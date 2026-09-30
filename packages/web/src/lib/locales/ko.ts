@@ -562,6 +562,7 @@ const ko: Record<string, string> = {
   "calendar.needPrep": "준비가 필요한 미팅",
   "calendar.voiceParsing": "일정을 파악하는 중…",
   "calendar.linkedSource": "연결됨",
+  "calendar.readOnly": "읽기 전용",
   "calendar.readOnlyHint": "읽기 전용: 연결된 캘린더의 일정입니다",
   // Decision queue (inbox)
   "inbox.decisions": "결정",

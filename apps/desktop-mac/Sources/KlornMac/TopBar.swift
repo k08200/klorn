@@ -1274,7 +1274,9 @@ private struct EventDetailPopover: View {
             if let source = calendarEventSourceLabel(event) {
                 HStack(spacing: 5) {
                     Image(systemName: "link").font(.caption2).accessibilityHidden(true)
-                    Text(source).font(.caption).lineLimit(1).truncationMode(.middle)
+                    // Visible, not only for VoiceOver: why edit and delete are missing.
+                    Text("\(source) · \(L("cal.readOnly"))").font(.caption).lineLimit(1)
+                        .truncationMode(.middle)
                 }
                 .foregroundStyle(Theme.textDim)
                 .accessibilityElement(children: .combine)

@@ -29,9 +29,20 @@ export function toLocalIso(date: Date, timeZone: string): string {
   return `${localDateKey(date, timeZone)}T${clock}:00${offsetStringFor(date, timeZone)}`;
 }
 
+const ISO_DATE_LENGTH = "2026-10-03".length;
+
+/**
+ * An all-day event is stored as UTC midnight of its dates (end exclusive), so its
+ * date is read off the UTC instant. Reading it in the user's zone would put it a
+ * day early west of UTC (Los Angeles shows Oct 2 for an event on Oct 3).
+ */
+function utcDate(date: Date): string {
+  return date.toISOString().slice(0, ISO_DATE_LENGTH);
+}
+
 function boundaries(row: CalendarReadRow, timeZone: string): { start: string; end: string } {
   return row.allDay
-    ? { start: localDateKey(row.startTime, timeZone), end: localDateKey(row.endTime, timeZone) }
+    ? { start: utcDate(row.startTime), end: utcDate(row.endTime) }
     : { start: toLocalIso(row.startTime, timeZone), end: toLocalIso(row.endTime, timeZone) };
 }
 
@@ -54,16 +65,38 @@ export function toToolEvent(row: CalendarReadRow, timeZone: string) {
   };
 }
 
-/** One row as an entry of the conflict list. The calendar is a label, never an account id. */
+/**
+ * One row as an entry of the conflict list: the interval, a label for the
+ * calendar (never an account id), provider and readOnly. No title: a conflict
+ * check says WHEN the user is busy, like free/busy, and must not hand the agent
+ * the name of a meeting on a linked (work) calendar.
+ */
 export function toRowConflict(row: CalendarReadRow, timeZone: string) {
   const readOnly = isReadOnlyCalendarRow(row);
   return {
     ...boundaries(row, timeZone),
     calendar: readOnly ? "linked" : "primary",
-    summary: wrapUntrusted(row.title || NO_TITLE, "calendar:summary"),
     provider: row.provider,
     readOnly,
   };
+}
+
+function isLinkedConflict(entry: unknown): boolean {
+  const { readOnly, calendar } = (entry ?? {}) as { readOnly?: unknown; calendar?: unknown };
+  return readOnly === true || calendar === "linked";
+}
+
+/**
+ * The conflicts as `create_event` echoes them to the model: an entry from a
+ * linked calendar carries no `summary` (defense in depth: row entries have none
+ * already), every other entry is untouched, so flag off the echo is what it was.
+ */
+export function withoutLinkedTitles(conflicts: readonly unknown[]): unknown[] {
+  return conflicts.map((entry) => {
+    if (!isLinkedConflict(entry)) return entry;
+    const { summary: _summary, ...rest } = entry as Record<string, unknown>;
+    return rest;
+  });
 }
 
 interface Interval {
@@ -83,26 +116,38 @@ function blockInterval(block: unknown): Interval | null {
   return Number.isNaN(interval.start) || Number.isNaN(interval.end) ? null : interval;
 }
 
+/** Overlapping or touching intervals joined, earliest first: how free/busy reports them. */
+function mergeTouching(intervals: readonly Interval[]): Interval[] {
+  const sorted = [...intervals].sort((a, b) => a.start - b.start);
+  return sorted.reduce<Interval[]>((merged, next) => {
+    const last = merged.at(-1);
+    if (last === undefined || next.start > last.end) return [...merged, next];
+    return [...merged.slice(0, -1), { start: last.start, end: Math.max(last.end, next.end) }];
+  }, []);
+}
+
 function covers(outer: Interval, inner: Interval): boolean {
   return outer.start <= inner.start && inner.end <= outer.end;
 }
 
 /**
- * Row conflicts first (they name the event), then the live free/busy blocks no
- * row already accounts for. A block inside a row's interval is that event seen
- * twice and is dropped; anything else stays, because free/busy sees what rows do
- * not: calendars the sync does not mirror and changes newer than the last sync.
- * A block that cannot be read is kept: never lose a possible conflict.
+ * Row conflicts first (they name the provider), then the live free/busy blocks no
+ * row already accounts for. Google reports busy time merged: two adjacent
+ * meetings come back as one block. So a block is accounted for when the rows,
+ * joined the same way, cover it: it is those events seen twice and is dropped.
+ * Anything else stays, because free/busy sees what rows do not: calendars the
+ * sync does not mirror and changes newer than the last sync. A block that cannot
+ * be read is kept: never lose a possible conflict.
  */
 export function mergeConflicts(
   rowConflicts: readonly unknown[],
   rows: readonly CalendarReadRow[],
   liveBlocks: readonly unknown[],
 ): unknown[] {
-  const intervals = rows.map(rowInterval);
+  const joined = mergeTouching(rows.map(rowInterval));
   const unaccounted = liveBlocks.filter((block) => {
     const interval = blockInterval(block);
-    return interval === null || !intervals.some((row) => covers(row, interval));
+    return interval === null || !joined.some((row) => covers(row, interval));
   });
   return [...rowConflicts, ...unaccounted];
 }

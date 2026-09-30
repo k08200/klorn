@@ -619,6 +619,7 @@ func runSelfChecks() async -> Bool {
               L10n.shipped.allSatisfy { code in
                   let keys = L10n.keys(forLanguage: code)
                   return keys.contains("cal.source.linked") && keys.contains("cal.source.a11y")
+                      && keys.contains("cal.readOnly")
               })
     }
     var utc = Calendar(identifier: .gregorian)

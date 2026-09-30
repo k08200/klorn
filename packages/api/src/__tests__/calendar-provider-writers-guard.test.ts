@@ -271,6 +271,43 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
     });
   });
 
+  // Calendar text is external content (an invite's author writes the title). The
+  // audit of every module that reads rows or events, for whether the text can reach
+  // an LLM: the ones that can wrap it (tested per reader), the ones that cannot
+  // must not start importing the LLM without this list being revisited.
+  describe("C7: calendar text reaches an LLM only wrapped", () => {
+    const LLM_FACING: Array<[string, RegExp]> = [
+      ["agentcore/agent-context.ts", /wrapUntrusted\(e\.title/],
+      ["agentcore/tool-executor.ts", /wrapUntrusted\(dupCheck\.title/],
+      ["mail/meeting-context.ts", /wrapUntrusted\(e\.title/],
+      ["pim/briefing.ts", /wrapEventsForPrompt\(/],
+      ["pim/calendar-read-format.ts", /wrapUntrusted\(row\.title/],
+    ];
+    const NOT_LLM_FACING = [
+      "agentcore/proactive-actions.ts", // notifications the user reads
+      "pim/briefing-structure.ts", // the rule-based day shape
+      "pim/focus-digest.ts",
+      "pim/inbox-summary.ts",
+      "pim/meeting-prep-pack.ts",
+      "pim/team-availability.ts",
+      "routes/calendar.ts",
+      "routes/ops.ts",
+      "learning/interaction-graph.ts",
+    ];
+
+    it.each(
+      LLM_FACING,
+    )("%s wraps the calendar text it puts in front of a model", (path, pattern) => {
+      expect(files.find((f) => f.path === path)?.text).toMatch(pattern);
+    });
+
+    it.each(NOT_LLM_FACING)("%s does not call the LLM", (path) => {
+      const text = files.find((f) => f.path === path)?.text ?? "";
+      expect(text.length).toBeGreaterThan(0);
+      expect(text).not.toMatch(/createCompletion|llm\/openai\.js/);
+    });
+  });
+
   it("the dropped C1 unique is referenced nowhere; the per-source unique only by the rows module", () => {
     expect(files.filter((f) => f.text.includes("userId_provider_externalId"))).toEqual([]);
     const keyed = files.filter((f) => f.text.includes("userId_provider_sourceKey_externalId"));

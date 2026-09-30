@@ -560,6 +560,7 @@ const ja: Record<string, string> = {
   "calendar.needPrep": "準備が必要な会議",
   "calendar.voiceParsing": "予定を解釈しています…",
   "calendar.linkedSource": "連携",
+  "calendar.readOnly": "読み取り専用",
   "calendar.readOnlyHint": "読み取り専用: 連携したカレンダーの予定です",
   "inbox.decisions": "判断",
   "inbox.tracking": "追跡中",

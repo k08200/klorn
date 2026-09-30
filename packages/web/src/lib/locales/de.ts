@@ -584,6 +584,7 @@ const de: Record<string, string> = {
   "calendar.needPrep": "Meetings, die Vorbereitung brauchen",
   "calendar.voiceParsing": "Dein Termin wird verstanden…",
   "calendar.linkedSource": "Verknüpft",
+  "calendar.readOnly": "Nur Lesen",
   "calendar.readOnlyHint": "Nur Lesen: Dieser Termin stammt aus einem verknüpften Kalender",
   "inbox.decisions": "Entscheidungen",
   "inbox.tracking": "Verfolgt",

@@ -579,6 +579,7 @@
 "cal.editor.end" = "終了";
 "cal.editor.location" = "場所";
 "cal.source.linked" = "連携";
+"cal.readOnly" = "読み取り専用";
 "cal.source.a11y" = "読み取り専用、%@ から";
 "cal.save" = "保存";
 "cal.save.failed" = "保存できません — もう一度お試しください。";

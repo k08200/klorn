@@ -579,6 +579,7 @@
 "cal.editor.end" = "Fin";
 "cal.editor.location" = "Lieu";
 "cal.source.linked" = "Lié";
+"cal.readOnly" = "Lecture seule";
 "cal.source.a11y" = "Lecture seule, de %@";
 "cal.save" = "Enregistrer";
 "cal.save.failed" = "Enregistrement impossible — réessayez.";

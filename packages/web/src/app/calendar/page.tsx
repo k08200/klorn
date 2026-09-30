@@ -551,7 +551,8 @@ function AgendaList({
                           className="mt-0.5 block truncate text-[11px] text-ink-dim"
                           title={t("calendar.readOnlyHint")}
                         >
-                          {ev.sourceLabel ?? t("calendar.linkedSource")}
+                          {ev.sourceLabel?.trim() || t("calendar.linkedSource")} ·{" "}
+                          {t("calendar.readOnly")}
                         </span>
                       )}
                     </span>

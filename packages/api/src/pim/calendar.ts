@@ -30,22 +30,29 @@ async function getUserTimeZone(userId: string): Promise<string> {
 const LIST_NOT_CONNECTED =
   "Google Calendar not connected. Please connect your Google account first.";
 
+/** What the model is told when rows exist but the primary Google connection is gone. */
+const STALE_ROWS_NOTICE =
+  "The events below are from Klorn's last sync and may be out of date until Google is reconnected.";
+
 /**
  * `list_events` with UNIFIED_CALENDAR_READ_ENABLED on (step C7): the synced rows
  * through the one read path, so linked calendars show once, marked read-only, and
- * no Google call is made. An empty answer keeps main's not-connected message for
- * a user with no Google connection, instead of reporting an empty calendar.
+ * no Google API call is made. The primary connection is still checked (a local
+ * read and decrypt, no network) so the live path's prompt survives: with no
+ * connection and no rows the answer is main's not-connected error; with rows it
+ * is the events plus the same prompt as a `warning`, since they are a stale copy.
  */
 async function listEventsFromRows(userId: string, maxResults: number) {
   try {
-    const [rows, timeZone] = await Promise.all([
-      readUpcomingEvents(userId, maxResults, new Date()),
-      getUserTimeZone(userId),
+    const now = new Date();
+    const timeZone = await getUserTimeZone(userId);
+    const [rows, session] = await Promise.all([
+      readUpcomingEvents(userId, maxResults, now, timeZone),
+      connectPrimaryCalendar(userId),
     ]);
-    if (rows.length === 0 && !(await connectPrimaryCalendar(userId))) {
-      return { error: LIST_NOT_CONNECTED };
-    }
-    return { events: rows.map((row) => toToolEvent(row, timeZone)) };
+    if (!session && rows.length === 0) return { error: LIST_NOT_CONNECTED };
+    const events = rows.map((row) => toToolEvent(row, timeZone));
+    return session ? { events } : { events, warning: `${LIST_NOT_CONNECTED} ${STALE_ROWS_NOTICE}` };
   } catch (err) {
     console.error("[CALENDAR] listEvents (rows) failed:", err);
     return { error: "Could not read the synced calendar right now." };
@@ -434,17 +441,21 @@ const LIST_EVENTS_DESCRIPTION = "List upcoming events from the user's Google Cal
 const CHECK_CONFLICTS_DESCRIPTION =
   "Check if a time range has any conflicting events. Use before creating events to avoid double-booking.";
 
-// Step C7. The freshness trade-off is stated to the model: rows are a synced copy.
+// Step C7. The freshness trade-off is stated to the model: rows are a synced
+// copy, so a change lags and an event deleted or cancelled in Google can still be
+// listed until the sync removes it.
 const LIST_EVENTS_UNIFIED_DESCRIPTION =
   "List upcoming events from the user's calendars, read from Klorn's synced copy " +
-  "(refreshed about every 15 minutes, covering the next 30 days), not live from Google: an " +
-  "event created, moved or deleted in the last 15 minutes may not show yet. Each event says " +
+  "(refreshed about every 15 minutes, covering the next month), not live from Google: an " +
+  "event created or moved in the last 15 minutes may not show yet, and an event deleted or " +
+  "cancelled in Google may still be listed until Klorn's sync removes it. Each event says " +
   "its provider and whether it is readOnly (a linked calendar's event cannot be edited or deleted).";
 const CHECK_CONFLICTS_UNIFIED_DESCRIPTION =
   "Check if a time range has any conflicting events. Use before creating events to avoid " +
   "double-booking. Timed events come from Klorn's synced copy of the calendars (refreshed about " +
   "every 15 minutes), combined with a live Google free/busy check, so a change made in the " +
-  "last 15 minutes is seen only through free/busy. All-day events are not counted.";
+  "last 15 minutes is seen only through free/busy, and an event deleted or cancelled in Google " +
+  "may still count until Klorn's sync removes it. All-day events are not counted.";
 
 export const CALENDAR_TOOLS = [
   {

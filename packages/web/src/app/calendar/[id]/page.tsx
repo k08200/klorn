@@ -296,7 +296,8 @@ function CalendarEventDetail({ id }: { id: string }) {
               )}
               {event.readOnly && (
                 <p className="mt-1 break-words text-[12px] text-ink-dim">
-                  {event.sourceLabel ?? t("calendar.linkedSource")} · {t("calendar.readOnlyHint")}
+                  {event.sourceLabel?.trim() || t("calendar.linkedSource")} ·{" "}
+                  {t("calendar.readOnlyHint")}
                 </p>
               )}
               {event.meetingLink && (

@@ -1646,47 +1646,69 @@ does not wait for them.
     no `take`, bounded by the sync itself (30 days, 100 events per calendar).
     `pim/calendar-read-format.ts` holds the pure shaping for the model.
   - `list_events`, flag on: the next events that have not ended yet, from rows,
-    scoped and deduped, `max_results` applied after the dedupe. Each event keeps
+    scoped and deduped, `max_results` applied after the dedupe, and bounded: rows
+    starting within a month either side of now, so the read can neither load
+    every future row nor scan the user's whole past (the lower `startTime` bound
+    is what keeps the (userId, startTime) index range finite). Each event keeps
     the old shape (id, summary, start, end, location, description, all wrapped as
-    untrusted) and adds `allDay`, `provider` and `readOnly`. Times are written as
-    Google wrote them to the live call: an offset-bearing local time, or a date
-    (end exclusive) for an all-day event. A linked calendar's event is `readOnly`
-    and has `id: null`: `delete_event` works on the primary calendar only, so an
-    id it cannot honour would invite a delete that cannot work. A local-only event
-    also has `id: null` (Google has no copy). An empty result keeps main's
-    "not connected" answer for a user with no Google connection, instead of
-    reporting an empty calendar; a failed row read is an `{ error }`, never a throw.
+    untrusted) and adds `allDay`, `provider` and `readOnly`. A timed event is
+    written as an offset-bearing local time, as Google wrote it to the live call.
+    An all-day event is stored as UTC midnight of its dates (end exclusive), so
+    its dates are read off the UTC instant, never in the user's zone (west of UTC
+    that put it a day early); it stays "upcoming" through the end of its last date
+    in the user's zone. A linked calendar's event is `readOnly` and has `id:
+    null`: `delete_event` works on the primary calendar only, so an id it cannot
+    honour would invite a delete that cannot work. A local-only event also has
+    `id: null` (Google has no copy). The primary connection is still checked (a
+    local read, no Google call) so the live path's reconnect prompt survives: no
+    connection and no rows is main's not-connected error; no connection with rows
+    is the events plus a `warning` with the same prompt, since they are a stale
+    copy. A failed row read is an `{ error }`, never a throw.
   - `check_calendar_conflicts`, flag on: timed rows overlapping the window (scope,
-    dedupe, `provider` and `readOnly` per entry, titles wrapped as untrusted) plus
-    the live free/busy answer the check always gave, primary and linked. A busy
-    block inside one row's interval is that event seen twice and is dropped;
-    every other block stays, because free/busy sees what rows do not: calendars
-    the sync does not mirror and changes newer than the last sync. The
-    not-connected and invalid-range answers are main's and come before any row is
-    read. A failed row read throws, like any other unexpected failure here: the
+    dedupe, `provider` and `readOnly` per entry) plus the live free/busy answer the
+    check always gave, primary and linked. An entry carries the interval, a
+    calendar label (`primary` or `linked`), `provider` and `readOnly`, and no
+    title: the answer says when the user is busy, like free/busy, and never hands
+    the agent the name of a meeting on a linked (work) calendar (`create_event`'s
+    skipped echo also drops the `summary` of a linked entry). Bounds: at most 100
+    rows (after the dedupe), a window of at most a month for the rows (free/busy
+    still gets the whole window), a lower `startTime` bound of a month before it.
+    Google reports busy time merged, so two adjacent meetings come back as one
+    block: a block is accounted for when the rows, joined the same way, cover it,
+    and is dropped; every other block stays, because free/busy sees what rows do
+    not (calendars the sync does not mirror, changes newer than the last sync).
+    The not-connected and invalid-range answers are main's and come before any row
+    is read. A failed row read throws, like any other unexpected failure here: the
     check never answers "free" on half the evidence, and `create_event` already
-    aborts on a throw. Every caller follows the flag (the reading pane's meeting
-    context and `create_event` included). All-day rows are left out on purpose:
-    free/busy treats an all-day marker (birthday, holiday) as free time, as
-    `summarizeConflicts` always did for the primary-only fallback, and a row does
-    not record transparency. Attendee free/busy (`checkAttendeeBusy`,
+    aborts on a throw. All-day rows are left out on purpose: free/busy treats an
+    all-day marker (birthday, holiday) as free time, as `summarizeConflicts` always
+    did for the primary-only fallback. Attendee free/busy (`checkAttendeeBusy`,
     `getAttendeeBusyBlocks`, `getAttendeeBusyByMember`) is untouched and stays
     live: attendees have no rows (tested with the flag on).
+  - Reach of the flag: it changes `listEvents` and `checkConflicts` for every
+    caller, not only the chat and MCP tools: the autonomous agent's `list_events`
+    and `check_calendar_conflicts`, `create_event`'s enforced conflict check (a
+    booking is refused on a row conflict, a stale one included) and the reading
+    pane's meeting-context conflict line. Documented in `config.ts` and
+    `.env.example`.
   - Freshness trade-off, stated in both tool descriptions while the flag is on:
     rows are a synced copy, refreshed by the scheduler about every 15 minutes
     (`SCHEDULER_CALENDAR_SYNC_INTERVAL_MS`, default 15 min) for the next 30 days
-    and at most 100 events per calendar. An event created, moved or deleted in
-    the last 15 minutes may not show in `list_events`; the conflict check sees it
-    only through free/busy. Two consequences to weigh before the flip, both
-    inherited from the sync, not new: (1) a row is never removed when its event is
-    deleted or cancelled upstream (C2, above), so with the flag on `list_events`
+    and at most 100 events per calendar. An event created or moved in the last 15
+    minutes may not show in `list_events`; the conflict check sees it only through
+    free/busy. The descriptions also say that an event deleted or cancelled in
+    Google can still be listed until the sync removes it. Two consequences to weigh
+    before the flip, inherited from the sync, not new: (1) a row is not removed
+    when its event is deleted or cancelled upstream (C2, above; the C2b step that
+    removes Google cancellations is in flight), so with the flag on `list_events`
     can still list such an event until it ends, and a booking that overlaps it is
     refused by the conflict check (free/busy cannot override a row conflict); the
-    Calendar page and the desktop app already show those rows today. (2) A timed
-    event marked free (transparent) in Google is a conflict from its row, while
-    free/busy would ignore it. Fixing either needs the sync to delete vanished
-    events and a `transparency` column; neither is in C7. Recommendation: do not
-    flip the flag until the sync removes vanished events. A founder decision.
+    Calendar page and the desktop app already show those rows today. (2) A row
+    stores neither transparency nor the user's response, so a timed event marked
+    free, or one the user declined, is a conflict from its row while free/busy
+    would ignore it. Fixing (2) needs columns the sync fills (`transparency`,
+    response status); that is not in C7. Recommendation: do not flip the flag until
+    the sync removes vanished events, and weigh (2). A founder decision.
   - The C2 gaps, closed regardless of the flag (they only matter while linked rows
     are visible): the `/api/ops` events-today count, the interaction-graph meeting
     count (it only uses `> 0` today), the weekly-review meeting count and the
@@ -1702,11 +1724,36 @@ does not wait for them.
     `readOnly: true`; one lookup per response, none when no row is linked (the
     primary calendar's JSON stays byte-identical), and a failed lookup drops the
     labels, never the list. The web agenda and event page show the label (or
-    "Linked") and hide delete on a `readOnly` row (the web has no edit); the
-    Mac app's event popover hides edit and delete, shows the label, and
+    "Linked", a blank label counts as none) with a visible "Read-only" text, and
+    hide delete on a `readOnly` row (the web has no edit); the Mac app's event
+    popover hides edit and delete, shows the label with a visible "Read-only" text
+    (not only for VoiceOver), and
     `beginEditingEvent` / `deleteEvent` refuse a read-only row as well. The two
     new Swift fields are optional, so a row from an older server still decodes
     (self-check). Strings: 7 web locales (parity guard) and 7 `.lproj` files.
+  - Per-provider kill switch. `calendarSourceScope()` and `isCalendarRowVisible()`
+    take an optional map of provider to "is its connector enabled" (default
+    `CALENDAR_PROVIDER_ENABLED`, exported from `pim/calendar-scope.ts`, empty
+    today). A connector registers its flag with one entry (C4: `OUTLOOK:
+    outlookCalendarEnabled`); its rows are then visible only while that flag is on,
+    whatever the Google linked flag says, for every reader and by id. GOOGLE keeps
+    `LINKED_CALENDAR_SYNC_ENABLED`; LOCAL is always visible. With nothing
+    registered the fragment is exactly what it was (`{ sourceAccountId: null }` or
+    `{}`), so a provider with no connector costs no clause. The fragment uses the
+    top-level keys `sourceAccountId`, `provider` and `OR`; a caller wraps an `OR`
+    of its own in `AND: [...]`. Tested with a fake provider flag.
+  - Calendar text to an LLM is wrapped. An event's title, description and location
+    are external content. Audited: `agent-context.ts` (the upcoming list and the
+    meeting hint), `briefing.ts` (the prompt's events and the calendar-sourced
+    titles in its signals, through `pim/briefing-prompt-wrap.ts`), `create_event`'s
+    "already exists" skip and `get_upcoming_meetings` (live Google, wrapped at the
+    tool boundary) now wrap with `wrapUntrusted`; `meeting-context.ts` already did.
+    The user-visible renderings (`listLocalBriefingEvents`, the rule-based
+    fallback, the notifications) keep the clean text, and the cross-link matching
+    still reads it. `proactive-actions`, `inbox-summary`, `briefing-structure`,
+    `focus-digest`, `meeting-prep-pack` and `team-availability` do not call an LLM;
+    the writers guard pins both lists. Not covered: event text that enters a
+    prompt through a path that is not a calendar reader.
   - Decision, the cross-calendar key: (provider, externalId) stays the dedupe key.
     An iCalUID column (expand migration plus backfill, and the sync writing it) is
     not added here: it changes the schema and the writers, and its value is for

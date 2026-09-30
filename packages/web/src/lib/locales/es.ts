@@ -573,6 +573,7 @@ const es: Record<string, string> = {
   "calendar.needPrep": "Reuniones que necesitan preparación",
   "calendar.voiceParsing": "Entendiendo tu evento…",
   "calendar.linkedSource": "Vinculado",
+  "calendar.readOnly": "Solo lectura",
   "calendar.readOnlyHint": "Solo lectura: este evento viene de un calendario vinculado",
   "inbox.decisions": "Decisiones",
   "inbox.tracking": "En seguimiento",

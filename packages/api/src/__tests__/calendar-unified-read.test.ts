@@ -53,6 +53,8 @@ vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 import { CALENDAR_TOOLS, checkAttendeeBusy, checkConflicts, listEvents } from "../pim/calendar.js";
 
 const NOW = new Date("2026-10-01T00:00:00.000Z");
+const DAY_MS = 24 * 60 * 60 * 1000;
+const SPAN_DAYS = 31; // MAX_EVENT_SPAN_DAYS, UPCOMING_HORIZON_DAYS and MAX_CONFLICT_WINDOW_DAYS
 const NOT_CONNECTED = "Google Calendar not connected. Please connect your Google account first.";
 // 14:00-15:00 KST on 2026-10-03.
 const START = "2026-10-03T14:00:00+09:00";
@@ -177,7 +179,6 @@ describe("listEvents — flag on", () => {
     const result = await listEvents("u1", 10);
 
     expect(m.eventsList).not.toHaveBeenCalled();
-    expect(m.getAuthedClient).not.toHaveBeenCalled();
     expect(result).toEqual({
       events: [
         {
@@ -195,7 +196,7 @@ describe("listEvents — flag on", () => {
     });
   });
 
-  it("asks for events that have not ended yet, for this user, through the scope", async () => {
+  it("asks for events that have not ended yet, bounded on both sides, through the scope", async () => {
     await listEvents("u1", 10);
 
     const arg = m.calendarFindMany.mock.calls[0]?.[0] as {
@@ -204,10 +205,42 @@ describe("listEvents — flag on", () => {
     };
     expect(arg.where).toEqual({
       userId: "u1",
-      endTime: { gt: NOW },
+      // A lower bound so the (userId, startTime) index is used, an upper one so
+      // the read cannot load every future row.
+      startTime: {
+        gte: new Date(NOW.getTime() - SPAN_DAYS * DAY_MS),
+        lt: new Date(NOW.getTime() + SPAN_DAYS * DAY_MS),
+      },
+      // A timed event is upcoming until it ends; an all-day one (stored as UTC
+      // midnight dates) until the end of its last date in the user's zone.
+      AND: [
+        {
+          OR: [
+            { allDay: false, endTime: { gt: NOW } },
+            { allDay: true, endTime: { gt: new Date("2026-10-01T00:00:00.000Z") } },
+          ],
+        },
+      ],
       sourceAccountId: null,
     });
     expect(arg.orderBy).toEqual({ startTime: "asc" });
+  });
+
+  it("cuts all-day events off at the end of their date in the user's zone (Los Angeles is still on Sep 30)", async () => {
+    m.automationConfigFindUnique.mockResolvedValue({ timezone: "America/Los_Angeles" });
+
+    await listEvents("u1", 10);
+
+    const where = (m.calendarFindMany.mock.calls[0]?.[0] as { where: { AND: unknown[] } }).where;
+    expect(where.AND).toEqual([
+      {
+        OR: [
+          { allDay: false, endTime: { gt: NOW } },
+          // 2026-10-01T00:00Z is 17:00 on Sep 30 in Los Angeles.
+          { allDay: true, endTime: { gt: new Date("2026-09-30T00:00:00.000Z") } },
+        ],
+      },
+    ]);
   });
 
   it("shows a linked calendar's event read-only with no id to delete by, once even when it is also in the primary", async () => {
@@ -274,14 +307,19 @@ describe("listEvents — flag on", () => {
     expect(events.map((e) => e.id)).toEqual(["g-1", "g-2"]);
   });
 
-  it("writes an all-day event as dates, the way Google does (end exclusive)", async () => {
+  it.each([
+    "Asia/Seoul",
+    "America/Los_Angeles",
+    "UTC",
+  ])("writes an all-day event as its stored UTC dates, end exclusive, whatever the zone (%s)", async (timezone) => {
+    m.automationConfigFindUnique.mockResolvedValue({ timezone });
+    // The sync stores an all-day event as UTC midnight of its date (Oct 3, end Oct 4).
     m.calendarFindMany.mockResolvedValue([
       row({
         id: "allday",
         allDay: true,
-        // Oct 3 to Oct 4 in Seoul.
-        startTime: "2026-10-02T15:00:00Z",
-        endTime: "2026-10-03T15:00:00Z",
+        startTime: "2026-10-03T00:00:00Z",
+        endTime: "2026-10-04T00:00:00Z",
       }),
     ]);
 
@@ -318,6 +356,27 @@ describe("listEvents — flag on", () => {
 
     expect(await listEvents("u1", 10)).toEqual({ error: NOT_CONNECTED });
     expect(m.eventsList).not.toHaveBeenCalled();
+  });
+
+  it("still tells the model to reconnect when the primary Google token is gone but rows exist", async () => {
+    m.getAuthedClient.mockResolvedValue(null);
+    m.calendarFindMany.mockResolvedValue([
+      row({ id: "r1", startTime: "2026-10-02T01:00:00Z", endTime: "2026-10-02T02:00:00Z" }),
+    ]);
+
+    const result = (await listEvents("u1", 10)) as { events: unknown[]; warning?: string };
+
+    expect(result.events).toHaveLength(1);
+    expect(result.warning).toContain(NOT_CONNECTED);
+    expect(result.warning).toContain("last sync");
+  });
+
+  it("adds no warning while Google is connected", async () => {
+    m.calendarFindMany.mockResolvedValue([
+      row({ id: "r1", startTime: "2026-10-02T01:00:00Z", endTime: "2026-10-02T02:00:00Z" }),
+    ]);
+
+    expect(await listEvents("u1", 10)).not.toHaveProperty("warning");
   });
 
   it("answers an error, never a throw, when the rows cannot be read", async () => {
@@ -366,12 +425,37 @@ describe("checkConflicts — flag on", () => {
         start: "2026-10-03T14:30:00+09:00",
         end: "2026-10-03T15:30:00+09:00",
         calendar: "primary",
-        summary: '<untrusted_content source="calendar:summary">Board</untrusted_content>',
         provider: "GOOGLE",
         readOnly: false,
       },
     ]);
     expect(result.message).toBe("Found 1 conflicting event(s) in this time range.");
+  });
+
+  it("never hands an event's title to the agent: a work calendar's meeting names stay out of the answer", async () => {
+    process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
+    m.calendarFindMany.mockResolvedValue([
+      row({
+        id: "w1",
+        title: "Layoff planning",
+        sourceAccountId: "acct-1",
+        startTime: "2026-10-03T05:30:00Z",
+        endTime: "2026-10-03T06:30:00Z",
+      }),
+      row({
+        id: "p1",
+        title: "Dentist",
+        startTime: "2026-10-03T05:00:00Z",
+        endTime: "2026-10-03T05:30:00Z",
+      }),
+    ]);
+
+    const result = await checkConflicts("u1", START, END);
+
+    const sent = JSON.stringify(result);
+    expect(sent).not.toContain("Layoff planning");
+    expect(sent).not.toContain("Dentist");
+    expect(sent).not.toContain("summary");
   });
 
   it("queries the overlap of the window for timed events only, through the scope", async () => {
@@ -381,11 +465,90 @@ describe("checkConflicts — flag on", () => {
       .where;
     expect(where).toEqual({
       userId: "u1",
-      startTime: { lt: new Date("2026-10-03T06:00:00.000Z") },
+      // The lower bound keeps the (userId, startTime) index range finite.
+      startTime: {
+        gte: new Date(new Date("2026-10-03T05:00:00.000Z").getTime() - SPAN_DAYS * DAY_MS),
+        lt: new Date("2026-10-03T06:00:00.000Z"),
+      },
       endTime: { gt: new Date("2026-10-03T05:00:00.000Z") },
       allDay: false,
       sourceAccountId: null,
     });
+  });
+
+  it("reads at most 100 rows, and clamps the window it reads rows for to a month, while free/busy still gets the whole window", async () => {
+    await checkConflicts("u1", "2026-10-03T14:00:00+09:00", "2027-03-03T14:00:00+09:00");
+
+    const arg = m.calendarFindMany.mock.calls[0]?.[0] as {
+      where: { startTime: { lt: Date } };
+      take?: number;
+    };
+    expect(arg.take).toBe(100);
+    expect(arg.where.startTime.lt).toEqual(
+      new Date(new Date("2026-10-03T05:00:00.000Z").getTime() + SPAN_DAYS * DAY_MS),
+    );
+    const freebusy = m.freebusyQuery.mock.calls[0]?.[0] as {
+      requestBody: { timeMax: string };
+    };
+    expect(freebusy.requestBody.timeMax).toBe("2027-03-03T05:00:00.000Z");
+  });
+
+  it("applies the 100 cap after the dedupe when linked copies can exist", async () => {
+    process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
+    m.calendarFindMany.mockResolvedValue(
+      Array.from({ length: 150 }, (_, i) =>
+        row({
+          id: `p${i}`,
+          externalId: `g-${i}`,
+          startTime: "2026-10-03T05:00:00Z",
+          endTime: "2026-10-03T06:00:00Z",
+        }),
+      ),
+    );
+
+    const result = (await checkConflicts("u1", START, END)) as { conflicts: unknown[] };
+
+    expect(result.conflicts).toHaveLength(100);
+    expect((m.calendarFindMany.mock.calls[0]?.[0] as { take?: number }).take).toBeUndefined();
+  });
+
+  it("counts two adjacent meetings and the one busy block Google merged them into as two events", async () => {
+    m.calendarFindMany.mockResolvedValue([
+      row({ id: "a", startTime: "2026-10-03T05:00:00Z", endTime: "2026-10-03T05:30:00Z" }),
+      row({ id: "b", startTime: "2026-10-03T05:30:00Z", endTime: "2026-10-03T06:00:00Z" }),
+    ]);
+    m.freebusyQuery.mockResolvedValue({
+      data: {
+        calendars: {
+          primary: { busy: [{ start: "2026-10-03T05:00:00Z", end: "2026-10-03T06:00:00Z" }] },
+        },
+      },
+    });
+
+    const result = (await checkConflicts("u1", START, END)) as {
+      conflicts: unknown[];
+      message: string;
+    };
+
+    expect(result.conflicts).toHaveLength(2);
+    expect(result.message).toBe("Found 2 conflicting event(s) in this time range.");
+  });
+
+  it("keeps a busy block that reaches beyond what the rows account for", async () => {
+    m.calendarFindMany.mockResolvedValue([
+      row({ id: "a", startTime: "2026-10-03T05:00:00Z", endTime: "2026-10-03T05:30:00Z" }),
+    ]);
+    m.freebusyQuery.mockResolvedValue({
+      data: {
+        calendars: {
+          primary: { busy: [{ start: "2026-10-03T05:00:00Z", end: "2026-10-03T06:00:00Z" }] },
+        },
+      },
+    });
+
+    const result = (await checkConflicts("u1", START, END)) as { conflicts: unknown[] };
+
+    expect(result.conflicts).toHaveLength(2);
   });
 
   it("does not lose a busy block only Google free/busy can see (a writer calendar the rows do not mirror)", async () => {
@@ -525,6 +688,15 @@ describe("tool descriptions state the freshness trade-off only while the flag is
     expect(toolDescription("list_events")).toContain("15 minutes");
     expect(toolDescription("check_calendar_conflicts")).toContain("15 minutes");
     expect(toolDescription("check_calendar_conflicts")).toContain("free/busy");
+  });
+
+  it("says a deleted or cancelled event can still be listed until the sync removes it, not only that changes lag", () => {
+    enableUnified();
+
+    for (const name of ["list_events", "check_calendar_conflicts"]) {
+      expect(toolDescription(name)).toMatch(/deleted or cancelled/);
+      expect(toolDescription(name)).toMatch(/until Klorn's sync removes it/);
+    }
   });
 
   it("turns back into the original text when the flag goes off again (read at request time)", () => {

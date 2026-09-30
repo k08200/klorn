@@ -17,6 +17,7 @@ import { sendPushNotification } from "../notify/push.js";
 import { localDayUtcRange, normalizeTimeZone } from "../time-zone.js";
 import { stripUntrusted } from "../untrusted.js";
 import { pushNotification } from "../websocket.js";
+import { wrapEventsForPrompt, wrapSignalsForPrompt } from "./briefing-prompt-wrap.js";
 import { type BriefingSignals, buildBriefingSignals } from "./briefing-signals.js";
 import { getBriefingStatus } from "./briefing-status.js";
 import { readCalendarRows } from "./calendar-read.js";
@@ -351,6 +352,10 @@ export default async function generateBriefing(
   // the clear signal worth acting on — not to summarize. This prompt asks the
   // model to name the single most important thing first, then connect risks,
   // then prune noise. Tone matches the product: calm, decisive, decision-first.
+  // Calendar text is external content: the prompt's copy carries it wrapped, the
+  // rule-based view (`data.signals`, the fallback) keeps the clean text.
+  const promptEvents = wrapEventsForPrompt(data.events);
+  const promptSignals = wrapSignalsForPrompt(data.signals);
   const briefingPrompt = `Today is ${today}. Write the one-minute morning briefing the user reads before work starts.
 
 ## Klorn voice
@@ -393,11 +398,11 @@ The Alpha Capital follow-up has to land before the 3 PM partner call — everyth
 ## Server-detected signals
 This section is rule-based evidence. Use crossLinks, deadlines, and urgentItems here when naming connected work.
 Use topActions as the primary Top 3 source. The model's job is to make the wording useful, not to invent a new priority list.
-Signals: ${JSON.stringify(data.signals)}
+Signals: ${JSON.stringify(promptSignals)}
 
 ## Today's data
 Tasks: ${JSON.stringify(data.tasks)}
-Calendar: ${JSON.stringify(data.events)}
+Calendar: ${JSON.stringify(promptEvents)}
 Emails: ${JSON.stringify(data.emails)}
 Recent Notes: ${JSON.stringify(data.notes)}`;
 

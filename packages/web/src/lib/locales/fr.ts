@@ -575,6 +575,7 @@ const fr: Record<string, string> = {
   "calendar.needPrep": "Réunions à préparer",
   "calendar.voiceParsing": "Compréhension de votre événement…",
   "calendar.linkedSource": "Lié",
+  "calendar.readOnly": "Lecture seule",
   "calendar.readOnlyHint": "Lecture seule : cet événement provient d'un agenda lié",
   "inbox.decisions": "Décisions",
   "inbox.tracking": "Suivi",
