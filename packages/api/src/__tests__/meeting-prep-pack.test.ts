@@ -123,3 +123,18 @@ describe("buildMeetingPrepPack", () => {
     );
   });
 });
+
+describe("buildMeetingPrepPack — a linked calendar's event (C2)", () => {
+  it("builds a pack for a row synced from a linked calendar, for its owner only", async () => {
+    stores.event = {
+      ...(stores.event as EventRow),
+      id: "linked-event",
+      sourceAccountId: "acct-1",
+      provider: "GOOGLE",
+      externalId: "g-work-1",
+    } as EventRow;
+
+    expect(await buildMeetingPrepPack("user-1", "linked-event", { now: NOW })).not.toBeNull();
+    expect(await buildMeetingPrepPack("someone-else", "linked-event", { now: NOW })).toBeNull();
+  });
+});

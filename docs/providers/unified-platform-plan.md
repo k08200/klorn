@@ -1051,20 +1051,107 @@ needs FA-9 and the admin guidance from F0.
 - Rollback: revert the PR. The columns and indexes are additive and ignorable,
   and the old unique index is still there for the previous release.
 
-**C2 — calendar provider seam and linked-account sync** (*outline*). Mirrors
-`mail/providers/`. Linked Google calendars are synced into rows, not only
-consulted for conflicts. Two gates from the C1 database review (2026-09-30),
-both settled before C2 writes a linked row:
-- Dedupe semantics. The unique (userId, provider, externalId) does not include
-  `sourceAccountId`, so an invite present in both the primary and a linked
-  Google calendar collides. Decide between a sentinel `sourceAccountId` for
-  primary rows and a `COALESCE(sourceAccountId, ...)` expression unique index
-  (raw SQL; confirm the CI drift check accepts it before choosing).
-- Unlinking. `DELETE /google/linked-calendars/:id` (`routes/auth.ts`, around
-  `:1590`) must delete that account's events in the same `$transaction` (or
-  the column becomes a foreign key with `ON DELETE CASCADE`), because
-  `/api/calendar` has no source filter and orphaned events would keep showing.
-  Add an index on (userId, sourceAccountId) when that query first exists.
+**C2 — calendar provider seam and linked-account sync.** Depends on: C1.
+- Tasks: a provider seam in `pim/calendar-providers/` mirroring
+  `mail/providers/`; linked Google calendars synced into rows; both C1 database
+  review gates settled before the first linked row is written.
+- Landed 2026-09-30 (branch `feat/calendar-provider-seam`, PR not yet opened).
+  Migration `20261002010000_calendar_linked_source_key`:
+  - Seam. `types.ts` (`CalendarProviderActions`, `CalendarSession`, neutral event
+    and free/busy shapes), `google.ts` (every googleapis calendar call the app
+    makes), `unsupported.ts` and `dispatch.ts` (`calendarActionsFor(userId,
+    linkedAccountId)`, `connectPrimaryCalendar`). `connect(account)` resolves the
+    credentials once and answers a session, `null` (not connected) or
+    `{ unsupported: true }`; a session's methods throw on a hard failure, so each
+    caller keeps its own error policy. `OUTLOOK`, `ICLOUD`, `NAVER`, `DEVICE` and
+    `LOCAL` answer unsupported. `pim/calendar.ts` keeps its exported functions and
+    results; the primary path is unchanged, pinned by characterisation tests
+    written before the move (`calendar-google-characterisation`,
+    `automation-scheduler-calendar-sync`, and request goldens in the sync route
+    tests). The three sync sites share `pim/calendar-sync.ts` (30 days, 100
+    events, the user's zone, one row mapping).
+  - Flag `LINKED_CALENDAR_SYNC_ENABLED` (OFF, lenient parse, read per scheduler
+    tick). Off: no linked-account lookup, no extra Google call, no linked row
+    (tested with a mutation that removes the check). On: after the primary sync,
+    every linked GOOGLE account is synced with its own client, the same window
+    and caps, rows `provider GOOGLE`, `externalId` = the event id,
+    `sourceAccountId` = the linked account. Isolated both ways: a primary failure
+    does not skip the linked sync, and a linked failure never raises the "Google
+    disconnected" alert; an auth failure flags that account for reconnect. Turning
+    the flag off stops syncing and leaves the rows already written until their
+    account is unlinked (readers do not check the flag).
+  - Gate (a), dedupe, decided: `CalendarEvent.sourceKey TEXT NOT NULL DEFAULT
+    'primary'` (the linked account id for a linked row), and the unique becomes
+    (userId, provider, sourceKey, externalId). One row per event per source
+    calendar; both copies of an invite exist and readers dedupe. A CHECK keeps
+    `sourceKey = COALESCE(sourceAccountId, 'primary')`, and `calendar-rows.ts` is
+    the only place that derives it. Linked rows keep `googleId` NULL, so they
+    never meet the legacy unique. C1's (userId, provider, externalId) unique is
+    dropped, which the gate had not assumed: keeping it makes a linked row block
+    the previous release's insert of the same primary event with a unique
+    violation that is not its `ON CONFLICT` target (negative control run on the
+    scratch database). Rejected: a `COALESCE` expression unique index (Prisma
+    cannot declare it or target it in an upsert), `NULLS NOT DISTINCT` (Postgres
+    15+, not declarable), a sentinel in `sourceAccountId` (changes the C1 wire
+    value and the previous release writes NULL).
+  - Overlap, verified on a scratch Postgres 16 with the previous release's
+    generated client (C1, run against a database that already had this migration
+    and held linked rows): its Google sync upsert (create, update, update of a
+    row written before C1, and create while a linked copy exists), its manual
+    create, demo seed and link-calendar upsert all succeed; its conflict targets
+    (`userId,googleId` and `userId,provider,email`) are untouched. The migration
+    applied cleanly to a database holding C1-shaped rows, and both `prisma
+    migrate diff` forms report no drift (the CHECK is invisible to the diff).
+    The shipped row, dedupe and unlink functions were also run against that
+    database: one invite is two rows, the primary one is kept by the dedupe,
+    unlink removes the linked row, its attention item and the account, and a
+    write after the unlink fails the foreign key.
+  - Gate (b), unlinking: `DELETE /google/linked-calendars/:id` deletes the
+    account, its events and their mirrored AttentionItems in one `$transaction`
+    (`pim/linked-calendar-unlink.ts`), events and attention items first: with
+    mocks alone the order looked free, but on a real Postgres deleting the
+    account first cascades the events away and leaves the AttentionItems
+    orphaned, so the order is pinned by a test. The route stays a Google surface: the
+    account lookup and delete are scoped to `provider GOOGLE`, so it can never
+    remove another provider's account by id (the mail route does the same). `sourceAccountId` also becomes a foreign
+    key with `ON DELETE CASCADE`, deliberately both: the route needs the event
+    ids for the AttentionItems, and the cascade covers what no route sees, a sync
+    in flight when the account is unlinked (its insert fails the foreign key,
+    skipped quietly) and the previous release's unlink after a rollback
+    (verified: its plain `deleteMany` on the account removes the events). The
+    index is on `sourceAccountId` alone, not the (userId, sourceAccountId) the C1
+    review suggested, because the cascade looks rows up without a userId.
+  - Linked rows are read-only mirrors: `PATCH` and `DELETE /api/calendar/:id` on
+    a row with a `sourceAccountId` answer 409, because Klorn holds only
+    `calendar.readonly` there and the next sync would revert the edit or bring the
+    event back.
+  - Readers. `calendar-provider-writers-guard.test.ts` lists every module that
+    reads CalendarEvent and fails for a new one. Deduped at read time by
+    (provider, externalId), primary copy preferred (`pim/calendar-dedupe.ts`):
+    `/api/calendar` and `/today/summary`, the briefing day shape, the meeting
+    context's nearby events, the inbox summary and its attention mirror, the
+    focus digest (its dedupeKey is per row, so a copy sent two digests) and the
+    back-to-back warning (a copy read as an overlap). Unaffected: team
+    availability (a linked event blocks the slot, which is the point; a duplicate
+    interval changes nothing), the conflict and focus-block lookups, and meeting
+    prep by id. `getLinkedCalendarClients` and the conflict checks are unchanged,
+    still Google-only.
+  - For C7, not deduped yet: the `/api/ops` events-today count, the
+    interaction-graph meeting bonus, the weekly-review meeting count and the
+    tomorrow list in `proactive-actions.ts`, and the briefing reader's `take: 20`
+    (it already collapses copies by title and day, but copies spend the cap).
+    Matching by event id misses an invite whose two accounts got different ids;
+    the iCalUID is the reliable key and needs a column. Events deleted or
+    cancelled upstream are not removed from rows, for the primary sync as before.
+  - Contract phase drops, on top of C1's list: the `sourceKey` default (once the
+    previous release is gone; every writer already states it), `googleId` and
+    `CalendarEvent_userId_googleId_key` after reads move to (provider,
+    externalId). It keeps the per-source unique, the CHECK, the index and the
+    foreign key. The migration header carries the same record.
+- Exit: flag OFF, no user-visible change except the additive `sourceKey` field on
+  the `/api/calendar` row JSON. Nothing is flipped.
+- Rollback: revert the PR. The columns, index and constraints are ignorable by
+  the previous release, which was verified against them.
 
 **C3 — CalDAV connector for iCloud and Naver** (*outline*). Read-only v1.
 `caldavUrl` is user-supplied and fetched server-side, so SSRF validation
@@ -1078,7 +1165,9 @@ P4.
 policy per P4.
 **C7 — unified calendar read path** (*outline*). Depends on: C2. `list_events`,
 briefing and conflict checks read rows across providers. Each connector joins
-as it lands; C7 does not wait for them.
+as it lands; C7 does not wait for them. It inherits C2's read-time dedupe and
+the readers C2 left undeduped (see C2), and decides the cross-calendar key
+(iCalUID).
 
 ### Workstream D — drive
 

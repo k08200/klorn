@@ -1,16 +1,6 @@
-import { type calendar_v3, google } from "googleapis";
 import { prisma } from "../db.js";
+import { type BusyConflict, toAbsoluteInstant } from "../google-calendar-time.js";
 import {
-  type BusyConflict,
-  type CalendarConflictItem,
-  calendarLabelMap,
-  selectFreeBusyCalendarIds,
-  summarizeConflicts,
-  summarizeFreeBusy,
-  toAbsoluteInstant,
-} from "../google-calendar-time.js";
-import {
-  getAuthedClient,
   getLinkedCalendarClients,
   isGoogleAuthError,
   markGoogleTokenForReconnect,
@@ -19,6 +9,12 @@ import {
 import { captureError } from "../sentry.js";
 import { normalizeTimeZone } from "../time-zone.js";
 import { wrapUntrusted } from "../untrusted.js";
+import { connectPrimaryCalendar } from "./calendar-providers/dispatch.js";
+import { googleSessionFromClient } from "./calendar-providers/google.js";
+
+// Tests and the web layer import this from here; the implementation moved behind
+// the provider seam (step C2) without changing.
+export { googleEventTimes } from "./calendar-providers/google.js";
 
 /**
  * The user's configured IANA timezone (defaults to the product default). Used to
@@ -35,25 +31,18 @@ async function getUserTimeZone(userId: string): Promise<string> {
 }
 
 export async function listEvents(userId: string, maxResults = 10) {
-  const auth = await getAuthedClient(userId);
-  if (!auth)
+  const session = await connectPrimaryCalendar(userId);
+  if (!session)
     return { error: "Google Calendar not connected. Please connect your Google account first." };
 
   try {
-    const calendar = google.calendar({ version: "v3", auth });
-    const res = await calendar.events.list({
-      calendarId: "primary",
-      timeMin: new Date().toISOString(),
-      maxResults,
-      singleEvents: true,
-      orderBy: "startTime",
-    });
+    const listed = await session.listEvents({ timeMin: new Date().toISOString(), maxResults });
 
-    const events = (res.data.items || []).map((e) => ({
-      id: e.id,
+    const events = listed.map((e) => ({
+      id: e.externalId,
       summary: wrapUntrusted(e.summary || "(No title)", "calendar:summary"),
-      start: e.start?.dateTime || e.start?.date || "",
-      end: e.end?.dateTime || e.end?.date || "",
+      start: e.start,
+      end: e.end,
       location: wrapUntrusted(e.location, "calendar:location"),
       description: wrapUntrusted(e.description, "calendar:description"),
     }));
@@ -75,32 +64,6 @@ export async function listEvents(userId: string, maxResults = 10) {
   }
 }
 
-/**
- * The start/end Google wants for an event. Timed events carry the user's
- * IANA zone so a naive dateTime is read in THEIR wall clock (#676). All-day
- * events are DATES (end exclusive, Google's contract) — the date is read
- * off the string, never off an instant, so "2026-08-01T00:00:00Z" and
- * "2026-08-01T00:00:00+09:00" both mean August 1st. Pure, exported for
- * its tests.
- */
-export function googleEventTimes(input: {
-  startTime: string;
-  endTime: string;
-  allDay: boolean;
-  timeZone: string;
-}): { start: calendar_v3.Schema$EventDateTime; end: calendar_v3.Schema$EventDateTime } {
-  if (input.allDay) {
-    return {
-      start: { date: input.startTime.slice(0, 10) },
-      end: { date: input.endTime.slice(0, 10) },
-    };
-  }
-  return {
-    start: { dateTime: input.startTime, timeZone: input.timeZone },
-    end: { dateTime: input.endTime, timeZone: input.timeZone },
-  };
-}
-
 export async function createEvent(
   userId: string,
   summary: string,
@@ -111,33 +74,29 @@ export async function createEvent(
   attendees?: string[],
   allDay = false,
 ) {
-  const auth = await getAuthedClient(userId);
-  if (!auth) return { error: "Google Calendar not connected." };
+  const session = await connectPrimaryCalendar(userId);
+  if (!session) return { error: "Google Calendar not connected." };
 
   try {
     // A naive (offset-less) dateTime is interpreted by Google in whatever
     // timeZone field is sent — hardcoding "Asia/Seoul" here put every
     // non-KST user's event at the wrong absolute time (#676).
     const userZone = await getUserTimeZone(userId);
-    const calendar = google.calendar({ version: "v3", auth });
-    const res = await calendar.events.insert({
-      calendarId: "primary",
-      requestBody: {
-        summary,
-        description: description || "",
-        location: location || "",
-        ...googleEventTimes({ startTime, endTime, allDay, timeZone: userZone }),
-        ...(attendees && attendees.length > 0
-          ? { attendees: attendees.map((email) => ({ email })) }
-          : {}),
-      },
-      // Invitations go out only when the human-approved draft carries
-      // attendees (team mode P2) — the assistant's tool path never passes them.
-      ...(attendees && attendees.length > 0 ? { sendUpdates: "all" as const } : {}),
+    // Invitations go out only when the human-approved draft carries attendees
+    // (team mode P2) — the assistant's tool path never passes them.
+    const written = await session.createEvent({
+      summary,
+      description,
+      location,
+      startTime,
+      endTime,
+      allDay,
+      timeZone: userZone,
+      attendees,
     });
 
-    // Canonical timestamps come back from Google's response — these are the
-    // values Google actually stored, after applying its own offset/timeZone
+    // Canonical timestamps come back from the provider's response — these are
+    // the values it actually stored, after applying its own offset/timeZone
     // resolution rules. Local DB writes should use these, NOT the LLM's
     // raw input, to prevent the 2026-06-04 +13h shift bug: when the LLM
     // produces a dateTime with a wrong offset (e.g. "-04:00" instead of
@@ -146,10 +105,10 @@ export async function createEvent(
     // UTC moment locally.
     return {
       success: true,
-      eventId: res.data.id,
-      htmlLink: res.data.htmlLink,
-      canonicalStart: res.data.start?.dateTime ?? res.data.start?.date ?? null,
-      canonicalEnd: res.data.end?.dateTime ?? res.data.end?.date ?? null,
+      eventId: written.eventId,
+      htmlLink: written.htmlLink,
+      canonicalStart: written.canonicalStart,
+      canonicalEnd: written.canonicalEnd,
     };
   } catch (err: unknown) {
     if (isGoogleAuthError(err)) {
@@ -185,30 +144,16 @@ export interface GoogleEventPatch {
  * like every other calendar write.
  */
 export async function updateEvent(userId: string, eventId: string, patch: GoogleEventPatch) {
-  const auth = await getAuthedClient(userId);
-  if (!auth) return { error: "Google Calendar not connected." };
+  const session = await connectPrimaryCalendar(userId);
+  if (!session) return { error: "Google Calendar not connected." };
 
   try {
     const userZone = await getUserTimeZone(userId);
-    const calendar = google.calendar({ version: "v3", auth });
-    const requestBody: calendar_v3.Schema$Event = {
-      ...(patch.summary !== undefined ? { summary: patch.summary } : {}),
-      ...(patch.description !== undefined ? { description: patch.description ?? "" } : {}),
-      ...(patch.location !== undefined ? { location: patch.location ?? "" } : {}),
-      ...(patch.startTime && patch.endTime
-        ? googleEventTimes({
-            startTime: patch.startTime,
-            endTime: patch.endTime,
-            allDay: patch.allDay ?? false,
-            timeZone: userZone,
-          })
-        : {}),
-    };
-    const res = await calendar.events.patch({ calendarId: "primary", eventId, requestBody });
+    const written = await session.updateEvent(eventId, { ...patch, timeZone: userZone });
     return {
       success: true,
-      canonicalStart: res.data.start?.dateTime ?? res.data.start?.date ?? null,
-      canonicalEnd: res.data.end?.dateTime ?? res.data.end?.date ?? null,
+      canonicalStart: written.canonicalStart,
+      canonicalEnd: written.canonicalEnd,
     };
   } catch (err: unknown) {
     if (isGoogleAuthError(err)) {
@@ -227,15 +172,11 @@ export async function updateEvent(userId: string, eventId: string, patch: Google
 }
 
 export async function deleteEvent(userId: string, eventId: string) {
-  const auth = await getAuthedClient(userId);
-  if (!auth) return { error: "Google Calendar not connected." };
+  const session = await connectPrimaryCalendar(userId);
+  if (!session) return { error: "Google Calendar not connected." };
 
-  const calendar = google.calendar({ version: "v3", auth });
   try {
-    await calendar.events.delete({
-      calendarId: "primary",
-      eventId,
-    });
+    await session.deleteEvent(eventId);
   } catch (err) {
     if (isGoogleAuthError(err)) {
       await markGoogleTokenForReconnect(userId);
@@ -271,51 +212,6 @@ function conflictResult(
   };
 }
 
-/** Free/busy across every calendar the user writes to — one query covers the
- *  work / shared / secondary calendars a primary-only check structurally misses. */
-async function freeBusyConflicts(calendar: calendar_v3.Calendar, timeMin: string, timeMax: string) {
-  const list = await calendar.calendarList.list({ maxResults: 250, minAccessRole: "writer" });
-  const ids = selectFreeBusyCalendarIds(list.data.items);
-  if (ids.length === 0) return [];
-  const fb = await calendar.freebusy.query({
-    requestBody: { timeMin, timeMax, items: ids.map((id) => ({ id })) },
-  });
-  const calendars = fb.data.calendars ?? {};
-
-  // freebusy reports per-calendar failures inline (not as an HTTP error): a
-  // calendar the token can't read returns { errors:[...] } with empty busy. If
-  // we ignored it, that calendar would look free — a silent false "no conflict".
-  // Surface it so the gap is visible instead of becoming a missed double-book.
-  const failed = Object.entries(calendars).filter(([, c]) => (c?.errors?.length ?? 0) > 0);
-  if (failed.length > 0) {
-    const reasons = failed.map(([id, c]) => `${id}:${c?.errors?.[0]?.reason ?? "unknown"}`);
-    console.warn(`[CALENDAR] freebusy partial — ${failed.length} calendar(s) failed: ${reasons}`);
-    captureError(new Error("freebusy partial result"), {
-      tags: { scope: "calendar.freebusy_partial" },
-      extra: { failedCount: failed.length, reasons },
-    });
-  }
-
-  return summarizeFreeBusy(calendars, calendarLabelMap(list.data.items));
-}
-
-/** Primary-only busy blocks (events.list) for tokens that lack calendar.readonly.
- *  Still timezone-correct and all-day-safe — just blind to other calendars. */
-async function primaryOnlyBusy(
-  calendar: calendar_v3.Calendar,
-  timeMin: string,
-  timeMax: string,
-): Promise<readonly unknown[]> {
-  const res = await calendar.events.list({
-    calendarId: "primary",
-    timeMin,
-    timeMax,
-    singleEvents: true,
-    orderBy: "startTime",
-  });
-  return summarizeConflicts((res.data.items as CalendarConflictItem[]) || []);
-}
-
 /** Busy blocks from every LINKED (secondary) Google account — e.g. a work
  *  account — which one primary token structurally can't see. Best-effort: a
  *  linked account that errors is logged + captured and skipped, never sinking
@@ -329,8 +225,9 @@ async function linkedAccountConflicts(
   const conflicts: BusyConflict[] = [];
   for (const { client, id, email } of linked) {
     try {
-      const cal = google.calendar({ version: "v3", auth: client });
-      conflicts.push(...(await freeBusyConflicts(cal, timeMin, timeMax)));
+      // Linked accounts are Google-only (getLinkedCalendarClients filters on it),
+      // so the Google session is built straight from each client.
+      conflicts.push(...(await googleSessionFromClient(client).busyBlocks({ timeMin, timeMax })));
     } catch (err) {
       // A revoked linked-calendar token 401s here. Flag it for reconnect so the
       // UI prompts a re-link instead of the account silently dropping out of
@@ -371,25 +268,16 @@ export async function checkAttendeeBusy(
   endTime: string,
 ): Promise<Array<{ email: string; busy: boolean }>> {
   if (attendeeEmails.length === 0) return [];
-  const auth = await getAuthedClient(userId);
-  if (!auth) return [];
+  const session = await connectPrimaryCalendar(userId);
+  if (!session) return [];
   const userZone = await getUserTimeZone(userId);
   const timeMin = toAbsoluteInstant(startTime, userZone);
   const timeMax = toAbsoluteInstant(endTime, userZone);
   if (!timeMin || !timeMax) return [];
   try {
-    const calendar = google.calendar({ version: "v3", auth });
-    const fb = await calendar.freebusy.query({
-      requestBody: { timeMin, timeMax, items: attendeeEmails.map((id) => ({ id })) },
-    });
-    const calendars = fb.data.calendars ?? {};
-    const out: Array<{ email: string; busy: boolean }> = [];
-    for (const email of attendeeEmails) {
-      const cal = calendars[email];
-      if (!cal || (cal.errors?.length ?? 0) > 0) continue; // not visible — unknown
-      out.push({ email, busy: (cal.busy?.length ?? 0) > 0 });
-    }
-    return out;
+    const people = await session.peopleFreeBusy(attendeeEmails, { timeMin, timeMax });
+    // A calendar we cannot see (blocks null) is unknown — omitted, never "free".
+    return people.flatMap((p) => (p.blocks ? [{ email: p.email, busy: p.blocks.length > 0 }] : []));
   } catch (err) {
     console.warn(`[CALENDAR] attendee freebusy failed for ${userId}:`, err);
     return [];
@@ -409,27 +297,14 @@ export async function getAttendeeBusyBlocks(
   timeMaxIso: string,
 ): Promise<Array<{ start: string; end: string }>> {
   if (attendeeEmails.length === 0) return [];
-  const auth = await getAuthedClient(userId);
-  if (!auth) return [];
+  const session = await connectPrimaryCalendar(userId);
+  if (!session) return [];
   try {
-    const calendar = google.calendar({ version: "v3", auth });
-    const fb = await calendar.freebusy.query({
-      requestBody: {
-        timeMin: timeMinIso,
-        timeMax: timeMaxIso,
-        items: attendeeEmails.map((id) => ({ id })),
-      },
+    const people = await session.peopleFreeBusy(attendeeEmails, {
+      timeMin: timeMinIso,
+      timeMax: timeMaxIso,
     });
-    const calendars = fb.data.calendars ?? {};
-    const out: Array<{ start: string; end: string }> = [];
-    for (const email of attendeeEmails) {
-      const cal = calendars[email];
-      if (!cal || (cal.errors?.length ?? 0) > 0) continue;
-      for (const b of cal.busy ?? []) {
-        if (b.start && b.end) out.push({ start: b.start, end: b.end });
-      }
-    }
-    return out;
+    return people.flatMap((p) => p.blocks ?? []);
   } catch (err) {
     console.warn(`[CALENDAR] attendee busy-block query failed for ${userId}:`, err);
     return [];
@@ -448,26 +323,12 @@ export async function getAttendeeBusyByMember(
   timeMaxIso: string,
 ): Promise<Array<{ email: string; blocks: Array<{ start: string; end: string }> | null }>> {
   if (attendeeEmails.length === 0) return [];
-  const auth = await getAuthedClient(userId);
-  if (!auth) return attendeeEmails.map((email) => ({ email, blocks: null }));
+  const session = await connectPrimaryCalendar(userId);
+  if (!session) return attendeeEmails.map((email) => ({ email, blocks: null }));
   try {
-    const calendar = google.calendar({ version: "v3", auth });
-    const fb = await calendar.freebusy.query({
-      requestBody: {
-        timeMin: timeMinIso,
-        timeMax: timeMaxIso,
-        items: attendeeEmails.map((id) => ({ id })),
-      },
-    });
-    const calendars = fb.data.calendars ?? {};
-    return attendeeEmails.map((email) => {
-      const cal = calendars[email];
-      if (!cal || (cal.errors?.length ?? 0) > 0) return { email, blocks: null };
-      const blocks: Array<{ start: string; end: string }> = [];
-      for (const b of cal.busy ?? []) {
-        if (b.start && b.end) blocks.push({ start: b.start, end: b.end });
-      }
-      return { email, blocks };
+    return await session.peopleFreeBusy(attendeeEmails, {
+      timeMin: timeMinIso,
+      timeMax: timeMaxIso,
     });
   } catch (err) {
     console.warn(`[CALENDAR] per-member busy query failed for ${userId}:`, err);
@@ -476,8 +337,8 @@ export async function getAttendeeBusyByMember(
 }
 
 export async function checkConflicts(userId: string, startTime: string, endTime: string) {
-  const auth = await getAuthedClient(userId);
-  if (!auth) return { error: "Google Calendar not connected." };
+  const session = await connectPrimaryCalendar(userId);
+  if (!session) return { error: "Google Calendar not connected." };
 
   // The conflict window must be an absolute instant. The tool contract asks the
   // agent for offset-bearing ISO8601, but a naive (offset-less) string must be
@@ -490,14 +351,14 @@ export async function checkConflicts(userId: string, startTime: string, endTime:
     return { error: "Invalid time range — start_time and end_time must be valid ISO 8601." };
   }
 
-  const calendar = google.calendar({ version: "v3", auth });
+  const window = { timeMin, timeMax };
 
   // Primary account: free/busy across ITS calendars, degrading to primary-only
   // events.list when the token predates the calendar.readonly scope (403).
   let primaryConflicts: readonly unknown[];
   let scope: "all_calendars" | "primary_only";
   try {
-    primaryConflicts = await freeBusyConflicts(calendar, timeMin, timeMax);
+    primaryConflicts = await session.busyBlocks(window);
     scope = "all_calendars";
   } catch (err) {
     if (isGoogleAuthError(err)) {
@@ -506,7 +367,7 @@ export async function checkConflicts(userId: string, startTime: string, endTime:
     }
     if (!isForbidden(err)) throw err;
     try {
-      primaryConflicts = await primaryOnlyBusy(calendar, timeMin, timeMax);
+      primaryConflicts = await session.primaryBusyBlocks(window);
       scope = "primary_only";
     } catch (fallbackErr) {
       if (isGoogleAuthError(fallbackErr)) {

@@ -20,6 +20,7 @@
 import { prisma } from "../db.js";
 import { parseEventText } from "../event-parse.js";
 import { checkAttendeeBusy, checkConflicts, getAttendeeBusyBlocks } from "../pim/calendar.js";
+import { dedupeCalendarEvents } from "../pim/calendar-dedupe.js";
 import { type SuggestedSlot, suggestAlternativeSlots } from "../pim/slot-suggest.js";
 import { wrapUntrusted } from "../untrusted.js";
 import { getUserTimeZone } from "../user-timezone.js";
@@ -231,7 +232,10 @@ export async function getMeetingContext(
       orderBy: { startTime: "asc" },
       take: NEARBY_MAX_EVENTS,
     });
-    nearby = rows.map((row) => ({
+    // An invite in both the primary and a linked calendar is two rows (C2);
+    // the pane must list it once. The busy-interval query above needs no dedupe:
+    // overlapping identical intervals busy the same time.
+    nearby = dedupeCalendarEvents(rows).map((row) => ({
       id: row.id,
       title: row.title,
       startTime: row.startTime.toISOString(),

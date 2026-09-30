@@ -28,6 +28,7 @@ import { senderName } from "../notify/notification-format.js";
 import type { NotifCategory } from "../notify/notification-prefs.js";
 import { sendPushNotification } from "../notify/push.js";
 import { sendSms } from "../notify/sms.js";
+import { dedupeCalendarEvents } from "../pim/calendar-dedupe.js";
 import { captureError } from "../sentry.js";
 import {
   isLocalTimeWithin,
@@ -414,11 +415,22 @@ async function checkBackToBackMeetings(userId: string, tz: string): Promise<void
   });
   if (existing) return;
 
-  const events = await prisma.calendarEvent.findMany({
+  const rows = await prisma.calendarEvent.findMany({
     where: { userId, startTime: { gte: now, lte: todayEnd } },
-    select: { title: true, startTime: true, endTime: true },
+    // The identity fields let an invite present in the primary and a linked
+    // calendar (two rows, C2) count once: a duplicate would read as a meeting
+    // that starts before the previous one ends and raise a false warning.
+    select: {
+      title: true,
+      startTime: true,
+      endTime: true,
+      provider: true,
+      externalId: true,
+      sourceAccountId: true,
+    },
     orderBy: { startTime: "asc" },
   });
+  const events = dedupeCalendarEvents(rows);
 
   if (events.length < 2) return;
 

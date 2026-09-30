@@ -93,6 +93,38 @@ describe("getMeetingContext", () => {
     expect(ctx?.timeZone).toBe("Asia/Seoul");
   });
 
+  it("lists nearby an invite that is in both the primary and a linked calendar once (C2)", async () => {
+    vi.mocked(parseEventText).mockResolvedValueOnce({
+      title: "Meeting with Terry",
+      startTime: "2026-08-13T16:00:00+09:00",
+      endTime: "2026-08-13T17:00:00+09:00",
+    });
+    vi.mocked(checkConflicts).mockResolvedValueOnce({
+      hasConflicts: false,
+      conflicts: [],
+      message: "No conflicts — this time slot is free.",
+    } as never);
+    const { prisma } = await import("../db.js");
+    const standup = (id: string, sourceAccountId: string | null) => ({
+      id,
+      title: "Standup",
+      startTime: new Date("2026-08-13T10:00:00+09:00"),
+      endTime: new Date("2026-08-13T10:15:00+09:00"),
+      allDay: false,
+      provider: "GOOGLE",
+      externalId: "g-standup",
+      sourceAccountId,
+    });
+    vi.mocked(prisma.calendarEvent.findMany).mockResolvedValueOnce([
+      standup("linked-copy", "acct-1"),
+      standup("primary-copy", null),
+    ] as never);
+
+    const ctx = await getMeetingContext("user-1", meetingEmail());
+
+    expect(ctx?.nearby.map((e) => e.id)).toEqual(["primary-copy"]);
+  });
+
   it("degrades to conflict:null when the calendar check errors (Google disconnected)", async () => {
     vi.mocked(parseEventText).mockResolvedValueOnce({
       title: "Meeting",

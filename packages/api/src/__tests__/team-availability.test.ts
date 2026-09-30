@@ -98,3 +98,48 @@ describe("getTeamAvailability", () => {
     ).toHaveProperty("error");
   });
 });
+
+describe("getTeamAvailability — linked calendar copies (C2)", () => {
+  it("duplicate rows of one invite (primary + linked) busy the same time once and change no slot", async () => {
+    const invite = {
+      startTime: new Date("2026-08-25T00:00:00Z"),
+      endTime: new Date("2026-08-25T01:00:00Z"),
+    };
+    state.myEvents = [invite];
+    const single = await getTeamAvailability(
+      "user-1",
+      ["alice@corp.com"],
+      WINDOW.start,
+      WINDOW.end,
+      60,
+    );
+
+    state.myEvents = [invite, { ...invite }];
+    const duplicated = await getTeamAvailability(
+      "user-1",
+      ["alice@corp.com"],
+      WINDOW.start,
+      WINDOW.end,
+      60,
+    );
+
+    expect(duplicated).toEqual(single);
+    if ("error" in duplicated) throw new Error(duplicated.error);
+    expect(duplicated.slots[0]?.startTime).toBe("2026-08-25T01:00:00.000Z");
+  });
+
+  it("a linked calendar's event blocks the slot too: that is what syncing it is for", async () => {
+    state.myEvents = [
+      { startTime: new Date("2026-08-25T01:00:00Z"), endTime: new Date("2026-08-25T02:00:00Z") },
+    ];
+    const out = await getTeamAvailability(
+      "user-1",
+      ["alice@corp.com"],
+      WINDOW.start,
+      WINDOW.end,
+      60,
+    );
+    if ("error" in out) throw new Error(out.error);
+    expect(out.slots.map((x) => x.startTime)).not.toContain("2026-08-25T01:00:00.000Z");
+  });
+});

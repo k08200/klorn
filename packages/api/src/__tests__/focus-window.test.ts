@@ -9,7 +9,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({
   config: { focusWindowEnabled: true } as Record<string, unknown> | null,
   ongoingBlock: null as { id: string } | null,
-  endedEvents: [] as Array<{ id: string; userId: string; startTime: Date; endTime: Date }>,
+  endedEvents: [] as Array<{
+    id: string;
+    userId: string;
+    startTime: Date;
+    endTime: Date;
+    provider?: string;
+    externalId?: string | null;
+    sourceAccountId?: string | null;
+  }>,
   arrivedCount: 0,
   notifications: [] as unknown[],
   notifDupe: false,
@@ -113,5 +121,31 @@ describe("sendFocusWindowDigests", () => {
     state.notifDupe = true; // dedupeKey already exists
     expect(await sendFocusWindowDigests(new Date("2026-08-21T02:01:00Z"))).toBe(0);
     expect(state.pushes).toHaveLength(0);
+  });
+});
+
+describe("sendFocusWindowDigests — linked calendar copies (C2)", () => {
+  const copy = (id: string, sourceAccountId: string | null) => ({
+    id,
+    userId: "u1",
+    startTime: new Date("2026-08-21T01:00:00Z"),
+    endTime: new Date("2026-08-21T02:00:00Z"),
+    provider: "GOOGLE",
+    externalId: "g-focus",
+    sourceAccountId,
+  });
+
+  it("sends ONE digest for a focus block that sits in the primary and a linked calendar", async () => {
+    state.endedEvents = [copy("linked-copy", "acct-1"), copy("primary-copy", null)];
+    state.arrivedCount = 4;
+
+    const sent = await sendFocusWindowDigests(new Date("2026-08-21T02:01:00Z"));
+
+    expect(sent).toBe(1);
+    expect(state.pushes).toHaveLength(1);
+    const keys = state.notifications.map(
+      (n) => (n as { data: { dedupeKey: string } }).data.dedupeKey,
+    );
+    expect(keys).toEqual(["focus:primary-copy"]);
   });
 });

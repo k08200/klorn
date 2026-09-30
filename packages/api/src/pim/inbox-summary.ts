@@ -33,6 +33,7 @@ import {
   upsertAttentionForTask,
 } from "../judge/attention-mirror.js";
 import { captureError } from "../sentry.js";
+import { dedupeCalendarEvents } from "./calendar-dedupe.js";
 
 export type { EventItem as EventInput, TaskItem as TaskInput } from "@klorn/contract";
 // Re-export for existing importers (routes, operating-plan, tests) so the
@@ -338,7 +339,7 @@ export async function buildInboxSummary(userId: string, now = Date.now()): Promi
   const todayStart = new Date(startOfToday(now));
   const tomorrowStart = new Date(endOfToday(now));
 
-  const [pendingRows, taskRows, eventRows, notifRows, commitmentRows] = await Promise.all([
+  const [pendingRows, taskRows, rawEventRows, notifRows, commitmentRows] = await Promise.all([
     (prisma.pendingAction.findMany as (args: unknown) => Promise<PendingActionRow[]>)({
       where: { userId, status: "PENDING" },
       orderBy: { createdAt: "desc" },
@@ -364,6 +365,10 @@ export async function buildInboxSummary(userId: string, now = Date.now()): Promi
       take: 50,
     }),
   ]);
+
+  // An invite in both the primary and a linked calendar is two rows (C2); the
+  // today list and the attention mirror below must see it once.
+  const eventRows = dedupeCalendarEvents(rawEventRows);
 
   // Fire-and-forget backfill. The attention-mirror producers keep the queue
   // current; this is a safety net for rows that pre-date the producers.

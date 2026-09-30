@@ -1,8 +1,9 @@
 /**
- * C1 (docs/providers/unified-platform-plan.md) — provider-aware CalendarEvent
+ * C1/C2 (docs/providers/unified-platform-plan.md) — provider-aware CalendarEvent
  * rows. `pim/calendar-rows.ts` is the one place that decides which
- * (provider, externalId, sourceAccountId) a row is written with, and the one
- * place the three Google sync sites upsert through. Reads stay on googleId.
+ * (provider, externalId, sourceAccountId, sourceKey) a row is written with, and
+ * the one place Google events are upserted. The primary calendar still matches
+ * by googleId; a linked calendar's rows match by the per-source unique.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,8 +14,16 @@ vi.mock("../db.js", () => {
   return { prisma, db: prisma };
 });
 
-const { eventSourceForGoogleId, googleEventSource, localEventSource, upsertGoogleEventRow } =
-  await import("../pim/calendar-rows.js");
+const {
+  PRIMARY_SOURCE_KEY,
+  eventSourceForGoogleId,
+  googleEventSource,
+  linkedGoogleEventSource,
+  localEventSource,
+  sourceKeyFor,
+  upsertGoogleEventRow,
+  upsertLinkedGoogleEventRow,
+} = await import("../pim/calendar-rows.js");
 
 const FIELDS = {
   title: "Standup",
@@ -32,6 +41,7 @@ describe("event source descriptors", () => {
       provider: "GOOGLE",
       externalId: "g-123",
       sourceAccountId: null,
+      sourceKey: "primary",
     });
   });
 
@@ -40,6 +50,7 @@ describe("event source descriptors", () => {
       provider: "LOCAL",
       externalId: null,
       sourceAccountId: null,
+      sourceKey: "primary",
     });
   });
 
@@ -76,6 +87,7 @@ describe("upsertGoogleEventRow", () => {
       provider: "GOOGLE",
       externalId: "g-1",
       sourceAccountId: null,
+      sourceKey: "primary",
     });
   });
 
@@ -91,11 +103,85 @@ describe("upsertGoogleEventRow", () => {
     expect(arg.update).not.toHaveProperty("userId");
     expect(arg.update).not.toHaveProperty("googleId");
     expect(arg.update).not.toHaveProperty("sourceAccountId");
+    expect(arg.update).not.toHaveProperty("sourceKey");
   });
 
   it("does not mutate the fields object it is given", async () => {
     const input = { ...FIELDS };
     await upsertGoogleEventRow("u1", "g-1", input);
     expect(input).toEqual(FIELDS);
+  });
+});
+
+describe("source key", () => {
+  it("is 'primary' for the primary calendar and the linked account id otherwise", () => {
+    expect(PRIMARY_SOURCE_KEY).toBe("primary");
+    expect(sourceKeyFor(null)).toBe("primary");
+    expect(sourceKeyFor("acct-1")).toBe("acct-1");
+  });
+
+  it("every descriptor keeps sourceKey equal to sourceKeyFor(sourceAccountId), the DB CHECK's rule", () => {
+    for (const source of [
+      googleEventSource("g"),
+      localEventSource(),
+      eventSourceForGoogleId("g"),
+      eventSourceForGoogleId(null),
+      linkedGoogleEventSource("acct-9", "g"),
+    ]) {
+      expect(source.sourceKey).toBe(sourceKeyFor(source.sourceAccountId));
+    }
+  });
+});
+
+describe("linked Google calendar rows", () => {
+  beforeEach(() => upsert.mockClear());
+
+  it("describes a linked event as GOOGLE, tagged with its account, keyed by that account", () => {
+    expect(linkedGoogleEventSource("acct-1", "g-7")).toEqual({
+      provider: "GOOGLE",
+      externalId: "g-7",
+      sourceAccountId: "acct-1",
+      sourceKey: "acct-1",
+    });
+  });
+
+  it("matches by the per-source unique, never by googleId (the primary row with the same id must not be touched)", async () => {
+    await upsertLinkedGoogleEventRow("u1", "acct-1", "g-7", FIELDS);
+    const arg = upsert.mock.calls[0]?.[0] as { where: unknown };
+    expect(arg.where).toEqual({
+      userId_provider_sourceKey_externalId: {
+        userId: "u1",
+        provider: "GOOGLE",
+        sourceKey: "acct-1",
+        externalId: "g-7",
+      },
+    });
+  });
+
+  it("creates the row with the full linked identity and NO googleId (it stays NULL)", async () => {
+    await upsertLinkedGoogleEventRow("u1", "acct-1", "g-7", FIELDS);
+    const arg = upsert.mock.calls[0]?.[0] as { create: Record<string, unknown> };
+    expect(arg.create).toEqual({
+      userId: "u1",
+      ...FIELDS,
+      provider: "GOOGLE",
+      externalId: "g-7",
+      sourceAccountId: "acct-1",
+      sourceKey: "acct-1",
+    });
+    expect(arg.create).not.toHaveProperty("googleId");
+  });
+
+  it("updates only the synced fields: identity and ownership never move", async () => {
+    await upsertLinkedGoogleEventRow("u1", "acct-1", "g-7", FIELDS);
+    const arg = upsert.mock.calls[0]?.[0] as { update: Record<string, unknown> };
+    expect(arg.update).toEqual({ ...FIELDS });
+  });
+
+  it("refuses an empty account id: a linked row with no account would be a primary row", async () => {
+    await expect(upsertLinkedGoogleEventRow("u1", "", "g-7", FIELDS)).rejects.toThrow(
+      /linked account id/,
+    );
+    expect(upsert).not.toHaveBeenCalled();
   });
 });

@@ -8,7 +8,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({
   timezone: "Asia/Seoul",
   language: "ko" as string | null,
-  events: [] as Array<{ title: string; startTime: Date; endTime: Date }>,
+  events: [] as Array<{
+    title: string;
+    startTime: Date;
+    endTime: Date;
+    provider?: string;
+    externalId?: string | null;
+    sourceAccountId?: string | null;
+  }>,
   pushItems: [] as Array<{ title: string; tierReason: string | null }>,
 }));
 
@@ -115,5 +122,34 @@ describe("buildBriefingStructure", () => {
     expect(s.curve[0]).toBe(1); // 08h
     expect(s.curve[1]).toBe(0); // 09h onward free
     expect(s.headline).toContain("1 meeting");
+  });
+});
+
+describe("buildBriefingStructure — linked calendar copies (C2)", () => {
+  const copy = (sourceAccountId: string | null) => ({
+    ...kstEvent("Design review", 10, 11),
+    provider: "GOOGLE",
+    externalId: "g-invite",
+    sourceAccountId,
+  });
+
+  it("counts an invite that sits in the primary and a linked calendar as one meeting", async () => {
+    state.events = [copy(null)];
+    const single = await buildBriefingStructure("u1", NOW);
+
+    state.events = [copy("acct-1"), copy(null)];
+    const both = await buildBriefingStructure("u1", NOW);
+
+    expect(both).toEqual(single);
+    // The overlap curve would read 2 at 10:00 if the copy were counted.
+    expect(Math.max(...both.curve)).toBe(1);
+  });
+
+  it("still counts two different meetings at the same time as two", async () => {
+    state.events = [
+      { ...copy(null), externalId: "g-a" },
+      { ...copy("acct-1"), externalId: "g-b" },
+    ];
+    expect(Math.max(...(await buildBriefingStructure("u1", NOW)).curve)).toBe(2);
   });
 });

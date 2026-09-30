@@ -27,6 +27,7 @@ import { isEntitled, planHasFeature } from "./billing/stripe.js";
 import {
   AUTO_REPLY_LINKED_INBOX_ENABLED,
   attentionAgingEnabled,
+  linkedCalendarSyncEnabled,
   MULTI_INBOX_SYNC_ENABLED,
   SCHEDULER_CALENDAR_SYNC_INTERVAL_MS,
   SCHEDULER_CHECK_INTERVAL_MS,
@@ -36,7 +37,6 @@ import {
 } from "./config.js";
 import { prisma } from "./db.js";
 import { withDbRetry } from "./db-retry.js";
-import { parseGoogleDateTime } from "./google-calendar-time.js";
 import { sweepAttentionAging } from "./judge/attention-aging.js";
 import { findOpenEmailAttentionItemId } from "./judge/attention-override.js";
 import { sweepFallbackRejudge } from "./judge/fallback-rejudge.js";
@@ -57,7 +57,7 @@ import {
   syncEmails,
   syncSpamLane,
 } from "./mail/email-sync.js";
-import { getAuthedClient, getLinkedInboxClients, renewExpiringGmailWatches } from "./mail/gmail.js";
+import { getLinkedInboxClients, renewExpiringGmailWatches } from "./mail/gmail.js";
 import { syncSentMessages } from "./mail/sent-messages.js";
 import { notifyConversationsUpdated } from "./notify/conversations-updated.js";
 import { formatUrgentEmailBody, senderName } from "./notify/notification-format.js";
@@ -67,7 +67,12 @@ import { sendSms } from "./notify/sms.js";
 import { buildUrgentDedupMessage, parseNotifiedGmailIds } from "./notify/urgent-dedup.js";
 import { autoModeSendEnabled, tierV2Enabled } from "./ops/feature-flags.js";
 import { createDailyBriefingDelivery } from "./pim/briefing.js";
-import { upsertGoogleEventRow } from "./pim/calendar-rows.js";
+import { connectPrimaryCalendar } from "./pim/calendar-providers/dispatch.js";
+import {
+  readSyncTimezone,
+  syncLinkedCalendars,
+  syncPrimaryCalendarWindow,
+} from "./pim/calendar-sync.js";
 import { sendFocusWindowDigests } from "./pim/focus-digest.js";
 import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
 import { captureError } from "./sentry.js";
@@ -1201,62 +1206,13 @@ async function runUserCycle(
   if (isCalendarSyncDue(config.userId) && googleConnectedUserIds.has(config.userId)) {
     lastCalendarSyncAt.set(config.userId, Date.now());
     try {
-      const auth = await getAuthedClient(config.userId);
-      if (auth) {
-        const { google } = await import("googleapis");
-        const calendar = google.calendar({ version: "v3", auth });
-        const now = new Date();
-        const later = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-
-        const userRow = (await prisma.user.findUnique({
-          where: { id: config.userId },
-        })) as { timezone?: string | null } | null;
-        const userTimezone = normalizeTimeZone(userRow?.timezone);
-
-        const response = await calendar.events.list({
-          calendarId: "primary",
-          timeMin: now.toISOString(),
-          timeMax: later.toISOString(),
-          singleEvents: true,
-          orderBy: "startTime",
-          maxResults: 100,
-          // See note in routes/calendar.ts /sync — pass timeZone so
-          // Google canonicalizes the response, and the defensive
-          // parseGoogleDateTime below handles any stray naive strings.
-          timeZone: userTimezone,
-        });
-
-        for (const item of response.data.items || []) {
-          const googleId = item.id || "";
-          if (!googleId) continue;
-          const startTime = item.start?.dateTime || item.start?.date || "";
-          const endTime = item.end?.dateTime || item.end?.date || "";
-          if (!startTime || !endTime) continue;
-
-          let meetingLink: string | null = null;
-          if (item.conferenceData?.entryPoints) {
-            const video = item.conferenceData.entryPoints.find((e) => e.entryPointType === "video");
-            if (video) meetingLink = video.uri || null;
-          }
-          if (!meetingLink && item.hangoutLink) meetingLink = item.hangoutLink;
-
-          const isTimed = Boolean(item.start?.dateTime);
-          const parsedStart = isTimed
-            ? parseGoogleDateTime(startTime, item.start?.timeZone ?? null, userTimezone)
-            : new Date(startTime);
-          const parsedEnd = isTimed
-            ? parseGoogleDateTime(endTime, item.end?.timeZone ?? null, userTimezone)
-            : new Date(endTime);
-          await upsertGoogleEventRow(config.userId, googleId, {
-            title: item.summary || "Untitled",
-            description: item.description || null,
-            startTime: parsedStart,
-            endTime: parsedEnd,
-            location: item.location || null,
-            meetingLink,
-            allDay: !isTimed,
-          });
-        }
+      const session = await connectPrimaryCalendar(config.userId);
+      if (session) {
+        // The user's timezone is passed to Google (canonicalize the response) and
+        // to the defensive parser for any stray naive strings — see the note in
+        // routes/calendar.ts /sync.
+        const userTimezone = await readSyncTimezone(config.userId);
+        await syncPrimaryCalendarWindow(session, config.userId, userTimezone);
       }
     } catch (err) {
       const gaxiosErr = err as {
@@ -1274,6 +1230,22 @@ async function runUserCycle(
       // double-alert; at most once per user per local day.
       if (status === 401 || status === 403) {
         await ensureCalendarDisconnectNotification(config.userId, today);
+      }
+    }
+
+    // Linked Google calendars (step C2), behind LINKED_CALENDAR_SYNC_ENABLED and
+    // read per tick. Off: nothing below runs, so no linked-account lookup and no
+    // extra Google call. Isolated from the primary sync above: neither one's
+    // failure skips the other, and a linked failure never raises the
+    // "Google disconnected" alert (that is about the primary token).
+    if (linkedCalendarSyncEnabled()) {
+      try {
+        await syncLinkedCalendars(config.userId);
+      } catch (err) {
+        console.warn(`[AUTOMATION] Linked calendar sync failed for ${config.userId}:`, err);
+        captureError(err, {
+          tags: { scope: "automation.linked-calendar-sync", userId: config.userId },
+        });
       }
     }
   }

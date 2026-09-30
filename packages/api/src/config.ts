@@ -197,6 +197,19 @@ export function imapSendEnabled(): boolean {
     (process.env.IMAP_SEND_ENABLED ?? "").trim().toLowerCase(),
   );
 }
+// Linked Google calendar sync — step C2 of docs/providers/unified-platform-plan.md.
+// OFF by default (repo doctrine). While unset/false the scheduler's calendar step
+// syncs the primary calendar exactly as before: no linked-account lookup, no
+// extra Google call, no linked CalendarEvent row. When on, each linked GOOGLE
+// calendar account is synced into rows too (same window and caps). Read at
+// request time (PROVIDER_INBOX_SELECTOR_ENABLED precedent) with the same
+// lenient truthy parse, so a flip needs no redeploy. Turning it off stops the
+// syncing; rows already written stay until their account is unlinked.
+export function linkedCalendarSyncEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.LINKED_CALENDAR_SYNC_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
 // MCP write tools — API key permission level and the MCP write set (steps A1
 // and A2a of docs/providers/unified-platform-plan.md). OFF by default (repo
 // doctrine). It gates minting a read-write API key, using one, the MCP-only
