@@ -283,7 +283,17 @@ describe("resolution: the row decides, scoped to the caller", () => {
   });
 });
 
-describe("Outlook drafts natively (step B0b)", () => {
+describe("Outlook drafts natively (step B0b), only while Outlook is enabled", () => {
+  const FLAG = "OUTLOOK_INBOX_ENABLED";
+  const originalFlag = process.env[FLAG];
+  beforeEach(() => {
+    process.env[FLAG] = "true";
+  });
+  afterEach(() => {
+    if (originalFlag === undefined) delete process.env[FLAG];
+    else process.env[FLAG] = originalFlag;
+  });
+
   const outlook = (overrides: ActionOverrides = {}) =>
     useProvider("OUTLOOK", {
       nativeReply: true,
@@ -309,6 +319,45 @@ describe("Outlook drafts natively (step B0b)", () => {
       linkedInboxAccountId: "acct-2",
       replyToProviderMessageId: "gm-2",
     });
+  });
+
+  it.each([
+    ["unset", undefined],
+    ["false", "false"],
+    ["empty", ""],
+  ])("with OUTLOOK_INBOX_ENABLED %s an Outlook row is unsupported, exactly as before B0b, and no provider call is made", async (_name, value) => {
+    if (value === undefined) delete process.env[FLAG];
+    else process.env[FLAG] = value;
+    const actions = outlook();
+    const text = await executeCreateDraft(ctx, valid({ email_id: "gm-2" }));
+    expect(text).toBe(
+      JSON.stringify({
+        unsupported: true,
+        error: "This mailbox's provider does not support threaded drafts from Klorn yet.",
+      }),
+    );
+    expect(actions.getReplyHeaders).not.toHaveBeenCalled();
+    expect(actions.createDraft).not.toHaveBeenCalled();
+  });
+
+  it("the flag is read on each call, so flipping it needs no restart", async () => {
+    const actions = outlook();
+    delete process.env[FLAG];
+    expect(await run(valid({ email_id: "gm-2", subject: "One" }))).toMatchObject({
+      unsupported: true,
+    });
+    process.env[FLAG] = "true";
+    expect(await run(valid({ email_id: "gm-2", subject: "Two" }))).toMatchObject({
+      success: true,
+    });
+    expect(actions.createDraft).toHaveBeenCalledTimes(1);
+  });
+
+  it("the flag gates Outlook only: a Gmail row drafts with it off", async () => {
+    delete process.env[FLAG];
+    const actions = useProvider();
+    expect(await run(valid())).toMatchObject({ success: true, provider: "GOOGLE" });
+    expect(actions.createDraft).toHaveBeenCalledTimes(1);
   });
 
   it("takes the reply target from the stored row, never from the id the agent typed", async () => {

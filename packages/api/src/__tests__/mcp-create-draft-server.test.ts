@@ -241,7 +241,24 @@ describe("a read_write key with the flag on", () => {
     expect(executeToolCall).not.toHaveBeenCalled();
   });
 
+  it("an Outlook mailbox with Outlook switched off answers unsupported, creates nothing and settles error", async () => {
+    vi.stubEnv("OUTLOOK_INBOX_ENABLED", "");
+    mailActionsFor.mockResolvedValue({
+      provider: "OUTLOOK",
+      nativeReply: true,
+      sendEmail,
+      createDraft,
+      getReplyHeaders,
+    });
+    const client = await connect("read_write");
+    const result = await draftCall(client);
+    expect(JSON.parse(textOf(result))).toMatchObject({ unsupported: true });
+    expect(createDraft).not.toHaveBeenCalled();
+    expect(db.tables.mcpWriteAudit[0]).toMatchObject({ outcome: "error", reason: "tool_error" });
+  });
+
   it("an Outlook mailbox drafts natively: the row's provider id is the reply target, the audit row settles ok", async () => {
+    vi.stubEnv("OUTLOOK_INBOX_ENABLED", "true");
     mailActionsFor.mockResolvedValue({
       provider: "OUTLOOK",
       nativeReply: true,

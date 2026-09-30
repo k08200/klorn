@@ -16,6 +16,7 @@ const emailUpdateMany = vi.hoisted(() => vi.fn(async () => ({ count: 1 })));
 const sentUpsert = vi.hoisted(() => vi.fn(async () => ({})));
 const resolveOutlookBearer = vi.hoisted(() => vi.fn());
 const updateCandidateIntake = vi.hoisted(() => vi.fn(async () => {}));
+const captureError = vi.hoisted(() => vi.fn());
 
 vi.mock("../auth.js", () => ({
   requireAuth: async () => {},
@@ -31,7 +32,7 @@ vi.mock("../db.js", () => {
   };
   return { prisma, db: prisma };
 });
-vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
+vi.mock("../sentry.js", () => ({ captureError }));
 vi.mock("../llm/llm-credentials.js", () => ({ getUserLlmCredentials: vi.fn(async () => ({})) }));
 vi.mock("../learning/voice-profile-extractor.js", () => ({
   buildVoicePromptHint: vi.fn(async () => ""),
@@ -53,12 +54,18 @@ const fetchMock = vi.fn();
 vi.stubGlobal("fetch", fetchMock);
 
 import { registerEmailRepliesRoutes } from "../routes/email-replies.js";
+import {
+  address,
+  createGraphFake,
+  type Handler,
+  LIST_ATTACHMENTS,
+  MAILBOX,
+  ORIGINAL_ID,
+} from "./helpers/graph-reply-fake.js";
 
-const BASE = "https://graph.microsoft.com/v1.0";
-const MAILBOX = "me@outlook.com";
 const OUTLOOK_EMAIL = {
   id: "klorn-e1",
-  gmailId: `outlook:${MAILBOX}:ORIG`,
+  gmailId: ORIGINAL_ID,
   threadId: "conv-1",
   userId: "user-1",
   from: "Alice Kim <alice@example.com>",
@@ -67,45 +74,9 @@ const OUTLOOK_EMAIL = {
   receivedAt: new Date("2026-09-30T00:00:00Z"),
   linkedInboxAccountId: "acct-outlook",
 };
-const address = (value: string) => ({ emailAddress: { address: value } });
-
-let graphCalls: Array<{ method: string; path: string; body: unknown }>;
-let draftAtSend: { toRecipients: unknown } | null;
-let failures: Record<string, number>;
-
-function installGraph() {
-  const draft: Record<string, unknown> = {
-    id: "DRAFT",
-    // createReply addresses the original's Reply-To, not its From.
-    toRecipients: [address("reply-to@elsewhere.test")],
-    ccRecipients: [],
-    bccRecipients: [],
-  };
-  fetchMock.mockImplementation(async (url: string, init: RequestInit) => {
-    const method = String(init.method);
-    const path = url.replace(BASE, "");
-    const body = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
-    graphCalls = [...graphCalls, { method, path, body }];
-    const key = `${method} ${path}`;
-    const status = failures[key];
-    if (status) return { ok: false, status, json: async () => null };
-    if (key === "POST /me/messages/ORIG/createReply") {
-      return { ok: true, status: 201, json: async () => ({ ...draft, webLink: "https://w/d" }) };
-    }
-    if (key === "PATCH /me/messages/DRAFT") {
-      Object.assign(draft, body);
-      return { ok: true, status: 200, json: async () => ({ ...draft }) };
-    }
-    if (key === "POST /me/messages/DRAFT/send") {
-      draftAtSend = structuredClone({ toRecipients: draft.toRecipients });
-      return { ok: true, status: 202, json: async () => null };
-    }
-    if (key === "DELETE /me/messages/DRAFT") {
-      return { ok: true, status: 204, json: async () => null };
-    }
-    throw new Error(`unscripted Graph call: ${key}`);
-  });
-}
+const graph = createGraphFake(fetchMock);
+const CREATE = "POST /me/messages/ORIG/createReply";
+const SEND = "POST /me/messages/DRAFT/send";
 
 async function buildApp() {
   const app = Fastify();
@@ -113,16 +84,11 @@ async function buildApp() {
   return app;
 }
 
-const callSummary = () => graphCalls.map((call) => `${call.method} ${call.path}`);
-
 beforeEach(() => {
   vi.clearAllMocks();
-  graphCalls = [];
-  draftAtSend = null;
-  failures = {};
   emailFindFirst.mockResolvedValue(OUTLOOK_EMAIL);
   resolveOutlookBearer.mockResolvedValue({ accessToken: "bearer-at", email: MAILBOX });
-  installGraph();
+  graph.reset();
 });
 
 describe("POST /api/email/:id/reply on an Outlook message", () => {
@@ -140,12 +106,8 @@ describe("POST /api/email/:id/reply on an Outlook message", () => {
       threaded: true,
       to: "alice@example.com",
     });
-    expect(callSummary()).toEqual([
-      "POST /me/messages/ORIG/createReply",
-      "PATCH /me/messages/DRAFT",
-      "POST /me/messages/DRAFT/send",
-    ]);
-    expect(graphCalls[1]?.body).toEqual({
+    expect(graph.summary()).toEqual([CREATE, "PATCH /me/messages/DRAFT", LIST_ATTACHMENTS, SEND]);
+    expect(graph.calls[1]?.body).toEqual({
       subject: "Re: Plan",
       body: { contentType: "Text", content: "Thursday works." },
       toRecipients: [address("alice@example.com")],
@@ -165,8 +127,8 @@ describe("POST /api/email/:id/reply on an Outlook message", () => {
       url: "/api/email/klorn-e1/reply",
       payload: { body: "Thursday works." },
     });
-    expect(graphCalls[0]?.path).toBe("/me/messages/ORIG/createReply");
-    expect(callSummary().join(" ")).not.toContain("klorn-e1");
+    expect(graph.calls[0]?.path).toBe("/me/messages/ORIG/createReply");
+    expect(graph.summary().join(" ")).not.toContain("klorn-e1");
     // The row was looked up by the URL id and scoped to the caller.
     expect(emailFindFirst).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -183,12 +145,12 @@ describe("POST /api/email/:id/reply on an Outlook message", () => {
       url: "/api/email/klorn-e1/reply",
       payload: { body: "Thursday works." },
     });
-    expect(draftAtSend?.toRecipients).toEqual([address("alice@example.com")]);
+    expect(graph.sentSnapshot?.toRecipients).toEqual([address("alice@example.com")]);
     await app.close();
   });
 
   it("does not claim a thread when the native reply failed", async () => {
-    failures["POST /me/messages/ORIG/createReply"] = 404;
+    graph.install({ [CREATE]: () => ({ status: 404 }) });
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
@@ -197,13 +159,62 @@ describe("POST /api/email/:id/reply on an Outlook message", () => {
     });
     expect(res.statusCode).toBe(500);
     expect(res.json()).not.toHaveProperty("threaded");
-    expect(callSummary()).toEqual(["POST /me/messages/ORIG/createReply"]);
+    expect(graph.summary()).toEqual([CREATE]);
     expect(emailUpdateMany).not.toHaveBeenCalled();
     await app.close();
   });
 
+  it.each([
+    ["an http 502", () => ({ status: 502 })],
+    [
+      "a timeout",
+      () => {
+        throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+      },
+    ],
+    [
+      "a network error",
+      () => {
+        throw new TypeError("fetch failed");
+      },
+    ],
+  ] as Array<
+    [string, Handler]
+  >)("answers 502 and tells the user to check Sent Items when /send ends with %s", async (_name, handler) => {
+    graph.install({ [SEND]: handler });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/klorn-e1/reply",
+      payload: { body: "Thursday works." },
+    });
+    expect(res.statusCode).toBe(502);
+    expect(res.json()).toEqual({
+      error: "The reply may already have been sent. Check Sent Items before retrying.",
+    });
+    // Nothing is recorded as answered, and the draft is left for the user to find.
+    expect(emailUpdateMany).not.toHaveBeenCalled();
+    expect(sentUpsert).not.toHaveBeenCalled();
+    expect(graph.summary()).not.toContain("DELETE /me/messages/DRAFT");
+    expect(captureError).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
+
+  it("does not use that answer for a send Graph rejected (429): that one was not sent", async () => {
+    graph.install({ [SEND]: () => ({ status: 429 }) });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/klorn-e1/reply",
+      payload: { body: "Thursday works." },
+    });
+    expect(res.statusCode).toBe(500);
+    expect(res.body).not.toContain("Sent Items");
+    await app.close();
+  });
+
   it("answers 409 with the provider's error when the mailbox needs reconnecting", async () => {
-    failures["POST /me/messages/ORIG/createReply"] = 403;
+    graph.install({ [CREATE]: () => ({ status: 403 }) });
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
@@ -226,11 +237,8 @@ describe("POST /api/email/:id/gmail-draft on an Outlook message", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ success: true, draftId: "DRAFT", attachedCount: 0 });
-    expect(callSummary()).toEqual([
-      "POST /me/messages/ORIG/createReply",
-      "PATCH /me/messages/DRAFT",
-    ]);
-    expect(callSummary().join(" ")).not.toContain("klorn-e1");
+    expect(graph.summary()).toEqual([CREATE, "PATCH /me/messages/DRAFT", LIST_ATTACHMENTS]);
+    expect(graph.summary().join(" ")).not.toContain("klorn-e1");
     await app.close();
   });
 
@@ -241,7 +249,7 @@ describe("POST /api/email/:id/gmail-draft on an Outlook message", () => {
       url: "/api/email/klorn-e1/gmail-draft",
       payload: { to: "someone-else@example.com", subject: "Re: Plan", body: "FYI" },
     });
-    expect(graphCalls[1]?.body).toMatchObject({
+    expect(graph.calls[1]?.body).toMatchObject({
       toRecipients: [address("someone-else@example.com")],
       ccRecipients: [],
       bccRecipients: [],

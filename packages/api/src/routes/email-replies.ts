@@ -28,6 +28,8 @@ import { type GmailDraftAttachment, resolveMailClient } from "../mail/gmail.js";
 import { formatCalendarFacts, getMeetingContext } from "../mail/meeting-context.js";
 import { mailActionsFor } from "../mail/providers/dispatch.js";
 import { replyTargetFor } from "../mail/providers/reply-target.js";
+import { SendOutcomeUnknownError } from "../mail/providers/send-outcome-unknown.js";
+import type { SendMailResult } from "../mail/providers/types.js";
 import { pickInReplyTo } from "../mail/reply-headers.js";
 import { buildReplySystemPrompt } from "../mail/reply-prompt.js";
 import { markEmailReplied } from "../mail/reply-state.js";
@@ -40,6 +42,9 @@ import { parseJsonArray, safeAttachmentFilename } from "./email.js";
 import { buildEmailAttachmentBrief } from "./email-attachments.js";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
+
+const SEND_OUTCOME_UNKNOWN_MESSAGE =
+  "The reply may already have been sent. Check Sent Items before retrying.";
 
 async function fetchOriginalAttachmentsForDraft(input: {
   userId: string;
@@ -613,15 +618,27 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
       );
       const referencesChain = [references, messageId].filter(Boolean).join(" ") || undefined;
 
-      const result = await actions.sendEmail(uid, to, subject, body, [], {
-        threadId: dbEmail.threadId,
-        linkedInboxAccountId: dbEmail.linkedInboxAccountId,
-        inReplyTo: messageId,
-        references: referencesChain,
-        // OUTLOOK threads natively from the original's id (step B0b), taken from the
-        // row looked up above and never from the URL.
-        ...replyTargetFor(actions, dbEmail.gmailId),
-      });
+      let result: SendMailResult;
+      try {
+        result = await actions.sendEmail(uid, to, subject, body, [], {
+          threadId: dbEmail.threadId,
+          linkedInboxAccountId: dbEmail.linkedInboxAccountId,
+          inReplyTo: messageId,
+          references: referencesChain,
+          // OUTLOOK threads natively from the original's id (step B0b), taken from the
+          // row looked up above and never from the URL.
+          ...replyTargetFor(actions, dbEmail.gmailId),
+        });
+      } catch (err) {
+        if (!(err instanceof SendOutcomeUnknownError)) throw err;
+        // The provider could not say whether the reply went out. Nothing is recorded as
+        // answered, and the user is told not to simply retry: that could deliver twice.
+        captureError(err, {
+          tags: { scope: "email-replies.send-outcome-unknown" },
+          extra: { userId: uid, emailId: dbEmail.id },
+        });
+        return reply.code(502).send({ error: SEND_OUTCOME_UNKNOWN_MESSAGE });
+      }
       if ("unsupported" in result) return reply.code(501).send({ error: result.error });
       if ("error" in result) return reply.code(409).send(result);
 

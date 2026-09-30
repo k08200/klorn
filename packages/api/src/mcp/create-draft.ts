@@ -26,13 +26,15 @@
  * Asking again for the same draft (same email, body and subject) inside a short
  * window returns the first draft instead of creating another (mcp/draft-dedupe.ts).
  *
- * Outlook drafts natively (step B0b): the provider is handed the original row's own
- * provider id and makes the draft with Graph's createReply, which threads it, then
- * sets the recipient to the pinned From explicitly (createReply alone would address
- * the original's Reply-To). A provider with no draft support answers its own
- * unsupported result, unchanged.
+ * Outlook drafts natively (step B0b), only while OUTLOOK_INBOX_ENABLED is on: the provider
+ * is handed the original row's own provider id and makes the draft with Graph's
+ * createReply, which threads it, then sets the recipient to the pinned From explicitly
+ * (createReply alone would address the original's Reply-To). With the flag off an
+ * Outlook row answers unsupported, as before B0b. A provider with no draft support
+ * answers its own unsupported result, unchanged.
  */
 
+import { outlookInboxEnabled } from "../config.js";
 import { findUserEmail, MAX_EMAIL_ID_LENGTH, parseEmailIdArg } from "../mail/email-lookup.js";
 import { exceedsCodePoints } from "../mail/header-text.js";
 import { mailActionsFor } from "../mail/providers/dispatch.js";
@@ -113,6 +115,8 @@ const SUBJECT_ERROR = `subject must be one line of 1 to ${MAX_SUBJECT_LENGTH} ch
 const NOT_FOUND_ERROR = "No email with this id in your inbox.";
 const NO_REPLY_ADDRESS_ERROR =
   "This email has no single valid sender address to reply to, so no draft was made.";
+const UNSUPPORTED_THREADING_ERROR =
+  "This mailbox's provider does not support threaded drafts from Klorn yet.";
 const UNAVAILABLE_ERROR =
   "The draft could not be created. Check the Drafts folder before trying again.";
 
@@ -203,7 +207,7 @@ const answer = (
 /**
  * Write the draft on the row's own account, through the provider. The provider
  * decides whether it can: any `{unsupported}` or `{error}` comes back exactly as the
- * provider said it.
+ * provider said it. Outlook is refused here while its flag is off.
  */
 async function writeDraft(
   userId: string,
@@ -214,6 +218,11 @@ async function writeDraft(
   // The account is the row's: a linked inbox stays linked at every step below.
   const accountId = original.linkedInboxAccountId;
   const actions = await mailActionsFor(userId, accountId);
+  // Dispatch is not flag-gated, so an OUTLOOK row that exists answers here even with
+  // Outlook off. Off, it is unsupported exactly as before B0b, before any provider call.
+  if (actions.provider === "OUTLOOK" && !outlookInboxEnabled()) {
+    return JSON.stringify({ unsupported: true, error: UNSUPPORTED_THREADING_ERROR });
+  }
 
   const headers = await actions.getReplyHeaders(userId, original.gmailId, accountId);
   const reply = replyContextFrom(headers);
