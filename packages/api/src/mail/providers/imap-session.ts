@@ -470,34 +470,72 @@ function adjustOutstanding(userId: string, delta: number): void {
   else outstandingTasks.set(userId, next);
 }
 
+/** What `runAccountTask` hands a task. */
+export interface TaskContext {
+  /**
+   * Aborted at TASK_TOTAL_TIMEOUT_MS. A task closes whatever connection it holds
+   * when it fires and does nothing further once it is aborted: the caller has
+   * already been told the outcome is unconfirmed.
+   */
+  signal: AbortSignal;
+  /**
+   * Register work to run AFTER the caller has its result, while still holding the
+   * account's turn and a session slot (the Sent copy of a message that has gone
+   * out). It is not part of the total timeout, so it cannot turn a finished task
+   * into a timed-out one, and it must bound itself. Never run for a task that
+   * timed out; a failure in it is noted, never reported to the caller.
+   */
+  afterResult(work: () => Promise<void>): void;
+}
+
+export interface TaskOptions {
+  /** The answer when the total deadline passes. Default: a generic "did not answer in time". */
+  onTimeout?: MailActionFailure;
+}
+
 /**
  * Run the task under TASK_TOTAL_TIMEOUT_MS. At the deadline the task's signal is
- * aborted (it closes its connection) and the caller gets the unconfirmed-outcome
- * answer; the task's own late failure is not reported again.
+ * aborted (it closes its connection) and the caller gets `timeoutAnswer`; the
+ * task's own late outcome, or failure, is ignored and not reported again.
  */
 async function runBounded<T>(
   provider: ImapProviderConfig,
   account: SessionAccount,
-  task: (signal: AbortSignal) => Promise<T>,
-): Promise<T | MailActionFailure> {
+  task: (context: TaskContext) => Promise<T>,
+  afterResult: (work: () => Promise<void>) => void,
+  timeoutAnswer: MailActionFailure,
+): Promise<{ result: T | MailActionFailure; timedOut: boolean }> {
   const controller = new AbortController();
   let deadline: ReturnType<typeof setTimeout> | undefined;
-  const timedOut = new Promise<MailActionFailure>((resolve) => {
+  const expired = new Promise<MailActionFailure>((resolve) => {
     deadline = setTimeout(() => {
       controller.abort();
-      resolve(timeoutFailure(provider));
+      resolve(timeoutAnswer);
     }, TASK_TOTAL_TIMEOUT_MS);
   });
   const finished = Promise.resolve()
-    .then(() => task(controller.signal))
+    .then(() => task({ signal: controller.signal, afterResult }))
     .catch(
       (err: unknown): MailActionFailure =>
-        controller.signal.aborted ? timeoutFailure(provider) : failureFor(err, provider, account),
+        controller.signal.aborted ? timeoutAnswer : failureFor(err, provider, account),
     );
   try {
-    return await Promise.race([finished, timedOut]);
+    const result = await Promise.race([finished, expired]);
+    return { result, timedOut: controller.signal.aborted };
   } finally {
     clearTimeout(deadline);
+  }
+}
+
+async function runFollowUp(
+  work: () => Promise<void>,
+  provider: ImapProviderConfig,
+  account: SessionAccount,
+): Promise<void> {
+  try {
+    await work();
+  } catch (err) {
+    noteSideFailure(err, provider, account);
   }
 }
 
@@ -511,7 +549,8 @@ async function runBounded<T>(
 export function runAccountTask<T>(
   provider: ImapProviderConfig,
   account: SessionAccount,
-  task: (signal: AbortSignal) => Promise<T>,
+  task: (context: TaskContext) => Promise<T>,
+  options: TaskOptions = {},
 ): Promise<T | MailActionFailure> {
   const cooling = cooldownFailure(provider, account);
   if (cooling) return Promise.resolve(cooling);
@@ -550,7 +589,19 @@ export function runAccountTask<T>(
         if (turn === "expired") return;
         turn = "running";
         clearTimeout(waitTimer);
-        finish(await runBounded(provider, account, task));
+        const after: { work?: () => Promise<void> } = {};
+        const { result, timedOut } = await runBounded(
+          provider,
+          account,
+          task,
+          (work) => {
+            after.work = work;
+          },
+          options.onTimeout ?? timeoutFailure(provider),
+        );
+        finish(result);
+        // The caller has its answer; the follow-up still holds the turn and the slot.
+        if (after.work && !timedOut) await runFollowUp(after.work, provider, account);
       });
     };
     serially(account.rowId, takeTurn).catch((err: unknown) => {

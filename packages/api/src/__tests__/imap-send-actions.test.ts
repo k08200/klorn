@@ -470,7 +470,10 @@ describe("sendEmail — failures", () => {
     const result = await naver.sendEmail("u1", "bob@example.com", "Hi", "b", [], {
       linkedInboxAccountId: "row-1",
     });
-    expect(result).toEqual({ error: "Could not reach Naver. Try again shortly." });
+    // never connected: provably nothing was sent, and the answer says so
+    expect(result).toEqual({
+      error: "Could not reach Naver. The message was not sent; try again shortly.",
+    });
     expect(loggedText()).not.toContain(PASSWORD);
     const retry = await naver.sendEmail("u1", "bob@example.com", "Hi", "b", [], {
       linkedInboxAccountId: "row-1",
@@ -547,7 +550,10 @@ describe("sendEmail — failures", () => {
     const result = await naver.sendEmail("u1", "bob@example.com", "Hi", "b", [], {
       linkedInboxAccountId: "row-1",
     });
-    expect(result).toEqual({ error: "Could not reach Naver. Try again shortly." });
+    expect(result).toEqual({
+      error:
+        "Sending through Naver is temporarily unavailable. The message was not sent; try again later.",
+    });
   });
 
   it("never throws when the account lookup fails, and logs no message id", async () => {
