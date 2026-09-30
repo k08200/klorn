@@ -30,9 +30,11 @@ describe("hasHeaderBreaker", () => {
 });
 
 describe("stripInvisibleControls", () => {
-  it("removes every zero-width and bidi control in U+200B-200F, U+202A-202E and U+2066-2069", () => {
+  it("removes zero-width space, the directional marks and every bidi embedding, override and isolate", () => {
     const invisible = [
-      ...Array.from({ length: 5 }, (_, i) => 0x200b + i),
+      0x200b,
+      0x200e,
+      0x200f,
       ...Array.from({ length: 5 }, (_, i) => 0x202a + i),
       ...Array.from({ length: 4 }, (_, i) => 0x2066 + i),
     ];
@@ -50,6 +52,13 @@ describe("stripInvisibleControls", () => {
       expect(stripInvisibleControls(`a${cp(code)}b`), code.toString(16)).toBe(`a${cp(code)}b`);
     }
     expect(stripInvisibleControls(`회의 ${EMOJI}`)).toBe(`회의 ${EMOJI}`);
+  });
+
+  it("keeps the zero-width non-joiner and joiner, which scripts and emoji sequences need", () => {
+    const persian = `می${cp(0x200c)}خواهم`;
+    const family = `${cp(0x1f469)}${cp(0x200d)}${cp(0x1f467)}`;
+    expect(stripInvisibleControls(persian)).toBe(persian);
+    expect(stripInvisibleControls(`hi ${family}`)).toBe(`hi ${family}`);
   });
 
   it("returns an all-invisible string as empty", () => {

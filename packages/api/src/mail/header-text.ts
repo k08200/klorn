@@ -12,9 +12,14 @@ const NEL = 0x85;
 const LINE_SEPARATOR = 0x2028;
 const PARAGRAPH_SEPARATOR = 0x2029;
 
-/** Zero-width and bidirectional-formatting controls: invisible, and able to reorder visible text. */
+/**
+ * Zero-width and bidirectional-formatting controls: invisible, and able to reorder visible text.
+ * U+200C (ZWNJ) and U+200D (ZWJ) are deliberately kept: Persian and Indic spelling and emoji
+ * sequences depend on them, and they cannot reorder text.
+ */
 const INVISIBLE_RANGES: ReadonlyArray<readonly [number, number]> = [
-  [0x200b, 0x200f],
+  [0x200b, 0x200b],
+  [0x200e, 0x200f],
   [0x202a, 0x202e],
   [0x2066, 0x2069],
 ];
@@ -41,7 +46,7 @@ function isInvisibleControl(code: number): boolean {
   return INVISIBLE_RANGES.some(([from, to]) => code >= from && code <= to);
 }
 
-/** `text` without zero-width and bidi controls (U+200B-200F, U+202A-202E, U+2066-2069). */
+/** `text` without zero-width and bidi controls (U+200B, U+200E-200F, U+202A-202E, U+2066-2069). */
 export function stripInvisibleControls(text: string): string {
   let out = "";
   for (const ch of text) {

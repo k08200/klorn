@@ -530,9 +530,9 @@ because a draft made through Graph `POST /me/messages` does not thread.
   - **Subject and body.** Limits count code points, the unit the schema's
     `maxLength` counts. Subject (`mail/reply-subject.ts`): the agent's, checked
     (1 to 300, no control character or line break, tested before trimming so a
-    trailing newline is an error; bidi and zero-width controls U+200B-200F,
-    U+202A-202E and U+2066-2069 are stripped, which also removes the zero-width
-    joiner and non-joiner), else `Re: <original>` flattened to one line, stripped
+    trailing newline is an error; bidi and zero-width controls U+200B,
+    U+200E-200F, U+202A-202E and U+2066-2069 are stripped; the zero-width
+    joiner and non-joiner are kept for Persian and Indic spelling and emoji), else `Re: <original>` flattened to one line, stripped
     the same way, capped, trimmed after the cut, with no second `Re:` in any
     case. Body: plain text, 1 to 20,000, no NUL, sent as `text/plain` and never
     interpreted (there is no html argument). Both limits are proposed values. A
