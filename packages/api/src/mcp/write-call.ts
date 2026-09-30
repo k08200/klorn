@@ -15,6 +15,7 @@
 
 import { executeToolCall } from "../agentcore/tool-executor.js";
 import { captureError } from "../sentry.js";
+import { CREATE_DRAFT_TOOL_NAME, executeCreateDraft } from "./create-draft.js";
 import { changedLanes, executeSetTier, SET_TIER_TOOL_NAME } from "./set-tier.js";
 import { errorResult, type McpToolResult, textResult } from "./tool-result.js";
 import {
@@ -85,6 +86,7 @@ const hasSuccessTrue = (parsed: unknown): boolean =>
 export const WRITE_TOOL_SUCCESS: Readonly<Record<string, (parsed: unknown) => boolean>> = {
   mark_read: hasSuccessTrue,
   [SET_TIER_TOOL_NAME]: hasSuccessTrue,
+  [CREATE_DRAFT_TOOL_NAME]: hasSuccessTrue,
 };
 
 /** Whether `resultText` is a success for `tool`. Non-JSON, arrays, in-band
@@ -106,10 +108,11 @@ export interface McpWriteCall {
   args: Record<string, unknown>;
 }
 
-/** set_tier is MCP-only and has its own executor; everything else shares the chat/agent one. */
+/** set_tier and create_draft are MCP-only and have their own executors; everything else shares the chat/agent one. */
 function executeWriteTool(call: McpWriteCall): Promise<string> {
   const { userId, apiKeyId, name, args } = call;
   if (name === SET_TIER_TOOL_NAME) return executeSetTier({ userId, apiKeyId }, args);
+  if (name === CREATE_DRAFT_TOOL_NAME) return executeCreateDraft({ userId }, args);
   return executeToolCall(userId, name, args);
 }
 

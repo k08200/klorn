@@ -12,6 +12,7 @@ const update = vi.hoisted(() => vi.fn());
 const captureError = vi.hoisted(() => vi.fn());
 const executeToolCall = vi.hoisted(() => vi.fn());
 const executeSetTier = vi.hoisted(() => vi.fn());
+const executeCreateDraft = vi.hoisted(() => vi.fn());
 
 vi.mock("../db.js", () => {
   const prisma = { mcpWriteAudit: { create, update } };
@@ -22,6 +23,10 @@ vi.mock("../agentcore/tool-executor.js", () => ({ executeToolCall }));
 vi.mock("../mcp/set-tier.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../mcp/set-tier.js")>()),
   executeSetTier,
+}));
+vi.mock("../mcp/create-draft.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../mcp/create-draft.js")>()),
+  executeCreateDraft,
 }));
 
 import {
@@ -49,10 +54,14 @@ beforeEach(() => {
   captureError.mockReset();
   executeToolCall.mockReset();
   executeSetTier.mockReset();
+  executeCreateDraft.mockReset();
   create.mockResolvedValue({ id: "audit-1" });
   update.mockResolvedValue({});
   executeToolCall.mockResolvedValue(JSON.stringify({ success: true }));
   executeSetTier.mockResolvedValue(JSON.stringify({ success: true, tier: "PUSH" }));
+  executeCreateDraft.mockResolvedValue(
+    JSON.stringify({ success: true, draft_id: "d-1", provider: "GOOGLE", to: "a@b.co" }),
+  );
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-09-30T10:00:00.000Z"));
   vi.stubEnv("MCP_WRITE_TOOLS_ENABLED", "true");
@@ -357,5 +366,119 @@ describe("runMcpWriteCall — set_tier", () => {
     const result = await runMcpWriteCall(tierCall(freshUser()));
     expect(result.isError).toBe(true);
     expect(executeSetTier).not.toHaveBeenCalled();
+  });
+});
+
+describe("isWriteSuccess for create_draft", () => {
+  const cases: [string, string, boolean][] = [
+    [
+      "a created draft",
+      JSON.stringify({ success: true, draft_id: "d-1", provider: "GOOGLE", to: "a@b.co" }),
+      true,
+    ],
+    ["an unsupported provider", JSON.stringify({ unsupported: true, error: "no" }), false],
+    ["an in-band error", JSON.stringify({ error: "Gmail not connected." }), false],
+    ["a coded refusal", JSON.stringify({ error: "x", code: "NOT_FOUND" }), false],
+    ["success as a string", JSON.stringify({ success: "true" }), false],
+    ["an array", JSON.stringify([{ success: true }]), false],
+    ["non-JSON", "drafted!", false],
+  ];
+  for (const [label, text, expected] of cases) {
+    it(`${label} -> ${expected}`, () => {
+      expect(isWriteSuccess("create_draft", text)).toBe(expected);
+    });
+  }
+});
+
+describe("runMcpWriteCall — create_draft", () => {
+  const draftCall = (userId: string, apiKeyId = `k-${userId}`) => ({
+    userId,
+    apiKeyId,
+    name: "create_draft",
+    args: { email_id: "g-1", body: "Thursday works." },
+  });
+
+  it("runs create_draft through its own executor with the caller alone, never the shared tool executor", async () => {
+    const call = draftCall(freshUser());
+    await runMcpWriteCall(call);
+    expect(executeCreateDraft).toHaveBeenCalledWith({ userId: call.userId }, call.args);
+    expect(executeToolCall).not.toHaveBeenCalled();
+    expect(executeSetTier).not.toHaveBeenCalled();
+  });
+
+  it("audits as attempted before the draft is made, then settles ok on a success result with no lanes", async () => {
+    const order: string[] = [];
+    create.mockImplementationOnce(async () => {
+      order.push("insert");
+      return { id: "audit-5" };
+    });
+    executeCreateDraft.mockImplementationOnce(async () => {
+      order.push("execute");
+      return JSON.stringify({ success: true, draft_id: "d-1", provider: "GOOGLE", to: "a@b.co" });
+    });
+    update.mockImplementationOnce(async () => {
+      order.push("settle");
+      return {};
+    });
+    await runMcpWriteCall(draftCall(freshUser()));
+    expect(order).toEqual(["insert", "execute", "settle"]);
+    expect(create.mock.calls[0]?.[0].data).toMatchObject({
+      tool: "create_draft",
+      targetId: "g-1",
+      outcome: "attempted",
+    });
+    expect(update).toHaveBeenCalledWith({
+      where: { id: "audit-5" },
+      data: { outcome: "ok", reason: null },
+    });
+  });
+
+  it("settles error/tool_error for an unsupported provider and passes that result through unchanged", async () => {
+    const unsupported = JSON.stringify({ unsupported: true, error: "no drafts here" });
+    executeCreateDraft.mockResolvedValueOnce(unsupported);
+    const result = await runMcpWriteCall(draftCall(freshUser()));
+    expect(result).toEqual({ content: [{ type: "text", text: unsupported }] });
+    expect(update).toHaveBeenCalledWith({
+      where: { id: "audit-1" },
+      data: { outcome: "error", reason: "tool_error" },
+    });
+  });
+
+  it("settles error/tool_error for a coded refusal", async () => {
+    executeCreateDraft.mockResolvedValueOnce(
+      JSON.stringify({ error: "x", code: "INVALID_ARGUMENT" }),
+    );
+    await runMcpWriteCall(draftCall(freshUser()));
+    expect(update).toHaveBeenCalledWith({
+      where: { id: "audit-1" },
+      data: { outcome: "error", reason: "tool_error" },
+    });
+  });
+
+  it("settles error/exception when the executor throws", async () => {
+    executeCreateDraft.mockRejectedValueOnce(new Error("boom"));
+    const result = await runMcpWriteCall(draftCall(freshUser()));
+    expect(result.isError).toBe(true);
+    expect(update).toHaveBeenCalledWith({
+      where: { id: "audit-1" },
+      data: { outcome: "error", reason: "exception" },
+    });
+  });
+
+  it("shares the per-user cap with the other write tools: the 31st write of any kind is refused", async () => {
+    const userId = freshUser();
+    for (let i = 0; i < MCP_WRITE_CAP_PER_WINDOW - 1; i++) await runMcpWriteCall(callFor(userId));
+    await runMcpWriteCall(draftCall(userId));
+    executeCreateDraft.mockClear();
+    const over = await runMcpWriteCall(draftCall(userId, "another-key"));
+    expect(JSON.parse(over.content[0]?.text ?? "{}")).toMatchObject({ code: "RATE_LIMITED" });
+    expect(executeCreateDraft).not.toHaveBeenCalled();
+  });
+
+  it("does not run, and makes no draft, when the audit insert fails", async () => {
+    create.mockRejectedValueOnce(new Error("db down"));
+    const result = await runMcpWriteCall(draftCall(freshUser()));
+    expect(result.isError).toBe(true);
+    expect(executeCreateDraft).not.toHaveBeenCalled();
   });
 });

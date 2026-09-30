@@ -475,6 +475,71 @@ because a draft made through Graph `POST /me/messages` does not thread.
 - Rule: if any send path ever carries agent-supplied reply context, the
   resolved in-reply-to email id and the thread id join the receipt payload
   hash, and `RECEIPT_SCHEMA_VERSION` (`judge/attention-floor.ts`) is bumped.
+- **Landed 2026-09-30** (branch `feat/mcp-create-draft`, not yet merged):
+  - **`create_draft(email_id, body, subject?)`** (`mcp/create-draft.ts`,
+    `mcp/reply-target.ts`). MCP-only: not in `ALL_TOOLS`, `CHAT_TOOL_NAMES` or the
+    risk table. It is the third member of the write set (`mark_read`,
+    `set_tier`, `create_draft`), so the A2a gate, audit row and per-user cap apply
+    unchanged; its success predicate is `success === true`, and the audit
+    `targetId` is the email id. Result: `{success: true, draft_id, provider, to}`;
+    a provider's own `{unsupported}` or `{error}` is returned unchanged; Klorn's
+    refusals are `{error, code}` with `INVALID_ARGUMENT`, `NOT_FOUND`,
+    `NO_REPLY_ADDRESS` or `UNAVAILABLE`. A hard failure is captured and answered
+    generically, and does not claim that no draft exists.
+  - **Plan gate: `email_write`** (`TOOL_FEATURE_MAP` in `billing/stripe.ts`), not
+    `email_read`. The human draft route (`POST /api/email/:id/gmail-draft`) is
+    Pro-only compose, so an agent key must not draft on a plan whose owner
+    cannot. FREE keys see `mark_read` and `set_tier` but not `create_draft`. This
+    is a choice the brief did not spell out; say so if FREE should draft.
+  - **The arguments are closed.** Anything outside `email_id`, `body`, `subject`
+    is refused with `INVALID_ARGUMENT` (no echo of the input): `to`, `cc`,
+    `bcc`, `in_reply_to`, `references`, `thread_id`, `html`, `attachments`. The
+    schema says `additionalProperties: false` for clients that read it.
+  - **Resolution.** `email_id` (Klorn id or provider id) resolves the caller's
+    own row (`userId` in the lookup), the row's `linkedInboxAccountId` goes to
+    `mailActionsFor`, `getReplyHeaders` and `createDraft` (`null` only for a
+    primary-inbox row), and the provider comes from the dispatcher. OUTLOOK
+    answers `{unsupported: true}` before any provider call. The reply headers are
+    `getReplyHeaders` of the original: In-Reply-To is its Message-ID, References
+    is its chain plus that id (the `/reply` route's shape), and with `{}` the
+    draft carries no `reply` and threads by thread id alone.
+  - **Recipient.** One bare address, parsed in one linear pass with no
+    backtracking regex on the raw header: display names dropped, quoted names may
+    hold commas, and a second address, group, comment, control character, non-ASCII
+    address or header over 998 characters is refused. The Reply-To branch is
+    implemented and tested (single valid Reply-To wins, several or invalid falls
+    back to From) **but no provider returns Reply-To yet**: `EmailMessage` has no
+    such column and `ReplyHeadersResult` is `{messageId, references}`. Today the
+    recipient is always From. Making it live is two lines once B3 has merged
+    (`replyTo?` on `ReplyHeadersResult`, `"Reply-To"` in the Gmail
+    `metadataHeaders`), which this step did not touch because B3 edits both files.
+    `createEmailDraft` still refuses a no-reply sender, and that error passes
+    through.
+  - **Subject and body.** Subject: the agent's, checked (1 to 300 characters, no
+    control character or line break, tested before trimming so a trailing newline
+    is an error), else `Re: <original>` flattened to one line and capped, with no
+    second `Re:` in any case. Body: plain text, 1 to 20,000 characters, no NUL, sent
+    as `text/plain` and never interpreted (there is no html argument). Both
+    limits are proposed values. A localised reply prefix in the original
+    (for example `AW:`) is not recognised, so it gets a `Re:` in front.
+  - **Never sends.** No send call exists in the module (the test reads the
+    source), and every test in the file asserts a `sendEmail` spy stayed
+    uncalled. No local state is written: no reply chip, no `repliedAt`, no
+    candidate-intake status, because nothing was sent.
+  - **Verify result.** Flag x permission x plan for list and call; foreign id;
+    Outlook; unsupported and soft-error passthrough; the row's account at every
+    step; headers from the provider and never from input; the Reply-To and From
+    cases; subject and body limits; audit row, cap sharing and a failed insert;
+    flag off byte-identical to `legacyMcpToolDefs`. The implementer (not CI) ran
+    ten mutations on 2026-09-30 and each failed at least one test before it was
+    restored: `to` flowing from the validated input at the call site, `to`
+    accepted from the arguments, From preferred over Reply-To, the row's account
+    replaced by the primary, Outlook no longer refused, reply headers taken from
+    the arguments, a send call added, the plan entry removed, the line-break
+    check moved after trimming, and the `userId` scope dropped from the lookup.
+  - **Not covered.** No live Gmail call: the provider seam is a spy, so the MIME
+    that `createEmailDraft` builds from `to`, `subject` and `reply` is checked
+    only by its own existing tests. A5's write-tool page is still to do.
 
 **A5 — client setup docs.** Read-only part done 2026-10-01
 (`docs/mcp/connect-clients.md`). Read-only part depends on nothing; the write part

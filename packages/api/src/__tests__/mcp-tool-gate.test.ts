@@ -14,6 +14,7 @@ import { TOOL_RISK_LEVELS } from "../agentcore/agent-logic.js";
 import { CHAT_TOOL_NAMES } from "../agentcore/chat-engine.js";
 import { ALL_TOOLS, isToolAllowedForPlan } from "../agentcore/tool-executor.js";
 import { teamModeEnabled } from "../config.js";
+import { CREATE_DRAFT_TOOL } from "../mcp/create-draft.js";
 import { SET_TIER_TOOL } from "../mcp/set-tier.js";
 import { MCP_WRITE_TOOL_NAMES, mcpToolDefs } from "../mcp/tool-gate.js";
 import { WRITE_TOOL_SUCCESS } from "../mcp/write-call.js";
@@ -32,7 +33,22 @@ function legacyMcpToolDefs(plan: string) {
   );
 }
 
+/** The write tools a read_write key sees on `plan` with the flag on, in gate order. */
+const writeToolsFor = (plan: string) => [
+  ...markReadDef(),
+  SET_TIER_TOOL,
+  ...(DRAFT_PLANS.has(plan) ? [CREATE_DRAFT_TOOL] : []),
+];
+
+const describeSet = (plan: string, writesVisible: boolean): string => {
+  if (!writesVisible) return "read set only";
+  return `read set + ${names(writeToolsFor(plan)).join(" + ")}`;
+};
+
 const names = (defs: readonly { function: { name: string } }[]) => defs.map((d) => d.function.name);
+
+/** Plans that carry `email_write` (the human draft route's gate), so they may use create_draft. */
+const DRAFT_PLANS: ReadonlySet<string> = new Set(["PRO", "TEAM", "ENTERPRISE"]);
 
 const READ_TOOLS_TEAM_OFF = [
   "generate_briefing",
@@ -137,12 +153,15 @@ describe("literal tool lists per plan (team mode off) — written out, not deriv
       expect(names(mcpToolDefs(plan, "read"))).toEqual(PAID_OR_FREE_READ);
     });
 
-    it(`${plan}: read_write key, flag on -> the eight read tools, then mark_read, then set_tier`, () => {
+    it(`${plan}: read_write key, flag on -> the eight read tools, then mark_read, then set_tier${
+      DRAFT_PLANS.has(plan) ? ", then create_draft" : " (no create_draft: no email_write)"
+    }`, () => {
       vi.stubEnv("MCP_WRITE_TOOLS_ENABLED", "true");
       expect(names(mcpToolDefs(plan, "read_write"))).toEqual([
         ...PAID_OR_FREE_READ,
         "mark_read",
         "set_tier",
+        ...(DRAFT_PLANS.has(plan) ? ["create_draft"] : []),
       ]);
     });
   }
@@ -175,16 +194,37 @@ describe("the write set", () => {
     expect(Object.keys(WRITE_TOOL_SUCCESS).sort()).toEqual([...MCP_WRITE_TOOL_NAMES].sort());
   });
 
-  it("is exactly mark_read then set_tier", () => {
-    expect([...MCP_WRITE_TOOL_NAMES]).toEqual(["mark_read", "set_tier"]);
+  it("is exactly mark_read, set_tier, then create_draft", () => {
+    expect([...MCP_WRITE_TOOL_NAMES]).toEqual(["mark_read", "set_tier", "create_draft"]);
   });
 
-  it("mark_read reuses its ALL_TOOLS definition; set_tier is MCP-only and is in neither registry", () => {
+  it("mark_read reuses its ALL_TOOLS definition; set_tier and create_draft are MCP-only and in neither registry", () => {
     expect(names(ALL_TOOLS)).toContain("mark_read");
-    expect(names(ALL_TOOLS)).not.toContain("set_tier");
-    expect(CHAT_TOOL_NAMES.has("set_tier")).toBe(false);
-    expect(TOOL_RISK_LEVELS.has("set_tier")).toBe(false);
+    for (const name of ["set_tier", "create_draft"]) {
+      expect(names(ALL_TOOLS), name).not.toContain(name);
+      expect(CHAT_TOOL_NAMES.has(name), name).toBe(false);
+      expect(TOOL_RISK_LEVELS.has(name), name).toBe(false);
+    }
     expect(SET_TIER_TOOL.function.name).toBe("set_tier");
+    expect(CREATE_DRAFT_TOOL.function.name).toBe("create_draft");
+  });
+
+  it("create_draft requires email_id and body, and offers no recipient, header, html or attachment field", () => {
+    const params = CREATE_DRAFT_TOOL.function.parameters as {
+      required: string[];
+      properties: Record<string, unknown>;
+    };
+    expect(params.required).toEqual(["email_id", "body"]);
+    expect(Object.keys(params.properties).sort()).toEqual(["body", "email_id", "subject"]);
+  });
+
+  it("create_draft is plan-gated like composing mail (email_write): Pro plans only, never FREE", () => {
+    for (const plan of ["FREE", "PRO", "TEAM", "ENTERPRISE", "NO_SUCH_PLAN"]) {
+      expect(isToolAllowedForPlan("create_draft", plan), plan).toBe(DRAFT_PLANS.has(plan));
+      expect(isToolAllowedForPlan("create_draft", plan), plan).toBe(
+        isToolAllowedForPlan("send_email", plan),
+      );
+    }
   });
 
   it("set_tier's schema offers exactly the five lanes (never AUTO or CALL) and requires both arguments", () => {
@@ -225,13 +265,11 @@ describe("mcpToolDefs(plan, permission) — flag x permission x plan", () => {
       for (const permission of ["read", "read_write"] as const) {
         const writesVisible =
           permission === "read_write" && flag.value === "true" && plan !== "NO_SUCH_PLAN";
-        it(`plan=${plan} flag=${flag.label} permission=${permission} -> ${
-          writesVisible ? "read set + mark_read + set_tier" : "read set only"
-        }`, () => {
+        it(`plan=${plan} flag=${flag.label} permission=${permission} -> ${describeSet(plan, writesVisible)}`, () => {
           if (flag.value !== undefined) vi.stubEnv("MCP_WRITE_TOOLS_ENABLED", flag.value);
           const legacy = legacyMcpToolDefs(plan);
           const got = mcpToolDefs(plan, permission);
-          const expected = writesVisible ? [...legacy, ...markReadDef(), SET_TIER_TOOL] : legacy;
+          const expected = writesVisible ? [...legacy, ...writeToolsFor(plan)] : legacy;
           // Byte-identical: same definitions, same order, same serialisation.
           expect(JSON.stringify(got)).toBe(JSON.stringify(expected));
         });
@@ -257,12 +295,15 @@ describe("mcpToolDefs(plan, permission) — flag x permission x plan", () => {
 
   it("re-reads the flag on every call (defence in depth: permission alone never grants a write)", () => {
     expect(names(mcpToolDefs("PRO", "read_write"))).not.toContain("set_tier");
+    expect(names(mcpToolDefs("PRO", "read_write"))).not.toContain("create_draft");
     vi.stubEnv("MCP_WRITE_TOOLS_ENABLED", "true");
     expect(names(mcpToolDefs("PRO", "read_write"))).toContain("mark_read");
     expect(names(mcpToolDefs("PRO", "read_write"))).toContain("set_tier");
+    expect(names(mcpToolDefs("PRO", "read_write"))).toContain("create_draft");
     vi.stubEnv("MCP_WRITE_TOOLS_ENABLED", "false");
     expect(names(mcpToolDefs("PRO", "read_write"))).not.toContain("mark_read");
     expect(names(mcpToolDefs("PRO", "read_write"))).not.toContain("set_tier");
+    expect(names(mcpToolDefs("PRO", "read_write"))).not.toContain("create_draft");
   });
 
   it("keeps create_event, send_email and delete_event out for every combination", () => {
@@ -280,6 +321,7 @@ describe("mcpToolDefs(plan, permission) — flag x permission x plan", () => {
     for (const bogus of ["", "READ_WRITE", "write", "admin", undefined, null]) {
       expect(names(mcpToolDefs("PRO", bogus as never))).not.toContain("mark_read");
       expect(names(mcpToolDefs("PRO", bogus as never))).not.toContain("set_tier");
+      expect(names(mcpToolDefs("PRO", bogus as never))).not.toContain("create_draft");
     }
   });
 });
