@@ -73,6 +73,9 @@ export async function syncImapAccountsForUser(
         host: checked.host,
         linkedInboxAccountId: row.id,
         inboxUidValidity: canonicalUidValidity(row.inboxUidValidity),
+        inboxUidValidityPending: canonicalUidValidity(row.inboxUidValidityPending),
+        inboxUidValidityPendingAt: row.inboxUidValidityPendingAt,
+        inboxUidValidityResetAt: row.inboxUidValidityResetAt,
       });
       total.fetched += result.fetched;
       total.inserted += result.inserted;

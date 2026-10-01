@@ -1093,28 +1093,90 @@ production.
   in the set returns (NO, which the split retry handles, or OK). Smoke-test Gmail
   archive, trash and both undos, which share the routes.
 
-**B2b — non-destructive UIDVALIDITY reset** (*outline*). Depends on: B2. Required
-before anything relies on a server reset being repaired; B2 only holds (refuses
-actions, reports once). Deleting the mailbox's rows on a reset was rejected in review:
-it takes user work with it and acts on one observation. The repair keeps every row:
-- Stale rows are tombstoned by re-keying, in ONE transaction that is guarded by a
-  conditional `updateMany({where: {id, inboxUidValidity: stored}, data: {inboxUidValidity: live}})`
-  whose count must be 1, so two overlapping polls cannot both apply it.
-- The stale rows' `gmailId` gets the suffix `#uv<old>`. The strict id parse (B1) then
-  refuses them, and a NEW message that reuses an old UID gets its own row. Row ids are
-  kept, so commitments and other things keyed by the row id are unaffected.
-- Tombstoned rows are hidden explicitly from every list and count (an explicit
-  filter, not a side effect of the id), and their attention items are resolved. Nothing
-  is deleted.
-- The new value must be seen on two consecutive polls before anything changes, and at
-  most one reset is applied per account per day, so a flapping server cannot churn.
-- The PUSH dedupe marker is text of the form `[gmailId]`; a new message that reuses an
-  old UID would be suppressed by the old marker, so the marker is keyed by row id.
-- Relink: an unlink keeps the EmailMessage rows and a relink baselines from the live
-  value, so the relink path must tombstone rows of the old numbering too (or refuse to
-  baseline while rows exist under an unknown value).
-- Verify: the same fake server, a reset with a reused UID, overlapping polls, a
-  flapping value, a relink.
+**B2b — non-destructive UIDVALIDITY reset.** Depends on: B2. Landed 2026-09-30, behind
+the IMAP flags (all OFF; production has no Naver, iCloud or IMAP account). Gmail and
+Outlook paths are unchanged.
+- The live bug it fixes: B2 held a reset (actions refused, one report) but kept
+  ingesting, so a NEW message that reused an old UID was deduped into the stale row
+  (its flags and labels written over the old row's; the new mail never got a row or a
+  triage). Deleting the mailbox's rows was rejected in review: it takes user work with
+  it and acts on one observation.
+- Landed (`mail/imap-uidvalidity-reset.ts`, `mail/imap-tombstone.ts`,
+  `mail/imap-poll-guards.ts`, migration `20261004010000_imap_uidvalidity_reset`, three
+  nullable columns on `LinkedInboxAccount`, additive, `SET LOCAL lock_timeout`):
+  - Hold stops ingest. While a mailbox is held (live value usable and different from
+    the stored one, or a reset pending, also when the live value is unusable) the poll
+    persists NOTHING for it and skips the moved-row cleanup. A live value that is
+    unusable with nothing pending ingests as before (no reset can be told).
+  - Two sightings. The first poll that sees a new value stores it as
+    `inboxUidValidityPending` with `inboxUidValidityPendingAt` and reports once (log +
+    one Sentry event per account and value). A later poll seeing the same value at least
+    `MIN_SIGHTING_GAP_MS` (60 s) after it repairs. The stored value seen again clears the
+    pending one; a third value replaces it and restarts the clock; an unusable value
+    leaves it. At most one repair per account per `RESET_LIMIT_WINDOW_MS` (24 h, from
+    `inboxUidValidityResetAt`); inside it the mailbox stays held and that is logged once.
+  - Repair, one `prisma.$transaction` (timeout 30 s): (a) claim, a conditional
+    `updateMany` on id, userId, the stored value, the pending value, the pending time
+    this poll read and "no repair in the last 24 h", moving the account to the new value
+    and stamping `inboxUidValidityResetAt`; a count other than 1 stops there; (b) the
+    OPEN and SNOOZED AttentionItems (`source EMAIL`, `sourceId` = EmailMessage.id) of the
+    mailbox's not-yet-tombstoned rows become RESOLVED, chunked by 1000; (c) one raw
+    `UPDATE "EmailMessage" SET "gmailId" = "gmailId" || '#uv<old>'` over the rows with
+    `starts_with("gmailId", '<prefix>:<email>:')` and `strpos("gmailId", '#uv') = 0`,
+    every value a bound parameter. No createdAt split is needed: nothing was ingested
+    while held. Any failure, a unique collision included, rolls all of it back; the
+    mailbox stays held and the failure is reported once per account and value. The
+    repair poll persists nothing; the next poll ingests the window under the new
+    numbering. Row ids are kept, so summaries, stars, reply state, attachments,
+    candidate intakes and commitments stay attached; nothing is deleted.
+  - Actions refuse tombstoned ids: the strict parse (`parseImapMessageId`) already
+    rejects `...:101#uv1000`; tests pin it for flags, trash, archive, both undos, reply
+    headers and the undo re-sync. No new error code.
+  - Moves recorded before a repair are ignored by the moved-row cleanup
+    (`recentlyMovedSourceIds(scope, notBefore = resetAt)`): their ids are old numbers
+    that a new message may now carry, and the 10-minute race window can span a repair.
+  - PUSH dedupe, IMAP ids only (`isImapMessageId`). The `[gmailId]` marker is shared by
+    the firewall PUSH (`email-firewall.ts`) and the urgent sweep
+    (`automation-scheduler.ts`, `notify/urgent-dedup.ts`). For an IMAP id a marker counts
+    only when the notification was created at or after the row's `createdAt` (firewall:
+    the query's `createdAt` floor; sweep: `unnotifiedEmails`), and the sweep's
+    at-most-once key is `urgent:<gmailId>@<row id>` for an IMAP lead (it is unique
+    forever). Gmail ids: same query, same key, no extra read (pinned by a test).
+- Not addressed: tombstoned rows are NOT hidden from lists, counts or search (about 90
+  call sites, out of scope by decision), so after a repair each recent message can show
+  twice: the tombstone and the re-ingested row. Accepted limit. Relink is not addressed:
+  an unlink keeps the EmailMessage rows and a relink baselines from the live value, so
+  rows of an old numbering become actionable again, guarded only by the envelope check.
+  A UIDVALIDITY that returns to a value an earlier repair already used as `<old>` makes
+  the re-key collide; the repair then rolls back and the mailbox stays held until an
+  operator acts. The auto-reply ledger key (`auto-reply:<gmailId>`) is not made
+  IMAP-aware.
+- Tests: `imap-uidvalidity-reset.test.ts` (real poll, fake server, strict database with
+  rollback: the named limits and every step; a held poll leaves the old row
+  byte-for-byte unchanged and creates nothing; one sighting changes nothing; the gap
+  boundary; re-key without delete; attention scope; user work kept; other accounts
+  untouched; ingest after repair; overlapping polls; the claim refusing each moved
+  field; flap back, third value, unusable value; the 24 h boundary and no stacked
+  suffix; rollback on a failure and on a unique collision; a move recorded before the
+  repair), `firewall-push-imap-dedupe.test.ts`, additions to `urgent-dedup.test.ts`,
+  `scheduler-notification-dedup.test.ts` and the four action suites. B2 assertions that
+  encoded "a held poll still ingests" were changed in
+  `imap-moves-poll-regression.test.ts`. Mutations, each caught: every claim condition
+  dropped, the claim count relaxed, `MIN_SIGHTING_GAP_MS` set to 0 or its comparison
+  loosened, the 24 h window shortened or its check removed, the `strpos` guard removed
+  or loosened (caught because the fake database only accepts the exact statement
+  text), hold not stopping ingest, the moved-row floor removed, the IMAP-only dedupe
+  rule applied to every id or to none, the sweep key made row-less, the firewall floor
+  dropped or applied to Gmail.
+- Verified on a scratch Postgres 16 (not in the suite): `prisma migrate diff` from the
+  migrations to the schema is empty; the re-key statement re-keys exactly the account's
+  rows, skips an earlier tombstone, leaves `myXname` alone for a `my_name` address
+  (Prisma's `startsWith` does NOT escape `_`: it matched `myXname`, which is why the
+  attention step re-checks the prefix in code), and a collision raises 23505 (P2010)
+  and rolls the whole transaction back.
+- Not verified: no real Naver or iCloud server; the urgent sweep's wiring inside
+  `runAutomations` is covered by typecheck and the pure helpers' tests, not by a test
+  of the sweep itself.
 
 **B3 — SMTP send for IMAP providers.** Depends on: B0, B1. Landed 2026-09-30,
 flag OFF.

@@ -64,7 +64,12 @@ import { formatUrgentEmailBody, senderName } from "./notify/notification-format.
 import { escalateUnackedPush } from "./notify/phone-escalation.js";
 import { sendPushNotification } from "./notify/push.js";
 import { sendSms } from "./notify/sms.js";
-import { buildUrgentDedupMessage, parseNotifiedGmailIds } from "./notify/urgent-dedup.js";
+import {
+  buildUrgentDedupMessage,
+  latestNotifiedAt,
+  unnotifiedEmails,
+  urgentDedupeKey,
+} from "./notify/urgent-dedup.js";
 import { autoModeSendEnabled, tierV2Enabled } from "./ops/feature-flags.js";
 import { createDailyBriefingDelivery } from "./pim/briefing.js";
 import { connectPrimaryCalendar } from "./pim/calendar-providers/dispatch.js";
@@ -752,9 +757,10 @@ export async function ensureAutoModeReplyNotification(
 
 /**
  * Urgent-email bell notification — WINNER-ONLY and atomic. The read-based
- * notifiedGmailIds filter (parseNotifiedGmailIds) still does the primary
- * per-message dedup; this closes the residual concurrent-tick race on a single
- * batch via a `(userId, dedupeKey)` unique (dedupeKey = "urgent:<leadGmailId>").
+ * marker filter (unnotifiedEmails) still does the primary per-message dedup; this
+ * closes the residual concurrent-tick race on a single batch via a
+ * `(userId, dedupeKey)` unique (urgentDedupeKey: "urgent:<leadGmailId>", plus the
+ * row id for an IMAP lead, step B2b).
  * `dbMessage` KEEPS the trailing `[id1,id2,…]` marker so every notified id is
  * recorded for the next tick's read-back — the accumulation logic is preserved.
  * The winner returns its notification so the CALLER runs the follow-on web-push /
@@ -762,7 +768,7 @@ export async function ensureAutoModeReplyNotification(
  */
 export async function ensureUrgentEmailNotification(
   userId: string,
-  leadGmailId: string,
+  lead: { id: string; gmailId: string },
   dbMessage: string,
   userBody: string,
 ): Promise<{ id: string; createdAt: Date } | null> {
@@ -772,7 +778,7 @@ export async function ensureUrgentEmailNotification(
       data: {
         userId,
         type: "email",
-        dedupeKey: `urgent:${leadGmailId}`,
+        dedupeKey: urgentDedupeKey(lead),
         title: "Urgent email",
         message: dbMessage,
       },
@@ -1567,7 +1573,14 @@ async function runUserCycle(
             syncedAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
           },
           orderBy: { receivedAt: "desc" },
-          select: { id: true, gmailId: true, subject: true, from: true, summary: true },
+          select: {
+            id: true,
+            gmailId: true,
+            subject: true,
+            from: true,
+            summary: true,
+            createdAt: true,
+          },
         });
 
         if (urgentEmails.length > 0) {
@@ -1579,12 +1592,12 @@ async function runUserCycle(
               OR: [{ title: "Urgent email" }, { title: "긴급 이메일" }],
               createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
             },
-            select: { message: true },
+            select: { message: true, createdAt: true },
           });
-          const notifiedGmailIds = parseNotifiedGmailIds(recentUrgentNotifs.map((n) => n.message));
-
-          // Only notify for urgent emails we haven't notified about yet
-          const newUrgent = urgentEmails.filter((e) => !notifiedGmailIds.has(e.gmailId));
+          // Only notify for urgent emails we haven't notified about yet. For an IMAP
+          // id a marker counts only from the row's creation on (step B2b: a repair
+          // can hand a re-keyed row's id to a new message); Gmail ids as before.
+          const newUrgent = unnotifiedEmails(urgentEmails, latestNotifiedAt(recentUrgentNotifs));
 
           if (newUrgent.length > 0) {
             // User-visible body: who + what, no internal IDs.
@@ -1602,14 +1615,14 @@ async function runUserCycle(
               newUrgent.map((e) => e.gmailId),
             );
 
-            // Atomic + winner-only (dedupeKey = "urgent:<leadGmailId>"): the
-            // read-based notifiedGmailIds filter above is the primary per-message
+            // Atomic + winner-only (dedupeKey = urgentDedupeKey(lead)): the
+            // read-based marker filter above is the primary per-message
             // dedup; this closes the residual concurrent-tick race on one batch so
             // the bell + web-push + SMS fire at most once. A P2002 loser returns
             // null and we skip ALL follow-on side-effects below.
             const notification = await ensureUrgentEmailNotification(
               config.userId,
-              newUrgent[0].gmailId,
+              newUrgent[0],
               dbMessage,
               userBody,
             );

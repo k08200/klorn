@@ -450,49 +450,59 @@ enum InboxProvider {
 // (the multi_account feature). watch/history/sync fields are for the later
 // real-time + incremental-sync phases and are unused until then.
 model LinkedInboxAccount {
-  id                  String             @id @default(uuid())
-  userId              String
-  user                User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  provider            InboxProvider      @default(GOOGLE)
-  email               String // the linked account address — label + dedup key
+  id                        String             @id @default(uuid())
+  userId                    String
+  user                      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider                  InboxProvider      @default(GOOGLE)
+  email                     String // the linked account address — label + dedup key
   // What this mailbox is FOR — "work" | "personal" | "mixed" | null (unset).
   // Feeds the analysis prompts: a personal inbox must not be scored as a
   // work inbox (founder 2026-08-30). Never inferred; the user says so.
-  purpose             String?
+  purpose                   String?
   // OAuth providers (GOOGLE, OUTLOOK): encrypted token pair. Nullable because
   // IMAP rows never have one; Google reads already guard `row.accessToken ?`.
-  accessToken         String?
-  refreshToken        String?
-  expiresAt           DateTime?
+  accessToken               String?
+  refreshToken              String?
+  expiresAt                 DateTime?
   // IMAP providers (NAVER, ICLOUD, IMAP): exact host (SSRF-allowlisted at the
   // route) + AES-256-GCM password cipher, same crypto-tokens helper as OAuth.
-  imapHost            String?
-  imapPasswordCipher  String?
+  imapHost                  String?
+  imapPasswordCipher        String?
   // IMAP providers (NAVER, ICLOUD): the INBOX UIDVALIDITY the poller last saw, as
   // a canonical decimal string (step B2). A UID in EmailMessage.gmailId names a
   // message only under this value, so every IMAP action compares the live value
-  // with it before touching a UID. The poller only ever FILLS it (the baseline); a
-  // poll that sees a different value leaves it alone, reports once, and every
-  // action then refuses the mailbox until a repair (plan step B2b). A String, not
-  // an Int or BigInt: the
-  // value is an unsigned 32-bit integer (over a signed Int), is only compared for
-  // equality, and BigInt would make any route that returns the whole row throw in
-  // JSON.stringify. NULL until the first poll after this column exists.
-  inboxUidValidity    String?
-  gmailWatchExpiresAt DateTime?
+  // with it before touching a UID. The poller FILLS it (the baseline) and, once the
+  // same new value was seen on two polls at least a minute apart, REPLACES it in the
+  // transaction that re-keys the mailbox's rows (step B2b). Until then a poll that
+  // sees a different value persists nothing for the mailbox, reports once, and every
+  // action refuses the mailbox. A String, not an Int or BigInt: the value is an unsigned
+  // 32-bit integer (over a signed Int), is only compared for equality, and BigInt
+  // would make any route that returns the whole row throw in JSON.stringify. NULL
+  // until the first poll after this column exists.
+  inboxUidValidity          String?
+  // Step B2b. A live value that differs from inboxUidValidity and has been seen on
+  // ONE poll so far, with the time of that sighting. A sighting of the same value at
+  // least a minute later confirms the reset; seeing the stored value again, or
+  // another value, discards or replaces it. NULL when no reset is pending.
+  inboxUidValidityPending   String?
+  inboxUidValidityPendingAt DateTime?
+  // Step B2b. When the last reset was applied; at most one per account per 24 h, so
+  // a server that keeps renumbering cannot churn the mailbox. NULL = never.
+  inboxUidValidityResetAt   DateTime?
+  gmailWatchExpiresAt       DateTime?
   // Provider-generic incremental-sync watermark: Gmail historyId for GOOGLE
   // rows, Graph delta/next link (a full URL) for OUTLOOK rows (Phase 3B —
   // same co-opt precedent as gmailId holding provider message ids).
-  historyId           String?
-  lastSyncedAt        DateTime?
+  historyId                 String?
+  lastSyncedAt              DateTime?
   // Set true when this linked inbox's token is found revoked/undecryptable so the
   // UI can prompt a re-link instead of the inbox silently rotting; cleared on a
   // successful token refresh or re-link. Durable so a revoked inbox stays flagged
   // across restarts (at scale, revoked linked tokens are the norm, not the edge).
-  needsReconnect      Boolean            @default(false)
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
-  imapMovedMessages   ImapMovedMessage[]
+  needsReconnect            Boolean            @default(false)
+  createdAt                 DateTime           @default(now())
+  updatedAt                 DateTime           @updatedAt
+  imapMovedMessages         ImapMovedMessage[]
 
   // provider participates so the same address can exist on two services (a
   // user forwarding their iCloud into Gmail links both) without colliding.

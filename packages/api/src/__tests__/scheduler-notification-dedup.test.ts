@@ -115,7 +115,7 @@ describe("ensureUrgentEmailNotification — winner-only atomic push", () => {
     const { prisma } = await import("../db.js");
     const result = await ensureUrgentEmailNotification(
       USER,
-      GMAIL_ID,
+      { id: "email-1", gmailId: GMAIL_ID },
       `body [${GMAIL_ID}]`,
       "body",
     );
@@ -134,11 +134,22 @@ describe("ensureUrgentEmailNotification — winner-only atomic push", () => {
     );
   });
 
+  it("IMAP lead (B2b): the key names the row, so a new message reusing a re-keyed id is not a loser", async () => {
+    const { prisma } = await import("../db.js");
+    const imapId = "naver-imap:me@naver.com:101";
+    await ensureUrgentEmailNotification(USER, { id: "email-9", gmailId: imapId }, "b", "b");
+    expect(vi.mocked(prisma.notification.create)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ dedupeKey: `urgent:${imapId}@email-9` }),
+      }),
+    );
+  });
+
   it("loser (P2002): returns null and does NOT push — no duplicate urgent alert", async () => {
     state.notificationCreateP2002 = true;
     const result = await ensureUrgentEmailNotification(
       USER,
-      GMAIL_ID,
+      { id: "email-1", gmailId: GMAIL_ID },
       `body [${GMAIL_ID}]`,
       "body",
     );
