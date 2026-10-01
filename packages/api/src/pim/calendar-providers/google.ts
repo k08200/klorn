@@ -29,6 +29,8 @@ import type {
   CalendarProviderActions,
   CalendarSession,
   CalendarWindow,
+  CancelledEventsQuery,
+  CancelledEventsResult,
   PersonFreeBusy,
   ProviderCalendarEvent,
 } from "./types.js";
@@ -38,6 +40,12 @@ type GoogleAuth = InstanceType<typeof google.auth.OAuth2>;
 const PRIMARY_CALENDAR_ID = "primary";
 /** One `calendarList.list` page is enough: a user writes to far fewer than 250 calendars. */
 const CALENDAR_LIST_PAGE_SIZE = 250;
+/** Cancellation scan: events per page (Google's own default) ... */
+export const CANCELLED_SCAN_PAGE_SIZE = 250;
+/** ... and pages per scan, so at most 1000 events are read per account per sync. */
+export const CANCELLED_SCAN_MAX_PAGES = 4;
+/** One scan page waits at most this long (gaxios timeout), so a hung call cannot hold a sync tick. */
+export const CANCELLED_SCAN_TIMEOUT_MS = 10_000;
 
 /**
  * The start/end Google wants for an event. Timed events carry the user's
@@ -165,6 +173,104 @@ async function listEventsVia(
   return (res.data.items || []).map((item) => toProviderEvent(item, query.timeZone));
 }
 
+interface LatestItem {
+  readonly cancelled: boolean;
+  /** An event or a whole series (no recurringEventId), not an instance of one. */
+  readonly standalone: boolean;
+  readonly updatedMs: number | null;
+}
+
+/** Keep the item with the latest `updated` per id; arrival order breaks a tie or a missing time. */
+function noteLatest(
+  latest: Map<string, LatestItem>,
+  id: string,
+  item: calendar_v3.Schema$Event,
+): void {
+  const parsed = item.updated ? Date.parse(item.updated) : Number.NaN;
+  const updatedMs = Number.isFinite(parsed) ? parsed : null;
+  const previous = latest.get(id);
+  if (previous?.updatedMs != null && updatedMs !== null && updatedMs < previous.updatedMs) return;
+  latest.set(id, {
+    cancelled: item.status === "cancelled",
+    standalone: !item.recurringEventId,
+    updatedMs,
+  });
+}
+
+function cancelledResult(
+  latest: ReadonlyMap<string, LatestItem>,
+  truncated: boolean,
+  resumeUpdatedMin: string | null,
+): CancelledEventsResult {
+  const cancelled = [...latest].filter(([, item]) => item.cancelled);
+  return {
+    externalIds: cancelled.map(([id]) => id),
+    seriesIds: cancelled.filter(([, item]) => item.standalone).map(([id]) => id),
+    truncated,
+    resumeUpdatedMin,
+  };
+}
+
+/**
+ * The events deleted or cancelled since `query.updatedMin` (C2b). This is its own
+ * events.list, never the sync listing with showDeleted added: cancelled events
+ * count toward that call's maxResults and would push live events out of the
+ * window. Google semantics
+ * (developers.google.com/workspace/calendar/api/v3/reference/events/list):
+ *   - `showDeleted: true` includes deleted events (status "cancelled"), and
+ *     `updatedMin` bounds the listing to events modified since then: "entries
+ *     deleted since this time will always be included regardless of showDeleted".
+ *   - `singleEvents: false` returns single events, recurring masters and
+ *     exceptions, not every expanded instance (the recurring-events guide), so a
+ *     recurring series cannot fill the page cap. A cancelled single event, a
+ *     cancelled series and a cancelled instance of a live series each come back
+ *     as one item; an instance carries `recurringEventId`, the other two do not.
+ *   - `orderBy: "updated"` (ascending) is valid without singleEvents (only
+ *     "startTime" needs it), so a truncated scan can resume at the last `updated`.
+ *   - No timeMin/timeMax: a cancelled event is only guaranteed to carry its id
+ *     (the events resource, "status"), and a time filter could drop one with no
+ *     start. Hence `fields` asks for nothing more than id, status, updated and
+ *     recurringEventId.
+ * An id can appear on more than one page (cancelled when an early page was read,
+ * restored since, so listed again under a newer `updated`): across the pages the
+ * item with the latest `updated` decides, and only an id whose final status is
+ * cancelled is reported, so a restored event (or series) is never removed.
+ * Paged up to CANCELLED_SCAN_MAX_PAGES; more than that is reported as truncated
+ * with where to resume, not followed. Each page waits at most
+ * CANCELLED_SCAN_TIMEOUT_MS and is never retried (the next sync is the retry), so
+ * a hung call cannot hold the scheduler tick.
+ */
+async function listCancelledVia(
+  api: calendar_v3.Calendar,
+  query: CancelledEventsQuery,
+): Promise<CancelledEventsResult> {
+  const latest = new Map<string, LatestItem>();
+  let lastUpdated: string | null = null;
+  let pageToken: string | undefined;
+  for (let page = 0; page < CANCELLED_SCAN_MAX_PAGES; page += 1) {
+    const res = await api.events.list(
+      {
+        calendarId: PRIMARY_CALENDAR_ID,
+        updatedMin: query.updatedMin,
+        singleEvents: false,
+        showDeleted: true,
+        orderBy: "updated",
+        maxResults: CANCELLED_SCAN_PAGE_SIZE,
+        fields: "nextPageToken,items(id,status,updated,recurringEventId)",
+        ...(pageToken ? { pageToken } : {}),
+      },
+      { timeout: CANCELLED_SCAN_TIMEOUT_MS, retry: false },
+    );
+    for (const item of res.data.items ?? []) {
+      if (item.updated) lastUpdated = item.updated;
+      if (item.id) noteLatest(latest, item.id, item);
+    }
+    pageToken = res.data.nextPageToken ?? undefined;
+    if (!pageToken) return cancelledResult(latest, false, null);
+  }
+  return cancelledResult(latest, true, lastUpdated);
+}
+
 async function createEventVia(
   api: calendar_v3.Calendar,
   input: CalendarCreateInput,
@@ -255,6 +361,7 @@ export function googleSessionFromClient(auth: GoogleAuth): CalendarSession {
   return {
     provider: "GOOGLE",
     listEvents: (query) => listEventsVia(api(), query),
+    listCancelledEvents: (query) => listCancelledVia(api(), query),
     createEvent: (input) => createEventVia(api(), input),
     updateEvent: (eventId, patch) => updateEventVia(api(), eventId, patch),
     deleteEvent: async (eventId) => {

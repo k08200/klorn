@@ -210,6 +210,21 @@ export function linkedCalendarSyncEnabled(): boolean {
     (process.env.LINKED_CALENDAR_SYNC_ENABLED ?? "").trim().toLowerCase(),
   );
 }
+// Removing events cancelled in Google on the next calendar sync — step C2b of
+// docs/providers/unified-platform-plan.md. OFF by default (repo doctrine). While
+// unset/false every calendar sync (the scheduler cycle, the login init-sync,
+// POST /api/calendar/sync, linked accounts included) makes exactly the Google
+// calls it always did and removes no row. When on, each sync also asks Google
+// which events were cancelled (a second events.list) and deletes their rows and
+// resolves their attention items. Read at sync time with the same lenient truthy
+// parse, so a flip needs no redeploy. Flipping it is a founder action, after a
+// check against a real Google calendar. Turning it off stops the scanning; rows
+// already removed stay removed.
+export function calendarCancellationSyncEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.CALENDAR_CANCELLATION_SYNC_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
 // Archive, trash and their inverses for Naver and iCloud over IMAP MOVE — step B2
 // of docs/providers/unified-platform-plan.md. OFF by default (repo doctrine) and
 // independent of IMAP_ACTIONS_ENABLED and IMAP_SEND_ENABLED. While OFF,
