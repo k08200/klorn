@@ -1768,6 +1768,51 @@ the first request, and the password is stored with `encryptToken`.
     dedupe (tested). Every C7 reader treats an OUTLOOK row as a linked Google row:
     read-only (`sourceAccountId` is set), text wrapped as untrusted, no title in a
     conflict; a guard test fails if a reader starts comparing a provider name.
+  - Review fixes (round 2).
+    - DST: `naiveLocalToUtc` read the zone's offset at the wall clock written as
+      if it were UTC, which is an hour off in the hours either side of a DST
+      transition (a Singapore holiday read in Los Angeles landed a day early after
+      the fall-back). It now settles the offset over two passes (a third at a
+      spring-forward gap) in one shared function, `wallClockToUtcMs` in
+      `time-zone.ts`, which `localDayUtcRange` uses as well. Live paths whose
+      behaviour changes, and only for a naive time on a transition day in a zone
+      with DST: the Google sync's offset-less `dateTime`
+      (`calendar-providers/google.ts` -> `mapGoogleEventTimes` ->
+      `parseGoogleDateTime`; Google normally sends an offset, so this is rare), and
+      `checkAttendeeBusy` and `checkConflicts` in `pim/calendar.ts` through
+      `toAbsoluteInstant` (an agent's or draft's naive time in the user's zone).
+      Asia/Seoul, the default, has no DST and is unaffected. Tested across
+      spring-forward and fall-back in Los Angeles and Berlin, plus a quarter-hour
+      sweep over Sydney and Lord Howe.
+    - Attention items. `attention-mirror.ts` copies an event's title into a
+      `CALENDAR_EVENT` item, and the briefing listed open PUSH items of every
+      source, so the title outlived the kill switch (an Outlook flag turned off, or
+      a linked Google event while the linked sync is off). Readers of such items
+      now pass them through `withoutHiddenCalendarItems`
+      (`pim/attention-calendar-visibility.ts`): one batch lookup scoped by
+      `calendarSourceScope()`, and an item whose event is hidden or gone is
+      dropped, as the inbox summary already did. The briefing reads four times as
+      many items as it shows so the filter cannot starve the list. A guard test
+      lists every module that reads AttentionItem and fails for an unclassified one.
+    - Concurrent refresh. A rotation is a compare-and-swap on the refresh cipher
+      that was read (`refreshedTokenUpdate(refreshed, previousCipher)`, shared with
+      the mail path): the loser's write matches no row. The calendar source then
+      re-reads the row and uses the winner's access token, and an `invalid_grant`
+      re-reads the row before it can flag the account: a changed refresh cipher
+      means the winner rotated first, so it uses the winner's token (one retry with
+      its refresh token if that has run out), and only an unchanged cipher, or a
+      refused retry, is a revoked grant. The mail path takes the swap with its own
+      behaviour otherwise unchanged (a lost swap logs and syncs with the fresh
+      token); both are tested.
+    - Smaller. Meeting links are capped at 2048 characters, after normalising as
+      well. Token-endpoint fetches (`mail/outlook-oauth.ts`) refuse redirects like
+      the Graph ones; every caller already treats a rejected fetch as a failure
+      (the link callbacks redirect to `failed`, the mail poll counts the account's
+      error, the calendar sync captures it without flagging), tested at each. A
+      failed token save logs the error's class, code and first line, not the raw
+      database error. The reader guard now catches `case`, `.includes`, constants,
+      template literals and lookups keyed by a provider, covers every consumer of
+      `readCalendarRows`, and no longer exempts `tool-executor.ts`.
   - Known gaps, deliberate. (1) The legacy (userId, email) unique on `LinkedCalendarAccount`
     still exists, so an address that is already a linked calendar of another
     provider cannot also be linked as an Outlook calendar (an `outlook.com` or

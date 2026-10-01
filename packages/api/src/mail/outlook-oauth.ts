@@ -110,6 +110,10 @@ export async function exchangeOutlookCode(
   const res = await fetch(`${authorityBase()}/token`, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
+    // Never follow a redirect: fetch would resend this body (the client secret, the
+    // code or refresh token) to wherever it points. A refused redirect rejects like
+    // any network failure, which every caller already handles.
+    redirect: "error",
     // Fail fast — a hung token call stalls whichever flow is waiting on it.
     signal: AbortSignal.timeout(15_000),
     body: new URLSearchParams({
@@ -165,6 +169,10 @@ export async function refreshOutlookTokens(
   const res = await fetch(`${authorityBase()}/token`, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
+    // Never follow a redirect: fetch would resend this body (the client secret, the
+    // code or refresh token) to wherever it points. A refused redirect rejects like
+    // any network failure, which every caller already handles.
+    redirect: "error",
     // Fail fast — a hung token call stalls whichever flow is waiting on it.
     signal: AbortSignal.timeout(15_000),
     body: new URLSearchParams({

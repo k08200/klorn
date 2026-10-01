@@ -79,11 +79,19 @@ export async function resolveAccessToken(userId: string, row: OutlookRow): Promi
     return null;
   }
   try {
-    const update = refreshedTokenUpdate(refreshed);
-    await prisma.linkedInboxAccount.updateMany({
+    // A rotation is a compare-and-swap on the refresh cipher that was read: a
+    // concurrent refresh that stored first keeps its token (count 0 here), and this
+    // tick, whose fresh access token is still valid, carries on with it.
+    const update = refreshedTokenUpdate(refreshed, row.refreshToken);
+    const written = await prisma.linkedInboxAccount.updateMany({
       where: { id: row.id, userId, ...update.where },
       data: update.data,
     });
+    if (written.count === 0 && Boolean(refreshed.refreshToken)) {
+      console.warn(
+        `[outlook-accounts] another refresh stored a newer token for row ${row.id}; syncing with this tick's`,
+      );
+    }
   } catch (err) {
     // A transient DB failure must not lose the tick — the fresh tokens are
     // in memory and valid. Worst case the rotated refresh cipher is lost and

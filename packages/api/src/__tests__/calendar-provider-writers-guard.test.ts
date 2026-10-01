@@ -146,6 +146,7 @@ describe("Google-only LinkedCalendarAccount readers filter on provider", () => {
     const readers = files.filter((f) => callWindows(f.text, READ).length > 0);
     expect(readers.map((f) => f.path).sort()).toEqual([
       "pim/calendar-providers/dispatch.ts",
+      "pim/calendar-providers/outlook-token.ts", // re-reads one OUTLOOK row after a refresh race
       "pim/calendar-source-label.ts",
       "pim/linked-calendar-unlink.ts",
       "routes/auth.ts",
@@ -186,9 +187,11 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
   ];
   // Only ask "is this time busy?", fetch one row by id, or delete an account's
   // own rows: a duplicate row changes nothing, and a linked calendar's event
-  // SHOULD block the slot.
+  // SHOULD block the slot. attention-calendar-visibility.ts asks only which of a
+  // list of event ids are visible (C4: the kill switch for mirrored attention items).
   const UNAFFECTED = [
     "agentcore/tool-executor.ts",
+    "pim/attention-calendar-visibility.ts",
     "notify/notification-prefs.ts",
     "pim/linked-calendar-unlink.ts",
     "pim/meeting-prep-pack.ts",

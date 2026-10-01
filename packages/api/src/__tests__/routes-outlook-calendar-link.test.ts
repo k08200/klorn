@@ -404,6 +404,28 @@ describe("GET /callback with a calendar state", () => {
     await app.close();
   });
 
+  it.each([
+    [
+      "the code exchange",
+      () => oauth.exchangeOutlookCode.mockRejectedValueOnce(new TypeError("fetch failed")),
+    ],
+    [
+      "the /me lookup",
+      () => oauth.fetchOutlookAccountEmail.mockRejectedValueOnce(new TypeError("fetch failed")),
+    ],
+  ])("a refused redirect or any network failure in %s lands on ?linked=failed and is reported, not unhandled", async (_label, arrange) => {
+    arrange();
+    const { app, calendarState } = await buildApp();
+
+    const res = await app.inject({ method: "GET", url: callbackUrl("c", calendarState) });
+
+    expect(res.statusCode).toBe(302);
+    expect(res.headers.location).toBe(`${WEB}/calendar?linked=failed`);
+    expect(db.calendar.upsert).not.toHaveBeenCalled();
+    expect(db.captureError).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
+
   it("any other write failure redirects ?linked=failed and is reported", async () => {
     db.calendar.upsert.mockRejectedValueOnce(new Error("db down"));
     const { app, calendarState } = await buildApp();

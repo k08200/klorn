@@ -26,6 +26,8 @@ const MAX_PAGES = 10;
 const OPEN_ENDED_WINDOW_DAYS = 365;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}/;
+/** The longest meeting link kept; a longer value is not a join link, and every client shows it. */
+const MAX_MEETING_LINK_LENGTH = 2048;
 /** The wall-clock time an all-day event starts at, in the zone it was created in. */
 const MIDNIGHT = /T00:00(?::00(?:\.0+)?)?$/;
 
@@ -180,15 +182,17 @@ function allDayTimes(item: GraphEvent, queryZone: string | undefined) {
 /**
  * A meeting link that is safe to hand on: it reaches a web `<a href>`, the Mac
  * app's NSWorkspace.open and the model's prompt, so only an https URL without
- * embedded credentials passes. Anything else (javascript:, file:, http:, a custom
- * scheme, a relative or malformed value) is dropped. Returned normalised.
+ * embedded credentials, of at most 2048 characters, passes. Anything else
+ * (javascript:, file:, http:, a custom scheme, a relative, malformed or oversized
+ * value) is dropped. Returned normalised.
  */
 function httpsLinkOf(value: string | null | undefined): string | null {
-  if (!value) return null;
+  if (!value || value.length > MAX_MEETING_LINK_LENGTH) return null;
   try {
     const url = new URL(value);
     if (url.protocol !== "https:" || url.username !== "" || url.password !== "") return null;
-    return url.href;
+    // Normalising can lengthen a value (percent-encoding), so the cap holds for the result too.
+    return url.href.length <= MAX_MEETING_LINK_LENGTH ? url.href : null;
   } catch {
     return null;
   }

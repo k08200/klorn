@@ -117,7 +117,9 @@ describe("syncOutlookAccountsForUser", () => {
     expect(m.refreshOutlookTokens).toHaveBeenCalledWith("plain:rt-cipher");
     expect(m.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "row-1", userId: "u1" },
+        // Compare-and-swap on the refresh cipher that was read (a concurrent refresh
+        // that stored first is not overwritten); otherwise the write is unchanged.
+        where: { id: "row-1", userId: "u1", refreshToken: "rt-cipher" },
         data: expect.objectContaining({
           accessToken: "enc:new-at",
           refreshToken: "enc:new-rt",
@@ -242,7 +244,58 @@ describe("syncOutlookAccountsForUser", () => {
     });
     await syncOutlookAccountsForUser("u1");
     const rotated = m.updateMany.mock.calls.find((c) => c[0]?.data?.accessToken);
-    expect(rotated?.[0].where).toEqual({ id: "row-1", userId: "u1" });
+    expect(rotated?.[0].where).toEqual({ id: "row-1", userId: "u1", refreshToken: "rt-cipher" });
+  });
+
+  it("an uncontended refresh behaves exactly as before: one refresh, one write, the new token syncs, nothing flagged", async () => {
+    m.findMany.mockResolvedValue([outlookRow({ expiresAt: PAST })]);
+
+    await syncOutlookAccountsForUser("u1");
+
+    expect(m.refreshOutlookTokens).toHaveBeenCalledTimes(1);
+    const writes = m.updateMany.mock.calls.filter((c) => c[0]?.data?.accessToken);
+    expect(writes).toHaveLength(1);
+    expect(writes[0]?.[0].data).toEqual({
+      accessToken: "enc:new-at",
+      refreshToken: "enc:new-rt",
+      expiresAt: FUTURE,
+      needsReconnect: false,
+    });
+    expect(m.syncOutlookInbox).toHaveBeenCalledWith(
+      expect.objectContaining({ accessToken: "new-at" }),
+    );
+    expect(m.markLinkedInboxForReconnect).not.toHaveBeenCalled();
+  });
+
+  it("when another refresh stored first (the swap writes no row) it syncs with its own fresh token and flags nothing", async () => {
+    m.findMany.mockResolvedValue([outlookRow({ expiresAt: PAST })]);
+    m.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    await syncOutlookAccountsForUser("u1");
+
+    expect(m.syncOutlookInbox).toHaveBeenCalledWith(
+      expect.objectContaining({ accessToken: "new-at" }),
+    );
+    expect(m.markLinkedInboxForReconnect).not.toHaveBeenCalled();
+  });
+
+  it("a refresh that rejects (a refused redirect, a timeout) is that account's error, and the next account still syncs", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    m.findMany.mockResolvedValue([
+      outlookRow({ expiresAt: PAST }),
+      outlookRow({ id: "row-2", email: "b@outlook.com" }),
+    ]);
+    m.refreshOutlookTokens.mockRejectedValueOnce(new TypeError("fetch failed"));
+
+    const result = await syncOutlookAccountsForUser("u1");
+
+    expect(result).toMatchObject({ errors: 1 });
+    expect(m.syncOutlookInbox).toHaveBeenCalledTimes(1);
+    expect(m.syncOutlookInbox).toHaveBeenCalledWith(
+      expect.objectContaining({ linkedInboxAccountId: "row-2" }),
+    );
+    // A network failure is not a revoked grant: nothing is flagged.
+    expect(m.markLinkedInboxForReconnect).not.toHaveBeenCalled();
   });
 
   it("one account failing never blocks the next, and errors aggregate", async () => {

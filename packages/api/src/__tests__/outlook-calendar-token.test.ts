@@ -15,6 +15,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({
   refreshOutlookTokens: vi.fn(),
   updateMany: vi.fn(async () => ({ count: 1 })),
+  findFirst: vi.fn(),
   markLinkedCalendarForReconnect: vi.fn(async () => {}),
   captureError: vi.fn(),
   decryptFails: false,
@@ -35,7 +36,9 @@ vi.mock("../crypto-tokens.js", () => ({
 }));
 vi.mock("../mail/outlook-oauth.js", () => ({ refreshOutlookTokens: m.refreshOutlookTokens }));
 vi.mock("../db.js", () => {
-  const prisma = { linkedCalendarAccount: { updateMany: m.updateMany } };
+  const prisma = {
+    linkedCalendarAccount: { updateMany: m.updateMany, findFirst: m.findFirst },
+  };
   return { prisma, db: prisma };
 });
 vi.mock("../mail/gmail.js", () => ({
@@ -71,6 +74,9 @@ beforeEach(() => {
   m.decryptFails = false;
   m.refreshDecryptFails = false;
   vi.spyOn(console, "warn").mockImplementation(() => {});
+  m.updateMany.mockResolvedValue({ count: 1 });
+  m.findFirst.mockResolvedValue(null);
+  m.refreshOutlookTokens.mockReset();
   m.refreshOutlookTokens.mockResolvedValue({
     accessToken: "access-2",
     refreshToken: "refresh-2",
@@ -114,7 +120,8 @@ describe("a token about to lapse", () => {
 
     expect(m.updateMany).toHaveBeenCalledTimes(1);
     expect(m.updateMany).toHaveBeenCalledWith({
-      where: { id: "acct-out", userId: "u1" },
+      // Compare-and-swap: a rotation is saved only over the refresh cipher that was read.
+      where: { id: "acct-out", userId: "u1", refreshToken: "enc:refresh-1" },
       data: {
         accessToken: "enc:access-2",
         refreshToken: "enc:refresh-2",
@@ -337,5 +344,234 @@ describe("renewAfterUnauthorized(failedToken)", () => {
 
     expect(isRevokedGrantError(err)).toBe(true);
     expect(m.refreshOutlookTokens).not.toHaveBeenCalled();
+  });
+});
+
+// A sync tick and a conflict check (or two ticks) can both refresh the same account.
+// Microsoft rotates the refresh token, so the loser must neither overwrite the winner's
+// stored token nor flag the account as revoked because the winner got there first.
+describe("two refreshes of one account at once (compare-and-swap on the refresh cipher)", () => {
+  const FUTURE = new Date(Date.now() + HOUR);
+  const PAST = new Date(Date.now() - 1000);
+
+  function storedRow(over: Record<string, unknown> = {}) {
+    return {
+      accessToken: "enc:access-winner",
+      refreshToken: "enc:refresh-winner",
+      expiresAt: FUTURE,
+      ...over,
+    };
+  }
+
+  it("saves a rotation only over the cipher it read, and returns its own token when it wins", async () => {
+    const token = await source({ expiresAt: PAST })?.accessToken();
+
+    expect(token).toBe("access-2");
+    expect(m.updateMany).toHaveBeenCalledTimes(1);
+    expect(
+      (m.updateMany.mock.calls[0] as unknown as [{ where: Record<string, unknown> }])[0].where,
+    ).toMatchObject({ id: "acct-out", userId: "u1", refreshToken: "enc:refresh-1" });
+    expect(m.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("when another refresh stored first (count 0) it re-reads the row and uses the stored token", async () => {
+    m.updateMany.mockResolvedValue({ count: 0 });
+    m.findFirst.mockResolvedValue(storedRow());
+
+    const token = await source({ expiresAt: PAST })?.accessToken();
+
+    expect(token).toBe("access-winner");
+    expect(m.findFirst).toHaveBeenCalledWith({
+      where: { id: "acct-out", userId: "u1", provider: "OUTLOOK" },
+      select: { accessToken: true, refreshToken: true, expiresAt: true },
+    });
+    expect(m.markLinkedCalendarForReconnect).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["no row any more", null],
+    ["a stored token that has run out", storedRow({ expiresAt: PAST })],
+    ["a stored token that cannot be read", storedRow({ accessToken: null })],
+  ])("when it lost and the re-read gives %s, it keeps its own fresh token", async (_label, stored) => {
+    m.updateMany.mockResolvedValue({ count: 0 });
+    m.findFirst.mockResolvedValue(stored);
+
+    expect(await source({ expiresAt: PAST })?.accessToken()).toBe("access-2");
+  });
+
+  it("a lost write followed by a failing re-read still answers its own fresh token", async () => {
+    m.updateMany.mockResolvedValue({ count: 0 });
+    m.findFirst.mockRejectedValue(new Error("db blip"));
+
+    expect(await source({ expiresAt: PAST })?.accessToken()).toBe("access-2");
+  });
+
+  describe("an invalid_grant is checked against the row before it flags anything", () => {
+    it("retries ONCE with the new refresh token when the row's cipher changed since the read", async () => {
+      m.refreshOutlookTokens
+        .mockResolvedValueOnce({ error: "invalid_grant" })
+        .mockResolvedValueOnce({
+          accessToken: "access-3",
+          refreshToken: "refresh-3",
+          expiresAt: new Date("2026-10-01T11:00:00.000Z"),
+        });
+      m.findFirst.mockResolvedValue(storedRow({ expiresAt: PAST }));
+
+      const token = await source({ expiresAt: PAST })?.accessToken();
+
+      expect(token).toBe("access-3");
+      expect(m.refreshOutlookTokens).toHaveBeenNthCalledWith(1, "refresh-1", "calendar");
+      expect(m.refreshOutlookTokens).toHaveBeenNthCalledWith(2, "refresh-winner", "calendar");
+      // The retry is saved over the cipher it used.
+      expect(
+        (m.updateMany.mock.calls[0] as unknown as [{ where: Record<string, unknown> }])[0].where,
+      ).toMatchObject({ refreshToken: "enc:refresh-winner" });
+      expect(m.markLinkedCalendarForReconnect).not.toHaveBeenCalled();
+    });
+
+    it("uses the stored access token as it is when the winner's is still fresh, with no second refresh", async () => {
+      m.refreshOutlookTokens.mockResolvedValueOnce({ error: "invalid_grant" });
+      m.findFirst.mockResolvedValue(storedRow());
+
+      expect(await source({ expiresAt: PAST })?.accessToken()).toBe("access-winner");
+      expect(m.refreshOutlookTokens).toHaveBeenCalledTimes(1);
+    });
+
+    it("is a revoked grant when the row's cipher is the one it used: no retry", async () => {
+      m.refreshOutlookTokens.mockResolvedValue({ error: "invalid_grant" });
+      m.findFirst.mockResolvedValue(storedRow({ refreshToken: "enc:refresh-1" }));
+
+      const err = await source({ expiresAt: PAST })
+        ?.accessToken()
+        .catch((e: unknown) => e);
+
+      expect(isRevokedGrantError(err)).toBe(true);
+      expect(m.refreshOutlookTokens).toHaveBeenCalledTimes(1);
+    });
+
+    it("is a revoked grant when the retry with the new cipher is refused too", async () => {
+      m.refreshOutlookTokens.mockResolvedValue({ error: "invalid_grant" });
+      m.findFirst.mockResolvedValue(storedRow({ expiresAt: PAST }));
+
+      const err = await source({ expiresAt: PAST })
+        ?.accessToken()
+        .catch((e: unknown) => e);
+
+      expect(isRevokedGrantError(err)).toBe(true);
+      expect(m.refreshOutlookTokens).toHaveBeenCalledTimes(2);
+    });
+
+    it.each([
+      ["no row", null],
+      ["a row with no refresh token", storedRow({ refreshToken: null })],
+    ])("is a revoked grant with %s", async (_label, stored) => {
+      m.refreshOutlookTokens.mockResolvedValue({ error: "invalid_grant" });
+      m.findFirst.mockResolvedValue(stored);
+
+      const err = await source({ expiresAt: PAST })
+        ?.accessToken()
+        .catch((e: unknown) => e);
+
+      expect(isRevokedGrantError(err)).toBe(true);
+      expect(m.refreshOutlookTokens).toHaveBeenCalledTimes(1);
+    });
+
+    it("a failing re-read does not hide the invalid_grant", async () => {
+      m.refreshOutlookTokens.mockResolvedValue({ error: "invalid_grant" });
+      m.findFirst.mockRejectedValue(new Error("db blip"));
+
+      const err = await source({ expiresAt: PAST })
+        ?.accessToken()
+        .catch((e: unknown) => e);
+
+      expect(isRevokedGrantError(err)).toBe(true);
+    });
+
+    it.each([
+      "server_error",
+      "interaction_required",
+    ])("only invalid_grant sends it back to the row: %s does not", async (code) => {
+      m.refreshOutlookTokens.mockResolvedValue({ error: code });
+
+      await source({ expiresAt: PAST })
+        ?.accessToken()
+        .catch(() => {});
+
+      expect(m.findFirst).not.toHaveBeenCalled();
+    });
+  });
+
+  it("an access-only refresh has no cipher condition: its guard is the expiry, as before", async () => {
+    m.refreshOutlookTokens.mockResolvedValue({
+      accessToken: "access-2",
+      refreshToken: null,
+      expiresAt: new Date("2026-10-01T10:00:00.000Z"),
+    });
+
+    await source({ expiresAt: PAST })?.accessToken();
+
+    const where = (m.updateMany.mock.calls[0] as unknown as [{ where: Record<string, unknown> }])[0]
+      .where;
+    expect(where).not.toHaveProperty("refreshToken");
+    expect(where).toHaveProperty("OR");
+  });
+});
+
+describe("a failed save logs a sanitised summary, never the raw database error", () => {
+  const SECRET = "enc:super-secret-cipher-value";
+  const longTail = "x".repeat(2000);
+
+  function prismaError() {
+    return Object.assign(
+      new Error(
+        `Invalid \`prisma.linkedCalendarAccount.updateMany()\` invocation in\n/app/outlook-token.ts:119\n\n  data: {\n    accessToken: "${SECRET}",\n    refreshToken: "${SECRET}"\n  }\n${longTail}`,
+      ),
+      { name: "PrismaClientKnownRequestError", code: "P2034" },
+    );
+  }
+
+  it("the log line has the class, the code and the first line only", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    m.updateMany.mockRejectedValueOnce(prismaError());
+
+    await source({ expiresAt: null })?.accessToken();
+
+    const line = warn.mock.calls
+      .map((c) => c.map(String).join(" "))
+      .find((l) => l.includes("persist failed"));
+    expect(line).toContain("PrismaClientKnownRequestError");
+    expect(line).toContain("P2034");
+    expect(line).toContain("updateMany()");
+    expect(line).not.toContain(SECRET);
+    expect(line?.length).toBeLessThan(400);
+    // No second argument carrying the raw error object.
+    expect(warn.mock.calls.find((c) => String(c[0]).includes("persist failed"))).toHaveLength(1);
+  });
+
+  it("Sentry gets the same summary, as an error without the row values", async () => {
+    m.updateMany.mockRejectedValueOnce(prismaError());
+
+    await source({ expiresAt: null })?.accessToken();
+
+    const captured = m.captureError.mock.calls[0]?.[0] as Error;
+    expect(captured).toBeInstanceOf(Error);
+    expect(captured.message).toContain("P2034");
+    expect(captured.message).not.toContain(SECRET);
+    expect(captured.message.length).toBeLessThan(400);
+    expect(m.captureError.mock.calls[0]?.[1]).toMatchObject({
+      tags: { scope: "outlook-calendar.token-persist" },
+    });
+  });
+
+  it("a thrown value that is not an Error is logged by its type only", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    m.updateMany.mockRejectedValueOnce({ secret: SECRET });
+
+    await source({ expiresAt: null })?.accessToken();
+
+    const line = warn.mock.calls
+      .map((c) => c.map(String).join(" "))
+      .find((l) => l.includes("persist failed"));
+    expect(line).not.toContain(SECRET);
   });
 });

@@ -790,6 +790,30 @@ describe("meetingLink reaches an <a href>, NSWorkspace.open and the model: https
     expect(event.meetingLink).toBeNull();
   });
 
+  it("caps a link at 2048 characters: the cap itself passes, one more is dropped", async () => {
+    const base = "https://meet.example.com/";
+    const atCap = base + "a".repeat(2048 - base.length);
+
+    expect((await listOne(timed("e1", { onlineMeeting: { joinUrl: atCap } }))).meetingLink).toBe(
+      atCap,
+    );
+    expect(
+      (await listOne(timed("e2", { onlineMeeting: { joinUrl: `${atCap}a` } }))).meetingLink,
+    ).toBeNull();
+    // The legacy field is capped the same way.
+    expect((await listOne(timed("e3", { onlineMeetingUrl: `${atCap}a` }))).meetingLink).toBeNull();
+  });
+
+  it("holds the cap for the normalised link too: a short value that grows when percent-encoded is dropped", async () => {
+    // 1100 two-byte characters are 1100 long as written and 6600 once encoded.
+    const grows = `https://meet.example.com/${"é".repeat(1100)}`;
+    expect(grows.length).toBeLessThan(2048);
+
+    expect(
+      (await listOne(timed("e1", { onlineMeeting: { joinUrl: grows } }))).meetingLink,
+    ).toBeNull();
+  });
+
   it("checks the legacy onlineMeetingUrl the same way, and prefers a valid link over an invalid one", async () => {
     expect(
       (await listOne(timed("e1", { onlineMeetingUrl: "javascript:alert(1)" }))).meetingLink,
@@ -1169,5 +1193,46 @@ describe("a busy item with times that cannot be read is busy, never free", () =>
     expect(await (await session()).primaryBusyBlocks(WINDOW)).toEqual([
       { id: "bad", summary: "Board", start: WINDOW.timeMin, end: WINDOW.timeMax },
     ]);
+  });
+});
+
+describe("all-day events read across a DST transition keep their date", () => {
+  const allDay = (start: string, end: string, zone: string, original: string) =>
+    timed("ad", {
+      isAllDay: true,
+      start: { dateTime: start, timeZone: zone },
+      end: { dateTime: end, timeZone: zone },
+      originalStartTimeZone: original,
+      originalEndTimeZone: original,
+    });
+
+  it("a Singapore all-day event on 2026-11-02 read in America/Los_Angeles, after the fall-back", async () => {
+    // Midnight SGT 2026-11-02 = 2026-11-01 16:00Z = 08:00 PST (PST began that morning).
+    const event = await listOne(
+      allDay(
+        "2026-11-01T08:00:00.0000000",
+        "2026-11-02T08:00:00.0000000",
+        "America/Los_Angeles",
+        "Singapore Standard Time",
+      ),
+      { ...LIST_QUERY, timeZone: "America/Los_Angeles" },
+    );
+
+    expect(event).toMatchObject({
+      start: "2026-11-02",
+      end: "2026-11-03",
+      startTime: new Date("2026-11-02"),
+      endTime: new Date("2026-11-03"),
+    });
+  });
+
+  it("a UTC all-day event on 2026-03-29 read in Europe/Berlin, across the spring-forward", async () => {
+    // Midnight UTC 2026-03-29 = 01:00 CET; CEST began at 01:00Z, an hour later.
+    const event = await listOne(
+      allDay("2026-03-29T01:00:00.0000000", "2026-03-30T02:00:00.0000000", "Europe/Berlin", "UTC"),
+      { ...LIST_QUERY, timeZone: "Europe/Berlin" },
+    );
+
+    expect(event).toMatchObject({ start: "2026-03-29", end: "2026-03-30" });
   });
 });

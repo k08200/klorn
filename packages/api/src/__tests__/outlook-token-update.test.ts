@@ -33,6 +33,38 @@ describe("refreshedTokenUpdate", () => {
     });
   });
 
+  it("a rotation saved with the cipher that was read is a compare-and-swap on it", () => {
+    const update = refreshedTokenUpdate(
+      { accessToken: "a2", refreshToken: "r2", expiresAt: EXPIRES },
+      "enc:r1",
+    );
+
+    expect(update.where).toEqual({ refreshToken: "enc:r1" });
+    expect(update.data).toMatchObject({ refreshToken: "enc:r2" });
+  });
+
+  it("a row that held no refresh cipher is compared against null, not left unguarded", () => {
+    expect(
+      refreshedTokenUpdate({ accessToken: "a2", refreshToken: "r2", expiresAt: EXPIRES }, null)
+        .where,
+    ).toEqual({ refreshToken: null });
+  });
+
+  it("no previous cipher given means no condition: the caller did not ask for the swap", () => {
+    expect(
+      refreshedTokenUpdate({ accessToken: "a2", refreshToken: "r2", expiresAt: EXPIRES }).where,
+    ).toEqual({});
+  });
+
+  it("an access-only refresh ignores the previous cipher: its guard is the expiry", () => {
+    const update = refreshedTokenUpdate(
+      { accessToken: "a2", refreshToken: null, expiresAt: EXPIRES },
+      "enc:r1",
+    );
+
+    expect(update.where).toEqual({ OR: [{ expiresAt: null }, { expiresAt: { lt: EXPIRES } }] });
+  });
+
   it("an access-only refresh keeps the stored refresh token and only replaces an older access token", () => {
     const update = refreshedTokenUpdate({
       accessToken: "a2",

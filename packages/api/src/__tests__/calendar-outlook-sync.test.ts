@@ -46,6 +46,8 @@ vi.mock("../db.js", () => {
     linkedCalendarAccount: {
       findMany: vi.fn(async () => m.linkedRows),
       updateMany: m.accountUpdateMany,
+      // The re-read an invalid_grant triggers before flagging: the row is unchanged.
+      findFirst: vi.fn(async () => null),
     },
   };
   return { prisma, db: prisma };
@@ -377,6 +379,18 @@ describe("failures", () => {
     expect(captured.tags.scope).toBe("calendar.linked_sync_failed");
     expect(captured.extra).toMatchObject({ userId: "u1", accountDomain: "contoso.com" });
     expect(JSON.stringify(captured)).not.toContain("acct-bad@contoso.com");
+  });
+
+  it("a refresh that rejects (a refused redirect, a timeout) is captured and not flagged: it is not a revoked grant", async () => {
+    m.linkedRows = [outlookRow("acct-out", { expiresAt: new Date(Date.now() - 1000) })];
+    m.refreshOutlookTokens.mockRejectedValue(new TypeError("fetch failed"));
+
+    const result = await syncLinkedCalendars("u1", NOW);
+
+    expect(result.failedAccounts).toBe(1);
+    expect(m.markLinkedCalendarForReconnect).not.toHaveBeenCalled();
+    expect(m.captureError).toHaveBeenCalledTimes(1);
+    expect(m.fetch).not.toHaveBeenCalled();
   });
 
   it("a refresh that fails for a reason other than a revoked grant is captured, not flagged", async () => {

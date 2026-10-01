@@ -3,12 +3,12 @@
  * checks (pim/calendar.ts) and the linked sync (pim/calendar-sync.ts), so the
  * two cannot drift.
  *
- * A revoked Google grant is a condition of the account (the user revoked access
- * or the token died), not a bug: it flags the account for reconnect, is warned
- * about once per account per window, and is never sent to Sentry, where it would
- * page on every cycle for something only the user can fix. Any other failure is
- * warned about and captured, with the domain only and never the full address
- * (PII).
+ * A revoked grant, Google's or Microsoft's, is a condition of the account (the
+ * user revoked access or the token died), not a bug: it flags the account for
+ * reconnect, is warned about once per account per window, and is never sent to
+ * Sentry, where it would page on every cycle for something only the user can fix.
+ * Any other failure is warned about and captured, with the domain only and never
+ * the full address (PII).
  *
  * "Revoked grant" is matched precisely, on purpose stricter than main's
  * `isGoogleAuthError`, which also matches any message containing "expired",

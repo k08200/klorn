@@ -373,6 +373,10 @@ describe("the wire and the labels do not care which provider a linked row is", (
 // The readers key on sourceAccountId, never on a provider name, so a connector's rows
 // are read-only, wrapped and title-free the moment they exist. A reader that starts
 // branching on "GOOGLE" would treat Outlook (and every later connector) differently.
+// The scan reads code only (comments stripped) and looks for every way to branch:
+// a provider-name literal in any quote style (so also `case "OUTLOOK"`, `.includes`
+// lists, constants and template literals), a comparison with a provider value
+// whatever the other side is (a constant, a variable), a switch, a lookup keyed by it.
 describe("no calendar reader branches on a provider name", () => {
   const srcDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -384,29 +388,62 @@ describe("no calendar reader branches on a provider name", () => {
     });
   }
 
+  /** Comments out of the way: a comment may name a provider, code may not. */
+  function codeOnly(text: string): string {
+    return text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`\\])\/\/.*$/gm, "$1");
+  }
+
   const READS_EVENTS =
     /\bcalendarEvent\s*\.\s*(findMany|findFirst|findUnique|count|aggregate|groupBy)\s*\(/;
-  const PROVIDER_COMPARISON =
-    /\bprovider\s*[!=]==?\s*["']|["'](GOOGLE|OUTLOOK|ICLOUD|NAVER|DEVICE|LOCAL)["']\s*[!=]==?/;
-  // The writers and the connectors legitimately name providers; readers must not.
+  const CONSUMES_READ_PATH = /from\s+["'][^"']*\/calendar-read(\.js)?["']/;
+  const READ_MODULES = /^pim\/calendar-(read|read-format|source-label|dedupe|scope)\.ts$/;
+  const PROVIDER_NAME = /["'`](GOOGLE|OUTLOOK|ICLOUD|NAVER|DEVICE|LOCAL)["'`]/;
+  const BRANCHING: Array<[string, RegExp]> = [
+    ["a provider-name literal", PROVIDER_NAME],
+    ["provider compared on its left", /\bprovider\s*[!=]==?/],
+    ["provider compared on its right", /[!=]==?\s*[\w$.?]*\bprovider\b(?!\s*:)/],
+    ["a switch on provider", /switch\s*\([^)]*\bprovider\b/],
+    ["provider passed to includes", /\.includes\(\s*[\w$.?]*\bprovider\b/],
+    [
+      "a string method on provider",
+      /\bprovider\s*\.\s*(includes|startsWith|endsWith|match|localeCompare)\(/,
+    ],
+    ["a lookup keyed by provider", /\[\s*[\w$.?]*\bprovider\s*(as\s+\w+\s*)?\]/],
+    ["provider as a key test", /\bhasOwn\([^)]*\bprovider\b|\.provider\s+in\s/],
+    [
+      "a template literal holding provider, compared",
+      /\$\{[^}]*\bprovider\b[^}]*\}[^`]*`\s*[!=]==?|[!=]==?\s*`[^`]*\$\{[^}]*\bprovider\b/,
+    ],
+  ];
+  // The writers and the connectors name providers; readers must not. Not exempted:
+  // agentcore/tool-executor.ts, which has no provider literal at all (create_event
+  // states its source through calendar-rows.ts).
   const NOT_READERS = [
     "pim/calendar-rows.ts",
     "pim/calendar-sync.ts",
     "pim/linked-calendar-unlink.ts",
     "pim/calendar-providers/dispatch.ts",
-    "agentcore/tool-executor.ts", // create_event writes a LOCAL/GOOGLE row; its reads are not provider-specific
   ];
+  // The registry itself: it maps a provider to its flag, which is the one place a
+  // provider is looked up by name on purpose.
+  const REGISTRY = ["pim/calendar-scope.ts"];
 
   const readers = sources(srcDir)
     .map((full) => ({ path: relative(srcDir, full), text: readFileSync(full, "utf8") }))
     .filter(
       (f) =>
         !NOT_READERS.includes(f.path) &&
-        (READS_EVENTS.test(f.text) ||
-          /^pim\/calendar-(read|read-format|source-label|dedupe|scope)\.ts$/.test(f.path)),
+        (READS_EVENTS.test(f.text) || CONSUMES_READ_PATH.test(f.text) || READ_MODULES.test(f.path)),
     );
 
-  it("finds the readers (so this guard cannot pass by scanning nothing)", () => {
+  function offences(file: { path: string; text: string }): string[] {
+    const code = codeOnly(file.text);
+    return BRANCHING.filter(([, pattern]) => pattern.test(code)).map(
+      ([why]) => `${file.path}: ${why}`,
+    );
+  }
+
+  it("finds the readers, including every consumer of the unified read path (so this guard cannot pass by scanning nothing)", () => {
     expect(readers.map((f) => f.path)).toEqual(
       expect.arrayContaining([
         "pim/calendar-read.ts",
@@ -415,11 +452,58 @@ describe("no calendar reader branches on a provider name", () => {
         "pim/inbox-summary.ts",
         "agentcore/agent-context.ts",
         "mail/meeting-context.ts",
+        // They read through readCalendarRows / countCalendarRows rather than the table.
+        "pim/briefing.ts",
+        "pim/briefing-structure.ts",
+        "pim/calendar.ts",
+        "routes/ops.ts",
+        "learning/interaction-graph.ts",
+        "agentcore/tool-executor.ts",
       ]),
     );
   });
 
-  it("none compares a provider to a literal", () => {
-    expect(readers.filter((f) => PROVIDER_COMPARISON.test(f.text)).map((f) => f.path)).toEqual([]);
+  it("none branches on a provider name, in any form", () => {
+    const found = readers.filter((f) => !REGISTRY.includes(f.path)).flatMap(offences);
+    expect(found).toEqual([]);
+  });
+
+  it("the registry names a provider only in the type of its keys, and never compares one", () => {
+    const registry = readers.find((f) => f.path === REGISTRY[0]);
+    expect(registry).toBeDefined();
+    const code = codeOnly(registry?.text ?? "")
+      // The one place the names appear: the type of the registry's keys.
+      .replace(/export type GatedCalendarProvider = [^;]*;/, "");
+    expect(code).not.toMatch(PROVIDER_NAME);
+    expect(code).not.toMatch(/\bprovider\s*[!=]==?\s*["'`]|["'`]\s*[!=]==?\s*[\w$.?]*\bprovider\b/);
+  });
+
+  // The scan has to catch what it is for: each of these is a way a reader could branch.
+  describe("the scan catches each way to branch", () => {
+    it.each([
+      ["a comparison with a literal", 'if (row.provider === "OUTLOOK") return 1;'],
+      ["a comparison the other way round", 'if ("GOOGLE" !== row.provider) return 1;'],
+      ["a case label", 'switch (row.kind) { case "OUTLOOK": return 1; }'],
+      ["a switch on the provider", "switch (row.provider) { default: return 1; }"],
+      ["an includes list", 'if (["GOOGLE", "OUTLOOK"].includes(row.provider)) return 1;'],
+      ["includes of a constant array", "if (LINKED.includes(row.provider)) return 1;"],
+      ["a comparison with a constant", "if (row.provider === GOOGLE) return 1;"],
+      ["a constant naming a provider", "const GOOGLE = `GOOGLE`;"],
+      ["a template literal on one side", "if (`${row.provider}` === other) return 1;"],
+      ["a string method", 'if (row.provider.startsWith("O")) return 1;'],
+      ["a lookup keyed by provider", "const label = LABELS[row.provider];"],
+      ["a key test", "if (Object.hasOwn(MAP, row.provider)) return 1;"],
+    ])("%s", (_label, code) => {
+      expect(offences({ path: "x.ts", text: code })).not.toEqual([]);
+    });
+
+    it.each([
+      ["a provider key in a where clause", "const where = { provider: { notIn: hidden } };"],
+      ["a comment that names a provider", '// GOOGLE rows win\nconst x = 1; /* "OUTLOOK" */'],
+      ["the provider carried through", "return { provider: row.provider, readOnly };"],
+      ["a dedupe key", "return `${row.userId}:${row.provider}:${row.externalId}`;"],
+    ])("and lets %s through", (_label, code) => {
+      expect(offences({ path: "x.ts", text: code })).toEqual([]);
+    });
   });
 });
