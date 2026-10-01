@@ -417,6 +417,7 @@ describe("guards that must refuse before any connection", () => {
     ["another provider's prefix", "icloud-imap:me@naver.com:101"],
     ["a Gmail id", "18c2f0a1b2c3d4e5"],
     ["empty", ""],
+    ["tombstoned id (B2b re-key)", "naver-imap:me@naver.com:101#uv1000"],
   ])("refuses a %s", async (_label, id) => {
     armAccount();
     const result = await run(id);

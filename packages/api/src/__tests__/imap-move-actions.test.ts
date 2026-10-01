@@ -516,6 +516,7 @@ describe("what never reaches the server", () => {
     ["a UID list", "naver-imap:me@naver.com:101,102"],
     ["a padded UID", "naver-imap:me@naver.com:0101"],
     ["an empty id", ""],
+    ["a tombstoned id (B2b re-key)", "naver-imap:me@naver.com:101#uv1000"],
   ])("refuses %s before any connection", async (_name, messageId) => {
     // A local row and a recorded move exist under this very id, so only the strict
     // parse of the id stands between the action and a connection.

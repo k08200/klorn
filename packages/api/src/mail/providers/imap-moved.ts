@@ -130,13 +130,22 @@ export async function findMovedAccountId(
  */
 export const MOVE_RACE_WINDOW_MS = 10 * 60 * 1000;
 
-/** The INBOX ids Klorn moved out within MOVE_RACE_WINDOW_MS, for one account. */
-export async function recentlyMovedSourceIds(scope: MoveScope): Promise<string[]> {
+/**
+ * The INBOX ids Klorn moved out within MOVE_RACE_WINDOW_MS, for one account. A move
+ * recorded before `notBefore` (the account's last UIDVALIDITY repair, step B2b) names
+ * an id of the old numbering, which a new message may now carry, so it is left out.
+ */
+export async function recentlyMovedSourceIds(
+  scope: MoveScope,
+  notBefore: Date | null = null,
+): Promise<string[]> {
+  const windowStart = new Date(Date.now() - MOVE_RACE_WINDOW_MS);
+  const since = notBefore && notBefore.getTime() > windowStart.getTime() ? notBefore : windowStart;
   const rows = await prisma.imapMovedMessage.findMany({
     where: {
       userId: scope.userId,
       linkedInboxAccountId: scope.linkedInboxAccountId,
-      createdAt: { gte: new Date(Date.now() - MOVE_RACE_WINDOW_MS) },
+      createdAt: { gte: since },
     },
     select: { sourceId: true },
   });

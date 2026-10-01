@@ -188,6 +188,24 @@ describe("flag ON — generalized connect route, provider ICLOUD", () => {
     await app.close();
   });
 
+  // B2b: a row id is `<prefix>:<email>:<uid>` and a re-keyed one ends `#uv<old>.<ms>`.
+  // The address format keeps ':' and '\\' out of the id (AJV `format: "email"`).
+  it.each([
+    ["a backslash", "a\\b@icloud.com"],
+    ["a colon", "a:b@icloud.com"],
+  ])("POST /connect rejects an address with %s before verifying", async (_name, email) => {
+    const { app, headers } = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/icloud-imap/connect",
+      headers,
+      payload: { email, password: "app-specific-pw" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(db.upsert).not.toHaveBeenCalled();
+    await app.close();
+  });
+
   it("POST /connect still enforces the entitlement gate (FREE → 403)", async () => {
     state.plan = "FREE";
     process.env.PAYWALL_ENABLED = "true";

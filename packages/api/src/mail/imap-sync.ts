@@ -31,7 +31,7 @@ import { envelopeSubject } from "./imap-envelope.js";
 import { formatImapMessageId } from "./imap-message-id.js";
 import { reconcileInboxValidity, removeRecentlyMovedRows } from "./imap-poll-guards.js";
 import type { ImapProviderConfig } from "./imap-providers.js";
-import { liveUidValidity, type PollValidity } from "./imap-uidvalidity.js";
+import { liveUidValidity } from "./imap-uidvalidity.js";
 
 interface VerifyArgs {
   provider: ImapProviderConfig;
@@ -91,6 +91,11 @@ interface SyncArgs {
   // The INBOX UIDVALIDITY stored on that row (step B2), so the poll can tell a
   // renumbered mailbox from an unchanged one. Null/absent = none recorded yet.
   inboxUidValidity?: string | null;
+  // Step B2b, from the same row: a reset seen on an earlier poll and when, and when
+  // the last repair ran (imap-uidvalidity-reset.ts). Null/absent = none.
+  inboxUidValidityPending?: string | null;
+  inboxUidValidityPendingAt?: Date | null;
+  inboxUidValidityResetAt?: Date | null;
   limit?: number; // defaults to 50
 }
 
@@ -102,6 +107,9 @@ interface SyncResult {
   // first-seen email is handed to the judge.
   classified: number;
   errors: number;
+  // Step B2b: present (true) when the mailbox is held and nothing was persisted. The
+  // caller must not count such a poll as a sync (lastSyncedAt).
+  held?: true;
 }
 
 interface ImapEnvelopeAddress {
@@ -235,18 +243,23 @@ export async function syncImapInbox(args: SyncArgs): Promise<SyncResult> {
     await client.connect();
     const lock = await client.getMailboxLock("INBOX");
     try {
-      let validity: PollValidity = "unknown";
       if (args.linkedInboxAccountId) {
-        // Step B2, imap-poll-guards.ts: record the INBOX UIDVALIDITY, or hold (report
-        // once, change nothing) when the server renumbered the mailbox.
-        validity = await reconcileInboxValidity({
+        // Steps B2 and B2b, imap-poll-guards.ts: record the INBOX UIDVALIDITY, or,
+        // when the server renumbered the mailbox, hold it and repair a confirmed reset.
+        const gate = await reconcileInboxValidity({
           provider: args.provider,
           userId: args.userId,
           email: args.email,
           linkedInboxAccountId: args.linkedInboxAccountId,
           stored: args.inboxUidValidity,
+          pending: args.inboxUidValidityPending,
+          pendingAt: args.inboxUidValidityPendingAt,
+          resetAt: args.inboxUidValidityResetAt,
           live: liveUidValidity(client.mailbox),
         });
+        // A held mailbox persists nothing: under the old stored value a new message
+        // that reuses an old UID would be deduped into the stale row.
+        if (gate === "hold") return { ...result, held: true };
       }
       const status = await client.status("INBOX", { messages: true });
       const totalMessages = status.messages ?? 0;
@@ -299,14 +312,15 @@ export async function syncImapInbox(args: SyncArgs): Promise<SyncResult> {
           });
         }
       }
-      if (args.linkedInboxAccountId && validity !== "reset") {
+      if (args.linkedInboxAccountId) {
         // A message Klorn moved out while this window was being persisted must not
-        // stay behind as a row (step B2). Skipped while the mailbox is held: the
-        // moved ids are old numbers.
+        // stay behind as a row (step B2). Never reached while the mailbox is held, and
+        // moves recorded before the last repair are ignored: their ids are old numbers.
         await removeRecentlyMovedRows({
           userId: args.userId,
           linkedInboxAccountId: args.linkedInboxAccountId,
           provider: args.provider,
+          notBefore: args.inboxUidValidityResetAt ?? null,
         });
       }
     } finally {

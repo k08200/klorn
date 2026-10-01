@@ -223,6 +223,7 @@ describe("getReplyHeaders", () => {
     ["a padded uid", "naver-imap:me@naver.com:0101"],
     ["a gmail id", "18c2f0a9d3b4e5f6"],
     ["a non-string", 101 as unknown as string],
+    ["a tombstoned id (B2b re-key)", "naver-imap:me@naver.com:101#uv1000"],
   ])("answers {} for %s without opening a connection", async (_name, id) => {
     expect(await naver.getReplyHeaders("u1", id, "row-1")).toEqual({});
     expect(h.imapCtorOpts).toHaveLength(0);
