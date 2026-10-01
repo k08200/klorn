@@ -49,7 +49,18 @@ const USER = "user-1";
 const NOW = new Date("2026-09-30T10:00:00.000Z");
 const HOUR = 60 * 60_000;
 const DEDUP_WINDOW_MS = 7 * 24 * HOUR;
-const IMAP_ID = "naver-imap:me@naver.com:101";
+/** The IMAP mailboxes the PUSH dedupe rules must hold for: Naver, and generic IMAP (step B4). */
+const IMAP_CASES = [
+  { label: "Naver", id: "naver-imap:me@naver.com:101", provider: "NAVER", email: "me@naver.com" },
+  {
+    label: "generic IMAP",
+    id: "generic-imap:me@example.com:101",
+    provider: "IMAP",
+    email: "me@example.com",
+  },
+] as const;
+/** The id under test; set per mailbox by the describe.each blocks below. */
+let IMAP_ID: string = IMAP_CASES[0].id;
 const GMAIL_ID = "18c2f0a1b2c3d4e5";
 
 let db: FakeDb;
@@ -116,7 +127,11 @@ beforeEach(() => {
   sendPushNotification.mockClear();
 });
 
-describe("IMAP ids: a marker counts only from the row's creation on", () => {
+describe.each(IMAP_CASES)("$label ids: a marker counts only from the row's creation on", (imap) => {
+  beforeEach(() => {
+    IMAP_ID = imap.id;
+  });
+
   it("pushes a new message whose id an older, re-keyed row was already notified under", async () => {
     seed(IMAP_ID, new Date(NOW.getTime() - HOUR), new Date(NOW.getTime() - 2 * HOUR));
 
@@ -190,13 +205,18 @@ describe("Gmail ids: exactly the query they had", () => {
  * row, but no PUSH. Mail received during the hold (at or after the first sighting,
  * `inboxUidValidityResetAt`) keeps its push.
  */
-describe("re-ingested history after a repair (B2b): judged, never pushed", () => {
+describe.each(
+  IMAP_CASES,
+)("$label: re-ingested history after a repair (B2b): judged, never pushed", (imap) => {
+  beforeEach(() => {
+    IMAP_ID = imap.id;
+  });
   const RESET_AT = new Date(NOW.getTime() - 30 * 60_000);
   const account = {
     id: "acc-1",
     userId: USER,
-    provider: "NAVER",
-    email: "me@naver.com",
+    provider: imap.provider,
+    email: imap.email,
     inboxUidValidityResetAt: RESET_AT,
   };
   const OLD_MARKER = new Date(NOW.getTime() - 8 * 24 * HOUR); // outside the 7-day window

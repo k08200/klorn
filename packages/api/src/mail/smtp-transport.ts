@@ -58,6 +58,10 @@ export function smtpTransportOptions(
   provider: ImapProviderConfig,
   credentials: SmtpCredentials,
 ): SMTPTransportOptions {
+  if (provider.smtp === null) {
+    // Generic IMAP has no outgoing server (step B4): fail closed rather than connect anywhere.
+    throw new Error(`${provider.label} has no SMTP endpoint`);
+  }
   const { host, port, security } = provider.smtp;
   return {
     host,

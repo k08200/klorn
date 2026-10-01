@@ -320,15 +320,18 @@ describe("re-ingested history after an IMAP repair (B2b)", () => {
     receivedAt,
   });
 
-  it("skips history and tombstones, keeps mail received during the hold", async () => {
+  it.each([
+    "naver-imap:me@naver.com",
+    "generic-imap:me@example.com",
+  ])("skips history and tombstones, keeps mail received during the hold (%s)", async (head) => {
     fixtures.inboxes = fixtures.inboxes.map((inbox) =>
       inbox.id === "acc-google" ? { ...inbox, inboxUidValidityResetAt: RESET_AT } : inbox,
     );
     fixtures.items = [item(1), item(2), item(3)];
     fixtures.emails = [
-      imapEmail(1, "naver-imap:me@naver.com:1", new Date(RESET_AT.getTime() - 1)),
-      imapEmail(2, "naver-imap:me@naver.com:2", RESET_AT),
-      imapEmail(3, "naver-imap:me@naver.com:3#uv1000.1727690000000", RESET_AT),
+      imapEmail(1, `${head}:1`, new Date(RESET_AT.getTime() - 1)),
+      imapEmail(2, `${head}:2`, RESET_AT),
+      imapEmail(3, `${head}:3#uv1000.1727690000000`, RESET_AT),
     ];
 
     const found = await findAutoModeCandidates(USER, SINCE, 5);
@@ -338,7 +341,10 @@ describe("re-ingested history after an IMAP repair (B2b)", () => {
 });
 
 describe("a failing reset lookup (B2b)", () => {
-  it("does not throw out of the sweep: Gmail candidates stay, IMAP ones fail closed", async () => {
+  it.each([
+    "naver-imap:me@naver.com",
+    "generic-imap:me@example.com",
+  ])("does not throw out of the sweep: Gmail candidates stay, IMAP ones fail closed (%s)", async (head) => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     vi.mocked(prisma.linkedInboxAccount.findMany).mockImplementation((async (args: {
       where: { userId: string; inboxUidValidityResetAt?: unknown };
@@ -351,7 +357,7 @@ describe("a failing reset lookup (B2b)", () => {
       email(1, null),
       {
         id: "row-2",
-        gmailId: "naver-imap:me@naver.com:2",
+        gmailId: `${head}:2`,
         userId: USER,
         linkedInboxAccountId: "acc-google",
         receivedAt: new Date("2026-09-30T12:00:00.000Z"),

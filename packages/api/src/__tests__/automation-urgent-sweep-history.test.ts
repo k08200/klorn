@@ -148,7 +148,13 @@ const USER = "user-1";
 const NOW = new Date("2026-09-30T03:00:00.000Z");
 const RESET_AT = new Date(NOW.getTime() - 20 * 60_000);
 const ACCOUNT = "acc-naver";
-const IMAP = "naver-imap:me@naver.com";
+/** The IMAP mailboxes the sweeps must hold for: Naver, and generic IMAP (step B4). */
+const IMAP_CASES = [
+  { label: "Naver", head: "naver-imap:me@naver.com" },
+  { label: "generic IMAP", head: "generic-imap:me@example.com" },
+] as const;
+/** The id head of the mailbox under test; set per mailbox by the describe.each blocks below. */
+let IMAP: string = IMAP_CASES[0].head;
 
 interface UrgentRow {
   id: string;
@@ -260,7 +266,10 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("the urgent sweep after an IMAP repair", () => {
+describe.each(IMAP_CASES)("$label: the urgent sweep after an IMAP repair", (imapCase) => {
+  beforeEach(() => {
+    IMAP = imapCase.head;
+  });
   it("rings only for Gmail mail and IMAP mail received during the hold; never for history or tombstones", async () => {
     arrange([
       urgent("gmail", "18abc", BEFORE_RESET, null),
@@ -273,7 +282,7 @@ describe("the urgent sweep after an IMAP repair", () => {
 
     const created = createdNotifications().filter((d) => d.title === "Urgent email");
     expect(created).toHaveLength(1);
-    expect(String(created[0].message)).toMatch(/\[18abc,naver-imap:me@naver\.com:2\]$/);
+    expect(String(created[0].message).endsWith(`[18abc,${IMAP}:2]`)).toBe(true);
     expect(m.sendPushNotification).toHaveBeenCalledTimes(1);
     expect(resetLookups()).toHaveLength(1);
   });
@@ -310,7 +319,10 @@ describe("the urgent sweep after an IMAP repair", () => {
   });
 });
 
-describe("the rule auto-reply loop after an IMAP repair", () => {
+describe.each(IMAP_CASES)("$label: the rule auto-reply loop after an IMAP repair", (imapCase) => {
+  beforeEach(() => {
+    IMAP = imapCase.head;
+  });
   it("never matches a rule for re-ingested history; Gmail mail goes through as before", async () => {
     m.syncEmails.mockResolvedValue({ newCount: 2 });
     const gmailRow = { ...urgent("gmail", "18abc", BEFORE_RESET, null), body: "", labels: [] };
@@ -336,7 +348,10 @@ describe("the rule auto-reply loop after an IMAP repair", () => {
  * catch ("Email sync failed") and skip the Gmail alert of a mixed batch. IMAP rows fail
  * closed for that tick; Gmail rows go through.
  */
-describe("a failing reset lookup", () => {
+describe.each(IMAP_CASES)("$label: a failing reset lookup", (imapCase) => {
+  beforeEach(() => {
+    IMAP = imapCase.head;
+  });
   const failLookup = () =>
     override("linkedInboxAccount.findMany", (arg) => {
       if ((arg as { select?: Record<string, unknown> }).select?.inboxUidValidityResetAt) {

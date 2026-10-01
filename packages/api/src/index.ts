@@ -10,7 +10,7 @@ import {
   revokeDemoAccessIfDisabled,
 } from "./auth.js";
 import { startBackgroundAgent } from "./background.js";
-import { icloudInboxEnabled, outlookInboxEnabled } from "./config.js";
+import { genericImapEnabled, icloudInboxEnabled, outlookInboxEnabled } from "./config.js";
 import { makeCorsOriginCallback } from "./cors-origin.js";
 import { db, INTERACTIVE_TX_OPTIONS, prisma } from "./db.js";
 import { withDbRetry } from "./db-retry.js";
@@ -280,6 +280,11 @@ await app.register(imapConnectRoutes(IMAP_PROVIDERS.NAVER), { prefix: "/api/nave
 // answers 404 while the flag is off (CASA surface freeze).
 await app.register(imapConnectRoutes(IMAP_PROVIDERS.ICLOUD, { gate: icloudInboxEnabled }), {
   prefix: "/api/icloud-imap",
+});
+// Step B4: generic IMAP with a user-supplied host — dark until GENERIC_IMAP_ENABLED
+// (same cloaked 404 while off; the flag is not to be flipped before the SSRF review).
+await app.register(imapConnectRoutes(IMAP_PROVIDERS.IMAP, { gate: genericImapEnabled }), {
+  prefix: "/api/generic-imap",
 });
 // Phase 3: dark until OUTLOOK_INBOX_ENABLED — same 404 gate as iCloud.
 await app.register(outlookAuthRoutes({ gate: outlookInboxEnabled }), {

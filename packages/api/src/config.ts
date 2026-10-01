@@ -216,6 +216,20 @@ export function imapSendEnabled(): boolean {
     (process.env.IMAP_SEND_ENABLED ?? "").trim().toLowerCase(),
   );
 }
+// Generic IMAP with a user-supplied host — step B4 of
+// docs/providers/unified-platform-plan.md. OFF by default (repo doctrine) and it
+// stays off until the security review of its SSRF design (resolve-then-pin) signs
+// off. While OFF, every /api/generic-imap route answers the cloaked 404, the poll
+// never selects IMAP rows, and mail/providers/dispatch.ts leaves a generic mailbox
+// on the unsupported stubs whatever IMAP_ACTIONS_ENABLED and
+// IMAP_MOVE_ACTIONS_ENABLED say (those two still need to be on as well). Send never
+// reaches a generic mailbox. Read at request time (PROVIDER_INBOX_SELECTOR_ENABLED
+// precedent) with the same lenient truthy parse, so a flip needs no redeploy.
+export function genericImapEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.GENERIC_IMAP_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
 // Linked Google calendar sync — step C2 of docs/providers/unified-platform-plan.md.
 // OFF by default (repo doctrine). While unset/false the scheduler's calendar step
 // syncs the primary calendar exactly as before: no linked-account lookup, no
