@@ -1577,8 +1577,8 @@ OFF. Not flippable until the security review below signs off.
   message row of the old server: the next poll either held the mailbox forever, or,
   when both servers report the same UIDVALIDITY, matched the new server's UIDs to the
   old `generic-imap:<email>:<uid>` rows and dedupe-dropped real mail. The follow-up is
-  the B2b UIDVALIDITY re-key (tombstones) run on a host change; step B2b is in
-  progress in another branch and this change does not touch its files.
+  the B2b UIDVALIDITY re-key (tombstones, now on main) run on a host change; it is not
+  wired here: a host change is refused, not repaired.
 - D8 A rejected login stops the retries (reviewed 2026-09-30). A generic poll whose
   LOGIN is rejected starts the same in-process cooldown the actions use (15 min,
   keyed by row id and stored cipher, so one rejection pauses polls and actions
@@ -1657,10 +1657,26 @@ OFF. Not flippable until the security review below signs off.
     Sentry dedupe, built-in provider hosts refused, the resolver's error code kept in
     the log, server text sanitised before logging, and the wire test's openssl call
     made portable (it skips with a warning if the binary is missing). imap-sync.ts
-    has three small additive edits: the TEXT query and the window break (both in the
-    fetch loop, the region around lines 262 to 305 that B2b also edits, so expect a
-    textual conflict there for whoever rebases second) and the failure report in the
-    final catch.
+    has three small additive edits: the TEXT query and the window break in the fetch
+    loop and the failure report in the final catch.
+  - Rebased onto B2b (#1351, 2026-09-30). Conflicts were the `.env.example` flag
+    blocks (both kept), the `imap-sync.ts` imports and the `lastSyncedAt` stamp in
+    `imap-accounts.ts`: B2b's rule (a held poll stores nothing, so it does not stamp)
+    and this step's failure re-arm both apply, so a held generic poll neither stamps
+    nor re-arms the Sentry report. B2b's hold, repair, tombstones, re-ingested-history
+    cutoff, PUSH and urgent-sweep dedupe floors and the auto-mode exclusion all apply to
+    generic rows with NO production change: `isImapMessageId` derives its prefixes
+    from `IMAP_PROVIDERS` (`imap-message-id.ts`), the registry already holds the
+    generic entry, and B2b's modules take the provider config (`idPrefix`,
+    `logScope`) instead of naming providers. `canAutoSendFromMailbox` allows only
+    GOOGLE, so a generic mailbox never gets an unattended reply. What was missing was
+    proof, added test-first: the real poll, hold, repair, history and actions for a
+    generic mailbox (`imap-generic-reset.test.ts`, with the scheduler's in-flight
+    guard and the hold together: a held generic mailbox is stamped by no tick and
+    overlapping ticks skip), the primitives with Gmail and Outlook ids excluded
+    (`imap-generic-protections.test.ts`), and B2b's firewall PUSH, urgent sweep,
+    rule auto-reply and auto-mode tests re-run over a generic id head. Detection
+    hard-coded back to the two prefixes fails 18 of those tests.
   - Not verified: no real IMAP server has been reached; behaviour rests on faked
     imapflow and resolver plus a local TLS server on loopback. The openssl
     invocation was run on LibreSSL only, not on OpenSSL 3. The real c-ares
