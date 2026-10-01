@@ -7,6 +7,7 @@
 
 import { prisma } from "../db.js";
 import { normalizeTimeZone } from "../time-zone.js";
+import { reconcileCancelledEvents } from "./calendar-cancellation.js";
 import { connectLinkedCalendars } from "./calendar-providers/dispatch.js";
 import type {
   CalendarListQuery,
@@ -77,8 +78,10 @@ async function listSyncRows(
 }
 
 /**
- * Sync the PRIMARY calendar's window into rows (matched by googleId). A list
- * failure throws to the caller, which owns the failure policy. Returns the
+ * Sync the PRIMARY calendar's window into rows (matched by googleId), then, behind
+ * CALENDAR_CANCELLATION_SYNC_ENABLED, remove the rows of events cancelled upstream
+ * (a separate call that can never fail the sync, see calendar-cancellation.ts). A
+ * list failure throws to the caller, which owns the failure policy. Returns the
  * number of rows written.
  */
 export async function syncPrimaryCalendarWindow(
@@ -91,6 +94,7 @@ export async function syncPrimaryCalendarWindow(
   for (const row of rows) {
     await upsertGoogleEventRow(userId, row.externalId, row.fields);
   }
+  await reconcileCancelledEvents(session, userId, null, now);
   return rows.length;
 }
 
@@ -106,6 +110,7 @@ export async function syncLinkedCalendarWindow(
   for (const row of rows) {
     await upsertLinkedGoogleEventRow(userId, linkedAccountId, row.externalId, row.fields);
   }
+  await reconcileCancelledEvents(session, userId, linkedAccountId, now);
   return rows.length;
 }
 

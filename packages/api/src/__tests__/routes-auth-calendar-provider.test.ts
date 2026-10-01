@@ -9,8 +9,11 @@ import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { signToken } from "../auth.js";
 import { isGoogleAuthError, markGoogleTokenForReconnect } from "../mail/gmail.js";
+import { _resetCancelledScanStateForTests } from "../pim/calendar-cancellation.js";
+import { CANCELLED_SCAN_OPTIONS, cancelledScanRequest } from "./helpers/google-cancelled-scan.js";
 
 const eventsList = vi.hoisted(() => vi.fn());
+const cancelledList = vi.hoisted(() => vi.fn());
 
 vi.mock("../mail/gmail.js", () => ({
   getAuthUrl: vi.fn(() => "https://example.com/oauth"),
@@ -45,7 +48,16 @@ vi.mock("../crypto-tokens.js", () => ({
 }));
 vi.mock("googleapis", () => ({
   google: {
-    calendar: () => ({ events: { list: eventsList } }),
+    calendar: () => ({
+      events: {
+        // The cancellation scan (C2b) is a second events.list; it gets its own mock so
+        // every assertion on `eventsList` stays about the sync's own listing.
+        list: (args: { showDeleted?: boolean }, options?: unknown) =>
+          args.showDeleted
+            ? (cancelledList(args, options) ?? { data: { items: [] } })
+            : eventsList(args),
+      },
+    }),
     gmail: () => ({ users: { messages: { list: vi.fn(async () => ({ data: {} })) } } }),
   },
 }));
@@ -202,6 +214,33 @@ describe("POST /api/auth/init-sync — Google request (characterisation, C2)", (
       orderBy: "startTime",
       maxResults: 100,
       timeZone: "Asia/Seoul",
+    });
+  });
+
+  it("makes no second Google call while the cancellation flag is off (the default)", async () => {
+    eventsList.mockResolvedValue({ data: { items: [] } });
+    await initSync();
+    expect(eventsList).toHaveBeenCalledTimes(1);
+    expect(cancelledList).not.toHaveBeenCalled();
+  });
+
+  describe("with CALENDAR_CANCELLATION_SYNC_ENABLED on (C2b)", () => {
+    beforeEach(() => {
+      process.env.CALENDAR_CANCELLATION_SYNC_ENABLED = "true";
+      _resetCancelledScanStateForTests();
+    });
+    afterEach(() => {
+      delete process.env.CALENDAR_CANCELLATION_SYNC_ENABLED;
+    });
+
+    it("also asks Google, in a second call, what was cancelled in the last 7 days", async () => {
+      eventsList.mockResolvedValue({ data: { items: [] } });
+      await initSync();
+      expect(cancelledList).toHaveBeenCalledTimes(1);
+      expect(cancelledList).toHaveBeenCalledWith(
+        cancelledScanRequest("2026-09-23T05:00:00.000Z"),
+        CANCELLED_SCAN_OPTIONS,
+      );
     });
   });
 
