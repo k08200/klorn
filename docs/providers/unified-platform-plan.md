@@ -1749,19 +1749,31 @@ the first request, and the password is stored with `encryptToken`.
     Outlook route passes OUTLOOK. Events and their AttentionItems go first, then
     the account, in one transaction, and neither route can remove the other's
     account by id.
-  - Known gaps, deliberate. (1) Kill switch: readers hide linked rows through
-    `calendarSourceScope()`, which keys on `LINKED_CALENDAR_SYNC_ENABLED` only, so
-    turning `OUTLOOK_CALENDAR_ENABLED` off stops linking, syncing and conflict
-    checks but leaves already-synced OUTLOOK rows visible. `calendar-scope.ts` is
-    a reader file in C7's area and was left alone; C7 should extend the scope
-    with `provider: { not: "OUTLOOK" }` while the flag is off. Until then, hide
-    them by turning `LINKED_CALENDAR_SYNC_ENABLED` off too, or delete them (see
-    Rollback). (2) The legacy (userId, email) unique on `LinkedCalendarAccount`
+  - Kill switch (after C7). OUTLOOK is registered in `CALENDAR_PROVIDER_ENABLED`
+    (`pim/calendar-scope.ts`, the per-provider hook C7 added) as
+    `outlookCalendarEnabled`, read at request time. OUTLOOK rows are visible
+    only while OUTLOOK_CALENDAR_ENABLED and OUTLOOK_INBOX_ENABLED are both on,
+    for every reader and by id, whatever `LINKED_CALENDAR_SYNC_ENABLED` says;
+    turning either off hides them at once, the rows staying until their account
+    is unlinked or deleted (Rollback). Google primary, Google linked and LOCAL
+    rows are unaffected (tested through `calendarSourceScope()`,
+    `isCalendarRowVisible()` and `list_events` with `UNIFIED_CALENDAR_READ_ENABLED`
+    on). Side effects, both intended: while the flags are off every reader's
+    `where` carries `provider: { notIn: ["OUTLOOK"] }` (the flag-off query tests
+    assert the new shape; no OUTLOOK row exists then), and
+    `anyLinkedRowVisible()` replaces the Google flag in `pim/calendar-read.ts`'s
+    choice between a database cap/count and fetch-then-dedupe: with only the
+    Outlook flags on, OUTLOOK rows are visible with the Google sync off, and two
+    Outlook accounts can hold the same invite, so a cap must come after the
+    dedupe (tested). Every C7 reader treats an OUTLOOK row as a linked Google row:
+    read-only (`sourceAccountId` is set), text wrapped as untrusted, no title in a
+    conflict; a guard test fails if a reader starts comparing a provider name.
+  - Known gaps, deliberate. (1) The legacy (userId, email) unique on `LinkedCalendarAccount`
     still exists, so an address that is already a linked calendar of another
     provider cannot also be linked as an Outlook calendar (an `outlook.com` or
     `gmail.com` address is unlikely, not impossible): the callback answers
     `linked=failed`, not an error. The contract phase drops
-    `LinkedCalendarAccount_userId_email_key` (see C1); C4 does not. (3) The
+    `LinkedCalendarAccount_userId_email_key` (see C1); C4 does not. (2) The
     Outlook UI for linking belongs to C7's web and desktop work; the routes exist
     and are dark.
   - Rollback. If the flags were never on, revert the PR. If they were: set
@@ -1912,8 +1924,8 @@ does not wait for them.
     (self-check). Strings: 7 web locales (parity guard) and 7 `.lproj` files.
   - Per-provider kill switch. `calendarSourceScope()` and `isCalendarRowVisible()`
     take an optional map of provider to "is its connector enabled" (default
-    `CALENDAR_PROVIDER_ENABLED`, exported from `pim/calendar-scope.ts`, empty
-    today). A connector registers its flag with one entry (C4: `OUTLOOK:
+    `CALENDAR_PROVIDER_ENABLED`, exported from `pim/calendar-scope.ts`; C4
+    registered OUTLOOK in it). A connector registers its flag with one entry (C4: `OUTLOOK:
     outlookCalendarEnabled`); its rows are then visible only while that flag is on,
     whatever the Google linked flag says, for every reader and by id. GOOGLE keeps
     `LINKED_CALENDAR_SYNC_ENABLED`; LOCAL is always visible. With nothing
