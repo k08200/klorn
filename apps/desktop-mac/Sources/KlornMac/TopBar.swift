@@ -557,12 +557,12 @@ private struct TodayColumn: View {
                 }
             }
             Spacer(minLength: 0)
-            if event.meetingLink != nil {
+            if MeetingLink.safeURL(event.meetingLink) != nil {
                 Image(systemName: "video").font(.caption).foregroundStyle(Theme.textDim)
                     .accessibilityHidden(true)
             }
         }
-        if let link = event.meetingLink, let url = URL(string: link) {
+        if let url = MeetingLink.safeURL(event.meetingLink) {
             Button { NSWorkspace.shared.open(url) } label: { row }
                 .buttonStyle(.plain)
                 .accessibilityLabel(L("calendar.join.a11y", event.title))
@@ -1179,7 +1179,7 @@ private struct UpcomingEventRow: View {
                     }
                 }
                 Spacer(minLength: 0)
-                if event.meetingLink != nil {
+                if MeetingLink.safeURL(event.meetingLink) != nil {
                     Image(systemName: "video").font(.caption).foregroundStyle(Theme.textDim)
                         .accessibilityHidden(true)
                 }
@@ -1282,8 +1282,13 @@ private struct EventDetailPopover: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(L("cal.source.a11y", source))
             }
+            // A link MeetingLink.safeURL refuses is shown as inert text, never opened.
+            if let link = event.meetingLink, !link.isEmpty, MeetingLink.safeURL(link) == nil {
+                Text(verbatim: link).font(.caption).foregroundStyle(Theme.textDim)
+                    .lineLimit(2).truncationMode(.middle).textSelection(.enabled)
+            }
             HStack(spacing: 8) {
-                if let link = event.meetingLink, let url = URL(string: link) {
+                if let url = MeetingLink.safeURL(event.meetingLink) {
                     Button(L("calendar.join")) { NSWorkspace.shared.open(url) }
                         .buttonStyle(PrimaryButtonStyle())
                         .accessibilityLabel(L("calendar.join.a11y", event.title))
@@ -2367,13 +2372,13 @@ private struct FullSidebar: View {
             }
             Text(event.title).font(.caption).foregroundStyle(Theme.text).lineLimit(1)
             Spacer(minLength: 0)
-            if event.meetingLink != nil {
+            if MeetingLink.safeURL(event.meetingLink) != nil {
                 Image(systemName: "video").font(.caption2).foregroundStyle(Theme.textDim)
                     .accessibilityHidden(true)
             }
         }
         .padding(.horizontal, 20).padding(.vertical, 3)
-        if let link = event.meetingLink, let url = URL(string: link) {
+        if let url = MeetingLink.safeURL(event.meetingLink) {
             Button { NSWorkspace.shared.open(url) } label: { row }
                 .buttonStyle(.plain)
                 .accessibilityLabel(L("calendar.join.a11y", event.title))

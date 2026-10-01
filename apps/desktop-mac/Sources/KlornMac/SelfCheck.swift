@@ -1409,6 +1409,52 @@ func runSelfChecks() async -> Bool {
         check("MeetingPrepPack decodes", false)
     }
 
+    print("Meeting links:")
+    // meetingLink is invite data anyone can set. Only an absolute https URL with
+    // a host and no userinfo is ever opened (mirror of web safeMeetingHref).
+    check("https link → allowed",
+          MeetingLink.safeURL("https://meet.google.com/abc")?.absoluteString
+              == "https://meet.google.com/abc")
+    check("upper-case scheme and host → allowed",
+          MeetingLink.safeURL("HTTPS://Zoom.us/j/1")?.absoluteString.lowercased()
+              == "https://zoom.us/j/1")
+    check("zoom join link keeps its query",
+          MeetingLink.safeURL("https://us02web.zoom.us/j/123?pwd=abc")?.absoluteString
+              == "https://us02web.zoom.us/j/123?pwd=abc")
+    let refusedLinks: [(String, String?)] = [
+        ("http", "http://meet.google.com/abc"),
+        ("javascript:", "javascript:alert(1)"),
+        ("data:", "data:text/html,<script>alert(1)</script>"),
+        ("file:", "file:///etc/passwd"),
+        ("zoommtg:", "zoommtg://zoom.us/join?confno=1"),
+        ("msteams:", "msteams://teams.microsoft.com/l/meetup-join/x"),
+        ("ftp:", "ftp://example.com/x"),
+        ("user:pass@", "https://user:pass@host/"),
+        ("user@", "https://user@host/"),
+        ("host look-alike userinfo", "https://meet.google.com@evil.example/abc"),
+        ("nil", nil),
+        ("empty", ""),
+        ("leading whitespace", " https://x.example/"),
+        ("trailing whitespace", "https://x.example/ "),
+        ("leading tab", "\thttps://x.example/"),
+        ("embedded newline", "https://x.exa\nmple/"),
+        ("relative path", "/x"),
+        ("scheme-relative", "//evil.example/x"),
+        ("no scheme", "meet.google.com/abc"),
+        ("https without a host", "https:evil.example"),
+    ]
+    for (label, raw) in refusedLinks {
+        check("refused: \(label)", MeetingLink.safeURL(raw) == nil)
+    }
+    // IDNA is Foundation's and may differ across macOS releases: opening the
+    // punycode https form or refusing are both safe; anything else is not.
+    let idnLink = MeetingLink.safeURL("https://bücher.example/room")
+    check("IDN host → punycode https or refused",
+          idnLink == nil || idnLink?.absoluteString == "https://xn--bcher-kva.example/room")
+    check("punycode host → allowed as-is",
+          MeetingLink.safeURL("https://xn--bcher-kva.example/room")?.absoluteString
+              == "https://xn--bcher-kva.example/room")
+
     print("Launch at login:")
     // Only a packaged .app can register as a login item (SMAppService needs a
     // bundle); the unbundled `swift run` must degrade to a visible explanation,
