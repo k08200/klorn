@@ -286,9 +286,120 @@ describe("flag ON: connect with a user-supplied host", () => {
     expect(refused.json().message).toBe("At most 3 IMAP accounts.");
     expect(imapSync.verifyImapCredentials).not.toHaveBeenCalled();
 
-    db.findUnique.mockResolvedValue({ id: "row-9" } as never);
+    db.findUnique.mockResolvedValue({ id: "row-9", imapHost: "imap.fastmail.com:993" } as never);
     const reverify = await connect(app, headers, GOOD);
     expect(reverify.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("REFUSES to re-point an existing account at another host: constant 409, nothing verified or stored", async () => {
+    const { app, headers } = await buildApp();
+    db.findUnique.mockResolvedValue({
+      id: "row-9",
+      imapHost: "imap.old-server.example.org:993",
+    } as never);
+
+    const res = await connect(app, headers, GOOD);
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({
+      ok: false,
+      message: "Disconnect this account first; changing the server is not supported yet.",
+    });
+    expect(imapSync.verifyImapCredentials).not.toHaveBeenCalled();
+    expect(db.upsert).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("the 409 does not depend on what the new host is, and reveals nothing about either host", async () => {
+    const { app, headers } = await buildApp();
+    db.findUnique.mockResolvedValue({
+      id: "row-9",
+      imapHost: "imap.old-server.example.org:993",
+    } as never);
+    const bodies = new Set<string>();
+    for (const host of ["imap.fastmail.com", "mail.other.example.net:993", "imap.daum.net"]) {
+      const res = await connect(app, headers, { ...GOOD, host });
+      expect(res.statusCode).toBe(409);
+      bodies.add(res.body);
+    }
+    expect(bodies.size).toBe(1);
+    expect([...bodies][0]).not.toMatch(/fastmail|old-server|other|daum/);
+    await app.close();
+  });
+
+  it("refuses without counting an attempt (twelve refusals leave the whole budget for the re-link)", async () => {
+    const { app, headers } = await buildApp();
+    db.findUnique.mockResolvedValue({
+      id: "row-9",
+      imapHost: "imap.old-server.example.org:993",
+    } as never);
+    for (let i = 0; i < 12; i++) expect((await connect(app, headers, GOOD)).statusCode).toBe(409);
+
+    db.findUnique.mockResolvedValue({ id: "row-9", imapHost: "imap.fastmail.com:993" } as never);
+    expect((await connect(app, headers, GOOD)).statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("the SAME host still re-links (password rotation): verified, stored, reconnect flag cleared", async () => {
+    const { app, headers } = await buildApp();
+    db.findUnique.mockResolvedValue({ id: "row-9", imapHost: "imap.fastmail.com:993" } as never);
+
+    const res = await connect(app, headers, GOOD);
+
+    expect(res.statusCode).toBe(200);
+    expect(imapSync.verifyImapCredentials).toHaveBeenCalledTimes(1);
+    expect(db.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({
+          imapHost: "imap.fastmail.com:993",
+          imapPasswordCipher: "cipher",
+          needsReconnect: false,
+        }),
+      }),
+    );
+    await app.close();
+  });
+
+  it.each([
+    "IMAP.Fastmail.COM:993",
+    "imap.fastmail.com",
+    "  imap.fastmail.com:993 ",
+  ])("the same host spelled %j is the same host (compared in folded form)", async (stored) => {
+    const { app, headers } = await buildApp();
+    db.findUnique.mockResolvedValue({ id: "row-9", imapHost: stored } as never);
+    const res = await connect(app, headers, { ...GOOD, host: "imap.fastmail.com:993" });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it.each([
+    null,
+    "",
+    "127.0.0.1:993",
+    "not a host",
+  ])("an existing row whose stored host is unusable (%j) is not silently re-pointed either", async (stored) => {
+    const { app, headers } = await buildApp();
+    db.findUnique.mockResolvedValue({ id: "row-9", imapHost: stored } as never);
+    const res = await connect(app, headers, GOOD);
+    expect(res.statusCode).toBe(409);
+    expect(db.upsert).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("a built-in provider host is refused with a pointer to the built-in connection", async () => {
+    const { app, headers } = await buildApp();
+    for (const host of [
+      "imap.gmail.com",
+      "imap.naver.com:993",
+      "outlook.office365.com",
+      "imap.mail.me.com",
+    ]) {
+      const res = await connect(app, headers, { ...GOOD, host });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().message).toBe("Use the built-in connection for that provider instead.");
+    }
+    expect(imapSync.verifyImapCredentials).not.toHaveBeenCalled();
     await app.close();
   });
 

@@ -11,7 +11,7 @@
  *     library resolves them, the client is not wrapped).
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const fake = vi.hoisted(() => ({
   ctorCalls: [] as Array<Record<string, unknown>>,
@@ -41,6 +41,14 @@ vi.mock("../mail/host-resolver.js", () => ({
 const { checkImapRow, createImapClient } = await import("../mail/imap-connection.js");
 const { IMAP_PROVIDERS } = await import("../mail/imap-providers.js");
 const { PinnedAddressError } = await import("../mail/pinned-address.js");
+const {
+  createPinnedImapClient,
+  GENERIC_CONNECTION_TIMEOUT_MS,
+  GENERIC_MAX_LINE_BYTES,
+  GENERIC_MAX_LITERAL_BYTES,
+  GENERIC_MAX_RESPONSE_BYTES,
+  GENERIC_SESSION_DEADLINE_MS,
+} = await import("../mail/imap-pinned-client.js");
 
 const GENERIC = IMAP_PROVIDERS.IMAP;
 const NAVER = IMAP_PROVIDERS.NAVER;
@@ -60,6 +68,10 @@ function build(over: Record<string, unknown> = {}) {
 /** The options object the most recent client was constructed with. */
 const lastOptions = () => fake.ctorCalls[fake.ctorCalls.length - 1];
 const tlsOf = (opts: Record<string, unknown>) => opts.tls as Record<string, unknown>;
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -233,6 +245,192 @@ describe("generic client: connect() resolves, checks, then pins", () => {
   it("close() still reaches the library", () => {
     build().close();
     expect(fake.close).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("generic client: size limits on what a server may send", () => {
+  it("bounds a line, a literal and a whole response to a few MiB, each a named constant", () => {
+    build();
+    expect(lastOptions()).toMatchObject({
+      maxLineLength: GENERIC_MAX_LINE_BYTES,
+      maxLiteralSize: GENERIC_MAX_LITERAL_BYTES,
+      maxResponseSize: GENERIC_MAX_RESPONSE_BYTES,
+    });
+    const MIB = 1024 * 1024;
+    for (const bytes of [
+      GENERIC_MAX_LINE_BYTES,
+      GENERIC_MAX_LITERAL_BYTES,
+      GENERIC_MAX_RESPONSE_BYTES,
+    ]) {
+      expect(bytes).toBeGreaterThanOrEqual(MIB);
+      expect(bytes).toBeLessThanOrEqual(16 * MIB);
+    }
+    // imapflow needs the response cap ABOVE the literal cap, or a literal at the cap cannot arrive.
+    expect(GENERIC_MAX_RESPONSE_BYTES).toBeGreaterThan(GENERIC_MAX_LITERAL_BYTES);
+  });
+
+  it("a caller of the pinned client cannot raise them", () => {
+    createPinnedImapClient({
+      hostname: "imap.example.com",
+      port: 993,
+      logScope: "generic-imap",
+      options: {
+        maxLiteralSize: Number.POSITIVE_INFINITY,
+        maxLineLength: Number.POSITIVE_INFINITY,
+        maxResponseSize: Number.POSITIVE_INFINITY,
+      },
+    });
+    expect(lastOptions()).toMatchObject({
+      maxLineLength: GENERIC_MAX_LINE_BYTES,
+      maxLiteralSize: GENERIC_MAX_LITERAL_BYTES,
+      maxResponseSize: GENERIC_MAX_RESPONSE_BYTES,
+    });
+  });
+
+  it("Naver and iCloud get no limits from here (their options are unchanged)", () => {
+    createImapClient({
+      provider: NAVER,
+      host: "imap.naver.com:993",
+      email: "me@naver.com",
+      password: "pw",
+      socketTimeout: 12_000,
+    });
+    expect(lastOptions()).not.toHaveProperty("maxLiteralSize");
+    expect(lastOptions()).not.toHaveProperty("maxLineLength");
+    expect(lastOptions()).not.toHaveProperty("maxResponseSize");
+  });
+});
+
+describe("generic client: time bounds", () => {
+  it("the DNS wait counts against the connect timeout: a resolver that never answers ends the connect on time", async () => {
+    vi.useFakeTimers();
+    fake.resolve.mockImplementation(() => new Promise(() => {}));
+    const client = build();
+    const outcome = client.connect().then(
+      () => "connected",
+      (err: Error) => err.message,
+    );
+
+    await vi.advanceTimersByTimeAsync(GENERIC_CONNECTION_TIMEOUT_MS - 1);
+    expect(fake.close).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(await outcome).toMatch(/timed out/i);
+    expect(fake.connect).not.toHaveBeenCalled();
+    expect(fake.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("DNS and the socket share ONE budget: 4 s of DNS leaves the connection only the rest", async () => {
+    vi.useFakeTimers();
+    fake.resolve.mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve([PUBLIC_IP]), 4_000)),
+    );
+    fake.connect.mockImplementation(() => new Promise(() => {})); // the handshake never finishes
+    const client = build();
+    let settled = "pending";
+    client.connect().then(
+      () => {
+        settled = "connected";
+      },
+      (err: Error) => {
+        settled = err.message;
+      },
+    );
+
+    await vi.advanceTimersByTimeAsync(GENERIC_CONNECTION_TIMEOUT_MS - 1);
+    expect(settled).toBe("pending");
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(settled).toMatch(/timed out/i); // at 15 s in total, not at 4 s + 15 s
+    expect(fake.connect).toHaveBeenCalledTimes(1);
+    expect(fake.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("a caller's tighter connect timeout is the whole budget", async () => {
+    vi.useFakeTimers();
+    fake.resolve.mockImplementation(() => new Promise(() => {}));
+    const client = build({ connectionTimeout: 5_000 });
+    const outcome = client.connect().then(
+      () => "connected",
+      (err: Error) => err.message,
+    );
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(await outcome).toMatch(/timed out/i);
+  });
+
+  it("a connect that succeeds leaves no connect timer behind", async () => {
+    vi.useFakeTimers();
+    const client = build();
+    await client.connect();
+    // Only the session deadline is still armed.
+    expect(vi.getTimerCount()).toBe(1);
+    client.close();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("a session that outlives its deadline is hard-closed, wherever it is stuck", async () => {
+    vi.useFakeTimers();
+    await build().connect();
+
+    await vi.advanceTimersByTimeAsync(GENERIC_SESSION_DEADLINE_MS - 1);
+    expect(fake.close).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fake.close).toHaveBeenCalledTimes(1);
+    expect(GENERIC_SESSION_DEADLINE_MS).toBeGreaterThanOrEqual(30_000);
+    expect(GENERIC_SESSION_DEADLINE_MS).toBeLessThanOrEqual(180_000);
+  });
+
+  it("the deadline is cancelled when the connection closes by itself (no stray timer)", async () => {
+    vi.useFakeTimers();
+    await build().connect();
+    const onClose = fake.on.mock.calls.find((call) => call[0] === "close")?.[1] as
+      | (() => void)
+      | undefined;
+    expect(onClose).toBeTypeOf("function");
+    onClose?.();
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(GENERIC_SESSION_DEADLINE_MS * 2);
+    expect(fake.close).not.toHaveBeenCalled();
+  });
+
+  it("a refused name leaves no timer behind either", async () => {
+    vi.useFakeTimers();
+    fake.resolve.mockResolvedValue(["10.0.0.5"]);
+    await expect(build().connect()).rejects.toBeInstanceOf(PinnedAddressError);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe("generic client: what is logged when a name is refused", () => {
+  it("keeps the resolver's error code, and no address or text of its own", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    fake.resolve.mockRejectedValue(
+      Object.assign(new Error("queryA ENOTFOUND imap.example.com"), { code: "ENOTFOUND" }),
+    );
+    await expect(build().connect()).rejects.toBeInstanceOf(PinnedAddressError);
+    const line = warn.mock.calls.map((call) => call.join(" ")).join("\n");
+    expect(line).toContain("unresolvable (ENOTFOUND)");
+  });
+
+  it("names the blocked class and the addresses for the ops log", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    fake.resolve.mockResolvedValue([PUBLIC_IP, "169.254.169.254"]);
+    await expect(build().connect()).rejects.toBeInstanceOf(PinnedAddressError);
+    const line = warn.mock.calls.map((call) => call.join(" ")).join("\n");
+    expect(line).toContain("blocked-address");
+    expect(line).toContain("169.254.169.254");
+  });
+
+  it("an error the library reports on a generic connection is logged on one line, capped", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    build();
+    const onError = fake.on.mock.calls.find((call) => call[0] === "error")?.[1] as (
+      e: unknown,
+    ) => void;
+    onError(new Error(`server said\r\n[generic-imap] FORGED ${"Z".repeat(10_000)}`));
+    const line = warn.mock.calls.map((call) => call.join(" ")).join("\n");
+    expect(line).not.toMatch(/[\r\n]/);
+    expect(line.length).toBeLessThan(600);
   });
 });
 

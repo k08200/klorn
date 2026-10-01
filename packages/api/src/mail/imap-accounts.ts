@@ -16,15 +16,82 @@ import { prisma } from "../db.js";
 import { captureError } from "../sentry.js";
 import { checkImapRow } from "./imap-connection.js";
 import { parseImapMessageId } from "./imap-message-id.js";
+import {
+  clearPollFailure,
+  pollFailureKind,
+  shouldReportPollFailure,
+} from "./imap-poll-failures.js";
 import type { ImapProviderConfig } from "./imap-providers.js";
 import { syncImapInbox, syncImapMessage } from "./imap-sync.js";
 import { canonicalUidValidity } from "./imap-uidvalidity.js";
+import { sanitizeLogText } from "./log-text.js";
+import {
+  isCredentialCoolingDown,
+  isImapAuthFailure,
+  startCredentialCooldown,
+} from "./providers/imap-session.js";
 
 export interface ImapSyncAggregate {
   fetched: number;
   inserted: number;
   classified: number;
   errors: number;
+}
+
+/** The credential the shared auth cooldown is keyed by: the same string the actions use. */
+const credentialKeyOf = (rowId: string, passwordCipher: string): string =>
+  `${rowId}:${passwordCipher}`;
+
+/**
+ * A generic row stays out of the poll while its login is known to be rejected: the
+ * durable `needsReconnect` flag (set below, cleared by a successful reconnect) or
+ * the in-process cooldown it shares with the actions. A revoked password is then
+ * not sent to the host again on every tick.
+ */
+function isPausedForLogin(
+  row: { needsReconnect?: boolean | null },
+  credentialKey: string,
+): boolean {
+  return row.needsReconnect === true || isCredentialCoolingDown(credentialKey);
+}
+
+/**
+ * A generic poll failed. Log one capped line (the text came from a server the user
+ * chose), stop sending a rejected password, and report to Sentry once per account and
+ * failure kind instead of on every tick. Never throws.
+ */
+async function handleGenericPollFailure(
+  err: unknown,
+  ctx: {
+    provider: ImapProviderConfig;
+    userId: string;
+    rowId: string;
+    credentialKey: string;
+  },
+): Promise<void> {
+  const { provider, userId, rowId, credentialKey } = ctx;
+  const scope = provider.logScope;
+  const kind = pollFailureKind(err);
+  console.warn(`[${scope}] sync failed for row ${rowId} (${kind}): ${sanitizeLogText(err)}`);
+  if (isImapAuthFailure(err)) {
+    startCredentialCooldown(provider, rowId, credentialKey);
+    try {
+      await prisma.linkedInboxAccount.updateMany({
+        where: { id: rowId, userId },
+        data: { needsReconnect: true },
+      });
+    } catch (flagErr) {
+      console.warn(
+        `[${scope}] could not flag row ${rowId} for reconnect: ${sanitizeLogText(flagErr)}`,
+      );
+    }
+  }
+  if (shouldReportPollFailure(rowId, kind)) {
+    captureError(err, {
+      tags: { scope: `${scope}.account-sync` },
+      extra: { userId, linkedInboxAccountId: rowId, failureKind: kind },
+    });
+  }
 }
 
 /**
@@ -64,6 +131,10 @@ export async function syncImapAccountsForUser(
       }
       continue;
     }
+    // Generic IMAP only (step B4): the poll must not re-send a rejected password.
+    const userHost = provider.hostPolicy === "user-supplied";
+    const credentialKey = credentialKeyOf(row.id, checked.passwordCipher);
+    if (userHost && isPausedForLogin(row, credentialKey)) continue;
     try {
       const result = await syncImapInbox({
         provider,
@@ -83,15 +154,21 @@ export async function syncImapAccountsForUser(
       total.errors += result.errors;
       // Stamp the last successful check (not just last new mail) so the UI's
       // "Synced Xm ago" is real — same contract as the Gmail linked-inbox path. A held
-      // poll (UIDVALIDITY reset, step B2b) stored nothing, so it is not a sync.
+      // poll (UIDVALIDITY reset, step B2b) stored nothing, so it is not a sync: it does
+      // not stamp, and for a generic row it does not re-arm the failure report either.
       if (!result.held) {
         await prisma.linkedInboxAccount.updateMany({
           where: { id: row.id, userId },
           data: { lastSyncedAt: new Date() },
         });
+        if (userHost) clearPollFailure(row.id);
       }
     } catch (err) {
       total.errors += 1;
+      if (userHost) {
+        await handleGenericPollFailure(err, { provider, userId, rowId: row.id, credentialKey });
+        continue;
+      }
       // console first — captureError is a no-op without a Sentry DSN, and a
       // silent per-account failure here would strand one mailbox invisibly.
       console.warn(`[${scope}] sync failed for row ${row.id}:`, err);

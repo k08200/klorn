@@ -20,6 +20,8 @@
 import net from "node:net";
 import { domainToASCII } from "node:url";
 
+import { isAllowedImapHost } from "./is-allowed-imap-host.js";
+
 /** The only port a generic host is reached on: IMAP over implicit TLS. */
 export const GENERIC_IMAP_PORT = 993;
 
@@ -58,6 +60,24 @@ const INTERNAL_SUFFIXES: readonly string[] = [
   "metadata.goog",
 ];
 
+/**
+ * Hosts of providers Klorn already has a built-in connection for. Typed here as a
+ * generic host they would bypass that provider's own flow (Google and Microsoft
+ * connect through OAuth, Naver and iCloud through a pinned host), so they are refused
+ * with a pointer to it. Naver and iCloud come from the exact allowlist itself
+ * (`isAllowedImapHost`), so a provider added there is refused here without a second
+ * edit; the others have no entry in that list and are named.
+ */
+const BUILT_IN_HOSTS: ReadonlySet<string> = new Set([
+  "imap.gmail.com",
+  "imap.googlemail.com",
+  "outlook.office365.com",
+  "imap-mail.outlook.com",
+]);
+
+const isBuiltInHost = (name: string): boolean =>
+  BUILT_IN_HOSTS.has(name) || isAllowedImapHost(name);
+
 export type HostRejection =
   | "empty"
   | "too-long"
@@ -65,7 +85,8 @@ export type HostRejection =
   | "ip-literal"
   | "port-not-allowed"
   | "single-label"
-  | "internal-suffix";
+  | "internal-suffix"
+  | "built-in-provider";
 
 export type ParsedGenericHost =
   | {
@@ -123,6 +144,7 @@ function nameRejection(name: string): HostRejection | null {
   if (labels.length < 2) return "single-label";
   if (!TOP_LEVEL_LABEL.test(labels[labels.length - 1])) return "invalid-format";
   if (hasInternalSuffix(name)) return "internal-suffix";
+  if (isBuiltInHost(name)) return "built-in-provider";
   return null;
 }
 

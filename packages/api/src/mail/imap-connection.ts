@@ -17,6 +17,7 @@ import { parseGenericImapHost } from "./generic-imap-host.js";
 import { createPinnedImapClient } from "./imap-pinned-client.js";
 import { hostMatchesProvider, type ImapProviderConfig } from "./imap-providers.js";
 import { isAllowedImapHost } from "./is-allowed-imap-host.js";
+import { sanitizeLogText } from "./log-text.js";
 
 const DEFAULT_IMAPS_PORT = 993;
 
@@ -88,7 +89,9 @@ export function createImapClient(opts: ImapClientOptions): ImapFlow {
   const where = opts.accountId ? ` for row ${opts.accountId}` : "";
   client.on("error", (err: unknown) => {
     const message = err instanceof Error ? err.message : String(err);
-    console.warn(`[${provider.logScope}] connection error${where}: ${message}`);
+    // A user-chosen server's text is logged as one capped line (log-text.ts).
+    const shown = provider.hostPolicy === "user-supplied" ? sanitizeLogText(message) : message;
+    console.warn(`[${provider.logScope}] connection error${where}: ${shown}`);
   });
   return client;
 }

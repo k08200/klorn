@@ -9,7 +9,9 @@
  *   - EVERYTHING else (DNS failure, a blocked or mixed answer, refused, timeout, TLS
  *     or certificate failure, no greeting, a host the grammar refuses) becomes one
  *     message, so the endpoint is no oracle for what is reachable from Klorn's
- *     network. The real text is logged on the server only.
+ *     network. The real text is logged on the server only, as one capped line
+ *     (log-text.ts): it came from a server the user chose and could otherwise forge
+ *     log lines.
  *
  * Kept out of imap-sync.ts on purpose: that file's error text (it quotes the host
  * and the library's message) is right for fixed providers and wrong for a host the
@@ -17,6 +19,7 @@
  */
 
 import { verifyImapCredentials } from "./imap-sync.js";
+import { sanitizeLogText } from "./log-text.js";
 
 type VerifyArgs = Parameters<typeof verifyImapCredentials>[0];
 type VerifyResult = Awaited<ReturnType<typeof verifyImapCredentials>>;
@@ -31,12 +34,13 @@ export async function verifyGenericImapCredentials(args: VerifyArgs): Promise<Ve
     const result = await verifyImapCredentials(args);
     if (result.ok) return result;
     if (result.message === authFailureHint) return result;
-    console.warn(`[${logScope}] connect verification failed: ${result.message ?? "no message"}`);
+    // The text comes from a server the user chose: one capped line, never raw.
+    console.warn(
+      `[${logScope}] connect verification failed: ${sanitizeLogText(result.message ?? "no message")}`,
+    );
     return GENERIC_FAILURE;
   } catch (err) {
-    console.warn(
-      `[${logScope}] connect verification threw: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    console.warn(`[${logScope}] connect verification threw: ${sanitizeLogText(err)}`);
     return GENERIC_FAILURE;
   }
 }

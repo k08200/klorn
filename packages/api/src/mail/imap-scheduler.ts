@@ -21,6 +21,7 @@ import { enabledImapProviderKeys, IMAP_PROVIDERS, type ImapProviderKey } from ".
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
 let firstTickTimer: ReturnType<typeof setTimeout> | null = null;
+let tickInFlight = false;
 const POLL_INTERVAL_MS = 5 * 60_000; // 5 minutes
 
 async function tickOnce(): Promise<void> {
@@ -62,6 +63,26 @@ async function tickOnce(): Promise<void> {
   }
 }
 
+/**
+ * One tick at a time, for every provider. A tick walks every account serially, so a
+ * slow one (many accounts, a slow host) can outlast the interval; without this guard
+ * the next tick started anyway and ticks stacked up, each holding sockets and
+ * logins. A tick that would overlap the previous one is skipped; the next interval
+ * tries again. The guard is released on every exit, including a failed tick.
+ */
+export async function runImapTick(): Promise<void> {
+  if (tickInFlight) {
+    console.warn("[imap-scheduler] previous tick still running — skipping this one");
+    return;
+  }
+  tickInFlight = true;
+  try {
+    await tickOnce();
+  } finally {
+    tickInFlight = false;
+  }
+}
+
 export function startImapScheduler(): void {
   // Guard the boot window too: intervalId isn't set until the first tick fires
   // ~30s in, so a second start() call before then would schedule a duplicate
@@ -73,10 +94,12 @@ export function startImapScheduler(): void {
   firstTickTimer = setTimeout(() => {
     firstTickTimer = null;
     recordSchedulerTick("imap");
-    tickOnce().catch((err) => captureError(err, { tags: { scope: "imap-scheduler.first-tick" } }));
+    runImapTick().catch((err) =>
+      captureError(err, { tags: { scope: "imap-scheduler.first-tick" } }),
+    );
     intervalId = setInterval(() => {
       recordSchedulerTick("imap");
-      tickOnce().catch((err) => captureError(err, { tags: { scope: "imap-scheduler.tick" } }));
+      runImapTick().catch((err) => captureError(err, { tags: { scope: "imap-scheduler.tick" } }));
     }, POLL_INTERVAL_MS);
   }, 30_000);
   console.log(

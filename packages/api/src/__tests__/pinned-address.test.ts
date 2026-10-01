@@ -139,6 +139,46 @@ describe("resolvePinnedAddress: nothing to pin", () => {
   });
 });
 
+describe("resolvePinnedAddress: the resolver's error code is kept for the log", () => {
+  const failing = (error: unknown) =>
+    vi.fn(async () => {
+      throw error;
+    });
+
+  it.each(["ENOTFOUND", "ETIMEOUT", "ESERVFAIL", "ECONNREFUSED"])("keeps %s", async (code) => {
+    const err = await resolvePinnedAddress(
+      "imap.example.com",
+      failing(Object.assign(new Error(`query ${code} 10.0.0.53`), { code })),
+    ).catch((e) => e);
+    expect(err).toBeInstanceOf(PinnedAddressError);
+    expect(err.code).toBe("unresolvable");
+    expect(err.resolverCode).toBe(code);
+    expect(err.message).not.toContain(code);
+  });
+
+  it.each([
+    ["no code", new Error("x")],
+    ["a non-error", "boom"],
+    ["a code with a newline", Object.assign(new Error("x"), { code: "E\nFORGED" })],
+    ["a lower-case code", Object.assign(new Error("x"), { code: "enotfound" })],
+    ["a numeric code", Object.assign(new Error("x"), { code: 53 })],
+    ["an over-long code", Object.assign(new Error("x"), { code: "E".repeat(200) })],
+  ])("drops %s", async (_label, error) => {
+    const err = await resolvePinnedAddress("imap.example.com", failing(error)).catch((e) => e);
+    expect(err.code).toBe("unresolvable");
+    expect(err.resolverCode).toBeUndefined();
+  });
+
+  it("an empty answer and a blocked answer have no resolver code", async () => {
+    const empty = await resolvePinnedAddress("imap.example.com", resolverOf()).catch((e) => e);
+    const blocked = await resolvePinnedAddress("imap.example.com", resolverOf("10.0.0.1")).catch(
+      (e) => e,
+    );
+    expect(empty.resolverCode).toBeUndefined();
+    expect(blocked.resolverCode).toBeUndefined();
+  });
+});
+
 describe("resolvePinnedAddress: rebinding-safe", () => {
   it("re-resolves on every call: public first, private second is refused the second time", async () => {
     const resolver = vi

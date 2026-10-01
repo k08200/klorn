@@ -157,3 +157,36 @@ describe("verifyGenericImapCredentials", () => {
     expect(fake.resolve).not.toHaveBeenCalled();
   });
 });
+
+describe("verifyGenericImapCredentials: what is logged", () => {
+  const loggedLines = () =>
+    (console.warn as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((call) =>
+      call.map(String).join(" "),
+    );
+
+  it("server text cannot forge or split a log line", async () => {
+    fake.connect.mockRejectedValue(new Error("boom\r\n[generic-imap] FORGED: connected ok\nmore"));
+    await verifyGenericImapCredentials(args);
+    const lines = loggedLines();
+    expect(lines.length).toBeGreaterThan(0);
+    for (const line of lines) expect(line).not.toMatch(/[\r\n]/);
+    expect(lines.join(" ")).toContain("FORGED");
+  });
+
+  it("server text is capped, so a hostile server cannot flood the log", async () => {
+    fake.connect.mockRejectedValue(new Error(`x${"A".repeat(50_000)}`));
+    await verifyGenericImapCredentials(args);
+    for (const line of loggedLines()) expect(line.length).toBeLessThan(600);
+  });
+
+  it("the same holds when verification throws instead of returning", async () => {
+    fake.getMailboxLock.mockImplementation(() => {
+      throw new Error(`line one\r\nline two ${"B".repeat(50_000)}`);
+    });
+    await verifyGenericImapCredentials(args);
+    for (const line of loggedLines()) {
+      expect(line).not.toMatch(/[\r\n]/);
+      expect(line.length).toBeLessThan(600);
+    }
+  });
+});

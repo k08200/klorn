@@ -57,7 +57,20 @@ const GENERIC_HOST_MESSAGES: Readonly<Record<HostRejection, string>> = {
   "internal-suffix": "Only public mail servers can be connected.",
   "ip-literal": "Use the server's host name, not an IP address.",
   "port-not-allowed": "Only port 993 (IMAP over TLS) is supported.",
+  "built-in-provider": "Use the built-in connection for that provider instead.",
 };
+
+/**
+ * Re-pointing an existing generic account at another server is refused (v1). The row
+ * keeps its INBOX UIDVALIDITY and every message row from the old server; the next
+ * poll would either hold the mailbox forever (the new server's UIDVALIDITY differs) or,
+ * when both servers happen to report the same value, treat the new server's UIDs as
+ * the old messages' (same ids, `generic-imap:<email>:<uid>`) and dedupe real mail away.
+ * The follow-up is the UIDVALIDITY re-key with tombstones of step B2b, done on a host
+ * change. A constant: it says nothing about either host.
+ */
+const SERVER_CHANGE_REFUSED =
+  "Disconnect this account first; changing the server is not supported yet.";
 
 const TOO_MANY_ATTEMPTS = "Too many connection attempts. Try again later.";
 
@@ -99,25 +112,48 @@ function resolveConnectHost(cfg: ImapProviderConfig, host: string | undefined): 
   return { ok: true, imapHost };
 }
 
+type Refusal = { status: number; message: string };
+
+/** Would this request move an existing generic account to another server? Compared in folded form. */
+function isServerChange(
+  cfg: ImapProviderConfig,
+  storedHost: string | null | undefined,
+  requestedHost: string,
+): boolean {
+  if (cfg.hostPolicy !== "user-supplied") return false;
+  const stored = parseGenericImapHost(storedHost);
+  return !stored.ok || stored.stored !== requestedHost;
+}
+
 /**
- * Cap NEW accounts only — re-verifying an address that already has a row (password
- * rotation) must always be allowed, mirroring the Google link route's "never lock a
- * user out of reconnecting" rule. Returns the refusal, or null.
+ * What stops this connect before any connection is made, or null.
+ *   - An existing account may be re-verified (password rotation) on the SAME host and
+ *     never on another (409, see SERVER_CHANGE_REFUSED).
+ *   - NEW accounts are capped; re-verifying an address that already has a row is
+ *     always allowed, mirroring the Google link route's "never lock a user out of
+ *     reconnecting" rule.
  */
-async function newAccountCapMessage(
+async function connectRefusal(
   cfg: ImapProviderConfig,
   userId: string,
   email: string,
-): Promise<string | null> {
+  imapHost: string,
+): Promise<Refusal | null> {
   const existing = await prisma.linkedInboxAccount.findUnique({
     where: { userId_provider_email: { userId, provider: cfg.provider, email } },
-    select: { id: true },
+    select: { id: true, imapHost: true },
   });
-  if (existing) return null;
+  if (existing) {
+    return isServerChange(cfg, existing.imapHost, imapHost)
+      ? { status: 409, message: SERVER_CHANGE_REFUSED }
+      : null;
+  }
   const count = await prisma.linkedInboxAccount.count({
     where: { userId, provider: cfg.provider },
   });
-  return count >= cfg.maxAccounts ? `At most ${cfg.maxAccounts} ${cfg.label} accounts.` : null;
+  return count >= cfg.maxAccounts
+    ? { status: 400, message: `At most ${cfg.maxAccounts} ${cfg.label} accounts.` }
+    : null;
 }
 
 /**
@@ -205,10 +241,10 @@ export function imapConnectRoutes(
         }
         const { imapHost } = hostChoice;
 
-        const capMessage = await newAccountCapMessage(cfg, userId, email);
-        if (capMessage) {
-          reply.code(400);
-          return { ok: false, message: capMessage };
+        const refusal = await connectRefusal(cfg, userId, email, imapHost);
+        if (refusal) {
+          reply.code(refusal.status);
+          return { ok: false, message: refusal.message };
         }
 
         // Counted only now: the refusals above made no connection.

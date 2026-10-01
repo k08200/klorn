@@ -8,6 +8,7 @@
 import { describe, expect, it } from "vitest";
 
 import { GENERIC_IMAP_PORT, parseGenericImapHost } from "../mail/generic-imap-host.js";
+import { isAllowedImapHost } from "../mail/is-allowed-imap-host.js";
 
 /** A valid-looking name of exactly `total` characters: four 50-character labels, a variable one, and .com. */
 function nameOfLength(total: number): string {
@@ -166,11 +167,39 @@ const REJECTED: ReadonlyArray<readonly [string, string, string]> = [
   ["ideographic dot before suffix", "db。internal", "internal-suffix"],
   ["full-width suffix", "ｄｂ.ｉｎｔｅｒｎａｌ", "internal-suffix"],
   ["suffix with a port", "db.internal:993", "internal-suffix"],
+  // built-in providers have their own connection
+  ["Naver", "imap.naver.com", "built-in-provider"],
+  ["Naver with port", "imap.naver.com:993", "built-in-provider"],
+  ["iCloud", "imap.mail.me.com", "built-in-provider"],
+  ["Gmail", "imap.gmail.com", "built-in-provider"],
+  ["Gmail alias", "imap.googlemail.com", "built-in-provider"],
+  ["Outlook", "outlook.office365.com", "built-in-provider"],
+  ["Outlook legacy", "imap-mail.outlook.com", "built-in-provider"],
+  ["built-in in capitals", "IMAP.GMAIL.COM", "built-in-provider"],
+  ["built-in as a full-width name", "ｉｍａｐ.ｇｍａｉｌ.ｃｏｍ", "built-in-provider"],
 ];
 
 describe("parseGenericImapHost: rejected", () => {
   it.each(REJECTED)("%s: %j", (_label, input, reason) => {
     expect(parseGenericImapHost(input)).toEqual({ ok: false, reason });
+  });
+
+  it("every host of the existing fixed-host allowlist is refused (the two lists cannot drift apart)", () => {
+    for (const host of ["imap.naver.com", "imap.mail.me.com"]) {
+      expect(isAllowedImapHost(host)).toBe(true);
+      expect(parseGenericImapHost(host)).toEqual({ ok: false, reason: "built-in-provider" });
+    }
+  });
+
+  it.each([
+    "imap.gmail.com.example.org",
+    "imap.naver.com.evil.net",
+    "mail.gmail.com",
+    "gmail.com",
+    "outlook.office365.com.example.org",
+    "imap.mail.me.com.attacker.io",
+  ])("a name that only CONTAINS a built-in host is a different host: %s", (host) => {
+    expect(parseGenericImapHost(host)).toMatchObject({ ok: true, hostname: host });
   });
 
   it("rejects a name over 253 characters", () => {

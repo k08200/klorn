@@ -1497,7 +1497,11 @@ OFF. Not flippable until the security review below signs off.
   that is not alphabetic or `xn--`, and the internal suffixes `local`,
   `localhost`, `internal`, `localdomain`, `lan`, `home`, `corp`, `intranet`,
   `private`, `home.arpa`, `arpa`, `test`, `invalid`, `example`, `onion`, plus
-  `metadata.goog`. The name is folded with `url.domainToASCII` (UTS 46: case,
+  `metadata.goog`, and the hosts of providers that have their own connection
+  (`imap.gmail.com`, `imap.googlemail.com`, `outlook.office365.com`,
+  `imap-mail.outlook.com`, and every host of the exact Naver/iCloud allowlist, read
+  from `isAllowedImapHost` so the lists cannot drift), answered "Use the built-in
+  connection for that provider instead." The name is folded with `url.domainToASCII` (UTS 46: case,
   full-width forms, ideographic dots, punycode) and only the ASCII result is
   stored (`host:993`) and used. An IDN look-alike therefore stays a different,
   `xn--` host and can never equal its ASCII twin.
@@ -1531,10 +1535,22 @@ OFF. Not flippable until the security review below signs off.
   authenticates the server: a self-signed server is refused by design. There is no
   plaintext and no STARTTLS path. imapflow does not follow RFC 2221 referrals (it
   only parses them).
-- D4 Bounded connections. The pinned client defaults `connectionTimeout` to 15 s
-  and `greetingTimeout` to 10 s (callers may tighten them; the action path does),
-  on top of the caller's `socketTimeout`. Registry `maxAccounts` for generic is 3,
-  not 10: the poll is serial, and each generic account is an arbitrary slow host.
+- D4 Bounded connections and sessions (reviewed 2026-09-30). One connect budget (the
+  caller's `connectionTimeout`, default 15 s) covers the DNS wait AND the
+  handshake; `greetingTimeout` defaults to 10 s. One wall-clock deadline of 90 s
+  from the start of `connect()` hard-closes the session whatever it is doing, because
+  imapflow's inactivity timer is reset by every byte a dripping server sends. A
+  line, a literal and a whole response are capped at 2, 4 and 8 MiB (imapflow
+  `maxLineLength`, `maxLiteralSize`, `maxResponseSize`, set after the caller's
+  options so they cannot be raised; the response cap must stay above the literal cap).
+  The poll fetches TEXT as a 64 KiB slice (`bodyParts: [{ key: "TEXT", start: 0,
+  maxLength }]`, which imapflow sends as `BODY.PEEK[TEXT]<0.N>`) and stops consuming
+  FETCH results at its window of 50, so a lying server cannot make one poll
+  unbounded. Registry `maxAccounts` for generic is 3, not 10: the poll is serial, and
+  each generic account is an arbitrary slow host. The scheduler skips a tick that
+  would start while the previous one is still running (every provider), so slow
+  ticks no longer stack. All of this is generic-only except that guard: Naver and
+  iCloud clients, queries and logs are unchanged.
 - D5 No oracle, no scanner. The connect route runs at most 10 attempts per user per
   hour (`mail/generic-imap-attempts.ts`, in-process like `login-throttle.ts`; answers
   429), on top of the route's per-IP limit (5 per 15 minutes), entitlement and the
@@ -1544,19 +1560,45 @@ OFF. Not flippable until the security review below signs off.
   Only a rejected LOGIN, which needs a full verified TLS session and an IMAP
   greeting first, gets its own hint, because the user has to fix the password. Host
   syntax errors are static messages (they depend on the input, not on the
-  network). Raw library errors are never returned, only logged server-side.
+  network). Raw library errors are never returned, only logged server-side, and
+  what is logged from a user-chosen server (a library or TLS message) is one line
+  capped at 240 characters (`mail/log-text.ts`), so it cannot forge log lines or
+  flood a log.
 - D6 Every boundary re-checks. `checkImapRow` validates the stored host with the
   grammar for a generic row (and with the exact allowlist and host pin for
   Naver and iCloud, unchanged), so a row edited by hand still cannot reach
   anything the grammar refuses; resolution is checked in D3 at every connect.
   Folder trust for archive and trash stays SPECIAL-USE only (name lists are empty).
+- D7 Host change is refused (v1, reviewed 2026-09-30). Connecting again with an
+  existing generic address works only on the SAME host (compared in folded form:
+  password rotation); another host answers a constant 409, "Disconnect this account
+  first; changing the server is not supported yet.", before any attempt is counted or
+  connection made. Re-pointing used to keep the row's INBOX UIDVALIDITY and every
+  message row of the old server: the next poll either held the mailbox forever, or,
+  when both servers report the same UIDVALIDITY, matched the new server's UIDs to the
+  old `generic-imap:<email>:<uid>` rows and dedupe-dropped real mail. The follow-up is
+  the B2b UIDVALIDITY re-key (tombstones) run on a host change; step B2b is in
+  progress in another branch and this change does not touch its files.
+- D8 A rejected login stops the retries (reviewed 2026-09-30). A generic poll whose
+  LOGIN is rejected starts the same in-process cooldown the actions use (15 min,
+  keyed by row id and stored cipher, so one rejection pauses polls and actions
+  alike and a new password is tried at once) and sets `needsReconnect` on the row
+  (scoped by id and user; the settings status already reports it, and a successful
+  reconnect clears it). A flagged or cooling row is skipped by the poll, so a revoked
+  password is not sent to the host every five minutes. The actions of B1/B2 did not
+  flag `needsReconnect` and still do not; only the poll does, for generic rows. Other
+  failures (refused, timeout, TLS, blocked address) are retried next tick with no
+  flag. Sentry gets one event per account per failure kind until the kind changes or
+  a poll succeeds (`mail/imap-poll-failures.ts`), reported by the fan-out only; the
+  poll's own `.sync` report is skipped for generic rows, which was a duplicate.
 - Residual risk, accepted and recorded. (a) One address is tried per connection: a
   round-robin name with a dead first record fails that attempt (the next poll
   retries). (b) Failure classes differ in timing (NXDOMAIN is faster than a timeout),
   which the per-user limit bounds but does not remove. (c) The attempt limiter is
   in-process: a restart resets it and each replica counts alone (single instance on
-  Render today). (d) Timeouts bound but do not remove the cost of a slow host in the
-  serial tick. (e) Network-level egress filtering on the host would be a second
+  Render today). (d) The bounds cap a slow host at 90 s per session, so a user with
+  3 generic accounts can cost a tick up to 4.5 minutes; with the in-flight guard that
+  delays the next tick instead of stacking one. (e) Network-level egress filtering on the host would be a second
   layer; not verified, not assumed.
 - Verify (test-first): a table-driven validator test (every range above, mixed
   public and private answers, rebinding between two resolutions, IP literals in
@@ -1564,7 +1606,11 @@ OFF. Not flippable until the security review below signs off.
   connection tests that assert the socket target is the checked address and the
   TLS name is the hostname; a wire test with the real imapflow over real TLS
   (throwaway certificate) proving the handshake is to the pinned address, verified
-  against the hostname, and refused for a wrong certificate.
+  against the hostname, and refused for a wrong certificate. Review fixes added:
+  a wire test where the real library refuses an oversized literal and a server that
+  drips bytes is cut by the session deadline; unit tests for the budget shared by
+  DNS and the socket (fake timers), the window cap, the bounded TEXT query, the
+  scheduler guard, the host-change refusal, the cooldown and the Sentry dedupe.
 - Landed 2026-09-30 (branch `feat/generic-imap`, PR not yet opened), flag OFF:
   - `GENERIC_IMAP_ENABLED` (`genericImapEnabled()` in `config.ts`, lenient parse,
     read at request time). Off: `/api/generic-imap/*` answers the cloaked 404
@@ -1606,8 +1652,18 @@ OFF. Not flippable until the security review below signs off.
     library resolve the name, certificate verification off, no TLS server name,
     CGNAT block dropped, internal-suffix check dropped, mapped-address unwrap
     dropped, generic flag ignored, attempt counted before host validation.
+  - Review fixes (second commit, same day): D7 host-change refusal, D4 size and time
+    bounds with the in-flight scheduler guard, D8 poll cooldown, reconnect flag and
+    Sentry dedupe, built-in provider hosts refused, the resolver's error code kept in
+    the log, server text sanitised before logging, and the wire test's openssl call
+    made portable (it skips with a warning if the binary is missing). imap-sync.ts
+    has three small additive edits: the TEXT query and the window break (both in the
+    fetch loop, the region around lines 262 to 305 that B2b also edits, so expect a
+    textual conflict there for whoever rebases second) and the failure report in the
+    final catch.
   - Not verified: no real IMAP server has been reached; behaviour rests on faked
-    imapflow and resolver plus a local TLS server on loopback. The real c-ares
+    imapflow and resolver plus a local TLS server on loopback. The openssl
+    invocation was run on LibreSSL only, not on OpenSSL 3. The real c-ares
     resolver path (`host-resolver.ts`) is tested only against a mocked `Resolver`.
     Whether Render's egress can reach IPv6 and what a real provider's LIST reports
     are unknown. A self-signed server is refused by design.

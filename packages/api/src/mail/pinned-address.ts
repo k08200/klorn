@@ -9,9 +9,10 @@
  * earlier check is refused the next time, and there is no gap between the check and
  * the connection because the connection targets the checked address itself.
  *
- * The error says only what class of failure it was. It carries no address and no
- * text from the resolver: callers turn it into one generic user message, and log
- * the class on the server.
+ * The error says only what class of failure it was. Its message carries no address
+ * and no text from the resolver: callers turn it into one generic user message, and
+ * log the class on the server, with the resolver's error code (a short token such as
+ * ENOTFOUND or ETIMEOUT) and the blocked addresses as separate fields.
  */
 
 import net from "node:net";
@@ -21,12 +22,26 @@ import { isPublicAddress } from "./ip-policy.js";
 
 export type PinnedAddressErrorCode = "unresolvable" | "blocked-address";
 
+/** A resolver error code worth logging (ENOTFOUND, ETIMEOUT, ESERVFAIL): short, upper snake case. */
+const RESOLVER_CODE = /^[A-Z][A-Z0-9_]{0,39}$/;
+
+function resolverCodeOf(err: unknown): string | undefined {
+  const code = (err as { code?: unknown } | null)?.code;
+  return typeof code === "string" && RESOLVER_CODE.test(code) ? code : undefined;
+}
+
 export class PinnedAddressError extends Error {
   readonly code: PinnedAddressErrorCode;
   /** The non-public answers, for the server log only (never for a user). */
   readonly blocked: readonly string[];
+  /** The resolver's own error code when the lookup failed, for the server log only. */
+  readonly resolverCode?: string;
 
-  constructor(code: PinnedAddressErrorCode, blocked: readonly string[] = []) {
+  constructor(
+    code: PinnedAddressErrorCode,
+    blocked: readonly string[] = [],
+    resolverCode?: string,
+  ) {
     super(
       code === "blocked-address"
         ? "host did not resolve to a public address"
@@ -36,6 +51,7 @@ export class PinnedAddressError extends Error {
     this.code = code;
     // Only well-formed addresses are kept: the list ends up in a log line.
     this.blocked = blocked.filter((address) => net.isIP(address) !== 0).slice(0, 4);
+    this.resolverCode = resolverCode;
   }
 }
 
@@ -57,8 +73,10 @@ export async function resolvePinnedAddress(
   let answers: readonly string[];
   try {
     answers = await resolve(host);
-  } catch {
-    throw new PinnedAddressError("unresolvable");
+  } catch (err) {
+    // The class stays "unresolvable" for the caller; the resolver's own code
+    // (ENOTFOUND, ETIMEOUT, ESERVFAIL...) is kept so the log can tell them apart.
+    throw new PinnedAddressError("unresolvable", [], resolverCodeOf(err));
   }
   if (answers.length === 0) throw new PinnedAddressError("unresolvable");
 
