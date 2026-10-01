@@ -11,6 +11,7 @@
 
 import { hasExplicitOffset, naiveLocalToUtc } from "../../google-calendar-time.js";
 import { localDateKey } from "../../time-zone.js";
+import { safeMeetingLink } from "../meeting-link.js";
 import { GRAPH_BASE_URL, graphRequest, nextLinkOf } from "./outlook-graph.js";
 import { ianaZoneOf, isKnownZone } from "./outlook-time-zones.js";
 import type { CalendarListQuery, ProviderCalendarEvent } from "./types.js";
@@ -26,8 +27,6 @@ const MAX_PAGES = 10;
 const OPEN_ENDED_WINDOW_DAYS = 365;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}/;
-/** The longest meeting link kept; a longer value is not a join link, and every client shows it. */
-const MAX_MEETING_LINK_LENGTH = 2048;
 /** The wall-clock time an all-day event starts at, in the zone it was created in. */
 const MIDNIGHT = /T00:00(?::00(?:\.0+)?)?$/;
 
@@ -179,25 +178,6 @@ function allDayTimes(item: GraphEvent, queryZone: string | undefined) {
   };
 }
 
-/**
- * A meeting link that is safe to hand on: it reaches a web `<a href>`, the Mac
- * app's NSWorkspace.open and the model's prompt, so only an https URL without
- * embedded credentials, of at most 2048 characters, passes. Anything else
- * (javascript:, file:, http:, a custom scheme, a relative, malformed or oversized
- * value) is dropped. Returned normalised.
- */
-function httpsLinkOf(value: string | null | undefined): string | null {
-  if (!value || value.length > MAX_MEETING_LINK_LENGTH) return null;
-  try {
-    const url = new URL(value);
-    if (url.protocol !== "https:" || url.username !== "" || url.password !== "") return null;
-    // Normalising can lengthen a value (percent-encoding), so the cap holds for the result too.
-    return url.href.length <= MAX_MEETING_LINK_LENGTH ? url.href : null;
-  } catch {
-    return null;
-  }
-}
-
 /** One Graph event in the provider-neutral shape the sync maps into a row. */
 export function toProviderEvent(
   item: GraphEvent,
@@ -209,7 +189,8 @@ export function toProviderEvent(
     summary: item.subject || null,
     description: item.bodyPreview || null,
     location: item.location?.displayName || null,
-    meetingLink: httpsLinkOf(item.onlineMeeting?.joinUrl) ?? httpsLinkOf(item.onlineMeetingUrl),
+    meetingLink:
+      safeMeetingLink(item.onlineMeeting?.joinUrl) ?? safeMeetingLink(item.onlineMeetingUrl),
     allDay,
     ...(allDay ? allDayTimes(item, queryZone) : timedTimes(item, queryZone)),
   };
