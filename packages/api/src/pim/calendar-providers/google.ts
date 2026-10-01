@@ -44,6 +44,8 @@ const CALENDAR_LIST_PAGE_SIZE = 250;
 export const CANCELLED_SCAN_PAGE_SIZE = 250;
 /** ... and pages per scan, so at most 1000 events are read per account per sync. */
 export const CANCELLED_SCAN_MAX_PAGES = 4;
+/** One scan page waits at most this long (gaxios timeout), so a hung call cannot hold a sync tick. */
+export const CANCELLED_SCAN_TIMEOUT_MS = 10_000;
 
 /**
  * The start/end Google wants for an event. Timed events carry the user's
@@ -172,48 +174,62 @@ async function listEventsVia(
 }
 
 /**
- * The ids of events deleted or cancelled since `query.updatedMin` (C2b). This is
- * its own events.list, never the sync listing with showDeleted added: cancelled
- * events count toward that call's maxResults and would push live events out of
- * the window. Google semantics
+ * The events deleted or cancelled since `query.updatedMin` (C2b). This is its own
+ * events.list, never the sync listing with showDeleted added: cancelled events
+ * count toward that call's maxResults and would push live events out of the
+ * window. Google semantics
  * (developers.google.com/workspace/calendar/api/v3/reference/events/list):
- *   - `showDeleted: true` includes deleted events (status "cancelled"); with
- *     `singleEvents` also true a cancelled INSTANCE of a recurring series comes
- *     back as its own event (id `<seriesId>_<start>`, the id its synced row holds),
- *     never the recurring master.
- *   - `updatedMin` bounds the listing to events modified since then, and "entries
+ *   - `showDeleted: true` includes deleted events (status "cancelled"), and
+ *     `updatedMin` bounds the listing to events modified since then: "entries
  *     deleted since this time will always be included regardless of showDeleted".
- * The events resource says a cancelled event is only guaranteed to carry its id,
- * so only `id` and `status` are read, and nothing else is required of an item.
- * The window (timeMin/timeMax) keeps an unbounded recurring series from being
- * expanded forever. Paged up to CANCELLED_SCAN_MAX_PAGES; more than that is
- * reported as truncated, not followed.
+ *   - `singleEvents: false` returns single events, recurring masters and
+ *     exceptions, not every expanded instance (the recurring-events guide), so a
+ *     recurring series cannot fill the page cap. A cancelled single event, a
+ *     cancelled series and a cancelled instance of a live series each come back
+ *     as one item; an instance carries `recurringEventId`, the other two do not.
+ *   - `orderBy: "updated"` (ascending) is valid without singleEvents (only
+ *     "startTime" needs it), so a truncated scan can resume at the last `updated`.
+ *   - No timeMin/timeMax: a cancelled event is only guaranteed to carry its id
+ *     (the events resource, "status"), and a time filter could drop one with no
+ *     start. Hence `fields` asks for nothing more than id, status, updated and
+ *     recurringEventId.
+ * Paged up to CANCELLED_SCAN_MAX_PAGES; more than that is reported as truncated
+ * with where to resume, not followed. Each page waits at most
+ * CANCELLED_SCAN_TIMEOUT_MS and is never retried (the next sync is the retry), so
+ * a hung call cannot hold the scheduler tick.
  */
 async function listCancelledVia(
   api: calendar_v3.Calendar,
   query: CancelledEventsQuery,
 ): Promise<CancelledEventsResult> {
   const externalIds: string[] = [];
+  const seriesIds: string[] = [];
+  let lastUpdated: string | null = null;
   let pageToken: string | undefined;
   for (let page = 0; page < CANCELLED_SCAN_MAX_PAGES; page += 1) {
-    const res = await api.events.list({
-      calendarId: PRIMARY_CALENDAR_ID,
-      timeMin: query.timeMin,
-      timeMax: query.timeMax,
-      updatedMin: query.updatedMin,
-      singleEvents: true,
-      showDeleted: true,
-      maxResults: CANCELLED_SCAN_PAGE_SIZE,
-      fields: "nextPageToken,items(id,status)",
-      ...(pageToken ? { pageToken } : {}),
-    });
+    const res = await api.events.list(
+      {
+        calendarId: PRIMARY_CALENDAR_ID,
+        updatedMin: query.updatedMin,
+        singleEvents: false,
+        showDeleted: true,
+        orderBy: "updated",
+        maxResults: CANCELLED_SCAN_PAGE_SIZE,
+        fields: "nextPageToken,items(id,status,updated,recurringEventId)",
+        ...(pageToken ? { pageToken } : {}),
+      },
+      { timeout: CANCELLED_SCAN_TIMEOUT_MS, retry: false },
+    );
     for (const item of res.data.items ?? []) {
-      if (item.status === "cancelled" && item.id) externalIds.push(item.id);
+      if (item.updated) lastUpdated = item.updated;
+      if (item.status !== "cancelled" || !item.id) continue;
+      externalIds.push(item.id);
+      if (!item.recurringEventId) seriesIds.push(item.id);
     }
     pageToken = res.data.nextPageToken ?? undefined;
-    if (!pageToken) return { externalIds, truncated: false };
+    if (!pageToken) return { externalIds, seriesIds, truncated: false, resumeUpdatedMin: null };
   }
-  return { externalIds, truncated: true };
+  return { externalIds, seriesIds, truncated: true, resumeUpdatedMin: lastUpdated };
 }
 
 async function createEventVia(

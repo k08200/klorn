@@ -62,10 +62,12 @@ export interface CalendarListQuery {
 
 /**
  * What the cancellation scan asks (C2b): events deleted or cancelled since
- * `updatedMin`, inside the sync window. It is a call of its own so that cancelled
- * events never spend the sync listing's `maxResults` and push live events out.
+ * `updatedMin`, anywhere in the calendar. It is a call of its own so that
+ * cancelled events never spend the sync listing's `maxResults` and push live
+ * events out, and it carries no time window so a time filter cannot drop a
+ * cancelled event that has no start.
  */
-export interface CancelledEventsQuery extends CalendarWindow {
+export interface CancelledEventsQuery {
   /** RFC 3339 instant: only events changed at or after it are considered. */
   readonly updatedMin: string;
 }
@@ -73,8 +75,21 @@ export interface CancelledEventsQuery extends CalendarWindow {
 export interface CancelledEventsResult {
   /** The ids (in the source calendar) of the events the provider reports cancelled. */
   readonly externalIds: readonly string[];
+  /**
+   * The cancelled ids that are not themselves an instance of a recurring series:
+   * single events and whole series. An instance row of a deleted series is keyed
+   * off its series id (`<seriesId>_<start>`), and a deleted series is reported
+   * only as the series itself.
+   */
+  readonly seriesIds: readonly string[];
   /** True when the provider had more pages than the scan's cap: some cancellations were not seen. */
   readonly truncated: boolean;
+  /**
+   * When truncated: the `updated` instant of the last event read, results being
+   * ordered by `updated`. The next scan can start exactly there; null when the
+   * provider gave none.
+   */
+  readonly resumeUpdatedMin: string | null;
 }
 
 /** One event of a provider calendar, as the provider reported it. */

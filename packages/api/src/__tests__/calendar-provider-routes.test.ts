@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { signToken } from "../auth.js";
 import { isGoogleAuthError, markGoogleTokenForReconnect } from "../mail/gmail.js";
 import { _resetCancelledScanStateForTests } from "../pim/calendar-cancellation.js";
+import { CANCELLED_SCAN_OPTIONS, cancelledScanRequest } from "./helpers/google-cancelled-scan.js";
 
 const googleCreateEvent = vi.hoisted(() => vi.fn());
 const getAuthedClient = vi.hoisted(() => vi.fn());
@@ -39,8 +40,10 @@ vi.mock("googleapis", () => ({
       events: {
         // The cancellation scan (C2b) is a second events.list; it gets its own mock so
         // every assertion on `eventsList` stays about the sync's own listing.
-        list: (args: { showDeleted?: boolean }) =>
-          args.showDeleted ? (cancelledList(args) ?? { data: { items: [] } }) : eventsList(args),
+        list: (args: { showDeleted?: boolean }, options?: unknown) =>
+          args.showDeleted
+            ? (cancelledList(args, options) ?? { data: { items: [] } })
+            : eventsList(args),
       },
     }),
   },
@@ -96,7 +99,6 @@ function lastCreateData(): Record<string, unknown> {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  _resetCancelledScanStateForTests();
   eventCreate.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
     id: "ev-1",
     ...data,
@@ -301,43 +303,56 @@ describe("POST /api/calendar/sync — Google request and failure handling (chara
     await app.close();
   });
 
-  it("also asks Google, in a second call, what was cancelled in that window in the last 7 days (C2b)", async () => {
+  it("makes no second Google call while the cancellation flag is off (the default)", async () => {
     eventsList.mockResolvedValue({ data: { items: [] } });
     const app = await buildApp();
     await app.inject({ method: "POST", url: "/api/calendar/sync", headers });
-    expect(cancelledList).toHaveBeenCalledTimes(1);
-    expect(cancelledList).toHaveBeenCalledWith({
-      calendarId: "primary",
-      timeMin: "2026-09-30T05:00:00.000Z",
-      timeMax: "2026-10-30T05:00:00.000Z",
-      updatedMin: "2026-09-23T05:00:00.000Z",
-      singleEvents: true,
-      showDeleted: true,
-      maxResults: 250,
-      fields: "nextPageToken,items(id,status)",
-    });
+    expect(eventsList).toHaveBeenCalledTimes(1);
+    expect(cancelledList).not.toHaveBeenCalled();
     await app.close();
   });
 
-  it("still answers the sync normally when the cancellation call fails (C2b)", async () => {
-    vi.spyOn(console, "warn").mockImplementation(() => {});
-    eventsList.mockResolvedValue({
-      data: {
-        items: [
-          {
-            id: "g-1",
-            summary: "Kickoff",
-            start: { dateTime: "2026-10-02T09:00:00+09:00" },
-            end: { dateTime: "2026-10-02T10:00:00+09:00" },
-          },
-        ],
-      },
+  describe("with CALENDAR_CANCELLATION_SYNC_ENABLED on (C2b)", () => {
+    beforeEach(() => {
+      process.env.CALENDAR_CANCELLATION_SYNC_ENABLED = "true";
+      _resetCancelledScanStateForTests();
     });
-    cancelledList.mockRejectedValue(new Error("quota"));
-    const app = await buildApp();
-    const res = await app.inject({ method: "POST", url: "/api/calendar/sync", headers });
-    expect(res.json()).toMatchObject({ success: true, synced: 1 });
-    await app.close();
+    afterEach(() => {
+      delete process.env.CALENDAR_CANCELLATION_SYNC_ENABLED;
+    });
+
+    it("also asks Google, in a second call, what was cancelled in the last 7 days", async () => {
+      eventsList.mockResolvedValue({ data: { items: [] } });
+      const app = await buildApp();
+      await app.inject({ method: "POST", url: "/api/calendar/sync", headers });
+      expect(cancelledList).toHaveBeenCalledTimes(1);
+      expect(cancelledList).toHaveBeenCalledWith(
+        cancelledScanRequest("2026-09-23T05:00:00.000Z"),
+        CANCELLED_SCAN_OPTIONS,
+      );
+      await app.close();
+    });
+
+    it("still answers the sync normally when the cancellation call fails", async () => {
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      eventsList.mockResolvedValue({
+        data: {
+          items: [
+            {
+              id: "g-1",
+              summary: "Kickoff",
+              start: { dateTime: "2026-10-02T09:00:00+09:00" },
+              end: { dateTime: "2026-10-02T10:00:00+09:00" },
+            },
+          ],
+        },
+      });
+      cancelledList.mockRejectedValue(new Error("quota"));
+      const app = await buildApp();
+      const res = await app.inject({ method: "POST", url: "/api/calendar/sync", headers });
+      expect(res.json()).toMatchObject({ success: true, synced: 1 });
+      await app.close();
+    });
   });
 
   it("answers not-connected without a user lookup or a Google call", async () => {

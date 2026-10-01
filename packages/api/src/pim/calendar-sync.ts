@@ -12,7 +12,6 @@ import { connectLinkedCalendars } from "./calendar-providers/dispatch.js";
 import type {
   CalendarListQuery,
   CalendarSession,
-  CalendarWindow,
   ProviderCalendarEvent,
 } from "./calendar-providers/types.js";
 import {
@@ -35,18 +34,11 @@ export async function readSyncTimezone(userId: string): Promise<string> {
   return normalizeTimeZone(userRow?.timezone);
 }
 
-/** The window every sync covers: the next 30 days. */
-export function syncWindow(now: Date): CalendarWindow {
-  return {
-    timeMin: now.toISOString(),
-    timeMax: new Date(now.getTime() + CALENDAR_SYNC_WINDOW_DAYS * DAY_MS).toISOString(),
-  };
-}
-
 /** The listing every sync asks for: the next 30 days, in the user's zone. */
 export function syncQuery(now: Date, userTimezone: string): CalendarListQuery {
   return {
-    ...syncWindow(now),
+    timeMin: now.toISOString(),
+    timeMax: new Date(now.getTime() + CALENDAR_SYNC_WINDOW_DAYS * DAY_MS).toISOString(),
     maxResults: CALENDAR_SYNC_MAX_RESULTS,
     timeZone: userTimezone,
   };
@@ -86,10 +78,11 @@ async function listSyncRows(
 }
 
 /**
- * Sync the PRIMARY calendar's window into rows (matched by googleId), then remove
- * the rows of events cancelled upstream (a separate call that can never fail the
- * sync, see calendar-cancellation.ts). A list failure throws to the caller, which
- * owns the failure policy. Returns the number of rows written.
+ * Sync the PRIMARY calendar's window into rows (matched by googleId), then, behind
+ * CALENDAR_CANCELLATION_SYNC_ENABLED, remove the rows of events cancelled upstream
+ * (a separate call that can never fail the sync, see calendar-cancellation.ts). A
+ * list failure throws to the caller, which owns the failure policy. Returns the
+ * number of rows written.
  */
 export async function syncPrimaryCalendarWindow(
   session: CalendarSession,
@@ -101,7 +94,7 @@ export async function syncPrimaryCalendarWindow(
   for (const row of rows) {
     await upsertGoogleEventRow(userId, row.externalId, row.fields);
   }
-  await reconcileCancelledEvents(session, userId, null, syncWindow(now), now);
+  await reconcileCancelledEvents(session, userId, null, now);
   return rows.length;
 }
 
@@ -117,7 +110,7 @@ export async function syncLinkedCalendarWindow(
   for (const row of rows) {
     await upsertLinkedGoogleEventRow(userId, linkedAccountId, row.externalId, row.fields);
   }
-  await reconcileCancelledEvents(session, userId, linkedAccountId, syncWindow(now), now);
+  await reconcileCancelledEvents(session, userId, linkedAccountId, now);
   return rows.length;
 }
 

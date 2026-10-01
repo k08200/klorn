@@ -9,7 +9,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const m = vi.hoisted(() => ({
   eventsList: vi.fn(),
-  cancelledList: vi.fn(),
   googleCalendar: vi.fn(),
   linkedRows: [] as Array<{
     id: string;
@@ -27,16 +26,7 @@ const m = vi.hoisted(() => ({
 
 vi.mock("googleapis", () => ({
   google: {
-    calendar: m.googleCalendar.mockImplementation(() => ({
-      // The cancellation scan (C2b) is a second events.list; it gets its own mock so
-      // every assertion on `eventsList` below stays about the sync's own listing.
-      events: {
-        list: (args: { showDeleted?: boolean }) =>
-          args.showDeleted
-            ? (m.cancelledList(args) ?? { data: { items: [] } })
-            : m.eventsList(args),
-      },
-    })),
+    calendar: m.googleCalendar.mockImplementation(() => ({ events: { list: m.eventsList } })),
   },
 }));
 vi.mock("../mail/gmail.js", () => ({
@@ -258,10 +248,8 @@ describe("syncLinkedCalendars", () => {
 
     const result = await syncLinkedCalendars("u1", NOW);
 
-    // One API object for the listing, one for the cancellation scan (C2b): both SCHOOL's.
-    expect(m.googleCalendar).toHaveBeenCalledTimes(2);
+    expect(m.googleCalendar).toHaveBeenCalledTimes(1);
     expect(m.googleCalendar).toHaveBeenCalledWith({ version: "v3", auth: SCHOOL.client });
-    expect(m.googleCalendar).not.toHaveBeenCalledWith({ version: "v3", auth: WORK.client });
     expect(result).toEqual({ accounts: 1, events: 1, failedAccounts: 0 });
   });
 
@@ -279,8 +267,7 @@ describe("syncLinkedCalendars", () => {
 
     const result = await syncLinkedCalendars("u1", NOW);
 
-    expect(m.googleCalendar).toHaveBeenCalledTimes(2); // listing + cancellation scan, SCHOOL only
-    expect(m.googleCalendar).not.toHaveBeenCalledWith({ version: "v3", auth: WORK.client });
+    expect(m.googleCalendar).toHaveBeenCalledTimes(1);
     expect(result.accounts).toBe(1);
   });
 

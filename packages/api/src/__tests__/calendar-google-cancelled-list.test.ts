@@ -1,16 +1,21 @@
 /**
  * C2b, the Google half. The sync's own events.list call is exactly what it was
  * (no showDeleted: cancelled events would spend its 100-event cap and push live
- * events out of the window). Cancellations come from a SEPARATE events.list
- * with showDeleted + updatedMin, paged up to a cap, that keeps only items Google
- * marks status "cancelled" and needs nothing but their id.
+ * events out of the window). Cancellations come from a SEPARATE events.list:
+ * showDeleted + updatedMin, singleEvents false and NO timeMin/timeMax (so a time
+ * filter cannot drop a cancelled event that has no start, and no recurring
+ * expansion fills the page cap), ordered by `updated`, paged up to a cap, with a
+ * bounded wait. It keeps only items Google marks status "cancelled" and needs
+ * nothing but their id.
  *
  * Semantics: developers.google.com/workspace/calendar/api/v3/reference/events/list
- * (showDeleted; updatedMin: "entries deleted since this time will always be
- * included regardless of showDeleted") and .../reference/events (status).
+ * (showDeleted; singleEvents; orderBy "updated"; updatedMin: "entries deleted
+ * since this time will always be included regardless of showDeleted") and
+ * .../reference/events (status: a deleted event is only guaranteed to carry its id).
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { CANCELLED_SCAN_OPTIONS, cancelledScanRequest } from "./helpers/google-cancelled-scan.js";
 
 const m = vi.hoisted(() => ({ eventsList: vi.fn(), googleCalendar: vi.fn() }));
 
@@ -28,6 +33,7 @@ vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 import {
   CANCELLED_SCAN_MAX_PAGES,
   CANCELLED_SCAN_PAGE_SIZE,
+  CANCELLED_SCAN_TIMEOUT_MS,
   googleSessionFromClient,
 } from "../pim/calendar-providers/google.js";
 
@@ -38,11 +44,7 @@ const QUERY = {
   maxResults: 100,
   timeZone: "Asia/Seoul",
 };
-const SCAN = {
-  timeMin: "2026-09-30T05:00:00.000Z",
-  timeMax: "2026-10-30T05:00:00.000Z",
-  updatedMin: "2026-09-23T05:00:00.000Z",
-};
+const UPDATED_MIN = "2026-09-23T05:00:00.000Z";
 
 function session() {
   const s = googleSessionFromClient(AUTH);
@@ -93,20 +95,27 @@ describe("GOOGLE listEvents (the sync's upsert call)", () => {
 });
 
 describe("GOOGLE listCancelledEvents (the separate cancellation call)", () => {
-  it("asks for deleted events changed since updatedMin, in the sync window, and nothing more", async () => {
-    await session().listCancelledEvents(SCAN);
+  it("asks for deleted events changed since updatedMin: no time window, no recurring expansion", async () => {
+    await session().listCancelledEvents({ updatedMin: UPDATED_MIN });
 
     expect(m.eventsList).toHaveBeenCalledTimes(1);
-    expect(m.eventsList).toHaveBeenCalledWith({
-      calendarId: "primary",
-      timeMin: "2026-09-30T05:00:00.000Z",
-      timeMax: "2026-10-30T05:00:00.000Z",
-      updatedMin: "2026-09-23T05:00:00.000Z",
-      singleEvents: true,
-      showDeleted: true,
-      maxResults: CANCELLED_SCAN_PAGE_SIZE,
-      fields: "nextPageToken,items(id,status)",
-    });
+    expect(m.eventsList.mock.calls[0]?.[0]).toStrictEqual(cancelledScanRequest(UPDATED_MIN));
+    expect(m.eventsList.mock.calls[0]?.[0]).not.toHaveProperty("timeMin");
+    expect(m.eventsList.mock.calls[0]?.[0]).not.toHaveProperty("timeMax");
+  });
+
+  it("bounds the wait: a named timeout and no retries on every page", async () => {
+    m.eventsList
+      .mockResolvedValueOnce({ data: { items: [], nextPageToken: "tok-2" } })
+      .mockResolvedValueOnce({ data: { items: [] } });
+
+    await session().listCancelledEvents({ updatedMin: UPDATED_MIN });
+
+    expect(CANCELLED_SCAN_TIMEOUT_MS).toBe(10_000);
+    expect(m.eventsList.mock.calls.map((c) => c[1])).toStrictEqual([
+      CANCELLED_SCAN_OPTIONS,
+      CANCELLED_SCAN_OPTIONS,
+    ]);
   });
 
   it("keeps only status-cancelled items, and needs nothing but their id", async () => {
@@ -114,8 +123,7 @@ describe("GOOGLE listCancelledEvents (the separate cancellation call)", () => {
       data: {
         items: [
           { id: "g-gone", status: "cancelled" },
-          { id: "standup_20261005T000000Z", status: "cancelled" },
-          { id: "g-live", status: "confirmed" },
+          { id: "g-live", status: "confirmed", updated: "2026-09-30T04:00:00.000Z" },
           { id: "g-maybe", status: "tentative" },
           { id: "g-no-status" },
           { status: "cancelled" },
@@ -123,12 +131,27 @@ describe("GOOGLE listCancelledEvents (the separate cancellation call)", () => {
       },
     });
 
-    const result = await session().listCancelledEvents(SCAN);
+    const result = await session().listCancelledEvents({ updatedMin: UPDATED_MIN });
 
-    expect(result).toEqual({
-      externalIds: ["g-gone", "standup_20261005T000000Z"],
-      truncated: false,
+    expect(result.externalIds).toEqual(["g-gone"]);
+    expect(result.truncated).toBe(false);
+  });
+
+  it("tells a cancelled instance (it has a recurringEventId) from a cancelled event or series (it has none)", async () => {
+    m.eventsList.mockResolvedValue({
+      data: {
+        items: [
+          { id: "standup_20261005T000000Z", status: "cancelled", recurringEventId: "standup" },
+          { id: "standup", status: "cancelled" },
+          { id: "lunch", status: "cancelled" },
+        ],
+      },
     });
+
+    const result = await session().listCancelledEvents({ updatedMin: UPDATED_MIN });
+
+    expect(result.externalIds).toEqual(["standup_20261005T000000Z", "standup", "lunch"]);
+    expect(result.seriesIds).toEqual(["standup", "lunch"]);
   });
 
   it("follows nextPageToken and joins the pages", async () => {
@@ -138,27 +161,52 @@ describe("GOOGLE listCancelledEvents (the separate cancellation call)", () => {
       })
       .mockResolvedValueOnce({ data: { items: [{ id: "b", status: "cancelled" }] } });
 
-    const result = await session().listCancelledEvents(SCAN);
+    const result = await session().listCancelledEvents({ updatedMin: UPDATED_MIN });
 
     expect(m.eventsList).toHaveBeenCalledTimes(2);
-    expect(m.eventsList.mock.calls[0]?.[0]).not.toHaveProperty("pageToken");
-    expect(m.eventsList.mock.calls[1]?.[0]).toMatchObject({
-      pageToken: "tok-2",
-      showDeleted: true,
+    expect(m.eventsList.mock.calls[1]?.[0]).toStrictEqual(
+      cancelledScanRequest(UPDATED_MIN, "tok-2"),
+    );
+    expect(result).toEqual({
+      externalIds: ["a", "b"],
+      seriesIds: ["a", "b"],
+      truncated: false,
+      resumeUpdatedMin: null,
     });
-    expect(result).toEqual({ externalIds: ["a", "b"], truncated: false });
   });
 
-  it("stops at the page cap and reports truncation", async () => {
-    m.eventsList.mockImplementation(async () => ({
-      data: { items: [{ id: "x", status: "cancelled" }], nextPageToken: "more" },
-    }));
+  it("stops at the page cap, reports truncation, and names where to resume: the last event's updated", async () => {
+    let page = 0;
+    m.eventsList.mockImplementation(async () => {
+      page += 1;
+      return {
+        data: {
+          items: [
+            { id: `live-${page}`, status: "confirmed", updated: `2026-09-30T04:0${page}:00.000Z` },
+            { id: `gone-${page}`, status: "cancelled", updated: `2026-09-30T04:0${page}:30.000Z` },
+          ],
+          nextPageToken: "more",
+        },
+      };
+    });
 
-    const result = await session().listCancelledEvents(SCAN);
+    const result = await session().listCancelledEvents({ updatedMin: UPDATED_MIN });
 
     expect(m.eventsList).toHaveBeenCalledTimes(CANCELLED_SCAN_MAX_PAGES);
     expect(result.truncated).toBe(true);
     expect(result.externalIds).toHaveLength(CANCELLED_SCAN_MAX_PAGES);
+    expect(result.resumeUpdatedMin).toBe(`2026-09-30T04:0${CANCELLED_SCAN_MAX_PAGES}:30.000Z`);
+  });
+
+  it("has nothing to resume from when a truncated scan carried no updated at all", async () => {
+    m.eventsList.mockImplementation(async () => ({
+      data: { items: [{ id: "x", status: "cancelled" }], nextPageToken: "more" },
+    }));
+
+    const result = await session().listCancelledEvents({ updatedMin: UPDATED_MIN });
+
+    expect(result.truncated).toBe(true);
+    expect(result.resumeUpdatedMin).toBeNull();
   });
 
   it("is not truncated when the last allowed page is also the last page", async () => {
@@ -167,21 +215,28 @@ describe("GOOGLE listCancelledEvents (the separate cancellation call)", () => {
       page += 1;
       return {
         data: {
-          items: [{ id: `p${page}`, status: "cancelled" }],
+          items: [{ id: `p${page}`, status: "cancelled", updated: "2026-09-30T04:00:00.000Z" }],
           ...(page < CANCELLED_SCAN_MAX_PAGES ? { nextPageToken: `t${page}` } : {}),
         },
       };
     });
 
-    const result = await session().listCancelledEvents(SCAN);
+    const result = await session().listCancelledEvents({ updatedMin: UPDATED_MIN });
 
     expect(m.eventsList).toHaveBeenCalledTimes(CANCELLED_SCAN_MAX_PAGES);
     expect(result.truncated).toBe(false);
+    expect(result.resumeUpdatedMin).toBeNull();
+  });
+
+  it("reads a full page size per request", () => {
+    expect(CANCELLED_SCAN_PAGE_SIZE).toBe(250);
   });
 
   it("lets a Google failure reach the caller, which owns the policy", async () => {
     m.eventsList.mockRejectedValue(new Error("quota"));
 
-    await expect(session().listCancelledEvents(SCAN)).rejects.toThrow("quota");
+    await expect(session().listCancelledEvents({ updatedMin: UPDATED_MIN })).rejects.toThrow(
+      "quota",
+    );
   });
 });

@@ -178,7 +178,7 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
   const UNAFFECTED = [
     "agentcore/tool-executor.ts",
     "notify/notification-prefs.ts",
-    "pim/calendar-rows.ts", // removes the rows Google named as cancelled, scoped to one source
+    "pim/calendar-cancellation.ts", // removes the rows Google named as cancelled, scoped to one source
     "pim/linked-calendar-unlink.ts",
     "pim/meeting-prep-pack.ts",
     "pim/team-availability.ts",
@@ -206,10 +206,11 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
 
   // Exempt from the kill switch on purpose: the GDPR export returns every row the
   // system holds, unlink deletes an account's own rows, and the cancelled-event
-  // removal deletes the rows of the one source whose sync named them (sourceKey).
+  // removal (its own module, C2b) deletes the rows of the one source whose scan
+  // named them.
   const EXEMPT_FROM_KILL_SWITCH = [
     "index.ts",
-    "pim/calendar-rows.ts",
+    "pim/calendar-cancellation.ts",
     "pim/linked-calendar-unlink.ts",
   ];
 

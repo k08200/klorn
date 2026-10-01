@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { signToken } from "../auth.js";
 import { isGoogleAuthError, markGoogleTokenForReconnect } from "../mail/gmail.js";
 import { _resetCancelledScanStateForTests } from "../pim/calendar-cancellation.js";
+import { CANCELLED_SCAN_OPTIONS, cancelledScanRequest } from "./helpers/google-cancelled-scan.js";
 
 const eventsList = vi.hoisted(() => vi.fn());
 const cancelledList = vi.hoisted(() => vi.fn());
@@ -51,8 +52,10 @@ vi.mock("googleapis", () => ({
       events: {
         // The cancellation scan (C2b) is a second events.list; it gets its own mock so
         // every assertion on `eventsList` stays about the sync's own listing.
-        list: (args: { showDeleted?: boolean }) =>
-          args.showDeleted ? (cancelledList(args) ?? { data: { items: [] } }) : eventsList(args),
+        list: (args: { showDeleted?: boolean }, options?: unknown) =>
+          args.showDeleted
+            ? (cancelledList(args, options) ?? { data: { items: [] } })
+            : eventsList(args),
       },
     }),
     gmail: () => ({ users: { messages: { list: vi.fn(async () => ({ data: {} })) } } }),
@@ -97,7 +100,6 @@ async function buildApp() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  _resetCancelledScanStateForTests();
 });
 
 describe("GET /api/auth/google/callback — __link_calendar__", () => {
@@ -215,19 +217,30 @@ describe("POST /api/auth/init-sync — Google request (characterisation, C2)", (
     });
   });
 
-  it("also asks Google, in a second call, what was cancelled in that window in the last 7 days (C2b)", async () => {
+  it("makes no second Google call while the cancellation flag is off (the default)", async () => {
     eventsList.mockResolvedValue({ data: { items: [] } });
     await initSync();
-    expect(cancelledList).toHaveBeenCalledTimes(1);
-    expect(cancelledList).toHaveBeenCalledWith({
-      calendarId: "primary",
-      timeMin: "2026-09-30T05:00:00.000Z",
-      timeMax: "2026-10-30T05:00:00.000Z",
-      updatedMin: "2026-09-23T05:00:00.000Z",
-      singleEvents: true,
-      showDeleted: true,
-      maxResults: 250,
-      fields: "nextPageToken,items(id,status)",
+    expect(eventsList).toHaveBeenCalledTimes(1);
+    expect(cancelledList).not.toHaveBeenCalled();
+  });
+
+  describe("with CALENDAR_CANCELLATION_SYNC_ENABLED on (C2b)", () => {
+    beforeEach(() => {
+      process.env.CALENDAR_CANCELLATION_SYNC_ENABLED = "true";
+      _resetCancelledScanStateForTests();
+    });
+    afterEach(() => {
+      delete process.env.CALENDAR_CANCELLATION_SYNC_ENABLED;
+    });
+
+    it("also asks Google, in a second call, what was cancelled in the last 7 days", async () => {
+      eventsList.mockResolvedValue({ data: { items: [] } });
+      await initSync();
+      expect(cancelledList).toHaveBeenCalledTimes(1);
+      expect(cancelledList).toHaveBeenCalledWith(
+        cancelledScanRequest("2026-09-23T05:00:00.000Z"),
+        CANCELLED_SCAN_OPTIONS,
+      );
     });
   });
 
