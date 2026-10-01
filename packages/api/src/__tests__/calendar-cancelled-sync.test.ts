@@ -20,7 +20,7 @@ import { cancelledScanRequest } from "./helpers/google-cancelled-scan.js";
 
 const h = vi.hoisted(() => {
   type Rec = Record<string, unknown>;
-  const state = { events: [] as Rec[], attention: [] as Rec[], created: 0 };
+  const state = { events: [] as Rec[], attention: [] as Rec[], created: 0, likeWildcards: false };
   const matches = (row: Rec, where: Rec): boolean =>
     Object.entries(where).every(([key, want]) => {
       if (key === "OR") return (want as Rec[]).some((clause) => matches(row, clause));
@@ -29,9 +29,17 @@ const h = vi.hoisted(() => {
       }
       if (want && typeof want === "object" && "startsWith" in want) {
         const value = row[key];
-        return (
-          typeof value === "string" && value.startsWith((want as { startsWith: string }).startsWith)
-        );
+        const prefix = (want as { startsWith: string }).startsWith;
+        if (typeof value !== "string") return false;
+        // Postgres LIKE 'prefix%': `_` stands for any one character, `%` for any run.
+        if (state.likeWildcards) {
+          const pattern = prefix
+            .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+            .replace(/_/g, ".")
+            .replace(/%/g, ".*");
+          return new RegExp(`^${pattern}`).test(value);
+        }
+        return value.startsWith(prefix);
       }
       return row[key] === want;
     });
@@ -107,6 +115,7 @@ const FLAG = "CALENDAR_CANCELLATION_SYNC_ENABLED";
 const NOW = new Date("2026-09-30T05:00:00.000Z");
 const ZONE = "Asia/Seoul";
 const MIN = 60 * 1000;
+const SECOND = 1000;
 const DAY = 24 * 60 * MIN;
 const later = (ms: number) => new Date(NOW.getTime() + ms);
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -222,6 +231,7 @@ beforeEach(() => {
   h.state.events = [];
   h.state.attention = [];
   h.state.created = 0;
+  h.state.likeWildcards = false;
   nextId = 0;
   _resetCancelledScanStateForTests();
   process.env[FLAG] = "true";
@@ -726,6 +736,54 @@ describe("the cancellation call's start", () => {
   });
 });
 
+/** One change Google reports: an event (or series, or instance) and when it last changed. */
+interface Change {
+  id: string;
+  status: "confirmed" | "cancelled";
+  updated: string;
+  recurringEventId?: string;
+}
+
+/**
+ * Google's events.list as the scan sees it: only changes at or after `updatedMin`
+ * (or strictly after it when `exclusive`, since Google does not document which),
+ * oldest `updated` first and in a stable order among ties, 250 to a page.
+ */
+function serveChanges(changes: Change[], options: { exclusive?: boolean } = {}) {
+  h.eventsList.mockImplementation(
+    async (params: {
+      showDeleted?: boolean;
+      updatedMin?: string;
+      pageToken?: string;
+      maxResults?: number;
+    }) => {
+      if (!params.showDeleted) return { data: { items: [] } };
+      const since = Date.parse(params.updatedMin ?? "");
+      const pool = changes
+        .map((change, index) => ({ change, index }))
+        .filter(({ change }) => {
+          const at = Date.parse(change.updated);
+          return options.exclusive ? at > since : at >= since;
+        })
+        .sort(
+          (a, b) =>
+            Date.parse(a.change.updated) - Date.parse(b.change.updated) || a.index - b.index,
+        )
+        .map(({ change }) => change);
+      const start = params.pageToken ? Number(params.pageToken) : 0;
+      const size = params.maxResults ?? 250;
+      const next = start + size < pool.length ? String(start + size) : undefined;
+      return {
+        data: { items: pool.slice(start, start + size), ...(next ? { nextPageToken: next } : {}) },
+      };
+    },
+  );
+}
+
+const scanCalls = () =>
+  h.eventsList.mock.calls.filter((c) => (c[0] as { showDeleted?: boolean }).showDeleted);
+const scanStarts = () => scanCalls().map((c) => (c[0] as { updatedMin: string }).updatedMin);
+
 describe("a truncated scan resumes where it stopped", () => {
   const truncated = (resumeUpdatedMin: string | null, ids: Cancelled[] = ["a"]) => ({
     ...scanOf(ids),
@@ -733,20 +791,22 @@ describe("a truncated scan resumes where it stopped", () => {
     resumeUpdatedMin,
   });
 
-  it("starts the next scan exactly at the last event it read (no margin), warning once", async () => {
-    const stopped = iso(NOW.getTime() - 40 * MIN);
-    const cut = makeSession({ cancelled: truncated(stopped) });
+  it("starts the next scan 1 s before the last event it read, warning once", async () => {
+    const stopped1 = NOW.getTime() - 40 * MIN;
+    const stopped2 = NOW.getTime() - 20 * MIN;
+    const cut1 = makeSession({ cancelled: truncated(iso(stopped1)) });
+    const cut2 = makeSession({ cancelled: truncated(iso(stopped2)) });
     const next = makeSession();
 
-    await syncPrimaryCalendarWindow(cut.session, "u1", ZONE, NOW);
-    await syncPrimaryCalendarWindow(cut.session, "u1", ZONE, later(MIN));
+    await syncPrimaryCalendarWindow(cut1.session, "u1", ZONE, NOW);
+    await syncPrimaryCalendarWindow(cut2.session, "u1", ZONE, later(MIN));
 
-    expect(scanArgs(cut.listCancelledEvents, 1).updatedMin).toBe(stopped);
+    expect(scanArgs(cut2.listCancelledEvents).updatedMin).toBe(iso(stopped1 - SECOND));
     expect(warn).toHaveBeenCalledTimes(1);
     expect(String(warn.mock.calls[0]?.[0])).toContain("truncated");
     expect(h.captureError).not.toHaveBeenCalled();
     await syncPrimaryCalendarWindow(next.session, "u1", ZONE, later(2 * MIN));
-    expect(scanArgs(next.listCancelledEvents).updatedMin).toBe(stopped);
+    expect(scanArgs(next.listCancelledEvents).updatedMin).toBe(iso(stopped2 - SECOND));
   });
 
   it("never starts before the 7 day lookback", async () => {
@@ -759,20 +819,15 @@ describe("a truncated scan resumes where it stopped", () => {
     expect(scanArgs(next.listCancelledEvents).updatedMin).toBe(iso(later(MIN).getTime() - 7 * DAY));
   });
 
-  it("stays put when it has nothing to resume from, or made no progress", async () => {
+  it("with nothing to resume from, stays put and warns", async () => {
     const noResume = makeSession({ cancelled: truncated(null) });
-    const noProgress = makeSession({ cancelled: truncated(iso(NOW.getTime() - 7 * DAY)) });
     const next = makeSession();
 
     await syncPrimaryCalendarWindow(noResume.session, "u1", ZONE, NOW);
-    await syncPrimaryCalendarWindow(noProgress.session, "u2", ZONE, NOW);
     await syncPrimaryCalendarWindow(next.session, "u1", ZONE, later(MIN));
-    await syncPrimaryCalendarWindow(next.session, "u2", ZONE, later(MIN));
 
-    const floor = iso(later(MIN).getTime() - 7 * DAY);
-    expect(scanArgs(next.listCancelledEvents, 0).updatedMin).toBe(floor);
-    expect(scanArgs(next.listCancelledEvents, 1).updatedMin).toBe(floor);
-    expect(warn).toHaveBeenCalledTimes(2);
+    expect(scanArgs(next.listCancelledEvents).updatedMin).toBe(iso(later(MIN).getTime() - 7 * DAY));
+    expect(warn).toHaveBeenCalledTimes(1);
   });
 
   it("still removes what the truncated scan did find", async () => {
@@ -790,31 +845,12 @@ describe("a truncated scan resumes where it stopped", () => {
     // 1500), and in the last stretch.
     const T0 = NOW.getTime() - 60 * MIN;
     const tombstones = new Set([10, 1500, 2300]);
-    const items = Array.from({ length: 2600 }, (_, i) => ({
-      id: `ev-${i}`,
-      status: tombstones.has(i) ? "cancelled" : "confirmed",
-      updated: iso(T0 + i * 1000),
-    }));
-    h.eventsList.mockImplementation(
-      async (params: {
-        showDeleted?: boolean;
-        updatedMin?: string;
-        pageToken?: string;
-        maxResults?: number;
-      }) => {
-        if (!params.showDeleted) return { data: { items: [] } };
-        const since = Date.parse(params.updatedMin ?? "");
-        const pool = items.filter((item) => Date.parse(item.updated) >= since);
-        const start = params.pageToken ? Number(params.pageToken) : 0;
-        const size = params.maxResults ?? 250;
-        const next = start + size < pool.length ? String(start + size) : undefined;
-        return {
-          data: {
-            items: pool.slice(start, start + size),
-            ...(next ? { nextPageToken: next } : {}),
-          },
-        };
-      },
+    serveChanges(
+      Array.from({ length: 2600 }, (_, i) => ({
+        id: `ev-${i}`,
+        status: tombstones.has(i) ? ("cancelled" as const) : ("confirmed" as const),
+        updated: iso(T0 + i * 1000),
+      })),
     );
     for (const i of tombstones) eventRow(`ev-${i}`);
     const session = googleSessionFromClient({} as never);
@@ -831,12 +867,177 @@ describe("a truncated scan resumes where it stopped", () => {
 
     // The third scan was complete: the next one is back to the narrow steady-state start.
     await syncPrimaryCalendarWindow(session, "u1", ZONE, later(45 * MIN));
-    const scans = h.eventsList.mock.calls.filter(
-      (c) => (c[0] as { showDeleted?: boolean }).showDeleted,
-    );
-    expect((scans.at(-1)?.[0] as { updatedMin: string }).updatedMin).toBe(
-      iso(later(30 * MIN).getTime() - 30 * MIN),
-    );
+    expect(scanStarts().at(-1)).toBe(iso(later(30 * MIN).getTime() - 30 * MIN));
+  });
+
+  describe.each([
+    ["updatedMin inclusive", false],
+    ["updatedMin exclusive", true],
+  ])("ties at the resume point (%s)", (_name, exclusive) => {
+    it("a group of events sharing one `updated` that straddles the page cap is fully processed", async () => {
+      // 1005 changes; 995..1004 share one `updated`, so the cap (1000) cuts the group
+      // in two. The tombstone at 1002 is in the half the first scan did not read.
+      const T0 = NOW.getTime() - 60 * MIN;
+      const tie = iso(T0 + 995 * 1000);
+      serveChanges(
+        Array.from({ length: 1005 }, (_, i) => ({
+          id: `ev-${i}`,
+          status: i === 1002 ? ("cancelled" as const) : ("confirmed" as const),
+          updated: i >= 995 ? tie : iso(T0 + i * 1000),
+        })),
+        { exclusive },
+      );
+      eventRow("ev-1002");
+      const session = googleSessionFromClient({} as never);
+
+      await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
+      expect(externalIds()).toEqual(["ev-1002"]); // the first, truncated scan did not read it
+
+      await syncPrimaryCalendarWindow(session, "u1", ZONE, later(15 * MIN));
+      expect(externalIds()).toEqual([]);
+      expect(scanStarts()[4]).toBe(iso(T0 + 995 * 1000 - SECOND));
+    });
+
+    it("a scan that cannot move forward steps 1 ms past the stuck point, warns once, and stops re-reading the same pages", async () => {
+      // 1200 changes share one `updated`: more than one cap's worth, so a resume 1 s
+      // earlier lands on the same pages again. The tombstone at 1100 is never read:
+      // the accepted miss.
+      const tie = iso(NOW.getTime() - 30 * MIN);
+      serveChanges(
+        Array.from({ length: 1200 }, (_, i) => ({
+          id: `ev-${i}`,
+          status: i === 1100 ? ("cancelled" as const) : ("confirmed" as const),
+          updated: tie,
+        })),
+        { exclusive },
+      );
+      eventRow("ev-1100");
+      const session = googleSessionFromClient({} as never);
+
+      await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
+      await syncPrimaryCalendarWindow(session, "u1", ZONE, later(MIN));
+      const callsBefore = scanCalls().length;
+      await syncPrimaryCalendarWindow(session, "u1", ZONE, later(2 * MIN));
+      await syncPrimaryCalendarWindow(session, "u1", ZONE, later(3 * MIN));
+
+      const stuckPoint = Date.parse(tie);
+      expect(scanStarts()[4]).toBe(iso(stuckPoint - SECOND)); // second scan: 1 s earlier
+      expect(scanStarts()[8]).toBe(iso(stuckPoint + 1)); // third scan: stepped past it
+      expect(scanCalls().length - callsBefore).toBe(2); // one page each: nothing left to read
+      expect(externalIds()).toEqual(["ev-1100"]); // the accepted miss
+      expect(warn.mock.calls.filter((c) => String(c[0]).includes("no progress"))).toHaveLength(1);
+    });
+  });
+});
+
+describe("the latest status of an id wins within one scan", () => {
+  const page = (items: Change[], nextPageToken?: string) => ({
+    data: { items, ...(nextPageToken ? { nextPageToken } : {}) },
+  });
+  const at = (seconds: number) => iso(NOW.getTime() - 60 * MIN + seconds * 1000);
+
+  it("an event cancelled on one page and restored on a later one keeps its row", async () => {
+    const row = eventRow("g-1");
+    h.eventsList
+      .mockResolvedValueOnce({ data: { items: [] } }) // the sync's own listing
+      .mockResolvedValueOnce(page([{ id: "g-1", status: "cancelled", updated: at(1) }], "p2"))
+      .mockResolvedValueOnce(page([{ id: "g-1", status: "confirmed", updated: at(9) }]));
+
+    await syncPrimaryCalendarWindow(googleSessionFromClient({} as never), "u1", ZONE, NOW);
+
+    expect(eventIds()).toEqual([row.id]);
+  });
+
+  it("a series cancelled on one page and restored on a later one keeps its whole family", async () => {
+    const instances = [
+      eventRow("standup_20260901T000000Z"), // a past instance that would never come back
+      eventRow("standup_20261005T000000Z"),
+    ];
+    h.eventsList
+      .mockResolvedValueOnce({ data: { items: [] } })
+      .mockResolvedValueOnce(page([{ id: "standup", status: "cancelled", updated: at(1) }], "p2"))
+      .mockResolvedValueOnce(page([{ id: "standup", status: "confirmed", updated: at(9) }]));
+
+    await syncPrimaryCalendarWindow(googleSessionFromClient({} as never), "u1", ZONE, NOW);
+
+    expect(eventIds()).toEqual(instances.map((row) => row.id));
+  });
+
+  it("an event restored and then cancelled again is removed", async () => {
+    eventRow("g-1");
+    h.eventsList
+      .mockResolvedValueOnce({ data: { items: [] } })
+      .mockResolvedValueOnce(page([{ id: "g-1", status: "confirmed", updated: at(1) }], "p2"))
+      .mockResolvedValueOnce(page([{ id: "g-1", status: "cancelled", updated: at(9) }]));
+
+    await syncPrimaryCalendarWindow(googleSessionFromClient({} as never), "u1", ZONE, NOW);
+
+    expect(eventIds()).toEqual([]);
+  });
+});
+
+describe("what the scan warns about", () => {
+  const truncated = (resumeUpdatedMin: string) => ({
+    ...scanOf([]),
+    truncated: true,
+    resumeUpdatedMin,
+  });
+
+  it("a failure is not hidden by an earlier truncation warning", async () => {
+    const cut = makeSession({ cancelled: truncated(iso(NOW.getTime() - 40 * MIN)) });
+    const broken = makeSession({ cancelled: new Error("quota") });
+
+    await syncPrimaryCalendarWindow(cut.session, "u1", ZONE, NOW);
+    await syncPrimaryCalendarWindow(broken.session, "u1", ZONE, later(MIN));
+
+    const messages = warn.mock.calls.map((c) => String(c[0]));
+    expect(messages).toHaveLength(2);
+    expect(messages[0]).toContain("truncated");
+    expect(messages[1]).toContain("failed");
+  });
+
+  it("a truncation is not hidden by an earlier failure warning", async () => {
+    const broken = makeSession({ cancelled: new Error("quota") });
+    const cut = makeSession({ cancelled: truncated(iso(NOW.getTime() - 40 * MIN)) });
+
+    await syncPrimaryCalendarWindow(broken.session, "u1", ZONE, NOW);
+    await syncPrimaryCalendarWindow(cut.session, "u1", ZONE, later(MIN));
+
+    const messages = warn.mock.calls.map((c) => String(c[0]));
+    expect(messages).toHaveLength(2);
+    expect(messages[0]).toContain("failed");
+    expect(messages[1]).toContain("truncated");
+  });
+});
+
+describe("the database prefix filter may match more than the code accepts", () => {
+  it("rejects a candidate that only matches because LIKE reads `_` as any character", async () => {
+    h.state.likeWildcards = true;
+    const instance = eventRow("standup_20261005T000000Z");
+    const lookalike = eventRow("standupX_20261005T000000Z"); // the pattern `standup_%` matches it
+    const noSeparator = eventRow("standupX20261005T000000Z");
+    const { session } = makeSession({ cancelled: ["standup"] });
+
+    await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
+
+    expect(h.tx.calendarEvent.findMany).toHaveBeenCalledTimes(1);
+    const candidates = (await h.tx.calendarEvent.findMany.mock.results[0]?.value) as {
+      id: string;
+    }[];
+    expect(candidates.map((row) => row.id)).toEqual([instance.id, lookalike.id, noSeparator.id]);
+    expect(eventIds()).toEqual([lookalike.id, noSeparator.id]);
+  });
+
+  it("rejects it in a linked account too", async () => {
+    h.state.likeWildcards = true;
+    const instance = eventRow("standup_20261005T000000Z", { sourceKey: "acct-work" });
+    const lookalike = eventRow("standupX_20261005T000000Z", { sourceKey: "acct-work" });
+    const { session } = makeSession({ cancelled: ["standup"] });
+
+    await syncLinkedCalendarWindow(session, "u1", "acct-work", ZONE, NOW);
+
+    expect(eventIds()).toEqual([lookalike.id]);
+    expect(eventIds()).not.toContain(instance.id);
   });
 });
 

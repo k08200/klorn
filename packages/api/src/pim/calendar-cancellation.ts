@@ -28,6 +28,13 @@ import { googleSourceScope, sourceKeyFor } from "./calendar-rows.js";
 export const CANCELLED_LOOKBACK_DAYS = 7;
 /** A complete scan resumes this much before it began, so a clock skew or a slow commit loses nothing. */
 export const CANCELLED_SCAN_MARGIN_MS = 30 * 60 * 1000;
+/**
+ * A scan cut off by the page cap resumes this much before the last `updated` it
+ * read. Google does not document whether `updatedMin` is inclusive, so a group of
+ * events sharing that `updated` that the cut split is read again; removals are
+ * idempotent.
+ */
+export const CANCELLED_RESUME_OVERLAP_MS = 1000;
 /** Accounts whose scan progress and warnings are remembered; the least recently scanned is forgotten. */
 export const CANCELLED_SCAN_STATE_CAP = 5000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -38,7 +45,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * larger (still bounded, still paged) first scan.
  */
 const resumeFrom = new Map<string, number>();
-/** Accounts whose current trouble (failure or truncation) was already logged. */
+/** What was already logged for an account, by kind, so one trouble never hides another. */
+type Trouble = "failure" | "truncation" | "stalled";
 const warned = new Set<string>();
 let reportedNonTransient = false;
 
@@ -70,10 +78,16 @@ export function cancelledScanUpdatedMin(key: string, now: Date): Date {
   return new Date(stored === undefined ? floor : Math.max(floor, stored));
 }
 
-function warnOnce(key: string, message: string): void {
-  if (warned.has(key)) return;
-  remember(warned, key);
+function warnOnce(trouble: Trouble, key: string, message: string): void {
+  const entry = `${trouble}:${key}`;
+  if (warned.has(entry)) return;
+  remember(warned, entry);
   console.warn(message);
+}
+
+/** The account is fine again for these kinds of trouble: the next one is worth a line. */
+function recovered(key: string, ...troubles: Trouble[]): void {
+  for (const trouble of troubles) warned.delete(`${trouble}:${key}`);
 }
 
 /** The basic-ISO UTC start of a timed instance, or the date of an all-day one. */
@@ -168,25 +182,47 @@ export async function removeCancelledGoogleEventRows(
   }, INTERACTIVE_TX_OPTIONS);
 }
 
-/** Where the next scan starts: after a complete scan, a margin before it; after a truncated one, where it stopped. */
+/**
+ * Where the next scan starts. After a complete scan: a margin before it. After a
+ * truncated one: 1 s before the last `updated` it read, so a tie group the cut
+ * split is read again (see CANCELLED_RESUME_OVERLAP_MS). If that does not move
+ * forward (more than one cap's worth of events share the window, so the same pages
+ * would be read forever), step 1 ms past the stuck point and warn once: the events
+ * tied at that point beyond the cap are missed, which is accepted and recorded in
+ * the plan as a limit to check during the live verification.
+ */
 function advance(key: string, scan: CancelledEventsResult, startedFrom: Date, now: Date): void {
+  recovered(key, "failure");
   if (!scan.truncated) {
     remember(resumeFrom, key, now.getTime() - CANCELLED_SCAN_MARGIN_MS);
-    warned.delete(key);
+    recovered(key, "truncation", "stalled");
     return;
   }
   const stopped = scan.resumeUpdatedMin === null ? Number.NaN : Date.parse(scan.resumeUpdatedMin);
-  if (Number.isFinite(stopped) && stopped > startedFrom.getTime()) {
-    remember(resumeFrom, key, stopped);
+  if (!Number.isFinite(stopped)) {
     warnOnce(
+      "stalled",
       key,
-      `[CALENDAR] cancelled-event scan truncated for ${key}: more changes than one scan reads, continuing from ${scan.resumeUpdatedMin} on the next sync`,
+      `[CALENDAR] cancelled-event scan truncated for ${key} and made no progress: nothing to resume from, the rest is not removed yet`,
     );
     return;
   }
+  const resume = stopped - CANCELLED_RESUME_OVERLAP_MS;
+  if (resume > startedFrom.getTime()) {
+    remember(resumeFrom, key, resume);
+    recovered(key, "stalled");
+    warnOnce(
+      "truncation",
+      key,
+      `[CALENDAR] cancelled-event scan truncated for ${key}: more changes than one scan reads, continuing from ${new Date(resume).toISOString()} on the next sync`,
+    );
+    return;
+  }
+  remember(resumeFrom, key, Math.max(stopped, startedFrom.getTime()) + 1);
   warnOnce(
+    "stalled",
     key,
-    `[CALENDAR] cancelled-event scan truncated for ${key} and made no progress: the rest is not removed yet`,
+    `[CALENDAR] cancelled-event scan truncated for ${key} and made no progress: more changes share one timestamp than a scan reads, stepping past ${scan.resumeUpdatedMin}; events tied there beyond the cap are missed`,
   );
 }
 
@@ -209,6 +245,7 @@ function reportFailure(key: string, err: unknown): void {
   }
   const reason = err instanceof Error ? err.message : String(err);
   warnOnce(
+    "failure",
     key,
     `[CALENDAR] cancelled-event scan failed for ${key}, events deleted upstream stay until it succeeds: ${reason}`,
   );

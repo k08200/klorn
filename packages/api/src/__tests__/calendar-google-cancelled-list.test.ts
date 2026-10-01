@@ -154,6 +154,77 @@ describe("GOOGLE listCancelledEvents (the separate cancellation call)", () => {
     expect(result.seriesIds).toEqual(["standup", "lunch"]);
   });
 
+  describe("the latest status of an id wins within one scan", () => {
+    const onPages = (...pages: unknown[][]) => {
+      pages.forEach((items, index) => {
+        m.eventsList.mockResolvedValueOnce({
+          data: { items, ...(index < pages.length - 1 ? { nextPageToken: `t${index}` } : {}) },
+        });
+      });
+    };
+
+    it("an event cancelled on one page and restored on a later one is not reported", async () => {
+      onPages(
+        [{ id: "g-1", status: "cancelled", updated: "2026-09-30T04:00:01.000Z" }],
+        [{ id: "g-1", status: "confirmed", updated: "2026-09-30T04:00:09.000Z" }],
+      );
+
+      const result = await session().listCancelledEvents({ updatedMin: UPDATED_MIN });
+
+      expect(result.externalIds).toEqual([]);
+      expect(result.seriesIds).toEqual([]);
+    });
+
+    it("a series cancelled on one page and restored on a later one is not reported as a series", async () => {
+      onPages(
+        [{ id: "standup", status: "cancelled", updated: "2026-09-30T04:00:01.000Z" }],
+        [{ id: "standup", status: "confirmed", updated: "2026-09-30T04:00:09.000Z" }],
+      );
+
+      const result = await session().listCancelledEvents({ updatedMin: UPDATED_MIN });
+
+      expect(result.externalIds).toEqual([]);
+      expect(result.seriesIds).toEqual([]);
+    });
+
+    it("an event restored and then cancelled again is reported", async () => {
+      onPages(
+        [{ id: "g-1", status: "confirmed", updated: "2026-09-30T04:00:01.000Z" }],
+        [{ id: "g-1", status: "cancelled", updated: "2026-09-30T04:00:09.000Z" }],
+      );
+
+      const result = await session().listCancelledEvents({ updatedMin: UPDATED_MIN });
+
+      expect(result.externalIds).toEqual(["g-1"]);
+      expect(result.seriesIds).toEqual(["g-1"]);
+    });
+
+    it("an older item that arrives later does not override a newer status", async () => {
+      onPages(
+        [{ id: "g-1", status: "cancelled", updated: "2026-09-30T04:00:09.000Z" }],
+        [{ id: "g-1", status: "confirmed", updated: "2026-09-30T04:00:01.000Z" }],
+      );
+
+      const result = await session().listCancelledEvents({ updatedMin: UPDATED_MIN });
+
+      expect(result.externalIds).toEqual(["g-1"]);
+    });
+
+    it("keeps first-seen order and judges each id on its own", async () => {
+      onPages(
+        [
+          { id: "a", status: "cancelled", updated: "2026-09-30T04:00:01.000Z" },
+          { id: "b", status: "cancelled", updated: "2026-09-30T04:00:02.000Z" },
+        ],
+        [{ id: "a", status: "confirmed", updated: "2026-09-30T04:00:03.000Z" }],
+      );
+
+      const result = await session().listCancelledEvents({ updatedMin: UPDATED_MIN });
+
+      expect(result.externalIds).toEqual(["b"]);
+    });
+  });
+
   it("follows nextPageToken and joins the pages", async () => {
     m.eventsList
       .mockResolvedValueOnce({

@@ -1606,7 +1606,10 @@ needs FA-9 and the admin guidance from F0.
       (`showDeleted`, `singleEvents`, `orderBy`, `updatedMin`),
       .../reference/events (`status`) and .../guides/recurringevents.
     - **What is removed.** The row matching (user, GOOGLE, `sourceKey`,
-      `externalId`) of every item with `status: "cancelled"`, and its open or
+      `externalId`) of every id whose FINAL status in the scan is `cancelled` (an id
+      can be listed twice in one scan, cancelled on an early page and restored
+      since; the item with the latest `updated` decides, so a restored event or
+      series is never removed), and its open or
       snoozed attention items resolved (not deleted), in one transaction per scan
       (`removeCancelledGoogleEventRows`); a primary row the previous release wrote
       with no `externalId` is matched by `googleId`. An item with no
@@ -1622,11 +1625,17 @@ needs FA-9 and the admin guidance from F0.
     - **Progress.** The next scan's start is per process (a restart widens the
       first scan back to 7 days; bounded to 5000 accounts, the least recently
       scanned forgotten). After a complete scan it is that scan's start minus 30
-      minutes. A scan reads at most 4 pages of 250; when it is cut off it resumes at
-      the last `updated` it read, with no margin, so a backlog of more than 1000
-      changes converges over consecutive syncs.
+      minutes. A scan reads at most 4 pages of 250; when it is cut off it resumes 1 s
+      before the last `updated` it read (`CANCELLED_RESUME_OVERLAP_MS`), so a backlog
+      of more than 1000 changes converges over consecutive syncs. Google does not
+      document whether `updatedMin` is inclusive, and a group of events sharing one
+      `updated` can straddle the cut; the 1 s overlap re-reads that group, and
+      removals are idempotent. If a resume would not move forward (more than one
+      cap's worth of events share the window, so the same pages would be read
+      forever) the scan steps 1 ms past the stuck point and warns once per account.
     - **Failure and noise.** A failing scan never fails the sync: one `console.warn`
-      per account until it recovers. A 4xx other than 429 is also reported to Sentry
+      per account and kind of trouble (failure, truncation, no progress) until it
+      recovers, so one never hides another. A 4xx other than 429 is also reported to Sentry
       once per process. When rows are removed, one log line per account and sync:
       `userId:sourceKey`, the removed count and the resolved-attention count, no
       titles.
@@ -1640,6 +1649,11 @@ needs FA-9 and the admin guidance from F0.
         old row's attention items stay resolved and the new row gets fresh ones.
       - A cancellation older than the lookback that no scan saw (the account was
         not syncing for over 7 days) is not removed.
+      - Ties at the resume point: when more than one cap's worth (1000) of events
+        share one `updated`, the scan steps past that timestamp and the cancelled
+        events tied there beyond the cap are never read. Accepted (a bulk operation
+        stamping one instant on over 1000 events), but check during the live
+        verification whether `updatedMin` is inclusive and how Google orders ties.
       - Not yet verified against a real Google calendar: that a deleted series is
         returned as one cancelled item and its instances as nothing, the instance
         id form, and that `orderBy: "updated"` with `showDeleted` pages as

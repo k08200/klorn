@@ -173,6 +173,44 @@ async function listEventsVia(
   return (res.data.items || []).map((item) => toProviderEvent(item, query.timeZone));
 }
 
+interface LatestItem {
+  readonly cancelled: boolean;
+  /** An event or a whole series (no recurringEventId), not an instance of one. */
+  readonly standalone: boolean;
+  readonly updatedMs: number | null;
+}
+
+/** Keep the item with the latest `updated` per id; arrival order breaks a tie or a missing time. */
+function noteLatest(
+  latest: Map<string, LatestItem>,
+  id: string,
+  item: calendar_v3.Schema$Event,
+): void {
+  const parsed = item.updated ? Date.parse(item.updated) : Number.NaN;
+  const updatedMs = Number.isFinite(parsed) ? parsed : null;
+  const previous = latest.get(id);
+  if (previous?.updatedMs != null && updatedMs !== null && updatedMs < previous.updatedMs) return;
+  latest.set(id, {
+    cancelled: item.status === "cancelled",
+    standalone: !item.recurringEventId,
+    updatedMs,
+  });
+}
+
+function cancelledResult(
+  latest: ReadonlyMap<string, LatestItem>,
+  truncated: boolean,
+  resumeUpdatedMin: string | null,
+): CancelledEventsResult {
+  const cancelled = [...latest].filter(([, item]) => item.cancelled);
+  return {
+    externalIds: cancelled.map(([id]) => id),
+    seriesIds: cancelled.filter(([, item]) => item.standalone).map(([id]) => id),
+    truncated,
+    resumeUpdatedMin,
+  };
+}
+
 /**
  * The events deleted or cancelled since `query.updatedMin` (C2b). This is its own
  * events.list, never the sync listing with showDeleted added: cancelled events
@@ -193,6 +231,10 @@ async function listEventsVia(
  *     (the events resource, "status"), and a time filter could drop one with no
  *     start. Hence `fields` asks for nothing more than id, status, updated and
  *     recurringEventId.
+ * An id can appear on more than one page (cancelled when an early page was read,
+ * restored since, so listed again under a newer `updated`): across the pages the
+ * item with the latest `updated` decides, and only an id whose final status is
+ * cancelled is reported, so a restored event (or series) is never removed.
  * Paged up to CANCELLED_SCAN_MAX_PAGES; more than that is reported as truncated
  * with where to resume, not followed. Each page waits at most
  * CANCELLED_SCAN_TIMEOUT_MS and is never retried (the next sync is the retry), so
@@ -202,8 +244,7 @@ async function listCancelledVia(
   api: calendar_v3.Calendar,
   query: CancelledEventsQuery,
 ): Promise<CancelledEventsResult> {
-  const externalIds: string[] = [];
-  const seriesIds: string[] = [];
+  const latest = new Map<string, LatestItem>();
   let lastUpdated: string | null = null;
   let pageToken: string | undefined;
   for (let page = 0; page < CANCELLED_SCAN_MAX_PAGES; page += 1) {
@@ -222,14 +263,12 @@ async function listCancelledVia(
     );
     for (const item of res.data.items ?? []) {
       if (item.updated) lastUpdated = item.updated;
-      if (item.status !== "cancelled" || !item.id) continue;
-      externalIds.push(item.id);
-      if (!item.recurringEventId) seriesIds.push(item.id);
+      if (item.id) noteLatest(latest, item.id, item);
     }
     pageToken = res.data.nextPageToken ?? undefined;
-    if (!pageToken) return { externalIds, seriesIds, truncated: false, resumeUpdatedMin: null };
+    if (!pageToken) return cancelledResult(latest, false, null);
   }
-  return { externalIds, seriesIds, truncated: true, resumeUpdatedMin: lastUpdated };
+  return cancelledResult(latest, true, lastUpdated);
 }
 
 async function createEventVia(
