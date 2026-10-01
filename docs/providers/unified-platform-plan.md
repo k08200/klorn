@@ -1874,6 +1874,10 @@ does not wait for them.
   on linked rows, which exist only while the C2 flag is on. Nothing is flipped.
 - Rollback: revert the PR. There is no schema or data step.
 
+#### Security follow-ups
+
+- Meeting links: the web and Mac clients open a `meetingLink` only when it is an https URL with no userinfo (2026-09-30); server-side normalisation of Google links (conferenceData `uri` and the description regex in `pim/meeting.ts`) follows C4, reusing its https-only helper.
+
 ### Workstream D — drive
 
 **D1 — object storage foundation** (*outline*). Depends on: FA-7. S3-compatible
