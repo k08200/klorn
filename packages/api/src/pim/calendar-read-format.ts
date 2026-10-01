@@ -81,6 +81,16 @@ export function toRowConflict(row: CalendarReadRow, timeZone: string) {
   };
 }
 
+/**
+ * A busy block without the event's title. The degraded primary-only path
+ * (`primaryBusyBlocks`) returns the raw invite title; a conflict check says WHEN
+ * the user is busy, like free/busy, and the title is external content.
+ */
+export function withoutSummary<T extends { summary?: unknown }>(conflict: T): Omit<T, "summary"> {
+  const { summary: _summary, ...rest } = conflict;
+  return rest;
+}
+
 function isLinkedConflict(entry: unknown): boolean {
   const { readOnly, calendar } = (entry ?? {}) as { readOnly?: unknown; calendar?: unknown };
   return readOnly === true || calendar === "linked";

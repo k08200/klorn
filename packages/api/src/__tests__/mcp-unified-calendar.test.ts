@@ -104,6 +104,20 @@ describe("check_calendar_conflicts through executeToolCall", () => {
     expect(m.calendarFindMany).not.toHaveBeenCalled();
   });
 
+  it("flag on: a database failure reaches the model as a constant message, never a connection string", async () => {
+    process.env.UNIFIED_CALENDAR_READ_ENABLED = "true";
+    m.calendarFindMany.mockRejectedValue(
+      new Error("Can't reach database server at postgres://app:s3cret@db.internal:5432/klorn"),
+    );
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const raw = await executeToolCall("u1", "check_calendar_conflicts", args);
+
+    expect(JSON.parse(raw)).toEqual({ error: "Could not read the synced calendar right now." });
+    expect(raw).not.toContain("s3cret");
+    spy.mockRestore();
+  });
+
   it("flag on: a row inside the window is a conflict, and free/busy is asked as well", async () => {
     process.env.UNIFIED_CALENDAR_READ_ENABLED = "true";
 

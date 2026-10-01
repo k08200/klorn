@@ -369,7 +369,10 @@ export async function gatherUserContext(userId: string): Promise<string> {
         });
         const minutesUntil = Math.round((e.startTime.getTime() - now.getTime()) / 60_000);
         const soon = minutesUntil <= 30 && minutesUntil > 0 ? " 🔴 STARTING SOON" : "";
-        const meeting = e.meetingLink ? ` [meeting: ${e.meetingLink}]` : "";
+        // The link can come out of an event's description: external content too.
+        const meeting = e.meetingLink
+          ? ` [meeting: ${wrapUntrusted(e.meetingLink, "calendar:meeting-link")}]`
+          : "";
         // An event title is external content (any invite's author wrote it).
         return `- ${wrapUntrusted(e.title, "calendar:summary")} @ ${start}${soon}${meeting}`;
       },

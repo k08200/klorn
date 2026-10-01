@@ -73,7 +73,12 @@ export function isCalendarRowVisible(
   row: { sourceAccountId?: string | null; provider?: string },
   providerEnabled: ProviderEnabledMap = CALENDAR_PROVIDER_ENABLED,
 ): boolean {
-  const gate = providerEnabled[row.provider as GatedCalendarProvider];
+  // Own keys only: a provider string such as "constructor" must not find a function
+  // on the prototype chain.
+  const gate =
+    row.provider !== undefined && Object.hasOwn(providerEnabled, row.provider)
+      ? providerEnabled[row.provider as GatedCalendarProvider]
+      : undefined;
   if (gate) return gate();
   if (!isReadOnlyCalendarRow(row)) return true;
   return linkedCalendarSyncEnabled();

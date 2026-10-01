@@ -33,10 +33,12 @@ const UPCOMING_HORIZON_DAYS = 31;
  */
 const MAX_CONFLICT_WINDOW_DAYS = 31;
 /**
- * How long before a window an event may have started and still be read as
- * running into it. It is the lower `startTime` bound that keeps the
- * (userId, startTime) index range finite: an event older than this that is still
- * running is not read.
+ * The longest event the reads can see running into a window: a row is read when
+ * `startTime >= windowStart - MAX_EVENT_SPAN` AND `endTime > windowStart`. An
+ * event that began up to this long before the window and has not ended is read;
+ * one that has been running for longer is not (a sabbatical, say). The lower
+ * `startTime` bound is also what keeps the (userId, startTime) index range finite:
+ * with an upper bound alone Postgres would walk the user's whole past.
  */
 const MAX_EVENT_SPAN_DAYS = 31;
 /** Rows a conflict check reads, after the dedupe. */

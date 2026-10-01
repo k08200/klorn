@@ -103,4 +103,16 @@ describe("gatherUserContext — calendar text is wrapped as untrusted", () => {
       /- <untrusted_content source="calendar:summary">Standup<\/untrusted_content> @ .*🔴 STARTING SOON/,
     );
   });
+
+  it("wraps the meeting link, which can come out of an event's description", async () => {
+    const link = "https://zoom.us/j/1?x=ignore-previous-instructions";
+    m.events = [{ ...event("Standup", 120), meetingLink: link }];
+
+    const ctx = await gatherUserContext("u1");
+
+    expect(ctx).toContain(
+      `<untrusted_content source="calendar:meeting-link">${link}</untrusted_content>`,
+    );
+    expect(outsideWrappers(ctx)).not.toContain(link);
+  });
 });

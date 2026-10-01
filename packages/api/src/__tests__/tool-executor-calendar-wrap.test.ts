@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({
   findFirst: vi.fn(),
   meetings: vi.fn(),
+  join: vi.fn(),
 }));
 
 vi.mock("../db.js", () => ({
@@ -33,7 +34,7 @@ vi.mock("../pim/calendar.js", () => ({
 vi.mock("../pim/meeting.js", () => ({
   MEETING_TOOLS: [],
   getUpcomingMeetings: (...args: unknown[]) => m.meetings(...args),
-  joinMeeting: vi.fn(),
+  joinMeeting: (...args: unknown[]) => m.join(...args),
   summarizeMeeting: vi.fn(),
 }));
 vi.mock("../pim/briefing.js", () => ({ BRIEFING_TOOLS: [] }));
@@ -118,8 +119,23 @@ describe("get_upcoming_meetings", () => {
     expect(result[0]).toMatchObject({
       id: "g1",
       summary: `<untrusted_content source="calendar:summary">${INJECTION}</untrusted_content>`,
-      meetingLink: "https://meet.google.com/abc",
-      attendees: ["bob@example.com"],
+      meetingLink:
+        '<untrusted_content source="calendar:meeting-link">https://meet.google.com/abc</untrusted_content>',
+      attendees: [
+        '<untrusted_content source="calendar:attendee">bob@example.com</untrusted_content>',
+      ],
+      start: "2026-10-03T05:00:00Z",
     });
+  });
+
+  it("join_meeting still works when the model copies the wrapped link", async () => {
+    m.join.mockResolvedValue({ success: true, link: "x" });
+
+    await executeToolCall("u1", "join_meeting", {
+      meeting_link:
+        '<untrusted_content source="calendar:meeting-link">https://meet.google.com/abc</untrusted_content>',
+    });
+
+    expect(m.join).toHaveBeenCalledWith("https://meet.google.com/abc");
   });
 });

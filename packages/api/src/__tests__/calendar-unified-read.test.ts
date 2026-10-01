@@ -379,6 +379,20 @@ describe("listEvents — flag on", () => {
     expect(await listEvents("u1", 10)).not.toHaveProperty("warning");
   });
 
+  it("still returns the rows it read, with the reconnect warning, when the connection check itself throws", async () => {
+    m.getAuthedClient.mockRejectedValue(new Error("db down"));
+    m.calendarFindMany.mockResolvedValue([
+      row({ id: "r1", startTime: "2026-10-02T01:00:00Z", endTime: "2026-10-02T02:00:00Z" }),
+    ]);
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const result = (await listEvents("u1", 10)) as { events: unknown[]; warning?: string };
+
+    expect(result.events).toHaveLength(1);
+    expect(result.warning).toContain(NOT_CONNECTED);
+    spy.mockRestore();
+  });
+
   it("answers an error, never a throw, when the rows cannot be read", async () => {
     m.calendarFindMany.mockRejectedValue(new Error("db down"));
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -474,6 +488,31 @@ describe("checkConflicts — flag on", () => {
       allDay: false,
       sourceAccountId: null,
     });
+  });
+
+  it("does not skip a long event that began up to a month before the window and is still running", async () => {
+    await checkConflicts("u1", START, END);
+
+    const where = (
+      m.calendarFindMany.mock.calls[0]?.[0] as {
+        where: { startTime: { gte: Date }; endTime: { gt: Date } };
+      }
+    ).where;
+    const windowStart = new Date("2026-10-03T05:00:00.000Z").getTime();
+    // startTime >= windowStart - 31 days AND endTime > windowStart: an event that
+    // started 30 days ago and has not ended is read; only one running longer than the
+    // named span (31 days) before the window is not.
+    expect(where.startTime.gte.getTime()).toBeLessThanOrEqual(windowStart - 30 * DAY_MS);
+    expect(where.endTime.gt.getTime()).toBe(windowStart);
+  });
+
+  it("list_events likewise reads an event that began a month ago and has not ended", async () => {
+    enableUnified();
+    await listEvents("u1", 10);
+
+    const where = (m.calendarFindMany.mock.calls[0]?.[0] as { where: { startTime: { gte: Date } } })
+      .where;
+    expect(where.startTime.gte.getTime()).toBeLessThanOrEqual(NOW.getTime() - 30 * DAY_MS);
   });
 
   it("reads at most 100 rows, and clamps the window it reads rows for to a month, while free/busy still gets the whole window", async () => {
@@ -657,10 +696,18 @@ describe("checkConflicts — flag on", () => {
     expect(m.calendarFindMany).not.toHaveBeenCalled();
   });
 
-  it("does not say a slot is free when the rows cannot be read", async () => {
-    m.calendarFindMany.mockRejectedValue(new Error("db down"));
+  it("does not say a slot is free when the rows cannot be read, and the message names no database detail", async () => {
+    m.calendarFindMany.mockRejectedValue(
+      new Error("Can't reach database server at postgres://app:s3cret@db.internal:5432/klorn"),
+    );
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    await expect(checkConflicts("u1", START, END)).rejects.toThrow("db down");
+    const failure = await checkConflicts("u1", START, END).catch((err: Error) => err);
+
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toBe("Could not read the synced calendar right now.");
+    expect(String(failure)).not.toContain("s3cret");
+    spy.mockRestore();
   });
 });
 
@@ -713,5 +760,37 @@ describe("tool descriptions state the freshness trade-off only while the flag is
     const tool = CALENDAR_TOOLS.find((t) => t.function.name === "list_events");
     const sent = JSON.parse(JSON.stringify(tool)) as { function: { description: string } };
     expect(sent.function.description).toContain("15 minutes");
+  });
+});
+
+describe("the primary-only free/busy fallback (a 403) names no event, flag off or on", () => {
+  const items = [
+    {
+      id: "timed",
+      summary: "Layoff planning",
+      start: { dateTime: "2026-10-03T14:00:00+09:00" },
+      end: { dateTime: "2026-10-03T15:00:00+09:00" },
+    },
+  ];
+
+  it.each([
+    ["off", false],
+    ["on", true],
+  ])("flag %s: the conflict carries an id and an interval, never the title", async (_name, on) => {
+    if (on) enableUnified();
+    m.calendarListList.mockRejectedValue({ response: { status: 403 } });
+    m.eventsList.mockResolvedValue({ data: { items } });
+
+    const result = (await checkConflicts("u1", START, END)) as {
+      hasConflicts: boolean;
+      scope: string;
+      conflicts: unknown[];
+    };
+
+    expect(result).toMatchObject({ hasConflicts: true, scope: "primary_only" });
+    expect(result.conflicts).toEqual([
+      { id: "timed", start: "2026-10-03T14:00:00+09:00", end: "2026-10-03T15:00:00+09:00" },
+    ]);
+    expect(JSON.stringify(result)).not.toContain("Layoff planning");
   });
 });

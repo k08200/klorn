@@ -283,6 +283,8 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
       ["pim/briefing.ts", /wrapEventsForPrompt\(/],
       ["pim/calendar-read-format.ts", /wrapUntrusted\(row\.title/],
     ];
+    // Modules that read calendar rows and never touch an LLM, directly or by a
+    // dynamic import.
     const NOT_LLM_FACING = [
       "agentcore/proactive-actions.ts", // notifications the user reads
       "pim/briefing-structure.ts", // the rule-based day shape
@@ -290,10 +292,32 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
       "pim/inbox-summary.ts",
       "pim/meeting-prep-pack.ts",
       "pim/team-availability.ts",
-      "routes/calendar.ts",
-      "routes/ops.ts",
       "learning/interaction-graph.ts",
     ];
+    // Modules that reach LLM-adjacent code, with the exact specifiers they use and why
+    // no calendar row text can ride along.
+    const LLM_ADJACENT: Array<[string, string[], string]> = [
+      [
+        "routes/calendar.ts",
+        ["../event-parse.js"], // dynamic import in POST /parse-event
+        "event-parse sends the user's own spoken or typed utterance to the model, never a row",
+      ],
+      [
+        "routes/ops.ts",
+        ["../llm/model-fallback.js"],
+        "snapshotUserProviderCooldowns reads in-memory provider cooldowns, no prompt",
+      ],
+    ];
+
+    /** Every static or dynamic import specifier that reaches the LLM client or its helpers. */
+    function llmSpecifiers(text: string): string[] {
+      const found = [...text.matchAll(/(?:\bfrom\s*|\bimport\s*\(\s*)["']([^"']+)["']/g)].map(
+        (match) => match[1] ?? "",
+      );
+      return found.filter(
+        (spec) => /(^|\/)llm\//.test(spec) || /(^|\/)event-parse(\.js)?$/.test(spec),
+      );
+    }
 
     it.each(
       LLM_FACING,
@@ -301,10 +325,30 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
       expect(files.find((f) => f.path === path)?.text).toMatch(pattern);
     });
 
-    it.each(NOT_LLM_FACING)("%s does not call the LLM", (path) => {
+    it.each(
+      NOT_LLM_FACING,
+    )("%s imports nothing from the LLM, statically or dynamically", (path) => {
       const text = files.find((f) => f.path === path)?.text ?? "";
       expect(text.length).toBeGreaterThan(0);
-      expect(text).not.toMatch(/createCompletion|llm\/openai\.js/);
+      expect(llmSpecifiers(text)).toEqual([]);
+      expect(text).not.toMatch(/createCompletion/);
+    });
+
+    it.each(LLM_ADJACENT)("%s reaches the LLM only through %j (%s)", (path, specifiers) => {
+      const text = files.find((f) => f.path === path)?.text ?? "";
+      expect(llmSpecifiers(text).sort()).toEqual([...specifiers].sort());
+      expect(text).not.toMatch(/createCompletion/);
+    });
+
+    it("the detector sees a dynamic import and a llm-json import (so the lists above cannot go stale silently)", () => {
+      expect(llmSpecifiers('const x = await import("../llm/llm-json.js");')).toEqual([
+        "../llm/llm-json.js",
+      ]);
+      expect(llmSpecifiers('import { a } from "../llm/model-fallback.js";')).toEqual([
+        "../llm/model-fallback.js",
+      ]);
+      expect(llmSpecifiers('import("../event-parse.js")')).toEqual(["../event-parse.js"]);
+      expect(llmSpecifiers('import { z } from "../pim/calendar-read.js";')).toEqual([]);
     });
   });
 

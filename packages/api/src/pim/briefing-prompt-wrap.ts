@@ -19,6 +19,8 @@ import type {
 } from "./briefing-signals.js";
 
 const SUMMARY = "calendar:summary";
+/** Where pim/briefing-signals.ts starts a link reason (`linkReason`). */
+const SHARED_TERMS_PREFIX = "shared terms:";
 
 type Json = Record<string, unknown>;
 
@@ -63,21 +65,33 @@ function wrapSignalTitle<T extends BriefingDeadlineSignal | BriefingUrgencySigna
   return item.source === "calendar" ? wrapTitle(item) : item;
 }
 
+/**
+ * "shared terms: a, b, c" lists words the cross-link matcher took from mail, task
+ * and calendar text. They are single words, but still external, so the line is data.
+ */
+function wrapSharedTerms(reason: string): string {
+  return reason.startsWith(SHARED_TERMS_PREFIX)
+    ? wrapUntrusted(reason, "briefing:shared-terms")
+    : reason;
+}
+
 function wrapCrossLink(link: BriefingCrossLink): BriefingCrossLink {
-  return link.event ? { ...link, event: wrapTitle(link.event) } : link;
+  const wrapped = { ...link, reason: wrapSharedTerms(link.reason) };
+  return wrapped.event ? { ...wrapped, event: wrapTitle(wrapped.event) } : wrapped;
 }
 
-/** "Prepare for: <title>" names the event inline: wrap every occurrence of the title. */
-function wrapTitleInText(text: string, title: string): string {
-  return title.length === 0 ? text : text.split(title).join(wrapUntrusted(title, SUMMARY));
-}
-
+/**
+ * An action that names a calendar event ("Prepare for: <title>") is wrapped as a
+ * whole field. The title is never searched for inside other text: a title such as
+ * "a" or "Prepare" would otherwise wrap unrelated words.
+ */
 function wrapTopAction(action: BriefingTopAction): BriefingTopAction {
-  const calendarRefs = action.refs.filter((ref) => ref.source === "calendar");
-  if (calendarRefs.length === 0) return action;
+  const reason = wrapSharedTerms(action.reason);
+  if (!action.refs.some((ref) => ref.source === "calendar")) return { ...action, reason };
   return {
     ...action,
-    action: calendarRefs.reduce((text, ref) => wrapTitleInText(text, ref.title), action.action),
+    action: wrapUntrusted(action.action, SUMMARY),
+    reason,
     refs: action.refs.map(wrapCalendarRef),
   };
 }

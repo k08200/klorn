@@ -40,7 +40,7 @@ import {
 } from "../pim/meeting.js";
 import { getTeamAvailability } from "../pim/team-availability.js";
 import { captureError } from "../sentry.js";
-import { wrapUntrusted } from "../untrusted.js";
+import { stripUntrusted, wrapUntrusted } from "../untrusted.js";
 import { calculate, generatePassword, UTILITY_TOOLS } from "../utilities.js";
 import { executeSkill, listUserSkills, SKILL_TOOLS } from "./skill-executor.js";
 import { capToolResult } from "./tool-result-budget.js";
@@ -542,11 +542,22 @@ async function executeToolCallInternal(
           meetings.map((meeting) => ({
             ...meeting,
             summary: wrapUntrusted(meeting.summary, "calendar:summary"),
+            // The link can be lifted from the description, and attendees are addresses
+            // an invite's author chose: both external content.
+            meetingLink:
+              meeting.meetingLink === null
+                ? null
+                : wrapUntrusted(meeting.meetingLink, "calendar:meeting-link"),
+            attendees: meeting.attendees.map((a) => wrapUntrusted(a, "calendar:attendee")),
           })),
         );
       }
       case "join_meeting":
-        return JSON.stringify(await joinMeeting(requireString(args.meeting_link, "meeting_link")));
+        // The link was handed to the model wrapped; a model that copies it verbatim
+        // must still get a joinable URL (the host allowlist still applies).
+        return JSON.stringify(
+          await joinMeeting(stripUntrusted(requireString(args.meeting_link, "meeting_link"))),
+        );
       case "summarize_meeting":
         return JSON.stringify(
           await summarizeMeeting(

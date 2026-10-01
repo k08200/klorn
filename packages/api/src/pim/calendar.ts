@@ -6,7 +6,12 @@ import { normalizeTimeZone } from "../time-zone.js";
 import { wrapUntrusted } from "../untrusted.js";
 import { connectLinkedCalendars, connectPrimaryCalendar } from "./calendar-providers/dispatch.js";
 import { readOverlappingTimedEvents, readUpcomingEvents } from "./calendar-read.js";
-import { mergeConflicts, toRowConflict, toToolEvent } from "./calendar-read-format.js";
+import {
+  mergeConflicts,
+  toRowConflict,
+  toToolEvent,
+  withoutSummary,
+} from "./calendar-read-format.js";
 import { handleLinkedCalendarFailure } from "./linked-calendar-failure.js";
 
 // Tests and the web layer import this from here; the implementation moved behind
@@ -29,10 +34,26 @@ async function getUserTimeZone(userId: string): Promise<string> {
 
 const LIST_NOT_CONNECTED =
   "Google Calendar not connected. Please connect your Google account first.";
+/** What the model hears when the rows cannot be read: never the database's own message. */
+const ROWS_UNREADABLE = "Could not read the synced calendar right now.";
 
 /** What the model is told when rows exist but the primary Google connection is gone. */
 const STALE_ROWS_NOTICE =
   "The events below are from Klorn's last sync and may be out of date until Google is reconnected.";
+
+/**
+ * The connection check is a local read and decrypt, but it can still throw (a
+ * database failure). It only decides whether to add a warning, so a failure must
+ * not replace rows already read: it counts as "not connected".
+ */
+async function connectPrimaryCalendarOrNull(userId: string) {
+  try {
+    return await connectPrimaryCalendar(userId);
+  } catch (err) {
+    console.warn("[CALENDAR] primary connection check failed:", err);
+    return null;
+  }
+}
 
 /**
  * `list_events` with UNIFIED_CALENDAR_READ_ENABLED on (step C7): the synced rows
@@ -48,14 +69,14 @@ async function listEventsFromRows(userId: string, maxResults: number) {
     const timeZone = await getUserTimeZone(userId);
     const [rows, session] = await Promise.all([
       readUpcomingEvents(userId, maxResults, now, timeZone),
-      connectPrimaryCalendar(userId),
+      connectPrimaryCalendarOrNull(userId),
     ]);
     if (!session && rows.length === 0) return { error: LIST_NOT_CONNECTED };
     const events = rows.map((row) => toToolEvent(row, timeZone));
     return session ? { events } : { events, warning: `${LIST_NOT_CONNECTED} ${STALE_ROWS_NOTICE}` };
   } catch (err) {
     console.error("[CALENDAR] listEvents (rows) failed:", err);
-    return { error: "Could not read the synced calendar right now." };
+    return { error: ROWS_UNREADABLE };
   }
 }
 
@@ -389,7 +410,9 @@ export async function checkConflicts(userId: string, startTime: string, endTime:
     }
     if (!isForbidden(err)) throw err;
     try {
-      primaryConflicts = await session.primaryBusyBlocks(window);
+      // The degraded path names no event (flag off or on): free/busy does not, and a
+      // title is external content the model must not be handed raw.
+      primaryConflicts = (await session.primaryBusyBlocks(window)).map(withoutSummary);
       scope = "primary_only";
     } catch (fallbackErr) {
       if (isGoogleAuthError(fallbackErr)) {
@@ -429,10 +452,18 @@ async function withRowConflicts(
   window: { timeMin: string; timeMax: string; userZone: string },
   live: readonly unknown[],
 ): Promise<unknown[]> {
-  const rows = await readOverlappingTimedEvents(userId, {
-    start: new Date(window.timeMin),
-    end: new Date(window.timeMax),
-  });
+  let rows: Awaited<ReturnType<typeof readOverlappingTimedEvents>>;
+  try {
+    rows = await readOverlappingTimedEvents(userId, {
+      start: new Date(window.timeMin),
+      end: new Date(window.timeMax),
+    });
+  } catch (err) {
+    // The tool executor hands an error's message to the model and to MCP clients:
+    // log the real one here and throw a constant (still fail-closed).
+    console.error("[CALENDAR] conflict rows read failed:", err);
+    throw new Error(ROWS_UNREADABLE);
+  }
   const rowConflicts = rows.map((row) => toRowConflict(row, window.userZone));
   return mergeConflicts(rowConflicts, rows, live);
 }

@@ -139,4 +139,16 @@ describe("per-provider kill switch", () => {
     expect(isCalendarRowVisible({ sourceAccountId: null, provider: "GOOGLE" }, device)).toBe(true);
     expect(isCalendarRowVisible({ sourceAccountId: null, provider: "LOCAL" }, device)).toBe(true);
   });
+
+  it("never reads a provider flag off the prototype chain", () => {
+    delete process.env[KEY];
+    for (const provider of ["constructor", "toString", "__proto__", "hasOwnProperty"]) {
+      expect(isCalendarRowVisible({ sourceAccountId: null, provider }, providers)).toBe(true);
+      expect(isCalendarRowVisible({ sourceAccountId: "a", provider }, providers)).toBe(false);
+    }
+    process.env[KEY] = "true";
+    expect(isCalendarRowVisible({ sourceAccountId: "a", provider: "constructor" }, providers)).toBe(
+      true,
+    );
+  });
 });

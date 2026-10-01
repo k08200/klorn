@@ -1663,14 +1663,19 @@ does not wait for them.
     local read, no Google call) so the live path's reconnect prompt survives: no
     connection and no rows is main's not-connected error; no connection with rows
     is the events plus a `warning` with the same prompt, since they are a stale
-    copy. A failed row read is an `{ error }`, never a throw.
+    copy. The connection check can itself throw (a database failure): that counts
+    as "not connected" and never replaces rows already read. A failed row read is
+    an `{ error }`, never a throw.
   - `check_calendar_conflicts`, flag on: timed rows overlapping the window (scope,
     dedupe, `provider` and `readOnly` per entry) plus the live free/busy answer the
     check always gave, primary and linked. An entry carries the interval, a
     calendar label (`primary` or `linked`), `provider` and `readOnly`, and no
     title: the answer says when the user is busy, like free/busy, and never hands
     the agent the name of a meeting on a linked (work) calendar (`create_event`'s
-    skipped echo also drops the `summary` of a linked entry). Bounds: at most 100
+    skipped echo also drops the `summary` of a linked entry). The degraded
+    primary-only path (a 403 for a token without `calendar.readonly`) no longer
+    returns the raw invite title either, flag off or on: a deliberate change to
+    main's output, as the title is external content. Bounds: at most 100
     rows (after the dedupe), a window of at most a month for the rows (free/busy
     still gets the whole window), a lower `startTime` bound of a month before it.
     Google reports busy time merged, so two adjacent meetings come back as one
@@ -1680,7 +1685,9 @@ does not wait for them.
     The not-connected and invalid-range answers are main's and come before any row
     is read. A failed row read throws, like any other unexpected failure here: the
     check never answers "free" on half the evidence, and `create_event` already
-    aborts on a throw. All-day rows are left out on purpose: free/busy treats an
+    aborts on a throw. The thrown message is a constant; the tool executor hands
+    an error's message to the model and to MCP clients, so the database's own
+    message is only logged. All-day rows are left out on purpose: free/busy treats an
     all-day marker (birthday, holiday) as free time, as `summarizeConflicts` always
     did for the primary-only fallback. Attendee free/busy (`checkAttendeeBusy`,
     `getAttendeeBusyBlocks`, `getAttendeeBusyByMember`) is untouched and stays
@@ -1742,18 +1749,32 @@ does not wait for them.
     `{}`), so a provider with no connector costs no clause. The fragment uses the
     top-level keys `sourceAccountId`, `provider` and `OR`; a caller wraps an `OR`
     of its own in `AND: [...]`. Tested with a fake provider flag.
-  - Calendar text to an LLM is wrapped. An event's title, description and location
-    are external content. Audited: `agent-context.ts` (the upcoming list and the
-    meeting hint), `briefing.ts` (the prompt's events and the calendar-sourced
-    titles in its signals, through `pim/briefing-prompt-wrap.ts`), `create_event`'s
-    "already exists" skip and `get_upcoming_meetings` (live Google, wrapped at the
-    tool boundary) now wrap with `wrapUntrusted`; `meeting-context.ts` already did.
-    The user-visible renderings (`listLocalBriefingEvents`, the rule-based
-    fallback, the notifications) keep the clean text, and the cross-link matching
-    still reads it. `proactive-actions`, `inbox-summary`, `briefing-structure`,
-    `focus-digest`, `meeting-prep-pack` and `team-availability` do not call an LLM;
-    the writers guard pins both lists. Not covered: event text that enters a
-    prompt through a path that is not a calendar reader.
+  - Calendar text to an LLM is wrapped. An event's title, description, location,
+    meeting link and attendees are external content. Audited: `agent-context.ts`
+    (the upcoming list, the link, the meeting hint), `briefing.ts` (the prompt's
+    events, and the calendar-sourced signals through `pim/briefing-prompt-wrap.ts`:
+    a calendar action is wrapped as a whole field, never found-and-replaced inside
+    other text, and the "shared terms" tokens of a link reason are wrapped),
+    `create_event`'s "already exists" skip and `get_upcoming_meetings` (live
+    Google: summary, link and attendees, wrapped at the tool boundary;
+    `join_meeting` strips the wrapper from a link the model copies back). The
+    user-visible renderings (`listLocalBriefingEvents`, the rule-based fallback,
+    the notifications) keep the clean text, and the cross-link matching still reads
+    it. The reverse direction: tags that come back out. A tool result is stored
+    and shown as text (`ActionOutbox.result`, `PendingAction.result`, the approve
+    route's response), so `action-outbox.ts` strips `<untrusted_content>` tags once,
+    where the result enters it. The briefing system prompt carries the standard
+    untrusted-content rule and forbids repeating the tags, and the briefing text
+    is stripped before it is saved and before the notification and push use it.
+    `meeting-context.ts` already wrapped. `proactive-actions`, `inbox-summary`,
+    `briefing-structure`, `focus-digest`, `meeting-prep-pack`, `team-availability`
+    and the interaction graph import nothing from the LLM, statically or
+    dynamically; `routes/calendar.ts` reaches the model only through `event-parse`
+    (the user's own utterance, no row) and `routes/ops.ts` only reads provider
+    cooldowns. The writers guard pins those lists and the import detector.
+    Not done here: the nesting escape of `wrapUntrusted` itself
+    (`</untrusted_</untrusted_content>content>`) is fixed in `untrusted.ts` in a
+    separate change.
   - Decision, the cross-calendar key: (provider, externalId) stays the dedupe key.
     An iCalUID column (expand migration plus backfill, and the sync writing it) is
     not added here: it changes the schema and the writers, and its value is for
