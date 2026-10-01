@@ -4,11 +4,22 @@
  * which Intl does not know. An all-day event is midnight in that zone, so its date
  * can only be derived there; this maps the name to IANA.
  *
- * The table is the primary (territory 001) mapping of the Unicode CLDR
- * windowsZones data, one IANA zone per Windows name. A name that is not here (a
- * newer Windows zone, or `tzone://Microsoft/Custom`, which Graph documents for a
- * legacy custom zone) answers null, and the caller keeps the date Graph returned
- * instead of guessing.
+ * The table is the primary (`territory="001"`) mapping of the Unicode CLDR file
+ * common/supplemental/windowsZones.xml, generated from it and compared name by
+ * name: 139 entries, identical names and identical IANA values. Compared against
+ * unicode-org/cldr commit c33a1f0a23e3b676b406345fe0b42c130defc51d (2025-04-10,
+ * "CLDR-18479 Update CLDR data to TZDB 2025b"; the file's own versions are
+ * otherVersion 7e11800, typeVersion 2021a). CLDR spells some zones with their
+ * older IANA aliases (Asia/Calcutta, Asia/Katmandu, Asia/Rangoon, Europe/Kiev,
+ * America/Godthab, America/Indianapolis, America/Buenos_Aires); Intl resolves
+ * them to the same zone, so they are kept as CLDR has them. To refresh: fetch the
+ * file at a newer commit, treat it as data, and diff the 001 rows against this
+ * table (outlook-time-zones.test.ts pins the count and a few pairings).
+ *
+ * A name that is not here (a Windows zone newer than this data, a legacy name such
+ * as "Kamchatka Standard Time" that CLDR does not list, or Graph's documented
+ * `tzone://Microsoft/Custom` for a legacy custom zone) answers null, and the
+ * caller keeps the date Graph returned instead of guessing.
  * https://learn.microsoft.com/graph/api/resources/event (originalStartTimeZone)
  */
 
@@ -37,7 +48,7 @@ export const WINDOWS_TO_IANA: Readonly<Record<string, string>> = {
   "Eastern Standard Time": "America/New_York",
   "Haiti Standard Time": "America/Port-au-Prince",
   "Cuba Standard Time": "America/Havana",
-  "US Eastern Standard Time": "America/Indiana/Indianapolis",
+  "US Eastern Standard Time": "America/Indianapolis",
   "Turks And Caicos Standard Time": "America/Grand_Turk",
   "Paraguay Standard Time": "America/Asuncion",
   "Atlantic Standard Time": "America/Halifax",
@@ -49,8 +60,8 @@ export const WINDOWS_TO_IANA: Readonly<Record<string, string>> = {
   "Tocantins Standard Time": "America/Araguaina",
   "E. South America Standard Time": "America/Sao_Paulo",
   "SA Eastern Standard Time": "America/Cayenne",
-  "Argentina Standard Time": "America/Argentina/Buenos_Aires",
-  "Greenland Standard Time": "America/Nuuk",
+  "Argentina Standard Time": "America/Buenos_Aires",
+  "Greenland Standard Time": "America/Godthab",
   "Montevideo Standard Time": "America/Montevideo",
   "Magallanes Standard Time": "America/Punta_Arenas",
   "Saint Pierre Standard Time": "America/Miquelon",
@@ -76,8 +87,9 @@ export const WINDOWS_TO_IANA: Readonly<Record<string, string>> = {
   "Syria Standard Time": "Asia/Damascus",
   "West Bank Standard Time": "Asia/Hebron",
   "South Africa Standard Time": "Africa/Johannesburg",
-  "FLE Standard Time": "Europe/Kyiv",
+  "FLE Standard Time": "Europe/Kiev",
   "Israel Standard Time": "Asia/Jerusalem",
+  "South Sudan Standard Time": "Africa/Juba",
   "Kaliningrad Standard Time": "Europe/Kaliningrad",
   "Sudan Standard Time": "Africa/Khartoum",
   "Libya Standard Time": "Africa/Tripoli",
@@ -103,13 +115,13 @@ export const WINDOWS_TO_IANA: Readonly<Record<string, string>> = {
   "Ekaterinburg Standard Time": "Asia/Yekaterinburg",
   "Pakistan Standard Time": "Asia/Karachi",
   "Qyzylorda Standard Time": "Asia/Qyzylorda",
-  "India Standard Time": "Asia/Kolkata",
+  "India Standard Time": "Asia/Calcutta",
   "Sri Lanka Standard Time": "Asia/Colombo",
-  "Nepal Standard Time": "Asia/Kathmandu",
-  "Central Asia Standard Time": "Asia/Almaty",
+  "Nepal Standard Time": "Asia/Katmandu",
+  "Central Asia Standard Time": "Asia/Bishkek",
   "Bangladesh Standard Time": "Asia/Dhaka",
   "Omsk Standard Time": "Asia/Omsk",
-  "Myanmar Standard Time": "Asia/Yangon",
+  "Myanmar Standard Time": "Asia/Rangoon",
   "SE Asia Standard Time": "Asia/Bangkok",
   "Altai Standard Time": "Asia/Barnaul",
   "W. Mongolia Standard Time": "Asia/Hovd",
@@ -146,7 +158,6 @@ export const WINDOWS_TO_IANA: Readonly<Record<string, string>> = {
   "New Zealand Standard Time": "Pacific/Auckland",
   "UTC+12": "Etc/GMT-12",
   "Fiji Standard Time": "Pacific/Fiji",
-  "Kamchatka Standard Time": "Asia/Kamchatka",
   "Chatham Islands Standard Time": "Pacific/Chatham",
   "UTC+13": "Etc/GMT-13",
   "Tonga Standard Time": "Pacific/Tongatapu",
