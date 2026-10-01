@@ -128,6 +128,32 @@ describe("create_event — conflict enforcement (#743)", () => {
     expect(result.conflicts).toHaveLength(1);
   });
 
+  it("echoes no title of a linked (work) calendar's event, but leaves a primary event's as it was", async () => {
+    checkConflictsMock.mockResolvedValue({
+      hasConflicts: true,
+      conflicts: [
+        {
+          start: args.start_time,
+          end: args.end_time,
+          calendar: "linked",
+          summary: "Layoff planning",
+          provider: "GOOGLE",
+          readOnly: true,
+        },
+        { id: "p1", summary: "Existing lesson", start: args.start_time, end: args.end_time },
+      ],
+      scope: "all_calendars",
+      linkedAccountsChecked: 1,
+      message: "Found 2 conflicting event(s) in this time range.",
+    });
+
+    const result = JSON.parse(await executeToolCall(userId, "create_event", args));
+
+    expect(JSON.stringify(result)).not.toContain("Layoff planning");
+    expect(result.conflicts[0]).toMatchObject({ calendar: "linked", readOnly: true });
+    expect(result.conflicts[1].summary).toBe("Existing lesson");
+  });
+
   it("books normally when the checker finds no conflicts", async () => {
     const result = JSON.parse(await executeToolCall(userId, "create_event", args));
     expect(createEventMock).toHaveBeenCalled();

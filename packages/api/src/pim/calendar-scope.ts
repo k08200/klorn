@@ -8,18 +8,85 @@
  * flag off only the primary calendar and LOCAL rows are visible, immediately, and
  * with it on nothing is added. calendar-provider-writers-guard.test.ts fails for a
  * reader that does neither.
+ *
+ * Since C7 a connector of another provider plugs its own flag into the same switch
+ * through `CALENDAR_PROVIDER_ENABLED` (C4: `OUTLOOK: outlookCalendarEnabled`): its rows are
+ * visible only while its flag is on, whatever the Google linked flag says. GOOGLE
+ * keeps LINKED_CALENDAR_SYNC_ENABLED and LOCAL is always visible. A provider with
+ * no entry has no connector, so it has no rows and adds nothing to the query.
+ *
+ * The fragment uses only the top-level keys `sourceAccountId`, `provider` and
+ * `OR`, so a caller must not put a top-level `OR` of its own next to it (wrap one
+ * in `AND: [{ OR: [...] }]`).
  */
 
+import type { Prisma } from "@prisma/client";
 import { linkedCalendarSyncEnabled } from "../config.js";
+import type { CalendarProviderName } from "./calendar-rows.js";
 
-/** A Prisma where-fragment: `{ sourceAccountId: null }` while the flag is off, else `{}`. */
-export function calendarSourceScope(): { sourceAccountId?: null } {
-  return linkedCalendarSyncEnabled() ? {} : { sourceAccountId: null };
+/** The providers whose rows have a flag of their own (every one but GOOGLE and LOCAL). */
+export type GatedCalendarProvider = Exclude<CalendarProviderName, "GOOGLE" | "LOCAL">;
+
+/** A provider to "is its connector enabled?", read at request time. */
+export type ProviderEnabledMap = Readonly<Partial<Record<GatedCalendarProvider, () => boolean>>>;
+
+/**
+ * The registered connectors. Empty until C3-C6 add theirs: a connector registers
+ * its flag with one entry here (C4: `OUTLOOK: outlookCalendarEnabled`), and every
+ * reader, the by-id check and the tests pick it up. Exported so a connector's own
+ * tests can pass a map of their own to `calendarSourceScope` and
+ * `isCalendarRowVisible`.
+ */
+export const CALENDAR_PROVIDER_ENABLED: ProviderEnabledMap = {};
+
+function registeredProviders(map: ProviderEnabledMap): GatedCalendarProvider[] {
+  return Object.keys(map) as GatedCalendarProvider[];
 }
 
-/** False for a linked row while the flag is off. */
-export function isCalendarRowVisible(row: { sourceAccountId?: string | null }): boolean {
-  return linkedCalendarSyncEnabled() || (row.sourceAccountId ?? null) === null;
+function partition(map: ProviderEnabledMap): {
+  enabled: GatedCalendarProvider[];
+  hidden: GatedCalendarProvider[];
+} {
+  const all = registeredProviders(map);
+  const enabled = all.filter((provider) => map[provider]?.() === true);
+  return { enabled, hidden: all.filter((provider) => !enabled.includes(provider)) };
+}
+
+/**
+ * A Prisma where-fragment: `{ sourceAccountId: null }` while the linked sync is
+ * off, `{}` once it is on, each narrowed or widened by the registered providers'
+ * own flags (see the header).
+ */
+export function calendarSourceScope(
+  providerEnabled: ProviderEnabledMap = CALENDAR_PROVIDER_ENABLED,
+): Prisma.CalendarEventWhereInput {
+  const { enabled, hidden } = partition(providerEnabled);
+  const hideDisabled = hidden.length > 0 ? { provider: { notIn: hidden } } : {};
+  if (linkedCalendarSyncEnabled()) return hideDisabled;
+  const primaryOnly = { sourceAccountId: null, ...hideDisabled };
+  if (enabled.length === 0) return primaryOnly;
+  return { OR: [primaryOnly, { provider: { in: enabled } }] };
+}
+
+/** False for a row the scope above hides, for a row fetched by id. */
+export function isCalendarRowVisible(
+  row: { sourceAccountId?: string | null; provider?: string },
+  providerEnabled: ProviderEnabledMap = CALENDAR_PROVIDER_ENABLED,
+): boolean {
+  // Own keys only: a provider string such as "constructor" must not find a function
+  // on the prototype chain.
+  const gate =
+    row.provider !== undefined && Object.hasOwn(providerEnabled, row.provider)
+      ? providerEnabled[row.provider as GatedCalendarProvider]
+      : undefined;
+  if (gate) return gate();
+  if (!isReadOnlyCalendarRow(row)) return true;
+  return linkedCalendarSyncEnabled();
+}
+
+/** True for a linked calendar's row: a read-only mirror, whatever reads it. */
+export function isReadOnlyCalendarRow(row: { sourceAccountId?: string | null }): boolean {
+  return (row.sourceAccountId ?? null) !== null;
 }
 
 /**
@@ -31,5 +98,5 @@ export function isCalendarRowVisible(row: { sourceAccountId?: string | null }): 
 export function withReadOnlyFlag<T extends { sourceAccountId?: string | null }>(
   row: T,
 ): T | (T & { readOnly: true }) {
-  return (row.sourceAccountId ?? null) === null ? row : { ...row, readOnly: true };
+  return isReadOnlyCalendarRow(row) ? { ...row, readOnly: true } : row;
 }

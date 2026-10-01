@@ -191,10 +191,11 @@ describe("checkConflicts — multi-calendar free/busy", () => {
     const result = await checkConflicts("user-1", START, END);
 
     expect(result).toMatchObject({ hasConflicts: true, scope: "primary_only" });
+    // The degraded path names no event: free/busy does not, and an invite's title is
+    // external content the model must not be handed raw (changed in C7).
     expect(result.conflicts).toEqual([
       {
         id: "timed",
-        summary: "1:1",
         start: "2026-06-03T14:00:00+09:00",
         end: "2026-06-03T15:00:00+09:00",
       },

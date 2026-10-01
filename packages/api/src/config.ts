@@ -224,6 +224,25 @@ export function imapMoveActionsEnabled(): boolean {
     (process.env.IMAP_MOVE_ACTIONS_ENABLED ?? "").trim().toLowerCase(),
   );
 }
+// One calendar read path — step C7 of docs/providers/unified-platform-plan.md.
+// OFF by default (repo doctrine). While unset/false `list_events` calls Google
+// live and `check_calendar_conflicts` asks Google free/busy only, exactly as
+// before: no CalendarEvent row is read for either. When on, both read the synced
+// CalendarEvent rows through pim/calendar-read.ts (the scope, the dedupe and
+// provider/readOnly per event); the conflict check still asks Google free/busy
+// as well. The price is freshness: rows are synced about every 15 minutes, and
+// an event deleted upstream can stay in them until the sync removes it.
+// REACH: the flag changes `listEvents` and `checkConflicts` for EVERY caller, not
+// only the chat and the MCP tools: the autonomous agent's list_events and
+// check_calendar_conflicts, create_event's enforced conflict check (a booking is
+// refused on a row conflict, including a stale one), and the reading pane's
+// meeting-context conflict line. Read at request time (PROVIDER_INBOX_SELECTOR_ENABLED
+// precedent) with the same lenient truthy parse, so a flip needs no redeploy.
+export function unifiedCalendarReadEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.UNIFIED_CALENDAR_READ_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
 // MCP write tools — API key permission level and the MCP write set (steps A1
 // and A2a of docs/providers/unified-platform-plan.md). OFF by default (repo
 // doctrine). It gates minting a read-write API key, using one, the MCP-only

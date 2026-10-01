@@ -29,6 +29,7 @@ import type { NotifCategory } from "../notify/notification-prefs.js";
 import { sendPushNotification } from "../notify/push.js";
 import { sendSms } from "../notify/sms.js";
 import { dedupeCalendarEvents } from "../pim/calendar-dedupe.js";
+import { countCalendarRows, readCalendarRows } from "../pim/calendar-read.js";
 import { calendarSourceScope } from "../pim/calendar-scope.js";
 import { captureError } from "../sentry.js";
 import {
@@ -39,6 +40,9 @@ import {
   normalizeTimeZone,
 } from "../time-zone.js";
 import { pushNotification } from "../websocket.js";
+
+/** How many of tomorrow's meetings the end-of-day summary names. */
+const TOMORROW_MEETINGS_LIMIT = 5;
 
 /** The user's configured IANA timezone (defaults to the product default). */
 async function getUserTimeZone(userId: string): Promise<string> {
@@ -221,9 +225,8 @@ async function checkWeeklyReview(userId: string, tz: string): Promise<void> {
     prisma.emailMessage.count({
       where: { userId, receivedAt: { gte: lastWeek } },
     }),
-    prisma.calendarEvent.count({
-      where: { userId, startTime: { gte: lastWeek, lte: now }, ...calendarSourceScope() },
-    }),
+    // An invite in the primary and a linked calendar is two rows (C2): counted once.
+    countCalendarRows({ userId, when: { startTime: { gte: lastWeek, lte: now } } }),
   ]);
 
   const message = `Last week: ${completedTasks} tasks completed, ${emailCount} emails processed, ${meetingCount} meetings attended.`;
@@ -260,11 +263,11 @@ async function checkEndOfDayReview(userId: string, tz: string): Promise<void> {
       select: { title: true },
       take: 5,
     }),
-    prisma.calendarEvent.findMany({
-      where: { userId, startTime: { gte: tomorrow, lt: tomorrowEnd }, ...calendarSourceScope() },
-      select: { title: true, startTime: true },
-      orderBy: { startTime: "asc" },
-      take: 5,
+    // Each invite once, and the cap of 5 applies after the dedupe (C7).
+    readCalendarRows({
+      userId,
+      when: { startTime: { gte: tomorrow, lt: tomorrowEnd } },
+      limit: TOMORROW_MEETINGS_LIMIT,
     }),
   ]);
 
