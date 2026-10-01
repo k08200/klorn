@@ -11,8 +11,10 @@
  * provider dispatch).
  */
 
-import { ImapFlow } from "imapflow";
+import { ImapFlow, type ImapFlowOptions } from "imapflow";
 
+import { parseGenericImapHost } from "./generic-imap-host.js";
+import { createPinnedImapClient } from "./imap-pinned-client.js";
 import { hostMatchesProvider, type ImapProviderConfig } from "./imap-providers.js";
 import { isAllowedImapHost } from "./is-allowed-imap-host.js";
 
@@ -39,10 +41,34 @@ interface ImapClientOptions {
 }
 
 /**
+ * Is this host acceptable for this provider at all? Fixed providers: the exact SSRF
+ * allowlist and the host pin. The generic provider: the host grammar, which has no
+ * list to check against (generic-imap-host.ts). Where a generic name POINTS is not
+ * decidable here: it is checked on every connection, by the pinned client.
+ */
+function hostRejection(host: string, provider: ImapProviderConfig): ImapRowRejection | null {
+  if (provider.hostPolicy === "user-supplied") {
+    return parseGenericImapHost(host).ok ? null : "host-not-allowlisted";
+  }
+  if (!isAllowedImapHost(host)) return "host-not-allowlisted";
+  return hostMatchesProvider(host, provider) ? null : "host-provider-mismatch";
+}
+
+type ClientShape = Omit<
+  ImapFlowOptions,
+  "host" | "port" | "secure" | "servername" | "tls" | "proxy"
+>;
+
+/**
  * Build the client. This is the sink every IMAP socket goes through, so the
  * SSRF allowlist and the host↔provider pin are enforced HERE as well as by the
  * callers: a host that reaches this point by any path still cannot open a
  * connection to an internal target, nor connect a NAVER row to the iCloud host.
+ *
+ * A fixed-host provider gets a plain client for its allowlisted host. A generic
+ * one (step B4) gets the pinned client: the name is resolved and checked by Klorn
+ * on every connect and the socket goes to the checked address (imap-pinned-client
+ * .ts), so this function stays synchronous for every caller.
  *
  * imapflow emits `'error'` for socket failures that arrive while no command is
  * pending; with no listener Node rethrows it as an uncaught exception, and
@@ -51,26 +77,38 @@ interface ImapClientOptions {
  */
 export function createImapClient(opts: ImapClientOptions): ImapFlow {
   const { provider } = opts;
-  if (!isAllowedImapHost(opts.host) || !hostMatchesProvider(opts.host, provider)) {
-    throw new Error(`IMAP host is not allowed for ${provider.label}`);
-  }
-  const { host, port } = parseImapHost(opts.host);
-  const client = new ImapFlow({
-    host,
-    port,
-    secure: true,
+  const shape: ClientShape = {
     auth: { user: opts.email, pass: opts.password },
     logger: false,
     socketTimeout: opts.socketTimeout,
     ...(opts.connectionTimeout !== undefined ? { connectionTimeout: opts.connectionTimeout } : {}),
     ...(opts.greetingTimeout !== undefined ? { greetingTimeout: opts.greetingTimeout } : {}),
-  });
+  };
+  const client = buildClient(opts, shape);
   const where = opts.accountId ? ` for row ${opts.accountId}` : "";
   client.on("error", (err: unknown) => {
     const message = err instanceof Error ? err.message : String(err);
     console.warn(`[${provider.logScope}] connection error${where}: ${message}`);
   });
   return client;
+}
+
+function buildClient(opts: ImapClientOptions, shape: ClientShape): ImapFlow {
+  const { provider } = opts;
+  const refused = () => new Error(`IMAP host is not allowed for ${provider.label}`);
+  if (provider.hostPolicy === "user-supplied") {
+    const parsed = parseGenericImapHost(opts.host);
+    if (!parsed.ok) throw refused();
+    return createPinnedImapClient({
+      hostname: parsed.hostname,
+      port: parsed.port,
+      options: shape,
+      logScope: provider.logScope,
+    });
+  }
+  if (hostRejection(opts.host, provider) !== null) throw refused();
+  const { host, port } = parseImapHost(opts.host);
+  return new ImapFlow({ host, port, secure: true, ...shape });
 }
 
 /** End a session whatever happened: LOGOUT, and a hard close if that fails. */
@@ -116,9 +154,7 @@ export function checkImapRow(
   if (!email || !imapHost || !imapPasswordCipher) {
     return { ok: false, reason: "missing-credentials" };
   }
-  if (!isAllowedImapHost(imapHost)) return { ok: false, reason: "host-not-allowlisted" };
-  if (!hostMatchesProvider(imapHost, provider)) {
-    return { ok: false, reason: "host-provider-mismatch" };
-  }
+  const rejection = hostRejection(imapHost, provider);
+  if (rejection !== null) return { ok: false, reason: rejection };
   return { ok: true, email, host: imapHost, passwordCipher: imapPasswordCipher };
 }

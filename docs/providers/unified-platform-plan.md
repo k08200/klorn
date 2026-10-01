@@ -1467,8 +1467,158 @@ flag OFF.
   exclusion is `canAutoSendFromMailbox` in `agentcore/auto-mode-candidates.ts`;
   widening it is that decision's change.
 
-**B4 — generic IMAP** (*outline*). Unchanged from Phase 4: the SSRF design
-passes security review first.
+**B4 — generic IMAP (user-supplied host).** Depends on: B1, B2. Design written
+2026-09-30 before any code; implementation follows it. Flag `GENERIC_IMAP_ENABLED`,
+OFF. Not flippable until the security review below signs off.
+
+- Scope. IMAP over implicit TLS on port 993 only. Read, unread and star (B1) and
+  archive, trash and undo (B2) work on a generic row only while their own flag AND
+  `GENERIC_IMAP_ENABLED` are on. **Send, drafts and reply headers are out of scope
+  (decision):** a user-supplied SMTP endpoint is a second outbound target with
+  STARTTLS-downgrade risk on ports 465/587, and it would double this design. A
+  generic row keeps the unsupported stubs for them whatever `IMAP_SEND_ENABLED`
+  says, its registry entry has `smtp: null`, and the SMTP transport refuses a
+  provider without an endpoint. Generic send is its own later step.
+- Threat model. The attacker is an authenticated, entitled user. They choose the
+  host string, control DNS for any name they own (any A/AAAA answer, TTL 0,
+  answers that change between queries) and run the IMAP/TLS server at any public
+  address. What they must not reach: Klorn's internal network, the cloud metadata
+  service, services on localhost. What they must not get: a port scanner, a
+  reachability oracle for internal or third-party hosts, a credential-stuffing
+  proxy, a way to stall the serial poll tick. Out of scope: a hostile server
+  reading the user's own mail (it is the user's own choice of host).
+- D1 Host grammar (`mail/generic-imap-host.ts`, pure, checked before any
+  network). A DNS name only. Accepted: `host` or `host:993`. Rejected: empty,
+  IP literals in any spelling (dotted, decimal, hex, bracketed IPv6, anything
+  that WHATWG IDNA folds to an address), userinfo and anything else with
+  `@ / \ ? # [ ] %` or whitespace, a second colon, any port but `993`
+  (canonical text), a trailing dot, a single label, a label outside
+  `[a-z0-9-]` or over 63 characters, a name over 253 characters, a last label
+  that is not alphabetic or `xn--`, and the internal suffixes `local`,
+  `localhost`, `internal`, `localdomain`, `lan`, `home`, `corp`, `intranet`,
+  `private`, `home.arpa`, `arpa`, `test`, `invalid`, `example`, `onion`, plus
+  `metadata.goog`. The name is folded with `url.domainToASCII` (UTS 46: case,
+  full-width forms, ideographic dots, punycode) and only the ASCII result is
+  stored (`host:993`) and used. An IDN look-alike therefore stays a different,
+  `xn--` host and can never equal its ASCII twin.
+- D2 Resolve-then-pin (`mail/pinned-address.ts`, `mail/ip-policy.ts`). Klorn
+  resolves A and AAAA itself (c-ares through `node:dns` `Resolver`, so neither
+  `/etc/hosts` nor search domains), with a 3 s per-query timeout. The name is
+  refused when it has no address OR when ANY answer is non-public. One address is
+  pinned (first IPv4, else first IPv6). Non-public means: 0/8, 10/8, 100.64/10
+  (CGNAT, Alibaba metadata), 127/8, 169.254/16 (link-local, AWS/GCP/Azure metadata),
+  172.16/12, 192.0.0/24 (Oracle metadata), 192.0.2/24, 192.88.99/24, 192.168/16,
+  198.18/15, 198.51.100/24, 203.0.113/24, 224/4, 240/4; IPv6 is default-deny:
+  only 2000::/3 passes, minus 2001::/23 (Teredo, benchmarking), 2001:db8::/32,
+  2002::/16 (6to4) and 3fff::/20, so `::`, `::1`, fc00::/7 (AWS `fd00:ec2::254`),
+  fe80::/10, ff00::/8, NAT64 `64:ff9b::/96` and every other reserved block are
+  refused. An IPv4-mapped IPv6 address (`::ffff:a.b.c.d`, dotted or hex) is judged
+  by the IPv4 address inside it.
+- D3 The socket goes to the checked address, never to the name
+  (`mail/imap-pinned-client.ts`). The client is built as before through
+  `createImapClient` (still synchronous, so the poller, the verify handshake and the
+  actions are untouched), then its `connect()` is wrapped: each call resolves the
+  name afresh, checks every answer, and only then hands imapflow
+  `tls: { host: <checked IP>, servername: <hostname>, rejectUnauthorized: true,
+  minVersion: 'TLSv1.2' }` (imapflow merges the `tls` option over `host`/`servername`
+  at connect time). The constructor `host` is `host.invalid`, which cannot resolve,
+  so if a future imapflow stopped honouring `tls.host` the connection fails closed
+  instead of resolving the name itself. Nothing is cached: every connection, poll or
+  action re-resolves and re-checks, so a name that turns private after the
+  connect-time check is caught on the next connection, and there is no window
+  between check and connect because the connection targets the checked address.
+  Certificate verification stays on with the hostname as SNI and name, so TLS still
+  authenticates the server: a self-signed server is refused by design. There is no
+  plaintext and no STARTTLS path. imapflow does not follow RFC 2221 referrals (it
+  only parses them).
+- D4 Bounded connections. The pinned client defaults `connectionTimeout` to 15 s
+  and `greetingTimeout` to 10 s (callers may tighten them; the action path does),
+  on top of the caller's `socketTimeout`. Registry `maxAccounts` for generic is 3,
+  not 10: the poll is serial, and each generic account is an arbitrary slow host.
+- D5 No oracle, no scanner. The connect route runs at most 10 attempts per user per
+  hour (`mail/generic-imap-attempts.ts`, in-process like `login-throttle.ts`; answers
+  429), on top of the route's per-IP limit (5 per 15 minutes), entitlement and the
+  beta gate. Every failure before an authenticated session, whatever the cause
+  (DNS, blocked address, refused, timeout, TLS or certificate failure, no IMAP
+  greeting), answers one message: "Could not connect securely to that server."
+  Only a rejected LOGIN, which needs a full verified TLS session and an IMAP
+  greeting first, gets its own hint, because the user has to fix the password. Host
+  syntax errors are static messages (they depend on the input, not on the
+  network). Raw library errors are never returned, only logged server-side.
+- D6 Every boundary re-checks. `checkImapRow` validates the stored host with the
+  grammar for a generic row (and with the exact allowlist and host pin for
+  Naver and iCloud, unchanged), so a row edited by hand still cannot reach
+  anything the grammar refuses; resolution is checked in D3 at every connect.
+  Folder trust for archive and trash stays SPECIAL-USE only (name lists are empty).
+- Residual risk, accepted and recorded. (a) One address is tried per connection: a
+  round-robin name with a dead first record fails that attempt (the next poll
+  retries). (b) Failure classes differ in timing (NXDOMAIN is faster than a timeout),
+  which the per-user limit bounds but does not remove. (c) The attempt limiter is
+  in-process: a restart resets it and each replica counts alone (single instance on
+  Render today). (d) Timeouts bound but do not remove the cost of a slow host in the
+  serial tick. (e) Network-level egress filtering on the host would be a second
+  layer; not verified, not assumed.
+- Verify (test-first): a table-driven validator test (every range above, mixed
+  public and private answers, rebinding between two resolutions, IP literals in
+  every spelling, userinfo and port injection, IDN folding, internal suffixes);
+  connection tests that assert the socket target is the checked address and the
+  TLS name is the hostname; a wire test with the real imapflow over real TLS
+  (throwaway certificate) proving the handshake is to the pinned address, verified
+  against the hostname, and refused for a wrong certificate.
+- Landed 2026-09-30 (branch `feat/generic-imap`, PR not yet opened), flag OFF:
+  - `GENERIC_IMAP_ENABLED` (`genericImapEnabled()` in `config.ts`, lenient parse,
+    read at request time). Off: `/api/generic-imap/*` answers the cloaked 404
+    (`darkRouteGate`), the poll never selects IMAP rows
+    (`enabledImapProviderKeys()`), and dispatch leaves a generic mailbox on the
+    unsupported stubs whatever the B1/B2 flags say. On, a generic mailbox gets B1
+    only with `IMAP_ACTIONS_ENABLED` and B2 only with `IMAP_MOVE_ACTIONS_ENABLED`.
+    `IMAP_SEND_ENABLED` changes nothing for it (no send part exists).
+  - New modules, each pure or single-purpose: `generic-imap-host.ts` (D1 grammar),
+    `ip-policy.ts` (D2 address policy, strict hand-written IPv4/IPv6 parsing),
+    `host-resolver.ts` (c-ares `Resolver`, A and AAAA, 3 s per query, 2 tries),
+    `pinned-address.ts` (refuse on no answer or any non-public answer, pin one),
+    `imap-pinned-client.ts` (D3 connect wrapper), `generic-imap-attempts.ts` (D5
+    limiter), `generic-imap-verify.ts` (D5 message collapse).
+  - Registry: `IMAP_PROVIDERS.IMAP` (`hostPolicy: "user-supplied"`, `idPrefix`
+    `generic-imap`, `maxAccounts` 3, `smtp` and `webmailUrl` null). Naver and iCloud
+    gain `hostPolicy: "fixed"` and nothing else; their client options, allowlist and
+    host pin are unchanged (asserted byte for byte). `hostMatchesProvider` for the
+    generic provider is the grammar. `checkImapRow` applies the grammar to a stored
+    generic row and the exact allowlist to the others.
+  - `createImapClient` stays synchronous: a generic provider gets the pinned client,
+    the others a plain one. `imap-sync.ts`, `imap-poll-guards.ts`,
+    `imap-uidvalidity.ts` and `email-firewall.ts` are untouched, so the B2 poll
+    (INBOX only, 50-message window, UIDVALIDITY baseline and hold) applies unchanged
+    to generic rows.
+  - Connect route: host required; grammar first (static messages, no attempt
+    counted), then the new-account cap (3), then the attempt limiter (429 with
+    `retry-after`), then verify, then upsert of the folded host and `encryptToken`
+    password. `email-undo.ts` takes the IMAP re-sync path for any IMAP-family key.
+    Archive and trash folder trust is unchanged: SPECIAL-USE only.
+  - Tests (hermetic): the table-driven validator and address-policy tests above;
+    `imap-generic-connection.test.ts` (target address, TLS name, rebinding between
+    connections, close during resolution, Naver unchanged); `imap-pinned-wire.test.ts`
+    (real imapflow, real TLS, throwaway openssl certificate: pinned address, SNI and
+    verification against the host name, wrong-name and untrusted certificates refused
+    with no LOGIN sent, blocked answers open no socket); poll, dispatch, route,
+    verify, limiter and registry tests. Mutations run and caught: skipping
+    re-resolution, accepting any one public address among mixed answers, letting the
+    library resolve the name, certificate verification off, no TLS server name,
+    CGNAT block dropped, internal-suffix check dropped, mapped-address unwrap
+    dropped, generic flag ignored, attempt counted before host validation.
+  - Not verified: no real IMAP server has been reached; behaviour rests on faked
+    imapflow and resolver plus a local TLS server on loopback. The real c-ares
+    resolver path (`host-resolver.ts`) is tested only against a mocked `Resolver`.
+    Whether Render's egress can reach IPv6 and what a real provider's LIST reports
+    are unknown. A self-signed server is refused by design.
+- Before the flip: (1) security review sign-off of this block and of the code;
+  (2) real-server tests from the Render egress: Fastmail, Daum or Kakao, and a
+  self-hosted Dovecot with a publicly trusted certificate, each for connect, poll,
+  read, star, archive and trash (record the LIST SPECIAL-USE flags each reports);
+  (3) rate-limit tuning (10 attempts per hour, 3 accounts) against what those
+  servers tolerate; (4) check which address families the egress can reach, since one
+  address is pinned per connection; (5) decide whether the host should also be
+  blocked at the network layer.
 
 **B5 — flips** (*outline*). After the Letter of Assessment. Microsoft also
 needs FA-9 and the admin guidance from F0.

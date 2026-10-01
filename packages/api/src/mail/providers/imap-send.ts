@@ -53,9 +53,9 @@ import type { ImapFlow, ListResponse } from "imapflow";
 
 import { parseImapMessageId } from "../imap-message-id.js";
 import {
+  type FixedHostImapProviderKey,
   IMAP_PROVIDERS,
   type ImapProviderConfig,
-  type ImapProviderKey,
 } from "../imap-providers.js";
 import {
   buildPlainTextMime,
@@ -440,6 +440,8 @@ async function saveDraft(
         if (!(await appendMessage(client, folder, message, DRAFT_FLAGS))) {
           return fail(`${provider.label} did not save the draft.`);
         }
+        if (provider.webmailUrl === null)
+          return fail(`${provider.label} drafts are not available.`);
         return {
           success: true,
           draftId: message.messageId,
@@ -489,7 +491,8 @@ async function neverThrow<T>(
   }
 }
 
-export function imapSendActions(providerKey: ImapProviderKey): SendSurface {
+/** Only the fixed-host providers have an SMTP endpoint; generic IMAP (step B4) has no send. */
+export function imapSendActions(providerKey: FixedHostImapProviderKey): SendSurface {
   const provider = IMAP_PROVIDERS[providerKey];
   return {
     sendEmail: (userId, to, subject, body, attachments = [], options) =>
