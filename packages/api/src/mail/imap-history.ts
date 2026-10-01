@@ -19,8 +19,10 @@
  */
 
 import { prisma } from "../db.js";
+import { captureError } from "../sentry.js";
 import { isImapMessageId } from "./imap-message-id.js";
 import { isTombstonedId } from "./imap-tombstone.js";
+import { describeFailure } from "./providers/action-failure.js";
 
 export interface HistoryCandidate {
   id: string;
@@ -75,4 +77,40 @@ export async function findReingestedHistory(
       )
       .map((row) => row.id),
   );
+}
+
+/** The callers that must survive a failed lookup; each reports its failure once. */
+export type HistoryLookupPath = "urgent-sweep" | "rule-auto-reply" | "auto-mode";
+
+const reportedLookupFailures = new Set<HistoryLookupPath>();
+
+/** Test hook: report lookup failures again. */
+export function resetHistoryLookupReports(): void {
+  reportedLookupFailures.clear();
+}
+
+/**
+ * `findReingestedHistory` for the scheduler's sweeps, which run inside one per-user
+ * try: a failed lookup must not escape it and skip the rest of the user's tick (the
+ * Gmail alert of a mixed batch included). On failure every IMAP row counts as history
+ * for this call (fail closed: no IMAP alert or unattended send this tick) and Gmail and
+ * Outlook rows go through unchanged. Reported once per process per path.
+ */
+export async function findReingestedHistoryFailClosed(
+  userId: string,
+  rows: readonly HistoryCandidate[],
+  path: HistoryLookupPath,
+): Promise<Set<string>> {
+  try {
+    return await findReingestedHistory(userId, rows);
+  } catch (err) {
+    if (!reportedLookupFailures.has(path)) {
+      reportedLookupFailures.add(path);
+      console.warn(
+        `[imap-history] reset lookup failed (${path}) for ${userId}; IMAP rows count as history this time: ${describeFailure(err)}`,
+      );
+      captureError(err, { tags: { scope: `imap-history.${path}` }, extra: { userId } });
+    }
+    return new Set(rows.filter((row) => isImapMessageId(row.gmailId)).map((row) => row.id));
+  }
 }

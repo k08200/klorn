@@ -21,7 +21,7 @@
  */
 
 import { prisma } from "../db.js";
-import { findReingestedHistory } from "../mail/imap-history.js";
+import { findReingestedHistoryFailClosed } from "../mail/imap-history.js";
 import type { AutoModeCandidate } from "./auto-mode-sweep.js";
 import { replyLedgerKeys } from "./auto-reply-ledger-keys.js";
 
@@ -83,8 +83,9 @@ export async function findAutoModeCandidates(
   const emailById = new Map(emails.map((row) => [row.id, row]));
   // Step B2b: mail an IMAP UIDVALIDITY repair re-ingested, and the re-keyed tombstones,
   // never get an unattended reply. No IMAP account is sendable today
-  // (canAutoSendFromMailbox); this holds on its own for the day one is.
-  const history = await findReingestedHistory(userId, emails);
+  // (canAutoSendFromMailbox); this holds on its own for the day one is. A failed
+  // lookup fails closed for IMAP rows and never throws out of the sweep.
+  const history = await findReingestedHistoryFailClosed(userId, emails, "auto-mode");
 
   // Mail a previous tick (or the rule sweep) already claimed, whatever became
   // of that send. The ledger keys are per gmailId.

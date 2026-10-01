@@ -63,6 +63,8 @@ vi.mock("../db.js", () => ({
   },
 }));
 
+vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
+
 import {
   AUTO_MODE_CANDIDATE_SCAN_MAX,
   canAutoSendFromMailbox,
@@ -332,5 +334,32 @@ describe("re-ingested history after an IMAP repair (B2b)", () => {
     const found = await findAutoModeCandidates(USER, SINCE, 5);
 
     expect(found.map((c) => c.id)).toEqual(["item-2"]);
+  });
+});
+
+describe("a failing reset lookup (B2b)", () => {
+  it("does not throw out of the sweep: Gmail candidates stay, IMAP ones fail closed", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.mocked(prisma.linkedInboxAccount.findMany).mockImplementation((async (args: {
+      where: { userId: string; inboxUidValidityResetAt?: unknown };
+    }) => {
+      if (args.where.inboxUidValidityResetAt) throw new Error("db down");
+      return fixtures.inboxes.filter((i) => i.userId === args.where.userId);
+    }) as never);
+    fixtures.items = [item(1), item(2)];
+    fixtures.emails = [
+      email(1, null),
+      {
+        id: "row-2",
+        gmailId: "naver-imap:me@naver.com:2",
+        userId: USER,
+        linkedInboxAccountId: "acc-google",
+        receivedAt: new Date("2026-09-30T12:00:00.000Z"),
+      },
+    ];
+
+    const found = await findAutoModeCandidates(USER, SINCE, 5);
+
+    expect(found.map((c) => c.id)).toEqual(["item-1"]);
   });
 });

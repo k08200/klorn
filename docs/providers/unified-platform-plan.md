@@ -1151,7 +1151,11 @@ production has no Naver, iCloud or IMAP account). Gmail and Outlook paths are un
     judged as usual but gets no firewall PUSH, no urgent-sweep notification (bell, push
     or SMS) and no unattended reply (the rule loop and the auto-mode candidates). The
     account lookup is one query per batch and none when no row is IMAP. Mail received
-    during the hold (at or after the first sighting) keeps its side effects.
+    during the hold (at or after the first sighting) keeps its side effects. In the
+    urgent sweep, the rule auto-reply loop and the auto-mode candidates a failed lookup
+    is caught (`findReingestedHistoryFailClosed`): every IMAP row counts as history for
+    that tick, Gmail and Outlook rows go through, the rest of the user's tick runs, and
+    the failure is reported once per process per path.
   - Actions refuse tombstoned ids: the strict parse (`parseImapMessageId`) rejects
     `...:101#uv1000.<ms>`; tests pin it for flags, trash, archive, both undos, reply
     headers and the undo re-sync. No new error code. The link route's

@@ -58,7 +58,7 @@ import {
   syncSpamLane,
 } from "./mail/email-sync.js";
 import { getLinkedInboxClients, renewExpiringGmailWatches } from "./mail/gmail.js";
-import { findReingestedHistory } from "./mail/imap-history.js";
+import { findReingestedHistoryFailClosed } from "./mail/imap-history.js";
 import { syncSentMessages } from "./mail/sent-messages.js";
 import { notifyConversationsUpdated } from "./notify/conversations-updated.js";
 import { formatUrgentEmailBody, senderName } from "./notify/notification-format.js";
@@ -1432,7 +1432,12 @@ async function runUserCycle(
           // Step B2b: mail an IMAP UIDVALIDITY repair re-ingested (and the re-keyed
           // tombstones) was already seen, maybe answered: no unattended reply, even
           // though its `auto-reply:<gmailId>` claim would be fresh. Gmail rows read nothing.
-          const autoReplyHistory = await findReingestedHistory(config.userId, newEmails);
+          // Fail-closed on a lookup failure (IMAP rows skipped), never thrown.
+          const autoReplyHistory = await findReingestedHistoryFailClosed(
+            config.userId,
+            newEmails,
+            "rule-auto-reply",
+          );
           for (const email of newEmails) {
             if (autoReplyHistory.has(email.id)) continue;
             try {
@@ -1592,7 +1597,13 @@ async function runUserCycle(
         });
         // Step B2b: tombstones and mail an IMAP UIDVALIDITY repair re-ingested are
         // history: rung once already, never again. Gmail rows read nothing more.
-        const urgentHistory = await findReingestedHistory(config.userId, urgentEmails);
+        // Fail-closed on a lookup failure (IMAP rows skipped), never thrown: the Gmail
+        // alert of a mixed batch must still go out.
+        const urgentHistory = await findReingestedHistoryFailClosed(
+          config.userId,
+          urgentEmails,
+          "urgent-sweep",
+        );
         const ringableUrgent = urgentEmails.filter((e) => !urgentHistory.has(e.id));
 
         if (ringableUrgent.length > 0) {

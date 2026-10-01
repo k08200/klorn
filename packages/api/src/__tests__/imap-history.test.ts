@@ -15,7 +15,15 @@ vi.mock("../db.js", async () => {
   return { prisma, db: prisma };
 });
 
-const { findReingestedHistory, isReingestedHistory } = await import("../mail/imap-history.js");
+vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
+
+const { captureError } = await import("../sentry.js");
+const {
+  findReingestedHistory,
+  findReingestedHistoryFailClosed,
+  isReingestedHistory,
+  resetHistoryLookupReports,
+} = await import("../mail/imap-history.js");
 
 const USER = "u1";
 const RESET_AT = new Date("2026-09-30T10:05:00Z");
@@ -97,5 +105,52 @@ describe("findReingestedHistory", () => {
 
     expect([...found].sort()).toEqual(["h1", "h2", "tomb"]);
     expect(db.reads).toEqual(["linkedInboxAccount"]);
+  });
+});
+
+/**
+ * The sweeps' variant: a failed reset lookup must not abort the user's tick. IMAP rows
+ * fail closed (history: no IMAP alert or send this tick); Gmail rows are untouched.
+ */
+describe("findReingestedHistoryFailClosed", () => {
+  beforeEach(() => {
+    resetHistoryLookupReports();
+    vi.mocked(captureError).mockClear();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  const batch = [
+    row("gmail", "18abc", BEFORE, null),
+    row("imap-live", `${IMAP}:3`, RESET_AT),
+    row("imap-history", `${IMAP}:1`, BEFORE),
+  ];
+
+  it("answers like findReingestedHistory while the lookup works", async () => {
+    const found = await findReingestedHistoryFailClosed(USER, batch, "urgent-sweep");
+
+    expect([...found]).toEqual(["imap-history"]);
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("on a failed lookup treats every IMAP row as history and leaves Gmail rows alone", async () => {
+    vi.spyOn(db.model("linkedInboxAccount"), "findMany").mockRejectedValue(new Error("db down"));
+
+    const found = await findReingestedHistoryFailClosed(USER, batch, "urgent-sweep");
+
+    expect([...found].sort()).toEqual(["imap-history", "imap-live"]);
+  });
+
+  it("reports a failure once per process per path", async () => {
+    vi.spyOn(db.model("linkedInboxAccount"), "findMany").mockRejectedValue(new Error("db down"));
+
+    await findReingestedHistoryFailClosed(USER, batch, "urgent-sweep");
+    await findReingestedHistoryFailClosed(USER, batch, "urgent-sweep");
+    await findReingestedHistoryFailClosed(USER, batch, "auto-mode");
+
+    expect(captureError).toHaveBeenCalledTimes(2);
+    const scopes = vi
+      .mocked(captureError)
+      .mock.calls.map(([, context]) => (context as { tags: { scope: string } }).tags.scope);
+    expect(scopes).toEqual(["imap-history.urgent-sweep", "imap-history.auto-mode"]);
   });
 });
