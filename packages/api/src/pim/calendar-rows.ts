@@ -147,3 +147,18 @@ export async function upsertLinkedEventRow(
     update: { ...fields },
   });
 }
+
+/**
+ * The rows of ONE Google source calendar of one user: GOOGLE rows whose source key
+ * is the linked account's (`linkedAccountId` null is the primary calendar). The
+ * `where` every removal by id (cancelled events, C2b) starts from, so the source
+ * key is derived here and nowhere else; LOCAL rows and another provider's, user's
+ * or account's rows are outside it.
+ */
+export function googleSourceScope(userId: string, linkedAccountId: string | null) {
+  return {
+    userId,
+    provider: "GOOGLE" as const,
+    sourceKey: sourceKeyFor(linkedAccountId),
+  };
+}

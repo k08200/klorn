@@ -67,6 +67,10 @@ const userStore = new Map<string, StoredUser>();
 const userByEmail = new Map<string, string>();
 let nextUserId = 1;
 
+// The background rehash is a cost-12 bcryptjs hash (pure JS): ~250 ms idle,
+// over vi.waitFor's 1 s default when the full suite runs in parallel.
+const REHASH_WAIT = { timeout: 15_000, interval: 50 };
+
 type StoredWaitlist = { email: string; status: string };
 const waitlistByEmail = new Map<string, StoredWaitlist>();
 
@@ -1033,7 +1037,7 @@ describe("POST /api/auth/login — legacy hash upgrade", () => {
     const { prisma } = await import("../db.js");
     await vi.waitFor(() => {
       expect(prisma.user.updateMany).toHaveBeenCalled();
-    });
+    }, REHASH_WAIT);
     const call = vi.mocked(prisma.user.updateMany).mock.calls.at(-1)?.[0] as {
       where: { id: string; passwordHash: string };
       data: { passwordHash: string };
@@ -1097,7 +1101,7 @@ describe("POST /api/auth/login — legacy hash upgrade", () => {
 
     await vi.waitFor(() => {
       expect(prisma.user.updateMany).toHaveBeenCalled();
-    });
+    }, REHASH_WAIT);
     // The in-flight guard admits exactly one background hash; the two other
     // logins must skip instead of stacking additional cost-12 work.
     await new Promise((r) => setTimeout(r, 100));

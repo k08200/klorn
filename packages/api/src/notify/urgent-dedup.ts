@@ -13,6 +13,8 @@
  * re-notified every sync tick for up to an hour.
  */
 
+import { isImapMessageId } from "../mail/imap-message-id.js";
+
 /** Build `"<body> [id1,id2,…]"`. Gmail message IDs are hex, never contain commas. */
 export function buildUrgentDedupMessage(body: string, gmailIds: readonly string[]): string {
   return `${body} [${gmailIds.join(",")}]`;
@@ -35,4 +37,58 @@ export function parseNotifiedGmailIds(messages: readonly string[]): Set<string> 
     }
   }
   return ids;
+}
+
+/** A prior notification as the dedupe reads it: its text and when it was written. */
+export interface NotifiedMarker {
+  message: string;
+  createdAt: Date;
+}
+
+/** Every id named in a trailing marker, with the time of the LATEST notification naming it. */
+export function latestNotifiedAt(notifications: readonly NotifiedMarker[]): Map<string, Date> {
+  const latest = new Map<string, Date>();
+  for (const { message, createdAt } of notifications) {
+    for (const id of parseNotifiedGmailIds([message])) {
+      const seen = latest.get(id);
+      if (!seen || createdAt.getTime() > seen.getTime()) latest.set(id, createdAt);
+    }
+  }
+  return latest;
+}
+
+/**
+ * Whether a marker for this email's id counts as "already notified". Gmail ids: always
+ * (the behaviour before B2b). IMAP ids name a message only under one UIDVALIDITY: after
+ * a repair re-keys the old row (step B2b), a NEW message can arrive under the same id,
+ * so a marker counts only when it was written at or after this row was created.
+ * The firewall PUSH path applies the same rule in its query (email-firewall.ts).
+ */
+export function markerCountsFor(
+  email: { gmailId: string; createdAt: Date },
+  notifiedAt: Date,
+): boolean {
+  return !isImapMessageId(email.gmailId) || notifiedAt.getTime() >= email.createdAt.getTime();
+}
+
+/** The emails no counting marker names yet, in their order. */
+export function unnotifiedEmails<T extends { gmailId: string; createdAt: Date }>(
+  emails: readonly T[],
+  notified: ReadonlyMap<string, Date>,
+): T[] {
+  return emails.filter((email) => {
+    const at = notified.get(email.gmailId);
+    return at === undefined || !markerCountsFor(email, at);
+  });
+}
+
+/**
+ * The at-most-once key of an urgent batch, named after its lead email. Gmail:
+ * `urgent:<gmailId>`, unchanged. IMAP: the row id is added, because the key is unique
+ * forever and a new message that reuses a re-keyed id (B2b) is a different email.
+ */
+export function urgentDedupeKey(lead: { id: string; gmailId: string }): string {
+  return isImapMessageId(lead.gmailId)
+    ? `urgent:${lead.gmailId}@${lead.id}`
+    : `urgent:${lead.gmailId}`;
 }

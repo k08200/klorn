@@ -1093,28 +1093,145 @@ production.
   in the set returns (NO, which the split retry handles, or OK). Smoke-test Gmail
   archive, trash and both undos, which share the routes.
 
-**B2b — non-destructive UIDVALIDITY reset** (*outline*). Depends on: B2. Required
-before anything relies on a server reset being repaired; B2 only holds (refuses
-actions, reports once). Deleting the mailbox's rows on a reset was rejected in review:
-it takes user work with it and acts on one observation. The repair keeps every row:
-- Stale rows are tombstoned by re-keying, in ONE transaction that is guarded by a
-  conditional `updateMany({where: {id, inboxUidValidity: stored}, data: {inboxUidValidity: live}})`
-  whose count must be 1, so two overlapping polls cannot both apply it.
-- The stale rows' `gmailId` gets the suffix `#uv<old>`. The strict id parse (B1) then
-  refuses them, and a NEW message that reuses an old UID gets its own row. Row ids are
-  kept, so commitments and other things keyed by the row id are unaffected.
-- Tombstoned rows are hidden explicitly from every list and count (an explicit
-  filter, not a side effect of the id), and their attention items are resolved. Nothing
-  is deleted.
-- The new value must be seen on two consecutive polls before anything changes, and at
-  most one reset is applied per account per day, so a flapping server cannot churn.
-- The PUSH dedupe marker is text of the form `[gmailId]`; a new message that reuses an
-  old UID would be suppressed by the old marker, so the marker is keyed by row id.
-- Relink: an unlink keeps the EmailMessage rows and a relink baselines from the live
-  value, so the relink path must tombstone rows of the old numbering too (or refuse to
-  baseline while rows exist under an unknown value).
-- Verify: the same fake server, a reset with a reused UID, overlapping polls, a
-  flapping value, a relink.
+**B2b — non-destructive UIDVALIDITY reset.** Depends on: B2. Landed 2026-09-30 (two
+commits: the repair, then the review follow-up), behind the IMAP flags (all OFF;
+production has no Naver, iCloud or IMAP account). Gmail and Outlook paths are unchanged.
+- The live bug it fixes: B2 held a reset (actions refused, one report) but kept
+  ingesting, so a NEW message that reused an old UID was deduped into the stale row
+  (its flags and labels written over the old row's; the new mail never got a row or a
+  triage). Deleting the mailbox's rows was rejected in review: it takes user work with
+  it and acts on one observation.
+- Landed (`mail/imap-uidvalidity-reset.ts`, `mail/imap-tombstone.ts`,
+  `mail/imap-poll-guards.ts`, `mail/imap-hold-state.ts`, `mail/imap-history.ts`,
+  migration `20261004010000_imap_uidvalidity_reset`, three nullable columns on
+  `LinkedInboxAccount`, additive, `SET LOCAL lock_timeout`):
+  - Hold stops ingest. While a mailbox is held (live value usable and different from
+    the stored one, or a reset pending, also when the live value is unusable) the poll
+    persists NOTHING for it and skips the moved-row cleanup. A live value that is
+    unusable with nothing pending ingests as before (no reset can be told).
+  - A hold does not look healthy: a held poll does not stamp `lastSyncedAt`, so the UI
+    stops saying "Synced 1m ago". It logs at most every `HELD_WARN_INTERVAL_MS` (15 min)
+    and alerts Sentry at most once per account per `HELD_ALERT_INTERVAL_MS` (24 h),
+    whatever the value, so a hold that lasts days keeps being seen. In-process state,
+    bounded to `MAX_TRACKED_ACCOUNTS` (1000) per map; a restart forgets it.
+  - Two sightings. The first poll that sees a new value stores it as
+    `inboxUidValidityPending` with `inboxUidValidityPendingAt`. A later poll seeing the
+    same value at least `MIN_SIGHTING_GAP_MS` (60 s) after it repairs. The stored value
+    seen again clears the pending one; a third value replaces it and restarts the clock;
+    an unusable value leaves it. At most one repair per account per
+    `RESET_LIMIT_WINDOW_MS` (24 h, from `inboxUidValidityResetAt`); inside it the
+    mailbox stays held.
+  - Repair, one `prisma.$transaction` (timeout 30 s): (a) claim, a conditional
+    `updateMany` on id, userId, the stored value, the pending value, the pending time
+    this poll read and "no repair in the last 24 h", moving the account to the new value
+    and setting `inboxUidValidityResetAt` to the claimed pending time (the FIRST
+    sighting, not the repair time); a count other than 1 stops there; (b) the OPEN and
+    SNOOZED AttentionItems (`source EMAIL`, `sourceId` = EmailMessage.id) of the
+    mailbox's live rows become RESOLVED, chunked by 1000; (c) one raw
+    `UPDATE "EmailMessage" SET "gmailId" = "gmailId" || '#uv<old>.<repair epoch ms>'`
+    over the rows with `starts_with("gmailId", '<prefix>:<email>:')` and
+    `"gmailId" !~ '#uv[0-9]+\.[0-9]+$'`, every value a bound parameter. The repair
+    time makes each suffix unique, so a server going A -> B -> A -> B repairs every
+    time instead of colliding with the first A tombstone; the anchored pattern skips
+    earlier tombstones and still re-keys an address that itself contains `#uv`. No
+    createdAt split is needed: nothing was ingested while held. Any failure, a unique
+    collision or a timeout included, rolls all of it back and the mailbox stays held;
+    the next attempt waits `repairBackoffMs` (10 min, doubling per consecutive
+    failure, capped at 6 h) so a repair that keeps timing out does not take a pooled
+    connection every poll. Failures log each time and alert Sentry once per account
+    per 24 h, sanitized (the database error quotes the colliding id). The repair poll
+    persists nothing; the next poll ingests the window under the new numbering. Row
+    ids are kept, so summaries, stars, reply state, attachments, candidate intakes and
+    commitments stay attached; nothing is deleted.
+  - Dating the reset from the first sighting keeps the 24 h limit and the moved-row
+    floor sound: from the first sighting every action refuses the mailbox, so Klorn
+    records no move between that instant and the repair.
+  - Re-ingested history (`imap-history.ts`): a tombstone, or an IMAP row whose account
+    has `inboxUidValidityResetAt` set and that was received before it, is stored and
+    judged as usual but gets no firewall PUSH, no urgent-sweep notification (bell, push
+    or SMS) and no unattended reply (the rule loop and the auto-mode candidates). The
+    account lookup is one query per batch and none when no row is IMAP. Mail received
+    during the hold (at or after the first sighting) keeps its side effects. In the
+    urgent sweep, the rule auto-reply loop and the auto-mode candidates a failed lookup
+    is caught (`findReingestedHistoryFailClosed`): every IMAP row counts as history for
+    that tick, Gmail and Outlook rows go through, the rest of the user's tick runs, and
+    the failure is reported once per process per path.
+  - Actions refuse tombstoned ids: the strict parse (`parseImapMessageId`) rejects
+    `...:101#uv1000.<ms>`; tests pin it for flags, trash, archive, both undos, reply
+    headers and the undo re-sync. No new error code. The link route's
+    `format: "email"` rejects `\` and `:` in an address (pinned by a route test), so an
+    address cannot forge the `<prefix>:<email>:` boundary.
+  - Moves recorded before the reset are ignored by the moved-row cleanup
+    (`recentlyMovedSourceIds(scope, notBefore = resetAt)`): their ids are old numbers
+    that a new message may now carry.
+  - PUSH dedupe, IMAP ids only (`isImapMessageId`). The `[gmailId]` marker is shared by
+    the firewall PUSH (`email-firewall.ts`) and the urgent sweep
+    (`automation-scheduler.ts`, `notify/urgent-dedup.ts`). For an IMAP id a marker counts
+    only when the notification was created at or after the row's `createdAt` (firewall:
+    the query's `createdAt` floor; sweep: `unnotifiedEmails`), and the sweep's
+    at-most-once key is `urgent:<gmailId>@<row id>` for an IMAP lead (it is unique
+    forever). Gmail ids: same query, same key, no extra read (pinned by tests).
+- Known limits:
+  - Tombstoned rows are NOT hidden from lists, counts or search (about 90 call sites,
+    out of scope by decision), so after a repair each recent message can show twice:
+    the tombstone and the re-ingested row.
+  - Each repair adds one row per message in the poll window (50) and re-judges them
+    (judge cost per repair, bounded by one repair per account per day); tombstones
+    accumulate and are never pruned.
+  - A server that alternates between two new values (B, C, B, ...) never shows the
+    same value twice in a row, so every poll restarts the pending clock and the mailbox
+    stays held, alerting once a day, until an operator acts.
+  - `receivedAt` is the Date header, which the sender controls: a mis-dated message can
+    land on the wrong side of the history cutoff (a real new message silenced, or an
+    old one pushed). New mail that arrived between the server's renumbering and the
+    first sighting (up to one poll interval) counts as history. Accepted.
+  - The 60 s gap and the 24 h window compare app-instance clocks with times other
+    instances wrote; a clock skew of 60 s or more between instances weakens the gap
+    (the claim still lets only one poll repair).
+  - Relink is not addressed: an unlink keeps the EmailMessage rows and a relink
+    baselines from the live value, so rows of an old numbering become actionable again,
+    guarded only by the envelope check.
+  - The `auto-reply:<gmailId>` claim key is not made IMAP-aware; re-ingested history
+    never reaches it, but a genuinely new message that reuses a re-keyed id whose old
+    message was answered finds the old claim and gets no unattended reply (the safe
+    direction; no IMAP unattended send is enabled today).
+- Tests: `imap-uidvalidity-reset.test.ts` (real poll, fake server, strict database with
+  rollback and LIKE-faithful `startsWith`: the named limits and every step; a held poll
+  leaves the old row byte-for-byte unchanged, creates nothing and does not stamp
+  `lastSyncedAt`; alert and log rate limits; one sighting changes nothing; the gap
+  boundary; re-key without delete; attention scope, including a `a_b` / `aXb` pair;
+  user work kept; other accounts untouched; ingest after repair and which rows are
+  history; an address containing `#uv1.2`; A -> B -> A -> B; overlapping polls; the
+  claim refusing each moved field; flap back, third value, unusable value; the 24 h
+  boundary from the first sighting; rollback, backoff and a single alert on failure;
+  a unique collision; a move recorded before the repair), `imap-history.test.ts`,
+  `automation-urgent-sweep-history.test.ts` (one real scheduler tick: the urgent sweep
+  and the rule auto-reply loop skip history and tombstones, Gmail unchanged),
+  `firewall-push-imap-dedupe.test.ts`, additions to `auto-mode-candidates.test.ts`,
+  `urgent-dedup.test.ts`, `scheduler-notification-dedup.test.ts`,
+  `routes-icloud-imap.test.ts` and the four action suites. B2 assertions that encoded
+  "a held poll still ingests" and "one alert per value" were changed in
+  `imap-moves-poll-regression.test.ts`. Mutations, each caught: every claim condition
+  dropped, the claim count relaxed, the gap set to 0 or its comparison loosened, the
+  24 h window shortened or its check removed, the re-key guard removed, loosened or
+  unanchored, the suffix without the repair time, the anchored tombstone test made a
+  substring test, the attention prefix re-check removed, hold not stopping ingest,
+  `lastSyncedAt` stamped while held, log or alert rate limits removed or keyed per
+  value, the alert interval shortened, backoff ignored, made flat or uncapped, the
+  bounded map not evicting, the reset dated from the repair, history widened to Gmail
+  ids or to `receivedAt == resetAt`, tombstones not history, the Gmail rows looked up,
+  and each side-effect guard (firewall, sweep, rule loop, auto mode) removed. The
+  re-key SQL mutations are caught because the fake database only accepts the exact
+  statement text; the anchored pattern is also checked semantically by the `#uv1.2`
+  address test.
+- Verified on a scratch Postgres 16 (not in the suite): `prisma migrate diff` from the
+  migrations to the schema is empty; the re-key statement re-keys exactly the
+  account's rows, skips earlier tombstones, re-keys a `a#uv1.2@...` mailbox, leaves
+  `aXb` alone for an `a_b` address (Prisma's `startsWith` does NOT escape `_`: it
+  matched `myXname` for `my_name`, which is why the attention step re-checks the
+  prefix in code), and a
+  collision raises 23505 (P2010) and rolls the whole transaction back.
+- Not verified: no real Naver or iCloud server.
 
 **B3 — SMTP send for IMAP providers.** Depends on: B0, B1. Landed 2026-09-30,
 flag OFF.
@@ -1575,7 +1692,89 @@ needs FA-9 and the admin guidance from F0.
     20` (it already collapses copies by title and day, but copies spend the cap).
     Matching by event id misses an invite whose two accounts got different ids;
     the iCalUID is the reliable key and needs a column. Events deleted or
-    cancelled upstream are not removed from rows, for the primary sync as before.
+    cancelled in Google are removed on the next sync once
+    `CALENDAR_CANCELLATION_SYNC_ENABLED` is on (C2b, next bullet); the Outlook and
+    CalDAV connectors must do the same.
+  - Cancelled events (C2b), behind `CALENDAR_CANCELLATION_SYNC_ENABLED` (OFF by
+    default, read at sync time like `LINKED_CALENDAR_SYNC_ENABLED`, in
+    `.env.example`). Flipping it is a founder action, after a check against a real
+    Google calendar (below). While OFF every sync makes exactly the Google calls it
+    always did and removes no row. When ON, after the upsert both Google syncs (the
+    primary and every linked account) ask Google which events were cancelled, in a
+    SEPARATE `events.list` (`CalendarSession.listCancelledEvents`): the sync's own
+    listing is unchanged, because with `showDeleted` on it cancelled events would
+    count toward `maxResults: 100` and push live events out of the window.
+    - **The request.** `showDeleted: true`, `singleEvents: false`, NO
+      `timeMin`/`timeMax`, `orderBy: "updated"`, `maxResults: 250`, `fields:
+      nextPageToken,items(id,status,updated,recurringEventId)`, `updatedMin` = the
+      later of (now - 7 days) and where this account's last scan left off, each
+      page with a 10 s timeout and no retry (`CANCELLED_SCAN_TIMEOUT_MS`). Why:
+      `updatedMin` bounds the listing to events changed since then, and "entries
+      deleted since this time will always be included regardless of showDeleted";
+      `singleEvents: false` returns single events, recurring masters and
+      exceptions, not every expanded instance, so a series cannot fill the page
+      cap; `orderBy: "updated"` is valid without `singleEvents` (only `startTime`
+      needs it) and lets a truncated scan resume; no time window because a deleted
+      event is only guaranteed to carry its `id`, so a time filter could drop one
+      with no start. A cancelled event, a cancelled series and a cancelled
+      instance of a live series each come back as one item, an instance carrying
+      `recurringEventId`. Sources:
+      developers.google.com/workspace/calendar/api/v3/reference/events/list
+      (`showDeleted`, `singleEvents`, `orderBy`, `updatedMin`),
+      .../reference/events (`status`) and .../guides/recurringevents.
+    - **What is removed.** The row matching (user, GOOGLE, `sourceKey`,
+      `externalId`) of every id whose FINAL status in the scan is `cancelled` (an id
+      can be listed twice in one scan, cancelled on an early page and restored
+      since; the item with the latest `updated` decides, so a restored event or
+      series is never removed), and its open or
+      snoozed attention items resolved (not deleted), in one transaction per scan
+      (`removeCancelledGoogleEventRows`); a primary row the previous release wrote
+      with no `externalId` is matched by `googleId`. An item with no
+      `recurringEventId` (an event or a whole series) also removes the instance
+      rows `<id>_<start>` of that series: the id is split at its LAST underscore,
+      the tail must be an instance start (`20261005T000000Z` or `20261005`), and the
+      rest must be a cancelled series id, so an unrelated id that merely shares a
+      prefix is never touched. Google documents base32hex ids (a-v, 0-9, no
+      underscore) only for ids a client supplies, and the `<id>_<start>` instance
+      form is observed behaviour, not documented, hence the strict match. A row
+      merely missing from a listing is never removed. The scan has no window, so a
+      cancelled event's row is removed wherever its date falls, past rows included.
+    - **Progress.** The next scan's start is per process (a restart widens the
+      first scan back to 7 days; bounded to 5000 accounts, the least recently
+      scanned forgotten). After a complete scan it is that scan's start minus 30
+      minutes. A scan reads at most 4 pages of 250; when it is cut off it resumes 1 s
+      before the last `updated` it read (`CANCELLED_RESUME_OVERLAP_MS`), so a backlog
+      of more than 1000 changes converges over consecutive syncs. Google does not
+      document whether `updatedMin` is inclusive, and a group of events sharing one
+      `updated` can straddle the cut; the 1 s overlap re-reads that group, and
+      removals are idempotent. If a resume would not move forward (more than one
+      cap's worth of events share the window, so the same pages would be read
+      forever) the scan steps 1 ms past the stuck point and warns once per account.
+    - **Failure and noise.** A failing scan never fails the sync: one `console.warn`
+      per account and kind of trouble (failure, truncation, no progress) until it
+      recovers, so one never hides another. A 4xx other than 429 is also reported to Sentry
+      once per process. When rows are removed, one log line per account and sync:
+      `userId:sourceKey`, the removed count and the resolved-attention count, no
+      titles.
+    - **Known limits.**
+      - "This and following" deletions truncate the series' recurrence and leave no
+        tombstone for the instances, so those instance rows stay until the series
+        is changed again or the account is unlinked. Nothing is ever removed because
+        it is absent from a listing.
+      - Restore race: if an event is restored between a scan's read and its
+        removal, its row is removed and re-created by the next sync's listing; the
+        old row's attention items stay resolved and the new row gets fresh ones.
+      - A cancellation older than the lookback that no scan saw (the account was
+        not syncing for over 7 days) is not removed.
+      - Ties at the resume point: when more than one cap's worth (1000) of events
+        share one `updated`, the scan steps past that timestamp and the cancelled
+        events tied there beyond the cap are never read. Accepted (a bulk operation
+        stamping one instant on over 1000 events), but check during the live
+        verification whether `updatedMin` is inclusive and how Google orders ties.
+      - Not yet verified against a real Google calendar: that a deleted series is
+        returned as one cancelled item and its instances as nothing, the instance
+        id form, and that `orderBy: "updated"` with `showDeleted` pages as
+        documented. Those are the checks before the flip.
   - Migration locks, measured size and runbook. `ALTER TABLE "CalendarEvent" ADD
     COLUMN` takes ACCESS EXCLUSIVE on the table and, because Prisma wraps the
     migration in one transaction, holds it until commit: reads of CalendarEvent
@@ -1935,16 +2134,21 @@ does not wait for them.
     free/busy. The descriptions also say that an event deleted or cancelled in
     Google can still be listed until the sync removes it. Two consequences to weigh
     before the flip, inherited from the sync, not new: (1) a row is not removed
-    when its event is deleted or cancelled upstream (C2, above; the C2b step that
-    removes Google cancellations is in flight), so with the flag on `list_events`
-    can still list such an event until it ends, and a booking that overlaps it is
+    when its event is deleted or cancelled upstream, except for Google once
+    `CALENDAR_CANCELLATION_SYNC_ENABLED` is on, where C2b (C2, above) removes it on
+    the next sync; the Outlook and CalDAV connectors must do the same
+    (`listCancelledEvents`, a call separate from the sync listing, so deletions
+    never spend its cap). Until then, and for a connector without it, `list_events` can
+    still list such an event until it ends, and a booking that overlaps it is
     refused by the conflict check (free/busy cannot override a row conflict); the
     Calendar page and the desktop app already show those rows today. (2) A row
     stores neither transparency nor the user's response, so a timed event marked
     free, or one the user declined, is a conflict from its row while free/busy
     would ignore it. Fixing (2) needs columns the sync fills (`transparency`,
     response status); that is not in C7. Recommendation: do not flip the flag until
-    the sync removes vanished events, and weigh (2). A founder decision.
+    the sync removes vanished events for the providers in use (for Google, C2b's
+    flag on after its live check, also a founder action), and weigh (2). A
+    founder decision.
   - The C2 gaps, closed regardless of the flag (they only matter while linked rows
     are visible): the `/api/ops` events-today count, the interaction-graph meeting
     count (it only uses `> 0` today), the weekly-review meeting count and the

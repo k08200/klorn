@@ -7,9 +7,12 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { _resetCancelledScanStateForTests } from "../pim/calendar-cancellation.js";
+import { CANCELLED_SCAN_OPTIONS, cancelledScanRequest } from "./helpers/google-cancelled-scan.js";
 
 const m = vi.hoisted(() => ({
   eventsList: vi.fn(),
+  cancelledList: vi.fn(),
   googleCalendar: vi.fn(),
   getAuthedClient: vi.fn(),
   buildLinkedCalendarClient: vi.fn(),
@@ -21,7 +24,16 @@ const m = vi.hoisted(() => ({
 
 vi.mock("googleapis", () => ({
   google: {
-    calendar: m.googleCalendar.mockImplementation(() => ({ events: { list: m.eventsList } })),
+    calendar: m.googleCalendar.mockImplementation(() => ({
+      // The cancellation scan (C2b) is a second events.list; it gets its own mock so
+      // every assertion on `eventsList` stays about the sync's own listing.
+      events: {
+        list: (args: { showDeleted?: boolean }, options?: unknown) =>
+          args.showDeleted
+            ? (m.cancelledList(args, options) ?? { data: { items: [] } })
+            : m.eventsList(args),
+      },
+    })),
   },
 }));
 
@@ -241,6 +253,57 @@ describe("scheduler calendar step — primary calendar", () => {
       orderBy: "startTime",
       maxResults: 100,
       timeZone: "Asia/Seoul",
+    });
+  });
+
+  it("makes no second Google call while the cancellation flag is off (the default)", async () => {
+    await runOneTick();
+
+    expect(m.eventsList).toHaveBeenCalledTimes(1);
+    expect(m.cancelledList).not.toHaveBeenCalled();
+    expect(m.googleCalendar).toHaveBeenCalledTimes(1);
+  });
+
+  describe("with CALENDAR_CANCELLATION_SYNC_ENABLED on (C2b)", () => {
+    beforeEach(() => {
+      process.env.CALENDAR_CANCELLATION_SYNC_ENABLED = "true";
+      _resetCancelledScanStateForTests();
+    });
+    afterEach(() => {
+      delete process.env.CALENDAR_CANCELLATION_SYNC_ENABLED;
+    });
+
+    it("also asks Google, in a second call, what was cancelled in the last 7 days", async () => {
+      await runOneTick();
+
+      expect(m.cancelledList).toHaveBeenCalledTimes(1);
+      expect(m.cancelledList).toHaveBeenCalledWith(
+        cancelledScanRequest(new Date(NOW.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()),
+        CANCELLED_SCAN_OPTIONS,
+      );
+    });
+
+    it("a failing cancellation call never fails the tick: the events are still upserted, no disconnect alert", async () => {
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      m.eventsList.mockResolvedValue({
+        data: {
+          items: [
+            {
+              id: "g-1",
+              summary: "Kickoff",
+              start: { dateTime: "2026-10-02T09:00:00+09:00" },
+              end: { dateTime: "2026-10-02T10:00:00+09:00" },
+            },
+          ],
+        },
+      });
+      m.cancelledList.mockRejectedValue(new Error("quota"));
+
+      await runOneTick();
+
+      expect(eventUpserts()).toHaveLength(1);
+      expect(callsTo("notification.create")).toBe(0);
+      expect(m.captureError).not.toHaveBeenCalled();
     });
   });
 

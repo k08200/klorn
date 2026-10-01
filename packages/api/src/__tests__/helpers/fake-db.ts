@@ -98,6 +98,14 @@ const cmp = (v: unknown): number | string | boolean =>
 
 const same = (a: unknown, b: unknown): boolean => cmp(a) === cmp(b);
 
+/** `LIKE '<prefix>%'` as a RegExp: `_` is any one character, `%` any run; the rest literal. */
+function likePrefix(prefix: string): RegExp {
+  const body = [...prefix]
+    .map((c) => (c === "_" ? "." : c === "%" ? ".*" : c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))
+    .join("");
+  return new RegExp(`^${body}`, "s");
+}
+
 /** One operator object against one value. NULL never satisfies any operator (SQL), except `not: null`. */
 function matchesOperators(actual: unknown, ops: Record<string, unknown>, where: string): boolean {
   return Object.entries(ops).every(([op, expected]) => {
@@ -117,7 +125,9 @@ function matchesOperators(actual: unknown, ops: Record<string, unknown>, where: 
       case "notIn":
         return !(expected as unknown[]).some((e) => same(actual, e));
       case "startsWith":
-        return typeof actual === "string" && actual.startsWith(expected as string);
+        // Prisma sends `startsWith` as LIKE '<value>%' WITHOUT escaping, so `_` and `%`
+        // in the value are wildcards (verified on Postgres 16 with Prisma 6.19, step B2b).
+        return typeof actual === "string" && likePrefix(expected as string).test(actual);
       case "contains":
         return (
           typeof actual === "string" &&
@@ -323,6 +333,8 @@ export interface FakeDb {
 export interface FakeDbHooks {
   /** Runs at the start of every updateMany, BEFORE its `where` is matched. */
   beforeUpdateMany?: (model: string, where: Where | undefined) => void;
+  /** Runs at the start of every raw statement, BEFORE it is emulated; may throw. */
+  beforeExecuteRaw?: () => void;
 }
 
 export function createFakeDb(seed: Record<string, Row[]>, hooks: FakeDbHooks = {}): FakeDb {
@@ -469,21 +481,110 @@ export function createFakeDb(seed: Record<string, Row[]>, hooks: FakeDbHooks = {
   };
 }
 
+export interface FakeClientOptions {
+  /**
+   * An interactive `$transaction` that throws restores every table to what it was
+   * when the transaction began, like a real rollback. Off by default: existing tests
+   * were written against "operations run as they are issued". Not isolation: a
+   * concurrent writer's changes made meanwhile are rolled back with it.
+   */
+  rollbackOnError?: boolean;
+}
+
+/**
+ * The one raw statement the code under test may issue: the B2b re-key of
+ * mail/imap-tombstone.ts. The fake owns its own copy of the SQL text on purpose: a
+ * change to the production statement (a dropped clause, another operator) no longer
+ * matches and throws, so the tests fail instead of emulating the old semantics.
+ * Whitespace is normalised; parameters are `$n`, in this order: suffix, now, userId,
+ * prefix, pattern (a POSIX regex for `!~`, emulated with a JavaScript RegExp: the
+ * tombstone pattern means the same in both).
+ */
+const REKEY_SQL =
+  'UPDATE "EmailMessage" SET "gmailId" = "gmailId" || $1::text, "updatedAt" = $2 ' +
+  'WHERE "userId" = $3 AND starts_with("gmailId", $4::text) AND "gmailId" !~ $5::text';
+
+const normalisedSql = (text: string): string => text.replace(/\s+/g, " ").trim();
+
+/** Applies the re-key with the semantics the SQL has, one unique key checked first. */
+async function executeRaw(db: FakeDb, hooks: FakeDbHooks, statement: unknown): Promise<number> {
+  hooks.beforeExecuteRaw?.();
+  const given = statement as { text?: string; values?: unknown[] };
+  if (
+    typeof given.text !== "string" ||
+    normalisedSql(given.text) !== REKEY_SQL ||
+    !Array.isArray(given.values)
+  ) {
+    throw new Error(`fake-db: unsupported raw statement: ${String(given.text)}`);
+  }
+  const [suffix, now, userId, prefix, pattern] = given.values as [
+    string,
+    Date,
+    string,
+    string,
+    string,
+  ];
+  const skip = new RegExp(pattern);
+  const rows = db.tables.emailMessage ?? [];
+  const targets = rows.filter(
+    (r) =>
+      r.userId === userId &&
+      typeof r.gmailId === "string" &&
+      r.gmailId.startsWith(prefix) &&
+      !skip.test(r.gmailId),
+  );
+  for (const r of targets) {
+    const next = `${r.gmailId as string}${suffix}`;
+    const clash = rows.some((o) => o !== r && o.userId === userId && o.gmailId === next);
+    // Worded like Postgres (23505), which quotes the colliding key.
+    if (clash) throw new Error(`Key ("userId", "gmailId")=(${userId}, ${next}) already exists.`);
+  }
+  db.writes.$executeRaw = [
+    ...(db.writes.$executeRaw ?? []),
+    { op: "executeRaw", data: { userId, prefix, suffix, count: targets.length } },
+  ];
+  for (const r of targets) {
+    r.gmailId = `${r.gmailId as string}${suffix}`;
+    r.updatedAt = now;
+  }
+  return targets.length;
+}
+
 /**
  * A Prisma-client stand-in for `vi.mock("../db.js")`: model accessors plus
  * `$transaction`, in both Prisma forms (batch array of operations, interactive
- * callback). Operations run as they are issued, so this simulates the batch's
- * ordering and failure propagation, not isolation or rollback.
+ * callback), and `$executeRaw` for the statements `executeRaw` knows. Operations run
+ * as they are issued, so this simulates the batch's ordering and failure
+ * propagation, not isolation; rollback only with `rollbackOnError`.
  */
-export function fakePrismaClient(getDb: () => FakeDb): unknown {
+export function fakePrismaClient(
+  getDb: () => FakeDb,
+  options: FakeClientOptions = {},
+  hooks: FakeDbHooks = {},
+): unknown {
   const client: unknown = new Proxy(
     {},
     {
       get(_t, prop) {
         if (typeof prop !== "string" || prop === "then") return undefined;
+        if (prop === "$executeRaw") {
+          return (statement: unknown) => executeRaw(getDb(), hooks, statement);
+        }
         if (prop === "$transaction") {
-          return async (arg: unknown) =>
-            Array.isArray(arg) ? Promise.all(arg) : (arg as (tx: unknown) => unknown)(client);
+          return async (arg: unknown) => {
+            if (Array.isArray(arg)) return Promise.all(arg);
+            const run = arg as (tx: unknown) => unknown;
+            if (!options.rollbackOnError) return run(client);
+            const db = getDb();
+            const before = structuredClone(db.tables);
+            try {
+              return await run(client);
+            } catch (err) {
+              for (const name of Object.keys(db.tables)) delete db.tables[name];
+              Object.assign(db.tables, before);
+              throw err;
+            }
+          };
         }
         return MODELS.has(prop) ? getDb().model(prop) : undefined;
       },

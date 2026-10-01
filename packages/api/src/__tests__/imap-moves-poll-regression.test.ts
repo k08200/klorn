@@ -2,7 +2,9 @@
  * Phase 0b regression shape, for the B2 move actions: an action reports success,
  * the next poll runs, and the message reappears, is duplicated or is lost. Plus the
  * UIDVALIDITY half of step B2: the poller records the INBOX value, and a server
- * that renumbers the mailbox cannot make a stale row act on the wrong message.
+ * that renumbers the mailbox cannot make a stale row act on the wrong message. Since
+ * B2b a held mailbox persists nothing; the repair itself is pinned in
+ * imap-uidvalidity-reset.test.ts.
  *
  * Nothing in the chain is stubbed except the network edge and the judge:
  *   - the REAL provider actions through the REAL dispatch (flag ON),
@@ -152,7 +154,7 @@ describe("the poller records the INBOX UIDVALIDITY", () => {
   });
 });
 
-describe("a server that renumbers the mailbox: the poller holds, it does not repair", () => {
+describe("a server that renumbers the mailbox: the poller holds and persists nothing", () => {
   const writesTo = (model: string) => db.writes[model] ?? [];
   const storedValueWrites = () =>
     writesTo("linkedInboxAccount").filter((w) => w.data && "inboxUidValidity" in w.data);
@@ -195,18 +197,16 @@ describe("a server that renumbers the mailbox: the poller holds, it does not rep
     expect(localIds(db)).toEqual(expect.arrayContaining([idOf(NAVER, 101), idOf(NAVER, 102)]));
   });
 
-  it("keeps polling exactly as main does: the new window is ingested under its new numbers", async () => {
+  it("does not ingest the renumbered window while held (B2b; B2 still ingested it)", async () => {
     await ingest(2);
     fakeServer.renumber("INBOX", 1001n);
     const before = creates();
 
     const result = await poll();
 
-    expect(result).toMatchObject({ fetched: 2, inserted: 2, errors: 0 });
-    expect(creates()).toBe(before + 2);
-    expect(localIds(db)).toEqual(
-      [idOf(NAVER, 1), idOf(NAVER, 2), idOf(NAVER, 101), idOf(NAVER, 102)].sort(),
-    );
+    expect(result).toEqual({ fetched: 0, inserted: 0, classified: 0, errors: 0 });
+    expect(creates()).toBe(before);
+    expect(localIds(db)).toEqual([idOf(NAVER, 101), idOf(NAVER, 102)]);
   });
 
   it("reports the reset once per account and value across repeated polls, never a message id", async () => {
@@ -229,7 +229,7 @@ describe("a server that renumbers the mailbox: the poller holds, it does not rep
     expect(String(lines[0][0])).toContain(NAVER.rowId);
   });
 
-  it("reports again when the server reports yet another value", async () => {
+  it("does not alert again for another value within the day (B2b: once per account per 24 h)", async () => {
     await ingest(1);
     fakeServer.renumber("INBOX", 1001n);
     await poll();
@@ -238,7 +238,9 @@ describe("a server that renumbers the mailbox: the poller holds, it does not rep
     await poll();
     await poll();
 
-    expect(captureError).toHaveBeenCalledTimes(2);
+    // B2 alerted once per value (2 here); the 24 h re-alert is pinned in
+    // imap-uidvalidity-reset.test.ts.
+    expect(captureError).toHaveBeenCalledTimes(1);
   });
 
   it("does not report a mailbox whose value is unchanged, or one being baselined", async () => {
@@ -256,7 +258,8 @@ describe("a server that renumbers the mailbox: the poller holds, it does not rep
 
     const before = await actions().trash(USER, idOf(NAVER, 101), NAVER.rowId);
     await poll();
-    const after = await actions().trash(USER, idOf(NAVER, 1), NAVER.rowId);
+    // B2b: the held poll ingested nothing, so the after-poll action targets a stored row.
+    const after = await actions().trash(USER, idOf(NAVER, 102), NAVER.rowId);
 
     expect(before).toMatchObject({ error: expect.any(String) });
     expect(after).toMatchObject({ error: expect.any(String) });
@@ -264,7 +267,7 @@ describe("a server that renumbers the mailbox: the poller holds, it does not rep
     expect(fakeServer.uidsIn("Trash")).toEqual([]);
   });
 
-  it("does not let a just-recorded move delete a new message that reuses its UID", async () => {
+  it("does not let a just-recorded move delete anything while held, and keeps the record", async () => {
     const [a] = await ingest(1);
     await actions().trash(USER, a, NAVER.rowId);
     // The mailbox is rebuilt right after: UID 101 now belongs to a different message.
@@ -272,24 +275,37 @@ describe("a server that renumbers the mailbox: the poller holds, it does not rep
     inbox.uidValidity = 1001n;
     inbox.nextUid = 101;
     fakeServer.add("INBOX", { uid: 101, subject: "Brand new after the rebuild" });
+    const writesBefore = writesTo("emailMessage").length;
 
     await poll();
 
-    expect(rowFor(idOf(NAVER, 101))).toMatchObject({ subject: "Brand new after the rebuild" });
+    // B2b: held, so the new message is not ingested yet (B2 ingested it here). The
+    // repair and the ingest after it are in imap-uidvalidity-reset.test.ts.
+    expect(rowFor(idOf(NAVER, 101))).toBeUndefined();
+    expect(writesTo("emailMessage")).toHaveLength(writesBefore);
+    expect(db.tables.imapMovedMessage).toHaveLength(1);
   });
 
-  it("characterises the collision main already has: a reused UID is deduped against the stale row (B2b)", async () => {
+  it("no longer dedupes a reused UID into the stale row: a held poll leaves the row untouched (B2b)", async () => {
     await ingest(1);
+    const before = structuredClone(db.tables.emailMessage);
+    const writesBefore = writesTo("emailMessage").length;
     const inbox = fakeServer.folder("INBOX");
     inbox.messages.clear();
     inbox.uidValidity = 1001n;
     inbox.nextUid = 101;
-    fakeServer.add("INBOX", { uid: 101, subject: "A different message" });
+    fakeServer.add("INBOX", {
+      uid: 101,
+      subject: "A different message",
+      flags: new Set(["\\Seen", "\\Flagged"]),
+    });
 
     await poll();
 
-    // Same as main: the key exists, so the new message is not a new row.
-    expect(rowFor(idOf(NAVER, 101))).toMatchObject({ subject: "Mail 101" });
+    // On main (B2) the new message was persisted INTO the stale row: its flags and
+    // labels overwrote the old row's. Now nothing is written at all.
+    expect(db.tables.emailMessage).toEqual(before);
+    expect(writesTo("emailMessage")).toHaveLength(writesBefore);
   });
 
   it("guards a stale row by the envelope even when the stored value was set to the live one", async () => {
@@ -441,6 +457,21 @@ describe("undo, then the poll", () => {
 
     expect(synced).toBeNull();
     expect(creates()).toBe(1);
+  });
+
+  it("re-syncing refuses a tombstoned id (B2b), before connecting", async () => {
+    await ingest(1);
+    fakeServer.logins = 0;
+
+    const synced = await syncImapMessageForUser(
+      USER,
+      IMAP_PROVIDERS.NAVER,
+      NAVER.rowId,
+      `${idOf(NAVER, 101)}#uv1000`,
+    );
+
+    expect(synced).toBeNull();
+    expect(fakeServer.logins).toBe(0);
   });
 
   it("re-syncing refuses an id that is not this mailbox's, before connecting", async () => {
