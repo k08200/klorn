@@ -26,6 +26,7 @@ import {
   GENERIC,
   idOf,
   localRowFor,
+  type Mailbox,
   NAVER,
   USER,
 } from "./helpers/imap-move-harness.js";
@@ -438,39 +439,66 @@ async function stubOwnerLookup(firstCall?: Promise<void>): Promise<{ calls: () =
   return { calls: () => calls };
 }
 
-describe("the scheduler's in-flight guard and the hold work together", () => {
-  it("a held generic mailbox is not stamped by any tick, and an overlapping tick is skipped", async () => {
-    await ingest(1);
-    const synced = lastSyncedAt();
-    fakeServer.renumber("INBOX", 1001n);
+describe("the scheduler's per-account guard and the hold work together", () => {
+  /** A second generic mailbox of the same user, on another host. */
+  const GENERIC_B: Mailbox = {
+    ...GENERIC,
+    rowId: "row-4",
+    email: "you@example.org",
+    host: "imap.example.org:993",
+  };
 
-    // Hold the first tick open at its first database read, start two more meanwhile.
+  it("a stuck account does not block the next tick, and a held generic mailbox is stamped by no tick", async () => {
+    arm();
+    db.tables.linkedInboxAccount = [accountRow(GENERIC), accountRow(GENERIC_B)];
+    await ingest(1); // both accounts ingest and are stamped at T0
+    const account = (id: string) =>
+      (db.tables.linkedInboxAccount ?? []).find((row) => row.id === id) as Row;
+    const stamp = (id: string) => (account(id).lastSyncedAt as Date).getTime();
+    const stampedA = stamp(GENERIC.rowId);
+    const stampedB = stamp(GENERIC_B.rowId);
+    fakeServer.renumber("INBOX", 1001n); // both mailboxes are now under a new UIDVALIDITY
+    await stubOwnerLookup();
+
+    // The first tick sticks on account A's connection (its DNS answer never comes).
     let release: () => void = () => {};
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const owners = await stubOwnerLookup(gate);
-
+    vi.mocked(resolveHostAddresses).mockImplementationOnce(
+      () =>
+        new Promise<string[]>((resolve) => {
+          release = () => resolve(["93.184.216.34"]);
+        }),
+    );
     advance(POLL_INTERVAL);
+    const loginsBefore = fakeServer.logins;
     const first = runImapTick();
     await flush();
-    await runImapTick(); // skipped: the first is still running
-    await runImapTick(); // skipped
-    expect(owners.calls()).toBe(1);
+    expect(fakeServer.logins).toBe(loginsBefore); // stuck before any login
+
+    // The next tick skips A (still in flight) and polls B: the stuck account blocked nobody.
+    advance(POLL_INTERVAL);
+    await runImapTick();
+    expect(fakeServer.logins).toBe(loginsBefore + 1); // B only
+    expect(stamp(GENERIC_B.rowId)).toBe(stampedB); // held (a sighting): not a sync
+    expect(account(GENERIC_B.rowId).inboxUidValidityPending).toBe("1001");
+    expect(account(GENERIC.rowId).inboxUidValidityPending ?? null).toBeNull(); // A not reached yet
 
     release();
     await first;
-    expect(lastSyncedAt()).toBe(synced); // sighting: held, not stamped
+    expect(stamp(GENERIC.rowId)).toBe(stampedA); // A's poll is held as well: no stamp
+    expect(account(GENERIC.rowId).inboxUidValidityPending).toBe("1001");
 
+    // Another tick: second sightings repair both; still held, still not stamped.
     advance(POLL_INTERVAL);
-    await runImapTick(); // the guard is free again: a second sighting, repair, still held
-    expect(owners.calls()).toBe(2);
-    expect(lastSyncedAt()).toBe(synced);
-    expect(account().inboxUidValidity).toBe("1001"); // the repair did run
+    await runImapTick();
+    expect(stamp(GENERIC.rowId)).toBe(stampedA);
+    expect(stamp(GENERIC_B.rowId)).toBe(stampedB);
+    expect(account(GENERIC.rowId).inboxUidValidity).toBe("1001"); // the repair did run
 
+    // Ingesting under the new value is a sync again.
     advance(POLL_INTERVAL);
-    await runImapTick(); // ingests under the new value: now it is a sync
-    expect(lastSyncedAt()).toBe(Date.now());
+    await runImapTick();
+    expect(stamp(GENERIC.rowId)).toBe(Date.now());
+    expect(stamp(GENERIC_B.rowId)).toBe(Date.now());
   });
 
   it("with GENERIC_IMAP_ENABLED off the tick never selects the generic mailbox", async () => {

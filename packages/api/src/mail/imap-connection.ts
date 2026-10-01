@@ -16,10 +16,19 @@ import { ImapFlow, type ImapFlowOptions } from "imapflow";
 import { parseGenericImapHost } from "./generic-imap-host.js";
 import { createPinnedImapClient } from "./imap-pinned-client.js";
 import { hostMatchesProvider, type ImapProviderConfig } from "./imap-providers.js";
+import { limitSessionTime } from "./imap-session-deadline.js";
 import { isAllowedImapHost } from "./is-allowed-imap-host.js";
 import { sanitizeLogText } from "./log-text.js";
 
 const DEFAULT_IMAPS_PORT = 993;
+
+/**
+ * The longest one session with a fixed-host provider (Naver, iCloud) may last, from the
+ * start of connect(): five minutes. Their only other bound is a 30 s INACTIVITY timer
+ * that any byte resets, so a server that kept answering could hold a poll forever. Far
+ * above any real poll or action, so nothing that works today meets it.
+ */
+export const FIXED_HOST_SESSION_DEADLINE_MS = 5 * 60_000;
 
 export function parseImapHost(host: string): { host: string; port: number } {
   const [h, p] = host.split(":");
@@ -111,7 +120,10 @@ function buildClient(opts: ImapClientOptions, shape: ClientShape): ImapFlow {
   }
   if (hostRejection(opts.host, provider) !== null) throw refused();
   const { host, port } = parseImapHost(opts.host);
-  return new ImapFlow({ host, port, secure: true, ...shape });
+  return limitSessionTime(
+    new ImapFlow({ host, port, secure: true, ...shape }),
+    FIXED_HOST_SESSION_DEADLINE_MS,
+  );
 }
 
 /** End a session whatever happened: LOGOUT, and a hard close if that fails. */

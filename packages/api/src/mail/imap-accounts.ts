@@ -16,6 +16,7 @@ import { prisma } from "../db.js";
 import { captureError } from "../sentry.js";
 import { checkImapRow } from "./imap-connection.js";
 import { parseImapMessageId } from "./imap-message-id.js";
+import { clearPollBackoff, isPollBackedOff, notePollBackoff } from "./imap-poll-backoff.js";
 import {
   clearPollFailure,
   pollFailureKind,
@@ -38,21 +39,31 @@ export interface ImapSyncAggregate {
   errors: number;
 }
 
+/**
+ * The accounts whose poll is running right now (every provider). A tick that finds an
+ * account here skips it: the same mailbox is never logged into twice at once, and a
+ * stuck account blocks neither the other accounts nor the next tick.
+ */
+const pollsInFlight = new Set<string>();
+
 /** The credential the shared auth cooldown is keyed by: the same string the actions use. */
 const credentialKeyOf = (rowId: string, passwordCipher: string): string =>
   `${rowId}:${passwordCipher}`;
 
 /**
- * A generic row stays out of the poll while its login is known to be rejected: the
- * durable `needsReconnect` flag (set below, cleared by a successful reconnect) or
- * the in-process cooldown it shares with the actions. A revoked password is then
- * not sent to the host again on every tick.
+ * A generic row stays out of the poll while its login is known to be rejected (the
+ * durable `needsReconnect` flag set below and cleared by a successful reconnect, or the
+ * in-process cooldown it shares with the actions: a revoked password is not sent to
+ * the host again on every tick) and while it is backed off after failing in another way
+ * (imap-poll-backoff.ts: a stalling host costs a serial tick up to ~105 s).
  */
-function isPausedForLogin(
-  row: { needsReconnect?: boolean | null },
+function isPausedForPolling(
+  row: { id: string; needsReconnect?: boolean | null },
   credentialKey: string,
 ): boolean {
-  return row.needsReconnect === true || isCredentialCoolingDown(credentialKey);
+  return (
+    row.needsReconnect === true || isCredentialCoolingDown(credentialKey) || isPollBackedOff(row.id)
+  );
 }
 
 /**
@@ -67,17 +78,23 @@ async function handleGenericPollFailure(
     userId: string;
     rowId: string;
     credentialKey: string;
+    /** The stored cipher the poll STARTED with: a flag is only written against that credential. */
+    passwordCipher: string;
   },
 ): Promise<void> {
-  const { provider, userId, rowId, credentialKey } = ctx;
+  const { provider, userId, rowId, credentialKey, passwordCipher } = ctx;
   const scope = provider.logScope;
   const kind = pollFailureKind(err);
   console.warn(`[${scope}] sync failed for row ${rowId} (${kind}): ${sanitizeLogText(err)}`);
-  if (isImapAuthFailure(err)) {
+  if (!isImapAuthFailure(err)) {
+    notePollBackoff(rowId);
+  } else {
     startCredentialCooldown(provider, rowId, credentialKey);
     try {
+      // Conditional on the cipher the poll began with: a user who relinked while this
+      // poll's login was being rejected has a NEW password, which must not be flagged.
       await prisma.linkedInboxAccount.updateMany({
-        where: { id: rowId, userId },
+        where: { id: rowId, userId, imapPasswordCipher: passwordCipher },
         data: { needsReconnect: true },
       });
     } catch (flagErr) {
@@ -134,7 +151,9 @@ export async function syncImapAccountsForUser(
     // Generic IMAP only (step B4): the poll must not re-send a rejected password.
     const userHost = provider.hostPolicy === "user-supplied";
     const credentialKey = credentialKeyOf(row.id, checked.passwordCipher);
-    if (userHost && isPausedForLogin(row, credentialKey)) continue;
+    if (pollsInFlight.has(row.id)) continue; // its previous poll is still running
+    if (userHost && isPausedForPolling(row, credentialKey)) continue;
+    pollsInFlight.add(row.id);
     try {
       const result = await syncImapInbox({
         provider,
@@ -156,6 +175,8 @@ export async function syncImapAccountsForUser(
       // "Synced Xm ago" is real — same contract as the Gmail linked-inbox path. A held
       // poll (UIDVALIDITY reset, step B2b) stored nothing, so it is not a sync: it does
       // not stamp, and for a generic row it does not re-arm the failure report either.
+      // The host answered, held or not: a stall is over, whatever the poll then stored.
+      if (userHost) clearPollBackoff(row.id);
       if (!result.held) {
         await prisma.linkedInboxAccount.updateMany({
           where: { id: row.id, userId },
@@ -166,7 +187,13 @@ export async function syncImapAccountsForUser(
     } catch (err) {
       total.errors += 1;
       if (userHost) {
-        await handleGenericPollFailure(err, { provider, userId, rowId: row.id, credentialKey });
+        await handleGenericPollFailure(err, {
+          provider,
+          userId,
+          rowId: row.id,
+          credentialKey,
+          passwordCipher: checked.passwordCipher,
+        });
         continue;
       }
       // console first — captureError is a no-op without a Sentry DSN, and a
@@ -176,6 +203,8 @@ export async function syncImapAccountsForUser(
         tags: { scope: `${scope}.account-sync` },
         extra: { userId, linkedInboxAccountId: row.id },
       });
+    } finally {
+      pollsInFlight.delete(row.id);
     }
   }
   return total;

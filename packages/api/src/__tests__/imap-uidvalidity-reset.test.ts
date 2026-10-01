@@ -105,6 +105,8 @@ const { findReingestedHistory } = await import("../mail/imap-history.js");
 const { syncImapAccountsForUser, syncImapMessageForUser } = await import(
   "../mail/imap-accounts.js"
 );
+const { syncImapInbox } = await import("../mail/imap-sync.js");
+const { canonicalUidValidity } = await import("../mail/imap-uidvalidity.js");
 const { IMAP_PROVIDERS } = await import("../mail/imap-providers.js");
 const { mailActionsForProvider } = await import("../mail/providers/dispatch.js");
 const { resetImapSessionState } = await import("../mail/providers/imap-session.js");
@@ -132,6 +134,29 @@ const nextPoll = async () => {
   return poll();
 };
 const actions = () => mailActionsForProvider("NAVER");
+/**
+ * A poll of the same account from ANOTHER process (a rolling deploy, a second replica).
+ * Two polls of one account in one process cannot overlap any more (the per-account guard in
+ * imap-accounts.ts skips the second), so a race on the database claim is staged by a poll that
+ * comes from outside that guard, reading the account row the way the fan-out does.
+ */
+const pollFromAnotherProcess = () => {
+  // Snapshot the row NOW: the fake database hands out its live row, and the other poll is about
+  // to change it. A real second process read its own copy.
+  const row = structuredClone(account());
+  return syncImapInbox({
+    provider: IMAP_PROVIDERS.NAVER,
+    userId: USER,
+    email: row.email as string,
+    password: "app-pw",
+    host: row.imapHost as string,
+    linkedInboxAccountId: row.id as string,
+    inboxUidValidity: canonicalUidValidity(row.inboxUidValidity as string | null),
+    inboxUidValidityPending: canonicalUidValidity(row.inboxUidValidityPending as string | null),
+    inboxUidValidityPendingAt: row.inboxUidValidityPendingAt as Date | null,
+    inboxUidValidityResetAt: row.inboxUidValidityResetAt as Date | null,
+  });
+};
 /** The id a repair at `repairedAt` gives a row of the `old` numbering. */
 const tomb = (id: string, old: string, repairedAt: number) => `${id}#uv${old}.${repairedAt}`;
 
@@ -707,7 +732,7 @@ describe("overlapping polls cannot both act", () => {
     await nextPoll();
     advance(POLL_INTERVAL);
 
-    await Promise.all([poll(), poll()]);
+    await Promise.all([poll(), pollFromAnotherProcess()]);
 
     expect(claims()).toHaveLength(2);
     expect(rekeys()).toHaveLength(1);
@@ -723,7 +748,7 @@ describe("overlapping polls cannot both act", () => {
     fakeServer.renumber("INBOX", 1001n);
     advance(POLL_INTERVAL);
 
-    await Promise.all([poll(), poll()]);
+    await Promise.all([poll(), pollFromAnotherProcess()]);
 
     expect(claims()).toEqual([]);
     expect(rekeys()).toEqual([]);

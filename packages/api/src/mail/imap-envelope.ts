@@ -15,9 +15,31 @@
 
 export const NO_SUBJECT = "(no subject)";
 
-/** The subject exactly as the poller stores it: trimmed, and a placeholder when empty. */
+/**
+ * What an envelope may put in a stored row. An ENVELOPE can be megabytes (imapflow
+ * accepts up to its literal cap), and these two fields are stored whole. The subject
+ * limit is RFC 5322's line limit, far above a real subject; a cc list of 4 000
+ * characters is dozens of addresses. Anything shorter is stored exactly as before.
+ */
+export const MAX_STORED_SUBJECT_LENGTH = 1_000;
+export const MAX_STORED_CC_LENGTH = 4_000;
+
+/** `text` cut to `max` UTF-16 units without leaving half a surrogate pair at the end. */
+export function capStored(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const last = cut.charCodeAt(cut.length - 1);
+  return last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut;
+}
+
+/**
+ * The subject exactly as the poller stores it: trimmed, capped, and a placeholder when
+ * empty. The cap lives here, where the stored and the compared value are both derived,
+ * so an over-long subject cannot make them differ.
+ */
 export function envelopeSubject(raw: string | null | undefined): string {
-  return raw?.trim() || NO_SUBJECT;
+  const trimmed = raw?.trim();
+  return trimmed ? capStored(trimmed, MAX_STORED_SUBJECT_LENGTH) : NO_SUBJECT;
 }
 
 export interface EnvelopeFacts {

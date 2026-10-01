@@ -40,6 +40,7 @@ import { prisma } from "../db.js";
 import { takeGenericImapAttempt } from "../mail/generic-imap-attempts.js";
 import { type HostRejection, parseGenericImapHost } from "../mail/generic-imap-host.js";
 import { verifyGenericImapCredentials } from "../mail/generic-imap-verify.js";
+import { clearPollBackoff } from "../mail/imap-poll-backoff.js";
 import { hostMatchesProvider, type ImapProviderConfig } from "../mail/imap-providers.js";
 import { verifyImapCredentials } from "../mail/imap-sync.js";
 import { isAllowedImapHost } from "../mail/is-allowed-imap-host.js";
@@ -125,6 +126,22 @@ function isServerChange(
   return !stored.ok || stored.stored !== requestedHost;
 }
 
+interface ExistingAccount {
+  id: string;
+  imapHost: string | null;
+}
+
+async function findExistingAccount(
+  cfg: ImapProviderConfig,
+  userId: string,
+  email: string,
+): Promise<ExistingAccount | null> {
+  return prisma.linkedInboxAccount.findUnique({
+    where: { userId_provider_email: { userId, provider: cfg.provider, email } },
+    select: { id: true, imapHost: true },
+  });
+}
+
 /**
  * What stops this connect before any connection is made, or null.
  *   - An existing account may be re-verified (password rotation) on the SAME host and
@@ -132,17 +149,14 @@ function isServerChange(
  *   - NEW accounts are capped; re-verifying an address that already has a row is
  *     always allowed, mirroring the Google link route's "never lock a user out of
  *     reconnecting" rule.
+ * This look is advisory: for a generic host the write below re-checks it atomically.
  */
 async function connectRefusal(
   cfg: ImapProviderConfig,
   userId: string,
-  email: string,
+  existing: ExistingAccount | null,
   imapHost: string,
 ): Promise<Refusal | null> {
-  const existing = await prisma.linkedInboxAccount.findUnique({
-    where: { userId_provider_email: { userId, provider: cfg.provider, email } },
-    select: { id: true, imapHost: true },
-  });
   if (existing) {
     return isServerChange(cfg, existing.imapHost, imapHost)
       ? { status: 409, message: SERVER_CHANGE_REFUSED }
@@ -155,6 +169,80 @@ async function connectRefusal(
     ? { status: 400, message: `At most ${cfg.maxAccounts} ${cfg.label} accounts.` }
     : null;
 }
+
+interface SaveArgs {
+  userId: string;
+  email: string;
+  imapHost: string;
+  password: string;
+  existing: ExistingAccount | null;
+}
+
+type Saved = { ok: true; id: string | undefined } | { ok: false };
+
+/** Prisma's unique-constraint violation (the (user, provider, email) key). */
+const isUniqueViolation = (err: unknown): boolean =>
+  (err as { code?: unknown } | null)?.code === "P2002";
+
+/**
+ * Store a generic account WITHOUT letting two requests race past the re-point check
+ * (a check-then-upsert let two concurrent first connects to different hosts both pass,
+ * the second re-pointing the row the first had just made). An existing row is updated
+ * only while it still has the host it was checked with; a new row is created, and a
+ * collision with a concurrent create is settled by looking at the winner: the same host
+ * is a double click, another host is refused. Never an upsert.
+ */
+async function saveGenericAccount(cfg: ImapProviderConfig, args: SaveArgs): Promise<Saved> {
+  const { userId, email, imapHost, password } = args;
+  const imapPasswordCipher = encryptToken(password);
+  let current = args.existing;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (current) {
+      const updated = await prisma.linkedInboxAccount.updateMany({
+        where: { id: current.id, userId, provider: cfg.provider, imapHost: current.imapHost },
+        // A successful re-verify clears the reconnect prompt.
+        data: { imapHost, imapPasswordCipher, needsReconnect: false },
+      });
+      return updated.count === 1 ? { ok: true, id: current.id } : { ok: false };
+    }
+    try {
+      const created = await prisma.linkedInboxAccount.create({
+        data: { userId, provider: cfg.provider, email, imapHost, imapPasswordCipher },
+      });
+      return { ok: true, id: created?.id };
+    } catch (err) {
+      if (!isUniqueViolation(err)) throw err;
+      current = await findExistingAccount(cfg, userId, email); // a concurrent request won
+      if (current && isServerChange(cfg, current.imapHost, imapHost)) return { ok: false };
+    }
+  }
+  return { ok: false };
+}
+
+/** Fixed-host providers keep the upsert they always had (their host cannot differ). */
+async function saveFixedAccount(cfg: ImapProviderConfig, args: SaveArgs): Promise<Saved> {
+  const { userId, email, imapHost, password } = args;
+  const saved = await prisma.linkedInboxAccount.upsert({
+    where: { userId_provider_email: { userId, provider: cfg.provider, email } },
+    create: {
+      userId,
+      provider: cfg.provider,
+      email,
+      imapHost,
+      imapPasswordCipher: encryptToken(password),
+    },
+    update: {
+      imapHost,
+      imapPasswordCipher: encryptToken(password),
+      // A successful re-verify clears the reconnect prompt.
+      needsReconnect: false,
+    },
+  });
+  return { ok: true, id: saved?.id };
+}
+
+const saveAccount = (cfg: ImapProviderConfig, args: SaveArgs): Promise<Saved> =>
+  cfg.hostPolicy === "user-supplied" ? saveGenericAccount(cfg, args) : saveFixedAccount(cfg, args);
 
 /**
  * Counts this connect attempt when the host is user-supplied (design D5): every
@@ -241,7 +329,8 @@ export function imapConnectRoutes(
         }
         const { imapHost } = hostChoice;
 
-        const refusal = await connectRefusal(cfg, userId, email, imapHost);
+        const existing = await findExistingAccount(cfg, userId, email);
+        const refusal = await connectRefusal(cfg, userId, existing, imapHost);
         if (refusal) {
           reply.code(refusal.status);
           return { ok: false, message: refusal.message };
@@ -268,22 +357,14 @@ export function imapConnectRoutes(
           return { ok: false, message: verify.message };
         }
 
-        await prisma.linkedInboxAccount.upsert({
-          where: { userId_provider_email: { userId, provider: cfg.provider, email } },
-          create: {
-            userId,
-            provider: cfg.provider,
-            email,
-            imapHost,
-            imapPasswordCipher: encryptToken(password),
-          },
-          update: {
-            imapHost,
-            imapPasswordCipher: encryptToken(password),
-            // A successful re-verify clears the reconnect prompt.
-            needsReconnect: false,
-          },
-        });
+        const saved = await saveAccount(cfg, { userId, email, imapHost, password, existing });
+        if (!saved.ok) {
+          // Another request changed the account's server while this one was being verified.
+          reply.code(409);
+          return { ok: false, message: SERVER_CHANGE_REFUSED };
+        }
+        // A relink starts the poll over: no leftover backoff for this account.
+        if (saved.id && cfg.hostPolicy === "user-supplied") clearPollBackoff(saved.id);
 
         return { ok: true, email, host: imapHost };
       },

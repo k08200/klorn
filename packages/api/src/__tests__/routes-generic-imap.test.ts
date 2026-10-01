@@ -18,6 +18,8 @@ const db = vi.hoisted(() => ({
   findUnique: vi.fn(async () => null),
   count: vi.fn(async () => 0),
   upsert: vi.fn(async () => ({ id: "row-1" })),
+  create: vi.fn(async (_args?: unknown) => ({ id: "row-1" })),
+  updateMany: vi.fn(async (_args?: unknown) => ({ count: 1 })),
   deleteMany: vi.fn(async () => ({ count: 0 })),
 }));
 
@@ -75,6 +77,13 @@ const connect = (
   payload: object,
 ) => app.inject({ method: "POST", url: `${PREFIX}/connect`, headers, payload });
 
+/** A generic connect stores through a conditional create or update, never an upsert. */
+function expectNothingStored() {
+  expect(db.create).not.toHaveBeenCalled();
+  expect(db.updateMany).not.toHaveBeenCalled();
+  expect(db.upsert).not.toHaveBeenCalled();
+}
+
 const GOOD = { email: "me@fastmail.com", password: "app-pw-1234", host: "imap.fastmail.com" };
 const GENERIC_FAILURE = "Could not connect securely to that server.";
 
@@ -83,6 +92,9 @@ beforeEach(() => {
   db.findMany.mockResolvedValue([]);
   db.findUnique.mockResolvedValue(null);
   db.count.mockResolvedValue(0);
+  // Fresh defaults: a test's stateful store must not leak into the next one.
+  db.create.mockImplementation(async () => ({ id: "row-1" }));
+  db.updateMany.mockImplementation(async () => ({ count: 1 }));
   imapSync.verifyImapCredentials.mockResolvedValue({ ok: true });
   state.plan = "PRO";
   vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -110,7 +122,7 @@ describe("flag OFF (default): the surface does not exist", () => {
     });
     expect(res.statusCode).toBe(404);
     expect(imapSync.verifyImapCredentials).not.toHaveBeenCalled();
-    expect(db.upsert).not.toHaveBeenCalled();
+    expectNothingStored();
     await app.close();
   });
 
@@ -156,25 +168,16 @@ describe("flag ON: connect with a user-supplied host", () => {
         host: "imap.fastmail.com:993",
       }),
     );
-    expect(db.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: {
-          userId_provider_email: { userId: "user-1", provider: "IMAP", email: "me@fastmail.com" },
-        },
-        create: expect.objectContaining({
-          userId: "user-1",
-          provider: "IMAP",
-          email: "me@fastmail.com",
-          imapHost: "imap.fastmail.com:993",
-          imapPasswordCipher: "cipher",
-        }),
-        update: expect.objectContaining({
-          imapHost: "imap.fastmail.com:993",
-          imapPasswordCipher: "cipher",
-          needsReconnect: false,
-        }),
-      }),
-    );
+    expect(db.create).toHaveBeenCalledWith({
+      data: {
+        userId: "user-1",
+        provider: "IMAP",
+        email: "me@fastmail.com",
+        imapHost: "imap.fastmail.com:993",
+        imapPasswordCipher: "cipher",
+      },
+    });
+    expect(db.upsert).not.toHaveBeenCalled(); // an upsert could re-point a row another request just made
     await app.close();
   });
 
@@ -191,7 +194,7 @@ describe("flag ON: connect with a user-supplied host", () => {
     expect(res.statusCode).toBe(400);
     expect(res.json().ok).toBe(false);
     expect(imapSync.verifyImapCredentials).not.toHaveBeenCalled();
-    expect(db.upsert).not.toHaveBeenCalled();
+    expectNothingStored();
     await app.close();
   });
 
@@ -218,7 +221,7 @@ describe("flag ON: connect with a user-supplied host", () => {
     expect(res.json().ok).toBe(false);
     expect(typeof res.json().message).toBe("string");
     expect(imapSync.verifyImapCredentials).not.toHaveBeenCalled();
-    expect(db.upsert).not.toHaveBeenCalled();
+    expectNothingStored();
     // Static input errors never reveal network state, and use no attempt: ten of
     // them in a row still leave the full budget for a real connect.
     for (let i = 0; i < 12; i++) await connect(app, headers, { ...GOOD, host });
@@ -243,7 +246,7 @@ describe("flag ON: connect with a user-supplied host", () => {
       messages.add(res.json().message);
     }
     expect([...messages]).toEqual([GENERIC_FAILURE]);
-    expect(db.upsert).not.toHaveBeenCalled();
+    expectNothingStored();
     await app.close();
   });
 
@@ -257,7 +260,7 @@ describe("flag ON: connect with a user-supplied host", () => {
     const res = await connect(app, headers, GOOD);
     expect(res.statusCode).toBe(400);
     expect(res.json().message).toBe(IMAP_PROVIDERS.IMAP.authFailureHint);
-    expect(db.upsert).not.toHaveBeenCalled();
+    expectNothingStored();
     await app.close();
   });
 
@@ -307,7 +310,7 @@ describe("flag ON: connect with a user-supplied host", () => {
       message: "Disconnect this account first; changing the server is not supported yet.",
     });
     expect(imapSync.verifyImapCredentials).not.toHaveBeenCalled();
-    expect(db.upsert).not.toHaveBeenCalled();
+    expectNothingStored();
     await app.close();
   });
 
@@ -349,15 +352,16 @@ describe("flag ON: connect with a user-supplied host", () => {
 
     expect(res.statusCode).toBe(200);
     expect(imapSync.verifyImapCredentials).toHaveBeenCalledTimes(1);
-    expect(db.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        update: expect.objectContaining({
-          imapHost: "imap.fastmail.com:993",
-          imapPasswordCipher: "cipher",
-          needsReconnect: false,
-        }),
-      }),
-    );
+    // Conditional on the host the account had when it was checked, and only that row.
+    expect(db.updateMany).toHaveBeenCalledWith({
+      where: { id: "row-9", userId: "user-1", provider: "IMAP", imapHost: "imap.fastmail.com:993" },
+      data: {
+        imapHost: "imap.fastmail.com:993",
+        imapPasswordCipher: "cipher",
+        needsReconnect: false,
+      },
+    });
+    expect(db.create).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -383,7 +387,7 @@ describe("flag ON: connect with a user-supplied host", () => {
     db.findUnique.mockResolvedValue({ id: "row-9", imapHost: stored } as never);
     const res = await connect(app, headers, GOOD);
     expect(res.statusCode).toBe(409);
-    expect(db.upsert).not.toHaveBeenCalled();
+    expectNothingStored();
     await app.close();
   });
 
@@ -401,6 +405,195 @@ describe("flag ON: connect with a user-supplied host", () => {
     }
     expect(imapSync.verifyImapCredentials).not.toHaveBeenCalled();
     await app.close();
+  });
+
+  describe("the re-point refusal is atomic (a check-then-write race cannot defeat it)", () => {
+    interface StoredRow {
+      id: string;
+      userId: string;
+      provider: string;
+      email: string;
+      imapHost: string;
+      imapPasswordCipher: string;
+      needsReconnect?: boolean;
+    }
+
+    /** An in-memory LinkedInboxAccount with the unique (user, provider, email) key. */
+    function useStatefulStore() {
+      const rows = new Map<string, StoredRow>();
+      const keyOf = (r: { userId: string; provider: string; email: string }) =>
+        `${r.userId}|${r.provider}|${r.email}`;
+      db.findUnique.mockImplementation((async (args: {
+        where: { userId_provider_email: { userId: string; provider: string; email: string } };
+      }) => {
+        // A copy, like Prisma returns: the caller's snapshot must not follow later writes.
+        const row = rows.get(keyOf(args.where.userId_provider_email));
+        return row ? { ...row } : null;
+      }) as never);
+      db.count.mockImplementation((async () => rows.size) as never);
+      db.create.mockImplementation((async (args: { data: Omit<StoredRow, "id"> }) => {
+        const key = keyOf(args.data);
+        if (rows.has(key))
+          throw Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
+        const row = { id: `row-${rows.size + 1}`, ...args.data };
+        rows.set(key, row);
+        return row;
+      }) as never);
+      db.updateMany.mockImplementation((async (args: {
+        where: { id: string; userId: string; provider: string; imapHost?: string };
+        data: Partial<StoredRow>;
+      }) => {
+        const row = [...rows.values()].find(
+          (r) =>
+            r.id === args.where.id &&
+            r.userId === args.where.userId &&
+            r.provider === args.where.provider &&
+            (args.where.imapHost === undefined || r.imapHost === args.where.imapHost),
+        );
+        if (!row) return { count: 0 };
+        Object.assign(row, args.data);
+        return { count: 1 };
+      }) as never);
+      return rows;
+    }
+
+    /** Both verifies are in flight before either request writes: the worst interleaving. */
+    function interleaveVerifies(requests: number) {
+      let arrived = 0;
+      let release: () => void = () => {};
+      const barrier = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      imapSync.verifyImapCredentials.mockImplementation(async () => {
+        arrived += 1;
+        if (arrived >= requests) release();
+        await barrier;
+        return { ok: true };
+      });
+    }
+
+    it("two concurrent FIRST connects to different hosts: exactly one wins, the other is refused", async () => {
+      const rows = useStatefulStore();
+      interleaveVerifies(2);
+      const { app, headers } = await buildApp();
+
+      const [a, b] = await Promise.all([
+        connect(app, headers, { ...GOOD, host: "imap.fastmail.com" }),
+        connect(app, headers, { ...GOOD, host: "imap.other-server.example.net" }),
+      ]);
+
+      expect([a.statusCode, b.statusCode].sort()).toEqual([200, 409]);
+      const winner = a.statusCode === 200 ? a : b;
+      expect(rows.size).toBe(1);
+      expect([...rows.values()][0].imapHost).toBe(winner.json().host);
+      const loser = a.statusCode === 409 ? a : b;
+      expect(loser.json().message).toBe(
+        "Disconnect this account first; changing the server is not supported yet.",
+      );
+      await app.close();
+    });
+
+    it("two concurrent first connects to the SAME host both succeed (a double click is not a re-point)", async () => {
+      const rows = useStatefulStore();
+      interleaveVerifies(2);
+      const { app, headers } = await buildApp();
+
+      const [a, b] = await Promise.all([connect(app, headers, GOOD), connect(app, headers, GOOD)]);
+
+      expect([a.statusCode, b.statusCode]).toEqual([200, 200]);
+      expect(rows.size).toBe(1);
+      expect([...rows.values()][0].imapHost).toBe("imap.fastmail.com:993");
+      await app.close();
+    });
+
+    it("an existing account whose host changed between the check and the write is refused, not overwritten", async () => {
+      const rows = useStatefulStore();
+      rows.set("user-1|IMAP|me@fastmail.com", {
+        id: "row-9",
+        userId: "user-1",
+        provider: "IMAP",
+        email: "me@fastmail.com",
+        imapHost: "imap.fastmail.com:993",
+        imapPasswordCipher: "old",
+      });
+      // While the verify runs, another request re-points the row.
+      imapSync.verifyImapCredentials.mockImplementation(async () => {
+        const row = rows.get("user-1|IMAP|me@fastmail.com") as StoredRow;
+        row.imapHost = "imap.sneaky.example.net:993";
+        return { ok: true };
+      });
+      const { app, headers } = await buildApp();
+
+      const res = await connect(app, headers, GOOD);
+
+      expect(res.statusCode).toBe(409);
+      expect(rows.get("user-1|IMAP|me@fastmail.com")).toMatchObject({
+        imapHost: "imap.sneaky.example.net:993",
+        imapPasswordCipher: "old", // the new password was NOT stored against the other host
+      });
+      await app.close();
+    });
+
+    it("a unique-key collision whose winner has a different host is the same constant refusal", async () => {
+      db.findUnique
+        .mockResolvedValueOnce(null as never) // the first look: nothing yet
+        .mockResolvedValueOnce({ id: "row-2", imapHost: "imap.other.example.net:993" } as never);
+      db.create.mockRejectedValueOnce(
+        Object.assign(new Error("Unique constraint"), { code: "P2002" }),
+      );
+      const { app, headers } = await buildApp();
+      const res = await connect(app, headers, GOOD);
+      expect(res.statusCode).toBe(409);
+      expect(db.updateMany).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it("any other database error is not mistaken for a collision", async () => {
+      db.create.mockRejectedValueOnce(
+        Object.assign(new Error("connection lost"), { code: "P1001" }),
+      );
+      const { app, headers } = await buildApp();
+      const res = await connect(app, headers, GOOD);
+      expect(res.statusCode).toBe(500);
+      await app.close();
+    });
+  });
+
+  describe("a relink starts the poll over", () => {
+    it("clears the account's poll backoff (a new account too)", async () => {
+      const { app, headers } = await buildApp();
+      // buildApp reset the module registry, so this is the instance the route uses.
+      const backoff = await import("../mail/imap-poll-backoff.js");
+      backoff.notePollBackoff("row-9");
+      db.findUnique.mockResolvedValue({ id: "row-9", imapHost: "imap.fastmail.com:993" } as never);
+
+      expect((await connect(app, headers, GOOD)).statusCode).toBe(200);
+
+      expect(backoff.isPollBackedOff("row-9")).toBe(false);
+      await app.close();
+    });
+
+    it("clears the backoff of a newly created account (a recycled id is never left backed off)", async () => {
+      const { app, headers } = await buildApp();
+      const backoff = await import("../mail/imap-poll-backoff.js");
+      backoff.notePollBackoff("row-1");
+      expect((await connect(app, headers, GOOD)).statusCode).toBe(200);
+      expect(backoff.isPollBackedOff("row-1")).toBe(false);
+      await app.close();
+    });
+
+    it("a refused connect leaves the backoff alone", async () => {
+      const { app, headers } = await buildApp();
+      const backoff = await import("../mail/imap-poll-backoff.js");
+      backoff.notePollBackoff("row-9");
+      db.findUnique.mockResolvedValue({
+        id: "row-9",
+        imapHost: "imap.old-server.example.org:993",
+      } as never);
+      expect((await connect(app, headers, GOOD)).statusCode).toBe(409);
+      expect(backoff.isPollBackedOff("row-9")).toBe(true);
+      await app.close();
+    });
   });
 
   it("still enforces the entitlement gate (FREE gets 403)", async () => {

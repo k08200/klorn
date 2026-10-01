@@ -1,8 +1,13 @@
 /**
- * Step B4 review fix: IMAP poll ticks must not stack. The scheduler fires every five
- * minutes and a tick walks every account serially; a slow tick (many accounts, a slow
- * host) used to be joined by the next one, and so on. Now a tick that starts while
- * the previous one is still running is skipped. This applies to every provider.
+ * The IMAP poll scheduler (every provider). Ticks used to be serialised by ONE
+ * boolean: a tick that never settled stopped all IMAP polling for good, and the
+ * heartbeat (recorded before the guard) stayed green while every later tick was
+ * skipped. Now:
+ *   - there is no global lock: a stuck tick cannot stop the next one; the double-poll
+ *     guard is per ACCOUNT, inside the fan-out (imap-accounts.ts, tested in
+ *     imap-accounts.test.ts), so a stuck account cannot block the others;
+ *   - the heartbeat is recorded by a tick that actually runs (inside runImapTick),
+ *     not by the interval callback ahead of any decision.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -35,21 +40,21 @@ const { runImapTick, startImapScheduler, stopImapScheduler } = await import(
   "../mail/imap-scheduler.js"
 );
 
+const AGGREGATE = { fetched: 0, inserted: 0, classified: 0, errors: 0 };
+
 /** A promise the test settles by hand. */
 function gate<T = void>() {
   let open: (value: T) => void = () => {};
-  let fail: (reason: unknown) => void = () => {};
-  const promise = new Promise<T>((resolve, reject) => {
+  const promise = new Promise<T>((resolve) => {
     open = resolve;
-    fail = reject;
   });
-  return { promise, open, fail };
+  return { promise, open };
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   m.groupBy.mockResolvedValue([{ userId: "u1", provider: "NAVER" }]);
-  m.sync.mockResolvedValue({ fetched: 0, inserted: 0, classified: 0, errors: 0 });
+  m.sync.mockResolvedValue(AGGREGATE);
   vi.spyOn(console, "warn").mockImplementation(() => {});
   vi.spyOn(console, "log").mockImplementation(() => {});
 });
@@ -66,76 +71,85 @@ describe("runImapTick", () => {
     expect(m.sync).toHaveBeenCalledTimes(1);
   });
 
-  it("skips a tick that starts while the previous one is still running", async () => {
-    const slow = gate<{ fetched: number; inserted: number; classified: number; errors: number }>();
-    m.sync.mockReturnValueOnce(slow.promise);
+  it("a tick that never settles does not stop the next one (no global lock)", async () => {
+    const stuck = gate<typeof AGGREGATE>();
+    m.sync.mockReturnValueOnce(stuck.promise);
 
     const first = runImapTick();
     await vi.waitFor(() => expect(m.sync).toHaveBeenCalledTimes(1));
-    await runImapTick(); // returns at once, does nothing
+    await runImapTick(); // not skipped: it runs and reaches the sync
     await runImapTick();
 
-    expect(m.groupBy).toHaveBeenCalledTimes(1);
-    expect(m.sync).toHaveBeenCalledTimes(1);
+    expect(m.groupBy).toHaveBeenCalledTimes(3);
+    expect(m.sync).toHaveBeenCalledTimes(3);
 
-    slow.open({ fetched: 0, inserted: 0, classified: 0, errors: 0 });
+    stuck.open(AGGREGATE);
     await first;
   });
 
-  it("says so in the log when it skips", async () => {
-    const slow = gate<null>();
-    m.sync.mockReturnValueOnce(slow.promise);
-    const first = runImapTick();
-    await vi.waitFor(() => expect(m.sync).toHaveBeenCalledTimes(1));
-    await runImapTick();
-    const lines = (console.warn as unknown as { mock: { calls: unknown[][] } }).mock.calls.map(
-      (call) => call.join(" "),
+  it("a stuck tick for one owner does not hold the next tick's other owners", async () => {
+    m.groupBy.mockResolvedValue([
+      { userId: "slow-user", provider: "NAVER" },
+      { userId: "other-user", provider: "NAVER" },
+    ]);
+    const stuck = gate<typeof AGGREGATE>();
+    let slowCalls = 0;
+    // The real fan-out skips an account whose poll is still running and returns at once
+    // (imap-accounts.ts, per-account guard); this stands in for that on the second call.
+    m.sync.mockImplementation((userId: string) =>
+      userId === "slow-user" && ++slowCalls === 1 ? stuck.promise : Promise.resolve(AGGREGATE),
     );
-    expect(lines.some((line) => /still running|skipp/i.test(line))).toBe(true);
-    slow.open(null);
+
+    const first = runImapTick(); // stuck on slow-user, never reaches other-user
+    await vi.waitFor(() => expect(m.sync).toHaveBeenCalledTimes(1));
+    await runImapTick(); // slow-user is skipped by the per-account guard; other-user is polled
+
+    const polled = m.sync.mock.calls.map((call) => call[0]);
+    expect(polled.filter((id) => id === "other-user")).toHaveLength(1);
+
+    stuck.open(AGGREGATE);
     await first;
   });
 
-  it("runs again once the previous tick has finished", async () => {
+  it("records the heartbeat for a tick that runs, and only from inside the tick", async () => {
+    expect(m.recordSchedulerTick).not.toHaveBeenCalled();
     await runImapTick();
-    await runImapTick();
-    expect(m.sync).toHaveBeenCalledTimes(2);
+    expect(m.recordSchedulerTick).toHaveBeenCalledTimes(1);
+    expect(m.recordSchedulerTick).toHaveBeenCalledWith("imap");
   });
 
-  it("releases the guard when the tick fails (a database error must not wedge the poll)", async () => {
+  it("surfaces a failed tick to its caller", async () => {
     m.groupBy.mockRejectedValueOnce(new Error("db down"));
     await expect(runImapTick()).rejects.toThrow("db down");
     await runImapTick();
     expect(m.sync).toHaveBeenCalledTimes(1);
   });
 
-  it("releases the guard when one user's sync fails", async () => {
+  it("one user's failed sync is reported and does not stop the tick", async () => {
     m.sync.mockRejectedValueOnce(new Error("sync broke"));
     await runImapTick();
+    expect(m.captureError).toHaveBeenCalledTimes(1);
     await runImapTick();
     expect(m.sync).toHaveBeenCalledTimes(2);
-    expect(m.captureError).toHaveBeenCalledTimes(1);
   });
 });
 
-describe("startImapScheduler: ticks do not stack", () => {
-  it("a tick still running when the next interval fires is skipped, not doubled", async () => {
+describe("startImapScheduler", () => {
+  it("every interval is a tick that runs and is recorded; a stuck one never makes the rest silent", async () => {
     vi.useFakeTimers();
-    const slow = gate<null>();
-    m.sync.mockReturnValue(slow.promise);
+    const stuck = gate<typeof AGGREGATE>();
+    m.sync.mockReturnValue(stuck.promise);
 
     startImapScheduler();
+    expect(m.recordSchedulerTick).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(30_000); // first tick starts and hangs
-    expect(m.sync).toHaveBeenCalledTimes(1);
-    await vi.advanceTimersByTimeAsync(5 * 60_000); // the next interval fires
+    expect(m.recordSchedulerTick).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
     await vi.advanceTimersByTimeAsync(5 * 60_000);
 
-    expect(m.sync).toHaveBeenCalledTimes(1);
-    expect(m.groupBy).toHaveBeenCalledTimes(1);
+    expect(m.recordSchedulerTick).toHaveBeenCalledTimes(3);
+    expect(m.groupBy).toHaveBeenCalledTimes(3);
 
-    slow.open(null);
-    m.sync.mockResolvedValue({ fetched: 0, inserted: 0, classified: 0, errors: 0 });
-    await vi.advanceTimersByTimeAsync(5 * 60_000);
-    expect(m.sync).toHaveBeenCalledTimes(2);
+    stuck.open(AGGREGATE);
   });
 });

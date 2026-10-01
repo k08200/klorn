@@ -21,7 +21,6 @@ import { enabledImapProviderKeys, IMAP_PROVIDERS, type ImapProviderKey } from ".
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
 let firstTickTimer: ReturnType<typeof setTimeout> | null = null;
-let tickInFlight = false;
 const POLL_INTERVAL_MS = 5 * 60_000; // 5 minutes
 
 async function tickOnce(): Promise<void> {
@@ -64,23 +63,18 @@ async function tickOnce(): Promise<void> {
 }
 
 /**
- * One tick at a time, for every provider. A tick walks every account serially, so a
- * slow one (many accounts, a slow host) can outlast the interval; without this guard
- * the next tick started anyway and ticks stacked up, each holding sockets and
- * logins. A tick that would overlap the previous one is skipped; the next interval
- * tries again. The guard is released on every exit, including a failed tick.
+ * One poll tick. There is no global lock: ticks used to be serialised by one boolean,
+ * so a tick that never settled stopped ALL IMAP polling for good, Naver and iCloud
+ * included, while the heartbeat (recorded before the guard) stayed green. Double-polling
+ * is prevented per ACCOUNT instead, inside the fan-out (imap-accounts.ts): an account whose
+ * previous poll is still running is skipped, so a stuck account blocks neither the
+ * others nor the next tick, and every session ends by its own wall-clock deadline
+ * (FIXED_HOST_SESSION_DEADLINE_MS, GENERIC_SESSION_DEADLINE_MS). The heartbeat is
+ * recorded here, by a tick that actually runs.
  */
 export async function runImapTick(): Promise<void> {
-  if (tickInFlight) {
-    console.warn("[imap-scheduler] previous tick still running — skipping this one");
-    return;
-  }
-  tickInFlight = true;
-  try {
-    await tickOnce();
-  } finally {
-    tickInFlight = false;
-  }
+  recordSchedulerTick("imap");
+  await tickOnce();
 }
 
 export function startImapScheduler(): void {
@@ -93,12 +87,10 @@ export function startImapScheduler(): void {
   // we open IMAP sockets. Subsequent ticks on the regular interval.
   firstTickTimer = setTimeout(() => {
     firstTickTimer = null;
-    recordSchedulerTick("imap");
     runImapTick().catch((err) =>
       captureError(err, { tags: { scope: "imap-scheduler.first-tick" } }),
     );
     intervalId = setInterval(() => {
-      recordSchedulerTick("imap");
       runImapTick().catch((err) => captureError(err, { tags: { scope: "imap-scheduler.tick" } }));
     }, POLL_INTERVAL_MS);
   }, 30_000);

@@ -28,7 +28,7 @@ import { persistGmailEmail } from "../judge/email-firewall.js";
 import { captureError } from "../sentry.js";
 import { fetchCapReached, textBodyPart } from "./generic-imap-bounds.js";
 import { createImapClient, endImapSession } from "./imap-connection.js";
-import { envelopeSubject } from "./imap-envelope.js";
+import { capStored, envelopeSubject, MAX_STORED_CC_LENGTH } from "./imap-envelope.js";
 import { formatImapMessageId } from "./imap-message-id.js";
 import { reconcileInboxValidity, removeRecentlyMovedRows } from "./imap-poll-guards.js";
 import type { ImapProviderConfig } from "./imap-providers.js";
@@ -172,7 +172,9 @@ function toPersistCall(args: SyncArgs, msg: ImapFetchMessage): PersistCall {
   const env = msg.envelope ?? {};
   const from = formatAddress(env.from?.[0] ?? undefined);
   const to = formatAddress(env.to?.[0] ?? undefined);
-  const cc = (env.cc ?? []).map(formatAddress).filter(Boolean).join(", ") || null;
+  const cc =
+    capStored((env.cc ?? []).map(formatAddress).filter(Boolean).join(", "), MAX_STORED_CC_LENGTH) ||
+    null;
   const subject = envelopeSubject(env.subject);
   const receivedAt = env.date ?? new Date();
   const bodyBuf = msg.bodyParts?.get("text") ?? msg.bodyParts?.get("TEXT");
@@ -391,7 +393,9 @@ export async function syncImapMessage(args: SyncMessageArgs): Promise<{ emailId:
     try {
       for await (const raw of client.fetch(
         String(args.uid),
-        { envelope: true, flags: true, bodyParts: ["TEXT"] },
+        // The same slice as the poll (whole TEXT for a fixed host): an undo must be able to
+        // restore a message larger than the literal cap too.
+        { envelope: true, flags: true, bodyParts: [textBodyPart(args.provider)] },
         { uid: true },
       )) {
         const persistCall = toPersistCall(args, raw as ImapFetchMessage);

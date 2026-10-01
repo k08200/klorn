@@ -37,7 +37,9 @@ vi.mock("../mail/host-resolver.js", () => ({
 }));
 
 const { createImapClient, endImapSession } = await import("../mail/imap-connection.js");
-const { createPinnedImapClient } = await import("../mail/imap-pinned-client.js");
+const { createPinnedImapClient, GENERIC_SESSION_BYTE_BUDGET } = await import(
+  "../mail/imap-pinned-client.js"
+);
 const { IMAP_PROVIDERS } = await import("../mail/imap-providers.js");
 
 // No openssl, no throwaway certificate, no real-TLS proof: skip loudly rather than fail.
@@ -71,23 +73,50 @@ interface FakeImapServer {
   commands: string[];
   /** How many of its connections have been closed (by either side). */
   closedConnections: () => number;
+  /** Bytes the server had written to connections that have closed. */
+  bytesWritten: () => number;
   stop: () => Promise<void>;
 }
 
 /** What the server answers to FETCH: nothing special, a literal far over any sane cap, or an endless drip. */
-type FetchBehaviour = "ok" | "oversized-literal" | "drip";
+type FetchBehaviour = "ok" | "oversized-literal" | "drip" | "list-flood" | "fetch-flood";
+
+const MIB = 1024 * 1024;
+/** Each flooded item is far under every per-response cap (2 MiB line, 4 MiB literal, 8 MiB response). */
+const FLOOD_ITEM_BYTES = MIB;
+const FLOOD_ITEMS = 400; // 400 MiB if nothing stops it
 
 const servers: FakeImapServer[] = [];
+
+/** Write `count` items one after another, honouring backpressure, then the tagged OK. */
+function flood(socket: net.Socket, tag: string, count: number, item: (n: number) => string): void {
+  let sent = 0;
+  const pump = (): void => {
+    while (sent < count) {
+      if (socket.destroyed) return;
+      const room = socket.write(item(sent));
+      sent += 1;
+      if (!room) {
+        socket.once("drain", pump);
+        return;
+      }
+    }
+    if (!socket.destroyed) socket.write(`${tag} OK done\r\n`);
+  };
+  pump();
+}
 
 /** TLS server speaking just enough IMAP for imapflow to log in. */
 async function startServer(
   identity: Identity,
   fetchBehaviour: FetchBehaviour = "ok",
+  floodItems: number = FLOOD_ITEMS,
 ): Promise<FakeImapServer> {
   const serverNames: Array<string | false> = [];
   const commands: string[] = [];
   const sockets = new Set<net.Socket>();
   let closed = 0;
+  let written = 0;
 
   const server = tls.createServer({ key: identity.key, cert: identity.cert }, (socket) => {
     sockets.add(socket);
@@ -96,6 +125,7 @@ async function startServer(
     socket.on("close", () => {
       sockets.delete(socket);
       closed += 1;
+      written += socket.bytesWritten;
       if (drip) clearInterval(drip);
     });
     socket.on("error", () => {});
@@ -117,6 +147,33 @@ async function startServer(
           socket.write(`* CAPABILITY IMAP4rev1\r\n${tag} OK done\r\n`);
         } else if (verb.toUpperCase() === "LOGIN") {
           socket.write(`${tag} OK [CAPABILITY IMAP4rev1] logged in\r\n`);
+        } else if (
+          ["SELECT", "EXAMINE"].includes(verb.toUpperCase()) &&
+          fetchBehaviour === "list-flood"
+        ) {
+          // The mailbox "does not exist": imapflow then LISTs, and the server floods that.
+          socket.write(`${tag} NO nope\r\n`);
+        } else if (verb.toUpperCase() === "NAMESPACE") {
+          socket.write(`* NAMESPACE (("" "/")) NIL NIL\r\n${tag} OK done\r\n`);
+        } else if (verb.toUpperCase() === "LIST" && /^\S+ LIST "" ""$/i.test(line)) {
+          // imapflow's own probe for the hierarchy delimiter: answered honestly, not flooded.
+          socket.write(`* LIST (\\Noselect) "/" ""\r\n${tag} OK done\r\n`);
+        } else if (verb.toUpperCase() === "LIST" && fetchBehaviour === "list-flood") {
+          flood(
+            socket,
+            tag,
+            floodItems,
+            (n) => `* LIST () "/" "${"A".repeat(FLOOD_ITEM_BYTES)}${n}"\r\n`,
+          );
+        } else if (verb.toUpperCase() === "FETCH" && fetchBehaviour === "fetch-flood") {
+          // Every message is a 1 MiB literal: each response is far under every cap.
+          flood(
+            socket,
+            tag,
+            floodItems,
+            (n) =>
+              `* ${n + 1} FETCH (UID ${n + 1} BODY[TEXT] {${FLOOD_ITEM_BYTES}}\r\n${"x".repeat(FLOOD_ITEM_BYTES)})\r\n`,
+          );
         } else if (["SELECT", "EXAMINE"].includes(verb.toUpperCase())) {
           socket.write(
             `* 1 EXISTS\r\n* OK [UIDVALIDITY 7] x\r\n* OK [UIDNEXT 6] x\r\n* FLAGS (\\Seen)\r\n${tag} OK [READ-WRITE] done\r\n`,
@@ -138,6 +195,7 @@ async function startServer(
     serverNames,
     commands,
     closedConnections: () => closed,
+    bytesWritten: () => written,
     stop: () =>
       new Promise<void>((resolve) => {
         for (const socket of sockets) socket.destroy();
@@ -361,6 +419,50 @@ describe.skipIf(!HAS_OPENSSL)("real imapflow, real TLS: what a hostile server ma
     });
     await client.connect();
     await expect(consumeFetch(client)).resolves.toBe(0);
+    await endImapSession(client);
+  });
+});
+
+describe.skipIf(!HAS_OPENSSL)("real imapflow, real TLS: a flood of small responses", () => {
+  it("a LIST flood (400 x 1 MiB, each far under every per-response cap) is cut off by the session byte budget", async () => {
+    const server = await startServer(good, "list-flood");
+    aimAt(server, good.cert);
+
+    const client = generic();
+    await client.connect();
+    // SELECT answers NO, imapflow LISTs, and the server floods the answer.
+    await expect(client.getMailboxLock("INBOX")).rejects.toThrow();
+
+    await vi.waitFor(() => expect(server.closedConnections()).toBe(1));
+    // Without the budget the client would read all 400 MiB; with it, the budget plus what
+    // the sockets were already holding.
+    expect(server.bytesWritten()).toBeLessThan(GENERIC_SESSION_BYTE_BUDGET + 24 * MIB);
+    expect(server.bytesWritten()).toBeLessThan((FLOOD_ITEMS * FLOOD_ITEM_BYTES) / 4);
+    await endImapSession(client);
+  });
+
+  it("a FETCH flood (400 literals of 1 MiB) is cut off the same way", async () => {
+    const server = await startServer(good, "fetch-flood");
+    aimAt(server, good.cert);
+
+    const client = generic();
+    await client.connect();
+    await expect(consumeFetch(client)).rejects.toThrow();
+
+    await vi.waitFor(() => expect(server.closedConnections()).toBe(1));
+    expect(server.bytesWritten()).toBeLessThan(GENERIC_SESSION_BYTE_BUDGET + 24 * MIB);
+    expect(server.bytesWritten()).toBeLessThan((FLOOD_ITEMS * FLOOD_ITEM_BYTES) / 4);
+    await endImapSession(client);
+  });
+
+  it("an honest transfer under the budget is untouched (8 messages of 1 MiB)", async () => {
+    const server = await startServer(good, "fetch-flood", 8);
+    aimAt(server, good.cert);
+
+    const client = generic();
+    await client.connect();
+    await expect(consumeFetch(client)).resolves.toBe(8);
+    expect(server.closedConnections()).toBe(0); // still open: nothing cut it
     await endImapSession(client);
   });
 });

@@ -20,6 +20,7 @@ const fake = vi.hoisted(() => ({
   logout: vi.fn(),
   on: vi.fn(),
   resolve: vi.fn(),
+  streamWrite: vi.fn(),
 }));
 
 class FakeImapFlow {
@@ -30,6 +31,8 @@ class FakeImapFlow {
   close = fake.close;
   logout = fake.logout;
   on = fake.on;
+  /** imapflow pipes every byte the socket receives into this stream's write(). */
+  streamer = { write: fake.streamWrite };
 }
 
 vi.mock("imapflow", () => ({ ImapFlow: FakeImapFlow }));
@@ -38,12 +41,15 @@ vi.mock("../mail/host-resolver.js", () => ({
   resolveHostAddresses: (...args: unknown[]) => fake.resolve(...args),
 }));
 
-const { checkImapRow, createImapClient } = await import("../mail/imap-connection.js");
+const { checkImapRow, createImapClient, FIXED_HOST_SESSION_DEADLINE_MS } = await import(
+  "../mail/imap-connection.js"
+);
 const { IMAP_PROVIDERS } = await import("../mail/imap-providers.js");
 const { PinnedAddressError } = await import("../mail/pinned-address.js");
 const {
   createPinnedImapClient,
   GENERIC_CONNECTION_TIMEOUT_MS,
+  GENERIC_SESSION_BYTE_BUDGET,
   GENERIC_MAX_LINE_BYTES,
   GENERIC_MAX_LITERAL_BYTES,
   GENERIC_MAX_RESPONSE_BYTES,
@@ -78,6 +84,7 @@ beforeEach(() => {
   fake.ctorCalls.length = 0;
   fake.connect.mockResolvedValue(undefined);
   fake.resolve.mockResolvedValue([PUBLIC_IP]);
+  fake.streamWrite.mockReturnValue(true);
   vi.spyOn(console, "warn").mockImplementation(() => {});
 });
 
@@ -434,6 +441,173 @@ describe("generic client: what is logged when a name is refused", () => {
   });
 });
 
+describe("generic client: a byte budget for the whole session (every command, every response)", () => {
+  const MIB = 1024 * 1024;
+  const writeOf = (client: unknown) =>
+    (client as { streamer: { write: (chunk: unknown) => boolean } }).streamer.write;
+
+  it("is tens of MiB: above any honest poll or action, far below what a flood needs", () => {
+    expect(GENERIC_SESSION_BYTE_BUDGET).toBeGreaterThanOrEqual(16 * MIB);
+    expect(GENERIC_SESSION_BYTE_BUDGET).toBeLessThanOrEqual(64 * MIB);
+  });
+
+  it("forwards bytes under the budget unchanged, and the stream's own answer with them", () => {
+    const write = writeOf(build());
+    const chunk = Buffer.alloc(4096, 1);
+    fake.streamWrite.mockReturnValueOnce(false); // backpressure from the stream must still reach the socket
+    expect(write(chunk)).toBe(false);
+    expect(fake.streamWrite).toHaveBeenCalledWith(chunk);
+    expect(fake.close).not.toHaveBeenCalled();
+  });
+
+  it("counts every response together: many chunks that are each small still add up", () => {
+    const write = writeOf(build());
+    const chunk = Buffer.alloc(MIB);
+    const limit = GENERIC_SESSION_BYTE_BUDGET / MIB;
+    for (let i = 0; i < limit; i++) write(chunk); // exactly the budget: allowed
+    expect(fake.close).not.toHaveBeenCalled();
+    expect(fake.streamWrite).toHaveBeenCalledTimes(limit);
+
+    write(Buffer.alloc(1)); // one byte over
+    expect(fake.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("past the budget the session is hard-closed ONCE and nothing more reaches the parser", () => {
+    const write = writeOf(build());
+    write(Buffer.alloc(GENERIC_SESSION_BYTE_BUDGET - 10));
+    fake.streamWrite.mockClear();
+
+    write(Buffer.alloc(100)); // crosses the budget: dropped, session closed
+    write(Buffer.alloc(MIB));
+    write(Buffer.alloc(MIB));
+
+    expect(fake.streamWrite).not.toHaveBeenCalled();
+    expect(fake.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("answers 'keep sending' after the cut-off so the socket is not stalled on a closed stream", () => {
+    const write = writeOf(build());
+    write(Buffer.alloc(GENERIC_SESSION_BYTE_BUDGET + 1));
+    expect(write(Buffer.alloc(10))).toBe(true);
+  });
+
+  it("counts string chunks by their bytes, not their characters", () => {
+    const write = writeOf(build());
+    // 3 bytes per character in UTF-8.
+    write("\u20ac".repeat(Math.floor(GENERIC_SESSION_BYTE_BUDGET / 3) + 1));
+    expect(fake.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("logs the cut-off once, as one line, naming the host and the budget", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const write = writeOf(build());
+    write(Buffer.alloc(GENERIC_SESSION_BYTE_BUDGET + 1));
+    write(Buffer.alloc(MIB));
+    write(Buffer.alloc(MIB));
+    const lines = warn.mock.calls.map((call) => call.join(" ")).filter((l) => /budget/i.test(l));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("imap.example.com");
+    expect(lines[0]).not.toMatch(/[\r\n]/);
+  });
+
+  it("the cut-off also cancels the session deadline (no timer is left to fire later)", async () => {
+    vi.useFakeTimers();
+    const client = build();
+    await client.connect();
+    expect(vi.getTimerCount()).toBe(1);
+    writeOf(client)(Buffer.alloc(GENERIC_SESSION_BYTE_BUDGET + 1));
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("is per session: a new client starts from zero", () => {
+    writeOf(build())(Buffer.alloc(GENERIC_SESSION_BYTE_BUDGET));
+    const second = build();
+    writeOf(second)(Buffer.alloc(GENERIC_SESSION_BYTE_BUDGET));
+    expect(fake.close).not.toHaveBeenCalled();
+  });
+});
+
+describe("every client: a wall-clock deadline on the whole session", () => {
+  const fixed = (provider = NAVER, host = "imap.naver.com:993") =>
+    createImapClient({
+      provider,
+      host,
+      email: "me@naver.com",
+      password: "pw",
+      socketTimeout: 30_000,
+    });
+
+  it("is generous (minutes, not seconds), and well past every action and poll deadline", () => {
+    expect(FIXED_HOST_SESSION_DEADLINE_MS).toBeGreaterThanOrEqual(2 * 60_000);
+    expect(FIXED_HOST_SESSION_DEADLINE_MS).toBeLessThanOrEqual(15 * 60_000);
+    expect(FIXED_HOST_SESSION_DEADLINE_MS).toBeGreaterThan(GENERIC_SESSION_DEADLINE_MS);
+  });
+
+  it.each([
+    ["Naver", NAVER, "imap.naver.com:993"],
+    ["iCloud", IMAP_PROVIDERS.ICLOUD, "imap.mail.me.com:993"],
+  ] as const)("%s: a session that outlives it is hard-closed, and not before", async (_name, provider, host) => {
+    vi.useFakeTimers();
+    await fixed(provider, host).connect();
+
+    await vi.advanceTimersByTimeAsync(FIXED_HOST_SESSION_DEADLINE_MS - 1);
+    expect(fake.close).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fake.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("arms nothing until the client connects (a client that is never used costs no timer)", () => {
+    vi.useFakeTimers();
+    fixed();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("a normal close cancels it, and so does the connection closing by itself", async () => {
+    vi.useFakeTimers();
+    const client = fixed();
+    await client.connect();
+    expect(vi.getTimerCount()).toBe(1);
+    client.close();
+    expect(vi.getTimerCount()).toBe(0);
+    expect(fake.close).toHaveBeenCalledTimes(1);
+
+    fake.close.mockClear();
+    const second = fixed();
+    await second.connect();
+    const onClose = fake.on.mock.calls
+      .filter((call) => call[0] === "close")
+      .at(-1)?.[1] as () => void;
+    onClose();
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(FIXED_HOST_SESSION_DEADLINE_MS * 2);
+    expect(fake.close).not.toHaveBeenCalled();
+  });
+
+  it("a connect that fails leaves no timer behind and rethrows the library's own error", async () => {
+    vi.useFakeTimers();
+    const boom = new Error("connect ECONNREFUSED");
+    fake.connect.mockRejectedValueOnce(boom);
+    await expect(fixed().connect()).rejects.toBe(boom);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("changes nothing else about a fixed-host client: same options, same library connect, same close", async () => {
+    const client = fixed();
+    expect(lastOptions()).toEqual({
+      host: "imap.naver.com",
+      port: 993,
+      secure: true,
+      auth: { user: "me@naver.com", pass: "pw" },
+      logger: false,
+      socketTimeout: 30_000,
+    });
+    await client.connect();
+    client.close();
+    expect(fake.connect).toHaveBeenCalledTimes(1);
+    expect(fake.close).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("generic client: a host the grammar refuses never builds a client", () => {
   it.each([
     "127.0.0.1:993",
@@ -469,9 +643,15 @@ describe("fixed-host providers are unchanged", () => {
       logger: false,
       socketTimeout: 12_000,
     });
-    expect(client.connect).toBe(fake.connect);
+    // The library's own connect is what runs; only a session deadline is added
+    // (below), and nothing is resolved by Klorn for a fixed host.
     await client.connect();
+    expect(fake.connect).toHaveBeenCalledTimes(1);
     expect(fake.resolve).not.toHaveBeenCalled();
+    // The byte stream is not wrapped for a fixed host: its server is a trusted one.
+    expect((client as unknown as { streamer: { write: unknown } }).streamer.write).toBe(
+      fake.streamWrite,
+    );
   });
 
   it("Naver still refuses a host the generic grammar would accept", () => {

@@ -1547,10 +1547,29 @@ OFF. Not flippable until the security review below signs off.
   maxLength }]`, which imapflow sends as `BODY.PEEK[TEXT]<0.N>`) and stops consuming
   FETCH results at its window of 50, so a lying server cannot make one poll
   unbounded. Registry `maxAccounts` for generic is 3, not 10: the poll is serial, and
-  each generic account is an arbitrary slow host. The scheduler skips a tick that
-  would start while the previous one is still running (every provider), so slow
-  ticks no longer stack. All of this is generic-only except that guard: Naver and
-  iCloud clients, queries and logs are unchanged.
+  each generic account is an arbitrary slow host.
+  Second review (2026-10-01), which found the per-response caps were not enough: they
+  bound ONE response, not a series. A SELECT answered NO makes imapflow LIST, and 400
+  untagged LIST lines of 1 MiB (each far under every cap) grew RSS by 585 MiB. So a
+  generic client has a byte budget for the WHOLE session, 32 MiB, counted at the
+  stream every received byte is piped into (imapflow's `streamer`, so every command
+  is covered): past it the session is hard-closed and no later byte reaches the
+  parser (`GENERIC_SESSION_BYTE_BUDGET`; wire-tested against a LIST flood and a FETCH
+  flood with the real library, with an honest 8 MiB transfer left alone). The
+  scheduler no longer has a global tick lock: one boolean meant a tick that never
+  settled stopped ALL IMAP polling, Naver and iCloud included (the heartbeat, then
+  recorded ahead of the guard, stayed green). The double-poll guard is per ACCOUNT
+  (`imap-accounts.ts`: a row whose previous poll is still running is skipped, released
+  on every exit), the heartbeat is recorded inside a tick that runs, and EVERY
+  provider's session now has a wall-clock deadline: 5 minutes for the fixed hosts
+  (`FIXED_HOST_SESSION_DEADLINE_MS`; they had only a 30 s inactivity timer), 90 s for
+  generic. Non-auth generic failures back the account off, 10 minutes doubling to a
+  6 h cap, per account, in memory and size-bounded, cleared by a successful poll or a
+  relink (`imap-poll-backoff.ts`; a stalling host used to cost a serial tick ~105 s
+  every five minutes, three accounts per user). Everything here is generic-only except
+  the per-account guard, the heartbeat placement and the fixed-host deadline: Naver
+  and iCloud clients, queries and logs are otherwise unchanged (their suites pass
+  untouched, apart from B2b's overlap test, below).
 - D5 No oracle, no scanner. The connect route runs at most 10 attempts per user per
   hour (`mail/generic-imap-attempts.ts`, in-process like `login-throttle.ts`; answers
   429), on top of the route's per-IP limit (5 per 15 minutes), entitlement and the
@@ -1597,8 +1616,13 @@ OFF. Not flippable until the security review below signs off.
   which the per-user limit bounds but does not remove. (c) The attempt limiter is
   in-process: a restart resets it and each replica counts alone (single instance on
   Render today). (d) The bounds cap a slow host at 90 s per session, so a user with
-  3 generic accounts can cost a tick up to 4.5 minutes; with the in-flight guard that
-  delays the next tick instead of stacking one. (e) Network-level egress filtering on the host would be a second
+  3 generic accounts can cost a tick up to 4.5 minutes until the backoff slows them;
+  ticks overlap rather than queue, each skipping the accounts already in flight.
+  (e) A name that is a CNAME to a built-in provider host (for example a vanity name for
+  imap.gmail.com) passes the host grammar, which looks at the name typed; it connects
+  as an ordinary generic account and fails the login or works as IMAP. A UX gap only
+  (the user should have used the built-in connection), not a security one, so there
+  is no code for it. (f) Network-level egress filtering on the host would be a second
   layer; not verified, not assumed.
 - Verify (test-first): a table-driven validator test (every range above, mixed
   public and private answers, rebinding between two resolutions, IP literals in
@@ -1659,6 +1683,21 @@ OFF. Not flippable until the security review below signs off.
     made portable (it skips with a warning if the binary is missing). imap-sync.ts
     has three small additive edits: the TEXT query and the window break in the fetch
     loop and the failure report in the final catch.
+  - Second review fixes (2026-10-01): the session byte budget; the per-account guard
+    in place of the global tick lock, the heartbeat inside the tick and a 5 minute
+    session deadline for every provider; the backoff; `syncImapMessage` fetches the
+    same TEXT slice as the poll; a poll that started before a relink flags
+    `needsReconnect` only while the row still holds the cipher it began with (a
+    conditional write); a generic account is stored by a conditional create or update,
+    never an upsert (an existing row is updated only while it still has the host it
+    was checked with, and a unique-key collision with a concurrent create is settled by
+    the winner's host: same host is a double click, another host is the 409), so two
+    concurrent first connects to different hosts cannot both pass; a stored subject
+    and cc are capped at 1 000 and 4 000 characters for every provider (neither was
+    capped anywhere; shorter values are stored exactly as before, and the subject cap
+    lives in `envelopeSubject`, the one place the stored and the compared value are
+    derived). B2b's "overlapping polls" test now stages its race from a poll outside
+    the in-process guard, which is what two processes (a rolling deploy) are.
   - Rebased onto B2b (#1351, 2026-09-30). Conflicts were the `.env.example` flag
     blocks (both kept), the `imap-sync.ts` imports and the `lastSyncedAt` stamp in
     `imap-accounts.ts`: B2b's rule (a held poll stores nothing, so it does not stamp)
@@ -1671,9 +1710,9 @@ OFF. Not flippable until the security review below signs off.
     `logScope`) instead of naming providers. `canAutoSendFromMailbox` allows only
     GOOGLE, so a generic mailbox never gets an unattended reply. What was missing was
     proof, added test-first: the real poll, hold, repair, history and actions for a
-    generic mailbox (`imap-generic-reset.test.ts`, with the scheduler's in-flight
-    guard and the hold together: a held generic mailbox is stamped by no tick and
-    overlapping ticks skip), the primitives with Gmail and Outlook ids excluded
+    generic mailbox (`imap-generic-reset.test.ts`, with the scheduler's per-account
+    guard and the hold together: a held generic mailbox is stamped by no tick, and a
+    stuck account does not block the next tick), the primitives with Gmail and Outlook ids excluded
     (`imap-generic-protections.test.ts`), and B2b's firewall PUSH, urgent sweep,
     rule auto-reply and auto-mode tests re-run over a generic id head. Detection
     hard-coded back to the two prefixes fails 18 of those tests.

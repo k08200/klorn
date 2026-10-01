@@ -52,7 +52,9 @@ vi.mock("../judge/email-firewall.js", () => ({
   persistGmailEmail: (...args: unknown[]) => fake.persist(...args),
 }));
 
-const { syncImapInbox } = await import("../mail/imap-sync.js");
+const { syncImapInbox, syncImapMessage } = await import("../mail/imap-sync.js");
+const { MAX_STORED_CC_LENGTH, MAX_STORED_SUBJECT_LENGTH, NO_SUBJECT, envelopeSubject } =
+  await import("../mail/imap-envelope.js");
 const { IMAP_PROVIDERS } = await import("../mail/imap-providers.js");
 const { GENERIC_TEXT_FETCH_BYTES } = await import("../mail/generic-imap-bounds.js");
 
@@ -198,5 +200,117 @@ describe("a failed poll", () => {
       (call) => String(call[0]).includes("sync failed"),
     );
     expect(warn?.[1]).toBe("boom\r\nraw text");
+  });
+});
+
+describe("the undo re-ingest (syncImapMessage) fetches the same bounded slice as the poll", () => {
+  const messageArgs = (provider = GENERIC) => ({
+    provider,
+    userId: "u1",
+    email: provider === NAVER ? "me@naver.com" : "me@example.com",
+    password: "pw",
+    host: provider === NAVER ? "imap.naver.com:993" : "imap.example.com:993",
+    linkedInboxAccountId: "row-1",
+    uid: 205,
+  });
+
+  beforeEach(() => {
+    fake.persist.mockResolvedValue({ isNew: false, emailId: "e-1" });
+  });
+
+  it("generic: TEXT with a byte range, so a message larger than the literal cap can still be restored", async () => {
+    yielding(1);
+    await syncImapMessage(messageArgs());
+    expect(fake.fetchImpl.mock.calls[0][1]).toEqual({
+      envelope: true,
+      flags: true,
+      bodyParts: [{ key: "TEXT", start: 0, maxLength: GENERIC_TEXT_FETCH_BYTES }],
+    });
+    expect(fake.fetchImpl.mock.calls[0][2]).toEqual({ uid: true });
+  });
+
+  it("Naver: the whole TEXT, exactly as before", async () => {
+    yielding(1);
+    await syncImapMessage(messageArgs(NAVER));
+    expect(fake.fetchImpl.mock.calls[0][1]).toEqual({
+      envelope: true,
+      flags: true,
+      bodyParts: ["TEXT"],
+    });
+  });
+
+  it("resolves with the stored row's id", async () => {
+    yielding(1);
+    await expect(syncImapMessage(messageArgs())).resolves.toEqual({ emailId: "e-1" });
+  });
+});
+
+describe("what is stored from an envelope is bounded", () => {
+  /** One message whose envelope has this subject and these cc addresses. */
+  function envelopeOf(subject: string, cc: Array<{ name?: string; address?: string }> = []) {
+    fake.fetchImpl.mockImplementation(() =>
+      (async function* () {
+        yield { uid: 1, flags: new Set<string>(), envelope: { subject, cc } };
+      })(),
+    );
+  }
+  const stored = (): { subject: string; cc: string } => fake.persist.mock.calls[0][1];
+
+  it("names its limits", () => {
+    expect(MAX_STORED_SUBJECT_LENGTH).toBe(1_000);
+    expect(MAX_STORED_CC_LENGTH).toBe(4_000);
+  });
+
+  describe.each([
+    ["generic IMAP", GENERIC],
+    ["Naver", NAVER],
+  ] as const)("%s", (_name, provider) => {
+    it("a subject over the cap is cut to it", async () => {
+      envelopeOf("S".repeat(5_000_000));
+      await syncImapInbox(args(provider));
+      expect(stored().subject).toHaveLength(MAX_STORED_SUBJECT_LENGTH);
+    });
+
+    it("a subject at or under the cap is stored exactly as before (trimmed, nothing else)", async () => {
+      envelopeOf(`  ${"S".repeat(MAX_STORED_SUBJECT_LENGTH)}  `);
+      await syncImapInbox(args(provider));
+      expect(stored().subject).toBe("S".repeat(MAX_STORED_SUBJECT_LENGTH));
+      vi.clearAllMocks();
+      fake.persist.mockResolvedValue({ isNew: false });
+      envelopeOf("Quarterly numbers, Q3");
+      await syncImapInbox(args(provider));
+      expect(stored().subject).toBe("Quarterly numbers, Q3");
+    });
+
+    it("cc over the cap is cut to it", async () => {
+      envelopeOf(
+        "s",
+        Array.from({ length: 5_000 }, (_, i) => ({
+          name: "Someone",
+          address: `p${i}@example.com`,
+        })),
+      );
+      await syncImapInbox(args(provider));
+      expect(stored().cc.length).toBe(MAX_STORED_CC_LENGTH);
+    });
+
+    it("cc under the cap is stored exactly as before", async () => {
+      envelopeOf("s", [
+        { name: "Kim", address: "kim@example.com" },
+        { address: "lee@example.com" },
+      ]);
+      await syncImapInbox(args(provider));
+      expect(stored().cc).toBe("Kim <kim@example.com>, lee@example.com");
+    });
+  });
+
+  it("envelopeSubject: the one place a subject is derived, capped for the stored AND the compared value", () => {
+    expect(envelopeSubject("x".repeat(10_000))).toHaveLength(MAX_STORED_SUBJECT_LENGTH);
+    expect(envelopeSubject("  hi  ")).toBe("hi");
+    expect(envelopeSubject("")).toBe(NO_SUBJECT);
+    expect(envelopeSubject(null)).toBe(NO_SUBJECT);
+    expect(envelopeSubject("   ")).toBe(NO_SUBJECT);
+    // The same long subject on both sides compares equal after the cap.
+    expect(envelopeSubject("y".repeat(9_000))).toBe(envelopeSubject("y".repeat(7_000)));
   });
 });

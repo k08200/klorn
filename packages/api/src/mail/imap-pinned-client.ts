@@ -32,6 +32,7 @@
 
 import { ImapFlow, type ImapFlowOptions } from "imapflow";
 
+import { armTimer } from "./imap-session-deadline.js";
 import { sanitizeLogText } from "./log-text.js";
 import { PinnedAddressError, resolvePinnedAddress } from "./pinned-address.js";
 
@@ -53,6 +54,15 @@ export const GENERIC_MAX_LINE_BYTES = 2 * MIB;
 export const GENERIC_MAX_LITERAL_BYTES = 4 * MIB;
 /** A whole response; imapflow needs it above the literal cap so a literal at the cap can arrive. */
 export const GENERIC_MAX_RESPONSE_BYTES = 8 * MIB;
+/**
+ * Every byte the server may send in ONE session, all commands and responses together.
+ * The per-response caps above bound one response, not a series of them: a SELECT that
+ * answers NO makes imapflow LIST, and a flood of untagged LIST lines (each far under
+ * every cap) was buffered without limit (confirmed: 400 x 1 MiB grew RSS by 585 MiB).
+ * An honest poll or action reads a few MiB (a window of 50 messages with 64 KiB of
+ * text each is about 3.5 MiB), so tens of MiB is generous.
+ */
+export const GENERIC_SESSION_BYTE_BUDGET = 32 * MIB;
 const MIN_TLS_VERSION = "TLSv1.2";
 
 const CONNECT_TIMEOUT_MESSAGE = "connection timed out";
@@ -67,13 +77,6 @@ export interface PinnedClientArgs {
   logScope: string;
   /** Override of GENERIC_SESSION_DEADLINE_MS, for tests. */
   sessionDeadlineMs?: number;
-}
-
-/** A timer that does not keep the process alive; returns the function that cancels it. */
-function armTimer(ms: number, onExpire: () => void): () => void {
-  const timer = setTimeout(onExpire, ms);
-  timer.unref?.();
-  return () => clearTimeout(timer);
 }
 
 /** `work`, unless `ms` pass first: then `onExpire` runs and the result is a timeout error. */
@@ -108,6 +111,40 @@ function logRefusal(logScope: string, hostname: string, err: unknown): void {
   } else {
     console.warn(`[${logScope}] connect to ${hostname} failed: ${sanitizeLogText(err)}`);
   }
+}
+
+/**
+ * Count the bytes of the whole session at the stream every received byte is piped into
+ * (imapflow's `streamer`, written by the socket), so every command is covered, and cut
+ * the session off the moment the budget is exceeded: the connection is closed and the
+ * bytes that crossed the line, and every later one, never reach the parser. A library
+ * build without that stream is left as it is.
+ */
+function budgetSessionBytes(
+  client: ImapFlow,
+  who: { hostname: string; logScope: string },
+  cutOff: () => void,
+): void {
+  const streamer = (client as unknown as { streamer?: ByteSink }).streamer;
+  if (!streamer || typeof streamer.write !== "function") return;
+  const forward = streamer.write.bind(streamer);
+  let received = 0;
+  let exhausted = false;
+  streamer.write = (chunk, ...rest) => {
+    if (exhausted) return true; // keep the socket draining; the session is already closing
+    received += typeof chunk === "string" ? Buffer.byteLength(chunk) : chunk.length;
+    if (received <= GENERIC_SESSION_BYTE_BUDGET) return forward(chunk, ...rest);
+    exhausted = true;
+    console.warn(
+      `[${who.logScope}] ${who.hostname}: the session exceeded its ${GENERIC_SESSION_BYTE_BUDGET / MIB} MiB byte budget; closed`,
+    );
+    cutOff();
+    return true;
+  };
+}
+
+interface ByteSink {
+  write: (chunk: Buffer | Uint8Array | string, ...rest: unknown[]) => boolean;
 }
 
 export function createPinnedImapClient(args: PinnedClientArgs): ImapFlow {
@@ -164,6 +201,10 @@ export function createPinnedImapClient(args: PinnedClientArgs): ImapFlow {
   };
   // The connection ended by itself (error, server BYE): nothing is left to cut off.
   client.on("close", () => cancelSessionDeadline());
+  budgetSessionBytes(client, { hostname, logScope }, () => {
+    cancelSessionDeadline();
+    hardClose();
+  });
 
   const connectPinned = async (): Promise<void> => {
     // Fresh on every connection: nothing is remembered from an earlier one.
