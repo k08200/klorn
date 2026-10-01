@@ -192,6 +192,23 @@ export function outlookCalendarEnabled(): boolean {
     )
   );
 }
+// iCloud and Naver calendars over CalDAV, read-only — step C3 of
+// docs/providers/unified-platform-plan.md. OFF by default (repo doctrine). While
+// off: every /api/caldav-calendar route answers Fastify's default 404
+// (darkRouteGate), the calendar provider dispatcher answers ICLOUD and NAVER with
+// the same unsupported result it did before C3 (no CalDAV request, no password
+// decrypt, no row), every reader hides ICLOUD and NAVER rows already stored
+// (CALENDAR_PROVIDER_ENABLED in pim/calendar-scope.ts), and no row is removed by
+// the CalDAV window reconcile. Syncing events additionally needs
+// LINKED_CALENDAR_SYNC_ENABLED and the user's entitlement, the C2 loop's own
+// gates. Independent of ICLOUD_INBOX_ENABLED: the calendar routes are their own
+// dark surface. Read at request time with the same lenient truthy parse, so a
+// flip needs no redeploy.
+export function caldavCalendarEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.CALDAV_CALENDAR_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
 // IMAP flag actions (read, unread, star) for Naver and iCloud — step B1 of
 // docs/providers/unified-platform-plan.md. OFF by default (repo doctrine). While
 // OFF, mail/providers/dispatch.ts routes NAVER and ICLOUD to the unsupported

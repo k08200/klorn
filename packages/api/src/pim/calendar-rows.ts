@@ -162,3 +162,23 @@ export function googleSourceScope(userId: string, linkedAccountId: string | null
     sourceKey: sourceKeyFor(linkedAccountId),
   };
 }
+
+/**
+ * The rows of ONE linked account of one user, of one provider: the `where` the
+ * CalDAV window reconcile (C3) starts from. The source key is derived here like
+ * every other; the primary calendar, LOCAL rows and another account's, provider's
+ * or user's rows are outside it.
+ */
+export function linkedSourceScope(
+  provider: CalendarProviderName,
+  userId: string,
+  linkedAccountId: string,
+) {
+  if (!linkedAccountId) throw new Error("linkedSourceScope needs a linked account id");
+  return {
+    userId,
+    provider,
+    sourceAccountId: linkedAccountId,
+    sourceKey: sourceKeyFor(linkedAccountId),
+  };
+}

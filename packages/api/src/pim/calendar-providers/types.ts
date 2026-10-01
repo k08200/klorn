@@ -153,9 +153,31 @@ export interface PersonFreeBusy {
   readonly anyBusy: boolean;
 }
 
+/**
+ * A listing that says whether it is the provider's COMPLETE set of events for its
+ * window (step C3). Only a provider that sees every event of a window in one fetch
+ * (CalDAV with a time-range query) can make that promise; the sync then removes the
+ * rows of that window the listing no longer has. `complete` is false whenever
+ * anything was left out: a calendar that failed, a cap that was hit, an object that
+ * could not be read.
+ */
+export interface CalendarWindowListing {
+  readonly events: ProviderCalendarEvent[];
+  readonly complete: boolean;
+  /** The window the listing covers: the query's timeMin, and its timeMax (or the default end). */
+  readonly window: CalendarWindow;
+  /** When the listing started: a row written after it (by a concurrent sync) is never removed. */
+  readonly listedAt: Date;
+}
+
 export interface CalendarSession {
   readonly provider: CalendarProviderName;
   listEvents(query: CalendarListQuery): Promise<ProviderCalendarEvent[]>;
+  /**
+   * The window's events and whether that is all of them (C3, CalDAV only). The
+   * sync prefers it to `listEvents` when present. Throws like `listEvents`.
+   */
+  listWindow?(query: CalendarListQuery): Promise<CalendarWindowListing>;
   /**
    * The ids of events deleted or cancelled since `query.updatedMin` (C2b), for the
    * row sync to remove. Optional: a provider without it simply never removes rows

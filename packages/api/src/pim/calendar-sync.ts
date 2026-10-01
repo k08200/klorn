@@ -19,6 +19,7 @@ import {
   upsertGoogleEventRow,
   upsertLinkedEventRow,
 } from "./calendar-rows.js";
+import { removeRowsMissingFromWindow } from "./calendar-window-reconcile.js";
 import { handleLinkedCalendarFailure } from "./linked-calendar-failure.js";
 
 export const CALENDAR_SYNC_WINDOW_DAYS = 30;
@@ -64,17 +65,21 @@ interface SyncRow {
   readonly fields: CalendarEventFields;
 }
 
-/** One account's sync window as rows; events with no id or usable times are dropped. */
+/** Events as rows; events with no id or usable times are dropped. */
+function toSyncRows(events: readonly ProviderCalendarEvent[]): SyncRow[] {
+  return events.flatMap((event) => {
+    const fields = syncRowFields(event);
+    return fields ? [{ externalId: event.externalId, fields }] : [];
+  });
+}
+
+/** One account's sync window as rows. */
 async function listSyncRows(
   session: CalendarSession,
   userTimezone: string,
   now: Date,
 ): Promise<SyncRow[]> {
-  const events = await session.listEvents(syncQuery(now, userTimezone));
-  return events.flatMap((event) => {
-    const fields = syncRowFields(event);
-    return fields ? [{ externalId: event.externalId, fields }] : [];
-  });
+  return toSyncRows(await session.listEvents(syncQuery(now, userTimezone)));
 }
 
 /**
@@ -100,7 +105,11 @@ export async function syncPrimaryCalendarWindow(
 
 /**
  * Sync one LINKED calendar's window into rows tagged with that account and with
- * the provider of the session that listed them (GOOGLE, or OUTLOOK in C4).
+ * the provider of the session that listed them (GOOGLE, OUTLOOK in C4, ICLOUD or
+ * NAVER in C3). A session that can say its listing is complete (CalDAV, C3) is
+ * listed through `listWindow`, and after the upsert the window's rows it no longer
+ * has are removed (calendar-window-reconcile.ts, which owns the guard); every other
+ * session is listed exactly as before and nothing is removed for being absent.
  */
 export async function syncLinkedCalendarWindow(
   session: CalendarSession,
@@ -109,7 +118,9 @@ export async function syncLinkedCalendarWindow(
   userTimezone: string,
   now: Date = new Date(),
 ): Promise<number> {
-  const rows = await listSyncRows(session, userTimezone, now);
+  const query = syncQuery(now, userTimezone);
+  const listing = session.listWindow ? await session.listWindow(query) : null;
+  const rows = toSyncRows(listing ? listing.events : await session.listEvents(query));
   for (const row of rows) {
     await upsertLinkedEventRow(
       session.provider,
@@ -118,6 +129,9 @@ export async function syncLinkedCalendarWindow(
       row.externalId,
       row.fields,
     );
+  }
+  if (listing) {
+    await removeRowsMissingFromWindow(session.provider, userId, linkedAccountId, listing, now);
   }
   await reconcileCancelledEvents(session, userId, linkedAccountId, now);
   return rows.length;
