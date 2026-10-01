@@ -22,6 +22,27 @@ struct MeetingPrepPack: Codable, Sendable {
     let checklist: [String]
 }
 
+/// The one gate in front of every "join meeting" open. A calendar event's
+/// meetingLink is invite data anyone can set (the server takes it from the
+/// event's conference data or a regex over its description), so the client only
+/// opens an absolute https URL with a host and no userinfo. Anything else gets
+/// no join button and is never handed to NSWorkspace: no `http:`, `file:`,
+/// `javascript:`, or app schemes such as `zoommtg:`. Mirror of
+/// safeMeetingHref in packages/web/src/lib/meeting-link.ts.
+enum MeetingLink {
+    static func safeURL(_ raw: String?) -> URL? {
+        guard let raw, !raw.isEmpty,
+              // Whitespace and control characters are refused, never trimmed.
+              !raw.unicodeScalars.contains(where: { $0.value <= 0x20 || $0.value == 0x7F }),
+              let parts = URLComponents(string: raw),
+              parts.scheme?.lowercased() == "https",
+              parts.user == nil, parts.password == nil,
+              let host = parts.host, !host.isEmpty
+        else { return nil }
+        return parts.url
+    }
+}
+
 /// Display label for the readiness enum; unknown values fall back to a
 /// neutral "Prep" so a server-side addition can't render a raw slug.
 func readinessLabel(_ readiness: String) -> String {

@@ -7,6 +7,7 @@ import AuthGuard from "../../../components/auth-guard";
 import { apiFetch } from "../../../lib/api";
 import { useAuth } from "../../../lib/auth";
 import { useT } from "../../../lib/i18n";
+import { safeMeetingHref } from "../../../lib/meeting-link";
 import { captureClientError } from "../../../lib/sentry";
 
 type Readiness = "ready" | "watch" | "needs_review";
@@ -191,6 +192,26 @@ function ExternalLinkIcon() {
   );
 }
 
+/** The join link, only when it is an https URL (lib/meeting-link). The link is
+ *  invite data anyone can set, so anything else stays inert text, never a link. */
+function MeetingLinkLine({ link }: { link: string }) {
+  const href = safeMeetingHref(link);
+  if (!href) {
+    return <p className="mt-2 break-all text-[12px] text-ink-dim">{link}</p>;
+  }
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="mt-2 inline-flex items-center gap-1 text-[12px] text-accent-deep hover:text-accent-deep"
+    >
+      Join meeting
+      <ExternalLinkIcon />
+    </a>
+  );
+}
+
 function CalendarEventDetail({ id }: { id: string }) {
   const router = useRouter();
   const { t } = useT();
@@ -300,17 +321,7 @@ function CalendarEventDetail({ id }: { id: string }) {
                   {t("calendar.readOnlyHint")}
                 </p>
               )}
-              {event.meetingLink && (
-                <a
-                  href={event.meetingLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-2 inline-flex items-center gap-1 text-[12px] text-accent-deep hover:text-accent-deep"
-                >
-                  Join meeting
-                  <ExternalLinkIcon />
-                </a>
-              )}
+              {event.meetingLink && <MeetingLinkLine link={event.meetingLink} />}
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
