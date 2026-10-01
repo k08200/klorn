@@ -10,19 +10,19 @@
  * `where` is composed here, after the caller's predicate, so a caller can neither
  * forget the scope nor widen the user.
  *
- * With the linked sync off no linked row is visible, nothing can be a copy, and
- * the queries are the ones the readers always ran: a count stays a database
- * count and a cap stays a database `take`. Rows are fetched and merged only once
- * copies can exist. They are bounded by the sync itself (30 days, 100 events per
- * calendar), so a read without a `take` stays small.
+ * With no linked row visible (the linked sync off and no connector's flag on, see
+ * `anyLinkedRowVisible`) nothing can be a copy, and the queries are the ones the
+ * readers always ran: a count stays a database count and a cap stays a database
+ * `take`. Rows are fetched and merged only once copies can exist. They are bounded
+ * by the sync itself (30 days, 100 events per calendar), so a read without a
+ * `take` stays small.
  */
 
 import type { Prisma } from "@prisma/client";
-import { linkedCalendarSyncEnabled } from "../config.js";
 import { prisma } from "../db.js";
 import { localDateKey } from "../time-zone.js";
 import { dedupeCalendarEvents } from "./calendar-dedupe.js";
-import { calendarSourceScope } from "./calendar-scope.js";
+import { anyLinkedRowVisible, calendarSourceScope } from "./calendar-scope.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** How far ahead `list_events` reads: the sync's 30-day window plus a day of slack. */
@@ -87,7 +87,7 @@ export async function readCalendarRows(query: CalendarReadQuery): Promise<Calend
   const { userId, when, limit } = query;
   // A cap before the dedupe would let copies spend it, so the database caps the
   // query only while no linked row can be visible (what the readers always did).
-  const dbTake = limit !== undefined && !linkedCalendarSyncEnabled() ? limit : undefined;
+  const dbTake = limit !== undefined && !anyLinkedRowVisible() ? limit : undefined;
   const rows = await prisma.calendarEvent.findMany({
     where: { ...when, userId, ...calendarSourceScope() },
     orderBy: { startTime: "asc" },
@@ -101,7 +101,7 @@ export async function readCalendarRows(query: CalendarReadQuery): Promise<Calend
 /** How many events match `when`, each invite counted once. */
 export async function countCalendarRows(query: Omit<CalendarReadQuery, "limit">): Promise<number> {
   const { userId, when } = query;
-  if (!linkedCalendarSyncEnabled()) {
+  if (!anyLinkedRowVisible()) {
     return prisma.calendarEvent.count({ where: { ...when, userId, ...calendarSourceScope() } });
   }
   const rows = await prisma.calendarEvent.findMany({

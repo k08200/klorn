@@ -29,6 +29,20 @@ describe("timezone helpers", () => {
     expect(range.lt.toISOString()).toBe("2026-05-04T15:00:00.000Z");
   });
 
+  it("a local day is 25 hours long on the fall-back day and 23 on the spring-forward day", () => {
+    const fall = localDayUtcRange(new Date("2026-11-01T20:00:00.000Z"), "America/Los_Angeles");
+    expect(fall.gte.toISOString()).toBe("2026-11-01T07:00:00.000Z");
+    expect(fall.lt.toISOString()).toBe("2026-11-02T08:00:00.000Z");
+
+    const spring = localDayUtcRange(new Date("2026-03-08T20:00:00.000Z"), "America/Los_Angeles");
+    expect(spring.gte.toISOString()).toBe("2026-03-08T08:00:00.000Z");
+    expect(spring.lt.toISOString()).toBe("2026-03-09T07:00:00.000Z");
+
+    const berlin = localDayUtcRange(new Date("2026-10-25T12:00:00.000Z"), "Europe/Berlin");
+    expect(berlin.gte.toISOString()).toBe("2026-10-24T22:00:00.000Z");
+    expect(berlin.lt.toISOString()).toBe("2026-10-25T23:00:00.000Z");
+  });
+
   it("computes day-of-week in the selected timezone", () => {
     // 00:30 UTC is Mon 09:30 in Seoul but still Sun 17:30 in LA (previous
     // calendar day), so the two zones report adjacent weekdays.

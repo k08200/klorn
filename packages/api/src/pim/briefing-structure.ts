@@ -16,6 +16,7 @@ import {
 import { localDayUtcRange } from "../time-zone.js";
 import { stripUntrusted } from "../untrusted.js";
 import { getUserTimeZone } from "../user-timezone.js";
+import { withoutHiddenCalendarItems } from "./attention-calendar-visibility.js";
 import { readCalendarRows } from "./calendar-read.js";
 import {
   buildDayShape,
@@ -27,6 +28,10 @@ import {
 
 /** Timed events read for one day's shape; the cap applies after the dedupe. */
 const DAY_SHAPE_EVENT_LIMIT = 50;
+/** Open PUSH items the briefing lists as "needs attention". */
+const ATTENTION_LIMIT = 3;
+/** Items read per item shown, to absorb the ones a hidden calendar event drops (as the inbox summary does). */
+const ATTENTION_OVERFETCH = 4;
 
 export interface BriefingSegmentView {
   label: string;
@@ -304,13 +309,21 @@ export async function buildBriefingStructure(
     }),
     // "Needs attention" = the open PUSH lane, cheapest honest source (pure
     // DB — this endpoint is polled, so it must never touch the Gmail API).
+    // Overfetched: an item that mirrors a hidden calendar event is dropped below
+    // (kill switch), and the list must still reach the top ATTENTION_LIMIT.
     prisma.attentionItem.findMany({
       where: { userId, status: "OPEN", tier: "PUSH" },
       orderBy: { priority: "desc" },
-      take: 3,
-      select: { title: true, tierReason: true },
+      take: ATTENTION_LIMIT * ATTENTION_OVERFETCH,
+      select: { title: true, tierReason: true, source: true, sourceId: true },
     }),
   ]);
+  // A calendar event the kill switch hides must not keep showing through its
+  // mirrored attention item (the title is copied into it).
+  const attentionItems = (await withoutHiddenCalendarItems(userId, pushItems)).slice(
+    0,
+    ATTENTION_LIMIT,
+  );
   const events = rows.map((row) => ({
     title: row.title,
     // Clamp instants outside today's local day to the day edges — localHour
@@ -331,7 +344,7 @@ export async function buildBriefingStructure(
     })),
     curve: shape.curve,
     dayStartHour: DAY_START_HOUR,
-    attention: pushItems.map((item, i) => ({
+    attention: attentionItems.map((item, i) => ({
       rank: i + 1,
       action: stripUntrusted(item.title),
       reason: stripUntrusted(item.tierReason ?? ""),

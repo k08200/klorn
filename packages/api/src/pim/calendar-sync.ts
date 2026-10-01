@@ -17,7 +17,7 @@ import type {
 import {
   type CalendarEventFields,
   upsertGoogleEventRow,
-  upsertLinkedGoogleEventRow,
+  upsertLinkedEventRow,
 } from "./calendar-rows.js";
 import { handleLinkedCalendarFailure } from "./linked-calendar-failure.js";
 
@@ -98,7 +98,10 @@ export async function syncPrimaryCalendarWindow(
   return rows.length;
 }
 
-/** Sync one LINKED calendar's window into rows tagged with that account. */
+/**
+ * Sync one LINKED calendar's window into rows tagged with that account and with
+ * the provider of the session that listed them (GOOGLE, or OUTLOOK in C4).
+ */
 export async function syncLinkedCalendarWindow(
   session: CalendarSession,
   userId: string,
@@ -108,7 +111,13 @@ export async function syncLinkedCalendarWindow(
 ): Promise<number> {
   const rows = await listSyncRows(session, userTimezone, now);
   for (const row of rows) {
-    await upsertLinkedGoogleEventRow(userId, linkedAccountId, row.externalId, row.fields);
+    await upsertLinkedEventRow(
+      session.provider,
+      userId,
+      linkedAccountId,
+      row.externalId,
+      row.fields,
+    );
   }
   await reconcileCancelledEvents(session, userId, linkedAccountId, now);
   return rows.length;

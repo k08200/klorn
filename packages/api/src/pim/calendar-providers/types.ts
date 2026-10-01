@@ -183,6 +183,20 @@ export interface CalendarProviderActions {
   connect(account: CalendarAccountRef): Promise<CalendarSession | CalendarUnsupported | null>;
 }
 
+/**
+ * Thrown by a read-only provider's write methods (createEvent, updateEvent,
+ * deleteEvent). Nothing calls them on a linked session today (writes go through
+ * the primary Google calendar), so this is a guard, not a flow: a future caller
+ * that routes a write to a read-only account fails loudly instead of silently
+ * dropping the write.
+ */
+export class CalendarReadOnlyError extends Error {
+  constructor(readonly provider: CalendarProviderName) {
+    super(`Calendar provider ${provider} is read-only from Klorn.`);
+    this.name = "CalendarReadOnlyError";
+  }
+}
+
 /** True when `connect` answered the explicit unsupported result. */
 export function isCalendarUnsupported(
   result: CalendarSession | CalendarUnsupported | null,

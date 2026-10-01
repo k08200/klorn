@@ -9,9 +9,11 @@
  */
 
 import type { LinkedCalendarAccount } from "@prisma/client";
+import { outlookCalendarEnabled } from "../../config.js";
 import { prisma } from "../../db.js";
 import type { CalendarProviderName } from "../calendar-rows.js";
 import { googleCalendarActions } from "./google.js";
+import { outlookCalendarActions } from "./outlook.js";
 import {
   type CalendarProviderActions,
   type CalendarSession,
@@ -31,6 +33,10 @@ const ACTIONS_BY_PROVIDER: Readonly<Record<CalendarProviderName, CalendarProvide
 export function calendarActionsForProvider(
   provider: CalendarProviderName,
 ): CalendarProviderActions {
+  // OUTLOOK (step C4) is real only while OUTLOOK_CALENDAR_ENABLED and
+  // OUTLOOK_INBOX_ENABLED are both on, read per call so a flip needs no restart;
+  // otherwise it is the unsupported stub in the table, exactly as before C4.
+  if (provider === "OUTLOOK" && outlookCalendarEnabled()) return outlookCalendarActions;
   return ACTIONS_BY_PROVIDER[provider];
 }
 
