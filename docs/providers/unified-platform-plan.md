@@ -2222,7 +2222,7 @@ does not wait for them.
 
 #### Security follow-ups
 
-- Meeting links: the web and Mac clients open a `meetingLink` only when it is an https URL with no userinfo (2026-09-30); server-side normalisation of Google links (conferenceData `uri` and the description regex in `pim/meeting.ts`) follows C4, reusing its https-only helper.
+- Meeting links (done, 2026-09-30): the web and Mac clients open a `meetingLink` only when it is an https URL with no userinfo (#1348). The server applies the same rule before a link is stored or handed on: C4's Outlook normaliser is now the shared `safeMeetingLink` in `pim/meeting-link.ts` (absolute https, no userinfo, normalised, at most 2048 characters, else null), used by Outlook unchanged, by Google's conferenceData `uri` / `hangoutLink` (`googleMeetingLinkOf`, so sync rows, linked accounts and every `listEvents` read), by `getUpcomingMeetings` including its description/location regex, and by `POST /api/calendar`. An unsafe first candidate falls back to the next safe one. `joinMeeting`'s host allowlist is unchanged and still applies on top. Rows already stored with an unsafe link are rewritten by the next sync inside its 30-day window; LOCAL rows created earlier through the route are not rewritten.
 
 ### Workstream D — drive
 

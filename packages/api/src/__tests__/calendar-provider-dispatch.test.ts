@@ -247,6 +247,81 @@ describe("Google session — the neutral event shape", () => {
   });
 });
 
+describe("Google session — meetingLink is https only (#1348 server follow-up)", () => {
+  async function linkOf(item: Record<string, unknown>) {
+    m.eventsList.mockResolvedValue({ data: { items: [{ id: "e1", ...item }] } });
+    const s = await connectPrimaryCalendar("u1");
+    if (!s) throw new Error("expected a session");
+    const [event] = await s.listEvents({ timeMin: "2026-10-01T00:00:00Z", maxResults: 10 });
+    if (!event) throw new Error("expected an event");
+    return event.meetingLink;
+  }
+
+  const video = (uri: unknown) => ({
+    conferenceData: { entryPoints: [{ entryPointType: "video", uri }] },
+  });
+
+  it.each([
+    "https://meet.google.com/abc-defg-hij",
+    "https://zoom.us/j/123?pwd=x",
+    "https://teams.microsoft.com/l/meetup-join/19%3ameeting_abc%40thread.v2/0?context=%7b%7d",
+  ])("keeps the conferenceData video uri %s", async (uri) => {
+    expect(await linkOf(video(uri))).toBe(uri);
+  });
+
+  it("keeps an https hangoutLink, normalised", async () => {
+    expect(await linkOf({ hangoutLink: "HTTPS://Meet.Google.com/abc-defg-hij" })).toBe(
+      "https://meet.google.com/abc-defg-hij",
+    );
+  });
+
+  it.each([
+    ["javascript:", "javascript:alert(document.cookie)"],
+    ["http:", "http://meet.google.com/abc-defg-hij"],
+    ["a custom scheme", "zoommtg://zoom.us/join?confno=1"],
+    ["userinfo", "https://meet.google.com@evil.example.com/x"],
+    ["over 2048 characters", `https://meet.google.com/${"a".repeat(2048)}`],
+  ])("drops a conferenceData uri with %s", async (_label, uri) => {
+    expect(await linkOf(video(uri))).toBeNull();
+  });
+
+  it.each([
+    ["javascript:", "javascript:alert(1)"],
+    ["http:", "http://meet.google.com/abc-defg-hij"],
+    ["userinfo", "https://u:p@meet.google.com/abc-defg-hij"],
+  ])("drops a hangoutLink with %s", async (_label, hangoutLink) => {
+    expect(await linkOf({ hangoutLink })).toBeNull();
+  });
+
+  it("falls back to a valid hangoutLink when the video uri is unsafe", async () => {
+    expect(
+      await linkOf({
+        ...video("javascript:alert(1)"),
+        hangoutLink: "https://meet.google.com/abc-defg-hij",
+      }),
+    ).toBe("https://meet.google.com/abc-defg-hij");
+  });
+
+  it("prefers the video uri over the hangoutLink when both are valid (main's order)", async () => {
+    expect(
+      await linkOf({
+        ...video("https://zoom.us/j/123?pwd=x"),
+        hangoutLink: "https://meet.google.com/abc-defg-hij",
+      }),
+    ).toBe("https://zoom.us/j/123?pwd=x");
+  });
+
+  it("ignores a non-video entry point", async () => {
+    expect(
+      await linkOf({
+        conferenceData: {
+          entryPoints: [{ entryPointType: "phone", uri: "https://tel.example/1" }],
+        },
+      }),
+    ).toBeNull();
+  });
+});
+
 describe("listLinkedCalendarAccounts", () => {
   it("reads the user's accounts of every provider as full rows, oldest first: the one read a check pays", async () => {
     const rows = [linkedRow("acct-1")];

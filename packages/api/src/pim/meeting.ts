@@ -8,10 +8,13 @@
  */
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import type { calendar_v3 } from "googleapis";
 import { parseLlmJson } from "../llm/llm-json.js";
 import { createCompletion, MODEL } from "../llm/openai.js";
 import { getAuthedClient } from "../mail/gmail.js";
 import { captureError } from "../sentry.js";
+import { googleMeetingLinkOf } from "./calendar-providers/google.js";
+import { safeMeetingLink } from "./meeting-link.js";
 
 const exec = promisify(execFile);
 const IS_MACOS = process.platform === "darwin";
@@ -34,6 +37,26 @@ interface MeetingSummary {
   actionItems: string[];
   decisions: string[];
   rawNotes: string;
+}
+
+// A Zoom or Meet link written into the description or location. Each runs to the
+// next whitespace, so trailing punctuation stays part of the link (unchanged).
+const ZOOM_LINK_IN_TEXT = /https:\/\/[^\s]*zoom\.us\/[^\s]*/;
+const MEET_LINK_IN_TEXT = /https:\/\/meet\.google\.com\/[^\s]*/;
+
+/**
+ * The join link of a Google event: conferenceData / hangoutLink first, else a
+ * Zoom or Meet link in the description or location. Every candidate passes the
+ * https-only gate, so an unsafe one is skipped for the next.
+ */
+function meetingLinkOf(event: calendar_v3.Schema$Event): string | null {
+  const fromConference = googleMeetingLinkOf(event);
+  if (fromConference) return fromConference;
+  const text = `${event.description || ""} ${event.location || ""}`;
+  return (
+    safeMeetingLink(text.match(ZOOM_LINK_IN_TEXT)?.[0]) ??
+    safeMeetingLink(text.match(MEET_LINK_IN_TEXT)?.[0])
+  );
 }
 
 /** Check calendar for upcoming meetings with video links */
@@ -63,33 +86,14 @@ export async function getUpcomingMeetings(userId: string): Promise<MeetingEvent[
     });
 
     return (response.data.items || [])
-      .map((event) => {
-        // Extract meeting link from description, location, or conferenceData
-        let meetingLink: string | null = null;
-        const confData = event.conferenceData;
-        if (confData?.entryPoints) {
-          const videoEntry = confData.entryPoints.find((e) => e.entryPointType === "video");
-          if (videoEntry) meetingLink = videoEntry.uri || null;
-        }
-        if (!meetingLink && event.hangoutLink) {
-          meetingLink = event.hangoutLink;
-        }
-        if (!meetingLink) {
-          const text = `${event.description || ""} ${event.location || ""}`;
-          const zoomMatch = text.match(/https:\/\/[^\s]*zoom\.us\/[^\s]*/);
-          const meetMatch = text.match(/https:\/\/meet\.google\.com\/[^\s]*/);
-          meetingLink = zoomMatch?.[0] || meetMatch?.[0] || null;
-        }
-
-        return {
-          id: event.id || "",
-          summary: event.summary || "Untitled Meeting",
-          start: event.start?.dateTime || event.start?.date || "",
-          end: event.end?.dateTime || event.end?.date || "",
-          meetingLink,
-          attendees: (event.attendees || []).map((a) => a.email || "").filter(Boolean),
-        };
-      })
+      .map((event) => ({
+        id: event.id || "",
+        summary: event.summary || "Untitled Meeting",
+        start: event.start?.dateTime || event.start?.date || "",
+        end: event.end?.dateTime || event.end?.date || "",
+        meetingLink: meetingLinkOf(event),
+        attendees: (event.attendees || []).map((a) => a.email || "").filter(Boolean),
+      }))
       .filter((e) => e.meetingLink); // Only meetings with links
   } catch (err) {
     // Never swallow silently: without a signal, a systemic calendar failure
