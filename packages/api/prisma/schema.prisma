@@ -486,8 +486,9 @@ model LinkedInboxAccount {
   // another value, discards or replaces it. NULL when no reset is pending.
   inboxUidValidityPending   String?
   inboxUidValidityPendingAt DateTime?
-  // Step B2b. When the last reset was applied; at most one per account per 24 h, so
-  // a server that keeps renumbering cannot churn the mailbox. NULL = never.
+  // Step B2b. The last applied reset, dated from its FIRST sighting: at most one per
+  // account per 24 h, so a server that keeps renumbering cannot churn the mailbox, and
+  // mail received before it is re-ingested history (no push, no auto-reply). NULL = never.
   inboxUidValidityResetAt   DateTime?
   gmailWatchExpiresAt       DateTime?
   // Provider-generic incremental-sync watermark: Gmail historyId for GOOGLE

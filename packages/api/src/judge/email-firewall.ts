@@ -23,6 +23,7 @@ import { classifyNeedsReplyFromSignals, classifyPriority } from "../mail/email-p
 import { coercePlainBody } from "../mail/email-text.js";
 import type { GmailRawEmail } from "../mail/gmail-fetch.js";
 import { applyLaneLabel } from "../mail/gmail-labels.js";
+import { findReingestedHistory } from "../mail/imap-history.js";
 import { isImapMessageId } from "../mail/imap-message-id.js";
 import { autoUnsubscribeEnabled, executeOneClickUnsubscribe } from "../mail/list-unsubscribe.js";
 import { mailActionsFor } from "../mail/providers/dispatch.js";
@@ -513,6 +514,17 @@ async function pushForFirewallEmail(userId: string, email: JudgeableEmailRow): P
     // every other suppression reason; this early return is the one blind spot.
     console.log(
       `[PUSH] Firewall PUSH suppressed (stale: ${Math.round(ageMs / 3_600_000)}h old) ` +
+        `for email ${email.gmailId} user ${userId}`,
+    );
+    return;
+  }
+
+  // Step B2b: mail a UIDVALIDITY repair re-ingested is history the user was already
+  // told about. It is judged like any row, but it does not push. Gmail ids read nothing.
+  const history = await findReingestedHistory(userId, [email]);
+  if (history.has(email.id)) {
+    console.log(
+      `[PUSH] Firewall PUSH suppressed (re-ingested after an IMAP UIDVALIDITY repair) ` +
         `for email ${email.gmailId} user ${userId}`,
     );
     return;

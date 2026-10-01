@@ -98,6 +98,14 @@ const cmp = (v: unknown): number | string | boolean =>
 
 const same = (a: unknown, b: unknown): boolean => cmp(a) === cmp(b);
 
+/** `LIKE '<prefix>%'` as a RegExp: `_` is any one character, `%` any run; the rest literal. */
+function likePrefix(prefix: string): RegExp {
+  const body = [...prefix]
+    .map((c) => (c === "_" ? "." : c === "%" ? ".*" : c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))
+    .join("");
+  return new RegExp(`^${body}`, "s");
+}
+
 /** One operator object against one value. NULL never satisfies any operator (SQL), except `not: null`. */
 function matchesOperators(actual: unknown, ops: Record<string, unknown>, where: string): boolean {
   return Object.entries(ops).every(([op, expected]) => {
@@ -117,7 +125,9 @@ function matchesOperators(actual: unknown, ops: Record<string, unknown>, where: 
       case "notIn":
         return !(expected as unknown[]).some((e) => same(actual, e));
       case "startsWith":
-        return typeof actual === "string" && actual.startsWith(expected as string);
+        // Prisma sends `startsWith` as LIKE '<value>%' WITHOUT escaping, so `_` and `%`
+        // in the value are wildcards (verified on Postgres 16 with Prisma 6.19, step B2b).
+        return typeof actual === "string" && likePrefix(expected as string).test(actual);
       case "contains":
         return (
           typeof actual === "string" &&
@@ -487,11 +497,12 @@ export interface FakeClientOptions {
  * change to the production statement (a dropped clause, another operator) no longer
  * matches and throws, so the tests fail instead of emulating the old semantics.
  * Whitespace is normalised; parameters are `$n`, in this order: suffix, now, userId,
- * prefix, marker.
+ * prefix, pattern (a POSIX regex for `!~`, emulated with a JavaScript RegExp: the
+ * tombstone pattern means the same in both).
  */
 const REKEY_SQL =
   'UPDATE "EmailMessage" SET "gmailId" = "gmailId" || $1::text, "updatedAt" = $2 ' +
-  'WHERE "userId" = $3 AND starts_with("gmailId", $4::text) AND strpos("gmailId", $5::text) = 0';
+  'WHERE "userId" = $3 AND starts_with("gmailId", $4::text) AND "gmailId" !~ $5::text';
 
 const normalisedSql = (text: string): string => text.replace(/\s+/g, " ").trim();
 
@@ -506,20 +517,21 @@ async function executeRaw(db: FakeDb, hooks: FakeDbHooks, statement: unknown): P
   ) {
     throw new Error(`fake-db: unsupported raw statement: ${String(given.text)}`);
   }
-  const [suffix, now, userId, prefix, marker] = given.values as [
+  const [suffix, now, userId, prefix, pattern] = given.values as [
     string,
     Date,
     string,
     string,
     string,
   ];
+  const skip = new RegExp(pattern);
   const rows = db.tables.emailMessage ?? [];
   const targets = rows.filter(
     (r) =>
       r.userId === userId &&
       typeof r.gmailId === "string" &&
       r.gmailId.startsWith(prefix) &&
-      !r.gmailId.includes(marker),
+      !skip.test(r.gmailId),
   );
   for (const r of targets) {
     const next = `${r.gmailId as string}${suffix}`;

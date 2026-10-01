@@ -82,11 +82,14 @@ export async function syncImapAccountsForUser(
       total.classified += result.classified;
       total.errors += result.errors;
       // Stamp the last successful check (not just last new mail) so the UI's
-      // "Synced Xm ago" is real — same contract as the Gmail linked-inbox path.
-      await prisma.linkedInboxAccount.updateMany({
-        where: { id: row.id, userId },
-        data: { lastSyncedAt: new Date() },
-      });
+      // "Synced Xm ago" is real — same contract as the Gmail linked-inbox path. A held
+      // poll (UIDVALIDITY reset, step B2b) stored nothing, so it is not a sync.
+      if (!result.held) {
+        await prisma.linkedInboxAccount.updateMany({
+          where: { id: row.id, userId },
+          data: { lastSyncedAt: new Date() },
+        });
+      }
     } catch (err) {
       total.errors += 1;
       // console first — captureError is a no-op without a Sentry DSN, and a

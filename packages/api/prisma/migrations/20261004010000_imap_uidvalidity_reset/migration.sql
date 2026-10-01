@@ -11,8 +11,8 @@
 --                               when the same new value is seen on a second, later poll.
 --   "inboxUidValidityPendingAt" when that first sighting happened (two polls of the
 --                               same instant, e.g. overlapping ticks, are not two).
---   "inboxUidValidityResetAt"   when the last reset was applied; at most one per
---                               account per 24 h.
+--   "inboxUidValidityResetAt"   the last applied reset, dated from its first sighting;
+--                               at most one per account per 24 h.
 -- TEXT for the value, for the reason "inboxUidValidity" is TEXT (an unsigned 32-bit
 -- integer, compared only for equality). NULL for every existing row: no reset pending,
 -- none ever applied.

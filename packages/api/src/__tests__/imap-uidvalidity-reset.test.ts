@@ -6,16 +6,18 @@
  * persist path) against the stateful fake server and the strict in-memory database.
  * Only the network edge and the judge are stubbed. What is pinned here:
  *   - while a mailbox is held (stored value differs from the live one, or a reset is
- *     pending) the poll persists NOTHING for it;
+ *     pending) the poll persists NOTHING for it, does not stamp lastSyncedAt, logs at
+ *     most every HELD_WARN_INTERVAL_MS and alerts once per account per day;
  *   - one sighting of a new value is only remembered;
  *   - the same value on a later poll, at least MIN_SIGHTING_GAP_MS after the first,
- *     acts once: in ONE transaction the account's value is replaced, the OPEN and
- *     SNOOZED attention items of the mailbox's rows are resolved and the rows are
- *     re-keyed (`#uv<old>`); nothing is deleted. The NEXT poll ingests the window
- *     under the new numbering;
+ *     acts once: in ONE transaction the account's value is replaced (the reset dated
+ *     from the first sighting), the OPEN and SNOOZED attention items of the mailbox's
+ *     rows are resolved and the rows are re-keyed (`#uv<old>.<repair ms>`); nothing is
+ *     deleted. The NEXT poll ingests the window under the new numbering, and those
+ *     rows are re-ingested history;
  *   - overlapping polls, a moved state, a flapping server and the 24 h limit cannot
  *     make it act twice or act on a stale decision; a failing transaction changes
- *     nothing.
+ *     nothing and backs off.
  *
  * The clock is faked (Date only) so that "a later poll" is a matter of one call.
  */
@@ -23,7 +25,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createFakeDb, type FakeDb, type Row } from "./helpers/fake-db.js";
 import { fakeServer } from "./helpers/fake-imap-server.js";
-import { accountRow, ICLOUD, idOf, localRowFor, NAVER, USER } from "./helpers/imap-move-harness.js";
+import {
+  accountRow,
+  ICLOUD,
+  idOf,
+  localRowFor,
+  type Mailbox,
+  NAVER,
+  USER,
+} from "./helpers/imap-move-harness.js";
 
 let db: FakeDb;
 let rawFailure: Error | null = null;
@@ -80,9 +90,18 @@ vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
 const { captureError } = await import("../sentry.js");
 const { resetPollGuardState } = await import("../mail/imap-poll-guards.js");
+const {
+  HELD_ALERT_INTERVAL_MS,
+  HELD_WARN_INTERVAL_MS,
+  REPAIR_BACKOFF_BASE_MS,
+  REPAIR_BACKOFF_MAX_MS,
+  rememberBounded,
+  repairBackoffMs,
+} = await import("../mail/imap-hold-state.js");
 const { MIN_SIGHTING_GAP_MS, RESET_LIMIT_WINDOW_MS, nextResetStep } = await import(
   "../mail/imap-uidvalidity-reset.js"
 );
+const { findReingestedHistory } = await import("../mail/imap-history.js");
 const { syncImapAccountsForUser, syncImapMessageForUser } = await import(
   "../mail/imap-accounts.js"
 );
@@ -99,7 +118,10 @@ const original = Object.fromEntries(FLAGS.map((name) => [name, process.env[name]
 
 const T0 = new Date("2026-09-30T10:00:00Z");
 const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
 const POLL_INTERVAL = 5 * MINUTE;
+/** What the per-user poll aggregate reports for a held mailbox: nothing fetched or stored. */
+const HELD = { fetched: 0, inserted: 0, classified: 0, errors: 0 };
 
 const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 const advance = (ms: number) => vi.setSystemTime(new Date(Date.now() + ms));
@@ -110,6 +132,8 @@ const nextPoll = async () => {
   return poll();
 };
 const actions = () => mailActionsForProvider("NAVER");
+/** The id a repair at `repairedAt` gives a row of the `old` numbering. */
+const tomb = (id: string, old: string, repairedAt: number) => `${id}#uv${old}.${repairedAt}`;
 
 const emails = (): Row[] => db.tables.emailMessage ?? [];
 const account = (): Row =>
@@ -130,14 +154,9 @@ const warned = (fragment: string) =>
     String(line).includes(fragment),
   );
 
-function arm(stored: string | null = "1000") {
+function armWith(accounts: Row[]) {
   db = createFakeDb(
-    {
-      linkedInboxAccount: [accountRow(NAVER, stored), accountRow(ICLOUD)],
-      emailMessage: [],
-      imapMovedMessage: [],
-      attentionItem: [],
-    },
+    { linkedInboxAccount: accounts, emailMessage: [], imapMovedMessage: [], attentionItem: [] },
     {
       beforeUpdateMany: (model, where) => {
         if (model !== "linkedInboxAccount" || !where || !("inboxUidValidityPending" in where)) {
@@ -150,13 +169,15 @@ function arm(stored: string | null = "1000") {
     },
   );
 }
+const arm = (stored: string | null = "1000") =>
+  armWith([accountRow(NAVER, stored), accountRow(ICLOUD)]);
 
 /** Put messages in INBOX with UIDs 101.. and let the REAL poll ingest them. */
-async function ingest(count: number): Promise<string[]> {
+async function ingest(count: number, mailbox: Mailbox = NAVER): Promise<string[]> {
   const uids = Array.from({ length: count }, (_, i) => 101 + i);
   for (const uid of uids) fakeServer.add("INBOX", { uid, subject: `Mail ${uid}` });
   await poll();
-  return uids.map((uid) => idOf(NAVER, uid));
+  return uids.map((uid) => idOf(mailbox, uid));
 }
 
 /** The server rebuilds INBOX: a new UIDVALIDITY, UID 101 now names a different message. */
@@ -192,8 +213,9 @@ async function confirmedReset() {
   ]);
   fakeServer.renumber("INBOX", 1001n);
   await nextPoll();
+  const sightedAt = Date.now();
   await nextPoll();
-  return { ingested, seeded };
+  return { ingested, seeded, sightedAt, repairedAt: Date.now() };
 }
 
 beforeEach(() => {
@@ -226,9 +248,13 @@ afterEach(async () => {
 });
 
 describe("the named limits", () => {
-  it("are one minute between sightings and one repair per account per 24 hours", () => {
+  it("are what the plan says", () => {
     expect(MIN_SIGHTING_GAP_MS).toBe(60_000);
-    expect(RESET_LIMIT_WINDOW_MS).toBe(24 * 60 * 60_000);
+    expect(RESET_LIMIT_WINDOW_MS).toBe(24 * HOUR);
+    expect(HELD_ALERT_INTERVAL_MS).toBe(24 * HOUR);
+    expect(HELD_WARN_INTERVAL_MS).toBe(15 * MINUTE);
+    expect(REPAIR_BACKOFF_BASE_MS).toBe(10 * MINUTE);
+    expect(REPAIR_BACKOFF_MAX_MS).toBe(6 * HOUR);
   });
 
   const at = (ms: number) => new Date(T0.getTime() + ms);
@@ -279,9 +305,29 @@ describe("the named limits", () => {
   ])("%s", (_name, s, live, elapsed, step) => {
     expect(nextResetStep(s, live, at(elapsed))).toBe(step);
   });
+
+  it.each([
+    [1, 10 * MINUTE],
+    [2, 20 * MINUTE],
+    [3, 40 * MINUTE],
+    [6, 320 * MINUTE],
+    [7, 6 * HOUR],
+    [40, 6 * HOUR],
+  ])("backs a repair off after %i consecutive failure(s) by %i ms", (failures, ms) => {
+    expect(repairBackoffMs(failures)).toBe(ms);
+  });
+
+  it("bounds every per-account map: the oldest entry goes first", () => {
+    const map = new Map<string, number>();
+    for (const key of ["a", "b", "c"]) rememberBounded(map, key, 1, 3);
+    rememberBounded(map, "a", 2, 3); // refreshed: now the newest
+    rememberBounded(map, "d", 1, 3);
+
+    expect([...map.keys()]).toEqual(["c", "a", "d"]);
+  });
 });
 
-describe("a held mailbox persists nothing", () => {
+describe("a held mailbox persists nothing and does not look healthy", () => {
   it("a new message that reuses an old UID leaves the old row byte-for-byte unchanged and creates nothing", async () => {
     await ingest(1);
     const before = structuredClone(emails());
@@ -291,8 +337,8 @@ describe("a held mailbox persists nothing", () => {
     const sighting = await nextPoll();
     const waiting = await poll();
 
-    expect(sighting).toEqual({ fetched: 0, inserted: 0, classified: 0, errors: 0 });
-    expect(waiting).toEqual({ fetched: 0, inserted: 0, classified: 0, errors: 0 });
+    expect(sighting).toEqual(HELD);
+    expect(waiting).toEqual(HELD);
     expect(emails()).toEqual(before);
     expect(emailWrites()).toBe(writesBefore);
   });
@@ -304,8 +350,7 @@ describe("a held mailbox persists nothing", () => {
     const writesBefore = emailWrites();
     fakeServer.folder("INBOX").uidValidity = 0n; // RFC 3501: non-zero, i.e. nothing usable
 
-    await nextPoll();
-
+    expect(await nextPoll()).toEqual(HELD);
     expect(emailWrites()).toBe(writesBefore);
     expect(account().inboxUidValidityPending).toBe("1001");
   });
@@ -318,6 +363,60 @@ describe("a held mailbox persists nothing", () => {
     await nextPoll();
 
     expect(db.reads).not.toContain("imapMovedMessage");
+  });
+
+  it("does not stamp lastSyncedAt while held; the first ingesting poll after the repair does", async () => {
+    await ingest(1);
+    const synced = (account().lastSyncedAt as Date).getTime();
+    expect(synced).toBe(T0.getTime());
+    fakeServer.renumber("INBOX", 1001n);
+
+    await nextPoll(); // sighting
+    await nextPoll(); // repair
+    expect((account().lastSyncedAt as Date).getTime()).toBe(synced);
+
+    await nextPoll(); // ingests under 1001
+    expect((account().lastSyncedAt as Date).getTime()).toBe(Date.now());
+  });
+});
+
+describe("alerts while held", () => {
+  it("reports a sighting with one log line and one Sentry event, however many polls follow at once", async () => {
+    await ingest(1);
+    fakeServer.renumber("INBOX", 1001n);
+
+    await nextPoll();
+    await poll();
+    await poll();
+
+    expect(captureError).toHaveBeenCalledTimes(1);
+    const [, context] = (captureError as unknown as { mock: { calls: unknown[][] } }).mock
+      .calls[0] as [unknown, { tags: Record<string, string> }];
+    expect(context.tags.scope).toBe("naver-imap.uidvalidity-reset");
+    expect(warned("UIDVALIDITY changed")).toHaveLength(1);
+  });
+
+  it("re-alerts once per account per 24 h, whatever the value, and logs at most every 15 minutes", async () => {
+    await ingest(1);
+    const alternate = ["1001", "1002", "1001", "1002"];
+    for (const value of alternate) {
+      fakeServer.folder("INBOX").uidValidity = BigInt(value);
+      await nextPoll(); // a value that differs from the pending one: the hold restarts
+    }
+    // Polls at +5, +10, +15, +20 minutes: one Sentry event; log lines at +5 and +20.
+    expect(captureError).toHaveBeenCalledTimes(1);
+    expect(warned("UIDVALIDITY changed")).toHaveLength(2);
+    expect(rekeys()).toEqual([]);
+
+    vi.setSystemTime(new Date(T0.getTime() + 5 * MINUTE + HELD_ALERT_INTERVAL_MS - 1));
+    fakeServer.folder("INBOX").uidValidity = 1001n;
+    await poll();
+    expect(captureError).toHaveBeenCalledTimes(1);
+
+    advance(1);
+    fakeServer.folder("INBOX").uidValidity = 1002n;
+    await poll();
+    expect(captureError).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -340,21 +439,6 @@ describe("a reset seen on ONE poll is remembered and nothing else changes", () =
     expect(attention("open").status).toBe("OPEN");
   });
 
-  it("reports the sighting once (one log line, one Sentry event), however many polls follow", async () => {
-    await ingest(1);
-    fakeServer.renumber("INBOX", 1001n);
-
-    await nextPoll();
-    await poll();
-    await poll();
-
-    expect(captureError).toHaveBeenCalledTimes(1);
-    const [, context] = (captureError as unknown as { mock: { calls: unknown[][] } }).mock
-      .calls[0] as [unknown, { tags: Record<string, string> }];
-    expect(context.tags.scope).toBe("naver-imap.uidvalidity-reset");
-    expect(warned("UIDVALIDITY changed")).toHaveLength(1);
-  });
-
   it("does not take a poll inside the minimum gap as the second sighting; the first one at the gap is", async () => {
     await ingest(1);
     fakeServer.renumber("INBOX", 1001n);
@@ -374,11 +458,11 @@ describe("a reset seen on ONE poll is remembered and nothing else changes", () =
 });
 
 describe("the same value on a later poll is a reset: one repair transaction", () => {
-  it("re-keys the mailbox's rows with #uv<old>, keeps every row and its id, deletes nothing", async () => {
-    const { ingested, seeded } = await confirmedReset();
+  it("re-keys the mailbox's rows with #uv<old>.<repair ms>, keeps every row and its id, deletes nothing", async () => {
+    const { ingested, seeded, repairedAt } = await confirmedReset();
 
     for (const [i, id] of ingested.entries()) {
-      expect(rowByGmailId(`${id}#uv1000`)?.id).toBe(seeded[i].id);
+      expect(rowByGmailId(tomb(id, "1000", repairedAt))?.id).toBe(seeded[i].id);
       expect(rowByGmailId(id)).toBeUndefined();
     }
     expect(emails()).toHaveLength(2);
@@ -387,13 +471,14 @@ describe("the same value on a later poll is a reset: one repair transaction", ()
     expect(deletes("attentionItem")).toEqual([]);
   });
 
-  it("replaces the stored value, clears the pending one and stamps the time, in the same step", async () => {
-    await confirmedReset();
+  it("replaces the stored value, clears the pending one, and dates the reset from the FIRST sighting", async () => {
+    const { sightedAt, repairedAt } = await confirmedReset();
 
     expect(account().inboxUidValidity).toBe("1001");
     expect(account().inboxUidValidityPending).toBeNull();
     expect(account().inboxUidValidityPendingAt).toBeNull();
-    expect((account().inboxUidValidityResetAt as Date).getTime()).toBe(Date.now());
+    expect((account().inboxUidValidityResetAt as Date).getTime()).toBe(sightedAt);
+    expect(sightedAt).toBeLessThan(repairedAt);
   });
 
   it("resolves the OPEN and SNOOZED items of the mailbox's rows, and only those", async () => {
@@ -456,7 +541,7 @@ describe("the same value on a later poll is a reset: one repair transaction", ()
     await nextPoll();
     await nextPoll();
 
-    const kept = rowByGmailId(`${ingested[0]}#uv1000`) as Row;
+    const kept = rowByGmailId(tomb(ingested[0], "1000", Date.now())) as Row;
     expect(kept).toMatchObject({
       id: row.id,
       summary: "Quarterly numbers",
@@ -499,7 +584,8 @@ describe("the same value on a later poll is a reset: one repair transaction", ()
     const createsBefore = creates();
 
     const repair = await nextPoll();
-    expect(repair).toEqual({ fetched: 0, inserted: 0, classified: 0, errors: 0 });
+    const repairedAt = Date.now();
+    expect(repair).toEqual(HELD);
     expect(creates()).toBe(createsBefore);
 
     const next = await nextPoll();
@@ -509,7 +595,31 @@ describe("the same value on a later poll is a reset: one repair transaction", ()
     expect(fresh).toMatchObject({ subject: "A different message", isRead: true, isStarred: true });
     expect(fresh.id).not.toBe(oldRow.id);
     // The accepted limit: the tombstone stays visible next to the new row.
-    expect(rowByGmailId(`${old}#uv1000`)).toMatchObject({ id: oldRow.id, subject: "Mail 101" });
+    expect(rowByGmailId(tomb(old, "1000", repairedAt))).toMatchObject({
+      id: oldRow.id,
+      subject: "Mail 101",
+    });
+  });
+
+  it("marks re-ingested history, and the tombstones, but not mail received during the hold", async () => {
+    await ingest(2);
+    fakeServer.renumber("INBOX", 1001n); // uids 1 and 2, received 2026-08-01
+    await nextPoll();
+    const sightedAt = Date.now();
+    // Arrives during the hold: received after the first sighting.
+    fakeServer.add("INBOX", { uid: 3, subject: "During the hold", date: new Date(sightedAt + 1) });
+    await nextPoll(); // repair
+    await nextPoll(); // ingests uids 1, 2, 3 under 1001
+
+    const history = await findReingestedHistory(USER, emails() as never);
+    const label = (r: Row) => (history.has(r.id as string) ? "history" : "live");
+
+    expect(Object.fromEntries(emails().map((r) => [r.subject, label(r)]))).toEqual({
+      "Mail 101": "history",
+      "Mail 102": "history",
+      "During the hold": "live",
+    });
+    expect(emails().filter((r) => label(r) === "history")).toHaveLength(4); // 2 re-ingested + 2 tombstones
   });
 
   it("does not repair twice: later polls under the new value change no more ids", async () => {
@@ -526,10 +636,10 @@ describe("the same value on a later poll is a reset: one repair transaction", ()
 
   it("refuses actions on a tombstoned id without a command, and acts on a row of the new numbering", async () => {
     process.env.IMAP_ACTIONS_ENABLED = "true"; // the flag actions (read, star)
-    const { ingested } = await confirmedReset();
+    const { ingested, repairedAt } = await confirmedReset();
     await nextPoll(); // ingests the renumbered window: uids 1 and 2
     fakeServer.commands = [];
-    const stale = `${ingested[0]}#uv1000`;
+    const stale = tomb(ingested[0], "1000", repairedAt);
 
     const results = await Promise.all([
       actions().trash(USER, stale, NAVER.rowId),
@@ -547,6 +657,47 @@ describe("the same value on a later poll is a reset: one repair transaction", ()
     ).toEqual([]);
     expect(fresh).not.toMatchObject({ error: expect.any(String) });
   });
+
+  it("re-keys a mailbox whose address itself contains '#uv1.2', and resolves its items", async () => {
+    const hash: Mailbox = { ...NAVER, email: "a#uv1.2@naver.com" };
+    armWith([accountRow(hash)]);
+    const [id] = await ingest(1, hash);
+    seedAttention([{ id: "open", sourceId: rowByGmailId(id)?.id as string, status: "OPEN" }]);
+    fakeServer.renumber("INBOX", 1001n);
+
+    await nextPoll();
+    await nextPoll();
+
+    expect(gmailIds()).toEqual([tomb(id, "1000", Date.now())]);
+    expect(attention("open").status).toBe("RESOLVED");
+  });
+});
+
+describe("tombstone ids are unique per repair", () => {
+  /** The server switches to `value`; sighting, repair, then the ingest poll. */
+  async function cycle(value: bigint): Promise<number> {
+    fakeServer.folder("INBOX").uidValidity = value;
+    await nextPoll();
+    await nextPoll();
+    const repairedAt = Date.now();
+    await nextPoll();
+    return repairedAt;
+  }
+
+  it("A -> B -> A -> B repairs every time and never re-suffixes an existing tombstone", async () => {
+    const [id] = await ingest(1); // uid 101 under 1000 (A)
+    const r1 = await cycle(1001n);
+    advance(RESET_LIMIT_WINDOW_MS);
+    const r2 = await cycle(1000n);
+    advance(RESET_LIMIT_WINDOW_MS);
+    const r3 = await cycle(1001n);
+
+    expect(rekeys()).toHaveLength(3);
+    expect(gmailIds().sort()).toEqual(
+      [id, tomb(id, "1000", r1), tomb(id, "1001", r2), tomb(id, "1000", r3)].sort(),
+    );
+    expect(account().inboxUidValidity).toBe("1001");
+  });
 });
 
 describe("overlapping polls cannot both act", () => {
@@ -560,7 +711,10 @@ describe("overlapping polls cannot both act", () => {
 
     expect(claims()).toHaveLength(2);
     expect(rekeys()).toHaveLength(1);
-    expect(gmailIds().sort()).toEqual([`${idOf(NAVER, 101)}#uv1000`, `${idOf(NAVER, 102)}#uv1000`]);
+    expect(gmailIds().sort()).toEqual([
+      tomb(idOf(NAVER, 101), "1000", Date.now()),
+      tomb(idOf(NAVER, 102), "1000", Date.now()),
+    ]);
     expect(account().inboxUidValidity).toBe("1001");
   });
 
@@ -591,21 +745,18 @@ describe("the claim is conditional on the state the repair was decided in", () =
       { inboxUidValidityResetAt: new Date("2026-09-30T10:09:00Z") },
     ],
   ])("does nothing when %s", async (_name, moved) => {
-    const { seeded } = await (async () => {
-      const ingested = await ingest(1);
-      const rows = ingested.map((id) => rowByGmailId(id) as Row);
-      seedAttention([{ id: "open", sourceId: rows[0].id as string, status: "OPEN" }]);
-      return { seeded: rows };
-    })();
+    const [id] = await ingest(1);
+    const row = rowByGmailId(id) as Row;
+    seedAttention([{ id: "open", sourceId: row.id as string, status: "OPEN" }]);
     fakeServer.renumber("INBOX", 1001n);
     await nextPoll();
-    beforeClaim = (row) => Object.assign(row, moved);
+    beforeClaim = (acct) => Object.assign(acct, moved);
 
     await nextPoll();
 
     expect(claims()).toHaveLength(1);
     expect(rekeys()).toEqual([]);
-    expect(rowByGmailId(idOf(NAVER, 101))?.id).toBe(seeded[0].id);
+    expect(rowByGmailId(id)?.id).toBe(row.id);
     expect(attention("open").status).toBe("OPEN");
     expect(account()).toMatchObject(moved);
   });
@@ -650,7 +801,7 @@ describe("a flapping or rate-limited server cannot churn the mailbox", () => {
 
     expect(rekeys()).toHaveLength(1);
     expect(account().inboxUidValidity).toBe("1002");
-    expect(gmailIds()).toEqual([`${idOf(NAVER, 101)}#uv1000`]);
+    expect(gmailIds()).toEqual([tomb(idOf(NAVER, 101), "1000", Date.now())]);
   });
 
   it("a poll with no usable value neither confirms, cancels nor restarts the pending reset", async () => {
@@ -670,13 +821,15 @@ describe("a flapping or rate-limited server cannot churn the mailbox", () => {
     expect(rekeys()).toHaveLength(1);
   });
 
-  it("applies at most one repair per account per 24 hours; inside that window it holds and logs once", async () => {
+  it("applies at most one repair per account per 24 hours, counted from the first sighting", async () => {
     await ingest(1);
     fakeServer.renumber("INBOX", 1001n); // uid 101 becomes uid 1
     await nextPoll();
+    const firstSighting = Date.now();
     await nextPoll();
+    const r1 = Date.now();
     expect(rekeys()).toHaveLength(1);
-    const resetAt = (account().inboxUidValidityResetAt as Date).getTime();
+    expect((account().inboxUidValidityResetAt as Date).getTime()).toBe(firstSighting);
     fakeServer.add("INBOX", { uid: 2, subject: "Under 1001" });
     await nextPoll(); // ingests uids 1 and 2 under 1001
 
@@ -691,62 +844,73 @@ describe("a flapping or rate-limited server cannot churn the mailbox", () => {
     expect(emailWrites()).toBe(writesBefore);
     expect(account().inboxUidValidity).toBe("1001");
     expect(account().inboxUidValidityPending).toBe("1002");
-    expect(warned("at most one repair")).toHaveLength(1);
 
-    vi.setSystemTime(new Date(resetAt + RESET_LIMIT_WINDOW_MS));
+    vi.setSystemTime(new Date(firstSighting + RESET_LIMIT_WINDOW_MS));
     await poll();
     expect(rekeys()).toHaveLength(1);
+    expect(warned("at most one repair").length).toBeGreaterThan(0);
 
-    vi.setSystemTime(new Date(resetAt + RESET_LIMIT_WINDOW_MS + 1));
+    vi.setSystemTime(new Date(firstSighting + RESET_LIMIT_WINDOW_MS + 1));
     await poll();
+    const r2 = Date.now();
 
     expect(rekeys()).toHaveLength(2);
     expect(account().inboxUidValidity).toBe("1002");
-    // The first repair's tombstones are not re-suffixed; the 1001 rows get #uv1001.
+    // The first repair's tombstone is not re-suffixed; the 1001 rows get their own suffix.
     expect(gmailIds().sort()).toEqual(
-      [`${idOf(NAVER, 101)}#uv1000`, `${idOf(NAVER, 1)}#uv1001`, `${idOf(NAVER, 2)}#uv1001`].sort(),
+      [
+        tomb(idOf(NAVER, 101), "1000", r1),
+        tomb(idOf(NAVER, 1), "1001", r2),
+        tomb(idOf(NAVER, 2), "1001", r2),
+      ].sort(),
     );
   });
 });
 
-describe("a failing transaction", () => {
-  it("rolls back every step, keeps the mailbox held, reports once, and the next poll retries", async () => {
+describe("a failing repair", () => {
+  it("rolls back every step, keeps the mailbox held, backs off, reports once, then succeeds", async () => {
     await ingest(2);
     const [row] = emails();
     seedAttention([{ id: "open", sourceId: row.id as string, status: "OPEN" }]);
     const idsBefore = gmailIds();
     fakeServer.renumber("INBOX", 1001n);
-    await nextPoll();
+    await nextPoll(); // +5: sighting
     vi.mocked(captureError).mockClear();
     rawFailure = new Error("connection reset");
 
-    const result = await nextPoll();
+    expect(await nextPoll()).toEqual(HELD); // +10: attempt 1 fails; retry from +20
+    expect(claims()).toHaveLength(1);
     const writesBefore = emailWrites();
-    await nextPoll();
-
-    expect(result).toEqual({ fetched: 0, inserted: 0, classified: 0, errors: 0 });
+    await nextPoll(); // +15: backing off, no transaction
+    expect(claims()).toHaveLength(1);
+    await nextPoll(); // +20: attempt 2 fails; retry from +40
     expect(claims()).toHaveLength(2);
+    for (let i = 0; i < 3; i += 1) await nextPoll(); // +25, +30, +35
+    expect(claims()).toHaveLength(2);
+
     expect(account().inboxUidValidity).toBe("1000");
     expect(account().inboxUidValidityPending).toBe("1001");
     expect(account().inboxUidValidityResetAt).toBeNull();
     expect(attention("open")).toMatchObject({ status: "OPEN", resolvedAt: null });
     expect(gmailIds()).toEqual(idsBefore);
     expect(emailWrites()).toBe(writesBefore);
+    expect(warned("repair failed")).toHaveLength(2);
     expect(captureError).toHaveBeenCalledTimes(1);
-    expect(warned("repair failed")).toHaveLength(1);
 
     rawFailure = null;
-    await nextPoll();
+    await nextPoll(); // +40: attempt 3 succeeds
 
+    expect(claims()).toHaveLength(3);
     expect(account().inboxUidValidity).toBe("1001");
     expect(attention("open").status).toBe("RESOLVED");
   });
 
-  it("rolls back on a unique collision with an existing tombstone", async () => {
+  it("rolls back on a unique collision with an existing tombstone, and reports no address", async () => {
     const [old] = await ingest(1);
+    const repairAt = T0.getTime() + 2 * POLL_INTERVAL;
     db.tables.emailMessage = [
       ...emails(),
-      { ...localRowFor(NAVER, 101), id: "older-tombstone", gmailId: `${old}#uv1000` },
+      { ...localRowFor(NAVER, 101), id: "older-tombstone", gmailId: tomb(old, "1000", repairAt) },
     ];
     seedAttention([{ id: "open", sourceId: rowByGmailId(old)?.id as string, status: "OPEN" }]);
     fakeServer.renumber("INBOX", 1001n);
@@ -754,6 +918,7 @@ describe("a failing transaction", () => {
     await nextPoll();
     await nextPoll();
 
+    expect(Date.now()).toBe(repairAt);
     expect(rowByGmailId(old)).toBeDefined();
     expect(account()).toMatchObject({ inboxUidValidity: "1000", inboxUidValidityPending: "1001" });
     expect(account().inboxUidValidityResetAt).toBeNull();
@@ -786,7 +951,7 @@ describe("moves recorded before the repair", () => {
       },
     ];
     advance(MINUTE);
-    await poll(); // first sighting
+    await poll(); // first sighting: the reset is dated from here
     advance(MINUTE);
     await poll(); // repair
     advance(MINUTE);
@@ -794,5 +959,54 @@ describe("moves recorded before the repair", () => {
 
     expect(rowByGmailId(idOf(NAVER, 101))).toMatchObject({ subject: "A different message" });
     expect(db.tables.imapMovedMessage).toHaveLength(1); // the undo record is kept
+  });
+});
+
+describe("an address with a LIKE wildcard ('_')", () => {
+  it("resolves only the repaired mailbox's items, never a look-alike address of the same user", async () => {
+    const { prisma } = await import("../db.js");
+    const { applyUidValidityRepair } = await import("../mail/imap-uidvalidity-reset.js");
+    const ab: Mailbox = { ...NAVER, rowId: "row-ab", email: "a_b@x.com" };
+    const axb: Mailbox = { ...NAVER, rowId: "row-axb", email: "aXb@x.com" };
+    armWith([
+      {
+        ...accountRow(ab),
+        inboxUidValidityPending: "1001",
+        inboxUidValidityPendingAt: T0,
+      },
+      accountRow(axb),
+    ]);
+    db.tables.emailMessage = [
+      { ...localRowFor(ab, 101), id: "ab-101" },
+      { ...localRowFor(axb, 101), id: "axb-101" },
+    ];
+    seedAttention([
+      { id: "ab", sourceId: "ab-101", status: "OPEN" },
+      { id: "axb", sourceId: "axb-101", status: "OPEN" },
+    ]);
+    // The fake behaves like Postgres LIKE here: Prisma's startsWith does not escape '_'.
+    const like = await (
+      prisma as unknown as { emailMessage: { findMany: (a: unknown) => Promise<Row[]> } }
+    ).emailMessage.findMany({
+      where: { userId: USER, gmailId: { startsWith: "naver-imap:a_b@x.com:" } },
+    });
+    expect(like.map((r) => r.id).sort()).toEqual(["ab-101", "axb-101"]);
+
+    const applied = await applyUidValidityRepair({
+      provider: IMAP_PROVIDERS.NAVER,
+      userId: USER,
+      email: ab.email,
+      linkedInboxAccountId: ab.rowId,
+      stored: "1000",
+      live: "1001",
+      pendingAt: T0,
+      now: new Date(T0.getTime() + MINUTE),
+    });
+
+    expect(applied).toBe(true);
+    expect(attention("ab").status).toBe("RESOLVED");
+    expect(attention("axb").status).toBe("OPEN");
+    expect(rowByGmailId(idOf(axb, 101))?.id).toBe("axb-101");
+    expect(rowByGmailId(tomb(idOf(ab, 101), "1000", T0.getTime() + MINUTE))?.id).toBe("ab-101");
   });
 });

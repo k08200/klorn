@@ -54,8 +54,9 @@ const GMAIL_ID = "18c2f0a1b2c3d4e5";
 
 let db: FakeDb;
 
-function seed(gmailId: string, rowCreatedAt: Date, markerAt: Date) {
+function seed(gmailId: string, rowCreatedAt: Date, markerAt: Date, accounts: Row[] = []) {
   db = createFakeDb({
+    linkedInboxAccount: accounts,
     emailMessage: [
       {
         id: "email-new",
@@ -84,7 +85,10 @@ function seed(gmailId: string, rowCreatedAt: Date, markerAt: Date) {
   dbHolder.current = db;
 }
 
-const judge = (gmailId: string) =>
+const judge = (
+  gmailId: string,
+  over: { receivedAt?: Date; linkedInboxAccountId?: string | null } = {},
+) =>
   judgeAndMirrorEmail(USER, {
     id: "email-new",
     gmailId,
@@ -94,6 +98,7 @@ const judge = (gmailId: string) =>
     labels: ["INBOX"],
     receivedAt: new Date(NOW.getTime() - 60_000),
     linkedInboxAccountId: null,
+    ...over,
   });
 const notifications = (): Row[] => db.tables.notification ?? [];
 
@@ -177,5 +182,59 @@ describe("Gmail ids: exactly the query they had", () => {
       select: { id: true },
     });
     expect(db.reads).not.toContain("emailMessage");
+  });
+});
+
+/**
+ * A repair re-ingests the INBOX window as new rows. Those are history: judged like any
+ * row, but no PUSH. Mail received during the hold (at or after the first sighting,
+ * `inboxUidValidityResetAt`) keeps its push.
+ */
+describe("re-ingested history after a repair (B2b): judged, never pushed", () => {
+  const RESET_AT = new Date(NOW.getTime() - 30 * 60_000);
+  const account = {
+    id: "acc-1",
+    userId: USER,
+    provider: "NAVER",
+    email: "me@naver.com",
+    inboxUidValidityResetAt: RESET_AT,
+  };
+  const OLD_MARKER = new Date(NOW.getTime() - 8 * 24 * HOUR); // outside the 7-day window
+  const fresh = () => new Date(NOW.getTime() - 60_000);
+
+  it("does not push an IMAP row received before the reset, but judges it", async () => {
+    seed(IMAP_ID, fresh(), OLD_MARKER, [account]);
+
+    await judge(IMAP_ID, {
+      receivedAt: new Date(RESET_AT.getTime() - 1),
+      linkedInboxAccountId: "acc-1",
+    });
+
+    expect(sendPushNotification).not.toHaveBeenCalled();
+    expect(notifications()).toHaveLength(1);
+    expect(db.tables.attentionItem).toEqual([
+      expect.objectContaining({ sourceId: "email-new", tier: "PUSH" }),
+    ]);
+  });
+
+  it("pushes IMAP mail received during the hold", async () => {
+    seed(IMAP_ID, fresh(), OLD_MARKER, [account]);
+
+    await judge(IMAP_ID, { receivedAt: RESET_AT, linkedInboxAccountId: "acc-1" });
+
+    expect(sendPushNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it("never looks at the accounts for a Gmail row", async () => {
+    seed(GMAIL_ID, fresh(), OLD_MARKER, [account]);
+    db.reads.length = 0;
+
+    await judge(GMAIL_ID, {
+      receivedAt: new Date(RESET_AT.getTime() - 1),
+      linkedInboxAccountId: "acc-1",
+    });
+
+    expect(sendPushNotification).toHaveBeenCalledTimes(1);
+    expect(db.reads).not.toContain("linkedInboxAccount");
   });
 });

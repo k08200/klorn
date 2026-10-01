@@ -15,12 +15,14 @@ interface EmailRow {
   gmailId: string;
   userId: string;
   linkedInboxAccountId: string | null;
+  receivedAt?: Date;
 }
 interface InboxRow {
   id: string;
   userId: string;
   provider: "GOOGLE" | "NAVER" | "ICLOUD" | "OUTLOOK" | "IMAP";
   needsReconnect: boolean;
+  inboxUidValidityResetAt?: Date | null;
 }
 interface LedgerRow {
   userId: string;
@@ -296,5 +298,39 @@ describe("findAutoModeCandidates", () => {
     expect(prisma.linkedInboxAccount.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { userId: USER } }),
     );
+  });
+});
+
+/**
+ * Step B2b: rows re-ingested after an IMAP UIDVALIDITY repair, and the re-keyed
+ * tombstones, are history and never get an unattended reply. Today no IMAP account
+ * is sendable (canAutoSendFromMailbox), so the fixture pairs an IMAP id with a
+ * sendable account to show the guard holds on its own, for the day IMAP mailboxes
+ * become sendable.
+ */
+describe("re-ingested history after an IMAP repair (B2b)", () => {
+  const RESET_AT = new Date("2026-09-30T10:00:00.000Z");
+  const imapEmail = (n: number, gmailId: string, receivedAt: Date): EmailRow => ({
+    id: `row-${n}`,
+    gmailId,
+    userId: USER,
+    linkedInboxAccountId: "acc-google",
+    receivedAt,
+  });
+
+  it("skips history and tombstones, keeps mail received during the hold", async () => {
+    fixtures.inboxes = fixtures.inboxes.map((inbox) =>
+      inbox.id === "acc-google" ? { ...inbox, inboxUidValidityResetAt: RESET_AT } : inbox,
+    );
+    fixtures.items = [item(1), item(2), item(3)];
+    fixtures.emails = [
+      imapEmail(1, "naver-imap:me@naver.com:1", new Date(RESET_AT.getTime() - 1)),
+      imapEmail(2, "naver-imap:me@naver.com:2", RESET_AT),
+      imapEmail(3, "naver-imap:me@naver.com:3#uv1000.1727690000000", RESET_AT),
+    ];
+
+    const found = await findAutoModeCandidates(USER, SINCE, 5);
+
+    expect(found.map((c) => c.id)).toEqual(["item-2"]);
   });
 });

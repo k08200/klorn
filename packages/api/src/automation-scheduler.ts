@@ -58,6 +58,7 @@ import {
   syncSpamLane,
 } from "./mail/email-sync.js";
 import { getLinkedInboxClients, renewExpiringGmailWatches } from "./mail/gmail.js";
+import { findReingestedHistory } from "./mail/imap-history.js";
 import { syncSentMessages } from "./mail/sent-messages.js";
 import { notifyConversationsUpdated } from "./notify/conversations-updated.js";
 import { formatUrgentEmailBody, senderName } from "./notify/notification-format.js";
@@ -1428,7 +1429,12 @@ async function runUserCycle(
             orderBy: { syncedAt: "desc" },
             take: autoReplyNewCount,
           });
+          // Step B2b: mail an IMAP UIDVALIDITY repair re-ingested (and the re-keyed
+          // tombstones) was already seen, maybe answered: no unattended reply, even
+          // though its `auto-reply:<gmailId>` claim would be fresh. Gmail rows read nothing.
+          const autoReplyHistory = await findReingestedHistory(config.userId, newEmails);
           for (const email of newEmails) {
+            if (autoReplyHistory.has(email.id)) continue;
             try {
               // Skip if an unattended reply (rule or auto-mode, sent OR failed)
               // already claimed this email
@@ -1580,10 +1586,16 @@ async function runUserCycle(
             from: true,
             summary: true,
             createdAt: true,
+            receivedAt: true,
+            linkedInboxAccountId: true,
           },
         });
+        // Step B2b: tombstones and mail an IMAP UIDVALIDITY repair re-ingested are
+        // history: rung once already, never again. Gmail rows read nothing more.
+        const urgentHistory = await findReingestedHistory(config.userId, urgentEmails);
+        const ringableUrgent = urgentEmails.filter((e) => !urgentHistory.has(e.id));
 
-        if (urgentEmails.length > 0) {
+        if (ringableUrgent.length > 0) {
           // Check which urgent emails we already notified about (by gmailId in message, last 7 days)
           const recentUrgentNotifs = await prisma.notification.findMany({
             where: {
@@ -1597,7 +1609,7 @@ async function runUserCycle(
           // Only notify for urgent emails we haven't notified about yet. For an IMAP
           // id a marker counts only from the row's creation on (step B2b: a repair
           // can hand a re-keyed row's id to a new message); Gmail ids as before.
-          const newUrgent = unnotifiedEmails(urgentEmails, latestNotifiedAt(recentUrgentNotifs));
+          const newUrgent = unnotifiedEmails(ringableUrgent, latestNotifiedAt(recentUrgentNotifs));
 
           if (newUrgent.length > 0) {
             // User-visible body: who + what, no internal IDs.

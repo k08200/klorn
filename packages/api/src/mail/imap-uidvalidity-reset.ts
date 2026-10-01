@@ -18,14 +18,22 @@
  * While a reset is pending, limited or being repaired, the poll persists nothing for
  * the mailbox, so every row with its id prefix is a row of the old numbering.
  *
+ * Clocks. The gap and the window compare this process's clock with times other
+ * processes wrote. Instances whose clocks differ by a minute or more weaken the
+ * MIN_SIGHTING_GAP_MS guard (two overlapping polls could then count as two
+ * sightings); the claim still lets only one of them repair.
+ *
  * How. ONE transaction, with an explicit timeout:
  *   a. claim: a conditional updateMany that only matches the account in exactly the
  *      state this poll decided on (stored value, pending value, pending time, no repair
  *      inside the window) and moves it to the new value. A count other than 1 means
- *      another poll won or the state moved: nothing else runs;
+ *      another poll won or the state moved: nothing else runs. The reset is dated
+ *      from the FIRST sighting (`inboxUidValidityResetAt` = the claimed pending time),
+ *      not from the repair: mail received before it is history the next poll
+ *      re-ingests (imap-history.ts), mail received during the hold is not;
  *   b. resolve the OPEN and SNOOZED attention items of the mailbox's rows;
- *   c. re-key those rows with one raw UPDATE (imap-tombstone.ts): `#uv<old>` is
- *      appended to `gmailId`, the row id stays.
+ *   c. re-key those rows with one raw UPDATE (imap-tombstone.ts):
+ *      `#uv<old>.<repair epoch ms>` is appended to `gmailId`, the row id stays.
  * Any failure, a unique collision included, rolls all three back and the mailbox
  * stays held (the caller reports it once). The next ordinary poll then ingests the
  * window under the new numbering.
@@ -35,12 +43,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../db.js";
 import { imapMessageIdHead } from "./imap-message-id.js";
 import type { ImapProviderConfig } from "./imap-providers.js";
-import {
-  isTombstonedId,
-  TOMBSTONE_MARKER,
-  tombstoneRekeyStatement,
-  tombstoneSuffix,
-} from "./imap-tombstone.js";
+import { isTombstonedId, tombstoneRekeyStatement, tombstoneSuffix } from "./imap-tombstone.js";
 import { classifyPollValidity } from "./imap-uidvalidity.js";
 
 /** The second sighting must come at least this long after the first. */
@@ -128,7 +131,11 @@ async function claimRepair(tx: Prisma.TransactionClient, args: RepairArgs): Prom
       inboxUidValidity: args.live,
       inboxUidValidityPending: null,
       inboxUidValidityPendingAt: null,
-      inboxUidValidityResetAt: args.now,
+      // The first sighting, not now. The 24 h limit and the moved-row floor
+      // (recentlyMovedSourceIds) read the same column and stay sound: from the first
+      // sighting on, every action refuses this mailbox (stored differs from live), so
+      // Klorn records no move between that instant and the repair.
+      inboxUidValidityResetAt: args.pendingAt,
     },
   });
   return count === 1;
@@ -141,15 +148,12 @@ async function resolveMailboxAttention(
 ): Promise<void> {
   const head = imapMessageIdHead(args.provider.idPrefix, args.email);
   const rows = await tx.emailMessage.findMany({
-    where: {
-      userId: args.userId,
-      gmailId: { startsWith: head },
-      NOT: { gmailId: { contains: TOMBSTONE_MARKER } },
-    },
+    where: { userId: args.userId, gmailId: { startsWith: head } },
     select: { id: true, gmailId: true },
   });
-  // The exact prefix test again in code: the same set the re-key's starts_with
-  // matches, whatever LIKE would make of a `_` in the address.
+  // The exact prefix and the anchored tombstone test again in code: the same set the
+  // re-key matches. Prisma's startsWith is LIKE without escaping, so `_` in an address
+  // also matches another of the user's mailboxes; and an address may contain `#uv`.
   const ids = rows
     .filter((row) => row.gmailId.startsWith(head) && !isTombstonedId(row.gmailId))
     .map((row) => row.id);
@@ -180,7 +184,7 @@ export async function applyUidValidityRepair(args: RepairArgs): Promise<boolean>
         tombstoneRekeyStatement({
           userId: args.userId,
           prefix: imapMessageIdHead(args.provider.idPrefix, args.email),
-          suffix: tombstoneSuffix(args.stored),
+          suffix: tombstoneSuffix(args.stored, args.now),
           now: args.now,
         }),
       );

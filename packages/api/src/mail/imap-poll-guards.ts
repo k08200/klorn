@@ -16,15 +16,19 @@
  *     this mailbox's rows are stale. The mailbox is HELD: the poll persists NOTHING
  *     for it and skips the moved-row cleanup, and every action refuses it (stored
  *     differs from live). Persisting would dedupe a new message that reuses an old UID
- *     into the stale row (B2 did: lost mail, wrong triage). The first poll that sees
- *     the value remembers it, logs and reports ONE Sentry event per account and
- *     value. A later poll that sees the same value at least a minute later repairs,
- *     at most once per account per 24 h: one transaction moves the account to the new
- *     value, resolves the mailbox's OPEN and SNOOZED attention items and re-keys its
- *     rows (`#uv<old>`, imap-tombstone.ts). Nothing is deleted; a failed repair rolls
- *     back, is reported once, and the mailbox stays held. The next poll ingests the
- *     window under the new numbering. Re-keyed rows stay visible as history, so a
- *     recent message can show twice (accepted, see the plan's B2b entry).
+ *     into the stale row (B2 did: lost mail, wrong triage). A held poll does not
+ *     count as a sync (imap-accounts.ts leaves lastSyncedAt alone), logs at most
+ *     every 15 minutes and alerts Sentry at most once a day per account
+ *     (imap-hold-state.ts). The first poll that sees the value remembers it; a later
+ *     poll that sees the same value at least a minute later repairs, at most once per
+ *     account per 24 h: one transaction moves the account to the new value (dated
+ *     from the first sighting), resolves the mailbox's OPEN and SNOOZED attention
+ *     items and re-keys its rows (`#uv<old>.<repair ms>`, imap-tombstone.ts). Nothing
+ *     is deleted. A failed or timed-out repair rolls back, the mailbox stays held and
+ *     the next attempt waits an exponential backoff. The next poll ingests the window
+ *     under the new numbering; those rows are history (imap-history.ts: judged, but
+ *     no push, no urgent alert, no unattended reply). Re-keyed rows stay visible, so
+ *     a recent message can show twice (accepted, see the plan's B2b entry).
  *   - a pending reset with no usable live value: still held, pending kept as it is.
  *
  * Racing moves. A poll reads its window, then persists each message. A message
@@ -40,6 +44,14 @@ import type { Prisma } from "@prisma/client";
 import { imapMoveActionsEnabled } from "../config.js";
 import { prisma } from "../db.js";
 import { captureError } from "../sentry.js";
+import {
+  clearRepairBackoff,
+  heldAlertDue,
+  heldWarnDue,
+  noteRepairFailure,
+  repairRetryAt,
+  resetHoldState,
+} from "./imap-hold-state.js";
 import type { ImapProviderConfig } from "./imap-providers.js";
 import {
   applyUidValidityRepair,
@@ -62,22 +74,9 @@ export interface ReconcileArgs extends ValidityState {
 /** Whether the poll may persist this mailbox's window. */
 export type PollGate = "ingest" | "hold";
 
-/** Keys (`<kind>:<rowId>:<live value>`) of what this process already reported. */
-const reported = new Set<string>();
-/** Bound on the set above; past it the set is cleared and an event may be reported again. */
-const MAX_REPORTED = 1000;
-
-/** Test hook: forget what was reported. */
+/** Test hook: forget what this process remembers about held mailboxes. */
 export function resetPollGuardState(): void {
-  reported.clear();
-}
-
-/** Run `report` once per key in this process. */
-function reportOnce(key: string, report: () => void): void {
-  if (reported.has(key)) return;
-  if (reported.size >= MAX_REPORTED) reported.clear();
-  reported.add(key);
-  report();
+  resetHoldState();
 }
 
 /** Report through Sentry; a reporting failure is logged, never thrown. */
@@ -94,24 +93,21 @@ function capture(args: ReconcileArgs, err: unknown, scope: string): void {
 }
 
 /**
- * A reset was seen: say so once per account and value. The event carries the row id
- * and the two numbers, never a message id or an address.
+ * A poll that holds the mailbox: a log line at most every HELD_WARN_INTERVAL_MS and a
+ * Sentry event at most every HELD_ALERT_INTERVAL_MS, per account, whatever the value,
+ * so a hold that lasts days keeps being seen. Only the row id and the numbers are
+ * written, never a message id or an address.
  */
-function reportSighting(args: ReconcileArgs): void {
-  reportOnce(`sighting:${args.linkedInboxAccountId}:${args.live}`, () => {
+function noteHeld(args: ReconcileArgs, now: Date, reason: string): void {
+  const { provider, linkedInboxAccountId: rowId } = args;
+  if (heldWarnDue(rowId, now)) {
     console.warn(
-      `[${args.provider.logScope}] UIDVALIDITY changed for row ${args.linkedInboxAccountId} (stored ${args.stored}, live ${args.live}): holding — nothing is stored for this mailbox and its actions refuse until the change is confirmed and repaired`,
+      `[${provider.logScope}] UIDVALIDITY changed for row ${rowId} (stored ${args.stored}, live ${args.live}, pending ${args.pending ?? "none"}): holding — nothing is stored for this mailbox and its actions refuse; ${reason}`,
     );
-    capture(args, new Error(`${args.provider.logScope} UIDVALIDITY changed`), "uidvalidity-reset");
-  });
-}
-
-function reportLimited(args: ReconcileArgs): void {
-  reportOnce(`limited:${args.linkedInboxAccountId}:${args.live}`, () => {
-    console.warn(
-      `[${args.provider.logScope}] UIDVALIDITY reset confirmed for row ${args.linkedInboxAccountId} (stored ${args.stored}, live ${args.live}), but at most one repair runs per account per 24 h: holding`,
-    );
-  });
+  }
+  if (heldAlertDue("held", rowId, now)) {
+    capture(args, new Error(`${provider.logScope} UIDVALIDITY changed`), "uidvalidity-reset");
+  }
 }
 
 /** A database write of this cycle; a failure is logged and the next poll repeats it. */
@@ -133,24 +129,39 @@ async function write(
   }
 }
 
+/**
+ * Run the repair, unless an earlier attempt failed and its backoff has not run out: a
+ * repair that keeps failing or timing out must not take a pooled connection every poll.
+ */
 async function repair(args: ReconcileArgs, now: Date): Promise<void> {
-  const { stored, live, pendingAt } = args;
+  const { stored, live, pendingAt, linkedInboxAccountId: rowId, provider } = args;
   if (!stored || !live || !pendingAt) return; // nextResetStep never asks for this
+  const retryAt = repairRetryAt(rowId);
+  if (retryAt !== null && now.getTime() < retryAt) {
+    noteHeld(
+      args,
+      now,
+      `the last repair attempt did not complete; the next one runs after ${new Date(retryAt).toISOString()}`,
+    );
+    return;
+  }
   try {
     const applied = await applyUidValidityRepair({ ...args, stored, live, pendingAt, now });
+    clearRepairBackoff(rowId);
     if (applied) {
       console.warn(
-        `[${args.provider.logScope}] UIDVALIDITY reset repaired for row ${args.linkedInboxAccountId} (${stored} -> ${live}): old rows re-keyed, their open attention items resolved; the next poll ingests the new numbering`,
+        `[${provider.logScope}] UIDVALIDITY reset repaired for row ${rowId} (${stored} -> ${live}): old rows re-keyed, their open attention items resolved; the next poll ingests the new numbering`,
       );
     }
   } catch (err) {
-    reportOnce(`repair:${args.linkedInboxAccountId}:${live}`, () => {
-      console.warn(
-        `[${args.provider.logScope}] UIDVALIDITY repair failed for row ${args.linkedInboxAccountId} (stored ${stored}, live ${live}), rolled back; holding: ${describeFailure(err)}`,
-      );
+    const next = new Date(noteRepairFailure(rowId, now)).toISOString();
+    console.warn(
+      `[${provider.logScope}] UIDVALIDITY repair failed for row ${rowId} (stored ${stored}, live ${live}), rolled back; holding, next attempt after ${next}: ${describeFailure(err)}`,
+    );
+    if (heldAlertDue("repair-failed", rowId, now)) {
       // Sanitized: a Prisma error can quote the colliding gmailId (an address).
       capture(args, sanitizedError(err), "uidvalidity-repair");
-    });
+    }
   }
 }
 
@@ -165,20 +176,31 @@ export async function reconcileInboxValidity(args: ReconcileArgs): Promise<PollG
     // Not fatal if it fails: actions refuse this mailbox until a later poll stores it.
     await write(args, "store UIDVALIDITY", { inboxUidValidity: args.live });
   } else if (step === "clear-pending") {
+    clearRepairBackoff(args.linkedInboxAccountId);
     await write(args, "clear the pending UIDVALIDITY", {
       inboxUidValidityPending: null,
       inboxUidValidityPendingAt: null,
     });
   } else if (step === "note-pending") {
-    reportSighting(args);
+    noteHeld(
+      args,
+      now,
+      "first sighting of this value; it is repaired once a later poll confirms it",
+    );
     await write(
       args,
       "record the pending UIDVALIDITY",
       { inboxUidValidityPending: args.live, inboxUidValidityPendingAt: now },
       { inboxUidValidity: args.stored },
     );
+  } else if (step === "wait") {
+    noteHeld(
+      args,
+      now,
+      args.live ? "waiting for a later sighting" : "the server reported no usable value",
+    );
   } else if (step === "limited") {
-    reportLimited(args);
+    noteHeld(args, now, "confirmed, but at most one repair runs per account per 24 h");
   } else if (step === "repair") {
     await repair(args, now);
   }

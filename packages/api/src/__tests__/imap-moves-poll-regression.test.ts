@@ -229,7 +229,7 @@ describe("a server that renumbers the mailbox: the poller holds and persists not
     expect(String(lines[0][0])).toContain(NAVER.rowId);
   });
 
-  it("reports again when the server reports yet another value", async () => {
+  it("does not alert again for another value within the day (B2b: once per account per 24 h)", async () => {
     await ingest(1);
     fakeServer.renumber("INBOX", 1001n);
     await poll();
@@ -238,7 +238,9 @@ describe("a server that renumbers the mailbox: the poller holds and persists not
     await poll();
     await poll();
 
-    expect(captureError).toHaveBeenCalledTimes(2);
+    // B2 alerted once per value (2 here); the 24 h re-alert is pinned in
+    // imap-uidvalidity-reset.test.ts.
+    expect(captureError).toHaveBeenCalledTimes(1);
   });
 
   it("does not report a mailbox whose value is unchanged, or one being baselined", async () => {

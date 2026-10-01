@@ -107,6 +107,9 @@ interface SyncResult {
   // first-seen email is handed to the judge.
   classified: number;
   errors: number;
+  // Step B2b: present (true) when the mailbox is held and nothing was persisted. The
+  // caller must not count such a poll as a sync (lastSyncedAt).
+  held?: true;
 }
 
 interface ImapEnvelopeAddress {
@@ -256,7 +259,7 @@ export async function syncImapInbox(args: SyncArgs): Promise<SyncResult> {
         });
         // A held mailbox persists nothing: under the old stored value a new message
         // that reuses an old UID would be deduped into the stale row.
-        if (gate === "hold") return result;
+        if (gate === "hold") return { ...result, held: true };
       }
       const status = await client.status("INBOX", { messages: true });
       const totalMessages = status.messages ?? 0;
