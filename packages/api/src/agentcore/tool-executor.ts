@@ -30,6 +30,7 @@ import {
   deleteEvent,
   listEvents,
 } from "../pim/calendar.js";
+import { withoutLinkedTitles } from "../pim/calendar-read-format.js";
 import { eventSourceForGoogleId } from "../pim/calendar-rows.js";
 import {
   getUpcomingMeetings,
@@ -39,6 +40,7 @@ import {
 } from "../pim/meeting.js";
 import { getTeamAvailability } from "../pim/team-availability.js";
 import { captureError } from "../sentry.js";
+import { stripUntrusted, wrapUntrusted } from "../untrusted.js";
 import { calculate, generatePassword, UTILITY_TOOLS } from "../utilities.js";
 import { executeSkill, listUserSkills, SKILL_TOOLS } from "./skill-executor.js";
 import { capToolResult } from "./tool-result-budget.js";
@@ -414,7 +416,8 @@ async function executeToolCallInternal(
         if (dupCheck) {
           return JSON.stringify({
             skipped: true,
-            message: `이미 같은 시간대에 이벤트가 있습니다: "${dupCheck.title}" (${dupCheck.startTime.toISOString()})`,
+            // The title is external content (an invite's author wrote it).
+            message: `이미 같은 시간대에 이벤트가 있습니다: ${wrapUntrusted(dupCheck.title, "calendar:summary")} (${dupCheck.startTime.toISOString()})`,
             existingEventId: dupCheck.id,
           });
         }
@@ -440,7 +443,8 @@ async function executeToolCallInternal(
           return JSON.stringify({
             skipped: true,
             message: conflictCheck.message,
-            conflicts: conflictCheck.conflicts,
+            // No title of a linked (work) calendar's event reaches the model.
+            conflicts: withoutLinkedTitles(conflictCheck.conflicts),
           });
         }
 
@@ -530,10 +534,30 @@ async function executeToolCallInternal(
           day_of_week: now.toLocaleDateString("ko-KR", { weekday: "long", timeZone: "Asia/Seoul" }),
         });
       }
-      case "get_upcoming_meetings":
-        return JSON.stringify(await getUpcomingMeetings(userId));
+      case "get_upcoming_meetings": {
+        // The summary is external content; the reminder scheduler reads the same
+        // function for a notification the user sees, so the wrap is applied here.
+        const meetings = await getUpcomingMeetings(userId);
+        return JSON.stringify(
+          meetings.map((meeting) => ({
+            ...meeting,
+            summary: wrapUntrusted(meeting.summary, "calendar:summary"),
+            // The link can be lifted from the description, and attendees are addresses
+            // an invite's author chose: both external content.
+            meetingLink:
+              meeting.meetingLink === null
+                ? null
+                : wrapUntrusted(meeting.meetingLink, "calendar:meeting-link"),
+            attendees: meeting.attendees.map((a) => wrapUntrusted(a, "calendar:attendee")),
+          })),
+        );
+      }
       case "join_meeting":
-        return JSON.stringify(await joinMeeting(requireString(args.meeting_link, "meeting_link")));
+        // The link was handed to the model wrapped; a model that copies it verbatim
+        // must still get a joinable URL (the host allowlist still applies).
+        return JSON.stringify(
+          await joinMeeting(stripUntrusted(requireString(args.meeting_link, "meeting_link"))),
+        );
       case "summarize_meeting":
         return JSON.stringify(
           await summarizeMeeting(

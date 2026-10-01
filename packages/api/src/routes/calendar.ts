@@ -25,6 +25,7 @@ import {
   isCalendarRowVisible,
   withReadOnlyFlag,
 } from "../pim/calendar-scope.js";
+import { withSourceLabels } from "../pim/calendar-source-label.js";
 import { readSyncTimezone, syncPrimaryCalendarWindow } from "../pim/calendar-sync.js";
 import { buildMeetingPrepPack } from "../pim/meeting-prep-pack.js";
 import { captureError } from "../sentry.js";
@@ -117,7 +118,8 @@ export async function calendarRoutes(app: FastifyInstance) {
     });
 
     // An invite in both the primary and a linked calendar is two rows (C2).
-    return { events: dedupeCalendarEvents(rows).map(withReadOnlyFlag) };
+    const events = dedupeCalendarEvents(rows).map(withReadOnlyFlag);
+    return { events: await withSourceLabels(uid, events) };
   });
 
   // Get deterministic prep pack for a meeting/event
@@ -138,7 +140,8 @@ export async function calendarRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Event not found" });
     }
     if (event.userId !== uid) return reply.code(403).send({ error: "Forbidden" });
-    return withReadOnlyFlag(event);
+    const [labelled] = await withSourceLabels(uid, [withReadOnlyFlag(event)]);
+    return labelled;
   });
 
   // Parse free text (voice transcript) into an event draft — read-side, free
@@ -431,12 +434,16 @@ export async function calendarRoutes(app: FastifyInstance) {
       (e: { startTime: Date; endTime: Date }) => e.startTime <= now && e.endTime > now,
     );
 
-    const marked = upcoming.map(withReadOnlyFlag);
+    // One label lookup for the current event and the upcoming ones together.
+    const shown = [...(current ? [current] : []), ...upcoming].map(withReadOnlyFlag);
+    const labelled = await withSourceLabels(uid, shown);
+    const labelledCurrent = current ? (labelled[0] ?? null) : null;
+    const labelledUpcoming = current ? labelled.slice(1) : labelled;
     return {
       total: events.length,
-      current: current ? withReadOnlyFlag(current) : null,
-      upcoming: marked,
-      nextEvent: marked[0] || null,
+      current: labelledCurrent,
+      upcoming: labelledUpcoming,
+      nextEvent: labelledUpcoming[0] || null,
     };
   });
 }

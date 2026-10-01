@@ -1077,6 +1077,27 @@ struct CalendarEventWire: Codable, Sendable, Identifiable, Hashable {
     let location: String?
     let meetingLink: String?
     let allDay: Bool
+    /// `true` on a linked calendar's event, a read-only mirror the server refuses
+    /// to edit or delete (409; step C7). Absent on every other row and on an older
+    /// server, so it is optional: a row without it still decodes, and is editable.
+    var readOnly: Bool?
+    /// The linked account's email (`sourceLabel`), on a linked event only.
+    var sourceLabel: String?
+}
+
+/// False for a linked calendar's event: Klorn holds read access there only, and the
+/// next sync would undo an edit or bring a deleted event back. Edit and delete are
+/// not offered (the server answers 409 anyway).
+func calendarEventIsEditable(_ event: CalendarEventWire) -> Bool {
+    event.readOnly != true
+}
+
+/// The small source label beside a read-only event: the linked account's email,
+/// else "Linked". Nil for an editable event, which has no source to call out.
+func calendarEventSourceLabel(_ event: CalendarEventWire) -> String? {
+    guard !calendarEventIsEditable(event) else { return nil }
+    let email = event.sourceLabel?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    return email.isEmpty ? L("cal.source.linked") : email
 }
 
 /// GET /api/calendar?days=N → { events } (routes/calendar.ts list). Same wire

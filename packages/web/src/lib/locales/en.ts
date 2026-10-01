@@ -570,6 +570,9 @@ const en: Record<string, string> = {
   "calendar.newEvent": "New event",
   "calendar.needPrep": "Meetings that need prep",
   "calendar.voiceParsing": "Understanding your event…",
+  "calendar.linkedSource": "Linked",
+  "calendar.readOnly": "Read-only",
+  "calendar.readOnlyHint": "Read-only: this event comes from a linked calendar",
   // Decision queue (inbox)
   "inbox.decisions": "Decisions",
   "inbox.tracking": "Tracking",

@@ -9,7 +9,9 @@
  *
  * A reader that is not in a list below fails the last describe: that is the
  * point of it. Decide whether the new reader dedupes (DEDUPED), is unaffected by
- * a duplicate (UNAFFECTED), or is a known gap for C7 (NOT_DEDUPED_YET).
+ * a duplicate (UNAFFECTED), or returns every row on purpose (EXPORTS_EVERYTHING).
+ * Since C7 the lists, counts and capped reads that used to be C2 gaps go through
+ * pim/calendar-read.ts, the one read path, and no longer read the table themselves.
  */
 
 import { readdirSync, readFileSync } from "node:fs";
@@ -121,15 +123,19 @@ describe("Google-only LinkedCalendarAccount readers filter on provider", () => {
   // The key-rotation sweep reads every provider on purpose: it re-encrypts all
   // secrets, whatever the provider. So does the dispatcher: it reads a row's
   // provider to choose the implementation.
+  // The source label reads an account's email by id, for a row that already
+  // names it: provider-agnostic on purpose, it only labels.
   const ALL_PROVIDER_READERS = [
     "scripts/reencrypt-tokens.ts",
     "pim/calendar-providers/dispatch.ts",
+    "pim/calendar-source-label.ts",
   ];
 
   it("finds the known readers (so this guard cannot pass by scanning nothing)", () => {
     const readers = files.filter((f) => callWindows(f.text, READ).length > 0);
     expect(readers.map((f) => f.path).sort()).toEqual([
       "pim/calendar-providers/dispatch.ts",
+      "pim/calendar-source-label.ts",
       "pim/linked-calendar-unlink.ts",
       "routes/auth.ts",
       "scripts/reencrypt-tokens.ts",
@@ -155,14 +161,13 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
     .sort();
 
   // Lists or counts events for a person or a notification: they dedupe by
-  // (provider, externalId) through pim/calendar-dedupe.ts. proactive-actions
-  // dedupes the back-to-back warning only; its weekly count and tomorrow list are
-  // a C7 gap (see the plan's C2 block).
+  // (provider, externalId) through pim/calendar-dedupe.ts, directly or (the C7
+  // read path) for every reader that used to be a known gap.
   const DEDUPED = [
     "agentcore/agent-context.ts",
     "agentcore/proactive-actions.ts",
     "mail/meeting-context.ts",
-    "pim/briefing-structure.ts",
+    "pim/calendar-read.ts",
     "pim/focus-digest.ts",
     "pim/inbox-summary.ts",
     "routes/calendar.ts",
@@ -177,26 +182,22 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
     "pim/meeting-prep-pack.ts",
     "pim/team-availability.ts",
   ];
-  // Known double counts while LINKED_CALENDAR_SYNC_ENABLED is on, left for C7
-  // (the unified read path). Each is a count or a capped list, noted in the plan.
-  const NOT_DEDUPED_YET = [
-    "index.ts", // GDPR export: every row is exported on purpose
-    "learning/interaction-graph.ts", // meeting-load bonus: a count
-    "pim/briefing.ts", // collapses by (title, day) already, but take: 20 is spent on copies
-    "routes/ops.ts", // "events today" count on the status page
+  // Returns every row on purpose.
+  const EXPORTS_EVERYTHING = [
+    "index.ts", // GDPR export: every row is exported
   ];
 
   it("finds the readers (so this guard cannot pass by scanning nothing)", () => {
     expect(readerPaths.length).toBeGreaterThan(8);
   });
 
-  it("every reader is either deduped, unaffected by a duplicate, or a known C7 gap", () => {
-    const accounted = new Set([...DEDUPED, ...UNAFFECTED, ...NOT_DEDUPED_YET]);
+  it("every reader is either deduped, unaffected by a duplicate, or exports everything on purpose", () => {
+    const accounted = new Set([...DEDUPED, ...UNAFFECTED, ...EXPORTS_EVERYTHING]);
     expect(readerPaths.filter((path) => !accounted.has(path))).toEqual([]);
   });
 
   it("the lists above name no module that has stopped reading events", () => {
-    const stale = [...DEDUPED, ...UNAFFECTED, ...NOT_DEDUPED_YET].filter(
+    const stale = [...DEDUPED, ...UNAFFECTED, ...EXPORTS_EVERYTHING].filter(
       (path) => !readerPaths.includes(path),
     );
     expect(stale).toEqual([]);
@@ -237,6 +238,118 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
   it.each(DEDUPED)("%s dedupes through dedupeCalendarEvents", (path) => {
     const file = files.find((f) => f.path === path);
     expect(file?.text).toContain("dedupeCalendarEvents(");
+  });
+
+  describe("C7: the C2 gaps read through the one read path", () => {
+    const VIA_READ_PATH = [
+      "learning/interaction-graph.ts",
+      "pim/briefing-structure.ts",
+      "pim/briefing.ts",
+      "routes/ops.ts",
+    ];
+
+    it.each(VIA_READ_PATH)("%s no longer reads the table itself", (path) => {
+      const file = files.find((f) => f.path === path);
+      expect(file?.text).toMatch(/\b(readCalendarRows|countCalendarRows)\(/);
+      expect(file?.text).not.toMatch(/\bcalendarEvent\s*\.\s*\w+\s*\(/);
+    });
+
+    it("the weekly review count and tomorrow list in proactive-actions use it too", () => {
+      const file = files.find((f) => f.path === "agentcore/proactive-actions.ts");
+      expect(file?.text).toContain("countCalendarRows(");
+      expect(file?.text).toContain("readCalendarRows(");
+      // What still reads the table directly there dedupes (back-to-back) or is
+      // covered by the notification dedupe (upcoming meetings).
+      expect(file?.text).not.toMatch(/calendarEvent\s*\.\s*count\(/);
+    });
+
+    it("list_events and the conflict check read through it, behind the flag", () => {
+      const file = files.find((f) => f.path === "pim/calendar.ts");
+      expect(file?.text).toContain("unifiedCalendarReadEnabled()");
+      expect(file?.text).toMatch(/readUpcomingEvents\(|readCalendarRows\(/);
+      expect(file?.text).not.toMatch(/\bcalendarEvent\s*\.\s*\w+\s*\(/);
+    });
+  });
+
+  // Calendar text is external content (an invite's author writes the title). The
+  // audit of every module that reads rows or events, for whether the text can reach
+  // an LLM: the ones that can wrap it (tested per reader), the ones that cannot
+  // must not start importing the LLM without this list being revisited.
+  describe("C7: calendar text reaches an LLM only wrapped", () => {
+    const LLM_FACING: Array<[string, RegExp]> = [
+      ["agentcore/agent-context.ts", /wrapUntrusted\(e\.title/],
+      ["agentcore/tool-executor.ts", /wrapUntrusted\(dupCheck\.title/],
+      ["mail/meeting-context.ts", /wrapUntrusted\(e\.title/],
+      ["pim/briefing.ts", /wrapEventsForPrompt\(/],
+      ["pim/calendar-read-format.ts", /wrapUntrusted\(row\.title/],
+    ];
+    // Modules that read calendar rows and never touch an LLM, directly or by a
+    // dynamic import.
+    const NOT_LLM_FACING = [
+      "agentcore/proactive-actions.ts", // notifications the user reads
+      "pim/briefing-structure.ts", // the rule-based day shape
+      "pim/focus-digest.ts",
+      "pim/inbox-summary.ts",
+      "pim/meeting-prep-pack.ts",
+      "pim/team-availability.ts",
+      "learning/interaction-graph.ts",
+    ];
+    // Modules that reach LLM-adjacent code, with the exact specifiers they use and why
+    // no calendar row text can ride along.
+    const LLM_ADJACENT: Array<[string, string[], string]> = [
+      [
+        "routes/calendar.ts",
+        ["../event-parse.js"], // dynamic import in POST /parse-event
+        "event-parse sends the user's own spoken or typed utterance to the model, never a row",
+      ],
+      [
+        "routes/ops.ts",
+        ["../llm/model-fallback.js"],
+        "snapshotUserProviderCooldowns reads in-memory provider cooldowns, no prompt",
+      ],
+    ];
+
+    /** Every static or dynamic import specifier that reaches the LLM client or its helpers. */
+    function llmSpecifiers(text: string): string[] {
+      const found = [...text.matchAll(/(?:\bfrom\s*|\bimport\s*\(\s*)["']([^"']+)["']/g)].map(
+        (match) => match[1] ?? "",
+      );
+      return found.filter(
+        (spec) => /(^|\/)llm\//.test(spec) || /(^|\/)event-parse(\.js)?$/.test(spec),
+      );
+    }
+
+    it.each(
+      LLM_FACING,
+    )("%s wraps the calendar text it puts in front of a model", (path, pattern) => {
+      expect(files.find((f) => f.path === path)?.text).toMatch(pattern);
+    });
+
+    it.each(
+      NOT_LLM_FACING,
+    )("%s imports nothing from the LLM, statically or dynamically", (path) => {
+      const text = files.find((f) => f.path === path)?.text ?? "";
+      expect(text.length).toBeGreaterThan(0);
+      expect(llmSpecifiers(text)).toEqual([]);
+      expect(text).not.toMatch(/createCompletion/);
+    });
+
+    it.each(LLM_ADJACENT)("%s reaches the LLM only through %j (%s)", (path, specifiers) => {
+      const text = files.find((f) => f.path === path)?.text ?? "";
+      expect(llmSpecifiers(text).sort()).toEqual([...specifiers].sort());
+      expect(text).not.toMatch(/createCompletion/);
+    });
+
+    it("the detector sees a dynamic import and a llm-json import (so the lists above cannot go stale silently)", () => {
+      expect(llmSpecifiers('const x = await import("../llm/llm-json.js");')).toEqual([
+        "../llm/llm-json.js",
+      ]);
+      expect(llmSpecifiers('import { a } from "../llm/model-fallback.js";')).toEqual([
+        "../llm/model-fallback.js",
+      ]);
+      expect(llmSpecifiers('import("../event-parse.js")')).toEqual(["../event-parse.js"]);
+      expect(llmSpecifiers('import { z } from "../pim/calendar-read.js";')).toEqual([]);
+    });
   });
 
   it("the dropped C1 unique is referenced nowhere; the per-source unique only by the rows module", () => {

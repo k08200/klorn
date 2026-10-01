@@ -3,7 +3,7 @@ import { getUserId, requireAuth } from "../auth.js";
 import { prisma } from "../db.js";
 import { snapshotUserProviderCooldowns } from "../llm/model-fallback.js";
 import { getBriefingStatus } from "../pim/briefing-status.js";
-import { calendarSourceScope } from "../pim/calendar-scope.js";
+import { countCalendarRows } from "../pim/calendar-read.js";
 
 type CheckStatus = "ok" | "warning" | "error";
 
@@ -112,9 +112,8 @@ async function collectReadinessData(userId: string, now: Date): Promise<Readines
       take: 5,
     }),
     prisma.emailMessage.count({ where: { userId } }),
-    prisma.calendarEvent.count({
-      where: { userId, startTime: { gte: startOfDay(now) }, ...calendarSourceScope() },
-    }),
+    // One invite in the primary and a linked calendar is two rows (C2): counted once.
+    countCalendarRows({ userId, when: { startTime: { gte: startOfDay(now) } } }),
     getBriefingStatus(userId, { now }),
   ]);
 
