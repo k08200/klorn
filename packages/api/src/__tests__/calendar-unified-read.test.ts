@@ -222,8 +222,8 @@ describe("listEvents — flag on", () => {
         },
       ],
       sourceAccountId: null,
-      // C4: the kill switch also hides OUTLOOK rows while its flags are off.
-      provider: { notIn: ["OUTLOOK"] },
+      // C4/C3: the kill switch also hides OUTLOOK, ICLOUD and NAVER rows while their flags are off.
+      provider: { notIn: ["OUTLOOK", "ICLOUD", "NAVER"] },
     });
     expect(arg.orderBy).toEqual({ startTime: "asc" });
   });
@@ -489,8 +489,8 @@ describe("checkConflicts — flag on", () => {
       endTime: { gt: new Date("2026-10-03T05:00:00.000Z") },
       allDay: false,
       sourceAccountId: null,
-      // C4: the kill switch also hides OUTLOOK rows while its flags are off.
-      provider: { notIn: ["OUTLOOK"] },
+      // C4/C3: the kill switch also hides OUTLOOK, ICLOUD and NAVER rows while their flags are off.
+      provider: { notIn: ["OUTLOOK", "ICLOUD", "NAVER"] },
     });
   });
 
