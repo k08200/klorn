@@ -132,7 +132,59 @@ describe("refreshOutlookTokens", () => {
   });
 });
 
+describe("no Microsoft call follows a redirect", () => {
+  // A redirect would resend the request body (the client secret, the code, the refresh
+  // token) or the bearer token to wherever it points. fetch with redirect "error"
+  // rejects instead, and every caller already treats a rejected fetch as a failure.
+  const ok = () =>
+    new Response(JSON.stringify({ access_token: "at", refresh_token: "rt", expires_in: 3600 }), {
+      status: 200,
+    });
+
+  it.each([
+    ["the code exchange", () => mod.exchangeOutlookCode("code-1")],
+    ["the calendar code exchange", () => mod.exchangeOutlookCode("code-1", "calendar")],
+    ["the refresh grant", () => mod.refreshOutlookTokens("rt-1")],
+    ["the calendar refresh grant", () => mod.refreshOutlookTokens("rt-1", "calendar")],
+    ["the /me lookup", () => mod.fetchOutlookAccountEmail("at")],
+  ])("%s asks fetch to refuse a redirect", async (_label, call) => {
+    fetchMock.mockResolvedValueOnce(ok());
+
+    await call();
+
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(init.redirect).toBe("error");
+  });
+
+  it.each([
+    ["the code exchange", () => mod.exchangeOutlookCode("code-1")],
+    ["the refresh grant", () => mod.refreshOutlookTokens("rt-1")],
+    ["the /me lookup", () => mod.fetchOutlookAccountEmail("at")],
+  ])("a refused redirect makes %s reject, like any other network failure, without echoing a secret", async (_label, call) => {
+    fetchMock.mockRejectedValueOnce(
+      Object.assign(new TypeError("fetch failed"), { cause: new Error("unexpected redirect") }),
+    );
+
+    const err = await call().catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(TypeError);
+    expect(String((err as Error).message)).not.toContain("secret-456");
+    expect(String((err as Error).message)).not.toContain("code-1");
+  });
+});
+
 describe("fetchOutlookAccountEmail", () => {
+  it("never follows a redirect: the bearer token goes only where it was sent", async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ mail: "me@contoso.com" }), { status: 200 }),
+    );
+
+    await mod.fetchOutlookAccountEmail("at");
+
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(init.redirect).toBe("error");
+  });
+
   it("prefers mail, falls back to userPrincipalName (personal accounts)", async () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,

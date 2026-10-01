@@ -21,9 +21,19 @@
  * mail, which Klorn never does (re-verified 2026-08-06). Note: some org
  * tenants block user consent for Mail.ReadWrite (admin consent needed);
  * personal outlook.com accounts consent directly.
+ *
+ * Two scope sets, chosen by the link being made (step C4 of
+ * docs/providers/unified-platform-plan.md). The INBOX set is the one above and is
+ * the default everywhere, so every existing inbox link asks for, and was granted,
+ * exactly what it always did. The CALENDAR set is requested only for a calendar
+ * link and for refreshing a calendar account's token: identity, offline access,
+ * User.Read (so Graph /me can name the account) and Calendars.Read, read-only,
+ * with no mail access. Calendars.Read is the permission the calendarView and
+ * getSchedule docs list for delegated work/school and personal accounts
+ * (https://learn.microsoft.com/graph/api/calendar-list-calendarview).
  */
 
-const GRAPH_SCOPES = [
+const INBOX_SCOPES = [
   "openid",
   "email",
   "offline_access",
@@ -31,6 +41,21 @@ const GRAPH_SCOPES = [
   "https://graph.microsoft.com/Mail.ReadWrite",
   "https://graph.microsoft.com/Mail.Send",
 ];
+
+const CALENDAR_SCOPES = [
+  "openid",
+  "email",
+  "offline_access",
+  "https://graph.microsoft.com/User.Read",
+  "https://graph.microsoft.com/Calendars.Read",
+];
+
+/** Which scope set a flow asks for: an inbox link (the default) or a calendar link. */
+export type OutlookScopeSet = "inbox" | "calendar";
+
+function scopeParam(scopeSet: OutlookScopeSet): string {
+  return (scopeSet === "calendar" ? CALENDAR_SCOPES : INBOX_SCOPES).join(" ");
+}
 
 function msClientId(): string {
   return process.env.MS_CLIENT_ID ?? "";
@@ -53,13 +78,13 @@ export function outlookConfigured(): boolean {
   return Boolean(msClientId() && msClientSecret());
 }
 
-export function getOutlookAuthUrl(state: string): string {
+export function getOutlookAuthUrl(state: string, scopeSet: OutlookScopeSet = "inbox"): string {
   const params = new URLSearchParams({
     client_id: msClientId(),
     response_type: "code",
     redirect_uri: msRedirectUri(),
     response_mode: "query",
-    scope: GRAPH_SCOPES.join(" "),
+    scope: scopeParam(scopeSet),
     state,
     // select_account (not consent): offline_access already yields a refresh
     // token on first consent, and forcing re-consent on every link is hostile.
@@ -80,10 +105,15 @@ export interface OutlookTokenError {
 
 export async function exchangeOutlookCode(
   code: string,
+  scopeSet: OutlookScopeSet = "inbox",
 ): Promise<OutlookTokens | OutlookTokenError> {
   const res = await fetch(`${authorityBase()}/token`, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
+    // Never follow a redirect: fetch would resend this body (the client secret, the
+    // code or refresh token) to wherever it points. A refused redirect rejects like
+    // any network failure, which every caller already handles.
+    redirect: "error",
     // Fail fast — a hung token call stalls whichever flow is waiting on it.
     signal: AbortSignal.timeout(15_000),
     body: new URLSearchParams({
@@ -92,7 +122,7 @@ export async function exchangeOutlookCode(
       grant_type: "authorization_code",
       code,
       redirect_uri: msRedirectUri(),
-      scope: GRAPH_SCOPES.join(" "),
+      scope: scopeParam(scopeSet),
     }),
   });
   if (!res.ok) {
@@ -134,10 +164,15 @@ export async function exchangeOutlookCode(
  */
 export async function refreshOutlookTokens(
   refreshToken: string,
+  scopeSet: OutlookScopeSet = "inbox",
 ): Promise<OutlookTokens | OutlookTokenError> {
   const res = await fetch(`${authorityBase()}/token`, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
+    // Never follow a redirect: fetch would resend this body (the client secret, the
+    // code or refresh token) to wherever it points. A refused redirect rejects like
+    // any network failure, which every caller already handles.
+    redirect: "error",
     // Fail fast — a hung token call stalls whichever flow is waiting on it.
     signal: AbortSignal.timeout(15_000),
     body: new URLSearchParams({
@@ -145,7 +180,7 @@ export async function refreshOutlookTokens(
       client_secret: msClientSecret(),
       grant_type: "refresh_token",
       refresh_token: refreshToken,
-      scope: GRAPH_SCOPES.join(" "),
+      scope: scopeParam(scopeSet),
     }),
   });
   if (!res.ok) {
@@ -185,6 +220,8 @@ export async function refreshOutlookTokens(
 export async function fetchOutlookAccountEmail(accessToken: string): Promise<string | null> {
   const res = await fetch("https://graph.microsoft.com/v1.0/me?$select=mail,userPrincipalName", {
     headers: { authorization: `Bearer ${accessToken}` },
+    // Never follow a redirect: fetch would resend the bearer token to wherever it points.
+    redirect: "error",
     signal: AbortSignal.timeout(15_000),
   });
   if (!res.ok) {

@@ -4,8 +4,10 @@
  * hides rows already synced immediately instead of leaving them on screen.
  */
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  anyLinkedRowVisible,
+  CALENDAR_PROVIDER_ENABLED,
   calendarSourceScope,
   isCalendarRowVisible,
   type ProviderEnabledMap,
@@ -19,48 +21,49 @@ afterEach(() => {
   else process.env[KEY] = original;
 });
 
+// The linked-sync flag on its own: an empty registry, so no connector's flag is in play.
 describe("calendarSourceScope", () => {
   it("limits a where clause to primary and LOCAL rows while the flag is off", () => {
     delete process.env[KEY];
-    expect(calendarSourceScope()).toEqual({ sourceAccountId: null });
+    expect(calendarSourceScope({})).toEqual({ sourceAccountId: null });
     process.env[KEY] = "false";
-    expect(calendarSourceScope()).toEqual({ sourceAccountId: null });
+    expect(calendarSourceScope({})).toEqual({ sourceAccountId: null });
   });
 
   it("adds nothing once the flag is on", () => {
     process.env[KEY] = "true";
-    expect(calendarSourceScope()).toEqual({});
+    expect(calendarSourceScope({})).toEqual({});
   });
 
   it("is read at request time: a flip needs no restart", () => {
     process.env[KEY] = "true";
-    expect(calendarSourceScope()).toEqual({});
+    expect(calendarSourceScope({})).toEqual({});
     process.env[KEY] = "off";
-    expect(calendarSourceScope()).toEqual({ sourceAccountId: null });
+    expect(calendarSourceScope({})).toEqual({ sourceAccountId: null });
   });
 
   it("returns a fresh object each call so a caller cannot poison the next query", () => {
     delete process.env[KEY];
-    const first = calendarSourceScope() as { sourceAccountId?: unknown };
+    const first = calendarSourceScope({}) as { sourceAccountId?: unknown };
     first.sourceAccountId = "x";
-    expect(calendarSourceScope()).toEqual({ sourceAccountId: null });
+    expect(calendarSourceScope({})).toEqual({ sourceAccountId: null });
   });
 });
 
 describe("isCalendarRowVisible", () => {
   it("hides a linked row while the flag is off, shows it once on", () => {
     delete process.env[KEY];
-    expect(isCalendarRowVisible({ sourceAccountId: "acct-1" })).toBe(false);
+    expect(isCalendarRowVisible({ sourceAccountId: "acct-1" }, {})).toBe(false);
     process.env[KEY] = "true";
-    expect(isCalendarRowVisible({ sourceAccountId: "acct-1" })).toBe(true);
+    expect(isCalendarRowVisible({ sourceAccountId: "acct-1" }, {})).toBe(true);
   });
 
   it("always shows primary and LOCAL rows, whatever the flag", () => {
     delete process.env[KEY];
-    expect(isCalendarRowVisible({ sourceAccountId: null })).toBe(true);
-    expect(isCalendarRowVisible({})).toBe(true);
+    expect(isCalendarRowVisible({ sourceAccountId: null }, {})).toBe(true);
+    expect(isCalendarRowVisible({}, {})).toBe(true);
     process.env[KEY] = "true";
-    expect(isCalendarRowVisible({ sourceAccountId: null })).toBe(true);
+    expect(isCalendarRowVisible({ sourceAccountId: null }, {})).toBe(true);
   });
 });
 
@@ -150,5 +153,123 @@ describe("per-provider kill switch", () => {
     expect(isCalendarRowVisible({ sourceAccountId: "a", provider: "constructor" }, providers)).toBe(
       true,
     );
+  });
+});
+
+describe("anyLinkedRowVisible: can a linked row reach a reader at all?", () => {
+  let outlookOn = false;
+  const providers: ProviderEnabledMap = { OUTLOOK: () => outlookOn };
+
+  afterEach(() => {
+    outlookOn = false;
+  });
+
+  it("is false with the linked sync off and no registered provider on", () => {
+    delete process.env[KEY];
+    expect(anyLinkedRowVisible({})).toBe(false);
+    expect(anyLinkedRowVisible(providers)).toBe(false);
+  });
+
+  it("is true once the linked sync is on", () => {
+    process.env[KEY] = "true";
+    expect(anyLinkedRowVisible({})).toBe(true);
+  });
+
+  it("is true once a registered provider's own flag is on, with the linked sync off", () => {
+    delete process.env[KEY];
+    outlookOn = true;
+    expect(anyLinkedRowVisible(providers)).toBe(true);
+  });
+});
+
+// C4: Outlook plugs into the kill switch. Its rows follow outlookCalendarEnabled()
+// (OUTLOOK_CALENDAR_ENABLED and OUTLOOK_INBOX_ENABLED), read at request time,
+// whatever the Google linked-sync flag says, and nothing else changes.
+describe("the default registry: OUTLOOK follows outlookCalendarEnabled() (C4)", () => {
+  const OUTLOOK_KEYS = ["OUTLOOK_CALENDAR_ENABLED", "OUTLOOK_INBOX_ENABLED"] as const;
+  const savedOutlook: Record<string, string | undefined> = {};
+
+  beforeEach(() => {
+    for (const k of OUTLOOK_KEYS) {
+      savedOutlook[k] = process.env[k];
+      delete process.env[k];
+    }
+    delete process.env[KEY];
+  });
+  afterEach(() => {
+    for (const k of OUTLOOK_KEYS) {
+      if (savedOutlook[k] === undefined) delete process.env[k];
+      else process.env[k] = savedOutlook[k];
+    }
+  });
+
+  function outlookFlags(on: boolean) {
+    process.env.OUTLOOK_CALENDAR_ENABLED = on ? "true" : "false";
+    process.env.OUTLOOK_INBOX_ENABLED = on ? "true" : "false";
+  }
+
+  const outlookRow = { sourceAccountId: "acct-out", provider: "OUTLOOK" };
+  const googleLinkedRow = { sourceAccountId: "acct-g", provider: "GOOGLE" };
+  const primaryRow = { sourceAccountId: null, provider: "GOOGLE" };
+  const localRow = { sourceAccountId: null, provider: "LOCAL" };
+
+  it("registers OUTLOOK, and only OUTLOOK", () => {
+    expect(Object.keys(CALENDAR_PROVIDER_ENABLED)).toEqual(["OUTLOOK"]);
+  });
+
+  it("hides OUTLOOK rows while its flags are off, whatever the linked sync says", () => {
+    expect(calendarSourceScope()).toEqual({
+      sourceAccountId: null,
+      provider: { notIn: ["OUTLOOK"] },
+    });
+    process.env[KEY] = "true";
+    expect(calendarSourceScope()).toEqual({ provider: { notIn: ["OUTLOOK"] } });
+    expect(isCalendarRowVisible(outlookRow)).toBe(false);
+  });
+
+  it("shows OUTLOOK rows once its flags are on, with the linked sync off", () => {
+    outlookFlags(true);
+
+    expect(calendarSourceScope()).toEqual({
+      OR: [{ sourceAccountId: null }, { provider: { in: ["OUTLOOK"] } }],
+    });
+    expect(isCalendarRowVisible(outlookRow)).toBe(true);
+  });
+
+  it("adds nothing once both the linked sync and Outlook are on", () => {
+    outlookFlags(true);
+    process.env[KEY] = "true";
+
+    expect(calendarSourceScope()).toEqual({});
+  });
+
+  it.each([
+    ["only the calendar flag", { OUTLOOK_CALENDAR_ENABLED: "true" }],
+    ["only the inbox flag", { OUTLOOK_INBOX_ENABLED: "true" }],
+  ])("keeps OUTLOOK rows hidden with %s: both are required", (_label, env) => {
+    Object.assign(process.env, env);
+
+    expect(isCalendarRowVisible(outlookRow)).toBe(false);
+    expect(calendarSourceScope()).toHaveProperty("provider");
+  });
+
+  it("is read at request time: a flip hides and shows the rows at once", () => {
+    outlookFlags(true);
+    expect(isCalendarRowVisible(outlookRow)).toBe(true);
+    outlookFlags(false);
+    expect(isCalendarRowVisible(outlookRow)).toBe(false);
+  });
+
+  it("leaves Google primary, LOCAL and Google linked rows exactly as they were", () => {
+    for (const on of [false, true]) {
+      outlookFlags(on);
+      delete process.env[KEY];
+      expect(isCalendarRowVisible(primaryRow)).toBe(true);
+      expect(isCalendarRowVisible(localRow)).toBe(true);
+      expect(isCalendarRowVisible(googleLinkedRow)).toBe(false);
+      process.env[KEY] = "true";
+      expect(isCalendarRowVisible(googleLinkedRow)).toBe(true);
+      expect(isCalendarRowVisible(primaryRow)).toBe(true);
+    }
   });
 });

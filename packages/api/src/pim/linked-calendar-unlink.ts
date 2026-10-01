@@ -6,14 +6,17 @@
  */
 
 import { INTERACTIVE_TX_OPTIONS, prisma } from "../db.js";
+import type { CalendarProviderName } from "./calendar-rows.js";
 
 /**
  * Delete one linked calendar account and everything synced from it, in a single
  * transaction: the CalendarEvent rows tagged with the account and the
  * AttentionItems mirrored from them (AttentionItem has no foreign key to an
  * event). Scoped by userId throughout, so a caller can only remove its own
- * account, and to GOOGLE accounts, the provider this surface serves. Returns false, having deleted nothing, when the account is not the
- * user's.
+ * account, and to the one provider the calling surface serves (GOOGLE by default,
+ * OUTLOOK from the Outlook routes, step C4), so a route can never remove another
+ * provider's account by id. Returns false, having deleted nothing, when the
+ * account is not the user's or is another provider's.
  *
  * The events and their attention items go BEFORE the account. The database
  * cascades events when the account row is deleted (see the C2 migration), so
@@ -23,14 +26,15 @@ import { INTERACTIVE_TX_OPTIONS, prisma } from "../db.js";
 export async function unlinkCalendarAccount(
   userId: string,
   linkedAccountId: string,
+  accountProvider: CalendarProviderName = "GOOGLE",
 ): Promise<boolean> {
   // Interactive because the AttentionItem delete needs the event ids; the
   // pool-sized options are the repo's rule for interactive transactions (#845).
   return prisma.$transaction(async (tx) => {
-    // GOOGLE only, like the route's own list: this is the Google linked-calendars
-    // surface, so it can never remove another provider's account by id.
+    // One provider, like the route's own list: each linked-calendars surface can
+    // never remove another provider's account by id.
     const account = await tx.linkedCalendarAccount.findFirst({
-      where: { id: linkedAccountId, userId, provider: "GOOGLE" },
+      where: { id: linkedAccountId, userId, provider: accountProvider },
       select: { id: true },
     });
     if (!account) return false;
@@ -53,7 +57,7 @@ export async function unlinkCalendarAccount(
     // The count, not the lookup above, decides: a concurrent unlink that got
     // here second deleted nothing and answers "not found".
     const removed = await tx.linkedCalendarAccount.deleteMany({
-      where: { id: linkedAccountId, userId, provider: "GOOGLE" },
+      where: { id: linkedAccountId, userId, provider: accountProvider },
     });
     return removed.count > 0;
   }, INTERACTIVE_TX_OPTIONS);

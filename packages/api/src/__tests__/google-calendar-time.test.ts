@@ -366,3 +366,177 @@ describe("summarizeFreeBusy (flatten busy intervals across calendars)", () => {
     expect(summarizeFreeBusy(null)).toEqual([]);
   });
 });
+
+// A wall-clock time read as "UTC" and offset by the zone's offset at THAT instant is
+// an hour off after a DST transition in a window of hours around it: the offset has
+// to be the one in force at the real instant. Two passes (and a third at a gap).
+// Live callers: the Google sync's offset-less dateTime (parseGoogleDateTime ->
+// mapGoogleEventTimes) and the conflict checks' agent-supplied times
+// (toAbsoluteInstant), both read in the user's zone; and the Outlook provider.
+describe("naiveLocalToUtc across DST transitions", () => {
+  const iso = (naive: string, zone: string) => naiveLocalToUtc(naive, zone)?.toISOString();
+
+  describe("America/Los_Angeles (negative offset)", () => {
+    it.each([
+      // Fall back 2026-11-01 09:00Z (02:00 PDT -> 01:00 PST).
+      ["2026-11-01T00:30:00", "2026-11-01T07:30:00.000Z", "before the transition, PDT"],
+      [
+        "2026-11-01T08:00:00",
+        "2026-11-01T16:00:00.000Z",
+        "hours after the transition, PST (was an hour early)",
+      ],
+      ["2026-11-01T12:00:00", "2026-11-01T20:00:00.000Z", "midday, PST"],
+      ["2026-11-02T00:00:00", "2026-11-02T08:00:00.000Z", "the next midnight, PST"],
+      // Spring forward 2026-03-08 10:00Z (02:00 PST -> 03:00 PDT).
+      ["2026-03-08T01:30:00", "2026-03-08T09:30:00.000Z", "before the transition, PST"],
+      ["2026-03-08T03:30:00", "2026-03-08T10:30:00.000Z", "just after it, PDT"],
+      ["2026-03-08T08:00:00", "2026-03-08T15:00:00.000Z", "hours after it, PDT (was an hour late)"],
+      ["2026-03-09T00:00:00", "2026-03-09T07:00:00.000Z", "the next midnight, PDT"],
+    ])("%s is %s (%s)", (naive, utc) => {
+      expect(iso(naive, "America/Los_Angeles")).toBe(utc);
+    });
+
+    it("reads a time in the spring-forward gap as the time after it, not before", () => {
+      // 02:30 does not exist on 2026-03-08; 03:30 PDT is 10:30Z.
+      expect(iso("2026-03-08T02:30:00", "America/Los_Angeles")).toBe("2026-03-08T10:30:00.000Z");
+    });
+
+    it("reads an ambiguous fall-back time as its first occurrence, always the same one", () => {
+      // 01:30 happens twice on 2026-11-01: 01:30 PDT (08:30Z) and 01:30 PST (09:30Z).
+      expect(iso("2026-11-01T01:30:00", "America/Los_Angeles")).toBe("2026-11-01T08:30:00.000Z");
+    });
+  });
+
+  describe("Europe/Berlin (positive offset)", () => {
+    it.each([
+      // Spring forward 2026-03-29 01:00Z (02:00 CET -> 03:00 CEST).
+      ["2026-03-29T00:30:00", "2026-03-28T23:30:00.000Z", "before the transition, CET"],
+      [
+        "2026-03-29T01:00:00",
+        "2026-03-29T00:00:00.000Z",
+        "one hour before it, CET (was an hour early)",
+      ],
+      [
+        "2026-03-29T01:30:00",
+        "2026-03-29T00:30:00.000Z",
+        "half an hour before it, CET (was an hour early)",
+      ],
+      ["2026-03-29T03:30:00", "2026-03-29T01:30:00.000Z", "just after it, CEST"],
+      ["2026-03-29T12:00:00", "2026-03-29T10:00:00.000Z", "midday, CEST"],
+      // Fall back 2026-10-25 01:00Z (03:00 CEST -> 02:00 CET).
+      ["2026-10-25T00:30:00", "2026-10-24T22:30:00.000Z", "before the transition, CEST"],
+      [
+        "2026-10-25T01:30:00",
+        "2026-10-24T23:30:00.000Z",
+        "an hour before the overlap, CEST (was an hour late)",
+      ],
+      ["2026-10-25T04:00:00", "2026-10-25T03:00:00.000Z", "after it, CET"],
+      ["2026-10-26T00:00:00", "2026-10-25T23:00:00.000Z", "the next midnight, CET"],
+    ])("%s is %s (%s)", (naive, utc) => {
+      expect(iso(naive, "Europe/Berlin")).toBe(utc);
+    });
+
+    it("reads a time in the spring-forward gap as the time after it", () => {
+      // 02:30 does not exist on 2026-03-29; 03:30 CEST is 01:30Z.
+      expect(iso("2026-03-29T02:30:00", "Europe/Berlin")).toBe("2026-03-29T01:30:00.000Z");
+    });
+
+    it("reads an ambiguous fall-back time as one of its two instants, and its own wall clock back", () => {
+      const utc = iso("2026-10-25T02:30:00", "Europe/Berlin");
+      expect(["2026-10-25T00:30:00.000Z", "2026-10-25T01:30:00.000Z"]).toContain(utc);
+    });
+  });
+
+  // Every quarter hour for two days around each transition: the result, shown in the
+  // zone, reads as the time that was asked for. The only exception is the spring-forward
+  // gap, where no such time exists.
+  describe("round trip across transitions", () => {
+    const wall = (date: Date, zone: string) =>
+      new Intl.DateTimeFormat("sv-SE", {
+        timeZone: zone,
+        hourCycle: "h23",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      })
+        .format(date)
+        .replace(" ", "T");
+    const QUARTER_HOUR_MS = 15 * 60_000;
+    const HOUR_MS = 60 * 60_000;
+
+    function sweep(zone: string, fromWall: string, gap: { from: string; to: string } | null) {
+      const startMs = Date.parse(`${fromWall}Z`);
+      const mismatches: string[] = [];
+      for (let t = startMs; t < startMs + 48 * HOUR_MS; t += QUARTER_HOUR_MS) {
+        const naive = new Date(t).toISOString().slice(0, 19);
+        const result = naiveLocalToUtc(naive, zone);
+        if (result === null) throw new Error(`unparseable ${naive}`);
+        if (wall(result, zone) !== naive) mismatches.push(naive);
+      }
+      // Only wall times inside the gap may differ.
+      const outsideGap = mismatches.filter((naive) => !gap || naive < gap.from || naive >= gap.to);
+      return outsideGap;
+    }
+
+    it.each([
+      ["America/Los_Angeles", "2026-11-01T00:00:00", null],
+      [
+        "America/Los_Angeles",
+        "2026-03-08T00:00:00",
+        { from: "2026-03-08T02:00:00", to: "2026-03-08T03:00:00" },
+      ],
+      ["Europe/Berlin", "2026-10-25T00:00:00", null],
+      [
+        "Europe/Berlin",
+        "2026-03-29T00:00:00",
+        { from: "2026-03-29T02:00:00", to: "2026-03-29T03:00:00" },
+      ],
+      ["Australia/Sydney", "2026-04-05T00:00:00", null],
+      [
+        "Australia/Sydney",
+        "2026-10-04T00:00:00",
+        { from: "2026-10-04T02:00:00", to: "2026-10-04T03:00:00" },
+      ],
+      [
+        "Australia/Lord_Howe",
+        "2026-10-04T00:00:00",
+        { from: "2026-10-04T02:00:00", to: "2026-10-04T02:30:00" },
+      ],
+      ["Asia/Kolkata", "2026-06-03T00:00:00", null],
+      ["Asia/Seoul", "2026-06-03T00:00:00", null],
+    ])("%s from %s reads back as asked", (zone, from, gap) => {
+      expect(sweep(zone, from, gap)).toEqual([]);
+    });
+  });
+
+  it("the live Google callers share the fix: a naive Google time and an agent's naive time", () => {
+    // parseGoogleDateTime: an offset-less dateTime with the event's zone.
+    expect(
+      parseGoogleDateTime("2026-11-01T08:00:00", "America/Los_Angeles", "Asia/Seoul").toISOString(),
+    ).toBe("2026-11-01T16:00:00.000Z");
+    // The user's zone is the fallback when the event names none.
+    expect(
+      parseGoogleDateTime("2026-11-01T08:00:00", null, "America/Los_Angeles").toISOString(),
+    ).toBe("2026-11-01T16:00:00.000Z");
+    // mapGoogleEventTimes: the sync's mapper.
+    const times = mapGoogleEventTimes(
+      {
+        start: { dateTime: "2026-03-29T01:30:00", timeZone: "Europe/Berlin" },
+        end: { dateTime: "2026-03-29T01:45:00", timeZone: "Europe/Berlin" },
+      },
+      "Asia/Seoul",
+    );
+    expect(times?.startTime.toISOString()).toBe("2026-03-29T00:30:00.000Z");
+    expect(times?.endTime.toISOString()).toBe("2026-03-29T00:45:00.000Z");
+    // toAbsoluteInstant: the conflict checks' naive agent time, in the user's zone.
+    expect(toAbsoluteInstant("2026-11-01T08:00:00", "America/Los_Angeles")).toBe(
+      "2026-11-01T16:00:00.000Z",
+    );
+    expect(toAbsoluteInstant("2026-03-08T08:00:00", "America/Los_Angeles")).toBe(
+      "2026-03-08T15:00:00.000Z",
+    );
+  });
+});

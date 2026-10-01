@@ -377,6 +377,42 @@ describe("scheduler calendar step — primary calendar", () => {
     expect(rows[0]?.update).toMatchObject({ provider: "GOOGLE", externalId: "g-timed" });
   });
 
+  it("stores only an https meetingLink: an unsafe one is written as null on create and on update", async () => {
+    m.eventsList.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "g-js",
+            start: { dateTime: "2026-10-02T09:00:00+09:00" },
+            end: { dateTime: "2026-10-02T10:00:00+09:00" },
+            conferenceData: {
+              entryPoints: [{ entryPointType: "video", uri: "javascript:alert(1)" }],
+            },
+            hangoutLink: "http://meet.google.com/abc-defg-hij",
+          },
+          {
+            id: "g-ok",
+            start: { dateTime: "2026-10-02T11:00:00+09:00" },
+            end: { dateTime: "2026-10-02T12:00:00+09:00" },
+            hangoutLink: "HTTPS://Meet.Google.com/abc-defg-hij",
+          },
+        ],
+      },
+    });
+
+    await runOneTick();
+
+    const rows = eventUpserts();
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.create).toMatchObject({ googleId: "g-js", meetingLink: null });
+    expect(rows[0]?.update).toMatchObject({ meetingLink: null });
+    expect(rows[1]?.create).toMatchObject({
+      googleId: "g-ok",
+      meetingLink: "https://meet.google.com/abc-defg-hij",
+    });
+    expect(rows[1]?.update).toMatchObject({ meetingLink: "https://meet.google.com/abc-defg-hij" });
+  });
+
   it("reads a naive timed value in the user's timezone, not the server's", async () => {
     m.eventsList.mockResolvedValue({
       data: {

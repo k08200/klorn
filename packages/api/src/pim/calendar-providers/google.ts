@@ -20,6 +20,7 @@ import {
 } from "../../google-calendar-time.js";
 import { buildLinkedCalendarClient, getAuthedClient } from "../../mail/gmail.js";
 import { captureError } from "../../sentry.js";
+import { safeMeetingLink } from "../meeting-link.js";
 import type {
   CalendarAccountRef,
   CalendarCreateInput,
@@ -73,14 +74,15 @@ export function googleEventTimes(input: {
   };
 }
 
-function meetingLinkOf(item: calendar_v3.Schema$Event): string | null {
-  let meetingLink: string | null = null;
-  if (item.conferenceData?.entryPoints) {
-    const video = item.conferenceData.entryPoints.find((e) => e.entryPointType === "video");
-    if (video) meetingLink = video.uri || null;
-  }
-  if (!meetingLink && item.hangoutLink) meetingLink = item.hangoutLink;
-  return meetingLink;
+/**
+ * An event's join link: the conferenceData video entry point, else hangoutLink,
+ * each through the https-only gate, so an unsafe first choice falls back to a
+ * safe second one and an event with neither has none. Exported for the live
+ * read in `pim/meeting.ts`, which lists the same Google events.
+ */
+export function googleMeetingLinkOf(item: calendar_v3.Schema$Event): string | null {
+  const video = item.conferenceData?.entryPoints?.find((e) => e.entryPointType === "video");
+  return safeMeetingLink(video?.uri) ?? safeMeetingLink(item.hangoutLink);
 }
 
 function toProviderEvent(
@@ -93,7 +95,7 @@ function toProviderEvent(
     summary: item.summary || null,
     description: item.description || null,
     location: item.location || null,
-    meetingLink: meetingLinkOf(item),
+    meetingLink: googleMeetingLinkOf(item),
     start: item.start?.dateTime || item.start?.date || "",
     end: item.end?.dateTime || item.end?.date || "",
     allDay: !item.start?.dateTime,

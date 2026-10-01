@@ -176,7 +176,13 @@ describe("countCalendarRows", () => {
     expect(n).toBe(4);
     expect(m.findMany).not.toHaveBeenCalled();
     expect(m.count.mock.calls[0]?.[0]).toEqual({
-      where: { userId: "u1", startTime: { gte: START }, sourceAccountId: null },
+      where: {
+        userId: "u1",
+        startTime: { gte: START },
+        sourceAccountId: null,
+        // C4: the kill switch also hides OUTLOOK rows while its flags are off.
+        provider: { notIn: ["OUTLOOK"] },
+      },
     });
   });
 

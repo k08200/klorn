@@ -1,7 +1,8 @@
 /**
  * CalendarProviderActions for providers with no calendar implementation yet:
- * OUTLOOK (C4), ICLOUD and NAVER (C3), DEVICE (C5/C6), and LOCAL, which is a
- * row-only source with no remote calendar at all.
+ * ICLOUD and NAVER (C3), DEVICE (C5/C6), and LOCAL, which is a row-only source
+ * with no remote calendar at all. OUTLOOK (C4) is here too while its flags are
+ * off: dispatch.ts serves the Graph implementation only when they are on.
  *
  * `connect` answers `{ unsupported: true }` so a caller refuses loudly instead
  * of reading it as "not connected" and falling back to a local-only write.

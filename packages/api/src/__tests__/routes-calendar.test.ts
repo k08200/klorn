@@ -233,6 +233,46 @@ describe("calendar routes", () => {
   });
 });
 
+describe("POST stores only an https meetingLink (#1348 server follow-up)", () => {
+  beforeEach(() => {
+    store.clear();
+  });
+
+  async function storedLink(meetingLink: unknown) {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/calendar",
+      headers: auth(),
+      payload: {
+        title: "Sync",
+        startTime: "2026-08-01T09:00:00Z",
+        endTime: "2026-08-01T10:00:00Z",
+        meetingLink,
+      },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    return res.json().meetingLink;
+  }
+
+  it.each([
+    "https://meet.google.com/abc-defg-hij",
+    "https://zoom.us/j/123?pwd=x",
+  ])("keeps %s", async (link) => {
+    expect(await storedLink(link)).toBe(link);
+  });
+
+  it.each([
+    ["javascript:", "javascript:alert(1)"],
+    ["http:", "http://meet.google.com/abc-defg-hij"],
+    ["userinfo", "https://u:p@meet.google.com/abc-defg-hij"],
+    ["a non-string", 42],
+  ])("stores null for %s", async (_label, link) => {
+    expect(await storedLink(link)).toBeNull();
+  });
+});
+
 describe("calendar write validation + Google update (2026-09-11)", () => {
   beforeEach(() => {
     store.clear();

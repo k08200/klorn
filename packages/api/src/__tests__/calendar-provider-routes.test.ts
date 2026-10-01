@@ -217,10 +217,17 @@ describe("GET /api/calendar — reads are unchanged", () => {
       headers,
     });
     const arg = eventFindMany.mock.calls[0]?.[0] as { where: Record<string, unknown> };
-    // No provider/externalId filter; the only addition is the C2 kill switch
-    // (linked rows are excluded while LINKED_CALENDAR_SYNC_ENABLED is off).
-    expect(Object.keys(arg.where).sort()).toEqual(["sourceAccountId", "startTime", "userId"]);
+    // No externalId filter; the only addition is the kill switch: linked rows are
+    // excluded while LINKED_CALENDAR_SYNC_ENABLED is off (C2), and OUTLOOK rows
+    // while its flags are off (C4).
+    expect(Object.keys(arg.where).sort()).toEqual([
+      "provider",
+      "sourceAccountId",
+      "startTime",
+      "userId",
+    ]);
     expect(arg.where.sourceAccountId).toBeNull();
+    expect(arg.where.provider).toEqual({ notIn: ["OUTLOOK"] });
     await app.close();
   });
 });

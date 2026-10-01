@@ -3,12 +3,12 @@
  * checks (pim/calendar.ts) and the linked sync (pim/calendar-sync.ts), so the
  * two cannot drift.
  *
- * A revoked Google grant is a condition of the account (the user revoked access
- * or the token died), not a bug: it flags the account for reconnect, is warned
- * about once per account per window, and is never sent to Sentry, where it would
- * page on every cycle for something only the user can fix. Any other failure is
- * warned about and captured, with the domain only and never the full address
- * (PII).
+ * A revoked grant, Google's or Microsoft's, is a condition of the account (the
+ * user revoked access or the token died), not a bug: it flags the account for
+ * reconnect, is warned about once per account per window, and is never sent to
+ * Sentry, where it would page on every cycle for something only the user can fix.
+ * Any other failure is warned about and captured, with the domain only and never
+ * the full address (PII).
  *
  * "Revoked grant" is matched precisely, on purpose stricter than main's
  * `isGoogleAuthError`, which also matches any message containing "expired",
@@ -32,25 +32,42 @@ export function _linkedCalendarFailureLogSizeForTests(): number {
   return lastAuthWarnAt.size;
 }
 
-/** The OAuth error codes Google answers for a revoked or withdrawn grant. */
-const REVOKED_GRANT_CODES: ReadonlySet<string> = new Set(["invalid_grant", "unauthorized_client"]);
-const REVOKED_GRANT_MESSAGE = /^(invalid_grant|unauthorized_client)\b/;
+/**
+ * The OAuth error codes that mean only the user can fix the account: Google's
+ * revoked or withdrawn grant, and Microsoft's `interaction_required` (a refresh
+ * that now needs MFA or a conditional-access prompt, step C4).
+ */
+const REVOKED_GRANT_CODES: ReadonlySet<string> = new Set([
+  "invalid_grant",
+  "unauthorized_client",
+  "interaction_required",
+]);
+const REVOKED_GRANT_MESSAGE = /^(invalid_grant|unauthorized_client|interaction_required)\b/;
 const HTTP_UNAUTHORIZED = 401;
 
 /**
- * True for HTTP 401, or an OAuth `invalid_grant` / `unauthorized_client` code
- * (in the response body, the error code, or at the start of the message, which
- * is how google-auth-library reports a failed refresh). Nothing else: a message
- * that merely mentions "expired" is not a revoked grant.
+ * True for HTTP 401 (googleapis' `response.status` or `code`, or the `status` of
+ * a Microsoft Graph error), or an OAuth `invalid_grant` / `unauthorized_client` /
+ * `interaction_required` code (in the response body, the error code, or at the
+ * start of the message, which is how google-auth-library reports a failed
+ * refresh). Nothing else: a message that merely mentions "expired" is not a
+ * revoked grant.
  */
-export function isRevokedGoogleGrantError(err: unknown): boolean {
+export function isRevokedGrantError(err: unknown): boolean {
   if (typeof err !== "object" || err === null) return false;
   const e = err as {
     response?: { status?: unknown; data?: { error?: unknown } };
+    status?: unknown;
     code?: unknown;
     message?: unknown;
   };
-  if (e.response?.status === HTTP_UNAUTHORIZED || Number(e.code) === HTTP_UNAUTHORIZED) return true;
+  if (
+    e.response?.status === HTTP_UNAUTHORIZED ||
+    e.status === HTTP_UNAUTHORIZED ||
+    Number(e.code) === HTTP_UNAUTHORIZED
+  ) {
+    return true;
+  }
   const bodyCode = e.response?.data?.error;
   for (const code of [bodyCode, e.code]) {
     if (typeof code === "string" && REVOKED_GRANT_CODES.has(code)) return true;
@@ -98,7 +115,7 @@ function describeError(err: unknown): string {
 export async function handleLinkedCalendarFailure(failure: LinkedCalendarFailure): Promise<void> {
   const { userId, linkedAccountId, email, err, scope, action } = failure;
 
-  if (isRevokedGoogleGrantError(err)) {
+  if (isRevokedGrantError(err)) {
     await flagForReconnect(userId, linkedAccountId);
     if (shouldWarnAuthFailure(linkedAccountId, Date.now())) {
       console.warn(

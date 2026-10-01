@@ -27,6 +27,7 @@ import {
 } from "../pim/calendar-scope.js";
 import { withSourceLabels } from "../pim/calendar-source-label.js";
 import { readSyncTimezone, syncPrimaryCalendarWindow } from "../pim/calendar-sync.js";
+import { safeMeetingLink } from "../pim/meeting-link.js";
 import { buildMeetingPrepPack } from "../pim/meeting-prep-pack.js";
 import { captureError } from "../sentry.js";
 
@@ -241,7 +242,8 @@ export async function calendarRoutes(app: FastifyInstance) {
         startTime: new Date(startTime),
         endTime: new Date(endTime),
         location: location || null,
-        meetingLink: meetingLink || null,
+        // Shown as a link and handed to the model: https only, else none.
+        meetingLink: safeMeetingLink(meetingLink),
         color: color || null,
         allDay: allDay || false,
         googleId,

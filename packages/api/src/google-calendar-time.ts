@@ -22,6 +22,8 @@
  * the caller; this helper only deals with timed events.
  */
 
+import { wallClockToUtcMs } from "./time-zone.js";
+
 const OFFSET_RE = /(Z|[+-]\d{2}:?\d{2})$/;
 
 /** Returns true iff the dateTime string ends with `Z` or a `±HH:MM` offset. */
@@ -35,8 +37,9 @@ export function hasExplicitOffset(dateTime: string): boolean {
  *
  * Approach:
  *   - Treat the naive string as a wall-clock time in the given zone.
- *   - Use Intl.DateTimeFormat to discover the UTC offset for that wall
- *     clock at that moment (which handles DST transitions correctly).
+ *   - Use Intl.DateTimeFormat to discover the UTC offset in force at the real
+ *     instant, settled over two passes so the hours either side of a DST
+ *     transition are right (see wallClockToUtcMs in time-zone.ts).
  *   - Apply the offset to get the UTC moment.
  *
  * Returns null if the string isn't a parseable naive ISO time.
@@ -46,8 +49,9 @@ export function naiveLocalToUtc(naive: string, timeZone: string): Date | null {
   const m = naive.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?$/);
   if (!m) return null;
   const [, y, mo, d, hh, mm, ss] = m;
-  // Construct as if UTC, then ask Intl what offset that wall-clock time
-  // would have in the target zone, then shift by that offset.
+  // The wall clock written as if it were UTC; the zone's offset at the REAL instant
+  // (which differs from the one at this as-if-UTC instant around a DST transition)
+  // is resolved in wallClockToUtcMs.
   const asUtcMs = Date.UTC(
     Number(y),
     Number(mo) - 1,
@@ -56,33 +60,7 @@ export function naiveLocalToUtc(naive: string, timeZone: string): Date | null {
     Number(mm),
     ss ? Number(ss) : 0,
   );
-  // Intl returns the parts of the as-if-UTC moment when displayed in
-  // `timeZone` — the diff between those parts and the input tells us the
-  // zone's offset at that wall clock.
-  const dtf = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  });
-  const parts = dtf.formatToParts(new Date(asUtcMs));
-  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
-  const tzAsUtcMs = Date.UTC(
-    get("year"),
-    get("month") - 1,
-    get("day"),
-    get("hour") % 24,
-    get("minute"),
-    get("second"),
-  );
-  // offset (ms) = (what Intl thinks the time is in tz) - (the input as UTC)
-  // To get the actual UTC moment for the wall clock, subtract that offset.
-  const offsetMs = tzAsUtcMs - asUtcMs;
-  return new Date(asUtcMs - offsetMs);
+  return new Date(wallClockToUtcMs(asUtcMs, timeZone));
 }
 
 /**
