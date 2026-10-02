@@ -10,7 +10,8 @@
  * server or an account.
  */
 
-import { type HostResolver, resolveHostAddresses } from "../../net/pinned-host.js";
+import { resolveHostAddresses } from "../../mail/host-resolver.js";
+import type { HostResolver } from "../../mail/pinned-address.js";
 import { findCalendarHome } from "./caldav-client.js";
 import { caldavErrorClass } from "./caldav-errors.js";
 import { CALDAV_REQUEST_TIMEOUT_MS, type CaldavTransport } from "./caldav-http.js";

@@ -14,7 +14,7 @@ import type { IncomingHttpHeaders } from "node:http";
 import https from "node:https";
 import type { LookupFunction } from "node:net";
 import type { Readable } from "node:stream";
-import type { PinnedAddress } from "../../net/pinned-host.js";
+import type { PinnedAddress } from "../../mail/pinned-address.js";
 import { CaldavLimitError, CaldavProtocolError } from "./caldav-errors.js";
 import type { CaldavTransport } from "./caldav-http.js";
 

@@ -34,8 +34,8 @@ vi.mock("../db.js", () => {
 vi.mock("../crypto-tokens.js", () => ({ decryptToken: (t: string) => t.replace(/^enc:/, "") }));
 vi.mock("../sentry.js", () => ({ captureError: m.captureError }));
 vi.mock("../pim/caldav/caldav-transport.js", () => ({ httpsPinnedTransport: m.transport }));
-vi.mock("../net/pinned-host.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../net/pinned-host.js")>()),
+vi.mock("../mail/host-resolver.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../mail/host-resolver.js")>()),
   resolveHostAddresses: vi.fn(async () => ["17.248.1.10"]),
 }));
 

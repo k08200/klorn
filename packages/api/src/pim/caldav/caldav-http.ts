@@ -15,8 +15,12 @@
  * stops at the connection's deadline: the one time budget of a whole sync or link.
  */
 
-import type { PinnedAddress } from "../../net/pinned-host.js";
-import { type HostResolver, PinnedHostError, resolvePinnedAddress } from "../../net/pinned-host.js";
+import {
+  type HostResolver,
+  type PinnedAddress,
+  PinnedAddressError,
+  resolvePinnedAddress,
+} from "../../mail/pinned-address.js";
 import { CaldavGuardError, CaldavHttpError, CaldavLimitError } from "./caldav-errors.js";
 import { type CaldavProviderConfig, checkCaldavUrl } from "./caldav-providers.js";
 
@@ -128,7 +132,7 @@ async function pinnedAddressOf(conn: CaldavConnection, url: URL): Promise<Pinned
       resolvePinnedAddress(url.hostname, conn.resolve),
     );
   } catch (err) {
-    if (err instanceof PinnedHostError) throw new CaldavGuardError(err.code);
+    if (err instanceof PinnedAddressError) throw new CaldavGuardError(err.code);
     throw err;
   }
 }

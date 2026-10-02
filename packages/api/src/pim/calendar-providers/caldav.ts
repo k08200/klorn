@@ -16,7 +16,8 @@
 
 import { decryptToken } from "../../crypto-tokens.js";
 import type { BusyConflict, ConflictSummary } from "../../google-calendar-time.js";
-import { type HostResolver, resolveHostAddresses } from "../../net/pinned-host.js";
+import { resolveHostAddresses } from "../../mail/host-resolver.js";
+import type { HostResolver } from "../../mail/pinned-address.js";
 import { getUserTimeZone } from "../../user-timezone.js";
 import {
   CALDAV_REQUEST_TIMEOUT_MS,
