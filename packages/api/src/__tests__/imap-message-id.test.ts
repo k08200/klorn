@@ -63,6 +63,7 @@ describe("parseImapMessageId", () => {
     ["a Gmail message id", "18c2f0a1b2c3d4e5"],
     ["a database row id", "cm8x0y1z20000abcd"],
     ["fullwidth digits", "naver-imap:me@naver.com:１０１"],
+    ["a tombstoned id (B2b re-key)", "naver-imap:me@naver.com:101#uv1000"],
   ])("refuses %s", (_label, id) => {
     expect(parseImapMessageId(id, PREFIX, EMAIL)).toBeNull();
   });

@@ -175,6 +175,40 @@ function isAuthFailure(err: unknown): boolean {
   return e?.authenticationFailed === true || e?.serverResponseCode === "AUTHENTICATIONFAILED";
 }
 
+/** The same test for the generic poller (imap-accounts.ts): one definition of "login rejected". */
+export const isImapAuthFailure = isAuthFailure;
+
+/** Is this credential (row id plus stored cipher) paused after a rejected login? Shared with the poller. */
+export function isCredentialCoolingDown(credentialKey: string): boolean {
+  const until = authCooldownUntil.get(credentialKey);
+  if (until === undefined) return false;
+  if (Date.now() >= until) {
+    authCooldownUntil.delete(credentialKey);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Start the shared cooldown from the poller (generic IMAP, step B4): a rejected login
+ * found by a poll pauses the actions for that credential, and one found by an
+ * action pauses the poll, because they read the same map.
+ */
+export function startCredentialCooldown(
+  provider: ImapProviderConfig,
+  rowId: string,
+  credentialKey: string,
+): void {
+  const now = Date.now();
+  for (const [key, until] of authCooldownUntil) {
+    if (until <= now) authCooldownUntil.delete(key);
+  }
+  authCooldownUntil.set(credentialKey, now + IMAP_AUTH_COOLDOWN_MS);
+  console.warn(
+    `[${provider.logScope}] login rejected for row ${rowId}; pausing this mailbox for ${IMAP_AUTH_COOLDOWN_MS / 60_000} min`,
+  );
+}
+
 /**
  * The answer for an account whose credential was rejected recently, or null.
  * Flag actions and B3 tasks share it, so a revoked app password stops every path.

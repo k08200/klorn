@@ -17,10 +17,13 @@ import type { EmailUndoActionResponse } from "@klorn/contract";
 
 import { imapMoveActionsEnabled } from "../config.js";
 import { syncEmailByGmailId } from "../mail/email-sync.js";
-import { IMAP_PROVIDERS } from "../mail/imap-providers.js";
+import { IMAP_PROVIDERS, type ImapProviderKey } from "../mail/imap-providers.js";
 import { describeFailure } from "../mail/providers/action-failure.js";
 import { findMovedAccountId, type MoveRoleName } from "../mail/providers/imap-moved.js";
 import type { MailProviderActions, SimpleMailActionResult } from "../mail/providers/types.js";
+
+const isImapProviderKey = (key: string): key is ImapProviderKey =>
+  Object.hasOwn(IMAP_PROVIDERS, key);
 
 const looksLikeImapId = (gmailId: string): boolean =>
   Object.values(IMAP_PROVIDERS).some((provider) => gmailId.startsWith(`${provider.idPrefix}:`));
@@ -73,7 +76,7 @@ export async function completeUndo(
   }
 
   const key = actions.provider;
-  if ((key !== "NAVER" && key !== "ICLOUD") || !linkedInboxAccountId) {
+  if (!isImapProviderKey(key) || !linkedInboxAccountId) {
     return { failure: "Could not refresh the restored message." };
   }
   const provider = IMAP_PROVIDERS[key];

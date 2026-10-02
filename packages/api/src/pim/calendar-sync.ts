@@ -7,6 +7,7 @@
 
 import { prisma } from "../db.js";
 import { normalizeTimeZone } from "../time-zone.js";
+import { reconcileCancelledEvents } from "./calendar-cancellation.js";
 import { connectLinkedCalendars } from "./calendar-providers/dispatch.js";
 import type {
   CalendarListQuery,
@@ -16,7 +17,7 @@ import type {
 import {
   type CalendarEventFields,
   upsertGoogleEventRow,
-  upsertLinkedGoogleEventRow,
+  upsertLinkedEventRow,
 } from "./calendar-rows.js";
 import { handleLinkedCalendarFailure } from "./linked-calendar-failure.js";
 
@@ -77,8 +78,10 @@ async function listSyncRows(
 }
 
 /**
- * Sync the PRIMARY calendar's window into rows (matched by googleId). A list
- * failure throws to the caller, which owns the failure policy. Returns the
+ * Sync the PRIMARY calendar's window into rows (matched by googleId), then, behind
+ * CALENDAR_CANCELLATION_SYNC_ENABLED, remove the rows of events cancelled upstream
+ * (a separate call that can never fail the sync, see calendar-cancellation.ts). A
+ * list failure throws to the caller, which owns the failure policy. Returns the
  * number of rows written.
  */
 export async function syncPrimaryCalendarWindow(
@@ -91,10 +94,14 @@ export async function syncPrimaryCalendarWindow(
   for (const row of rows) {
     await upsertGoogleEventRow(userId, row.externalId, row.fields);
   }
+  await reconcileCancelledEvents(session, userId, null, now);
   return rows.length;
 }
 
-/** Sync one LINKED calendar's window into rows tagged with that account. */
+/**
+ * Sync one LINKED calendar's window into rows tagged with that account and with
+ * the provider of the session that listed them (GOOGLE, or OUTLOOK in C4).
+ */
 export async function syncLinkedCalendarWindow(
   session: CalendarSession,
   userId: string,
@@ -104,8 +111,15 @@ export async function syncLinkedCalendarWindow(
 ): Promise<number> {
   const rows = await listSyncRows(session, userTimezone, now);
   for (const row of rows) {
-    await upsertLinkedGoogleEventRow(userId, linkedAccountId, row.externalId, row.fields);
+    await upsertLinkedEventRow(
+      session.provider,
+      userId,
+      linkedAccountId,
+      row.externalId,
+      row.fields,
+    );
   }
+  await reconcileCancelledEvents(session, userId, linkedAccountId, now);
   return rows.length;
 }
 

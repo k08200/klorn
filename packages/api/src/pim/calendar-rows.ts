@@ -9,7 +9,8 @@
  * module is the ONE place that decides those four values, and the one place
  * Google events are upserted, so the writers cannot drift apart. The primary
  * calendar still keys on googleId until the contract phase; a linked
- * calendar's rows key on (userId, provider, sourceKey, externalId).
+ * calendar's rows key on (userId, provider, sourceKey, externalId), for every
+ * provider (Google, C2; Outlook, C4).
  */
 
 import { prisma } from "../db.js";
@@ -49,13 +50,18 @@ export function googleEventSource(googleId: string): CalendarEventSource {
   };
 }
 
-/** An event that lives in a linked Google calendar (C2). */
-export function linkedGoogleEventSource(
+/**
+ * An event that lives in a LINKED calendar of any provider: a linked Google
+ * account (C2) or an Outlook one (C4). The provider is part of the row's identity,
+ * so the same event id in two providers is two rows, never one.
+ */
+export function linkedEventSource(
+  provider: CalendarProviderName,
   linkedAccountId: string,
   externalId: string,
 ): CalendarEventSource {
   return {
-    provider: "GOOGLE",
+    provider,
     externalId,
     sourceAccountId: linkedAccountId,
     sourceKey: sourceKeyFor(linkedAccountId),
@@ -113,19 +119,21 @@ export async function upsertGoogleEventRow(
 }
 
 /**
- * Upsert one event of a LINKED Google calendar. The row is matched by the
- * per-source unique, never by googleId: linked rows keep googleId NULL, so an
- * invite that also sits in the primary calendar stays a separate row and the
- * primary row is never touched. Identity and ownership never move on update.
+ * Upsert one event of a LINKED calendar (Google, C2; Outlook, C4). The row is
+ * matched by the per-source unique, never by googleId: linked rows keep googleId
+ * NULL, so an invite that also sits in the primary calendar, or in another
+ * provider's calendar, stays a separate row and no other row is ever touched.
+ * Identity and ownership never move on update.
  */
-export async function upsertLinkedGoogleEventRow(
+export async function upsertLinkedEventRow(
+  provider: CalendarProviderName,
   userId: string,
   linkedAccountId: string,
   externalId: string,
   fields: CalendarEventFields,
 ): Promise<void> {
-  if (!linkedAccountId) throw new Error("upsertLinkedGoogleEventRow needs a linked account id");
-  const source = linkedGoogleEventSource(linkedAccountId, externalId);
+  if (!linkedAccountId) throw new Error("upsertLinkedEventRow needs a linked account id");
+  const source = linkedEventSource(provider, linkedAccountId, externalId);
   await prisma.calendarEvent.upsert({
     where: {
       userId_provider_sourceKey_externalId: {
@@ -138,4 +146,19 @@ export async function upsertLinkedGoogleEventRow(
     create: { userId, ...fields, ...source },
     update: { ...fields },
   });
+}
+
+/**
+ * The rows of ONE Google source calendar of one user: GOOGLE rows whose source key
+ * is the linked account's (`linkedAccountId` null is the primary calendar). The
+ * `where` every removal by id (cancelled events, C2b) starts from, so the source
+ * key is derived here and nowhere else; LOCAL rows and another provider's, user's
+ * or account's rows are outside it.
+ */
+export function googleSourceScope(userId: string, linkedAccountId: string | null) {
+  return {
+    userId,
+    provider: "GOOGLE" as const,
+    sourceKey: sourceKeyFor(linkedAccountId),
+  };
 }

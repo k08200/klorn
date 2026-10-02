@@ -8,10 +8,13 @@ import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { signToken } from "../auth.js";
 import { isGoogleAuthError, markGoogleTokenForReconnect } from "../mail/gmail.js";
+import { _resetCancelledScanStateForTests } from "../pim/calendar-cancellation.js";
+import { CANCELLED_SCAN_OPTIONS, cancelledScanRequest } from "./helpers/google-cancelled-scan.js";
 
 const googleCreateEvent = vi.hoisted(() => vi.fn());
 const getAuthedClient = vi.hoisted(() => vi.fn());
 const eventsList = vi.hoisted(() => vi.fn());
+const cancelledList = vi.hoisted(() => vi.fn());
 
 vi.mock("../mail/email.js", () => ({
   sendVerificationEmail: vi.fn(),
@@ -32,7 +35,18 @@ vi.mock("../judge/attention-mirror.js", () => ({
   deleteAttentionForCalendarEvents: vi.fn(async () => {}),
 }));
 vi.mock("googleapis", () => ({
-  google: { calendar: () => ({ events: { list: eventsList } }) },
+  google: {
+    calendar: () => ({
+      events: {
+        // The cancellation scan (C2b) is a second events.list; it gets its own mock so
+        // every assertion on `eventsList` stays about the sync's own listing.
+        list: (args: { showDeleted?: boolean }, options?: unknown) =>
+          args.showDeleted
+            ? (cancelledList(args, options) ?? { data: { items: [] } })
+            : eventsList(args),
+      },
+    }),
+  },
 }));
 
 const eventCreate = vi.hoisted(() => vi.fn());
@@ -40,6 +54,7 @@ const eventUpsert = vi.hoisted(() => vi.fn(async () => ({})));
 const eventFindMany = vi.hoisted(() => vi.fn(async () => []));
 const eventFindUnique = vi.hoisted(() => vi.fn());
 const eventUpdate = vi.hoisted(() => vi.fn());
+const linkedAccountFindMany = vi.hoisted(() => vi.fn(async () => [] as unknown[]));
 
 vi.mock("../db.js", () => {
   const prisma = {
@@ -50,6 +65,7 @@ vi.mock("../db.js", () => {
       update: eventUpdate,
       upsert: eventUpsert,
     },
+    linkedCalendarAccount: { findMany: linkedAccountFindMany },
     user: { findUnique: vi.fn(async () => ({ id: "user-1", plan: "FREE", role: "USER" })) },
     device: {
       findUnique: vi.fn(async () => ({ id: "d1" })),
@@ -201,10 +217,17 @@ describe("GET /api/calendar — reads are unchanged", () => {
       headers,
     });
     const arg = eventFindMany.mock.calls[0]?.[0] as { where: Record<string, unknown> };
-    // No provider/externalId filter; the only addition is the C2 kill switch
-    // (linked rows are excluded while LINKED_CALENDAR_SYNC_ENABLED is off).
-    expect(Object.keys(arg.where).sort()).toEqual(["sourceAccountId", "startTime", "userId"]);
+    // No externalId filter; the only addition is the kill switch: linked rows are
+    // excluded while LINKED_CALENDAR_SYNC_ENABLED is off (C2), and OUTLOOK rows
+    // while its flags are off (C4).
+    expect(Object.keys(arg.where).sort()).toEqual([
+      "provider",
+      "sourceAccountId",
+      "startTime",
+      "userId",
+    ]);
     expect(arg.where.sourceAccountId).toBeNull();
+    expect(arg.where.provider).toEqual({ notIn: ["OUTLOOK"] });
     await app.close();
   });
 });
@@ -285,6 +308,58 @@ describe("POST /api/calendar/sync — Google request and failure handling (chara
       timeZone: "Asia/Seoul",
     });
     await app.close();
+  });
+
+  it("makes no second Google call while the cancellation flag is off (the default)", async () => {
+    eventsList.mockResolvedValue({ data: { items: [] } });
+    const app = await buildApp();
+    await app.inject({ method: "POST", url: "/api/calendar/sync", headers });
+    expect(eventsList).toHaveBeenCalledTimes(1);
+    expect(cancelledList).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  describe("with CALENDAR_CANCELLATION_SYNC_ENABLED on (C2b)", () => {
+    beforeEach(() => {
+      process.env.CALENDAR_CANCELLATION_SYNC_ENABLED = "true";
+      _resetCancelledScanStateForTests();
+    });
+    afterEach(() => {
+      delete process.env.CALENDAR_CANCELLATION_SYNC_ENABLED;
+    });
+
+    it("also asks Google, in a second call, what was cancelled in the last 7 days", async () => {
+      eventsList.mockResolvedValue({ data: { items: [] } });
+      const app = await buildApp();
+      await app.inject({ method: "POST", url: "/api/calendar/sync", headers });
+      expect(cancelledList).toHaveBeenCalledTimes(1);
+      expect(cancelledList).toHaveBeenCalledWith(
+        cancelledScanRequest("2026-09-23T05:00:00.000Z"),
+        CANCELLED_SCAN_OPTIONS,
+      );
+      await app.close();
+    });
+
+    it("still answers the sync normally when the cancellation call fails", async () => {
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      eventsList.mockResolvedValue({
+        data: {
+          items: [
+            {
+              id: "g-1",
+              summary: "Kickoff",
+              start: { dateTime: "2026-10-02T09:00:00+09:00" },
+              end: { dateTime: "2026-10-02T10:00:00+09:00" },
+            },
+          ],
+        },
+      });
+      cancelledList.mockRejectedValue(new Error("quota"));
+      const app = await buildApp();
+      const res = await app.inject({ method: "POST", url: "/api/calendar/sync", headers });
+      expect(res.json()).toMatchObject({ success: true, synced: 1 });
+      await app.close();
+    });
   });
 
   it("answers not-connected without a user lookup or a Google call", async () => {
@@ -651,6 +726,86 @@ describe("wire: linked rows say readOnly (C2)", () => {
     const body = res.json();
     expect(body.upcoming[0].readOnly).toBe(true);
     expect(body.nextEvent.readOnly).toBe(true);
+    await app.close();
+  });
+});
+
+describe("wire: linked rows say which account they come from (C7)", () => {
+  const start = new Date("2026-10-01T10:00:00.000Z");
+  const row = (id: string, sourceAccountId: string | null) => ({
+    id,
+    userId: "user-1",
+    title: `event ${id}`,
+    startTime: start,
+    endTime: new Date(start.getTime() + 3_600_000),
+    allDay: false,
+    googleId: sourceAccountId ? null : `g-${id}`,
+    provider: "GOOGLE",
+    externalId: `g-${id}`,
+    sourceAccountId,
+    sourceKey: sourceAccountId ?? "primary",
+  });
+
+  beforeEach(() => {
+    process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
+    linkedAccountFindMany.mockResolvedValue([{ id: "acct-1", email: "work@company.com" }]);
+  });
+  afterEach(() => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+  });
+
+  it("GET / adds sourceLabel to a linked row only", async () => {
+    eventFindMany.mockResolvedValueOnce([row("linked", "acct-1"), row("primary", null)]);
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/calendar", headers });
+    const byId = Object.fromEntries(
+      (res.json().events as Array<Record<string, unknown>>).map((e) => [e.id as string, e]),
+    );
+    expect(byId.linked?.sourceLabel).toBe("work@company.com");
+    expect(byId.linked?.readOnly).toBe(true);
+    expect("sourceLabel" in (byId.primary ?? {})).toBe(false);
+    await app.close();
+  });
+
+  it("GET /:id adds sourceLabel to a linked row", async () => {
+    eventFindUnique.mockResolvedValue(row("linked", "acct-1"));
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/calendar/linked", headers });
+    expect(res.json().sourceLabel).toBe("work@company.com");
+    await app.close();
+  });
+
+  it("GET /today/summary adds sourceLabel wherever a linked row appears", async () => {
+    const soon = {
+      ...row("linked-only", "acct-1"),
+      startTime: new Date(Date.now() + 60_000),
+      endTime: new Date(Date.now() + 3_600_000),
+    };
+    eventFindMany.mockResolvedValueOnce([soon]);
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/calendar/today/summary", headers });
+    const body = res.json();
+    expect(body.upcoming[0].sourceLabel).toBe("work@company.com");
+    expect(body.nextEvent.sourceLabel).toBe("work@company.com");
+    await app.close();
+  });
+
+  it("makes no account lookup when no row is linked: the JSON is byte-identical to the row", async () => {
+    const primary = row("primary", null);
+    eventFindMany.mockResolvedValueOnce([primary]);
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/calendar", headers });
+    expect(linkedAccountFindMany).not.toHaveBeenCalled();
+    expect(res.body).toBe(JSON.stringify({ events: [primary] }));
+    await app.close();
+  });
+
+  it("a linked row never reaches the list while the flag is off, so nothing is looked up", async () => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+    eventFindMany.mockResolvedValueOnce([]);
+    const app = await buildApp();
+    await app.inject({ method: "GET", url: "/api/calendar", headers });
+    expect(linkedAccountFindMany).not.toHaveBeenCalled();
     await app.close();
   });
 });

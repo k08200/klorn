@@ -23,6 +23,8 @@ import { classifyNeedsReplyFromSignals, classifyPriority } from "../mail/email-p
 import { coercePlainBody } from "../mail/email-text.js";
 import type { GmailRawEmail } from "../mail/gmail-fetch.js";
 import { applyLaneLabel } from "../mail/gmail-labels.js";
+import { findReingestedHistory } from "../mail/imap-history.js";
+import { isImapMessageId } from "../mail/imap-message-id.js";
 import { autoUnsubscribeEnabled, executeOneClickUnsubscribe } from "../mail/list-unsubscribe.js";
 import { mailActionsFor } from "../mail/providers/dispatch.js";
 import { notifyConversationsUpdated } from "../notify/conversations-updated.js";
@@ -480,6 +482,24 @@ function senderDisplayName(from: string): string {
 }
 
 /**
+ * The earliest notification that may count as "already pushed" for this email. The
+ * 7-day window for every id. For an IMAP id also not before the row was created: a
+ * repair (step B2b, imap-uidvalidity-reset.ts) re-keys the old row and a NEW message
+ * can then arrive under the same id, which the old row's `[id]` marker must not
+ * silence. The urgent sweep applies the same rule (notify/urgent-dedup.ts). Gmail ids
+ * read nothing more and get exactly the window they had.
+ */
+async function pushDedupeFloor(email: JudgeableEmailRow): Promise<Date> {
+  const windowStart = new Date(Date.now() - PUSH_DEDUP_WINDOW_MS);
+  if (!isImapMessageId(email.gmailId)) return windowStart;
+  const row = await prisma.emailMessage.findUnique({
+    where: { id: email.id },
+    select: { createdAt: true },
+  });
+  return row && row.createdAt.getTime() > windowStart.getTime() ? row.createdAt : windowStart;
+}
+
+/**
  * Send a push for an email the judge tiered PUSH. Recency-guarded (never push
  * backfilled old mail) and deduped (shared marker with the urgent-priority
  * sweep so an email never gets two pushes). sendPushNotification applies the
@@ -499,7 +519,19 @@ async function pushForFirewallEmail(userId: string, email: JudgeableEmailRow): P
     return;
   }
 
+  // Step B2b: mail a UIDVALIDITY repair re-ingested is history the user was already
+  // told about. It is judged like any row, but it does not push. Gmail ids read nothing.
+  const history = await findReingestedHistory(userId, [email]);
+  if (history.has(email.id)) {
+    console.log(
+      `[PUSH] Firewall PUSH suppressed (re-ingested after an IMAP UIDVALIDITY repair) ` +
+        `for email ${email.gmailId} user ${userId}`,
+    );
+    return;
+  }
+
   const id = email.gmailId;
+  const since = await pushDedupeFloor(email);
   const already = await prisma.notification.findFirst({
     where: {
       userId,
@@ -518,7 +550,7 @@ async function pushForFirewallEmail(userId: string, email: JudgeableEmailRow): P
         { message: { contains: `,${id},` } },
         { message: { contains: `,${id}]` } },
       ],
-      createdAt: { gte: new Date(Date.now() - PUSH_DEDUP_WINDOW_MS) },
+      createdAt: { gte: since },
     },
     select: { id: true },
   });

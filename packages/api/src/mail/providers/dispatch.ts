@@ -35,16 +35,18 @@ const ACTIONS_BY_PROVIDER: Readonly<Record<InboxProviderName, MailProviderAction
   IMAP: unsupportedMailActions("IMAP"),
 };
 
-// The three opt-in action sets for NAVER and ICLOUD, each behind its own OFF flag
-// and independent of the others:
+// The three opt-in action sets, each behind its own OFF flag and independent of the
+// others:
 //   - step B1, IMAP_ACTIONS_ENABLED: read/unread/star over IMAP flags;
 //   - step B2, IMAP_MOVE_ACTIONS_ENABLED: archive, trash and their undo over MOVE;
 //   - step B3, IMAP_SEND_ENABLED: send, drafts and reply headers over SMTP/IMAP.
-// Generic IMAP has no entry on purpose — it stays unsupported until its SSRF
-// design (Phase 4 / B4) passes review. Every combination is built once, on first
-// use, so each call returns the same object and, with every flag off, the
-// unchanged unsupported one.
-const IMAP_PROVIDER_KEYS = ["NAVER", "ICLOUD"] as const;
+// NAVER and ICLOUD can have all three. Generic IMAP (step B4) can have the first two
+// and only while GENERIC_IMAP_ENABLED is on as well (enabledImapProviderKeys()): it
+// has NO send part, because a user-supplied SMTP endpoint is out of scope, so
+// IMAP_SEND_ENABLED never changes a generic mailbox. Every combination is built
+// once, on first use, so each call returns the same object and, with every flag
+// off, the unchanged unsupported one.
+const IMAP_PROVIDER_KEYS = ["NAVER", "ICLOUD", "IMAP"] as const;
 type ImapKey = (typeof IMAP_PROVIDER_KEYS)[number];
 // imap-send.ts does not export its surface type (another change edits that file).
 type SendSurface = ReturnType<typeof imapSendActions>;
@@ -55,12 +57,26 @@ interface ImapFlagSet {
   send: boolean;
 }
 
-const IMAP_PARTS = Object.fromEntries(
-  IMAP_PROVIDER_KEYS.map((key) => [
-    key,
-    { flags: imapMailActions(key), moves: imapMoveActions(key), send: imapSendActions(key) },
-  ]),
-) as Record<ImapKey, { flags: MailProviderActions; moves: MoveSurface; send: SendSurface }>;
+interface ImapParts {
+  flags: MailProviderActions;
+  moves: MoveSurface;
+  /** Absent for a provider that has no SMTP endpoint (generic IMAP). */
+  send?: SendSurface;
+}
+
+const IMAP_PARTS: Record<ImapKey, ImapParts> = {
+  NAVER: {
+    flags: imapMailActions("NAVER"),
+    moves: imapMoveActions("NAVER"),
+    send: imapSendActions("NAVER"),
+  },
+  ICLOUD: {
+    flags: imapMailActions("ICLOUD"),
+    moves: imapMoveActions("ICLOUD"),
+    send: imapSendActions("ICLOUD"),
+  },
+  IMAP: { flags: imapMailActions("IMAP"), moves: imapMoveActions("IMAP") },
+};
 
 const COMPOSED = new Map<string, MailProviderActions>();
 
@@ -75,7 +91,7 @@ function composeImapActions(provider: ImapKey, on: ImapFlagSet): MailProviderAct
   const composed: MailProviderActions = {
     ...(on.actions ? parts.flags : unsupportedMailActions(provider)),
     ...(on.moves ? parts.moves : {}),
-    ...(on.send ? parts.send : {}),
+    ...(on.send && parts.send ? parts.send : {}),
   };
   COMPOSED.set(cacheKey, composed);
   return composed;
@@ -87,15 +103,17 @@ function isImapKey(provider: InboxProviderName): provider is ImapKey {
 
 function imapActionsFor(provider: InboxProviderName): MailProviderActions | undefined {
   if (!isImapKey(provider)) return undefined;
-  // ICLOUD stays dark until ICLOUD_INBOX_ENABLED (the CASA surface freeze): its
-  // poll never selects ICLOUD rows and its routes 404 while that flag is off,
+  // ICLOUD stays dark until ICLOUD_INBOX_ENABLED (the CASA surface freeze) and
+  // generic IMAP until GENERIC_IMAP_ENABLED (its SSRF design awaits review): their
+  // poll never selects their rows and their routes 404 while those flags are off,
   // and no action flag may open a door the freeze keeps shut.
   const enabledProviders: readonly string[] = enabledImapProviderKeys();
   if (!enabledProviders.includes(provider)) return undefined;
   const on = {
     actions: imapActionsEnabled(),
     moves: imapMoveActionsEnabled(),
-    send: imapSendEnabled(),
+    // A provider without a send part has nothing for this flag to turn on.
+    send: imapSendEnabled() && IMAP_PARTS[provider].send !== undefined,
   };
   if (!on.actions && !on.moves && !on.send) return undefined;
   return composeImapActions(provider, on);

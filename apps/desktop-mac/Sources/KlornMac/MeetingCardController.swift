@@ -47,7 +47,7 @@ final class MeetingCardController {
     }
 
     private func join() {
-        if let link = state.event?.meetingLink, let url = URL(string: link) {
+        if let url = MeetingLink.safeURL(state.event?.meetingLink) {
             NSWorkspace.shared.open(url)
         }
         dismiss()

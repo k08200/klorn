@@ -235,6 +235,48 @@ describe("claimAndRunOutboxRow", () => {
     expect(recordFeedback).toHaveBeenCalledWith(expect.objectContaining({ signal: "APPROVED" }));
   });
 
+  it("stores and returns a tool result without <untrusted_content> tags (the web renders it as text)", async () => {
+    const row = seedRow();
+    executeToolCall.mockResolvedValue(
+      JSON.stringify({
+        skipped: true,
+        message:
+          'exists: <untrusted_content source="calendar:summary">Lunch</untrusted_content> (2026-10-03)',
+        existingEventId: "ev-1",
+      }),
+    );
+    const outcome = await claimAndRunOutboxRow(row, NOW);
+    const clean = {
+      skipped: true,
+      message: "exists: Lunch (2026-10-03)",
+      existingEventId: "ev-1",
+    };
+    expect(outcome.kind).toBe("completed");
+    expect(JSON.parse((outcome as { result: string }).result)).toEqual(clean);
+    expect(JSON.parse(String(paStore.get("pa-1")?.result))).toEqual(clean);
+    expect(JSON.parse(String(outboxStore.get("ob-1")?.result))).toEqual(clean);
+    expect(JSON.stringify([...paStore.values(), ...outboxStore.values()])).not.toContain(
+      "untrusted_content",
+    );
+  });
+
+  it("leaves a tool result with no wrapper exactly as it was", async () => {
+    const row = seedRow();
+    executeToolCall.mockResolvedValue('{"ok":true,"n":1}');
+    const outcome = await claimAndRunOutboxRow(row, NOW);
+    expect(outcome).toEqual({ kind: "completed", result: '{"ok":true,"n":1}' });
+  });
+
+  it("stores a dead-letter error without wrapper tags too", async () => {
+    const row = seedRow();
+    executeToolCall.mockRejectedValue(
+      new Error('missing <untrusted_content source="email:subject">x</untrusted_content>'),
+    );
+    await claimAndRunOutboxRow(row, NOW);
+    expect(String(paStore.get("pa-1")?.result)).not.toContain("untrusted_content");
+    expect(String(outboxStore.get("ob-1")?.lastError)).not.toContain("untrusted_content");
+  });
+
   it("treats a swallowed non-floor tool error ({error}) as a failure, not success", async () => {
     // tool-executor returns JSON.stringify({error}) for non-floor failures
     // instead of throwing — the outbox must not record that as COMPLETED.

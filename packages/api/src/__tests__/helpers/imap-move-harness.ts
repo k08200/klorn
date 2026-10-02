@@ -12,7 +12,7 @@ export const USER = "u1";
 
 export interface Mailbox {
   rowId: string;
-  provider: "NAVER" | "ICLOUD";
+  provider: "NAVER" | "ICLOUD" | "IMAP";
   email: string;
   idPrefix: string;
   host: string;
@@ -32,6 +32,15 @@ export const ICLOUD: Mailbox = {
   email: "me@icloud.com",
   idPrefix: "icloud-imap",
   host: "imap.mail.me.com:993",
+};
+
+/** A generic IMAP mailbox (step B4): a user-supplied host, ids under `generic-imap:`. */
+export const GENERIC: Mailbox = {
+  rowId: "row-3",
+  provider: "IMAP",
+  email: "me@example.com",
+  idPrefix: "generic-imap",
+  host: "imap.example.com:993",
 };
 
 export const idOf = (mailbox: Mailbox, uid: number): string =>

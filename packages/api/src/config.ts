@@ -173,6 +173,25 @@ export function outlookInboxEnabled(): boolean {
     (process.env.OUTLOOK_INBOX_ENABLED ?? "").trim().toLowerCase(),
   );
 }
+// Outlook (Microsoft Graph) calendar, read-only — step C4 of
+// docs/providers/unified-platform-plan.md. OFF by default (repo doctrine) and it
+// ALSO needs OUTLOOK_INBOX_ENABLED, exactly as the Outlook mail path does: the
+// calendar link rides the Outlook OAuth routes and app registration, so the inbox
+// flag's CASA surface freeze must stay the outer gate. While either is off, every
+// /api/auth/outlook/link-calendar and /linked-calendars route answers Fastify's
+// default 404 and the calendar provider dispatcher answers the same unsupported
+// result it did before C4 (no Graph call, no row). Syncing the linked account's
+// events additionally needs LINKED_CALENDAR_SYNC_ENABLED, like Google's.
+// Read at request time (PROVIDER_INBOX_SELECTOR_ENABLED precedent) with the same
+// lenient truthy parse, so a flip needs no redeploy.
+export function outlookCalendarEnabled(): boolean {
+  return (
+    outlookInboxEnabled() &&
+    ["true", "1", "yes", "on"].includes(
+      (process.env.OUTLOOK_CALENDAR_ENABLED ?? "").trim().toLowerCase(),
+    )
+  );
+}
 // IMAP flag actions (read, unread, star) for Naver and iCloud — step B1 of
 // docs/providers/unified-platform-plan.md. OFF by default (repo doctrine). While
 // OFF, mail/providers/dispatch.ts routes NAVER and ICLOUD to the unsupported
@@ -197,6 +216,20 @@ export function imapSendEnabled(): boolean {
     (process.env.IMAP_SEND_ENABLED ?? "").trim().toLowerCase(),
   );
 }
+// Generic IMAP with a user-supplied host — step B4 of
+// docs/providers/unified-platform-plan.md. OFF by default (repo doctrine) and it
+// stays off until the security review of its SSRF design (resolve-then-pin) signs
+// off. While OFF, every /api/generic-imap route answers the cloaked 404, the poll
+// never selects IMAP rows, and mail/providers/dispatch.ts leaves a generic mailbox
+// on the unsupported stubs whatever IMAP_ACTIONS_ENABLED and
+// IMAP_MOVE_ACTIONS_ENABLED say (those two still need to be on as well). Send never
+// reaches a generic mailbox. Read at request time (PROVIDER_INBOX_SELECTOR_ENABLED
+// precedent) with the same lenient truthy parse, so a flip needs no redeploy.
+export function genericImapEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.GENERIC_IMAP_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
 // Linked Google calendar sync — step C2 of docs/providers/unified-platform-plan.md.
 // OFF by default (repo doctrine). While unset/false the scheduler's calendar step
 // syncs the primary calendar exactly as before: no linked-account lookup, no
@@ -208,6 +241,21 @@ export function imapSendEnabled(): boolean {
 export function linkedCalendarSyncEnabled(): boolean {
   return ["true", "1", "yes", "on"].includes(
     (process.env.LINKED_CALENDAR_SYNC_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
+// Removing events cancelled in Google on the next calendar sync — step C2b of
+// docs/providers/unified-platform-plan.md. OFF by default (repo doctrine). While
+// unset/false every calendar sync (the scheduler cycle, the login init-sync,
+// POST /api/calendar/sync, linked accounts included) makes exactly the Google
+// calls it always did and removes no row. When on, each sync also asks Google
+// which events were cancelled (a second events.list) and deletes their rows and
+// resolves their attention items. Read at sync time with the same lenient truthy
+// parse, so a flip needs no redeploy. Flipping it is a founder action, after a
+// check against a real Google calendar. Turning it off stops the scanning; rows
+// already removed stay removed.
+export function calendarCancellationSyncEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.CALENDAR_CANCELLATION_SYNC_ENABLED ?? "").trim().toLowerCase(),
   );
 }
 // Archive, trash and their inverses for Naver and iCloud over IMAP MOVE — step B2
@@ -222,6 +270,25 @@ export function linkedCalendarSyncEnabled(): boolean {
 export function imapMoveActionsEnabled(): boolean {
   return ["true", "1", "yes", "on"].includes(
     (process.env.IMAP_MOVE_ACTIONS_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
+// One calendar read path — step C7 of docs/providers/unified-platform-plan.md.
+// OFF by default (repo doctrine). While unset/false `list_events` calls Google
+// live and `check_calendar_conflicts` asks Google free/busy only, exactly as
+// before: no CalendarEvent row is read for either. When on, both read the synced
+// CalendarEvent rows through pim/calendar-read.ts (the scope, the dedupe and
+// provider/readOnly per event); the conflict check still asks Google free/busy
+// as well. The price is freshness: rows are synced about every 15 minutes, and
+// an event deleted upstream can stay in them until the sync removes it.
+// REACH: the flag changes `listEvents` and `checkConflicts` for EVERY caller, not
+// only the chat and the MCP tools: the autonomous agent's list_events and
+// check_calendar_conflicts, create_event's enforced conflict check (a booking is
+// refused on a row conflict, including a stale one), and the reading pane's
+// meeting-context conflict line. Read at request time (PROVIDER_INBOX_SELECTOR_ENABLED
+// precedent) with the same lenient truthy parse, so a flip needs no redeploy.
+export function unifiedCalendarReadEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.UNIFIED_CALENDAR_READ_ENABLED ?? "").trim().toLowerCase(),
   );
 }
 // MCP write tools — API key permission level and the MCP write set (steps A1

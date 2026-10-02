@@ -26,12 +26,14 @@ import sanitizeHtml from "sanitize-html";
 
 import { persistGmailEmail } from "../judge/email-firewall.js";
 import { captureError } from "../sentry.js";
+import { fetchCapReached, textBodyPart } from "./generic-imap-bounds.js";
 import { createImapClient, endImapSession } from "./imap-connection.js";
-import { envelopeSubject } from "./imap-envelope.js";
+import { capStored, envelopeSubject, MAX_STORED_CC_LENGTH } from "./imap-envelope.js";
 import { formatImapMessageId } from "./imap-message-id.js";
 import { reconcileInboxValidity, removeRecentlyMovedRows } from "./imap-poll-guards.js";
 import type { ImapProviderConfig } from "./imap-providers.js";
-import { liveUidValidity, type PollValidity } from "./imap-uidvalidity.js";
+import { liveUidValidity } from "./imap-uidvalidity.js";
+import { sanitizeLogText } from "./log-text.js";
 
 interface VerifyArgs {
   provider: ImapProviderConfig;
@@ -91,6 +93,11 @@ interface SyncArgs {
   // The INBOX UIDVALIDITY stored on that row (step B2), so the poll can tell a
   // renumbered mailbox from an unchanged one. Null/absent = none recorded yet.
   inboxUidValidity?: string | null;
+  // Step B2b, from the same row: a reset seen on an earlier poll and when, and when
+  // the last repair ran (imap-uidvalidity-reset.ts). Null/absent = none.
+  inboxUidValidityPending?: string | null;
+  inboxUidValidityPendingAt?: Date | null;
+  inboxUidValidityResetAt?: Date | null;
   limit?: number; // defaults to 50
 }
 
@@ -102,6 +109,9 @@ interface SyncResult {
   // first-seen email is handed to the judge.
   classified: number;
   errors: number;
+  // Step B2b: present (true) when the mailbox is held and nothing was persisted. The
+  // caller must not count such a poll as a sync (lastSyncedAt).
+  held?: true;
 }
 
 interface ImapEnvelopeAddress {
@@ -162,7 +172,9 @@ function toPersistCall(args: SyncArgs, msg: ImapFetchMessage): PersistCall {
   const env = msg.envelope ?? {};
   const from = formatAddress(env.from?.[0] ?? undefined);
   const to = formatAddress(env.to?.[0] ?? undefined);
-  const cc = (env.cc ?? []).map(formatAddress).filter(Boolean).join(", ") || null;
+  const cc =
+    capStored((env.cc ?? []).map(formatAddress).filter(Boolean).join(", "), MAX_STORED_CC_LENGTH) ||
+    null;
   const subject = envelopeSubject(env.subject);
   const receivedAt = env.date ?? new Date();
   const bodyBuf = msg.bodyParts?.get("text") ?? msg.bodyParts?.get("TEXT");
@@ -235,18 +247,23 @@ export async function syncImapInbox(args: SyncArgs): Promise<SyncResult> {
     await client.connect();
     const lock = await client.getMailboxLock("INBOX");
     try {
-      let validity: PollValidity = "unknown";
       if (args.linkedInboxAccountId) {
-        // Step B2, imap-poll-guards.ts: record the INBOX UIDVALIDITY, or hold (report
-        // once, change nothing) when the server renumbered the mailbox.
-        validity = await reconcileInboxValidity({
+        // Steps B2 and B2b, imap-poll-guards.ts: record the INBOX UIDVALIDITY, or,
+        // when the server renumbered the mailbox, hold it and repair a confirmed reset.
+        const gate = await reconcileInboxValidity({
           provider: args.provider,
           userId: args.userId,
           email: args.email,
           linkedInboxAccountId: args.linkedInboxAccountId,
           stored: args.inboxUidValidity,
+          pending: args.inboxUidValidityPending,
+          pendingAt: args.inboxUidValidityPendingAt,
+          resetAt: args.inboxUidValidityResetAt,
           live: liveUidValidity(client.mailbox),
         });
+        // A held mailbox persists nothing: under the old stored value a new message
+        // that reuses an old UID would be deduped into the stale row.
+        if (gate === "hold") return { ...result, held: true };
       }
       const status = await client.status("INBOX", { messages: true });
       const totalMessages = status.messages ?? 0;
@@ -264,7 +281,8 @@ export async function syncImapInbox(args: SyncArgs): Promise<SyncResult> {
         {
           envelope: true,
           flags: true,
-          bodyParts: ["TEXT"],
+          // Whole TEXT for a fixed host; a bounded slice for a user-supplied one.
+          bodyParts: [textBodyPart(args.provider)],
         },
         { uid: false },
       )) {
@@ -298,15 +316,18 @@ export async function syncImapInbox(args: SyncArgs): Promise<SyncResult> {
             extra: { userId: args.userId, stableId },
           });
         }
+        // A user-supplied host must not yield more than the window it was asked for.
+        if (fetchCapReached(args.provider, result.fetched, limit)) break;
       }
-      if (args.linkedInboxAccountId && validity !== "reset") {
+      if (args.linkedInboxAccountId) {
         // A message Klorn moved out while this window was being persisted must not
-        // stay behind as a row (step B2). Skipped while the mailbox is held: the
-        // moved ids are old numbers.
+        // stay behind as a row (step B2). Never reached while the mailbox is held, and
+        // moves recorded before the last repair are ignored: their ids are old numbers.
         await removeRecentlyMovedRows({
           userId: args.userId,
           linkedInboxAccountId: args.linkedInboxAccountId,
           provider: args.provider,
+          notBefore: args.inboxUidValidityResetAt ?? null,
         });
       }
     } finally {
@@ -314,15 +335,22 @@ export async function syncImapInbox(args: SyncArgs): Promise<SyncResult> {
     }
   } catch (err) {
     result.errors += 1;
+    const userHost = args.provider.hostPolicy === "user-supplied";
+    const text = err instanceof Error ? err.message : String(err);
     // console first — captureError is silent without a Sentry DSN (self-host/dev).
+    // A user-supplied host's text is logged as one capped line.
     console.warn(
       `[${scope}] sync failed for ${args.userId}:`,
-      err instanceof Error ? err.message : String(err),
+      userHost ? sanitizeLogText(text) : text,
     );
-    captureError(err, {
-      tags: { scope: `${scope}.sync` },
-      extra: { userId: args.userId },
-    });
+    // A generic poll is reported once per account and failure kind by the fan-out
+    // (imap-accounts.ts), not on every tick from here.
+    if (!userHost) {
+      captureError(err, {
+        tags: { scope: `${scope}.sync` },
+        extra: { userId: args.userId },
+      });
+    }
     throw err;
   } finally {
     // Every exit path closes the session: the empty-mailbox early return, a
@@ -365,7 +393,9 @@ export async function syncImapMessage(args: SyncMessageArgs): Promise<{ emailId:
     try {
       for await (const raw of client.fetch(
         String(args.uid),
-        { envelope: true, flags: true, bodyParts: ["TEXT"] },
+        // The same slice as the poll (whole TEXT for a fixed host): an undo must be able to
+        // restore a message larger than the literal cap too.
+        { envelope: true, flags: true, bodyParts: [textBodyPart(args.provider)] },
         { uid: true },
       )) {
         const persistCall = toPersistCall(args, raw as ImapFetchMessage);

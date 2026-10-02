@@ -270,6 +270,31 @@ describe("flag ON — callback", () => {
     await app.close();
   });
 
+  it.each([
+    [
+      "the code exchange",
+      () => oauth.exchangeOutlookCode.mockRejectedValueOnce(new TypeError("fetch failed")),
+    ],
+    [
+      "the /me lookup",
+      () => oauth.fetchOutlookAccountEmail.mockRejectedValueOnce(new TypeError("fetch failed")),
+    ],
+  ])("a refused redirect or any network failure in %s lands on ?inbox=failed, not an unhandled error", async (_label, arrange) => {
+    arrange();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { app, linkState } = await buildApp();
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/auth/outlook/callback?code=c&state=${encodeURIComponent(linkState)}`,
+    });
+
+    expect(res.statusCode).toBe(302);
+    expect(res.headers.location).toBe("https://app.example.com/settings?inbox=failed");
+    expect(db.upsert).not.toHaveBeenCalled();
+    await app.close();
+  });
+
   it("re-checks entitlement at callback time (TOCTOU) — lapsed user cannot finish", async () => {
     state.plan = "FREE";
     process.env.PAYWALL_ENABLED = "true";

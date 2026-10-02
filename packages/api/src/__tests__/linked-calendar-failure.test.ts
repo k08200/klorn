@@ -24,7 +24,7 @@ import {
   _linkedCalendarFailureLogSizeForTests,
   _resetLinkedCalendarFailureLogForTests,
   handleLinkedCalendarFailure,
-  isRevokedGoogleGrantError,
+  isRevokedGrantError,
   LINKED_AUTH_WARN_WINDOW_MS,
 } from "../pim/linked-calendar-failure.js";
 
@@ -138,7 +138,7 @@ describe("handleLinkedCalendarFailure — any other error", () => {
   });
 });
 
-describe("isRevokedGoogleGrantError — precise, not a message substring", () => {
+describe("isRevokedGrantError — precise, not a message substring", () => {
   it.each([
     ["HTTP 401", { response: { status: 401 } }],
     ["a numeric 401 code", { code: 401 }],
@@ -163,8 +163,13 @@ describe("isRevokedGoogleGrantError — precise, not a message substring", () =>
       { response: { status: 400, data: { error: "unauthorized_client" } } },
     ],
     ["unauthorized_client in the message", { message: "unauthorized_client: Unauthorized" }],
+    // Microsoft Graph (C4): the HTTP status sits on the error itself, and a token
+    // refresh that needs the user (MFA, conditional access) answers interaction_required.
+    ["a Graph 401 carried as a top-level status", { status: 401 }],
+    ["a Microsoft interaction_required code", { code: "interaction_required" }],
+    ["a Microsoft interaction_required message", { message: "interaction_required: MFA needed" }],
   ])("recognises %s", (_name, err) => {
-    expect(isRevokedGoogleGrantError(err)).toBe(true);
+    expect(isRevokedGrantError(err)).toBe(true);
   });
 
   it.each([
@@ -174,6 +179,8 @@ describe("isRevokedGoogleGrantError — precise, not a message substring", () =>
     ["a message containing 'revoked'", new Error("certificate revoked by issuer")],
     ["an 'invalid token' message that is not a grant", new Error("invalid token in request body")],
     ["HTTP 403", { response: { status: 403 } }],
+    ["a Graph 403 carried as a top-level status", { status: 403 }],
+    ["a Graph 500 carried as a top-level status", { status: 500 }],
     [
       "HTTP 500 with an 'expired' body",
       { response: { status: 500, data: { error: { message: "cache expired" } } } },
@@ -183,7 +190,7 @@ describe("isRevokedGoogleGrantError — precise, not a message substring", () =>
     ["null", null],
     ["undefined", undefined],
   ])("does not mistake %s for a revoked grant", (_name, err) => {
-    expect(isRevokedGoogleGrantError(err)).toBe(false);
+    expect(isRevokedGrantError(err)).toBe(false);
   });
 });
 

@@ -10,9 +10,13 @@
  * re-ingests as new.
  */
 
-import { icloudInboxEnabled } from "../config.js";
+import { genericImapEnabled, icloudInboxEnabled } from "../config.js";
+import { parseGenericImapHost } from "./generic-imap-host.js";
 
-export type ImapProviderKey = "NAVER" | "ICLOUD";
+/** Providers with one fixed, allowlisted host (and a fixed SMTP endpoint). */
+export type FixedHostImapProviderKey = "NAVER" | "ICLOUD";
+/** `IMAP` is the generic provider: the user supplies the host (step B4). */
+export type ImapProviderKey = FixedHostImapProviderKey | "IMAP";
 
 /**
  * Where a provider accepts mail for submission. Taken from the provider's own
@@ -30,12 +34,22 @@ export interface SmtpEndpoint {
   security: "starttls" | "implicit-tls";
 }
 
+/**
+ * Where the IMAP host of a provider comes from.
+ *   - "fixed": one exact, allowlisted host (Naver, iCloud). The library resolves it.
+ *   - "user-supplied": a DNS name the user typed (generic IMAP, step B4). It is
+ *     checked by the host grammar and connected to only through resolve-then-pin
+ *     (imap-pinned-client.ts): never resolved by the library, never a private address.
+ */
+export type ImapHostPolicy = "fixed" | "user-supplied";
+
 export interface ImapProviderConfig {
   provider: ImapProviderKey;
-  /** User-facing name for error copy ("Naver", "iCloud"). */
+  /** User-facing name for error copy ("Naver", "iCloud", "IMAP"). */
   label: string;
-  /** The only host the SSRF allowlist accepts for this provider. */
-  defaultHost: string;
+  hostPolicy: ImapHostPolicy;
+  /** The only host the SSRF allowlist accepts for this provider; null for a user-supplied host. */
+  defaultHost: string | null;
   /** Persisted dedup-key namespace — never change an existing value. */
   idPrefix: string;
   /** Log + Sentry scope prefix (also effectively persisted: ops dashboards). */
@@ -45,16 +59,21 @@ export interface ImapProviderConfig {
   /** Same ceiling rationale as routes/auth.ts MAX_LINKED_INBOXES: one user
    * must not turn the serial IMAP poll into a multi-minute tick. */
   maxAccounts: number;
-  /** Outgoing mail server (step B3). The only SMTP host this provider uses. */
-  smtp: SmtpEndpoint;
-  /** Public webmail entry, handed back as the link for a saved draft. */
-  webmailUrl: string;
+  /**
+   * Outgoing mail server (step B3). The only SMTP host this provider uses. Null for
+   * generic IMAP: sending is out of scope for B4, and the SMTP transport refuses a
+   * provider without an endpoint.
+   */
+  smtp: SmtpEndpoint | null;
+  /** Public webmail entry, handed back as the link for a saved draft. Null where there is no send. */
+  webmailUrl: string | null;
 }
 
 export const IMAP_PROVIDERS: Record<ImapProviderKey, ImapProviderConfig> = {
   NAVER: {
     provider: "NAVER",
     label: "Naver",
+    hostPolicy: "fixed",
     defaultHost: "imap.naver.com:993",
     idPrefix: "naver-imap",
     logScope: "naver-imap",
@@ -73,6 +92,7 @@ export const IMAP_PROVIDERS: Record<ImapProviderKey, ImapProviderConfig> = {
   ICLOUD: {
     provider: "ICLOUD",
     label: "iCloud",
+    hostPolicy: "fixed",
     defaultHost: "imap.mail.me.com:993",
     idPrefix: "icloud-imap",
     logScope: "icloud-imap",
@@ -87,6 +107,22 @@ export const IMAP_PROVIDERS: Record<ImapProviderKey, ImapProviderConfig> = {
     smtp: { host: "smtp.mail.me.com", port: 587, security: "starttls" },
     webmailUrl: "https://www.icloud.com/mail/",
   },
+  IMAP: {
+    provider: "IMAP",
+    label: "IMAP",
+    hostPolicy: "user-supplied",
+    defaultHost: null,
+    // Persisted in dedup keys (`generic-imap:<email>:<uid>`), like the others: never change it.
+    idPrefix: "generic-imap",
+    logScope: "generic-imap",
+    authFailureHint:
+      "IMAP login failed. Check your email address and password. Many providers require an app password instead of your account password.",
+    // Lower than the fixed providers: the poll is serial and each generic account is
+    // an arbitrary host of unknown speed (step B4, design D4).
+    maxAccounts: 3,
+    smtp: null,
+    webmailUrl: null,
+  },
 };
 
 /**
@@ -95,8 +131,14 @@ export const IMAP_PROVIDERS: Record<ImapProviderKey, ImapProviderConfig> = {
  * the port-less form was always accepted, and port validity is the
  * allowlist's job. Enforced at the /connect write AND re-checked at poll
  * time (imap-accounts.ts), same belt-and-braces as the allowlist itself.
+ *
+ * For the generic provider there is no host to pin to, so the pin is replaced by
+ * the host grammar (generic-imap-host.ts): a public DNS name on 993 and nothing
+ * else. Where that name POINTS is checked on every connection (pinned-address.ts).
  */
 export function hostMatchesProvider(host: string, provider: ImapProviderConfig): boolean {
+  if (provider.hostPolicy === "user-supplied") return parseGenericImapHost(host).ok;
+  if (provider.defaultHost === null) return false;
   const hostPart = host.trim().toLowerCase().split(":")[0];
   return hostPart === provider.defaultHost.split(":")[0];
 }
@@ -104,9 +146,14 @@ export function hostMatchesProvider(host: string, provider: ImapProviderConfig):
 /**
  * Providers the poll scheduler may select rows for. NAVER predates the flag
  * doctrine and is always on; ICLOUD stays dark until ICLOUD_INBOX_ENABLED
- * (CASA surface freeze — see the flag comment in config.ts). Evaluated per
- * tick so the flag is togglable without a restart.
+ * (CASA surface freeze — see the flag comment in config.ts); generic IMAP stays
+ * dark until GENERIC_IMAP_ENABLED (step B4). Evaluated per tick so a flag is
+ * togglable without a restart.
  */
 export function enabledImapProviderKeys(): ImapProviderKey[] {
-  return icloudInboxEnabled() ? ["NAVER", "ICLOUD"] : ["NAVER"];
+  return [
+    "NAVER",
+    ...(icloudInboxEnabled() ? (["ICLOUD"] as const) : []),
+    ...(genericImapEnabled() ? (["IMAP"] as const) : []),
+  ];
 }

@@ -16,15 +16,116 @@ import { prisma } from "../db.js";
 import { captureError } from "../sentry.js";
 import { checkImapRow } from "./imap-connection.js";
 import { parseImapMessageId } from "./imap-message-id.js";
+import { clearPollBackoff, isPollBackedOff, notePollBackoff } from "./imap-poll-backoff.js";
+import {
+  clearPollFailure,
+  pollFailureKind,
+  shouldReportPollFailure,
+} from "./imap-poll-failures.js";
+import { beginPoll, endPoll, isPollInFlight, noteSkippedPoll } from "./imap-poll-inflight.js";
 import type { ImapProviderConfig } from "./imap-providers.js";
 import { syncImapInbox, syncImapMessage } from "./imap-sync.js";
 import { canonicalUidValidity } from "./imap-uidvalidity.js";
+import { sanitizeLogText } from "./log-text.js";
+import {
+  isCredentialCoolingDown,
+  isImapAuthFailure,
+  startCredentialCooldown,
+} from "./providers/imap-session.js";
 
 export interface ImapSyncAggregate {
   fetched: number;
   inserted: number;
   classified: number;
   errors: number;
+}
+
+/**
+ * A tick that finds an account's previous poll still running skips it (imap-poll-inflight
+ * .ts, every provider): the same mailbox is never logged into twice at once, and a stuck
+ * account blocks neither the other accounts nor the next tick. The skip says so: a
+ * rate-limited warning, and one Sentry report if the poll has been running for far longer
+ * than any poll should. Only the row id is named, never the address.
+ */
+function surfaceSkippedPoll(rowId: string, userId: string, scope: string): void {
+  const skipped = noteSkippedPoll(rowId);
+  if (!skipped) return;
+  if (skipped.warn) {
+    console.warn(
+      `[${scope}] poll skipped — row ${rowId} is still in flight after ${Math.round(skipped.ageMs / 1000)}s`,
+    );
+  }
+  if (skipped.report) {
+    captureError(new Error("IMAP poll stuck in flight"), {
+      tags: { scope: `${scope}.poll-stuck` },
+      extra: { userId, linkedInboxAccountId: rowId, inFlightMs: skipped.ageMs },
+    });
+  }
+}
+
+/** The credential the shared auth cooldown is keyed by: the same string the actions use. */
+const credentialKeyOf = (rowId: string, passwordCipher: string): string =>
+  `${rowId}:${passwordCipher}`;
+
+/**
+ * A generic row stays out of the poll while its login is known to be rejected (the
+ * durable `needsReconnect` flag set below and cleared by a successful reconnect, or the
+ * in-process cooldown it shares with the actions: a revoked password is not sent to
+ * the host again on every tick) and while it is backed off after failing in another way
+ * (imap-poll-backoff.ts: a stalling host costs a serial tick up to ~105 s).
+ */
+function isPausedForPolling(
+  row: { id: string; needsReconnect?: boolean | null },
+  credentialKey: string,
+): boolean {
+  return (
+    row.needsReconnect === true || isCredentialCoolingDown(credentialKey) || isPollBackedOff(row.id)
+  );
+}
+
+/**
+ * A generic poll failed. Log one capped line (the text came from a server the user
+ * chose), stop sending a rejected password, and report to Sentry once per account and
+ * failure kind instead of on every tick. Never throws.
+ */
+async function handleGenericPollFailure(
+  err: unknown,
+  ctx: {
+    provider: ImapProviderConfig;
+    userId: string;
+    rowId: string;
+    credentialKey: string;
+    /** The stored cipher the poll STARTED with: a flag is only written against that credential. */
+    passwordCipher: string;
+  },
+): Promise<void> {
+  const { provider, userId, rowId, credentialKey, passwordCipher } = ctx;
+  const scope = provider.logScope;
+  const kind = pollFailureKind(err);
+  console.warn(`[${scope}] sync failed for row ${rowId} (${kind}): ${sanitizeLogText(err)}`);
+  if (!isImapAuthFailure(err)) {
+    notePollBackoff(rowId);
+  } else {
+    startCredentialCooldown(provider, rowId, credentialKey);
+    try {
+      // Conditional on the cipher the poll began with: a user who relinked while this
+      // poll's login was being rejected has a NEW password, which must not be flagged.
+      await prisma.linkedInboxAccount.updateMany({
+        where: { id: rowId, userId, imapPasswordCipher: passwordCipher },
+        data: { needsReconnect: true },
+      });
+    } catch (flagErr) {
+      console.warn(
+        `[${scope}] could not flag row ${rowId} for reconnect: ${sanitizeLogText(flagErr)}`,
+      );
+    }
+  }
+  if (shouldReportPollFailure(rowId, kind)) {
+    captureError(err, {
+      tags: { scope: `${scope}.account-sync` },
+      extra: { userId, linkedInboxAccountId: rowId, failureKind: kind },
+    });
+  }
 }
 
 /**
@@ -64,6 +165,15 @@ export async function syncImapAccountsForUser(
       }
       continue;
     }
+    // Generic IMAP only (step B4): the poll must not re-send a rejected password.
+    const userHost = provider.hostPolicy === "user-supplied";
+    const credentialKey = credentialKeyOf(row.id, checked.passwordCipher);
+    if (isPollInFlight(row.id)) {
+      surfaceSkippedPoll(row.id, userId, scope); // its previous poll is still running
+      continue;
+    }
+    if (userHost && isPausedForPolling(row, credentialKey)) continue;
+    beginPoll(row.id);
     try {
       const result = await syncImapInbox({
         provider,
@@ -73,19 +183,39 @@ export async function syncImapAccountsForUser(
         host: checked.host,
         linkedInboxAccountId: row.id,
         inboxUidValidity: canonicalUidValidity(row.inboxUidValidity),
+        inboxUidValidityPending: canonicalUidValidity(row.inboxUidValidityPending),
+        inboxUidValidityPendingAt: row.inboxUidValidityPendingAt,
+        inboxUidValidityResetAt: row.inboxUidValidityResetAt,
       });
       total.fetched += result.fetched;
       total.inserted += result.inserted;
       total.classified += result.classified;
       total.errors += result.errors;
       // Stamp the last successful check (not just last new mail) so the UI's
-      // "Synced Xm ago" is real — same contract as the Gmail linked-inbox path.
-      await prisma.linkedInboxAccount.updateMany({
-        where: { id: row.id, userId },
-        data: { lastSyncedAt: new Date() },
-      });
+      // "Synced Xm ago" is real — same contract as the Gmail linked-inbox path. A held
+      // poll (UIDVALIDITY reset, step B2b) stored nothing, so it is not a sync: it does
+      // not stamp, and for a generic row it does not re-arm the failure report either.
+      // The host answered, held or not: a stall is over, whatever the poll then stored.
+      if (userHost) clearPollBackoff(row.id);
+      if (!result.held) {
+        await prisma.linkedInboxAccount.updateMany({
+          where: { id: row.id, userId },
+          data: { lastSyncedAt: new Date() },
+        });
+        if (userHost) clearPollFailure(row.id);
+      }
     } catch (err) {
       total.errors += 1;
+      if (userHost) {
+        await handleGenericPollFailure(err, {
+          provider,
+          userId,
+          rowId: row.id,
+          credentialKey,
+          passwordCipher: checked.passwordCipher,
+        });
+        continue;
+      }
       // console first — captureError is a no-op without a Sentry DSN, and a
       // silent per-account failure here would strand one mailbox invisibly.
       console.warn(`[${scope}] sync failed for row ${row.id}:`, err);
@@ -93,6 +223,8 @@ export async function syncImapAccountsForUser(
         tags: { scope: `${scope}.account-sync` },
         extra: { userId, linkedInboxAccountId: row.id },
       });
+    } finally {
+      endPoll(row.id);
     }
   }
   return total;

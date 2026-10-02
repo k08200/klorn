@@ -16,8 +16,8 @@ import {
 import { localDayUtcRange } from "../time-zone.js";
 import { stripUntrusted } from "../untrusted.js";
 import { getUserTimeZone } from "../user-timezone.js";
-import { dedupeCalendarEvents } from "./calendar-dedupe.js";
-import { calendarSourceScope } from "./calendar-scope.js";
+import { withoutHiddenCalendarItems } from "./attention-calendar-visibility.js";
+import { readCalendarRows } from "./calendar-read.js";
 import {
   buildDayShape,
   DAY_END_HOUR,
@@ -25,6 +25,13 @@ import {
   type DaySegment,
   localHour,
 } from "./day-shape.js";
+
+/** Timed events read for one day's shape; the cap applies after the dedupe. */
+const DAY_SHAPE_EVENT_LIMIT = 50;
+/** Open PUSH items the briefing lists as "needs attention". */
+const ATTENTION_LIMIT = 3;
+/** Items read per item shown, to absorb the ones a hidden calendar event drops (as the inbox summary does). */
+const ATTENTION_OVERFETCH = 4;
 
 export interface BriefingSegmentView {
   label: string;
@@ -291,38 +298,32 @@ export async function buildBriefingStructure(
   const { gte, lt } = localDayUtcRange(now, timeZone);
   // OVERLAP with today (not started-today): an event that began yesterday
   // and runs into this morning still occupies today's narrated window.
-  const [rawRows, pushItems] = await Promise.all([
-    prisma.calendarEvent.findMany({
-      where: {
-        userId,
-        allDay: false,
-        startTime: { lt },
-        endTime: { gt: gte },
-        ...calendarSourceScope(),
-      },
-      orderBy: { startTime: "asc" },
-      take: 50,
-      // The identity fields let an invite present in the primary and a linked
-      // calendar (two rows, C2) count as one meeting.
-      select: {
-        title: true,
-        startTime: true,
-        endTime: true,
-        provider: true,
-        externalId: true,
-        sourceAccountId: true,
-      },
+  const [rows, pushItems] = await Promise.all([
+    // Through the one read path: the scope, and an invite in the primary and a
+    // linked calendar (two rows, C2) counted as one meeting, with the cap applied
+    // after that (C7).
+    readCalendarRows({
+      userId,
+      when: { allDay: false, startTime: { lt }, endTime: { gt: gte } },
+      limit: DAY_SHAPE_EVENT_LIMIT,
     }),
     // "Needs attention" = the open PUSH lane, cheapest honest source (pure
     // DB — this endpoint is polled, so it must never touch the Gmail API).
+    // Overfetched: an item that mirrors a hidden calendar event is dropped below
+    // (kill switch), and the list must still reach the top ATTENTION_LIMIT.
     prisma.attentionItem.findMany({
       where: { userId, status: "OPEN", tier: "PUSH" },
       orderBy: { priority: "desc" },
-      take: 3,
-      select: { title: true, tierReason: true },
+      take: ATTENTION_LIMIT * ATTENTION_OVERFETCH,
+      select: { title: true, tierReason: true, source: true, sourceId: true },
     }),
   ]);
-  const rows = dedupeCalendarEvents(rawRows);
+  // A calendar event the kill switch hides must not keep showing through its
+  // mirrored attention item (the title is copied into it).
+  const attentionItems = (await withoutHiddenCalendarItems(userId, pushItems)).slice(
+    0,
+    ATTENTION_LIMIT,
+  );
   const events = rows.map((row) => ({
     title: row.title,
     // Clamp instants outside today's local day to the day edges — localHour
@@ -343,7 +344,7 @@ export async function buildBriefingStructure(
     })),
     curve: shape.curve,
     dayStartHour: DAY_START_HOUR,
-    attention: pushItems.map((item, i) => ({
+    attention: attentionItems.map((item, i) => ({
       rank: i + 1,
       action: stripUntrusted(item.title),
       reason: stripUntrusted(item.tierReason ?? ""),

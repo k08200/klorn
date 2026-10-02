@@ -1093,28 +1093,145 @@ production.
   in the set returns (NO, which the split retry handles, or OK). Smoke-test Gmail
   archive, trash and both undos, which share the routes.
 
-**B2b — non-destructive UIDVALIDITY reset** (*outline*). Depends on: B2. Required
-before anything relies on a server reset being repaired; B2 only holds (refuses
-actions, reports once). Deleting the mailbox's rows on a reset was rejected in review:
-it takes user work with it and acts on one observation. The repair keeps every row:
-- Stale rows are tombstoned by re-keying, in ONE transaction that is guarded by a
-  conditional `updateMany({where: {id, inboxUidValidity: stored}, data: {inboxUidValidity: live}})`
-  whose count must be 1, so two overlapping polls cannot both apply it.
-- The stale rows' `gmailId` gets the suffix `#uv<old>`. The strict id parse (B1) then
-  refuses them, and a NEW message that reuses an old UID gets its own row. Row ids are
-  kept, so commitments and other things keyed by the row id are unaffected.
-- Tombstoned rows are hidden explicitly from every list and count (an explicit
-  filter, not a side effect of the id), and their attention items are resolved. Nothing
-  is deleted.
-- The new value must be seen on two consecutive polls before anything changes, and at
-  most one reset is applied per account per day, so a flapping server cannot churn.
-- The PUSH dedupe marker is text of the form `[gmailId]`; a new message that reuses an
-  old UID would be suppressed by the old marker, so the marker is keyed by row id.
-- Relink: an unlink keeps the EmailMessage rows and a relink baselines from the live
-  value, so the relink path must tombstone rows of the old numbering too (or refuse to
-  baseline while rows exist under an unknown value).
-- Verify: the same fake server, a reset with a reused UID, overlapping polls, a
-  flapping value, a relink.
+**B2b — non-destructive UIDVALIDITY reset.** Depends on: B2. Landed 2026-09-30 (two
+commits: the repair, then the review follow-up), behind the IMAP flags (all OFF;
+production has no Naver, iCloud or IMAP account). Gmail and Outlook paths are unchanged.
+- The live bug it fixes: B2 held a reset (actions refused, one report) but kept
+  ingesting, so a NEW message that reused an old UID was deduped into the stale row
+  (its flags and labels written over the old row's; the new mail never got a row or a
+  triage). Deleting the mailbox's rows was rejected in review: it takes user work with
+  it and acts on one observation.
+- Landed (`mail/imap-uidvalidity-reset.ts`, `mail/imap-tombstone.ts`,
+  `mail/imap-poll-guards.ts`, `mail/imap-hold-state.ts`, `mail/imap-history.ts`,
+  migration `20261004010000_imap_uidvalidity_reset`, three nullable columns on
+  `LinkedInboxAccount`, additive, `SET LOCAL lock_timeout`):
+  - Hold stops ingest. While a mailbox is held (live value usable and different from
+    the stored one, or a reset pending, also when the live value is unusable) the poll
+    persists NOTHING for it and skips the moved-row cleanup. A live value that is
+    unusable with nothing pending ingests as before (no reset can be told).
+  - A hold does not look healthy: a held poll does not stamp `lastSyncedAt`, so the UI
+    stops saying "Synced 1m ago". It logs at most every `HELD_WARN_INTERVAL_MS` (15 min)
+    and alerts Sentry at most once per account per `HELD_ALERT_INTERVAL_MS` (24 h),
+    whatever the value, so a hold that lasts days keeps being seen. In-process state,
+    bounded to `MAX_TRACKED_ACCOUNTS` (1000) per map; a restart forgets it.
+  - Two sightings. The first poll that sees a new value stores it as
+    `inboxUidValidityPending` with `inboxUidValidityPendingAt`. A later poll seeing the
+    same value at least `MIN_SIGHTING_GAP_MS` (60 s) after it repairs. The stored value
+    seen again clears the pending one; a third value replaces it and restarts the clock;
+    an unusable value leaves it. At most one repair per account per
+    `RESET_LIMIT_WINDOW_MS` (24 h, from `inboxUidValidityResetAt`); inside it the
+    mailbox stays held.
+  - Repair, one `prisma.$transaction` (timeout 30 s): (a) claim, a conditional
+    `updateMany` on id, userId, the stored value, the pending value, the pending time
+    this poll read and "no repair in the last 24 h", moving the account to the new value
+    and setting `inboxUidValidityResetAt` to the claimed pending time (the FIRST
+    sighting, not the repair time); a count other than 1 stops there; (b) the OPEN and
+    SNOOZED AttentionItems (`source EMAIL`, `sourceId` = EmailMessage.id) of the
+    mailbox's live rows become RESOLVED, chunked by 1000; (c) one raw
+    `UPDATE "EmailMessage" SET "gmailId" = "gmailId" || '#uv<old>.<repair epoch ms>'`
+    over the rows with `starts_with("gmailId", '<prefix>:<email>:')` and
+    `"gmailId" !~ '#uv[0-9]+\.[0-9]+$'`, every value a bound parameter. The repair
+    time makes each suffix unique, so a server going A -> B -> A -> B repairs every
+    time instead of colliding with the first A tombstone; the anchored pattern skips
+    earlier tombstones and still re-keys an address that itself contains `#uv`. No
+    createdAt split is needed: nothing was ingested while held. Any failure, a unique
+    collision or a timeout included, rolls all of it back and the mailbox stays held;
+    the next attempt waits `repairBackoffMs` (10 min, doubling per consecutive
+    failure, capped at 6 h) so a repair that keeps timing out does not take a pooled
+    connection every poll. Failures log each time and alert Sentry once per account
+    per 24 h, sanitized (the database error quotes the colliding id). The repair poll
+    persists nothing; the next poll ingests the window under the new numbering. Row
+    ids are kept, so summaries, stars, reply state, attachments, candidate intakes and
+    commitments stay attached; nothing is deleted.
+  - Dating the reset from the first sighting keeps the 24 h limit and the moved-row
+    floor sound: from the first sighting every action refuses the mailbox, so Klorn
+    records no move between that instant and the repair.
+  - Re-ingested history (`imap-history.ts`): a tombstone, or an IMAP row whose account
+    has `inboxUidValidityResetAt` set and that was received before it, is stored and
+    judged as usual but gets no firewall PUSH, no urgent-sweep notification (bell, push
+    or SMS) and no unattended reply (the rule loop and the auto-mode candidates). The
+    account lookup is one query per batch and none when no row is IMAP. Mail received
+    during the hold (at or after the first sighting) keeps its side effects. In the
+    urgent sweep, the rule auto-reply loop and the auto-mode candidates a failed lookup
+    is caught (`findReingestedHistoryFailClosed`): every IMAP row counts as history for
+    that tick, Gmail and Outlook rows go through, the rest of the user's tick runs, and
+    the failure is reported once per process per path.
+  - Actions refuse tombstoned ids: the strict parse (`parseImapMessageId`) rejects
+    `...:101#uv1000.<ms>`; tests pin it for flags, trash, archive, both undos, reply
+    headers and the undo re-sync. No new error code. The link route's
+    `format: "email"` rejects `\` and `:` in an address (pinned by a route test), so an
+    address cannot forge the `<prefix>:<email>:` boundary.
+  - Moves recorded before the reset are ignored by the moved-row cleanup
+    (`recentlyMovedSourceIds(scope, notBefore = resetAt)`): their ids are old numbers
+    that a new message may now carry.
+  - PUSH dedupe, IMAP ids only (`isImapMessageId`). The `[gmailId]` marker is shared by
+    the firewall PUSH (`email-firewall.ts`) and the urgent sweep
+    (`automation-scheduler.ts`, `notify/urgent-dedup.ts`). For an IMAP id a marker counts
+    only when the notification was created at or after the row's `createdAt` (firewall:
+    the query's `createdAt` floor; sweep: `unnotifiedEmails`), and the sweep's
+    at-most-once key is `urgent:<gmailId>@<row id>` for an IMAP lead (it is unique
+    forever). Gmail ids: same query, same key, no extra read (pinned by tests).
+- Known limits:
+  - Tombstoned rows are NOT hidden from lists, counts or search (about 90 call sites,
+    out of scope by decision), so after a repair each recent message can show twice:
+    the tombstone and the re-ingested row.
+  - Each repair adds one row per message in the poll window (50) and re-judges them
+    (judge cost per repair, bounded by one repair per account per day); tombstones
+    accumulate and are never pruned.
+  - A server that alternates between two new values (B, C, B, ...) never shows the
+    same value twice in a row, so every poll restarts the pending clock and the mailbox
+    stays held, alerting once a day, until an operator acts.
+  - `receivedAt` is the Date header, which the sender controls: a mis-dated message can
+    land on the wrong side of the history cutoff (a real new message silenced, or an
+    old one pushed). New mail that arrived between the server's renumbering and the
+    first sighting (up to one poll interval) counts as history. Accepted.
+  - The 60 s gap and the 24 h window compare app-instance clocks with times other
+    instances wrote; a clock skew of 60 s or more between instances weakens the gap
+    (the claim still lets only one poll repair).
+  - Relink is not addressed: an unlink keeps the EmailMessage rows and a relink
+    baselines from the live value, so rows of an old numbering become actionable again,
+    guarded only by the envelope check.
+  - The `auto-reply:<gmailId>` claim key is not made IMAP-aware; re-ingested history
+    never reaches it, but a genuinely new message that reuses a re-keyed id whose old
+    message was answered finds the old claim and gets no unattended reply (the safe
+    direction; no IMAP unattended send is enabled today).
+- Tests: `imap-uidvalidity-reset.test.ts` (real poll, fake server, strict database with
+  rollback and LIKE-faithful `startsWith`: the named limits and every step; a held poll
+  leaves the old row byte-for-byte unchanged, creates nothing and does not stamp
+  `lastSyncedAt`; alert and log rate limits; one sighting changes nothing; the gap
+  boundary; re-key without delete; attention scope, including a `a_b` / `aXb` pair;
+  user work kept; other accounts untouched; ingest after repair and which rows are
+  history; an address containing `#uv1.2`; A -> B -> A -> B; overlapping polls; the
+  claim refusing each moved field; flap back, third value, unusable value; the 24 h
+  boundary from the first sighting; rollback, backoff and a single alert on failure;
+  a unique collision; a move recorded before the repair), `imap-history.test.ts`,
+  `automation-urgent-sweep-history.test.ts` (one real scheduler tick: the urgent sweep
+  and the rule auto-reply loop skip history and tombstones, Gmail unchanged),
+  `firewall-push-imap-dedupe.test.ts`, additions to `auto-mode-candidates.test.ts`,
+  `urgent-dedup.test.ts`, `scheduler-notification-dedup.test.ts`,
+  `routes-icloud-imap.test.ts` and the four action suites. B2 assertions that encoded
+  "a held poll still ingests" and "one alert per value" were changed in
+  `imap-moves-poll-regression.test.ts`. Mutations, each caught: every claim condition
+  dropped, the claim count relaxed, the gap set to 0 or its comparison loosened, the
+  24 h window shortened or its check removed, the re-key guard removed, loosened or
+  unanchored, the suffix without the repair time, the anchored tombstone test made a
+  substring test, the attention prefix re-check removed, hold not stopping ingest,
+  `lastSyncedAt` stamped while held, log or alert rate limits removed or keyed per
+  value, the alert interval shortened, backoff ignored, made flat or uncapped, the
+  bounded map not evicting, the reset dated from the repair, history widened to Gmail
+  ids or to `receivedAt == resetAt`, tombstones not history, the Gmail rows looked up,
+  and each side-effect guard (firewall, sweep, rule loop, auto mode) removed. The
+  re-key SQL mutations are caught because the fake database only accepts the exact
+  statement text; the anchored pattern is also checked semantically by the `#uv1.2`
+  address test.
+- Verified on a scratch Postgres 16 (not in the suite): `prisma migrate diff` from the
+  migrations to the schema is empty; the re-key statement re-keys exactly the
+  account's rows, skips earlier tombstones, re-keys a `a#uv1.2@...` mailbox, leaves
+  `aXb` alone for an `a_b` address (Prisma's `startsWith` does NOT escape `_`: it
+  matched `myXname` for `my_name`, which is why the attention step re-checks the
+  prefix in code), and a
+  collision raises 23505 (P2010) and rolls the whole transaction back.
+- Not verified: no real Naver or iCloud server.
 
 **B3 — SMTP send for IMAP providers.** Depends on: B0, B1. Landed 2026-09-30,
 flag OFF.
@@ -1350,8 +1467,269 @@ flag OFF.
   exclusion is `canAutoSendFromMailbox` in `agentcore/auto-mode-candidates.ts`;
   widening it is that decision's change.
 
-**B4 — generic IMAP** (*outline*). Unchanged from Phase 4: the SSRF design
-passes security review first.
+**B4 — generic IMAP (user-supplied host).** Depends on: B1, B2. Design written
+2026-09-30 before any code; implementation follows it. Flag `GENERIC_IMAP_ENABLED`,
+OFF. Not flippable until the security review below signs off.
+
+- Scope. IMAP over implicit TLS on port 993 only. Read, unread and star (B1) and
+  archive, trash and undo (B2) work on a generic row only while their own flag AND
+  `GENERIC_IMAP_ENABLED` are on. **Send, drafts and reply headers are out of scope
+  (decision):** a user-supplied SMTP endpoint is a second outbound target with
+  STARTTLS-downgrade risk on ports 465/587, and it would double this design. A
+  generic row keeps the unsupported stubs for them whatever `IMAP_SEND_ENABLED`
+  says, its registry entry has `smtp: null`, and the SMTP transport refuses a
+  provider without an endpoint. Generic send is its own later step.
+- Threat model. The attacker is an authenticated, entitled user. They choose the
+  host string, control DNS for any name they own (any A/AAAA answer, TTL 0,
+  answers that change between queries) and run the IMAP/TLS server at any public
+  address. What they must not reach: Klorn's internal network, the cloud metadata
+  service, services on localhost. What they must not get: a port scanner, a
+  reachability oracle for internal or third-party hosts, a credential-stuffing
+  proxy, a way to stall the serial poll tick. Out of scope: a hostile server
+  reading the user's own mail (it is the user's own choice of host).
+- D1 Host grammar (`mail/generic-imap-host.ts`, pure, checked before any
+  network). A DNS name only. Accepted: `host` or `host:993`. Rejected: empty,
+  IP literals in any spelling (dotted, decimal, hex, bracketed IPv6, anything
+  that WHATWG IDNA folds to an address), userinfo and anything else with
+  `@ / \ ? # [ ] %` or whitespace, a second colon, any port but `993`
+  (canonical text), a trailing dot, a single label, a label outside
+  `[a-z0-9-]` or over 63 characters, a name over 253 characters, a last label
+  that is not alphabetic or `xn--`, and the internal suffixes `local`,
+  `localhost`, `internal`, `localdomain`, `lan`, `home`, `corp`, `intranet`,
+  `private`, `home.arpa`, `arpa`, `test`, `invalid`, `example`, `onion`, plus
+  `metadata.goog`, and the hosts of providers that have their own connection
+  (`imap.gmail.com`, `imap.googlemail.com`, `outlook.office365.com`,
+  `imap-mail.outlook.com`, and every host of the exact Naver/iCloud allowlist, read
+  from `isAllowedImapHost` so the lists cannot drift), answered "Use the built-in
+  connection for that provider instead." The name is folded with `url.domainToASCII` (UTS 46: case,
+  full-width forms, ideographic dots, punycode) and only the ASCII result is
+  stored (`host:993`) and used. An IDN look-alike therefore stays a different,
+  `xn--` host and can never equal its ASCII twin.
+- D2 Resolve-then-pin (`mail/pinned-address.ts`, `mail/ip-policy.ts`). Klorn
+  resolves A and AAAA itself (c-ares through `node:dns` `Resolver`, so neither
+  `/etc/hosts` nor search domains), with a 3 s per-query timeout. The name is
+  refused when it has no address OR when ANY answer is non-public. One address is
+  pinned (first IPv4, else first IPv6). Non-public means: 0/8, 10/8, 100.64/10
+  (CGNAT, Alibaba metadata), 127/8, 169.254/16 (link-local, AWS/GCP/Azure metadata),
+  172.16/12, 192.0.0/24 (Oracle metadata), 192.0.2/24, 192.88.99/24, 192.168/16,
+  198.18/15, 198.51.100/24, 203.0.113/24, 224/4, 240/4; IPv6 is default-deny:
+  only 2000::/3 passes, minus 2001::/23 (Teredo, benchmarking), 2001:db8::/32,
+  2002::/16 (6to4) and 3fff::/20, so `::`, `::1`, fc00::/7 (AWS `fd00:ec2::254`),
+  fe80::/10, ff00::/8, NAT64 `64:ff9b::/96` and every other reserved block are
+  refused. An IPv4-mapped IPv6 address (`::ffff:a.b.c.d`, dotted or hex) is judged
+  by the IPv4 address inside it.
+- D3 The socket goes to the checked address, never to the name
+  (`mail/imap-pinned-client.ts`). The client is built as before through
+  `createImapClient` (still synchronous, so the poller, the verify handshake and the
+  actions are untouched), then its `connect()` is wrapped: each call resolves the
+  name afresh, checks every answer, and only then hands imapflow
+  `tls: { host: <checked IP>, servername: <hostname>, rejectUnauthorized: true,
+  minVersion: 'TLSv1.2' }` (imapflow merges the `tls` option over `host`/`servername`
+  at connect time). The constructor `host` is `host.invalid`, which cannot resolve,
+  so if a future imapflow stopped honouring `tls.host` the connection fails closed
+  instead of resolving the name itself. Nothing is cached: every connection, poll or
+  action re-resolves and re-checks, so a name that turns private after the
+  connect-time check is caught on the next connection, and there is no window
+  between check and connect because the connection targets the checked address.
+  Certificate verification stays on with the hostname as SNI and name, so TLS still
+  authenticates the server: a self-signed server is refused by design. There is no
+  plaintext and no STARTTLS path. imapflow does not follow RFC 2221 referrals (it
+  only parses them).
+- D4 Bounded connections and sessions (reviewed 2026-09-30). One connect budget (the
+  caller's `connectionTimeout`, default 15 s) covers the DNS wait AND the
+  handshake; `greetingTimeout` defaults to 10 s. One wall-clock deadline of 90 s
+  from the start of `connect()` hard-closes the session whatever it is doing, because
+  imapflow's inactivity timer is reset by every byte a dripping server sends. A
+  line, a literal and a whole response are capped at 2, 4 and 8 MiB (imapflow
+  `maxLineLength`, `maxLiteralSize`, `maxResponseSize`, set after the caller's
+  options so they cannot be raised; the response cap must stay above the literal cap).
+  The poll fetches TEXT as a 64 KiB slice (`bodyParts: [{ key: "TEXT", start: 0,
+  maxLength }]`, which imapflow sends as `BODY.PEEK[TEXT]<0.N>`) and stops consuming
+  FETCH results at its window of 50, so a lying server cannot make one poll
+  unbounded. Registry `maxAccounts` for generic is 3, not 10: the poll is serial, and
+  each generic account is an arbitrary slow host.
+  Second review (2026-10-01), which found the per-response caps were not enough: they
+  bound ONE response, not a series. A SELECT answered NO makes imapflow LIST, and 400
+  untagged LIST lines of 1 MiB (each far under every cap) grew RSS by 585 MiB. So a
+  generic client has a byte budget for the WHOLE session, 32 MiB, counted at the
+  stream every received byte is piped into (imapflow's `streamer`, so every command
+  is covered): past it the session is hard-closed and no later byte reaches the
+  parser (`GENERIC_SESSION_BYTE_BUDGET`; wire-tested against a LIST flood and a FETCH
+  flood with the real library, with an honest 8 MiB transfer left alone). The
+  scheduler no longer has a global tick lock: one boolean meant a tick that never
+  settled stopped ALL IMAP polling, Naver and iCloud included (the heartbeat, then
+  recorded ahead of the guard, stayed green). The double-poll guard is per ACCOUNT
+  (`imap-accounts.ts`: a row whose previous poll is still running is skipped, released
+  on every exit), the heartbeat is recorded inside a tick that runs, and EVERY
+  provider's session now has a wall-clock deadline: 5 minutes for the fixed hosts
+  (`FIXED_HOST_SESSION_DEADLINE_MS`; they had only a 30 s inactivity timer), 90 s for
+  generic. Non-auth generic failures back the account off, 10 minutes doubling to a
+  6 h cap, per account, in memory and size-bounded, cleared by a successful poll or a
+  relink (`imap-poll-backoff.ts`; a stalling host used to cost a serial tick ~105 s
+  every five minutes, three accounts per user). Everything here is generic-only except
+  the per-account guard, the heartbeat placement and the fixed-host deadline: Naver
+  and iCloud clients, queries and logs are otherwise unchanged (their suites pass
+  untouched, apart from B2b's overlap test, below).
+- D5 No oracle, no scanner. The connect route runs at most 10 attempts per user per
+  hour (`mail/generic-imap-attempts.ts`, in-process like `login-throttle.ts`; answers
+  429), on top of the route's per-IP limit (5 per 15 minutes), entitlement and the
+  beta gate. Every failure before an authenticated session, whatever the cause
+  (DNS, blocked address, refused, timeout, TLS or certificate failure, no IMAP
+  greeting), answers one message: "Could not connect securely to that server."
+  Only a rejected LOGIN, which needs a full verified TLS session and an IMAP
+  greeting first, gets its own hint, because the user has to fix the password. Host
+  syntax errors are static messages (they depend on the input, not on the
+  network). Raw library errors are never returned, only logged server-side, and
+  what is logged from a user-chosen server (a library or TLS message) is one line
+  capped at 240 characters (`mail/log-text.ts`), so it cannot forge log lines or
+  flood a log.
+- D6 Every boundary re-checks. `checkImapRow` validates the stored host with the
+  grammar for a generic row (and with the exact allowlist and host pin for
+  Naver and iCloud, unchanged), so a row edited by hand still cannot reach
+  anything the grammar refuses; resolution is checked in D3 at every connect.
+  Folder trust for archive and trash stays SPECIAL-USE only (name lists are empty).
+- D7 Host change is refused (v1, reviewed 2026-09-30). Connecting again with an
+  existing generic address works only on the SAME host (compared in folded form:
+  password rotation); another host answers a constant 409, "Disconnect this account
+  first; changing the server is not supported yet.", before any attempt is counted or
+  connection made. Re-pointing used to keep the row's INBOX UIDVALIDITY and every
+  message row of the old server: the next poll either held the mailbox forever, or,
+  when both servers report the same UIDVALIDITY, matched the new server's UIDs to the
+  old `generic-imap:<email>:<uid>` rows and dedupe-dropped real mail. The follow-up is
+  the B2b UIDVALIDITY re-key (tombstones, now on main) run on a host change; it is not
+  wired here: a host change is refused, not repaired.
+- D8 A rejected login stops the retries (reviewed 2026-09-30). A generic poll whose
+  LOGIN is rejected starts the same in-process cooldown the actions use (15 min,
+  keyed by row id and stored cipher, so one rejection pauses polls and actions
+  alike and a new password is tried at once) and sets `needsReconnect` on the row
+  (scoped by id and user; the settings status already reports it, and a successful
+  reconnect clears it). A flagged or cooling row is skipped by the poll, so a revoked
+  password is not sent to the host every five minutes. The actions of B1/B2 did not
+  flag `needsReconnect` and still do not; only the poll does, for generic rows. Other
+  failures (refused, timeout, TLS, blocked address) are retried next tick with no
+  flag. Sentry gets one event per account per failure kind until the kind changes or
+  a poll succeeds (`mail/imap-poll-failures.ts`), reported by the fan-out only; the
+  poll's own `.sync` report is skipped for generic rows, which was a duplicate.
+- Residual risk, accepted and recorded. (a) One address is tried per connection: a
+  round-robin name with a dead first record fails that attempt (the next poll
+  retries). (b) Failure classes differ in timing (NXDOMAIN is faster than a timeout),
+  which the per-user limit bounds but does not remove. (c) The attempt limiter is
+  in-process: a restart resets it and each replica counts alone (single instance on
+  Render today). (d) The bounds cap a slow host at 90 s per session, so a user with
+  3 generic accounts can cost a tick up to 4.5 minutes until the backoff slows them;
+  ticks overlap rather than queue, each skipping the accounts already in flight.
+  (e) A name that is a CNAME to a built-in provider host (for example a vanity name for
+  imap.gmail.com) passes the host grammar, which looks at the name typed; it connects
+  as an ordinary generic account and fails the login or works as IMAP. A UX gap only
+  (the user should have used the built-in connection), not a security one, so there
+  is no code for it. (f) Network-level egress filtering on the host would be a second
+  layer; not verified, not assumed.
+- Verify (test-first): a table-driven validator test (every range above, mixed
+  public and private answers, rebinding between two resolutions, IP literals in
+  every spelling, userinfo and port injection, IDN folding, internal suffixes);
+  connection tests that assert the socket target is the checked address and the
+  TLS name is the hostname; a wire test with the real imapflow over real TLS
+  (throwaway certificate) proving the handshake is to the pinned address, verified
+  against the hostname, and refused for a wrong certificate. Review fixes added:
+  a wire test where the real library refuses an oversized literal and a server that
+  drips bytes is cut by the session deadline; unit tests for the budget shared by
+  DNS and the socket (fake timers), the window cap, the bounded TEXT query, the
+  scheduler guard, the host-change refusal, the cooldown and the Sentry dedupe.
+- Landed 2026-09-30 (branch `feat/generic-imap`, PR not yet opened), flag OFF:
+  - `GENERIC_IMAP_ENABLED` (`genericImapEnabled()` in `config.ts`, lenient parse,
+    read at request time). Off: `/api/generic-imap/*` answers the cloaked 404
+    (`darkRouteGate`), the poll never selects IMAP rows
+    (`enabledImapProviderKeys()`), and dispatch leaves a generic mailbox on the
+    unsupported stubs whatever the B1/B2 flags say. On, a generic mailbox gets B1
+    only with `IMAP_ACTIONS_ENABLED` and B2 only with `IMAP_MOVE_ACTIONS_ENABLED`.
+    `IMAP_SEND_ENABLED` changes nothing for it (no send part exists).
+  - New modules, each pure or single-purpose: `generic-imap-host.ts` (D1 grammar),
+    `ip-policy.ts` (D2 address policy, strict hand-written IPv4/IPv6 parsing),
+    `host-resolver.ts` (c-ares `Resolver`, A and AAAA, 3 s per query, 2 tries),
+    `pinned-address.ts` (refuse on no answer or any non-public answer, pin one),
+    `imap-pinned-client.ts` (D3 connect wrapper), `generic-imap-attempts.ts` (D5
+    limiter), `generic-imap-verify.ts` (D5 message collapse).
+  - Registry: `IMAP_PROVIDERS.IMAP` (`hostPolicy: "user-supplied"`, `idPrefix`
+    `generic-imap`, `maxAccounts` 3, `smtp` and `webmailUrl` null). Naver and iCloud
+    gain `hostPolicy: "fixed"` and nothing else; their client options, allowlist and
+    host pin are unchanged (asserted byte for byte). `hostMatchesProvider` for the
+    generic provider is the grammar. `checkImapRow` applies the grammar to a stored
+    generic row and the exact allowlist to the others.
+  - `createImapClient` stays synchronous: a generic provider gets the pinned client,
+    the others a plain one. `imap-sync.ts`, `imap-poll-guards.ts`,
+    `imap-uidvalidity.ts` and `email-firewall.ts` are untouched, so the B2 poll
+    (INBOX only, 50-message window, UIDVALIDITY baseline and hold) applies unchanged
+    to generic rows.
+  - Connect route: host required; grammar first (static messages, no attempt
+    counted), then the new-account cap (3), then the attempt limiter (429 with
+    `retry-after`), then verify, then upsert of the folded host and `encryptToken`
+    password. `email-undo.ts` takes the IMAP re-sync path for any IMAP-family key.
+    Archive and trash folder trust is unchanged: SPECIAL-USE only.
+  - Tests (hermetic): the table-driven validator and address-policy tests above;
+    `imap-generic-connection.test.ts` (target address, TLS name, rebinding between
+    connections, close during resolution, Naver unchanged); `imap-pinned-wire.test.ts`
+    (real imapflow, real TLS, throwaway openssl certificate: pinned address, SNI and
+    verification against the host name, wrong-name and untrusted certificates refused
+    with no LOGIN sent, blocked answers open no socket); poll, dispatch, route,
+    verify, limiter and registry tests. Mutations run and caught: skipping
+    re-resolution, accepting any one public address among mixed answers, letting the
+    library resolve the name, certificate verification off, no TLS server name,
+    CGNAT block dropped, internal-suffix check dropped, mapped-address unwrap
+    dropped, generic flag ignored, attempt counted before host validation.
+  - Review fixes (second commit, same day): D7 host-change refusal, D4 size and time
+    bounds with the in-flight scheduler guard, D8 poll cooldown, reconnect flag and
+    Sentry dedupe, built-in provider hosts refused, the resolver's error code kept in
+    the log, server text sanitised before logging, and the wire test's openssl call
+    made portable (it skips with a warning if the binary is missing). imap-sync.ts
+    has three small additive edits: the TEXT query and the window break in the fetch
+    loop and the failure report in the final catch.
+  - Second review fixes (2026-10-01): the session byte budget; the per-account guard
+    in place of the global tick lock, the heartbeat inside the tick and a 5 minute
+    session deadline for every provider; the backoff; `syncImapMessage` fetches the
+    same TEXT slice as the poll; a poll that started before a relink flags
+    `needsReconnect` only while the row still holds the cipher it began with (a
+    conditional write); a generic account is stored by a conditional create or update,
+    never an upsert (an existing row is updated only while it still has the host it
+    was checked with, and a unique-key collision with a concurrent create is settled by
+    the winner's host: same host is a double click, another host is the 409), so two
+    concurrent first connects to different hosts cannot both pass; a stored subject
+    and cc are capped at 1 000 and 4 000 characters for every provider (neither was
+    capped anywhere; shorter values are stored exactly as before, and the subject cap
+    lives in `envelopeSubject`, the one place the stored and the compared value are
+    derived). B2b's "overlapping polls" test now stages its race from a poll outside
+    the in-process guard, which is what two processes (a rolling deploy) are.
+  - Rebased onto B2b (#1351, 2026-09-30). Conflicts were the `.env.example` flag
+    blocks (both kept), the `imap-sync.ts` imports and the `lastSyncedAt` stamp in
+    `imap-accounts.ts`: B2b's rule (a held poll stores nothing, so it does not stamp)
+    and this step's failure re-arm both apply, so a held generic poll neither stamps
+    nor re-arms the Sentry report. B2b's hold, repair, tombstones, re-ingested-history
+    cutoff, PUSH and urgent-sweep dedupe floors and the auto-mode exclusion all apply to
+    generic rows with NO production change: `isImapMessageId` derives its prefixes
+    from `IMAP_PROVIDERS` (`imap-message-id.ts`), the registry already holds the
+    generic entry, and B2b's modules take the provider config (`idPrefix`,
+    `logScope`) instead of naming providers. `canAutoSendFromMailbox` allows only
+    GOOGLE, so a generic mailbox never gets an unattended reply. What was missing was
+    proof, added test-first: the real poll, hold, repair, history and actions for a
+    generic mailbox (`imap-generic-reset.test.ts`, with the scheduler's per-account
+    guard and the hold together: a held generic mailbox is stamped by no tick, and a
+    stuck account does not block the next tick), the primitives with Gmail and Outlook ids excluded
+    (`imap-generic-protections.test.ts`), and B2b's firewall PUSH, urgent sweep,
+    rule auto-reply and auto-mode tests re-run over a generic id head. Detection
+    hard-coded back to the two prefixes fails 18 of those tests.
+  - Not verified: no real IMAP server has been reached; behaviour rests on faked
+    imapflow and resolver plus a local TLS server on loopback. The openssl
+    invocation was run on LibreSSL only, not on OpenSSL 3. The real c-ares
+    resolver path (`host-resolver.ts`) is tested only against a mocked `Resolver`.
+    Whether Render's egress can reach IPv6 and what a real provider's LIST reports
+    are unknown. A self-signed server is refused by design.
+- Before the flip: (1) security review sign-off of this block and of the code;
+  (2) real-server tests from the Render egress: Fastmail, Daum or Kakao, and a
+  self-hosted Dovecot with a publicly trusted certificate, each for connect, poll,
+  read, star, archive and trash (record the LIST SPECIAL-USE flags each reports);
+  (3) rate-limit tuning (10 attempts per hour, 3 accounts) against what those
+  servers tolerate; (4) check which address families the egress can reach, since one
+  address is pinned per connection; (5) decide whether the host should also be
+  blocked at the network layer.
 
 **B5 — flips** (*outline*). After the Letter of Assessment. Microsoft also
 needs FA-9 and the admin guidance from F0.
@@ -1569,13 +1947,95 @@ needs FA-9 and the admin guidance from F0.
     person. The +-30 minute duplicate check that runs before it looks at primary
     and LOCAL rows only, flag on or off: it names an existing event for the model
     to point at, and a read-only linked mirror is not one.
-  - For C7, not deduped yet: the `/api/ops` events-today count, the
-    interaction-graph meeting bonus, the weekly-review meeting count and the
-    tomorrow list in `proactive-actions.ts`, and the briefing reader's `take: 20`
-    (it already collapses copies by title and day, but copies spend the cap).
+  - For C7, not deduped yet (closed in C7, see below): the `/api/ops` events-today
+    count, the interaction-graph meeting bonus, the weekly-review meeting count and
+    the tomorrow list in `proactive-actions.ts`, and the briefing reader's `take:
+    20` (it already collapses copies by title and day, but copies spend the cap).
     Matching by event id misses an invite whose two accounts got different ids;
     the iCalUID is the reliable key and needs a column. Events deleted or
-    cancelled upstream are not removed from rows, for the primary sync as before.
+    cancelled in Google are removed on the next sync once
+    `CALENDAR_CANCELLATION_SYNC_ENABLED` is on (C2b, next bullet); the Outlook and
+    CalDAV connectors must do the same.
+  - Cancelled events (C2b), behind `CALENDAR_CANCELLATION_SYNC_ENABLED` (OFF by
+    default, read at sync time like `LINKED_CALENDAR_SYNC_ENABLED`, in
+    `.env.example`). Flipping it is a founder action, after a check against a real
+    Google calendar (below). While OFF every sync makes exactly the Google calls it
+    always did and removes no row. When ON, after the upsert both Google syncs (the
+    primary and every linked account) ask Google which events were cancelled, in a
+    SEPARATE `events.list` (`CalendarSession.listCancelledEvents`): the sync's own
+    listing is unchanged, because with `showDeleted` on it cancelled events would
+    count toward `maxResults: 100` and push live events out of the window.
+    - **The request.** `showDeleted: true`, `singleEvents: false`, NO
+      `timeMin`/`timeMax`, `orderBy: "updated"`, `maxResults: 250`, `fields:
+      nextPageToken,items(id,status,updated,recurringEventId)`, `updatedMin` = the
+      later of (now - 7 days) and where this account's last scan left off, each
+      page with a 10 s timeout and no retry (`CANCELLED_SCAN_TIMEOUT_MS`). Why:
+      `updatedMin` bounds the listing to events changed since then, and "entries
+      deleted since this time will always be included regardless of showDeleted";
+      `singleEvents: false` returns single events, recurring masters and
+      exceptions, not every expanded instance, so a series cannot fill the page
+      cap; `orderBy: "updated"` is valid without `singleEvents` (only `startTime`
+      needs it) and lets a truncated scan resume; no time window because a deleted
+      event is only guaranteed to carry its `id`, so a time filter could drop one
+      with no start. A cancelled event, a cancelled series and a cancelled
+      instance of a live series each come back as one item, an instance carrying
+      `recurringEventId`. Sources:
+      developers.google.com/workspace/calendar/api/v3/reference/events/list
+      (`showDeleted`, `singleEvents`, `orderBy`, `updatedMin`),
+      .../reference/events (`status`) and .../guides/recurringevents.
+    - **What is removed.** The row matching (user, GOOGLE, `sourceKey`,
+      `externalId`) of every id whose FINAL status in the scan is `cancelled` (an id
+      can be listed twice in one scan, cancelled on an early page and restored
+      since; the item with the latest `updated` decides, so a restored event or
+      series is never removed), and its open or
+      snoozed attention items resolved (not deleted), in one transaction per scan
+      (`removeCancelledGoogleEventRows`); a primary row the previous release wrote
+      with no `externalId` is matched by `googleId`. An item with no
+      `recurringEventId` (an event or a whole series) also removes the instance
+      rows `<id>_<start>` of that series: the id is split at its LAST underscore,
+      the tail must be an instance start (`20261005T000000Z` or `20261005`), and the
+      rest must be a cancelled series id, so an unrelated id that merely shares a
+      prefix is never touched. Google documents base32hex ids (a-v, 0-9, no
+      underscore) only for ids a client supplies, and the `<id>_<start>` instance
+      form is observed behaviour, not documented, hence the strict match. A row
+      merely missing from a listing is never removed. The scan has no window, so a
+      cancelled event's row is removed wherever its date falls, past rows included.
+    - **Progress.** The next scan's start is per process (a restart widens the
+      first scan back to 7 days; bounded to 5000 accounts, the least recently
+      scanned forgotten). After a complete scan it is that scan's start minus 30
+      minutes. A scan reads at most 4 pages of 250; when it is cut off it resumes 1 s
+      before the last `updated` it read (`CANCELLED_RESUME_OVERLAP_MS`), so a backlog
+      of more than 1000 changes converges over consecutive syncs. Google does not
+      document whether `updatedMin` is inclusive, and a group of events sharing one
+      `updated` can straddle the cut; the 1 s overlap re-reads that group, and
+      removals are idempotent. If a resume would not move forward (more than one
+      cap's worth of events share the window, so the same pages would be read
+      forever) the scan steps 1 ms past the stuck point and warns once per account.
+    - **Failure and noise.** A failing scan never fails the sync: one `console.warn`
+      per account and kind of trouble (failure, truncation, no progress) until it
+      recovers, so one never hides another. A 4xx other than 429 is also reported to Sentry
+      once per process. When rows are removed, one log line per account and sync:
+      `userId:sourceKey`, the removed count and the resolved-attention count, no
+      titles.
+    - **Known limits.**
+      - "This and following" deletions truncate the series' recurrence and leave no
+        tombstone for the instances, so those instance rows stay until the series
+        is changed again or the account is unlinked. Nothing is ever removed because
+        it is absent from a listing.
+      - Restore race: if an event is restored between a scan's read and its
+        removal, its row is removed and re-created by the next sync's listing; the
+        old row's attention items stay resolved and the new row gets fresh ones.
+      - A cancellation older than the lookback that no scan saw (the account was
+        not syncing for over 7 days) is not removed.
+      - Ties at the resume point: when more than one cap's worth (1000) of events
+        share one `updated`, the scan steps past that timestamp and the cancelled
+        events tied there beyond the cap are never read. Accepted (a bulk operation
+        stamping one instant on over 1000 events), but check during the live
+        verification whether `updatedMin` is inclusive and how Google orders ties.
+      - Not yet verified against a real Google calendar: that a deleted series is
+        returned as one cancelled item and its instances as nothing, the instance
+        id form, and that `orderBy: "updated"` with `showDeleted` pages as
+        documented. Those are the checks before the flip.
   - Migration locks, measured size and runbook. `ALTER TABLE "CalendarEvent" ADD
     COLUMN` takes ACCESS EXCLUSIVE on the table and, because Prisma wraps the
     migration in one transaction, holds it until commit: reads of CalendarEvent
@@ -1618,17 +2078,412 @@ needs FA-9 and the admin guidance from F0.
 `caldavUrl` is user-supplied and fetched server-side, so SSRF validation
 (resolve the host, pin the address, reject private ranges) is required before
 the first request, and the password is stored with `encryptToken`.
-**C4 — Microsoft Graph calendar** (*outline*). Needs calendar permissions
-added to the Azure app (FA-9); existing users re-consent.
+**C4 — Microsoft Graph calendar, read-only.** Depends on: C2. Needs FA-9
+(`Calendars.Read` on the Azure app) before the flip, not before the merge.
+- Tasks: link an Outlook account for its calendar over the existing Outlook OAuth
+  app; an OUTLOOK implementation of the C2 provider seam (events, free/busy);
+  the C2 linked-sync loop syncs it into rows; unlink.
+- Landed 2026-09-30 (branch `feat/graph-calendar`, PR not yet opened). No
+  migration: `CalendarProvider.OUTLOOK` and the per-source row key came with C1
+  and C2.
+  - Flag `OUTLOOK_CALENDAR_ENABLED` (OFF, lenient parse, read per call). It
+    also needs `OUTLOOK_INBOX_ENABLED`, like the Outlook mail path:
+    `outlookCalendarEnabled()` in `config.ts` is the AND of the two. Off (either
+    one): the three calendar routes answer Fastify's default 404 (`darkRouteGate`,
+    byte-identical to an unregistered route) and `calendarActionsForProvider(
+    "OUTLOOK")` answers the same unsupported result it did before C4, so no
+    Graph call, no token read and no row can follow (tested with a mutation that
+    removes each check). Syncing events additionally needs
+    `LINKED_CALENDAR_SYNC_ENABLED` and the user's entitlement, which are the C2
+    loop's own gates; nothing there changed.
+  - Link. `POST /api/auth/outlook/link-calendar` (Pro-gated, rate limited, 503
+    without the Azure credentials) returns the authorize URL; the callback is the
+    inbox link's, `/api/auth/outlook/callback`, so Azure needs no new redirect
+    URI. A distinct signed-state marker, `__link_outlook_calendar__` (10 minute
+    JWT), sends it to `routes/outlook-calendar-link.ts`, which upserts a
+    `LinkedCalendarAccount` keyed (userId, OUTLOOK, email) with encrypted tokens
+    and lands on `/calendar?linked=success|failed|limit` (the markers the Google
+    flow uses). Re-checks entitlement at the callback (TOCTOU), caps NEW links at
+    10 per user and always allows a re-link, and a calendar state that arrives
+    after the flag went off exchanges nothing and writes nothing. An inbox state
+    still writes only an inbox row. `GET /linked-calendars` (never tokens) and
+    `DELETE /linked-calendars/:id` sit beside it.
+  - Scopes. `Calendars.Read` is requested ONLY for a calendar link, and for
+    refreshing a calendar account's token. `getOutlookAuthUrl`,
+    `exchangeOutlookCode` and `refreshOutlookTokens` take a scope set that
+    defaults to `inbox`, which is byte-for-byte the list that shipped (tested
+    against a literal copy, with a mutation that adds the calendar scope to it),
+    so no existing inbox link asks for anything new. The calendar set is
+    `openid email offline_access User.Read Calendars.Read`: read-only and no
+    `Mail.*`, so a calendar link never asks an org admin for mail access.
+    `User.Read` is asked for explicitly so Graph `/me` can name the account; the
+    inbox set has never listed it and relies on Microsoft adding it, which the
+    tenant test below also checks. A user with an Outlook inbox linked who adds
+    the calendar sees one consent screen for the new scope and gets a separate
+    `LinkedCalendarAccount` row with its own tokens.
+  - Provider (`pim/calendar-providers/outlook*.ts`; docs checked 2026-09-30).
+    Events: `GET /v1.0/me/calendarView?startDateTime&endDateTime&$top&$orderby=
+    start/dateTime&$select`, https://learn.microsoft.com/graph/api/calendar-list-calendarview
+    (the window values are read with their own offset; `$top` 1 to 1000;
+    recurring series come back as occurrences). Paging follows `@odata.nextLink`
+    (https://learn.microsoft.com/graph/paging), at most 10 pages, only to an https
+    link on graph.microsoft.com (the token rides every request), and stops at
+    `maxResults`. Cancelled events (`isCancelled`) are left out and do not count
+    toward the cap. Header `Prefer: outlook.timezone="<user zone>", IdType=
+    "ImmutableId"`: the zone Graph renders times in (UTC without it), and
+    immutable ids (https://learn.microsoft.com/graph/outlook-immutable-id) so an
+    event moved between folders keeps its `externalId` instead of syncing as a
+    new one. Graph answers naive wall-clock times plus a zone name: read in that
+    zone when Intl knows it, else in the zone the query asked for. An all-day
+    event is midnight in the zone it was created in; when Graph returns it
+    converted to the asked-for zone (the start is no longer `T00:00:00`), its date
+    is the one the same instant has in `originalStartTimeZone` /
+    `originalEndTimeZone` (both in `$select`; Windows zone names, mapped to IANA by
+    the table in `outlook-time-zones.ts`, the CLDR primary mapping). A zone that
+    is not in the table, or `tzone://Microsoft/Custom`, keeps the date Graph
+    returned rather than guess. The row is midnight UTC of that date, like a
+    Google all-day row. `meetingLink` (`onlineMeeting.joinUrl`, else
+    `onlineMeetingUrl`) is kept only when it is an https URL without embedded
+    credentials, and is normalised: it reaches the web `<a href>`, the Mac app's
+    `NSWorkspace.open` and the model's prompt, so `javascript:`, `file:`, `http:`,
+    custom schemes and malformed values become null. Only the account's default
+    calendar is read (`/me/calendarView`, and getSchedule for the same mailbox);
+    secondary and shared calendars are not. Every Graph fetch refuses redirects
+    (`redirect: "error"`) so the bearer token cannot be forwarded. A listing that
+    hits the page cap logs `truncated after 10 pages`. Free/busy:
+    `POST /v1.0/me/calendar/getSchedule` for the account's own address over the
+    window (https://learn.microsoft.com/graph/api/calendar-getschedule), where
+    `busy`, `tentative`, `oof` and `unknown` block and `free` and
+    `workingElsewhere` do not. That page lists delegated personal Microsoft
+    accounts as not supported, so a 4xx that is not 401, 408 or 429, or a
+    per-schedule error, falls back to the calendar view's `showAs`; a 401, a
+    timeout, throttling or a 5xx rejects and is never hidden behind the fallback.
+    The first time each distinct fallback answer is seen per process it is logged
+    with the status and Graph's short code only (no body, no address). A busy
+    item whose times cannot be read is treated as busy, never free: it blocks the
+    whole window (a readable block beside it stays).
+    `peopleFreeBusy` is the same call for other addresses, unreadable ones
+    `blocks: null` (unknown, never free). `createEvent`, `updateEvent` and
+    `deleteEvent` reject with `CalendarReadOnlyError`; nothing calls them on a
+    linked session today.
+  - Tokens (`outlook-token.ts`). Decrypt, refresh when under 5 minutes are left,
+    persist Microsoft's rotated refresh token (an access-only refresh never
+    overwrites a newer token), clear `needsReconnect` on a good refresh. What a
+    refreshed pair is saved as is one pure function, `refreshedTokenUpdate`
+    (`mail/outlook-token-update.ts`), used by both `mail/outlook-token.ts` and
+    this module, so only the table and the reconnect marker differ; the rest of
+    the lifecycle is a sibling of the mail one because that module is tied to
+    `LinkedInboxAccount`. A rotten refresh cipher with a still-valid access token
+    does not flag the account (the mail path's rule); it surfaces as a revoked
+    grant once the access token runs out. The refresh is lazy (`connect` only
+    decrypts) so a revoked grant rejects inside the caller's try/catch instead of
+    escaping the dispatcher's loop and skipping every other account. A Graph 401
+    gets one forced refresh and one retry with the new token before it reaches
+    the failure policy (a token that looks fresh can be dead without the grant
+    being revoked); a second 401, or a token that was itself just refreshed,
+    propagates.
+  - Revoked grant. The shared failure policy (`isRevokedGrantError`, renamed from
+    `isRevokedGoogleGrantError` now that it serves both providers) also reads a
+    Graph 401 (the `status` on the error) and a Microsoft `interaction_required`
+    refresh answer as a revoked grant: the account is flagged `needsReconnect`,
+    warned about once per hour, never sent to Sentry. Anything else (403, 429,
+    5xx, `server_error`, `invalid_client`) is warned and captured with the domain
+    only, and the account is left alone. The sync skips a flagged account;
+    conflict checks still try it.
+  - Sync. No change to the loop or the scheduler. `syncLinkedCalendarWindow` now
+    writes the row's provider from the session that listed it, so OUTLOOK rows
+    are `provider OUTLOOK`, `externalId` the Graph event id, `sourceAccountId` and
+    `sourceKey` the account id, over the same 30 days and 100 events, with the
+    same entitlement and `needsReconnect` handling. `calendar-rows.ts` has one
+    `upsertLinkedEventRow(provider, ...)` for every linked provider in place of
+    the Google-only one. The writers guard test lists the new writer of
+    `LinkedCalendarAccount`.
+  - Two providers are never merged. The dedupe key is (provider, externalId), so
+    the same invite in Google and in Outlook stays two rows and two entries
+    (tested at the dedupe, the row key and the sync, with mutations at each).
+    Future key for C7: Graph's `iCalUId`, which is per occurrence in a series
+    (https://learn.microsoft.com/graph/api/resources/event). It needs a column and
+    a decision together with the Google `iCalUID`, and is not started here.
+  - Unlink. `unlinkCalendarAccount(userId, id, provider)` takes the provider of
+    the calling surface (GOOGLE by default, so the Google route is unchanged); the
+    Outlook route passes OUTLOOK. Events and their AttentionItems go first, then
+    the account, in one transaction, and neither route can remove the other's
+    account by id.
+  - Kill switch (after C7). OUTLOOK is registered in `CALENDAR_PROVIDER_ENABLED`
+    (`pim/calendar-scope.ts`, the per-provider hook C7 added) as
+    `outlookCalendarEnabled`, read at request time. OUTLOOK rows are visible
+    only while OUTLOOK_CALENDAR_ENABLED and OUTLOOK_INBOX_ENABLED are both on,
+    for every reader and by id, whatever `LINKED_CALENDAR_SYNC_ENABLED` says;
+    turning either off hides them at once, the rows staying until their account
+    is unlinked or deleted (Rollback). Google primary, Google linked and LOCAL
+    rows are unaffected (tested through `calendarSourceScope()`,
+    `isCalendarRowVisible()` and `list_events` with `UNIFIED_CALENDAR_READ_ENABLED`
+    on). Side effects, both intended: while the flags are off every reader's
+    `where` carries `provider: { notIn: ["OUTLOOK"] }` (the flag-off query tests
+    assert the new shape; no OUTLOOK row exists then), and
+    `anyLinkedRowVisible()` replaces the Google flag in `pim/calendar-read.ts`'s
+    choice between a database cap/count and fetch-then-dedupe: with only the
+    Outlook flags on, OUTLOOK rows are visible with the Google sync off, and two
+    Outlook accounts can hold the same invite, so a cap must come after the
+    dedupe (tested). Every C7 reader treats an OUTLOOK row as a linked Google row:
+    read-only (`sourceAccountId` is set), text wrapped as untrusted, no title in a
+    conflict; a guard test fails if a reader starts comparing a provider name.
+  - Review fixes (round 2).
+    - DST: `naiveLocalToUtc` read the zone's offset at the wall clock written as
+      if it were UTC, which is an hour off in the hours either side of a DST
+      transition (a Singapore holiday read in Los Angeles landed a day early after
+      the fall-back). It now settles the offset over two passes (a third at a
+      spring-forward gap) in one shared function, `wallClockToUtcMs` in
+      `time-zone.ts`, which `localDayUtcRange` uses as well. Live paths whose
+      behaviour changes, and only for a naive time on a transition day in a zone
+      with DST: the Google sync's offset-less `dateTime`
+      (`calendar-providers/google.ts` -> `mapGoogleEventTimes` ->
+      `parseGoogleDateTime`; Google normally sends an offset, so this is rare), and
+      `checkAttendeeBusy` and `checkConflicts` in `pim/calendar.ts` through
+      `toAbsoluteInstant` (an agent's or draft's naive time in the user's zone).
+      Asia/Seoul, the default, has no DST and is unaffected. Tested across
+      spring-forward and fall-back in Los Angeles and Berlin, plus a quarter-hour
+      sweep over Sydney and Lord Howe.
+    - Attention items. `attention-mirror.ts` copies an event's title into a
+      `CALENDAR_EVENT` item, and the briefing listed open PUSH items of every
+      source, so the title outlived the kill switch (an Outlook flag turned off, or
+      a linked Google event while the linked sync is off). Readers of such items
+      now pass them through `withoutHiddenCalendarItems`
+      (`pim/attention-calendar-visibility.ts`): one batch lookup scoped by
+      `calendarSourceScope()`, and an item whose event is hidden or gone is
+      dropped, as the inbox summary already did. The briefing reads four times as
+      many items as it shows so the filter cannot starve the list. A guard test
+      lists every module that reads AttentionItem and fails for an unclassified one.
+    - Concurrent refresh. A rotation is a compare-and-swap on the refresh cipher
+      that was read (`refreshedTokenUpdate(refreshed, previousCipher)`, shared with
+      the mail path): the loser's write matches no row. The calendar source then
+      re-reads the row and uses the winner's access token, and an `invalid_grant`
+      re-reads the row before it can flag the account: a changed refresh cipher
+      means the winner rotated first, so it uses the winner's token (one retry with
+      its refresh token if that has run out), and only an unchanged cipher, or a
+      refused retry, is a revoked grant. The mail path takes the swap with its own
+      behaviour otherwise unchanged (a lost swap logs and syncs with the fresh
+      token); both are tested.
+    - Smaller. Meeting links are capped at 2048 characters, after normalising as
+      well. Token-endpoint fetches (`mail/outlook-oauth.ts`) refuse redirects like
+      the Graph ones; every caller already treats a rejected fetch as a failure
+      (the link callbacks redirect to `failed`, the mail poll counts the account's
+      error, the calendar sync captures it without flagging), tested at each. A
+      failed token save logs the error's class, code and first line, not the raw
+      database error. The reader guard now catches `case`, `.includes`, constants,
+      template literals and lookups keyed by a provider, covers every consumer of
+      `readCalendarRows`, and no longer exempts `tool-executor.ts`.
+  - Known gaps, deliberate. (1) The legacy (userId, email) unique on `LinkedCalendarAccount`
+    still exists, so an address that is already a linked calendar of another
+    provider cannot also be linked as an Outlook calendar (an `outlook.com` or
+    `gmail.com` address is unlikely, not impossible): the callback answers
+    `linked=failed`, not an error. The contract phase drops
+    `LinkedCalendarAccount_userId_email_key` (see C1); C4 does not. (2) The
+    Outlook UI for linking belongs to C7's web and desktop work; the routes exist
+    and are dark.
+  - Rollback. If the flags were never on, revert the PR. If they were: set
+    `OUTLOOK_CALENDAR_ENABLED` OFF, then `DELETE FROM "AttentionItem" WHERE
+    "source" = 'CALENDAR_EVENT' AND "sourceId" IN (SELECT "id" FROM
+    "CalendarEvent" WHERE "provider" = 'OUTLOOK')`, then `DELETE FROM
+    "CalendarEvent" WHERE "provider" = 'OUTLOOK'`, then revert the code. The
+    accounts can stay: nothing reads them while the flag is off.
+  - Before the flip (real Microsoft 365 tenant; the code was only ever run
+    against mocked Graph). Do it once with a work account and once with a
+    personal outlook.com account. FA-9 first: add delegated `Calendars.Read` to
+    the Azure app. (a) The consent screen lists Calendars.Read and no Mail.*; an
+    org that blocks user consent ends in `linked=failed`. (b) `/me` names the
+    account with the calendar set (`User.Read`). (c) One sync writes the expected
+    rows; a cancelled occurrence of a recurring meeting is absent; an all-day
+    event keeps its date when read in a zone west of UTC and in one east of it,
+    from an account whose own zone is on the other side, and record whether Graph
+    returns it at midnight or converted (the code handles both; the converted case
+    needs `originalStartTimeZone` to be a name in the table). An event cancelled
+    AFTER its first sync stays as a row: removal of upstream-cancelled events
+    (C2b, in flight, Google only) must be extended to Outlook before the flip,
+    or the calendar shows meetings that were cancelled. (d) `Prefer: outlook.timezone` accepts an
+    IANA name and echoes it; a moved event keeps its id. (e) getSchedule on the
+    work account returns the account's own busy time; record the exact status a
+    personal account answers, because the fallback rule (any 4xx except 401, 408
+    or 429) is a guess about it. (f) A refresh rotates the refresh token and the
+    new cipher is stored. (g) Revoke the app at the account's consent page: the
+    next sync flags `needsReconnect`, warns once, and Sentry stays quiet. (h)
+    Unlink removes the rows and their attention items.
+- Exit: flags OFF, no user-visible change. Nothing is flipped.
 **C5 — mobile device bridge** (*outline*). Blocked on FA-8. Upload policy per
 P4.
 **C6 — desktop device bridge** (*outline*). EventKit in KlornMac. Upload
 policy per P4.
-**C7 — unified calendar read path** (*outline*). Depends on: C2. `list_events`,
-briefing and conflict checks read rows across providers. Each connector joins
-as it lands; C7 does not wait for them. It inherits C2's read-time dedupe and
-the readers C2 left undeduped (see C2), and decides the cross-calendar key
-(iCalUID).
+**C7 — one calendar read path.** Depends on: C2. `list_events`, briefing and
+conflict checks read rows across providers. Each connector joins as it lands; C7
+does not wait for them.
+- Landed 2026-09-30 (branch `feat/unified-calendar-read`, PR not yet opened). No
+  migration, no new dependency, no schema change. One new flag.
+  - Flag `UNIFIED_CALENDAR_READ_ENABLED` (OFF, lenient parse, read per request).
+    Off: every behaviour is the one on main. `list_events` (chat and MCP, both go
+    through `executeToolCall`) still calls Google live, `check_calendar_conflicts`
+    asks Google free/busy only, no row is read for either, and the tool
+    descriptions are the original strings (tested, with mutations that remove the
+    flag check from `listEvents`, from `checkConflicts` and from the description).
+  - The read path is `pim/calendar-read.ts`: `readCalendarRows` and
+    `countCalendarRows` take a user and a time predicate and add the scope
+    (`calendarSourceScope()`), the dedupe (`dedupeCalendarEvents`) and the cap
+    after the dedupe. The caller cannot forget the scope or widen the user: the
+    `where` is composed after its predicate. While the linked sync is off no
+    linked row is visible and nothing can be a copy, so the queries are the ones
+    the readers always ran (a count stays a database count, a cap stays a
+    database `take`); rows are fetched and merged only once copies can exist, with
+    no `take`, bounded by the sync itself (30 days, 100 events per calendar).
+    `pim/calendar-read-format.ts` holds the pure shaping for the model.
+  - `list_events`, flag on: the next events that have not ended yet, from rows,
+    scoped and deduped, `max_results` applied after the dedupe, and bounded: rows
+    starting within a month either side of now, so the read can neither load
+    every future row nor scan the user's whole past (the lower `startTime` bound
+    is what keeps the (userId, startTime) index range finite). Each event keeps
+    the old shape (id, summary, start, end, location, description, all wrapped as
+    untrusted) and adds `allDay`, `provider` and `readOnly`. A timed event is
+    written as an offset-bearing local time, as Google wrote it to the live call.
+    An all-day event is stored as UTC midnight of its dates (end exclusive), so
+    its dates are read off the UTC instant, never in the user's zone (west of UTC
+    that put it a day early); it stays "upcoming" through the end of its last date
+    in the user's zone. A linked calendar's event is `readOnly` and has `id:
+    null`: `delete_event` works on the primary calendar only, so an id it cannot
+    honour would invite a delete that cannot work. A local-only event also has
+    `id: null` (Google has no copy). The primary connection is still checked (a
+    local read, no Google call) so the live path's reconnect prompt survives: no
+    connection and no rows is main's not-connected error; no connection with rows
+    is the events plus a `warning` with the same prompt, since they are a stale
+    copy. The connection check can itself throw (a database failure): that counts
+    as "not connected" and never replaces rows already read. A failed row read is
+    an `{ error }`, never a throw.
+  - `check_calendar_conflicts`, flag on: timed rows overlapping the window (scope,
+    dedupe, `provider` and `readOnly` per entry) plus the live free/busy answer the
+    check always gave, primary and linked. An entry carries the interval, a
+    calendar label (`primary` or `linked`), `provider` and `readOnly`, and no
+    title: the answer says when the user is busy, like free/busy, and never hands
+    the agent the name of a meeting on a linked (work) calendar (`create_event`'s
+    skipped echo also drops the `summary` of a linked entry). The degraded
+    primary-only path (a 403 for a token without `calendar.readonly`) no longer
+    returns the raw invite title either, flag off or on: a deliberate change to
+    main's output, as the title is external content. Bounds: at most 100
+    rows (after the dedupe), a window of at most a month for the rows (free/busy
+    still gets the whole window), a lower `startTime` bound of a month before it.
+    Google reports busy time merged, so two adjacent meetings come back as one
+    block: a block is accounted for when the rows, joined the same way, cover it,
+    and is dropped; every other block stays, because free/busy sees what rows do
+    not (calendars the sync does not mirror, changes newer than the last sync).
+    The not-connected and invalid-range answers are main's and come before any row
+    is read. A failed row read throws, like any other unexpected failure here: the
+    check never answers "free" on half the evidence, and `create_event` already
+    aborts on a throw. The thrown message is a constant; the tool executor hands
+    an error's message to the model and to MCP clients, so the database's own
+    message is only logged. All-day rows are left out on purpose: free/busy treats an
+    all-day marker (birthday, holiday) as free time, as `summarizeConflicts` always
+    did for the primary-only fallback. Attendee free/busy (`checkAttendeeBusy`,
+    `getAttendeeBusyBlocks`, `getAttendeeBusyByMember`) is untouched and stays
+    live: attendees have no rows (tested with the flag on).
+  - Reach of the flag: it changes `listEvents` and `checkConflicts` for every
+    caller, not only the chat and MCP tools: the autonomous agent's `list_events`
+    and `check_calendar_conflicts`, `create_event`'s enforced conflict check (a
+    booking is refused on a row conflict, a stale one included) and the reading
+    pane's meeting-context conflict line. Documented in `config.ts` and
+    `.env.example`.
+  - Freshness trade-off, stated in both tool descriptions while the flag is on:
+    rows are a synced copy, refreshed by the scheduler about every 15 minutes
+    (`SCHEDULER_CALENDAR_SYNC_INTERVAL_MS`, default 15 min) for the next 30 days
+    and at most 100 events per calendar. An event created or moved in the last 15
+    minutes may not show in `list_events`; the conflict check sees it only through
+    free/busy. The descriptions also say that an event deleted or cancelled in
+    Google can still be listed until the sync removes it. Two consequences to weigh
+    before the flip, inherited from the sync, not new: (1) a row is not removed
+    when its event is deleted or cancelled upstream, except for Google once
+    `CALENDAR_CANCELLATION_SYNC_ENABLED` is on, where C2b (C2, above) removes it on
+    the next sync; the Outlook and CalDAV connectors must do the same
+    (`listCancelledEvents`, a call separate from the sync listing, so deletions
+    never spend its cap). Until then, and for a connector without it, `list_events` can
+    still list such an event until it ends, and a booking that overlaps it is
+    refused by the conflict check (free/busy cannot override a row conflict); the
+    Calendar page and the desktop app already show those rows today. (2) A row
+    stores neither transparency nor the user's response, so a timed event marked
+    free, or one the user declined, is a conflict from its row while free/busy
+    would ignore it. Fixing (2) needs columns the sync fills (`transparency`,
+    response status); that is not in C7. Recommendation: do not flip the flag until
+    the sync removes vanished events for the providers in use (for Google, C2b's
+    flag on after its live check, also a founder action), and weigh (2). A
+    founder decision.
+  - The C2 gaps, closed regardless of the flag (they only matter while linked rows
+    are visible): the `/api/ops` events-today count, the interaction-graph meeting
+    count (it only uses `> 0` today), the weekly-review meeting count and the
+    tomorrow list in `proactive-actions.ts` (the cap of 5 applies after the
+    dedupe), and the briefing caps: `listLocalBriefingEvents` (20) and the day
+    shape (50), whose query no longer carries the cap while copies can exist. Each
+    goes through the read path; with no linked row the outputs are identical to
+    main's (tests per reader, including the query shape while the linked sync is
+    off). `calendar-provider-writers-guard.test.ts` now requires those modules to
+    read through the path and nothing but the GDPR export to return every row.
+  - Clients. `/api/calendar` (list and `:id`) and `/today/summary` add
+    `sourceLabel` (the linked account's email) on a linked row, next to C2's
+    `readOnly: true`; one lookup per response, none when no row is linked (the
+    primary calendar's JSON stays byte-identical), and a failed lookup drops the
+    labels, never the list. The web agenda and event page show the label (or
+    "Linked", a blank label counts as none) with a visible "Read-only" text, and
+    hide delete on a `readOnly` row (the web has no edit); the Mac app's event
+    popover hides edit and delete, shows the label with a visible "Read-only" text
+    (not only for VoiceOver), and
+    `beginEditingEvent` / `deleteEvent` refuse a read-only row as well. The two
+    new Swift fields are optional, so a row from an older server still decodes
+    (self-check). Strings: 7 web locales (parity guard) and 7 `.lproj` files.
+  - Per-provider kill switch. `calendarSourceScope()` and `isCalendarRowVisible()`
+    take an optional map of provider to "is its connector enabled" (default
+    `CALENDAR_PROVIDER_ENABLED`, exported from `pim/calendar-scope.ts`; C4
+    registered OUTLOOK in it). A connector registers its flag with one entry (C4: `OUTLOOK:
+    outlookCalendarEnabled`); its rows are then visible only while that flag is on,
+    whatever the Google linked flag says, for every reader and by id. GOOGLE keeps
+    `LINKED_CALENDAR_SYNC_ENABLED`; LOCAL is always visible. With nothing
+    registered the fragment is exactly what it was (`{ sourceAccountId: null }` or
+    `{}`), so a provider with no connector costs no clause. The fragment uses the
+    top-level keys `sourceAccountId`, `provider` and `OR`; a caller wraps an `OR`
+    of its own in `AND: [...]`. Tested with a fake provider flag.
+  - Calendar text to an LLM is wrapped. An event's title, description, location,
+    meeting link and attendees are external content. Audited: `agent-context.ts`
+    (the upcoming list, the link, the meeting hint), `briefing.ts` (the prompt's
+    events, and the calendar-sourced signals through `pim/briefing-prompt-wrap.ts`:
+    a calendar action is wrapped as a whole field, never found-and-replaced inside
+    other text, and the "shared terms" tokens of a link reason are wrapped),
+    `create_event`'s "already exists" skip and `get_upcoming_meetings` (live
+    Google: summary, link and attendees, wrapped at the tool boundary;
+    `join_meeting` strips the wrapper from a link the model copies back). The
+    user-visible renderings (`listLocalBriefingEvents`, the rule-based fallback,
+    the notifications) keep the clean text, and the cross-link matching still reads
+    it. The reverse direction: tags that come back out. A tool result is stored
+    and shown as text (`ActionOutbox.result`, `PendingAction.result`, the approve
+    route's response), so `action-outbox.ts` strips `<untrusted_content>` tags once,
+    where the result enters it. The briefing system prompt carries the standard
+    untrusted-content rule and forbids repeating the tags, and the briefing text
+    is stripped before it is saved and before the notification and push use it.
+    `meeting-context.ts` already wrapped. `proactive-actions`, `inbox-summary`,
+    `briefing-structure`, `focus-digest`, `meeting-prep-pack`, `team-availability`
+    and the interaction graph import nothing from the LLM, statically or
+    dynamically; `routes/calendar.ts` reaches the model only through `event-parse`
+    (the user's own utterance, no row) and `routes/ops.ts` only reads provider
+    cooldowns. The writers guard pins those lists and the import detector.
+    Not done here: the nesting escape of `wrapUntrusted` itself
+    (`</untrusted_</untrusted_content>content>`) is fixed in `untrusted.ts` in a
+    separate change.
+  - Decision, the cross-calendar key: (provider, externalId) stays the dedupe key.
+    An iCalUID column (expand migration plus backfill, and the sync writing it) is
+    not added here: it changes the schema and the writers, and its value is for
+    copies across providers, which do not exist until C3 and C4 land. The known
+    limit from C2 stands: two accounts whose copies of an invite got different
+    event ids still show it twice. Revisit with the first non-Google connector.
+  - Not verified: every test mocks Prisma, so the flag was never on against a
+    real database, and the query cost of the row reads was not measured.
+- Exit: flag OFF; no user-visible change except the additive `sourceLabel` field
+  on linked rows, which exist only while the C2 flag is on. Nothing is flipped.
+- Rollback: revert the PR. There is no schema or data step.
+
+#### Security follow-ups
+
+- Meeting links (done, 2026-09-30): the web and Mac clients open a `meetingLink` only when it is an https URL with no userinfo (#1348). The server applies the same rule before a link is stored or handed on: C4's Outlook normaliser is now the shared `safeMeetingLink` in `pim/meeting-link.ts` (absolute https, no userinfo, normalised, at most 2048 characters, else null), used by Outlook unchanged, by Google's conferenceData `uri` / `hangoutLink` (`googleMeetingLinkOf`, so sync rows, linked accounts and every `listEvents` read), by `getUpcomingMeetings` including its description/location regex, and by `POST /api/calendar`. An unsafe first candidate falls back to the next safe one. `joinMeeting`'s host allowlist is unchanged and still applies on top. Rows already stored with an unsafe link are rewritten by the next sync inside its 30-day window; LOCAL rows created earlier through the route are not rewritten.
 
 ### Workstream D — drive
 
@@ -1705,6 +2560,7 @@ time, whatever the graph says. The later step rebases, reruns
 | `mail/imap-connection.ts`, `mail/imap-sync.ts`, `mail/providers/imap.ts` | B1, B2, B3 |
 | `mail/providers/outlook.ts`, `routes/email-replies.ts` | B0b, the `gmail-draft` follow-up under B0 |
 | `mail/reply-headers.ts` | B0, B3 |
+| `pim/calendar.ts`, `pim/calendar-read.ts`, `routes/calendar.ts` | C3, C4, C5, C6, C7 |
 | web locale files | every step with UI copy |
 
 ## Founder actions
@@ -1719,7 +2575,7 @@ time, whatever the graph says. The later step rebases, reruns
 | FA-6 | Confirm whether hosting mail requires a value-added telecommunications filing in Korea. Unverified | E3 |
 | FA-7 | Create the object storage account | D1 |
 | FA-8 | Run the Samsung calendar probe on a Galaxy device and record the result here | C5 |
-| FA-9 | Azure app registration (existing action B). That action lists `Mail.*` permissions only; calendar and file permissions must be added for C4 and D6 | B5, C4, D6 |
+| FA-9 | Azure app registration (existing action B). That action lists `Mail.*` permissions only; calendar and file permissions must be added for C4 and D6. For C4: add delegated `Calendars.Read` (and `User.Read` if it is not already listed); the calendar link requests exactly `openid email offline_access User.Read Calendars.Read`, reuses the existing redirect URI, and asks for no `Mail.*`. Existing inbox links keep their consent unchanged | B5, C4, D6 |
 
 ## Cross-cutting rules
 
