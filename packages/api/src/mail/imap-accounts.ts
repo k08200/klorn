@@ -22,6 +22,7 @@ import {
   pollFailureKind,
   shouldReportPollFailure,
 } from "./imap-poll-failures.js";
+import { beginPoll, endPoll, isPollInFlight, noteSkippedPoll } from "./imap-poll-inflight.js";
 import type { ImapProviderConfig } from "./imap-providers.js";
 import { syncImapInbox, syncImapMessage } from "./imap-sync.js";
 import { canonicalUidValidity } from "./imap-uidvalidity.js";
@@ -40,11 +41,27 @@ export interface ImapSyncAggregate {
 }
 
 /**
- * The accounts whose poll is running right now (every provider). A tick that finds an
- * account here skips it: the same mailbox is never logged into twice at once, and a
- * stuck account blocks neither the other accounts nor the next tick.
+ * A tick that finds an account's previous poll still running skips it (imap-poll-inflight
+ * .ts, every provider): the same mailbox is never logged into twice at once, and a stuck
+ * account blocks neither the other accounts nor the next tick. The skip says so: a
+ * rate-limited warning, and one Sentry report if the poll has been running for far longer
+ * than any poll should. Only the row id is named, never the address.
  */
-const pollsInFlight = new Set<string>();
+function surfaceSkippedPoll(rowId: string, userId: string, scope: string): void {
+  const skipped = noteSkippedPoll(rowId);
+  if (!skipped) return;
+  if (skipped.warn) {
+    console.warn(
+      `[${scope}] poll skipped — row ${rowId} is still in flight after ${Math.round(skipped.ageMs / 1000)}s`,
+    );
+  }
+  if (skipped.report) {
+    captureError(new Error("IMAP poll stuck in flight"), {
+      tags: { scope: `${scope}.poll-stuck` },
+      extra: { userId, linkedInboxAccountId: rowId, inFlightMs: skipped.ageMs },
+    });
+  }
+}
 
 /** The credential the shared auth cooldown is keyed by: the same string the actions use. */
 const credentialKeyOf = (rowId: string, passwordCipher: string): string =>
@@ -151,9 +168,12 @@ export async function syncImapAccountsForUser(
     // Generic IMAP only (step B4): the poll must not re-send a rejected password.
     const userHost = provider.hostPolicy === "user-supplied";
     const credentialKey = credentialKeyOf(row.id, checked.passwordCipher);
-    if (pollsInFlight.has(row.id)) continue; // its previous poll is still running
+    if (isPollInFlight(row.id)) {
+      surfaceSkippedPoll(row.id, userId, scope); // its previous poll is still running
+      continue;
+    }
     if (userHost && isPausedForPolling(row, credentialKey)) continue;
-    pollsInFlight.add(row.id);
+    beginPoll(row.id);
     try {
       const result = await syncImapInbox({
         provider,
@@ -204,7 +224,7 @@ export async function syncImapAccountsForUser(
         extra: { userId, linkedInboxAccountId: row.id },
       });
     } finally {
-      pollsInFlight.delete(row.id);
+      endPoll(row.id);
     }
   }
   return total;
