@@ -57,7 +57,8 @@ export function decodeXmlText(text: string): string {
       const code = Number.parseInt(digits, hex ? 16 : 10);
       return code <= MAX_CODE_POINT ? String.fromCodePoint(code) : badXml();
     }
-    return NAMED_ENTITIES[entity] ?? badXml();
+    // Own keys only: `&constructor;` must not find the object prototype's.
+    return Object.hasOwn(NAMED_ENTITIES, entity) ? (NAMED_ENTITIES[entity] as string) : badXml();
   });
 }
 
@@ -82,59 +83,80 @@ function skipMarkup(xml: string, at: number): number {
   return -1;
 }
 
+interface ParseState {
+  readonly xml: string;
+  readonly root: XmlNode;
+  readonly stack: Array<{ node: XmlNode; qualified: string }>;
+  at: number;
+}
+
+const MAX_TAG_LENGTH = 4096;
+const CDATA_OPEN = "<![CDATA[";
+const CDATA_CLOSE = "]]>";
+
+/** Text up to the next `<`, into the open element (only whitespace outside the root). */
+function readText(state: ParseState, lt: number): void {
+  const text = state.xml.slice(state.at, lt === -1 ? state.xml.length : lt);
+  if (state.stack.length === 1 && text.trim() !== "") badXml();
+  state.stack[state.stack.length - 1].node.text += decodeXmlText(text);
+  state.at = lt === -1 ? state.xml.length : lt;
+}
+
+/** A `<?..?>`, comment or CDATA section at `at`; false when it is none of them. */
+function readSpecial(state: ParseState): boolean {
+  const skipped = skipMarkup(state.xml, state.at);
+  if (skipped !== -1) {
+    state.at = skipped;
+    return true;
+  }
+  if (!state.xml.startsWith(CDATA_OPEN, state.at)) return false;
+  const end = state.xml.indexOf(CDATA_CLOSE, state.at);
+  if (end === -1 || state.stack.length === 1) badXml();
+  state.stack[state.stack.length - 1].node.text += state.xml.slice(
+    state.at + CDATA_OPEN.length,
+    end,
+  );
+  state.at = end + CDATA_CLOSE.length;
+  return true;
+}
+
+/** An opening, closing or self-closing tag at `at`. */
+function readTag(state: ParseState): void {
+  // DOCTYPE, ENTITY and every other declaration are refused (the tag grammar below
+  // refuses them too; this says so).
+  if (state.xml.startsWith("<!", state.at)) badXml();
+  const match = TAG.exec(state.xml.slice(state.at, state.at + MAX_TAG_LENGTH));
+  if (!match) badXml();
+  const [whole, closing, qualified, rawAttrs, selfClosing] = match;
+  state.at += whole.length;
+  if (closing === "/") {
+    const open = state.stack.pop();
+    if (!open || state.stack.length === 0 || open.qualified !== qualified) badXml();
+    return;
+  }
+  const node: XmlNode = {
+    name: localName(qualified),
+    attrs: parseAttributes(rawAttrs ?? ""),
+    children: [],
+    text: "",
+  };
+  if (state.stack.length === 1 && state.root.children.length > 0) badXml();
+  state.stack[state.stack.length - 1].node.children.push(node);
+  if (selfClosing === "/") return;
+  if (state.stack.length > MAX_DEPTH) badXml();
+  state.stack.push({ node, qualified });
+}
+
 /** Parse a whole document; answers its root element. */
 export function parseXml(xml: string): XmlNode {
   const root: XmlNode = { name: "#document", attrs: {}, children: [], text: "" };
-  const stack: Array<{ node: XmlNode; qualified: string }> = [{ node: root, qualified: "" }];
-  let at = 0;
-  while (at < xml.length) {
-    const current = stack[stack.length - 1].node;
-    const lt = xml.indexOf("<", at);
-    if (lt === -1 || lt > at) {
-      const text = xml.slice(at, lt === -1 ? xml.length : lt);
-      if (stack.length === 1 && text.trim() !== "") badXml();
-      current.text += decodeXmlText(text);
-      if (lt === -1) break;
-      at = lt;
-      continue;
-    }
-    const skipped = skipMarkup(xml, at);
-    if (skipped !== -1) {
-      at = skipped;
-      continue;
-    }
-    if (xml.startsWith("<![CDATA[", at)) {
-      const end = xml.indexOf("]]>", at);
-      if (end === -1 || stack.length === 1) badXml();
-      current.text += xml.slice(at + 9, end);
-      at = end + 3;
-      continue;
-    }
-    // DOCTYPE, ENTITY and every other declaration: refused.
-    if (xml.startsWith("<!", at)) badXml();
-    const match = TAG.exec(xml.slice(at, at + 4096));
-    if (!match) badXml();
-    const [whole, closing, qualified, rawAttrs, selfClosing] = match;
-    at += whole.length;
-    if (closing === "/") {
-      const open = stack.pop();
-      if (!open || stack.length === 0 || open.qualified !== qualified) badXml();
-      continue;
-    }
-    const node: XmlNode = {
-      name: localName(qualified),
-      attrs: parseAttributes(rawAttrs ?? ""),
-      children: [],
-      text: "",
-    };
-    if (stack.length === 1 && root.children.length > 0) badXml();
-    current.children.push(node);
-    if (selfClosing !== "/") {
-      if (stack.length > MAX_DEPTH) badXml();
-      stack.push({ node, qualified });
-    }
+  const state: ParseState = { xml, root, stack: [{ node: root, qualified: "" }], at: 0 };
+  while (state.at < xml.length) {
+    const lt = xml.indexOf("<", state.at);
+    if (lt !== state.at) readText(state, lt);
+    else if (!readSpecial(state)) readTag(state);
   }
-  if (stack.length !== 1 || root.children.length !== 1) badXml();
+  if (state.stack.length !== 1 || root.children.length !== 1) badXml();
   return root.children[0];
 }
 

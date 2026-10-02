@@ -114,6 +114,18 @@ export interface CalendarCollections {
   readonly calendars: readonly URL[];
   /** True when the account has more calendars than CALDAV_MAX_CALENDARS. */
   readonly truncated: boolean;
+  /**
+   * Collections under the home whose type could not be read (no resourcetype in a
+   * 200 propstat, or an error status for the whole entry). Any of them may be an
+   * event calendar that was not fetched, so a listing is incomplete while this is
+   * above zero.
+   */
+  readonly unclassified: number;
+}
+
+/** True when the entry's resourcetype was read (a 200 propstat carries it). */
+function hasReadableType(entry: XmlNode): boolean {
+  return okProps(entry).some((prop) => firstChild(prop, "resourcetype") !== undefined);
 }
 
 async function listEventCalendars(conn: CaldavConnection, home: URL): Promise<CalendarCollections> {
@@ -124,17 +136,27 @@ async function listEventCalendars(conn: CaldavConnection, home: URL): Promise<Ca
     body: CALENDARS_BODY,
   });
   const found = new Map<string, URL>();
+  let unclassified = 0;
   for (const entry of responsesOf(response.body)) {
     const href = firstChild(entry, "href")?.text.trim();
-    if (!href) continue;
-    if (!okProps(entry).some(isEventCalendar)) continue;
+    if (!href) {
+      unclassified += 1;
+      continue;
+    }
     const url = new URL(href, response.url);
+    if (!hasReadableType(entry)) {
+      // The home itself says nothing about its children; anything else may be one.
+      if (url.pathname !== home.pathname) unclassified += 1;
+      continue;
+    }
+    if (!okProps(entry).some(isEventCalendar)) continue;
     found.set(url.href, url);
   }
   const sorted = [...found.values()].sort((a, b) => a.href.localeCompare(b.href));
   return {
     calendars: sorted.slice(0, CALDAV_MAX_CALENDARS),
     truncated: sorted.length > CALDAV_MAX_CALENDARS,
+    unclassified,
   };
 }
 
@@ -201,9 +223,13 @@ export async function queryCalendarObjects(
       .flatMap((prop) => descendantsNamed(prop, "calendar-data"))
       .map((node) => node.text)
       .find((text) => text.trim() !== "");
+    // Every response of a calendar-query should carry an object's data. One that
+    // does not, whatever its status (none, 200 without data, 403, 404...), is an
+    // object this listing could not read: counted, so the listing is incomplete and
+    // no row is removed on its account. Conservative on purpose: a server that also
+    // lists the collection itself would keep removal off (check before the flip).
     if (data === undefined) {
-      // The calendar collection itself can be listed with no data; anything else is a miss.
-      if (status === "" || HTTP_OK_LINE.test(` ${status} `)) unreadable += 1;
+      unreadable += 1;
       continue;
     }
     objects.push(data);

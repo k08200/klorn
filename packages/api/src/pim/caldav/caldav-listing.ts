@@ -6,10 +6,12 @@
  * back), then expansion and the window cut here, with the same instants the rows
  * store.
  *
- * Complete means: no calendar was left out (cap), every calendar answered, none was
- * cut short (507), every object was readable, no series ran out of iterations, and
- * no more than `maxResults` occurrences met the window. Only then may the sync
- * remove the window's rows this listing does not have.
+ * Complete means: at least one calendar was found, none was left out (cap), every
+ * collection under the home could be classified (one that could not may be an
+ * event calendar), every calendar answered, none was cut short (507), every object was readable, no
+ * series ran out of iterations, and no more than `maxResults` occurrences met the
+ * window. Only then may the sync remove the window's rows this listing does not
+ * have.
  *
  * Failure: a 401 anywhere throws at once (the app password was revoked; the
  * failure policy flags the account). Another failure of one calendar leaves it out
@@ -80,8 +82,12 @@ export async function listAccountWindow(
     throw gathered.firstError;
   }
   const parsed = occurrencesInWindow(gathered.objects, window, userZone);
+  // An account with no calendar found is never "complete": an empty or odd discovery
+  // answer must not read as "every event was deleted" and empty the window.
   const complete =
+    discovered.calendars.length > 0 &&
     !discovered.truncated &&
+    discovered.unclassified === 0 &&
     gathered.failed === 0 &&
     !gathered.truncated &&
     gathered.unreadable === 0 &&
@@ -91,7 +97,7 @@ export async function listAccountWindow(
   if (!complete) {
     console.warn(
       `[CALDAV] ${conn.provider.provider} listing incomplete (rows are kept): calendars=${discovered.calendars.length}` +
-        ` capped=${discovered.truncated} failed=${gathered.failed} cut=${gathered.truncated || parsed.truncated}` +
+        ` capped=${discovered.truncated} unclassified=${discovered.unclassified} failed=${gathered.failed} cut=${gathered.truncated || parsed.truncated}` +
         ` unreadable=${gathered.unreadable + parsed.unreadable} over=${parsed.occurrences.length > maxResults}` +
         (gathered.firstError ? ` first=${caldavErrorClass(gathered.firstError)}` : ""),
     );

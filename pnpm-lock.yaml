@@ -76,7 +76,7 @@ importers:
         specifier: ^171.4.0
         version: 171.4.0
       ical.js:
-        specifier: ^2.2.1
+        specifier: 2.2.1
         version: 2.2.1
       imapflow:
         specifier: ^1.7.0

@@ -33,6 +33,7 @@ vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
 import {
   bulkEvents,
+  ENDLESS_SECONDLY,
   ICLOUD_ALL_DAY,
   ICLOUD_TIMED,
   MALFORMED,
@@ -183,6 +184,92 @@ describe("listWindow: complete only when nothing was left out", () => {
     const listing = await session.listWindow?.(QUERY);
     expect(listing?.complete).toBe(true);
     expect(listing?.events).toHaveLength(2);
+  });
+
+  it("no calendar found at all: NOT complete (an empty answer must never wipe the window)", async () => {
+    const routes = icloudRoutes({});
+    routes[`PROPFIND ${ICLOUD_PARTITION} ${ICLOUD_HOME_PATH}`] = {
+      status: 207,
+      body: '<multistatus xmlns="DAV:"></multistatus>',
+    };
+    const listing = await (await sessionFor("ICLOUD", fakeCaldavServer(routes))).listWindow?.(
+      QUERY,
+    );
+    expect(listing?.events).toEqual([]);
+    expect(listing?.complete).toBe(false);
+  });
+
+  // A collection whose type discovery could not read may be an event calendar: it
+  // was not fetched, so the listing is not "every calendar".
+  it.each([
+    [
+      "its resourcetype answered 500",
+      `<response><href>${ICLOUD_HOME_PATH}hidden/</href><propstat><prop><resourcetype/></prop><status>HTTP/1.1 500 Internal Server Error</status></propstat></response>`,
+    ],
+    [
+      "the entry answered 403 with no propstat",
+      `<response><href>${ICLOUD_HOME_PATH}hidden/</href><status>HTTP/1.1 403 Forbidden</status></response>`,
+    ],
+  ])("a collection discovery could not classify (%s): NOT complete", async (_case, entry) => {
+    const routes = icloudRoutes({
+      [HOME]: { status: 207, body: icloudReportXml([UTC_WITH_DURATION]) },
+      [WORK]: { status: 207, body: icloudReportXml([]) },
+    });
+    const key = `PROPFIND ${ICLOUD_PARTITION} ${ICLOUD_HOME_PATH}`;
+    const calendars = (routes[key] as { body: string }).body;
+    routes[key] = {
+      status: 207,
+      body: calendars.replace("</multistatus>", `${entry}</multistatus>`),
+    };
+    const listing = await (await sessionFor("ICLOUD", fakeCaldavServer(routes))).listWindow?.(
+      QUERY,
+    );
+    expect(listing?.events.map((e) => e.externalId)).toEqual(["utc-duration@example.com"]);
+    expect(listing?.complete).toBe(false);
+  });
+
+  it("an object answered without its data (404): NOT complete", async () => {
+    const missing = icloudReportXml([UTC_WITH_DURATION]).replace(
+      "</multistatus>",
+      `<response><href>${HOME}gone.ics</href><status>HTTP/1.1 404 Not Found</status></response></multistatus>`,
+    );
+    const server = fakeCaldavServer(
+      icloudRoutes({
+        [HOME]: { status: 207, body: missing },
+        [WORK]: { status: 207, body: icloudReportXml([]) },
+      }),
+    );
+    const listing = await (await sessionFor("ICLOUD", server)).listWindow?.(QUERY);
+    expect(listing?.events.map((e) => e.externalId)).toEqual(["utc-duration@example.com"]);
+    expect(listing?.complete).toBe(false);
+  });
+
+  it("a 507 (the server cut its answer short): NOT complete", async () => {
+    const cut = icloudReportXml([UTC_WITH_DURATION]).replace(
+      "</multistatus>",
+      `<response><href>${HOME}</href><status>HTTP/1.1 507 Insufficient Storage</status></response></multistatus>`,
+    );
+    const server = fakeCaldavServer(
+      icloudRoutes({
+        [HOME]: { status: 207, body: cut },
+        [WORK]: { status: 207, body: icloudReportXml([]) },
+      }),
+    );
+    const listing = await (await sessionFor("ICLOUD", server)).listWindow?.(QUERY);
+    expect(listing?.events.map((e) => e.externalId)).toEqual(["utc-duration@example.com"]);
+    expect(listing?.complete).toBe(false);
+  });
+
+  it("a series the iteration cap cut short: NOT complete", async () => {
+    const server = fakeCaldavServer(
+      icloudRoutes({
+        [HOME]: { status: 207, body: icloudReportXml([ENDLESS_SECONDLY, UTC_WITH_DURATION]) },
+        [WORK]: { status: 207, body: icloudReportXml([]) },
+      }),
+    );
+    const listing = await (await sessionFor("ICLOUD", server)).listWindow?.(QUERY);
+    expect(listing?.events.map((e) => e.externalId)).toEqual(["utc-duration@example.com"]);
+    expect(listing?.complete).toBe(false);
   });
 
   it("one calendar failing: the rest are listed, and the listing is NOT complete", async () => {

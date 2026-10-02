@@ -2116,8 +2116,9 @@ needs FA-9 and the admin guidance from F0.
     the shipped transport: both hosts resolve to public addresses, the TLS handshake
     to the pinned address under the host name succeeds, and a PROPFIND at the root
     answers 401 with no redirect. Nothing past that was checked.
-  - SSRF guard (`pim/caldav/caldav-http.ts`, `caldav-providers.ts`,
-    `net/pinned-host.ts`, `net/ip-policy.ts`). Every request, the base URL and every
+  - SSRF guard (`pim/caldav/caldav-http.ts`, `caldav-providers.ts`, and B4's
+    `mail/host-resolver.ts`, `mail/pinned-address.ts`, `mail/ip-policy.ts`, reused
+    as they are). Every request, the base URL and every
     href and redirect after it, goes through, in order: https only; no userinfo; no
     IP literal (after WHATWG parsing, so `0x7f000001` is caught); port 443 only; a
     host on the provider's own allowlist (iCloud: exactly `caldav.icloud.com` or
@@ -2187,18 +2188,38 @@ needs FA-9 and the admin guidance from F0.
     TZID through its own VTIMEZONE (ical.js, no global registration); none, or a
     floating time, in the user's zone. RRULE/RDATE expansion, EXDATE and
     RECURRENCE-ID overrides (moved, cancelled, and moved INTO the window from a later
-    original time) are ical.js's; `STATUS:CANCELLED` on an event or an override
-    drops it. A series is walked at most 20 000 steps and one listing 200 000 in all
-    (a FREQ=SECONDLY series cannot pin the CPU or starve the next one); running out
-    marks the listing truncated. Anything unreadable is counted, never guessed.
+    original time): ical.js walks RRULE/RDATE only; EXDATEs and overrides are
+    matched here by INSTANT (`ical-events.ts`). ical.js drops a TZID it has no
+    VTIMEZONE for and reads the value as floating, so it missed a UTC RECURRENCE-ID
+    or EXDATE against a TZID start and took an EXDATE at the same wall clock in
+    another zone for a match; every value is now read with the TZID its property
+    was written with (`ical-time.ts`), never the user's zone. A DATE EXDATE still
+    removes a timed occurrence on that date (ical.js's rule for the mixed form).
+    `STATUS:CANCELLED` on an event or an override drops it. Bounds: a series is
+    walked at most 25 000 steps and one listing 200 000 in all (a rule with no
+    COUNT or UNTIL, MINUTELY or SECONDLY, cannot pin the CPU or starve the next
+    one); running out marks the listing truncated. ical.js's own search for the
+    next occurrence has no bound for SECONDLY to WEEKLY rules (`FREQ=DAILY;
+    BYMONTH=2;BYMONTHDAY=30` never returned, synchronously), so
+    `ical-recur-guard.ts` counts its passes, 50 000 per occurrence and 2 000 000
+    per listing; an INTERVAL over 1 000 and more than 10 RRULEs in one VEVENT
+    (10 000 RRULEs in a 340 KB object blocked the event loop 6.5 s) are refused up
+    front. Each makes the object unreadable. BYxxx lists need no bound of ours:
+    ical.js 2.2.1 refuses out-of-range values and keeps distinct values only
+    (tested). The guard patches ical.js's `RecurIterator` prototype, so
+    `package.json` pins `ical.js` to exactly `2.2.1`, and the guard throws at import
+    if the methods it wraps are gone. Anything unreadable is counted, never guessed.
     `meetingLink` is the first `CONFERENCE` or `URL` value `safeMeetingLink` passes
     (https only, `pim/meeting-link.ts`, #1354).
   - Removal of vanished events (`pim/calendar-window-reconcile.ts`). Google never
     removes a row for being absent (C2b). CalDAV may: a time-range query returns
     every object with an instance in the range, so a COMPLETE listing is the
-    window's whole current set. Complete means every calendar answered, none over
-    the calendar cap, no 507 from the server, nothing unreadable, no series cut
-    short, and no more than 100 occurrences. Then, in one transaction, the rows of
+    window's whole current set. Complete means at least one calendar found, every
+    collection under the home classified (a 403 entry or an unreadable
+    `resourcetype` may hide an event calendar), none over the calendar cap, every
+    calendar answered, no 507 from the server, every object response carrying data
+    (any status), nothing unreadable, no series cut short, and no more than 100
+    occurrences. Then, in one transaction, the rows of
     that account (user, provider, source key) inside the window (same overlap rule)
     whose `externalId` the listing lacks AND written before the listing started (so
     a concurrent sync's fresh row is never taken) are deleted, their open or snoozed
@@ -2221,7 +2242,9 @@ needs FA-9 and the admin guidance from F0.
   - Dependency. `ical.js` 2.2.1: 1,021,863 downloads in the week to 2026-09-29, last
     release 2025-08-08, one npm maintainer (Philipp Kewisch, Mozilla Thunderbird),
     zero runtime dependencies, MPL-2.0 (not marked Incompatible With Secondary
-    Licenses, so it combines with AGPL-3.0). Lockfile: +7 lines, one package.
+    Licenses, so it combines with AGPL-3.0). Pinned exactly (`"ical.js": "2.2.1"`,
+    no caret) because the recurrence guard patches its internals. Lockfile: +7
+    lines, one package.
     `pnpm audit --prod`: no known vulnerabilities. Rejected: `tsdav` 2.3.5 (177,473
     a week, MIT, pulls `debug` and `xml-js`, and does its own fetching, which would
     have to be bypassed for the pinned, manual-redirect transport), `node-ical`
@@ -2233,12 +2256,17 @@ needs FA-9 and the admin guidance from F0.
   - No UI. C4 added none for Outlook ("belongs to C7's web and desktop work"), so
     C3 adds none: no web page, no Swift, no locale strings. The routes exist and are
     dark.
-  - Duplicates to dedupe. `net/ip-policy.ts` is a verbatim copy (below its header)
-    of `mail/ip-policy.ts` on the unmerged `feat/generic-imap` (B4), and
-    `net/pinned-host.ts` the same design as its `host-resolver.ts` and
-    `pinned-address.ts`; whichever lands second moves to one module. Main's
-    `notify/is-safe-push-endpoint.ts` `isPrivateIp` (deny list, default-allow IPv6)
-    is a weaker third and should move in the same change.
+  - Shared address policy. B4 landed first (#1353), so C3 dropped its copies
+    (`net/ip-policy.ts`, a verbatim copy of `mail/ip-policy.ts`, its test, and
+    `net/pinned-host.ts`) and imports B4's modules; the CalDAV guard tests run
+    against them. NOT done: main's `notify/is-safe-push-endpoint.ts` `isPrivateIp`
+    (deny list, default-allow IPv6) is a weaker third and should move onto
+    `mail/ip-policy.ts` in its own change.
+  - `time-zone.ts`: one cached `Intl.DateTimeFormat` per zone (at most 1 000), since
+    a long series paid a formatter construction per occurrence. Same output:
+    `wallClockToUtcMs`, `localDayUtcRange`, `localDateKey`, `localMinuteOfDay` and
+    `offsetStringFor` compared against main's file over 14 zones (DST edges, an
+    unknown and an empty zone), 245 560 calls, 0 differences.
   - Known limits. (1) Only ICLOUD and NAVER; no generic CalDAV. (2) The legacy
     `(userId, email)` unique still exists: an Apple ID already linked as a Google or
     Outlook calendar cannot also be linked (generic failure, logged), as in C4.
@@ -2250,7 +2278,11 @@ needs FA-9 and the admin guidance from F0.
     `readSyncTimezone` in `pim/calendar-sync.ts` reads `User.timezone`, which does
     not exist (the zone is on `AutomationConfig`), so every sync passes the default
     `Asia/Seoul`; CalDAV floating times are read in Seoul during the sync, as are
-    Google's offset-less times. `busyBlocks` reads the configured zone.
+    Google's offset-less times. `busyBlocks` reads the configured zone. (7) ical.js
+    2.2.1 does not expand a YEARLY rule with BYHOUR, BYMINUTE or BYSECOND as RFC
+    5545 says (`FREQ=YEARLY;BYHOUR=9,10` gives one time a year; with BYSECOND as well,
+    nothing). Such a series is missing or wrong, the same way every sync, so it never
+    had rows to remove; neither provider's UI writes such a rule.
   - Rollback. Flags never on: revert the PR. Ever on: set
     `CALDAV_CALENDAR_ENABLED` OFF (rows hidden at once), then `DELETE FROM
     "AttentionItem" WHERE "source" = 'CALENDAR_EVENT' AND "sourceId" IN (SELECT "id"

@@ -233,6 +233,17 @@ describe("caldavRequest: redirects are followed by hand, each hop re-validated",
     expect(transport).toHaveBeenCalledTimes(CALDAV_MAX_REDIRECTS + 1);
   });
 
+  it("a Location that is not a URL is refused as malformed, not thrown raw", async () => {
+    const transport = vi.fn<CaldavTransport>(async () => ({
+      status: 302,
+      location: "http://[::1",
+      body: "",
+    }));
+    const err = await errorOf(caldavRequest(connection(transport), PROPFIND));
+    expect(err).toBeInstanceOf(CaldavGuardError);
+    expect((err as CaldavGuardError).code).toBe("malformed");
+  });
+
   it("a redirect without a Location is refused", async () => {
     const transport = vi.fn<CaldavTransport>(async () => ({
       status: 301,

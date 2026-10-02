@@ -159,6 +159,15 @@ async function sendOnce(
   );
 }
 
+/** The next hop, resolved against the URL that answered; a Location that is no URL is refused. */
+function redirectTarget(location: string, from: URL): URL {
+  try {
+    return new URL(location, from);
+  } catch {
+    throw new CaldavGuardError("malformed");
+  }
+}
+
 /**
  * Send one CalDAV request through the guard (see the header). Resolves with a 2xx
  * multistatus answer; throws CaldavGuardError (refused before connecting),
@@ -175,7 +184,7 @@ export async function caldavRequest(
     const response = await sendOnce(conn, url, request);
     if (REDIRECT_STATUSES.has(response.status)) {
       if (!response.location) throw new CaldavGuardError("redirect-without-location");
-      target = new URL(response.location, url);
+      target = redirectTarget(response.location, url);
       continue;
     }
     if (!OK_STATUSES.has(response.status)) throw new CaldavHttpError(response.status);

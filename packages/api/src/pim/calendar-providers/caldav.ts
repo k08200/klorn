@@ -117,6 +117,12 @@ async function listWindow(
   return { events: listing.occurrences, complete: listing.complete, window, listedAt };
 }
 
+/**
+ * The busy occurrences of a window, from a live listing. An INCOMPLETE listing
+ * (one calendar failed, the cap was hit) still answers what it read, on purpose:
+ * the conflict checks treat a thrown account as skipped, which would drop even the
+ * busy time this listing did see. A failure of the whole listing still throws.
+ */
 async function busyOccurrences(
   credentials: Credentials,
   deps: CaldavDeps,

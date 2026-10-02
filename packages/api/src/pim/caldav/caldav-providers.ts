@@ -4,7 +4,7 @@
  * a base URL pinned here. No URL comes from a user or an account row; a generic
  * CalDAV server is a later step.
  *
- * Base URLs (checked 2026-09-30). Neither provider has an official page that names
+ * Base URLs (checked 2026-10-01). Neither provider has an official page that names
  * its CalDAV server; both are the values every third-party client documents:
  *   - iCloud `https://caldav.icloud.com`. Apple's own forums show discovery handing
  *     out per-account partition hosts `pNN-caldav.icloud.com`

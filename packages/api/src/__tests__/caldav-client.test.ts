@@ -79,6 +79,8 @@ describe("parseXml", () => {
     ["<a/><b/>", "two roots"],
     ["text<a/>", "text outside the root"],
     ["<a>&#x110000;</a>", "an out-of-range character reference"],
+    ["<a>&constructor;</a>", "a name only the object prototype knows"],
+    ["<a>&toString;</a>", "another prototype name"],
   ])("refuses %j (%s)", (doc) => {
     expect(() => parseXml(doc)).toThrow(CaldavProtocolError);
   });
@@ -211,6 +213,22 @@ describe("calendar-query REPORT", () => {
       END,
     );
     expect(result.objects).toEqual([NAVER_WEEKLY]);
+  });
+
+  it("an object answered with any other status (404, 403) is unreadable, never silently skipped", async () => {
+    const path = ICLOUD_CALENDARS[0] as string;
+    const body = `<multistatus xmlns="DAV:"><response><href>${path}gone.ics</href><status>HTTP/1.1 404 Not Found</status></response><response><href>${path}secret.ics</href><status>HTTP/1.1 403 Forbidden</status></response></multistatus>`;
+    const server = fakeCaldavServer({
+      [`REPORT ${ICLOUD_PARTITION} ${path}`]: { status: 207, body },
+    });
+    const result = await queryCalendarObjects(
+      conn("ICLOUD", server),
+      new URL(`https://${ICLOUD_PARTITION}${path}`),
+      START,
+      END,
+    );
+    expect(result.objects).toEqual([]);
+    expect(result.unreadable).toBe(2);
   });
 
   it("a 507 response marks the result truncated; a response with no data is unreadable", async () => {
