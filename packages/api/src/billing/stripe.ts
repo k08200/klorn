@@ -231,6 +231,14 @@ export const TOOL_FEATURE_MAP: Record<string, FeatureKey> = {
   read_email: "email_read",
   classify_emails: "email_read",
   mark_read: "email_read",
+  // MCP-only write tool (mcp/set-tier.ts): not in ALL_TOOLS, so this entry only
+  // lets the MCP gate plan-gate it exactly like mark_read.
+  set_tier: "email_read",
+  // MCP-only write tool (mcp/create-draft.ts), not in ALL_TOOLS. Gated by the same
+  // `email_write` feature as send_email, the map the chat's write tools use. MCP
+  // follows this map, so FREE keys cannot draft even while the paywall is off;
+  // the human draft route (`requireEntitled`) admits FREE in that state.
+  create_draft: "email_write",
   send_email: "email_write",
   // Calendar
   list_events: "calendar_read",

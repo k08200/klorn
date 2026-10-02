@@ -153,6 +153,83 @@ describe("POST /api/email/:id/reply", () => {
     await app.close();
   });
 
+  it.each([
+    ["free text with no message id", { messageId: "not a message id" }],
+    ["an empty id", { messageId: "<>" }],
+    ["a non-string id", { messageId: 12345 }],
+    ["an id with whitespace inside", { messageId: "<a b@corp.com>" }],
+  ])("reports threaded=false when getReplyHeaders returns %s (no In-Reply-To can be emitted)", async (_name, headers) => {
+    getReplyHeaders.mockResolvedValue({ ...headers, references: "<a@corp.com>" });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/e1/reply",
+      payload: { body: "hi" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().threaded).toBe(false);
+    await app.close();
+  });
+
+  it("reports threaded=true when a valid message id is present among other text", async () => {
+    getReplyHeaders.mockResolvedValue({ messageId: "Message-ID: <orig@corp.com> (via relay)" });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/e1/reply",
+      payload: { body: "hi" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().threaded).toBe(true);
+    await app.close();
+  });
+
+  it("names no reply target to a header-path provider: the options are exactly the Gmail ones", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/e1/reply",
+      payload: { body: "hi" },
+    });
+    expect(res.statusCode).toBe(200);
+    const options = sendEmail.mock.calls[0][5];
+    expect(options).not.toHaveProperty("replyToProviderMessageId");
+    expect(Object.keys(options).sort()).toEqual([
+      "inReplyTo",
+      "linkedInboxAccountId",
+      "references",
+      "threadId",
+    ]);
+    await app.close();
+  });
+
+  it("reports threaded=true when the provider threaded natively, though no Message-ID header exists", async () => {
+    getReplyHeaders.mockResolvedValue({});
+    sendEmail.mockResolvedValue({ success: true, messageId: null, threaded: true });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/e1/reply",
+      payload: { body: "hi" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().threaded).toBe(true);
+    await app.close();
+  });
+
+  it("does not take the provider's word for a thread it did not report: no header, no native flag, threaded=false", async () => {
+    getReplyHeaders.mockResolvedValue({});
+    sendEmail.mockResolvedValue({ success: true, messageId: null, threaded: false });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/e1/reply",
+      payload: { body: "hi" },
+    });
+    expect(res.json().threaded).toBe(false);
+    await app.close();
+  });
+
   it("reports threaded=false when no RFC Message-ID is found (threadId-only)", async () => {
     getReplyHeaders.mockResolvedValue({});
     const app = await buildApp();

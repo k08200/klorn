@@ -14,17 +14,26 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const imap = vi.hoisted(() => ({
+  ctorOpts: [] as Array<Record<string, unknown>>,
   connect: vi.fn(),
   getMailboxLock: vi.fn(),
   logout: vi.fn(),
+  close: vi.fn(),
+  on: vi.fn(),
   status: vi.fn(),
   fetch: vi.fn(),
+  release: vi.fn(),
 }));
 
 class FakeImapFlow {
+  constructor(opts: Record<string, unknown>) {
+    imap.ctorOpts.push(opts);
+  }
   connect = imap.connect;
   getMailboxLock = imap.getMailboxLock;
   logout = imap.logout;
+  close = imap.close;
+  on = imap.on;
   status = imap.status;
   fetch = imap.fetch;
 }
@@ -75,7 +84,7 @@ function fakeMessages() {
 
 function armImap() {
   imap.connect.mockResolvedValue(undefined);
-  imap.getMailboxLock.mockResolvedValue({ release: () => {} });
+  imap.getMailboxLock.mockResolvedValue({ release: imap.release });
   imap.logout.mockResolvedValue(undefined);
   imap.status.mockResolvedValue({ messages: 2 });
   imap.fetch.mockImplementation(async function* () {
@@ -86,6 +95,7 @@ function armImap() {
 describe("syncImapInbox → shared persist path", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    imap.ctorOpts.length = 0;
     armImap();
   });
 
@@ -182,5 +192,88 @@ describe("syncImapInbox → shared persist path", () => {
     });
 
     expect(result).toEqual({ fetched: 2, inserted: 1, classified: 1, errors: 1 });
+  });
+});
+
+describe("syncImapInbox → connection hygiene", () => {
+  const args = {
+    provider: IMAP_PROVIDERS.NAVER,
+    userId: "u1",
+    email: "me@naver.com",
+    password: "app-pw",
+    host: "imap.naver.com:993",
+    linkedInboxAccountId: "acc-naver",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    imap.ctorOpts.length = 0;
+    armImap();
+    persistGmailEmail.mockResolvedValue({ emailId: "e1", isNew: false });
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  it("keeps the poll's 30 s socket timeout", async () => {
+    await syncImapInbox(args);
+    expect(imap.ctorOpts).toHaveLength(1);
+    expect(imap.ctorOpts[0]).toMatchObject({
+      host: "imap.naver.com",
+      port: 993,
+      secure: true,
+      socketTimeout: 30_000,
+    });
+  });
+
+  it("registers an error listener, so a late socket error cannot crash the process", async () => {
+    await syncImapInbox(args);
+    const listener = imap.on.mock.calls.find(([event]) => event === "error")?.[1];
+    expect(listener).toBeTypeOf("function");
+    expect(() => listener(new Error("read ECONNRESET"))).not.toThrow();
+    const logged = (console.warn as unknown as { mock: { calls: unknown[][] } }).mock.calls
+      .flat()
+      .join("\n");
+    expect(logged).toContain("naver-imap");
+    expect(logged).toContain("acc-naver");
+    expect(logged).not.toContain("app-pw");
+    expect(logged).not.toContain("me@naver.com");
+  });
+
+  it("logs out and releases the lock on success", async () => {
+    await syncImapInbox(args);
+    expect(imap.release).toHaveBeenCalledTimes(1);
+    expect(imap.logout).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes the session when the fetch throws, and still rethrows", async () => {
+    imap.fetch.mockImplementation(() => {
+      throw new Error("socket hang up");
+    });
+    await expect(syncImapInbox(args)).rejects.toThrow("socket hang up");
+    expect(imap.release).toHaveBeenCalledTimes(1);
+    expect(imap.logout).toHaveBeenCalledTimes(1);
+    expect(imap.close).toHaveBeenCalled();
+  });
+
+  it("closes the session when connect() fails, and still rethrows", async () => {
+    imap.connect.mockRejectedValue(new Error("ECONNREFUSED"));
+    imap.logout.mockRejectedValue(new Error("NoConnection"));
+    await expect(syncImapInbox(args)).rejects.toThrow("ECONNREFUSED");
+    expect(imap.close).toHaveBeenCalled();
+  });
+
+  it("closes the session on the empty-mailbox early return", async () => {
+    imap.status.mockResolvedValue({ messages: 0 });
+    const result = await syncImapInbox(args);
+    expect(result).toEqual({ fetched: 0, inserted: 0, classified: 0, errors: 0 });
+    expect(imap.release).toHaveBeenCalledTimes(1);
+    expect(imap.logout).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses to open a socket to a host outside the allowlist", async () => {
+    await expect(syncImapInbox({ ...args, host: "169.254.169.254:993" })).rejects.toThrow(
+      /not allowed/i,
+    );
+    expect(imap.ctorOpts).toHaveLength(0);
+    expect(imap.connect).not.toHaveBeenCalled();
   });
 });

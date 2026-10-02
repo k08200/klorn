@@ -46,6 +46,8 @@ import { db } from "../db.js";
 import type { ActionReceipt } from "../judge/attention-floor.js";
 import { isConnectionError, isKeyLimitError } from "../llm/model-fallback.js";
 import { captureError } from "../sentry.js";
+import { stableStringify } from "../stable-json.js";
+import { stripUntrusted } from "../untrusted.js";
 import { pushNotification } from "../websocket.js";
 import { executeToolCall } from "./tool-executor.js";
 
@@ -88,14 +90,6 @@ export function deriveIdempotencyKey(
 ): string {
   const argsJson = stableStringify(toolArgs);
   return createHash("sha256").update(`${pendingActionId}\n${toolName}\n${argsJson}`).digest("hex");
-}
-
-function stableStringify(value: unknown): string {
-  if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
-  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
-  const obj = value as Record<string, unknown>;
-  const keys = Object.keys(obj).sort();
-  return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`).join(",")}}`;
 }
 
 /**
@@ -257,7 +251,11 @@ async function runOutboxAttempt(
     const args = (
       typeof row.toolArgs === "string" ? JSON.parse(row.toolArgs) : row.toolArgs
     ) as Record<string, unknown>;
-    const result = await executeToolCall(row.userId, row.toolName, args, receipt);
+    // A tool result can carry <untrusted_content> wrappers (they protect the model
+    // that reads it). The result is stored and shown as text to the user, so the
+    // tags come off here, once, for every sink: ActionOutbox.result,
+    // PendingAction.result and the response to the approve route.
+    const result = stripUntrusted(await executeToolCall(row.userId, row.toolName, args, receipt));
 
     // tool-executor swallows non-floor tool failures and returns them as a
     // `{"error":"..."}` string instead of throwing (tool-executor.ts). If the
@@ -282,7 +280,8 @@ async function runOutboxAttempt(
     await onOutboxCompleted(row, result);
     return { kind: "completed", result };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    // Stored and shown as text, like the result above.
+    const message = stripUntrusted(err instanceof Error ? err.message : String(err));
     const transient = isTransientToolError(err);
     const canRetry = transient && attemptNo < row.maxAttempts;
 

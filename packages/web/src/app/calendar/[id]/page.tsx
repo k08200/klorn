@@ -6,6 +6,8 @@ import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../../components/auth-guard";
 import { apiFetch } from "../../../lib/api";
 import { useAuth } from "../../../lib/auth";
+import { useT } from "../../../lib/i18n";
+import { safeMeetingHref } from "../../../lib/meeting-link";
 import { captureClientError } from "../../../lib/sentry";
 
 type Readiness = "ready" | "watch" | "needs_review";
@@ -21,6 +23,10 @@ interface CalendarEvent {
   allDay: boolean;
   color: string | null;
   googleId: string | null;
+  /** Present (true) on a linked calendar's event: a read-only mirror (step C7). */
+  readOnly?: boolean;
+  /** The linked account's email, on a linked event only. */
+  sourceLabel?: string;
 }
 
 interface PrepEmail {
@@ -186,8 +192,29 @@ function ExternalLinkIcon() {
   );
 }
 
+/** The join link, only when it is an https URL (lib/meeting-link). The link is
+ *  invite data anyone can set, so anything else stays inert text, never a link. */
+function MeetingLinkLine({ link }: { link: string }) {
+  const href = safeMeetingHref(link);
+  if (!href) {
+    return <p className="mt-2 break-all text-[12px] text-ink-dim">{link}</p>;
+  }
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="mt-2 inline-flex items-center gap-1 text-[12px] text-accent-deep hover:text-accent-deep"
+    >
+      Join meeting
+      <ExternalLinkIcon />
+    </a>
+  );
+}
+
 function CalendarEventDetail({ id }: { id: string }) {
   const router = useRouter();
+  const { t } = useT();
   const { user } = useAuth();
   const userTimezone = user?.timezone ?? "Asia/Seoul";
   const [event, setEvent] = useState<CalendarEvent | null>(null);
@@ -288,21 +315,19 @@ function CalendarEventDetail({ id }: { id: string }) {
               {event.location && (
                 <p className="mt-1 break-words text-[12px] text-ink-dim">📍 {event.location}</p>
               )}
-              {event.meetingLink && (
-                <a
-                  href={event.meetingLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-2 inline-flex items-center gap-1 text-[12px] text-accent-deep hover:text-accent-deep"
-                >
-                  Join meeting
-                  <ExternalLinkIcon />
-                </a>
+              {event.readOnly && (
+                <p className="mt-1 break-words text-[12px] text-ink-dim">
+                  {event.sourceLabel?.trim() || t("calendar.linkedSource")} ·{" "}
+                  {t("calendar.readOnlyHint")}
+                </p>
               )}
+              {event.meetingLink && <MeetingLinkLine link={event.meetingLink} />}
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
-              {confirmDelete ? (
+              {/* A linked calendar's event is a read-only mirror: the server refuses
+                  the delete (409), so the control is not offered (step C7). */}
+              {event.readOnly ? null : confirmDelete ? (
                 <>
                   <button
                     type="button"

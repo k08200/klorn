@@ -24,6 +24,7 @@
  */
 
 import { prisma } from "../db.js";
+import { NOT_AGENT_SET } from "./agent-tier.js";
 
 export const SILENT_MAX_AGE_DAYS = 14;
 export const QUEUE_MAX_AGE_DAYS = 30;
@@ -75,11 +76,20 @@ export async function sweepAttentionAging(now: Date = new Date()): Promise<Atten
   }
 
   // ── Age-out: low-stakes lanes only. Direct updateMany — no fetch needed.
+  // An MCP agent's lane is exempt (NOT_AGENT_SET, step A2b): otherwise an injected
+  // agent could demote an important old mail to SILENT and have this sweep resolve
+  // it. Acted-elsewhere above is not aging — a mail the user archived stays resolved.
   const silentCutoff = new Date(now.getTime() - SILENT_MAX_AGE_DAYS * DAY_MS);
   const queueCutoff = new Date(now.getTime() - QUEUE_MAX_AGE_DAYS * DAY_MS);
   const [silent, queue] = await Promise.all([
     prisma.attentionItem.updateMany({
-      where: { status: "OPEN", source: "EMAIL", tier: "SILENT", surfacedAt: { lt: silentCutoff } },
+      where: {
+        status: "OPEN",
+        source: "EMAIL",
+        tier: "SILENT",
+        surfacedAt: { lt: silentCutoff },
+        ...NOT_AGENT_SET,
+      },
       data: { status: "RESOLVED", resolvedAt: now },
     }),
     prisma.attentionItem.updateMany({
@@ -89,12 +99,19 @@ export async function sweepAttentionAging(now: Date = new Date()): Promise<Atten
         source: "EMAIL",
         tier: { in: ["QUEUE"] },
         surfacedAt: { lt: queueCutoff },
+        ...NOT_AGENT_SET,
       },
       data: { status: "RESOLVED", resolvedAt: now },
     }),
   ]);
   const nullTier = await prisma.attentionItem.updateMany({
-    where: { status: "OPEN", source: "EMAIL", tier: null, surfacedAt: { lt: queueCutoff } },
+    where: {
+      status: "OPEN",
+      source: "EMAIL",
+      tier: null,
+      surfacedAt: { lt: queueCutoff },
+      ...NOT_AGENT_SET,
+    },
     data: { status: "RESOLVED", resolvedAt: now },
   });
 

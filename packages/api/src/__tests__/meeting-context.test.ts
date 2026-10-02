@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../event-parse.js", () => ({
   parseEventText: vi.fn(),
@@ -91,6 +91,116 @@ describe("getMeetingContext", () => {
     expect(ctx?.nearby).toHaveLength(1);
     expect(ctx?.nearby[0]?.title).toBe("Standup");
     expect(ctx?.timeZone).toBe("Asia/Seoul");
+  });
+
+  it("lists nearby an invite that is in both the primary and a linked calendar once (C2)", async () => {
+    vi.mocked(parseEventText).mockResolvedValueOnce({
+      title: "Meeting with Terry",
+      startTime: "2026-08-13T16:00:00+09:00",
+      endTime: "2026-08-13T17:00:00+09:00",
+    });
+    vi.mocked(checkConflicts).mockResolvedValueOnce({
+      hasConflicts: false,
+      conflicts: [],
+      message: "No conflicts — this time slot is free.",
+    } as never);
+    const { prisma } = await import("../db.js");
+    const standup = (id: string, sourceAccountId: string | null) => ({
+      id,
+      title: "Standup",
+      startTime: new Date("2026-08-13T10:00:00+09:00"),
+      endTime: new Date("2026-08-13T10:15:00+09:00"),
+      allDay: false,
+      provider: "GOOGLE",
+      externalId: "g-standup",
+      sourceAccountId,
+    });
+    vi.mocked(prisma.calendarEvent.findMany).mockResolvedValueOnce([
+      standup("linked-copy", "acct-1"),
+      standup("primary-copy", null),
+    ] as never);
+
+    const ctx = await getMeetingContext("user-1", meetingEmail());
+
+    expect(ctx?.nearby.map((e) => e.id)).toEqual(["primary-copy"]);
+  });
+
+  it("applies the nearby cap AFTER the dedupe: copies of an invite do not spend it (C2)", async () => {
+    process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
+    vi.mocked(parseEventText).mockResolvedValueOnce({
+      title: "Meeting with Terry",
+      startTime: "2026-08-13T16:00:00+09:00",
+      endTime: "2026-08-13T17:00:00+09:00",
+    });
+    vi.mocked(checkConflicts).mockResolvedValueOnce({
+      hasConflicts: false,
+      conflicts: [],
+      message: "No conflicts — this time slot is free.",
+    } as never);
+    // Eight distinct events, each present in the primary and a linked calendar,
+    // ordered by start as the real query returns them, and cut by the query's
+    // `take` exactly as the database would.
+    const rows = Array.from({ length: 8 }, (_, i) =>
+      [null, "acct-1"].map((sourceAccountId) => ({
+        id: `ev-${i}-${sourceAccountId ?? "primary"}`,
+        title: `Event ${i}`,
+        startTime: new Date(`2026-08-13T${String(8 + i).padStart(2, "0")}:00:00+09:00`),
+        endTime: new Date(`2026-08-13T${String(8 + i).padStart(2, "0")}:30:00+09:00`),
+        allDay: false,
+        provider: "GOOGLE",
+        externalId: `g-${i}`,
+        sourceAccountId,
+      })),
+    ).flat();
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.calendarEvent.findMany).mockImplementationOnce((async (args: {
+      take?: number;
+    }) => rows.slice(0, args.take ?? rows.length)) as never);
+
+    const ctx = await getMeetingContext("user-1", meetingEmail());
+
+    expect(ctx?.nearby).toHaveLength(8);
+    expect(new Set(ctx?.nearby.map((e) => e.title)).size).toBe(8);
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+  });
+
+  describe("kill switch (C2)", () => {
+    afterEach(() => {
+      delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+    });
+
+    async function runClashing() {
+      vi.mocked(parseEventText).mockResolvedValueOnce({
+        title: "Meeting with Terry",
+        startTime: "2026-08-13T16:00:00+09:00",
+        endTime: "2026-08-13T17:00:00+09:00",
+      });
+      vi.mocked(checkConflicts).mockResolvedValueOnce({
+        hasConflicts: true,
+        conflicts: [{ start: "x", end: "y", calendar: "primary" }],
+        message: "Found 1 conflicting event(s) in this time range.",
+      } as never);
+      const { prisma } = await import("../db.js");
+      vi.mocked(prisma.calendarEvent.findMany).mockClear();
+      await getMeetingContext("user-1", meetingEmail());
+      return vi
+        .mocked(prisma.calendarEvent.findMany)
+        .mock.calls.map((call) => (call[0] as { where: Record<string, unknown> }).where);
+    }
+
+    it("reads primary and LOCAL rows only, in the alternatives query and the nearby query, while the flag is off", async () => {
+      delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+      const wheres = await runClashing();
+      expect(wheres).toHaveLength(2);
+      for (const where of wheres) expect(where.sourceAccountId).toBeNull();
+    });
+
+    it("does not narrow either query once the flag is on", async () => {
+      process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
+      const wheres = await runClashing();
+      expect(wheres).toHaveLength(2);
+      for (const where of wheres) expect(where).not.toHaveProperty("sourceAccountId");
+    });
   });
 
   it("degrades to conflict:null when the calendar check errors (Google disconnected)", async () => {

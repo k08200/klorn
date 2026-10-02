@@ -12,8 +12,10 @@ type PurgeTx = typeof db;
  * A regression that drops one silently strands user data (this list has
  * regressed before: linked-account OAuth tokens and verbatim email excerpts
  * were surviving). `purge-user-data.test.ts` asserts the required set. Every
- * table below FKs only to `User` (onDelete: Cascade), so delete order is
- * unconstrained.
+ * table below FKs to `User` (onDelete: Cascade). The one other foreign key among
+ * them is CalendarEvent.sourceAccountId -> LinkedCalendarAccount (C2), which also
+ * cascades: deleting an account removes its synced events, and deleting events
+ * never touches an account, so delete order is still unconstrained.
  */
 export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> {
   const scope = { where: { userId } };
@@ -29,6 +31,20 @@ export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> 
   await tx.senderLabel.deleteMany(scope);
   // SentMessage: headers of the user's own sent mail.
   await tx.sentMessage.deleteMany(scope);
+  // ImapMovedMessage: where trash/archive parked the user's Naver and iCloud mail
+  // (folder, UID, subject and Message-ID of each message).
+  await tx.imapMovedMessage.deleteMany(scope);
+  // McpWriteAudit: what an agent changed through the user's API keys — opaque
+  // message ids and argument hashes, no content, but still the user's history.
+  await tx.mcpWriteAudit.deleteMany(scope);
+  // API keys are REVOKED, not deleted: a purged account that re-links Google
+  // must not be readable (or, with write tools on, writable) through a key
+  // minted before the purge. The revoked row is inert — authenticateApiKey
+  // rejects it — and stays so the audit history still names its key.
+  await tx.apiKey.updateMany({
+    where: { userId, revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
 
   await tx.emailAttachment.deleteMany(scope);
   await tx.candidateIntake.deleteMany(scope);

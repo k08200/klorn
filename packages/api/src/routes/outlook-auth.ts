@@ -16,12 +16,18 @@
  * The whole module sits behind OUTLOOK_INBOX_ENABLED via darkRouteGate:
  * while OFF, every route answers Fastify's default 404 (CASA surface
  * freeze), exactly like the iCloud surface in routes/imap-connect.ts.
+ *
+ * Step C4 adds a read-only CALENDAR link on the same OAuth app and callback
+ * (routes/outlook-calendar-link.ts): its own routes behind their own gate
+ * (OUTLOOK_CALENDAR_ENABLED plus this flag), and a calendar state marker that
+ * sends this callback's calendar branch there. The inbox flow below is unchanged.
  */
 
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth, signToken, verifyToken } from "../auth.js";
 import { requireEntitled } from "../billing/entitlement-guard.js";
 import { isEntitled } from "../billing/stripe.js";
+import { outlookCalendarEnabled } from "../config.js";
 import { encryptOptional, encryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
 import {
@@ -32,6 +38,12 @@ import {
 } from "../mail/outlook-oauth.js";
 import { captureError } from "../sentry.js";
 import { darkRouteGate } from "./dark-route-gate.js";
+import {
+  calendarLinkRedirect,
+  completeOutlookCalendarLink,
+  OUTLOOK_CALENDAR_STATE_MARKER,
+  outlookCalendarRoutes,
+} from "./outlook-calendar-link.js";
 
 // Same demo sentinel as routes/auth.ts (module-private there).
 const DEMO_USER_ID = "demo-user";
@@ -61,11 +73,25 @@ const outlookCallbackQuerySchema = {
   },
 } as const;
 
+/** The state a callback carries, when it is a valid state at all: which flow started it. */
+function verifiedStateOf(state: string | undefined): { userId: string; email: string } | null {
+  if (!state) return null;
+  try {
+    return verifyToken(state);
+  } catch {
+    return null;
+  }
+}
+
 export function outlookAuthRoutes(opts: {
   gate: () => boolean;
+  /** Gate of the calendar link (step C4); defaults to OUTLOOK_CALENDAR_ENABLED + OUTLOOK_INBOX_ENABLED. */
+  calendarGate?: () => boolean;
 }): (app: FastifyInstance) => Promise<void> {
+  const calendarGate = opts.calendarGate ?? outlookCalendarEnabled;
   return async function routes(app: FastifyInstance) {
     app.addHook("onRequest", darkRouteGate(opts.gate));
+    await app.register(outlookCalendarRoutes({ gate: calendarGate }));
 
     // POST /link-inbox — start OAuth to link an Outlook account as a full
     // inbox. Pro-gated (multi_account). Short-lived signed state (10 min):
@@ -115,6 +141,11 @@ export function outlookAuthRoutes(opts: {
           console.warn(
             `[outlook-oauth] callback returned provider error (access_denied=${oauthError === "access_denied"})`,
           );
+          // A calendar link lands back on the calendar; anything else, including
+          // a missing or forged state, keeps the inbox marker.
+          if (verifiedStateOf(state)?.email === OUTLOOK_CALENDAR_STATE_MARKER) {
+            return reply.redirect(calendarLinkRedirect(webUrl, "failed"));
+          }
           return reply.redirect(`${webUrl}/settings?inbox=outlook_denied`);
         }
 
@@ -129,6 +160,16 @@ export function outlookAuthRoutes(opts: {
           statePayload = verifyToken(state);
         } catch {
           return reply.code(400).send({ error: "Invalid or expired OAuth state" });
+        }
+        // The calendar link (step C4) is finished by its own module: the marker
+        // decides, and it is only ever in a state this server signed for that flow.
+        if (statePayload.email === OUTLOOK_CALENDAR_STATE_MARKER) {
+          return completeOutlookCalendarLink(reply, {
+            code,
+            userId: statePayload.userId,
+            webUrl,
+            enabled: calendarGate(),
+          });
         }
         // A valid session JWT is NOT a valid link state: the marker must match,
         // or a stolen ordinary token could be replayed into this flow.

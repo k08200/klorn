@@ -1,3 +1,4 @@
+import type { LinkedCalendarAccount } from "@prisma/client";
 import { google } from "googleapis";
 import { MULTI_INBOX_SYNC_ENABLED } from "../config.js";
 import { decryptOptional, decryptToken, encryptOptional, encryptToken } from "../crypto-tokens.js";
@@ -10,6 +11,19 @@ import {
 import { spamIntakeEnabled } from "../ops/feature-flags.js";
 import { captureError } from "../sentry.js";
 import { wrapUntrusted } from "../untrusted.js";
+import {
+  buildPlainTextRawEmail,
+  checkSendRecipient,
+  invalidAddressMessage,
+  isNoReplyAddress,
+  looksLikeEmailAddress,
+} from "./outbound-message.js";
+import type { CreateDraftInput, SendMailOptions } from "./providers/types.js";
+
+// The recipient helpers and the MIME builder moved to ./outbound-message.ts so
+// the IMAP providers share them (step B3). Re-exported: other modules and tests
+// import these two from here.
+export { isNoReplyAddress, safeMimeType } from "./outbound-message.js";
 
 const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
@@ -476,68 +490,67 @@ async function persistRefreshedGoogleToken(
 }
 
 /**
- * OAuth2 clients for every SECONDARY calendar account the user linked. Mirrors
- * getAuthedClient (decrypt + auto-refresh) but returns one client per
- * LinkedCalendarAccount row, tagged with its email. A row whose token can't be
- * decrypted is skipped, not fatal — the primary account and the other linked
- * accounts still work. Read only by checkConflicts.
+ * The OAuth2 client of ONE SECONDARY calendar account the user linked, built from
+ * the LinkedCalendarAccount row the provider seam's dispatcher already loaded (so
+ * a conflict check costs no read per account beyond the listing). Mirrors
+ * getAuthedClient (decrypt + auto-refresh), tagged with the row's id and email. A
+ * row whose token can't be decrypted, or that holds no token at all, answers null
+ * and is flagged for reconnect: the primary account and the other linked accounts
+ * still work. Only called for GOOGLE rows (the dispatcher routes by provider): a
+ * CalDAV row has no OAuth token and an OUTLOOK row is not a Google client.
  */
-export async function getLinkedCalendarClients(
+export function buildLinkedCalendarClient(
   userId: string,
-): Promise<Array<{ client: InstanceType<typeof google.auth.OAuth2>; id: string; email: string }>> {
-  const rows = await prisma.linkedCalendarAccount.findMany({ where: { userId } });
-  const clients: Array<{
-    client: InstanceType<typeof google.auth.OAuth2>;
-    id: string;
-    email: string;
-  }> = [];
-  for (const row of rows) {
-    let accessTokenPlain = "";
-    let refreshTokenPlain: string | null = null;
-    try {
-      accessTokenPlain = row.accessToken ? decryptToken(row.accessToken) : "";
-      refreshTokenPlain = decryptOptional(row.refreshToken);
-    } catch {
-      // Undecryptable token can only be fixed by a re-link — flag it (fire-and-
-      // forget; this loop is sync) so the UI prompts a reconnect, then skip.
-      console.warn(`[GOOGLE] Skipping linked calendar ${row.id} — token decrypt failed`);
-      void markLinkedCalendarForReconnect(userId, row.id).catch((markErr) => {
-        console.error(`[GOOGLE] Failed to flag linked calendar ${row.id} for reconnect:`, markErr);
-        captureError(markErr, { tags: { scope: "gmail.linked-calendar.mark-reconnect" } });
-      });
-      continue;
-    }
-    if (!accessTokenPlain && !refreshTokenPlain) {
-      // Empty tokens (corruption / prior invalidation): flag for reconnect so the
-      // calendar surfaces a re-link prompt instead of silently dropping out of
-      // free/busy (mirror of the decrypt-failure branch above).
-      console.warn(`[GOOGLE] Linked calendar ${row.id} has empty tokens — flagging for reconnect`);
-      void markLinkedCalendarForReconnect(userId, row.id).catch((markErr) => {
-        console.error(`[GOOGLE] Failed to flag linked calendar ${row.id} for reconnect:`, markErr);
-        captureError(markErr, { tags: { scope: "gmail.linked-calendar.mark-reconnect" } });
-      });
-      continue;
-    }
-
-    const oauth2 = getOAuth2Client();
-    oauth2.setCredentials({
-      access_token: accessTokenPlain,
-      refresh_token: refreshTokenPlain,
-      expiry_date: row.expiresAt ? row.expiresAt.getTime() : undefined,
-    });
-    oauth2.on("tokens", async (newTokens) => {
-      try {
-        await persistRefreshedLinkedToken(row.id, userId, newTokens);
-      } catch (err) {
-        console.error(
-          `[GOOGLE] Failed to persist refreshed linked-calendar token for user ${userId}:`,
-          err instanceof Error ? err.message : err,
-        );
-      }
-    });
-    clients.push({ client: oauth2, id: row.id, email: row.email });
+  row: Pick<LinkedCalendarAccount, "id" | "email" | "accessToken" | "refreshToken" | "expiresAt">,
+): { client: InstanceType<typeof google.auth.OAuth2>; id: string; email: string } | null {
+  let accessTokenPlain = "";
+  let refreshTokenPlain: string | null = null;
+  try {
+    accessTokenPlain = row.accessToken ? decryptToken(row.accessToken) : "";
+    refreshTokenPlain = decryptOptional(row.refreshToken);
+  } catch {
+    // Undecryptable token can only be fixed by a re-link — flag it (fire-and-
+    // forget) so the UI prompts a reconnect, then report it unusable.
+    console.warn(`[GOOGLE] Skipping linked calendar ${row.id} — token decrypt failed`);
+    flagLinkedCalendarForReconnect(userId, row.id);
+    return null;
   }
-  return clients;
+  if (!accessTokenPlain && !refreshTokenPlain) {
+    // Empty tokens (corruption / prior invalidation): flag for reconnect so the
+    // calendar surfaces a re-link prompt instead of silently dropping out of
+    // free/busy (mirror of the decrypt-failure branch above).
+    console.warn(`[GOOGLE] Linked calendar ${row.id} has empty tokens — flagging for reconnect`);
+    flagLinkedCalendarForReconnect(userId, row.id);
+    return null;
+  }
+
+  const oauth2 = getOAuth2Client();
+  oauth2.setCredentials({
+    access_token: accessTokenPlain,
+    refresh_token: refreshTokenPlain,
+    expiry_date: row.expiresAt ? row.expiresAt.getTime() : undefined,
+  });
+  oauth2.on("tokens", async (newTokens) => {
+    try {
+      await persistRefreshedLinkedToken(row.id, userId, newTokens);
+    } catch (err) {
+      console.error(
+        `[GOOGLE] Failed to persist refreshed linked-calendar token for user ${userId}:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+  });
+  return { client: oauth2, id: row.id, email: row.email };
+}
+
+function flagLinkedCalendarForReconnect(userId: string, linkedAccountId: string): void {
+  void markLinkedCalendarForReconnect(userId, linkedAccountId).catch((markErr) => {
+    console.error(
+      `[GOOGLE] Failed to flag linked calendar ${linkedAccountId} for reconnect:`,
+      markErr,
+    );
+    captureError(markErr, { tags: { scope: "gmail.linked-calendar.mark-reconnect" } });
+  });
 }
 
 async function persistRefreshedLinkedToken(
@@ -569,7 +582,7 @@ async function persistRefreshedLinkedToken(
   }
 
   // Both writes are scoped by { id, userId } (not id alone): the row id is a
-  // UUID already filtered by userId in getLinkedCalendarClients, but scoping the
+  // UUID already filtered by userId by the dispatcher, but scoping the
   // write too makes this function safe to reuse from any future call site and
   // can never touch another user's row.
   // A successful refresh means the token is healthy again — clear any stale
@@ -946,212 +959,18 @@ export async function readEmail(userId: string, emailId: string) {
   };
 }
 
-/** RFC 5321 hard limit — reject before any parsing to keep validation O(1). */
-const MAX_RECIPIENT_LENGTH = 320;
-
-/**
- * Loose email address validator — we only need to catch agent hallucinations
- * where `to` is a bare domain ("accounts.google.com") or otherwise clearly not
- * an address. Gmail itself does strict RFC validation on send. Implemented
- * with string ops rather than regex because `to` is LLM-generated and we
- * want no regex backtracking on adversarial inputs (CodeQL js/polynomial-redos).
- */
-function extractAddress(raw: string): string {
-  const trimmed = raw.trim();
-  // "Name <addr@host>" form — take whatever is inside the final angle brackets
-  if (trimmed.endsWith(">")) {
-    const open = trimmed.lastIndexOf("<");
-    if (open !== -1) return trimmed.slice(open + 1, -1).trim();
-  }
-  return trimmed;
-}
-
-function looksLikeEmailAddress(raw: string): boolean {
-  if (raw.length > MAX_RECIPIENT_LENGTH) return false;
-  const addr = extractAddress(raw);
-  if (addr.length === 0 || addr.length > MAX_RECIPIENT_LENGTH) return false;
-  const at = addr.indexOf("@");
-  if (at <= 0 || at !== addr.lastIndexOf("@")) return false; // need exactly one @, not at start
-  const local = addr.slice(0, at);
-  const domain = addr.slice(at + 1);
-  if (local.length === 0 || domain.length === 0) return false;
-  if (!domain.includes(".")) return false;
-  // No whitespace in either part
-  for (const part of [local, domain]) {
-    for (let i = 0; i < part.length; i++) {
-      const ch = part.charCodeAt(i);
-      if (ch === 0x20 || ch === 0x09 || ch === 0x0a || ch === 0x0d) return false;
-    }
-  }
-  return true;
-}
-
-/** Local-parts / subdomains that should never receive an auto-reply — responses
- *  either bounce or land in an unmonitored inbox (security-alert /
- *  transactional domains). Matched against extracted address parts, not the
- *  raw input, so there's no regex-on-user-input risk. */
-const NO_REPLY_TOKENS = [
-  "no-reply",
-  "noreply",
-  "do-not-reply",
-  "donotreply",
-  "mailer-daemon",
-  "postmaster",
-  "notification",
-  "notifications",
-  "alert",
-  "alerts",
-  "security",
-];
-
-export function isNoReplyAddress(raw: string): boolean {
-  const addr = extractAddress(raw).toLowerCase();
-  const at = addr.indexOf("@");
-  if (at === -1) return false;
-  const local = addr.slice(0, at);
-  const domain = addr.slice(at + 1);
-  // Check local-part exact match OR any leading subdomain label
-  if (NO_REPLY_TOKENS.includes(local)) return true;
-  for (const label of domain.split(".")) {
-    if (NO_REPLY_TOKENS.includes(label)) return true;
-  }
-  return false;
-}
-
-function encodeSubject(subject: string): string {
-  return `=?UTF-8?B?${Buffer.from(safeHeaderValue(subject)).toString("base64")}?=`;
-}
-
-function safeHeaderValue(value: string): string {
-  return value.replace(/[\r\n]+/g, " ").trim();
-}
-
-function wrapBase64(value: string): string {
-  return value.replace(/.{1,76}/g, "$&\r\n").trimEnd();
-}
-
-function safeAsciiFilename(filename: string): string {
-  const fallback = filename
-    .replace(/[\r\n"]/g, "")
-    .replace(/[^\x20-\x7E]+/g, "_")
-    .trim();
-  return fallback || "attachment";
-}
-
-/**
- * Reduce a client-supplied attachment Content-Type to a clean RFC 2045
- * type/subtype token. `mimeType` is the only attachment value that reaches a
- * MIME header without sanitization; busboy already strips CR/LF (sub-part
- * headers are line-delimited), but this drops parameters, quotes, and any
- * non-token characters so a malformed upload type can't shape the header we
- * emit. Falls back to a safe default when the value isn't a valid type/subtype.
- */
-export function safeMimeType(raw: string): string {
-  const token = safeHeaderValue(raw).split(";")[0].trim().toLowerCase();
-  const cleaned = token.replace(/[^a-z0-9!#$&^_.+/-]/g, "");
-  return /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/.test(cleaned)
-    ? cleaned
-    : "application/octet-stream";
-}
-
-interface ThreadingHeaders {
-  inReplyTo?: string;
-  references?: string;
-}
-
-/** RFC822 threading headers, CR/LF-stripped so a fetched value can't inject. */
-function threadingHeaderLines(headers?: ThreadingHeaders): string[] {
-  const lines: string[] = [];
-  if (headers?.inReplyTo) lines.push(`In-Reply-To: ${safeHeaderValue(headers.inReplyTo)}`);
-  if (headers?.references) lines.push(`References: ${safeHeaderValue(headers.references)}`);
-  return lines;
-}
-
-function buildPlainTextRawEmail(
-  to: string,
-  subject: string,
-  body: string,
-  attachments: GmailDraftAttachment[] = [],
-  threading?: ThreadingHeaders,
-): string {
-  const threadLines = threadingHeaderLines(threading);
-  if (attachments.length === 0) {
-    return Buffer.from(
-      [
-        `To: ${safeHeaderValue(to)}`,
-        `Subject: ${encodeSubject(subject)}`,
-        ...threadLines,
-        "MIME-Version: 1.0",
-        "Content-Type: text/plain; charset=utf-8",
-        "Content-Transfer-Encoding: 8bit",
-        "",
-        body,
-      ].join("\r\n"),
-    ).toString("base64url");
-  }
-
-  const boundary = `klorn_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
-  const parts = [
-    `To: ${safeHeaderValue(to)}`,
-    `Subject: ${encodeSubject(subject)}`,
-    ...threadLines,
-    "MIME-Version: 1.0",
-    `Content-Type: multipart/mixed; boundary="${boundary}"`,
-    "",
-    `--${boundary}`,
-    "Content-Type: text/plain; charset=utf-8",
-    "Content-Transfer-Encoding: 8bit",
-    "",
-    body,
-  ];
-
-  for (const attachment of attachments) {
-    const filename = safeHeaderValue(attachment.filename || "attachment");
-    const asciiFilename = safeAsciiFilename(filename);
-    parts.push(
-      `--${boundary}`,
-      `Content-Type: ${safeMimeType(attachment.mimeType)}; name="${asciiFilename}"`,
-      "Content-Transfer-Encoding: base64",
-      `Content-Disposition: attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
-      "",
-      wrapBase64(attachment.content.toString("base64")),
-    );
-  }
-
-  parts.push(`--${boundary}--`, "");
-  return Buffer.from(parts.join("\r\n")).toString("base64url");
-}
-
 export async function sendEmail(
   userId: string,
   to: string,
   subject: string,
   body: string,
   attachments: GmailDraftAttachment[] = [],
-  options?: {
-    threadId?: string | null;
-    inReplyTo?: string;
-    references?: string;
-    linkedInboxAccountId?: string | null;
-  },
+  options?: SendMailOptions,
 ) {
-  // Single recipient only. A comma or semicolon means multiple addresses —
-  // reject it so the angle-bracket display-name trick
-  // (`a@x.com, evil@y.com <legit@z.com>`, whose addr-spec passes the check
-  // below) can't smuggle an extra recipient into the To header.
-  if (to.includes(",") || to.includes(";")) {
-    return { error: "Send to one recipient at a time (no commas or semicolons in the address)." };
-  }
-  if (!looksLikeEmailAddress(to)) {
-    return {
-      error: `Invalid email address: "${to}". Use a full address like local@domain, not a domain such as accounts.google.com.`,
-    };
-  }
-  if (isNoReplyAddress(to)) {
-    return {
-      error: `This address (${to}) is a no-reply system sender, so Klorn will not send a reply.`,
-    };
-  }
+  // Single recipient only, a real address, not a no-reply sender — one guard
+  // shared with the IMAP providers (outbound-message.ts `checkSendRecipient`).
+  const recipientError = checkSendRecipient(to);
+  if (recipientError) return { error: recipientError };
 
   // A message that arrived via a linked secondary inbox lives on THAT
   // account's Gmail, not the primary — sending/threading against the
@@ -1185,20 +1004,9 @@ export async function sendEmail(
   return { success: true as const, messageId: res.data.id, threadId: res.data.threadId ?? null };
 }
 
-export async function createEmailDraft(
-  userId: string,
-  to: string,
-  subject: string,
-  body: string,
-  threadId?: string | null,
-  attachments: GmailDraftAttachment[] = [],
-  linkedInboxAccountId?: string | null,
-) {
-  if (!looksLikeEmailAddress(to)) {
-    return {
-      error: `Invalid email address: "${to}". Use a full address like local@domain, not a domain such as accounts.google.com.`,
-    };
-  }
+export async function createEmailDraft(userId: string, draft: CreateDraftInput) {
+  const { to, subject, body, threadId, attachments = [], linkedInboxAccountId, reply } = draft;
+  if (!looksLikeEmailAddress(to)) return { error: invalidAddressMessage(to) };
   if (isNoReplyAddress(to)) {
     return {
       error: `This address (${to}) is a no-reply system sender. Klorn will not create a Gmail draft.`,
@@ -1211,7 +1019,7 @@ export async function createEmailDraft(
   if (!auth) return { error: "Gmail not connected." };
 
   const gmail = google.gmail({ version: "v1", auth });
-  const raw = buildPlainTextRawEmail(to, subject, body, attachments);
+  const raw = buildPlainTextRawEmail(to, subject, body, attachments, reply);
   let res: { data: { id?: string | null; message?: { id?: string | null } | null } };
   try {
     res = await gmail.users.drafts.create({

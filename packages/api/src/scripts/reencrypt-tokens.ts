@@ -15,8 +15,9 @@
  *      row (by design), e.g. breaking Gmail sync for those users.
  *
  * Covers every encrypted column: UserToken (Google OAuth), the two linked
- * account tables (calendar/inbox OAuth), and the User BYOK/app-secret columns
- * (Naver IMAP password, GitHub PAT, OpenRouter/Gemini keys).
+ * account tables (OAuth tokens plus the CalDAV/IMAP password ciphers), and the
+ * User BYOK/app-secret columns (Naver IMAP password, GitHub PAT,
+ * OpenRouter/Gemini keys).
  *
  * Usage:
  *   cd packages/api && pnpm tsx src/scripts/reencrypt-tokens.ts            # dry run
@@ -131,9 +132,13 @@ function buildSweeps(): FieldSweep[] {
       "LinkedCalendarAccount",
       () =>
         prisma.linkedCalendarAccount.findMany({
-          select: { id: true, accessToken: true, refreshToken: true },
+          // caldavPasswordCipher joined with C1: CalDAV-provider rows carry their
+          // credential there, and a key rotation that skipped it would strand
+          // every CalDAV calendar on the retired key (same lesson as Phase 0b's
+          // imapPasswordCipher below).
+          select: { id: true, accessToken: true, refreshToken: true, caldavPasswordCipher: true },
         }),
-      ["accessToken", "refreshToken"],
+      ["accessToken", "refreshToken", "caldavPasswordCipher"],
       (id, data, guard) =>
         prisma.linkedCalendarAccount.updateMany({ where: { id, ...guard }, data }),
     ),

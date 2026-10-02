@@ -45,6 +45,7 @@ import { extractEmailAddress } from "../mail/email-address.js";
 import { isPublicMailboxDomain } from "../mail/public-mailbox-domains.js";
 import { fetchTriagePriorities } from "../mail/triage-priorities.js";
 import { captureError } from "../sentry.js";
+import { NOT_AGENT_SET } from "./agent-tier.js";
 import { EMPTY_JUDGE_CONTEXT, type JudgeContext } from "./poc-judge.js";
 import { isTier, type Tier } from "./tiers.js";
 
@@ -189,6 +190,9 @@ async function fetchCorrections(
         userId,
         source: "EMAIL",
         isManualOverride: true,
+        // An agent-set tier is never a correction (step A2b). Structurally it
+        // cannot be one (isManualOverride stays false), so this is defence in depth.
+        ...NOT_AGENT_SET,
         tier: { not: null },
         ...(excludeSourceId ? { sourceId: { not: excludeSourceId } } : {}),
       },
@@ -327,7 +331,12 @@ async function fetchSenderItems(
     if (ownIds.length === 0) return [];
 
     return (await db.attentionItem.findMany({
-      where: { userId, source: "EMAIL", sourceId: { in: ownIds } },
+      // Agent-set rows are invisible here (step A2b): the tier is not the judge's
+      // decision and not a human's, so it must not build the unanimous-history
+      // prior that skips the LLM, the tier history shown to the judge, or the
+      // override count. Without this an injected agent could steer a sender's
+      // future mail by moving three of its emails to QUEUE.
+      where: { userId, source: "EMAIL", sourceId: { in: ownIds }, ...NOT_AGENT_SET },
       select: {
         sourceId: true,
         tier: true,

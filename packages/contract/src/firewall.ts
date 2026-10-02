@@ -114,6 +114,13 @@ export interface FirewallItem {
    * email's current bytes — the cached tier may be stale (PR #468 read path).
    */
   hashStale?: boolean;
+  /**
+   * Present (and always `true`) only when an MCP agent set this item's lane
+   * through set_tier, rather than the classifier or the user. Absent otherwise,
+   * so a response for an account without agent-set lanes is unchanged. No client
+   * renders it yet; the activity-log step (A3) or a later UI step does.
+   */
+  agentSet?: true;
 }
 
 export interface FirewallResponse {

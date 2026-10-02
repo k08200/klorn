@@ -97,7 +97,7 @@ describe("rejudgeFallbackItems", () => {
     const summary = await rejudgeFallbackItems("u1", { apply: true, delayMs: 0 });
     expect(summary.changed).toBe(1);
     expect(dbMock.attentionItem.updateMany).toHaveBeenCalledWith({
-      where: { id: "a0", status: "OPEN", isManualOverride: false },
+      where: { id: "a0", status: "OPEN", isManualOverride: false, agentTierSetAt: null },
       data: { tier: "PUSH", tierReason: "Urgent and confident" },
     });
     expect(recordDecisionMock).toHaveBeenCalledWith(
@@ -108,6 +108,21 @@ describe("rejudgeFallbackItems", () => {
         decidedBy: "llm",
       }),
     );
+  });
+
+  it("never targets an item whose lane an MCP agent set (step A2b) — in the read or in the guarded write", async () => {
+    wire();
+    await rejudgeFallbackItems("u1", { apply: true, delayMs: 0 });
+    // Same skip as a human override: the eligible-item query excludes agent-set rows…
+    expect(dbMock.attentionItem.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ isManualOverride: false, agentTierSetAt: null }),
+      }),
+    );
+    // …and the write re-checks it, so an agent change landing between the two loses nothing.
+    expect(dbMock.attentionItem.updateMany.mock.calls[0]?.[0].where).toMatchObject({
+      agentTierSetAt: null,
+    });
   });
 
   it("counts an identical verdict as unchanged (still refreshes the ledger)", async () => {

@@ -21,6 +21,7 @@
  */
 
 import { prisma } from "../db.js";
+import { countCalendarRows } from "../pim/calendar-read.js";
 import { captureError } from "../sentry.js";
 import { remember } from "./memory.js";
 
@@ -316,10 +317,9 @@ async function buildAndCacheGraph(userId: string): Promise<InteractionGraph> {
       orderBy: { receivedAt: "desc" },
       take: 500,
     }),
-    // Count upcoming meetings (used for bonus, not per-contact)
-    prisma.calendarEvent.count({
-      where: { userId, startTime: { gte: now, lte: calendarUntil } },
-    }),
+    // Count upcoming meetings (used for bonus, not per-contact). Through the one
+    // read path: the scope, and an invite in two calendars counted once (C7).
+    countCalendarRows({ userId, when: { startTime: { gte: now, lte: calendarUntil } } }),
     // Known contacts for name resolution
     prisma.contact.findMany({
       where: { userId },

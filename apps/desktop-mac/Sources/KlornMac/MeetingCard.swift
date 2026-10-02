@@ -108,7 +108,7 @@ struct MeetingCard: View {
         HStack {
             Text(L("calendar.startingSoon")).font(.caption2).foregroundStyle(Theme.textDim)
             Spacer()
-            if state.event?.meetingLink != nil {
+            if MeetingLink.safeURL(state.event?.meetingLink) != nil {
                 Button(L("calendar.join"), action: actions.onJoin)
                     .buttonStyle(PrimaryButtonStyle())
             }

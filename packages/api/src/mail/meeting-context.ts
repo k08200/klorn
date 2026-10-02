@@ -20,6 +20,8 @@
 import { prisma } from "../db.js";
 import { parseEventText } from "../event-parse.js";
 import { checkAttendeeBusy, checkConflicts, getAttendeeBusyBlocks } from "../pim/calendar.js";
+import { dedupeCalendarEvents } from "../pim/calendar-dedupe.js";
+import { calendarSourceScope } from "../pim/calendar-scope.js";
 import { type SuggestedSlot, suggestAlternativeSlots } from "../pim/slot-suggest.js";
 import { wrapUntrusted } from "../untrusted.js";
 import { getUserTimeZone } from "../user-timezone.js";
@@ -72,6 +74,8 @@ const PARSE_TEXT_CAP = 800;
 const ALTERNATIVES_WINDOW_MS = 5 * 24 * 60 * 60 * 1000;
 const NEARBY_WINDOW_MS = 12 * 60 * 60 * 1000;
 const NEARBY_MAX_EVENTS = 8;
+/** Rows fetched before the dedupe; bounds the query, not the pane. */
+const NEARBY_FETCH_CAP = NEARBY_MAX_EVENTS * 4;
 
 const cache = new Map<string, { value: MeetingContext; expiresAt: number }>();
 
@@ -189,6 +193,7 @@ export async function getMeetingContext(
             userId,
             startTime: { lte: windowEnd },
             endTime: { gte: windowStart },
+            ...calendarSourceScope(),
           },
           select: { startTime: true, endTime: true },
           take: 200,
@@ -227,17 +232,24 @@ export async function getMeetingContext(
           gte: new Date(start.getTime() - NEARBY_WINDOW_MS),
           lte: new Date(start.getTime() + NEARBY_WINDOW_MS),
         },
+        ...calendarSourceScope(),
       },
       orderBy: { startTime: "asc" },
-      take: NEARBY_MAX_EVENTS,
+      take: NEARBY_FETCH_CAP,
     });
-    nearby = rows.map((row) => ({
-      id: row.id,
-      title: row.title,
-      startTime: row.startTime.toISOString(),
-      endTime: row.endTime.toISOString(),
-      allDay: row.allDay,
-    }));
+    // An invite in both the primary and a linked calendar is two rows (C2);
+    // the pane must list it once, and the display cap applies AFTER that so
+    // copies do not spend it. The busy-interval query above needs no dedupe:
+    // overlapping identical intervals busy the same time.
+    nearby = dedupeCalendarEvents(rows)
+      .slice(0, NEARBY_MAX_EVENTS)
+      .map((row) => ({
+        id: row.id,
+        title: row.title,
+        startTime: row.startTime.toISOString(),
+        endTime: row.endTime.toISOString(),
+        allDay: row.allDay,
+      }));
   } catch (err) {
     console.warn(`[MEETING-CTX] nearby lookup failed for email ${email.id}:`, err);
   }

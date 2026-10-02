@@ -129,6 +129,31 @@ describe("parseMailtoTarget", () => {
     });
   });
 
+  it("refuses a sender-controlled subject or body over the cap, so the caller falls back to the link", async () => {
+    const { parseMailtoTarget, MAX_MAILTO_SUBJECT_LENGTH, MAX_MAILTO_BODY_LENGTH } = await import(
+      "../mail/list-unsubscribe.js"
+    );
+    const at = (subject: string, body: string) =>
+      parseMailtoTarget(
+        `mailto:unsub@acme.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
+      );
+    expect(at("s".repeat(MAX_MAILTO_SUBJECT_LENGTH), "b")).not.toBeNull();
+    expect(at("s".repeat(MAX_MAILTO_SUBJECT_LENGTH + 1), "b")).toBeNull();
+    expect(at("s", "b".repeat(MAX_MAILTO_BODY_LENGTH))).not.toBeNull();
+    expect(at("s", "b".repeat(MAX_MAILTO_BODY_LENGTH + 1))).toBeNull();
+    expect(MAX_MAILTO_SUBJECT_LENGTH).toBeLessThanOrEqual(300);
+    expect(MAX_MAILTO_BODY_LENGTH).toBeLessThanOrEqual(2_000);
+  });
+
+  it("measures the decoded text, not the URI, and ignores a huge query parameter it does not use", async () => {
+    const { parseMailtoTarget } = await import("../mail/list-unsubscribe.js");
+    expect(
+      parseMailtoTarget(
+        `mailto:unsub@acme.com?subject=${"%41".repeat(100)}&cc=${"x".repeat(50_000)}`,
+      ),
+    ).toMatchObject({ subject: "A".repeat(100) });
+  });
+
   it("returns null for junk or non-address targets", async () => {
     const { parseMailtoTarget } = await import("../mail/list-unsubscribe.js");
     expect(parseMailtoTarget("mailto:not an address")).toBeNull();

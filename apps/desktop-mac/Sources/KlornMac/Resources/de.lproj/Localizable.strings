@@ -578,6 +578,9 @@
 "cal.editor.start" = "Beginn";
 "cal.editor.end" = "Ende";
 "cal.editor.location" = "Ort";
+"cal.source.linked" = "Verknüpft";
+"cal.readOnly" = "Nur Lesen";
+"cal.source.a11y" = "Nur Lesen, von %@";
 "cal.save" = "Speichern";
 "cal.save.failed" = "Speichern fehlgeschlagen — erneut versuchen.";
 

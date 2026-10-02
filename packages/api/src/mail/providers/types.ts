@@ -19,10 +19,29 @@ import type { InboxProviderName } from "../inbox-credentials.js";
 export type MailActionUnsupported = { unsupported: true; error: string };
 export type MailActionFailure = { error: string };
 
-export type SimpleMailActionResult = { success: true } | MailActionFailure | MailActionUnsupported;
+/**
+ * `restoredMessageId` is set only by the IMAP untrash and unarchive (step B2): a
+ * MOVE back into INBOX gives the message a NEW UID, so it returns under a new
+ * provider message id, which the route needs to re-sync its local row. Gmail keeps
+ * a message's id, so its results never carry one.
+ */
+export type SimpleMailActionResult =
+  | { success: true; restoredMessageId?: string }
+  | MailActionFailure
+  | MailActionUnsupported;
 
 export type SendMailResult =
-  | { success: true; messageId?: string | null; threadId?: string | null }
+  | {
+      success: true;
+      messageId?: string | null;
+      threadId?: string | null;
+      /**
+       * True only when the provider itself threaded the message to its original
+       * (OUTLOOK's native reply, step B0b). Absent otherwise: a header-path provider
+       * reports threading through the headers it was given, not through this field.
+       */
+      threaded?: boolean;
+    }
   | MailActionFailure
   | MailActionUnsupported;
 
@@ -40,11 +59,44 @@ export interface MailAttachment {
   content: Buffer;
 }
 
-export interface SendMailOptions {
-  threadId?: string | null;
+/**
+ * RFC 5322 threading headers of a reply. Values are untrusted `Message-ID`
+ * text. An implementation that writes them into a header must go through
+ * `mail/reply-headers.ts`, which parses message ids and drops everything else.
+ * Absent means "not a reply": the message carries no threading headers.
+ */
+export interface ReplyThreadingHeaders {
   inReplyTo?: string;
   references?: string;
+}
+
+/**
+ * Names the message being answered, for a provider that threads a reply by the
+ * original's own id instead of by header text (OUTLOOK, step B0b). The value is the
+ * original's `EmailMessage.gmailId`, taken from a row the SERVER resolved for the
+ * caller and their linked account: never from an agent, a request body or a URL.
+ * Callers add it with `replyTargetFor` (reply-target.ts), which adds nothing for a
+ * provider without `nativeReply`, so the options a Gmail or IMAP provider receives
+ * are unchanged.
+ */
+export interface ReplyTarget {
+  replyToProviderMessageId?: string;
+}
+
+export interface SendMailOptions extends ReplyThreadingHeaders, ReplyTarget {
+  threadId?: string | null;
   linkedInboxAccountId?: string | null;
+}
+
+/** Everything `createDraft` needs besides the acting user. */
+export interface CreateDraftInput extends ReplyTarget {
+  to: string;
+  subject: string;
+  body: string;
+  threadId?: string | null;
+  attachments?: MailAttachment[];
+  linkedInboxAccountId?: string | null;
+  reply?: ReplyThreadingHeaders;
 }
 
 /**
@@ -56,6 +108,13 @@ export interface SendMailOptions {
  */
 export interface MailProviderActions {
   readonly provider: InboxProviderName;
+  /**
+   * True when `sendEmail` and `createDraft` thread a reply natively from
+   * `replyToProviderMessageId` (OUTLOOK). Such a provider answers `{}` from
+   * `getReplyHeaders`: its threading does not go through headers. Absent for every
+   * other provider.
+   */
+  readonly nativeReply?: boolean;
   sendEmail(
     userId: string,
     to: string,
@@ -64,15 +123,7 @@ export interface MailProviderActions {
     attachments?: MailAttachment[],
     options?: SendMailOptions,
   ): Promise<SendMailResult>;
-  createDraft(
-    userId: string,
-    to: string,
-    subject: string,
-    body: string,
-    threadId?: string | null,
-    attachments?: MailAttachment[],
-    linkedInboxAccountId?: string | null,
-  ): Promise<CreateDraftResult>;
+  createDraft(userId: string, draft: CreateDraftInput): Promise<CreateDraftResult>;
   getReplyHeaders(
     userId: string,
     messageId: string,

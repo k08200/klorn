@@ -32,6 +32,8 @@
 import { AGENT_MAX_CONTEXT_ITEMS } from "../config.js";
 import { db, prisma } from "../db.js";
 import { isNoReplyAddress } from "../mail/gmail.js";
+import { dedupeCalendarEvents } from "../pim/calendar-dedupe.js";
+import { calendarSourceScope } from "../pim/calendar-scope.js";
 import { captureError } from "../sentry.js";
 import { offsetStringFor } from "../time-zone.js";
 import { wrapUntrusted } from "../untrusted.js";
@@ -114,7 +116,7 @@ export async function gatherUserContext(userId: string): Promise<string> {
 
   const [
     tasks,
-    calendar,
+    calendarRows,
     reminders,
     notes,
     unreadNotifs,
@@ -141,7 +143,8 @@ export async function gatherUserContext(userId: string): Promise<string> {
       }),
     prisma.calendarEvent
       .findMany({
-        where: { userId, startTime: { gte: now, lte: in7d } },
+        // Linked-calendar rows reach the model only while the linked sync is on (C2).
+        where: { userId, startTime: { gte: now, lte: in7d }, ...calendarSourceScope() },
         orderBy: { startTime: "asc" },
         take: MAX_CONTEXT_ITEMS * 2,
       })
@@ -284,6 +287,9 @@ export async function gatherUserContext(userId: string): Promise<string> {
     recentProposalSuppressions,
   );
   const visibleTasks = suppressedTasks.visible.slice(0, MAX_CONTEXT_ITEMS);
+  // An invite in both the primary and a linked calendar is two rows (C2); the
+  // model must see it once.
+  const calendar = dedupeCalendarEvents(calendarRows);
   const suppressedCalendar = filterSuppressedContextItems(
     calendar,
     (e: {
@@ -363,8 +369,12 @@ export async function gatherUserContext(userId: string): Promise<string> {
         });
         const minutesUntil = Math.round((e.startTime.getTime() - now.getTime()) / 60_000);
         const soon = minutesUntil <= 30 && minutesUntil > 0 ? " 🔴 STARTING SOON" : "";
-        const meeting = e.meetingLink ? ` [meeting: ${e.meetingLink}]` : "";
-        return `- ${e.title} @ ${start}${soon}${meeting}`;
+        // The link can come out of an event's description: external content too.
+        const meeting = e.meetingLink
+          ? ` [meeting: ${wrapUntrusted(e.meetingLink, "calendar:meeting-link")}]`
+          : "";
+        // An event title is external content (any invite's author wrote it).
+        return `- ${wrapUntrusted(e.title, "calendar:summary")} @ ${start}${soon}${meeting}`;
       },
     );
     sections.push(`## Upcoming Calendar (next 7 days)\n${calLines.join("\n")}`);
@@ -550,7 +560,7 @@ export async function gatherUserContext(userId: string): Promise<string> {
         if (relatedContacts.length > 0 || relatedTasks.length > 0) {
           const timeLabel =
             minutesUntil < 60 ? `${minutesUntil}min` : `${Math.round(minutesUntil / 60)}h`;
-          let hint = `⚡ Meeting "${event.title}" in ${timeLabel}`;
+          let hint = `⚡ Meeting ${wrapUntrusted(event.title, "calendar:summary")} in ${timeLabel}`;
           if (relatedContacts.length > 0) {
             hint += ` — attendee(s): ${relatedContacts.map((c) => `${c.name}${c.company ? ` (${c.company})` : ""}`).join(", ")}`;
           }

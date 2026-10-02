@@ -14,6 +14,9 @@ import { describe, expect, it, vi } from "vitest";
 const connectFn = vi.fn();
 const getLockFn = vi.fn();
 const logoutFn = vi.fn();
+const closeFn = vi.fn();
+const onFn = vi.fn();
+const ctorOpts: Array<Record<string, unknown>> = [];
 
 class FakeImapFlow {
   public host: string;
@@ -21,10 +24,13 @@ class FakeImapFlow {
   constructor(opts: { host: string; port: number }) {
     this.host = opts.host;
     this.port = opts.port;
+    ctorOpts.push(opts);
   }
   connect = connectFn;
   getMailboxLock = getLockFn;
   logout = logoutFn;
+  close = closeFn;
+  on = onFn;
 }
 
 vi.mock("imapflow", () => ({ ImapFlow: FakeImapFlow }));
@@ -81,17 +87,19 @@ describe("verifyImapCredentials", () => {
   });
 
   it("maps network errors to a host-prefixed message", async () => {
-    connectFn.mockRejectedValueOnce(new Error("ENOTFOUND imap.naver.invalid"));
+    // The host must be an allowlisted one now: createImapClient itself refuses
+    // anything else, so "unreachable host" is modelled with the real host.
+    connectFn.mockRejectedValueOnce(new Error("ENOTFOUND imap.naver.com"));
 
     const result = await verifyImapCredentials({
       provider: IMAP_PROVIDERS.NAVER,
       email: "user@naver.com",
       password: "x",
-      host: "imap.naver.invalid:993",
+      host: "imap.naver.com:993",
     });
 
     expect(result.ok).toBe(false);
-    expect(result.message).toContain("imap.naver.invalid:993");
+    expect(result.message).toContain("imap.naver.com:993");
   });
 
   it("falls back to the raw error message for unknown errors", async () => {
@@ -122,21 +130,70 @@ describe("verifyImapCredentials", () => {
     expect(result.message).toMatch(/app-specific password/);
   });
 
-  it("parses host:port into the right tuple", async () => {
+  it("connects with the 12 s verify timeout and the parsed host and port", async () => {
     connectFn.mockResolvedValueOnce(undefined);
     getLockFn.mockResolvedValueOnce({ release: () => {} });
     logoutFn.mockResolvedValueOnce(undefined);
+    ctorOpts.length = 0;
 
     await verifyImapCredentials({
+      provider: IMAP_PROVIDERS.NAVER,
+      email: "u@n.com",
+      password: "p",
+      host: "imap.naver.com:993",
+    });
+
+    expect(ctorOpts).toHaveLength(1);
+    expect(ctorOpts[0]).toMatchObject({
+      host: "imap.naver.com",
+      port: 993,
+      secure: true,
+      socketTimeout: 12_000,
+    });
+  });
+
+  it("registers an error listener on the verify client", async () => {
+    connectFn.mockResolvedValueOnce(undefined);
+    getLockFn.mockResolvedValueOnce({ release: () => {} });
+    logoutFn.mockResolvedValueOnce(undefined);
+    onFn.mockClear();
+
+    await verifyImapCredentials({
+      provider: IMAP_PROVIDERS.NAVER,
+      email: "u@n.com",
+      password: "p",
+      host: "imap.naver.com:993",
+    });
+
+    expect(onFn.mock.calls.some(([event]) => event === "error")).toBe(true);
+  });
+
+  it("closes the session when the handshake fails", async () => {
+    connectFn.mockRejectedValueOnce(new Error("Authentication failed (AUTH=PLAIN)"));
+    logoutFn.mockRejectedValueOnce(new Error("NoConnection"));
+    closeFn.mockClear();
+
+    const result = await verifyImapCredentials({
+      provider: IMAP_PROVIDERS.NAVER,
+      email: "u@n.com",
+      password: "wrong",
+      host: "imap.naver.com:993",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(closeFn).toHaveBeenCalled();
+  });
+
+  it("returns a failed result (never throws) for a host the client refuses to construct", async () => {
+    ctorOpts.length = 0;
+    const result = await verifyImapCredentials({
       provider: IMAP_PROVIDERS.NAVER,
       email: "u@n.com",
       password: "p",
       host: "custom.example.com:1234",
     });
 
-    // The fake ImapFlow constructor stored the parsed values; we can't
-    // access them from outside, but the absence of a parse error is the
-    // assertion here — a malformed host would throw before connect().
-    expect(connectFn).toHaveBeenCalled();
+    expect(result.ok).toBe(false);
+    expect(ctorOpts).toHaveLength(0);
   });
 });

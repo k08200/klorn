@@ -557,12 +557,12 @@ private struct TodayColumn: View {
                 }
             }
             Spacer(minLength: 0)
-            if event.meetingLink != nil {
+            if MeetingLink.safeURL(event.meetingLink) != nil {
                 Image(systemName: "video").font(.caption).foregroundStyle(Theme.textDim)
                     .accessibilityHidden(true)
             }
         }
-        if let link = event.meetingLink, let url = URL(string: link) {
+        if let url = MeetingLink.safeURL(event.meetingLink) {
             Button { NSWorkspace.shared.open(url) } label: { row }
                 .buttonStyle(.plain)
                 .accessibilityLabel(L("calendar.join.a11y", event.title))
@@ -1173,9 +1173,13 @@ private struct UpcomingEventRow: View {
                     if let location = event.location, !location.isEmpty {
                         Text(location).font(.caption2).foregroundStyle(Theme.textDim).lineLimit(1)
                     }
+                    if let source = calendarEventSourceLabel(event) {
+                        Text(source).font(.caption2).foregroundStyle(Theme.textDim)
+                            .lineLimit(1).truncationMode(.middle)
+                    }
                 }
                 Spacer(minLength: 0)
-                if event.meetingLink != nil {
+                if MeetingLink.safeURL(event.meetingLink) != nil {
                     Image(systemName: "video").font(.caption).foregroundStyle(Theme.textDim)
                         .accessibilityHidden(true)
                 }
@@ -1267,8 +1271,24 @@ private struct EventDetailPopover: View {
                 }
                 .foregroundStyle(Theme.textDim)
             }
+            if let source = calendarEventSourceLabel(event) {
+                HStack(spacing: 5) {
+                    Image(systemName: "link").font(.caption2).accessibilityHidden(true)
+                    // Visible, not only for VoiceOver: why edit and delete are missing.
+                    Text("\(source) · \(L("cal.readOnly"))").font(.caption).lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                .foregroundStyle(Theme.textDim)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(L("cal.source.a11y", source))
+            }
+            // A link MeetingLink.safeURL refuses is shown as inert text, never opened.
+            if let link = event.meetingLink, !link.isEmpty, MeetingLink.safeURL(link) == nil {
+                Text(verbatim: link).font(.caption).foregroundStyle(Theme.textDim)
+                    .lineLimit(2).truncationMode(.middle).textSelection(.enabled)
+            }
             HStack(spacing: 8) {
-                if let link = event.meetingLink, let url = URL(string: link) {
+                if let url = MeetingLink.safeURL(event.meetingLink) {
                     Button(L("calendar.join")) { NSWorkspace.shared.open(url) }
                         .buttonStyle(PrimaryButtonStyle())
                         .accessibilityLabel(L("calendar.join.a11y", event.title))
@@ -1277,18 +1297,21 @@ private struct EventDetailPopover: View {
                 .buttonStyle(.bordered).controlSize(.small)
             }
             .padding(.top, 4)
-            // Edit / delete (2026-09-11) — the server pushes both to Google.
-            HStack(spacing: 8) {
-                Button(L("cal.edit")) { model.beginEditingEvent(event) }
-                    .buttonStyle(.bordered).controlSize(.small)
-                if confirmDelete {
-                    Button(L("cal.delete.confirm")) {
-                        Task { deleteFailed = !(await model.deleteEvent(event)) }
-                    }
-                    .buttonStyle(.bordered).controlSize(.small).tint(Theme.tint(.push))
-                } else {
-                    Button(L("cal.delete")) { confirmDelete = true }
+            // Edit / delete (2026-09-11) — the server pushes both to Google. A linked
+            // calendar's event is a read-only mirror (step C7): neither is offered.
+            if calendarEventIsEditable(event) {
+                HStack(spacing: 8) {
+                    Button(L("cal.edit")) { model.beginEditingEvent(event) }
                         .buttonStyle(.bordered).controlSize(.small)
+                    if confirmDelete {
+                        Button(L("cal.delete.confirm")) {
+                            Task { deleteFailed = !(await model.deleteEvent(event)) }
+                        }
+                        .buttonStyle(.bordered).controlSize(.small).tint(Theme.tint(.push))
+                    } else {
+                        Button(L("cal.delete")) { confirmDelete = true }
+                            .buttonStyle(.bordered).controlSize(.small)
+                    }
                 }
             }
             if deleteFailed {
@@ -2349,13 +2372,13 @@ private struct FullSidebar: View {
             }
             Text(event.title).font(.caption).foregroundStyle(Theme.text).lineLimit(1)
             Spacer(minLength: 0)
-            if event.meetingLink != nil {
+            if MeetingLink.safeURL(event.meetingLink) != nil {
                 Image(systemName: "video").font(.caption2).foregroundStyle(Theme.textDim)
                     .accessibilityHidden(true)
             }
         }
         .padding(.horizontal, 20).padding(.vertical, 3)
-        if let link = event.meetingLink, let url = URL(string: link) {
+        if let url = MeetingLink.safeURL(event.meetingLink) {
             Button { NSWorkspace.shared.open(url) } label: { row }
                 .buttonStyle(.plain)
                 .accessibilityLabel(L("calendar.join.a11y", event.title))
