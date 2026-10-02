@@ -455,13 +455,14 @@ describe.skipIf(!HAS_OPENSSL)("real imapflow, real TLS: a flood of small respons
     await endImapSession(client);
   });
 
-  it("an honest transfer under the budget is untouched (8 messages of 1 MiB)", async () => {
-    const server = await startServer(good, "fetch-flood", 8);
+  it("an honest transfer under the budget is untouched (1 MiB messages, 4 MiB under the budget)", async () => {
+    const honestItems = Math.floor(GENERIC_SESSION_BYTE_BUDGET / MIB) - 4;
+    const server = await startServer(good, "fetch-flood", honestItems);
     aimAt(server, good.cert);
 
     const client = generic();
     await client.connect();
-    await expect(consumeFetch(client)).resolves.toBe(8);
+    await expect(consumeFetch(client)).resolves.toBe(honestItems);
     expect(server.closedConnections()).toBe(0); // still open: nothing cut it
     await endImapSession(client);
   });

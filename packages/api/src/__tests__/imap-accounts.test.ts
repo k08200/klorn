@@ -7,7 +7,13 @@
  * the next, and success stamps lastSyncedAt like the Gmail path does.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  inFlightPollCount,
+  resetPollInFlightState,
+  STUCK_POLL_REPORT_AFTER_MS,
+  STUCK_POLL_WARN_INTERVAL_MS,
+} from "../mail/imap-poll-inflight.js";
 import { IMAP_PROVIDERS } from "../mail/imap-providers.js";
 
 const NAVER = IMAP_PROVIDERS.NAVER;
@@ -17,6 +23,7 @@ const m = vi.hoisted(() => ({
   updateMany: vi.fn(async () => ({ count: 1 })),
   syncImapInbox: vi.fn(async () => ({ fetched: 2, inserted: 1, classified: 1, errors: 0 })),
   isAllowedImapHost: vi.fn(() => true),
+  captureError: vi.fn(),
 }));
 
 vi.mock("../db.js", () => {
@@ -34,6 +41,7 @@ vi.mock("../mail/is-allowed-imap-host.js", () => ({
 vi.mock("../mail/imap-sync.js", () => ({
   syncImapInbox: m.syncImapInbox,
 }));
+vi.mock("../sentry.js", () => ({ captureError: m.captureError }));
 
 function naverRow(over: Record<string, unknown> = {}) {
   return {
@@ -273,5 +281,123 @@ describe("syncImapAccountsForUser: an account whose poll is still running", () =
     expect(stamped).toEqual(["row-2"]);
     stuck.open(AGG);
     await first;
+  });
+});
+
+/**
+ * A skip is not silent: the account whose previous poll is still running is named in a
+ * rate-limited warning (row id only, never the address), and one that has been running
+ * longer than the threshold is reported to Sentry once. A normal overlap is not.
+ */
+describe("syncImapAccountsForUser: a skipped poll is surfaced, not silent", () => {
+  const AGG = { fetched: 0, inserted: 0, classified: 0, errors: 0 };
+  const MINUTE = 60_000;
+  let clock = 0;
+  let nowSpy: ReturnType<typeof vi.spyOn>;
+  let warn: ReturnType<typeof vi.spyOn>;
+  let release: (value: typeof AGG) => void = () => {};
+  let first: Promise<unknown> = Promise.resolve();
+
+  let syncImapAccountsForUser: typeof import("../mail/imap-accounts.js").syncImapAccountsForUser;
+
+  const skipWarnings = () =>
+    warn.mock.calls
+      .map((call: unknown[]) => call.join(" "))
+      .filter((l: string) => /in flight/.test(l));
+
+  /** One tick while row-1's first poll hangs. */
+  const tick = async (afterMs: number) => {
+    clock += afterMs;
+    await syncImapAccountsForUser("u1", NAVER);
+  };
+
+  beforeEach(async () => {
+    ({ syncImapAccountsForUser } = await import("../mail/imap-accounts.js"));
+    vi.clearAllMocks();
+    resetPollInFlightState();
+    clock = 1_000_000;
+    nowSpy = vi.spyOn(Date, "now").mockImplementation(() => clock);
+    warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    m.updateMany.mockResolvedValue({ count: 1 });
+    m.isAllowedImapHost.mockReturnValue(true);
+    m.findMany.mockResolvedValue([naverRow({ id: "row-1", email: "secret.person@naver.com" })]);
+    m.syncImapInbox.mockImplementationOnce(
+      () =>
+        new Promise<typeof AGG>((resolve) => {
+          release = resolve;
+        }),
+    );
+    first = syncImapAccountsForUser("u1", NAVER); // row-1 hangs
+    await vi.waitFor(() => expect(m.syncImapInbox).toHaveBeenCalledTimes(1));
+  });
+
+  afterEach(async () => {
+    release(AGG);
+    await first;
+    nowSpy.mockRestore();
+    warn.mockRestore();
+  });
+
+  it("warns on the skip, naming the row id and never the address", async () => {
+    await tick(5 * MINUTE);
+    const lines = skipWarnings();
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("row-1");
+    expect(lines[0]).not.toContain("secret.person");
+    expect(lines[0]).not.toContain("@");
+    expect(lines[0]).not.toMatch(/[\r\n]/);
+  });
+
+  it("warns at most once per interval for the same account, however many ticks skip it", async () => {
+    await tick(5 * MINUTE);
+    await tick(5 * MINUTE);
+    await tick(5 * MINUTE);
+    expect(skipWarnings()).toHaveLength(1);
+
+    await tick(STUCK_POLL_WARN_INTERVAL_MS); // an interval after the first warning
+    expect(skipWarnings()).toHaveLength(2);
+  });
+
+  it("does not report a normal overlap shorter than the threshold to Sentry", async () => {
+    await tick(STUCK_POLL_REPORT_AFTER_MS - 1);
+    await tick(0);
+    expect(m.captureError).not.toHaveBeenCalled();
+  });
+
+  it("reports a poll stuck past the threshold to Sentry once, with the row id and no address", async () => {
+    await tick(STUCK_POLL_REPORT_AFTER_MS);
+    await tick(5 * MINUTE);
+    await tick(5 * MINUTE);
+
+    expect(m.captureError).toHaveBeenCalledTimes(1);
+    const [error, context] = m.captureError.mock.calls[0] as [
+      Error,
+      { tags: Record<string, string>; extra: Record<string, unknown> },
+    ];
+    expect(context.tags.scope).toBe(`${NAVER.logScope}.poll-stuck`);
+    expect(context.extra.linkedInboxAccountId).toBe("row-1");
+    expect(JSON.stringify([error.message, context])).not.toContain("secret.person");
+  });
+
+  it("holds nothing once the poll has finished, and polls the account again", async () => {
+    await tick(5 * MINUTE);
+    expect(inFlightPollCount()).toBe(1);
+
+    release(AGG);
+    await first;
+    expect(inFlightPollCount()).toBe(0);
+
+    m.syncImapInbox.mockClear();
+    await tick(MINUTE);
+    expect(m.syncImapInbox).toHaveBeenCalledTimes(1);
+    expect(inFlightPollCount()).toBe(0);
+  });
+
+  it("holds nothing after a poll that failed either", async () => {
+    release(AGG);
+    await first;
+    m.syncImapInbox.mockRejectedValueOnce(new Error("boom"));
+    await tick(MINUTE);
+    expect(inFlightPollCount()).toBe(0);
   });
 });
