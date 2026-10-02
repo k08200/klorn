@@ -4,8 +4,8 @@ import {
   assertSafeCalDavUrl,
   CalDavError,
   discoverCalendarHome,
-  fetchEventDocuments,
   type FetchLike,
+  fetchEventDocuments,
   isPrivateAddress,
   listCalendars,
   resolveHref,
@@ -187,13 +187,17 @@ describe("discoverCalendarHome", () => {
 
   it("explains that an app-specific password is needed when the server says 401", async () => {
     const fetchImpl: FetchLike = async () => xmlResponse(401, "");
-    await expect(discoverCalendarHome(CREDS, fetchImpl, PUBLIC_LOOKUP)).rejects.toThrow(/app-specific password/i);
+    await expect(discoverCalendarHome(CREDS, fetchImpl, PUBLIC_LOOKUP)).rejects.toThrow(
+      /app-specific password/i,
+    );
   });
 
   it("fails loudly when the server returns no principal", async () => {
     const fetchImpl: FetchLike = async () =>
       xmlResponse(207, '<d:multistatus xmlns:d="DAV:"></d:multistatus>');
-    await expect(discoverCalendarHome(CREDS, fetchImpl, PUBLIC_LOOKUP)).rejects.toThrow(/current-user-principal/);
+    await expect(discoverCalendarHome(CREDS, fetchImpl, PUBLIC_LOOKUP)).rejects.toThrow(
+      /current-user-principal/,
+    );
   });
 });
 
@@ -230,7 +234,8 @@ describe("listCalendars", () => {
   it("sends Depth: 1, since the calendars are children of the home", async () => {
     const fetchImpl = vi.fn(async () => xmlResponse(207, MULTISTATUS)) as unknown as FetchLike;
     await listCalendars(CREDS, HOME, fetchImpl);
-    const init = (fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as RequestInit;
+    const init = (fetchImpl as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[1] as RequestInit;
     expect((init.headers as Record<string, string>).Depth).toBe("1");
   });
 });

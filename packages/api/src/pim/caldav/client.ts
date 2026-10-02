@@ -260,7 +260,10 @@ export async function listCalendars(
 
 /** iCalendar's own UTC stamp format: 20260929T140000Z. */
 export function toCalDavStamp(date: Date): string {
-  return `${date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "")}`;
+  return `${date
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}/, "")}`;
 }
 
 /**

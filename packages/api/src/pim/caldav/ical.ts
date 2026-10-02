@@ -222,9 +222,7 @@ export function parseEvents(icsText: string): ICalEvent[] {
             ...(current.rrule !== undefined ? { rrule: current.rrule } : {}),
             ...(current.organizer !== undefined ? { organizer: current.organizer } : {}),
             ...(current.status !== undefined ? { status: current.status } : {}),
-            ...(current.recurrenceId !== undefined
-              ? { recurrenceId: current.recurrenceId }
-              : {}),
+            ...(current.recurrenceId !== undefined ? { recurrenceId: current.recurrenceId } : {}),
           });
         }
         current = null;
