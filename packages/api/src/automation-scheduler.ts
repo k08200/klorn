@@ -1294,10 +1294,6 @@ async function runUserCycle(
         await summarizeUnsummarizedEmails(config.userId, Math.max(syncResult.newCount, 10));
         await syncRecentCandidateIntakes(config.userId, Math.max(syncResult.newCount, 10));
         await notifyCandidateEmails(config.userId);
-        // Proactive reply drafts for fresh PUSH mail that needs an answer.
-        // No-op unless PROACTIVE_DRAFT_ENABLED; capped per user and per
-        // tick inside, and it never throws.
-        await runProactiveDrafts(config.userId, draftReplyForEmailId);
 
         // Multi-account (Pro): also sync each LINKED secondary inbox via
         // its own OAuth client so the firewall classifies its mail too.
@@ -1395,6 +1391,14 @@ async function runUserCycle(
             `[EMAIL-BACKFILL] re-judged ${backfilled} stranded email(s) for ${config.userId}`,
           );
         }
+
+        // Proactive reply drafts for fresh PUSH mail that needs an answer.
+        // After the backfill so stranded mail has its lane. Detached on
+        // purpose: its LLM calls run at background priority and may park in
+        // the pacer, which must not eat this cycle's per-user time budget.
+        // No-op unless PROACTIVE_DRAFT_ENABLED; it never rejects, refuses to
+        // overlap itself per user, and its caps are enforced in the database.
+        void runProactiveDrafts(config.userId, draftReplyForEmailId);
 
         // Self-heal provider-outage residue: recent keyword-fallback tiers
         // (human-untouched, still OPEN) get re-judged through the real judge.
