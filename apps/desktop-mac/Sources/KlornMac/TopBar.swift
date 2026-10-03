@@ -2038,6 +2038,9 @@ enum ListMode: Equatable, Hashable {
 struct FullView: View {
     @Environment(AppModel.self) private var model
     let actions: TopBarActions
+    /// Which pane this window's list keys address (M3). Per FullView, so
+    /// the bar's panel and the main window never reset each other.
+    @State private var keyZone: MailKeyZone = .list
 
     var body: some View {
         // The list mode lives on the model, not in @State: opening the full
@@ -2061,10 +2064,13 @@ struct FullView: View {
                 HStack(spacing: 0) {
                     FullSidebar(selected: $model.listMode, actions: actions).frame(width: 220)
                     Rectangle().fill(Theme.line).frame(width: 1)
-                    FullList(mode: model.listMode, actions: actions).frame(width: 420)
+                    FullList(mode: model.listMode, actions: actions, keyZone: $keyZone)
+                        .frame(width: 420)
                     Rectangle().fill(Theme.line).frame(width: 1)
-                    ReadingPane(actions: actions).frame(maxWidth: .infinity)
+                    ReadingPane(actions: actions, keyZone: keyZone).frame(maxWidth: .infinity)
                 }
+                // Any new selection (click, key, card) starts in the list.
+                .onChange(of: model.selectedItemId) { _, _ in keyZone = .list }
             }
             // ONE surface, header included — any band around the header reads
             // as chrome-on-chrome.
@@ -2993,6 +2999,10 @@ private struct FullList: View {
     @Environment(AppModel.self) private var model
     let mode: ListMode
     let actions: TopBarActions
+    @Binding var keyZone: MailKeyZone
+    /// The user asked for the search field (⌘F, `/`): its focus is theirs,
+    /// not the window's opening default.
+    @State private var searchRequested = false
     @State private var query = ""
     @FocusState private var searchFocused: Bool
 
@@ -3095,11 +3105,17 @@ private struct FullList: View {
                     .opacity(Theme.isRenderingOffscreen ? 0 : 1)
                     .textFieldStyle(.plain).font(.callout).foregroundStyle(Theme.text)
                     .focused($searchFocused)
+                    // Esc hands the keyboard back to the list.
+                    .onKeyPress(.escape) {
+                        searchFocused = false
+                        return .handled
+                    }
                     .accessibilityLabel(L("mail.search.a11y"))
                     // Edit ▸ Search Mail (⌘F). `initial`: Find may have just
                     // switched the list mode, mounting this field fresh.
                     .onChange(of: model.searchFocusPending, initial: true) { _, pending in
                         guard pending else { return }
+                        searchRequested = true
                         model.searchFocusPending = false
                         // Next runloop: focus set during mount is dropped.
                         DispatchQueue.main.async { searchFocused = true }
@@ -3159,23 +3175,87 @@ private struct FullList: View {
                     Spacer(minLength: 0)
                 }
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(items) { item in
-                            FullRow(item: item, actions: actions, showLaneChip: mixedLanes)
-                                .transition(rowTransition)
-                            Divider().overlay(Theme.line).padding(.leading, 24)
+                // Same ScrollView + LazyVStack as before M3; the reader only
+                // adds scroll-into-view for a keyboard-moved selection.
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(items) { item in
+                                FullRow(item: item, actions: actions, showLaneChip: mixedLanes)
+                                    .id(item.id)
+                                    .transition(rowTransition)
+                                Divider().overlay(Theme.line).padding(.leading, 24)
+                            }
                         }
+                        // The one motion that carries product truth (P1): a new
+                        // classification ARRIVES and a corrected row LEAVES for
+                        // its new lane — state changes are never silent.
+                        .animation(
+                            reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85),
+                            value: items.map(\.id))
                     }
-                    // The one motion that carries product truth (P1): a new
-                    // classification ARRIVES and a corrected row LEAVES for
-                    // its new lane — state changes are never silent.
-                    .animation(
-                        reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85),
-                        value: items.map(\.id))
+                    // No anchor: the minimal scroll that shows the row, so a
+                    // click on a visible row never moves the list.
+                    .onChange(of: model.selectedItemId) { _, id in
+                        if let id { proxy.scrollTo(id) }
+                    }
                 }
             }
         }
+        // List keys (M3). Mounted with the mail list only, so other list
+        // modes never see them.
+        .background(
+            MailListKeyCatcher(
+                onKey: { handleKey($0) },
+                onClickOutsideReader: { keyZone = .list },
+                mayReleaseOpeningFocus: {
+                    !searchRequested && !model.searchFocusPending && !model.fullViewModalOpen
+                }))
+        .onDisappear { keyZone = .list }
+    }
+
+    /// One key press from the catcher: decide with the pure rules, then run
+    /// the same paths a click or a menu command runs.
+    private func handleKey(_ press: ListKeyPress) -> Bool {
+        let rows = items
+        var menu = MenuState(model: model)
+        menu.modalOpen = menu.modalOpen || press.window.attachedSheet != nil
+        let state = ListKeyState(
+            menu: menu, responder: press.responder, composingText: press.composingText,
+            zone: keyZone, showsRows: !searching && model.queue != nil, itemCount: rows.count)
+        guard let action = ListKeyRules.action(for: press.key, isRepeat: press.isRepeat, in: state)
+        else { return false }
+        let ids = rows.map(\.id)
+        func row(_ id: String?) -> FirewallItem? { rows.first { $0.id == id } }
+        switch action {
+        case .move(let delta):
+            let target = ListKeyRules.movedSelection(
+                ids: ids, selected: model.selectedItemId, delta: delta)
+            if let item = row(target) { actions.onSelect(item) }
+        case .openReader:
+            keyZone = .reader
+            MailReaderFocus.enter(in: press.window)
+        case .backToList:
+            keyZone = .list
+            MailReaderFocus.leave(in: press.window)
+        case .dismiss:
+            guard let item = model.menuTargetItem else { return true }
+            actions.onDismiss(item)
+            // Triage keeps moving: the row that takes its place is next.
+            // Picked once the dismiss has left the list, from the rows that
+            // are still there, so a refresh in between can't select a ghost.
+            Task { @MainActor in
+                let live = items
+                let next = ListKeyRules.selectionAfterRemoval(
+                    ids: ids, removed: item.id, present: Set(live.map(\.id)))
+                if let target = live.first(where: { $0.id == next }) { actions.onSelect(target) }
+            }
+        case .reply:
+            model.requestReply()
+        case .focusSearch:
+            model.searchFocusPending = true
+        }
+        return true
     }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -4182,6 +4262,8 @@ struct FullRow: View {
 struct ReadingPane: View {
     @Environment(AppModel.self) private var model
     let actions: TopBarActions
+    /// The owning FullView's key zone; `.reader` draws the focus ring.
+    var keyZone: MailKeyZone = .list
     @State private var replying = false
     @State private var replyText = ""
     /// The composer was opened with the ahead-of-time draft (says so above
@@ -4236,6 +4318,12 @@ struct ReadingPane: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Return/o put the keyboard here (M3): show it, like the row's ring.
+        .overlay {
+            if keyZone == .reader {
+                Rectangle().strokeBorder(Theme.accent, lineWidth: 2).allowsHitTesting(false)
+            }
+        }
         .onChange(of: model.selectedItemId) { _, _ in
             replying = false
             replyText = ""
