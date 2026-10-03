@@ -35,8 +35,8 @@ describe("device calendar source migration", () => {
       .filter((n) => /^\d{14}_/.test(n))
       .sort();
     expect(names.indexOf(MIGRATION)).toBe(names.indexOf("20261006010000_proactive_draft") + 1);
-    const stamps = names.map((n) => n.slice(0, 14));
-    expect(new Set(stamps).size).toBe(stamps.length);
+    // Older migrations share timestamps; this one must not.
+    expect(names.filter((n) => n.slice(0, 14) === MIGRATION.slice(0, 14))).toEqual([MIGRATION]);
   });
 
   it("the schema declares it optional on LinkedCalendarAccount, and DEVICE already exists", () => {
