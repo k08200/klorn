@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { getFocusableElements } from "../lib/focusable";
 
 interface ConfirmOptions {
   title: string;
@@ -135,20 +136,4 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
       )}
     </ConfirmContext.Provider>
   );
-}
-
-function getFocusableElements(root: HTMLElement | null): HTMLElement[] {
-  if (!root) return [];
-  return Array.from(
-    root.querySelectorAll<HTMLElement>(
-      [
-        "a[href]",
-        "button:not([disabled])",
-        "textarea:not([disabled])",
-        "input:not([disabled])",
-        "select:not([disabled])",
-        '[tabindex]:not([tabindex="-1"])',
-      ].join(","),
-    ),
-  ).filter((element) => !element.hasAttribute("disabled") && element.offsetParent !== null);
 }
