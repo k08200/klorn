@@ -21,6 +21,8 @@ import type { InboxSummary, ReplyNeededEmail } from "../../lib/inbox-summary";
 import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
 import { formatRelative } from "../../lib/text";
+import { TIER_NAMES } from "../../lib/tiers";
+import { toolLabelKey } from "../../lib/tool-labels";
 
 interface PendingActionItem {
   id: string;
@@ -733,13 +735,15 @@ function HonestEmptyState({ commitmentCount }: { commitmentCount: number }) {
 // ─── Onboarding hint ──────────────────────────────────────────────────────
 //
 // Founder dogfood found that new users land on /inbox without knowing what
-// the product is or where to click first. This banner shows the 4 core
-// destinations once and stays dismissed in localStorage thereafter.
+// the product is or where to click first. This banner shows the core
+// destinations once (the "connect mail" step only while no mail source is
+// connected) and stays dismissed in localStorage thereafter.
 
 const ONBOARDING_STORAGE_KEY = "klorn.inbox.onboarding.v1.dismissed";
 
 function OnboardingHint() {
   const { t } = useT();
+  const { hasMailSource } = useAuth();
   const [dismissed, setDismissed] = useState<boolean | null>(null);
   // On phones the full 4-step tour eats the whole first fold, burying the
   // decision queue. Collapse it to a single title line by default on mobile
@@ -765,6 +769,12 @@ function OnboardingHint() {
 
   if (dismissed !== false) return null;
 
+  // Only tell the user to connect mail when we know nothing is connected:
+  // most users connected Google during onboarding, and `null` (still
+  // loading / unknown) must not flash a stale instruction either.
+  const needsMailSource = hasMailSource === false;
+  const linkClass = "font-medium text-accent-deep hover:text-accent-deeper";
+
   return (
     <>
       {/* DESKTOP — one-line compact strip; the tour never outweighs the queue. */}
@@ -772,30 +782,27 @@ function OnboardingHint() {
         <p className="min-w-0 flex-1 truncate text-xs text-ink-mid">
           <span className="font-semibold text-accent-deeper">{t("inbox.tourTitle")}</span>
           <span className="mx-1.5 text-slate-300">·</span>
-          Approve decisions here, tune the{" "}
-          <Link
-            href="/inbox/firewall"
-            className="font-medium text-accent-deep hover:text-accent-deeper"
-          >
-            Firewall board
+          {t("inbox.tour.lead")}{" "}
+          <Link href="/inbox/firewall" className={linkClass}>
+            {t("inbox.tour.firewallLink")}
           </Link>
-          , connect Google in{" "}
-          <Link href="/settings" className="font-medium text-accent-deep hover:text-accent-deeper">
-            Settings
+          {needsMailSource && (
+            <>
+              <span className="mx-1.5 text-slate-300">·</span>
+              <Link href="/settings" className={linkClass}>
+                {t("inbox.tour.connectLink")}
+              </Link>
+            </>
+          )}
+          <span className="mx-1.5 text-slate-300">·</span>
+          <Link href="/inbox/receipt" className={linkClass}>
+            {t("inbox.tour.receiptLink")}
           </Link>
-          , then check{" "}
-          <Link
-            href="/inbox/receipt"
-            className="font-medium text-accent-deep hover:text-accent-deeper"
-          >
-            Today's receipt
-          </Link>
-          .
         </p>
         <button
           type="button"
           onClick={dismiss}
-          aria-label="Dismiss tour"
+          aria-label={t("inbox.tour.dismissAria")}
           className="ease-strong flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-ink-dim transition duration-150 hover:bg-accent-dim hover:text-ink-soft active:scale-[0.97]"
         >
           <svg
@@ -818,35 +825,34 @@ function OnboardingHint() {
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 space-y-1.5">
             <p className="text-[11px] font-medium text-ink-dim">{t("inbox.tourTitle")}</p>
-            <ul
-              className={`${expanded ? "block" : "hidden"} space-y-1 text-[13px] leading-5 text-ink-mid`}
+            <ol
+              className={`${expanded ? "block" : "hidden"} list-inside list-decimal space-y-1 text-[13px] leading-5 text-ink-mid`}
             >
               <li>
-                1. <span className="text-ink">This page</span> — agent decisions waiting on your
-                approval.
+                <span className="text-ink">{t("inbox.tour.queueLabel")}</span> —{" "}
+                {t("inbox.tour.queueBody")}
               </li>
               <li>
-                2.{" "}
                 <Link href="/inbox/firewall" className="text-accent-deep hover:text-accent-deeper">
-                  Firewall board
+                  {t("inbox.tour.firewallLink")}
                 </Link>{" "}
-                — see every signal sorted into SILENT / QUEUE / PUSH. Move what we got wrong.
+                — {t("inbox.tour.firewallBody", { lanes: TIER_NAMES })}
               </li>
+              {needsMailSource && (
+                <li>
+                  <Link href="/settings" className="text-accent-deep hover:text-accent-deeper">
+                    {t("inbox.tour.connectLink")}
+                  </Link>{" "}
+                  — {t("inbox.tour.connectBody")}
+                </li>
+              )}
               <li>
-                3.{" "}
-                <Link href="/settings" className="text-accent-deep hover:text-accent-deeper">
-                  Settings → Connections
-                </Link>{" "}
-                — connect Google so Klorn can read mail and calendar.
-              </li>
-              <li>
-                4.{" "}
                 <Link href="/inbox/receipt" className="text-accent-deep hover:text-accent-deeper">
-                  Today's receipt
+                  {t("inbox.tour.receiptLink")}
                 </Link>{" "}
-                — what Klorn silenced, surfaced, and auto-handled today.
+                — {t("inbox.tour.receiptBody")}
               </li>
-            </ul>
+            </ol>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             <button
@@ -854,14 +860,14 @@ function OnboardingHint() {
               onClick={() => setExpanded((v) => !v)}
               className="rounded-md border border-line px-2.5 py-1 text-[11px] text-ink-mid transition hover:border-line-strong hover:text-ink"
             >
-              {expanded ? "Hide" : "Show"}
+              {expanded ? t("inbox.tour.hide") : t("inbox.tour.show")}
             </button>
             <button
               type="button"
               onClick={dismiss}
               className="rounded-md border border-line px-2.5 py-1 text-[11px] text-ink-mid transition hover:border-line-strong hover:text-ink"
             >
-              Dismiss
+              {t("inbox.tour.dismiss")}
             </button>
           </div>
         </div>
@@ -1241,6 +1247,7 @@ function ActionCard({
   onReject: () => void;
   onSnooze: () => void;
 }) {
+  const { t } = useT();
   const toolName = action.toolName || "prepared_action";
   const toolArgs = action.toolArgs || "{}";
   const emailPreview = toolName === "send_email" ? buildEmailPreview(toolArgs) : null;
@@ -1253,10 +1260,7 @@ function ActionCard({
   // subject beats conversation title beats the per-tool preview beats a
   // humanised tool name. We never fall back to the literal "prepared_action".
   const heroSubject =
-    emailPreview?.subject ||
-    action.conversationTitle ||
-    toolPreview ||
-    (toolName === "prepared_action" ? "Decision pending" : toolName.replace(/_/g, " "));
+    emailPreview?.subject || action.conversationTitle || toolPreview || t(toolLabelKey(toolName));
 
   // Single-paragraph context. Prefer the AI's "judgment" framing because
   // that's the why-it-matters. Situation is a weaker fallback.
@@ -1747,6 +1751,7 @@ function MobileActionCard({
 }) {
   // Same derivation as the desktop ActionCard, kept local so the desktop card
   // is never affected by mobile-only changes.
+  const { t } = useT();
   const toolName = action.toolName || "prepared_action";
   const toolArgs = action.toolArgs || "{}";
   const emailPreview = toolName === "send_email" ? buildEmailPreview(toolArgs) : null;
@@ -1755,10 +1760,7 @@ function MobileActionCard({
   const isPending = action.status === "PENDING";
   const risk = riskForTool(toolName);
   const heroSubject =
-    emailPreview?.subject ||
-    action.conversationTitle ||
-    toolPreview ||
-    (toolName === "prepared_action" ? "Decision pending" : toolName.replace(/_/g, " "));
+    emailPreview?.subject || action.conversationTitle || toolPreview || t(toolLabelKey(toolName));
   const context = reasoning.judgment || reasoning.situation || action.reasoning;
 
   return (

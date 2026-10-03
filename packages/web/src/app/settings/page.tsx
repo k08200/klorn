@@ -35,6 +35,7 @@ import {
   unregisterPushSubscription,
 } from "../../lib/push";
 import { captureClientError } from "../../lib/sentry";
+import { toolLabelKey } from "../../lib/tool-labels";
 import { track } from "../../lib/track";
 import {
   type AgentMode,
@@ -1600,7 +1601,7 @@ export default function SettingsPage() {
                             }`}
                             aria-pressed={enabled}
                           >
-                            <span className="font-mono text-xs">{tool}</span>
+                            <span className="text-xs">{t(toolLabelKey(tool))}</span>
                             <span className="text-[10px] opacity-80">
                               {enabled
                                 ? t("settings.tool.runWithinPolicy")

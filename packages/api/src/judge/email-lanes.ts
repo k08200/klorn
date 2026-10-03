@@ -9,7 +9,7 @@
 import type { LiveTier } from "@klorn/contract";
 import { prisma } from "../db.js";
 import { captureError } from "../sentry.js";
-import { normalizeTier } from "./tiers.js";
+import { toLiveTier } from "./tiers.js";
 
 /**
  * Map each email id on a list page to its normalized lane. Deliberately no
@@ -28,11 +28,9 @@ export async function listLaneTiersByEmail(
     })) as Array<{ sourceId: string; tier: string | null }>;
     const laneBySourceId = new Map<string, LiveTier>();
     for (const row of rows) {
-      const tier = normalizeTier(row.tier);
       // AUTO is retired v1 vocabulary and must never reach a user-facing
-      // chip; QUEUE is the vocabulary's visible default, the same fallback
-      // normalizeTier applies to unknown values.
-      laneBySourceId.set(row.sourceId, tier === "AUTO" ? "QUEUE" : tier);
+      // chip; toLiveTier folds it into QUEUE, the visible default.
+      laneBySourceId.set(row.sourceId, toLiveTier(row.tier));
     }
     return laneBySourceId;
   } catch (err) {
