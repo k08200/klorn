@@ -68,7 +68,9 @@ interface SkeletonGroupProps {
 
 export function SkeletonGroup({ label = "Loading", children, className = "" }: SkeletonGroupProps) {
   return (
-    <div role="status" aria-live="polite" aria-label={label} className={className}>
+    // Announced once: the status text is the only accessible content (no
+    // aria-label on top of it, which some readers speak twice).
+    <div role="status" aria-live="polite" className={className}>
       {children}
       <span className="sr-only">{label}…</span>
     </div>

@@ -2,6 +2,7 @@
 
 import type { LiveTier } from "@klorn/contract";
 import { useRef, useState } from "react";
+import { useConfirm } from "../../../components/confirm-dialog";
 import Button from "../../../components/ui/button";
 import EmptyState from "../../../components/ui/empty-state";
 import { LaneChip } from "../../../components/ui/lane-chip";
@@ -103,6 +104,9 @@ function InboxGlyph() {
 
 export default function PrimitivesPreview() {
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [nestedOpen, setNestedOpen] = useState(false);
+  const [confirmResult, setConfirmResult] = useState("");
+  const { confirm } = useConfirm();
   const [selected, setSelected] = useState(0);
   const nameRef = useRef<HTMLInputElement>(null);
 
@@ -235,6 +239,38 @@ export default function PrimitivesPreview() {
               className="focus-ring block min-h-11 w-full rounded-control border border-line bg-surface-panel px-3 text-body"
             />
           </label>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              data-testid="open-confirm"
+              onClick={async () =>
+                setConfirmResult(
+                  String(await confirm({ title: "Discard?", message: "Stacked over the sheet." })),
+                )
+              }
+            >
+              Confirm over sheet
+            </Button>
+            <Button
+              variant="secondary"
+              data-testid="open-nested"
+              onClick={() => setNestedOpen(true)}
+            >
+              Open nested sheet
+            </Button>
+          </div>
+          <p data-testid="confirm-result" className="mt-2 text-caption text-ink-muted">
+            {confirmResult}
+          </p>
+        </Sheet>
+        <Sheet open={nestedOpen} onClose={() => setNestedOpen(false)} title="Nested sheet">
+          <Button
+            variant="secondary"
+            data-testid="close-nested"
+            onClick={() => setNestedOpen(false)}
+          >
+            Done
+          </Button>
         </Sheet>
       </section>
     </main>

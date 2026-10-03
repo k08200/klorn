@@ -22,10 +22,10 @@ describe("sourceGlyph", () => {
     expect(sourceGlyph("google").glyph).toBe("G");
   });
 
-  it("falls back to the generic glyph for unknown or missing providers", () => {
-    expect(sourceGlyph("YAHOO")).toEqual({ glyph: "IMAP", name: "Mail" });
-    expect(sourceGlyph(null).glyph).toBe("IMAP");
-    expect(sourceGlyph("").glyph).toBe("IMAP");
+  it("falls back to a neutral glyph (not IMAP's) for unknown or missing providers", () => {
+    expect(sourceGlyph("YAHOO")).toEqual({ glyph: "@", name: "another mail account" });
+    expect(sourceGlyph(null).glyph).toBe("@");
+    expect(sourceGlyph("").glyph).toBe("@");
   });
 });
 
@@ -34,7 +34,7 @@ describe("sourceLabel", () => {
     expect(sourceLabel("GOOGLE", "work@")).toBe("From Google · work@");
     expect(sourceLabel("NAVER")).toBe("From Naver");
     expect(sourceLabel("NAVER", "   ")).toBe("From Naver");
-    expect(sourceLabel("UNKNOWN")).toBe("From Mail");
+    expect(sourceLabel("UNKNOWN")).toBe("From another mail account");
   });
 });
 

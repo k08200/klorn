@@ -1,6 +1,7 @@
 /**
  * Keyboard-focusable descendants of `root`, in DOM order, skipping disabled
- * and hidden (display:none) elements. Shared by the modal primitives
+ * and unrendered (display:none) elements. Rendered-ness is `getClientRects()`
+ * rather than `offsetParent`, which is null for position:fixed elements too. Shared by the modal primitives
  * (confirm dialog, Sheet) for their Tab focus trap.
  */
 const FOCUSABLE_SELECTOR = [
@@ -10,12 +11,16 @@ const FOCUSABLE_SELECTOR = [
   "input:not([disabled])",
   "select:not([disabled])",
   '[tabindex]:not([tabindex="-1"])',
+  '[contenteditable]:not([contenteditable="false"])',
+  "summary",
+  "audio[controls]",
+  "video[controls]",
 ].join(",");
 
 export function getFocusableElements(root: HTMLElement | null): HTMLElement[] {
   if (!root) return [];
   return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
-    (element) => !element.hasAttribute("disabled") && element.offsetParent !== null,
+    (element) => !element.hasAttribute("disabled") && element.getClientRects().length > 0,
   );
 }
 

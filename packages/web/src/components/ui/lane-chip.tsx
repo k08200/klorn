@@ -23,6 +23,10 @@
 import type { LiveTier, Tier } from "@klorn/contract";
 import { toLiveTier } from "../../lib/tiers";
 
+/** Tint strength in percent; must match the `/13` in every class below
+ *  (web-lane-chip-contrast.test.ts asserts both, then measures with it). */
+export const LANE_CHIP_TINT_PERCENT = 13;
+
 // Static class strings so Tailwind can see them. Record keys are exempt from
 // the lane-vocabulary guard; tint and label both ride theme-aware tokens.
 const CHIP_CLASS: Record<LiveTier, string> = {

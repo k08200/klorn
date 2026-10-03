@@ -8,15 +8,22 @@
  * reduced-motion rule in globals.css shortens that to an instant swap).
  *
  * Accessibility: role="dialog" + aria-modal, labelled by its title and
- * described by `description` when given. Focus moves into the sheet on open,
- * Tab / Shift+Tab are trapped inside (shared lib/focusable trap, same as the
- * confirm dialog), Escape and a scrim click close it, and focus returns to the
- * element that opened it.
+ * described by `description` when given. Focus moves into the sheet body on
+ * open (or `initialFocusRef`), Tab / Shift+Tab are trapped inside (shared
+ * lib/focusable trap), Escape and a scrim click close it, and focus returns
+ * to the element that opened it. Escape that ends an IME composition is
+ * ignored.
+ *
+ * Stacking: the sheet registers in the shared lib/modal-stack and only the
+ * TOP overlay handles Escape / Tab, so a confirm or a second sheet opened over
+ * this one owns the keyboard. Body scroll uses the shared ref-counted lock,
+ * held until the exit transition finishes.
  */
 
 import { type ReactNode, type RefObject, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { getFocusableElements, trapTab } from "../../lib/focusable";
+import { bodyScrollLock, isPlainEscape, modalStack } from "../../lib/modal-stack";
 import Button from "./button";
 
 /** Matches --motion-exit; the panel unmounts after the exit transition. */
@@ -67,6 +74,8 @@ export function Sheet({
 }: SheetProps) {
   const [phase, setPhase] = useState<Phase>("closed");
   const panelRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const tokenRef = useRef<symbol>(Symbol("sheet"));
   const openerRef = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
   const titleId = useId();
@@ -99,15 +108,19 @@ export function Sheet({
     const panel = panelRef.current;
     void panel?.offsetHeight;
     setPhase("open");
-    const target = initialFocusRef?.current ?? getFocusableElements(panel)[0] ?? panel;
+    const target = initialFocusRef?.current ?? getFocusableElements(bodyRef.current)[0] ?? panel;
     target?.focus();
   }, [phase, initialFocusRef]);
 
   useEffect(() => {
     if (!open) return;
+    const token = tokenRef.current;
+    modalStack.push(token);
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        // Top-most modal: stop underlying window listeners from also closing.
+      // Another overlay is above this one: it owns the keyboard.
+      if (!modalStack.isTop(token)) return;
+      if (isPlainEscape(event)) {
+        // Stop underlying window listeners (e.g. compose modal) from also closing.
         event.stopImmediatePropagation();
         onCloseRef.current();
         return;
@@ -115,13 +128,18 @@ export function Sheet({
       trapTab(event, panelRef.current);
     };
     window.addEventListener("keydown", onKeyDown, true);
-    const { overflow } = document.body.style;
-    document.body.style.overflow = "hidden";
     return () => {
       window.removeEventListener("keydown", onKeyDown, true);
-      document.body.style.overflow = overflow;
+      modalStack.remove(token);
     };
   }, [open]);
+
+  // Scroll lock spans the whole mounted lifetime, exit transition included.
+  const mounted = phase !== "closed";
+  useEffect(() => {
+    if (!mounted) return;
+    return bodyScrollLock.acquire();
+  }, [mounted]);
 
   if (phase === "closed") return null;
 
@@ -163,7 +181,9 @@ export function Sheet({
             <CloseGlyph />
           </Button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 text-body">{children}</div>
+        <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-4 text-body">
+          {children}
+        </div>
         {footer && (
           <div className="flex shrink-0 justify-end gap-2 border-t border-line-soft px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             {footer}

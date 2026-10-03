@@ -24,7 +24,7 @@ interface EmptyStateProps {
   primaryAction?: EmptyStateAction;
   /** Custom action node (e.g. a link) when a Button does not fit. */
   action?: ReactNode;
-  /** Heading level for the title; defaults to h2. */
+  /** Heading level for the title; defaults to h3 (the pre-P2 markup). */
   headingLevel?: "h2" | "h3";
   className?: string;
 }
@@ -35,7 +35,7 @@ export default function EmptyState({
   description,
   primaryAction,
   action,
-  headingLevel = "h2",
+  headingLevel = "h3",
   className = "",
 }: EmptyStateProps) {
   const Heading = headingLevel;

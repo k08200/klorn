@@ -5,7 +5,7 @@
  * NAVER / ICLOUD / OUTLOOK / IMAP) plus KLORN for the native mailbox. Glyphs
  * are neutral monograms — never brand colours or logos. Clients must treat an
  * unknown provider as a generic mail source (contract email.ts), so anything
- * not listed falls back to the IMAP glyph.
+ * not listed gets a neutral "@" glyph — not IMAP's, which would misname it.
  */
 
 export interface SourceGlyph {
@@ -15,7 +15,7 @@ export interface SourceGlyph {
   name: string;
 }
 
-const GENERIC: SourceGlyph = { glyph: "IMAP", name: "Mail" };
+const GENERIC: SourceGlyph = { glyph: "@", name: "another mail account" };
 
 const SOURCE_GLYPHS: Readonly<Record<string, SourceGlyph>> = {
   GOOGLE: { glyph: "G", name: "Google" },

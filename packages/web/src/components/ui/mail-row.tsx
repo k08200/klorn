@@ -10,6 +10,10 @@
  * button with `onOpen`), so it gets a single tab stop and an accessible name
  * read in visual order. Trailing actions are siblings, never nested inside it
  * (nested interactive content is invalid), revealed on hover or keyboard focus.
+ * While hidden they are pointer-events-none, so a tap on the time or chips
+ * opens the row instead of hitting an invisible action. Tailwind v4 `hover:`
+ * variants only apply under @media (hover: hover), so on touch the actions
+ * are reachable by focus only; swipe actions arrive with P10.
  * Height is 52px with a fine pointer and 64px on touch / narrow viewports.
  */
 
@@ -129,7 +133,7 @@ export function MailRow(props: MailRowProps) {
       )}
       {actions && (
         <div
-          className={`absolute inset-y-0 right-2 flex items-center gap-1 pl-2 opacity-0 transition-opacity duration-120 ease-fluid group-hover:opacity-100 group-focus-within:opacity-100 ${
+          className={`pointer-events-none absolute inset-y-0 right-2 flex items-center gap-1 pl-2 opacity-0 transition-opacity duration-120 ease-fluid group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 ${
             selected ? "bg-state-info-bg" : "bg-surface-hover"
           }`}
         >

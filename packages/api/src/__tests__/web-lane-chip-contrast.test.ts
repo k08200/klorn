@@ -15,7 +15,15 @@ import {
 
 const CSS = readFileSync(resolve(__dirname, "../../../web/src/app/globals.css"), "utf8");
 const LANES = ["push", "meeting", "queue", "info", "silent"] as const;
-const TINT_ALPHA = 0.13; // ui/lane-chip.tsx: bg-tier-<lane>-ink/13
+// The tint is read from ui/lane-chip.tsx itself: its exported percent and
+// every `bg-tier-<lane>-ink/NN` class must agree, and that value is measured.
+const CHIP_SRC = readFileSync(
+  resolve(__dirname, "../../../web/src/components/ui/lane-chip.tsx"),
+  "utf8",
+);
+const TINT_PERCENT = Number(/LANE_CHIP_TINT_PERCENT = (\d+);/.exec(CHIP_SRC)?.[1]);
+const TINT_CLASSES = [...CHIP_SRC.matchAll(/bg-tier-(\w+)-ink\/(\d+)/g)];
+const TINT_ALPHA = TINT_PERCENT / 100;
 const AA_TEXT = 4.5;
 
 // Every surface a MailRow (and so a chip) can sit on, per theme.
@@ -24,6 +32,7 @@ const SURFACES = {
     "surface-canvas",
     "surface-app",
     "surface-panel",
+    "surface-elevated",
     "surface-raised",
     "surface-hover",
     "state-info-bg",
@@ -67,6 +76,14 @@ describe("contrast helper", () => {
   it("composites source-over", () => {
     expect(composite([0, 0, 0], [255, 255, 255], 0.5)).toEqual([128, 128, 128]);
     expect(composite([10, 20, 30], [200, 200, 200], 0)).toEqual([200, 200, 200]);
+  });
+});
+
+describe("LaneChip tint is one value", () => {
+  it("every lane class uses the exported tint percent", () => {
+    expect(TINT_PERCENT).toBeGreaterThan(0);
+    expect(TINT_CLASSES.map((m) => m[1]).sort()).toEqual([...LANES].sort());
+    for (const m of TINT_CLASSES) expect(Number(m[2])).toBe(TINT_PERCENT);
   });
 });
 
