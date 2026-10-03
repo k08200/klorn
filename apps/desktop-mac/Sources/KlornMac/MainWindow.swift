@@ -6,8 +6,9 @@ import SwiftUI
 enum MainWindowRules {
     /// NSWindow frame autosave name: position and size survive relaunch.
     static let frameAutosaveName = "KlornMainWindow"
-    /// The full view's own floor (sidebar 220 + list 420 + a readable
-    /// reading pane), so the window can never be dragged into clipping it.
+    /// The shell's floor (sidebar 220 + list 420 + a readable reading pane;
+    /// the same numbers as the bar's full view), so the window can never be
+    /// dragged into clipping it.
     static let minSize = TopBarMetrics.fullMin
     /// First-open size before any autosaved frame exists. Fits a 1280×800
     /// display's visible area (minus menu bar, Dock and title bar).
@@ -27,23 +28,19 @@ enum MainWindowRules {
     }
 }
 
-/// The main window's content: the current full view, unchanged (the IA
-/// change is M4). Actions come from the bar controller, which owns every
-/// full-view action today.
+/// The main window's content: the five-item shell (M4b). Actions come from
+/// the bar controller, which owns every full-view action today.
 struct MainWindowRoot: View {
     let model: AppModel
     let actions: TopBarActions
 
     var body: some View {
-        FullView(actions: actions)
+        MainShell(actions: actions)
             .environment(model)
             // L() is not observable; rebuild on a language change (same
             // trick as the bar).
             .id(model.settings.languageRevision)
-            .frame(
-                minWidth: MainWindowRules.minSize.width, maxWidth: .infinity,
-                minHeight: MainWindowRules.minSize.height, maxHeight: .infinity,
-                alignment: .top)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 }
 
@@ -88,6 +85,8 @@ final class MainWindowController: NSObject, NSWindowDelegate {
 
     private func makeWindow() -> NSWindow? {
         guard let actions = actionsProvider?() else { return nil }
+        // Land on Today unless a deep link already chose a destination.
+        model.prepareMainNavigation()
         let host = NSHostingController(rootView: MainWindowRoot(model: model, actions: actions))
         // The window owns its frame; SwiftUI content must never resize it
         // (clipping lessons, 2026-08-19).
@@ -97,7 +96,7 @@ final class MainWindowController: NSObject, NSWindowDelegate {
             styleMask: MainWindowRules.styleMask, backing: .buffered, defer: false)
         window.contentViewController = host
         window.title = "Klorn"
-        window.titleVisibility = .hidden  // the full view draws its own header
+        window.titleVisibility = .hidden  // the sections draw their own titles
         window.contentMinSize = MainWindowRules.minSize
         window.isReleasedWhenClosed = false  // reused on reopen
         window.isRestorable = false  // our frame autosave is the only restoration

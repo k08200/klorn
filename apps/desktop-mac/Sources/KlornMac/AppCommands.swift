@@ -9,6 +9,8 @@ enum MenuCommand: Hashable {
     case dismiss
     case moveTo(Tier)
     case go(ListMode)
+    /// A main-window section (M4b). Only offered while `macMainWindow` is on.
+    case section(NavSection)
 }
 
 /// A Reply request from the menu, bound to the item it was issued for.
@@ -99,6 +101,9 @@ enum MenuRules {
             return !s.modalOpen && (s.listHasSearchField || keepsDraft)
         case .go(let mode):
             return !s.modalOpen && keepsDraft && (mode != .teams || s.teamModeAvailable)
+        case .section:
+            // Same rule as Go: leaving Mail unmounts the inline reply.
+            return !s.modalOpen && keepsDraft
         case .reply:
             // Re-drafting while the inline composer is open would wipe it.
             return canActOnMessage && s.emailLoaded && keepsDraft
@@ -140,7 +145,29 @@ enum MenuRules {
             let numbered: [ListMode] = [.inbox, .calendar, .proposals, .commitments, .waitingOn]
             guard let index = numbered.firstIndex(of: mode) else { return nil }
             return KeyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
+        case .section(let section):
+            return digitShortcut(NavRules.shortcutDigit(for: section))
         }
+    }
+
+    /// The Go menu while the main window is the full view (M4b): the
+    /// sections take ⌘1–4 and Approvals keeps a digit (⌘5); every other old
+    /// destination stays in the menu without one.
+    static func mainWindowShortcut(for command: MenuCommand) -> KeyboardShortcut? {
+        switch command {
+        case .go(NavRules.numberedSecondary): digitShortcut(NavRules.numberedSecondaryDigit)
+        case .go: nil
+        default: shortcut(for: command)
+        }
+    }
+
+    private static func digitShortcut(_ digit: Int) -> KeyboardShortcut {
+        KeyboardShortcut(KeyEquivalent(Character("\(digit)")), modifiers: .command)
+    }
+
+    /// Go-menu title in the main window: Proposals reads "Approvals" (FD-1).
+    static func mainWindowTitle(for mode: ListMode) -> String {
+        mode == .proposals ? AssistantPane.approvals.title : title(for: mode)
     }
 
     /// Menu title for a Go destination — the sidebar's own label for it.
@@ -193,18 +220,36 @@ struct KlornCommands: Commands {
 }
 
 /// Go menu body. A View (not inline Commands content) so it observes the
-/// model and can hide Teams exactly when the sidebar does.
+/// model and can hide Teams exactly when the sidebar does. With
+/// `macMainWindow` off it is the pre-M4b menu, item for item.
 private struct GoMenuItems: View {
     let model: AppModel
     let perform: @MainActor (MenuCommand) -> Void
 
     var body: some View {
-        ForEach(MenuRules.destinations, id: \.self) { mode in
-            if mode == .mailbox(.sent) { Divider() }
-            if mode != .teams || model.teamModeAvailable {
+        if model.settings.macMainWindow {
+            ForEach(NavSection.allCases) { section in
                 CommandButton(
-                    model: model, command: .go(mode), title: MenuRules.title(for: mode),
+                    model: model, command: .section(section), title: section.title,
                     perform: perform)
+            }
+            Divider()
+            ForEach(NavRules.secondaryDestinations, id: \.self) { mode in
+                if mode != .teams || model.teamModeAvailable {
+                    CommandButton(
+                        model: model, command: .go(mode),
+                        title: MenuRules.mainWindowTitle(for: mode), perform: perform,
+                        shortcut: MenuRules.mainWindowShortcut(for: .go(mode)))
+                }
+            }
+        } else {
+            ForEach(MenuRules.destinations, id: \.self) { mode in
+                if mode == .mailbox(.sent) { Divider() }
+                if mode != .teams || model.teamModeAvailable {
+                    CommandButton(
+                        model: model, command: .go(mode), title: MenuRules.title(for: mode),
+                        perform: perform)
+                }
             }
         }
     }
@@ -217,10 +262,12 @@ private struct CommandButton: View {
     let command: MenuCommand
     let title: String
     let perform: @MainActor (MenuCommand) -> Void
+    /// Set only by the main-window Go menu, which renumbers its items.
+    var shortcut: KeyboardShortcut?? = nil
 
     var body: some View {
         Button(title) { perform(command) }
-            .keyboardShortcut(MenuRules.shortcut(for: command))
+            .keyboardShortcut(shortcut ?? MenuRules.shortcut(for: command))
             .disabled(!MenuRules.isEnabled(command, in: MenuState(model: model)))
     }
 }

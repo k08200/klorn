@@ -240,10 +240,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         case .find:
             ensureFullView()
             if !model.listMode.hasSearchField { model.go(to: .inbox) }
+            // The search field lives in Mail; the main window may be elsewhere.
+            if model.settings.macMainWindow { model.navigate(to: .mail) }
             model.searchFocusPending = true
         case .go(let mode):
             ensureFullView()
             model.go(to: mode)
+        case .section(let section):
+            ensureFullView()
+            model.navigate(to: section)
         case .reply:
             model.requestReply()
         case .dismiss:

@@ -12,11 +12,14 @@ import SwiftUI
 /// the wrong instinct on a screen whose whole job is informed consent.
 struct ProposalsList: View {
     @Environment(AppModel.self) private var model
+    /// The main window calls this list "Approvals" (FD-1); the bar's full
+    /// view keeps its own title until it is retired (M8).
+    var title = L("proposals.title")
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                Text(L("proposals.title"))
+                Text(title)
                     .font(.title3.weight(.semibold)).foregroundStyle(Theme.text)
                 Text("\(model.pendingActions.count)")
                     .font(.title3.monospacedDigit()).foregroundStyle(Theme.textDim)
@@ -40,7 +43,7 @@ struct ProposalsList: View {
                 .padding(.horizontal, 20).padding(.top, Theme.s4)
                 Spacer()
             } else {
-                ScrollView {
+                OffscreenFriendlyScroll {
                     VStack(alignment: .leading, spacing: Theme.s2) {
                         ForEach(model.pendingActions) { action in
                             ProposalRow(

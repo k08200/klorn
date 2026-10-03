@@ -355,6 +355,9 @@ final class TopBarController {
     /// to "open this", shared by the panel rows and the urgent-mail card.
     func openInApp(_ item: FirewallItem) {
         setState(.full)
+        // The main window may be on Today or another section: bring Mail
+        // forward on a facet that lists the item (M4b).
+        if model.settings.macMainWindow { model.revealInMail(item) }
         Task { await model.select(item) }
     }
 

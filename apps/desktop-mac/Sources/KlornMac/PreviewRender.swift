@@ -76,7 +76,7 @@ enum PreviewRender {
      "attention":[{"rank":1,"action":"회고 생각 두세 가지 준비","reason":"오후 2시 디자인 회고"}]}
     """
 
-    private static let calendarSeedJSON = """
+    static let calendarSeedJSON = """
     [{"id":"c1","title":"디자인 회고","startTime":"2026-07-29T05:00:00Z",
       "endTime":"2026-07-29T06:00:00Z","location":null,"meetingLink":null,"allDay":false},
      {"id":"c2","title":"벤더 체크인","startTime":"2026-07-29T07:30:00Z",
@@ -186,39 +186,11 @@ enum PreviewRender {
         ])
 
         var ok = true
-        // A view taller than the frame is centred by default, which silently cuts
-        // the title off the top. Surfaces that read top-down pass .top.
         func shot(_ name: String, size: CGSize, align: Alignment = .center,
                   @ViewBuilder _ content: () -> some View) {
-            // .background LAST would sit OUTSIDE the forced colorScheme and
-            // paint the light ground behind a dark render — the shot has to
-            // carry the environment all the way out.
-            let view = content()
-                .environment(model)
-                .frame(width: size.width, height: size.height, alignment: align)
-                .clipped()
-                .background(Theme.bg)
-                .environment(\.colorScheme, renderDark ? .dark : .light)
-            let renderer = ImageRenderer(content: view)
-            // 2x so type rendering is judged at the density a Mac actually shows.
-            renderer.scale = 2
-            guard let image = renderer.nsImage,
-                  let tiff = image.tiffRepresentation,
-                  let rep = NSBitmapImageRep(data: tiff),
-                  let png = rep.representation(using: .png, properties: [:])
-            else {
-                print("  ✗ \(name) — render failed")
-                ok = false
-                return
-            }
-            let out = dir.appendingPathComponent("\(name).png")
-            do {
-                try png.write(to: out)
-                print("  ✓ \(name)  \(Int(size.width))×\(Int(size.height))")
-            } catch {
-                print("  ✗ \(name) — \(error.localizedDescription)")
-                ok = false
-            }
+            ok = writeShot(
+                name, size: size, align: align, model: model, dir: dir, dark: renderDark,
+                content) && ok
         }
 
         let actions = previewActions()
@@ -322,12 +294,52 @@ enum PreviewRender {
         shot("tier-guide", size: CGSize(width: tourW, height: 520)) {
             TierGuide {}
         }
-        return ok
+        // The main window's sections (M4b), on their own model so the
+        // shots above keep their state.
+        return renderMainWindow(dir: dir, dark: renderDark, actions: actions) && ok
+    }
+
+    /// Render one view to `<dir>/<name>.png`. A view taller than the frame
+    /// is centred by default, which silently cuts the title off the top;
+    /// surfaces that read top-down pass `.top`.
+    static func writeShot(
+        _ name: String, size: CGSize, align: Alignment, model: AppModel, dir: URL, dark: Bool,
+        @ViewBuilder _ content: () -> some View
+    ) -> Bool {
+        // .background LAST would sit OUTSIDE the forced colorScheme and
+        // paint the light ground behind a dark render — the shot has to
+        // carry the environment all the way out.
+        let view = content()
+            .environment(model)
+            .frame(width: size.width, height: size.height, alignment: align)
+            .clipped()
+            .background(Theme.bg)
+            .environment(\.colorScheme, dark ? .dark : .light)
+        let renderer = ImageRenderer(content: view)
+        // 2x so type rendering is judged at the density a Mac actually shows.
+        renderer.scale = 2
+        guard let image = renderer.nsImage,
+              let tiff = image.tiffRepresentation,
+              let rep = NSBitmapImageRep(data: tiff),
+              let png = rep.representation(using: .png, properties: [:])
+        else {
+            print("  ✗ \(name) — render failed")
+            return false
+        }
+        let out = dir.appendingPathComponent("\(name).png")
+        do {
+            try png.write(to: out)
+            print("  ✓ \(name)  \(Int(size.width))×\(Int(size.height))")
+            return true
+        } catch {
+            print("  ✗ \(name) — \(error.localizedDescription)")
+            return false
+        }
     }
 
     /// No-op actions: the renderer never interacts, and a fixture must not be
     /// able to fire a real network call.
-    private static func previewActions() -> TopBarActions {
+    static func previewActions() -> TopBarActions {
         TopBarActions(
             onExpand: {}, onExpandFull: {}, onRestore: {}, onCollapse: {}, onClose: {},
             onSignIn: {}, onSignOut: {},
