@@ -1,4 +1,28 @@
-import { prisma } from "./db.js";
+import { type db, INTERACTIVE_TX_OPTIONS, prisma } from "./db.js";
+import { purgeUserData } from "./purge-user-data.js";
+import { purgeUserObjects } from "./storage/runtime.js";
+
+/**
+ * A full purge of a large account is many deletes and must not die at the 5s
+ * interactive default on a compliance-critical endpoint.
+ */
+const PURGE_TX_TIMEOUT_MS = 60_000;
+
+/**
+ * The two ways a user's data is deleted live here, so neither can drift:
+ *
+ *   - `deleteUserAndAllData`: the account goes (self-service and admin routes);
+ *   - `purgeAllUserData`: the data goes, the account row stays
+ *     (`DELETE /api/user/me/data`).
+ *
+ * Both delete the user's stored objects FIRST (step D1 of
+ * docs/providers/unified-platform-plan.md) and stop if that fails. The user id
+ * is the only handle on those objects: once the rows are gone, files left in
+ * the bucket could never be found again, and the request would have been
+ * answered "deleted" while they still existed. A failed deletion leaves every
+ * row in place and is safe to retry. While OBJECT_STORAGE_ENABLED is off the
+ * object step is a no-op.
+ */
 
 /**
  * Delete a user and ALL of their data. Single source of truth so the
@@ -14,8 +38,22 @@ import { prisma } from "./db.js";
  * deletion leaves nothing tied to the user, not even an anonymized usage row.
  */
 export async function deleteUserAndAllData(userId: string): Promise<void> {
+  await purgeUserObjects(userId);
   await prisma.$transaction([
     prisma.llmUsageLog.deleteMany({ where: { userId } }),
     prisma.user.delete({ where: { id: userId } }),
   ]);
+}
+
+/**
+ * Exhaustive user-data wipe that keeps the account row. See purge-user-data.ts:
+ * the row list is CASA/Google "delete my data" critical and regression-tested.
+ * Pool-sized maxWait (#845 P2028 class) plus a 60s timeout of its own.
+ */
+export async function purgeAllUserData(userId: string): Promise<void> {
+  await purgeUserObjects(userId);
+  await prisma.$transaction((tx) => purgeUserData(tx as unknown as typeof db, userId), {
+    ...INTERACTIVE_TX_OPTIONS,
+    timeout: PURGE_TX_TIMEOUT_MS,
+  });
 }

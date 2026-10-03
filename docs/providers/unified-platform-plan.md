@@ -3031,9 +3031,156 @@ does not wait for them.
 
 ### Workstream D — drive
 
-**D1 — object storage foundation** (*outline*). Depends on: FA-7. S3-compatible
-client, per-user key prefix, size caps, signed downloads. It may start early:
-E4 needs it before workstream D's turn comes.
+**D1 — object storage foundation.** Depends on: FA-7 for the flip, not for the
+merge. Landed 2026-10-03 (branch `feat/object-storage`, PR not yet opened), flag
+OFF. It started early because E4 needs it before workstream D's turn comes.
+- Context: nothing in the repo stored a file. `mail/email-attachments.ts` keeps
+  only extracted text (at most 24,000 characters per attachment) in Postgres.
+  D3, D4 and E4 need bytes somewhere, and L15 and P6 say where: Cloudflare R2,
+  through the S3 API so the vendor stays replaceable.
+- Tasks: a storage interface, one S3-compatible implementation, server-minted
+  keys with a per-user prefix, size and expiry limits, signed downloads, purge on
+  account deletion, a health check, and an in-memory fake with a contract suite.
+  No route, no schema change, no UI.
+- Landed (`packages/api/src/storage/`):
+  - Flag `OBJECT_STORAGE_ENABLED` (`objectStorageEnabled()` in `config.ts`,
+    lenient parse, read per call). Off: `storage/runtime.ts` builds no client,
+    reads no `OBJECT_STORAGE_*` variable and opens no connection, and the purge
+    skips storage (tested with mutations that remove each check). Everything
+    outside `storage/` reaches a store through `runtime.ts`
+    (`getUserStorage()`, `getObjectStore()`, both null while off).
+  - Two layers. `ObjectStore` (`object-store.ts`) is the vendor seam:
+    `putObject(key, body, {contentType, size})`, `getObject(key)` (a stream, or
+    null), `headObject`, `deleteObject`, `deleteByPrefix(prefix)` (one page per
+    call, answers `{deleted, more}`), `signedDownloadUrl(key, {expiresInSeconds,
+    downloadName})` and `ping()`. `UserStorage` (`user-storage.ts`) is what D3,
+    D4 and E4 call: every function takes the `userId`, an upload gets its key
+    minted there, and any other call refuses a key outside that user's prefix
+    before the store is touched (`key-not-owned`). The `userId` must come from
+    the session.
+  - Keys (`keys.ts`): `u/<userId>/<purpose>/<uuid>`. The purpose is an enum
+    (`drive`, `attachment`); the last segment is `randomUUID()`. Nothing a
+    client sends is a path segment: a display file name is metadata for a later
+    step's table, and reaches storage only as a signed query value. The grammar
+    is checked by the store itself on every call, so `..`, `%2F`, a query string
+    or a second bucket cannot ride in on a key. A user prefix always ends with
+    the slash, so user `abc` never covers `abcd`.
+  - Limits (`limits.ts`), each a named constant:
+    - `MAX_OBJECT_BYTES` 25 MiB, the only size the plan has decided (L14). It is
+      checked against the declared size before the upload and counted on the
+      stream during it (`guardBytes`): a stream that passes the cap, or does not
+      match its declared size, is aborted and nothing is stored. A caller may
+      pass a lower `maxBytes`; nothing raises the cap. The drive's own number is
+      a flip-time decision (P3) and changes this constant in D3.
+    - Content type: normalised to `type/subtype`, and each caller passes a
+      `contentTypePolicy` (required, no default; `allowContentTypes`,
+      `denyContentTypes`, `allowAnyContentType`). D1 decides no policy.
+    - `MAX_SIGNED_URL_EXPIRY_SECONDS` 300. A longer request is refused, not
+      shortened.
+    - A signed download always carries `response-content-disposition:
+      attachment` with a cleaned name (`download-name.ts`: last path component
+      only, no quote, line break, control or bidi character, NFC, 120
+      characters, an ASCII fallback plus `filename*=UTF-8''…` for Korean names)
+      and `response-content-type: application/octet-stream`. A stored HTML or
+      SVG file therefore downloads; it never renders on the storage origin. An
+      inline preview is a separate decision for D3.
+  - The S3 implementation (`s3-store.ts`): plain REST calls over Node's `fetch`,
+    signed with SigV4. Path-style addressing by default (R2, MinIO, Supabase
+    Storage, including an endpoint with a base path); virtual-hosted style when
+    `OBJECT_STORAGE_FORCE_PATH_STYLE=false` (AWS S3). Uploads are streamed with
+    a `Content-Length` and an unsigned payload, so TLS carries the integrity and
+    the endpoint must be https outside development and tests. Redirects are not
+    followed. Nothing is retried: a streamed body cannot be replayed and the
+    other calls are idempotent. Timeouts are named (15 s for head, delete and
+    list; 120 s for one upload or download). Host, bucket and credentials come
+    only from the operator's environment, so the SSRF pinning B4 needed for a
+    user-supplied host does not apply here.
+  - Deletion. `deleteByPrefix` accepts only `u/<userId>/` or
+    `u/<userId>/<purpose>/`, lists one page (at most 1,000 keys) and deletes
+    those keys one by one, eight at a time. If the listing names any key outside
+    the prefix or outside the grammar, nothing is deleted. A page whose deletes
+    partly fail throws `delete-incomplete`. `UserStorage.purgeUser` repeats
+    pages until the prefix is empty, at most `PURGE_MAX_PAGES` (1,000).
+  - Purge wiring (`user-deletion.ts`). Both deletion paths now live there:
+    `deleteUserAndAllData` (the account goes: `DELETE /api/auth/account` and the
+    admin route) and `purgeAllUserData` (rows go, the account stays:
+    `DELETE /api/user/me/data`, moved out of `index.ts` unchanged). Each calls
+    `purgeUserObjects(userId)` first and outside the database transaction.
+    **Decision: the purge blocks on storage.** If the bucket is unreachable,
+    misconfigured or keeps an object, the call throws, no row is deleted, and
+    the request answers 500 through the existing error handler (logged and sent
+    to Sentry). The reason: the user id is the only handle on the objects. Once
+    the rows are gone, files left behind could never be found, and the request
+    would have answered "deleted" while they still existed. Deleting is
+    idempotent, so the person retries. The price: while the flag is on, a
+    storage outage also blocks account deletion.
+  - Health (`checkObjectStorageAtStartup`, called from `index.ts` after
+    `listen`). Off: nothing. On: it validates the variables and lists one key,
+    which needs exactly the permission the purge needs. A bad config is reported
+    by variable NAME, a failing bucket by HTTP status and the vendor's error
+    code (`[STORAGE]` log lines and Sentry). **It does not stop the boot**:
+    storage is auxiliary and mail must keep serving. Every storage call then
+    fails closed with `misconfigured` until it is fixed. No value is logged, the
+    error body from the vendor is never printed (only its `<Code>`), and the
+    store keeps its credentials in `#private` fields so logging the object
+    prints nothing.
+  - Tests. `MemoryObjectStore` (`memory-store.ts`) implements the same interface
+    for D3, D4 and E4. One contract suite
+    (`__tests__/helpers/object-store-contract.ts`) runs against the fake,
+    against the S3 implementation over real HTTP to a local stand-in
+    (`fake-s3-server.ts`), and against a real bucket when
+    `OBJECT_STORAGE_TEST_*` is set (`storage-s3-real-bucket.test.ts`, skipped
+    by default with the variable names in the skip message). The stand-in
+    verifies every request with an independent SigV4 implementation
+    (`sigv4-reference.ts`) that is itself pinned to three signatures AWS
+    publishes in the S3 documentation.
+- Dependency decision: `aws4fetch` 1.0.20 (MIT, pinned exactly), measured
+  2026-10-03 with a clean `npm install` of each option:
+
+  | | `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner` 3.1146.0 | `aws4fetch` 1.0.20 |
+  |---|---|---|
+  | Packages installed | 27 | 1 (no dependencies) |
+  | Size on disk | 18.7 MB, 3,354 files | 84 kB, 10 files (one 11 kB module) |
+  | Last release | 2026-10-02, near-daily | 2024-08-28 |
+  | Streaming upload | yes; multipart needs a third package | yes: it signs, Node's `fetch` streams with `duplex: "half"` |
+  | Presigned GET | yes | yes (`signQuery`) |
+  | `npm audit` | 0 | 0 |
+
+  `aws4fetch` covers the whole interface, so the smaller one wins. What it
+  costs: the six REST calls and two small XML reads are our code (`s3-store.ts`,
+  `s3-xml.ts`), there is no multipart upload (one PUT holds 5 GB on S3, far
+  above the cap), and the library is slow-moving. It sits behind `ObjectStore`,
+  so replacing it touches one file. A hand-written signer was rejected: with no
+  bucket yet it could not be checked against a real vendor.
+  `pnpm audit --prod`: no known vulnerabilities.
+- Environment (`packages/api/.env.example`), all read only while the flag is on:
+  `OBJECT_STORAGE_ENABLED`, `OBJECT_STORAGE_ENDPOINT`, `OBJECT_STORAGE_REGION`
+  (`auto` on R2), `OBJECT_STORAGE_BUCKET`, `OBJECT_STORAGE_ACCESS_KEY_ID`,
+  `OBJECT_STORAGE_SECRET_ACCESS_KEY`, `OBJECT_STORAGE_FORCE_PATH_STYLE`
+  (optional, default true).
+- What FA-7 must provide: a Cloudflare R2 account; one private bucket for
+  production (and, ideally, a second one for the contract run); an R2 API token
+  with **Object Read & Write limited to that bucket**, nothing account-wide; the
+  S3 endpoint `https://<account id>.r2.cloudflarestorage.com`. No CORS rule and
+  no public access: a browser only ever follows a signed URL as a plain
+  download.
+- Not verified, and what closes each gap:
+  - No request has reached a real R2 bucket. Before the flip, run
+    `storage-s3-real-bucket.test.ts` against a test bucket. It covers what the
+    stand-in cannot: that R2 accepts the unsigned-payload streamed PUT, honours
+    `response-content-disposition` and `response-content-type` on a signed URL,
+    canonicalises the `filename*` value the same way, and lets a bucket-scoped
+    token list.
+  - A HEAD answer has no body, so `headObject` cannot tell a missing object from
+    a missing bucket. `ping` and every GET can.
+- Before the flip:
+  - Do not turn the flag off again once objects exist: the purge would skip
+    them. Kill switches belong to the features built on top (D3, E4).
+  - D3 must close the upload race: an upload that is in flight while the account
+    is being deleted can land after the object purge. It needs a check at
+    upload time or an orphan sweep over `u/` prefixes with no user row.
+  - The purge deletes one object per request. D3 revisits this (a batch delete
+    or a background job) once the drive's real volumes are known.
 **D2 — drive model and provider seam** (*outline*). A metadata index of files
 across sources.
 **D3 — Klorn drive** (*outline*). Depends on: D1, D2. Upload, list, download,
@@ -3119,7 +3266,7 @@ time, whatever the graph says. The later step rebases, reruns
 | FA-4 | Add the MX record at Namecheap once L4 is confirmed and the address inventory (E0) is done | E1 |
 | FA-5 | Approve privacy policy and terms changes. Klorn becomes a mail and file host | E3, D3 |
 | FA-6 | Confirm whether hosting mail requires a value-added telecommunications filing in Korea. Unverified | E3 |
-| FA-7 | Create the object storage account | D1 |
+| FA-7 | Create the object storage account: Cloudflare R2, one private bucket, an API token with object read and write on that bucket only, and the S3 endpoint. No CORS rule (details in D1) | D1 flip |
 | FA-8 | Run the Samsung calendar probe on a Galaxy device and record the result here | C5 |
 | FA-9 | Azure app registration (existing action B). That action lists `Mail.*` permissions only; calendar and file permissions must be added for C4 and D6. For C4: add delegated `Calendars.Read` (and `User.Read` if it is not already listed); the calendar link requests exactly `openid email offline_access User.Read Calendars.Read`, reuses the existing redirect URI, and asks for no `Mail.*`. Existing inbox links keep their consent unchanged | B5, C4, D6 |
 
