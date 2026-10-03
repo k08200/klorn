@@ -36,7 +36,7 @@ struct TopBarActions {
     let onUnpinSender: (FirewallItem) -> Void
     /// Select a row in the full view — loads its email into the reading pane.
     let onSelect: (FirewallItem) -> Void
-    /// Open the Preferences overlay (switches to the full view first).
+    /// Open the Settings window.
     let onOpenPreferences: () -> Void
     /// Hide the bar entirely (pill ✕) — the menu-bar icon takes over as anchor.
     let onHideBar: () -> Void
@@ -2015,6 +2015,24 @@ enum ListMode: Equatable, Hashable {
     /// not live in a settings corner) — teams, whole-team availability, and
     /// booking. Rendered only while the server grants team mode.
     case teams
+
+    /// Whether the destination lives on the sidebar's mail level (folders,
+    /// lanes, categories) rather than the root feature nav.
+    var isMailFamily: Bool {
+        switch self {
+        case .inbox, .label, .tier, .mailbox, .waitingOn: true
+        case .commitments, .proposals, .calendar, .teams: false
+        }
+    }
+
+    /// The list column modes that carry the whole-mailbox search field
+    /// (FullList.tierList) — where Find (⌘F) can land.
+    var hasSearchField: Bool {
+        switch self {
+        case .inbox, .tier, .label: true
+        default: false
+        }
+    }
 }
 
 struct FullView: View {
@@ -2054,39 +2072,27 @@ struct FullView: View {
             // Modal overlays block POINTER input with the scrim, but Tab/
             // VoiceOver traversal follows the view tree — disable the
             // background so keyboard focus can't wander behind the modal.
-            .disabled(model.showCompose || model.showPreferences || model.showTierGuide)
+            .disabled(model.showCompose || model.showTierGuide)
             .onAppear {
                 model.presentTierGuideIfFirstRun()
                 model.presentPurposePromptIfNeeded()
             }
             // The dock rides above the columns but BELOW the modal overlays:
             // a modal is something the user just asked for.
-            if model.phase == .signedIn
-                && !model.showCompose && !model.showPreferences && !model.showTierGuide
-            {
+            if model.phase == .signedIn && !model.showCompose && !model.showTierGuide {
                 AssistantDock()
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             }
-            if model.showCompose && !model.showPreferences {
+            if model.showCompose {
                 Theme.text.opacity(0.45)
                     .onTapGesture { if !model.composeSending { model.showCompose = false } }
                     .accessibilityHidden(true)
                 ComposePanel()
             }
-            if model.showPreferences {
-                // Scrim: click-off dismiss (a11y users use the Done button instead).
-                // Slate-navy tint, not pure black — matches the light theme.
-                Theme.text.opacity(0.45)
-                    .onTapGesture { model.showPreferences = false }
-                    .accessibilityHidden(true)
-                PreferencesView(actions: actions)
-            }
-            // Preferences wins if both are up: the guide is ambient explanation,
-            // a settings panel is something the user just asked for.
-            // The connect-time purpose question — below the guide and
-            // Preferences in priority (both are things the user asked for or
-            // must read first).
-            if model.showPurposePrompt && !model.showPreferences && !model.showTierGuide
+            // Preferences moved to the Settings window (M0, 2026-10-02).
+            // The connect-time purpose question — below the guide in
+            // priority (the user must read that first).
+            if model.showPurposePrompt && !model.showTierGuide
                 && !model.showCompose
             {
                 Theme.text.opacity(0.45)
@@ -2095,14 +2101,14 @@ struct FullView: View {
                 PurposePrompt()
             }
             // Event editor (2026-09-11) — a user action opened it, so it sits
-            // above the connect-time question but below Preferences.
-            if model.showEventEditor && !model.showPreferences {
+            // above the connect-time question.
+            if model.showEventEditor {
                 Theme.text.opacity(0.45)
                     .onTapGesture { model.dismissEventEditor() }
                     .accessibilityHidden(true)
                 CalendarEventEditor()
             }
-            if model.showTierGuide && !model.showPreferences {
+            if model.showTierGuide {
                 Theme.text.opacity(0.45)
                     .onTapGesture { model.dismissTierGuide() }
                     .accessibilityHidden(true)
@@ -2916,7 +2922,7 @@ private struct FullSidebar: View {
                 }
             }
             sidebarAction(L("guide.reopen"), dim: true) { model.showTierGuide = true }
-            sidebarAction(L("prefs.title"), dim: true) { model.showPreferences = true }
+            sidebarAction(L("prefs.title"), dim: true) { actions.onOpenPreferences() }
             }
             }
             // A CAP, not a fixed height (same rule as TODAY/UPCOMING): short
@@ -3069,7 +3075,7 @@ private struct FullList: View {
                         .iconTarget(30)
                 }
                 .buttonStyle(.plain).foregroundStyle(Theme.textDim)
-                .keyboardShortcut("n", modifiers: .command)
+                // ⌘N lives in the app menu (File ▸ New Email) — one owner.
                 .help(L("compose.new"))
                 .accessibilityLabel(L("compose.new"))
             }
@@ -3090,6 +3096,14 @@ private struct FullList: View {
                     .textFieldStyle(.plain).font(.callout).foregroundStyle(Theme.text)
                     .focused($searchFocused)
                     .accessibilityLabel(L("mail.search.a11y"))
+                    // Edit ▸ Search Mail (⌘F). `initial`: Find may have just
+                    // switched the list mode, mounting this field fresh.
+                    .onChange(of: model.searchFocusPending, initial: true) { _, pending in
+                        guard pending else { return }
+                        model.searchFocusPending = false
+                        // Next runloop: focus set during mount is dropped.
+                        DispatchQueue.main.async { searchFocused = true }
+                    }
                 if !query.isEmpty {
                     Button {
                         query = ""
@@ -4229,6 +4243,18 @@ struct ReadingPane: View {
             quickReplies = nil
             loadingQuickReplies = false
         }
+        // Message ▸ Reply (⌘R) runs the same path as the Reply-with-AI button.
+        // Never while composing: a fresh draft would overwrite the user's text.
+        .onChange(of: model.replyRequest) { _, request in
+            guard let item, MenuRules.shouldStartReply(
+                request, selectedItemId: item.id, replying: replying,
+                emailLoaded: model.openedEmail != nil)
+            else { return }
+            startReply(item)
+        }
+        // Mirror the inline composer so the menu can disable Reply while it is open.
+        .onChange(of: replying, initial: true) { _, now in model.readerReplying = now }
+        .onDisappear { model.readerReplying = false }
     }
 
     /// A folder message: subject / counterparty / time, then the body as the
