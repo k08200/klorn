@@ -11,6 +11,109 @@ This is a **staged** rollout, and the staging is gated on a tested restore
 path (done, 2026-08-04) *and* on the app connecting as a role that RLS can
 actually constrain (not yet true — see below).
 
+## 2026-10-03: the last 19 tables, and the Data API
+
+**Found.** Supabase's security advisor reported ERROR `rls_disabled_in_public`
+for 19 tables (read-only check on production, 2026-10-03). Supabase serves the
+`public` schema over its REST API as the roles `anon` and `authenticated`, and
+both held SELECT, INSERT and DELETE on those tables. Anyone holding the
+project's anon key could read or change them. The app never uses that API.
+
+The rest of this document is about a missed `where: { userId }` in our own
+code. This was a different door: a role we never use, reaching the tables from
+outside. RLS that is inert for the app's role is still what keeps that role out.
+
+**Fixed by** `20261010010000_enable_rls_remaining_tables`. ENABLE only, never
+FORCE, so nothing changes for the running app.
+
+| Tables | Policies | Why |
+| --- | --- | --- |
+| ApiKey, ContactDossier, ImapMovedMessage, LlmUsageLog, McpWriteAudit, PmfResponse, ScreenerDecision, SenderLabel, SentMessage, Team, ThreadBrief | `_tenant_isolation` on `"userId"`, `_system_bypass` | The standard pair. `LlmUsageLog."userId"` is nullable: a NULL row is a system call and is reachable through the bypass only. |
+| Message, ConversationSummary, CommitmentPath | `_tenant_isolation` through the parent (`Conversation`, `Commitment`), `_system_bypass` | No `"userId"`, but the parent has one, and tenant-scoped handlers read them with the parent. Bypass-only would return zero rows to those handlers once RLS binds. |
+| GlobalCostLedger, OntologyProposal, Waitlist, WebhookEvent | `_system_bypass` only | No owning user. Reach them with `withSystem`. |
+| `_prisma_migrations` | none | RLS with no policy denies every role that neither owns the table nor bypasses RLS. `prisma migrate deploy` runs as the owner. |
+
+The same migration revokes every table privilege from `anon` and
+`authenticated` on every table in `public`, the ones that already had RLS
+included, and removes both roles from the default privileges so that a table
+created by a later migration is not granted to them. It goes table by table
+over the tables the migrating role owns. `REVOKE ... ON
+ALL TABLES IN SCHEMA public` is an error, not a warning, when the schema holds
+one relation that role has no privilege on, and the error would roll back the
+whole migration.
+
+The policies trust a setting the connection supplies. That holds for our own
+connection. It does not hold for a connection that can run `SET`: on a scratch
+database with the grants left in place, `anon` set `app.bypass_rls` itself and
+read every row. Without a privilege there is nothing left to bypass, and
+`TRUNCATE`, which RLS never covers, goes with it. `service_role`, `postgres`
+and `klorn_app` are not touched. Sequences and functions are left alone: the
+migrations create none of their own (the only functions in `public` on a
+scratch deploy are `pg_trgm`'s).
+
+Every count of "43 tables" below is as measured on 2026-08-05. After this
+migration every table in `public` has RLS: each model's table with its
+policies, and `_prisma_migrations` with none.
+
+### New tables ship with RLS
+
+`packages/api/src/__tests__/rls-coverage-guard.test.ts` reads `schema.prisma`
+and fails when a model's table is not left with RLS enabled, a `_system_bypass`
+policy and, if it has a `userId` field, a `_tenant_isolation` policy. It
+compares the policy's condition too, so a policy with the right name and
+`USING (true)` fails. The failure prints the lines to add to the migration that
+creates the table:
+
+```sql
+ALTER TABLE "Thing" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Thing_tenant_isolation" ON "Thing" USING ("userId" = current_setting('app.current_user_id', true));
+CREATE POLICY "Thing_system_bypass" ON "Thing" USING (current_setting('app.bypass_rls', true) = 'on');
+```
+
+It also fails on a later `DISABLE` or `DROP POLICY`. A table with no `userId`
+gets the bypass policy only, unless it is listed in `PARENT_SCOPED` in that
+file, which asks for a tenant policy through its parent. A table that must have
+no RLS goes in `RLS_EXEMPT_MODELS`, with the reason.
+
+### Check the database after the deploy
+
+The test reads migration text. It cannot tell whether production ran it, and
+there is a path where production does not. `scripts/start.sh` falls back to
+baselining when `prisma migrate deploy` fails: if `prisma migrate diff` finds no
+difference between the live database and `schema.prisma`, it marks every
+migration as applied. Prisma's diff does not see RLS, policies or grants, so a
+migration made only of those always passes that check. Reproduced on a scratch
+database on 2026-10-03, running the script's steps by hand: a reader held a lock
+on `"Message"` past the 5 s `lock_timeout`, the migration failed and rolled
+back, and the fallback recorded it as applied with 19 tables still open.
+
+So after deploying any migration that only changes RLS or grants, run this as
+`postgres`. The first two queries must return no rows, and the third must not
+name `anon` or `authenticated` in a row whose creator is `postgres`:
+
+```sql
+SELECT c.relname FROM pg_class c
+WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'r' AND NOT c.relrowsecurity;
+
+SELECT grantee, count(*) FROM information_schema.role_table_grants
+WHERE table_schema = 'public' AND grantee IN ('anon', 'authenticated') GROUP BY grantee;
+
+SELECT pg_get_userbyid(defaclrole) AS creator, defaclnamespace::regnamespace AS schema, defaclacl
+FROM pg_default_acl
+WHERE defaclobjtype = 'r' AND defaclnamespace IN (0, 'public'::regnamespace);
+```
+
+If the first two return rows, run the migration file by hand inside
+`BEGIN; … COMMIT;`. Every statement in it can run twice. A table in `public`
+that `postgres` does not own keeps its grants and shows up in the second query:
+the migration leaves it alone.
+
+The third query has only been run on a scratch database built to copy
+Supabase's default privileges. The migration removes the two roles from the
+entry for schema `public`. If production still names either of them, in that
+entry or in one with schema `-`, tables created by later migrations are still
+granted to them and depend on the guard test alone.
+
 ## The blocker: the app's role bypasses RLS unconditionally
 
 Measured against production on 2026-08-04:
@@ -67,13 +170,11 @@ as a mismatch here and nowhere else.
 This also confirms `set_config(..., is_local => true)` survives the pooler,
 which is the assumption `withTenant` is built on.
 
-**Known gap: `User` itself has no RLS.** 43 tables are enabled and all 43 have
-policies (no orphan with RLS on and no policy — that combination would deny
-everything once RLS binds). `User` is not among them: it has no `userId`
-column, so the `"userId" = current_setting(...)` shape does not fit — it needs
-`id = current_setting(...)`. Until that lands, a missed filter on the table
-holding every account's email address is exactly the class of bug this whole
-effort exists to backstop. It should be its own slice, and it is not optional.
+**Gap found here, closed since: `User` had no RLS.** 43 tables were enabled and
+all 43 had policies (no orphan with RLS on and no policy — that combination
+would deny everything once RLS binds). `User` was not among them: it has no
+`userId` column, so the `"userId" = current_setting(...)` shape does not fit.
+`20260805120000_enable_rls_user` added it with `id = current_setting(...)`.
 
 ### What actually unlocks isolation
 
@@ -334,6 +435,13 @@ including the account needed to diagnose it.
    every table simultaneously and every unrouted query silently returns zero
    rows.
 
+   **Corrected 2026-10-03: the RLS state is not decorative.** It is what kept
+   the Data API roles out of the 43 tables while they held grants (see the
+   2026-10-03 section). Those grants are revoked now, so disabling RLS no longer
+   opens a table to them, but the coverage guard fails on a `DISABLE` until the
+   table is listed in `RLS_EXEMPT_MODELS`. The set that arms at the switch is
+   also larger than 43 now: it includes `Message` and the other 17 tables.
+
 6. **Re-enable per table** as its call sites land, lowest-traffic first. Two
    hard gates before widening:
    - **Correctness canary (required)**: an integration test per newly-armed
@@ -349,17 +457,17 @@ including the account needed to diagnose it.
    Roll a table back instantly with `ALTER TABLE t DISABLE ROW LEVEL SECURITY;`
    (no data change).
 
-7. **Bespoke policies** for the tables the first migration skipped:
+7. **Bespoke policies** for the tables the first migration skipped.
+   ✅ **Done — no table is waiting for a policy.**
 
-   - **`User`** — the important one, and the only one the migration omitted
-     without saying so. It has no `userId`; the policy shape is
-     `id = current_setting('app.current_user_id', true)`. Leaving it out means
-     the table holding every account's email address stays outside the backstop
-     that the other 43 get, which inverts the point of the exercise. Confirmed
-     readable in full by `klorn_app` on 2026-08-05.
-   - `Message` — scoped via `conversationId`, needs a subquery/join policy.
-   - `LlmUsageLog` — nullable `userId` for system calls.
-   - `WebhookEvent` — global idempotency ledger; likely stays system-only.
+   - **`User`** — the only one the first migration omitted without saying so.
+     `20260805120000_enable_rls_user`, keyed on
+     `id = current_setting('app.current_user_id', true)`.
+   - `Message` — tenant policy through `Conversation`
+     (`20261010010000_enable_rls_remaining_tables`).
+   - `LlmUsageLog` — the standard pair; a NULL `userId` row is system-only
+     (same migration).
+   - `WebhookEvent` — system-only (same migration).
 
 ## Rollback
 
