@@ -1,5 +1,6 @@
--- Enable Row-Level Security on the 19 public tables that still lacked it, and
--- take the Data API roles' table privileges away (2026-10-03).
+-- Enable Row-Level Security on the 19 public tables that still lacked it
+-- (2026-10-03). Second of two migrations: 20261010020000_revoke_data_api_table_grants
+-- runs first and takes the Data API roles' table privileges away.
 --
 -- Found on production (Supabase), read-only, 2026-10-03: the security advisor
 -- reported ERROR `rls_disabled_in_public` for these 19 tables. Supabase serves
@@ -13,10 +14,17 @@
 -- changes nothing for the running app. Every other role now reaches a row only
 -- through the policies below. See docs/rls-rollout.md.
 --
+-- This migration can fail where the first cannot. ENABLE ROW LEVEL SECURITY
+-- needs an ACCESS EXCLUSIVE lock on each of the 19 tables, and one transaction
+-- that holds any lock on one of them for more than 5 seconds makes the whole
+-- file time out and roll back. scripts/start.sh then records it as applied
+-- without running it (docs/rls-rollout.md, "Check the database after the
+-- deploy"). That is why the revoke is a migration of its own: it is already
+-- committed by then.
+--
 -- Every statement can run twice. A policy is dropped before it is created, so
 -- applying this by hand first and deploying it afterwards does not fail.
--- Slotted after 20261009010000_drive_file (main). 20261008010000 belongs to a
--- branch that is still open.
+-- Slotted after 20261010010000_attention_override_undo (main) and the revoke.
 -- Fail fast instead of queueing behind a long lock (same guard as 20261007010000).
 SET LOCAL lock_timeout = '5s';
 
@@ -148,42 +156,3 @@ CREATE POLICY "WebhookEvent_system_bypass" ON "WebhookEvent" USING (current_sett
 -- unaffected. IF EXISTS because a shadow database (`prisma migrate diff`, the
 -- CI Migrations job) replays this file with no such table.
 ALTER TABLE IF EXISTS "_prisma_migrations" ENABLE ROW LEVEL SECURITY;
-
--- 5. Defense in depth: the Data API roles lose their table privileges.
---
--- The policies above trust a setting the connection supplies, which is sound
--- for the app's own connection and is not meant to hold against a role an
--- outsider can reach. Nothing in this repository uses the Data API, so `anon`
--- and `authenticated` need no privilege on any table here, including the ones
--- that already had RLS. The second statement stops Supabase's default
--- privileges from granting them again on every table a later migration
--- creates. It covers tables created by the role that runs this migration,
--- which is the role that runs every migration.
---
--- Skipped where the roles do not exist (CI, local Postgres). `service_role`,
--- `postgres` and `klorn_app` are not touched.
---
--- Table by table, and only the tables the migrating role owns, instead of
--- `REVOKE ... ON ALL TABLES IN SCHEMA public`: that statement is an error, not
--- a warning, when the schema holds one relation the role has no privilege on,
--- and an error here would roll back sections 1 to 4 with it.
-DO $$
-DECLARE
-  data_api_role text;
-  owned_table regclass;
-BEGIN
-  FOREACH data_api_role IN ARRAY ARRAY['anon', 'authenticated'] LOOP
-    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = data_api_role) THEN
-      FOR owned_table IN
-        SELECT c.oid::regclass
-        FROM pg_class c
-        WHERE c.relnamespace = 'public'::regnamespace
-          AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
-          AND pg_get_userbyid(c.relowner) = current_user
-      LOOP
-        EXECUTE format('REVOKE ALL ON TABLE %s FROM %I', owned_table, data_api_role);
-      END LOOP;
-      EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM %I', data_api_role);
-    END IF;
-  END LOOP;
-END $$;

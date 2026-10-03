@@ -23,8 +23,36 @@ The rest of this document is about a missed `where: { userId }` in our own
 code. This was a different door: a role we never use, reaching the tables from
 outside. RLS that is inert for the app's role is still what keeps that role out.
 
-**Fixed by** `20261010010000_enable_rls_remaining_tables`. ENABLE only, never
-FORCE, so nothing changes for the running app.
+**Also read from production that day, read-only (2026-10-03):**
+
+- Postgres 17.6.
+- All 65 tables in `public` are owned by `postgres`. There are no views.
+- The default privileges that grant new tables to `anon` and `authenticated`
+  are the entry for creator `postgres` in schema `public`.
+- `public` holds 31 functions, all of them `pg_trgm`'s. None is
+  `SECURITY DEFINER`.
+- No policy exists outside `public`. Supabase Auth and Storage are unused.
+
+**Fixed by two migrations, in this order:**
+
+1. `20261010020000_revoke_data_api_table_grants` takes every table privilege
+   in `public` away from `anon` and `authenticated`, the tables that already
+   had RLS included, and removes both roles from the default privileges so that
+   a table created by a later migration is not granted to them.
+2. `20261010030000_enable_rls_remaining_tables` enables RLS on the 19 tables
+   and creates their policies. ENABLE only, never FORCE, so nothing changes for
+   the running app.
+
+The order is the point. The second migration needs an ACCESS EXCLUSIVE lock on
+19 tables, with a 5 s `lock_timeout`, so one long transaction on any of them
+makes it fail. The first takes no lock on a user table. Measured on a scratch
+Postgres 17.10 on 2026-10-03: with a session holding ACCESS SHARE, ROW
+EXCLUSIVE or ACCESS EXCLUSIVE on `"Message"`, the revoke on `"Message"` itself
+finished in about a second each time. And with a reader holding `"Message"` for
+25 s, `prisma migrate deploy` applied the first migration, failed the second
+with `55P03 canceling statement due to lock timeout`, and left `anon` with
+`permission denied` on all 65 tables. In one file, that timeout would have
+rolled the revoke back too.
 
 | Tables | Policies | Why |
 | --- | --- | --- |
@@ -33,36 +61,35 @@ FORCE, so nothing changes for the running app.
 | GlobalCostLedger, OntologyProposal, Waitlist, WebhookEvent | `_system_bypass` only | No owning user. Reach them with `withSystem`. |
 | `_prisma_migrations` | none | RLS with no policy denies every role that neither owns the table nor bypasses RLS. `prisma migrate deploy` runs as the owner. |
 
-The same migration revokes every table privilege from `anon` and
-`authenticated` on every table in `public`, the ones that already had RLS
-included, and removes both roles from the default privileges so that a table
-created by a later migration is not granted to them. It goes table by table
-over the tables the migrating role owns. `REVOKE ... ON
-ALL TABLES IN SCHEMA public` is an error, not a warning, when the schema holds
-one relation that role has no privilege on, and the error would roll back the
-whole migration.
+The revoke goes table by table over the tables the migrating role owns.
+`REVOKE ... ON ALL TABLES IN SCHEMA public` is an error, not a warning, when
+the schema holds one relation that role has no privilege on.
 
 The policies trust a setting the connection supplies. That holds for our own
 connection. It does not hold for a connection that can run `SET`: on a scratch
 database with the grants left in place, `anon` set `app.bypass_rls` itself and
 read every row. Without a privilege there is nothing left to bypass, and
 `TRUNCATE`, which RLS never covers, goes with it. `service_role`, `postgres`
-and `klorn_app` are not touched. Sequences and functions are left alone: the
-migrations create none of their own (the only functions in `public` on a
-scratch deploy are `pg_trgm`'s).
+and `klorn_app` are not touched.
 
-Every count of "43 tables" below is as measured on 2026-08-05. After this
-migration every table in `public` has RLS: each model's table with its
+**Functions in `public` keep EXECUTE for `anon` and `authenticated`.** Today
+that reaches only `pg_trgm`. A `SECURITY DEFINER` function added to `public`
+later would be callable by anyone holding the anon key, through `/rpc`, with
+its owner's rights. Create such a function in another schema, or revoke
+EXECUTE on it in the migration that creates it.
+
+Every count of "43 tables" below is as measured on 2026-08-05. After these
+migrations every table in `public` has RLS: each model's table with its
 policies, and `_prisma_migrations` with none.
 
 ### New tables ship with RLS
 
-`packages/api/src/__tests__/rls-coverage-guard.test.ts` reads `schema.prisma`
-and fails when a model's table is not left with RLS enabled, a `_system_bypass`
-policy and, if it has a `userId` field, a `_tenant_isolation` policy. It
-compares the policy's condition too, so a policy with the right name and
-`USING (true)` fails. The failure prints the lines to add to the migration that
-creates the table:
+`packages/api/src/__tests__/rls-coverage-guard.test.ts` fails when a table is
+not left with RLS enabled, a `_system_bypass` policy and, if it has a `userId`
+column, a `_tenant_isolation` policy. The checks are in
+`src/__tests__/helpers/rls-coverage.ts`. The failure says which tables have RLS
+off, which lack a policy and which hold one they may not, and prints the lines
+to add to the migration that creates the table:
 
 ```sql
 ALTER TABLE "Thing" ENABLE ROW LEVEL SECURITY;
@@ -70,10 +97,26 @@ CREATE POLICY "Thing_tenant_isolation" ON "Thing" USING ("userId" = current_sett
 CREATE POLICY "Thing_system_bypass" ON "Thing" USING (current_setting('app.bypass_rls', true) = 'on');
 ```
 
-It also fails on a later `DISABLE` or `DROP POLICY`. A table with no `userId`
-gets the bypass policy only, unless it is listed in `PARENT_SCOPED` in that
-file, which asks for a tenant policy through its parent. A table that must have
-no RLS goes in `RLS_EXEMPT_MODELS`, with the reason.
+What it reads, and what it refuses:
+
+- It finds tables in two places: the models of `schema.prisma`, and every
+  `CREATE TABLE` in the migrations that no later `DROP TABLE` removes. A table
+  written in raw SQL, or an implicit many-to-many table, is checked like any
+  other.
+- A policy must match its expected line word for word. One with the right name
+  and `USING (true)` fails.
+- A table may hold its expected policies and no other. Permissive policies are
+  ORed, so one extra policy opens a table whatever the others say. A policy the
+  guard does not expect fails, and so does one changed by `ALTER POLICY`: drop
+  it and create it again.
+- A later `DISABLE`, `DROP POLICY`, or `DROP TABLE` followed by a new
+  `CREATE TABLE` undoes what came before it.
+- SQL inside a `--` or `/* */` comment does not count.
+
+A table with no `userId` gets the bypass policy only, unless it is listed in
+`PARENT_SCOPED` in the helper, which asks for a tenant policy through its
+parent. A table that must have no RLS goes in `RLS_EXEMPT_TABLES`, with the
+reason. A policy of a new shape needs the helper taught first.
 
 ### Check the database after the deploy
 
@@ -83,9 +126,10 @@ baselining when `prisma migrate deploy` fails: if `prisma migrate diff` finds no
 difference between the live database and `schema.prisma`, it marks every
 migration as applied. Prisma's diff does not see RLS, policies or grants, so a
 migration made only of those always passes that check. Reproduced on a scratch
-database on 2026-10-03, running the script's steps by hand: a reader held a lock
-on `"Message"` past the 5 s `lock_timeout`, the migration failed and rolled
-back, and the fallback recorded it as applied with 19 tables still open.
+database on 2026-10-03, running the script's steps by hand: after the lock
+timeout above, the fallback recorded the second migration as applied with RLS
+still off on 19 tables. The revoke had already been committed, so `anon` was
+still denied on every table.
 
 So after deploying any migration that only changes RLS or grants, run this as
 `postgres`. The first two queries must return no rows, and the third must not
@@ -93,7 +137,7 @@ name `anon` or `authenticated` in a row whose creator is `postgres`:
 
 ```sql
 SELECT c.relname FROM pg_class c
-WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'r' AND NOT c.relrowsecurity;
+WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('r', 'p') AND NOT c.relrowsecurity;
 
 SELECT grantee, count(*) FROM information_schema.role_table_grants
 WHERE table_schema = 'public' AND grantee IN ('anon', 'authenticated') GROUP BY grantee;
@@ -103,16 +147,15 @@ FROM pg_default_acl
 WHERE defaclobjtype = 'r' AND defaclnamespace IN (0, 'public'::regnamespace);
 ```
 
-If the first two return rows, run the migration file by hand inside
-`BEGIN; … COMMIT;`. Every statement in it can run twice. A table in `public`
-that `postgres` does not own keeps its grants and shows up in the second query:
-the migration leaves it alone.
+If the first returns rows, run the second migration's file by hand inside
+`BEGIN; … COMMIT;`. If the second or third does, run the first one's. Every
+statement in both can run twice. A table in `public` that `postgres` does not
+own keeps its grants and shows up in the second query: the revoke leaves it
+alone. On 2026-10-03 production had no such table.
 
-The third query has only been run on a scratch database built to copy
-Supabase's default privileges. The migration removes the two roles from the
-entry for schema `public`. If production still names either of them, in that
-entry or in one with schema `-`, tables created by later migrations are still
-granted to them and depend on the guard test alone.
+A migration that fails without the fallback stays recorded as failed, and
+`prisma migrate deploy` then refuses with `P3009`. Run
+`prisma migrate resolve --rolled-back <name>` and deploy again.
 
 ## The blocker: the app's role bypasses RLS unconditionally
 
@@ -439,7 +482,7 @@ including the account needed to diagnose it.
    the Data API roles out of the 43 tables while they held grants (see the
    2026-10-03 section). Those grants are revoked now, so disabling RLS no longer
    opens a table to them, but the coverage guard fails on a `DISABLE` until the
-   table is listed in `RLS_EXEMPT_MODELS`. The set that arms at the switch is
+   table is listed in `RLS_EXEMPT_TABLES`. The set that arms at the switch is
    also larger than 43 now: it includes `Message` and the other 17 tables.
 
 6. **Re-enable per table** as its call sites land, lowest-traffic first. Two
@@ -464,7 +507,7 @@ including the account needed to diagnose it.
      `20260805120000_enable_rls_user`, keyed on
      `id = current_setting('app.current_user_id', true)`.
    - `Message` — tenant policy through `Conversation`
-     (`20261010010000_enable_rls_remaining_tables`).
+     (`20261010030000_enable_rls_remaining_tables`).
    - `LlmUsageLog` — the standard pair; a NULL `userId` row is system-only
      (same migration).
    - `WebhookEvent` — system-only (same migration).
