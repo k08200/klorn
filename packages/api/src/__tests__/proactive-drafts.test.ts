@@ -340,12 +340,14 @@ describe("runProactiveDrafts — robustness", () => {
   it("refuses a second sweep for a user while one is still running", async () => {
     let release: (value: string) => void = () => {};
     // Only the first mail's draft hangs; the rest answer at once.
-    const slow = vi.fn(async () => "done").mockImplementationOnce(
-      () =>
-        new Promise<string>((resolve) => {
-          release = resolve;
-        }),
-    );
+    const slow = vi
+      .fn(async () => "done")
+      .mockImplementationOnce(
+        () =>
+          new Promise<string>((resolve) => {
+            release = resolve;
+          }),
+      );
     const first = runProactiveDrafts("u1", slow, NOW);
     await vi.waitFor(() => expect(slow).toHaveBeenCalledTimes(1));
     const overlapping = vi.fn(async () => "draft");
