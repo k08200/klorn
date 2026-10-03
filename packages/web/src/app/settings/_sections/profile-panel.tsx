@@ -2,16 +2,17 @@
 
 import { useT } from "../../../lib/i18n";
 import { TIMEZONES } from "../agent-mode-helpers";
+import type { ProfileFields, UserProfile } from "./profile-save-plan";
 import { PANEL, PRIMARY_BTN, SECTION_TITLE } from "./shared";
 import { useAutomationConfig } from "./use-automation-config";
-import { type UserProfile, useProfile } from "./use-profile";
+import { useProfile } from "./use-profile";
 
 /**
  * The operator profile form. `identity` shows the display name (Account &
  * billing); `locale` shows app language and timezone (Appearance & language).
- * Both save through the same `saveProfile`, exactly as the single form did.
+ * Each Save writes only the fields its own form shows.
  */
-export function ProfilePanel({ fields }: { fields: "identity" | "locale" }) {
+export function ProfilePanel({ fields }: { fields: ProfileFields }) {
   const config = useAutomationConfig();
   const { profile, setProfile, profileSaved, saveProfile } = useProfile(config);
   const { t } = useT();
@@ -87,7 +88,7 @@ export function ProfilePanel({ fields }: { fields: "identity" | "locale" }) {
         <div className="flex justify-end">
           <button
             type="button"
-            onClick={saveProfile}
+            onClick={() => saveProfile(fields)}
             className={
               profileSaved
                 ? "ease-strong inline-flex min-h-10 items-center justify-center rounded-lg border border-state-ok-line bg-state-ok-bg px-4 text-sm font-medium text-state-ok-ink transition duration-150 active:scale-[0.97]"

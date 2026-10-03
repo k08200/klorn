@@ -35,19 +35,27 @@ export function settingsSectionHref(id: SettingsSectionId): string {
  * exposed (they are unchanged, so the fragment still scrolls to the control)
  * plus each section's own id.
  */
-export const LEGACY_ANCHOR_SECTION: Readonly<Record<string, SettingsSectionId>> = {
-  ...Object.fromEntries(SETTINGS_SECTIONS.map((section) => [section.id, section.id])),
-  "profile-name": "account-billing",
-  "current-pw": "account-billing",
-  "new-pw": "account-billing",
-  "set-pw": "account-billing",
-  "profile-lang": "appearance",
-  "profile-tz": "appearance",
-  "reply-tone": "assistant",
-  "auto-guideline": "assistant",
-  "agent-interval": "assistant",
-  "notification-language": "notifications",
-  "briefing-time": "notifications",
-  "quiet-hours-start": "notifications",
-  "quiet-hours-end": "notifications",
-};
+const LEGACY_ANCHOR_SECTION: ReadonlyMap<string, SettingsSectionId> = new Map<
+  string,
+  SettingsSectionId
+>([
+  ...SETTINGS_SECTIONS.map((section) => [section.id, section.id] as const),
+  ["profile-name", "account-billing"],
+  ["current-pw", "account-billing"],
+  ["new-pw", "account-billing"],
+  ["set-pw", "account-billing"],
+  ["profile-lang", "appearance"],
+  ["profile-tz", "appearance"],
+  ["reply-tone", "assistant"],
+  ["auto-guideline", "assistant"],
+  ["agent-interval", "assistant"],
+  ["notification-language", "notifications"],
+  ["briefing-time", "notifications"],
+  ["quiet-hours-start", "notifications"],
+  ["quiet-hours-end", "notifications"],
+]);
+
+/** A Map, not an object: `#constructor` must not resolve to a prototype member. */
+export function legacyAnchorSection(anchor: string): SettingsSectionId | null {
+  return LEGACY_ANCHOR_SECTION.get(anchor) ?? null;
+}

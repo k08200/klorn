@@ -359,7 +359,7 @@ export async function sendDigestEmail(to: string, subject: string, text: string)
         `margin:0 auto;padding:32px 20px;color:#374151;font-size:15px;line-height:1.6">` +
         `<pre style="font-family:inherit;white-space:pre-wrap;margin:0">${escapeHtml(text)}</pre>` +
         `<p style="color:#6b7280;font-size:13px;margin-top:28px">` +
-        `<a href="${WEB_URL}/settings" style="color:#6b7280">Turn digests off</a></p></div>`,
+        `<a href="${WEB_URL}/settings/notifications" style="color:#6b7280">Turn digests off</a></p></div>`,
     });
     return true;
   } catch (err) {

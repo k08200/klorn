@@ -5,8 +5,8 @@ import { useToast } from "../../../components/toast";
 import Button from "../../../components/ui/button";
 import { API_BASE, authHeaders } from "../../../lib/api";
 import { useT } from "../../../lib/i18n";
+import { PROFILE_KEY } from "./profile-save-plan";
 import { PANEL, SECTION_TITLE } from "./shared";
-import { PROFILE_KEY } from "./use-profile";
 
 const PINNED_CHATS_KEY = "klorn-pinned-chats";
 

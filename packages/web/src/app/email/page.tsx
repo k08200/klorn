@@ -1138,7 +1138,7 @@ function EmailView() {
             {filter === "all" && (
               <div className="mt-4 flex flex-wrap justify-center gap-2">
                 <Link
-                  href="/settings"
+                  href="/settings/accounts"
                   className="inline-flex min-h-11 items-center rounded-md bg-accent-solid px-4 text-xs font-medium text-accent-solid-ink transition hover:bg-accent-solid-hover"
                 >
                   {t("mail.connectGoogle")}

@@ -37,7 +37,7 @@ function reconnectTitle(label: string): string {
 function reconnectMessage(label: string): string {
   return `Klorn lost access to your ${label}, so the firewall is paused. Reconnect in Settings to resume.`;
 }
-const RECONNECT_LINK = "/settings";
+const RECONNECT_LINK = "/settings/accounts";
 
 /** UTC calendar day (YYYY-MM-DD) the reconnect alert dedupes on. */
 export function gmailReconnectDayKey(now: Date = new Date()): string {

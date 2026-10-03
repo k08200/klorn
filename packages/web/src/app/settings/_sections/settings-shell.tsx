@@ -4,7 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import { apiFetch } from "../../../lib/api";
 import { captureClientError } from "../../../lib/sentry";
-import { LEGACY_ANCHOR_SECTION, settingsSectionHref } from "../sections";
+import { legacyAnchorSection, settingsSectionHref } from "../sections";
 import { SettingsNav } from "./settings-nav";
 
 /** `null` while the probe is in flight. */
@@ -41,7 +41,7 @@ function useLegacyAnchorRedirect(pathname: string) {
   useEffect(() => {
     const anchor = window.location.hash.slice(1);
     if (!anchor) return;
-    const target = LEGACY_ANCHOR_SECTION[anchor];
+    const target = legacyAnchorSection(anchor);
     if (!target) return;
     const href = settingsSectionHref(target);
     if (pathname === href) return;

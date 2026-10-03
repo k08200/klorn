@@ -26,6 +26,12 @@ const SECTION_COMPONENTS: Record<SettingsSectionId, ComponentType> = {
   data: DataSection,
 };
 
+/**
+ * Each section is its own route, so switching sections unmounts the previous
+ * one. Local edits that were not saved (a typed name, a draft guideline, a
+ * half-entered password) are dropped on a section switch. Known and accepted:
+ * every field either saves on change or has its own Save button.
+ */
 export function SectionView({ id }: { id: SettingsSectionId }) {
   const { t } = useT();
   const Section = SECTION_COMPONENTS[id];

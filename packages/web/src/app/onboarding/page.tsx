@@ -154,7 +154,7 @@ function WelcomeStep({
         <p className="text-center text-xs leading-5 text-ink-dim">
           {t("onboarding.welcome.preferNaver")}{" "}
           <Link
-            href="/settings"
+            href="/settings/accounts"
             className="font-medium text-accent-deep underline decoration-sky-200 underline-offset-2 hover:text-accent-deep"
           >
             {t("onboarding.welcome.connectViaImap")}
