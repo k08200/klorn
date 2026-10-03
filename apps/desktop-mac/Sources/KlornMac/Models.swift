@@ -1,10 +1,11 @@
 import Foundation
 
-/// The firewall lane model — PUSH / MEETING / QUEUE / INFO / SILENT
-/// (ontology v2, docs/design/tier-ontology-v2.md), plus retired AUTO for rows
-/// written before the flip. TIER_V2_ENABLED has been default-ON server-side
-/// since 2026-08-18, so the classifier emits the five live lanes and never
-/// AUTO; the case stays so old rows still decode and render.
+/// The firewall lane model — exactly five lanes: PUSH / MEETING / QUEUE /
+/// INFO / SILENT (ontology v2, docs/design/tier-ontology-v2.md,
+/// docs/product-vocabulary.md). `AUTO` and `CALL` are retired v1 values and
+/// never render: a legacy "AUTO" row decodes as .queue (what the v2 flip
+/// backfilled AUTO rows to — QUEUE + autoEligible) and the server already
+/// folds "CALL" into PUSH via normalizeTier.
 ///
 /// Any lane string this build doesn't know decodes as .queue — a server ahead
 /// of the client must never crash or blank it (never a decode throw). See
@@ -16,7 +17,6 @@ enum Tier: String, Codable, CaseIterable, Sendable, Identifiable {
     case queue = "QUEUE"
     case info = "INFO"
     case silent = "SILENT"
-    case auto = "AUTO"
 
     init(from decoder: Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)
@@ -26,25 +26,19 @@ enum Tier: String, Codable, CaseIterable, Sendable, Identifiable {
     var id: String { rawValue }
 
     /// Display order: loudest first (what interrupts you), quietest last.
-    /// Callers that render one row per tier hide the v2 lanes (meeting/info)
-    /// while their counts are zero — see `visibleOrder(counts:)` — so a
-    /// flag-off server renders the same four rows as before.
-    static let displayOrder: [Tier] = [.push, .meeting, .queue, .info, .silent, .auto]
+    static let displayOrder: [Tier] = [.push, .meeting, .queue, .info, .silent]
 
-    /// What the first-run guide teaches: the five live v2 lanes. AUTO is
-    /// legacy-only after the 2026-08-18 flip (existing rows render; the
-    /// classifier never emits it), so the guide no longer introduces it.
-    static let coreOrder: [Tier] = [.push, .meeting, .queue, .info, .silent]
+    /// What the first-run guide teaches: the five live lanes.
+    static let coreOrder: [Tier] = displayOrder
 
     /// Whether this tier existed before ontology v2. Pure for the harness.
     var isV2Lane: Bool { self == .meeting || self == .info }
 
-    /// Rows worth drawing: the five live v2 lanes ALWAYS (the sidebar is the
+    /// Rows worth drawing: the five live lanes ALWAYS (the sidebar is the
     /// classification scheme itself — a zero-count Meeting lane is
-    /// information, founder 2026-08-19); legacy AUTO only while old rows
-    /// remain (the v2 classifier never emits it).
+    /// information, founder 2026-08-19).
     static func visibleOrder(counts: (Tier) -> Int) -> [Tier] {
-        displayOrder.filter { $0 != .auto || counts($0) > 0 }
+        displayOrder
     }
 
     /// The full sidebar's two-level presentation (founder 2026-08-20: nine
@@ -52,8 +46,8 @@ enum Tier: String, Codable, CaseIterable, Sendable, Identifiable {
     /// default VIEW earns its rows). Action lanes stay primary: PUSH/QUEUE
     /// always, MEETING only while it holds items (it notifies on arrival, so
     /// an empty row teaches nothing). INFO/SILENT — mail Klorn already filed —
-    /// collapse into one "filed" disclosure row; legacy AUTO joins them only
-    /// while old rows remain. Every lane stays one click away.
+    /// collapse into one "filed" disclosure row. Every lane stays one click
+    /// away.
     /// Pure for the harness.
     struct SidebarLanes: Equatable {
         let primary: [Tier]
@@ -65,8 +59,7 @@ enum Tier: String, Codable, CaseIterable, Sendable, Identifiable {
         var primary: [Tier] = [.push]
         if counts(.meeting) > 0 { primary.append(.meeting) }
         primary.append(.queue)
-        var filed: [Tier] = [.info, .silent]
-        if counts(.auto) > 0 { filed.append(.auto) }
+        let filed: [Tier] = [.info, .silent]
         return SidebarLanes(
             primary: primary,
             filed: filed,
@@ -80,7 +73,6 @@ enum Tier: String, Codable, CaseIterable, Sendable, Identifiable {
         case .queue: "Queue"
         case .info: "Info"
         case .silent: "Silent"
-        case .auto: "Auto"
         }
     }
 }
@@ -233,11 +225,11 @@ struct FirewallItem: Codable, Sendable, Identifiable, Hashable {
 
 /// Per-tier open counts (the daily receipt header). The v2 lanes decode as
 /// optional so a v1 server (no MEETING/INFO keys) still parses; absent = 0.
+/// A legacy "AUTO" count is folded into QUEUE on decode (see `Tier`).
 struct FirewallSummary: Codable, Sendable, Hashable {
     let silent: Int
     let queue: Int
     let push: Int
-    let auto: Int
     let meeting: Int?
     let info: Int?
     let total: Int
@@ -246,7 +238,6 @@ struct FirewallSummary: Codable, Sendable, Hashable {
         case silent = "SILENT"
         case queue = "QUEUE"
         case push = "PUSH"
-        case auto = "AUTO"
         case meeting = "MEETING"
         case info = "INFO"
         case total
@@ -259,8 +250,24 @@ struct FirewallSummary: Codable, Sendable, Hashable {
         case .queue: queue
         case .info: info ?? 0
         case .silent: silent
-        case .auto: auto
         }
+    }
+}
+
+extension FirewallSummary {
+    private enum LegacyKeys: String, CodingKey { case auto = "AUTO" }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let legacy = try decoder.container(keyedBy: LegacyKeys.self)
+        let legacyAuto = try legacy.decodeIfPresent(Int.self, forKey: .auto) ?? 0
+        self.init(
+            silent: try c.decode(Int.self, forKey: .silent),
+            queue: try c.decode(Int.self, forKey: .queue) + legacyAuto,
+            push: try c.decode(Int.self, forKey: .push),
+            meeting: try c.decodeIfPresent(Int.self, forKey: .meeting),
+            info: try c.decodeIfPresent(Int.self, forKey: .info),
+            total: try c.decode(Int.self, forKey: .total))
     }
 }
 
@@ -321,7 +328,6 @@ struct FirewallResponse: Codable, Sendable {
             silent: shifted(.silent, self.summary.silent),
             queue: shifted(.queue, self.summary.queue),
             push: shifted(.push, self.summary.push),
-            auto: shifted(.auto, self.summary.auto),
             meeting: shifted(.meeting, self.summary.meeting ?? 0),
             info: shifted(.info, self.summary.info ?? 0),
             total: self.summary.total)
@@ -344,19 +350,34 @@ struct FirewallResponse: Codable, Sendable {
             }
         }
         // Broken into locals: the compiler timed out type-checking the single
-        // six-argument max() expression after the v2 fields joined.
+        // multi-argument max() expression after the v2 fields joined.
         let removedTotal = removed.values.reduce(0, +)
         let newSilent = max(0, self.summary.silent - (removed[.silent] ?? 0))
         let newQueue = max(0, self.summary.queue - (removed[.queue] ?? 0))
         let newPush = max(0, self.summary.push - (removed[.push] ?? 0))
-        let newAuto = max(0, self.summary.auto - (removed[.auto] ?? 0))
         let newMeeting = max(0, (self.summary.meeting ?? 0) - (removed[.meeting] ?? 0))
         let newInfo = max(0, (self.summary.info ?? 0) - (removed[.info] ?? 0))
         let summary = FirewallSummary(
-            silent: newSilent, queue: newQueue, push: newPush, auto: newAuto,
+            silent: newSilent, queue: newQueue, push: newPush,
             meeting: newMeeting, info: newInfo,
             total: max(0, self.summary.total - removedTotal))
         return FirewallResponse(tiers: newTiers, summary: summary)
+    }
+}
+
+extension FirewallResponse {
+    private enum Keys: String, CodingKey { case tiers, summary }
+
+    /// Folds a legacy "AUTO" list into QUEUE (its items already decode with
+    /// tier .queue), so no retired lane key survives past the decoder and
+    /// every per-tier lookup stays consistent with the items it holds.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self)
+        var tiers = try c.decode([String: [FirewallItem]].self, forKey: .tiers)
+        if let legacy = tiers.removeValue(forKey: "AUTO"), !legacy.isEmpty {
+            tiers[Tier.queue.rawValue] = (tiers[Tier.queue.rawValue] ?? []) + legacy
+        }
+        self.init(tiers: tiers, summary: try c.decode(FirewallSummary.self, forKey: .summary))
     }
 }
 

@@ -317,13 +317,11 @@
 "tier.info.empty" = "新しい記録はありません";
 "tier.push.blurb" = "通知します。相手が返信を待っているか、時間に関わるものです。";
 "tier.queue.blurb" = "待っています。今日読む価値はありますが、バナーを出すほどではありません。";
-"tier.silent.blurb" = "整理済みで、削除ではありません。ニュースレターや領収書 — 見に来ればここにあります。";
-"tier.auto.blurb" = "自動で処理済み。Klornが確信を持てたため確認しませんでした。";
+"tier.silent.blurb" = "整理済みで、削除ではありません。ニュースレターやプロモーション — 見に来ればここにあります。";
 
 "tier.push.empty" = "今すぐ対応が必要なものはありません。";
 "tier.queue.empty" = "読み待ちのものはありません。";
 "tier.silent.empty" = "ここにはまだ何も整理されていません。";
-"tier.auto.empty" = "Klornが自動で処理したものはまだありません。";
 
 /* First-run guide */
 "guide.title" = "Klornのメール振り分け方";
@@ -399,7 +397,7 @@
 "section.calendar" = "カレンダー";
 
 /* Account maintenance disclosure (2026-08-14) */
-"account.maintenance" = "アプリと診断";
+"account.maintenance" = "アプリとサポート";
 "a11y.expanded" = "展開済み";
 "a11y.collapsed" = "折りたたみ済み";
 

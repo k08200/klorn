@@ -317,13 +317,11 @@
 "tier.info.empty" = "Keine neuen Belege";
 "tier.push.blurb" = "Unterbricht dich. Jemand wartet auf eine Antwort, oder es ist zeitkritisch.";
 "tier.queue.blurb" = "Wartet auf dich. Heute lesenswert, aber kein Banner wert.";
-"tier.silent.blurb" = "Abgelegt, nicht gelöscht. Newsletter und Quittungen — immer noch da, wenn du nachsiehst.";
-"tier.auto.blurb" = "Von allein erledigt. Klorn war sicher genug, um nicht zu fragen.";
+"tier.silent.blurb" = "Abgelegt, nicht gelöscht. Newsletter und Werbung — immer noch da, wenn du nachsiehst.";
 
 "tier.push.empty" = "Gerade braucht dich nichts.";
 "tier.queue.empty" = "Nichts wartet aufs Lesen.";
 "tier.silent.empty" = "Hier ist noch nichts abgelegt.";
-"tier.auto.empty" = "Klorn hat noch nichts von allein erledigt.";
 
 /* First-run guide */
 "guide.title" = "Wie Klorn deine Mail sortiert";
@@ -399,7 +397,7 @@
 "section.calendar" = "Kalender";
 
 /* Account maintenance disclosure (2026-08-14) */
-"account.maintenance" = "App und Diagnose";
+"account.maintenance" = "App und Support";
 "a11y.expanded" = "Ausgeklappt";
 "a11y.collapsed" = "Eingeklappt";
 

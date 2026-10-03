@@ -317,13 +317,11 @@
 "tier.info.empty" = "Aucune nouvelle trace";
 "tier.push.blurb" = "Vous interrompt. Quelqu'un attend une réponse, ou le délai presse.";
 "tier.queue.blurb" = "Vous attend. À lire aujourd'hui, mais sans bannière.";
-"tier.silent.blurb" = "Classé, pas supprimé. Newsletters et reçus — toujours là quand vous cherchez.";
-"tier.auto.blurb" = "Traité tout seul. Klorn était assez sûr pour ne pas demander.";
+"tier.silent.blurb" = "Classé, pas supprimé. Newsletters et promotions — toujours là quand vous cherchez.";
 
 "tier.push.empty" = "Rien ne requiert votre attention pour l'instant.";
 "tier.queue.empty" = "Rien n'attend d'être lu.";
 "tier.silent.empty" = "Rien n'est encore classé ici.";
-"tier.auto.empty" = "Klorn n'a encore rien traité tout seul.";
 
 /* First-run guide */
 "guide.title" = "Comment Klorn trie votre courrier";
@@ -399,7 +397,7 @@
 "section.calendar" = "Calendrier";
 
 /* Account maintenance disclosure (2026-08-14) */
-"account.maintenance" = "App et diagnostic";
+"account.maintenance" = "App et assistance";
 "a11y.expanded" = "Déplié";
 "a11y.collapsed" = "Replié";
 

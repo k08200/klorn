@@ -84,8 +84,19 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         } else {
             menu.addItem(actionItem(L("menu.signIn"), #selector(signIn)))
         }
-        menu.addItem(actionItem(L("menu.restart"), #selector(restart)))
         menu.addItem(actionItem(L("menu.quit"), #selector(quit), key: "q"))
+        // Support tool, not a daily control: hold Option and Quit becomes
+        // Restart (the standard alternate-item pattern).
+        menu.addItem(Self.restartAlternate(actionItem(L("menu.restart"), #selector(restart), key: "q")))
+    }
+
+    /// Turns `item` into the Option-alternate of the Quit item before it.
+    /// AppKit pairs an alternate with the PRECEDING item only when both share
+    /// a key equivalent and differ in modifier mask. Pure for the harness.
+    nonisolated static func restartAlternate(_ item: NSMenuItem) -> NSMenuItem {
+        item.keyEquivalentModifierMask = [.command, .option]
+        item.isAlternate = true
+        return item
     }
 
     private func actionItem(_ title: String, _ action: Selector, key: String = "") -> NSMenuItem {

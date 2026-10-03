@@ -111,6 +111,20 @@ func runSelfChecks() async -> Bool {
     } else {
         check("FirewallResponse decodes", false)
     }
+    // A pre-v2 row still filed under the retired AUTO key surfaces in QUEUE
+    // (what the v2 flip backfilled AUTO to) — never as a sixth lane.
+    let legacyFwJSON = """
+    {"tiers":{"QUEUE":[],"AUTO":[{"id":"9","source":"email","sourceId":"e9","type":"email",
+    "title":"Old","tier":"AUTO","priority":1,"surfacedAt":"2026-06-24T10:00:00Z"}]},
+    "summary":{"PUSH":0,"QUEUE":0,"SILENT":0,"AUTO":1,"total":1}}
+    """
+    if let fw = try? JSONDecoder().decode(FirewallResponse.self, from: Data(legacyFwJSON.utf8)) {
+        check("legacy AUTO list folds into QUEUE",
+              fw.items(for: .queue).map(\.id) == ["9"] && fw.items(for: .queue).first?.tier == .queue
+              && fw.tiers["AUTO"] == nil && fw.summary.count(for: .queue) == 1)
+    } else {
+        check("legacy AUTO list decodes", false)
+    }
 
     let okTok = try? JSONDecoder().decode(
         DesktopTokenResponse.self, from: Data(#"{"status":"ok","token":"jwt"}"#.utf8))
@@ -1119,11 +1133,17 @@ func runSelfChecks() async -> Bool {
           && (AttentionMode(rawValue: "AUTO") ?? .basic) == .auto)
 
     print("Tier v2 lanes:")
-    check("the five live lanes always show; legacy AUTO hides at zero",
-          Tier.visibleOrder(counts: { _ in 0 }) == [.push, .meeting, .queue, .info, .silent])
-    check("legacy AUTO joins only while old rows remain",
-          Tier.visibleOrder(counts: { $0 == .auto ? 1 : 0 })
-              == [.push, .meeting, .queue, .info, .silent, .auto])
+    check("exactly five lanes; retired AUTO is not one of them",
+          Tier.allCases == [.push, .meeting, .queue, .info, .silent]
+          && Tier(rawValue: "AUTO") == nil)
+    check("the five live lanes always show",
+          Tier.visibleOrder(counts: { _ in 0 }) == [.push, .meeting, .queue, .info, .silent]
+          && Tier.visibleOrder(counts: { _ in 1 }) == [.push, .meeting, .queue, .info, .silent])
+    if let t = try? JSONDecoder().decode([Tier].self, from: Data(#"["AUTO","CALL"]"#.utf8)) {
+        check("legacy AUTO/unknown lane strings decode as QUEUE", t == [.queue, .queue])
+    } else {
+        check("legacy AUTO/unknown lane strings decode as QUEUE", false)
+    }
     // Two-level sidebar (founder 2026-08-20): action lanes primary, filed
     // lanes behind one disclosure — MEETING earns its row with items.
     check("sidebar defaults to PUSH/QUEUE primary; filed = INFO+SILENT",
@@ -1132,17 +1152,16 @@ func runSelfChecks() async -> Bool {
     check("MEETING becomes primary only while it holds items",
           Tier.sidebarLanes(counts: { $0 == .meeting ? 2 : 0 }).primary
               == [.push, .meeting, .queue])
-    check("filed total sums its lanes; legacy AUTO joins only with rows",
-          Tier.sidebarLanes(counts: { [.info: 4, .silent: 91, .auto: 1][$0] ?? 0 })
+    check("filed total sums its lanes",
+          Tier.sidebarLanes(counts: { [.info: 4, .silent: 91][$0] ?? 0 })
               == Tier.SidebarLanes(
-                  primary: [.push, .queue], filed: [.info, .silent, .auto], filedTotal: 96))
+                  primary: [.push, .queue], filed: [.info, .silent], filedTotal: 95))
     check("section height resolvers clamp junk",
           AppSettings.resolveInboxSectionHeight("junk") == 620
           && AppSettings.resolveInboxSectionHeight(10.0) == 180
           && AppSettings.resolveUpcomingSectionHeight(9_999.0) == 600)
-    check("guide teaches the five live v2 lanes, not legacy AUTO",
-          Tier.coreOrder.count == 5 && Tier.coreOrder.contains(.meeting)
-          && Tier.coreOrder.contains(.info) && !Tier.coreOrder.contains(.auto))
+    check("guide teaches the five live lanes",
+          Tier.coreOrder == [.push, .meeting, .queue, .info, .silent])
     // A v1 server's summary (no MEETING/INFO keys) must still decode.
     let v1Summary = """
     {"SILENT":1,"QUEUE":2,"PUSH":3,"AUTO":4,"total":10}
@@ -1151,6 +1170,7 @@ func runSelfChecks() async -> Bool {
         check("v1 summary decodes; absent v2 lanes count zero",
               sum.count(for: .meeting) == 0 && sum.count(for: .info) == 0
               && sum.count(for: .push) == 3)
+        check("legacy AUTO count folds into QUEUE", sum.count(for: .queue) == 6)
     } else {
         check("v1 summary decodes", false)
     }
@@ -1487,6 +1507,25 @@ func runSelfChecks() async -> Bool {
           StatusItemController.shouldShow(pillVisible: false))
     check("menu-bar icon absent while the pill is visible",
           !StatusItemController.shouldShow(pillVisible: true))
+    // Restart is a support tool: hidden until Option turns Quit into it.
+    let restartItem = StatusItemController.restartAlternate(
+        NSMenuItem(title: "Restart", action: nil, keyEquivalent: "q"))
+    check("Restart is Quit's Option-alternate, not a standing menu item",
+          restartItem.isAlternate && restartItem.keyEquivalent == "q"
+          && restartItem.keyEquivalentModifierMask == [.command, .option])
+    // Same rule in the sidebars: a plain click never shows Restart /
+    // connection status; an Option-click does, and collapsing hides them.
+    let closed = MaintenanceDisclosure.State(expanded: false, supportTools: false)
+    let plain = MaintenanceDisclosure.toggled(closed, optionHeld: false)
+    let revealed = MaintenanceDisclosure.toggled(closed, optionHeld: true)
+    check("plain click opens App & support without support tools",
+          plain == .init(expanded: true, supportTools: false))
+    check("Option-click reveals support tools (also when already open)",
+          revealed == .init(expanded: true, supportTools: true)
+          && MaintenanceDisclosure.toggled(plain, optionHeld: true) == revealed)
+    check("collapsing hides support tools again",
+          MaintenanceDisclosure.toggled(revealed, optionHeld: false) == closed
+          && MaintenanceDisclosure.toggled(revealed, optionHeld: true) == closed)
 
     print("PKCE + relay + TLS (security audit 2026-07-20):")
     // Challenge must match the server's createHash("sha256").digest("base64url").

@@ -4,10 +4,9 @@ import SwiftUI
 // `Tier.coreOrder`, never a literal — see the note by `guide.pipeline` below.
 //
 // The tier names are the product's core idea and they were never explained
-// anywhere in the app: the sidebar showed "Push 3 / Queue 12 / Silent 40 /
-// Auto 8" and left the reader to guess. Worse, the guess is usually wrong —
-// "Silent" reads as deleted and "Auto" reads as "Klorn replied for me", and
-// neither is true.
+// anywhere in the app: the sidebar showed "Push 3 / Queue 12 / Silent 40" and
+// left the reader to guess. Worse, the guess is usually wrong — "Silent" reads
+// as deleted, which it is not.
 
 extension Tier {
     /// One line: what this tier does to your attention.
@@ -18,7 +17,6 @@ extension Tier {
         case .queue: L("tier.queue.blurb")
         case .silent: L("tier.silent.blurb")
         case .info: L("tier.info.blurb")
-        case .auto: L("tier.auto.blurb")
         }
     }
 
@@ -31,7 +29,6 @@ extension Tier {
         case .queue: L("tier.queue.empty")
         case .silent: L("tier.silent.empty")
         case .info: L("tier.info.empty")
-        case .auto: L("tier.auto.empty")
         }
     }
 
@@ -42,7 +39,6 @@ extension Tier {
         case .queue: "tray"
         case .silent: "moon"
         case .info: "archivebox"
-        case .auto: "sparkles"
         }
     }
 }
