@@ -22,7 +22,7 @@ See `design/productization-plan.md`.
 
 | Term | Means | Where it appears | Never means |
 |---|---|---|---|
-| **inbox** | One connected mail account (a Gmail account, a Naver IMAP account). A user can have several. | Settings → "Accounts & sources", the source badge on each row, the account facet on Mail (no account switcher — FD-2) | A screen. Not Today, not Approvals, not the lane view. |
+| **inbox** | One connected mail account (a Gmail account, a Naver IMAP account). A user can have several. | Settings → "Accounts & sources" (today: "Connected inboxes"), the source badge on each row, the account facet on Mail (no account switcher — FD-2) | A screen. Not Today, not Approvals, not the lane view. |
 | **Today** | The home surface: mail by lane across all connected accounts, the merged calendar, recent files, and an assistant strip. | Sidebar nav (first item), the app's landing view | A mail list or an approval list. Shipping behind `UNIFIED_HOME` (proposed flag); until then `/inbox` is still home. |
 | **Assistant** | The nav section holding chat, **Approvals**, Briefing and Receipt. | Sidebar nav | A lane or an agent mode. |
 | **Approvals** | The list of things waiting for the user's approval. Formerly the **Decision queue**. | Under Assistant | A mail list. Nothing lands here unless it needs a decision. Transition: the old term "Decision queue" and `/inbox` remain in code until P6/P7 ship behind `UNIFIED_HOME`; new copy uses "Approvals". |
