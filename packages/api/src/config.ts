@@ -230,7 +230,7 @@ export function deviceCalendarEnabled(): boolean {
 // every reader hides every DriveFile row (drive/drive-scope.ts), whatever a
 // connector's own flag says. On, a row is visible only while its provider's
 // connector flag is on too (DRIVE_PROVIDER_ENABLED); D2 ships no connector, so
-// the list is empty until D3, D5, D6 or D7 registers one. Read at request time
+// the list is empty until D3, D5 or D6 registers one. Read at request time
 // with the same lenient truthy parse, so a flip needs no redeploy.
 export function driveEnabled(): boolean {
   return ["true", "1", "yes", "on"].includes(

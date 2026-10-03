@@ -18,7 +18,7 @@ import {
 
 const on = () => true;
 const off = () => false;
-const ALL_ON: DriveProviderEnabledMap = { KLORN: on, GOOGLE: on, ONEDRIVE: on, DEVICE: on };
+const ALL_ON: DriveProviderEnabledMap = { KLORN: on, GOOGLE: on, ONEDRIVE: on };
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -47,7 +47,7 @@ describe("the shipped registry", () => {
     expect(Object.keys(DRIVE_PROVIDER_ENABLED)).toEqual([]);
     expect(visibleDriveProviders()).toEqual([]);
     expect(driveSourceScope()).toEqual({ provider: { in: [] } });
-    for (const provider of ["KLORN", "GOOGLE", "ONEDRIVE", "DEVICE"]) {
+    for (const provider of ["KLORN", "GOOGLE", "ONEDRIVE"]) {
       expect(isDriveRowVisible({ provider })).toBe(false);
     }
   });
@@ -76,7 +76,7 @@ describe("with DRIVE_ENABLED on", () => {
     vi.stubEnv("DRIVE_ENABLED", "true");
     const map: DriveProviderEnabledMap = { GOOGLE: on };
     expect(isDriveRowVisible({ provider: "KLORN" }, map)).toBe(false);
-    expect(isDriveRowVisible({ provider: "DEVICE" }, map)).toBe(false);
+    expect(isDriveRowVisible({ provider: "ONEDRIVE" }, map)).toBe(false);
     expect(visibleDriveProviders(map)).not.toContain("KLORN");
   });
 
@@ -99,14 +99,14 @@ describe("with DRIVE_ENABLED on", () => {
 
   it("a provider string that is not a provider is never visible, prototype names included", () => {
     vi.stubEnv("DRIVE_ENABLED", "true");
-    for (const provider of ["constructor", "__proto__", "toString", "", "google"]) {
+    for (const provider of ["constructor", "__proto__", "toString", "", "google", "DEVICE"]) {
       expect(isDriveRowVisible({ provider }, ALL_ON)).toBe(false);
     }
   });
 
   it("lists the visible providers in the enum's order, each once", () => {
     vi.stubEnv("DRIVE_ENABLED", "true");
-    expect(visibleDriveProviders({ DEVICE: on, KLORN: on })).toEqual(["KLORN", "DEVICE"]);
-    expect(visibleDriveProviders(ALL_ON)).toEqual(["KLORN", "GOOGLE", "ONEDRIVE", "DEVICE"]);
+    expect(visibleDriveProviders({ ONEDRIVE: on, KLORN: on })).toEqual(["KLORN", "ONEDRIVE"]);
+    expect(visibleDriveProviders(ALL_ON)).toEqual(["KLORN", "GOOGLE", "ONEDRIVE"]);
   });
 });

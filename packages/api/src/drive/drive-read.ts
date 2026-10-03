@@ -10,21 +10,27 @@
  *   - is paged on (modifiedAt, id), newest first, with a hard ceiling;
  *   - returns the wire shape, never a raw row: no storage key leaves the
  *     database, and `sizeBytes` (a BigInt, which JSON.stringify refuses) is a
- *     number.
+ *     number. `readOnly` is derived from the provider (decision V4), not read
+ *     from the row.
  *
  * The search matches NAMES only, with ILIKE inside one user's rows: Prisma's
  * `contains`, so the text is a bind parameter, never SQL. It is not trigram:
  * a user's index is small, pg_trgm would need an extension in the migration, and
  * whether its index helps a Korean name depends on the database's locale, which
- * is not measured. A trigram index can be added later without changing this API.
+ * is not measured. A trigram index can be added later without changing this API,
+ * and one (or a prefix index) is needed before a source brings many rows (D7).
  * drive-file-guard.test.ts fails for a DriveFile read anywhere else.
+ *
+ * These reads run on the global client. The table has row-level security; it is
+ * inert while the app role has BYPASSRLS, and when that role is dropped the reads
+ * move to `withTenant` (db-tenant.ts), or they return no row.
  */
 
 import type { DriveFileWire } from "@klorn/contract";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../db.js";
-import { safeMeetingLink } from "../pim/meeting-link.js";
-import type { DriveProviderName } from "./drive-providers.js";
+import { safeHttpsLink } from "../safe-https-link.js";
+import { type DriveProviderName, isReadOnlyDriveProvider } from "./drive-providers.js";
 import {
   DRIVE_PROVIDER_ENABLED,
   type DriveProviderEnabledMap,
@@ -39,7 +45,8 @@ export const DRIVE_PAGE_MAX = 100;
 /** The most characters of a search text that are used. */
 export const DRIVE_SEARCH_MAX_CHARS = 100;
 
-const CURSOR_MAX_CHARS = 200;
+/** The longest cursor accepted; the route's schema uses the same bound. */
+export const DRIVE_CURSOR_MAX_CHARS = 200;
 const CURSOR_SEPARATOR = "|";
 const BASE64URL = /^[A-Za-z0-9_-]+$/;
 const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
@@ -61,7 +68,6 @@ export const DRIVE_WIRE_SELECT = {
   parentExternalId: true,
   modifiedAt: true,
   webUrl: true,
-  readOnly: true,
 } as const satisfies Prisma.DriveFileSelect;
 
 type DriveWireRow = Prisma.DriveFileGetPayload<{ select: typeof DRIVE_WIRE_SELECT }>;
@@ -108,8 +114,8 @@ export function toDriveFileWire(row: DriveWireRow): DriveFileWire {
     sizeBytes: row.sizeBytes === null ? null : Number(row.sizeBytes),
     parentExternalId: row.parentExternalId,
     modifiedAt: row.modifiedAt.toISOString(),
-    webUrl: safeMeetingLink(row.webUrl),
-    readOnly: row.readOnly,
+    webUrl: safeHttpsLink(row.webUrl),
+    readOnly: isReadOnlyDriveProvider(row.provider),
   };
 }
 
@@ -120,7 +126,8 @@ export function encodeDriveCursor(cursor: DriveCursor): string {
 
 /** The cursor a client sent back, or null when it is not one this module made. */
 export function decodeDriveCursor(raw: unknown): DriveCursor | null {
-  if (typeof raw !== "string" || raw.length > CURSOR_MAX_CHARS || !BASE64URL.test(raw)) return null;
+  if (typeof raw !== "string" || raw.length > DRIVE_CURSOR_MAX_CHARS || !BASE64URL.test(raw))
+    return null;
   const text = Buffer.from(raw, "base64url").toString("utf8");
   const at = text.indexOf(CURSOR_SEPARATOR);
   if (at < 0) return null;

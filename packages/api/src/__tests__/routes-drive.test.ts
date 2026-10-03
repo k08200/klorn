@@ -70,7 +70,17 @@ async function buildApp(
   const { driveRoutes } = await import("../routes/drive.js");
   const { driveEnabled } = await import("../config.js");
   const app = Fastify();
-  if (opts.withRateLimit) await app.register(rateLimit, { max: 100_000, timeWindow: "1 minute" });
+  if (opts.withRateLimit) {
+    // The client address as index.ts reads it: Cloudflare's header, else the socket.
+    await app.register(rateLimit, {
+      max: 100_000,
+      timeWindow: "1 minute",
+      keyGenerator: (req) => {
+        const cf = req.headers["cf-connecting-ip"];
+        return typeof cf === "string" && cf.length > 0 ? cf : req.ip;
+      },
+    });
+  }
   await app.register(driveRoutes({ gate: driveEnabled, providerEnabled: opts.providerEnabled }), {
     prefix: PREFIX,
   });
@@ -314,7 +324,13 @@ describe("GET /files/:id", () => {
 });
 
 describe("rate limits", () => {
-  it("the list and search share 30 requests a minute", async () => {
+  const FILE = "/files/00000000-0000-4000-8000-000000000001";
+  const from = (ip: number, headers: Record<string, string>) => ({
+    ...headers,
+    "cf-connecting-ip": `10.0.0.${ip}`,
+  });
+
+  it("per address: the list and search share 30 requests a minute", async () => {
     const { app, me } = await buildApp({ withRateLimit: true, providerEnabled: GOOGLE_ON });
     for (let i = 0; i < 30; i += 1) {
       expect((await get(app, i % 2 === 0 ? "/files" : "/files?q=a", me)).statusCode).toBe(200);
@@ -323,17 +339,57 @@ describe("rate limits", () => {
     await app.close();
   });
 
-  it("the by-id read allows 60 a minute, counted apart from the list", async () => {
+  it("per address: the by-id read allows 60 a minute, counted apart from the list", async () => {
     const { app, me } = await buildApp({ withRateLimit: true, providerEnabled: GOOGLE_ON });
     for (let i = 0; i < 60; i += 1) {
-      expect((await get(app, "/files/00000000-0000-4000-8000-000000000001", me)).statusCode).toBe(
-        404,
-      );
+      expect((await get(app, FILE, me)).statusCode).toBe(404);
     }
-    expect((await get(app, "/files/00000000-0000-4000-8000-000000000001", me)).statusCode).toBe(
-      429,
-    );
+    expect((await get(app, FILE, me)).statusCode).toBe(429);
     expect((await get(app, "/files", me)).statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("per address, whoever asks: two users behind one address share its 30", async () => {
+    const { app, me, other } = await buildApp({ withRateLimit: true, providerEnabled: GOOGLE_ON });
+    for (let i = 0; i < 30; i += 1) {
+      expect((await get(app, "/files", i % 2 === 0 ? me : other)).statusCode).toBe(200);
+    }
+    expect((await get(app, "/files", me)).statusCode).toBe(429);
+    await app.close();
+  });
+
+  it("per user: 30 list requests a minute, however many addresses they come from", async () => {
+    const { app, me, other } = await buildApp({ withRateLimit: true, providerEnabled: GOOGLE_ON });
+    for (let i = 0; i < 30; i += 1) {
+      const path = i % 2 === 0 ? "/files" : "/files?q=a";
+      expect((await get(app, path, from(i, me))).statusCode).toBe(200);
+    }
+    const limited = await get(app, "/files", from(200, me));
+    expect(limited.statusCode).toBe(429);
+    expect(limited.json()).toEqual({ error: "Too many drive requests. Try again later." });
+    expect(Number(limited.headers["retry-after"])).toBeGreaterThan(0);
+    // Another user is not held back by it, and neither is this user's by-id read.
+    expect((await get(app, "/files", from(201, other))).statusCode).toBe(200);
+    expect((await get(app, FILE, from(202, me))).statusCode).toBe(404);
+    await app.close();
+  });
+
+  it("per user: 60 by-id reads a minute, however many addresses they come from", async () => {
+    const { app, me, other } = await buildApp({ withRateLimit: true, providerEnabled: GOOGLE_ON });
+    for (let i = 0; i < 60; i += 1) {
+      expect((await get(app, FILE, from(i, me))).statusCode).toBe(404);
+    }
+    expect((await get(app, FILE, from(200, me))).statusCode).toBe(429);
+    expect((await get(app, FILE, from(201, other))).statusCode).toBe(404);
+    await app.close();
+  });
+
+  it("a request without a session is refused before it counts against anyone", async () => {
+    const { app, me } = await buildApp({ withRateLimit: true, providerEnabled: GOOGLE_ON });
+    for (let i = 0; i < 40; i += 1) {
+      expect((await get(app, "/files", from(i, {}))).statusCode).toBe(401);
+    }
+    expect((await get(app, "/files", from(100, me))).statusCode).toBe(200);
     await app.close();
   });
 });

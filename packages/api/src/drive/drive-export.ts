@@ -16,7 +16,8 @@ import { DRIVE_WIRE_SELECT, toDriveFileWire } from "./drive-read.js";
 
 export interface DriveFileExport extends DriveFileWire {
   trashed: boolean;
-  summaryStatus: string;
+  /** The source's own version of the file, as the index holds it. */
+  etag: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -28,7 +29,7 @@ export async function exportDriveFiles(userId: string): Promise<DriveFileExport[
     select: {
       ...DRIVE_WIRE_SELECT,
       trashed: true,
-      summaryStatus: true,
+      etag: true,
       createdAt: true,
       updatedAt: true,
     },
@@ -36,7 +37,7 @@ export async function exportDriveFiles(userId: string): Promise<DriveFileExport[
   return rows.map((row) => ({
     ...toDriveFileWire(row),
     trashed: row.trashed,
-    summaryStatus: row.summaryStatus,
+    etag: row.etag,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }));

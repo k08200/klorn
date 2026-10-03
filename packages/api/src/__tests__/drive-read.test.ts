@@ -36,7 +36,7 @@ import type { DriveProviderEnabledMap } from "../drive/drive-scope.js";
 
 const on = () => true;
 const off = () => false;
-/** GOOGLE and KLORN connectors on, ONEDRIVE registered but off, DEVICE not registered. */
+/** GOOGLE and KLORN connectors on, ONEDRIVE registered but off. */
 const MAP: DriveProviderEnabledMap = { KLORN: on, GOOGLE: on, ONEDRIVE: off };
 const ME = "user-1";
 const OTHER = "user-2";
@@ -61,7 +61,7 @@ function file(over: Row = {}): Row {
     modifiedAt: minutes(seq),
     webUrl: `https://drive.google.com/file/d/ext-${seq}/view`,
     storageKey: null,
-    readOnly: true,
+    etag: null,
     trashed: false,
     ...over,
   };
@@ -96,10 +96,8 @@ describe("listFiles: whose rows", () => {
         provider: "KLORN",
         sourceKey: "klorn",
         webUrl: null,
-        readOnly: false,
       }),
       file({ name: "mine onedrive (flag off)", provider: "ONEDRIVE", sourceKey: "acct-2" }),
-      file({ name: "mine device (not registered)", provider: "DEVICE", sourceKey: "mac-1" }),
       file({ name: "mine trashed", trashed: true }),
     ]);
   });
@@ -138,7 +136,14 @@ describe("listFiles: whose rows", () => {
     ).toEqual(["mine new", "mine old"]);
     expect(names(await listFiles({ userId: ME, sourceKey: "nope" }, MAP))).toEqual([]);
     expect(names(await listFiles({ userId: ME, provider: "ONEDRIVE" }, MAP))).toEqual([]);
-    expect(names(await listFiles({ userId: ME, provider: "DEVICE" }, MAP))).toEqual([]);
+  });
+
+  it("hides the rows of a provider nobody registered: the switch fails closed", async () => {
+    expect(names(await listFiles({ userId: ME }, { GOOGLE: on }))).toEqual([
+      "mine new",
+      "mine old",
+    ]);
+    expect(names(await listFiles({ userId: ME, provider: "KLORN" }, { GOOGLE: on }))).toEqual([]);
   });
 });
 
@@ -149,7 +154,7 @@ describe("listFiles: the wire shape", () => {
         provider: "KLORN",
         sourceKey: "klorn",
         webUrl: null,
-        readOnly: false,
+        etag: "internal-version",
         sizeBytes: 5_000_000_000n,
         storageKey: "u/user-1/drive/secret",
         parentExternalId: "folder-1",
@@ -173,6 +178,21 @@ describe("listFiles: the wire shape", () => {
       },
     ]);
     expect(JSON.stringify(files)).not.toContain("secret");
+    expect(JSON.stringify(files)).not.toMatch(/etag|internal-version/);
+  });
+
+  it("read-only is derived from the provider (decision V4): only a Klorn file is writable", async () => {
+    seed([
+      file({ provider: "KLORN", sourceKey: "klorn", webUrl: null }),
+      file({ provider: "GOOGLE" }),
+      file({ provider: "ONEDRIVE", sourceKey: "acct-2" }),
+    ]);
+    const { files } = await listFiles({ userId: ME }, { KLORN: on, GOOGLE: on, ONEDRIVE: on });
+    expect(files.map((f) => [f.provider, f.readOnly])).toEqual([
+      ["ONEDRIVE", true],
+      ["GOOGLE", true],
+      ["KLORN", false],
+    ]);
   });
 
   it("never hands on a stored link that is not a safe https link", async () => {
@@ -451,6 +471,7 @@ describe("exportDriveFiles (the user's own data, on request)", () => {
         sourceKey: "klorn",
         webUrl: null,
         storageKey: "u/user-1/secret",
+        etag: "k-version",
         sizeBytes: 9_000_000_000n,
       }),
       file({ name: "theirs", userId: OTHER }),
@@ -482,8 +503,10 @@ describe("exportDriveFiles (the user's own data, on request)", () => {
     expect(klorn).toMatchObject({
       sizeBytes: 9_000_000_000,
       trashed: false,
-      summaryStatus: "NONE",
+      readOnly: false,
+      etag: "k-version",
     });
+    expect(klorn).not.toHaveProperty("summaryStatus");
     expect(typeof klorn?.createdAt).toBe("string");
     expect(rows.find((r) => r.name === "trashed")?.trashed).toBe(true);
   });

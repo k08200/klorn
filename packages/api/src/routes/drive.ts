@@ -10,6 +10,10 @@
  * also applies the provider kill switch; with no connector implemented the list
  * is empty and every id is a 404.
  *
+ * Each route is rate limited twice: per client address (route config, before
+ * authentication) and per user (after it), so neither many users behind one
+ * address nor one user behind many addresses can pass the limit.
+ *
  * Every route sits behind DRIVE_ENABLED via darkRouteGate: while off they answer
  * Fastify's default 404, before authentication and before any query.
  */
@@ -19,6 +23,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { DRIVE_PROVIDER_NAMES, type DriveProviderName } from "../drive/drive-providers.js";
 import {
+  DRIVE_CURSOR_MAX_CHARS,
   decodeDriveCursor,
   getFile,
   listFiles,
@@ -28,18 +33,21 @@ import {
 import { DRIVE_ID_MAX_CHARS } from "../drive/drive-rows.js";
 import { DRIVE_PROVIDER_ENABLED, type DriveProviderEnabledMap } from "../drive/drive-scope.js";
 import { darkRouteGate } from "./dark-route-gate.js";
+import { rateLimitHook } from "./rate-limit-hook.js";
 
 /**
  * The list and the search share one limit: a search reads one user's rows, so it
  * takes the lower of the sibling read routes' limits (30 a minute, routes/api-keys.ts).
+ * Applied per client address and, separately, per user.
  */
 export const DRIVE_LIST_RATE_LIMIT = { max: 30, timeWindow: "1 minute" } as const;
-/** One row by id: the higher sibling limit (60 a minute, routes/email-mailbox.ts). */
+/** One row by id: the higher sibling limit (60 a minute, routes/email-mailbox.ts). Likewise both. */
 export const DRIVE_FILE_RATE_LIMIT = { max: 60, timeWindow: "1 minute" } as const;
+
+const RATE_LIMITED = "Too many drive requests. Try again later.";
 
 /** Longer than any text the search uses; the reader takes the first 100 characters. */
 const QUERY_TEXT_MAX_CHARS = 500;
-const CURSOR_MAX_CHARS = 200;
 const HTTP_BAD_REQUEST = 400;
 const HTTP_NOT_FOUND = 404;
 const INVALID_CURSOR = { error: "Invalid cursor" } as const;
@@ -55,7 +63,7 @@ const listQuerySchema = {
     // Only "at least one" is refused here: the reader clamps the ceiling, so a
     // large limit is served the largest page instead of an error.
     limit: { type: "integer", minimum: 1 },
-    cursor: { type: "string", minLength: 1, maxLength: CURSOR_MAX_CHARS },
+    cursor: { type: "string", minLength: 1, maxLength: DRIVE_CURSOR_MAX_CHARS },
   },
 } as const;
 
@@ -103,11 +111,22 @@ export function driveRoutes(opts: {
 
   return async function routes(app: FastifyInstance) {
     app.addHook("onRequest", darkRouteGate(opts.gate));
+    // The per-user limits run after authentication: they need the user.
+    const perUser = (
+      name: string,
+      limit: typeof DRIVE_LIST_RATE_LIMIT | typeof DRIVE_FILE_RATE_LIMIT,
+    ) =>
+      rateLimitHook(
+        app,
+        limit,
+        (request) => `drive:${name}:user:${getUserId(request)}`,
+        RATE_LIMITED,
+      );
 
     app.get<{ Querystring: ListQuery }>(
       "/files",
       {
-        preHandler: requireAuth,
+        preHandler: [requireAuth, perUser("list", DRIVE_LIST_RATE_LIMIT)],
         config: { rateLimit: DRIVE_LIST_RATE_LIMIT },
         schema: { querystring: listQuerySchema },
       },
@@ -115,7 +134,10 @@ export function driveRoutes(opts: {
     );
     app.get<{ Params: IdParams }>(
       "/files/:id",
-      { preHandler: requireAuth, config: { rateLimit: DRIVE_FILE_RATE_LIMIT } },
+      {
+        preHandler: [requireAuth, perUser("file", DRIVE_FILE_RATE_LIMIT)],
+        config: { rateLimit: DRIVE_FILE_RATE_LIMIT },
+      },
       fileHandler,
     );
   };

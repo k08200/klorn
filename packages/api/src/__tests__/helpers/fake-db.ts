@@ -98,25 +98,19 @@ const cmp = (v: unknown): number | string | boolean =>
 
 const same = (a: unknown, b: unknown): boolean => cmp(a) === cmp(b);
 
-/** `LIKE '<prefix>%'` as a RegExp: `_` is any one character, `%` any run; the rest literal. */
-function likePrefix(prefix: string): RegExp {
-  const body = [...prefix]
-    .map((c) => (c === "_" ? "." : c === "%" ? ".*" : c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))
-    .join("");
-  return new RegExp(`^${body}`, "s");
-}
-
 /**
- * `LIKE '%<fragment>%'` as a RegExp, as Postgres reads it: `_` is any one
- * character, `%` any run, and a backslash makes the next character literal.
- * Prisma sends `contains` unescaped, exactly like `startsWith` above, so a caller
- * that wants a literal `%` or `_` must escape it (drive/drive-read.ts does). A
- * fragment ending in a lone backslash is an error in Postgres, and here.
- * Case-insensitive whatever the `mode`, as this fake always was.
+ * A LIKE pattern as a RegExp, as Postgres reads it: `_` is any one character,
+ * `%` any run, and a backslash makes the next character literal. Prisma sends
+ * `startsWith` and `contains` as LIKE '<value>%' and LIKE '%<value>%' WITHOUT
+ * escaping the value (verified on Postgres 16 with Prisma 6.19, steps B2b and D2),
+ * so a caller that wants a literal `%` or `_` must escape it. A value ending in
+ * a lone backslash is an error in Postgres, and here. One dialect for both
+ * operators: `anchored` is the only difference. Case-sensitive like LIKE, unless
+ * the filter's `mode` is "insensitive" (ILIKE).
  */
-function likeContains(fragment: string): RegExp {
+function likePattern(value: string, anchored: boolean, insensitive: boolean): RegExp {
   const literal = (c: string): string => c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const chars = [...fragment];
+  const chars = [...value];
   let body = "";
   for (let i = 0; i < chars.length; i += 1) {
     const c = chars[i] as string;
@@ -130,11 +124,12 @@ function likeContains(fragment: string): RegExp {
       body += c === "_" ? "." : c === "%" ? ".*" : literal(c);
     }
   }
-  return new RegExp(body, "siu");
+  return new RegExp(anchored ? `^${body}` : body, insensitive ? "siu" : "su");
 }
 
 /** One operator object against one value. NULL never satisfies any operator (SQL), except `not: null`. */
 function matchesOperators(actual: unknown, ops: Record<string, unknown>, where: string): boolean {
+  const insensitive = ops.mode === "insensitive";
   return Object.entries(ops).every(([op, expected]) => {
     if (expected === undefined) return true;
     if (op === "mode") return expected === "insensitive" || expected === "default";
@@ -152,11 +147,15 @@ function matchesOperators(actual: unknown, ops: Record<string, unknown>, where: 
       case "notIn":
         return !(expected as unknown[]).some((e) => same(actual, e));
       case "startsWith":
-        // Prisma sends `startsWith` as LIKE '<value>%' WITHOUT escaping, so `_` and `%`
-        // in the value are wildcards (verified on Postgres 16 with Prisma 6.19, step B2b).
-        return typeof actual === "string" && likePrefix(expected as string).test(actual);
+        return (
+          typeof actual === "string" &&
+          likePattern(expected as string, true, insensitive).test(actual)
+        );
       case "contains":
-        return typeof actual === "string" && likeContains(expected as string).test(actual);
+        return (
+          typeof actual === "string" &&
+          likePattern(expected as string, false, insensitive).test(actual)
+        );
       case "gte":
         return cmp(actual) >= cmp(expected);
       case "gt":

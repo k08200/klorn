@@ -74,7 +74,7 @@ describe("every DriveFile write states its source, in one place", () => {
     const windows = callWindows(text, ROW_WRITE);
     expect(windows).toHaveLength(1);
     expect(windows[0]).toMatch(
-      /driveFile\.upsert\(\{\s*where: \{ driveFileIdentity: \{ userId: owner, provider, sourceKey, externalId \} \}/,
+      /driveFile\.upsert\(\{\s*where: \{ driveFileIdentity: \{ userId, provider, sourceKey, externalId \} \}/,
     );
     expect(windows[0]).toMatch(/create: row\.data,/);
   });
@@ -84,12 +84,28 @@ describe("every DriveFile write states its source, in one place", () => {
     expect(text).toMatch(/\n\s+provider: source\.provider,\n\s+sourceKey: source\.sourceKey,\n/);
   });
 
-  it("an update never rewrites the identity", () => {
+  it("an update writes only the changes, which cannot name the identity", () => {
     const text = fileAt(ROWS_MODULE)?.text ?? "";
-    expect(text).toContain(
-      "const { userId: owner, provider, sourceKey, externalId, ...metadata } = row.data;",
-    );
-    expect(text).toMatch(/update: metadata,/);
+    const windows = callWindows(text, ROW_WRITE);
+    expect(windows[0]).toMatch(/update: row\.changes,/);
+    const from = text.slice(text.indexOf("export interface DriveRowChanges {"));
+    const changes = from.slice(0, from.indexOf("\n}"));
+    expect(changes).toMatch(/readonly name: string;/);
+    expect(changes).not.toMatch(/\b(userId|provider|sourceKey|externalId)\b/);
+  });
+
+  it("every field of the changes but the two a create needs is optional: an update is partial", () => {
+    const text = fileAt(ROWS_MODULE)?.text ?? "";
+    const from = text.slice(text.indexOf("export interface DriveRowChanges {"));
+    const fields = from
+      .slice(0, from.indexOf("\n}"))
+      .split("\n")
+      .slice(1)
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith("readonly "));
+    const required = fields.filter((line) => !/^readonly \w+\?:/.test(line));
+    expect(required).toEqual(["readonly name: string;", "readonly modifiedAt: Date;"]);
+    expect(fields.length).toBeGreaterThan(required.length);
   });
 
   it("the schema gives provider and sourceKey no default to fall back on", () => {

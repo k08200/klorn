@@ -93,32 +93,50 @@ describe("SQL NULL semantics", () => {
   });
 });
 
-describe("`contains` is LIKE '%value%', as Prisma sends it to Postgres", () => {
+describe("`contains` and `startsWith` are one LIKE dialect, as Prisma sends them to Postgres", () => {
   const titled = (title: string) => item({ id: title, sourceId: title, title });
   const rows = ["100% done", "100 percent", "a_b", "axb", "back\\slash", "Q3 Report"].map(titled);
-  const find = async (contains: string) =>
-    (await items(db(rows)).findMany({ where: { title: { contains, mode: "insensitive" } } }))
-      .map((r) => r.id)
-      .sort();
+  const ids = (found: Array<{ id?: unknown }>) => found.map((r) => r.id).sort();
+  const find = async (contains: string, mode?: "insensitive" | "default") =>
+    ids(await items(db(rows)).findMany({ where: { title: { contains, mode } } }));
+  const prefixed = async (startsWith: string, mode?: "insensitive" | "default") =>
+    ids(await items(db(rows)).findMany({ where: { title: { startsWith, mode } } }));
 
-  it("an unescaped % or _ is a wildcard", async () => {
+  it("an unescaped % or _ is a wildcard, in both", async () => {
     expect(await find("100%")).toEqual(["100 percent", "100% done"]);
     expect(await find("a_b")).toEqual(["a_b", "axb"]);
+    expect(await prefixed("100%d")).toEqual(["100% done"]);
+    expect(await prefixed("a_b")).toEqual(["a_b", "axb"]);
   });
 
-  it("a backslash makes the next character literal", async () => {
+  it("a backslash makes the next character literal, in both", async () => {
     expect(await find("100\\%")).toEqual(["100% done"]);
     expect(await find("a\\_b")).toEqual(["a_b"]);
     expect(await find("back\\\\slash")).toEqual(["back\\slash"]);
+    expect(await prefixed("100\\%")).toEqual(["100% done"]);
+    expect(await prefixed("a\\_b")).toEqual(["a_b"]);
+    expect(await prefixed("back\\\\s")).toEqual(["back\\slash"]);
   });
 
-  it("matches anywhere in the value, whatever the case, and regex characters are literal", async () => {
-    expect(await find("report")).toEqual(["Q3 Report"]);
+  it("`contains` matches anywhere, `startsWith` only at the start; regex characters are literal", async () => {
+    expect(await find("Report")).toEqual(["Q3 Report"]);
+    expect(await prefixed("Report")).toEqual([]);
+    expect(await prefixed("Q3")).toEqual(["Q3 Report"]);
     expect(await find(".*")).toEqual([]);
+    expect(await prefixed(".*")).toEqual([]);
   });
 
-  it("a pattern ending in a lone backslash throws, as Postgres does", async () => {
+  it("is case-sensitive, as LIKE is, unless the mode is insensitive (ILIKE)", async () => {
+    expect(await find("report")).toEqual([]);
+    expect(await find("report", "default")).toEqual([]);
+    expect(await find("report", "insensitive")).toEqual(["Q3 Report"]);
+    expect(await prefixed("q3")).toEqual([]);
+    expect(await prefixed("q3", "insensitive")).toEqual(["Q3 Report"]);
+  });
+
+  it("a pattern ending in a lone backslash throws, as Postgres does, in both", async () => {
     await expect(find("oops\\")).rejects.toThrow(/must not end with escape character/);
+    await expect(prefixed("oops\\")).rejects.toThrow(/must not end with escape character/);
   });
 });
 

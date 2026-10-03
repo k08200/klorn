@@ -4,9 +4,10 @@
  * pim/calendar-providers/types.ts).
  *
  * v1 of an external connector reads only (decision V4): it lists a folder,
- * searches by name, reads one file's metadata and fetches one file's bytes for a
- * summary, under a size cap. There is no method that changes anything in the
- * source, and drive-provider-dispatch.test.ts fails if one is added here.
+ * searches by name and reads one file's metadata. There is no method that changes
+ * anything in the source, and none that fetches a file's bytes: reading content
+ * for a summary arrives with D4, which adds it together with a streaming size
+ * check. drive-provider-dispatch.test.ts fails if a method is added here.
  *
  * Shape: `connect` resolves a source's credentials ONCE and answers a session
  * bound to them.
@@ -23,6 +24,11 @@
  * Everything a session returns is what the source said, uncleaned. A row is
  * written only through drive/drive-rows.ts, which cleans it, and a name reaches
  * a model only inside `wrapUntrusted`.
+ *
+ * Two rules for a connector (D5, D6): `connect` must check that the `sourceKey`
+ * it is given names an account of that user, and it must never fetch a URL the
+ * provider supplied (a download link, a thumbnail, a redirect) unless the host is
+ * on an allowlist of that provider's own hosts.
  */
 
 import type { DriveProviderName } from "../drive-providers.js";
@@ -43,7 +49,7 @@ interface DrivePageQuery {
 }
 
 export interface DriveListQuery extends DrivePageQuery {
-  /** The folder to list; null lists the source's root. */
+  /** The folder to list; null lists the source's root, as the PROVIDER defines it. */
   readonly parentExternalId: string | null;
 }
 
@@ -60,9 +66,12 @@ export interface ProviderDriveFile {
   readonly mimeType: string | null;
   readonly isFolder: boolean;
   readonly sizeBytes: number | null;
+  /** Null when the provider names no parent, or one this grant cannot see. */
   readonly parentExternalId: string | null;
   readonly modifiedAt: Date;
   readonly webUrl: string | null;
+  /** The provider's own version of the file (etag, version, content hash); null when it has none. */
+  readonly etag: string | null;
   readonly trashed: boolean;
 }
 
@@ -72,38 +81,12 @@ export interface ProviderDrivePage {
   readonly nextPageToken: string | null;
 }
 
-/**
- * The most bytes of one file a summary may read: what the attachment analysis
- * pipeline D4 reuses accepts (mail/email-attachment-text.ts,
- * mail/vision-attachment-policy.ts). The dispatcher enforces it on every session.
- */
-export const DRIVE_SUMMARY_MAX_BYTES = 8_000_000;
-
-export interface DriveSummaryFetchOptions {
-  /** The caller's own limit; the dispatcher clamps it to DRIVE_SUMMARY_MAX_BYTES. */
-  readonly maxBytes: number;
-}
-
-/**
- * A file's bytes for a summary, or why there are none. A connector checks the
- * size BEFORE it downloads and answers `too-large` instead of reading past
- * `maxBytes`; `unavailable` covers a file that is gone or has no readable form.
- */
-export type DriveSummaryResult =
-  | { readonly kind: "content"; readonly bytes: Uint8Array; readonly mimeType: string | null }
-  | { readonly kind: "too-large"; readonly sizeBytes: number | null }
-  | { readonly kind: "unavailable" };
-
 export interface DriveProviderSession {
   readonly provider: DriveProviderName;
   list(query: DriveListQuery): Promise<ProviderDrivePage>;
   search(query: DriveSearchQuery): Promise<ProviderDrivePage>;
   /** Null when the source has no such file. */
   getMetadata(externalId: string): Promise<ProviderDriveFile | null>;
-  fetchForSummary(
-    externalId: string,
-    options: DriveSummaryFetchOptions,
-  ): Promise<DriveSummaryResult>;
 }
 
 export interface DriveProviderActions {

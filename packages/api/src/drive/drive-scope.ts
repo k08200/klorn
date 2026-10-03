@@ -28,8 +28,7 @@ export type DriveProviderEnabledMap = Readonly<Partial<Record<DriveProviderName,
 
 /**
  * The registered connectors. D2 ships none, so no row is visible. D3 registers
- * KLORN, D5 GOOGLE, D6 ONEDRIVE and D7 DEVICE, each with one entry naming its
- * own flag; every reader, the by-id check, the dispatcher and the tests pick it
+ * KLORN, D5 GOOGLE and D6 ONEDRIVE, each with one entry naming its own flag; every reader, the by-id check, the dispatcher and the tests pick it
  * up. Exported so a connector's own tests can pass a map of their own.
  */
 export const DRIVE_PROVIDER_ENABLED: DriveProviderEnabledMap = {};

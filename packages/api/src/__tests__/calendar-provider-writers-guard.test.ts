@@ -103,14 +103,25 @@ describe("every CalendarEvent writer states its provider", () => {
   });
 
   it("no code outside the rows module builds a linked row's identity by hand", () => {
-    // DriveFile has a `sourceKey` of its own (D2). Its modules never touch a
-    // calendar row, and drive-file-guard.test.ts guards that identity.
-    const isDriveModule = (path: string) => path.startsWith("drive/") || path === "routes/drive.ts";
-    const handBuilt = files
-      .filter((f) => f.path !== ROWS_MODULE && !isDriveModule(f.path))
-      .filter((f) => /\bsourceKey\s*:/.test(f.text))
-      .map((f) => f.path);
+    // DriveFile has a `sourceKey` of its own (D2), guarded by
+    // drive-file-guard.test.ts. Exactly the drive files that name that field are
+    // exempt, and none of them touches a calendar row.
+    const DRIVE_SOURCE_KEY_FILES = [
+      "drive/drive-read.ts",
+      "drive/drive-rows.ts",
+      "drive/providers/types.ts",
+      "routes/drive.ts",
+    ];
+    const naming = files.filter((f) => /\bsourceKey\s*:/.test(f.text)).map((f) => f.path);
+    const handBuilt = naming.filter(
+      (path) => path !== ROWS_MODULE && !DRIVE_SOURCE_KEY_FILES.includes(path),
+    );
     expect(handBuilt).toEqual([]);
+    for (const path of DRIVE_SOURCE_KEY_FILES) {
+      // No stale entry, and the exemption cannot hide a calendar write.
+      expect(naming).toContain(path);
+      expect(files.find((f) => f.path === path)?.text).not.toMatch(/\bcalendarEvent\b/);
+    }
   });
 });
 

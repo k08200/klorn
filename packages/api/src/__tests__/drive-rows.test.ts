@@ -2,8 +2,11 @@
  * D2: drive/drive-rows.ts is the one place a DriveFile row is written. It states
  * the row's source (provider, sourceKey, externalId) and cleans what an external
  * drive sends: the name, the link, the type and the size are all attacker-controlled.
+ * An update writes only what the input names, so a rename cannot turn a folder
+ * into a file, move it, or bring it back from the trash.
  */
 
+import { DriveProvider } from "@prisma/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createFakeDb, type FakeDb } from "./helpers/fake-db.js";
 
@@ -15,12 +18,13 @@ vi.mock("../db.js", async () => {
   return { prisma, db: prisma };
 });
 
-import { DRIVE_PROVIDER_NAMES } from "../drive/drive-providers.js";
+import { DRIVE_PROVIDER_NAMES, isReadOnlyDriveProvider } from "../drive/drive-providers.js";
 import {
   connectedDriveSource,
   DRIVE_ID_MAX_CHARS,
   DRIVE_NAME_MAX_CHARS,
   type DriveFileInput,
+  type DriveFileSource,
   driveRowData,
   KLORN_DRIVE_SOURCE_KEY,
   klornDriveSource,
@@ -28,29 +32,45 @@ import {
 } from "../drive/drive-rows.js";
 
 const MODIFIED = new Date("2026-10-01T09:00:00.000Z");
+const LATER = new Date("2026-10-02T09:00:00.000Z");
 const GOOGLE = connectedDriveSource("GOOGLE", "acct-1", "file-1");
+const ONEDRIVE = connectedDriveSource("ONEDRIVE", "acct-2", "item-9");
 const KLORN = klornDriveSource("k-1");
 
 function input(init: Partial<DriveFileInput> = {}): DriveFileInput {
   return { name: "Q3 report.pdf", modifiedAt: MODIFIED, ...init };
 }
 
-function dataOf(source: typeof GOOGLE, init: Partial<DriveFileInput> = {}) {
+function rowOf(source: DriveFileSource, init: Partial<DriveFileInput> = {}) {
   const result = driveRowData("user-1", source, input(init));
   if (!result.ok) throw new Error(`refused: ${result.reason}`);
-  return result.data;
+  return result;
 }
 
-function refusalOf(source: typeof GOOGLE, init: Partial<DriveFileInput> = {}) {
+const dataOf = (source: DriveFileSource, init: Partial<DriveFileInput> = {}) =>
+  rowOf(source, init).data;
+const changesOf = (source: DriveFileSource, init: Partial<DriveFileInput> = {}) =>
+  rowOf(source, init).changes;
+
+function refusalOf(source: DriveFileSource, init: Partial<DriveFileInput> = {}) {
   const result = driveRowData("user-1", source, input(init));
   return result.ok ? null : result.reason;
 }
 
-describe("drive sources", () => {
-  it("names exactly the providers of the Prisma enum", () => {
-    expect([...DRIVE_PROVIDER_NAMES]).toEqual(["KLORN", "GOOGLE", "ONEDRIVE", "DEVICE"]);
+describe("drive providers", () => {
+  it("are exactly the Prisma enum's values, in its order", () => {
+    expect([...DRIVE_PROVIDER_NAMES]).toEqual(Object.values(DriveProvider));
+    expect([...DRIVE_PROVIDER_NAMES]).toEqual(["KLORN", "GOOGLE", "ONEDRIVE"]);
   });
 
+  it("only the Klorn drive is writable; an external drive is read-only (decision V4)", () => {
+    expect(DRIVE_PROVIDER_NAMES.filter((provider) => !isReadOnlyDriveProvider(provider))).toEqual([
+      "KLORN",
+    ]);
+  });
+});
+
+describe("drive sources", () => {
   it("a Klorn file's source is the user's one Klorn drive", () => {
     expect(KLORN).toEqual({
       provider: "KLORN",
@@ -62,11 +82,7 @@ describe("drive sources", () => {
 
   it("a connected source carries its provider and the account it came from", () => {
     expect(GOOGLE).toEqual({ provider: "GOOGLE", sourceKey: "acct-1", externalId: "file-1" });
-    expect(connectedDriveSource("ONEDRIVE", "acct-2", "item-9")).toEqual({
-      provider: "ONEDRIVE",
-      sourceKey: "acct-2",
-      externalId: "item-9",
-    });
+    expect(ONEDRIVE).toEqual({ provider: "ONEDRIVE", sourceKey: "acct-2", externalId: "item-9" });
   });
 });
 
@@ -78,6 +94,13 @@ describe("driveRowData: the row's identity", () => {
       sourceKey: "acct-1",
       externalId: "file-1",
     });
+  });
+
+  it("the changes never carry the identity: an update cannot rewrite it", () => {
+    const changes = changesOf(GOOGLE, { mimeType: "application/pdf", trashed: true });
+    for (const key of ["userId", "provider", "sourceKey", "externalId"]) {
+      expect(changes).not.toHaveProperty(key);
+    }
   });
 
   it.each([
@@ -96,11 +119,15 @@ describe("driveRowData: the row's identity", () => {
     expect(refusalOf(source)).toBe("identity");
   });
 
-  it("refuses a parent id that could not be an upstream id, instead of moving the file to the root", () => {
+  it("refuses a parent id that could not be an upstream id, instead of dropping the parent", () => {
     expect(refusalOf(GOOGLE, { parentExternalId: "" })).toBe("identity");
     expect(refusalOf(GOOGLE, { parentExternalId: "a\u0000b" })).toBe("identity");
     expect(dataOf(GOOGLE, { parentExternalId: "folder-7" }).parentExternalId).toBe("folder-7");
+  });
+
+  it("a row with no parent named has no known parent", () => {
     expect(dataOf(GOOGLE).parentExternalId).toBeNull();
+    expect(dataOf(GOOGLE, { parentExternalId: null }).parentExternalId).toBeNull();
   });
 
   it("refuses a modified time that is not a time", () => {
@@ -123,11 +150,9 @@ describe("driveRowData: the name", () => {
 
   it("caps the length by character, never splitting one", () => {
     const long = `${"가".repeat(DRIVE_NAME_MAX_CHARS)}😀tail`;
-    const stored = dataOf(GOOGLE, { name: long }).name;
-    expect([...stored]).toHaveLength(DRIVE_NAME_MAX_CHARS);
-    expect(
-      dataOf(GOOGLE, { name: `${"a".repeat(DRIVE_NAME_MAX_CHARS - 1)}😀b` }).name.endsWith("😀"),
-    ).toBe(true);
+    expect([...dataOf(GOOGLE, { name: long }).name]).toHaveLength(DRIVE_NAME_MAX_CHARS);
+    const edge = `${"a".repeat(DRIVE_NAME_MAX_CHARS - 1)}😀b`;
+    expect(dataOf(GOOGLE, { name: edge }).name.endsWith("😀")).toBe(true);
   });
 
   it("refuses a name with nothing left", () => {
@@ -152,18 +177,15 @@ describe("driveRowData: the link", () => {
     `https://example.com/${"a".repeat(2100)}`,
   ])("drops %s", (webUrl) => {
     expect(dataOf(GOOGLE, { webUrl }).webUrl).toBeNull();
+    expect(changesOf(GOOGLE, { webUrl })).toMatchObject({ webUrl: null });
   });
 
   it("stores no link for a file Klorn holds: it opens through Klorn's own routes", () => {
     expect(dataOf(KLORN, { webUrl: "https://example.com/x" }).webUrl).toBeNull();
-    expect(
-      dataOf(connectedDriveSource("DEVICE", "mac-1", "d-1"), { webUrl: "https://example.com/x" })
-        .webUrl,
-    ).toBeNull();
   });
 });
 
-describe("driveRowData: type, size, flags", () => {
+describe("driveRowData: type, size, version, flags", () => {
   it("keeps a well-formed media type, lower-cased, and drops anything else", () => {
     expect(dataOf(GOOGLE, { mimeType: "Application/PDF" }).mimeType).toBe("application/pdf");
     expect(dataOf(GOOGLE, { mimeType: "application/vnd.google-apps.folder" }).mimeType).toBe(
@@ -181,27 +203,37 @@ describe("driveRowData: type, size, flags", () => {
     for (const sizeBytes of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, -3n]) {
       expect(dataOf(GOOGLE, { sizeBytes }).sizeBytes).toBeNull();
     }
+  });
+
+  it("a folder has no size, whatever the source reports", () => {
     expect(dataOf(GOOGLE, { sizeBytes: 10, isFolder: true }).sizeBytes).toBeNull();
+    expect(changesOf(GOOGLE, { isFolder: true })).toMatchObject({
+      isFolder: true,
+      sizeBytes: null,
+    });
   });
 
-  it("an external row is always read-only (decision V4), whatever the caller says", () => {
-    expect(dataOf(GOOGLE, { readOnly: false }).readOnly).toBe(true);
-    expect(
-      dataOf(connectedDriveSource("ONEDRIVE", "acct-2", "i-1"), { readOnly: false }).readOnly,
-    ).toBe(true);
+  it("keeps the source's version as an opaque, bounded string", () => {
+    expect(dataOf(GOOGLE, { etag: '"MTcyNzc4"' }).etag).toBe('"MTcyNzc4"');
+    expect(dataOf(GOOGLE).etag).toBeNull();
+    expect(dataOf(GOOGLE, { etag: null }).etag).toBeNull();
+    expect(dataOf(GOOGLE, { etag: "" }).etag).toBeNull();
+    expect(dataOf(GOOGLE, { etag: "a\u0000b" }).etag).toBeNull();
+    expect(dataOf(GOOGLE, { etag: "e".repeat(DRIVE_ID_MAX_CHARS + 1) }).etag).toBeNull();
+    expect(dataOf(GOOGLE, { etag: 7 as unknown as string }).etag).toBeNull();
   });
 
-  it("a Klorn file is editable unless the caller says otherwise", () => {
-    expect(dataOf(KLORN).readOnly).toBe(false);
-    expect(dataOf(KLORN, { readOnly: true }).readOnly).toBe(true);
-  });
-
-  it("defaults: a file, not trashed", () => {
+  it("a new row is a file, not trashed, unless the source says otherwise", () => {
     expect(dataOf(GOOGLE)).toMatchObject({ isFolder: false, trashed: false });
     expect(dataOf(GOOGLE, { isFolder: true, trashed: true })).toMatchObject({
       isFolder: true,
       trashed: true,
     });
+  });
+
+  it("has no read-only flag to store: that follows from the provider", () => {
+    expect(dataOf(GOOGLE)).not.toHaveProperty("readOnly");
+    expect(dataOf(KLORN)).not.toHaveProperty("readOnly");
   });
 });
 
@@ -210,20 +242,78 @@ describe("driveRowData: the storage key", () => {
     expect(dataOf(KLORN, { storageKey: "u/user-1/drive/k-1" }).storageKey).toBe(
       "u/user-1/drive/k-1",
     );
-    expect(dataOf(KLORN).storageKey).toBeUndefined();
+    expect(dataOf(KLORN).storageKey).toBeNull();
+    expect(changesOf(KLORN)).not.toHaveProperty("storageKey");
   });
 
   it("is refused on an external row: a connector's row never points at an object", () => {
     expect(refusalOf(GOOGLE, { storageKey: "u/user-1/drive/x" })).toBe("storageKey");
-    expect(refusalOf(connectedDriveSource("ONEDRIVE", "a", "b"), { storageKey: "x" })).toBe(
-      "storageKey",
-    );
+    expect(refusalOf(ONEDRIVE, { storageKey: "x" })).toBe("storageKey");
   });
 
   it("is refused when it could not be a key", () => {
     expect(refusalOf(KLORN, { storageKey: "" })).toBe("storageKey");
     expect(refusalOf(KLORN, { storageKey: "a\u0000b" })).toBe("storageKey");
     expect(refusalOf(KLORN, { storageKey: "k".repeat(1025) })).toBe("storageKey");
+  });
+});
+
+describe("driveRowData: the changes are only what the input names", () => {
+  it("a name and a modified time alone change nothing else", () => {
+    expect(changesOf(GOOGLE)).toEqual({ name: "Q3 report.pdf", modifiedAt: MODIFIED });
+  });
+
+  it("each field the input names is in the changes, cleaned", () => {
+    expect(
+      changesOf(GOOGLE, {
+        mimeType: "Application/PDF",
+        isFolder: false,
+        sizeBytes: 42,
+        parentExternalId: "folder-7",
+        webUrl: "https://drive.google.com/file/d/abc/view",
+        etag: "v7",
+        trashed: true,
+      }),
+    ).toEqual({
+      name: "Q3 report.pdf",
+      modifiedAt: MODIFIED,
+      mimeType: "application/pdf",
+      isFolder: false,
+      sizeBytes: 42n,
+      parentExternalId: "folder-7",
+      webUrl: "https://drive.google.com/file/d/abc/view",
+      etag: "v7",
+      trashed: true,
+    });
+  });
+
+  it("an explicit null clears a field; leaving it out does not", () => {
+    expect(changesOf(GOOGLE, { parentExternalId: null, mimeType: null, sizeBytes: null })).toEqual({
+      name: "Q3 report.pdf",
+      modifiedAt: MODIFIED,
+      parentExternalId: null,
+      mimeType: null,
+      sizeBytes: null,
+    });
+  });
+
+  it("the row to create is the defaults with the changes over them", () => {
+    expect(dataOf(GOOGLE)).toEqual({
+      userId: "user-1",
+      provider: "GOOGLE",
+      sourceKey: "acct-1",
+      externalId: "file-1",
+      name: "Q3 report.pdf",
+      modifiedAt: MODIFIED,
+      mimeType: null,
+      isFolder: false,
+      sizeBytes: null,
+      parentExternalId: null,
+      webUrl: null,
+      storageKey: null,
+      etag: null,
+      trashed: false,
+    });
   });
 });
 
@@ -238,7 +328,7 @@ describe("upsertDriveFileRow", () => {
   const rows = () => db.tables.driveFile ?? [];
 
   it("writes one row that states its provider and source", async () => {
-    const result = await upsertDriveFileRow("user-1", GOOGLE, input({ sizeBytes: 42 }));
+    const result = await upsertDriveFileRow("user-1", GOOGLE, input({ sizeBytes: 42, etag: "v1" }));
     expect(result.ok).toBe(true);
     expect(rows()).toHaveLength(1);
     expect(rows()[0]).toMatchObject({
@@ -248,10 +338,9 @@ describe("upsertDriveFileRow", () => {
       externalId: "file-1",
       name: "Q3 report.pdf",
       sizeBytes: 42n,
-      readOnly: true,
+      etag: "v1",
       trashed: false,
       storageKey: null,
-      summaryStatus: "NONE",
     });
     expect(result.ok && result.id).toBe(rows()[0]?.id);
   });
@@ -261,15 +350,15 @@ describe("upsertDriveFileRow", () => {
     const again = await upsertDriveFileRow(
       "user-1",
       GOOGLE,
-      input({
-        name: "Q3 report (final).pdf",
-        trashed: true,
-        modifiedAt: new Date("2026-10-02T00:00:00.000Z"),
-      }),
+      input({ name: "Q3 report (final).pdf", trashed: true, modifiedAt: LATER }),
     );
     expect(again.ok).toBe(true);
     expect(rows()).toHaveLength(1);
-    expect(rows()[0]).toMatchObject({ name: "Q3 report (final).pdf", trashed: true });
+    expect(rows()[0]).toMatchObject({
+      name: "Q3 report (final).pdf",
+      trashed: true,
+      modifiedAt: LATER,
+    });
   });
 
   it("the same upstream id in another source, provider or user is another row", async () => {
@@ -284,18 +373,79 @@ describe("upsertDriveFileRow", () => {
     expect(rows()).toHaveLength(4);
   });
 
+  it("updating only the name leaves every other field of a file untouched", async () => {
+    await upsertDriveFileRow(
+      "user-1",
+      GOOGLE,
+      input({
+        mimeType: "application/pdf",
+        sizeBytes: 2_048,
+        parentExternalId: "folder-7",
+        webUrl: "https://drive.google.com/file/d/file-1/view",
+        etag: "v1",
+        trashed: true,
+      }),
+    );
+    await upsertDriveFileRow("user-1", GOOGLE, { name: "renamed.pdf", modifiedAt: LATER });
+    expect(rows()).toHaveLength(1);
+    expect(rows()[0]).toMatchObject({
+      name: "renamed.pdf",
+      modifiedAt: LATER,
+      isFolder: false,
+      mimeType: "application/pdf",
+      sizeBytes: 2_048n,
+      parentExternalId: "folder-7",
+      webUrl: "https://drive.google.com/file/d/file-1/view",
+      etag: "v1",
+      trashed: true,
+    });
+  });
+
+  it("renaming a folder leaves it a folder, where it was", async () => {
+    await upsertDriveFileRow(
+      "user-1",
+      GOOGLE,
+      input({
+        name: "Reports",
+        isFolder: true,
+        parentExternalId: "root-folder",
+        mimeType: "application/vnd.google-apps.folder",
+      }),
+    );
+    await upsertDriveFileRow("user-1", GOOGLE, { name: "Reports 2026", modifiedAt: LATER });
+    expect(rows()[0]).toMatchObject({
+      name: "Reports 2026",
+      isFolder: true,
+      parentExternalId: "root-folder",
+      mimeType: "application/vnd.google-apps.folder",
+      sizeBytes: null,
+      trashed: false,
+    });
+  });
+
+  it("a field the source names is written, a null included", async () => {
+    await upsertDriveFileRow(
+      "user-1",
+      GOOGLE,
+      input({ parentExternalId: "folder-7", trashed: true, sizeBytes: 10, etag: "v1" }),
+    );
+    await upsertDriveFileRow(
+      "user-1",
+      GOOGLE,
+      input({ parentExternalId: null, trashed: false, sizeBytes: 20, etag: "v2" }),
+    );
+    expect(rows()[0]).toMatchObject({
+      parentExternalId: null,
+      trashed: false,
+      sizeBytes: 20n,
+      etag: "v2",
+    });
+  });
+
   it("an update that names no storage key leaves the stored one alone", async () => {
     await upsertDriveFileRow("user-1", KLORN, input({ storageKey: "u/user-1/drive/k-1" }));
     await upsertDriveFileRow("user-1", KLORN, input({ name: "renamed.pdf" }));
     expect(rows()[0]).toMatchObject({ name: "renamed.pdf", storageKey: "u/user-1/drive/k-1" });
-  });
-
-  it("an update never touches the summary state, which D4 owns", async () => {
-    await upsertDriveFileRow("user-1", GOOGLE, input());
-    const [row] = rows();
-    if (row) row.summaryStatus = "ANALYZED";
-    await upsertDriveFileRow("user-1", GOOGLE, input({ name: "again.pdf" }));
-    expect(rows()[0]?.summaryStatus).toBe("ANALYZED");
   });
 
   it("a refused row is not written, and says why", async () => {

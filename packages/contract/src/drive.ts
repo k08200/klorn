@@ -8,8 +8,8 @@
  * connector is enabled; no storage key, content or summary ever crosses the wire.
  */
 
-/** Where a file lives. KLORN: Klorn's own drive. DEVICE: imported from a device. */
-export type DriveProviderWire = "KLORN" | "GOOGLE" | "ONEDRIVE" | "DEVICE";
+/** Where a file lives. KLORN: Klorn's own drive, which also holds what a device imported. */
+export type DriveProviderWire = "KLORN" | "GOOGLE" | "ONEDRIVE";
 
 export interface DriveFileWire {
   id: string;
@@ -27,13 +27,21 @@ export interface DriveFileWire {
   isFolder: boolean;
   /** Null for a folder, or when the source reports no size. */
   sizeBytes: number | null;
-  /** The containing folder's `externalId` in the same source; null at its root. */
+  /**
+   * The containing folder's `externalId` in the same source. Null means no
+   * parent is KNOWN: the file is at the source's root, or its folder is not in
+   * the index (a file picked from Google Drive on its own, for one). So null is
+   * not "at the root", and the files with a null parent are not a root listing.
+   */
   parentExternalId: string | null;
   /** ISO 8601, the source's own modified time. */
   modifiedAt: string;
   /** An https link to the file in its own service; null for a file Klorn holds. */
   webUrl: string | null;
-  /** True for every file of an external source: Klorn lists it, never edits it. */
+  /**
+   * Derived from `provider`: true for every file of an external source (Klorn
+   * lists it, never edits it), false for a file in the Klorn drive.
+   */
   readOnly: boolean;
 }
 
