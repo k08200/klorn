@@ -227,7 +227,8 @@ describe("GET /api/calendar — reads are unchanged", () => {
       "userId",
     ]);
     expect(arg.where.sourceAccountId).toBeNull();
-    expect(arg.where.provider).toEqual({ notIn: ["OUTLOOK"] });
+    // C3: ICLOUD and NAVER rows too, while CALDAV_CALENDAR_ENABLED is off.
+    expect(arg.where.provider).toEqual({ notIn: ["OUTLOOK", "ICLOUD", "NAVER"] });
     await app.close();
   });
 });

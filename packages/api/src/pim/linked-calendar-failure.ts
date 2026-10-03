@@ -14,18 +14,32 @@
  * `isGoogleAuthError`, which also matches any message containing "expired",
  * "unauthorized", "revoked" or "invalid token": an unrelated "request expired"
  * would then be flagged as a revoked account and hidden from Sentry.
+ *
+ * CalDAV (ICLOUD, NAVER; review fix 2026-10-02): a failure that is not a 401 is
+ * warned about every time but sent to Sentry once per account per failure kind
+ * (`caldavErrorClass`) per process. The provider backs the account off after it
+ * (pim/caldav/caldav-backoff.ts), and a stalled server used to raise one event
+ * per account every sync tick. Google and Outlook pass their own provider and keep
+ * the policy above, unchanged.
  */
 
 import { markLinkedCalendarForReconnect } from "../mail/gmail.js";
 import { captureError } from "../sentry.js";
+import { caldavErrorClass } from "./caldav/caldav-errors.js";
+import { isCaldavProviderKey } from "./caldav/caldav-providers.js";
+import type { CalendarProviderName } from "./calendar-rows.js";
 
 /** How long an account's auth failure stays quiet in the log after it is first warned about. */
 export const LINKED_AUTH_WARN_WINDOW_MS = 60 * 60 * 1000;
 
 const lastAuthWarnAt = new Map<string, number>();
+/** "<account>:<kind>" pairs already sent to Sentry (CalDAV only). */
+const reportedCaldavFailures = new Set<string>();
+const MAX_TRACKED_CALDAV_FAILURES = 10_000;
 
 export function _resetLinkedCalendarFailureLogForTests(): void {
   lastAuthWarnAt.clear();
+  reportedCaldavFailures.clear();
 }
 
 export function _linkedCalendarFailureLogSizeForTests(): number {
@@ -84,6 +98,8 @@ export interface LinkedCalendarFailure {
   readonly scope: string;
   /** What was being done, for the log line ("sync", "free/busy"). */
   readonly action: string;
+  /** The account's provider: ICLOUD and NAVER get the CalDAV Sentry dedupe. */
+  readonly provider?: CalendarProviderName;
 }
 
 function shouldWarnAuthFailure(linkedAccountId: string, now: number): boolean {
@@ -112,6 +128,18 @@ function describeError(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/** True the first time this account fails this way in this process (CalDAV). */
+function firstCaldavFailure(linkedAccountId: string, err: unknown): boolean {
+  const key = `${linkedAccountId}:${caldavErrorClass(err)}`;
+  if (reportedCaldavFailures.has(key)) return false;
+  if (reportedCaldavFailures.size >= MAX_TRACKED_CALDAV_FAILURES) {
+    const oldest = reportedCaldavFailures.values().next().value;
+    if (oldest !== undefined) reportedCaldavFailures.delete(oldest);
+  }
+  reportedCaldavFailures.add(key);
+  return true;
+}
+
 export async function handleLinkedCalendarFailure(failure: LinkedCalendarFailure): Promise<void> {
   const { userId, linkedAccountId, email, err, scope, action } = failure;
 
@@ -126,6 +154,8 @@ export async function handleLinkedCalendarFailure(failure: LinkedCalendarFailure
   }
 
   console.warn(`[CALENDAR] linked-account ${action} failed (skipped): ${describeError(err)}`);
+  const caldav = failure.provider !== undefined && isCaldavProviderKey(failure.provider);
+  if (caldav && !firstCaldavFailure(linkedAccountId, err)) return;
   captureError(err, {
     tags: { scope },
     // Domain only — never send the full linked email (PII) to Sentry.
