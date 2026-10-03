@@ -403,10 +403,14 @@ export async function judgeAndMirrorEmail(
     undefined,
     reasonLanguage,
   );
-  // Fleet-wide accuracy tripwire: track how the judge decided (LLM vs the
-  // keyword fallback that caps PUSH recall ~46%). Prod path only — the eval
-  // harness calls judgeEmail directly and must not pollute the window.
-  recordJudgeSource(judgement.source);
+  // Judge heartbeat (#742). Prod path only — the eval harness calls judgeEmail
+  // directly. Observability: a throw here must never skip the upsert below.
+  try {
+    recordJudgeSource(judgement.source);
+  } catch (err) {
+    console.warn("[JUDGE-HEALTH] recordJudgeSource failed:", err);
+    captureError(err, { tags: { scope: "judge-health.record" } });
+  }
   const outcome = await upsertAttentionForEmailJudgement(
     { userId, ...email },
     judgement,

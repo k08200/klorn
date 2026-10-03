@@ -176,6 +176,11 @@ let lastAttentionAgingAt = 0;
 // Own constant on purpose: piggybacking WATCH_RENEWAL_INTERVAL_MS would let
 // a Gmail-quota retune silently change the aging cadence too.
 const ATTENTION_AGING_INTERVAL_MS = 60 * 60 * 1000;
+// Judge fallback alarm (#1319): DB-backed, so the cadence only bounds how fast
+// an outage is noticed. Own constant; mirrors JUDGE_FALLBACK_CHECK_INTERVAL_MS
+// in judge-fallback-check.ts (lazy-imported, so not importable here).
+let lastJudgeFallbackCheckAt = 0;
+const JUDGE_FALLBACK_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 // Once-per-user-per-UTC-day Sentry alert for the "Gmail not connected"
 // per-tick skip: every tick warns to stdout only, which is how a dead
 // primary token ran silently for weeks (2026-08-10 diagnosis). One alert a
@@ -855,6 +860,21 @@ async function runAutomations() {
         .catch((err) => {
           console.warn("[ATTENTION-AGING] sweep errored:", err);
           captureError(err, { tags: { scope: "automation.attention-aging" } });
+        });
+    }
+
+    // --- Hourly: judge fallback alarm (#1319) ---
+    // Reads the last 24 h of judged-by sources from AttentionItem (one
+    // aggregate query) and raises a deduped ops Notification when the LLM
+    // judge has been falling back to keywords. Runs under the scheduler lock;
+    // the per-tick "automation" heartbeat above covers its liveness.
+    if (Date.now() - lastJudgeFallbackCheckAt >= JUDGE_FALLBACK_CHECK_INTERVAL_MS) {
+      lastJudgeFallbackCheckAt = Date.now();
+      import("./judge/judge-fallback-check.js")
+        .then(({ runJudgeFallbackCheck }) => runJudgeFallbackCheck())
+        .catch((err) => {
+          console.warn("[AUTOMATION] Judge fallback check failed:", err);
+          captureError(err, { tags: { scope: "automation.judge-fallback-check" } });
         });
     }
 
