@@ -211,7 +211,7 @@ const ja: Record<string, string> = {
   "settings.morningBriefing.desc":
     "離席していても、あなたのタイムゾーンで1日1回の判断ブリーフィングを届けます。",
   "settings.morningBriefing.timezoneNote":
-    "タイムゾーン: {timezone}。上のプロフィール欄で変更できます。",
+    "タイムゾーン: {timezone}。「外観と言語」で変更できます。",
   "settings.field.deliveryTime": "配信時刻",
   "settings.deliveryTime.defaultNote": "既定は06:00です。",
   "settings.pushNotifications.title": "プッシュ通知",
@@ -1295,6 +1295,18 @@ const ja: Record<string, string> = {
   "undo.lane.expired": "取り消せる時間を過ぎました。",
   "undo.lane.conflict": "その後メールが再分類されたため、取り消しませんでした。",
   "undo.archive.failed": "メールをアーカイブできませんでした。一覧に戻しました。",
+  // Settings sections (productization plan P3).
+  "settings.nav.label": "設定のセクション",
+  "settings.nav.accounts": "アカウントとソース",
+  "settings.nav.lanes": "レーンとルール",
+  "settings.nav.assistant": "アシスタント",
+  "settings.nav.notifications": "通知",
+  "settings.nav.team": "チーム",
+  "settings.nav.integrations": "インテグレーション",
+  "settings.nav.appearance": "外観と言語",
+  "settings.nav.accountBilling": "アカウントと請求",
+  "settings.nav.data": "データとプライバシー",
+  "settings.team.unavailable": "このアカウントではチーム機能を利用できません。",
 };
 
 export default ja;

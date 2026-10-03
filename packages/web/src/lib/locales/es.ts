@@ -213,7 +213,7 @@ const es: Record<string, string> = {
   "settings.morningBriefing.desc":
     "Envía un resumen de decisiones al día en tu zona horaria, incluso cuando no estás.",
   "settings.morningBriefing.timezoneNote":
-    "Zona horaria: {timezone}. Cámbiala en la sección de perfil de arriba.",
+    "Zona horaria: {timezone}. Cámbiala en Apariencia e idioma.",
   "settings.field.deliveryTime": "Hora de entrega",
   "settings.deliveryTime.defaultNote": "Por defecto son las 06:00.",
   "settings.pushNotifications.title": "Notificaciones push",
@@ -1321,6 +1321,18 @@ const es: Record<string, string> = {
   "undo.lane.expired": "Ya es tarde para deshacer ese movimiento.",
   "undo.lane.conflict": "El correo se reclasificó entretanto, así que no se deshizo el movimiento.",
   "undo.archive.failed": "No se pudo archivar ese correo. Ha vuelto a la lista.",
+  // Settings sections (productization plan P3).
+  "settings.nav.label": "Secciones de ajustes",
+  "settings.nav.accounts": "Cuentas y fuentes",
+  "settings.nav.lanes": "Carriles y reglas",
+  "settings.nav.assistant": "Asistente",
+  "settings.nav.notifications": "Notificaciones",
+  "settings.nav.team": "Equipo",
+  "settings.nav.integrations": "Integraciones",
+  "settings.nav.appearance": "Apariencia e idioma",
+  "settings.nav.accountBilling": "Cuenta y facturación",
+  "settings.nav.data": "Datos y privacidad",
+  "settings.team.unavailable": "Las funciones de equipo no están disponibles en esta cuenta.",
 };
 
 export default es;

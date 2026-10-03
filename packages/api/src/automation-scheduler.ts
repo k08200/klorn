@@ -455,7 +455,7 @@ export async function maybeNudgeFreeDailyLimit(
         type: "reminder",
         title: FREE_LIMIT_NUDGE_TITLE,
         message: FREE_LIMIT_NUDGE_MESSAGE,
-        link: "/settings",
+        link: "/settings/account-billing",
       },
     });
     pushNotification(userId, {
@@ -463,7 +463,7 @@ export async function maybeNudgeFreeDailyLimit(
       type: "reminder",
       title: FREE_LIMIT_NUDGE_TITLE,
       message: FREE_LIMIT_NUDGE_MESSAGE,
-      link: "/settings",
+      link: "/settings/account-billing",
       createdAt: notification.createdAt.toISOString(),
     });
   } catch (err) {
@@ -504,7 +504,7 @@ export async function ensureCalendarDisconnectNotification(
         dedupeKey: `calendar-disconnect:${dayKey}`,
         title: "Google disconnected",
         message: "Calendar sync stopped. Reconnect your Google account in settings.",
-        link: "/settings",
+        link: "/settings/accounts",
       },
       select: { id: true, createdAt: true },
     });
@@ -518,7 +518,7 @@ export async function ensureCalendarDisconnectNotification(
     type: "calendar",
     title: "Google disconnected",
     message: "Reconnect your Google account in settings.",
-    link: "/settings",
+    link: "/settings/accounts",
   });
   return notification;
 }

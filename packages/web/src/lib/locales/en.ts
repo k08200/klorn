@@ -215,7 +215,7 @@ const en: Record<string, string> = {
   "settings.morningBriefing.desc":
     "Sends one daily decision briefing in your time zone, even when you are away.",
   "settings.morningBriefing.timezoneNote":
-    "Time zone: {timezone}. Change it in the profile section above.",
+    "Time zone: {timezone}. Change it under Appearance & language.",
   "settings.field.deliveryTime": "Delivery time",
   "settings.deliveryTime.defaultNote": "Default is 06:00.",
   "settings.pushNotifications.title": "Push notifications",
@@ -1317,6 +1317,18 @@ const en: Record<string, string> = {
   "undo.lane.expired": "Too late to undo that move.",
   "undo.lane.conflict": "This mail was reclassified since, so the move wasn't undone.",
   "undo.archive.failed": "Couldn't archive that mail. It is back in the list.",
+  // Settings sections (productization plan P3).
+  "settings.nav.label": "Settings sections",
+  "settings.nav.accounts": "Accounts & sources",
+  "settings.nav.lanes": "Lanes & rules",
+  "settings.nav.assistant": "Assistant",
+  "settings.nav.notifications": "Notifications",
+  "settings.nav.team": "Team",
+  "settings.nav.integrations": "Integrations",
+  "settings.nav.appearance": "Appearance & language",
+  "settings.nav.accountBilling": "Account & billing",
+  "settings.nav.data": "Data & privacy",
+  "settings.team.unavailable": "Team features aren't available on this account.",
 };
 
 export default en;
