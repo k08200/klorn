@@ -14,4 +14,6 @@
 -- for every row of every other provider, and for any CalDAV row written before
 -- this column (none: C3 has never been on); such a row is never removed for being
 -- absent. Rollback: the previous release ignores the column; drop it only after.
+-- Fail fast instead of queueing behind a long lock (same guard as 20261004010000).
+SET LOCAL lock_timeout = '5s';
 ALTER TABLE "CalendarEvent" ADD COLUMN "caldavCalendarKey" TEXT;
