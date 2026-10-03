@@ -67,6 +67,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var meetingCard: MeetingCardController?
     private var statusItem: StatusItemController?
     private var hotKey: HotKey?
+    private var settingsOpener: SettingsOpener?
+    private var mainWindow: MainWindowController?
 
     /// OAuth deep-link relay: the browser bounces `klorn://oauth-callback?code=…`
     /// back to us; the code goes to the RelayInbox where the sign-in loop
@@ -154,6 +156,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
         let bar = TopBarController(model: model)
         let card = PushCardController(model: model)
+        // Settings scene (M0): one opener for the status item, the in-app
+        // Preferences buttons, and anything else outside SwiftUI's own ⌘,.
+        let opener = SettingsOpener()
+        bar.onOpenSettings = { [weak opener] in opener?.open() }
+        model.onWindowPresenceChanged = { [weak bar] in bar?.refreshActivationPolicy() }
+        settingsOpener = opener
+        // Main window (M2, behind `macMainWindow`): the bar routes every
+        // "open the full view" to it while the flag is on.
+        let mainWindow = MainWindowController(model: model)
+        mainWindow.actionsProvider = { [weak bar] in bar?.mainWindowActions() }
+        self.mainWindow = mainWindow
+        bar.onOpenMainWindow = { [weak mainWindow] in mainWindow?.open() }
+        bar.onCloseMainWindow = { [weak mainWindow] in mainWindow?.close() }
         // Menu-bar anchor while the pill is hidden (one-anchor rule): appears
         // when the pill's ✕ / Preferences hides the bar, disappears when the
         // bar comes back. Without it a hidden-pill accessory app is invisible
@@ -214,6 +229,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         model.start()
     }
 
+    /// App-menu dispatch (M1). Every case is an existing action; commands
+    /// that need the full view open it first (menus also show with the bar
+    /// collapsed when show-in-Dock or Settings keeps the app .regular).
+    func perform(_ command: MenuCommand) {
+        switch command {
+        case .compose:
+            ensureFullView()
+            model.showCompose = true
+        case .find:
+            ensureFullView()
+            if !model.listMode.hasSearchField { model.go(to: .inbox) }
+            model.searchFocusPending = true
+        case .go(let mode):
+            ensureFullView()
+            model.go(to: mode)
+        case .reply:
+            model.requestReply()
+        case .dismiss:
+            guard let item = model.menuTargetItem else { return }
+            Task { await model.dismiss(item) }
+        case .moveTo(let tier):
+            guard let item = model.menuTargetItem else { return }
+            Task { await model.setTier(item, to: tier) }
+        }
+    }
+
+    /// Open the full view only if it isn't already up: a same-state render
+    /// rebuilds the hosting view, which would reset in-progress UI state.
+    private func ensureFullView() {
+        if !model.isFullViewOpen { topBar?.openFull() }
+    }
+
+    /// Closing the main window must never quit Klorn: the bar and the poll
+    /// loop are the app, the window is only a view of it. Explicit so it
+    /// never depends on SwiftUI's scene-derived default.
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
+    }
+
     /// Finder/Dock re-open of a running Klorn (LaunchServices sends reopen
     /// instead of spawning a second process): show the app window. Without
     /// this, double-clicking Klorn.app again appears to do nothing — the
@@ -226,12 +280,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 }
 
-/// The custom top bar (an AppKit NSPanel) is the whole UI, so SwiftUI needs only a
-/// placeholder scene. `Settings` is invisible under `.accessory` (no menu to open it).
+/// The custom top bar (an AppKit NSPanel) is the main UI. SwiftUI owns the
+/// Settings window (M0) and the app menus (M1); both surface only while the
+/// app is `.regular`, i.e. while one of its windows is summoned. The M2 main
+/// window is AppKit (`MainWindowController`), not a scene.
 struct KlornApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        Settings { EmptyView() }
+        Settings {
+            SettingsRoot().environment(appDelegate.model)
+        }
+        .commands {
+            KlornCommands(model: appDelegate.model) { [appDelegate] command in
+                appDelegate.perform(command)
+            }
+        }
     }
 }

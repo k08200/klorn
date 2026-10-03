@@ -69,7 +69,7 @@ beforeEach(() => {
 });
 
 describe("ensureGmailReconnectNotification — primary account", () => {
-  it("winner: creates the alert with dedupeKey reconnect:google:<dayKey> and link /settings", async () => {
+  it("winner: creates the alert with dedupeKey reconnect:google:<dayKey> and link /settings/accounts", async () => {
     const result = await ensureGmailReconnectNotification(USER);
     expect(result).not.toBeNull();
     expect(vi.mocked(prisma.notification.create)).toHaveBeenCalledWith(
@@ -79,13 +79,13 @@ describe("ensureGmailReconnectNotification — primary account", () => {
           type: "email",
           dedupeKey: `reconnect:google:${gmailReconnectDayKey()}`,
           title: RECONNECT_TITLE,
-          link: "/settings",
+          link: "/settings/accounts",
         }),
       }),
     );
   });
 
-  it("winner: sends BOTH the in-app bell broadcast and a web push pointing at /settings", async () => {
+  it("winner: sends BOTH the in-app bell broadcast and a web push pointing at /settings/accounts", async () => {
     await ensureGmailReconnectNotification(USER);
     expect(state.wsCalls).toBe(1);
     expect(state.webPushCalls).toBe(1);
@@ -93,14 +93,18 @@ describe("ensureGmailReconnectNotification — primary account", () => {
       USER,
       expect.objectContaining({
         title: RECONNECT_TITLE,
-        url: "/settings",
+        url: "/settings/accounts",
         notificationId: "notif-reconnect",
       }),
       "system",
     );
     expect(vi.mocked(pushNotification)).toHaveBeenCalledWith(
       USER,
-      expect.objectContaining({ type: "email", title: RECONNECT_TITLE, link: "/settings" }),
+      expect.objectContaining({
+        type: "email",
+        title: RECONNECT_TITLE,
+        link: "/settings/accounts",
+      }),
     );
   });
 

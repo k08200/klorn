@@ -84,7 +84,7 @@ export function LinkedInboxesSection() {
     } else {
       toast("Couldn't connect that inbox. Try again.", "error");
     }
-    router.replace("/settings");
+    router.replace("/settings/accounts");
   }, [searchParams, toast, queryClient, router]);
 
   const disconnect = useMutation({

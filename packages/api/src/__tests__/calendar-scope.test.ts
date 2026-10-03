@@ -187,11 +187,13 @@ describe("anyLinkedRowVisible: can a linked row reach a reader at all?", () => {
 // (OUTLOOK_CALENDAR_ENABLED and OUTLOOK_INBOX_ENABLED), read at request time,
 // whatever the Google linked-sync flag says, and nothing else changes.
 describe("the default registry: OUTLOOK follows outlookCalendarEnabled() (C4)", () => {
-  // CALDAV_CALENDAR_ENABLED (C3) is cleared too, so the CalDAV providers stay hidden here.
+  // CALDAV_CALENDAR_ENABLED (C3) and DEVICE_CALENDAR_ENABLED (C6) are cleared too, so
+  // the CalDAV and device providers stay hidden here.
   const OUTLOOK_KEYS = [
     "OUTLOOK_CALENDAR_ENABLED",
     "OUTLOOK_INBOX_ENABLED",
     "CALDAV_CALENDAR_ENABLED",
+    "DEVICE_CALENDAR_ENABLED",
   ] as const;
   const savedOutlook: Record<string, string | undefined> = {};
 
@@ -219,18 +221,23 @@ describe("the default registry: OUTLOOK follows outlookCalendarEnabled() (C4)", 
   const primaryRow = { sourceAccountId: null, provider: "GOOGLE" };
   const localRow = { sourceAccountId: null, provider: "LOCAL" };
 
-  it("registers OUTLOOK (C4), then ICLOUD and NAVER (C3), and nothing else", () => {
-    expect(Object.keys(CALENDAR_PROVIDER_ENABLED)).toEqual(["OUTLOOK", "ICLOUD", "NAVER"]);
+  it("registers OUTLOOK (C4), then ICLOUD and NAVER (C3), then DEVICE (C6), and nothing else", () => {
+    expect(Object.keys(CALENDAR_PROVIDER_ENABLED)).toEqual([
+      "OUTLOOK",
+      "ICLOUD",
+      "NAVER",
+      "DEVICE",
+    ]);
   });
 
   it("hides OUTLOOK rows while its flags are off, whatever the linked sync says", () => {
     expect(calendarSourceScope()).toEqual({
       sourceAccountId: null,
-      provider: { notIn: ["OUTLOOK", "ICLOUD", "NAVER"] },
+      provider: { notIn: ["OUTLOOK", "ICLOUD", "NAVER", "DEVICE"] },
     });
     process.env[KEY] = "true";
     expect(calendarSourceScope()).toEqual({
-      provider: { notIn: ["OUTLOOK", "ICLOUD", "NAVER"] },
+      provider: { notIn: ["OUTLOOK", "ICLOUD", "NAVER", "DEVICE"] },
     });
     expect(isCalendarRowVisible(outlookRow)).toBe(false);
   });
@@ -240,7 +247,7 @@ describe("the default registry: OUTLOOK follows outlookCalendarEnabled() (C4)", 
 
     expect(calendarSourceScope()).toEqual({
       OR: [
-        { sourceAccountId: null, provider: { notIn: ["ICLOUD", "NAVER"] } },
+        { sourceAccountId: null, provider: { notIn: ["ICLOUD", "NAVER", "DEVICE"] } },
         { provider: { in: ["OUTLOOK"] } },
       ],
     });
@@ -251,8 +258,8 @@ describe("the default registry: OUTLOOK follows outlookCalendarEnabled() (C4)", 
     outlookFlags(true);
     process.env[KEY] = "true";
 
-    // Only the CalDAV providers, whose own flag is still off, stay excluded.
-    expect(calendarSourceScope()).toEqual({ provider: { notIn: ["ICLOUD", "NAVER"] } });
+    // Only the CalDAV and device providers, whose own flags are still off, stay excluded.
+    expect(calendarSourceScope()).toEqual({ provider: { notIn: ["ICLOUD", "NAVER", "DEVICE"] } });
   });
 
   it.each([
@@ -295,6 +302,7 @@ describe("the default registry: ICLOUD and NAVER follow caldavCalendarEnabled() 
     "CALDAV_CALENDAR_ENABLED",
     "OUTLOOK_CALENDAR_ENABLED",
     "OUTLOOK_INBOX_ENABLED",
+    "DEVICE_CALENDAR_ENABLED",
   ] as const;
   const saved: Record<string, string | undefined> = {};
 
@@ -321,7 +329,7 @@ describe("the default registry: ICLOUD and NAVER follow caldavCalendarEnabled() 
       expect(isCalendarRowVisible(icloudRow)).toBe(false);
       expect(isCalendarRowVisible(naverRow)).toBe(false);
       expect(calendarSourceScope()).toMatchObject({
-        provider: { notIn: ["OUTLOOK", "ICLOUD", "NAVER"] },
+        provider: { notIn: ["OUTLOOK", "ICLOUD", "NAVER", "DEVICE"] },
       });
     }
   });
@@ -330,7 +338,7 @@ describe("the default registry: ICLOUD and NAVER follow caldavCalendarEnabled() 
     process.env.CALDAV_CALENDAR_ENABLED = "true";
     expect(calendarSourceScope()).toEqual({
       OR: [
-        { sourceAccountId: null, provider: { notIn: ["OUTLOOK"] } },
+        { sourceAccountId: null, provider: { notIn: ["OUTLOOK", "DEVICE"] } },
         { provider: { in: ["ICLOUD", "NAVER"] } },
       ],
     });
@@ -353,5 +361,71 @@ describe("the default registry: ICLOUD and NAVER follow caldavCalendarEnabled() 
     expect(isCalendarRowVisible(naverRow)).toBe(true);
     process.env.CALDAV_CALENDAR_ENABLED = "false";
     expect(isCalendarRowVisible(naverRow)).toBe(false);
+  });
+});
+
+// C6: device calendars (DEVICE, uploaded by the desktop app) plug into the kill
+// switch with DEVICE_CALENDAR_ENABLED, read at request time, whatever the Google
+// linked-sync and CalDAV flags say.
+describe("the default registry: DEVICE follows deviceCalendarEnabled() (C6)", () => {
+  const KEYS = [
+    "DEVICE_CALENDAR_ENABLED",
+    "CALDAV_CALENDAR_ENABLED",
+    "OUTLOOK_CALENDAR_ENABLED",
+    "OUTLOOK_INBOX_ENABLED",
+  ] as const;
+  const saved: Record<string, string | undefined> = {};
+
+  beforeEach(() => {
+    for (const k of KEYS) {
+      saved[k] = process.env[k];
+      delete process.env[k];
+    }
+    delete process.env[KEY];
+  });
+  afterEach(() => {
+    for (const k of KEYS) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  });
+
+  const deviceRow = { sourceAccountId: "acct-dev", provider: "DEVICE" };
+
+  it("hides DEVICE rows while the flag is off, whatever the linked sync says", () => {
+    for (const linked of [false, true]) {
+      if (linked) process.env[KEY] = "true";
+      expect(isCalendarRowVisible(deviceRow)).toBe(false);
+      expect(calendarSourceScope()).toMatchObject({
+        provider: { notIn: ["OUTLOOK", "ICLOUD", "NAVER", "DEVICE"] },
+      });
+    }
+  });
+
+  it("shows them once the flag is on, with the linked sync off; the others stay hidden", () => {
+    process.env.DEVICE_CALENDAR_ENABLED = "true";
+    expect(calendarSourceScope()).toEqual({
+      OR: [
+        { sourceAccountId: null, provider: { notIn: ["OUTLOOK", "ICLOUD", "NAVER"] } },
+        { provider: { in: ["DEVICE"] } },
+      ],
+    });
+    expect(isCalendarRowVisible(deviceRow)).toBe(true);
+    expect(anyLinkedRowVisible()).toBe(true);
+  });
+
+  it("their rows are read-only linked rows on the wire", () => {
+    expect(withReadOnlyFlag({ ...deviceRow, id: "e1" })).toEqual({
+      ...deviceRow,
+      id: "e1",
+      readOnly: true,
+    });
+  });
+
+  it("is read at request time: a flip hides and shows the rows at once", () => {
+    process.env.DEVICE_CALENDAR_ENABLED = "true";
+    expect(isCalendarRowVisible(deviceRow)).toBe(true);
+    process.env.DEVICE_CALENDAR_ENABLED = "false";
+    expect(isCalendarRowVisible(deviceRow)).toBe(false);
   });
 });

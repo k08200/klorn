@@ -150,7 +150,6 @@
 
 /* Preferences — shell */
 "prefs.title" = "環境設定";
-"prefs.done" = "完了";
 "prefs.section.notifications" = "通知";
 "prefs.section.general" = "一般";
 "prefs.section.topBar" = "トップバー";
@@ -602,7 +601,36 @@
 "waiting.days" = "%d日目";
 "waiting.row.a11y" = "%@ — %@、%d日目返信待ち";
 
+/* Settings window + app menus (M0/M1) */
+"settings.tab.general" = "一般";
+"settings.tab.accounts" = "アカウント";
+"settings.tab.assistant" = "アシスタント";
+"settings.tab.notifications" = "通知";
+"settings.tab.appearance" = "外観";
+"settings.tab.privacy" = "プライバシー";
+"settings.signedOutNote" = "この設定を表示するには Klorn にサインインしてください。";
+"menu.message" = "メッセージ";
+"menu.go" = "移動";
+"menu.compose" = "新規メール";
+"menu.find" = "メールを検索";
+"menu.moveToLane" = "レーンを移動";
+
 /* Proactive reply drafts */
 "chip.draftReady" = "下書きあり";
 "reading.openDraft" = "下書きを開く";
 "reading.preparedDraft" = "Klornが事前に用意した下書きです — 送信前に確認してください。";
+"prefs.mainWindow" = "標準のメインウインドウを使う（ベータ）";
+"prefs.mainWindow.detail" = "フルビューを通常のウインドウで開きます。開いている間はDockと⌘Tabに表示されます。トップバーは変わりません。";
+
+/* Device calendars (C6): EventKit calendars the user uploads, one by one. */
+"prefs.section.deviceCalendars" = "デバイスのカレンダー";
+"deviceCalendars.upload" = "デバイスのカレンダーをアップロード";
+"deviceCalendars.detail" = "下でオンにしたカレンダーだけが、読み取り専用のコピーとしてKlornにアップロードされます。ブリーフィングとアシスタントはサーバー上でそれを読みます。";
+"deviceCalendars.denied" = "Klornはカレンダーを読めません。システム設定 › プライバシーとセキュリティ › カレンダーで許可してください。";
+"deviceCalendars.openSettings" = "システム設定を開く";
+"deviceCalendars.empty" = "このMacにカレンダーはありません。";
+"deviceCalendars.count" = "%d件をアップロード中";
+"deviceCalendars.untitled" = "名称未設定のカレンダー";
+"deviceCalendars.error.limit" = "アップロードしたカレンダーが多すぎます。先に1つをオフにしてください。";
+"deviceCalendars.error.rows" = "このMacのカレンダーから保存された予定が多すぎます。先にカレンダーを1つオフにしてください。";
+"deviceCalendars.error.generic" = "カレンダーをアップロードできませんでした。Klornが再試行します。";

@@ -199,7 +199,7 @@ const zh: Record<string, string> = {
   "settings.section.signalRhythm": "信号节奏",
   "settings.morningBriefing.title": "早间简报",
   "settings.morningBriefing.desc": "即使你不在，也会按你的时区每天发送一份决策简报。",
-  "settings.morningBriefing.timezoneNote": "时区：{timezone}。可在上方个人资料中修改。",
+  "settings.morningBriefing.timezoneNote": "时区：{timezone}。可在“外观与语言”中修改。",
   "settings.field.deliveryTime": "发送时间",
   "settings.deliveryTime.defaultNote": "默认为 06:00。",
   "settings.pushNotifications.title": "推送通知",
@@ -1173,6 +1173,18 @@ const zh: Record<string, string> = {
   "pmf.thanks": "谢谢 — 已记录。",
   "pmf.failed": "未能记录。没有保存任何内容 — 请重试。",
   "pmf.later": "以后再说",
+  // Settings sections (productization plan P3).
+  "settings.nav.label": "设置分区",
+  "settings.nav.accounts": "账户与来源",
+  "settings.nav.lanes": "分类与规则",
+  "settings.nav.assistant": "助理",
+  "settings.nav.notifications": "通知",
+  "settings.nav.team": "团队",
+  "settings.nav.integrations": "集成",
+  "settings.nav.appearance": "外观与语言",
+  "settings.nav.accountBilling": "账户与账单",
+  "settings.nav.data": "数据与隐私",
+  "settings.team.unavailable": "此账户暂不支持团队功能。",
 };
 
 export default zh;

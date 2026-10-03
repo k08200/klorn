@@ -54,6 +54,75 @@ the JWT in the **Keychain**. The firewall then loads.
 - **`⌥⌘K`** (Option-Command-K) — expand / collapse the bar from anywhere, even
   when another app is focused. It's a Carbon global hotkey, so it needs **no
   Accessibility permission** and never takes focus.
+- **`⌘,`** — the Settings window (also the status-item *Preferences…* and the
+  in-app Preferences buttons). Tabs: General, Accounts, Assistant,
+  Notifications, Appearance, Privacy.
+
+### Standard main window (beta, off by default)
+
+Behind the `macMainWindow` user default (productization plan, macOS M2), the
+full view opens as a standard titled window (traffic lights, resizable,
+frame remembered across relaunch) instead of the bar's panel morphing into
+it. The pill and the expanded panel are unchanged. While the window is open
+Klorn is a regular app (Dock + Cmd+Tab + menus); closing it (⌘W, the red
+button, or the header ✕) returns Klorn to ambient unless Settings is still
+open. The header's *Smaller* closes the window and opens the expanded panel.
+With the default off, nothing changes.
+
+Turn it on with either:
+
+- Settings ▸ General ▸ hold **Option** ▸ *Use standard main window (beta)*
+  (the switch stays visible once on, so it can be turned back off), or
+- `defaults write ai.klorn.desktop macMainWindow -bool YES` (packaged app;
+  an unbundled `swift run` reads the `KlornMac` domain), then relaunch Klorn.
+
+App menus (shown while Klorn is a regular app, i.e. a window is open):
+
+| Menu | Item | Key |
+|------|------|-----|
+| File | New Email | `⌘N` |
+| Edit | Search Mail | `⌘F` |
+| Message | Reply with AI · Dismiss | `⌘R` · — |
+| Message › Move to Lane | PUSH / MEETING / QUEUE / INFO / SILENT | `⌃⌘1`–`⌃⌘5` |
+| Go | Inbox · Calendar · Proposals · Commitments · Waiting on | `⌘1`–`⌘5` |
+| Go | Sent · Drafts · Archived · Teams (when granted) | — |
+
+Lane moves use `⌃⌘`, not bare digits: the reading pane binds bare `1`/`2`/`3`
+to its quick replies, and `⌃1`–`⌃5` are macOS's "Switch to Desktop N".
+Items disable when signed out or under a modal. Message items also need the
+full view to be key — the bar's full panel, or the main window when
+`macMainWindow` is on (not Settings) — and a selected message. While an inline
+reply is open, Reply, Dismiss, Move to Lane, Go, and a mode-switching Search
+stay disabled so the draft can't be lost. File ▸ New Email is the only `⌘N`.
+
+Mail list keys (the full view's list in Inbox, a lane or a label; same in
+the bar's full panel and the main window):
+
+| Key | Action |
+|-----|--------|
+| `↑` / `↓`, `j` / `k` | Move the selection (opens the message like a click, scrolls it into view) |
+| `Return` / `o` | Put the keyboard in the reading pane: arrows, Space and Page Up/Down scroll the message |
+| `Esc` | Back to the list (from the reading pane or the search field) |
+| `e` | Dismiss the selected message, then select the next one |
+| `r` | Reply with AI (same as `⌘R`) |
+| `/` | Search mail (same as `⌘F`) |
+| `⌃⌘1`–`⌃⌘5` | Move to lane (the Message menu above) |
+
+Bare keys never fire while a text field or editor has focus (search, inline
+reply, compose, assistant), under a modal, or when the mail surface is not
+the key window. `e` and `r` follow the Message menu's rules, and the
+selection does not move while an inline reply is open. They also stand
+down while a control holds keyboard focus (Tab / Full Keyboard Access on a
+button, segmented control or popup): Return, Space and the arrows stay that
+control's. In the reading pane only `Esc` is taken, so `r` there is `⌘R`;
+bare `1`/`2`/`3` stay the quick replies. Known limit: with the caret in a
+form field inside an email, `Esc` still returns to the list (the page's
+editing state can't be read synchronously); letters typed there are never
+taken, and an input method mid-composition keeps every key, `Esc` included.
+The reading-pane zone is per window. On a non-Latin input source (Korean) the keys go by position. There
+is no `z`/`⌘Z`: dismiss and lane moves have no undo path yet. The search
+field no longer takes the keyboard when the full view first opens (it would
+swallow every list key); `/` or `⌘F` puts it there.
 
 ### Row actions (on each PUSH item)
 
@@ -195,7 +264,16 @@ A full XCTest suite can be added when building under Xcode/CI.
 | File | Role |
 |------|------|
 | `KlornApp.swift` | `@main` entry (+ `--self-check`); `.accessory` app, `AppDelegate` owns the model, top bar, and hotkey |
-| `TopBar.swift` | SwiftUI `CollapsedBar` (pill) + `ExpandedPanel` (3 columns) |
+| `Shell/` | the SwiftUI shell (M4a split of the former `TopBar.swift`): `TopBarRoot.swift` (`BarState`, `TopBarActions`, `TopBarMetrics`, `TopBarRoot`), `FullView.swift` (`ListMode`, `FullView`), `Sidebar.swift` (`FullSidebar`), `SidebarResize.swift` (section resize handle), `TeamsColumn.swift` |
+| `Pill/` | `CollapsedPill.swift` (`CollapsedBar`), `ExpandedDashboard.swift` (`ExpandedPanel` and its columns), `BriefingCard.swift`, `AccountColumn.swift` |
+| `Mail/` | `FullList.swift` (the list column, alone in its file), `MailRow.swift` (`FullRow`, `SearchHitRow`), `MailboxList.swift`, `WaitingOnList.swift`, `CommitmentsList.swift`, `ReadingPane.swift`, `Compose.swift` (`ComposePanel`) |
+| `Calendar/` | `CalendarScreen.swift`, `EventRows.swift` (upcoming rows, week chips, event popover) |
+| `Assistant/` | `AssistantDock.swift`, `AssistantThread.swift` (thread + `ChatBubble`) |
+| `Shared/` | views used by more than one feature: `Controls.swift`, `TierMenus.swift` (`SnoozeMenu`, `TierMenu`), `LaneChip.swift` (lane, signal, reply-state and label chips), `AccountRows.swift` (account rows, diagnostics, update row) |
+| `SettingsWindow.swift` | `Settings` scene root (`TabView`), tab grouping, `SettingsOpener` |
+| `MainWindow.swift` | standard main window (M2, `macMainWindow`): `MainWindowController` (a lazily created AppKit `NSWindow`, never a SwiftUI scene), its rules, the Settings beta switch |
+| `AppCommands.swift` | app menus (`.commands`) and their pure enablement/shortcut rules |
+| `ListKeys.swift` | mail list keyboard (M3): pure key rules, the window-scoped key catcher |
 | `TopBarController.swift` | the floating non-activating `NSPanel`: top-center pin, expand/collapse, row actions |
 | `HotKey.swift` | Carbon `RegisterEventHotKey` global shortcut (`⌥⌘K`) |
 | `RealtimeClient.swift` | WebSocket wake channel (reuses the API's `/ws` hub) |
@@ -203,6 +281,7 @@ A full XCTest suite can be added when building under Xcode/CI.
 | `AuthFlow.swift` | nonce-poll sign-in — pure orchestration (injectable deps) + live wiring |
 | `APIClient.swift` | async URLSession client, Bearer auth, GET/POST |
 | `KeychainStore.swift` | JWT persistence (Keychain generic password) |
+| `TokenStore.swift` | Token-store seam: Keychain for the app, in-memory for the offscreen harnesses |
 | `Models.swift` | `Tier`, `FirewallItem`, `FirewallResponse` (+ `removingIDs`), auth DTOs |
 | `Config.swift` | env-overridable API + web base URLs |
 | `Notifications.swift` | pure PUSH-diff planner + `UNUserNotification` poster |

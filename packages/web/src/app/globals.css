@@ -77,6 +77,16 @@
   --tier-meeting-ink: #4f46e5; /* 5.74:1 worst-surface */
   --tier-info-ink: #0e7490; /* 4.89:1 worst-surface */
   --tier-silent-ink: #57534e; /* 6.96:1 worst-surface */
+  /* LaneChip text (P2). The chip paints a 13% tint of the lane ink under its
+     label, which pulls the plain ink below 4.5:1 for queue (3.86) and info
+     (4.10) on the hover surface. These are the label values, measured against
+     the COMPOSITED chip (13% lane ink over each of #ffffff / #fafafa / #f8fafc
+     / #f1f5f9), worst case shown. Pinned by api web-lane-chip-contrast.test.ts. */
+  --tier-push-chip-ink: #9f1239; /* 5.84:1 worst-surface */
+  --tier-meeting-chip-ink: #4338ca; /* 5.95:1 */
+  --tier-queue-chip-ink: #92400e; /* 5.45:1 */
+  --tier-info-chip-ink: #155e75; /* 5.56:1 */
+  --tier-silent-chip-ink: #57534e; /* 5.76:1 */
   /* RETIRED v1 lane — kept only so Record<Tier, …> visuals for legacy rows
      still resolve. No new usage: check-design-tokens.mjs burns this down. */
   --tier-auto-ink: #047857; /* 5.01:1 worst-surface — retired v1 lane */
@@ -169,6 +179,14 @@
   --tier-meeting-ink: #818cf8; /* 4.9:1 worst-surface */
   --tier-info-ink: #22d3ee; /* 8.09:1 worst-surface */
   --tier-silent-ink: #a8a29e; /* 5.8:1 worst-surface */
+  /* LaneChip text, dark: composited 13% tint over #0b1120 / #0f172a / #111a2e
+     / #16213a / #1e293b, worst case shown. Meeting's plain ink drops to 4.00
+     on the tinted hover row, push to 4.52 — both move one step lighter. */
+  --tier-push-chip-ink: #fda4af; /* 6.43:1 worst-surface */
+  --tier-meeting-chip-ink: #a5b4fc; /* 5.99:1 */
+  --tier-queue-chip-ink: #fbbf24; /* 6.58:1 */
+  --tier-info-chip-ink: #22d3ee; /* 6.14:1 */
+  --tier-silent-chip-ink: #a8a29e; /* 4.61:1 — muted on purpose, a silenced lane must not glow */
   --tier-auto-ink: #34d399; /* 7.61:1 worst-surface — retired v1 lane */
   --danger-solid: #dc2626; /* white 4.8:1 */
   --danger-solid-hover: #b91c1c; /* hover goes DARKER, 6.5:1 */
@@ -223,6 +241,11 @@
   --color-tier-meeting-ink: var(--tier-meeting-ink);
   --color-tier-info-ink: var(--tier-info-ink);
   --color-tier-silent-ink: var(--tier-silent-ink);
+  --color-tier-push-chip-ink: var(--tier-push-chip-ink);
+  --color-tier-meeting-chip-ink: var(--tier-meeting-chip-ink);
+  --color-tier-queue-chip-ink: var(--tier-queue-chip-ink);
+  --color-tier-info-chip-ink: var(--tier-info-chip-ink);
+  --color-tier-silent-chip-ink: var(--tier-silent-chip-ink);
   --color-tier-auto-ink: var(--tier-auto-ink);
   --color-danger-solid: var(--danger-solid);
   --color-danger-solid-hover: var(--danger-solid-hover);

@@ -209,6 +209,34 @@ export function caldavCalendarEnabled(): boolean {
     (process.env.CALDAV_CALENDAR_ENABLED ?? "").trim().toLowerCase(),
   );
 }
+// Device calendars uploaded by the desktop app (EventKit), read-only — step C6 of
+// docs/providers/unified-platform-plan.md. OFF by default (repo doctrine). While
+// off: every /api/device-calendar route answers Fastify's default 404
+// (darkRouteGate), so the Mac app hides its setting; no snapshot is stored; and
+// every reader hides DEVICE rows already stored (CALENDAR_PROVIDER_ENABLED in
+// pim/calendar-scope.ts). A device uploads only the calendars its user turned on
+// (decision P4), so nothing reaches the server without that per-calendar opt-in.
+// Independent of LINKED_CALENDAR_SYNC_ENABLED: nothing is fetched by the server.
+// Read at request time with the same lenient truthy parse, so a flip needs no
+// redeploy.
+export function deviceCalendarEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.DEVICE_CALENDAR_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
+// The drive: a metadata index of files across sources — step D2 of
+// docs/providers/unified-platform-plan.md. OFF by default (repo doctrine). While
+// off: every /api/drive route answers Fastify's default 404 (darkRouteGate), and
+// every reader hides every DriveFile row (drive/drive-scope.ts), whatever a
+// connector's own flag says. On, a row is visible only while its provider's
+// connector flag is on too (DRIVE_PROVIDER_ENABLED); D2 ships no connector, so
+// the list is empty until D3, D5 or D6 registers one. Read at request time
+// with the same lenient truthy parse, so a flip needs no redeploy.
+export function driveEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.DRIVE_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
 // IMAP flag actions (read, unread, star) for Naver and iCloud — step B1 of
 // docs/providers/unified-platform-plan.md. OFF by default (repo doctrine). While
 // OFF, mail/providers/dispatch.ts routes NAVER and ICLOUD to the unsupported

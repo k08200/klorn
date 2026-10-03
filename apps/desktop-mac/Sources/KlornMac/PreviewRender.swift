@@ -120,7 +120,9 @@ enum PreviewRender {
         let dir = URL(fileURLWithPath: outputDir)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 
-        let model = AppModel()
+        // Never the default store: an unsigned harness binary asking the Keychain
+        // for the shipped app's token blocks on a permission dialog.
+        let model = AppModel(tokenStore: InMemoryTokenStore())
         model.seedForPreview(
             firewallJSON: firewallJSON,
             emailJSON: emailJSON,
@@ -308,7 +310,6 @@ enum PreviewRender {
                 HStack {
                     Text(L("prefs.title")).font(.title3.weight(.semibold)).foregroundStyle(Theme.text)
                     Spacer()
-                    Button(L("prefs.done")) {}.buttonStyle(PrimaryButtonStyle())
                 }
                 .padding(.bottom, 10)
                 AutomationPreferences()

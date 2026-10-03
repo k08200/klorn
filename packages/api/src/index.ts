@@ -12,6 +12,8 @@ import {
 import { startBackgroundAgent } from "./background.js";
 import {
   caldavCalendarEnabled,
+  deviceCalendarEnabled,
+  driveEnabled,
   genericImapEnabled,
   icloudInboxEnabled,
   outlookInboxEnabled,
@@ -19,6 +21,7 @@ import {
 import { makeCorsOriginCallback } from "./cors-origin.js";
 import { db, INTERACTIVE_TX_OPTIONS, prisma } from "./db.js";
 import { withDbRetry } from "./db-retry.js";
+import { exportDriveFiles } from "./drive/drive-export.js";
 import { isDevOrTestEnv } from "./env.js";
 import { handleError } from "./error-handler.js";
 import {
@@ -44,8 +47,10 @@ import { chatConversationRoutes } from "./routes/chat-conversations.js";
 import { chatRoutes } from "./routes/chat-pending-actions.js";
 import { commitmentRoutes } from "./routes/commitments.js";
 import { cronRoutes } from "./routes/cron.js";
+import { deviceCalendarRoutes } from "./routes/device-calendar.js";
 import { deviceRoutes } from "./routes/devices.js";
 import { diagnosticsRoutes } from "./routes/diagnostics.js";
+import { driveRoutes } from "./routes/drive.js";
 import { emailRoutes } from "./routes/email.js";
 import { feedbackRoutes } from "./routes/feedback.js";
 import { firewallRoutes } from "./routes/firewall.js";
@@ -306,6 +311,14 @@ await app.register(outlookAuthRoutes({ gate: outlookInboxEnabled }), {
 await app.register(caldavCalendarRoutes({ gate: caldavCalendarEnabled }), {
   prefix: "/api/caldav-calendar",
 });
+// Step C6: calendars the desktop app uploads from the device (EventKit), one opted-in
+// calendar at a time — dark until DEVICE_CALENDAR_ENABLED (the default 404 while off,
+// which the Mac app reads as "hide the setting").
+await app.register(deviceCalendarRoutes({ gate: deviceCalendarEnabled }), {
+  prefix: "/api/device-calendar",
+});
+// The drive's read-only metadata routes (step D2) — dark until DRIVE_ENABLED.
+await app.register(driveRoutes({ gate: driveEnabled }), { prefix: "/api/drive" });
 // Social LOGIN providers beyond Google — dark until APPLE_LOGIN_ENABLED /
 // NAVER_LOGIN_ENABLED flip; every route answers the cloaked 404 while off
 // (same CASA surface freeze as the dark IMAP providers above).
@@ -388,6 +401,7 @@ app.get("/api/user/me/export", { preHandler: requireAuth }, async (request) => {
     reminders,
     conversations,
     calendarEvents,
+    driveFiles,
     notifications,
     automationConfig,
     agentLogs,
@@ -401,6 +415,7 @@ app.get("/api/user/me/export", { preHandler: requireAuth }, async (request) => {
       include: { messages: { orderBy: { createdAt: "asc" } } },
     }),
     prisma.calendarEvent.findMany({ where: { userId } }),
+    exportDriveFiles(userId),
     prisma.notification.findMany({ where: { userId }, orderBy: { createdAt: "desc" }, take: 200 }),
     prisma.automationConfig.findUnique({ where: { userId } }),
     db.agentLog.findMany({
@@ -416,6 +431,7 @@ app.get("/api/user/me/export", { preHandler: requireAuth }, async (request) => {
     reminders,
     conversations,
     calendarEvents,
+    driveFiles,
     notifications,
     automationConfig,
     agentLogs,

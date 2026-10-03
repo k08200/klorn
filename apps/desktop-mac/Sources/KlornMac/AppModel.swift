@@ -26,8 +26,87 @@ final class AppModel {
     /// by the controller before posting an OS banner.
     let settings = AppSettings()
 
-    /// Drives the Preferences overlay in the full view.
-    var showPreferences = false
+    /// True while the Settings scene's window is on screen. Part of the
+    /// activation-policy decision (Cmd+Tab compromise): an open Settings
+    /// window keeps the app .regular even with the bar collapsed.
+    var settingsWindowOpen = false {
+        didSet {
+            guard settingsWindowOpen != oldValue else { return }
+            onWindowPresenceChanged?()
+        }
+    }
+    /// True while the standard main window (M2, `macMainWindow`) is open.
+    /// Same rule as Settings: an open window keeps the app .regular.
+    var mainWindowOpen = false {
+        didSet {
+            guard mainWindowOpen != oldValue else { return }
+            onWindowPresenceChanged?()
+        }
+    }
+    /// Wired by the AppDelegate to re-apply the activation policy when
+    /// Settings or the main window opens or closes.
+    @ObservationIgnored var onWindowPresenceChanged: (() -> Void)?
+
+    /// Mirrors whether the top bar is in its full (app window) state.
+    /// Written by TopBarController on every render.
+    var barFullOpen = false
+    /// Whether the full view is up anywhere — the bar's full state or the
+    /// main window — so the app menus enable only what the UI can act on.
+    var isFullViewOpen: Bool { barFullOpen || mainWindowOpen }
+    /// Mirrors the reading pane's inline reply composer being open: Reply in
+    /// the Message menu is disabled then, since re-drafting would wipe
+    /// what the user has typed.
+    var readerReplying = false
+    /// Mirrors whether the top bar's panel is the key window. Written by
+    /// TopBarController.
+    var barPanelIsKey = false
+    /// Mirrors whether the main window is the key window. Written by its
+    /// window tracker.
+    var mainWindowIsKey = false
+    /// Message-menu commands act on what the full view shows, so they stay
+    /// off while another window (Settings) is key.
+    var mailSurfaceIsKey: Bool {
+        MenuRules.mailSurfaceIsKey(
+            barPanelIsKey: barPanelIsKey, barFullOpen: barFullOpen,
+            mainWindowIsKey: mainWindowIsKey, mainWindowOpen: mainWindowOpen)
+    }
+    /// Set by the Message menu's Reply; the reading pane answers by starting
+    /// the same AI-drafted reply as its own button — for this item only.
+    private(set) var replyRequest: ReplyRequest?
+    /// Set by Find (⌘F); the mail list's search field takes focus and clears it.
+    var searchFocusPending = false
+
+    /// Message ▸ Reply: ask the reading pane to start a reply to the item
+    /// it shows now. The id rides along so a selection change in between
+    /// can never redirect the reply to another message.
+    func requestReply() {
+        guard let item = menuTargetItem else { return }
+        replyRequest = ReplyRequest(token: (replyRequest?.token ?? 0) &+ 1, itemId: item.id)
+    }
+
+    /// Go-menu navigation: switch the list column and put the sidebar on the
+    /// level that owns the destination (mail family vs root features).
+    func go(to mode: ListMode) {
+        listMode = mode
+        sidebarLevel = mode.isMailFamily ? .mail : .root
+        clearSelection()
+    }
+
+    /// The firewall item the reading pane is showing, if any — what the
+    /// Message menu acts on. nil while a Sent/Drafts/Archived row owns the
+    /// pane (those rows are not firewall items).
+    var menuTargetItem: FirewallItem? {
+        if listMode.showsLiveMessages, selectedMailboxItem != nil { return nil }
+        guard let id = selectedItemId else { return nil }
+        return queue?.item(id: id)
+    }
+
+    /// A modal overlay covers the full view (its background is disabled).
+    var fullViewModalOpen: Bool {
+        showCompose || showTierGuide || showEventEditor || showPurposePrompt
+    }
+    /// Device calendars uploaded from EventKit (step C6): opt-in per calendar.
+    let deviceCalendars: DeviceCalendarBridge
 
     /// Drives the tier explainer. Set on first run and by the sidebar's
     /// "How sorting works", which is what keeps it re-readable.
@@ -106,10 +185,25 @@ final class AppModel {
     private var linkWatchTask: Task<Void, Never>?
 
     private let api: APIClient
+    /// Where the session token lives. Every token read and write in the model
+    /// goes through this, so a harness that injects an in-memory store cannot
+    /// reach the Keychain.
+    private let tokenStore: any TokenStore
 
-    init(api: APIClient = APIClient()) {
+    /// The store the shipped app uses. Named so the self-check can pin the
+    /// default without constructing a model (which would read the Keychain).
+    nonisolated static func productionTokenStore() -> any TokenStore { KeychainTokenStore() }
+
+    /// `api` defaults to a client that reads its bearer token from `tokenStore`,
+    /// as does the device-calendar bridge — one injected store covers them all.
+    init(tokenStore: any TokenStore = AppModel.productionTokenStore(), api: APIClient? = nil) {
+        let api = api ?? APIClient(token: { tokenStore.load() })
         self.api = api
-        self.phase = KeychainStore.load() != nil ? .signedIn : .signedOut
+        self.tokenStore = tokenStore
+        self.deviceCalendars = DeviceCalendarBridge(
+            api: api,
+            currentUser: { SessionIdentity.userId(fromToken: tokenStore.load()) })
+        self.phase = tokenStore.load() != nil ? .signedIn : .signedOut
         self.selectedInbox =
             UserDefaults.standard.string(forKey: Self.selectedInboxKey) ?? "all"
     }
@@ -460,6 +554,8 @@ final class AppModel {
         Task { await refreshLoginProviders() }
         guard phase == .signedIn else { return }
         Task { await loadQueue() }
+        // Resumes uploading only calendars the user already turned on; asks nothing.
+        deviceCalendars.start()
         // Team mode availability probe (403 while dark) — decides whether the
         // 팀 sidebar row and screen render at all.
         Task { await refreshTeams() }
@@ -493,7 +589,7 @@ final class AppModel {
         guard !Task.isCancelled else { return }
         switch result {
         case .success(let token):
-            if !KeychainStore.save(token) {
+            if !tokenStore.save(token) {
                 Log.app.warning("Keychain save denied (unsigned dev build?) — token kept in memory for this session only")
             }
             // A live socket opened under the PREVIOUS token would 4001-loop
@@ -502,6 +598,7 @@ final class AppModel {
             // credential; start() tears the old loop down first.
             realtime?.start(token: token)
             phase = .signedIn
+            deviceCalendars.start()
             await loadQueue()
         case .failure(let reason, let detail):
             Log.app.error("sign-in failed: \(reason.rawValue, privacy: .public) \(detail, privacy: .private)")
@@ -714,10 +811,10 @@ final class AppModel {
         }
     }
 
-    /// Compose overlay visibility (full view). Preferences wins if both are up.
+    /// Compose overlay visibility (full view).
     var showCompose = false
     /// Draft lives on the MODEL, not the panel: SwiftUI drops a conditionally
-    /// mounted view's @State (e.g. when Preferences overlays the composer via
+    /// mounted view's @State (e.g. when the full view is torn down and rebuilt via
     /// the menu bar), and a draft must survive that. There is exactly one
     /// composer identity, so an orphaned send can never race a "new" session.
     var composeTo = ""
@@ -1629,7 +1726,10 @@ final class AppModel {
         clearSelection()
         baselineEstablished = false
         didRequestNotifyAuth = false
-        KeychainStore.clear()
+        // Read before the Keychain is cleared: the device-calendar removals owed at
+        // sign-out are sent with this session's token.
+        let sessionToken = tokenStore.load()
+        tokenStore.clear()
         queue = nil
         loadError = nil
         // Cross-account hygiene: every per-account surface must reset, or the
@@ -1643,6 +1743,8 @@ final class AppModel {
         selectedInbox = "all"
         UserDefaults.standard.removeObject(forKey: Self.selectedInboxKey)
         shownMeetingIds = []
+        // The device-calendar opt-in belongs to the account that gave it.
+        deviceCalendars.signOut(token: sessionToken)
         phase = .signedOut
     }
 
@@ -1997,7 +2099,7 @@ final class AppModel {
     /// Open the WebSocket wake channel once signed in. On a server push it
     /// refetches immediately; the poll loop remains the backstop. Idempotent.
     private func startRealtime() {
-        guard realtime == nil, let token = KeychainStore.load() else { return }
+        guard realtime == nil, let token = tokenStore.load() else { return }
         let client = RealtimeClient(onWake: { [weak self] in
             // Skip if a load is already in flight — avoids overlapping refetches
             // if the server bursts events.

@@ -9,12 +9,23 @@ import SwiftUI
 struct AutomationPreferences: View {
     @Environment(AppModel.self) private var model
 
+    /// The server-backed groups, which the Settings window splits across its
+    /// Assistant and Notifications tabs. Order here is display order.
+    enum Part: CaseIterable, Sendable { case mode, behaviour, replies, interrupts }
+
+    /// Which groups to draw. Defaults to all of them (the preview renderer).
+    var parts: [Part] = Part.allCases
+
     var body: some View {
         Group {
-            section(L("mode.section")) { attentionModeSection }
-            section(L("auto.section.behaviour")) { modeSection }
-            section(L("auto.section.replies")) { replySection }
-            section(L("auto.section.interrupts")) { notificationSection }
+            ForEach(parts, id: \.self) { part in
+                switch part {
+                case .mode: section(L("mode.section")) { attentionModeSection }
+                case .behaviour: section(L("auto.section.behaviour")) { modeSection }
+                case .replies: section(L("auto.section.replies")) { replySection }
+                case .interrupts: section(L("auto.section.interrupts")) { notificationSection }
+                }
+            }
         }
     }
 

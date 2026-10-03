@@ -150,7 +150,6 @@
 
 /* Preferences — shell */
 "prefs.title" = "Preferences";
-"prefs.done" = "Done";
 "prefs.section.notifications" = "NOTIFICATIONS";
 "prefs.section.general" = "GENERAL";
 "prefs.section.topBar" = "TOP BAR";
@@ -602,7 +601,36 @@
 "waiting.days" = "%d days";
 "waiting.row.a11y" = "%@ — %@, waiting %d days";
 
+/* Settings window + app menus (M0/M1) */
+"settings.tab.general" = "General";
+"settings.tab.accounts" = "Accounts";
+"settings.tab.assistant" = "Assistant";
+"settings.tab.notifications" = "Notifications";
+"settings.tab.appearance" = "Appearance";
+"settings.tab.privacy" = "Privacy";
+"settings.signedOutNote" = "Sign in to Klorn to see these settings.";
+"menu.message" = "Message";
+"menu.go" = "Go";
+"menu.compose" = "New Email";
+"menu.find" = "Search Mail";
+"menu.moveToLane" = "Move to Lane";
+
 /* Proactive reply drafts */
 "chip.draftReady" = "Draft ready";
 "reading.openDraft" = "Open draft";
 "reading.preparedDraft" = "Klorn drafted this ahead of time — review it before sending.";
+"prefs.mainWindow" = "Use standard main window (beta)";
+"prefs.mainWindow.detail" = "Opens the full view in a regular window that shows in the Dock and Cmd+Tab while it is open. The top bar is unchanged.";
+
+/* Device calendars (C6): EventKit calendars the user uploads, one by one. */
+"prefs.section.deviceCalendars" = "DEVICE CALENDARS";
+"deviceCalendars.upload" = "Upload device calendars";
+"deviceCalendars.detail" = "Only the calendars you turn on below are uploaded to Klorn, as read-only copies. Your briefing and assistant read them on the server.";
+"deviceCalendars.denied" = "Klorn can't read your calendars. Allow it in System Settings › Privacy & Security › Calendars.";
+"deviceCalendars.openSettings" = "Open System Settings";
+"deviceCalendars.empty" = "No calendars on this Mac.";
+"deviceCalendars.count" = "%d uploaded";
+"deviceCalendars.untitled" = "Untitled calendar";
+"deviceCalendars.error.limit" = "Too many calendars are uploaded. Turn one off first.";
+"deviceCalendars.error.rows" = "Too many events are stored from this Mac's calendars. Turn a calendar off first.";
+"deviceCalendars.error.generic" = "Couldn't upload a calendar. Klorn will try again.";

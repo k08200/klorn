@@ -2,9 +2,9 @@ import Link from "next/link";
 
 export default function NotFound() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-[#ffffff] px-6 text-center text-ink">
+    <main className="flex min-h-screen flex-col items-center justify-center bg-surface-app px-6 text-center text-ink">
       <img src="/brand/mark.svg?v=matte2" alt="" className="mb-6 h-10 w-10" />
-      <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.18em] text-accent-deep">
+      <p className="mb-3 font-mono text-caption uppercase tracking-[0.18em] text-accent-deep">
         Page not found
       </p>
       <h1 className="text-2xl font-semibold tracking-tight md:text-4xl">

@@ -1,0 +1,173 @@
+import AppKit
+import SwiftUI
+
+/// Pure rules for the standard main window (productization plan, macOS M2),
+/// pinned by the self-check.
+enum MainWindowRules {
+    /// NSWindow frame autosave name: position and size survive relaunch.
+    static let frameAutosaveName = "KlornMainWindow"
+    /// The full view's own floor (sidebar 220 + list 420 + a readable
+    /// reading pane), so the window can never be dragged into clipping it.
+    static let minSize = TopBarMetrics.fullMin
+    /// First-open size before any autosaved frame exists. Fits a 1280×800
+    /// display's visible area (minus menu bar, Dock and title bar).
+    static let defaultSize = NSSize(width: 1180, height: 640)
+    static let styleMask: NSWindow.StyleMask = [.titled, .closable, .miniaturizable, .resizable]
+
+    /// Whether an open request may create (or show) the window. With the
+    /// flag off no window object is ever made, so flag-off is unchanged.
+    static func mayOpen(macMainWindow: Bool) -> Bool {
+        macMainWindow
+    }
+
+    /// Settings ▸ General shows the beta toggle while Option is held, and
+    /// always once it is on, so it can be turned back off.
+    static func showsBetaToggle(optionHeld: Bool, macMainWindow: Bool) -> Bool {
+        optionHeld || macMainWindow
+    }
+}
+
+/// The main window's content: the current full view, unchanged (the IA
+/// change is M4). Actions come from the bar controller, which owns every
+/// full-view action today.
+struct MainWindowRoot: View {
+    let model: AppModel
+    let actions: TopBarActions
+
+    var body: some View {
+        FullView(actions: actions)
+            .environment(model)
+            // L() is not observable; rebuild on a language change (same
+            // trick as the bar).
+            .id(model.settings.languageRevision)
+            .frame(
+                minWidth: MainWindowRules.minSize.width, maxWidth: .infinity,
+                minHeight: MainWindowRules.minSize.height, maxHeight: .infinity,
+                alignment: .top)
+    }
+}
+
+/// Owns the standard main window: a plain AppKit NSWindow hosting the full
+/// view, created lazily on the first open request while `macMainWindow` is
+/// on and reused afterwards. There is no SwiftUI `Window` scene, so nothing
+/// is instantiated at launch and the flag-off app never has this window.
+///
+/// Open/closed and key state come from the window's own delegate callbacks
+/// (shown → open, willClose → closed), never from view lifecycle.
+@MainActor
+final class MainWindowController: NSObject, NSWindowDelegate {
+    private let model: AppModel
+    /// FullView actions for the window; wired by the AppDelegate to the bar.
+    var actionsProvider: (() -> TopBarActions?)?
+    private(set) var window: NSWindow?
+
+    init(model: AppModel) {
+        self.model = model
+    }
+
+    /// Open the main window, or bring the open one forward.
+    func open() {
+        guard MainWindowRules.mayOpen(macMainWindow: model.settings.macMainWindow) else { return }
+        guard let window = window ?? makeWindow() else {
+            Log.app.error("main window: no full-view actions to host")
+            return
+        }
+        // Explicit user command, so take focus outright (cooperative
+        // activate() is refused when not tied to the current input event).
+        NSApp.activate(ignoringOtherApps: true)
+        if window.isMiniaturized { window.deminiaturize(nil) }
+        window.makeKeyAndOrderFront(nil)
+        model.mainWindowOpen = true
+        model.mainWindowIsKey = window.isKeyWindow
+    }
+
+    /// Close the main window (header ✕ / "Smaller"); willClose does the rest.
+    func close() {
+        window?.close()
+    }
+
+    private func makeWindow() -> NSWindow? {
+        guard let actions = actionsProvider?() else { return nil }
+        let host = NSHostingController(rootView: MainWindowRoot(model: model, actions: actions))
+        // The window owns its frame; SwiftUI content must never resize it
+        // (clipping lessons, 2026-08-19).
+        host.sizingOptions = []
+        let window = NSWindow(
+            contentRect: NSRect(origin: .zero, size: MainWindowRules.defaultSize),
+            styleMask: MainWindowRules.styleMask, backing: .buffered, defer: false)
+        window.contentViewController = host
+        window.title = "Klorn"
+        window.titleVisibility = .hidden  // the full view draws its own header
+        window.contentMinSize = MainWindowRules.minSize
+        window.isReleasedWhenClosed = false  // reused on reopen
+        window.isRestorable = false  // our frame autosave is the only restoration
+        window.tabbingMode = .disallowed
+        window.collectionBehavior.insert(.fullScreenPrimary)
+        window.delegate = self
+        window.setContentSize(MainWindowRules.defaultSize)
+        if !window.setFrameUsingName(MainWindowRules.frameAutosaveName) { window.center() }
+        window.setFrameAutosaveName(MainWindowRules.frameAutosaveName)
+        clampOnScreen(window)
+        self.window = window
+        return window
+    }
+
+    func windowDidBecomeKey(_ notification: Notification) {
+        model.mainWindowIsKey = true
+    }
+
+    func windowDidResignKey(_ notification: Notification) {
+        model.mainWindowIsKey = false
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        model.mainWindowIsKey = false
+        model.mainWindowOpen = false
+    }
+
+    /// A restored frame from a since-disconnected or smaller display must
+    /// not leave the title bar unreachable (clipping lessons, 2026-08-20).
+    private func clampOnScreen(_ window: NSWindow) {
+        guard let visible = (window.screen ?? NSScreen.main)?.visibleFrame else { return }
+        let clamped = KeyablePanel.clamped(window.frame, into: visible)
+        if clamped != window.frame { window.setFrame(clamped, display: true) }
+    }
+}
+
+/// Settings ▸ General: the hidden switch for the main-window beta. Revealed
+/// while Option is held (the macOS convention for advanced items), and kept
+/// visible once on so it can be turned back off. The same switch is
+/// `defaults write ai.klorn.desktop macMainWindow -bool YES`.
+struct MainWindowBetaToggle: View {
+    @Bindable var settings: AppSettings
+    @State private var optionHeld = NSEvent.modifierFlags.contains(.option)
+    @State private var monitor: Any?
+
+    var body: some View {
+        Group {
+            if MainWindowRules.showsBetaToggle(
+                optionHeld: optionHeld, macMainWindow: settings.macMainWindow)
+            {
+                Toggle(isOn: $settings.macMainWindow) {
+                    Text(L("prefs.mainWindow")).foregroundStyle(Theme.text)
+                }
+                .toggleStyle(.switch).tint(Theme.accent)
+                Text(L("prefs.mainWindow.detail"))
+                    .font(.caption).foregroundStyle(Theme.textDim)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        // A key-modifier monitor, not window tracking: view lifecycle is
+        // the right scope for it.
+        .onAppear {
+            monitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
+                optionHeld = event.modifierFlags.contains(.option)
+                return event
+            }
+        }
+        .onDisappear {
+            if let monitor { NSEvent.removeMonitor(monitor) }
+            monitor = nil
+        }
+    }
+}
