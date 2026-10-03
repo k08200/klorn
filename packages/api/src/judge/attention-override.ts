@@ -11,6 +11,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { LiveTier } from "@klorn/contract";
+import { Prisma } from "@prisma/client";
 import { keyboardTriageEnabled } from "../config.js";
 import { prisma } from "../db.js";
 import { CLEAR_AGENT_TIER } from "./agent-tier.js";
@@ -26,7 +27,27 @@ export interface AttentionOverrideUndoHandle {
 
 export type AttentionOverrideResult =
   | { ok: true; tier: Tier; undo?: AttentionOverrideUndoHandle }
-  | { ok: false; reason: "not_found" };
+  // "conflict" only from a reversible override: the row kept changing under it.
+  | { ok: false; reason: "not_found" | "conflict" };
+
+export interface AttentionOverrideOptions {
+  /**
+   * Record an undo snapshot and return an undo handle (needs KEYBOARD_TRIAGE).
+   * Only the web's own lane routes ask. Telegram buttons, the notification
+   * capability link and Gmail label correction have no undo affordance, so they
+   * leave it off and never write a snapshot.
+   */
+  reversible?: boolean;
+}
+
+/** `data` fragment: drop any undo snapshot. Json columns need DbNull for SQL NULL. */
+export const CLEAR_OVERRIDE_UNDO = {
+  overrideUndoToken: null,
+  overrideUndo: Prisma.DbNull,
+} as const;
+
+/** How often a reversible override re-reads when the row changed under it. */
+const OVERRIDE_ATTEMPTS = 3;
 export type AttentionConfirmResult = { ok: true; tier: Tier } | { ok: false; reason: "not_found" };
 
 /** Apply a manual tier override to an attention item the user owns. */
@@ -34,10 +55,34 @@ export async function overrideAttentionTier(
   userId: string,
   itemId: string,
   tier: Tier,
+  options: AttentionOverrideOptions = {},
 ): Promise<AttentionOverrideResult> {
-  // Reversible only while KEYBOARD_TRIAGE is on. Off, this function reads and
-  // writes exactly what it did before the flag existed.
-  const reversible = keyboardTriageEnabled();
+  // With KEYBOARD_TRIAGE off this function reads and writes exactly what it did
+  // before the flag existed, whatever the caller asks.
+  const flagOn = keyboardTriageEnabled();
+  const reversible = flagOn && options.reversible === true;
+  if (!reversible) return applyOverride(userId, itemId, tier, false, flagOn);
+
+  // A reversible override snapshots the row it read, so the write is guarded on
+  // that row still being there (see applyOverride). If another write got in
+  // between, read again: the snapshot must describe what THIS override replaces.
+  for (let attempt = 1; attempt <= OVERRIDE_ATTEMPTS; attempt += 1) {
+    try {
+      return await applyOverride(userId, itemId, tier, true, flagOn);
+    } catch (err) {
+      if (!isRecordNotFound(err)) throw err;
+    }
+  }
+  return { ok: false, reason: "conflict" };
+}
+
+async function applyOverride(
+  userId: string,
+  itemId: string,
+  tier: Tier,
+  reversible: boolean,
+  flagOn: boolean,
+): Promise<AttentionOverrideResult> {
   // Ownership check before mutating
   const existing = await (
     prisma.attentionItem as unknown as {
@@ -56,12 +101,24 @@ export async function overrideAttentionTier(
   // stamp THIS override wrote by its exact outcomeAt.
   const at = new Date();
   const undoToken = reversible ? randomUUID() : null;
+  // Reversible: record what is being replaced. Not reversible, flag on: this
+  // override still supersedes any earlier reversible one on the row, so its
+  // token and snapshot go (otherwise a same-lane move from Telegram would leave
+  // the web's older token able to undo it). Flag off: the columns are untouched.
   const undoData = undoToken
-    ? {
-        overrideUndoToken: undoToken,
-        overrideUndo: snapshotOf(existing, tier, undoToken, at),
-      }
-    : {};
+    ? { overrideUndoToken: undoToken, overrideUndo: snapshotOf(existing, tier, undoToken, at) }
+    : flagOn
+      ? CLEAR_OVERRIDE_UNDO
+      : {};
+  // Optimistic guard for the reversible path: two quick overrides must not both
+  // snapshot the same prior row (the second undo would then drop the row to
+  // the judge's state while the first override's stamp stayed on the ledger).
+  // The loser's update throws P2025, the batch rolls back, and the caller
+  // re-reads.
+  const where =
+    reversible && existing.updatedAt
+      ? { id: itemId, updatedAt: existing.updatedAt }
+      : { id: itemId };
 
   // Atomic: the visible tier write and the ground-truth ledger stamp land in ONE
   // transaction. Previously they were two separate awaits — a crash or DB blip
@@ -83,7 +140,7 @@ export async function overrideAttentionTier(
   // connection like any other query.
   await prisma.$transaction([
     prisma.attentionItem.update({
-      where: { id: itemId },
+      where,
       // manualOverrideReason keeps the MANUAL_OVERRIDE_PREFIX marker that
       // judge-context.ts mines from ever drifting. isManualOverride is the
       // actual trust boundary (GHSA-cxc5-fmqv-pxv6) — this is the only call
@@ -344,6 +401,8 @@ export async function undoAttentionOverride(
           // Explicit, so @updatedAt does not make the row look freshly decided.
           updatedAt: new Date(snapshot.prevUpdatedAt),
           overrideUndoToken: null,
+          // Kept (with undoneAt) so a repeat of this undo is answered from it;
+          // the next override or judge write, or the daily sweep, removes it.
           overrideUndo: done,
         },
       }),
@@ -373,6 +432,29 @@ export async function undoAttentionOverride(
   }
 
   return { ok: true, tier: restoredTier, alreadyUndone: false };
+}
+
+/** How long a snapshot may sit on a row before the sweep removes it. */
+export const OVERRIDE_UNDO_RETENTION_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Remove undo snapshots older than OVERRIDE_UNDO_RETENTION_MS. They are dead
+ * weight long before that (the undo window is 30s); the day of slack keeps a
+ * repeated undo answerable and the sweep cheap to reason about.
+ *
+ * Raw SQL on purpose: a Prisma updateMany would bump `updatedAt`, which the
+ * judge's sender priors read as "decided just now". This statement touches the
+ * two undo columns and nothing else. No index serves it (a partial index is
+ * not expressible in the Prisma schema); it is one pass over AttentionItem per
+ * run, like the aging sweep next to it.
+ */
+export async function sweepOverrideUndoSnapshots(now: Date = new Date()): Promise<number> {
+  const cutoff = new Date(now.getTime() - OVERRIDE_UNDO_RETENTION_MS);
+  return prisma.$executeRaw`
+    UPDATE "AttentionItem"
+    SET "overrideUndoToken" = NULL, "overrideUndo" = NULL
+    WHERE "overrideUndo" IS NOT NULL
+      AND ("overrideUndo"->>'at')::timestamptz < ${cutoff}`;
 }
 
 /**

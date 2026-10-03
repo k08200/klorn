@@ -29,7 +29,7 @@ import type {
   LaneOverrideUndoResponse,
   LiveTier,
 } from "@klorn/contract";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireAppAccess } from "../billing/entitlement-guard.js";
 import { keyboardTriageEnabled } from "../config.js";
@@ -151,9 +151,39 @@ function overrideWire(
 const triageGate = darkRouteGate(keyboardTriageEnabled);
 
 // Fast keyboard triage is a few writes a second at most; this only stops a
-// scripted override/undo loop from churning the ledger (the global limit is
-// per IP, not per route).
+// scripted override/undo loop from churning the ledger.
 const LANE_WRITE_RATE_LIMIT = { max: 120, timeWindow: "1 minute" } as const;
+
+/**
+ * Per-USER limit for the two lane-write routes. The app-wide limiter keys on
+ * the client IP (index.ts), and so would a route `config.rateLimit`; a user
+ * behind a shared address must not spend other users' budget, and one user on
+ * many addresses must not multiply theirs. A route-level preHandler runs after
+ * the plugin's requireAuth, so the user id is known. No limiter without the
+ * rate-limit plugin (route tests).
+ */
+function laneWriteLimiter(app: FastifyInstance) {
+  const limiter = app.hasDecorator("createRateLimit")
+    ? app.createRateLimit({
+        ...LANE_WRITE_RATE_LIMIT,
+        keyGenerator: (request: FastifyRequest) => `lane-write:user:${getUserId(request)}`,
+      })
+    : null;
+  return async function laneWriteLimit(request: FastifyRequest, reply: FastifyReply) {
+    if (!limiter || reply.sent) return;
+    const state = await limiter(request);
+    if (state.isAllowed || !state.isExceeded) return;
+    reply.header("retry-after", String(state.ttlInSeconds));
+    return reply
+      .code(429)
+      .send({ ok: false, message: "Too many lane changes. Try again shortly." });
+  };
+}
+
+const OVERRIDE_REFUSALS = {
+  not_found: { status: 404, message: "Attention item not found." },
+  conflict: { status: 409, message: "This mail changed while it was being moved. Try again." },
+} as const;
 
 const UNDO_REFUSALS = {
   not_found: { status: 404, code: "not_found", message: "Attention item not found." },
@@ -303,6 +333,7 @@ const firewallListQuerySchema = {
 } as const;
 
 export async function firewallRoutes(app: FastifyInstance) {
+  const laneWriteLimit = laneWriteLimiter(app);
   app.addHook("preHandler", requireAuth);
   // Usable free tier: the firewall graph/classification view is core, read-only
   // value — admit any non-hard-walled user (free included). No-op pre-launch.
@@ -923,10 +954,12 @@ export async function firewallRoutes(app: FastifyInstance) {
       const { id } = request.params;
       const { tier } = request.body;
 
-      const result = await overrideAttentionTier(userId, id, tier);
+      const result = await overrideAttentionTier(userId, id, tier, { reversible: true });
       if (!result.ok) {
-        reply.code(404);
-        return { ok: false, message: "Attention item not found." };
+        // "conflict" exists only with KEYBOARD_TRIAGE on (see overrideAttentionTier).
+        const refusal = OVERRIDE_REFUSALS[result.reason];
+        reply.code(refusal.status);
+        return { ok: false, message: refusal.message };
       }
 
       return overrideWire(result);
@@ -941,7 +974,7 @@ export async function firewallRoutes(app: FastifyInstance) {
     "/:id/undo",
     {
       onRequest: triageGate,
-      config: { rateLimit: LANE_WRITE_RATE_LIMIT },
+      preHandler: laneWriteLimit,
       schema: { params: idParamSchema("id"), body: undoBodySchema },
     },
     async (request, reply): Promise<LaneOverrideUndoResponse | LaneOverrideErrorResponse> => {
@@ -967,18 +1000,27 @@ export async function firewallRoutes(app: FastifyInstance) {
     "/email/:emailId",
     {
       onRequest: triageGate,
-      config: { rateLimit: LANE_WRITE_RATE_LIMIT },
+      preHandler: laneWriteLimit,
       schema: { params: idParamSchema("emailId"), body: liveLaneBodySchema },
     },
     async (request, reply): Promise<LaneOverrideByEmailResponse | LaneOverrideErrorResponse> => {
       const userId = getUserId(request);
       const itemId = await findEmailAttentionItemId(userId, request.params.emailId);
       const result = itemId
-        ? await overrideAttentionTier(userId, itemId, request.body.tier)
+        ? await overrideAttentionTier(userId, itemId, request.body.tier, { reversible: true })
         : ({ ok: false, reason: "not_found" } as const);
       if (!itemId || !result.ok) {
-        reply.code(404);
-        return { ok: false, code: "not_found", message: "This mail has not been classified yet." };
+        if (result.ok || result.reason === "not_found") {
+          reply.code(404);
+          return {
+            ok: false,
+            code: "not_found",
+            message: "This mail has not been classified yet.",
+          };
+        }
+        const refusal = OVERRIDE_REFUSALS.conflict;
+        reply.code(refusal.status);
+        return { ok: false, code: "override_conflict", message: refusal.message };
       }
       return { ...overrideWire(result), itemId };
     },

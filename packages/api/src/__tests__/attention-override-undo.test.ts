@@ -29,9 +29,13 @@ vi.mock("../db.js", () => {
     then: (ok: (v: T) => unknown, fail?: (e: unknown) => unknown) =>
       new Promise<T>((resolve) => resolve(run())).then(ok, fail),
   });
+  // Prisma.DbNull is how a Json column is set to SQL NULL; store it as null.
+  const isDbNull = (v: unknown) =>
+    typeof v === "object" && v !== null && v.constructor?.name === "DbNull";
   const pick = (row: Row, select?: Row): Row =>
     select ? Object.fromEntries(Object.keys(select).map((k) => [k, row[k]])) : { ...row };
 
+  let txQueue: Promise<unknown> = Promise.resolve();
   const prisma = {
     attentionItem: {
       findFirst: vi.fn((args: { where: Row; select?: Row }) =>
@@ -47,7 +51,10 @@ vi.mock("../db.js", () => {
             throw Object.assign(new Error("Record to update not found."), { code: "P2025" });
           }
           // @updatedAt: bumped unless the write supplies a value itself.
-          const next = { ...state.items[idx], updatedAt: new Date(), ...args.data };
+          const data = Object.fromEntries(
+            Object.entries(args.data).map(([k, v]) => [k, isDbNull(v) ? null : v]),
+          );
+          const next = { ...state.items[idx], updatedAt: new Date(), ...data };
           state.items = state.items.map((r, i) => (i === idx ? next : r));
           return next;
         }),
@@ -66,17 +73,25 @@ vi.mock("../db.js", () => {
         }),
       ),
     },
-    $transaction: vi.fn(async (ops: PromiseLike<unknown>[]) => {
-      const before = { items: state.items, labels: state.labels };
-      try {
-        const results: unknown[] = [];
-        for (const op of ops) results.push(await op);
-        return results;
-      } catch (err) {
-        state.items = before.items;
-        state.labels = before.labels;
-        throw err;
-      }
+    $executeRaw: vi.fn(async () => 0),
+    // One transaction at a time, as row locks give on a real database: a
+    // rollback must never restore a state another transaction wrote over.
+    $transaction: vi.fn((ops: PromiseLike<unknown>[]) => {
+      const run = async () => {
+        const before = { items: state.items, labels: state.labels };
+        try {
+          const results: unknown[] = [];
+          for (const op of ops) results.push(await op);
+          return results;
+        } catch (err) {
+          state.items = before.items;
+          state.labels = before.labels;
+          throw err;
+        }
+      };
+      const result = txQueue.then(run, run);
+      txQueue = result.catch(() => undefined);
+      return result;
     }),
   };
   return { prisma, db: prisma };
@@ -84,9 +99,12 @@ vi.mock("../db.js", () => {
 
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
+import { prisma } from "../db.js";
 import {
+  OVERRIDE_UNDO_RETENTION_MS,
   OVERRIDE_UNDO_WINDOW_MS,
   overrideAttentionTier,
+  sweepOverrideUndoSnapshots,
   undoAttentionOverride,
 } from "../judge/attention-override.js";
 
@@ -141,7 +159,7 @@ const learning = (row: Row) => ({
 });
 
 async function override(tier: "PUSH" | "MEETING" | "QUEUE" | "INFO" | "SILENT") {
-  const result = await overrideAttentionTier("user-1", "item-1", tier);
+  const result = await overrideAttentionTier("user-1", "item-1", tier, { reversible: true });
   if (!result.ok || !result.undo) throw new Error("expected a reversible override");
   return result.undo;
 }
@@ -161,7 +179,7 @@ afterEach(() => {
 describe("overrideAttentionTier with KEYBOARD_TRIAGE off", () => {
   it("writes no undo snapshot and returns no undo handle", async () => {
     vi.stubEnv("KEYBOARD_TRIAGE", "");
-    const result = await overrideAttentionTier("user-1", "item-1", "QUEUE");
+    const result = await overrideAttentionTier("user-1", "item-1", "QUEUE", { reversible: true });
     expect(result).toEqual({ ok: true, tier: "QUEUE" });
     expect(item().overrideUndoToken).toBeNull();
     expect(item().overrideUndo).toBeNull();
@@ -169,7 +187,7 @@ describe("overrideAttentionTier with KEYBOARD_TRIAGE off", () => {
 
   it("refuses an undo as a conflict (nothing was recorded)", async () => {
     vi.stubEnv("KEYBOARD_TRIAGE", "");
-    await overrideAttentionTier("user-1", "item-1", "QUEUE");
+    await overrideAttentionTier("user-1", "item-1", "QUEUE", { reversible: true });
     expect(await undoAttentionOverride("user-1", "item-1", "any")).toEqual({
       ok: false,
       reason: "conflict",
@@ -320,7 +338,6 @@ describe("undoAttentionOverride", () => {
 
   it("rolls back the ledger when the row changes between the check and the write", async () => {
     const undo = await override("QUEUE");
-    const { prisma } = await import("../db.js");
     const findFirst = (
       prisma as unknown as { attentionItem: { findFirst: ReturnType<typeof vi.fn> } }
     ).attentionItem.findFirst;
@@ -409,5 +426,103 @@ describe("undoAttentionOverride", () => {
       ok: false,
       reason: "conflict",
     });
+  });
+});
+
+describe("reversible is opt-in (flag on)", () => {
+  it("a caller that does not ask (Telegram, Gmail label correction) records no snapshot or token", async () => {
+    const result = await overrideAttentionTier("user-1", "item-1", "QUEUE");
+    expect(result).toEqual({ ok: true, tier: "QUEUE" });
+    expect(item().overrideUndoToken).toBeNull();
+    expect(item().overrideUndo).toBeNull();
+    expect(label().outcome).toBe("OVERRIDE:QUEUE");
+  });
+
+  it("and it retires the token of an earlier reversible override on that row", async () => {
+    const first = await override("QUEUE");
+    // Same lane again, from Telegram: the row would still look like `first`'s.
+    await overrideAttentionTier("user-1", "item-1", "QUEUE");
+    expect(item().overrideUndoToken).toBeNull();
+    expect(item().overrideUndo).toBeNull();
+    expect(await undoAttentionOverride("user-1", "item-1", first.token)).toEqual({
+      ok: false,
+      reason: "conflict",
+    });
+    expect(item()).toMatchObject({ tier: "QUEUE", isManualOverride: true });
+  });
+});
+
+describe("two quick overrides on one row", () => {
+  it("A → B → undo B: back to A's state, A's stamp intact, A no longer undoable", async () => {
+    const a = await override("QUEUE");
+    const afterA = learning(item());
+    vi.setSystemTime(T0.getTime() + 50);
+    const b = await override("SILENT");
+
+    expect(await undoAttentionOverride("user-1", "item-1", b.token)).toEqual({
+      ok: true,
+      tier: "QUEUE",
+      alreadyUndone: false,
+    });
+    expect(learning(item())).toEqual(afterA);
+    expect(label()).toMatchObject({ outcome: "OVERRIDE:QUEUE", outcomeAt: T0 });
+    expect(item().overrideUndoToken).toBeNull();
+    expect(await undoAttentionOverride("user-1", "item-1", a.token)).toEqual({
+      ok: false,
+      reason: "conflict",
+    });
+  });
+
+  it("concurrent A and B never both snapshot the original row", async () => {
+    const [a, b] = await Promise.all([
+      overrideAttentionTier("user-1", "item-1", "QUEUE", { reversible: true }),
+      overrideAttentionTier("user-1", "item-1", "SILENT", { reversible: true }),
+    ]);
+    if (!a.ok || !b.ok || !a.undo || !b.undo) throw new Error("expected two reversible overrides");
+
+    // One landed first; the other re-read and landed on top of it.
+    const last = item().overrideUndoToken === a.undo.token ? a : b;
+    const first = last === a ? b : a;
+    expect(item().tier).toBe(last.tier);
+    expect(label().outcome).toBe(`OVERRIDE:${first.tier}`);
+
+    // Undoing the last one returns to the FIRST override, not to the judge's
+    // row: still manual, still carrying the stamp that is on the ledger.
+    expect(await undoAttentionOverride("user-1", "item-1", last.undo?.token ?? "")).toMatchObject({
+      ok: true,
+      tier: first.tier,
+    });
+    expect(item()).toMatchObject({ tier: first.tier, isManualOverride: true });
+    expect(label().outcome).toBe(`OVERRIDE:${first.tier}`);
+  });
+
+  it("gives up with a conflict when the row keeps changing underneath it", async () => {
+    const update = (prisma as unknown as { attentionItem: { update: ReturnType<typeof vi.fn> } })
+      .attentionItem.update;
+    update.mockImplementation(() => ({
+      // biome-ignore lint/suspicious/noThenProperty: lazy thenable, as above
+      then: (_ok: unknown, fail: (e: unknown) => unknown) =>
+        Promise.reject(Object.assign(new Error("not found"), { code: "P2025" })).catch(fail),
+    }));
+    try {
+      expect(
+        await overrideAttentionTier("user-1", "item-1", "QUEUE", { reversible: true }),
+      ).toEqual({ ok: false, reason: "conflict" });
+      expect(label().outcome).toBeNull();
+    } finally {
+      update.mockReset();
+    }
+  });
+});
+
+describe("snapshot retention", () => {
+  it("sweeps snapshots older than the retention with one parameterized statement", async () => {
+    const executeRaw = (prisma as unknown as { $executeRaw: ReturnType<typeof vi.fn> }).$executeRaw;
+    executeRaw.mockResolvedValueOnce(3);
+    const now = new Date("2026-10-05T00:00:00.000Z");
+    expect(await sweepOverrideUndoSnapshots(now)).toBe(3);
+    const [strings, cutoff] = executeRaw.mock.calls[0] as [TemplateStringsArray, Date];
+    expect(strings.join("?")).toMatch(/UPDATE "AttentionItem"[\s\S]*"overrideUndo" IS NOT NULL/);
+    expect(cutoff).toEqual(new Date(now.getTime() - OVERRIDE_UNDO_RETENTION_MS));
   });
 });

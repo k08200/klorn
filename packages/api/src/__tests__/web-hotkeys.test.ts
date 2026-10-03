@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   createHotkeyMatcher,
   createHotkeyRegistry,
+  effectiveKey,
   HOTKEYS,
   type HotkeyContext,
   type HotkeyDef,
@@ -247,9 +248,68 @@ describe("guards", () => {
     expect(hotkeyBlockReason(key("Escape", { isComposing: true }), body, false)).toBe("composing");
   });
 
-  it("a committed jamo is not a hotkey either", () => {
+  it("a non-Latin character with no key position to fall back on is not a hotkey", () => {
     expect(idOf(feed(key("ㅓ")))).toBe("none");
     expect(idOf(feed(key("ㅏ")))).toBe("none");
+  });
+});
+
+describe("non-Latin layouts resolve by key position (event.code), like the Mac app", () => {
+  it("Korean 2-set: ㅓ on the J key moves down, ㅏ on K moves up, ㄷ on E is done", () => {
+    expect(idOf(feed(key("ㅓ", { code: "KeyJ" })))).toBe("mail.next");
+    expect(idOf(feed(key("ㅏ", { code: "KeyK" })))).toBe("mail.prev");
+    expect(idOf(feed(key("ㄷ", { code: "KeyE" })))).toBe("mail.done");
+    expect(idOf(feed(key("ㅋ", { code: "KeyZ" })))).toBe("mail.undo");
+    // Shift is still a different key: ㅕ is Shift+U, ㅓ with Shift is Shift+J.
+    expect(idOf(feed(key("ㅓ", { code: "KeyJ", shiftKey: true })))).toBe("select.extendDown");
+  });
+
+  it("sequences work too: ㅎ (G) then ㅡ (M) goes to mail", () => {
+    const matcher = createHotkeyMatcher();
+    expect(feed(key("ㅎ", { code: "KeyG" }), ctx(true), matcher, 0).kind).toBe("pending");
+    expect(idOf(feed(key("ㅡ", { code: "KeyM" }), ctx(true), matcher, 10))).toBe("go.mail");
+  });
+
+  it("Cyrillic: о on the J key is j", () => {
+    expect(idOf(feed(key("о", { code: "KeyJ" })))).toBe("mail.next");
+  });
+
+  it("digits and / fall back by position as well", () => {
+    expect(effectiveKey(key("١", { code: "Digit1" }))).toBe("1");
+    expect(effectiveKey(key("。", { code: "Slash" }))).toBe("/");
+    expect(effectiveKey(key("？", { code: "Slash", shiftKey: true }))).toBe("?");
+  });
+
+  it("a composing event never fires, even with a code that would match", () => {
+    const body = { tagName: "BODY" };
+    const composing = key("ㅓ", { code: "KeyJ", isComposing: true });
+    expect(hotkeyBlockReason(composing, body, false)).toBe("composing");
+    expect(hotkeyBlockReason(key("ㅓ", { code: "KeyJ", keyCode: 229 }), body, false)).toBe(
+      "composing",
+    );
+    // And never in a text field, composing or not.
+    expect(hotkeyBlockReason(key("ㅓ", { code: "KeyJ" }), { tagName: "INPUT" }, false)).toBe(
+      "typing",
+    );
+  });
+
+  it("Latin layouts resolve by character, not position (Dvorak)", () => {
+    // Dvorak: the physical J key types "h", and "j" is on the physical C key.
+    expect(idOf(feed(key("h", { code: "KeyJ" })))).toBe("none");
+    expect(idOf(feed(key("j", { code: "KeyC" })))).toBe("mail.next");
+    // The physical E key types "." on Dvorak: not "done".
+    expect(idOf(feed(key(".", { code: "KeyE" })))).toBe("none");
+    // AZERTY digits row without Shift types "&": position must not turn it into 1.
+    expect(idOf(feed(key("&", { code: "Digit1" })))).toBe("none");
+  });
+
+  it("named keys are never remapped", () => {
+    expect(effectiveKey(key("Escape", { code: "Escape" }))).toBe("Escape");
+    expect(effectiveKey(key("Enter", { code: "KeyJ" }))).toBe("Enter");
+  });
+
+  it("the legacy Cmd chords are untouched (flag-off behaviour is by character, as before)", () => {
+    expect(matchLegacyHotkey(key("ㅏ", { code: "KeyK", metaKey: true }))).toBeNull();
   });
 });
 

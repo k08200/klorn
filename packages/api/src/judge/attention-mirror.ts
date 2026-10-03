@@ -19,12 +19,14 @@
 import type { AttentionSource, AttentionStatus, AttentionType } from "@prisma/client";
 import { getToolRisk } from "../agentcore/agent-logic.js";
 import { AUTOPILOT_LEVEL, type AutopilotLevel } from "../agentcore/agent-mode.js";
+import { keyboardTriageEnabled } from "../config.js";
 import { prisma } from "../db.js";
 import { getSuppressionSet, isSuppressed } from "../learning/feedback-adaptor.js";
 import type { EngagementKind } from "../learning/sender-policy.js";
 import { captureError } from "../sentry.js";
 import { CLEAR_AGENT_TIER, NOT_AGENT_SET } from "./agent-tier.js";
 import { attentionHashInputOf, computeAttentionInputHash } from "./attention-input-hash.js";
+import { CLEAR_OVERRIDE_UNDO } from "./attention-override.js";
 import { recordDecision, recordEmailDecision } from "./decision-label.js";
 import type { PocJudgement } from "./poc-judge.js";
 import type { Tier } from "./tiers.js";
@@ -961,6 +963,9 @@ async function writeEmailItem(
       isManualOverride: false,
       // Same for an MCP agent's stamp (step A2b): the tier is judge-authored again.
       ...CLEAR_AGENT_TIER,
+      // And for a manual override's undo snapshot (KEYBOARD_TRIAGE): the row is
+      // no longer what that override wrote, so there is nothing left to undo.
+      ...(keyboardTriageEnabled() ? CLEAR_OVERRIDE_UNDO : {}),
     },
   });
   return "written";

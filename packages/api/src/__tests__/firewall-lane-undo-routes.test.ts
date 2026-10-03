@@ -126,7 +126,9 @@ describe("flag on", () => {
   it("POST /email/:emailId resolves the user's own item and overrides it", async () => {
     const res = await post("/api/inbox/firewall/email/email-1", { tier: "INFO" });
     expect(override.findEmailAttentionItemId).toHaveBeenCalledWith("user-1", "email-1");
-    expect(override.overrideAttentionTier).toHaveBeenCalledWith("user-1", "item-1", "INFO");
+    expect(override.overrideAttentionTier).toHaveBeenCalledWith("user-1", "item-1", "INFO", {
+      reversible: true,
+    });
     expect(res.json()).toEqual({
       ok: true,
       tier: "QUEUE",
@@ -144,9 +146,57 @@ describe("flag on", () => {
     expect(override.overrideAttentionTier).not.toHaveBeenCalled();
   });
 
+  it("a move that kept losing to concurrent writes is a retryable 409, on both routes", async () => {
+    override.overrideAttentionTier.mockResolvedValue({ ok: false, reason: "conflict" });
+    const byEmail = await post("/api/inbox/firewall/email/email-1", { tier: "INFO" });
+    expect(byEmail.statusCode).toBe(409);
+    expect(byEmail.json()).toMatchObject({ ok: false, code: "override_conflict" });
+    const byId = await post("/api/inbox/firewall/item-1", { tier: "QUEUE" });
+    expect(byId.statusCode).toBe(409);
+    expect(byId.json()).toMatchObject({ ok: false });
+  });
+
+  it("the web's own override route asks for a reversible override", async () => {
+    await post("/api/inbox/firewall/item-1", { tier: "QUEUE" });
+    expect(override.overrideAttentionTier).toHaveBeenCalledWith("user-1", "item-1", "QUEUE", {
+      reversible: true,
+    });
+  });
+
   it("POST /email/:emailId refuses the retired AUTO lane", async () => {
     const res = await post("/api/inbox/firewall/email/email-1", { tier: "AUTO" });
     expect(res.statusCode).toBe(400);
     expect(override.overrideAttentionTier).not.toHaveBeenCalled();
+  });
+});
+
+describe("lane-write rate limit is per user, not per IP", () => {
+  async function limitedApp() {
+    const { default: rateLimit } = await import("@fastify/rate-limit");
+    const { getUserId } = await import("../auth.js");
+    const app = Fastify();
+    // Same shape as index.ts: the app-wide limiter keys on the client address.
+    await app.register(rateLimit, { max: 100_000, keyGenerator: () => "one-shared-ip" });
+    await app.register(firewallRoutes, { prefix: "/api/inbox/firewall" });
+    return { app, asUser: (id: string) => vi.mocked(getUserId).mockReturnValue(id) };
+  }
+
+  it("one user's budget does not spend another's behind the same address", async () => {
+    const { app, asUser } = await limitedApp();
+    const move = () =>
+      app.inject({
+        method: "POST",
+        url: "/api/inbox/firewall/email/email-1",
+        payload: { tier: "INFO" },
+      });
+    asUser("user-a");
+    const first = await Promise.all(Array.from({ length: 121 }, move));
+    expect(first.filter((r) => r.statusCode === 200)).toHaveLength(120);
+    expect(first.filter((r) => r.statusCode === 429)).toHaveLength(1);
+
+    asUser("user-b");
+    expect((await move()).statusCode).toBe(200);
+    asUser("user-1");
+    await app.close();
   });
 });

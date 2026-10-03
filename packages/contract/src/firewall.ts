@@ -157,9 +157,13 @@ export interface LaneOverrideUndoResponse {
   alreadyUndone: boolean;
 }
 
-/** Refusals of the two routes above. `undo_*` are HTTP 409 and change nothing. */
+/**
+ * Refusals of the two routes above. `undo_*` and `override_conflict` are HTTP
+ * 409 and change nothing; `override_conflict` means the row kept changing while
+ * the move was applied and the client may simply try again.
+ */
 export interface LaneOverrideErrorResponse {
   ok: false;
-  code: "not_found" | "undo_expired" | "undo_conflict";
+  code: "not_found" | "undo_expired" | "undo_conflict" | "override_conflict";
   message: string;
 }
