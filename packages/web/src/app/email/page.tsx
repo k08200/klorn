@@ -1959,26 +1959,9 @@ function EmailBadges({ email, unread }: { email: EmailRow; unread: boolean }) {
       </span>,
     );
   }
-  if ((email.attachmentPendingCount ?? 0) > 0) {
-    badges.push(
-      <span
-        key="pending"
-        className="shrink-0 rounded-md bg-surface-hover px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-ink-dim"
-      >
-        Pending {email.attachmentPendingCount}
-      </span>,
-    );
-  }
-  if ((email.attachmentFallbackCount ?? 0) > 0) {
-    badges.push(
-      <span
-        key="fallback"
-        className="shrink-0 rounded-md bg-accent/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-accent-deep ring-1 ring-inset ring-accent/20"
-      >
-        Fallback {email.attachmentFallbackCount}
-      </span>,
-    );
-  }
+  // attachmentPendingCount / attachmentFallbackCount are attachment-pipeline
+  // diagnostics (still on the wire; the API is unchanged), not user-facing;
+  // they used to render here as "Pending N" / "Fallback N" row badges.
   if (email.category) badges.push(<CategoryBadge key="category" category={email.category} />);
 
   const visible = badges.slice(0, MAX_VISIBLE_BADGES);

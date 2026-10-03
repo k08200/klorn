@@ -317,13 +317,11 @@
 "tier.info.empty" = "没有新记录";
 "tier.push.blurb" = "会打断你。有人在等你回复，或者事情有时限。";
 "tier.queue.blurb" = "等着你。今天值得一读，但不值得弹横幅。";
-"tier.silent.blurb" = "已归档，不是删除。订阅邮件和收据 — 你来找时还在。";
-"tier.auto.blurb" = "自动处理完毕。Klorn 有足够把握，就没有来问你。";
+"tier.silent.blurb" = "已归档，不是删除。订阅邮件和促销邮件 — 你来找时还在。";
 
 "tier.push.empty" = "目前没有需要你处理的事。";
 "tier.queue.empty" = "没有等着读的内容。";
 "tier.silent.empty" = "这里还没有归档任何内容。";
-"tier.auto.empty" = "Klorn 还没有自动处理过任何内容。";
 
 /* First-run guide */
 "guide.title" = "Klorn 如何为你分拣邮件";
@@ -399,7 +397,8 @@
 "section.calendar" = "日历";
 
 /* Account maintenance disclosure (2026-08-14) */
-"account.maintenance" = "应用与诊断";
+"account.maintenance" = "应用与支持";
+"account.showSupportTools" = "显示支持工具";
 "a11y.expanded" = "已展开";
 "a11y.collapsed" = "已收起";
 

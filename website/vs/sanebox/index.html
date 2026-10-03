@@ -23,15 +23,22 @@
 <link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/sanebox/">
 <link rel="preload" as="font" type="font/woff2" href="/fonts/geist-var.woff2" crossorigin>
 <link rel="stylesheet" href="/compare.css">
+<link rel="icon" href="/brand/favicon.svg?v=matte2" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png?v=matte2">
+<script src="/site-nav.js" defer></script>
 </head>
 <body>
 <div class="wrap">
-  <nav class="top">
+  <header class="top">
     <a class="home" href="/">Klorn</a>
-    <span class="lang">
-      <a href="/vs/sanebox/" aria-current="true">EN</a><a href="/ko/vs/sanebox/">KO</a>
-    </span>
-  </nav>
+    <button type="button" class="menu-btn" data-menu-toggle aria-expanded="false" aria-controls="site-menu" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <nav class="menu" id="site-menu" aria-label="Site">
+      <a href="/pricing/">Pricing</a><a href="/blog/">Blog</a><a href="/security/">Security</a><a href="/self-host/">Self-host</a>
+      <span class="pair"><a href="/vs/sanebox/" aria-current="page">EN</a><a href="/ko/vs/sanebox/">KO</a></span>
+      <a href="https://app.klorn.ai/login">Log in</a>
+    </nav>
+    <a class="dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener" data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe">Download</a>
+  </header>
 
   <h1>SaneBox moves the mail.<br>Klorn tells you <em>why</em> it moved.</h1>
   <p class="thesis">SaneBox has been doing folder-based triage since 2010 and does it without an app of its own. The trade it makes is deliberate: it looks at sender, subject and date, never the message body — so it can be private in a way Klorn is not, and it can never explain a decision.</p>
@@ -46,7 +53,7 @@
       <tr><th>Correcting it</th><td class="us">Move the row; two matching corrections make that sender deterministic</td><td>Drag between folders; it learns from the move</td></tr>
       <tr><th>Needs its own app</th><td class="us">No, if you use the label mode; there are also web, macOS and Windows clients</td><td><strong>No — it works inside whatever client you already use</strong></td></tr>
       <tr><th>Source &amp; hosting</th><td class="us"><strong>AGPL-3.0, self-hostable end to end</strong></td><td>Closed, cloud only</td></tr>
-      <tr><th>Published price</th><td class="us"><strong><a href="/pricing/">$8.99/mo</a></strong> web · $9.99 iOS/Android</td><td>$3.49 Snack · $5.99 Lunch · $16.99 Dinner</td></tr>
+      <tr><th>Published price</th><td class="us"><strong><a href="/pricing/">$8.99/mo</a></strong></td><td>$3.49 Snack · $5.99 Lunch · $16.99 Dinner</td></tr>
     </tbody>
   </table>
   </div>
@@ -67,6 +74,7 @@
 
   <footer>
     <p>Prices and product facts as published by each vendor, checked 2026-08-23. Something here wrong? <a href="mailto:k0820086@gmail.com">Tell us</a> and we will fix it.</p>
+    <nav class="foot-links" aria-label="More from Klorn"><a href="/pricing/">Pricing</a><a href="/blog/">Blog</a><a href="/security/">Security</a><a href="/self-host/">Self-host</a><a href="/open-source/">Open source</a><a href="/status/">Status</a><a href="/gdpr/">GDPR</a><a href="/dpa/">DPA</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a><a href="https://github.com/k08200/klorn" rel="noreferrer noopener">GitHub</a></nav>
   </footer>
 </div>
 <script>

@@ -60,9 +60,12 @@ export const GENERIC_MAX_RESPONSE_BYTES = 8 * MIB;
  * answers NO makes imapflow LIST, and a flood of untagged LIST lines (each far under
  * every cap) was buffered without limit (confirmed: 400 x 1 MiB grew RSS by 585 MiB).
  * An honest poll or action reads a few MiB (a window of 50 messages with 64 KiB of
- * text each is about 3.5 MiB), so tens of MiB is generous.
+ * text each is about 3.5 MiB). The review of the generic IMAP PR measured the memory a
+ * session retains at about 2x the wire bytes (the parser's buffers plus the decoded
+ * strings), so the budget is also a memory bound: 12 MiB is ~3.4x an honest poll and
+ * caps a hostile session near 24 MiB retained, where the earlier 32 MiB allowed ~64.
  */
-export const GENERIC_SESSION_BYTE_BUDGET = 32 * MIB;
+export const GENERIC_SESSION_BYTE_BUDGET = 12 * MIB;
 const MIN_TLS_VERSION = "TLSv1.2";
 
 const CONNECT_TIMEOUT_MESSAGE = "connection timed out";

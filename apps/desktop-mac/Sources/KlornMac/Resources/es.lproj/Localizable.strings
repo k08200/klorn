@@ -317,13 +317,11 @@
 "tier.info.empty" = "No hay registros nuevos";
 "tier.push.blurb" = "Te interrumpe. Alguien espera respuesta, o hay una fecha límite.";
 "tier.queue.blurb" = "Te espera. Vale la pena leerlo hoy, pero no un aviso.";
-"tier.silent.blurb" = "Archivado, no borrado. Boletines y recibos: siguen aquí cuando los busques.";
-"tier.auto.blurb" = "Resuelto solo. Klorn tuvo confianza suficiente para no preguntar.";
+"tier.silent.blurb" = "Archivado, no borrado. Boletines y promociones: siguen aquí cuando los busques.";
 
 "tier.push.empty" = "Ahora mismo nada requiere tu atención.";
 "tier.queue.empty" = "No hay nada esperando lectura.";
 "tier.silent.empty" = "Aquí todavía no hay nada archivado.";
-"tier.auto.empty" = "Klorn todavía no ha resuelto nada por su cuenta.";
 
 /* First-run guide */
 "guide.title" = "Cómo clasifica Klorn tu correo";
@@ -399,7 +397,8 @@
 "section.calendar" = "Calendario";
 
 /* Account maintenance disclosure (2026-08-14) */
-"account.maintenance" = "App y diagnóstico";
+"account.maintenance" = "App y soporte";
+"account.showSupportTools" = "Mostrar herramientas de soporte";
 "a11y.expanded" = "Desplegado";
 "a11y.collapsed" = "Plegado";
 

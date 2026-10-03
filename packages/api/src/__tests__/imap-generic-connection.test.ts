@@ -446,9 +446,10 @@ describe("generic client: a byte budget for the whole session (every command, ev
   const writeOf = (client: unknown) =>
     (client as { streamer: { write: (chunk: unknown) => boolean } }).streamer.write;
 
-  it("is tens of MiB: above any honest poll or action, far below what a flood needs", () => {
-    expect(GENERIC_SESSION_BYTE_BUDGET).toBeGreaterThanOrEqual(16 * MIB);
-    expect(GENERIC_SESSION_BYTE_BUDGET).toBeLessThanOrEqual(64 * MIB);
+  it("is a small multiple of an honest poll: retained memory is ~2x the wire bytes, so it stays low", () => {
+    const HONEST_POLL_BYTES = 3.5 * MIB; // a window of 50 messages, 64 KiB of text each
+    expect(GENERIC_SESSION_BYTE_BUDGET).toBeGreaterThanOrEqual(2 * HONEST_POLL_BYTES);
+    expect(GENERIC_SESSION_BYTE_BUDGET).toBeLessThanOrEqual(12 * MIB);
   });
 
   it("forwards bytes under the budget unchanged, and the stream's own answer with them", () => {

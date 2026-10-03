@@ -13,15 +13,24 @@ while the schema had moved to five lanes. Realigned to the schema.
 Updated 2026-09-30: added **Key permission** and **Agent activity** (step A3 of
 `providers/unified-platform-plan.md`), the two nouns of the MCP write-tools UI.
 
+Updated 2026-10-02: Home is **Today** and the approval surface is **Approvals**
+(formerly "Decision queue"); the Firewall board screen is retired as a
+user-facing term. Added **Today**, **Assistant**, **Files**, **SourceBadge**.
+See `design/productization-plan.md`.
+
 ## The nouns
 
 | Term | Means | Where it appears | Never means |
 |---|---|---|---|
-| **inbox** | One connected mail account (a Gmail account, a Naver IMAP account). A user can have several. | Settings → "Connected inboxes", the account switcher on Mail | A screen. Not the decision queue, not the firewall board. |
-| **Decision queue** | The list of things waiting for the user's approval. The app's home surface. | Sidebar nav, `/inbox` (URL is historical), desktop panel | A mail list. Nothing lands here unless it needs a decision. |
-| **Firewall board** | The lane view of how mail was classified: PUSH / MEETING / QUEUE / INFO / SILENT. | `/inbox/firewall`, the desktop tier columns | A place to read mail. It shows *judgments*, not threads. |
-| **Receipt** | The record of what Klorn did today, after the fact. | `/inbox/receipt` | Something to act on. It is read-only history. |
-| **Mail** | The actual message list and reading view. | `/email`, desktop reading pane | The decision queue. |
+| **inbox** | One connected mail account (a Gmail account, a Naver IMAP account). A user can have several. | Settings → "Accounts & sources" (today: "Connected inboxes"), the source badge on each row, the account facet on Mail (no account switcher — FD-2) | A screen. Not Today, not Approvals, not the lane view. |
+| **Today** | The home surface: mail by lane across all connected accounts, the merged calendar, recent files, and an assistant strip. | Sidebar nav (first item), the app's landing view | A mail list or an approval list. Shipping behind `UNIFIED_HOME` (proposed flag); until then `/inbox` is still home. |
+| **Assistant** | The nav section holding chat, **Approvals**, Briefing and Receipt. | Sidebar nav | A lane or an agent mode. |
+| **Approvals** | The list of things waiting for the user's approval. Formerly the **Decision queue**. | Under Assistant | A mail list. Nothing lands here unless it needs a decision. Transition: the old term "Decision queue" and `/inbox` remain in code until P6/P7 ship behind `UNIFIED_HOME`; new copy uses "Approvals". |
+| **Files** | Documents from connected drive sources. | Sidebar nav, only when a drive source is enabled | Mail attachments. |
+| **SourceBadge** (source) | The small monochrome glyph showing which connected account a row or event came from. | Every mail row and calendar event | A lane or a category. |
+| **Firewall board** | Internal-docs term for the lane classification view. The separate screen is **retired as a user-facing term**: lanes are Mail's primary filter (PUSH / MEETING / QUEUE / INFO / SILENT). `/inbox/firewall` and the desktop tier columns persist in code until migration. | Internal docs only | A place to read mail, and never user-facing copy. |
+| **Receipt** | The record of what Klorn did today, after the fact. | `/inbox/receipt`; under Assistant | Something to act on. It is read-only history. |
+| **Mail** | The actual message list and reading view; lanes are its primary filter. | `/email`, desktop reading pane | Approvals. |
 | **Key permission** | What an MCP API key may do: **Read only** (the default) or **Read and write**. Read and write lets an external agent mark mail as read and change lanes; it never allows send, delete or forward. Offered only while write tools are switched on. | Settings → "MCP API keys": the choice when creating a key, and a label on each key | Agent mode (`SHADOW` / `SUGGEST` / `AUTO`). A key's permission is about which tools an *external* agent may call; it says nothing about how much Klorn's own agent does without asking. |
 | **Agent activity** | The per-key history of write actions an external agent took through that key: when, what, and how it ended (Done / Refused / Error / Outcome unknown). | Settings → "MCP API keys", expandable on each Read and write key | The receipt (Klorn's own record of what Klorn did today), or agent mode. It never lists reads, and never shows message content. |
 

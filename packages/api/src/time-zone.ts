@@ -138,7 +138,18 @@ function getTimeZoneOffsetMs(date: Date, timeZone: string): number {
   return localAsUtcMs - date.getTime();
 }
 
-function getLocalParts(date: Date, timeZone: string): LocalDateTimeParts {
+/**
+ * One formatter per zone: building an Intl.DateTimeFormat costs tens of
+ * microseconds, which a recurring-calendar expansion (step C3) paid several times
+ * per occurrence. Formatting is stateless, so a shared formatter returns exactly
+ * what a fresh one did. Bounded: past the cap a zone simply gets a fresh formatter.
+ */
+const MAX_CACHED_FORMATTERS = 1000;
+const formatters = new Map<string, Intl.DateTimeFormat>();
+
+function formatterFor(timeZone: string): Intl.DateTimeFormat {
+  const cached = formatters.get(timeZone);
+  if (cached) return cached;
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone,
     hour12: false,
@@ -149,6 +160,12 @@ function getLocalParts(date: Date, timeZone: string): LocalDateTimeParts {
     minute: "2-digit",
     second: "2-digit",
   });
+  if (formatters.size < MAX_CACHED_FORMATTERS) formatters.set(timeZone, formatter);
+  return formatter;
+}
+
+function getLocalParts(date: Date, timeZone: string): LocalDateTimeParts {
+  const formatter = formatterFor(timeZone);
   const parts = Object.fromEntries(
     formatter.formatToParts(date).map((part) => [part.type, part.value]),
   );

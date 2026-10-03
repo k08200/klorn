@@ -1705,8 +1705,9 @@ private struct AccountColumn: View {
     let actions: TopBarActions
     @State private var updating = false
     /// Same stowing as the full sidebar: maintenance is occasional, the
-    /// 380pt panel column doubly so.
-    @State private var showMaintenance = false
+    /// 380pt panel column doubly so. Support tools need an Option-click
+    /// (see MaintenanceDisclosure).
+    @State private var maintenance = MaintenanceDisclosure.State(expanded: false, supportTools: false)
 
     var body: some View {
         // The panel is a fixed 1140x380; this column grew past it when the
@@ -1731,35 +1732,44 @@ private struct AccountColumn: View {
                 SubtleTextButton(title: L("account.add")) { Task { await model.addAccount() } }
                 Divider()
                 Button {
-                    withAnimation(.easeOut(duration: 0.15)) { showMaintenance.toggle() }
+                    let next = MaintenanceDisclosure.toggled(
+                        maintenance, optionHeld: MaintenanceDisclosure.optionHeld)
+                    withAnimation(.easeOut(duration: 0.15)) { maintenance = next }
                 } label: {
                     HStack(spacing: 6) {
                         Text(L("account.maintenance")).font(.callout).foregroundStyle(Theme.textDim)
                         Image(systemName: "chevron.right").font(.caption2)
                             .foregroundStyle(Theme.textDim)
-                            .rotationEffect(showMaintenance ? .degrees(90) : .zero)
+                            .rotationEffect(maintenance.expanded ? .degrees(90) : .zero)
                             .accessibilityHidden(true)
                     }
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(L("account.maintenance"))
-                .accessibilityValue(showMaintenance ? L("a11y.expanded") : L("a11y.collapsed"))
-                if showMaintenance {
+                .accessibilityValue(maintenance.expanded ? L("a11y.expanded") : L("a11y.collapsed"))
+                // VoiceOver / Switch Control / Full Keyboard Access path to
+                // the Option-click support tools.
+                .accessibilityAction(named: L("account.showSupportTools")) {
+                    maintenance = MaintenanceDisclosure.revealed
+                }
+                if maintenance.expanded {
                     SubtleTextButton(title: L("menu.checkUpdates")) {
                         Task { await model.checkForUpdateNow() }
                     }
                     if let result = model.updateCheckResult {
                         Text(result).font(.caption2).foregroundStyle(Theme.textDim)
                     }
-                    SubtleTextButton(title: L("menu.restart")) { AppRestart.relaunch() }
-                    SubtleTextButton(title: L("menu.diagnostics")) {
-                        Task { await model.runDiagnostics() }
+                    if maintenance.supportTools {
+                        SubtleTextButton(title: L("menu.restart")) { AppRestart.relaunch() }
+                        SubtleTextButton(title: L("menu.diagnostics")) {
+                            Task { await model.runDiagnostics() }
+                        }
                     }
                     // Sits with diagnostics on purpose: someone who just ran a
                     // diagnostic and is still stuck needs the next step in the
                     // same place, not on a legal page they have no reason to open.
                     SubtleTextButton(title: L("menu.contactSupport")) { openSupportMail() }
-                    DiagnosticsBlock()
+                    if maintenance.supportTools { DiagnosticsBlock() }
                 }
                 if let error = model.linkAccountError {
                     Text(error).font(.caption2).foregroundStyle(Theme.textDim)
@@ -2302,8 +2312,9 @@ private struct FullSidebar: View {
     /// Maintenance actions + diagnostics live behind a disclosure — the
     /// account section is daily-use identity actions; update/restart/health
     /// are occasional and were crowding the sidebar (founder, 2026-08-14).
-    @State private var showMaintenance = false
-    /// Filed-lanes disclosure (INFO/SILENT/legacy AUTO). Session-scoped; a
+    /// Restart + connection status need an Option-click (MaintenanceDisclosure).
+    @State private var maintenance = MaintenanceDisclosure.State(expanded: false, supportTools: false)
+    /// Filed-lanes disclosure (INFO/SILENT). Session-scoped; a
     /// selection inside the group keeps it open regardless.
     @State private var filedExpanded = false
     /// 레인 disclosure (mail level). Session-scoped; a lane selection keeps
@@ -2864,7 +2875,7 @@ private struct FullSidebar: View {
                 PrioritiesRow()
                 Divider().padding(.horizontal, 16).padding(.vertical, 4)
                 maintenanceDisclosureRow
-                if showMaintenance {
+                if maintenance.expanded {
                     // The full window had no way to ASK for an update — the
                     // row only appeared if a check had already found one.
                     sidebarAction(L("menu.checkUpdates"), dim: true) {
@@ -2876,13 +2887,15 @@ private struct FullSidebar: View {
                         Text(result).font(.caption2).foregroundStyle(Theme.textDim)
                             .padding(.horizontal, 20)
                     }
-                    sidebarAction(L("menu.restart"), dim: true) { AppRestart.relaunch() }
-                    // The app must be able to answer "why is mail stuck" itself.
-                    sidebarAction(L("menu.diagnostics"), dim: true) {
-                        Task { await model.runDiagnostics() }
+                    if maintenance.supportTools {
+                        sidebarAction(L("menu.restart"), dim: true) { AppRestart.relaunch() }
+                        // The app must be able to answer "why is mail stuck" itself.
+                        sidebarAction(L("menu.diagnostics"), dim: true) {
+                            Task { await model.runDiagnostics() }
+                        }
                     }
                     sidebarAction(L("menu.contactSupport"), dim: true) { openSupportMail() }
-                    DiagnosticsBlock().padding(.horizontal, 20)
+                    if maintenance.supportTools { DiagnosticsBlock().padding(.horizontal, 20) }
                 }
                 if let error = model.linkAccountError {
                     Text(error).font(.caption2).foregroundStyle(Theme.textDim)
@@ -2921,13 +2934,15 @@ private struct FullSidebar: View {
     /// rows, plus a rotating chevron so the collapsed state is discoverable.
     private var maintenanceDisclosureRow: some View {
         Button {
-            withAnimation(.easeOut(duration: 0.15)) { showMaintenance.toggle() }
+            let next = MaintenanceDisclosure.toggled(
+                maintenance, optionHeld: MaintenanceDisclosure.optionHeld)
+            withAnimation(.easeOut(duration: 0.15)) { maintenance = next }
         } label: {
             HStack(spacing: 6) {
                 Text(L("account.maintenance")).font(.body).foregroundStyle(Theme.textDim)
                 Image(systemName: "chevron.right").font(.caption2)
                     .foregroundStyle(Theme.textDim)
-                    .rotationEffect(showMaintenance ? .degrees(90) : .zero)
+                    .rotationEffect(maintenance.expanded ? .degrees(90) : .zero)
                     .accessibilityHidden(true)
                 Spacer()
             }
@@ -2936,7 +2951,11 @@ private struct FullSidebar: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(L("account.maintenance"))
-        .accessibilityValue(showMaintenance ? L("a11y.expanded") : L("a11y.collapsed"))
+        .accessibilityValue(maintenance.expanded ? L("a11y.expanded") : L("a11y.collapsed"))
+        // Assistive-tech path to the Option-click support tools.
+        .accessibilityAction(named: L("account.showSupportTools")) {
+            maintenance = MaintenanceDisclosure.revealed
+        }
     }
 
     private func sidebarAction(_ title: String, dim: Bool = false, _ run: @escaping () -> Void) -> some View {
@@ -4862,9 +4881,9 @@ private struct DiagnosticsBlock: View {
 
     private func statusColor(_ status: String) -> Color {
         switch status {
-        case "ok": return .green
-        case "warning": return .orange
-        default: return .red
+        case "ok": return Theme.success
+        case "warning": return Theme.warning
+        default: return Theme.danger
         }
     }
 }

@@ -661,42 +661,47 @@ model Contact {
 }
 
 model CalendarEvent {
-  id              String                 @id @default(uuid())
-  userId          String
-  user            User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title           String
-  description     String?
-  startTime       DateTime
-  endTime         DateTime
-  location        String?
-  meetingLink     String?
-  color           String?
-  allDay          Boolean                @default(false)
+  id                String                 @id @default(uuid())
+  userId            String
+  user              User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title             String
+  description       String?
+  startTime         DateTime
+  endTime           DateTime
+  location          String?
+  meetingLink       String?
+  color             String?
+  allDay            Boolean                @default(false)
   // Legacy Google key. Still what every read and sync lookup uses; it is
   // dual-written with provider/externalId (C1) and dropped in the contract phase.
-  googleId        String?
+  googleId          String?
   // C1 provider-aware identity. The DEFAULT only serves the previous release
   // while the migration and the new code overlap — every writer here sets it
   // explicitly (guarded by calendar-provider-writers-guard.test.ts).
-  provider        CalendarProvider       @default(GOOGLE)
+  provider          CalendarProvider       @default(GOOGLE)
   // The id in the source calendar (Google event id, CalDAV UID, Graph id).
   // NULL for LOCAL rows. Equals googleId for GOOGLE rows.
-  externalId      String?
+  externalId        String?
   // Which LinkedCalendarAccount the row was synced from. NULL = the primary
   // Google login calendar, or a LOCAL row. A foreign key with ON DELETE CASCADE
   // (C2): unlinking an account deletes its rows, in the route's own transaction
   // and, as a backstop, in the database (see the migration header).
-  sourceAccountId String?
-  sourceAccount   LinkedCalendarAccount? @relation(fields: [sourceAccountId], references: [id], onDelete: Cascade)
+  sourceAccountId   String?
+  sourceAccount     LinkedCalendarAccount? @relation(fields: [sourceAccountId], references: [id], onDelete: Cascade)
   // C2 dedupe key: 'primary' for the primary calendar and LOCAL rows, the
   // LinkedCalendarAccount id for a linked row (a CHECK keeps it equal to
   // COALESCE(sourceAccountId, 'primary')). Part of the unique below so the same
   // Google event id can exist once per source calendar. The DEFAULT only serves
   // the previous release during deploy overlap; every writer here sets it
   // through pim/calendar-rows.ts.
-  sourceKey       String                 @default("primary")
-  createdAt       DateTime               @default(now())
-  updatedAt       DateTime               @updatedAt
+  sourceKey         String                 @default("primary")
+  // C3: which calendar of a CalDAV account (ICLOUD, NAVER) the row was listed
+  // from, a hash of the collection path (pim/caldav/caldav-listing.ts
+  // `calendarKeyOf`). A row whose calendar a later discovery does not list is
+  // unknown, never removed for being absent. NULL for every other provider.
+  caldavCalendarKey String?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
 
   // Scope the Google event id by user: the SAME googleId can appear in two
   // users' calendars (both attendees of one event), so a global unique would
