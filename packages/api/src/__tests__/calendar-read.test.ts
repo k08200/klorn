@@ -180,8 +180,8 @@ describe("countCalendarRows", () => {
         userId: "u1",
         startTime: { gte: START },
         sourceAccountId: null,
-        // C4/C3: the kill switch also hides OUTLOOK, ICLOUD and NAVER rows while their flags are off.
-        provider: { notIn: ["OUTLOOK", "ICLOUD", "NAVER"] },
+        // C4/C3/C6: the kill switch also hides OUTLOOK, ICLOUD, NAVER and DEVICE rows while their flags are off.
+        provider: { notIn: ["OUTLOOK", "ICLOUD", "NAVER", "DEVICE"] },
       },
     });
   });

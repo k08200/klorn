@@ -12,6 +12,7 @@ import {
 import { startBackgroundAgent } from "./background.js";
 import {
   caldavCalendarEnabled,
+  deviceCalendarEnabled,
   genericImapEnabled,
   icloudInboxEnabled,
   outlookInboxEnabled,
@@ -44,6 +45,7 @@ import { chatConversationRoutes } from "./routes/chat-conversations.js";
 import { chatRoutes } from "./routes/chat-pending-actions.js";
 import { commitmentRoutes } from "./routes/commitments.js";
 import { cronRoutes } from "./routes/cron.js";
+import { deviceCalendarRoutes } from "./routes/device-calendar.js";
 import { deviceRoutes } from "./routes/devices.js";
 import { diagnosticsRoutes } from "./routes/diagnostics.js";
 import { emailRoutes } from "./routes/email.js";
@@ -305,6 +307,12 @@ await app.register(outlookAuthRoutes({ gate: outlookInboxEnabled }), {
 // (every route answers the default 404 while off).
 await app.register(caldavCalendarRoutes({ gate: caldavCalendarEnabled }), {
   prefix: "/api/caldav-calendar",
+});
+// Step C6: calendars the desktop app uploads from the device (EventKit), one opted-in
+// calendar at a time — dark until DEVICE_CALENDAR_ENABLED (the default 404 while off,
+// which the Mac app reads as "hide the setting").
+await app.register(deviceCalendarRoutes({ gate: deviceCalendarEnabled }), {
+  prefix: "/api/device-calendar",
 });
 // Social LOGIN providers beyond Google — dark until APPLE_LOGIN_ENABLED /
 // NAVER_LOGIN_ENABLED flip; every route answers the cloaked 404 while off

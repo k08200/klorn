@@ -1,0 +1,3 @@
+/* Calendar permission prompt (step C6: device calendars, opt-in per calendar). */
+"NSCalendarsFullAccessUsageDescription" = "Klorn 只上传你在设置中开启的日历，供简报和助手使用。";
+"NSCalendarsUsageDescription" = "Klorn 只上传你在设置中开启的日历，供简报和助手使用。";

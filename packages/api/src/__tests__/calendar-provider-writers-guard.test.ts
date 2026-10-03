@@ -88,6 +88,14 @@ describe("every CalendarEvent writer states its provider", () => {
     expect(file?.text).toContain("syncPrimaryCalendarWindow(");
   });
 
+  it("the batch insert of linked rows is reached only by the device snapshot (C6)", () => {
+    const callers = files.filter((f) => /createLinkedEventRows\(/.test(f.text));
+    expect(callers.map((f) => f.path).sort()).toEqual([
+      "pim/calendar-rows.ts",
+      "pim/device-calendar/device-ingest.ts",
+    ]);
+  });
+
   it("the shared sync module is what reaches the row upserts", () => {
     const sync = files.find((f) => f.path === "pim/calendar-sync.ts");
     expect(sync?.text).toContain("upsertGoogleEventRow(");
@@ -130,9 +138,18 @@ describe("every LinkedCalendarAccount writer states its provider", () => {
     expect(caldav?.text).toContain("const config = CALDAV_PROVIDERS[provider];");
   });
 
+  it("pim/device-calendar/device-ingest.ts source upsert names provider DEVICE in both the key and the create (C6)", () => {
+    const ingest = files.find((f) => f.path === "pim/device-calendar/device-ingest.ts");
+    const windows = callWindows(ingest?.text ?? "", ACCOUNT_WRITE);
+    expect(windows).toHaveLength(1);
+    expect(windows[0]).toMatch(/userId_provider_email:\s*\{[^}]*provider:\s*"DEVICE"/);
+    expect(windows[0]).toMatch(/create:\s*\{[^}]*provider:\s*"DEVICE"/);
+  });
+
   it("no other module creates a LinkedCalendarAccount", () => {
     const writers = files.filter((f) => callWindows(f.text, ACCOUNT_WRITE).length > 0);
     expect(writers.map((f) => f.path).sort()).toEqual([
+      "pim/device-calendar/device-ingest.ts",
       "routes/auth.ts",
       "routes/caldav-calendar.ts",
       "routes/outlook-calendar-link.ts",
@@ -159,6 +176,8 @@ describe("Google-only LinkedCalendarAccount readers filter on provider", () => {
       "pim/calendar-providers/dispatch.ts",
       "pim/calendar-providers/outlook-token.ts", // re-reads one OUTLOOK row after a refresh race
       "pim/calendar-source-label.ts",
+      "pim/device-calendar/device-ingest.ts",
+      "pim/device-calendar/device-sources.ts",
       "pim/linked-calendar-unlink.ts",
       "routes/auth.ts",
       "routes/caldav-calendar.ts",
@@ -207,6 +226,7 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
     "notify/notification-prefs.ts",
     "pim/calendar-cancellation.ts", // removes the rows Google named as cancelled, scoped to one source
     "pim/calendar-window-reconcile.ts", // C3: removes one CalDAV account's rows a complete window listing lacks
+    "pim/device-calendar/device-ingest.ts", // C6: reconciles one device calendar's own rows with its snapshot
     "pim/linked-calendar-unlink.ts",
     "pim/meeting-prep-pack.ts",
     "pim/team-availability.ts",
@@ -236,11 +256,14 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
   // system holds, unlink deletes an account's own rows, the cancelled-event
   // removal (its own module, C2b) deletes the rows of the one source whose scan
   // named them, and the CalDAV window reconcile (C3) deletes the rows of the one
-  // account whose complete listing no longer has them (behind its own flag).
+  // account whose complete listing no longer has them (behind its own flag). The
+  // device snapshot (C6) reads only its own source's rows, to reconcile them with
+  // the snapshot the device just sent (its route is dark while its flag is off).
   const EXEMPT_FROM_KILL_SWITCH = [
     "index.ts",
     "pim/calendar-cancellation.ts",
     "pim/calendar-window-reconcile.ts",
+    "pim/device-calendar/device-ingest.ts",
     "pim/linked-calendar-unlink.ts",
   ];
 
