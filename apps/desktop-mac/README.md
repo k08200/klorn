@@ -264,7 +264,12 @@ A full XCTest suite can be added when building under Xcode/CI.
 | File | Role |
 |------|------|
 | `KlornApp.swift` | `@main` entry (+ `--self-check`); `.accessory` app, `AppDelegate` owns the model, top bar, and hotkey |
-| `TopBar.swift` | SwiftUI `CollapsedBar` (pill) + `ExpandedPanel` (3 columns) |
+| `Shell/` | the SwiftUI shell (M4a split of the former `TopBar.swift`): `TopBarRoot.swift` (`BarState`, `TopBarActions`, `TopBarMetrics`, `TopBarRoot`), `FullView.swift` (`ListMode`, `FullView`), `Sidebar.swift` (`FullSidebar`), `SidebarResize.swift` (section resize handle), `TeamsColumn.swift` |
+| `Pill/` | `CollapsedPill.swift` (`CollapsedBar`), `ExpandedDashboard.swift` (`ExpandedPanel` and its columns), `BriefingCard.swift`, `AccountColumn.swift` |
+| `Mail/` | `FullList.swift` (the list column, alone in its file), `MailRow.swift` (`FullRow`, `SearchHitRow`), `MailboxList.swift`, `WaitingOnList.swift`, `CommitmentsList.swift`, `ReadingPane.swift`, `Compose.swift` (`ComposePanel`) |
+| `Calendar/` | `CalendarScreen.swift`, `EventRows.swift` (upcoming rows, week chips, event popover) |
+| `Assistant/` | `AssistantDock.swift`, `AssistantThread.swift` (thread + `ChatBubble`) |
+| `Shared/` | views used by more than one feature: `Controls.swift`, `TierMenus.swift` (`SnoozeMenu`, `TierMenu`), `LaneChip.swift` (lane, signal, reply-state and label chips), `AccountRows.swift` (account rows, diagnostics, update row) |
 | `SettingsWindow.swift` | `Settings` scene root (`TabView`), tab grouping, `SettingsOpener` |
 | `MainWindow.swift` | standard main window (M2, `macMainWindow`): `MainWindowController` (a lazily created AppKit `NSWindow`, never a SwiftUI scene), its rules, the Settings beta switch |
 | `AppCommands.swift` | app menus (`.commands`) and their pure enablement/shortcut rules |
