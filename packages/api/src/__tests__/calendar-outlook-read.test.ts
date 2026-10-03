@@ -423,6 +423,8 @@ describe("no calendar reader branches on a provider name", () => {
     "pim/calendar-sync.ts",
     "pim/linked-calendar-unlink.ts",
     "pim/calendar-providers/dispatch.ts",
+    // C6: the device snapshot writer reads only its own source's rows, to reconcile them.
+    "pim/device-calendar/device-ingest.ts",
   ];
   // The registry itself: it maps a provider to its flag, which is the one place a
   // provider is looked up by name on purpose.

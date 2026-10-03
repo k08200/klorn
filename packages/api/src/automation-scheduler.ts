@@ -27,6 +27,7 @@ import { isEntitled, planHasFeature } from "./billing/stripe.js";
 import {
   AUTO_REPLY_LINKED_INBOX_ENABLED,
   attentionAgingEnabled,
+  deviceCalendarEnabled,
   linkedCalendarSyncEnabled,
   MULTI_INBOX_SYNC_ENABLED,
   SCHEDULER_CALENDAR_SYNC_INTERVAL_MS,
@@ -80,6 +81,7 @@ import {
   syncLinkedCalendars,
   syncPrimaryCalendarWindow,
 } from "./pim/calendar-sync.js";
+import { expireStaleDeviceSources } from "./pim/device-calendar/device-sources.js";
 import { sendFocusWindowDigests } from "./pim/focus-digest.js";
 import { draftReplyForEmailId } from "./routes/email-replies.js";
 import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
@@ -182,6 +184,8 @@ const ATTENTION_AGING_INTERVAL_MS = 60 * 60 * 1000;
 // an outage is noticed. Own constant; mirrors JUDGE_FALLBACK_CHECK_INTERVAL_MS
 // in judge-fallback-check.ts (lazy-imported, so not importable here).
 const JUDGE_FALLBACK_CHECK_INTERVAL_MS = 60 * 60 * 1000;
+let lastDeviceSourceExpiryAt = 0;
+const DEVICE_SOURCE_EXPIRY_INTERVAL_MS = 60 * 60 * 1000;
 // The first check runs this long after the process starts, not on the first
 // tick: a deploy's warm-up tick stays off the extra query, and unit tests that
 // drive one tick never reach the DB through it (a real $queryRaw under a
@@ -868,6 +872,28 @@ async function runAutomations() {
         .catch((err) => {
           console.warn("[ATTENTION-AGING] sweep errored:", err);
           captureError(err, { tags: { scope: "automation.attention-aging" } });
+        });
+    }
+
+    // --- Hourly: device calendar sources no device refreshes any more (C6, P4) ---
+    // A Mac wiped, uninstalled or left offline stops sending snapshots; its source
+    // and rows go after DEVICE_SOURCE_EXPIRY_DAYS, through the same unlink as a
+    // switch-off. One read of the DEVICE accounts per hour; no index serves it, and the table
+    // holds one row per linked calendar, so it is a short scan.
+    // Only while DEVICE_CALENDAR_ENABLED is on (rows are hidden while it is off;
+    // a flip back on sweeps what went stale meanwhile within the hour).
+    if (
+      deviceCalendarEnabled() &&
+      Date.now() - lastDeviceSourceExpiryAt >= DEVICE_SOURCE_EXPIRY_INTERVAL_MS
+    ) {
+      lastDeviceSourceExpiryAt = Date.now();
+      expireStaleDeviceSources(new Date())
+        .then((removed) => {
+          if (removed > 0) console.log(`[CALENDAR] expired device calendar sources=${removed}`);
+        })
+        .catch((err) => {
+          console.warn("[CALENDAR] device source expiry errored:", err);
+          captureError(err, { tags: { scope: "automation.device-source-expiry" } });
         });
     }
 

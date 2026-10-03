@@ -5,7 +5,7 @@ import SwiftUI
 /// tabs; it adds no new settings (productization plan, macOS M0).
 enum PrefsSection: CaseIterable, Hashable, Sendable {
     case general, topBar, keyboard, about
-    case account, inboxes
+    case account, inboxes, deviceCalendars
     case mode, behaviour, replies
     case banners, interrupts
     case appearance, language
@@ -14,7 +14,7 @@ enum PrefsSection: CaseIterable, Hashable, Sendable {
     /// Server-backed sections only make sense with an account behind them.
     var requiresSignIn: Bool {
         switch self {
-        case .inboxes, .mode, .behaviour, .replies, .interrupts: true
+        case .inboxes, .deviceCalendars, .mode, .behaviour, .replies, .interrupts: true
         default: false
         }
     }
@@ -48,7 +48,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Sendable {
     var sections: [PrefsSection] {
         switch self {
         case .general: [.general, .topBar, .keyboard, .about]
-        case .accounts: [.account, .inboxes]
+        case .accounts: [.account, .inboxes, .deviceCalendars]
         case .assistant: [.mode, .behaviour, .replies]
         case .notifications: [.banners, .interrupts]
         case .appearance: [.appearance, .language]

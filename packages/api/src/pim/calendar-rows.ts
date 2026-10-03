@@ -13,6 +13,7 @@
  * provider (Google, C2; Outlook, C4).
  */
 
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../db.js";
 
 /** Mirrors the Prisma `CalendarProvider` enum (kept string-typed like InboxProviderName). */
@@ -151,6 +152,39 @@ export async function upsertLinkedEventRow(
     create: { userId, ...fields, ...source, ...calendar },
     update: { ...fields, ...calendar },
   });
+}
+
+/** One new row of a linked source: its id in the source and its fields. */
+export interface LinkedEventRowInput {
+  readonly externalId: string;
+  readonly fields: CalendarEventFields;
+}
+
+/**
+ * Insert NEW rows of one linked source in one statement, inside the caller's
+ * transaction: the device snapshot (C6) writes a whole calendar at once. Identity
+ * comes from `linkedEventSource` like every other linked row; a row that already
+ * exists under the per-source unique is skipped, never duplicated or moved (the
+ * caller updates existing rows itself, scoped to the same source).
+ */
+export async function createLinkedEventRows(
+  client: Prisma.TransactionClient,
+  provider: CalendarProviderName,
+  userId: string,
+  linkedAccountId: string,
+  rows: readonly LinkedEventRowInput[],
+): Promise<number> {
+  if (!linkedAccountId) throw new Error("createLinkedEventRows needs a linked account id");
+  if (rows.length === 0) return 0;
+  const created = await client.calendarEvent.createMany({
+    data: rows.map((row) => ({
+      userId,
+      ...row.fields,
+      ...linkedEventSource(provider, linkedAccountId, row.externalId),
+    })),
+    skipDuplicates: true,
+  });
+  return created.count;
 }
 
 /**
