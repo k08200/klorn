@@ -416,6 +416,12 @@ model LinkedCalendarAccount {
   // free/busy; cleared on a successful token refresh or re-link. Mirrors
   // LinkedInboxAccount.needsReconnect.
   needsReconnect       Boolean          @default(false)
+  // C6: a DEVICE source is one calendar a desktop app uploads (opt-in per
+  // calendar, decision P4). Its `email` is `device:<key>`, the device's hash of
+  // the calendar identifier plus the device id (never the raw identifier), and
+  // this is the calendar's title on the device, shown as the row's source label.
+  // NULL for every other provider, which label their rows with `email`.
+  displayName          String?
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
   // Events synced from this account (C2); deleted with it.

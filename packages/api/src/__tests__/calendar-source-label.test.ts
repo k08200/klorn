@@ -51,14 +51,37 @@ describe("withSourceLabels", () => {
     expect("sourceLabel" in (out[1] ?? {})).toBe(false);
   });
 
-  it("asks once, for this user's accounts and the distinct ids only, reading nothing but the email", async () => {
+  it("asks once, for this user's accounts and the distinct ids only, reading nothing but the label", async () => {
     await withSourceLabels("u1", [linkedA, { ...linkedA, id: "a2" }, linkedB]);
 
     expect(m.findMany).toHaveBeenCalledTimes(1);
     expect(m.findMany.mock.calls[0]?.[0]).toEqual({
       where: { userId: "u1", id: { in: ["acct-1", "acct-2"] } },
-      select: { id: true, email: true },
+      select: { id: true, email: true, displayName: true },
     });
+  });
+
+  it("labels a device calendar's row with the calendar's title, never its device key (C6)", async () => {
+    m.findMany.mockResolvedValue([
+      { id: "acct-1", email: `device:${"a".repeat(64)}`, displayName: "Family" },
+      { id: "acct-2", email: "team@other.org", displayName: null },
+    ]);
+
+    const out = await withSourceLabels("u1", [linkedA, linkedB]);
+
+    expect(out[0]).toHaveProperty("sourceLabel", "Family");
+    expect(out[1]).toHaveProperty("sourceLabel", "team@other.org");
+    expect(JSON.stringify(out)).not.toContain("device:");
+  });
+
+  it("a device calendar with no title stored is labelled with nothing, never with its key", async () => {
+    m.findMany.mockResolvedValue([
+      { id: "acct-1", email: `device:${"a".repeat(64)}`, displayName: null },
+    ]);
+
+    const out = await withSourceLabels("u1", [linkedA]);
+
+    expect("sourceLabel" in (out[0] ?? {})).toBe(false);
   });
 
   it("leaves a row unlabelled when its account is gone (the client falls back to 'Linked')", async () => {
