@@ -1839,6 +1839,9 @@ func runSelfChecks() async -> Bool {
     print("Device calendars (C6):")
     for (name, ok) in await deviceCalendarSelfChecks(sourceDir: sourceDir) { check(name, ok) }
 
+    print("Token store:")
+    for (name, ok) in tokenStoreSelfChecks(sourceDir: sourceDir) { check("token store — \(name)", ok) }
+
     print("Localization:")
     // A key present in one language and missing in another ships a raw key
     // ("prefs.done") to whoever runs the other language — the kind of bug that

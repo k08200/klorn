@@ -281,6 +281,7 @@ A full XCTest suite can be added when building under Xcode/CI.
 | `AuthFlow.swift` | nonce-poll sign-in — pure orchestration (injectable deps) + live wiring |
 | `APIClient.swift` | async URLSession client, Bearer auth, GET/POST |
 | `KeychainStore.swift` | JWT persistence (Keychain generic password) |
+| `TokenStore.swift` | Token-store seam: Keychain for the app, in-memory for the offscreen harnesses |
 | `Models.swift` | `Tier`, `FirewallItem`, `FirewallResponse` (+ `removingIDs`), auth DTOs |
 | `Config.swift` | env-overridable API + web base URLs |
 | `Notifications.swift` | pure PUSH-diff planner + `UNUserNotification` poster |
