@@ -394,6 +394,27 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
 .foot{max-width:1180px;margin:34px auto 0;padding:0 24px;font-size:13px;color:var(--ink-3)}
 .foot a{color:var(--sky-ink);font-weight:600}
 
+/* ── One place ─────────────────────────────────────────────────────────────
+   Two columns: accounts that connect today, and accounts whose code is merged
+   but switched off in production while Google reviews the audited OAuth
+   surface. The second column is the honest half of the claim, so it is given
+   the same weight as the first rather than a footnote. */
+.acct{max-width:1180px;margin:0 auto;padding:0 24px;display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+.acctgrp{border-radius:26px;background:#fff;border:1px solid var(--line);padding:26px 26px 10px;
+  box-shadow:0 22px 50px -38px rgba(8,42,80,.45)}
+.acctgrp h3{margin:0 0 4px;font-size:13px;font-weight:650}
+.acctgrp .badge{display:inline-flex;align-items:center;gap:7px;font-size:10.5px;letter-spacing:.16em;
+  text-transform:uppercase;font-weight:650;color:var(--ink-3)}
+.acctgrp .badge::before{content:"";width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+.acctgrp .badge.on::before{background:var(--sky-600)}
+.acctgrp .badge.off::before{background:transparent;box-shadow:inset 0 0 0 1.5px var(--ink-3)}
+.acctrow{padding:15px 0;border-top:1px solid var(--line)}
+.acctrow b{display:block;font-size:14.5px;font-weight:650}
+.acctrow span{display:block;margin-top:3px;font-size:13px;color:var(--ink-3);line-height:1.5}
+@media(max-width:860px){.acct{grid-template-columns:1fr}}
+.acctnote{max-width:1180px;margin:22px auto 0;padding:0 24px;font-size:13px;color:var(--ink-3);line-height:1.6}
+.acctnote a{color:var(--sky-ink);font-weight:600}
+
 .os{border-radius:30px;padding:10px;background:rgba(10,14,20,.04);border:1px solid var(--line);
   max-width:720px;margin:0 auto}
 /* The right-hand column held four bullets the page had already made three times
@@ -1090,6 +1111,34 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
       <p>Accepter, refuser ou demander — une touche chacun, dans votre ton et la langue de l'expéditeur. Rien ne
         part tout seul ; chaque envoi génère un reçu.</p></article>
   </div>
+</section>
+
+<!-- ══ ONE PLACE ════════════════════════════════════ -->
+<section class="sec" id="accounts">
+  <div class="sec-head">
+    <div style="flex:1 1 420px">
+      <span class="tag rv">Un seul endroit</span>
+      <h2 class="rv">Comptez vos boîtes.<br>Puis vos agendas.</h2>
+    </div>
+    <p class="rv">Le Google du travail, une adresse personnelle, celle qu'iCloud vous a créée, et ce que l'entreprise fait tourner sur son propre serveur. La plupart arrivent à trois ou six — chacune avec son application, son badge, sa propre idée de ce qui est urgent. <b style="color:var(--ink);font-weight:650">Klorn est le seul endroit où elles arrivent</b> — chaque message dans les mêmes cinq voies, avec la même raison attachée, et votre agenda vérifié avant que quoi que ce soit se dise réunion.</p>
+  </div>
+  <div class="acct rv">
+    <div class="acctgrp" id="acct-live">
+      <h3><span class="badge on">Connecté aujourd'hui</span></h3>
+      <div class="acctrow"><b>Gmail et Google Workspace</b><span>Comptes personnels et professionnels via OAuth — aucun mot de passe stocké.</span></div>
+      <div class="acctrow"><b>Naver Mail</b><span>Connecté en IMAP et trié dans les mêmes cinq voies.</span></div>
+      <div class="acctrow"><b>Google Agenda</b><span>Lire, créer, déplacer, annuler. Les courriels de réunion y sont confrontés.</span></div>
+    </div>
+    <div class="acctgrp" id="acct-next">
+      <h3><span class="badge off">Fusionné, pas encore activé</span></h3>
+      <div class="acctrow"><b>Apple Mail (iCloud)</b><span>IMAP avec mot de passe d'application — Apple ne publie aucune API de messagerie.</span></div>
+      <div class="acctrow"><b>Microsoft 365 et Outlook</b><span>Courrier et agenda via Graph ; notre enregistrement Azure reste à faire.</span></div>
+      <div class="acctrow"><b>N'importe quel hôte IMAP</b><span>Fastmail, Daum, un serveur d'entreprise — l'hôte est résolu puis épinglé avant connexion.</span></div>
+      <div class="acctrow"><b>Agendas CalDAV</b><span>Une norme ouvre iCloud, Naver et la plupart des agendas d'entreprise autogérés.</span></div>
+    </div>
+  </div>
+  <p class="acctnote rv">La colonne de droite est fusionnée dans <b>main</b> et en test. Elle est restée désactivée en production pendant que Google examinait la surface OAuth auditée par CASA &mdash; <b>cet examen s'est terminé le 2026-10-03 et la vérification a été approuvée</b>, elles sont donc activées une par une. Chacune passe dans la colonne de gauche le jour où elle est réellement en service, pas un jour avant.
+    <a href="https://github.com/k08200/klorn/blob/main/docs/providers/unified-platform-plan.md" rel="noreferrer noopener">Le plan complet, dans le dépôt →</a></p>
 </section>
 
 <!-- ══ COMPARISON ═══════════════════════════════════ -->
