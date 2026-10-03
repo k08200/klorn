@@ -17,32 +17,34 @@ import {
   type EmailReminderKey,
   type EmailReminderOption,
   type NextEmailSummary,
-  type UndoNotice,
 } from "./types";
 
 export function UndoActionBanner({
-  notice,
+  title,
+  subject,
+  undoLabel,
   busy,
   onDismiss,
   onUndo,
 }: {
-  notice: UndoNotice;
+  /** What happened: "Email archived.", or with KEYBOARD_TRIAGE "Moved to QUEUE". */
+  title: string;
+  subject: string | null;
+  /** Defaults to "Undo"; the keyboard path names its key ("Undo (z)"). */
+  undoLabel?: string;
   busy: boolean;
   onDismiss: () => void;
   onUndo: () => void;
 }) {
   const { t } = useT();
-  const actionLabel =
-    notice.action === "archive"
-      ? t("emailDetail.toolbar.undo.actionArchived")
-      : t("emailDetail.toolbar.undo.actionMovedToTrash");
   return (
-    <div className="mb-4 flex flex-col gap-3 rounded-lg border border-accent-light/30 bg-state-info-bg px-4 py-3 text-sm text-ink shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
+    <div
+      role="status"
+      className="mb-4 flex flex-col gap-3 rounded-lg border border-accent-light/30 bg-state-info-bg px-4 py-3 text-sm text-ink shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between"
+    >
       <div className="min-w-0">
-        <p className="font-medium">
-          {t("emailDetail.toolbar.undo.emailActionDone", { action: actionLabel })}
-        </p>
-        {notice.subject && <p className="mt-0.5 truncate text-xs text-ink-mid">{notice.subject}</p>}
+        <p className="font-medium">{title}</p>
+        {subject && <p className="mt-0.5 truncate text-xs text-ink-mid">{subject}</p>}
       </div>
       <div className="flex shrink-0 gap-2">
         <button
@@ -51,7 +53,9 @@ export function UndoActionBanner({
           disabled={busy}
           className="min-h-10 rounded-md bg-accent-solid px-3 text-xs font-semibold text-accent-solid-ink transition hover:bg-accent-solid-hover disabled:opacity-50 focus-ring"
         >
-          {busy ? t("emailDetail.toolbar.undo.restoring") : t("emailDetail.toolbar.undo.undo")}
+          {busy
+            ? t("emailDetail.toolbar.undo.restoring")
+            : (undoLabel ?? t("emailDetail.toolbar.undo.undo"))}
         </button>
         <button
           type="button"

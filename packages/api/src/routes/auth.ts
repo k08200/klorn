@@ -16,7 +16,12 @@ import {
 } from "../auth.js";
 import { requireEntitled } from "../billing/entitlement-guard.js";
 import { isEntitled, isHardPaywalled, isWebCheckoutAvailable } from "../billing/stripe.js";
-import { appleLoginEnabled, INIT_SYNC_EMAIL_COUNT, naverLoginEnabled } from "../config.js";
+import {
+  appleLoginEnabled,
+  INIT_SYNC_EMAIL_COUNT,
+  keyboardTriageEnabled,
+  naverLoginEnabled,
+} from "../config.js";
 import { encryptOptional, encryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
 import { withDbRetry } from "../db-retry.js";
@@ -689,6 +694,10 @@ export function authRoutes(app: FastifyInstance) {
           // Apple/Naver-login user who connected Naver IMAP is not bounced
           // out of the app forever.
           hasAnyMailSource: googleStatus.connected || linkedInboxCount > 0,
+          // Server-driven client flag (KEYBOARD_TRIAGE, productization plan P4):
+          // the web turns its hotkey registry, shortcut sheet and optimistic
+          // lane moves on only when this is true. An older client ignores it.
+          keyboardTriage: keyboardTriageEnabled(),
         },
       });
     } catch {

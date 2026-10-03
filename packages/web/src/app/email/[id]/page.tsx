@@ -1,5 +1,6 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
@@ -12,12 +13,14 @@ import LoadingState from "../../../components/ui/loading-state";
 import { API_BASE, apiFetch, authHeaders } from "../../../lib/api";
 import { useT } from "../../../lib/i18n";
 import { linkifyText } from "../../../lib/linkify";
+import { queryKeys } from "../../../lib/query-keys";
 import { captureClientError } from "../../../lib/sentry";
 import { serverErrorMessage } from "../../../lib/server-error";
+import { useKeyboardTriage } from "../../../lib/use-hotkeys";
+import { useLaneMove } from "../use-lane-move";
 import { formatBytes, ProfileFact, senderName } from "./atoms";
 import { AttachmentAnalysis } from "./attachment-analysis";
 import { EmailActionToolbar, EmailReminderQuickActions, UndoActionBanner } from "./toolbar";
-
 // Domain types and the reminder option list live in ./types.ts so
 // sibling components (atoms.tsx, toolbar.tsx, future
 // candidate/attachment/reply extractions) can import them without
@@ -38,6 +41,7 @@ import type {
   UndoNotice,
 } from "./types";
 import { EMAIL_REMINDER_OPTIONS } from "./types";
+import { focusReplyEntry, REPLY_INTENT_INPUT_ID, useDetailTriage } from "./use-detail-triage";
 
 type EmailQueueKey =
   | "all"
@@ -657,6 +661,45 @@ function EmailDetailView() {
     }
   };
 
+  // KEYBOARD_TRIAGE (productization plan P4). The reader shows no lane chip, so
+  // the optimistic part of a lane move here is the notice itself; a failure
+  // takes the notice down and reports inline.
+  const keyboardTriage = useKeyboardTriage();
+  const noLaneToPaint = useCallback(() => {}, []);
+  // The list shows the lane chip: refetch it once the move (or its undo) lands.
+  const queryClient = useQueryClient();
+  const refreshList = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.email.all });
+  }, [queryClient]);
+  const laneMove = useLaneMove({
+    apply: noLaneToPaint,
+    onError: setError,
+    onSettled: refreshList,
+  });
+  const isDemoMail = Boolean(email?.id.startsWith("demo-"));
+  useDetailTriage({
+    active: keyboardTriage,
+    email: email ? { id: email.id, subject: email.subject || null } : null,
+    blockedReason: isDemoMail
+      ? t("keys.reason.demo")
+      : actionBusy || laneMove.busy
+        ? t("keys.reason.busy")
+        : null,
+    hasNext: nextEmail !== null,
+    openNext: () => goToNextOrList(t("emailDetail.toast.movingToNext")),
+    back: () => router.push("/email"),
+    archive: () => void archiveEmailNow(),
+    laneMove,
+    undoLastAction: undoNotice ? () => void undoLastAction() : null,
+  });
+
+  // `r` on the list opens the mail with ?focus=reply: land on the reply entry.
+  const focusReplyOnOpen = keyboardTriage && searchParams?.get("focus") === "reply";
+  const emailLoaded = email !== null;
+  useEffect(() => {
+    if (focusReplyOnOpen && emailLoaded) focusReplyEntry();
+  }, [focusReplyOnOpen, emailLoaded]);
+
   return (
     <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-5 md:py-10">
       <Link
@@ -682,10 +725,28 @@ function EmailDetailView() {
 
       {undoNotice && (
         <UndoActionBanner
-          notice={undoNotice}
+          title={t("emailDetail.toolbar.undo.emailActionDone", {
+            action:
+              undoNotice.action === "archive"
+                ? t("emailDetail.toolbar.undo.actionArchived")
+                : t("emailDetail.toolbar.undo.actionMovedToTrash"),
+          })}
+          subject={undoNotice.subject}
+          undoLabel={keyboardTriage ? t("undo.action") : undefined}
           busy={actionBusy === "undo"}
           onDismiss={dismissUndoNotice}
           onUndo={undoLastAction}
+        />
+      )}
+
+      {laneMove.notice && (
+        <UndoActionBanner
+          title={t("undo.lane.moved", { lane: laneMove.notice.tier })}
+          subject={laneMove.notice.subject}
+          undoLabel={t("undo.action")}
+          busy={laneMove.busy}
+          onDismiss={laneMove.dismiss}
+          onUndo={() => void laneMove.undo()}
         />
       )}
 
@@ -1314,6 +1375,7 @@ function ReplyDraftBox({
         </button>
       </div>
       <input
+        id={REPLY_INTENT_INPUT_ID}
         value={intent}
         onChange={(e) => onIntentChange(e.target.value)}
         placeholder={t("emailDetail.replyDraft.intentPlaceholder")}
