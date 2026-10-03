@@ -52,10 +52,14 @@ import {
   naverRoutes,
 } from "../__fixtures__/caldav/server.js";
 import { caldavCalendarEnabled } from "../config.js";
+import { _resetCaldavBackoffForTests } from "../pim/caldav/caldav-backoff.js";
 import { CALDAV_MAX_CALENDARS } from "../pim/caldav/caldav-client.js";
 import { CaldavLimitError } from "../pim/caldav/caldav-errors.js";
 import type { CaldavTransport } from "../pim/caldav/caldav-http.js";
-import { caldavCalendarActions } from "../pim/calendar-providers/caldav.js";
+import {
+  CALDAV_LISTING_MAX_OCCURRENCES,
+  caldavCalendarActions,
+} from "../pim/calendar-providers/caldav.js";
 import { calendarActionsForProvider } from "../pim/calendar-providers/dispatch.js";
 import {
   CalendarReadOnlyError,
@@ -107,6 +111,11 @@ async function sessionFor(
 }
 
 const [HOME, WORK] = ICLOUD_CALENDARS as [string, string];
+
+// One account id is reused across tests: a failure must not back the next one off.
+beforeEach(() => {
+  _resetCaldavBackoffForTests();
+});
 
 describe("connect", () => {
   it("opens no session for the primary calendar (CalDAV only ever links)", async () => {
@@ -303,16 +312,33 @@ describe("listWindow: complete only when nothing was left out", () => {
     await expect(session.listWindow?.(QUERY)).rejects.toMatchObject({ status: 401 });
   });
 
-  it("more events than maxResults: capped, and NOT complete", async () => {
+  it("more events than the CalDAV cap: capped at it, and NOT complete", async () => {
     const server = fakeCaldavServer(
       icloudRoutes({
-        [HOME]: { status: 207, body: icloudReportXml(bulkEvents(101)) },
+        [HOME]: {
+          status: 207,
+          body: icloudReportXml(bulkEvents(CALDAV_LISTING_MAX_OCCURRENCES + 1)),
+        },
         [WORK]: { status: 207, body: icloudReportXml([]) },
       }),
     );
     const listing = await (await sessionFor("ICLOUD", server)).listWindow?.(QUERY);
-    expect(listing?.events).toHaveLength(100);
+    expect(listing?.events).toHaveLength(CALDAV_LISTING_MAX_OCCURRENCES);
     expect(listing?.complete).toBe(false);
+  });
+
+  it("more events than the query's page but under the CalDAV cap: complete; listEvents keeps the page", async () => {
+    const server = fakeCaldavServer(
+      icloudRoutes({
+        [HOME]: { status: 207, body: icloudReportXml(bulkEvents(150)) },
+        [WORK]: { status: 207, body: icloudReportXml([]) },
+      }),
+    );
+    const session = await sessionFor("ICLOUD", server);
+    const listing = await session.listWindow?.({ ...QUERY, maxResults: 100 });
+    expect(listing?.events).toHaveLength(150);
+    expect(listing?.complete).toBe(true);
+    expect(await session.listEvents({ ...QUERY, maxResults: 100 })).toHaveLength(100);
   });
 
   it(`more than ${CALDAV_MAX_CALENDARS} calendars: the rest are left out, and NOT complete`, async () => {

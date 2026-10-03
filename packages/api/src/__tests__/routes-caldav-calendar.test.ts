@@ -203,6 +203,20 @@ describe("POST /link", () => {
     await app.close();
   });
 
+  it("a re-link starts the account's failure backoff over", async () => {
+    const { app, headers } = await buildApp(fakeCaldavServer(ICLOUD_OK));
+    const backoff = await import("../pim/caldav/caldav-backoff.js");
+    backoff.noteCaldavFailure("cal-row-1");
+    expect(backoff.isCaldavBackedOff("cal-row-1")).toBe(true);
+    const res = await app.inject({
+      ...link({ provider: "ICLOUD", username: "me@icloud.com", password: PASSWORD }),
+      headers,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(backoff.isCaldavBackedOff("cal-row-1")).toBe(false);
+    await app.close();
+  });
+
   it("Naver: logs in with the Naver ID and lists the account as id@naver.com", async () => {
     let auth = "";
     const routes = fakeCaldavServer(NAVER_OK);
@@ -408,6 +422,54 @@ describe("POST /link", () => {
     }
     expect(statuses).toEqual([400, 400, 400, 400, 400, 429]);
     await app.close();
+  });
+});
+
+describe("POST /link: per-account limit (review fix 2026-10-02)", () => {
+  async function attempts(bodies: Array<{ username: string; ip: string }>) {
+    const server = fakeCaldavServer({ "PROPFIND caldav.icloud.com /": { status: 401 } });
+    const { app, headers } = await buildApp(server, { withRateLimit: true });
+    const statuses: number[] = [];
+    for (const { username, ip } of bodies) {
+      const res = await app.inject({
+        ...link({ provider: "ICLOUD", username, password: PASSWORD }),
+        headers,
+        remoteAddress: ip,
+      });
+      statuses.push(res.statusCode);
+    }
+    await app.close();
+    return { statuses, server };
+  }
+
+  it("one Apple ID from six IPs: the 6th attempt is refused before Apple is asked", async () => {
+    const spellings = [
+      "me@icloud.com",
+      " Me@iCloud.com ",
+      "ME@ICLOUD.COM",
+      "me@icloud.com",
+      "me@icloud.com",
+      "me@icloud.com",
+    ];
+    const { statuses, server } = await attempts(
+      spellings.map((username, n) => ({ username, ip: `10.0.0.${n + 1}` })),
+    );
+    expect(statuses).toEqual([400, 400, 400, 400, 400, 429]);
+    expect(server.calls).toHaveLength(5);
+  });
+
+  it("six Apple IDs from one IP: the IP limit still refuses the 6th", async () => {
+    const { statuses } = await attempts(
+      Array.from({ length: 6 }, (_, n) => ({ username: `u${n}@icloud.com`, ip: "10.0.0.9" })),
+    );
+    expect(statuses).toEqual([400, 400, 400, 400, 400, 429]);
+  });
+
+  it("different Apple IDs from different IPs are not limited by each other", async () => {
+    const { statuses } = await attempts(
+      Array.from({ length: 6 }, (_, n) => ({ username: `u${n}@icloud.com`, ip: `10.0.1.${n}` })),
+    );
+    expect(statuses).toEqual([400, 400, 400, 400, 400, 400]);
   });
 });
 

@@ -2150,9 +2150,16 @@ needs FA-9 and the admin guidance from F0.
     stored with `encryptToken` in `caldavPasswordCipher` (already covered by the
     key-rotation sweep since C1), never returned, never logged (tested). NEW links
     are capped at 10 per provider; a re-link is always allowed and clears
-    `needsReconnect`. `GET /linked-calendars` (never a password) and `DELETE
-    /linked-calendars/:id` (provider read first, scoped to ICLOUD/NAVER, then
-    `unlinkCalendarAccount` with it) sit beside it.
+    `needsReconnect` and the failure backoff. `GET /linked-calendars` (never a
+    password) and `DELETE /linked-calendars/:id` (provider read first, scoped to
+    ICLOUD/NAVER, then `unlinkCalendarAccount` with it) sit beside it; the three
+    handlers are named functions (review 2026-10-02, no behaviour change). Review
+    fix 2026-10-02: a second limit, 5 per 15 minutes per Apple ID or Naver ID
+    (normalised by `caldavAccountIdentity`, sha256 in the limiter's key, through
+    `@fastify/rate-limit`'s `createRateLimit`), checked just before Apple or Naver
+    is asked, so rotating IPs cannot hammer one account's password (a lockout of
+    the victim, our egress IP blocked); the IP limit stays (tested both ways). NOT
+    changed: the IMAP connect route (B4) has the same IP-only gap.
   - Reusing the linked inbox's app password: simple and safe, so offered.
     `{ provider, username, reuseInboxPassword: true }` reads the user's OWN
     `LinkedInboxAccount` of the same provider and address, decrypts it, verifies it
@@ -2173,13 +2180,34 @@ needs FA-9 and the admin guidance from F0.
     provider of the session, `externalId` = the UID (a series occurrence
     `UID#<original start, UTC stamp or date>`, so a moved occurrence keeps its id; a
     UID over 400 characters hashed), `sourceAccountId` and `sourceKey` = the account
-    id, same 30 days and 100 events per account. Change from the brief: `sourceKey`
+    id, same 30 days per account; a CalDAV listing holds up to
+    `CALDAV_LISTING_MAX_OCCURRENCES` (500, its own constant since the review: the
+    sync's `CALENDAR_SYNC_MAX_RESULTS` of 100 is Google's page size, and a month of
+    100+ occurrences turned every removal off). Change from the brief: `sourceKey`
     is per ACCOUNT, not per CalDAV calendar, because C2's CHECK pins it to
     `COALESCE(sourceAccountId, 'primary')`; one UID in two calendars of one account
-    is one row. A 401 anywhere throws (the password was revoked: the shared failure
-    policy flags `needsReconnect`, once-an-hour warning, no Sentry, tested through
-    the real dispatcher); any other failure of one calendar leaves it out and makes
-    the listing incomplete; every calendar failing throws the first error.
+    is one row. Each row records the calendar that listed it in
+    `CalendarEvent.caldavCalendarKey` (review fix; migration
+    `20261005010000_calendar_caldav_calendar_key`, one nullable TEXT column, no
+    backfill: a sha256 prefix of the collection path, never the path, which carries
+    the iCloud account number). A 401 anywhere throws (the password was revoked:
+    the shared failure policy flags `needsReconnect`, once-an-hour warning, no
+    Sentry, tested through the real dispatcher); any other failure of one calendar
+    leaves it out and makes the listing incomplete; every calendar failing throws
+    the first error. Review fixes 2026-10-02: (a) a flagged account opens no CalDAV
+    session at all, so the conflict checks (which still try a flagged Google or
+    Outlook account) never send a revoked app password again. Only a re-link
+    clears the flag, as for Outlook (`routes/outlook-calendar-link.ts`; nothing in
+    `outlook-token.ts` clears it); Google clears it on a refreshed token
+    (`mail/gmail.ts` `persistRefreshedLinkedToken`), which has no CalDAV equivalent:
+    an app password does not heal. (b) Any failure but a 401 backs the account off
+    (`pim/caldav/caldav-backoff.ts`, the pattern of `mail/imap-poll-backoff.ts`):
+    15 minutes doubling to 6 hours, cleared by a listing that returns or a re-link;
+    while backed off no session opens, so neither the sync tick (up to 45 s per
+    stalled account) nor a conflict check waits on it. (c) Sentry hears of a CalDAV
+    failure once per account per kind (`caldavErrorClass`) per process; the warning
+    line stays. Google and Outlook pass their own provider and keep the old policy
+    (their tests unchanged and green).
   - Parsing (`pim/caldav/ical-events.ts`, ical.js). All-day DATE values are UTC
     midnight of the date, end exclusive, like Google's. A TZID Intl knows (IANA, a
     Windows name through the Outlook table, or a prefixed form such as
@@ -2195,20 +2223,50 @@ needs FA-9 and the admin guidance from F0.
     another zone for a match; every value is now read with the TZID its property
     was written with (`ical-time.ts`), never the user's zone. A DATE EXDATE still
     removes a timed occurrence on that date (ical.js's rule for the mixed form).
-    `STATUS:CANCELLED` on an event or an override drops it. Bounds: a series is
+    `STATUS:CANCELLED` on an event or an override drops it. An override of an
+    instance an EXDATE removes is dropped with it (EXDATE wins; RFC 5545 does not
+    say; tested). Bounds: a series is
     walked at most 25 000 steps and one listing 200 000 in all (a rule with no
     COUNT or UNTIL, MINUTELY or SECONDLY, cannot pin the CPU or starve the next
     one); running out marks the listing truncated. ical.js's own search for the
     next occurrence has no bound for SECONDLY to WEEKLY rules (`FREQ=DAILY;
     BYMONTH=2;BYMONTHDAY=30` never returned, synchronously), so
-    `ical-recur-guard.ts` counts its passes, 50 000 per occurrence and 2 000 000
-    per listing; an INTERVAL over 1 000 and more than 10 RRULEs in one VEVENT
+    `ical-recur-guard.ts` counts its passes, 12 000 per occurrence (was 50 000:
+    Feb 29 on a given weekday recurs every 28 years, 10 227 days, so a DAILY rule
+    fits; an impossible rule now costs ~10 ms, measured) and 1 200 000 per listing;
+    an INTERVAL over 1 000 and more than 10 RRULEs in one VEVENT
     (10 000 RRULEs in a 340 KB object blocked the event loop 6.5 s) are refused up
     front. Each makes the object unreadable. BYxxx lists need no bound of ours:
     ical.js 2.2.1 refuses out-of-range values and keeps distinct values only
     (tested). The guard patches ical.js's `RecurIterator` prototype, so
-    `package.json` pins `ical.js` to exactly `2.2.1`, and the guard throws at import
-    if the methods it wraps are gone. Anything unreadable is counted, never guessed.
+    `package.json` pins `ical.js` to exactly `2.2.1`; since the review it installs
+    on the first CalDAV listing, once, not at import (main's process is untouched
+    while the flag is off; tested in its own file), and throws if the methods it
+    wraps are gone. Anything unreadable is counted, never guessed.
+    Review fixes 2026-10-02 (`ical-bounds.ts`; the review measured 53 s, 40 s,
+    4.4 s and 2.4 s on four hostile inputs): caps per object and per listing on
+    VEVENTs (1 000 / 5 000), overrides (500 / 2 500), RDATE values (1 000 / 5 000)
+    and EXDATE values (1 000 / 5 000), counted on the parsed jCal before anything is
+    expanded: an object over one is skipped whole, one warning per listing, listing
+    truncated. A parse budget of 2 s of working time per listing (waits for the
+    event loop not counted), checked before each object and on every step of a
+    walk: running out truncates. The work yields to the event loop (`setImmediate`)
+    every 10 ms, so a large legitimate calendar holds the process one slice plus one
+    bounded step at a time. Override instants are a sorted array searched by
+    bisection, not scanned on every step. A truncated listing never removes a row.
+    The CalDAV XML reader refuses a document over 60 000 elements (a 4 MB body of
+    `<a/>`: 357 ms and 168 MB of heap -> 26 ms and 17 MB here).
+    Measured on this machine (scratch benchmark, before -> after over two runs,
+    the longest event-loop block after in brackets): 20 000 VEVENTs x
+    `COUNT=100000` in one 2.7 MB object 18 171 ms -> 58-90 ms (the same); one
+    VEVENT with 200 000 RDATEs, descending, 18 574 -> 90-100 ms (the same); 30 000
+    overrides of a DAILY series 1 982 -> 64-93 ms (the same); 500 overrides (the
+    cap) of a DAILY series since 1990 242 -> 130-133 ms (20-22); 60 impossible
+    rules 1 906 -> 654-660 ms (61-74 on the cold first slice, under 25 after);
+    2 000 weekly series since 2015 1 002 -> 1 005-1 084 ms (20; still truncated by
+    the 200 000-step listing cap). What remains of the hostile blocks is ical.js
+    parsing one object, which is not sliced: ~60-100 ms for a 3-4 MB object,
+    bounded by the 4 MB response cap.
     `meetingLink` is the first `CONFERENCE` or `URL` value `safeMeetingLink` passes
     (https only, `pim/meeting-link.ts`, #1354).
   - Removal of vanished events (`pim/calendar-window-reconcile.ts`). Google never
@@ -2218,8 +2276,9 @@ needs FA-9 and the admin guidance from F0.
     collection under the home classified (a 403 entry or an unreadable
     `resourcetype` may hide an event calendar), none over the calendar cap, every
     calendar answered, no 507 from the server, every object response carrying data
-    (any status), nothing unreadable, no series cut short, and no more than 100
-    occurrences. Then, in one transaction, the rows of
+    (any status), nothing unreadable, no series cut short, no object skipped over a
+    cap, the parse budget not spent, and no more than 500 occurrences. Then, in one
+    transaction, the rows of
     that account (user, provider, source key) inside the window (same overlap rule)
     whose `externalId` the listing lacks AND written before the listing started (so
     a concurrent sync's fresh row is never taken) are deleted, their open or snoozed
@@ -2227,7 +2286,17 @@ needs FA-9 and the admin guidance from F0.
     ICLOUD and NAVER, only with `CALDAV_CALENDAR_ENABLED` on. Truncated, partial,
     unreadable and thrown listings remove nothing (tested; a mutation of each
     condition is killed). A row whose event is past the window is untouched, like
-    Google's.
+    Google's. Review fixes 2026-10-02: (a) only rows of a calendar the listing read
+    are candidates; a row whose `caldavCalendarKey` names a calendar the discovery
+    did not list (or none) is unknown, never removed. (b) The deletion valve: a
+    removal of more than half (`CALDAV_DELETE_MAX_SHARE`) of the account's rows in
+    the window, when over 5 rows (`CALDAV_DELETE_VALVE_MIN_ROWS`), is refused (a
+    transient empty 207 would otherwise remove the window and resolve its attention
+    items, with nothing to restore them); one warning and one Sentry event per
+    account per process. The share counts every row of the account in the window,
+    including the ones this sync just wrote. (c) Unchanged: only a complete listing
+    removes. Tested: an empty 207 over 8 rows, a calendar missing from discovery, a
+    single legitimate removal, the valve's edges, 150 occurrences still complete.
   - Free/busy. `busyBlocks` is a live listing of the window: timed occurrences not
     `TRANSP:TRANSPARENT`, label `calendar`, no title. `peopleFreeBusy` answers
     unknown for everyone (CalDAV shows no one else's calendar). Writes reject with
@@ -2243,7 +2312,8 @@ needs FA-9 and the admin guidance from F0.
     release 2025-08-08, one npm maintainer (Philipp Kewisch, Mozilla Thunderbird),
     zero runtime dependencies, MPL-2.0 (not marked Incompatible With Secondary
     Licenses, so it combines with AGPL-3.0). Pinned exactly (`"ical.js": "2.2.1"`,
-    no caret) because the recurrence guard patches its internals. Lockfile: +7
+    no caret) because the recurrence guard patches its internals (lazily, since the
+    review). Lockfile: +7
     lines, one package.
     `pnpm audit --prod`: no known vulnerabilities. Rejected: `tsdav` 2.3.5 (177,473
     a week, MIT, pulls `debug` and `xml-js`, and does its own fetching, which would
@@ -2282,13 +2352,25 @@ needs FA-9 and the admin guidance from F0.
     2.2.1 does not expand a YEARLY rule with BYHOUR, BYMINUTE or BYSECOND as RFC
     5545 says (`FREQ=YEARLY;BYHOUR=9,10` gives one time a year; with BYSECOND as well,
     nothing). Such a series is missing or wrong, the same way every sync, so it never
-    had rows to remove; neither provider's UI writes such a rule.
+    had rows to remove; neither provider's UI writes such a rule. (8) PARTSTAT is
+    not read: an invitation the user DECLINED is still a busy block and a row (no
+    code change; review 2026-10-02). (9) Every fixture is hand-written from RFC
+    4791 / 5545 shapes; none was captured from a real iCloud or Naver answer.
+    (10) The deletion valve also refuses a real mass deletion (more than half of a
+    month, over 5 rows): those rows stay until they leave the window. (11) An
+    override of an EXDATE'd instance is dropped (EXDATE wins). (12) Found by the
+    review fix, NOT fixed (ical.js): an RDATE-only VEVENT (no RRULE) is iterated
+    without its DTSTART instance, so that instance has no row. (13) One object's
+    ical.js parse is not sliced (~60-100 ms for 3-4 MB, bounded by the response
+    cap). (14) The IMAP connect route's link limit is per IP only (see Link).
   - Rollback. Flags never on: revert the PR. Ever on: set
     `CALDAV_CALENDAR_ENABLED` OFF (rows hidden at once), then `DELETE FROM
     "AttentionItem" WHERE "source" = 'CALENDAR_EVENT' AND "sourceId" IN (SELECT "id"
     FROM "CalendarEvent" WHERE "provider" IN ('ICLOUD', 'NAVER'))`, then `DELETE FROM
     "CalendarEvent" WHERE "provider" IN ('ICLOUD', 'NAVER')`, then revert. The
-    accounts can stay: nothing reads them while the flag is off.
+    accounts can stay: nothing reads them while the flag is off. The
+    `caldavCalendarKey` column is additive and nullable: a revert leaves it unused;
+    drop it only after.
   - Before the flip (founder; the code only ever ran against a fake CalDAV server
     built from RFC 4791 / RFC 5545 shapes). With one real iCloud and one real Naver
     account: (a) the link verifies with an app-specific password and fails with the
@@ -2298,9 +2380,11 @@ needs FA-9 and the admin guidance from F0.
     set; record any redirect; (c) one sync writes the expected rows: a timed event,
     an all-day event read from a zone west and one east of UTC, a recurring series
     with a deleted and a moved occurrence; (d) delete an event upstream and see its
-    row removed on the next sync, and confirm with a calendar over 100 events in the
-    window that nothing is removed; (e) revoke the app-specific password: the next
-    sync flags `needsReconnect`, warns once, Sentry stays quiet; (f) the
+    row removed on the next sync, confirm a calendar of 101-500 occurrences in the
+    window still removes one, and one over 500 removes nothing; delete most of a
+    test calendar's month upstream and see the valve refuse it once in Sentry; (e)
+    revoke the app-specific password: the next sync flags `needsReconnect`, warns
+    once, Sentry stays quiet, and a conflict check sends nothing to Apple; (f) the
     `reuseInboxPassword` path with a linked iCloud and a linked Naver inbox; (g)
     unlink removes the rows and their attention items. Decide on the Naver risk
     above before flipping for Naver users.

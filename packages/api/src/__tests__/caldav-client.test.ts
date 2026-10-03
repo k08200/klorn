@@ -27,7 +27,7 @@ import {
 import { CaldavHttpError, CaldavProtocolError } from "../pim/caldav/caldav-errors.js";
 import type { CaldavConnection, CaldavTransport } from "../pim/caldav/caldav-http.js";
 import { CALDAV_PROVIDERS, type CaldavProviderKey } from "../pim/caldav/caldav-providers.js";
-import { parseXml, textBelow } from "../pim/caldav/caldav-xml.js";
+import { CALDAV_MAX_XML_NODES, parseXml, textBelow } from "../pim/caldav/caldav-xml.js";
 
 function conn(
   provider: CaldavProviderKey,
@@ -87,6 +87,19 @@ describe("parseXml", () => {
 
   it("skips comments and the XML declaration", () => {
     expect(parseXml('<?xml version="1.0"?><!-- hi --><a>1</a>').text).toBe("1");
+  });
+});
+
+// Review finding (2026-10-02): a 4 MB body of `<a/>` took 1.3 s and 190 MB.
+describe("parseXml: element count bound", () => {
+  it("a document of exactly the bound parses", () => {
+    const doc = `<r>${"<a/>".repeat(CALDAV_MAX_XML_NODES - 1)}</r>`;
+    expect(parseXml(doc).children).toHaveLength(CALDAV_MAX_XML_NODES - 1);
+  });
+
+  it("one element more is malformed, refused before the rest is read", () => {
+    const doc = `<r>${"<a/>".repeat(CALDAV_MAX_XML_NODES)}</r>`;
+    expect(() => parseXml(doc)).toThrow(CaldavProtocolError);
   });
 });
 

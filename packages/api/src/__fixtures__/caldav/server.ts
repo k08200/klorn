@@ -86,6 +86,15 @@ export const ICLOUD_CALENDARS_XML = `<?xml version="1.0" encoding="UTF-8"?>
   collection(`${ICLOUD_HOME_PATH}notification/`, "<collection/>", null),
 ].join("")}</multistatus>`;
 
+/** The iCloud calendar listing with only the named event calendars (one missing from discovery). */
+export function icloudCalendarsXmlOnly(names: readonly string[]): string {
+  const calendars = names.map((name) =>
+    collection(`${ICLOUD_HOME_PATH}${name}`, `<collection/>${CAL}`, ["VEVENT"]),
+  );
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<multistatus xmlns="DAV:">${[collection(ICLOUD_HOME_PATH, "<collection/>", null), ...calendars].join("")}</multistatus>`;
+}
+
 /** A calendar-query answer holding `objects`, the iCloud way (escaped text). */
 export function icloudReportXml(objects: readonly string[]): string {
   const responses = objects

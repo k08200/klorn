@@ -11,7 +11,11 @@
  *     defined or expanded (no XXE, no billion laughs);
  *   - only the five predefined entities and numeric references are decoded; any
  *     other `&name;` is malformed;
- *   - tags must nest and close; anything else throws CaldavProtocolError("bad-xml").
+ *   - tags must nest and close; anything else throws CaldavProtocolError("bad-xml");
+ *   - at most CALDAV_MAX_XML_NODES elements (review fix 2026-10-02: a 4 MB body of
+ *     `<a/>` took 1.3 s and 190 MB). A calendar-query answer is about seven
+ *     elements per object, so the bound fits ~8 500 objects, past the listing's
+ *     5 000-VEVENT cap (ical-bounds.ts); a calendar over it fails (rows are kept).
  */
 
 import { CaldavProtocolError } from "./caldav-errors.js";
@@ -26,6 +30,8 @@ export interface XmlNode {
 }
 
 const MAX_DEPTH = 64;
+/** Elements one document may hold (see the header). */
+export const CALDAV_MAX_XML_NODES = 60_000;
 const NAMED_ENTITIES: Readonly<Record<string, string>> = {
   lt: "<",
   gt: ">",
@@ -88,6 +94,7 @@ interface ParseState {
   readonly root: XmlNode;
   readonly stack: Array<{ node: XmlNode; qualified: string }>;
   at: number;
+  nodes: number;
 }
 
 const MAX_TAG_LENGTH = 4096;
@@ -134,6 +141,8 @@ function readTag(state: ParseState): void {
     if (!open || state.stack.length === 0 || open.qualified !== qualified) badXml();
     return;
   }
+  state.nodes += 1;
+  if (state.nodes > CALDAV_MAX_XML_NODES) badXml();
   const node: XmlNode = {
     name: localName(qualified),
     attrs: parseAttributes(rawAttrs ?? ""),
@@ -150,7 +159,13 @@ function readTag(state: ParseState): void {
 /** Parse a whole document; answers its root element. */
 export function parseXml(xml: string): XmlNode {
   const root: XmlNode = { name: "#document", attrs: {}, children: [], text: "" };
-  const state: ParseState = { xml, root, stack: [{ node: root, qualified: "" }], at: 0 };
+  const state: ParseState = {
+    xml,
+    root,
+    stack: [{ node: root, qualified: "" }],
+    at: 0,
+    nodes: 0,
+  };
   while (state.at < xml.length) {
     const lt = xml.indexOf("<", state.at);
     if (lt !== state.at) readText(state, lt);

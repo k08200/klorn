@@ -63,13 +63,15 @@ export function syncRowFields(event: ProviderCalendarEvent): CalendarEventFields
 interface SyncRow {
   readonly externalId: string;
   readonly fields: CalendarEventFields;
+  /** CalDAV only: the calendar of the account that listed it. */
+  readonly calendarKey?: string;
 }
 
 /** Events as rows; events with no id or usable times are dropped. */
 function toSyncRows(events: readonly ProviderCalendarEvent[]): SyncRow[] {
   return events.flatMap((event) => {
     const fields = syncRowFields(event);
-    return fields ? [{ externalId: event.externalId, fields }] : [];
+    return fields ? [{ externalId: event.externalId, fields, calendarKey: event.calendarKey }] : [];
   });
 }
 
@@ -128,6 +130,7 @@ export async function syncLinkedCalendarWindow(
       linkedAccountId,
       row.externalId,
       row.fields,
+      row.calendarKey,
     );
   }
   if (listing) {
@@ -181,6 +184,7 @@ export async function syncLinkedCalendars(
         err,
         scope: "calendar.linked_sync_failed",
         action: "sync",
+        provider: session.provider,
       });
     }
   }

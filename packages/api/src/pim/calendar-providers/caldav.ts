@@ -9,6 +9,17 @@
  * session opens and only ever sent, as Basic auth, to a host the provider's
  * allowlist names (pim/caldav/caldav-http.ts). The write methods refuse.
  *
+ * No session opens (review fix 2026-10-02) for an account flagged needsReconnect:
+ * its app password was refused with a 401, and the conflict checks, which still try
+ * a flagged Google or Outlook account, would otherwise send the revoked password to
+ * Apple or Naver on every check (a lockout risk). A CalDAV password has no refresh
+ * that could heal it, so, as for Outlook (only routes/outlook-calendar-link.ts
+ * clears the flag) and unlike Google (a refreshed token clears it, mail/gmail.ts
+ * persistRefreshedLinkedToken), only a re-link clears it
+ * (routes/caldav-calendar.ts saveAccount). Nor does one open while the account is
+ * backed off after another failure (pim/caldav/caldav-backoff.ts); a listing that
+ * fails other than with a 401 extends the backoff, one that returns clears it.
+ *
  *   - discovery and queries: pim/caldav/caldav-client.ts
  *   - the window and its completeness: pim/caldav/caldav-listing.ts
  *   - iCalendar to occurrences: pim/caldav/ical-events.ts
@@ -19,6 +30,12 @@ import type { BusyConflict, ConflictSummary } from "../../google-calendar-time.j
 import { resolveHostAddresses } from "../../mail/host-resolver.js";
 import type { HostResolver } from "../../mail/pinned-address.js";
 import { getUserTimeZone } from "../../user-timezone.js";
+import {
+  clearCaldavBackoff,
+  isCaldavBackedOff,
+  noteCaldavFailure,
+} from "../caldav/caldav-backoff.js";
+import { CaldavHttpError } from "../caldav/caldav-errors.js";
 import {
   CALDAV_REQUEST_TIMEOUT_MS,
   type CaldavConnection,
@@ -32,6 +49,7 @@ import {
   caldavUsernameOf,
 } from "../caldav/caldav-providers.js";
 import { httpsPinnedTransport } from "../caldav/caldav-transport.js";
+import type { ParseOptions } from "../caldav/ical-bounds.js";
 import type { CaldavOccurrence } from "../caldav/ical-events.js";
 import {
   type CalendarListQuery,
@@ -49,6 +67,13 @@ const OPEN_ENDED_WINDOW_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Occurrences read for a free/busy window. */
 const BUSY_WINDOW_MAX_EVENTS = 250;
+/**
+ * The most occurrences a sync listing holds and can still be complete. Its own
+ * number, not CALENDAR_SYNC_MAX_RESULTS (100, Google's page): a CalDAV listing
+ * is complete or nothing, and a busy month of 100+ occurrences used to turn every
+ * removal off. Over it the listing is incomplete (rows kept), as before.
+ */
+export const CALDAV_LISTING_MAX_OCCURRENCES = 500;
 /** The label a busy block carries to the model: never a calendar's own name, which is user text. */
 const BUSY_CALENDAR_LABEL = "calendar";
 
@@ -56,6 +81,8 @@ export interface CaldavDeps {
   readonly transport: CaldavTransport;
   readonly resolve: HostResolver;
   readonly now: () => number;
+  /** Tests: the parse budget's clock and size (ical-bounds.ts). */
+  readonly parse?: ParseOptions;
 }
 
 const DEFAULT_DEPS: CaldavDeps = {
@@ -71,6 +98,7 @@ function refuseWrite(provider: CaldavProviderKey): () => Promise<never> {
 interface Credentials {
   readonly config: CaldavProviderConfig;
   readonly userId: string;
+  readonly accountId: string;
   readonly username: string;
   readonly password: string;
 }
@@ -99,7 +127,26 @@ interface CaldavWindowListing extends CalendarWindowListing {
   readonly events: CaldavOccurrence[];
 }
 
+const HTTP_UNAUTHORIZED = 401;
+
+/** One listing, with the account's backoff kept: a 401 is the reconnect flag's business. */
 async function listWindow(
+  credentials: Credentials,
+  deps: CaldavDeps,
+  query: CalendarListQuery,
+): Promise<CaldavWindowListing> {
+  try {
+    const listing = await readWindow(credentials, deps, query);
+    clearCaldavBackoff(credentials.accountId);
+    return listing;
+  } catch (err) {
+    const revoked = err instanceof CaldavHttpError && err.status === HTTP_UNAUTHORIZED;
+    if (!revoked) noteCaldavFailure(credentials.accountId, deps.now());
+    throw err;
+  }
+}
+
+async function readWindow(
   credentials: Credentials,
   deps: CaldavDeps,
   query: CalendarListQuery,
@@ -113,8 +160,15 @@ async function listWindow(
     { start: new Date(window.timeMin), end: new Date(window.timeMax) },
     zone,
     query.maxResults,
+    deps.parse,
   );
-  return { events: listing.occurrences, complete: listing.complete, window, listedAt };
+  return {
+    events: listing.occurrences,
+    complete: listing.complete,
+    window,
+    listedAt,
+    calendarKeys: listing.calendarKeys,
+  };
 }
 
 /**
@@ -139,7 +193,12 @@ function caldavSession(credentials: Credentials, deps: CaldavDeps): CalendarSess
   const provider = credentials.config.provider;
   return {
     provider,
-    listWindow: (query) => listWindow(credentials, deps, query),
+    // The sync's listing: complete up to the CalDAV cap, whatever page size it asks.
+    listWindow: (query) =>
+      listWindow(credentials, deps, {
+        ...query,
+        maxResults: Math.max(query.maxResults, CALDAV_LISTING_MAX_OCCURRENCES),
+      }),
     async listEvents(query) {
       return (await listWindow(credentials, deps, query)).events;
     },
@@ -171,13 +230,27 @@ function caldavSession(credentials: Credentials, deps: CaldavDeps): CalendarSess
 function credentialsOf(
   config: CaldavProviderConfig,
   userId: string,
-  row: { provider: string; email: string; caldavPasswordCipher: string | null },
+  row: {
+    id: string;
+    provider: string;
+    email: string;
+    caldavPasswordCipher: string | null;
+    needsReconnect?: boolean;
+  },
 ): Credentials | null {
   if (row.provider !== config.provider || !row.caldavPasswordCipher) return null;
+  // A revoked app password is never sent again: only a re-link clears the flag.
+  if (row.needsReconnect === true) return null;
   const username = caldavUsernameOf(config, row.email);
   if (!username) return null;
   try {
-    return { config, userId, username, password: decryptToken(row.caldavPasswordCipher) };
+    return {
+      config,
+      userId,
+      accountId: row.id,
+      username,
+      password: decryptToken(row.caldavPasswordCipher),
+    };
   } catch {
     // A rotten cipher is "not connected", like an undecryptable OAuth token.
     return null;
@@ -196,6 +269,7 @@ export function caldavCalendarActions(
     async connect(account) {
       // The primary calendar is the Google login; a CalDAV account only ever links.
       if (account.linkedAccountId === null) return null;
+      if (isCaldavBackedOff(account.linkedAccountId, resolved.now())) return null;
       const credentials = credentialsOf(config, account.userId, account.linked);
       return credentials ? caldavSession(credentials, resolved) : null;
     },

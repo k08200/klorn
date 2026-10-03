@@ -107,6 +107,11 @@ export interface ProviderCalendarEvent {
   /** Instants; null unless the query named a `timeZone`, or when start/end is missing. */
   readonly startTime: Date | null;
   readonly endTime: Date | null;
+  /**
+   * CalDAV only (C3): the calendar collection the event was listed from, as
+   * `calendarKeyOf` (pim/caldav/caldav-listing.ts) names it. Absent elsewhere.
+   */
+  readonly calendarKey?: string;
 }
 
 export interface CalendarCreateInput {
@@ -168,6 +173,11 @@ export interface CalendarWindowListing {
   readonly window: CalendarWindow;
   /** When the listing started: a row written after it (by a concurrent sync) is never removed. */
   readonly listedAt: Date;
+  /**
+   * The calendars the listing read (CalDAV, `calendarKeyOf`). A row of any other
+   * calendar is unknown to it, never removed for being absent.
+   */
+  readonly calendarKeys?: readonly string[];
 }
 
 export interface CalendarSession {

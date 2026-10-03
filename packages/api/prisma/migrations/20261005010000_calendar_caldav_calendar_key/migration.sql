@@ -1,0 +1,17 @@
+-- CalDAV calendar of a row (2026-10-02): step C3 of
+-- docs/providers/unified-platform-plan.md, review fix.
+--
+-- A CalDAV account (ICLOUD, NAVER) holds several calendars, and its rows all
+-- carry the same sourceKey (the linked account id). The sync removes the rows of
+-- a window that a COMPLETE listing no longer has; without knowing which calendar
+-- a row came from, a calendar missing from one discovery answer would read as an
+-- empty calendar and every one of its rows would be removed. This column records
+-- the calendar (a hash of its collection path, never the path itself) so a row
+-- of a calendar the discovery did not list is left alone.
+--
+-- Additive and nullable: no default, no backfill, no index (it is read only for
+-- the rows of one account and one window, which the existing indexes find). NULL
+-- for every row of every other provider, and for any CalDAV row written before
+-- this column (none: C3 has never been on); such a row is never removed for being
+-- absent. Rollback: the previous release ignores the column; drop it only after.
+ALTER TABLE "CalendarEvent" ADD COLUMN "caldavCalendarKey" TEXT;

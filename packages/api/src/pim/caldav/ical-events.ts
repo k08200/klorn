@@ -31,18 +31,22 @@
  *
  * Bounds: a series is walked from its DTSTART at most CALDAV_MAX_SERIES_ITERATIONS
  * steps and one listing CALDAV_MAX_TOTAL_ITERATIONS in all (running out marks the
- * result truncated); a step before the window costs no zone arithmetic; ical.js's
- * own search is bounded by ical-recur-guard.ts. Whatever cannot be read (text that
- * does not parse, a VEVENT with no UID or DTSTART, a rule past a bound) is counted
- * in `unreadable`, never guessed: the sync only removes rows after a listing with
- * nothing unreadable and nothing truncated. Text is stripped of NUL (Postgres
- * refuses it) and cut to a bound.
+ * result truncated); a step before the window costs no zone arithmetic, and an
+ * override near it is found in a sorted index; ical.js's own search is bounded by
+ * ical-recur-guard.ts. The caps on what an object may carry, the listing's parse
+ * budget and its turns to the event loop are ical-bounds.ts: an object over a cap
+ * is skipped and a spent budget stops the listing, both marking it truncated.
+ * Whatever cannot be read (text that does not parse, a VEVENT with no UID or
+ * DTSTART, a rule past a bound) is counted in `unreadable`, never guessed: the
+ * sync only removes rows after a listing with nothing unreadable and nothing
+ * truncated. Text is stripped of NUL (Postgres refuses it) and cut to a bound.
  */
 
 import { createHash } from "node:crypto";
 import ICAL from "ical.js";
 import type { ProviderCalendarEvent } from "../calendar-providers/types.js";
 import { safeMeetingLink } from "../meeting-link.js";
+import { countsOf, hasInstantNear, type ParseOptions, ParseRun } from "./ical-bounds.js";
 import { assertBoundedRecurrence, withRecurSpinBudget } from "./ical-recur-guard.js";
 import {
   type IcalClock,
@@ -80,7 +84,11 @@ export interface WindowOccurrences {
   readonly occurrences: CaldavOccurrence[];
   /** VEVENTs or objects that could not be read. */
   readonly unreadable: number;
-  /** True when an iteration bound stopped a series before the window's end. */
+  /**
+   * True when something was left out on purpose: an iteration bound stopped a
+   * series before the window's end, an object over a cap was skipped, or the
+   * parse budget ran out.
+   */
   readonly truncated: boolean;
 }
 
@@ -94,6 +102,9 @@ export function overlapsWindow(start: Date, end: Date, window: CaldavWindow): bo
 interface Context {
   readonly window: CaldavWindow;
   readonly clock: IcalClock;
+  readonly run: ParseRun;
+  /** Run synchronous ical.js work under the listing's search budget. */
+  readonly sync: <T>(work: () => T) => T;
   steps: number;
 }
 
@@ -198,6 +209,7 @@ function single(component: IcalComponent, ctx: Context): SeriesResult {
 }
 
 interface SeriesShape {
+  readonly master: IcalComponent;
   readonly uid: string;
   readonly durationMs: number;
   /** The TZID DTSTART was written with: every step of the series is in it. */
@@ -207,7 +219,7 @@ interface SeriesShape {
   /** DATE EXDATEs (`YYYYMMDD`), which also remove a timed occurrence on that date. */
   readonly exdateDays: ReadonlySet<string>;
   readonly overrides: ReadonlyMap<string, IcalComponent>;
-  /** Override instants, for deciding which early steps need an exact instant. */
+  /** Override instants, ascending, for deciding which early steps need an exact instant. */
   readonly overrideMs: readonly number[];
 }
 
@@ -240,13 +252,14 @@ function shapeOf(master: IcalComponent, overrides: readonly IcalComponent[], ctx
     overrideMs.push(clock.instantOf(recurrenceId.time, recurrenceId.tzid).getTime());
   }
   return {
+    master,
     uid: boundedUid(String(master.getFirstPropertyValue("uid"))),
     durationMs: clock.endOf(master, startTime.time, start).getTime() - start.getTime(),
     stepTzid: startTime.tzid,
     exdates: new Set(exdates),
     exdateDays: new Set(exdateDays),
     overrides: byStamp,
-    overrideMs,
+    overrideMs: [...overrideMs].sort((a, b) => a - b),
   } satisfies SeriesShape;
 }
 
@@ -274,7 +287,6 @@ function iterableMaster(master: IcalComponent): IcalComponent {
 
 /** The occurrence a step of the series stands for, or null (excluded, cancelled, outside). */
 function stepOccurrence(
-  master: IcalComponent,
   next: IcalTime,
   shape: SeriesShape,
   ctx: Context,
@@ -290,45 +302,90 @@ function stepOccurrence(
   }
   const start = ctx.clock.instantOf(next, shape.stepTzid);
   const end = new Date(start.getTime() + shape.durationMs);
-  const found = occurrence(master, id, next.isDate, { start, end });
+  const found = occurrence(shape.master, id, next.isDate, { start, end });
   return overlapsWindow(start, end, ctx.window) ? found : null;
 }
 
-function series(master: IcalComponent, overrides: readonly IcalComponent[], ctx: Context) {
-  if (isCancelled(master)) return NONE;
-  assertBoundedRecurrence(master);
-  const shape = shapeOf(master, overrides, ctx);
-  const windowStart = ctx.window.start.getTime();
-  const windowEnd = ctx.window.end.getTime();
-  const found: CaldavOccurrence[] = [];
-  const visited = new Set<string>();
-  const iterator = new ICAL.Event(iterableMaster(master)).iterator();
-  let steps = 0;
-  for (let next = iterator.next(); next; next = iterator.next()) {
-    steps += 1;
-    ctx.steps += 1;
-    if (steps > CALDAV_MAX_SERIES_ITERATIONS || ctx.steps > CALDAV_MAX_TOTAL_ITERATIONS) {
-      return { occurrences: found, truncated: true };
-    }
-    // A step's wall clock is within MAX_UTC_OFFSET_MS of its instant: cheap bounds first.
-    const approx = wallClockMs(next);
-    if (approx - MAX_UTC_OFFSET_MS >= windowEnd) break;
-    const reachesWindow = approx + MAX_UTC_OFFSET_MS + shape.durationMs >= windowStart;
-    const nearOverride = shape.overrideMs.some((ms) => Math.abs(ms - approx) <= MAX_UTC_OFFSET_MS);
-    if (!reachesWindow && !nearOverride) continue;
-    const item = stepOccurrence(master, next, shape, ctx, visited);
-    if (item) found.push(item);
+/** A series being walked: ical.js's iterator over the master, and what it found so far. */
+interface Walk {
+  readonly iterator: { next(): IcalTime | null | undefined };
+  readonly shape: SeriesShape;
+  readonly found: CaldavOccurrence[];
+  readonly visited: Set<string>;
+  steps: number;
+}
+
+type StepOutcome = "next" | "end" | "cut";
+
+/** One step of the walk (synchronous: run under the listing's search budget). */
+function walkStep(walk: Walk, ctx: Context): StepOutcome {
+  const next = walk.iterator.next();
+  if (!next) return "end";
+  walk.steps += 1;
+  ctx.steps += 1;
+  if (walk.steps > CALDAV_MAX_SERIES_ITERATIONS || ctx.steps > CALDAV_MAX_TOTAL_ITERATIONS) {
+    return "cut";
   }
-  // An override whose original start is past the window can move an occurrence INTO
-  // it; the walk above stopped before reaching it.
+  // A step's wall clock is within MAX_UTC_OFFSET_MS of its instant: cheap bounds first.
+  const approx = wallClockMs(next);
+  if (approx - MAX_UTC_OFFSET_MS >= ctx.window.end.getTime()) return "end";
+  const reachesWindow =
+    approx + MAX_UTC_OFFSET_MS + walk.shape.durationMs >= ctx.window.start.getTime();
+  if (!reachesWindow && !hasInstantNear(walk.shape.overrideMs, approx, MAX_UTC_OFFSET_MS)) {
+    return "next";
+  }
+  const item = stepOccurrence(next, walk.shape, ctx, walk.visited);
+  if (item) walk.found.push(item);
+  return "next";
+}
+
+/**
+ * An override whose original start is past the window can move an occurrence INTO
+ * it; the walk stopped before reaching it. One whose instance an EXDATE removes is
+ * dropped with it, here and in the walk: EXDATE wins (documented in the plan).
+ */
+function movedIntoWindow(walk: Walk, ctx: Context): void {
+  const { shape } = walk;
   for (const [stamp, override] of shape.overrides) {
     const recurrenceId = timeProperty(override, "recurrence-id") as WrittenTime;
-    if (visited.has(stamp) || isExcluded(recurrenceId.time, stamp, shape)) continue;
-    if (ctx.clock.instantOf(recurrenceId.time, recurrenceId.tzid).getTime() < windowEnd) continue;
+    if (walk.visited.has(stamp) || isExcluded(recurrenceId.time, stamp, shape)) continue;
+    const original = ctx.clock.instantOf(recurrenceId.time, recurrenceId.tzid).getTime();
+    if (original < ctx.window.end.getTime()) continue;
     const item = ownOccurrence(override, `${shape.uid}#${stamp}`, ctx);
-    if (item) found.push(item);
+    if (item) walk.found.push(item);
   }
-  return { occurrences: found, truncated: false };
+}
+
+/**
+ * Walk a series to the window's end. Every ical.js call runs synchronously under
+ * the listing's search budget (`ctx.sync`); between steps the parse budget is
+ * checked and the event loop gets a turn when a slice is over.
+ */
+async function series(
+  master: IcalComponent,
+  overrides: readonly IcalComponent[],
+  ctx: Context,
+): Promise<SeriesResult> {
+  if (isCancelled(master)) return NONE;
+  const walk: Walk = ctx.sync(() => {
+    assertBoundedRecurrence(master);
+    return {
+      iterator: new ICAL.Event(iterableMaster(master)).iterator(),
+      shape: shapeOf(master, overrides, ctx),
+      found: [],
+      visited: new Set<string>(),
+      steps: 0,
+    };
+  });
+  for (;;) {
+    if (ctx.run.spent()) return { occurrences: walk.found, truncated: true };
+    if (ctx.run.sliceOver()) await ctx.run.yieldTurn();
+    const outcome = ctx.sync(() => walkStep(walk, ctx));
+    if (outcome === "cut") return { occurrences: walk.found, truncated: true };
+    if (outcome === "end") break;
+  }
+  ctx.sync(() => movedIntoWindow(walk, ctx));
+  return { occurrences: walk.found, truncated: false };
 }
 
 function isRecurring(component: IcalComponent): boolean {
@@ -346,11 +403,14 @@ function groupsOf(root: IcalComponent): Map<string, IcalComponent[]> {
   return groups;
 }
 
-function groupOccurrences(components: readonly IcalComponent[], ctx: Context): SeriesResult {
+async function groupOccurrences(
+  components: readonly IcalComponent[],
+  ctx: Context,
+): Promise<SeriesResult> {
   const master = components.find((c) => !c.hasProperty("recurrence-id"));
   const overrides = components.filter((c) => c.hasProperty("recurrence-id"));
   if (master && isRecurring(master)) return series(master, overrides, ctx);
-  const parts = (master ? [master] : overrides).map((c) => single(c, ctx));
+  const parts = ctx.sync(() => (master ? [master] : overrides).map((c) => single(c, ctx)));
   return { occurrences: parts.flatMap((p) => p.occurrences), truncated: false };
 }
 
@@ -360,48 +420,107 @@ function rootOf(text: string): IcalComponent {
   return root;
 }
 
-function collect(objects: readonly string[], ctx: Context): WindowOccurrences {
-  const occurrences: CaldavOccurrence[] = [];
-  let unreadable = 0;
-  let truncated = false;
-  for (const text of objects) {
-    let groups: Map<string, IcalComponent[]>;
-    try {
-      groups = groupsOf(rootOf(text));
-    } catch {
-      unreadable += 1;
-      continue;
+/** One object's groups, or null when it does not parse; caps decide whether it is read. */
+function admittedGroups(
+  text: string,
+  run: ParseRun,
+): Map<string, IcalComponent[]> | "skipped" | null {
+  let root: IcalComponent;
+  try {
+    root = rootOf(text);
+  } catch {
+    return null;
+  }
+  if (!run.caps.admit(countsOf(root))) return "skipped";
+  try {
+    return groupsOf(root);
+  } catch {
+    return null;
+  }
+}
+
+/** Start order, then id: the order a listing answers in. */
+export function compareOccurrences(a: CaldavOccurrence, b: CaldavOccurrence): number {
+  return (
+    (a.startTime as Date).getTime() - (b.startTime as Date).getTime() ||
+    a.externalId.localeCompare(b.externalId)
+  );
+}
+
+/**
+ * One listing's expansion: objects are added a batch at a time (a calendar each)
+ * under one parse budget, one search budget and one set of caps, then `finish`
+ * says what was unreadable or left out.
+ */
+export class IcalExpansion {
+  private readonly ctx: Context;
+  private unreadable = 0;
+  private truncated = false;
+
+  /** `userZone` reads floating times (and a TZID nothing defines); `options` is for tests. */
+  constructor(window: CaldavWindow, userZone: string, options: ParseOptions = {}) {
+    const run = new ParseRun(options);
+    this.ctx = {
+      window,
+      clock: icalClock(userZone),
+      run,
+      sync: (work) => withRecurSpinBudget(run.spins, work),
+      steps: 0,
+    };
+  }
+
+  /** The occurrences of `objects` (iCalendar texts) that meet the window. */
+  async add(objects: readonly string[]): Promise<CaldavOccurrence[]> {
+    const { run } = this.ctx;
+    const occurrences: CaldavOccurrence[] = [];
+    for (const text of objects) {
+      if (run.spent()) {
+        this.truncated = true;
+        break;
+      }
+      if (run.sliceOver()) await run.yieldTurn();
+      const groups = admittedGroups(text, run);
+      if (groups === null) this.unreadable += 1;
+      else if (groups === "skipped") this.truncated = true;
+      else occurrences.push(...(await this.expand(groups)));
     }
+    return occurrences;
+  }
+
+  private async expand(groups: Map<string, IcalComponent[]>): Promise<CaldavOccurrence[]> {
+    const occurrences: CaldavOccurrence[] = [];
     for (const components of groups.values()) {
       try {
-        const result = groupOccurrences(components, ctx);
+        const result = await groupOccurrences(components, this.ctx);
         occurrences.push(...result.occurrences);
-        truncated = truncated || result.truncated;
+        this.truncated = this.truncated || result.truncated;
       } catch {
         // Unparsable values, a missing DTSTART, a rule past a bound (RecurSpinLimitError).
-        unreadable += 1;
+        this.unreadable += 1;
       }
     }
+    return occurrences;
   }
-  return { occurrences, unreadable, truncated };
+
+  /** What was unreadable or left out; warns once if a cap skipped anything. */
+  finish(): { unreadable: number; truncated: boolean } {
+    this.ctx.run.caps.warnOnce();
+    return { unreadable: this.unreadable, truncated: this.truncated };
+  }
 }
 
 /**
  * The occurrences of `objects` (iCalendar texts) that meet `window`, in start
  * order. `userZone` is the zone floating times (and a TZID nothing defines) are
- * read in.
+ * read in; `options` is for tests (the parse budget's clock and size).
  */
-export function occurrencesInWindow(
+export async function occurrencesInWindow(
   objects: readonly string[],
   window: CaldavWindow,
   userZone: string,
-): WindowOccurrences {
-  const ctx: Context = { window, clock: icalClock(userZone), steps: 0 };
-  const result = withRecurSpinBudget(() => collect(objects, ctx));
-  const occurrences = [...result.occurrences].sort(
-    (a, b) =>
-      (a.startTime as Date).getTime() - (b.startTime as Date).getTime() ||
-      a.externalId.localeCompare(b.externalId),
-  );
-  return { ...result, occurrences };
+  options: ParseOptions = {},
+): Promise<WindowOccurrences> {
+  const expansion = new IcalExpansion(window, userZone, options);
+  const occurrences = await expansion.add(objects);
+  return { occurrences: occurrences.sort(compareOccurrences), ...expansion.finish() };
 }
