@@ -119,11 +119,14 @@ export async function upsertGoogleEventRow(
 }
 
 /**
- * Upsert one event of a LINKED calendar (Google, C2; Outlook, C4). The row is
- * matched by the per-source unique, never by googleId: linked rows keep googleId
- * NULL, so an invite that also sits in the primary calendar, or in another
- * provider's calendar, stays a separate row and no other row is ever touched.
- * Identity and ownership never move on update.
+ * Upsert one event of a LINKED calendar (Google, C2; Outlook, C4; iCloud and
+ * Naver, C3). The row is matched by the per-source unique, never by googleId:
+ * linked rows keep googleId NULL, so an invite that also sits in the primary
+ * calendar, or in another provider's calendar, stays a separate row and no other
+ * row is ever touched. Identity and ownership never move on update.
+ * `caldavCalendarKey` (CalDAV only) records which calendar of the account listed
+ * the event, so a calendar missing from a later discovery is not read as empty;
+ * every other provider passes none and its rows are written exactly as before.
  */
 export async function upsertLinkedEventRow(
   provider: CalendarProviderName,
@@ -131,9 +134,11 @@ export async function upsertLinkedEventRow(
   linkedAccountId: string,
   externalId: string,
   fields: CalendarEventFields,
+  caldavCalendarKey?: string,
 ): Promise<void> {
   if (!linkedAccountId) throw new Error("upsertLinkedEventRow needs a linked account id");
   const source = linkedEventSource(provider, linkedAccountId, externalId);
+  const calendar = caldavCalendarKey === undefined ? {} : { caldavCalendarKey };
   await prisma.calendarEvent.upsert({
     where: {
       userId_provider_sourceKey_externalId: {
@@ -143,8 +148,8 @@ export async function upsertLinkedEventRow(
         externalId,
       },
     },
-    create: { userId, ...fields, ...source },
-    update: { ...fields },
+    create: { userId, ...fields, ...source, ...calendar },
+    update: { ...fields, ...calendar },
   });
 }
 
@@ -159,6 +164,26 @@ export function googleSourceScope(userId: string, linkedAccountId: string | null
   return {
     userId,
     provider: "GOOGLE" as const,
+    sourceKey: sourceKeyFor(linkedAccountId),
+  };
+}
+
+/**
+ * The rows of ONE linked account of one user, of one provider: the `where` the
+ * CalDAV window reconcile (C3) starts from. The source key is derived here like
+ * every other; the primary calendar, LOCAL rows and another account's, provider's
+ * or user's rows are outside it.
+ */
+export function linkedSourceScope(
+  provider: CalendarProviderName,
+  userId: string,
+  linkedAccountId: string,
+) {
+  if (!linkedAccountId) throw new Error("linkedSourceScope needs a linked account id");
+  return {
+    userId,
+    provider,
+    sourceAccountId: linkedAccountId,
     sourceKey: sourceKeyFor(linkedAccountId),
   };
 }
