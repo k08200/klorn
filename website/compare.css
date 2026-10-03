@@ -50,34 +50,82 @@ body {
 /* ---- top bar ---------------------------------------------------------- */
 
 .top {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 18px 0;
+  gap: 12px;
+  padding: 14px 0;
   border-bottom: 1px solid var(--line);
   font-size: 15px;
 }
 .top a { color: var(--ink-2); text-decoration: none; }
 .top a:hover { color: var(--sky-ink); }
 .home { font-weight: 650; color: var(--ink) !important; letter-spacing: -.01em; }
-/* #1217 replaced the landing's two-button toggle with a menu, on the grounds
- * that a control needing a redesign per shipped language is the wrong shape.
- * These are text pages with a sparse top bar rather than a tight nav pill, so
- * they do not need the menu — but they must not overflow either. Wrapping is
- * what makes seven languages a second row instead of a horizontal scrollbar. */
-.lang { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 2px; }
-/* 44px minimum touch target — the label is small, the hit area is not. */
-.lang a {
-  min-width: 44px;
+
+/* One header on every subpage: brand, the section links, the EN/KO pair where
+ * a translation exists, Log in, and the Download CTA. Every link keeps a 44px
+ * hit area. Below 760px the links fold behind a disclosure button
+ * (site-nav.js) instead of wrapping into a second row. */
+.menu { display: flex; align-items: center; margin-left: auto; }
+.menu a {
   min-height: 44px;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  letter-spacing: .04em;
+  padding: 0 9px;
+  white-space: nowrap;
 }
-.lang a[aria-current] { color: var(--ink); font-weight: 650; }
+.menu a[aria-current] { color: var(--ink); font-weight: 650; }
+.menu .pair { display: inline-flex; margin: 0 4px; padding: 0 4px; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+.menu .pair a { min-width: 40px; justify-content: center; padding: 0 6px; font-size: 13px; letter-spacing: .04em; }
+.dl-cta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 9px;
+  background: var(--ink);
+  color: var(--paper) !important;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.dl-cta:hover { background: #16202c; }
+.menu-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+.menu-btn svg { width: 18px; height: 18px; }
+@media (max-width: 760px) {
+  .menu-btn { display: inline-flex; }
+  .dl-cta { margin-left: auto; }
+  .menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    z-index: 20;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 6px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: 0 18px 40px -18px rgba(10, 14, 20, .35);
+  }
+  .menu[data-open] { display: flex; }
+  .menu a { padding: 0 12px; }
+  .menu .pair { margin: 4px 0 0; padding: 4px 0 0; border: 0; border-top: 1px solid var(--line); }
+}
+
 
 /* ---- prose ------------------------------------------------------------ */
 
@@ -110,8 +158,9 @@ h2 {
 p { margin: 16px 0 0; }
 a { color: var(--sky-ink); }
 a:focus-visible,
-.lang a:focus-visible,
-.cta:focus-visible {
+.cta:focus-visible,
+.dl-cta:focus-visible,
+.menu-btn:focus-visible {
   outline: 2px solid var(--sky-600);
   outline-offset: 3px;
   border-radius: 4px;
@@ -182,6 +231,16 @@ footer {
   font-size: 14px;
 }
 footer a { color: var(--ink-3); }
+/* Same link set on every subpage, after the page's own footer note. */
+.foot-links { display: flex; flex-wrap: wrap; margin: 12px 0 0 -8px; }
+.foot-links a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  text-decoration: none;
+}
+.foot-links a:hover { color: var(--sky-ink); }
 
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }

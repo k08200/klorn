@@ -23,15 +23,22 @@
 <link rel="alternate" hreflang="x-default" href="https://klorn.ai/open-source/">
 <link rel="preload" as="font" type="font/woff2" href="/fonts/geist-var.woff2" crossorigin>
 <link rel="stylesheet" href="/compare.css">
+<link rel="icon" href="/brand/favicon.svg?v=matte2" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png?v=matte2">
+<script src="/site-nav.js" defer></script>
 </head>
 <body>
 <div class="wrap">
-  <nav class="top">
+  <header class="top">
     <a class="home" href="/ko/">Klorn</a>
-    <span class="lang">
-      <a href="/open-source/">EN</a><a href="/ko/open-source/" aria-current="true">KO</a>
-    </span>
-  </nav>
+    <button type="button" class="menu-btn" data-menu-toggle aria-expanded="false" aria-controls="site-menu" aria-label="메뉴"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <nav class="menu" id="site-menu" aria-label="사이트">
+      <a href="/pricing/">가격</a><a href="/blog/">블로그</a><a href="/security/">보안</a><a href="/self-host/">셀프호스팅</a>
+      <span class="pair"><a href="/open-source/">EN</a><a href="/ko/open-source/" aria-current="page">KO</a></span>
+      <a href="https://app.klorn.ai/login">로그인</a>
+    </nav>
+    <a class="dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener" data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe">다운로드</a>
+  </header>
 
   <h1>AGPL-3.0, 덧붙인 조항 <em>없이</em>.</h1>
   <p class="thesis">&lsquo;오픈소스&rsquo;는 이제 확인해봐야 하는 단어가 됐습니다. 이 카테고리에서는 진짜 오픈소스 라이선스 뒤에 제약을 볼트로 조여 붙인 경우가 흔합니다. Klorn의 <a href="https://github.com/k08200/klorn/blob/main/LICENSE" rel="noreferrer noopener">LICENSE</a>는 GNU AGPL v3이고, 거기서 끝납니다.</p>
@@ -67,7 +74,33 @@
 
   <footer>
     <p>라이선스 사실은 2026-08-23에 저장소 기준으로 확인했습니다. 틀린 내용이 있으면 <a href="mailto:k0820086@gmail.com">알려주세요</a>. 고치겠습니다.</p>
+    <nav class="foot-links" aria-label="Klorn 더 보기"><a href="/pricing/">가격</a><a href="/blog/">블로그</a><a href="/security/">보안</a><a href="/self-host/">셀프호스팅</a><a href="/ko/open-source/">오픈소스</a><a href="/status/">상태</a><a href="/gdpr/">GDPR</a><a href="/dpa/">DPA</a><a href="/privacy/">개인정보처리방침</a><a href="/terms/">이용약관</a><a href="https://github.com/k08200/klorn" rel="noreferrer noopener">GitHub</a></nav>
   </footer>
 </div>
+<script>
+// Same block as every other page: carry the campaign through to the app so a
+// signup can be credited to the page that earned it.
+(function () {
+  try {
+    var p = new URLSearchParams(location.search);
+    var q = [];
+    ["utm_source", "utm_medium", "utm_campaign", "utm_content"].forEach(function (k) {
+      var v = p.get(k);
+      if (v) q.push(k + "=" + encodeURIComponent(v.slice(0, 60)));
+    });
+    if (document.referrer) {
+      try {
+        var h = new URL(document.referrer).hostname;
+        if (h && h !== location.hostname) q.push("ref=" + encodeURIComponent(h));
+      } catch (e) {}
+    }
+    q.push("lp=" + encodeURIComponent(location.pathname.slice(0, 60)));
+    var qs = q.join("&");
+    document.querySelectorAll('a[href^="https://app.klorn.ai/"]').forEach(function (a) {
+      a.href += (a.href.indexOf("?") === -1 ? "?" : "&") + qs;
+    });
+  } catch (e) {}
+})();
+</script>
 </body>
 </html>

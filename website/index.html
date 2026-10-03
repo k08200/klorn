@@ -402,13 +402,16 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
 .foot{max-width:1180px;margin:34px auto 0;padding:0 24px;font-size:13px;color:var(--ink-3)}
 .foot a{color:var(--sky-ink);font-weight:600}
 
-.os{border-radius:30px;padding:10px;background:rgba(10,14,20,.04);border:1px solid var(--line)}
+.os{border-radius:30px;padding:10px;background:rgba(10,14,20,.04);border:1px solid var(--line);
+  max-width:720px;margin:0 auto}
 /* The right-hand column held four bullets the page had already made three times
-   over, so the card is a single column now: the claim and the two links. */
+   over, so the card is a single column now: the claim and the two links. The
+   card is capped to that column's width, or it renders as a full-width box
+   with its right half empty. */
 .os-in{border-radius:22px;background:#fff;border:1px solid var(--line);padding:34px 38px;
   display:grid;gap:0;align-items:start}
 .os-h{font-size:clamp(26px,3.2vw,40px);line-height:1.08;letter-spacing:-.03em;margin:0 0 16px;font-weight:700}
-.os-p{color:var(--ink-2);font-size:15.5px;margin:0 0 26px;max-width:520px}
+.os-p{color:var(--ink-2);font-size:15.5px;margin:0 0 26px}
 .os-cta{display:flex;gap:12px;flex-wrap:wrap}
 /* Recently shipped. On the landings measured, developer-facing tools surface
    shipping velocity on the page itself (linear, warp, cursor, resend, vercel);
@@ -607,6 +610,26 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
    .nav-lang is defined after the pill's own media queries, so an override up
    there loses on source order. */
 @media(max-width:480px){.nav-lang{display:none}}
+/* Under 880px .nav-links collapse, which left Pricing, Blog and the rest of
+   the sections unreachable on phones. A disclosure button reopens them as a
+   panel under the pill (behaviour in /site-nav.js). 38px keeps the pill's
+   height; the overlay takes the hit area to 44px, as with .nav-login. */
+.nav-menu-btn{display:none;position:relative;align-items:center;justify-content:center;width:38px;height:38px;
+  margin-right:6px;padding:0;border-radius:9999px;border:1px solid rgba(255,255,255,.22);background:transparent;
+  color:#fff;cursor:pointer;transition:background .4s var(--ease)}
+.nav-menu-btn::before{content:"";position:absolute;inset:-3px}
+.nav-menu-btn:hover{background:rgba(255,255,255,.10)}
+.nav-menu-btn svg{width:17px;height:17px}
+@media(max-width:880px){
+  .nav-menu-btn{display:inline-flex}
+  .nav-pill{position:relative}
+  .nav-links[data-open]{display:flex;position:absolute;top:calc(100% + 8px);left:0;right:0;flex-direction:column;gap:1px;
+    padding:6px;border-radius:18px;background:rgba(24,26,32,.96);border:1px solid rgba(255,255,255,.12);
+    box-shadow:0 18px 40px rgba(0,0,0,.34)}
+  .nav-links[data-open] a{display:flex;align-items:center;min-height:44px;padding:0 14px;border-radius:12px;color:rgba(255,255,255,.86)}
+}
+@media(max-width:480px){.nav-menu-btn{margin-right:4px}}
+@media(prefers-reduced-motion:reduce){.nav-menu-btn{transition:none}}
 
 
 @media (max-height: 900px){
@@ -893,6 +916,7 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
  ]
 }
 </script>
+<script src="/site-nav.js" defer></script>
 </head>
 <body>
 <div class="grain"></div>
@@ -900,7 +924,8 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
 
 <nav class="nav"><div class="nav-pill">
   <a class="nav-brand" href="#top" data-top>Klorn</a>
-  <span class="nav-links"><a href="#cards">Product</a><a href="#day">How it works</a><a href="#compare">Why Klorn</a><a href="#pricing">Pricing</a><a href="#open">Open source</a><a href="/blog/">Blog</a></span>
+  <button type="button" class="nav-menu-btn" data-menu-toggle aria-expanded="false" aria-controls="nav-menu" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <span class="nav-links" id="nav-menu" role="group" aria-label="Sections"><a href="#cards">Product</a><a href="#day">How it works</a><a href="#compare">Why Klorn</a><a href="#pricing">Pricing</a><a href="#open">Open source</a><a href="/blog/">Blog</a></span>
   <span class="nav-lang">
     <button type="button" class="nav-lang-btn" data-lang-toggle
             aria-haspopup="true" aria-expanded="false" aria-controls="lang-menu">English <i aria-hidden="true">▾</i></button>
@@ -944,7 +969,7 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
         <span class="t"><b>Download for Mac</b><span>Universal · macOS 14+ · notarized</span></span></a>
       <a class="dl" data-os="win" href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe" rel="noreferrer noopener">
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.6l7.2-1v7.1H3V5.6zm0 12.8l7.2 1v-7H3v6zM11.2 4.4L21 3v8.7h-9.8V4.4zm0 15.2L21 21v-8.6h-9.8v7.2z"/></svg>
-        <span class="t"><b>Download for Windows</b><span>Windows 10+ · unsigned beta, SmartScreen warns once</span></span></a>
+        <span class="t"><b>Download for Windows</b><span>Windows 10+ · Beta</span></span></a>
     </div>
     <!-- The download alone is a dead end without an account, so say what the
          app expects next to the button rather than after the click. -->
@@ -1223,8 +1248,7 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
       <span class="chip-s dark">Founding price</span>
       <h3>Klorn Pro</h3>
       <div class="amt">$8.99<span>/month</span></div>
-      <p class="note">7-day Pro trial, then $8.99/mo on the web — $9.99 in the iOS and Android apps, where
-        the store takes its cut. Cancel anytime.</p>
+      <p class="note">7-day Pro trial, then $8.99/mo. Cancel anytime.</p>
       <ul>
         <li>Everything in Free, with a bigger AI budget</li>
         <li>Reply drafts you approve and send from Klorn</li>
@@ -1260,7 +1284,7 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
   </div>
   <p class="works-note rv"><b>Not supported:</b> IMAP hosts other than Naver. Signing in to Klorn is
     Google-only, and there is no native mobile app — mobile runs in the browser today.
-    On Windows the desktop app is an unsigned beta (SmartScreen warns once);
+    On Windows the desktop app is in beta;
     on Linux, Klorn runs in the browser. Self-hosting works against your own database and model keys.</p>
   <p class="works-note rv"><b>Coming soon:</b> Outlook &amp; Microsoft 365 and iCloud Mail — already built,
     staged for rollout after security review. Sign in with Apple and Naver is planned on the web, the Mac
@@ -1320,7 +1344,7 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
         Download for Mac</a>
     </div>
     <p class="actions-note">Already approved? <a href="https://app.klorn.ai/login">Log in</a> ·
-      macOS 14+ universal · Windows in the browser · AGPLv3</p>
+      macOS 14+ universal · Windows 10+ beta · AGPLv3</p>
   </div>
 </section>
 
@@ -1492,14 +1516,22 @@ if (shell && fine) {
     .then(function (rel) {
       if (!rel || !rel.length) return;
       var list = box.querySelector('ol');
-      var loc = document.documentElement.lang === 'ko' ? 'ko-KR' : 'en-US';
+      var loc = document.documentElement.lang || 'en';
+      // Release tags are build ids (desktop-v0.4.80103): the trailing build
+      // number means nothing to a visitor, so show major.minor plus the
+      // platform when it is not the Mac app. The raw tag stays in the title.
+      var human = function (tag) {
+        var m = /^desktop-(win-)?v(\d+)\.(\d+)/.exec(tag || '');
+        if (!m) return tag;
+        return (m[1] ? 'Windows ' : '') + 'v' + m[2] + '.' + m[3];
+      };
       rel.slice(0, 3).forEach(function (r) {
         var li = document.createElement('li');
         var a = document.createElement('a');
         a.href = r.html_url; a.rel = 'noreferrer noopener';
-        a.textContent = r.tag_name;
+        a.textContent = human(r.tag_name); a.title = r.tag_name;
         var s = document.createElement('span');
-        s.textContent = new Date(r.published_at)
+        s.textContent = '· ' + new Date(r.published_at)
           .toLocaleDateString(loc, { month: 'short', day: 'numeric' });
         li.appendChild(a); li.appendChild(s); list.appendChild(li);
       });
