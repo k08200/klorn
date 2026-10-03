@@ -22,6 +22,9 @@ final class AppSettings {
     static let upcomingSectionHeightKey = "klorn.upcomingSectionHeight"
     static let todaySectionHeightKey = "klorn.todaySectionHeight"
     static let accountSectionHeightKey = "klorn.sidebar.accountHeight"
+    /// Un-prefixed on purpose: it is the documented developer switch
+    /// (`defaults write ai.klorn.desktop macMainWindow -bool YES`).
+    static let macMainWindowKey = "macMainWindow"
 
     private let defaults: UserDefaults
 
@@ -39,6 +42,13 @@ final class AppSettings {
     /// policy immediately instead of at the next panel state change. Not
     /// persisted (wired at launch).
     var onShowInDockChanged: ((Bool) -> Void)?
+
+    /// Productization M2: the full view opens as a standard main window
+    /// (title bar, Dock, Cmd+Tab while open) instead of the bar's panel
+    /// morphing into it. OFF by default until M8 flips it.
+    var macMainWindow: Bool {
+        didSet { defaults.set(macMainWindow, forKey: Self.macMainWindowKey) }
+    }
 
     /// A new PUSH posts a macOS banner unless the user turns it off. The top-bar
     /// count always updates regardless — this only gates the system banner.
@@ -207,6 +217,7 @@ final class AppSettings {
         self.upcomingSectionHeight = Self.resolveUpcomingSectionHeight(
             defaults.object(forKey: Self.upcomingSectionHeightKey))
         self.showInDock = Self.resolveShowInDock(defaults.object(forKey: Self.showInDockKey))
+        self.macMainWindow = Self.resolveMacMainWindow(defaults.object(forKey: Self.macMainWindowKey))
         self.pillVisible = Self.resolvePillVisible(defaults.object(forKey: Self.pillVisibleKey))
         self.shortcut = Self.resolveShortcut(defaults.object(forKey: Self.shortcutKey))
         self.fullWindowSize = Self.resolveFullWindowSize(
@@ -296,6 +307,11 @@ final class AppSettings {
     /// Default ON (pill shown) when never set; otherwise honor the stored flag. Pure.
     nonisolated static func resolvePillVisible(_ stored: Any?) -> Bool {
         (stored as? Bool) ?? true
+    }
+
+    /// OFF unless explicitly stored true. Pure.
+    nonisolated static func resolveMacMainWindow(_ stored: Any?) -> Bool {
+        (stored as? Bool) ?? false
     }
 
     /// Default OFF when never set: the resting app stays ambient (no Dock icon,

@@ -2227,7 +2227,7 @@ func runSelfChecks() async -> Bool {
 
     print("App menus (M1):")
     let signedInFull = MenuState(
-        signedIn: true, fullViewOpen: true, barIsKey: true, modalOpen: false, targetTier: .queue,
+        signedIn: true, fullViewOpen: true, mailSurfaceIsKey: true, modalOpen: false, targetTier: .queue,
         emailLoaded: true, readerReplying: false, teamModeAvailable: false,
         listHasSearchField: true)
     var everyCommand: [MenuCommand] = [.compose, .find, .reply, .dismiss]
@@ -2266,7 +2266,7 @@ func runSelfChecks() async -> Bool {
     check("Find that would switch modes waits for the reply to close",
           !MenuRules.isEnabled(.find, in: composingElsewhere))
     var settingsKey = signedInFull
-    settingsKey.barIsKey = false
+    settingsKey.mailSurfaceIsKey = false
     check("message commands are off while another window (Settings) is key",
           [MenuCommand.reply, .dismiss, .moveTo(.push)]
               .allSatisfy { !MenuRules.isEnabled($0, in: settingsKey) }
@@ -2330,6 +2330,111 @@ func runSelfChecks() async -> Bool {
           ListMode.waitingOn.isMailFamily && ListMode.mailbox(.sent).isMailFamily
           && !ListMode.proposals.isMailFamily && !ListMode.calendar.isMailFamily)
 
+    print("Main window (M2):")
+    check("macMainWindow defaults OFF and reads only a stored Bool",
+          !AppSettings.resolveMacMainWindow(nil)
+          && AppSettings.resolveMacMainWindow(true)
+          && !AppSettings.resolveMacMainWindow(false)
+          && !AppSettings.resolveMacMainWindow("YES"))
+    check("flag on: only the full state routes to the main window",
+          TopBarController.routesToMainWindow(.full, macMainWindow: true)
+          && !TopBarController.routesToMainWindow(.expanded, macMainWindow: true)
+          && !TopBarController.routesToMainWindow(.collapsed, macMainWindow: true))
+    check("flag off: nothing routes to the main window",
+          [BarState.collapsed, .expanded, .full]
+              .allSatisfy { !TopBarController.routesToMainWindow($0, macMainWindow: false) })
+    check("an open main window makes the app regular (Dock + Cmd+Tab)",
+          TopBarController.activationPolicy(for: .collapsed, mainWindowOpen: true) == .regular)
+    check("closing the main window returns the resting app to ambient",
+          TopBarController.activationPolicy(for: .collapsed, mainWindowOpen: false) == .accessory)
+    check("closing the main window while Settings is open stays regular",
+          TopBarController.activationPolicy(
+              for: .collapsed, settingsOpen: true, mainWindowOpen: false) == .regular
+          && TopBarController.activationPolicy(
+              for: .collapsed, settingsOpen: false, mainWindowOpen: true) == .regular)
+    check("main window closed: policy is exactly the pre-M2 rule",
+          [BarState.collapsed, .expanded, .full].allSatisfy { state in
+              [false, true].allSatisfy { dock in
+                  [false, true].allSatisfy { settings in
+                      TopBarController.activationPolicy(
+                          for: state, showInDock: dock, settingsOpen: settings, mainWindowOpen: false)
+                          == TopBarController.activationPolicy(
+                              for: state, showInDock: dock, settingsOpen: settings)
+                  }
+              }
+          })
+    check("mail surface is key: bar only in its full state, main window only while open",
+          MenuRules.mailSurfaceIsKey(
+              barPanelIsKey: true, barFullOpen: true, mainWindowIsKey: false, mainWindowOpen: false)
+          && MenuRules.mailSurfaceIsKey(
+              barPanelIsKey: false, barFullOpen: false, mainWindowIsKey: true, mainWindowOpen: true)
+          && !MenuRules.mailSurfaceIsKey(
+              barPanelIsKey: true, barFullOpen: false, mainWindowIsKey: false, mainWindowOpen: false)
+          && !MenuRules.mailSurfaceIsKey(
+              barPanelIsKey: false, barFullOpen: false, mainWindowIsKey: true, mainWindowOpen: false)
+          && !MenuRules.mailSurfaceIsKey(
+              barPanelIsKey: false, barFullOpen: true, mainWindowIsKey: false, mainWindowOpen: true))
+    var mainKey = signedInFull
+    mainKey.mailSurfaceIsKey = MenuRules.mailSurfaceIsKey(
+        barPanelIsKey: false, barFullOpen: false, mainWindowIsKey: true, mainWindowOpen: true)
+    check("message commands work against a key main window",
+          MenuRules.isEnabled(.reply, in: mainKey) && MenuRules.isEnabled(.dismiss, in: mainKey)
+          && MenuRules.isEnabled(.moveTo(.push), in: mainKey))
+    check("flag off: an open request never creates the main window",
+          !MainWindowRules.mayOpen(macMainWindow: false) && MainWindowRules.mayOpen(macMainWindow: true))
+    check("beta toggle: hidden until Option, visible while on",
+          !MainWindowRules.showsBetaToggle(optionHeld: false, macMainWindow: false)
+          && MainWindowRules.showsBetaToggle(optionHeld: true, macMainWindow: false)
+          && MainWindowRules.showsBetaToggle(optionHeld: false, macMainWindow: true))
+    let titleBarHeight: CGFloat = 28
+    check("main window floor holds the full view and fits the smallest display",
+          MainWindowRules.minSize == TopBarMetrics.fullMin
+          && MainWindowRules.minSize.height + titleBarHeight <= SettingsMetrics.smallestVisibleHeight
+          && MainWindowRules.defaultSize.width >= MainWindowRules.minSize.width
+          && MainWindowRules.defaultSize.height >= MainWindowRules.minSize.height
+          && MainWindowRules.defaultSize.width <= 1280
+          && MainWindowRules.defaultSize.height + titleBarHeight <= SettingsMetrics.smallestVisibleHeight)
+    check("main-window strings are localized",
+          ["prefs.mainWindow", "prefs.mainWindow.detail"].allSatisfy { L($0) != $0 })
+    let mainWindowSource = swiftFiles.first { $0.lastPathComponent == "MainWindow.swift" }
+        .flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? ""
+    // The window part of the file, up to the Settings toggle (whose key
+    // monitor legitimately uses view lifecycle).
+    let windowPart = mainWindowSource.components(separatedBy: "struct MainWindowBetaToggle").first ?? ""
+    let openBody = windowPart.components(separatedBy: "func open() {").dropFirst().first?
+        .components(separatedBy: "func close()").first ?? ""
+    check("no SwiftUI Window scene: nothing is instantiated at launch",
+          lineOffenders { $0.contains("Window(\"") || $0.contains("WindowGroup") }.isEmpty)
+    check("the main window is created lazily, only past the flag guard in open()",
+          windowPart.components(separatedBy: "NSWindow(").count == 2
+          && windowPart.components(separatedBy: "makeWindow()").count == 3  // decl + one call
+          && openBody.contains("makeWindow()")
+          && (openBody.range(of: "mayOpen(")?.lowerBound ?? openBody.endIndex)
+              < (openBody.range(of: "makeWindow()")?.lowerBound ?? openBody.startIndex))
+    check("the main window is reused and remembers its frame",
+          windowPart.contains("isReleasedWhenClosed = false")
+          && windowPart.contains("setFrameAutosaveName(MainWindowRules.frameAutosaveName)")
+          && windowPart.contains("contentMinSize = MainWindowRules.minSize")
+          && windowPart.contains("sizingOptions = []"))
+    check("main window state comes from NSWindow callbacks, never onAppear/onDisappear",
+          windowPart.contains("func windowWillClose(")
+          && windowPart.contains("func windowDidBecomeKey(")
+          && !windowPart.contains("onAppear") && !windowPart.contains("onDisappear")
+          && lineOffenders {
+              ($0.contains("onAppear") || $0.contains("onDisappear")) && $0.contains("mainWindowOpen")
+          }.isEmpty)
+    check("the main window hosts the unchanged FullView",
+          windowPart.contains("FullView(actions: actions)"))
+    let appSource = swiftFiles.first { $0.lastPathComponent == "KlornApp.swift" }
+        .flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? ""
+    check("closing the main window never quits the app",
+          appSource.contains("func applicationShouldTerminateAfterLastWindowClosed")
+          && appSource.contains("-> Bool {\n        false\n    }"))
+    check("BarState.full still exists until M8",
+          lineOffenders { $0.contains("enum BarState { case collapsed, expanded, full }") }
+              .contains("TopBar.swift"))
+
     print(failures == 0 ? "\nALL CHECKS PASSED" : "\n\(failures) CHECK(S) FAILED")
     return failures == 0
 }
+

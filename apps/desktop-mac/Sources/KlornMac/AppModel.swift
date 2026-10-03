@@ -32,24 +32,44 @@ final class AppModel {
     var settingsWindowOpen = false {
         didSet {
             guard settingsWindowOpen != oldValue else { return }
-            onSettingsWindowChanged?()
+            onWindowPresenceChanged?()
         }
     }
-    /// Wired by the AppDelegate to re-apply the activation policy.
-    @ObservationIgnored var onSettingsWindowChanged: (() -> Void)?
+    /// True while the standard main window (M2, `macMainWindow`) is open.
+    /// Same rule as Settings: an open window keeps the app .regular.
+    var mainWindowOpen = false {
+        didSet {
+            guard mainWindowOpen != oldValue else { return }
+            onWindowPresenceChanged?()
+        }
+    }
+    /// Wired by the AppDelegate to re-apply the activation policy when
+    /// Settings or the main window opens or closes.
+    @ObservationIgnored var onWindowPresenceChanged: (() -> Void)?
 
-    /// Mirrors whether the top bar is in its full (app window) state, so the
-    /// app menus can enable only what the visible UI can act on. Written by
-    /// TopBarController on every render.
-    var isFullViewOpen = false
+    /// Mirrors whether the top bar is in its full (app window) state.
+    /// Written by TopBarController on every render.
+    var barFullOpen = false
+    /// Whether the full view is up anywhere — the bar's full state or the
+    /// main window — so the app menus enable only what the UI can act on.
+    var isFullViewOpen: Bool { barFullOpen || mainWindowOpen }
     /// Mirrors the reading pane's inline reply composer being open: Reply in
     /// the Message menu is disabled then, since re-drafting would wipe
     /// what the user has typed.
     var readerReplying = false
-    /// Mirrors whether the top bar's panel is the key window. Message-menu
-    /// commands act on what the panel shows, so they stay off while another
-    /// window (Settings) is key. Written by TopBarController.
+    /// Mirrors whether the top bar's panel is the key window. Written by
+    /// TopBarController.
     var barPanelIsKey = false
+    /// Mirrors whether the main window is the key window. Written by its
+    /// window tracker.
+    var mainWindowIsKey = false
+    /// Message-menu commands act on what the full view shows, so they stay
+    /// off while another window (Settings) is key.
+    var mailSurfaceIsKey: Bool {
+        MenuRules.mailSurfaceIsKey(
+            barPanelIsKey: barPanelIsKey, barFullOpen: barFullOpen,
+            mainWindowIsKey: mainWindowIsKey, mainWindowOpen: mainWindowOpen)
+    }
     /// Set by the Message menu's Reply; the reading pane answers by starting
     /// the same AI-drafted reply as its own button — for this item only.
     private(set) var replyRequest: ReplyRequest?

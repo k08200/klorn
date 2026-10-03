@@ -21,8 +21,9 @@ struct ReplyRequest: Equatable, Sendable {
 struct MenuState: Equatable {
     var signedIn: Bool
     var fullViewOpen: Bool
-    /// The bar's panel is the key window (not Settings or another window).
-    var barIsKey: Bool
+    /// A window showing the full view (the bar's full panel or the main
+    /// window) is key — not Settings or another window.
+    var mailSurfaceIsKey: Bool
     var modalOpen: Bool
     /// The lane of the firewall item the reading pane shows, nil if none.
     var targetTier: Tier?
@@ -37,7 +38,7 @@ struct MenuState: Equatable {
     init(model: AppModel) {
         signedIn = model.phase == .signedIn
         fullViewOpen = model.isFullViewOpen
-        barIsKey = model.barPanelIsKey
+        mailSurfaceIsKey = model.mailSurfaceIsKey
         modalOpen = model.fullViewModalOpen
         targetTier = model.menuTargetItem?.tier
         emailLoaded = model.openedEmail != nil
@@ -47,13 +48,13 @@ struct MenuState: Equatable {
     }
 
     init(
-        signedIn: Bool, fullViewOpen: Bool, barIsKey: Bool, modalOpen: Bool, targetTier: Tier?,
+        signedIn: Bool, fullViewOpen: Bool, mailSurfaceIsKey: Bool, modalOpen: Bool, targetTier: Tier?,
         emailLoaded: Bool, readerReplying: Bool, teamModeAvailable: Bool,
         listHasSearchField: Bool
     ) {
         self.signedIn = signedIn
         self.fullViewOpen = fullViewOpen
-        self.barIsKey = barIsKey
+        self.mailSurfaceIsKey = mailSurfaceIsKey
         self.modalOpen = modalOpen
         self.targetTier = targetTier
         self.emailLoaded = emailLoaded
@@ -72,12 +73,21 @@ enum MenuRules {
         .mailbox(.sent), .mailbox(.drafts), .mailbox(.archived), .teams,
     ]
 
+    /// Whether the key window is one that shows the full view: the bar's
+    /// panel only counts in its full state (the pill and the compact panel
+    /// show no reading pane), the main window whenever it is open.
+    static func mailSurfaceIsKey(
+        barPanelIsKey: Bool, barFullOpen: Bool, mainWindowIsKey: Bool, mainWindowOpen: Bool
+    ) -> Bool {
+        (barPanelIsKey && barFullOpen) || (mainWindowIsKey && mainWindowOpen)
+    }
+
     static func isEnabled(_ command: MenuCommand, in s: MenuState) -> Bool {
         guard s.signedIn else { return false }
         // Message commands act on the mail visible in the reading pane, so
         // they need the full view up AND key (not Settings), no modal over
         // it, and a firewall item.
-        let canActOnMessage = s.fullViewOpen && s.barIsKey && !s.modalOpen && s.targetTier != nil
+        let canActOnMessage = s.fullViewOpen && s.mailSurfaceIsKey && !s.modalOpen && s.targetTier != nil
         // Anything that clears the selection or switches the list mode
         // unmounts the inline reply composer and loses what was typed, so
         // those commands wait until the composer is closed.
