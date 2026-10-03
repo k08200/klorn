@@ -344,8 +344,8 @@ private enum DeviceCalendarPureChecks {
                 .appendingPathComponent("packages/api/src/routes/device-calendar.ts"),
             encoding: .utf8)) ?? ""
         let appModel = text("AppModel.swift")
-        let tokenRead = appModel.range(of: "let sessionToken = KeychainStore.load()")
-        let tokenCleared = appModel.range(of: "KeychainStore.clear()\n        queue = nil")
+        let tokenRead = appModel.range(of: "let sessionToken = tokenStore.load()")
+        let tokenCleared = appModel.range(of: "tokenStore.clear()\n        queue = nil")
         return [
             ("only the reader asks macOS for calendar access, and only from the upload switch",
              containing("requestFullAccessToEvents") == ["DeviceCalendarReader.swift"]
@@ -358,7 +358,7 @@ private enum DeviceCalendarPureChecks {
              && text("DeviceCalendarReader.swift").contains("actor DeviceCalendarReader")),
             ("the refresh loop holds the bridge weakly and ends with it",
              bridge.contains("guard self?.refreshTick() == true else { return }")),
-            ("sign-out reads the session token before the Keychain is cleared",
+            ("sign-out reads the session token before the token store is cleared",
              tokenRead != nil && tokenCleared != nil
              && tokenRead.map { $0.lowerBound < (tokenCleared?.lowerBound ?? $0.lowerBound) } == true
              && appModel.contains("deviceCalendars.signOut(token: sessionToken)")),
