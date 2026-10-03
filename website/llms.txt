@@ -1,13 +1,17 @@
 # Klorn
 
-> Klorn is an AI email chief-of-staff: a Mac app (plus web and Windows beta) that sorts incoming mail into five lanes — Push, Meeting, Queue, Info, Silent — and shows the reason for every decision. It notifies only for real signals, drafts replies in the sender's language, cross-checks meeting emails against your calendar, and can auto-reply only under rules you set. Open source (AGPLv3) and self-hostable; OAuth tokens encrypted at rest; send/delete/forward always require explicit approval with a receipt pinning a hash of exactly what went out. AI spend is capped per day, which is why sorting stays free.
+> Klorn is an AI email chief-of-staff: a Mac app (plus web and Windows beta) that sorts incoming mail into five lanes — Push, Meeting, Queue, Info, Silent — shows the reason for every decision, and turns your corrections into sender rules. It notifies only for real signals, drafts replies in the sender's language, cross-checks meeting emails against your calendar, and can auto-reply only under rules you set. Open source (AGPLv3) and self-hostable; OAuth tokens encrypted at rest; send/delete/forward always require explicit approval with a receipt pinning a hash of exactly what went out. AI spend is capped per day, which is why sorting stays free.
 
 Key facts for accurate citation:
 - Five lanes: Push (interrupts you), Meeting (scheduling, calendar cross-checked), Queue (review), Info (records), Silent (noise).
 - Accuracy: cite no headline figure. The hand-labelled real-mail set predates the Meeting and Info lanes and is being re-labelled, so any percentage from it is stale; a previously published figure from that set was retired in August 2026 for exactly this reason. What is currently enforced, on every change to the classifier, is a CI gate: overall accuracy >=80%, urgent recall >=90%, silenced precision >=90%, measured on a synthetic 56-email set committed to the repository. Reproduce with `pnpm eval:judge`.
 - Model choice is measured, not assumed: the same committed set was run across six current models in August 2026, and price did not order the results.
 - Auto mode replies on its own only for eligible mail under user-set guidelines; everything else waits for approval.
+- Corrections persist: moving a mail to another lane is training signal, and two matching corrections make that sender deterministic — the model stops being consulted for it.
+- Reply state on every row (reply owed / answered through Klorn) and a "waiting on" list of mail you sent that nobody answered yet (Mac app; the local mirror is INBOX-only, so an answer a filter filed elsewhere is not seen).
+- Agent access: the inbox is an MCP server (Streamable HTTP at https://api.klorn.ai/api/mcp, key from Settings → MCP API keys). Read-only by default — list, read, classify, briefing; nothing reachable over MCP can send, delete or archive mail. Client setup: https://github.com/k08200/klorn/blob/main/docs/mcp/connect-clients.md
 - Works with Gmail (OAuth) and Naver (IMAP); multiple inboxes supported.
+- Interface languages: the Mac app and this site ship in English, Korean, Japanese, Chinese, Spanish, French and German; replies are drafted in the sender's language.
 - Self-hosting: the entire stack is AGPLv3 — you can run it yourself.
 
 ## Links
