@@ -237,7 +237,7 @@ A full XCTest suite can be added when building under Xcode/CI.
 | `KlornApp.swift` | `@main` entry (+ `--self-check`); `.accessory` app, `AppDelegate` owns the model, top bar, and hotkey |
 | `TopBar.swift` | SwiftUI `CollapsedBar` (pill) + `ExpandedPanel` (3 columns) |
 | `SettingsWindow.swift` | `Settings` scene root (`TabView`), tab grouping, `SettingsOpener` |
-| `MainWindow.swift` | standard main window (M2, `macMainWindow`): keep/close rules, `MainWindowOpener`, the Settings beta switch |
+| `MainWindow.swift` | standard main window (M2, `macMainWindow`): `MainWindowController` (a lazily created AppKit `NSWindow`, never a SwiftUI scene), its rules, the Settings beta switch |
 | `AppCommands.swift` | app menus (`.commands`) and their pure enablement/shortcut rules |
 | `TopBarController.swift` | the floating non-activating `NSPanel`: top-center pin, expand/collapse, row actions |
 | `HotKey.swift` | Carbon `RegisterEventHotKey` global shortcut (`⌥⌘K`) |

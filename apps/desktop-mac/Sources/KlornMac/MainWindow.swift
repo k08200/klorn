@@ -4,8 +4,6 @@ import SwiftUI
 /// Pure rules for the standard main window (productization plan, macOS M2),
 /// pinned by the self-check.
 enum MainWindowRules {
-    /// The `Window` scene id.
-    static let sceneID = "main"
     /// NSWindow frame autosave name: position and size survive relaunch.
     static let frameAutosaveName = "KlornMainWindow"
     /// The full view's own floor (sidebar 220 + list 420 + a readable
@@ -14,13 +12,12 @@ enum MainWindowRules {
     /// First-open size before any autosaved frame exists. Fits a 1280×800
     /// display's visible area (minus menu bar, Dock and title bar).
     static let defaultSize = NSSize(width: 1180, height: 640)
+    static let styleMask: NSWindow.StyleMask = [.titled, .closable, .miniaturizable, .resizable]
 
-    /// Whether a main window that just appeared may stay. Only one we asked
-    /// for (an openFull() routed here while the flag is on) is kept;
-    /// anything else — SwiftUI opening its primary scene at launch, or state
-    /// restoration — is closed, so the flag-off app looks exactly as before.
-    static func keepsAttachedWindow(macMainWindow: Bool, requested: Bool) -> Bool {
-        macMainWindow && requested
+    /// Whether an open request may create (or show) the window. With the
+    /// flag off no window object is ever made, so flag-off is unchanged.
+    static func mayOpen(macMainWindow: Bool) -> Bool {
+        macMainWindow
     }
 
     /// Settings ▸ General shows the beta toggle while Option is held, and
@@ -35,131 +32,97 @@ enum MainWindowRules {
 /// full-view action today.
 struct MainWindowRoot: View {
     let model: AppModel
-    let opener: MainWindowOpener
-    let actions: () -> TopBarActions?
+    let actions: TopBarActions
 
     var body: some View {
-        content
+        FullView(actions: actions)
+            .environment(model)
+            // L() is not observable; rebuild on a language change (same
+            // trick as the bar).
+            .id(model.settings.languageRevision)
             .frame(
                 minWidth: MainWindowRules.minSize.width, maxWidth: .infinity,
                 minHeight: MainWindowRules.minSize.height, maxHeight: .infinity,
                 alignment: .top)
-            // Driven by the real NSWindow (same tracker as Settings), never
-            // view lifecycle: SwiftUI can keep this content alive after the
-            // window closes.
-            .background(WindowPresenceTracker(
-                onChange: { [weak opener] open in opener?.windowOpenChanged(open) },
-                onKeyChange: { [model] isKey in model.mainWindowIsKey = isKey },
-                onAttach: { [weak opener] window in opener?.attached(window) }))
-    }
-
-    @ViewBuilder
-    private var content: some View {
-        if let actions = actions() {
-            FullView(actions: actions)
-                .environment(model)
-                // L() is not observable; rebuild on a language change (same
-                // trick as the bar). Scoped so the tracker survives it.
-                .id(model.settings.languageRevision)
-        } else {
-            Color.clear
-        }
     }
 }
 
-/// Opens, focuses and closes the main window from AppKit code, and decides
-/// which appearing windows are kept (see `MainWindowRules`).
+/// Owns the standard main window: a plain AppKit NSWindow hosting the full
+/// view, created lazily on the first open request while `macMainWindow` is
+/// on and reused afterwards. There is no SwiftUI `Window` scene, so nothing
+/// is instantiated at launch and the flag-off app never has this window.
 ///
-/// Like `SettingsOpener`, it captures SwiftUI's `openWindow` action from a
-/// window-less hosting view, so it works whatever the bar is drawing.
+/// Open/closed and key state come from the window's own delegate callbacks
+/// (shown → open, willClose → closed), never from view lifecycle.
 @MainActor
-final class MainWindowOpener {
+final class MainWindowController: NSObject, NSWindowDelegate {
     private let model: AppModel
-    private var action: OpenWindowAction?
-    private var host: NSHostingView<Capture>?
-    /// The accepted main window.
-    private weak var window: NSWindow?
-    /// The last window the tracker landed in (accepted or not yet decided).
-    private weak var candidate: NSWindow?
-    /// Set by open(), consumed when the window opens (or after the timeout).
-    private var requested = false
-    private static let requestTimeout: TimeInterval = 2
+    /// FullView actions for the window; wired by the AppDelegate to the bar.
+    var actionsProvider: (() -> TopBarActions?)?
+    private(set) var window: NSWindow?
 
     init(model: AppModel) {
         self.model = model
-        let host = NSHostingView(rootView: Capture { [weak self] action in self?.action = action })
-        _ = host.fittingSize  // evaluates the body once, which captures the action
-        self.host = host
     }
 
     /// Open the main window, or bring the open one forward.
     func open() {
+        guard MainWindowRules.mayOpen(macMainWindow: model.settings.macMainWindow) else { return }
+        guard let window = window ?? makeWindow() else {
+            Log.app.error("main window: no full-view actions to host")
+            return
+        }
         // Explicit user command, so take focus outright (cooperative
         // activate() is refused when not tied to the current input event).
         NSApp.activate(ignoringOtherApps: true)
-        if let window, model.mainWindowOpen {
-            if window.isMiniaturized { window.deminiaturize(nil) }
-            window.makeKeyAndOrderFront(nil)
-            return
-        }
-        guard let action else {
-            Log.app.error("main window: openWindow action was never captured")
-            return
-        }
-        requested = true
-        action(id: MainWindowRules.sceneID)
-        // If no window ever shows up, the request must not linger and turn
-        // a later stray window (launch, restoration) into a "requested" one.
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.requestTimeout) { [weak self] in
-            guard let self, !self.model.mainWindowOpen else { return }
-            self.requested = false
-        }
+        if window.isMiniaturized { window.deminiaturize(nil) }
+        window.makeKeyAndOrderFront(nil)
+        model.mainWindowOpen = true
+        model.mainWindowIsKey = window.isKeyWindow
     }
 
-    /// Close the main window (header ✕ / "Smaller"). The tracker's willClose
-    /// drops the app back to ambient.
+    /// Close the main window (header ✕ / "Smaller"); willClose does the rest.
     func close() {
         window?.close()
     }
 
-    /// The tracker landed in a hosting NSWindow. SwiftUI may reuse that
-    /// window across close/reopen, so the keep-or-close decision is made on
-    /// each open transition, not here.
-    func attached(_ window: NSWindow) {
-        candidate = window
-        // Our own frame autosave is the only restoration we want; state
-        // restoration would reopen the window at launch.
-        window.isRestorable = false
-    }
-
-    /// The tracker's open/closed signal.
-    func windowOpenChanged(_ open: Bool) {
-        guard open else {
-            model.mainWindowOpen = false
-            model.mainWindowIsKey = false
-            return
-        }
-        let keep = MainWindowRules.keepsAttachedWindow(
-            macMainWindow: model.settings.macMainWindow, requested: requested)
-        requested = false
-        guard keep, let candidate else {
-            Log.app.info("main window: closing an unrequested window")
-            let stray = candidate
-            DispatchQueue.main.async { stray?.close() }
-            return
-        }
-        if window !== candidate { configure(candidate) }
-        window = candidate
-        model.mainWindowOpen = true
-        model.mainWindowIsKey = candidate.isKeyWindow
-    }
-
-    private func configure(_ window: NSWindow) {
+    private func makeWindow() -> NSWindow? {
+        guard let actions = actionsProvider?() else { return nil }
+        let host = NSHostingController(rootView: MainWindowRoot(model: model, actions: actions))
+        // The window owns its frame; SwiftUI content must never resize it
+        // (clipping lessons, 2026-08-19).
+        host.sizingOptions = []
+        let window = NSWindow(
+            contentRect: NSRect(origin: .zero, size: MainWindowRules.defaultSize),
+            styleMask: MainWindowRules.styleMask, backing: .buffered, defer: false)
+        window.contentViewController = host
+        window.title = "Klorn"
         window.titleVisibility = .hidden  // the full view draws its own header
+        window.contentMinSize = MainWindowRules.minSize
+        window.isReleasedWhenClosed = false  // reused on reopen
+        window.isRestorable = false  // our frame autosave is the only restoration
+        window.tabbingMode = .disallowed
         window.collectionBehavior.insert(.fullScreenPrimary)
+        window.delegate = self
+        window.setContentSize(MainWindowRules.defaultSize)
+        if !window.setFrameUsingName(MainWindowRules.frameAutosaveName) { window.center() }
         window.setFrameAutosaveName(MainWindowRules.frameAutosaveName)
-        _ = window.setFrameUsingName(MainWindowRules.frameAutosaveName)
         clampOnScreen(window)
+        self.window = window
+        return window
+    }
+
+    func windowDidBecomeKey(_ notification: Notification) {
+        model.mainWindowIsKey = true
+    }
+
+    func windowDidResignKey(_ notification: Notification) {
+        model.mainWindowIsKey = false
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        model.mainWindowIsKey = false
+        model.mainWindowOpen = false
     }
 
     /// A restored frame from a since-disconnected or smaller display must
@@ -168,17 +131,6 @@ final class MainWindowOpener {
         guard let visible = (window.screen ?? NSScreen.main)?.visibleFrame else { return }
         let clamped = KeyablePanel.clamped(window.frame, into: visible)
         if clamped != window.frame { window.setFrame(clamped, display: true) }
-    }
-
-    /// Reads the environment action during body evaluation.
-    struct Capture: View {
-        @Environment(\.openWindow) private var openWindow
-        let onCapture: (OpenWindowAction) -> Void
-
-        var body: some View {
-            let _ = onCapture(openWindow)
-            Color.clear.frame(width: 1, height: 1)
-        }
     }
 }
 

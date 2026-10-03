@@ -309,13 +309,13 @@ final class AppSettings {
         (stored as? Bool) ?? true
     }
 
-    /// Default OFF when never set: the resting app stays ambient (no Dock icon,
-    /// out of Cmd+Tab) unless the user opts in. Pure.
     /// OFF unless explicitly stored true. Pure.
     nonisolated static func resolveMacMainWindow(_ stored: Any?) -> Bool {
         (stored as? Bool) ?? false
     }
 
+    /// Default OFF when never set: the resting app stays ambient (no Dock icon,
+    /// out of Cmd+Tab) unless the user opts in. Pure.
     nonisolated static func resolveShowInDock(_ stored: Any?) -> Bool {
         (stored as? Bool) ?? false
     }

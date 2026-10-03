@@ -100,7 +100,7 @@ struct SettingsRoot: View {
             // TopBarController.activationPolicy). Driven by the real NSWindow,
             // not view lifecycle: SwiftUI may keep this content alive after
             // the window closes, so onDisappear is not a close signal.
-            .background(WindowPresenceTracker { open in model.settingsWindowOpen = open })
+            .background(SettingsWindowTracker { open in model.settingsWindowOpen = open })
     }
 
     private var tabs: some View {
@@ -117,17 +117,16 @@ struct SettingsRoot: View {
     }
 }
 
-/// What happened to a tracked window (Settings, the main window), as the
-/// tracker sees it.
-enum WindowPresenceEvent: Sendable {
+/// What happened to the Settings window, as the tracker sees it.
+enum SettingsWindowEvent: Sendable {
     case attached(visible: Bool)
     case becameKey
     case occlusionChanged(visible: Bool)
     case willClose
 }
 
-extension WindowPresenceEvent {
-    /// Whether the window counts as open after `event`. Only a real close
+extension SettingsWindowEvent {
+    /// Whether Settings counts as open after `event`. Only a real close
     /// clears it: hiding the app (⌘H) or covering the window must not drop
     /// the app to .accessory, which would leave a hidden accessory app that
     /// Cmd+Tab can no longer bring back. Pure for the harness.
@@ -140,39 +139,24 @@ extension WindowPresenceEvent {
     }
 }
 
-/// Reports a SwiftUI scene window's open/closed (and key) state from the
-/// NSWindow that actually hosts the scene content — no private identifiers,
-/// no timers, and never view lifecycle (SwiftUI may keep content alive after
-/// its window closes, so onDisappear is not a close signal). Used by the
-/// Settings window (M0) and the main window (M2).
-struct WindowPresenceTracker: NSViewRepresentable {
+/// Reports the Settings window's open/closed state from the NSWindow that
+/// actually hosts the scene content (no private identifiers, no timers).
+struct SettingsWindowTracker: NSViewRepresentable {
     let onChange: @MainActor (Bool) -> Void
-    var onKeyChange: (@MainActor (Bool) -> Void)?
-    /// Called once per hosting NSWindow, when the tracker first lands in it.
-    var onAttach: (@MainActor (NSWindow) -> Void)?
 
     func makeNSView(context: Context) -> TrackingView {
         let view = TrackingView()
-        update(view)
+        view.onChange = onChange
         return view
     }
 
     func updateNSView(_ view: TrackingView, context: Context) {
-        update(view)
-    }
-
-    private func update(_ view: TrackingView) {
         view.onChange = onChange
-        view.onKeyChange = onKeyChange
-        view.onAttach = onAttach
     }
 
     final class TrackingView: NSView {
         var onChange: (@MainActor (Bool) -> Void)?
-        var onKeyChange: (@MainActor (Bool) -> Void)?
-        var onAttach: (@MainActor (NSWindow) -> Void)?
         private var isOpen = false
-        private weak var attachedWindow: NSWindow?
         nonisolated(unsafe) private var tokens: [NSObjectProtocol] = []
 
         override func viewDidMoveToWindow() {
@@ -182,7 +166,6 @@ struct WindowPresenceTracker: NSViewRepresentable {
             guard let window else { return }
             let names: [Notification.Name] = [
                 NSWindow.didBecomeKeyNotification,
-                NSWindow.didResignKeyNotification,
                 NSWindow.didChangeOcclusionStateNotification,
                 NSWindow.willCloseNotification,
             ]
@@ -193,31 +176,19 @@ struct WindowPresenceTracker: NSViewRepresentable {
                     MainActor.assumeIsolated { self?.handle(name) }
                 }
             }
-            if attachedWindow !== window {
-                attachedWindow = window
-                onAttach?(window)
-            }
             apply(.attached(visible: window.isVisible))
-            // The window may already be key before this view lands in it.
-            onKeyChange?(window.isKeyWindow)
         }
 
         private func handle(_ name: Notification.Name) {
             guard let window else { return }
             switch name {
-            case NSWindow.didBecomeKeyNotification:
-                onKeyChange?(true)
-                apply(.becameKey)
-            case NSWindow.didResignKeyNotification:
-                onKeyChange?(false)
-            case NSWindow.willCloseNotification:
-                onKeyChange?(false)
-                apply(.willClose)
+            case NSWindow.didBecomeKeyNotification: apply(.becameKey)
+            case NSWindow.willCloseNotification: apply(.willClose)
             default: apply(.occlusionChanged(visible: window.occlusionState.contains(.visible)))
             }
         }
 
-        private func apply(_ event: WindowPresenceEvent) {
+        private func apply(_ event: SettingsWindowEvent) {
             let next = event.openState(current: isOpen)
             guard next != isOpen else { return }
             isOpen = next

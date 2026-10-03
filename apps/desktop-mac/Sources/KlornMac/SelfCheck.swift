@@ -2204,13 +2204,13 @@ func runSelfChecks() async -> Bool {
     check("an open Settings window keeps the app in Cmd+Tab",
           TopBarController.activationPolicy(for: .collapsed, settingsOpen: true) == .regular)
     check("only a real close clears the Settings-open flag",
-          !WindowPresenceEvent.willClose.openState(current: true)
-          && WindowPresenceEvent.becameKey.openState(current: false)
-          && WindowPresenceEvent.attached(visible: true).openState(current: false))
+          !SettingsWindowEvent.willClose.openState(current: true)
+          && SettingsWindowEvent.becameKey.openState(current: false)
+          && SettingsWindowEvent.attached(visible: true).openState(current: false))
     check("hiding or covering Settings (⌘H) keeps it counted as open",
-          WindowPresenceEvent.occlusionChanged(visible: false).openState(current: true)
-          && WindowPresenceEvent.attached(visible: false).openState(current: true)
-          && !WindowPresenceEvent.occlusionChanged(visible: false).openState(current: false))
+          SettingsWindowEvent.occlusionChanged(visible: false).openState(current: true)
+          && SettingsWindowEvent.attached(visible: false).openState(current: true)
+          && !SettingsWindowEvent.occlusionChanged(visible: false).openState(current: false))
     check("Settings tracking uses the real window, not a private id or a timer",
           lineOffenders { $0.contains("com_apple_SwiftUI_Settings_window") }.isEmpty
           && !lineOffenders { $0.contains(".onDisappear { model.settingsWindowOpen") }
@@ -2380,11 +2380,8 @@ func runSelfChecks() async -> Bool {
     check("message commands work against a key main window",
           MenuRules.isEnabled(.reply, in: mainKey) && MenuRules.isEnabled(.dismiss, in: mainKey)
           && MenuRules.isEnabled(.moveTo(.push), in: mainKey))
-    check("only a requested window survives, and only with the flag on",
-          MainWindowRules.keepsAttachedWindow(macMainWindow: true, requested: true)
-          && !MainWindowRules.keepsAttachedWindow(macMainWindow: true, requested: false)
-          && !MainWindowRules.keepsAttachedWindow(macMainWindow: false, requested: true)
-          && !MainWindowRules.keepsAttachedWindow(macMainWindow: false, requested: false))
+    check("flag off: an open request never creates the main window",
+          !MainWindowRules.mayOpen(macMainWindow: false) && MainWindowRules.mayOpen(macMainWindow: true))
     check("beta toggle: hidden until Option, visible while on",
           !MainWindowRules.showsBetaToggle(optionHeld: false, macMainWindow: false)
           && MainWindowRules.showsBetaToggle(optionHeld: true, macMainWindow: false)
@@ -2401,30 +2398,38 @@ func runSelfChecks() async -> Bool {
           ["prefs.mainWindow", "prefs.mainWindow.detail"].allSatisfy { L($0) != $0 })
     let mainWindowSource = swiftFiles.first { $0.lastPathComponent == "MainWindow.swift" }
         .flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? ""
-    // The tracked part of the file: the root view and the opener, up to the
-    // Settings toggle (whose key monitor legitimately uses view lifecycle).
-    let trackedPart = mainWindowSource.components(separatedBy: "struct MainWindowBetaToggle").first ?? ""
-    check("main window tracking uses the real NSWindow, never onAppear/onDisappear",
-          trackedPart.contains("WindowPresenceTracker(")
-          && !trackedPart.contains("onAppear") && !trackedPart.contains("onDisappear")
+    // The window part of the file, up to the Settings toggle (whose key
+    // monitor legitimately uses view lifecycle).
+    let windowPart = mainWindowSource.components(separatedBy: "struct MainWindowBetaToggle").first ?? ""
+    let openBody = windowPart.components(separatedBy: "func open() {").dropFirst().first?
+        .components(separatedBy: "func close()").first ?? ""
+    check("no SwiftUI Window scene: nothing is instantiated at launch",
+          lineOffenders { $0.contains("Window(\"") || $0.contains("WindowGroup") }.isEmpty)
+    check("the main window is created lazily, only past the flag guard in open()",
+          windowPart.components(separatedBy: "NSWindow(").count == 2
+          && windowPart.components(separatedBy: "makeWindow()").count == 3  // decl + one call
+          && openBody.contains("makeWindow()")
+          && (openBody.range(of: "mayOpen(")?.lowerBound ?? openBody.endIndex)
+              < (openBody.range(of: "makeWindow()")?.lowerBound ?? openBody.startIndex))
+    check("the main window is reused and remembers its frame",
+          windowPart.contains("isReleasedWhenClosed = false")
+          && windowPart.contains("setFrameAutosaveName(MainWindowRules.frameAutosaveName)")
+          && windowPart.contains("contentMinSize = MainWindowRules.minSize")
+          && windowPart.contains("sizingOptions = []"))
+    check("main window state comes from NSWindow callbacks, never onAppear/onDisappear",
+          windowPart.contains("func windowWillClose(")
+          && windowPart.contains("func windowDidBecomeKey(")
+          && !windowPart.contains("onAppear") && !windowPart.contains("onDisappear")
           && lineOffenders {
               ($0.contains("onAppear") || $0.contains("onDisappear")) && $0.contains("mainWindowOpen")
           }.isEmpty)
-    check("the main window scene hosts the unchanged FullView and adds no menu item",
-          trackedPart.contains("FullView(actions: actions)")
-          && lineOffenders { $0.contains("Window(\"Klorn\", id: MainWindowRules.sceneID)") }
-              .contains("KlornApp.swift")
-          && lineOffenders { $0.contains(".commandsRemoved()") }.contains("KlornApp.swift"))
+    check("the main window hosts the unchanged FullView",
+          windowPart.contains("FullView(actions: actions)"))
     let appSource = swiftFiles.first { $0.lastPathComponent == "KlornApp.swift" }
         .flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? ""
     check("closing the main window never quits the app",
           appSource.contains("func applicationShouldTerminateAfterLastWindowClosed")
           && appSource.contains("-> Bool {\n        false\n    }"))
-    check("the main window is the first scene (SwiftUI's launch pick is turned away, not Settings)",
-          appSource.components(separatedBy: "KlornScenes.mainWindow(appDelegate)").count == 3
-          && appSource.allRanges("KlornScenes.mainWindow(appDelegate)").allSatisfy { main in
-              appSource[main.upperBound...].contains("KlornScenes.settings(appDelegate)")
-          })
     check("BarState.full still exists until M8",
           lineOffenders { $0.contains("enum BarState { case collapsed, expanded, full }") }
               .contains("TopBar.swift"))
@@ -2433,15 +2438,3 @@ func runSelfChecks() async -> Bool {
     return failures == 0
 }
 
-private extension String {
-    /// Every range of `needle`, in order (self-check source pins).
-    func allRanges(_ needle: String) -> [Range<String.Index>] {
-        var out: [Range<String.Index>] = []
-        var from = startIndex
-        while let r = range(of: needle, range: from..<endIndex) {
-            out.append(r)
-            from = r.upperBound
-        }
-        return out
-    }
-}
