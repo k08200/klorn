@@ -1316,6 +1316,7 @@ const en: Record<string, string> = {
   "undo.lane.notClassified": "This mail hasn't been classified yet, so it has no lane to change.",
   "undo.lane.expired": "Too late to undo that move.",
   "undo.lane.conflict": "This mail was reclassified since, so the move wasn't undone.",
+  "undo.lane.rateLimited": "Too many lane changes at once. Wait a moment and try again.",
   "undo.archive.failed": "Couldn't archive that mail. It is back in the list.",
   // Settings sections (productization plan P3).
   "settings.nav.label": "Settings sections",

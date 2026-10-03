@@ -303,6 +303,28 @@ describe("non-Latin layouts resolve by key position (event.code), like the Mac a
     expect(idOf(feed(key("&", { code: "Digit1" })))).toBe("none");
   });
 
+  it("Latin-script characters beyond ASCII are not remapped by position", () => {
+    // AZERTY digit row, unshifted: é è ç à sit on Digit2 / 7 / 9 / 0.
+    for (const [char, code] of [
+      ["é", "Digit2"],
+      ["è", "Digit7"],
+      ["ç", "Digit9"],
+      ["à", "Digit0"],
+    ] as const) {
+      expect(effectiveKey(key(char, { code }))).toBe(char);
+      expect(idOf(feed(key(char, { code })))).toBe("none");
+    }
+    // Turkish dotless ı is on the physical I key; ö / ü on other letter keys.
+    expect(effectiveKey(key("ı", { code: "KeyI" }))).toBe("ı");
+    expect(idOf(feed(key("ı", { code: "KeyI" })))).toBe("none");
+    expect(idOf(feed(key("ö", { code: "KeyJ" })))).toBe("none");
+    // Non-Latin scripts still fall back: Hangul, Cyrillic, Kana, Greek.
+    expect(idOf(feed(key("ㅓ", { code: "KeyJ" })))).toBe("mail.next");
+    expect(idOf(feed(key("о", { code: "KeyJ" })))).toBe("mail.next");
+    expect(idOf(feed(key("ま", { code: "KeyJ" })))).toBe("mail.next");
+    expect(idOf(feed(key("ξ", { code: "KeyJ" })))).toBe("mail.next");
+  });
+
   it("named keys are never remapped", () => {
     expect(effectiveKey(key("Escape", { code: "Escape" }))).toBe("Escape");
     expect(effectiveKey(key("Enter", { code: "KeyJ" }))).toBe("Enter");

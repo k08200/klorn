@@ -48,6 +48,7 @@ export interface LaneMoveNotice {
 const REFUSAL_KEYS: Record<string, string> = {
   not_found: "undo.lane.notClassified",
   override_conflict: "undo.lane.moveFailed",
+  rate_limited: "undo.lane.rateLimited",
   undo_expired: "undo.lane.expired",
   undo_conflict: "undo.lane.conflict",
 };
@@ -55,7 +56,9 @@ const REFUSAL_KEYS: Record<string, string> = {
 function refusalMessage(err: unknown, t: (key: string) => string, fallbackKey: string): string {
   const code =
     err instanceof Error
-      ? /"code":"(not_found|override_conflict|undo_expired|undo_conflict)"/.exec(err.message)
+      ? /"code":"(not_found|override_conflict|rate_limited|undo_expired|undo_conflict)"/.exec(
+          err.message,
+        )
       : null;
   return code ? t(REFUSAL_KEYS[code[1]]) : serverErrorMessage(err, t(fallbackKey));
 }

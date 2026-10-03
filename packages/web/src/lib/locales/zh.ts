@@ -1223,6 +1223,7 @@ const zh: Record<string, string> = {
   "undo.lane.notClassified": "这封邮件尚未分类，暂时无法更改。",
   "undo.lane.expired": "已超过可撤销的时间。",
   "undo.lane.conflict": "邮件在此期间已被重新分类，因此未撤销。",
+  "undo.lane.rateLimited": "分类更改过于频繁，请稍后再试。",
   "undo.archive.failed": "无法归档该邮件，已放回列表。",
   // Settings sections (productization plan P3).
   "settings.nav.label": "设置分区",

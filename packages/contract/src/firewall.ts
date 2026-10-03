@@ -129,9 +129,9 @@ export interface FirewallResponse {
 }
 
 /**
- * `POST /api/inbox/firewall/:id` — manual lane override. The undo handle is
- * present only while the server's KEYBOARD_TRIAGE flag is on; a client that
- * gets none simply offers no undo.
+ * A manual lane override that can be undone. Only
+ * `POST /api/inbox/firewall/email/:emailId` returns the undo handle (the older
+ * `POST /api/inbox/firewall/:id` answers `{ ok, tier }` and is not reversible).
  */
 export interface LaneOverrideResponse {
   ok: true;
@@ -160,10 +160,11 @@ export interface LaneOverrideUndoResponse {
 /**
  * Refusals of the two routes above. `undo_*` and `override_conflict` are HTTP
  * 409 and change nothing; `override_conflict` means the row kept changing while
- * the move was applied and the client may simply try again.
+ * the move was applied and the client may simply try again. `rate_limited` is
+ * HTTP 429 from the per-user lane-write limit.
  */
 export interface LaneOverrideErrorResponse {
   ok: false;
-  code: "not_found" | "undo_expired" | "undo_conflict" | "override_conflict";
+  code: "not_found" | "undo_expired" | "undo_conflict" | "override_conflict" | "rate_limited";
   message: string;
 }

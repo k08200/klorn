@@ -434,6 +434,9 @@ export async function undoAttentionOverride(
   return { ok: true, tier: restoredTier, alreadyUndone: false };
 }
 
+/** The shape Date.prototype.toISOString() writes, as a POSIX regex. */
+const ISO_INSTANT_PATTERN = "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$";
+
 /** How long a snapshot may sit on a row before the sweep removes it. */
 export const OVERRIDE_UNDO_RETENTION_MS = 24 * 60 * 60 * 1000;
 
@@ -449,12 +452,20 @@ export const OVERRIDE_UNDO_RETENTION_MS = 24 * 60 * 60 * 1000;
  * run, like the aging sweep next to it.
  */
 export async function sweepOverrideUndoSnapshots(now: Date = new Date()): Promise<number> {
-  const cutoff = new Date(now.getTime() - OVERRIDE_UNDO_RETENTION_MS);
+  // `at` is always written by toISOString(): fixed width, UTC, so text order
+  // IS time order and no cast is needed. A cast would let one malformed row
+  // fail the whole statement. Compared as text nothing can raise, and a
+  // snapshot whose `at` is missing or not in that shape is swept as well: it
+  // could never be undone (parseSnapshot rejects it) and would otherwise stay.
+  const cutoff = new Date(now.getTime() - OVERRIDE_UNDO_RETENTION_MS).toISOString();
   return prisma.$executeRaw`
     UPDATE "AttentionItem"
     SET "overrideUndoToken" = NULL, "overrideUndo" = NULL
     WHERE "overrideUndo" IS NOT NULL
-      AND ("overrideUndo"->>'at')::timestamptz < ${cutoff}`;
+      AND (
+        COALESCE("overrideUndo"->>'at', '') !~ ${ISO_INSTANT_PATTERN}
+        OR ("overrideUndo"->>'at') COLLATE "C" < ${cutoff}
+      )`;
 }
 
 /**

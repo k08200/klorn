@@ -1340,6 +1340,8 @@ const de: Record<string, string> = {
   "undo.lane.expired": "Zu spät, um diese Verschiebung rückgängig zu machen.",
   "undo.lane.conflict":
     "Die Mail wurde inzwischen neu eingeordnet, daher wurde nichts rückgängig gemacht.",
+  "undo.lane.rateLimited":
+    "Zu viele Lane-Änderungen auf einmal. Warte kurz und versuche es erneut.",
   "undo.archive.failed": "Die Mail konnte nicht archiviert werden. Sie ist wieder in der Liste.",
   // Settings sections (productization plan P3).
   "settings.nav.label": "Einstellungsbereiche",

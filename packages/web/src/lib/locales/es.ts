@@ -1320,6 +1320,8 @@ const es: Record<string, string> = {
     "Este correo aún no está clasificado, así que no tiene carril que cambiar.",
   "undo.lane.expired": "Ya es tarde para deshacer ese movimiento.",
   "undo.lane.conflict": "El correo se reclasificó entretanto, así que no se deshizo el movimiento.",
+  "undo.lane.rateLimited":
+    "Demasiados cambios de carril seguidos. Espera un momento e inténtalo de nuevo.",
   "undo.archive.failed": "No se pudo archivar ese correo. Ha vuelto a la lista.",
   // Settings sections (productization plan P3).
   "settings.nav.label": "Secciones de ajustes",

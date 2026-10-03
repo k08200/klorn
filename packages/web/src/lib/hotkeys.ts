@@ -311,17 +311,24 @@ const CODE_SYMBOLS: Readonly<Record<string, readonly [plain: string, shifted: st
  * The character a flag-gated chord is matched against.
  *
  * A Latin layout is matched by the CHARACTER it produces, so Dvorak, AZERTY
- * and Colemak users press the letter printed on their key. A non-Latin layout
+ * and Colemak users press the letter printed on their key, and an accented or
+ * dotless Latin letter is never mistaken for another key. A non-Latin layout
  * (Korean 2-set typing `ㅓ` on the J key, Russian, Greek) produces a character
  * no hotkey names, so it falls back to the key's POSITION via `event.code`,
  * which is how the Mac app resolves the same shortcuts. Named keys (Escape,
  * Enter) and anything ASCII are left alone. Composition never reaches here:
  * hotkeyBlockReason refuses it first.
  */
+const LATIN_SCRIPT = /\p{Script=Latin}/u;
+
 export function effectiveKey(event: KeyEventLike): string {
   const { key, code } = event;
   const isSingleChar = [...key].length === 1;
   if (!isSingleChar || key.charCodeAt(0) < 0x80 || !code) return key;
+  // A Latin-script character beyond ASCII is still a Latin layout typing what
+  // it means to type: AZERTY's digit row gives é è ç à, Turkish has ı on the I
+  // key. Position would turn those into 2 / 7 / 9 / 0 and i.
+  if (LATIN_SCRIPT.test(key)) return key;
   const letter = /^Key([A-Z])$/.exec(code);
   if (letter) return event.shiftKey ? letter[1] : letter[1].toLowerCase();
   const digit = /^Digit([0-9])$/.exec(code);

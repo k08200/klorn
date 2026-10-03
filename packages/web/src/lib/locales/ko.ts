@@ -1302,6 +1302,7 @@ const ko: Record<string, string> = {
   "undo.lane.notClassified": "아직 분류되지 않은 메일이라 바꿀 레인이 없습니다.",
   "undo.lane.expired": "되돌릴 수 있는 시간이 지났습니다.",
   "undo.lane.conflict": "그 사이 메일이 다시 분류되어 되돌리지 않았습니다.",
+  "undo.lane.rateLimited": "레인 변경이 너무 많습니다. 잠시 후 다시 시도해 주세요.",
   "undo.archive.failed": "메일을 보관하지 못했습니다. 목록으로 되돌렸습니다.",
   // Settings sections (productization plan P3).
   "settings.nav.label": "설정 섹션",

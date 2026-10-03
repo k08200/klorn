@@ -1294,6 +1294,7 @@ const ja: Record<string, string> = {
   "undo.lane.notClassified": "まだ分類されていないメールのため、変更するレーンがありません。",
   "undo.lane.expired": "取り消せる時間を過ぎました。",
   "undo.lane.conflict": "その後メールが再分類されたため、取り消しませんでした。",
+  "undo.lane.rateLimited": "レーンの変更が多すぎます。少し待ってからもう一度お試しください。",
   "undo.archive.failed": "メールをアーカイブできませんでした。一覧に戻しました。",
   // Settings sections (productization plan P3).
   "settings.nav.label": "設定のセクション",

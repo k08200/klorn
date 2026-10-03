@@ -132,7 +132,7 @@ const idParamSchema = (name: string) =>
     properties: { [name]: { type: "string", minLength: 1, maxLength: 128 } },
   }) as const;
 
-/** Override wire shape: the undo handle rides along only while the flag is on. */
+/** By-email override wire shape: the undo handle is there while the flag is on. */
 function overrideWire(
   result: Extract<AttentionOverrideResult, { ok: true }>,
 ): LaneOverrideResponse {
@@ -160,7 +160,8 @@ const LANE_WRITE_RATE_LIMIT = { max: 120, timeWindow: "1 minute" } as const;
  * behind a shared address must not spend other users' budget, and one user on
  * many addresses must not multiply theirs. A route-level preHandler runs after
  * the plugin's requireAuth, so the user id is known. No limiter without the
- * rate-limit plugin (route tests).
+ * rate-limit plugin (route tests). The app-wide per-IP limit (100/min) still
+ * applies on top of this one.
  */
 function laneWriteLimiter(app: FastifyInstance) {
   const limiter = app.hasDecorator("createRateLimit")
@@ -174,16 +175,16 @@ function laneWriteLimiter(app: FastifyInstance) {
     const state = await limiter(request);
     if (state.isAllowed || !state.isExceeded) return;
     reply.header("retry-after", String(state.ttlInSeconds));
-    return reply
-      .code(429)
-      .send({ ok: false, message: "Too many lane changes. Try again shortly." });
+    const body: LaneOverrideErrorResponse = {
+      ok: false,
+      code: "rate_limited",
+      message: "Too many lane changes. Try again shortly.",
+    };
+    return reply.code(429).send(body);
   };
 }
 
-const OVERRIDE_REFUSALS = {
-  not_found: { status: 404, message: "Attention item not found." },
-  conflict: { status: 409, message: "This mail changed while it was being moved. Try again." },
-} as const;
+const OVERRIDE_CONFLICT_MESSAGE = "This mail changed while it was being moved. Try again.";
 
 const UNDO_REFUSALS = {
   not_found: { status: 404, code: "not_found", message: "Attention item not found." },
@@ -949,20 +950,21 @@ export async function firewallRoutes(app: FastifyInstance) {
         body: overrideBodySchema,
       },
     },
-    async (request, reply): Promise<LaneOverrideResponse | { ok: false; message: string }> => {
+    async (request, reply): Promise<{ ok: true; tier: Tier } | { ok: false; message: string }> => {
       const userId = getUserId(request);
       const { id } = request.params;
       const { tier } = request.body;
 
-      const result = await overrideAttentionTier(userId, id, tier, { reversible: true });
+      // Not reversible: no client of this route (firewall board, onboarding
+      // review, desktop) reads an undo token. The undo lives on the by-email
+      // route the mail list and reader use.
+      const result = await overrideAttentionTier(userId, id, tier);
       if (!result.ok) {
-        // "conflict" exists only with KEYBOARD_TRIAGE on (see overrideAttentionTier).
-        const refusal = OVERRIDE_REFUSALS[result.reason];
-        reply.code(refusal.status);
-        return { ok: false, message: refusal.message };
+        reply.code(404);
+        return { ok: false, message: "Attention item not found." };
       }
 
-      return overrideWire(result);
+      return { ok: true, tier: result.tier };
     },
   );
 
@@ -1018,9 +1020,8 @@ export async function firewallRoutes(app: FastifyInstance) {
             message: "This mail has not been classified yet.",
           };
         }
-        const refusal = OVERRIDE_REFUSALS.conflict;
-        reply.code(refusal.status);
-        return { ok: false, code: "override_conflict", message: refusal.message };
+        reply.code(409);
+        return { ok: false, code: "override_conflict", message: OVERRIDE_CONFLICT_MESSAGE };
       }
       return { ...overrideWire(result), itemId };
     },

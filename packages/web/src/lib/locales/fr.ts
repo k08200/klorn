@@ -1326,6 +1326,8 @@ const fr: Record<string, string> = {
   "undo.lane.expired": "Il est trop tard pour annuler ce déplacement.",
   "undo.lane.conflict":
     "Le courrier a été reclassé entre-temps : le déplacement n'a pas été annulé.",
+  "undo.lane.rateLimited":
+    "Trop de changements de voie à la suite. Patientez un instant, puis réessayez.",
   "undo.archive.failed": "Impossible d'archiver ce courrier. Il est de retour dans la liste.",
   // Settings sections (productization plan P3).
   "settings.nav.label": "Sections des réglages",

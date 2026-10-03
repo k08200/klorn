@@ -185,6 +185,30 @@ describe("overrideAttentionTier with KEYBOARD_TRIAGE off", () => {
     expect(item().overrideUndo).toBeNull();
   });
 
+  it("lock-in: the write carries no undo column and no updatedAt guard, reversible or not", async () => {
+    vi.stubEnv("KEYBOARD_TRIAGE", "");
+    const update = (prisma as unknown as { attentionItem: { update: ReturnType<typeof vi.fn> } })
+      .attentionItem.update;
+    const findFirst = (
+      prisma as unknown as { attentionItem: { findFirst: ReturnType<typeof vi.fn> } }
+    ).attentionItem.findFirst;
+    for (const options of [undefined, { reversible: true }]) {
+      update.mockClear();
+      findFirst.mockClear();
+      await overrideAttentionTier("user-1", "item-1", "QUEUE", options);
+      const { where, data } = update.mock.calls[0][0] as { where: Row; data: Row };
+      expect(where).toEqual({ id: "item-1" });
+      expect(Object.keys(data).sort()).toEqual([
+        "agentTierKeyId",
+        "agentTierSetAt",
+        "isManualOverride",
+        "tier",
+        "tierReason",
+      ]);
+      expect(findFirst.mock.calls[0][0].select).toEqual({ id: true, source: true, sourceId: true });
+    }
+  });
+
   it("refuses an undo as a conflict (nothing was recorded)", async () => {
     vi.stubEnv("KEYBOARD_TRIAGE", "");
     await overrideAttentionTier("user-1", "item-1", "QUEUE", { reversible: true });
@@ -521,8 +545,17 @@ describe("snapshot retention", () => {
     executeRaw.mockResolvedValueOnce(3);
     const now = new Date("2026-10-05T00:00:00.000Z");
     expect(await sweepOverrideUndoSnapshots(now)).toBe(3);
-    const [strings, cutoff] = executeRaw.mock.calls[0] as [TemplateStringsArray, Date];
-    expect(strings.join("?")).toMatch(/UPDATE "AttentionItem"[\s\S]*"overrideUndo" IS NOT NULL/);
-    expect(cutoff).toEqual(new Date(now.getTime() - OVERRIDE_UNDO_RETENTION_MS));
+    const [strings, shape, cutoff] = executeRaw.mock.calls[0] as [
+      TemplateStringsArray,
+      string,
+      string,
+    ];
+    expect(new RegExp(shape).test(now.toISOString())).toBe(true);
+    expect(new RegExp(shape).test("not-a-date")).toBe(false);
+    const sql = strings.join("?");
+    expect(sql).toMatch(/UPDATE "AttentionItem"[\s\S]*"overrideUndo" IS NOT NULL/);
+    // No cast: one malformed snapshot must not be able to fail the sweep.
+    expect(sql).not.toMatch(/::/);
+    expect(cutoff).toBe(new Date(now.getTime() - OVERRIDE_UNDO_RETENTION_MS).toISOString());
   });
 });

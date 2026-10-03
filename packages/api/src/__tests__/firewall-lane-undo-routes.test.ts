@@ -88,14 +88,10 @@ describe("flag off", () => {
 });
 
 describe("flag on", () => {
-  it("POST /:id returns the undo handle", async () => {
+  it("POST /:id stays as it was: not reversible, no undo handle (no client reads one)", async () => {
     const res = await post("/api/inbox/firewall/item-1", { tier: "QUEUE" });
-    expect(res.json()).toEqual({
-      ok: true,
-      tier: "QUEUE",
-      undoToken: "tok-1",
-      undoExpiresAt: UNDO.expiresAt,
-    });
+    expect(res.json()).toEqual({ ok: true, tier: "QUEUE" });
+    expect(override.overrideAttentionTier).toHaveBeenCalledWith("user-1", "item-1", "QUEUE");
   });
 
   it("POST /:id/undo reverses for the calling user only", async () => {
@@ -146,21 +142,11 @@ describe("flag on", () => {
     expect(override.overrideAttentionTier).not.toHaveBeenCalled();
   });
 
-  it("a move that kept losing to concurrent writes is a retryable 409, on both routes", async () => {
+  it("a move that kept losing to concurrent writes is a retryable 409", async () => {
     override.overrideAttentionTier.mockResolvedValue({ ok: false, reason: "conflict" });
     const byEmail = await post("/api/inbox/firewall/email/email-1", { tier: "INFO" });
     expect(byEmail.statusCode).toBe(409);
     expect(byEmail.json()).toMatchObject({ ok: false, code: "override_conflict" });
-    const byId = await post("/api/inbox/firewall/item-1", { tier: "QUEUE" });
-    expect(byId.statusCode).toBe(409);
-    expect(byId.json()).toMatchObject({ ok: false });
-  });
-
-  it("the web's own override route asks for a reversible override", async () => {
-    await post("/api/inbox/firewall/item-1", { tier: "QUEUE" });
-    expect(override.overrideAttentionTier).toHaveBeenCalledWith("user-1", "item-1", "QUEUE", {
-      reversible: true,
-    });
   });
 
   it("POST /email/:emailId refuses the retired AUTO lane", async () => {
@@ -192,7 +178,9 @@ describe("lane-write rate limit is per user, not per IP", () => {
     asUser("user-a");
     const first = await Promise.all(Array.from({ length: 121 }, move));
     expect(first.filter((r) => r.statusCode === 200)).toHaveLength(120);
-    expect(first.filter((r) => r.statusCode === 429)).toHaveLength(1);
+    const limited = first.filter((r) => r.statusCode === 429);
+    expect(limited).toHaveLength(1);
+    expect(limited[0].json()).toMatchObject({ ok: false, code: "rate_limited" });
 
     asUser("user-b");
     expect((await move()).statusCode).toBe(200);
