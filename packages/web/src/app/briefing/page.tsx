@@ -387,7 +387,7 @@ function BriefingView() {
           </p>
           <p className="mb-4 text-xs text-ink-dim">
             Change the automatic briefing time in{" "}
-            <Link href="/settings" className="text-accent-deep hover:underline">
+            <Link href="/settings/notifications" className="text-accent-deep hover:underline">
               Settings
             </Link>
             .
@@ -482,7 +482,7 @@ function BriefingDeliveryStatus({ status }: { status: BriefingStatus }) {
     <section className="panel-elevated mb-4 rounded-2xl border border-line/70 bg-surface-panel p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold text-ink">Briefing delivery</h2>
-        <Link href="/settings" className="text-xs text-accent-deep hover:underline">
+        <Link href="/settings/notifications" className="text-xs text-accent-deep hover:underline">
           Settings
         </Link>
       </div>
@@ -545,20 +545,20 @@ function deliveryGuidance(status: BriefingStatus): DeliveryGuidance | null {
   if (!status.automation.configured || status.automation.reason === "no_config") {
     return {
       message: "No briefing time is set. Choose when you want the morning brief to arrive.",
-      action: { label: "Set briefing time", href: "/settings" },
+      action: { label: "Set briefing time", href: "/settings/notifications" },
     };
   }
   if (status.automation.reason === "disabled") {
     return {
       message: "Daily briefing automation is off. Turn it on to receive a brief every morning.",
-      action: { label: "Turn on", href: "/settings" },
+      action: { label: "Turn on", href: "/settings/notifications" },
     };
   }
   if (status.push.state === "no_subscription") {
     return {
       message:
         "Push isn't set up on this device — install Klorn as an app to receive the morning push.",
-      action: { label: "Install instructions", href: "/settings" },
+      action: { label: "Install instructions", href: "/settings/notifications" },
     };
   }
   if (status.push.reason === "permission_denied") {
@@ -581,7 +581,7 @@ function deliveryGuidance(status: BriefingStatus): DeliveryGuidance | null {
   if (status.push.state === "skipped" && status.push.reason === "quiet_hours") {
     return {
       message: "Push was skipped because quiet hours were active when the briefing fired.",
-      action: { label: "Adjust quiet hours", href: "/settings" },
+      action: { label: "Adjust quiet hours", href: "/settings/notifications" },
     };
   }
   return null;

@@ -214,7 +214,7 @@ const ko: Record<string, string> = {
   "settings.morningBriefing.desc":
     "자리를 비웠어도 시간대에 맞춰 하루 한 번 결정 브리핑을 보냅니다.",
   "settings.morningBriefing.timezoneNote":
-    "시간대: {timezone}. 위의 프로필 섹션에서 바꿀 수 있습니다.",
+    "시간대: {timezone}. '모양 및 언어'에서 바꿀 수 있습니다.",
   "settings.field.deliveryTime": "발송 시각",
   "settings.deliveryTime.defaultNote": "기본값은 06:00입니다.",
   "settings.pushNotifications.title": "푸시 알림",
@@ -1252,6 +1252,18 @@ const ko: Record<string, string> = {
   "pmf.thanks": "감사합니다 — 기록됐습니다.",
   "pmf.failed": "기록하지 못했습니다. 저장된 것은 없습니다 — 다시 시도해 주세요.",
   "pmf.later": "나중에",
+  // Settings sections (productization plan P3).
+  "settings.nav.label": "설정 섹션",
+  "settings.nav.accounts": "계정 및 소스",
+  "settings.nav.lanes": "레인 및 규칙",
+  "settings.nav.assistant": "어시스턴트",
+  "settings.nav.notifications": "알림",
+  "settings.nav.team": "팀",
+  "settings.nav.integrations": "연동",
+  "settings.nav.appearance": "모양 및 언어",
+  "settings.nav.accountBilling": "계정 및 결제",
+  "settings.nav.data": "데이터 및 개인정보",
+  "settings.team.unavailable": "이 계정에서는 팀 기능을 사용할 수 없습니다.",
 };
 
 export default ko;

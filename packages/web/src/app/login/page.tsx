@@ -492,11 +492,11 @@ function returnDestinationLabel(path: string, t: (key: string) => string): strin
   if (cleanPath === "/email" || cleanPath.startsWith("/email/")) return t("nav.mail");
   if (cleanPath === "/calendar") return t("nav.calendar");
   if (cleanPath === "/briefing") return t("nav.briefing");
-  if (cleanPath === "/settings") return t("settings.title");
   if (cleanPath.startsWith("/settings/memory")) return t("auth.destMemory");
   if (cleanPath.startsWith("/settings/usage")) return t("auth.destUsage");
   if (cleanPath.startsWith("/settings/status")) return t("auth.destStatus");
   if (cleanPath.startsWith("/settings/email-feedback")) return t("auth.destFeedback");
+  if (cleanPath === "/settings" || cleanPath.startsWith("/settings/")) return t("settings.title");
   if (cleanPath === "/billing") return t("nav.billing");
   if (cleanPath === "/files") return t("auth.destFiles");
   if (cleanPath === "/admin" || cleanPath.startsWith("/admin/")) return t("nav.admin");
