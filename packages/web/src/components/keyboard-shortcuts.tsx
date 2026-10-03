@@ -2,6 +2,16 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
+import {
+  createHotkeyMatcher,
+  hotkeyBlockReason,
+  hotkeyRegistry,
+  matchLegacyHotkey,
+} from "../lib/hotkeys";
+import { modalStack } from "../lib/modal-stack";
+import { useHotkeys, useKeyboardTriage } from "../lib/use-hotkeys";
+import { ShortcutSheet } from "./shortcut-sheet";
+import { useToast } from "./toast";
 
 const SHORTCUTS = [
   { keys: ["Cmd", "K"], label: "Command palette" },
@@ -10,41 +20,109 @@ const SHORTCUTS = [
   { keys: ["Esc"], label: "Close window" },
 ];
 
+/**
+ * The one keydown listener for app-wide shortcuts. Every key it answers comes
+ * from the HOTKEYS table (lib/hotkeys); pages mount handlers for the ids they
+ * own (lib/use-hotkeys) and this component dispatches to them.
+ *
+ * With KEYBOARD_TRIAGE off only the three legacy chords exist (Cmd/Ctrl+K, +B,
+ * +/) and the help dialog is the one below, unchanged. With it on, the rest of
+ * the table is live and `?` / Cmd+/ open the ShortcutSheet instead.
+ */
 export default function KeyboardShortcuts() {
   const router = useRouter();
+  const triage = useKeyboardTriage();
+  const { toast } = useToast();
   const [showHelp, setShowHelp] = useState(false);
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
-  const titleId = useId();
+
+  // Handlers this component owns: briefing, help, and the `g` destinations.
+  useHotkeys(
+    "global",
+    {
+      "nav.briefing": { run: () => router.push("/briefing") },
+      "help.toggle": { run: () => setShowHelp((prev) => !prev) },
+      "help.open": { run: () => setShowHelp(true) },
+      "go.mail": { run: () => router.push("/email") },
+      "go.calendar": { run: () => router.push("/calendar") },
+      "go.queue": { run: () => router.push("/inbox") },
+      "go.briefing": { run: () => router.push("/briefing") },
+      "go.settings": { run: () => router.push("/settings") },
+    },
+    true,
+  );
 
   useEffect(() => {
+    const matcher = createHotkeyMatcher();
+
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && showHelp) {
-        setShowHelp(false);
+      // Legacy chords first and unguarded, exactly as before the registry.
+      const legacy = matchLegacyHotkey(e);
+      if (legacy) {
+        const owner = hotkeyRegistry.resolve(legacy.id);
+        if (!owner) return;
+        e.preventDefault();
+        owner.run();
         return;
       }
+      // Something closer to the key already handled it (a menu closing on
+      // Escape, a widget's own shortcut): it is not ours as well.
+      if (!triage || e.defaultPrevented) return;
 
-      const meta = e.metaKey || e.ctrlKey;
-      if (!meta) return;
-
-      switch (e.key) {
-        case "b":
-          e.preventDefault();
-          router.push("/briefing");
-          break;
-        case "/":
-          e.preventDefault();
-          setShowHelp((prev) => !prev);
-          break;
+      const target = e.target instanceof HTMLElement ? e.target : null;
+      if (hotkeyBlockReason(e, describeTarget(target), isModalOpen())) {
+        matcher.reset();
+        return;
       }
+      const ctx = { triage, scopes: hotkeyRegistry.activeScopes() };
+      const match = matcher.feed(e, describeTarget(target), (def) => def.enabled(ctx), Date.now());
+      if (match.kind === "pending") {
+        e.preventDefault();
+        return;
+      }
+      if (match.kind !== "match") return;
+      const owner = hotkeyRegistry.resolve(match.def.id);
+      if (!owner) return;
+      e.preventDefault();
+      const reason = owner.disabledReason?.() ?? null;
+      if (reason) toast(reason, "info");
+      else owner.run();
     };
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [router, showHelp]);
+  }, [triage, toast]);
+
+  if (triage) return <ShortcutSheet open={showHelp} onClose={() => setShowHelp(false)} />;
+  return showHelp ? <LegacyShortcutsDialog onClose={() => setShowHelp(false)} /> : null;
+}
+
+function describeTarget(target: HTMLElement | null) {
+  if (!target) return null;
+  return {
+    tagName: target.tagName,
+    type: target instanceof HTMLInputElement ? target.type : undefined,
+    isContentEditable: target.isContentEditable,
+    role: target.getAttribute("role"),
+  };
+}
+
+/** Any overlay: the shared modal stack, or a dialog that predates it. */
+function isModalOpen(): boolean {
+  return modalStack.size() > 0 || document.querySelector('[aria-modal="true"]') !== null;
+}
+
+/** The pre-flag help dialog, kept as it was for the flag-off path. */
+function LegacyShortcutsDialog({ onClose }: { onClose: () => void }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  const titleId = useId();
 
   useEffect(() => {
-    if (!showHelp) return;
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
     previousFocusRef.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const focusTimer = window.setTimeout(() => {
@@ -52,7 +130,7 @@ export default function KeyboardShortcuts() {
     }, 0);
     const handler = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setShowHelp(false);
+        onCloseRef.current();
         return;
       }
       if (event.key !== "Tab") return;
@@ -74,14 +152,12 @@ export default function KeyboardShortcuts() {
       window.removeEventListener("keydown", handler);
       previousFocusRef.current?.focus();
     };
-  }, [showHelp]);
-
-  if (!showHelp) return null;
+  }, []);
 
   return (
     <div
       className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4"
-      onClick={() => setShowHelp(false)}
+      onClick={onClose}
     >
       <div
         ref={dialogRef}
@@ -116,7 +192,7 @@ export default function KeyboardShortcuts() {
         </p>
         <button
           type="button"
-          onClick={() => setShowHelp(false)}
+          onClick={onClose}
           className="mt-4 w-full min-h-11 rounded-lg border border-line text-sm text-ink-mid transition hover:border-accent/40 hover:text-accent-deep"
         >
           Close
