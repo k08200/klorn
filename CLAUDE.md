@@ -65,8 +65,11 @@ manual backup/restore drill (the free tier has no automated backups):
 
 `docs/product-vocabulary.md` is the canonical word list — read it before naming
 a surface or writing user-facing copy. The load-bearing ones: **"inbox" means a
-connected mail account, never a screen**; the approval surface is the
-**Decision queue**; the lane view is the **Firewall board**. A lane is a
+connected mail account, never a screen**; home is **Today**; the approval
+surface is **Approvals** under **Assistant** (formerly "Decision queue"); lanes
+are Mail's primary filter (the "Firewall board" screen is retired as a
+user-facing term). The old names persist in code until the migration ships
+behind `UNIFIED_HOME`. A lane is a
 classification and never an action — delegation is the separate agent mode
 (`SHADOW` / `SUGGEST` / `AUTO`), which is not the same thing as the retired
 `AUTO` lane. App language / notification language / reply language are three
