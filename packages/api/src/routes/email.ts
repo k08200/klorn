@@ -61,6 +61,7 @@ import { executeOneClickUnsubscribe, parseMailtoTarget } from "../mail/list-unsu
 import { getMeetingContext } from "../mail/meeting-context.js";
 import { mailActionsFor } from "../mail/providers/dispatch.js";
 import { isPublicMailboxDomain } from "../mail/public-mailbox-domains.js";
+import { offeredDraftFor } from "../mail/reply-state.js";
 import { getSenderDossier } from "../mail/sender-dossier.js";
 import { getThreadBrief } from "../mail/thread-brief.js";
 import {
@@ -1274,6 +1275,9 @@ export async function emailRoutes(app: FastifyInstance) {
         actionItems,
         sentiment: dbEmail.sentiment,
         needsReplyReason: dbEmail.needsReplyReason,
+        // A reply written ahead of time (proactive drafts) — the client
+        // offers it in the composer; null once answered or when none exists.
+        proactiveDraft: offeredDraftFor(dbEmail),
         needsReplyConfidence: dbEmail.needsReplyConfidence,
         needsReply: looksReplyNeeded({
           needsReply: dbEmail.needsReply,

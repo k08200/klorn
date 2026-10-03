@@ -150,7 +150,6 @@
 
 /* Preferences — shell */
 "prefs.title" = "Preferences";
-"prefs.done" = "Done";
 "prefs.section.notifications" = "NOTIFICATIONS";
 "prefs.section.general" = "GENERAL";
 "prefs.section.topBar" = "TOP BAR";
@@ -601,3 +600,22 @@
 "waiting.empty" = "Nothing is waiting on a reply.";
 "waiting.days" = "%d days";
 "waiting.row.a11y" = "%@ — %@, waiting %d days";
+
+/* Settings window + app menus (M0/M1) */
+"settings.tab.general" = "General";
+"settings.tab.accounts" = "Accounts";
+"settings.tab.assistant" = "Assistant";
+"settings.tab.notifications" = "Notifications";
+"settings.tab.appearance" = "Appearance";
+"settings.tab.privacy" = "Privacy";
+"settings.signedOutNote" = "Sign in to Klorn to see these settings.";
+"menu.message" = "Message";
+"menu.go" = "Go";
+"menu.compose" = "New Email";
+"menu.find" = "Search Mail";
+"menu.moveToLane" = "Move to Lane";
+
+/* Proactive reply drafts */
+"chip.draftReady" = "Draft ready";
+"reading.openDraft" = "Open draft";
+"reading.preparedDraft" = "Klorn drafted this ahead of time — review it before sending.";

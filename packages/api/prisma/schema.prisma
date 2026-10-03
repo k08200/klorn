@@ -17,6 +17,12 @@ model User {
   primaryInboxPurpose       String?
   companyDomains            String[]                   @default([])
   triagePriorities          String?
+  /// Proactive reply drafts: today's slot counter (mail/proactive-drafts.ts).
+  /// proactiveDraftDay is the UTC day ("YYYY-MM-DD") the count belongs to;
+  /// both are only ever changed by conditional updates, which is what makes
+  /// PROACTIVE_DRAFT_DAILY_CAP a hard bound.
+  proactiveDraftDay         String?
+  proactiveDraftCount       Int                        @default(0)
   passwordHash              String?
   name                      String?
   role                      UserRole                   @default(USER)
@@ -1197,6 +1203,10 @@ model EmailMessage {
   needsReplyConfidence    Float             @default(0.0)
   /// When the user answered this mail through Klorn (reply-state.ts). Null = not via Klorn.
   repliedAt               DateTime?
+  /// A reply Klorn drafted ahead of time (proactive-drafts.ts). Offered in the
+  /// reading pane — never sent. proactiveDraftAt stamps the ATTEMPT (cap + retry guard).
+  proactiveDraft          String?
+  proactiveDraftAt        DateTime?
   sentiment               String? // positive | negative | neutral
   receivedAt              DateTime // Original email date
   syncedAt                DateTime          @default(now()) // When we synced from Gmail

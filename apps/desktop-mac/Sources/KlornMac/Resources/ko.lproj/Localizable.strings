@@ -150,7 +150,6 @@
 
 /* Preferences — shell */
 "prefs.title" = "환경설정";
-"prefs.done" = "완료";
 "prefs.section.notifications" = "알림";
 "prefs.section.general" = "일반";
 "prefs.section.topBar" = "상단 바";
@@ -601,3 +600,22 @@
 "waiting.empty" = "답장을 기다리는 메일이 없습니다.";
 "waiting.days" = "%d일째";
 "waiting.row.a11y" = "%@ — %@, %d일째 회신 대기";
+
+/* Settings window + app menus (M0/M1) */
+"settings.tab.general" = "일반";
+"settings.tab.accounts" = "계정";
+"settings.tab.assistant" = "어시스턴트";
+"settings.tab.notifications" = "알림";
+"settings.tab.appearance" = "화면";
+"settings.tab.privacy" = "개인정보";
+"settings.signedOutNote" = "이 설정을 보려면 Klorn에 로그인하세요.";
+"menu.message" = "메시지";
+"menu.go" = "이동";
+"menu.compose" = "새 메일";
+"menu.find" = "메일 검색";
+"menu.moveToLane" = "레인 이동";
+
+/* Proactive reply drafts */
+"chip.draftReady" = "초안 준비됨";
+"reading.openDraft" = "초안 열기";
+"reading.preparedDraft" = "Klorn이 미리 써 둔 초안입니다 — 보내기 전에 확인하세요.";

@@ -65,6 +65,10 @@ export interface FirewallEmailContext {
    *  answered through Klorn (recorded). Absent / null = no claim. Replies
    *  sent from Gmail directly are not seen. */
   replyState?: "needsReply" | "replied" | null;
+  /** A reply draft is already written for this mail (proactive drafts) and
+   *  it has not been answered. Absent = none. The draft itself rides on the
+   *  detail response. */
+  draftReady?: boolean;
 }
 
 export type RowSignalWire =

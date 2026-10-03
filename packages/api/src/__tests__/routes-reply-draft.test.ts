@@ -42,7 +42,7 @@ vi.mock("../mail/gmail.js", () => ({
   GMAIL_TOOLS: [],
 }));
 
-import { registerEmailRepliesRoutes } from "../routes/email-replies.js";
+import { draftReplyForEmailId, registerEmailRepliesRoutes } from "../routes/email-replies.js";
 
 const EMAIL = {
   id: "e1",
@@ -78,7 +78,32 @@ function systemPrompt(): string {
   return request?.messages?.find((m: { role: string }) => m.role === "system")?.content ?? "";
 }
 
+describe("draftReplyForEmailId — the proactive sweep's builder", () => {
+  it("drafts the user's own row at background priority with the route's prompt", async () => {
+    createCompletion.mockResolvedValue({ choices: [{ message: { content: " 3pm works. " } }] });
+    expect(await draftReplyForEmailId("user-1", "e1")).toBe("3pm works.");
+    expect(emailFindFirst).toHaveBeenCalledWith({ where: { id: "e1", userId: "user-1" } });
+    const [request, options] = createCompletion.mock.calls[0];
+    expect(request.model).toBe("test-draft-model");
+    expect(options).toMatchObject({ userId: "user-1", priority: "background" });
+  });
+
+  it("returns null without an LLM call when the row is gone or foreign", async () => {
+    emailFindFirst.mockResolvedValue(null);
+    expect(await draftReplyForEmailId("user-1", "nope")).toBeNull();
+    expect(createCompletion).not.toHaveBeenCalled();
+  });
+});
+
 describe("POST /api/email/:id/reply-draft", () => {
+  it("an on-demand draft stays foreground — no priority is passed", async () => {
+    createCompletion.mockResolvedValue({ choices: [{ message: { content: "ok" } }] });
+    const app = await buildApp();
+    await app.inject({ method: "POST", url: "/api/email/e1/reply-draft", payload: {} });
+    expect(createCompletion.mock.calls[0][1]).not.toHaveProperty("priority");
+    await app.close();
+  });
+
   it("returns a drafted reply on the happy path", async () => {
     createCompletion.mockResolvedValue({
       choices: [{ message: { content: "Hi, 3pm works for me. — Yongrean" } }],

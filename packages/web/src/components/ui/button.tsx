@@ -15,7 +15,9 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantStyles: Record<Variant, string> = {
   primary:
-    "bg-accent-solid hover:bg-accent-solid-hover text-accent-solid-ink disabled:bg-surface-inset disabled:text-ink-dim disabled:shadow-none shadow-lg shadow-accent/25 hover:shadow-xl hover:shadow-accent/35 hover:-translate-y-px active:translate-y-0 transition-all",
+    // Flat fill: no coloured shadow and no hover lift (productization plan
+    // §2). Hierarchy comes from the solid accent alone.
+    "bg-accent-solid hover:bg-accent-solid-hover text-accent-solid-ink disabled:bg-surface-inset disabled:text-ink-dim",
   secondary:
     "bg-surface-panel hover:bg-surface-hover text-ink border border-line hover:border-line-strong",
   danger:
@@ -26,9 +28,10 @@ const variantStyles: Record<Variant, string> = {
 const sizeStyles: Record<Size, string> = {
   // `sm` keeps its compact visual padding but gets a ≥44px hit area
   // (min-h-11) so touch targets stay WCAG 2.5.8 compliant (was h-~28px).
-  sm: "px-3 py-1.5 min-h-11 text-xs gap-1.5",
-  md: "px-4 py-2.5 text-sm gap-2",
-  lg: "px-5 py-3 text-sm gap-2",
+  // All sizes use the `label` type role (13/18/500); size changes padding only.
+  sm: "px-3 py-1.5 min-h-11 gap-1.5",
+  md: "px-4 py-2.5 min-h-11 gap-2",
+  lg: "px-5 py-3 min-h-11 gap-2",
 };
 
 export default function Button({
@@ -45,7 +48,7 @@ export default function Button({
     <button
       type="button"
       disabled={disabled || loading}
-      className={`inline-flex items-center justify-center font-medium rounded-lg transition-all duration-150 cursor-pointer disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 focus-visible:ring-offset-1 focus-visible:ring-offset-white ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}
+      className={`focus-ring inline-flex items-center justify-center text-label rounded-control transition-colors duration-120 ease-fluid cursor-pointer disabled:cursor-not-allowed ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}
       {...props}
     >
       {loading ? (

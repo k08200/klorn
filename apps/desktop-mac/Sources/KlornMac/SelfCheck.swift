@@ -891,6 +891,27 @@ func runSelfChecks() async -> Bool {
             EmailContext.self, from: Data(#"{"emailDbId":"e"}"#.utf8))
         check("replyState — decoded when present, nil on an older server",
               owed?.replyState == "needsReply" && older?.replyState == nil)
+        // Proactive drafts (2026-09-28): the row flag and the chip wording.
+        let drafted = try? JSONDecoder().decode(
+            EmailContext.self,
+            from: Data(#"{"emailDbId":"e","replyState":"needsReply","draftReady":true}"#.utf8))
+        check("draftReady — decoded when present, false on an older server",
+              drafted?.draftReady == true && owed?.draftReady == false
+              && older?.draftReady == false)
+        check("reply chip — a waiting draft replaces 'needs reply', never 'answered'",
+              ReplyStateChip.kind(state: "needsReply", draftReady: true) == .draftReady
+              && ReplyStateChip.kind(state: "needsReply", draftReady: false) == .needsReply
+              && ReplyStateChip.kind(state: "replied", draftReady: true) == .answered
+              && ReplyStateChip.kind(state: "other", draftReady: true) == nil)
+        func detail(_ json: String) -> EmailDetail? {
+            try? JSONDecoder().decode(EmailDetail.self, from: Data(json.utf8))
+        }
+        check("prepared draft — trimmed when present, nil when blank or absent",
+              detail(#"{"id":"e","proactiveDraft":"  3pm works.  "}"#)?.preparedDraft == "3pm works."
+              && detail(#"{"id":"e","proactiveDraft":"   "}"#)?.preparedDraft == nil
+              && detail(#"{"id":"e","proactiveDraft":null}"#)?.preparedDraft == nil
+              && detail(#"{"id":"e"}"#) != nil
+              && detail(#"{"id":"e"}"#)?.preparedDraft == nil)
     }
 
     print("Row signals + chronological inbox:")
@@ -1749,9 +1770,15 @@ func runSelfChecks() async -> Bool {
               let text = try? String(contentsOf: url, encoding: .utf8) else { return total }
         return total + text.components(separatedBy: "actions.onSignOut()").count - 1
     }
-    // Three, one per surface that has an account area: the expanded panel's
-    // account column, the full sidebar, and Preferences. None in a header.
-    check("sign-out is offered once per surface, not twice", signOutCallSites == 3)
+    // One per surface that has an account area: the expanded panel's account
+    // column and the full sidebar (via actions), plus the Settings window's
+    // Accounts tab, which has no TopBarActions and calls the model directly.
+    // None in a header.
+    let settingsSignOut = (try? String(
+        contentsOf: sourceDir.appendingPathComponent("PreferencesView.swift"), encoding: .utf8))
+        .map { $0.components(separatedBy: "model.signOut()").count - 1 } ?? 0
+    check("sign-out is offered once per surface, not twice",
+          signOutCallSites == 2 && settingsSignOut == 1)
     let headerSignOut = swiftFiles.contains { url in
         guard let text = try? String(contentsOf: url, encoding: .utf8) else { return false }
         return text.contains("Button(L(\"auth.signOut\")")
@@ -2053,6 +2080,37 @@ func runSelfChecks() async -> Bool {
         check("dark: engage (non-text) clears 3:1 on a raised card",
               contrast(Theme.engage, on: darkRaised) >= 3.0)
     }
+    // Lane palette (FD-4, 2026-10-02): one palette with the web. Pure math on
+    // Theme.laneComponents — no NSColor resolution — so the verdict never
+    // depends on the running machine's appearance. Two guards: the five lane
+    // colors stay pairwise distinct per appearance (the old ramp shipped INFO
+    // and SILENT as near-identical slates), and each one clears the 4.5:1
+    // text floor on the canvas, because `tint` colors text (LaneChip, errors).
+    func rawContrast(_ a: Theme.RGBA, _ b: Theme.RGBA) -> Double {
+        let (x, y) = (luminance(a) + 0.05, luminance(b) + 0.05)
+        return max(x, y) / min(x, y)
+    }
+    let lanes = Tier.allCases
+    for dark in [false, true] {
+        let mode = dark ? "dark" : "light"
+        let canvas = dark ? Theme.bgDark : Theme.bgLight
+        let colors = lanes.map { Theme.laneComponents($0, dark: dark) }
+        // Distinct = some channel differs by ≥ 0.15 (≈ 38/255). INFO vs SILENT
+        // on the old ramp differed by at most 0.07 — that is the regression.
+        var distinct = true
+        for i in colors.indices {
+            for j in colors.indices where j > i {
+                let (a, b) = (colors[i], colors[j])
+                if max(abs(a.r - b.r), abs(a.g - b.g), abs(a.b - b.b)) < 0.15 { distinct = false }
+            }
+        }
+        check("\(mode): the five lane colors are pairwise distinct", distinct)
+        for (tier, color) in zip(lanes, colors) {
+            check("\(mode): \(tier.rawValue) lane ink clears 4.5:1 on the canvas",
+                  rawContrast(color, canvas) >= 4.5)
+        }
+    }
+
     // textDim IS the floor: any extra .opacity() on top drops caption text
     // back under 4.5:1, so both single-line shapes are banned — thinning the
     // color (`textDim.opacity(…)`) and thinning an inline chain
@@ -2116,6 +2174,161 @@ func runSelfChecks() async -> Bool {
     check("mail surface pins a light card in every theme",
           mailWrap.contains("background: #ffffff")
           && mailWrap.contains("color-scheme: light"))
+
+    print("Settings window (M0):")
+    // Every section the old overlay showed lands in exactly one tab — a
+    // regroup that drops one silently removes a setting from the app.
+    let tabbed = SettingsTab.allCases.flatMap(\.sections)
+    check("every Preferences section is in exactly one tab",
+          tabbed.count == PrefsSection.allCases.count
+          && Set(tabbed) == Set(PrefsSection.allCases))
+    check("General is the first tab (macOS convention)",
+          SettingsTab.allCases.first == .general)
+    check("signed out hides only server-backed sections",
+          SettingsTab.allCases.allSatisfy { tab in
+              tab.visibleSections(signedIn: false) == tab.sections.filter { !$0.requiresSignIn }
+              && tab.visibleSections(signedIn: true) == tab.sections
+          })
+    check("signed-out Assistant tab is empty (shows the sign-in note)",
+          SettingsTab.assistant.visibleSections(signedIn: false).isEmpty)
+    check("signed-out Accounts tab still shows sign-in status",
+          SettingsTab.accounts.visibleSections(signedIn: false) == [.account])
+    check("unknown persisted tab falls back to General",
+          SettingsTab.restored("billing") == .general
+          && SettingsTab.restored("privacy") == .privacy)
+    check("every tab title is localized",
+          SettingsTab.allCases.allSatisfy { $0.title != $0.titleKey && !$0.title.isEmpty })
+    check("Settings window fits the smallest supported display",
+          SettingsMetrics.height + SettingsMetrics.chromeHeight
+              <= SettingsMetrics.smallestVisibleHeight)
+    check("an open Settings window keeps the app in Cmd+Tab",
+          TopBarController.activationPolicy(for: .collapsed, settingsOpen: true) == .regular)
+    check("only a real close clears the Settings-open flag",
+          !SettingsWindowEvent.willClose.openState(current: true)
+          && SettingsWindowEvent.becameKey.openState(current: false)
+          && SettingsWindowEvent.attached(visible: true).openState(current: false))
+    check("hiding or covering Settings (⌘H) keeps it counted as open",
+          SettingsWindowEvent.occlusionChanged(visible: false).openState(current: true)
+          && SettingsWindowEvent.attached(visible: false).openState(current: true)
+          && !SettingsWindowEvent.occlusionChanged(visible: false).openState(current: false))
+    check("Settings tracking uses the real window, not a private id or a timer",
+          lineOffenders { $0.contains("com_apple_SwiftUI_Settings_window") }.isEmpty
+          && !lineOffenders { $0.contains(".onDisappear { model.settingsWindowOpen") }
+              .contains("SettingsWindow.swift"))
+    check("closing Settings returns the resting app to ambient",
+          TopBarController.activationPolicy(for: .collapsed, settingsOpen: false) == .accessory)
+    // Source pins: the overlay path is gone and the scene is real.
+    check("Preferences is no longer an in-window overlay",
+          lineOffenders { $0.contains("showPreferences") }.isEmpty
+          && !lineOffenders { $0.contains("PreferencesView(") }.contains("TopBar.swift"))
+    check("the Settings scene hosts SettingsRoot",
+          lineOffenders { $0.contains("SettingsRoot().environment") }.contains("KlornApp.swift")
+          && lineOffenders { $0.contains("Settings { EmptyView() }") }.isEmpty)
+
+    print("App menus (M1):")
+    let signedInFull = MenuState(
+        signedIn: true, fullViewOpen: true, barIsKey: true, modalOpen: false, targetTier: .queue,
+        emailLoaded: true, readerReplying: false, teamModeAvailable: false,
+        listHasSearchField: true)
+    var everyCommand: [MenuCommand] = [.compose, .find, .reply, .dismiss]
+    everyCommand += Tier.allCases.map { MenuCommand.moveTo($0) }
+    everyCommand += MenuRules.destinations.map { MenuCommand.go($0) }
+    var loggedOut = signedInFull
+    loggedOut.signedIn = false
+    check("logged out disables every command",
+          everyCommand.allSatisfy { !MenuRules.isEnabled($0, in: loggedOut) })
+    var noSelection = signedInFull
+    noSelection.targetTier = nil
+    check("no selection disables message commands",
+          [MenuCommand.reply, .dismiss, .moveTo(.push)]
+              .allSatisfy { !MenuRules.isEnabled($0, in: noSelection) })
+    check("no selection keeps compose, find and go live",
+          [MenuCommand.compose, .find, .go(.inbox), .go(.calendar)]
+              .allSatisfy { MenuRules.isEnabled($0, in: noSelection) })
+    check("with a selection, reply / dismiss / other lanes are live",
+          MenuRules.isEnabled(.reply, in: signedInFull)
+          && MenuRules.isEnabled(.dismiss, in: signedInFull)
+          && MenuRules.isEnabled(.moveTo(.push), in: signedInFull))
+    check("moving to the current lane is disabled",
+          !MenuRules.isEnabled(.moveTo(.queue), in: signedInFull))
+    var composing = signedInFull
+    composing.readerReplying = true
+    check("reply is disabled while the inline composer is open",
+          !MenuRules.isEnabled(.reply, in: composing))
+    check("an open inline reply blocks everything that would unmount it",
+          !MenuRules.isEnabled(.dismiss, in: composing)
+          && Tier.allCases.allSatisfy { !MenuRules.isEnabled(.moveTo($0), in: composing) }
+          && MenuRules.destinations.allSatisfy { !MenuRules.isEnabled(.go($0), in: composing) })
+    check("compose and in-place Find stay live while replying",
+          MenuRules.isEnabled(.compose, in: composing) && MenuRules.isEnabled(.find, in: composing))
+    var composingElsewhere = composing
+    composingElsewhere.listHasSearchField = false
+    check("Find that would switch modes waits for the reply to close",
+          !MenuRules.isEnabled(.find, in: composingElsewhere))
+    var settingsKey = signedInFull
+    settingsKey.barIsKey = false
+    check("message commands are off while another window (Settings) is key",
+          [MenuCommand.reply, .dismiss, .moveTo(.push)]
+              .allSatisfy { !MenuRules.isEnabled($0, in: settingsKey) }
+          && MenuRules.isEnabled(.go(.inbox), in: settingsKey))
+    let request = ReplyRequest(token: 1, itemId: "a")
+    check("menu Reply only lands on the item it was issued for",
+          MenuRules.shouldStartReply(request, selectedItemId: "a", replying: false, emailLoaded: true)
+          && !MenuRules.shouldStartReply(request, selectedItemId: "b", replying: false, emailLoaded: true)
+          && !MenuRules.shouldStartReply(request, selectedItemId: nil, replying: false, emailLoaded: true)
+          && !MenuRules.shouldStartReply(nil, selectedItemId: "a", replying: false, emailLoaded: true))
+    check("menu Reply never overwrites a reply in progress or races the load",
+          !MenuRules.shouldStartReply(request, selectedItemId: "a", replying: true, emailLoaded: true)
+          && !MenuRules.shouldStartReply(request, selectedItemId: "a", replying: false, emailLoaded: false))
+    check("⌘N has a single owner (the app menu)",
+          lineOffenders { $0.contains(".keyboardShortcut(\"n\"") }.isEmpty)
+    var loading = signedInFull
+    loading.emailLoaded = false
+    check("reply waits for the email to load",
+          !MenuRules.isEnabled(.reply, in: loading))
+    var collapsed = signedInFull
+    collapsed.fullViewOpen = false
+    check("message commands need the full view; navigation opens it",
+          !MenuRules.isEnabled(.dismiss, in: collapsed)
+          && MenuRules.isEnabled(.go(.inbox), in: collapsed)
+          && MenuRules.isEnabled(.compose, in: collapsed))
+    var modal = signedInFull
+    modal.modalOpen = true
+    check("a modal overlay disables every command",
+          everyCommand.allSatisfy { !MenuRules.isEnabled($0, in: modal) })
+    var teams = signedInFull
+    check("Teams follows the server grant",
+          !MenuRules.isEnabled(.go(.teams), in: teams)
+          && { teams.teamModeAvailable = true; return MenuRules.isEnabled(.go(.teams), in: teams) }())
+    let shortcuts = everyCommand.compactMap { MenuRules.shortcut(for: $0) }
+    check("no two commands share a key equivalent",
+          Set(shortcuts.map { "\($0.key.character)|\($0.modifiers.rawValue)" }).count == shortcuts.count)
+    check("every key equivalent carries ⌘ or ⌃ (bare keys belong to text and quick replies)",
+          shortcuts.allSatisfy { !$0.modifiers.intersection([.command, .control]).isEmpty })
+    check("lane moves are ⌃⌘1–5 in lane order",
+          Tier.allCases.enumerated().allSatisfy { index, tier in
+              let sc = MenuRules.shortcut(for: .moveTo(tier))
+              return sc?.key.character == Character("\(index + 1)")
+                  && sc?.modifiers == [.control, .command]
+          })
+    check("Dismiss has no shortcut (⌘⌫ edits text in the reply field)",
+          MenuRules.shortcut(for: .dismiss) == nil)
+    check("Go destinations mirror the sidebar modes",
+          Set(MenuRules.destinations).count == MenuRules.destinations.count
+          && MenuRules.destinations.first == .inbox)
+    check("every Go destination has a localized title",
+          MenuRules.destinations.allSatisfy {
+              let title = MenuRules.title(for: $0)
+              return !title.isEmpty && !title.contains(".")
+          })
+    check("menu titles are localized",
+          ["menu.message", "menu.go", "menu.compose", "menu.find", "menu.moveToLane"]
+              .allSatisfy { L($0) != $0 })
+    check("Find lands on a mode with the search field",
+          ListMode.inbox.hasSearchField && !ListMode.calendar.hasSearchField)
+    check("Go puts mail destinations on the mail sidebar level",
+          ListMode.waitingOn.isMailFamily && ListMode.mailbox(.sent).isMailFamily
+          && !ListMode.proposals.isMailFamily && !ListMode.calendar.isMailFamily)
 
     print(failures == 0 ? "\nALL CHECKS PASSED" : "\n\(failures) CHECK(S) FAILED")
     return failures == 0

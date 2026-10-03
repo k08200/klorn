@@ -150,7 +150,6 @@
 
 /* Preferences — shell */
 "prefs.title" = "Einstellungen";
-"prefs.done" = "Fertig";
 "prefs.section.notifications" = "MITTEILUNGEN";
 "prefs.section.general" = "ALLGEMEIN";
 "prefs.section.topBar" = "OBERE LEISTE";
@@ -601,3 +600,22 @@
 "waiting.empty" = "Nichts wartet auf eine Antwort.";
 "waiting.days" = "%d Tage";
 "waiting.row.a11y" = "%@ — %@, wartet seit %d Tagen";
+
+/* Settings window + app menus (M0/M1) */
+"settings.tab.general" = "Allgemein";
+"settings.tab.accounts" = "Konten";
+"settings.tab.assistant" = "Assistent";
+"settings.tab.notifications" = "Mitteilungen";
+"settings.tab.appearance" = "Darstellung";
+"settings.tab.privacy" = "Datenschutz";
+"settings.signedOutNote" = "Melde dich bei Klorn an, um diese Einstellungen zu sehen.";
+"menu.message" = "E-Mail";
+"menu.go" = "Gehe zu";
+"menu.compose" = "Neue E-Mail";
+"menu.find" = "E-Mails durchsuchen";
+"menu.moveToLane" = "In Spur verschieben";
+
+/* Proactive reply drafts */
+"chip.draftReady" = "Entwurf bereit";
+"reading.openDraft" = "Entwurf öffnen";
+"reading.preparedDraft" = "Klorn hat diesen Entwurf vorab geschrieben — vor dem Senden prüfen.";
