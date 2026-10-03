@@ -10,11 +10,13 @@ import Foundation
 
 /// Every token-store check, as (name, passed).
 func tokenStoreSelfChecks(sourceDir: URL) -> [(String, Bool)] {
+    // Feature subfolders included: a flat listing would skip most of the views.
+    let sourceFiles = swiftSources(under: sourceDir)
     func text(_ name: String) -> String {
-        (try? String(contentsOf: sourceDir.appendingPathComponent(name), encoding: .utf8)) ?? ""
+        sourceFiles.first { $0.lastPathComponent == name }
+            .flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? ""
     }
-    let sources = (try? FileManager.default.contentsOfDirectory(at: sourceDir, includingPropertiesForKeys: nil))?
-        .filter { $0.pathExtension == "swift" }.map(\.lastPathComponent).sorted() ?? []
+    let sources = sourceFiles.map(\.lastPathComponent).sorted()
     func containing(_ needle: String) -> [String] { sources.filter { text($0).contains(needle) } }
 
     // Needles are assembled so this file does not match its own search.
