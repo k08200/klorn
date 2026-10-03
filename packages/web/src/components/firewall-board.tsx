@@ -206,7 +206,10 @@ export function FirewallBoard() {
     return {
       PUSH: data.tiers.PUSH,
       MEETING: data.tiers.MEETING ?? [],
-      QUEUE: [...data.tiers.QUEUE, ...(data.tiers.AUTO ?? [])],
+      QUEUE: [
+        ...data.tiers.QUEUE,
+        ...(data.tiers.AUTO ?? []).map((row) => ({ ...row, tier: "QUEUE" as Tier })),
+      ],
       SILENT: data.tiers.SILENT,
     } as Record<ColumnTier, FirewallItem[]>;
   }, [data]);
@@ -296,12 +299,20 @@ function moveItemBetweenTiers(
   for (const t of Object.keys(next.tiers) as Tier[]) {
     next.tiers[t] = [...next.tiers[t]];
   }
-  next.tiers[item.tier] = next.tiers[item.tier].filter((row) => row.id !== item.id);
+  // Remove from every lane, not just item.tier: a legacy AUTO row is displayed
+  // in QUEUE with tier rewritten, but still lives in tiers.AUTO in the payload.
+  for (const t of Object.keys(next.tiers) as Tier[]) {
+    next.tiers[t] = next.tiers[t].filter((row) => row.id !== item.id);
+  }
   next.tiers[newTier] = [{ ...item, tier: newTier }, ...next.tiers[newTier]];
   next.summary = {
     ...(Object.fromEntries(
       (Object.keys(next.tiers) as Tier[]).map((t) => [t, next.tiers[t].length]),
     ) as Record<Tier, number>),
+    // Retired lane: the board shows any legacy AUTO rows inside QUEUE, so the
+    // optimistic counts must agree with what is on screen.
+    QUEUE: next.tiers.QUEUE.length + (next.tiers.AUTO?.length ?? 0),
+    AUTO: 0,
     total: prev.summary.total,
   };
   return next;
