@@ -402,13 +402,16 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
 .foot{max-width:1180px;margin:34px auto 0;padding:0 24px;font-size:13px;color:var(--ink-3)}
 .foot a{color:var(--sky-ink);font-weight:600}
 
-.os{border-radius:30px;padding:10px;background:rgba(10,14,20,.04);border:1px solid var(--line)}
+.os{border-radius:30px;padding:10px;background:rgba(10,14,20,.04);border:1px solid var(--line);
+  max-width:720px;margin:0 auto}
 /* The right-hand column held four bullets the page had already made three times
-   over, so the card is a single column now: the claim and the two links. */
+   over, so the card is a single column now: the claim and the two links. The
+   card is capped to that column's width, or it renders as a full-width box
+   with its right half empty. */
 .os-in{border-radius:22px;background:#fff;border:1px solid var(--line);padding:34px 38px;
   display:grid;gap:0;align-items:start}
 .os-h{font-size:clamp(26px,3.2vw,40px);line-height:1.08;letter-spacing:-.03em;margin:0 0 16px;font-weight:700}
-.os-p{color:var(--ink-2);font-size:15.5px;margin:0 0 26px;max-width:520px}
+.os-p{color:var(--ink-2);font-size:15.5px;margin:0 0 26px}
 .os-cta{display:flex;gap:12px;flex-wrap:wrap}
 /* Recently shipped. On the landings measured, developer-facing tools surface
    shipping velocity on the page itself (linear, warp, cursor, resend, vercel);
@@ -607,6 +610,26 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
    .nav-lang is defined after the pill's own media queries, so an override up
    there loses on source order. */
 @media(max-width:480px){.nav-lang{display:none}}
+/* Under 880px .nav-links collapse, which left Pricing, Blog and the rest of
+   the sections unreachable on phones. A disclosure button reopens them as a
+   panel under the pill (behaviour in /site-nav.js). 38px keeps the pill's
+   height; the overlay takes the hit area to 44px, as with .nav-login. */
+.nav-menu-btn{display:none;position:relative;align-items:center;justify-content:center;width:38px;height:38px;
+  margin-right:6px;padding:0;border-radius:9999px;border:1px solid rgba(255,255,255,.22);background:transparent;
+  color:#fff;cursor:pointer;transition:background .4s var(--ease)}
+.nav-menu-btn::before{content:"";position:absolute;inset:-3px}
+.nav-menu-btn:hover{background:rgba(255,255,255,.10)}
+.nav-menu-btn svg{width:17px;height:17px}
+@media(max-width:880px){
+  .nav-menu-btn{display:inline-flex}
+  .nav-pill{position:relative}
+  .nav-links[data-open]{display:flex;position:absolute;top:calc(100% + 8px);left:0;right:0;flex-direction:column;gap:1px;
+    padding:6px;border-radius:18px;background:rgba(24,26,32,.96);border:1px solid rgba(255,255,255,.12);
+    box-shadow:0 18px 40px rgba(0,0,0,.34)}
+  .nav-links[data-open] a{display:flex;align-items:center;min-height:44px;padding:0 14px;border-radius:12px;color:rgba(255,255,255,.86)}
+}
+@media(max-width:480px){.nav-menu-btn{margin-right:4px}}
+@media(prefers-reduced-motion:reduce){.nav-menu-btn{transition:none}}
 
 
 @media (max-height: 900px){
@@ -893,6 +916,7 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
  ]
 }
 </script>
+<script src="/site-nav.js" defer></script>
 </head>
 <body>
 <div class="grain"></div>
@@ -900,7 +924,8 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
 
 <nav class="nav"><div class="nav-pill">
   <a class="nav-brand" href="#top" data-top>Klorn</a>
-  <span class="nav-links"><a href="#cards">제품</a><a href="#day">동작 방식</a><a href="#compare">왜 Klorn인가</a><a href="#pricing">가격</a><a href="#open">오픈소스</a><a href="/blog/">블로그</a></span>
+  <button type="button" class="nav-menu-btn" data-menu-toggle aria-expanded="false" aria-controls="nav-menu" aria-label="메뉴"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <span class="nav-links" id="nav-menu" role="group" aria-label="섹션"><a href="#cards">제품</a><a href="#day">동작 방식</a><a href="#compare">왜 Klorn인가</a><a href="#pricing">가격</a><a href="#open">오픈소스</a><a href="/blog/">블로그</a></span>
   <span class="nav-lang">
     <button type="button" class="nav-lang-btn" data-lang-toggle
             aria-haspopup="true" aria-expanded="false" aria-controls="lang-menu">한국어 <i aria-hidden="true">▾</i></button>
@@ -944,7 +969,7 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
         <span class="t"><b>맥용 다운로드</b><span>유니버설 · macOS 14+ · 공증 완료</span></span></a>
       <a class="dl" data-os="win" href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe" rel="noreferrer noopener">
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.6l7.2-1v7.1H3V5.6zm0 12.8l7.2 1v-7H3v6zM11.2 4.4L21 3v8.7h-9.8V4.4zm0 15.2L21 21v-8.6h-9.8v7.2z"/></svg>
-        <span class="t"><b>윈도우용 다운로드</b><span>Windows 10+ · 서명 전 베타, SmartScreen 경고 1회</span></span></a>
+        <span class="t"><b>윈도우용 다운로드</b><span>Windows 10+ · 베타</span></span></a>
     </div>
     <!-- The app needs an approved account, so the download alone is a dead end.
          Say so next to the button rather than after the click. -->
@@ -1223,8 +1248,7 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
       <span class="chip-s dark">얼리 가격</span>
       <h3>Klorn Pro</h3>
       <div class="amt">$8.99<span>/월</span></div>
-      <p class="note">7일 Pro 체험 후 웹에서 월 $8.99 — iOS·Android 앱은 스토어 수수료가 붙어 $9.99입니다.
-        언제든 해지할 수 있습니다.</p>
+      <p class="note">7일 Pro 체험 후 월 $8.99. 언제든 해지할 수 있습니다.</p>
       <ul>
         <li>무료의 모든 것 + 더 큰 AI 예산</li>
         <li>Klorn에서 승인하고 바로 보내는 답장 초안</li>
@@ -1260,7 +1284,7 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
   </div>
   <p class="works-note rv"><b>미지원:</b> 네이버 외의 IMAP 호스트. Klorn 로그인은 아직 구글만 되고,
     네이티브 모바일 앱은 없습니다 — 지금 모바일은 브라우저로 실행됩니다.
-    윈도우 데스크탑 앱은 서명 전 베타입니다(SmartScreen 경고 1회) — 리눅스는 브라우저로 실행됩니다.
+    윈도우 데스크탑 앱은 베타입니다 — 리눅스는 브라우저로 실행됩니다.
     셀프호스팅은 당신의 DB와 모델 키로 동작합니다.</p>
   <p class="works-note rv"><b>곧 지원:</b> Outlook·Microsoft 365, iCloud 메일 — 구현은 끝났고,
     보안 심사 후 순차 공개됩니다. Apple·네이버 로그인은 웹과 맥 앱, 모바일 모두에 예정되어 있어
@@ -1319,7 +1343,7 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
         맥용 다운로드</a>
     </div>
     <p class="actions-note">이미 승인받으셨나요? <a href="https://app.klorn.ai/login">로그인</a> ·
-      macOS 14+ 유니버설 · 윈도우는 브라우저 · AGPLv3</p>
+      macOS 14+ 유니버설 · Windows 10+ 베타 · AGPLv3</p>
   </div>
 </section>
 
@@ -1491,14 +1515,22 @@ if (shell && fine) {
     .then(function (rel) {
       if (!rel || !rel.length) return;
       var list = box.querySelector('ol');
-      var loc = document.documentElement.lang === 'ko' ? 'ko-KR' : 'en-US';
+      var loc = document.documentElement.lang || 'en';
+      // Release tags are build ids (desktop-v0.4.80103): the trailing build
+      // number means nothing to a visitor, so show major.minor plus the
+      // platform when it is not the Mac app. The raw tag stays in the title.
+      var human = function (tag) {
+        var m = /^desktop-(win-)?v(\d+)\.(\d+)/.exec(tag || '');
+        if (!m) return tag;
+        return (m[1] ? 'Windows ' : '') + 'v' + m[2] + '.' + m[3];
+      };
       rel.slice(0, 3).forEach(function (r) {
         var li = document.createElement('li');
         var a = document.createElement('a');
         a.href = r.html_url; a.rel = 'noreferrer noopener';
-        a.textContent = r.tag_name;
+        a.textContent = human(r.tag_name); a.title = r.tag_name;
         var s = document.createElement('span');
-        s.textContent = new Date(r.published_at)
+        s.textContent = '· ' + new Date(r.published_at)
           .toLocaleDateString(loc, { month: 'short', day: 'numeric' });
         li.appendChild(a); li.appendChild(s); list.appendChild(li);
       });

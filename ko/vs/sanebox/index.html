@@ -23,15 +23,22 @@
 <link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/sanebox/">
 <link rel="preload" as="font" type="font/woff2" href="/fonts/geist-var.woff2" crossorigin>
 <link rel="stylesheet" href="/compare.css">
+<link rel="icon" href="/brand/favicon.svg?v=matte2" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png?v=matte2">
+<script src="/site-nav.js" defer></script>
 </head>
 <body>
 <div class="wrap">
-  <nav class="top">
+  <header class="top">
     <a class="home" href="/ko/">Klorn</a>
-    <span class="lang">
-      <a href="/vs/sanebox/">EN</a><a href="/ko/vs/sanebox/" aria-current="true">KO</a>
-    </span>
-  </nav>
+    <button type="button" class="menu-btn" data-menu-toggle aria-expanded="false" aria-controls="site-menu" aria-label="메뉴"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <nav class="menu" id="site-menu" aria-label="사이트">
+      <a href="/pricing/">가격</a><a href="/blog/">블로그</a><a href="/security/">보안</a><a href="/self-host/">셀프호스팅</a>
+      <span class="pair"><a href="/vs/sanebox/">EN</a><a href="/ko/vs/sanebox/" aria-current="page">KO</a></span>
+      <a href="https://app.klorn.ai/login">로그인</a>
+    </nav>
+    <a class="dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener" data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe">다운로드</a>
+  </header>
 
   <h1>SaneBox는 옮깁니다.<br>Klorn은 <em>왜</em> 옮겼는지 말합니다.</h1>
   <p class="thesis">SaneBox는 2010년부터 폴더 기반 트리아지를 해왔고, 자기 앱 없이 해냅니다. 그 대가는 의도적입니다. 발신자·제목·날짜만 보고 본문은 절대 읽지 않습니다 — 그래서 Klorn이 가질 수 없는 프라이버시를 갖고, 동시에 판단을 설명할 수 없습니다.</p>
@@ -46,7 +53,7 @@
       <tr><th>교정 방법</th><td class="us">행을 옮깁니다. 같은 교정이 두 번이면 그 발신자는 결정론적으로 고정됩니다</td><td>폴더 간 드래그. 그 이동에서 학습합니다</td></tr>
       <tr><th>전용 앱이 필요한가</th><td class="us">라벨 모드면 불필요. 웹·macOS·Windows 클라이언트도 있습니다</td><td><strong>불필요 — 원래 쓰던 클라이언트 안에서 동작</strong></td></tr>
       <tr><th>소스·호스팅</th><td class="us"><strong>AGPL-3.0, 전 구간 셀프호스트 가능</strong></td><td>폐쇄, 클라우드 전용</td></tr>
-      <tr><th>공개 가격</th><td class="us"><strong><a href="/pricing/">월 $8.99</a></strong> 웹 · $9.99 iOS·Android</td><td>$3.49 Snack · $5.99 Lunch · $16.99 Dinner</td></tr>
+      <tr><th>공개 가격</th><td class="us"><strong><a href="/pricing/">월 $8.99</a></strong></td><td>$3.49 Snack · $5.99 Lunch · $16.99 Dinner</td></tr>
     </tbody>
   </table>
   </div>
@@ -67,6 +74,7 @@
 
   <footer>
     <p>가격·제품 사실은 각 벤더 공개 자료 기준, 2026-08-23 확인. 틀린 내용이 있으면 <a href="mailto:k0820086@gmail.com">알려주세요</a>. 고치겠습니다.</p>
+    <nav class="foot-links" aria-label="Klorn 더 보기"><a href="/pricing/">가격</a><a href="/blog/">블로그</a><a href="/security/">보안</a><a href="/self-host/">셀프호스팅</a><a href="/ko/open-source/">오픈소스</a><a href="/status/">상태</a><a href="/gdpr/">GDPR</a><a href="/dpa/">DPA</a><a href="/privacy/">개인정보처리방침</a><a href="/terms/">이용약관</a><a href="https://github.com/k08200/klorn" rel="noreferrer noopener">GitHub</a></nav>
   </footer>
 </div>
 <script>

@@ -23,15 +23,22 @@
 <link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/inbox-zero/">
 <link rel="preload" as="font" type="font/woff2" href="/fonts/geist-var.woff2" crossorigin>
 <link rel="stylesheet" href="/compare.css">
+<link rel="icon" href="/brand/favicon.svg?v=matte2" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png?v=matte2">
+<script src="/site-nav.js" defer></script>
 </head>
 <body>
 <div class="wrap">
-  <nav class="top">
+  <header class="top">
     <a class="home" href="/">Klorn</a>
-    <span class="lang">
-      <a href="/vs/inbox-zero/" aria-current="true">EN</a><a href="/ko/vs/inbox-zero/">KO</a>
-    </span>
-  </nav>
+    <button type="button" class="menu-btn" data-menu-toggle aria-expanded="false" aria-controls="site-menu" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <nav class="menu" id="site-menu" aria-label="Site">
+      <a href="/pricing/">Pricing</a><a href="/blog/">Blog</a><a href="/security/">Security</a><a href="/self-host/">Self-host</a>
+      <span class="pair"><a href="/vs/inbox-zero/" aria-current="page">EN</a><a href="/ko/vs/inbox-zero/">KO</a></span>
+      <a href="https://app.klorn.ai/login">Log in</a>
+    </nav>
+    <a class="dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener" data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe">Download</a>
+  </header>
 
   <h1>Both are open source.<br>The <em>licences</em> are not the same.</h1>
   <p class="thesis">This is the closest comparison on this site — same shape, same stack family, both self-hostable, both with a paid hosted tier. Two things separate them, and one of them is checkable in under a minute.</p>
@@ -46,7 +53,7 @@
       <tr><th>How GitHub resolves it</th><td class="us"><strong><code>AGPL-3.0</code></strong></td><td><code>NOASSERTION</code></td></tr>
       <tr><th>How it decides</th><td class="us">A model scores four features; a deterministic rule you can unit-test picks the lane</td><td>Rules you describe in plain English</td></tr>
       <tr><th>Why it decided that</th><td class="us"><strong>Shown on every row, and corrections retrain it</strong></td><td>You wrote the rule, so the rule is the reason</td></tr>
-      <tr><th>Published price</th><td class="us"><strong><a href="/pricing/">$8.99/mo</a></strong> web · $9.99 iOS/Android</td><td>$20/mo Starter · $35 Plus · $50 Professional</td></tr>
+      <tr><th>Published price</th><td class="us"><strong><a href="/pricing/">$8.99/mo</a></strong></td><td>$20/mo Starter · $35 Plus · $50 Professional</td></tr>
     </tbody>
   </table>
   </div>
@@ -68,6 +75,7 @@
 
   <footer>
     <p>Prices and product facts as published by each vendor, checked 2026-08-23. Something here wrong? <a href="mailto:k0820086@gmail.com">Tell us</a> and we will fix it.</p>
+    <nav class="foot-links" aria-label="More from Klorn"><a href="/pricing/">Pricing</a><a href="/blog/">Blog</a><a href="/security/">Security</a><a href="/self-host/">Self-host</a><a href="/open-source/">Open source</a><a href="/status/">Status</a><a href="/gdpr/">GDPR</a><a href="/dpa/">DPA</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a><a href="https://github.com/k08200/klorn" rel="noreferrer noopener">GitHub</a></nav>
   </footer>
 </div>
 <script>
