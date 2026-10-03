@@ -37,6 +37,13 @@ struct PreferencesView: View {
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .onAppear { launchAtLogin = LoginItem.isEnabled }
+        // Re-ask the server whether device calendars exist each time Settings shows
+        // this tab, so a server-side flip shows (or hides) the section without a relaunch.
+        .task {
+            if model.phase == .signedIn && tab.sections.contains(.deviceCalendars) {
+                await model.deviceCalendars.refreshAvailability()
+            }
+        }
     }
 
     @ViewBuilder
@@ -56,6 +63,13 @@ struct PreferencesView: View {
         case .account: accountSection
         case .inboxes:
             section(L("prefs.section.inboxes")) { InboxAccountsSection(model: model) }
+        case .deviceCalendars:
+            // Step C6: drawn only while the server has the feature (its 404 hides it).
+            if model.deviceCalendars.availability == .available {
+                section(L("prefs.section.deviceCalendars")) {
+                    DeviceCalendarSection(bridge: model.deviceCalendars)
+                }
+            }
         case .about:
             section(L("prefs.section.about")) {
                 infoRow(L("prefs.about.version"), AppInfo.version)

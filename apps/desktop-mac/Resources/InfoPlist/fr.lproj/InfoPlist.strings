@@ -1,0 +1,3 @@
+/* Calendar permission prompt (step C6: device calendars, opt-in per calendar). */
+"NSCalendarsFullAccessUsageDescription" = "Klorn n’envoie que les calendriers que vous activez dans les réglages, pour que votre briefing et l’assistant les voient.";
+"NSCalendarsUsageDescription" = "Klorn n’envoie que les calendriers que vous activez dans les réglages, pour que votre briefing et l’assistant les voient.";

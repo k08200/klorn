@@ -98,6 +98,14 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>NSHighResolutionCapable</key><true/>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>KlornAPIURL</key><string>${API_URL}</string>
+  <key>CFBundleDevelopmentRegion</key><string>en</string>
+  <key>CFBundleLocalizations</key>
+  <array><string>en</string><string>ko</string><string>ja</string><string>zh</string><string>es</string><string>fr</string><string>de</string></array>
+  <!-- Step C6: EventKit asks only when the user turns on "Upload device calendars".
+       macOS 14+ reads the FullAccess key; the plain one serves older readers.
+       Localised by Contents/Resources/<lang>.lproj/InfoPlist.strings (below). -->
+  <key>NSCalendarsFullAccessUsageDescription</key><string>Klorn uploads only the calendars you turn on in Settings, so your briefing and assistant can see them.</string>
+  <key>NSCalendarsUsageDescription</key><string>Klorn uploads only the calendars you turn on in Settings, so your briefing and assistant can see them.</string>
   <key>CFBundleURLTypes</key>
   <array>
     <dict>
@@ -108,6 +116,16 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </dict>
 </plist>
 PLIST
+
+# The calendar permission prompt's text, per language. These belong to the MAIN
+# bundle (the OS reads them from Contents/Resources/<lang>.lproj), not to the
+# SwiftPM resource bundle, so they live outside the target and are copied here.
+for lproj in Resources/InfoPlist/*.lproj; do
+  mkdir -p "$APP/Contents/Resources/$(basename "$lproj")"
+  cp "$lproj/InfoPlist.strings" "$APP/Contents/Resources/$(basename "$lproj")/"
+done
+[ -f "$APP/Contents/Resources/ko.lproj/InfoPlist.strings" ] \
+  || { echo "✗ InfoPlist.strings missing — the calendar prompt would not be localised"; exit 1; }
 
 # Dock/Finder icon: build AppIcon.icns from the source PNG (the matte K).
 ICON_SRC="Resources/AppIcon.png"
@@ -125,7 +143,7 @@ else
 fi
 
 # Ad-hoc sign so macOS will surface the notification-permission prompt.
-if codesign --force --deep --sign - "$APP" >/dev/null 2>&1; then
+if codesign --force --deep --sign - --entitlements Klorn.entitlements "$APP" >/dev/null 2>&1; then
   echo "▸ ad-hoc signed"
 else
   echo "▸ codesign unavailable — notifications may not prompt"

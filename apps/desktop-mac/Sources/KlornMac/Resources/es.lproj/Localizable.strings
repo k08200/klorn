@@ -619,3 +619,15 @@
 "chip.draftReady" = "Borrador listo";
 "reading.openDraft" = "Abrir borrador";
 "reading.preparedDraft" = "Klorn preparó este borrador por adelantado — revísalo antes de enviar.";
+
+/* Device calendars (C6): EventKit calendars the user uploads, one by one. */
+"prefs.section.deviceCalendars" = "CALENDARIOS DEL DISPOSITIVO";
+"deviceCalendars.upload" = "Subir calendarios del dispositivo";
+"deviceCalendars.detail" = "Solo se suben a Klorn los calendarios que actives abajo, como copias de solo lectura. Tu resumen y el asistente los leen en el servidor.";
+"deviceCalendars.denied" = "Klorn no puede leer tus calendarios. Permítelo en Ajustes del Sistema › Privacidad y seguridad › Calendarios.";
+"deviceCalendars.openSettings" = "Abrir Ajustes del Sistema";
+"deviceCalendars.empty" = "No hay calendarios en este Mac.";
+"deviceCalendars.count" = "%d subidos";
+"deviceCalendars.untitled" = "Calendario sin título";
+"deviceCalendars.error.limit" = "Hay demasiados calendarios subidos. Desactiva uno primero.";
+"deviceCalendars.error.generic" = "No se pudo subir un calendario. Klorn lo intentará de nuevo.";

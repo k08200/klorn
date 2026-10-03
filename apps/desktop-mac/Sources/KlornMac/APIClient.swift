@@ -72,6 +72,25 @@ struct APIClient: Sendable {
             contentType: "application/json")
     }
 
+    /// GET /api/device-calendar/sources — the device calendars this user uploaded
+    /// (step C6). The server answers its default 404 while the feature is off, which
+    /// DeviceCalendarBridge reads as "hide the setting".
+    func fetchDeviceCalendarSources() async throws -> DeviceCalendarSourcesResponse {
+        try await get("/api/device-calendar/sources")
+    }
+
+    /// PUT one opted-in calendar's full snapshot of its window. `key` is the
+    /// device-scoped hash (DeviceCalendarSnapshot.sourceKey), never the raw
+    /// EventKit identifier.
+    func putDeviceCalendarSnapshot(key: String, _ snapshot: DeviceSnapshotWire) async throws {
+        try await put("/api/device-calendar/sources/\(key)/window", encodable: snapshot)
+    }
+
+    /// DELETE a calendar the user turned off: the server removes it and its events.
+    func deleteDeviceCalendarSource(key: String) async throws {
+        try await delete("/api/device-calendar/sources/\(key)")
+    }
+
     /// GET /api/automations — server-owned behaviour settings (agent mode,
     /// reply tone, notification categories, quiet hours).
     func fetchAutomationSettings() async throws -> AutomationSettings {

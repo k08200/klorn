@@ -619,3 +619,15 @@
 "chip.draftReady" = "草稿已备好";
 "reading.openDraft" = "打开草稿";
 "reading.preparedDraft" = "这是 Klorn 提前写好的草稿 — 发送前请确认。";
+
+/* Device calendars (C6): EventKit calendars the user uploads, one by one. */
+"prefs.section.deviceCalendars" = "设备日历";
+"deviceCalendars.upload" = "上传设备日历";
+"deviceCalendars.detail" = "只有你在下方开启的日历会以只读副本上传到 Klorn。简报和助手在服务器上读取它们。";
+"deviceCalendars.denied" = "Klorn 无法读取你的日历。请在“系统设置 › 隐私与安全性 › 日历”中允许。";
+"deviceCalendars.openSettings" = "打开系统设置";
+"deviceCalendars.empty" = "此 Mac 上没有日历。";
+"deviceCalendars.count" = "已上传 %d 个";
+"deviceCalendars.untitled" = "未命名日历";
+"deviceCalendars.error.limit" = "上传的日历过多。请先关闭一个。";
+"deviceCalendars.error.generic" = "无法上传日历。Klorn 会重试。";

@@ -85,6 +85,8 @@ final class AppModel {
     var fullViewModalOpen: Bool {
         showCompose || showTierGuide || showEventEditor || showPurposePrompt
     }
+    /// Device calendars uploaded from EventKit (step C6): opt-in per calendar.
+    let deviceCalendars: DeviceCalendarBridge
 
     /// Drives the tier explainer. Set on first run and by the sidebar's
     /// "How sorting works", which is what keeps it re-readable.
@@ -166,6 +168,7 @@ final class AppModel {
 
     init(api: APIClient = APIClient()) {
         self.api = api
+        self.deviceCalendars = DeviceCalendarBridge(api: api)
         self.phase = KeychainStore.load() != nil ? .signedIn : .signedOut
         self.selectedInbox =
             UserDefaults.standard.string(forKey: Self.selectedInboxKey) ?? "all"
@@ -517,6 +520,8 @@ final class AppModel {
         Task { await refreshLoginProviders() }
         guard phase == .signedIn else { return }
         Task { await loadQueue() }
+        // Resumes uploading only calendars the user already turned on; asks nothing.
+        deviceCalendars.start()
         // Team mode availability probe (403 while dark) — decides whether the
         // 팀 sidebar row and screen render at all.
         Task { await refreshTeams() }
@@ -559,6 +564,7 @@ final class AppModel {
             // credential; start() tears the old loop down first.
             realtime?.start(token: token)
             phase = .signedIn
+            deviceCalendars.start()
             await loadQueue()
         case .failure(let reason, let detail):
             Log.app.error("sign-in failed: \(reason.rawValue, privacy: .public) \(detail, privacy: .private)")
@@ -1686,6 +1692,9 @@ final class AppModel {
         clearSelection()
         baselineEstablished = false
         didRequestNotifyAuth = false
+        // Read before the Keychain is cleared: the device-calendar removals owed at
+        // sign-out are sent with this session's token.
+        let sessionToken = KeychainStore.load()
         KeychainStore.clear()
         queue = nil
         loadError = nil
@@ -1700,6 +1709,8 @@ final class AppModel {
         selectedInbox = "all"
         UserDefaults.standard.removeObject(forKey: Self.selectedInboxKey)
         shownMeetingIds = []
+        // The device-calendar opt-in belongs to the account that gave it.
+        deviceCalendars.signOut(token: sessionToken)
         phase = .signedOut
     }
 

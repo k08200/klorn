@@ -619,3 +619,15 @@
 "chip.draftReady" = "초안 준비됨";
 "reading.openDraft" = "초안 열기";
 "reading.preparedDraft" = "Klorn이 미리 써 둔 초안입니다 — 보내기 전에 확인하세요.";
+
+/* Device calendars (C6): EventKit calendars the user uploads, one by one. */
+"prefs.section.deviceCalendars" = "기기 캘린더";
+"deviceCalendars.upload" = "기기 캘린더 업로드";
+"deviceCalendars.detail" = "아래에서 켠 캘린더만 읽기 전용 사본으로 Klorn에 업로드됩니다. 브리핑과 어시스턴트는 서버에서 이를 읽습니다.";
+"deviceCalendars.denied" = "Klorn이 캘린더를 읽을 수 없습니다. 시스템 설정 › 개인정보 보호 및 보안 › 캘린더에서 허용하세요.";
+"deviceCalendars.openSettings" = "시스템 설정 열기";
+"deviceCalendars.empty" = "이 Mac에 캘린더가 없습니다.";
+"deviceCalendars.count" = "%d개 업로드 중";
+"deviceCalendars.untitled" = "제목 없는 캘린더";
+"deviceCalendars.error.limit" = "업로드한 캘린더가 너무 많습니다. 먼저 하나를 끄세요.";
+"deviceCalendars.error.generic" = "캘린더를 업로드하지 못했습니다. Klorn이 다시 시도합니다.";
