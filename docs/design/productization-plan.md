@@ -91,6 +91,36 @@ MailRow, LaneChip, SourceBadge, EmptyState, Skeleton (loading only), Sheet,
 CommandPalette (actions plus "Ask:"). Lint guard: no new `text-[Npx]`, raw
 palette values, or raw `<button>` in `app/**`.
 
+### Tokens and guard (P1, shipped)
+
+Web tokens live in `packages/web/src/app/globals.css`:
+
+| Token | Utility | Value |
+|---|---|---|
+| Type roles | `text-display` `text-title` `text-head` `text-body` `text-label` `text-caption` | the table above (size, line-height and weight in one class) |
+| Radii | `rounded-control` (r-sm) `rounded-card` (r-md) `rounded-sheet` (r-lg) | 6 / 10 / 16 px; capsule stays `rounded-full` |
+| Elevation | `shadow-l2` `shadow-l3` | `0 8px 24px rgb(0 0 0 / .12)` / `0 24px 48px rgb(0 0 0 / .18)` |
+| Motion | `duration-120` `duration-200` `duration-160` + `ease-fluid` | `--motion-state` / `--motion-enter` / `--motion-exit` |
+| Spacing | Tailwind default scale `1 2 3 4 6 8 12` | 4/8/12/16/24/32/48, no new tokens |
+
+The radii are named by role rather than overriding `rounded-sm/md/lg`, which
+would restyle every existing call site. The sky/indigo wash on the app body is
+gone in both themes. The light canvas (`--surface-app`) is hue-free `#fafafa`
+(Theme.swift `bg`); the dark canvas stays navy because every dark panel value
+is navy, and the dark ramp moves to neutral as one set. The slate-tinted ink,
+line and panel ramps keep their measured contrast values until P2 re-measures
+those pairs.
+
+`.github/scripts/check-design-tokens.mjs` (CI Lint job, "Design tokens") counts
+four rules per file in `packages/web/src/app/**` and `components/**`:
+`arbitrary-font-size` (`text-[Npx]`), `raw-palette` (`bg-slate-100` etc.),
+`raw-button` (`<button` in `app/**`) and `retired-auto-lane` (`tier-auto`).
+Each file may not exceed its count in `.github/scripts/design-tokens-baseline.json`,
+and a file not listed is allowed zero. After migrating call sites, run
+`node .github/scripts/check-design-tokens.mjs --update` and commit the smaller
+baseline with the change. `--update` refuses to run while any count is above
+its baseline, so the numbers only go down. Never raise a count by hand.
+
 ## 3. Interaction
 
 Keys: `j/k`, `o/Enter`, `Esc`, `e` (if the source supports it), `r/a/f`, `c`,
