@@ -2621,9 +2621,182 @@ needs FA-9 and the admin guidance from F0.
     Unlink removes the rows and their attention items.
 - Exit: flags OFF, no user-visible change. Nothing is flipped.
 **C5 — mobile device bridge** (*outline*). Blocked on FA-8. Upload policy per
-P4.
-**C6 — desktop device bridge** (*outline*). EventKit in KlornMac. Upload
+P4. Uploads through C6's `/api/device-calendar` API (below), unchanged: a mobile
+client sends the same per-calendar snapshot with its own device-scoped key.
+**C6 — desktop device bridge.** Depends on: C2. EventKit in KlornMac. Upload
 policy per P4.
+- Landed 2026-10-02 (branch `feat/device-calendar-mac`, PR not yet opened).
+  Migration `20261007010000_linked_calendar_display_name`: one nullable TEXT column,
+  `LinkedCalendarAccount.displayName`, no backfill (`CalendarProvider.DEVICE` came
+  with C1, so no enum change).
+  - Flag `DEVICE_CALENDAR_ENABLED` (OFF, lenient parse, read per request, in
+    `.env.example`). Off: the three routes answer Fastify's default 404
+    (`darkRouteGate`, byte-identical to an unregistered route, tested), no snapshot
+    is stored, and every reader hides DEVICE rows already stored (registered in
+    `CALENDAR_PROVIDER_ENABLED` as `deviceCalendarEnabled`; the flag-off `where` of
+    every reader now carries `provider: { notIn: [..., "DEVICE"] }`). The prefix is
+    `/api/device-calendar`, not `/api/calendar/device-sources`: main's
+    `GET /api/calendar/:id` would answer that path with a 401, so a dark sub-route
+    there would not look unregistered. Independent of `LINKED_CALENDAR_SYNC_ENABLED`;
+    the dispatcher still answers DEVICE unsupported (the server fetches nothing).
+  - API (C5 reuses it). `GET /sources` -> `{ sources: [{ key, title, uploadedAt }] }`.
+    `PUT /sources/:key/window` with `{ windowStart, windowEnd, calendarTitle, events:
+    [{ externalId, title, start, end, allDay, location?, meetingLink?, status? }] }`
+    -> `{ created, updated, removed, skipped, valveRefused }`; 400 names the refused
+    part and never echoes a value, 409 is a new calendar over the cap, 413 a body
+    over 2 MiB. `DELETE /sources/:key` -> `{ success: true }` or 404.
+  - Opt-in (P4). A source is a `LinkedCalendarAccount` with provider DEVICE, `email`
+    `device:<key>` (so the existing (userId, provider, email) unique is its upsert
+    key and no address can collide under the legacy (userId, email) one) and
+    `displayName` the calendar's title. The key is computed on the Mac: sha256 of the
+    device id and the EventKit calendar identifier; the server accepts exactly 64
+    lowercase hex characters, so a raw identifier is refused. The first PUT creates
+    the source (at most 50 per user, new ones only); DELETE removes the source, its
+    rows and their attention items through `unlinkCalendarAccount(..., "DEVICE")`.
+    No other path creates a DEVICE row.
+  - Boundary (`pim/device-calendar/device-snapshot.ts`, named constants). Window at
+    most 62 days, starting no earlier than now - 31 days and ending no later than now
+    + 93; times must carry Z or an offset. At most 500 events; title and location 500
+    code points, external id 512, calendar title 200, meeting link 2048, then
+    `safeMeetingLink`. An all-day event is two dates (`YYYY-MM-DD`, end exclusive)
+    stored at UTC midnight, as C4 and C7 store them; a timed one two instants stored
+    as UTC. Cancelled events, events outside the window and a repeated external id
+    are dropped and counted (`skipped`); a malformed time refuses the snapshot. NUL
+    (which Postgres text cannot hold, so one invitation would fail every upload) is
+    stripped from every string. No description field exists; unknown fields are
+    dropped by the schema.
+  - Reconcile (`device-ingest.ts`), one interactive transaction. The source upsert
+    takes the source row's lock, so two snapshots of one calendar never interleave.
+    Rows are matched by external id wherever they lie (an event moved into the
+    window updates its row), created in one `createMany` (`createLinkedEventRows`,
+    identity from `linkedEventSource`), updated only when a field changed. Rows of
+    THAT source inside the window (the snapshot's overlap rule) that the snapshot
+    lacks are removed and their open or snoozed attention items resolved, through
+    C3's valve (`isOverDeletionValve`: more than half of the window's rows, when over
+    5); a refusal keeps every row, still applies creates and updates, and warns and
+    reports to Sentry once per source per process. Retention: rows of the source that
+    ended more than 31 days ago (`DEVICE_ROW_RETENTION_DAYS`, the oldest a window may
+    reach) are removed in the same transaction, outside the valve, so the server keeps
+    no more of a device calendar than the device still shows.
+  - Auth and limits. `requireAuth` (a live Device row for the bearer token) runs
+    `onRequest`, before the body is read; every query is scoped to the token's user.
+    Rate limits as hooks in a fixed order: 120 per 10 minutes per device session
+    (sha256 of the bearer token) before authentication, 240 per 10 minutes per user
+    after it (without a token the key is the Cloudflare or socket address, never
+    `request.ip`). PUT is Pro-gated (`requireEntitled`, also before the body); GET and
+    DELETE are not, so a downgraded user can always see and remove what was uploaded.
+  - Readers. Every C7 reader keys on `sourceAccountId`, so a DEVICE row is read-only,
+    wrapped as untrusted on LLM paths and title-free in a conflict
+    (`calendar-device-read.test.ts`). `sourceLabel` on a DEVICE row is the calendar's
+    title, never the `device:` key (`calendar-source-label.ts`).
+  - Mac (`DeviceCalendarBridge.swift`, `DeviceCalendarSnapshot.swift`,
+    `DeviceCalendarSection.swift`). Preferences shows a "Device calendars" section
+    only when `GET /sources` answers 200 (re-asked each time Preferences opens; the
+    default 404 hides it; any other failure is asked again every 5 minutes). The master switch "Upload device calendars" is the only
+    place that asks macOS (`requestFullAccessToEvents`, macOS 14); nothing touches
+    EventKit before it. Denied or restricted: a short explanation and a button to
+    System Settings › Privacy & Security › Calendars. Granted: every EventKit calendar
+    with its own switch, all off. A calendar is uploaded when switched on, on
+    `EKEventStoreChanged` (5 s debounce), at launch and every 15 minutes; an unchanged
+    snapshot is skipped for up to 6 hours. One pass at a time. Window: start of today
+    - 7 days to + 31 days; EventKit is asked one day wider on each side and the
+    builder keeps what overlaps the window as the server reads it (east of UTC the
+    all-day day before the local window overlaps it in UTC). Recurrence: EventKit
+    expands occurrences in `predicateForEvents`; a recurring or detached occurrence is
+    keyed by its identity plus `occurrenceDate`, so a moved occurrence keeps its id.
+    External ids are sha256 of `calendarItemExternalIdentifier` (else
+    `calendarItemIdentifier`); notes and attendees never leave the Mac. Declined
+    events are skipped: EventKit exposes `EKParticipant.isCurrentUser` and
+    `participantStatus`. Over 500 events, the earliest are kept and the window ends at
+    the first one left out, so the snapshot stays complete. Switching a calendar off
+    sends DELETE, queued behind any upload in flight so a late PUT cannot recreate it
+    (passes run in tasks of their own, never cancelled mid-request); a removal that
+    fails (offline, or a 404 while `GET /sources` does not answer 200) is kept and
+    retried at every launch and pass, even with uploading off, so the rows cannot come
+    back with the flag. A calendar that leaves the Mac while others are listed is
+    removed on the server. Signing out ends the opt-in on that Mac (another account
+    must opt in itself) and sends one best-effort DELETE per source switched on or
+    owed, with the session token read before the Keychain is cleared. Dates use the
+    autoupdating calendar and zone, so a Mac that travels reads all-day dates in its
+    new zone. Device id: the hardware UUID, else a random one kept in the defaults.
+    Info.plist gains `NSCalendarsFullAccessUsageDescription` and
+    `NSCalendarsUsageDescription`, localised in 7 `InfoPlist.strings` copied into the
+    main bundle by `make-app.sh`; `Klorn.entitlements` grants the hardened runtime
+    `com.apple.security.personal-information.calendars`, and the Developer ID signing
+    step in `desktop-release.yml` now passes it (without it a notarized build is
+    refused calendar access). 10 strings in all 7 `.lproj` catalogues (`%d` for the
+    count).
+  - Tests. API: snapshot boundary, ingest against a fake table that applies the
+    `where` keys, sources, routes (dark 404 byte-identical, auth, 400/409/413, unknown
+    fields dropped, both rate limits), DEVICE through the read path, label, migration,
+    and the guards (writers, readers, provider-name branching, kill-switch
+    exemptions). Mutations, each killed: DELETE keeping the rows, removal widened past
+    DEVICE, candidates or deletion not scoped to the source, valve removed, dark gate
+    removed, DEVICE not registered, `safeMeetingLink` bypassed, candidates not scoped
+    to the user (survived the first run; a test was added), cap counting other users,
+    the route ignoring the token's user; after the review, the Pro gate moved after the
+    body, NUL kept, expired rows kept, the limiter keyed on `request.ip`. Mac self-check: window and query range, key
+    and id hashing, all-day in Seoul and Los Angeles, UTC instants, recurrence and a
+    moved occurrence, declined/cancelled/repeated, the 500 cut, clamping, links, the
+    wire's fields, access states, the 404 rule, defaults all off, sign-out reset, the
+    one access call site, the usage strings in 7 languages and the entitlement.
+    Mutations, each killed: switches default on, access asked at launch, all-day end
+    not walked back, occurrence ignored, declined sent, no device id in the key,
+    unsafe link, the 404 rule, the window not cut. Review (code and security, 2026-10-02): no
+    critical finding; fixed: removals owed while uploading is off or at sign-out, a
+    failed probe never retried, a switch-off racing an upload in flight, a returning
+    calendar removed by a stale removal, the zone going stale after travel, a
+    duplicate calendar id trapping, the Pro gate after the body, NUL, the limiter's
+    address, retention. Not fixed: (9) below.
+  - Known limits. (1) Not run on a real Mac against real calendars: the permission
+    prompt (and the entitlement in a notarized build), EventKit's all-day `endDate`
+    and `occurrenceDate` conventions, the stability of
+    `calendarItemExternalIdentifier`, and the System Settings link are unverified.
+    (2) A source whose Mac stops uploading (app deleted, Mac wiped, signed out while
+    offline) keeps its rows until it is switched on and off again from a signed-in Mac
+    or the account is deleted (past rows age out after 31 days); there is no web
+    control, and such sources count toward the 50-source cap. (3) The same calendar on two
+    Macs is two sources; their rows collapse at read time only when their hashed ids
+    match. A calendar that is also linked as ICLOUD or GOOGLE shows twice
+    (cross-provider dedupe is C7's open decision). (4) Meeting links come from the
+    event's URL field or a location that is a URL; links inside notes are not
+    extracted. (5) The valve also refuses a real mass deletion (more than half of the
+    window, over 5 rows); those rows stay until they leave the window. (6) Rows store
+    no transparency (C7's limit (2)); a declined invitation is skipped only when
+    EventKit marks the user's participant as the current user. (7) An older
+    snapshot that arrives after a newer one wins until the next upload (the Mac sends
+    one at a time; the 15-minute pass repairs it). (8) Every ingest test mocks Prisma:
+    `createMany` with `skipDuplicates`, the upsert's row lock and the query cost were
+    not run against Postgres. (9) Review, not fixed: a snapshot changing all 500
+    events runs 500 sequential `updateMany` in one transaction (bounded by the rate
+    limits; a single `UPDATE ... FROM unnest(...)` needs a real-Postgres check first);
+    the 50-source cap is checked outside the transaction, so concurrent first uploads
+    can pass it once; the source key has no per-account salt, so two accounts on one
+    Mac share keys (visible only to an operator); past the 500 cut, rows after the cut
+    stay until the calendar is under the cap again. (10) The Mac change reaches users only with a desktop
+    release; until then nothing uploads, and the section stays hidden while the flag
+    is off.
+  - Before the flip (founder). (a) Apply the migration (additive; nothing to
+    preflight). (b) Ship a desktop release containing C6, signed with
+    `Klorn.entitlements`, and on a real Mac: turning the switch on shows one macOS
+    prompt with the localised text; denying shows the explanation and the button opens
+    the Calendars pane; granting lists the calendars, all off; switching one on puts its
+    events in `/api/calendar` with `readOnly` and the calendar title as `sourceLabel`;
+    an edit or deletion on the Mac reaches the server within the debounce; a recurring
+    series with one moved and one deleted occurrence, and an all-day event read with
+    the Mac set to a zone west and one east of UTC, come out right; switching the
+    calendar off removes its rows, the master switch removes all; a declined
+    invitation is absent. (c) Then turn `DEVICE_CALENDAR_ENABLED` on. LLM paths
+    (`list_events`, conflicts) see the rows only with `UNIFIED_CALENDAR_READ_ENABLED`
+    too (C7's own flip).
+  - Rollback. Flag never on: revert. Ever on: set the flag OFF (rows hidden at once),
+    `DELETE FROM "AttentionItem" WHERE "source" = 'CALENDAR_EVENT' AND "sourceId" IN
+    (SELECT "id" FROM "CalendarEvent" WHERE "provider" = 'DEVICE')`, `DELETE FROM
+    "CalendarEvent" WHERE "provider" = 'DEVICE'`, `DELETE FROM "LinkedCalendarAccount"
+    WHERE "provider" = 'DEVICE'`, then revert. The column is additive: drop it only
+    after.
+- Exit: flag OFF; no user-visible change on the server, and the Mac section stays
+  hidden until the flag is on. Nothing is flipped.
 **C7 — one calendar read path.** Depends on: C2. `list_events`, briefing and
 conflict checks read rows across providers. Each connector joins as it lands; C7
 does not wait for them.
@@ -2873,6 +3046,7 @@ time, whatever the graph says. The later step rebases, reruns
 | `mail/reply-headers.ts` | B0, B3 |
 | `pim/calendar.ts`, `pim/calendar-read.ts`, `routes/calendar.ts` | C3, C4, C5, C6, C7 |
 | `pim/calendar-sync.ts`, `pim/calendar-scope.ts`, `pim/calendar-rows.ts`, `pim/calendar-providers/types.ts`, `dispatch.ts` | C2, C3, C4, C5, C6, C7 |
+| `pim/device-calendar/*`, `routes/device-calendar.ts` | C5, C6 |
 | web locale files | every step with UI copy |
 
 ## Founder actions
