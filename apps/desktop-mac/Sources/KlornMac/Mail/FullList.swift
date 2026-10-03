@@ -5,6 +5,10 @@ struct FullList: View {
     let mode: ListMode
     let actions: TopBarActions
     @Binding var keyZone: MailKeyZone
+    /// The offscreen renderer paints the key catcher (an AppKit view) as a
+    /// placeholder over the whole list. The main window's shots leave it
+    /// out; the bar's shots are unchanged from main, placeholder included.
+    var keyCatcherInRender = true
     /// The user asked for the search field (⌘F, `/`): its focus is theirs,
     /// not the window's opening default.
     @State private var searchRequested = false
@@ -209,13 +213,16 @@ struct FullList: View {
         }
         // List keys (M3). Mounted with the mail list only, so other list
         // modes never see them.
-        .background(
-            MailListKeyCatcher(
-                onKey: { handleKey($0) },
-                onClickOutsideReader: { keyZone = .list },
-                mayReleaseOpeningFocus: {
-                    !searchRequested && !model.searchFocusPending && !model.fullViewModalOpen
-                }))
+        .background {
+            if keyCatcherInRender || !Theme.isRenderingOffscreen {
+                MailListKeyCatcher(
+                    onKey: { handleKey($0) },
+                    onClickOutsideReader: { keyZone = .list },
+                    mayReleaseOpeningFocus: {
+                        !searchRequested && !model.searchFocusPending && !model.fullViewModalOpen
+                    })
+            }
+        }
         .onDisappear { keyZone = .list }
     }
 

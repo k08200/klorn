@@ -69,6 +69,27 @@ button, or the header ✕) returns Klorn to ambient unless Settings is still
 open. The header's *Smaller* closes the window and opens the expanded panel.
 With the default off, nothing changes.
 
+The window's content is the five-item navigation (M4b), not the bar's full
+view: a sidebar with **Today · Mail · Calendar · Assistant** (Files joins
+when a drive source exists), the connected accounts with a health dot, and
+Settings at the foot.
+
+- **Today** — mail by lane across the accounts (Push and Meeting expanded,
+  Queue as a count plus its top five, Info as a count, Silent never), today's
+  calendar, the briefing line and the approvals waiting. A row opens in Mail.
+- **Mail** — the existing list and reader. Lanes are the primary filter
+  (Push · Meeting · Queue (default) · Info · All; Silent only through
+  *Show silenced* in the filter menu); folders and labels are sidebar facets.
+- **Calendar** — the existing calendar at full width; team availability
+  beside it while the server grants team mode.
+- **Assistant** — the thread, with Approvals (the proposals list),
+  Commitments and the Briefing beside it.
+
+It is a custom two-column split, not `NavigationSplitView`: the window is an
+AppKit `NSWindow` that owns its frame and restoration, the mail list keys
+depend on the window's first responder, and the offscreen renderer cannot
+draw AppKit-backed containers.
+
 Turn it on with either:
 
 - Settings ▸ General ▸ hold **Option** ▸ *Use standard main window (beta)*
@@ -86,6 +107,10 @@ App menus (shown while Klorn is a regular app, i.e. a window is open):
 | Message › Move to Lane | PUSH / MEETING / QUEUE / INFO / SILENT | `⌃⌘1`–`⌃⌘5` |
 | Go | Inbox · Calendar · Proposals · Commitments · Waiting on | `⌘1`–`⌘5` |
 | Go | Sent · Drafts · Archived · Teams (when granted) | — |
+
+With `macMainWindow` on, Go is the sections instead: Today `⌘1`, Mail `⌘2`,
+Calendar `⌘3`, Assistant `⌘4`, then Approvals `⌘5` and, without a key,
+Commitments · Waiting on · Sent · Drafts · Archived · Teams (when granted).
 
 Lane moves use `⌃⌘`, not bare digits: the reading pane binds bare `1`/`2`/`3`
 to its quick replies, and `⌃1`–`⌃5` are macOS's "Switch to Desktop N".
@@ -264,12 +289,13 @@ A full XCTest suite can be added when building under Xcode/CI.
 | File | Role |
 |------|------|
 | `KlornApp.swift` | `@main` entry (+ `--self-check`); `.accessory` app, `AppDelegate` owns the model, top bar, and hotkey |
-| `Shell/` | the SwiftUI shell (M4a split of the former `TopBar.swift`): `TopBarRoot.swift` (`BarState`, `TopBarActions`, `TopBarMetrics`, `TopBarRoot`), `FullView.swift` (`ListMode`, `FullView`), `Sidebar.swift` (`FullSidebar`), `SidebarResize.swift` (section resize handle), `TeamsColumn.swift` |
+| `Shell/` | the SwiftUI shell (M4a split of the former `TopBar.swift`): `TopBarRoot.swift` (`BarState`, `TopBarActions`, `TopBarMetrics`, `TopBarRoot`), `FullView.swift` (`ListMode`, `FullView`, `FullViewModals`), `Sidebar.swift` (`FullSidebar`), `SidebarResize.swift` (section resize handle), `TeamsColumn.swift`; the main window (M4b): `MainNav.swift` (`NavSection`, `LaneFilter`, `NavRules`), `MainShell.swift`, `NavSidebar.swift` |
+| `Today/` | the main window's home (M4b): `TodayRules.swift` (pure composition), `TodayScreen.swift`, `TodayPanels.swift` (calendar and assistant panels) |
 | `Pill/` | `CollapsedPill.swift` (`CollapsedBar`), `ExpandedDashboard.swift` (`ExpandedPanel` and its columns), `BriefingCard.swift`, `AccountColumn.swift` |
-| `Mail/` | `FullList.swift` (the list column, alone in its file), `MailRow.swift` (`FullRow`, `SearchHitRow`), `MailboxList.swift`, `WaitingOnList.swift`, `CommitmentsList.swift`, `ReadingPane.swift`, `Compose.swift` (`ComposePanel`) |
-| `Calendar/` | `CalendarScreen.swift`, `EventRows.swift` (upcoming rows, week chips, event popover) |
-| `Assistant/` | `AssistantDock.swift`, `AssistantThread.swift` (thread + `ChatBubble`) |
-| `Shared/` | views used by more than one feature: `Controls.swift`, `TierMenus.swift` (`SnoozeMenu`, `TierMenu`), `LaneChip.swift` (lane, signal, reply-state and label chips), `AccountRows.swift` (account rows, diagnostics, update row) |
+| `Mail/` | `FullList.swift` (the list column, alone in its file), `MailRow.swift` (`FullRow`, `SearchHitRow`), `MailboxList.swift`, `WaitingOnList.swift`, `CommitmentsList.swift`, `ReadingPane.swift`, `Compose.swift` (`ComposePanel`), `MailSection.swift` (main window: lane bar + list + reader) |
+| `Calendar/` | `CalendarScreen.swift`, `EventRows.swift` (upcoming rows, week chips, event popover), `CalendarSection.swift` (main window) |
+| `Assistant/` | `AssistantDock.swift`, `AssistantThread.swift` (thread + `ChatBubble`), `AssistantSection.swift` (main window: panes + thread) |
+| `Shared/` | views used by more than one feature: `Controls.swift`, `TierMenus.swift` (`SnoozeMenu`, `TierMenu`), `LaneChip.swift` (lane, signal, reply-state and label chips), `AccountRows.swift` (account rows, diagnostics, update row), `SegmentedBar.swift` (filter tabs, `SourceBadge`) |
 | `SettingsWindow.swift` | `Settings` scene root (`TabView`), tab grouping, `SettingsOpener` |
 | `MainWindow.swift` | standard main window (M2, `macMainWindow`): `MainWindowController` (a lazily created AppKit `NSWindow`, never a SwiftUI scene), its rules, the Settings beta switch |
 | `AppCommands.swift` | app menus (`.commands`) and their pure enablement/shortcut rules |

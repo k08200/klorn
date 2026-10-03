@@ -134,7 +134,14 @@ final class AppModel {
     /// The mail-first default (shell 2026-08-26): people read a mailbox top
     /// to bottom — the lanes ride on the rows as chips and remain one click
     /// away as categories, but navigation no longer starts lane-first.
-    var listMode: ListMode = .inbox
+    var listMode: ListMode = .inbox {
+        // The main window (M4b) follows every write, same value included:
+        // a deep link to the list mode already set must still bring its
+        // section forward. Unused while `macMainWindow` is off.
+        didSet { mainNav = NavRules.following(listMode, from: mainNav) }
+    }
+    /// Where the main window is (M4b): section, Assistant pane, last mail facet.
+    var mainNav = MainNav()
     /// Which sidebar the full view shows: the root feature nav, or the mail
     /// client's own sidebar (folders + categories, with a Back row). The
     /// reference clients swap ONE sidebar between levels — two stacked nav
@@ -542,6 +549,21 @@ final class AppModel {
             briefingStructure = try? JSONDecoder().decode(
                 BriefingStructure.self, from: Data(briefingJSON.utf8))
         }
+    }
+
+    /// Render-probe seam for the main-window shots (M4b): the state the
+    /// fixtures cannot reach through `seedForPreview`. No network, no disk.
+    func seedMainWindowForRender(
+        inboxes: [InboxOption], today: TodaySummary?,
+        pendingActions: [PendingActionsResponse.Action], commitments: [CommitmentItem],
+        chat: [ChatMessage], loadError: String? = nil
+    ) {
+        self.loadError = loadError
+        self.inboxes = inboxes
+        self.today = today
+        self.pendingActions = pendingActions
+        self.commitments = commitments
+        chatMessages = chat
     }
 
     /// Kick off the headless lifecycle at app launch. With no window driving it,
