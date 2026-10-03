@@ -54,6 +54,27 @@ the JWT in the **Keychain**. The firewall then loads.
 - **`⌥⌘K`** (Option-Command-K) — expand / collapse the bar from anywhere, even
   when another app is focused. It's a Carbon global hotkey, so it needs **no
   Accessibility permission** and never takes focus.
+- **`⌘,`** — the Settings window (also the status-item *Preferences…* and the
+  in-app Preferences buttons). Tabs: General, Accounts, Assistant,
+  Notifications, Appearance, Privacy.
+
+App menus (shown while Klorn is a regular app, i.e. a window is open):
+
+| Menu | Item | Key |
+|------|------|-----|
+| File | New Email | `⌘N` |
+| Edit | Search Mail | `⌘F` |
+| Message | Reply with AI · Dismiss | `⌘R` · — |
+| Message › Move to Lane | PUSH / MEETING / QUEUE / INFO / SILENT | `⌃⌘1`–`⌃⌘5` |
+| Go | Inbox · Calendar · Proposals · Commitments · Waiting on | `⌘1`–`⌘5` |
+| Go | Sent · Drafts · Archived · Teams (when granted) | — |
+
+Lane moves use `⌃⌘`, not bare digits: the reading pane binds bare `1`/`2`/`3`
+to its quick replies, and `⌃1`–`⌃5` are macOS's "Switch to Desktop N".
+Items disable when signed out or under a modal. Message items also need the
+full window to be key (not Settings) and a selected message. While an inline
+reply is open, Reply, Dismiss, Move to Lane, Go, and a mode-switching Search
+stay disabled so the draft can't be lost. File ▸ New Email is the only `⌘N`.
 
 ### Row actions (on each PUSH item)
 
@@ -196,6 +217,8 @@ A full XCTest suite can be added when building under Xcode/CI.
 |------|------|
 | `KlornApp.swift` | `@main` entry (+ `--self-check`); `.accessory` app, `AppDelegate` owns the model, top bar, and hotkey |
 | `TopBar.swift` | SwiftUI `CollapsedBar` (pill) + `ExpandedPanel` (3 columns) |
+| `SettingsWindow.swift` | `Settings` scene root (`TabView`), tab grouping, `SettingsOpener` |
+| `AppCommands.swift` | app menus (`.commands`) and their pure enablement/shortcut rules |
 | `TopBarController.swift` | the floating non-activating `NSPanel`: top-center pin, expand/collapse, row actions |
 | `HotKey.swift` | Carbon `RegisterEventHotKey` global shortcut (`⌥⌘K`) |
 | `RealtimeClient.swift` | WebSocket wake channel (reuses the API's `/ws` hub) |
