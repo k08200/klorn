@@ -55,8 +55,8 @@ the JWT in the **Keychain**. The firewall then loads.
   when another app is focused. It's a Carbon global hotkey, so it needs **no
   Accessibility permission** and never takes focus.
 - **`⌘,`** — the Settings window (also the status-item *Preferences…* and the
-  in-app Preferences buttons). Tabs: General, Accounts & Sources, Assistant,
-  Notifications, Appearance & Language, Data & Privacy.
+  in-app Preferences buttons). Tabs: General, Accounts, Assistant,
+  Notifications, Appearance, Privacy.
 
 App menus (shown while Klorn is a regular app, i.e. a window is open):
 
@@ -71,7 +71,10 @@ App menus (shown while Klorn is a regular app, i.e. a window is open):
 
 Lane moves use `⌃⌘`, not bare digits: the reading pane binds bare `1`/`2`/`3`
 to its quick replies, and `⌃1`–`⌃5` are macOS's "Switch to Desktop N".
-Items disable when signed out, with no message selected, or under a modal.
+Items disable when signed out or under a modal. Message items also need the
+full window to be key (not Settings) and a selected message. While an inline
+reply is open, Reply, Dismiss, Move to Lane, Go, and a mode-switching Search
+stay disabled so the draft can't be lost. File ▸ New Email is the only `⌘N`.
 
 ### Row actions (on each PUSH item)
 

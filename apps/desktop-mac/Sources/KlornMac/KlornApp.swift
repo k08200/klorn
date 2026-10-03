@@ -157,8 +157,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         let card = PushCardController(model: model)
         // Settings scene (M0): one opener for the status item, the in-app
         // Preferences buttons, and anything else outside SwiftUI's own ⌘,.
-        let opener = SettingsOpener(model: model)
-        opener.onPolicyChange = { [weak bar] in bar?.refreshActivationPolicy() }
+        let opener = SettingsOpener()
         bar.onOpenSettings = { [weak opener] in opener?.open() }
         model.onSettingsWindowChanged = { [weak bar] in bar?.refreshActivationPolicy() }
         settingsOpener = opener
@@ -222,10 +221,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         model.start()
     }
 
-    /// Finder/Dock re-open of a running Klorn (LaunchServices sends reopen
-    /// instead of spawning a second process): show the app window. Without
-    /// this, double-clicking Klorn.app again appears to do nothing — the
-    /// accessory pill gives no visible response.
     /// App-menu dispatch (M1). Every case is an existing action; commands
     /// that need the full view open it first (menus also show with the bar
     /// collapsed when show-in-Dock or Settings keeps the app .regular).
@@ -258,6 +253,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         if !model.isFullViewOpen { topBar?.openFull() }
     }
 
+    /// Finder/Dock re-open of a running Klorn (LaunchServices sends reopen
+    /// instead of spawning a second process): show the app window. Without
+    /// this, double-clicking Klorn.app again appears to do nothing — the
+    /// accessory pill gives no visible response.
     func applicationShouldHandleReopen(
         _ sender: NSApplication, hasVisibleWindows flag: Bool
     ) -> Bool {

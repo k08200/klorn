@@ -150,7 +150,6 @@
 
 /* Preferences — shell */
 "prefs.title" = "환경설정";
-"prefs.done" = "완료";
 "prefs.section.notifications" = "알림";
 "prefs.section.general" = "일반";
 "prefs.section.topBar" = "상단 바";
@@ -604,11 +603,11 @@
 
 /* Settings window + app menus (M0/M1) */
 "settings.tab.general" = "일반";
-"settings.tab.accounts" = "계정 및 소스";
+"settings.tab.accounts" = "계정";
 "settings.tab.assistant" = "어시스턴트";
 "settings.tab.notifications" = "알림";
-"settings.tab.appearance" = "화면 및 언어";
-"settings.tab.privacy" = "데이터 및 개인정보";
+"settings.tab.appearance" = "화면";
+"settings.tab.privacy" = "개인정보";
 "settings.signedOutNote" = "이 설정을 보려면 Klorn에 로그인하세요.";
 "menu.message" = "메시지";
 "menu.go" = "이동";

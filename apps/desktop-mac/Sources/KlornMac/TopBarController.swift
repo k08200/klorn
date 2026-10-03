@@ -73,6 +73,10 @@ final class TopBarController {
         resizeRecorder.onMoveOrResize = { [weak self] in
             MainActor.assumeIsolated { self?.reclampIfLost() }
         }
+        // Message-menu enablement needs to know the panel (not Settings) is key.
+        resizeRecorder.onKeyChange = { [weak self] isKey in
+            MainActor.assumeIsolated { self?.model.barPanelIsKey = isKey }
+        }
         resizeRecorder.onLiveResizeEnd = { [weak self] size in
             guard let self else { return }
             switch self.state {
@@ -523,6 +527,10 @@ final class TopBarController {
 final class PanelResizeRecorder: NSObject, NSWindowDelegate {
     var onLiveResizeEnd: ((NSSize) -> Void)?
     var onMoveOrResize: (() -> Void)?
+    var onKeyChange: ((Bool) -> Void)?
+
+    func windowDidBecomeKey(_ notification: Notification) { onKeyChange?(true) }
+    func windowDidResignKey(_ notification: Notification) { onKeyChange?(false) }
 
     func windowDidEndLiveResize(_ notification: Notification) {
         guard let window = notification.object as? NSWindow else { return }

@@ -3075,7 +3075,7 @@ private struct FullList: View {
                         .iconTarget(30)
                 }
                 .buttonStyle(.plain).foregroundStyle(Theme.textDim)
-                .keyboardShortcut("n", modifiers: .command)
+                // ⌘N lives in the app menu (File ▸ New Email) — one owner.
                 .help(L("compose.new"))
                 .accessibilityLabel(L("compose.new"))
             }
@@ -4224,8 +4224,11 @@ struct ReadingPane: View {
         }
         // Message ▸ Reply (⌘R) runs the same path as the Reply-with-AI button.
         // Never while composing: a fresh draft would overwrite the user's text.
-        .onChange(of: model.replyRequest) { _, _ in
-            guard let item, !replying, model.openedEmail != nil else { return }
+        .onChange(of: model.replyRequest) { _, request in
+            guard let item, MenuRules.shouldStartReply(
+                request, selectedItemId: item.id, replying: replying,
+                emailLoaded: model.openedEmail != nil)
+            else { return }
             startReply(item)
         }
         // Mirror the inline composer so the menu can disable Reply while it is open.

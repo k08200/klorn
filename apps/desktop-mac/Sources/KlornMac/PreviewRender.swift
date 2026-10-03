@@ -308,7 +308,6 @@ enum PreviewRender {
                 HStack {
                     Text(L("prefs.title")).font(.title3.weight(.semibold)).foregroundStyle(Theme.text)
                     Spacer()
-                    Button(L("prefs.done")) {}.buttonStyle(PrimaryButtonStyle())
                 }
                 .padding(.bottom, 10)
                 AutomationPreferences()

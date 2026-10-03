@@ -150,7 +150,6 @@
 
 /* Preferences — shell */
 "prefs.title" = "偏好设置";
-"prefs.done" = "完成";
 "prefs.section.notifications" = "通知";
 "prefs.section.general" = "通用";
 "prefs.section.topBar" = "顶部栏";
@@ -604,11 +603,11 @@
 
 /* Settings window + app menus (M0/M1) */
 "settings.tab.general" = "通用";
-"settings.tab.accounts" = "账户与来源";
+"settings.tab.accounts" = "账户";
 "settings.tab.assistant" = "助理";
 "settings.tab.notifications" = "通知";
-"settings.tab.appearance" = "外观与语言";
-"settings.tab.privacy" = "数据与隐私";
+"settings.tab.appearance" = "外观";
+"settings.tab.privacy" = "隐私";
 "settings.signedOutNote" = "登录 Klorn 后即可查看这些设置。";
 "menu.message" = "邮件";
 "menu.go" = "前往";

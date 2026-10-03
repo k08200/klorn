@@ -150,7 +150,6 @@
 
 /* Preferences — shell */
 "prefs.title" = "Einstellungen";
-"prefs.done" = "Fertig";
 "prefs.section.notifications" = "MITTEILUNGEN";
 "prefs.section.general" = "ALLGEMEIN";
 "prefs.section.topBar" = "OBERE LEISTE";
@@ -604,11 +603,11 @@
 
 /* Settings window + app menus (M0/M1) */
 "settings.tab.general" = "Allgemein";
-"settings.tab.accounts" = "Konten & Quellen";
+"settings.tab.accounts" = "Konten";
 "settings.tab.assistant" = "Assistent";
 "settings.tab.notifications" = "Mitteilungen";
-"settings.tab.appearance" = "Darstellung & Sprache";
-"settings.tab.privacy" = "Daten & Datenschutz";
+"settings.tab.appearance" = "Darstellung";
+"settings.tab.privacy" = "Datenschutz";
 "settings.signedOutNote" = "Melde dich bei Klorn an, um diese Einstellungen zu sehen.";
 "menu.message" = "E-Mail";
 "menu.go" = "Gehe zu";

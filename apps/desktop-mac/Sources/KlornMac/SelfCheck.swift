@@ -2151,6 +2151,18 @@ func runSelfChecks() async -> Bool {
               <= SettingsMetrics.smallestVisibleHeight)
     check("an open Settings window keeps the app in Cmd+Tab",
           TopBarController.activationPolicy(for: .collapsed, settingsOpen: true) == .regular)
+    check("only a real close clears the Settings-open flag",
+          !SettingsWindowEvent.willClose.openState(current: true)
+          && SettingsWindowEvent.becameKey.openState(current: false)
+          && SettingsWindowEvent.attached(visible: true).openState(current: false))
+    check("hiding or covering Settings (⌘H) keeps it counted as open",
+          SettingsWindowEvent.occlusionChanged(visible: false).openState(current: true)
+          && SettingsWindowEvent.attached(visible: false).openState(current: true)
+          && !SettingsWindowEvent.occlusionChanged(visible: false).openState(current: false))
+    check("Settings tracking uses the real window, not a private id or a timer",
+          lineOffenders { $0.contains("com_apple_SwiftUI_Settings_window") }.isEmpty
+          && !lineOffenders { $0.contains(".onDisappear { model.settingsWindowOpen") }
+              .contains("SettingsWindow.swift"))
     check("closing Settings returns the resting app to ambient",
           TopBarController.activationPolicy(for: .collapsed, settingsOpen: false) == .accessory)
     // Source pins: the overlay path is gone and the scene is real.
@@ -2163,8 +2175,9 @@ func runSelfChecks() async -> Bool {
 
     print("App menus (M1):")
     let signedInFull = MenuState(
-        signedIn: true, fullViewOpen: true, modalOpen: false, targetTier: .queue,
-        emailLoaded: true, readerReplying: false, teamModeAvailable: false)
+        signedIn: true, fullViewOpen: true, barIsKey: true, modalOpen: false, targetTier: .queue,
+        emailLoaded: true, readerReplying: false, teamModeAvailable: false,
+        listHasSearchField: true)
     var everyCommand: [MenuCommand] = [.compose, .find, .reply, .dismiss]
     everyCommand += Tier.allCases.map { MenuCommand.moveTo($0) }
     everyCommand += MenuRules.destinations.map { MenuCommand.go($0) }
@@ -2190,6 +2203,33 @@ func runSelfChecks() async -> Bool {
     composing.readerReplying = true
     check("reply is disabled while the inline composer is open",
           !MenuRules.isEnabled(.reply, in: composing))
+    check("an open inline reply blocks everything that would unmount it",
+          !MenuRules.isEnabled(.dismiss, in: composing)
+          && Tier.allCases.allSatisfy { !MenuRules.isEnabled(.moveTo($0), in: composing) }
+          && MenuRules.destinations.allSatisfy { !MenuRules.isEnabled(.go($0), in: composing) })
+    check("compose and in-place Find stay live while replying",
+          MenuRules.isEnabled(.compose, in: composing) && MenuRules.isEnabled(.find, in: composing))
+    var composingElsewhere = composing
+    composingElsewhere.listHasSearchField = false
+    check("Find that would switch modes waits for the reply to close",
+          !MenuRules.isEnabled(.find, in: composingElsewhere))
+    var settingsKey = signedInFull
+    settingsKey.barIsKey = false
+    check("message commands are off while another window (Settings) is key",
+          [MenuCommand.reply, .dismiss, .moveTo(.push)]
+              .allSatisfy { !MenuRules.isEnabled($0, in: settingsKey) }
+          && MenuRules.isEnabled(.go(.inbox), in: settingsKey))
+    let request = ReplyRequest(token: 1, itemId: "a")
+    check("menu Reply only lands on the item it was issued for",
+          MenuRules.shouldStartReply(request, selectedItemId: "a", replying: false, emailLoaded: true)
+          && !MenuRules.shouldStartReply(request, selectedItemId: "b", replying: false, emailLoaded: true)
+          && !MenuRules.shouldStartReply(request, selectedItemId: nil, replying: false, emailLoaded: true)
+          && !MenuRules.shouldStartReply(nil, selectedItemId: "a", replying: false, emailLoaded: true))
+    check("menu Reply never overwrites a reply in progress or races the load",
+          !MenuRules.shouldStartReply(request, selectedItemId: "a", replying: true, emailLoaded: true)
+          && !MenuRules.shouldStartReply(request, selectedItemId: "a", replying: false, emailLoaded: false))
+    check("⌘N has a single owner (the app menu)",
+          lineOffenders { $0.contains(".keyboardShortcut(\"n\"") }.isEmpty)
     var loading = signedInFull
     loading.emailLoaded = false
     check("reply waits for the email to load",

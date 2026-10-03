@@ -11,39 +11,55 @@ enum MenuCommand: Hashable {
     case go(ListMode)
 }
 
+/// A Reply request from the menu, bound to the item it was issued for.
+struct ReplyRequest: Equatable, Sendable {
+    let token: Int
+    let itemId: String
+}
+
 /// The slice of app state that decides which commands are live.
 struct MenuState: Equatable {
     var signedIn: Bool
     var fullViewOpen: Bool
+    /// The bar's panel is the key window (not Settings or another window).
+    var barIsKey: Bool
     var modalOpen: Bool
     /// The lane of the firewall item the reading pane shows, nil if none.
     var targetTier: Tier?
     var emailLoaded: Bool
     var readerReplying: Bool
     var teamModeAvailable: Bool
+    /// The list column currently shows the search field (Find needs no
+    /// mode switch, so it can't unmount the reading pane).
+    var listHasSearchField: Bool
 
     @MainActor
     init(model: AppModel) {
         signedIn = model.phase == .signedIn
         fullViewOpen = model.isFullViewOpen
+        barIsKey = model.barPanelIsKey
         modalOpen = model.fullViewModalOpen
         targetTier = model.menuTargetItem?.tier
         emailLoaded = model.openedEmail != nil
         readerReplying = model.readerReplying
         teamModeAvailable = model.teamModeAvailable
+        listHasSearchField = model.listMode.hasSearchField
     }
 
     init(
-        signedIn: Bool, fullViewOpen: Bool, modalOpen: Bool, targetTier: Tier?,
-        emailLoaded: Bool, readerReplying: Bool, teamModeAvailable: Bool
+        signedIn: Bool, fullViewOpen: Bool, barIsKey: Bool, modalOpen: Bool, targetTier: Tier?,
+        emailLoaded: Bool, readerReplying: Bool, teamModeAvailable: Bool,
+        listHasSearchField: Bool
     ) {
         self.signedIn = signedIn
         self.fullViewOpen = fullViewOpen
+        self.barIsKey = barIsKey
         self.modalOpen = modalOpen
         self.targetTier = targetTier
         self.emailLoaded = emailLoaded
         self.readerReplying = readerReplying
         self.teamModeAvailable = teamModeAvailable
+        self.listHasSearchField = listHasSearchField
     }
 }
 
@@ -59,21 +75,38 @@ enum MenuRules {
     static func isEnabled(_ command: MenuCommand, in s: MenuState) -> Bool {
         guard s.signedIn else { return false }
         // Message commands act on the mail visible in the reading pane, so
-        // they need the full view up, no modal over it, and a firewall item.
-        let canActOnMessage = s.fullViewOpen && !s.modalOpen && s.targetTier != nil
+        // they need the full view up AND key (not Settings), no modal over
+        // it, and a firewall item.
+        let canActOnMessage = s.fullViewOpen && s.barIsKey && !s.modalOpen && s.targetTier != nil
+        // Anything that clears the selection or switches the list mode
+        // unmounts the inline reply composer and loses what was typed, so
+        // those commands wait until the composer is closed.
+        let keepsDraft = !s.readerReplying
         switch command {
-        case .compose, .find:
+        case .compose:
             return !s.modalOpen
+        case .find:
+            return !s.modalOpen && (s.listHasSearchField || keepsDraft)
         case .go(let mode):
-            return !s.modalOpen && (mode != .teams || s.teamModeAvailable)
+            return !s.modalOpen && keepsDraft && (mode != .teams || s.teamModeAvailable)
         case .reply:
             // Re-drafting while the inline composer is open would wipe it.
-            return canActOnMessage && s.emailLoaded && !s.readerReplying
+            return canActOnMessage && s.emailLoaded && keepsDraft
         case .dismiss:
-            return canActOnMessage
+            return canActOnMessage && keepsDraft
         case .moveTo(let tier):
-            return canActOnMessage && s.targetTier != tier
+            return canActOnMessage && keepsDraft && s.targetTier != tier
         }
+    }
+
+    /// Whether the reading pane should act on a menu Reply: only for the
+    /// item it was issued for, with the email loaded and no reply already
+    /// being composed. Pure for the harness.
+    static func shouldStartReply(
+        _ request: ReplyRequest?, selectedItemId: String?, replying: Bool, emailLoaded: Bool
+    ) -> Bool {
+        guard let request, let selectedItemId else { return false }
+        return request.itemId == selectedItemId && !replying && emailLoaded
     }
 
     /// Key equivalents. Every one carries ⌘ or ⌃: a bare key would be eaten

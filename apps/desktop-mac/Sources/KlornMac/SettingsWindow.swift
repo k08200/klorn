@@ -20,8 +20,9 @@ enum PrefsSection: CaseIterable, Hashable, Sendable {
     }
 }
 
-/// The Settings window's tabs, in display order. Names follow the settings
-/// IA in `docs/design/productization-plan.md` §1 for the groups the Mac app
+/// The Settings window's tabs, in display order. Groups follow the settings
+/// IA in `docs/design/productization-plan.md` §1 (labels shortened to one
+/// word each so six toolbar tabs fit) for the groups the Mac app
 /// already has; plan groups with no Mac settings yet (Lanes & rules, Team,
 /// Integrations, billing) are deliberately absent rather than shown empty.
 /// `general` is the macOS-convention home for app chrome (login item,
@@ -71,7 +72,9 @@ enum SettingsTab: String, CaseIterable, Identifiable, Sendable {
 /// never grow the window (the content-overflow clipping lesson, 2026-08-20),
 /// and the height fits the smallest supported display's visible area.
 enum SettingsMetrics {
-    static let width: CGFloat = 560
+    /// Wide enough for all six toolbar tabs in the longest locale (de/fr)
+    /// without the overflow chevron hiding the last tab (probe, 2026-10-02).
+    static let width: CGFloat = 620
     static let height: CGFloat = 560
     /// Title bar + toolbar tab strip above the content, approximately.
     static let chromeHeight: CGFloat = 90
@@ -85,6 +88,22 @@ struct SettingsRoot: View {
     @AppStorage("settings.selectedTab") private var selectedRaw = SettingsTab.general.rawValue
 
     var body: some View {
+        tabs
+            // L() is not observable; rebuild the tabs on a language change
+            // (same trick as the top bar) — the tab survives via @AppStorage.
+            // Scoped to the tabs only, so the window tracker below is never
+            // torn down by a language switch.
+            .id(model.settings.languageRevision)
+            .frame(width: SettingsMetrics.width, height: SettingsMetrics.height)
+            // Cmd+Tab compromise: an open Settings window is a summoned app
+            // window, so the app is .regular while it is up (see
+            // TopBarController.activationPolicy). Driven by the real NSWindow,
+            // not view lifecycle: SwiftUI may keep this content alive after
+            // the window closes, so onDisappear is not a close signal.
+            .background(SettingsWindowTracker { open in model.settingsWindowOpen = open })
+    }
+
+    private var tabs: some View {
         TabView(selection: Binding(
             get: { SettingsTab.restored(selectedRaw) },
             set: { selectedRaw = $0.rawValue })
@@ -95,16 +114,90 @@ struct SettingsRoot: View {
                     .tag(tab)
             }
         }
-        .frame(width: SettingsMetrics.width, height: SettingsMetrics.height)
-        // L() is not observable; rebuild on a language change (same trick
-        // as the top bar) — the tab survives via @AppStorage.
-        .id(model.settings.languageRevision)
-        // Cmd+Tab compromise: an open Settings window is a summoned app
-        // window, so the app is .regular while it is up (see
-        // TopBarController.activationPolicy). Appear/disappear fire on every
-        // open and close of the scene's window, whichever path opened it.
-        .onAppear { model.settingsWindowOpen = true }
-        .onDisappear { model.settingsWindowOpen = false }
+    }
+}
+
+/// What happened to the Settings window, as the tracker sees it.
+enum SettingsWindowEvent: Sendable {
+    case attached(visible: Bool)
+    case becameKey
+    case occlusionChanged(visible: Bool)
+    case willClose
+}
+
+extension SettingsWindowEvent {
+    /// Whether Settings counts as open after `event`. Only a real close
+    /// clears it: hiding the app (⌘H) or covering the window must not drop
+    /// the app to .accessory, which would leave a hidden accessory app that
+    /// Cmd+Tab can no longer bring back. Pure for the harness.
+    func openState(current: Bool) -> Bool {
+        switch self {
+        case .willClose: false
+        case .becameKey: true
+        case .attached(let visible), .occlusionChanged(let visible): visible ? true : current
+        }
+    }
+}
+
+/// Reports the Settings window's open/closed state from the NSWindow that
+/// actually hosts the scene content (no private identifiers, no timers).
+struct SettingsWindowTracker: NSViewRepresentable {
+    let onChange: @MainActor (Bool) -> Void
+
+    func makeNSView(context: Context) -> TrackingView {
+        let view = TrackingView()
+        view.onChange = onChange
+        return view
+    }
+
+    func updateNSView(_ view: TrackingView, context: Context) {
+        view.onChange = onChange
+    }
+
+    final class TrackingView: NSView {
+        var onChange: (@MainActor (Bool) -> Void)?
+        private var isOpen = false
+        nonisolated(unsafe) private var tokens: [NSObjectProtocol] = []
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            tokens.forEach(NotificationCenter.default.removeObserver)
+            tokens = []
+            guard let window else { return }
+            let names: [Notification.Name] = [
+                NSWindow.didBecomeKeyNotification,
+                NSWindow.didChangeOcclusionStateNotification,
+                NSWindow.willCloseNotification,
+            ]
+            tokens = names.map { name in
+                NotificationCenter.default.addObserver(
+                    forName: name, object: window, queue: .main
+                ) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.handle(name) }
+                }
+            }
+            apply(.attached(visible: window.isVisible))
+        }
+
+        private func handle(_ name: Notification.Name) {
+            guard let window else { return }
+            switch name {
+            case NSWindow.didBecomeKeyNotification: apply(.becameKey)
+            case NSWindow.willCloseNotification: apply(.willClose)
+            default: apply(.occlusionChanged(visible: window.occlusionState.contains(.visible)))
+            }
+        }
+
+        private func apply(_ event: SettingsWindowEvent) {
+            let next = event.openState(current: isOpen)
+            guard next != isOpen else { return }
+            isOpen = next
+            onChange?(next)
+        }
+
+        deinit {
+            tokens.forEach(NotificationCenter.default.removeObserver)
+        }
     }
 }
 
@@ -116,54 +209,28 @@ struct SettingsRoot: View {
 /// independent of whether the pill is drawn (hidden-pill mode has no panel).
 @MainActor
 final class SettingsOpener {
-    private let model: AppModel
     private var action: OpenSettingsAction?
     private var host: NSHostingView<Capture>?
-    /// Re-applies the activation policy (wired to the top bar controller).
-    var onPolicyChange: (() -> Void)?
 
-    static let windowIdentifier = "com_apple_SwiftUI_Settings_window"
-
-    init(model: AppModel) {
-        self.model = model
+    init() {
         let host = NSHostingView(rootView: Capture { [weak self] action in self?.action = action })
         _ = host.fittingSize  // evaluates the body once, which captures the action
         self.host = host
     }
 
+    /// The window tracker promotes the app to .regular once the window is
+    /// actually up; nothing here guesses at that.
     func open() {
         guard let action else {
             Log.app.error("settings: openSettings action was never captured")
             return
         }
-        // Promote BEFORE activating: an .accessory app can't hold the menu
-        // bar or a Cmd+Tab slot, and the window must arrive frontmost.
-        model.settingsWindowOpen = true
-        onPolicyChange?()
         // Explicit user command (menu item / button), so take focus outright:
         // cooperative NSApp.activate() is refused when the request isn't tied
         // to the current input event, which left the window behind the
         // frontmost app in testing (2026-10-02).
         NSApp.activate(ignoringOtherApps: true)
         action()
-        // SwiftUI creates the window asynchronously on first open.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-            MainActor.assumeIsolated { self?.bringToFront() }
-        }
-    }
-
-    private func bringToFront() {
-        guard let window = NSApp.windows.first(where: {
-            $0.identifier?.rawValue == Self.windowIdentifier
-        }) else {
-            // No window means no onDisappear will ever clear the promotion —
-            // drop it here so the app can't get stuck in Cmd+Tab. A late
-            // window re-promotes itself through SettingsRoot.onAppear.
-            Log.app.error("settings: window did not appear")
-            model.settingsWindowOpen = false
-            return
-        }
-        if !window.isKeyWindow { window.makeKeyAndOrderFront(nil) }
     }
 
     /// Reads the environment action during body evaluation.

@@ -46,14 +46,23 @@ final class AppModel {
     /// the Message menu is disabled then, since re-drafting would wipe
     /// what the user has typed.
     var readerReplying = false
-    /// Bumped by the Message menu's Reply; the reading pane answers by
-    /// starting the same AI-drafted reply as its own button.
-    private(set) var replyRequest = 0
+    /// Mirrors whether the top bar's panel is the key window. Message-menu
+    /// commands act on what the panel shows, so they stay off while another
+    /// window (Settings) is key. Written by TopBarController.
+    var barPanelIsKey = false
+    /// Set by the Message menu's Reply; the reading pane answers by starting
+    /// the same AI-drafted reply as its own button — for this item only.
+    private(set) var replyRequest: ReplyRequest?
     /// Set by Find (⌘F); the mail list's search field takes focus and clears it.
     var searchFocusPending = false
 
-    /// Message ▸ Reply: ask the reading pane to start a reply.
-    func requestReply() { replyRequest &+= 1 }
+    /// Message ▸ Reply: ask the reading pane to start a reply to the item
+    /// it shows now. The id rides along so a selection change in between
+    /// can never redirect the reply to another message.
+    func requestReply() {
+        guard let item = menuTargetItem else { return }
+        replyRequest = ReplyRequest(token: (replyRequest?.token ?? 0) &+ 1, itemId: item.id)
+    }
 
     /// Go-menu navigation: switch the list column and put the sidebar on the
     /// level that owns the destination (mail family vs root features).
