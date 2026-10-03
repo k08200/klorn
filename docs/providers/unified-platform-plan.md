@@ -3042,7 +3042,7 @@ with no connector behind it yet, and two read-only routes.
   routes answer Fastify's default 404 before authentication (`darkRouteGate`)
   and every reader hides every row. Nothing writes a row in D2, so with the flag
   on the list is still empty.
-- Model. Migration `20261008010000_drive_file` (after
+- Model. Migration `20261009010000_drive_file` (after
   `20261007010000_linked_calendar_display_name`), additive only: one enum, one
   table, `SET LOCAL lock_timeout = '5s'`. Its SQL is pinned by
   `drive-file-migration.test.ts`.

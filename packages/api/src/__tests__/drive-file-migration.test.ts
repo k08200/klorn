@@ -13,7 +13,7 @@ import { describe, expect, it } from "vitest";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const prismaDir = join(here, "..", "..", "prisma");
-const MIGRATION = "20261008010000_drive_file";
+const MIGRATION = "20261009010000_drive_file";
 const PREVIOUS = "20261007010000_linked_calendar_display_name";
 
 const sql = readFileSync(join(prismaDir, "migrations", MIGRATION, "migration.sql"), "utf8");
