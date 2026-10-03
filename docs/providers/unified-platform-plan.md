@@ -3033,7 +3033,9 @@ does not wait for them.
 
 **D1 — object storage foundation.** Depends on: FA-7 for the flip, not for the
 merge. Landed 2026-10-03 (branch `feat/object-storage`, PR not yet opened), flag
-OFF. It started early because E4 needs it before workstream D's turn comes.
+OFF. Two independent reviews (code and security) came back the same day; their
+findings are folded into this entry. It started early because E4 needs it before
+workstream D's turn comes.
 - Context: nothing in the repo stored a file. `mail/email-attachments.ts` keeps
   only extracted text (at most 24,000 characters per attachment) in Postgres.
   D3, D4 and E4 need bytes somewhere, and L15 and P6 say where: Cloudflare R2,
@@ -3044,16 +3046,20 @@ OFF. It started early because E4 needs it before workstream D's turn comes.
   No route, no schema change, no UI.
 - Landed (`packages/api/src/storage/`):
   - Flag `OBJECT_STORAGE_ENABLED` (`objectStorageEnabled()` in `config.ts`,
-    lenient parse, read per call). Off: `storage/runtime.ts` builds no client,
-    reads no `OBJECT_STORAGE_*` variable and opens no connection, and the purge
-    skips storage (tested with mutations that remove each check). Everything
-    outside `storage/` reaches a store through `runtime.ts`
-    (`getUserStorage()`, `getObjectStore()`, both null while off).
+    lenient parse, read per call). Off: `storage/runtime.ts` never loads the S3
+    implementation or `aws4fetch` (a dynamic import, proven by
+    `storage-lazy-load.test.ts`), builds no client, reads the value of no
+    `OBJECT_STORAGE_*` variable and opens no connection, and the purge skips
+    storage (tested with mutations that remove each check). Everything outside
+    `storage/` reaches a store through `runtime.ts` (`getUserStorage()`,
+    `getObjectStore()`, both async and null while off). **D3, D4 and E4 stay on
+    `getUserStorage()`**: the raw store has no notion of who owns a key.
   - Two layers. `ObjectStore` (`object-store.ts`) is the vendor seam:
     `putObject(key, body, {contentType, size})`, `getObject(key)` (a stream, or
-    null), `headObject`, `deleteObject`, `deleteByPrefix(prefix)` (one page per
-    call, answers `{deleted, more}`), `signedDownloadUrl(key, {expiresInSeconds,
-    downloadName})` and `ping()`. `UserStorage` (`user-storage.ts`) is what D3,
+    null), `headObject`, `deleteObject`, `deleteByPrefix(prefix, {signal})` (one
+    page per call, answers `{deleted, more}`), `signedDownloadUrl(key,
+    {expiresInSeconds, downloadName})` and `ping()`. `putObject` is for a fresh
+    key only. `UserStorage` (`user-storage.ts`) is what D3,
     D4 and E4 call: every function takes the `userId`, an upload gets its key
     minted there, and any other call refuses a key outside that user's prefix
     before the store is touched (`key-not-owned`). The `userId` must come from
@@ -3069,8 +3075,13 @@ OFF. It started early because E4 needs it before workstream D's turn comes.
     - `MAX_OBJECT_BYTES` 25 MiB, the only size the plan has decided (L14). It is
       checked against the declared size before the upload and counted on the
       stream during it (`guardBytes`): a stream that passes the cap, or does not
-      match its declared size, is aborted and nothing is stored. A caller may
-      pass a lower `maxBytes`; nothing raises the cap. The drive's own number is
+      match its declared size, is aborted and nothing is stored. The chunk that
+      completes the declared size is held back until the stream has ended, so a
+      stream that delivers its declared size and then more never hands the
+      bucket a complete body. If an upload fails after a request went out, the
+      store also deletes the key (best effort): a bucket can commit an upload
+      whose answer was lost. A caller may pass a lower `maxBytes`; nothing
+      raises the cap. The drive's own number is
       a flip-time decision (P3) and changes this constant in D3.
     - Content type: normalised to `type/subtype`, and each caller passes a
       `contentTypePolicy` (required, no default; `allowContentTypes`,
@@ -3084,6 +3095,12 @@ OFF. It started early because E4 needs it before workstream D's turn comes.
       and `response-content-type: application/octet-stream`. A stored HTML or
       SVG file therefore downloads; it never renders on the storage origin. An
       inline preview is a separate decision for D3.
+    - The same two headers are also stored on the object at PUT
+      (`Content-Type: application/octet-stream`, `Content-Disposition:
+      attachment`), so a download is safe even from a vendor that ignores the
+      signed overrides. The caller's content type is kept as signed user
+      metadata (`x-amz-meta-content-type`, already normalised) and is what
+      `headObject` and `getObject` report.
   - The S3 implementation (`s3-store.ts`): plain REST calls over Node's `fetch`,
     signed with SigV4. Path-style addressing by default (R2, MinIO, Supabase
     Storage, including an endpoint with a base path); virtual-hosted style when
@@ -3091,16 +3108,35 @@ OFF. It started early because E4 needs it before workstream D's turn comes.
     a `Content-Length` and an unsigned payload, so TLS carries the integrity and
     the endpoint must be https outside development and tests. Redirects are not
     followed. Nothing is retried: a streamed body cannot be replayed and the
-    other calls are idempotent. Timeouts are named (15 s for head, delete and
-    list; 120 s for one upload or download). Host, bucket and credentials come
+    other calls are idempotent. `StorageError.retryable` tells the caller when a
+    second try may pass (no answer, 5xx, 429) and when it will not (4xx,
+    configuration, a limit). Timeouts are named (15 s for head, delete and
+    list; 120 s for one upload or download). A response body is never read
+    without a byte cap (4 MiB for a list, 16 KiB of an error body), and a body
+    that stalls becomes a `StorageError`. Host, bucket and credentials come
     only from the operator's environment, so the SSRF pinning B4 needed for a
     user-supplied host does not apply here.
   - Deletion. `deleteByPrefix` accepts only `u/<userId>/` or
     `u/<userId>/<purpose>/`, lists one page (at most 1,000 keys) and deletes
-    those keys one by one, eight at a time. If the listing names any key outside
-    the prefix or outside the grammar, nothing is deleted. A page whose deletes
-    partly fail throws `delete-incomplete`. `UserStorage.purgeUser` repeats
-    pages until the prefix is empty, at most `PURGE_MAX_PAGES` (1,000).
+    those keys one by one, eight at a time.
+    - It deletes every key that starts with the prefix, including one this code
+      did not mint (an older grammar, a purpose added and rolled back, a
+      console-made folder). Such keys are counted in one `[STORAGE]` warning,
+      never named. A stray key therefore cannot block a user's deletion.
+    - Each key is percent-encoded and the resulting URL is checked: decoded, its
+      path must be exactly the bucket path plus the key (`s3-address.ts`). A key
+      with a `..` or `.` segment fails that check, because a URL parser would
+      rewrite it onto another object. Such keys are left, and the call throws
+      `delete-incomplete` after deleting the rest.
+    - If the listing names any key outside the prefix, nothing is deleted.
+    - It stops at the first batch with a failed delete and throws
+      `delete-incomplete`. Going on against a failing bucket would cost one
+      15 s timeout per batch, about half an hour for a full page.
+    - `UserStorage.purgeUser` repeats pages until the prefix is empty, within
+      `PURGE_DEADLINE_MS` (45 s) and `PURGE_MAX_PAGES` (1,000). The deadline is
+      an `AbortSignal` handed to every page: at the deadline nothing new is
+      sent and a request in flight is dropped. The error is retryable and the
+      progress is kept.
   - Purge wiring (`user-deletion.ts`). Both deletion paths now live there:
     `deleteUserAndAllData` (the account goes: `DELETE /api/auth/account` and the
     admin route) and `purgeAllUserData` (rows go, the account stays:
@@ -3109,21 +3145,26 @@ OFF. It started early because E4 needs it before workstream D's turn comes.
     **Decision: the purge blocks on storage.** If the bucket is unreachable,
     misconfigured or keeps an object, the call throws, no row is deleted, and
     the request answers 500 through the existing error handler (logged and sent
-    to Sentry). The reason: the user id is the only handle on the objects. Once
+    to Sentry). The blocked purge is also reported on its own, tagged
+    `scope: storage.purge` with `storageCode` and `retryable`, so an alert can
+    be built on it (runbook below). The reason: the user id is the only handle on the objects. Once
     the rows are gone, files left behind could never be found, and the request
     would have answered "deleted" while they still existed. Deleting is
     idempotent, so the person retries. The price: while the flag is on, a
     storage outage also blocks account deletion.
   - Health (`checkObjectStorageAtStartup`, called from `index.ts` after
-    `listen`). Off: nothing. On: it validates the variables and lists one key,
-    which needs exactly the permission the purge needs. A bad config is reported
-    by variable NAME, a failing bucket by HTTP status and the vendor's error
-    code (`[STORAGE]` log lines and Sentry). **It does not stop the boot**:
-    storage is auxiliary and mail must keep serving. Every storage call then
-    fails closed with `misconfigured` until it is fixed. No value is logged, the
-    error body from the vendor is never printed (only its `<Code>`), and the
-    store keeps its credentials in `#private` fields so logging the object
-    prints nothing.
+    `listen`). On: it validates the variables and lists one key, which needs
+    exactly the permission the purge needs. A bad config is reported by variable
+    NAME, a failing bucket by HTTP status and the vendor's error code
+    (`[STORAGE]` log lines and Sentry, `scope: storage.startup`). **It does not
+    stop the boot**: storage is auxiliary and mail must keep serving. Every
+    storage call then fails closed with `misconfigured` until it is fixed. Off:
+    it only checks whether the endpoint, bucket or key variables are set, and
+    warns by name if they are, because a purge would then skip objects that may
+    exist. No value is logged anywhere: the success line says only that the
+    check passed (an R2 host contains the account id), the vendor's error body
+    is never printed (only its `<Code>`), and the store keeps its credentials in
+    `#private` fields so logging the object prints nothing.
   - Tests. `MemoryObjectStore` (`memory-store.ts`) implements the same interface
     for D3, D4 and E4. One contract suite
     (`__tests__/helpers/object-store-contract.ts`) runs against the fake,
@@ -3169,18 +3210,45 @@ OFF. It started early because E4 needs it before workstream D's turn comes.
     `storage-s3-real-bucket.test.ts` against a test bucket. It covers what the
     stand-in cannot: that R2 accepts the unsigned-payload streamed PUT, honours
     `response-content-disposition` and `response-content-type` on a signed URL,
-    canonicalises the `filename*` value the same way, and lets a bucket-scoped
-    token list.
+    canonicalises the `filename*` value the same way, keeps `x-amz-meta-*` and
+    a stored `Content-Disposition`, and lets a bucket-scoped token list.
   - A HEAD answer has no body, so `headObject` cannot tell a missing object from
     a missing bucket. `ping` and every GET can.
+- Runbook: an account deletion is blocked by storage (flag on).
+  - What the person sees: "delete my account" or "delete my data" fails with a
+    500. Nothing was deleted from the database, and whatever objects were
+    already removed stay removed. Trying again is safe and carries on.
+  - What to check: Sentry events tagged `scope: storage.purge`, and the
+    `[STORAGE] purge blocked (<code>)` log line. The code says where to look:
+    - `misconfigured`: the line names the wrong `OBJECT_STORAGE_*` variables.
+    - `access-denied`: the token was revoked or lost object read and write on
+      the bucket.
+    - `bucket-not-found`: the bucket or the endpoint is wrong.
+    - `unreachable`, or `upstream` with a 5xx or 429: the vendor is down or
+      throttling (`retryable: true`). Check its status page.
+    - `delete-incomplete`, retryable: the 45 s deadline or a failed batch. A
+      retry continues. Not retryable: the prefix holds a key that cannot be
+      addressed over HTTP (a `..` or `.` segment).
+  - How to unblock: fix the variable or the token and have the person retry;
+    for an outage, retry when the vendor is back; for an unaddressable key,
+    delete `u/<userId>/` in the vendor's console, then retry.
+  - Last resort for a deletion that cannot wait: delete `u/<userId>/` in the
+    vendor's console yourself, turn the flag off, complete the deletion, turn
+    the flag back on. While it is off every other deletion skips storage too,
+    so keep that window short and check the startup warning is gone afterwards.
 - Before the flip:
   - Do not turn the flag off again once objects exist: the purge would skip
-    them. Kill switches belong to the features built on top (D3, E4).
-  - D3 must close the upload race: an upload that is in flight while the account
-    is being deleted can land after the object purge. It needs a check at
-    upload time or an orphan sweep over `u/` prefixes with no user row.
+    them. Startup warns when the flag is off and a bucket is still configured.
+    Kill switches belong to the features built on top (D3, E4).
+- Left to D3, on purpose:
+  - A durable pending-purge record, so a blocked deletion is retried by the
+    system and not by the person. It needs a table, and D1 changes no schema.
+  - The upload race: an upload in flight while the account is being deleted can
+    land after the object purge and orphan an object. D3 needs a check at
+    upload time or a sweep over `u/` prefixes with no user row.
   - The purge deletes one object per request. D3 revisits this (a batch delete
     or a background job) once the drive's real volumes are known.
+  - D3 calls `getUserStorage()` and never the raw store.
 **D2 — drive model and provider seam** (*outline*). A metadata index of files
 across sources.
 **D3 — Klorn drive** (*outline*). Depends on: D1, D2. Upload, list, download,

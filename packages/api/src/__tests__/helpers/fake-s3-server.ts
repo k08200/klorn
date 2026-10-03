@@ -8,7 +8,12 @@
  *     of a presigned URL. A request the store builds wrongly gets 403;
  *   - PUT needs a Content-Length (411 without one, as S3 answers) and stores
  *     nothing unless the whole body arrives;
- *   - GET honours `response-content-disposition` and `response-content-type`;
+ *   - PUT stores Content-Type, Content-Disposition and `x-amz-meta-*`, and GET
+ *     and HEAD answer with them, as S3 does;
+ *   - GET honours `response-content-disposition` and `response-content-type`,
+ *     unless `ignoreResponseOverrides` is set (a vendor that drops them);
+ *   - `commitThenFail` stores a PUT and then answers an error, the way a lost
+ *     response looks to the client;
  *   - ListObjectsV2 with `prefix` and `max-keys`, answering IsTruncated;
  *   - DELETE is idempotent (204), HEAD answers 404 without a body;
  *   - path-style addressing only, one bucket.
@@ -40,6 +45,10 @@ export interface RecordedRequest {
 interface StoredEntry {
   bytes: Buffer;
   contentType: string;
+  /** The Content-Disposition sent with the PUT, when there was one. */
+  contentDisposition?: string;
+  /** `x-amz-meta-*` headers sent with the PUT, by full header name. */
+  metadata?: Record<string, string>;
 }
 
 interface ForcedFailure {
@@ -89,6 +98,10 @@ export class FakeS3Server {
   readonly requests: RecordedRequest[] = [];
   /** Keys the next list answers with, whatever the prefix. For hostile-answer tests. */
   listOverride: string[] | null = null;
+  /** Answer GET as a vendor that ignores the `response-*` query overrides would. */
+  ignoreResponseOverrides = false;
+  /** Store the next PUT, then answer it with this error (a lost response). */
+  commitThenFail: { status: number; code: string } | null = null;
   private forced: ForcedFailure | null = null;
   private server: http.Server | null = null;
 
@@ -245,11 +258,21 @@ export class FakeS3Server {
   ): Reply {
     if (method === "PUT") {
       if (headers["content-length"] === undefined) return failure(411, "MissingContentLength");
+      const metadata = Object.fromEntries(
+        Object.entries(headers)
+          .filter(([name]) => name.startsWith("x-amz-meta-"))
+          .map(([name, value]) => [name, String(value)]),
+      );
+      const disposition = headers["content-disposition"];
       this.objects.set(key, {
         bytes: body,
         contentType: String(headers["content-type"] ?? "binary/octet-stream"),
+        ...(disposition ? { contentDisposition: String(disposition) } : {}),
+        metadata,
       });
-      return reply(200, { etag: '"fake"' });
+      const lost = this.commitThenFail;
+      this.commitThenFail = null;
+      return lost ? failure(lost.status, lost.code) : reply(200, { etag: '"fake"' });
     }
     if (method === "DELETE") {
       this.objects.delete(key);
@@ -258,11 +281,14 @@ export class FakeS3Server {
     const entry = this.objects.get(key);
     if (method !== "GET" && method !== "HEAD") return failure(405, "MethodNotAllowed");
     if (!entry) return failure(404, "NoSuchKey");
-    const disposition = url.searchParams.get("response-content-disposition");
+    const override = (name: string) =>
+      this.ignoreResponseOverrides ? null : url.searchParams.get(name);
+    const disposition = override("response-content-disposition") ?? entry.contentDisposition;
     return reply(
       200,
       {
-        "content-type": url.searchParams.get("response-content-type") ?? entry.contentType,
+        ...entry.metadata,
+        "content-type": override("response-content-type") ?? entry.contentType,
         "content-length": entry.bytes.byteLength,
         ...(disposition ? { "content-disposition": disposition } : {}),
       },

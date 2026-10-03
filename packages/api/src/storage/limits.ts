@@ -52,6 +52,11 @@ export interface ByteGuardOptions {
  * runs past the cap or past its declared size, before the offending chunk is
  * handed on, and fails at the end if it came up short. The declared size is
  * only a claim; this counter is what holds the cap.
+ *
+ * The chunk that COMPLETES the declared size is held back until the source has
+ * ended. Handing it on at once would give the bucket a whole body of the
+ * declared length, which it commits, while a source that then sends more makes
+ * the caller see a failed upload.
  */
 export async function* guardBytes(
   source: AsyncIterable<Uint8Array>,
@@ -59,7 +64,9 @@ export async function* guardBytes(
 ): AsyncGenerator<Uint8Array> {
   const { declaredSize, maxBytes } = options;
   let seen = 0;
+  let held: Uint8Array | null = null;
   for await (const chunk of source) {
+    if (chunk.byteLength === 0) continue;
     seen += chunk.byteLength;
     if (seen > maxBytes) {
       throw new StorageError("object-too-large", `upload ran past the ${maxBytes} byte cap`);
@@ -67,11 +74,13 @@ export async function* guardBytes(
     if (seen > declaredSize) {
       throw new StorageError("size-mismatch", "upload is longer than its declared size");
     }
-    yield chunk;
+    if (seen === declaredSize) held = chunk;
+    else yield chunk;
   }
   if (seen !== declaredSize) {
     throw new StorageError("size-mismatch", "upload is shorter than its declared size");
   }
+  if (held) yield held;
 }
 
 /** `type/subtype`, lower-cased, parameters dropped; null when it is not a media type. */

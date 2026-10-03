@@ -61,6 +61,15 @@ export interface SignedDownload {
   expiresInSeconds: number;
 }
 
+export interface DeleteByPrefixOptions {
+  /**
+   * The caller's deadline. Once it is aborted the call stops: nothing new is
+   * sent, a request in flight is dropped, and the call rejects with a retryable
+   * `delete-incomplete` (or `unreachable`). What was deleted stays deleted.
+   */
+  signal?: AbortSignal;
+}
+
 export interface DeleteByPrefixResult {
   /** Objects removed by this call. */
   deleted: number;
@@ -70,9 +79,12 @@ export interface DeleteByPrefixResult {
 
 export interface ObjectStore {
   /**
-   * Store one object. Nothing is stored unless the whole body arrives and
-   * matches `size`. When the call fails, the body may be left unread or partly
-   * read: the caller disposes of its own stream.
+   * Store one object under a FRESH key (`newObjectKey`). Nothing is stored
+   * unless the whole body arrives and matches `size`. When the call fails after
+   * a request went out, the store also removes whatever is at the key, because
+   * a bucket can commit an upload whose answer was lost; that is only safe
+   * because the key is new. The body may be left unread or partly read: the
+   * caller disposes of its own stream.
    */
   putObject(key: string, body: ObjectBody, options: PutObjectOptions): Promise<ObjectMeta>;
   /** The object as a stream, or null when the key holds nothing. */
@@ -80,8 +92,11 @@ export interface ObjectStore {
   headObject(key: string): Promise<ObjectMeta | null>;
   /** Idempotent: deleting a key that holds nothing succeeds. */
   deleteObject(key: string): Promise<void>;
-  /** Delete at most one page of objects under a user prefix. */
-  deleteByPrefix(prefix: string): Promise<DeleteByPrefixResult>;
+  /**
+   * Delete at most one page of objects under a user prefix: every key that
+   * starts with it, whatever its shape. Stops at the first failure.
+   */
+  deleteByPrefix(prefix: string, options?: DeleteByPrefixOptions): Promise<DeleteByPrefixResult>;
   signedDownloadUrl(key: string, options: SignedDownloadOptions): Promise<SignedDownload>;
   /** Cheap reachability and permission check. Rejects with a StorageError. */
   ping(): Promise<void>;
@@ -164,6 +179,17 @@ export function prepareSignedDownload(
     contentDisposition: attachmentDisposition(options.downloadName),
     contentType: SIGNED_DOWNLOAD_CONTENT_TYPE,
   };
+}
+
+/** Throws a retryable `delete-incomplete` once the caller's deadline has passed. */
+export function assertBeforeDeadline(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throw new StorageError(
+      "delete-incomplete",
+      "bulk delete stopped at its deadline; what was deleted stays deleted",
+      { retryable: true },
+    );
+  }
 }
 
 /** Throws `invalid-prefix` unless the prefix is one user's tree or one purpose in it. */

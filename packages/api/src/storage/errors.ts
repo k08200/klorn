@@ -33,13 +33,34 @@ export interface StorageErrorDetails {
   status?: number;
   /** The vendor's own error code (`NoSuchBucket`, `AccessDenied`, …). */
   upstreamCode?: string;
+  /** Overrides the default below, for the code that knows better. */
+  retryable?: boolean;
   cause?: unknown;
+}
+
+const HTTP_TOO_MANY_REQUESTS = 429;
+const HTTP_SERVER_ERROR_FLOOR = 500;
+
+/**
+ * Whether the same call may pass on a second try: the endpoint did not answer
+ * (a timeout, a refused connection), or it answered 5xx or 429. Everything
+ * else (4xx, configuration, a bad key, a limit) fails the same way again.
+ */
+function retryableByDefault(code: StorageErrorCode, status: number | undefined): boolean {
+  if (code === "unreachable") return true;
+  if (code !== "upstream" || status === undefined) return false;
+  return status >= HTTP_SERVER_ERROR_FLOOR || status === HTTP_TOO_MANY_REQUESTS;
 }
 
 export class StorageError extends Error {
   readonly code: StorageErrorCode;
   readonly status: number | undefined;
   readonly upstreamCode: string | undefined;
+  /**
+   * A hint for the caller. Nothing in storage/ retries on its own: a person or
+   * a later step's job decides whether to try again.
+   */
+  readonly retryable: boolean;
 
   constructor(code: StorageErrorCode, message: string, details: StorageErrorDetails = {}) {
     super(message, details.cause === undefined ? undefined : { cause: details.cause });
@@ -47,5 +68,6 @@ export class StorageError extends Error {
     this.code = code;
     this.status = details.status;
     this.upstreamCode = details.upstreamCode;
+    this.retryable = details.retryable ?? retryableByDefault(code, details.status);
   }
 }

@@ -341,15 +341,17 @@ export function mcpWriteToolsEnabled(): boolean {
 // Object storage (step D1 of docs/providers/unified-platform-plan.md) — the
 // S3-compatible bucket behind the Klorn drive (D3), file summaries (D4) and
 // mailbox attachments (E4). OFF by default (repo doctrine). While OFF nothing in
-// storage/ builds a client, reads an OBJECT_STORAGE_* variable or opens a
-// connection, and the account purge does not touch storage. While ON, the
-// OBJECT_STORAGE_* variables are validated at startup and on first use, and
-// deleting an account (or its data) deletes that user's objects FIRST and fails
-// if it cannot. Do not turn it back OFF once objects exist: a purge would then
-// skip them. Kill switches belong to the features built on top (D3, E4). Read
-// at request time (PROVIDER_INBOX_SELECTOR_ENABLED precedent) with the same
-// lenient truthy parse. D1 ships no route and no UI, so the flag alone changes
-// nothing a user can see.
+// storage/ loads the S3 client, builds one, reads the value of an
+// OBJECT_STORAGE_* variable or opens a connection, and the account purge does
+// not touch storage. While ON, the OBJECT_STORAGE_* variables are validated at
+// startup and on first use, and deleting an account (or its data) deletes that
+// user's objects FIRST and fails if it cannot. Do not turn it back OFF once
+// objects exist: a purge would then skip them. Startup warns ([STORAGE]) when
+// the flag is OFF and a bucket is still configured. Kill switches belong to the
+// features built on top (D3, E4). Read at request time
+// (PROVIDER_INBOX_SELECTOR_ENABLED precedent) with the same lenient truthy
+// parse. D1 ships no route and no UI, so the flag alone changes nothing a user
+// can see.
 export function objectStorageEnabled(): boolean {
   return ["true", "1", "yes", "on"].includes(
     (process.env.OBJECT_STORAGE_ENABLED ?? "").trim().toLowerCase(),

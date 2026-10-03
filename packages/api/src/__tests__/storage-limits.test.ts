@@ -80,6 +80,26 @@ describe("guardBytes (during the upload)", () => {
     expect(await codeOfAsync(() => drain(guarded))).toBe("size-mismatch");
   });
 
+  it("holds back the chunk that completes the declared size until the stream has ended", async () => {
+    // Handing that chunk on would give the bucket a complete body of the
+    // declared size. It must not get one from a stream that is about to fail.
+    const yieldedBeforeFailure = async (sizes: number[]) => {
+      let yielded = 0;
+      const guarded = guardBytes(chunksOf(sizes), { declaredSize: 10, maxBytes: 100 });
+      const code = await codeOfAsync(async () => {
+        for await (const chunk of guarded) yielded += chunk.byteLength;
+      });
+      return { code, yielded };
+    };
+    expect(await yieldedBeforeFailure([10, 1])).toEqual({ code: "size-mismatch", yielded: 0 });
+    expect(await yieldedBeforeFailure([4, 6, 1])).toEqual({ code: "size-mismatch", yielded: 4 });
+  });
+
+  it("ignores empty chunks after the declared size", async () => {
+    const guarded = guardBytes(chunksOf([10, 0, 0]), { declaredSize: 10, maxBytes: 100 });
+    expect(await drain(guarded)).toBe(10);
+  });
+
   it("fails a stream that ends short of the declared size", async () => {
     const guarded = guardBytes(chunksOf([4]), { declaredSize: 10, maxBytes: 100 });
     expect(await codeOfAsync(() => drain(guarded))).toBe("size-mismatch");

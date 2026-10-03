@@ -1,13 +1,3 @@
-import { type db, INTERACTIVE_TX_OPTIONS, prisma } from "./db.js";
-import { purgeUserData } from "./purge-user-data.js";
-import { purgeUserObjects } from "./storage/runtime.js";
-
-/**
- * A full purge of a large account is many deletes and must not die at the 5s
- * interactive default on a compliance-critical endpoint.
- */
-const PURGE_TX_TIMEOUT_MS = 60_000;
-
 /**
  * The two ways a user's data is deleted live here, so neither can drift:
  *
@@ -20,9 +10,20 @@ const PURGE_TX_TIMEOUT_MS = 60_000;
  * is the only handle on those objects: once the rows are gone, files left in
  * the bucket could never be found again, and the request would have been
  * answered "deleted" while they still existed. A failed deletion leaves every
- * row in place and is safe to retry. While OBJECT_STORAGE_ENABLED is off the
- * object step is a no-op.
+ * row in place and is safe to retry; it is reported under the Sentry tag
+ * `scope: storage.purge` (runbook in the plan's D1 entry). While
+ * OBJECT_STORAGE_ENABLED is off the object step is a no-op.
  */
+
+import { type db, INTERACTIVE_TX_OPTIONS, prisma } from "./db.js";
+import { purgeUserData } from "./purge-user-data.js";
+import { purgeUserObjects } from "./storage/runtime.js";
+
+/**
+ * A full purge of a large account is many deletes and must not die at the 5s
+ * interactive default on a compliance-critical endpoint.
+ */
+const PURGE_TX_TIMEOUT_MS = 60_000;
 
 /**
  * Delete a user and ALL of their data. Single source of truth so the

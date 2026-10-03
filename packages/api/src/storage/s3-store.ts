@@ -6,13 +6,20 @@
  *
  * What a request is built from:
  *   - host, bucket and credentials: the operator's config, fixed at construction;
- *   - the path: a key that matched the grammar in `keys.ts`;
+ *   - the path: a key, percent-encoded and checked by `s3-address.ts`;
  *   - nothing else. A download name only ever becomes a signed query VALUE.
  *
  * Uploads are streamed with a Content-Length and an unsigned payload (TLS
- * carries the integrity), so a 25 MiB file is never held in memory. Nothing is
- * retried: a streamed body cannot be replayed, and the other calls are
- * idempotent, so the caller retries.
+ * carries the integrity), so a 25 MiB file is never held in memory. Every
+ * object is stored as `application/octet-stream` with `Content-Disposition:
+ * attachment`; the caller's content type is kept as metadata. A download is
+ * therefore safe even from a vendor that ignores the signed response overrides.
+ *
+ * Nothing is retried: a streamed body cannot be replayed, and the other calls
+ * are idempotent, so the caller retries (`StorageError.retryable` says when
+ * that is worth it).
+ *
+ * This module is loaded lazily by `runtime.ts`, and only while the flag is on.
  */
 
 import { Readable } from "node:stream";
@@ -20,14 +27,17 @@ import { ReadableStream } from "node:stream/web";
 import { AwsV4Signer } from "aws4fetch";
 import { StorageError, type StorageErrorCode } from "./errors.js";
 import { assertValidObjectKey, parseObjectKey } from "./keys.js";
-import { mediaTypeOf } from "./limits.js";
+import { mediaTypeOf, SIGNED_DOWNLOAD_CONTENT_TYPE } from "./limits.js";
 import {
+  assertBeforeDeadline,
   assertDeletablePrefix,
+  type DeleteByPrefixOptions,
   type DeleteByPrefixResult,
   type ObjectBody,
   type ObjectMeta,
   type ObjectStore,
   type ObjectStoreLimits,
+  type PreparedUpload,
   type PutObjectOptions,
   prepareSignedDownload,
   prepareUpload,
@@ -36,21 +46,32 @@ import {
   type SignedDownloadOptions,
   type StoredObject,
 } from "./object-store.js";
+import { bucketUrlOf, isAddressableKey, objectUrlOf } from "./s3-address.js";
 import { assertS3StoreConfig, type S3StoreConfig } from "./s3-config.js";
+import { describeNetworkError, readTextCapped } from "./s3-response.js";
 import { type ListPage, parseListObjectsXml, s3ErrorCodeOf } from "./s3-xml.js";
 
 export type { S3StoreConfig } from "./s3-config.js";
 
 const SERVICE = "s3";
+const LOG_PREFIX = "[STORAGE]";
 /** How long a metadata call (head, delete, list) may take. */
 const REQUEST_TIMEOUT_MS = 15_000;
 /** How long one upload or one download may take, body included. */
 const TRANSFER_TIMEOUT_MS = 120_000;
 /** Deletes in flight at once inside one `deleteByPrefix` page. */
-const DELETE_CONCURRENCY = 8;
+export const S3_DELETE_CONCURRENCY = 8;
+/** The most a list answer may hold. A page of 1,000 keys is well under 1 MiB. */
+export const S3_MAX_LIST_BODY_BYTES = 4 * 1024 * 1024;
+/** The most that is read of an error body. Only its `<Code>` is used. */
+export const S3_MAX_ERROR_BODY_BYTES = 16 * 1024;
 /** The prefix every key lives under; what `ping` lists one key of. */
 const ROOT_PREFIX = "u/";
-const FALLBACK_CONTENT_TYPE = "application/octet-stream";
+/** What every object is stored as, whatever type the caller named. */
+const STORED_CONTENT_TYPE = SIGNED_DOWNLOAD_CONTENT_TYPE;
+const STORED_CONTENT_DISPOSITION = "attachment";
+/** Where the caller's content type is kept: S3 user metadata, signed with the PUT. */
+const CONTENT_TYPE_METADATA = "x-amz-meta-content-type";
 
 export interface S3StoreOptions extends ObjectStoreLimits {
   /** Replaces the global `fetch`. For tests. */
@@ -65,6 +86,8 @@ interface SendInit {
   headers?: Record<string, string>;
   body?: ReadableStream<Uint8Array>;
   timeoutMs: number;
+  /** The caller's deadline, on top of the per-request timeout. */
+  signal?: AbortSignal;
 }
 
 /** `YYYYMMDD'T'HHMMSS'Z'`, the SigV4 timestamp. */
@@ -72,23 +95,14 @@ function amzDate(date: Date): string {
   return date.toISOString().replace(/[:-]|\.\d{3}/g, "");
 }
 
-/** What went wrong on the socket, in words that carry no URL and no header. */
-function describeNetworkError(err: unknown): string {
-  const name = err instanceof Error ? err.name : "Error";
-  const cause = err instanceof Error ? (err.cause as { code?: unknown } | undefined) : undefined;
-  return typeof cause?.code === "string" ? `${name} ${cause.code}` : name;
-}
-
-function contentTypeOf(headers: Headers): string {
-  return mediaTypeOf(headers.get("content-type")) ?? FALLBACK_CONTENT_TYPE;
-}
-
 function metaOf(key: string, headers: Headers): ObjectMeta {
   const size = Number(headers.get("content-length"));
   if (headers.get("content-length") === null || !Number.isSafeInteger(size) || size < 0) {
     throw new StorageError("upstream", "object storage answered without a usable Content-Length");
   }
-  return { key, size, contentType: contentTypeOf(headers) };
+  // The stored Content-Type is always octet-stream; the caller's is metadata.
+  const contentType = mediaTypeOf(headers.get(CONTENT_TYPE_METADATA)) ?? STORED_CONTENT_TYPE;
+  return { key, size, contentType };
 }
 
 /** Wrap a stream so the error that ended it can be read back after `fetch` fails. */
@@ -106,6 +120,10 @@ function rememberFailure(source: AsyncIterable<Uint8Array>): {
     }
   }
   return { stream: relay(), failure: () => failure };
+}
+
+function isRetryable(err: unknown): boolean {
+  return err instanceof StorageError && err.retryable;
 }
 
 export class S3ObjectStore implements ObjectStore {
@@ -134,22 +152,14 @@ export class S3ObjectStore implements ObjectStore {
   }
 
   async putObject(key: string, body: ObjectBody, options: PutObjectOptions): Promise<ObjectMeta> {
+    // A refusal here happens before anything is sent: there is nothing to undo.
     const upload = prepareUpload(key, body, options, this.maxObjectBytes);
-    const guarded = rememberFailure(upload.body);
-    let response: Response;
     try {
-      response = await this.send("PUT", this.objectUrl(key), {
-        headers: { "content-type": upload.contentType, "content-length": String(upload.size) },
-        body: ReadableStream.from(guarded.stream),
-        timeoutMs: this.transferTimeoutMs,
-      });
+      await this.upload(upload);
     } catch (err) {
-      // The byte counter (or the caller's own stream) ended the upload: say so,
-      // rather than reporting the dropped connection it caused.
-      throw guarded.failure() ?? err;
+      await this.discardFailedUpload(key);
+      throw err;
     }
-    if (!response.ok) throw await this.failure(response, "put");
-    await response.body?.cancel();
     return { key, size: upload.size, contentType: upload.contentType };
   }
 
@@ -186,38 +196,43 @@ export class S3ObjectStore implements ObjectStore {
 
   async deleteObject(key: string): Promise<void> {
     assertValidObjectKey(key);
-    const response = await this.send("DELETE", this.objectUrl(key), {
-      timeoutMs: this.requestTimeoutMs,
-    });
-    if (response.status === 404) {
-      await this.missing(response, "delete");
-      return;
-    }
-    if (!response.ok) throw await this.failure(response, "delete");
-    await response.body?.cancel();
+    await this.deleteAt(key);
   }
 
-  async deleteByPrefix(prefix: string): Promise<DeleteByPrefixResult> {
+  async deleteByPrefix(
+    prefix: string,
+    options: DeleteByPrefixOptions = {},
+  ): Promise<DeleteByPrefixResult> {
     assertDeletablePrefix(prefix);
-    const page = await this.listPage(prefix, this.deletePageSize);
-    // Delete only what is provably under the prefix. A listing that names
-    // anything else is a vendor fault, and the whole page is left alone.
-    const foreign = page.keys.some((key) => !key.startsWith(prefix) || !parseObjectKey(key));
-    if (foreign) {
+    const { signal } = options;
+    assertBeforeDeadline(signal);
+    const page = await this.listPage(prefix, this.deletePageSize, signal);
+    // A listing that names a key outside the prefix is a vendor fault. Nothing
+    // on that page is trusted, and nothing is deleted.
+    if (page.keys.some((key) => !key.startsWith(prefix))) {
       throw new StorageError(
         "upstream",
         "object storage listed a key outside the requested prefix; nothing was deleted",
       );
     }
-    const failures = await this.deleteKeys(page.keys);
-    if (failures.length > 0) {
-      throw new StorageError(
-        "delete-incomplete",
-        `${failures.length} of ${page.keys.length} objects under the prefix could not be deleted`,
-        { cause: failures[0] },
+    // Everything under the user's prefix goes, including a key this code did
+    // not mint: a stray key must not block that user's deletion for good.
+    const strays = page.keys.filter((key) => !parseObjectKey(key)).length;
+    if (strays > 0) {
+      console.warn(
+        `${LOG_PREFIX} bulk delete: ${strays} key(s) under a user prefix do not match the key grammar; deleting them with the rest`,
       );
     }
-    return { deleted: page.keys.length, more: page.truncated };
+    const addressable = page.keys.filter((key) => isAddressableKey(this.#config, key));
+    await this.deleteKeys(addressable, signal);
+    const left = page.keys.length - addressable.length;
+    if (left > 0) {
+      throw new StorageError(
+        "delete-incomplete",
+        `${left} key(s) under the prefix cannot be addressed over HTTP and were left; remove them at the storage vendor`,
+      );
+    }
+    return { deleted: addressable.length, more: page.truncated };
   }
 
   async signedDownloadUrl(key: string, options: SignedDownloadOptions): Promise<SignedDownload> {
@@ -235,23 +250,63 @@ export class S3ObjectStore implements ObjectStore {
     await this.listPage(ROOT_PREFIX, 1);
   }
 
-  private bucketUrl(): URL {
-    const url = new URL(this.#config.endpoint);
-    const basePath = url.pathname.replace(/\/+$/, "");
-    if (this.#config.forcePathStyle) {
-      url.pathname = `${basePath}/${this.#config.bucket}`;
-    } else {
-      url.hostname = `${this.#config.bucket}.${url.hostname}`;
-      url.pathname = basePath || "/";
-    }
-    return url;
+  private objectUrl(key: string): URL {
+    return objectUrlOf(this.#config, key);
   }
 
-  /** The key has matched the grammar, so it needs no escaping and cannot climb. */
-  private objectUrl(key: string): URL {
-    const url = this.bucketUrl();
-    url.pathname = `${url.pathname.replace(/\/+$/, "")}/${key}`;
-    return url;
+  private async upload(upload: PreparedUpload): Promise<void> {
+    const guarded = rememberFailure(upload.body);
+    let response: Response;
+    try {
+      response = await this.send("PUT", this.objectUrl(upload.key), {
+        headers: {
+          "content-type": STORED_CONTENT_TYPE,
+          "content-disposition": STORED_CONTENT_DISPOSITION,
+          [CONTENT_TYPE_METADATA]: upload.contentType,
+          "content-length": String(upload.size),
+        },
+        body: ReadableStream.from(guarded.stream),
+        timeoutMs: this.transferTimeoutMs,
+      });
+    } catch (err) {
+      // The byte counter (or the caller's own stream) ended the upload: say so,
+      // rather than reporting the dropped connection it caused.
+      throw guarded.failure() ?? err;
+    }
+    if (!response.ok) throw await this.failure(response, "put");
+    await response.body?.cancel();
+  }
+
+  /**
+   * After a failed upload, remove whatever is at the key. A bucket can commit
+   * an upload and still fail to say so (a lost answer, a 5xx after the write),
+   * and the caller has been told the upload failed, so nothing would ever point
+   * at that object. Best effort: the upload's own error is what the caller
+   * gets. Safe because `putObject` is for fresh keys.
+   */
+  private async discardFailedUpload(key: string): Promise<void> {
+    try {
+      await this.deleteAt(key);
+    } catch (err) {
+      const code = err instanceof StorageError ? err.code : "upstream";
+      console.warn(
+        `${LOG_PREFIX} a failed upload may have left an object behind: the clean-up delete failed too (${code})`,
+      );
+    }
+  }
+
+  /** DELETE one key that `objectUrlOf` can address. Idempotent. */
+  private async deleteAt(key: string, signal?: AbortSignal): Promise<void> {
+    const response = await this.send("DELETE", this.objectUrl(key), {
+      timeoutMs: this.requestTimeoutMs,
+      signal,
+    });
+    if (response.status === 404) {
+      await this.missing(response, "delete");
+      return;
+    }
+    if (!response.ok) throw await this.failure(response, "delete");
+    await response.body?.cancel();
   }
 
   private signer(
@@ -275,6 +330,7 @@ export class S3ObjectStore implements ObjectStore {
 
   private async send(method: string, url: URL, init: SendInit): Promise<Response> {
     const signed = await this.signer(method, url, { headers: init.headers }).sign();
+    const timeout = AbortSignal.timeout(init.timeoutMs);
     try {
       return await this.fetchImpl(signed.url, {
         method,
@@ -284,7 +340,7 @@ export class S3ObjectStore implements ObjectStore {
         ...(init.body ? { duplex: "half" as const } : {}),
         // A redirect would carry the signed headers to another host.
         redirect: "manual",
-        signal: AbortSignal.timeout(init.timeoutMs),
+        signal: init.signal ? AbortSignal.any([timeout, init.signal]) : timeout,
       });
     } catch (err) {
       throw new StorageError(
@@ -295,9 +351,20 @@ export class S3ObjectStore implements ObjectStore {
     }
   }
 
+  /** The vendor's error code from an error body, read with a cap. */
+  private async errorCodeOf(response: Response): Promise<string | undefined> {
+    try {
+      return s3ErrorCodeOf((await readTextCapped(response, S3_MAX_ERROR_BODY_BYTES)).text);
+    } catch {
+      // The error is built from the status either way. A body that cannot be
+      // read only means the vendor's own code is missing from it.
+      return undefined;
+    }
+  }
+
   /** A 404 on an object: null, unless it is the bucket that is missing. */
   private async missing(response: Response, action: string): Promise<null> {
-    const upstreamCode = s3ErrorCodeOf(await response.text().catch(() => ""));
+    const upstreamCode = await this.errorCodeOf(response);
     if (upstreamCode === "NoSuchBucket") {
       throw this.error("bucket-not-found", action, response.status, upstreamCode);
     }
@@ -311,7 +378,7 @@ export class S3ObjectStore implements ObjectStore {
   ): Promise<StorageError> {
     // Only the vendor's error code is read from the body. The rest of an S3
     // error body can repeat the access key id and the string that was signed.
-    const upstreamCode = s3ErrorCodeOf(await response.text().catch(() => ""));
+    const upstreamCode = await this.errorCodeOf(response);
     const { status } = response;
     if (status === 401 || status === 403) {
       return this.error("access-denied", action, status, upstreamCode);
@@ -335,27 +402,57 @@ export class S3ObjectStore implements ObjectStore {
     });
   }
 
-  private async listPage(prefix: string, maxKeys: number): Promise<ListPage> {
-    const url = this.bucketUrl();
+  private async listPage(prefix: string, maxKeys: number, signal?: AbortSignal): Promise<ListPage> {
+    const url = bucketUrlOf(this.#config);
     url.searchParams.set("list-type", "2");
     url.searchParams.set("prefix", prefix);
     url.searchParams.set("max-keys", String(maxKeys));
-    const response = await this.send("GET", url, { timeoutMs: this.requestTimeoutMs });
+    const response = await this.send("GET", url, { timeoutMs: this.requestTimeoutMs, signal });
     if (!response.ok) throw await this.failure(response, "list", "bucket-not-found");
-    return parseListObjectsXml(await response.text());
+    return parseListObjectsXml(await this.listBody(response));
   }
 
-  /** Delete the keys a few at a time. Returns the errors, one per key that stayed. */
-  private async deleteKeys(keys: readonly string[]): Promise<unknown[]> {
-    let failures: unknown[] = [];
-    for (let start = 0; start < keys.length; start += DELETE_CONCURRENCY) {
-      const batch = keys.slice(start, start + DELETE_CONCURRENCY);
-      const results = await Promise.allSettled(batch.map((key) => this.deleteObject(key)));
-      const rejected = results.flatMap((result) =>
+  /** The list answer as text: capped, and a stalled body is an error with a name. */
+  private async listBody(response: Response): Promise<string> {
+    let body: Awaited<ReturnType<typeof readTextCapped>>;
+    try {
+      body = await readTextCapped(response, S3_MAX_LIST_BODY_BYTES);
+    } catch (err) {
+      throw new StorageError(
+        "unreachable",
+        `object storage stopped answering during a list (${describeNetworkError(err)})`,
+        { cause: err },
+      );
+    }
+    if (body.truncated) {
+      throw new StorageError(
+        "upstream",
+        `object storage list answer is over ${S3_MAX_LIST_BODY_BYTES} bytes`,
+      );
+    }
+    return body.text;
+  }
+
+  /**
+   * Delete the keys a few at a time, and stop at the first batch with a
+   * failure. Against a bucket that is failing, going on would cost one timeout
+   * per batch for the whole page.
+   */
+  private async deleteKeys(keys: readonly string[], signal?: AbortSignal): Promise<void> {
+    for (let start = 0; start < keys.length; start += S3_DELETE_CONCURRENCY) {
+      assertBeforeDeadline(signal);
+      const batch = keys.slice(start, start + S3_DELETE_CONCURRENCY);
+      const results = await Promise.allSettled(batch.map((key) => this.deleteAt(key, signal)));
+      const failures = results.flatMap((result) =>
         result.status === "rejected" ? [result.reason as unknown] : [],
       );
-      failures = [...failures, ...rejected];
+      if (failures.length > 0) {
+        throw new StorageError(
+          "delete-incomplete",
+          `${failures.length} of ${batch.length} objects in one batch could not be deleted; stopped with ${keys.length - start} of ${keys.length} keys on the page not yet confirmed deleted`,
+          { cause: failures[0], retryable: failures.every(isRetryable) },
+        );
+      }
     }
-    return failures;
   }
 }

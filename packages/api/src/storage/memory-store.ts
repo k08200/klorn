@@ -8,7 +8,9 @@
 import { Readable } from "node:stream";
 import { assertValidObjectKey } from "./keys.js";
 import {
+  assertBeforeDeadline,
   assertDeletablePrefix,
+  type DeleteByPrefixOptions,
   type DeleteByPrefixResult,
   type ObjectBody,
   type ObjectMeta,
@@ -79,9 +81,13 @@ export class MemoryObjectStore implements ObjectStore {
     });
   }
 
-  deleteByPrefix(prefix: string): Promise<DeleteByPrefixResult> {
+  deleteByPrefix(
+    prefix: string,
+    options: DeleteByPrefixOptions = {},
+  ): Promise<DeleteByPrefixResult> {
     return this.run(() => {
       assertDeletablePrefix(prefix);
+      assertBeforeDeadline(options.signal);
       const matching = this.keys().filter((key) => key.startsWith(prefix));
       const page = matching.slice(0, this.deletePageSize);
       for (const key of page) this.objects.delete(key);

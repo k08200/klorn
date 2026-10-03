@@ -32,6 +32,14 @@ import { bodyChunks } from "./object-store.js";
 /** How many `deleteByPrefix` pages one purge may run before it gives up loudly. */
 export const PURGE_MAX_PAGES = 1000;
 
+/**
+ * How long one purge may run. It runs inside the deletion request, so it has
+ * to end well before a proxy gives up on that request. Past the deadline the
+ * purge stops with a retryable error and keeps what it has deleted; the next
+ * attempt carries on from there.
+ */
+export const PURGE_DEADLINE_MS = 45_000;
+
 export interface UserUploadOptions {
   contentType: string;
   /** Exact byte length of the body. */
@@ -63,6 +71,12 @@ export interface UserStorage {
 
 export interface UserStorageOptions {
   purgeMaxPages?: number;
+  purgeDeadlineMs?: number;
+}
+
+interface PurgeBounds {
+  maxPages: number;
+  deadlineMs: number;
 }
 
 /** Apply the caller's own cap, when it gave one, on top of the store's. */
@@ -75,11 +89,21 @@ function withCallerCap(body: ObjectBody, size: number, maxBytes: number | undefi
 async function purgePrefix(
   store: ObjectStore,
   prefix: string,
-  maxPages: number,
+  bounds: PurgeBounds,
 ): Promise<{ deleted: number }> {
+  // One deadline for the whole purge. The store drops a request in flight when
+  // it fires, so the purge cannot outlive it by more than a moment.
+  const signal = AbortSignal.timeout(bounds.deadlineMs);
   let deleted = 0;
-  for (let page = 0; page < maxPages; page++) {
-    const result = await store.deleteByPrefix(prefix);
+  for (let page = 0; page < bounds.maxPages; page++) {
+    if (signal.aborted) {
+      throw new StorageError(
+        "delete-incomplete",
+        `purge stopped at its ${bounds.deadlineMs} ms deadline with ${deleted} objects deleted; retry to continue`,
+        { retryable: true },
+      );
+    }
+    const result = await store.deleteByPrefix(prefix, { signal });
     deleted += result.deleted;
     if (!result.more) return { deleted };
     if (result.deleted === 0) {
@@ -91,7 +115,8 @@ async function purgePrefix(
   }
   throw new StorageError(
     "delete-incomplete",
-    `user prefix still holds objects after ${maxPages} delete pages (${deleted} deleted)`,
+    `user prefix still holds objects after ${bounds.maxPages} delete pages (${deleted} deleted)`,
+    { retryable: true },
   );
 }
 
@@ -99,7 +124,10 @@ export function createUserStorage(
   store: ObjectStore,
   options: UserStorageOptions = {},
 ): UserStorage {
-  const purgeMaxPages = options.purgeMaxPages ?? PURGE_MAX_PAGES;
+  const purgeBounds: PurgeBounds = {
+    maxPages: options.purgeMaxPages ?? PURGE_MAX_PAGES,
+    deadlineMs: options.purgeDeadlineMs ?? PURGE_DEADLINE_MS,
+  };
   return {
     async put(userId, purpose, body, upload) {
       const key = newObjectKey(userId, purpose);
@@ -130,7 +158,7 @@ export function createUserStorage(
       return await store.signedDownloadUrl(key, download);
     },
     async purgeUser(userId) {
-      return await purgePrefix(store, userPrefix(userId), purgeMaxPages);
+      return await purgePrefix(store, userPrefix(userId), purgeBounds);
     },
   };
 }

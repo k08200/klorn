@@ -169,6 +169,18 @@ export function describeObjectStoreContract(name: string, target: ContractTarget
         expect(await store.headObject(key)).toBeNull();
       });
 
+      it("stores nothing when the stream delivers its declared size and then more", async () => {
+        // The first chunk is already a complete body of the declared size. A
+        // store that hands it on before it knows the stream has ended lets the
+        // bucket commit an object while the caller is told the upload failed.
+        const { store, newUser } = await setup();
+        const key = newObjectKey(newUser(), "drive");
+        const put = () =>
+          store.putObject(key, chunksOf([10, 1]), { contentType: "text/plain", size: 10 });
+        expect(await codeOfAsync(put)).toBe("size-mismatch");
+        expect(await store.headObject(key)).toBeNull();
+      });
+
       it("fails a stream shorter than it declared and stores nothing", async () => {
         const { store, newUser } = await setup();
         const key = newObjectKey(newUser(), "drive");

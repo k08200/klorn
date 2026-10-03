@@ -5,6 +5,7 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
+import { StorageError } from "../storage/errors.js";
 import { newObjectKey, parseObjectKey } from "../storage/keys.js";
 import { allowAnyContentType, allowContentTypes } from "../storage/limits.js";
 import { MemoryObjectStore } from "../storage/memory-store.js";
@@ -191,6 +192,45 @@ describe("purgeUser", () => {
     expect(await codeOfAsync(() => storage.purgeUser(ALICE))).toBe("delete-incomplete");
     // Progress is kept: the two pages that ran did delete.
     expect(store.keys()).toHaveLength(2);
+  });
+
+  it("gives up at its deadline, keeps the progress, and says it is worth retrying", async () => {
+    const store = new MemoryObjectStore({ deletePageSize: 1 });
+    const storage = createUserStorage(store, { purgeDeadlineMs: 60 });
+    for (let index = 0; index < 50; index++) {
+      await storage.put(ALICE, "drive", bytesOf("alice"), TEXT);
+    }
+    const real = store.deleteByPrefix.bind(store);
+    // A slow store that pays no attention to the signal: the purge itself has
+    // to notice the deadline between pages.
+    const spy = vi.spyOn(store, "deleteByPrefix").mockImplementation(async (prefix) => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      return real(prefix);
+    });
+
+    const err = await storage.purgeUser(ALICE).then(
+      () => null,
+      (reason: unknown) => reason,
+    );
+    expect(err).toBeInstanceOf(StorageError);
+    expect((err as StorageError).code).toBe("delete-incomplete");
+    expect((err as StorageError).retryable).toBe(true);
+    // 60 ms at 25 ms a page: a handful of pages, not all fifty.
+    expect(spy.mock.calls.length).toBeLessThan(10);
+    expect(store.keys().length).toBeGreaterThan(40);
+    expect(store.keys().length).toBeLessThan(50);
+  });
+
+  it("hands every page the same deadline signal", async () => {
+    const { store, storage } = setup({ deletePageSize: 1 });
+    await storage.put(ALICE, "drive", bytesOf("alice"), TEXT);
+    await storage.put(ALICE, "drive", bytesOf("alice"), TEXT);
+    const spy = vi.spyOn(store, "deleteByPrefix");
+    await storage.purgeUser(ALICE);
+    const signals = spy.mock.calls.map(([, options]) => options?.signal);
+    expect(signals.length).toBeGreaterThanOrEqual(2);
+    expect(signals[0]).toBeInstanceOf(AbortSignal);
+    expect(new Set(signals).size).toBe(1);
   });
 
   it("refuses a user id that cannot be a prefix", async () => {
