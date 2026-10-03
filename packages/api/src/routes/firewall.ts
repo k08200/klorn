@@ -39,7 +39,7 @@ import { getDecisionMetrics } from "../judge/decision-metrics.js";
 import { collapseEmailThreads } from "../judge/firewall-thread-collapse.js";
 import { gmailCategoryOf, rowSignalFor } from "../judge/row-signals.js";
 import { resolveTierReason } from "../judge/tier-reason-strings.js";
-import { manualOverrideReason, normalizeTier, type Tier } from "../judge/tiers.js";
+import { manualOverrideReason, type Tier, toLiveTier } from "../judge/tiers.js";
 import { getInteractionGraph } from "../learning/interaction-graph.js";
 import { describePolicy } from "../learning/ontology.js";
 import { getTrustScoresBulk } from "../learning/trust-score.js";
@@ -661,9 +661,11 @@ export async function firewallRoutes(app: FastifyInstance) {
       );
 
       for (const row of dedupedItems) {
-        // normalizeTier maps legacy CALL rows → PUSH (not QUEUE) and any
-        // unknown/null tier → QUEUE. See tiers.ts.
-        const tier = normalizeTier(row.tier);
+        // toLiveTier maps legacy CALL rows → PUSH (not QUEUE), the retired
+        // v1 AUTO lane → QUEUE, and any unknown/null tier → QUEUE. The AUTO
+        // bucket stays on the wire (always empty) because the desktop decodes
+        // it as a required field. See tiers.ts.
+        const tier = toLiveTier(row.tier);
         const item: FirewallItem = {
           id: row.id,
           source: row.source,
