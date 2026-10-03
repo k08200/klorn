@@ -10,7 +10,8 @@ enum ListKey: CaseIterable, Hashable {
 
 /// Which pane the list keys are talking to. `reader` is entered with
 /// Return/o and left with Esc; while there the list keys pause so the
-/// message can be scrolled with the arrows.
+/// message can be scrolled with the arrows. Owned by each FullView, so the
+/// bar's panel and the main window never share it.
 enum MailKeyZone: Equatable { case list, reader }
 
 /// What a key press does. Every case is an action the UI already had.
@@ -24,23 +25,57 @@ enum ListKeyAction: Equatable {
 }
 
 /// What holds keyboard focus in the mail surface's window.
-enum MailKeyResponder: Equatable {
+enum MailKeyResponder: Equatable, CaseIterable {
+    /// Nothing in particular: the window itself, or a container the list
+    /// sits in. The only state in which the list keys act on the list.
+    case list
     /// A text field or editor (search, inline reply, compose, assistant).
     case text
     /// The message body's web view.
     case web
-    case other
+    /// Any other view that took focus (Tab / Full Keyboard Access): a
+    /// button, segmented control, popup. Its keys are its own — Return and
+    /// Space activate it, the arrows drive it.
+    case control
+
+    /// The facts `classify` reads off the responder chain. Pure, so the
+    /// self-check can pin the decision without AppKit objects.
+    struct Facts: Equatable {
+        /// No first responder, or the window itself.
+        var isWindowOrNil: Bool
+        var isText: Bool
+        var inWebView: Bool
+        /// A view the list's key catcher lives inside (content view,
+        /// hosting view): a container, never a control.
+        var containsList: Bool
+    }
+
+    static func classify(_ facts: Facts) -> MailKeyResponder {
+        if facts.isText { return .text }
+        if facts.inWebView { return .web }
+        if facts.isWindowOrNil || facts.containsList { return .list }
+        return .control
+    }
 
     @MainActor
-    static func classify(_ responder: NSResponder?) -> MailKeyResponder {
-        // NSTextField edits through the window's field editor, an NSTextView.
-        if responder is NSText { return .text }
-        var view = responder as? NSView
-        while let current = view {
-            if current is WKWebView { return .web }
-            view = current.superview
+    static func classify(_ responder: NSResponder?, listAnchor: NSView?) -> MailKeyResponder {
+        let view = responder as? NSView
+        return classify(Facts(
+            isWindowOrNil: responder == nil || responder is NSWindow,
+            // NSTextField edits through the window's field editor, an NSTextView.
+            isText: responder is NSText,
+            inWebView: webView(containing: view) != nil,
+            containsList: view.map { listAnchor?.isDescendant(of: $0) ?? false } ?? false))
+    }
+
+    @MainActor
+    static func webView(containing view: NSView?) -> WKWebView? {
+        var current = view
+        while let candidate = current {
+            if let web = candidate as? WKWebView { return web }
+            current = candidate.superview
         }
-        return .other
+        return nil
     }
 }
 
@@ -48,12 +83,16 @@ enum MailKeyResponder: Equatable {
 struct ListKeyState: Equatable {
     /// The same slice the app menus use, so `e`/`r`/`/` share M1's guards.
     var menu: MenuState
-    var textInputFocused: Bool
+    var responder: MailKeyResponder
+    /// An input method is composing (marked text) in the focused view.
+    var composingText: Bool
+    var zone: MailKeyZone
     /// The list column shows firewall rows (not search hits, not loading).
     var showsRows: Bool
     var itemCount: Int
+
     /// Focus is in the reading pane (Return/o, or a click in the message).
-    var readerFocused: Bool
+    var readerFocused: Bool { zone == .reader || responder == .web }
 }
 
 /// Pure rules for the mail list's keyboard, pinned by the self-check.
@@ -94,14 +133,18 @@ enum ListKeyRules {
 
     /// The action for a key, or nil to let the event through untouched.
     /// Nothing fires unless the mail surface is key, signed in, with no
-    /// modal over it and no text field or editor holding focus.
+    /// modal over it, and focus is on the list or the message — never on a
+    /// text field, an editor, a focused control, or mid-composition.
     static func action(for key: ListKey, isRepeat: Bool, in s: ListKeyState) -> ListKeyAction? {
         let m = s.menu
-        guard m.signedIn, m.fullViewOpen, m.mailSurfaceIsKey, !m.modalOpen,
-              !s.textInputFocused, m.listHasSearchField
+        guard m.signedIn, m.fullViewOpen, m.mailSurfaceIsKey, !m.modalOpen, m.listHasSearchField,
+              s.responder == .list || s.responder == .web, !s.composingText
         else { return nil }
         // In the reading pane only Esc is ours: the arrows scroll the
-        // message, and a form field inside an email must get its letters.
+        // message. Known limit: a caret in an email's own form field (no
+        // composition under way) cannot be told apart from plain message
+        // focus without asking the page, so Esc there still returns to the
+        // list; letters typed into such a field are never taken.
         if s.readerFocused { return key == .escape ? .backToList : nil }
         // Moving the selection unmounts an open inline reply (M1's rule).
         let canMove = s.showsRows && s.itemCount > 0 && !m.readerReplying
@@ -127,12 +170,25 @@ enum ListKeyRules {
         return next == index ? nil : ids[next]
     }
 
-    /// The row to select once `removed` leaves the list: the one that takes
-    /// its place, else the one above, else none.
-    static func selectionAfterRemoval(ids: [String], removed: String) -> String? {
+    /// The row to select once `removed` leaves the list: the nearest row
+    /// below it that is still present, else the nearest above, else none.
+    /// `ids` is the list as it was when the key was pressed; `present` is
+    /// the list after the removal (and any refresh) landed.
+    static func selectionAfterRemoval(ids: [String], removed: String, present: Set<String>) -> String? {
         guard let index = ids.firstIndex(of: removed) else { return nil }
-        if index + 1 < ids.count { return ids[index + 1] }
-        return index > 0 ? ids[index - 1] : nil
+        let below = ids[(index + 1)...]
+        let above = ids[..<index].reversed()
+        return (Array(below) + Array(above)).first { $0 != removed && present.contains($0) }
+    }
+
+    /// Whether the focus a freshly shown window handed to a text field
+    /// should be given back to the list. Only the search field's default
+    /// focus is released: never one the user asked for (⌘F, `/`), never
+    /// under a modal (compose owns its own field), never another field.
+    static func releasesOpeningFocus(
+        responder: MailKeyResponder, fieldIsSearch: Bool, searchRequested: Bool, modalOpen: Bool
+    ) -> Bool {
+        responder == .text && fieldIsSearch && !searchRequested && !modalOpen
     }
 }
 
@@ -141,6 +197,7 @@ struct ListKeyPress {
     let key: ListKey
     let isRepeat: Bool
     let responder: MailKeyResponder
+    let composingText: Bool
     let window: NSWindow
 }
 
@@ -155,17 +212,24 @@ struct MailListKeyCatcher: NSViewRepresentable {
     let onKey: @MainActor (ListKeyPress) -> Bool
     /// A click outside the message body: focus is back in the list.
     let onClickOutsideReader: @MainActor () -> Void
+    /// Whether the search field's opening focus may be handed back
+    /// (false once the user asked for search, or under a modal).
+    let mayReleaseOpeningFocus: @MainActor () -> Bool
 
     func makeNSView(context _: Context) -> MailListKeyView {
         let view = MailListKeyView()
-        view.onKey = onKey
-        view.onClickOutsideReader = onClickOutsideReader
+        apply(to: view)
         return view
     }
 
     func updateNSView(_ view: MailListKeyView, context _: Context) {
+        apply(to: view)
+    }
+
+    private func apply(to view: MailListKeyView) {
         view.onKey = onKey
         view.onClickOutsideReader = onClickOutsideReader
+        view.mayReleaseOpeningFocus = mayReleaseOpeningFocus
     }
 
     static func dismantleNSView(_ view: MailListKeyView, coordinator _: ()) {
@@ -176,9 +240,15 @@ struct MailListKeyCatcher: NSViewRepresentable {
 final class MailListKeyView: NSView {
     var onKey: (@MainActor (ListKeyPress) -> Bool)?
     var onClickOutsideReader: (@MainActor () -> Void)?
-    private var monitor: Any?
-    /// Windows whose opening focus was already handed back to the list.
+    var mayReleaseOpeningFocus: (@MainActor () -> Bool)?
+    /// Only written on the main thread; unsafe so deinit can release it.
+    nonisolated(unsafe) private var monitor: Any?
+    /// Windows whose opening focus was already looked at.
     private static let focusReleased = NSHashTable<NSWindow>.weakObjects()
+
+    deinit {
+        if let monitor { NSEvent.removeMonitor(monitor) }
+    }
 
     // Invisible and never in the way of a click.
     override func hitTest(_: NSPoint) -> NSView? { nil }
@@ -195,32 +265,49 @@ final class MailListKeyView: NSView {
         releaseOpeningFocus()
     }
 
-    /// AppKit gives a freshly shown window's focus to its first text field,
-    /// here the search field, which would swallow every list key. Hand it
-    /// back once per window; `/` and ⌘F are how search takes the keyboard.
-    /// Next runloop turn: the window is shown after this view is attached,
-    /// and a pending Find or Compose focus is queued later, so it still wins.
-    private func releaseOpeningFocus() {
-        guard let window, !Self.focusReleased.contains(window) else { return }
-        Self.focusReleased.add(window)
-        DispatchQueue.main.async { [weak window] in
-            guard let window, MailKeyResponder.classify(window.firstResponder) == .text else { return }
-            window.makeFirstResponder(nil)
-        }
-    }
-
     func removeMonitor() {
         if let monitor { NSEvent.removeMonitor(monitor) }
         monitor = nil
     }
 
+    /// AppKit gives a freshly shown window's focus to its first text field,
+    /// here the search field, which would swallow every list key. Hand it
+    /// back once per window; `/` and ⌘F are how search takes the keyboard.
+    /// Decided on the next runloop turn (the window is shown after this
+    /// view is attached) by `ListKeyRules.releasesOpeningFocus`.
+    private func releaseOpeningFocus() {
+        guard let window, !Self.focusReleased.contains(window) else { return }
+        Self.focusReleased.add(window)
+        DispatchQueue.main.async { [weak self, weak window] in
+            guard let self, let window else { return }
+            let responder = MailKeyResponder.classify(window.firstResponder, listAnchor: self)
+            guard ListKeyRules.releasesOpeningFocus(
+                responder: responder, fieldIsSearch: self.isSearchField(window.firstResponder),
+                searchRequested: !(self.mayReleaseOpeningFocus?() ?? false),
+                modalOpen: window.attachedSheet != nil)
+            else { return }
+            window.makeFirstResponder(nil)
+        }
+    }
+
+    /// The search field is the only text field laid out inside the list
+    /// column, which is exactly this view's frame (it is the column's
+    /// background). A field editor stands in for the field it edits.
+    private func isSearchField(_ responder: NSResponder?) -> Bool {
+        var field = responder as? NSView
+        if let editor = responder as? NSText, let owner = editor.delegate as? NSView { field = owner }
+        guard let field, field.window === window else { return false }
+        return convert(bounds, to: nil).contains(field.convert(field.bounds, to: nil))
+    }
+
     /// True when the event was consumed.
     private func handle(_ event: NSEvent) -> Bool {
         guard let window, event.window === window, window.isKeyWindow else { return false }
-        let responder = MailKeyResponder.classify(window.firstResponder)
+        let first = window.firstResponder
+        let responder = MailKeyResponder.classify(first, listAnchor: self)
         if event.type == .leftMouseDown {
             let hit = window.contentView?.hitTest(event.locationInWindow)
-            if MailKeyResponder.classify(hit) != .web {
+            if MailKeyResponder.webView(containing: hit) == nil {
                 if responder == .web { window.makeFirstResponder(nil) }
                 onClickOutsideReader?()
             }
@@ -232,8 +319,14 @@ final class MailListKeyView: NSView {
             shift: flags.contains(.shift),
             commandControlOrOption: !flags.isDisjoint(with: [.command, .control, .option]))
         else { return false }
+        // An input method mid-composition owns every key, Esc included
+        // (it cancels the composition). Covers the message web view too.
+        let composing = (first as? NSTextInputClient)?.hasMarkedText()
+            ?? (MailKeyResponder.webView(containing: first as? NSView) as? NSTextInputClient)?
+            .hasMarkedText() ?? false
         return onKey?(ListKeyPress(
-            key: key, isRepeat: event.isARepeat, responder: responder, window: window)) ?? false
+            key: key, isRepeat: event.isARepeat, responder: responder,
+            composingText: composing, window: window)) ?? false
     }
 }
 
@@ -249,7 +342,7 @@ enum MailReaderFocus {
     }
 
     static func leave(in window: NSWindow) {
-        if MailKeyResponder.classify(window.firstResponder) == .web {
+        if MailKeyResponder.webView(containing: window.firstResponder as? NSView) != nil {
             window.makeFirstResponder(nil)
         }
     }

@@ -111,9 +111,15 @@ the bar's full panel and the main window):
 Bare keys never fire while a text field or editor has focus (search, inline
 reply, compose, assistant), under a modal, or when the mail surface is not
 the key window. `e` and `r` follow the Message menu's rules, and the
-selection does not move while an inline reply is open. In the reading pane
-only `Esc` is taken, so `r` there is `⌘R`; bare `1`/`2`/`3` stay the quick
-replies. On a non-Latin input source (Korean) the keys go by position. There
+selection does not move while an inline reply is open. They also stand
+down while a control holds keyboard focus (Tab / Full Keyboard Access on a
+button, segmented control or popup): Return, Space and the arrows stay that
+control's. In the reading pane only `Esc` is taken, so `r` there is `⌘R`;
+bare `1`/`2`/`3` stay the quick replies. Known limit: with the caret in a
+form field inside an email, `Esc` still returns to the list (the page's
+editing state can't be read synchronously); letters typed there are never
+taken, and an input method mid-composition keeps every key, `Esc` included.
+The reading-pane zone is per window. On a non-Latin input source (Korean) the keys go by position. There
 is no `z`/`⌘Z`: dismiss and lane moves have no undo path yet. The search
 field no longer takes the keyboard when the full view first opens (it would
 swallow every list key); `/` or `⌘F` puts it there.

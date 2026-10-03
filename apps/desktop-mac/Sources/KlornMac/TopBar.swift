@@ -2038,6 +2038,9 @@ enum ListMode: Equatable, Hashable {
 struct FullView: View {
     @Environment(AppModel.self) private var model
     let actions: TopBarActions
+    /// Which pane this window's list keys address (M3). Per FullView, so
+    /// the bar's panel and the main window never reset each other.
+    @State private var keyZone: MailKeyZone = .list
 
     var body: some View {
         // The list mode lives on the model, not in @State: opening the full
@@ -2061,10 +2064,13 @@ struct FullView: View {
                 HStack(spacing: 0) {
                     FullSidebar(selected: $model.listMode, actions: actions).frame(width: 220)
                     Rectangle().fill(Theme.line).frame(width: 1)
-                    FullList(mode: model.listMode, actions: actions).frame(width: 420)
+                    FullList(mode: model.listMode, actions: actions, keyZone: $keyZone)
+                        .frame(width: 420)
                     Rectangle().fill(Theme.line).frame(width: 1)
-                    ReadingPane(actions: actions).frame(maxWidth: .infinity)
+                    ReadingPane(actions: actions, keyZone: keyZone).frame(maxWidth: .infinity)
                 }
+                // Any new selection (click, key, card) starts in the list.
+                .onChange(of: model.selectedItemId) { _, _ in keyZone = .list }
             }
             // ONE surface, header included — any band around the header reads
             // as chrome-on-chrome.
@@ -2993,6 +2999,10 @@ private struct FullList: View {
     @Environment(AppModel.self) private var model
     let mode: ListMode
     let actions: TopBarActions
+    @Binding var keyZone: MailKeyZone
+    /// The user asked for the search field (⌘F, `/`): its focus is theirs,
+    /// not the window's opening default.
+    @State private var searchRequested = false
     @State private var query = ""
     @FocusState private var searchFocused: Bool
 
@@ -3105,6 +3115,7 @@ private struct FullList: View {
                     // switched the list mode, mounting this field fresh.
                     .onChange(of: model.searchFocusPending, initial: true) { _, pending in
                         guard pending else { return }
+                        searchRequested = true
                         model.searchFocusPending = false
                         // Next runloop: focus set during mount is dropped.
                         DispatchQueue.main.async { searchFocused = true }
@@ -3196,8 +3207,11 @@ private struct FullList: View {
         .background(
             MailListKeyCatcher(
                 onKey: { handleKey($0) },
-                onClickOutsideReader: { model.mailKeyZone = .list }))
-        .onDisappear { model.mailKeyZone = .list }
+                onClickOutsideReader: { keyZone = .list },
+                mayReleaseOpeningFocus: {
+                    !searchRequested && !model.searchFocusPending && !model.fullViewModalOpen
+                }))
+        .onDisappear { keyZone = .list }
     }
 
     /// One key press from the catcher: decide with the pure rules, then run
@@ -3207,9 +3221,8 @@ private struct FullList: View {
         var menu = MenuState(model: model)
         menu.modalOpen = menu.modalOpen || press.window.attachedSheet != nil
         let state = ListKeyState(
-            menu: menu, textInputFocused: press.responder == .text,
-            showsRows: !searching && model.queue != nil, itemCount: rows.count,
-            readerFocused: model.mailKeyZone == .reader || press.responder == .web)
+            menu: menu, responder: press.responder, composingText: press.composingText,
+            zone: keyZone, showsRows: !searching && model.queue != nil, itemCount: rows.count)
         guard let action = ListKeyRules.action(for: press.key, isRepeat: press.isRepeat, in: state)
         else { return false }
         let ids = rows.map(\.id)
@@ -3220,17 +3233,23 @@ private struct FullList: View {
                 ids: ids, selected: model.selectedItemId, delta: delta)
             if let item = row(target) { actions.onSelect(item) }
         case .openReader:
-            model.mailKeyZone = .reader
+            keyZone = .reader
             MailReaderFocus.enter(in: press.window)
         case .backToList:
-            model.mailKeyZone = .list
+            keyZone = .list
             MailReaderFocus.leave(in: press.window)
         case .dismiss:
             guard let item = model.menuTargetItem else { return true }
-            // Triage keeps moving: the row that takes its place is next.
-            let next = row(ListKeyRules.selectionAfterRemoval(ids: ids, removed: item.id))
             actions.onDismiss(item)
-            if let next { actions.onSelect(next) }
+            // Triage keeps moving: the row that takes its place is next.
+            // Picked once the dismiss has left the list, from the rows that
+            // are still there, so a refresh in between can't select a ghost.
+            Task { @MainActor in
+                let live = items
+                let next = ListKeyRules.selectionAfterRemoval(
+                    ids: ids, removed: item.id, present: Set(live.map(\.id)))
+                if let target = live.first(where: { $0.id == next }) { actions.onSelect(target) }
+            }
         case .reply:
             model.requestReply()
         case .focusSearch:
@@ -4243,6 +4262,8 @@ struct FullRow: View {
 struct ReadingPane: View {
     @Environment(AppModel.self) private var model
     let actions: TopBarActions
+    /// The owning FullView's key zone; `.reader` draws the focus ring.
+    var keyZone: MailKeyZone = .list
     @State private var replying = false
     @State private var replyText = ""
     /// The composer was opened with the ahead-of-time draft (says so above
@@ -4299,7 +4320,7 @@ struct ReadingPane: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // Return/o put the keyboard here (M3): show it, like the row's ring.
         .overlay {
-            if model.mailKeyZone == .reader {
+            if keyZone == .reader {
                 Rectangle().strokeBorder(Theme.accent, lineWidth: 2).allowsHitTesting(false)
             }
         }

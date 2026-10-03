@@ -2438,16 +2438,21 @@ func runSelfChecks() async -> Bool {
     // Every combination of the inputs the decision reads, for every key.
     var keyStates: [ListKeyState] = []
     let bools = [false, true]
-    for bits in 0..<(1 << 11) {
+    for bits in 0..<(1 << 10) {
         func bit(_ n: Int) -> Bool { bools[(bits >> n) & 1] }
         for targetTier in [Tier?.none, .queue] {
-            keyStates.append(ListKeyState(
-                menu: MenuState(
-                    signedIn: bit(0), fullViewOpen: bit(1), mailSurfaceIsKey: bit(2),
-                    modalOpen: bit(3), targetTier: targetTier, emailLoaded: bit(4),
-                    readerReplying: bit(5), teamModeAvailable: false, listHasSearchField: bit(6)),
-                textInputFocused: bit(7), showsRows: bit(8), itemCount: bit(9) ? 3 : 0,
-                readerFocused: bit(10)))
+            for responder in MailKeyResponder.allCases {
+                for zone in [MailKeyZone.list, .reader] {
+                    keyStates.append(ListKeyState(
+                        menu: MenuState(
+                            signedIn: bit(0), fullViewOpen: bit(1), mailSurfaceIsKey: bit(2),
+                            modalOpen: bit(3), targetTier: targetTier, emailLoaded: bit(4),
+                            readerReplying: bit(5), teamModeAvailable: false,
+                            listHasSearchField: bit(6)),
+                        responder: responder, composingText: bit(7), zone: zone,
+                        showsRows: bit(8), itemCount: bit(9) ? 3 : 0))
+                }
+            }
         }
     }
     func fires(_ key: ListKey, _ s: ListKeyState, isRepeat: Bool = false) -> ListKeyAction? {
@@ -2457,7 +2462,11 @@ func runSelfChecks() async -> Bool {
         ListKey.allCases.allSatisfy { fires($0, s) == nil && fires($0, s, isRepeat: true) == nil }
     }
     check("no key fires while a text field or editor has focus",
-          keyStates.filter(\.textInputFocused).allSatisfy(noKeyFires))
+          keyStates.filter { $0.responder == .text }.allSatisfy(noKeyFires))
+    check("no key fires while a focused control owns the keyboard (Return, arrows, Esc included)",
+          keyStates.filter { $0.responder == .control }.allSatisfy(noKeyFires))
+    check("no key fires while an input method is composing, Esc included",
+          keyStates.filter(\.composingText).allSatisfy(noKeyFires))
     check("no key fires under a modal, signed out, or off the key mail surface",
           keyStates.filter {
               $0.menu.modalOpen || !$0.menu.signedIn || !$0.menu.mailSurfaceIsKey
@@ -2472,6 +2481,32 @@ func runSelfChecks() async -> Bool {
           })
     check("Esc in the list is left to the system",
           keyStates.filter { !$0.readerFocused }.allSatisfy { fires(.escape, $0) == nil })
+    func responder(
+        windowOrNil: Bool = false, text: Bool = false, web: Bool = false, containsList: Bool = false
+    ) -> MailKeyResponder {
+        MailKeyResponder.classify(MailKeyResponder.Facts(
+            isWindowOrNil: windowOrNil, isText: text, inWebView: web, containsList: containsList))
+    }
+    check("focus counts as the list only on the window, nothing, or a container of the list",
+          responder(windowOrNil: true) == .list && responder(containsList: true) == .list
+          && responder() == .control)
+    check("a text field or the message web view is never mistaken for the list",
+          responder(text: true) == .text && responder(text: true, containsList: true) == .text
+          && responder(web: true) == .web && responder(web: true, containsList: true) == .web
+          && responder(windowOrNil: true, text: true) == .text)
+    check("the opening focus is released only from the search field's default focus",
+          ListKeyRules.releasesOpeningFocus(
+              responder: .text, fieldIsSearch: true, searchRequested: false, modalOpen: false)
+          && !ListKeyRules.releasesOpeningFocus(
+              responder: .text, fieldIsSearch: true, searchRequested: true, modalOpen: false)
+          && !ListKeyRules.releasesOpeningFocus(
+              responder: .text, fieldIsSearch: true, searchRequested: false, modalOpen: true)
+          && !ListKeyRules.releasesOpeningFocus(
+              responder: .text, fieldIsSearch: false, searchRequested: false, modalOpen: false)
+          && MailKeyResponder.allCases.filter { $0 != .text }.allSatisfy {
+              !ListKeyRules.releasesOpeningFocus(
+                  responder: $0, fieldIsSearch: true, searchRequested: false, modalOpen: false)
+          })
     check("e and r fire only where the Message menu enables Dismiss and Reply",
           keyStates.allSatisfy { s in
               (fires(.e, s) == nil || MenuRules.isEnabled(.dismiss, in: s.menu))
@@ -2491,8 +2526,8 @@ func runSelfChecks() async -> Bool {
               }
           })
     let listReady = ListKeyState(
-        menu: signedInFull, textInputFocused: false, showsRows: true, itemCount: 3,
-        readerFocused: false)
+        menu: signedInFull, responder: .list, composingText: false, zone: .list,
+        showsRows: true, itemCount: 3)
     check("in the list every key maps to its action",
           fires(.j, listReady) == .move(1) && fires(.down, listReady) == .move(1)
           && fires(.k, listReady) == .move(-1) && fires(.up, listReady) == .move(-1)
@@ -2549,29 +2584,49 @@ func runSelfChecks() async -> Bool {
           && ListKeyRules.movedSelection(ids: rowIds, selected: "gone", delta: 1) == "a"
           && ListKeyRules.movedSelection(ids: [], selected: nil, delta: 1) == nil)
     check("after a dismiss the next row is selected, else the previous, else none",
-          ListKeyRules.selectionAfterRemoval(ids: rowIds, removed: "a") == "b"
-          && ListKeyRules.selectionAfterRemoval(ids: rowIds, removed: "c") == "b"
-          && ListKeyRules.selectionAfterRemoval(ids: ["a"], removed: "a") == nil
-          && ListKeyRules.selectionAfterRemoval(ids: rowIds, removed: "gone") == nil)
+          ListKeyRules.selectionAfterRemoval(ids: rowIds, removed: "a", present: ["b", "c"]) == "b"
+          && ListKeyRules.selectionAfterRemoval(ids: rowIds, removed: "c", present: ["a", "b"]) == "b"
+          && ListKeyRules.selectionAfterRemoval(ids: ["a"], removed: "a", present: []) == nil
+          && ListKeyRules.selectionAfterRemoval(ids: rowIds, removed: "gone", present: ["a"]) == nil)
+    check("the auto-advance target must still exist: nearest surviving row, never a ghost",
+          ListKeyRules.selectionAfterRemoval(ids: rowIds, removed: "a", present: ["c"]) == "c"
+          && ListKeyRules.selectionAfterRemoval(ids: rowIds, removed: "b", present: ["a"]) == "a"
+          && ListKeyRules.selectionAfterRemoval(ids: rowIds, removed: "b", present: []) == nil
+          // A failed dismiss leaves the row in place; it is never its own successor.
+          && ListKeyRules.selectionAfterRemoval(ids: ["a"], removed: "a", present: ["a"]) == nil
+          && ListKeyRules.selectionAfterRemoval(
+              ids: ["a", "b", "c", "d", "e"], removed: "c", present: ["a", "b", "e"]) == "e")
     let topBarSource = swiftFiles.first { $0.lastPathComponent == "TopBar.swift" }
         .flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? ""
-    let keyHandler = topBarSource.components(separatedBy: "private func handleKey(").dropFirst().first?
-        .components(separatedBy: "\n    }\n").first ?? ""
+    // FullList's own source, by struct boundaries (not indentation).
+    let fullListSource = topBarSource.components(separatedBy: "struct FullList: View").dropFirst().first?
+        .components(separatedBy: "struct AssistantThread: View").first ?? ""
     check("list keys run the click and menu paths, never their own",
-          keyHandler.contains("ListKeyRules.action(for:")
-          && keyHandler.contains("actions.onSelect(") && keyHandler.contains("actions.onDismiss(")
-          && keyHandler.contains("model.requestReply()")
-          && keyHandler.contains("model.searchFocusPending = true")
-          && !keyHandler.contains("model.select(") && !keyHandler.contains("model.dismiss("))
+          fullListSource.contains("ListKeyRules.action(for:")
+          && fullListSource.contains("actions.onSelect(") && fullListSource.contains("actions.onDismiss(")
+          && fullListSource.contains("model.requestReply()")
+          && fullListSource.contains("model.searchFocusPending = true")
+          && !fullListSource.contains("model.select(") && !fullListSource.contains("model.dismiss("))
     check("the mail list keeps ScrollView + LazyVStack (no List migration in M3)",
           lineOffenders { $0.contains("List(selection:") }.isEmpty
-          && topBarSource.contains("ScrollViewReader { proxy in\n                    ScrollView {\n                        LazyVStack(spacing: 0) {\n                            ForEach(items)"))
+          && fullListSource.contains("ScrollViewReader") && fullListSource.contains("LazyVStack(")
+          && fullListSource.contains("proxy.scrollTo("))
+    check("the key zone is per window: owned by FullView, not the shared model",
+          lineOffenders { $0.contains("mailKeyZone") }.isEmpty
+          && topBarSource.contains("@State private var keyZone: MailKeyZone")
+          && fullListSource.contains("@Binding var keyZone: MailKeyZone"))
+    let listKeysSource = swiftFiles.first { $0.lastPathComponent == "ListKeys.swift" }
+        .flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? ""
+    check("the key monitor is removed with its view",
+          listKeysSource.contains("deinit {") && listKeysSource.contains("dismantleNSView")
+          && listKeysSource.components(separatedBy: "NSEvent.removeMonitor(").count >= 3)
     let readmeText = (try? String(
         contentsOf: sourceDir.deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("README.md"), encoding: .utf8)) ?? ""
     check("the README documents every list key",
           ["`↑` / `↓`", "`j` / `k`", "`Return` / `o`", "`Esc`", "`e`", "`r`", "`/`"]
-              .allSatisfy { readmeText.contains($0) })
+              .allSatisfy { readmeText.contains($0) }
+          && readmeText.contains("form field inside an email"))
 
     print(failures == 0 ? "\nALL CHECKS PASSED" : "\n\(failures) CHECK(S) FAILED")
     return failures == 0
