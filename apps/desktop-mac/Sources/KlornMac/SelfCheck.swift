@@ -442,8 +442,7 @@ func runSelfChecks() async -> Bool {
     // "finish this on the web" round trip the app exists to remove, so the rule
     // is checked against the sources rather than trusted to review.
     let sourceDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-    let swiftFiles = (try? FileManager.default.contentsOfDirectory(at: sourceDir, includingPropertiesForKeys: nil))?
-        .filter { $0.pathExtension == "swift" } ?? []
+    let swiftFiles = swiftSources(under: sourceDir)
     check("sources are readable", !swiftFiles.isEmpty)
     let allowedWebBaseUsers: Set<String> = ["AuthFlow.swift", "Config.swift", "SelfCheck.swift"]
     let offenders = swiftFiles.filter { url in
@@ -1840,6 +1839,9 @@ func runSelfChecks() async -> Bool {
     print("Device calendars (C6):")
     for (name, ok) in await deviceCalendarSelfChecks(sourceDir: sourceDir) { check(name, ok) }
 
+    print("Token store:")
+    for (name, ok) in tokenStoreSelfChecks(sourceDir: sourceDir) { check("token store — \(name)", ok) }
+
     print("Localization:")
     // A key present in one language and missing in another ships a raw key
     // ("prefs.done") to whoever runs the other language — the kind of bug that
@@ -2167,12 +2169,12 @@ func runSelfChecks() async -> Bool {
         $0.contains("maxHeight: .infinity, alignment: .top")
     }
     check("root content pins to the top (overflow clips at the bottom)",
-          rootTopPinned.contains("TopBar.swift"))
+          rootTopPinned.contains("TopBarRoot.swift"))
     let sidebarScrolls = lineOffenders {
         $0.contains("minHeight: geo.size.height, alignment: .top")
     }
     check("sidebar scrolls instead of clipping when the window is short",
-          sidebarScrolls.contains("TopBar.swift"))
+          sidebarScrolls.contains("Sidebar.swift"))
 
     // Mail HTML is authored against a white page; the reading surface must
     // pin one regardless of app theme (dark mode ghost-text recording,
@@ -2227,7 +2229,7 @@ func runSelfChecks() async -> Bool {
     // Source pins: the overlay path is gone and the scene is real.
     check("Preferences is no longer an in-window overlay",
           lineOffenders { $0.contains("showPreferences") }.isEmpty
-          && !lineOffenders { $0.contains("PreferencesView(") }.contains("TopBar.swift"))
+          && lineOffenders { $0.contains("PreferencesView(") } == ["SettingsWindow.swift"])
     check("the Settings scene hosts SettingsRoot",
           lineOffenders { $0.contains("SettingsRoot().environment") }.contains("KlornApp.swift")
           && lineOffenders { $0.contains("Settings { EmptyView() }") }.isEmpty)
@@ -2439,7 +2441,7 @@ func runSelfChecks() async -> Bool {
           && appSource.contains("-> Bool {\n        false\n    }"))
     check("BarState.full still exists until M8",
           lineOffenders { $0.contains("enum BarState { case collapsed, expanded, full }") }
-              .contains("TopBar.swift"))
+              .contains("TopBarRoot.swift"))
 
     print("Mail list keyboard (M3):")
     // Every combination of the inputs the decision reads, for every key.
@@ -2579,7 +2581,7 @@ func runSelfChecks() async -> Bool {
           ["1", "2", "3", "4", "5"].allSatisfy { resolve($0, kVK_ANSI_1) == nil }
           && lineOffenders {
               $0.contains(".keyboardShortcut(KeyEquivalent(Character(\"\\(index + 1)\")), modifiers: [])")
-          }.contains("TopBar.swift"))
+          }.contains("ReadingPane.swift"))
     let rowIds = ["a", "b", "c"]
     check("moves step one row, clamp at the edges and start at the top",
           ListKeyRules.movedSelection(ids: rowIds, selected: "a", delta: 1) == "b"
@@ -2603,11 +2605,17 @@ func runSelfChecks() async -> Bool {
           && ListKeyRules.selectionAfterRemoval(ids: ["a"], removed: "a", present: ["a"]) == nil
           && ListKeyRules.selectionAfterRemoval(
               ids: ["a", "b", "c", "d", "e"], removed: "c", present: ["a", "b", "e"]) == "e")
-    let topBarSource = swiftFiles.first { $0.lastPathComponent == "TopBar.swift" }
-        .flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? ""
-    // FullList's own source, by struct boundaries (not indentation).
-    let fullListSource = topBarSource.components(separatedBy: "struct FullList: View").dropFirst().first?
-        .components(separatedBy: "struct AssistantThread: View").first ?? ""
+    func source(named name: String) -> String {
+        swiftFiles.first { $0.lastPathComponent == name }
+            .flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? ""
+    }
+    let fullViewSource = source(named: "FullView.swift")
+    // FullList's own source: the struct is the only declaration in its file.
+    let fullListFile = source(named: "FullList.swift")
+    let fullListSource = fullListFile.components(separatedBy: "struct FullList: View").dropFirst().first ?? ""
+    check("FullList.swift holds FullList and nothing else",
+          fullListFile.components(separatedBy: "\nstruct ").count == 2
+          && !fullListFile.contains("\nprivate struct ") && !fullListFile.contains("\nextension "))
     check("list keys run the click and menu paths, never their own",
           fullListSource.contains("ListKeyRules.action(for:")
           && fullListSource.contains("actions.onSelect(") && fullListSource.contains("actions.onDismiss(")
@@ -2620,7 +2628,7 @@ func runSelfChecks() async -> Bool {
           && fullListSource.contains("proxy.scrollTo("))
     check("the key zone is per window: owned by FullView, not the shared model",
           lineOffenders { $0.contains("mailKeyZone") }.isEmpty
-          && topBarSource.contains("@State private var keyZone: MailKeyZone")
+          && fullViewSource.contains("@State private var keyZone: MailKeyZone")
           && fullListSource.contains("@Binding var keyZone: MailKeyZone"))
     let listKeysSource = swiftFiles.first { $0.lastPathComponent == "ListKeys.swift" }
         .flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? ""
@@ -2639,3 +2647,10 @@ func runSelfChecks() async -> Bool {
     return failures == 0
 }
 
+/// Every Swift source of the target, feature subfolders included. The source
+/// pins read files by name, so a flat listing would silently skip Pill/,
+/// Shell/, Mail/, Calendar/, Assistant/ and Shared/.
+func swiftSources(under dir: URL) -> [URL] {
+    let walker = FileManager.default.enumerator(at: dir, includingPropertiesForKeys: nil)
+    return (walker?.compactMap { $0 as? URL } ?? []).filter { $0.pathExtension == "swift" }
+}
