@@ -320,8 +320,8 @@ private enum DeviceCalendarPureChecks {
     }
 
     static func sourceChecks(sourceDir: URL) -> [(String, Bool)] {
-        let files = (try? FileManager.default.contentsOfDirectory(at: sourceDir, includingPropertiesForKeys: nil))?
-            .filter { $0.pathExtension == "swift" && !$0.lastPathComponent.hasPrefix("SelfCheck") } ?? []
+        let files = swiftSources(under: sourceDir)
+            .filter { !$0.lastPathComponent.hasPrefix("SelfCheck") }
         func containing(_ needle: String) -> [String] {
             files.filter { (try? String(contentsOf: $0, encoding: .utf8))?.contains(needle) == true }
                 .map(\.lastPathComponent).sorted()
