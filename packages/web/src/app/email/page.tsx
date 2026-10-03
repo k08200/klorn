@@ -22,6 +22,7 @@ import {
   type FormEvent,
   Fragment,
   type ReactNode,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -38,7 +39,11 @@ import { apiFetch } from "../../lib/api";
 import { useT } from "../../lib/i18n";
 import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
+import { serverErrorMessage } from "../../lib/server-error";
 import { formatRelative } from "../../lib/text";
+import { useKeyboardTriage } from "../../lib/use-hotkeys";
+import { UNDO_NOTICE_SECONDS, useLaneMove } from "./use-lane-move";
+import { TRIAGE_ROW_ATTR, useListTriage } from "./use-list-triage";
 
 type Filter =
   | "all"
@@ -202,6 +207,10 @@ function EmailView() {
   const { toast } = useToast();
   const undoNotice = useMemo(() => parseUndoNotice(searchParams), [searchParams]);
   const queryClient = useQueryClient();
+  // KEYBOARD_TRIAGE (productization plan P4): hotkeys, optimistic lane moves
+  // and the 6s undo. Off, nothing below it changes how this page behaves.
+  const keyboardTriage = useKeyboardTriage();
+  const searchInputRef = useRef<HTMLInputElement>(null);
   // The page promises "mail that needs a reply" — default to the matching
   // filter so users don't land on a full-noise All view that contradicts the
   // headline. A user with no reply-needed mail still has every other tab
@@ -501,6 +510,41 @@ function EmailView() {
     }
   };
 
+  // The exact key the live list query uses; an optimistic write to any other
+  // key lands in a bucket nothing renders.
+  const listKey = queryKeys.email.list({ filter, search: appliedSearch, inbox });
+
+  // Optimistic lane chip: write the lane into the cached rows. Cancelling the
+  // in-flight poll first keeps a stale response from overwriting it;
+  // `revert: false` because the default revert restores the pre-fetch state
+  // asynchronously and would land on top of the optimistic write.
+  const applyLane = useCallback(
+    (emailId: string, tier: EmailRow["tier"]) => {
+      void queryClient.cancelQueries({ queryKey: listKey }, { revert: false });
+      queryClient.setQueryData<typeof listQuery.data>(listKey, (prev) =>
+        prev
+          ? {
+              ...prev,
+              pages: prev.pages.map((page) =>
+                page.kind === "list"
+                  ? {
+                      ...page,
+                      emails: page.emails.map((e) => (e.id === emailId ? { ...e, tier } : e)),
+                    }
+                  : page,
+              ),
+            }
+          : prev,
+      );
+    },
+    // biome-ignore lint/correctness/useExhaustiveDependencies: listKey is rebuilt every render; its parts are the real dependencies
+    [queryClient, filter, appliedSearch, inbox],
+  );
+  const refreshLanes = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.email.all });
+  }, [queryClient]);
+  const laneMove = useLaneMove({ apply: applyLane, onError: setError, onSettled: refreshLanes });
+
   const dismissUndoNotice = () => {
     router.replace("/email");
   };
@@ -509,7 +553,7 @@ function EmailView() {
     setBulkUndoNotice(null);
   };
 
-  const UNDO_DISMISS_SECONDS = 8;
+  const UNDO_DISMISS_SECONDS = keyboardTriage ? UNDO_NOTICE_SECONDS : 8;
 
   useEffect(() => {
     if (!undoNotice) return;
@@ -525,7 +569,7 @@ function EmailView() {
       });
     }, 1000);
     return () => clearInterval(id);
-  }, [undoNotice, router]);
+  }, [undoNotice, router, UNDO_DISMISS_SECONDS]);
 
   useEffect(() => {
     if (!bulkUndoNotice) return;
@@ -541,7 +585,7 @@ function EmailView() {
       });
     }, 1000);
     return () => clearInterval(id);
-  }, [bulkUndoNotice]);
+  }, [bulkUndoNotice, UNDO_DISMISS_SECONDS]);
 
   const undoLastAction = async () => {
     if (!undoNotice || undoBusy) return;
@@ -671,6 +715,84 @@ function EmailView() {
       setRowQuickBusy(null);
     }
   };
+
+  // Keyboard archive (e): the row leaves at once and the request follows. A
+  // refusal — including a source that cannot archive, which only the server
+  // knows per account — puts the row back and says why, inline.
+  const archiveOptimistic = async (email: EmailRow) => {
+    if (rowQuickBusy) return;
+    setRowQuickBusy(email.id);
+    setError(null);
+    laneMove.dismiss();
+    await queryClient.cancelQueries({ queryKey: listKey });
+    const snapshot = queryClient.getQueryData<typeof listQuery.data>(listKey);
+    queryClient.setQueryData<typeof listQuery.data>(listKey, (prev) =>
+      prev
+        ? {
+            ...prev,
+            pages: prev.pages.map((page) =>
+              page.kind === "list"
+                ? { ...page, emails: updateEmailsAfterBulk(page.emails, [email.id], "archive") }
+                : page,
+            ),
+          }
+        : prev,
+    );
+    setBulkUndoNotice({
+      action: "archive",
+      emails: [{ id: email.id, gmailId: email.gmailId, subject: email.subject || "No subject" }],
+    });
+    try {
+      const data = await apiFetch<BulkActionResponse>("/api/email/bulk", {
+        method: "POST",
+        body: JSON.stringify({ ids: [email.id], action: "archive" }),
+      });
+      const failure = data.failed?.[0];
+      if (failure) throw new Error(`API 200: ${JSON.stringify({ error: failure.error })}`);
+    } catch (err) {
+      captureClientError(err, { scope: "email.row.archiveOptimistic", emailId: email.id });
+      queryClient.setQueryData(listKey, snapshot);
+      setBulkUndoNotice(null);
+      setError(serverErrorMessage(err, t("undo.archive.failed")));
+    } finally {
+      setRowQuickBusy(null);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.email.all });
+    }
+  };
+
+  const openEmail = (email: EmailRow, intent?: "reply") => {
+    const params = new URLSearchParams({ markRead: "false", queue: filter });
+    if (intent) params.set("focus", intent);
+    router.push(`/email/${email.id}?${params.toString()}`);
+  };
+
+  const { cursorId } = useListTriage({
+    active: keyboardTriage,
+    emails,
+    setSelectedIds,
+    open: openEmail,
+    archive: (email) => void archiveOptimistic(email),
+    archiveBlockedReason: () =>
+      source === "demo"
+        ? t("keys.reason.demo")
+        : rowQuickBusy || undoBusy
+          ? t("keys.reason.busy")
+          : null,
+    laneBlockedReason: () => (source === "demo" ? t("keys.reason.demo") : null),
+    moveLane: (email, tier) => {
+      setError(null);
+      setBulkUndoNotice(null);
+      laneMove.move({ id: email.id, subject: email.subject || null, tier: email.tier }, tier);
+    },
+    undo: () => {
+      if (laneMove.notice) void laneMove.undo();
+      else if (bulkUndoNotice) void undoBulkArchive();
+      else if (undoNotice) void undoLastAction();
+    },
+    canUndo: Boolean(laneMove.notice || bulkUndoNotice || undoNotice) && !rowQuickBusy && !undoBusy,
+    compose: () => setComposeOpen(true),
+    focusSearch: () => searchInputRef.current?.focus(),
+  });
 
   const quickToggleRead = async (email: EmailRow) => {
     if (rowQuickBusy) return;
@@ -943,11 +1065,30 @@ function EmailView() {
 
         {bulkUndoNotice && (
           <BulkUndoActionBanner
-            notice={bulkUndoNotice}
+            title={`${bulkUndoNotice.emails.length} ${
+              bulkUndoNotice.emails.length === 1 ? "email" : "emails"
+            } archived.`}
+            preview={bulkUndoNotice.emails
+              .slice(0, 2)
+              .map((email) => email.subject)
+              .join(", ")}
+            undoLabel={keyboardTriage ? t("undo.action") : "Undo all"}
             busy={undoBusy}
             countdown={bulkUndoCountdown}
             onDismiss={dismissBulkUndoNotice}
             onUndo={undoBulkArchive}
+          />
+        )}
+
+        {laneMove.notice && (
+          <BulkUndoActionBanner
+            title={t("undo.lane.moved", { lane: laneMove.notice.tier })}
+            preview={laneMove.notice.subject ?? ""}
+            undoLabel={t("undo.action")}
+            busy={laneMove.busy}
+            countdown={laneMove.countdown}
+            onDismiss={laneMove.dismiss}
+            onUndo={() => void laneMove.undo()}
           />
         )}
 
@@ -972,6 +1113,7 @@ function EmailView() {
               <path d="m21 21-4.3-4.3" />
             </svg>
             <input
+              ref={searchInputRef}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder={t("mail.searchPlaceholder")}
@@ -1182,6 +1324,7 @@ function EmailView() {
                       reminderBusyKey={rowReminderBusy}
                       quickBusyId={rowQuickBusy}
                       selected={selectedIds.has(e.id)}
+                      cursor={cursorId === e.id}
                       inboxLabel={resolveInboxLabel(e)}
                       onCreateReminder={createRowReminder}
                       onQuickArchive={quickArchive}
@@ -1317,30 +1460,32 @@ function UndoActionBanner({
   );
 }
 
+// One banner for every undoable list action (bulk archive, and with
+// KEYBOARD_TRIAGE the lane move): the caller words it, the banner counts down.
 function BulkUndoActionBanner({
-  notice,
+  title,
+  preview,
+  undoLabel,
   busy,
   countdown,
   onDismiss,
   onUndo,
 }: {
-  notice: BulkUndoNotice;
+  title: string;
+  preview: string;
+  undoLabel: string;
   busy: boolean;
   countdown: number;
   onDismiss: () => void;
   onUndo: () => void;
 }) {
-  const count = notice.emails.length;
-  const preview = notice.emails
-    .slice(0, 2)
-    .map((email) => email.subject)
-    .join(", ");
   return (
-    <div className="mb-4 flex flex-col gap-3 rounded-lg border border-accent-light/30 bg-state-info-bg px-4 py-3 text-sm text-ink shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
+    <div
+      role="status"
+      className="mb-4 flex flex-col gap-3 rounded-lg border border-accent-light/30 bg-state-info-bg px-4 py-3 text-sm text-ink shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between"
+    >
       <div className="min-w-0">
-        <p className="font-medium">
-          {count} {count === 1 ? "email" : "emails"} archived.
-        </p>
+        <p className="font-medium">{title}</p>
         {preview && <p className="mt-0.5 truncate text-xs text-ink-mid">{preview}</p>}
       </div>
       <div className="flex shrink-0 gap-2">
@@ -1350,7 +1495,7 @@ function BulkUndoActionBanner({
           disabled={busy}
           className="min-h-10 rounded-md bg-accent-solid px-3 text-xs font-semibold text-accent-solid-ink transition hover:bg-accent-solid-hover disabled:opacity-50"
         >
-          {busy ? "Restoring..." : "Undo all"}
+          {busy ? "Restoring..." : undoLabel}
         </button>
         <button
           type="button"
@@ -1678,6 +1823,7 @@ function EmailRowItem({
   quickBusyId,
   queue,
   selected,
+  cursor,
   inboxLabel,
   onCreateReminder,
   onQuickArchive,
@@ -1689,6 +1835,8 @@ function EmailRowItem({
   quickBusyId: string | null;
   queue: Filter;
   selected: boolean;
+  /** The keyboard cursor (j / k) is on this row. */
+  cursor: boolean;
   inboxLabel?: string | null;
   onCreateReminder: (email: EmailRow, option: EmailReminderOption) => void;
   onQuickArchive: (email: EmailRow) => void;
@@ -1700,7 +1848,11 @@ function EmailRowItem({
   const name = senderName(email.from);
   const detailParams = new URLSearchParams({ markRead: "false", queue });
   return (
-    <li className="row-wash group relative">
+    <li
+      className={`row-wash group relative ${cursor ? "z-[1] ring-2 ring-inset ring-accent" : ""}`}
+      aria-current={cursor ? "true" : undefined}
+      {...(cursor ? { [TRIAGE_ROW_ATTR]: email.id } : {})}
+    >
       {/* Tier accent bar: urgent outranks unread; read+normal rows stay bare. */}
       {(urgent || unread) && (
         <span

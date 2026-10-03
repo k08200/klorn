@@ -31,6 +31,10 @@ interface User {
   // the UI doesn't silently fall back to the browser timezone, which on iOS
   // PWA can disagree with the user's actual locale (e.g., shows UTC).
   timezone: string;
+  // Server-driven client flag: the API's KEYBOARD_TRIAGE (productization plan
+  // P4). True turns on the hotkey registry beyond Cmd+K / B / /, the `?` sheet
+  // and optimistic lane moves with undo. Undefined (older API) = off.
+  keyboardTriage?: boolean;
 }
 
 interface AuthContextType {

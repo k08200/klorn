@@ -2,6 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
+import { hotkeyCaps, hotkeyRegistry, liveHotkeys } from "../lib/hotkeys";
+import { useT } from "../lib/i18n";
+import { useHotkeys, useKeyboardTriage } from "../lib/use-hotkeys";
+import { useToast } from "./toast";
 
 interface Command {
   id: string;
@@ -19,6 +23,48 @@ export default function CommandPalette() {
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const listboxId = useId();
   const router = useRouter();
+  const triage = useKeyboardTriage();
+  const { t } = useT();
+  const { toast } = useToast();
+
+  // Cmd/Ctrl+K is an entry in the HOTKEYS table like every other key; the
+  // palette owns its handler, the shared listener dispatches it.
+  useHotkeys(
+    "global",
+    {
+      "palette.toggle": {
+        run: () => {
+          setOpen((prev) => !prev);
+          setQuery("");
+          setSelected(0);
+        },
+      },
+    },
+    true,
+  );
+
+  // KEYBOARD_TRIAGE: the actions of the current screen, straight from the
+  // hotkey table, so the palette and the keys can never disagree. Read while
+  // open because handlers mount and unmount with pages. Each runs after the
+  // palette has closed and handed focus back.
+  const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+  const actionCommands: Command[] =
+    triage && open
+      ? liveHotkeys({ triage, scopes: hotkeyRegistry.activeScopes() })
+          .filter(({ def }) => def.palette)
+          .map(({ def, handler }) => ({
+            id: `action-${def.id}`,
+            label: t(def.labelKey),
+            sublabel: hotkeyCaps(def.keys[0], isMac).join(" "),
+            action: () => {
+              window.setTimeout(() => {
+                const reason = handler.disabledReason?.() ?? null;
+                if (reason) toast(reason, "info");
+                else handler.run();
+              }, 0);
+            },
+          }))
+      : [];
 
   const commands: Command[] = [
     {
@@ -59,6 +105,8 @@ export default function CommandPalette() {
         window.dispatchEvent(new KeyboardEvent("keydown", { key: "/", metaKey: true }));
       },
     },
+    // After the destinations, so Enter on an empty query never runs an action.
+    ...actionCommands,
   ];
 
   const filtered = commands.filter((c) => {
@@ -69,12 +117,6 @@ export default function CommandPalette() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        setOpen((prev) => !prev);
-        setQuery("");
-        setSelected(0);
-      }
       if (e.key === "Escape") {
         setOpen(false);
       }
