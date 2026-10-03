@@ -1436,6 +1436,18 @@ model AttentionItem {
   agentTierSetAt DateTime?
   agentTierKeyId String?
 
+  // Reversible manual override (productization plan P4, KEYBOARD_TRIAGE). When
+  // overrideAttentionTier() moves the lane it snapshots what it replaced here
+  // (previous tier, reason, isManualOverride, agent stamp, updatedAt, and the
+  // exact outcomeAt it stamped on the decision ledger), so
+  // undoAttentionOverride() can put all of it back within a short server-side
+  // window. overrideUndoToken is the live handle: it is replaced by every later
+  // override and cleared by the undo, so only the most recent override on a row
+  // is ever reversible. The snapshot is server-written and never accepted from
+  // a client. Both stay null while the flag is off.
+  overrideUndoToken String?
+  overrideUndo      Json?
+
   // Content-addressed classification. Hash of the decision-relevant input
   // bytes (from, subject, snippet, labels) at the moment tier was decided.
   // Read paths must re-hash the current input and compare; mismatch means

@@ -308,6 +308,21 @@ export function unifiedCalendarReadEnabled(): boolean {
     (process.env.UNIFIED_CALENDAR_READ_ENABLED ?? "").trim().toLowerCase(),
   );
 }
+// Keyboard triage (productization plan P4) — OFF by default (repo doctrine).
+// ONE flag for both halves: the web client learns it from GET /api/auth/me
+// (`user.keyboardTriage`) and turns on the hotkey registry, the `?` sheet and
+// the optimistic lane move with undo; the API turns on the reversible lane
+// override (the override records an undo snapshot and returns an undo token,
+// POST /api/inbox/firewall/:id/undo and POST /api/inbox/firewall/email/:emailId
+// exist). While OFF the override writes exactly what it wrote before, the two
+// new routes 404 like any unknown route, and /me reports false. Read at
+// request time with the same lenient truthy parse as the flags above, so a
+// flip needs no redeploy.
+export function keyboardTriageEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.KEYBOARD_TRIAGE ?? "").trim().toLowerCase(),
+  );
+}
 // MCP write tools — API key permission level and the MCP write set (steps A1
 // and A2a of docs/providers/unified-platform-plan.md). OFF by default (repo
 // doctrine). It gates minting a read-write API key, using one, the MCP-only

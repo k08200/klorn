@@ -127,3 +127,39 @@ export interface FirewallResponse {
   tiers: Record<Tier, FirewallItem[]>;
   summary: Record<Tier, number> & { total: number };
 }
+
+/**
+ * `POST /api/inbox/firewall/:id` — manual lane override. The undo handle is
+ * present only while the server's KEYBOARD_TRIAGE flag is on; a client that
+ * gets none simply offers no undo.
+ */
+export interface LaneOverrideResponse {
+  ok: true;
+  tier: Tier;
+  undoToken?: string;
+  /** ISO time after which the server refuses the undo. */
+  undoExpiresAt?: string;
+}
+
+/** `POST /api/inbox/firewall/email/:emailId` — the same override, keyed by email id. */
+export interface LaneOverrideByEmailResponse extends LaneOverrideResponse {
+  /** Attention item id: the `:id` of the undo route. */
+  itemId: string;
+}
+
+/**
+ * `POST /api/inbox/firewall/:id/undo` — `tier` is the lane restored (null when
+ * the mail had none). `alreadyUndone` marks a repeat of a completed undo.
+ */
+export interface LaneOverrideUndoResponse {
+  ok: true;
+  tier: LiveTier | null;
+  alreadyUndone: boolean;
+}
+
+/** Refusals of the two routes above. `undo_*` are HTTP 409 and change nothing. */
+export interface LaneOverrideErrorResponse {
+  ok: false;
+  code: "not_found" | "undo_expired" | "undo_conflict";
+  message: string;
+}
