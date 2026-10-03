@@ -1,5 +1,6 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
@@ -12,6 +13,7 @@ import LoadingState from "../../../components/ui/loading-state";
 import { API_BASE, apiFetch, authHeaders } from "../../../lib/api";
 import { useT } from "../../../lib/i18n";
 import { linkifyText } from "../../../lib/linkify";
+import { queryKeys } from "../../../lib/query-keys";
 import { captureClientError } from "../../../lib/sentry";
 import { serverErrorMessage } from "../../../lib/server-error";
 import { useKeyboardTriage } from "../../../lib/use-hotkeys";
@@ -664,7 +666,16 @@ function EmailDetailView() {
   // takes the notice down and reports inline.
   const keyboardTriage = useKeyboardTriage();
   const noLaneToPaint = useCallback(() => {}, []);
-  const laneMove = useLaneMove({ apply: noLaneToPaint, onError: setError });
+  // The list shows the lane chip: refetch it once the move (or its undo) lands.
+  const queryClient = useQueryClient();
+  const refreshList = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.email.all });
+  }, [queryClient]);
+  const laneMove = useLaneMove({
+    apply: noLaneToPaint,
+    onError: setError,
+    onSettled: refreshList,
+  });
   const isDemoMail = Boolean(email?.id.startsWith("demo-"));
   useDetailTriage({
     active: keyboardTriage,

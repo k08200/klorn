@@ -47,6 +47,7 @@ export interface LaneMoveNotice {
  */
 const REFUSAL_KEYS: Record<string, string> = {
   not_found: "undo.lane.notClassified",
+  override_conflict: "undo.lane.moveFailed",
   undo_expired: "undo.lane.expired",
   undo_conflict: "undo.lane.conflict",
 };
@@ -54,7 +55,7 @@ const REFUSAL_KEYS: Record<string, string> = {
 function refusalMessage(err: unknown, t: (key: string) => string, fallbackKey: string): string {
   const code =
     err instanceof Error
-      ? /"code":"(not_found|undo_expired|undo_conflict)"/.exec(err.message)
+      ? /"code":"(not_found|override_conflict|undo_expired|undo_conflict)"/.exec(err.message)
       : null;
   return code ? t(REFUSAL_KEYS[code[1]]) : serverErrorMessage(err, t(fallbackKey));
 }
@@ -116,7 +117,13 @@ export function useLaneMove({ apply, onError, onSettled }: UseLaneMoveOptions) {
         .then((res): UndoHandle => ({ itemId: res.itemId, undoToken: res.undoToken ?? null }))
         .catch((err) => {
           captureClientError(err, { scope: "email.lane.move", emailId: target.id, tier });
-          apply(target.id, target.tier);
+          // Roll back only what is still ours to roll back: if a later move on
+          // the same mail has taken over, its lane is the one on screen and
+          // this rollback would paint a stale lane over it.
+          const latest = pending.current?.notice;
+          const superseded =
+            latest !== undefined && latest !== next && latest.emailId === target.id;
+          if (!superseded) apply(target.id, target.tier);
           setNotice((current) => (current === next ? null : current));
           onError(refusalMessage(err, t, "undo.lane.moveFailed"));
           return null;

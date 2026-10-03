@@ -238,6 +238,8 @@ export const HOTKEYS: readonly HotkeyDef[] = [
 /** The fields of a KeyboardEvent the matcher reads. */
 export interface KeyEventLike {
   key: string;
+  /** Physical key ("KeyJ", "Digit1", "Slash"); the fallback for non-Latin layouts. */
+  code?: string;
   metaKey: boolean;
   ctrlKey: boolean;
   altKey: boolean;
@@ -301,6 +303,34 @@ export function isComposingEvent(event: KeyEventLike): boolean {
   return event.isComposing === true || event.keyCode === 229 || event.key === "Process";
 }
 
+const CODE_SYMBOLS: Readonly<Record<string, readonly [plain: string, shifted: string]>> = {
+  Slash: ["/", "?"],
+};
+
+/**
+ * The character a flag-gated chord is matched against.
+ *
+ * A Latin layout is matched by the CHARACTER it produces, so Dvorak, AZERTY
+ * and Colemak users press the letter printed on their key. A non-Latin layout
+ * (Korean 2-set typing `ㅓ` on the J key, Russian, Greek) produces a character
+ * no hotkey names, so it falls back to the key's POSITION via `event.code`,
+ * which is how the Mac app resolves the same shortcuts. Named keys (Escape,
+ * Enter) and anything ASCII are left alone. Composition never reaches here:
+ * hotkeyBlockReason refuses it first.
+ */
+export function effectiveKey(event: KeyEventLike): string {
+  const { key, code } = event;
+  const isSingleChar = [...key].length === 1;
+  if (!isSingleChar || key.charCodeAt(0) < 0x80 || !code) return key;
+  const letter = /^Key([A-Z])$/.exec(code);
+  if (letter) return event.shiftKey ? letter[1] : letter[1].toLowerCase();
+  const digit = /^Digit([0-9])$/.exec(code);
+  if (digit) return digit[1];
+  const symbol = CODE_SYMBOLS[code];
+  if (symbol) return event.shiftKey ? symbol[1] : symbol[0];
+  return key;
+}
+
 interface Chord {
   key: string;
   mod: boolean;
@@ -325,11 +355,12 @@ const isLetter = (key: string) => key.length === 1 && key.toLowerCase() !== key.
 function matchesChord(chord: Chord, event: KeyEventLike): boolean {
   if (event.altKey) return false;
   if ((event.metaKey || event.ctrlKey) !== chord.mod) return false;
+  const key = effectiveKey(event);
   if (isLetter(chord.key)) {
-    return event.key.toLowerCase() === chord.key && event.shiftKey === chord.shift;
+    return key.toLowerCase() === chord.key && event.shiftKey === chord.shift;
   }
-  if (/^[0-9]$/.test(chord.key)) return event.key === chord.key && !event.shiftKey;
-  return event.key === chord.key;
+  if (/^[0-9]$/.test(chord.key)) return key === chord.key && !event.shiftKey;
+  return key === chord.key;
 }
 
 /** The pre-flag rule, kept byte for byte: Cmd or Ctrl, and the exact key. */
@@ -427,7 +458,7 @@ export function createHotkeyMatcher(defs: readonly HotkeyDef[] = HOTKEYS): Hotke
         }),
       );
       if (opensSequence && !event.repeat) {
-        prefix = { key: event.key.toLowerCase(), at: now };
+        prefix = { key: effectiveKey(event).toLowerCase(), at: now };
         return { kind: "pending" };
       }
       return { kind: "none" };
