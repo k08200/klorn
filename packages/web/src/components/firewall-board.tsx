@@ -65,7 +65,9 @@ export const TIER_VISUAL: Record<
   },
   AUTO: {
     label: "AUTO",
-    description: "Handled without asking. Eligible for auto-execution.",
+    // Retired v1 lane: kept only because the Record is keyed by the wire Tier.
+    // Never rendered as a lane — see visibleColumns.
+    description: "Legacy classification. Shown in QUEUE.",
     plane:
       "tier-plane-auto border-tier-auto/30 bg-gradient-to-b from-tier-auto/[0.05] to-transparent",
     card: "border-tier-auto/15 bg-surface-panel hover:border-tier-auto/40",
@@ -195,14 +197,19 @@ export function FirewallBoard() {
     }
   };
 
-  // Visible columns: PUSH, QUEUE, SILENT. AUTO sits below as a one-line
-  // summary because the user already chose not to be interrupted by it.
+  // Visible columns: PUSH, (MEETING), QUEUE, SILENT. AUTO is a retired v1
+  // lane and is never rendered: the API folds it into QUEUE on read, and any
+  // AUTO row an older API still sends joins the QUEUE column here rather
+  // than vanishing (docs/product-vocabulary.md, "Legacy values").
   const visibleColumns = useMemo(() => {
     if (!data) return null;
     return {
       PUSH: data.tiers.PUSH,
       MEETING: data.tiers.MEETING ?? [],
-      QUEUE: data.tiers.QUEUE,
+      QUEUE: [
+        ...data.tiers.QUEUE,
+        ...(data.tiers.AUTO ?? []).map((row) => ({ ...row, tier: "QUEUE" as Tier })),
+      ],
       SILENT: data.tiers.SILENT,
     } as Record<ColumnTier, FirewallItem[]>;
   }, [data]);
@@ -243,7 +250,7 @@ export function FirewallBoard() {
 
         {/* Ontology v2: MEETING becomes a real column only when the server
             emits it (TIER_V2_ENABLED) — a flag-off board is pixel-identical.
-            INFO is a records lane, so it gets the strip treatment like AUTO. */}
+            INFO is a records lane, so it renders as a strip below the columns. */}
         <div
           className={`mt-8 grid gap-4 ${
             (data.summary.MEETING ?? 0) > 0 ? "md:grid-cols-4" : "md:grid-cols-3"
@@ -269,7 +276,6 @@ export function FirewallBoard() {
         {(data.summary.INFO ?? 0) > 0 && (
           <InfoStrip count={data.summary.INFO} items={data.tiers.INFO} />
         )}
-        {data.summary.AUTO > 0 && <AutoStrip count={data.summary.AUTO} items={data.tiers.AUTO} />}
       </div>
     </div>
   );
@@ -293,12 +299,20 @@ function moveItemBetweenTiers(
   for (const t of Object.keys(next.tiers) as Tier[]) {
     next.tiers[t] = [...next.tiers[t]];
   }
-  next.tiers[item.tier] = next.tiers[item.tier].filter((row) => row.id !== item.id);
+  // Remove from every lane, not just item.tier: a legacy AUTO row is displayed
+  // in QUEUE with tier rewritten, but still lives in tiers.AUTO in the payload.
+  for (const t of Object.keys(next.tiers) as Tier[]) {
+    next.tiers[t] = next.tiers[t].filter((row) => row.id !== item.id);
+  }
   next.tiers[newTier] = [{ ...item, tier: newTier }, ...next.tiers[newTier]];
   next.summary = {
     ...(Object.fromEntries(
       (Object.keys(next.tiers) as Tier[]).map((t) => [t, next.tiers[t].length]),
     ) as Record<Tier, number>),
+    // Retired lane: the board shows any legacy AUTO rows inside QUEUE, so the
+    // optimistic counts must agree with what is on screen.
+    QUEUE: next.tiers.QUEUE.length + (next.tiers.AUTO?.length ?? 0),
+    AUTO: 0,
     total: prev.summary.total,
   };
   return next;
@@ -638,7 +652,7 @@ function toolBodyPreview(item: FirewallItem): string | undefined {
 }
 
 /** Records lane (ontology v2): filed transactional mail — visible, never a
- * column (nothing here ever needs a reply), same strip idiom as AUTO. */
+ * column (nothing here ever needs a reply). */
 function InfoStrip({ count, items }: { count: number; items: FirewallItem[] }) {
   const v = TIER_VISUAL.INFO;
   return (
@@ -655,41 +669,6 @@ function InfoStrip({ count, items }: { count: number; items: FirewallItem[] }) {
         {items.slice(0, 5).map((item) => (
           <li key={item.id} className="flex items-center gap-2 line-clamp-1">
             <span className="text-ink-dim/60">·</span>
-            <span className="truncate">{item.title}</span>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-function AutoStrip({ count, items }: { count: number; items: FirewallItem[] }) {
-  const v = TIER_VISUAL.AUTO;
-  if (count === 0) {
-    return (
-      <section className="glass mt-4 flex items-center gap-2 rounded-2xl border border-line bg-surface-raised p-4 text-xs text-ink-dim">
-        <TierGlyph tier="AUTO" className="text-ink-mid" />
-        <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-dim">AUTO</span>
-        <span>— nothing handled automatically yet.</span>
-      </section>
-    );
-  }
-  return (
-    <section className={`glass mt-4 rounded-2xl border p-4 ${v.plane}`}>
-      <header className="flex items-center gap-2">
-        <TierGlyph tier="AUTO" className={v.dot} />
-        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-tier-auto-ink">
-          AUTO
-        </h2>
-        <CountChip value={count} className={`ml-auto text-sm font-semibold ${v.accent}`} />
-      </header>
-      <p className="mt-1.5 text-[11px] leading-5 text-ink-dim">
-        Low-risk, pre-approved. Klorn ran these without interrupting you.
-      </p>
-      <ul className="mt-3 space-y-1.5 text-xs text-ink-mid">
-        {items.slice(0, 5).map((item) => (
-          <li key={item.id} className="flex items-center gap-2 line-clamp-1">
-            <span className="text-tier-auto-ink/60">·</span>
             <span className="truncate">{item.title}</span>
           </li>
         ))}

@@ -2074,10 +2074,321 @@ needs FA-9 and the admin guidance from F0.
 - Exit: flag OFF, no user-visible change except the additive `sourceKey` field on
   the `/api/calendar` row JSON. Nothing is flipped.
 
-**C3 — CalDAV connector for iCloud and Naver** (*outline*). Read-only v1.
-`caldavUrl` is user-supplied and fetched server-side, so SSRF validation
-(resolve the host, pin the address, reject private ranges) is required before
-the first request, and the password is stored with `encryptToken`.
+**C3 — CalDAV connector for iCloud and Naver, read-only.** Depends on: C2.
+- Tasks: link an iCloud or Naver account for its calendar with an app-specific
+  password; an ICLOUD and NAVER implementation of the C2 provider seam; the C2
+  linked-sync loop syncs it into rows; rows of events deleted upstream removed;
+  unlink.
+- Landed 2026-10-01 (branch `feat/caldav-calendar`, PR not yet opened). No
+  migration: `CalendarProvider.ICLOUD` and `NAVER` and
+  `LinkedCalendarAccount.caldavPasswordCipher` came with C1, the per-source row key
+  with C2. One new dependency, `ical.js` (below).
+  - Change from the outline. The outline assumed a user-supplied `caldavUrl`. v1
+    takes NO URL: each provider's base URL is pinned in
+    `pim/caldav/caldav-providers.ts`, the link body has no URL field (an extra field
+    is dropped by the schema, tested), and `caldavUrl` stays NULL on every row. A
+    generic CalDAV server (user URL, RFC 6764 discovery) is a later step and needs
+    the outline's resolve-pin-reject design for the first hop too; the guard below
+    already does it for every hop.
+  - Flag `CALDAV_CALENDAR_ENABLED` (OFF, lenient parse, read per call, in
+    `.env.example`), one flag for both providers. Off: the three routes answer
+    Fastify's default 404 (`darkRouteGate`), `calendarActionsForProvider` answers
+    ICLOUD and NAVER with the unsupported stub it answered before C3 (no request,
+    no decrypt, no row), every reader hides ICLOUD and NAVER rows already stored,
+    and the window reconcile removes nothing (each tested, and each killed by a
+    mutation that removes the check). Syncing events also needs
+    `LINKED_CALENDAR_SYNC_ENABLED` and the user's entitlement, the C2 loop's own
+    gates. Independent of `ICLOUD_INBOX_ENABLED`: the calendar routes are their own
+    dark surface.
+  - Base URLs, checked 2026-10-01. Neither provider has an official page naming its
+    CalDAV server. iCloud `https://caldav.icloud.com`: Apple Community threads show
+    discovery handing out per-account partition hosts `pNN-caldav.icloud.com`
+    (https://discussions.apple.com/thread/6447414,
+    https://discussions.apple.com/thread/255132611); third parties document the
+    host (https://cli.nylas.com/guides/icloud-caldav-settings); login is the Apple
+    ID and an app-specific password (https://support.apple.com/en-us/102654).
+    Naver `https://caldav.calendar.naver.com`, principal
+    `/principals/users/<Naver ID>/`, the Naver ID and a 2-step-verification
+    application password (https://extrememanual.net/41175,
+    https://blog.miyu.pe.kr/992). One guide calls the Naver endpoint unofficial and
+    liable to disappear; Naver's help centre has no page for it. That is a product
+    risk for the flip, recorded here. Probed 2026-10-01 without credentials through
+    the shipped transport: both hosts resolve to public addresses, the TLS handshake
+    to the pinned address under the host name succeeds, and a PROPFIND at the root
+    answers 401 with no redirect. Nothing past that was checked.
+  - SSRF guard (`pim/caldav/caldav-http.ts`, `caldav-providers.ts`, and B4's
+    `mail/host-resolver.ts`, `mail/pinned-address.ts`, `mail/ip-policy.ts`, reused
+    as they are). Every request, the base URL and every
+    href and redirect after it, goes through, in order: https only; no userinfo; no
+    IP literal (after WHATWG parsing, so `0x7f000001` is caught); port 443 only; a
+    host on the provider's own allowlist (iCloud: exactly `caldav.icloud.com` or
+    `^p\d{1,4}-caldav\.icloud\.com$`, stricter than a `.icloud.com` suffix; Naver:
+    exactly `caldav.calendar.naver.com`; the two never share a host); DNS asked
+    directly (c-ares, not `dns.lookup`) and EVERY answer checked public (IPv6
+    default-deny); the connection made to that one checked address with the host
+    name kept for SNI and the certificate (`lookup` pinned, `agent: false`).
+    Redirects are never followed by the transport: a 301/302/307/308 is resolved
+    against the URL that answered and re-checked as a new hop, at most
+    `CALDAV_MAX_REDIRECTS` (3), so Basic credentials only ever reach an allowlisted
+    host. Bounds, named constants: `CALDAV_MAX_RESPONSE_BYTES` 4 MiB per response
+    (a declared or streamed overrun is cut off; compressed bodies refused, identity
+    asked for), `CALDAV_REQUEST_TIMEOUT_MS` 15 s per request, `CALDAV_SYNC_DEADLINE_MS`
+    45 s per listing and `CALDAV_LINK_DEADLINE_MS` 20 s per link verification
+    (DNS included; a transport that ignores the abort cannot hold the caller), at
+    most `CALDAV_MAX_CALENDARS` (25) calendars per account. Error messages are
+    constants; no URL, server text or credential reaches a log, Sentry or a user.
+  - Link. `POST /api/caldav-calendar/link` (Pro-gated, `rateLimit` 5 per 15
+    minutes like the IMAP connect route, demo user refused) with `{ provider,
+    username, password }`. iCloud logs in with the Apple ID (an address); Naver with
+    the Naver ID (`id@naver.com` is reduced to it, the account is listed as
+    `id@naver.com`, and the ID is checked against `[a-z0-9][a-z0-9_-]{0,29}` because
+    it reaches a URL path). Verification is discovery steps 1 and 2 (principal,
+    calendar home) through the guard. EVERY verification failure (401, 5xx, a
+    refused redirect, a private address, unreadable XML, a timeout, the legacy
+    `(userId, email)` unique) answers one constant message, so the route is no
+    oracle; the class is logged (`http:401`, `guard:host`...). The password is
+    stored with `encryptToken` in `caldavPasswordCipher` (already covered by the
+    key-rotation sweep since C1), never returned, never logged (tested). NEW links
+    are capped at 10 per provider; a re-link is always allowed and clears
+    `needsReconnect` and the failure backoff. `GET /linked-calendars` (never a
+    password) and `DELETE /linked-calendars/:id` (provider read first, scoped to
+    ICLOUD/NAVER, then `unlinkCalendarAccount` with it) sit beside it; the three
+    handlers are named functions (review 2026-10-02, no behaviour change). Review
+    fix 2026-10-02: a second limit, 5 per 15 minutes per Apple ID or Naver ID
+    (normalised by `caldavAccountIdentity`, sha256 in the limiter's key, through
+    `@fastify/rate-limit`'s `createRateLimit`), checked just before Apple or Naver
+    is asked, so rotating IPs cannot hammer one account's password (a lockout of
+    the victim, our egress IP blocked); the IP limit stays (tested both ways). NOT
+    changed: the IMAP connect route (B4) has the same IP-only gap.
+  - Reusing the linked inbox's app password: simple and safe, so offered.
+    `{ provider, username, reuseInboxPassword: true }` reads the user's OWN
+    `LinkedInboxAccount` of the same provider and address, decrypts it, verifies it
+    against CalDAV and stores its own cipher. The password never leaves the server,
+    and an Apple app-specific password already grants the whole account, so the copy
+    widens nothing. Unlinking the inbox does not unlink the calendar. Not verified:
+    whether an iCloud MAIL address works as the CalDAV login when it differs from the
+    Apple ID, and whether one Naver application password serves both IMAP and
+    CalDAV; a refusal is just the generic failure.
+  - Sync. No change to the loop or the scheduler. `syncLinkedCalendarWindow` prefers
+    a session's optional `listWindow` (new on `CalendarSession`, CalDAV only), which
+    returns the events plus `complete`. Discovery every sync (3 PROPFINDs), then one
+    `calendar-query` REPORT per VEVENT calendar (`supported-calendar-component-set`
+    absent or naming VEVENT; reminders, inbox and notification collections are not
+    read) with a time-range one day wider than the window on each side, so an
+    all-day or floating event the server reads in its own zone still comes back.
+    The window cut is made here, with the same instants the rows store. Rows: the
+    provider of the session, `externalId` = the UID (a series occurrence
+    `UID#<original start, UTC stamp or date>`, so a moved occurrence keeps its id; a
+    UID over 400 characters hashed), `sourceAccountId` and `sourceKey` = the account
+    id, same 30 days per account; a CalDAV listing holds up to
+    `CALDAV_LISTING_MAX_OCCURRENCES` (500, its own constant since the review: the
+    sync's `CALENDAR_SYNC_MAX_RESULTS` of 100 is Google's page size, and a month of
+    100+ occurrences turned every removal off). Change from the brief: `sourceKey`
+    is per ACCOUNT, not per CalDAV calendar, because C2's CHECK pins it to
+    `COALESCE(sourceAccountId, 'primary')`; one UID in two calendars of one account
+    is one row. Each row records the calendar that listed it in
+    `CalendarEvent.caldavCalendarKey` (review fix; migration
+    `20261005010000_calendar_caldav_calendar_key`, one nullable TEXT column, no
+    backfill: a sha256 prefix of the collection path, never the path, which carries
+    the iCloud account number). A 401 anywhere throws (the password was revoked:
+    the shared failure policy flags `needsReconnect`, once-an-hour warning, no
+    Sentry, tested through the real dispatcher); any other failure of one calendar
+    leaves it out and makes the listing incomplete; every calendar failing throws
+    the first error. Review fixes 2026-10-02: (a) a flagged account opens no CalDAV
+    session at all, so the conflict checks (which still try a flagged Google or
+    Outlook account) never send a revoked app password again. Only a re-link
+    clears the flag, as for Outlook (`routes/outlook-calendar-link.ts`; nothing in
+    `outlook-token.ts` clears it); Google clears it on a refreshed token
+    (`mail/gmail.ts` `persistRefreshedLinkedToken`), which has no CalDAV equivalent:
+    an app password does not heal. (b) Any failure but a 401 backs the account off
+    (`pim/caldav/caldav-backoff.ts`, the pattern of `mail/imap-poll-backoff.ts`):
+    15 minutes doubling to 6 hours, cleared by a listing that returns or a re-link;
+    while backed off no session opens, so neither the sync tick (up to 45 s per
+    stalled account) nor a conflict check waits on it. (c) Sentry hears of a CalDAV
+    failure once per account per kind (`caldavErrorClass`) per process; the warning
+    line stays. Google and Outlook pass their own provider and keep the old policy
+    (their tests unchanged and green).
+  - Parsing (`pim/caldav/ical-events.ts`, ical.js). All-day DATE values are UTC
+    midnight of the date, end exclusive, like Google's. A TZID Intl knows (IANA, a
+    Windows name through the Outlook table, or a prefixed form such as
+    `/mozilla.org/.../Europe/Berlin`) is read with `wallClockToUtcMs`, so the tz
+    database decides DST, not a VTIMEZONE carrying some years' rules; any other
+    TZID through its own VTIMEZONE (ical.js, no global registration); none, or a
+    floating time, in the user's zone. RRULE/RDATE expansion, EXDATE and
+    RECURRENCE-ID overrides (moved, cancelled, and moved INTO the window from a later
+    original time): ical.js walks RRULE/RDATE only; EXDATEs and overrides are
+    matched here by INSTANT (`ical-events.ts`). ical.js drops a TZID it has no
+    VTIMEZONE for and reads the value as floating, so it missed a UTC RECURRENCE-ID
+    or EXDATE against a TZID start and took an EXDATE at the same wall clock in
+    another zone for a match; every value is now read with the TZID its property
+    was written with (`ical-time.ts`), never the user's zone. A DATE EXDATE still
+    removes a timed occurrence on that date (ical.js's rule for the mixed form).
+    `STATUS:CANCELLED` on an event or an override drops it. An override of an
+    instance an EXDATE removes is dropped with it (EXDATE wins; RFC 5545 does not
+    say; tested). Bounds: a series is
+    walked at most 25 000 steps and one listing 200 000 in all (a rule with no
+    COUNT or UNTIL, MINUTELY or SECONDLY, cannot pin the CPU or starve the next
+    one); running out marks the listing truncated. ical.js's own search for the
+    next occurrence has no bound for SECONDLY to WEEKLY rules (`FREQ=DAILY;
+    BYMONTH=2;BYMONTHDAY=30` never returned, synchronously), so
+    `ical-recur-guard.ts` counts its passes, 12 000 per occurrence (was 50 000:
+    Feb 29 on a given weekday recurs every 28 years, 10 227 days, so a DAILY rule
+    fits; an impossible rule now costs ~10 ms, measured) and 1 200 000 per listing;
+    an INTERVAL over 1 000 and more than 10 RRULEs in one VEVENT
+    (10 000 RRULEs in a 340 KB object blocked the event loop 6.5 s) are refused up
+    front. Each makes the object unreadable. BYxxx lists need no bound of ours:
+    ical.js 2.2.1 refuses out-of-range values and keeps distinct values only
+    (tested). The guard patches ical.js's `RecurIterator` prototype, so
+    `package.json` pins `ical.js` to exactly `2.2.1`; since the review it installs
+    on the first CalDAV listing, once, not at import (main's process is untouched
+    while the flag is off; tested in its own file), and throws if the methods it
+    wraps are gone. Anything unreadable is counted, never guessed.
+    Review fixes 2026-10-02 (`ical-bounds.ts`; the review measured 53 s, 40 s,
+    4.4 s and 2.4 s on four hostile inputs): caps per object and per listing on
+    VEVENTs (1 000 / 5 000), overrides (500 / 2 500), RDATE values (1 000 / 5 000)
+    and EXDATE values (1 000 / 5 000), counted on the parsed jCal before anything is
+    expanded: an object over one is skipped whole, one warning per listing, listing
+    truncated. A parse budget of 2 s of working time per listing (waits for the
+    event loop not counted), checked before each object and on every step of a
+    walk: running out truncates. The work yields to the event loop (`setImmediate`)
+    every 10 ms, so a large legitimate calendar holds the process one slice plus one
+    bounded step at a time. Override instants are a sorted array searched by
+    bisection, not scanned on every step. A truncated listing never removes a row.
+    The CalDAV XML reader refuses a document over 60 000 elements (a 4 MB body of
+    `<a/>`: 357 ms and 168 MB of heap -> 26 ms and 17 MB here).
+    Measured on this machine (scratch benchmark, before -> after over two runs,
+    the longest event-loop block after in brackets): 20 000 VEVENTs x
+    `COUNT=100000` in one 2.7 MB object 18 171 ms -> 58-90 ms (the same); one
+    VEVENT with 200 000 RDATEs, descending, 18 574 -> 90-100 ms (the same); 30 000
+    overrides of a DAILY series 1 982 -> 64-93 ms (the same); 500 overrides (the
+    cap) of a DAILY series since 1990 242 -> 130-133 ms (20-22); 60 impossible
+    rules 1 906 -> 654-660 ms (61-74 on the cold first slice, under 25 after);
+    2 000 weekly series since 2015 1 002 -> 1 005-1 084 ms (20; still truncated by
+    the 200 000-step listing cap). What remains of the hostile blocks is ical.js
+    parsing one object, which is not sliced: ~60-100 ms for a 3-4 MB object,
+    bounded by the 4 MB response cap.
+    `meetingLink` is the first `CONFERENCE` or `URL` value `safeMeetingLink` passes
+    (https only, `pim/meeting-link.ts`, #1354).
+  - Removal of vanished events (`pim/calendar-window-reconcile.ts`). Google never
+    removes a row for being absent (C2b). CalDAV may: a time-range query returns
+    every object with an instance in the range, so a COMPLETE listing is the
+    window's whole current set. Complete means at least one calendar found, every
+    collection under the home classified (a 403 entry or an unreadable
+    `resourcetype` may hide an event calendar), none over the calendar cap, every
+    calendar answered, no 507 from the server, every object response carrying data
+    (any status), nothing unreadable, no series cut short, no object skipped over a
+    cap, the parse budget not spent, and no more than 500 occurrences. Then, in one
+    transaction, the rows of
+    that account (user, provider, source key) inside the window (same overlap rule)
+    whose `externalId` the listing lacks AND written before the listing started (so
+    a concurrent sync's fresh row is never taken) are deleted, their open or snoozed
+    attention items resolved, one log line per account with counts only. Only for
+    ICLOUD and NAVER, only with `CALDAV_CALENDAR_ENABLED` on. Truncated, partial,
+    unreadable and thrown listings remove nothing (tested; a mutation of each
+    condition is killed). A row whose event is past the window is untouched, like
+    Google's. Review fixes 2026-10-02: (a) only rows of a calendar the listing read
+    are candidates; a row whose `caldavCalendarKey` names a calendar the discovery
+    did not list (or none) is unknown, never removed. (b) The deletion valve: a
+    removal of more than half (`CALDAV_DELETE_MAX_SHARE`) of the account's rows in
+    the window, when over 5 rows (`CALDAV_DELETE_VALVE_MIN_ROWS`), is refused (a
+    transient empty 207 would otherwise remove the window and resolve its attention
+    items, with nothing to restore them); one warning and one Sentry event per
+    account per process. The share counts every row of the account in the window,
+    including the ones this sync just wrote. (c) Unchanged: only a complete listing
+    removes. Tested: an empty 207 over 8 rows, a calendar missing from discovery, a
+    single legitimate removal, the valve's edges, 150 occurrences still complete.
+  - Free/busy. `busyBlocks` is a live listing of the window: timed occurrences not
+    `TRANSP:TRANSPARENT`, label `calendar`, no title. `peopleFreeBusy` answers
+    unknown for everyone (CalDAV shows no one else's calendar). Writes reject with
+    `CalendarReadOnlyError`.
+  - Readers. ICLOUD and NAVER are registered in `CALENDAR_PROVIDER_ENABLED` as
+    `caldavCalendarEnabled`. Every C7 reader keys on `sourceAccountId`, never a
+    provider name (C4's guard), so a CalDAV row is read-only, wrapped as untrusted,
+    and title-free in a conflict exactly like a linked Google or Outlook row
+    (`calendar-caldav-read.test.ts`). Side effect, intended: with the flags off every
+    reader's `where` now carries `provider: { notIn: ["OUTLOOK", "ICLOUD", "NAVER"] }`
+    (the flag-off query tests assert the new shape).
+  - Dependency. `ical.js` 2.2.1: 1,021,863 downloads in the week to 2026-09-29, last
+    release 2025-08-08, one npm maintainer (Philipp Kewisch, Mozilla Thunderbird),
+    zero runtime dependencies, MPL-2.0 (not marked Incompatible With Secondary
+    Licenses, so it combines with AGPL-3.0). Pinned exactly (`"ical.js": "2.2.1"`,
+    no caret) because the recurrence guard patches its internals (lazily, since the
+    review). Lockfile: +7
+    lines, one package.
+    `pnpm audit --prod`: no known vulnerabilities. Rejected: `tsdav` 2.3.5 (177,473
+    a week, MIT, pulls `debug` and `xml-js`, and does its own fetching, which would
+    have to be bypassed for the pinned, manual-redirect transport), `node-ical`
+    (pulls `rrule-temporal` and `temporal-polyfill`), and `fast-xml-parser` (95M a
+    week, MIT, six dependencies; in the tree only as an optional transitive, pinned
+    by a root override since #1007's audit clean-up). The CalDAV client is about 210
+    lines here and the XML reader about 170 (local names, five entities, DOCTYPE
+    refused).
+  - No UI. C4 added none for Outlook ("belongs to C7's web and desktop work"), so
+    C3 adds none: no web page, no Swift, no locale strings. The routes exist and are
+    dark.
+  - Shared address policy. B4 landed first (#1353), so C3 dropped its copies
+    (`net/ip-policy.ts`, a verbatim copy of `mail/ip-policy.ts`, its test, and
+    `net/pinned-host.ts`) and imports B4's modules; the CalDAV guard tests run
+    against them. NOT done: main's `notify/is-safe-push-endpoint.ts` `isPrivateIp`
+    (deny list, default-allow IPv6) is a weaker third and should move onto
+    `mail/ip-policy.ts` in its own change.
+  - `time-zone.ts`: one cached `Intl.DateTimeFormat` per zone (at most 1 000), since
+    a long series paid a formatter construction per occurrence. Same output:
+    `wallClockToUtcMs`, `localDayUtcRange`, `localDateKey`, `localMinuteOfDay` and
+    `offsetStringFor` compared against main's file over 14 zones (DST edges, an
+    unknown and an empty zone), 245 560 calls, 0 differences.
+  - Known limits. (1) Only ICLOUD and NAVER; no generic CalDAV. (2) The legacy
+    `(userId, email)` unique still exists: an Apple ID already linked as a Google or
+    Outlook calendar cannot also be linked (generic failure, logged), as in C4.
+    (3) No iCalUID cross-provider dedupe (C7's decision stands); two accounts holding
+    one invite are two entries unless they share provider and UID. (4) Discovery runs
+    every sync (3 PROPFINDs per account per 15 minutes); the home set is not cached.
+    (5) Rows store no transparency, so a transparent timed event is a row conflict
+    (C7's limit (2)). (6) Found while wiring, NOT fixed (pre-existing, outside C3):
+    `readSyncTimezone` in `pim/calendar-sync.ts` reads `User.timezone`, which does
+    not exist (the zone is on `AutomationConfig`), so every sync passes the default
+    `Asia/Seoul`; CalDAV floating times are read in Seoul during the sync, as are
+    Google's offset-less times. `busyBlocks` reads the configured zone. (7) ical.js
+    2.2.1 does not expand a YEARLY rule with BYHOUR, BYMINUTE or BYSECOND as RFC
+    5545 says (`FREQ=YEARLY;BYHOUR=9,10` gives one time a year; with BYSECOND as well,
+    nothing). Such a series is missing or wrong, the same way every sync, so it never
+    had rows to remove; neither provider's UI writes such a rule. (8) PARTSTAT is
+    not read: an invitation the user DECLINED is still a busy block and a row (no
+    code change; review 2026-10-02). (9) Every fixture is hand-written from RFC
+    4791 / 5545 shapes; none was captured from a real iCloud or Naver answer.
+    (10) The deletion valve also refuses a real mass deletion (more than half of a
+    month, over 5 rows): those rows stay until they leave the window. (11) An
+    override of an EXDATE'd instance is dropped (EXDATE wins). (12) Found by the
+    review fix, NOT fixed (ical.js): an RDATE-only VEVENT (no RRULE) is iterated
+    without its DTSTART instance, so that instance has no row. (13) One object's
+    ical.js parse is not sliced (~60-100 ms for 3-4 MB, bounded by the response
+    cap). (14) The IMAP connect route's link limit is per IP only (see Link).
+  - Rollback. Flags never on: revert the PR. Ever on: set
+    `CALDAV_CALENDAR_ENABLED` OFF (rows hidden at once), then `DELETE FROM
+    "AttentionItem" WHERE "source" = 'CALENDAR_EVENT' AND "sourceId" IN (SELECT "id"
+    FROM "CalendarEvent" WHERE "provider" IN ('ICLOUD', 'NAVER'))`, then `DELETE FROM
+    "CalendarEvent" WHERE "provider" IN ('ICLOUD', 'NAVER')`, then revert. The
+    accounts can stay: nothing reads them while the flag is off. The
+    `caldavCalendarKey` column is additive and nullable: a revert leaves it unused;
+    drop it only after.
+  - Before the flip (founder; the code only ever ran against a fake CalDAV server
+    built from RFC 4791 / RFC 5545 shapes). With one real iCloud and one real Naver
+    account: (a) the link verifies with an app-specific password and fails with the
+    generic message on a wrong one; (b) discovery answers as assumed: iCloud's
+    principal at the root and its home set on a `pNN-caldav.icloud.com` host the
+    pattern accepts, Naver's root PROPFIND answer (404 or a principal) and its home
+    set; record any redirect; (c) one sync writes the expected rows: a timed event,
+    an all-day event read from a zone west and one east of UTC, a recurring series
+    with a deleted and a moved occurrence; (d) delete an event upstream and see its
+    row removed on the next sync, confirm a calendar of 101-500 occurrences in the
+    window still removes one, and one over 500 removes nothing; delete most of a
+    test calendar's month upstream and see the valve refuse it once in Sentry; (e)
+    revoke the app-specific password: the next sync flags `needsReconnect`, warns
+    once, Sentry stays quiet, and a conflict check sends nothing to Apple; (f) the
+    `reuseInboxPassword` path with a linked iCloud and a linked Naver inbox; (g)
+    unlink removes the rows and their attention items. Decide on the Naver risk
+    above before flipping for Naver users.
+- Exit: flag OFF, no user-visible change. Nothing is flipped.
 **C4 — Microsoft Graph calendar, read-only.** Depends on: C2. Needs FA-9
 (`Calendars.Read` on the Azure app) before the flip, not before the merge.
 - Tasks: link an Outlook account for its calendar over the existing Outlook OAuth
@@ -2561,6 +2872,7 @@ time, whatever the graph says. The later step rebases, reruns
 | `mail/providers/outlook.ts`, `routes/email-replies.ts` | B0b, the `gmail-draft` follow-up under B0 |
 | `mail/reply-headers.ts` | B0, B3 |
 | `pim/calendar.ts`, `pim/calendar-read.ts`, `routes/calendar.ts` | C3, C4, C5, C6, C7 |
+| `pim/calendar-sync.ts`, `pim/calendar-scope.ts`, `pim/calendar-rows.ts`, `pim/calendar-providers/types.ts`, `dispatch.ts` | C2, C3, C4, C5, C6, C7 |
 | web locale files | every step with UI copy |
 
 ## Founder actions

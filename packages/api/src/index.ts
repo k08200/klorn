@@ -10,12 +10,22 @@ import {
   revokeDemoAccessIfDisabled,
 } from "./auth.js";
 import { startBackgroundAgent } from "./background.js";
-import { genericImapEnabled, icloudInboxEnabled, outlookInboxEnabled } from "./config.js";
+import {
+  caldavCalendarEnabled,
+  genericImapEnabled,
+  icloudInboxEnabled,
+  outlookInboxEnabled,
+} from "./config.js";
 import { makeCorsOriginCallback } from "./cors-origin.js";
 import { db, INTERACTIVE_TX_OPTIONS, prisma } from "./db.js";
 import { withDbRetry } from "./db-retry.js";
 import { isDevOrTestEnv } from "./env.js";
 import { handleError } from "./error-handler.js";
+import {
+  getPublicJudgeHealth,
+  type PublicJudgeHealth,
+  warnRetiredJudgeHealthEnv,
+} from "./judge/judge-fallback-check.js";
 import { reportJudgeModelResolution } from "./llm/judge-model-gate.js";
 import { JUDGE_MODEL_RESOLUTION } from "./llm/openai.js";
 import { IMAP_PROVIDERS } from "./mail/imap-providers.js";
@@ -28,6 +38,7 @@ import { apiKeyRoutes } from "./routes/api-keys.js";
 import { authRoutes } from "./routes/auth.js";
 import { automationRoutes } from "./routes/automations.js";
 import { billingRoutes } from "./routes/billing.js";
+import { caldavCalendarRoutes } from "./routes/caldav-calendar.js";
 import { calendarRoutes } from "./routes/calendar.js";
 import { chatConversationRoutes } from "./routes/chat-conversations.js";
 import { chatRoutes } from "./routes/chat-pending-actions.js";
@@ -290,6 +301,11 @@ await app.register(imapConnectRoutes(IMAP_PROVIDERS.IMAP, { gate: genericImapEna
 await app.register(outlookAuthRoutes({ gate: outlookInboxEnabled }), {
   prefix: "/api/auth/outlook",
 });
+// Step C3: iCloud and Naver calendars over CalDAV, dark until CALDAV_CALENDAR_ENABLED
+// (every route answers the default 404 while off).
+await app.register(caldavCalendarRoutes({ gate: caldavCalendarEnabled }), {
+  prefix: "/api/caldav-calendar",
+});
 // Social LOGIN providers beyond Google — dark until APPLE_LOGIN_ENABLED /
 // NAVER_LOGIN_ENABLED flip; every route answers the cloaked 404 while off
 // (same CASA surface freeze as the dark IMAP providers above).
@@ -346,9 +362,18 @@ app.get("/api/health", async () => {
 // in-process scheduler loop has gone silent past its staleness threshold —
 // the failure mode where the dyno slept or an import failed and briefings
 // just stopped (see routes/cron.ts). Public like /api/health: exposes only
-// scheduler names and tick times, no user data.
+// scheduler names and tick times, no user data — plus the LLM judge's coarse
+// fallback status + ratio (#1319), never error text.
 app.get("/api/health/schedulers", async (_request, reply) => {
-  const report = buildSchedulerHealthReport({ disabled: isBackgroundAgentsDisabled() });
+  // The judge read is a cached in-memory value, but it must never turn the
+  // liveness endpoint into a 500: on any throw the field is simply omitted.
+  let judge: PublicJudgeHealth | undefined;
+  try {
+    judge = getPublicJudgeHealth();
+  } catch (err) {
+    console.warn("[JUDGE-HEALTH] public judge health read failed:", err);
+  }
+  const report = buildSchedulerHealthReport({ disabled: isBackgroundAgentsDisabled(), judge });
   reply.code(report.statusCode);
   return report.body;
 });
@@ -501,6 +526,8 @@ app.addHook("onClose", async () => {
 // opted in explicitly. This line is what makes either outcome visible; the
 // 2026-09 incident ran for three weeks precisely because nothing announced it.
 reportJudgeModelResolution(JUDGE_MODEL_RESOLUTION);
+// The count-based JUDGE_HEALTH_WINDOW knob is retired (#1319): say so once.
+warnRetiredJudgeHealthEnv();
 
 // Startup DB calls are wrapped in withDbRetry so a Neon cold-start (suspended
 // compute waking up) does not kill the container. If retries are exhausted we
