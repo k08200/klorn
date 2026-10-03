@@ -18,6 +18,7 @@ const m = vi.hoisted(() => ({
   buildLinkedCalendarClient: vi.fn(),
   isEntitled: vi.fn((_plan: string, _role?: string) => true),
   captureError: vi.fn(),
+  runJudgeFallbackCheck: vi.fn(async () => {}),
   overrides: new Map<string, (...args: unknown[]) => unknown>(),
   calls: [] as string[],
 }));
@@ -67,6 +68,11 @@ vi.mock("../judge/calibration-snapshot.js", () => ({
 }));
 vi.mock("../learning/ontology-proposals-store.js", () => ({
   recomputeOntologyProposalsSafe: vi.fn(async () => {}),
+}));
+// The hourly judge fallback alarm (#1319) reads the DB with $queryRaw; this
+// file's prisma mock has no such method, so it is replaced by a spy.
+vi.mock("../judge/judge-fallback-check.js", () => ({
+  runJudgeFallbackCheck: m.runJudgeFallbackCheck,
 }));
 vi.mock("../judge/judge-health.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../judge/judge-health.js")>()),
@@ -305,6 +311,12 @@ describe("scheduler calendar step — primary calendar", () => {
       expect(callsTo("notification.create")).toBe(0);
       expect(m.captureError).not.toHaveBeenCalled();
     });
+  });
+
+  it("the judge fallback check waits for its boot delay instead of running on the first tick", async () => {
+    await runOneTick();
+
+    expect(m.runJudgeFallbackCheck).not.toHaveBeenCalled();
   });
 
   it("upserts each event by (userId, googleId) with the mapped fields", async () => {

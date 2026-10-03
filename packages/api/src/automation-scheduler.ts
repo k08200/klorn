@@ -181,8 +181,14 @@ const ATTENTION_AGING_INTERVAL_MS = 60 * 60 * 1000;
 // Judge fallback alarm (#1319): DB-backed, so the cadence only bounds how fast
 // an outage is noticed. Own constant; mirrors JUDGE_FALLBACK_CHECK_INTERVAL_MS
 // in judge-fallback-check.ts (lazy-imported, so not importable here).
-let lastJudgeFallbackCheckAt = 0;
 const JUDGE_FALLBACK_CHECK_INTERVAL_MS = 60 * 60 * 1000;
+// The first check runs this long after the process starts, not on the first
+// tick: a deploy's warm-up tick stays off the extra query, and unit tests that
+// drive one tick never reach the DB through it (a real $queryRaw under a
+// partial prisma mock made automation-scheduler-calendar-sync flaky).
+const JUDGE_FALLBACK_CHECK_BOOT_DELAY_MS = 5 * 60 * 1000;
+let lastJudgeFallbackCheckAt =
+  Date.now() - JUDGE_FALLBACK_CHECK_INTERVAL_MS + JUDGE_FALLBACK_CHECK_BOOT_DELAY_MS;
 // Once-per-user-per-UTC-day Sentry alert for the "Gmail not connected"
 // per-tick skip: every tick warns to stdout only, which is how a dead
 // primary token ran silently for weeks (2026-08-10 diagnosis). One alert a
