@@ -21,7 +21,11 @@ import { db, INTERACTIVE_TX_OPTIONS, prisma } from "./db.js";
 import { withDbRetry } from "./db-retry.js";
 import { isDevOrTestEnv } from "./env.js";
 import { handleError } from "./error-handler.js";
-import { getPublicJudgeHealth } from "./judge/judge-health.js";
+import {
+  getPublicJudgeHealth,
+  type PublicJudgeHealth,
+  warnRetiredJudgeHealthEnv,
+} from "./judge/judge-fallback-check.js";
 import { reportJudgeModelResolution } from "./llm/judge-model-gate.js";
 import { JUDGE_MODEL_RESOLUTION } from "./llm/openai.js";
 import { IMAP_PROVIDERS } from "./mail/imap-providers.js";
@@ -361,10 +365,15 @@ app.get("/api/health", async () => {
 // scheduler names and tick times, no user data — plus the LLM judge's coarse
 // fallback status + ratio (#1319), never error text.
 app.get("/api/health/schedulers", async (_request, reply) => {
-  const report = buildSchedulerHealthReport({
-    disabled: isBackgroundAgentsDisabled(),
-    judge: getPublicJudgeHealth(),
-  });
+  // The judge read is a cached in-memory value, but it must never turn the
+  // liveness endpoint into a 500: on any throw the field is simply omitted.
+  let judge: PublicJudgeHealth | undefined;
+  try {
+    judge = getPublicJudgeHealth();
+  } catch (err) {
+    console.warn("[JUDGE-HEALTH] public judge health read failed:", err);
+  }
+  const report = buildSchedulerHealthReport({ disabled: isBackgroundAgentsDisabled(), judge });
   reply.code(report.statusCode);
   return report.body;
 });
@@ -517,6 +526,8 @@ app.addHook("onClose", async () => {
 // opted in explicitly. This line is what makes either outcome visible; the
 // 2026-09 incident ran for three weeks precisely because nothing announced it.
 reportJudgeModelResolution(JUDGE_MODEL_RESOLUTION);
+// The count-based JUDGE_HEALTH_WINDOW knob is retired (#1319): say so once.
+warnRetiredJudgeHealthEnv();
 
 // Startup DB calls are wrapped in withDbRetry so a Neon cold-start (suspended
 // compute waking up) does not kill the container. If retries are exhausted we

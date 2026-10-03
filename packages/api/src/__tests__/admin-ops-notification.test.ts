@@ -35,12 +35,12 @@ afterEach(() => {
 describe("createAdminOpsNotifications", () => {
   it("creates one ops Notification per ADMIN with the shared dedupeKey", async () => {
     behavior.admins = [{ id: "a1" }, { id: "a2" }];
-    const n = await createAdminOpsNotifications({
+    const delivery = await createAdminOpsNotifications({
       dedupeKey: "judge-fallback:2026-10-02T13:00:00.000Z",
       title: "LLM judge failing",
       message: "m",
     });
-    expect(n).toBe(2);
+    expect(delivery).toEqual({ recipients: 2, created: 2 });
     expect(created).toEqual([
       {
         userId: "a1",
@@ -64,7 +64,7 @@ describe("createAdminOpsNotifications", () => {
     behavior.failWith = Object.assign(new Error("unique"), { code: "P2002" });
     await expect(
       createAdminOpsNotifications({ dedupeKey: "k", title: "t", message: "m" }),
-    ).resolves.toBe(0);
+    ).resolves.toEqual({ recipients: 1, created: 0 });
   });
 
   it("rethrows any other write failure so the caller can log it", async () => {
@@ -78,7 +78,7 @@ describe("createAdminOpsNotifications", () => {
   it("is a no-op with no ADMIN users", async () => {
     await expect(
       createAdminOpsNotifications({ dedupeKey: "k", title: "t", message: "m" }),
-    ).resolves.toBe(0);
+    ).resolves.toEqual({ recipients: 0, created: 0 });
     expect(created).toEqual([]);
   });
 });

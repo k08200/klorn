@@ -18,7 +18,7 @@ import {
 import { captureError } from "../sentry.js";
 import { backgroundLlmPacer } from "./background-pacer.js";
 import { resolveJudgeModel } from "./judge-model-gate.js";
-import { recordLlmCallFailure } from "./llm-failure-log.js";
+import { type DispatchFailureTracker, trackDispatchFailures } from "./llm-failure-log.js";
 import {
   FALLBACK_MODEL,
   getProviderCooldownInfo,
@@ -233,30 +233,33 @@ async function enforceCostGates(
 }
 
 /**
- * True when the resolved provider chain contains a provider built from the
- * user's OWN (BYOK) key. Such a call is EXPECTED to run on the user's credit,
- * so the shared cost ledgers skip the pre-bill (the true-up settles the real
- * outcome per served provider). Playground is handled separately and excluded.
- */
-/**
  * Failure-side ledger (#1319): LlmUsageLog only sees successful calls, so a
- * failed dispatch is recorded here (content-free, rate-limited) before the
- * original error is rethrown unchanged. A playground visitor's own key failing
- * is not fleet capacity, so it is not counted (mirrors the cooldown skip).
+ * failed dispatch is noted here (logged now, content-free and rate-limited)
+ * before the original error is rethrown unchanged. The entry point tallies the
+ * noted attempts only if the whole call then fails — a hop a fallback provider
+ * recovered is not "the" error. A playground visitor's own key failing is not
+ * fleet capacity, so it is not noted at all (mirrors the cooldown skip).
  */
 function recordDispatchFailure(
+  failures: DispatchFailureTracker,
   provider: Provider,
   model: string,
   err: unknown,
   playgroundOnly: boolean,
 ): void {
   if (playgroundOnly) return;
-  recordLlmCallFailure(
+  failures.note(
     { provider: provider.name, model, ownedByUser: provider.ownedByUser === true },
     err,
   );
 }
 
+/**
+ * True when the resolved provider chain contains a provider built from the
+ * user's OWN (BYOK) key. Such a call is EXPECTED to run on the user's credit,
+ * so the shared cost ledgers skip the pre-bill (the true-up settles the real
+ * outcome per served provider). Playground is handled separately and excluded.
+ */
 function hasUserOwnedProvider(chain: Provider[], playgroundOnly: boolean): boolean {
   // Membership, not position: a user key anywhere in the chain skips the
   // pre-bill. If an env provider serves first instead (only the local compat
@@ -420,6 +423,23 @@ export async function createCompletion(
   | OpenAI.Chat.Completions.ChatCompletion
   | AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>
 > {
+  const failures = trackDispatchFailures();
+  try {
+    return await createCompletionWithFailover(params, options, failures);
+  } catch (err) {
+    failures.settleUnrecovered();
+    throw err;
+  }
+}
+
+async function createCompletionWithFailover(
+  params: ChatCompletionCreateParamsNonStreaming | ChatCompletionCreateParamsStreaming,
+  options: CompletionOptions,
+  failures: DispatchFailureTracker,
+): Promise<
+  | OpenAI.Chat.Completions.ChatCompletion
+  | AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>
+> {
   type Result =
     | OpenAI.Chat.Completions.ChatCompletion
     | AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
@@ -516,7 +536,7 @@ export async function createCompletion(
     try {
       result = (await provider.call(effectiveParams as typeof params, model)) as Result;
     } catch (err) {
-      recordDispatchFailure(provider, model, err, playgroundOnly);
+      recordDispatchFailure(failures, provider, model, err, playgroundOnly);
       throw err;
     }
     // v1 limitation: streaming responses carry no `usage` block (OpenRouter
@@ -698,6 +718,20 @@ export async function createVisionCompletion(
   params: ChatCompletionCreateParamsNonStreaming,
   options: CompletionOptions = {},
 ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
+  const failures = trackDispatchFailures();
+  try {
+    return await createVisionCompletionWithFailover(params, options, failures);
+  } catch (err) {
+    failures.settleUnrecovered();
+    throw err;
+  }
+}
+
+async function createVisionCompletionWithFailover(
+  params: ChatCompletionCreateParamsNonStreaming,
+  options: CompletionOptions,
+  failures: DispatchFailureTracker,
+): Promise<OpenAI.Chat.Completions.ChatCompletion> {
   const chain = getProviderChain(options.credentials);
   if (chain.length === 0) {
     throw new Error(
@@ -752,7 +786,7 @@ export async function createVisionCompletion(
         model,
       )) as OpenAI.Chat.Completions.ChatCompletion;
     } catch (err) {
-      recordDispatchFailure(provider, model, err, playgroundOnly);
+      recordDispatchFailure(failures, provider, model, err, playgroundOnly);
       throw err;
     }
     // Mirror the gate: BYOK and playground spend no Klorn budget, so the

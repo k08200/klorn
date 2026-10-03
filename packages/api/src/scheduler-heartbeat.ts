@@ -14,9 +14,9 @@
  */
 
 // Type-only on purpose: src/__tests__/setup.ts imports this module, and a
-// runtime import here would preload judge-health (and Sentry) into every test
-// file before its vi.mock calls register. index.ts injects the value.
-import type { PublicJudgeHealth } from "./judge/judge-health.js";
+// runtime import here would preload the judge check (and Sentry) into every
+// test file before its vi.mock calls register. index.ts injects the value.
+import type { PublicJudgeHealth } from "./judge/judge-fallback-check.js";
 
 /**
  * Names every scheduler that index.ts starts when BACKGROUND_AGENTS_DISABLED
@@ -136,10 +136,12 @@ export interface SchedulerHealthReport {
     schedulers?: SchedulerHealthEntry[];
     missing?: string[];
     /**
-     * LLM judge fallback share (#1319). This endpoint is PUBLIC, so only a
-     * coarse status + aggregate ratio — no error text, no volumes. The top
-     * error lives on the admin-only GET /api/admin/judge-health. Informational:
-     * it does not change the status code, which stays scheduler liveness.
+     * LLM judge fallback status (#1319), from the last DB-backed check. This
+     * endpoint is PUBLIC, so only a coarse status + aggregate ratio (null below
+     * the minimum sample) — no error text, no volumes. The top error lives on
+     * the admin-only GET /api/admin/judge-health. Informational: it does not
+     * change the status code, which stays scheduler liveness. Omitted when the
+     * read failed — the liveness answer must not depend on it.
      */
     judge?: PublicJudgeHealth;
   };
@@ -159,7 +161,7 @@ export function buildSchedulerHealthReport(opts: {
 }): SchedulerHealthReport {
   const { judge } = opts;
   if (opts.disabled) {
-    return { statusCode: 200, body: { status: "disabled", judge } };
+    return { statusCode: 200, body: { status: "disabled", ...(judge ? { judge } : {}) } };
   }
   const health = getSchedulerHealth({ now: opts.now, uptimeMs: opts.uptimeMs });
   return {
@@ -169,7 +171,7 @@ export function buildSchedulerHealthReport(opts: {
       inStartupGrace: health.inStartupGrace,
       schedulers: health.schedulers,
       missing: health.missing,
-      judge,
+      ...(judge ? { judge } : {}),
     },
   };
 }

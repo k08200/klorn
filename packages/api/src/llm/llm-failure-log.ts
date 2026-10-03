@@ -6,9 +6,14 @@
  * BEFORE dispatch. During the 2026-09-05 OpenRouter credit outage every judge
  * call failed, nothing was written for the failures, and the pre-bills kept
  * the ledgers moving — the system looked alive for four weeks. This module is
- * the failure-side record: one structured, rate-limited log line per failure
- * class, plus a bounded in-memory tally per provider that the judge-health
- * alarm reads to name the top error.
+ * the failure-side record:
+ *   - every failed dispatch attempt → one structured, rate-limited log line
+ *     (logLlmCallFailure), including hops a fallback provider then recovered;
+ *   - only attempts of calls that failed OVERALL → a bounded 24 h in-memory
+ *     tally per provider (tallyLlmFailure), which the judge fallback alarm
+ *     reads to name the top error. A hop that a fallback recovered broke
+ *     nothing, so it must not become "the" error. trackDispatchFailures ties
+ *     the two together per call.
  *
  * Why NOT LlmUsageLog: it has no status/error column (recording a failure
  * there needs a schema change), and every row is read as a served call by the
@@ -52,8 +57,8 @@ const CODE_LABEL: Readonly<Record<LlmFailureCode, string>> = {
   other: "other error",
 };
 
-/** Rolling window the per-provider tally covers (matches the judge alarm). */
-export const LLM_FAILURE_WINDOW_MS = 60 * 60 * 1000;
+/** Rolling window the per-provider tally covers (the judge alarm's 24 h lookback). */
+export const LLM_FAILURE_WINDOW_MS = 24 * 60 * 60 * 1000;
 /** Hard cap on retained failure events, whatever the outage volume. */
 export const LLM_FAILURE_MAX_EVENTS = 1000;
 /** At most one log line per (provider, code, status) per interval. */
@@ -161,25 +166,68 @@ function logRateLimited(provider: string, model: string, cls: LlmFailureClass, n
   logMarks.set(key, { at: now, suppressed: 0 });
 }
 
+function providerKey(ctx: LlmFailureContext): string {
+  return ctx.ownedByUser ? `${ctx.provider}:user` : ctx.provider;
+}
+
 /**
- * Record one failed provider dispatch. Call from the provider-call catch
- * path, then rethrow the original error. Never throws.
+ * Log one failed provider dispatch attempt (rate-limited, content-free).
+ * Never throws: it runs inside the provider-call catch path.
  */
-export function recordLlmCallFailure(
+export function logLlmCallFailure(
   ctx: LlmFailureContext,
   err: unknown,
   now: number = Date.now(),
 ): void {
   try {
-    const cls = classifyLlmFailure(err);
-    const provider = ctx.ownedByUser ? `${ctx.provider}:user` : ctx.provider;
-    events = [...events, { at: now, provider, label: cls.label }];
-    pruneEvents(now);
-    logRateLimited(provider, ctx.model, cls, now);
+    logRateLimited(providerKey(ctx), ctx.model, classifyLlmFailure(err), now);
   } catch (recorderErr) {
     // Observability must never break the call path it observes.
-    console.warn(`${LOG_PREFIX} recorder failed: ${describeLlmFailure(recorderErr)}`);
+    console.warn(`${LOG_PREFIX} logger failed: ${describeLlmFailure(recorderErr)}`);
   }
+}
+
+/**
+ * Count one attempt of a call that failed overall toward the top-error tally.
+ * Never throws.
+ */
+export function tallyLlmFailure(
+  ctx: LlmFailureContext,
+  err: unknown,
+  now: number = Date.now(),
+): void {
+  try {
+    const { label } = classifyLlmFailure(err);
+    events = [...events, { at: now, provider: providerKey(ctx), label }];
+    pruneEvents(now);
+  } catch (recorderErr) {
+    console.warn(`${LOG_PREFIX} tally failed: ${describeLlmFailure(recorderErr)}`);
+  }
+}
+
+export interface DispatchFailureTracker {
+  /** A dispatch attempt failed: log it now, hold it until the call settles. */
+  note(ctx: LlmFailureContext, err: unknown): void;
+  /** The call failed overall: tally every held attempt (idempotent). */
+  settleUnrecovered(): void;
+}
+
+/**
+ * Per-call tracker. A call that later succeeds on a fallback provider is simply
+ * never settled, so its failed hops are logged but never tallied.
+ */
+export function trackDispatchFailures(): DispatchFailureTracker {
+  let held: Array<{ ctx: LlmFailureContext; err: unknown }> = [];
+  return {
+    note(ctx, err) {
+      logLlmCallFailure(ctx, err);
+      held = [...held, { ctx, err }];
+    },
+    settleUnrecovered() {
+      for (const { ctx, err } of held) tallyLlmFailure(ctx, err);
+      held = [];
+    },
+  };
 }
 
 /** Failures per provider inside the rolling window. */

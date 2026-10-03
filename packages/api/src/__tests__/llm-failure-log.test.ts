@@ -15,7 +15,9 @@ import {
   LLM_FAILURE_LOG_INTERVAL_MS,
   LLM_FAILURE_MAX_EVENTS,
   LLM_FAILURE_WINDOW_MS,
-  recordLlmCallFailure,
+  logLlmCallFailure,
+  tallyLlmFailure,
+  trackDispatchFailures,
 } from "../llm/llm-failure-log.js";
 
 const T0 = 1_800_000_000_000;
@@ -64,9 +66,9 @@ describe("classifyLlmFailure", () => {
   });
 });
 
-describe("recordLlmCallFailure — structured log line", () => {
+describe("logLlmCallFailure — structured log line", () => {
   it("logs provider, model, error class, HTTP status and code", () => {
-    recordLlmCallFailure(
+    logLlmCallFailure(
       { provider: "openrouter", model: "google/gemma-4-31b-it" },
       httpError(402, "402 Insufficient credits"),
       T0,
@@ -83,7 +85,7 @@ describe("recordLlmCallFailure — structured log line", () => {
   });
 
   it("never logs the provider message (it can quote the rejected key) or any prompt", () => {
-    recordLlmCallFailure(
+    logLlmCallFailure(
       { provider: "openrouter", model: "m" },
       httpError(401, "401 invalid key sk-or-v1-SECRETSECRET for prompt: Dear Bob"),
       T0,
@@ -96,11 +98,11 @@ describe("recordLlmCallFailure — structured log line", () => {
 
   it("rate-limits identical failure classes to one line per interval, then reports the suppressed count", () => {
     for (let i = 0; i < 50; i++) {
-      recordLlmCallFailure({ provider: "openrouter", model: "m" }, httpError(402, "402"), T0 + i);
+      logLlmCallFailure({ provider: "openrouter", model: "m" }, httpError(402, "402"), T0 + i);
     }
     expect(failureLines(warnSpy)).toHaveLength(1);
 
-    recordLlmCallFailure(
+    logLlmCallFailure(
       { provider: "openrouter", model: "m" },
       httpError(402, "402"),
       T0 + LLM_FAILURE_LOG_INTERVAL_MS + 1,
@@ -111,24 +113,24 @@ describe("recordLlmCallFailure — structured log line", () => {
   });
 
   it("logs each distinct failure class on its own", () => {
-    recordLlmCallFailure({ provider: "openrouter", model: "m" }, httpError(402, "402"), T0);
-    recordLlmCallFailure({ provider: "openrouter", model: "m" }, httpError(429, "429"), T0);
-    recordLlmCallFailure({ provider: "gemini", model: "g" }, httpError(402, "402"), T0);
+    logLlmCallFailure({ provider: "openrouter", model: "m" }, httpError(402, "402"), T0);
+    logLlmCallFailure({ provider: "openrouter", model: "m" }, httpError(429, "429"), T0);
+    logLlmCallFailure({ provider: "gemini", model: "g" }, httpError(402, "402"), T0);
     expect(failureLines(warnSpy)).toHaveLength(3);
   });
 
   it("never throws, whatever was thrown at the provider", () => {
     expect(() =>
-      recordLlmCallFailure({ provider: "openrouter", model: "m" }, undefined, T0),
+      logLlmCallFailure({ provider: "openrouter", model: "m" }, undefined, T0),
     ).not.toThrow();
   });
 });
 
 describe("failure tally — per provider, per window, bounded", () => {
   it("counts failures per provider, keeping BYOK keys apart from the env key", () => {
-    recordLlmCallFailure({ provider: "openrouter", model: "m" }, httpError(402, "402"), T0);
-    recordLlmCallFailure({ provider: "openrouter", model: "m" }, httpError(402, "402"), T0);
-    recordLlmCallFailure(
+    tallyLlmFailure({ provider: "openrouter", model: "m" }, httpError(402, "402"), T0);
+    tallyLlmFailure({ provider: "openrouter", model: "m" }, httpError(402, "402"), T0);
+    tallyLlmFailure(
       { provider: "openrouter", model: "m", ownedByUser: true },
       httpError(401, "401"),
       T0,
@@ -141,28 +143,64 @@ describe("failure tally — per provider, per window, bounded", () => {
   });
 
   it("drops failures older than the window", () => {
-    recordLlmCallFailure({ provider: "openrouter", model: "m" }, httpError(402, "402"), T0);
+    tallyLlmFailure({ provider: "openrouter", model: "m" }, httpError(402, "402"), T0);
     expect(getLlmFailureCounts(T0 + LLM_FAILURE_WINDOW_MS + 1)).toEqual([]);
     expect(getTopLlmFailure(T0 + LLM_FAILURE_WINDOW_MS + 1)).toBeNull();
   });
 
   it("bounds memory during a sustained outage", () => {
     for (let i = 0; i < LLM_FAILURE_MAX_EVENTS + 500; i++) {
-      recordLlmCallFailure({ provider: "openrouter", model: "m" }, httpError(402, "402"), T0);
+      tallyLlmFailure({ provider: "openrouter", model: "m" }, httpError(402, "402"), T0);
     }
     const total = getLlmFailureCounts(T0).reduce((n, c) => n + c.total, 0);
     expect(total).toBe(LLM_FAILURE_MAX_EVENTS);
   });
 
   it("names the most frequent failure class and its provider", () => {
-    recordLlmCallFailure({ provider: "gemini", model: "g" }, httpError(429, "429"), T0);
+    tallyLlmFailure({ provider: "gemini", model: "g" }, httpError(429, "429"), T0);
     for (let i = 0; i < 3; i++) {
-      recordLlmCallFailure({ provider: "openrouter", model: "m" }, httpError(402, "402"), T0);
+      tallyLlmFailure({ provider: "openrouter", model: "m" }, httpError(402, "402"), T0);
     }
     expect(getTopLlmFailure(T0)).toEqual({
       provider: "openrouter",
       label: "402 credits exhausted",
       count: 3,
     });
+  });
+});
+
+describe("failure tally — 24 h window", () => {
+  it("covers a full day, matching the DB-backed judge check", () => {
+    expect(LLM_FAILURE_WINDOW_MS).toBe(24 * 60 * 60 * 1000);
+    tallyLlmFailure({ provider: "openrouter", model: "m" }, httpError(402, "402"), T0);
+    expect(getTopLlmFailure(T0 + 23 * 60 * 60 * 1000)?.count).toBe(1);
+  });
+});
+
+describe("trackDispatchFailures — only unrecovered calls feed the top error", () => {
+  it("logs every failed attempt immediately but tallies nothing until settled", () => {
+    const tracker = trackDispatchFailures();
+    tracker.note({ provider: "openrouter", model: "m" }, httpError(429, "429"));
+    expect(failureLines(warnSpy)).toHaveLength(1);
+    // The call then succeeded on a fallback provider: never settled.
+    expect(getLlmFailureCounts()).toEqual([]);
+    expect(getTopLlmFailure()).toBeNull();
+  });
+
+  it("tallies every failed attempt of a call that failed overall", () => {
+    const tracker = trackDispatchFailures();
+    tracker.note({ provider: "openrouter", model: "m" }, httpError(402, "402"));
+    tracker.note({ provider: "gemini", model: "g" }, httpError(429, "429"));
+    tracker.settleUnrecovered();
+    const counts = getLlmFailureCounts();
+    expect(counts.map((c) => c.provider).sort()).toEqual(["gemini", "openrouter"]);
+  });
+
+  it("settling twice does not double-count", () => {
+    const tracker = trackDispatchFailures();
+    tracker.note({ provider: "openrouter", model: "m" }, httpError(402, "402"));
+    tracker.settleUnrecovered();
+    tracker.settleUnrecovered();
+    expect(getTopLlmFailure()?.count).toBe(1);
   });
 });

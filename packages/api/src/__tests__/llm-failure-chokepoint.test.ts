@@ -120,7 +120,7 @@ describe("createCompletion — failed provider calls are recorded", () => {
     expect(recordedUsage).toEqual([]);
   });
 
-  it("records the failed hop of a failover and still returns the served result", async () => {
+  it("logs the failed hop of a recovered failover but keeps it out of the top-error tally", async () => {
     chain.push(
       makeProvider("openrouter", async () => {
         throw httpError(429, "429 Too many requests");
@@ -133,9 +133,11 @@ describe("createCompletion — failed provider calls are recorded", () => {
     const result = await createCompletion(PARAMS);
 
     expect(result).toBe(COMPLETION);
-    expect(getLlmFailureCounts()).toEqual([
-      { provider: "openrouter", total: 1, byLabel: { "429 rate limited": 1 } },
-    ]);
+    const lines = failureLogLines();
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('"code":"rate_limited"');
+    // Recovered by the next provider: not what broke anything.
+    expect(getLlmFailureCounts()).toEqual([]);
     expect(recordedUsage).toHaveLength(1);
     expect(recordedUsage[0]).toMatchObject({ provider: "gemini" });
   });
@@ -154,11 +156,34 @@ describe("createCompletion — failed provider calls are recorded", () => {
       createCompletion(PARAMS, { credentials: { playgroundOnly: true } as never }),
     ).rejects.toBe(boom);
     expect(getLlmFailureCounts()).toEqual([]);
+    expect(failureLogLines()).toEqual([]);
+  });
+
+  it("tallies every failed hop when the whole call fails", async () => {
+    chain.push(
+      makeProvider("openrouter", async () => {
+        throw httpError(429, "429 Too many requests");
+      }),
+    );
+    chain.push(
+      makeProvider("gemini", async () => {
+        throw httpError(429, "429 Too many requests");
+      }),
+    );
+    const { createCompletion } = await import("../llm/openai.js");
+    const { getLlmFailureCounts } = await import("../llm/llm-failure-log.js");
+
+    await expect(createCompletion(PARAMS)).rejects.toThrow();
+
+    const providers = getLlmFailureCounts()
+      .map((c) => c.provider)
+      .sort();
+    expect(providers).toEqual(["gemini", "openrouter"]);
   });
 });
 
 describe("createVisionCompletion — failed provider calls are recorded", () => {
-  it("records the failed hop and still returns the next provider's result", async () => {
+  it("logs the failed hop, returns the next provider's result, and tallies nothing", async () => {
     chain.push(
       makeProvider("gemini", async () => {
         throw httpError(402, "402 Insufficient credits");
@@ -171,6 +196,22 @@ describe("createVisionCompletion — failed provider calls are recorded", () => 
     const result = await createVisionCompletion(PARAMS);
 
     expect(result).toBe(COMPLETION);
+    expect(failureLogLines()).toHaveLength(1);
+    expect(getLlmFailureCounts()).toEqual([]);
+  });
+
+  it("tallies the failed hop when no provider recovers", async () => {
+    const boom = httpError(402, "402 Insufficient credits");
+    chain.push(
+      makeProvider("gemini", async () => {
+        throw boom;
+      }),
+    );
+    const { createVisionCompletion } = await import("../llm/openai.js");
+    const { getLlmFailureCounts } = await import("../llm/llm-failure-log.js");
+
+    await expect(createVisionCompletion(PARAMS)).rejects.toThrow();
+
     expect(getLlmFailureCounts()).toEqual([
       { provider: "gemini", total: 1, byLabel: { "402 credits exhausted": 1 } },
     ]);
