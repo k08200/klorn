@@ -185,11 +185,25 @@ final class AppModel {
     private var linkWatchTask: Task<Void, Never>?
 
     private let api: APIClient
+    /// Where the session token lives. Every token read and write in the model
+    /// goes through this, so a harness that injects an in-memory store cannot
+    /// reach the Keychain.
+    private let tokenStore: any TokenStore
 
-    init(api: APIClient = APIClient()) {
+    /// The store the shipped app uses. Named so the self-check can pin the
+    /// default without constructing a model (which would read the Keychain).
+    nonisolated static func productionTokenStore() -> any TokenStore { KeychainTokenStore() }
+
+    /// `api` defaults to a client that reads its bearer token from `tokenStore`,
+    /// as does the device-calendar bridge — one injected store covers them all.
+    init(tokenStore: any TokenStore = AppModel.productionTokenStore(), api: APIClient? = nil) {
+        let api = api ?? APIClient(token: { tokenStore.load() })
         self.api = api
-        self.deviceCalendars = DeviceCalendarBridge(api: api)
-        self.phase = KeychainStore.load() != nil ? .signedIn : .signedOut
+        self.tokenStore = tokenStore
+        self.deviceCalendars = DeviceCalendarBridge(
+            api: api,
+            currentUser: { SessionIdentity.userId(fromToken: tokenStore.load()) })
+        self.phase = tokenStore.load() != nil ? .signedIn : .signedOut
         self.selectedInbox =
             UserDefaults.standard.string(forKey: Self.selectedInboxKey) ?? "all"
     }
@@ -575,7 +589,7 @@ final class AppModel {
         guard !Task.isCancelled else { return }
         switch result {
         case .success(let token):
-            if !KeychainStore.save(token) {
+            if !tokenStore.save(token) {
                 Log.app.warning("Keychain save denied (unsigned dev build?) — token kept in memory for this session only")
             }
             // A live socket opened under the PREVIOUS token would 4001-loop
@@ -1714,8 +1728,8 @@ final class AppModel {
         didRequestNotifyAuth = false
         // Read before the Keychain is cleared: the device-calendar removals owed at
         // sign-out are sent with this session's token.
-        let sessionToken = KeychainStore.load()
-        KeychainStore.clear()
+        let sessionToken = tokenStore.load()
+        tokenStore.clear()
         queue = nil
         loadError = nil
         // Cross-account hygiene: every per-account surface must reset, or the
@@ -2085,7 +2099,7 @@ final class AppModel {
     /// Open the WebSocket wake channel once signed in. On a server push it
     /// refetches immediately; the poll loop remains the backstop. Idempotent.
     private func startRealtime() {
-        guard realtime == nil, let token = KeychainStore.load() else { return }
+        guard realtime == nil, let token = tokenStore.load() else { return }
         let client = RealtimeClient(onWake: { [weak self] in
             // Skip if a load is already in flight — avoids overlapping refetches
             // if the server bursts events.
