@@ -398,6 +398,7 @@
 
 /* Account maintenance disclosure (2026-08-14) */
 "account.maintenance" = "앱 관리 및 지원";
+"account.showSupportTools" = "지원 도구 표시";
 "a11y.expanded" = "펼쳐짐";
 "a11y.collapsed" = "접힘";
 

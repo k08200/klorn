@@ -398,6 +398,7 @@
 
 /* Account maintenance disclosure (2026-08-14) */
 "account.maintenance" = "アプリとサポート";
+"account.showSupportTools" = "サポートツールを表示";
 "a11y.expanded" = "展開済み";
 "a11y.collapsed" = "折りたたみ済み";
 

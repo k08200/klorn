@@ -125,6 +125,19 @@ func runSelfChecks() async -> Bool {
     } else {
         check("legacy AUTO list decodes", false)
     }
+    // A stray AUTO count beside an EMPTY AUTO list: those rows (if any) are
+    // already in QUEUE, so the count must not be added a second time.
+    let strayAutoJSON = """
+    {"tiers":{"QUEUE":[{"id":"9","source":"email","sourceId":"e9","type":"email",
+    "title":"Old","tier":"QUEUE","priority":1,"surfacedAt":"2026-06-24T10:00:00Z"}],"AUTO":[]},
+    "summary":{"PUSH":0,"QUEUE":1,"SILENT":0,"AUTO":1,"total":1}}
+    """
+    if let fw = try? JSONDecoder().decode(FirewallResponse.self, from: Data(strayAutoJSON.utf8)) {
+        check("AUTO count with an empty AUTO list is not double-counted",
+              fw.summary.count(for: .queue) == 1 && fw.items(for: .queue).count == 1)
+    } else {
+        check("stray AUTO count decodes", false)
+    }
 
     let okTok = try? JSONDecoder().decode(
         DesktopTokenResponse.self, from: Data(#"{"status":"ok","token":"jwt"}"#.utf8))
@@ -1170,7 +1183,7 @@ func runSelfChecks() async -> Bool {
         check("v1 summary decodes; absent v2 lanes count zero",
               sum.count(for: .meeting) == 0 && sum.count(for: .info) == 0
               && sum.count(for: .push) == 3)
-        check("legacy AUTO count folds into QUEUE", sum.count(for: .queue) == 6)
+        check("a bare summary ignores the retired AUTO count", sum.count(for: .queue) == 2)
     } else {
         check("v1 summary decodes", false)
     }
@@ -1508,11 +1521,16 @@ func runSelfChecks() async -> Bool {
     check("menu-bar icon absent while the pill is visible",
           !StatusItemController.shouldShow(pillVisible: true))
     // Restart is a support tool: hidden until Option turns Quit into it.
-    let restartItem = StatusItemController.restartAlternate(
-        NSMenuItem(title: "Restart", action: nil, keyEquivalent: "q"))
-    check("Restart is Quit's Option-alternate, not a standing menu item",
-          restartItem.isAlternate && restartItem.keyEquivalent == "q"
-          && restartItem.keyEquivalentModifierMask == [.command, .option])
+    // Restart is a support tool: listed only when the menu opens with Option
+    // held. Pure flag check (the harness blocks the main thread, so it never
+    // builds AppKit menus).
+    check("Restart is listed only with Option held",
+          MaintenanceDisclosure.isRevealGesture([.option])
+          && MaintenanceDisclosure.isRevealGesture([.option, .command])
+          && !MaintenanceDisclosure.isRevealGesture([])
+          && !MaintenanceDisclosure.isRevealGesture([.command]))
+    check("accessibility action reveals support tools",
+          MaintenanceDisclosure.revealed == .init(expanded: true, supportTools: true))
     // Same rule in the sidebars: a plain click never shows Restart /
     // connection status; an Option-click does, and collapsing hides them.
     let closed = MaintenanceDisclosure.State(expanded: false, supportTools: false)

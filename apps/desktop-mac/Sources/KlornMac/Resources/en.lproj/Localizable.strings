@@ -398,6 +398,7 @@
 
 /* Account maintenance disclosure (2026-08-14) */
 "account.maintenance" = "App & support";
+"account.showSupportTools" = "Show support tools";
 "a11y.expanded" = "Expanded";
 "a11y.collapsed" = "Collapsed";
 

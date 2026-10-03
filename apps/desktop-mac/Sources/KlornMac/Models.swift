@@ -225,7 +225,8 @@ struct FirewallItem: Codable, Sendable, Identifiable, Hashable {
 
 /// Per-tier open counts (the daily receipt header). The v2 lanes decode as
 /// optional so a v1 server (no MEETING/INFO keys) still parses; absent = 0.
-/// A legacy "AUTO" count is folded into QUEUE on decode (see `Tier`).
+/// A retired "AUTO" count is ignored here; FirewallResponse folds it into
+/// QUEUE together with the AUTO list it counts (see its decoder).
 struct FirewallSummary: Codable, Sendable, Hashable {
     let silent: Int
     let queue: Int
@@ -251,23 +252,6 @@ struct FirewallSummary: Codable, Sendable, Hashable {
         case .info: info ?? 0
         case .silent: silent
         }
-    }
-}
-
-extension FirewallSummary {
-    private enum LegacyKeys: String, CodingKey { case auto = "AUTO" }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        let legacy = try decoder.container(keyedBy: LegacyKeys.self)
-        let legacyAuto = try legacy.decodeIfPresent(Int.self, forKey: .auto) ?? 0
-        self.init(
-            silent: try c.decode(Int.self, forKey: .silent),
-            queue: try c.decode(Int.self, forKey: .queue) + legacyAuto,
-            push: try c.decode(Int.self, forKey: .push),
-            meeting: try c.decodeIfPresent(Int.self, forKey: .meeting),
-            info: try c.decodeIfPresent(Int.self, forKey: .info),
-            total: try c.decode(Int.self, forKey: .total))
     }
 }
 
@@ -367,17 +351,32 @@ struct FirewallResponse: Codable, Sendable {
 
 extension FirewallResponse {
     private enum Keys: String, CodingKey { case tiers, summary }
+    private struct LegacyAutoCount: Decodable {
+        let count: Int?
+        enum CodingKeys: String, CodingKey { case count = "AUTO" }
+    }
 
-    /// Folds a legacy "AUTO" list into QUEUE (its items already decode with
-    /// tier .queue), so no retired lane key survives past the decoder and
-    /// every per-tier lookup stays consistent with the items it holds.
+    /// Folds a retired "AUTO" list into QUEUE (its items already decode with
+    /// tier .queue), so no retired lane key survives past the decoder.
+    ///
+    /// The server's summary counts each list separately (QUEUE =
+    /// tiers.QUEUE.length, AUTO = tiers.AUTO.length — routes/firewall.ts), so
+    /// the AUTO count is added to QUEUE only when its list actually moved
+    /// into QUEUE here. A stray AUTO count with an empty list is dropped: those
+    /// rows, if any, are already inside QUEUE and must not count twice.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
         var tiers = try c.decode([String: [FirewallItem]].self, forKey: .tiers)
-        if let legacy = tiers.removeValue(forKey: "AUTO"), !legacy.isEmpty {
-            tiers[Tier.queue.rawValue] = (tiers[Tier.queue.rawValue] ?? []) + legacy
+        let summary = try c.decode(FirewallSummary.self, forKey: .summary)
+        guard let legacy = tiers.removeValue(forKey: "AUTO"), !legacy.isEmpty else {
+            self.init(tiers: tiers, summary: summary)
+            return
         }
-        self.init(tiers: tiers, summary: try c.decode(FirewallSummary.self, forKey: .summary))
+        tiers[Tier.queue.rawValue] = (tiers[Tier.queue.rawValue] ?? []) + legacy
+        let legacyCount = try c.decode(LegacyAutoCount.self, forKey: .summary).count ?? legacy.count
+        self.init(tiers: tiers, summary: FirewallSummary(
+            silent: summary.silent, queue: summary.queue + legacyCount, push: summary.push,
+            meeting: summary.meeting, info: summary.info, total: summary.total))
     }
 }
 

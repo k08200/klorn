@@ -84,19 +84,15 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         } else {
             menu.addItem(actionItem(L("menu.signIn"), #selector(signIn)))
         }
+        // Support tool, not a daily control: listed only when the menu is
+        // opened with Option held. No chord of its own (⌥⌘Q is the system's
+        // "Quit and Keep Windows"), and not an AppKit alternate of Quit —
+        // pairing requires matching key equivalents, which would either bind
+        // ⌥⌘Q or strip ⌘Q from Quit.
+        if MaintenanceDisclosure.isRevealGesture(NSEvent.modifierFlags) {
+            menu.addItem(actionItem(L("menu.restart"), #selector(restart)))
+        }
         menu.addItem(actionItem(L("menu.quit"), #selector(quit), key: "q"))
-        // Support tool, not a daily control: hold Option and Quit becomes
-        // Restart (the standard alternate-item pattern).
-        menu.addItem(Self.restartAlternate(actionItem(L("menu.restart"), #selector(restart), key: "q")))
-    }
-
-    /// Turns `item` into the Option-alternate of the Quit item before it.
-    /// AppKit pairs an alternate with the PRECEDING item only when both share
-    /// a key equivalent and differ in modifier mask. Pure for the harness.
-    nonisolated static func restartAlternate(_ item: NSMenuItem) -> NSMenuItem {
-        item.keyEquivalentModifierMask = [.command, .option]
-        item.isAlternate = true
-        return item
     }
 
     private func actionItem(_ title: String, _ action: Selector, key: String = "") -> NSMenuItem {

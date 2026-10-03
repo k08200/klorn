@@ -1747,6 +1747,11 @@ private struct AccountColumn: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(L("account.maintenance"))
                 .accessibilityValue(maintenance.expanded ? L("a11y.expanded") : L("a11y.collapsed"))
+                // VoiceOver / Switch Control / Full Keyboard Access path to
+                // the Option-click support tools.
+                .accessibilityAction(named: L("account.showSupportTools")) {
+                    maintenance = MaintenanceDisclosure.revealed
+                }
                 if maintenance.expanded {
                     SubtleTextButton(title: L("menu.checkUpdates")) {
                         Task { await model.checkForUpdateNow() }
@@ -2947,6 +2952,10 @@ private struct FullSidebar: View {
         .buttonStyle(.plain)
         .accessibilityLabel(L("account.maintenance"))
         .accessibilityValue(maintenance.expanded ? L("a11y.expanded") : L("a11y.collapsed"))
+        // Assistive-tech path to the Option-click support tools.
+        .accessibilityAction(named: L("account.showSupportTools")) {
+            maintenance = MaintenanceDisclosure.revealed
+        }
     }
 
     private func sidebarAction(_ title: String, dim: Bool = false, _ run: @escaping () -> Void) -> some View {

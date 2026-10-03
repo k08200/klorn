@@ -398,6 +398,7 @@
 
 /* Account maintenance disclosure (2026-08-14) */
 "account.maintenance" = "应用与支持";
+"account.showSupportTools" = "显示支持工具";
 "a11y.expanded" = "已展开";
 "a11y.collapsed" = "已收起";
 

@@ -398,6 +398,7 @@
 
 /* Account maintenance disclosure (2026-08-14) */
 "account.maintenance" = "App et assistance";
+"account.showSupportTools" = "Afficher les outils d’assistance";
 "a11y.expanded" = "Déplié";
 "a11y.collapsed" = "Replié";
 
