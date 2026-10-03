@@ -621,3 +621,16 @@
 "reading.preparedDraft" = "Klorn a préparé ce brouillon à l'avance — relisez-le avant d'envoyer.";
 "prefs.mainWindow" = "Utiliser la fenêtre principale standard (bêta)";
 "prefs.mainWindow.detail" = "Ouvre la vue complète dans une fenêtre normale, visible dans le Dock et ⌘Tab tant qu'elle est ouverte. La barre du haut ne change pas.";
+
+/* Device calendars (C6): EventKit calendars the user uploads, one by one. */
+"prefs.section.deviceCalendars" = "CALENDRIERS DE L’APPAREIL";
+"deviceCalendars.upload" = "Envoyer les calendriers de l’appareil";
+"deviceCalendars.detail" = "Seuls les calendriers que vous activez ci-dessous sont envoyés à Klorn, en copies en lecture seule. Votre briefing et l’assistant les lisent sur le serveur.";
+"deviceCalendars.denied" = "Klorn ne peut pas lire vos calendriers. Autorisez-le dans Réglages Système › Confidentialité et sécurité › Calendriers.";
+"deviceCalendars.openSettings" = "Ouvrir Réglages Système";
+"deviceCalendars.empty" = "Aucun calendrier sur ce Mac.";
+"deviceCalendars.count" = "%d envoyés";
+"deviceCalendars.untitled" = "Calendrier sans titre";
+"deviceCalendars.error.limit" = "Trop de calendriers sont envoyés. Désactivez-en un d’abord.";
+"deviceCalendars.error.rows" = "Trop d’événements sont enregistrés depuis les calendriers de ce Mac. Désactivez d’abord un calendrier.";
+"deviceCalendars.error.generic" = "Impossible d’envoyer un calendrier. Klorn réessaiera.";

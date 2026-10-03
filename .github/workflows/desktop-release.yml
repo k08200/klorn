@@ -137,7 +137,10 @@ jobs:
           # (secure timestamp) are both notarization requirements. The app is a
           # single Mach-O with no nested frameworks, so signing the bundle
           # covers its only executable — no inside-out walk needed.
-          codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" Klorn.app
+          # Klorn.entitlements grants the hardened runtime calendar access (step C6,
+          # EventKit); without it macOS refuses the device-calendar upload silently.
+          codesign --force --options runtime --timestamp --entitlements Klorn.entitlements \
+            --sign "$SIGN_IDENTITY" Klorn.app
           codesign --verify --strict --verbose=2 Klorn.app
           # Fail early if the hardened runtime flag didn't take (notarization
           # would reject it minutes later with a vaguer error).

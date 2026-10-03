@@ -621,3 +621,16 @@
 "reading.preparedDraft" = "Klorn hat diesen Entwurf vorab geschrieben — vor dem Senden prüfen.";
 "prefs.mainWindow" = "Standard-Hauptfenster verwenden (Beta)";
 "prefs.mainWindow.detail" = "Öffnet die Vollansicht in einem normalen Fenster, das im Dock und mit ⌘Tab erscheint, solange es offen ist. Die obere Leiste bleibt unverändert.";
+
+/* Device calendars (C6): EventKit calendars the user uploads, one by one. */
+"prefs.section.deviceCalendars" = "GERÄTEKALENDER";
+"deviceCalendars.upload" = "Gerätekalender hochladen";
+"deviceCalendars.detail" = "Nur die Kalender, die du unten einschaltest, werden als schreibgeschützte Kopien zu Klorn hochgeladen. Briefing und Assistent lesen sie auf dem Server.";
+"deviceCalendars.denied" = "Klorn kann deine Kalender nicht lesen. Erlaube es in Systemeinstellungen › Datenschutz & Sicherheit › Kalender.";
+"deviceCalendars.openSettings" = "Systemeinstellungen öffnen";
+"deviceCalendars.empty" = "Keine Kalender auf diesem Mac.";
+"deviceCalendars.count" = "%d hochgeladen";
+"deviceCalendars.untitled" = "Unbenannter Kalender";
+"deviceCalendars.error.limit" = "Zu viele Kalender hochgeladen. Schalte zuerst einen aus.";
+"deviceCalendars.error.rows" = "Zu viele Termine aus den Kalendern dieses Macs sind gespeichert. Schalte zuerst einen Kalender aus.";
+"deviceCalendars.error.generic" = "Ein Kalender konnte nicht hochgeladen werden. Klorn versucht es erneut.";
