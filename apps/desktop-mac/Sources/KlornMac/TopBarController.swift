@@ -131,6 +131,10 @@ final class TopBarController {
 
     /// Opens the Settings window (wired by the AppDelegate to SettingsOpener).
     var onOpenSettings: (() -> Void)?
+    /// Opens/focuses and closes the standard main window (M2). Wired by the
+    /// AppDelegate to MainWindowOpener; only used while `macMainWindow` is on.
+    var onOpenMainWindow: (() -> Void)?
+    var onCloseMainWindow: (() -> Void)?
 
     /// Menu-bar "Preferences…" and the in-app Preferences buttons: open the
     /// Settings window. The bar's own state is left alone — Settings is its
@@ -188,15 +192,30 @@ final class TopBarController {
             // too, or the app lingers in Cmd+Tab after Close.
             NSApp.setActivationPolicy(Self.activationPolicy(
                 for: .collapsed, showInDock: model.settings.showInDock,
-                settingsOpen: model.settingsWindowOpen))
+                settingsOpen: model.settingsWindowOpen,
+                mainWindowOpen: model.mainWindowOpen))
             panel?.orderOut(nil)
-            model.isFullViewOpen = false
+            model.barFullOpen = false
         }
     }
 
     private func setState(_ newState: BarState) {
+        // M2: with the flag on, "full" is the standard main window, not a
+        // morph of this panel. Rest the bar first, then open the window, so
+        // the window's own tracker has the last word on the policy.
+        if Self.routesToMainWindow(newState, macMainWindow: model.settings.macMainWindow) {
+            dismiss()
+            onOpenMainWindow?()
+            return
+        }
         state = newState
         render()
+    }
+
+    /// Whether a request for `state` opens the main window instead of the
+    /// bar's full state. Pure for the harness.
+    nonisolated static func routesToMainWindow(_ state: BarState, macMainWindow: Bool) -> Bool {
+        macMainWindow && state == .full
     }
 
     /// Whether the bar draws at all for this state. Hidden-pill mode only
@@ -216,8 +235,9 @@ final class TopBarController {
         // stale .regular in Cmd+Tab after Close (2026-08-10 diagnosis).
         NSApp.setActivationPolicy(Self.activationPolicy(
             for: state, showInDock: model.settings.showInDock,
-            settingsOpen: model.settingsWindowOpen))
-        model.isFullViewOpen = (state == .full)
+            settingsOpen: model.settingsWindowOpen,
+            mainWindowOpen: model.mainWindowOpen))
+        model.barFullOpen = (state == .full)
         guard Self.shouldDraw(state: state, pillVisible: effectiveVisible) else {
             panel?.orderOut(nil)
             return
@@ -306,13 +326,18 @@ final class TopBarController {
     /// `settingsOpen`: the Settings window is a summoned window too, so it
     /// counts as "open" under the same rule — otherwise a collapse while
     /// Settings is up would drop it out of Cmd+Tab and take the menu bar
-    /// with it. Closing Settings re-runs this. Pure, for the harness.
+    /// with it. Closing Settings re-runs this.
+    ///
+    /// `mainWindowOpen`: the standard main window (M2) is the app's real
+    /// window, so it is .regular (Dock + Cmd+Tab) for exactly as long as it
+    /// is open. Pure, for the harness.
     nonisolated static func activationPolicy(
         for state: BarState,
         showInDock: Bool = false,
-        settingsOpen: Bool = false
+        settingsOpen: Bool = false,
+        mainWindowOpen: Bool = false
     ) -> NSApplication.ActivationPolicy {
-        if showInDock || settingsOpen { return .regular }
+        if showInDock || settingsOpen || mainWindowOpen { return .regular }
         return state == .collapsed ? .accessory : .regular
     }
 
@@ -322,7 +347,8 @@ final class TopBarController {
     func refreshActivationPolicy() {
         NSApp.setActivationPolicy(Self.activationPolicy(
             for: state, showInDock: model.settings.showInDock,
-            settingsOpen: model.settingsWindowOpen))
+            settingsOpen: model.settingsWindowOpen,
+            mainWindowOpen: model.mainWindowOpen))
     }
 
     /// Show one item in the full view's reading pane. The single in-app answer
@@ -332,13 +358,37 @@ final class TopBarController {
         Task { await model.select(item) }
     }
 
-    private func makeActions() -> TopBarActions {
-        TopBarActions(
+    /// Actions for the FullView hosted by the standard main window (M2).
+    /// Same as the bar's, except leaving the full view closes the window:
+    /// "Smaller" hands over to the expanded panel, ✕ just closes.
+    func mainWindowActions() -> TopBarActions {
+        makeActions(surface: .mainWindow)
+    }
+
+    /// Which window a FullView's header buttons belong to.
+    enum FullViewSurface { case bar, mainWindow }
+
+    private func makeActions(surface: FullViewSurface = .bar) -> TopBarActions {
+        let leaveFull: () -> Void = { [weak self] in
+            guard let self else { return }
+            switch surface {
+            case .bar: self.dismiss()  // "Close" → back to rest
+            case .mainWindow: self.onCloseMainWindow?()
+            }
+        }
+        return TopBarActions(
             onExpand: { [weak self] in self?.setState(.expanded) },
             onExpandFull: { [weak self] in self?.setState(.full) },
-            onRestore: { [weak self] in self?.setState(.expanded) },
-            onCollapse: { [weak self] in self?.dismiss() },  // "Close" → back to rest
-            onClose: { [weak self] in self?.dismiss() },     // header ✕ → back to rest
+            onRestore: { [weak self] in
+                guard let self else { return }
+                if surface == .mainWindow {
+                    self.onCloseMainWindow?()
+                    self.summoned = true  // explicit: hidden-pill mode must not eat it
+                }
+                self.setState(.expanded)
+            },
+            onCollapse: leaveFull,
+            onClose: leaveFull,  // header ✕
             onSignIn: { [weak self] in guard let self else { return }; Task { await self.model.signIn() } },
             onSignOut: { [weak self] in self?.model.signOut() },
             onOpenInApp: { [weak self] item in self?.openInApp(item) },

@@ -58,6 +58,24 @@ the JWT in the **Keychain**. The firewall then loads.
   in-app Preferences buttons). Tabs: General, Accounts, Assistant,
   Notifications, Appearance, Privacy.
 
+### Standard main window (beta, off by default)
+
+Behind the `macMainWindow` user default (productization plan, macOS M2), the
+full view opens as a standard titled window (traffic lights, resizable,
+frame remembered across relaunch) instead of the bar's panel morphing into
+it. The pill and the expanded panel are unchanged. While the window is open
+Klorn is a regular app (Dock + Cmd+Tab + menus); closing it (⌘W, the red
+button, or the header ✕) returns Klorn to ambient unless Settings is still
+open. The header's *Smaller* closes the window and opens the expanded panel.
+With the default off, nothing changes.
+
+Turn it on with either:
+
+- Settings ▸ General ▸ hold **Option** ▸ *Use standard main window (beta)*
+  (the switch stays visible once on, so it can be turned back off), or
+- `defaults write ai.klorn.desktop macMainWindow -bool YES` (packaged app;
+  an unbundled `swift run` reads the `KlornMac` domain), then relaunch Klorn.
+
 App menus (shown while Klorn is a regular app, i.e. a window is open):
 
 | Menu | Item | Key |
@@ -72,7 +90,8 @@ App menus (shown while Klorn is a regular app, i.e. a window is open):
 Lane moves use `⌃⌘`, not bare digits: the reading pane binds bare `1`/`2`/`3`
 to its quick replies, and `⌃1`–`⌃5` are macOS's "Switch to Desktop N".
 Items disable when signed out or under a modal. Message items also need the
-full window to be key (not Settings) and a selected message. While an inline
+full view to be key — the bar's full panel, or the main window when
+`macMainWindow` is on (not Settings) — and a selected message. While an inline
 reply is open, Reply, Dismiss, Move to Lane, Go, and a mode-switching Search
 stay disabled so the draft can't be lost. File ▸ New Email is the only `⌘N`.
 
@@ -218,6 +237,7 @@ A full XCTest suite can be added when building under Xcode/CI.
 | `KlornApp.swift` | `@main` entry (+ `--self-check`); `.accessory` app, `AppDelegate` owns the model, top bar, and hotkey |
 | `TopBar.swift` | SwiftUI `CollapsedBar` (pill) + `ExpandedPanel` (3 columns) |
 | `SettingsWindow.swift` | `Settings` scene root (`TabView`), tab grouping, `SettingsOpener` |
+| `MainWindow.swift` | standard main window (M2, `macMainWindow`): keep/close rules, `MainWindowOpener`, the Settings beta switch |
 | `AppCommands.swift` | app menus (`.commands`) and their pure enablement/shortcut rules |
 | `TopBarController.swift` | the floating non-activating `NSPanel`: top-center pin, expand/collapse, row actions |
 | `HotKey.swift` | Carbon `RegisterEventHotKey` global shortcut (`⌥⌘K`) |

@@ -619,3 +619,5 @@
 "chip.draftReady" = "Borrador listo";
 "reading.openDraft" = "Abrir borrador";
 "reading.preparedDraft" = "Klorn preparó este borrador por adelantado — revísalo antes de enviar.";
+"prefs.mainWindow" = "Usar la ventana principal estándar (beta)";
+"prefs.mainWindow.detail" = "Abre la vista completa en una ventana normal que aparece en el Dock y en ⌘Tab mientras está abierta. La barra superior no cambia.";

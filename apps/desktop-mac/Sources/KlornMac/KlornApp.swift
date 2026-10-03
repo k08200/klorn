@@ -36,7 +36,11 @@ enum Entry {
         // from whatever the user is working in. `.accessory` gives a chrome-less
         // process; the custom top bar (an NSPanel) is the app's entire surface.
         NSApplication.shared.setActivationPolicy(.accessory)
-        KlornApp.main()
+        if #available(macOS 15, *) {
+            KlornAppSuppressedLaunch.main()
+        } else {
+            KlornApp.main()
+        }
     }
 
     /// The already-running Klorn, if any (excludes this process). nil for an
@@ -68,6 +72,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var statusItem: StatusItemController?
     private var hotKey: HotKey?
     private var settingsOpener: SettingsOpener?
+    private(set) lazy var mainWindowOpener = MainWindowOpener(model: model)
 
     /// OAuth deep-link relay: the browser bounces `klorn://oauth-callback?code=…`
     /// back to us; the code goes to the RelayInbox where the sign-in loop
@@ -159,8 +164,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         // Preferences buttons, and anything else outside SwiftUI's own ⌘,.
         let opener = SettingsOpener()
         bar.onOpenSettings = { [weak opener] in opener?.open() }
-        model.onSettingsWindowChanged = { [weak bar] in bar?.refreshActivationPolicy() }
+        model.onWindowPresenceChanged = { [weak bar] in bar?.refreshActivationPolicy() }
         settingsOpener = opener
+        // Main window (M2, behind `macMainWindow`): the bar routes every
+        // "open the full view" to it while the flag is on.
+        let mainWindow = mainWindowOpener
+        bar.onOpenMainWindow = { [weak mainWindow] in mainWindow?.open() }
+        bar.onCloseMainWindow = { [weak mainWindow] in mainWindow?.close() }
         // Menu-bar anchor while the pill is hidden (one-anchor rule): appears
         // when the pill's ✕ / Preferences hides the bar, disappears when the
         // bar comes back. Without it a hidden-pill accessory app is invisible
@@ -253,6 +263,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         if !model.isFullViewOpen { topBar?.openFull() }
     }
 
+    /// Closing the main window must never quit Klorn: SwiftUI terminates an
+    /// app whose single `Window` scene closes (probe, 2026-10-02), but the
+    /// bar and the poll loop are the app — the window is only a view of it.
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
+    }
+
+    /// FullView actions for the main window; nil before launch finishes.
+    func mainWindowActions() -> TopBarActions? {
+        topBar?.mainWindowActions()
+    }
+
     /// Finder/Dock re-open of a running Klorn (LaunchServices sends reopen
     /// instead of spawning a second process): show the app window. Without
     /// this, double-clicking Klorn.app again appears to do nothing — the
@@ -266,12 +288,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 }
 
 /// The custom top bar (an AppKit NSPanel) is the main UI. SwiftUI owns the
-/// Settings window (M0) and the app menus (M1); both surface only while the
-/// app is `.regular`, i.e. while one of its windows is summoned.
+/// Settings window (M0), the app menus (M1) and, behind `macMainWindow`, the
+/// standard main window (M2); they surface only while the app is `.regular`,
+/// i.e. while one of its windows is summoned.
 struct KlornApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
+        KlornScenes.mainWindow(appDelegate)
+        KlornScenes.settings(appDelegate)
+    }
+}
+
+/// macOS 15+: same scenes, but SwiftUI never opens the main window just
+/// because the app launched (on macOS 14 MainWindowOpener closes it).
+@available(macOS 15, *)
+struct KlornAppSuppressedLaunch: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
+    var body: some Scene {
+        KlornScenes.mainWindow(appDelegate)
+            .defaultLaunchBehavior(.suppressed)
+            .restorationBehavior(.disabled)
+        KlornScenes.settings(appDelegate)
+    }
+}
+
+/// The scenes both App types declare. The main window comes FIRST: SwiftUI
+/// opens the first window scene at launch, and with Settings first it
+/// opened Settings behind every other window (probe, 2026-10-02) — the main
+/// window is the one MainWindowOpener knows how to turn away.
+@MainActor
+enum KlornScenes {
+    static func settings(_ appDelegate: AppDelegate) -> some Scene {
         Settings {
             SettingsRoot().environment(appDelegate.model)
         }
@@ -280,5 +329,19 @@ struct KlornApp: App {
                 appDelegate.perform(command)
             }
         }
+    }
+
+    /// Only ever opened through MainWindowOpener; any other appearance
+    /// (launch, restoration) is closed by it, so flag-off is unchanged.
+    static func mainWindow(_ appDelegate: AppDelegate) -> some Scene {
+        Window("Klorn", id: MainWindowRules.sceneID) {
+            MainWindowRoot(
+                model: appDelegate.model, opener: appDelegate.mainWindowOpener,
+                actions: { [appDelegate] in appDelegate.mainWindowActions() })
+        }
+        .defaultSize(MainWindowRules.defaultSize)
+        .windowResizability(.contentMinSize)
+        // No Window ▸ Klorn item: with the flag off nothing may open it.
+        .commandsRemoved()
     }
 }

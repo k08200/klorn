@@ -619,3 +619,5 @@
 "chip.draftReady" = "Entwurf bereit";
 "reading.openDraft" = "Entwurf öffnen";
 "reading.preparedDraft" = "Klorn hat diesen Entwurf vorab geschrieben — vor dem Senden prüfen.";
+"prefs.mainWindow" = "Standard-Hauptfenster verwenden (Beta)";
+"prefs.mainWindow.detail" = "Öffnet die Vollansicht in einem normalen Fenster, das im Dock und mit ⌘Tab erscheint, solange es offen ist. Die obere Leiste bleibt unverändert.";

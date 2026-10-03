@@ -2204,13 +2204,13 @@ func runSelfChecks() async -> Bool {
     check("an open Settings window keeps the app in Cmd+Tab",
           TopBarController.activationPolicy(for: .collapsed, settingsOpen: true) == .regular)
     check("only a real close clears the Settings-open flag",
-          !SettingsWindowEvent.willClose.openState(current: true)
-          && SettingsWindowEvent.becameKey.openState(current: false)
-          && SettingsWindowEvent.attached(visible: true).openState(current: false))
+          !WindowPresenceEvent.willClose.openState(current: true)
+          && WindowPresenceEvent.becameKey.openState(current: false)
+          && WindowPresenceEvent.attached(visible: true).openState(current: false))
     check("hiding or covering Settings (⌘H) keeps it counted as open",
-          SettingsWindowEvent.occlusionChanged(visible: false).openState(current: true)
-          && SettingsWindowEvent.attached(visible: false).openState(current: true)
-          && !SettingsWindowEvent.occlusionChanged(visible: false).openState(current: false))
+          WindowPresenceEvent.occlusionChanged(visible: false).openState(current: true)
+          && WindowPresenceEvent.attached(visible: false).openState(current: true)
+          && !WindowPresenceEvent.occlusionChanged(visible: false).openState(current: false))
     check("Settings tracking uses the real window, not a private id or a timer",
           lineOffenders { $0.contains("com_apple_SwiftUI_Settings_window") }.isEmpty
           && !lineOffenders { $0.contains(".onDisappear { model.settingsWindowOpen") }
@@ -2227,7 +2227,7 @@ func runSelfChecks() async -> Bool {
 
     print("App menus (M1):")
     let signedInFull = MenuState(
-        signedIn: true, fullViewOpen: true, barIsKey: true, modalOpen: false, targetTier: .queue,
+        signedIn: true, fullViewOpen: true, mailSurfaceIsKey: true, modalOpen: false, targetTier: .queue,
         emailLoaded: true, readerReplying: false, teamModeAvailable: false,
         listHasSearchField: true)
     var everyCommand: [MenuCommand] = [.compose, .find, .reply, .dismiss]
@@ -2266,7 +2266,7 @@ func runSelfChecks() async -> Bool {
     check("Find that would switch modes waits for the reply to close",
           !MenuRules.isEnabled(.find, in: composingElsewhere))
     var settingsKey = signedInFull
-    settingsKey.barIsKey = false
+    settingsKey.mailSurfaceIsKey = false
     check("message commands are off while another window (Settings) is key",
           [MenuCommand.reply, .dismiss, .moveTo(.push)]
               .allSatisfy { !MenuRules.isEnabled($0, in: settingsKey) }
@@ -2330,6 +2330,118 @@ func runSelfChecks() async -> Bool {
           ListMode.waitingOn.isMailFamily && ListMode.mailbox(.sent).isMailFamily
           && !ListMode.proposals.isMailFamily && !ListMode.calendar.isMailFamily)
 
+    print("Main window (M2):")
+    check("macMainWindow defaults OFF and reads only a stored Bool",
+          !AppSettings.resolveMacMainWindow(nil)
+          && AppSettings.resolveMacMainWindow(true)
+          && !AppSettings.resolveMacMainWindow(false)
+          && !AppSettings.resolveMacMainWindow("YES"))
+    check("flag on: only the full state routes to the main window",
+          TopBarController.routesToMainWindow(.full, macMainWindow: true)
+          && !TopBarController.routesToMainWindow(.expanded, macMainWindow: true)
+          && !TopBarController.routesToMainWindow(.collapsed, macMainWindow: true))
+    check("flag off: nothing routes to the main window",
+          [BarState.collapsed, .expanded, .full]
+              .allSatisfy { !TopBarController.routesToMainWindow($0, macMainWindow: false) })
+    check("an open main window makes the app regular (Dock + Cmd+Tab)",
+          TopBarController.activationPolicy(for: .collapsed, mainWindowOpen: true) == .regular)
+    check("closing the main window returns the resting app to ambient",
+          TopBarController.activationPolicy(for: .collapsed, mainWindowOpen: false) == .accessory)
+    check("closing the main window while Settings is open stays regular",
+          TopBarController.activationPolicy(
+              for: .collapsed, settingsOpen: true, mainWindowOpen: false) == .regular
+          && TopBarController.activationPolicy(
+              for: .collapsed, settingsOpen: false, mainWindowOpen: true) == .regular)
+    check("main window closed: policy is exactly the pre-M2 rule",
+          [BarState.collapsed, .expanded, .full].allSatisfy { state in
+              [false, true].allSatisfy { dock in
+                  [false, true].allSatisfy { settings in
+                      TopBarController.activationPolicy(
+                          for: state, showInDock: dock, settingsOpen: settings, mainWindowOpen: false)
+                          == TopBarController.activationPolicy(
+                              for: state, showInDock: dock, settingsOpen: settings)
+                  }
+              }
+          })
+    check("mail surface is key: bar only in its full state, main window only while open",
+          MenuRules.mailSurfaceIsKey(
+              barPanelIsKey: true, barFullOpen: true, mainWindowIsKey: false, mainWindowOpen: false)
+          && MenuRules.mailSurfaceIsKey(
+              barPanelIsKey: false, barFullOpen: false, mainWindowIsKey: true, mainWindowOpen: true)
+          && !MenuRules.mailSurfaceIsKey(
+              barPanelIsKey: true, barFullOpen: false, mainWindowIsKey: false, mainWindowOpen: false)
+          && !MenuRules.mailSurfaceIsKey(
+              barPanelIsKey: false, barFullOpen: false, mainWindowIsKey: true, mainWindowOpen: false)
+          && !MenuRules.mailSurfaceIsKey(
+              barPanelIsKey: false, barFullOpen: true, mainWindowIsKey: false, mainWindowOpen: true))
+    var mainKey = signedInFull
+    mainKey.mailSurfaceIsKey = MenuRules.mailSurfaceIsKey(
+        barPanelIsKey: false, barFullOpen: false, mainWindowIsKey: true, mainWindowOpen: true)
+    check("message commands work against a key main window",
+          MenuRules.isEnabled(.reply, in: mainKey) && MenuRules.isEnabled(.dismiss, in: mainKey)
+          && MenuRules.isEnabled(.moveTo(.push), in: mainKey))
+    check("only a requested window survives, and only with the flag on",
+          MainWindowRules.keepsAttachedWindow(macMainWindow: true, requested: true)
+          && !MainWindowRules.keepsAttachedWindow(macMainWindow: true, requested: false)
+          && !MainWindowRules.keepsAttachedWindow(macMainWindow: false, requested: true)
+          && !MainWindowRules.keepsAttachedWindow(macMainWindow: false, requested: false))
+    check("beta toggle: hidden until Option, visible while on",
+          !MainWindowRules.showsBetaToggle(optionHeld: false, macMainWindow: false)
+          && MainWindowRules.showsBetaToggle(optionHeld: true, macMainWindow: false)
+          && MainWindowRules.showsBetaToggle(optionHeld: false, macMainWindow: true))
+    let titleBarHeight: CGFloat = 28
+    check("main window floor holds the full view and fits the smallest display",
+          MainWindowRules.minSize == TopBarMetrics.fullMin
+          && MainWindowRules.minSize.height + titleBarHeight <= SettingsMetrics.smallestVisibleHeight
+          && MainWindowRules.defaultSize.width >= MainWindowRules.minSize.width
+          && MainWindowRules.defaultSize.height >= MainWindowRules.minSize.height
+          && MainWindowRules.defaultSize.width <= 1280
+          && MainWindowRules.defaultSize.height + titleBarHeight <= SettingsMetrics.smallestVisibleHeight)
+    check("main-window strings are localized",
+          ["prefs.mainWindow", "prefs.mainWindow.detail"].allSatisfy { L($0) != $0 })
+    let mainWindowSource = swiftFiles.first { $0.lastPathComponent == "MainWindow.swift" }
+        .flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? ""
+    // The tracked part of the file: the root view and the opener, up to the
+    // Settings toggle (whose key monitor legitimately uses view lifecycle).
+    let trackedPart = mainWindowSource.components(separatedBy: "struct MainWindowBetaToggle").first ?? ""
+    check("main window tracking uses the real NSWindow, never onAppear/onDisappear",
+          trackedPart.contains("WindowPresenceTracker(")
+          && !trackedPart.contains("onAppear") && !trackedPart.contains("onDisappear")
+          && lineOffenders {
+              ($0.contains("onAppear") || $0.contains("onDisappear")) && $0.contains("mainWindowOpen")
+          }.isEmpty)
+    check("the main window scene hosts the unchanged FullView and adds no menu item",
+          trackedPart.contains("FullView(actions: actions)")
+          && lineOffenders { $0.contains("Window(\"Klorn\", id: MainWindowRules.sceneID)") }
+              .contains("KlornApp.swift")
+          && lineOffenders { $0.contains(".commandsRemoved()") }.contains("KlornApp.swift"))
+    let appSource = swiftFiles.first { $0.lastPathComponent == "KlornApp.swift" }
+        .flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? ""
+    check("closing the main window never quits the app",
+          appSource.contains("func applicationShouldTerminateAfterLastWindowClosed")
+          && appSource.contains("-> Bool {\n        false\n    }"))
+    check("the main window is the first scene (SwiftUI's launch pick is turned away, not Settings)",
+          appSource.components(separatedBy: "KlornScenes.mainWindow(appDelegate)").count == 3
+          && appSource.allRanges("KlornScenes.mainWindow(appDelegate)").allSatisfy { main in
+              appSource[main.upperBound...].contains("KlornScenes.settings(appDelegate)")
+          })
+    check("BarState.full still exists until M8",
+          lineOffenders { $0.contains("enum BarState { case collapsed, expanded, full }") }
+              .contains("TopBar.swift"))
+
     print(failures == 0 ? "\nALL CHECKS PASSED" : "\n\(failures) CHECK(S) FAILED")
     return failures == 0
+}
+
+private extension String {
+    /// Every range of `needle`, in order (self-check source pins).
+    func allRanges(_ needle: String) -> [Range<String.Index>] {
+        var out: [Range<String.Index>] = []
+        var from = startIndex
+        while let r = range(of: needle, range: from..<endIndex) {
+            out.append(r)
+            from = r.upperBound
+        }
+        return out
+    }
 }
