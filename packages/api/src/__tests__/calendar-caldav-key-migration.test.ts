@@ -26,7 +26,11 @@ const schema = readFileSync(join(prismaDir, "schema.prisma"), "utf8");
 
 describe("caldavCalendarKey migration", () => {
   it("only adds one nullable text column: no default, no backfill, nothing destructive", () => {
-    expect(statements).toBe(`ALTER TABLE "CalendarEvent" ADD COLUMN "caldavCalendarKey" TEXT;`);
+    // The lock guard fails the deploy fast instead of queueing behind a long lock
+    // (same as 20261004010000); it changes no data.
+    expect(statements).toBe(
+      `SET LOCAL lock_timeout = '5s'; ALTER TABLE "CalendarEvent" ADD COLUMN "caldavCalendarKey" TEXT;`,
+    );
   });
 
   it("the schema declares it optional on CalendarEvent", () => {
