@@ -98,12 +98,10 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>NSHighResolutionCapable</key><true/>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>KlornAPIURL</key><string>${API_URL}</string>
-  <key>CFBundleDevelopmentRegion</key><string>en</string>
-  <key>CFBundleLocalizations</key>
-  <array><string>en</string><string>ko</string><string>ja</string><string>zh</string><string>es</string><string>fr</string><string>de</string></array>
   <!-- Step C6: EventKit asks only when the user turns on "Upload device calendars".
        macOS 14+ reads the FullAccess key; the plain one serves older readers.
-       Localised by Contents/Resources/<lang>.lproj/InfoPlist.strings (below). -->
+       Localised by Contents/Resources/<lang>.lproj/InfoPlist.strings (below); the
+       lproj folders alone carry it; no app-wide localisation list is declared. -->
   <key>NSCalendarsFullAccessUsageDescription</key><string>Klorn uploads only the calendars you turn on in Settings, so your briefing and assistant can see them.</string>
   <key>NSCalendarsUsageDescription</key><string>Klorn uploads only the calendars you turn on in Settings, so your briefing and assistant can see them.</string>
   <key>CFBundleURLTypes</key>

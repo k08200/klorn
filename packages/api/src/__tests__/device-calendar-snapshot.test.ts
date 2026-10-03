@@ -10,10 +10,13 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  DEVICE_EVENT_MAX_SPAN_DAYS,
+  DEVICE_SNAPSHOT_CLOCK_SKEW_DAYS,
   DEVICE_SNAPSHOT_MAX_EVENTS,
   DEVICE_WINDOW_MAX_DAYS,
   DEVICE_WINDOW_MAX_LAG_DAYS,
   DEVICE_WINDOW_MAX_LEAD_DAYS,
+  DEVICE_WINDOW_PAST_DAYS,
   type DeviceEventBody,
   type DeviceSnapshotBody,
   isDeviceSourceKey,
@@ -41,6 +44,7 @@ function body(init: Partial<DeviceSnapshotBody> = {}): DeviceSnapshotBody {
   return {
     windowStart: "2026-10-01T15:00:00.000Z",
     windowEnd: "2026-10-31T15:00:00.000Z",
+    snapshotAt: "2026-10-02T02:59:00.000Z",
     calendarTitle: "Work",
     events: [event()],
     ...init,
@@ -287,5 +291,62 @@ describe("NUL, which Postgres text cannot hold, never reaches a row", () => {
     );
     expect(snapshot.events.map((e) => e.externalId)).toEqual(["e2"]);
     expect(snapshot.skipped).toBe(1);
+  });
+});
+
+describe("the snapshot time (stale-overwrite guard)", () => {
+  it("is kept as the instant the device sent", () => {
+    expect(ok(body()).snapshotAt.toISOString()).toBe("2026-10-02T02:59:00.000Z");
+  });
+
+  it("must name its zone and sit near now, so a wrong clock cannot block later uploads", () => {
+    const skewMs = DEVICE_SNAPSHOT_CLOCK_SKEW_DAYS * DAY_MS;
+    expect(reason(body({ snapshotAt: "2026-10-02T02:59:00" }))).toBe("snapshotAt");
+    expect(reason(body({ snapshotAt: "9999-12-31T00:00:00Z" }))).toBe("snapshotAt");
+    expect(reason(body({ snapshotAt: new Date(NOW.getTime() + skewMs + 1).toISOString() }))).toBe(
+      "snapshotAt",
+    );
+    expect(reason(body({ snapshotAt: new Date(NOW.getTime() + skewMs).toISOString() }))).toBe(null);
+    const tooOld = NOW.getTime() - DEVICE_WINDOW_MAX_LAG_DAYS * DAY_MS - 1;
+    expect(reason(body({ snapshotAt: new Date(tooOld).toISOString() }))).toBe("snapshotAt");
+  });
+});
+
+describe("an event's span is bounded, so no row can outlive the retention prune", () => {
+  it(`drops (and counts) an event longer than ${DEVICE_EVENT_MAX_SPAN_DAYS} days`, () => {
+    const start = Date.parse("2026-10-05T00:00:00Z");
+    const atMax = new Date(start + DEVICE_EVENT_MAX_SPAN_DAYS * DAY_MS).toISOString();
+    const over = new Date(start + DEVICE_EVENT_MAX_SPAN_DAYS * DAY_MS + 1000).toISOString();
+    const snapshot = ok(
+      body({
+        events: [
+          event({ externalId: "max", start: "2026-10-05T00:00:00Z", end: atMax }),
+          event({ externalId: "over", start: "2026-10-05T00:00:00Z", end: over }),
+        ],
+      }),
+    );
+    expect(snapshot.events.map((e) => e.externalId)).toEqual(["max"]);
+    expect(snapshot.skipped).toBe(1);
+  });
+
+  it("drops a year-9999 end, timed or all-day", () => {
+    const snapshot = ok(
+      body({
+        events: [
+          event({
+            externalId: "timed",
+            start: "2026-10-05T00:00:00Z",
+            end: "9999-12-31T00:00:00Z",
+          }),
+          event({ externalId: "allday", allDay: true, start: "2026-10-05", end: "9999-12-31" }),
+        ],
+      }),
+    );
+    expect(snapshot.events).toEqual([]);
+    expect(snapshot.skipped).toBe(2);
+  });
+
+  it(`the lag a window may reach is the Mac's ${DEVICE_WINDOW_PAST_DAYS} days plus one`, () => {
+    expect(DEVICE_WINDOW_MAX_LAG_DAYS).toBe(DEVICE_WINDOW_PAST_DAYS + 1);
   });
 });

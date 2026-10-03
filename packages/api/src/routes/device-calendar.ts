@@ -137,6 +137,14 @@ async function putHandler(
   if (outcome.kind === "over-cap") {
     return reply.code(409).send({ error: "Too many device calendars. Turn one off first." });
   }
+  if (outcome.kind === "over-row-cap") {
+    return reply.code(409).send({ error: "Too many events stored for device calendars." });
+  }
+  if (outcome.kind === "stale") {
+    // A newer snapshot of this calendar was applied already: nothing changed.
+    const skipped = checked.snapshot.skipped;
+    return { created: 0, updated: 0, removed: 0, skipped, valveRefused: false, stale: true };
+  }
   return {
     created: outcome.created,
     updated: outcome.updated,

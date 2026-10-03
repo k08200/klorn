@@ -9,7 +9,8 @@
  * interval of at most DEVICE_WINDOW_MAX_DAYS near now, a timed event is two
  * offset-bearing instants (stored as UTC), an all-day event is two dates stored at
  * UTC midnight with the end exclusive (as C4 and C7 store them), and a meeting
- * link reaches a row only through `safeMeetingLink`. Cancelled events, events
+ * link reaches a row only through `safeMeetingLink`. An event longer than
+ * DEVICE_EVENT_MAX_SPAN_DAYS, cancelled events, events
  * outside the window and a repeated external id are left out and counted; a
  * malformed time refuses the whole snapshot, so a device never half-applies one.
  * Pure: no database, and no clock but the `now` passed in.
@@ -22,10 +23,26 @@ export { isDeviceSourceKey } from "./device-source-key.js";
 
 /** The longest window one snapshot may cover. */
 export const DEVICE_WINDOW_MAX_DAYS = 62;
-/** A window may start at most this long before now (a device clock can be off). */
-export const DEVICE_WINDOW_MAX_LAG_DAYS = 31;
+/**
+ * How far back the desktop app's window reaches: the start of today minus this.
+ * Seven days keep last week's meetings for the briefing and the assistant.
+ */
+export const DEVICE_WINDOW_PAST_DAYS = 7;
+/**
+ * A window may start at most this long before now: the app's seven days plus the
+ * day its local-midnight start can add. The row retention (device-ingest.ts) is the
+ * same span, so the server keeps nothing older than a window can still confirm.
+ */
+export const DEVICE_WINDOW_MAX_LAG_DAYS = DEVICE_WINDOW_PAST_DAYS + 1;
 /** A window may end at most this long after now. */
 export const DEVICE_WINDOW_MAX_LEAD_DAYS = 93;
+/**
+ * The longest event kept, start to end. A longer one is left out (and counted), so
+ * no row can end far beyond any window and escape the retention prune.
+ */
+export const DEVICE_EVENT_MAX_SPAN_DAYS = 31;
+/** How far ahead of the server's clock a device's snapshot time may be. */
+export const DEVICE_SNAPSHOT_CLOCK_SKEW_DAYS = 1;
 /** The most events one snapshot may carry (the CalDAV listing's cap, C3). */
 export const DEVICE_SNAPSHOT_MAX_EVENTS = 500;
 export const DEVICE_TITLE_MAX = 500;
@@ -59,6 +76,8 @@ export interface DeviceEventBody {
 export interface DeviceSnapshotBody {
   readonly windowStart: string;
   readonly windowEnd: string;
+  /** When the device read the calendar (its clock); an older one is ignored. */
+  readonly snapshotAt: string;
   readonly calendarTitle: string;
   readonly events: readonly DeviceEventBody[];
 }
@@ -75,6 +94,7 @@ export interface NormalisedDeviceEvent {
 
 export interface DeviceSnapshot {
   readonly window: DeviceSnapshotWindow;
+  readonly snapshotAt: Date;
   readonly calendarTitle: string;
   readonly events: readonly NormalisedDeviceEvent[];
   /** Cancelled, out-of-window and repeated events left out. */
@@ -82,7 +102,7 @@ export interface DeviceSnapshot {
 }
 
 /** Which part of the snapshot was refused; never echoes a value. */
-export type DeviceSnapshotRefusal = "window" | "events" | "event";
+export type DeviceSnapshotRefusal = "window" | "snapshotAt" | "events" | "event";
 
 export type DeviceSnapshotResult =
   | { readonly ok: true; readonly snapshot: DeviceSnapshot }
@@ -110,10 +130,11 @@ const deviceEventSchema = {
 export const deviceSnapshotBodySchema = {
   type: "object",
   additionalProperties: false,
-  required: ["windowStart", "windowEnd", "calendarTitle", "events"],
+  required: ["windowStart", "windowEnd", "snapshotAt", "calendarTitle", "events"],
   properties: {
     windowStart: timeString,
     windowEnd: timeString,
+    snapshotAt: timeString,
     calendarTitle: { type: "string", minLength: 1, maxLength: DEVICE_CALENDAR_TITLE_MAX },
     events: { type: "array", maxItems: DEVICE_SNAPSHOT_MAX_EVENTS, items: deviceEventSchema },
   },
@@ -186,6 +207,20 @@ function parseWindow(body: DeviceSnapshotBody, now: Date): DeviceSnapshotWindow 
   return { start, end };
 }
 
+/** The snapshot time, near the server's clock (a far-future one would block every later upload). */
+function parseSnapshotAt(value: string, now: Date): Date | null {
+  const at = parseDeviceInstant(value);
+  if (!at) return null;
+  if (at.getTime() > now.getTime() + DEVICE_SNAPSHOT_CLOCK_SKEW_DAYS * DAY_MS) return null;
+  if (at.getTime() < now.getTime() - DEVICE_WINDOW_MAX_LAG_DAYS * DAY_MS) return null;
+  return at;
+}
+
+/** Within the span cap, so its end is at most the window end plus that span. */
+function withinSpan(times: { start: Date; end: Date }): boolean {
+  return times.end.getTime() - times.start.getTime() <= DEVICE_EVENT_MAX_SPAN_DAYS * DAY_MS;
+}
+
 function eventTimes(event: DeviceEventBody): { start: Date; end: Date } | null {
   const parse = event.allDay ? parseDeviceDate : parseDeviceInstant;
   const start = parse(event.start);
@@ -220,6 +255,8 @@ function rowFields(event: DeviceEventBody, times: { start: Date; end: Date }): C
 export function normaliseDeviceSnapshot(body: DeviceSnapshotBody, now: Date): DeviceSnapshotResult {
   const window = parseWindow(body, now);
   if (!window) return { ok: false, reason: "window" };
+  const snapshotAt = parseSnapshotAt(body.snapshotAt, now);
+  if (!snapshotAt) return { ok: false, reason: "snapshotAt" };
   if (body.events.length > DEVICE_SNAPSHOT_MAX_EVENTS) return { ok: false, reason: "events" };
 
   const seen = new Set<string>();
@@ -232,6 +269,7 @@ export function normaliseDeviceSnapshot(body: DeviceSnapshotBody, now: Date): De
     const keep =
       event.status !== "cancelled" &&
       externalId !== "" &&
+      withinSpan(times) &&
       !seen.has(externalId) &&
       overlapsDeviceWindow(times.start, times.end, window);
     if (!keep) {
@@ -242,5 +280,5 @@ export function normaliseDeviceSnapshot(body: DeviceSnapshotBody, now: Date): De
     events.push({ externalId, fields: rowFields(event, times) });
   }
   const calendarTitle = withoutNul(body.calendarTitle);
-  return { ok: true, snapshot: { window, calendarTitle, events, skipped } };
+  return { ok: true, snapshot: { window, snapshotAt, calendarTitle, events, skipped } };
 }

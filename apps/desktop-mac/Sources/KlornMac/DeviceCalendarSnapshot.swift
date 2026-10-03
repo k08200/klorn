@@ -43,13 +43,34 @@ struct DeviceEventWire: Encodable, Equatable, Sendable {
 struct DeviceSnapshotWire: Encodable, Equatable, Sendable {
     let windowStart: String
     let windowEnd: String
+    /// When this Mac read the calendar; the server ignores an older snapshot that
+    /// arrives after a newer one (a retry, a slow request).
+    let snapshotAt: String
     let calendarTitle: String
     let events: [DeviceEventWire]
+
+    /// The same snapshot with no time: what "unchanged since the last upload" compares.
+    var content: DeviceSnapshotWire {
+        DeviceSnapshotWire(
+            windowStart: windowStart, windowEnd: windowEnd, snapshotAt: "",
+            calendarTitle: calendarTitle, events: events)
+    }
+}
+
+/// A snapshot ready to send: the request body, and a digest of its content without
+/// the snapshot time, to skip an unchanged calendar. Built off the main thread.
+struct PreparedSnapshot: Sendable, Equatable {
+    let body: Data
+    let fingerprint: Data
 }
 
 enum DeviceCalendarSnapshot {
     /// The window uploaded: a week back (so today's earlier events and the last
-    /// few days stay current) to a month ahead, from the start of today.
+    /// few days stay current) to a month ahead, from the start of today. The server
+    /// accepts a window starting at most these 7 days plus one before now and prunes
+    /// rows older than that same span (DEVICE_WINDOW_PAST_DAYS and
+    /// DEVICE_ROW_RETENTION_DAYS in pim/device-calendar), so an event deleted here
+    /// cannot linger there longer than the day the local-midnight start adds.
     static let windowPastDays = 7
     static let windowFutureDays = 31
     /// The server's caps (pim/device-calendar/device-snapshot.ts), mirrored so a
@@ -94,10 +115,33 @@ enum DeviceCalendarSnapshot {
         return sha256Hex("\(identity)#\(Int64(occurrence.timeIntervalSince1970.rounded()))")
     }
 
+    /// The id of one input. An all-day occurrence is keyed by its FLOATING date (its
+    /// original start read in the zone EventKit reported it in), so a change of the
+    /// Mac's time zone, which moves the instant of local midnight, keeps its id.
+    static func externalId(for input: DeviceEventInput, timeZone: TimeZone) -> String {
+        guard input.isAllDay, let occurrence = input.occurrence else {
+            return externalId(identity: input.identity, occurrence: input.occurrence)
+        }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        return sha256Hex("\(input.identity)#date:\(dateString(occurrence, calendar))")
+    }
+
+    /// The body to send and its content digest (see PreparedSnapshot).
+    static func prepared(_ wire: DeviceSnapshotWire) -> PreparedSnapshot? {
+        // Sorted keys: JSONEncoder's key order is not stable, and the digest must be,
+        // or an unchanged calendar would be re-sent on every pass.
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        guard let body = try? encoder.encode(wire), let content = try? encoder.encode(wire.content)
+        else { return nil }
+        return PreparedSnapshot(body: body, fingerprint: Data(SHA256.hash(data: content)))
+    }
+
     /// The snapshot, or nil when no complete one can be made (see `capped`).
     static func build(
         events: [DeviceEventInput], calendarTitle: String, window: DateInterval, timeZone: TimeZone,
-        untitled: String
+        untitled: String, snapshotAt: Date
     ) -> DeviceSnapshotWire? {
         var seen = Set<String>()
         let kept = events
@@ -106,7 +150,7 @@ enum DeviceCalendarSnapshot {
             .filter { overlaps($0.1, window) }
             .sorted { $0.1.start < $1.1.start }
             .compactMap { input, interval -> (Date, DeviceEventWire)? in
-                let id = externalId(identity: input.identity, occurrence: input.occurrence)
+                let id = externalId(for: input, timeZone: timeZone)
                 guard seen.insert(id).inserted else { return nil }
                 return (interval.start, wire(input, id: id, timeZone: timeZone))
             }
@@ -115,6 +159,7 @@ enum DeviceCalendarSnapshot {
         return DeviceSnapshotWire(
             windowStart: instant(window.start),
             windowEnd: instant(end),
+            snapshotAt: instant(snapshotAt),
             calendarTitle: title.isEmpty ? clamp(untitled, calendarTitleMax) : title,
             events: events)
     }

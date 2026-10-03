@@ -24,9 +24,9 @@ const statements = sql
 const schema = readFileSync(join(prismaDir, "schema.prisma"), "utf8");
 
 describe("device calendar source migration", () => {
-  it("only adds one nullable text column: no default, no backfill, nothing destructive", () => {
+  it("only adds two nullable columns: no default, no backfill, nothing destructive", () => {
     expect(statements).toBe(
-      `SET LOCAL lock_timeout = '5s'; ALTER TABLE "LinkedCalendarAccount" ADD COLUMN "displayName" TEXT;`,
+      `SET LOCAL lock_timeout = '5s'; ALTER TABLE "LinkedCalendarAccount" ADD COLUMN "displayName" TEXT, ADD COLUMN "deviceSnapshotAt" TIMESTAMP(3);`,
     );
   });
 
@@ -42,6 +42,7 @@ describe("device calendar source migration", () => {
   it("the schema declares it optional on LinkedCalendarAccount, and DEVICE already exists", () => {
     const model = schema.slice(schema.indexOf("model LinkedCalendarAccount {"));
     expect(model.slice(0, model.indexOf("\n}"))).toMatch(/\n\s+displayName\s+String\?\n/);
+    expect(model.slice(0, model.indexOf("\n}"))).toMatch(/\n\s+deviceSnapshotAt\s+DateTime\?\n/);
     const providers = schema.slice(schema.indexOf("enum CalendarProvider {"));
     expect(providers.slice(0, providers.indexOf("}"))).toMatch(/\n\s+DEVICE\n/);
   });

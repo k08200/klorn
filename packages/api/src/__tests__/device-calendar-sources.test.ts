@@ -21,7 +21,9 @@ vi.mock("../db.js", () => {
 vi.mock("../pim/linked-calendar-unlink.js", () => ({ unlinkCalendarAccount: m.unlink }));
 
 import {
+  DEVICE_SOURCE_EXPIRY_DAYS,
   deviceSourceEmail,
+  expireStaleDeviceSources,
   listDeviceSources,
   removeDeviceSource,
 } from "../pim/device-calendar/device-sources.js";
@@ -86,5 +88,53 @@ describe("removeDeviceSource (the user turned the calendar off)", () => {
     m.findFirst.mockResolvedValue({ id: "acct-dev" });
     m.unlink.mockResolvedValue(false);
     expect(await removeDeviceSource("u1", KEY)).toBe(false);
+  });
+});
+
+describe("expireStaleDeviceSources (a Mac wiped, offline or uninstalled: P4)", () => {
+  const NOW = new Date("2026-10-20T00:00:00.000Z");
+
+  it(`removes every DEVICE source not refreshed for ${DEVICE_SOURCE_EXPIRY_DAYS} days, through the shared unlink`, async () => {
+    m.findMany.mockResolvedValue([
+      { id: "acct-1", userId: "u1" },
+      { id: "acct-2", userId: "u2" },
+    ]);
+
+    expect(await expireStaleDeviceSources(NOW)).toBe(2);
+
+    expect(m.findMany).toHaveBeenCalledWith({
+      where: {
+        provider: "DEVICE",
+        updatedAt: { lt: new Date(NOW.getTime() - DEVICE_SOURCE_EXPIRY_DAYS * 86_400_000) },
+      },
+      select: { id: true, userId: true },
+      orderBy: { updatedAt: "asc" },
+      take: expect.any(Number),
+    });
+    expect(m.unlink).toHaveBeenNthCalledWith(1, "u1", "acct-1", "DEVICE");
+    expect(m.unlink).toHaveBeenNthCalledWith(2, "u2", "acct-2", "DEVICE");
+  });
+
+  it("counts only what the unlink removed, and finds nothing to do quietly", async () => {
+    m.findMany.mockResolvedValue([{ id: "acct-1", userId: "u1" }]);
+    m.unlink.mockResolvedValue(false);
+    expect(await expireStaleDeviceSources(NOW)).toBe(0);
+    m.findMany.mockResolvedValue([]);
+    expect(await expireStaleDeviceSources(NOW)).toBe(0);
+  });
+
+  it("runs from the scheduler's hourly block", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { fileURLToPath } = await import("node:url");
+    const scheduler = readFileSync(
+      fileURLToPath(new URL("../automation-scheduler.ts", import.meta.url)),
+      "utf8",
+    );
+    expect(scheduler).toContain("expireStaleDeviceSources(");
+    expect(scheduler).toContain("DEVICE_SOURCE_EXPIRY_INTERVAL_MS");
+    // Behind the flag, like every other DEVICE path.
+    expect(scheduler).toMatch(
+      /deviceCalendarEnabled\(\) &&\s+Date\.now\(\) - lastDeviceSourceExpiryAt/,
+    );
   });
 });

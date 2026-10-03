@@ -18,6 +18,7 @@ interface Account {
   provider: string;
   email: string;
   displayName: string | null;
+  deviceSnapshotAt?: Date | null;
   updatedAt: Date;
 }
 interface Row {
@@ -109,6 +110,7 @@ vi.mock("../db.js", () => {
           const created = {
             id: `acct-${++db.nextId}`,
             displayName: null,
+            deviceSnapshotAt: null,
             updatedAt: new Date(),
             ...args.create,
           } as Account;
@@ -116,10 +118,21 @@ vi.mock("../db.js", () => {
           return created;
         },
       ),
+      updateMany: vi.fn(async ({ where, data }: { where: Where; data: Partial<Account> }) => {
+        const hit = accounts().filter((a) =>
+          matches(a as unknown as Record<string, unknown>, where),
+        );
+        for (const a of hit) Object.assign(a, data, { updatedAt: new Date() });
+        return { count: hit.length };
+      }),
     },
     calendarEvent: {
       findMany: vi.fn(async ({ where }: { where: Where }) =>
         rows().filter((r) => matches(r as unknown as Record<string, unknown>, where)),
+      ),
+      count: vi.fn(
+        async ({ where }: { where: Where }) =>
+          rows().filter((r) => matches(r as unknown as Record<string, unknown>, where)).length,
       ),
       createMany: vi.fn(async ({ data }: { data: Partial<Row>[] }) => {
         db.calls.createMany += 1;
@@ -151,7 +164,18 @@ vi.mock("../db.js", () => {
   };
   const prisma = {
     ...client,
-    $transaction: vi.fn(async (fn: (tx: typeof client) => Promise<unknown>) => fn(client)),
+    // A thrown error rolls the fake back, as Postgres rolls the transaction back.
+    $transaction: vi.fn(async (fn: (tx: typeof client) => Promise<unknown>) => {
+      const before = structuredClone({ a: db.accounts, r: db.rows, t: db.attention });
+      try {
+        return await fn(client);
+      } catch (err) {
+        db.accounts = before.a;
+        db.rows = before.r;
+        db.attention = before.t;
+        throw err;
+      }
+    }),
   };
   return { prisma, db: prisma, INTERACTIVE_TX_OPTIONS: {} };
 });
@@ -162,8 +186,14 @@ import {
   DEVICE_ROW_RETENTION_DAYS,
   ingestDeviceSnapshot,
 } from "../pim/device-calendar/device-ingest.js";
-import type { DeviceSnapshot } from "../pim/device-calendar/device-snapshot.js";
 import {
+  type DeviceSnapshot,
+  type DeviceSnapshotBody,
+  normaliseDeviceSnapshot,
+} from "../pim/device-calendar/device-snapshot.js";
+import {
+  DEVICE_MAX_ROWS_PER_SOURCE,
+  DEVICE_MAX_ROWS_PER_USER,
   DEVICE_MAX_SOURCES_PER_USER,
   deviceSourceEmail,
 } from "../pim/device-calendar/device-sources.js";
@@ -189,9 +219,14 @@ function fields(title: string, day: number) {
   };
 }
 
-function snapshot(events: Array<[string, number]>, title = "Work"): DeviceSnapshot {
+function snapshot(
+  events: Array<[string, number]>,
+  title = "Work",
+  snapshotAt: Date = NOW,
+): DeviceSnapshot {
   return {
     window: WINDOW,
+    snapshotAt,
     calendarTitle: title,
     events: events.map(([externalId, day]) => ({
       externalId,
@@ -390,8 +425,8 @@ describe("a later snapshot is the whole truth for its window and source", () => 
     );
     const past = rows().find((r) => r.externalId === "e2") as Row;
     // Before the window, but within the retention period.
-    past.startTime = new Date("2026-09-20T00:00:00Z");
-    past.endTime = new Date("2026-09-20T01:00:00Z");
+    past.startTime = new Date("2026-09-28T00:00:00Z");
+    past.endTime = new Date("2026-09-28T01:00:00Z");
 
     await ingestDeviceSnapshot("u1", KEY, snapshot([["e1", 5]]), NOW);
 
@@ -563,5 +598,138 @@ describe("retention: rows no window can reach any more are removed (P4)", () => 
     expect(out).toMatchObject({ kind: "stored", expired: 1, removed: 0, valveRefused: false });
     expect(externalIds()).toEqual(["e1", "other-source", "other-user", "recent"]);
     expect((db.attention as Attention[])[0]?.status).toBe("RESOLVED");
+  });
+});
+
+describe("a snapshot older than the last one applied is ignored (stale overwrite)", () => {
+  const EARLY = new Date("2026-10-02T02:00:00.000Z");
+  const LATE = new Date("2026-10-02T02:30:00.000Z");
+
+  it("changes nothing: rows, title and the stored snapshot time stay the newer one's", async () => {
+    await ingestDeviceSnapshot(
+      "u1",
+      KEY,
+      snapshot(
+        [
+          ["e1", 5],
+          ["e2", 6],
+        ],
+        "Work",
+        LATE,
+      ),
+      NOW,
+    );
+    const before = structuredClone({ rows: db.rows, accounts: db.accounts });
+
+    const out = await ingestDeviceSnapshot(
+      "u1",
+      KEY,
+      snapshot([["e9", 9]], "Old title", EARLY),
+      NOW,
+    );
+
+    expect(out).toEqual({ kind: "stale" });
+    expect(db.rows).toEqual(before.rows);
+    expect(db.accounts).toEqual(before.accounts);
+    expect(accounts()[0]?.deviceSnapshotAt?.toISOString()).toBe(LATE.toISOString());
+  });
+
+  it("records the time of each applied snapshot, and takes a retry of the same one", async () => {
+    await ingestDeviceSnapshot("u1", KEY, snapshot([["e1", 5]], "Work", EARLY), NOW);
+    expect(accounts()[0]?.deviceSnapshotAt?.toISOString()).toBe(EARLY.toISOString());
+    const retry = await ingestDeviceSnapshot("u1", KEY, snapshot([["e1", 5]], "Work", EARLY), NOW);
+    expect(retry.kind).toBe("stored");
+    await ingestDeviceSnapshot("u1", KEY, snapshot([["e2", 6]], "Work", LATE), NOW);
+    expect(accounts()[0]?.deviceSnapshotAt?.toISOString()).toBe(LATE.toISOString());
+    expect(externalIds()).toEqual(["e2"]);
+  });
+
+  it("is per source: another calendar's newer snapshot does not block this one", async () => {
+    await ingestDeviceSnapshot("u1", OTHER_KEY, snapshot([["x", 5]], "Family", LATE), NOW);
+    const out = await ingestDeviceSnapshot("u1", KEY, snapshot([["e1", 5]], "Work", EARLY), NOW);
+    expect(out.kind).toBe("stored");
+  });
+});
+
+describe("row caps: a source and a user hold a bounded number of rows", () => {
+  it(`refuses a snapshot that would leave a source over ${DEVICE_MAX_ROWS_PER_SOURCE} rows, changing nothing`, async () => {
+    // Rows of the source outside this window (so the snapshot cannot remove them).
+    await ingestDeviceSnapshot("u1", KEY, snapshot([["seed", 5]]), NOW);
+    const acct = accounts()[0]?.id ?? "";
+    for (let i = 0; i < DEVICE_MAX_ROWS_PER_SOURCE - 1; i++) {
+      rows().push(
+        foreignRow({
+          externalId: `old${i}`,
+          sourceAccountId: acct,
+          sourceKey: acct,
+          startTime: new Date("2026-11-20T00:00:00Z"),
+          endTime: new Date("2026-11-20T01:00:00Z"),
+        }),
+      );
+    }
+    const before = structuredClone({ rows: db.rows, accounts: db.accounts });
+
+    const out = await ingestDeviceSnapshot(
+      "u1",
+      KEY,
+      snapshot(
+        [
+          ["seed", 5],
+          ["new", 6],
+        ],
+        "Renamed",
+      ),
+      NOW,
+    );
+
+    expect(out).toEqual({ kind: "over-row-cap" });
+    expect(db.rows).toEqual(before.rows);
+    expect(db.accounts).toEqual(before.accounts);
+  });
+
+  it("a flood of 1 ms windows stops at the source cap", async () => {
+    let stored = 0;
+    let refused = 0;
+    for (let i = 0; i < 6; i++) {
+      // Each 1 ms window an hour apart, so no snapshot can remove another's rows.
+      const instant = new Date(Date.UTC(2026, 9, 10, i, 0, 0, 0));
+      const body: DeviceSnapshotBody = {
+        windowStart: instant.toISOString(),
+        windowEnd: new Date(instant.getTime() + 1).toISOString(),
+        snapshotAt: new Date(NOW.getTime() + i).toISOString(),
+        calendarTitle: "Flood",
+        events: Array.from({ length: 500 }, (_, n) => ({
+          externalId: `w${i}-${n}`,
+          title: "x",
+          start: new Date(instant.getTime() - 60_000).toISOString(),
+          end: new Date(instant.getTime() + 60_000).toISOString(),
+          allDay: false,
+        })),
+      };
+      const checked = normaliseDeviceSnapshot(body, NOW);
+      if (!checked.ok) throw new Error(checked.reason);
+      const out = await ingestDeviceSnapshot("u1", KEY, checked.snapshot, NOW);
+      if (out.kind === "stored") stored += 1;
+      if (out.kind === "over-row-cap") refused += 1;
+    }
+    expect(stored).toBeGreaterThan(0);
+    expect(refused).toBeGreaterThan(0);
+    expect(rows().length).toBeLessThanOrEqual(DEVICE_MAX_ROWS_PER_SOURCE);
+  });
+
+  it(`refuses a snapshot that would leave the user over ${DEVICE_MAX_ROWS_PER_USER} device rows`, async () => {
+    for (let i = 0; i < DEVICE_MAX_ROWS_PER_USER; i++) {
+      rows().push(foreignRow({ externalId: `u${i}` }));
+    }
+    // Another user's rows never count.
+    rows().push(foreignRow({ userId: "u2", externalId: "theirs" }));
+    const before = structuredClone({ rows: db.rows, accounts: db.accounts });
+
+    const out = await ingestDeviceSnapshot("u1", KEY, snapshot([["e1", 5]]), NOW);
+
+    expect(out).toEqual({ kind: "over-row-cap" });
+    expect(db.rows).toEqual(before.rows);
+    expect(db.accounts).toEqual(before.accounts);
+    expect((await ingestDeviceSnapshot("u2", KEY, snapshot([["e1", 5]]), NOW)).kind).toBe("stored");
   });
 });

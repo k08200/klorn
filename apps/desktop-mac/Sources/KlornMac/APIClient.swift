@@ -82,8 +82,11 @@ struct APIClient: Sendable {
     /// PUT one opted-in calendar's full snapshot of its window. `key` is the
     /// device-scoped hash (DeviceCalendarSnapshot.sourceKey), never the raw
     /// EventKit identifier.
-    func putDeviceCalendarSnapshot(key: String, _ snapshot: DeviceSnapshotWire) async throws {
-        try await put("/api/device-calendar/sources/\(key)/window", encodable: snapshot)
+    /// The body is already encoded (off the main thread, by DeviceCalendarReader).
+    func putDeviceCalendarSnapshot(key: String, body: Data) async throws {
+        try await data(
+            "/api/device-calendar/sources/\(key)/window", method: "PUT", body: body,
+            contentType: "application/json")
     }
 
     /// DELETE a calendar the user turned off: the server removes it and its events.

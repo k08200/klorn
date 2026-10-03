@@ -66,6 +66,7 @@ function snapshotBody(init: Record<string, unknown> = {}) {
   return {
     windowStart: "2026-10-01T15:00:00.000Z",
     windowEnd: "2026-10-31T15:00:00.000Z",
+    snapshotAt: "2026-10-02T02:59:00.000Z",
     calendarTitle: "Work",
     events: [
       {
@@ -332,6 +333,28 @@ describe("PUT /sources/:key/window", () => {
       }),
     });
     expect(res.statusCode).toBe(413);
+    expect(m.ingest).not.toHaveBeenCalled();
+  });
+
+  it("answers 409 when the rows would pass a row cap", async () => {
+    m.ingest.mockResolvedValue({ kind: "over-row-cap" });
+    const { app, headers } = await buildApp();
+    const res = await app.inject(put(KEY, snapshotBody(), headers));
+    expect(res.statusCode).toBe(409);
+  });
+
+  it("answers 200 with stale: true for a snapshot older than the one applied, changing nothing", async () => {
+    m.ingest.mockResolvedValue({ kind: "stale" });
+    const { app, headers } = await buildApp();
+    const res = await app.inject(put(KEY, snapshotBody(), headers));
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ stale: true, created: 0, updated: 0, removed: 0 });
+  });
+
+  it("refuses a snapshot without its snapshot time", async () => {
+    const { app, headers } = await buildApp();
+    const res = await app.inject(put(KEY, snapshotBody({ snapshotAt: undefined }), headers));
+    expect(res.statusCode).toBe(400);
     expect(m.ingest).not.toHaveBeenCalled();
   });
 

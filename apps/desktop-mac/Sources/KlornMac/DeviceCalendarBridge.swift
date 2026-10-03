@@ -12,6 +12,8 @@ import Observation
 // (DeviceCalendarSnapshot) when it is turned on, when the calendar store changes
 // (debounced), at launch and every 15 minutes; turning one off deletes it on the
 // server. A 404 from the server means the feature is off there: the setting hides.
+// EventKit is read, and each snapshot built and encoded, off the main thread
+// (DeviceCalendarReader); this file keeps UI state and the order of requests.
 
 /// What macOS lets Klorn do with the calendars.
 enum DeviceCalendarAccess: Equatable, Sendable {
@@ -59,32 +61,6 @@ enum DeviceIdentity {
     }
 }
 
-/// The opt-in on this Mac (decision P4), as persisted: the master switch, the
-/// calendars switched on (all off by default), and the sources turned off that the
-/// server has not confirmed removing yet. A value type off the main actor so the
-/// self-check can exercise it; the bridge owns the live copy.
-struct DeviceCalendarOptIn: Equatable, Sendable {
-    static let uploadEnabledKey = "klorn.deviceCalendars.uploadEnabled"
-    static let calendarIdsKey = "klorn.deviceCalendars.calendarIds"
-    static let pendingRemovalKey = "klorn.deviceCalendars.pendingRemoval"
-
-    var uploadEnabled = false
-    var calendarIds: Set<String> = []
-    var pendingRemoval: Set<String> = []
-
-    static func load(from defaults: UserDefaults) -> DeviceCalendarOptIn {
-        DeviceCalendarOptIn(
-            uploadEnabled: defaults.bool(forKey: uploadEnabledKey),
-            calendarIds: Set(defaults.stringArray(forKey: calendarIdsKey) ?? []),
-            pendingRemoval: Set(defaults.stringArray(forKey: pendingRemovalKey) ?? []))
-    }
-
-    func save(to defaults: UserDefaults) {
-        defaults.set(uploadEnabled, forKey: Self.uploadEnabledKey)
-        defaults.set(calendarIds.sorted(), forKey: Self.calendarIdsKey)
-        defaults.set(pendingRemoval.sorted(), forKey: Self.pendingRemovalKey)
-    }
-}
 
 @MainActor
 @Observable
@@ -98,46 +74,60 @@ final class DeviceCalendarBridge {
     /// A probe that failed for any reason but the server's 404 (offline at launch).
     nonisolated static let probeRetryInterval: Duration = .seconds(5 * 60)
     /// An unchanged snapshot is still re-sent after this long, so a server that
-    /// lost it heals without a change on the Mac.
+    /// lost it heals without a change on the Mac, and its source never expires
+    /// (the server removes a source not refreshed for 14 days).
     nonisolated static let resendUnchangedAfter: TimeInterval = 6 * 3600
     nonisolated static let settingsURL = "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars"
 
     private(set) var availability: Availability = .unknown
     private(set) var access: DeviceCalendarAccess
-    private(set) var uploadEnabled: Bool
-    private(set) var enabledIds: Set<String>
+    private(set) var optIn: DeviceCalendarOptIn
     private(set) var calendars: [DeviceCalendarItem] = []
     private(set) var lastError: String?
     private(set) var isBusy = false
 
-    private let api: APIClient
-    private let defaults: UserDefaults
-    private let deviceId: () -> String
-    /// Created only once the user turned the feature on (creating it never prompts,
-    /// but nothing here has any business with EventKit before that).
-    private var store: EKEventStore?
-    private var changeObserver: NSObjectProtocol?
-    private var refreshTask: Task<Void, Never>?
-    private var debounceTask: Task<Void, Never>?
-    private var probeRetryTask: Task<Void, Never>?
-    private var passRunning = false
-    private var passQueued = false
-    /// Calendar id -> the last body sent and when, to skip an unchanged snapshot.
-    private var lastSent: [String: (body: Data, at: Date)] = [:]
-    private var pendingRemoval: Set<String>
+    var uploadEnabled: Bool { optIn.uploadEnabled }
+    var enabledIds: Set<String> { optIn.calendarIds }
+
+    @ObservationIgnored private let api: APIClient
+    @ObservationIgnored private let defaults: UserDefaults
+    @ObservationIgnored private let deviceId: () -> String
+    @ObservationIgnored private let currentUser: () -> String?
+    @ObservationIgnored private let makeStore: @MainActor () -> any DeviceCalendarStore
+    @ObservationIgnored private let authorization: () -> DeviceCalendarAccess
+    /// Created only once the user turned the feature on.
+    @ObservationIgnored private var store: (any DeviceCalendarStore)?
+    @ObservationIgnored private var cachedDeviceId: String?
+    @ObservationIgnored private var changeObserver: NSObjectProtocol?
+    @ObservationIgnored private var refreshTask: Task<Void, Never>?
+    @ObservationIgnored private var debounceTask: Task<Void, Never>?
+    @ObservationIgnored private var probeRetryTask: Task<Void, Never>?
+    /// The last job queued: every network job (upload pass, removal, sign-out
+    /// removal, launch reconcile) runs after the previous one finished, so a DELETE
+    /// can never be overtaken by a PUT that recreates the source.
+    @ObservationIgnored private var tail: Task<Void, Never>?
+    @ObservationIgnored private var passQueued = false
+    /// Calendar id -> the last content sent and when, to skip an unchanged snapshot.
+    @ObservationIgnored private var lastSent: [String: (fingerprint: Data, at: Date)] = [:]
 
     init(
-        api: APIClient = APIClient(), defaults: UserDefaults = .standard,
-        deviceId: @escaping () -> String = { DeviceIdentity.current() }
+        api: APIClient = APIClient(),
+        defaults: UserDefaults = .standard,
+        deviceId: @escaping () -> String = { DeviceIdentity.current() },
+        currentUser: @escaping () -> String? = { SessionIdentity.userId(fromToken: KeychainStore.load()) },
+        makeStore: @escaping @MainActor () -> any DeviceCalendarStore = { DeviceCalendarReader() },
+        authorization: @escaping () -> DeviceCalendarAccess = {
+            DeviceCalendarAccess.from(EKEventStore.authorizationStatus(for: .event))
+        }
     ) {
         self.api = api
         self.defaults = defaults
         self.deviceId = deviceId
-        self.access = DeviceCalendarAccess.from(EKEventStore.authorizationStatus(for: .event))
-        let saved = DeviceCalendarOptIn.load(from: defaults)
-        self.uploadEnabled = saved.uploadEnabled
-        self.enabledIds = saved.calendarIds
-        self.pendingRemoval = saved.pendingRemoval
+        self.currentUser = currentUser
+        self.makeStore = makeStore
+        self.authorization = authorization
+        self.access = authorization()
+        self.optIn = DeviceCalendarOptIn.load(from: defaults)
     }
 
     /// True once EventKit has been touched (self-check: never before the opt-in).
@@ -145,22 +135,38 @@ final class DeviceCalendarBridge {
 
     // MARK: Lifecycle
 
-    /// Signed in (launch or sign-in): learn whether the server has the feature, then
-    /// send any removal still owed and, if the user turned uploading on before,
-    /// resume it.
+    /// Signed in (launch or sign-in): learn whether the server has the feature,
+    /// settle this Mac's leftovers against it, send any removal still owed to this
+    /// user, and resume uploading if the user turned it on before.
     func start() {
-        Task { await refreshAvailability() }
+        enqueue { [weak self] in await self?.launch() }
     }
 
-    /// GET /sources: 200 = the feature is on, the default 404 = it is off (hide it),
-    /// anything else (offline at launch) = ask again after `probeRetryInterval`.
+    /// Re-asked each time Preferences opens, so a server flip shows or hides the
+    /// section without a relaunch.
     func refreshAvailability() async {
-        switch await probe() {
+        await enqueue { [weak self] in await self?.launch() }.value
+    }
+
+    /// Wait until every queued job ran (self-check).
+    func idle() async {
+        while let current = tail {
+            await current.value
+            if tail == current { return }
+        }
+    }
+
+    private func launch() async {
+        let (answer, serverKeys) = await probe(with: api)
+        switch answer {
         case .available:
             availability = .available
-            activateIfReady()
-            // Owed removals go out even while uploading is off.
-            startPass()
+            if let user = currentUser() {
+                let enabledKeys = Set(optIn.calendarIds.map(sourceKey(for:)))
+                commit(optIn.reconciled(serverKeys: serverKeys, enabledKeys: enabledKeys, user: user))
+                await processRemovals(for: user, client: api)
+            }
+            await activateIfReady()
         case .unavailable:
             availability = .unavailable
             deactivate()
@@ -169,13 +175,15 @@ final class DeviceCalendarBridge {
         }
     }
 
-    private func probe() async -> Availability {
+    /// GET /sources: 200 = the feature is on (with the user's source keys), the
+    /// default 404 = it is off, anything else = unknown (asked again later).
+    private func probe(with client: APIClient) async -> (Availability, Set<String>) {
         do {
-            _ = try await api.fetchDeviceCalendarSources()
-            return .available
+            let response = try await client.fetchDeviceCalendarSources()
+            return (.available, Set(response.sources.map(\.key)))
         } catch {
             Log.net.debug("device calendars probe: \(String(describing: error), privacy: .private)")
-            return Self.isFeatureOff(error) ? .unavailable : .unknown
+            return (Self.isFeatureOff(error) ? .unavailable : .unknown, [])
         }
     }
 
@@ -185,41 +193,30 @@ final class DeviceCalendarBridge {
             try? await Task.sleep(for: Self.probeRetryInterval)
             guard !Task.isCancelled else { return }
             self?.probeRetryTask = nil
-            await self?.refreshAvailability()
+            self?.start()
         }
     }
 
-    /// Signing out ends the opt-in on this Mac, so another account signing in here
-    /// must turn calendars on itself, and what this Mac uploaded under it is removed:
-    /// one best-effort DELETE per source with the session's own token (`token`, read
-    /// before the Keychain is cleared). Offline, the sources stay on the server until
-    /// turned on and off again from a signed-in Mac or the account is deleted (plan, C6).
+    /// Signing out ends the opt-in on this Mac (another account must opt in itself)
+    /// and owes a DELETE for every source that was on, kept for that user until the
+    /// server confirms it: sent now with the session's own token (read before the
+    /// Keychain is cleared), queued behind any upload in flight, and retried at that
+    /// user's next sign-in here if it fails. A Mac that never returns is covered by
+    /// the server's expiry (14 days).
     func signOut(token: String?) {
-        let owed = Self.removalsOnSignOut(
-            DeviceCalendarOptIn(uploadEnabled: uploadEnabled, calendarIds: enabledIds, pendingRemoval: pendingRemoval),
-            key: sourceKey(for:))
-        if let token, !owed.isEmpty, availability == .available {
-            var client = api
-            client.token = { token }
-            Task {
-                for key in owed.sorted() {
-                    do { try await client.deleteDeviceCalendarSource(key: key) } catch {
-                        Log.net.error("device calendar removal at sign-out failed: \(String(describing: error), privacy: .private)")
-                    }
-                }
-            }
-        }
+        let user = SessionIdentity.userId(fromToken: token)
+        let enabledKeys = Set(optIn.calendarIds.map(sourceKey(for:)))
+        commit(optIn.switchedOff(user: user, enabledKeys: enabledKeys))
         deactivate()
         availability = .unknown
-        let signedOut = DeviceCalendarOptIn()
-        uploadEnabled = signedOut.uploadEnabled
-        enabledIds = signedOut.calendarIds
-        pendingRemoval = signedOut.pendingRemoval
         calendars = []
         lastSent = [:]
         lastError = nil
         store = nil
-        persist()
+        guard let user, let token, !optIn.pending(for: user).isEmpty else { return }
+        var client = api
+        client.token = { token }
+        enqueue { [weak self] in await self?.processRemovals(for: user, client: client) }
     }
 
     // MARK: User actions
@@ -229,39 +226,34 @@ final class DeviceCalendarBridge {
     func setUploadEnabled(_ on: Bool) async {
         lastError = nil
         guard on else {
-            uploadEnabled = false
-            pendingRemoval.formUnion(enabledIds.map(sourceKey(for:)))
-            enabledIds = []
+            let enabledKeys = Set(optIn.calendarIds.map(sourceKey(for:)))
+            commit(optIn.switchedOff(user: currentUser(), enabledKeys: enabledKeys))
             lastSent = [:]
-            persist()
             deactivate()
-            // Through the pass queue: a PUT already in flight lands first, then the
-            // DELETEs, so a late upload cannot recreate a source just removed.
             await runPass()
             return
         }
         isBusy = true
         defer { isBusy = false }
-        let granted = await requestAccess()
+        let reader = store ?? makeStore()
+        store = reader
+        let granted = await reader.requestAccess()
         access = granted ? .granted : .denied
-        uploadEnabled = granted
-        persist()
-        if granted { activateIfReady() }
+        var next = optIn
+        next.uploadEnabled = granted
+        commit(next)
+        if granted { await activateIfReady() }
     }
 
-    /// One calendar's toggle. On uploads it now; off deletes it on the server.
+    /// One calendar's toggle. On uploads it now; off deletes it on the server. Only
+    /// this deletes a source: a calendar missing from this Mac merely pauses.
     func setCalendar(_ id: String, enabled: Bool) async {
         lastError = nil
-        if enabled {
-            enabledIds.insert(id)
-            pendingRemoval.remove(sourceKey(for: id))
-            lastSent[id] = nil
-        } else {
-            enabledIds.remove(id)
-            lastSent[id] = nil
-            pendingRemoval.insert(sourceKey(for: id))
-        }
-        persist()
+        let key = sourceKey(for: id)
+        lastSent[id] = nil
+        commit(enabled
+            ? optIn.enabling(id, key: key, user: currentUser())
+            : optIn.disabling(id, key: key, user: currentUser()))
         await runPass()
     }
 
@@ -271,35 +263,37 @@ final class DeviceCalendarBridge {
 
     // MARK: Uploading
 
-    private func activateIfReady() {
+    private func activateIfReady() async {
         guard availability == .available, uploadEnabled else { return }
-        access = DeviceCalendarAccess.from(EKEventStore.authorizationStatus(for: .event))
+        access = authorization()
         guard access == .granted else { return }
-        if store == nil { store = EKEventStore() }
-        reloadCalendars()
+        let reader = store ?? makeStore()
+        store = reader
+        calendars = await reader.calendars()
         if changeObserver == nil {
+            // object nil: the reader's store is the only one in the process, and it
+            // lives on the reader's actor.
             changeObserver = NotificationCenter.default.addObserver(
-                forName: .EKEventStoreChanged, object: store, queue: .main
+                forName: .EKEventStoreChanged, object: nil, queue: .main
             ) { [weak self] _ in
                 MainActor.assumeIsolated { self?.storeChanged() }
             }
         }
         if refreshTask == nil {
+            // Holds the bridge weakly, also across the sleep: once the bridge is
+            // gone the loop ends instead of ticking forever.
             refreshTask = Task { [weak self] in
-                self?.startPass()
                 while !Task.isCancelled {
+                    guard self?.refreshTick() == true else { return }
                     try? await Task.sleep(for: Self.refreshInterval)
-                    if Task.isCancelled { break }
-                    self?.startPass()
                 }
             }
         }
     }
 
-    /// A pass in a task of its own: cancelling the loop or the debounce never cancels
-    /// a request in flight (a cancelled PUT can still land on the server).
-    private func startPass() {
-        Task { await runPass() }
+    private func refreshTick() -> Bool {
+        startPass()
+        return true
     }
 
     private func deactivate() {
@@ -314,81 +308,73 @@ final class DeviceCalendarBridge {
     }
 
     private func storeChanged() {
-        reloadCalendars()
         debounceTask?.cancel()
         debounceTask = Task { [weak self] in
             try? await Task.sleep(for: Self.changeDebounce)
-            guard !Task.isCancelled else { return }
-            self?.startPass()
+            guard !Task.isCancelled, let self else { return }
+            if let reader = self.store { self.calendars = await reader.calendars() }
+            self.startPass()
         }
     }
 
-    private func reloadCalendars() {
-        guard let store else { calendars = []; return }
-        calendars = store.calendars(for: .event)
-            .map { DeviceCalendarItem(id: $0.calendarIdentifier, title: $0.title, account: $0.source?.title ?? "") }
-            .sorted { ($0.account, $0.title) < ($1.account, $1.title) }
+    /// Queue a job after the last one. A job runs in a task of its own, so
+    /// cancelling a loop or a debounce never cancels a request in flight.
+    @discardableResult
+    private func enqueue(_ job: @escaping @MainActor () async -> Void) -> Task<Void, Never> {
+        let previous = tail
+        let task = Task { @MainActor in
+            await previous?.value
+            await job()
+        }
+        tail = task
+        return task
     }
 
-    /// One pass at a time; a request during a pass runs one more pass after it.
+    /// One upload pass and the removals owed, queued; at most one waits at a time.
+    private func startPass() {
+        guard !passQueued else { return }
+        passQueued = true
+        enqueue { [weak self] in
+            guard let self else { return }
+            self.passQueued = false
+            await self.uploadEnabledCalendars()
+            if let user = self.currentUser() { await self.processRemovals(for: user, client: self.api) }
+        }
+    }
+
     private func runPass() async {
-        guard !passRunning else { passQueued = true; return }
-        passRunning = true
-        defer { passRunning = false }
-        repeat {
-            passQueued = false
-            await uploadEnabledCalendars()
-            await processRemovals()
-        } while passQueued
+        startPass()
+        await idle()
     }
 
     private func uploadEnabledCalendars() async {
-        guard availability == .available, uploadEnabled, access == .granted, let store else { return }
-        let present = Dictionary(
-            store.calendars(for: .event).map { ($0.calendarIdentifier, $0) }, uniquingKeysWith: { first, _ in first })
-        for id in enabledIds.sorted() {
-            guard let calendar = present[id] else {
-                // Gone from this Mac (account removed): remove its copy too, and send it
-                // whole again if it comes back. Nothing is removed while the store
-                // lists no calendar at all.
-                if !present.isEmpty {
-                    pendingRemoval.insert(sourceKey(for: id))
-                    lastSent[id] = nil
-                    persist()
-                }
+        guard availability == .available, uploadEnabled, access == .granted,
+              let reader = store, let user = currentUser() else { return }
+        let untitled = L("deviceCalendars.untitled")
+        for id in optIn.calendarIds.sorted() {
+            // Absent from this Mac right now (an account briefly unavailable): skip,
+            // never delete. Only a switch-off deletes; the server expires a source
+            // that is never refreshed again.
+            guard let prepared = await reader.snapshot(calendarId: id, now: Date(), untitled: untitled)
+            else { continue }
+            // Switched off (or signed out) while the snapshot was read: do not send.
+            guard uploadEnabled, optIn.calendarIds.contains(id) else { continue }
+            if let last = lastSent[id], !Self.shouldResend(
+                lastFingerprint: last.fingerprint, lastAt: last.at, fingerprint: prepared.fingerprint, now: Date()) {
                 continue
             }
-            guard await upload(calendar, in: store) else { return }
+            guard await upload(prepared, calendarId: id, user: user) else { return }
         }
     }
 
     /// False when the pass must stop (feature off, signed out, rate limited).
-    private func upload(_ calendar: EKCalendar, in store: EKEventStore) async -> Bool {
-        let now = Date()
-        // Autoupdating: a Mac that travels must read all-day dates in its new zone.
-        let window = DeviceCalendarSnapshot.window(now: now, calendar: .autoupdatingCurrent)
-        let range = DeviceCalendarSnapshot.queryRange(for: window)
-        let predicate = store.predicateForEvents(withStart: range.start, end: range.end, calendars: [calendar])
-        let inputs = store.events(matching: predicate).map(Self.input(from:))
-        guard let snapshot = DeviceCalendarSnapshot.build(
-            events: inputs, calendarTitle: calendar.title, window: window, timeZone: .autoupdatingCurrent,
-            untitled: L("deviceCalendars.untitled"))
-        else {
-            Log.app.warning("device calendar snapshot not complete; skipped this pass")
-            return true
-        }
-        let body = (try? JSONEncoder().encode(snapshot)) ?? Data()
-        if let last = lastSent[calendar.calendarIdentifier],
-           !Self.shouldResend(lastBody: last.body, lastAt: last.at, body: body, now: now) {
-            return true
-        }
+    private func upload(_ prepared: PreparedSnapshot, calendarId: String, user: String) async -> Bool {
+        let key = sourceKey(for: calendarId)
         do {
-            let key = sourceKey(for: calendar.calendarIdentifier)
-            try await api.putDeviceCalendarSnapshot(key: key, snapshot)
-            lastSent[calendar.calendarIdentifier] = (body, now)
+            try await api.putDeviceCalendarSnapshot(key: key, body: prepared.body)
+            lastSent[calendarId] = (prepared.fingerprint, Date())
             lastError = nil
-            // A calendar that came back must not be removed by an older, failed removal.
-            if pendingRemoval.remove(key) != nil { persist() }
+            commit(optIn.uploadedSource(key, user: user))
             return true
         } catch {
             return handleUploadError(error)
@@ -419,41 +405,26 @@ final class DeviceCalendarBridge {
         }
     }
 
-    /// Delete every source the user turned off (kept until the server confirms, so
-    /// a removal made offline or while the feature was off is retried).
-    private func processRemovals() async {
-        for key in pendingRemoval.sorted() {
+    /// DELETE every source owed for `user`, with `client` (the session's token).
+    /// A key is dropped only when the server confirms: 200, or a 404 while the
+    /// feature answers (already gone). A 404 while it does not answer, or any other
+    /// failure, keeps the key for the next pass or the user's next sign-in.
+    private func processRemovals(for user: String, client: APIClient) async {
+        for key in optIn.pending(for: user).sorted() {
             do {
-                try await api.deleteDeviceCalendarSource(key: key)
-                pendingRemoval.remove(key)
+                try await client.deleteDeviceCalendarSource(key: key)
+                commit(optIn.removedSource(key, user: user))
             } catch APIError.http(404, _) {
-                // Not found: either the source is already gone (done) or the whole
-                // feature is off (keep it, or its rows would return with the flag).
-                if await featureIsOn() { pendingRemoval.remove(key) } else { break }
+                guard await probe(with: client).0 == .available else { return }
+                commit(optIn.removedSource(key, user: user))
             } catch {
                 Log.net.error("device calendar removal failed: \(String(describing: error), privacy: .private)")
-                break
+                return
             }
         }
-        persist()
-    }
-
-    /// Asked after a DELETE answered 404: a failed probe is NOT "on", so the removal
-    /// is kept rather than dropped on a stale answer.
-    private func featureIsOn() async -> Bool {
-        let answer = await probe()
-        if answer == .unavailable { availability = .unavailable; deactivate() }
-        return answer == .available
     }
 
     // MARK: Pure helpers (self-checked)
-
-    /// What signing out removes: every source switched on and every removal still owed.
-    nonisolated static func removalsOnSignOut(
-        _ optIn: DeviceCalendarOptIn, key: (String) -> String
-    ) -> Set<String> {
-        optIn.pendingRemoval.union(optIn.calendarIds.map(key))
-    }
 
     /// The server's dark gate answers Fastify's default 404 on every route.
     nonisolated static func isFeatureOff(_ error: Error) -> Bool {
@@ -461,51 +432,20 @@ final class DeviceCalendarBridge {
         return false
     }
 
-    nonisolated static func shouldResend(lastBody: Data, lastAt: Date, body: Data, now: Date) -> Bool {
-        lastBody != body || now.timeIntervalSince(lastAt) >= resendUnchangedAfter
-    }
-
-    /// The EKEvent fields the snapshot needs, and nothing else (no notes, no attendees).
-    static func input(from event: EKEvent) -> DeviceEventInput {
-        let recurring = event.hasRecurrenceRules || event.isDetached
-        let declined = event.attendees?.contains {
-            $0.isCurrentUser && $0.participantStatus == .declined
-        } ?? false
-        let status: DeviceEventInput.Status = switch event.status {
-        case .canceled: .canceled
-        case .tentative: .tentative
-        case .confirmed: .confirmed
-        default: .none
-        }
-        return DeviceEventInput(
-            identity: event.calendarItemExternalIdentifier ?? event.calendarItemIdentifier,
-            occurrence: recurring ? event.occurrenceDate : nil,
-            title: event.title ?? "",
-            start: event.startDate,
-            end: event.endDate ?? event.startDate,
-            isAllDay: event.isAllDay,
-            location: event.location,
-            url: event.url,
-            status: status,
-            declinedBySelf: declined)
+    nonisolated static func shouldResend(lastFingerprint: Data, lastAt: Date, fingerprint: Data, now: Date) -> Bool {
+        lastFingerprint != fingerprint || now.timeIntervalSince(lastAt) >= resendUnchangedAfter
     }
 
     // MARK: Private
 
     private func sourceKey(for calendarId: String) -> String {
-        DeviceCalendarSnapshot.sourceKey(calendarIdentifier: calendarId, deviceId: deviceId())
+        let id = cachedDeviceId ?? deviceId()
+        cachedDeviceId = id
+        return DeviceCalendarSnapshot.sourceKey(calendarIdentifier: calendarId, deviceId: id)
     }
 
-    private func requestAccess() async -> Bool {
-        if store == nil { store = EKEventStore() }
-        guard let store else { return false }
-        return await withCheckedContinuation { continuation in
-            store.requestFullAccessToEvents { granted, _ in continuation.resume(returning: granted) }
-        }
-    }
-
-    private func persist() {
-        DeviceCalendarOptIn(uploadEnabled: uploadEnabled, calendarIds: enabledIds, pendingRemoval: pendingRemoval)
-            .save(to: defaults)
+    private func commit(_ next: DeviceCalendarOptIn) {
+        optIn = next
+        next.save(to: defaults)
     }
 }

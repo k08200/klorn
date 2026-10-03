@@ -17,6 +17,23 @@ export { deviceSourceEmail } from "./device-source-key.js";
 
 /** New sources a user may have (every device together); a known one is always taken. */
 export const DEVICE_MAX_SOURCES_PER_USER = 50;
+/**
+ * Rows one source may hold after a snapshot. A window holds at most 500 events and
+ * rows older than the retention are pruned, so a real calendar stays far below it;
+ * a device that floods distinct tiny windows stops here (409, nothing changed).
+ */
+export const DEVICE_MAX_ROWS_PER_SOURCE = 1_000;
+/** Device rows one user may hold across every source and device. */
+export const DEVICE_MAX_ROWS_PER_USER = 10_000;
+/**
+ * A source no snapshot refreshed for this long is removed with its rows: its Mac
+ * was wiped, uninstalled or left offline (P4: nothing stays that no device still
+ * shows). A running Mac re-sends an unchanged calendar every 6 hours.
+ */
+export const DEVICE_SOURCE_EXPIRY_DAYS = 14;
+/** Sources expired per sweep; the next hourly sweep takes the rest. */
+const EXPIRY_BATCH = 200;
+const DAY_MS = 86_400_000;
 
 export interface DeviceSourceSummary {
   /** The device's key for the calendar (never the raw EventKit identifier). */
@@ -53,4 +70,27 @@ export async function removeDeviceSource(userId: string, key: string): Promise<b
   });
   if (!account) return false;
   return unlinkCalendarAccount(userId, account.id, "DEVICE");
+}
+
+/**
+ * Remove every DEVICE source (of any user) that no snapshot refreshed for
+ * DEVICE_SOURCE_EXPIRY_DAYS, each with its rows and their attention items, through
+ * the same unlink as a switch-off. Run hourly by the scheduler. Returns how many
+ * were removed.
+ */
+export async function expireStaleDeviceSources(now: Date): Promise<number> {
+  const stale = await prisma.linkedCalendarAccount.findMany({
+    where: {
+      provider: "DEVICE",
+      updatedAt: { lt: new Date(now.getTime() - DEVICE_SOURCE_EXPIRY_DAYS * DAY_MS) },
+    },
+    select: { id: true, userId: true },
+    orderBy: { updatedAt: "asc" },
+    take: EXPIRY_BATCH,
+  });
+  let removed = 0;
+  for (const source of stale) {
+    if (await unlinkCalendarAccount(source.userId, source.id, "DEVICE")) removed += 1;
+  }
+  return removed;
 }

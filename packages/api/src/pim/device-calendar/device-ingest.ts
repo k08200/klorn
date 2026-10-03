@@ -22,6 +22,10 @@
  *     process. Another source's, provider's or user's rows are never candidates.
  *   - rows of the source that ended more than DEVICE_ROW_RETENTION_DAYS ago are
  *     removed the same way (no window can reach them any more).
+ * Refused whole (every write rolled back, nothing changed): a snapshot older than the
+ * last one applied to the source (`snapshotAt`, the device's clock: a retry or a slow
+ * request must not overwrite a newer view), and one that would leave the source over
+ * DEVICE_MAX_ROWS_PER_SOURCE rows or the user over DEVICE_MAX_ROWS_PER_USER.
  * Rows are read-only mirrors like every linked row (`sourceAccountId` is set).
  */
 
@@ -41,7 +45,11 @@ import {
   overlapsDeviceWindow,
 } from "./device-snapshot.js";
 import { deviceSourceEmail } from "./device-source-key.js";
-import { DEVICE_MAX_SOURCES_PER_USER } from "./device-sources.js";
+import {
+  DEVICE_MAX_ROWS_PER_SOURCE,
+  DEVICE_MAX_ROWS_PER_USER,
+  DEVICE_MAX_SOURCES_PER_USER,
+} from "./device-sources.js";
 
 /**
  * A source's row that ended longer ago than this is removed with the next snapshot:
@@ -61,6 +69,10 @@ export function _resetDeviceValveReportsForTests(): void {
 
 export type DeviceIngestOutcome =
   | { readonly kind: "over-cap" }
+  /** The snapshot would leave the source or the user over a row cap: nothing changed. */
+  | { readonly kind: "over-row-cap" }
+  /** Older than the last snapshot applied to the source: ignored, nothing changed. */
+  | { readonly kind: "stale" }
   | {
       readonly kind: "stored";
       readonly created: number;
@@ -254,6 +266,62 @@ function reportValve(
   });
 }
 
+/** Thrown inside the transaction so Postgres rolls every write of it back. */
+class SnapshotRefused extends Error {
+  constructor(readonly kind: "over-row-cap" | "stale") {
+    super(`device snapshot refused: ${kind}`);
+  }
+}
+
+/** True when the newest snapshot applied to the source is later than this one. */
+function isStale(applied: Date | null | undefined, snapshotAt: Date): boolean {
+  if (!applied) return false;
+  return applied.getTime() > snapshotAt.getTime();
+}
+
+/** After every write: over a cap, the whole snapshot is refused (rolled back). */
+async function overRowCap(tx: Tx, userId: string, accountId: string): Promise<boolean> {
+  const inSource = await tx.calendarEvent.count({
+    where: linkedSourceScope("DEVICE", userId, accountId),
+  });
+  if (inSource > DEVICE_MAX_ROWS_PER_SOURCE) return true;
+  const inUser = await tx.calendarEvent.count({ where: { userId, provider: "DEVICE" } });
+  return inUser > DEVICE_MAX_ROWS_PER_USER;
+}
+
+/**
+ * The transaction body. The upsert takes the source row's lock first, so the stale
+ * check and everything after it see the newest applied snapshot; a refusal throws
+ * and every write here is rolled back.
+ */
+async function applySnapshot(
+  tx: Tx,
+  userId: string,
+  email: string,
+  snapshot: DeviceSnapshot,
+  now: Date,
+) {
+  const account = await tx.linkedCalendarAccount.upsert({
+    where: { userId_provider_email: { userId, provider: "DEVICE", email } },
+    // The schema default is GOOGLE: a device source must say what it is.
+    create: { userId, provider: "DEVICE", email, displayName: snapshot.calendarTitle },
+    update: { displayName: snapshot.calendarTitle },
+    // The update leaves deviceSnapshotAt alone, so this is the last applied one.
+    select: { id: true, deviceSnapshotAt: true },
+  });
+  if (isStale(account.deviceSnapshotAt, snapshot.snapshotAt)) throw new SnapshotRefused("stale");
+  const existing = await sourceRows(tx, userId, account.id, snapshot);
+  const written = await applyUpserts(tx, userId, account.id, snapshot, existing);
+  const removal = await removeVanished(tx, userId, account.id, snapshot, existing, now);
+  const expired = await pruneExpired(tx, userId, account.id, now);
+  if (await overRowCap(tx, userId, account.id)) throw new SnapshotRefused("over-row-cap");
+  await tx.linkedCalendarAccount.updateMany({
+    where: { id: account.id, userId, provider: "DEVICE" },
+    data: { deviceSnapshotAt: snapshot.snapshotAt },
+  });
+  return { accountId: account.id, ...written, ...removal, expired };
+}
+
 /** See the header. A database failure propagates (the transaction rolls back). */
 export async function ingestDeviceSnapshot(
   userId: string,
@@ -264,20 +332,16 @@ export async function ingestDeviceSnapshot(
   const email = deviceSourceEmail(key);
   if (!(await hasRoomFor(userId, email))) return { kind: "over-cap" };
 
-  const outcome = await prisma.$transaction(async (tx) => {
-    const account = await tx.linkedCalendarAccount.upsert({
-      where: { userId_provider_email: { userId, provider: "DEVICE", email } },
-      // The schema default is GOOGLE: a device source must say what it is.
-      create: { userId, provider: "DEVICE", email, displayName: snapshot.calendarTitle },
-      update: { displayName: snapshot.calendarTitle },
-      select: { id: true },
-    });
-    const existing = await sourceRows(tx, userId, account.id, snapshot);
-    const written = await applyUpserts(tx, userId, account.id, snapshot, existing);
-    const removal = await removeVanished(tx, userId, account.id, snapshot, existing, now);
-    const expired = await pruneExpired(tx, userId, account.id, now);
-    return { accountId: account.id, ...written, ...removal, expired };
-  }, INTERACTIVE_TX_OPTIONS);
+  let outcome: Awaited<ReturnType<typeof applySnapshot>>;
+  try {
+    outcome = await prisma.$transaction(
+      (tx) => applySnapshot(tx, userId, email, snapshot, now),
+      INTERACTIVE_TX_OPTIONS,
+    );
+  } catch (err) {
+    if (err instanceof SnapshotRefused) return { kind: err.kind };
+    throw err;
+  }
 
   if (outcome.refused) reportValve(userId, outcome.accountId, outcome.refused);
   if (outcome.removed > 0 || outcome.expired > 0) {
