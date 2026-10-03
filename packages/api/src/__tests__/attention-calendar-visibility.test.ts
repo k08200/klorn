@@ -333,6 +333,7 @@ describe("every AttentionItem reader is accounted for", () => {
     "judge/label-correction.ts",
     "judge/rejudge-open-items.ts",
     "learning/learned-rule-store.ts",
+    "mail/proactive-drafts.ts", // OPEN PUSH email items, ids only
     "mcp/set-tier.ts",
     "pim/briefing.ts",
     "pim/focus-digest.ts", // a count of arrivals, no title

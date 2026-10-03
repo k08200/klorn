@@ -601,3 +601,8 @@
 "waiting.empty" = "Nichts wartet auf eine Antwort.";
 "waiting.days" = "%d Tage";
 "waiting.row.a11y" = "%@ — %@, wartet seit %d Tagen";
+
+/* Proactive reply drafts */
+"chip.draftReady" = "Entwurf bereit";
+"reading.openDraft" = "Entwurf öffnen";
+"reading.preparedDraft" = "Klorn hat diesen Entwurf vorab geschrieben — vor dem Senden prüfen.";
