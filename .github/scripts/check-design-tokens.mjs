@@ -33,6 +33,11 @@
  * while any count is above its baseline, so it can only ratchet downwards.
  * Run it after migrating call sites and commit the smaller baseline with the
  * change. Never raise a number by hand; fix the call site instead.
+ *
+ * `--update --init` seeds a baseline from scratch and is the only way past the
+ * ratchet — reserved for introducing a new rule, never for a regression.
+ * Allowances are keyed by path: moving or renaming a file resets its allowance
+ * to 0, so move the baseline key with the file in the same commit.
  */
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -74,14 +79,22 @@ const RULES = [
   },
 ];
 
-/** Blank out comments, preserving offsets (same approach as check-lane-vocabulary). */
+/**
+ * Blank out comments, preserving offsets. String literals are matched first and
+ * kept verbatim, so a `//` inside a string or URL ("https://…") is not taken
+ * for a line comment and cannot hide a class name later on the same line.
+ */
 function stripComments(src) {
-  return src.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, (m) => m.replace(/[^\n]/g, " "));
+  return src.replace(
+    /("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`)|\/\*[\s\S]*?\*\/|\/\/[^\n]*/g,
+    (m, str) => (str ? m : m.replace(/[^\n]/g, " ")),
+  );
 }
 
 function sources(dir, out = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
-    const full = join(dir, e.name);
+    // Normalise to forward slashes so baseline keys match on every OS.
+    const full = join(dir, e.name).replaceAll("\\", "/");
     if (e.isDirectory()) sources(full, out);
     else if (/\.(ts|tsx|js|jsx)$/.test(e.name)) out.push(full);
   }
@@ -116,8 +129,9 @@ const total = (byFile) => Object.values(byFile).reduce((a, b) => a + b, 0);
 const { counts, firstHit } = countAll();
 const baseline = loadBaseline();
 const updating = process.argv.includes("--update");
-// Seeding: with no baseline file yet, --update records the current counts.
-const bootstrap = !existsSync(BASELINE);
+// Seeding needs an explicit --init: deleting the baseline and running --update
+// must not be a way to raise every count.
+const bootstrap = process.argv.includes("--init");
 
 const regressions = [];
 const improvements = [];
