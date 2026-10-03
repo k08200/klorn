@@ -50,6 +50,20 @@ export const DEVICE_CALENDAR_USER_LIMIT = { max: 240, timeWindow: "10 minutes" }
 
 const HTTP_TOO_MANY_REQUESTS = 429;
 const RATE_LIMITED = "Too many device calendar requests. Try again later.";
+/** 409: a NEW calendar past the per-user source cap. */
+export const DEVICE_SOURCE_CAP_ERROR = "Too many device calendars. Turn one off first.";
+/**
+ * 409: the snapshot would pass a row cap. Its own words: this is about events, not
+ * about how many calendars are on.
+ */
+export const DEVICE_ROW_CAP_ERROR = "Too many events are stored from device calendars.";
+/**
+ * The machine codes beside those words. A client picks its own localised text by
+ * them (the Mac app: DeviceCalendarBridge.rowCapCode, pinned by its self-check), so
+ * they never change.
+ */
+const DEVICE_SOURCE_CAP_CODE = "device_source_cap";
+const DEVICE_ROW_CAP_CODE = "device_row_cap";
 
 /** The one answer to every refused snapshot: names the part, never echoes a value. */
 const SNAPSHOT_REFUSED: Record<string, string> = {
@@ -135,10 +149,10 @@ async function putHandler(
     now,
   );
   if (outcome.kind === "over-cap") {
-    return reply.code(409).send({ error: "Too many device calendars. Turn one off first." });
+    return reply.code(409).send({ error: DEVICE_SOURCE_CAP_ERROR, code: DEVICE_SOURCE_CAP_CODE });
   }
   if (outcome.kind === "over-row-cap") {
-    return reply.code(409).send({ error: "Too many events stored for device calendars." });
+    return reply.code(409).send({ error: DEVICE_ROW_CAP_ERROR, code: DEVICE_ROW_CAP_CODE });
   }
   if (outcome.kind === "stale") {
     // A newer snapshot of this calendar was applied already: nothing changed.

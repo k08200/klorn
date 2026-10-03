@@ -630,4 +630,5 @@
 "deviceCalendars.count" = "%d hochgeladen";
 "deviceCalendars.untitled" = "Unbenannter Kalender";
 "deviceCalendars.error.limit" = "Zu viele Kalender hochgeladen. Schalte zuerst einen aus.";
+"deviceCalendars.error.rows" = "Zu viele Termine aus den Kalendern dieses Macs sind gespeichert. Schalte zuerst einen Kalender aus.";
 "deviceCalendars.error.generic" = "Ein Kalender konnte nicht hochgeladen werden. Klorn versucht es erneut.";

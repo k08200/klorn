@@ -67,10 +67,11 @@ struct PreparedSnapshot: Sendable, Equatable {
 enum DeviceCalendarSnapshot {
     /// The window uploaded: a week back (so today's earlier events and the last
     /// few days stay current) to a month ahead, from the start of today. The server
-    /// accepts a window starting at most these 7 days plus one before now and prunes
-    /// rows older than that same span (DEVICE_WINDOW_PAST_DAYS and
+    /// accepts a window starting at most these 7 days plus two before now (the day a
+    /// local-midnight start adds, 25 hours on a fall-back day, and a slow clock) and
+    /// prunes rows older than that same span (DEVICE_WINDOW_PAST_DAYS and
     /// DEVICE_ROW_RETENTION_DAYS in pim/device-calendar), so an event deleted here
-    /// cannot linger there longer than the day the local-midnight start adds.
+    /// cannot linger there longer than those two days past its window.
     static let windowPastDays = 7
     static let windowFutureDays = 31
     /// The server's caps (pim/device-calendar/device-snapshot.ts), mirrored so a

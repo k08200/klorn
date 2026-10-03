@@ -630,4 +630,5 @@
 "deviceCalendars.count" = "%d uploaded";
 "deviceCalendars.untitled" = "Untitled calendar";
 "deviceCalendars.error.limit" = "Too many calendars are uploaded. Turn one off first.";
+"deviceCalendars.error.rows" = "Too many events are stored from this Mac's calendars. Turn a calendar off first.";
 "deviceCalendars.error.generic" = "Couldn't upload a calendar. Klorn will try again.";

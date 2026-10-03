@@ -10,6 +10,7 @@
  */
 
 import { prisma } from "../../db.js";
+import { captureError } from "../../sentry.js";
 import { unlinkCalendarAccount } from "../linked-calendar-unlink.js";
 import { deviceKeyOfEmail, deviceSourceEmail, isDeviceSourceKey } from "./device-source-key.js";
 
@@ -90,7 +91,20 @@ export async function expireStaleDeviceSources(now: Date): Promise<number> {
   });
   let removed = 0;
   for (const source of stale) {
-    if (await unlinkCalendarAccount(source.userId, source.id, "DEVICE")) removed += 1;
+    // Each source on its own: one that fails (a lock, a lost connection) is reported
+    // and left for the next sweep, and never blocks the ones after it.
+    try {
+      if (await unlinkCalendarAccount(source.userId, source.id, "DEVICE")) removed += 1;
+    } catch (err) {
+      console.warn(
+        `[CALENDAR] device source expiry failed for ${source.userId}:${source.id}:`,
+        err,
+      );
+      captureError(err, {
+        tags: { scope: "calendar.device.source_expiry" },
+        extra: { userId: source.userId, linkedAccountId: source.id },
+      });
+    }
   }
   return removed;
 }

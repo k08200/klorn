@@ -346,7 +346,38 @@ describe("an event's span is bounded, so no row can outlive the retention prune"
     expect(snapshot.skipped).toBe(2);
   });
 
-  it(`the lag a window may reach is the Mac's ${DEVICE_WINDOW_PAST_DAYS} days plus one`, () => {
-    expect(DEVICE_WINDOW_MAX_LAG_DAYS).toBe(DEVICE_WINDOW_PAST_DAYS + 1);
+  it(`the lag a window may reach is the Mac's ${DEVICE_WINDOW_PAST_DAYS} days plus two`, () => {
+    expect(DEVICE_WINDOW_MAX_LAG_DAYS).toBe(DEVICE_WINDOW_PAST_DAYS + 2);
+  });
+});
+
+describe("the lag has margin for a 25-hour day (fall-back)", () => {
+  // Los Angeles, 2026-11-01 (25 hours). At 23:59 PST the Mac's window starts at the
+  // local midnight seven calendar days back, 2026-10-25 00:00 PDT: 8 days and 59
+  // minutes before now, which a limit of exactly 8 x 24 h refused for the last hour
+  // of each day until the fall-back left the window.
+  const lateOnFallBackDay = new Date("2026-11-02T07:59:00.000Z");
+  const fallBackWindow = {
+    windowStart: "2026-10-25T07:00:00.000Z",
+    windowEnd: "2026-12-02T08:00:00.000Z",
+    snapshotAt: "2026-11-02T07:59:00.000Z",
+    events: [],
+  };
+
+  it("accepts the Mac's window in the last hour of a fall-back day", () => {
+    const result = normaliseDeviceSnapshot(body(fallBackWindow), lateOnFallBackDay);
+    expect(result.ok).toBe(true);
+  });
+
+  it("accepts a window starting exactly at the limit and refuses one a millisecond past it", () => {
+    const limit = NOW.getTime() - DEVICE_WINDOW_MAX_LAG_DAYS * DAY_MS;
+    const window = (startMs: number) =>
+      body({
+        windowStart: new Date(startMs).toISOString(),
+        windowEnd: new Date(startMs + DAY_MS).toISOString(),
+        events: [],
+      });
+    expect(reason(window(limit))).toBe(null);
+    expect(reason(window(limit - 1))).toBe("window");
   });
 });

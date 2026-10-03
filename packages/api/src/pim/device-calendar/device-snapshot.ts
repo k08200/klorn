@@ -29,11 +29,15 @@ export const DEVICE_WINDOW_MAX_DAYS = 62;
  */
 export const DEVICE_WINDOW_PAST_DAYS = 7;
 /**
- * A window may start at most this long before now: the app's seven days plus the
- * day its local-midnight start can add. The row retention (device-ingest.ts) is the
- * same span, so the server keeps nothing older than a window can still confirm.
+ * A window may start at most this long before now: the app's seven days plus TWO.
+ * The app's window starts at a local midnight, so late in the day it is already
+ * seven days and almost a day old, and on a 25-hour fall-back day that is 8 days and
+ * up to an hour: a limit of exactly 8 x 24 h refused the last hour of each day while
+ * the fall-back was inside the window. The second day covers that hour and a device
+ * clock that runs behind. The row retention (device-ingest.ts) is the same span, so
+ * the server keeps nothing older than a window can still confirm.
  */
-export const DEVICE_WINDOW_MAX_LAG_DAYS = DEVICE_WINDOW_PAST_DAYS + 1;
+export const DEVICE_WINDOW_MAX_LAG_DAYS = DEVICE_WINDOW_PAST_DAYS + 2;
 /** A window may end at most this long after now. */
 export const DEVICE_WINDOW_MAX_LEAD_DAYS = 93;
 /**

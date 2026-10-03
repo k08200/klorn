@@ -84,11 +84,13 @@ struct DeviceCalendarOptIn: Equatable, Sendable {
         return next
     }
 
-    /// An upload of `key` for `user` succeeded: it is this Mac's, and not owed a DELETE.
+    /// An upload of `key` for `user` succeeded: the source is this Mac's. An owed
+    /// DELETE stays owed: the calendar may have been switched off while that upload
+    /// was in flight. Only a confirmed DELETE (`removedSource`) or the user switching
+    /// the calendar back on (`enabling`) clears one.
     func uploadedSource(_ key: String, user: String) -> DeviceCalendarOptIn {
         var next = self
         next.uploaded[user, default: []].insert(key)
-        next.pendingRemoval = Self.removing(key, user, from: pendingRemoval)
         return next
     }
 

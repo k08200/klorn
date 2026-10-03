@@ -878,7 +878,8 @@ async function runAutomations() {
     // --- Hourly: device calendar sources no device refreshes any more (C6, P4) ---
     // A Mac wiped, uninstalled or left offline stops sending snapshots; its source
     // and rows go after DEVICE_SOURCE_EXPIRY_DAYS, through the same unlink as a
-    // switch-off. Cheap when there is nothing to expire (one indexed read).
+    // switch-off. One read of the DEVICE accounts per hour; no index serves it, and the table
+    // holds one row per linked calendar, so it is a short scan.
     // Only while DEVICE_CALENDAR_ENABLED is on (rows are hidden while it is off;
     // a flip back on sweeps what went stale meanwhile within the hour).
     if (

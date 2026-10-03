@@ -630,4 +630,5 @@
 "deviceCalendars.count" = "%d subidos";
 "deviceCalendars.untitled" = "Calendario sin título";
 "deviceCalendars.error.limit" = "Hay demasiados calendarios subidos. Desactiva uno primero.";
+"deviceCalendars.error.rows" = "Hay demasiados eventos guardados de los calendarios de este Mac. Desactiva un calendario primero.";
 "deviceCalendars.error.generic" = "No se pudo subir un calendario. Klorn lo intentará de nuevo.";

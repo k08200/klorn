@@ -342,7 +342,8 @@ final class DeviceCalendarBridge {
         }
     }
 
-    private func runPass() async {
+    /// One pass now, awaited (a switch in Settings; the self-check).
+    func runPass() async {
         startPass()
         await idle()
     }
@@ -371,7 +372,10 @@ final class DeviceCalendarBridge {
     private func upload(_ prepared: PreparedSnapshot, calendarId: String, user: String) async -> Bool {
         let key = sourceKey(for: calendarId)
         do {
-            try await api.putDeviceCalendarSnapshot(key: key, body: prepared.body)
+            let reply = try await api.putDeviceCalendarSnapshot(key: key, body: prepared.body)
+            // Ignored as older than what the server holds: not a send. Nothing is
+            // recorded, so the next pass reads the calendar again and retries.
+            guard reply == .applied else { return true }
             lastSent[calendarId] = (prepared.fingerprint, Date())
             lastError = nil
             commit(optIn.uploadedSource(key, user: user))
@@ -394,8 +398,8 @@ final class DeviceCalendarBridge {
         case APIError.forbidden:
             lastError = L("error.needsPro")
             return false
-        case APIError.http(409, _):
-            lastError = L("deviceCalendars.error.limit")
+        case APIError.http(409, let code):
+            lastError = L(Self.conflictErrorKey(serverCode: code))
             return true
         case APIError.http(429, _):
             return false
@@ -430,6 +434,16 @@ final class DeviceCalendarBridge {
     nonisolated static func isFeatureOff(_ error: Error) -> Bool {
         if case APIError.http(404, _) = error { return true }
         return false
+    }
+
+    /// The server's code for a row-cap 409 (DEVICE_ROW_CAP_CODE in
+    /// packages/api/src/routes/device-calendar.ts; the self-check pins the pair).
+    nonisolated static let rowCapCode = "device_row_cap"
+
+    /// Which text a 409 gets: too many events stored, or (any other code, or none)
+    /// too many calendars switched on.
+    nonisolated static func conflictErrorKey(serverCode: String?) -> String {
+        serverCode == rowCapCode ? "deviceCalendars.error.rows" : "deviceCalendars.error.limit"
     }
 
     nonisolated static func shouldResend(lastFingerprint: Data, lastAt: Date, fingerprint: Data, now: Date) -> Bool {

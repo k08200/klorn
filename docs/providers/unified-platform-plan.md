@@ -2646,7 +2646,8 @@ policy per P4.
     meetingLink?, status? }] }` -> `{ created, updated, removed, skipped, valveRefused }`
     (plus `stale: true`, all counts 0, for a snapshot older than the last applied);
     400 names the refused part and never echoes a value, 409 is a new calendar over
-    the source cap or a snapshot over a row cap, 413 a body over 2 MiB. `DELETE /sources/:key` -> `{ success: true }` or 404.
+    the source cap (`code: "device_source_cap"`) or a snapshot over a row cap
+    (`code: "device_row_cap"`, its own words), 413 a body over 2 MiB. `DELETE /sources/:key` -> `{ success: true }` or 404.
   - Opt-in (P4). A source is a `LinkedCalendarAccount` with provider DEVICE, `email`
     `device:<key>` (so the existing (userId, provider, email) unique is its upsert
     key and no address can collide under the legacy (userId, email) one) and
@@ -2657,10 +2658,9 @@ policy per P4.
     rows and their attention items through `unlinkCalendarAccount(..., "DEVICE")`.
     No other path creates a DEVICE row.
   - Boundary (`pim/device-calendar/device-snapshot.ts`, named constants). Window at
-    most 62 days, starting no earlier than now - 8 days (the Mac's 7 plus the day its
-    local-midnight start adds) and ending no later than now + 93; times must carry Z
-    or an offset; `snapshotAt` no later than now + 1 day and no earlier than now - 8
-    days. An event longer than 31 days (`DEVICE_EVENT_MAX_SPAN_DAYS`) is dropped and
+    most 62 days, starting no earlier than now - 9 days (the Mac's 7 plus two: see
+    round 3) and ending no later than now + 93; times must carry Z or an offset;
+    `snapshotAt` no later than now + 1 day and no earlier than now - 9 days. An event longer than 31 days (`DEVICE_EVENT_MAX_SPAN_DAYS`) is dropped and
     counted, so no row ends far past a window (a year-9999 end cannot be stored). At most 500 events; title and location 500
     code points, external id 512, calendar title 200, meeting link 2048, then
     `safeMeetingLink`. An all-day event is two dates (`YYYY-MM-DD`, end exclusive)
@@ -2680,7 +2680,7 @@ policy per P4.
     C3's valve (`isOverDeletionValve`: more than half of the window's rows, when over
     5); a refusal keeps every row, still applies creates and updates, and warns and
     reports to Sentry once per source per process. Retention: rows of the source that
-    ended more than 8 days ago (`DEVICE_ROW_RETENTION_DAYS`, the oldest a window may
+    ended more than 9 days ago (`DEVICE_ROW_RETENTION_DAYS`, the oldest a window may
     reach) are removed in the same transaction, outside the valve, so the server keeps
     no more of a device calendar than the device still shows.
   - Auth and limits. `requireAuth` (a live Device row for the bearer token) runs
@@ -2807,9 +2807,9 @@ policy per P4.
     tested). A stale snapshot (older `snapshotAt` than the source's `deviceSnapshotAt`)
     is ignored the same way; the source upsert takes the row lock first, so the check
     sees the newest applied one. Retention and the window are one span: the Mac sends
-    7 days back from local midnight, the server accepts a window and keeps rows 8 days
-    back (7 plus that day), so an event deleted on the Mac lingers at most a day past
-    its window. Hourly, while the flag is on, the scheduler removes every DEVICE source
+    7 days back from local midnight, the server accepts a window and keeps rows 9 days
+    back (7 plus two, round 3), so an event deleted on the Mac lingers at most two
+    days past its window. Hourly, while the flag is on, the scheduler removes every DEVICE source
     no snapshot refreshed for 14 days (`DEVICE_SOURCE_EXPIRY_DAYS`, 200 per sweep),
     through the same unlink; a running Mac re-sends an unchanged calendar every 6
     hours, so a live source never expires. Mac: EventKit reads, the snapshot build
@@ -2838,6 +2838,23 @@ policy per P4.
     provider filter, expiry ungated; on the Mac: absence deleting, sign-out owing
     nothing, a failed removal dropped, the launch reconcile skipped, the sign-out
     removal not queued, the reconcile touching another Mac's sources.
+  - Review round 3 (2026-10-03), test-first. (1) An upload that succeeds no longer
+    clears an owed removal (`uploadedSource`): a calendar switched off while its PUT
+    was in flight lost its DELETE until the next launch or the expiry. Only a
+    confirmed DELETE or switching the calendar back on clears one (scenario: a 400 ms
+    PUT, switched off meanwhile, DELETE sent after it). (2) The lag had no margin: at
+    23:59 on a 25-hour fall-back day the Mac's window starts 8 days and 59 minutes
+    back, over a limit of exactly 8 x 24 h, so the last hour of each day answered 400
+    for about 8 days. `DEVICE_WINDOW_MAX_LAG_DAYS` is now the Mac's 7 days plus 2 (the
+    local-midnight day, that hour, a slow clock), and the retention follows it
+    (tested at the fall-back boundary and one millisecond past the limit). (3) The
+    expiry sweep handles each source in its own try/catch (one failure is reported
+    and left for the next sweep); its comment no longer claims an index (none serves
+    the read; the table holds one row per linked calendar). The two 409s carry
+    machine codes and the row cap its own words; the Mac reads the code from the PUT
+    reply and shows `deviceCalendars.error.rows` (7 languages) for it. A `stale: true`
+    reply is not recorded as a send: nothing is remembered, and the next pass reads
+    the calendar again and retries.
 - Exit: flag OFF; no user-visible change on the server, and the Mac section stays
   hidden until the flag is on. Nothing is flipped.
 **C7 — one calendar read path.** Depends on: C2. `list_events`, briefing and

@@ -630,4 +630,5 @@
 "deviceCalendars.count" = "%d envoyés";
 "deviceCalendars.untitled" = "Calendrier sans titre";
 "deviceCalendars.error.limit" = "Trop de calendriers sont envoyés. Désactivez-en un d’abord.";
+"deviceCalendars.error.rows" = "Trop d’événements sont enregistrés depuis les calendriers de ce Mac. Désactivez d’abord un calendrier.";
 "deviceCalendars.error.generic" = "Impossible d’envoyer un calendrier. Klorn réessaiera.";

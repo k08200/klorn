@@ -9,6 +9,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const m = vi.hoisted(() => ({
+  captureError: vi.fn(),
   findMany: vi.fn(),
   findFirst: vi.fn(),
   unlink: vi.fn(),
@@ -19,6 +20,7 @@ vi.mock("../db.js", () => {
   return { prisma, db: prisma };
 });
 vi.mock("../pim/linked-calendar-unlink.js", () => ({ unlinkCalendarAccount: m.unlink }));
+vi.mock("../sentry.js", () => ({ captureError: m.captureError }));
 
 import {
   DEVICE_SOURCE_EXPIRY_DAYS,
@@ -121,6 +123,39 @@ describe("expireStaleDeviceSources (a Mac wiped, offline or uninstalled: P4)", (
     expect(await expireStaleDeviceSources(NOW)).toBe(0);
     m.findMany.mockResolvedValue([]);
     expect(await expireStaleDeviceSources(NOW)).toBe(0);
+  });
+
+  it("one failing source does not block the rest of the sweep", async () => {
+    m.findMany.mockResolvedValue([
+      { id: "acct-1", userId: "u1" },
+      { id: "acct-2", userId: "u2" },
+      { id: "acct-3", userId: "u3" },
+    ]);
+    m.unlink
+      .mockResolvedValueOnce(true)
+      .mockRejectedValueOnce(new Error("deadlock detected"))
+      .mockResolvedValueOnce(true);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    expect(await expireStaleDeviceSources(NOW)).toBe(2);
+
+    expect(m.unlink).toHaveBeenCalledTimes(3);
+    expect(m.unlink).toHaveBeenNthCalledWith(3, "u3", "acct-3", "DEVICE");
+    expect(m.captureError).toHaveBeenCalledTimes(1);
+    expect(m.captureError.mock.calls[0]?.[1]).toMatchObject({
+      tags: { scope: "calendar.device.source_expiry" },
+    });
+    warn.mockRestore();
+  });
+
+  it("the scheduler's comment claims no index that does not exist", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { fileURLToPath } = await import("node:url");
+    const scheduler = readFileSync(
+      fileURLToPath(new URL("../automation-scheduler.ts", import.meta.url)),
+      "utf8",
+    );
+    expect(scheduler).not.toContain("one indexed read");
   });
 
   it("runs from the scheduler's hourly block", async () => {

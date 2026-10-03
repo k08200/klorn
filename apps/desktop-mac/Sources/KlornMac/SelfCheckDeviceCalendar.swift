@@ -309,9 +309,10 @@ private enum DeviceCalendarPureChecks {
             ("the opt-in and the owed removals survive a relaunch and a sign-out", persisted),
             ("launch: this Mac's sources no longer on are owed a DELETE; another Mac's are not",
              reconciled.pending(for: "u1") == ["mine-off"] && reconciled.uploaded["u1"] == ["mine-on", "mine-off"]),
-            ("a confirmed removal forgets the source; a later upload of it voids an owed removal",
+            ("only a confirmed DELETE or switching the calendar back on clears an owed removal; an upload never does",
              reconciled.removedSource("mine-off", user: "u1").pending(for: "u1").isEmpty
-             && reconciled.uploadedSource("mine-off", user: "u1").pending(for: "u1").isEmpty),
+             && reconciled.uploadedSource("mine-off", user: "u1").pending(for: "u1") == ["mine-off"]
+             && reconciled.enabling("cal", key: "mine-off", user: "u1").pending(for: "u1").isEmpty),
             ("the session's user is read from the token's payload",
              SessionIdentity.userId(fromToken: DeviceCalendarScenarios.token("user-9")) == "user-9"
              && SessionIdentity.userId(fromToken: "not-a-jwt") == nil && SessionIdentity.userId(fromToken: nil) == nil),
@@ -338,6 +339,10 @@ private enum DeviceCalendarPureChecks {
             return strings.contains("\"NSCalendarsFullAccessUsageDescription\"")
                 && strings.contains("\"NSCalendarsUsageDescription\"")
         }
+        let serverRoutes = (try? String(
+            contentsOf: appDir.deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("packages/api/src/routes/device-calendar.ts"),
+            encoding: .utf8)) ?? ""
         let appModel = text("AppModel.swift")
         let tokenRead = appModel.range(of: "let sessionToken = KeychainStore.load()")
         let tokenCleared = appModel.range(of: "KeychainStore.clear()\n        queue = nil")
@@ -364,6 +369,13 @@ private enum DeviceCalendarPureChecks {
              && makeApp.contains("Resources/InfoPlist/*.lproj")),
             ("the build does not declare app-wide localisations it does not need",
              !makeApp.contains("CFBundleLocalizations") && !makeApp.contains("CFBundleDevelopmentRegion")),
+            ("the row-cap 409 has its own text, in every language, keyed to the server's code",
+             DeviceCalendarBridge.conflictErrorKey(serverCode: DeviceCalendarBridge.rowCapCode)
+                 == "deviceCalendars.error.rows"
+             && DeviceCalendarBridge.conflictErrorKey(serverCode: "device_source_cap") == "deviceCalendars.error.limit"
+             && DeviceCalendarBridge.conflictErrorKey(serverCode: nil) == "deviceCalendars.error.limit"
+             && serverRoutes.contains("\"\(DeviceCalendarBridge.rowCapCode)\"")
+             && L10n.shipped.allSatisfy { L10n.keys(forLanguage: $0).contains("deviceCalendars.error.rows") }),
             ("the hardened runtime may read calendars",
              entitlements.contains("com.apple.security.personal-information.calendars")
              && makeApp.contains("--entitlements Klorn.entitlements")),
@@ -383,6 +395,8 @@ final class DeviceCalendarStubProtocol: URLProtocol, @unchecked Sendable {
     struct Reply: Sendable {
         let status: Int
         let body: String
+        /// Answer this long after the request starts (an upload "in flight").
+        var delayMs = 0
     }
 
     static let state = OSAllocatedUnfairLock(initialState: (replies: [String: Reply](), calls: [Call]()))
@@ -402,6 +416,13 @@ final class DeviceCalendarStubProtocol: URLProtocol, @unchecked Sendable {
             state.calls.append(call)
             return state.replies["\(method) \(url.path)"] ?? state.replies[method] ?? Reply(status: 200, body: "{}")
         }
+        guard reply.delayMs > 0 else { return answer(reply, url: url) }
+        DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(reply.delayMs)) { [self] in
+            answer(reply, url: url)
+        }
+    }
+
+    private func answer(_ reply: Reply, url: URL) {
         let response = HTTPURLResponse(
             url: url, statusCode: reply.status, httpVersion: "HTTP/1.1",
             headerFields: ["Content-Type": "application/json"])
@@ -548,6 +569,58 @@ enum DeviceCalendarScenarios {
         let lastPut = calls.lastIndex { $0.method == "PUT" }
         results.append(("a sign-out's DELETE is never overtaken by an upload",
                         lastDelete != nil && (lastPut ?? -1) < (lastDelete ?? -1)))
+
+        // 4b. Switched off while its upload is in flight: the DELETE still goes, after the PUT.
+        fresh(DeviceCalendarOptIn(uploadEnabled: true, calendarIds: ["a"]))
+        DeviceCalendarStubProtocol.reset([
+            "GET \(sourcesPath)": sources([]), "PUT": .init(status: 200, body: "{}", delayMs: 400),
+        ])
+        let inFlight = bridge(defaults, user: user, items: ["a"], snapshots: ["a"])
+        inFlight.start()
+        var waits = 0
+        while !DeviceCalendarStubProtocol.calls.contains(where: { $0.method == "PUT" }), waits < 300 {
+            try? await Task.sleep(for: .milliseconds(10))
+            waits += 1
+        }
+        await inFlight.setCalendar("a", enabled: false)
+        let flightLog = DeviceCalendarStubProtocol.calls
+        let putAt = flightLog.firstIndex { $0.method == "PUT" }
+        let deleteAt = flightLog.lastIndex { $0.method == "DELETE" && $0.path == path(key("a")) }
+        results.append(("a calendar switched off during its upload is still deleted afterwards",
+                        putAt != nil && deleteAt != nil && (putAt ?? 0) < (deleteAt ?? 0)
+                        && inFlight.optIn.pending(for: user).isEmpty))
+
+        // 4c. A reply of stale: true is not a send: the next pass tries again.
+        fresh(DeviceCalendarOptIn(uploadEnabled: true, calendarIds: ["a"]))
+        DeviceCalendarStubProtocol.reset([
+            "GET \(sourcesPath)": sources([]), "PUT": .init(status: 200, body: #"{"stale":true}"#),
+        ])
+        let ignored = bridge(defaults, user: user, items: ["a"], snapshots: ["a"])
+        func puts() -> Int { DeviceCalendarStubProtocol.calls.filter { $0.method == "PUT" }.count }
+        ignored.start()
+        await ignored.idle()
+        await ignored.runPass()
+        let afterStale = puts()
+        DeviceCalendarStubProtocol.replace([
+            "GET \(sourcesPath)": sources([]), "PUT": .init(status: 200, body: #"{"created":1}"#),
+        ])
+        await ignored.runPass()
+        await ignored.runPass()
+        results.append(("a stale reply is retried on the next pass; an applied one is then not re-sent",
+                        afterStale == 2 && puts() == 3))
+
+        // 4d. A 409 carrying the row-cap code shows the events text, not the calendars one.
+        fresh(DeviceCalendarOptIn(uploadEnabled: true, calendarIds: ["a"]))
+        DeviceCalendarStubProtocol.reset([
+            "GET \(sourcesPath)": sources([]),
+            "PUT": .init(status: 409, body: #"{"error":"x","code":"device_row_cap"}"#),
+        ])
+        let overRows = bridge(defaults, user: user, items: ["a"], snapshots: ["a"])
+        overRows.start()
+        await overRows.idle()
+        results.append(("a row-cap refusal shows the events text, not the too-many-calendars one",
+                        overRows.lastError == L("deviceCalendars.error.rows")
+                        && overRows.lastError != L("deviceCalendars.error.limit")))
 
         // 5. The feature off on the server hides it and uploads nothing.
         fresh(DeviceCalendarOptIn(uploadEnabled: true, calendarIds: ["a"]))

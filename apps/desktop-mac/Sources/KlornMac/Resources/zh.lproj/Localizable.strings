@@ -630,4 +630,5 @@
 "deviceCalendars.count" = "已上传 %d 个";
 "deviceCalendars.untitled" = "未命名日历";
 "deviceCalendars.error.limit" = "上传的日历过多。请先关闭一个。";
+"deviceCalendars.error.rows" = "此 Mac 的日历中存储的日程过多。请先关闭一个日历。";
 "deviceCalendars.error.generic" = "无法上传日历。Klorn 会重试。";

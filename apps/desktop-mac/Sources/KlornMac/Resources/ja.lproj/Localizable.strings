@@ -630,4 +630,5 @@
 "deviceCalendars.count" = "%d件をアップロード中";
 "deviceCalendars.untitled" = "名称未設定のカレンダー";
 "deviceCalendars.error.limit" = "アップロードしたカレンダーが多すぎます。先に1つをオフにしてください。";
+"deviceCalendars.error.rows" = "このMacのカレンダーから保存された予定が多すぎます。先にカレンダーを1つオフにしてください。";
 "deviceCalendars.error.generic" = "カレンダーをアップロードできませんでした。Klornが再試行します。";

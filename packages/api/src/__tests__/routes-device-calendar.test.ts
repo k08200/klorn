@@ -336,11 +336,22 @@ describe("PUT /sources/:key/window", () => {
     expect(m.ingest).not.toHaveBeenCalled();
   });
 
-  it("answers 409 when the rows would pass a row cap", async () => {
+  it("answers 409 when the rows would pass a row cap, in its own words (not the calendar-count ones)", async () => {
+    const { DEVICE_ROW_CAP_ERROR, DEVICE_SOURCE_CAP_ERROR } = await import(
+      "../routes/device-calendar.js"
+    );
     m.ingest.mockResolvedValue({ kind: "over-row-cap" });
     const { app, headers } = await buildApp();
     const res = await app.inject(put(KEY, snapshotBody(), headers));
     expect(res.statusCode).toBe(409);
+    // A machine code beside the words: the Mac app picks its own localised text by it.
+    expect(res.json()).toEqual({ error: DEVICE_ROW_CAP_ERROR, code: "device_row_cap" });
+    expect(DEVICE_ROW_CAP_ERROR).not.toBe(DEVICE_SOURCE_CAP_ERROR);
+    expect(DEVICE_ROW_CAP_ERROR).toBe("Too many events are stored from device calendars.");
+
+    m.ingest.mockResolvedValue({ kind: "over-cap" });
+    const capped = await app.inject(put(KEY, snapshotBody(), headers));
+    expect(capped.json()).toEqual({ error: DEVICE_SOURCE_CAP_ERROR, code: "device_source_cap" });
   });
 
   it("answers 200 with stale: true for a snapshot older than the one applied, changing nothing", async () => {
