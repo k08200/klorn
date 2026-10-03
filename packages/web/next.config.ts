@@ -61,7 +61,17 @@ const securityHeaders = [
     : []),
 ];
 
+// Dev-only routes are named `page.dev.tsx` (e.g. app/dev/primitives). Only
+// non-production builds treat `dev.tsx` as a page extension, so in production
+// the route does not exist at all — a real 404 and no chunk in the build.
+const DEFAULT_PAGE_EXTENSIONS = ["tsx", "ts", "jsx", "js"];
+const pageExtensions =
+  process.env.NODE_ENV === "production"
+    ? DEFAULT_PAGE_EXTENSIONS
+    : ["dev.tsx", ...DEFAULT_PAGE_EXTENSIONS];
+
 const nextConfig: NextConfig = {
+  pageExtensions,
   distDir: process.env.NEXT_DEV_DIST === "1" ? ".next-dev" : ".next",
   outputFileTracingRoot: path.join(import.meta.dirname, "../../"),
   async headers() {
