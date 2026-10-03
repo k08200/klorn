@@ -20,6 +20,8 @@
 <link rel="canonical" href="https://klorn.ai/blog/gmail-priority-inbox-not-working/">
 <link rel="preload" as="font" type="font/woff2" href="/fonts/geist-var.woff2" crossorigin>
 <link rel="stylesheet" href="/compare.css">
+<link rel="icon" href="/brand/favicon.svg?v=matte2" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png?v=matte2">
 <style>
 .meta { margin: 14px 0 0; font-size: 13.5px; color: var(--ink-3); }
 article h2 { margin-top: 40px; }
@@ -62,13 +64,19 @@ li { margin-top: 6px; }
  ]
 }
 </script>
+<script src="/site-nav.js" defer></script>
 </head>
 <body>
 <div class="wrap">
-  <nav class="top">
+  <header class="top">
     <a class="home" href="/">Klorn</a>
-    <span class="lang"><a href="/blog/" aria-current="true">Blog</a><a href="/security/">Security</a><a href="/pricing/">Pricing</a><a href="/self-host/">Self-host</a></span>
-  </nav>
+    <button type="button" class="menu-btn" data-menu-toggle aria-expanded="false" aria-controls="site-menu" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <nav class="menu" id="site-menu" aria-label="Site">
+      <a href="/pricing/">Pricing</a><a href="/blog/" aria-current="page">Blog</a><a href="/security/">Security</a><a href="/self-host/">Self-host</a>
+      <a href="https://app.klorn.ai/login">Log in</a>
+    </nav>
+    <a class="dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener" data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe">Download</a>
+  </header>
 
   <article>
   <h1>Priority Inbox isn't broken. It's <em>untrained</em>.</h1>
@@ -94,6 +102,7 @@ li { margin-top: 6px; }
   <footer>
     <p>Klorn is <a href="https://github.com/k08200/klorn" rel="noreferrer noopener">AGPL-3.0</a> — every claim in
       this post is checkable against the source. More notes at <a href="/blog/">/blog</a>.</p>
+    <nav class="foot-links" aria-label="More from Klorn"><a href="/pricing/">Pricing</a><a href="/blog/">Blog</a><a href="/security/">Security</a><a href="/self-host/">Self-host</a><a href="/open-source/">Open source</a><a href="/status/">Status</a><a href="/gdpr/">GDPR</a><a href="/dpa/">DPA</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a><a href="https://github.com/k08200/klorn" rel="noreferrer noopener">GitHub</a></nav>
   </footer>
 </div>
 <script>

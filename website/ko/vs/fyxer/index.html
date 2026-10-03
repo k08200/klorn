@@ -23,15 +23,22 @@
 <link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/fyxer/">
 <link rel="preload" as="font" type="font/woff2" href="/fonts/geist-var.woff2" crossorigin>
 <link rel="stylesheet" href="/compare.css">
+<link rel="icon" href="/brand/favicon.svg?v=matte2" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png?v=matte2">
+<script src="/site-nav.js" defer></script>
 </head>
 <body>
 <div class="wrap">
-  <nav class="top">
+  <header class="top">
     <a class="home" href="/ko/">Klorn</a>
-    <span class="lang">
-      <a href="/vs/fyxer/">EN</a><a href="/ko/vs/fyxer/" aria-current="true">KO</a>
-    </span>
-  </nav>
+    <button type="button" class="menu-btn" data-menu-toggle aria-expanded="false" aria-controls="site-menu" aria-label="메뉴"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <nav class="menu" id="site-menu" aria-label="사이트">
+      <a href="/pricing/">가격</a><a href="/blog/">블로그</a><a href="/security/">보안</a><a href="/self-host/">셀프호스팅</a>
+      <span class="pair"><a href="/vs/fyxer/">EN</a><a href="/ko/vs/fyxer/" aria-current="page">KO</a></span>
+      <a href="https://app.klorn.ai/login">로그인</a>
+    </nav>
+    <a class="dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener" data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe">다운로드</a>
+  </header>
 
   <h1>Fyxer는 대신 씁니다.<br>Klorn은 <em>무엇이 닿을지</em>를 정합니다.</h1>
   <p class="thesis">둘 다 Gmail·Outlook 위에 얹힙니다. 다만 답하는 질문이 다릅니다. Fyxer는 <strong>어떻게 더 빨리 처리하나</strong>, Klorn은 <strong>이게 애초에 나를 방해했어야 하나</strong>를 묻습니다.</p>
@@ -46,7 +53,7 @@
       <tr><th>소스·호스팅</th><td class="us"><strong>AGPL-3.0, 전 구간 셀프호스트 가능</strong></td><td>폐쇄, 클라우드 전용</td></tr>
       <tr><th>내 모델 키 사용</th><td class="us"><strong>가능 — 자기 키를 쓰거나 로컬 모델을 돌립니다</strong></td><td>제공하지 않습니다</td></tr>
       <tr><th>AI 지출</th><td class="us"><strong>일일 하드캡. 초과하는 대신 멈춥니다</strong></td><td>구독료에 포함</td></tr>
-      <tr><th>공개 가격</th><td class="us"><strong><a href="/pricing/">월 $8.99</a></strong> 웹 · $9.99 iOS·Android</td><td>$30/user/월 Starter · $50 Professional</td></tr>
+      <tr><th>공개 가격</th><td class="us"><strong><a href="/pricing/">월 $8.99</a></strong></td><td>$30/user/월 Starter · $50 Professional</td></tr>
     </tbody>
   </table>
   </div>
@@ -67,6 +74,7 @@
 
   <footer>
     <p>가격·제품 사실은 각 벤더 공개 자료 기준, 2026-08-23 확인. 틀린 내용이 있으면 <a href="mailto:k0820086@gmail.com">알려주세요</a>. 고치겠습니다.</p>
+    <nav class="foot-links" aria-label="Klorn 더 보기"><a href="/pricing/">가격</a><a href="/blog/">블로그</a><a href="/security/">보안</a><a href="/self-host/">셀프호스팅</a><a href="/ko/open-source/">오픈소스</a><a href="/status/">상태</a><a href="/gdpr/">GDPR</a><a href="/dpa/">DPA</a><a href="/privacy/">개인정보처리방침</a><a href="/terms/">이용약관</a><a href="https://github.com/k08200/klorn" rel="noreferrer noopener">GitHub</a></nav>
   </footer>
 </div>
 <script>
