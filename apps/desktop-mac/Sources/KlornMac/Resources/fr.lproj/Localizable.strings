@@ -619,6 +619,8 @@
 "chip.draftReady" = "Brouillon prêt";
 "reading.openDraft" = "Ouvrir le brouillon";
 "reading.preparedDraft" = "Klorn a préparé ce brouillon à l'avance — relisez-le avant d'envoyer.";
+"prefs.mainWindow" = "Utiliser la fenêtre principale standard (bêta)";
+"prefs.mainWindow.detail" = "Ouvre la vue complète dans une fenêtre normale, visible dans le Dock et ⌘Tab tant qu'elle est ouverte. La barre du haut ne change pas.";
 
 /* Device calendars (C6): EventKit calendars the user uploads, one by one. */
 "prefs.section.deviceCalendars" = "CALENDRIERS DE L’APPAREIL";

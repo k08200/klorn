@@ -148,6 +148,7 @@ struct PreferencesView: View {
                 infoRow(L("prefs.launchAtLogin.unavailable.label"), L("prefs.launchAtLogin.unavailable.value"))
             }
             updatesRow
+            MainWindowBetaToggle(settings: model.settings)
         }
     }
 

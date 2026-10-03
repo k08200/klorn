@@ -619,6 +619,8 @@
 "chip.draftReady" = "草稿已备好";
 "reading.openDraft" = "打开草稿";
 "reading.preparedDraft" = "这是 Klorn 提前写好的草稿 — 发送前请确认。";
+"prefs.mainWindow" = "使用标准主窗口（测试版）";
+"prefs.mainWindow.detail" = "在普通窗口中打开完整视图，窗口打开期间显示在 Dock 和 ⌘Tab 中。顶部栏保持不变。";
 
 /* Device calendars (C6): EventKit calendars the user uploads, one by one. */
 "prefs.section.deviceCalendars" = "设备日历";

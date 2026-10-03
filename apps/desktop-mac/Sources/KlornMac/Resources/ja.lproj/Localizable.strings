@@ -619,6 +619,8 @@
 "chip.draftReady" = "下書きあり";
 "reading.openDraft" = "下書きを開く";
 "reading.preparedDraft" = "Klornが事前に用意した下書きです — 送信前に確認してください。";
+"prefs.mainWindow" = "標準のメインウインドウを使う（ベータ）";
+"prefs.mainWindow.detail" = "フルビューを通常のウインドウで開きます。開いている間はDockと⌘Tabに表示されます。トップバーは変わりません。";
 
 /* Device calendars (C6): EventKit calendars the user uploads, one by one. */
 "prefs.section.deviceCalendars" = "デバイスのカレンダー";

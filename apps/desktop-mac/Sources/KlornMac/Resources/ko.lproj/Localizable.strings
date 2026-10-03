@@ -619,6 +619,8 @@
 "chip.draftReady" = "초안 준비됨";
 "reading.openDraft" = "초안 열기";
 "reading.preparedDraft" = "Klorn이 미리 써 둔 초안입니다 — 보내기 전에 확인하세요.";
+"prefs.mainWindow" = "표준 메인 창 사용 (베타)";
+"prefs.mainWindow.detail" = "전체 보기를 일반 창으로 엽니다. 창이 열려 있는 동안 Dock과 Cmd+Tab에 표시됩니다. 상단 바는 그대로입니다.";
 
 /* Device calendars (C6): EventKit calendars the user uploads, one by one. */
 "prefs.section.deviceCalendars" = "기기 캘린더";
