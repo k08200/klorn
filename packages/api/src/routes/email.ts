@@ -21,9 +21,18 @@ import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireAppAccess, requireEntitled } from "../billing/entitlement-guard.js";
 import { planHasFeature } from "../billing/stripe.js";
-import { MULTI_INBOX_SYNC_ENABLED, providerInboxSelectorEnabled } from "../config.js";
+import {
+  MULTI_INBOX_SYNC_ENABLED,
+  mailV2Enabled,
+  providerInboxSelectorEnabled,
+} from "../config.js";
 import { prisma } from "../db.js";
-import { listLaneTiersByEmail } from "../judge/email-lanes.js";
+import {
+  LANE_FILTERS,
+  listEmailIdsInLane,
+  listLaneTiersByEmail,
+  parseLaneFilter,
+} from "../judge/email-lanes.js";
 import { isTier } from "../judge/tiers.js";
 import { getCachedInteractionNode } from "../learning/interaction-graph.js";
 import {
@@ -75,6 +84,7 @@ import { registerEmailAttachmentsRoutes } from "./email-attachments.js";
 import { registerEmailBulkRoutes } from "./email-bulk.js";
 import { registerEmailCandidatesRoutes } from "./email-candidates.js";
 import { registerEmailFeedbackRoutes } from "./email-feedback.js";
+import { registerEmailLaneRoutes } from "./email-lanes.js";
 import { registerEmailMailboxRoutes } from "./email-mailbox.js";
 import { registerEmailMutationsRoutes } from "./email-mutations.js";
 import { registerEmailRepliesRoutes } from "./email-replies.js";
@@ -621,6 +631,9 @@ const listEmailsQuerySchema = {
     category: { type: "string", maxLength: 500 },
     page: { type: "string", maxLength: 500 },
     inbox: { type: "string", maxLength: 500 },
+    // Lane filter (MAIL_V2). Validated in the handler, not here, so that with
+    // the flag off any value is ignored exactly as an undeclared param was.
+    tier: { type: "string", maxLength: 500 },
   },
 } as const;
 
@@ -682,14 +695,15 @@ export async function emailRoutes(app: FastifyInstance) {
   registerEmailSenderLabelRoutes(app);
   registerEmailWaitingRoutes(app);
   await registerEmailBulkRoutes(app);
+  registerEmailLaneRoutes(app, { demoRows: () => DEMO_EMAILS });
 
   // ─── Sync & List Emails ───────────────────────────────────────────────
   // GET /api/email?filter=unread|urgent|reply-needed|attachments|candidates&search=keyword&category=billing&page=1
   app.get(
     "/",
     { schema: { querystring: listEmailsQuerySchema } },
-    async (request): Promise<EmailListResponse> => {
-      const { filter, search, category, page, inbox } = request.query as {
+    async (request, reply): Promise<EmailListResponse> => {
+      const { filter, search, category, page, inbox, tier } = request.query as {
         filter?: string;
         search?: string;
         category?: string;
@@ -698,9 +712,19 @@ export async function emailRoutes(app: FastifyInstance) {
         // Google inbox, or a specific LinkedInboxAccount id. Always userId-scoped
         // below, so a foreign/garbage id yields zero rows — never a cross-user leak.
         inbox?: string;
+        // Mail v2: one of the five live lanes, or ALL. Honoured only while
+        // MAIL_V2 is on.
+        tier?: string;
       };
       const uid = getUserId(request);
       const pageNum = parsePageNum(page);
+      const lane = mailV2Enabled() && tier !== undefined ? parseLaneFilter(tier) : undefined;
+      if (lane === null) {
+        return reply
+          .code(400)
+          .send({ error: `tier must be one of ${LANE_FILTERS.join(", ")}.` } as never);
+      }
+      const laneOnly = lane && lane !== "ALL" ? lane : null;
       // Heavy-email users (~200/day) clicking "Load more" 10 times to see one
       // morning's intake was the #1 dogfood friction. 50 keeps the first
       // payload under ~25 KB once joined with attachment summaries and trust
@@ -728,6 +752,7 @@ export async function emailRoutes(app: FastifyInstance) {
           );
         }
         if (filter === "attachments" || filter === "candidates") emails = [];
+        if (laneOnly) emails = emails.filter((e) => e.tier === laneOnly);
         if (search) {
           const s = search.toLowerCase();
           emails = emails.filter(
@@ -822,6 +847,12 @@ export async function emailRoutes(app: FastifyInstance) {
         where.linkedInboxAccountId = null;
       } else if (inbox && inbox !== "all") {
         where.linkedInboxAccountId = inbox;
+      }
+      // Lane scoping (MAIL_V2). The lane lives on AttentionItem, which has no
+      // relation to EmailMessage, so it is applied as the lane's mail ids —
+      // looked up for this user only, and still under `where.userId` here.
+      if (laneOnly) {
+        where.id = { in: await listEmailIdsInLane(uid, laneOnly) };
       }
 
       const [emails, total, unreadCount] = await Promise.all([

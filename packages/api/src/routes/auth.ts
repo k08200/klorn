@@ -20,6 +20,7 @@ import {
   appleLoginEnabled,
   INIT_SYNC_EMAIL_COUNT,
   keyboardTriageEnabled,
+  mailV2Enabled,
   naverLoginEnabled,
 } from "../config.js";
 import { encryptOptional, encryptToken } from "../crypto-tokens.js";
@@ -698,6 +699,9 @@ export function authRoutes(app: FastifyInstance) {
           // the web turns its hotkey registry, shortcut sheet and optimistic
           // lane moves on only when this is true. An older client ignores it.
           keyboardTriage: keyboardTriageEnabled(),
+          // Server-driven client flag (MAIL_V2, productization plan P5): the
+          // web renders /email as the lane-first list only when this is true.
+          mailV2: mailV2Enabled(),
         },
       });
     } catch {
