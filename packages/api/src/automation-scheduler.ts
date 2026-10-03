@@ -59,6 +59,7 @@ import {
 } from "./mail/email-sync.js";
 import { getLinkedInboxClients, renewExpiringGmailWatches } from "./mail/gmail.js";
 import { findReingestedHistoryFailClosed } from "./mail/imap-history.js";
+import { runProactiveDrafts } from "./mail/proactive-drafts.js";
 import { syncSentMessages } from "./mail/sent-messages.js";
 import { notifyConversationsUpdated } from "./notify/conversations-updated.js";
 import { formatUrgentEmailBody, senderName } from "./notify/notification-format.js";
@@ -80,6 +81,7 @@ import {
   syncPrimaryCalendarWindow,
 } from "./pim/calendar-sync.js";
 import { sendFocusWindowDigests } from "./pim/focus-digest.js";
+import { draftReplyForEmailId } from "./routes/email-replies.js";
 import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
 import { captureError } from "./sentry.js";
 import {
@@ -1415,6 +1417,14 @@ async function runUserCycle(
             `[EMAIL-BACKFILL] re-judged ${backfilled} stranded email(s) for ${config.userId}`,
           );
         }
+
+        // Proactive reply drafts for fresh PUSH mail that needs an answer.
+        // After the backfill so stranded mail has its lane. Detached on
+        // purpose: its LLM calls run at background priority and may park in
+        // the pacer, which must not eat this cycle's per-user time budget.
+        // No-op unless PROACTIVE_DRAFT_ENABLED; it never rejects, refuses to
+        // overlap itself per user, and its caps are enforced in the database.
+        void runProactiveDrafts(config.userId, draftReplyForEmailId);
 
         // Self-heal provider-outage residue: recent keyword-fallback tiers
         // (human-untouched, still OPEN) get re-judged through the real judge.

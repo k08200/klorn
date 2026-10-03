@@ -154,9 +154,12 @@ struct EmailContext: Codable, Sendable, Hashable {
     /// "replied" (the user answered through Klorn — recorded). Nil = no
     /// claim, or an older server.
     let replyState: String?
+    /// A reply Klorn drafted ahead of time is waiting for this mail
+    /// (proactive drafts — server flag, default off). False on older servers.
+    let draftReady: Bool
 
     enum CodingKeys: String, CodingKey {
-        case emailDbId, subject, from, snippet, receivedAt, signal, replyState
+        case emailDbId, subject, from, snippet, receivedAt, signal, replyState, draftReady
     }
 
     init(from decoder: Decoder) throws {
@@ -167,6 +170,7 @@ struct EmailContext: Codable, Sendable, Hashable {
         snippet = try c.decodeIfPresent(String.self, forKey: .snippet)
         receivedAt = try c.decodeIfPresent(String.self, forKey: .receivedAt)
         replyState = try? c.decodeIfPresent(String.self, forKey: .replyState)
+        draftReady = (try? c.decodeIfPresent(Bool.self, forKey: .draftReady)) ?? false
         if let nested = try? c.nestedContainer(
             keyedBy: RowSignal.CodingKeysImpl.self, forKey: .signal)
         {
@@ -192,7 +196,7 @@ struct EmailContext: Codable, Sendable, Hashable {
     init(
         emailDbId: String, subject: String?, from: String?, snippet: String?,
         receivedAt: String?, signal: RowSignal? = nil, signalByUser: Bool = false,
-        replyState: String? = nil
+        replyState: String? = nil, draftReady: Bool = false
     ) {
         self.emailDbId = emailDbId
         self.subject = subject
@@ -202,6 +206,7 @@ struct EmailContext: Codable, Sendable, Hashable {
         self.signal = signal
         self.signalByUser = signalByUser
         self.replyState = replyState
+        self.draftReady = draftReady
     }
 }
 
@@ -408,6 +413,9 @@ struct EmailDetail: Codable, Sendable, Identifiable {
     let actionItems: [String]?
     let needsReply: Bool?
     let needsReplyReason: String?
+    /// A reply Klorn drafted ahead of time for this mail (proactive drafts).
+    /// Absent on older servers, null when none exists or the mail was answered.
+    let proactiveDraft: String?
     /// Learned engagement: how often the user has replied to/written this sender.
     /// null (absent) for strangers — only present when there's real engagement.
     let engagement: Engagement?
@@ -449,6 +457,16 @@ struct EmailDetail: Codable, Sendable, Identifiable {
         var accessibilityLabel: String {
             showsImportance ? L("engagement.combined.a11y", replyCountLabel, importanceLabel) : replyCountLabel
         }
+    }
+
+    /// The ahead-of-time draft worth opening the composer with — nil when the
+    /// server sent none or only whitespace, so the composer falls back to
+    /// drafting on demand.
+    var preparedDraft: String? {
+        guard let draft = proactiveDraft?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !draft.isEmpty
+        else { return nil }
+        return draft
     }
 
     /// Body, falling back to the snippet when the body is empty (as the web does).
