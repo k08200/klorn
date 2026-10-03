@@ -2053,6 +2053,37 @@ func runSelfChecks() async -> Bool {
         check("dark: engage (non-text) clears 3:1 on a raised card",
               contrast(Theme.engage, on: darkRaised) >= 3.0)
     }
+    // Lane palette (FD-4, 2026-10-02): one palette with the web. Pure math on
+    // Theme.laneComponents — no NSColor resolution — so the verdict never
+    // depends on the running machine's appearance. Two guards: the five lane
+    // colors stay pairwise distinct per appearance (the old ramp shipped INFO
+    // and SILENT as near-identical slates), and each one clears the 4.5:1
+    // text floor on the canvas, because `tint` colors text (LaneChip, errors).
+    func rawContrast(_ a: Theme.RGBA, _ b: Theme.RGBA) -> Double {
+        let (x, y) = (luminance(a) + 0.05, luminance(b) + 0.05)
+        return max(x, y) / min(x, y)
+    }
+    let lanes = Tier.allCases
+    for dark in [false, true] {
+        let mode = dark ? "dark" : "light"
+        let canvas = dark ? Theme.bgDark : Theme.bgLight
+        let colors = lanes.map { Theme.laneComponents($0, dark: dark) }
+        // Distinct = some channel differs by ≥ 0.15 (≈ 38/255). INFO vs SILENT
+        // on the old ramp differed by at most 0.07 — that is the regression.
+        var distinct = true
+        for i in colors.indices {
+            for j in colors.indices where j > i {
+                let (a, b) = (colors[i], colors[j])
+                if max(abs(a.r - b.r), abs(a.g - b.g), abs(a.b - b.b)) < 0.15 { distinct = false }
+            }
+        }
+        check("\(mode): the five lane colors are pairwise distinct", distinct)
+        for (tier, color) in zip(lanes, colors) {
+            check("\(mode): \(tier.rawValue) lane ink clears 4.5:1 on the canvas",
+                  rawContrast(color, canvas) >= 4.5)
+        }
+    }
+
     // textDim IS the floor: any extra .opacity() on top drops caption text
     // back under 4.5:1, so both single-line shapes are banned — thinning the
     // color (`textDim.opacity(…)`) and thinning an inline chain
