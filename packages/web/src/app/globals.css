@@ -10,7 +10,12 @@
    The .dark block swaps the same variables — components tokenized onto the
    surface / ink / line families need no dark: variants at all. */
 :root {
-  --surface-app: #f4f8fc;
+  /* Canvas: hue-free, matched to Theme.swift `bg` light (0.98 → #fafafa).
+     Only the canvas moved in P1 — it is LIGHTER than the old #f4f8fc and than
+     --surface-hover, so every text pair measured below against the worst
+     light surface still holds. The slate-tinted ink/line/surface ramp keeps
+     its measured values until those pairs are re-measured (P2). */
+  --surface-app: #fafafa;
   --surface-canvas: #ffffff;
   --surface-elevated: #ffffff;
   --surface-panel: #ffffff;
@@ -72,6 +77,8 @@
   --tier-meeting-ink: #4f46e5; /* 5.74:1 worst-surface */
   --tier-info-ink: #0e7490; /* 4.89:1 worst-surface */
   --tier-silent-ink: #57534e; /* 6.96:1 worst-surface */
+  /* RETIRED v1 lane — kept only so Record<Tier, …> visuals for legacy rows
+     still resolve. No new usage: check-design-tokens.mjs burns this down. */
   --tier-auto-ink: #047857; /* 5.01:1 worst-surface — retired v1 lane */
   /* Filled destructive control. Unlike --accent-solid this does NOT invert in
      the dark: a destructive button has to keep reading as red-with-white, and
@@ -99,11 +106,25 @@
   --notice-border: #7dd3fc;
   --notice-ink: #075985;
   --notice-ink-strong: #0c4a6e;
+
+  /* Motion (productization plan §2). Durations as variables so CSS and
+     inline styles share them; in classNames use Tailwind's native
+     `duration-120` / `duration-200` / `duration-160` with `ease-fluid`.
+     Reduced-motion is handled globally at the bottom of this file. */
+  --motion-state: 120ms; /* hover, press, toggle */
+  --motion-enter: 200ms; /* sheets, popovers, toasts appearing */
+  --motion-exit: 160ms; /* the same leaving — exits are quicker */
 }
 
 /* Dark: deep navy-slate, never pure black. Text steps keep AA against
    their surfaces (verified in the dark QA pass). */
 .dark {
+  /* Canvas stays navy in P1 ON PURPOSE. Every dark panel/raised/line value
+     below is navy, and the app shell paints bg-surface-panel over the canvas;
+     a hue-free #0a0a0b canvas (Theme.swift `bg` dark) next to navy panels —
+     e.g. /graph, which paints bg-surface-app inside the shell — is a visible
+     half-state. The dark ramp moves to neutral as ONE set in P2, together
+     with re-measuring its text pairs. */
   --surface-app: #0b1120;
   --surface-canvas: #0f172a;
   --surface-elevated: #16213a;
@@ -270,10 +291,52 @@
   --color-tier-queue: #fbbf24; /* amber-400 */
   --color-tier-info: #22d3ee; /* cyan-400 */
   --color-tier-silent: #a8a29e; /* stone-400 */
-  /* Retired v1 lane. normalizeTier folds AUTO away on read, but rows written
+  /* RETIRED v1 lane. normalizeTier folds AUTO away on read, but rows written
      before the flip still render, so the hue stays until a backfill removes
-     the last one. Never emit AUTO in new code. */
+     the last one. Never emit AUTO in new code — `tier-auto` is a burn-down
+     rule in .github/scripts/check-design-tokens.mjs, so a new call site fails
+     CI. */
   --color-tier-auto: #34d399; /* emerald-400 */
+
+  /* ── Design system (productization plan §2, P1) ──────────────────────
+     Type scale: six roles, each a size + line-height + weight bundle, so one
+     class sets all three: text-display / text-title / text-head / text-body /
+     text-label / text-caption. New code uses these instead of text-xs/sm/…
+     and never an arbitrary text-[Npx] (guarded). 10px text is retired. */
+  --text-display: 28px;
+  --text-display--line-height: 34px;
+  --text-display--font-weight: 600;
+  --text-title: 20px;
+  --text-title--line-height: 28px;
+  --text-title--font-weight: 600;
+  --text-head: 15px;
+  --text-head--line-height: 22px;
+  --text-head--font-weight: 600;
+  --text-body: 14px;
+  --text-body--line-height: 21px;
+  --text-body--font-weight: 400;
+  --text-label: 13px;
+  --text-label--line-height: 18px;
+  --text-label--font-weight: 500;
+  --text-caption: 12px;
+  --text-caption--line-height: 16px;
+  --text-caption--font-weight: 400;
+
+  /* Spacing: 4/8/12/16/24/32/48 — Tailwind's default 4px scale already is
+     this (1/2/3/4/6/8/12), so no tokens are added. Stay on those steps. */
+
+  /* Radii: r-sm 6 controls, r-md 10 rows/cards/popovers, r-lg 16 sheets/
+     windows. Named by role, NOT by overriding rounded-sm/md/lg (that would
+     silently restyle every existing call site; `rounded-r-*` is taken by the
+     right-side utilities). Capsule stays `rounded-full`, pills/LaneChip only. */
+  --radius-control: 6px; /* r-sm */
+  --radius-card: 10px; /* r-md */
+  --radius-sheet: 16px; /* r-lg */
+
+  /* Elevation: L0 canvas and L1 hairline (border-line) need no shadow token.
+     L2 floating cards/popovers, L3 sheets/palette (pair L3 with a 40% scrim). */
+  --shadow-l2: 0 8px 24px rgb(0 0 0 / 0.12);
+  --shadow-l3: 0 24px 48px rgb(0 0 0 / 0.18);
 }
 
 body {
@@ -299,51 +362,17 @@ body {
     radial-gradient(40% 30% at 40% 40%, rgba(255, 255, 255, 0.75), transparent 66%);
 }
 
-/* App-canvas wash: a soft sky→indigo two-tone gradient behind every in-app
-   surface so the workspace never reads as flat white. Sits on the body via a
-   fixed pseudo-element (z-index -1) so pages/panels stack above it without any
-   z-index bookkeeping. Auth/marketing pages layer .sky-bg on top of this. */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at center, rgba(14, 116, 180, 0.045) 1px, transparent 1.5px),
-    radial-gradient(80% 60% at 12% -5%, rgba(14, 165, 233, 0.14), transparent 60%),
-    radial-gradient(70% 50% at 105% 0%, rgba(99, 102, 241, 0.11), transparent 55%),
-    radial-gradient(60% 45% at 50% 115%, rgba(56, 189, 248, 0.09), transparent 60%),
-    linear-gradient(180deg, #edf3fc 0%, #f4f8fd 40%, #f5f8fc 100%);
-  background-size:
-    26px 26px,
-    100% 100%,
-    100% 100%,
-    100% 100%,
-    100% 100%;
-  background-repeat: repeat, no-repeat, no-repeat, no-repeat, no-repeat;
-}
+/* App canvas is FLAT and hue-free (productization plan FD-4, P1). The
+   sky→indigo wash that used to sit here on body::before put a blue cast under
+   every lane tint and competed with the only colours that mean something.
+   The canvas is now just `bg-surface-app` on <body> (layout.tsx). Marketing
+   and auth pages keep their atmosphere via `.sky-bg`, which paints its own
+   opaque background and never depended on the wash. */
 
 /* ── Dark counterparts for the hand-written surfaces ─────────────────
    The token swap handles utility colors; these are the atmospheric layers
    and shadows that hardcode light-world values. Same composition, night
    palette: glows dim, shadows deepen, inset highlights go faint. */
-.dark body::before {
-  background:
-    radial-gradient(circle at center, rgba(56, 189, 248, 0.05) 1px, transparent 1.5px),
-    radial-gradient(80% 60% at 12% -5%, rgba(14, 165, 233, 0.1), transparent 60%),
-    radial-gradient(70% 50% at 105% 0%, rgba(99, 102, 241, 0.09), transparent 55%),
-    radial-gradient(60% 45% at 50% 115%, rgba(56, 189, 248, 0.06), transparent 60%),
-    linear-gradient(180deg, #0d1526 0%, #0b1120 45%, #0a0f1c 100%);
-  background-size:
-    26px 26px,
-    100% 100%,
-    100% 100%,
-    100% 100%,
-    100% 100%;
-  background-repeat: repeat, no-repeat, no-repeat, no-repeat, no-repeat;
-}
-
 .dark .sky-bg {
   background-color: #0c1322;
   background-image:

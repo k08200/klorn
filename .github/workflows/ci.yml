@@ -102,6 +102,13 @@ jobs:
       - name: Sitemap coverage
         run: node .github/scripts/check-sitemap.mjs
 
+      # P1 of the productization plan added the design tokens; P2 migrates onto
+      # them. This ratchet keeps the gap from widening meanwhile: no new
+      # text-[Npx], raw palette colours, raw <button> in app pages, or retired
+      # AUTO lane styling. Per-file baseline counts can only go down.
+      - name: Design tokens
+        run: node .github/scripts/check-design-tokens.mjs
+
   typecheck:
     name: TypeScript
     runs-on: ubuntu-latest
