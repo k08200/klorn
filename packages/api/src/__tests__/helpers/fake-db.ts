@@ -106,6 +106,33 @@ function likePrefix(prefix: string): RegExp {
   return new RegExp(`^${body}`, "s");
 }
 
+/**
+ * `LIKE '%<fragment>%'` as a RegExp, as Postgres reads it: `_` is any one
+ * character, `%` any run, and a backslash makes the next character literal.
+ * Prisma sends `contains` unescaped, exactly like `startsWith` above, so a caller
+ * that wants a literal `%` or `_` must escape it (drive/drive-read.ts does). A
+ * fragment ending in a lone backslash is an error in Postgres, and here.
+ * Case-insensitive whatever the `mode`, as this fake always was.
+ */
+function likeContains(fragment: string): RegExp {
+  const literal = (c: string): string => c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const chars = [...fragment];
+  let body = "";
+  for (let i = 0; i < chars.length; i += 1) {
+    const c = chars[i] as string;
+    if (c === "\\") {
+      const next = chars[i + 1];
+      if (next === undefined)
+        throw new Error("fake-db: LIKE pattern must not end with escape character");
+      body += literal(next);
+      i += 1;
+    } else {
+      body += c === "_" ? "." : c === "%" ? ".*" : literal(c);
+    }
+  }
+  return new RegExp(body, "siu");
+}
+
 /** One operator object against one value. NULL never satisfies any operator (SQL), except `not: null`. */
 function matchesOperators(actual: unknown, ops: Record<string, unknown>, where: string): boolean {
   return Object.entries(ops).every(([op, expected]) => {
@@ -129,10 +156,7 @@ function matchesOperators(actual: unknown, ops: Record<string, unknown>, where: 
         // in the value are wildcards (verified on Postgres 16 with Prisma 6.19, step B2b).
         return typeof actual === "string" && likePrefix(expected as string).test(actual);
       case "contains":
-        return (
-          typeof actual === "string" &&
-          actual.toLowerCase().includes((expected as string).toLowerCase())
-        );
+        return typeof actual === "string" && likeContains(expected as string).test(actual);
       case "gte":
         return cmp(actual) >= cmp(expected);
       case "gt":

@@ -93,6 +93,35 @@ describe("SQL NULL semantics", () => {
   });
 });
 
+describe("`contains` is LIKE '%value%', as Prisma sends it to Postgres", () => {
+  const titled = (title: string) => item({ id: title, sourceId: title, title });
+  const rows = ["100% done", "100 percent", "a_b", "axb", "back\\slash", "Q3 Report"].map(titled);
+  const find = async (contains: string) =>
+    (await items(db(rows)).findMany({ where: { title: { contains, mode: "insensitive" } } }))
+      .map((r) => r.id)
+      .sort();
+
+  it("an unescaped % or _ is a wildcard", async () => {
+    expect(await find("100%")).toEqual(["100 percent", "100% done"]);
+    expect(await find("a_b")).toEqual(["a_b", "axb"]);
+  });
+
+  it("a backslash makes the next character literal", async () => {
+    expect(await find("100\\%")).toEqual(["100% done"]);
+    expect(await find("a\\_b")).toEqual(["a_b"]);
+    expect(await find("back\\\\slash")).toEqual(["back\\slash"]);
+  });
+
+  it("matches anywhere in the value, whatever the case, and regex characters are literal", async () => {
+    expect(await find("report")).toEqual(["Q3 Report"]);
+    expect(await find(".*")).toEqual([]);
+  });
+
+  it("a pattern ending in a lone backslash throws, as Postgres does", async () => {
+    await expect(find("oops\\")).rejects.toThrow(/must not end with escape character/);
+  });
+});
+
 describe("upsert", () => {
   const where = { userId_source_sourceId: { userId: "u1", source: "EMAIL", sourceId: "s1" } };
   const create = {

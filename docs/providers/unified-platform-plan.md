@@ -3034,8 +3034,171 @@ does not wait for them.
 **D1 — object storage foundation** (*outline*). Depends on: FA-7. S3-compatible
 client, per-user key prefix, size caps, signed downloads. It may start early:
 E4 needs it before workstream D's turn comes.
-**D2 — drive model and provider seam** (*outline*). A metadata index of files
-across sources.
+**D2 — drive model and provider seam.** Depends on: nothing. A metadata index
+of files across sources: one table, one writer, one read path, a provider seam
+with no connector behind it yet, and two read-only routes.
+- Landed 2026-10-03, flag OFF (branch `feat/drive-model`, PR not yet opened).
+  Flag: `DRIVE_ENABLED`, default OFF, read at request time. While off, both
+  routes answer Fastify's default 404 before authentication (`darkRouteGate`)
+  and every reader hides every row. Nothing writes a row in D2, so with the flag
+  on the list is still empty.
+- Model. Migration `20261008010000_drive_file` (after
+  `20261007010000_linked_calendar_display_name`), additive only: one enum, one
+  table, `SET LOCAL lock_timeout = '5s'`. Its SQL is pinned by
+  `drive-file-migration.test.ts`.
+  - Enum `DriveProvider`: KLORN (D3), GOOGLE (D5), ONEDRIVE (D6), DEVICE (D7).
+    Only the sources the D steps name.
+  - Table `DriveFile`, metadata only: `userId`, `provider`, `sourceKey`,
+    `externalId`, `name`, `mimeType`, `isFolder`, `sizeBytes`,
+    `parentExternalId`, `modifiedAt`, `webUrl`, `storageKey`, `readOnly`,
+    `trashed`, `summaryStatus`, timestamps. No content column and no summary
+    text. The test pins the column list, so a content column cannot be added
+    without changing it.
+  - Identity: unique (userId, provider, sourceKey, externalId). `sourceKey` is
+    `'klorn'` for the user's Klorn drive, the connector's account id for GOOGLE
+    and ONEDRIVE, and the device source key for DEVICE. `provider` and
+    `sourceKey` have no default: the table is new, so no previous release
+    writes it and the compiler makes every writer state both. `externalId` is
+    required (a Klorn file gets the id D3 mints), so every row is addressable
+    and a parent id always has something to name. The Prisma name of the unique
+    is `driveFileIdentity`, because the generated name is the one
+    `CalendarEvent` already has and the calendar guard greps for it.
+  - Index (userId, modifiedAt, id) for the list and the search: both read one
+    user's rows newest first, keyset-paged on (modifiedAt, id). On a scratch
+    Postgres 16 with sequential scans disabled the list plan is an
+    `Index Scan Backward` on it.
+  - Two CHECK constraints Prisma cannot declare: `webUrl` is NULL or starts
+    with `https://`; `storageKey` is NULL unless the provider is KLORN or
+    DEVICE. The drift check does not see them; the migration test pins them.
+  - `sizeBytes` is BIGINT (a drive file passes 2 GiB). `JSON.stringify` refuses
+    a BigInt, so no route returns a raw row: the read path selects its columns
+    and maps the size to a number.
+  - `summaryStatus` is a string, default `'NONE'`, like
+    `EmailAttachment.analysisStatus`: D4 reuses that pipeline and owns the
+    vocabulary. D2 never writes or returns it.
+  - Rows cascade on user delete (foreign key, verified on Postgres), and
+    `purgeUserData` deletes them explicitly, since it keeps the user row.
+- Decisions.
+  - Accounts: no account table in D2, and no reuse of `LinkedInboxAccount`,
+    `LinkedCalendarAccount` or `UserToken`. Those rows carry a mail or calendar
+    grant; a Drive grant is a different scope on the same identity (P5), and
+    unlinking a drive must not unlink an inbox. Their enums are per service, and
+    `UserToken`'s unique (userId, provider) is what the primary mail path rests
+    on. A `LinkedDriveAccount` table is the right shape, but with no connector
+    it would be a credential store with no writer, no reader and no test, and
+    its columns depend on D5's grant flow, which V2 still blocks. So D5 or D6,
+    whichever lands first, adds `LinkedDriveAccount` together with a nullable
+    `sourceAccountId` foreign key on `DriveFile` (ON DELETE CASCADE), as C2 did
+    for `CalendarEvent`, and the key-rotation sweep in the same PR. `sourceKey`
+    already holds that account's id, so no row is rewritten. This puts D5 and D6
+    on the shared-files row for `schema.prisma` (below).
+  - Parent, not path: `parentExternalId`, NULL at a source's root. Google Drive
+    and Graph both report a parent id and neither reports a stable path; a
+    folder rename would rewrite the path of every descendant; a name may
+    contain `/`; and a path is many attacker-written names joined into one
+    unbounded string. A folder is a row with `isFolder` true.
+  - Search: ILIKE through Prisma's `contains`, inside one user's rows, on the
+    name only. No pg_trgm: it needs an extension created in the migration,
+    whether its index helps a Korean name depends on the database's locale
+    (not measured), and one user's index is small. A trigram index can be added
+    later with no API change. The text is composed (NFC, as names are stored, so
+    a name typed on a Mac and a search for it meet), capped at 100 characters,
+    and `%`, `_` and `\` are escaped, because Prisma sends `contains`
+    unescaped.
+- One writer: `drive/drive-rows.ts` (`klornDriveSource`, `connectedDriveSource`,
+  `driveRowData`, `upsertDriveFileRow`). The provider names live in
+  `drive/drive-providers.ts`, which imports nothing. It cleans what a source reported
+  before a row exists: the name loses control characters and bidi overrides, is
+  composed and capped at 500 characters; the link is kept only if it passes
+  `safeMeetingLink` (https, no credentials, at most 2048 characters) and never
+  for a Klorn-held file; the media type must be well formed; the size a whole
+  non-negative number. An external row is always `readOnly` (V4) and a storage
+  key on one is refused. An update never rewrites the identity, leaves a
+  storage key the caller did not name alone, and never touches `summaryStatus`.
+  A row that cannot be stored is refused with the part at fault, never written
+  half-cleaned. Nothing calls it yet.
+- Seam: `drive/providers/types.ts`, `dispatch.ts`, `unsupported.ts`, the shape
+  of `pim/calendar-providers`. `DriveProviderActions.connect(source)` answers a
+  `DriveProviderSession`, `null` (not connected) or `{ unsupported: true }`. A
+  session has exactly `list`, `search`, `getMetadata` and `fetchForSummary`
+  (V4: no upload or edit; a test fails if a fifth method or a write appears).
+  `fetchForSummary` takes `maxBytes` and answers content, `too-large` or
+  `unavailable`. The dispatcher enforces the cap on every session it hands out:
+  the request is clamped to `DRIVE_SUMMARY_MAX_BYTES` (8,000,000, what the
+  attachment pipeline reads) and content longer than asked for is answered
+  `too-large`. Every provider is the unsupported stub in D2. A connector plugs
+  in with two entries: its flag in `DRIVE_PROVIDER_ENABLED` and its actions in
+  the dispatcher's table; it is served only while `DRIVE_ENABLED` and its own
+  flag are both on.
+- Kill switch: `drive/drive-scope.ts`. `driveSourceScope()` is the `where`
+  fragment of every list and search, `isDriveRowVisible()` the check on a row
+  fetched by id. A row is visible only while `DRIVE_ENABLED` is on and its
+  provider's flag in `DRIVE_PROVIDER_ENABLED` answers exactly `true`. Unlike
+  the calendar's switch it fails closed: it lists the providers known to be on,
+  so a provider nobody registered is hidden. The registry ships empty.
+- Read path: `drive/drive-read.ts` (`listFiles`, `searchFiles`, `getFile`).
+  Every query names the user, composes the scope inside an `AND` (so a caller's
+  own provider filter cannot replace it), skips trashed rows, orders by
+  (modifiedAt, id) descending, and pages by keyset with a default of 50 and a
+  ceiling of 100 whatever is asked. The cursor is opaque and validated; a
+  forged one can only start elsewhere in the caller's own rows.
+- API, read-only (`routes/drive.ts`, types in `packages/contract/src/drive.ts`):
+  `GET /api/drive/files` (`q`, `provider`, `sourceKey`, `limit`, `cursor`) and
+  `GET /api/drive/files/:id`. Session-authenticated, 30 and 60 requests a
+  minute. An unknown id, another user's, a trashed file and a file of a
+  disabled provider are one 404. No storage key crosses the wire. There is no
+  upload, download or delete route: those are D3.
+- Guards: `drive-file-guard.test.ts`. One writer; reads only in the read module
+  and the export; every list has the scope inside its `AND` and every by-id
+  read the visibility check; every read names the user and selects its
+  columns; no raw SQL names the table.
+- Untrusted text. A file name is written by whoever shared the file. No module
+  that holds drive rows imports the LLM today, and the guard fails for a new
+  one until it is listed: as not LLM-facing, or as LLM-facing with the pattern
+  that shows the name inside `wrapUntrusted`. D4 adds the first such entry.
+- Export: `GET /api/user/me/export` now carries `driveFiles`, every row the
+  user has (trashed and disabled-provider rows included, as calendar events
+  are), without the storage key.
+- What plugs in.
+  - D3 writes KLORN rows through `upsertDriveFileRow` with D1's object key as
+    `storageKey`, registers KLORN in `DRIVE_PROVIDER_ENABLED`, and adds the
+    upload, download and delete routes. It must delete a file's object before
+    its row, in `purgeUserData` too. Folder browsing (children of a folder, a
+    source's root) is D3's: it adds that query and its index (userId, provider,
+    sourceKey, parentExternalId).
+  - D4 owns `summaryStatus`, calls `fetchForSummary` through the dispatcher,
+    stores its summary in a table of its own (not in `DriveFile`), and is the
+    first module the guard lists as LLM-facing.
+  - D5 and D6 implement `DriveProviderActions`, add `LinkedDriveAccount`, sync
+    metadata through `upsertDriveFileRow`, and register a flag each. Unlinking
+    deletes the account's rows.
+  - D7 decides whether an imported file is a KLORN row or a DEVICE row. Both
+    may carry a storage key; DEVICE needs its own flag.
+- Known limits.
+  - No connector, so no row and no data in the list.
+  - Name search only. A search reads one user's rows; that is bounded by the
+    rate limit and the page ceiling, not by an index.
+  - No row cap per source and no bound on the export: a connector sets its own
+    cap, as the device calendar did.
+  - `DriveFile` has no row-level-security policy, like every table created
+    since `20260806033517` (`../rls-rollout.md`).
+  - No user-facing noun and no copy in D2, so no vocabulary row. The first step
+    with UI adds it.
+- Verify: 203 tests in seven files (migration, rows, scope, dispatch, read,
+  routes, guard), plus the `LIKE` cases added to `fake-db.test.ts`. The fake
+  database's `contains` now follows Postgres `LIKE`, escapes included.
+  Full API suite green (546 files, 7705 tests, on main at `43467202`).
+  Mutation checks: 26 single-line changes to the drive modules (user scoping,
+  the kill switch, the page ceiling and tie-break, the search escape and cap,
+  the flag-off gate and its order, the writer's link, read-only and storage-key
+  rules, the summary cap, the rate limit), each failing at least one test.
+  On a scratch Postgres 16 (not in the suite): `prisma migrate deploy`, the CI
+  drift check ("No difference detected"), both CHECKs refusing a row, the
+  upsert's conflict target, the list order and paging across a five-row tie,
+  the search with `%`, `_`, `\` and a decomposed Korean query, an empty
+  provider list as valid SQL, a 5 GB size as a JSON number, and the cascade on
+  user delete.
+- Rollback: revert the PR. The table and the enum can stay; nothing reads them.
 **D3 — Klorn drive** (*outline*). Depends on: D1, D2. Upload, list, download,
 delete. Upload is inherent here; V4 restricts external connectors, not
 Klorn-owned storage.
@@ -3098,7 +3261,8 @@ time, whatever the graph says. The later step rebases, reruns
 
 | File | Steps |
 |---|---|
-| `packages/api/prisma/schema.prisma` | A1, A2a, A2b, B2, C1, D2, E1, F |
+| `packages/api/prisma/schema.prisma` | A1, A2a, A2b, B2, C1, D2, D5, D6, E1, F |
+| `drive/drive-scope.ts`, `drive/drive-rows.ts`, `drive/providers/dispatch.ts`, `routes/drive.ts` | D3, D5, D6, D7 |
 | `packages/api/src/mcp/tool-gate.ts`, `mcp/write-call.ts`, `mcp/server.ts` | A2a, A2b, A4 |
 | `mail/providers/types.ts`, `dispatch.ts` | A4, B0, B0b, B1, B2, B3, E2 |
 | `mail/imap-connection.ts`, `mail/imap-sync.ts`, `mail/providers/imap.ts` | B1, B2, B3 |

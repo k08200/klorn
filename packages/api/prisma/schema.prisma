@@ -107,6 +107,7 @@ model User {
   reminders                 Reminder[]
   contacts                  Contact[]
   calendarEvents            CalendarEvent[]
+  driveFiles                DriveFile[]
   automationConfig          AutomationConfig?
   agentLogs                 AgentLog[]
   notifications             Notification[]
@@ -723,6 +724,81 @@ model CalendarEvent {
   @@unique([userId, provider, sourceKey, externalId])
   @@index([userId, startTime])
   @@index([sourceAccountId])
+}
+
+// Which file source a DriveFile row belongs to (step D2,
+// docs/providers/unified-platform-plan.md). Only the sources the plan's D steps
+// name: KLORN (D3, files Klorn stores itself), GOOGLE (D5, Google Drive), ONEDRIVE
+// (D6, Microsoft Graph) and DEVICE (D7, files a desktop or mobile app imports
+// behind explicit per-source opt-in, decision P4).
+enum DriveProvider {
+  KLORN
+  GOOGLE
+  ONEDRIVE
+  DEVICE
+}
+
+// One file or folder of one source, as METADATA ONLY (step D2): the index every
+// drive surface lists and searches. No content column, ever: the bytes stay in
+// the source (GOOGLE, ONEDRIVE) or in object storage (KLORN, DEVICE; D1). A new
+// table, so provider and sourceKey carry no default and the compiler makes every
+// writer state them; drive/drive-rows.ts is the one writer
+// (drive-file-guard.test.ts).
+model DriveFile {
+  id               String        @id @default(uuid())
+  userId           String
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider         DriveProvider
+  // Which source of that provider: 'klorn' for the user's Klorn drive, the
+  // connector's account id for GOOGLE and ONEDRIVE (D5, D6), the device source
+  // key for DEVICE (D7). Part of the unique below, so the same upstream id can
+  // exist once per source.
+  sourceKey        String
+  // The id in the source (Drive file id, Graph item id, the id D3 mints for a
+  // Klorn file). Required: every row is addressable, and parentExternalId always
+  // has something to name.
+  externalId       String
+  // Attacker-controlled for an external source (whoever shared the file named
+  // it). Cleaned and capped at the writer; wrapped before any LLM sees it.
+  name             String
+  mimeType         String?
+  isFolder         Boolean       @default(false)
+  // BigInt: a drive file passes 2 GiB. Never returned raw (JSON.stringify
+  // throws on a BigInt); drive/drive-read.ts maps it to a number.
+  sizeBytes        BigInt?
+  // The containing folder's externalId in the SAME source; NULL at the source's
+  // root or when the source does not say. A parent id, not a path: both APIs
+  // report parents, a path is not stable (a folder rename would rewrite every
+  // descendant) and names may contain '/'.
+  parentExternalId String?
+  // The source's own modified time (the upload time for a Klorn file): the list
+  // order.
+  modifiedAt       DateTime
+  // Where the file opens in its own service. External sources only, https only
+  // (the migration's CHECK, and the writer's safe-link rule). NULL for KLORN
+  // and DEVICE rows, which open through Klorn's own routes (D3).
+  webUrl           String?
+  // The object-storage key of the bytes Klorn holds (D1, D3): opaque, KLORN and
+  // DEVICE rows only (the migration's CHECK), never on the wire.
+  storageKey       String?
+  // True for every external row (decision V4: list, search, summarise; no
+  // upload or edit). Defaults to true so a writer that forgets fails closed.
+  readOnly         Boolean       @default(true)
+  trashed          Boolean       @default(false)
+  // D4's summary state. A string like EmailAttachment.analysisStatus, whose
+  // pipeline D4 reuses and whose vocabulary is D4's to set; D2 only ever leaves
+  // the default.
+  summaryStatus    String        @default("NONE")
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  // Named, so the client's key is `driveFileIdentity` and not the generated
+  // name CalendarEvent's unique already has (its guard test greps for that one).
+  // The name changes nothing in the database.
+  @@unique([userId, provider, sourceKey, externalId], name: "driveFileIdentity")
+  // The list and the name search: one user's rows, newest first, keyset-paged
+  // on (modifiedAt, id).
+  @@index([userId, modifiedAt, id])
 }
 
 model AutomationConfig {

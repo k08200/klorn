@@ -103,8 +103,11 @@ describe("every CalendarEvent writer states its provider", () => {
   });
 
   it("no code outside the rows module builds a linked row's identity by hand", () => {
+    // DriveFile has a `sourceKey` of its own (D2). Its modules never touch a
+    // calendar row, and drive-file-guard.test.ts guards that identity.
+    const isDriveModule = (path: string) => path.startsWith("drive/") || path === "routes/drive.ts";
     const handBuilt = files
-      .filter((f) => f.path !== ROWS_MODULE)
+      .filter((f) => f.path !== ROWS_MODULE && !isDriveModule(f.path))
       .filter((f) => /\bsourceKey\s*:/.test(f.text))
       .map((f) => f.path);
     expect(handBuilt).toEqual([]);
