@@ -84,7 +84,14 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         } else {
             menu.addItem(actionItem(L("menu.signIn"), #selector(signIn)))
         }
-        menu.addItem(actionItem(L("menu.restart"), #selector(restart)))
+        // Support tool, not a daily control: listed only when the menu is
+        // opened with Option held. No chord of its own (⌥⌘Q is the system's
+        // "Quit and Keep Windows"), and not an AppKit alternate of Quit —
+        // pairing requires matching key equivalents, which would either bind
+        // ⌥⌘Q or strip ⌘Q from Quit.
+        if MaintenanceDisclosure.isRevealGesture(NSEvent.modifierFlags) {
+            menu.addItem(actionItem(L("menu.restart"), #selector(restart)))
+        }
         menu.addItem(actionItem(L("menu.quit"), #selector(quit), key: "q"))
     }
 

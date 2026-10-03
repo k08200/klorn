@@ -317,13 +317,11 @@
 "tier.info.empty" = "새 기록 없음";
 "tier.push.blurb" = "지금 방해합니다. 상대가 답을 기다리고 있거나 시간이 걸린 일입니다.";
 "tier.queue.blurb" = "기다립니다. 오늘 읽을 만하지만 배너를 띄울 정도는 아닙니다.";
-"tier.silent.blurb" = "지운 게 아니라 넣어둔 겁니다. 뉴스레터·영수증 — 찾아보면 그대로 있습니다.";
-"tier.auto.blurb" = "알아서 분류했습니다. Klorn이 물어볼 필요가 없다고 판단한 것들입니다.";
+"tier.silent.blurb" = "지운 게 아니라 넣어둔 겁니다. 뉴스레터·프로모션 — 찾아보면 그대로 있습니다.";
 
 "tier.push.empty" = "지금 처리할 것이 없습니다.";
 "tier.queue.empty" = "읽을 것이 없습니다.";
 "tier.silent.empty" = "아직 넣어둔 것이 없습니다.";
-"tier.auto.empty" = "Klorn이 아직 알아서 분류한 것이 없습니다.";
 
 /* First-run guide */
 "guide.title" = "Klorn이 메일을 나누는 방식";
@@ -399,7 +397,8 @@
 "section.calendar" = "캘린더";
 
 /* Account maintenance disclosure (2026-08-14) */
-"account.maintenance" = "앱 관리 및 진단";
+"account.maintenance" = "앱 관리 및 지원";
+"account.showSupportTools" = "지원 도구 표시";
 "a11y.expanded" = "펼쳐짐";
 "a11y.collapsed" = "접힘";
 

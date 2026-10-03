@@ -82,8 +82,8 @@ enum Theme {
     static let engage = Color(red: 0.776, green: 0.302, blue: 0.549)
 
     /// Per-tier signal palette — semantic hues kept from the dark system, with
-    /// QUEUE/AUTO nudged darker so the dots stay perceivable on the white
-    /// panel: warm signal red, amber-600, cool slate, calm signal blue-500.
+    /// QUEUE nudged darker so the dot stays perceivable on the white panel:
+    /// warm signal red, amber-600, cool slate.
     static func tint(_ tier: Tier) -> Color {
         switch tier {
         case .push: Color(red: 1.0, green: 0.30, blue: 0.34)
@@ -93,7 +93,6 @@ enum Theme {
         case .queue: Color(red: 0.851, green: 0.467, blue: 0.024)
         case .info: Color(red: 0.42, green: 0.47, blue: 0.55)
         case .silent: Color(red: 0.49, green: 0.53, blue: 0.59)
-        case .auto: Color(red: 0.231, green: 0.510, blue: 0.965)
         }
     }
 
@@ -179,6 +178,13 @@ enum Theme {
     /// Selection speaks in the accent — tinted fill (the accent bar still
     /// carries the hard edge, so selection is never color-alone).
     static let surfaceSelected = accent.opacity(0.12)
+
+    /// Status signals (diagnostics dots). AppKit's system colors, so they
+    /// follow light/dark and Increase Contrast. Never color-alone: callers
+    /// pair them with a word.
+    static let success = Color(nsColor: .systemGreen)
+    static let warning = Color(nsColor: .systemOrange)
+    static let danger = Color(nsColor: .systemRed)
 
     /// True only while `--render-previews` is drawing. See GlassPanel.
     nonisolated(unsafe) static var isRenderingOffscreen = false

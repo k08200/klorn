@@ -317,13 +317,11 @@
 "tier.info.empty" = "No new records";
 "tier.push.blurb" = "Interrupts you. Someone is waiting on a reply, or it's time-critical.";
 "tier.queue.blurb" = "Waits for you. Worth reading today, but not worth a banner.";
-"tier.silent.blurb" = "Filed, not deleted. Newsletters and receipts — still here when you look.";
-"tier.auto.blurb" = "Sorted on its own. Klorn was confident enough not to ask.";
+"tier.silent.blurb" = "Filed, not deleted. Newsletters and promotions — still here when you look.";
 
 "tier.push.empty" = "Nothing needs you right now.";
 "tier.queue.empty" = "Nothing waiting to be read.";
 "tier.silent.empty" = "Nothing filed here yet.";
-"tier.auto.empty" = "Klorn hasn't sorted anything on its own yet.";
 
 /* First-run guide */
 "guide.title" = "How Klorn sorts your mail";
@@ -399,7 +397,8 @@
 "section.calendar" = "Calendar";
 
 /* Account maintenance disclosure (2026-08-14) */
-"account.maintenance" = "App & diagnostics";
+"account.maintenance" = "App & support";
+"account.showSupportTools" = "Show support tools";
 "a11y.expanded" = "Expanded";
 "a11y.collapsed" = "Collapsed";
 
