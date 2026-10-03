@@ -601,3 +601,17 @@
 "waiting.empty" = "답장을 기다리는 메일이 없습니다.";
 "waiting.days" = "%d일째";
 "waiting.row.a11y" = "%@ — %@, %d일째 회신 대기";
+
+/* Settings window + app menus (M0/M1) */
+"settings.tab.general" = "일반";
+"settings.tab.accounts" = "계정 및 소스";
+"settings.tab.assistant" = "어시스턴트";
+"settings.tab.notifications" = "알림";
+"settings.tab.appearance" = "화면 및 언어";
+"settings.tab.privacy" = "데이터 및 개인정보";
+"settings.signedOutNote" = "이 설정을 보려면 Klorn에 로그인하세요.";
+"menu.message" = "메시지";
+"menu.go" = "이동";
+"menu.compose" = "새 메일";
+"menu.find" = "메일 검색";
+"menu.moveToLane" = "레인 이동";

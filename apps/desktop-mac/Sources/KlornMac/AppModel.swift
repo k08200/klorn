@@ -26,8 +26,56 @@ final class AppModel {
     /// by the controller before posting an OS banner.
     let settings = AppSettings()
 
-    /// Drives the Preferences overlay in the full view.
-    var showPreferences = false
+    /// True while the Settings scene's window is on screen. Part of the
+    /// activation-policy decision (Cmd+Tab compromise): an open Settings
+    /// window keeps the app .regular even with the bar collapsed.
+    var settingsWindowOpen = false {
+        didSet {
+            guard settingsWindowOpen != oldValue else { return }
+            onSettingsWindowChanged?()
+        }
+    }
+    /// Wired by the AppDelegate to re-apply the activation policy.
+    @ObservationIgnored var onSettingsWindowChanged: (() -> Void)?
+
+    /// Mirrors whether the top bar is in its full (app window) state, so the
+    /// app menus can enable only what the visible UI can act on. Written by
+    /// TopBarController on every render.
+    var isFullViewOpen = false
+    /// Mirrors the reading pane's inline reply composer being open: Reply in
+    /// the Message menu is disabled then, since re-drafting would wipe
+    /// what the user has typed.
+    var readerReplying = false
+    /// Bumped by the Message menu's Reply; the reading pane answers by
+    /// starting the same AI-drafted reply as its own button.
+    private(set) var replyRequest = 0
+    /// Set by Find (⌘F); the mail list's search field takes focus and clears it.
+    var searchFocusPending = false
+
+    /// Message ▸ Reply: ask the reading pane to start a reply.
+    func requestReply() { replyRequest &+= 1 }
+
+    /// Go-menu navigation: switch the list column and put the sidebar on the
+    /// level that owns the destination (mail family vs root features).
+    func go(to mode: ListMode) {
+        listMode = mode
+        sidebarLevel = mode.isMailFamily ? .mail : .root
+        clearSelection()
+    }
+
+    /// The firewall item the reading pane is showing, if any — what the
+    /// Message menu acts on. nil while a Sent/Drafts/Archived row owns the
+    /// pane (those rows are not firewall items).
+    var menuTargetItem: FirewallItem? {
+        if listMode.showsLiveMessages, selectedMailboxItem != nil { return nil }
+        guard let id = selectedItemId else { return nil }
+        return queue?.item(id: id)
+    }
+
+    /// A modal overlay covers the full view (its background is disabled).
+    var fullViewModalOpen: Bool {
+        showCompose || showTierGuide || showEventEditor || showPurposePrompt
+    }
 
     /// Drives the tier explainer. Set on first run and by the sidebar's
     /// "How sorting works", which is what keeps it re-readable.
@@ -714,10 +762,10 @@ final class AppModel {
         }
     }
 
-    /// Compose overlay visibility (full view). Preferences wins if both are up.
+    /// Compose overlay visibility (full view).
     var showCompose = false
     /// Draft lives on the MODEL, not the panel: SwiftUI drops a conditionally
-    /// mounted view's @State (e.g. when Preferences overlays the composer via
+    /// mounted view's @State (e.g. when the full view is torn down and rebuilt via
     /// the menu bar), and a draft must survive that. There is exactly one
     /// composer identity, so an orphaned send can never race a "new" session.
     var composeTo = ""

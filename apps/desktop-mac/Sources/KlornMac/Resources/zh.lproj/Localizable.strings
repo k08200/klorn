@@ -601,3 +601,17 @@
 "waiting.empty" = "没有在等待回复的邮件。";
 "waiting.days" = "第 %d 天";
 "waiting.row.a11y" = "%@ — %@，等待回复第 %d 天";
+
+/* Settings window + app menus (M0/M1) */
+"settings.tab.general" = "通用";
+"settings.tab.accounts" = "账户与来源";
+"settings.tab.assistant" = "助理";
+"settings.tab.notifications" = "通知";
+"settings.tab.appearance" = "外观与语言";
+"settings.tab.privacy" = "数据与隐私";
+"settings.signedOutNote" = "登录 Klorn 后即可查看这些设置。";
+"menu.message" = "邮件";
+"menu.go" = "前往";
+"menu.compose" = "新邮件";
+"menu.find" = "搜索邮件";
+"menu.moveToLane" = "移至通道";

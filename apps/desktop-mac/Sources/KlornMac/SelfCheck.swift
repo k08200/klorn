@@ -1749,9 +1749,15 @@ func runSelfChecks() async -> Bool {
               let text = try? String(contentsOf: url, encoding: .utf8) else { return total }
         return total + text.components(separatedBy: "actions.onSignOut()").count - 1
     }
-    // Three, one per surface that has an account area: the expanded panel's
-    // account column, the full sidebar, and Preferences. None in a header.
-    check("sign-out is offered once per surface, not twice", signOutCallSites == 3)
+    // One per surface that has an account area: the expanded panel's account
+    // column and the full sidebar (via actions), plus the Settings window's
+    // Accounts tab, which has no TopBarActions and calls the model directly.
+    // None in a header.
+    let settingsSignOut = (try? String(
+        contentsOf: sourceDir.appendingPathComponent("PreferencesView.swift"), encoding: .utf8))
+        .map { $0.components(separatedBy: "model.signOut()").count - 1 } ?? 0
+    check("sign-out is offered once per surface, not twice",
+          signOutCallSites == 2 && settingsSignOut == 1)
     let headerSignOut = swiftFiles.contains { url in
         guard let text = try? String(contentsOf: url, encoding: .utf8) else { return false }
         return text.contains("Button(L(\"auth.signOut\")")
@@ -2116,6 +2122,121 @@ func runSelfChecks() async -> Bool {
     check("mail surface pins a light card in every theme",
           mailWrap.contains("background: #ffffff")
           && mailWrap.contains("color-scheme: light"))
+
+    print("Settings window (M0):")
+    // Every section the old overlay showed lands in exactly one tab — a
+    // regroup that drops one silently removes a setting from the app.
+    let tabbed = SettingsTab.allCases.flatMap(\.sections)
+    check("every Preferences section is in exactly one tab",
+          tabbed.count == PrefsSection.allCases.count
+          && Set(tabbed) == Set(PrefsSection.allCases))
+    check("General is the first tab (macOS convention)",
+          SettingsTab.allCases.first == .general)
+    check("signed out hides only server-backed sections",
+          SettingsTab.allCases.allSatisfy { tab in
+              tab.visibleSections(signedIn: false) == tab.sections.filter { !$0.requiresSignIn }
+              && tab.visibleSections(signedIn: true) == tab.sections
+          })
+    check("signed-out Assistant tab is empty (shows the sign-in note)",
+          SettingsTab.assistant.visibleSections(signedIn: false).isEmpty)
+    check("signed-out Accounts tab still shows sign-in status",
+          SettingsTab.accounts.visibleSections(signedIn: false) == [.account])
+    check("unknown persisted tab falls back to General",
+          SettingsTab.restored("billing") == .general
+          && SettingsTab.restored("privacy") == .privacy)
+    check("every tab title is localized",
+          SettingsTab.allCases.allSatisfy { $0.title != $0.titleKey && !$0.title.isEmpty })
+    check("Settings window fits the smallest supported display",
+          SettingsMetrics.height + SettingsMetrics.chromeHeight
+              <= SettingsMetrics.smallestVisibleHeight)
+    check("an open Settings window keeps the app in Cmd+Tab",
+          TopBarController.activationPolicy(for: .collapsed, settingsOpen: true) == .regular)
+    check("closing Settings returns the resting app to ambient",
+          TopBarController.activationPolicy(for: .collapsed, settingsOpen: false) == .accessory)
+    // Source pins: the overlay path is gone and the scene is real.
+    check("Preferences is no longer an in-window overlay",
+          lineOffenders { $0.contains("showPreferences") }.isEmpty
+          && !lineOffenders { $0.contains("PreferencesView(") }.contains("TopBar.swift"))
+    check("the Settings scene hosts SettingsRoot",
+          lineOffenders { $0.contains("SettingsRoot().environment") }.contains("KlornApp.swift")
+          && lineOffenders { $0.contains("Settings { EmptyView() }") }.isEmpty)
+
+    print("App menus (M1):")
+    let signedInFull = MenuState(
+        signedIn: true, fullViewOpen: true, modalOpen: false, targetTier: .queue,
+        emailLoaded: true, readerReplying: false, teamModeAvailable: false)
+    var everyCommand: [MenuCommand] = [.compose, .find, .reply, .dismiss]
+    everyCommand += Tier.allCases.map { MenuCommand.moveTo($0) }
+    everyCommand += MenuRules.destinations.map { MenuCommand.go($0) }
+    var loggedOut = signedInFull
+    loggedOut.signedIn = false
+    check("logged out disables every command",
+          everyCommand.allSatisfy { !MenuRules.isEnabled($0, in: loggedOut) })
+    var noSelection = signedInFull
+    noSelection.targetTier = nil
+    check("no selection disables message commands",
+          [MenuCommand.reply, .dismiss, .moveTo(.push)]
+              .allSatisfy { !MenuRules.isEnabled($0, in: noSelection) })
+    check("no selection keeps compose, find and go live",
+          [MenuCommand.compose, .find, .go(.inbox), .go(.calendar)]
+              .allSatisfy { MenuRules.isEnabled($0, in: noSelection) })
+    check("with a selection, reply / dismiss / other lanes are live",
+          MenuRules.isEnabled(.reply, in: signedInFull)
+          && MenuRules.isEnabled(.dismiss, in: signedInFull)
+          && MenuRules.isEnabled(.moveTo(.push), in: signedInFull))
+    check("moving to the current lane is disabled",
+          !MenuRules.isEnabled(.moveTo(.queue), in: signedInFull))
+    var composing = signedInFull
+    composing.readerReplying = true
+    check("reply is disabled while the inline composer is open",
+          !MenuRules.isEnabled(.reply, in: composing))
+    var loading = signedInFull
+    loading.emailLoaded = false
+    check("reply waits for the email to load",
+          !MenuRules.isEnabled(.reply, in: loading))
+    var collapsed = signedInFull
+    collapsed.fullViewOpen = false
+    check("message commands need the full view; navigation opens it",
+          !MenuRules.isEnabled(.dismiss, in: collapsed)
+          && MenuRules.isEnabled(.go(.inbox), in: collapsed)
+          && MenuRules.isEnabled(.compose, in: collapsed))
+    var modal = signedInFull
+    modal.modalOpen = true
+    check("a modal overlay disables every command",
+          everyCommand.allSatisfy { !MenuRules.isEnabled($0, in: modal) })
+    var teams = signedInFull
+    check("Teams follows the server grant",
+          !MenuRules.isEnabled(.go(.teams), in: teams)
+          && { teams.teamModeAvailable = true; return MenuRules.isEnabled(.go(.teams), in: teams) }())
+    let shortcuts = everyCommand.compactMap { MenuRules.shortcut(for: $0) }
+    check("no two commands share a key equivalent",
+          Set(shortcuts.map { "\($0.key.character)|\($0.modifiers.rawValue)" }).count == shortcuts.count)
+    check("every key equivalent carries ⌘ or ⌃ (bare keys belong to text and quick replies)",
+          shortcuts.allSatisfy { !$0.modifiers.intersection([.command, .control]).isEmpty })
+    check("lane moves are ⌃⌘1–5 in lane order",
+          Tier.allCases.enumerated().allSatisfy { index, tier in
+              let sc = MenuRules.shortcut(for: .moveTo(tier))
+              return sc?.key.character == Character("\(index + 1)")
+                  && sc?.modifiers == [.control, .command]
+          })
+    check("Dismiss has no shortcut (⌘⌫ edits text in the reply field)",
+          MenuRules.shortcut(for: .dismiss) == nil)
+    check("Go destinations mirror the sidebar modes",
+          Set(MenuRules.destinations).count == MenuRules.destinations.count
+          && MenuRules.destinations.first == .inbox)
+    check("every Go destination has a localized title",
+          MenuRules.destinations.allSatisfy {
+              let title = MenuRules.title(for: $0)
+              return !title.isEmpty && !title.contains(".")
+          })
+    check("menu titles are localized",
+          ["menu.message", "menu.go", "menu.compose", "menu.find", "menu.moveToLane"]
+              .allSatisfy { L($0) != $0 })
+    check("Find lands on a mode with the search field",
+          ListMode.inbox.hasSearchField && !ListMode.calendar.hasSearchField)
+    check("Go puts mail destinations on the mail sidebar level",
+          ListMode.waitingOn.isMailFamily && ListMode.mailbox(.sent).isMailFamily
+          && !ListMode.proposals.isMailFamily && !ListMode.calendar.isMailFamily)
 
     print(failures == 0 ? "\nALL CHECKS PASSED" : "\n\(failures) CHECK(S) FAILED")
     return failures == 0

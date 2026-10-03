@@ -601,3 +601,17 @@
 "waiting.empty" = "返信を待っているメールはありません。";
 "waiting.days" = "%d日目";
 "waiting.row.a11y" = "%@ — %@、%d日目返信待ち";
+
+/* Settings window + app menus (M0/M1) */
+"settings.tab.general" = "一般";
+"settings.tab.accounts" = "アカウントとソース";
+"settings.tab.assistant" = "アシスタント";
+"settings.tab.notifications" = "通知";
+"settings.tab.appearance" = "外観と言語";
+"settings.tab.privacy" = "データとプライバシー";
+"settings.signedOutNote" = "この設定を表示するには Klorn にサインインしてください。";
+"menu.message" = "メッセージ";
+"menu.go" = "移動";
+"menu.compose" = "新規メール";
+"menu.find" = "メールを検索";
+"menu.moveToLane" = "レーンを移動";

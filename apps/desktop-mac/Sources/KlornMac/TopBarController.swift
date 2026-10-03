@@ -125,11 +125,14 @@ final class TopBarController {
         setState(.expanded)
     }
 
-    /// Menu-bar "Preferences…": jump to the full view with the overlay open.
+    /// Opens the Settings window (wired by the AppDelegate to SettingsOpener).
+    var onOpenSettings: (() -> Void)?
+
+    /// Menu-bar "Preferences…" and the in-app Preferences buttons: open the
+    /// Settings window. The bar's own state is left alone — Settings is its
+    /// own window now, not an overlay that needs the full view under it.
     func openPreferences() {
-        summoned = true
-        setState(.full)
-        model.showPreferences = true
+        onOpenSettings?()
     }
 
     /// First launch + Finder/Dock reopen: show the real app window. An
@@ -173,18 +176,17 @@ final class TopBarController {
     /// nothing (the menu-bar icon is the anchor in hidden-pill mode).
     private func dismiss() {
         summoned = false
-        // Leaving via ⌥⌘K / "Close" must also drop the Preferences overlay —
-        // otherwise the stale flag re-opens it on the NEXT full-view entry.
-        model.showPreferences = false
         if model.settings.pillVisible {
             setState(.collapsed)
         } else {
             state = .collapsed
             // orderOut skips render(): drop the policy back to ambient here
             // too, or the app lingers in Cmd+Tab after Close.
-            NSApp.setActivationPolicy(
-                Self.activationPolicy(for: .collapsed, showInDock: model.settings.showInDock))
+            NSApp.setActivationPolicy(Self.activationPolicy(
+                for: .collapsed, showInDock: model.settings.showInDock,
+                settingsOpen: model.settingsWindowOpen))
             panel?.orderOut(nil)
+            model.isFullViewOpen = false
         }
     }
 
@@ -208,8 +210,10 @@ final class TopBarController {
         // the hidden-pill early-return below used to skip it, which left a
         // stored show-in-Dock=true unapplied at launch and (inversely) a
         // stale .regular in Cmd+Tab after Close (2026-08-10 diagnosis).
-        NSApp.setActivationPolicy(
-            Self.activationPolicy(for: state, showInDock: model.settings.showInDock))
+        NSApp.setActivationPolicy(Self.activationPolicy(
+            for: state, showInDock: model.settings.showInDock,
+            settingsOpen: model.settingsWindowOpen))
+        model.isFullViewOpen = (state == .full)
         guard Self.shouldDraw(state: state, pillVisible: effectiveVisible) else {
             panel?.orderOut(nil)
             return
@@ -293,12 +297,18 @@ final class TopBarController {
     ///
     /// `showInDock` is the opt-in escape hatch (default off): people who expect
     /// Cmd+Tab to reach every running app get that, and the resting default
-    /// stays ambient for everyone else. Pure, for the harness.
+    /// stays ambient for everyone else.
+    ///
+    /// `settingsOpen`: the Settings window is a summoned window too, so it
+    /// counts as "open" under the same rule — otherwise a collapse while
+    /// Settings is up would drop it out of Cmd+Tab and take the menu bar
+    /// with it. Closing Settings re-runs this. Pure, for the harness.
     nonisolated static func activationPolicy(
         for state: BarState,
-        showInDock: Bool = false
+        showInDock: Bool = false,
+        settingsOpen: Bool = false
     ) -> NSApplication.ActivationPolicy {
-        if showInDock { return .regular }
+        if showInDock || settingsOpen { return .regular }
         return state == .collapsed ? .accessory : .regular
     }
 
@@ -306,8 +316,9 @@ final class TopBarController {
     /// user flips show-in-Dock, so the Dock icon appears/disappears on the
     /// click rather than at the next panel state change.
     func refreshActivationPolicy() {
-        NSApp.setActivationPolicy(
-            Self.activationPolicy(for: state, showInDock: model.settings.showInDock))
+        NSApp.setActivationPolicy(Self.activationPolicy(
+            for: state, showInDock: model.settings.showInDock,
+            settingsOpen: model.settingsWindowOpen))
     }
 
     /// Show one item in the full view's reading pane. The single in-app answer
@@ -356,11 +367,7 @@ final class TopBarController {
                 Task { await self.model.unpinSender(item) }
             },
             onSelect: { [weak self] item in guard let self else { return }; Task { await self.model.select(item) } },
-            onOpenPreferences: { [weak self] in
-                guard let self else { return }
-                self.setState(.full)          // the overlay lives in the full view
-                self.model.showPreferences = true
-            },
+            onOpenPreferences: { [weak self] in self?.openPreferences() },
             onHideBar: { [weak self] in
                 guard let self else { return }
                 self.model.settings.pillVisible = false  // status icon takes over

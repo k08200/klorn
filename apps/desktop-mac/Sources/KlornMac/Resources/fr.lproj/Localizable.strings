@@ -601,3 +601,17 @@
 "waiting.empty" = "Rien n'attend de réponse.";
 "waiting.days" = "%d jours";
 "waiting.row.a11y" = "%@ — %@, en attente depuis %d jours";
+
+/* Settings window + app menus (M0/M1) */
+"settings.tab.general" = "Général";
+"settings.tab.accounts" = "Comptes et sources";
+"settings.tab.assistant" = "Assistant";
+"settings.tab.notifications" = "Notifications";
+"settings.tab.appearance" = "Apparence et langue";
+"settings.tab.privacy" = "Données et confidentialité";
+"settings.signedOutNote" = "Connectez-vous à Klorn pour voir ces réglages.";
+"menu.message" = "Message";
+"menu.go" = "Aller";
+"menu.compose" = "Nouvel e-mail";
+"menu.find" = "Rechercher dans les e-mails";
+"menu.moveToLane" = "Déplacer vers la file";
