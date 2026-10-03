@@ -394,13 +394,16 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
 .foot{max-width:1180px;margin:34px auto 0;padding:0 24px;font-size:13px;color:var(--ink-3)}
 .foot a{color:var(--sky-ink);font-weight:600}
 
-.os{border-radius:30px;padding:10px;background:rgba(10,14,20,.04);border:1px solid var(--line)}
+.os{border-radius:30px;padding:10px;background:rgba(10,14,20,.04);border:1px solid var(--line);
+  max-width:720px;margin:0 auto}
 /* The right-hand column held four bullets the page had already made three times
-   over, so the card is a single column now: the claim and the two links. */
+   over, so the card is a single column now: the claim and the two links. The
+   card is capped to that column's width, or it renders as a full-width box
+   with its right half empty. */
 .os-in{border-radius:22px;background:#fff;border:1px solid var(--line);padding:34px 38px;
   display:grid;gap:0;align-items:start}
 .os-h{font-size:clamp(26px,3.2vw,40px);line-height:1.08;letter-spacing:-.03em;margin:0 0 16px;font-weight:700}
-.os-p{color:var(--ink-2);font-size:15.5px;margin:0 0 26px;max-width:520px}
+.os-p{color:var(--ink-2);font-size:15.5px;margin:0 0 26px}
 .os-cta{display:flex;gap:12px;flex-wrap:wrap}
 /* Recently shipped. On the landings measured, developer-facing tools surface
    shipping velocity on the page itself (linear, warp, cursor, resend, vercel);
@@ -599,6 +602,26 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
    .nav-lang is defined after the pill's own media queries, so an override up
    there loses on source order. */
 @media(max-width:480px){.nav-lang{display:none}}
+/* Under 880px .nav-links collapse, which left Pricing, Blog and the rest of
+   the sections unreachable on phones. A disclosure button reopens them as a
+   panel under the pill (behaviour in /site-nav.js). 38px keeps the pill's
+   height; the overlay takes the hit area to 44px, as with .nav-login. */
+.nav-menu-btn{display:none;position:relative;align-items:center;justify-content:center;width:38px;height:38px;
+  margin-right:6px;padding:0;border-radius:9999px;border:1px solid rgba(255,255,255,.22);background:transparent;
+  color:#fff;cursor:pointer;transition:background .4s var(--ease)}
+.nav-menu-btn::before{content:"";position:absolute;inset:-3px}
+.nav-menu-btn:hover{background:rgba(255,255,255,.10)}
+.nav-menu-btn svg{width:17px;height:17px}
+@media(max-width:880px){
+  .nav-menu-btn{display:inline-flex}
+  .nav-pill{position:relative}
+  .nav-links[data-open]{display:flex;position:absolute;top:calc(100% + 8px);left:0;right:0;flex-direction:column;gap:1px;
+    padding:6px;border-radius:18px;background:rgba(24,26,32,.96);border:1px solid rgba(255,255,255,.12);
+    box-shadow:0 18px 40px rgba(0,0,0,.34)}
+  .nav-links[data-open] a{display:flex;align-items:center;min-height:44px;padding:0 14px;border-radius:12px;color:rgba(255,255,255,.86)}
+}
+@media(max-width:480px){.nav-menu-btn{margin-right:4px}}
+@media(prefers-reduced-motion:reduce){.nav-menu-btn{transition:none}}
 
 
 @media (max-height: 900px){
@@ -892,6 +915,7 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
 <link rel="alternate" hreflang="de" href="https://klorn.ai/de/">
 <link rel="alternate" hreflang="x-default" href="https://klorn.ai/">
 <link rel="canonical" href="https://klorn.ai/zh/">
+<script src="/site-nav.js" defer></script>
 </head>
 <body>
 <div class="grain"></div>
@@ -899,7 +923,8 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
 
 <nav class="nav"><div class="nav-pill">
   <a class="nav-brand" href="#top" data-top>Klorn</a>
-  <span class="nav-links"><a href="#cards">产品</a><a href="#day">工作原理</a><a href="#compare">为何选 Klorn</a><a href="#pricing">定价</a><a href="#open">开源</a><a href="/blog/">博客</a></span>
+  <button type="button" class="nav-menu-btn" data-menu-toggle aria-expanded="false" aria-controls="nav-menu" aria-label="菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <span class="nav-links" id="nav-menu" role="group" aria-label="页面板块"><a href="#cards">产品</a><a href="#day">工作原理</a><a href="#compare">为何选 Klorn</a><a href="#pricing">定价</a><a href="#open">开源</a><a href="/blog/">博客</a></span>
   <span class="nav-lang">
     <button type="button" class="nav-lang-btn" data-lang-toggle
             aria-haspopup="true" aria-expanded="false" aria-controls="lang-menu">中文（简体） <i aria-hidden="true">▾</i></button>
@@ -940,7 +965,7 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
         <span class="t"><b>下载 Mac 版</b><span>Universal · macOS 14+ · 已公证</span></span></a>
       <a class="dl" data-os="win" href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe" rel="noreferrer noopener">
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.6l7.2-1v7.1H3V5.6zm0 12.8l7.2 1v-7H3v6zM11.2 4.4L21 3v8.7h-9.8V4.4zm0 15.2L21 21v-8.6h-9.8v7.2z"/></svg>
-        <span class="t"><b>下载 Windows 版</b><span>Windows 10+ · 未签名 beta，SmartScreen 会提示一次</span></span></a>
+        <span class="t"><b>下载 Windows 版</b><span>Windows 10+ · Beta</span></span></a>
     </div>
     <!-- The download alone is a dead end without an account, so say what the
          app expects next to the button rather than after the click. -->
@@ -1197,7 +1222,7 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
       <span class="chip-s dark">创始价</span>
       <h3>Klorn Pro</h3>
       <div class="amt">$8.99<span>/月</span></div>
-      <p class="note">7 天 Pro 试用，之后网页版每月 $8.99 —— iOS 与 Android 应用内因平台抽成为 $9.99。随时可以取消。</p>
+      <p class="note">7 天 Pro 试用，之后每月 $8.99。随时可以取消。</p>
       <ul>
         <li>包含免费版全部功能，AI 预算更高</li>
         <li>在 Klorn 中批准并发送的回复草稿</li>
@@ -1233,7 +1258,7 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
   </div>
   <p class="works-note rv"><b>不支持：</b> Naver 以外的 IMAP 服务商。登录 Klorn 目前
     仅支持 Google，也没有原生移动应用 —— 移动端现在在浏览器中运行。
-    Windows 桌面应用是未签名 beta（SmartScreen 会提示一次）；
+    Windows 桌面应用为 beta 版；
     在 Linux 上，Klorn 在浏览器中运行。自托管可使用你自己的数据库和模型密钥。</p>
   <p class="works-note rv"><b>即将推出：</b> Outlook &amp; Microsoft 365 以及 iCloud Mail —— 已经做好，
     等安全审核后再上线。使用 Apple 和 Naver 登录计划在网页端、Mac
@@ -1293,7 +1318,7 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
         下载 Mac 版</a>
     </div>
     <p class="actions-note">已获批准？ <a href="https://app.klorn.ai/login">登录</a> ·
-      macOS 14+ universal · Windows 在浏览器中运行 · AGPLv3</p>
+      macOS 14+ universal · Windows 10+ beta · AGPLv3</p>
   </div>
 </section>
 
@@ -1465,14 +1490,22 @@ if (shell && fine) {
     .then(function (rel) {
       if (!rel || !rel.length) return;
       var list = box.querySelector('ol');
-      var loc = document.documentElement.lang === 'ko' ? 'ko-KR' : 'en-US';
+      var loc = document.documentElement.lang || 'en';
+      // Release tags are build ids (desktop-v0.4.80103): the trailing build
+      // number means nothing to a visitor, so show major.minor plus the
+      // platform when it is not the Mac app. The raw tag stays in the title.
+      var human = function (tag) {
+        var m = /^desktop-(win-)?v(\d+)\.(\d+)/.exec(tag || '');
+        if (!m) return tag;
+        return (m[1] ? 'Windows ' : '') + 'v' + m[2] + '.' + m[3];
+      };
       rel.slice(0, 3).forEach(function (r) {
         var li = document.createElement('li');
         var a = document.createElement('a');
         a.href = r.html_url; a.rel = 'noreferrer noopener';
-        a.textContent = r.tag_name;
+        a.textContent = human(r.tag_name); a.title = r.tag_name;
         var s = document.createElement('span');
-        s.textContent = new Date(r.published_at)
+        s.textContent = '· ' + new Date(r.published_at)
           .toLocaleDateString(loc, { month: 'short', day: 'numeric' });
         li.appendChild(a); li.appendChild(s); list.appendChild(li);
       });

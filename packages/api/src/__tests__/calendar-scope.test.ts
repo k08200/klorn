@@ -11,6 +11,7 @@ import {
   calendarSourceScope,
   isCalendarRowVisible,
   type ProviderEnabledMap,
+  withReadOnlyFlag,
 } from "../pim/calendar-scope.js";
 
 const KEY = "LINKED_CALENDAR_SYNC_ENABLED";
@@ -186,7 +187,12 @@ describe("anyLinkedRowVisible: can a linked row reach a reader at all?", () => {
 // (OUTLOOK_CALENDAR_ENABLED and OUTLOOK_INBOX_ENABLED), read at request time,
 // whatever the Google linked-sync flag says, and nothing else changes.
 describe("the default registry: OUTLOOK follows outlookCalendarEnabled() (C4)", () => {
-  const OUTLOOK_KEYS = ["OUTLOOK_CALENDAR_ENABLED", "OUTLOOK_INBOX_ENABLED"] as const;
+  // CALDAV_CALENDAR_ENABLED (C3) is cleared too, so the CalDAV providers stay hidden here.
+  const OUTLOOK_KEYS = [
+    "OUTLOOK_CALENDAR_ENABLED",
+    "OUTLOOK_INBOX_ENABLED",
+    "CALDAV_CALENDAR_ENABLED",
+  ] as const;
   const savedOutlook: Record<string, string | undefined> = {};
 
   beforeEach(() => {
@@ -213,17 +219,19 @@ describe("the default registry: OUTLOOK follows outlookCalendarEnabled() (C4)", 
   const primaryRow = { sourceAccountId: null, provider: "GOOGLE" };
   const localRow = { sourceAccountId: null, provider: "LOCAL" };
 
-  it("registers OUTLOOK, and only OUTLOOK", () => {
-    expect(Object.keys(CALENDAR_PROVIDER_ENABLED)).toEqual(["OUTLOOK"]);
+  it("registers OUTLOOK (C4), then ICLOUD and NAVER (C3), and nothing else", () => {
+    expect(Object.keys(CALENDAR_PROVIDER_ENABLED)).toEqual(["OUTLOOK", "ICLOUD", "NAVER"]);
   });
 
   it("hides OUTLOOK rows while its flags are off, whatever the linked sync says", () => {
     expect(calendarSourceScope()).toEqual({
       sourceAccountId: null,
-      provider: { notIn: ["OUTLOOK"] },
+      provider: { notIn: ["OUTLOOK", "ICLOUD", "NAVER"] },
     });
     process.env[KEY] = "true";
-    expect(calendarSourceScope()).toEqual({ provider: { notIn: ["OUTLOOK"] } });
+    expect(calendarSourceScope()).toEqual({
+      provider: { notIn: ["OUTLOOK", "ICLOUD", "NAVER"] },
+    });
     expect(isCalendarRowVisible(outlookRow)).toBe(false);
   });
 
@@ -231,16 +239,20 @@ describe("the default registry: OUTLOOK follows outlookCalendarEnabled() (C4)", 
     outlookFlags(true);
 
     expect(calendarSourceScope()).toEqual({
-      OR: [{ sourceAccountId: null }, { provider: { in: ["OUTLOOK"] } }],
+      OR: [
+        { sourceAccountId: null, provider: { notIn: ["ICLOUD", "NAVER"] } },
+        { provider: { in: ["OUTLOOK"] } },
+      ],
     });
     expect(isCalendarRowVisible(outlookRow)).toBe(true);
   });
 
-  it("adds nothing once both the linked sync and Outlook are on", () => {
+  it("adds nothing for Outlook once both the linked sync and Outlook are on", () => {
     outlookFlags(true);
     process.env[KEY] = "true";
 
-    expect(calendarSourceScope()).toEqual({});
+    // Only the CalDAV providers, whose own flag is still off, stay excluded.
+    expect(calendarSourceScope()).toEqual({ provider: { notIn: ["ICLOUD", "NAVER"] } });
   });
 
   it.each([
@@ -271,5 +283,75 @@ describe("the default registry: OUTLOOK follows outlookCalendarEnabled() (C4)", 
       expect(isCalendarRowVisible(googleLinkedRow)).toBe(true);
       expect(isCalendarRowVisible(primaryRow)).toBe(true);
     }
+  });
+});
+
+// C3: iCloud and Naver (CalDAV) plug into the kill switch with one flag,
+// CALDAV_CALENDAR_ENABLED, read at request time. Their rows are read-only linked
+// rows like Outlook's, visible only while the flag is on, whatever the Google
+// linked-sync flag says.
+describe("the default registry: ICLOUD and NAVER follow caldavCalendarEnabled() (C3)", () => {
+  const KEYS = [
+    "CALDAV_CALENDAR_ENABLED",
+    "OUTLOOK_CALENDAR_ENABLED",
+    "OUTLOOK_INBOX_ENABLED",
+  ] as const;
+  const saved: Record<string, string | undefined> = {};
+
+  beforeEach(() => {
+    for (const k of KEYS) {
+      saved[k] = process.env[k];
+      delete process.env[k];
+    }
+    delete process.env[KEY];
+  });
+  afterEach(() => {
+    for (const k of KEYS) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  });
+
+  const icloudRow = { sourceAccountId: "acct-ic", provider: "ICLOUD" };
+  const naverRow = { sourceAccountId: "acct-nv", provider: "NAVER" };
+
+  it("hides ICLOUD and NAVER rows while the flag is off, whatever the linked sync says", () => {
+    for (const linked of [false, true]) {
+      if (linked) process.env[KEY] = "true";
+      expect(isCalendarRowVisible(icloudRow)).toBe(false);
+      expect(isCalendarRowVisible(naverRow)).toBe(false);
+      expect(calendarSourceScope()).toMatchObject({
+        provider: { notIn: ["OUTLOOK", "ICLOUD", "NAVER"] },
+      });
+    }
+  });
+
+  it("shows both once the flag is on, with the linked sync off; Outlook stays hidden", () => {
+    process.env.CALDAV_CALENDAR_ENABLED = "true";
+    expect(calendarSourceScope()).toEqual({
+      OR: [
+        { sourceAccountId: null, provider: { notIn: ["OUTLOOK"] } },
+        { provider: { in: ["ICLOUD", "NAVER"] } },
+      ],
+    });
+    expect(isCalendarRowVisible(icloudRow)).toBe(true);
+    expect(isCalendarRowVisible(naverRow)).toBe(true);
+    expect(isCalendarRowVisible({ sourceAccountId: "acct-out", provider: "OUTLOOK" })).toBe(false);
+    expect(anyLinkedRowVisible()).toBe(true);
+  });
+
+  it("their rows are read-only linked rows on the wire, like Outlook's", () => {
+    expect(withReadOnlyFlag({ ...icloudRow, id: "e1" })).toEqual({
+      ...icloudRow,
+      id: "e1",
+      readOnly: true,
+    });
+  });
+
+  it("is read at request time: a flip hides and shows the rows at once", () => {
+    process.env.CALDAV_CALENDAR_ENABLED = "true";
+    expect(isCalendarRowVisible(naverRow)).toBe(true);
+    process.env.CALDAV_CALENDAR_ENABLED = "false";
+    expect(isCalendarRowVisible(naverRow)).toBe(false);
   });
 });

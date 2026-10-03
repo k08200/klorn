@@ -120,10 +120,21 @@ describe("every LinkedCalendarAccount writer states its provider", () => {
     expect(windows[0]).toMatch(/create:\s*\{[^}]*provider:\s*"OUTLOOK"/);
   });
 
+  it("routes/caldav-calendar.ts link upsert names the registry's provider in both the key and the create (C3)", () => {
+    const caldav = files.find((f) => f.path === "routes/caldav-calendar.ts");
+    const windows = callWindows(caldav?.text ?? "", ACCOUNT_WRITE);
+    expect(windows).toHaveLength(1);
+    expect(windows[0]).toMatch(/userId_provider_email:\s*\{[^}]*provider:\s*config\.provider/);
+    expect(windows[0]).toMatch(/create:\s*\{[^}]*provider:\s*config\.provider/);
+    // The provider comes from the pinned registry, never from the request body.
+    expect(caldav?.text).toContain("const config = CALDAV_PROVIDERS[provider];");
+  });
+
   it("no other module creates a LinkedCalendarAccount", () => {
     const writers = files.filter((f) => callWindows(f.text, ACCOUNT_WRITE).length > 0);
     expect(writers.map((f) => f.path).sort()).toEqual([
       "routes/auth.ts",
+      "routes/caldav-calendar.ts",
       "routes/outlook-calendar-link.ts",
     ]);
   });
@@ -150,6 +161,7 @@ describe("Google-only LinkedCalendarAccount readers filter on provider", () => {
       "pim/calendar-source-label.ts",
       "pim/linked-calendar-unlink.ts",
       "routes/auth.ts",
+      "routes/caldav-calendar.ts",
       "routes/outlook-calendar-link.ts",
       "scripts/reencrypt-tokens.ts",
     ]);
@@ -194,6 +206,7 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
     "pim/attention-calendar-visibility.ts",
     "notify/notification-prefs.ts",
     "pim/calendar-cancellation.ts", // removes the rows Google named as cancelled, scoped to one source
+    "pim/calendar-window-reconcile.ts", // C3: removes one CalDAV account's rows a complete window listing lacks
     "pim/linked-calendar-unlink.ts",
     "pim/meeting-prep-pack.ts",
     "pim/team-availability.ts",
@@ -220,12 +233,14 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
   });
 
   // Exempt from the kill switch on purpose: the GDPR export returns every row the
-  // system holds, unlink deletes an account's own rows, and the cancelled-event
+  // system holds, unlink deletes an account's own rows, the cancelled-event
   // removal (its own module, C2b) deletes the rows of the one source whose scan
-  // named them.
+  // named them, and the CalDAV window reconcile (C3) deletes the rows of the one
+  // account whose complete listing no longer has them (behind its own flag).
   const EXEMPT_FROM_KILL_SWITCH = [
     "index.ts",
     "pim/calendar-cancellation.ts",
+    "pim/calendar-window-reconcile.ts",
     "pim/linked-calendar-unlink.ts",
   ];
 

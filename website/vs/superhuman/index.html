@@ -23,15 +23,22 @@
 <link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/superhuman/">
 <link rel="preload" as="font" type="font/woff2" href="/fonts/geist-var.woff2" crossorigin>
 <link rel="stylesheet" href="/compare.css">
+<link rel="icon" href="/brand/favicon.svg?v=matte2" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png?v=matte2">
+<script src="/site-nav.js" defer></script>
 </head>
 <body>
 <div class="wrap">
-  <nav class="top">
+  <header class="top">
     <a class="home" href="/">Klorn</a>
-    <span class="lang">
-      <a href="/vs/superhuman/" aria-current="true">EN</a><a href="/ko/vs/superhuman/">KO</a>
-    </span>
-  </nav>
+    <button type="button" class="menu-btn" data-menu-toggle aria-expanded="false" aria-controls="site-menu" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <nav class="menu" id="site-menu" aria-label="Site">
+      <a href="/pricing/">Pricing</a><a href="/blog/">Blog</a><a href="/security/">Security</a><a href="/self-host/">Self-host</a>
+      <span class="pair"><a href="/vs/superhuman/" aria-current="page">EN</a><a href="/ko/vs/superhuman/">KO</a></span>
+      <a href="https://app.klorn.ai/login">Log in</a>
+    </nav>
+    <a class="dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener" data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe">Download</a>
+  </header>
 
   <h1>Superhuman makes you faster.<br>Klorn makes there be <em>less</em>.</h1>
   <p class="thesis">Superhuman is a keyboard-first client built around speed, and it is very good at that. It is also a place you have to live: the value arrives when you are inside it. Klorn's output is the opposite — a decision about what deserved to interrupt you, delivered wherever you already read mail.</p>
@@ -46,7 +53,7 @@
       <tr><th>Acting unattended</th><td class="us">Approval-gated. Send, delete and forward each require a receipt pinned to a payload hash</td><td>Auto Drafts prepare replies for your review</td></tr>
       <tr><th>Source &amp; hosting</th><td class="us"><strong>AGPL-3.0, self-hostable end to end</strong></td><td>Closed, cloud only</td></tr>
       <tr><th>Your own model key</th><td class="us"><strong>Yes — bring your own key, or run a local model</strong></td><td>Not offered</td></tr>
-      <tr><th>Published price</th><td class="us"><strong><a href="/pricing/">$8.99/mo</a></strong> web · $9.99 iOS/Android</td><td>$30/mo Starter · $40 Business</td></tr>
+      <tr><th>Published price</th><td class="us"><strong><a href="/pricing/">$8.99/mo</a></strong></td><td>$30/mo Starter · $40 Business</td></tr>
     </tbody>
   </table>
   </div>
@@ -67,6 +74,7 @@
 
   <footer>
     <p>Prices and product facts as published by each vendor, checked 2026-08-23. Something here wrong? <a href="mailto:k0820086@gmail.com">Tell us</a> and we will fix it.</p>
+    <nav class="foot-links" aria-label="More from Klorn"><a href="/pricing/">Pricing</a><a href="/blog/">Blog</a><a href="/security/">Security</a><a href="/self-host/">Self-host</a><a href="/open-source/">Open source</a><a href="/status/">Status</a><a href="/gdpr/">GDPR</a><a href="/dpa/">DPA</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a><a href="https://github.com/k08200/klorn" rel="noreferrer noopener">GitHub</a></nav>
   </footer>
 </div>
 <script>

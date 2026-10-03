@@ -9,9 +9,10 @@
  */
 
 import type { LinkedCalendarAccount } from "@prisma/client";
-import { outlookCalendarEnabled } from "../../config.js";
+import { caldavCalendarEnabled, outlookCalendarEnabled } from "../../config.js";
 import { prisma } from "../../db.js";
 import type { CalendarProviderName } from "../calendar-rows.js";
+import { caldavCalendarActions } from "./caldav.js";
 import { googleCalendarActions } from "./google.js";
 import { outlookCalendarActions } from "./outlook.js";
 import {
@@ -30,6 +31,11 @@ const ACTIONS_BY_PROVIDER: Readonly<Record<CalendarProviderName, CalendarProvide
   LOCAL: unsupportedCalendarActions("LOCAL"),
 };
 
+const CALDAV_ACTIONS: Readonly<Record<"ICLOUD" | "NAVER", CalendarProviderActions>> = {
+  ICLOUD: caldavCalendarActions("ICLOUD"),
+  NAVER: caldavCalendarActions("NAVER"),
+};
+
 export function calendarActionsForProvider(
   provider: CalendarProviderName,
 ): CalendarProviderActions {
@@ -37,6 +43,10 @@ export function calendarActionsForProvider(
   // OUTLOOK_INBOX_ENABLED are both on, read per call so a flip needs no restart;
   // otherwise it is the unsupported stub in the table, exactly as before C4.
   if (provider === "OUTLOOK" && outlookCalendarEnabled()) return outlookCalendarActions;
+  // ICLOUD and NAVER (step C3, CalDAV) likewise, behind CALDAV_CALENDAR_ENABLED.
+  if ((provider === "ICLOUD" || provider === "NAVER") && caldavCalendarEnabled()) {
+    return CALDAV_ACTIONS[provider];
+  }
   return ACTIONS_BY_PROVIDER[provider];
 }
 

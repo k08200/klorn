@@ -10,7 +10,8 @@
  * reader that does neither.
  *
  * Since C7 a connector of another provider plugs its own flag into the same switch
- * through `CALENDAR_PROVIDER_ENABLED` (C4 registered `OUTLOOK: outlookCalendarEnabled`): its rows are
+ * through `CALENDAR_PROVIDER_ENABLED` (C4 registered `OUTLOOK: outlookCalendarEnabled`,
+ * C3 `ICLOUD` and `NAVER: caldavCalendarEnabled`): its rows are
  * visible only while its flag is on, whatever the Google linked flag says. GOOGLE
  * keeps LINKED_CALENDAR_SYNC_ENABLED and LOCAL is always visible. A provider with
  * no entry has no connector, so it has no rows and adds nothing to the query.
@@ -21,7 +22,11 @@
  */
 
 import type { Prisma } from "@prisma/client";
-import { linkedCalendarSyncEnabled, outlookCalendarEnabled } from "../config.js";
+import {
+  caldavCalendarEnabled,
+  linkedCalendarSyncEnabled,
+  outlookCalendarEnabled,
+} from "../config.js";
 import type { CalendarProviderName } from "./calendar-rows.js";
 
 /** The providers whose rows have a flag of their own (every one but GOOGLE and LOCAL). */
@@ -32,13 +37,16 @@ export type ProviderEnabledMap = Readonly<Partial<Record<GatedCalendarProvider, 
 
 /**
  * The registered connectors. C4 registered OUTLOOK (`outlookCalendarEnabled`:
- * OUTLOOK_CALENDAR_ENABLED and OUTLOOK_INBOX_ENABLED); C3, C5 and C6 add theirs
- * with one entry each, and every reader, the by-id check and the tests pick it
- * up. Exported so a connector's own tests can pass a map of their own to
- * `calendarSourceScope` and `isCalendarRowVisible`.
+ * OUTLOOK_CALENDAR_ENABLED and OUTLOOK_INBOX_ENABLED); C3 registered ICLOUD and
+ * NAVER (`caldavCalendarEnabled`: CALDAV_CALENDAR_ENABLED, one flag for both CalDAV
+ * providers); C5 and C6 add theirs with one entry each, and every reader, the by-id
+ * check and the tests pick it up. Exported so a connector's own tests can pass a
+ * map of their own to `calendarSourceScope` and `isCalendarRowVisible`.
  */
 export const CALENDAR_PROVIDER_ENABLED: ProviderEnabledMap = {
   OUTLOOK: outlookCalendarEnabled,
+  ICLOUD: caldavCalendarEnabled,
+  NAVER: caldavCalendarEnabled,
 };
 
 function registeredProviders(map: ProviderEnabledMap): GatedCalendarProvider[] {

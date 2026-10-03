@@ -289,6 +289,7 @@ async function linkedAccountConflicts(
         err,
         scope: "calendar.linked_freebusy_failed",
         action: "free/busy",
+        provider: session.provider,
       });
     }
   }
