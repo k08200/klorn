@@ -614,3 +614,8 @@
 "menu.compose" = "新規メール";
 "menu.find" = "メールを検索";
 "menu.moveToLane" = "レーンを移動";
+
+/* Proactive reply drafts */
+"chip.draftReady" = "下書きあり";
+"reading.openDraft" = "下書きを開く";
+"reading.preparedDraft" = "Klornが事前に用意した下書きです — 送信前に確認してください。";

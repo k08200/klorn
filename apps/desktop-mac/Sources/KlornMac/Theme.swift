@@ -2,14 +2,15 @@ import AppKit
 import SwiftUI
 
 enum Theme {
+    /// Raw sRGB components (0–1). Tokens that the self-check audits keep
+    /// their values in this pure form so contrast math never needs AppKit.
+    typealias RGBA = (r: Double, g: Double, b: Double, a: Double)
+
     /// Appearance-following color: AppKit resolves the closure against the
     /// EFFECTIVE appearance at draw time, so every consumer of these tokens
     /// flips with the app appearance (system / Preferences override) with no
     /// per-view work. Light values are byte-identical to the pre-dark theme.
-    private static func dyn(
-        light: (r: Double, g: Double, b: Double, a: Double),
-        dark: (r: Double, g: Double, b: Double, a: Double)
-    ) -> Color {
+    private static func dyn(light: RGBA, dark: RGBA) -> Color {
         Color(nsColor: NSColor(name: nil) { appearance in
             let c = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light
             return NSColor(srgbRed: c.r, green: c.g, blue: c.b, alpha: c.a)
@@ -21,7 +22,11 @@ enum Theme {
     /// surface hue-free so the only color on screen is color that MEANS
     /// something — lane tints, the accent, unread. A navy canvas put a blue
     /// cast under all of it and made the lane hues compete with the ground.
-    static let bg = dyn(light: (0.980, 0.980, 0.980, 1), dark: (0.039, 0.039, 0.045, 1))
+    static let bg = dyn(light: bgLight, dark: bgDark)
+    /// The canvas as raw sRGB components — pure, so the self-check can do
+    /// contrast math without resolving an NSColor (see `laneComponents`).
+    static let bgLight: RGBA = (0.980, 0.980, 0.980, 1)
+    static let bgDark: RGBA = (0.039, 0.039, 0.045, 1)
     /// The one interaction accent — CTAs, focus, selection, gauge. Everything
     /// "choose me / chosen" speaks in this; the brand marks themselves are B&W.
     /// Web v2 sky-500 `#0ea5e9`.
@@ -81,22 +86,60 @@ enum Theme {
     /// Don't set text in this color.
     static let engage = Color(red: 0.776, green: 0.302, blue: 0.549)
 
-    /// Per-tier signal palette — semantic hues kept from the dark system, with
-    /// QUEUE nudged darker so the dot stays perceivable on the white panel:
-    /// warm signal red, amber-600, cool slate.
+    /// Per-lane palette — ONE palette on web and mac (FD-4,
+    /// docs/design/productization-plan.md §2). Values are the web's
+    /// `--tier-*-ink` tokens (packages/web/src/app/globals.css): Tailwind
+    /// 700-level inks in light, the 400-level hues (`--color-tier-*`) in dark.
+    /// This replaces the old mac ramp, where INFO and SILENT were two near-
+    /// identical slates and MEETING was a teal the web never used.
+    ///
+    /// Light deliberately uses the ink, not the 400 hue, for dots AND text:
+    /// the 400 hues are 1.5–2.7:1 on the light canvas, below even the 3:1
+    /// non-text floor (WCAG 1.4.11), and `tint` already colors text (LaneChip,
+    /// inline error lines). One theme-aware token keeps every call site AA.
+    ///
+    /// Measured text contrast (WCAG 2.2, 4.5:1 floor) — light on bg #FAFAFA /
+    /// raised card; dark on bg / panel / raised card:
+    ///   PUSH     #be123c 6.02 / 5.51   |  #fb7185 7.35 / 6.89 / 6.55
+    ///   MEETING  #4f46e5 6.02 / 5.51   |  #818cf8 6.63 / 6.22 / 5.91
+    ///   QUEUE    #b45309 4.81 / 4.40   |  #fbbf24 11.86 / 11.11 / 10.56
+    ///   INFO     #0e7490 5.13 / 4.70   |  #22d3ee 10.95 / 10.26 / 9.75
+    ///   SILENT   #57534e 7.30 / 6.69   |  #a8a29e 7.85 / 7.35 / 6.99
+    /// Known gap: LaneChip sets 10pt text on a 13% wash of the same tint;
+    /// light QUEUE measures 4.19:1 and INFO 4.46:1 there (dark: all ≥ 5.2).
+    /// Both were far lower on the old ramp; the chip is rebuilt as a
+    /// primitive in M7/P2, which owns the wash. The self-check pins the inks
+    /// on `bg` in both appearances and the pairwise distinctness.
     static func tint(_ tier: Tier) -> Color {
-        switch tier {
-        case .push: Color(red: 1.0, green: 0.30, blue: 0.34)
-        // v2 lanes: meeting sits near push in urgency (teal keeps it distinct
-        // from every v1 hue); info is records-gray, quieter than queue.
-        case .meeting: Color(red: 0.05, green: 0.60, blue: 0.55)
-        case .queue: Color(red: 0.851, green: 0.467, blue: 0.024)
-        case .info: Color(red: 0.42, green: 0.47, blue: 0.55)
-        case .silent: Color(red: 0.49, green: 0.53, blue: 0.59)
+        dyn(light: laneComponents(tier, dark: false), dark: laneComponents(tier, dark: true))
+    }
+
+    /// The lane color as pure sRGB components (no AppKit) — the source of
+    /// truth `tint` resolves from, and what the self-check audits.
+    static func laneComponents(_ tier: Tier, dark: Bool) -> RGBA {
+        switch (tier, dark) {
+        case (.push, false): hex(0xBE123C)  // rose-700
+        case (.push, true): hex(0xFB7185)  // rose-400
+        case (.meeting, false): hex(0x4F46E5)  // indigo-600
+        case (.meeting, true): hex(0x818CF8)  // indigo-400
+        case (.queue, false): hex(0xB45309)  // amber-700
+        case (.queue, true): hex(0xFBBF24)  // amber-400
+        case (.info, false): hex(0x0E7490)  // cyan-700
+        case (.info, true): hex(0x22D3EE)  // cyan-400
+        case (.silent, false): hex(0x57534E)  // stone-600
+        case (.silent, true): hex(0xA8A29E)  // stone-400
         }
     }
 
+    private static func hex(_ value: UInt32) -> RGBA {
+        (Double((value >> 16) & 0xFF) / 255, Double((value >> 8) & 0xFF) / 255,
+         Double(value & 0xFF) / 255, 1)
+    }
+
     // MARK: Label palette (2026-08-27)
+    // NOTE (productization plan §2, 2026-10-02): category labels become
+    // NEUTRAL in the reader — this hued palette is demoted in P5 (web Mail v2)
+    // / M7 (mac tokens). Left as is until then; do not add new hues here.
     // The category labels were monochrome chips and the founder couldn't see
     // them ("라벨도 색깔도 없고… 눈에 안뜨임"). Labels are data — they get
     // hues, one per meaning, distinct from every lane hue so the two chip
@@ -189,26 +232,30 @@ enum Theme {
     /// True only while `--render-previews` is drawing. See GlassPanel.
     nonisolated(unsafe) static var isRenderingOffscreen = false
 
-    // MARK: Spacing (4pt grid)
-    // s2/s3 within a control, s4 between controls, s6 between sections.
-    // MARK: Typography — the five-step scale (design renewal P0, 2026-08-21).
+    // MARK: Typography — the six-step scale (productization plan §2,
+    // 2026-10-02; was the five-step scale of design renewal P0, 2026-08-21).
     // SF stays (native-feel doctrine, writing-style.md); unification with the
-    // web happens at the HIERARCHY level, not the typeface. Every step is a
-    // deliberate contrast jump so a glance separates statement (head) from
-    // metadata (label/caption) — the old surfaces mixed raw .font() sizes one
-    // point apart, which reads as one grey block at arm's length.
+    // web happens at the HIERARCHY level, not the typeface: the step NAMES
+    // match the web roles 1:1 (display/title/head/body/label/caption), the
+    // mac sizes sit a notch under the web px. Every step is a deliberate
+    // contrast jump so a glance separates statement (head) from metadata
+    // (label/caption).
     enum Typo {
-        /// Screen titles (Preferences, Teams, reading-pane subject).
-        static let display = Font.system(size: 20, weight: .semibold)
-        /// The statement a list is scanned for: subjects, section heads.
+        /// Screen titles (Preferences, Teams, reading-pane subject). 22pt.
+        static let display = Font.system(size: 22, weight: .semibold)
+        /// Section/pane titles one step under display. 17pt.
+        static let title = Font.system(size: 17, weight: .semibold)
+        /// The statement a list is scanned for: subjects, section heads. 15pt.
         static let head = Font.system(size: 15, weight: .semibold)
-        /// Identity + controls: senders, buttons, chips.
-        static let label = Font.system(size: 12, weight: .medium)
-        /// Running text.
+        /// Running text. 13pt.
         static let body = Font.system(size: 13)
-        /// Metadata: reasons, timestamps, helper lines.
+        /// Identity + controls: senders, buttons, chips. 12pt.
+        static let label = Font.system(size: 12, weight: .medium)
+        /// Metadata: reasons, timestamps, helper lines. 11pt.
         static let caption = Font.system(size: 11)
-        /// Tracked micro-labels: column headers. Pair with ColumnHeader tracking.
+        /// DEPRECATED — the plan retires 10pt text; new code uses `caption`
+        /// (11pt). Kept so existing call sites (column headers, LaneChip)
+        /// keep compiling until the M7 view migration moves them.
         static let micro = Font.system(size: 10, weight: .semibold)
         /// Counts — monospaced digits so columns of numbers never shimmy.
         static let numeric = Font.system(size: 13).monospacedDigit()
@@ -216,6 +263,21 @@ enum Theme {
         static let icon = Font.system(size: 12, weight: .medium)
     }
 
+    // MARK: Radius (productization plan §2)
+    // 6 controls, 10 rows/cards/popovers, 16 sheets/windows. Pills and
+    // LaneChip use the Capsule SHAPE, not a radius token. Call sites migrate
+    // in M7 — new code picks a rung instead of a raw cornerRadius literal.
+    enum Radius {
+        /// Controls: buttons, fields, small toggles.
+        static let sm: CGFloat = 6
+        /// Rows, cards, popovers.
+        static let md: CGFloat = 10
+        /// Sheets and windows.
+        static let lg: CGFloat = 16
+    }
+
+    // MARK: Spacing (4pt grid)
+    // s2/s3 within a control, s4 between controls, s6 between sections.
     static let s1: CGFloat = 4
     static let s2: CGFloat = 8
     static let s3: CGFloat = 12

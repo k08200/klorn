@@ -3920,9 +3920,13 @@ struct SignalChip: View {
 /// axis, the one Spark / Superhuman / Inbox Zero all label first.
 struct ReplyStateChip: View {
     let state: String?
+    /// A reply is already drafted (proactive drafts): the owed chip says so
+    /// instead — one chip, the more useful fact.
+    var draftReady: Bool = false
 
     var body: some View {
-        if let state, let text = label(for: state) {
+        if let state, let kind = Self.kind(state: state, draftReady: draftReady) {
+            let text = Self.label(kind)
             let tint: Color = state == "needsReply" ? Theme.labelTint(.needsReply) : Theme.textDim
             Text(text)
                 .font(Theme.Typo.micro)
@@ -3933,13 +3937,24 @@ struct ReplyStateChip: View {
         }
     }
 
-    private func label(for state: String) -> String? {
+    enum Kind: Equatable { case needsReply, draftReady, answered }
+
+    /// What the chip says. Static and pure so --self-check can pin it.
+    nonisolated static func kind(state: String, draftReady: Bool) -> Kind? {
         switch state {
-        case "needsReply": L("chip.needsReply")
+        case "needsReply": draftReady ? .draftReady : .needsReply
+        case "replied": .answered
+        default: nil
+        }
+    }
+
+    private static func label(_ kind: Kind) -> String {
+        switch kind {
+        case .needsReply: L("chip.needsReply")
+        case .draftReady: L("chip.draftReady")
         // chip.replied is the "replied N×" relationship chip's key — this
         // axis has its own word.
-        case "replied": L("chip.answered")
-        default: nil
+        case .answered: L("chip.answered")
         }
     }
 }
@@ -4061,7 +4076,9 @@ struct FullRow: View {
                             {
                                 AddLabelChip(address: address)
                             }
-                            ReplyStateChip(state: item.email?.replyState)
+                            ReplyStateChip(
+                                state: item.email?.replyState,
+                                draftReady: item.email?.draftReady ?? false)
                             if let reason = rowTierReason(item.tierReason) {
                                 Text(reason).font(Theme.Typo.caption)
                                     .foregroundStyle(Theme.textDim).lineLimit(1)
@@ -4167,6 +4184,9 @@ struct ReadingPane: View {
     let actions: TopBarActions
     @State private var replying = false
     @State private var replyText = ""
+    /// The composer was opened with the ahead-of-time draft (says so above
+    /// the editor until the user asks for a fresh one).
+    @State private var showingPreparedDraft = false
     @State private var sending = false
     @State private var quickReplies: AppModel.ReplyOptionsFetch?
     @State private var loadingQuickReplies = false
@@ -4219,6 +4239,7 @@ struct ReadingPane: View {
         .onChange(of: model.selectedItemId) { _, _ in
             replying = false
             replyText = ""
+            showingPreparedDraft = false
             quickReplies = nil
             loadingQuickReplies = false
         }
@@ -4301,8 +4322,10 @@ struct ReadingPane: View {
                 }
                 if let item {
                     HStack(spacing: 10) {
-                        Button(L("reading.replyWithAI")) { startReply(item) }
-                            .buttonStyle(PrimaryButtonStyle())
+                        Button(email.preparedDraft == nil ? L("reading.replyWithAI") : L("reading.openDraft")) {
+                            startReply(item)
+                        }
+                        .buttonStyle(PrimaryButtonStyle())
                         // menuIndicator(.hidden) kills the system-blue pull-down
                         // segment (the one off-palette element on this row —
                         // design audit 2026-07-20); a dim chevron in the label
@@ -4396,12 +4419,20 @@ struct ReadingPane: View {
                         Text(L("reading.drafting")).font(.caption).foregroundStyle(Theme.textDim)
                     }
                 } else {
-                    Button { Task { if let d = await model.draftReply(item) { replyText = d } } } label: {
+                    Button {
+                        showingPreparedDraft = false
+                        Task { if let d = await model.draftReply(item) { replyText = d } }
+                    } label: {
                         Label(L("reading.regenerate"), systemImage: "sparkles").font(.caption)
                     }
                     .buttonStyle(.plain).foregroundStyle(Theme.accent)
                     .help(L("reading.regenerate.help"))
                 }
+            }
+            if showingPreparedDraft {
+                Text(L("reading.preparedDraft"))
+                    .font(.caption).foregroundStyle(Theme.textDim)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             TextEditor(text: $replyText)
                 .font(.callout).foregroundStyle(Theme.text)
@@ -4415,8 +4446,12 @@ struct ReadingPane: View {
             }
             HStack {
                 Spacer()
-                Button(L("reading.cancel")) { replying = false; replyText = "" }
-                    .buttonStyle(.bordered).controlSize(.small)
+                Button(L("reading.cancel")) {
+                    replying = false
+                    replyText = ""
+                    showingPreparedDraft = false
+                }
+                .buttonStyle(.bordered).controlSize(.small)
                 Button(sending ? L("reading.sending") : L("reading.send")) { send(item) }
                     .buttonStyle(PrimaryButtonStyle())
                     .disabled(sending || model.isDrafting || replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -4767,6 +4802,16 @@ struct ReadingPane: View {
     /// reviews/edits before Send (approval before action).
     private func startReply(_ item: FirewallItem) {
         replying = true
+        // A draft Klorn wrote ahead of time opens at once — no LLM call, no
+        // wait. The composer's regenerate button still asks for a fresh one.
+        if let opened = model.openedEmail, opened.id == item.email?.emailDbId,
+           let prepared = opened.preparedDraft
+        {
+            replyText = prepared
+            showingPreparedDraft = true
+            return
+        }
+        showingPreparedDraft = false
         replyText = ""
         Task {
             if let draft = await model.draftReply(item) { replyText = draft }
@@ -4778,7 +4823,7 @@ struct ReadingPane: View {
         Task {
             let ok = await model.reply(item, body: replyText)
             sending = false
-            if ok { replying = false; replyText = "" }
+            if ok { replying = false; replyText = ""; showingPreparedDraft = false }
         }
     }
 
