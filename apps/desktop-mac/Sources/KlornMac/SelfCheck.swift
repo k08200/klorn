@@ -40,17 +40,20 @@ private func makeDeps(
 
 private let base = "http://localhost:3001"
 
-/// Block the calling thread while the async checks run (used from the CLI entry).
+/// Wait on the calling (main) thread while the async checks run (used from the CLI
+/// entry). The main run loop keeps turning meanwhile, so checks that drive
+/// main-actor code (the device-calendar bridge) can run; a semaphore here would
+/// deadlock them.
 func runSelfChecksBlocking() -> Bool {
-    let sem = DispatchSemaphore(value: 0)
-    let out = locked(false)
+    let out: OSAllocatedUnfairLock<Bool?> = locked(nil)
     Task {
         let ok = await runSelfChecks()
         out.withLock { $0 = ok }
-        sem.signal()
     }
-    sem.wait()
-    return out.withLock { $0 }
+    while out.withLock({ $0 }) == nil {
+        RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.05))
+    }
+    return out.withLock { $0 } ?? false
 }
 
 func runSelfChecks() async -> Bool {
@@ -1834,6 +1837,9 @@ func runSelfChecks() async -> Bool {
           Set(Tier.allCases.map(\.emptyTitle)).count == Tier.allCases.count
           && Tier.allCases.allSatisfy { !$0.emptyTitle.hasPrefix("tier.") })
 
+    print("Device calendars (C6):")
+    for (name, ok) in await deviceCalendarSelfChecks(sourceDir: sourceDir) { check(name, ok) }
+
     print("Localization:")
     // A key present in one language and missing in another ships a raw key
     // ("prefs.done") to whoever runs the other language — the kind of bug that
@@ -1859,6 +1865,7 @@ func runSelfChecks() async -> Bool {
         L("bar.push", 3), L("bar.more", 2), L("commitments.a11y", 4),
         L("aiUsage.a11y", 7, 20), L("bar.menuBar.push", 9),
         L("engagement.repliedTimes", 5), L("waiting.days", 3), L("waiting.hint", 2),
+        L("deviceCalendars.count", 3),
     ].allSatisfy { $0.contains(where: \.isNumber) })
     check("string formats render", [
         L("today.a11y", "x"), L("briefing.a11y", "x"), L("commitments.markDone.a11y", "x"),

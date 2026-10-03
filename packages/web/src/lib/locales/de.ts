@@ -220,7 +220,8 @@ const de: Record<string, string> = {
   "settings.morningBriefing.title": "Morgen-Briefing",
   "settings.morningBriefing.desc":
     "Schickt ein Entscheidungs-Briefing pro Tag in deiner Zeitzone, auch wenn du weg bist.",
-  "settings.morningBriefing.timezoneNote": "Zeitzone: {timezone}. Änderbar im Profilbereich oben.",
+  "settings.morningBriefing.timezoneNote":
+    "Zeitzone: {timezone}. Änderbar unter Darstellung und Sprache.",
   "settings.field.deliveryTime": "Zustellzeit",
   "settings.deliveryTime.defaultNote": "Standard ist 06:00.",
   "settings.pushNotifications.title": "Push-Mitteilungen",
@@ -1287,6 +1288,18 @@ const de: Record<string, string> = {
   "pmf.failed":
     "Konnte nicht erfasst werden. Es wurde nichts gespeichert — bitte erneut versuchen.",
   "pmf.later": "Später",
+  // Settings sections (productization plan P3).
+  "settings.nav.label": "Einstellungsbereiche",
+  "settings.nav.accounts": "Konten und Quellen",
+  "settings.nav.lanes": "Lanes und Regeln",
+  "settings.nav.assistant": "Assistent",
+  "settings.nav.notifications": "Mitteilungen",
+  "settings.nav.team": "Team",
+  "settings.nav.integrations": "Integrationen",
+  "settings.nav.appearance": "Darstellung und Sprache",
+  "settings.nav.accountBilling": "Konto und Abrechnung",
+  "settings.nav.data": "Daten und Datenschutz",
+  "settings.team.unavailable": "Teamfunktionen sind für dieses Konto nicht verfügbar.",
 };
 
 export default de;

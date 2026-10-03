@@ -789,7 +789,7 @@ function OnboardingHint() {
           {needsMailSource && (
             <>
               <span className="mx-1.5 text-slate-300">·</span>
-              <Link href="/settings" className={linkClass}>
+              <Link href="/settings/accounts" className={linkClass}>
                 {t("inbox.tour.connectLink")}
               </Link>
             </>
@@ -840,7 +840,10 @@ function OnboardingHint() {
               </li>
               {needsMailSource && (
                 <li>
-                  <Link href="/settings" className="text-accent-deep hover:text-accent-deeper">
+                  <Link
+                    href="/settings/accounts"
+                    className="text-accent-deep hover:text-accent-deeper"
+                  >
                     {t("inbox.tour.connectLink")}
                   </Link>{" "}
                   — {t("inbox.tour.connectBody")}

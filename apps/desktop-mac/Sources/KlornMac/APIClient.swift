@@ -1,5 +1,8 @@
 import Foundation
 
+/// What the server did with one device calendar snapshot (step C6).
+enum DeviceSnapshotReply: Sendable, Equatable { case applied, stale }
+
 enum APIError: Error, Sendable, Equatable {
     /// Non-2xx status + the server's `message`/`error` field when present, so the
     /// UI can show the real reason (e.g. a 409 "no-reply sender") not just a code.
@@ -70,6 +73,51 @@ struct APIClient: Sendable {
         _ = try await data(
             "/api/naver-imap/disconnect", method: "POST", body: body,
             contentType: "application/json")
+    }
+
+    /// GET /api/device-calendar/sources — the device calendars this user uploaded
+    /// (step C6). The server answers its default 404 while the feature is off, which
+    /// DeviceCalendarBridge reads as "hide the setting".
+    func fetchDeviceCalendarSources() async throws -> DeviceCalendarSourcesResponse {
+        try await get("/api/device-calendar/sources")
+    }
+
+    /// PUT one opted-in calendar's full snapshot of its window. `key` is the
+    /// device-scoped hash (DeviceCalendarSnapshot.sourceKey), never the raw
+    /// EventKit identifier.
+    /// The body is already encoded (off the main thread, by DeviceCalendarReader).
+    /// Its own request, like `rawGet`: the reply's body matters on both sides of 2xx.
+    /// A 200 may say `stale: true` (ignored as older than what the server holds),
+    /// and a 409 carries a machine `code` naming the cap that was hit, thrown as the
+    /// error's message so the bridge can pick the text.
+    func putDeviceCalendarSnapshot(key: String, body: Data) async throws -> DeviceSnapshotReply {
+        var req = URLRequest(url: try url("/api/device-calendar/sources/\(key)/window"))
+        req.httpMethod = "PUT"
+        req.httpBody = body
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let t = token() { req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization") }
+        let bytes: Data
+        let resp: URLResponse
+        do {
+            (bytes, resp) = try await session.data(for: req)
+        } catch {
+            throw APIError.transport(error.localizedDescription)
+        }
+        guard let http = resp as? HTTPURLResponse else { throw APIError.transport("non-HTTP response") }
+        struct Reply: Decodable { let stale: Bool?; let code: String? }
+        let reply = try? JSONDecoder().decode(Reply.self, from: bytes)
+        switch http.statusCode {
+        case 200...299: return reply?.stale == true ? .stale : .applied
+        case 401: throw APIError.unauthorized
+        case 403: throw APIError.forbidden
+        case 409: throw APIError.http(409, reply?.code ?? Self.serverMessage(bytes))
+        default: throw APIError.http(http.statusCode, Self.serverMessage(bytes))
+        }
+    }
+
+    /// DELETE a calendar the user turned off: the server removes it and its events.
+    func deleteDeviceCalendarSource(key: String) async throws {
+        try await delete("/api/device-calendar/sources/\(key)")
     }
 
     /// GET /api/automations — server-owned behaviour settings (agent mode,

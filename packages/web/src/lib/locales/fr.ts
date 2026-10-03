@@ -213,7 +213,7 @@ const fr: Record<string, string> = {
   "settings.morningBriefing.desc":
     "Envoie un brief de décisions par jour dans votre fuseau horaire, même en votre absence.",
   "settings.morningBriefing.timezoneNote":
-    "Fuseau horaire : {timezone}. Modifiable dans la section profil ci-dessus.",
+    "Fuseau horaire : {timezone}. Modifiable dans Apparence et langue.",
   "settings.field.deliveryTime": "Heure d'envoi",
   "settings.deliveryTime.defaultNote": "Par défaut : 06:00.",
   "settings.pushNotifications.title": "Notifications push",
@@ -1275,6 +1275,18 @@ const fr: Record<string, string> = {
   "pmf.thanks": "Merci — c'est enregistré.",
   "pmf.failed": "Impossible d'enregistrer. Rien n'a été sauvegardé — réessayez.",
   "pmf.later": "Plus tard",
+  // Settings sections (productization plan P3).
+  "settings.nav.label": "Sections des réglages",
+  "settings.nav.accounts": "Comptes et sources",
+  "settings.nav.lanes": "Voies et règles",
+  "settings.nav.assistant": "Assistant",
+  "settings.nav.notifications": "Notifications",
+  "settings.nav.team": "Équipe",
+  "settings.nav.integrations": "Intégrations",
+  "settings.nav.appearance": "Apparence et langue",
+  "settings.nav.accountBilling": "Compte et facturation",
+  "settings.nav.data": "Données et confidentialité",
+  "settings.team.unavailable": "Les fonctions d'équipe ne sont pas disponibles sur ce compte.",
 };
 
 export default fr;
