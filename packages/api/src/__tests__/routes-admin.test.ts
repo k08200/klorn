@@ -609,10 +609,8 @@ describe("admin routes", () => {
     await app.close();
   });
 
-  it("reports fleet judge health via /judge-health", async () => {
-    const { recordJudgeSource, __resetJudgeHealth } = await import("../judge/judge-health.js");
-    __resetJudgeHealth();
-    for (let i = 0; i < 10; i++) recordJudgeSource("llm");
+  it("reports fleet judge health via /judge-health (last DB check + top error)", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     const app = await buildApp();
     const res = await app.inject({
       method: "GET",
@@ -620,8 +618,10 @@ describe("admin routes", () => {
       headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ total: 10, fallbackRate: 0, degraded: false });
-    __resetJudgeHealth();
+    const body = res.json();
+    expect(body).toMatchObject({ lookbackMs: 24 * 60 * 60 * 1000 });
+    expect(body).toHaveProperty("lastCheck");
+    expect(body).toHaveProperty("topError");
     await app.close();
   });
 

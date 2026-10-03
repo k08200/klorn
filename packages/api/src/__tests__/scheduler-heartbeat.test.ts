@@ -139,3 +139,41 @@ describe("buildSchedulerHealthReport", () => {
     expect(report.body.schedulers).toHaveLength(EXPECTED_SCHEDULERS.length);
   });
 });
+
+describe("buildSchedulerHealthReport — judge fallback surface (#1319)", () => {
+  beforeEach(() => {
+    resetSchedulerHeartbeats();
+  });
+
+  it("carries the injected coarse judge status without touching the status code", () => {
+    registerAll();
+    const report = buildSchedulerHealthReport({
+      disabled: false,
+      now: T0 + 60_000,
+      uptimeMs: 10 * 60_000,
+      judge: { status: "degraded", fallbackRatio: 1 },
+    });
+    expect(report.statusCode).toBe(200);
+    expect(report.body.status).toBe("ok");
+    expect(report.body.judge).toEqual({ status: "degraded", fallbackRatio: 1 });
+  });
+
+  it("carries it when background agents are disabled too", () => {
+    const report = buildSchedulerHealthReport({
+      disabled: true,
+      judge: { status: "unknown", fallbackRatio: null },
+    });
+    expect(report.body.judge).toEqual({ status: "unknown", fallbackRatio: null });
+  });
+
+  it("omits it when the caller could not read it (the endpoint must still answer)", () => {
+    registerAll();
+    const report = buildSchedulerHealthReport({
+      disabled: false,
+      now: T0 + 60_000,
+      uptimeMs: 10 * 60_000,
+    });
+    expect(report.statusCode).toBe(200);
+    expect(report.body).not.toHaveProperty("judge");
+  });
+});
