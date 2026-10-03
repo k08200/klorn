@@ -1,0 +1,54 @@
+/**
+ * Mail v2 lane routes (productization plan P5, MAIL_V2). Registered against
+ * the email plugin, so they inherit its requireAuth + requireAppAccess hooks.
+ * While MAIL_V2 is off the route answers Fastify's own 404.
+ */
+
+import type { EmailLaneCountsResponse, LiveTier } from "@klorn/contract";
+import type { FastifyInstance } from "fastify";
+import { getUserId } from "../auth.js";
+import { mailV2Enabled } from "../config.js";
+import { prisma } from "../db.js";
+import { countEmailsByLane, foldLaneCounts } from "../judge/email-lanes.js";
+import { darkRouteGate } from "./dark-route-gate.js";
+
+const laneCountsQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    inbox: { type: "string", maxLength: 500 },
+  },
+} as const;
+
+interface DemoLaneRow {
+  tier: LiveTier;
+  isRead: boolean;
+}
+
+export function registerEmailLaneRoutes(
+  app: FastifyInstance,
+  options: { demoRows: () => readonly DemoLaneRow[] },
+) {
+  // GET /api/email/lane-counts?inbox= — mail per lane (total + unread) for the
+  // lane control: one grouped query, not one count per lane.
+  app.get(
+    "/lane-counts",
+    { onRequest: darkRouteGate(mailV2Enabled), schema: { querystring: laneCountsQuerySchema } },
+    async (request): Promise<EmailLaneCountsResponse> => {
+      const uid = getUserId(request);
+      const { inbox } = request.query as { inbox?: string };
+      // Same demo switch as the list, so the control and the rows agree.
+      const token = await prisma.userToken.findFirst({
+        where: { userId: uid, provider: "google" },
+        select: { id: true },
+      });
+      if (!token) {
+        const rows = options
+          .demoRows()
+          .map((row) => ({ tier: row.tier, total: 1, unread: row.isRead ? 0 : 1 }));
+        return { counts: foldLaneCounts(rows), source: "demo" };
+      }
+      return { counts: await countEmailsByLane(uid, inbox), source: "gmail" };
+    },
+  );
+}

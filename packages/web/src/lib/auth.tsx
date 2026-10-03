@@ -35,6 +35,9 @@ interface User {
   // P4). True turns on the hotkey registry beyond Cmd+K / B / /, the `?` sheet
   // and optimistic lane moves with undo. Undefined (older API) = off.
   keyboardTriage?: boolean;
+  // Server-driven client flag: the API's MAIL_V2 (productization plan P5).
+  // True renders /email as the lane-first list. Undefined (older API) = off.
+  mailV2?: boolean;
 }
 
 interface AuthContextType {

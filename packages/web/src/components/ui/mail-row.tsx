@@ -15,6 +15,9 @@
  * variants only apply under @media (hover: hover), so on touch the actions
  * are reachable by focus only; swipe actions arrive with P10.
  * Height is 52px with a fine pointer and 64px on touch / narrow viewports.
+ * Weight carries read state: an unread row's sender and subject are semibold,
+ * a read row's are regular, so a list of read mail does not read as all-bold.
+ * The time has a fixed right-aligned column so the badges before it line up.
  */
 
 import type { Tier } from "@klorn/contract";
@@ -95,13 +98,16 @@ function RowContent(props: MailRowProps) {
         )}
         {source && <SourceBadge provider={source.provider} nickname={source.nickname} />}
         {tier && <LaneChip tier={tier} />}
-        <time dateTime={timeIso} className="shrink-0 text-caption tabular-nums text-ink-muted">
+        <time
+          dateTime={timeIso}
+          className="min-w-16 shrink-0 text-right text-caption tabular-nums text-ink-muted"
+        >
           {time}
         </time>
       </span>
       <span className="flex min-w-0 items-baseline gap-2 pl-4">
         <span
-          className={`shrink-0 truncate text-head ${unread ? "text-ink" : "text-ink-strong"} max-w-[60%]`}
+          className={`shrink-0 truncate text-head ${unread ? "text-ink" : "font-normal text-ink-strong"} max-w-[60%]`}
         >
           {subject}
         </span>
