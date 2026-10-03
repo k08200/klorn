@@ -95,6 +95,29 @@ full view to be key — the bar's full panel, or the main window when
 reply is open, Reply, Dismiss, Move to Lane, Go, and a mode-switching Search
 stay disabled so the draft can't be lost. File ▸ New Email is the only `⌘N`.
 
+Mail list keys (the full view's list in Inbox, a lane or a label; same in
+the bar's full panel and the main window):
+
+| Key | Action |
+|-----|--------|
+| `↑` / `↓`, `j` / `k` | Move the selection (opens the message like a click, scrolls it into view) |
+| `Return` / `o` | Put the keyboard in the reading pane: arrows, Space and Page Up/Down scroll the message |
+| `Esc` | Back to the list (from the reading pane or the search field) |
+| `e` | Dismiss the selected message, then select the next one |
+| `r` | Reply with AI (same as `⌘R`) |
+| `/` | Search mail (same as `⌘F`) |
+| `⌃⌘1`–`⌃⌘5` | Move to lane (the Message menu above) |
+
+Bare keys never fire while a text field or editor has focus (search, inline
+reply, compose, assistant), under a modal, or when the mail surface is not
+the key window. `e` and `r` follow the Message menu's rules, and the
+selection does not move while an inline reply is open. In the reading pane
+only `Esc` is taken, so `r` there is `⌘R`; bare `1`/`2`/`3` stay the quick
+replies. On a non-Latin input source (Korean) the keys go by position. There
+is no `z`/`⌘Z`: dismiss and lane moves have no undo path yet. The search
+field no longer takes the keyboard when the full view first opens (it would
+swallow every list key); `/` or `⌘F` puts it there.
+
 ### Row actions (on each PUSH item)
 
 | Action | What it does |
@@ -239,6 +262,7 @@ A full XCTest suite can be added when building under Xcode/CI.
 | `SettingsWindow.swift` | `Settings` scene root (`TabView`), tab grouping, `SettingsOpener` |
 | `MainWindow.swift` | standard main window (M2, `macMainWindow`): `MainWindowController` (a lazily created AppKit `NSWindow`, never a SwiftUI scene), its rules, the Settings beta switch |
 | `AppCommands.swift` | app menus (`.commands`) and their pure enablement/shortcut rules |
+| `ListKeys.swift` | mail list keyboard (M3): pure key rules, the window-scoped key catcher |
 | `TopBarController.swift` | the floating non-activating `NSPanel`: top-center pin, expand/collapse, row actions |
 | `HotKey.swift` | Carbon `RegisterEventHotKey` global shortcut (`⌥⌘K`) |
 | `RealtimeClient.swift` | WebSocket wake channel (reuses the API's `/ws` hub) |

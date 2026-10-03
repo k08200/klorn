@@ -75,6 +75,9 @@ final class AppModel {
     private(set) var replyRequest: ReplyRequest?
     /// Set by Find (⌘F); the mail list's search field takes focus and clears it.
     var searchFocusPending = false
+    /// Which pane the mail list's bare keys address (M3). Return/o enters
+    /// the reading pane, Esc or any new selection returns to the list.
+    var mailKeyZone: MailKeyZone = .list
 
     /// Message ▸ Reply: ask the reading pane to start a reply to the item
     /// it shows now. The id rides along so a selection change in between
@@ -592,6 +595,7 @@ final class AppModel {
     /// so reading needs no focus change — only replying (later) does.
     func select(_ item: FirewallItem) async {
         selectedItemId = item.id
+        mailKeyZone = .list
         emailError = nil
         guard let emailDbId = item.email?.emailDbId else {
             openedEmail = nil  // non-email item: nothing to read in-app
@@ -686,6 +690,7 @@ final class AppModel {
 
     func clearSelection() {
         selectedItemId = nil
+        mailKeyZone = .list
         threadBrief = nil
         openedEmail = nil
         meetingContext = nil

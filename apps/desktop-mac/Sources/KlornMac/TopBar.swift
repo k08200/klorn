@@ -3095,6 +3095,11 @@ private struct FullList: View {
                     .opacity(Theme.isRenderingOffscreen ? 0 : 1)
                     .textFieldStyle(.plain).font(.callout).foregroundStyle(Theme.text)
                     .focused($searchFocused)
+                    // Esc hands the keyboard back to the list.
+                    .onKeyPress(.escape) {
+                        searchFocused = false
+                        return .handled
+                    }
                     .accessibilityLabel(L("mail.search.a11y"))
                     // Edit ▸ Search Mail (⌘F). `initial`: Find may have just
                     // switched the list mode, mounting this field fresh.
@@ -3159,23 +3164,79 @@ private struct FullList: View {
                     Spacer(minLength: 0)
                 }
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(items) { item in
-                            FullRow(item: item, actions: actions, showLaneChip: mixedLanes)
-                                .transition(rowTransition)
-                            Divider().overlay(Theme.line).padding(.leading, 24)
+                // Same ScrollView + LazyVStack as before M3; the reader only
+                // adds scroll-into-view for a keyboard-moved selection.
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(items) { item in
+                                FullRow(item: item, actions: actions, showLaneChip: mixedLanes)
+                                    .id(item.id)
+                                    .transition(rowTransition)
+                                Divider().overlay(Theme.line).padding(.leading, 24)
+                            }
                         }
+                        // The one motion that carries product truth (P1): a new
+                        // classification ARRIVES and a corrected row LEAVES for
+                        // its new lane — state changes are never silent.
+                        .animation(
+                            reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85),
+                            value: items.map(\.id))
                     }
-                    // The one motion that carries product truth (P1): a new
-                    // classification ARRIVES and a corrected row LEAVES for
-                    // its new lane — state changes are never silent.
-                    .animation(
-                        reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85),
-                        value: items.map(\.id))
+                    // No anchor: the minimal scroll that shows the row, so a
+                    // click on a visible row never moves the list.
+                    .onChange(of: model.selectedItemId) { _, id in
+                        if let id { proxy.scrollTo(id) }
+                    }
                 }
             }
         }
+        // List keys (M3). Mounted with the mail list only, so other list
+        // modes never see them.
+        .background(
+            MailListKeyCatcher(
+                onKey: { handleKey($0) },
+                onClickOutsideReader: { model.mailKeyZone = .list }))
+        .onDisappear { model.mailKeyZone = .list }
+    }
+
+    /// One key press from the catcher: decide with the pure rules, then run
+    /// the same paths a click or a menu command runs.
+    private func handleKey(_ press: ListKeyPress) -> Bool {
+        let rows = items
+        var menu = MenuState(model: model)
+        menu.modalOpen = menu.modalOpen || press.window.attachedSheet != nil
+        let state = ListKeyState(
+            menu: menu, textInputFocused: press.responder == .text,
+            showsRows: !searching && model.queue != nil, itemCount: rows.count,
+            readerFocused: model.mailKeyZone == .reader || press.responder == .web)
+        guard let action = ListKeyRules.action(for: press.key, isRepeat: press.isRepeat, in: state)
+        else { return false }
+        let ids = rows.map(\.id)
+        func row(_ id: String?) -> FirewallItem? { rows.first { $0.id == id } }
+        switch action {
+        case .move(let delta):
+            let target = ListKeyRules.movedSelection(
+                ids: ids, selected: model.selectedItemId, delta: delta)
+            if let item = row(target) { actions.onSelect(item) }
+        case .openReader:
+            model.mailKeyZone = .reader
+            MailReaderFocus.enter(in: press.window)
+        case .backToList:
+            model.mailKeyZone = .list
+            MailReaderFocus.leave(in: press.window)
+        case .dismiss:
+            guard let item = model.menuTargetItem else { return true }
+            // Triage keeps moving: the row that takes its place is next.
+            let next = row(ListKeyRules.selectionAfterRemoval(ids: ids, removed: item.id))
+            actions.onDismiss(item)
+            if let next { actions.onSelect(next) }
+        case .reply:
+            model.requestReply()
+        case .focusSearch:
+            model.searchFocusPending = true
+        }
+        return true
     }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -4236,6 +4297,12 @@ struct ReadingPane: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Return/o put the keyboard here (M3): show it, like the row's ring.
+        .overlay {
+            if model.mailKeyZone == .reader {
+                Rectangle().strokeBorder(Theme.accent, lineWidth: 2).allowsHitTesting(false)
+            }
+        }
         .onChange(of: model.selectedItemId) { _, _ in
             replying = false
             replyText = ""
