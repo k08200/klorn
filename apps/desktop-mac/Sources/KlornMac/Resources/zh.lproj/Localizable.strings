@@ -601,3 +601,8 @@
 "waiting.empty" = "没有在等待回复的邮件。";
 "waiting.days" = "第 %d 天";
 "waiting.row.a11y" = "%@ — %@，等待回复第 %d 天";
+
+/* Proactive reply drafts */
+"chip.draftReady" = "草稿已备好";
+"reading.openDraft" = "打开草稿";
+"reading.preparedDraft" = "这是 Klorn 提前写好的草稿 — 发送前请确认。";

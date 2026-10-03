@@ -601,3 +601,8 @@
 "waiting.empty" = "Nada espera respuesta.";
 "waiting.days" = "%d días";
 "waiting.row.a11y" = "%@ — %@, esperando %d días";
+
+/* Proactive reply drafts */
+"chip.draftReady" = "Borrador listo";
+"reading.openDraft" = "Abrir borrador";
+"reading.preparedDraft" = "Klorn preparó este borrador por adelantado — revísalo antes de enviar.";
