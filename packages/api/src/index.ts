@@ -21,6 +21,7 @@ import { db, INTERACTIVE_TX_OPTIONS, prisma } from "./db.js";
 import { withDbRetry } from "./db-retry.js";
 import { isDevOrTestEnv } from "./env.js";
 import { handleError } from "./error-handler.js";
+import { getPublicJudgeHealth } from "./judge/judge-health.js";
 import { reportJudgeModelResolution } from "./llm/judge-model-gate.js";
 import { JUDGE_MODEL_RESOLUTION } from "./llm/openai.js";
 import { IMAP_PROVIDERS } from "./mail/imap-providers.js";
@@ -357,9 +358,13 @@ app.get("/api/health", async () => {
 // in-process scheduler loop has gone silent past its staleness threshold —
 // the failure mode where the dyno slept or an import failed and briefings
 // just stopped (see routes/cron.ts). Public like /api/health: exposes only
-// scheduler names and tick times, no user data.
+// scheduler names and tick times, no user data — plus the LLM judge's coarse
+// fallback status + ratio (#1319), never error text.
 app.get("/api/health/schedulers", async (_request, reply) => {
-  const report = buildSchedulerHealthReport({ disabled: isBackgroundAgentsDisabled() });
+  const report = buildSchedulerHealthReport({
+    disabled: isBackgroundAgentsDisabled(),
+    judge: getPublicJudgeHealth(),
+  });
   reply.code(report.statusCode);
   return report.body;
 });

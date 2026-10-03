@@ -1,4 +1,16 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+// The judge alarm's ops Notification would otherwise reach for Prisma.
+vi.mock("../ops/admin-ops-notification.js", () => ({
+  createAdminOpsNotifications: vi.fn(async () => 0),
+}));
+
+import {
+  __resetJudgeHealth,
+  getPublicJudgeHealth,
+  recordJudgeSource,
+} from "../judge/judge-health.js";
+import { __resetLlmFailureLog, recordLlmCallFailure } from "../llm/llm-failure-log.js";
 import {
   buildSchedulerHealthReport,
   EXPECTED_SCHEDULERS,
@@ -137,5 +149,58 @@ describe("buildSchedulerHealthReport", () => {
     expect(report.statusCode).toBe(200);
     expect(report.body.status).toBe("ok");
     expect(report.body.schedulers).toHaveLength(EXPECTED_SCHEDULERS.length);
+  });
+});
+
+describe("buildSchedulerHealthReport — judge fallback surface (#1319)", () => {
+  beforeEach(() => {
+    resetSchedulerHeartbeats();
+    __resetJudgeHealth();
+    __resetLlmFailureLog();
+  });
+
+  it("reports judge status ok and the ratio on a healthy stream", () => {
+    registerAll();
+    for (let i = 0; i < 20; i++) recordJudgeSource("llm", T0);
+    const report = buildSchedulerHealthReport({
+      disabled: false,
+      now: T0 + 60_000,
+      uptimeMs: 10 * 60_000,
+      judge: getPublicJudgeHealth(T0 + 60_000),
+    });
+    expect(report.body.judge).toEqual({ status: "ok", fallbackRatio: 0 });
+  });
+
+  it("reports judge degraded without error text, and leaves the scheduler status code alone", () => {
+    registerAll();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    recordLlmCallFailure(
+      { provider: "openrouter", model: "m" },
+      Object.assign(new Error("402 Insufficient credits"), { status: 402 }),
+      T0,
+    );
+    for (let i = 0; i < 20; i++) recordJudgeSource("keyword-fallback", T0);
+    const report = buildSchedulerHealthReport({
+      disabled: false,
+      now: T0 + 60_000,
+      uptimeMs: 10 * 60_000,
+      judge: getPublicJudgeHealth(T0 + 60_000),
+    });
+    expect(report.statusCode).toBe(200);
+    expect(report.body.status).toBe("ok");
+    expect(report.body.judge).toEqual({ status: "degraded", fallbackRatio: 1 });
+    expect(JSON.stringify(report.body)).not.toMatch(/credit|402|openrouter/i);
+    vi.restoreAllMocks();
+  });
+
+  it("still reports the judge surface when background agents are disabled", () => {
+    const report = buildSchedulerHealthReport({
+      disabled: true,
+      now: T0,
+      uptimeMs: 0,
+      judge: getPublicJudgeHealth(T0),
+    });
+    expect(report.body.judge).toEqual({ status: "ok", fallbackRatio: 0 });
   });
 });

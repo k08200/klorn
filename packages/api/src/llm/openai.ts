@@ -18,6 +18,7 @@ import {
 import { captureError } from "../sentry.js";
 import { backgroundLlmPacer } from "./background-pacer.js";
 import { resolveJudgeModel } from "./judge-model-gate.js";
+import { recordLlmCallFailure } from "./llm-failure-log.js";
 import {
   FALLBACK_MODEL,
   getProviderCooldownInfo,
@@ -237,6 +238,25 @@ async function enforceCostGates(
  * so the shared cost ledgers skip the pre-bill (the true-up settles the real
  * outcome per served provider). Playground is handled separately and excluded.
  */
+/**
+ * Failure-side ledger (#1319): LlmUsageLog only sees successful calls, so a
+ * failed dispatch is recorded here (content-free, rate-limited) before the
+ * original error is rethrown unchanged. A playground visitor's own key failing
+ * is not fleet capacity, so it is not counted (mirrors the cooldown skip).
+ */
+function recordDispatchFailure(
+  provider: Provider,
+  model: string,
+  err: unknown,
+  playgroundOnly: boolean,
+): void {
+  if (playgroundOnly) return;
+  recordLlmCallFailure(
+    { provider: provider.name, model, ownedByUser: provider.ownedByUser === true },
+    err,
+  );
+}
+
 function hasUserOwnedProvider(chain: Provider[], playgroundOnly: boolean): boolean {
   // Membership, not position: a user key anywhere in the chain skips the
   // pre-bill. If an env provider serves first instead (only the local compat
@@ -492,7 +512,13 @@ export async function createCompletion(
       const { tools: _t, tool_choice: _tc, ...rest } = effectiveParams;
       effectiveParams = rest as typeof effectiveParams;
     }
-    const result = (await provider.call(effectiveParams as typeof params, model)) as Result;
+    let result: Result;
+    try {
+      result = (await provider.call(effectiveParams as typeof params, model)) as Result;
+    } catch (err) {
+      recordDispatchFailure(provider, model, err, playgroundOnly);
+      throw err;
+    }
     // v1 limitation: streaming responses carry no `usage` block (OpenRouter
     // supports include_usage on streams, but changing stream behavior is out
     // of scope) — record a usageMissing row with zero counts instead so the
@@ -719,10 +745,16 @@ export async function createVisionCompletion(
     provider: Provider,
     model: string,
   ): Promise<OpenAI.Chat.Completions.ChatCompletion> => {
-    const result = (await provider.call(
-      { ...params, stream: false },
-      model,
-    )) as OpenAI.Chat.Completions.ChatCompletion;
+    let result: OpenAI.Chat.Completions.ChatCompletion;
+    try {
+      result = (await provider.call(
+        { ...params, stream: false },
+        model,
+      )) as OpenAI.Chat.Completions.ChatCompletion;
+    } catch (err) {
+      recordDispatchFailure(provider, model, err, playgroundOnly);
+      throw err;
+    }
     // Mirror the gate: BYOK and playground spend no Klorn budget, so the
     // pre-bill is 0 and the usage log must not show a cost Klorn never paid.
     // Estimate against the model that ACTUALLY dispatches (`model`), not the

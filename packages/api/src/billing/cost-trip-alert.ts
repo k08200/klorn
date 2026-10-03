@@ -16,6 +16,7 @@
  * never throws, and cost-guard.ts invokes it fire-and-forget.
  */
 
+import { createAdminOpsNotifications } from "../ops/admin-ops-notification.js";
 import { captureError } from "../sentry.js";
 
 export interface CostCapTripInput {
@@ -110,37 +111,12 @@ async function createAdminTripNotifications(
   input: CostCapTripInput,
   message: string,
 ): Promise<void> {
-  // Lazy db import: keeps this module off the Prisma .env-autoload init path
-  // (same reason cents.ts exists — see the header comment there).
-  const { prisma } = await import("../db.js");
-  const admins = await prisma.user.findMany({
-    where: { role: "ADMIN" },
-    select: { id: true },
-  });
-  if (admins.length === 0) return;
-
   const dedupeKey =
     input.scope === "global"
       ? `cost-cap-trip:global:${tripState.dayKey}`
       : `cost-cap-trip:user:${input.userId}:${tripState.dayKey}`;
   const title = input.scope === "global" ? "LLM cost ceiling tripped" : "User LLM cost cap tripped";
-
-  for (const admin of admins) {
-    try {
-      await prisma.notification.create({
-        data: {
-          userId: admin.id,
-          type: "ops",
-          dedupeKey,
-          title,
-          message,
-        },
-      });
-    } catch (err) {
-      // P2002 = another instance already won this (userId, dedupeKey) create.
-      if ((err as { code?: string })?.code !== "P2002") throw err;
-    }
-  }
+  await createAdminOpsNotifications({ dedupeKey, title, message });
 }
 
 /** Test seam: reset the in-memory trip marks. */

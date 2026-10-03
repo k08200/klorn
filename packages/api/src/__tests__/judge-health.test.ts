@@ -1,11 +1,63 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const capturedErrors = vi.hoisted(() => [] as Array<{ err: unknown; ctx: unknown }>);
+vi.mock("../sentry.js", () => ({
+  captureError: vi.fn((err: unknown, ctx: unknown) => {
+    capturedErrors.push({ err, ctx });
+  }),
+}));
+
+const opsNotifications = vi.hoisted(() => [] as Array<Record<string, unknown>>);
+const opsBehavior = vi.hoisted(() => ({ reject: false }));
+vi.mock("../ops/admin-ops-notification.js", () => ({
+  createAdminOpsNotifications: vi.fn(async (input: Record<string, unknown>) => {
+    if (opsBehavior.reject) throw new Error("db down");
+    opsNotifications.push(input);
+    return 1;
+  }),
+}));
+
 import {
   __resetJudgeHealth,
   checkJudgeHeartbeat,
   getJudgeHealth,
+  getPublicJudgeHealth,
+  JUDGE_HEALTH_ALARM_INTERVAL_MS,
+  JUDGE_HEALTH_FALLBACK_ALARM_RATIO,
+  JUDGE_HEALTH_MAX_EVENTS,
+  JUDGE_HEALTH_MIN_LLM_ELIGIBLE,
+  JUDGE_HEALTH_WINDOW_MS,
+  type JudgeSource,
   recordJudgeSource,
   runJudgeHeartbeatCheck,
 } from "../judge/judge-health.js";
+import { __resetLlmFailureLog, recordLlmCallFailure } from "../llm/llm-failure-log.js";
+
+const T0 = 1_800_000_000_000;
+const MINUTE = 60_000;
+
+function recordMany(source: JudgeSource, n: number, at: number): void {
+  for (let i = 0; i < n; i++) recordJudgeSource(source, at);
+}
+
+function judgeAlarms(spy: ReturnType<typeof vi.spyOn>): string[] {
+  return spy.mock.calls
+    .map((c) => String(c[0]))
+    .filter((line) => line.includes("[JUDGE-HEALTH] LLM judge failing"));
+}
+
+let errSpy: ReturnType<typeof vi.spyOn>;
+
+beforeEach(() => {
+  __resetJudgeHealth();
+  __resetLlmFailureLog();
+  capturedErrors.length = 0;
+  opsNotifications.length = 0;
+  opsBehavior.reject = false;
+  errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  vi.spyOn(console, "warn").mockImplementation(() => {});
+  vi.spyOn(console, "log").mockImplementation(() => {});
+});
 
 afterEach(() => {
   __resetJudgeHealth();
@@ -13,58 +65,174 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("judge health — fallback-rate tripwire", () => {
-  it("reports 0 fallback rate and not-degraded on a healthy LLM stream", () => {
-    for (let i = 0; i < 50; i++) recordJudgeSource("llm");
-    const h = getJudgeHealth();
-    expect(h.total).toBe(50);
-    expect(h.fallbackRate).toBe(0);
-    expect(h.degraded).toBe(false);
+describe("judge health — named alarm constants", () => {
+  it("pins the window, sample floor, threshold and interval", () => {
+    expect(JUDGE_HEALTH_WINDOW_MS).toBe(60 * MINUTE);
+    expect(JUDGE_HEALTH_MIN_LLM_ELIGIBLE).toBe(20);
+    expect(JUDGE_HEALTH_FALLBACK_ALARM_RATIO).toBe(0.5);
+    expect(JUDGE_HEALTH_ALARM_INTERVAL_MS).toBe(60 * MINUTE);
+  });
+});
+
+describe("judge health — fallback ratio over LLM-eligible judgments", () => {
+  it("reports 0 fallback and not degraded on a healthy LLM stream", () => {
+    recordMany("llm", 50, T0);
+    expect(getJudgeHealth(T0)).toMatchObject({
+      total: 50,
+      fallbacks: 0,
+      fallbackRate: 0,
+      degraded: false,
+    });
   });
 
-  it("stays quiet below the minimum sample even if every call fell back", () => {
-    vi.stubEnv("JUDGE_HEALTH_MIN_SAMPLE", "30");
-    for (let i = 0; i < 10; i++) recordJudgeSource("keyword-fallback");
-    // 100% fallback but only 10 samples — not enough signal to alarm.
-    expect(getJudgeHealth().degraded).toBe(false);
-  });
-
-  it("flags degraded once the keyword-fallback rate exceeds the alarm threshold", () => {
-    vi.stubEnv("JUDGE_HEALTH_MIN_SAMPLE", "20");
-    vi.stubEnv("JUDGE_HEALTH_FALLBACK_RATE", "0.2");
-    // 30 llm + 20 fallback = 40% fallback over 50 samples → degraded.
-    for (let i = 0; i < 30; i++) recordJudgeSource("llm");
-    for (let i = 0; i < 20; i++) recordJudgeSource("keyword-fallback");
-    const h = getJudgeHealth();
-    expect(h.fallbackRate).toBeCloseTo(0.4, 5);
+  it("excludes deterministic short-circuits (fast-path, sender-prior, pinned, learned) from the ratio", () => {
+    // Total LLM outage while most mail is newsletters: every LLM-eligible email
+    // fell back. Counting the fast-path would dilute this to ~16% and stay quiet.
+    recordMany("keyword-fallback", 20, T0);
+    recordMany("fast-path", 60, T0);
+    recordMany("sender-prior", 30, T0);
+    recordMany("pinned-rule", 10, T0);
+    recordMany("learned-rule", 5, T0);
+    const h = getJudgeHealth(T0);
+    expect(h.total).toBe(20);
+    expect(h.fallbackRate).toBe(1);
     expect(h.degraded).toBe(true);
   });
 
-  it("fires the alarm exactly once on threshold crossing, not on every call", () => {
-    vi.stubEnv("JUDGE_HEALTH_MIN_SAMPLE", "20");
-    vi.stubEnv("JUDGE_HEALTH_FALLBACK_RATE", "0.2");
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    for (let i = 0; i < 20; i++) recordJudgeSource("keyword-fallback");
-    // Still degraded on subsequent records, but the alarm must not re-spam.
-    for (let i = 0; i < 10; i++) recordJudgeSource("keyword-fallback");
-    const alarms = errSpy.mock.calls.filter((c) => String(c[0]).includes("[JUDGE-HEALTH]"));
-    expect(alarms.length).toBe(1);
+  it("stays quiet below the minimum LLM-eligible sample even at 100% fallback", () => {
+    recordMany("keyword-fallback", JUDGE_HEALTH_MIN_LLM_ELIGIBLE - 1, T0);
+    recordMany("fast-path", 100, T0);
+    expect(getJudgeHealth(T0).degraded).toBe(false);
+    expect(judgeAlarms(errSpy)).toHaveLength(0);
+    expect(capturedErrors).toHaveLength(0);
   });
 
-  it("bounds memory: only the most recent window is retained", () => {
-    vi.stubEnv("JUDGE_HEALTH_WINDOW", "100");
-    for (let i = 0; i < 500; i++) recordJudgeSource("llm");
-    expect(getJudgeHealth().total).toBe(100);
+  it("does not alarm when the fallback share is under the threshold", () => {
+    // 8/20 = 40% fallback: above any "some fallback" floor, below the 50% bar.
+    recordMany("llm", 12, T0);
+    recordMany("keyword-fallback", 8, T0);
+    const h = getJudgeHealth(T0);
+    expect(h.fallbackRate).toBeCloseTo(0.4, 5);
+    expect(h.degraded).toBe(false);
+    expect(judgeAlarms(errSpy)).toHaveLength(0);
+    expect(opsNotifications).toHaveLength(0);
   });
 
-  it("recovers (clears degraded + re-arms the alarm) once the stream is healthy again", () => {
-    vi.stubEnv("JUDGE_HEALTH_WINDOW", "50");
-    vi.stubEnv("JUDGE_HEALTH_MIN_SAMPLE", "20");
-    vi.stubEnv("JUDGE_HEALTH_FALLBACK_RATE", "0.2");
-    for (let i = 0; i < 50; i++) recordJudgeSource("keyword-fallback");
-    expect(getJudgeHealth().degraded).toBe(true);
-    for (let i = 0; i < 50; i++) recordJudgeSource("llm"); // window rolls over
-    expect(getJudgeHealth().degraded).toBe(false);
+  it("flags degraded once the fallback share exceeds the threshold", () => {
+    recordMany("llm", 8, T0);
+    recordMany("keyword-fallback", 12, T0);
+    const h = getJudgeHealth(T0);
+    expect(h.fallbackRate).toBeCloseTo(0.6, 5);
+    expect(h.degraded).toBe(true);
+  });
+
+  it("forgets judgments older than the window, so the stream recovers on its own", () => {
+    recordMany("keyword-fallback", 30, T0);
+    expect(getJudgeHealth(T0).degraded).toBe(true);
+    const later = T0 + JUDGE_HEALTH_WINDOW_MS + 1;
+    recordMany("llm", 25, later);
+    expect(getJudgeHealth(later)).toMatchObject({ total: 25, fallbacks: 0, degraded: false });
+  });
+
+  it("bounds memory under a flood of judgments", () => {
+    recordMany("llm", JUDGE_HEALTH_MAX_EVENTS + 500, T0);
+    expect(getJudgeHealth(T0).total).toBe(JUDGE_HEALTH_MAX_EVENTS);
+  });
+});
+
+describe("judge health — alarm (Sentry + ops Notification, once per interval)", () => {
+  it("fires Sentry, console.error and one ops Notification naming the top provider error", () => {
+    for (let i = 0; i < 5; i++) {
+      recordLlmCallFailure(
+        { provider: "openrouter", model: "google/gemma-4-31b-it" },
+        Object.assign(new Error("402 Insufficient credits"), { status: 402 }),
+        T0,
+      );
+    }
+    recordMany("keyword-fallback", 20, T0);
+
+    const alarms = judgeAlarms(errSpy);
+    expect(alarms).toHaveLength(1);
+    expect(alarms[0]).toContain("LLM judge failing: 100% fallback in last 60 min");
+    expect(alarms[0]).toContain("top error: 402 credits exhausted (openrouter)");
+
+    expect(capturedErrors).toHaveLength(1);
+    expect(capturedErrors[0].ctx).toMatchObject({
+      tags: { scope: "judge-health" },
+      extra: { fallbackRate: 1, sample: 20, topError: "402 credits exhausted (openrouter)" },
+    });
+
+    expect(opsNotifications).toHaveLength(1);
+    expect(opsNotifications[0].title).toBe("LLM judge failing");
+    expect(String(opsNotifications[0].message)).toContain("top error: 402 credits exhausted");
+    expect(String(opsNotifications[0].dedupeKey)).toMatch(/^judge-fallback:/);
+  });
+
+  it("says so when no provider error was recorded (gate or parse failures)", () => {
+    recordMany("keyword-fallback", 20, T0);
+    expect(judgeAlarms(errSpy)[0]).toContain("top error: none recorded at provider dispatch");
+  });
+
+  it("alarms at most once per interval while degradation persists, then again after it", () => {
+    recordMany("keyword-fallback", 20, T0);
+    // Sustained outage: keep judging (and failing) for the rest of the interval.
+    for (let m = 1; m < 60; m += 5) recordMany("keyword-fallback", 5, T0 + m * MINUTE);
+    expect(judgeAlarms(errSpy)).toHaveLength(1);
+    expect(capturedErrors).toHaveLength(1);
+    expect(opsNotifications).toHaveLength(1);
+
+    recordMany("keyword-fallback", 5, T0 + JUDGE_HEALTH_ALARM_INTERVAL_MS);
+    expect(judgeAlarms(errSpy)).toHaveLength(2);
+    expect(capturedErrors).toHaveLength(2);
+    expect(opsNotifications).toHaveLength(2);
+    expect(opsNotifications[0].dedupeKey).not.toBe(opsNotifications[1].dedupeKey);
+  });
+
+  it("does not re-alarm inside the interval when degradation flaps off and on", () => {
+    recordMany("keyword-fallback", 20, T0);
+    recordMany("llm", 30, T0 + MINUTE); // 20/50 = 40% → recovered
+    expect(getJudgeHealth(T0 + MINUTE).degraded).toBe(false);
+    recordMany("keyword-fallback", 40, T0 + 2 * MINUTE); // 60/90 → degraded again
+    expect(getJudgeHealth(T0 + 2 * MINUTE).degraded).toBe(true);
+    expect(judgeAlarms(errSpy)).toHaveLength(1);
+    expect(opsNotifications).toHaveLength(1);
+  });
+
+  it("never throws into the judge path when the ops Notification write fails", async () => {
+    opsBehavior.reject = true;
+    expect(() => recordMany("keyword-fallback", 20, T0)).not.toThrow();
+    await new Promise((r) => setImmediate(r));
+    expect(capturedErrors).toHaveLength(1);
+  });
+});
+
+describe("judge health — public surface", () => {
+  it("exposes only a coarse status and an aggregate ratio, never error text", () => {
+    recordLlmCallFailure(
+      { provider: "openrouter", model: "m" },
+      Object.assign(new Error("402 Insufficient credits"), { status: 402 }),
+      T0,
+    );
+    recordMany("keyword-fallback", 20, T0);
+    const pub = getPublicJudgeHealth(T0);
+    expect(pub).toEqual({ status: "degraded", fallbackRatio: 1 });
+    expect(JSON.stringify(pub)).not.toMatch(/credit|402|openrouter/);
+  });
+
+  it("reports ok with the rounded ratio on a healthy stream", () => {
+    recordMany("llm", 2, T0);
+    recordMany("keyword-fallback", 1, T0);
+    expect(getPublicJudgeHealth(T0)).toEqual({ status: "ok", fallbackRatio: 0.33 });
+  });
+
+  it("names the top error on the admin (authenticated) surface", () => {
+    recordLlmCallFailure(
+      { provider: "openrouter", model: "m" },
+      Object.assign(new Error("402"), { status: 402 }),
+      T0,
+    );
+    recordMany("keyword-fallback", 20, T0);
+    expect(getJudgeHealth(T0).topError).toBe("402 credits exhausted (openrouter)");
   });
 });
 

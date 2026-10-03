@@ -13,6 +13,11 @@
  * pattern-learner), so a boot must start in a healthy state.
  */
 
+// Type-only on purpose: src/__tests__/setup.ts imports this module, and a
+// runtime import here would preload judge-health (and Sentry) into every test
+// file before its vi.mock calls register. index.ts injects the value.
+import type { PublicJudgeHealth } from "./judge/judge-health.js";
+
 /**
  * Names every scheduler that index.ts starts when BACKGROUND_AGENTS_DISABLED
  * is off. An expected name that never registers is reported as missing —
@@ -130,6 +135,13 @@ export interface SchedulerHealthReport {
     inStartupGrace?: boolean;
     schedulers?: SchedulerHealthEntry[];
     missing?: string[];
+    /**
+     * LLM judge fallback share (#1319). This endpoint is PUBLIC, so only a
+     * coarse status + aggregate ratio — no error text, no volumes. The top
+     * error lives on the admin-only GET /api/admin/judge-health. Informational:
+     * it does not change the status code, which stays scheduler liveness.
+     */
+    judge?: PublicJudgeHealth;
   };
 }
 
@@ -142,9 +154,12 @@ export function buildSchedulerHealthReport(opts: {
   disabled: boolean;
   now?: number;
   uptimeMs?: number;
+  /** getPublicJudgeHealth() — injected by index.ts (see the import note). */
+  judge?: PublicJudgeHealth;
 }): SchedulerHealthReport {
+  const { judge } = opts;
   if (opts.disabled) {
-    return { statusCode: 200, body: { status: "disabled" } };
+    return { statusCode: 200, body: { status: "disabled", judge } };
   }
   const health = getSchedulerHealth({ now: opts.now, uptimeMs: opts.uptimeMs });
   return {
@@ -154,6 +169,7 @@ export function buildSchedulerHealthReport(opts: {
       inStartupGrace: health.inStartupGrace,
       schedulers: health.schedulers,
       missing: health.missing,
+      judge,
     },
   };
 }
