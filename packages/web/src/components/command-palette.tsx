@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
+import { useAuth } from "../lib/auth";
+import { assistantHref, TODAY_HOME } from "../lib/home";
 import { hotkeyCaps, hotkeyRegistry, liveHotkeys } from "../lib/hotkeys";
 import { useT } from "../lib/i18n";
 import { useHotkeys, useKeyboardTriage } from "../lib/use-hotkeys";
@@ -24,6 +26,7 @@ export default function CommandPalette() {
   const listboxId = useId();
   const router = useRouter();
   const triage = useKeyboardTriage();
+  const unifiedHome = useAuth().user?.unifiedHome === true;
   const { t } = useT();
   const { toast } = useToast();
 
@@ -50,7 +53,7 @@ export default function CommandPalette() {
   const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
   const actionCommands: Command[] =
     triage && open
-      ? liveHotkeys({ triage, scopes: hotkeyRegistry.activeScopes() })
+      ? liveHotkeys({ triage, scopes: hotkeyRegistry.activeScopes(), unifiedHome })
           .filter(({ def }) => def.palette)
           .map(({ def, handler }) => ({
             id: `action-${def.id}`,
@@ -66,13 +69,28 @@ export default function CommandPalette() {
           }))
       : [];
 
+  // UNIFIED_HOME: Today is the first destination and the approval surface is
+  // named Approvals; otherwise the list is what it was.
+  const homeCommands: Command[] = unifiedHome
+    ? [
+        { id: "today", label: t("nav.v2.openToday"), action: () => router.push(TODAY_HOME) },
+        {
+          id: "approval-queue",
+          label: t("nav.v2.openApprovals"),
+          action: () => router.push(assistantHref()),
+        },
+      ]
+    : [
+        {
+          id: "approval-queue",
+          label: "Open decision queue",
+          sublabel: "Review decisions waiting for approval",
+          action: () => router.push("/inbox"),
+        },
+      ];
+
   const commands: Command[] = [
-    {
-      id: "approval-queue",
-      label: "Open decision queue",
-      sublabel: "Review decisions waiting for approval",
-      action: () => router.push("/inbox"),
-    },
+    ...homeCommands,
     {
       id: "mail",
       label: "Open mail",

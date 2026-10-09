@@ -363,6 +363,24 @@ export function keyboardTriageEnabled(): boolean {
 export function mailV2Enabled(): boolean {
   return ["true", "1", "yes", "on"].includes((process.env.MAIL_V2 ?? "").trim().toLowerCase());
 }
+// Unified home (productization plan P6/P7) — OFF by default (repo doctrine).
+// ONE flag for both halves: the web client learns it from GET /api/auth/me and
+// the login/register responses (`user.unifiedHome`) and makes Today (`/today`)
+// the home, with the nav Today · Mail · Calendar · Assistant; the API serves
+// Today's mail block, which reads mail by lane (see `laneReadsEnabled`). While
+// OFF nothing changes: `/inbox` is home and the clients are told false. Read at
+// request time with the same lenient truthy parse as the flags above, so a
+// flip needs no redeploy.
+export function unifiedHomeEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes((process.env.UNIFIED_HOME ?? "").trim().toLowerCase());
+}
+// The lane reads — `tier` on GET /api/email and GET /api/email/lane-counts —
+// have two consumers: Mail v2 (MAIL_V2) and Today (UNIFIED_HOME). Either flag
+// turns them on, so Today never depends on Mail v2 having been flipped first;
+// with both off the list ignores `tier` and the counts route 404s, as before.
+export function laneReadsEnabled(): boolean {
+  return mailV2Enabled() || unifiedHomeEnabled();
+}
 // MCP write tools — API key permission level and the MCP write set (steps A1
 // and A2a of docs/providers/unified-platform-plan.md). OFF by default (repo
 // doctrine). It gates minting a read-write API key, using one, the MCP-only

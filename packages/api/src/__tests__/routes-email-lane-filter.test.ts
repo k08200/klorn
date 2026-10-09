@@ -117,6 +117,7 @@ beforeEach(() => {
 
 afterEach(() => {
   delete process.env.MAIL_V2;
+  delete process.env.UNIFIED_HOME;
 });
 
 interface RawCall {
@@ -386,6 +387,20 @@ describe("GET /api/email?tier= — lane page", () => {
     await app.close();
   });
 
+  it("UNIFIED_HOME on, MAIL_V2 off: Today reads lanes, so tier is honoured", async () => {
+    delete process.env.MAIL_V2;
+    process.env.UNIFIED_HOME = "true";
+    userTokenFindFirst.mockResolvedValue(GOOGLE_TOKEN);
+    const app = await buildApp();
+    const lane = await app.inject({ method: "GET", url: "/api/email?tier=PUSH", headers: auth() });
+    expect(lane.statusCode).toBe(200);
+    // The lane page is the raw join, never the unfiltered Prisma list.
+    expect(queryRaw).toHaveBeenCalled();
+    const bad = await app.inject({ method: "GET", url: "/api/email?tier=nope", headers: auth() });
+    expect(bad.statusCode).toBe(400);
+    await app.close();
+  });
+
   it("MAIL_V2 off: tier is ignored, valid or not — the list is what it was", async () => {
     delete process.env.MAIL_V2;
     userTokenFindFirst.mockResolvedValue(GOOGLE_TOKEN);
@@ -507,6 +522,22 @@ describe("GET /api/email/lane-counts", () => {
     expect(Object.keys(body.counts).sort()).toEqual(["INFO", "MEETING", "PUSH", "QUEUE", "SILENT"]);
     expect(body.counts.PUSH.total).toBeGreaterThan(0);
     expect(queryRaw).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("UNIFIED_HOME on, MAIL_V2 off: the counts are served for Today", async () => {
+    delete process.env.MAIL_V2;
+    process.env.UNIFIED_HOME = "true";
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/email/lane-counts", headers: auth() });
+    expect(res.statusCode).toBe(200);
+    expect(Object.keys(res.json().counts).sort()).toEqual([
+      "INFO",
+      "MEETING",
+      "PUSH",
+      "QUEUE",
+      "SILENT",
+    ]);
     await app.close();
   });
 
