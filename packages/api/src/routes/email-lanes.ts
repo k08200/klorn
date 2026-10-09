@@ -9,7 +9,7 @@ import type { FastifyInstance } from "fastify";
 import { getUserId } from "../auth.js";
 import { mailV2Enabled } from "../config.js";
 import { prisma } from "../db.js";
-import { countEmailsByLane, foldLaneCounts } from "../judge/email-lanes.js";
+import { countEmailsByLane, foldLaneCounts, resolveInboxScope } from "../judge/email-lanes.js";
 import { darkRouteGate } from "./dark-route-gate.js";
 
 const laneCountsQuerySchema = {
@@ -19,6 +19,10 @@ const laneCountsQuerySchema = {
     inbox: { type: "string", maxLength: 500 },
   },
 } as const;
+
+// Read on every view change and after every action; well above a busy session,
+// well below a scripted loop. Same shape as the sibling email routes.
+const LANE_COUNTS_RATE_LIMIT = { max: 120, timeWindow: "1 minute" } as const;
 
 interface DemoLaneRow {
   tier: LiveTier;
@@ -33,7 +37,11 @@ export function registerEmailLaneRoutes(
   // lane control: one grouped query, not one count per lane.
   app.get(
     "/lane-counts",
-    { onRequest: darkRouteGate(mailV2Enabled), schema: { querystring: laneCountsQuerySchema } },
+    {
+      onRequest: darkRouteGate(mailV2Enabled),
+      schema: { querystring: laneCountsQuerySchema },
+      config: { rateLimit: LANE_COUNTS_RATE_LIMIT },
+    },
     async (request): Promise<EmailLaneCountsResponse> => {
       const uid = getUserId(request);
       const { inbox } = request.query as { inbox?: string };
@@ -48,7 +56,10 @@ export function registerEmailLaneRoutes(
           .map((row) => ({ tier: row.tier, total: 1, unread: row.isRead ? 0 : 1 }));
         return { counts: foldLaneCounts(rows), source: "demo" };
       }
-      return { counts: await countEmailsByLane(uid, inbox), source: "gmail" };
+      // A linked id is checked against its owner; one that is not the caller's
+      // counts nothing.
+      const scope = await resolveInboxScope(uid, inbox);
+      return { counts: await countEmailsByLane(uid, scope), source: "gmail" };
     },
   );
 }

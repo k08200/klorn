@@ -1268,6 +1268,7 @@ const zh: Record<string, string> = {
   "mailV2.row.markRead": "标为已读",
   "mailV2.row.markUnread": "标为未读",
   "mailV2.row.archive": "归档",
+  "mailV2.row.sorting": "分类中…",
   "mailV2.loading": "正在加载邮件",
   "mailV2.error.title": "无法加载邮件",
   "mailV2.error.body": "没有丢失任何内容。请检查连接后重试。",

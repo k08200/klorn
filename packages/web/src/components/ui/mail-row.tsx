@@ -42,6 +42,12 @@ export interface MailRowProps {
   timeIso?: string;
   /** Recorded lane. Omit/null for no chip — never a guess. */
   tier?: Tier | null;
+  /**
+   * Shown in the chip's place while there is no recorded lane ("Sorting…").
+   * A neutral, dashed capsule: it says the judge has not assigned a lane, and
+   * never borrows a lane's colour. Ignored when `tier` is set.
+   */
+  tierPending?: string;
   source?: MailRowSource | null;
   unread?: boolean;
   hasAttachment?: boolean;
@@ -77,6 +83,7 @@ function PaperclipGlyph() {
 
 function RowContent(props: MailRowProps) {
   const { sender, subject, snippet, time, timeIso, tier, source, unread, hasAttachment } = props;
+  const { tierPending } = props;
   return (
     <>
       <span className="flex min-w-0 items-center gap-2">
@@ -98,6 +105,11 @@ function RowContent(props: MailRowProps) {
         )}
         {source && <SourceBadge provider={source.provider} nickname={source.nickname} />}
         {tier && <LaneChip tier={tier} />}
+        {!tier && tierPending && (
+          <span className="shrink-0 rounded-full border border-dashed border-line-strong px-2 py-px text-caption text-ink-muted">
+            {tierPending}
+          </span>
+        )}
         <time
           dateTime={timeIso}
           className="min-w-16 shrink-0 text-right text-caption tabular-nums text-ink-muted"

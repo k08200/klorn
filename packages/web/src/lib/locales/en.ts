@@ -1362,6 +1362,7 @@ const en: Record<string, string> = {
   "mailV2.row.markRead": "Mark as read",
   "mailV2.row.markUnread": "Mark as unread",
   "mailV2.row.archive": "Archive",
+  "mailV2.row.sorting": "Sorting…",
   "mailV2.loading": "Loading mail",
   "mailV2.error.title": "Couldn't load your mail",
   "mailV2.error.body": "Nothing was lost. Check your connection and try again.",

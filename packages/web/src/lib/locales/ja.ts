@@ -1341,6 +1341,7 @@ const ja: Record<string, string> = {
   "mailV2.row.markRead": "既読にする",
   "mailV2.row.markUnread": "未読にする",
   "mailV2.row.archive": "アーカイブ",
+  "mailV2.row.sorting": "分類中…",
   "mailV2.loading": "メールを読み込み中",
   "mailV2.error.title": "メールを読み込めませんでした",
   "mailV2.error.body": "失われたものはありません。接続を確認して、もう一度お試しください。",

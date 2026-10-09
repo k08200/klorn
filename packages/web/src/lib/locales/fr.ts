@@ -1375,6 +1375,7 @@ const fr: Record<string, string> = {
   "mailV2.row.markRead": "Marquer comme lu",
   "mailV2.row.markUnread": "Marquer comme non lu",
   "mailV2.row.archive": "Archiver",
+  "mailV2.row.sorting": "Tri en cours…",
   "mailV2.loading": "Chargement du courrier",
   "mailV2.error.title": "Impossible de charger votre courrier",
   "mailV2.error.body": "Rien n'a été perdu. Vérifiez votre connexion et réessayez.",

@@ -1348,6 +1348,7 @@ const ko: Record<string, string> = {
   "mailV2.row.markRead": "읽음으로 표시",
   "mailV2.row.markUnread": "안 읽음으로 표시",
   "mailV2.row.archive": "보관",
+  "mailV2.row.sorting": "분류 중…",
   "mailV2.loading": "메일 불러오는 중",
   "mailV2.error.title": "메일을 불러오지 못했습니다",
   "mailV2.error.body": "사라진 것은 없습니다. 연결을 확인하고 다시 시도하세요.",

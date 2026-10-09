@@ -14,6 +14,7 @@ import type {
   EmailThreadListResponse,
   InboxesResponse,
   InboxPurpose,
+  LiveTier,
   TrustWire,
 } from "@klorn/contract";
 import type { EmailMessage, FeedbackSignal, Prisma } from "@prisma/client";
@@ -28,10 +29,12 @@ import {
 } from "../config.js";
 import { prisma } from "../db.js";
 import {
+  isLanePageFilter,
   LANE_FILTERS,
-  listEmailIdsInLane,
   listLaneTiersByEmail,
+  pageEmailIdsInLane,
   parseLaneFilter,
+  resolveInboxScope,
 } from "../judge/email-lanes.js";
 import { isTier } from "../judge/tiers.js";
 import { getCachedInteractionNode } from "../learning/interaction-graph.js";
@@ -725,6 +728,11 @@ export async function emailRoutes(app: FastifyInstance) {
           .send({ error: `tier must be one of ${LANE_FILTERS.join(", ")}.` } as never);
       }
       const laneOnly = lane && lane !== "ALL" ? lane : null;
+      if (laneOnly && !isLanePageFilter(filter)) {
+        return reply
+          .code(400)
+          .send({ error: `filter=${filter} cannot be combined with a lane.` } as never);
+      }
       // Heavy-email users (~200/day) clicking "Load more" 10 times to see one
       // morning's intake was the #1 dogfood friction. 50 keeps the first
       // payload under ~25 KB once joined with attachment summaries and trust
@@ -848,21 +856,39 @@ export async function emailRoutes(app: FastifyInstance) {
       } else if (inbox && inbox !== "all") {
         where.linkedInboxAccountId = inbox;
       }
-      // Lane scoping (MAIL_V2). The lane lives on AttentionItem, which has no
-      // relation to EmailMessage, so it is applied as the lane's mail ids —
-      // looked up for this user only, and still under `where.userId` here.
-      if (laneOnly) {
-        where.id = { in: await listEmailIdsInLane(uid, laneOnly) };
-      }
-
-      const [emails, total, unreadCount] = await Promise.all([
-        prisma.emailMessage.findMany({
-          where,
-          orderBy: { receivedAt: "desc" },
+      const listPage = () =>
+        Promise.all([
+          prisma.emailMessage.findMany({
+            where,
+            orderBy: { receivedAt: "desc" },
+            skip: (pageNum - 1) * pageSize,
+            take: pageSize,
+          }),
+          prisma.emailMessage.count({ where }),
+        ]);
+      // Lane page (MAIL_V2): paged by a join on the lane, so `total` is the
+      // lane's own count; the rows are then read by id and put back in the
+      // join's order. A failure throws — never the unfiltered list.
+      const lanePage = async (laneView: LiveTier): Promise<[EmailMessage[], number]> => {
+        const page = await pageEmailIdsInLane({
+          userId: uid,
+          lane: laneView,
+          scope: await resolveInboxScope(uid, inbox),
+          filter,
+          category,
+          search,
           skip: (pageNum - 1) * pageSize,
           take: pageSize,
-        }),
-        prisma.emailMessage.count({ where }),
+        });
+        if (page.ids.length === 0) return [[], page.total];
+        const rows = await prisma.emailMessage.findMany({
+          where: { userId: uid, id: { in: page.ids } },
+        });
+        const byId = new Map(rows.map((row) => [row.id, row]));
+        return [page.ids.flatMap((id) => byId.get(id) ?? []), page.total];
+      };
+      const [[emails, total], unreadCount] = await Promise.all([
+        laneOnly ? lanePage(laneOnly) : listPage(),
         prisma.emailMessage.count({ where: { userId: uid, isRead: false } }),
       ]);
 

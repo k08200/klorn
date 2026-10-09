@@ -4,7 +4,8 @@
  * Mail v2 rows and list states (productization plan §1/§2, P5).
  *
  * One-badge rule: a row is the P2 MailRow — sender, subject, snippet, time,
- * LaneChip, SourceBadge, unread dot, attachment glyph. Needs-reply, priority,
+ * LaneChip (or a neutral "Sorting…" while the judge has not assigned a lane),
+ * SourceBadge, unread dot, attachment glyph. Needs-reply, priority,
  * category, candidate and the reason are not on the row; they belong to the
  * reader header.
  */
@@ -77,6 +78,8 @@ export function MailRows(props: MailRowsProps) {
               time={formatRowTime(email.date, time.now, time.locale, time.timeZone)}
               timeIso={email.date}
               tier={email.tier}
+              // No AttentionItem yet: the mail is listed, but no lane is claimed.
+              tierPending={t("mailV2.row.sorting")}
               source={account ? { provider: account.provider, nickname: account.nickname } : null}
               unread={!email.isRead}
               hasAttachment={email.attachmentCount > 0}

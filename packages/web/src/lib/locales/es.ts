@@ -1368,6 +1368,7 @@ const es: Record<string, string> = {
   "mailV2.row.markRead": "Marcar como leído",
   "mailV2.row.markUnread": "Marcar como no leído",
   "mailV2.row.archive": "Archivar",
+  "mailV2.row.sorting": "Clasificando…",
   "mailV2.loading": "Cargando el correo",
   "mailV2.error.title": "No se pudo cargar tu correo",
   "mailV2.error.body": "No se ha perdido nada. Revisa tu conexión e inténtalo de nuevo.",

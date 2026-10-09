@@ -1390,6 +1390,7 @@ const de: Record<string, string> = {
   "mailV2.row.markRead": "Als gelesen markieren",
   "mailV2.row.markUnread": "Als ungelesen markieren",
   "mailV2.row.archive": "Archivieren",
+  "mailV2.row.sorting": "Wird sortiert…",
   "mailV2.loading": "Mails werden geladen",
   "mailV2.error.title": "Mails konnten nicht geladen werden",
   "mailV2.error.body": "Es ist nichts verloren gegangen. Verbindung prüfen und erneut versuchen.",
