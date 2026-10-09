@@ -142,6 +142,32 @@ export interface EmailLaneCountsResponse {
 }
 
 /**
+ * `GET /api/email/:id/reader-context?tier=&inbox=&filter=&search=` — what the
+ * Mail v2 reader header shows beyond the mail itself (MAIL_V2): the lane and
+ * why, the account, the relationship facts that left the list row, and the
+ * mail's neighbours in the list view it was opened from.
+ */
+export interface EmailReaderContextResponse {
+  /** The recorded lane; null = not judged yet (never a guessed lane). */
+  tier: LiveTier | null;
+  /** Why that lane, in the user's notification language; null when none is recorded. */
+  tierReason: string | null;
+  /** null = the primary account; a string = the linked inbox it arrived in. */
+  linkedInboxAccountId: string | null;
+  /**
+   * True only as a recorded fact: no reply history with this sender and no
+   * category claim (a newsletter is never a "first contact").
+   */
+  firstContact: boolean;
+  /** How many times the user has written to this sender; null when unknown. */
+  repliedCount: number | null;
+  /** The mail just above this one in that view (newer); null at the top. */
+  newerId: string | null;
+  /** The mail just below this one in that view (older); null at the end. */
+  olderId: string | null;
+}
+
+/**
  * Which mail service a connected inbox lives on. Mirrors the API's
  * InboxProviderName (Phase 1 of the multi-provider plan). Clients must treat
  * unknown values as "a provider without a full action surface" — new

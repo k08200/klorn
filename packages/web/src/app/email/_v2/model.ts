@@ -5,7 +5,13 @@
  * suite pins it (packages/api/src/__tests__/web-mail-v2-model.test.ts).
  */
 
-import type { EmailListItem, InboxOption, InboxProvider, LiveTier } from "@klorn/contract";
+import type {
+  EmailLaneCounts,
+  EmailListItem,
+  InboxOption,
+  InboxProvider,
+  LiveTier,
+} from "@klorn/contract";
 import { CORE_TIERS } from "../../../lib/tiers";
 
 /** What the list is scoped to: one live lane, or every lane. */
@@ -71,6 +77,72 @@ export function listRequestPath(view: ListView, page: number): string {
 /** True when the view is narrowed by anything other than its lane. */
 export function isNarrowed(view: ListView): boolean {
   return view.filter !== "none" || view.account !== ALL_ACCOUNTS || view.search.trim() !== "";
+}
+
+/**
+ * Whether rows carry their lane chip. Inside one lane the chip repeats the
+ * selected segment on every row, so it shows only where the view mixes lanes
+ * or is not the standing set: All, a search, and "Show silenced".
+ */
+export function showsLaneChip(view: ListView): boolean {
+  return view.lane === "ALL" || view.lane === "SILENT" || view.search.trim() !== "";
+}
+
+/**
+ * The lane a row shows. A row whose lane differs from the selected segment
+ * (it was just moved, and has not left the list yet) keeps its chip: there the
+ * chip is news, not repetition.
+ */
+export function rowLane(view: ListView, tier: LiveTier | null): LiveTier | null {
+  if (tier === null) return null;
+  return showsLaneChip(view) || tier !== view.lane ? tier : null;
+}
+
+export interface ViewTally {
+  /** Mail in this exact view (lane, account, filter, search). */
+  total: number;
+  /** Unread among them; null when the lane counts cannot answer for this view. */
+  unread: number | null;
+}
+
+/**
+ * The header line's numbers. `total` is the list's own total; `unread` comes
+ * from the lane counts already loaded for the selected account, so it is known
+ * only while the view is a plain lane (no filter, no search) — never a guess.
+ */
+export function viewTally(
+  view: ListView,
+  counts: EmailLaneCounts | null,
+  listTotal: number,
+): ViewTally {
+  if (!counts || view.filter !== "none" || view.search.trim() !== "") {
+    return { total: listTotal, unread: null };
+  }
+  const unread =
+    view.lane === "ALL"
+      ? Object.values(counts).reduce((sum, lane) => sum + lane.unread, 0)
+      : counts[view.lane].unread;
+  return { total: listTotal, unread };
+}
+
+/** The ids from `fromId` to `toId` inclusive, in list order; just `toId` when either is gone. */
+export function rangeIds(ids: readonly string[], fromId: string | null, toId: string): string[] {
+  const from = fromId === null ? -1 : ids.indexOf(fromId);
+  const to = ids.indexOf(toId);
+  if (from < 0 || to < 0) return [toId];
+  return ids.slice(Math.min(from, to), Math.max(from, to) + 1);
+}
+
+/** Path and query for the reader's context in the view it was opened from. */
+export function readerContextPath(emailId: string, view: ListView): string {
+  const params = new URLSearchParams();
+  params.set("tier", view.lane);
+  if (view.account !== ALL_ACCOUNTS) params.set("inbox", view.account);
+  // Threads are not a lane page; the reader walks the lane itself there.
+  if (view.filter !== "none" && view.filter !== "threads") params.set("filter", view.filter);
+  const search = view.search.trim();
+  if (search) params.set("search", search);
+  return `/api/email/${encodeURIComponent(emailId)}/reader-context?${params.toString()}`;
 }
 
 /** The reader's "next mail" queue for this view (GET /api/email/next?queue=). */

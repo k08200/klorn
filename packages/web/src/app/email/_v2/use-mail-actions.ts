@@ -21,13 +21,14 @@ import { useT } from "../../../lib/i18n";
 import { captureClientError } from "../../../lib/sentry";
 import { serverErrorMessage } from "../../../lib/server-error";
 import { UNDO_NOTICE_SECONDS, useLaneMove } from "../use-lane-move";
+import { REMINDER_LABEL_KEYS, type ReminderKey, reminderDate } from "./reminders";
 import type { MailList } from "./use-mail-list";
 
 export interface ArchivedNotice {
   emails: ReadonlyArray<{ id: string; gmailId: string; subject: string }>;
 }
 
-type Busy = "sync" | "row" | "undo" | "reanalyze";
+type Busy = "sync" | "row" | "undo" | "reanalyze" | "remind";
 
 interface SyncResult {
   synced?: number;
@@ -142,6 +143,35 @@ export function useMailActions(list: MailList) {
     }
   };
 
+  /** A reminder about one mail. Nothing on the row changes; the toast confirms it. */
+  const remind = async (email: EmailListItem, key: ReminderKey) => {
+    if (busy) return;
+    setBusy("remind");
+    setError(null);
+    const subject = email.subject || t("mailV2.noSubject");
+    try {
+      await apiFetch("/api/reminders", {
+        method: "POST",
+        body: JSON.stringify({
+          title: t(
+            email.needsReply
+              ? "emailDetail.reminderTitle.replyTo"
+              : "emailDetail.reminderTitle.review",
+            { subject },
+          ),
+          remindAt: reminderDate(key, new Date()).toISOString(),
+          description: [`From: ${email.from}`, `Open: /email/${email.id}`].join("\n"),
+        }),
+      });
+      toast(t("mailV2.list.remind.set", { when: t(REMINDER_LABEL_KEYS[key]) }), "success");
+    } catch (err) {
+      captureClientError(err, { scope: "email.v2.remind", option: key });
+      setError(serverErrorMessage(err, t("mailV2.list.remind.failed")));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const sync = async () => {
     if (busy) return;
     setBusy("sync");
@@ -197,6 +227,7 @@ export function useMailActions(list: MailList) {
     archive,
     undoArchive,
     setRead,
+    remind,
     sync,
     reanalyzeAttachments,
     laneMove,

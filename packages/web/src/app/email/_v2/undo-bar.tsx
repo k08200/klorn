@@ -17,12 +17,21 @@ interface UndoBarProps {
   busy: boolean;
   onUndo: () => void;
   onDismiss: () => void;
+  /** Sit above a phone bottom action bar (the reader's) as well as the tab bar. */
+  raised?: boolean;
 }
 
-export function UndoBar({ title, detail, undoLabel, busy, onUndo, onDismiss }: UndoBarProps) {
+export function UndoBar(props: UndoBarProps) {
+  const { title, detail, undoLabel, busy, onUndo, onDismiss, raised = false } = props;
   const { t } = useT();
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(74px+env(safe-area-inset-bottom))] z-40 flex justify-center px-4 md:bottom-6">
+    <div
+      className={`pointer-events-none fixed inset-x-0 z-40 flex justify-center px-4 md:bottom-6 ${
+        raised
+          ? "bottom-[calc(158px+env(safe-area-inset-bottom))]"
+          : "bottom-[calc(74px+env(safe-area-inset-bottom))]"
+      }`}
+    >
       <div
         role="status"
         className="pointer-events-auto flex w-full max-w-md items-center gap-2 rounded-card border border-line bg-surface-elevated py-1 pl-4 pr-1 shadow-l2"

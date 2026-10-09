@@ -73,3 +73,36 @@ export const InboxIcon = () => (
     <path d="M2.5 9.5h3l.8 1.5h3.4l.8-1.5h3" />
   </Glyph>
 );
+
+export const ClockIcon = () => (
+  <Glyph>
+    <circle cx="8" cy="8" r="5.5" />
+    <path d="M8 5v3l2 1.5" />
+  </Glyph>
+);
+
+export const ReplyIcon = () => (
+  <Glyph>
+    <path d="M6.5 4 3 7.5 6.5 11" />
+    <path d="M3 7.5h6a4 4 0 0 1 4 4V12" />
+  </Glyph>
+);
+
+export const BackIcon = () => (
+  <Glyph>
+    <path d="M13 8H3" />
+    <path d="M7 4 3 8l4 4" />
+  </Glyph>
+);
+
+export const ChevronUpIcon = () => (
+  <Glyph>
+    <path d="m4 10 4-4 4 4" />
+  </Glyph>
+);
+
+export const ChevronDownIcon = () => (
+  <Glyph>
+    <path d="m4 6 4 4 4-4" />
+  </Glyph>
+);

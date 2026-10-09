@@ -178,15 +178,7 @@ export async function pageEmailIdsInLane(
   query: LanePageQuery,
 ): Promise<{ ids: string[]; total: number }> {
   if (query.scope.kind === "unknown") return { ids: [], total: 0 };
-  const { join, predicate } = laneSql(query.lane);
-  const from = Prisma.sql`FROM "EmailMessage" e
-    ${join}
-    WHERE e."userId" = ${query.userId}
-      ${predicate}
-      ${inboxSql(query.scope)}
-      ${(query.filter && LANE_PAGE_FILTERS.get(query.filter)) || Prisma.empty}
-      ${query.category ? Prisma.sql`AND e."category" = ${query.category}` : Prisma.empty}
-      ${searchSql(query.search)}`;
+  const from = laneFromSql(query);
   const [rows, totals] = await Promise.all([
     prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
       SELECT e."id" AS id
@@ -198,6 +190,61 @@ export async function pageEmailIdsInLane(
       ${from}`),
   ]);
   return { ids: rows.map((row) => row.id), total: Number(totals[0]?.total ?? 0) };
+}
+
+/** What a list view is made of: the FROM / WHERE both the page and the reader's neighbours read. */
+type LaneViewQuery = Pick<LanePageQuery, "userId" | "scope" | "filter" | "category" | "search"> & {
+  /** One live lane, or ALL for every lane (no join at all). */
+  lane: LaneFilter;
+};
+
+function laneFromSql(query: LaneViewQuery): Prisma.Sql {
+  const { join, predicate } =
+    query.lane === "ALL" ? { join: Prisma.empty, predicate: Prisma.empty } : laneSql(query.lane);
+  return Prisma.sql`FROM "EmailMessage" e
+    ${join}
+    WHERE e."userId" = ${query.userId}
+      ${predicate}
+      ${inboxSql(query.scope)}
+      ${(query.filter && LANE_PAGE_FILTERS.get(query.filter)) || Prisma.empty}
+      ${query.category ? Prisma.sql`AND e."category" = ${query.category}` : Prisma.empty}
+      ${searchSql(query.search)}`;
+}
+
+export interface LaneNeighbourQuery extends LaneViewQuery {
+  /** The mail the reader is on. It need not be in the view (it may just have been moved out). */
+  emailId: string;
+}
+
+/**
+ * The mail just above (newer) and just below (older) `emailId` in a list
+ * view — the reader's previous / next (MAIL_V2). Same FROM, WHERE and order as
+ * the page above, so walking "next" visits exactly the rows the list shows, in
+ * that order. The anchor is read inside the query by id AND owner: a mail that
+ * is not the caller's has no neighbours. Every value is a bound parameter.
+ */
+export async function neighbourEmailIdsInLane(
+  query: LaneNeighbourQuery,
+): Promise<{ newerId: string | null; olderId: string | null }> {
+  if (query.scope.kind === "unknown") return { newerId: null, olderId: null };
+  const from = laneFromSql(query);
+  const anchor = Prisma.sql`(SELECT c."receivedAt", c."id" FROM "EmailMessage" c
+    WHERE c."id" = ${query.emailId} AND c."userId" = ${query.userId})`;
+  const [older, newer] = await Promise.all([
+    prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT e."id" AS id
+      ${from}
+      AND (e."receivedAt", e."id") < ${anchor}
+      ORDER BY e."receivedAt" DESC, e."id" DESC
+      LIMIT 1`),
+    prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT e."id" AS id
+      ${from}
+      AND (e."receivedAt", e."id") > ${anchor}
+      ORDER BY e."receivedAt" ASC, e."id" ASC
+      LIMIT 1`),
+  ]);
+  return { newerId: newer[0]?.id ?? null, olderId: older[0]?.id ?? null };
 }
 
 export function emptyLaneCounts(): EmailLaneCounts {

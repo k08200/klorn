@@ -332,6 +332,21 @@ describe("GET /api/email?tier= — lane page", () => {
     for (const [args] of emailFindMany.mock.calls) {
       expect((args as { where: Record<string, unknown> }).where).toEqual({ userId: "user-1" });
     }
+    // Mail v2's All view breaks a timestamp tie by id, like the lane pages and
+    // the reader's previous / next; without `tier` the order is the legacy one.
+    const orders = emailFindMany.mock.calls.map(([args]) => (args as { orderBy: unknown }).orderBy);
+    expect(orders).toEqual([[{ receivedAt: "desc" }, { id: "desc" }], { receivedAt: "desc" }]);
+    await app.close();
+  });
+
+  it("MAIL_V2 off: tier=ALL keeps the legacy ordering too", async () => {
+    delete process.env.MAIL_V2;
+    userTokenFindFirst.mockResolvedValue(GOOGLE_TOKEN);
+    const app = await buildApp();
+    await app.inject({ method: "GET", url: "/api/email?tier=ALL", headers: auth() });
+    expect((emailFindMany.mock.calls[0]?.[0] as { orderBy: unknown }).orderBy).toEqual({
+      receivedAt: "desc",
+    });
     await app.close();
   });
 
