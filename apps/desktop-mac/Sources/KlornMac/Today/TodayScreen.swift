@@ -149,21 +149,19 @@ private struct TodayLaneGroup: View {
 /// A Today mail row under the one-badge rule: who, what, when. The lane is
 /// the group it sits in; the reply state and the reason are in the reader.
 private struct TodayMailRow: View {
+    @Environment(AppModel.self) private var model
     let item: FirewallItem
     let now: Date
     let open: () -> Void
     @State private var hovering = false
 
-    private var sender: String {
-        let name = senderDisplayName(item.email?.from.map(decodeHTMLEntities))
-        return name.isEmpty ? (sourceBadgeLabel(item.source) ?? L("source.unknown")) : name
-    }
-    private var subject: String { decodeHTMLEntities(item.email?.subject ?? item.title) }
-
     var body: some View {
+        // Mixed lanes never happen inside a lane group: no chip.
+        let content = WindowRowRules.content(
+            for: item, mixedLanes: false, inboxes: model.inboxes,
+            opened: model.openedEmailIds, now: now)
         Button(action: open) {
-            // Mixed lanes never happen inside a lane group: no chip.
-            WindowRowBody(content: WindowRowRules.content(for: item, mixedLanes: false, now: now))
+            WindowRowBody(content: content)
                 .padding(.horizontal, Theme.s3).padding(.vertical, Theme.s2)
                 .frame(maxWidth: .infinity, minHeight: Theme.rowHeight, alignment: .leading)
                 .background(hovering ? Theme.surfaceHover : .clear)
@@ -171,7 +169,9 @@ private struct TodayMailRow: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .accessibilityLabel(L("today.row.a11y", sender, subject))
+        .accessibilityLabel(
+            WindowRowRules.a11yLabel(
+                content, lead: L("today.row.a11y", content.sender, content.subject)))
     }
 }
 
