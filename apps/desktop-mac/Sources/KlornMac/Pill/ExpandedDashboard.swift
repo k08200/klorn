@@ -11,6 +11,9 @@ struct ExpandedPanel: View {
         VStack(spacing: 0) {
             header
             Divider().overlay(Theme.line).padding(.horizontal, 18)
+            // A snooze from the ticker that did not take says so here too:
+            // the row it was clicked on is back, and silence reads as a bug.
+            if let message = model.actionError { ActionErrorBanner(message: message) }
             HStack(alignment: .top, spacing: 0) {
                 InboxColumn(actions: actions)
                 columnDivider

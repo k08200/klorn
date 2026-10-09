@@ -25,6 +25,9 @@ final class PushCardState {
     /// Index that was sent (checkmark) just before the card advances.
     var sentIndex: Int?
     var sendError: String?
+    /// The snooze from this card did not take: the item is back on the card
+    /// with the reason, until the next action on it.
+    var actionError: String?
     /// True while the panel is key — the only state in which 1/2/3/⏎/esc work.
     var keysArmed = false
 }
@@ -81,6 +84,7 @@ struct PushCard: View {
         let size = PushCardMetrics.size(for: state.layout)
         VStack(alignment: .leading, spacing: 10) {
             header
+            if let message = state.actionError { actionErrorRow(message) }
             Divider().overlay(Theme.line)
             if state.layout == .expanded {
                 summarySection
@@ -103,6 +107,19 @@ struct PushCard: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel(L("push.card.a11y"))
         .accessibilityHint(state.layout == .compact ? L("push.expand.hint") : L("push.collapse.hint"))
+    }
+
+    /// The snooze from this card did not take. Body ink, not a warning hue:
+    /// it has to read on the glass in both appearances.
+    private func actionErrorRow(_ message: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Theme.s2) {
+            Image(systemName: "exclamationmark.circle").font(.caption2)
+                .foregroundStyle(Theme.textDim).accessibilityHidden(true)
+            Text(message).font(.caption2).foregroundStyle(Theme.text)
+                .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .accessibilityElement(children: .combine)
     }
 
     /// Expanded-only: Klorn's AI summary of the email (snippet fallback while

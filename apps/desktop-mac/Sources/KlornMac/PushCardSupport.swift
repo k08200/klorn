@@ -65,5 +65,11 @@ struct PushCardQueue: Equatable, Sendable {
         items.removeFirst()
     }
 
+    /// Put an item back at the front: an action on it failed after the
+    /// card had already moved on. Never a duplicate.
+    mutating func restore(_ item: FirewallItem) {
+        items = [item] + items.filter { $0.id != item.id }
+    }
+
     mutating func clear() { items = [] }
 }

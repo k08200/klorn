@@ -1851,6 +1851,9 @@ func runSelfChecks() async -> Bool {
     print("States and first launch (M6):")
     for (name, ok) in await stateSelfChecks(sourceDir: sourceDir) { check(name, ok) }
 
+    print("Session scope:")
+    for (name, ok) in await sessionSelfChecks(sourceDir: sourceDir) { check(name, ok) }
+
     print("Localization:")
     // A key present in one language and missing in another ships a raw key
     // ("prefs.done") to whoever runs the other language — the kind of bug that

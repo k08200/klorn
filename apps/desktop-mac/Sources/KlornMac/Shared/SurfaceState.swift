@@ -82,6 +82,18 @@ enum SurfaceStateRules {
         return offlineCodes.contains(code) ? .offline : .failed
     }
 
+    enum CancelledLoadRecovery: Equatable { case none, retry, fail }
+
+    /// What a cancelled load needs. With mail on screen or an error already
+    /// showing, nothing: the surface has a state. With neither it would sit
+    /// on "loading", so load once more, then fall back to the failed state.
+    static func cancelledLoadRecovery(
+        hasQueue: Bool, hasError: Bool, retried: Bool
+    ) -> CancelledLoadRecovery {
+        guard !hasQueue, !hasError else { return .none }
+        return retried ? .fail : .retry
+    }
+
     static func isOffline(_ error: Error) -> Bool {
         failureKind(error) == .offline
     }

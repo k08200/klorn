@@ -13,8 +13,15 @@ import SwiftUI
 @MainActor
 final class PushCardController {
     private let model: AppModel
-    private let state = PushCardState()
+    /// Internal (not private) so the self-check can read what the card shows.
+    let state = PushCardState()
     private var queue = PushCardQueue()
+    /// The session the cards on screen belong to (`AppModel.sessionGeneration`
+    /// when they were presented). Every action and every late result checks
+    /// it: a card must never act for an account other than the one it shows.
+    private var stamp: Int
+    /// Self-check mode: the whole lifecycle, with no panel and no sound.
+    private let headless: Bool
     private var panel: NSPanel?
     private var keyMonitor: Any?
     private var resignObserver: NSObjectProtocol?
@@ -44,8 +51,36 @@ final class PushCardController {
     /// unset, "Open" just dismisses the card rather than silently doing nothing.
     var onOpenInApp: ((FirewallItem) -> Void)?
 
-    init(model: AppModel) {
+    init(model: AppModel, headless: Bool = false) {
         self.model = model
+        self.headless = headless
+        self.stamp = model.sessionGeneration
+    }
+
+    /// The session ended (sign-out, or another sign-in): take the card off
+    /// screen and forget everything on it. Wired to `AppModel.onSessionEnded`.
+    func reset() {
+        queue.clear()
+        state.item = nil
+        state.pendingCount = 0
+        state.drafts = .loading
+        state.layout = .compact
+        state.detail = nil
+        state.sendingIndex = nil
+        state.sentIndex = nil
+        state.sendError = nil
+        state.actionError = nil
+        state.keysArmed = false
+        panel?.orderOut(nil)
+    }
+
+    /// False once the session the card was presented in has ended. The card
+    /// is reset on the way out, so nothing of that session stays actionable
+    /// even if the teardown callback was missed.
+    private func cardIsCurrent() -> Bool {
+        if model.isCurrent(stamp) { return true }
+        reset()
+        return false
     }
 
     // No deinit teardown: the AppDelegate owns exactly one controller for the
@@ -55,14 +90,20 @@ final class PushCardController {
     /// screen (the caller uses this to decide the OS-banner fallback).
     @discardableResult
     func present(_ items: [FirewallItem]) -> Bool {
-        guard NSScreen.main != nil else { return false }  // headless: banner instead
+        guard headless || NSScreen.main != nil else { return false }  // no screen: banner instead
+        // Cards left over from a session that has ended are not shown beside
+        // (or ahead of) this session's mail.
+        if !model.isCurrent(stamp) { reset() }
+        stamp = model.sessionGeneration
         let hadCurrent = queue.current != nil
         queue.enqueue(items)
         if !hadCurrent { showCurrent() } else { state.pendingCount = queue.pendingCount }
         // Arrival chime: the card is silent chrome without it, and the OS
         // banner (which carries the system sound) is suppressed while a card
         // draws. Same user switch as the banner (Preferences → Notifications).
-        if Self.shouldChime(newCount: items.count, alertsEnabled: model.settings.notificationsEnabled) {
+        if !headless,
+           Self.shouldChime(newCount: items.count, alertsEnabled: model.settings.notificationsEnabled)
+        {
             NSSound(named: "Glass")?.play()
         }
         return queue.current != nil
@@ -106,6 +147,7 @@ final class PushCardController {
         state.sendingIndex = nil
         state.sentIndex = nil
         state.sendError = nil
+        state.actionError = nil
         render()
         fetchDrafts(for: item)
         fetchDetail(for: item)
@@ -115,20 +157,23 @@ final class PushCardController {
     /// the moment the user clicks. Best-effort: on failure the expanded view
     /// falls back to the wire snippet (cardDetailText).
     private func fetchDetail(for item: FirewallItem) {
+        let stamp = stamp
         Task { [weak self] in
             guard let self else { return }
-            let detail = await self.model.fetchEmailDetail(item)
-            guard self.state.item?.id == item.id else { return }
+            let detail = await self.model.fetchEmailDetail(item, session: stamp)
+            guard self.model.isCurrent(stamp), self.state.item?.id == item.id else { return }
             self.state.detail = detail
         }
     }
 
     private func fetchDrafts(for item: FirewallItem) {
+        let stamp = stamp
         Task { [weak self] in
             guard let self else { return }
-            let fetch = await self.model.fetchReplyOptions(item)
-            // The card may have advanced to another item while the LLM drafted.
-            guard self.state.item?.id == item.id else { return }
+            let fetch = await self.model.fetchReplyOptions(item, session: stamp)
+            // The card may have advanced to another item while the LLM
+            // drafted, or its session may have ended.
+            guard self.model.isCurrent(stamp), self.state.item?.id == item.id else { return }
             switch fetch {
             case .ready(let options): self.state.drafts = .ready(options.options)
             case .needsPro: self.state.drafts = .needsPro
@@ -151,14 +196,38 @@ final class PushCardController {
 
     /// Snooze the current item server-side (resurfaces at the chosen time),
     /// then move to the next card. The model hides it optimistically and
-    /// reconciles on failure — the card just advances.
+    /// reconciles on failure — the card just advances, and comes back to
+    /// the item only if the snooze did not take.
     private func snooze(_ option: SnoozeOption) {
-        guard let item = state.item else { return }
-        Task { [weak self] in await self?.model.snooze(item, until: option.resurface()) }
+        guard cardIsCurrent(), let item = state.item else { return }
+        let stamp = stamp
+        Task { [weak self] in
+            guard let self else { return }
+            // nil: it took, or the session it was sent in has ended.
+            guard let failure = await self.model.snooze(
+                item, until: option.resurface(), session: stamp)
+            else { return }
+            self.restore(item, failure: failure, stamp: stamp)
+        }
         advance()
     }
 
+    /// The snooze failed and the model put the mail back in the queue: put
+    /// it back on the card too, with the reason. The card had already moved
+    /// on (or closed), so without this the failure was silent.
+    private func restore(_ item: FirewallItem, failure: String, stamp: Int) {
+        // Never a card from a session that has ended, and never onto the
+        // cards of a later one.
+        guard model.isCurrent(stamp), stamp == self.stamp else { return }
+        queue.restore(item)
+        showCurrent()
+        state.actionError = failure
+    }
+
     // MARK: - Actions
+
+    /// Self-check seam: the card's own actions, as its buttons call them.
+    func actionsForCheck() -> PushCardActions { makeActions() }
 
     private func makeActions() -> PushCardActions {
         PushCardActions(
@@ -167,7 +236,7 @@ final class PushCardController {
             onDismiss: { [weak self] in self?.advance() },  // local only — never archives
             onSnooze: { [weak self] option in self?.snooze(option) },
             onRetry: { [weak self] in
-                guard let self, let item = self.state.item else { return }
+                guard let self, self.cardIsCurrent(), let item = self.state.item else { return }
                 self.state.drafts = .loading
                 self.fetchDrafts(for: item)
             },
@@ -192,20 +261,22 @@ final class PushCardController {
     }
 
     private func send(_ index: Int) {
-        guard let item = state.item,
+        guard cardIsCurrent(), let item = state.item,
               case .ready(let options) = state.drafts,
               options.indices.contains(index),
               state.sendingIndex == nil, state.sentIndex == nil
         else { return }
         state.sendingIndex = index
         state.sendError = nil
+        let stamp = stamp
         Task { [weak self] in
             guard let self else { return }
             // sendReply (not reply): the card owns its own error channel and
             // must never clear/overwrite the reading-pane composer's live
             // replyError while that surface is mid-send for another email.
-            let error = await self.model.sendReply(item, body: options[index].body)
-            guard self.state.item?.id == item.id else { return }
+            let error = await self.model.sendReply(
+                item, body: options[index].body, session: stamp)
+            guard self.model.isCurrent(stamp), self.state.item?.id == item.id else { return }
             self.state.sendingIndex = nil
             if let error {
                 self.state.sendError = error
@@ -213,7 +284,7 @@ final class PushCardController {
                 self.state.sentIndex = index
                 AccessibilityNotification.Announcement("Reply sent").post()
                 try? await Task.sleep(for: .seconds(1.2))  // let the ✓ land
-                guard self.state.item?.id == item.id else { return }
+                guard self.model.isCurrent(stamp), self.state.item?.id == item.id else { return }
                 self.advance()
             }
         }
@@ -222,6 +293,8 @@ final class PushCardController {
     /// "Open" now lands in Klorn's own reading pane — replying, re-tiering and
     /// snoozing all live there, so the web round trip bought nothing.
     private func openInApp() {
+        // A card of a session that has ended opens nothing in this one.
+        guard cardIsCurrent() else { return }
         let item = state.item
         hide()
         if let item { onOpenInApp?(item) }
@@ -231,6 +304,7 @@ final class PushCardController {
     // MARK: - Panel
 
     private func render() {
+        guard !headless else { return }
         let wasVisible = panel?.isVisible ?? false
         let panel = self.panel ?? makePanel()
         self.panel = panel
