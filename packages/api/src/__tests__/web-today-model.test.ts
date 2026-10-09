@@ -61,8 +61,8 @@ describe("homePath", () => {
     expect(homePath(null)).toBe(LEGACY_HOME);
   });
 
-  it("keeps the Assistant destination on the approvals page until the hub ships", () => {
-    expect(assistantHref()).toBe("/inbox");
+  it("sends Assistant to the hub's approvals page (P7)", () => {
+    expect(assistantHref()).toBe("/assistant/approvals");
   });
 });
 

@@ -12,6 +12,7 @@ import type {
   OperatingPlanTone,
   OperatingPlanWatchContext,
 } from "../lib/operating-plan";
+import { ToolName } from "./tool-name";
 
 const EMPTY_PLAN: OperatingPlan = {
   generatedAt: "",
@@ -245,9 +246,11 @@ function DecisionOutcomeRow({ outcome }: { outcome: OperatingPlanOutcome }) {
           </span>
         </div>
         <p className="mt-1 truncate text-[11px] text-ink-mid">
-          {outcome.toolName && outcome.toolName !== "decision"
-            ? outcome.toolName.replace(/_/g, " ")
-            : "Decision"}
+          {outcome.toolName && outcome.toolName !== "decision" ? (
+            <ToolName toolName={outcome.toolName} />
+          ) : (
+            "Decision"
+          )}
           {outcome.result ? ` · ${outcome.result}` : ""}
         </p>
       </Link>

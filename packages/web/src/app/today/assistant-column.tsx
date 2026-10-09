@@ -14,12 +14,11 @@ import { type FormEvent, useState } from "react";
 import Button from "../../components/ui/button";
 import { Skeleton, SkeletonGroup } from "../../components/ui/skeleton";
 import { askAssistant } from "../../lib/assistant-ask";
-import { assistantHref } from "../../lib/home";
+import { ASSISTANT_BRIEFING, assistantHref } from "../../lib/home";
 import { useT } from "../../lib/i18n";
 import { BlockError, BlockLink, Chevron, LinesSkeleton, TodayBlock } from "./block";
 import { useBriefing, usePendingApprovals } from "./use-today-data";
 
-const BRIEFING_HREF = "/briefing";
 const BRIEFING_SETTINGS_HREF = "/settings/notifications";
 const ASK_MAX_LENGTH = 4000;
 
@@ -65,7 +64,7 @@ function BriefingSummary() {
             {preview || dayOneCopy(briefing.status, t)}
           </p>
           {preview || scheduled ? (
-            <BlockLink href={BRIEFING_HREF}>{t("today.briefing.open")}</BlockLink>
+            <BlockLink href={ASSISTANT_BRIEFING}>{t("today.briefing.open")}</BlockLink>
           ) : (
             <BlockLink href={BRIEFING_SETTINGS_HREF}>{t("today.briefing.setUp")}</BlockLink>
           )}

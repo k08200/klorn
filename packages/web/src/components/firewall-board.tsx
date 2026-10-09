@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "../lib/api";
 import { captureClientError } from "../lib/sentry";
 import { useToast } from "./toast";
+import { ToolName } from "./tool-name";
 import { TrustDot, type TrustScoreData } from "./trust-badge";
 
 // Wire shapes come from @klorn/contract — the same types the server builds
@@ -549,7 +550,9 @@ function FirewallCard({
         {item.toolName && (
           <>
             <span>·</span>
-            <span>{item.toolName.replace(/_/g, " ")}</span>
+            <span>
+              <ToolName toolName={item.toolName} />
+            </span>
           </>
         )}
         <span>·</span>

@@ -3,78 +3,36 @@
 // Wire shapes come from @klorn/contract — the same types the server builds
 // (routes/receipt.ts), so a response-shape change fails to compile here
 // instead of silently desyncing.
-import type { DailyReceipt, ReceiptItem, ReceiptUndoResponse } from "@klorn/contract";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ReceiptItem } from "@klorn/contract";
 import Link from "next/link";
-import { useState } from "react";
 import AuthGuard from "../../../components/auth-guard";
+import { HubHandoff } from "../../../components/hub-handoff";
 import { useToast } from "../../../components/toast";
 import ErrorAlert from "../../../components/ui/error-alert";
 import LoadingState from "../../../components/ui/loading-state";
-import { apiFetch } from "../../../lib/api";
 import { useT } from "../../../lib/i18n";
-import { queryKeys } from "../../../lib/query-keys";
-import { captureClientError } from "../../../lib/sentry";
+import { useReceipt } from "./use-receipt";
 
 export default function ReceiptPage() {
   return (
     <AuthGuard>
-      <ReceiptView />
+      <HubHandoff>
+        <ReceiptView />
+      </HubHandoff>
     </AuthGuard>
   );
 }
 
 function ReceiptView() {
   const { t } = useT();
-  const queryClient = useQueryClient();
-  const [undoLoading, setUndoLoading] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
-
-  const receiptQuery = useQuery({
-    queryKey: queryKeys.inbox.receipt(),
-    queryFn: async () => {
-      try {
-        return await apiFetch<DailyReceipt>("/api/inbox/receipt/today");
-      } catch (err) {
-        captureClientError(err, { scope: "receipt.load" });
-        throw err;
-      }
-    },
+  const { receiptQuery, isUndoing, requestUndo } = useReceipt({
+    onUndoAnswer: (result) => toast(result.message, result.ok ? "success" : "error"),
+    onUndoError: () => toast(t("receipt.undo.error"), "error"),
   });
   const receipt = receiptQuery.data ?? null;
   const loading = receiptQuery.isLoading;
   const error = receiptQuery.error ? t("receipt.error.load") : null;
-
-  const undoMutation = useMutation({
-    mutationFn: (pendingActionId: string) =>
-      apiFetch<ReceiptUndoResponse>(`/api/inbox/receipt/undo/${pendingActionId}`, {
-        method: "POST",
-      }),
-    onMutate: (pendingActionId) => {
-      setUndoLoading((prev) => ({ ...prev, [pendingActionId]: true }));
-    },
-    onSuccess: (result) => {
-      if (result.ok) {
-        toast(result.message, "success");
-        // The undo creates a new proposal server-side; refetch reflects it.
-        void queryClient.invalidateQueries({ queryKey: queryKeys.inbox.receipt() });
-      } else {
-        toast(result.message, "error");
-      }
-    },
-    onError: (err, pendingActionId) => {
-      captureClientError(err, { scope: "receipt.undo", pendingActionId });
-      toast(t("receipt.undo.error"), "error");
-    },
-    onSettled: (_data, _err, pendingActionId) => {
-      setUndoLoading((prev) => ({ ...prev, [pendingActionId]: false }));
-    },
-  });
-
-  const handleUndo = (pendingActionId: string) => {
-    if (undoLoading[pendingActionId]) return;
-    undoMutation.mutate(pendingActionId);
-  };
 
   if (loading) {
     return (
@@ -154,11 +112,11 @@ function ReceiptView() {
             renderActions={(item) => (
               <button
                 type="button"
-                onClick={() => handleUndo(item.id)}
-                disabled={!!undoLoading[item.id]}
+                onClick={() => requestUndo(item.id)}
+                disabled={isUndoing(item.id)}
                 className="text-[11px] text-ink-dim transition duration-150 hover:text-accent-deeper disabled:opacity-50 focus-ring min-h-9 min-w-9"
               >
-                {undoLoading[item.id] ? t("receipt.undo.creating") : t("receipt.undo.request")}
+                {isUndoing(item.id) ? t("receipt.undo.creating") : t("receipt.undo.request")}
               </button>
             )}
           />
