@@ -687,6 +687,24 @@ const fr: Record<string, string> = {
   "tool.label.delete_task": "Supprimer la tâche",
   "tool.label.record_skill": "Enregistrer la compétence",
   "tool.label.execute_skill": "Exécuter la compétence",
+  "tool.label.list_emails": "Lister les e-mails",
+  "tool.label.read_email": "Lire un e-mail",
+  "tool.label.sender_context": "Consulter un expéditeur",
+  "tool.label.classify_emails": "Classer les e-mails par voie",
+  "tool.label.list_events": "Lister les événements",
+  "tool.label.team_availability": "Vérifier les disponibilités de l'équipe",
+  "tool.label.check_calendar_conflicts": "Vérifier les conflits d'agenda",
+  "tool.label.generate_briefing": "Rédiger un brief",
+  "tool.label.get_current_time": "Vérifier l'heure",
+  "tool.label.get_upcoming_meetings": "Lister les réunions à venir",
+  "tool.label.join_meeting": "Rejoindre la réunion",
+  "tool.label.summarize_meeting": "Résumer la réunion",
+  "tool.label.calculate": "Calculer",
+  "tool.label.generate_password": "Générer un mot de passe",
+  "tool.label.remember": "Mémoriser",
+  "tool.label.recall": "Retrouver un souvenir",
+  "tool.label.forget": "Oublier un souvenir",
+  "tool.label.list_skills": "Lister les compétences",
   "tool.label.unknown": "Action",
   "briefing.learningMode":
     "Klorn apprend vos habitudes de courrier et d'agenda pendant les 2-3 premiers jours. Les priorités s'affinent à l'usage.",
@@ -1628,6 +1646,7 @@ const fr: Record<string, string> = {
   "assistantHub.activity.undo.gone": "Cette action ne peut plus être annulée.",
   "assistantHub.activity.undo.hint":
     "Demander l'annulation n'annule rien en soi : cela ajoute une annulation dans Approbations.",
+  "assistantHub.approvals.unknownTitle": "Action que Klorn souhaite effectuer",
 };
 
 export default fr;

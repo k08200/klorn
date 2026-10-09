@@ -669,6 +669,24 @@ const ja: Record<string, string> = {
   "tool.label.delete_task": "タスクを削除",
   "tool.label.record_skill": "スキルを保存",
   "tool.label.execute_skill": "スキルを実行",
+  "tool.label.list_emails": "メール一覧を表示",
+  "tool.label.read_email": "メールを読む",
+  "tool.label.sender_context": "送信者情報を確認",
+  "tool.label.classify_emails": "メールをレーンに分類",
+  "tool.label.list_events": "予定一覧を表示",
+  "tool.label.team_availability": "チームの空き時間を確認",
+  "tool.label.check_calendar_conflicts": "予定の重複を確認",
+  "tool.label.generate_briefing": "ブリーフィングを作成",
+  "tool.label.get_current_time": "現在時刻を確認",
+  "tool.label.get_upcoming_meetings": "今後の会議を表示",
+  "tool.label.join_meeting": "会議に参加",
+  "tool.label.summarize_meeting": "会議を要約",
+  "tool.label.calculate": "計算",
+  "tool.label.generate_password": "パスワードを生成",
+  "tool.label.remember": "記憶する",
+  "tool.label.recall": "記憶を呼び出す",
+  "tool.label.forget": "記憶を削除",
+  "tool.label.list_skills": "スキル一覧を表示",
   "tool.label.unknown": "アクション",
   "briefing.learningMode":
     "Klornは最初の2〜3日でメールとカレンダーの傾向を学びます。使うほど上位の対応事項が鋭くなります。",
@@ -1584,6 +1602,7 @@ const ja: Record<string, string> = {
   "assistantHub.activity.undo.gone": "この操作はもう取り消せません。",
   "assistantHub.activity.undo.hint":
     "取り消しリクエストだけでは元に戻りません。取り消しの項目が「承認」に追加されます。",
+  "assistantHub.approvals.unknownTitle": "Klornが実行しようとしている操作",
 };
 
 export default ja;

@@ -24,6 +24,12 @@ const SUGGESTION_KEYS = [
   "chat.suggestion4",
 ];
 
+/** The reader's own message. The legacy page keeps its classes byte for byte. */
+const LEGACY_USER_BUBBLE =
+  "max-w-[85%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-2.5 text-sm text-slate-50 shadow-[0_1px_2px_rgba(15,23,42,0.16)]";
+const HUB_USER_BUBBLE =
+  "max-w-[85%] rounded-sheet rounded-br-control bg-accent-solid px-4 py-2.5 text-body text-accent-solid-ink";
+
 /**
  * `hub` is the Assistant hub's Chat page (productization plan P7): the same
  * thread and composer, sized for the hub frame, with every string translated.
@@ -109,11 +115,11 @@ export function ChatView({ hub = false }: { hub?: boolean }) {
         ) : (
           <>
             {messages.map((m) => (
-              <MessageBubble key={m.id} message={m} />
+              <MessageBubble key={m.id} message={m} hub={hub} />
             ))}
             {pendingText && (
               <div className="flex justify-end transition duration-150 ease-strong starting:translate-y-1 starting:opacity-0 motion-reduce:transition-none">
-                <div className="max-w-[85%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-2.5 text-sm text-slate-50 shadow-[0_1px_2px_rgba(15,23,42,0.16)]">
+                <div className={hub ? HUB_USER_BUBBLE : LEGACY_USER_BUBBLE}>
                   <p className="whitespace-pre-wrap">{pendingText}</p>
                 </div>
               </div>
@@ -181,11 +187,11 @@ export function ChatView({ hub = false }: { hub?: boolean }) {
   );
 }
 
-function MessageBubble({ message }: { message: ChatMessage }) {
+function MessageBubble({ message, hub }: { message: ChatMessage; hub: boolean }) {
   if (message.role === "USER") {
     return (
       <div className="flex justify-end transition duration-150 ease-strong starting:translate-y-1 starting:opacity-0 motion-reduce:transition-none">
-        <div className="max-w-[85%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-2.5 text-sm text-slate-50 shadow-[0_1px_2px_rgba(15,23,42,0.16)]">
+        <div className={hub ? HUB_USER_BUBBLE : LEGACY_USER_BUBBLE}>
           <p className="whitespace-pre-wrap">{message.content}</p>
         </div>
       </div>

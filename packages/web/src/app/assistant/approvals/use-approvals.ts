@@ -13,8 +13,8 @@
  *    happened before it did.
  *  - Reject is held for a few seconds behind an Undo notice before it is sent.
  *    The API has no un-reject, so the only honest undo is not to have sent it
- *    yet. Leaving the page sends it; closing the tab inside the window leaves
- *    the approval waiting, which is the safe side to fail on.
+ *    yet. Leaving the page or closing the tab sends it (a keepalive request
+ *    on unmount and on pagehide).
  */
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -54,6 +54,7 @@ export function useApprovals() {
   // can still carry the card; it stays hidden rather than flashing back.
   const [decided, setDecided] = useState<ReadonlySet<string>>(new Set());
   const approvingRef = useRef(false);
+  const mountedRef = useRef(true);
   const heldRef = useRef<HeldReject | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -124,13 +125,16 @@ export function useApprovals() {
       } catch (err) {
         captureClientError(err, { scope: "assistant.approvals.approve", actionId: id });
         toast(t("assistantHub.approvals.approveFailed"), "error");
+        // The usual cause is a card that expired or was handled elsewhere:
+        // re-read the list so it leaves instead of inviting another try.
+        void invalidate();
         return false;
       } finally {
         approvingRef.current = false;
         setApproving(null);
       }
     },
-    [drop, markDecided, t, toast],
+    [drop, invalidate, markDecided, t, toast],
   );
 
   const sendReject = useCallback(
@@ -141,11 +145,18 @@ export function useApprovals() {
         await apiFetch(`/api/chat/pending-actions/${encodeURIComponent(reject.id)}/reject`, {
           method: "POST",
           body: JSON.stringify(reject.reason ? { reason: reject.reason } : {}),
+          // Outlives the page: a rejection flushed by leaving or closing the
+          // tab is still delivered.
+          keepalive: true,
         });
         drop(reject.id);
       } catch (err) {
-        // Not sent: the card comes back, and the notice says why.
         captureClientError(err, { scope: "assistant.approvals.reject", actionId: reject.id });
+        // Off this page there is nothing to point at: a notice on another
+        // screen would name no card. The list is the record — the approval is
+        // still pending and is there on the next visit.
+        if (!mountedRef.current) return;
+        // Not sent: the card comes back, and the notice says why.
         markDecided(reject.id, false);
         toast(t("assistantHub.approvals.rejectFailed"), "error");
       }
@@ -185,7 +196,17 @@ export function useApprovals() {
   useEffect(() => {
     settleRef.current = settle;
   }, [settle]);
-  useEffect(() => () => settleRef.current(), []);
+  useEffect(() => {
+    mountedRef.current = true;
+    // Closing or backgrounding the tab is not an undo either.
+    const flush = () => settleRef.current();
+    window.addEventListener("pagehide", flush);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      mountedRef.current = false;
+      settleRef.current();
+    };
+  }, []);
 
   /** Pull new mail, then re-read the list — the manual path when no push arrived. */
   const refresh = useCallback(async () => {

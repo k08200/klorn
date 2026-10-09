@@ -631,6 +631,24 @@ const zh: Record<string, string> = {
   "tool.label.delete_task": "删除任务",
   "tool.label.record_skill": "保存技能",
   "tool.label.execute_skill": "运行技能",
+  "tool.label.list_emails": "列出邮件",
+  "tool.label.read_email": "阅读邮件",
+  "tool.label.sender_context": "查询发件人",
+  "tool.label.classify_emails": "将邮件分类到通道",
+  "tool.label.list_events": "列出日程",
+  "tool.label.team_availability": "查看团队空闲时间",
+  "tool.label.check_calendar_conflicts": "检查日程冲突",
+  "tool.label.generate_briefing": "生成简报",
+  "tool.label.get_current_time": "查看当前时间",
+  "tool.label.get_upcoming_meetings": "列出即将举行的会议",
+  "tool.label.join_meeting": "加入会议",
+  "tool.label.summarize_meeting": "总结会议",
+  "tool.label.calculate": "计算",
+  "tool.label.generate_password": "生成密码",
+  "tool.label.remember": "记住这条信息",
+  "tool.label.recall": "回忆已记住的信息",
+  "tool.label.forget": "忘记已记住的信息",
+  "tool.label.list_skills": "列出技能",
   "tool.label.unknown": "操作",
   "briefing.learningMode":
     "Klorn 会在最初 2-3 天里学习你的邮件和日历规律。用得越久，首要事项越准。",
@@ -1497,6 +1515,7 @@ const zh: Record<string, string> = {
   "assistantHub.activity.undo.gone": "该操作已无法撤销。",
   "assistantHub.activity.undo.hint":
     "“请求撤销”本身不会撤回任何操作，而是在“审批”中添加一条撤销请求。",
+  "assistantHub.approvals.unknownTitle": "Klorn 想要执行的操作",
 };
 
 export default zh;

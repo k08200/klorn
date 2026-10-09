@@ -78,7 +78,7 @@ export function ApprovalCard(props: ApprovalCardProps) {
       {model.facts.length > 0 && (
         <dl className="mt-1 flex flex-col gap-0.5">
           {model.facts.map((fact) => (
-            <Fact key={fact.labelKey} fact={fact} timeZone={props.timeZone} />
+            <Fact key={fact.labelKey ?? fact.label} fact={fact} timeZone={props.timeZone} />
           ))}
         </dl>
       )}
@@ -160,7 +160,7 @@ function Fact({ fact, timeZone }: { fact: ApprovalFact; timeZone: string }) {
   const { t, locale } = useT();
   return (
     <div className="flex gap-2 text-body">
-      <dt className="shrink-0 text-ink-muted">{t(fact.labelKey)}</dt>
+      <dt className="shrink-0 text-ink-muted">{fact.labelKey ? t(fact.labelKey) : fact.label}</dt>
       <dd className="min-w-0 break-words text-ink-soft">
         {fact.iso ? formatWhen(fact.iso, locale, timeZone) : fact.text}
       </dd>

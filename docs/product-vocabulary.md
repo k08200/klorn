@@ -24,8 +24,9 @@ Updated 2026-10-09: the **Assistant** hub exists at `/assistant/*` behind
 `UNIFIED_HOME` (P7): `/assistant/approvals`, `/assistant/briefing`,
 `/assistant/activity` (the Receipt) and `/assistant/chat`. With the flag on,
 `/inbox`, `/briefing` and `/inbox/receipt` hand over to those pages; with it
-off the hub routes hand back and the legacy pages are unchanged. Added
-**Activity**.
+off the hub routes hand back and the legacy pages are unchanged. With
+`MAIL_V2` on as well, `/inbox/firewall` hands over to `/email` (the lane view
+lives in Mail). Added **Activity**.
 
 ## The nouns
 

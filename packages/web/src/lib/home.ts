@@ -63,6 +63,9 @@ const HUB_BY_LEGACY: ReadonlyMap<string, string> = new Map([
   ["/inbox/receipt", ASSISTANT_ACTIVITY],
 ]);
 
+/** FD-3: the lane view lives in Mail. */
+const MAIL_BY_LEGACY: ReadonlyMap<string, string> = new Map([["/inbox/firewall", "/email"]]);
+
 const LEGACY_BY_HUB: ReadonlyMap<string, string> = new Map([
   [ASSISTANT_APPROVALS, LEGACY_HOME],
   [ASSISTANT_BRIEFING, "/briefing"],
@@ -83,9 +86,19 @@ function withQuery(target: string, search: string): string {
  * With UNIFIED_HOME on: the hub page a legacy route hands over to, or null
  * when the route is not one of the three that moved.
  */
-export function hubRouteFor(pathname: string, search: string): string | null {
-  const target = HUB_BY_LEGACY.get(trimSlash(pathname));
-  return target === undefined ? null : withQuery(target, search);
+export function hubRouteFor(
+  pathname: string,
+  search: string,
+  flags: { mailV2?: boolean } = {},
+): string | null {
+  const path = trimSlash(pathname);
+  const target = HUB_BY_LEGACY.get(path);
+  if (target !== undefined) return withQuery(target, search);
+  // The retired board's replacement is Mail's lane filter, which exists only
+  // with MAIL_V2; without it the board is still the only lane view. Its query
+  // means nothing to Mail, so it is not carried.
+  if (flags.mailV2 === true) return MAIL_BY_LEGACY.get(path) ?? null;
+  return null;
 }
 
 /**

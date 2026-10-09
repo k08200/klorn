@@ -683,6 +683,24 @@ const es: Record<string, string> = {
   "tool.label.delete_task": "Eliminar tarea",
   "tool.label.record_skill": "Guardar habilidad",
   "tool.label.execute_skill": "Ejecutar habilidad",
+  "tool.label.list_emails": "Listar correo",
+  "tool.label.read_email": "Leer correo",
+  "tool.label.sender_context": "Consultar un remitente",
+  "tool.label.classify_emails": "Clasificar el correo en carriles",
+  "tool.label.list_events": "Listar eventos",
+  "tool.label.team_availability": "Consultar la disponibilidad del equipo",
+  "tool.label.check_calendar_conflicts": "Comprobar conflictos de calendario",
+  "tool.label.generate_briefing": "Escribir un resumen",
+  "tool.label.get_current_time": "Consultar la hora",
+  "tool.label.get_upcoming_meetings": "Listar próximas reuniones",
+  "tool.label.join_meeting": "Unirse a la reunión",
+  "tool.label.summarize_meeting": "Resumir la reunión",
+  "tool.label.calculate": "Calcular",
+  "tool.label.generate_password": "Generar una contraseña",
+  "tool.label.remember": "Recordar esto",
+  "tool.label.recall": "Recuperar un recuerdo",
+  "tool.label.forget": "Olvidar un recuerdo",
+  "tool.label.list_skills": "Listar habilidades",
   "tool.label.unknown": "Acción",
   "briefing.learningMode":
     "Klorn aprende los patrones de tu correo y tu calendario durante los primeros 2-3 días. Las acciones principales se afinan con el uso.",
@@ -1618,6 +1636,7 @@ const es: Record<string, string> = {
   "assistantHub.activity.undo.gone": "Esa acción ya no se puede deshacer.",
   "assistantHub.activity.undo.hint":
     "Solicitar deshacer no revierte nada por sí solo: añade una reversión a Aprobaciones.",
+  "assistantHub.approvals.unknownTitle": "Acción que Klorn quiere realizar",
 };
 
 export default es;

@@ -670,6 +670,24 @@ const ko: Record<string, string> = {
   "tool.label.delete_task": "할 일 삭제",
   "tool.label.record_skill": "스킬 저장",
   "tool.label.execute_skill": "스킬 실행",
+  "tool.label.list_emails": "메일 목록 보기",
+  "tool.label.read_email": "메일 읽기",
+  "tool.label.sender_context": "발신자 정보 조회",
+  "tool.label.classify_emails": "메일 레인 분류",
+  "tool.label.list_events": "일정 목록 보기",
+  "tool.label.team_availability": "팀 가능 시간 확인",
+  "tool.label.check_calendar_conflicts": "일정 충돌 확인",
+  "tool.label.generate_briefing": "브리핑 작성",
+  "tool.label.get_current_time": "현재 시각 확인",
+  "tool.label.get_upcoming_meetings": "예정된 회의 보기",
+  "tool.label.join_meeting": "회의 참가",
+  "tool.label.summarize_meeting": "회의 요약",
+  "tool.label.calculate": "계산",
+  "tool.label.generate_password": "비밀번호 생성",
+  "tool.label.remember": "기억하기",
+  "tool.label.recall": "기억 불러오기",
+  "tool.label.forget": "기억 삭제",
+  "tool.label.list_skills": "스킬 목록 보기",
   "tool.label.unknown": "작업",
   // Briefing
   "briefing.learningMode":
@@ -1588,6 +1606,7 @@ const ko: Record<string, string> = {
   "assistantHub.activity.undo.gone": "이 작업은 더 이상 되돌릴 수 없습니다.",
   "assistantHub.activity.undo.hint":
     "실행 취소 요청만으로는 되돌려지지 않습니다. 되돌리기 항목이 승인에 추가됩니다.",
+  "assistantHub.approvals.unknownTitle": "Klorn이 실행하려는 작업",
 };
 
 export default ko;

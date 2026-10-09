@@ -696,6 +696,24 @@ const de: Record<string, string> = {
   "tool.label.delete_task": "Aufgabe löschen",
   "tool.label.record_skill": "Skill speichern",
   "tool.label.execute_skill": "Skill ausführen",
+  "tool.label.list_emails": "E-Mails auflisten",
+  "tool.label.read_email": "E-Mail lesen",
+  "tool.label.sender_context": "Absender nachschlagen",
+  "tool.label.classify_emails": "E-Mails in Spuren einordnen",
+  "tool.label.list_events": "Termine auflisten",
+  "tool.label.team_availability": "Verfügbarkeit des Teams prüfen",
+  "tool.label.check_calendar_conflicts": "Terminkonflikte prüfen",
+  "tool.label.generate_briefing": "Briefing erstellen",
+  "tool.label.get_current_time": "Uhrzeit abfragen",
+  "tool.label.get_upcoming_meetings": "Anstehende Meetings auflisten",
+  "tool.label.join_meeting": "Meeting beitreten",
+  "tool.label.summarize_meeting": "Meeting zusammenfassen",
+  "tool.label.calculate": "Berechnen",
+  "tool.label.generate_password": "Passwort erzeugen",
+  "tool.label.remember": "Merken",
+  "tool.label.recall": "Erinnerung abrufen",
+  "tool.label.forget": "Erinnerung löschen",
+  "tool.label.list_skills": "Skills auflisten",
   "tool.label.unknown": "Aktion",
   "briefing.learningMode":
     "Klorn lernt in den ersten 2-3 Tagen die Muster deiner Mail und deines Kalenders. Die wichtigsten Aufgaben werden mit der Nutzung schärfer.",
@@ -1646,6 +1664,7 @@ const de: Record<string, string> = {
   "assistantHub.activity.undo.gone": "Diese Aktion lässt sich nicht mehr rückgängig machen.",
   "assistantHub.activity.undo.hint":
     "„Rückgängig anfordern“ kehrt allein nichts um: Es legt eine Rücknahme unter Freigaben an.",
+  "assistantHub.approvals.unknownTitle": "Aktion, die Klorn ausführen möchte",
 };
 
 export default de;

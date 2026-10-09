@@ -680,6 +680,24 @@ const en: Record<string, string> = {
   "tool.label.delete_task": "Delete task",
   "tool.label.record_skill": "Save skill",
   "tool.label.execute_skill": "Run skill",
+  "tool.label.list_emails": "List mail",
+  "tool.label.read_email": "Read mail",
+  "tool.label.sender_context": "Look up a sender",
+  "tool.label.classify_emails": "Sort mail into lanes",
+  "tool.label.list_events": "List calendar events",
+  "tool.label.team_availability": "Check team availability",
+  "tool.label.check_calendar_conflicts": "Check calendar conflicts",
+  "tool.label.generate_briefing": "Write a briefing",
+  "tool.label.get_current_time": "Check the time",
+  "tool.label.get_upcoming_meetings": "List upcoming meetings",
+  "tool.label.join_meeting": "Join meeting",
+  "tool.label.summarize_meeting": "Summarize meeting",
+  "tool.label.calculate": "Calculate",
+  "tool.label.generate_password": "Generate a password",
+  "tool.label.remember": "Remember this",
+  "tool.label.recall": "Recall a memory",
+  "tool.label.forget": "Forget a memory",
+  "tool.label.list_skills": "List skills",
   "tool.label.unknown": "Action",
   // Briefing
   "briefing.learningMode":
@@ -1603,6 +1621,7 @@ const en: Record<string, string> = {
   "assistantHub.activity.undo.gone": "That action can't be undone any more.",
   "assistantHub.activity.undo.hint":
     "Request undo doesn't reverse anything by itself: it adds a reversal to Approvals.",
+  "assistantHub.approvals.unknownTitle": "Action Klorn wants to take",
 };
 
 export default en;

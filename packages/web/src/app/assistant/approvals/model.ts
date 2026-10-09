@@ -7,7 +7,7 @@
  * server sent — never the raw argument that names a row.
  */
 
-import { KNOWN_TOOL_IDS, toolLabelKey, UNKNOWN_TOOL_LABEL_KEY } from "../../../lib/tool-labels";
+import { KNOWN_TOOL_IDS, toolLabelKey } from "../../../lib/tool-labels";
 
 /** One row of GET /api/chat/pending-actions. */
 export interface PendingActionItem {
@@ -26,7 +26,10 @@ export interface PendingActionItem {
 
 /** A labelled line under the title: who it goes to, when, where. */
 export interface ApprovalFact {
-  labelKey: string;
+  /** i18n key of the label, for the lines a tool's own layout names. */
+  labelKey?: string;
+  /** The label as text: an argument's name, for a tool with no layout. */
+  label?: string;
   /** Shown as written. */
   text?: string;
   /** An instant the card formats in the reader's locale and zone. */
@@ -158,7 +161,56 @@ function contactContent(args: Args): Content {
   };
 }
 
-/** How each tool's arguments read as a card. A tool not listed shows its title alone. */
+const MAX_ARGUMENT_LINES = 8;
+const MAX_LABEL_CHARS = 40;
+const MAX_VALUE_CHARS = 200;
+const RECORD_ID_KEY = /(^id$|_id$|Id$)/;
+
+const clip = (text: string, max: number) => (text.length > max ? `${text.slice(0, max)}…` : text);
+
+/** "folder_name" / "folderName" -> "Folder name". */
+function argumentLabel(key: string): string {
+  const words = key
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .trim()
+    .toLowerCase();
+  return clip(words.charAt(0).toUpperCase() + words.slice(1), MAX_LABEL_CHARS);
+}
+
+const isPlain = (value: unknown): value is string | number | boolean =>
+  typeof value === "string" || typeof value === "number" || typeof value === "boolean";
+
+/** A value as one line of text, or null when it has no plain reading (an object, an empty string). */
+function argumentText(value: unknown): string | null {
+  const parts = (Array.isArray(value) ? value : [value])
+    .filter(isPlain)
+    .map((part) => String(part).replace(/\s+/g, " ").trim());
+  const text = parts.filter(Boolean).join(", ");
+  return text ? clip(text, MAX_VALUE_CHARS) : null;
+}
+
+/**
+ * A tool with no layout of its own still says what it would do: its arguments
+ * as labelled lines of plain text — never a JSON dump, never nested data, and
+ * capped in count and length. A tool Klorn has a name for leaves out record
+ * ids (the resolved target says what they point at); a tool it has no name for
+ * shows them, because there the arguments are all the reader has.
+ */
+function argumentFacts(args: Args, withIds: boolean): ApprovalFact[] {
+  return [...args.entries()]
+    .filter(([key]) => withIds || !RECORD_ID_KEY.test(key))
+    .flatMap(([key, value]): ApprovalFact[] => {
+      const text = argumentText(value);
+      const label = argumentLabel(key);
+      return text && label ? [{ label, text }] : [];
+    })
+    .slice(0, MAX_ARGUMENT_LINES);
+}
+
+export const UNKNOWN_APPROVAL_TITLE_KEY = "assistantHub.approvals.unknownTitle";
+
+/** How each tool's arguments read as a card. A tool not listed lists its arguments. */
 const CONTENT_BY_TOOL: ReadonlyMap<string, (args: Args) => Content> = new Map([
   ["send_email", mailContent],
   ["reply_to_email", mailContent],
@@ -175,10 +227,15 @@ export function approvalModel(action: PendingActionItem): ApprovalModel {
   const raw = action.toolName || "";
   const undo = raw.startsWith(UNDO_PREFIX);
   const tool = undo ? raw.slice(UNDO_PREFIX.length) : raw;
-  const content = CONTENT_BY_TOOL.get(tool)?.(parseArgs(action.toolArgs)) ?? NO_CONTENT;
+  const known = KNOWN_TOOLS.has(tool);
+  const args = parseArgs(action.toolArgs);
+  const content = CONTENT_BY_TOOL.get(tool)?.(args) ?? {
+    ...NO_CONTENT,
+    facts: argumentFacts(args, !known),
+  };
   return {
     id: action.id,
-    titleKey: KNOWN_TOOLS.has(tool) ? toolLabelKey(tool) : UNKNOWN_TOOL_LABEL_KEY,
+    titleKey: known ? toolLabelKey(tool) : UNKNOWN_APPROVAL_TITLE_KEY,
     undo,
     sendsMail: !undo && MAIL_SENDING_TOOLS.has(tool),
     subject:

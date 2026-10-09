@@ -76,6 +76,13 @@ describe("hub routes", () => {
     expect(hubRouteFor("/inbox/", "")).toBe(ASSISTANT_APPROVALS);
   });
 
+  it("the retired board goes to Mail only when Mail has the lane view (MAIL_V2)", () => {
+    expect(hubRouteFor("/inbox/firewall", "?x=1", { mailV2: true })).toBe("/email");
+    expect(hubRouteFor("/inbox/firewall", "", { mailV2: false })).toBeNull();
+    expect(hubRouteFor("/inbox/firewall", "")).toBeNull();
+    expect(hubRouteFor("/inbox", "", { mailV2: true })).toBe(ASSISTANT_APPROVALS);
+  });
+
   it("leaves every other route alone, including inherited object keys", () => {
     for (const path of ["/inbox/firewall", "/chat", "/email", "/", "constructor", "__proto__"]) {
       expect(hubRouteFor(path, ""), path).toBeNull();
@@ -176,8 +183,57 @@ describe("approvalModel", () => {
 
   it("an unknown tool gets the generic label, never its raw id", () => {
     const model = approvalModel(action({ toolName: "frobnicate_widget", toolArgs: "{}" }));
-    expect(model.titleKey).toBe("tool.label.unknown");
+    expect(model.titleKey).toBe("assistantHub.approvals.unknownTitle");
     expect(JSON.stringify(model)).not.toContain("frobnicate");
+  });
+
+  it("an unknown tool still shows what it would do: its arguments, as plain labelled lines", () => {
+    const model = approvalModel(
+      action({
+        toolName: "frobnicate_widget",
+        toolArgs: {
+          thread_id: "t-pilot",
+          folder_name: "Pilots",
+          notify: true,
+          count: 3,
+          tags: ["a", "b"],
+          nested: { secret: "x" },
+          empty: "  ",
+          constructor: "c",
+          long: "y".repeat(500),
+        },
+      }),
+    );
+    expect(model.facts).toEqual([
+      { label: "Thread id", text: "t-pilot" },
+      { label: "Folder name", text: "Pilots" },
+      { label: "Notify", text: "true" },
+      { label: "Count", text: "3" },
+      { label: "Tags", text: "a, b" },
+      { label: "Constructor", text: "c" },
+      { label: "Long", text: `${"y".repeat(200)}…` },
+    ]);
+    expect(model.facts.some((fact) => /[{}[\]]/.test(fact.text ?? ""))).toBe(false);
+    expect(JSON.stringify(model.facts)).not.toContain("secret");
+  });
+
+  it("caps how many argument lines a card carries", () => {
+    const args = Object.fromEntries(Array.from({ length: 20 }, (_, i) => [`key_${i}`, `v${i}`]));
+    expect(approvalModel(action({ toolName: "frobnicate", toolArgs: args })).facts).toHaveLength(8);
+  });
+
+  it("a labelled tool without a layout of its own lists its arguments too, minus record ids", () => {
+    const model = approvalModel(
+      action({
+        toolName: "record_skill",
+        toolArgs: { key: "weekly", name: "Weekly digest", skill_id: "s1", id: "9" },
+      }),
+    );
+    expect(model.titleKey).toBe("tool.label.record_skill");
+    expect(model.facts).toEqual([
+      { label: "Key", text: "weekly" },
+      { label: "Name", text: "Weekly digest" },
+    ]);
   });
 
   it("an undo proposal is named after the action it reverses", () => {
@@ -185,7 +241,7 @@ describe("approvalModel", () => {
     expect(model.undo).toBe(true);
     expect(model.titleKey).toBe("tool.label.archive_email");
     expect(approvalModel(action({ toolName: "undo_frobnicate" })).titleKey).toBe(
-      "tool.label.unknown",
+      "assistantHub.approvals.unknownTitle",
     );
   });
 
