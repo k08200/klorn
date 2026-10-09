@@ -525,6 +525,7 @@
 "appearance.toLight" = "라이트 모드로 전환";
 "appearance.toDark" = "다크 모드로 전환";
 "compose.editDraft" = "임시보관 메일 편집";
+"compose.discard" = "초안 삭제";
 "mailbox.loadMore" = "더 보기";
 "chip.billing" = "청구·영수증";
 

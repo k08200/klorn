@@ -525,6 +525,7 @@
 "appearance.toLight" = "Zum hellen Modus wechseln";
 "appearance.toDark" = "Zum dunklen Modus wechseln";
 "compose.editDraft" = "Entwurf bearbeiten";
+"compose.discard" = "Entwurf verwerfen";
 "mailbox.loadMore" = "Mehr laden";
 "chip.billing" = "Rechnungen";
 

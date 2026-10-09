@@ -90,6 +90,26 @@ AppKit `NSWindow` that owns its frame and restoration, the mail list keys
 depend on the window's first responder, and the offscreen renderer cannot
 draw AppKit-backed containers.
 
+With the main window on, the composer and the modal cards are native too
+(M5):
+
+- **Compose** (`⌘N`, the Compose buttons, opening a draft) is its own
+  window: titled, resizable, frame remembered. It covers nothing, so mail
+  stays readable and every menu and list key keeps working behind it.
+  `⌘N` on an open composer brings it forward. There is still one draft,
+  owned by the model. Closing the window (`⌘W`, the red button) keeps the
+  draft; *Discard Draft* clears it; `⌘⏎` sends; the window will not close
+  mid-send. While it is open Klorn stays a regular app, like the main
+  window. Message commands never act while the compose window is key.
+- **The lane guide, the event editor and the connect-time question** are
+  sheets on the main window (`NSWindow.beginSheet`), one at a time in the
+  old overlays' order. A sheet blocks the list keys and every menu command
+  exactly as the overlay did.
+
+Not in the composer because the model and `POST /api/email/send` carry only
+to / subject / body: Cc, Bcc, attachments, recipient autocomplete, choosing
+the sending account, and more than one draft at a time.
+
 Turn it on with either:
 
 - Settings ▸ General ▸ hold **Option** ▸ *Use standard main window (beta)*
@@ -301,7 +321,9 @@ A full XCTest suite can be added when building under Xcode/CI.
 | `Assistant/` | `AssistantDock.swift`, `AssistantThread.swift` (thread + `ChatBubble`), `AssistantSection.swift` (main window: panes + thread) |
 | `Shared/` | views used by more than one feature: `Controls.swift`, `TierMenus.swift` (`SnoozeMenu`, `TierMenu`), `LaneChip.swift` (lane, signal, reply-state and label chips), `AccountRows.swift` (account rows, diagnostics, update row), `SegmentedBar.swift` (filter tabs, `SourceBadge`) |
 | `SettingsWindow.swift` | `Settings` scene root (`TabView`), tab grouping, `SettingsOpener` |
-| `MainWindow.swift` | standard main window (M2, `macMainWindow`): `MainWindowController` (a lazily created AppKit `NSWindow`, never a SwiftUI scene), its rules, the Settings beta switch |
+| `MainWindow.swift` | standard main window (M2, `macMainWindow`): `MainWindowController` (a lazily created AppKit `NSWindow`, never a SwiftUI scene; also attaches the sheets, M5), its rules, the Settings beta switch |
+| `Mail/ComposeWindow.swift` | compose window (M5, same flag): `ComposeWindowRules`, `ComposeWindowController` (lazily created, driven by the model's `showCompose`) |
+| `Shell/MainSheets.swift` | the main window's sheets (M5): `MainSheet`, `MainSheetRules`, the shared modal-card chrome (`modalCard`) |
 | `AppCommands.swift` | app menus (`.commands`) and their pure enablement/shortcut rules |
 | `ListKeys.swift` | mail list keyboard (M3): pure key rules, the window-scoped key catcher |
 | `TopBarController.swift` | the floating non-activating `NSPanel`: top-center pin, expand/collapse, row actions |

@@ -43,9 +43,20 @@ final class AppModel {
             onWindowPresenceChanged?()
         }
     }
+    /// True while the compose window (M5, `macMainWindow`) is on screen. It
+    /// counts like the main window: an open window keeps the app .regular.
+    var composeWindowOpen = false {
+        didSet {
+            guard composeWindowOpen != oldValue else { return }
+            onWindowPresenceChanged?()
+        }
+    }
     /// Wired by the AppDelegate to re-apply the activation policy when
-    /// Settings or the main window opens or closes.
+    /// Settings, the main window or the compose window opens or closes.
     @ObservationIgnored var onWindowPresenceChanged: (() -> Void)?
+    /// Wired by the AppDelegate to the compose window (M5): fires when the
+    /// composer is asked for (again) or put away. Unused with the flag off.
+    @ObservationIgnored var onComposePresentationChanged: (() -> Void)?
 
     /// Mirrors whether the top bar is in its full (app window) state.
     /// Written by TopBarController on every render.
@@ -106,7 +117,13 @@ final class AppModel {
 
     /// A modal overlay covers the full view (its background is disabled).
     var fullViewModalOpen: Bool {
-        showCompose || showTierGuide || showEventEditor || showPurposePrompt
+        composeOverlayOpen || showTierGuide || showEventEditor || showPurposePrompt
+    }
+    /// The composer as an in-window overlay (the bar's full view). With
+    /// `macMainWindow` on it is its own window (M5) and covers nothing.
+    var composeOverlayOpen: Bool {
+        ComposeWindowRules.overlayOpen(
+            showCompose: showCompose, macMainWindow: settings.macMainWindow)
     }
     /// Device calendars uploaded from EventKit (step C6): opt-in per calendar.
     let deviceCalendars: DeviceCalendarBridge
@@ -855,8 +872,14 @@ final class AppModel {
         }
     }
 
-    /// Compose overlay visibility (full view).
-    var showCompose = false
+    /// Whether the composer is presented: an overlay on the bar's full view,
+    /// its own window while `macMainWindow` is on (M5). Asking again while
+    /// it is up still notifies, so the window comes forward.
+    var showCompose = false {
+        didSet {
+            if showCompose || oldValue { onComposePresentationChanged?() }
+        }
+    }
     /// Draft lives on the MODEL, not the panel: SwiftUI drops a conditionally
     /// mounted view's @State (e.g. when the full view is torn down and rebuilt via
     /// the menu bar), and a draft must survive that. There is exactly one

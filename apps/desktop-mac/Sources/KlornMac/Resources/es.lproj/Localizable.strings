@@ -525,6 +525,7 @@
 "appearance.toLight" = "Cambiar a modo claro";
 "appearance.toDark" = "Cambiar a modo oscuro";
 "compose.editDraft" = "Editar borrador";
+"compose.discard" = "Descartar borrador";
 "mailbox.loadMore" = "Cargar más";
 "chip.billing" = "Facturación";
 

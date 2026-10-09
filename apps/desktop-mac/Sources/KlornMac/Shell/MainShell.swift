@@ -41,11 +41,13 @@ struct MainShell: View {
                 AssistantDock()
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             }
-            FullViewModals()
         }
         .frame(
             minWidth: MainWindowRules.minSize.width, maxWidth: .infinity,
             minHeight: MainWindowRules.minSize.height, maxHeight: .infinity, alignment: .top)
+        // No overlay layer here: the guide, the event editor and the
+        // connect-time question are native sheets on the window (M5,
+        // `MainWindowController.syncSheet`); the composer is its own window.
     }
 
     /// The dock keeps the assistant one click away with the mail or the day

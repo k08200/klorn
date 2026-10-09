@@ -69,6 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var hotKey: HotKey?
     private var settingsOpener: SettingsOpener?
     private var mainWindow: MainWindowController?
+    private var composeWindow: ComposeWindowController?
 
     /// OAuth deep-link relay: the browser bounces `klorn://oauth-callback?code=…`
     /// back to us; the code goes to the RelayInbox where the sign-in loop
@@ -169,6 +170,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         self.mainWindow = mainWindow
         bar.onOpenMainWindow = { [weak mainWindow] in mainWindow?.open() }
         bar.onCloseMainWindow = { [weak mainWindow] in mainWindow?.close() }
+        // Compose window (M5, same flag): the model's composer state drives it.
+        let composeWindow = ComposeWindowController(model: model)
+        model.onComposePresentationChanged = { [weak composeWindow] in composeWindow?.sync() }
+        self.composeWindow = composeWindow
         // Menu-bar anchor while the pill is hidden (one-anchor rule): appears
         // when the pill's ✕ / Preferences hides the bar, disappears when the
         // bar comes back. Without it a hidden-pill accessory app is invisible
@@ -235,7 +240,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     func perform(_ command: MenuCommand) {
         switch command {
         case .compose:
-            ensureFullView()
+            // With its own window (M5) the composer needs no full view
+            // under it; ⌘N on an open composer brings it forward.
+            if !ComposeWindowRules.usesWindow(macMainWindow: model.settings.macMainWindow) {
+                ensureFullView()
+            }
             model.showCompose = true
         case .find:
             ensureFullView()
