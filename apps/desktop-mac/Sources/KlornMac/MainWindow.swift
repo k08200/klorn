@@ -13,7 +13,27 @@ enum MainWindowRules {
     /// First-open size before any autosaved frame exists. Fits a 1280×800
     /// display's visible area (minus menu bar, Dock and title bar).
     static let defaultSize = NSSize(width: 1180, height: 640)
-    static let styleMask: NSWindow.StyleMask = [.titled, .closable, .miniaturizable, .resizable]
+    /// `.fullSizeContentView` with a transparent title bar (M7): the canvas
+    /// and the sidebar's rule run to the top of the window and the traffic
+    /// lights sit over the sidebar. The shell stays inside the safe area, so
+    /// no control ever sits under the title bar and the strip still drags
+    /// the window.
+    static let styleMask: NSWindow.StyleMask = [
+        .titled, .closable, .miniaturizable, .resizable, .fullSizeContentView,
+    ]
+
+    /// The title bar's height in a full-size-content window: what the frame
+    /// has and the unobscured layout rect does not. Never negative.
+    static func titlebarInset(frameHeight: CGFloat, layoutHeight: CGFloat) -> CGFloat {
+        max(0, frameHeight - layoutHeight)
+    }
+
+    /// A content size that leaves `usable` under the title bar. The content
+    /// view now includes the title bar strip, so the shell's floor and the
+    /// first-open size both grow by it; the WINDOW sizes are what they were.
+    static func contentSize(usable: NSSize, titlebarInset: CGFloat) -> NSSize {
+        NSSize(width: usable.width, height: usable.height + titlebarInset)
+    }
 
     /// Whether an open request may create (or show) the window. With the
     /// flag off no window object is ever made, so flag-off is unchanged.
@@ -133,13 +153,18 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         window.contentViewController = host
         window.title = "Klorn"
         window.titleVisibility = .hidden  // the sections draw their own titles
-        window.contentMinSize = MainWindowRules.minSize
+        window.titlebarAppearsTransparent = true
+        let titlebar = MainWindowRules.titlebarInset(
+            frameHeight: window.frame.height, layoutHeight: window.contentLayoutRect.height)
+        window.contentMinSize = MainWindowRules.contentSize(
+            usable: MainWindowRules.minSize, titlebarInset: titlebar)
         window.isReleasedWhenClosed = false  // reused on reopen
         window.isRestorable = false  // our frame autosave is the only restoration
         window.tabbingMode = .disallowed
         window.collectionBehavior.insert(.fullScreenPrimary)
         window.delegate = self
-        window.setContentSize(MainWindowRules.defaultSize)
+        window.setContentSize(MainWindowRules.contentSize(
+            usable: MainWindowRules.defaultSize, titlebarInset: titlebar))
         if !window.setFrameUsingName(MainWindowRules.frameAutosaveName) { window.center() }
         window.setFrameAutosaveName(MainWindowRules.frameAutosaveName)
         clampOnScreen(window)

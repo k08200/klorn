@@ -173,6 +173,27 @@ Not in the composer because the model and `POST /api/email/send` carry only
 to / subject / body: Cc, Bcc, attachments, recipient autocomplete, choosing
 the sending account, and more than one draft at a time.
 
+The main window wears the design system (M7): the six type roles, three
+radii (6 / 10 / 16), the 4pt spacing grid and `Theme` colors only. A
+self-check source guard holds the main window's own files at zero raw
+style literals. Views it shares with the bar (`FullList`, `ReadingPane`,
+`CalendarScreen`, `LaneChip`, `EmptyState`) take a style parameter that
+defaults to the bar's look, so the bar's previews are byte-identical.
+
+- **One badge per row.** A mail row shows sender, subject, snippet and
+  time, plus the lane chip on mixed-lane lists (All, a label, search). The
+  category, the relationship ("Replied ×3"), the reply state and
+  why-this-lane are in the reader header, as plain words beside the lane
+  chip. Search rows also show the unread dot and, with two or more
+  accounts, the account's monogram; firewall rows carry neither fact.
+- **Lane chip.** 12pt on a 13% wash with a dedicated chip ink per lane,
+  pinned at 4.5:1 or better on the canvas, a panel, a raised card, a
+  hovered row and a selected row, in both appearances.
+- **Calendar.** The month's weeks share the window's height.
+- **Title bar.** Transparent over full-size content: the canvas and the
+  sidebar's rule run to the top and the traffic lights sit over the
+  sidebar. The shell stays inside the safe area.
+
 Turn it on with either:
 
 - Settings ▸ General ▸ hold **Option** ▸ *Use standard main window (beta)*

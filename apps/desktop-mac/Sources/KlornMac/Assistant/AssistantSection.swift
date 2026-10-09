@@ -63,8 +63,9 @@ struct AssistantSection: View {
                         .padding(Theme.s4)
                 }
             } else {
-                EmptyState(icon: "sun.max", title: L("today.assistant.noBriefing"))
-                    .padding(.top, Theme.s6 * 2)
+                EmptyState(
+                    icon: "sun.max", title: L("today.assistant.noBriefing"), style: .window)
+                    .padding(.top, Theme.s12)
             }
         }
     }

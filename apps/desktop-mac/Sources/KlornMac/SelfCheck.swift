@@ -1854,6 +1854,9 @@ func runSelfChecks() async -> Bool {
     print("Session scope:")
     for (name, ok) in await sessionSelfChecks(sourceDir: sourceDir) { check(name, ok) }
 
+    // Design tokens and the one-badge row rule in the main window (M7).
+    for (name, ok) in tokenSelfChecks(sourceDir: sourceDir) { check(name, ok) }
+
     print("Localization:")
     // A key present in one language and missing in another ships a raw key
     // ("prefs.done") to whoever runs the other language — the kind of bug that
@@ -2439,7 +2442,7 @@ func runSelfChecks() async -> Bool {
     check("the main window is reused and remembers its frame",
           windowPart.contains("isReleasedWhenClosed = false")
           && windowPart.contains("setFrameAutosaveName(MainWindowRules.frameAutosaveName)")
-          && windowPart.contains("contentMinSize = MainWindowRules.minSize")
+          && windowPart.contains("usable: MainWindowRules.minSize, titlebarInset: titlebar)")
           && windowPart.contains("sizingOptions = []"))
     check("main window state comes from NSWindow callbacks, never onAppear/onDisappear",
           windowPart.contains("func windowWillClose(")

@@ -64,6 +64,7 @@
 "mail.filterByInbox" = "受信トレイで絞り込む";
 "mail.filterByInbox.a11y" = "受信トレイで絞り込む — 現在 %@";
 "mail.inbox.a11y" = "受信トレイ %@";
+"mail.unread" = "未読";
 "mail.searchResult.a11y" = "%1$@ からの検索結果: %2$@";
 "mail.noSubject" = "件名なし";
 "mail.snooze" = "スヌーズ…";

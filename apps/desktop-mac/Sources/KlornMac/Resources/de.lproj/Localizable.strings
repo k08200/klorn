@@ -64,6 +64,7 @@
 "mail.filterByInbox" = "Nach Postfach filtern";
 "mail.filterByInbox.a11y" = "Nach Postfach filtern — aktuell %@";
 "mail.inbox.a11y" = "Postfach %@";
+"mail.unread" = "Ungelesen";
 "mail.searchResult.a11y" = "Suchtreffer von %1$@: %2$@";
 "mail.noSubject" = "kein Betreff";
 "mail.snooze" = "Zurückstellen…";
