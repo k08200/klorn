@@ -149,14 +149,16 @@ extension ConnectionNotice {
 struct SolidButtonStyle: ButtonStyle {
     var prominent = true
     var fullWidth = false
+    /// The 24pt size, for a row of small controls (the reader's actions).
+    var compact = false
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(Theme.Typo.body.weight(.semibold))
+            .font(compact ? Theme.Typo.label.weight(.semibold) : Theme.Typo.body.weight(.semibold))
             .foregroundStyle(prominent ? Theme.onAccentSolid : Theme.text)
-            .padding(.horizontal, Theme.s4)
-            .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: 32)
+            .padding(.horizontal, compact ? Theme.s3 : Theme.s4)
+            .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: compact ? 24 : 32)
             .background(
                 prominent ? Theme.accentSolid : Theme.surfaceRaised,
                 in: RoundedRectangle(cornerRadius: Theme.Radius.sm))
@@ -246,7 +248,7 @@ struct SurfaceStateView: View {
         VStack(alignment: compact ? .leading : .center, spacing: Theme.s3) {
             if !compact {
                 Image(systemName: icon)
-                    .font(.system(size: 28, weight: .light))
+                    .font(Theme.Typo.stateGlyph)
                     .foregroundStyle(Theme.textDim)
                     .accessibilityHidden(true)
             }

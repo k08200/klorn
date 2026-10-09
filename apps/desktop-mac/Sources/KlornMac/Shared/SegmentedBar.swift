@@ -46,7 +46,7 @@ private struct SegmentButton<Value: Hashable>: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 6) {
+            HStack(spacing: Theme.s1 + Theme.hairline * 2) {
                 if let dot = segment.dot {
                     Circle().fill(dot).frame(width: 6, height: 6).accessibilityHidden(true)
                 }
@@ -61,7 +61,7 @@ private struct SegmentButton<Value: Hashable>: View {
             }
             .lineLimit(1)
             .fixedSize()
-            .padding(.horizontal, 10)
+            .padding(.horizontal, Theme.s3)
             .frame(height: 28)
             .background(
                 selected ? Theme.surfaceHover : hovering ? Theme.surfaceRaised : .clear,
@@ -79,13 +79,16 @@ private struct SegmentButton<Value: Hashable>: View {
 /// Neutral monochrome source glyph for an account (productization plan §2).
 struct SourceBadge: View {
     let provider: String?
+    /// The 16pt tile for a mail row's line; 20pt beside an account's name.
+    var compact = false
 
     var body: some View {
         let glyph = sourceMonogram(provider: provider)
+        let side: CGFloat = compact ? 16 : 20
         Text(glyph)
-            .font(.system(size: glyph.count > 2 ? 8 : 10, weight: .bold, design: .rounded))
+            .font(glyph.count > 2 || compact ? Theme.Typo.monogramTight : Theme.Typo.monogram)
             .foregroundStyle(Theme.textDim)
-            .frame(width: 20, height: 20)
+            .frame(width: side, height: side)
             .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.sm))
             .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm).strokeBorder(Theme.line))
             .accessibilityHidden(true)

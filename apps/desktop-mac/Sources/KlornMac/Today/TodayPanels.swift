@@ -65,7 +65,7 @@ private struct TodayEventRow: View {
     var body: some View {
         let source = calendarEventSourceLabel(event)
         let row = HStack(alignment: .top, spacing: Theme.s2) {
-            RoundedRectangle(cornerRadius: 1.5)
+            Capsule()
                 .fill(source == nil ? Theme.accent : Theme.textDim)
                 .frame(width: 3)
                 .accessibilityHidden(true)
@@ -73,7 +73,7 @@ private struct TodayEventRow: View {
                 .font(Theme.Typo.caption.monospacedDigit().weight(isNow ? .semibold : .regular))
                 .foregroundStyle(isNow ? Theme.text : Theme.textDim)
                 .frame(width: 44, alignment: .leading)
-                .padding(.top, 1)
+                .padding(.top, Theme.hairline)
             VStack(alignment: .leading, spacing: 1) {
                 Text(event.title).font(Theme.Typo.body).foregroundStyle(Theme.text).lineLimit(1)
                 if let source {
@@ -120,7 +120,7 @@ struct TodayAssistantPanel: View {
                     .font(Theme.Typo.body).foregroundStyle(Theme.textDim)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Rectangle().fill(Theme.line).frame(height: 1)
+            Rectangle().fill(Theme.line).frame(height: Theme.hairline)
             if approvals > 0 {
                 Button { model.showAssistantPane(.approvals) } label: {
                     HStack(spacing: Theme.s2) {

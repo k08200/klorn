@@ -184,6 +184,8 @@ extension PreviewRender {
         shot("mail-lanes", navModel(firewallJSON: navFirewallJSON)) {
             $0.listMode = NavRules.defaultMailMode
         }
+        // Mixed lanes (M7): the one place a row carries its lane chip.
+        shot("mail-all", navModel(firewallJSON: navFirewallJSON)) { $0.listMode = .inbox }
         shot("calendar-full", model) { $0.listMode = .calendar }
         shot("assistant", model) { $0.showAssistantPane(.approvals) }
 

@@ -64,6 +64,7 @@
 "mail.filterByInbox" = "Filtrer par boîte";
 "mail.filterByInbox.a11y" = "Filtrer par boîte — actuellement %@";
 "mail.inbox.a11y" = "Boîte %@";
+"mail.unread" = "Non lu";
 "mail.searchResult.a11y" = "Résultat de %1$@ : %2$@";
 "mail.noSubject" = "sans objet";
 "mail.snooze" = "Reporter…";

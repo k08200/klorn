@@ -54,8 +54,8 @@ struct TodayScreen: View {
                 if lanes.isEmpty {
                     EmptyState(
                         icon: "checkmark.circle", title: L("today.clear.title"),
-                        hint: L("today.clear.detail"))
-                        .padding(.vertical, Theme.s6 * 2)
+                        hint: L("today.clear.detail"), style: .window)
+                        .padding(.vertical, Theme.s12)
                 } else {
                     ForEach(lanes, id: \.tier) { lane in
                         TodayLaneGroup(lane: lane, now: now, open: open)
@@ -142,12 +142,12 @@ private struct TodayLaneGroup: View {
     }
 
     private var rowDivider: some View {
-        Rectangle().fill(Theme.line).frame(height: 1).padding(.leading, Theme.s3)
+        Rectangle().fill(Theme.line).frame(height: Theme.hairline).padding(.leading, Theme.s3)
     }
 }
 
-/// A Today mail row: the subject is the statement, the sender and the
-/// reason are the metadata under it. Two lines, so nine rows fit a screen.
+/// A Today mail row under the one-badge rule: who, what, when. The lane is
+/// the group it sits in; the reply state and the reason are in the reader.
 private struct TodayMailRow: View {
     let item: FirewallItem
     let now: Date
@@ -159,36 +159,15 @@ private struct TodayMailRow: View {
         return name.isEmpty ? (sourceBadgeLabel(item.source) ?? L("source.unknown")) : name
     }
     private var subject: String { decodeHTMLEntities(item.email?.subject ?? item.title) }
-    private var time: String {
-        mailTimeLabel(iso: item.email?.receivedAt ?? item.surfacedAt, now: now)
-    }
 
     var body: some View {
         Button(action: open) {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .firstTextBaseline, spacing: Theme.s2) {
-                    Text(subject).font(Theme.Typo.body.weight(.medium))
-                        .foregroundStyle(Theme.text).lineLimit(1)
-                    Spacer(minLength: Theme.s2)
-                    Text(time).font(Theme.Typo.caption.monospacedDigit())
-                        .foregroundStyle(Theme.textDim)
-                }
-                HStack(spacing: 6) {
-                    Text(sender).font(Theme.Typo.label).foregroundStyle(Theme.textDim)
-                        .lineLimit(1).layoutPriority(1)
-                    ReplyStateChip(
-                        state: item.email?.replyState, draftReady: item.email?.draftReady ?? false)
-                    if let reason = rowTierReason(item.tierReason) {
-                        Text(reason).font(Theme.Typo.caption).foregroundStyle(Theme.textDim)
-                            .lineLimit(1)
-                    }
-                    Spacer(minLength: 0)
-                }
-            }
-            .padding(.horizontal, Theme.s3).padding(.vertical, Theme.s2)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(hovering ? Theme.surfaceHover : .clear)
-            .contentShape(Rectangle())
+            // Mixed lanes never happen inside a lane group: no chip.
+            WindowRowBody(content: WindowRowRules.content(for: item, mixedLanes: false, now: now))
+                .padding(.horizontal, Theme.s3).padding(.vertical, Theme.s2)
+                .frame(maxWidth: .infinity, minHeight: Theme.rowHeight, alignment: .leading)
+                .background(hovering ? Theme.surfaceHover : .clear)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }

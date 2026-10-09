@@ -64,6 +64,7 @@
 "mail.filterByInbox" = "按收件箱筛选";
 "mail.filterByInbox.a11y" = "按收件箱筛选 — 当前 %@";
 "mail.inbox.a11y" = "收件箱 %@";
+"mail.unread" = "未读";
 "mail.searchResult.a11y" = "来自 %1$@ 的搜索结果：%2$@";
 "mail.noSubject" = "无主题";
 "mail.snooze" = "稍后提醒…";

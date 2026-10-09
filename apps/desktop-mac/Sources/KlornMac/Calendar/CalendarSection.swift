@@ -28,12 +28,13 @@ struct CalendarSection: View {
                     onSelect: { model.go(to: $0 == .teams ? .teams : .calendar) })
                     .padding(.horizontal, Theme.s6)
                     .frame(height: NavRules.topBarHeight)
-                Rectangle().fill(Theme.line).frame(height: 1)
+                Rectangle().fill(Theme.line).frame(height: Theme.hairline)
             }
             switch pane {
             case .calendar:
                 CalendarScreen(
-                    actions: actions, initialScope: initialScope, initialAnchor: initialAnchor)
+                    actions: actions, initialScope: initialScope, initialAnchor: initialAnchor,
+                    style: .window)
             case .teams:
                 // Built for the list column; keep its measure readable.
                 TeamsColumn()

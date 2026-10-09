@@ -64,6 +64,7 @@
 "mail.filterByInbox" = "Filtrar por bandeja";
 "mail.filterByInbox.a11y" = "Filtrar por bandeja: actualmente %@";
 "mail.inbox.a11y" = "Bandeja %@";
+"mail.unread" = "No leído";
 "mail.searchResult.a11y" = "Resultado de %1$@: %2$@";
 "mail.noSubject" = "sin asunto";
 "mail.snooze" = "Posponer…";

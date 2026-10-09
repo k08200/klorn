@@ -42,7 +42,7 @@ struct OnboardingView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, Theme.s4)
         }
-        .padding(.horizontal, Theme.s6 + Theme.s2)
+        .padding(.horizontal, Theme.s8)
         // One block, centred: with a single sign-in button the spare height
         // is shared above and below instead of opening a gap in the middle.
         .frame(width: OnboardingRules.size.width, height: OnboardingRules.size.height)
