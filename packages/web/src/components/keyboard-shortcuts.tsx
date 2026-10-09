@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { useAuth } from "../lib/auth";
-import { assistantHref, TODAY_HOME } from "../lib/home";
+import { ASSISTANT_BRIEFING, assistantHref, TODAY_HOME } from "../lib/home";
 import {
   createHotkeyMatcher,
   hotkeyBlockReason,
@@ -37,12 +37,14 @@ export default function KeyboardShortcuts() {
   const unifiedHome = useAuth().user?.unifiedHome === true;
   const { toast } = useToast();
   const [showHelp, setShowHelp] = useState(false);
+  // UNIFIED_HOME: Briefing is a page of the Assistant hub (P7).
+  const briefingHref = unifiedHome ? ASSISTANT_BRIEFING : "/briefing";
 
   // Handlers this component owns: briefing, help, and the `g` destinations.
   useHotkeys(
     "global",
     {
-      "nav.briefing": { run: () => router.push("/briefing") },
+      "nav.briefing": { run: () => router.push(briefingHref) },
       "help.toggle": { run: () => setShowHelp((prev) => !prev) },
       "help.open": { run: () => setShowHelp(true) },
       "go.mail": { run: () => router.push("/email") },
@@ -51,7 +53,7 @@ export default function KeyboardShortcuts() {
       // Live only under UNIFIED_HOME (the table gates them on the flag).
       "go.today": { run: () => router.push(TODAY_HOME) },
       "go.assistant": { run: () => router.push(assistantHref()) },
-      "go.briefing": { run: () => router.push("/briefing") },
+      "go.briefing": { run: () => router.push(briefingHref) },
       "go.settings": { run: () => router.push("/settings") },
     },
     true,

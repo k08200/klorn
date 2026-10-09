@@ -6,7 +6,15 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import { ASSISTANT_ROUTES, assistantHref, LEGACY_HOME, TODAY_HOME } from "../lib/home";
+import {
+  ASSISTANT_ACTIVITY,
+  ASSISTANT_APPROVALS,
+  ASSISTANT_BRIEFING,
+  ASSISTANT_CHAT,
+  ASSISTANT_ROUTES,
+  assistantHref,
+  TODAY_HOME,
+} from "../lib/home";
 import { useT } from "../lib/i18n";
 import { NavIcon, type NavIconType } from "./nav-icons";
 import NotificationBell from "./notification-bell";
@@ -53,6 +61,8 @@ function useNavCounts(enabled: boolean) {
 
   return {
     "/inbox": pendingQuery.data ?? 0,
+    // UNIFIED_HOME: the same count sits on Assistant, which opens Approvals.
+    [ASSISTANT_APPROVALS]: pendingQuery.data ?? 0,
     "/email": replyQuery.data ?? 0,
   } as Record<string, number>;
 }
@@ -90,10 +100,10 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/briefing", labelKey: "nav.briefing", icon: "bell" },
 ];
 
-// UNIFIED_HOME (productization plan §1, P6): Today · Mail · Calendar ·
+// UNIFIED_HOME (productization plan §1, P6/P7): Today · Mail · Calendar ·
 // Assistant. Files joins only once a drive source exists (FD-7). Assistant
-// leads to the approvals page until the hub ships (P7); Approvals and
-// Briefing sit under it so both stay one click away.
+// opens the hub's Approvals page; the hub's four pages sit under it, which is
+// the hub's own navigation at this width.
 const UNIFIED_NAV_ITEMS: NavItem[] = [
   { href: TODAY_HOME, labelKey: "nav.v2.today", icon: "today" },
   { href: "/email", labelKey: "nav.mail", icon: "mail" },
@@ -104,8 +114,10 @@ const UNIFIED_NAV_ITEMS: NavItem[] = [
     icon: "chat",
     routes: ASSISTANT_ROUTES,
     children: [
-      { href: LEGACY_HOME, labelKey: "nav.v2.approvals" },
-      { href: "/briefing", labelKey: "nav.briefing" },
+      { href: ASSISTANT_APPROVALS, labelKey: "nav.v2.approvals" },
+      { href: ASSISTANT_BRIEFING, labelKey: "nav.briefing" },
+      { href: ASSISTANT_ACTIVITY, labelKey: "nav.v2.activity" },
+      { href: ASSISTANT_CHAT, labelKey: "nav.v2.chat" },
     ],
   },
 ];

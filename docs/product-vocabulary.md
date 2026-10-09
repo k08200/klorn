@@ -20,18 +20,25 @@ See `design/productization-plan.md`.
 
 Updated 2026-10-09: **Today** exists at `/today` behind `UNIFIED_HOME` (P6).
 
+Updated 2026-10-09: the **Assistant** hub exists at `/assistant/*` behind
+`UNIFIED_HOME` (P7): `/assistant/approvals`, `/assistant/briefing`,
+`/assistant/activity` (the Receipt) and `/assistant/chat`. With the flag on,
+`/inbox`, `/briefing` and `/inbox/receipt` hand over to those pages; with it
+off the hub routes hand back and the legacy pages are unchanged. Added
+**Activity**.
+
 ## The nouns
 
 | Term | Means | Where it appears | Never means |
 |---|---|---|---|
 | **inbox** | One connected mail account (a Gmail account, a Naver IMAP account). A user can have several. | Settings → "Accounts & sources" (today: "Connected inboxes"), the source badge on each row, the account facet on Mail (no account switcher — FD-2) | A screen. Not Today, not Approvals, not the lane view. |
 | **Today** | The home surface: mail by lane across all connected accounts, the merged calendar, recent files, and an assistant strip. | Sidebar nav (first item), the app's landing view | A mail list or an approval list. Lives at `/today` behind `UNIFIED_HOME` (default OFF, P6); while the flag is off `/inbox` is still home. |
-| **Assistant** | The nav section holding chat, **Approvals**, Briefing and Receipt. | Sidebar nav | A lane or an agent mode. |
-| **Approvals** | The list of things waiting for the user's approval. Formerly the **Decision queue**. | Under Assistant | A mail list. Nothing lands here unless it needs a decision. Transition: with `UNIFIED_HOME` on (P6) the nav item is **Assistant** and the page at `/inbox` is titled "Approvals"; the route itself and the old term "Decision queue" (flag off) remain until the Assistant hub ships (P7). New copy uses "Approvals". |
+| **Assistant** | The nav section holding chat, **Approvals**, Briefing and Receipt (shown as **Activity**). Lives at `/assistant/*` behind `UNIFIED_HOME` (default OFF, P7). | Sidebar nav; a tab row on phones | A lane or an agent mode. |
+| **Approvals** | The list of things waiting for the user's approval. Formerly the **Decision queue**. | Under Assistant | A mail list. Nothing lands here unless it needs a decision. With `UNIFIED_HOME` on it is `/assistant/approvals` (P7) and `/inbox` hands over to it; the screener's new senders and open commitments sit on the same page as secondary lists. With the flag off `/inbox` is still the "Decision queue". New copy uses "Approvals". |
 | **Files** | Documents from connected drive sources. | Sidebar nav, only when a drive source is enabled | Mail attachments. |
 | **SourceBadge** (source) | The small monochrome glyph showing which connected account a row or event came from. | Every mail row and calendar event | A lane or a category. |
 | **Firewall board** | Internal-docs term for the lane classification view. The separate screen is **retired as a user-facing term**: lanes are Mail's primary filter (PUSH / MEETING / QUEUE / INFO / SILENT). `/inbox/firewall` and the desktop tier columns persist in code until migration. | Internal docs only | A place to read mail, and never user-facing copy. |
-| **Receipt** | The record of what Klorn did today, after the fact. | `/inbox/receipt`; under Assistant | Something to act on. It is read-only history. |
+| **Receipt** / **Activity** | The record of what Klorn did and decided today, after the fact. "Receipt" is the concept and the legacy page; the hub page that shows it is labelled **Activity**. | `/assistant/activity` with `UNIFIED_HOME` on (P7); `/inbox/receipt` with it off | Something to act on. It is read-only history; "Request undo" only adds a reversal to Approvals. |
 | **Mail** | The actual message list and reading view; lanes are its primary filter. | `/email`, desktop reading pane | Approvals. |
 | **Key permission** | What an MCP API key may do: **Read only** (the default) or **Read and write**. Read and write lets an external agent mark mail as read and change lanes; it never allows send, delete or forward. Offered only while write tools are switched on. | Settings → "MCP API keys": the choice when creating a key, and a label on each key | Agent mode (`SHADOW` / `SUGGEST` / `AUTO`). A key's permission is about which tools an *external* agent may call; it says nothing about how much Klorn's own agent does without asking. |
 | **Agent activity** | The per-key history of write actions an external agent took through that key: when, what, and how it ended (Done / Refused / Error / Outcome unknown). | Settings → "MCP API keys", expandable on each Read and write key | The receipt (Klorn's own record of what Klorn did today), or agent mode. It never lists reads, and never shows message content. |

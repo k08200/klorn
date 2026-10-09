@@ -37,7 +37,7 @@ const ctx = (triage: boolean, ...scopes: HotkeyScope[]): HotkeyContext => ({
   scopes: new Set<HotkeyScope>(["global", ...scopes]),
 });
 
-const ALL_SCOPES: HotkeyScope[] = ["global", "mail-list", "mail-detail"];
+const ALL_SCOPES: HotkeyScope[] = ["global", "mail-list", "mail-detail", "approvals"];
 
 const enabledIn = (c: HotkeyContext) => (def: HotkeyDef) => def.enabled(c);
 

@@ -24,8 +24,9 @@ import { CORE_TIERS } from "./tiers";
 /**
  * `mail-reader` is the Mail v2 reader (MAIL_V2), mounted next to `mail-detail`:
  * it has a previous mail to go to, which the legacy reader does not.
+ * `approvals` is the Assistant hub's approvals page (UNIFIED_HOME, P7).
  */
-export type HotkeyScope = "global" | "mail-list" | "mail-detail" | "mail-reader";
+export type HotkeyScope = "global" | "mail-list" | "mail-detail" | "mail-reader" | "approvals";
 
 export type HotkeyGroup = "general" | "navigate" | "triage" | "lane" | "select" | "go";
 
@@ -101,6 +102,7 @@ const MAIL: readonly HotkeyScope[] = ["mail-list", "mail-detail"];
 const LIST: readonly HotkeyScope[] = ["mail-list"];
 const LIST_AND_READER: readonly HotkeyScope[] = ["mail-list", "mail-reader"];
 const GLOBAL: readonly HotkeyScope[] = ["global"];
+const APPROVALS: readonly HotkeyScope[] = ["approvals"];
 
 /** Lane keys 1–5: the five live lanes in their display order (lib/tiers). */
 export const LANE_HOTKEY_ORDER = CORE_TIERS;
@@ -220,6 +222,47 @@ export const HOTKEYS: readonly HotkeyDef[] = [
     labelKey: "keys.extendUp",
     group: "select",
     repeatable: true,
+  }),
+
+  // Approvals (Assistant hub, P7). The page mounts the scope only under
+  // UNIFIED_HOME, and it answers approve / reject only for a card the user
+  // picked with j / k first — a stray key never approves anything.
+  triage({
+    id: "approvals.next",
+    keys: "j",
+    scopes: APPROVALS,
+    labelKey: "keys.approvals.next",
+    group: "navigate",
+    repeatable: true,
+  }),
+  triage({
+    id: "approvals.prev",
+    keys: "k",
+    scopes: APPROVALS,
+    labelKey: "keys.approvals.prev",
+    group: "navigate",
+    repeatable: true,
+  }),
+  triage({
+    id: "approvals.expand",
+    keys: ["o", "Enter"],
+    scopes: APPROVALS,
+    labelKey: "keys.approvals.expand",
+    group: "navigate",
+  }),
+  triage({
+    id: "approvals.approve",
+    keys: "a",
+    scopes: APPROVALS,
+    labelKey: "keys.approvals.approve",
+    group: "triage",
+  }),
+  triage({
+    id: "approvals.reject",
+    keys: "x",
+    scopes: APPROVALS,
+    labelKey: "keys.approvals.reject",
+    group: "triage",
   }),
 
   // Destinations that exist today only. `g f` (Files) joins when that route
