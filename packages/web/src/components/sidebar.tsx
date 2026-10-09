@@ -6,9 +6,11 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { ASSISTANT_ROUTES, assistantHref, LEGACY_HOME, TODAY_HOME } from "../lib/home";
 import { useT } from "../lib/i18n";
 import { NavIcon, type NavIconType } from "./nav-icons";
 import NotificationBell from "./notification-bell";
+import SidebarAccounts from "./sidebar-accounts";
 
 // Live nav counts — server truth, cheap, and shared with the pages' own
 // caches where the keys overlap. Only rendered when > 0 so the rail never
@@ -71,12 +73,46 @@ function NavCountBadge({ count, active }: { count: number; active: boolean }) {
 // Desktop-only workspace nav. On mobile the bottom tab bar (+ account sheet)
 // is the whole navigation, so this sidebar renders `hidden md:block` and there
 // is no mobile drawer anymore. Labels resolve via t() inside the component.
-const NAV_ITEMS: { href: string; labelKey: string; icon: NavIconType }[] = [
+interface NavItem {
+  href: string;
+  labelKey: string;
+  icon: NavIconType;
+  /** Routes that light this item up; defaults to its own href. */
+  routes?: readonly string[];
+  /** Secondary links shown under the item. */
+  children?: readonly { href: string; labelKey: string }[];
+}
+
+const NAV_ITEMS: NavItem[] = [
   { href: "/inbox", labelKey: "nav.decisionQueue", icon: "check" },
   { href: "/email", labelKey: "nav.mail", icon: "mail" },
   { href: "/calendar", labelKey: "nav.calendar", icon: "calendar" },
   { href: "/briefing", labelKey: "nav.briefing", icon: "bell" },
 ];
+
+// UNIFIED_HOME (productization plan §1, P6): Today · Mail · Calendar ·
+// Assistant. Files joins only once a drive source exists (FD-7). Assistant
+// leads to the approvals page until the hub ships (P7); Approvals and
+// Briefing sit under it so both stay one click away.
+const UNIFIED_NAV_ITEMS: NavItem[] = [
+  { href: TODAY_HOME, labelKey: "nav.v2.today", icon: "today" },
+  { href: "/email", labelKey: "nav.mail", icon: "mail" },
+  { href: "/calendar", labelKey: "nav.calendar", icon: "calendar" },
+  {
+    href: assistantHref(),
+    labelKey: "nav.assistant",
+    icon: "chat",
+    routes: ASSISTANT_ROUTES,
+    children: [
+      { href: LEGACY_HOME, labelKey: "nav.v2.approvals" },
+      { href: "/briefing", labelKey: "nav.briefing" },
+    ],
+  },
+];
+
+function isOnRoute(pathname: string, routes: readonly string[]): boolean {
+  return routes.some((route) => pathname.startsWith(route));
+}
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -85,6 +121,8 @@ export default function Sidebar() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const navCounts = useNavCounts(!!user);
+  const unified = user?.unifiedHome === true;
+  const navItems = unified ? UNIFIED_NAV_ITEMS : NAV_ITEMS;
 
   // Close user menu on outside click
   useEffect(() => {
@@ -112,16 +150,20 @@ export default function Sidebar() {
         {/* Header */}
         <div className="relative flex items-center justify-between px-3 py-4">
           <Link
-            href="/inbox"
-            aria-label="Open decision queue"
+            href={unified ? TODAY_HOME : "/inbox"}
+            aria-label={unified ? t("nav.v2.openToday") : "Open decision queue"}
             className="flex items-center gap-2.5 rounded-lg px-1 py-1 text-sm font-semibold text-ink transition hover:text-ink"
           >
             <img src="/brand/mark.svg?v=matte2" alt="" className="h-8 w-8" />
             <span>
               <span className="block text-[15px] leading-none tracking-tight">Klorn</span>
-              <span className="mt-1.5 block text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-dim">
-                {t("nav.decisionQueue")}
-              </span>
+              {/* The home is Today under UNIFIED_HOME, so the wordmark carries
+                  no surface name. */}
+              {!unified && (
+                <span className="mt-1.5 block text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-dim">
+                  {t("nav.decisionQueue")}
+                </span>
+              )}
             </span>
           </Link>
           <div className="flex items-center gap-1">
@@ -133,13 +175,15 @@ export default function Sidebar() {
             can go, not on empty space. */}
         <div className="relative px-2 pt-2">
           <div className="space-y-0.5">
-            {NAV_ITEMS.map((item) => {
-              const active = pathname.startsWith(item.href);
+            {navItems.map((item) => {
+              const active = isOnRoute(pathname, item.routes ?? [item.href]);
               return (
                 <Link
-                  key={item.href}
+                  key={item.labelKey}
                   href={item.href}
-                  aria-current={active ? "page" : undefined}
+                  // A section with links under it is highlighted, but the
+                  // current page is the link below it, not the section.
+                  aria-current={active && !item.children ? "page" : undefined}
                   className={`focus-ring relative flex min-h-10 items-center gap-3 rounded-lg px-3 py-2 text-[13px] transition ${
                     active
                       ? "bg-state-info-bg font-medium text-accent-deeper shadow-[0_1px_2px_rgba(2,60,110,0.06)] ring-1 ring-inset ring-accent-dim"
@@ -158,6 +202,30 @@ export default function Sidebar() {
                 </Link>
               );
             })}
+            {navItems.map((item) =>
+              item.children ? (
+                <ul key={`${item.labelKey}.children`} className="space-y-0.5 pl-7">
+                  {item.children.map((child) => {
+                    const current = pathname.startsWith(child.href);
+                    return (
+                      <li key={child.href}>
+                        <Link
+                          href={child.href}
+                          aria-current={current ? "page" : undefined}
+                          className={`focus-ring flex min-h-10 items-center rounded-lg px-3 py-1.5 text-label transition-colors duration-120 ease-fluid ${
+                            current
+                              ? "text-ink"
+                              : "font-normal text-ink-mid hover:bg-surface-hover/70 hover:text-ink"
+                          }`}
+                        >
+                          {t(child.labelKey)}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : null,
+            )}
             {user?.role === "ADMIN" && (
               <Link
                 href="/admin"
@@ -181,13 +249,18 @@ export default function Sidebar() {
           </div>
         </div>
 
+        {/* Connected accounts and their health — a status list, never a
+            switcher (FD-2). */}
+        {unified && user && <SidebarAccounts />}
+
         {/* Spacer pushes the account card to the bottom. */}
         <div aria-hidden="true" className="flex-1" />
 
         {/* Real-time status — only shown when Google is actually connected
             (the Gmail watch auto-registers on connect), so this is a true
-            statement, not decoration. */}
-        {user && googleConnected === true && (
+            statement, not decoration. Under UNIFIED_HOME the Accounts group
+            above states each account's health instead. */}
+        {user && googleConnected === true && !unified && (
           <div className="mx-2 mb-2 rounded-xl border border-state-info-line bg-state-info-bg p-3 shadow-[0_1px_2px_rgba(2,60,110,0.05)]">
             <div className="flex items-center gap-1.5 text-[11px] font-semibold text-state-info-ink">
               <span aria-hidden="true" className="relative flex h-1.5 w-1.5">

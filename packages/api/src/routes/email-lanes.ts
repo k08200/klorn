@@ -1,13 +1,14 @@
 /**
- * Mail v2 lane routes (productization plan P5, MAIL_V2). Registered against
- * the email plugin, so they inherit its requireAuth + requireAppAccess hooks.
- * While MAIL_V2 is off the route answers Fastify's own 404.
+ * Lane routes (productization plan P5/P6). Registered against the email
+ * plugin, so they inherit its requireAuth + requireAppAccess hooks. Two
+ * readers: Mail v2 (MAIL_V2) and Today (UNIFIED_HOME). While both are off the
+ * route answers Fastify's own 404.
  */
 
 import type { EmailLaneCountsResponse, LiveTier } from "@klorn/contract";
 import type { FastifyInstance } from "fastify";
 import { getUserId } from "../auth.js";
-import { mailV2Enabled } from "../config.js";
+import { laneReadsEnabled } from "../config.js";
 import { prisma } from "../db.js";
 import { countEmailsByLane, foldLaneCounts, resolveInboxScope } from "../judge/email-lanes.js";
 import { darkRouteGate } from "./dark-route-gate.js";
@@ -38,7 +39,7 @@ export function registerEmailLaneRoutes(
   app.get(
     "/lane-counts",
     {
-      onRequest: darkRouteGate(mailV2Enabled),
+      onRequest: darkRouteGate(laneReadsEnabled),
       schema: { querystring: laneCountsQuerySchema },
       config: { rateLimit: LANE_COUNTS_RATE_LIMIT },
     },

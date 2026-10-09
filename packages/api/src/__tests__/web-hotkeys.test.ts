@@ -37,6 +37,8 @@ const ctx = (triage: boolean, ...scopes: HotkeyScope[]): HotkeyContext => ({
   scopes: new Set<HotkeyScope>(["global", ...scopes]),
 });
 
+const ALL_SCOPES: HotkeyScope[] = ["global", "mail-list", "mail-detail"];
+
 const enabledIn = (c: HotkeyContext) => (def: HotkeyDef) => def.enabled(c);
 
 const feed = (
@@ -56,17 +58,22 @@ describe("the table", () => {
     for (const def of HOTKEYS) expect(def.labelKey.startsWith("keys.")).toBe(true);
   });
 
-  it("no two entries in one scope claim the same key", () => {
-    const seen = new Map<string, string>();
-    for (const def of HOTKEYS.filter((d) => !d.legacy)) {
-      for (const scope of def.scopes) {
-        for (const keys of def.keys) {
-          const slot = `${scope}:${keys}`;
-          expect(
-            seen.get(slot),
-            `${slot} claimed by ${seen.get(slot)} and ${def.id}`,
-          ).toBeUndefined();
-          seen.set(slot, def.id);
+  it("no two entries live in one scope claim the same key", () => {
+    // UNIFIED_HOME gives `g a` a different destination, so the table holds one
+    // entry per side of the flag: unique within each side, never both at once.
+    for (const unifiedHome of [false, true]) {
+      const live = { triage: true, scopes: new Set<HotkeyScope>(ALL_SCOPES), unifiedHome };
+      const seen = new Map<string, string>();
+      for (const def of HOTKEYS.filter((d) => !d.legacy && d.enabled(live))) {
+        for (const scope of def.scopes) {
+          for (const keys of def.keys) {
+            const slot = `${scope}:${keys}`;
+            expect(
+              seen.get(slot),
+              `${slot} claimed by ${seen.get(slot)} and ${def.id}`,
+            ).toBeUndefined();
+            seen.set(slot, def.id);
+          }
         }
       }
     }
@@ -176,9 +183,34 @@ describe("sequences", () => {
     expect(go("s")).toBe("go.settings");
     expect(go("a")).toBe("go.queue");
     expect(go("b")).toBe("go.briefing");
-    // Today and Files have no route yet.
+    // Today exists only under UNIFIED_HOME; Files has no route yet.
     expect(go("t")).toBe("none");
     expect(go("f")).toBe("none");
+  });
+
+  it("UNIFIED_HOME: g t goes to Today and g a means Assistant", () => {
+    const unified = { ...ctx(true), unifiedHome: true };
+    const go = (second: string) => {
+      const matcher = createHotkeyMatcher();
+      feed(key("g"), unified, matcher, 0);
+      return idOf(feed(key(second), unified, matcher, 10));
+    };
+    expect(go("t")).toBe("go.today");
+    expect(go("a")).toBe("go.assistant");
+    // The rest of the destinations are the same on both sides of the flag.
+    expect(go("m")).toBe("go.mail");
+    expect(go("c")).toBe("go.calendar");
+    expect(go("b")).toBe("go.briefing");
+    expect(go("s")).toBe("go.settings");
+  });
+
+  it("UNIFIED_HOME destinations need keyboard triage too", () => {
+    const off = { ...ctx(false), unifiedHome: true };
+    expect(feed(key("g"), off).kind).toBe("none");
+    const today = HOTKEYS.find((def) => def.id === "go.today");
+    expect(today?.enabled(off)).toBe(false);
+    expect(today?.enabled({ ...ctx(true), unifiedHome: true })).toBe(true);
+    expect(today?.enabled(ctx(true))).toBe(false);
   });
 
   it("the prefix expires, and then the second key is just itself", () => {

@@ -31,6 +31,12 @@ export interface HotkeyContext {
   triage: boolean;
   /** Scopes with a mounted surface. "global" is always present. */
   scopes: ReadonlySet<HotkeyScope>;
+  /**
+   * The UNIFIED_HOME flag, as the server reported it (absent = off). It
+   * decides which destinations the `g` keys have: `g t` exists only with
+   * Today, and `g a` means Assistant instead of the decision queue.
+   */
+  unifiedHome?: boolean;
 }
 
 export interface HotkeyDef {
@@ -67,6 +73,15 @@ const triage = (def: DefInput): HotkeyDef => ({
   keys: typeof def.keys === "string" ? [def.keys] : def.keys,
   enabled: inScope(def.scopes),
 });
+
+/** A `g` destination that exists on only one side of UNIFIED_HOME. */
+const destination = (def: DefInput, unifiedHome: boolean): HotkeyDef => {
+  const base = triage(def);
+  return {
+    ...base,
+    enabled: (ctx) => base.enabled(ctx) && (ctx.unifiedHome === true) === unifiedHome,
+  };
+};
 
 const legacy = (id: string, keys: string, labelKey: string): HotkeyDef => ({
   id,
@@ -202,8 +217,13 @@ export const HOTKEYS: readonly HotkeyDef[] = [
     repeatable: true,
   }),
 
-  // Destinations that exist today only. `g t` (Today) and `g f` (Files) join
-  // when those routes ship (P6, P12).
+  // Destinations that exist today only. `g f` (Files) joins when that route
+  // ships (P12). `g t` (Today) and `g a` as Assistant are live under
+  // UNIFIED_HOME; without it `g a` is the decision queue, as before.
+  destination(
+    { id: "go.today", keys: "g t", scopes: GLOBAL, labelKey: "keys.go.today", group: "go" },
+    true,
+  ),
   triage({ id: "go.mail", keys: "g m", scopes: GLOBAL, labelKey: "keys.go.mail", group: "go" }),
   triage({
     id: "go.calendar",
@@ -212,13 +232,20 @@ export const HOTKEYS: readonly HotkeyDef[] = [
     labelKey: "keys.go.calendar",
     group: "go",
   }),
-  triage({
-    id: "go.queue",
-    keys: "g a",
-    scopes: GLOBAL,
-    labelKey: "keys.go.queue",
-    group: "go",
-  }),
+  destination(
+    { id: "go.queue", keys: "g a", scopes: GLOBAL, labelKey: "keys.go.queue", group: "go" },
+    false,
+  ),
+  destination(
+    {
+      id: "go.assistant",
+      keys: "g a",
+      scopes: GLOBAL,
+      labelKey: "keys.go.assistant",
+      group: "go",
+    },
+    true,
+  ),
   triage({
     id: "go.briefing",
     keys: "g b",

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { apiFetch, clearStoredAuthToken, getStoredAuthToken, setStoredAuthToken } from "./api";
 import { storedAttribution } from "./attribution";
+import { homePath, LEGACY_HOME, rememberHome } from "./home";
 import { clearSensitiveStorage, revokeServerSession } from "./logout-cleanup";
 import { trackAppOpenOnce } from "./track";
 
@@ -38,6 +39,10 @@ interface User {
   // Server-driven client flag: the API's MAIL_V2 (productization plan P5).
   // True renders /email as the lane-first list. Undefined (older API) = off.
   mailV2?: boolean;
+  // Server-driven client flag: the API's UNIFIED_HOME (productization plan
+  // P6). True makes Today (/today) the home and switches the nav to Today ·
+  // Mail · Calendar · Assistant. Undefined (older API) = off.
+  unifiedHome?: boolean;
 }
 
 interface AuthContextType {
@@ -54,6 +59,7 @@ interface AuthContextType {
   // Naver IMAP instead of Gmail is not bounced out of the app. null = unknown.
   hasMailSource: boolean | null;
   initSync: InitSyncState;
+  /** `redirectTo` omitted = the user's home (Today under UNIFIED_HOME). */
   login: (email: string, password: string, redirectTo?: string) => Promise<void>;
   register: (email: string, password: string, name?: string, redirectTo?: string) => Promise<void>;
   loginWithToken: (token: string) => Promise<void>;
@@ -152,6 +158,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })
         .then((data) => {
           setUser(data.user);
+          // UNIFIED_HOME: keep the home hint for the callers that route before
+          // this answer exists (the root redirect, the native sign-in).
+          rememberHome(data.user);
           setGoogleConnected(data.user.googleConnected ?? false);
           setGoogleNeedsReconnect(data.user.googleNeedsReconnect ?? false);
           // Older API without the field: fall back to googleConnected so the
@@ -181,7 +190,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [runInitialSync]);
 
   const login = useCallback(
-    async (email: string, password: string, redirectTo = "/inbox") => {
+    async (email: string, password: string, redirectTo?: string) => {
       const data = await apiFetch<{ token: string; user: User }>("/api/auth/login", {
         method: "POST",
         body: JSON.stringify({ email, password }),
@@ -190,7 +199,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setToken(data.token);
       setUser(data.user);
       setAuthError(null);
-      router.push(redirectTo);
+      rememberHome(data.user);
+      router.push(redirectTo ?? homePath(data.user));
 
       // Trigger bootstrap sync. If Google is not connected yet, the card can show that clearly.
       runInitialSync(data.token);
@@ -226,6 +236,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setStoredAuthToken(newToken);
       setToken(newToken);
       let connected = false;
+      let home = LEGACY_HOME;
       try {
         const data = await apiFetch<{
           user: User & { googleConnected?: boolean; hasAnyMailSource?: boolean };
@@ -234,6 +245,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
         setUser(data.user);
         setAuthError(null);
+        rememberHome(data.user);
+        home = homePath(data.user);
         connected = data.user.googleConnected ?? false;
         setGoogleConnected(connected);
         setHasMailSource(data.user.hasAnyMailSource ?? connected);
@@ -249,7 +262,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // /inbox → AuthGuard → /onboarding.
       if (connected) {
         runInitialSync(newToken);
-        window.location.href = "/inbox";
+        window.location.href = home;
       } else {
         window.location.href = "/onboarding";
       }

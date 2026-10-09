@@ -20,6 +20,7 @@
 // passed through a URL query.
 
 import { API_BASE, setStoredAuthToken } from "../api";
+import { landingHome } from "../home";
 import { closeExternal, openExternal, shellKind } from "./shell";
 
 const POLL_INTERVAL_MS = 1500;
@@ -91,7 +92,7 @@ async function startRelayLogin(scheme: string): Promise<void> {
     const token = await exchangeCode(code);
     setStoredAuthToken(token);
     // Hard navigation so AuthProvider re-bootstraps from the stored token.
-    window.location.href = "/inbox";
+    window.location.href = landingHome();
   } finally {
     clearTimeout(timer);
     await handle.remove().catch(() => {});
@@ -128,7 +129,7 @@ async function startPollLogin(): Promise<void> {
   try {
     const token = await pollForToken(nonce, verifier);
     setStoredAuthToken(token);
-    window.location.href = "/inbox";
+    window.location.href = landingHome();
   } finally {
     await closeExternal().catch((err) => {
       console.warn("[AUTH] closeExternal() failed (harmless):", err);

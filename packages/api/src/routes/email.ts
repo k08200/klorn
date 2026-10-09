@@ -23,8 +23,8 @@ import { getUserId, requireAuth } from "../auth.js";
 import { requireAppAccess, requireEntitled } from "../billing/entitlement-guard.js";
 import { planHasFeature } from "../billing/stripe.js";
 import {
+  laneReadsEnabled,
   MULTI_INBOX_SYNC_ENABLED,
-  mailV2Enabled,
   providerInboxSelectorEnabled,
 } from "../config.js";
 import { prisma } from "../db.js";
@@ -634,8 +634,9 @@ const listEmailsQuerySchema = {
     category: { type: "string", maxLength: 500 },
     page: { type: "string", maxLength: 500 },
     inbox: { type: "string", maxLength: 500 },
-    // Lane filter (MAIL_V2). Validated in the handler, not here, so that with
-    // the flag off any value is ignored exactly as an undeclared param was.
+    // Lane filter (MAIL_V2 or UNIFIED_HOME). Validated in the handler, not
+    // here, so that with both off any value is ignored exactly as an
+    // undeclared param was.
     tier: { type: "string", maxLength: 500 },
   },
 } as const;
@@ -715,13 +716,13 @@ export async function emailRoutes(app: FastifyInstance) {
         // Google inbox, or a specific LinkedInboxAccount id. Always userId-scoped
         // below, so a foreign/garbage id yields zero rows — never a cross-user leak.
         inbox?: string;
-        // Mail v2: one of the five live lanes, or ALL. Honoured only while
-        // MAIL_V2 is on.
+        // One of the five live lanes, or ALL. Honoured only while a lane
+        // reader is on: MAIL_V2 (Mail v2) or UNIFIED_HOME (Today).
         tier?: string;
       };
       const uid = getUserId(request);
       const pageNum = parsePageNum(page);
-      const lane = mailV2Enabled() && tier !== undefined ? parseLaneFilter(tier) : undefined;
+      const lane = laneReadsEnabled() && tier !== undefined ? parseLaneFilter(tier) : undefined;
       if (lane === null) {
         return reply
           .code(400)
