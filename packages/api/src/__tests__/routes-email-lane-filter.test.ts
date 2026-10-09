@@ -117,6 +117,7 @@ beforeEach(() => {
 
 afterEach(() => {
   delete process.env.MAIL_V2;
+  delete process.env.UNIFIED_HOME;
 });
 
 interface RawCall {
@@ -331,6 +332,21 @@ describe("GET /api/email?tier= — lane page", () => {
     for (const [args] of emailFindMany.mock.calls) {
       expect((args as { where: Record<string, unknown> }).where).toEqual({ userId: "user-1" });
     }
+    // Mail v2's All view breaks a timestamp tie by id, like the lane pages and
+    // the reader's previous / next; without `tier` the order is the legacy one.
+    const orders = emailFindMany.mock.calls.map(([args]) => (args as { orderBy: unknown }).orderBy);
+    expect(orders).toEqual([[{ receivedAt: "desc" }, { id: "desc" }], { receivedAt: "desc" }]);
+    await app.close();
+  });
+
+  it("MAIL_V2 off: tier=ALL keeps the legacy ordering too", async () => {
+    delete process.env.MAIL_V2;
+    userTokenFindFirst.mockResolvedValue(GOOGLE_TOKEN);
+    const app = await buildApp();
+    await app.inject({ method: "GET", url: "/api/email?tier=ALL", headers: auth() });
+    expect((emailFindMany.mock.calls[0]?.[0] as { orderBy: unknown }).orderBy).toEqual({
+      receivedAt: "desc",
+    });
     await app.close();
   });
 
@@ -368,6 +384,20 @@ describe("GET /api/email?tier= — lane page", () => {
     expect(body.emails.length).toBeGreaterThan(0);
     for (const email of body.emails) expect(email.tier).toBe("PUSH");
     expect(body.total).toBe(body.emails.length);
+    await app.close();
+  });
+
+  it("UNIFIED_HOME on, MAIL_V2 off: Today reads lanes, so tier is honoured", async () => {
+    delete process.env.MAIL_V2;
+    process.env.UNIFIED_HOME = "true";
+    userTokenFindFirst.mockResolvedValue(GOOGLE_TOKEN);
+    const app = await buildApp();
+    const lane = await app.inject({ method: "GET", url: "/api/email?tier=PUSH", headers: auth() });
+    expect(lane.statusCode).toBe(200);
+    // The lane page is the raw join, never the unfiltered Prisma list.
+    expect(queryRaw).toHaveBeenCalled();
+    const bad = await app.inject({ method: "GET", url: "/api/email?tier=nope", headers: auth() });
+    expect(bad.statusCode).toBe(400);
     await app.close();
   });
 
@@ -492,6 +522,22 @@ describe("GET /api/email/lane-counts", () => {
     expect(Object.keys(body.counts).sort()).toEqual(["INFO", "MEETING", "PUSH", "QUEUE", "SILENT"]);
     expect(body.counts.PUSH.total).toBeGreaterThan(0);
     expect(queryRaw).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("UNIFIED_HOME on, MAIL_V2 off: the counts are served for Today", async () => {
+    delete process.env.MAIL_V2;
+    process.env.UNIFIED_HOME = "true";
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/email/lane-counts", headers: auth() });
+    expect(res.statusCode).toBe(200);
+    expect(Object.keys(res.json().counts).sort()).toEqual([
+      "INFO",
+      "MEETING",
+      "PUSH",
+      "QUEUE",
+      "SILENT",
+    ]);
     await app.close();
   });
 

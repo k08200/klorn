@@ -7,6 +7,7 @@
 
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { ASSISTANT_ASK_EVENT, type AssistantAskDetail } from "../lib/assistant-ask";
 import { useT } from "../lib/i18n";
 import { type AssistantChatMessage, useAssistantChat } from "../lib/use-assistant-chat";
 import EventDraftCard from "./event-draft-card";
@@ -39,6 +40,23 @@ export default function AssistantDock() {
     if (!open) return;
     threadEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [chat.messages.length, chat.pendingText, open]);
+
+  // Another surface (Today's ask box) hands over a question: open with it in
+  // the composer. It is sent only when the user sends it here.
+  const setInput = chat.setInput;
+  useEffect(() => {
+    const onAsk = (event: Event) => {
+      const text = (event as CustomEvent<AssistantAskDetail>).detail?.text;
+      if (typeof text !== "string" || !text.trim()) return;
+      // Never drop a draft already in the composer: the question joins it.
+      setInput((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text));
+      setOpen(true);
+      // Already open: the focus-on-open effect will not run again.
+      window.setTimeout(() => inputRef.current?.focus(), 0);
+    };
+    window.addEventListener(ASSISTANT_ASK_EVENT, onAsk);
+    return () => window.removeEventListener(ASSISTANT_ASK_EVENT, onAsk);
+  }, [setInput]);
 
   // Focus the composer when the panel opens; Escape closes it.
   useEffect(() => {

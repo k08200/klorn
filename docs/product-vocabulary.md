@@ -18,14 +18,16 @@ Updated 2026-10-02: Home is **Today** and the approval surface is **Approvals**
 user-facing term. Added **Today**, **Assistant**, **Files**, **SourceBadge**.
 See `design/productization-plan.md`.
 
+Updated 2026-10-09: **Today** exists at `/today` behind `UNIFIED_HOME` (P6).
+
 ## The nouns
 
 | Term | Means | Where it appears | Never means |
 |---|---|---|---|
 | **inbox** | One connected mail account (a Gmail account, a Naver IMAP account). A user can have several. | Settings → "Accounts & sources" (today: "Connected inboxes"), the source badge on each row, the account facet on Mail (no account switcher — FD-2) | A screen. Not Today, not Approvals, not the lane view. |
-| **Today** | The home surface: mail by lane across all connected accounts, the merged calendar, recent files, and an assistant strip. | Sidebar nav (first item), the app's landing view | A mail list or an approval list. Shipping behind `UNIFIED_HOME` (proposed flag); until then `/inbox` is still home. |
+| **Today** | The home surface: mail by lane across all connected accounts, the merged calendar, recent files, and an assistant strip. | Sidebar nav (first item), the app's landing view | A mail list or an approval list. Lives at `/today` behind `UNIFIED_HOME` (default OFF, P6); while the flag is off `/inbox` is still home. |
 | **Assistant** | The nav section holding chat, **Approvals**, Briefing and Receipt. | Sidebar nav | A lane or an agent mode. |
-| **Approvals** | The list of things waiting for the user's approval. Formerly the **Decision queue**. | Under Assistant | A mail list. Nothing lands here unless it needs a decision. Transition: the old term "Decision queue" and `/inbox` remain in code until P6/P7 ship behind `UNIFIED_HOME`; new copy uses "Approvals". |
+| **Approvals** | The list of things waiting for the user's approval. Formerly the **Decision queue**. | Under Assistant | A mail list. Nothing lands here unless it needs a decision. Transition: with `UNIFIED_HOME` on (P6) the nav item is **Assistant** and the page at `/inbox` is titled "Approvals"; the route itself and the old term "Decision queue" (flag off) remain until the Assistant hub ships (P7). New copy uses "Approvals". |
 | **Files** | Documents from connected drive sources. | Sidebar nav, only when a drive source is enabled | Mail attachments. |
 | **SourceBadge** (source) | The small monochrome glyph showing which connected account a row or event came from. | Every mail row and calendar event | A lane or a category. |
 | **Firewall board** | Internal-docs term for the lane classification view. The separate screen is **retired as a user-facing term**: lanes are Mail's primary filter (PUSH / MEETING / QUEUE / INFO / SILENT). `/inbox/firewall` and the desktop tier columns persist in code until migration. | Internal docs only | A place to read mail, and never user-facing copy. |

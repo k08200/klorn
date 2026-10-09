@@ -1211,6 +1211,47 @@ describe("GET /api/auth/me", () => {
     await app.close();
   });
 
+  it("reports UNIFIED_HOME as user.unifiedHome, false unless the flag is on", async () => {
+    const app = await buildApp();
+    const token = await registerAndGetToken(app, "home@example.com");
+    const me = async () =>
+      (await app.inject({ method: "GET", url: "/api/auth/me", headers: authHeader(token) })).json()
+        .user.unifiedHome;
+
+    delete process.env.UNIFIED_HOME;
+    expect(await me()).toBe(false);
+    process.env.UNIFIED_HOME = "true";
+    try {
+      expect(await me()).toBe(true);
+    } finally {
+      delete process.env.UNIFIED_HOME;
+    }
+    await app.close();
+  });
+
+  it("login carries user.unifiedHome so the first landing is the right home", async () => {
+    const app = await buildApp();
+    await registerAndGetToken(app, "landing@example.com");
+    const login = async () =>
+      (
+        await app.inject({
+          method: "POST",
+          url: "/api/auth/login",
+          payload: { email: "landing@example.com", password: "testpassword123" },
+        })
+      ).json();
+
+    delete process.env.UNIFIED_HOME;
+    expect((await login()).user.unifiedHome).toBe(false);
+    process.env.UNIFIED_HOME = "true";
+    try {
+      expect((await login()).user.unifiedHome).toBe(true);
+    } finally {
+      delete process.env.UNIFIED_HOME;
+    }
+    await app.close();
+  });
+
   it("rejects requests without Authorization header", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "GET", url: "/api/auth/me" });

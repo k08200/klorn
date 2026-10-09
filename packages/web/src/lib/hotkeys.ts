@@ -21,7 +21,11 @@
 
 import { CORE_TIERS } from "./tiers";
 
-export type HotkeyScope = "global" | "mail-list" | "mail-detail";
+/**
+ * `mail-reader` is the Mail v2 reader (MAIL_V2), mounted next to `mail-detail`:
+ * it has a previous mail to go to, which the legacy reader does not.
+ */
+export type HotkeyScope = "global" | "mail-list" | "mail-detail" | "mail-reader";
 
 export type HotkeyGroup = "general" | "navigate" | "triage" | "lane" | "select" | "go";
 
@@ -31,6 +35,12 @@ export interface HotkeyContext {
   triage: boolean;
   /** Scopes with a mounted surface. "global" is always present. */
   scopes: ReadonlySet<HotkeyScope>;
+  /**
+   * The UNIFIED_HOME flag, as the server reported it (absent = off). It
+   * decides which destinations the `g` keys have: `g t` exists only with
+   * Today, and `g a` means Assistant instead of the decision queue.
+   */
+  unifiedHome?: boolean;
 }
 
 export interface HotkeyDef {
@@ -68,6 +78,15 @@ const triage = (def: DefInput): HotkeyDef => ({
   enabled: inScope(def.scopes),
 });
 
+/** A `g` destination that exists on only one side of UNIFIED_HOME. */
+const destination = (def: DefInput, unifiedHome: boolean): HotkeyDef => {
+  const base = triage(def);
+  return {
+    ...base,
+    enabled: (ctx) => base.enabled(ctx) && (ctx.unifiedHome === true) === unifiedHome,
+  };
+};
+
 const legacy = (id: string, keys: string, labelKey: string): HotkeyDef => ({
   id,
   keys: [keys],
@@ -80,6 +99,7 @@ const legacy = (id: string, keys: string, labelKey: string): HotkeyDef => ({
 
 const MAIL: readonly HotkeyScope[] = ["mail-list", "mail-detail"];
 const LIST: readonly HotkeyScope[] = ["mail-list"];
+const LIST_AND_READER: readonly HotkeyScope[] = ["mail-list", "mail-reader"];
 const GLOBAL: readonly HotkeyScope[] = ["global"];
 
 /** Lane keys 1–5: the five live lanes in their display order (lib/tiers). */
@@ -115,7 +135,7 @@ export const HOTKEYS: readonly HotkeyDef[] = [
   triage({
     id: "mail.prev",
     keys: "k",
-    scopes: LIST,
+    scopes: LIST_AND_READER,
     labelKey: "keys.prev",
     group: "navigate",
     repeatable: true,
@@ -202,8 +222,13 @@ export const HOTKEYS: readonly HotkeyDef[] = [
     repeatable: true,
   }),
 
-  // Destinations that exist today only. `g t` (Today) and `g f` (Files) join
-  // when those routes ship (P6, P12).
+  // Destinations that exist today only. `g f` (Files) joins when that route
+  // ships (P12). `g t` (Today) and `g a` as Assistant are live under
+  // UNIFIED_HOME; without it `g a` is the decision queue, as before.
+  destination(
+    { id: "go.today", keys: "g t", scopes: GLOBAL, labelKey: "keys.go.today", group: "go" },
+    true,
+  ),
   triage({ id: "go.mail", keys: "g m", scopes: GLOBAL, labelKey: "keys.go.mail", group: "go" }),
   triage({
     id: "go.calendar",
@@ -212,13 +237,20 @@ export const HOTKEYS: readonly HotkeyDef[] = [
     labelKey: "keys.go.calendar",
     group: "go",
   }),
-  triage({
-    id: "go.queue",
-    keys: "g a",
-    scopes: GLOBAL,
-    labelKey: "keys.go.queue",
-    group: "go",
-  }),
+  destination(
+    { id: "go.queue", keys: "g a", scopes: GLOBAL, labelKey: "keys.go.queue", group: "go" },
+    false,
+  ),
+  destination(
+    {
+      id: "go.assistant",
+      keys: "g a",
+      scopes: GLOBAL,
+      labelKey: "keys.go.assistant",
+      group: "go",
+    },
+    true,
+  ),
   triage({
     id: "go.briefing",
     keys: "g b",

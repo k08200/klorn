@@ -12,8 +12,16 @@ Related documents:
 - `docs/product-vocabulary.md` — canonical word list, updated with this plan.
 - `apps/desktop-mac/REBUILD_BLUEPRINT.md` — superseded in part (see macOS).
 
-Flag names below are **proposed**; none exist in code yet. All ship OFF by
-default and are flipped as separate decisions.
+Flags (status as of 2026-10-09). All ship OFF by default and are flipped as
+separate decisions:
+
+| Flag | Step | Status |
+|---|---|---|
+| `KEYBOARD_TRIAGE` | P4 | In code, default OFF |
+| `MAIL_V2` | P5 | In code, default OFF |
+| `UNIFIED_HOME` | P6 (Today), P7 (Assistant hub) | In code for P6, default OFF; P7 not built |
+| `macMainWindow` | P9 (M2–M8) | In code (desktop), default OFF |
+| `ONBOARDING_V2` | P8 | Proposed; not in code |
 
 ## 1. Information architecture
 

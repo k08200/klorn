@@ -24,7 +24,7 @@ import { useT } from "../../../lib/i18n";
 import { captureClientError } from "../../../lib/sentry";
 import { useKeyboardTriage } from "../../../lib/use-hotkeys";
 import { UNDO_NOTICE_SECONDS } from "../use-lane-move";
-import { useListTriage } from "../use-list-triage";
+import { TRIAGE_ROW_ATTR, useListTriage } from "../use-list-triage";
 import { MailHeader } from "./mail-header";
 import {
   LoadMore,
@@ -35,7 +35,14 @@ import {
   ThreadRows,
 } from "./mail-list";
 import { MailNotices, SelectionBar } from "./mail-notices";
-import { ALL_ACCOUNTS, type ListView, readerQueue } from "./model";
+import { ALL_ACCOUNTS, type ListView, rangeIds, readerQueue, viewTally } from "./model";
+import {
+  clearListReturn,
+  type ListReturn,
+  peekListReturn,
+  saveListContext,
+  saveListScroll,
+} from "./reader-handoff";
 import { useMailActions } from "./use-mail-actions";
 import { useMailList } from "./use-mail-list";
 import { useViewState } from "./use-view-state";
@@ -64,6 +71,11 @@ export function MailV2() {
   const { user } = useAuth();
   const keyboardTriage = useKeyboardTriage();
   const searchRef = useRef<HTMLInputElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  // The row a Shift-click extends the selection from.
+  const lastPicked = useRef<string | null>(null);
+  // Coming back from the reader: the mail it was on, and where the list was.
+  const [listReturn, setListReturn] = useState<ListReturn | null>(peekListReturn);
 
   const [view, setView] = useViewState();
   const [searchDraft, setSearchDraft] = useState("");
@@ -84,7 +96,29 @@ export function MailV2() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: the view's parts are the triggers; the setter is stable
   useEffect(() => {
     setPickedIds(new Set());
+    lastPicked.current = null;
   }, [lane, account, filter, search]);
+
+  // The reader walks previous / next in the view it was opened from.
+  useEffect(() => {
+    saveListContext({ lane, account, filter, search });
+  }, [lane, account, filter, search]);
+
+  // Remember where the list is scrolled, so the way back can land there.
+  useEffect(() => {
+    const scroller = rootRef.current?.closest("main");
+    if (!scroller) return;
+    let frame = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => saveListScroll(scroller.scrollTop));
+    };
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      scroller.removeEventListener("scroll", onScroll);
+    };
+  }, []);
 
   // An account that was disconnected elsewhere must not leave the list scoped
   // to nothing: fall back to every account once the real set is known.
@@ -147,7 +181,7 @@ export function MailV2() {
 
   // KEYBOARD_TRIAGE (P4): the same registry and hook as the legacy list, so the
   // `?` sheet and the palette describe this list without a second key table.
-  const { cursorId } = useListTriage({
+  const { cursorId, setCursor } = useListTriage({
     active: keyboardTriage,
     emails,
     setSelectedIds: setPickedIds,
@@ -167,6 +201,40 @@ export function MailV2() {
     focusSearch: () => searchRef.current?.focus(),
   });
 
+  // Back from the reader: same scroll position, and the row it was on takes
+  // the focus and the cursor. Once, as soon as there are rows to land on.
+  const hasRows = !list.loading && emails.length > 0;
+  useEffect(() => {
+    if (!listReturn || !hasRows) return;
+    const scroller = rootRef.current?.closest("main");
+    if (scroller) scroller.scrollTop = listReturn.scrollTop;
+    const row = document.querySelector(`[${TRIAGE_ROW_ATTR}="${CSS.escape(listReturn.emailId)}"]`);
+    if (row) {
+      row.scrollIntoView({ block: "nearest" });
+      row.querySelector<HTMLElement>("a")?.focus({ preventScroll: true });
+      setCursor(listReturn.emailId);
+    }
+    clearListReturn();
+    setListReturn(null);
+  }, [listReturn, hasRows, setCursor]);
+
+  const pick = (email: EmailListItem, range: boolean) => {
+    const anchor = lastPicked.current;
+    const ids = emails.map((row) => row.id);
+    setPickedIds((prev) => {
+      const next = new Set(prev);
+      if (range && anchor) {
+        for (const id of rangeIds(ids, anchor, email.id)) next.add(id);
+      } else if (next.has(email.id)) {
+        next.delete(email.id);
+      } else {
+        next.add(email.id);
+      }
+      return next;
+    });
+    lastPicked.current = email.id;
+  };
+
   const picked = emails.filter((email) => pickedIds.has(email.id));
   const time = {
     now: new Date(),
@@ -178,7 +246,10 @@ export function MailV2() {
   return (
     <>
       <ComposeModal open={composeOpen} onClose={() => setComposeOpen(false)} />
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 px-4 pb-24 pt-4 md:px-8 md:pb-10 md:pt-8">
+      <div
+        ref={rootRef}
+        className="mx-auto flex w-full max-w-5xl flex-col gap-3 px-4 pb-24 pt-4 md:px-8 md:pb-10 md:pt-8"
+      >
         <MailHeader
           view={view}
           onChange={changeView}
@@ -186,6 +257,7 @@ export function MailV2() {
           onSearchDraft={setSearchDraft}
           searchRef={searchRef}
           counts={list.counts}
+          tally={list.loading || list.failed ? null : viewTally(view, list.counts, list.total)}
           accounts={list.accounts}
           isDemo={isDemo}
           syncing={actions.busy === "sync"}
@@ -249,6 +321,8 @@ export function MailV2() {
                   busy={actions.busy !== null}
                   onArchive={(email) => void actions.archive([email])}
                   onSetRead={(email, isRead) => void actions.setRead([email], isRead)}
+                  onRemind={(email, key) => void actions.remind(email, key)}
+                  onPick={pick}
                 />
               )}
               <LoadMore
