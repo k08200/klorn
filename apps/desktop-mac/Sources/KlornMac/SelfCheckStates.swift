@@ -65,11 +65,31 @@ func stateSelfChecks(sourceDir: URL) -> [(String, Bool)] {
           && SurfaceStateRules.pillNotice(phase: .signedIn, loadError: "x", offline: false) == .stale
           && SurfaceStateRules.pillNotice(phase: .signedIn, loadError: nil, offline: false) == nil
           && SurfaceStateRules.pillNotice(phase: .signedOut, loadError: "x", offline: true) == nil)
-    check("offline means the request reached no server",
-          SurfaceStateRules.isOffline(APIError.transport("x"))
+    func kind(_ code: URLError.Code?) -> SurfaceStateRules.FailureKind {
+        SurfaceStateRules.failureKind(APIError.transport("x", code: code?.rawValue))
+    }
+    let offlineCodes: [URLError.Code] = [
+        .notConnectedToInternet, .networkConnectionLost, .cannotFindHost, .dnsLookupFailed,
+        .dataNotAllowed, .internationalRoamingOff,
+    ]
+    check("offline is exactly the no-network codes",
+          offlineCodes.allSatisfy { kind($0) == .offline }
+          && SurfaceStateRules.offlineCodes.count == offlineCodes.count)
+    let unreachable: [URLError.Code] = [
+        .timedOut, .cannotConnectToHost, .secureConnectionFailed, .serverCertificateUntrusted,
+        .badServerResponse, .badURL, .unsupportedURL, .cannotParseResponse,
+    ]
+    check("timeouts, TLS and bad answers are a failure, never 'offline'",
+          unreachable.allSatisfy { kind($0) == .failed } && kind(nil) == .failed)
+    check("a cancelled request is not an error state", kind(.cancelled) == .ignored)
+    check("an answer from the server is a failure, never 'offline'",
+          SurfaceStateRules.failureKind(APIError.http(503, nil)) == .failed
+          && SurfaceStateRules.failureKind(APIError.decoding("x")) == .failed
+          && SurfaceStateRules.failureKind(APIError.forbidden) == .failed
           && !SurfaceStateRules.isOffline(APIError.http(503, nil))
-          && !SurfaceStateRules.isOffline(APIError.decoding("x"))
-          && !SurfaceStateRules.isOffline(APIError.forbidden))
+          && SurfaceStateRules.isOffline(APIError.transport("x", code: URLError.Code.notConnectedToInternet.rawValue)))
+    check("one retry at a time", SurfaceStateRules.mayRetry(isLoading: false)
+          && !SurfaceStateRules.mayRetry(isLoading: true))
     check("Today's rule is the shared rule",
           TodayRules.state(phase: .signedIn, hasQueue: false, loadError: "x") == .failed("x")
           && TodayRules.state(phase: .signedIn, hasQueue: false, loadError: "x", offline: true) == .offline)
@@ -84,6 +104,14 @@ func stateSelfChecks(sourceDir: URL) -> [(String, Bool)] {
     check("onboarding is done exactly when an account is signed in",
           OnboardingRules.completes(phase: .signedIn) && !OnboardingRules.completes(phase: .signingIn)
           && !OnboardingRules.completes(phase: .signedOut))
+    check("onboarding closes on sign-in whenever it is open, visible or not",
+          OnboardingRules.closesOnPhase(.signedIn, windowOpen: true)
+          && !OnboardingRules.closesOnPhase(.signedIn, windowOpen: false)
+          && !OnboardingRules.closesOnPhase(.signingIn, windowOpen: true)
+          && !OnboardingRules.closesOnPhase(.signedOut, windowOpen: true))
+    check("a Dock click during onboarding focuses onboarding, not a signed-out full view",
+          OnboardingRules.reopenTarget(onboardingOpen: true) == .onboarding
+          && OnboardingRules.reopenTarget(onboardingOpen: false) == .fullView)
     check("the explainer lists the five live lanes and no retired one",
           OnboardingRules.lanes.map(\.rawValue) == ["PUSH", "MEETING", "QUEUE", "INFO", "SILENT"])
     check("every lane has its own line in the explainer",
@@ -122,6 +150,35 @@ func stateSelfChecks(sourceDir: URL) -> [(String, Bool)] {
     model.seedStateForRender(phase: .signedIn, loadError: nil, offline: true)
     check("offline never outlives the error it describes",
           offline == .offline && model.surfaceState == .loading && !model.loadOffline)
+    // Sign-out: nothing of the previous account may be painted again.
+    let leaving = AppModel(tokenStore: InMemoryTokenStore())
+    leaving.seedForPreview(
+        firewallJSON: #"{"tiers":{"PUSH":[],"MEETING":[],"QUEUE":[],"INFO":[],"SILENT":[],"AUTO":[]},"summary":{"PUSH":0,"MEETING":0,"QUEUE":0,"INFO":0,"SILENT":0,"AUTO":0,"total":0}}"#, emailJSON: "", selectedItemId: nil)
+    let cachedBefore = !leaving.queueCacheIsEmpty
+    leaving.showActionError("x")
+    leaving.signOut()
+    check("sign-out clears the per-inbox queue snapshots",
+          cachedBefore && leaving.queueCacheIsEmpty && leaving.queue == nil)
+    check("sign-out clears a pending action error", leaving.actionError == nil)
+    model.showActionError("pin failed")
+    check("a failed action is its own notice: no banner, no pill chip, no offline state",
+          model.actionError == "pin failed" && model.loadError == nil && !model.loadOffline
+          && model.connectionNotice == nil && model.pillNotice == nil)
+    model.dismissActionError()
+    check("an action error can be dismissed", model.actionError == nil)
+    check("restarting sign-in defaults to Google until a provider was chosen", model.signInProvider == "google")
+    // Sign-in error ink: the PUSH lane red on the canvas, both modes.
+    func luminance(_ c: (r: Double, g: Double, b: Double, a: Double)) -> Double {
+        func channel(_ v: Double) -> Double { v <= 0.03928 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4) }
+        return 0.2126 * channel(c.r) + 0.7152 * channel(c.g) + 0.0722 * channel(c.b)
+    }
+    func ratio(_ a: (r: Double, g: Double, b: Double, a: Double), _ b: (r: Double, g: Double, b: Double, a: Double)) -> Double {
+        let (hi, lo) = (max(luminance(a), luminance(b)), min(luminance(a), luminance(b)))
+        return (hi + 0.05) / (lo + 0.05)
+    }
+    check("the sign-in error ink clears 4.5:1 on the canvas in light and dark",
+          ratio(Theme.laneComponents(.push, dark: false), Theme.bgLight) >= 4.5
+          && ratio(Theme.laneComponents(.push, dark: true), Theme.bgDark) >= 4.5)
     var presence = 0
     model.onWindowPresenceChanged = { presence += 1 }
     model.onboardingWindowOpen = true
@@ -152,7 +209,24 @@ func stateSelfChecks(sourceDir: URL) -> [(String, Bool)] {
           && text("CollapsedPill.swift").contains("model.pillNotice"))
     check("load failures are recorded with their kind, in one place",
           text("AppModel.swift").components(separatedBy: "loadError = Self.describe(error)").count == 2
-          && text("AppModel.swift").contains("loadOffline = SurfaceStateRules.isOffline(error)"))
+          && text("AppModel.swift").contains("loadOffline = kind == .offline"))
+    // Only a refresh may raise the "couldn't refresh" banner and the pill
+    // chip; pin, unpin, dismiss and snooze failures go to the action notice.
+    check("only the queue refresh records a load failure; actions have their own channel",
+          text("AppModel.swift").components(separatedBy: "            noteLoadFailure(error)\n").count == 2
+          && text("AppModel.swift").components(separatedBy: "noteActionFailure(error)\n").count == 4)
+    check("every retry control goes through the guarded retry",
+          users(of: "await model.retry" + "Load()") == ["CollapsedPill.swift", "SurfaceState.swift"]
+          && text("CollapsedPill.swift")
+              .contains(".disabled(!SurfaceStateRules.mayRetry(isLoading: model.isLoadingQueue))")
+          && !text("SurfaceState.swift").contains("await model.loadQueue()"))
+    check("restarting sign-in keeps the provider the user chose",
+          users(of: "await model.restart" + "SignIn()") == ["OnboardingView.swift", "SurfaceState.swift"]
+          && text("AppModel.swift").contains("signInProvider = provider\n        signInTask?.cancel()"))
+    check("the API client carries the URLError code on every transport failure",
+          text("APIClient.swift").components(separatedBy: "code: (error as? URLError)?.code.rawValue").count == 4)
+    check("the sign-in error is not system orange",
+          !text("SurfaceState.swift").contains(".orange") && !text("OnboardingView.swift").contains(".orange"))
     let onboardingFiles = ["OnboardingWindow.swift", "OnboardingView.swift", "SurfaceState.swift"]
     check("onboarding adds no auth code: sign-in is the model's existing entry point",
           onboardingFiles.allSatisfy { name in

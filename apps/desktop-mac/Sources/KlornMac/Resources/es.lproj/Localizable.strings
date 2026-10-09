@@ -687,11 +687,13 @@
 "error.server" = "Error del servidor (%d).";
 "error.network" = "Error de red. Comprueba tu conexión.";
 "onboarding.windowTitle" = "Te damos la bienvenida a Klorn";
-"onboarding.value" = "Todo tu correo y tus calendarios, ordenados en %d carriles.";
+"onboarding.value" = "Todo tu correo y tus calendarios en un solo lugar. El correo, ordenado en %d carriles.";
 "onboarding.lane.push" = "Te interrumpe ahora";
 "onboarding.lane.meeting" = "Citas, comprobadas con tu calendario";
 "onboarding.lane.queue" = "Vale la pena leerlo hoy";
 "onboarding.lane.info" = "Recibos y avisos, archivados";
 "onboarding.lane.silent" = "Guardado, sin mostrarse";
 "onboarding.lanes.note" = "Los carriles solo ordenan tu correo. Nunca actúan sobre él.";
-"onboarding.privacy" = "Klorn lee tu correo para ordenarlo. Nada se borra y nada se responde sin ti.";
+"onboarding.privacy" = "Klorn lee tu correo para ordenarlo. Tú decides qué más puede hacer.";
+"error.unreachable" = "Klorn no puede conectar con el servidor.";
+"banner.dismiss.a11y" = "Cerrar mensaje";

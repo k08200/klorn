@@ -49,7 +49,7 @@ struct CollapsedBar: View {
                     // chip is the retry (M6); it used to read "offline" for
                     // every failure and do nothing.
                     Button {
-                        Task { await model.loadQueue() }
+                        Task { await model.retryLoad() }
                     } label: {
                         HStack(spacing: 5) {
                             Circle().fill(Theme.tint(.push).opacity(0.7)).frame(width: 6, height: 6)
@@ -61,6 +61,7 @@ struct CollapsedBar: View {
                         .background(Theme.surfaceRaised, in: Capsule())
                     }
                     .buttonStyle(.plain)
+                    .disabled(!SurfaceStateRules.mayRetry(isLoading: model.isLoadingQueue))
                     .help(L("bar.retry.help"))
                     .accessibilityLabel(L("bar.retry.a11y", notice.shortLabel))
                 } else if pushCount == 0 {

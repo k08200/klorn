@@ -687,11 +687,13 @@
 "error.server" = "サーバーエラー（%d）。";
 "error.network" = "ネットワークエラーです。接続を確認してください。";
 "onboarding.windowTitle" = "Klornへようこそ";
-"onboarding.value" = "すべてのメールとカレンダーを%dつのレーンに整理します。";
+"onboarding.value" = "すべてのメールとカレンダーをひとつの場所に。メールは%dつのレーンに振り分けられます。";
 "onboarding.lane.push" = "今すぐ知らせます";
 "onboarding.lane.meeting" = "日程調整。カレンダーと照合します";
 "onboarding.lane.queue" = "今日読む価値のあるメール";
 "onboarding.lane.info" = "領収書やお知らせ。保管のみ";
 "onboarding.lane.silent" = "保管し、表示しません";
 "onboarding.lanes.note" = "レーンはメールを分類するだけです。メールに対して何も実行しません。";
-"onboarding.privacy" = "Klornは分類のためにメールを読みます。削除も、あなた抜きの返信もしません。";
+"onboarding.privacy" = "Klornは分類のためにメールを読みます。それ以上に何をしてよいかは、あなたが決めます。";
+"error.unreachable" = "Klornのサーバーに接続できません。";
+"banner.dismiss.a11y" = "メッセージを閉じる";

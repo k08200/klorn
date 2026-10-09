@@ -687,11 +687,13 @@
 "error.server" = "서버 오류(%d).";
 "error.network" = "네트워크 오류입니다. 연결을 확인하세요.";
 "onboarding.windowTitle" = "Klorn 시작하기";
-"onboarding.value" = "모든 메일과 캘린더를 %d개 레인으로 정리합니다.";
+"onboarding.value" = "모든 메일과 캘린더를 한곳에. 메일은 %d개 레인으로 분류됩니다.";
 "onboarding.lane.push" = "지금 바로 알립니다";
 "onboarding.lane.meeting" = "일정 메일, 캘린더와 대조합니다";
 "onboarding.lane.queue" = "오늘 읽을 만한 메일";
 "onboarding.lane.info" = "영수증·안내, 보관만 합니다";
 "onboarding.lane.silent" = "보관하되 보이지 않게";
 "onboarding.lanes.note" = "레인은 메일을 분류만 합니다. 메일에 어떤 동작도 하지 않습니다.";
-"onboarding.privacy" = "Klorn은 분류를 위해 메일을 읽습니다. 지우지 않고, 사용자 없이 답장하지도 않습니다.";
+"onboarding.privacy" = "Klorn은 분류를 위해 메일을 읽습니다. 그 밖에 무엇을 해도 되는지는 사용자가 정합니다.";
+"error.unreachable" = "Klorn 서버에 연결할 수 없습니다.";
+"banner.dismiss.a11y" = "메시지 닫기";

@@ -302,7 +302,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     func applicationShouldHandleReopen(
         _ sender: NSApplication, hasVisibleWindows flag: Bool
     ) -> Bool {
-        topBar?.openFull()
+        switch OnboardingRules.reopenTarget(onboardingOpen: model.onboardingWindowOpen) {
+        case .onboarding: onboarding?.open()
+        case .fullView: topBar?.openFull()
+        }
         return false
     }
 }

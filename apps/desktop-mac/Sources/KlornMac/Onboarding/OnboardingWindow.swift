@@ -26,6 +26,19 @@ enum OnboardingRules {
         phase == .signedIn
     }
 
+    static func closesOnPhase(_ phase: AppModel.Phase, windowOpen: Bool) -> Bool {
+        windowOpen && completes(phase: phase)
+    }
+
+    /// A Dock click or a second launch of a running Klorn: while onboarding
+    /// is open it comes forward, instead of a signed-out full view opening
+    /// beside it.
+    enum ReopenTarget: Equatable { case onboarding, fullView }
+
+    static func reopenTarget(onboardingOpen: Bool) -> ReopenTarget {
+        onboardingOpen ? .onboarding : .fullView
+    }
+
     /// The lanes the explainer lists: all five live ones, loudest first.
     static var lanes: [Tier] { Tier.coreOrder }
 }
@@ -88,7 +101,11 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
     }
 
     private func phaseChanged() {
-        guard OnboardingRules.completes(phase: model.phase), window?.isVisible == true else { return }
+        // The open flag, not `isVisible`: a miniaturized or hidden window
+        // must close on sign-in too. Closing resets the flag and with it
+        // the activation policy.
+        guard OnboardingRules.closesOnPhase(model.phase, windowOpen: model.onboardingWindowOpen)
+        else { return }
         window?.close()
         onSignedIn()
     }

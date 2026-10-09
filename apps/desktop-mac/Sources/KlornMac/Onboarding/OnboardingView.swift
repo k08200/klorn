@@ -31,22 +31,21 @@ struct OnboardingView: View {
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.top, Theme.s6)
 
             signIn.padding(.top, Theme.s6)
 
             LaneExplainer().padding(.top, Theme.s6)
 
-            Spacer(minLength: Theme.s4)
-
             Text(L("onboarding.privacy"))
                 .font(Theme.Typo.caption).foregroundStyle(Theme.textDim)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, Theme.s4)
         }
         .padding(.horizontal, Theme.s6 + Theme.s2)
-        .padding(.bottom, Theme.s6)
-        .frame(width: OnboardingRules.size.width, height: OnboardingRules.size.height, alignment: .top)
+        // One block, centred: with a single sign-in button the spare height
+        // is shared above and below instead of opening a gap in the middle.
+        .frame(width: OnboardingRules.size.width, height: OnboardingRules.size.height)
         .background(Theme.bg)
     }
 
@@ -59,7 +58,7 @@ struct OnboardingView: View {
                     .font(Theme.Typo.body).foregroundStyle(Theme.textDim)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
-                Button(L("today.signIn.restart")) { Task { await model.signIn() } }
+                Button(L("today.signIn.restart")) { Task { await model.restartSignIn() } }
                     .buttonStyle(SolidButtonStyle(prominent: false))
                     .padding(.top, Theme.s1)
             }

@@ -687,11 +687,13 @@
 "error.server" = "Server error (%d).";
 "error.network" = "Network error. Check your connection.";
 "onboarding.windowTitle" = "Welcome to Klorn";
-"onboarding.value" = "All your mail and calendars, sorted into %d lanes.";
+"onboarding.value" = "All your mail and calendars in one place. Mail sorted into %d lanes.";
 "onboarding.lane.push" = "Interrupts you now";
 "onboarding.lane.meeting" = "Scheduling, checked against your calendar";
 "onboarding.lane.queue" = "Worth reading today";
 "onboarding.lane.info" = "Receipts and notices, filed";
 "onboarding.lane.silent" = "Kept, out of your way";
 "onboarding.lanes.note" = "Lanes only sort your mail. They never act on it.";
-"onboarding.privacy" = "Klorn reads your mail to sort it. Nothing is deleted and nothing is answered without you.";
+"onboarding.privacy" = "Klorn reads your mail to sort it. You decide what it may do beyond that.";
+"error.unreachable" = "Klorn can't reach its server.";
+"banner.dismiss.a11y" = "Dismiss message";

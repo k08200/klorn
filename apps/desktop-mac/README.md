@@ -68,14 +68,22 @@ window) maps the model to one `SurfaceState`:
 | signed out | "Sign in to Klorn", the sign-in buttons |
 | signing in | "Finish signing in", *Start over* |
 | loading | the "sorting every message into its lane" skeleton, and only here |
-| offline (no server reached, nothing loaded) | "You're offline", *Try again* |
-| failed (the server answered with an error, nothing loaded) | "Couldn't load your mail", the reason, *Try again* |
+| offline (this Mac has no network, nothing loaded) | "You're offline", *Try again* |
+| failed (a server error, a timeout, a TLS failure; nothing loaded) | "Couldn't load your mail", the reason, *Try again* |
 | ready | the mail |
 
 Loaded mail whose refresh is failing stays on screen under a banner
 ("You're offline. This is the mail from the last sync." or "Klorn couldn't
 refresh…") with *Try again*. The pill's chip reads *Offline* only when the
-network is the cause, *Not updating* otherwise, and a click retries.
+network is the cause, *Not updating* otherwise, and a click retries (one
+load at a time).
+
+"Offline" is decided from the `URLError` code the API client now carries:
+not connected, connection lost, host not found, DNS failure, data not
+allowed, roaming off. A cancelled request is no error; everything else is
+"Klorn can't reach its server". A failed action on one mail (pin, unpin,
+dismiss, snooze) shows a short notice of its own and never raises the
+refresh banner. Signing out drops the per-inbox queue snapshots.
 
 ### Keyboard
 

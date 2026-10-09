@@ -63,10 +63,32 @@ enum SurfaceStateRules {
         return offline ? .offline : .stale
     }
 
-    /// Offline means the request never reached a server.
+    /// The `URLError` codes that mean this Mac has no usable network.
+    /// Timeouts, TLS failures and the rest mean the server could not be
+    /// reached, which is a failure, not "offline".
+    static let offlineCodes: Set<Int> = Set([
+        URLError.Code.notConnectedToInternet, .networkConnectionLost, .cannotFindHost,
+        .dnsLookupFailed, .dataNotAllowed, .internationalRoamingOff,
+    ].map(\.rawValue))
+
+    enum FailureKind: Equatable { case offline, failed, ignored }
+
+    /// Classify a failed request. A cancelled request (a superseded task)
+    /// is no failure at all; a transport error with no code (bad URL,
+    /// non-HTTP answer) and every HTTP error is a plain failure.
+    static func failureKind(_ error: Error) -> FailureKind {
+        guard case APIError.transport(_, let code) = error, let code else { return .failed }
+        if code == URLError.Code.cancelled.rawValue { return .ignored }
+        return offlineCodes.contains(code) ? .offline : .failed
+    }
+
     static func isOffline(_ error: Error) -> Bool {
-        if case APIError.transport = error { return true }
-        return false
+        failureKind(error) == .offline
+    }
+
+    /// One load at a time from the retry controls.
+    static func mayRetry(isLoading: Bool) -> Bool {
+        !isLoading
     }
 }
 
@@ -151,7 +173,9 @@ struct SignInButtons: View {
                 .buttonStyle(SolidButtonStyle(prominent: false, fullWidth: fullWidth))
             }
             if let error = model.signInError {
-                Text(error).font(Theme.Typo.caption).foregroundStyle(.orange)
+                // The PUSH lane red: 4.5:1 or better on the canvas in both
+                // modes (pinned), which system orange is not.
+                Text(error).font(Theme.Typo.caption).foregroundStyle(Theme.tint(.push))
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, Theme.s1)
@@ -181,7 +205,7 @@ struct SurfaceStateView: View {
                 icon: "safari", title: L("today.signingIn.title"),
                 detail: L("today.signingIn.detail")
             ) {
-                Button(L("today.signIn.restart")) { Task { await model.signIn() } }
+                Button(L("today.signIn.restart")) { Task { await model.restartSignIn() } }
                     .buttonStyle(SolidButtonStyle(prominent: false))
             }
         case .offline:
@@ -199,7 +223,7 @@ struct SurfaceStateView: View {
     }
 
     private var retry: some View {
-        Button(L("today.retry")) { Task { await model.loadQueue() } }
+        Button(L("today.retry")) { Task { await model.retryLoad() } }
             .buttonStyle(SolidButtonStyle())
             .disabled(model.isLoadingQueue)
     }
@@ -243,11 +267,41 @@ struct ConnectionBanner: View {
             Text(notice.message).font(Theme.Typo.label).foregroundStyle(Theme.text)
                 .lineLimit(2).fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: Theme.s3)
-            Button(L("today.retry")) { Task { await model.loadQueue() } }
+            Button(L("today.retry")) { Task { await model.retryLoad() } }
                 .buttonStyle(.plain).font(Theme.Typo.label.weight(.semibold))
                 .foregroundStyle(Theme.accentSolid)
                 .disabled(model.isLoadingQueue)
                 .frame(minHeight: 28).contentShape(Rectangle())
+        }
+        .padding(.horizontal, Theme.s4)
+        .frame(minHeight: 36)
+        .frame(maxWidth: .infinity)
+        .background(Theme.surfaceRaised)
+        .overlay(alignment: .bottom) { Rectangle().fill(Theme.line).frame(height: 1) }
+        .accessibilityElement(children: .contain)
+    }
+}
+
+/// A failed action on one mail, shown for a few seconds or until dismissed.
+/// Separate from `ConnectionBanner`: it does not mean the list is stale.
+struct ActionErrorBanner: View {
+    @Environment(AppModel.self) private var model
+    let message: String
+
+    var body: some View {
+        HStack(spacing: Theme.s2) {
+            Image(systemName: "exclamationmark.circle").font(Theme.Typo.icon)
+                .foregroundStyle(Theme.textDim).accessibilityHidden(true)
+            Text(message).font(Theme.Typo.label).foregroundStyle(Theme.text)
+                .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: Theme.s3)
+            Button {
+                model.dismissActionError()
+            } label: {
+                Image(systemName: "xmark").font(Theme.Typo.icon).iconTarget(28)
+            }
+            .buttonStyle(.plain).foregroundStyle(Theme.textDim)
+            .accessibilityLabel(L("banner.dismiss.a11y"))
         }
         .padding(.horizontal, Theme.s4)
         .frame(minHeight: 36)

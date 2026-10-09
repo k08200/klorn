@@ -95,6 +95,7 @@ struct FullView: View {
                 // Loaded mail whose refresh is failing says so, with a retry
                 // (M6); it used to say nothing at all.
                 if let notice = model.connectionNotice { ConnectionBanner(notice: notice) }
+                if let message = model.actionError { ActionErrorBanner(message: message) }
                 HStack(spacing: 0) {
                     FullSidebar(selected: $model.listMode, actions: actions).frame(width: 220)
                     Rectangle().fill(Theme.line).frame(width: 1)

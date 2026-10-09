@@ -403,6 +403,8 @@ final class AppModel {
     /// blanking for a full server round trip (founder: "숫자 갈림 좀 느림",
     /// 2026-07-23). Session-scoped by design: repainted by every loadQueue.
     private var queueCache: [String: FirewallResponse] = [:]
+    /// Self-check seam.
+    var queueCacheIsEmpty: Bool { queueCache.isEmpty }
 
     func selectInbox(_ value: String) {
         guard value != selectedInbox else { return }
@@ -602,6 +604,7 @@ final class AppModel {
     ) {
         phase = .signedIn
         queue = try? JSONDecoder().decode(FirewallResponse.self, from: Data(firewallJSON.utf8))
+        queueCache[selectedInbox] = queue
         openedEmail = try? JSONDecoder().decode(EmailDetail.self, from: Data(emailJSON.utf8))
         self.selectedItemId = selectedItemId
         if let briefingJSON {
@@ -655,6 +658,14 @@ final class AppModel {
         Task { await refreshTeams() }
     }
 
+    /// The provider of the last sign-in attempt, so "Start over" restarts
+    /// the one the user chose rather than falling back to Google.
+    private(set) var signInProvider = "google"
+
+    func restartSignIn() async {
+        await signIn(provider: signInProvider)
+    }
+
     /// The in-flight sign-in, so a re-click SUPERSEDES it instead of racing it.
     private var signInTask: Task<Void, Never>?
 
@@ -666,6 +677,7 @@ final class AppModel {
     /// later, and stomps the SECOND attempt's state back to signed-out — the
     /// bar flickering between "Log in" and "Signing in…" (dogfood 2026-08-10).
     func signIn(provider: String = "google") async {
+        signInProvider = provider
         signInTask?.cancel()
         let task = Task { [weak self] in
             guard let self else { return }
@@ -1769,7 +1781,7 @@ final class AppModel {
         } catch APIError.unauthorized {
             signOut()
         } catch {
-            noteLoadFailure(error)
+            noteActionFailure(error)
             Log.app.warning("pin sender failed: \(String(describing: error), privacy: .private)")
         }
     }
@@ -1783,7 +1795,7 @@ final class AppModel {
         } catch APIError.unauthorized {
             signOut()
         } catch {
-            noteLoadFailure(error)
+            noteActionFailure(error)
             Log.app.warning("unpin sender failed: \(String(describing: error), privacy: .private)")
         }
     }
@@ -1814,7 +1826,7 @@ final class AppModel {
     /// Undo an optimistic hide when the mutation failed, then refetch the truth.
     private func unhide(_ item: FirewallItem, _ error: Error) {
         dismissed.remove(item.id)
-        noteLoadFailure(error)
+        noteActionFailure(error)
         Task { await loadQueue() }
     }
 
@@ -1841,7 +1853,11 @@ final class AppModel {
         let sessionToken = tokenStore.load()
         tokenStore.clear()
         queue = nil
+        // The per-inbox snapshots are the previous account's mail: an inbox
+        // switch after the next sign-in must never paint them.
+        queueCache = [:]
         loadError = nil
+        dismissActionError()
         // Cross-account hygiene: every per-account surface must reset, or the
         // next sign-in briefly shows the previous account's data.
         today = nil
@@ -2253,16 +2269,56 @@ final class AppModel {
     /// User-facing message only — the raw error (which can echo response bytes
     /// or internal shape) is logged privately, never surfaced.
     /// Record a failed load: the message, and whether it was the network.
+    /// Refresh failures only: this is what raises the offline / "couldn't
+    /// refresh" states. A cancelled request is not a failure.
     private func noteLoadFailure(_ error: Error) {
+        let kind = SurfaceStateRules.failureKind(error)
+        guard kind != .ignored else { return }
         loadError = Self.describe(error)
-        loadOffline = SurfaceStateRules.isOffline(error)
+        loadOffline = kind == .offline
+    }
+
+    /// A failed action on one mail (pin, unpin, dismiss, snooze). Shown as
+    /// a transient notice; it says nothing about whether the list is fresh.
+    private(set) var actionError: String?
+    private var actionErrorTask: Task<Void, Never>?
+    static let actionErrorSeconds = 6
+
+    private func noteActionFailure(_ error: Error) {
+        guard SurfaceStateRules.failureKind(error) != .ignored else { return }
+        showActionError(Self.describe(error))
+    }
+
+    /// Internal so the render and self-check harnesses can raise one.
+    func showActionError(_ message: String) {
+        actionError = message
+        actionErrorTask?.cancel()
+        actionErrorTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Self.actionErrorSeconds))
+            guard !Task.isCancelled else { return }
+            self?.actionError = nil
+        }
+    }
+
+    func dismissActionError() {
+        actionErrorTask?.cancel()
+        actionError = nil
+    }
+
+    /// Try again, from a state view, the banner or the pill's chip. One
+    /// retry at a time: clicks while a load is in flight do nothing.
+    func retryLoad() async {
+        guard SurfaceStateRules.mayRetry(isLoading: isLoadingQueue) else { return }
+        await loadQueue()
     }
 
     private static func describe(_ error: Error) -> String {
         Log.app.error("queue load failed: \(String(describing: error), privacy: .private)")
         switch error {
         case APIError.http(let code, let msg): return msg ?? L("error.server", code)
-        case APIError.transport: return L("error.network")
+        case APIError.transport:
+            return SurfaceStateRules.failureKind(error) == .offline
+                ? L("error.network") : L("error.unreachable")
         case APIError.decoding: return L("error.badResponse")
         case APIError.unauthorized: return L("error.sessionExpired")
         case APIError.forbidden: return L("error.needsPro")

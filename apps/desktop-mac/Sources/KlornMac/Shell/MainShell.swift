@@ -32,6 +32,7 @@ struct MainShell: View {
                 VStack(spacing: 0) {
                     // Loaded mail whose refresh is failing (M6).
                     if let notice = model.connectionNotice { ConnectionBanner(notice: notice) }
+                    if let message = model.actionError { ActionErrorBanner(message: message) }
                     content.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 }
             }

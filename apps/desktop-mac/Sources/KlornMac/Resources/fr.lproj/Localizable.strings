@@ -687,11 +687,13 @@
 "error.server" = "Erreur du serveur (%d).";
 "error.network" = "Erreur réseau. Vérifiez votre connexion.";
 "onboarding.windowTitle" = "Bienvenue dans Klorn";
-"onboarding.value" = "Tout votre courrier et vos agendas, triés en %d files.";
+"onboarding.value" = "Tout votre courrier et vos agendas au même endroit. Le courrier est trié en %d files.";
 "onboarding.lane.push" = "Vous interrompt tout de suite";
 "onboarding.lane.meeting" = "Planification, vérifiée avec votre agenda";
 "onboarding.lane.queue" = "À lire aujourd'hui";
 "onboarding.lane.info" = "Reçus et avis, classés";
 "onboarding.lane.silent" = "Conservé, sans être affiché";
 "onboarding.lanes.note" = "Les files ne font que trier votre courrier. Elles n'agissent jamais dessus.";
-"onboarding.privacy" = "Klorn lit votre courrier pour le trier. Rien n'est supprimé et rien n'est répondu sans vous.";
+"onboarding.privacy" = "Klorn lit votre courrier pour le trier. C'est vous qui décidez de ce qu'il peut faire de plus.";
+"error.unreachable" = "Klorn ne parvient pas à joindre le serveur.";
+"banner.dismiss.a11y" = "Fermer le message";

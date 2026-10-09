@@ -687,11 +687,13 @@
 "error.server" = "服务器错误（%d）。";
 "error.network" = "网络错误。请检查网络连接。";
 "onboarding.windowTitle" = "欢迎使用 Klorn";
-"onboarding.value" = "你的所有邮件和日历，整理进 %d 个通道。";
+"onboarding.value" = "你的所有邮件和日历，集中在一处。邮件分入 %d 个通道。";
 "onboarding.lane.push" = "立即提醒你";
 "onboarding.lane.meeting" = "日程安排，已对照你的日历";
 "onboarding.lane.queue" = "值得今天阅读";
 "onboarding.lane.info" = "收据和通知，已归档";
 "onboarding.lane.silent" = "保留，但不显示";
 "onboarding.lanes.note" = "通道只对邮件分类，从不对邮件执行任何操作。";
-"onboarding.privacy" = "Klorn 读取你的邮件以进行分类。不会删除任何东西，也不会背着你回复。";
+"onboarding.privacy" = "Klorn 读取你的邮件以进行分类。除此之外它可以做什么，由你决定。";
+"error.unreachable" = "Klorn 无法连接服务器。";
+"banner.dismiss.a11y" = "关闭消息";

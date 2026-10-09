@@ -9,7 +9,10 @@ enum APIError: Error, Sendable, Equatable {
     case http(Int, String?)
     case unauthorized  // 401 — session invalid/expired (drop to sign-in)
     case forbidden     // 403 — authenticated but not entitled (e.g. Pro-only); do NOT sign out
-    case transport(String)
+    /// No HTTP answer. `code` is the `URLError` code when there was one: it
+    /// tells "this Mac is offline" from a timeout, a TLS failure or a
+    /// cancelled request (`SurfaceStateRules.failureKind`).
+    case transport(String, code: Int? = nil)
     case decoding(String)
 }
 
@@ -101,7 +104,8 @@ struct APIClient: Sendable {
         do {
             (bytes, resp) = try await session.data(for: req)
         } catch {
-            throw APIError.transport(error.localizedDescription)
+            throw APIError.transport(
+                error.localizedDescription, code: (error as? URLError)?.code.rawValue)
         }
         guard let http = resp as? HTTPURLResponse else { throw APIError.transport("non-HTTP response") }
         struct Reply: Decodable { let stale: Bool?; let code: String? }
@@ -236,7 +240,8 @@ struct APIClient: Sendable {
         do {
             (bytes, resp) = try await session.data(for: req)
         } catch {
-            throw APIError.transport(error.localizedDescription)
+            throw APIError.transport(
+                error.localizedDescription, code: (error as? URLError)?.code.rawValue)
         }
         guard let http = resp as? HTTPURLResponse else {
             throw APIError.transport("non-HTTP response")
@@ -261,7 +266,8 @@ struct APIClient: Sendable {
         do {
             (bytes, resp) = try await session.data(for: req)
         } catch {
-            throw APIError.transport(error.localizedDescription)
+            throw APIError.transport(
+                error.localizedDescription, code: (error as? URLError)?.code.rawValue)
         }
         guard let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             throw APIError.transport("inline fetch failed")
