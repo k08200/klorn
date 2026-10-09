@@ -15,7 +15,7 @@
 "bar.smaller" = "Verkleinern";
 "bar.smaller.help" = "Zurück zum kompakten Panel";
 "bar.push" = "%d PUSH";
-"bar.offline" = "offline";
+"bar.offline" = "Offline";
 "bar.allClear" = "Alles erledigt";
 "bar.signingIn" = "Anmeldung…";
 "bar.loading" = "Lädt…";
@@ -660,7 +660,6 @@
 "today.signingIn.detail" = "Schließe die Anmeldung im Browser ab. Dieses Fenster aktualisiert sich danach.";
 "today.failed.title" = "Mails konnten nicht geladen werden";
 "today.retry" = "Erneut versuchen";
-"today.stale" = "Aktualisieren fehlgeschlagen. Das ist der letzte Stand, den Klorn geladen hat.";
 "today.clear.title" = "Nichts wartet auf dich";
 "today.clear.detail" = "Neue Mails erscheinen hier, sobald Klorn sie einsortiert hat.";
 "today.lane.a11y" = "%1$@, %2$d offen";
@@ -674,3 +673,27 @@
 "today.ask.a11y" = "Den Assistenten fragen";
 "today.signIn.restart" = "Neu starten";
 "a11y.position" = "%1$d von %2$d";
+
+/* Signed-out, offline and first-launch states (M6) */
+"auth.continueGoogle" = "Mit Google fortfahren";
+"state.signedOut.title" = "Bei Klorn anmelden";
+"state.offline.title" = "Du bist offline";
+"state.offline.detail" = "Klorn erreicht den Server nicht. Prüfe deine Verbindung und versuche es erneut.";
+"banner.offline" = "Du bist offline. Das sind die Mails der letzten Synchronisierung.";
+"banner.stale" = "Aktualisieren fehlgeschlagen. Das sind die Mails der letzten Synchronisierung.";
+"bar.notUpdating" = "Keine Aktualisierung";
+"bar.retry.help" = "Erneut versuchen";
+"bar.retry.a11y" = "%@. Erneut versuchen";
+"error.server" = "Serverfehler (%d).";
+"error.network" = "Netzwerkfehler. Prüfe deine Verbindung.";
+"onboarding.windowTitle" = "Willkommen bei Klorn";
+"onboarding.value" = "Alle deine Mails und Kalender an einem Ort. Mails sortiert in %d Spuren.";
+"onboarding.lane.push" = "Unterbricht dich sofort";
+"onboarding.lane.meeting" = "Terminplanung, mit deinem Kalender abgeglichen";
+"onboarding.lane.queue" = "Heute lesenswert";
+"onboarding.lane.info" = "Belege und Hinweise, abgelegt";
+"onboarding.lane.silent" = "Aufbewahrt, nicht angezeigt";
+"onboarding.lanes.note" = "Spuren sortieren deine Mails nur. Sie führen nie etwas damit aus.";
+"onboarding.privacy" = "Klorn liest deine Mails, um sie zu sortieren. Was es darüber hinaus tun darf, entscheidest du.";
+"error.unreachable" = "Klorn erreicht den Server nicht.";
+"banner.dismiss.a11y" = "Meldung schließen";

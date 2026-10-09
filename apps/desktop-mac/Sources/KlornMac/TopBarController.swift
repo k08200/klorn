@@ -194,7 +194,8 @@ final class TopBarController {
                 for: .collapsed, showInDock: model.settings.showInDock,
                 settingsOpen: model.settingsWindowOpen,
                 mainWindowOpen: model.mainWindowOpen,
-            composeWindowOpen: model.composeWindowOpen))
+            composeWindowOpen: model.composeWindowOpen,
+            onboardingOpen: model.onboardingWindowOpen))
             panel?.orderOut(nil)
             model.barFullOpen = false
         }
@@ -238,7 +239,8 @@ final class TopBarController {
             for: state, showInDock: model.settings.showInDock,
             settingsOpen: model.settingsWindowOpen,
             mainWindowOpen: model.mainWindowOpen,
-            composeWindowOpen: model.composeWindowOpen))
+            composeWindowOpen: model.composeWindowOpen,
+            onboardingOpen: model.onboardingWindowOpen))
         model.barFullOpen = (state == .full)
         guard Self.shouldDraw(state: state, pillVisible: effectiveVisible) else {
             panel?.orderOut(nil)
@@ -336,15 +338,21 @@ final class TopBarController {
     ///
     /// `composeWindowOpen`: the compose window (M5) counts the same way, so
     /// a draft left open with the main window closed stays reachable from
-    /// the Dock and Cmd+Tab. Pure, for the harness.
+    /// the Dock and Cmd+Tab.
+    ///
+    /// `onboardingOpen`: the first-launch window (M6) is a window the user
+    /// has to act in, so it is reachable the same way. Pure, for the harness.
     nonisolated static func activationPolicy(
         for state: BarState,
         showInDock: Bool = false,
         settingsOpen: Bool = false,
         mainWindowOpen: Bool = false,
-        composeWindowOpen: Bool = false
+        composeWindowOpen: Bool = false,
+        onboardingOpen: Bool = false
     ) -> NSApplication.ActivationPolicy {
-        if showInDock || settingsOpen || mainWindowOpen || composeWindowOpen { return .regular }
+        if showInDock || settingsOpen || mainWindowOpen || composeWindowOpen || onboardingOpen {
+            return .regular
+        }
         return state == .collapsed ? .accessory : .regular
     }
 
@@ -356,7 +364,8 @@ final class TopBarController {
             for: state, showInDock: model.settings.showInDock,
             settingsOpen: model.settingsWindowOpen,
             mainWindowOpen: model.mainWindowOpen,
-            composeWindowOpen: model.composeWindowOpen))
+            composeWindowOpen: model.composeWindowOpen,
+            onboardingOpen: model.onboardingWindowOpen))
     }
 
     /// Show one item in the full view's reading pane. The single in-app answer

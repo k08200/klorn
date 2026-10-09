@@ -34,6 +34,11 @@ enum Theme {
     /// Deep end of the accent gradient (gauge fill etc.) — sky-600 `#0284c7`
     /// in light; brightens to sky-400 in the dark like the web's accent-deep.
     static let accentDeep = dyn(light: (0.008, 0.518, 0.780, 1), dark: (0.220, 0.741, 0.973, 1))
+    /// The accent as a solid fill that carries text (productization plan §2:
+    /// sky `#0369a1` light / `#38bdf8` dark), with the ink that sits on it.
+    /// White on the light fill is 5.9:1, the dark ink on the dark fill 9.2:1.
+    static let accentSolid = dyn(light: (0.012, 0.412, 0.631, 1), dark: (0.220, 0.741, 0.973, 1))
+    static let onAccentSolid = dyn(light: (1, 1, 1, 1), dark: (0.039, 0.039, 0.045, 1))
     /// slate-200-grade hairline on the glass panel; faint white line in dark.
     static let line = dyn(light: (0, 0, 0, 0.08), dark: (1, 1, 1, 0.10))
     /// Panel bevel (GlassPanel edge): a top highlight that FADES DOWN the rim

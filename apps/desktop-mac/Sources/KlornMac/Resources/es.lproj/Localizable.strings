@@ -15,7 +15,7 @@
 "bar.smaller" = "Reducir";
 "bar.smaller.help" = "Volver al panel compacto";
 "bar.push" = "%d PUSH";
-"bar.offline" = "sin conexión";
+"bar.offline" = "Sin conexión";
 "bar.allClear" = "Todo al día";
 "bar.signingIn" = "Iniciando sesión…";
 "bar.loading" = "Cargando…";
@@ -660,7 +660,6 @@
 "today.signingIn.detail" = "Completa el inicio de sesión en el navegador. Esta ventana se actualiza al terminar.";
 "today.failed.title" = "No se pudo cargar el correo";
 "today.retry" = "Reintentar";
-"today.stale" = "No se pudo actualizar. Este es el último resultado que cargó Klorn.";
 "today.clear.title" = "Nada te está esperando";
 "today.clear.detail" = "El correo nuevo aparece aquí cuando Klorn lo clasifica.";
 "today.lane.a11y" = "%1$@, %2$d abiertos";
@@ -674,3 +673,27 @@
 "today.ask.a11y" = "Preguntar al asistente";
 "today.signIn.restart" = "Empezar de nuevo";
 "a11y.position" = "%1$d de %2$d";
+
+/* Signed-out, offline and first-launch states (M6) */
+"auth.continueGoogle" = "Continuar con Google";
+"state.signedOut.title" = "Inicia sesión en Klorn";
+"state.offline.title" = "Estás sin conexión";
+"state.offline.detail" = "Klorn no puede conectar con el servidor. Comprueba tu conexión e inténtalo de nuevo.";
+"banner.offline" = "Estás sin conexión. Este es el correo de la última sincronización.";
+"banner.stale" = "No se pudo actualizar. Este es el correo de la última sincronización.";
+"bar.notUpdating" = "Sin actualizar";
+"bar.retry.help" = "Reintentar";
+"bar.retry.a11y" = "%@. Reintentar";
+"error.server" = "Error del servidor (%d).";
+"error.network" = "Error de red. Comprueba tu conexión.";
+"onboarding.windowTitle" = "Te damos la bienvenida a Klorn";
+"onboarding.value" = "Todo tu correo y tus calendarios en un solo lugar. El correo, ordenado en %d carriles.";
+"onboarding.lane.push" = "Te interrumpe ahora";
+"onboarding.lane.meeting" = "Citas, comprobadas con tu calendario";
+"onboarding.lane.queue" = "Vale la pena leerlo hoy";
+"onboarding.lane.info" = "Recibos y avisos, archivados";
+"onboarding.lane.silent" = "Guardado, sin mostrarse";
+"onboarding.lanes.note" = "Los carriles solo ordenan tu correo. Nunca actúan sobre él.";
+"onboarding.privacy" = "Klorn lee tu correo para ordenarlo. Tú decides qué más puede hacer.";
+"error.unreachable" = "Klorn no puede conectar con el servidor.";
+"banner.dismiss.a11y" = "Cerrar mensaje";
