@@ -12,7 +12,7 @@ import type {
 } from "@klorn/contract";
 import type { FastifyInstance } from "fastify";
 import { getUserId } from "../auth.js";
-import { laneReadsEnabled } from "../config.js";
+import { laneReadsEnabled, mailV2Enabled } from "../config.js";
 import { prisma } from "../db.js";
 import {
   countEmailsByLane,
