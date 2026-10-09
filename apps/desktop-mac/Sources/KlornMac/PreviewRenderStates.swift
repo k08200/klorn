@@ -15,6 +15,16 @@ extension PreviewRender {
         (try? JSONDecoder().decode([String].self, from: Data(stateErrorJSON.utf8))) ?? ["", ""]
     }
 
+    private static let cardDraftsJSON = """
+    [{"tone":"accept","body":"Signed off. Please send it on to the counterparty."},
+     {"tone":"decline","body":"I can't sign off today. Can the deadline move to tomorrow?"},
+     {"tone":"info","body":"Which of the two changes touches the indemnity cap?"}]
+    """
+
+    private static var cardDrafts: [ReplyOption] {
+        (try? JSONDecoder().decode([ReplyOption].self, from: Data(cardDraftsJSON.utf8))) ?? []
+    }
+
     /// A model in one state, on the in-memory token store (see `run`).
     static func stateModel(
         phase: AppModel.Phase, firewallJSON: String? = nil, loadError: String? = nil,
@@ -65,6 +75,23 @@ extension PreviewRender {
         shot("expanded-offline", size: expanded,
              stateModel(phase: .signedIn, loadError: network, offline: true)) {
             TopBarRoot(state: .expanded, actions: actions)
+        }
+
+        // A failed snooze, on the two surfaces that used to say nothing.
+        let actionFailed = stateModel(phase: .signedIn, firewallJSON: firewallJSON)
+        actionFailed.showActionError(strings[0])
+        shot("expanded-action-error", size: expanded, actionFailed) {
+            TopBarRoot(state: .expanded, actions: actions)
+        }
+        let card = PushCardState()
+        card.item = actionFailed.queue?.items(for: .push).first
+        card.drafts = .ready(Self.cardDrafts)
+        card.actionError = strings[0]
+        shot("push-card-snooze-failed", size: CGSize(
+            width: PushCardMetrics.compact.width, height: PushCardMetrics.compact.height), actionFailed) {
+            PushCard(state: card, actions: PushCardActions(
+                onSend: { _ in }, onOpen: {}, onDismiss: {}, onSnooze: { _ in }, onRetry: {},
+                onToggleExpand: {}, onShowAll: {}))
         }
 
         let pill = CGSize(

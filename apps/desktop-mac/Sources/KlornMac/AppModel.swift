@@ -256,6 +256,22 @@ final class AppModel {
     /// reach the Keychain.
     private let tokenStore: any TokenStore
 
+    // MARK: Session scope
+
+    /// Counts the sessions this model has held: bumped by `signOut()` and by
+    /// every sign-in that lands. Async work reads it before its first `await`
+    /// and checks `isCurrent` after each one. A result that arrives after the
+    /// account changed belongs to nobody on screen: it writes nothing, raises
+    /// no error and signs nobody out.
+    @ObservationIgnored private(set) var sessionGeneration = 0
+
+    func isCurrent(_ session: Int) -> Bool { session == sessionGeneration }
+
+    /// The release check. A seam so the self-check never calls GitHub.
+    @ObservationIgnored var updateCheck: @MainActor () async -> UpdateCheck.Outcome = {
+        await UpdateCheck.run()
+    }
+
     /// The store the shipped app uses. Named so the self-check can pin the
     /// default without constructing a model (which would read the Keychain).
     nonisolated static func productionTokenStore() -> any TokenStore { KeychainTokenStore() }
@@ -304,10 +320,14 @@ final class AppModel {
 
     func refreshTeams() async {
         struct Resp: Codable { let teams: [TeamWire] }
+        let session = sessionGeneration
         do {
             let resp = try await api.get("/api/teams", as: Resp.self)
+            guard isCurrent(session) else { return }
             teams = resp.teams
             teamModeAvailable = true
+        } catch _ where !isCurrent(session) {
+            return
         } catch APIError.forbidden {
             teamModeAvailable = false
         } catch {
@@ -322,9 +342,12 @@ final class AppModel {
             .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
             .filter { !$0.isEmpty }
         struct Body: Encodable { let name: String; let members: [String] }
+        let session = sessionGeneration
         do {
             try await api.post("/api/teams", encodable: Body(name: name, members: members))
             await refreshTeams()
+        } catch _ where !isCurrent(session) {
+            return
         } catch {
             teamError = L("teams.saveFailed")
             Log.app.error("team create failed: \(String(describing: error), privacy: .private)")
@@ -339,15 +362,18 @@ final class AppModel {
     private(set) var teamBookingResult: String?
 
     func checkTeamAvailability(teamId: String, durationMinutes: Int) async {
+        let session = sessionGeneration
         checkingTeamId = teamId
         teamAvailability = nil
         teamBookingResult = nil
-        defer { checkingTeamId = nil }
+        defer { if isCurrent(session) { checkingTeamId = nil } }
         let fmt = ISO8601DateFormatter()
         let start = fmt.string(from: Date())
         let end = fmt.string(from: Date().addingTimeInterval(3 * 24 * 3600))
         let path = "/api/teams/\(teamId)/availability?window_start=\(start)&window_end=\(end)&duration_minutes=\(durationMinutes)"
-        teamAvailability = try? await api.get(path, as: TeamAvailabilityWire.self)
+        let availability = try? await api.get(path, as: TeamAvailabilityWire.self)
+        guard isCurrent(session) else { return }
+        teamAvailability = availability
     }
 
     /// Book a team meeting from a chosen slot. This IS the approval: the
@@ -360,15 +386,19 @@ final class AppModel {
             let endTime: String
             let attendees: [String]
         }
+        let session = sessionGeneration
         do {
             try await api.post(
                 "/api/calendar",
                 encodable: Body(
                     title: title, startTime: slot.startTime, endTime: slot.endTime,
                     attendees: members))
+            guard isCurrent(session) else { return false }
             teamBookingResult = L("teams.booked")
             Task { await refreshToday() }
             return true
+        } catch _ where !isCurrent(session) {
+            return false
         } catch {
             teamBookingResult = L("teams.bookFailed")
             Log.app.error("team booking failed: \(String(describing: error), privacy: .private)")
@@ -430,8 +460,10 @@ final class AppModel {
     /// A persisted selection whose linked inbox was since unlinked falls back
     /// to "all" — a stale id would silently scope every list to zero rows.
     private func refreshInboxes() async {
+        let session = sessionGeneration
         do {
             let resp = try await api.fetchInboxes()
+            guard isCurrent(session) else { return }
             inboxes = resp.inboxes
             companyDomains = resp.companyDomains ?? []
             triagePriorities = resp.priorities
@@ -451,8 +483,10 @@ final class AppModel {
     /// Reload the Naver IMAP mailbox list. Silent on failure — the section
     /// simply shows nothing rather than an error the user can't act on.
     func refreshImapAccounts() async {
+        let session = sessionGeneration
         do {
             let status = try await api.fetchNaverStatus()
+            guard isCurrent(session) else { return }
             imapAccounts = status.resolvedAccounts(fallbackEmail: nil)
         } catch {
             Log.app.debug("imap status fetch failed: \(String(describing: error), privacy: .private)")
@@ -465,15 +499,19 @@ final class AppModel {
     /// clear its fields on success only.
     func connectNaverInbox(email: String, password: String) async -> Bool {
         guard !isConnectingImap else { return false }
+        let session = sessionGeneration
         isConnectingImap = true
-        defer { isConnectingImap = false }
+        defer { if isCurrent(session) { isConnectingImap = false } }
         imapError = nil
         do {
             try await api.connectNaver(email: email, password: password)
+            guard isCurrent(session) else { return false }
             await refreshImapAccounts()
             await refreshInboxes()
             await loadQueue()
-            return true
+            return isCurrent(session)
+        } catch _ where !isCurrent(session) {
+            return false
         } catch APIError.unauthorized {
             signOut()
             return false
@@ -494,11 +532,15 @@ final class AppModel {
 
     /// Disconnect ONE Naver mailbox (never the bodyless all-accounts form).
     func disconnectNaverInbox(email: String) async {
+        let session = sessionGeneration
         imapError = nil
         do {
             try await api.disconnectNaver(email: email)
+            guard isCurrent(session) else { return }
             await refreshImapAccounts()
             await refreshInboxes()
+        } catch _ where !isCurrent(session) {
+            return
         } catch APIError.unauthorized {
             signOut()
         } catch {
@@ -510,10 +552,13 @@ final class AppModel {
     /// browser, then watch the inbox list so the new account appears quickly.
     func addAccount() async {
         guard !isLinkingAccount else { return }
+        let session = sessionGeneration
         isLinkingAccount = true
-        defer { isLinkingAccount = false }
+        defer { if isCurrent(session) { isLinkingAccount = false } }
         linkAccountError = nil
-        switch await LinkInboxFlow.start(api: api) {
+        let outcome = await LinkInboxFlow.start(api: api)
+        guard isCurrent(session) else { return }
+        switch outcome {
         case .success:
             startLinkWatch()
         case .failure(.needsPro):
@@ -530,10 +575,13 @@ final class AppModel {
     /// SECOND account and cannot revive the primary token.
     func reconnectPrimary() async {
         guard !isLinkingAccount else { return }
+        let session = sessionGeneration
         isLinkingAccount = true
-        defer { isLinkingAccount = false }
+        defer { if isCurrent(session) { isLinkingAccount = false } }
         linkAccountError = nil
-        switch await GoogleConnectFlow.start(api: api) {
+        let outcome = await GoogleConnectFlow.start(api: api)
+        guard isCurrent(session) else { return }
+        switch outcome {
         case .success:
             startReconnectWatch()
         case .failure(.unauthorized):
@@ -548,11 +596,13 @@ final class AppModel {
     /// startLinkWatch's count-grew condition can never fire for it.
     private func startReconnectWatch() {
         linkWatchTask?.cancel()
+        let session = sessionGeneration
         linkWatchTask = Task { [weak self] in
             for _ in 0..<36 {
                 try? await Task.sleep(for: .seconds(5))
-                guard let self, !Task.isCancelled else { return }
+                guard let self, !Task.isCancelled, self.isCurrent(session) else { return }
                 await self.refreshInboxes()
+                guard self.isCurrent(session) else { return }
                 let primaryDead = self.inboxes.contains {
                     $0.kind == "primary" && $0.needsReconnect
                 }
@@ -569,13 +619,16 @@ final class AppModel {
     private func startLinkWatch() {
         linkWatchTask?.cancel()
         let baseline = Set(inboxes.compactMap(\.id))
+        let session = sessionGeneration
         linkWatchTask = Task { [weak self] in
             for _ in 0..<36 {
                 try? await Task.sleep(for: .seconds(5))
-                guard let self, !Task.isCancelled else { return }
+                guard let self, !Task.isCancelled, self.isCurrent(session) else { return }
                 await self.refreshInboxes()
+                guard self.isCurrent(session) else { return }
                 if let linked = Self.newlyLinkedInbox(baseline: baseline, now: self.inboxes) {
                     await self.loadQueue()
+                    guard self.isCurrent(session) else { return }
                     // Ask what the NEW mailbox is for, right as it lands —
                     // the same connect-time question the primary gets.
                     self.presentPurposePrompt(forLinked: linked)
@@ -690,20 +743,14 @@ final class AppModel {
     private func runSignIn(provider: String = "google") async {
         phase = .signingIn
         signInError = nil
+        let session = sessionGeneration
         let result = await GoogleSignIn.run(api: api, provider: provider)
-        // A superseded attempt owns none of this state any more.
-        guard !Task.isCancelled else { return }
+        // A superseded attempt owns none of this state any more; nor does
+        // one that a sign-out overtook.
+        guard !Task.isCancelled, isCurrent(session) else { return }
         switch result {
         case .success(let token):
-            if !tokenStore.save(token) {
-                Log.app.warning("Keychain save denied (unsigned dev build?) — token kept in memory for this session only")
-            }
-            // A live socket opened under the PREVIOUS token would 4001-loop
-            // forever (RealtimeClient captures its token once), silently
-            // degrading realtime to the 60s poll. Re-arm it with the fresh
-            // credential; start() tears the old loop down first.
-            realtime?.start(token: token)
-            phase = .signedIn
+            beginSession(token: token)
             deviceCalendars.start()
             await loadQueue()
         case .failure(let reason, let detail):
@@ -712,6 +759,27 @@ final class AppModel {
             phase = .signedOut
         }
     }
+
+    /// A sign-in landed: a new session starts here, whoever held the last
+    /// one. Whatever the previous session left running stops being current.
+    private func beginSession(token: String) {
+        if !tokenStore.save(token) {
+            Log.app.warning("Keychain save denied (unsigned dev build?) — token kept in memory for this session only")
+        }
+        sessionGeneration += 1
+        // The poll loop and the socket belong to the session that started
+        // them. A socket opened under the PREVIOUS token would also 4001-loop
+        // forever (RealtimeClient captures its token once). Both stop here;
+        // `ensureActive()` starts this session's own after its first load.
+        stopPolling()
+        realtime?.stop()
+        realtime = nil
+        phase = .signedIn
+    }
+
+    /// Self-check seam: start a session as a sign-in does, without the
+    /// browser leg or the first load.
+    func beginSessionForCheck(token: String) { beginSession(token: token) }
 
     /// Select a row in the full view and load its email into the reading pane.
     /// Clicking works in the non-focus-stealing panel (mouse events are delivered),
@@ -724,11 +792,14 @@ final class AppModel {
             return
         }
         openedEmail = nil
+        let session = sessionGeneration
         isLoadingEmail = true
-        defer { isLoadingEmail = false }
+        defer { if isCurrent(session) { isLoadingEmail = false } }
         do {
-            openedEmail = try await api.get(
+            let detail = try await api.get(
                 "/api/email/\(emailDbId)", as: EmailDetail.self)
+            guard isCurrent(session) else { return }
+            openedEmail = detail
             // Reading is a side-effect-free GET; marking read is an explicit
             // write. Fire-and-forget: a failed mark-read must not blank the
             // reading pane the user already has.
@@ -736,6 +807,8 @@ final class AppModel {
             loadMeetingContext(for: emailDbId, guardId: item.id)
             loadSenderDossier(for: emailDbId, guardId: item.id)
             loadThreadBrief(for: emailDbId, guardId: item.id)
+        } catch _ where !isCurrent(session) {
+            return
         } catch APIError.unauthorized {
             signOut()
         } catch {
@@ -774,12 +847,13 @@ final class AppModel {
     /// keeps a slow response from painting over a different, newer selection.
     private func loadSenderDossier(for emailDbId: String, guardId: String) {
         senderDossier = nil
+        let session = sessionGeneration
         Task {
             let lang = L10n.resolvedCode(override: L10n.override)
             let dossier = try? await api.get(
                 "/api/email/\(emailDbId)/sender-dossier?lang=\(lang)", as: SenderDossierWire.self)
             // Empty history answers with an empty summary — nothing to show.
-            if selectedItemId == guardId, let dossier, !dossier.summary.isEmpty {
+            if isCurrent(session), selectedItemId == guardId, let dossier, !dossier.summary.isEmpty {
                 senderDossier = dossier
             }
         }
@@ -790,11 +864,12 @@ final class AppModel {
     /// reads, so "AI 답장" on an opened mail costs no extra thread read.
     private func loadThreadBrief(for emailDbId: String, guardId: String) {
         threadBrief = nil
+        let session = sessionGeneration
         Task {
             let lang = L10n.resolvedCode(override: L10n.override)
             let response = try? await api.get(
                 "/api/email/\(emailDbId)/thread-brief?lang=\(lang)", as: ThreadBriefResponse.self)
-            if selectedItemId == guardId, let brief = response?.brief, !brief.whyNow.isEmpty {
+            if isCurrent(session), selectedItemId == guardId, let brief = response?.brief, !brief.whyNow.isEmpty {
                 threadBrief = brief
             }
         }
@@ -803,10 +878,11 @@ final class AppModel {
     private func loadMeetingContext(for emailDbId: String, guardId: String) {
         meetingContext = nil
         guard openedEmail?.category == "meeting" else { return }
+        let session = sessionGeneration
         Task {
             let context = try? await api.get(
                 "/api/email/\(emailDbId)/meeting-context", as: MeetingContextWire.self)
-            if selectedItemId == guardId { meetingContext = context }
+            if isCurrent(session), selectedItemId == guardId { meetingContext = context }
         }
     }
 
@@ -828,12 +904,15 @@ final class AppModel {
     func draftReply(_ item: FirewallItem) async -> String? {
         guard let emailDbId = item.email?.emailDbId else { return nil }
         struct Draft: Decodable { let body: String? }
+        let session = sessionGeneration
         isDrafting = true
-        defer { isDrafting = false }
+        defer { if isCurrent(session) { isDrafting = false } }
         replyError = nil
         do {
             let draft: Draft = try await api.post("/api/email/\(emailDbId)/reply-draft", json: [:], as: Draft.self)
-            return draft.body
+            return isCurrent(session) ? draft.body : nil
+        } catch _ where !isCurrent(session) {
+            return nil
         } catch APIError.unauthorized {
             signOut()
             return nil
@@ -862,10 +941,13 @@ final class AppModel {
         guard let emailDbId = item.email?.emailDbId else {
             return .failed(L("reply.emailOnly"))
         }
+        let session = sessionGeneration
         do {
             let options: ReplyOptionsResponse = try await api.post(
                 "/api/email/\(emailDbId)/reply-options", json: [:], as: ReplyOptionsResponse.self)
-            return .ready(options)
+            return isCurrent(session) ? .ready(options) : .failed(L("error.sessionExpired"))
+        } catch _ where !isCurrent(session) {
+            return .failed(L("error.sessionExpired"))
         } catch APIError.unauthorized {
             signOut()
             return .failed(L("error.sessionExpired"))
@@ -883,22 +965,24 @@ final class AppModel {
     /// replies mirror the mail's language).
     func summarizeOpenedEmail() async {
         guard let email = openedEmail, !isSummarizing else { return }
+        let session = sessionGeneration
         isSummarizing = true
         summarizeFailed = false
-        defer { isSummarizing = false }
+        defer { if isCurrent(session) { isSummarizing = false } }
         do {
             let lang = L10n.resolvedCode(override: L10n.override)
             try await api.post("/api/email/\(email.id)/summarize", json: ["lang": lang])
         } catch {
             Log.app.error("on-demand summarize failed: \(String(describing: error), privacy: .private)")
-            if openedEmail?.id == email.id { summarizeFailed = true }
+            if isCurrent(session), openedEmail?.id == email.id { summarizeFailed = true }
             return
         }
         // The POST persisted server-side; a refresh failure here must not
         // report "summarize failed" — the pane just keeps the old band until
         // the next open re-fetches it.
+        guard isCurrent(session) else { return }
         if let updated = try? await api.get("/api/email/\(email.id)", as: EmailDetail.self),
-           openedEmail?.id == email.id {
+           isCurrent(session), openedEmail?.id == email.id {
             openedEmail = updated
         }
     }
@@ -949,22 +1033,31 @@ final class AppModel {
     /// un-sent ⌘N text was sitting in the composer: opening a document is an
     /// explicit act, like File→Open over an unsaved scratch buffer.
     func openDraftForEditing(_ item: MailboxItem) {
-        Task {
-            do {
-                let resp: LiveEmailDetail = try await api.get(
-                    "/api/email/live/\(item.gmailId)\(mailboxItemQuery(inbox: item.inbox))",
-                    as: LiveEmailDetail.self)
-                composeTo = extractRecipient(resp.data.to)
-                composeSubject = resp.data.subject
-                composeBody = resp.data.body
-                composeError = nil
-                editingDraftGmailId = item.gmailId
-                editingDraftInbox = item.inbox
-                showCompose = true
-            } catch {
-                mailboxError = L("mailbox.loadFailed")
-                Log.app.warning("draft open failed: \(String(describing: error), privacy: .private)")
-            }
+        Task { await loadDraftForEditing(item) }
+    }
+
+    /// The fetch behind `openDraftForEditing`. Internal so the self-check
+    /// can await it. A draft that arrives after its account signed out is
+    /// dropped: the next account must not find it in the composer.
+    func loadDraftForEditing(_ item: MailboxItem) async {
+        let session = sessionGeneration
+        do {
+            let resp: LiveEmailDetail = try await api.get(
+                "/api/email/live/\(item.gmailId)\(mailboxItemQuery(inbox: item.inbox))",
+                as: LiveEmailDetail.self)
+            guard isCurrent(session) else { return }
+            composeTo = extractRecipient(resp.data.to)
+            composeSubject = resp.data.subject
+            composeBody = resp.data.body
+            composeError = nil
+            editingDraftGmailId = item.gmailId
+            editingDraftInbox = item.inbox
+            showCompose = true
+        } catch _ where !isCurrent(session) {
+            return
+        } catch {
+            mailboxError = L("mailbox.loadFailed")
+            Log.app.warning("draft open failed: \(String(describing: error), privacy: .private)")
         }
     }
 
@@ -983,13 +1076,19 @@ final class AppModel {
     /// failure surfaces composeError and keeps everything for retry.
     func submitCompose() async {
         guard !composeSending else { return }
+        let session = sessionGeneration
+        // The draft this send was started from: the one to delete afterwards.
+        let draftId = editingDraftGmailId
+        let draftInbox = editingDraftInbox
         composeSending = true
         composeError = nil
-        defer { composeSending = false }
+        defer { if isCurrent(session) { composeSending = false } }
         let error = await sendNewEmail(to: composeTo, subject: composeSubject, body: composeBody)
-        // A 401 mid-send signed the account out and discarded the draft;
-        // there is no composer left to carry the error.
-        guard phase == .signedIn else { return }
+        // The composer belongs to the session that started the send. A 401
+        // mid-send signed the account out and discarded the draft; a sign-out
+        // (and another account's sign-in) while the send was in flight leaves
+        // a composer, and a draft id, that this result must not touch.
+        guard isCurrent(session) else { return }
         if let error {
             composeError = error
         } else {
@@ -997,10 +1096,12 @@ final class AppModel {
             // (404 = already gone from another client — a legitimate outcome).
             // The mail was SENT either way; cleanup failure must never read
             // as a send failure.
-            if let draftId = editingDraftGmailId {
+            if let draftId {
                 try? await api.delete(
-                    "/api/email/draft/by-message/\(draftId)\(mailboxItemQuery(inbox: editingDraftInbox))")
+                    "/api/email/draft/by-message/\(draftId)\(mailboxItemQuery(inbox: draftInbox))")
+                guard isCurrent(session) else { return }
                 await loadMailbox(.drafts)
+                guard isCurrent(session) else { return }
             }
             discardComposeDraft()
             showCompose = false
@@ -1034,11 +1135,14 @@ final class AppModel {
         guard !toTrimmed.isEmpty, !subjectTrimmed.isEmpty,
               !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else { return L("compose.missingFields") }
+        let session = sessionGeneration
         do {
             try await api.post(
                 "/api/email/send",
                 json: ["to": toTrimmed, "subject": subjectTrimmed, "body": body])
             return nil
+        } catch _ where !isCurrent(session) {
+            return L("error.sessionExpired")
         } catch APIError.unauthorized {
             signOut()
             return L("error.sessionExpired")
@@ -1059,9 +1163,12 @@ final class AppModel {
         guard let emailDbId = item.email?.emailDbId,
               !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else { return L("reply.nothingToSend") }
+        let session = sessionGeneration
         do {
             try await api.post("/api/email/\(emailDbId)/reply", json: ["body": body])
             return nil
+        } catch _ where !isCurrent(session) {
+            return L("error.sessionExpired")
         } catch APIError.unauthorized {
             signOut()
             return L("error.sessionExpired")
@@ -1075,8 +1182,10 @@ final class AppModel {
     /// Reading-pane composer wrapper: same send, but publishes the outcome to
     /// the live-bound `replyError` the full view renders. Returns true on success.
     func reply(_ item: FirewallItem, body: String) async -> Bool {
+        let session = sessionGeneration
         replyError = nil
         let error = await sendReply(item, body: body)
+        guard isCurrent(session) else { return error == nil }
         replyError = error
         return error == nil
     }
@@ -1085,9 +1194,12 @@ final class AppModel {
     /// leaves the source email in Gmail) and hide it immediately (optimistic).
     /// Works for any source. On failure, un-hide and refetch the truth.
     func dismiss(_ item: FirewallItem) async {
+        let session = sessionGeneration
         hideLocally(item)
         do {
             try await api.post("/api/inbox/firewall/\(item.id)/dismiss")
+        } catch _ where !isCurrent(session) {
+            return
         } catch APIError.unauthorized {
             signOut()
         } catch {
@@ -1109,12 +1221,16 @@ final class AppModel {
         let body = Body(
             title: draft.title, startTime: draft.startTime, endTime: draft.endTime,
             location: draft.location, attendees: draft.attendees)
+        let session = sessionGeneration
         do {
             try await api.post("/api/calendar", encodable: body)
+            guard isCurrent(session) else { return }
             clearEventDraft(messageId)
             chatMessages.append(ChatMessage(
                 role: .assistant, text: L("calendar.addedConfirm", eventDraftLabel(draft))))
             Task { await refreshToday() }  // the TODAY column should show it now
+        } catch _ where !isCurrent(session) {
+            return
         } catch APIError.unauthorized {
             signOut()
         } catch {
@@ -1139,9 +1255,12 @@ final class AppModel {
     private(set) var agentToday: TodayActions?
 
     func refreshAgentToday() async {
+        let session = sessionGeneration
         do {
-            agentToday = try await api.get(
+            let actions = try await api.get(
                 "/api/automations/today-actions", as: TodayActions.self)
+            guard isCurrent(session) else { return }
+            agentToday = actions
         } catch {
             Log.app.debug("agent today fetch failed: \(String(describing: error), privacy: .private)")
         }
@@ -1163,13 +1282,15 @@ final class AppModel {
     func sendChat(_ text: String) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard canSendChat(trimmed, busy: isChatting) else { return }
+        let session = sessionGeneration
         chatMessages.append(ChatMessage(role: .user, text: trimmed))
         isChatting = true
-        defer { isChatting = false }
+        defer { if isCurrent(session) { isChatting = false } }
         do {
             if chatConversationId == nil {
                 let conv: ChatConversation = try await api.post(
                     "/api/chat/conversations", json: [:], as: ChatConversation.self)
+                guard isCurrent(session) else { return }
                 chatConversationId = conv.id
             }
             guard let convId = chatConversationId else { return }
@@ -1181,11 +1302,14 @@ final class AppModel {
                     text: trimmed,
                     context: openedEmail.map { ChatTurnRequest.Context(emailId: $0.id) }),
                 as: ChatTurnResponse.self)
+            guard isCurrent(session) else { return }
             chatMessages.append(
                 ChatMessage(role: .assistant, text: turn.reply, eventDraft: turn.eventDraft))
             if let error = turn.error {
                 chatMessages.append(ChatMessage(role: .failure, text: error))
             }
+        } catch _ where !isCurrent(session) {
+            return
         } catch APIError.unauthorized {
             signOut()
         } catch {
@@ -1221,8 +1345,10 @@ final class AppModel {
               inboxes.contains(where: { $0.kind == "primary" })
         else { return }
         pendingPurpose = nil
+        let session = sessionGeneration
         Task {
             await setInboxPurpose(inboxId: nil, purpose: purpose)
+            guard isCurrent(session) else { return }
             // A work / mixed mailbox has a company — ask which domain right
             // after the purpose lands, exactly as the in-app card does; then
             // (or instead, for a personal mailbox) what matters to them.
@@ -1247,12 +1373,16 @@ final class AppModel {
         struct Body: Encodable { let text: String? }
         prioritiesError = nil
         let trimmed = text?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let session = sessionGeneration
         do {
             try await api.patch(
                 "/api/email/inboxes/priorities",
                 encodable: Body(text: (trimmed?.isEmpty ?? true) ? nil : trimmed))
+            guard isCurrent(session) else { return false }
             await refreshInboxes()
             return true
+        } catch _ where !isCurrent(session) {
+            return false
         } catch APIError.unauthorized {
             signOut()
         } catch APIError.http(_, let message) {
@@ -1285,11 +1415,15 @@ final class AppModel {
             let value: String
             let category: String
         }
+        let session = sessionGeneration
         do {
             try await api.put(
                 "/api/email/sender-labels",
                 encodable: Body(scope: scope, value: value, category: category))
+            guard isCurrent(session) else { return }
             await loadQueue()
+        } catch _ where !isCurrent(session) {
+            return
         } catch APIError.unauthorized {
             signOut()
         } catch {
@@ -1304,14 +1438,18 @@ final class AppModel {
         query.queryItems = [
             URLQueryItem(name: "scope", value: scope), URLQueryItem(name: "value", value: value),
         ]
+        let session = sessionGeneration
         do {
             try await api.delete("/api/email/sender-labels?\(query.percentEncodedQuery ?? "")")
+        } catch _ where !isCurrent(session) {
+            return
         } catch APIError.unauthorized {
             signOut()
             return
         } catch {
             Log.app.debug("sender label clear: \(String(describing: error), privacy: .private)")
         }
+        guard isCurrent(session) else { return }
         await loadQueue()
     }
 
@@ -1333,10 +1471,14 @@ final class AppModel {
     func setCompanyDomains(_ domains: [String]) async -> Bool {
         struct Body: Encodable { let domains: [String] }
         companyDomainsError = nil
+        let session = sessionGeneration
         do {
             try await api.patch("/api/email/inboxes/company-domains", encodable: Body(domains: domains))
+            guard isCurrent(session) else { return false }
             await refreshInboxes()
             return true
+        } catch _ where !isCurrent(session) {
+            return false
         } catch APIError.unauthorized {
             signOut()
             return false
@@ -1404,11 +1546,15 @@ final class AppModel {
             let inbox: String
             let purpose: String?
         }
+        let session = sessionGeneration
         do {
             try await api.patch(
                 "/api/email/inboxes/purpose",
                 encodable: Body(inbox: inboxId ?? "primary", purpose: purpose))
+            guard isCurrent(session) else { return }
             await refreshInboxes()
+        } catch _ where !isCurrent(session) {
+            return
         } catch APIError.unauthorized {
             signOut()
         } catch {
@@ -1431,15 +1577,19 @@ final class AppModel {
         let iso = ISO8601DateFormatter()
         let key = iso.string(from: start) + "|" + iso.string(from: end)
         if calendarRangeKey == key, !calendarRangeEvents.isEmpty { return }
+        let session = sessionGeneration
         calendarRangeLoading = true
-        defer { calendarRangeLoading = false }
+        defer { if isCurrent(session) { calendarRangeLoading = false } }
         do {
             let resp: CalendarListResponse = try await api.get(
                 "/api/calendar?start=\(iso.string(from: start))&end=\(iso.string(from: end))",
                 as: CalendarListResponse.self)
+            guard isCurrent(session) else { return }
             calendarRangeKey = key
             calendarRangeBounds = (start, end)
             calendarRangeEvents = resp.events
+        } catch _ where !isCurrent(session) {
+            return
         } catch APIError.unauthorized {
             signOut()
         } catch {
@@ -1490,8 +1640,9 @@ final class AppModel {
     /// error.needsPro, and the draft is kept on any failure.
     func saveEvent(_ draft: CalendarEventDraft) async -> Bool {
         struct Created: Decodable { let id: String }
+        let session = sessionGeneration
         eventEditorSaving = true
-        defer { eventEditorSaving = false }
+        defer { if isCurrent(session) { eventEditorSaving = false } }
         eventEditorError = nil
         let payload = calendarEventPayload(draft)
         do {
@@ -1500,8 +1651,11 @@ final class AppModel {
             } else {
                 _ = try await api.post("/api/calendar", encodable: payload, as: Created.self)
             }
+            guard isCurrent(session) else { return false }
             await refreshCalendarRange()
             return true
+        } catch _ where !isCurrent(session) {
+            return false
         } catch APIError.unauthorized {
             signOut()
         } catch APIError.forbidden {
@@ -1519,10 +1673,14 @@ final class AppModel {
     /// caller shows it next to the button.
     func deleteEvent(_ event: CalendarEventWire) async -> Bool {
         guard calendarEventIsEditable(event) else { return false }  // linked calendar: read-only
+        let session = sessionGeneration
         do {
             try await api.delete("/api/calendar/\(event.id)")
+            guard isCurrent(session) else { return false }
             await refreshCalendarRange()
             return true
+        } catch _ where !isCurrent(session) {
+            return false
         } catch APIError.unauthorized {
             signOut()
         } catch {
@@ -1540,13 +1698,17 @@ final class AppModel {
     private(set) var waitingOnLoading = false
 
     func loadWaitingOn() async {
+        let session = sessionGeneration
         waitingOnLoading = true
-        defer { waitingOnLoading = false }
+        defer { if isCurrent(session) { waitingOnLoading = false } }
         do {
             let resp: WaitingOnResponse = try await api.get(
                 "/api/email/waiting-on", as: WaitingOnResponse.self)
+            guard isCurrent(session) else { return }
             waitingOn = resp.items
             waitingOnMinDays = resp.minDays
+        } catch _ where !isCurrent(session) {
+            return
         } catch APIError.unauthorized {
             signOut()
         } catch {
@@ -1594,14 +1756,18 @@ final class AppModel {
     }
 
     func loadMailbox(_ box: MailboxKind) async {
+        let session = sessionGeneration
         mailboxLoading = box
         mailboxError = nil
-        defer { mailboxLoading = nil }
+        defer { if isCurrent(session) { mailboxLoading = nil } }
         do {
             let resp: MailboxListResponse = try await api.get(
                 mailboxPath(box: box, selectedInbox: selectedInbox), as: MailboxListResponse.self)
+            guard isCurrent(session) else { return }
             mailboxItems[box] = resp.data.items
             mailboxNextToken[box] = resp.data.nextPageToken
+        } catch _ where !isCurrent(session) {
+            return
         } catch APIError.unauthorized {
             signOut()
         } catch {
@@ -1619,17 +1785,21 @@ final class AppModel {
     /// crashes on duplicate ids.
     func loadMoreMailbox(_ box: MailboxKind) async {
         guard let token = mailboxNextToken[box], mailboxLoading != box else { return }
+        let session = sessionGeneration
         mailboxNextToken[box] = nil
         mailboxLoading = box
-        defer { mailboxLoading = nil }
+        defer { if isCurrent(session) { mailboxLoading = nil } }
         do {
             let resp: MailboxListResponse = try await api.get(
                 mailboxPath(box: box, selectedInbox: selectedInbox, pageToken: token),
                 as: MailboxListResponse.self)
+            guard isCurrent(session) else { return }
             let seen = Set((mailboxItems[box] ?? []).map(\.gmailId))
             mailboxItems[box, default: []]
                 .append(contentsOf: resp.data.items.filter { !seen.contains($0.gmailId) })
             mailboxNextToken[box] = resp.data.nextPageToken
+        } catch _ where !isCurrent(session) {
+            return
         } catch APIError.unauthorized {
             signOut()
         } catch {
@@ -1642,15 +1812,16 @@ final class AppModel {
         selectedMailboxItem = item
         mailboxDetail = nil
         mailboxDetailLoading = true
+        let session = sessionGeneration
         Task {
-            defer { mailboxDetailLoading = false }
+            defer { if isCurrent(session) { mailboxDetailLoading = false } }
             do {
                 let resp: LiveEmailDetail = try await api.get(
                     "/api/email/live/\(item.gmailId)\(mailboxItemQuery(inbox: item.inbox))",
                     as: LiveEmailDetail.self)
                 // Stale-response guard: the user may have clicked another row
-                // while this one was in flight.
-                if selectedMailboxItem?.gmailId == item.gmailId {
+                // (or signed out) while this one was in flight.
+                if isCurrent(session), selectedMailboxItem?.gmailId == item.gmailId {
                     mailboxDetail = resp.data
                 }
             } catch {
@@ -1671,11 +1842,15 @@ final class AppModel {
     }
 
     private func refreshCommitments() async {
+        let session = sessionGeneration
         do {
             let resp: CommitmentsResponse = try await api.get(
                 "/api/commitments?status=OPEN&limit=50", as: CommitmentsResponse.self)
+            guard isCurrent(session) else { return }
             commitments = resp.commitments
             commitmentsFailed = false
+        } catch _ where !isCurrent(session) {
+            return
         } catch {
             commitmentsFailed = true
             Log.app.warning("commitments fetch failed: \(String(describing: error), privacy: .private)")
@@ -1687,8 +1862,11 @@ final class AppModel {
     func resolveCommitment(_ item: CommitmentItem, as status: String) async {
         let before = commitments
         commitments = commitments?.filter { $0.id != item.id }
+        let session = sessionGeneration
         do {
             try await api.patch("/api/commitments/\(item.id)", json: ["status": status])
+        } catch _ where !isCurrent(session) {
+            return
         } catch APIError.unauthorized {
             signOut()
         } catch {
@@ -1713,16 +1891,20 @@ final class AppModel {
             searchTotal = 0
             return
         }
+        let session = sessionGeneration
         isSearching = true
-        defer { isSearching = false }
+        defer { if isCurrent(session) { isSearching = false } }
         do {
             // Scoped to the selected inbox ("all" adds nothing) — the desktop
             // list must honor the same per-inbox scope as the web inbox.
             let resp: EmailSearchResponse = try await api.get(
                 emailSearchPath(query: query, selectedInbox: selectedInbox),
                 as: EmailSearchResponse.self)
+            guard isCurrent(session) else { return }
             searchResults = resp.emails
             searchTotal = resp.total
+        } catch _ where !isCurrent(session) {
+            return
         } catch APIError.unauthorized {
             signOut()
         } catch {
@@ -1736,14 +1918,19 @@ final class AppModel {
         selectedItemId = hit.id
         emailError = nil
         openedEmail = nil
+        let session = sessionGeneration
         isLoadingEmail = true
-        defer { isLoadingEmail = false }
+        defer { if isCurrent(session) { isLoadingEmail = false } }
         do {
-            openedEmail = try await api.get(
+            let detail = try await api.get(
                 "/api/email/\(hit.id)", as: EmailDetail.self)
+            guard isCurrent(session) else { return }
+            openedEmail = detail
             // Same contract as openItem: explicit PATCH write, never a GET
             // side effect; failures degrade to leaving the mail unread.
             Task { try? await api.patch("/api/email/\(hit.id)/read", json: [:]) }
+        } catch _ where !isCurrent(session) {
+            return
         } catch APIError.unauthorized {
             signOut()
         } catch {
@@ -1759,8 +1946,11 @@ final class AppModel {
         guard item.tier != tier else { return }
         let before = queue
         queue = queue?.movingItem(id: item.id, to: tier)
+        let session = sessionGeneration
         do {
             try await api.post("/api/inbox/firewall/\(item.id)", json: ["tier": tier.rawValue])
+        } catch _ where !isCurrent(session) {
+            return
         } catch APIError.unauthorized {
             signOut()
         } catch {
@@ -1775,9 +1965,13 @@ final class AppModel {
     /// item via the normal correction path so the change is visible instantly.
     func pinSender(_ item: FirewallItem, to tier: Tier) async {
         guard let emailId = item.email?.emailDbId else { return }
+        let session = sessionGeneration
         await setTier(item, to: tier)
+        guard isCurrent(session) else { return }
         do {
             try await api.post("/api/email/\(emailId)/pin-tier", json: ["tier": tier.rawValue])
+        } catch _ where !isCurrent(session) {
+            return
         } catch APIError.unauthorized {
             signOut()
         } catch {
@@ -1790,8 +1984,11 @@ final class AppModel {
     /// back — future mails simply go back to predicted tiers.
     func unpinSender(_ item: FirewallItem) async {
         guard let emailId = item.email?.emailDbId else { return }
+        let session = sessionGeneration
         do {
             try await api.delete("/api/email/\(emailId)/pin-tier")
+        } catch _ where !isCurrent(session) {
+            return
         } catch APIError.unauthorized {
             signOut()
         } catch {
@@ -1802,16 +1999,24 @@ final class AppModel {
 
     /// Snooze a PUSH item until `until`; it resurfaces server-side when the time
     /// passes. Works for any source (uses the AttentionItem id, not the email id).
-    func snooze(_ item: FirewallItem, until: Date = AppModel.tomorrow9am()) async {
+    /// Returns the failure message when the snooze did not take and the item
+    /// came back, so a surface that already moved on (the HUD card) can say so.
+    @discardableResult
+    func snooze(_ item: FirewallItem, until: Date = AppModel.tomorrow9am()) async -> String? {
+        let session = sessionGeneration
         hideLocally(item)
         do {
             try await api.post(
                 "/api/inbox/firewall/\(item.id)/snooze",
                 json: ["snoozeUntil": ISO8601DateFormatter().string(from: until)])
+            return nil
+        } catch _ where !isCurrent(session) {
+            return nil
         } catch APIError.unauthorized {
             signOut()
+            return nil
         } catch {
-            unhide(item, error)
+            return unhide(item, error)
         }
     }
 
@@ -1824,10 +2029,12 @@ final class AppModel {
     }
 
     /// Undo an optimistic hide when the mutation failed, then refetch the truth.
-    private func unhide(_ item: FirewallItem, _ error: Error) {
+    @discardableResult
+    private func unhide(_ item: FirewallItem, _ error: Error) -> String? {
         dismissed.remove(item.id)
-        noteActionFailure(error)
+        let message = noteActionFailure(error)
         Task { await loadQueue() }
+        return message
     }
 
     /// Default snooze target: 9am local tomorrow. Pure for testing. Delegates to
@@ -1837,6 +2044,8 @@ final class AppModel {
     }
 
     func signOut() {
+        // First: from here on, nothing the leaving session started is current.
+        sessionGeneration += 1
         stopPolling()
         linkWatchTask?.cancel()
         linkWatchTask = nil
@@ -1876,7 +2085,73 @@ final class AppModel {
         // Putting the composer away also closes the compose window (M5).
         discardComposeDraft()
         showCompose = false
+        resetAccountState()
         phase = .signedOut
+    }
+
+    /// The rest of what was fetched for, or typed by, the account that is
+    /// leaving, and the in-flight flags of the requests it started: those
+    /// requests no longer report back (`isCurrent`), so nothing else would
+    /// lower them.
+    private func resetAccountState() {
+        isLoadingQueue = false
+        cancelledLoadRetried = false
+        isLoadingEmail = false
+        isDrafting = false
+        isSummarizing = false
+        summarizeFailed = false
+        composeSending = false
+        isChatting = false
+        chatMessages = []
+        chatConversationId = nil
+        commitments = nil
+        commitmentsFailed = false
+        pendingActions = []
+        pendingActionError = nil
+        resolvingActions = []
+        agentToday = nil
+        automation = AutomationSettings()
+        automationLoaded = false
+        automationSaving = false
+        automationError = nil
+        mailboxItems = [:]
+        mailboxNextToken = [:]
+        mailboxLoading = nil
+        mailboxError = nil
+        mailboxDetailLoading = false
+        clearMailboxSelection()
+        searchResults = nil
+        searchTotal = 0
+        isSearching = false
+        waitingOn = []
+        waitingOnLoading = false
+        calendarRangeEvents = []
+        calendarRangeKey = nil
+        calendarRangeBounds = nil
+        calendarRangeLoading = false
+        eventEditorSaving = false
+        dismissEventEditor()
+        teams = []
+        teamError = nil
+        teamModeAvailable = false
+        teamAvailability = nil
+        checkingTeamId = nil
+        teamBookingResult = nil
+        imapAccounts = []
+        imapError = nil
+        isConnectingImap = false
+        isLinkingAccount = false
+        companyDomains = []
+        companyDomainsError = nil
+        triagePriorities = nil
+        prioritiesError = nil
+        diagnostics = []
+        diagnosticsInFlight = false
+        diagnosticsError = nil
+        showPurposePrompt = false
+        purposePromptTarget = nil
+        purposePromptStartsAtDomains = false
+        purposePromptStartsAtPriorities = false
     }
 
     /// Today's calendar (expanded panel's TODAY column). Best-effort: a
@@ -1923,7 +2198,7 @@ final class AppModel {
         guard Self.updateCheckDue(now: Date(), last: lastUpdateCheck, intervalSeconds: intervalSeconds)
         else { return }
         lastUpdateCheck = Date()
-        if case .updateAvailable(let version) = await UpdateCheck.run() {
+        if case .updateAvailable(let version) = await updateCheck() {
             updateAvailable = version
         } else {
             updateAvailable = nil  // up to date, dev build, or network hiccup
@@ -1946,7 +2221,7 @@ final class AppModel {
         updateCheckResult = nil
         defer { updateCheckInFlight = false }
         lastUpdateCheck = Date()
-        if case .updateAvailable(let version) = await UpdateCheck.run() {
+        if case .updateAvailable(let version) = await updateCheck() {
             updateAvailable = version
             updateCheckResult = nil  // the update row itself is the answer
         } else {
@@ -1963,12 +2238,16 @@ final class AppModel {
 
     func runDiagnostics() async {
         guard !diagnosticsInFlight else { return }
+        let session = sessionGeneration
         diagnosticsInFlight = true
-        defer { diagnosticsInFlight = false }
+        defer { if isCurrent(session) { diagnosticsInFlight = false } }
         diagnosticsError = nil
         do {
             let res = try await api.get("/api/ops/readiness", as: ReadinessResponse.self)
+            guard isCurrent(session) else { return }
             diagnostics = diagnosticHighlights(res.checks)
+        } catch _ where !isCurrent(session) {
+            return
         } catch APIError.unauthorized {
             signOut()
         } catch {
@@ -1987,8 +2266,10 @@ final class AppModel {
     }
 
     private func refreshBriefing() async {
+        let session = sessionGeneration
         do {
             let today = try await api.get("/api/briefing/today", as: TodayBriefing.self)
+            guard isCurrent(session) else { return }
             briefing = briefingPreview(today.briefing?.content)
             briefingStructure = today.structured
         } catch {
@@ -1997,11 +2278,16 @@ final class AppModel {
     }
 
     private func refreshToday() async {
+        let session = sessionGeneration
         do {
-            today = try await api.get("/api/calendar/today/summary", as: TodaySummary.self)
+            let summary = try await api.get("/api/calendar/today/summary", as: TodaySummary.self)
+            guard isCurrent(session) else { return }
+            today = summary
         } catch {
             Log.app.debug("today summary fetch failed: \(String(describing: error), privacy: .private)")
         }
+        // The meeting card below is planned from this session's calendar only.
+        guard isCurrent(session) else { return }
         // Replan on every refresh tick (poll + WS wake — the same cadence that
         // keeps the TODAY column fresh keeps the lead window honest).
         // Gated on the user's "Meetings" category: this card is an interrupt,
@@ -2025,9 +2311,11 @@ final class AppModel {
     /// calendar page uses. days=8 from today 00:00 covers tomorrow → +7 days;
     /// today's rows are filtered out by the pure grouping.
     private func refreshWeekAhead() async {
+        let session = sessionGeneration
         do {
             let resp: CalendarListResponse = try await api.get(
                 "/api/calendar?days=8", as: CalendarListResponse.self)
+            guard isCurrent(session) else { return }
             weekAhead = resp.events
         } catch {
             Log.app.debug("week-ahead fetch failed: \(String(describing: error), privacy: .private)")
@@ -2038,8 +2326,10 @@ final class AppModel {
     private(set) var usage: BillingStatusWire.Usage?
 
     private func refreshUsage() async {
+        let session = sessionGeneration
         do {
             let status: BillingStatusWire = try await api.get("/api/billing/models", as: BillingStatusWire.self)
+            guard isCurrent(session) else { return }
             usage = status.usage
         } catch {
             Log.app.debug("usage fetch failed: \(String(describing: error), privacy: .private)")
@@ -2060,8 +2350,11 @@ final class AppModel {
     /// Refreshed on the queue cadence: System Settings is not the only writer —
     /// the web settings screen can change these behind the desktop app's back.
     private func refreshAutomation() async {
+        let session = sessionGeneration
         do {
-            automation = try await api.fetchAutomationSettings()
+            let fetched = try await api.fetchAutomationSettings()
+            guard isCurrent(session) else { return }
+            automation = fetched
             automationLoaded = true
             automationError = nil
         } catch {
@@ -2080,11 +2373,15 @@ final class AppModel {
         automation = next
         automationSaving = true
         automationError = nil
+        let session = sessionGeneration
         Task {
             do {
-                automation = try await api.updateAutomationSettings(next)
+                let stored = try await api.updateAutomationSettings(next)
+                guard isCurrent(session) else { return }
+                automation = stored
                 automationLoaded = true
             } catch {
+                guard isCurrent(session) else { return }
                 automation = previous
                 automationError = Self.automationErrorText(error)
                 Log.app.debug("automation save failed: \(String(describing: error), privacy: .private)")
@@ -2113,9 +2410,11 @@ final class AppModel {
     private(set) var resolvingActions: Set<String> = []
 
     private func refreshPendingActions() async {
+        let session = sessionGeneration
         do {
             let resp: PendingActionsResponse = try await api.get(
                 "/api/chat/pending-actions", as: PendingActionsResponse.self)
+            guard isCurrent(session) else { return }
             pendingActions = resp.actions
             pendingActionError = nil
         } catch {
@@ -2132,18 +2431,22 @@ final class AppModel {
         resolvingActions.insert(action.id)
         pendingActions.removeAll { $0.id == action.id }
         pendingActionError = nil
+        let session = sessionGeneration
         Task {
             do {
                 try await api.post(
                     "/api/chat/pending-actions/\(action.id)/\(approve ? "approve" : "reject")")
+                guard isCurrent(session) else { return }
                 // The agent receipt counts this action too, so refresh both.
                 await refreshAgentToday()
                 await refreshPendingActions()
             } catch {
+                guard isCurrent(session) else { return }
                 pendingActions = previous
                 pendingActionError = Self.automationErrorText(error)
                 Log.app.debug("pending action resolve failed: \(String(describing: error), privacy: .private)")
             }
+            guard isCurrent(session) else { return }
             resolvingActions.remove(action.id)
         }
     }
@@ -2159,8 +2462,9 @@ final class AppModel {
     }
 
     func loadQueue() async {
+        let session = sessionGeneration
         isLoadingQueue = true
-        defer { isLoadingQueue = false }
+        defer { if isCurrent(session) { isLoadingQueue = false } }
         // Piggyback on the same cadence as the queue (poll + WS wake) without
         // serializing the fetches.
         Task { await refreshToday() }
@@ -2177,6 +2481,9 @@ final class AppModel {
             let selectionAtFetch = selectedInbox
             let fetched = try await api.get(
                 firewallPath(selected: selectionAtFetch), as: FirewallResponse.self)
+            // A response that outlived its session is the previous account's
+            // mail: it reaches neither the cache nor the screen.
+            guard isCurrent(session) else { return }
             queueCache[selectionAtFetch] = fetched
             // A slow response for a selection the user has already left must
             // not clobber the queue they're looking at now.
@@ -2186,9 +2493,13 @@ final class AppModel {
             queue = fetched.removingIDs(dismissed)
             // The reply axis's other half rides the same poll — one DB-only GET.
             await loadWaitingOn()
+            guard isCurrent(session) else { return }
             loadError = nil
+            cancelledLoadRetried = false
             reconcilePush()
             ensureActive()
+        } catch _ where !isCurrent(session) {
+            return
         } catch APIError.unauthorized {
             signOut()  // token expired/invalid — drop to sign-in
         } catch {
@@ -2231,22 +2542,37 @@ final class AppModel {
     /// refetches immediately; the poll loop remains the backstop. Idempotent.
     private func startRealtime() {
         guard realtime == nil, let token = tokenStore.load() else { return }
+        let session = sessionGeneration
         let client = RealtimeClient(onWake: { [weak self] in
-            // Skip if a load is already in flight — avoids overlapping refetches
-            // if the server bursts events.
-            guard let self, !self.isLoadingQueue else { return }
-            Task { await self.loadQueue() }
+            self?.realtimeDidWake(session: session)
         })
         client.start(token: token)
         realtime = client
     }
 
+    /// A server push on the wake channel that `session` opened. The socket
+    /// is stopped at sign-out, but a message it had already received can
+    /// still be delivered: a wake that outlived its session refetches
+    /// nothing. Internal, and returning whether a refetch started, for the
+    /// self-check.
+    @discardableResult
+    func realtimeDidWake(session: Int) -> Bool {
+        // Skip if a load is already in flight — avoids overlapping refetches
+        // if the server bursts events.
+        guard isCurrent(session), !isLoadingQueue else { return false }
+        Task { await loadQueue() }
+        return true
+    }
+
     private func startPolling() {
+        let session = sessionGeneration
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(AppModel.pollIntervalSeconds))
-                if Task.isCancelled { break }
-                await self?.loadQueue()
+                // Cancelled at sign-out; the session check covers a tick
+                // that was already past the sleep.
+                guard !Task.isCancelled, let self, self.isCurrent(session) else { break }
+                await self.loadQueue()
             }
         }
     }
@@ -2273,9 +2599,36 @@ final class AppModel {
     /// refresh" states. A cancelled request is not a failure.
     private func noteLoadFailure(_ error: Error) {
         let kind = SurfaceStateRules.failureKind(error)
-        guard kind != .ignored else { return }
+        guard kind != .ignored else { return recoverCancelledLoad() }
+        cancelledLoadRetried = false
         loadError = Self.describe(error)
         loadOffline = kind == .offline
+    }
+
+    /// One retry has been spent on a cancelled first load.
+    private var cancelledLoadRetried = false
+
+    /// A cancelled load is not an error, but with nothing loaded and nothing
+    /// wrong the surface would sit on "loading" until the next poll tick
+    /// (which may not exist yet: polling starts after the first load). Load
+    /// once more, in a task of its own since the caller's is the one that
+    /// was cancelled; if that is cancelled too, show the failed state, whose
+    /// Retry is the way out.
+    private func recoverCancelledLoad() {
+        guard phase == .signedIn else { return }
+        switch SurfaceStateRules.cancelledLoadRecovery(
+            hasQueue: queue != nil, hasError: loadError != nil, retried: cancelledLoadRetried)
+        {
+        case .none:
+            return
+        case .retry:
+            cancelledLoadRetried = true
+            Task { await loadQueue() }
+        case .fail:
+            cancelledLoadRetried = false
+            loadError = L("error.unreachable")
+            loadOffline = false
+        }
     }
 
     /// A failed action on one mail (pin, unpin, dismiss, snooze). Shown as
@@ -2284,9 +2637,13 @@ final class AppModel {
     private var actionErrorTask: Task<Void, Never>?
     static let actionErrorSeconds = 6
 
-    private func noteActionFailure(_ error: Error) {
-        guard SurfaceStateRules.failureKind(error) != .ignored else { return }
-        showActionError(Self.describe(error))
+    /// Returns the message it showed, nil for a cancelled request.
+    @discardableResult
+    private func noteActionFailure(_ error: Error) -> String? {
+        guard SurfaceStateRules.failureKind(error) != .ignored else { return nil }
+        let message = Self.describe(error)
+        showActionError(message)
+        return message
     }
 
     /// Internal so the render and self-check harnesses can raise one.

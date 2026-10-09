@@ -83,7 +83,18 @@ not connected, connection lost, host not found, DNS failure, data not
 allowed, roaming off. A cancelled request is no error; everything else is
 "Klorn can't reach its server". A failed action on one mail (pin, unpin,
 dismiss, snooze) shows a short notice of its own and never raises the
-refresh banner. Signing out drops the per-inbox queue snapshots.
+refresh banner: a row in the full view, the main window and the expanded
+panel, and on the HUD card the mail comes back with the reason. A first load
+that was cancelled is retried once, then shows the failed state.
+
+Results belong to the session that asked for them. The model counts its
+sessions (`sessionGeneration`, bumped by sign-out and by every sign-in), and
+every continuation checks `isCurrent(session)` after each `await`: a response
+that lands after the account changed writes nothing, raises no error and
+signs nobody out. New async code in `AppModel` follows the same shape, with
+`catch _ where !isCurrent(session)` ahead of any 401 handler (the self-check
+pins it). Signing out also stops the poll and the socket and clears
+everything fetched for the account.
 
 ### Keyboard
 

@@ -106,6 +106,7 @@ final class PushCardController {
         state.sendingIndex = nil
         state.sentIndex = nil
         state.sendError = nil
+        state.actionError = nil
         render()
         fetchDrafts(for: item)
         fetchDetail(for: item)
@@ -151,11 +152,27 @@ final class PushCardController {
 
     /// Snooze the current item server-side (resurfaces at the chosen time),
     /// then move to the next card. The model hides it optimistically and
-    /// reconciles on failure — the card just advances.
+    /// reconciles on failure — the card just advances, and comes back to
+    /// the item only if the snooze did not take.
     private func snooze(_ option: SnoozeOption) {
         guard let item = state.item else { return }
-        Task { [weak self] in await self?.model.snooze(item, until: option.resurface()) }
+        Task { [weak self] in
+            guard let self else { return }
+            // nil: it took, or the session it was sent in has ended.
+            guard let failure = await self.model.snooze(item, until: option.resurface())
+            else { return }
+            self.restore(item, failure: failure)
+        }
         advance()
+    }
+
+    /// The snooze failed and the model put the mail back in the queue: put
+    /// it back on the card too, with the reason. The card had already moved
+    /// on (or closed), so without this the failure was silent.
+    private func restore(_ item: FirewallItem, failure: String) {
+        queue.restore(item)
+        showCurrent()
+        state.actionError = failure
     }
 
     // MARK: - Actions
