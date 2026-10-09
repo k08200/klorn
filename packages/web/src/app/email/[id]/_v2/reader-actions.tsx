@@ -176,7 +176,9 @@ export function ReaderActionsRow(props: ReaderActionsProps) {
 /**
  * Below 768px: Reply and Archive stay in reach above the tab bar; the lane,
  * the reminder and the rest open upward from More. 44px targets throughout.
- * The right end is left free: the assistant dock's button floats there.
+ * The bar floats on the assistant dock's row (the dock button is fixed at
+ * bottom 96px, right 16px, 48px square) and stops short of it, so the two
+ * never overlap; the dock itself is untouched.
  */
 export function ReaderBottomBar(props: ReaderActionsProps) {
   const { t } = useT();
@@ -186,7 +188,7 @@ export function ReaderBottomBar(props: ReaderActionsProps) {
     <div
       role="toolbar"
       aria-label={t("mailV2.reader.actions")}
-      className="fixed inset-x-0 bottom-[calc(62px+env(safe-area-inset-bottom))] z-30 flex items-center gap-2 border-t border-line bg-surface-elevated py-2 pl-4 pr-20 md:hidden"
+      className="fixed bottom-23.5 left-4 right-20 z-30 flex items-center gap-1 rounded-card border border-line bg-surface-elevated p-1 shadow-l2 md:hidden"
     >
       <Button
         variant="primary"

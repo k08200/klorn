@@ -65,6 +65,12 @@ export interface MailRowProps {
   leading?: ReactNode;
   /** Keep `leading` visible regardless of hover (a selection is in progress). */
   leadingPinned?: boolean;
+  /**
+   * Classes that make room for `actions` while they show, so they cover no
+   * badge: right padding under `group-hover:` / `group-focus-within:` sized to
+   * the actions (e.g. three 44px buttons need `pr-40`).
+   */
+  actionsReserve?: string;
   className?: string;
 }
 
@@ -146,6 +152,11 @@ function RowContent(props: MailRowProps) {
 
 export function MailRow(props: MailRowProps) {
   const { href, onOpen, selected = false, actions, leading, className = "" } = props;
+  const bodyClass = `${BODY_CLASS} ${
+    actions && props.actionsReserve
+      ? `transition-[padding] duration-120 ease-fluid ${props.actionsReserve}`
+      : ""
+  }`;
   const current = selected ? ("true" as const) : undefined;
   return (
     <div
@@ -154,11 +165,11 @@ export function MailRow(props: MailRowProps) {
       } ${className}`}
     >
       {href ? (
-        <Link href={href} aria-current={current} className={BODY_CLASS}>
+        <Link href={href} aria-current={current} className={bodyClass}>
           <RowContent {...props} />
         </Link>
       ) : (
-        <button type="button" onClick={onOpen} aria-current={current} className={BODY_CLASS}>
+        <button type="button" onClick={onOpen} aria-current={current} className={bodyClass}>
           <RowContent {...props} />
         </button>
       )}

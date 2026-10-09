@@ -1397,6 +1397,7 @@ const ja: Record<string, string> = {
   "mailV2.reader.account": "{account} で受信",
   "mailV2.reader.error.title": "このメールを開けませんでした",
   "mailV2.reader.reconnectToArchive": "アーカイブするには、このアカウントを再接続してください。",
+  "mailV2.reader.tone": "トーンとテンプレート",
 };
 
 export default ja;

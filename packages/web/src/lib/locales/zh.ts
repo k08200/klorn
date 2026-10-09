@@ -1323,6 +1323,7 @@ const zh: Record<string, string> = {
   "mailV2.reader.account": "收于 {account}",
   "mailV2.reader.error.title": "无法打开这封邮件",
   "mailV2.reader.reconnectToArchive": "重新连接此账户后才能归档邮件。",
+  "mailV2.reader.tone": "语气与模板",
 };
 
 export default zh;

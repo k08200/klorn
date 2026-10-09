@@ -164,6 +164,35 @@ interface ThreadDetail {
   }>;
 }
 
+const REPLY_PRESETS_OPEN_KEY = "klorn.mailV2.replyPresetsOpen";
+
+/**
+ * A remembered on/off choice (localStorage). Starts off, reads the stored value
+ * after mount, and never throws when storage is unavailable.
+ */
+function useStoredFlag(key: string): [boolean, (value: boolean) => void] {
+  const [value, setValue] = useState(false);
+  useEffect(() => {
+    try {
+      setValue(window.localStorage.getItem(key) === "1");
+    } catch {
+      // Storage unavailable: the choice just does not persist.
+    }
+  }, [key]);
+  const store = useCallback(
+    (next: boolean) => {
+      setValue(next);
+      try {
+        window.localStorage.setItem(key, next ? "1" : "0");
+      } catch {
+        // Storage unavailable: keep the choice for this visit only.
+      }
+    },
+    [key],
+  );
+  return [value, store];
+}
+
 /** The v2 reader's slots while there is no mail to fill them with. */
 const EMPTY_READER_SLOTS = {
   thread: null,
@@ -788,6 +817,7 @@ function EmailDetailView() {
                   ) : null,
                 reply: (
                   <ReplyDraftBox
+                    presets="collapsed"
                     draft={draft}
                     intent={draftIntent}
                     drafting={drafting}
@@ -830,6 +860,7 @@ function EmailDetailView() {
                   ) : null,
                 analysis: (
                   <KlornAnalysis
+                    quiet
                     email={email}
                     onPriorityChange={(priority) =>
                       setEmail((prev) => (prev ? { ...prev, priority } : prev))
@@ -1470,7 +1501,14 @@ function ReplyDraftBox({
   onDraftChange,
   onSaveGmailDraft,
   onSend,
+  presets = "inline",
 }: {
+  /**
+   * Where the work-mode chips and quick intents sit. "inline" is the legacy
+   * reader; the v2 reader folds them behind one disclosure (closed by default,
+   * its state remembered) so the intent field and the draft button lead.
+   */
+  presets?: "inline" | "collapsed";
   draft: ReplyDraft | null;
   intent: string;
   drafting: boolean;
@@ -1502,36 +1540,11 @@ function ReplyDraftBox({
   const draftAttachmentCount = selectedCount + (includeBriefAttachment ? 1 : 0);
   const workModeOptions = buildWorkModeOptions(t);
   const quickIntents = buildQuickReplyIntents(t, candidateProfile, mode);
-
-  return (
-    <section className="panel-elevated mt-5 overflow-hidden rounded-2xl border border-line/70 bg-surface-panel p-4 md:p-5">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-mid">
-            {t("emailDetail.replyDraft.title")}
-          </h2>
-          <p className="mt-1 text-xs text-ink-dim">{t("emailDetail.replyDraft.subtitle")}</p>
-        </div>
-        <button
-          type="button"
-          onClick={onGenerate}
-          disabled={drafting}
-          className="ease-strong inline-flex h-9 shrink-0 items-center rounded-lg border border-state-info-line bg-state-info-bg px-3 text-xs font-medium text-accent-deeper transition duration-150 hover:bg-state-info-bg hover:text-state-info-ink active:scale-[0.97] disabled:opacity-50 focus-ring"
-        >
-          {drafting
-            ? t("emailDetail.replyDraft.drafting")
-            : draft
-              ? t("emailDetail.replyDraft.regenerate")
-              : t("emailDetail.replyDraft.draftButton")}
-        </button>
-      </div>
-      <input
-        id={REPLY_INTENT_INPUT_ID}
-        value={intent}
-        onChange={(e) => onIntentChange(e.target.value)}
-        placeholder={t("emailDetail.replyDraft.intentPlaceholder")}
-        className="mb-3 w-full rounded-lg border border-line bg-surface-panel/80 px-3 py-2 text-xs text-ink-soft placeholder-ink-dim outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15"
-      />
+  const [presetsOpen, setPresetsOpen] = useStoredFlag(REPLY_PRESETS_OPEN_KEY);
+  // The same two rows in both layouts: inline for the legacy reader, inside
+  // the disclosure for v2.
+  const presetRows = (
+    <>
       <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1">
         {workModeOptions.map((option) => (
           <button
@@ -1564,6 +1577,64 @@ function ReplyDraftBox({
             </button>
           ))}
         </div>
+      )}
+    </>
+  );
+
+  return (
+    <section className="panel-elevated mt-5 overflow-hidden rounded-2xl border border-line/70 bg-surface-panel p-4 md:p-5">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-mid">
+            {t("emailDetail.replyDraft.title")}
+          </h2>
+          <p className="mt-1 text-xs text-ink-dim">{t("emailDetail.replyDraft.subtitle")}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onGenerate}
+          disabled={drafting}
+          className="ease-strong inline-flex h-9 shrink-0 items-center rounded-lg border border-state-info-line bg-state-info-bg px-3 text-xs font-medium text-accent-deeper transition duration-150 hover:bg-state-info-bg hover:text-state-info-ink active:scale-[0.97] disabled:opacity-50 focus-ring"
+        >
+          {drafting
+            ? t("emailDetail.replyDraft.drafting")
+            : draft
+              ? t("emailDetail.replyDraft.regenerate")
+              : t("emailDetail.replyDraft.draftButton")}
+        </button>
+      </div>
+      <input
+        id={REPLY_INTENT_INPUT_ID}
+        value={intent}
+        onChange={(e) => onIntentChange(e.target.value)}
+        placeholder={t("emailDetail.replyDraft.intentPlaceholder")}
+        className="mb-3 w-full rounded-lg border border-line bg-surface-panel/80 px-3 py-2 text-xs text-ink-soft placeholder-ink-dim outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15"
+      />
+      {presets === "collapsed" ? (
+        <details
+          open={presetsOpen}
+          onToggle={(event) => setPresetsOpen(event.currentTarget.open)}
+          className="group mb-3"
+        >
+          <summary className="focus-ring inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 rounded-control text-label text-ink-mid hover:text-ink [&::-webkit-details-marker]:hidden">
+            {t("mailV2.reader.tone")}
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 16 16"
+              className="size-3.5 transition-transform duration-120 ease-fluid group-open:rotate-180"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m4 6 4 4 4-4" />
+            </svg>
+          </summary>
+          <div className="pt-2">{presetRows}</div>
+        </details>
+      ) : (
+        presetRows
       )}
       {draft && (
         <div className="space-y-2">
@@ -1829,15 +1900,60 @@ function KlornAnalysis({
   onPriorityChange,
   onSummarize,
   summarizing,
+  quiet = false,
 }: {
   email: EmailDetail;
   onPriorityChange: (priority: EmailPriority) => void;
   onSummarize?: () => void;
   summarizing?: boolean;
+  /**
+   * The v2 reader's variant: no priority / needs-reply / category badges (its
+   * header states those, and there only the lane is coloured) and a neutral
+   * card. The default is the legacy card, unchanged.
+   */
+  quiet?: boolean;
 }) {
   const { t } = useT();
   const hasAnything =
     email.summary || email.keyPoints.length > 0 || email.actionItems.length > 0 || email.category;
+
+  if (quiet && hasAnything) {
+    return (
+      <section className="rounded-card border border-line bg-surface-panel p-4">
+        <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <h2 className="text-label text-ink-mid">{t("emailDetail.analysis.title")}</h2>
+          <LabelFeedbackControl
+            emailId={email.id}
+            currentPriority={email.priority}
+            onPriorityChange={onPriorityChange}
+          />
+          <SummarizeButton onSummarize={onSummarize} summarizing={summarizing} />
+        </div>
+        {email.summary && <p className="text-body text-ink">{email.summary}</p>}
+        {email.keyPoints.length > 0 && (
+          <div className="mt-3">
+            <p className="mb-1 text-caption text-ink-muted">
+              {t("emailDetail.analysis.keyPoints")}
+            </p>
+            <ul className="flex flex-col gap-1">
+              {email.keyPoints.map((point) => (
+                <li key={point} className="flex gap-2 text-body text-ink-mid">
+                  <span aria-hidden="true" className="text-ink-muted">
+                    •
+                  </span>
+                  <span>{point}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {email.actionItems.length > 0 && (
+          <ActionItemsPanel emailId={email.id} actionItems={email.actionItems} />
+        )}
+        {email.needsReply && <ReplyNeededFeedbackControl emailId={email.id} />}
+      </section>
+    );
+  }
 
   if (!hasAnything) {
     return (

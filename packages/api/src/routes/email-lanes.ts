@@ -66,7 +66,12 @@ interface DemoLaneRow {
   isRead: boolean;
 }
 
-/** A demo mail's context: its hand-assigned lane and its neighbours in the demo list. */
+/**
+ * A demo mail's context: its hand-assigned lane and its neighbours in the demo
+ * list. Only the lane narrows the neighbours — `inbox`, `filter` and `search`
+ * are not applied to demo rows (there is one demo account and a dozen rows), so
+ * previous / next there walk the whole demo lane.
+ */
 function demoReaderContext(
   rows: readonly DemoLaneRow[],
   id: string,

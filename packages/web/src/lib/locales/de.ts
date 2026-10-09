@@ -1450,6 +1450,7 @@ const de: Record<string, string> = {
   "mailV2.reader.account": "Eingegangen in {account}",
   "mailV2.reader.error.title": "Diese Mail konnte nicht geöffnet werden",
   "mailV2.reader.reconnectToArchive": "Verbinde dieses Konto erneut, um Mail zu archivieren.",
+  "mailV2.reader.tone": "Ton & Vorlage",
 };
 
 export default de;

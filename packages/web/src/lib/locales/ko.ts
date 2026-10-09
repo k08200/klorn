@@ -1404,6 +1404,7 @@ const ko: Record<string, string> = {
   "mailV2.reader.account": "{account} 계정으로 수신",
   "mailV2.reader.error.title": "이 메일을 열지 못했습니다",
   "mailV2.reader.reconnectToArchive": "메일을 보관하려면 이 계정을 다시 연결하세요.",
+  "mailV2.reader.tone": "어조 및 템플릿",
 };
 
 export default ko;

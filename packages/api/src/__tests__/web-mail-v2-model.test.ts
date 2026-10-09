@@ -26,6 +26,7 @@ import {
 import { NO_LIST_CONTEXT, parseListContext } from "../../../web/src/app/email/_v2/reader-handoff";
 import { REMINDER_KEYS, reminderDate } from "../../../web/src/app/email/_v2/reminders";
 import { readerLeaveHref } from "../../../web/src/app/email/[id]/_v2/reader-model";
+import { keysWithPrefix } from "../../../web/src/lib/logout-cleanup";
 
 const view = (overrides: Partial<ListView> = {}): ListView => ({
   lane: "QUEUE",
@@ -274,5 +275,16 @@ describe("reminders (P5b)", () => {
   it("does not mutate the time it was given", () => {
     reminderDate("next-week", now);
     expect(now).toEqual(new Date(2026, 9, 8, 15, 30, 0, 0));
+  });
+});
+
+describe("logout clears Mail v2 view state (P5b)", () => {
+  it("finds every key under the prefix, and only those", () => {
+    const keys = ["klorn.mailV2.view", "klorn-token", "klorn.mailV2.lastRead", "klorn.mailV20"];
+    const storage = { length: keys.length, key: (index: number) => keys[index] ?? null };
+    expect(keysWithPrefix(storage, "klorn.mailV2.")).toEqual([
+      "klorn.mailV2.view",
+      "klorn.mailV2.lastRead",
+    ]);
   });
 });

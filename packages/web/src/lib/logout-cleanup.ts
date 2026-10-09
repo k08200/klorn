@@ -14,10 +14,34 @@ const SENSITIVE_STORAGE_KEYS = [
   "klorn-playground-key-openai",
 ] as const;
 
+/**
+ * sessionStorage keys under this prefix hold Mail v2 view state: the lane,
+ * account, filter and search the list was on, and the mail last read. Not
+ * secrets, but they describe the previous user's mail, so logout drops them.
+ */
+const MAIL_VIEW_STATE_PREFIX = "klorn.mailV2.";
+
+/** The keys under `prefix`, collected first so removing them cannot skip one. */
+export function keysWithPrefix(storage: Pick<Storage, "length" | "key">, prefix: string): string[] {
+  const keys: string[] = [];
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index);
+    if (key?.startsWith(prefix)) keys.push(key);
+  }
+  return keys;
+}
+
 export function clearSensitiveStorage(): void {
   if (typeof window === "undefined") return;
   for (const key of SENSITIVE_STORAGE_KEYS) {
     localStorage.removeItem(key);
+  }
+  try {
+    for (const key of keysWithPrefix(sessionStorage, MAIL_VIEW_STATE_PREFIX)) {
+      sessionStorage.removeItem(key);
+    }
+  } catch {
+    // sessionStorage unavailable (private mode): there is nothing to clear.
   }
 }
 

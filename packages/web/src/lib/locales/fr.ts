@@ -1435,6 +1435,7 @@ const fr: Record<string, string> = {
   "mailV2.reader.account": "Reçu sur {account}",
   "mailV2.reader.error.title": "Impossible d'ouvrir ce courrier",
   "mailV2.reader.reconnectToArchive": "Reconnectez ce compte pour archiver du courrier.",
+  "mailV2.reader.tone": "Ton et modèle",
 };
 
 export default fr;

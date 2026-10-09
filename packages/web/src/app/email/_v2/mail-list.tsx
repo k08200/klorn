@@ -136,6 +136,8 @@ export function MailRows(props: MailRowsProps) {
                 )
               }
               leadingPinned={selecting}
+              // Three 44px actions: the badges and the time slide clear of them.
+              actionsReserve="group-hover:pr-40 group-focus-within:pr-40"
               actions={
                 props.readOnly ? undefined : (
                   <>
