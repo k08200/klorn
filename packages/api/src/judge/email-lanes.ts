@@ -116,16 +116,21 @@ function laneSql(lane: LiveTier): { join: Prisma.Sql; predicate: Prisma.Sql } {
 }
 
 /** The legacy `filter` values a lane page can be narrowed by. */
-const LANE_PAGE_FILTERS: Readonly<Record<string, Prisma.Sql>> = {
-  unread: Prisma.sql`AND e."isRead" = false`,
-  urgent: Prisma.sql`AND e."priority" = 'URGENT'`,
-  "reply-needed": Prisma.sql`AND e."needsReply" = true`,
-  attachments: Prisma.sql`AND EXISTS (SELECT 1 FROM "EmailAttachment" x WHERE x."emailId" = e."id")`,
-};
+// A Map, not an object: `filter` comes from the query string, and an object
+// lookup would also answer for inherited keys ("constructor", "__proto__").
+const LANE_PAGE_FILTERS: ReadonlyMap<string, Prisma.Sql> = new Map([
+  ["unread", Prisma.sql`AND e."isRead" = false`],
+  ["urgent", Prisma.sql`AND e."priority" = 'URGENT'`],
+  ["reply-needed", Prisma.sql`AND e."needsReply" = true`],
+  [
+    "attachments",
+    Prisma.sql`AND EXISTS (SELECT 1 FROM "EmailAttachment" x WHERE x."emailId" = e."id")`,
+  ],
+]);
 
 /** False for a `filter` the lane page cannot apply (candidates); absent is fine. */
 export function isLanePageFilter(filter: string | undefined): boolean {
-  return !filter || filter in LANE_PAGE_FILTERS;
+  return !filter || LANE_PAGE_FILTERS.has(filter);
 }
 
 /** `%term%` with LIKE's own wildcards escaped, as Prisma's `contains` does. */
@@ -179,7 +184,7 @@ export async function pageEmailIdsInLane(
     WHERE e."userId" = ${query.userId}
       ${predicate}
       ${inboxSql(query.scope)}
-      ${(query.filter && LANE_PAGE_FILTERS[query.filter]) || Prisma.empty}
+      ${(query.filter && LANE_PAGE_FILTERS.get(query.filter)) || Prisma.empty}
       ${query.category ? Prisma.sql`AND e."category" = ${query.category}` : Prisma.empty}
       ${searchSql(query.search)}`;
   const [rows, totals] = await Promise.all([

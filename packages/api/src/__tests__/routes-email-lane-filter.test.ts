@@ -307,6 +307,21 @@ describe("GET /api/email?tier= — lane page", () => {
     await app.close();
   });
 
+  it("an inherited object key is not a lane filter: refused, never interpolated", async () => {
+    userTokenFindFirst.mockResolvedValue(GOOGLE_TOKEN);
+    const app = await buildApp();
+    for (const filter of ["constructor", "toString", "__proto__", "hasOwnProperty"]) {
+      const res = await app.inject({
+        method: "GET",
+        url: `/api/email?tier=PUSH&filter=${filter}`,
+        headers: auth(),
+      });
+      expect(res.statusCode).toBe(400);
+    }
+    expect(queryRaw).not.toHaveBeenCalled();
+    await app.close();
+  });
+
   it("ALL and an absent tier take the list path that existed before", async () => {
     userTokenFindFirst.mockResolvedValue(GOOGLE_TOKEN);
     const app = await buildApp();
