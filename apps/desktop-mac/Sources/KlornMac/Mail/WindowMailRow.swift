@@ -11,21 +11,25 @@ enum MailRowStyle: Sendable {
 
 /// What a main-window row may show, and nothing else: who, what, when, the
 /// lane (only where lanes are mixed), the account (only when the row knows
-/// it) and the unread dot (only when the row knows that). Category, the
-/// relationship, the reply state and why-this-lane are in the reader header.
+/// it and there is more than one), the unread dot (only when the row knows
+/// that) and the attachment glyph. Category, the relationship, the reply
+/// state and why-this-lane are in the reader header.
 struct WindowRowContent: Equatable {
     var sender: String
     var subject: String
     var snippet: String?
     var time: String
-    /// nil = the row's data does not say (firewall items carry no read state).
+    /// nil = the row's data does not say (an older server sends no read state).
     var unread: Bool?
     /// nil = no chip: the lane tab above the list already names it.
     var lane: Tier?
     /// The account's provider, when the row carries its account and there is
-    /// more than one to tell apart. Firewall items carry none.
+    /// more than one to tell apart.
     var provider: String?
     var showsAccount = false
+    /// The account's address, for the spoken label; the row draws the badge only.
+    var accountLabel: String?
+    var hasAttachment = false
 }
 
 enum WindowRowRules {
@@ -44,29 +48,70 @@ enum WindowRowRules {
         mixedLanes ? item.tier : nil
     }
 
-    static func content(for item: FirewallItem, mixedLanes: Bool, now: Date) -> WindowRowContent {
+    /// A source badge tells accounts apart, so it shows only when there are
+    /// two or more to tell apart: the same rule for every row.
+    static func showsAccounts(_ inboxes: [InboxOption]) -> Bool { inboxes.count >= 2 }
+
+    /// The server's read flag, minus mail opened here since it was fetched.
+    /// nil stays nil: no claim is never turned into "read".
+    static func unread(_ email: EmailContext?, opened: Set<String>) -> Bool? {
+        guard let email, let unread = email.unread else { return nil }
+        return unread && !opened.contains(email.emailDbId)
+    }
+
+    static func content(
+        for item: FirewallItem, mixedLanes: Bool, inboxes: [InboxOption],
+        opened: Set<String> = [], now: Date
+    ) -> WindowRowContent {
         let subject = decodeHTMLEntities(item.email?.subject ?? item.title)
+        let source = showsAccounts(inboxes) ? item.email?.source : nil
         return WindowRowContent(
             sender: a11ySenderLabel(item), subject: subject,
             snippet: snippet(item.email?.snippet, subject: subject),
             time: mailTimeLabel(iso: item.email?.receivedAt ?? item.surfacedAt, now: now),
-            unread: nil, lane: lane(for: item, mixedLanes: mixedLanes))
+            unread: unread(item.email, opened: opened),
+            lane: lane(for: item, mixedLanes: mixedLanes),
+            provider: source?.provider, showsAccount: source != nil,
+            accountLabel: source?.label, hasAttachment: item.email?.hasAttachment == true)
     }
 
     static func content(
-        for hit: EmailSearchItem, inboxes: [InboxOption], now: Date
+        for hit: EmailSearchItem, inboxes: [InboxOption], opened: Set<String> = [], now: Date
     ) -> WindowRowContent {
         let name = senderDisplayName(hit.from.map(decodeHTMLEntities))
         let subject = decodeHTMLEntities(hit.subject ?? L("mail.noSubjectParen"))
         let time = mailTimeLabel(iso: hit.date, now: now)
-        let account = inboxes.count >= 2
+        let account = showsAccounts(inboxes)
             ? inboxes.first { $0.id == hit.linkedInboxAccountId } : nil
         return WindowRowContent(
             sender: name.isEmpty ? L("mail.unknownSender") : name, subject: subject,
             snippet: snippet(hit.snippet, subject: subject),
             time: time.isEmpty ? String((hit.date ?? "").prefix(10)) : time,
-            unread: hit.isRead.map { !$0 }, lane: nil,
-            provider: account?.provider, showsAccount: account != nil)
+            unread: hit.isRead.map { !$0 && !opened.contains(hit.id) }, lane: nil,
+            provider: account?.provider, showsAccount: account != nil,
+            accountLabel: account?.email)
+    }
+
+    /// What VoiceOver says for a row: the state first, then `lead` (who and
+    /// what, in the surface's own words), then everything the row draws
+    /// without words. Pure, so the self-check can pin it.
+    static func a11yLabel(_ content: WindowRowContent, lead: String) -> String {
+        var parts: [String] = []
+        if content.unread == true { parts.append(L("mail.unread")) }
+        parts.append(lead)
+        if let lane = content.lane { parts.append(lane.label) }
+        if content.showsAccount {
+            parts.append(sourceA11yLabel(provider: content.provider, label: content.accountLabel))
+        }
+        if content.hasAttachment { parts.append(L("mail.hasAttachment")) }
+        if !content.time.isEmpty { parts.append(content.time) }
+        return parts.joined(separator: ", ")
+    }
+
+    /// A mail-list row's lead: sender, subject, and the snippet when shown.
+    static func listLead(_ content: WindowRowContent) -> String {
+        ([content.sender, content.subject] + (content.snippet.map { [$0] } ?? []))
+            .joined(separator: ", ")
     }
 }
 
@@ -89,6 +134,11 @@ struct WindowRowBody: View {
                     SourceBadge(provider: content.provider, compact: true)
                 }
                 Spacer(minLength: Theme.s2)
+                if content.hasAttachment {
+                    Image(systemName: "paperclip")
+                        .font(Theme.Typo.icon).foregroundStyle(Theme.textDim)
+                        .accessibilityHidden(true)
+                }
                 if let lane = content.lane {
                     WindowLaneChip(tier: lane)
                 }
@@ -159,7 +209,9 @@ struct WindowMailRow: View {
     private var showsActions: Bool { hovering || focused }
 
     var body: some View {
-        let content = WindowRowRules.content(for: item, mixedLanes: showLaneChip, now: Date())
+        let content = WindowRowRules.content(
+            for: item, mixedLanes: showLaneChip, inboxes: model.inboxes,
+            opened: model.openedEmailIds, now: Date())
         // A real Button (role, keyboard, focus), as in the bar's row.
         Button { actions.onSelect(item) } label: {
             WindowRowBody(content: content)
@@ -168,6 +220,8 @@ struct WindowMailRow: View {
         }
         .buttonStyle(.plain)
         .focused($focused)
+        .accessibilityLabel(
+            WindowRowRules.a11yLabel(content, lead: WindowRowRules.listLead(content)))
         .accessibilityAddTraits(selected ? .isSelected : [])
         .modifier(WindowRowChrome(selected: selected, hovering: hovering, focused: focused))
         .overlay(alignment: .trailing) {
@@ -227,7 +281,8 @@ struct WindowSearchHitRow: View {
     private var selected: Bool { model.selectedItemId == hit.id }
 
     var body: some View {
-        let content = WindowRowRules.content(for: hit, inboxes: model.inboxes, now: Date())
+        let content = WindowRowRules.content(
+            for: hit, inboxes: model.inboxes, opened: model.openedEmailIds, now: Date())
         Button { Task { await model.selectSearchResult(hit) } } label: {
             WindowRowBody(content: content)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -235,8 +290,8 @@ struct WindowSearchHitRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(
-            (content.unread == true ? L("mail.unread") + ", " : "")
-                + L("mail.searchResult.a11y", content.sender, content.subject))
+            WindowRowRules.a11yLabel(
+                content, lead: L("mail.searchResult.a11y", content.sender, content.subject)))
         .accessibilityAddTraits(selected ? .isSelected : [])
         .modifier(WindowRowChrome(selected: selected, hovering: hovering, focused: false))
         .onHover { hovering = $0 }

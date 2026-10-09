@@ -201,15 +201,17 @@ func tokenSelfChecks(sourceDir: URL) -> [(String, Bool)] {
             WindowRowRules.lane(for: $0, mixedLanes: true) == .queue
                 && WindowRowRules.lane(for: $0, mixedLanes: false) == nil
         } ?? false))
+    let inboxes = tokenFixtureInboxes()
     results.append((
-        "a firewall row claims no read state and no account; the snippet is its second line",
+        "a row from an older server claims no read state, account or attachment",
         tokenFixtureItem().map {
-            let content = WindowRowRules.content(for: $0, mixedLanes: false, now: Date())
-            return content.unread == nil && !content.showsAccount
+            let content = WindowRowRules.content(
+                for: $0, mixedLanes: false, inboxes: inboxes, now: Date())
+            return content.unread == nil && !content.showsAccount && !content.hasAttachment
                 && content.sender == "dana@vendor.example" && content.subject == "renewal"
                 && content.snippet == "quote is attached"
         } ?? false))
-    let inboxes = tokenFixtureInboxes()
+    results.append(contentsOf: sourceBadgeChecks(inboxes: inboxes))
     let hit = EmailSearchItem(
         id: "s1", from: "Dana <dana@vendor.example>", subject: "Renewal", snippet: "Renewal",
         date: nil, isRead: false, linkedInboxAccountId: "linked-1")
@@ -267,7 +269,8 @@ func tokenSelfChecks(sourceDir: URL) -> [(String, Bool)] {
     return results
 }
 
-private func tokenFixtureItem() -> FirewallItem? {
+/// `extra` is spliced into the email preview: the account facts under test.
+private func tokenFixtureItem(_ extra: String = "") -> FirewallItem? {
     let json = """
         {"id":"i1","source":"EMAIL","sourceId":"m1","type":"EMAIL","title":"renewal",
          "tier":"QUEUE","tierReason":"vendor","priority":1,
@@ -275,9 +278,110 @@ private func tokenFixtureItem() -> FirewallItem? {
          "email":{"emailDbId":"e1","subject":"renewal",
                   "from":"dana@vendor.example",
                   "snippet":"quote\\n is  attached","receivedAt":"2026-07-29T05:00:00.000Z",
-                  "signal":{"kind":"replied","count":3},"replyState":"needsReply"}}
+                  "signal":{"kind":"replied","count":3},"replyState":"needsReply"\(extra)}}
         """
     return try? JSONDecoder().decode(FirewallItem.self, from: Data(json.utf8))
+}
+
+/// The account, the read state and the attachment on a main-window row.
+private func sourceBadgeChecks(inboxes: [InboxOption]) -> [(String, Bool)] {
+    var results: [(String, Bool)] = []
+    let now = Date()
+    let one = Array(inboxes.prefix(1))
+    func content(_ extra: String, _ accounts: [InboxOption], opened: Set<String> = [])
+        -> WindowRowContent?
+    {
+        tokenFixtureItem(extra).map {
+            WindowRowRules.content(
+                for: $0, mixedLanes: false, inboxes: accounts, opened: opened, now: now)
+        }
+    }
+    let naver = #","source":{"provider":"NAVER","accountId":"linked-1","label":"you@naver.example"}"#
+    let full = naver + #","unread":true,"hasAttachment":true"#
+
+    results.append((
+        "the source badge shows only when there are two or more accounts to tell apart",
+        content(naver, inboxes).map {
+            $0.showsAccount && $0.provider == "NAVER" && $0.accountLabel == "you@naver.example"
+        } == true
+            && content(naver, one).map { !$0.showsAccount && $0.provider == nil } == true
+            && content(naver, []).map { !$0.showsAccount } == true
+            && content("", inboxes).map { !$0.showsAccount } == true))
+    results.append((
+        "the unread dot and the attachment glyph follow the wire; no claim draws neither",
+        content(full, inboxes).map { $0.unread == true && $0.hasAttachment } == true
+            && content(#","unread":false,"hasAttachment":false"#, inboxes).map {
+                $0.unread == false && !$0.hasAttachment
+            } == true
+            && content(#","unread":null,"hasAttachment":null"#, inboxes).map {
+                $0.unread == nil && !$0.hasAttachment
+            } == true))
+    results.append((
+        "mail opened here drops its dot before the next poll; no claim stays no claim",
+        content(full, inboxes, opened: ["e1"]).map { $0.unread == false } == true
+            && content(full, inboxes, opened: ["other"]).map { $0.unread == true } == true
+            && content("", inboxes, opened: ["e1"]).map { $0.unread == nil } == true))
+    results.append((
+        "a wrong shape is no claim, never a failed queue; an unknown provider still decodes",
+        content(#","source":"NAVER","unread":"yes","hasAttachment":3"#, inboxes).map {
+            !$0.showsAccount && $0.unread == nil && !$0.hasAttachment
+        } == true
+            && content(#","source":{"accountId":"x","label":"y"}"#, inboxes).map {
+                !$0.showsAccount
+            } == true
+            && content(#","source":{"provider":"PROTON","accountId":null,"label":"p@x.example"}"#, inboxes)
+                .map { $0.showsAccount && $0.provider == "PROTON" } == true
+            && content(#","source":{"provider":"GOOGLE"}"#, inboxes).map {
+                $0.showsAccount && $0.accountLabel == ""
+            } == true
+            && content(#","source":null"#, inboxes).map { !$0.showsAccount } == true))
+    results.append((
+        "an unknown provider draws the generic badge, never one it is not",
+        sourceMonogram(provider: "PROTON") == "@" && sourceMonogram(provider: "OUTLOOK") == "M"
+            && sourceMonogram(provider: nil) == "K"
+            && sourceName(provider: "PROTON") == L("source.generic")
+            && sourceName(provider: "outlook") == "Microsoft"
+            && sourceName(provider: "ICLOUD") == "iCloud"))
+
+    let account = sourceA11yLabel(provider: "NAVER", label: "you@naver.example")
+    results.append((
+        "a row says its unread state, lane, account, attachment and time, in that order",
+        content(full, inboxes).map { row in
+            var mixed = row
+            mixed.lane = .queue
+            mixed.time = "14:05"
+            return WindowRowRules.a11yLabel(mixed, lead: WindowRowRules.listLead(mixed))
+                == [
+                    L("mail.unread"), "dana@vendor.example", "renewal", "quote is attached",
+                    Tier.queue.label, account, L("mail.hasAttachment"), "14:05",
+                ].joined(separator: ", ")
+        } == true
+            && account == L("source.account.a11y", "Naver") + ", you@naver.example"
+            && sourceA11yLabel(provider: "GOOGLE", label: " ") == L("source.account.a11y", "Google")))
+    results.append((
+        "a plain row says who, what and when, and nothing it does not show",
+        content("", one).map { row in
+            var plain = row
+            plain.time = ""
+            return WindowRowRules.a11yLabel(plain, lead: "lead") == "lead"
+        } == true))
+    let hit = EmailSearchItem(
+        id: "s1", from: "Dana <dana@vendor.example>", subject: "Renewal", snippet: nil,
+        date: "2026-07-29T05:00:00.000Z", isRead: false, linkedInboxAccountId: "linked-1")
+    let hitContent = WindowRowRules.content(for: hit, inboxes: inboxes, now: now)
+    let hitLabel = WindowRowRules.a11yLabel(
+        hitContent, lead: L("mail.searchResult.a11y", hitContent.sender, hitContent.subject))
+    results.append((
+        "a search row says its account and its time again",
+        !hitContent.time.isEmpty && hitLabel.hasPrefix(L("mail.unread") + ", ")
+            && hitLabel.contains(account) && hitLabel.hasSuffix(", " + hitContent.time)
+            && WindowRowRules.content(for: hit, inboxes: inboxes, opened: ["s1"], now: now).unread
+                == false))
+    results.append((
+        "the account and attachment strings are localized",
+        ["mail.hasAttachment", "source.account.a11y", "source.generic"].allSatisfy { L($0) != $0 }
+            && !L("source.account.a11y", "x").contains("%")))
+    return results
 }
 
 private func tokenFixtureInboxes() -> [InboxOption] {

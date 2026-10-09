@@ -49,16 +49,30 @@ enum ReaderMetaRules {
     }
 }
 
-/// The reader header's meta line: the lane chip, then the neutral facts.
+/// The reader header's meta line: the lane chip, the account the mail is on
+/// (when there is more than one to tell apart), then the neutral facts.
 struct ReaderMetaLine: View {
+    @Environment(AppModel.self) private var model
     let item: FirewallItem
 
     var body: some View {
         let parts = ReaderMetaRules.parts(
             signal: item.email?.signal, replyState: item.email?.replyState,
             draftReady: item.email?.draftReady ?? false)
+        let source = WindowRowRules.showsAccounts(model.inboxes) ? item.email?.source : nil
         HStack(spacing: Theme.s2) {
             WindowLaneChip(tier: item.tier)
+            if let source {
+                HStack(spacing: Theme.s1) {
+                    SourceBadge(provider: source.provider, compact: true)
+                    Text(source.label)
+                        .font(Theme.Typo.caption).foregroundStyle(Theme.textDim)
+                        .lineLimit(1).truncationMode(.middle)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(
+                    sourceA11yLabel(provider: source.provider, label: source.label))
+            }
             if !parts.isEmpty {
                 Text(parts.joined(separator: " · "))
                     .font(Theme.Typo.caption).foregroundStyle(Theme.textDim)

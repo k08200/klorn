@@ -310,6 +310,10 @@ final class AppModel {
     /// every mail-list fetch is scoped by `selectedInbox` (doctrine: never
     /// assume the primary account).
     private(set) var inboxes: [InboxOption] = []
+    /// Mail opened in this session (EmailMessage ids). Opening marks it read
+    /// on the server, but the list only learns that on its next poll; rows
+    /// drop the unread dot from this set in the meantime.
+    private(set) var openedEmailIds: Set<String> = []
     /// Server-enabled login providers (GET /api/auth/providers, unauthed).
     /// Defaults to ["google"] so the UI works before/without the fetch.
     private(set) var loginProviders: [String] = ["google"]
@@ -831,6 +835,7 @@ final class AppModel {
             // write. Fire-and-forget: a failed mark-read must not blank the
             // reading pane the user already has.
             Task { try? await api.patch("/api/email/\(emailDbId)/read", json: [:]) }
+            openedEmailIds = openedEmailIds.union([emailDbId])
             loadMeetingContext(for: emailDbId, guardId: item.id)
             loadSenderDossier(for: emailDbId, guardId: item.id)
             loadThreadBrief(for: emailDbId, guardId: item.id)
@@ -1965,6 +1970,7 @@ final class AppModel {
             // Same contract as openItem: explicit PATCH write, never a GET
             // side effect; failures degrade to leaving the mail unread.
             Task { try? await api.patch("/api/email/\(hit.id)/read", json: [:]) }
+            openedEmailIds = openedEmailIds.union([hit.id])
         } catch _ where !isCurrent(session) {
             return
         } catch APIError.unauthorized {
@@ -2121,6 +2127,7 @@ final class AppModel {
         briefing = nil
         briefingStructure = nil
         inboxes = []
+        openedEmailIds = []
         selectedInbox = "all"
         UserDefaults.standard.removeObject(forKey: Self.selectedInboxKey)
         shownMeetingIds = []
