@@ -188,7 +188,7 @@ function LoginForm() {
         await login(email, password, hasNext ? nextPath : undefined);
         toast(t("auth.welcomeBack"), "success");
       } else {
-        await register(email, password, name || undefined, nextPath);
+        await register(email, password, name || undefined, hasNext ? nextPath : undefined);
         toast(t("auth.accountCreated"), "success");
       }
     } catch (err) {

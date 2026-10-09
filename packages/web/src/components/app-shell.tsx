@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useAuth } from "../lib/auth";
-import { LEGACY_HOME, TODAY_HOME, takeLegacyLanding } from "../lib/home";
+import { landingStep, TODAY_HOME, takeLegacyLanding } from "../lib/home";
 import { useT } from "../lib/i18n";
 import AssistantDock from "./assistant-dock";
 import BottomTabs from "./bottom-tabs";
@@ -65,13 +65,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   // UNIFIED_HOME: a visitor the root redirect (or the native sign-in) sent to
   // the legacy home before the server had answered is moved on to Today once
-  // it has. Only a marked landing moves — opening /inbox on purpose does not.
-  // Waits out "/" itself: the redirect away from it may still be in flight.
+  // it has. Only a marked landing moves — opening /inbox on purpose does not,
+  // and the mark is dropped as soon as the visitor is on any other route
+  // (see landingStep).
   const unifiedHome = user?.unifiedHome === true;
+  const userLoaded = user !== null;
   useEffect(() => {
-    if (!user || pathname === "/") return;
-    if (takeLegacyLanding() && unifiedHome && pathname === LEGACY_HOME) router.replace(TODAY_HOME);
-  }, [user, unifiedHome, pathname, router]);
+    const step = landingStep(pathname, userLoaded);
+    if (step === "wait") return;
+    const marked = takeLegacyLanding();
+    if (step === "resolve" && marked && unifiedHome) router.replace(TODAY_HOME);
+  }, [userLoaded, unifiedHome, pathname, router]);
 
   const showSidebar = !NO_SIDEBAR_ROUTES.includes(pathname) && isAppShellRoute(pathname);
   const sectionLabel = t(currentSectionLabelKey(pathname, user?.unifiedHome === true));

@@ -23,6 +23,17 @@ export function homePath(user: HomeFlag | null | undefined): string {
 }
 
 /**
+ * Where a sign-in or a registration lands: the page the visitor was sent
+ * from (`next`), or — with none — their home.
+ */
+export function signInDestination(
+  next: string | null | undefined,
+  user: HomeFlag | null | undefined,
+): string {
+  return next || homePath(user);
+}
+
+/**
  * Where "Assistant" leads. The hub is the next step (P7); until it ships the
  * destination is the approvals page, which still lives at `/inbox`.
  */
@@ -73,6 +84,34 @@ export function landingHome(): string {
     }
   }
   return home;
+}
+
+/**
+ * Forget what this device was told about home, on sign-out: the next person
+ * to sign in here starts from the legacy home until the server says otherwise.
+ */
+export function forgetHome(): void {
+  try {
+    window.localStorage.removeItem(HOME_HINT_KEY);
+    window.sessionStorage.removeItem(LEGACY_LANDING_KEY);
+  } catch {
+    // Storage unavailable: there was nothing stored to forget.
+  }
+}
+
+export type LandingStep = "wait" | "discard" | "resolve";
+
+/**
+ * What the app shell does with a marked landing on this route. The redirect
+ * away from `/` may still be in flight, so that route waits. Only `/inbox`
+ * can be the marked landing; any other route means the visitor went
+ * somewhere on purpose, so the mark is dropped unused. On `/inbox` the mark
+ * is resolved once the user (and with it the flag) has loaded.
+ */
+export function landingStep(pathname: string, userLoaded: boolean): LandingStep {
+  if (pathname === "/") return "wait";
+  if (pathname !== LEGACY_HOME) return "discard";
+  return userLoaded ? "resolve" : "wait";
 }
 
 /** Whether this visit was a marked landing on the legacy home; clears the mark. */

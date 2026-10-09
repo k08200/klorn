@@ -7,7 +7,7 @@
  */
 
 import type { InboxOption } from "@klorn/contract";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type CalendarEventWire,
   dayRangeInZone,
@@ -20,7 +20,18 @@ import {
   orderEvents,
 } from "../../../web/src/app/today/model";
 import { connectedAccounts } from "../../../web/src/lib/connected-accounts";
-import { assistantHref, homePath, LEGACY_HOME, TODAY_HOME } from "../../../web/src/lib/home";
+import {
+  assistantHref,
+  forgetHome,
+  homePath,
+  LEGACY_HOME,
+  landingHome,
+  landingStep,
+  rememberHome,
+  signInDestination,
+  TODAY_HOME,
+  takeLegacyLanding,
+} from "../../../web/src/lib/home";
 
 const inbox = (over: Partial<InboxOption>): InboxOption => ({
   id: null,
@@ -290,5 +301,111 @@ describe("event source", () => {
     expect(eventSourceProvider("DEVICE")).toBeNull();
     expect(eventSourceProvider("LOCAL")).toBeNull();
     expect(eventSourceProvider(undefined)).toBeNull();
+  });
+});
+
+describe("signInDestination", () => {
+  it("returns to the page the visitor came from, for sign-in and registration alike", () => {
+    expect(signInDestination("/email/abc", { unifiedHome: true })).toBe("/email/abc");
+    expect(signInDestination("/inbox", { unifiedHome: true })).toBe("/inbox");
+  });
+
+  it("lands on the user's home when there is no page to return to", () => {
+    expect(signInDestination(undefined, { unifiedHome: true })).toBe(TODAY_HOME);
+    expect(signInDestination(null, { unifiedHome: false })).toBe(LEGACY_HOME);
+    expect(signInDestination(undefined, {})).toBe(LEGACY_HOME);
+    expect(signInDestination("", null)).toBe(LEGACY_HOME);
+  });
+});
+
+describe("landingStep", () => {
+  it("waits on the root route, whose redirect may still be in flight", () => {
+    expect(landingStep("/", true)).toBe("wait");
+    expect(landingStep("/", false)).toBe("wait");
+  });
+
+  it("resolves only on the legacy home, and only once the user has loaded", () => {
+    expect(landingStep("/inbox", false)).toBe("wait");
+    expect(landingStep("/inbox", true)).toBe("resolve");
+  });
+
+  it("drops the mark on any other route, loaded or not", () => {
+    for (const path of ["/email", "/today", "/inbox/receipt", "/settings/accounts"]) {
+      expect(landingStep(path, false)).toBe("discard");
+      expect(landingStep(path, true)).toBe("discard");
+    }
+  });
+});
+
+describe("the home hint and the landing mark", () => {
+  const fakeStorage = () => {
+    const data = new Map<string, string>();
+    return {
+      getItem: (key: string) => data.get(key) ?? null,
+      setItem: (key: string, value: string) => void data.set(key, value),
+      removeItem: (key: string) => void data.delete(key),
+      keys: () => [...data.keys()],
+    };
+  };
+  let local: ReturnType<typeof fakeStorage>;
+  let session: ReturnType<typeof fakeStorage>;
+
+  beforeEach(() => {
+    local = fakeStorage();
+    session = fakeStorage();
+    vi.stubGlobal("window", { localStorage: local, sessionStorage: session });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("with the flag off nothing is kept, and the landing is the legacy home", () => {
+    rememberHome({ unifiedHome: false });
+    expect(local.keys()).toEqual([]);
+    expect(landingHome()).toBe(LEGACY_HOME);
+  });
+
+  it("marks a landing on the legacy home, once", () => {
+    expect(landingHome()).toBe(LEGACY_HOME);
+    expect(takeLegacyLanding()).toBe(true);
+    expect(takeLegacyLanding()).toBe(false);
+  });
+
+  it("lands on Today, unmarked, once the server has said so", () => {
+    rememberHome({ unifiedHome: true });
+    expect(landingHome()).toBe(TODAY_HOME);
+    expect(takeLegacyLanding()).toBe(false);
+  });
+
+  it("drops the hint when the server stops saying so", () => {
+    rememberHome({ unifiedHome: true });
+    rememberHome({ unifiedHome: false });
+    expect(landingHome()).toBe(LEGACY_HOME);
+  });
+
+  it("sign-out forgets both the hint and a pending mark", () => {
+    rememberHome({ unifiedHome: true });
+    session.setItem("klorn.legacyLanding", "1");
+    forgetHome();
+    expect(local.keys()).toEqual([]);
+    expect(session.keys()).toEqual([]);
+    expect(takeLegacyLanding()).toBe(false);
+  });
+
+  it("survives a browser with no usable storage", () => {
+    const broken = {
+      getItem: () => {
+        throw new Error("denied");
+      },
+      setItem: () => {
+        throw new Error("denied");
+      },
+      removeItem: () => {
+        throw new Error("denied");
+      },
+    };
+    vi.stubGlobal("window", { localStorage: broken, sessionStorage: broken });
+    expect(() => rememberHome({ unifiedHome: true })).not.toThrow();
+    expect(() => forgetHome()).not.toThrow();
+    expect(landingHome()).toBe(LEGACY_HOME);
+    expect(takeLegacyLanding()).toBe(false);
   });
 });

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { apiFetch, clearStoredAuthToken, getStoredAuthToken, setStoredAuthToken } from "./api";
 import { storedAttribution } from "./attribution";
-import { homePath, LEGACY_HOME, rememberHome } from "./home";
+import { forgetHome, homePath, LEGACY_HOME, rememberHome, signInDestination } from "./home";
 import { clearSensitiveStorage, revokeServerSession } from "./logout-cleanup";
 import { trackAppOpenOnce } from "./track";
 
@@ -59,7 +59,7 @@ interface AuthContextType {
   // Naver IMAP instead of Gmail is not bounced out of the app. null = unknown.
   hasMailSource: boolean | null;
   initSync: InitSyncState;
-  /** `redirectTo` omitted = the user's home (Today under UNIFIED_HOME). */
+  /** `redirectTo` omitted = the user's home (Today under UNIFIED_HOME); the same for register. */
   login: (email: string, password: string, redirectTo?: string) => Promise<void>;
   register: (email: string, password: string, name?: string, redirectTo?: string) => Promise<void>;
   loginWithToken: (token: string) => Promise<void>;
@@ -200,7 +200,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(data.user);
       setAuthError(null);
       rememberHome(data.user);
-      router.push(redirectTo ?? homePath(data.user));
+      router.push(signInDestination(redirectTo, data.user));
 
       // Trigger bootstrap sync. If Google is not connected yet, the card can show that clearly.
       runInitialSync(data.token);
@@ -209,7 +209,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const register = useCallback(
-    async (email: string, password: string, name?: string, redirectTo = "/onboarding") => {
+    async (email: string, password: string, name?: string, redirectTo?: string) => {
       const data = await apiFetch<{ token: string; user: User }>("/api/auth/register", {
         method: "POST",
         body: JSON.stringify({
@@ -226,7 +226,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setGoogleConnected(false);
       setGoogleNeedsReconnect(false);
       setHasMailSource(false); // fresh account — nothing attached yet
-      router.push(redirectTo);
+      rememberHome(data.user);
+      router.push(signInDestination(redirectTo, data.user));
     },
     [router],
   );
@@ -276,6 +277,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     revokeServerSession();
     clearStoredAuthToken();
     clearSensitiveStorage();
+    // UNIFIED_HOME: the home hint belongs to the session that is ending.
+    forgetHome();
     setToken(null);
     setUser(null);
     setAuthError(null);
