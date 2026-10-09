@@ -8,6 +8,7 @@ import InAppBrowserNotice from "../../../components/in-app-browser-notice";
 import { LinkedInboxesSection } from "../../../components/linked-inboxes-section";
 import { NaverImapSection } from "../../../components/naver-imap-section";
 import { OAuthErrorBanner } from "../../../components/oauth-error-banner";
+import { OnboardingReturn } from "../../../components/onboarding-return";
 import { OutlookInboxesSection } from "../../../components/outlook-inboxes-section";
 import { ListSkeleton } from "../../../components/skeleton";
 import { useToast } from "../../../components/toast";
@@ -157,6 +158,10 @@ export function AccountsSection() {
     <>
       <Suspense>
         <GoogleConnectRedirect />
+      </Suspense>
+      {/* ONBOARDING_V2: a connect the first run started returns there. */}
+      <Suspense>
+        <OnboardingReturn />
       </Suspense>
 
       {/* Integrations */}

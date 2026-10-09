@@ -1491,6 +1491,114 @@ const es: Record<string, string> = {
   "mailV2.reader.error.title": "No se pudo abrir este correo",
   "mailV2.reader.reconnectToArchive": "Vuelve a conectar esta cuenta para archivar correo.",
   "mailV2.reader.tone": "Tono y plantilla",
+  // Multi-provider first run (productization plan P8, ONBOARDING_V2)
+  "onboardingV2.steps.label": "Pasos de configuración",
+  "onboardingV2.steps.connect": "Cuentas",
+  "onboardingV2.steps.sync": "Sincronización",
+  "onboardingV2.steps.review": "Revisión",
+  "onboardingV2.steps.finish": "Listo",
+  "onboardingV2.steps.done": "completado",
+  "onboardingV2.continue": "Continuar",
+  "onboardingV2.retry": "Reintentar",
+  "onboardingV2.connect.title": "Trae tus cuentas",
+  "onboardingV2.connect.body":
+    "Ya iniciaste sesión en Klorn una vez. Ahora conecta cada cuenta de correo una sola vez y Klorn reunirá su correo en un solo lugar, ordenado por carril. Cada tarjeta indica qué aporta esa cuenta.",
+  "onboardingV2.connect.loading": "Cargando las cuentas que puedes conectar",
+  "onboardingV2.connect.loadError": "No se pudieron cargar las cuentas que puedes conectar.",
+  "onboardingV2.connect.lanesNote":
+    "Klorn ordena el correo en 5 carriles: PUSH, MEETING, QUEUE, INFO y SILENT. Un carril es una etiqueta. Ordenar nunca envía, archiva ni elimina correo.",
+  "onboardingV2.connect.skip": "Omitir por ahora",
+  "onboardingV2.connect.continueHint": "Conecta al menos una cuenta para continuar.",
+  "onboardingV2.connect.needsPlan": "Tu plan no incluye añadir esta cuenta.",
+  "onboardingV2.connect.failed":
+    "No se pudo iniciar la conexión. No se cambió nada. Inténtalo de nuevo.",
+  "onboardingV2.tile.connect": "Conectar",
+  "onboardingV2.tile.add": "Añadir otra cuenta",
+  "onboardingV2.tile.manage": "Gestionar",
+  "onboardingV2.tile.reconnect": "Reconectar",
+  "onboardingV2.tile.accountsLabel": "Cuentas de {provider} conectadas",
+  "onboardingV2.tile.google.scope": "Gmail y Google Calendar.",
+  "onboardingV2.tile.google.addNote":
+    "Una segunda cuenta de Google aporta su correo, no su calendario.",
+  "onboardingV2.tile.outlook.scope": "Correo de Outlook y Microsoft 365.",
+  "onboardingV2.tile.naver.scope": "Naver Mail, con una contraseña de aplicación.",
+  "onboardingV2.tile.icloud.scope": "iCloud Mail, con una contraseña específica de app.",
+  "onboardingV2.tile.readOnly":
+    "Por ahora solo lectura. Responde, archiva y marca como leído en la app del proveedor.",
+  "onboardingV2.health.connected": "Conectada",
+  "onboardingV2.health.syncing": "Sincronizando",
+  "onboardingV2.health.reconnect": "Hay que reconectar",
+  "onboardingV2.sheet.naver.title": "Conectar Naver Mail",
+  "onboardingV2.sheet.naver.body":
+    "Una conexión única. Naver pide una contraseña de aplicación creada para apps de correo, no tu contraseña de Naver. Klorn la guarda cifrada.",
+  "onboardingV2.sheet.icloud.title": "Conectar iCloud Mail",
+  "onboardingV2.sheet.icloud.body":
+    "Una conexión única. Apple pide una contraseña específica de app, no la contraseña de tu cuenta de Apple. Klorn la guarda cifrada.",
+  "onboardingV2.sheet.close": "Cerrar",
+  "onboardingV2.sheet.done": "Listo",
+  "onboardingV2.return.okTitle": "{provider} conectado.",
+  "onboardingV2.return.failTitle": "{provider} no se conectó.",
+  "onboardingV2.return.connected": "Añade otra cuenta o continúa.",
+  "onboardingV2.return.denied":
+    "Se rechazó el acceso en la página del proveedor. No se cambió nada.",
+  "onboardingV2.return.offline":
+    "Google no concedió acceso continuo, así que Klorn no puede seguir sincronizando. Conecta de nuevo y permite todos los permisos. Una cuenta de trabajo puede requerir que su administrador autorice Klorn.",
+  "onboardingV2.return.unverified": "La dirección de correo de esa cuenta no está verificada.",
+  "onboardingV2.return.self": "Esa es la cuenta que ya conectaste.",
+  "onboardingV2.return.limit": "Se alcanzó el límite de cuentas de tu plan.",
+  "onboardingV2.return.failed": "No se cambió nada. Puedes intentarlo de nuevo.",
+  "onboardingV2.return.dismiss": "Cerrar",
+  "onboardingV2.sync.title": "Leyendo tu correo",
+  "onboardingV2.sync.titleDone": "Tu correo ya está aquí",
+  "onboardingV2.sync.titleStatus": "Estado de tus cuentas",
+  "onboardingV2.sync.body":
+    "Klorn lee el correo reciente de cada cuenta y lo ordena en carriles. Las cifras de abajo son lo que ha llegado hasta ahora. El resto sigue llegando en segundo plano después de continuar.",
+  "onboardingV2.sync.bodyNoCounts":
+    "Todavía no hay recuento de mensajes para estas cuentas. El correo sigue llegando en segundo plano y puedes continuar.",
+  "onboardingV2.sync.summary": "{ready} de {total} cuentas ya no están en espera",
+  "onboardingV2.sync.counting": "Contando…",
+  "onboardingV2.sync.messages": "{count} mensajes",
+  "onboardingV2.sync.events": "{count} eventos",
+  "onboardingV2.sync.state.reading": "Leyendo correo",
+  "onboardingV2.sync.state.ready": "Lista",
+  "onboardingV2.sync.state.background":
+    "Conectada. Aún sin recuento; el correo llega en segundo plano.",
+  "onboardingV2.sync.state.attention": "Requiere atención",
+  "onboardingV2.sync.reconnect": "Reconectar",
+  "onboardingV2.sync.waitHint": "En unos segundos podrás continuar sin esperar.",
+  "onboardingV2.sync.continueEarly": "Continuar sin esperar",
+  "onboardingV2.sync.lanesTitle": "Ordenado hasta ahora",
+  "onboardingV2.sync.lanesNote":
+    "El correo que Klorn aún no ha ordenado se cuenta en QUEUE hasta entonces.",
+  "onboardingV2.review.title": "Revisa cómo ordena Klorn",
+  "onboardingV2.review.body":
+    "Estos son algunos de tus correos y el carril en el que cayó cada uno. Confirma o mueve uno con un toque. Klorn aprende de tus respuestas.",
+  "onboardingV2.review.loading": "Cargando algunos de tus correos",
+  "onboardingV2.review.loadError":
+    "No se pudo cargar tu correo para esta revisión. Puedes continuar; no se pierde nada.",
+  "onboardingV2.review.empty":
+    "Aún no se ha ordenado nada. Klorn sigue ordenando en segundo plano y podrás corregir un carril más tarde.",
+  "onboardingV2.review.note":
+    "Mover un correo solo cambia su carril. No se envía, archiva ni elimina nada.",
+  "onboardingV2.review.looksRight": "Está bien",
+  "onboardingV2.review.moveTo": "o mover a",
+  "onboardingV2.review.moveToLane": "Mover a {lane}",
+  "onboardingV2.review.keptIn": "Se queda en {lane}",
+  "onboardingV2.review.movedTo": "Movido a {lane}",
+  "onboardingV2.review.undo": "Deshacer",
+  "onboardingV2.review.unknownSender": "Remitente desconocido",
+  "onboardingV2.review.noSubject": "(sin asunto)",
+  "onboardingV2.finish.title": "Todo listo",
+  "onboardingV2.finish.bodyToday":
+    "Hoy muestra el correo de tus cuentas conectadas por carril, junto a tu calendario.",
+  "onboardingV2.finish.bodyLegacy":
+    "El correo de tus cuentas conectadas está ordenado por carril y listo para revisar.",
+  "onboardingV2.finish.accountsTitle": "Cuentas conectadas",
+  "onboardingV2.finish.briefingNote":
+    "Con los resúmenes activados llega uno al día. Puede que el primero aún no esté.",
+  "onboardingV2.finish.addAccount": "Añadir otra cuenta",
+  "onboardingV2.finish.openToday": "Abrir Hoy",
+  "onboardingV2.finish.openHome": "Abrir Klorn",
 };
 
 export default es;

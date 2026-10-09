@@ -1229,6 +1229,50 @@ describe("GET /api/auth/me", () => {
     await app.close();
   });
 
+  it("reports ONBOARDING_V2 as user.onboardingV2 on /me, login and register, false unless on", async () => {
+    const app = await buildApp();
+    const register = async (email: string) =>
+      (
+        await app.inject({
+          method: "POST",
+          url: "/api/auth/register",
+          payload: { email, password: "testpassword123" },
+        })
+      ).json();
+    const login = async () =>
+      (
+        await app.inject({
+          method: "POST",
+          url: "/api/auth/login",
+          payload: { email: "first-run@example.com", password: "testpassword123" },
+        })
+      ).json();
+
+    delete process.env.ONBOARDING_V2;
+    const registered = await register("first-run@example.com");
+    const me = async () =>
+      (
+        await app.inject({
+          method: "GET",
+          url: "/api/auth/me",
+          headers: authHeader(registered.token),
+        })
+      ).json().user.onboardingV2;
+    expect(registered.user.onboardingV2).toBe(false);
+    expect((await login()).user.onboardingV2).toBe(false);
+    expect(await me()).toBe(false);
+
+    process.env.ONBOARDING_V2 = "true";
+    try {
+      expect((await register("first-run-2@example.com")).user.onboardingV2).toBe(true);
+      expect((await login()).user.onboardingV2).toBe(true);
+      expect(await me()).toBe(true);
+    } finally {
+      delete process.env.ONBOARDING_V2;
+    }
+    await app.close();
+  });
+
   it("login carries user.unifiedHome so the first landing is the right home", async () => {
     const app = await buildApp();
     await registerAndGetToken(app, "landing@example.com");

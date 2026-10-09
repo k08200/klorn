@@ -1,16 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import {
-  type FirewallItem,
-  type FirewallResponse,
-  TIER_VISUAL,
-  type Tier,
-} from "../../components/firewall-board";
-import { apiFetch } from "../../lib/api";
+import { type FirewallItem, TIER_VISUAL, type Tier } from "../../components/firewall-board";
 import { useT } from "../../lib/i18n";
-import { captureClientError } from "../../lib/sentry";
 import { CORE_TIERS } from "../../lib/tiers";
+import { type Label, useFirewallEmails, useFirewallLabels } from "./use-firewall-emails";
 
 // Both lists are the five live lanes, loudest first: the user reviews
 // interrupts before the pile Klorn silenced, and can reassign to any lane the
@@ -21,13 +14,6 @@ import { CORE_TIERS } from "../../lib/tiers";
 const MOVE_TARGETS = CORE_TIERS;
 const GROUP_ORDER = CORE_TIERS;
 
-// Classification is fire-and-forget, so the freshly-synced emails trickle in as
-// each judge call returns. Poll a bounded number of times until the count holds.
-const MAX_POLLS = 8;
-const POLL_MS = 2000;
-
-type Label = { kind: "confirmed" | "corrected"; tier: Tier };
-
 /**
  * Onboarding step 3: show the user how Klorn classified their most-recent inbox
  * and let them confirm or correct a few. Every confirm/correct writes a
@@ -37,73 +23,8 @@ type Label = { kind: "confirmed" | "corrected"; tier: Tier };
  */
 export function ReviewStep({ onContinue }: { onContinue: () => void }) {
   const { t } = useT();
-  const [items, setItems] = useState<FirewallItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
-  const [labels, setLabels] = useState<Record<string, Label>>({});
-  const [pending, setPending] = useState<Record<string, boolean>>({});
-
-  useEffect(() => {
-    let cancelled = false;
-    let polls = 0;
-    let lastLen = -1;
-    let stableStreak = 0;
-    let timer: ReturnType<typeof setTimeout>;
-
-    const tick = async () => {
-      try {
-        const resp = await apiFetch<FirewallResponse>("/api/inbox/firewall/");
-        if (cancelled) return;
-        const emails = (Object.values(resp.tiers) as FirewallItem[][])
-          .flat()
-          .filter((it) => it.source === "EMAIL");
-        setItems(emails);
-        setLoading(false);
-        stableStreak = emails.length === lastLen ? stableStreak + 1 : 0;
-        lastLen = emails.length;
-      } catch (err) {
-        if (cancelled) return;
-        captureClientError(err);
-        setLoading(false);
-        setLoadError(true);
-        return; // stop polling on error
-      }
-      polls += 1;
-      const settled = lastLen > 0 && stableStreak >= 1;
-      if (!cancelled && polls < MAX_POLLS && !settled) {
-        timer = setTimeout(tick, POLL_MS);
-      }
-    };
-    timer = setTimeout(tick, 0);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, []);
-
-  const label = async (item: FirewallItem, action: "confirm" | Tier) => {
-    if (pending[item.id] || labels[item.id]) return;
-    setPending((p) => ({ ...p, [item.id]: true }));
-    try {
-      if (action === "confirm") {
-        await apiFetch(`/api/inbox/firewall/${item.id}/confirm`, {
-          method: "POST",
-          body: JSON.stringify({}),
-        });
-        setLabels((l) => ({ ...l, [item.id]: { kind: "confirmed", tier: item.tier } }));
-      } else {
-        await apiFetch(`/api/inbox/firewall/${item.id}`, {
-          method: "POST",
-          body: JSON.stringify({ tier: action }),
-        });
-        setLabels((l) => ({ ...l, [item.id]: { kind: "corrected", tier: action } }));
-      }
-    } catch (err) {
-      captureClientError(err);
-    } finally {
-      setPending((p) => ({ ...p, [item.id]: false }));
-    }
-  };
+  const { items, loading, loadError } = useFirewallEmails();
+  const { labels, pending, label } = useFirewallLabels();
 
   const reviewedCount = Object.keys(labels).length;
   // Group by ORIGINAL classification so a corrected card stays put (showing what
