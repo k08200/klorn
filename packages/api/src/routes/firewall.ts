@@ -20,10 +20,19 @@
  * poc-judge.
  */
 
-import type { FirewallItem, FirewallResponse } from "@klorn/contract";
-import type { FastifyInstance } from "fastify";
+import type {
+  FirewallItem,
+  FirewallResponse,
+  LaneOverrideByEmailResponse,
+  LaneOverrideErrorResponse,
+  LaneOverrideResponse,
+  LaneOverrideUndoResponse,
+  LiveTier,
+} from "@klorn/contract";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireAppAccess } from "../billing/entitlement-guard.js";
+import { keyboardTriageEnabled } from "../config.js";
 import { prisma } from "../db.js";
 import { dismissAttentionItem } from "../judge/attention-dismiss.js";
 import {
@@ -33,7 +42,13 @@ import {
   computeAttentionInputHash,
   registerHashMismatch,
 } from "../judge/attention-input-hash.js";
-import { confirmAttentionTier, overrideAttentionTier } from "../judge/attention-override.js";
+import {
+  type AttentionOverrideResult,
+  confirmAttentionTier,
+  findEmailAttentionItemId,
+  overrideAttentionTier,
+  undoAttentionOverride,
+} from "../judge/attention-override.js";
 import { snoozeAttentionItem } from "../judge/attention-snooze.js";
 import { getDecisionMetrics } from "../judge/decision-metrics.js";
 import { collapseEmailThreads } from "../judge/firewall-thread-collapse.js";
@@ -51,6 +66,7 @@ import { senderLabelsFor, type UserLabelCategory } from "../mail/sender-labels.j
 import { senderEmail } from "../notify/notification-format.js";
 import { getUserNotificationLanguage } from "../notify/notification-strings.js";
 import { captureError } from "../sentry.js";
+import { darkRouteGate } from "./dark-route-gate.js";
 
 // Tool args that carry a Gmail message id we can map back to a stored
 // EmailMessage row. Other tools (create_event, send_email, etc.) carry
@@ -78,6 +94,105 @@ const overrideBodySchema = {
       type: "string",
       enum: OVERRIDABLE_TIERS,
     },
+  },
+} as const;
+
+// The by-email override is new with KEYBOARD_TRIAGE, so it never offers the
+// retired AUTO lane the legacy body above still accepts.
+const LIVE_LANES = ["SILENT", "INFO", "QUEUE", "MEETING", "PUSH"] as const;
+// Compile-time completeness against the wire contract: a lane added to
+// LiveTier fails this line until LIVE_LANES names it.
+const _allLiveLanes: Record<LiveTier, (typeof LIVE_LANES)[number]> = {
+  SILENT: "SILENT",
+  INFO: "INFO",
+  QUEUE: "QUEUE",
+  MEETING: "MEETING",
+  PUSH: "PUSH",
+};
+void _allLiveLanes;
+
+const liveLaneBodySchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["tier"],
+  properties: { tier: { type: "string", enum: LIVE_LANES } },
+} as const;
+
+const undoBodySchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["undoToken"],
+  properties: { undoToken: { type: "string", minLength: 1, maxLength: 64 } },
+} as const;
+
+const idParamSchema = (name: string) =>
+  ({
+    type: "object",
+    required: [name],
+    properties: { [name]: { type: "string", minLength: 1, maxLength: 128 } },
+  }) as const;
+
+/** By-email override wire shape: the undo handle is there while the flag is on. */
+function overrideWire(
+  result: Extract<AttentionOverrideResult, { ok: true }>,
+): LaneOverrideResponse {
+  return result.undo
+    ? {
+        ok: true,
+        tier: result.tier,
+        undoToken: result.undo.token,
+        undoExpiresAt: result.undo.expiresAt,
+      }
+    : { ok: true, tier: result.tier };
+}
+
+// While KEYBOARD_TRIAGE is off the two new routes answer Fastify's own 404,
+// before auth and validation, so they cannot be told from an unknown route.
+const triageGate = darkRouteGate(keyboardTriageEnabled);
+
+// Fast keyboard triage is a few writes a second at most; this only stops a
+// scripted override/undo loop from churning the ledger.
+const LANE_WRITE_RATE_LIMIT = { max: 120, timeWindow: "1 minute" } as const;
+
+/**
+ * Per-USER limit for the two lane-write routes. The app-wide limiter keys on
+ * the client IP (index.ts), and so would a route `config.rateLimit`; a user
+ * behind a shared address must not spend other users' budget, and one user on
+ * many addresses must not multiply theirs. A route-level preHandler runs after
+ * the plugin's requireAuth, so the user id is known. No limiter without the
+ * rate-limit plugin (route tests). The app-wide per-IP limit (100/min) still
+ * applies on top of this one.
+ */
+function laneWriteLimiter(app: FastifyInstance) {
+  const limiter = app.hasDecorator("createRateLimit")
+    ? app.createRateLimit({
+        ...LANE_WRITE_RATE_LIMIT,
+        keyGenerator: (request: FastifyRequest) => `lane-write:user:${getUserId(request)}`,
+      })
+    : null;
+  return async function laneWriteLimit(request: FastifyRequest, reply: FastifyReply) {
+    if (!limiter || reply.sent) return;
+    const state = await limiter(request);
+    if (state.isAllowed || !state.isExceeded) return;
+    reply.header("retry-after", String(state.ttlInSeconds));
+    const body: LaneOverrideErrorResponse = {
+      ok: false,
+      code: "rate_limited",
+      message: "Too many lane changes. Try again shortly.",
+    };
+    return reply.code(429).send(body);
+  };
+}
+
+const OVERRIDE_CONFLICT_MESSAGE = "This mail changed while it was being moved. Try again.";
+
+const UNDO_REFUSALS = {
+  not_found: { status: 404, code: "not_found", message: "Attention item not found." },
+  expired: { status: 409, code: "undo_expired", message: "This move can no longer be undone." },
+  conflict: {
+    status: 409,
+    code: "undo_conflict",
+    message: "This mail was reclassified since; nothing was undone.",
   },
 } as const;
 
@@ -219,6 +334,7 @@ const firewallListQuerySchema = {
 } as const;
 
 export async function firewallRoutes(app: FastifyInstance) {
+  const laneWriteLimit = laneWriteLimiter(app);
   app.addHook("preHandler", requireAuth);
   // Usable free tier: the firewall graph/classification view is core, read-only
   // value — admit any non-hard-walled user (free included). No-op pre-launch.
@@ -839,6 +955,9 @@ export async function firewallRoutes(app: FastifyInstance) {
       const { id } = request.params;
       const { tier } = request.body;
 
+      // Not reversible: no client of this route (firewall board, onboarding
+      // review, desktop) reads an undo token. The undo lives on the by-email
+      // route the mail list and reader use.
       const result = await overrideAttentionTier(userId, id, tier);
       if (!result.ok) {
         reply.code(404);
@@ -846,6 +965,65 @@ export async function firewallRoutes(app: FastifyInstance) {
       }
 
       return { ok: true, tier: result.tier };
+    },
+  );
+
+  // POST /api/inbox/firewall/:id/undo — reverse the user's most recent manual
+  // override on this item (KEYBOARD_TRIAGE). Restores the lane and the learning
+  // state the override changed; see undoAttentionOverride for the invariants.
+  // Idempotent. 409 undo_expired / undo_conflict change nothing.
+  app.post<{ Params: { id: string }; Body: { undoToken: string } }>(
+    "/:id/undo",
+    {
+      onRequest: triageGate,
+      preHandler: laneWriteLimit,
+      schema: { params: idParamSchema("id"), body: undoBodySchema },
+    },
+    async (request, reply): Promise<LaneOverrideUndoResponse | LaneOverrideErrorResponse> => {
+      const result = await undoAttentionOverride(
+        getUserId(request),
+        request.params.id,
+        request.body.undoToken,
+      );
+      if (result.ok) return { ok: true, tier: result.tier, alreadyUndone: result.alreadyUndone };
+      const refusal = UNDO_REFUSALS[result.reason];
+      reply.code(refusal.status);
+      return { ok: false, code: refusal.code, message: refusal.message };
+    },
+  );
+
+  // POST /api/inbox/firewall/email/:emailId — the same manual override, keyed
+  // by the EmailMessage id the mail list and reader hold (KEYBOARD_TRIAGE). A
+  // lane move is a reclassification, never a mailbox action, so nothing here
+  // touches a provider: the item is found by the user's own email row, whichever
+  // inbox (primary or linked) it arrived in. Returns the attention item id the
+  // undo route needs.
+  app.post<{ Params: { emailId: string }; Body: { tier: (typeof LIVE_LANES)[number] } }>(
+    "/email/:emailId",
+    {
+      onRequest: triageGate,
+      preHandler: laneWriteLimit,
+      schema: { params: idParamSchema("emailId"), body: liveLaneBodySchema },
+    },
+    async (request, reply): Promise<LaneOverrideByEmailResponse | LaneOverrideErrorResponse> => {
+      const userId = getUserId(request);
+      const itemId = await findEmailAttentionItemId(userId, request.params.emailId);
+      const result = itemId
+        ? await overrideAttentionTier(userId, itemId, request.body.tier, { reversible: true })
+        : ({ ok: false, reason: "not_found" } as const);
+      if (!itemId || !result.ok) {
+        if (result.ok || result.reason === "not_found") {
+          reply.code(404);
+          return {
+            ok: false,
+            code: "not_found",
+            message: "This mail has not been classified yet.",
+          };
+        }
+        reply.code(409);
+        return { ok: false, code: "override_conflict", message: OVERRIDE_CONFLICT_MESSAGE };
+      }
+      return { ...overrideWire(result), itemId };
     },
   );
 

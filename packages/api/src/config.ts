@@ -224,6 +224,19 @@ export function deviceCalendarEnabled(): boolean {
     (process.env.DEVICE_CALENDAR_ENABLED ?? "").trim().toLowerCase(),
   );
 }
+// The drive: a metadata index of files across sources — step D2 of
+// docs/providers/unified-platform-plan.md. OFF by default (repo doctrine). While
+// off: every /api/drive route answers Fastify's default 404 (darkRouteGate), and
+// every reader hides every DriveFile row (drive/drive-scope.ts), whatever a
+// connector's own flag says. On, a row is visible only while its provider's
+// connector flag is on too (DRIVE_PROVIDER_ENABLED); D2 ships no connector, so
+// the list is empty until D3, D5 or D6 registers one. Read at request time
+// with the same lenient truthy parse, so a flip needs no redeploy.
+export function driveEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.DRIVE_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
 // IMAP flag actions (read, unread, star) for Naver and iCloud — step B1 of
 // docs/providers/unified-platform-plan.md. OFF by default (repo doctrine). While
 // OFF, mail/providers/dispatch.ts routes NAVER and ICLOUD to the unsupported
@@ -323,6 +336,21 @@ export function unifiedCalendarReadEnabled(): boolean {
     (process.env.UNIFIED_CALENDAR_READ_ENABLED ?? "").trim().toLowerCase(),
   );
 }
+// Keyboard triage (productization plan P4) — OFF by default (repo doctrine).
+// ONE flag for both halves: the web client learns it from GET /api/auth/me
+// (`user.keyboardTriage`) and turns on the hotkey registry, the `?` sheet and
+// the optimistic lane move with undo; the API turns on the reversible lane
+// override (the override records an undo snapshot and returns an undo token,
+// POST /api/inbox/firewall/:id/undo and POST /api/inbox/firewall/email/:emailId
+// exist). While OFF the override writes exactly what it wrote before, the two
+// new routes 404 like any unknown route, and /me reports false. Read at
+// request time with the same lenient truthy parse as the flags above, so a
+// flip needs no redeploy.
+export function keyboardTriageEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.KEYBOARD_TRIAGE ?? "").trim().toLowerCase(),
+  );
+}
 // MCP write tools — API key permission level and the MCP write set (steps A1
 // and A2a of docs/providers/unified-platform-plan.md). OFF by default (repo
 // doctrine). It gates minting a read-write API key, using one, the MCP-only
@@ -336,6 +364,25 @@ export function unifiedCalendarReadEnabled(): boolean {
 export function mcpWriteToolsEnabled(): boolean {
   return ["true", "1", "yes", "on"].includes(
     (process.env.MCP_WRITE_TOOLS_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
+// Object storage (step D1 of docs/providers/unified-platform-plan.md) — the
+// S3-compatible bucket behind the Klorn drive (D3), file summaries (D4) and
+// mailbox attachments (E4). OFF by default (repo doctrine). While OFF nothing in
+// storage/ loads the S3 client, builds one, reads the value of an
+// OBJECT_STORAGE_* variable or opens a connection, and the account purge does
+// not touch storage. While ON, the OBJECT_STORAGE_* variables are validated at
+// startup and on first use, and deleting an account (or its data) deletes that
+// user's objects FIRST and fails if it cannot. Do not turn it back OFF once
+// objects exist: a purge would then skip them. Startup warns ([STORAGE]) when
+// the flag is OFF and a bucket is still configured. Kill switches belong to the
+// features built on top (D3, E4). Read at request time
+// (PROVIDER_INBOX_SELECTOR_ENABLED precedent) with the same lenient truthy
+// parse. D1 ships no route and no UI, so the flag alone changes nothing a user
+// can see.
+export function objectStorageEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.OBJECT_STORAGE_ENABLED ?? "").trim().toLowerCase(),
   );
 }
 // Social LOGIN providers beyond Google (Sign in with Apple, Naver OAuth) —

@@ -3031,11 +3031,424 @@ does not wait for them.
 
 ### Workstream D — drive
 
-**D1 — object storage foundation** (*outline*). Depends on: FA-7. S3-compatible
-client, per-user key prefix, size caps, signed downloads. It may start early:
-E4 needs it before workstream D's turn comes.
-**D2 — drive model and provider seam** (*outline*). A metadata index of files
-across sources.
+**D1 — object storage foundation.** Depends on: FA-7 for the flip, not for the
+merge. Landed 2026-10-03 (branch `feat/object-storage`, PR not yet opened), flag
+OFF. Two independent reviews (code and security) came back the same day; their
+findings are folded into this entry. It started early because E4 needs it before
+workstream D's turn comes.
+- Context: nothing in the repo stored a file. `mail/email-attachments.ts` keeps
+  only extracted text (at most 24,000 characters per attachment) in Postgres.
+  D3, D4 and E4 need bytes somewhere, and L15 and P6 say where: Cloudflare R2,
+  through the S3 API so the vendor stays replaceable.
+- Tasks: a storage interface, one S3-compatible implementation, server-minted
+  keys with a per-user prefix, size and expiry limits, signed downloads, purge on
+  account deletion, a health check, and an in-memory fake with a contract suite.
+  No route, no schema change, no UI.
+- Landed (`packages/api/src/storage/`):
+  - Flag `OBJECT_STORAGE_ENABLED` (`objectStorageEnabled()` in `config.ts`,
+    lenient parse, read per call). Off: `storage/runtime.ts` never loads the S3
+    implementation or `aws4fetch` (a dynamic import, proven by
+    `storage-lazy-load.test.ts`), builds no client, reads the value of no
+    `OBJECT_STORAGE_*` variable and opens no connection, and the purge skips
+    storage (tested with mutations that remove each check). Everything outside
+    `storage/` reaches a store through `runtime.ts` (`getUserStorage()`,
+    `getObjectStore()`, both async and null while off). **D3, D4 and E4 stay on
+    `getUserStorage()`**: the raw store has no notion of who owns a key.
+  - Two layers. `ObjectStore` (`object-store.ts`) is the vendor seam:
+    `putObject(key, body, {contentType, size})`, `getObject(key)` (a stream, or
+    null), `headObject`, `deleteObject`, `deleteByPrefix(prefix, {signal})` (one
+    page per call, answers `{deleted, more}`), `signedDownloadUrl(key,
+    {expiresInSeconds, downloadName})` and `ping()`. `putObject` is for a fresh
+    key only. `UserStorage` (`user-storage.ts`) is what D3,
+    D4 and E4 call: every function takes the `userId`, an upload gets its key
+    minted there, and any other call refuses a key outside that user's prefix
+    before the store is touched (`key-not-owned`). The `userId` must come from
+    the session.
+  - Keys (`keys.ts`): `u/<userId>/<purpose>/<uuid>`. The purpose is an enum
+    (`drive`, `attachment`); the last segment is `randomUUID()`. Nothing a
+    client sends is a path segment: a display file name is metadata for a later
+    step's table, and reaches storage only as a signed query value. The grammar
+    is checked by the store itself on every call, so `..`, `%2F`, a query string
+    or a second bucket cannot ride in on a key. A user prefix always ends with
+    the slash, so user `abc` never covers `abcd`.
+  - Limits (`limits.ts`), each a named constant:
+    - `MAX_OBJECT_BYTES` 25 MiB, the only size the plan has decided (L14). It is
+      checked against the declared size before the upload and counted on the
+      stream during it (`guardBytes`): a stream that passes the cap, or does not
+      match its declared size, is aborted and nothing is stored. The chunk that
+      completes the declared size is held back until the stream has ended, so a
+      stream that delivers its declared size and then more never hands the
+      bucket a complete body. If an upload fails after a request went out, the
+      store also deletes the key (best effort): a bucket can commit an upload
+      whose answer was lost. A caller may pass a lower `maxBytes`; nothing
+      raises the cap. The drive's own number is
+      a flip-time decision (P3) and changes this constant in D3.
+    - Content type: normalised to `type/subtype`, and each caller passes a
+      `contentTypePolicy` (required, no default; `allowContentTypes`,
+      `denyContentTypes`, `allowAnyContentType`). D1 decides no policy.
+    - `MAX_SIGNED_URL_EXPIRY_SECONDS` 300. A longer request is refused, not
+      shortened.
+    - A signed download always carries `response-content-disposition:
+      attachment` with a cleaned name (`download-name.ts`: last path component
+      only, no quote, line break, control or bidi character, NFC, 120
+      characters, an ASCII fallback plus `filename*=UTF-8''…` for Korean names)
+      and `response-content-type: application/octet-stream`. A stored HTML or
+      SVG file therefore downloads; it never renders on the storage origin. An
+      inline preview is a separate decision for D3.
+    - The same two headers are also stored on the object at PUT
+      (`Content-Type: application/octet-stream`, `Content-Disposition:
+      attachment`), so a download is safe even from a vendor that ignores the
+      signed overrides. The caller's content type is kept as signed user
+      metadata (`x-amz-meta-content-type`, already normalised) and is what
+      `headObject` and `getObject` report.
+  - The S3 implementation (`s3-store.ts`): plain REST calls over Node's `fetch`,
+    signed with SigV4. Path-style addressing by default (R2, MinIO, Supabase
+    Storage, including an endpoint with a base path); virtual-hosted style when
+    `OBJECT_STORAGE_FORCE_PATH_STYLE=false` (AWS S3). Uploads are streamed with
+    a `Content-Length` and an unsigned payload, so TLS carries the integrity and
+    the endpoint must be https outside development and tests. Redirects are not
+    followed. Nothing is retried: a streamed body cannot be replayed and the
+    other calls are idempotent. `StorageError.retryable` tells the caller when a
+    second try may pass (no answer, 5xx, 429) and when it will not (4xx,
+    configuration, a limit). Timeouts are named (15 s for head, delete and
+    list; 120 s for one upload or download). A response body is never read
+    without a byte cap (4 MiB for a list, 16 KiB of an error body), and a body
+    that stalls becomes a `StorageError`. Host, bucket and credentials come
+    only from the operator's environment, so the SSRF pinning B4 needed for a
+    user-supplied host does not apply here.
+  - Deletion. `deleteByPrefix` accepts only `u/<userId>/` or
+    `u/<userId>/<purpose>/`, lists one page (at most 1,000 keys) and deletes
+    those keys one by one, eight at a time.
+    - It deletes every key that starts with the prefix, including one this code
+      did not mint (an older grammar, a purpose added and rolled back, a
+      console-made folder). Such keys are counted in one `[STORAGE]` warning,
+      never named. A stray key therefore cannot block a user's deletion.
+    - Each key is percent-encoded and the resulting URL is checked: decoded, its
+      path must be exactly the bucket path plus the key (`s3-address.ts`). A key
+      with a `..` or `.` segment fails that check, because a URL parser would
+      rewrite it onto another object. Such keys are left, and the call throws
+      `delete-incomplete` after deleting the rest.
+    - If the listing names any key outside the prefix, nothing is deleted.
+    - It stops at the first batch with a failed delete and throws
+      `delete-incomplete`. Going on against a failing bucket would cost one
+      15 s timeout per batch, about half an hour for a full page.
+    - `UserStorage.purgeUser` repeats pages until the prefix is empty, within
+      `PURGE_DEADLINE_MS` (45 s) and `PURGE_MAX_PAGES` (1,000). The deadline is
+      an `AbortSignal` handed to every page: at the deadline nothing new is
+      sent and a request in flight is dropped. The error is retryable and the
+      progress is kept.
+  - Purge wiring (`user-deletion.ts`). Both deletion paths now live there:
+    `deleteUserAndAllData` (the account goes: `DELETE /api/auth/account` and the
+    admin route) and `purgeAllUserData` (rows go, the account stays:
+    `DELETE /api/user/me/data`, moved out of `index.ts` unchanged). Each calls
+    `purgeUserObjects(userId)` first and outside the database transaction.
+    **Decision: the purge blocks on storage.** If the bucket is unreachable,
+    misconfigured or keeps an object, the call throws, no row is deleted, and
+    the request answers 500 through the existing error handler (logged and sent
+    to Sentry). The blocked purge is also reported on its own, tagged
+    `scope: storage.purge` with `storageCode` and `retryable`, so an alert can
+    be built on it (runbook below). The reason: the user id is the only handle on the objects. Once
+    the rows are gone, files left behind could never be found, and the request
+    would have answered "deleted" while they still existed. Deleting is
+    idempotent, so the person retries. The price: while the flag is on, a
+    storage outage also blocks account deletion.
+  - Health (`checkObjectStorageAtStartup`, called from `index.ts` after
+    `listen`). On: it validates the variables and lists one key, which needs
+    exactly the permission the purge needs. A bad config is reported by variable
+    NAME, a failing bucket by HTTP status and the vendor's error code
+    (`[STORAGE]` log lines and Sentry, `scope: storage.startup`). **It does not
+    stop the boot**: storage is auxiliary and mail must keep serving. Every
+    storage call then fails closed with `misconfigured` until it is fixed. Off:
+    it only checks whether the endpoint, bucket or key variables are set, and
+    warns by name if they are, because a purge would then skip objects that may
+    exist. No value is logged anywhere: the success line says only that the
+    check passed (an R2 host contains the account id), the vendor's error body
+    is never printed (only its `<Code>`), and the store keeps its credentials in
+    `#private` fields so logging the object prints nothing.
+  - Tests. `MemoryObjectStore` (`memory-store.ts`) implements the same interface
+    for D3, D4 and E4. One contract suite
+    (`__tests__/helpers/object-store-contract.ts`) runs against the fake,
+    against the S3 implementation over real HTTP to a local stand-in
+    (`fake-s3-server.ts`), and against a real bucket when
+    `OBJECT_STORAGE_TEST_*` is set (`storage-s3-real-bucket.test.ts`, skipped
+    by default with the variable names in the skip message). The stand-in
+    verifies every request with an independent SigV4 implementation
+    (`sigv4-reference.ts`) that is itself pinned to three signatures AWS
+    publishes in the S3 documentation.
+- Dependency decision: `aws4fetch` 1.0.20 (MIT, pinned exactly), measured
+  2026-10-03 with a clean `npm install` of each option:
+
+  | | `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner` 3.1146.0 | `aws4fetch` 1.0.20 |
+  |---|---|---|
+  | Packages installed | 27 | 1 (no dependencies) |
+  | Size on disk | 18.7 MB, 3,354 files | 84 kB, 10 files (one 11 kB module) |
+  | Last release | 2026-10-02, near-daily | 2024-08-28 |
+  | Streaming upload | yes; multipart needs a third package | yes: it signs, Node's `fetch` streams with `duplex: "half"` |
+  | Presigned GET | yes | yes (`signQuery`) |
+  | `npm audit` | 0 | 0 |
+
+  `aws4fetch` covers the whole interface, so the smaller one wins. What it
+  costs: the six REST calls and two small XML reads are our code (`s3-store.ts`,
+  `s3-xml.ts`), there is no multipart upload (one PUT holds 5 GB on S3, far
+  above the cap), and the library is slow-moving. It sits behind `ObjectStore`,
+  so replacing it touches one file. A hand-written signer was rejected: with no
+  bucket yet it could not be checked against a real vendor.
+  `pnpm audit --prod`: no known vulnerabilities.
+- Environment (`packages/api/.env.example`), all read only while the flag is on:
+  `OBJECT_STORAGE_ENABLED`, `OBJECT_STORAGE_ENDPOINT`, `OBJECT_STORAGE_REGION`
+  (`auto` on R2), `OBJECT_STORAGE_BUCKET`, `OBJECT_STORAGE_ACCESS_KEY_ID`,
+  `OBJECT_STORAGE_SECRET_ACCESS_KEY`, `OBJECT_STORAGE_FORCE_PATH_STYLE`
+  (optional, default true).
+- What FA-7 must provide: a Cloudflare R2 account; one private bucket for
+  production (and, ideally, a second one for the contract run); an R2 API token
+  with **Object Read & Write limited to that bucket**, nothing account-wide; the
+  S3 endpoint `https://<account id>.r2.cloudflarestorage.com`. No CORS rule and
+  no public access: a browser only ever follows a signed URL as a plain
+  download.
+- Not verified, and what closes each gap:
+  - No request has reached a real R2 bucket. Before the flip, run
+    `storage-s3-real-bucket.test.ts` against a test bucket. It covers what the
+    stand-in cannot: that R2 accepts the unsigned-payload streamed PUT, honours
+    `response-content-disposition` and `response-content-type` on a signed URL,
+    canonicalises the `filename*` value the same way, keeps `x-amz-meta-*` and
+    a stored `Content-Disposition`, and lets a bucket-scoped token list.
+  - A HEAD answer has no body, so `headObject` cannot tell a missing object from
+    a missing bucket. `ping` and every GET can.
+- Runbook: an account deletion is blocked by storage (flag on).
+  - What the person sees: "delete my account" or "delete my data" fails with a
+    500. Nothing was deleted from the database, and whatever objects were
+    already removed stay removed. Trying again is safe and carries on.
+  - What to check: Sentry events tagged `scope: storage.purge`, and the
+    `[STORAGE] purge blocked (<code>)` log line. The code says where to look:
+    - `misconfigured`: the line names the wrong `OBJECT_STORAGE_*` variables.
+    - `access-denied`: the token was revoked or lost object read and write on
+      the bucket.
+    - `bucket-not-found`: the bucket or the endpoint is wrong.
+    - `unreachable`, or `upstream` with a 5xx or 429: the vendor is down or
+      throttling (`retryable: true`). Check its status page.
+    - `delete-incomplete`, retryable: the 45 s deadline or a failed batch. A
+      retry continues. Not retryable: the prefix holds a key that cannot be
+      addressed over HTTP (a `..` or `.` segment).
+  - How to unblock: fix the variable or the token and have the person retry;
+    for an outage, retry when the vendor is back; for an unaddressable key,
+    delete `u/<userId>/` in the vendor's console, then retry.
+  - Last resort for a deletion that cannot wait: delete `u/<userId>/` in the
+    vendor's console yourself, turn the flag off, complete the deletion, turn
+    the flag back on. While it is off every other deletion skips storage too,
+    so keep that window short and check the startup warning is gone afterwards.
+- Before the flip:
+  - Do not turn the flag off again once objects exist: the purge would skip
+    them. Startup warns when the flag is off and a bucket is still configured.
+    Kill switches belong to the features built on top (D3, E4).
+- Left to D3, on purpose:
+  - A durable pending-purge record, so a blocked deletion is retried by the
+    system and not by the person. It needs a table, and D1 changes no schema.
+  - The upload race: an upload in flight while the account is being deleted can
+    land after the object purge and orphan an object. D3 needs a check at
+    upload time or a sweep over `u/` prefixes with no user row.
+  - The purge deletes one object per request. D3 revisits this (a batch delete
+    or a background job) once the drive's real volumes are known.
+  - D3 calls `getUserStorage()` and never the raw store.
+**D2 — drive model and provider seam.** Depends on: nothing. A metadata index
+of files across sources: one table, one writer, one read path, a provider seam
+with no connector behind it yet, and two read-only routes.
+- Landed 2026-10-03, flag OFF (branch `feat/drive-model`, PR not yet opened).
+  Flag: `DRIVE_ENABLED`, default OFF, read at request time. While off, both
+  routes answer Fastify's default 404 before authentication (`darkRouteGate`)
+  and every reader hides every row. Nothing writes a row in D2, so with the flag
+  on the list is still empty.
+- Model. Migration `20261009010000_drive_file`, additive only: one enum, one
+  table, `SET LOCAL lock_timeout = '5s'`. Its SQL is pinned by
+  `drive-file-migration.test.ts`, which also requires it to sort after
+  `20261007010000_linked_calendar_display_name` (the latest when it was
+  written), not directly after it.
+  - Enum `DriveProvider`: KLORN (D3, D7), GOOGLE (D5), ONEDRIVE (D6). There is
+    no DEVICE value: D7 imports a device's files into the Klorn drive, so those
+    rows are KLORN, and Postgres cannot remove an enum value once it exists.
+  - Table `DriveFile`, metadata only: `userId`, `provider`, `sourceKey`,
+    `externalId`, `name`, `mimeType`, `isFolder`, `sizeBytes`,
+    `parentExternalId`, `modifiedAt`, `webUrl`, `storageKey`, `etag`,
+    `trashed`, timestamps. No content column, no summary text, and no summary
+    state: D4 keeps that in a table of its own. The test pins the column list.
+  - Identity: unique (userId, provider, sourceKey, externalId). `sourceKey` is
+    `'klorn'` for the user's Klorn drive and the connector's account id for
+    GOOGLE and ONEDRIVE. `provider` and `sourceKey` have no default: the table
+    is new, so no previous release writes it and the compiler makes every
+    writer state both. `externalId` is required (a Klorn file gets the id D3
+    mints), so every row is addressable. The Prisma name of the unique is
+    `driveFileIdentity`, because the generated name is the one `CalendarEvent`
+    already has and the calendar guard greps for it.
+  - `parentExternalId` NULL means "no known parent row". That is the source's
+    root, OR a parent that was never indexed: a file picked through the Google
+    Picker under `drive.file` (P5) reports a parent the user never picked. It
+    does not mean "at the root", so a root listing for an external provider is
+    NOT `parentExternalId IS NULL`. D2 builds no tree API.
+  - `etag`: the source's own version of the file, opaque (a provider etag or
+    version, or a content fingerprint). D4, D5 and D6 compare it to see whether
+    a file changed. Never interpreted, never on the wire.
+  - Read-only is not a column. It follows from the provider: a KLORN file is
+    writable, every external file is read-only (V4). The reader derives it.
+  - Indexes: (userId, modifiedAt, id) for the list and the search, which read
+    one user's rows newest first, keyset-paged on (modifiedAt, id); and
+    (userId, provider, modifiedAt, id) for the same list narrowed to one
+    provider. On a scratch Postgres 16 with sequential scans disabled each plan
+    is an `Index Scan Backward` on its index.
+  - Three CHECK constraints Prisma cannot declare: `webUrl` is NULL or starts
+    with `https://`; `storageKey` is NULL unless the provider is KLORN;
+    `sizeBytes` is NULL or not negative. The drift check does not see them; the
+    migration test pins them.
+  - Row-level security, in the form every per-user table has
+    (`20260806033517_add_user_identity`): ENABLE, never FORCE, a
+    `DriveFile_tenant_isolation` policy on `app.current_user_id` and a
+    `DriveFile_system_bypass` policy on `app.bypass_rls`. The test compares the
+    three statements with that migration's. Inert while the app connects as a
+    role with BYPASSRLS (`../rls-rollout.md`).
+  - `sizeBytes` is BIGINT (a drive file passes 2 GiB). `JSON.stringify` refuses
+    a BigInt, so no route returns a raw row: the read path selects its columns
+    and maps the size to a number.
+  - Rows cascade on user delete (foreign key, verified on Postgres), and
+    `purgeUserData` deletes them explicitly, since it keeps the user row.
+- Decisions.
+  - Accounts: no account table in D2, and no reuse of `LinkedInboxAccount`,
+    `LinkedCalendarAccount` or `UserToken`. Those rows carry a mail or calendar
+    grant; a Drive grant is a different scope on the same identity (P5), and
+    unlinking a drive must not unlink an inbox. Their enums are per service, and
+    `UserToken`'s unique (userId, provider) is what the primary mail path rests
+    on. A `LinkedDriveAccount` table is the right shape, but with no connector
+    it would be a credential store with no writer, no reader and no test, and
+    its columns depend on D5's grant flow, which V2 still blocks. So D5 or D6,
+    whichever lands first, adds `LinkedDriveAccount` together with a nullable
+    `sourceAccountId` foreign key on `DriveFile` (ON DELETE CASCADE), as C2 did
+    for `CalendarEvent`, and the key-rotation sweep in the same PR. `sourceKey`
+    already holds that account's id, so no row is rewritten. This puts D5 and D6
+    on the shared-files row for `schema.prisma` (below).
+  - Parent, not path: Google Drive and Graph both report a parent id and
+    neither reports a stable path; a folder rename would rewrite the path of
+    every descendant; a name may contain `/`; and a path is many
+    attacker-written names joined into one unbounded string. A folder is a row
+    with `isFolder` true.
+  - Search: ILIKE through Prisma's `contains`, inside one user's rows, on the
+    name only. No pg_trgm: it needs an extension created in the migration,
+    whether its index helps a Korean name depends on the database's locale
+    (not measured), and one user's index is small. The text is composed (NFC, as
+    names are stored, so a name typed on a Mac and a search for it meet), capped
+    at 100 characters, and `%`, `_` and `\` are escaped, because Prisma sends
+    `contains` unescaped.
+- One writer: `drive/drive-rows.ts` (`klornDriveSource`, `connectedDriveSource`,
+  `driveRowData`, `upsertDriveFileRow`). The provider names live in
+  `drive/drive-providers.ts`, which imports nothing; a test pins them against
+  the Prisma enum.
+  - It cleans what a source reported before a row exists: the name loses
+    control characters and bidi overrides, is composed and capped at 500
+    characters; the link is kept only if it passes `safeHttpsLink` (https, no
+    credentials, at most 2048 characters) and never for a Klorn-held file; the
+    media type must be well formed; the size a whole non-negative number; the
+    etag a bounded string. A storage key on an external row is refused. A row
+    that cannot be stored is refused with the part at fault, never written
+    half-cleaned.
+  - An update is partial. A field the input leaves out is left as it is in the
+    row; a field it names is written, an explicit null included. A create needs
+    the name and the modified time and starts the rest from defaults. So a
+    rename cannot turn a folder into a file, move it, or bring it back from the
+    trash. The identity is never updated.
+  - `safeHttpsLink` is the rule `safeMeetingLink` always was, under a neutral
+    name in `safe-https-link.ts`; `pim/meeting-link.ts` aliases it, so meeting
+    links behave exactly as before.
+  - Nothing calls the writer yet.
+- Seam: `drive/providers/types.ts`, `dispatch.ts`, `unsupported.ts`, the shape
+  of `pim/calendar-providers`. `DriveProviderActions.connect(source)` answers a
+  `DriveProviderSession`, `null` (not connected) or `{ unsupported: true }`. A
+  session has exactly `list`, `search` and `getMetadata` (V4: no upload or
+  edit; a test fails if a method is added). It does not fetch a file's bytes:
+  D4 adds that method together with a streaming size check, since D4 is its
+  only caller. A reported file carries its `etag`. Every provider is the
+  unsupported stub in D2. A connector plugs in with two entries: its flag in
+  `DRIVE_PROVIDER_ENABLED` and its actions in the dispatcher's table; it is
+  served only while `DRIVE_ENABLED` and its own flag are both on.
+- Kill switch: `drive/drive-scope.ts`. `driveSourceScope()` is the `where`
+  fragment of every list and search, `isDriveRowVisible()` the check on a row
+  fetched by id. A row is visible only while `DRIVE_ENABLED` is on and its
+  provider's flag in `DRIVE_PROVIDER_ENABLED` answers exactly `true`. Unlike
+  the calendar's switch it fails closed: it lists the providers known to be on,
+  so a provider nobody registered is hidden. The registry ships empty.
+- Read path: `drive/drive-read.ts` (`listFiles`, `searchFiles`, `getFile`).
+  Every query names the user, composes the scope inside an `AND` (so a caller's
+  own provider filter cannot replace it), skips trashed rows, orders by
+  (modifiedAt, id) descending, and pages by keyset with a default of 50 and a
+  ceiling of 100 whatever is asked. The cursor is opaque and validated; a
+  forged one can only start elsewhere in the caller's own rows.
+- API, read-only (`routes/drive.ts`, types in `packages/contract/src/drive.ts`):
+  `GET /api/drive/files` (`q`, `provider`, `sourceKey`, `limit`, `cursor`) and
+  `GET /api/drive/files/:id`. Session-authenticated. Each is rate limited twice,
+  at 30 and 60 requests a minute: per client address before authentication, and
+  per user after it (`routes/rate-limit-hook.ts`). An unknown id, another
+  user's, a trashed file and a file of a disabled provider are one 404. No
+  storage key and no etag cross the wire. There is no upload, download or
+  delete route: those are D3.
+- Guards: `drive-file-guard.test.ts`. One writer; reads only in the read module
+  and the export; every list has the scope inside its `AND` and every by-id
+  read the visibility check; every read names the user and selects its
+  columns; an update writes only the changes; no raw SQL names the table. The
+  calendar guard exempts exactly the four drive files that name a `sourceKey`.
+- Untrusted text. A file name is written by whoever shared the file. No module
+  that holds drive rows imports the LLM today, and the guard fails for a new
+  one until it is listed: as not LLM-facing, or as LLM-facing with the pattern
+  that shows the name inside `wrapUntrusted`. D4 adds the first such entry.
+- Export: `GET /api/user/me/export` now carries `driveFiles`, every row the
+  user has (trashed and disabled-provider rows included, as calendar events
+  are), with the etag and without the storage key.
+- What plugs in, and what each step must do.
+  - D3 writes KLORN rows through `upsertDriveFileRow` with D1's object key as
+    `storageKey`, registers KLORN in `DRIVE_PROVIDER_ENABLED`, and adds the
+    upload, download and delete routes. It must delete a file's object before
+    its row, in `purgeUserData` too. Folder browsing in the Klorn drive is D3's:
+    it adds that query and its index.
+  - D4 keeps summary state and text in a table of its own, adds the byte fetch
+    to the seam with a streaming size check, compares `etag` to skip an
+    unchanged file, and is the first module the guard lists as LLM-facing.
+  - D5 and D6 implement `DriveProviderActions`, add `LinkedDriveAccount`, sync
+    metadata through `upsertDriveFileRow`, and register a flag each. Unlinking
+    deletes the account's rows. Two rules: a sync must verify that the
+    `sourceKey` it writes names an account of that user before it writes; and a
+    connector must never fetch a URL the provider supplied (a download link, a
+    thumbnail, a redirect) unless its host is on an allowlist of that
+    provider's own hosts.
+  - D7 writes KLORN rows (a device import lands in the Klorn drive). It needs a
+    trigram or prefix index on the name before the name search runs over many
+    rows.
+  - When the app role drops BYPASSRLS, the drive reads and the writer move to
+    `withTenant` (`db-tenant.ts`); until they do they would see no row.
+- Known limits.
+  - No connector, so no row and no data in the list.
+  - Name search only. A search reads one user's rows; that is bounded by the
+    rate limits and the page ceiling, not by an index.
+  - No tree API: no folder listing, and no root listing for an external source
+    (see `parentExternalId`).
+  - No row cap per source and no bound on the export: a connector sets its own
+    cap, as the device calendar did.
+  - `routes/device-calendar.ts` keeps its private copy of the hook that is now
+    `routes/rate-limit-hook.ts`.
+  - No user-facing noun and no copy in D2, so no vocabulary row. The first step
+    with UI adds it.
+- Verify: tests in eight files (migration, rows, scope, dispatch, read, routes,
+  guard, safe link), plus the `LIKE` cases in `fake-db.test.ts`. The fake
+  database's `startsWith` and `contains` now share one Postgres `LIKE` dialect
+  (backslash escapes) and are case-sensitive unless `mode` is insensitive; no
+  test that uses the fake changed its result.
+  Mutation checks: single-line changes to the drive modules (user scoping, the
+  kill switch, the page ceiling and tie-break, the search escape and cap, the
+  flag-off gate and its order, the writer's link and storage-key rules, the
+  partial update, both rate limits) and to the migration (each row-level
+  security statement, FORCE for ENABLE), each failing at least one test.
+  On a scratch Postgres 16 (not in the suite): `prisma migrate deploy`, the CI
+  drift check ("No difference detected"), each CHECK refusing a row, DEVICE
+  refused by the enum, the upsert's conflict target, a rename leaving a folder
+  a folder, the list order and paging across a five-row tie, the search with
+  `%`, `_`, `\` and a decomposed Korean query, an empty provider list as valid
+  SQL, a 5 GB size as a JSON number, the cascade on user delete, and the
+  policies: with a role that has no BYPASSRLS, no tenant set sees no row, a
+  tenant sees only its own, and the system setting sees all.
+- Rollback: revert the PR. The table and the enum can stay; nothing reads them.
 **D3 — Klorn drive** (*outline*). Depends on: D1, D2. Upload, list, download,
 delete. Upload is inherent here; V4 restricts external connectors, not
 Klorn-owned storage.
@@ -3098,7 +3511,8 @@ time, whatever the graph says. The later step rebases, reruns
 
 | File | Steps |
 |---|---|
-| `packages/api/prisma/schema.prisma` | A1, A2a, A2b, B2, C1, D2, E1, F |
+| `packages/api/prisma/schema.prisma` | A1, A2a, A2b, B2, C1, D2, D5, D6, E1, F |
+| `drive/drive-scope.ts`, `drive/drive-rows.ts`, `drive/providers/dispatch.ts`, `routes/drive.ts` | D3, D5, D6, D7 |
 | `packages/api/src/mcp/tool-gate.ts`, `mcp/write-call.ts`, `mcp/server.ts` | A2a, A2b, A4 |
 | `mail/providers/types.ts`, `dispatch.ts` | A4, B0, B0b, B1, B2, B3, E2 |
 | `mail/imap-connection.ts`, `mail/imap-sync.ts`, `mail/providers/imap.ts` | B1, B2, B3 |
@@ -3119,7 +3533,7 @@ time, whatever the graph says. The later step rebases, reruns
 | FA-4 | Add the MX record at Namecheap once L4 is confirmed and the address inventory (E0) is done | E1 |
 | FA-5 | Approve privacy policy and terms changes. Klorn becomes a mail and file host | E3, D3 |
 | FA-6 | Confirm whether hosting mail requires a value-added telecommunications filing in Korea. Unverified | E3 |
-| FA-7 | Create the object storage account | D1 |
+| FA-7 | Create the object storage account: Cloudflare R2, one private bucket, an API token with object read and write on that bucket only, and the S3 endpoint. No CORS rule (details in D1) | D1 flip |
 | FA-8 | Run the Samsung calendar probe on a Galaxy device and record the result here | C5 |
 | FA-9 | Azure app registration (existing action B). That action lists `Mail.*` permissions only; calendar and file permissions must be added for C4 and D6. For C4: add delegated `Calendars.Read` (and `User.Read` if it is not already listed); the calendar link requests exactly `openid email offline_access User.Read Calendars.Read`, reuses the existing redirect URI, and asks for no `Mail.*`. Existing inbox links keep their consent unchanged | B5, C4, D6 |
 

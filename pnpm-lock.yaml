@@ -63,6 +63,9 @@ importers:
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
+      aws4fetch:
+        specifier: 1.0.20
+        version: 1.0.20
       bcryptjs:
         specifier: ^3.0.3
         version: 3.0.3
@@ -1741,6 +1744,9 @@ packages:
 
   avvio@9.3.0:
     resolution: {integrity: sha512-g2tQ7LE7oOSqDfwEm3M+ZCMTJc7KiZCdJ4UwyZJb5ckTKyYu50OYmvv0mCFXPuYXoM4zkSt8zM9XQ9KCvxA74A==}
+
+  aws4fetch@1.0.20:
+    resolution: {integrity: sha512-/djoAN709iY65ETD6LKCtyyEI04XIBP5xVvfmNxsEP0uJB5tyaGBztSryRr4HqMStr9R06PisQE7m9zDTXKu6g==}
 
   axe-core@4.11.1:
     resolution: {integrity: sha512-BASOg+YwO2C+346x3LZOeoovTIoTrRqEsqMa6fmfAV0P+U9mFr9NsyOEpiYvFjbc64NMrSswhV50WdXzdb/Z5A==}
@@ -5752,6 +5758,8 @@ snapshots:
       '@fastify/error': 4.2.0
       fastq: 1.20.1
 
+  aws4fetch@1.0.20: {}
+
   axe-core@4.11.1: {}
 
   axios@1.20.0:
@@ -7071,6 +7079,7 @@ snapshots:
       - supports-color
 
   ical.js@2.2.1: {}
+
   iconv-lite@0.7.3:
     dependencies:
       safer-buffer: 2.1.2

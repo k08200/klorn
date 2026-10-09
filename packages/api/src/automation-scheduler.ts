@@ -28,6 +28,7 @@ import {
   AUTO_REPLY_LINKED_INBOX_ENABLED,
   attentionAgingEnabled,
   deviceCalendarEnabled,
+  keyboardTriageEnabled,
   linkedCalendarSyncEnabled,
   MULTI_INBOX_SYNC_ENABLED,
   SCHEDULER_CALENDAR_SYNC_INTERVAL_MS,
@@ -39,7 +40,10 @@ import {
 import { prisma } from "./db.js";
 import { withDbRetry } from "./db-retry.js";
 import { sweepAttentionAging } from "./judge/attention-aging.js";
-import { findOpenEmailAttentionItemId } from "./judge/attention-override.js";
+import {
+  findOpenEmailAttentionItemId,
+  sweepOverrideUndoSnapshots,
+} from "./judge/attention-override.js";
 import { sweepFallbackRejudge } from "./judge/fallback-rejudge.js";
 import {
   effectiveAutoReplyGuideline,
@@ -177,6 +181,7 @@ async function releaseSchedulerLock(): Promise<void> {
 const briefingSentToday = new Map<string, string>(); // userId -> date string
 let lastWatchRenewalAt = 0;
 let lastAttentionAgingAt = 0;
+let lastOverrideUndoSweepAt = 0;
 // Own constant on purpose: piggybacking WATCH_RENEWAL_INTERVAL_MS would let
 // a Gmail-quota retune silently change the aging cadence too.
 const ATTENTION_AGING_INTERVAL_MS = 60 * 60 * 1000;
@@ -873,6 +878,19 @@ async function runAutomations() {
           console.warn("[ATTENTION-AGING] sweep errored:", err);
           captureError(err, { tags: { scope: "automation.attention-aging" } });
         });
+    }
+
+    // Override-undo snapshots (KEYBOARD_TRIAGE, hourly): drop the ones older
+    // than a day. Dark while the flag is off, like everything else it gates.
+    if (
+      keyboardTriageEnabled() &&
+      Date.now() - lastOverrideUndoSweepAt >= ATTENTION_AGING_INTERVAL_MS
+    ) {
+      lastOverrideUndoSweepAt = Date.now();
+      sweepOverrideUndoSnapshots().catch((err) => {
+        console.warn("[OVERRIDE-UNDO] snapshot sweep errored:", err);
+        captureError(err, { tags: { scope: "automation.override-undo-sweep" } });
+      });
     }
 
     // --- Hourly: device calendar sources no device refreshes any more (C6, P4) ---

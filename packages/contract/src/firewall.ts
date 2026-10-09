@@ -127,3 +127,44 @@ export interface FirewallResponse {
   tiers: Record<Tier, FirewallItem[]>;
   summary: Record<Tier, number> & { total: number };
 }
+
+/**
+ * A manual lane override that can be undone. Only
+ * `POST /api/inbox/firewall/email/:emailId` returns the undo handle (the older
+ * `POST /api/inbox/firewall/:id` answers `{ ok, tier }` and is not reversible).
+ */
+export interface LaneOverrideResponse {
+  ok: true;
+  tier: Tier;
+  undoToken?: string;
+  /** ISO time after which the server refuses the undo. */
+  undoExpiresAt?: string;
+}
+
+/** `POST /api/inbox/firewall/email/:emailId` — the same override, keyed by email id. */
+export interface LaneOverrideByEmailResponse extends LaneOverrideResponse {
+  /** Attention item id: the `:id` of the undo route. */
+  itemId: string;
+}
+
+/**
+ * `POST /api/inbox/firewall/:id/undo` — `tier` is the lane restored (null when
+ * the mail had none). `alreadyUndone` marks a repeat of a completed undo.
+ */
+export interface LaneOverrideUndoResponse {
+  ok: true;
+  tier: LiveTier | null;
+  alreadyUndone: boolean;
+}
+
+/**
+ * Refusals of the two routes above. `undo_*` and `override_conflict` are HTTP
+ * 409 and change nothing; `override_conflict` means the row kept changing while
+ * the move was applied and the client may simply try again. `rate_limited` is
+ * HTTP 429 from the per-user lane-write limit.
+ */
+export interface LaneOverrideErrorResponse {
+  ok: false;
+  code: "not_found" | "undo_expired" | "undo_conflict" | "override_conflict" | "rate_limited";
+  message: string;
+}
