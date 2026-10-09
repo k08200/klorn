@@ -15,25 +15,40 @@ func windowSelfChecks(sourceDir: URL) -> [(String, Bool)] {
     let bools = [false, true]
 
     // MARK: compose window
-    check("flag off: the composer is never a window",
+    func step(flag: Bool, signedIn: Bool = true, show: Bool, visible: Bool) -> ComposeWindowRules.Step {
+        ComposeWindowRules.step(
+            macMainWindow: flag, signedIn: signedIn, showCompose: show, windowVisible: visible)
+    }
+    check("flag off: the composer is never shown as a window",
           !ComposeWindowRules.usesWindow(macMainWindow: false)
           && bools.allSatisfy { show in
               bools.allSatisfy { visible in
-                  ComposeWindowRules.step(
-                      macMainWindow: false, showCompose: show, windowVisible: visible) == .none
+                  bools.allSatisfy { step(flag: false, signedIn: $0, show: show, visible: visible) != .show }
               }
+          }
+          && bools.allSatisfy { step(flag: false, show: $0, visible: false) == .none })
+    check("turning the flag off closes an open compose window, so two composers never coexist",
+          bools.allSatisfy { step(flag: false, show: $0, visible: true) == .close })
+    check("signed out: the compose window closes and is never shown",
+          bools.allSatisfy { show in
+              step(flag: true, signedIn: false, show: show, visible: true) == .close
+                  && step(flag: true, signedIn: false, show: show, visible: false) == .none
           })
+    check("discarding asks first only when the draft has content",
+          !ComposeWindowRules.confirmsDiscard(to: "", subject: " ", body: "\n")
+          && ComposeWindowRules.confirmsDiscard(to: "a@b.example", subject: "", body: "")
+          && ComposeWindowRules.confirmsDiscard(to: "", subject: "", body: "x"))
     check("flag off: an open composer is the modal overlay, as before",
           ComposeWindowRules.overlayOpen(showCompose: true, macMainWindow: false)
           && !ComposeWindowRules.overlayOpen(showCompose: false, macMainWindow: false))
     check("flag on: the compose window is never a modal over the mail",
           bools.allSatisfy { !ComposeWindowRules.overlayOpen(showCompose: $0, macMainWindow: true) })
     check("flag on: asking for the composer shows it, also when it is already up",
-          ComposeWindowRules.step(macMainWindow: true, showCompose: true, windowVisible: false) == .show
-          && ComposeWindowRules.step(macMainWindow: true, showCompose: true, windowVisible: true) == .show)
+          step(flag: true, show: true, visible: false) == .show
+          && step(flag: true, show: true, visible: true) == .show)
     check("flag on: putting the composer away closes only a visible window",
-          ComposeWindowRules.step(macMainWindow: true, showCompose: false, windowVisible: true) == .close
-          && ComposeWindowRules.step(macMainWindow: true, showCompose: false, windowVisible: false) == .none)
+          step(flag: true, show: false, visible: true) == .close
+          && step(flag: true, show: false, visible: false) == .none)
     check("the compose window refuses to close mid-send",
           !ComposeWindowRules.mayClose(sending: true) && ComposeWindowRules.mayClose(sending: false))
     check("the compose window is a standard resizable window with a floor",
@@ -110,9 +125,32 @@ func windowSelfChecks(sourceDir: URL) -> [(String, Bool)] {
               }
           })
     check("a sheet attaches only to a window on screen; a pending one waits for it",
-          MainSheetRules.presented(active: .tierGuide, windowVisible: true) == .tierGuide
-          && MainSheetRules.presented(active: .tierGuide, windowVisible: false) == nil
-          && MainSheetRules.presented(active: nil, windowVisible: true) == nil)
+          MainSheetRules.presented(active: .tierGuide, windowVisible: true, miniaturized: false) == .tierGuide
+          && MainSheetRules.presented(active: .tierGuide, windowVisible: false, miniaturized: false) == nil
+          && MainSheetRules.presented(active: nil, windowVisible: true, miniaturized: false) == nil)
+    check("a miniaturized window still gets its sheet, so the surface is never blocked with nothing to dismiss",
+          MainSheet.allCases.allSatisfy {
+              MainSheetRules.presented(active: $0, windowVisible: false, miniaturized: true) == $0
+          })
+    check("flag on: only an attached sheet is a modal; a leftover flag on a closed window is not",
+          !MainSheetRules.modalOpen(macMainWindow: true, overlayModal: true, sheetAttached: false)
+          && MainSheetRules.modalOpen(macMainWindow: true, overlayModal: false, sheetAttached: true))
+    check("flag off: a modal is the overlays' flags, exactly as before",
+          bools.allSatisfy { attached in
+              bools.allSatisfy { overlay in
+                  MainSheetRules.modalOpen(
+                      macMainWindow: false, overlayModal: overlay, sheetAttached: attached) == overlay
+              }
+          })
+    // Only the compose window is open; the lane guide's flag is still set
+    // from a main window that has since been closed.
+    var leftover = composeKey
+    leftover.fullViewOpen = false
+    leftover.modalOpen = MainSheetRules.modalOpen(
+        macMainWindow: true, overlayModal: true, sheetAttached: false)
+    check("a leftover sheet flag never disables New Email, Find or Go",
+          [MenuCommand.compose, .find, .go(.inbox), .section(.mail)]
+              .allSatisfy { MenuRules.isEnabled($0, in: leftover) })
     var underSheet = composeKey
     underSheet.mailSurfaceIsKey = true
     underSheet.modalOpen = MainSheetRules.blocksSurface(
@@ -160,6 +198,30 @@ func windowSelfChecks(sourceDir: URL) -> [(String, Bool)] {
               model.discardComposeDraft()
               return model.composeTo.isEmpty && model.composeBody.isEmpty
           }())
+    // Sign-out: the draft belongs to the account that wrote it.
+    let leaving = AppModel(tokenStore: InMemoryTokenStore())
+    leaving.seedForPreview(firewallJSON: "", emailJSON: "", selectedItemId: nil)
+    leaving.composeTo = "a@b.example"
+    leaving.composeSubject = "s"
+    leaving.composeBody = "draft"
+    leaving.seedEditingDraftForCheck(gmailId: "g1", inbox: "li-1")
+    leaving.showCompose = true
+    var closes = 0
+    leaving.onComposePresentationChanged = { if !leaving.showCompose { closes += 1 } }
+    leaving.signOut()
+    check("sign-out discards the compose draft and the draft it was editing",
+          leaving.composeTo.isEmpty && leaving.composeSubject.isEmpty && leaving.composeBody.isEmpty
+          && leaving.composeError == nil
+          && leaving.editingDraftGmailId == nil && leaving.editingDraftInbox == nil)
+    check("sign-out puts the composer away and tells the compose window",
+          !leaving.showCompose && closes == 1 && leaving.phase == .signedOut)
+    check("flag off: a modal still follows the overlays' flags on the model",
+          !model.settings.macMainWindow ? {
+              model.showCompose = true
+              let open = model.fullViewModalOpen
+              model.showCompose = false
+              return open && !model.fullViewModalOpen
+          }() : true)
     model.showTierGuide = true
     model.beginNewEvent(at: Date(timeIntervalSince1970: 0))
     let top = model.activeMainSheet
@@ -179,6 +241,7 @@ func windowSelfChecks(sourceDir: URL) -> [(String, Bool)] {
             .filter { !$0.hasPrefix("SelfCheck") && text($0).contains(needle) }.sorted()
     }
     let fullView = text("FullView.swift")
+    let controller = text("ComposeWindow.swift")
     check("flag off: the bar's full view keeps its overlay layer and composer",
           fullView.contains("            FullViewModals()\n") && fullView.contains("            ComposePanel()\n")
           && fullView.contains(".disabled(model.showCompose || model.showTierGuide)"))
@@ -186,7 +249,7 @@ func windowSelfChecks(sourceDir: URL) -> [(String, Bool)] {
           users(of: "FullView" + "Modals()") == ["FullView.swift"])
     check("the composer is an overlay unless asked to be a window",
           text("Compose.swift").contains("var style: ComposeStyle = .overlay")
-          && users(of: "ComposePanel(style: " + ".window)")
+          && users(of: "ComposePanel(style: " + ".window")
               == ["ComposeWindow.swift", "PreviewRenderWindows.swift"])
     check("only the main window presents sheets, and only the app delegate owns the compose window",
           users(of: "MainSheet" + "Root(model:") == ["MainWindow.swift"]
@@ -201,13 +264,19 @@ func windowSelfChecks(sourceDir: URL) -> [(String, Bool)] {
                   + "                ensureFullView()"))
     check("send stays explicit: ⌘⏎ on the one Send button, in both styles",
           text("Compose.swift").components(separatedBy: ".keyboardShortcut(.return, modifiers: .command)").count == 2)
+    check("the window's Discard Draft goes through the confirming controller, Cancel as the default",
+          text("Compose.swift").contains("Button(L(\"compose.discard\"), action: onDiscard)")
+          && controller.contains("alert.addButton(withTitle: L(\"compose.cancel\"))\n"
+              + "        alert.addButton(withTitle: L(\"compose.discard\")).hasDestructiveAction = true"))
+    check("a sheet is re-synced when the main window comes back",
+          text("MainWindow.swift").contains("func windowDidDeminiaturize(_ notification: Notification) {\n        syncSheet()")
+          && text("MainWindow.swift").contains("model.mainWindowIsKey = true\n        // A sheet asked for"))
     check("in a window, Escape never discards the draft",
           text("Compose.swift").components(separatedBy: ".keyboardShortcut(.cancelAction)").count == 2)
     check("modal cards carry overlay chrome unless a sheet hosts them",
           text("MainSheets.swift").contains("static let defaultValue = ModalPresentation.overlay")
           && text("TierGuide.swift").components(separatedBy: ".modalCard(width:").count == 3
           && text("CalendarEditor.swift").contains(".modalCard(width: 440)"))
-    let controller = text("ComposeWindow.swift")
     check("the compose window owns its frame and is reused",
           controller.contains("host.sizingOptions = []") && controller.contains("isReleasedWhenClosed = false")
           && controller.contains("isRestorable = false")

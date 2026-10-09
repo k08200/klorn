@@ -526,6 +526,8 @@
 "appearance.toDark" = "Switch to dark mode";
 "compose.editDraft" = "Edit draft";
 "compose.discard" = "Discard Draft";
+"compose.discard.confirm.title" = "Discard this draft?";
+"compose.discard.confirm.detail" = "What you've written here will be lost.";
 "mailbox.loadMore" = "Load more";
 "chip.billing" = "Billing";
 

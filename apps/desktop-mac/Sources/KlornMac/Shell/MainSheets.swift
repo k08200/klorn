@@ -23,10 +23,19 @@ enum MainSheetRules {
         return nil
     }
 
-    /// The sheet the window should have attached now. A window that is not
-    /// on screen has none; the pending one is presented when it opens.
-    static func presented(active: MainSheet?, windowVisible: Bool) -> MainSheet? {
-        windowVisible ? active : nil
+    /// The sheet the window should have attached now. A closed window has
+    /// none (the pending one is presented when it opens); a miniaturized
+    /// window still exists, so its sheet is attached and waiting in the Dock.
+    static func presented(active: MainSheet?, windowVisible: Bool, miniaturized: Bool) -> MainSheet? {
+        windowVisible || miniaturized ? active : nil
+    }
+
+    /// Whether a modal covers the full view, for the menus and list keys.
+    /// Flag off: the bar's overlays, by their flags, as always. Flag on:
+    /// only a sheet actually attached to the open main window, so a flag
+    /// left set while that window is closed never disables ⌘N, Find or Go.
+    static func modalOpen(macMainWindow: Bool, overlayModal: Bool, sheetAttached: Bool) -> Bool {
+        macMainWindow ? sheetAttached : overlayModal
     }
 
     /// Whether the main window's keys and menus stand down: exactly while a

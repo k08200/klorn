@@ -173,6 +173,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         // Compose window (M5, same flag): the model's composer state drives it.
         let composeWindow = ComposeWindowController(model: model)
         model.onComposePresentationChanged = { [weak composeWindow] in composeWindow?.sync() }
+        // Switching the main window off puts an open compose window away
+        // (draft kept), so it can never sit beside the overlay composer.
+        model.settings.onMacMainWindowChanged = { [weak composeWindow] in composeWindow?.sync() }
         self.composeWindow = composeWindow
         // Menu-bar anchor while the pill is hidden (one-anchor rule): appears
         // when the pill's ✕ / Preferences hides the bar, disappears when the

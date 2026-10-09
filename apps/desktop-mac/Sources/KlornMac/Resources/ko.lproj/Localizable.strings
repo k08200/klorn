@@ -526,6 +526,8 @@
 "appearance.toDark" = "다크 모드로 전환";
 "compose.editDraft" = "임시보관 메일 편집";
 "compose.discard" = "초안 삭제";
+"compose.discard.confirm.title" = "이 초안을 삭제할까요?";
+"compose.discard.confirm.detail" = "여기에 작성한 내용이 사라집니다.";
 "mailbox.loadMore" = "더 보기";
 "chip.billing" = "청구·영수증";
 

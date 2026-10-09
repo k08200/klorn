@@ -98,13 +98,18 @@ With the main window on, the composer and the modal cards are native too
   stays readable and every menu and list key keeps working behind it.
   `⌘N` on an open composer brings it forward. There is still one draft,
   owned by the model. Closing the window (`⌘W`, the red button) keeps the
-  draft; *Discard Draft* clears it; `⌘⏎` sends; the window will not close
-  mid-send. While it is open Klorn stays a regular app, like the main
+  draft; *Discard Draft* clears it, asking first when there is something
+  to lose; `⌘⏎` sends; the window will not close mid-send. Signing out, or
+  switching the main window off, closes it. While it is open Klorn stays a regular app, like the main
   window. Message commands never act while the compose window is key.
 - **The lane guide, the event editor and the connect-time question** are
   sheets on the main window (`NSWindow.beginSheet`), one at a time in the
   old overlays' order. A sheet blocks the list keys and every menu command
-  exactly as the overlay did.
+  exactly as the overlay did, and only while it is attached: a sheet asked
+  for with the main window closed waits for the window and blocks nothing.
+
+Signing out discards the compose draft (and forgets the Gmail draft it was
+editing) in both modes, so the next account never inherits it.
 
 Not in the composer because the model and `POST /api/email/send` carry only
 to / subject / body: Cc, Bcc, attachments, recipient autocomplete, choosing
