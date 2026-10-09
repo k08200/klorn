@@ -670,3 +670,4 @@
 "today.approvals.none" = "No hay aprobaciones pendientes.";
 "today.ask.a11y" = "Preguntar al asistente";
 "today.signIn.restart" = "Empezar de nuevo";
+"a11y.position" = "%1$d de %2$d";

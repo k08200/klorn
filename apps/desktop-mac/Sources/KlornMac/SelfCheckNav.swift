@@ -225,8 +225,70 @@ func navSelfChecks(sourceDir: URL) -> [(String, Bool)] {
               model.mainNav.section == .calendar && model.listMode == .teams)
     }
 
+    // MARK: the Message menu never acts on a mail that is not on screen
+    check("reader: always there in the bar's full view, only in Mail in the main window",
+          NavSection.allCases.allSatisfy { NavRules.readerVisible(macMainWindow: false, section: $0) }
+          && NavRules.readerVisible(macMainWindow: true, section: .mail)
+          && [NavSection.today, .calendar, .assistant]
+              .allSatisfy { !NavRules.readerVisible(macMainWindow: true, section: $0) })
+    check("leaving Mail drops the selection in the main window, never in the bar",
+          [NavSection.today, .calendar, .assistant]
+              .allSatisfy { NavRules.clearsSelection(macMainWindow: true, section: $0) }
+          && !NavRules.clearsSelection(macMainWindow: true, section: .mail)
+          && NavSection.allCases
+              .allSatisfy { !NavRules.clearsSelection(macMainWindow: false, section: $0) })
+    do {
+        var onMail = MenuState(
+            signedIn: true, fullViewOpen: true, mailSurfaceIsKey: true, modalOpen: false,
+            targetTier: .queue, emailLoaded: true, readerReplying: false, teamModeAvailable: false,
+            listHasSearchField: true, readerVisible: true)
+        let messageCommands: [MenuCommand] = [.reply, .dismiss, .moveTo(.push), .moveTo(.silent)]
+        let liveInMail = messageCommands.allSatisfy { MenuRules.isEnabled($0, in: onMail) }
+        // The same mail still selected, but the window is on Today.
+        onMail.readerVisible = false
+        check("open mail, go to Today: Reply, Dismiss and lane moves are off",
+              liveInMail && messageCommands.allSatisfy { !MenuRules.isEnabled($0, in: onMail) })
+        check("off-screen reader: Compose, Go and the sections stay available",
+              MenuRules.isEnabled(.compose, in: onMail) && MenuRules.isEnabled(.go(.inbox), in: onMail)
+              && MenuRules.isEnabled(.section(.mail), in: onMail))
+    }
+    do {
+        let model = AppModel(tokenStore: InMemoryTokenStore())
+        func openMail() {
+            model.seedForPreview(firewallJSON: navCheckQueueJSON, emailJSON: "", selectedItemId: "q1")
+            model.go(to: .tier(.queue))
+            model.seedForPreview(firewallJSON: navCheckQueueJSON, emailJSON: "", selectedItemId: "q1")
+        }
+        openMail()
+        let targeted = model.menuTargetItem?.id == "q1" && model.mainNav.section == .mail
+        model.navigate(to: .today)
+        check("model: Mail to Today leaves no selection and no menu target",
+              targeted && model.selectedItemId == nil && model.menuTargetItem == nil)
+        openMail()
+        model.showAssistantPane(.briefing)
+        check("model: Mail to the briefing pane leaves no selection",
+              model.selectedItemId == nil && model.menuTargetItem == nil)
+        openMail()
+        model.navigate(to: .assistant)
+        check("model: Mail to Assistant leaves no selection",
+              model.selectedItemId == nil && model.menuTargetItem == nil)
+        openMail()
+        model.navigate(to: .mail)
+        check("model: staying in Mail keeps the open mail",
+              model.selectedItemId == "q1" && model.menuTargetItem?.id == "q1")
+        model.navigate(to: .today)
+        if let push = model.queue?.items(for: .push).first {
+            model.revealInMail(push)
+            check("model: a Today row brings Mail forward on a facet that lists it",
+                  model.mainNav.section == .mail && model.listMode == .tier(.push))
+        } else {
+            check("the menu fixture holds a Push item", false)
+        }
+    }
+
     check("new integer formats render",
-          [L("today.lane.more", 4), L("today.approvals.waiting", 4), L("today.lane.a11y", "x", 4)]
+          [L("today.lane.more", 4), L("today.approvals.waiting", 4), L("today.lane.a11y", "x", 4),
+           L("a11y.position", 4, 5)]
               .allSatisfy { $0.contains("4") && !$0.contains("%") })
     check("new string formats render",
           L("today.row.a11y", "x", "y").contains("x") && !L("today.row.a11y", "x", "y").contains("%"))
@@ -258,6 +320,32 @@ func navSelfChecks(sourceDir: URL) -> [(String, Bool)] {
     check("flag off: the model reveals mail in the window only behind the flag",
           text("TopBarController.swift")
               .contains("if model.settings.macMainWindow { model.revealInMail(item) }"))
+    // A deep link that writes the list mode (the pill's "awaiting approval"
+    // sets .proposals) leaves Mail through the didSet rule, behind the flag.
+    let modelSource = text("AppModel.swift")
+    check("a list-mode write that leaves Mail drops the selection, behind the flag",
+          modelSource.contains("macMainWindow: settings.macMainWindow, section: mainNav.section)")
+          && modelSource.contains("guard readerVisible else { return nil }"))
+    // Every listMode write moves the main window, so every writer must be
+    // user intent. A new writer has to be added here on purpose.
+    let assignment = "list" + "Mode = "
+    let binding = "$model.list" + "Mode"
+    var writers: [String: Int] = [:]
+    for file in files.map(\.lastPathComponent)
+    where !file.hasPrefix("SelfCheck") && !file.hasPrefix("PreviewRender") {
+        let count = text(file).split(separator: "\n").filter { line in
+            let code = line.trimmingCharacters(in: .whitespaces)
+            return !code.hasPrefix("//") && (code.contains(assignment) || code.contains(binding))
+        }.count
+        if count > 0 { writers[file] = count }
+    }
+    check("listMode has only its known, user-driven writers",
+          writers == [
+              "AppModel.swift": 2,  // go(to:), showTier(_:)
+              "TopBarController.swift": 1,  // onOpenProposals
+              "MainNav.swift": 2,  // revealInMail(_:), prepareMainNavigation()
+              "FullView.swift": 1,  // the bar sidebar's selection binding
+          ])
     let m4bFiles = [
         "MainNav.swift", "MainShell.swift", "NavSidebar.swift", "TodayRules.swift",
         "TodayScreen.swift", "TodayPanels.swift", "MailSection.swift", "CalendarSection.swift",

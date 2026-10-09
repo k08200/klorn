@@ -112,6 +112,10 @@ With `macMainWindow` on, Go is the sections instead: Today `⌘1`, Mail `⌘2`,
 Calendar `⌘3`, Assistant `⌘4`, then Approvals `⌘5` and, without a key,
 Commitments · Waiting on · Sent · Drafts · Archived · Teams (when granted).
 
+In the main window the reading pane exists only in Mail, so the Message
+items are off in Today, Calendar and Assistant, and leaving Mail drops the
+open mail's selection.
+
 Lane moves use `⌃⌘`, not bare digits: the reading pane binds bare `1`/`2`/`3`
 to its quick replies, and `⌃1`–`⌃5` are macOS's "Switch to Desktop N".
 Items disable when signed out or under a modal. Message items also need the

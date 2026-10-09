@@ -25,7 +25,8 @@ struct MailSection: View {
                     Rectangle().fill(Theme.line).frame(height: 1)
                     FullList(
                         mode: model.listMode, actions: actions, keyZone: $keyZone,
-                        keyCatcherInRender: false)
+                        keyCatcherInRender: false,
+                        hidesLaneTitle: NavRules.laneFilter(for: model.listMode) != nil)
                 }
                 .frame(width: NavRules.listColumnWidth)
                 Rectangle().fill(Theme.line).frame(width: 1)
@@ -42,9 +43,21 @@ struct MailSection: View {
 private struct LaneBar: View {
     @Environment(AppModel.self) private var model
 
+    private var selected: LaneFilter? { NavRules.laneFilter(for: model.listMode) }
+
+    /// What the list under the tab holds (the same rows FullList shows).
+    private func count(for filter: LaneFilter) -> Int? {
+        guard let queue = model.queue else { return nil }
+        return filter.tier.map { queue.items(for: $0).count } ?? queue.itemsByTime.count
+    }
+
     private var segments: [BarSegment<LaneFilter>] {
         LaneFilter.allCases.map { filter in
-            BarSegment(value: filter, title: filter.title, dot: filter.tier.map(Theme.tint))
+            // The lit tab carries the count the list title used to show.
+            BarSegment(
+                value: filter, title: filter.title,
+                count: filter == selected ? count(for: filter) : nil,
+                dot: filter.tier.map(Theme.tint))
         }
     }
 
@@ -52,7 +65,7 @@ private struct LaneBar: View {
         let silenced = NavRules.showsSilenced(model.listMode)
         HStack(spacing: Theme.s1) {
             SegmentedBar(
-                segments: segments, selection: NavRules.laneFilter(for: model.listMode),
+                segments: segments, selection: selected,
                 label: L("mail.lane.a11y"), onSelect: { model.showLane($0) })
             Spacer(minLength: 0)
             if Theme.isRenderingOffscreen {

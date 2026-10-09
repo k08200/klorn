@@ -670,3 +670,4 @@
 "today.approvals.none" = "没有待审批项。";
 "today.ask.a11y" = "询问助理";
 "today.signIn.restart" = "重新开始";
+"a11y.position" = "第 %1$d 项，共 %2$d 项";

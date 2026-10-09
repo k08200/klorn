@@ -670,3 +670,4 @@
 "today.approvals.none" = "No approvals waiting.";
 "today.ask.a11y" = "Ask the assistant";
 "today.signIn.restart" = "Start over";
+"a11y.position" = "%1$d of %2$d";

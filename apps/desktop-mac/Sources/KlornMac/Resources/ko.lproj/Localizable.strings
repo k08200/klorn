@@ -670,3 +670,4 @@
 "today.approvals.none" = "승인 대기 없음.";
 "today.ask.a11y" = "어시스턴트에게 물어보기";
 "today.signIn.restart" = "처음부터 다시";
+"a11y.position" = "%2$d개 중 %1$d번째";

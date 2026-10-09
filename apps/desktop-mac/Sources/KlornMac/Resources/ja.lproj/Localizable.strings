@@ -670,3 +670,4 @@
 "today.approvals.none" = "承認待ちはありません。";
 "today.ask.a11y" = "アシスタントに質問";
 "today.signIn.restart" = "最初からやり直す";
+"a11y.position" = "%2$d個中 %1$d番目";

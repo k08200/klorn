@@ -25,10 +25,12 @@ struct SegmentedBar<Value: Hashable>: View {
 
     var body: some View {
         HStack(spacing: Theme.s1) {
-            ForEach(segments) { segment in
+            ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
                 SegmentButton(
                     segment: segment, selected: segment.value == selection,
                     action: { onSelect(segment.value) })
+                    // "2 of 5": where the tab sits in its group.
+                    .accessibilityValue(L("a11y.position", index + 1, segments.count))
             }
         }
         .accessibilityElement(children: .contain)
@@ -68,6 +70,8 @@ private struct SegmentButton<Value: Hashable>: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
+        .accessibilityLabel(
+            segment.count.map { "\(segment.title), \($0)" } ?? segment.title)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }

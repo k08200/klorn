@@ -35,6 +35,9 @@ struct MenuState: Equatable {
     /// The list column currently shows the search field (Find needs no
     /// mode switch, so it can't unmount the reading pane).
     var listHasSearchField: Bool
+    /// A reading pane is on screen: always in the bar's full view, only in
+    /// Mail in the main window (M4b). Message commands need it.
+    var readerVisible: Bool
 
     @MainActor
     init(model: AppModel) {
@@ -47,12 +50,13 @@ struct MenuState: Equatable {
         readerReplying = model.readerReplying
         teamModeAvailable = model.teamModeAvailable
         listHasSearchField = model.listMode.hasSearchField
+        readerVisible = model.readerVisible
     }
 
     init(
         signedIn: Bool, fullViewOpen: Bool, mailSurfaceIsKey: Bool, modalOpen: Bool, targetTier: Tier?,
         emailLoaded: Bool, readerReplying: Bool, teamModeAvailable: Bool,
-        listHasSearchField: Bool
+        listHasSearchField: Bool, readerVisible: Bool = true
     ) {
         self.signedIn = signedIn
         self.fullViewOpen = fullViewOpen
@@ -63,6 +67,7 @@ struct MenuState: Equatable {
         self.readerReplying = readerReplying
         self.teamModeAvailable = teamModeAvailable
         self.listHasSearchField = listHasSearchField
+        self.readerVisible = readerVisible
     }
 }
 
@@ -89,7 +94,9 @@ enum MenuRules {
         // Message commands act on the mail visible in the reading pane, so
         // they need the full view up AND key (not Settings), no modal over
         // it, and a firewall item.
-        let canActOnMessage = s.fullViewOpen && s.mailSurfaceIsKey && !s.modalOpen && s.targetTier != nil
+        let canActOnMessage =
+            s.fullViewOpen && s.mailSurfaceIsKey && !s.modalOpen && s.targetTier != nil
+            && s.readerVisible
         // Anything that clears the selection or switches the list mode
         // unmounts the inline reply composer and loses what was typed, so
         // those commands wait until the composer is closed.

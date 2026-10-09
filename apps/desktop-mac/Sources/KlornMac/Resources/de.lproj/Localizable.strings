@@ -670,3 +670,4 @@
 "today.approvals.none" = "Keine Freigaben offen.";
 "today.ask.a11y" = "Den Assistenten fragen";
 "today.signIn.restart" = "Neu starten";
+"a11y.position" = "%1$d von %2$d";

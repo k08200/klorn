@@ -180,7 +180,10 @@ extension PreviewRender {
 
         let model = navModel(firewallJSON: navFirewallJSON)
         shot("today", model) { $0.navigate(to: .today) }
-        shot("mail-lanes", model) { $0.listMode = NavRules.defaultMailMode }
+        // Its own model: leaving Mail (the Today shot) drops the selection.
+        shot("mail-lanes", navModel(firewallJSON: navFirewallJSON)) {
+            $0.listMode = NavRules.defaultMailMode
+        }
         shot("calendar-full", model) { $0.listMode = .calendar }
         shot("assistant", model) { $0.showAssistantPane(.approvals) }
 

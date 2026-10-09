@@ -96,6 +96,9 @@ final class AppModel {
     /// Message menu acts on. nil while a Sent/Drafts/Archived row owns the
     /// pane (those rows are not firewall items).
     var menuTargetItem: FirewallItem? {
+        // In the main window the reader exists only in Mail (M4b): a mail
+        // that is not on screen is never a menu target.
+        guard readerVisible else { return nil }
         if listMode.showsLiveMessages, selectedMailboxItem != nil { return nil }
         guard let id = selectedItemId else { return nil }
         return queue?.item(id: id)
@@ -138,7 +141,26 @@ final class AppModel {
         // The main window (M4b) follows every write, same value included:
         // a deep link to the list mode already set must still bring its
         // section forward. Unused while `macMainWindow` is off.
-        didSet { mainNav = NavRules.following(listMode, from: mainNav) }
+        //
+        // Every write must therefore be USER INTENT (a click, a menu
+        // command, a deep link the user followed). A background writer
+        // (poll, realtime, restore) would yank the window to another
+        // section; the self-check pins the list of writers.
+        didSet {
+            mainNav = NavRules.following(listMode, from: mainNav)
+            // Leaving Mail takes the reader off screen; drop its selection
+            // so nothing invisible stays selected (main window only).
+            if NavRules.clearsSelection(
+                macMainWindow: settings.macMainWindow, section: mainNav.section)
+            {
+                clearSelection()
+            }
+        }
+    }
+    /// Whether a reading pane is on screen for the Message menu: always in
+    /// the bar's full view, only in Mail in the main window.
+    var readerVisible: Bool {
+        NavRules.readerVisible(macMainWindow: settings.macMainWindow, section: mainNav.section)
     }
     /// Where the main window is (M4b): section, Assistant pane, last mail facet.
     var mainNav = MainNav()

@@ -146,6 +146,18 @@ enum NavRules {
         return (defaultMailMode, nav)
     }
 
+    /// The main window shows the reader only in Mail; the bar's full view
+    /// (flag off) always has it.
+    static func readerVisible(macMainWindow: Bool, section: NavSection) -> Bool {
+        !macMainWindow || section == .mail
+    }
+
+    /// Whether arriving at `section` drops the reading-pane selection: only
+    /// in the main window, and only when the reader goes off screen.
+    static func clearsSelection(macMainWindow: Bool, section: NavSection) -> Bool {
+        !readerVisible(macMainWindow: macMainWindow, section: section)
+    }
+
     /// Mail's sidebar count: everything a lane segment can show. SILENT is
     /// never counted (it is never shown unasked).
     static func mailCount(_ count: (Tier) -> Int) -> Int {
@@ -194,12 +206,16 @@ extension AppModel {
         // After go(): the list mode's own follow rule must not win over an
         // explicit section pick (Today and briefing write no list mode).
         mainNav.section = section
+        // No list mode was written for Today or the briefing, so the
+        // didSet rule did not run: drop the off-screen selection here.
+        if section != .mail { clearSelection() }
     }
 
     func showAssistantPane(_ pane: AssistantPane) {
         if let mode = NavRules.listMode(for: pane), mode != listMode { go(to: mode) }
         mainNav.assistantPane = pane
         mainNav.section = .assistant
+        clearSelection()  // the reader is not on screen in Assistant
     }
 
     func showLane(_ filter: LaneFilter) {
@@ -217,6 +233,10 @@ extension AppModel {
     func prepareMainNavigation() {
         let start = NavRules.initial(listMode: listMode, nav: mainNav)
         guard start.mode != listMode else { return }
+        // Order matters: writing `listMode` runs its didSet, which moves
+        // `mainNav.section` to Mail. `mainNav` is assigned AFTER it, so the
+        // window still opens on Today with QUEUE waiting in Mail. Swapping
+        // the two lines opens the window on Mail.
         listMode = start.mode
         mainNav = start.nav
     }

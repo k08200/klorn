@@ -56,10 +56,12 @@ struct AssistantSection: View {
             if model.briefing != nil || model.briefingStructure != nil {
                 // The card is a button elsewhere (it opens the full view);
                 // here it is already the destination.
-                BriefingCard(briefing: model.briefing, structure: model.briefingStructure) {}
-                    .allowsHitTesting(false)
-                    .accessibilityRemoveTraits(.isButton)
-                    .padding(Theme.s4)
+                OffscreenFriendlyScroll {
+                    BriefingCard(briefing: model.briefing, structure: model.briefingStructure) {}
+                        .allowsHitTesting(false)
+                        .accessibilityRemoveTraits(.isButton)
+                        .padding(Theme.s4)
+                }
             } else {
                 EmptyState(icon: "sun.max", title: L("today.assistant.noBriefing"))
                     .padding(.top, Theme.s6 * 2)
