@@ -3,7 +3,13 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { useAuth } from "../lib/auth";
-import { assistantHref, TODAY_HOME } from "../lib/home";
+import {
+  ASSISTANT_ACTIVITY,
+  ASSISTANT_BRIEFING,
+  ASSISTANT_CHAT,
+  assistantHref,
+  TODAY_HOME,
+} from "../lib/home";
 import { hotkeyCaps, hotkeyRegistry, liveHotkeys } from "../lib/hotkeys";
 import { useT } from "../lib/i18n";
 import { useHotkeys, useKeyboardTriage } from "../lib/use-hotkeys";
@@ -89,6 +95,34 @@ export default function CommandPalette() {
         },
       ];
 
+  // UNIFIED_HOME: Briefing, Activity and Chat are pages of the Assistant hub.
+  const briefingCommands: Command[] = unifiedHome
+    ? [
+        {
+          id: "briefing",
+          label: t("keys.go.briefing"),
+          action: () => router.push(ASSISTANT_BRIEFING),
+        },
+        {
+          id: "activity",
+          label: t("assistantHub.palette.activity"),
+          action: () => router.push(ASSISTANT_ACTIVITY),
+        },
+        {
+          id: "assistant-chat",
+          label: t("assistantHub.palette.chat"),
+          action: () => router.push(ASSISTANT_CHAT),
+        },
+      ]
+    : [
+        {
+          id: "briefing",
+          label: "Open briefing",
+          sublabel: "Review today's work signals",
+          action: () => router.push("/briefing"),
+        },
+      ];
+
   const commands: Command[] = [
     ...homeCommands,
     {
@@ -103,12 +137,7 @@ export default function CommandPalette() {
       sublabel: "See meetings and prep context",
       action: () => router.push("/calendar"),
     },
-    {
-      id: "briefing",
-      label: "Open briefing",
-      sublabel: "Review today's work signals",
-      action: () => router.push("/briefing"),
-    },
+    ...briefingCommands,
     {
       id: "settings",
       label: "Open settings",

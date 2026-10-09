@@ -1,19 +1,9 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { apiFetch } from "../lib/api";
 import { useT } from "../lib/i18n";
-import { queryKeys } from "../lib/query-keys";
-import { captureClientError } from "../lib/sentry";
 import { formatRelativeIntl } from "../lib/text";
-import { useToast } from "./toast";
-
-interface PendingSender {
-  sender: string;
-  messageCount: number;
-  lastReceivedAt: string | null;
-}
+import { useScreener } from "../lib/use-screener";
 
 /** Rows shown before the list collapses behind "show all". */
 const VISIBLE_LIMIT = 5;
@@ -51,64 +41,8 @@ const VISIBLE_LIMIT = 5;
  */
 export default function ScreenerCard() {
   const { t, locale } = useT();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState(false);
-  // Per-sender, not a single flag: ruling on one row must not disable the rest.
-  const [deciding, setDeciding] = useState<Record<string, "ALLOW" | "BLOCK">>({});
-
-  // null = the surface is unavailable (flag off server-side) → render nothing.
-  // Any other failure resolves to an empty list, which also renders nothing:
-  // a first-contact prompt is an optional convenience, and an error box in its
-  // place would cost more attention than the feature saves.
-  const { data: pending } = useQuery({
-    queryKey: queryKeys.screener.pending(),
-    queryFn: async (): Promise<PendingSender[] | null> => {
-      try {
-        const res = await apiFetch<{ pending: PendingSender[] }>("/api/screener/pending");
-        return res.pending ?? [];
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (msg.startsWith("API 404")) return null;
-        captureClientError(err, { scope: "screener.pending" });
-        return [];
-      }
-    },
-  });
-
-  const decide = useMutation({
-    mutationFn: ({ sender, verdict }: { sender: string; verdict: "ALLOW" | "BLOCK" }) =>
-      apiFetch<{ ok: true }>("/api/screener/decision", {
-        method: "POST",
-        body: JSON.stringify({ sender, verdict }),
-      }),
-    onMutate: ({ sender, verdict }) => {
-      setDeciding((prev) => ({ ...prev, [sender]: verdict }));
-    },
-    onSuccess: (_data, { sender, verdict }) => {
-      // Drop just this row rather than refetching: the server list is windowed
-      // and re-derived per call, so a refetch here would reshuffle rows the
-      // user is still reading through.
-      queryClient.setQueryData<PendingSender[] | null>(queryKeys.screener.pending(), (prev) =>
-        prev ? prev.filter((p) => p.sender !== sender) : prev,
-      );
-      toast(
-        verdict === "ALLOW" ? t("screener.allowed", { sender }) : t("screener.blocked", { sender }),
-        "success",
-      );
-    },
-    onError: (err) => {
-      captureClientError(err, { scope: "screener.decision" });
-      toast(t("screener.failed"), "error");
-    },
-    onSettled: (_d, _e, { sender }) => {
-      setDeciding((prev) => {
-        const next = { ...prev };
-        delete next[sender];
-        return next;
-      });
-    },
-  });
+  const { pending, deciding, decide } = useScreener();
 
   if (!pending || pending.length === 0) return null;
 
@@ -156,7 +90,7 @@ export default function ScreenerCard() {
                 <button
                   type="button"
                   disabled={Boolean(busy)}
-                  onClick={() => decide.mutate({ sender: row.sender, verdict: "ALLOW" })}
+                  onClick={() => decide(row.sender, "ALLOW")}
                   className="focus-ring inline-flex min-h-11 items-center rounded-lg border border-line px-3 text-xs font-semibold text-ink transition hover:border-line-strong hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {busy === "ALLOW" ? t("screener.working") : t("screener.allow")}
@@ -164,7 +98,7 @@ export default function ScreenerCard() {
                 <button
                   type="button"
                   disabled={Boolean(busy)}
-                  onClick={() => decide.mutate({ sender: row.sender, verdict: "BLOCK" })}
+                  onClick={() => decide(row.sender, "BLOCK")}
                   className="focus-ring inline-flex min-h-11 items-center rounded-lg border border-state-danger-line px-3 text-xs font-semibold text-state-danger-ink transition hover:bg-state-danger-bg disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {busy === "BLOCK" ? t("screener.working") : t("screener.block")}

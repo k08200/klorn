@@ -19,7 +19,7 @@ separate decisions:
 |---|---|---|
 | `KEYBOARD_TRIAGE` | P4 | In code, default OFF |
 | `MAIL_V2` | P5 | In code, default OFF |
-| `UNIFIED_HOME` | P6 (Today), P7 (Assistant hub) | In code for P6, default OFF; P7 not built |
+| `UNIFIED_HOME` | P6 (Today), P7 (Assistant hub) | In code for P6 and P7, default OFF |
 | `macMainWindow` | P9 (M2–M8) | In code (desktop), default OFF |
 | `ONBOARDING_V2` | P8 | In code, default OFF |
 

@@ -9,6 +9,7 @@ import BriefingCard from "../../components/briefing-card";
 import CommandCenterSummary from "../../components/command-center-summary";
 import type { CommitmentItem } from "../../components/commitment-card";
 import { FirewallBoard } from "../../components/firewall-board";
+import { HubHandoff } from "../../components/hub-handoff";
 import PmfCard from "../../components/pmf-card";
 import { RejectReasonDialog } from "../../components/reject-reason-dialog";
 import ScreenerCard from "../../components/screener-card";
@@ -51,7 +52,9 @@ function parseView(raw: string | null): SegmentView {
 export default function InboxPage() {
   return (
     <AuthGuard>
-      <CommandCenterView />
+      <HubHandoff>
+        <CommandCenterView />
+      </HubHandoff>
     </AuthGuard>
   );
 }
@@ -379,11 +382,6 @@ function DecisionsBody({
   onSnooze: (id: string) => void;
 }) {
   const { t } = useT();
-  // UNIFIED_HOME (productization plan P6): this page is "Approvals" under
-  // Assistant, and Today is the home — so the home widgets that Today
-  // replaces (signal strip, command-center summary, quick links, PMF card)
-  // leave this surface. With the flag off everything renders as before.
-  const unified = useAuth().user?.unifiedHome === true;
   return (
     <>
       {/* MOBILE — purpose-built native screen (desktop layout untouched below) */}
@@ -394,7 +392,7 @@ function DecisionsBody({
             decision queue — mounting it only on desktop would hide the feature
             from half the surface. */}
         <ScreenerCard />
-        {!unified && <PmfCard />}
+        <PmfCard />
         <MobileDecisionQueue
           actions={actions}
           commitments={commitments}
@@ -418,7 +416,7 @@ function DecisionsBody({
         <header className="mb-4 flex items-start justify-between gap-4">
           <div className="min-w-0">
             <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-ink">
-              {unified ? t("nav.v2.approvals") : <Greeting />}
+              <Greeting />
             </h1>
             <p className="mt-2 text-sm text-ink-mid">
               <span className="text-ink-dim">{formatToday()}</span>
@@ -477,14 +475,12 @@ function DecisionsBody({
         {/* Real-data stat tiles — command-center density between the toolbar
             and the grid. Counts come from the queries already on this page
             (plus the shared reply-needed/summary caches); never estimated. */}
-        {!unified && (
-          <SignalStrip
-            pendingCount={pendingCount}
-            commitmentCount={commitments.length}
-            countsLoading={loading}
-            onPendingClick={() => setFilter("pending")}
-          />
-        )}
+        <SignalStrip
+          pendingCount={pendingCount}
+          commitmentCount={commitments.length}
+          countsLoading={loading}
+          onPendingClick={() => setFilter("pending")}
+        />
 
         {error && <ErrorAlert className="mb-4">{error}</ErrorAlert>}
 
@@ -555,15 +551,15 @@ function DecisionsBody({
             )}
 
             <ScreenerCard />
-            {!unified && <PmfCard />}
-            {!unified && <CommandCenterSummary />}
+            <PmfCard />
+            <CommandCenterSummary />
             <CommitmentsPanel commitments={commitments} />
           </section>
 
           <div className="space-y-4">
             {(loading || actions.length > 0) && <ReplyNeededPanel />}
             <BriefingCard />
-            {!unified && <QuickLinksPanel />}
+            <QuickLinksPanel />
           </div>
         </div>
       </div>

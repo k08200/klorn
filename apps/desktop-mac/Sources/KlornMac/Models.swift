@@ -135,6 +135,32 @@ func mailDomain(of address: String) -> String? {
 }
 
 /// Email enrichment for a firewall row (best-effort; fields may be nil).
+/// The connected account a mail arrived on (`email.source` on the firewall
+/// wire). `provider` stays a string: one this build does not know draws the
+/// generic badge instead of failing the decode.
+struct MailSource: Codable, Sendable, Hashable {
+    let provider: String
+    /// The linked inbox account id; nil = the primary account.
+    let accountId: String?
+    /// The account's address.
+    let label: String
+
+    enum CodingKeys: String, CodingKey { case provider, accountId, label }
+
+    init(provider: String, accountId: String?, label: String) {
+        self.provider = provider
+        self.accountId = accountId
+        self.label = label
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        provider = try c.decode(String.self, forKey: .provider)
+        accountId = try? c.decodeIfPresent(String.self, forKey: .accountId)
+        label = (try? c.decodeIfPresent(String.self, forKey: .label)) ?? ""
+    }
+}
+
 struct EmailContext: Codable, Sendable, Hashable {
     let emailDbId: String
     let subject: String?
@@ -157,9 +183,17 @@ struct EmailContext: Codable, Sendable, Hashable {
     /// A reply Klorn drafted ahead of time is waiting for this mail
     /// (proactive drafts — server flag, default off). False on older servers.
     let draftReady: Bool
+    /// The account the mail is on. Nil = the server makes no claim (an older
+    /// server, a removed account) or sent a shape this build cannot read.
+    let source: MailSource?
+    /// The mail's read flag; nil = no claim, and the row reserves no dot.
+    let unread: Bool?
+    /// The mail carries an attached file; nil = no claim.
+    let hasAttachment: Bool?
 
     enum CodingKeys: String, CodingKey {
         case emailDbId, subject, from, snippet, receivedAt, signal, replyState, draftReady
+        case source, unread, hasAttachment
     }
 
     init(from decoder: Decoder) throws {
@@ -171,6 +205,10 @@ struct EmailContext: Codable, Sendable, Hashable {
         receivedAt = try c.decodeIfPresent(String.self, forKey: .receivedAt)
         replyState = try? c.decodeIfPresent(String.self, forKey: .replyState)
         draftReady = (try? c.decodeIfPresent(Bool.self, forKey: .draftReady)) ?? false
+        // Tolerant like the rest: a wrong shape is "no claim", never a failed queue.
+        source = try? c.decodeIfPresent(MailSource.self, forKey: .source)
+        unread = try? c.decodeIfPresent(Bool.self, forKey: .unread)
+        hasAttachment = try? c.decodeIfPresent(Bool.self, forKey: .hasAttachment)
         if let nested = try? c.nestedContainer(
             keyedBy: RowSignal.CodingKeysImpl.self, forKey: .signal)
         {
@@ -196,7 +234,8 @@ struct EmailContext: Codable, Sendable, Hashable {
     init(
         emailDbId: String, subject: String?, from: String?, snippet: String?,
         receivedAt: String?, signal: RowSignal? = nil, signalByUser: Bool = false,
-        replyState: String? = nil, draftReady: Bool = false
+        replyState: String? = nil, draftReady: Bool = false,
+        source: MailSource? = nil, unread: Bool? = nil, hasAttachment: Bool? = nil
     ) {
         self.emailDbId = emailDbId
         self.subject = subject
@@ -207,6 +246,9 @@ struct EmailContext: Codable, Sendable, Hashable {
         self.signalByUser = signalByUser
         self.replyState = replyState
         self.draftReady = draftReady
+        self.source = source
+        self.unread = unread
+        self.hasAttachment = hasAttachment
     }
 }
 

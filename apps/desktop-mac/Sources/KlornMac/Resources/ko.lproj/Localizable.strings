@@ -65,6 +65,9 @@
 "mail.filterByInbox.a11y" = "수신함으로 거르기 — 현재 %@";
 "mail.inbox.a11y" = "수신함 %@";
 "mail.unread" = "읽지 않음";
+"mail.hasAttachment" = "첨부 파일 있음";
+"source.account.a11y" = "%@ 계정";
+"source.generic" = "메일";
 "mail.searchResult.a11y" = "%1$@ 님의 검색 결과: %2$@";
 "mail.noSubject" = "제목 없음";
 "mail.snooze" = "미루기…";

@@ -33,16 +33,81 @@ export function signInDestination(
   return next || homePath(user);
 }
 
-/**
- * Where "Assistant" leads. The hub is the next step (P7); until it ships the
- * destination is the approvals page, which still lives at `/inbox`.
- */
+/** The Assistant hub (productization plan P7). Dark while the flag is off. */
+export const ASSISTANT_HUB = "/assistant";
+export const ASSISTANT_APPROVALS = "/assistant/approvals";
+export const ASSISTANT_BRIEFING = "/assistant/briefing";
+export const ASSISTANT_ACTIVITY = "/assistant/activity";
+export const ASSISTANT_CHAT = "/assistant/chat";
+
+/** Where "Assistant" leads: the hub's first page, Approvals. */
 export function assistantHref(): string {
-  return LEGACY_HOME;
+  return ASSISTANT_APPROVALS;
 }
 
-/** Routes that belong to the Assistant section of the unified nav. */
-export const ASSISTANT_ROUTES = ["/inbox", "/briefing", "/chat"] as const;
+/**
+ * Routes that belong to the Assistant section of the unified nav. The legacy
+ * routes stay listed: each hands over to its hub page, and `/chat` is still a
+ * page of its own.
+ */
+export const ASSISTANT_ROUTES = [ASSISTANT_HUB, "/inbox", "/briefing", "/chat"] as const;
+
+/**
+ * Legacy route -> hub page, and back. Both are fixed tables looked up with
+ * Map.get, so a pathname can never pick a destination that is not listed here
+ * (an object index would also answer "constructor").
+ */
+const HUB_BY_LEGACY: ReadonlyMap<string, string> = new Map([
+  [LEGACY_HOME, ASSISTANT_APPROVALS],
+  ["/briefing", ASSISTANT_BRIEFING],
+  ["/inbox/receipt", ASSISTANT_ACTIVITY],
+]);
+
+/** FD-3: the lane view lives in Mail. */
+const MAIL_BY_LEGACY: ReadonlyMap<string, string> = new Map([["/inbox/firewall", "/email"]]);
+
+const LEGACY_BY_HUB: ReadonlyMap<string, string> = new Map([
+  [ASSISTANT_APPROVALS, LEGACY_HOME],
+  [ASSISTANT_BRIEFING, "/briefing"],
+  [ASSISTANT_ACTIVITY, "/inbox/receipt"],
+  [ASSISTANT_CHAT, "/chat"],
+]);
+
+function trimSlash(pathname: string): string {
+  return pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+}
+
+/** The query is carried over only in its own position: after one "?". */
+function withQuery(target: string, search: string): string {
+  return search.startsWith("?") && search.length > 1 ? `${target}${search}` : target;
+}
+
+/**
+ * With UNIFIED_HOME on: the hub page a legacy route hands over to, or null
+ * when the route is not one of the three that moved.
+ */
+export function hubRouteFor(
+  pathname: string,
+  search: string,
+  flags: { mailV2?: boolean } = {},
+): string | null {
+  const path = trimSlash(pathname);
+  const target = HUB_BY_LEGACY.get(path);
+  if (target !== undefined) return withQuery(target, search);
+  // The retired board's replacement is Mail's lane filter, which exists only
+  // with MAIL_V2; without it the board is still the only lane view. Its query
+  // means nothing to Mail, so it is not carried.
+  if (flags.mailV2 === true) return MAIL_BY_LEGACY.get(path) ?? null;
+  return null;
+}
+
+/**
+ * With UNIFIED_HOME off: the legacy route a hub page hands back to. Anything
+ * under the hub that is not a known page goes to the legacy home.
+ */
+export function legacyRouteFor(pathname: string, search: string): string {
+  return withQuery(LEGACY_BY_HUB.get(trimSlash(pathname)) ?? LEGACY_HOME, search);
+}
 
 /** Record what the server said, for the callers that route before it answers. */
 export function rememberHome(user: HomeFlag | null | undefined): void {
@@ -112,6 +177,18 @@ export function landingStep(pathname: string, userLoaded: boolean): LandingStep 
   if (pathname === "/") return "wait";
   if (pathname !== LEGACY_HOME) return "discard";
   return userLoaded ? "resolve" : "wait";
+}
+
+/**
+ * Whether a marked landing is still waiting to be resolved. The legacy home
+ * asks before handing over to the hub: a marked landing belongs to Today.
+ */
+export function hasLegacyLanding(): boolean {
+  try {
+    return window.sessionStorage.getItem(LEGACY_LANDING_KEY) === "1";
+  } catch {
+    return false;
+  }
 }
 
 /** Whether this visit was a marked landing on the legacy home; clears the mark. */
