@@ -23,6 +23,8 @@ export interface Segment<Id extends string> {
   count?: number;
   /** Full spoken name when the count needs words ("PUSH, 3 unread"). */
   ariaLabel?: string;
+  /** Hover text saying what the count is ("3 unread in PUSH"). */
+  title?: string;
 }
 
 interface SegmentedControlProps<Id extends string> {
@@ -93,6 +95,7 @@ export function SegmentedControl<Id extends string>({
             role="radio"
             aria-checked={checked}
             aria-label={segment.ariaLabel}
+            title={segment.title}
             tabIndex={index === tabStop ? 0 : -1}
             disabled={disabled}
             onClick={() => onChange(segment.id)}

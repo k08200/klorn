@@ -14,10 +14,18 @@ import {
   type ListView,
   laneSegments,
   listRequestPath,
+  rangeIds,
+  readerContextPath,
   readerQueue,
   rowAccount,
+  rowLane,
   senderName,
+  showsLaneChip,
+  viewTally,
 } from "../../../web/src/app/email/_v2/model";
+import { NO_LIST_CONTEXT, parseListContext } from "../../../web/src/app/email/_v2/reader-handoff";
+import { REMINDER_KEYS, reminderDate } from "../../../web/src/app/email/_v2/reminders";
+import { readerLeaveHref } from "../../../web/src/app/email/[id]/_v2/reader-model";
 
 const view = (overrides: Partial<ListView> = {}): ListView => ({
   lane: "QUEUE",
@@ -153,5 +161,118 @@ describe("row wording", () => {
     const now = new Date("2026-10-03T01:00:00Z");
     expect(formatRowTime("2026-10-02T16:30:00Z", now, "en-US", "Asia/Seoul")).toBe("1:30 AM");
     expect(formatRowTime("2026-10-02T16:30:00Z", now, "en-US", "UTC")).toBe("Fri");
+  });
+});
+
+describe("list polish (P5b)", () => {
+  it("rows carry a lane chip only where the view mixes lanes", () => {
+    for (const lane of ["PUSH", "MEETING", "QUEUE", "INFO"] as const) {
+      expect(showsLaneChip(view({ lane }))).toBe(false);
+    }
+    expect(showsLaneChip(view({ lane: "ALL" }))).toBe(true);
+    expect(showsLaneChip(view({ lane: "SILENT" }))).toBe(true);
+    expect(showsLaneChip(view({ lane: "QUEUE", search: " invoice " }))).toBe(true);
+    expect(showsLaneChip(view({ lane: "QUEUE", search: "   " }))).toBe(false);
+  });
+
+  it("a row whose lane differs from the selected one keeps its chip; no lane is never guessed", () => {
+    expect(rowLane(view({ lane: "QUEUE" }), "QUEUE")).toBeNull();
+    expect(rowLane(view({ lane: "QUEUE" }), "INFO")).toBe("INFO");
+    expect(rowLane(view({ lane: "ALL" }), "QUEUE")).toBe("QUEUE");
+    expect(rowLane(view({ lane: "ALL" }), null)).toBeNull();
+    expect(rowLane(view({ lane: "QUEUE" }), null)).toBeNull();
+  });
+
+  const counts = {
+    PUSH: { total: 4, unread: 1 },
+    MEETING: { total: 2, unread: 0 },
+    QUEUE: { total: 132, unread: 12 },
+    INFO: { total: 60, unread: 5 },
+    SILENT: { total: 9, unread: 9 },
+  };
+
+  it("the header tally is the list's own total plus the lane's unread", () => {
+    expect(viewTally(view({ lane: "QUEUE" }), counts, 132)).toEqual({ total: 132, unread: 12 });
+    expect(viewTally(view({ lane: "ALL" }), counts, 207)).toEqual({ total: 207, unread: 27 });
+  });
+
+  it("claims no unread count the lane counts cannot answer for", () => {
+    expect(viewTally(view({ filter: "attachments" }), counts, 7).unread).toBeNull();
+    expect(viewTally(view({ search: "invoice" }), counts, 3).unread).toBeNull();
+    expect(viewTally(view(), null, 132)).toEqual({ total: 132, unread: null });
+  });
+
+  it("a Shift-click selects the rows between the anchor and the target, either way round", () => {
+    const ids = ["a", "b", "c", "d", "e"];
+    expect(rangeIds(ids, "b", "d")).toEqual(["b", "c", "d"]);
+    expect(rangeIds(ids, "d", "b")).toEqual(["b", "c", "d"]);
+    expect(rangeIds(ids, "c", "c")).toEqual(["c"]);
+    // No anchor, or an anchor that left the list: just the clicked row.
+    expect(rangeIds(ids, null, "d")).toEqual(["d"]);
+    expect(rangeIds(ids, "gone", "d")).toEqual(["d"]);
+  });
+});
+
+describe("reader context (P5b)", () => {
+  it("asks for the neighbours of the view the mail was opened from", () => {
+    expect(readerContextPath("e1", view({ lane: "PUSH" }))).toBe(
+      "/api/email/e1/reader-context?tier=PUSH",
+    );
+    expect(
+      readerContextPath("e 1", view({ lane: "ALL", account: "linked-1", filter: "unread" })),
+    ).toBe("/api/email/e%201/reader-context?tier=ALL&inbox=linked-1&filter=unread");
+    expect(readerContextPath("e1", view({ search: " q4 plan " }))).toBe(
+      "/api/email/e1/reader-context?tier=QUEUE&search=q4+plan",
+    );
+  });
+
+  it("threads are not a lane page: the reader walks the lane itself", () => {
+    expect(readerContextPath("e1", view({ filter: "threads" }))).toBe(
+      "/api/email/e1/reader-context?tier=QUEUE",
+    );
+  });
+
+  it("a stored list context is validated field by field", () => {
+    expect(parseListContext(null)).toEqual(NO_LIST_CONTEXT);
+    expect(parseListContext("PUSH")).toEqual(NO_LIST_CONTEXT);
+    expect(
+      parseListContext({ lane: "INFO", account: "linked-1", filter: "unread", search: "x" }),
+    ).toEqual({ lane: "INFO", account: "linked-1", filter: "unread", search: "x" });
+    // A retired lane, an unknown filter and a non-string search fall back.
+    expect(parseListContext({ lane: "AUTO", account: 7, filter: "candidates", search: 5 })).toEqual(
+      NO_LIST_CONTEXT,
+    );
+    expect(NO_LIST_CONTEXT.lane).toBe("ALL");
+  });
+
+  it("leaving the reader: the next mail opens unread-preserving, or the list, with the undo offer", () => {
+    expect(readerLeaveHref("e2")).toBe("/email/e2?markRead=false");
+    expect(readerLeaveHref(null)).toBe("/email");
+    const undo = new URLSearchParams({ undoAction: "archive", undoGmailId: "g1" });
+    expect(readerLeaveHref("e2", undo)).toBe(
+      "/email/e2?undoAction=archive&undoGmailId=g1&markRead=false",
+    );
+    expect(readerLeaveHref(null, undo)).toBe("/email?undoAction=archive&undoGmailId=g1");
+    // The carried params are not mutated.
+    expect(undo.has("markRead")).toBe(false);
+  });
+});
+
+describe("reminders (P5b)", () => {
+  const now = new Date(2026, 9, 8, 15, 30, 0, 0);
+
+  it("offers later today, tomorrow and next week", () => {
+    expect(REMINDER_KEYS).toEqual(["later-today", "tomorrow", "next-week"]);
+  });
+
+  it("later today is four hours on; the others are 09:00 local", () => {
+    expect(reminderDate("later-today", now)).toEqual(new Date(2026, 9, 8, 19, 30, 0, 0));
+    expect(reminderDate("tomorrow", now)).toEqual(new Date(2026, 9, 9, 9, 0, 0, 0));
+    expect(reminderDate("next-week", now)).toEqual(new Date(2026, 9, 15, 9, 0, 0, 0));
+  });
+
+  it("does not mutate the time it was given", () => {
+    reminderDate("next-week", now);
+    expect(now).toEqual(new Date(2026, 9, 8, 15, 30, 0, 0));
   });
 });

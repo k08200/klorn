@@ -7,7 +7,13 @@
  * LaneChip (or a neutral "Sorting…" while the judge has not assigned a lane),
  * SourceBadge, unread dot, attachment glyph. Needs-reply, priority,
  * category, candidate and the reason are not on the row; they belong to the
- * reader header.
+ * reader header. Inside one lane the chip would repeat the selected segment on
+ * every row, so it shows only where the view mixes lanes (model.rowLane).
+ *
+ * A row's controls are siblings of its link, never inside it: a select
+ * checkbox over the unread dot (hover / focus, or pinned while a selection is
+ * in progress; Shift extends the range) and the trailing actions — remind,
+ * read state, archive.
  */
 
 import type { EmailListItem, EmailThreadRow } from "@klorn/contract";
@@ -15,10 +21,11 @@ import { useEffect, useRef } from "react";
 import Button from "../../../components/ui/button";
 import EmptyState from "../../../components/ui/empty-state";
 import { MailRow } from "../../../components/ui/mail-row";
+import { Menu } from "../../../components/ui/menu";
 import { MailRowSkeleton, SkeletonGroup } from "../../../components/ui/skeleton";
 import { useT } from "../../../lib/i18n";
 import { TRIAGE_ROW_ATTR } from "../use-list-triage";
-import { ArchiveIcon, InboxIcon, ReadIcon, UnreadIcon } from "./icons";
+import { ArchiveIcon, ClockIcon, InboxIcon, ReadIcon, UnreadIcon } from "./icons";
 import {
   type AccountOption,
   formatRowTime,
@@ -27,8 +34,10 @@ import {
   type ListView,
   readerQueue,
   rowAccount,
+  rowLane,
   senderName,
 } from "./model";
+import { REMINDER_KEYS, REMINDER_LABEL_KEYS, type ReminderKey } from "./reminders";
 
 const SKELETON_ROWS = ["a", "b", "c", "d", "e", "f", "g", "h"];
 /** Start loading the next page this far before the end scrolls into view. */
@@ -56,39 +65,99 @@ interface MailRowsProps {
   busy: boolean;
   onArchive: (email: EmailListItem) => void;
   onSetRead: (email: EmailListItem, isRead: boolean) => void;
+  onRemind: (email: EmailListItem, key: ReminderKey) => void;
+  /** Toggle a row's selection; `range` extends it from the last toggled row. */
+  onPick: (email: EmailListItem, range: boolean) => void;
+}
+
+interface RowPickProps {
+  label: string;
+  picked: boolean;
+  onPick: (range: boolean) => void;
+}
+
+/**
+ * The select control. The label is the hit area (the row's full height, 36px
+ * wide with a mouse and 44px on touch); the native checkbox inside it carries
+ * the state and the name. Shift is read from the click behind the change,
+ * which a keyboard toggle (Space) reports as unset.
+ */
+function RowPick({ label, picked, onPick }: RowPickProps) {
+  return (
+    <label className="flex h-full w-9 cursor-pointer items-center pl-1.5 pointer-coarse:w-11 pointer-coarse:pl-2">
+      <input
+        type="checkbox"
+        aria-label={label}
+        checked={picked}
+        onChange={(event) => onPick((event.nativeEvent as MouseEvent).shiftKey === true)}
+        className="focus-ring size-4 cursor-pointer rounded-control accent-accent-solid"
+      />
+    </label>
+  );
 }
 
 export function MailRows(props: MailRowsProps) {
   const { emails, view, accounts, time, cursorId, pickedIds } = props;
   const { t } = useT();
   const queue = readerQueue(view.filter);
+  const selecting = pickedIds.size > 0;
   return (
     <ul className="flex flex-col">
       {emails.map((email) => {
         const account = rowAccount(email, accounts);
         const cursor = cursorId === email.id;
         const picked = pickedIds.has(email.id);
+        const subject = email.subject || t("mailV2.noSubject");
         return (
           <li key={email.id} {...{ [TRIAGE_ROW_ATTR]: email.id }}>
             {picked && <span className="sr-only">{t("mailV2.bulk.rowSelected")}</span>}
             <MailRow
               sender={senderName(email.from)}
-              subject={email.subject || t("mailV2.noSubject")}
+              subject={subject}
               snippet={email.snippet ?? undefined}
               time={formatRowTime(email.date, time.now, time.locale, time.timeZone)}
               timeIso={email.date}
-              tier={email.tier}
+              tier={rowLane(view, email.tier)}
               // No AttentionItem yet: the mail is listed, but no lane is claimed.
-              tierPending={t("mailV2.row.sorting")}
+              tierPending={email.tier === null ? t("mailV2.row.sorting") : undefined}
               source={account ? { provider: account.provider, nickname: account.nickname } : null}
               unread={!email.isRead}
               hasAttachment={email.attachmentCount > 0}
               selected={cursor}
               href={`/email/${email.id}?markRead=false&queue=${queue}`}
               className={cursor ? CURSOR_CLASS : picked ? PICKED_CLASS : ""}
+              leading={
+                props.readOnly ? undefined : (
+                  <RowPick
+                    label={t("mailV2.list.select", { subject })}
+                    picked={picked}
+                    onPick={(range) => props.onPick(email, range)}
+                  />
+                )
+              }
+              leadingPinned={selecting}
               actions={
                 props.readOnly ? undefined : (
                   <>
+                    <Menu
+                      label={t("mailV2.list.remind")}
+                      variant="icon"
+                      align="end"
+                      disabled={props.busy}
+                      sections={[
+                        {
+                          id: "remind",
+                          heading: t("mailV2.list.remind"),
+                          items: REMINDER_KEYS.map((key) => ({
+                            id: key,
+                            label: t(REMINDER_LABEL_KEYS[key]),
+                            onSelect: () => props.onRemind(email, key),
+                          })),
+                        },
+                      ]}
+                    >
+                      <ClockIcon />
+                    </Menu>
                     <Button
                       variant="ghost"
                       size="icon"

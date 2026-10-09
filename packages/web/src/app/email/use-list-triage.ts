@@ -34,7 +34,11 @@ interface UseListTriageOptions {
 /** Marks the desktop row the cursor is on; used to scroll it into view. */
 export const TRIAGE_ROW_ATTR = "data-triage-row";
 
-export function useListTriage(options: UseListTriageOptions): { cursorId: string | null } {
+export function useListTriage(options: UseListTriageOptions): {
+  cursorId: string | null;
+  /** Put the cursor on a row (Mail v2: the mail the reader was just on). */
+  setCursor: (id: string | null) => void;
+} {
   const { active, emails, setSelectedIds } = options;
   const { t } = useT();
   const [cursorId, setCursorId] = useState<string | null>(null);
@@ -142,5 +146,5 @@ export function useListTriage(options: UseListTriageOptions): { cursorId: string
     active,
   );
 
-  return { cursorId: active ? cursorId : null };
+  return { cursorId: active ? cursorId : null, setCursor: setCursorId };
 }

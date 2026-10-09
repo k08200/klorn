@@ -11,13 +11,19 @@ import { TrustBadgeChip } from "../../../components/trust-badge";
 import ErrorAlert from "../../../components/ui/error-alert";
 import LoadingState from "../../../components/ui/loading-state";
 import { API_BASE, apiFetch, authHeaders } from "../../../lib/api";
+import { useAuth } from "../../../lib/auth";
 import { useT } from "../../../lib/i18n";
 import { linkifyText } from "../../../lib/linkify";
 import { queryKeys } from "../../../lib/query-keys";
 import { captureClientError } from "../../../lib/sentry";
 import { serverErrorMessage } from "../../../lib/server-error";
 import { useKeyboardTriage } from "../../../lib/use-hotkeys";
+import { REMINDER_LABEL_KEYS } from "../_v2/reminders";
 import { useLaneMove } from "../use-lane-move";
+import { readerLeaveHref } from "./_v2/reader-model";
+import { ReaderV2 } from "./_v2/reader-v2";
+import { useReaderContext } from "./_v2/use-reader-context";
+import { useReaderTriage } from "./_v2/use-reader-triage";
 import { formatBytes, ProfileFact, senderName } from "./atoms";
 import { AttachmentAnalysis } from "./attachment-analysis";
 import { EmailActionToolbar, EmailReminderQuickActions, UndoActionBanner } from "./toolbar";
@@ -158,6 +164,16 @@ interface ThreadDetail {
   }>;
 }
 
+/** The v2 reader's slots while there is no mail to fill them with. */
+const EMPTY_READER_SLOTS = {
+  thread: null,
+  reply: null,
+  candidate: null,
+  attachments: null,
+  analysis: null,
+  context: null,
+};
+
 export default function EmailDetailPage() {
   return (
     <AuthGuard>
@@ -177,6 +193,11 @@ function EmailDetailView() {
   const shouldMarkRead = searchParams?.get("markRead") === "true";
   const queue = normalizeEmailQueue(searchParams?.get("queue"));
   const undoNotice = parseUndoNotice(searchParams);
+  // MAIL_V2 (productization plan P5b): the v2 reader shares this component's
+  // state and handlers and replaces only what is rendered. Anything but an
+  // explicit `true` keeps the legacy reader below exactly as it was.
+  const mailV2 = useAuth().user?.mailV2 === true;
+  const reader = useReaderContext(id, mailV2);
   const [email, setEmail] = useState<EmailDetail | null>(null);
   const [nextEmail, setNextEmail] = useState<NextEmailSummary | null>(null);
   const [thread, setThread] = useState<ThreadDetail | null>(null);
@@ -220,14 +241,17 @@ function EmailDetailView() {
         setEmail(markingRead ? { ...data, isRead: true } : data);
         setSelectedDraftAttachmentIds([]);
         setIncludeBriefAttachment((data.attachments?.length ?? 0) > 0);
-        apiFetch<{ next: NextEmailSummary | null }>(
-          `/api/email/${id}/next?queue=${encodeURIComponent(queue)}`,
-        )
-          .then((nextData) => setNextEmail(nextData.next))
-          .catch((err) => {
-            setNextEmail(null);
-            captureClientError(err, { scope: "email.next.load", id, queue });
-          });
+        // The v2 reader walks its list view (reader-context), not a queue.
+        if (!mailV2) {
+          apiFetch<{ next: NextEmailSummary | null }>(
+            `/api/email/${id}/next?queue=${encodeURIComponent(queue)}`,
+          )
+            .then((nextData) => setNextEmail(nextData.next))
+            .catch((err) => {
+              setNextEmail(null);
+              captureClientError(err, { scope: "email.next.load", id, queue });
+            });
+        }
         if (data.threadId) {
           apiFetch<ThreadDetail | { error: string }>(
             `/api/email/thread/${encodeURIComponent(data.threadId)}`,
@@ -244,7 +268,7 @@ function EmailDetailView() {
     } finally {
       setLoading(false);
     }
-  }, [id, queue, shouldMarkRead, t]);
+  }, [id, queue, shouldMarkRead, t, mailV2]);
 
   useEffect(() => {
     load();
@@ -520,6 +544,15 @@ function EmailDetailView() {
     doneMessage = t("emailDetail.toast.queueComplete"),
     undoAction?: UndoableEmailAction,
   ) => {
+    if (mailV2) {
+      // v2 walks the list view the reader was opened from, and its undo
+      // notice says what happened: no toast on top of it.
+      const params = new URLSearchParams();
+      if (undoAction) appendUndoParams(params, undoAction, email);
+      const target = reader.context?.olderId ?? reader.context?.newerId ?? null;
+      router.push(readerLeaveHref(target, params));
+      return;
+    }
     if (nextEmail) {
       toast(nextMessage, "success");
       const params = new URLSearchParams({ markRead: "false", queue });
@@ -672,13 +705,13 @@ function EmailDetailView() {
     void queryClient.invalidateQueries({ queryKey: queryKeys.email.all });
   }, [queryClient]);
   const laneMove = useLaneMove({
-    apply: noLaneToPaint,
+    apply: mailV2 ? reader.applyLane : noLaneToPaint,
     onError: setError,
     onSettled: refreshList,
   });
   const isDemoMail = Boolean(email?.id.startsWith("demo-"));
   useDetailTriage({
-    active: keyboardTriage,
+    active: keyboardTriage && !mailV2,
     email: email ? { id: email.id, subject: email.subject || null } : null,
     blockedReason: isDemoMail
       ? t("keys.reason.demo")
@@ -693,12 +726,130 @@ function EmailDetailView() {
     undoLastAction: undoNotice ? () => void undoLastAction() : null,
   });
 
+  const openInReader = (emailId: string) => router.push(readerLeaveHref(emailId));
+  useReaderTriage({
+    active: keyboardTriage && mailV2,
+    email: email ? { id: email.id, subject: email.subject || null } : null,
+    tier: reader.context?.tier ?? null,
+    blockedReason: isDemoMail
+      ? t("keys.reason.demo")
+      : actionBusy || laneMove.busy
+        ? t("keys.reason.busy")
+        : null,
+    olderId: reader.context?.olderId ?? null,
+    newerId: reader.context?.newerId ?? null,
+    open: openInReader,
+    back: () => router.push("/email"),
+    archive: () => void archiveEmailNow(),
+    laneMove,
+    undoLastAction: undoNotice ? () => void undoLastAction() : null,
+  });
+
   // `r` on the list opens the mail with ?focus=reply: land on the reply entry.
   const focusReplyOnOpen = keyboardTriage && searchParams?.get("focus") === "reply";
   const emailLoaded = email !== null;
   useEffect(() => {
     if (focusReplyOnOpen && emailLoaded) focusReplyEntry();
   }, [focusReplyOnOpen, emailLoaded]);
+
+  if (mailV2) {
+    return (
+      <ReaderV2
+        emailId={id}
+        email={email}
+        loading={loading}
+        error={error}
+        onDismissError={() => setError(null)}
+        onRetry={() => void load()}
+        reader={reader}
+        facts={{
+          priority: email && email.priority !== "NORMAL" ? priorityLabel(t, email.priority) : null,
+          category: email?.category ? categoryLabel(t, email.category) : null,
+        }}
+        busy={actionBusy}
+        reminderBusy={reminderBusy !== null}
+        keyboardTriage={keyboardTriage}
+        laneMove={laneMove}
+        undo={{ notice: undoNotice, onUndo: undoLastAction, onDismiss: dismissUndoNotice }}
+        onOpen={openInReader}
+        onReply={focusReplyEntry}
+        onArchive={archiveEmailNow}
+        onDelete={deleteEmailNow}
+        onToggleRead={toggleRead}
+        onToggleStar={toggleStar}
+        onUnsubscribe={unsubscribeNow}
+        onRemind={(key) => void createEmailReminder({ key, label: t(REMINDER_LABEL_KEYS[key]) })}
+        slots={
+          email
+            ? {
+                thread:
+                  thread && thread.messages.length > 1 ? (
+                    <ThreadContextPanel currentEmailId={email.id} thread={thread} />
+                  ) : null,
+                reply: (
+                  <ReplyDraftBox
+                    draft={draft}
+                    intent={draftIntent}
+                    drafting={drafting}
+                    sending={sendingDraft}
+                    savingGmailDraft={savingGmailDraft}
+                    gmailDraftUrl={gmailDraftUrl}
+                    attachments={email.attachments ?? []}
+                    candidateProfile={email.candidateProfile ?? null}
+                    selectedAttachmentIds={selectedDraftAttachmentIds}
+                    includeBriefAttachment={includeBriefAttachment}
+                    onSelectedAttachmentIdsChange={setSelectedDraftAttachmentIds}
+                    onIncludeBriefAttachmentChange={setIncludeBriefAttachment}
+                    onIntentChange={setDraftIntent}
+                    onGenerate={generateReplyDraft}
+                    onDraftChange={setDraft}
+                    onSaveGmailDraft={saveGmailDraft}
+                    onSend={sendReplyDraft}
+                  />
+                ),
+                candidate: email.candidateProfile ? (
+                  <CandidateProfileCard
+                    profile={email.candidateProfile}
+                    intake={email.candidateIntake ?? null}
+                    updating={updatingCandidate}
+                    onUpdate={updateCandidateIntake}
+                  />
+                ) : null,
+                attachments:
+                  email.attachments && email.attachments.length > 0 ? (
+                    <AttachmentAnalysis
+                      emailId={email.id}
+                      attachments={email.attachments}
+                      onReanalyze={reanalyzeAttachments}
+                      onOcr={runAttachmentOcr}
+                      onSaveCorrection={saveAttachmentCorrection}
+                      reanalyzing={reanalyzing}
+                      ocring={ocring}
+                      savingCorrectionId={savingAttachmentCorrection}
+                    />
+                  ) : null,
+                analysis: (
+                  <KlornAnalysis
+                    email={email}
+                    onPriorityChange={(priority) =>
+                      setEmail((prev) => (prev ? { ...prev, priority } : prev))
+                    }
+                    onSummarize={summarize}
+                    summarizing={summarizing}
+                  />
+                ),
+                context: (
+                  <>
+                    <ThreadBriefCard emailId={email.id} />
+                    <SenderContextCard emailId={email.id} />
+                  </>
+                ),
+              }
+            : EMPTY_READER_SLOTS
+        }
+      />
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-5 md:py-10">
