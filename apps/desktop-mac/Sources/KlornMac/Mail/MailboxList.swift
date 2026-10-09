@@ -21,6 +21,15 @@ struct InboxSelectorMenu: View {
         }
         if model.inboxes.count >= 2 {
             let current = inboxSelectorLabel(selected: model.selectedInbox, inboxes: model.inboxes)
+            if Theme.isRenderingOffscreen {
+                // ImageRenderer paints an AppKit menu as a placeholder.
+                (Text(current + " ")
+                    + Text(Image(systemName: "chevron.down"))
+                    .font(.caption2.weight(.semibold)))
+                    .font(.caption)
+                    .foregroundStyle(Theme.textDim)
+                    .lineLimit(1)
+            } else {
             Menu {
                 row(value: "all", label: L("mail.allInboxes"), needsReconnect: false)
                 ForEach(model.inboxes) { inbox in
@@ -57,6 +66,7 @@ struct InboxSelectorMenu: View {
             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
             .help(L("mail.filterByInbox"))
             .accessibilityLabel(L("mail.filterByInbox.a11y", current))
+            }
         }
     }
 

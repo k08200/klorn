@@ -5,6 +5,14 @@ struct FullList: View {
     let mode: ListMode
     let actions: TopBarActions
     @Binding var keyZone: MailKeyZone
+    /// The offscreen renderer paints the key catcher (an AppKit view) as a
+    /// placeholder over the whole list. The main window's shots leave it
+    /// out; the bar's shots are unchanged from main, placeholder included.
+    var keyCatcherInRender = true
+    /// The main window's lane tab already names the lane and carries its
+    /// count, so the list drops its own title row there; the inbox scope
+    /// and compose move beside the search field. Search results keep theirs.
+    var hidesLaneTitle = false
     /// The user asked for the search field (⌘F, `/`): its focus is theirs,
     /// not the window's opening default.
     @State private var searchRequested = false
@@ -28,6 +36,7 @@ struct FullList: View {
         return inboxMode ? (model.queue?.itemsByTime ?? []) : (model.queue?.items(for: tier) ?? [])
     }
     private var searching: Bool { isSearchActive(query) }
+    private var titleHidden: Bool { hidesLaneTitle && !searching }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotionSwitch
 
@@ -53,6 +62,7 @@ struct FullList: View {
 
     private var tierList: some View {
         VStack(alignment: .leading, spacing: 0) {
+            if !titleHidden {
             HStack(spacing: 8) {
                 if searching {
                     Image(systemName: "magnifyingglass").font(.body).foregroundStyle(Theme.accent)
@@ -83,21 +93,14 @@ struct FullList: View {
                 }
                 Spacer()
                 InboxSelectorMenu()
-                Button {
-                    model.showCompose = true
-                } label: {
-                    Image(systemName: "square.and.pencil").font(.callout.weight(.medium))
-                        .iconTarget(30)
-                }
-                .buttonStyle(.plain).foregroundStyle(Theme.textDim)
-                // ⌘N lives in the app menu (File ▸ New Email) — one owner.
-                .help(L("compose.new"))
-                .accessibilityLabel(L("compose.new"))
+                composeButton
             }
             .padding(.horizontal, 24).padding(.vertical, 18)
+            }
 
             // Whole-mailbox search (same endpoint as the web inbox). Debounced;
             // clearing the field returns to the tier list instantly.
+            HStack(spacing: 8) {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").font(.caption).foregroundStyle(Theme.textDim)
                     .accessibilityHidden(true)
@@ -137,7 +140,12 @@ struct FullList: View {
             .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8)
                 .strokeBorder(searchFocused ? Theme.accent.opacity(0.5) : .clear))
-            .padding(.horizontal, 24).padding(.bottom, 12)
+            if titleHidden {
+                InboxSelectorMenu()
+                composeButton
+            }
+            }
+            .padding(.horizontal, 24).padding(.top, titleHidden ? 12 : 0).padding(.bottom, 12)
             .task(id: "\(model.selectedInbox)|\(query)") {
                 // Keyed on scope + query: an inbox switch re-fetches an active
                 // search with the new scope, same debounce path.
@@ -209,14 +217,30 @@ struct FullList: View {
         }
         // List keys (M3). Mounted with the mail list only, so other list
         // modes never see them.
-        .background(
-            MailListKeyCatcher(
-                onKey: { handleKey($0) },
-                onClickOutsideReader: { keyZone = .list },
-                mayReleaseOpeningFocus: {
-                    !searchRequested && !model.searchFocusPending && !model.fullViewModalOpen
-                }))
+        .background {
+            if keyCatcherInRender || !Theme.isRenderingOffscreen {
+                MailListKeyCatcher(
+                    onKey: { handleKey($0) },
+                    onClickOutsideReader: { keyZone = .list },
+                    mayReleaseOpeningFocus: {
+                        !searchRequested && !model.searchFocusPending && !model.fullViewModalOpen
+                    })
+            }
+        }
         .onDisappear { keyZone = .list }
+    }
+
+    private var composeButton: some View {
+        Button {
+            model.showCompose = true
+        } label: {
+            Image(systemName: "square.and.pencil").font(.callout.weight(.medium))
+                .iconTarget(30)
+        }
+        .buttonStyle(.plain).foregroundStyle(Theme.textDim)
+        // ⌘N lives in the app menu (File ▸ New Email) — one owner.
+        .help(L("compose.new"))
+        .accessibilityLabel(L("compose.new"))
     }
 
     /// One key press from the catcher: decide with the pure rules, then run

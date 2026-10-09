@@ -120,37 +120,7 @@ struct FullView: View {
                 AssistantDock()
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             }
-            if model.showCompose {
-                Theme.text.opacity(0.45)
-                    .onTapGesture { if !model.composeSending { model.showCompose = false } }
-                    .accessibilityHidden(true)
-                ComposePanel()
-            }
-            // Preferences moved to the Settings window (M0, 2026-10-02).
-            // The connect-time purpose question — below the guide in
-            // priority (the user must read that first).
-            if model.showPurposePrompt && !model.showTierGuide
-                && !model.showCompose
-            {
-                Theme.text.opacity(0.45)
-                    .onTapGesture { model.dismissPurposePrompt() }
-                    .accessibilityHidden(true)
-                PurposePrompt()
-            }
-            // Event editor (2026-09-11) — a user action opened it, so it sits
-            // above the connect-time question.
-            if model.showEventEditor {
-                Theme.text.opacity(0.45)
-                    .onTapGesture { model.dismissEventEditor() }
-                    .accessibilityHidden(true)
-                CalendarEventEditor()
-            }
-            if model.showTierGuide {
-                Theme.text.opacity(0.45)
-                    .onTapGesture { model.dismissTierGuide() }
-                    .accessibilityHidden(true)
-                TierGuide { model.dismissTierGuide() }
-            }
+            FullViewModals()
         }
         // Fill whatever frame the controller fitted to the screen (and the
         // user's drag-resize); the old fixed 1400×860 clipped on smaller
@@ -204,5 +174,46 @@ struct FullView: View {
         // so the slate-500 contrast argument holds unchanged).
         .padding(.horizontal, 18)
         .frame(height: 48)
+    }
+}
+
+/// The full view's modal layer: compose, the connect-time question, the
+/// event editor and the lane guide, each over its own scrim. Shared by the
+/// bar's full view and the main window so a modal behaves the same in both.
+struct FullViewModals: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        if model.showCompose {
+            Theme.text.opacity(0.45)
+                .onTapGesture { if !model.composeSending { model.showCompose = false } }
+                .accessibilityHidden(true)
+            ComposePanel()
+        }
+        // Preferences moved to the Settings window (M0, 2026-10-02).
+        // The connect-time purpose question — below the guide in
+        // priority (the user must read that first).
+        if model.showPurposePrompt && !model.showTierGuide
+            && !model.showCompose
+        {
+            Theme.text.opacity(0.45)
+                .onTapGesture { model.dismissPurposePrompt() }
+                .accessibilityHidden(true)
+            PurposePrompt()
+        }
+        // Event editor (2026-09-11) — a user action opened it, so it sits
+        // above the connect-time question.
+        if model.showEventEditor {
+            Theme.text.opacity(0.45)
+                .onTapGesture { model.dismissEventEditor() }
+                .accessibilityHidden(true)
+            CalendarEventEditor()
+        }
+        if model.showTierGuide {
+            Theme.text.opacity(0.45)
+                .onTapGesture { model.dismissTierGuide() }
+                .accessibilityHidden(true)
+            TierGuide { model.dismissTierGuide() }
+        }
     }
 }
