@@ -69,6 +69,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var hotKey: HotKey?
     private var settingsOpener: SettingsOpener?
     private var mainWindow: MainWindowController?
+    private var composeWindow: ComposeWindowController?
+    private var onboarding: OnboardingWindowController?
 
     /// OAuth deep-link relay: the browser bounces `klorn://oauth-callback?code=…`
     /// back to us; the code goes to the RelayInbox where the sign-in loop
@@ -169,6 +171,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         self.mainWindow = mainWindow
         bar.onOpenMainWindow = { [weak mainWindow] in mainWindow?.open() }
         bar.onCloseMainWindow = { [weak mainWindow] in mainWindow?.close() }
+        // Compose window (M5, same flag): the model's composer state drives it.
+        let composeWindow = ComposeWindowController(model: model)
+        model.onComposePresentationChanged = { [weak composeWindow] in composeWindow?.sync() }
+        // Switching the main window off puts an open compose window away
+        // (draft kept), so it can never sit beside the overlay composer.
+        model.settings.onMacMainWindowChanged = { [weak composeWindow] in composeWindow?.sync() }
+        self.composeWindow = composeWindow
         // Menu-bar anchor while the pill is hidden (one-anchor rule): appears
         // when the pill's ✕ / Preferences hides the bar, disappears when the
         // bar comes back. Without it a hidden-pill accessory app is invisible
@@ -199,8 +208,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         // First run after install: open the real app window once. The resting
         // pill at the top edge is easy to miss right after a download — people
         // reported not realizing the app had launched (2026-08-05).
-        if model.settings.consumeFirstLaunch() {
-            bar.openFull()
+        // With no account yet that window is the onboarding window (M6),
+        // not a logged-out full view; signing in there continues into the
+        // full view, where the existing post-login flow takes over.
+        let onboarding = OnboardingWindowController(model: model) { [weak bar] in bar?.openFull() }
+        self.onboarding = onboarding
+        switch OnboardingRules.launchAction(
+            firstLaunch: model.settings.consumeFirstLaunch(), signedIn: model.phase == .signedIn)
+        {
+        case .onboarding: onboarding.open()
+        case .fullView: bar.openFull()
+        case .none: break
         }
 
         // Global toggle shortcut (default ⌥⌘K, user-configurable in Preferences):
@@ -235,7 +253,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     func perform(_ command: MenuCommand) {
         switch command {
         case .compose:
-            ensureFullView()
+            // With its own window (M5) the composer needs no full view
+            // under it; ⌘N on an open composer brings it forward.
+            if !ComposeWindowRules.usesWindow(macMainWindow: model.settings.macMainWindow) {
+                ensureFullView()
+            }
             model.showCompose = true
         case .find:
             ensureFullView()
@@ -280,7 +302,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     func applicationShouldHandleReopen(
         _ sender: NSApplication, hasVisibleWindows flag: Bool
     ) -> Bool {
-        topBar?.openFull()
+        switch OnboardingRules.reopenTarget(onboardingOpen: model.onboardingWindowOpen) {
+        case .onboarding: onboarding?.open()
+        case .fullView: topBar?.openFull()
+        }
         return false
     }
 }

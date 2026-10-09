@@ -12,9 +12,7 @@ struct TodayScreen: View {
 
     static let sideColumnWidth: CGFloat = 300
 
-    private var state: TodayState {
-        TodayRules.state(phase: model.phase, hasQueue: model.queue != nil, loadError: model.loadError)
-    }
+    private var state: SurfaceState { model.surfaceState }
 
     private var dateLabel: String {
         let formatter = DateFormatter()
@@ -31,16 +29,11 @@ struct TodayScreen: View {
             }
             Rectangle().fill(Theme.line).frame(height: 1)
             switch state {
-            case .signedOut, .signingIn:
-                SignInMessage(signingIn: state == .signingIn, onSignIn: actions.onSignIn)
+            case .signedOut, .signingIn, .offline, .failed:
+                SurfaceStateView(state: state)
             case .loading:
                 FirstSyncState()
                 Spacer(minLength: 0)
-            case .failed(let message):
-                StateMessage(
-                    icon: "exclamationmark.triangle", title: L("today.failed.title"),
-                    detail: message, actionTitle: L("today.retry"),
-                    action: { Task { await model.loadQueue() } })
             case .ready:
                 if Theme.isRenderingOffscreen {
                     // ImageRenderer draws nothing inside a ScrollView; lay
@@ -57,7 +50,6 @@ struct TodayScreen: View {
     private var ready: some View {
         HStack(alignment: .top, spacing: Theme.s6) {
             VStack(alignment: .leading, spacing: Theme.s6) {
-                if model.loadError != nil { staleNotice }
                 let lanes = model.queue.map(TodayRules.lanes) ?? []
                 if lanes.isEmpty {
                     EmptyState(
@@ -80,18 +72,6 @@ struct TodayScreen: View {
         .padding(Theme.s6)
         .frame(maxWidth: 1080, alignment: .topLeading)
         .frame(maxWidth: .infinity, alignment: .topLeading)
-    }
-
-    /// The queue on screen is the last good one; say so, and offer a retry.
-    private var staleNotice: some View {
-        HStack(spacing: Theme.s2) {
-            Image(systemName: "exclamationmark.triangle").font(Theme.Typo.icon)
-                .foregroundStyle(Theme.textDim).accessibilityHidden(true)
-            Text(L("today.stale")).font(Theme.Typo.caption).foregroundStyle(Theme.textDim)
-            Button(L("today.retry")) { Task { await model.loadQueue() } }
-                .buttonStyle(.plain).font(Theme.Typo.caption.weight(.semibold))
-                .foregroundStyle(Theme.text)
-        }
     }
 
     /// A row opens in Mail: the list on a facet that holds it, the reader

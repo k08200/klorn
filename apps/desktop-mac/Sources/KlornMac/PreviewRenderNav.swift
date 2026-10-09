@@ -192,6 +192,22 @@ extension PreviewRender {
         shot("today-loading", navModel(firewallJSON: ""))
         shot("today-error", navModel(firewallJSON: "", loadError: "The server did not respond (timed out after 30 s)."))
         shot("today-signed-out", AppModel(tokenStore: InMemoryTokenStore()))
+        // The rest of the not-ready states (M6).
+        shot("today-signing-in", stateModel(phase: .signingIn))
+        shot("today-offline", navModel(firewallJSON: "")) {
+            $0.seedStateForRender(phase: .signedIn, loadError: L("error.network"), offline: true)
+        }
+        shot("mail-offline", navModel(firewallJSON: "")) {
+            $0.seedStateForRender(phase: .signedIn, loadError: L("error.network"), offline: true)
+            $0.listMode = NavRules.defaultMailMode
+        }
+        // Loaded content, refresh failing: the banner over the day.
+        shot("today-stale-offline", navModel(firewallJSON: navFirewallJSON)) {
+            $0.seedStateForRender(phase: .signedIn, loadError: L("error.network"), offline: true)
+        }
+        shot("today-stale", navModel(
+            firewallJSON: navFirewallJSON,
+            loadError: "The server did not respond (timed out after 30 s)."))
         return ok
     }
 }

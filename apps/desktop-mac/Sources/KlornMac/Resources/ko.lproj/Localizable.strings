@@ -525,6 +525,9 @@
 "appearance.toLight" = "라이트 모드로 전환";
 "appearance.toDark" = "다크 모드로 전환";
 "compose.editDraft" = "임시보관 메일 편집";
+"compose.discard" = "초안 삭제";
+"compose.discard.confirm.title" = "이 초안을 삭제할까요?";
+"compose.discard.confirm.detail" = "여기에 작성한 내용이 사라집니다.";
 "mailbox.loadMore" = "더 보기";
 "chip.billing" = "청구·영수증";
 
@@ -657,7 +660,6 @@
 "today.signingIn.detail" = "브라우저에서 로그인을 끝내면 이 창이 바뀝니다.";
 "today.failed.title" = "메일을 불러오지 못했습니다";
 "today.retry" = "다시 시도";
-"today.stale" = "새로 고치지 못했습니다. 마지막으로 불러온 결과입니다.";
 "today.clear.title" = "기다리는 메일이 없습니다";
 "today.clear.detail" = "새 메일은 Klorn이 분류하는 대로 여기에 나타납니다.";
 "today.lane.a11y" = "%1$@, 열린 메일 %2$d건";
@@ -671,3 +673,27 @@
 "today.ask.a11y" = "어시스턴트에게 물어보기";
 "today.signIn.restart" = "처음부터 다시";
 "a11y.position" = "%2$d개 중 %1$d번째";
+
+/* Signed-out, offline and first-launch states (M6) */
+"auth.continueGoogle" = "Google로 계속하기";
+"state.signedOut.title" = "Klorn에 로그인";
+"state.offline.title" = "오프라인 상태입니다";
+"state.offline.detail" = "Klorn 서버에 연결할 수 없습니다. 네트워크를 확인한 뒤 다시 시도하세요.";
+"banner.offline" = "오프라인 상태입니다. 마지막 동기화 때의 메일입니다.";
+"banner.stale" = "새로 고치지 못했습니다. 마지막 동기화 때의 메일입니다.";
+"bar.notUpdating" = "업데이트 중단";
+"bar.retry.help" = "다시 시도";
+"bar.retry.a11y" = "%@. 다시 시도";
+"error.server" = "서버 오류(%d).";
+"error.network" = "네트워크 오류입니다. 연결을 확인하세요.";
+"onboarding.windowTitle" = "Klorn 시작하기";
+"onboarding.value" = "모든 메일과 캘린더를 한곳에. 메일은 %d개 레인으로 분류됩니다.";
+"onboarding.lane.push" = "지금 바로 알립니다";
+"onboarding.lane.meeting" = "일정 메일, 캘린더와 대조합니다";
+"onboarding.lane.queue" = "오늘 읽을 만한 메일";
+"onboarding.lane.info" = "영수증·안내, 보관만 합니다";
+"onboarding.lane.silent" = "보관하되 보이지 않게";
+"onboarding.lanes.note" = "레인은 메일을 분류만 합니다. 메일에 어떤 동작도 하지 않습니다.";
+"onboarding.privacy" = "Klorn은 분류를 위해 메일을 읽습니다. 그 밖에 무엇을 해도 되는지는 사용자가 정합니다.";
+"error.unreachable" = "Klorn 서버에 연결할 수 없습니다.";
+"banner.dismiss.a11y" = "메시지 닫기";

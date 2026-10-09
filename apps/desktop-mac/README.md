@@ -49,6 +49,42 @@ On launch the pill appears at the top-center of your screen. Click it and choose
 nonce-poll flow), one consent also connects Gmail/Calendar, and the app stores
 the JWT in the **Keychain**. The firewall then loads.
 
+### First launch and the not-ready states
+
+The first launch after install with no account opens a small **onboarding
+window** instead of a logged-out full view: the logo, one sentence, the
+sign-in buttons the server offers (Google always; Apple and Naver when
+enabled), the five lanes with what each means, and what Klorn does with the
+mail it reads. Signing in closes it and opens the full view, where the lane
+guide and the mailbox question follow as before. It is the same for both
+values of `macMainWindow`. A first launch that already has a token opens the
+full view, and later launches open nothing.
+
+Every mail surface (the bar's full view and expanded panel, the main
+window) maps the model to one `SurfaceState`:
+
+| State | Shows |
+|-------|-------|
+| signed out | "Sign in to Klorn", the sign-in buttons |
+| signing in | "Finish signing in", *Start over* |
+| loading | the "sorting every message into its lane" skeleton, and only here |
+| offline (this Mac has no network, nothing loaded) | "You're offline", *Try again* |
+| failed (a server error, a timeout, a TLS failure; nothing loaded) | "Couldn't load your mail", the reason, *Try again* |
+| ready | the mail |
+
+Loaded mail whose refresh is failing stays on screen under a banner
+("You're offline. This is the mail from the last sync." or "Klorn couldn't
+refresh…") with *Try again*. The pill's chip reads *Offline* only when the
+network is the cause, *Not updating* otherwise, and a click retries (one
+load at a time).
+
+"Offline" is decided from the `URLError` code the API client now carries:
+not connected, connection lost, host not found, DNS failure, data not
+allowed, roaming off. A cancelled request is no error; everything else is
+"Klorn can't reach its server". A failed action on one mail (pin, unpin,
+dismiss, snooze) shows a short notice of its own and never raises the
+refresh banner. Signing out drops the per-inbox queue snapshots.
+
 ### Keyboard
 
 - **`⌥⌘K`** (Option-Command-K) — expand / collapse the bar from anywhere, even
@@ -89,6 +125,31 @@ It is a custom two-column split, not `NavigationSplitView`: the window is an
 AppKit `NSWindow` that owns its frame and restoration, the mail list keys
 depend on the window's first responder, and the offscreen renderer cannot
 draw AppKit-backed containers.
+
+With the main window on, the composer and the modal cards are native too
+(M5):
+
+- **Compose** (`⌘N`, the Compose buttons, opening a draft) is its own
+  window: titled, resizable, frame remembered. It covers nothing, so mail
+  stays readable and every menu and list key keeps working behind it.
+  `⌘N` on an open composer brings it forward. There is still one draft,
+  owned by the model. Closing the window (`⌘W`, the red button) keeps the
+  draft; *Discard Draft* clears it, asking first when there is something
+  to lose; `⌘⏎` sends; the window will not close mid-send. Signing out, or
+  switching the main window off, closes it. While it is open Klorn stays a regular app, like the main
+  window. Message commands never act while the compose window is key.
+- **The lane guide, the event editor and the connect-time question** are
+  sheets on the main window (`NSWindow.beginSheet`), one at a time in the
+  old overlays' order. A sheet blocks the list keys and every menu command
+  exactly as the overlay did, and only while it is attached: a sheet asked
+  for with the main window closed waits for the window and blocks nothing.
+
+Signing out discards the compose draft (and forgets the Gmail draft it was
+editing) in both modes, so the next account never inherits it.
+
+Not in the composer because the model and `POST /api/email/send` carry only
+to / subject / body: Cc, Bcc, attachments, recipient autocomplete, choosing
+the sending account, and more than one draft at a time.
 
 Turn it on with either:
 
@@ -299,9 +360,12 @@ A full XCTest suite can be added when building under Xcode/CI.
 | `Mail/` | `FullList.swift` (the list column, alone in its file), `MailRow.swift` (`FullRow`, `SearchHitRow`), `MailboxList.swift`, `WaitingOnList.swift`, `CommitmentsList.swift`, `ReadingPane.swift`, `Compose.swift` (`ComposePanel`), `MailSection.swift` (main window: lane bar + list + reader) |
 | `Calendar/` | `CalendarScreen.swift`, `EventRows.swift` (upcoming rows, week chips, event popover), `CalendarSection.swift` (main window) |
 | `Assistant/` | `AssistantDock.swift`, `AssistantThread.swift` (thread + `ChatBubble`), `AssistantSection.swift` (main window: panes + thread) |
-| `Shared/` | views used by more than one feature: `Controls.swift`, `TierMenus.swift` (`SnoozeMenu`, `TierMenu`), `LaneChip.swift` (lane, signal, reply-state and label chips), `AccountRows.swift` (account rows, diagnostics, update row), `SegmentedBar.swift` (filter tabs, `SourceBadge`) |
+| `Onboarding/` | first launch (M6): `OnboardingWindow.swift` (`OnboardingRules`, `OnboardingWindowController`), `OnboardingView.swift` (the window's content, `LaneExplainer`) |
+| `Shared/` | `SurfaceState.swift` (M6: `SurfaceState`, `SurfaceStateRules`, `SurfaceStateView`, `ConnectionBanner`, `SignInButtons`, `SolidButtonStyle`); views used by more than one feature: `Controls.swift`, `TierMenus.swift` (`SnoozeMenu`, `TierMenu`), `LaneChip.swift` (lane, signal, reply-state and label chips), `AccountRows.swift` (account rows, diagnostics, update row), `SegmentedBar.swift` (filter tabs, `SourceBadge`) |
 | `SettingsWindow.swift` | `Settings` scene root (`TabView`), tab grouping, `SettingsOpener` |
-| `MainWindow.swift` | standard main window (M2, `macMainWindow`): `MainWindowController` (a lazily created AppKit `NSWindow`, never a SwiftUI scene), its rules, the Settings beta switch |
+| `MainWindow.swift` | standard main window (M2, `macMainWindow`): `MainWindowController` (a lazily created AppKit `NSWindow`, never a SwiftUI scene; also attaches the sheets, M5), its rules, the Settings beta switch |
+| `Mail/ComposeWindow.swift` | compose window (M5, same flag): `ComposeWindowRules`, `ComposeWindowController` (lazily created, driven by the model's `showCompose`) |
+| `Shell/MainSheets.swift` | the main window's sheets (M5): `MainSheet`, `MainSheetRules`, the shared modal-card chrome (`modalCard`) |
 | `AppCommands.swift` | app menus (`.commands`) and their pure enablement/shortcut rules |
 | `ListKeys.swift` | mail list keyboard (M3): pure key rules, the window-scoped key catcher |
 | `TopBarController.swift` | the floating non-activating `NSPanel`: top-center pin, expand/collapse, row actions |

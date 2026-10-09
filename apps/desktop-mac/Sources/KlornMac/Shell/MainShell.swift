@@ -29,7 +29,12 @@ struct MainShell: View {
             HStack(spacing: 0) {
                 NavSidebar(actions: actions)
                 Rectangle().fill(Theme.line).frame(width: 1)
-                content.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                VStack(spacing: 0) {
+                    // Loaded mail whose refresh is failing (M6).
+                    if let notice = model.connectionNotice { ConnectionBanner(notice: notice) }
+                    if let message = model.actionError { ActionErrorBanner(message: message) }
+                    content.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                }
             }
             // Keyboard focus must not wander behind a modal.
             .disabled(model.fullViewModalOpen)
@@ -41,11 +46,13 @@ struct MainShell: View {
                 AssistantDock()
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             }
-            FullViewModals()
         }
         .frame(
             minWidth: MainWindowRules.minSize.width, maxWidth: .infinity,
             minHeight: MainWindowRules.minSize.height, maxHeight: .infinity, alignment: .top)
+        // No overlay layer here: the guide, the event editor and the
+        // connect-time question are native sheets on the window (M5,
+        // `MainWindowController.syncSheet`); the composer is its own window.
     }
 
     /// The dock keeps the assistant one click away with the mail or the day
@@ -62,7 +69,7 @@ struct MainShell: View {
             VStack(alignment: .leading, spacing: 0) {
                 SectionHeader(title: model.mainNav.section.title)
                 Rectangle().fill(Theme.line).frame(height: 1)
-                SignInMessage(signingIn: model.phase == .signingIn, onSignIn: actions.onSignIn)
+                SurfaceStateView(state: model.surfaceState)
             }
         } else {
             switch model.mainNav.section {
@@ -71,26 +78,6 @@ struct MainShell: View {
             case .calendar: CalendarSection(actions: actions, initialAnchor: renderDate ?? Date())
             case .assistant: AssistantSection(actions: actions)
             }
-        }
-    }
-}
-
-/// Signed out, or waiting on the browser: a message and the way forward.
-struct SignInMessage: View {
-    let signingIn: Bool
-    let onSignIn: () -> Void
-
-    var body: some View {
-        if signingIn {
-            StateMessage(
-                icon: "safari", title: L("today.signingIn.title"),
-                detail: L("today.signingIn.detail"), actionTitle: L("today.signIn.restart"),
-                action: onSignIn)
-        } else {
-            StateMessage(
-                icon: "person.crop.circle", title: L("today.signedOut.title"),
-                detail: L("today.signedOut.detail"), actionTitle: L("auth.logIn"),
-                action: onSignIn)
         }
     }
 }
@@ -121,39 +108,5 @@ struct SectionHeader<Trailing: View>: View {
 extension SectionHeader where Trailing == EmptyView {
     init(title: String, detail: String? = nil) {
         self.init(title: title, detail: detail) { EmptyView() }
-    }
-}
-
-/// A message with one action, for the states that are not "loading":
-/// signed out, failed. Never the sorting skeleton.
-struct StateMessage: View {
-    let icon: String
-    let title: String
-    let detail: String?
-    let actionTitle: String?
-    let action: () -> Void
-
-    var body: some View {
-        VStack(spacing: Theme.s3) {
-            Image(systemName: icon)
-                .font(.system(size: 28, weight: .light))
-                .foregroundStyle(Theme.textDim)
-                .accessibilityHidden(true)
-            Text(title).font(Theme.Typo.head).foregroundStyle(Theme.text)
-                .multilineTextAlignment(.center)
-            if let detail {
-                Text(detail).font(Theme.Typo.body).foregroundStyle(Theme.textDim)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if let actionTitle {
-                Button(actionTitle, action: action)
-                    .buttonStyle(PrimaryButtonStyle())
-                    .padding(.top, Theme.s1)
-            }
-        }
-        .frame(maxWidth: 360)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(Theme.s6)
     }
 }

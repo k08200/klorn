@@ -15,7 +15,12 @@ final class AppModel {
     private(set) var phase: Phase
     var signInError: String?
     private(set) var queue: FirewallResponse?
-    private(set) var loadError: String?
+    private(set) var loadError: String? {
+        didSet { if loadError == nil { loadOffline = false } }
+    }
+    /// The failure behind `loadError` was the network (no server reached),
+    /// not an answer from the server. Decides "offline" vs "couldn't load".
+    private(set) var loadOffline = false
     private(set) var isLoadingQueue = false
 
     /// Called with newly-arrived PUSH items (never the first-load baseline).
@@ -43,9 +48,28 @@ final class AppModel {
             onWindowPresenceChanged?()
         }
     }
-    /// Wired by the AppDelegate to re-apply the activation policy when
-    /// Settings or the main window opens or closes.
+    /// True while the compose window (M5, `macMainWindow`) is on screen. It
+    /// counts like the main window: an open window keeps the app .regular.
+    var composeWindowOpen = false {
+        didSet {
+            guard composeWindowOpen != oldValue else { return }
+            onWindowPresenceChanged?()
+        }
+    }
+    /// True while the first-launch onboarding window (M6) is on screen. A
+    /// window the user has to act in must be reachable from the Dock.
+    var onboardingWindowOpen = false {
+        didSet {
+            guard onboardingWindowOpen != oldValue else { return }
+            onWindowPresenceChanged?()
+        }
+    }
+    /// Wired by the AppDelegate to re-apply the activation policy when a
+    /// window (Settings, main, compose, onboarding) opens or closes.
     @ObservationIgnored var onWindowPresenceChanged: (() -> Void)?
+    /// Wired by the AppDelegate to the compose window (M5): fires when the
+    /// composer is asked for (again) or put away. Unused with the flag off.
+    @ObservationIgnored var onComposePresentationChanged: (() -> Void)?
 
     /// Mirrors whether the top bar is in its full (app window) state.
     /// Written by TopBarController on every render.
@@ -106,7 +130,20 @@ final class AppModel {
 
     /// A modal overlay covers the full view (its background is disabled).
     var fullViewModalOpen: Bool {
-        showCompose || showTierGuide || showEventEditor || showPurposePrompt
+        MainSheetRules.modalOpen(
+            macMainWindow: settings.macMainWindow,
+            overlayModal: composeOverlayOpen || showTierGuide || showEventEditor || showPurposePrompt,
+            sheetAttached: mainSheetAttached)
+    }
+    /// A sheet is attached to the open main window (M5). Written by
+    /// `MainWindowController`; a sheet flag left set while the window is
+    /// closed blocks nothing.
+    var mainSheetAttached = false
+    /// The composer as an in-window overlay (the bar's full view). With
+    /// `macMainWindow` on it is its own window (M5) and covers nothing.
+    var composeOverlayOpen: Bool {
+        ComposeWindowRules.overlayOpen(
+            showCompose: showCompose, macMainWindow: settings.macMainWindow)
     }
     /// Device calendars uploaded from EventKit (step C6): opt-in per calendar.
     let deviceCalendars: DeviceCalendarBridge
@@ -366,6 +403,8 @@ final class AppModel {
     /// blanking for a full server round trip (founder: "숫자 갈림 좀 느림",
     /// 2026-07-23). Session-scoped by design: repainted by every loadQueue.
     private var queueCache: [String: FirewallResponse] = [:]
+    /// Self-check seam.
+    var queueCacheIsEmpty: Bool { queueCache.isEmpty }
 
     func selectInbox(_ value: String) {
         guard value != selectedInbox else { return }
@@ -565,6 +604,7 @@ final class AppModel {
     ) {
         phase = .signedIn
         queue = try? JSONDecoder().decode(FirewallResponse.self, from: Data(firewallJSON.utf8))
+        queueCache[selectedInbox] = queue
         openedEmail = try? JSONDecoder().decode(EmailDetail.self, from: Data(emailJSON.utf8))
         self.selectedItemId = selectedItemId
         if let briefingJSON {
@@ -588,6 +628,19 @@ final class AppModel {
         chatMessages = chat
     }
 
+    /// Render-probe seam for the state shots (M6): the states no fixture
+    /// reaches. No network, no disk.
+    func seedStateForRender(
+        phase: Phase, loadError: String? = nil, offline: Bool = false,
+        loginProviders: [String]? = nil, signInError: String? = nil
+    ) {
+        self.phase = phase
+        self.loadError = loadError
+        loadOffline = offline && loadError != nil
+        if let loginProviders { self.loginProviders = loginProviders }
+        self.signInError = signInError
+    }
+
     /// Kick off the headless lifecycle at app launch. With no window driving it,
     /// this is what starts the background poll loop when we already hold a token.
     /// `loadQueue()` -> `ensureActive()` establishes the silent PUSH baseline and
@@ -605,6 +658,14 @@ final class AppModel {
         Task { await refreshTeams() }
     }
 
+    /// The provider of the last sign-in attempt, so "Start over" restarts
+    /// the one the user chose rather than falling back to Google.
+    private(set) var signInProvider = "google"
+
+    func restartSignIn() async {
+        await signIn(provider: signInProvider)
+    }
+
     /// The in-flight sign-in, so a re-click SUPERSEDES it instead of racing it.
     private var signInTask: Task<Void, Never>?
 
@@ -616,6 +677,7 @@ final class AppModel {
     /// later, and stomps the SECOND attempt's state back to signed-out — the
     /// bar flickering between "Log in" and "Signing in…" (dogfood 2026-08-10).
     func signIn(provider: String = "google") async {
+        signInProvider = provider
         signInTask?.cancel()
         let task = Task { [weak self] in
             guard let self else { return }
@@ -855,8 +917,14 @@ final class AppModel {
         }
     }
 
-    /// Compose overlay visibility (full view).
-    var showCompose = false
+    /// Whether the composer is presented: an overlay on the bar's full view,
+    /// its own window while `macMainWindow` is on (M5). Asking again while
+    /// it is up still notifies, so the window comes forward.
+    var showCompose = false {
+        didSet {
+            if showCompose || oldValue { onComposePresentationChanged?() }
+        }
+    }
     /// Draft lives on the MODEL, not the panel: SwiftUI drops a conditionally
     /// mounted view's @State (e.g. when the full view is torn down and rebuilt via
     /// the menu bar), and a draft must survive that. There is exactly one
@@ -919,6 +987,9 @@ final class AppModel {
         composeError = nil
         defer { composeSending = false }
         let error = await sendNewEmail(to: composeTo, subject: composeSubject, body: composeBody)
+        // A 401 mid-send signed the account out and discarded the draft;
+        // there is no composer left to carry the error.
+        guard phase == .signedIn else { return }
         if let error {
             composeError = error
         } else {
@@ -934,6 +1005,13 @@ final class AppModel {
             discardComposeDraft()
             showCompose = false
         }
+    }
+
+    /// Self-check seam: the state `openDraftForEditing` leaves, without the
+    /// network fetch.
+    func seedEditingDraftForCheck(gmailId: String, inbox: String?) {
+        editingDraftGmailId = gmailId
+        editingDraftInbox = inbox
     }
 
     /// Explicit discard (the Cancel button). Hiding the panel via ✕/scrim/Esc
@@ -1703,7 +1781,7 @@ final class AppModel {
         } catch APIError.unauthorized {
             signOut()
         } catch {
-            loadError = Self.describe(error)
+            noteActionFailure(error)
             Log.app.warning("pin sender failed: \(String(describing: error), privacy: .private)")
         }
     }
@@ -1717,7 +1795,7 @@ final class AppModel {
         } catch APIError.unauthorized {
             signOut()
         } catch {
-            loadError = Self.describe(error)
+            noteActionFailure(error)
             Log.app.warning("unpin sender failed: \(String(describing: error), privacy: .private)")
         }
     }
@@ -1748,7 +1826,7 @@ final class AppModel {
     /// Undo an optimistic hide when the mutation failed, then refetch the truth.
     private func unhide(_ item: FirewallItem, _ error: Error) {
         dismissed.remove(item.id)
-        loadError = Self.describe(error)
+        noteActionFailure(error)
         Task { await loadQueue() }
     }
 
@@ -1775,7 +1853,11 @@ final class AppModel {
         let sessionToken = tokenStore.load()
         tokenStore.clear()
         queue = nil
+        // The per-inbox snapshots are the previous account's mail: an inbox
+        // switch after the next sign-in must never paint them.
+        queueCache = [:]
         loadError = nil
+        dismissActionError()
         // Cross-account hygiene: every per-account surface must reset, or the
         // next sign-in briefly shows the previous account's data.
         today = nil
@@ -1789,6 +1871,11 @@ final class AppModel {
         shownMeetingIds = []
         // The device-calendar opt-in belongs to the account that gave it.
         deviceCalendars.signOut(token: sessionToken)
+        // A draft belongs to the account that wrote it: the next account
+        // must not find it, send it, or delete the Gmail draft it edits.
+        // Putting the composer away also closes the compose window (M5).
+        discardComposeDraft()
+        showCompose = false
         phase = .signedOut
     }
 
@@ -2105,7 +2192,7 @@ final class AppModel {
         } catch APIError.unauthorized {
             signOut()  // token expired/invalid — drop to sign-in
         } catch {
-            loadError = Self.describe(error)
+            noteLoadFailure(error)
         }
     }
 
@@ -2181,11 +2268,57 @@ final class AppModel {
 
     /// User-facing message only — the raw error (which can echo response bytes
     /// or internal shape) is logged privately, never surfaced.
+    /// Record a failed load: the message, and whether it was the network.
+    /// Refresh failures only: this is what raises the offline / "couldn't
+    /// refresh" states. A cancelled request is not a failure.
+    private func noteLoadFailure(_ error: Error) {
+        let kind = SurfaceStateRules.failureKind(error)
+        guard kind != .ignored else { return }
+        loadError = Self.describe(error)
+        loadOffline = kind == .offline
+    }
+
+    /// A failed action on one mail (pin, unpin, dismiss, snooze). Shown as
+    /// a transient notice; it says nothing about whether the list is fresh.
+    private(set) var actionError: String?
+    private var actionErrorTask: Task<Void, Never>?
+    static let actionErrorSeconds = 6
+
+    private func noteActionFailure(_ error: Error) {
+        guard SurfaceStateRules.failureKind(error) != .ignored else { return }
+        showActionError(Self.describe(error))
+    }
+
+    /// Internal so the render and self-check harnesses can raise one.
+    func showActionError(_ message: String) {
+        actionError = message
+        actionErrorTask?.cancel()
+        actionErrorTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Self.actionErrorSeconds))
+            guard !Task.isCancelled else { return }
+            self?.actionError = nil
+        }
+    }
+
+    func dismissActionError() {
+        actionErrorTask?.cancel()
+        actionError = nil
+    }
+
+    /// Try again, from a state view, the banner or the pill's chip. One
+    /// retry at a time: clicks while a load is in flight do nothing.
+    func retryLoad() async {
+        guard SurfaceStateRules.mayRetry(isLoading: isLoadingQueue) else { return }
+        await loadQueue()
+    }
+
     private static func describe(_ error: Error) -> String {
         Log.app.error("queue load failed: \(String(describing: error), privacy: .private)")
         switch error {
-        case APIError.http(let code, let msg): return msg ?? "Server error (\(code))."
-        case APIError.transport: return "Network error — check your connection."
+        case APIError.http(let code, let msg): return msg ?? L("error.server", code)
+        case APIError.transport:
+            return SurfaceStateRules.failureKind(error) == .offline
+                ? L("error.network") : L("error.unreachable")
         case APIError.decoding: return L("error.badResponse")
         case APIError.unauthorized: return L("error.sessionExpired")
         case APIError.forbidden: return L("error.needsPro")

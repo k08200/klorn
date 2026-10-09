@@ -525,6 +525,9 @@
 "appearance.toLight" = "ライトモードに切り替え";
 "appearance.toDark" = "ダークモードに切り替え";
 "compose.editDraft" = "下書きを編集";
+"compose.discard" = "下書きを破棄";
+"compose.discard.confirm.title" = "この下書きを破棄しますか？";
+"compose.discard.confirm.detail" = "ここに書いた内容は失われます。";
 "mailbox.loadMore" = "さらに読み込む";
 "chip.billing" = "請求・領収書";
 
@@ -657,7 +660,6 @@
 "today.signingIn.detail" = "ブラウザでログインを完了すると、このウィンドウが更新されます。";
 "today.failed.title" = "メールを読み込めませんでした";
 "today.retry" = "再試行";
-"today.stale" = "更新できませんでした。最後に読み込んだ結果です。";
 "today.clear.title" = "対応待ちのメールはありません";
 "today.clear.detail" = "新しいメールは Klorn が仕分け次第ここに表示されます。";
 "today.lane.a11y" = "%1$@、未処理 %2$d件";
@@ -671,3 +673,27 @@
 "today.ask.a11y" = "アシスタントに質問";
 "today.signIn.restart" = "最初からやり直す";
 "a11y.position" = "%2$d個中 %1$d番目";
+
+/* Signed-out, offline and first-launch states (M6) */
+"auth.continueGoogle" = "Googleで続ける";
+"state.signedOut.title" = "Klornにサインイン";
+"state.offline.title" = "オフラインです";
+"state.offline.detail" = "Klornのサーバーに接続できません。接続を確認して、もう一度お試しください。";
+"banner.offline" = "オフラインです。最後に同期したときのメールを表示しています。";
+"banner.stale" = "更新できませんでした。最後に同期したときのメールを表示しています。";
+"bar.notUpdating" = "更新停止中";
+"bar.retry.help" = "再試行";
+"bar.retry.a11y" = "%@。再試行";
+"error.server" = "サーバーエラー（%d）。";
+"error.network" = "ネットワークエラーです。接続を確認してください。";
+"onboarding.windowTitle" = "Klornへようこそ";
+"onboarding.value" = "すべてのメールとカレンダーをひとつの場所に。メールは%dつのレーンに振り分けられます。";
+"onboarding.lane.push" = "今すぐ知らせます";
+"onboarding.lane.meeting" = "日程調整。カレンダーと照合します";
+"onboarding.lane.queue" = "今日読む価値のあるメール";
+"onboarding.lane.info" = "領収書やお知らせ。保管のみ";
+"onboarding.lane.silent" = "保管し、表示しません";
+"onboarding.lanes.note" = "レーンはメールを分類するだけです。メールに対して何も実行しません。";
+"onboarding.privacy" = "Klornは分類のためにメールを読みます。それ以上に何をしてよいかは、あなたが決めます。";
+"error.unreachable" = "Klornのサーバーに接続できません。";
+"banner.dismiss.a11y" = "メッセージを閉じる";

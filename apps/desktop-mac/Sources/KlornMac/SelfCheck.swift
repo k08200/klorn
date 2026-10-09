@@ -1845,6 +1845,12 @@ func runSelfChecks() async -> Bool {
     print("Main window navigation and Today (M4b):")
     for (name, ok) in await navSelfChecks(sourceDir: sourceDir) { check(name, ok) }
 
+    print("Compose window and sheets (M5):")
+    for (name, ok) in await windowSelfChecks(sourceDir: sourceDir) { check(name, ok) }
+
+    print("States and first launch (M6):")
+    for (name, ok) in await stateSelfChecks(sourceDir: sourceDir) { check(name, ok) }
+
     print("Localization:")
     // A key present in one language and missing in another ships a raw key
     // ("prefs.done") to whoever runs the other language — the kind of bug that
