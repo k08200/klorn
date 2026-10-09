@@ -123,6 +123,24 @@ export interface EmailListResponse {
   page: number;
 }
 
+/** Mail in one lane: every message, and the unread ones among them. */
+export interface EmailLaneCount {
+  total: number;
+  unread: number;
+}
+
+/** One entry per live lane — retired values are folded server-side. */
+export type EmailLaneCounts = Record<LiveTier, EmailLaneCount>;
+
+/**
+ * `GET /api/email/lane-counts?inbox=` — feeds Mail's lane control (MAIL_V2).
+ * `inbox` scopes it to one connected account exactly as on the list.
+ */
+export interface EmailLaneCountsResponse {
+  counts: EmailLaneCounts;
+  source: "gmail" | "demo";
+}
+
 /**
  * Which mail service a connected inbox lives on. Mirrors the API's
  * InboxProviderName (Phase 1 of the multi-provider plan). Clients must treat

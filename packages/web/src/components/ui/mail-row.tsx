@@ -15,6 +15,9 @@
  * variants only apply under @media (hover: hover), so on touch the actions
  * are reachable by focus only; swipe actions arrive with P10.
  * Height is 52px with a fine pointer and 64px on touch / narrow viewports.
+ * Weight carries read state: an unread row's sender and subject are semibold,
+ * a read row's are regular, so a list of read mail does not read as all-bold.
+ * The time has a fixed right-aligned column so the badges before it line up.
  */
 
 import type { Tier } from "@klorn/contract";
@@ -39,6 +42,12 @@ export interface MailRowProps {
   timeIso?: string;
   /** Recorded lane. Omit/null for no chip — never a guess. */
   tier?: Tier | null;
+  /**
+   * Shown in the chip's place while there is no recorded lane ("Sorting…").
+   * A neutral, dashed capsule: it says the judge has not assigned a lane, and
+   * never borrows a lane's colour. Ignored when `tier` is set.
+   */
+  tierPending?: string;
   source?: MailRowSource | null;
   unread?: boolean;
   hasAttachment?: boolean;
@@ -74,6 +83,7 @@ function PaperclipGlyph() {
 
 function RowContent(props: MailRowProps) {
   const { sender, subject, snippet, time, timeIso, tier, source, unread, hasAttachment } = props;
+  const { tierPending } = props;
   return (
     <>
       <span className="flex min-w-0 items-center gap-2">
@@ -95,13 +105,21 @@ function RowContent(props: MailRowProps) {
         )}
         {source && <SourceBadge provider={source.provider} nickname={source.nickname} />}
         {tier && <LaneChip tier={tier} />}
-        <time dateTime={timeIso} className="shrink-0 text-caption tabular-nums text-ink-muted">
+        {!tier && tierPending && (
+          <span className="shrink-0 rounded-full border border-dashed border-line-strong px-2 py-px text-caption text-ink-muted">
+            {tierPending}
+          </span>
+        )}
+        <time
+          dateTime={timeIso}
+          className="min-w-16 shrink-0 text-right text-caption tabular-nums text-ink-muted"
+        >
           {time}
         </time>
       </span>
       <span className="flex min-w-0 items-baseline gap-2 pl-4">
         <span
-          className={`shrink-0 truncate text-head ${unread ? "text-ink" : "text-ink-strong"} max-w-[60%]`}
+          className={`shrink-0 truncate text-head ${unread ? "text-ink" : "font-normal text-ink-strong"} max-w-[60%]`}
         >
           {subject}
         </span>
