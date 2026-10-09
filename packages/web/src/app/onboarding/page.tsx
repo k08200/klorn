@@ -10,15 +10,25 @@ import { useAuth } from "../../lib/auth";
 import { homePath } from "../../lib/home";
 import { useT } from "../../lib/i18n";
 import { ReviewStep } from "./review-step";
+import { OnboardingV2 } from "./v2/flow";
 
 export default function OnboardingPage() {
   return (
     <AuthGuard>
       <Suspense>
-        <OnboardingFlow />
+        <OnboardingGate />
       </Suspense>
     </AuthGuard>
   );
+}
+
+/**
+ * ONBOARDING_V2 (productization plan P8): the multi-provider first run when
+ * the server says so, otherwise the flow below, untouched.
+ */
+function OnboardingGate() {
+  const { user } = useAuth();
+  return user?.onboardingV2 === true ? <OnboardingV2 /> : <OnboardingFlow />;
 }
 
 type Step = 1 | 2 | 3 | 4;

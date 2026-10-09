@@ -1665,6 +1665,114 @@ const de: Record<string, string> = {
   "assistantHub.activity.undo.hint":
     "„Rückgängig anfordern“ kehrt allein nichts um: Es legt eine Rücknahme unter Freigaben an.",
   "assistantHub.approvals.unknownTitle": "Aktion, die Klorn ausführen möchte",
+  // Multi-provider first run (productization plan P8, ONBOARDING_V2)
+  "onboardingV2.steps.label": "Einrichtungsschritte",
+  "onboardingV2.steps.connect": "Konten",
+  "onboardingV2.steps.sync": "Synchronisierung",
+  "onboardingV2.steps.review": "Prüfung",
+  "onboardingV2.steps.finish": "Fertig",
+  "onboardingV2.steps.done": "abgeschlossen",
+  "onboardingV2.continue": "Weiter",
+  "onboardingV2.retry": "Erneut versuchen",
+  "onboardingV2.connect.title": "Konten einbinden",
+  "onboardingV2.connect.body":
+    "Bei Klorn melden Sie sich einmal an. Verbinden Sie jetzt jedes Mailkonto ein einziges Mal, dann führt Klorn dessen Mail an einem Ort zusammen, nach Spuren sortiert. Jede Kachel nennt, was das Konto mitbringt.",
+  "onboardingV2.connect.loading": "Verfügbare Konten werden geladen",
+  "onboardingV2.connect.loadError": "Die verfügbaren Konten konnten nicht geladen werden.",
+  "onboardingV2.connect.lanesNote":
+    "Klorn sortiert Mail in 5 Spuren: PUSH, MEETING, QUEUE, INFO und SILENT. Eine Spur ist ein Etikett. Das Sortieren sendet, archiviert oder löscht nie etwas.",
+  "onboardingV2.connect.skip": "Vorerst überspringen",
+  "onboardingV2.connect.continueHint": "Verbinden Sie mindestens ein Konto, um fortzufahren.",
+  "onboardingV2.connect.needsPlan": "Ihr Tarif umfasst das Hinzufügen dieses Kontos nicht.",
+  "onboardingV2.connect.failed":
+    "Die Verbindung konnte nicht gestartet werden. Es wurde nichts geändert. Versuchen Sie es erneut.",
+  "onboardingV2.tile.connect": "Verbinden",
+  "onboardingV2.tile.add": "Weiteres Konto hinzufügen",
+  "onboardingV2.tile.manage": "Verwalten",
+  "onboardingV2.tile.reconnect": "Neu verbinden",
+  "onboardingV2.tile.accountsLabel": "Verbundene {provider}-Konten",
+  "onboardingV2.tile.google.scope": "Gmail und Google Kalender.",
+  "onboardingV2.tile.google.addNote":
+    "Ein zweites Google-Konto bringt seine Mail mit, nicht seinen Kalender.",
+  "onboardingV2.tile.outlook.scope": "Mail von Outlook und Microsoft 365.",
+  "onboardingV2.tile.naver.scope": "Naver Mail, mit einem App-Passwort.",
+  "onboardingV2.tile.icloud.scope": "iCloud Mail, mit einem anwendungsspezifischen Passwort.",
+  "onboardingV2.tile.readOnly":
+    "Vorerst nur lesend. Antworten, Archivieren und Als-gelesen-Markieren erfolgen in der App des Anbieters.",
+  "onboardingV2.health.connected": "Verbunden",
+  "onboardingV2.health.syncing": "Wird synchronisiert",
+  "onboardingV2.health.reconnect": "Neu verbinden",
+  "onboardingV2.sheet.naver.title": "Naver Mail verbinden",
+  "onboardingV2.sheet.naver.body":
+    "Eine einmalige Verbindung. Naver verlangt ein App-Passwort für Mail-Apps, nicht Ihr Naver-Passwort. Klorn speichert es verschlüsselt.",
+  "onboardingV2.sheet.icloud.title": "iCloud Mail verbinden",
+  "onboardingV2.sheet.icloud.body":
+    "Eine einmalige Verbindung. Apple verlangt ein anwendungsspezifisches Passwort, nicht das Passwort Ihres Apple Accounts. Klorn speichert es verschlüsselt.",
+  "onboardingV2.sheet.close": "Schließen",
+  "onboardingV2.sheet.done": "Fertig",
+  "onboardingV2.return.okTitle": "{provider} verbunden.",
+  "onboardingV2.return.failTitle": "{provider} wurde nicht verbunden.",
+  "onboardingV2.return.connected": "Fügen Sie ein weiteres Konto hinzu oder fahren Sie fort.",
+  "onboardingV2.return.denied":
+    "Der Zugriff wurde auf der Seite des Anbieters abgelehnt. Es wurde nichts geändert.",
+  "onboardingV2.return.offline":
+    "Google hat keinen dauerhaften Zugriff gewährt, daher kann Klorn nicht weiter synchronisieren. Verbinden Sie erneut und erlauben Sie alle Berechtigungen. Bei einem Arbeitskonto muss eventuell die Administration Klorn zulassen.",
+  "onboardingV2.return.unverified": "Die E-Mail-Adresse dieses Kontos ist nicht bestätigt.",
+  "onboardingV2.return.self": "Dieses Konto haben Sie bereits verbunden.",
+  "onboardingV2.return.limit": "Das Kontolimit Ihres Tarifs ist erreicht.",
+  "onboardingV2.return.failed": "Es wurde nichts geändert. Sie können es erneut versuchen.",
+  "onboardingV2.return.dismiss": "Schließen",
+  "onboardingV2.sync.title": "Ihre Mail wird gelesen",
+  "onboardingV2.sync.titleDone": "Ihre Mail ist da",
+  "onboardingV2.sync.titleStatus": "Stand Ihrer Konten",
+  "onboardingV2.sync.body":
+    "Klorn liest die aktuelle Mail jedes Kontos und sortiert sie in Spuren. Die Zahlen unten zeigen, was bisher angekommen ist. Der Rest trifft im Hintergrund ein, auch nachdem Sie fortfahren.",
+  "onboardingV2.sync.bodyNoCounts":
+    "Für diese Konten gibt es noch keine Nachrichtenzählung. Die Mail trifft weiter im Hintergrund ein, und Sie können fortfahren.",
+  "onboardingV2.sync.summary": "{ready} von {total} Konten warten nicht mehr",
+  "onboardingV2.sync.counting": "Wird gezählt…",
+  "onboardingV2.sync.messages": "{count} Nachrichten",
+  "onboardingV2.sync.events": "{count} Termine",
+  "onboardingV2.sync.state.reading": "Mail wird gelesen",
+  "onboardingV2.sync.state.ready": "Bereit",
+  "onboardingV2.sync.state.background":
+    "Verbunden. Noch keine Zählung; die Mail trifft im Hintergrund ein.",
+  "onboardingV2.sync.state.attention": "Aktion erforderlich",
+  "onboardingV2.sync.reconnect": "Neu verbinden",
+  "onboardingV2.sync.waitHint": "In wenigen Sekunden können Sie ohne Warten fortfahren.",
+  "onboardingV2.sync.continueEarly": "Ohne Warten fortfahren",
+  "onboardingV2.sync.lanesTitle": "Bisher sortiert",
+  "onboardingV2.sync.lanesNote":
+    "Mail, die Klorn noch nicht sortiert hat, wird bis dahin unter QUEUE gezählt.",
+  "onboardingV2.review.title": "Klorns Sortierung prüfen",
+  "onboardingV2.review.body":
+    "Hier sind einige Ihrer Mails und die Spur, in der jede gelandet ist. Bestätigen Sie oder verschieben Sie eine mit einem Tipp. Klorn lernt aus Ihren Antworten.",
+  "onboardingV2.review.loading": "Einige Ihrer Mails werden geladen",
+  "onboardingV2.review.loadError":
+    "Ihre Mail konnte für diese Prüfung nicht geladen werden. Sie können fortfahren; es geht nichts verloren.",
+  "onboardingV2.review.empty":
+    "Noch wurde nichts sortiert. Klorn sortiert im Hintergrund weiter, und eine Spur können Sie später korrigieren.",
+  "onboardingV2.review.note":
+    "Das Verschieben einer Mail ändert nur ihre Spur. Es wird nichts gesendet, archiviert oder gelöscht.",
+  "onboardingV2.review.looksRight": "Stimmt so",
+  "onboardingV2.review.moveTo": "oder verschieben nach",
+  "onboardingV2.review.moveToLane": "Nach {lane} verschieben",
+  "onboardingV2.review.keptIn": "Bleibt in {lane}",
+  "onboardingV2.review.movedTo": "Nach {lane} verschoben",
+  "onboardingV2.review.undo": "Rückgängig",
+  "onboardingV2.review.unknownSender": "Unbekannter Absender",
+  "onboardingV2.review.noSubject": "(kein Betreff)",
+  "onboardingV2.finish.title": "Die Einrichtung ist abgeschlossen",
+  "onboardingV2.finish.bodyToday":
+    "Heute zeigt die Mail Ihrer verbundenen Konten nach Spuren, neben Ihrem Kalender.",
+  "onboardingV2.finish.bodyLegacy":
+    "Die Mail Ihrer verbundenen Konten ist nach Spuren sortiert und bereit zur Durchsicht.",
+  "onboardingV2.finish.accountsTitle": "Verbundene Konten",
+  "onboardingV2.finish.briefingNote":
+    "Solange Briefings aktiviert sind, kommt eines pro Tag. Das erste ist vielleicht noch nicht da.",
+  "onboardingV2.finish.addAccount": "Weiteres Konto hinzufügen",
+  "onboardingV2.finish.openToday": "Heute öffnen",
+  "onboardingV2.finish.openHome": "Klorn öffnen",
 };
 
 export default de;

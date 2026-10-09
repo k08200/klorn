@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import { TIER_COUNT } from "@/lib/tiers";
 import { apiFetch, startLinkInbox } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { pendingConnect } from "../lib/onboarding-return";
 import { queryKeys } from "../lib/query-keys";
 import { captureClientError } from "../lib/sentry";
 import { useToast } from "./toast";
@@ -74,6 +75,10 @@ export function LinkedInboxesSection() {
   useEffect(() => {
     const linked = searchParams.get("inbox");
     if (!linked) return;
+    // The first run started this connect (ONBOARDING_V2): it reports the
+    // result itself and OnboardingReturn is taking the visitor back there, so
+    // this section must not toast or route to Settings underneath it.
+    if (pendingConnect()) return;
     if (linked === "success") {
       toast("Inbox connected. Klorn will start classifying its mail.", "success");
       void queryClient.invalidateQueries({ queryKey: queryKeys.inbox.linkedAccounts() });

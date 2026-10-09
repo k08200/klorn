@@ -22,6 +22,7 @@ import {
   keyboardTriageEnabled,
   mailV2Enabled,
   naverLoginEnabled,
+  onboardingV2Enabled,
   unifiedHomeEnabled,
 } from "../config.js";
 import { encryptOptional, encryptToken } from "../crypto-tokens.js";
@@ -497,6 +498,9 @@ export function authRoutes(app: FastifyInstance) {
           // the home before /me is ever read, so it needs the flag to land
           // on Today rather than the legacy home.
           unifiedHome: unifiedHomeEnabled(),
+          // ONBOARDING_V2, for the same reason: a fresh registration reaches
+          // /onboarding on this user object, before /me is read.
+          onboardingV2: onboardingV2Enabled(),
         },
       });
     },
@@ -624,6 +628,9 @@ export function authRoutes(app: FastifyInstance) {
           // the home before /me is ever read, so it needs the flag to land
           // on Today rather than the legacy home.
           unifiedHome: unifiedHomeEnabled(),
+          // ONBOARDING_V2, for the same reason: a fresh registration reaches
+          // /onboarding on this user object, before /me is read.
+          onboardingV2: onboardingV2Enabled(),
         },
       });
     },
@@ -715,6 +722,10 @@ export function authRoutes(app: FastifyInstance) {
           // the web makes Today the home and switches to the unified nav only
           // when this is true.
           unifiedHome: unifiedHomeEnabled(),
+          // Server-driven client flag (ONBOARDING_V2, productization plan P8):
+          // the web renders /onboarding as the multi-provider first run only
+          // when this is true.
+          onboardingV2: onboardingV2Enabled(),
         },
       });
     } catch {
@@ -761,6 +772,7 @@ export function authRoutes(app: FastifyInstance) {
           // UNIFIED_HOME: a client that replaces its user with this response
           // must not lose the home it was told at sign-in.
           unifiedHome: unifiedHomeEnabled(),
+          onboardingV2: onboardingV2Enabled(),
         },
       });
     },
