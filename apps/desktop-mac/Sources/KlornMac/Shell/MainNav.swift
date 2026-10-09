@@ -183,7 +183,9 @@ enum NavRules {
 }
 
 /// Neutral monochrome source glyph (productization plan §2): G, M, N, iC,
-/// IMAP, K. Pure for the harness.
+/// IMAP, K. No provider is Klorn's own; a provider this build does not know
+/// is a generic mail source ("@"), never mislabeled as one it knows. Pure for
+/// the harness.
 func sourceMonogram(provider: String?) -> String {
     switch provider?.uppercased() {
     case "GOOGLE", "GMAIL": "G"
@@ -191,8 +193,31 @@ func sourceMonogram(provider: String?) -> String {
     case "NAVER": "N"
     case "ICLOUD", "APPLE": "iC"
     case "IMAP": "IMAP"
-    default: "K"
+    case nil, "KLORN": "K"
+    default: "@"
     }
+}
+
+/// The provider's name as VoiceOver says it, beside the monogram's letters.
+/// Brand names are not translated; the generic one is. Pure for the harness.
+func sourceName(provider: String?) -> String {
+    switch provider?.uppercased() {
+    case "GOOGLE", "GMAIL": "Google"
+    case "MICROSOFT", "OUTLOOK": "Microsoft"
+    case "NAVER": "Naver"
+    case "ICLOUD", "APPLE": "iCloud"
+    case "IMAP": "IMAP"
+    case nil, "KLORN": "Klorn"
+    default: L("source.generic")
+    }
+}
+
+/// "Google account, you@company.example": the account as a row or the reader
+/// header says it. The address is left out when there is none. Pure.
+func sourceA11yLabel(provider: String?, label: String?) -> String {
+    let account = L("source.account.a11y", sourceName(provider: provider))
+    guard let label, !label.trimmingCharacters(in: .whitespaces).isEmpty else { return account }
+    return account + ", " + label
 }
 
 extension AppModel {

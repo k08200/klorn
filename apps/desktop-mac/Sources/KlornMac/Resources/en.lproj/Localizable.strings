@@ -64,6 +64,10 @@
 "mail.filterByInbox" = "Filter by inbox";
 "mail.filterByInbox.a11y" = "Filter by inbox — currently %@";
 "mail.inbox.a11y" = "Inbox %@";
+"mail.unread" = "Unread";
+"mail.hasAttachment" = "Has attachment";
+"source.account.a11y" = "%@ account";
+"source.generic" = "Mail";
 "mail.searchResult.a11y" = "Search result from %1$@: %2$@";
 "mail.noSubject" = "no subject";
 "mail.snooze" = "Snooze…";

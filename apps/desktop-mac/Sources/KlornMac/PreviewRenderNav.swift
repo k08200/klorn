@@ -11,64 +11,76 @@ extension PreviewRender {
       {"id":"p1","source":"email","sourceId":"e1","type":"email","title":"Contract review",
        "tier":"PUSH","tierReason":"You replied to this sender 6 times","priority":9,
        "surfacedAt":"2026-07-29T08:12:00Z",
-       "email":{"emailDbId":"d1","replyState":"needsReply","subject":"Re: Contract review — needs your sign-off today",
+       "email":{"emailDbId":"d1","source":{"provider":"GOOGLE","accountId":null,"label":"you@company.example"},
+                "unread":true,"hasAttachment":true,"replyState":"needsReply","subject":"Re: Contract review — needs your sign-off today",
                 "from":"Sarah Kim <sarah.kim@northwind-partners.com>","receivedAt":"2026-07-29T08:12:00Z"},"hashStale":false},
       {"id":"p2","source":"email","sourceId":"e2","type":"email","title":"Invoice overdue",
        "tier":"PUSH","tierReason":"Payment due today","priority":8,"surfacedAt":"2026-07-29T07:40:00Z",
-       "email":{"emailDbId":"d2","subject":"Invoice #4821 is overdue",
+       "email":{"emailDbId":"d2","source":{"provider":"OUTLOOK","accountId":"li-2","label":"side-project@outlook.example"},
+                "unread":true,"hasAttachment":false,"subject":"Invoice #4821 is overdue",
                 "from":"billing@vendor.io","receivedAt":"2026-07-29T07:40:00Z"},"hashStale":false},
       {"id":"p3","source":"email","sourceId":"e3","type":"email","title":"Sign-off needed",
        "tier":"PUSH","tierReason":"Blocking two people since yesterday","priority":7,
        "surfacedAt":"2026-07-29T07:05:00Z",
-       "email":{"emailDbId":"d3","replyState":"needsReply","draftReady":true,"subject":"Waiting on your sign-off to ship",
+       "email":{"emailDbId":"d3","source":{"provider":"GOOGLE","accountId":null,"label":"you@company.example"},
+                "unread":false,"hasAttachment":false,"replyState":"needsReply","draftReady":true,"subject":"Waiting on your sign-off to ship",
                 "from":"Alex Carter <alex@team.co>","receivedAt":"2026-07-29T07:05:00Z"},"hashStale":false}],
       "MEETING":[
       {"id":"m1","source":"email","sourceId":"e4","type":"email","title":"Standup moved",
        "tier":"MEETING","tierReason":"Reschedule, no conflict on your calendar","priority":5,
        "surfacedAt":"2026-07-29T06:50:00Z",
-       "email":{"emailDbId":"d4","subject":"Standup moved to 10:30",
+       "email":{"emailDbId":"d4","source":{"provider":"GOOGLE","accountId":null,"label":"you@company.example"},
+                "unread":false,"hasAttachment":false,"subject":"Standup moved to 10:30",
                 "from":"Alex Carter <alex@team.co>","receivedAt":"2026-07-29T06:50:00Z"},"hashStale":false},
       {"id":"m2","source":"email","sourceId":"e5","type":"email","title":"Board prep",
        "tier":"MEETING","tierReason":"Invitation for Thursday, one conflict","priority":5,
        "surfacedAt":"2026-07-29T05:31:00Z",
-       "email":{"emailDbId":"d5","subject":"Invitation: Q3 board prep, Thursday 14:00",
+       "email":{"emailDbId":"d5","source":{"provider":"ICLOUD","accountId":"li-3","label":"you@icloud.example"},
+                "unread":true,"hasAttachment":false,"subject":"Invitation: Q3 board prep, Thursday 14:00",
                 "from":"Priya Patel <priya@northwind.io>","receivedAt":"2026-07-29T05:31:00Z"},"hashStale":false}],
       "QUEUE":[
       {"id":"q1","source":"email","sourceId":"e6","type":"email","title":"Design review notes",
        "tier":"QUEUE","tierReason":"A colleague, no deadline","priority":4,"surfacedAt":"2026-07-29T06:20:00Z",
-       "email":{"emailDbId":"d6","subject":"Notes from the onboarding design review",
+       "email":{"emailDbId":"d6","source":{"provider":"GOOGLE","accountId":null,"label":"you@company.example"},
+                "unread":false,"hasAttachment":false,"subject":"Notes from the onboarding design review",
                 "from":"Jamie Ortiz <jamie@team.co>","snippet":"Three open questions from this morning.",
                 "receivedAt":"2026-07-29T06:20:00Z","signal":{"kind":"category","category":"internal"}},"hashStale":false},
       {"id":"q2","source":"email","sourceId":"e7","type":"email","title":"Renewal quote",
        "tier":"QUEUE","tierReason":"Vendor quote, renewal is next month","priority":4,
        "surfacedAt":"2026-07-29T05:58:00Z",
-       "email":{"emailDbId":"d7","subject":"Your renewal quote for 2027",
+       "email":{"emailDbId":"d7","source":{"provider":"NAVER","accountId":"li-1","label":"you@naver.example"},
+                "unread":true,"hasAttachment":true,"subject":"Your renewal quote for 2027",
                 "from":"Dana Whitfield <dana@datahost.example>","snippet":"Attached is the quote we discussed.",
                 "receivedAt":"2026-07-29T05:58:00Z","signal":{"kind":"replied","count":3}},"hashStale":false},
       {"id":"q3","source":"email","sourceId":"e8","type":"email","title":"Candidate packet",
        "tier":"QUEUE","tierReason":"Recruiting thread you follow","priority":3,"surfacedAt":"2026-07-29T05:12:00Z",
-       "email":{"emailDbId":"d8","subject":"Candidate packet: senior backend engineer",
+       "email":{"emailDbId":"d8","source":{"provider":"GOOGLE","accountId":null,"label":"you@company.example"},
+                "unread":false,"hasAttachment":true,"subject":"Candidate packet: senior backend engineer",
                 "from":"Morgan Lee <morgan@team.co>","snippet":"Interview loop is Friday.",
                 "receivedAt":"2026-07-29T05:12:00Z","signal":{"kind":"category","category":"internal"}},"hashStale":false},
       {"id":"q4","source":"email","sourceId":"e9","type":"email","title":"Customer question",
        "tier":"QUEUE","tierReason":"Customer question, not urgent","priority":3,"surfacedAt":"2026-07-29T04:44:00Z",
-       "email":{"emailDbId":"d9","subject":"Question about export limits on the team plan",
+       "email":{"emailDbId":"d9","source":{"provider":"OUTLOOK","accountId":"li-2","label":"side-project@outlook.example"},
+                "unread":true,"hasAttachment":false,"subject":"Question about export limits on the team plan, and whether the cap resets with the billing month or the calendar month",
                 "from":"Lena Fischer <lena@brightlabs.example>","snippet":"We hit the cap twice last week.",
                 "receivedAt":"2026-07-29T04:44:00Z","signal":{"kind":"category","category":"customer"}},"hashStale":false},
       {"id":"q5","source":"email","sourceId":"e10","type":"email","title":"Offsite logistics",
        "tier":"QUEUE","tierReason":"Planning thread, reply by Friday","priority":3,"surfacedAt":"2026-07-29T03:30:00Z",
-       "email":{"emailDbId":"d10","subject":"Offsite logistics: rooms and travel",
-                "from":"Noor Haddad <noor@team.co>","snippet":"Please confirm your dates.",
+       "email":{"emailDbId":"d10","source":{"provider":"ICLOUD","accountId":"li-3","label":"you@icloud.example"},
+                "unread":false,"hasAttachment":false,"subject":"Offsite logistics: rooms and travel",
+                "from":"Noor Haddad, Workplace Experience and Travel Operations at Northwind Partners International <noor@team.co>","snippet":"Please confirm your dates.",
                 "receivedAt":"2026-07-29T03:30:00Z"},"hashStale":false},
       {"id":"q6","source":"email","sourceId":"e11","type":"email","title":"Weekly digest",
        "tier":"QUEUE","tierReason":"Newsletter you open most weeks","priority":2,"surfacedAt":"2026-07-29T02:10:00Z",
-       "email":{"emailDbId":"d11","subject":"This week in developer tooling",
+       "email":{"emailDbId":"d11","source":{"provider":"NAVER","accountId":"li-1","label":"you@naver.example"},
+                "unread":false,"hasAttachment":false,"subject":"This week in developer tooling",
                 "from":"BetaList <hello@betalist.example>","snippet":"Twelve launches worth a look.",
                 "receivedAt":"2026-07-29T02:10:00Z","signal":{"kind":"category","category":"promotions"}},"hashStale":false}],
       "INFO":[
       {"id":"i1","source":"email","sourceId":"e12","type":"email","title":"Sign-in alert",
        "tier":"INFO","tierReason":"Automated security notice","priority":2,"surfacedAt":"2026-07-29T04:05:00Z",
-       "email":{"emailDbId":"d12","subject":"New sign-in to your account",
+       "email":{"emailDbId":"d12","source":{"provider":"GOOGLE","accountId":null,"label":"you@company.example"},
+                "unread":false,"hasAttachment":false,"subject":"New sign-in to your account",
                 "from":"OpenAI <noreply@openai.example>","receivedAt":"2026-07-29T04:04:00Z"},"hashStale":false}],
       "SILENT":[],"AUTO":[]},
      "summary":{"PUSH":3,"MEETING":2,"QUEUE":14,"INFO":9,"SILENT":41,"AUTO":0,"total":69}}
@@ -118,7 +130,8 @@ extension PreviewRender {
     private static let navInboxesJSON = """
     [{"id":null,"email":"you@company.example","kind":"primary","needsReconnect":false,"provider":"GOOGLE","purpose":"work"},
      {"id":"li-1","email":"you@naver.example","kind":"linked","needsReconnect":false,"provider":"NAVER","purpose":"personal"},
-     {"id":"li-2","email":"side-project@outlook.example","kind":"linked","needsReconnect":true,"provider":"MICROSOFT","purpose":"mixed"}]
+     {"id":"li-2","email":"side-project@outlook.example","kind":"linked","needsReconnect":true,"provider":"MICROSOFT","purpose":"mixed"},
+     {"id":"li-3","email":"you@icloud.example","kind":"linked","needsReconnect":false,"provider":"ICLOUD","purpose":"personal"}]
     """
 
     private static let navActionsJSON = """
@@ -184,6 +197,8 @@ extension PreviewRender {
         shot("mail-lanes", navModel(firewallJSON: navFirewallJSON)) {
             $0.listMode = NavRules.defaultMailMode
         }
+        // Mixed lanes (M7): the one place a row carries its lane chip.
+        shot("mail-all", navModel(firewallJSON: navFirewallJSON)) { $0.listMode = .inbox }
         shot("calendar-full", model) { $0.listMode = .calendar }
         shot("assistant", model) { $0.showAssistantPane(.approvals) }
 

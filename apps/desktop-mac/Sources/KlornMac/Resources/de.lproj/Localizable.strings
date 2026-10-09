@@ -64,6 +64,10 @@
 "mail.filterByInbox" = "Nach Postfach filtern";
 "mail.filterByInbox.a11y" = "Nach Postfach filtern — aktuell %@";
 "mail.inbox.a11y" = "Postfach %@";
+"mail.unread" = "Ungelesen";
+"mail.hasAttachment" = "Mit Anhang";
+"source.account.a11y" = "%@-Konto";
+"source.generic" = "E-Mail";
 "mail.searchResult.a11y" = "Suchtreffer von %1$@: %2$@";
 "mail.noSubject" = "kein Betreff";
 "mail.snooze" = "Zurückstellen…";

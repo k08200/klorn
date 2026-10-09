@@ -117,8 +117,8 @@ struct NavRowLabel: View {
         .frame(height: indented ? 28 : 32)
         .background(alignment: .leading) {
             if selected {
-                RoundedRectangle(cornerRadius: 1.5).fill(Theme.accent)
-                    .frame(width: 3).padding(.vertical, 7)
+                Capsule().fill(Theme.accent)
+                    .frame(width: 3).padding(.vertical, Theme.s2)
             }
         }
         .background(

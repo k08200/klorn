@@ -5,6 +5,8 @@ import SwiftUI
 struct SearchHitRow: View {
     @Environment(AppModel.self) private var model
     let hit: EmailSearchItem
+    /// `.window`: the main window's row. The default is the bar's row.
+    var style: MailRowStyle = .legacy
 
     private var selected: Bool { model.selectedItemId == hit.id }
     private var sender: String {
@@ -14,6 +16,13 @@ struct SearchHitRow: View {
     @State private var hovering = false
 
     var body: some View {
+        switch style {
+        case .legacy: legacyBody
+        case .window: WindowSearchHitRow(hit: hit)
+        }
+    }
+
+    private var legacyBody: some View {
         Button {
             Task { await model.selectSearchResult(hit) }
         } label: {
@@ -66,6 +75,9 @@ struct FullRow: View {
     /// the row must carry its own lane; lane views leave it off — the lane
     /// is the screen title there.
     var showLaneChip = false
+    /// `.window`: the main window's row (one-badge rule). The default is
+    /// the bar's row, unchanged.
+    var style: MailRowStyle = .legacy
     @FocusState private var focused: Bool
 
     private var selected: Bool { model.selectedItemId == item.id }
@@ -73,6 +85,13 @@ struct FullRow: View {
     @State private var hovering = false
 
     var body: some View {
+        switch style {
+        case .legacy: legacyBody
+        case .window: WindowMailRow(item: item, actions: actions, showLaneChip: showLaneChip)
+        }
+    }
+
+    private var legacyBody: some View {
         HStack(spacing: 12) {
             // The select action is a real Button (role + keyboard + focus), not an
             // onTapGesture, so VoiceOver / Full-Keyboard-Access can open the message.

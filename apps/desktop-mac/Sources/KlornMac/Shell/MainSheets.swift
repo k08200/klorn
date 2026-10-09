@@ -68,16 +68,19 @@ extension EnvironmentValues {
 private struct ModalCard: ViewModifier {
     @Environment(\.modalPresentation) private var presentation
     let width: CGFloat
+    /// The bar's overlay cards keep the inset they shipped with until the
+    /// overlays go with the bar (M8); a sheet uses the spacing grid.
+    private static let overlayInset: CGFloat = 22
 
     func body(content: Content) -> some View {
         if presentation == .sheet {
-            content.padding(22).frame(width: width)
+            content.padding(Theme.s6).frame(width: width)
         } else {
             content
-                .padding(22)
+                .padding(Self.overlayInset)
                 .frame(width: width)
-                .background(Theme.panel, in: RoundedRectangle(cornerRadius: 16))
-                .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.line))
+                .background(Theme.panel, in: RoundedRectangle(cornerRadius: Theme.Radius.lg))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.lg).strokeBorder(Theme.line))
                 .shadow(color: Theme.panelShadow, radius: 24, y: 8)
         }
     }

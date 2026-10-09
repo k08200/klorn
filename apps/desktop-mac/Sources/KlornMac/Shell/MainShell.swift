@@ -25,10 +25,13 @@ struct MainShell: View {
         // .top: any overflow must be cut at the bottom, never eat the top
         // row (clipping lessons, 2026-08-20).
         ZStack(alignment: .top) {
-            Theme.bg
+            // Under the transparent title bar too (M7); the shell itself
+            // stays inside the safe area, below the traffic lights.
+            Theme.bg.ignoresSafeArea()
             HStack(spacing: 0) {
                 NavSidebar(actions: actions)
-                Rectangle().fill(Theme.line).frame(width: 1)
+                Rectangle().fill(Theme.line).frame(width: Theme.hairline)
+                    .ignoresSafeArea(.container, edges: .top)
                 VStack(spacing: 0) {
                     // Loaded mail whose refresh is failing (M6).
                     if let notice = model.connectionNotice { ConnectionBanner(notice: notice) }
@@ -68,7 +71,7 @@ struct MainShell: View {
             // Every section needs an account; none shows a skeleton for it.
             VStack(alignment: .leading, spacing: 0) {
                 SectionHeader(title: model.mainNav.section.title)
-                Rectangle().fill(Theme.line).frame(height: 1)
+                Rectangle().fill(Theme.line).frame(height: Theme.hairline)
                 SurfaceStateView(state: model.surfaceState)
             }
         } else {

@@ -98,6 +98,8 @@ vi.mock("../db.js", () => ({
     // a TypeError to Sentry and pollute the assertions below).
     user: { findUnique: vi.fn(async () => ({ companyDomains: [] })) },
     senderLabel: { findMany: vi.fn(async () => []) },
+    // Attachment-glyph lookup (fail-open, same Sentry caveat as above).
+    emailAttachment: { groupBy: vi.fn(async () => []) },
   },
 }));
 

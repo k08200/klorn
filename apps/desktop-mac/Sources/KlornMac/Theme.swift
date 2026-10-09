@@ -10,7 +10,7 @@ enum Theme {
     /// EFFECTIVE appearance at draw time, so every consumer of these tokens
     /// flips with the app appearance (system / Preferences override) with no
     /// per-view work. Light values are byte-identical to the pre-dark theme.
-    private static func dyn(light: RGBA, dark: RGBA) -> Color {
+    static func dyn(light: RGBA, dark: RGBA) -> Color {
         Color(nsColor: NSColor(name: nil) { appearance in
             let c = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light
             return NSColor(srgbRed: c.r, green: c.g, blue: c.b, alpha: c.a)
@@ -56,9 +56,11 @@ enum Theme {
 
     /// The floating surface. Dark is a neutral raised gray one step above the
     /// canvas — not navy (see `bg`).
-    static let panel = dyn(
-        light: (1, 1, 1, panelDefaultOpacity), dark: (0.078, 0.078, 0.086, panelDefaultOpacity))
+    static let panel = dyn(light: panelLight, dark: panelDark)
     static let panelDefaultOpacity = 0.92
+    /// The panel as raw components, for the self-check's contrast math.
+    static let panelLight: RGBA = (1, 1, 1, panelDefaultOpacity)
+    static let panelDark: RGBA = (0.078, 0.078, 0.086, panelDefaultOpacity)
 
     /// Panel fill opacity: fully opaque when the user asked to reduce transparency
     /// (the 8% see-through can drop contrast over a busy backdrop), else the
@@ -110,11 +112,12 @@ enum Theme {
     ///   QUEUE    #b45309 4.81 / 4.40   |  #fbbf24 11.86 / 11.11 / 10.56
     ///   INFO     #0e7490 5.13 / 4.70   |  #22d3ee 10.95 / 10.26 / 9.75
     ///   SILENT   #57534e 7.30 / 6.69   |  #a8a29e 7.85 / 7.35 / 6.99
-    /// Known gap: LaneChip sets 10pt text on a 13% wash of the same tint;
+    /// The bar's LaneChip sets 10pt text on a 13% wash of the same tint;
     /// light QUEUE measures 4.19:1 and INFO 4.46:1 there (dark: all ≥ 5.2).
-    /// Both were far lower on the old ramp; the chip is rebuilt as a
-    /// primitive in M7/P2, which owns the wash. The self-check pins the inks
-    /// on `bg` in both appearances and the pairwise distinctness.
+    /// The main window's chip uses `chipInk` instead (DesignTokens.swift),
+    /// which clears 4.5:1 on every surface; the bar's chip goes with the bar
+    /// in M8. The self-check pins the inks on `bg` in both appearances and
+    /// the pairwise distinctness.
     static func tint(_ tier: Tier) -> Color {
         dyn(light: laneComponents(tier, dark: false), dark: laneComponents(tier, dark: true))
     }
@@ -136,7 +139,7 @@ enum Theme {
         }
     }
 
-    private static func hex(_ value: UInt32) -> RGBA {
+    static func hex(_ value: UInt32) -> RGBA {
         (Double((value >> 16) & 0xFF) / 255, Double((value >> 8) & 0xFF) / 255,
          Double(value & 0xFF) / 255, 1)
     }
@@ -221,11 +224,18 @@ enum Theme {
     // One opacity scale for every interactive rest→hover→selected state, so
     // "how raised is this?" reads consistently across the app. Never invent
     // ad-hoc `Color.white.opacity(…)` fills in views — pick a rung.
-    static let surfaceRaised = dyn(light: (0, 0, 0, 0.04), dark: (1, 1, 1, 0.06))  // cards, chips at rest
-    static let surfaceHover = dyn(light: (0, 0, 0, 0.07), dark: (1, 1, 1, 0.10))  // pointer feedback
+    static let surfaceRaised = dyn(light: surfaceRaisedLight, dark: surfaceRaisedDark)  // cards, chips at rest
+    static let surfaceHover = dyn(light: surfaceHoverLight, dark: surfaceHoverDark)  // pointer feedback
     /// Selection speaks in the accent — tinted fill (the accent bar still
     /// carries the hard edge, so selection is never color-alone).
-    static let surfaceSelected = accent.opacity(0.12)
+    static let surfaceSelected = accent.opacity(surfaceSelectedOpacity)
+    /// The ladder as raw components, for the self-check's contrast math.
+    static let surfaceRaisedLight: RGBA = (0, 0, 0, 0.04)
+    static let surfaceRaisedDark: RGBA = (1, 1, 1, 0.06)
+    static let surfaceHoverLight: RGBA = (0, 0, 0, 0.07)
+    static let surfaceHoverDark: RGBA = (1, 1, 1, 0.10)
+    static let accentComponents: RGBA = (0.055, 0.647, 0.914, 1)
+    static let surfaceSelectedOpacity = 0.12
 
     /// Status signals (diagnostics dots). AppKit's system colors, so they
     /// follow light/dark and Increase Contrast. Never color-alone: callers
@@ -259,8 +269,8 @@ enum Theme {
         /// Metadata: reasons, timestamps, helper lines. 11pt.
         static let caption = Font.system(size: 11)
         /// DEPRECATED — the plan retires 10pt text; new code uses `caption`
-        /// (11pt). Kept so existing call sites (column headers, LaneChip)
-        /// keep compiling until the M7 view migration moves them.
+        /// (11pt). The main window is free of it (self-check guard); the
+        /// bar's surfaces keep it until they are deleted in M8.
         static let micro = Font.system(size: 10, weight: .semibold)
         /// Counts — monospaced digits so columns of numbers never shimmy.
         static let numeric = Font.system(size: 13).monospacedDigit()
@@ -288,6 +298,8 @@ enum Theme {
     static let s3: CGFloat = 12
     static let s4: CGFloat = 16
     static let s6: CGFloat = 24
+    static let s8: CGFloat = 32
+    static let s12: CGFloat = 48
 }
 
 /// Real macOS blur behind the panel — the difference between "a white
@@ -501,6 +513,9 @@ struct EmptyState: View {
     let icon: String
     let title: String
     var hint: String? = nil
+    /// `.window`: the type roles (13pt / 11pt) instead of the bar's system
+    /// styles, whose caption is the retired 10pt.
+    var style: ShellStyle = .bar
 
     var body: some View {
         VStack(spacing: Theme.s3) {
@@ -509,9 +524,11 @@ struct EmptyState: View {
                 .foregroundStyle(Theme.textDim)
                 .opacity(0.7)
                 .accessibilityHidden(true)
-            Text(title).font(.callout).foregroundStyle(Theme.textDim)
+            Text(title).font(style == .window ? Theme.Typo.body : .callout)
+                .foregroundStyle(Theme.textDim)
             if let hint {
-                Text(hint).font(.caption).foregroundStyle(Theme.textDim)
+                Text(hint).font(style == .window ? Theme.Typo.caption : .caption)
+                    .foregroundStyle(Theme.textDim)
                     .multilineTextAlignment(.center)
             }
         }
