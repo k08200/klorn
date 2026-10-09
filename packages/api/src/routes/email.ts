@@ -14,6 +14,7 @@ import type {
   EmailThreadListResponse,
   InboxesResponse,
   InboxPurpose,
+  LiveTier,
   TrustWire,
 } from "@klorn/contract";
 import type { EmailMessage, FeedbackSignal, Prisma } from "@prisma/client";
@@ -21,9 +22,20 @@ import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireAppAccess, requireEntitled } from "../billing/entitlement-guard.js";
 import { planHasFeature } from "../billing/stripe.js";
-import { MULTI_INBOX_SYNC_ENABLED, providerInboxSelectorEnabled } from "../config.js";
+import {
+  MULTI_INBOX_SYNC_ENABLED,
+  mailV2Enabled,
+  providerInboxSelectorEnabled,
+} from "../config.js";
 import { prisma } from "../db.js";
-import { listLaneTiersByEmail } from "../judge/email-lanes.js";
+import {
+  isLanePageFilter,
+  LANE_FILTERS,
+  listLaneTiersByEmail,
+  pageEmailIdsInLane,
+  parseLaneFilter,
+  resolveInboxScope,
+} from "../judge/email-lanes.js";
 import { isTier } from "../judge/tiers.js";
 import { getCachedInteractionNode } from "../learning/interaction-graph.js";
 import {
@@ -75,6 +87,7 @@ import { registerEmailAttachmentsRoutes } from "./email-attachments.js";
 import { registerEmailBulkRoutes } from "./email-bulk.js";
 import { registerEmailCandidatesRoutes } from "./email-candidates.js";
 import { registerEmailFeedbackRoutes } from "./email-feedback.js";
+import { registerEmailLaneRoutes } from "./email-lanes.js";
 import { registerEmailMailboxRoutes } from "./email-mailbox.js";
 import { registerEmailMutationsRoutes } from "./email-mutations.js";
 import { registerEmailRepliesRoutes } from "./email-replies.js";
@@ -621,6 +634,9 @@ const listEmailsQuerySchema = {
     category: { type: "string", maxLength: 500 },
     page: { type: "string", maxLength: 500 },
     inbox: { type: "string", maxLength: 500 },
+    // Lane filter (MAIL_V2). Validated in the handler, not here, so that with
+    // the flag off any value is ignored exactly as an undeclared param was.
+    tier: { type: "string", maxLength: 500 },
   },
 } as const;
 
@@ -682,14 +698,15 @@ export async function emailRoutes(app: FastifyInstance) {
   registerEmailSenderLabelRoutes(app);
   registerEmailWaitingRoutes(app);
   await registerEmailBulkRoutes(app);
+  registerEmailLaneRoutes(app, { demoRows: () => DEMO_EMAILS });
 
   // ─── Sync & List Emails ───────────────────────────────────────────────
   // GET /api/email?filter=unread|urgent|reply-needed|attachments|candidates&search=keyword&category=billing&page=1
   app.get(
     "/",
     { schema: { querystring: listEmailsQuerySchema } },
-    async (request): Promise<EmailListResponse> => {
-      const { filter, search, category, page, inbox } = request.query as {
+    async (request, reply): Promise<EmailListResponse> => {
+      const { filter, search, category, page, inbox, tier } = request.query as {
         filter?: string;
         search?: string;
         category?: string;
@@ -698,9 +715,24 @@ export async function emailRoutes(app: FastifyInstance) {
         // Google inbox, or a specific LinkedInboxAccount id. Always userId-scoped
         // below, so a foreign/garbage id yields zero rows — never a cross-user leak.
         inbox?: string;
+        // Mail v2: one of the five live lanes, or ALL. Honoured only while
+        // MAIL_V2 is on.
+        tier?: string;
       };
       const uid = getUserId(request);
       const pageNum = parsePageNum(page);
+      const lane = mailV2Enabled() && tier !== undefined ? parseLaneFilter(tier) : undefined;
+      if (lane === null) {
+        return reply
+          .code(400)
+          .send({ error: `tier must be one of ${LANE_FILTERS.join(", ")}.` } as never);
+      }
+      const laneOnly = lane && lane !== "ALL" ? lane : null;
+      if (laneOnly && !isLanePageFilter(filter)) {
+        return reply
+          .code(400)
+          .send({ error: `filter=${filter} cannot be combined with a lane.` } as never);
+      }
       // Heavy-email users (~200/day) clicking "Load more" 10 times to see one
       // morning's intake was the #1 dogfood friction. 50 keeps the first
       // payload under ~25 KB once joined with attachment summaries and trust
@@ -728,6 +760,7 @@ export async function emailRoutes(app: FastifyInstance) {
           );
         }
         if (filter === "attachments" || filter === "candidates") emails = [];
+        if (laneOnly) emails = emails.filter((e) => e.tier === laneOnly);
         if (search) {
           const s = search.toLowerCase();
           emails = emails.filter(
@@ -823,15 +856,39 @@ export async function emailRoutes(app: FastifyInstance) {
       } else if (inbox && inbox !== "all") {
         where.linkedInboxAccountId = inbox;
       }
-
-      const [emails, total, unreadCount] = await Promise.all([
-        prisma.emailMessage.findMany({
-          where,
-          orderBy: { receivedAt: "desc" },
+      const listPage = () =>
+        Promise.all([
+          prisma.emailMessage.findMany({
+            where,
+            orderBy: { receivedAt: "desc" },
+            skip: (pageNum - 1) * pageSize,
+            take: pageSize,
+          }),
+          prisma.emailMessage.count({ where }),
+        ]);
+      // Lane page (MAIL_V2): paged by a join on the lane, so `total` is the
+      // lane's own count; the rows are then read by id and put back in the
+      // join's order. A failure throws — never the unfiltered list.
+      const lanePage = async (laneView: LiveTier): Promise<[EmailMessage[], number]> => {
+        const page = await pageEmailIdsInLane({
+          userId: uid,
+          lane: laneView,
+          scope: await resolveInboxScope(uid, inbox),
+          filter,
+          category,
+          search,
           skip: (pageNum - 1) * pageSize,
           take: pageSize,
-        }),
-        prisma.emailMessage.count({ where }),
+        });
+        if (page.ids.length === 0) return [[], page.total];
+        const rows = await prisma.emailMessage.findMany({
+          where: { userId: uid, id: { in: page.ids } },
+        });
+        const byId = new Map(rows.map((row) => [row.id, row]));
+        return [page.ids.flatMap((id) => byId.get(id) ?? []), page.total];
+      };
+      const [[emails, total], unreadCount] = await Promise.all([
+        laneOnly ? lanePage(laneOnly) : listPage(),
         prisma.emailMessage.count({ where: { userId: uid, isRead: false } }),
       ]);
 

@@ -351,6 +351,18 @@ export function keyboardTriageEnabled(): boolean {
     (process.env.KEYBOARD_TRIAGE ?? "").trim().toLowerCase(),
   );
 }
+// Mail v2 (productization plan P5) — OFF by default (repo doctrine). ONE flag
+// for both halves: the web client learns it from GET /api/auth/me
+// (`user.mailV2`) and renders /email as the lane-first list (lanes as the
+// primary filter, one-badge rows, account facet); the API honours the `tier`
+// query param on GET /api/email and serves GET /api/email/lane-counts. While
+// OFF the list ignores `tier` (what it did before the param existed), the
+// counts route 404s like any unknown route, and /me reports false. Read at
+// request time with the same lenient truthy parse as the flags above, so a
+// flip needs no redeploy.
+export function mailV2Enabled(): boolean {
+  return ["true", "1", "yes", "on"].includes((process.env.MAIL_V2 ?? "").trim().toLowerCase());
+}
 // MCP write tools — API key permission level and the MCP write set (steps A1
 // and A2a of docs/providers/unified-platform-plan.md). OFF by default (repo
 // doctrine). It gates minting a read-write API key, using one, the MCP-only
