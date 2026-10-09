@@ -49,6 +49,34 @@ On launch the pill appears at the top-center of your screen. Click it and choose
 nonce-poll flow), one consent also connects Gmail/Calendar, and the app stores
 the JWT in the **Keychain**. The firewall then loads.
 
+### First launch and the not-ready states
+
+The first launch after install with no account opens a small **onboarding
+window** instead of a logged-out full view: the logo, one sentence, the
+sign-in buttons the server offers (Google always; Apple and Naver when
+enabled), the five lanes with what each means, and what Klorn does with the
+mail it reads. Signing in closes it and opens the full view, where the lane
+guide and the mailbox question follow as before. It is the same for both
+values of `macMainWindow`. A first launch that already has a token opens the
+full view, and later launches open nothing.
+
+Every mail surface (the bar's full view and expanded panel, the main
+window) maps the model to one `SurfaceState`:
+
+| State | Shows |
+|-------|-------|
+| signed out | "Sign in to Klorn", the sign-in buttons |
+| signing in | "Finish signing in", *Start over* |
+| loading | the "sorting every message into its lane" skeleton, and only here |
+| offline (no server reached, nothing loaded) | "You're offline", *Try again* |
+| failed (the server answered with an error, nothing loaded) | "Couldn't load your mail", the reason, *Try again* |
+| ready | the mail |
+
+Loaded mail whose refresh is failing stays on screen under a banner
+("You're offline. This is the mail from the last sync." or "Klorn couldn't
+refresh…") with *Try again*. The pill's chip reads *Offline* only when the
+network is the cause, *Not updating* otherwise, and a click retries.
+
 ### Keyboard
 
 - **`⌥⌘K`** (Option-Command-K) — expand / collapse the bar from anywhere, even
@@ -319,7 +347,8 @@ A full XCTest suite can be added when building under Xcode/CI.
 | `Mail/` | `FullList.swift` (the list column, alone in its file), `MailRow.swift` (`FullRow`, `SearchHitRow`), `MailboxList.swift`, `WaitingOnList.swift`, `CommitmentsList.swift`, `ReadingPane.swift`, `Compose.swift` (`ComposePanel`), `MailSection.swift` (main window: lane bar + list + reader) |
 | `Calendar/` | `CalendarScreen.swift`, `EventRows.swift` (upcoming rows, week chips, event popover), `CalendarSection.swift` (main window) |
 | `Assistant/` | `AssistantDock.swift`, `AssistantThread.swift` (thread + `ChatBubble`), `AssistantSection.swift` (main window: panes + thread) |
-| `Shared/` | views used by more than one feature: `Controls.swift`, `TierMenus.swift` (`SnoozeMenu`, `TierMenu`), `LaneChip.swift` (lane, signal, reply-state and label chips), `AccountRows.swift` (account rows, diagnostics, update row), `SegmentedBar.swift` (filter tabs, `SourceBadge`) |
+| `Onboarding/` | first launch (M6): `OnboardingWindow.swift` (`OnboardingRules`, `OnboardingWindowController`), `OnboardingView.swift` (the window's content, `LaneExplainer`) |
+| `Shared/` | `SurfaceState.swift` (M6: `SurfaceState`, `SurfaceStateRules`, `SurfaceStateView`, `ConnectionBanner`, `SignInButtons`, `SolidButtonStyle`); views used by more than one feature: `Controls.swift`, `TierMenus.swift` (`SnoozeMenu`, `TierMenu`), `LaneChip.swift` (lane, signal, reply-state and label chips), `AccountRows.swift` (account rows, diagnostics, update row), `SegmentedBar.swift` (filter tabs, `SourceBadge`) |
 | `SettingsWindow.swift` | `Settings` scene root (`TabView`), tab grouping, `SettingsOpener` |
 | `MainWindow.swift` | standard main window (M2, `macMainWindow`): `MainWindowController` (a lazily created AppKit `NSWindow`, never a SwiftUI scene; also attaches the sheets, M5), its rules, the Settings beta switch |
 | `Mail/ComposeWindow.swift` | compose window (M5, same flag): `ComposeWindowRules`, `ComposeWindowController` (lazily created, driven by the model's `showCompose`) |

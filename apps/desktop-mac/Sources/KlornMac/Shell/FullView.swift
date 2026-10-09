@@ -92,13 +92,23 @@ struct FullView: View {
             VStack(spacing: 0) {
                 header
                 Rectangle().fill(Theme.line).frame(height: 1)
+                // Loaded mail whose refresh is failing says so, with a retry
+                // (M6); it used to say nothing at all.
+                if let notice = model.connectionNotice { ConnectionBanner(notice: notice) }
                 HStack(spacing: 0) {
                     FullSidebar(selected: $model.listMode, actions: actions).frame(width: 220)
                     Rectangle().fill(Theme.line).frame(width: 1)
-                    FullList(mode: model.listMode, actions: actions, keyZone: $keyZone)
-                        .frame(width: 420)
-                    Rectangle().fill(Theme.line).frame(width: 1)
-                    ReadingPane(actions: actions, keyZone: keyZone).frame(maxWidth: .infinity)
+                    if SurfaceStateRules.isBlocking(model.surfaceState) {
+                        // Signed out, signing in, offline or failed (M6): its
+                        // own view. The list's "sorting" skeleton is for
+                        // loading only.
+                        SurfaceStateView(state: model.surfaceState)
+                    } else {
+                        FullList(mode: model.listMode, actions: actions, keyZone: $keyZone)
+                            .frame(width: 420)
+                        Rectangle().fill(Theme.line).frame(width: 1)
+                        ReadingPane(actions: actions, keyZone: keyZone).frame(maxWidth: .infinity)
+                    }
                 }
                 // Any new selection (click, key, card) starts in the list.
                 .onChange(of: model.selectedItemId) { _, _ in keyZone = .list }

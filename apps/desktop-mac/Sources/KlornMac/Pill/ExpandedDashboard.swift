@@ -292,7 +292,10 @@ private struct RecentPushColumn: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             ColumnHeader(title: L("section.recentPush"))
-            if model.queue == nil {
+            if SurfaceStateRules.isBlocking(model.surfaceState) {
+                // Signed out, offline or failed (M6): never the skeleton.
+                SurfaceStateView(state: model.surfaceState, compact: true)
+            } else if model.queue == nil {
                 FirstSyncState()
             } else if items.isEmpty {
                 EmptyState(icon: Tier.push.emptyIcon, title: Tier.push.emptyTitle)

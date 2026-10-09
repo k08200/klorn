@@ -15,7 +15,7 @@
 "bar.smaller" = "Réduire";
 "bar.smaller.help" = "Revenir au panneau compact";
 "bar.push" = "%d PUSH";
-"bar.offline" = "hors ligne";
+"bar.offline" = "Hors ligne";
 "bar.allClear" = "Tout est traité";
 "bar.signingIn" = "Connexion…";
 "bar.loading" = "Chargement…";
@@ -658,7 +658,6 @@
 "today.signingIn.detail" = "Terminez la connexion dans votre navigateur. Cette fenêtre se met à jour ensuite.";
 "today.failed.title" = "Impossible de charger le courrier";
 "today.retry" = "Réessayer";
-"today.stale" = "Actualisation impossible. Voici le dernier résultat chargé par Klorn.";
 "today.clear.title" = "Rien ne vous attend";
 "today.clear.detail" = "Le nouveau courrier apparaît ici dès que Klorn l'a trié.";
 "today.lane.a11y" = "%1$@, %2$d ouverts";
@@ -672,3 +671,25 @@
 "today.ask.a11y" = "Demander à l'assistant";
 "today.signIn.restart" = "Recommencer";
 "a11y.position" = "%1$d sur %2$d";
+
+/* Signed-out, offline and first-launch states (M6) */
+"auth.continueGoogle" = "Continuer avec Google";
+"state.signedOut.title" = "Connectez-vous à Klorn";
+"state.offline.title" = "Vous êtes hors ligne";
+"state.offline.detail" = "Klorn ne parvient pas à joindre le serveur. Vérifiez votre connexion, puis réessayez.";
+"banner.offline" = "Vous êtes hors ligne. Voici le courrier de la dernière synchronisation.";
+"banner.stale" = "Actualisation impossible. Voici le courrier de la dernière synchronisation.";
+"bar.notUpdating" = "Non actualisé";
+"bar.retry.help" = "Réessayer";
+"bar.retry.a11y" = "%@. Réessayer";
+"error.server" = "Erreur du serveur (%d).";
+"error.network" = "Erreur réseau. Vérifiez votre connexion.";
+"onboarding.windowTitle" = "Bienvenue dans Klorn";
+"onboarding.value" = "Tout votre courrier et vos agendas, triés en %d files.";
+"onboarding.lane.push" = "Vous interrompt tout de suite";
+"onboarding.lane.meeting" = "Planification, vérifiée avec votre agenda";
+"onboarding.lane.queue" = "À lire aujourd'hui";
+"onboarding.lane.info" = "Reçus et avis, classés";
+"onboarding.lane.silent" = "Conservé, sans être affiché";
+"onboarding.lanes.note" = "Les files ne font que trier votre courrier. Elles n'agissent jamais dessus.";
+"onboarding.privacy" = "Klorn lit votre courrier pour le trier. Rien n'est supprimé et rien n'est répondu sans vous.";

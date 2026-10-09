@@ -11,13 +11,10 @@ struct MailSection: View {
     @State private var keyZone: MailKeyZone = .list
 
     var body: some View {
-        if model.queue == nil, let error = model.loadError {
+        if SurfaceStateRules.isBlocking(model.surfaceState) {
             // The list would show its loading skeleton forever; say what
-            // happened instead.
-            StateMessage(
-                icon: "exclamationmark.triangle", title: L("today.failed.title"),
-                detail: error, actionTitle: L("today.retry"),
-                action: { Task { await model.loadQueue() } })
+            // happened instead (offline, or the server's reason).
+            SurfaceStateView(state: model.surfaceState)
         } else {
             HStack(spacing: 0) {
                 VStack(alignment: .leading, spacing: 0) {

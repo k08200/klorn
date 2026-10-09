@@ -19,15 +19,8 @@ struct TodayLane: Equatable, Sendable {
     var remaining: Int { max(count - rows.count, 0) }
 }
 
-/// What the Today screen can be. The loading skeleton is for loading only;
-/// signed out and failed are their own states with a message and an action.
-enum TodayState: Equatable, Sendable {
-    case signedOut
-    case signingIn
-    case loading
-    case failed(String)
-    case ready
-}
+/// What the Today screen can be: the states every mail surface shares (M6).
+typealias TodayState = SurfaceState
 
 /// Pure composition rules for Today (productization plan §1), pinned by the
 /// self-check.
@@ -38,15 +31,11 @@ enum TodayRules {
     /// from pushing the rest of the day off screen; the remainder is a link.
     static let expandedRowLimit = 12
 
-    static func state(phase: AppModel.Phase, hasQueue: Bool, loadError: String?) -> TodayState {
-        switch phase {
-        case .signedOut: return .signedOut
-        case .signingIn: return .signingIn
-        case .signedIn:
-            if hasQueue { return .ready }
-            if let loadError { return .failed(loadError) }
-            return .loading
-        }
+    static func state(
+        phase: AppModel.Phase, hasQueue: Bool, loadError: String?, offline: Bool = false
+    ) -> TodayState {
+        SurfaceStateRules.state(
+            phase: phase, hasQueue: hasQueue, loadError: loadError, offline: offline)
     }
 
     /// The lanes Today lists, loudest first. SILENT is never part of it, and

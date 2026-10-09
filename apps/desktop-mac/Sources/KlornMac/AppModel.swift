@@ -15,7 +15,12 @@ final class AppModel {
     private(set) var phase: Phase
     var signInError: String?
     private(set) var queue: FirewallResponse?
-    private(set) var loadError: String?
+    private(set) var loadError: String? {
+        didSet { if loadError == nil { loadOffline = false } }
+    }
+    /// The failure behind `loadError` was the network (no server reached),
+    /// not an answer from the server. Decides "offline" vs "couldn't load".
+    private(set) var loadOffline = false
     private(set) var isLoadingQueue = false
 
     /// Called with newly-arrived PUSH items (never the first-load baseline).
@@ -51,8 +56,16 @@ final class AppModel {
             onWindowPresenceChanged?()
         }
     }
-    /// Wired by the AppDelegate to re-apply the activation policy when
-    /// Settings, the main window or the compose window opens or closes.
+    /// True while the first-launch onboarding window (M6) is on screen. A
+    /// window the user has to act in must be reachable from the Dock.
+    var onboardingWindowOpen = false {
+        didSet {
+            guard onboardingWindowOpen != oldValue else { return }
+            onWindowPresenceChanged?()
+        }
+    }
+    /// Wired by the AppDelegate to re-apply the activation policy when a
+    /// window (Settings, main, compose, onboarding) opens or closes.
     @ObservationIgnored var onWindowPresenceChanged: (() -> Void)?
     /// Wired by the AppDelegate to the compose window (M5): fires when the
     /// composer is asked for (again) or put away. Unused with the flag off.
@@ -603,6 +616,19 @@ final class AppModel {
         self.pendingActions = pendingActions
         self.commitments = commitments
         chatMessages = chat
+    }
+
+    /// Render-probe seam for the state shots (M6): the states no fixture
+    /// reaches. No network, no disk.
+    func seedStateForRender(
+        phase: Phase, loadError: String? = nil, offline: Bool = false,
+        loginProviders: [String]? = nil, signInError: String? = nil
+    ) {
+        self.phase = phase
+        self.loadError = loadError
+        loadOffline = offline && loadError != nil
+        if let loginProviders { self.loginProviders = loginProviders }
+        self.signInError = signInError
     }
 
     /// Kick off the headless lifecycle at app launch. With no window driving it,
@@ -1726,7 +1752,7 @@ final class AppModel {
         } catch APIError.unauthorized {
             signOut()
         } catch {
-            loadError = Self.describe(error)
+            noteLoadFailure(error)
             Log.app.warning("pin sender failed: \(String(describing: error), privacy: .private)")
         }
     }
@@ -1740,7 +1766,7 @@ final class AppModel {
         } catch APIError.unauthorized {
             signOut()
         } catch {
-            loadError = Self.describe(error)
+            noteLoadFailure(error)
             Log.app.warning("unpin sender failed: \(String(describing: error), privacy: .private)")
         }
     }
@@ -1771,7 +1797,7 @@ final class AppModel {
     /// Undo an optimistic hide when the mutation failed, then refetch the truth.
     private func unhide(_ item: FirewallItem, _ error: Error) {
         dismissed.remove(item.id)
-        loadError = Self.describe(error)
+        noteLoadFailure(error)
         Task { await loadQueue() }
     }
 
@@ -2128,7 +2154,7 @@ final class AppModel {
         } catch APIError.unauthorized {
             signOut()  // token expired/invalid — drop to sign-in
         } catch {
-            loadError = Self.describe(error)
+            noteLoadFailure(error)
         }
     }
 
@@ -2204,11 +2230,17 @@ final class AppModel {
 
     /// User-facing message only — the raw error (which can echo response bytes
     /// or internal shape) is logged privately, never surfaced.
+    /// Record a failed load: the message, and whether it was the network.
+    private func noteLoadFailure(_ error: Error) {
+        loadError = Self.describe(error)
+        loadOffline = SurfaceStateRules.isOffline(error)
+    }
+
     private static func describe(_ error: Error) -> String {
         Log.app.error("queue load failed: \(String(describing: error), privacy: .private)")
         switch error {
-        case APIError.http(let code, let msg): return msg ?? "Server error (\(code))."
-        case APIError.transport: return "Network error — check your connection."
+        case APIError.http(let code, let msg): return msg ?? L("error.server", code)
+        case APIError.transport: return L("error.network")
         case APIError.decoding: return L("error.badResponse")
         case APIError.unauthorized: return L("error.sessionExpired")
         case APIError.forbidden: return L("error.needsPro")

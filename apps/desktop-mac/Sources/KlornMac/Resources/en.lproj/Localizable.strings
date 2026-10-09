@@ -15,7 +15,7 @@
 "bar.smaller" = "Smaller";
 "bar.smaller.help" = "Back to the compact panel";
 "bar.push" = "%d PUSH";
-"bar.offline" = "offline";
+"bar.offline" = "Offline";
 "bar.allClear" = "All clear";
 "bar.signingIn" = "Signing in…";
 "bar.loading" = "Loading…";
@@ -658,7 +658,6 @@
 "today.signingIn.detail" = "Complete the sign-in in your browser. This window updates when it is done.";
 "today.failed.title" = "Couldn't load your mail";
 "today.retry" = "Try again";
-"today.stale" = "Couldn't refresh. This is the last result Klorn loaded.";
 "today.clear.title" = "Nothing is waiting on you";
 "today.clear.detail" = "New mail shows up here as Klorn sorts it.";
 "today.lane.a11y" = "%1$@, %2$d open";
@@ -672,3 +671,25 @@
 "today.ask.a11y" = "Ask the assistant";
 "today.signIn.restart" = "Start over";
 "a11y.position" = "%1$d of %2$d";
+
+/* Signed-out, offline and first-launch states (M6) */
+"auth.continueGoogle" = "Continue with Google";
+"state.signedOut.title" = "Sign in to Klorn";
+"state.offline.title" = "You're offline";
+"state.offline.detail" = "Klorn can't reach its server. Check your connection, then try again.";
+"banner.offline" = "You're offline. This is the mail from the last sync.";
+"banner.stale" = "Klorn couldn't refresh. This is the mail from the last sync.";
+"bar.notUpdating" = "Not updating";
+"bar.retry.help" = "Try again";
+"bar.retry.a11y" = "%@. Try again";
+"error.server" = "Server error (%d).";
+"error.network" = "Network error. Check your connection.";
+"onboarding.windowTitle" = "Welcome to Klorn";
+"onboarding.value" = "All your mail and calendars, sorted into %d lanes.";
+"onboarding.lane.push" = "Interrupts you now";
+"onboarding.lane.meeting" = "Scheduling, checked against your calendar";
+"onboarding.lane.queue" = "Worth reading today";
+"onboarding.lane.info" = "Receipts and notices, filed";
+"onboarding.lane.silent" = "Kept, out of your way";
+"onboarding.lanes.note" = "Lanes only sort your mail. They never act on it.";
+"onboarding.privacy" = "Klorn reads your mail to sort it. Nothing is deleted and nothing is answered without you.";

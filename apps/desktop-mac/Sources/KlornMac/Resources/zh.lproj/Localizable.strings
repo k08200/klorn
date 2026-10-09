@@ -658,7 +658,6 @@
 "today.signingIn.detail" = "在浏览器中完成登录后，此窗口会更新。";
 "today.failed.title" = "无法加载邮件";
 "today.retry" = "重试";
-"today.stale" = "无法刷新。这是 Klorn 上次加载的结果。";
 "today.clear.title" = "没有等待你处理的邮件";
 "today.clear.detail" = "新邮件经 Klorn 分类后会显示在这里。";
 "today.lane.a11y" = "%1$@，%2$d 封未处理";
@@ -672,3 +671,25 @@
 "today.ask.a11y" = "询问助理";
 "today.signIn.restart" = "重新开始";
 "a11y.position" = "第 %1$d 项，共 %2$d 项";
+
+/* Signed-out, offline and first-launch states (M6) */
+"auth.continueGoogle" = "使用 Google 继续";
+"state.signedOut.title" = "登录 Klorn";
+"state.offline.title" = "你已离线";
+"state.offline.detail" = "Klorn 无法连接服务器。请检查网络连接后重试。";
+"banner.offline" = "你已离线。这是上次同步时的邮件。";
+"banner.stale" = "无法刷新。这是上次同步时的邮件。";
+"bar.notUpdating" = "未更新";
+"bar.retry.help" = "重试";
+"bar.retry.a11y" = "%@。重试";
+"error.server" = "服务器错误（%d）。";
+"error.network" = "网络错误。请检查网络连接。";
+"onboarding.windowTitle" = "欢迎使用 Klorn";
+"onboarding.value" = "你的所有邮件和日历，整理进 %d 个通道。";
+"onboarding.lane.push" = "立即提醒你";
+"onboarding.lane.meeting" = "日程安排，已对照你的日历";
+"onboarding.lane.queue" = "值得今天阅读";
+"onboarding.lane.info" = "收据和通知，已归档";
+"onboarding.lane.silent" = "保留，但不显示";
+"onboarding.lanes.note" = "通道只对邮件分类，从不对邮件执行任何操作。";
+"onboarding.privacy" = "Klorn 读取你的邮件以进行分类。不会删除任何东西，也不会背着你回复。";

@@ -298,7 +298,10 @@ enum PreviewRender {
         // shots above keep their state.
         ok = renderMainWindow(dir: dir, dark: renderDark, actions: actions) && ok
         // The compose window and the sheets (M5).
-        return renderWindows(dir: dir, dark: renderDark) && ok
+        ok = renderWindows(dir: dir, dark: renderDark) && ok
+        // Signed out, offline, failed and first launch (M6).
+        return renderStates(
+            dir: dir, dark: renderDark, actions: actions, firewallJSON: firewallJSON) && ok
     }
 
     /// Render one view to `<dir>/<name>.png`. A view taller than the frame
