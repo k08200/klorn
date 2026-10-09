@@ -526,6 +526,8 @@
 "appearance.toDark" = "Passer en mode sombre";
 "compose.editDraft" = "Modifier le brouillon";
 "compose.discard" = "Supprimer le brouillon";
+"compose.discard.confirm.title" = "Supprimer ce brouillon ?";
+"compose.discard.confirm.detail" = "Ce que vous avez écrit ici sera perdu.";
 "mailbox.loadMore" = "Charger plus";
 "chip.billing" = "Facturation";
 

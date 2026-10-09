@@ -34,10 +34,21 @@ enum ComposeWindowRules {
     /// touches the draft; only Discard and a successful send clear it.
     enum Step: Equatable { case show, close, none }
 
-    static func step(macMainWindow: Bool, showCompose: Bool, windowVisible: Bool) -> Step {
-        guard usesWindow(macMainWindow: macMainWindow) else { return .none }
+    static func step(
+        macMainWindow: Bool, signedIn: Bool, showCompose: Bool, windowVisible: Bool
+    ) -> Step {
+        // Switched off, or signed out, with the window up: close it. With
+        // the flag off the overlay is the composer, and two must not coexist.
+        guard usesWindow(macMainWindow: macMainWindow), signedIn else {
+            return windowVisible ? .close : .none
+        }
         if showCompose { return .show }
         return windowVisible ? .close : .none
+    }
+
+    /// Discarding asks first when there is something to lose.
+    static func confirmsDiscard(to: String, subject: String, body: String) -> Bool {
+        [to, subject, body].contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
 
     static func title(editingDraft: Bool) -> String {
@@ -48,9 +59,10 @@ enum ComposeWindowRules {
 /// The compose window's content: the one composer, laid out to fill.
 struct ComposeWindowRoot: View {
     let model: AppModel
+    var onDiscard: () -> Void = {}
 
     var body: some View {
-        ComposePanel(style: .window)
+        ComposePanel(style: .window, onDiscard: onDiscard)
             .environment(model)
             // L() is not observable; rebuild on a language change.
             .id(model.settings.languageRevision)
@@ -83,8 +95,9 @@ final class ComposeWindowController: NSObject, NSWindowDelegate {
     /// request, so asking for an open composer brings it forward.
     func sync() {
         let step = ComposeWindowRules.step(
-            macMainWindow: model.settings.macMainWindow, showCompose: model.showCompose,
-            windowVisible: window?.isVisible ?? false)
+            macMainWindow: model.settings.macMainWindow, signedIn: model.phase == .signedIn,
+            showCompose: model.showCompose,
+            windowVisible: (window?.isVisible ?? false) || (window?.isMiniaturized ?? false))
         switch step {
         case .show: show()
         case .close: if !closing { window?.close() }
@@ -98,7 +111,7 @@ final class ComposeWindowController: NSObject, NSWindowDelegate {
         if !window.isVisible {
             // A fresh view per open, so the To field takes the keyboard
             // again (the hosting view outlives a closed window).
-            host?.rootView = ComposeWindowRoot(model: model)
+            host?.rootView = root()
         }
         // Explicit user command (⌘N, the Compose button), so take focus.
         NSApp.activate(ignoringOtherApps: true)
@@ -108,7 +121,7 @@ final class ComposeWindowController: NSObject, NSWindowDelegate {
     }
 
     private func makeWindow() -> NSWindow {
-        let host = NSHostingController(rootView: ComposeWindowRoot(model: model))
+        let host = NSHostingController(rootView: root())
         // The window owns its frame; SwiftUI content must never resize it
         // (clipping lessons, 2026-08-19).
         host.sizingOptions = []
@@ -128,6 +141,37 @@ final class ComposeWindowController: NSObject, NSWindowDelegate {
         self.host = host
         self.window = window
         return window
+    }
+
+    private func root() -> ComposeWindowRoot {
+        ComposeWindowRoot(model: model) { [weak self] in self?.discard() }
+    }
+
+    /// Discard Draft. With content it asks first, in a sheet on this window:
+    /// Cancel is the default (Return), discarding is the marked destructive
+    /// button and never the default.
+    private func discard() {
+        let confirm = ComposeWindowRules.confirmsDiscard(
+            to: model.composeTo, subject: model.composeSubject, body: model.composeBody)
+        guard confirm, let window else {
+            discardNow()
+            return
+        }
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = L("compose.discard.confirm.title")
+        alert.informativeText = L("compose.discard.confirm.detail")
+        alert.addButton(withTitle: L("compose.cancel"))
+        alert.addButton(withTitle: L("compose.discard")).hasDestructiveAction = true
+        alert.beginSheetModal(for: window) { [weak self] response in
+            if response == .alertSecondButtonReturn { self?.discardNow() }
+        }
+    }
+
+    private func discardNow() {
+        guard !model.composeSending else { return }
+        model.discardComposeDraft()
+        model.showCompose = false
     }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {

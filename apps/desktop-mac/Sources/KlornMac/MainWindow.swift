@@ -93,13 +93,15 @@ final class MainWindowController: NSObject, NSWindowDelegate {
     func syncSheet() {
         guard let window else { return }
         let wanted = MainSheetRules.presented(
-            active: model.activeMainSheet, windowVisible: window.isVisible)
+            active: model.activeMainSheet, windowVisible: window.isVisible,
+            miniaturized: window.isMiniaturized)
         guard wanted != presentedSheet else { return }
         if let sheetWindow {
             window.endSheet(sheetWindow)
             self.sheetWindow = nil
         }
         presentedSheet = wanted
+        model.mainSheetAttached = wanted != nil
         guard let wanted else { return }
         let sheet = SheetWindow(
             contentViewController: NSHostingController(
@@ -147,6 +149,12 @@ final class MainWindowController: NSObject, NSWindowDelegate {
 
     func windowDidBecomeKey(_ notification: Notification) {
         model.mainWindowIsKey = true
+        // A sheet asked for while the window was away is attached now.
+        syncSheet()
+    }
+
+    func windowDidDeminiaturize(_ notification: Notification) {
+        syncSheet()
     }
 
     func windowDidResignKey(_ notification: Notification) {
@@ -159,6 +167,7 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         if let sheetWindow { window?.endSheet(sheetWindow) }
         sheetWindow = nil
         presentedSheet = nil
+        model.mainSheetAttached = false
         model.mainWindowIsKey = false
         model.mainWindowOpen = false
     }

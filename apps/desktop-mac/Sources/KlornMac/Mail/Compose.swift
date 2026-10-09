@@ -11,6 +11,8 @@ struct ComposePanel: View {
     @Environment(AppModel.self) private var model
     @FocusState private var focusTo: Bool
     var style: ComposeStyle = .overlay
+    /// The window's Discard Draft: the controller confirms, then discards.
+    var onDiscard: () -> Void = {}
 
     var body: some View {
         @Bindable var model = model
@@ -71,10 +73,7 @@ struct ComposePanel: View {
                 } else {
                     // Named for what it does, and never on Escape: in a
                     // window, closing (⌘W) keeps the draft.
-                    Button(L("compose.discard")) {
-                        model.discardComposeDraft()
-                        model.showCompose = false
-                    }
+                    Button(L("compose.discard"), action: onDiscard)
                         .buttonStyle(.plain).font(Theme.Typo.label)
                         .foregroundStyle(Theme.textDim)
                         .disabled(model.composeSending)
