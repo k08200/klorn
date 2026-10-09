@@ -9,6 +9,8 @@
  * the server had been sending since PR #468 was invisible to the client.
  */
 
+import type { InboxProvider } from "./email.js";
+
 /**
  * The canonical attention vocabulary, as serialized on the wire.
  *
@@ -45,6 +47,18 @@ export interface TrustWire {
   totalCount: number;
 }
 
+/**
+ * The connected account a mail arrived on — what a row's source badge shows.
+ * `accountId` is the linked inbox account id, null for the primary account;
+ * `label` is the account's address. Clients treat an unknown `provider` as a
+ * generic mail source (see InboxProvider).
+ */
+export interface FirewallSourceWire {
+  provider: InboxProvider;
+  accountId: string | null;
+  label: string;
+}
+
 /** Email preview attached to EMAIL / email-referencing PENDING_ACTION items. */
 export interface FirewallEmailContext {
   /** EmailMessage.id (DB id) — used by /email/[id]. */
@@ -69,6 +83,16 @@ export interface FirewallEmailContext {
    *  it has not been answered. Absent = none. The draft itself rides on the
    *  detail response. */
   draftReady?: boolean;
+  /** Which account the mail is on. Null when the account cannot be named
+   *  (its linked row is gone, or the lookup failed); absent on older servers.
+   *  Named `source` here, on the preview: the item's own `source` is the
+   *  attention source ("EMAIL", "PENDING_ACTION") and stays a string. */
+  source?: FirewallSourceWire | null;
+  /** The mail's read flag. Null / absent = no claim. */
+  unread?: boolean | null;
+  /** The mail has at least one attached file; an inline image is not one.
+   *  Null / absent = no claim. */
+  hasAttachment?: boolean | null;
 }
 
 export type RowSignalWire =

@@ -60,6 +60,11 @@ import { describePolicy } from "../learning/ontology.js";
 import { getTrustScoresBulk } from "../learning/trust-score.js";
 import { ensureRecentMailSync } from "../mail/activity-sync.js";
 import { isInternalSender } from "../mail/company-domains.js";
+import {
+  accountFactsOf,
+  accountFactsSelect,
+  type LinkedAccountFact,
+} from "../mail/firewall-account-facts.js";
 import { ensureFreshGmailWatch } from "../mail/gmail.js";
 import { draftReadyFor, replyStateOf } from "../mail/reply-state.js";
 import { senderLabelsFor, type UserLabelCategory } from "../mail/sender-labels.js";
@@ -644,7 +649,9 @@ export async function firewallRoutes(app: FastifyInstance) {
                 needsReply: true,
                 repliedAt: true,
                 proactiveDraft: true,
-                linkedInboxAccountId: true,
+                // The mailbox (also the `inbox=` scope), the read flag and the
+                // attachment count: the preview's account facts.
+                ...accountFactsSelect,
               },
             })
           : Promise.resolve([] as never[]),
@@ -668,14 +675,40 @@ export async function firewallRoutes(app: FastifyInstance) {
                 // Gmail thread id — used to collapse a multi-message conversation
                 // (N EmailMessage rows) to a single firewall card. See below.
                 threadId: true,
-                // Which mailbox the message lives on — drives the `inbox=` scope.
-                linkedInboxAccountId: true,
+                // Which mailbox the message lives on — drives the `inbox=` scope
+                // — plus the read flag and the attachment count.
+                ...accountFactsSelect,
               },
             })
           : Promise.resolve([] as never[]),
       ]);
       const emailByGmailId = new Map(emailRowsByGmailId.map((e) => [e.gmailId, e]));
       const emailById = new Map(emailRowsById.map((e) => [e.id, e]));
+
+      // The linked accounts this page's mail lives on, for the source badge:
+      // ONE lookup for the whole page, and none when every mail is on the
+      // primary account. FAIL-OPEN like the chips below — a failed read means
+      // no badge on linked mail, never a 500. The userId scope keeps a stale
+      // or foreign id from resolving to someone else's account.
+      const linkedIds = new Set<string>();
+      for (const e of [...emailRowsByGmailId, ...emailRowsById]) {
+        if (e.linkedInboxAccountId) linkedIds.add(e.linkedInboxAccountId);
+      }
+      let linkedAccounts: Map<string, LinkedAccountFact> | null = new Map();
+      if (linkedIds.size) {
+        try {
+          const accountRows = await prisma.linkedInboxAccount.findMany({
+            where: { userId, id: { in: [...linkedIds] } },
+            select: { id: true, provider: true, email: true },
+          });
+          linkedAccounts = new Map(
+            accountRows.map((a) => [a.id, { provider: a.provider, email: a.email }]),
+          );
+        } catch (err) {
+          linkedAccounts = null;
+          captureError(err, { tags: { scope: "firewall.linkedAccounts" } });
+        }
+      }
 
       // Batch-fetch trust scores for every distinct sender address surfaced
       // by this page. One round-trip; the bulk helper returns a Map keyed by
@@ -715,13 +748,17 @@ export async function firewallRoutes(app: FastifyInstance) {
       // Declared company domains → the 회사 chip is a recorded fact (the
       // sender's domain), never a guess. FAIL-OPEN like the reply lookup:
       // a failed read means no chip, never a 500.
+      // The same read carries the user's own address: the primary account's
+      // label on the source badge.
       let companyDomains: string[] = [];
+      let primaryEmail: string | null = null;
       try {
         const owner = await prisma.user.findUnique({
           where: { id: userId },
-          select: { companyDomains: true },
+          select: { companyDomains: true, email: true },
         });
         companyDomains = owner?.companyDomains ?? [];
+        primaryEmail = owner?.email ?? null;
       } catch (err) {
         captureError(err, { tags: { scope: "firewall.companyDomains" } });
       }
@@ -734,6 +771,8 @@ export async function firewallRoutes(app: FastifyInstance) {
       } catch (err) {
         captureError(err, { tags: { scope: "firewall.senderLabels" } });
       }
+
+      const accountContext = { primaryEmail, linked: linkedAccounts };
 
       const tiers: Record<Tier, FirewallItem[]> = {
         SILENT: [],
@@ -819,6 +858,7 @@ export async function firewallRoutes(app: FastifyInstance) {
                   receivedAt: email.receivedAt?.toISOString() ?? null,
                   replyState: replyStateOf(email),
                   draftReady: draftReadyFor(email),
+                  ...accountFactsOf(email, accountContext),
                   signal: rowSignalFor({
                     userLabel: addr ? (userLabels.get(addr) ?? null) : null,
                     internal: isInternalSender(email.from, companyDomains),
@@ -891,6 +931,7 @@ export async function firewallRoutes(app: FastifyInstance) {
               receivedAt: email.receivedAt?.toISOString() ?? null,
               replyState: replyStateOf(email),
               draftReady: draftReadyFor(email),
+              ...accountFactsOf(email, accountContext),
               signal: rowSignalFor({
                 userLabel: addr ? (userLabels.get(addr) ?? null) : null,
                 internal: isInternalSender(email.from, companyDomains),
