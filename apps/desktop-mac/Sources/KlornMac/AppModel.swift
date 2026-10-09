@@ -96,6 +96,9 @@ final class AppModel {
     /// Message menu acts on. nil while a Sent/Drafts/Archived row owns the
     /// pane (those rows are not firewall items).
     var menuTargetItem: FirewallItem? {
+        // In the main window the reader exists only in Mail (M4b): a mail
+        // that is not on screen is never a menu target.
+        guard readerVisible else { return nil }
         if listMode.showsLiveMessages, selectedMailboxItem != nil { return nil }
         guard let id = selectedItemId else { return nil }
         return queue?.item(id: id)
@@ -134,7 +137,33 @@ final class AppModel {
     /// The mail-first default (shell 2026-08-26): people read a mailbox top
     /// to bottom — the lanes ride on the rows as chips and remain one click
     /// away as categories, but navigation no longer starts lane-first.
-    var listMode: ListMode = .inbox
+    var listMode: ListMode = .inbox {
+        // The main window (M4b) follows every write, same value included:
+        // a deep link to the list mode already set must still bring its
+        // section forward. Unused while `macMainWindow` is off.
+        //
+        // Every write must therefore be USER INTENT (a click, a menu
+        // command, a deep link the user followed). A background writer
+        // (poll, realtime, restore) would yank the window to another
+        // section; the self-check pins the list of writers.
+        didSet {
+            mainNav = NavRules.following(listMode, from: mainNav)
+            // Leaving Mail takes the reader off screen; drop its selection
+            // so nothing invisible stays selected (main window only).
+            if NavRules.clearsSelection(
+                macMainWindow: settings.macMainWindow, section: mainNav.section)
+            {
+                clearSelection()
+            }
+        }
+    }
+    /// Whether a reading pane is on screen for the Message menu: always in
+    /// the bar's full view, only in Mail in the main window.
+    var readerVisible: Bool {
+        NavRules.readerVisible(macMainWindow: settings.macMainWindow, section: mainNav.section)
+    }
+    /// Where the main window is (M4b): section, Assistant pane, last mail facet.
+    var mainNav = MainNav()
     /// Which sidebar the full view shows: the root feature nav, or the mail
     /// client's own sidebar (folders + categories, with a Back row). The
     /// reference clients swap ONE sidebar between levels — two stacked nav
@@ -542,6 +571,21 @@ final class AppModel {
             briefingStructure = try? JSONDecoder().decode(
                 BriefingStructure.self, from: Data(briefingJSON.utf8))
         }
+    }
+
+    /// Render-probe seam for the main-window shots (M4b): the state the
+    /// fixtures cannot reach through `seedForPreview`. No network, no disk.
+    func seedMainWindowForRender(
+        inboxes: [InboxOption], today: TodaySummary?,
+        pendingActions: [PendingActionsResponse.Action], commitments: [CommitmentItem],
+        chat: [ChatMessage], loadError: String? = nil
+    ) {
+        self.loadError = loadError
+        self.inboxes = inboxes
+        self.today = today
+        self.pendingActions = pendingActions
+        self.commitments = commitments
+        chatMessages = chat
     }
 
     /// Kick off the headless lifecycle at app launch. With no window driving it,
