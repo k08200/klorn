@@ -33,10 +33,13 @@ enum MainWindowRules {
 struct MainWindowRoot: View {
     let model: AppModel
     let actions: TopBarActions
+    /// Tells the controller the sheet the model wants has changed (M5).
+    var onSheetChange: () -> Void = {}
 
     var body: some View {
         MainShell(actions: actions)
             .environment(model)
+            .onChange(of: model.activeMainSheet, initial: true) { _, _ in onSheetChange() }
             // L() is not observable; rebuild on a language change (same
             // trick as the bar).
             .id(model.settings.languageRevision)
@@ -57,6 +60,9 @@ final class MainWindowController: NSObject, NSWindowDelegate {
     /// FullView actions for the window; wired by the AppDelegate to the bar.
     var actionsProvider: (() -> TopBarActions?)?
     private(set) var window: NSWindow?
+    /// The attached sheet (M5) and which one it is.
+    private var sheetWindow: NSWindow?
+    private var presentedSheet: MainSheet?
 
     init(model: AppModel) {
         self.model = model
@@ -76,6 +82,34 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         window.makeKeyAndOrderFront(nil)
         model.mainWindowOpen = true
         model.mainWindowIsKey = window.isKeyWindow
+        // A sheet asked for while the window was closed shows now.
+        syncSheet()
+    }
+
+    /// Attach, swap or end the window's sheet so it matches the model: the
+    /// lane guide, the event editor or the connect-time question (M5). The
+    /// model's flags are the only state; dismissing a sheet clears its flag
+    /// and lands back here.
+    func syncSheet() {
+        guard let window else { return }
+        let wanted = MainSheetRules.presented(
+            active: model.activeMainSheet, windowVisible: window.isVisible,
+            miniaturized: window.isMiniaturized)
+        guard wanted != presentedSheet else { return }
+        if let sheetWindow {
+            window.endSheet(sheetWindow)
+            self.sheetWindow = nil
+        }
+        presentedSheet = wanted
+        model.mainSheetAttached = wanted != nil
+        guard let wanted else { return }
+        let sheet = SheetWindow(
+            contentViewController: NSHostingController(
+                rootView: MainSheetRoot(model: model, sheet: wanted)))
+        sheet.styleMask = [.titled]
+        sheet.onCancel = { [weak self] in self?.model.dismiss(wanted) }
+        sheetWindow = sheet
+        window.beginSheet(sheet)
     }
 
     /// Close the main window (header ✕ / "Smaller"); willClose does the rest.
@@ -87,7 +121,9 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         guard let actions = actionsProvider?() else { return nil }
         // Land on Today unless a deep link already chose a destination.
         model.prepareMainNavigation()
-        let host = NSHostingController(rootView: MainWindowRoot(model: model, actions: actions))
+        let host = NSHostingController(
+            rootView: MainWindowRoot(
+                model: model, actions: actions, onSheetChange: { [weak self] in self?.syncSheet() }))
         // The window owns its frame; SwiftUI content must never resize it
         // (clipping lessons, 2026-08-19).
         host.sizingOptions = []
@@ -113,6 +149,12 @@ final class MainWindowController: NSObject, NSWindowDelegate {
 
     func windowDidBecomeKey(_ notification: Notification) {
         model.mainWindowIsKey = true
+        // A sheet asked for while the window was away is attached now.
+        syncSheet()
+    }
+
+    func windowDidDeminiaturize(_ notification: Notification) {
+        syncSheet()
     }
 
     func windowDidResignKey(_ notification: Notification) {
@@ -120,6 +162,12 @@ final class MainWindowController: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
+        // A sheet never outlives its window; its flag stays set, so it is
+        // presented again on the next open.
+        if let sheetWindow { window?.endSheet(sheetWindow) }
+        sheetWindow = nil
+        presentedSheet = nil
+        model.mainSheetAttached = false
         model.mainWindowIsKey = false
         model.mainWindowOpen = false
     }
@@ -130,6 +178,16 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         guard let visible = (window.screen ?? NSScreen.main)?.visibleFrame else { return }
         let clamped = KeyablePanel.clamped(window.frame, into: visible)
         if clamped != window.frame { window.setFrame(clamped, display: true) }
+    }
+}
+
+/// A sheet's window: Escape dismisses it, as a click on the scrim did for the
+/// overlay it replaces.
+private final class SheetWindow: NSWindow {
+    var onCancel: (() -> Void)?
+
+    override func cancelOperation(_ sender: Any?) {
+        onCancel?()
     }
 }
 

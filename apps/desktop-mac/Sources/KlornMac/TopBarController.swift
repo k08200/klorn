@@ -193,7 +193,8 @@ final class TopBarController {
             NSApp.setActivationPolicy(Self.activationPolicy(
                 for: .collapsed, showInDock: model.settings.showInDock,
                 settingsOpen: model.settingsWindowOpen,
-                mainWindowOpen: model.mainWindowOpen))
+                mainWindowOpen: model.mainWindowOpen,
+            composeWindowOpen: model.composeWindowOpen))
             panel?.orderOut(nil)
             model.barFullOpen = false
         }
@@ -236,7 +237,8 @@ final class TopBarController {
         NSApp.setActivationPolicy(Self.activationPolicy(
             for: state, showInDock: model.settings.showInDock,
             settingsOpen: model.settingsWindowOpen,
-            mainWindowOpen: model.mainWindowOpen))
+            mainWindowOpen: model.mainWindowOpen,
+            composeWindowOpen: model.composeWindowOpen))
         model.barFullOpen = (state == .full)
         guard Self.shouldDraw(state: state, pillVisible: effectiveVisible) else {
             panel?.orderOut(nil)
@@ -330,14 +332,19 @@ final class TopBarController {
     ///
     /// `mainWindowOpen`: the standard main window (M2) is the app's real
     /// window, so it is .regular (Dock + Cmd+Tab) for exactly as long as it
-    /// is open. Pure, for the harness.
+    /// is open.
+    ///
+    /// `composeWindowOpen`: the compose window (M5) counts the same way, so
+    /// a draft left open with the main window closed stays reachable from
+    /// the Dock and Cmd+Tab. Pure, for the harness.
     nonisolated static func activationPolicy(
         for state: BarState,
         showInDock: Bool = false,
         settingsOpen: Bool = false,
-        mainWindowOpen: Bool = false
+        mainWindowOpen: Bool = false,
+        composeWindowOpen: Bool = false
     ) -> NSApplication.ActivationPolicy {
-        if showInDock || settingsOpen || mainWindowOpen { return .regular }
+        if showInDock || settingsOpen || mainWindowOpen || composeWindowOpen { return .regular }
         return state == .collapsed ? .accessory : .regular
     }
 
@@ -348,7 +355,8 @@ final class TopBarController {
         NSApp.setActivationPolicy(Self.activationPolicy(
             for: state, showInDock: model.settings.showInDock,
             settingsOpen: model.settingsWindowOpen,
-            mainWindowOpen: model.mainWindowOpen))
+            mainWindowOpen: model.mainWindowOpen,
+            composeWindowOpen: model.composeWindowOpen))
     }
 
     /// Show one item in the full view's reading pane. The single in-app answer

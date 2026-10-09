@@ -296,7 +296,9 @@ enum PreviewRender {
         }
         // The main window's sections (M4b), on their own model so the
         // shots above keep their state.
-        return renderMainWindow(dir: dir, dark: renderDark, actions: actions) && ok
+        ok = renderMainWindow(dir: dir, dark: renderDark, actions: actions) && ok
+        // The compose window and the sheets (M5).
+        return renderWindows(dir: dir, dark: renderDark) && ok
     }
 
     /// Render one view to `<dir>/<name>.png`. A view taller than the frame

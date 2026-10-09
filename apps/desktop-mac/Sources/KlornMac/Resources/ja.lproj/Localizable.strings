@@ -525,6 +525,9 @@
 "appearance.toLight" = "ライトモードに切り替え";
 "appearance.toDark" = "ダークモードに切り替え";
 "compose.editDraft" = "下書きを編集";
+"compose.discard" = "下書きを破棄";
+"compose.discard.confirm.title" = "この下書きを破棄しますか？";
+"compose.discard.confirm.detail" = "ここに書いた内容は失われます。";
 "mailbox.loadMore" = "さらに読み込む";
 "chip.billing" = "請求・領収書";
 

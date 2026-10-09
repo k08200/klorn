@@ -43,9 +43,20 @@ final class AppModel {
             onWindowPresenceChanged?()
         }
     }
+    /// True while the compose window (M5, `macMainWindow`) is on screen. It
+    /// counts like the main window: an open window keeps the app .regular.
+    var composeWindowOpen = false {
+        didSet {
+            guard composeWindowOpen != oldValue else { return }
+            onWindowPresenceChanged?()
+        }
+    }
     /// Wired by the AppDelegate to re-apply the activation policy when
-    /// Settings or the main window opens or closes.
+    /// Settings, the main window or the compose window opens or closes.
     @ObservationIgnored var onWindowPresenceChanged: (() -> Void)?
+    /// Wired by the AppDelegate to the compose window (M5): fires when the
+    /// composer is asked for (again) or put away. Unused with the flag off.
+    @ObservationIgnored var onComposePresentationChanged: (() -> Void)?
 
     /// Mirrors whether the top bar is in its full (app window) state.
     /// Written by TopBarController on every render.
@@ -106,7 +117,20 @@ final class AppModel {
 
     /// A modal overlay covers the full view (its background is disabled).
     var fullViewModalOpen: Bool {
-        showCompose || showTierGuide || showEventEditor || showPurposePrompt
+        MainSheetRules.modalOpen(
+            macMainWindow: settings.macMainWindow,
+            overlayModal: composeOverlayOpen || showTierGuide || showEventEditor || showPurposePrompt,
+            sheetAttached: mainSheetAttached)
+    }
+    /// A sheet is attached to the open main window (M5). Written by
+    /// `MainWindowController`; a sheet flag left set while the window is
+    /// closed blocks nothing.
+    var mainSheetAttached = false
+    /// The composer as an in-window overlay (the bar's full view). With
+    /// `macMainWindow` on it is its own window (M5) and covers nothing.
+    var composeOverlayOpen: Bool {
+        ComposeWindowRules.overlayOpen(
+            showCompose: showCompose, macMainWindow: settings.macMainWindow)
     }
     /// Device calendars uploaded from EventKit (step C6): opt-in per calendar.
     let deviceCalendars: DeviceCalendarBridge
@@ -855,8 +879,14 @@ final class AppModel {
         }
     }
 
-    /// Compose overlay visibility (full view).
-    var showCompose = false
+    /// Whether the composer is presented: an overlay on the bar's full view,
+    /// its own window while `macMainWindow` is on (M5). Asking again while
+    /// it is up still notifies, so the window comes forward.
+    var showCompose = false {
+        didSet {
+            if showCompose || oldValue { onComposePresentationChanged?() }
+        }
+    }
     /// Draft lives on the MODEL, not the panel: SwiftUI drops a conditionally
     /// mounted view's @State (e.g. when the full view is torn down and rebuilt via
     /// the menu bar), and a draft must survive that. There is exactly one
@@ -919,6 +949,9 @@ final class AppModel {
         composeError = nil
         defer { composeSending = false }
         let error = await sendNewEmail(to: composeTo, subject: composeSubject, body: composeBody)
+        // A 401 mid-send signed the account out and discarded the draft;
+        // there is no composer left to carry the error.
+        guard phase == .signedIn else { return }
         if let error {
             composeError = error
         } else {
@@ -934,6 +967,13 @@ final class AppModel {
             discardComposeDraft()
             showCompose = false
         }
+    }
+
+    /// Self-check seam: the state `openDraftForEditing` leaves, without the
+    /// network fetch.
+    func seedEditingDraftForCheck(gmailId: String, inbox: String?) {
+        editingDraftGmailId = gmailId
+        editingDraftInbox = inbox
     }
 
     /// Explicit discard (the Cancel button). Hiding the panel via ✕/scrim/Esc
@@ -1789,6 +1829,11 @@ final class AppModel {
         shownMeetingIds = []
         // The device-calendar opt-in belongs to the account that gave it.
         deviceCalendars.signOut(token: sessionToken)
+        // A draft belongs to the account that wrote it: the next account
+        // must not find it, send it, or delete the Gmail draft it edits.
+        // Putting the composer away also closes the compose window (M5).
+        discardComposeDraft()
+        showCompose = false
         phase = .signedOut
     }
 

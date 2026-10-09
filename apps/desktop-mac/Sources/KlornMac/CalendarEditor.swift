@@ -48,11 +48,7 @@ struct CalendarEventEditor: View {
             }
             .padding(.top, Theme.s1)
         }
-        .padding(22)
-        .frame(width: 440)
-        .background(Theme.panel, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.line))
-        .shadow(color: Theme.panelShadow, radius: 24, y: 8)
+        .modalCard(width: 440)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(isEdit ? L("cal.editor.editTitle") : L("cal.editor.newTitle"))
         .onAppear {

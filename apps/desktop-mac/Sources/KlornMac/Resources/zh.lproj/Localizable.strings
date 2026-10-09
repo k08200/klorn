@@ -525,6 +525,9 @@
 "appearance.toLight" = "切换到浅色模式";
 "appearance.toDark" = "切换到深色模式";
 "compose.editDraft" = "编辑草稿";
+"compose.discard" = "舍弃草稿";
+"compose.discard.confirm.title" = "要舍弃这封草稿吗？";
+"compose.discard.confirm.detail" = "你在这里写的内容将会丢失。";
 "mailbox.loadMore" = "加载更多";
 "chip.billing" = "账单·收据";
 
