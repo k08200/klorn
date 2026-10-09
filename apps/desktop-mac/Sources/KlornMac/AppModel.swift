@@ -267,6 +267,20 @@ final class AppModel {
 
     func isCurrent(_ session: Int) -> Bool { session == sessionGeneration }
 
+    /// Fired when a session ends (sign-out, or a sign-in replacing it). The
+    /// AppDelegate wires it to what lives outside the model and still shows
+    /// the account that left: the HUD card, the meeting card, OS banners.
+    @ObservationIgnored var onSessionEnded: (() -> Void)?
+
+    /// Harness seams. The browser leg of sign-in, the poll cadence, and
+    /// whether the wake socket opens: a self-check drives sign-in without a
+    /// browser, polls in milliseconds and never opens a socket.
+    @ObservationIgnored var signInRunner: @MainActor (APIClient, String) async -> SignInResult = {
+        await GoogleSignIn.run(api: $0, provider: $1)
+    }
+    @ObservationIgnored var pollInterval: Duration = .seconds(AppModel.pollIntervalSeconds)
+    @ObservationIgnored var opensRealtime = true
+
     /// The release check. A seam so the self-check never calls GitHub.
     @ObservationIgnored var updateCheck: @MainActor () async -> UpdateCheck.Outcome = {
         await UpdateCheck.run()
@@ -513,7 +527,7 @@ final class AppModel {
         } catch _ where !isCurrent(session) {
             return false
         } catch APIError.unauthorized {
-            signOut()
+            sessionRejected()
             return false
         } catch APIError.forbidden {
             // Entitlement, not a dead session — never sign the user out here.
@@ -542,7 +556,7 @@ final class AppModel {
         } catch _ where !isCurrent(session) {
             return
         } catch APIError.unauthorized {
-            signOut()
+            sessionRejected()
         } catch {
             imapError = L("account.imap.disconnectFailed")
         }
@@ -564,7 +578,7 @@ final class AppModel {
         case .failure(.needsPro):
             linkAccountError = L("error.needsPro")
         case .failure(.unauthorized):
-            signOut()
+            sessionRejected()
         case .failure(.network):
             linkAccountError = L("account.add.failed")
         }
@@ -585,7 +599,7 @@ final class AppModel {
         case .success:
             startReconnectWatch()
         case .failure(.unauthorized):
-            signOut()
+            sessionRejected()
         case .failure(.network):
             linkAccountError = L("account.reconnect.failed")
         }
@@ -744,7 +758,7 @@ final class AppModel {
         phase = .signingIn
         signInError = nil
         let session = sessionGeneration
-        let result = await GoogleSignIn.run(api: api, provider: provider)
+        let result = await signInRunner(api, provider)
         // A superseded attempt owns none of this state any more; nor does
         // one that a sign-out overtook.
         guard !Task.isCancelled, isCurrent(session) else { return }
@@ -769,12 +783,25 @@ final class AppModel {
         sessionGeneration += 1
         // The poll loop and the socket belong to the session that started
         // them. A socket opened under the PREVIOUS token would also 4001-loop
-        // forever (RealtimeClient captures its token once). Both stop here;
-        // `ensureActive()` starts this session's own after its first load.
+        // forever (RealtimeClient captures its token once). Both stop here.
         stopPolling()
         realtime?.stop()
         realtime = nil
+        // Whatever still showed the previous account outside the model.
+        onSessionEnded?()
         phase = .signedIn
+        // The poll starts with the session, not with its first good load: a
+        // sign-in whose first load fails recovers by itself when the network
+        // is back. The socket waits for `ensureActive()`.
+        startPolling()
+    }
+
+    /// A request of the current session was answered 401. Only a live
+    /// session can be rejected: a stray 401 while signed out or while a
+    /// sign-in is in flight ends nothing, and above all not that sign-in.
+    private func sessionRejected() {
+        guard phase == .signedIn else { return }
+        signOut()
     }
 
     /// Self-check seam: start a session as a sign-in does, without the
@@ -810,7 +837,7 @@ final class AppModel {
         } catch _ where !isCurrent(session) {
             return
         } catch APIError.unauthorized {
-            signOut()
+            sessionRejected()
         } catch {
             emailError = Self.describe(error)
         }
@@ -914,7 +941,7 @@ final class AppModel {
         } catch _ where !isCurrent(session) {
             return nil
         } catch APIError.unauthorized {
-            signOut()
+            sessionRejected()
             return nil
         } catch APIError.forbidden {
             replyError = L("error.needsPro")
@@ -937,11 +964,14 @@ final class AppModel {
     /// Fetch the 3 tone-differentiated drafts for a PUSH item's card
     /// (POST /api/email/:id/reply-options). 403 = free tier → the card shows
     /// its Pro hint instead of an error.
-    func fetchReplyOptions(_ item: FirewallItem) async -> ReplyOptionsFetch {
+    /// `session`: the session the asking surface belongs to (a HUD card is
+    /// stamped when presented). One that has ended sends no request.
+    func fetchReplyOptions(_ item: FirewallItem, session: Int? = nil) async -> ReplyOptionsFetch {
         guard let emailDbId = item.email?.emailDbId else {
             return .failed(L("reply.emailOnly"))
         }
-        let session = sessionGeneration
+        let session = session ?? sessionGeneration
+        guard isCurrent(session) else { return .failed(L("error.sessionExpired")) }
         do {
             let options: ReplyOptionsResponse = try await api.post(
                 "/api/email/\(emailDbId)/reply-options", json: [:], as: ReplyOptionsResponse.self)
@@ -949,7 +979,7 @@ final class AppModel {
         } catch _ where !isCurrent(session) {
             return .failed(L("error.sessionExpired"))
         } catch APIError.unauthorized {
-            signOut()
+            sessionRejected()
             return .failed(L("error.sessionExpired"))
         } catch APIError.forbidden {
             return .needsPro
@@ -991,10 +1021,12 @@ final class AppModel {
     /// lives there, not on the firewall wire. Plain GET, never `markRead`: an
     /// unattended card must not silently mark mail as read. Best-effort — the
     /// expanded view falls back to the snippet when this returns nil.
-    func fetchEmailDetail(_ item: FirewallItem) async -> EmailDetail? {
-        guard let emailDbId = item.email?.emailDbId else { return nil }
+    func fetchEmailDetail(_ item: FirewallItem, session: Int? = nil) async -> EmailDetail? {
+        let session = session ?? sessionGeneration
+        guard isCurrent(session), let emailDbId = item.email?.emailDbId else { return nil }
         do {
-            return try await api.get("/api/email/\(emailDbId)", as: EmailDetail.self)
+            let detail = try await api.get("/api/email/\(emailDbId)", as: EmailDetail.self)
+            return isCurrent(session) ? detail : nil
         } catch {
             Log.app.debug("card detail fetch failed: \(String(describing: error), privacy: .private)")
             return nil
@@ -1144,7 +1176,7 @@ final class AppModel {
         } catch _ where !isCurrent(session) {
             return L("error.sessionExpired")
         } catch APIError.unauthorized {
-            signOut()
+            sessionRejected()
             return L("error.sessionExpired")
         } catch APIError.forbidden {
             return L("compose.needsPro")
@@ -1159,18 +1191,22 @@ final class AppModel {
     /// composer can both be mid-send for DIFFERENT emails at once, and a shared
     /// slot would let one surface clear or overwrite the other's live error.
     /// A 403 means the account isn't entitled (Pro) — surfaced, NOT a sign-out.
-    func sendReply(_ item: FirewallItem, body: String) async -> String? {
+    /// `session`: the session the sending surface belongs to. A reply from a
+    /// surface whose session has ended is refused before any request: the
+    /// mail on it is another account's, and the token is not.
+    func sendReply(_ item: FirewallItem, body: String, session: Int? = nil) async -> String? {
         guard let emailDbId = item.email?.emailDbId,
               !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else { return L("reply.nothingToSend") }
-        let session = sessionGeneration
+        let session = session ?? sessionGeneration
+        guard isCurrent(session) else { return L("error.sessionExpired") }
         do {
             try await api.post("/api/email/\(emailDbId)/reply", json: ["body": body])
             return nil
         } catch _ where !isCurrent(session) {
             return L("error.sessionExpired")
         } catch APIError.unauthorized {
-            signOut()
+            sessionRejected()
             return L("error.sessionExpired")
         } catch APIError.forbidden {
             return L("reply.needsPro")
@@ -1201,7 +1237,7 @@ final class AppModel {
         } catch _ where !isCurrent(session) {
             return
         } catch APIError.unauthorized {
-            signOut()
+            sessionRejected()
         } catch {
             unhide(item, error)
         }
@@ -1232,7 +1268,7 @@ final class AppModel {
         } catch _ where !isCurrent(session) {
             return
         } catch APIError.unauthorized {
-            signOut()
+            sessionRejected()
         } catch {
             chatMessages.append(ChatMessage(
                 role: .failure, text: "Couldn't create the event — \(Self.describe(error))"))
@@ -1311,7 +1347,7 @@ final class AppModel {
         } catch _ where !isCurrent(session) {
             return
         } catch APIError.unauthorized {
-            signOut()
+            sessionRejected()
         } catch {
             chatMessages.append(ChatMessage(
                 role: .failure, text: "Couldn't reach Klorn — \(Self.describe(error))"))
@@ -1384,7 +1420,7 @@ final class AppModel {
         } catch _ where !isCurrent(session) {
             return false
         } catch APIError.unauthorized {
-            signOut()
+            sessionRejected()
         } catch APIError.http(_, let message) {
             prioritiesError = message ?? L("priorities.saveFailed")
         } catch {
@@ -1425,7 +1461,7 @@ final class AppModel {
         } catch _ where !isCurrent(session) {
             return
         } catch APIError.unauthorized {
-            signOut()
+            sessionRejected()
         } catch {
             Log.app.warning("sender label update failed: \(String(describing: error), privacy: .private)")
         }
@@ -1444,7 +1480,7 @@ final class AppModel {
         } catch _ where !isCurrent(session) {
             return
         } catch APIError.unauthorized {
-            signOut()
+            sessionRejected()
             return
         } catch {
             Log.app.debug("sender label clear: \(String(describing: error), privacy: .private)")
@@ -1480,7 +1516,7 @@ final class AppModel {
         } catch _ where !isCurrent(session) {
             return false
         } catch APIError.unauthorized {
-            signOut()
+            sessionRejected()
             return false
         } catch {
             companyDomainsError = L("company.saveFailed")
@@ -1556,7 +1592,7 @@ final class AppModel {
         } catch _ where !isCurrent(session) {
             return
         } catch APIError.unauthorized {
-            signOut()
+            sessionRejected()
         } catch {
             Log.app.warning("purpose update failed: \(String(describing: error), privacy: .private)")
         }
@@ -1591,7 +1627,7 @@ final class AppModel {
         } catch _ where !isCurrent(session) {
             return
         } catch APIError.unauthorized {
-            signOut()
+            sessionRejected()
         } catch {
             Log.app.warning("calendar range fetch failed: \(String(describing: error), privacy: .private)")
         }
@@ -1657,7 +1693,7 @@ final class AppModel {
         } catch _ where !isCurrent(session) {
             return false
         } catch APIError.unauthorized {
-            signOut()
+            sessionRejected()
         } catch APIError.forbidden {
             eventEditorError = L("error.needsPro")
         } catch APIError.http(_, let message) {
@@ -1682,7 +1718,7 @@ final class AppModel {
         } catch _ where !isCurrent(session) {
             return false
         } catch APIError.unauthorized {
-            signOut()
+            sessionRejected()
         } catch {
             Log.app.warning("calendar delete failed: \(String(describing: error), privacy: .private)")
         }
@@ -1710,7 +1746,7 @@ final class AppModel {
         } catch _ where !isCurrent(session) {
             return
         } catch APIError.unauthorized {
-            signOut()
+            sessionRejected()
         } catch {
             // An older server has no route: keep whatever we had.
             Log.app.debug("waiting-on fetch failed: \(String(describing: error), privacy: .private)")
@@ -1769,7 +1805,7 @@ final class AppModel {
         } catch _ where !isCurrent(session) {
             return
         } catch APIError.unauthorized {
-            signOut()
+            sessionRejected()
         } catch {
             // Keep the stale listing if we had one; only surface the error
             // when the folder would otherwise be blank.
@@ -1801,7 +1837,7 @@ final class AppModel {
         } catch _ where !isCurrent(session) {
             return
         } catch APIError.unauthorized {
-            signOut()
+            sessionRejected()
         } catch {
             mailboxNextToken[box] = token
             Log.app.warning("mailbox page fetch failed: \(String(describing: error), privacy: .private)")
@@ -1868,7 +1904,7 @@ final class AppModel {
         } catch _ where !isCurrent(session) {
             return
         } catch APIError.unauthorized {
-            signOut()
+            sessionRejected()
         } catch {
             commitments = before
             Log.app.warning("commitment update failed: \(String(describing: error), privacy: .private)")
@@ -1906,7 +1942,7 @@ final class AppModel {
         } catch _ where !isCurrent(session) {
             return
         } catch APIError.unauthorized {
-            signOut()
+            sessionRejected()
         } catch {
             Log.app.debug("search failed: \(String(describing: error), privacy: .private)")
         }
@@ -1932,7 +1968,7 @@ final class AppModel {
         } catch _ where !isCurrent(session) {
             return
         } catch APIError.unauthorized {
-            signOut()
+            sessionRejected()
         } catch {
             emailError = Self.describe(error)
         }
@@ -1952,7 +1988,7 @@ final class AppModel {
         } catch _ where !isCurrent(session) {
             return
         } catch APIError.unauthorized {
-            signOut()
+            sessionRejected()
         } catch {
             // Roll back the optimistic move; next poll reconciles regardless.
             queue = before
@@ -1973,7 +2009,7 @@ final class AppModel {
         } catch _ where !isCurrent(session) {
             return
         } catch APIError.unauthorized {
-            signOut()
+            sessionRejected()
         } catch {
             noteActionFailure(error)
             Log.app.warning("pin sender failed: \(String(describing: error), privacy: .private)")
@@ -1990,7 +2026,7 @@ final class AppModel {
         } catch _ where !isCurrent(session) {
             return
         } catch APIError.unauthorized {
-            signOut()
+            sessionRejected()
         } catch {
             noteActionFailure(error)
             Log.app.warning("unpin sender failed: \(String(describing: error), privacy: .private)")
@@ -2002,8 +2038,12 @@ final class AppModel {
     /// Returns the failure message when the snooze did not take and the item
     /// came back, so a surface that already moved on (the HUD card) can say so.
     @discardableResult
-    func snooze(_ item: FirewallItem, until: Date = AppModel.tomorrow9am()) async -> String? {
-        let session = sessionGeneration
+    func snooze(
+        _ item: FirewallItem, until: Date = AppModel.tomorrow9am(), session: Int? = nil
+    ) async -> String? {
+        // A surface from a session that has ended snoozes nothing.
+        let session = session ?? sessionGeneration
+        guard isCurrent(session) else { return nil }
         hideLocally(item)
         do {
             try await api.post(
@@ -2013,7 +2053,7 @@ final class AppModel {
         } catch _ where !isCurrent(session) {
             return nil
         } catch APIError.unauthorized {
-            signOut()
+            sessionRejected()
             return nil
         } catch {
             return unhide(item, error)
@@ -2043,7 +2083,13 @@ final class AppModel {
         SnoozeOption.tomorrow.resurface(from: now, calendar: calendar)
     }
 
+    /// The user's sign-out, or a 401 on a live session (`sessionRejected`).
+    /// Signed out already, there is no session to end: nothing happens, and
+    /// the generation an in-flight sign-in is waiting on stays put. During
+    /// a sign-in this is the user backing out, and it abandons the attempt.
     func signOut() {
+        guard phase != .signedOut else { return }
+        signInTask?.cancel()
         // First: from here on, nothing the leaving session started is current.
         sessionGeneration += 1
         stopPolling()
@@ -2087,71 +2133,126 @@ final class AppModel {
         showCompose = false
         resetAccountState()
         phase = .signedOut
+        onSessionEnded?()
     }
 
     /// The rest of what was fetched for, or typed by, the account that is
     /// leaving, and the in-flight flags of the requests it started: those
     /// requests no longer report back (`isCurrent`), so nothing else would
-    /// lower them.
+    /// lower them. Driven by `accountFields()`, which the self-check walks
+    /// too, so a field added there is reset and checked in one edit.
     private func resetAccountState() {
-        isLoadingQueue = false
-        cancelledLoadRetried = false
-        isLoadingEmail = false
-        isDrafting = false
-        isSummarizing = false
-        summarizeFailed = false
-        composeSending = false
-        isChatting = false
-        chatMessages = []
-        chatConversationId = nil
-        commitments = nil
-        commitmentsFailed = false
-        pendingActions = []
-        pendingActionError = nil
-        resolvingActions = []
-        agentToday = nil
-        automation = AutomationSettings()
-        automationLoaded = false
-        automationSaving = false
-        automationError = nil
-        mailboxItems = [:]
-        mailboxNextToken = [:]
-        mailboxLoading = nil
-        mailboxError = nil
-        mailboxDetailLoading = false
-        clearMailboxSelection()
-        searchResults = nil
-        searchTotal = 0
-        isSearching = false
-        waitingOn = []
-        waitingOnLoading = false
-        calendarRangeEvents = []
-        calendarRangeKey = nil
-        calendarRangeBounds = nil
-        calendarRangeLoading = false
-        eventEditorSaving = false
-        dismissEventEditor()
-        teams = []
-        teamError = nil
-        teamModeAvailable = false
-        teamAvailability = nil
-        checkingTeamId = nil
-        teamBookingResult = nil
-        imapAccounts = []
-        imapError = nil
-        isConnectingImap = false
-        isLinkingAccount = false
-        companyDomains = []
-        companyDomainsError = nil
-        triagePriorities = nil
-        prioritiesError = nil
-        diagnostics = []
-        diagnosticsInFlight = false
-        diagnosticsError = nil
-        showPurposePrompt = false
-        purposePromptTarget = nil
-        purposePromptStartsAtDomains = false
-        purposePromptStartsAtPriorities = false
+        for field in Self.accountFields() { field.reset(self) }
+    }
+
+    /// One per-account field: how to reset it, how to tell it is reset, and
+    /// (where a value is cheap to make) how to dirty it for the self-check.
+    struct AccountField {
+        let name: String
+        let reset: (AppModel) -> Void
+        let isClean: (AppModel) -> Bool
+        let dirty: ((AppModel) -> Void)?
+    }
+
+    private static func field<V: Equatable>(
+        _ name: String, _ path: ReferenceWritableKeyPath<AppModel, V>, _ clean: V, dirty: V
+    ) -> AccountField {
+        AccountField(
+            name: name, reset: { $0[keyPath: path] = clean },
+            isClean: { $0[keyPath: path] == clean }, dirty: { $0[keyPath: path] = dirty })
+    }
+
+    private static func field<V>(
+        _ name: String, _ path: ReferenceWritableKeyPath<AppModel, V>, _ clean: V,
+        isClean: @escaping (V) -> Bool, dirty: V? = nil
+    ) -> AccountField {
+        AccountField(
+            name: name, reset: { $0[keyPath: path] = clean },
+            isClean: { isClean($0[keyPath: path]) },
+            dirty: dirty.map { value in { $0[keyPath: path] = value } })
+    }
+
+    private static func flag(_ name: String, _ path: ReferenceWritableKeyPath<AppModel, Bool>) -> AccountField {
+        field(name, path, false, dirty: true)
+    }
+
+    private static func text(_ name: String, _ path: ReferenceWritableKeyPath<AppModel, String?>) -> AccountField {
+        field(name, path, nil, dirty: "x")
+    }
+
+    /// Everything `resetAccountState` resets. Internal for the self-check.
+    static func accountFields() -> [AccountField] {
+        [
+            flag("isLoadingQueue", \.isLoadingQueue),
+            flag("cancelledLoadRetried", \.cancelledLoadRetried),
+            flag("isLoadingEmail", \.isLoadingEmail),
+            flag("isDrafting", \.isDrafting),
+            flag("isSummarizing", \.isSummarizing),
+            flag("summarizeFailed", \.summarizeFailed),
+            flag("composeSending", \.composeSending),
+            flag("isChatting", \.isChatting),
+            field("chatMessages", \.chatMessages, [], dirty: [ChatMessage(role: .user, text: "x")]),
+            text("chatConversationId", \.chatConversationId),
+            field("commitments", \.commitments, nil, isClean: { $0 == nil }, dirty: .some([])),
+            flag("commitmentsFailed", \.commitmentsFailed),
+            field("pendingActions", \.pendingActions, [], isClean: { $0.isEmpty }),
+            text("pendingActionError", \.pendingActionError),
+            field("resolvingActions", \.resolvingActions, [], dirty: ["x"]),
+            field("agentToday", \.agentToday, nil, isClean: { $0 == nil }),
+            field("automation", \.automation, AutomationSettings(), isClean: { $0 == AutomationSettings() }),
+            flag("automationLoaded", \.automationLoaded),
+            flag("automationSaving", \.automationSaving),
+            text("automationError", \.automationError),
+            field("mailboxItems", \.mailboxItems, [:], dirty: [.sent: []]),
+            field("mailboxNextToken", \.mailboxNextToken, [:], dirty: [.sent: "x"]),
+            field("mailboxLoading", \.mailboxLoading, nil, dirty: .sent),
+            text("mailboxError", \.mailboxError),
+            flag("mailboxDetailLoading", \.mailboxDetailLoading),
+            field("selectedMailboxItem", \.selectedMailboxItem, nil, isClean: { $0 == nil }),
+            field("mailboxDetail", \.mailboxDetail, nil, isClean: { $0 == nil }),
+            field("searchResults", \.searchResults, nil, isClean: { $0 == nil }, dirty: .some([])),
+            field("searchTotal", \.searchTotal, 0, dirty: 3),
+            flag("isSearching", \.isSearching),
+            field("waitingOn", \.waitingOn, [], isClean: { $0.isEmpty }),
+            flag("waitingOnLoading", \.waitingOnLoading),
+            field("calendarRangeEvents", \.calendarRangeEvents, [], isClean: { $0.isEmpty }),
+            text("calendarRangeKey", \.calendarRangeKey),
+            field(
+                "calendarRangeBounds", \.calendarRangeBounds, nil, isClean: { $0 == nil },
+                dirty: .some((start: Date(timeIntervalSince1970: 0), end: Date(timeIntervalSince1970: 1)))),
+            flag("calendarRangeLoading", \.calendarRangeLoading),
+            flag("eventEditorSaving", \.eventEditorSaving),
+            flag("showEventEditor", \.showEventEditor),
+            field("editingEvent", \.editingEvent, nil, isClean: { $0 == nil }),
+            text("eventEditorError", \.eventEditorError),
+            field("teams", \.teams, [], isClean: { $0.isEmpty }),
+            text("teamError", \.teamError),
+            flag("teamModeAvailable", \.teamModeAvailable),
+            field("teamAvailability", \.teamAvailability, nil, isClean: { $0 == nil }),
+            text("checkingTeamId", \.checkingTeamId),
+            text("teamBookingResult", \.teamBookingResult),
+            field("imapAccounts", \.imapAccounts, [], isClean: { $0.isEmpty }),
+            text("imapError", \.imapError),
+            flag("isConnectingImap", \.isConnectingImap),
+            flag("isLinkingAccount", \.isLinkingAccount),
+            field("companyDomains", \.companyDomains, [], dirty: ["x.example"]),
+            text("companyDomainsError", \.companyDomainsError),
+            text("triagePriorities", \.triagePriorities),
+            text("prioritiesError", \.prioritiesError),
+            field("diagnostics", \.diagnostics, [], isClean: { $0.isEmpty }),
+            flag("diagnosticsInFlight", \.diagnosticsInFlight),
+            text("diagnosticsError", \.diagnosticsError),
+            flag("showPurposePrompt", \.showPurposePrompt),
+            field("purposePromptTarget", \.purposePromptTarget, nil, isClean: { $0 == nil }),
+            flag("purposePromptStartsAtDomains", \.purposePromptStartsAtDomains),
+            flag("purposePromptStartsAtPriorities", \.purposePromptStartsAtPriorities),
+        ]
+    }
+
+    /// Self-check seam: put every field that has a cheap non-default value
+    /// into it, so the reset is checked against state that was really there.
+    func dirtyAccountStateForCheck() {
+        for field in Self.accountFields() { field.dirty?(self) }
     }
 
     /// Today's calendar (expanded panel's TODAY column). Best-effort: a
@@ -2249,7 +2350,7 @@ final class AppModel {
         } catch _ where !isCurrent(session) {
             return
         } catch APIError.unauthorized {
-            signOut()
+            sessionRejected()
         } catch {
             diagnostics = []
             diagnosticsError = Self.describe(error)
@@ -2452,9 +2553,12 @@ final class AppModel {
     }
 
     /// GET /api/calendar/:id/prep-pack for the meeting card. Best-effort.
-    func fetchPrepPack(eventId: String) async -> MeetingPrepPack? {
+    func fetchPrepPack(eventId: String, session: Int? = nil) async -> MeetingPrepPack? {
+        let session = session ?? sessionGeneration
+        guard isCurrent(session) else { return nil }
         do {
-            return try await api.get("/api/calendar/\(eventId)/prep-pack", as: MeetingPrepPack.self)
+            let pack = try await api.get("/api/calendar/\(eventId)/prep-pack", as: MeetingPrepPack.self)
+            return isCurrent(session) ? pack : nil
         } catch {
             Log.app.debug("prep pack fetch failed: \(String(describing: error), privacy: .private)")
             return nil
@@ -2501,7 +2605,7 @@ final class AppModel {
         } catch _ where !isCurrent(session) {
             return
         } catch APIError.unauthorized {
-            signOut()  // token expired/invalid — drop to sign-in
+            sessionRejected()  // token expired/invalid — drop to sign-in
         } catch {
             noteLoadFailure(error)
         }
@@ -2541,7 +2645,7 @@ final class AppModel {
     /// Open the WebSocket wake channel once signed in. On a server push it
     /// refetches immediately; the poll loop remains the backstop. Idempotent.
     private func startRealtime() {
-        guard realtime == nil, let token = tokenStore.load() else { return }
+        guard opensRealtime, realtime == nil, let token = tokenStore.load() else { return }
         let session = sessionGeneration
         let client = RealtimeClient(onWake: { [weak self] in
             self?.realtimeDidWake(session: session)
@@ -2568,7 +2672,7 @@ final class AppModel {
         let session = sessionGeneration
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(AppModel.pollIntervalSeconds))
+                try? await Task.sleep(for: self?.pollInterval ?? .seconds(AppModel.pollIntervalSeconds))
                 // Cancelled at sign-out; the session check covers a tick
                 // that was already past the sleep.
                 guard !Task.isCancelled, let self, self.isCurrent(session) else { break }

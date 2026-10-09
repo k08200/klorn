@@ -42,6 +42,8 @@ final class SessionStubProtocol: URLProtocol, @unchecked Sendable {
         }
     }
     private static func host(_ scenario: Int) -> String { "scenario-\(scenario).stub.test" }
+    /// Change one reply while a scenario runs (the network "coming back").
+    static func set(_ key: String, _ reply: Reply) { state.withLock { $0.replies[key] = reply } }
     static var calls: [Call] { state.withLock { $0.calls } }
     static func calls(_ key: String) -> [Call] { calls.filter { "\($0.method) \($0.path)" == key } }
     static func parked(_ key: String) -> Int { state.withLock { $0.parked[key]?.count ?? 0 } }
@@ -113,10 +115,17 @@ enum SessionScenarios {
         to: "peer@a.example", snippet: "", receivedAt: "2026-07-29T08:12:00Z", isRead: true,
         inbox: "primary")
 
-    /// A signed-in model for account A whose every request goes to the stub.
-    static func model(_ replies: [String: Stub.Reply] = [:], hold: Set<String> = []) -> AppModel {
+    /// The token store of the last model made, for checks on what was saved.
+    static var store = InMemoryTokenStore()
+
+    /// A model whose every request goes to the stub: signed in as account A,
+    /// or signed out with `token: nil`. It never opens the wake socket.
+    static func model(
+        _ replies: [String: Stub.Reply] = [:], hold: Set<String> = [], token: String? = "token-A"
+    ) -> AppModel {
         let base = Stub.reset(replies, hold: hold)
-        let store = InMemoryTokenStore(token: "token-A")
+        let store = InMemoryTokenStore(token: token)
+        Self.store = store
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [Stub.self]
         let api = APIClient(
@@ -124,6 +133,7 @@ enum SessionScenarios {
             token: { store.load() })
         let model = AppModel(tokenStore: store, api: api)
         model.updateCheck = { .unknown }  // never GitHub from a harness
+        model.opensRealtime = false
         return model
     }
 
@@ -320,18 +330,26 @@ func sessionSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
           && Stub.calls(S.firewall).count == 2 && cancelled.connectionNotice == nil)
 
     // MARK: what sign-out leaves behind
+    // One list drives the reset and this check (`AppModel.accountFields`).
     let leaving = S.model()
-    leaving.seedMainWindowForRender(
-        inboxes: [], today: nil, pendingActions: [], commitments: [],
-        chat: [ChatMessage(role: .user, text: "hi")])
-    leaving.seedMailboxForRender(.sent, items: [S.draftItem])
-    leaving.seedWaitingOnForRender([])
-    leaving.seedCalendarForRender([])
+    let fields = AppModel.accountFields()
+    leaving.dirtyAccountStateForCheck()
+    let dirtied = fields.filter { $0.dirty != nil }
+    let wasDirty = dirtied.filter { !$0.isClean(leaving) }.map(\.name)
     leaving.signOut()
-    check("sign-out clears the assistant thread, folders, commitments and calendar range",
-          leaving.chatMessages.isEmpty && leaving.mailboxItems.isEmpty && leaving.commitments == nil
-          && leaving.calendarRangeKey == nil && leaving.searchResults == nil
-          && !leaving.isLoadingQueue && !leaving.composeSending)
+    let stillSet = fields.filter { !$0.isClean(leaving) }.map(\.name)
+    check("sign-out resets every per-account field on the model's list", stillSet.isEmpty)
+    if !stillSet.isEmpty { print("      not reset: \(stillSet.joined(separator: ", "))") }
+    check("and the check is not vacuous: each field it can set was set first",
+          wasDirty == dirtied.map(\.name) && Set(fields.map(\.name)).count == fields.count)
+    // Fields whose values are too costly to build here are checked clean
+    // only. Named, so a new field does not join them unnoticed.
+    check("the fields checked without being set first are the known few",
+          fields.filter { $0.dirty == nil }.map(\.name).sorted() == [
+              "agentToday", "automation", "calendarRangeEvents", "diagnostics", "editingEvent",
+              "imapAccounts", "mailboxDetail", "pendingActions", "purposePromptTarget",
+              "selectedMailboxItem", "teamAvailability", "teams", "waitingOn",
+          ])
 
     // MARK: source pins
     let files = swiftSources(under: sourceDir)
@@ -341,16 +359,24 @@ func sessionSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
     }
     let appModel = text("AppModel.swift")
     let staleClause = "} catch _ where !isCurrent(session) {"
-    // Every 401 handler signs out, so each one sits right behind the clause
-    // that drops a result from a session that has ended.
+    // Exact pairing: each 401 handler sits right behind the clause that
+    // drops a result from a session that has ended, and its first statement
+    // is `sessionRejected()`, which signs out only a live session.
     let unauthorized = appModel.components(separatedBy: "} catch APIError.unauthorized {")
     check("every 401 handler in the model is behind the stale-session clause",
-          unauthorized.count > 20
+          unauthorized.count > 1
           && unauthorized.dropLast().allSatisfy { before in
               before.components(separatedBy: "\n").suffix(3).first?.hasSuffix(staleClause) == true
           })
+    check("every 401 handler ends the session through sessionRejected, never signOut directly",
+          unauthorized.dropFirst().allSatisfy {
+              $0.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("sessionRejected()")
+          }
+          && !appModel.contains("            signOut()")
+          && appModel.components(separatedBy: "\n        signOut()\n").count == 2
+          && appModel.contains("guard phase == .signedIn else { return }\n        signOut()\n"))
     check("sign-out ends the session before anything else, and stops the poll and the socket",
-          appModel.contains("func signOut() {\n        // First: from here on, nothing the leaving session started is current.\n        sessionGeneration += 1\n        stopPolling()")
+          appModel.contains("guard phase != .signedOut else { return }\n        signInTask?.cancel()\n        // First: from here on, nothing the leaving session started is current.\n        sessionGeneration += 1\n        stopPolling()")
           && appModel.contains("realtime?.stop()\n        realtime = nil\n        seenPush = []"))
     check("the poll loop and the wake channel are bound to the session that started them",
           appModel.contains("guard !Task.isCancelled, let self, self.isCurrent(session) else { break }")
@@ -362,6 +388,7 @@ func sessionSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
               .filter { text($0).contains("ActionErrorBanner(message: message)") }.sorted()
               == ["ExpandedDashboard.swift", "FullView.swift", "MainShell.swift"]
           && text("PushCard.swift").contains("if let message = state.actionError { actionErrorRow(message) }")
-          && text("PushCardController.swift").contains("self.restore(item, failure: failure)"))
+          && text("PushCardController.swift").contains("self.restore(item, failure: failure, stamp: stamp)"))
+    for result in await sessionCardSelfChecks(sourceDir: sourceDir) { results.append(result) }
     return results
 }

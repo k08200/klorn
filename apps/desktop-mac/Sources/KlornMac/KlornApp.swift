@@ -202,6 +202,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             meetingCard?.present(event) ?? false
         }
         self.meetingCard = meetingCard
+        // Sign-out (or another account signing in): the cards and banners
+        // still show the account that left, and the cards can act. Take
+        // them down with the session.
+        model.onSessionEnded = { [weak card, weak meetingCard] in
+            card?.reset()
+            meetingCard?.reset()
+            PushNotifier.clearAll()
+        }
         bar.show()
         topBar = bar
         pushCard = card

@@ -94,7 +94,18 @@ that lands after the account changed writes nothing, raises no error and
 signs nobody out. New async code in `AppModel` follows the same shape, with
 `catch _ where !isCurrent(session)` ahead of any 401 handler (the self-check
 pins it). Signing out also stops the poll and the socket and clears
-everything fetched for the account.
+everything fetched for the account (`AppModel.accountFields()` is the one
+list both the reset and the self-check walk).
+
+A 401 ends a session only when there is one (`sessionRejected`): while
+signed out or signing in it ends nothing, so it cannot discard a sign-in in
+flight. The poll loop starts with the session, so a sign-in whose first load
+fails recovers on the next tick.
+
+The HUD push card and the meeting card are taken down with the session
+(`onSessionEnded`), along with delivered OS banners. A push card is also
+stamped with the session it was presented in; reply, snooze, drafts, detail
+and open are refused for a stamp that has ended, before any request.
 
 ### Keyboard
 
