@@ -33,10 +33,12 @@ struct AssistantThread: View {
             }
 
             HStack(spacing: Theme.s2) {
-                if Theme.isRenderingOffscreen && inlineWhenOffscreen {
-                    // ImageRenderer paints a text field as a placeholder.
-                    Text(L("assistant.placeholder"))
-                        .font(.callout).foregroundStyle(Theme.textDim)
+                if Theme.isRenderingOffscreen {
+                    // TextField is AppKit-backed; ImageRenderer paints it as
+                    // its "restricted" placeholder.
+                    Text(draft.isEmpty ? L("assistant.placeholder") : draft)
+                        .font(.callout).foregroundStyle(draft.isEmpty ? Theme.textDim : Theme.text)
+                        .lineLimit(1...4)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
                     TextField(L("assistant.placeholder"), text: $draft, axis: .vertical)

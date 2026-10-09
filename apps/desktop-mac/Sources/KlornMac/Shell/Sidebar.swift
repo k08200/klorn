@@ -496,18 +496,24 @@ struct FullSidebar: View {
             if model.phase == .signedIn {
                 HStack(spacing: 8) {
                     Text(L("mode.section")).font(.caption).foregroundStyle(Theme.textDim)
-                    Picker(L("mode.sidebar.a11y"), selection: Binding(
-                        get: { model.automation.attentionMode },
-                        set: { mode in model.updateAutomation { $0.attentionMode = mode } }
-                    )) {
-                        ForEach(AttentionMode.allCases, id: \.self) { mode in
-                            Text(mode.label).tag(mode)
+                    if Theme.isRenderingOffscreen {
+                        OffscreenSegmentedLabel(
+                            titles: AttentionMode.allCases.map(\.label),
+                            selected: model.automation.attentionMode.label)
+                    } else {
+                        Picker(L("mode.sidebar.a11y"), selection: Binding(
+                            get: { model.automation.attentionMode },
+                            set: { mode in model.updateAutomation { $0.attentionMode = mode } }
+                        )) {
+                            ForEach(AttentionMode.allCases, id: \.self) { mode in
+                                Text(mode.label).tag(mode)
+                            }
                         }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .disabled(model.automationSaving)
+                        .accessibilityLabel(L("mode.sidebar.a11y"))
                     }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .disabled(model.automationSaving)
-                    .accessibilityLabel(L("mode.sidebar.a11y"))
                 }
                 .padding(.horizontal, 20).padding(.vertical, 6)
             }

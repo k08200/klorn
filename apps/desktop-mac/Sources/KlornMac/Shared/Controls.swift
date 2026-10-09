@@ -140,6 +140,30 @@ struct OffscreenMenuLabel: View {
     }
 }
 
+/// Stand-in for a segmented `Picker` while the offscreen renderer runs, for
+/// the same reason as `OffscreenMenuLabel`: the control is AppKit-backed.
+struct OffscreenSegmentedLabel: View {
+    let titles: [String]
+    let selected: String
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(titles, id: \.self) { title in
+                Text(title)
+                    .font(.caption.weight(title == selected ? .semibold : .regular))
+                    .foregroundStyle(title == selected ? Theme.text : Theme.textDim)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity).padding(.vertical, 3)
+                    .background(
+                        title == selected ? Theme.surfaceSelected : .clear,
+                        in: RoundedRectangle(cornerRadius: 5))
+            }
+        }
+        .padding(2)
+        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 7))
+        .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.line))
+    }
+}
+
 /// Sun/moon appearance toggle (founder 2026-08-27: switchable from the top
 /// right). Shows the mode a CLICK gives you — the universal toggle idiom —
 /// and writes an explicit choice over "system" (the Preferences picker still
