@@ -338,6 +338,7 @@ describe("every AttentionItem reader is accounted for", () => {
     "pim/briefing.ts",
     "pim/focus-digest.ts", // a count of arrivals, no title
     "routes/commitments.ts",
+    "routes/email-lanes.ts", // one mail's EMAIL item: lane and reason, no title
   ];
   // Show items of every source, so they drop the ones whose calendar event is hidden.
   const FILTERS_CALENDAR_ITEMS = ["pim/briefing-structure.ts", "pim/inbox-summary.ts"];

@@ -21,7 +21,11 @@
 
 import { CORE_TIERS } from "./tiers";
 
-export type HotkeyScope = "global" | "mail-list" | "mail-detail";
+/**
+ * `mail-reader` is the Mail v2 reader (MAIL_V2), mounted next to `mail-detail`:
+ * it has a previous mail to go to, which the legacy reader does not.
+ */
+export type HotkeyScope = "global" | "mail-list" | "mail-detail" | "mail-reader";
 
 export type HotkeyGroup = "general" | "navigate" | "triage" | "lane" | "select" | "go";
 
@@ -80,6 +84,7 @@ const legacy = (id: string, keys: string, labelKey: string): HotkeyDef => ({
 
 const MAIL: readonly HotkeyScope[] = ["mail-list", "mail-detail"];
 const LIST: readonly HotkeyScope[] = ["mail-list"];
+const LIST_AND_READER: readonly HotkeyScope[] = ["mail-list", "mail-reader"];
 const GLOBAL: readonly HotkeyScope[] = ["global"];
 
 /** Lane keys 1–5: the five live lanes in their display order (lib/tiers). */
@@ -115,7 +120,7 @@ export const HOTKEYS: readonly HotkeyDef[] = [
   triage({
     id: "mail.prev",
     keys: "k",
-    scopes: LIST,
+    scopes: LIST_AND_READER,
     labelKey: "keys.prev",
     group: "navigate",
     repeatable: true,

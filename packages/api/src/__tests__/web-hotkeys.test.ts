@@ -117,6 +117,9 @@ describe("matching", () => {
     expect(idOf(feed(key("c")))).toBe("mail.compose");
     // The reader has no list to move back through, and no compose.
     expect(idOf(feed(key("k"), ctx(true, "mail-detail")))).toBe("none");
+    // The Mail v2 reader does have a previous mail: it mounts its own scope.
+    expect(idOf(feed(key("k"), ctx(true, "mail-detail", "mail-reader")))).toBe("mail.prev");
+    expect(idOf(feed(key("k"), ctx(false, "mail-detail", "mail-reader")))).toBe("none");
     expect(idOf(feed(key("c"), ctx(true, "mail-detail")))).toBe("none");
     // Outside mail, the triage keys do nothing.
     expect(idOf(feed(key("e"), ctx(true)))).toBe("none");

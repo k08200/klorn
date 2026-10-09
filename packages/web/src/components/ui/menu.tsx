@@ -61,6 +61,8 @@ interface MenuProps {
    * trigger that sits at the right on desktop and at the left on a phone.
    */
   align?: "start" | "end" | "end-from-md";
+  /** Which way the popover opens. `top` is for a trigger in a bottom bar. */
+  side?: "bottom" | "top";
   /** Marks the chip as holding a non-default choice. */
   active?: boolean;
   disabled?: boolean;
@@ -168,6 +170,7 @@ export function Menu({
   sections,
   variant = "chip",
   align = "start",
+  side = "bottom",
   active = false,
   disabled = false,
   className = "",
@@ -285,9 +288,9 @@ export function Menu({
           role="menu"
           aria-label={label}
           onKeyDown={onMenuKeyDown}
-          className={`absolute top-full z-30 mt-1 w-max min-w-56 max-w-[min(20rem,calc(100vw-2rem))] rounded-card border border-line bg-surface-elevated p-1 shadow-l2 ${
-            ALIGN_CLASS[align]
-          }`}
+          className={`absolute z-30 w-max min-w-56 max-w-[min(20rem,calc(100vw-2rem))] rounded-card border border-line bg-surface-elevated p-1 shadow-l2 ${
+            side === "top" ? "bottom-full mb-1" : "top-full mt-1"
+          } ${ALIGN_CLASS[align]}`}
         >
           {sections.map((section, index) => (
             // biome-ignore lint/a11y/useSemanticElements: a menu's groups are role="group" by the ARIA menu pattern; <fieldset> is for form controls

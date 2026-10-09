@@ -860,7 +860,12 @@ export async function emailRoutes(app: FastifyInstance) {
         Promise.all([
           prisma.emailMessage.findMany({
             where,
-            orderBy: { receivedAt: "desc" },
+            // Mail v2's All view (MAIL_V2 on and `tier=ALL`) breaks a timestamp
+            // tie by id, as the lane pages and the reader's previous / next do,
+            // so the list and the reader agree on the order. Without the lane
+            // parameter the ordering is what it always was.
+            orderBy:
+              lane === "ALL" ? [{ receivedAt: "desc" }, { id: "desc" }] : { receivedAt: "desc" },
             skip: (pageNum - 1) * pageSize,
             take: pageSize,
           }),

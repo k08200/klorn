@@ -24,9 +24,10 @@ import {
   laneSegments,
   SECONDARY_FILTERS,
   type SecondaryFilter,
+  type ViewTally,
 } from "./model";
 
-const LANE_DOT: Record<LiveTier, string> = {
+export const LANE_DOT: Record<LiveTier, string> = {
   PUSH: "bg-tier-push-ink",
   MEETING: "bg-tier-meeting-ink",
   QUEUE: "bg-tier-queue-ink",
@@ -49,6 +50,8 @@ interface MailHeaderProps {
   onSearchDraft: (value: string) => void;
   searchRef: RefObject<HTMLInputElement | null>;
   counts: EmailLaneCounts | null;
+  /** The numbers under the lane control; null while the list is loading. */
+  tally: ViewTally | null;
   accounts: readonly AccountOption[];
   isDemo: boolean;
   syncing: boolean;
@@ -59,8 +62,9 @@ interface MailHeaderProps {
 
 export function MailHeader(props: MailHeaderProps) {
   const { view, onChange, counts, accounts, isDemo } = props;
-  const { t } = useT();
+  const { t, locale } = useT();
   const threads = view.filter === "threads";
+  const number = new Intl.NumberFormat(locale);
 
   const segments = laneSegments(view.lane).map((lane): Segment<LaneView> => {
     if (lane === "ALL") return { id: lane, label: t("mailV2.lane.all") };
@@ -69,8 +73,12 @@ export function MailHeader(props: MailHeaderProps) {
       id: lane,
       label: lane,
       leading: <span aria-hidden="true" className={`size-2 rounded-full ${LANE_DOT[lane]}`} />,
+      // The badge is the unread count, and says so to a pointer and to a
+      // screen reader; the lane's total is in the line under the control.
       count: unread,
-      ariaLabel: unread > 0 ? t("mailV2.lane.unread", { lane, count: String(unread) }) : undefined,
+      ariaLabel:
+        unread > 0 ? t("mailV2.list.laneUnread", { lane, count: String(unread) }) : undefined,
+      title: unread > 0 ? t("mailV2.list.laneUnread", { lane, count: String(unread) }) : undefined,
     };
   });
 
@@ -249,6 +257,23 @@ export function MailHeader(props: MailHeaderProps) {
         </div>
       </div>
       {threads && <p className="text-caption text-ink-muted">{t("mailV2.threads.note")}</p>}
+      {!threads && props.tally && (
+        <p className="px-1 text-caption tabular-nums text-ink-muted">
+          <span className="font-medium text-ink-soft">
+            {view.lane === "ALL" ? t("mailV2.lane.all") : view.lane}
+          </span>
+          {" · "}
+          {props.tally.total === 1
+            ? t("mailV2.list.tally.one")
+            : t("mailV2.list.tally.many", { count: number.format(props.tally.total) })}
+          {props.tally.unread !== null && props.tally.unread > 0 && (
+            <>
+              {" · "}
+              {t("mailV2.list.tally.unread", { count: number.format(props.tally.unread) })}
+            </>
+          )}
+        </p>
+      )}
     </header>
   );
 }
