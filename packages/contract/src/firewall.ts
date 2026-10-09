@@ -90,8 +90,10 @@ export interface FirewallEmailContext {
   source?: FirewallSourceWire | null;
   /** The mail's read flag. Null / absent = no claim. */
   unread?: boolean | null;
-  /** The mail has at least one attached file; an inline image is not one.
-   *  Null / absent = no claim. */
+  /** The mail has at least one attached file. An inline image (an image part
+   *  with a Content-ID, e.g. a signature logo) is NOT counted — unlike
+   *  `GET /api/email?filter=attachments`, which matches any attachment row;
+   *  aligning the two is a follow-up. Null / absent = no claim. */
   hasAttachment?: boolean | null;
 }
 

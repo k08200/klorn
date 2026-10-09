@@ -17,28 +17,46 @@ export interface LinkedAccountFact {
 
 /**
  * What the mail lookup must select for `accountFactsOf`. Spread into the
- * route's existing EmailMessage selects, so the facts cost no extra query.
+ * route's existing EmailMessage selects, so these two cost no extra query.
  *
- * The count leaves out inline images (an image part with a Content-ID is one
- * the body shows, typically a signature logo): counting them would put the
- * attachment glyph on most mail.
+ * No `_count` of attachments here on purpose: Prisma compiles a relation
+ * count to a join on an aggregate over the WHOLE EmailAttachment table,
+ * grouped by mail, before it is matched to the page's rows. On a route the
+ * desktop polls every minute that scan grows with every attachment ever
+ * synced. `attachmentLookupWhere` below is bounded by the page's ids.
  */
 export const accountFactsSelect = {
   isRead: true,
   linkedInboxAccountId: true,
-  _count: {
-    select: {
-      attachments: {
-        where: { NOT: { contentId: { not: null }, mimeType: { startsWith: "image/" } } },
-      },
-    },
-  },
 } satisfies Prisma.EmailMessageSelect;
 
+/**
+ * The attachments of exactly these mails, for one user: an index lookup on
+ * EmailAttachment(emailId). Leaves out inline images (an image part with a
+ * Content-ID is one the body shows, typically a signature logo): counting
+ * them would put the attachment glyph on most mail. The type is compared
+ * without case, as mailers write "IMAGE/PNG" too.
+ */
+export function attachmentLookupWhere(
+  userId: string,
+  emailIds: readonly string[],
+): Prisma.EmailAttachmentWhereInput {
+  return {
+    userId,
+    emailId: { in: [...emailIds] },
+    NOT: {
+      AND: [
+        { contentId: { not: null } },
+        { mimeType: { startsWith: "image/", mode: "insensitive" } },
+      ],
+    },
+  };
+}
+
 export interface AccountFactsRow {
+  id: string;
   linkedInboxAccountId: string | null;
   isRead?: boolean | null;
-  _count?: { attachments: number } | null;
 }
 
 export interface AccountFactsContext {
@@ -46,6 +64,8 @@ export interface AccountFactsContext {
   primaryEmail: string | null;
   /** Linked accounts by id; null when the lookup failed. */
   linked: ReadonlyMap<string, LinkedAccountFact> | null;
+  /** Ids of the page's mail that has an attached file; null when the lookup failed. */
+  withAttachment: ReadonlySet<string> | null;
 }
 
 /**
@@ -65,7 +85,7 @@ export function firewallSourceOf(
   return { provider: account.provider, accountId: linkedInboxAccountId, label: account.email };
 }
 
-/** The three preview fields. A missing column or count is "no claim" (null). */
+/** The three preview fields. A missing column or a failed lookup is "no claim" (null). */
 export function accountFactsOf(
   row: AccountFactsRow,
   context: AccountFactsContext,
@@ -73,6 +93,6 @@ export function accountFactsOf(
   return {
     source: firewallSourceOf(row.linkedInboxAccountId, context),
     unread: typeof row.isRead === "boolean" ? !row.isRead : null,
-    hasAttachment: row._count ? row._count.attachments > 0 : null,
+    hasAttachment: context.withAttachment ? context.withAttachment.has(row.id) : null,
   };
 }

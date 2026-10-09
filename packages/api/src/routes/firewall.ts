@@ -63,6 +63,7 @@ import { isInternalSender } from "../mail/company-domains.js";
 import {
   accountFactsOf,
   accountFactsSelect,
+  attachmentLookupWhere,
   type LinkedAccountFact,
 } from "../mail/firewall-account-facts.js";
 import { ensureFreshGmailWatch } from "../mail/gmail.js";
@@ -649,8 +650,7 @@ export async function firewallRoutes(app: FastifyInstance) {
                 needsReply: true,
                 repliedAt: true,
                 proactiveDraft: true,
-                // The mailbox (also the `inbox=` scope), the read flag and the
-                // attachment count: the preview's account facts.
+                // The mailbox (also the `inbox=` scope) and the read flag.
                 ...accountFactsSelect,
               },
             })
@@ -676,7 +676,7 @@ export async function firewallRoutes(app: FastifyInstance) {
                 // (N EmailMessage rows) to a single firewall card. See below.
                 threadId: true,
                 // Which mailbox the message lives on — drives the `inbox=` scope
-                // — plus the read flag and the attachment count.
+                // — plus the read flag.
                 ...accountFactsSelect,
               },
             })
@@ -685,30 +685,47 @@ export async function firewallRoutes(app: FastifyInstance) {
       const emailByGmailId = new Map(emailRowsByGmailId.map((e) => [e.gmailId, e]));
       const emailById = new Map(emailRowsById.map((e) => [e.id, e]));
 
-      // The linked accounts this page's mail lives on, for the source badge:
-      // ONE lookup for the whole page, and none when every mail is on the
-      // primary account. FAIL-OPEN like the chips below — a failed read means
-      // no badge on linked mail, never a 500. The userId scope keeps a stale
-      // or foreign id from resolving to someone else's account.
+      // The source badge and the attachment glyph: two lookups for the whole
+      // page, run together, each bounded by this page's ids and by userId (a
+      // stale or foreign id resolves to nothing). No linked mail → no account
+      // lookup; no mail → neither. FAIL-OPEN like the chips below — a failed
+      // read means no badge / no glyph claim, never a 500.
+      const pageEmails = [...emailRowsByGmailId, ...emailRowsById];
       const linkedIds = new Set<string>();
-      for (const e of [...emailRowsByGmailId, ...emailRowsById]) {
+      for (const e of pageEmails) {
         if (e.linkedInboxAccountId) linkedIds.add(e.linkedInboxAccountId);
       }
-      let linkedAccounts: Map<string, LinkedAccountFact> | null = new Map();
-      if (linkedIds.size) {
+      const pageEmailIds = [...new Set(pageEmails.map((e) => e.id))];
+      const loadLinkedAccounts = async (): Promise<Map<string, LinkedAccountFact> | null> => {
+        if (!linkedIds.size) return new Map();
         try {
           const accountRows = await prisma.linkedInboxAccount.findMany({
             where: { userId, id: { in: [...linkedIds] } },
             select: { id: true, provider: true, email: true },
           });
-          linkedAccounts = new Map(
-            accountRows.map((a) => [a.id, { provider: a.provider, email: a.email }]),
-          );
+          return new Map(accountRows.map((a) => [a.id, { provider: a.provider, email: a.email }]));
         } catch (err) {
-          linkedAccounts = null;
           captureError(err, { tags: { scope: "firewall.linkedAccounts" } });
+          return null;
         }
-      }
+      };
+      const loadMailWithAttachment = async (): Promise<Set<string> | null> => {
+        if (!pageEmailIds.length) return new Set();
+        try {
+          const groups = await prisma.emailAttachment.groupBy({
+            by: ["emailId"],
+            where: attachmentLookupWhere(userId, pageEmailIds),
+          });
+          return new Set(groups.map((g) => g.emailId));
+        } catch (err) {
+          captureError(err, { tags: { scope: "firewall.attachments" } });
+          return null;
+        }
+      };
+      const [linkedAccounts, withAttachment] = await Promise.all([
+        loadLinkedAccounts(),
+        loadMailWithAttachment(),
+      ]);
 
       // Batch-fetch trust scores for every distinct sender address surfaced
       // by this page. One round-trip; the bulk helper returns a Map keyed by
@@ -772,7 +789,7 @@ export async function firewallRoutes(app: FastifyInstance) {
         captureError(err, { tags: { scope: "firewall.senderLabels" } });
       }
 
-      const accountContext = { primaryEmail, linked: linkedAccounts };
+      const accountContext = { primaryEmail, linked: linkedAccounts, withAttachment };
 
       const tiers: Record<Tier, FirewallItem[]> = {
         SILENT: [],

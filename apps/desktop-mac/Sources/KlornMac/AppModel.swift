@@ -312,8 +312,31 @@ final class AppModel {
     private(set) var inboxes: [InboxOption] = []
     /// Mail opened in this session (EmailMessage ids). Opening marks it read
     /// on the server, but the list only learns that on its next poll; rows
-    /// drop the unread dot from this set in the meantime.
+    /// drop the unread dot from this set in the meantime. An id leaves the
+    /// set when its mark-read fails, so the server's flag is trusted again.
     private(set) var openedEmailIds: Set<String> = []
+
+    /// Mark a mail read on the server after the user opened it. Reading is a
+    /// side-effect-free GET; this is the explicit write, fire-and-forget: a
+    /// failure must not blank the reading pane, it only brings the dot back.
+    private func markOpened(_ emailDbId: String) {
+        openedEmailIds = openedEmailIds.union([emailDbId])
+        let session = sessionGeneration
+        Task {
+            do {
+                try await api.patch("/api/email/\(emailDbId)/read", json: [:])
+            } catch {
+                guard isCurrent(session) else { return }
+                openedEmailIds = Self.afterFailedMarkRead(openedEmailIds, emailDbId)
+            }
+        }
+    }
+
+    /// The opened set once a mark-read failed: the mail is unread on the
+    /// server, so the row must say so again. Pure for the harness.
+    nonisolated static func afterFailedMarkRead(_ opened: Set<String>, _ emailDbId: String) -> Set<String> {
+        opened.subtracting([emailDbId])
+    }
     /// Server-enabled login providers (GET /api/auth/providers, unauthed).
     /// Defaults to ["google"] so the UI works before/without the fetch.
     private(set) var loginProviders: [String] = ["google"]
@@ -831,11 +854,7 @@ final class AppModel {
                 "/api/email/\(emailDbId)", as: EmailDetail.self)
             guard isCurrent(session) else { return }
             openedEmail = detail
-            // Reading is a side-effect-free GET; marking read is an explicit
-            // write. Fire-and-forget: a failed mark-read must not blank the
-            // reading pane the user already has.
-            Task { try? await api.patch("/api/email/\(emailDbId)/read", json: [:]) }
-            openedEmailIds = openedEmailIds.union([emailDbId])
+            markOpened(emailDbId)
             loadMeetingContext(for: emailDbId, guardId: item.id)
             loadSenderDossier(for: emailDbId, guardId: item.id)
             loadThreadBrief(for: emailDbId, guardId: item.id)
@@ -1969,8 +1988,7 @@ final class AppModel {
             openedEmail = detail
             // Same contract as openItem: explicit PATCH write, never a GET
             // side effect; failures degrade to leaving the mail unread.
-            Task { try? await api.patch("/api/email/\(hit.id)/read", json: [:]) }
-            openedEmailIds = openedEmailIds.union([hit.id])
+            markOpened(hit.id)
         } catch _ where !isCurrent(session) {
             return
         } catch APIError.unauthorized {
@@ -2127,7 +2145,6 @@ final class AppModel {
         briefing = nil
         briefingStructure = nil
         inboxes = []
-        openedEmailIds = []
         selectedInbox = "all"
         UserDefaults.standard.removeObject(forKey: Self.selectedInboxKey)
         shownMeetingIds = []
@@ -2205,6 +2222,7 @@ final class AppModel {
             field("pendingActions", \.pendingActions, [], isClean: { $0.isEmpty }),
             text("pendingActionError", \.pendingActionError),
             field("resolvingActions", \.resolvingActions, [], dirty: ["x"]),
+            field("openedEmailIds", \.openedEmailIds, [], dirty: ["x"]),
             field("agentToday", \.agentToday, nil, isClean: { $0 == nil }),
             field("automation", \.automation, AutomationSettings(), isClean: { $0 == AutomationSettings() }),
             flag("automationLoaded", \.automationLoaded),

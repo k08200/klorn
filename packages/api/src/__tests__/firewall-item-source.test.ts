@@ -4,8 +4,9 @@
  *
  * The unified list promises a source badge on every row (productization plan
  * §1). These facts ride on the email preview the route already builds, from
- * the EmailMessage rows it already fetches, plus ONE batched account lookup
- * (and none at all for a user with no linked mailbox).
+ * the EmailMessage rows it already fetches, plus two page-bounded lookups:
+ * the linked accounts (none at all when every mail is on the primary) and
+ * the attachments of exactly this page's mail. Never a query per item.
  */
 
 import Fastify from "fastify";
@@ -55,7 +56,7 @@ function email(
     proactiveDraft: null,
     linkedInboxAccountId,
     isRead: extra.isRead ?? false,
-    _count: { attachments: extra.attachments ?? 0 },
+    attachments: extra.attachments ?? 0,
   };
 }
 
@@ -89,12 +90,28 @@ const accountFindMany = vi.fn(
       .map(({ id, provider, email: address }) => ({ id, provider, email: address })),
 );
 
+interface AttachmentWhere {
+  userId: string;
+  emailId: { in: string[] };
+  NOT: unknown;
+}
+
+// Stands in for the grouped lookup: one row per mail that has a file.
+const attachmentGroupBy = vi.fn(async ({ where }: { where: AttachmentWhere }) =>
+  state.emails
+    .filter(
+      (e) => e.userId === where.userId && where.emailId.in.includes(e.id) && e.attachments > 0,
+    )
+    .map((e) => ({ emailId: e.id })),
+);
+
 vi.mock("../db.js", () => ({
   prisma: {
     attentionItem: { findMany: vi.fn(async () => state.attention) },
     pendingAction: { findMany: vi.fn(async () => state.pendingActions) },
     emailMessage: { findMany: emailFindMany },
     linkedInboxAccount: { findMany: accountFindMany },
+    emailAttachment: { groupBy: attachmentGroupBy },
     contactEngagementScore: { findMany: vi.fn(async () => []) },
     user: {
       findUnique: vi.fn(async () => ({ companyDomains: [], email: state.ownerEmail })),
@@ -157,6 +174,7 @@ beforeEach(() => {
   state.ownerEmail = "me@company.example";
   emailFindMany.mockClear();
   accountFindMany.mockClear();
+  attachmentGroupBy.mockClear();
 });
 
 describe("GET /api/inbox/firewall — account, read state and attachment on the preview", () => {
@@ -269,7 +287,7 @@ describe("GET /api/inbox/firewall — account, read state and attachment on the 
     expect(items.get("a2")?.email).toMatchObject({ unread: false, hasAttachment: false });
   });
 
-  it("asks for the read flag and the attachment count in the mail lookup itself", async () => {
+  it("reads the read flag in the mail lookup itself, and no per-row attachment count", async () => {
     state.attention = [attention("a1", "EMAIL", "m1")];
     state.emails = [email("m1", null)];
     await fetchItems();
@@ -277,7 +295,68 @@ describe("GET /api/inbox/firewall — account, read state and attachment on the 
       { select: { isRead?: boolean; _count?: unknown } },
     ];
     expect(select.isRead).toBe(true);
-    expect(select._count).toBeDefined();
+    // An unbounded aggregate over every attachment: see firewall-account-facts.ts.
+    expect(select._count).toBeUndefined();
+  });
+
+  it("looks attachments up once, bounded to this page's mail and this user", async () => {
+    const ids = ["m1", "m2", "m3", "m4", "m5", "m6"];
+    state.attention = ids.map((id) => attention(`a-${id}`, "EMAIL", id));
+    state.emails = ids.map((id, i) => email(id, null, { attachments: i % 2 }));
+    const items = await fetchItems();
+    expect(attachmentGroupBy).toHaveBeenCalledTimes(1);
+    const [args] = attachmentGroupBy.mock.calls[0] as unknown as [
+      { by: string[]; where: AttachmentWhere },
+    ];
+    expect(args.by).toEqual(["emailId"]);
+    expect(args.where.userId).toBe("user-1");
+    expect([...args.where.emailId.in].sort()).toEqual(ids);
+    // An inline image is not an attachment, whatever the case of its type.
+    expect(args.where.NOT).toEqual({
+      AND: [
+        { contentId: { not: null } },
+        { mimeType: { startsWith: "image/", mode: "insensitive" } },
+      ],
+    });
+    expect(items.get("a-m1")?.email?.hasAttachment).toBe(false);
+    expect(items.get("a-m2")?.email?.hasAttachment).toBe(true);
+  });
+
+  it("costs two lookups beyond the mail fetch at most, whatever the row count", async () => {
+    const ids = ["m1", "m2", "m3", "m4", "m5", "m6", "m7", "m8"];
+    state.attention = ids.map((id) => attention(`a-${id}`, "EMAIL", id));
+    state.emails = ids.map((id, i) => email(id, i % 2 === 0 ? "li-1" : null, { attachments: 1 }));
+    state.accounts = [{ id: "li-1", userId: "user-1", provider: "NAVER", email: "n@n.example" }];
+    await fetchItems();
+    expect(emailFindMany).toHaveBeenCalledTimes(1);
+    expect(accountFindMany).toHaveBeenCalledTimes(1);
+    expect(attachmentGroupBy).toHaveBeenCalledTimes(1);
+  });
+
+  it("makes no attachment lookup when the page holds no mail", async () => {
+    state.attention = [attention("a1", "COMMITMENT", "c1"), attention("a2", "EMAIL", "missing")];
+    await fetchItems();
+    expect(attachmentGroupBy).not.toHaveBeenCalled();
+    expect(accountFindMany).not.toHaveBeenCalled();
+  });
+
+  it("claims nothing about attachments, not an error, when that lookup fails", async () => {
+    attachmentGroupBy.mockRejectedValueOnce(new Error("db down"));
+    state.attention = [attention("a1", "EMAIL", "m1")];
+    state.emails = [email("m1", null, { isRead: false, attachments: 3 })];
+    const items = await fetchItems();
+    expect(items.get("a1")?.email).toMatchObject({ unread: true, hasAttachment: null });
+    expect(items.get("a1")?.email?.source?.provider).toBe("GOOGLE");
+  });
+
+  it("never counts another user's attachment, even on a matching mail id", async () => {
+    state.attention = [attention("a1", "EMAIL", "m1")];
+    state.emails = [
+      email("m1", null),
+      { ...email("m1", null, { attachments: 2 }), userId: "user-2" },
+    ];
+    const items = await fetchItems();
+    expect(items.get("a1")?.email?.hasAttachment).toBe(false);
   });
 
   it("leaves an item without mail as it was: no preview, no account", async () => {
@@ -315,5 +394,6 @@ describe("GET /api/inbox/firewall — account, read state and attachment on the 
       hasAttachment: true,
     });
     expect(accountFindMany).toHaveBeenCalledTimes(1);
+    expect(attachmentGroupBy).toHaveBeenCalledTimes(1);
   });
 });

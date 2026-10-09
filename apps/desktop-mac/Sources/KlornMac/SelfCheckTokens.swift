@@ -322,6 +322,11 @@ private func sourceBadgeChecks(inboxes: [InboxOption]) -> [(String, Bool)] {
             && content(full, inboxes, opened: ["other"]).map { $0.unread == true } == true
             && content("", inboxes, opened: ["e1"]).map { $0.unread == nil } == true))
     results.append((
+        "a failed mark-read gives the row its dot back",
+        AppModel.afterFailedMarkRead(["e1", "e2"], "e1") == ["e2"]
+            && content(full, inboxes, opened: AppModel.afterFailedMarkRead(["e1"], "e1"))
+                .map { $0.unread == true } == true))
+    results.append((
         "a wrong shape is no claim, never a failed queue; an unknown provider still decodes",
         content(#","source":"NAVER","unread":"yes","hasAttachment":3"#, inboxes).map {
             !$0.showsAccount && $0.unread == nil && !$0.hasAttachment
