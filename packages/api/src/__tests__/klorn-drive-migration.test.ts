@@ -83,7 +83,8 @@ describe("Klorn drive migration", () => {
   it("is additive: one table, two indexes, nothing existing altered or dropped", () => {
     const touchingOthers = statements.filter(
       (statement) =>
-        /\b(ALTER|DROP|UPDATE|DELETE|INSERT)\b/.test(statement) && !/"StoragePurge"/.test(statement),
+        /\b(ALTER|DROP|UPDATE|DELETE|INSERT)\b/.test(statement) &&
+        !/"StoragePurge"/.test(statement),
     );
     expect(touchingOthers).toEqual([]);
     expect(statements.join(" ")).not.toMatch(/\bDROP\b/);

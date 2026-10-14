@@ -720,6 +720,19 @@ try {
       });
   }
 
+  // Pending account purges in object storage (step D3; hourly). A tick reads
+  // nothing while OBJECT_STORAGE_ENABLED is off.
+  if (!BG_DISABLED) {
+    import("./storage/purge-sweep.js")
+      .then(({ startStoragePurgeScheduler }) => {
+        startStoragePurgeScheduler();
+      })
+      .catch((err) => {
+        console.error("[STARTUP] storage-purge sweep failed to start:", err);
+        captureError(err, { tags: { context: "startup:storage-purge" } });
+      });
+  }
+
   // Self-ping to prevent Render free tier from sleeping after 15 min inactivity
   const RENDER_URL = process.env.RENDER_EXTERNAL_URL;
   if (RENDER_URL) {
