@@ -3,7 +3,8 @@
  * only while DRIVE_ENABLED is on AND its provider's own connector flag is: every
  * list and search spreads `driveSourceScope()` into its `where`, every by-id read
  * checks `isDriveRowVisible`. It fails closed: a provider nobody registered is
- * hidden, so D2, which ships no connector, shows nothing.
+ * hidden. D3 registers KLORN, live only with KLORN_DRIVE_ENABLED and
+ * OBJECT_STORAGE_ENABLED on as well.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -13,6 +14,8 @@ import {
   type DriveProviderEnabledMap,
   driveSourceScope,
   isDriveRowVisible,
+  klornDriveLive,
+  klornDriveRoutesEnabled,
   visibleDriveProviders,
 } from "../drive/drive-scope.js";
 
@@ -42,14 +45,38 @@ describe("DRIVE_ENABLED", () => {
 });
 
 describe("the shipped registry", () => {
-  it("names no provider: D2 has no connector, so no row is visible even with DRIVE_ENABLED on", () => {
-    vi.stubEnv("DRIVE_ENABLED", "true");
-    expect(Object.keys(DRIVE_PROVIDER_ENABLED)).toEqual([]);
-    expect(visibleDriveProviders()).toEqual([]);
-    expect(driveSourceScope()).toEqual({ provider: { in: [] } });
-    for (const provider of ["KLORN", "GOOGLE", "ONEDRIVE"]) {
+  const FLAGS = ["DRIVE_ENABLED", "KLORN_DRIVE_ENABLED", "OBJECT_STORAGE_ENABLED"] as const;
+  function flags(on: readonly (typeof FLAGS)[number][]): void {
+    for (const name of FLAGS) vi.stubEnv(name, on.includes(name) ? "true" : "false");
+  }
+
+  it("names only KLORN (D3); the external connectors are not registered yet", () => {
+    expect(Object.keys(DRIVE_PROVIDER_ENABLED)).toEqual(["KLORN"]);
+  });
+
+  it("KLORN is visible only while the drive, the Klorn drive and object storage are all on", () => {
+    flags(FLAGS);
+    expect(visibleDriveProviders()).toEqual(["KLORN"]);
+    expect(klornDriveLive()).toBe(true);
+    expect(klornDriveRoutesEnabled()).toBe(true);
+    expect(isDriveRowVisible({ provider: "KLORN" })).toBe(true);
+    for (const provider of ["GOOGLE", "ONEDRIVE"]) {
       expect(isDriveRowVisible({ provider })).toBe(false);
     }
+  });
+
+  it.each(FLAGS)("turning %s off hides every Klorn file and darkens the Klorn routes", (name) => {
+    flags(FLAGS.filter((flag) => flag !== name));
+    expect(visibleDriveProviders()).toEqual([]);
+    expect(driveSourceScope()).toEqual({ provider: { in: [] } });
+    expect(isDriveRowVisible({ provider: "KLORN" })).toBe(false);
+    expect(klornDriveRoutesEnabled()).toBe(false);
+  });
+
+  it("with every flag unset nothing is visible", () => {
+    for (const name of FLAGS) vi.stubEnv(name, undefined as unknown as string);
+    expect(visibleDriveProviders()).toEqual([]);
+    expect(klornDriveRoutesEnabled()).toBe(false);
   });
 });
 

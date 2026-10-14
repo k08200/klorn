@@ -26,7 +26,12 @@ export type DriveImplementations = Readonly<
   Partial<Record<DriveProviderName, DriveProviderActions>>
 >;
 
-/** The connectors that exist. D3 adds KLORN, D5 GOOGLE, D6 ONEDRIVE. */
+/**
+ * The connectors that exist. D5 adds GOOGLE, D6 ONEDRIVE. KLORN has none: the
+ * Klorn drive's index IS its source (D3 writes the rows itself), so a session
+ * that lists it would only read the same table back. KLORN stays the
+ * unsupported stub here while its flag lives in DRIVE_PROVIDER_ENABLED.
+ */
 const IMPLEMENTATIONS: DriveImplementations = {};
 
 export function driveActionsForProvider(

@@ -237,6 +237,20 @@ export function driveEnabled(): boolean {
     (process.env.DRIVE_ENABLED ?? "").trim().toLowerCase(),
   );
 }
+// The Klorn drive: files a user uploads, stored in object storage — step D3 of
+// docs/providers/unified-platform-plan.md. OFF by default (repo doctrine). It is
+// live only while DRIVE_ENABLED and OBJECT_STORAGE_ENABLED are on too
+// (drive/drive-scope.ts, `klornDriveLive`): until then the upload, folder,
+// download, rename/move and delete routes answer Fastify's default 404
+// (darkRouteGate) and every KLORN row is hidden from the drive list. Turning it
+// off hides the files and stops writes; it never deletes them (the account
+// purge does that, flag or not, while OBJECT_STORAGE_ENABLED is on). Read at
+// request time with the same lenient truthy parse, so a flip needs no redeploy.
+export function klornDriveEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.KLORN_DRIVE_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
 // IMAP flag actions (read, unread, star) for Naver and iCloud — step B1 of
 // docs/providers/unified-platform-plan.md. OFF by default (repo doctrine). While
 // OFF, mail/providers/dispatch.ts routes NAVER and ICLOUD to the unsupported

@@ -65,3 +65,86 @@ export interface DriveFilesListResponse {
 export interface DriveFileResponse {
   file: DriveFileWire;
 }
+
+// ── The Klorn drive (step D3) ───────────────────────────────────────────────
+//
+// Upload, folders, download, rename/move and delete for KLORN files only. Every
+// route below answers exactly like an unregistered route unless DRIVE_ENABLED,
+// KLORN_DRIVE_ENABLED and OBJECT_STORAGE_ENABLED are all on. A file of an
+// external source (`readOnly: true`) answers 409 `read-only` on each of them.
+//
+// `GET /api/drive/files` also takes `folder`: a Klorn folder's `externalId`, or
+// `root`, to list that folder's children (KLORN only).
+
+/** Why a drive request failed. Branch on this, never on `error`. */
+export type DriveErrorCode =
+  | "invalid-upload"
+  | "invalid-name"
+  | "not-found"
+  | "parent-not-found"
+  | "read-only"
+  | "is-folder"
+  | "cycle"
+  | "too-deep"
+  | "folder-too-large"
+  | "account-purging"
+  | "too-large"
+  | "quota-exceeded"
+  | "storage-unavailable";
+
+/** Every 4xx/5xx of the routes below. `retryable`: the same request may pass later. */
+export interface DriveErrorResponse {
+  error: string;
+  code: DriveErrorCode;
+  retryable: boolean;
+}
+
+/**
+ * `POST /api/drive/files` — multipart/form-data, in this order:
+ *   - `size`: the file's exact byte length (decimal), required;
+ *   - `parentExternalId`: a Klorn folder's `externalId`, optional (root when absent);
+ *   - `file`: the file itself, exactly one part; its filename is the file's name.
+ * The type is sniffed from the bytes; the part's Content-Type is ignored. The
+ * largest file is 25 MiB (26,214,400 bytes; 413 `too-large`). Answers 201.
+ */
+export interface DriveUploadResponse {
+  file: DriveFileWire;
+}
+
+/** `POST /api/drive/folders`. Answers 201 `{ file }` (the folder). */
+export interface DriveCreateFolderRequest {
+  name: string;
+  /** A Klorn folder's `externalId`; absent or null for the root. */
+  parentExternalId?: string | null;
+}
+
+/**
+ * `PATCH /api/drive/files/:id` — rename, move, or both. A field left out is left
+ * as it is; `parentExternalId: null` moves to the root. Answers `{ file }`.
+ */
+export interface DriveUpdateFileRequest {
+  name?: string;
+  parentExternalId?: string | null;
+}
+
+/**
+ * `GET /api/drive/files/:id/download` — a signed link to the file's bytes,
+ * minted per request and valid for `expiresInSeconds` (at most 300). Open it
+ * WITHOUT Klorn's Authorization header (a plain navigation in the browser, a
+ * fresh request in the app): it is a link to the storage vendor. It always
+ * downloads as an attachment. Folders answer 409 `is-folder`.
+ */
+export interface DriveDownloadResponse {
+  url: string;
+  expiresInSeconds: number;
+}
+
+/**
+ * `DELETE /api/drive/files/:id` — permanent; there is no trash. A folder goes
+ * with everything in it, up to a bound (409 `folder-too-large` past it). A
+ * storage failure answers 503 `storage-unavailable` with what was deleted
+ * already gone; sending the same request again continues.
+ */
+export interface DriveDeleteResponse {
+  deleted: { files: number; folders: number };
+}

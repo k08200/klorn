@@ -23,6 +23,7 @@ import { describe, expect, it } from "vitest";
 const srcDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 const ROWS_MODULE = "drive/drive-rows.ts";
 const READ_MODULE = "drive/drive-read.ts";
+const KLORN_READ_MODULE = "drive/klorn-drive-read.ts";
 const EXPORT_MODULE = "drive/drive-export.ts";
 
 function sourceFiles(dir: string): string[] {
@@ -69,14 +70,18 @@ describe("every DriveFile write states its source, in one place", () => {
     expect(pathsWith(ROW_WRITE)).toEqual([ROWS_MODULE]);
   });
 
-  it("it writes with exactly one upsert, keyed on the row's whole identity", () => {
+  it("it writes with one upsert and one update-only call, both keyed on the row's whole identity", () => {
     const text = fileAt(ROWS_MODULE)?.text ?? "";
     const windows = callWindows(text, ROW_WRITE);
-    expect(windows).toHaveLength(1);
+    expect(windows).toHaveLength(2);
     expect(windows[0]).toMatch(
       /driveFile\.upsert\(\{\s*where: \{ driveFileIdentity: \{ userId, provider, sourceKey, externalId \} \}/,
     );
     expect(windows[0]).toMatch(/create: row\.data,/);
+    // D3's rename and move: never creates, so a row deleted meanwhile stays deleted.
+    expect(windows[1]).toMatch(
+      /driveFile\.updateMany\(\{\s*where: \{ userId, provider, sourceKey, externalId \},\s*data: row\.changes,/,
+    );
   });
 
   it("the row it creates always carries provider and sourceKey, from the source", () => {
@@ -88,6 +93,7 @@ describe("every DriveFile write states its source, in one place", () => {
     const text = fileAt(ROWS_MODULE)?.text ?? "";
     const windows = callWindows(text, ROW_WRITE);
     expect(windows[0]).toMatch(/update: row\.changes,/);
+    expect(windows[1]).toMatch(/data: row\.changes,/);
     const from = text.slice(text.indexOf("export interface DriveRowChanges {"));
     const changes = from.slice(0, from.indexOf("\n}"));
     expect(changes).toMatch(/readonly name: string;/);
@@ -116,9 +122,24 @@ describe("every DriveFile write states its source, in one place", () => {
     expect(body).toMatch(/\n\s+sourceKey\s+String\n/);
   });
 
-  it("only the user purge deletes rows", () => {
-    expect(pathsWith(ROW_DELETE)).toEqual(["purge-user-data.ts"]);
+  it("only the user purge and the writer's Klorn delete delete rows", () => {
+    expect(pathsWith(ROW_DELETE)).toEqual([ROWS_MODULE, "purge-user-data.ts"]);
     expect(fileAt("purge-user-data.ts")?.text).toContain("await tx.driveFile.deleteMany(scope);");
+    // D3: one user's KLORN rows, by the ids D3 minted. Nothing of another source.
+    const windows = callWindows(fileAt(ROWS_MODULE)?.text ?? "", ROW_DELETE);
+    expect(windows).toHaveLength(1);
+    expect(windows[0]).toMatch(
+      /driveFile\.deleteMany\(\{\s*where: \{\s*userId,\s*provider: "KLORN",\s*sourceKey: KLORN_DRIVE_SOURCE_KEY,\s*externalId: \{ in: \[\.\.\.externalIds\] \},\s*\},/,
+    );
+  });
+
+  it("the Klorn drive deletes a file's object before its row", () => {
+    const text = fileAt("drive/klorn-remove.ts")?.text ?? "";
+    const body = text.slice(text.indexOf("export async function deleteKlornItem("));
+    const objects = body.indexOf("await deleteObjects(");
+    const rowsGone = body.indexOf("await deleteKlornDriveRows(");
+    expect(objects).toBeGreaterThan(0);
+    expect(rowsGone).toBeGreaterThan(objects);
   });
 
   it("no module outside the drive modules names the row's unique key", () => {
@@ -133,7 +154,7 @@ describe("every DriveFile read goes through the kill switch", () => {
   const EXEMPT_FROM_KILL_SWITCH = [EXPORT_MODULE];
 
   it("finds the known readers (so this guard cannot pass by scanning nothing)", () => {
-    expect(pathsWith(ROW_READ)).toEqual([EXPORT_MODULE, READ_MODULE]);
+    expect(pathsWith(ROW_READ)).toEqual([EXPORT_MODULE, READ_MODULE, KLORN_READ_MODULE]);
   });
 
   const scoped = pathsWith(ROW_READ).filter((path) => !EXEMPT_FROM_KILL_SWITCH.includes(path));
@@ -163,15 +184,25 @@ describe("every DriveFile read goes through the kill switch", () => {
         expect(window.slice(0, 120)).toMatch(/where: \{ id, userId \}/);
       }
       for (const window of callWindows(text, LIST_READ)) {
-        expect(window.slice(0, 200)).toMatch(/\.\.\.filtersOf\(options\)|where: \{ userId \}/);
+        expect(window.slice(0, 200)).toMatch(
+          /\.\.\.filtersOf\(options\)|\.\.\.klornRowsOf\(userId\)|where: \{ userId \}/,
+        );
       }
     }
     expect(fileAt(READ_MODULE)?.text).toContain("[{ userId: options.userId, trashed: false }]");
+    expect(fileAt(KLORN_READ_MODULE)?.text).toContain(
+      'return [{ userId, provider: "KLORN", sourceKey: KLORN_DRIVE_SOURCE_KEY, trashed: false }];',
+    );
   });
 
   it("every read selects its columns: no raw row, so no storage key and no BigInt on the wire", () => {
     for (const path of pathsWith(ROW_READ)) {
       for (const window of callWindows(fileAt(path)?.text ?? "", ROW_READ)) {
+        // An aggregate returns no row: it names the one sum it computes.
+        if (/^driveFile\.aggregate\(/.test(window)) {
+          expect(window).toMatch(/_sum: \{ sizeBytes: true \},\s*\}\);/);
+          continue;
+        }
         expect(window).toMatch(/\bselect: /);
       }
     }
@@ -195,9 +226,12 @@ describe("every DriveFile read goes through the kill switch", () => {
     expect(index).toMatch(
       /app\.register\(driveRoutes\(\{ gate: driveEnabled \}\), \{\s*prefix: "\/api\/drive",?\s*\}\)/,
     );
-    expect(fileAt("routes/drive.ts")?.text).toContain(
-      'app.addHook("onRequest", darkRouteGate(opts.gate));',
+    expect(index).toMatch(
+      /app\.register\(klornDriveRoutes\(\{ gate: klornDriveRoutesEnabled \}\), \{\s*prefix: "\/api\/drive",?\s*\}\)/,
     );
+    for (const path of ["routes/drive.ts", "routes/klorn-drive.ts"]) {
+      expect(fileAt(path)?.text).toContain('app.addHook("onRequest", darkRouteGate(opts.gate));');
+    }
   });
 });
 
@@ -249,11 +283,20 @@ describe("drive text reaches an LLM only wrapped", () => {
     "drive/drive-read.ts",
     "drive/drive-rows.ts",
     "drive/drive-scope.ts",
+    "drive/klorn-content-type.ts",
+    "drive/klorn-drive-read.ts",
+    "drive/klorn-errors.ts",
+    "drive/klorn-file-name.ts",
+    "drive/klorn-quota.ts",
+    "drive/klorn-remove.ts",
+    "drive/klorn-tree.ts",
+    "drive/klorn-upload.ts",
     "drive/providers/dispatch.ts",
     "drive/providers/types.ts",
     "drive/providers/unsupported.ts",
     "purge-user-data.ts",
     "routes/drive.ts",
+    "routes/klorn-drive.ts",
   ];
   // The server entry point imports the LLM for its own startup reporting, so its
   // imports say nothing. What it does with drive code is pinned instead: it
@@ -294,9 +337,14 @@ describe("drive text reaches an LLM only wrapped", () => {
     const driveImports = [...text.matchAll(/from "(\.\/[^"]*drive[^"]*)"/g)]
       .map((match) => match[1])
       .sort();
-    expect(driveImports).toEqual(["./drive/drive-export.js", "./routes/drive.js"]);
+    expect(driveImports).toEqual([
+      "./drive/drive-export.js",
+      "./routes/drive.js",
+      "./routes/klorn-drive.js",
+    ]);
     expect(text.match(/\bexportDriveFiles\(/g)).toHaveLength(1);
     expect(text.match(/\bdriveRoutes\(/g)).toHaveLength(1);
+    expect(text.match(/\bklornDriveRoutes\(/g)).toHaveLength(1);
     expect(text.match(/\bdriveFiles\b/g)).toHaveLength(2);
   });
 

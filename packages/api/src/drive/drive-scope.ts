@@ -12,7 +12,8 @@
  * Unlike the calendar's switch this one fails closed. The calendar hides the
  * providers it knows to be off; the drive shows only the providers known to be
  * on, because it has no legacy rows that must stay visible. A provider nobody
- * registered is hidden.
+ * registered is hidden. The Klorn drive (D3) is registered, behind its own flag
+ * and OBJECT_STORAGE_ENABLED (`klornDriveLive`).
  *
  * The fragment uses only the top-level key `provider`. A caller that filters on
  * a provider of its own must not spread one over the other: combine them with
@@ -20,18 +21,28 @@
  */
 
 import type { Prisma } from "@prisma/client";
-import { driveEnabled } from "../config.js";
+import { driveEnabled, klornDriveEnabled, objectStorageEnabled } from "../config.js";
 import { DRIVE_PROVIDER_NAMES, type DriveProviderName } from "./drive-providers.js";
 
 /** A provider to "is its connector enabled?", read at request time. */
 export type DriveProviderEnabledMap = Readonly<Partial<Record<DriveProviderName, () => boolean>>>;
 
 /**
- * The registered connectors. D2 ships none, so no row is visible. D3 registers
- * KLORN, D5 GOOGLE and D6 ONEDRIVE, each with one entry naming its own flag; every reader, the by-id check, the dispatcher and the tests pick it
- * up. Exported so a connector's own tests can pass a map of their own.
+ * The Klorn drive (D3) holds its bytes in object storage, so it is live only
+ * while KLORN_DRIVE_ENABLED and OBJECT_STORAGE_ENABLED are both on (and, like
+ * every provider, DRIVE_ENABLED; `visibleDriveProviders` checks that one).
  */
-export const DRIVE_PROVIDER_ENABLED: DriveProviderEnabledMap = {};
+export function klornDriveLive(): boolean {
+  return klornDriveEnabled() && objectStorageEnabled();
+}
+
+/**
+ * The registered sources. D3 registers KLORN; D5 adds GOOGLE and D6 ONEDRIVE,
+ * each with one entry naming its own flag. Every reader, the by-id check, the
+ * dispatcher and the tests pick it up. Exported so a connector's own tests can
+ * pass a map of their own.
+ */
+export const DRIVE_PROVIDER_ENABLED: DriveProviderEnabledMap = { KLORN: klornDriveLive };
 
 /** The providers whose rows a reader may return right now, in the enum's order. */
 export function visibleDriveProviders(
@@ -59,4 +70,15 @@ export function isDriveRowVisible(
   providerEnabled: DriveProviderEnabledMap = DRIVE_PROVIDER_ENABLED,
 ): boolean {
   return (visibleDriveProviders(providerEnabled) as string[]).includes(row.provider);
+}
+
+/**
+ * The gate of the Klorn drive's write and download routes (routes/klorn-drive.ts):
+ * open exactly while KLORN rows are visible, so a file can never be written where
+ * it could not be listed, or listed where it could not be fetched.
+ */
+export function klornDriveRoutesEnabled(
+  providerEnabled: DriveProviderEnabledMap = DRIVE_PROVIDER_ENABLED,
+): boolean {
+  return visibleDriveProviders(providerEnabled).includes("KLORN");
 }
