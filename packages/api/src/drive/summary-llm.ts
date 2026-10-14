@@ -78,7 +78,10 @@ ${wrapUntrusted(input.text, "drive:text")}`;
 /** The summary as stored: no control characters, trimmed, at most DRIVE_SUMMARY_MAX_CHARS. */
 function cleanSummary(value: unknown): string | null {
   if (typeof value !== "string") return null;
-  const cleaned = value.replace(CONTROL_CHARACTERS, "").trim();
+  const cleaned = value
+    .slice(0, DRIVE_SUMMARY_MAX_CHARS * 4)
+    .replace(CONTROL_CHARACTERS, "")
+    .trim();
   const capped = [...cleaned].slice(0, DRIVE_SUMMARY_MAX_CHARS).join("").trim();
   return capped.length > 0 ? capped : null;
 }

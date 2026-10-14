@@ -51,6 +51,9 @@ export function extractSummaryText(
   const extracted = extractAttachmentContent(bytes, name, mimeType ?? OCTET_STREAM);
   if (extracted.status === "unsupported") return { ok: false, code: "unsupported-type" };
   if (extracted.status !== "readable") return { ok: false, code: "no-text" };
-  const text = [...(extracted.text ?? "").trim()].slice(0, DRIVE_SUMMARY_MAX_INPUT_CHARS).join("");
+  // Cut in code units first (two per character covers any surrogate pair), so a
+  // file of megabytes is never spread into an array of that many characters.
+  const head = (extracted.text ?? "").trim().slice(0, DRIVE_SUMMARY_MAX_INPUT_CHARS * 2);
+  const text = [...head].slice(0, DRIVE_SUMMARY_MAX_INPUT_CHARS).join("");
   return text.length > 0 ? { ok: true, text } : { ok: false, code: "no-text" };
 }

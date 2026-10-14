@@ -54,22 +54,20 @@ describe("readCappedBytes: the cap is checked while the bytes stream", () => {
   it("stops at the chunk that crosses the cap, pulls no further and releases the source", async () => {
     const { source, state } = countingSource(1_000, 1_024);
     const result = await readCappedBytes(source, 10 * 1_024);
-    expect(result).toEqual({ ok: false, reason: "too-large" });
+    // Compared as a label: a failing diff of a megabyte buffer would not print.
+    expect(result.ok ? "ok" : result.reason).toBe("too-large");
     // 10 chunks fit, the 11th crosses: nothing after it is read.
     expect(state.pulled).toBe(11);
     expect(state.returned).toBe(true);
   });
 
-  it("an endless source ends in too-large instead of filling memory", async () => {
-    const endless: AsyncIterable<Uint8Array> = {
-      async *[Symbol.asyncIterator]() {
-        for (;;) yield new Uint8Array(64 * 1_024);
-      },
-    };
-    await expect(readCappedBytes(endless, 1_000_000)).resolves.toEqual({
-      ok: false,
-      reason: "too-large",
-    });
+  it("a source far over the cap ends in too-large after reading just past the cap", async () => {
+    // 200 chunks of 64 KiB (12.5 MiB) against a 1 MB cap. Bounded on purpose: a
+    // check moved after the loop fails this test instead of hanging the run.
+    const { source, state } = countingSource(200, 64 * 1_024);
+    const result = await readCappedBytes(source, 1_000_000);
+    expect(result.ok ? "ok" : result.reason).toBe("too-large");
+    expect(state.pulled).toBe(Math.floor(1_000_000 / (64 * 1_024)) + 1);
   });
 
   it("destroys a Node stream it stops reading", async () => {
