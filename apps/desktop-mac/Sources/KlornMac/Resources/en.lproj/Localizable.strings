@@ -15,7 +15,7 @@
 "bar.smaller" = "Smaller";
 "bar.smaller.help" = "Back to the compact panel";
 "bar.push" = "%d PUSH";
-"bar.offline" = "offline";
+"bar.offline" = "Offline";
 "bar.allClear" = "All clear";
 "bar.signingIn" = "Signing in…";
 "bar.loading" = "Loading…";
@@ -64,6 +64,10 @@
 "mail.filterByInbox" = "Filter by inbox";
 "mail.filterByInbox.a11y" = "Filter by inbox — currently %@";
 "mail.inbox.a11y" = "Inbox %@";
+"mail.unread" = "Unread";
+"mail.hasAttachment" = "Has attachment";
+"source.account.a11y" = "%@ account";
+"source.generic" = "Mail";
 "mail.searchResult.a11y" = "Search result from %1$@: %2$@";
 "mail.noSubject" = "no subject";
 "mail.snooze" = "Snooze…";
@@ -525,6 +529,9 @@
 "appearance.toLight" = "Switch to light mode";
 "appearance.toDark" = "Switch to dark mode";
 "compose.editDraft" = "Edit draft";
+"compose.discard" = "Discard Draft";
+"compose.discard.confirm.title" = "Discard this draft?";
+"compose.discard.confirm.detail" = "What you've written here will be lost.";
 "mailbox.loadMore" = "Load more";
 "chip.billing" = "Billing";
 
@@ -634,3 +641,63 @@
 "deviceCalendars.error.limit" = "Too many calendars are uploaded. Turn one off first.";
 "deviceCalendars.error.rows" = "Too many events are stored from this Mac's calendars. Turn a calendar off first.";
 "deviceCalendars.error.generic" = "Couldn't upload a calendar. Klorn will try again.";
+
+/* Main window: five-item navigation and Today (M4b) */
+"nav.today" = "Today";
+"nav.calendar" = "Calendar";
+"nav.assistant" = "Assistant";
+"nav.accounts" = "Accounts";
+"nav.accounts.signedOut" = "Log in to see your accounts.";
+"nav.accounts.none" = "No accounts connected yet.";
+"nav.accounts.connected" = "Connected";
+"nav.accounts.needsReconnect" = "Needs reconnect";
+"assistant.pane.approvals" = "Approvals";
+"assistant.pane.commitments" = "Commitments";
+"assistant.pane.briefing" = "Briefing";
+"mail.lane.all" = "All";
+"mail.lane.a11y" = "Filter by lane";
+"mail.lane.filter" = "Mail filters";
+"mail.lane.showSilenced" = "Show silenced";
+"today.signedOut.title" = "Log in to see your day";
+"today.signedOut.detail" = "Klorn sorts your mail and calendars once you are signed in.";
+"today.signingIn.title" = "Finish signing in";
+"today.signingIn.detail" = "Complete the sign-in in your browser. This window updates when it is done.";
+"today.failed.title" = "Couldn't load your mail";
+"today.retry" = "Try again";
+"today.clear.title" = "Nothing is waiting on you";
+"today.clear.detail" = "New mail shows up here as Klorn sorts it.";
+"today.lane.a11y" = "%1$@, %2$d open";
+"today.lane.more" = "%d more in Mail";
+"today.row.a11y" = "%1$@: %2$@";
+"today.open" = "Open";
+"today.calendar.empty" = "Nothing on the calendar today.";
+"today.assistant.noBriefing" = "No briefing yet today.";
+"today.approvals.waiting" = "Approvals waiting: %d";
+"today.approvals.none" = "No approvals waiting.";
+"today.ask.a11y" = "Ask the assistant";
+"today.signIn.restart" = "Start over";
+"a11y.position" = "%1$d of %2$d";
+
+/* Signed-out, offline and first-launch states (M6) */
+"auth.continueGoogle" = "Continue with Google";
+"state.signedOut.title" = "Sign in to Klorn";
+"state.offline.title" = "You're offline";
+"state.offline.detail" = "Klorn can't reach its server. Check your connection, then try again.";
+"banner.offline" = "You're offline. This is the mail from the last sync.";
+"banner.stale" = "Klorn couldn't refresh. This is the mail from the last sync.";
+"bar.notUpdating" = "Not updating";
+"bar.retry.help" = "Try again";
+"bar.retry.a11y" = "%@. Try again";
+"error.server" = "Server error (%d).";
+"error.network" = "Network error. Check your connection.";
+"onboarding.windowTitle" = "Welcome to Klorn";
+"onboarding.value" = "All your mail and calendars in one place. Mail sorted into %d lanes.";
+"onboarding.lane.push" = "Interrupts you now";
+"onboarding.lane.meeting" = "Scheduling, checked against your calendar";
+"onboarding.lane.queue" = "Worth reading today";
+"onboarding.lane.info" = "Receipts and notices, filed";
+"onboarding.lane.silent" = "Kept, out of your way";
+"onboarding.lanes.note" = "Lanes only sort your mail. They never act on it.";
+"onboarding.privacy" = "Klorn reads your mail to sort it. You decide what it may do beyond that.";
+"error.unreachable" = "Klorn can't reach its server.";
+"banner.dismiss.a11y" = "Dismiss message";

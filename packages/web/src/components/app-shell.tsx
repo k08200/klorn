@@ -1,7 +1,9 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { useAuth } from "../lib/auth";
+import { ASSISTANT_CHAT, landingStep, TODAY_HOME, takeLegacyLanding } from "../lib/home";
 import { useT } from "../lib/i18n";
 import AssistantDock from "./assistant-dock";
 import BottomTabs from "./bottom-tabs";
@@ -21,6 +23,7 @@ const NO_SIDEBAR_ROUTES = [
 
 const APP_SHELL_ROUTES = [
   "/admin",
+  "/assistant",
   "/billing",
   "/briefing",
   "/calendar",
@@ -29,16 +32,24 @@ const APP_SHELL_ROUTES = [
   "/graph",
   "/inbox",
   "/settings",
+  "/today",
   "/usage",
 ];
+
+const CHAT_PAGES = ["/chat", ASSISTANT_CHAT];
 
 function isAppShellRoute(pathname: string): boolean {
   return APP_SHELL_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 }
 
-// Returns an i18n key — the component resolves it via t().
-function currentSectionLabelKey(pathname: string): string {
-  if (pathname === "/inbox" || pathname.startsWith("/inbox/")) return "nav.decisionQueue";
+// Returns an i18n key — the component resolves it via t(). `unified` is the
+// UNIFIED_HOME vocabulary: the approvals page is "Approvals", not a queue.
+function currentSectionLabelKey(pathname: string, unified: boolean): string {
+  if (pathname === "/today") return "nav.v2.today";
+  if (pathname === "/assistant" || pathname.startsWith("/assistant/")) return "nav.assistant";
+  if (pathname === "/inbox" || pathname.startsWith("/inbox/")) {
+    return unified ? "nav.v2.approvals" : "nav.decisionQueue";
+  }
   if (pathname === "/graph" || pathname.startsWith("/graph/")) return "nav.graph";
   if (pathname === "/email" || pathname.startsWith("/email/")) return "nav.mail";
   if (pathname === "/calendar" || pathname.startsWith("/calendar/")) return "nav.calendar";
@@ -54,9 +65,24 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { t } = useT();
   const { user, loading } = useAuth();
+  const router = useRouter();
+
+  // UNIFIED_HOME: a visitor the root redirect (or the native sign-in) sent to
+  // the legacy home before the server had answered is moved on to Today once
+  // it has. Only a marked landing moves — opening /inbox on purpose does not,
+  // and the mark is dropped as soon as the visitor is on any other route
+  // (see landingStep).
+  const unifiedHome = user?.unifiedHome === true;
+  const userLoaded = user !== null;
+  useEffect(() => {
+    const step = landingStep(pathname, userLoaded);
+    if (step === "wait") return;
+    const marked = takeLegacyLanding();
+    if (step === "resolve" && marked && unifiedHome) router.replace(TODAY_HOME);
+  }, [userLoaded, unifiedHome, pathname, router]);
 
   const showSidebar = !NO_SIDEBAR_ROUTES.includes(pathname) && isAppShellRoute(pathname);
-  const sectionLabel = t(currentSectionLabelKey(pathname));
+  const sectionLabel = t(currentSectionLabelKey(pathname, user?.unifiedHome === true));
 
   if (!showSidebar) {
     return <>{children}</>;
@@ -106,9 +132,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </main>
         <BottomTabs />
       </div>
-      {/* Global assistant — bottom-right on every app surface. The full /chat
-          page keeps its own composer, so the dock stays out of the way there. */}
-      {!pathname.startsWith("/chat") && <AssistantDock />}
+      {/* Global assistant — bottom-right on every app surface. The full chat
+          pages (/chat, and /assistant/chat in the hub) keep their own composer,
+          so the dock stays out of the way there. */}
+      {!CHAT_PAGES.some((route) => pathname.startsWith(route)) && <AssistantDock />}
     </div>
   );
 }

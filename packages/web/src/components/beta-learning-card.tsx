@@ -94,7 +94,7 @@ export default function BetaLearningCard() {
         <div className="flex shrink-0 items-center gap-2">
           {!connected && (
             <Link
-              href="/settings"
+              href="/settings/accounts"
               className="glow-primary ease-strong rounded-lg bg-accent-solid px-3 py-1.5 text-xs font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97]"
             >
               Connect

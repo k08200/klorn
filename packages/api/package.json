@@ -36,6 +36,7 @@
     "@sentry/node": "^10.70.0",
     "@types/web-push": "^3.6.4",
     "@types/ws": "^8.18.1",
+    "aws4fetch": "1.0.20",
     "bcryptjs": "^3.0.3",
     "fastify": "^5.12.5",
     "firebase-admin": "^14.2.0",

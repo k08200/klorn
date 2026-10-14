@@ -72,6 +72,9 @@ export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> 
   await tx.agentLog.deleteMany(scope);
   await tx.automationConfig.deleteMany(scope);
   await tx.calendarEvent.deleteMany(scope);
+  // DriveFile: the metadata index of the user's files (names, sizes, links). D2
+  // writes no bytes; D3 must delete a Klorn file's object before its row goes.
+  await tx.driveFile.deleteMany(scope);
   await tx.userToken.deleteMany(scope);
   await tx.tokenUsage.deleteMany(scope);
   await tx.memory.deleteMany(scope);

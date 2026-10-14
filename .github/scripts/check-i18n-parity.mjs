@@ -170,7 +170,13 @@ if (problems > 0) {
  * value must differ from English, be non-empty, and carry the same {placeholders}.
  * To cover a later step's keys, add its prefix here.
  */
-const COPY_GUARD_PREFIXES = ["settings.apiKeys.permission.", "settings.apiKeys.activity."];
+const COPY_GUARD_PREFIXES = [
+  "settings.apiKeys.permission.",
+  "settings.apiKeys.activity.",
+  // Assistant hub (productization plan P7).
+  "assistantHub.",
+  "keys.approvals.",
+];
 
 /** Words that are genuinely the same in another language: key -> locales. Keep this tiny. */
 const SAME_AS_ENGLISH = {
@@ -228,6 +234,71 @@ if (copyProblems > 0) {
   process.exit(1);
 }
 
+/**
+ * Prose guard for surfaces that shipped fully translated. Key parity cannot see
+ * a string that never went through t(): it is not in any table. For the
+ * directories below, every file is checked for (a) keys passed as literals
+ * that en.ts does not have — a typo renders as the raw key — and (b) English
+ * written straight into the markup: JSX text, or a literal aria-label / title
+ * / placeholder / alt / label / description attribute. Heuristic by design: it
+ * reads source text, not a syntax tree. To cover a later surface, add its
+ * directory here.
+ */
+const PROSE_GUARD_DIRS = ["packages/web/src/app/assistant"];
+const KEY_LITERAL_RE =
+  /["'`]((?:assistantHub|keys|nav|today|receipt|screener|briefing|chat|settings|mailV2|tool\.label)\.[\w.]+)["'`]/g;
+// Text that ends at a closing tag or an expression, after a tag or an expression.
+const JSX_TEXT_RE = />([^<>{}]+)(?:<\/|\{)|\}([^<>{}]+)<\//g;
+const PROSE_RE = /^[\s\w.,:!?'’·—–-]*[A-Za-z]{2}[\s\w.,:!?'’·—–-]*$/;
+const ATTRIBUTE_RE = /\b(aria-label|title|placeholder|alt|label|description)="([^"]*[A-Za-z][^"]*)"/g;
+
+function sourceFiles(dir) {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = `${dir}/${entry.name}`;
+    if (entry.isDirectory()) return sourceFiles(path);
+    return /\.tsx?$/.test(entry.name) ? [path] : [];
+  });
+}
+
+const stripComments = (text) =>
+  text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
+
+let proseProblems = 0;
+let proseFiles = 0;
+for (const dir of PROSE_GUARD_DIRS) {
+  let paths;
+  try {
+    paths = sourceFiles(dir);
+  } catch {
+    fail(`could not read ${dir} — did the guarded surface move?`);
+  }
+  for (const path of paths) {
+    proseFiles++;
+    const source = stripComments(readFileSync(path, "utf8"));
+    for (const [, key] of source.matchAll(KEY_LITERAL_RE)) {
+      if (baseSet.has(key)) continue;
+      console.error(`✗ ${path}: "${key}" is not a key in ${baseLocale}.ts`);
+      proseProblems++;
+    }
+    if (!path.endsWith(".tsx")) continue;
+    for (const [, afterTag, afterExpression] of source.matchAll(JSX_TEXT_RE)) {
+      const text = afterTag ?? afterExpression;
+      if (!PROSE_RE.test(text)) continue;
+      console.error(`✗ ${path}: text written into the markup: "${text.trim().slice(0, 60)}"`);
+      proseProblems++;
+    }
+    for (const [, attribute, text] of source.matchAll(ATTRIBUTE_RE)) {
+      console.error(`✗ ${path}: ${attribute}="${text.slice(0, 60)}" is not translated`);
+      proseProblems++;
+    }
+  }
+}
+
+if (proseProblems > 0) {
+  console.error("\nPass the string through t() and add its key to all seven locale tables.");
+  process.exit(1);
+}
+
 console.log(
-  `✓ i18n parity: ${tables.size} locales × ${baseKeys.length} keys (${[...tables.keys()].join(", ")}); copy guard: ${guardedKeys.length} keys`,
+  `✓ i18n parity: ${tables.size} locales × ${baseKeys.length} keys (${[...tables.keys()].join(", ")}); copy guard: ${guardedKeys.length} keys; prose guard: ${proseFiles} files`,
 );

@@ -14,7 +14,13 @@
  * opens the row instead of hitting an invisible action. Tailwind v4 `hover:`
  * variants only apply under @media (hover: hover), so on touch the actions
  * are reachable by focus only; swipe actions arrive with P10.
+ * An optional `leading` control (Mail's select checkbox) is a sibling too: it
+ * sits over the unread dot, appears on hover / focus, and stays while
+ * `leadingPinned` (a selection is in progress); the dot yields to it.
  * Height is 52px with a fine pointer and 64px on touch / narrow viewports.
+ * Weight carries read state: an unread row's sender and subject are semibold,
+ * a read row's are regular, so a list of read mail does not read as all-bold.
+ * The time has a fixed right-aligned column so the badges before it line up.
  */
 
 import type { Tier } from "@klorn/contract";
@@ -39,6 +45,12 @@ export interface MailRowProps {
   timeIso?: string;
   /** Recorded lane. Omit/null for no chip — never a guess. */
   tier?: Tier | null;
+  /**
+   * Shown in the chip's place while there is no recorded lane ("Sorting…").
+   * A neutral, dashed capsule: it says the judge has not assigned a lane, and
+   * never borrows a lane's colour. Ignored when `tier` is set.
+   */
+  tierPending?: string;
   source?: MailRowSource | null;
   unread?: boolean;
   hasAttachment?: boolean;
@@ -49,6 +61,16 @@ export interface MailRowProps {
   onOpen?: () => void;
   /** Trailing actions, shown on hover / focus-within. Use ui/button. */
   actions?: ReactNode;
+  /** A control over the unread dot (a select checkbox), shown on hover / focus-within. */
+  leading?: ReactNode;
+  /** Keep `leading` visible regardless of hover (a selection is in progress). */
+  leadingPinned?: boolean;
+  /**
+   * Classes that make room for `actions` while they show, so they cover no
+   * badge: right padding under `group-hover:` / `group-focus-within:` sized to
+   * the actions (e.g. three 44px buttons need `pr-40`).
+   */
+  actionsReserve?: string;
   className?: string;
 }
 
@@ -74,12 +96,19 @@ function PaperclipGlyph() {
 
 function RowContent(props: MailRowProps) {
   const { sender, subject, snippet, time, timeIso, tier, source, unread, hasAttachment } = props;
+  const { tierPending } = props;
+  // The dot gives way to the leading control wherever that control is showing.
+  const dotYields = !props.leading
+    ? ""
+    : props.leadingPinned
+      ? "opacity-0"
+      : "group-focus-within:opacity-0 group-hover:opacity-0";
   return (
     <>
       <span className="flex min-w-0 items-center gap-2">
         <span
           aria-hidden="true"
-          className={`size-2 shrink-0 rounded-full ${unread ? "bg-accent-solid" : "bg-transparent"}`}
+          className={`size-2 shrink-0 rounded-full ${unread ? "bg-accent-solid" : "bg-transparent"} ${dotYields}`}
         />
         {unread && <span className="sr-only">Unread, </span>}
         <span
@@ -95,13 +124,21 @@ function RowContent(props: MailRowProps) {
         )}
         {source && <SourceBadge provider={source.provider} nickname={source.nickname} />}
         {tier && <LaneChip tier={tier} />}
-        <time dateTime={timeIso} className="shrink-0 text-caption tabular-nums text-ink-muted">
+        {!tier && tierPending && (
+          <span className="shrink-0 rounded-full border border-dashed border-line-strong px-2 py-px text-caption text-ink-muted">
+            {tierPending}
+          </span>
+        )}
+        <time
+          dateTime={timeIso}
+          className="min-w-16 shrink-0 text-right text-caption tabular-nums text-ink-muted"
+        >
           {time}
         </time>
       </span>
       <span className="flex min-w-0 items-baseline gap-2 pl-4">
         <span
-          className={`shrink-0 truncate text-head ${unread ? "text-ink" : "text-ink-strong"} max-w-[60%]`}
+          className={`shrink-0 truncate text-head ${unread ? "text-ink" : "font-normal text-ink-strong"} max-w-[60%]`}
         >
           {subject}
         </span>
@@ -114,7 +151,12 @@ function RowContent(props: MailRowProps) {
 }
 
 export function MailRow(props: MailRowProps) {
-  const { href, onOpen, selected = false, actions, className = "" } = props;
+  const { href, onOpen, selected = false, actions, leading, className = "" } = props;
+  const bodyClass = `${BODY_CLASS} ${
+    actions && props.actionsReserve
+      ? `transition-[padding] duration-120 ease-fluid ${props.actionsReserve}`
+      : ""
+  }`;
   const current = selected ? ("true" as const) : undefined;
   return (
     <div
@@ -123,13 +165,24 @@ export function MailRow(props: MailRowProps) {
       } ${className}`}
     >
       {href ? (
-        <Link href={href} aria-current={current} className={BODY_CLASS}>
+        <Link href={href} aria-current={current} className={bodyClass}>
           <RowContent {...props} />
         </Link>
       ) : (
-        <button type="button" onClick={onOpen} aria-current={current} className={BODY_CLASS}>
+        <button type="button" onClick={onOpen} aria-current={current} className={bodyClass}>
           <RowContent {...props} />
         </button>
+      )}
+      {leading && (
+        <div
+          className={`absolute inset-y-0 left-0 flex items-center ${
+            props.leadingPinned
+              ? ""
+              : "pointer-events-none opacity-0 transition-opacity duration-120 ease-fluid group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100"
+          }`}
+        >
+          {leading}
+        </div>
       )}
       {actions && (
         <div

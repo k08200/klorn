@@ -67,10 +67,10 @@ describe("maybeNudgeFreeDailyLimit (paywall on)", () => {
       userId: "free-1",
       type: "reminder",
       title: "Daily free limit reached",
-      link: "/settings",
+      link: "/settings/account-billing",
     });
     expect(state.pushed).toHaveLength(1);
-    expect(state.pushed[0].payload.link).toBe("/settings");
+    expect(state.pushed[0].payload.link).toBe("/settings/account-billing");
   });
 
   it("does not create a second nudge when one already exists today (dedup)", async () => {

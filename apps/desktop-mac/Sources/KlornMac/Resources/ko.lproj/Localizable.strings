@@ -64,6 +64,10 @@
 "mail.filterByInbox" = "수신함으로 거르기";
 "mail.filterByInbox.a11y" = "수신함으로 거르기 — 현재 %@";
 "mail.inbox.a11y" = "수신함 %@";
+"mail.unread" = "읽지 않음";
+"mail.hasAttachment" = "첨부 파일 있음";
+"source.account.a11y" = "%@ 계정";
+"source.generic" = "메일";
 "mail.searchResult.a11y" = "%1$@ 님의 검색 결과: %2$@";
 "mail.noSubject" = "제목 없음";
 "mail.snooze" = "미루기…";
@@ -525,6 +529,9 @@
 "appearance.toLight" = "라이트 모드로 전환";
 "appearance.toDark" = "다크 모드로 전환";
 "compose.editDraft" = "임시보관 메일 편집";
+"compose.discard" = "초안 삭제";
+"compose.discard.confirm.title" = "이 초안을 삭제할까요?";
+"compose.discard.confirm.detail" = "여기에 작성한 내용이 사라집니다.";
 "mailbox.loadMore" = "더 보기";
 "chip.billing" = "청구·영수증";
 
@@ -634,3 +641,63 @@
 "deviceCalendars.error.limit" = "업로드한 캘린더가 너무 많습니다. 먼저 하나를 끄세요.";
 "deviceCalendars.error.rows" = "이 Mac의 캘린더에서 저장된 일정이 너무 많습니다. 먼저 캘린더 하나를 끄세요.";
 "deviceCalendars.error.generic" = "캘린더를 업로드하지 못했습니다. Klorn이 다시 시도합니다.";
+
+/* Main window: five-item navigation and Today (M4b) */
+"nav.today" = "오늘";
+"nav.calendar" = "캘린더";
+"nav.assistant" = "어시스턴트";
+"nav.accounts" = "계정";
+"nav.accounts.signedOut" = "로그인하면 연결된 계정이 여기에 보입니다.";
+"nav.accounts.none" = "연결된 계정이 없습니다.";
+"nav.accounts.connected" = "연결됨";
+"nav.accounts.needsReconnect" = "재연결 필요";
+"assistant.pane.approvals" = "승인";
+"assistant.pane.commitments" = "약속한 일";
+"assistant.pane.briefing" = "브리핑";
+"mail.lane.all" = "전체";
+"mail.lane.a11y" = "레인으로 필터";
+"mail.lane.filter" = "메일 필터";
+"mail.lane.showSilenced" = "Silent 메일 보기";
+"today.signedOut.title" = "로그인하면 오늘 할 일이 보입니다";
+"today.signedOut.detail" = "로그인하면 Klorn이 메일과 캘린더를 정리합니다.";
+"today.signingIn.title" = "로그인을 마무리하세요";
+"today.signingIn.detail" = "브라우저에서 로그인을 끝내면 이 창이 바뀝니다.";
+"today.failed.title" = "메일을 불러오지 못했습니다";
+"today.retry" = "다시 시도";
+"today.clear.title" = "기다리는 메일이 없습니다";
+"today.clear.detail" = "새 메일은 Klorn이 분류하는 대로 여기에 나타납니다.";
+"today.lane.a11y" = "%1$@, 열린 메일 %2$d건";
+"today.lane.more" = "메일에서 %d건 더 보기";
+"today.row.a11y" = "%1$@: %2$@";
+"today.open" = "열기";
+"today.calendar.empty" = "오늘 일정이 없습니다.";
+"today.assistant.noBriefing" = "오늘 브리핑이 아직 없습니다.";
+"today.approvals.waiting" = "승인 대기 %d건";
+"today.approvals.none" = "승인 대기 없음.";
+"today.ask.a11y" = "어시스턴트에게 물어보기";
+"today.signIn.restart" = "처음부터 다시";
+"a11y.position" = "%2$d개 중 %1$d번째";
+
+/* Signed-out, offline and first-launch states (M6) */
+"auth.continueGoogle" = "Google로 계속하기";
+"state.signedOut.title" = "Klorn에 로그인";
+"state.offline.title" = "오프라인 상태입니다";
+"state.offline.detail" = "Klorn 서버에 연결할 수 없습니다. 네트워크를 확인한 뒤 다시 시도하세요.";
+"banner.offline" = "오프라인 상태입니다. 마지막 동기화 때의 메일입니다.";
+"banner.stale" = "새로 고치지 못했습니다. 마지막 동기화 때의 메일입니다.";
+"bar.notUpdating" = "업데이트 중단";
+"bar.retry.help" = "다시 시도";
+"bar.retry.a11y" = "%@. 다시 시도";
+"error.server" = "서버 오류(%d).";
+"error.network" = "네트워크 오류입니다. 연결을 확인하세요.";
+"onboarding.windowTitle" = "Klorn 시작하기";
+"onboarding.value" = "모든 메일과 캘린더를 한곳에. 메일은 %d개 레인으로 분류됩니다.";
+"onboarding.lane.push" = "지금 바로 알립니다";
+"onboarding.lane.meeting" = "일정 메일, 캘린더와 대조합니다";
+"onboarding.lane.queue" = "오늘 읽을 만한 메일";
+"onboarding.lane.info" = "영수증·안내, 보관만 합니다";
+"onboarding.lane.silent" = "보관하되 보이지 않게";
+"onboarding.lanes.note" = "레인은 메일을 분류만 합니다. 메일에 어떤 동작도 하지 않습니다.";
+"onboarding.privacy" = "Klorn은 분류를 위해 메일을 읽습니다. 그 밖에 무엇을 해도 되는지는 사용자가 정합니다.";
+"error.unreachable" = "Klorn 서버에 연결할 수 없습니다.";
+"banner.dismiss.a11y" = "메시지 닫기";

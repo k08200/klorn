@@ -13,6 +13,7 @@ import { apiFetch } from "../../lib/api";
 import { captureFirstTouchAttribution } from "../../lib/attribution";
 import { useAuth } from "../../lib/auth";
 import { readCachedProviders, writeCachedProviders } from "../../lib/auth-providers-cache";
+import { homePath } from "../../lib/home";
 import { useT } from "../../lib/i18n";
 import { startNativeGoogleLogin } from "../../lib/native/native-auth";
 import { isNativeShell } from "../../lib/native/shell";
@@ -45,6 +46,8 @@ function LoginForm() {
   const { toast } = useToast();
   const router = useRouter();
   const nextPath = safeNextPath(searchParams.get("next"));
+  // Whether the visitor was sent here from a page they should return to.
+  const hasNext = searchParams.get("next") !== null;
 
   // First field of the form — focus moves here when the mode toggles so
   // keyboard/AT users are not stranded after the fields swap.
@@ -139,9 +142,10 @@ function LoginForm() {
 
   useEffect(() => {
     if (!authLoading && user) {
-      router.push(nextPath);
+      // No `next`: the user's home, which is Today under UNIFIED_HOME.
+      router.push(hasNext ? nextPath : homePath(user));
     }
-  }, [user, authLoading, nextPath, router]);
+  }, [user, authLoading, hasNext, nextPath, router]);
 
   // Surface redirect feedback from Google OAuth and email verification.
   useEffect(() => {
@@ -181,10 +185,10 @@ function LoginForm() {
     setLoading(true);
     try {
       if (mode === "login") {
-        await login(email, password, nextPath);
+        await login(email, password, hasNext ? nextPath : undefined);
         toast(t("auth.welcomeBack"), "success");
       } else {
-        await register(email, password, name || undefined, nextPath);
+        await register(email, password, name || undefined, hasNext ? nextPath : undefined);
         toast(t("auth.accountCreated"), "success");
       }
     } catch (err) {
@@ -492,11 +496,11 @@ function returnDestinationLabel(path: string, t: (key: string) => string): strin
   if (cleanPath === "/email" || cleanPath.startsWith("/email/")) return t("nav.mail");
   if (cleanPath === "/calendar") return t("nav.calendar");
   if (cleanPath === "/briefing") return t("nav.briefing");
-  if (cleanPath === "/settings") return t("settings.title");
   if (cleanPath.startsWith("/settings/memory")) return t("auth.destMemory");
   if (cleanPath.startsWith("/settings/usage")) return t("auth.destUsage");
   if (cleanPath.startsWith("/settings/status")) return t("auth.destStatus");
   if (cleanPath.startsWith("/settings/email-feedback")) return t("auth.destFeedback");
+  if (cleanPath === "/settings" || cleanPath.startsWith("/settings/")) return t("settings.title");
   if (cleanPath === "/billing") return t("nav.billing");
   if (cleanPath === "/files") return t("auth.destFiles");
   if (cleanPath === "/admin" || cleanPath.startsWith("/admin/")) return t("nav.admin");

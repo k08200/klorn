@@ -34,6 +34,20 @@ describe("collectFeatureFlags", () => {
     ).toBe(false);
   });
 
+  it("reports the request-time object storage flag and the bucket's presence only", () => {
+    const on = collectFeatureFlags({
+      OBJECT_STORAGE_ENABLED: "true",
+      OBJECT_STORAGE_BUCKET: "klorn-objects",
+    } as NodeJS.ProcessEnv);
+    expect(on.dynamic.OBJECT_STORAGE_ENABLED).toBe(true);
+    expect(on.configured.OBJECT_STORAGE_BUCKET).toBe(true);
+    expect(JSON.stringify(on)).not.toContain("klorn-objects");
+
+    const off = collectFeatureFlags({} as NodeJS.ProcessEnv);
+    expect(off.dynamic.OBJECT_STORAGE_ENABLED).toBe(false);
+    expect(off.configured.OBJECT_STORAGE_BUCKET).toBe(false);
+  });
+
   it("reports the import-time linked-inbox auto-reply flag", () => {
     // Import-time: the value tracks the config.ts const frozen at module load,
     // not the env passed in — asserting presence is what's meaningful here.

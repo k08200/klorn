@@ -107,6 +107,7 @@ model User {
   reminders                 Reminder[]
   contacts                  Contact[]
   calendarEvents            CalendarEvent[]
+  driveFiles                DriveFile[]
   automationConfig          AutomationConfig?
   agentLogs                 AgentLog[]
   notifications             Notification[]
@@ -723,6 +724,86 @@ model CalendarEvent {
   @@unique([userId, provider, sourceKey, externalId])
   @@index([userId, startTime])
   @@index([sourceAccountId])
+}
+
+// Which file source a DriveFile row belongs to (step D2,
+// docs/providers/unified-platform-plan.md): KLORN (D3, files Klorn stores
+// itself, including what a device app imports in D7), GOOGLE (D5, Google Drive)
+// and ONEDRIVE (D6, Microsoft Graph). There is no DEVICE value: a device import
+// lands IN the Klorn drive, so its rows are KLORN, and Postgres cannot remove an
+// enum value once it exists.
+enum DriveProvider {
+  KLORN
+  GOOGLE
+  ONEDRIVE
+}
+
+// One file or folder of one source, as METADATA ONLY (step D2): the index every
+// drive surface lists and searches. No content column, ever, and no summary
+// state (D4 keeps that in a table of its own): the bytes stay in the source
+// (GOOGLE, ONEDRIVE) or in object storage (KLORN; D1). A new table, so provider
+// and sourceKey carry no default and the compiler makes every writer state them;
+// drive/drive-rows.ts is the one writer (drive-file-guard.test.ts). Whether a
+// row is read-only is not stored: it follows from the provider (decision V4,
+// drive/drive-read.ts). Row-level security is enabled in the migration, with the
+// two policies every per-user table has.
+model DriveFile {
+  id               String        @id @default(uuid())
+  userId           String
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider         DriveProvider
+  // Which source of that provider: 'klorn' for the user's Klorn drive, the
+  // connector's account id for GOOGLE and ONEDRIVE (D5, D6). Part of the unique
+  // below, so the same upstream id can exist once per source.
+  sourceKey        String
+  // The id in the source (Drive file id, Graph item id, the id D3 mints for a
+  // Klorn file). Required: every row is addressable, and parentExternalId always
+  // has something to name.
+  externalId       String
+  // Attacker-controlled for an external source (whoever shared the file named
+  // it). Cleaned and capped at the writer; wrapped before any LLM sees it.
+  name             String
+  mimeType         String?
+  isFolder         Boolean       @default(false)
+  // BigInt: a drive file passes 2 GiB. Never negative (the migration's CHECK).
+  // Never returned raw (JSON.stringify throws on a BigInt); drive/drive-read.ts
+  // maps it to a number.
+  sizeBytes        BigInt?
+  // The containing folder's externalId in the SAME source. A parent id, not a
+  // path: both APIs report parents, a path is not stable (a folder rename would
+  // rewrite every descendant) and names may contain '/'.
+  // NULL means "no known parent row", which is NOT the same as "at the root":
+  // it is the root, OR a parent that was never indexed (a file picked through
+  // the Google Picker under drive.file reports a parent the user never picked).
+  // So an external source's root listing is not `parentExternalId IS NULL`.
+  parentExternalId String?
+  // The source's own modified time (the upload time for a Klorn file): the list
+  // order.
+  modifiedAt       DateTime
+  // Where the file opens in its own service. External sources only, https only
+  // (the migration's CHECK, and the writer's safe-link rule). NULL for KLORN
+  // rows, which open through Klorn's own routes (D3).
+  webUrl           String?
+  // The object-storage key of the bytes Klorn holds (D1, D3): opaque, KLORN rows
+  // only (the migration's CHECK), never on the wire.
+  storageKey       String?
+  // The source's own version of the file, opaque: a provider etag or version, or
+  // a content fingerprint. D4, D5 and D6 compare it to see whether a file
+  // changed. Never interpreted here, never on the wire.
+  etag             String?
+  trashed          Boolean       @default(false)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  // Named, so the client's key is `driveFileIdentity` and not the generated
+  // name CalendarEvent's unique already has (its guard test greps for that one).
+  // The name changes nothing in the database.
+  @@unique([userId, provider, sourceKey, externalId], name: "driveFileIdentity")
+  // The list and the name search: one user's rows, newest first, keyset-paged
+  // on (modifiedAt, id).
+  @@index([userId, modifiedAt, id])
+  // The same list narrowed to one provider.
+  @@index([userId, provider, modifiedAt, id])
 }
 
 model AutomationConfig {
@@ -1445,6 +1526,18 @@ model AttentionItem {
   // history outlives the key (same as McpWriteAudit.apiKeyId).
   agentTierSetAt DateTime?
   agentTierKeyId String?
+
+  // Reversible manual override (productization plan P4, KEYBOARD_TRIAGE). When
+  // overrideAttentionTier() moves the lane it snapshots what it replaced here
+  // (previous tier, reason, isManualOverride, agent stamp, updatedAt, and the
+  // exact outcomeAt it stamped on the decision ledger), so
+  // undoAttentionOverride() can put all of it back within a short server-side
+  // window. overrideUndoToken is the live handle: it is replaced by every later
+  // override and cleared by the undo, so only the most recent override on a row
+  // is ever reversible. The snapshot is server-written and never accepted from
+  // a client. Both stay null while the flag is off.
+  overrideUndoToken String?
+  overrideUndo      Json?
 
   // Content-addressed classification. Hash of the decision-relevant input
   // bytes (from, subject, snippet, labels) at the moment tier was decided.

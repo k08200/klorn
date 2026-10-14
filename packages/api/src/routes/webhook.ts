@@ -103,7 +103,13 @@ export async function webhookRoutes(app: FastifyInstance) {
             }
             if (sub.status === "past_due" || sub.status === "unpaid") {
               const msg = `Your subscription is ${sub.status}. Please update your payment method to restore access.`;
-              await notifyUser(user.id, "billing", "Payment Issue", msg, "/settings");
+              await notifyUser(
+                user.id,
+                "billing",
+                "Payment Issue",
+                msg,
+                "/settings/account-billing",
+              );
             }
           }
           break;
@@ -125,7 +131,7 @@ export async function webhookRoutes(app: FastifyInstance) {
               "billing",
               "Subscription Cancelled",
               "Your subscription has been cancelled. You've been moved to the Free plan.",
-              "/settings",
+              "/settings/account-billing",
             );
           }
           break;
@@ -144,7 +150,7 @@ export async function webhookRoutes(app: FastifyInstance) {
               "billing",
               "Payment Failed",
               "Your latest payment failed. Please update your payment method to keep your plan active.",
-              "/settings",
+              "/settings/account-billing",
             );
           } else {
             // A payment failure for a customer we can't map to a user is a real
@@ -306,7 +312,7 @@ export async function webhookRoutes(app: FastifyInstance) {
                 "billing",
                 "Subscription Cancelled",
                 "Your subscription has been cancelled. You've been moved to the Free plan.",
-                "/settings",
+                "/settings/account-billing",
               );
             } else if (data.status === "past_due" || data.status === "paused") {
               await notifyUser(
@@ -314,7 +320,7 @@ export async function webhookRoutes(app: FastifyInstance) {
                 "billing",
                 "Payment Issue",
                 "Your subscription payment failed. Please update your payment method to restore access.",
-                "/settings",
+                "/settings/account-billing",
               );
             }
           }
@@ -330,7 +336,7 @@ export async function webhookRoutes(app: FastifyInstance) {
             "billing",
             "Payment Failed",
             "Your latest payment failed. Please update your payment method to keep your plan active.",
-            "/settings",
+            "/settings/account-billing",
           );
         }
       }
@@ -399,7 +405,7 @@ export async function webhookRoutes(app: FastifyInstance) {
             "billing",
             "Payment Issue",
             "Your subscription payment failed. Please update your payment method to keep your plan.",
-            "/settings",
+            "/settings/account-billing",
           );
         }
       }

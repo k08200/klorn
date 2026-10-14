@@ -8,7 +8,10 @@ import SwiftUI
 @MainActor
 final class MeetingCardController {
     private let model: AppModel
-    private let state = MeetingCardState()
+    /// Internal (not private) so the self-check can read what the card shows.
+    let state = MeetingCardState()
+    /// Self-check mode: no panel, no sound.
+    private let headless: Bool
     private var panel: NSPanel?
     /// Defers to the PushCard when both want the slot (mail interrupt wins);
     /// the planner will re-offer the meeting on the next refresh tick.
@@ -16,26 +19,38 @@ final class MeetingCardController {
 
     var isVisible: Bool { panel?.isVisible ?? false }
 
-    init(model: AppModel, isSlotBusy: @escaping () -> Bool) {
+    init(model: AppModel, headless: Bool = false, isSlotBusy: @escaping () -> Bool) {
         self.model = model
+        self.headless = headless
         self.isSlotBusy = isSlotBusy
+    }
+
+    /// The session ended: the meeting on the card is the previous account's.
+    /// Wired to `AppModel.onSessionEnded`.
+    func reset() {
+        state.event = nil
+        state.pack = nil
+        panel?.orderOut(nil)
     }
 
     /// Present the prep card for an upcoming meeting. Returns false when the
     /// slot is occupied (caller keeps the event un-shown so it re-offers).
     @discardableResult
     func present(_ event: CalendarEventWire) -> Bool {
-        guard NSScreen.main != nil, !isSlotBusy(), !isVisible else { return false }
+        guard headless || NSScreen.main != nil, !isSlotBusy(), !isVisible else { return false }
         state.event = event
         state.pack = nil
         render()
-        if PushCardController.shouldChime(newCount: 1, alertsEnabled: model.settings.notificationsEnabled) {
+        if !headless,
+           PushCardController.shouldChime(newCount: 1, alertsEnabled: model.settings.notificationsEnabled)
+        {
             NSSound(named: "Glass")?.play()
         }
+        let stamp = model.sessionGeneration
         Task { [weak self] in
             guard let self else { return }
-            let pack = await self.model.fetchPrepPack(eventId: event.id)
-            guard self.state.event?.id == event.id else { return }
+            let pack = await self.model.fetchPrepPack(eventId: event.id, session: stamp)
+            guard self.model.isCurrent(stamp), self.state.event?.id == event.id else { return }
             self.state.pack = pack
         }
         return true
@@ -54,6 +69,7 @@ final class MeetingCardController {
     }
 
     private func render() {
+        guard !headless else { return }
         let wasVisible = panel?.isVisible ?? false
         let panel = self.panel ?? makePanel()
         self.panel = panel

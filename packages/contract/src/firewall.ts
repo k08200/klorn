@@ -9,6 +9,8 @@
  * the server had been sending since PR #468 was invisible to the client.
  */
 
+import type { InboxProvider } from "./email.js";
+
 /**
  * The canonical attention vocabulary, as serialized on the wire.
  *
@@ -45,6 +47,18 @@ export interface TrustWire {
   totalCount: number;
 }
 
+/**
+ * The connected account a mail arrived on — what a row's source badge shows.
+ * `accountId` is the linked inbox account id, null for the primary account;
+ * `label` is the account's address. Clients treat an unknown `provider` as a
+ * generic mail source (see InboxProvider).
+ */
+export interface FirewallSourceWire {
+  provider: InboxProvider;
+  accountId: string | null;
+  label: string;
+}
+
 /** Email preview attached to EMAIL / email-referencing PENDING_ACTION items. */
 export interface FirewallEmailContext {
   /** EmailMessage.id (DB id) — used by /email/[id]. */
@@ -69,6 +83,18 @@ export interface FirewallEmailContext {
    *  it has not been answered. Absent = none. The draft itself rides on the
    *  detail response. */
   draftReady?: boolean;
+  /** Which account the mail is on. Null when the account cannot be named
+   *  (its linked row is gone, or the lookup failed); absent on older servers.
+   *  Named `source` here, on the preview: the item's own `source` is the
+   *  attention source ("EMAIL", "PENDING_ACTION") and stays a string. */
+  source?: FirewallSourceWire | null;
+  /** The mail's read flag. Null / absent = no claim. */
+  unread?: boolean | null;
+  /** The mail has at least one attached file. An inline image (an image part
+   *  with a Content-ID, e.g. a signature logo) is NOT counted — unlike
+   *  `GET /api/email?filter=attachments`, which matches any attachment row;
+   *  aligning the two is a follow-up. Null / absent = no claim. */
+  hasAttachment?: boolean | null;
 }
 
 export type RowSignalWire =
@@ -126,4 +152,45 @@ export interface FirewallItem {
 export interface FirewallResponse {
   tiers: Record<Tier, FirewallItem[]>;
   summary: Record<Tier, number> & { total: number };
+}
+
+/**
+ * A manual lane override that can be undone. Only
+ * `POST /api/inbox/firewall/email/:emailId` returns the undo handle (the older
+ * `POST /api/inbox/firewall/:id` answers `{ ok, tier }` and is not reversible).
+ */
+export interface LaneOverrideResponse {
+  ok: true;
+  tier: Tier;
+  undoToken?: string;
+  /** ISO time after which the server refuses the undo. */
+  undoExpiresAt?: string;
+}
+
+/** `POST /api/inbox/firewall/email/:emailId` — the same override, keyed by email id. */
+export interface LaneOverrideByEmailResponse extends LaneOverrideResponse {
+  /** Attention item id: the `:id` of the undo route. */
+  itemId: string;
+}
+
+/**
+ * `POST /api/inbox/firewall/:id/undo` — `tier` is the lane restored (null when
+ * the mail had none). `alreadyUndone` marks a repeat of a completed undo.
+ */
+export interface LaneOverrideUndoResponse {
+  ok: true;
+  tier: LiveTier | null;
+  alreadyUndone: boolean;
+}
+
+/**
+ * Refusals of the two routes above. `undo_*` and `override_conflict` are HTTP
+ * 409 and change nothing; `override_conflict` means the row kept changing while
+ * the move was applied and the client may simply try again. `rate_limited` is
+ * HTTP 429 from the per-user lane-write limit.
+ */
+export interface LaneOverrideErrorResponse {
+  ok: false;
+  code: "not_found" | "undo_expired" | "undo_conflict" | "override_conflict" | "rate_limited";
+  message: string;
 }

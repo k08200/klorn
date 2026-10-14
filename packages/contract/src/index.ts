@@ -14,6 +14,7 @@
 export type * from "./api-keys.js";
 export type * from "./auth-providers.js";
 export type * from "./briefing.js";
+export type * from "./drive.js";
 export type * from "./email.js";
 export type * from "./email-rules.js";
 export type * from "./firewall.js";

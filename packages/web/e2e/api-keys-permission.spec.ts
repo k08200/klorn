@@ -238,7 +238,7 @@ async function mockApi(page: Page, opts: MockOptions): Promise<Recorded> {
 
 /** The component's root element: the parent of its intro paragraph. */
 async function openSection(page: Page, language: LocaleCode = "en"): Promise<Locator> {
-  await page.goto("/settings");
+  await page.goto("/settings/integrations");
   const intro = page.getByText(LOCALES[language]["settings.apiKeys.intro"], { exact: true });
   await intro.waitFor({ timeout: 90_000 });
   return intro.locator("..");
