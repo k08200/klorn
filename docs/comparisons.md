@@ -11,7 +11,7 @@ Most AI email tools are **compose-first**: they help you write and process more 
 | | **Klorn** | Superhuman | Shortwave | Fyxer |
 | --- | --- | --- | --- | --- |
 | Core approach | Attention firewall: five lanes (Push / Meeting / Queue / Info / Silent), every row shows why | Speed-focused email client with AI assist | AI-native email client with search/chat | AI executive assistant drafting replies |
-| Decision transparency | Every classification carries its reason; corrections become sender rules (measured: 77.4% cold → 86.8% warm on real labelled mail — one inbox, 53 items, re-measured 2026-08-26; the README explains why the earlier 94.3% no longer reproduces) | — | — | — |
+| Decision transparency | Every classification carries its reason; corrections become sender rules; no headline accuracy is quoted (see below) | — | — | — |
 | Unattended sending | Only in an explicit AUTO mode, only for eligible mail, under user-written guidelines; every send writes a receipt pinning a payload hash. Default is approval-gated | n/a (client) | n/a (client) | Drafts in your voice for review |
 | Meetings | Calendar cross-check on scheduling mail: proposed slot, conflicts, sender availability, and slots verified free for both sides | Calendar features in client | Calendar in client | — |
 | Source & hosting | **Open source (AGPLv3), self-hostable end to end** | Closed | Closed | Closed |
@@ -25,7 +25,7 @@ Blank cells mean "not that product's focus," not a deficiency; the rows are the 
 
 - It does not send, delete, or forward anything without explicit approval (or, in AUTO mode, outside your written guidelines) — every outbound action carries a receipt pinning a hash of exactly what left. (It is a content hash, not a cryptographic signature — `attention-floor.ts` uses `createHash`, and the word "signed" was never ours to use.)
 - It does not read your mail on someone else's server if you don't want it to: the entire stack is AGPLv3 and self-hostable.
-- It does not claim accuracy it hasn't measured: the 77.4%/86.8% figures come from the committed, PII-scrubbed [`eval/real-eval-set.json`](../packages/api/eval/real-eval-set.json), runnable with `pnpm eval:real`. Its labels predate the five-lane ontology (4 of the 7 misses are `QUEUE` → `INFO`, a lane that did not exist when the set was labelled), so the set is being re-labelled and no headline number from it is quotable until then. `pnpm eval:judge` runs a different file — the synthetic gate set — and reports a different number.
+- It does not claim accuracy it hasn't measured: the committed, PII-scrubbed [`eval/real-eval-set.json`](../packages/api/eval/real-eval-set.json) (runnable with `pnpm eval:real`) predates the Meeting and Info lanes, so it is being re-labelled and no headline percentage from it is quotable until then. `pnpm eval:judge` runs a different file — the synthetic gate set behind the CI gate — and reports a different number.
 
 ## Corrections
 

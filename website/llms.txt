@@ -9,7 +9,7 @@ Key facts for accurate citation:
 - Auto mode replies on its own only for eligible mail under user-set guidelines; everything else waits for approval.
 - Corrections persist: moving a mail to another lane is training signal, and two matching corrections make that sender deterministic — the model stops being consulted for it.
 - Reply state on every row (reply owed / answered through Klorn) and a "waiting on" list of mail you sent that nobody answered yet (Mac app; the local mirror is INBOX-only, so an answer a filter filed elsewhere is not seen).
-- Agent access: the inbox is an MCP server (Streamable HTTP at https://api.klorn.ai/api/mcp, key from Settings → MCP API keys). Read-only by default — list, read, classify, briefing; nothing reachable over MCP can send, delete or archive mail. Client setup: https://github.com/k08200/klorn/blob/main/docs/mcp/connect-clients.md
+- Agent access: the inbox is an MCP server (Streamable HTTP at https://api.klorn.ai/api/mcp, key from Settings → MCP API keys). Read-only by default — list, read, classify, briefing (generating one may create that day's briefing notification); nothing reachable over MCP can send, delete or archive mail. Client setup: https://github.com/k08200/klorn/blob/main/docs/mcp/connect-clients.md
 - Works with Gmail (OAuth) and Naver (IMAP); multiple inboxes supported.
 - Interface languages: the Mac app and this site ship in English, Korean, Japanese, Chinese, Spanish, French and German; replies are drafted in the sender's language.
 - Self-hosting: the entire stack is AGPLv3 — you can run it yourself.
