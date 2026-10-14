@@ -4,8 +4,8 @@
  *
  *   1. The file, through the drive's kill switch: hidden or gone waits.
  *   2. Cheap refusals before any byte is read: a folder, a type the extractor
- *      has no text for, a recorded size over the cap, a file whose daily count
- *      is spent.
+ *      has no text for, a recorded size over the cap, a file or a user whose
+ *      daily count is spent.
  *   3. The bytes, capped while they stream (summary-bytes.ts).
  *   4. The text, from the attachment pipeline's extractor (summary-extract.ts).
  *   5. The user's daily count, then the file's, then one model call
@@ -48,6 +48,7 @@ import {
   markSummarySkipped,
   reserveUserSummary,
   type SummaryRow,
+  userDailyCountSpent,
 } from "./summary-store.js";
 
 export type SummaryRunOutcome = "done" | "skipped" | "deferred" | "retry" | "failed";
@@ -208,6 +209,9 @@ export async function runClaimedSummary(
   }
   if (fileRunsToday(row, ctx.now) >= DRIVE_SUMMARY_RUNS_PER_FILE_PER_DAY) {
     return await defer(ctx, "file-limit", nextUtcDay(ctx.now));
+  }
+  if (await userDailyCountSpent(row.userId, ctx.now)) {
+    return await defer(ctx, "daily-limit", nextUtcDay(ctx.now));
   }
   try {
     return await summariseSource(ctx, source);

@@ -50,6 +50,8 @@ import {
   driveFileIdsMatchingSummary,
   enqueueDriveFileSummary,
   findSummaryRow,
+  reserveUserSummary,
+  userDailyCountSpent,
 } from "../drive/summary-store.js";
 import { allowAnyContentType } from "../storage/limits.js";
 import { MemoryObjectStore } from "../storage/memory-store.js";
@@ -193,6 +195,21 @@ describe("the queue: one row per file, at the file's version", () => {
     expect(summaryOf(theirs.id)).toMatchObject({ userId: OTHER, sourceEtag: theirs.etag });
   });
 
+  it("the user's daily count: the reservation that passes the count is refused", async () => {
+    db.tables.driveSummaryUsage.push({
+      userId: ME,
+      dayKey: "2026-10-14",
+      count: DRIVE_SUMMARIES_PER_USER_PER_DAY - 1,
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+    expect(await userDailyCountSpent(ME, NOW)).toBe(false);
+    expect(await reserveUserSummary(ME, NOW)).toBe(true);
+    expect(await userDailyCountSpent(ME, NOW)).toBe(true);
+    expect(await reserveUserSummary(ME, NOW)).toBe(false);
+    expect(await userDailyCountSpent(OTHER, NOW)).toBe(false);
+  });
+
   it("a claim holds the row for the lease; a second claimant gets nothing", async () => {
     const file = await storedFile("hello");
     const row = await queued(file);
@@ -326,8 +343,9 @@ describe("one run", () => {
 });
 
 describe("caps defer, they never fail", () => {
-  it("the user's daily summary count: PENDING until the next UTC day, no model call", async () => {
+  it("the user's daily summary count: PENDING until the next UTC day, no read, no model call", async () => {
     const file = await storedFile("hello");
+    const getObject = vi.spyOn(store, "getObject");
     db.tables.driveSummaryUsage.push({
       userId: ME,
       dayKey: "2026-10-14",
@@ -343,6 +361,8 @@ describe("caps defer, they never fail", () => {
       attempts: 0,
     });
     expect(llm.calls).toEqual([]);
+    // Checked before the bytes: a user at the count costs no download.
+    expect(getObject).not.toHaveBeenCalled();
   });
 
   it("another user's count does not count against me", async () => {

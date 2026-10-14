@@ -295,7 +295,7 @@ describe("the summary tables (D4): one writer, every query names its user", () =
       for (const window of callWindows(fn, SUMMARY_CALL)) {
         if (SYSTEM_QUERIES.includes(name)) continue;
         expect(window.slice(0, 220), name).toMatch(
-          /where: \{\s*(driveFileId, userId|id: row\.id, userId|id: ref\.id, userId: ref\.userId|id: row\.id, userId: row\.userId|userId_dayKey: \{ userId, dayKey \}|userId,)/,
+          /where: \{\s*(driveFileId, userId|id: row\.id, userId|id: ref\.id, userId: ref\.userId|id: row\.id, userId: row\.userId|userId_dayKey: \{ userId, dayKey\b|userId,)/,
         );
         scoped += 1;
       }

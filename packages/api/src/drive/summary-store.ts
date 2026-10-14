@@ -175,6 +175,15 @@ export async function countFileRun(row: SummaryRow, now: Date): Promise<boolean>
   return true;
 }
 
+/** Whether the user's daily count is already spent: a read, checked before any byte is fetched. */
+export async function userDailyCountSpent(userId: string, now: Date): Promise<boolean> {
+  const usage = await prisma.driveSummaryUsage.findUnique({
+    where: { userId_dayKey: { userId, dayKey: utcDayKey(now) } },
+    select: { count: true },
+  });
+  return (usage?.count ?? 0) >= DRIVE_SUMMARIES_PER_USER_PER_DAY;
+}
+
 /**
  * Count one summary call against the user's day; false past the daily count.
  * The increment is atomic, and the count after it decides, so concurrent

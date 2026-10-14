@@ -3829,7 +3829,8 @@ both.
 - A run (`drive/summary-run.ts`), cheapest refusal first: the row through the
   kill switch (hidden or gone: PENDING `source-unavailable`, one hour); a
   folder, a type the extractor has no text for, or a recorded size over the cap:
-  SKIPPED without reading a byte; the per-file count; the bytes, read through
+  SKIPPED without reading a byte; the per-file count and the user's daily
+  count (a read), so a user at the count costs no download; the bytes, read through
   D1's user-scoped storage with the cap counted while they stream
   (`readCappedBytes`: it stops at the chunk that crosses 8,000,000 bytes and
   destroys the stream; a store that under-reports the size still stops there);
@@ -3908,7 +3909,8 @@ both.
   byte check, the cost-cap deferral in the run and its mapping in the
   summariser, user scoping of the row read, a write, the summary search and the
   source read, each flag-off gate (job, route, upload, file response, search),
-  the search escape, both daily counts, the give-up bound, two RLS statements,
+  the search escape, both daily counts and the user's pre-fetch check, the
+  give-up bound, two RLS statements,
   the purge of summaries. On a scratch Postgres 16 (not in the suite): `prisma
   migrate deploy`, the CI drift check ("No difference detected"), each CHECK
   refusing a row, one row per file, the policies (no tenant sees nothing, a
