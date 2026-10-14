@@ -430,9 +430,10 @@ export function mcpWriteToolsEnabled(): boolean {
 // storage/ loads the S3 client, builds one, reads the value of an
 // OBJECT_STORAGE_* variable or opens a connection, and the account purge does
 // not touch storage. While ON, the OBJECT_STORAGE_* variables are validated at
-// startup and on first use, and deleting an account (or its data) deletes that
-// user's objects FIRST and fails if it cannot. Do not turn it back OFF once
-// objects exist: a purge would then skip them. Startup warns ([STORAGE]) when
+// startup and on first use, and deleting an account (or its data) first records
+// a pending purge of that user's objects, then tries the bucket; a failure no
+// longer blocks the deletion, an hourly sweep finishes it (step D3). Do not turn
+// it back OFF once objects exist: a purge would then skip them. Startup warns ([STORAGE]) when
 // the flag is OFF and a bucket is still configured. Kill switches belong to the
 // features built on top (D3, E4). Read at request time
 // (PROVIDER_INBOX_SELECTOR_ENABLED precedent) with the same lenient truthy
