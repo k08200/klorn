@@ -10,6 +10,7 @@ import { HubHandoff } from "../../../components/hub-handoff";
 import { useToast } from "../../../components/toast";
 import ErrorAlert from "../../../components/ui/error-alert";
 import LoadingState from "../../../components/ui/loading-state";
+import { useAuth } from "../../../lib/auth";
 import { useT } from "../../../lib/i18n";
 import { useReceipt } from "./use-receipt";
 
@@ -197,6 +198,8 @@ function ReceiptSection({
   renderActions?: (item: ReceiptItem) => React.ReactNode;
   renderExtra?: (item: ReceiptItem) => React.ReactNode;
 }) {
+  // The user's stored zone, so times sit on the same day as the receipt's date.
+  const timeZone = useAuth().user?.timezone;
   return (
     <section aria-label={title}>
       <div className="mb-2 flex items-center justify-between">
@@ -229,7 +232,7 @@ function ReceiptSection({
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
                     <span className="text-[11px] tabular-nums text-ink-dim">
-                      {formatTime(item.surfacedAt)}
+                      {formatTime(item.surfacedAt, timeZone)}
                     </span>
                     {renderExtra?.(item)}
                     {renderActions?.(item)}
@@ -318,11 +321,12 @@ function formatReceiptDate(dateStr: string): string {
   }
 }
 
-function formatTime(isoStr: string): string {
+function formatTime(isoStr: string, timeZone?: string): string {
   try {
     return new Date(isoStr).toLocaleTimeString("en-US", {
       hour: "2-digit",
       minute: "2-digit",
+      timeZone,
     });
   } catch {
     return "";

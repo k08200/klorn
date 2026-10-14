@@ -62,6 +62,8 @@ type StoredUser = {
   resetTokenExp?: Date | null;
   sessionsInvalidatedAt?: Date | null;
   betaProGrantedAt?: Date | null;
+  // Stands in for the `include: { automationConfig }` relation on /me.
+  automationConfig?: { timezone: string } | null;
 };
 const userStore = new Map<string, StoredUser>();
 const userByEmail = new Map<string, string>();
@@ -1208,6 +1210,27 @@ describe("GET /api/auth/me", () => {
     expect(body.user.email).toBe("me@example.com");
     expect(body.user.id).toBe("user-1");
     expect(body.user).toHaveProperty("googleConnected");
+    await app.close();
+  });
+
+  it("reports the user's stored timezone (AutomationConfig.timezone), not a constant", async () => {
+    const app = await buildApp();
+    const token = await registerAndGetToken(app, "tz@example.com");
+    const me = async () =>
+      (await app.inject({ method: "GET", url: "/api/auth/me", headers: authHeader(token) })).json()
+        .user.timezone;
+
+    // No config row yet: the product default.
+    expect(await me()).toBe("Asia/Seoul");
+
+    const stored = userStore.get("user-1");
+    if (!stored) throw new Error("registered user missing");
+    userStore.set("user-1", { ...stored, automationConfig: { timezone: "America/Los_Angeles" } });
+    expect(await me()).toBe("America/Los_Angeles");
+
+    // A garbage stored value never reaches the client's Intl calls.
+    userStore.set("user-1", { ...stored, automationConfig: { timezone: "Not/AZone" } });
+    expect(await me()).toBe("Asia/Seoul");
     await app.close();
   });
 

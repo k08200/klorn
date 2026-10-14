@@ -645,7 +645,11 @@ export function authRoutes(app: FastifyInstance) {
 
     try {
       const payload = verifyToken(auth.slice(7));
-      const user = await prisma.user.findUnique({ where: { id: payload.userId } });
+      const user = await prisma.user.findUnique({
+        where: { id: payload.userId },
+        // The user's timezone lives on AutomationConfig (User has no such column).
+        include: { automationConfig: { select: { timezone: true } } },
+      });
       if (!user) return reply.code(404).send({ error: "User not found" });
 
       // Keep an ADMIN_EMAILS operator's DB role in sync. Admin-ness was split:
@@ -698,11 +702,12 @@ export function authRoutes(app: FastifyInstance) {
           // configured). The web paywall disables its subscribe button when
           // false so a native-IAP-only launch never shows a dead button.
           webCheckoutAvailable: isWebCheckoutAvailable(),
-          // Stored IANA timezone (User.timezone, default "Asia/Seoul").
-          // Surfaced so the web client can render calendar/briefing times
-          // in the user's intended zone instead of the browser default
-          // (which can disagree — e.g., iOS PWA falling back to UTC).
-          timezone: (user as unknown as { timezone?: string | null }).timezone ?? "Asia/Seoul",
+          // Stored IANA timezone (AutomationConfig.timezone, default
+          // "Asia/Seoul"), the same zone the server's briefing/receipt days
+          // use. Surfaced so the web client renders calendar/briefing times in
+          // the user's intended zone instead of the browser default (which can
+          // disagree — e.g., iOS PWA falling back to UTC).
+          timezone: normalizeTimeZone(user.automationConfig?.timezone),
           googleConnected: googleStatus.connected,
           googleNeedsReconnect: googleStatus.needsReconnect,
           // Whether ANY mail source is attached — the primary Google grant or
