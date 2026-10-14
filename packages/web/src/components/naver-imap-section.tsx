@@ -29,7 +29,18 @@ const DEFAULT_HOST = "imap.naver.com:993";
 
 const PASSWORD_HELP_URL = "https://help.naver.com/service/3007/contents/?lang=ko";
 
-export function NaverImapSection() {
+interface NaverImapSectionProps {
+  /**
+   * Rendered inside another surface that already names it (the first run's
+   * sheet): no panel chrome and no heading of its own. The form, the
+   * requests and every state are the same.
+   */
+  embedded?: boolean;
+  /** A mailbox was connected or disconnected; the caller refreshes its list. */
+  onChanged?: () => void;
+}
+
+export function NaverImapSection({ embedded = false, onChanged }: NaverImapSectionProps = {}) {
   const { user } = useAuth();
   const { confirm } = useConfirm();
   // Multi-account (a second inbox) is a paid feature. `entitled` is server-
@@ -84,6 +95,7 @@ export function NaverImapSection() {
         setEmailInput("");
         setPasswordInput("");
         await loadStatus();
+        onChanged?.();
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -108,6 +120,7 @@ export function NaverImapSection() {
     try {
       await apiFetch("/api/naver-imap/disconnect", { method: "POST" });
       await loadStatus();
+      onChanged?.();
     } catch (err) {
       captureClientError(err, { scope: "naver-imap.disconnect" });
       setError("Disconnect failed.");
@@ -117,8 +130,14 @@ export function NaverImapSection() {
   };
 
   return (
-    <section className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-5">
-      <header className="mb-3 flex items-start justify-between gap-3">
+    <section
+      className={
+        embedded
+          ? undefined
+          : "panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-5"
+      }
+    >
+      <header className={embedded ? "hidden" : "mb-3 flex items-start justify-between gap-3"}>
         <div>
           <h2 className="text-base font-semibold text-ink">Naver Mail</h2>
           <p className="mt-1 text-xs text-ink-mid">

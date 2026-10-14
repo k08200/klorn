@@ -5,10 +5,6 @@ struct FullList: View {
     let mode: ListMode
     let actions: TopBarActions
     @Binding var keyZone: MailKeyZone
-    /// The offscreen renderer paints the key catcher (an AppKit view) as a
-    /// placeholder over the whole list. The main window's shots leave it
-    /// out; the bar's shots are unchanged from main, placeholder included.
-    var keyCatcherInRender = true
     /// The main window's lane tab already names the lane and carries its
     /// count, so the list drops its own title row there; the inbox scope
     /// and compose move beside the search field. Search results keep theirs.
@@ -225,9 +221,12 @@ struct FullList: View {
             }
         }
         // List keys (M3). Mounted with the mail list only, so other list
-        // modes never see them.
+        // modes never see them. Not mounted under the offscreen renderer:
+        // ImageRenderer paints an NSViewRepresentable as its yellow
+        // "restricted" placeholder, and as a background that covers the
+        // whole mail column.
         .background {
-            if keyCatcherInRender || !Theme.isRenderingOffscreen {
+            if !Theme.isRenderingOffscreen {
                 MailListKeyCatcher(
                     onKey: { handleKey($0) },
                     onClickOutsideReader: { keyZone = .list },

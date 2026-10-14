@@ -315,7 +315,6 @@ func navSelfChecks(sourceDir: URL) -> [(String, Bool)] {
           barFiles.allSatisfy { file in !newViews.contains { text(file).contains($0) } })
     check("flag off: shared views default to their pre-M4b behaviour",
           text("ProposalsList.swift").contains("var title = L(\"proposals.title\")")
-          && text("FullList.swift").contains("var keyCatcherInRender = true")
           && text("AssistantThread.swift").contains("var inlineWhenOffscreen = false"))
     check("flag off: the model reveals mail in the window only behind the flag",
           text("TopBarController.swift")

@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- P11a preview of the new landing (Korean). Not indexed, not in the sitemap,
+     not linked from the nav; a later PR swaps it in at /ko/. -->
+<meta name="robots" content="noindex, nofollow">
+<title>Klorn — 모든 메일과 캘린더를, 한 곳에서 차분하게.</title>
+<meta name="description" content="Gmail, Google 캘린더, 네이버 메일을 한 화면에 모으고, 메일마다 무엇이 필요한지 나눠 그 이유와 함께 보여줍니다.">
+<meta property="og:title" content="Klorn — 모든 메일과 캘린더를, 한 곳에서 차분하게.">
+<meta property="og:description" content="메일과 캘린더를 한 화면에. 모든 메일을 다섯 레인으로 나누고, 이유를 함께 보여줍니다.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://klorn.ai/ko/next/">
+<meta property="og:image" content="https://klorn.ai/brand/og-image.png?v=k2">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preload" as="font" type="font/woff2" href="/fonts/geist-var.woff2" crossorigin>
+<link rel="preload" as="image" type="image/webp" media="(max-width:640px)"
+      imagesrcset="/media/app-2026-10/today-m-light-720.webp 720w, /media/app-2026-10/today-m-light-1440.webp 1440w"
+      imagesizes="94vw" fetchpriority="high">
+<link rel="preload" as="image" type="image/webp" media="(min-width:641px)"
+      imagesrcset="/media/app-2026-10/today-light-1200.webp 1200w, /media/app-2026-10/today-light-2000.webp 2000w, /media/app-2026-10/today-light-2560.webp 2560w"
+      imagesizes="(min-width:1240px) 1176px, 94vw" fetchpriority="high">
+<link rel="icon" href="/brand/favicon.svg?v=matte2" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png?v=matte2">
+<link rel="stylesheet" href="/next/next.css">
+<script src="/site-nav.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">본문으로 건너뛰기</a>
+
+<nav class="nav" aria-label="메인"><div class="nav-pill">
+  <a class="nav-brand" href="#top">Klorn</a>
+  <span class="nav-links"><a href="#accounts">계정</a><a href="#lanes">레인</a><a href="#day">하루</a><a href="#pricing">요금</a></span>
+  <a class="nav-lang" href="/next/" hreflang="en" lang="en">English</a>
+  <a class="nav-login" href="https://app.klorn.ai/login">로그인</a>
+  <a class="nav-cta dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
+     data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe" data-win-label="다운로드">다운로드</a>
+</div></nav>
+
+<main id="main">
+<header class="hero" id="top">
+  <picture class="hero-sky" aria-hidden="true">
+    <source type="image/webp" sizes="100vw"
+            srcset="/media/sky/dusk-1280.webp 1280w, /media/sky/dusk-1920.webp 1920w, /media/sky/dusk-2560.webp 2560w">
+    <img src="/media/sky/dusk-1920.jpg" alt="" decoding="async" width="2560" height="1709">
+  </picture>
+
+  <div class="wrap hero-copy">
+    <h1>모든 메일과 캘린더를, <span class="ser">한 곳에서 차분하게.</span></h1>
+    <p class="lead"><b>Gmail, Google 캘린더, 네이버 메일</b>을 한 화면에 모읍니다. 메일마다 지금 무엇이
+      필요한지 나누고, 왜 그런지 한 줄로 알려 줍니다. Outlook과 iCloud도 곧 이어집니다.</p>
+    <div class="actions">
+      <a class="btn btn-1 dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
+         data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe" data-win-label="Windows용 다운로드">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.05 12.54c.02-2.3 1.87-3.4 1.95-3.45-1.06-1.56-2.71-1.77-3.3-1.8-1.4-.11-2.58.78-3.25.78-.68 0-1.72-.76-2.83-.74-1.46.02-2.8.85-3.55 2.15-1.51 2.630-.39 6.52 1.09 8.66.72 1.04 1.58 2.21 2.71 2.17 1.09-.04 1.5-.7 2.82-.7 1.31 0 1.68.7 2.83.68 1.17-.02 1.92-1.06 2.64-2.11.83-1.2 1.17-2.37 1.19-2.43-.03-.01-2.28-.88-2.3-3.48zM14.9 5.6c.6-.72 1-1.72.89-2.72-.86.04-1.9.57-2.52 1.29-.55.63-1.02 1.65-.89 2.63.96.07 1.92-.49 2.52-1.2z"/></svg>
+        Mac용 다운로드</a>
+      <a class="btn btn-2" href="https://app.klorn.ai/login?mode=register">브라우저에서 열기</a>
+    </div>
+    <p class="meta">월 $8.99<span aria-hidden="true">·</span>무료 플랜<span aria-hidden="true">·</span>내 AI 키로도 사용 가능</p>
+  </div>
+
+  <figure class="shot">
+    <div class="win">
+      <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+      <picture>
+      <source media="(max-width:640px)" sizes="94vw" width="1440" height="1240"
+              srcset="/media/app-2026-10/today-m-light-720.webp 720w, /media/app-2026-10/today-m-light-1440.webp 1440w">
+      <img src="/media/app-2026-10/today-light-2000.webp"
+           srcset="/media/app-2026-10/today-light-1200.webp 1200w, /media/app-2026-10/today-light-2000.webp 2000w, /media/app-2026-10/today-light-2560.webp 2560w"
+           sizes="(min-width:1240px) 1176px, 94vw" width="2560" height="1600" fetchpriority="high" decoding="async"
+           alt="Mac의 Klorn 오늘 화면: 네 개 계정의 메일이 Push, Meeting, Queue로 나뉘어 있고 각 행에 계정 표시가 붙어 있으며, 옆에 오늘 일정과 어시스턴트가 있습니다."></picture>
+    </div>
+    <img class="pill" src="/media/app-2026-10/pill-light-396.webp"
+         srcset="/media/app-2026-10/pill-light-396.webp 396w, /media/app-2026-10/pill-light-792.webp 792w"
+         sizes="320px" width="792" height="98" decoding="async"
+         alt="Mac 데스크톱의 Klorn 필. Push 메일 3개를 표시합니다.">
+    <figcaption class="cap"><span class="demo-tag">데모 데이터</span>Mac의 <b>오늘</b> 화면. 연결한 모든 계정이 한 목록에.</figcaption>
+  </figure>
+</header>
+
+<!-- 2 · Every account, one view -->
+<section class="sec" id="accounts" aria-labelledby="accounts-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">모든 계정</span>
+      <h2 id="accounts-h">계정은 여러 개, <span class="ser">화면은 하나.</span></h2>
+      <p class="sec-lead">계정마다 한 번만 연결하면 됩니다. 모든 계정의 메일과 일정이 한 목록에 모이고, 어디서 왔는지 표시됩니다.</p>
+    </div>
+    <ul class="acct-grid">
+      <li class="acct"><div class="acct-top"><b>Gmail</b><span class="st st-live">사용 가능</span></div>
+        <p>분류하고, 요약하고, 검색합니다.</p></li>
+      <li class="acct"><div class="acct-top"><b>Google 캘린더</b><span class="st st-live">사용 가능</span></div>
+        <p>메일 옆에 일정을. 새 일정은 내가 말할 때만 만듭니다.</p></li>
+      <li class="acct"><div class="acct-top"><b>네이버 메일</b><span class="st st-beta">베타</span></div>
+        <p>다른 메일과 함께 읽고 분류합니다.</p></li>
+      <li class="acct is-soon"><div class="acct-top"><b>Outlook · Microsoft 365</b><span class="st st-soon">준비 중</span></div>
+        <p>회사 메일과 캘린더.</p></li>
+      <li class="acct is-soon"><div class="acct-top"><b>iCloud 메일</b><span class="st st-soon">준비 중</span></div>
+        <p>Apple 주소도 같은 목록에.</p></li>
+      <li class="acct is-soon"><div class="acct-top"><b>iCloud · 네이버 캘린더</b><span class="st st-soon">준비 중</span></div>
+        <p>같은 하루 안에 합쳐집니다.</p></li>
+      <li class="acct is-soon"><div class="acct-top"><b>그 밖의 IMAP 메일</b><span class="st st-soon">준비 중</span></div>
+        <p>이 목록에 없는 주소를 위해.</p></li>
+      <li class="acct is-soon"><div class="acct-top"><b>Mac의 캘린더</b><span class="st st-soon">준비 중</span></div>
+        <p>내 Mac에만 있는 캘린더를, 하나씩 골라서.</p></li>
+    </ul>
+    <p class="acct-note"><b>준비 중</b>은 이미 만들어 두었고, 검토가 끝나면 켜는 기능입니다. 켜지는 날 이곳에 바로 표시합니다.</p>
+
+    <figure class="acct-shot">
+      <div class="win">
+        <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+        <picture>
+        <source media="(max-width:640px)" sizes="94vw" width="840" height="1000" srcset="/media/app-2026-10/mail-m-light-840.webp 840w">
+        <img src="/media/app-2026-10/mail-light-2000.webp"
+             srcset="/media/app-2026-10/mail-light-1200.webp 1200w, /media/app-2026-10/mail-light-2000.webp 2000w"
+             sizes="(min-width:1240px) 1116px, 94vw" width="2000" height="1250" loading="lazy" decoding="async"
+             alt="Mac의 Klorn 메일 화면: Gmail, Microsoft, 네이버, iCloud 메일이 한 목록에 섞여 있고, 각 행에 계정 배지와 레인 표시가 있으며, 오른쪽에 열린 메일이 있습니다."></picture>
+      </div>
+      <figcaption class="cap"><span class="demo-tag">데모 데이터</span>위에서 &lsquo;준비 중&rsquo;인 계정도 포함되어 있습니다.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- 3 · Five lanes, with the reason -->
+<section class="sec sec-alt" id="lanes" aria-labelledby="lanes-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">다섯 개의 레인</span>
+      <h2 id="lanes-h">레인은 다섯, <span class="ser">이유는 한 줄로.</span></h2>
+      <p class="sec-lead">모든 메일은 다섯 레인 중 하나로 들어가고, 왜 거기 있는지 한 문장으로 적혀 있습니다.</p>
+    </div>
+    <div class="lanes-grid">
+      <div>
+        <ul class="lane-list">
+          <li class="lane"><span class="chip c-push">PUSH</span><p>지금 바로 알려야 할 메일.<span>미룰 수 없는 몇 통만.</span></p></li>
+          <li class="lane"><span class="chip c-meeting">MEETING</span><p>일정 조율, 내 캘린더와 대조해서.<span>제안된 시간, 겹치는 일정, 비어 있는 시간까지.</span></p></li>
+          <li class="lane"><span class="chip c-queue">QUEUE</span><p>오늘 읽어 두면 좋은 메일.<span>알림 없이, 오늘 목록에 자리만.</span></p></li>
+          <li class="lane"><span class="chip c-info">INFO</span><p>영수증과 안내, 알아서 정리.<span>답장할 필요 없는 메일.</span></p></li>
+          <li class="lane"><span class="chip c-silent">SILENT</span><p>보관은 하되, 눈앞에서는 치웁니다.<span>지우지 않습니다.</span></p></li>
+        </ul>
+        <p class="rule">레인은 나누기만 합니다. 대신 행동하지 않습니다.<span>분류가 마음에 안 들면 옮기세요. Klorn이 그 교정에서 배웁니다.</span></p>
+      </div>
+      <figure style="margin:0">
+        <div class="card-shot">
+          <img src="/media/app-2026-10/reason-light-1278.webp"
+               srcset="/media/app-2026-10/reason-light-640.webp 640w, /media/app-2026-10/reason-light-1278.webp 1278w"
+               sizes="(min-width:980px) 620px, 92vw" width="1278" height="640" loading="lazy" decoding="async"
+               alt="Queue 레인에 있는 열린 메일. 헤더 아래에 Why Queue · A colleague, no deadline이라는 이유와 한 문장 요약이 있습니다.">
+        </div>
+        <figcaption class="cap"><span class="demo-tag">데모 데이터</span>모든 메일 위에 이유가 붙습니다.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- 4 · Your day, merged, plus assistant -->
+<section class="sec" id="day" aria-labelledby="day-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">나의 하루</span>
+      <h2 id="day-h">하루가 한 화면에. <span class="ser">그 하루를 아는 어시스턴트.</span></h2>
+      <p class="sec-lead">메일 옆의 캘린더, 아침 브리핑, 그리고 내 메일함을 근거로 답하고 행동 전에는 꼭 묻는 어시스턴트.</p>
+    </div>
+    <div class="day-grid">
+      <article class="tile">
+        <div><h3>묻고, 승인하고</h3>
+          <p>오전 중에 챙길 게 뭔지 물어보세요. 답장 초안과 새 일정은 승인할 때까지 &lsquo;승인 대기&rsquo;에서 기다립니다.</p></div>
+        <div class="tile-media card-shot">
+          <picture>
+          <source media="(max-width:640px)" sizes="88vw" width="840" height="700" srcset="/media/app-2026-10/assistant-m-light-840.webp 840w">
+          <img src="/media/app-2026-10/assistant-light-2000.webp"
+               srcset="/media/app-2026-10/assistant-light-1200.webp 1200w, /media/app-2026-10/assistant-light-2000.webp 2000w"
+               sizes="(min-width:1240px) 700px, (min-width:900px) 60vw, 90vw" width="2000" height="1250" loading="lazy" decoding="async"
+               alt="Mac의 어시스턴트 화면: 답장과 일정 생성 두 건이 승인과 거절 버튼과 함께 대기 중이고, 옆 대화창에서 오전 중 챙길 일을 답합니다."></picture>
+        </div>
+      </article>
+      <div class="tile-col">
+        <article class="tile tile-day">
+          <div><h3>모든 캘린더를 하루로</h3>
+            <p>연결한 캘린더의 일정이 관련 메일 옆에 나란히.</p></div>
+          <div class="tile-media card-shot">
+            <img src="/media/app-2026-10/day-light-640.webp"
+                 srcset="/media/app-2026-10/day-light-320.webp 320w, /media/app-2026-10/day-light-640.webp 640w"
+                 sizes="(min-width:900px) 380px, 88vw" width="640" height="370" loading="lazy" decoding="async"
+                 alt="오늘 일정 네 개가 있는 캘린더 카드와, 하루를 요약하고 승인 대기 2건을 보여주는 어시스턴트 카드.">
+          </div>
+        </article>
+        <article class="tile">
+          <div><h3>시작 전에 읽는 브리핑</h3>
+            <p>오늘 하루의 흐름과, 놓치면 안 되는 두 가지.</p></div>
+          <div class="tile-media card-shot">
+            <img src="/media/app-2026-10/briefing-light-776.webp" width="776" height="274" loading="lazy" decoding="async"
+                 alt="아침 브리핑: 바쁜 오전, 4시 이후 한가함. 시간대별 바쁜 정도를 보여주는 선과 우선순위 두 가지.">
+          </div>
+        </article>
+      </div>
+    </div>
+    <p class="cap" style="text-align:left"><span class="demo-tag">데모 데이터</span>어시스턴트와 캘린더는 Mac, 브리핑은 웹 화면입니다.</p>
+  </div>
+</section>
+
+<!-- 5 · Proof and trust -->
+<section class="sec sec-alt" id="trust" aria-labelledby="trust-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">신뢰</span>
+      <h2 id="trust-h">직접 <span class="ser">확인할 수 있게.</span></h2>
+      <p class="sec-lead">메일을 읽는 서비스라면 근거를 보여줘야 합니다. 직접 확인할 수 있는 것들입니다.</p>
+    </div>
+    <dl class="facts">
+      <div class="fact"><dt>보내기는 언제나 내 승인 후에</dt>
+        <dd>답장, 삭제, 보관은 자동화를 켜도 승인을 거쳐야 합니다.</dd></div>
+      <div class="fact"><dt>테스트 세트는 공개되어 있습니다</dt>
+        <dd>분류기를 바꿀 때마다 저장소에 있는 라벨링된 메일 세트로 검사합니다. <a href="https://github.com/k08200/klorn/tree/main/packages/api/eval" rel="noreferrer noopener">보기</a></dd></div>
+      <div class="fact"><dt>AI 비용에는 상한이 있습니다</dt>
+        <dd>Klorn은 하루 AI 사용량에 스스로 상한을 두고, 넘기 전에 멈춥니다.</dd></div>
+    </dl>
+    <div class="trust-grid">
+      <a class="trust" href="/ko/open-source/"><h3>오픈소스</h3>
+        <p>메일을 다루는 모든 코드가 공개되어 있습니다. 라이선스는 수정 없는 AGPL-3.0.</p><span class="go">오픈소스인 이유 →</span></a>
+      <a class="trust" href="/self-host/"><h3>직접 설치</h3>
+        <p>내 서버에서 전체를 돌릴 수 있습니다. 내 모델 키로, 또는 로컬 모델로.</p><span class="go">설치 가이드 →</span></a>
+      <a class="trust" href="/security/"><h3>보안</h3>
+        <p>계정 토큰은 암호화해 저장합니다. 데이터 처리 방식을 자세히 공개합니다.</p><span class="go">보안 →</span></a>
+      <a class="trust" href="/pricing/"><h3>내 AI 키</h3>
+        <p>어떤 플랜에서든 내 모델 키를 연결해 쓸 수 있습니다.</p><span class="go">자세히 →</span></a>
+    </div>
+  </div>
+</section>
+
+<!-- 6 · Pricing, FAQ, final CTA -->
+<section class="sec" id="pricing" aria-labelledby="pricing-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">요금</span>
+      <h2 id="pricing-h">분류는 무료. <span class="ser">더 맡기면 $8.99.</span></h2>
+      <p class="sec-lead">레인과 이유는 기간 제한 없이 무료입니다. 실제 AI 비용이 드는 기능만 Pro에 있습니다.</p>
+    </div>
+    <div class="prices">
+      <article class="price">
+        <span class="plan">Free</span>
+        <div class="amt">$0<small>/월</small></div>
+        <p class="pnote">카드 등록도, 만료도 없습니다.</p>
+        <ul>
+          <li>다섯 레인, 모든 메일에 이유 표시</li>
+          <li>아침 브리핑과 캘린더</li>
+          <li>내 메일을 근거로 답하는 어시스턴트</li>
+          <li>하루 AI 사용량 상한</li>
+        </ul>
+        <a class="btn btn-2" href="https://app.klorn.ai/login?mode=register">무료로 시작</a>
+      </article>
+      <article class="price feat">
+        <span class="plan">Pro</span>
+        <div class="amt">$8.99<small>/월</small></div>
+        <p class="pnote">7일 체험. 앱에서 언제든 해지.</p>
+        <ul>
+          <li>Free의 모든 기능</li>
+          <li>승인 후 보내는 답장 초안</li>
+          <li>더 많은 계정 연결</li>
+          <li>더 넉넉한 하루 AI 사용량</li>
+        </ul>
+        <a class="btn btn-1" href="https://app.klorn.ai/login?mode=register">Pro 체험 시작</a>
+      </article>
+    </div>
+    <p class="price-foot">가격은 USD 기준입니다. <a href="/pricing/">플랜 자세히 보기</a></p>
+
+    <div class="faq-wrap">
+      <h2>자주 묻는 질문</h2>
+      <div class="faq">
+        <details><summary>계정마다 따로 연결해야 하나요?</summary>
+          <p>네, 계정마다 한 번씩입니다. 로그인할 때 첫 Google 계정이 연결되고, 나머지는 설정에서 추가하면
+            그때부터 모두 같은 목록으로 들어옵니다.</p></details>
+        <details><summary>Klorn이 알아서 메일을 보내거나 지우나요?</summary>
+          <p>아니요. 레인은 분류만 합니다. 답장, 삭제, 보관은 모두 승인을 기다립니다. 자동화를 켜면
+            어시스턴트가 위험이 낮은 일부 작업을 스스로 처리하지만, 메일 보내기는 여기에 절대 포함되지 않습니다.</p></details>
+        <details><summary>지금 연결할 수 있는 계정은 무엇인가요?</summary>
+          <p>Gmail과 Google 캘린더, 그리고 베타로 네이버 메일입니다. Outlook, iCloud, 그 밖의 IMAP 메일은
+            만들어 두었고, 하나씩 켜질 때까지 위에 &lsquo;준비 중&rsquo;으로 표시합니다.</p></details>
+        <details><summary>내 메일은 어디로 가나요?</summary>
+          <p>Klorn의 분류기로 갔다가 돌아옵니다. 토큰은 암호화해 저장하고, 토큰을 다루는 코드는 공개되어 있습니다.
+            직접 관리하고 싶다면 <a href="/self-host/">내 서버에서 Klorn을 실행</a>할 수 있습니다.</p></details>
+        <details><summary>&lsquo;내 AI 키로 사용&rsquo;은 무슨 뜻인가요?</summary>
+          <p>Klorn이 우리 키 대신 내가 가진 모델 제공사 키나 로컬 모델을 쓰게 할 수 있다는 뜻입니다.
+            모든 플랜에서 됩니다.</p></details>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="final" aria-labelledby="final-h">
+  <picture class="hero-sky" aria-hidden="true">
+    <source type="image/webp" sizes="100vw"
+            srcset="/media/sky/dusk-1280.webp 1280w, /media/sky/dusk-1920.webp 1920w, /media/sky/dusk-2560.webp 2560w">
+    <img src="/media/sky/dusk-1920.jpg" alt="" loading="lazy" decoding="async" width="2560" height="1709">
+  </picture>
+  <div class="wrap">
+    <h2 id="final-h">흩어진 메일과 일정을, <span class="ser">한 곳으로.</span></h2>
+    <div class="actions">
+      <a class="btn btn-1 dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
+         data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe" data-win-label="Windows용 다운로드">Mac용 다운로드</a>
+      <a class="btn btn-2" href="https://app.klorn.ai/login?mode=register">브라우저에서 열기</a>
+    </div>
+    <p class="meta">macOS 14 이상<span aria-hidden="true">·</span>Windows 베타<span aria-hidden="true">·</span>최신 브라우저</p>
+  </div>
+</section>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <a class="brand" href="#top">Klorn</a>
+    <nav aria-label="푸터">
+      <a href="/pricing/">요금</a><a href="/ko/open-source/">오픈소스</a><a href="/self-host/">직접 설치</a>
+      <a href="/security/">보안</a><a href="/ko/vs/fyxer/">비교</a><a href="/blog/">블로그</a>
+      <a href="/status/">상태</a><a href="https://app.klorn.ai/privacy">개인정보처리방침</a><a href="https://app.klorn.ai/terms">이용약관</a>
+      <a href="/next/" hreflang="en" lang="en">English</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+// Windows visitors get the installer and a matching label (same rule as the
+// live landing). Only the text node changes, so icons survive.
+(function () {
+  var uaData = navigator.userAgentData;
+  var raw = String((uaData && uaData.platform) || navigator.platform || navigator.userAgent || '');
+  if (!/win/i.test(raw) || /mac|iphone|ipad|ipod/i.test(raw)) return;
+  document.querySelectorAll('[data-mac-dl]').forEach(function (a) {
+    var label = a.getAttribute('data-win-label');
+    if (!label) return;
+    Array.prototype.forEach.call(a.childNodes, function (n) {
+      if (n.nodeType !== 3 || !n.textContent.trim()) return;
+      var pad = n.textContent.match(/^(\s*)[\s\S]*?(\s*)$/);
+      n.textContent = pad[1] + label + pad[2];
+    });
+  });
+})();
+</script>
+<script>
+// Inflow attribution, as on the live landing: utm_campaign and friends,
+// the referrer and this landing path ride along on every app.klorn.ai link.
+(function () {
+  try {
+    var p = new URLSearchParams(location.search);
+    var q = [];
+    ["utm_source", "utm_medium", "utm_campaign", "utm_content"].forEach(function (k) {
+      var v = p.get(k);
+      if (v) q.push(k + "=" + encodeURIComponent(v.slice(0, 60)));
+    });
+    if (document.referrer) {
+      try {
+        var h = new URL(document.referrer).hostname;
+        if (h && h !== location.hostname) q.push("ref=" + encodeURIComponent(h));
+      } catch (e) {}
+    }
+    q.push("lp=" + encodeURIComponent(location.pathname.slice(0, 60)));
+    var qs = q.join("&");
+    document.querySelectorAll('a[href^="https://app.klorn.ai/"]').forEach(function (a) {
+      a.href += (a.href.indexOf("?") === -1 ? "?" : "&") + qs;
+    });
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>

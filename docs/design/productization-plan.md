@@ -21,7 +21,7 @@ separate decisions:
 | `MAIL_V2` | P5 | In code, default OFF |
 | `UNIFIED_HOME` | P6 (Today), P7 (Assistant hub) | In code for P6 and P7, default OFF |
 | `macMainWindow` | P9 (M2–M8) | In code (desktop), default OFF |
-| `ONBOARDING_V2` | P8 | Proposed; not in code |
+| `ONBOARDING_V2` | P8 | In code, default OFF |
 
 ## 1. Information architecture
 
@@ -143,6 +143,42 @@ reverse the ledger and the sender prior; this needs an API change in
 First run: sign in, provider grid (flag-on providers only, honest scope), live
 per-account sync counts, Today filled with the first briefing, then add another
 account. Mac first launch shows an onboarding window.
+
+### First run on the web (P8, shipped behind `ONBOARDING_V2`)
+
+`/onboarding` renders the multi-provider first run only when the server says so
+(`user.onboardingV2` on `GET /api/auth/me` and the login/register responses);
+otherwise it is the earlier four-step flow, unchanged. Four steps: accounts,
+sync, check, done.
+
+The grid draws one tile per entry of `GET /api/providers/available` (dark, the
+default 404, while the flag is off) that the web has a connect flow for:
+
+| Tile | Listed when | Scope the tile states | Connect flow |
+|---|---|---|---|
+| Google | always | Gmail and Google Calendar; a second account (only with `MULTI_INBOX_SYNC_ENABLED`) brings mail only | existing OAuth start |
+| Microsoft | `OUTLOOK_INBOX_ENABLED` and the app registration is present | Outlook and Microsoft 365 mail | existing OAuth start |
+| Naver | always | Naver Mail; "read-only" unless an IMAP write flag is on | Settings' credential form, in a Sheet |
+| iCloud | `ICLOUD_INBOX_ENABLED` | iCloud Mail; "read-only" unless an IMAP write flag is on | Settings' credential form, in a Sheet |
+
+A tile claims only what pressing it connects. The server also reports whether
+it reads a provider's calendar (`OUTLOOK_CALENDAR_ENABLED`,
+`CALDAV_CALENDAR_ENABLED`), but the web has no connect flow for those calendars
+yet, so no tile names them. Generic IMAP (`GENERIC_IMAP_ENABLED`) is reported
+too and has no tile for the same reason: the web has no form for it.
+
+The sync screen shows read numbers only. The primary account's come from its
+sign-in sync; every account's message count and the lane totals come from
+`GET /api/email/lane-counts?inbox=`, which exists while `MAIL_V2` or
+`UNIFIED_HOME` is on. Without it, or for a user with no Google grant (the route
+answers sample data), a row says it has no count.
+
+OAuth callbacks still land on `/settings?google=…|inbox=…`. A connect started
+from the first run leaves a sessionStorage marker holding one of two fixed
+provider names and the time it was written (ignored after 15 minutes); Settings
+reads the callback's status against a fixed list and
+sends the visitor to the constant route `/onboarding`, which shows the result.
+Nothing in the URL chooses a destination and `safeNextPath` is untouched.
 
 ## 4. macOS architecture (FD-5)
 

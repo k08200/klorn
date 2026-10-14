@@ -374,6 +374,20 @@ export function mailV2Enabled(): boolean {
 export function unifiedHomeEnabled(): boolean {
   return ["true", "1", "yes", "on"].includes((process.env.UNIFIED_HOME ?? "").trim().toLowerCase());
 }
+// Multi-provider first run (productization plan P8) — OFF by default (repo
+// doctrine). ONE flag for both halves: the web client learns it from GET
+// /api/auth/me and the login/register responses (`user.onboardingV2`) and
+// renders /onboarding as the provider grid with the live sync screen; the API
+// serves GET /api/providers/available, which tells that grid which providers
+// this deployment can connect. While OFF nothing changes: /onboarding is the
+// existing four-step flow, the availability route 404s like any unknown route,
+// and the clients are told false. Read at request time with the same lenient
+// truthy parse as the flags above, so a flip needs no redeploy.
+export function onboardingV2Enabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.ONBOARDING_V2 ?? "").trim().toLowerCase(),
+  );
+}
 // The lane reads — `tier` on GET /api/email and GET /api/email/lane-counts —
 // have two consumers: Mail v2 (MAIL_V2) and Today (UNIFIED_HOME). Either flag
 // turns them on, so Today never depends on Mail v2 having been flipped first;
