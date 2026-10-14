@@ -43,6 +43,10 @@ interface User {
   // P6). True makes Today (/today) the home and switches the nav to Today ·
   // Mail · Calendar · Assistant. Undefined (older API) = off.
   unifiedHome?: boolean;
+  // Server-driven client flag: the API's ONBOARDING_V2 (productization plan
+  // P8). True renders /onboarding as the multi-provider first run. Undefined
+  // (older API) = off.
+  onboardingV2?: boolean;
 }
 
 interface AuthContextType {
@@ -59,6 +63,8 @@ interface AuthContextType {
   // Naver IMAP instead of Gmail is not bounced out of the app. null = unknown.
   hasMailSource: boolean | null;
   initSync: InitSyncState;
+  /** Run the primary account's sign-in sync again (the first run's retry). */
+  retryInitSync: () => void;
   /** `redirectTo` omitted = the user's home (Today under UNIFIED_HOME); the same for register. */
   login: (email: string, password: string, redirectTo?: string) => Promise<void>;
   register: (email: string, password: string, name?: string, redirectTo?: string) => Promise<void>;
@@ -271,6 +277,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [runInitialSync],
   );
 
+  const retryInitSync = useCallback(() => {
+    if (token) runInitialSync(token);
+  }, [token, runInitialSync]);
+
   const logout = useCallback(() => {
     // Order matters: revoke server-side BEFORE clearing the token (the call
     // needs it), then wipe secrets from browser storage (CASA 2.2.1 / 6.6.1).
@@ -299,6 +309,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         googleNeedsReconnect,
         hasMailSource,
         initSync,
+        retryInitSync,
         login,
         register,
         loginWithToken,

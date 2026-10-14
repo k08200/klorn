@@ -66,6 +66,7 @@ import { phoneRoutes } from "./routes/phone.js";
 import { playbookRoutes } from "./routes/playbooks.js";
 import { playgroundRoutes } from "./routes/playground.js";
 import { pmfRoutes } from "./routes/pmf.js";
+import { providersAvailableRoutes } from "./routes/providers-available.js";
 import { receiptRoutes } from "./routes/receipt.js";
 import { screenerRoutes } from "./routes/screener.js";
 import { skillRoutes } from "./routes/skills.js";
@@ -320,6 +321,9 @@ await app.register(deviceCalendarRoutes({ gate: deviceCalendarEnabled }), {
 });
 // The drive's read-only metadata routes (step D2) — dark until DRIVE_ENABLED.
 await app.register(driveRoutes({ gate: driveEnabled }), { prefix: "/api/drive" });
+// Which account types this deployment can connect, for the first run's provider
+// grid (productization plan P8) — dark until ONBOARDING_V2 (the default 404 while off).
+await app.register(providersAvailableRoutes, { prefix: "/api/providers" });
 // Social LOGIN providers beyond Google — dark until APPLE_LOGIN_ENABLED /
 // NAVER_LOGIN_ENABLED flip; every route answers the cloaked 404 while off
 // (same CASA surface freeze as the dark IMAP providers above).

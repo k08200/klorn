@@ -27,7 +27,18 @@ interface ConnectResponse {
 
 const APP_PASSWORD_HELP_URL = "https://support.apple.com/102654";
 
-export function ICloudImapSection() {
+interface ICloudImapSectionProps {
+  /**
+   * Rendered inside another surface that already names it (the first run's
+   * sheet): no panel chrome and no heading of its own. The form, the
+   * requests and every state are the same.
+   */
+  embedded?: boolean;
+  /** A mailbox was connected or disconnected; the caller refreshes its list. */
+  onChanged?: () => void;
+}
+
+export function ICloudImapSection({ embedded = false, onChanged }: ICloudImapSectionProps = {}) {
   const { user } = useAuth();
   const { confirm } = useConfirm();
   // Multi-account (a second inbox) is a paid feature. `entitled` is server-
@@ -89,6 +100,7 @@ export function ICloudImapSection() {
         setEmailInput("");
         setPasswordInput("");
         await loadStatus();
+        onChanged?.();
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -113,6 +125,7 @@ export function ICloudImapSection() {
     try {
       await apiFetch("/api/icloud-imap/disconnect", { method: "POST" });
       await loadStatus();
+      onChanged?.();
     } catch (err) {
       captureClientError(err, { scope: "icloud-imap.disconnect" });
       setError("Disconnect failed.");
@@ -128,8 +141,14 @@ export function ICloudImapSection() {
   if (loading && !status) return null;
 
   return (
-    <section className="panel-elevated mb-8 rounded-2xl border border-line/70 bg-surface-panel p-5">
-      <header className="mb-3 flex items-start justify-between gap-3">
+    <section
+      className={
+        embedded
+          ? undefined
+          : "panel-elevated mb-8 rounded-2xl border border-line/70 bg-surface-panel p-5"
+      }
+    >
+      <header className={embedded ? "hidden" : "mb-3 flex items-start justify-between gap-3"}>
         <div>
           <h2 className="text-base font-semibold text-ink">iCloud Mail</h2>
           <p className="mt-1 text-xs text-ink-mid">
