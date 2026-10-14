@@ -208,7 +208,10 @@ async function applyBulkArchiveAction(
     try {
       await resolveAttentionForEmails(userId, archivedIds);
     } catch (err) {
-      console.warn("[EMAIL-BULK] attention resolve failed:", err instanceof Error ? err.message : err);
+      console.warn(
+        "[EMAIL-BULK] attention resolve failed:",
+        err instanceof Error ? err.message : err,
+      );
       captureError(err, { tags: { scope: "email-bulk.archive.resolve" }, extra: { userId } });
     }
   }

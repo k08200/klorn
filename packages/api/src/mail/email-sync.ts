@@ -343,7 +343,6 @@ export async function syncSpamLane(userId: string): Promise<number> {
 
 // ─── Gmail ↔ DB Reconciliation ────────────────────────────────────────────
 
-
 /**
  * On-demand fan-out: sync every LINKED secondary inbox for a user, gated exactly
  * like the scheduler's fan-out (MULTI_INBOX_SYNC_ENABLED + the multi_account
