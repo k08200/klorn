@@ -4,10 +4,10 @@
  * pim/calendar-providers/types.ts).
  *
  * v1 of an external connector reads only (decision V4): it lists a folder,
- * searches by name and reads one file's metadata. There is no method that changes
- * anything in the source, and none that fetches a file's bytes: reading content
- * for a summary arrives with D4, which adds it together with a streaming size
- * check. drive-provider-dispatch.test.ts fails if a method is added here.
+ * searches by name, reads one file's metadata and, for a summary (D4), reads one
+ * file's bytes with the size cap checked while they stream. There is no method
+ * that changes anything in the source. drive-provider-dispatch.test.ts fails if
+ * a method is added here.
  *
  * Shape: `connect` resolves a source's credentials ONCE and answers a session
  * bound to them.
@@ -32,6 +32,7 @@
  */
 
 import type { DriveProviderName } from "../drive-providers.js";
+import type { CappedBytes } from "../summary-bytes.js";
 
 /** Which source an operation targets: its user and the `sourceKey` of its rows. */
 export interface DriveSourceRef {
@@ -87,6 +88,16 @@ export interface DriveProviderSession {
   search(query: DriveSearchQuery): Promise<ProviderDrivePage>;
   /** Null when the source has no such file. */
   getMetadata(externalId: string): Promise<ProviderDriveFile | null>;
+  /**
+   * One file's bytes for its summary (D4), read with `readCappedBytes`
+   * (summary-bytes.ts): past `maxBytes` the read stops and answers `too-large`,
+   * whatever size the provider declared. Null when the source has no such file.
+   * Only from the provider's own API hosts (the allowlist rule above).
+   */
+  fetchForSummary(
+    externalId: string,
+    options: { readonly maxBytes: number },
+  ): Promise<CappedBytes | null>;
 }
 
 export interface DriveProviderActions {
