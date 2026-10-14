@@ -286,9 +286,7 @@ describe("the summary tables (D4): one writer, every query names its user", () =
 
   it("every other query names the user in its where", () => {
     const callers = pathsWith(SUMMARY_CALL);
-    expect(callers).toEqual(
-      [EXPORT_MODULE, "drive/summary-store.ts", "purge-user-data.ts"].sort(),
-    );
+    expect(callers).toEqual([EXPORT_MODULE, "drive/summary-store.ts", "purge-user-data.ts"].sort());
     const store = fileAt(SUMMARY_STORE_MODULE)?.text ?? "";
     const functions = store.split(/\nexport async function /).slice(1);
     let scoped = 0;
@@ -304,9 +302,13 @@ describe("the summary tables (D4): one writer, every query names its user", () =
     }
     expect(scoped).toBeGreaterThanOrEqual(10);
     for (const name of SYSTEM_QUERIES) {
-      expect(store).toMatch(new RegExp(`/\\*\\* system: [^*]*\\*/\\nexport async function ${name}\\(`));
+      expect(store).toMatch(
+        new RegExp(`/\\*\\* system: [^*]*\\*/\\nexport async function ${name}\\(`),
+      );
     }
-    expect(fileAt(EXPORT_MODULE)?.text).toMatch(/driveFileSummary\.findMany\(\{\s*where: \{ userId \}/);
+    expect(fileAt(EXPORT_MODULE)?.text).toMatch(
+      /driveFileSummary\.findMany\(\{\s*where: \{ userId \}/,
+    );
   });
 
   it("the summary search escapes its text before Prisma's contains, as the name search does", () => {
@@ -317,7 +319,9 @@ describe("the summary tables (D4): one writer, every query names its user", () =
 
   it("no response carries the extracted text or a storage key", () => {
     for (const path of ["routes/drive.ts", SUMMARY_STORE_MODULE, EXPORT_MODULE]) {
-      expect(fileAt(path)?.text ?? "", path).not.toMatch(/storageKey|contentText|extractSummaryText/);
+      expect(fileAt(path)?.text ?? "", path).not.toMatch(
+        /storageKey|contentText|extractSummaryText/,
+      );
     }
   });
 });
@@ -370,6 +374,8 @@ describe("drive text reaches an LLM only wrapped", () => {
     "drive/summary-run.ts",
     "drive/summary-source.ts",
     "drive/summary-store.ts",
+    // Loads summary-run.ts on demand; imports nothing from the LLM itself.
+    "drive/summary-triggers.ts",
     "purge-user-data.ts",
     "routes/drive.ts",
     "routes/klorn-drive.ts",

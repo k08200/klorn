@@ -96,10 +96,12 @@ async function readSourceBytes(ctx: RunContext, source: SummarySource): Promise<
       source.storageKey,
       DRIVE_SUMMARY_MAX_SOURCE_BYTES,
     );
-    if (!read.ok && read.reason === "storage-unavailable") {
-      return { ok: false, reason: "source-unavailable" };
-    }
-    return read;
+    if (read.ok) return read;
+    // Object storage switched off: the file is hidden too, so it waits like one.
+    return {
+      ok: false,
+      reason: read.reason === "storage-unavailable" ? "source-unavailable" : read.reason,
+    };
   }
   const actions = driveActionsForProvider(
     source.provider,

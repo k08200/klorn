@@ -749,6 +749,19 @@ try {
       });
   }
 
+  // Drive file summaries (step D4; every 5 minutes). While DRIVE_SUMMARIES_ENABLED
+  // or DRIVE_ENABLED is off a sweep reads nothing and runs nothing.
+  if (!BG_DISABLED) {
+    import("./drive/summary-job.js")
+      .then(({ startDriveSummaryScheduler }) => {
+        startDriveSummaryScheduler();
+      })
+      .catch((err) => {
+        console.error("[STARTUP] drive-summary job failed to start:", err);
+        captureError(err, { tags: { context: "startup:drive-summary" } });
+      });
+  }
+
   // Self-ping to prevent Render free tier from sleeping after 15 min inactivity
   const RENDER_URL = process.env.RENDER_EXTERNAL_URL;
   if (RENDER_URL) {

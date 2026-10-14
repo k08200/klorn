@@ -13,7 +13,8 @@
  *     number. `readOnly` is derived from the provider (decision V4), not read
  *     from the row.
  *
- * The search matches NAMES only, with ILIKE inside one user's rows: Prisma's
+ * The search matches NAMES (and, from D4 while summaries are on, the files whose
+ * summary matched: `alsoIds`), with ILIKE inside one user's rows: Prisma's
  * `contains`, so the text is a bind parameter, never SQL. It is not trigram:
  * a user's index is small, pg_trgm would need an extension in the migration, and
  * whether its index helps a Korean name depends on the database's locale, which
@@ -95,6 +96,12 @@ export interface DriveListOptions {
 
 export interface DriveSearchOptions extends DriveListOptions {
   readonly text: string;
+  /**
+   * Files that match by something other than the name: the ids whose summary
+   * contains the text (D4, summary-store.ts), already scoped to the user and
+   * bounded. Each still passes the scope, the user and the other filters here.
+   */
+  readonly alsoIds?: readonly string[];
 }
 
 export interface DrivePage {
@@ -232,8 +239,11 @@ export async function searchFiles(
   if (text === null) return EMPTY_PAGE;
   const limit = pageLimit(options.limit);
   const name = { contains: escapeLikePattern(text), mode: "insensitive" } as const;
+  const alsoIds = options.alsoIds ?? [];
+  const match: Prisma.DriveFileWhereInput =
+    alsoIds.length > 0 ? { OR: [{ name }, { id: { in: [...alsoIds] } }] } : { name };
   const rows = await prisma.driveFile.findMany({
-    where: { AND: [driveSourceScope(providerEnabled), ...filtersOf(options), { name }] },
+    where: { AND: [driveSourceScope(providerEnabled), ...filtersOf(options), match] },
     orderBy: [{ modifiedAt: "desc" }, { id: "desc" }],
     take: limit + 1,
     select: DRIVE_WIRE_SELECT,

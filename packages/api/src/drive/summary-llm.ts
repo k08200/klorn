@@ -14,6 +14,7 @@
  * throws: a cap, a rate limit or an outage comes back as a code.
  */
 
+import type { ChatCompletion } from "openai/resources/chat/completions";
 import { usdToFractionalCents } from "../billing/cents.js";
 import type { CallPriority } from "../billing/quota-limiter.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
@@ -105,7 +106,7 @@ function failureOf(err: unknown): Extract<DriveSummaryResult, { ok: false }> {
 
 /** Summarise one file's text. Never throws. */
 export async function summariseDriveText(input: DriveSummaryInput): Promise<DriveSummaryResult> {
-  let response: Awaited<ReturnType<typeof createCompletion>>;
+  let response: ChatCompletion;
   try {
     const credentials = await getUserLlmCredentials(input.userId);
     response = await createCompletion(

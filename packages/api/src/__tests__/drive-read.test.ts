@@ -512,7 +512,12 @@ describe("exportDriveFiles (the user's own data, on request)", () => {
       error: null,
       summarizedAt: new Date(T0).toISOString(),
     });
-    expect(byName.klorn).toEqual({ status: "SKIPPED", text: null, error: "no-text", summarizedAt: null });
+    expect(byName.klorn).toEqual({
+      status: "SKIPPED",
+      text: null,
+      error: "no-text",
+      summarizedAt: null,
+    });
     expect(byName.trashed).toBeNull();
     expect(JSON.stringify(rows)).not.toContain("Theirs.");
   });
