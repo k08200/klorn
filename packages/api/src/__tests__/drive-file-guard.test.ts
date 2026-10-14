@@ -272,9 +272,14 @@ describe("drive text reaches an LLM only wrapped", () => {
     .sort();
 
   // A module that puts a file's name (or any other drive text) in front of a
-  // model: its path and the pattern that shows the wrap. None exists in D2. D4
-  // (summaries) adds the first; the entry is its obligation.
-  const LLM_FACING: Array<[string, RegExp]> = [];
+  // model: its path and the pattern that shows the wrap. D4's summariser is the
+  // only one; drive-summary-llm.test.ts proves the wrap on what is sent.
+  const LLM_FACING: Array<[string, RegExp]> = [
+    [
+      "drive/summary-llm.ts",
+      /wrapUntrusted\(input\.name, "drive:name"\)[\s\S]*wrapUntrusted\(input\.mimeType \?\? "unknown", "drive:type"\)[\s\S]*wrapUntrusted\(input\.text, "drive:text"\)/,
+    ],
+  ];
   // Modules that hold drive rows and never touch an LLM, directly or by a
   // dynamic import.
   const NOT_LLM_FACING = [
@@ -294,6 +299,9 @@ describe("drive text reaches an LLM only wrapped", () => {
     "drive/providers/dispatch.ts",
     "drive/providers/types.ts",
     "drive/providers/unsupported.ts",
+    "drive/summary-bytes.ts",
+    "drive/summary-extract.ts",
+    "drive/summary-policy.ts",
     "purge-user-data.ts",
     "routes/drive.ts",
     "routes/klorn-drive.ts",
@@ -348,13 +356,20 @@ describe("drive text reaches an LLM only wrapped", () => {
     expect(text.match(/\bdriveFiles\b/g)).toHaveLength(2);
   });
 
-  it("an LLM-facing module wraps the drive text it sends (none in D2)", () => {
+  it("an LLM-facing module wraps the drive text it sends", () => {
     for (const [path, pattern] of LLM_FACING) {
       const text = fileAt(path)?.text ?? "";
       expect(text).toMatch(pattern);
       expect(text).toContain("wrapUntrusted(");
     }
-    expect(LLM_FACING).toEqual([]);
+    expect(LLM_FACING.map(([path]) => path)).toEqual(["drive/summary-llm.ts"]);
+  });
+
+  it("only the summariser imports the LLM among the drive modules", () => {
+    const importers = files
+      .filter((f) => f.path.startsWith("drive/") && llmSpecifiers(f.text).length > 0)
+      .map((f) => f.path);
+    expect(importers).toEqual(["drive/summary-llm.ts"]);
   });
 
   it("the detector sees a static import, a dynamic import and a drive import (so the lists cannot go stale silently)", () => {
