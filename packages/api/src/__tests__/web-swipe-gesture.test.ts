@@ -14,9 +14,11 @@ import {
   swipeAction,
 } from "../../../web/src/app/email/_v2/row-actions";
 import {
+  CLICK_SWALLOW_MS,
   classifyAxis,
   FLING_MIN_PX,
   isArmed,
+  isClickSwallowed,
   moveTrack,
   releaseOutcome,
   rubberBand,
@@ -280,5 +282,23 @@ describe("rowActionPlan (no swipe-only actions)", () => {
     const plan = rowActionPlan({ isDemo: false, needsReconnect: false, tier: null });
     expect(plan.lanes.blockedReason).toBe(REASON_NOT_CLASSIFIED);
     expect(plan.archive.blockedReason).toBeNull();
+  });
+});
+
+describe("click swallow window", () => {
+  it("swallows the click that follows a swipe release", () => {
+    const releasedAt = 1000;
+    const until = releasedAt + CLICK_SWALLOW_MS;
+    expect(isClickSwallowed(releasedAt + 16, until)).toBe(true);
+  });
+
+  it("never swallows a later activation (keyboard, screen reader, next tap)", () => {
+    const until = 1000 + CLICK_SWALLOW_MS;
+    expect(isClickSwallowed(until + 1, until)).toBe(false);
+    expect(isClickSwallowed(5000, until)).toBe(false);
+  });
+
+  it("swallows nothing when no swipe has happened", () => {
+    expect(isClickSwallowed(10, 0)).toBe(false);
   });
 });

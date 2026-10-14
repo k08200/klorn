@@ -175,6 +175,18 @@ export function releaseOutcome(track: SwipeTrack, config: SwipeConfig): SwipeOut
   return state.blocked ? { kind: "blocked", direction } : { kind: "commit", direction };
 }
 
+/**
+ * How long after a swipe's release its click is swallowed. The synthetic click
+ * follows the touchend within a frame or two; a later activation (keyboard,
+ * screen reader, the next tap) must never be eaten by a stale flag.
+ */
+export const CLICK_SWALLOW_MS = 300;
+
+/** Whether a click at `now` still belongs to the swipe released before `until`. */
+export function isClickSwallowed(now: number, until: number): boolean {
+  return until > 0 && now <= until;
+}
+
 /** The click that follows a touch must not open the row once it became a swipe. */
 export function suppressesClick(track: SwipeTrack | null): boolean {
   return track !== null && track.axis === "horizontal";

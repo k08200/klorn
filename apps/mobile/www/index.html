@@ -20,6 +20,12 @@
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
     <meta name="color-scheme" content="light dark" />
+    <!-- Nothing leaves this page but the Retry navigation (not governed by CSP):
+         its own image, inline style and inline script only. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"
+    />
     <title>Klorn</title>
     <style>
       :root {

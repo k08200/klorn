@@ -57,6 +57,12 @@ const PRELOAD_MARGIN = "400px";
 /** The cursor row carries an accent bar as well as the tint: tint alone is not a 3:1 indicator. */
 const CURSOR_CLASS = "shadow-[inset_2px_0_0_var(--accent-solid)]";
 const PICKED_CLASS = "bg-state-info-bg";
+/**
+ * The last rows open their menus upward: the lane menu is ~260px, more than
+ * the space left under the final rows, and on a phone the fixed tab bar would
+ * cover what runs past the end of the list.
+ */
+const MENU_UP_ROWS = 3;
 
 interface TimeContext {
   now: Date;
@@ -144,10 +150,12 @@ interface RowActionsProps {
   onSetRead: (isRead: boolean) => void;
   onRemind: (key: ReminderKey) => void;
   onMoveLane: (tier: LiveTier) => void;
+  /** Open the menus upward (rows near the end, where below runs off the list). */
+  menuSide: "top" | "bottom";
 }
 
 /** The row's trailing actions: every swipe action is here too (no swipe-only actions). */
-function RowActions({ email, plan, busy, archiveBlocked, ...on }: RowActionsProps) {
+function RowActions({ email, plan, busy, archiveBlocked, menuSide, ...on }: RowActionsProps) {
   const { t } = useT();
   const readKey = email.isRead ? "mailV2.row.markUnread" : "mailV2.row.markRead";
   return (
@@ -156,6 +164,7 @@ function RowActions({ email, plan, busy, archiveBlocked, ...on }: RowActionsProp
         label={t("mailV2.reader.moveTo")}
         variant="icon"
         align="end"
+        side={menuSide}
         disabled={busy}
         sections={[laneMenuSection(email, plan, t, on.onMoveLane)]}
       >
@@ -165,6 +174,7 @@ function RowActions({ email, plan, busy, archiveBlocked, ...on }: RowActionsProp
         label={t("mailV2.list.remind")}
         variant="icon"
         align="end"
+        side={menuSide}
         disabled={busy}
         sections={[
           {
@@ -211,6 +221,8 @@ interface MailRowItemProps extends Omit<MailRowsProps, "emails" | "cursorId" | "
   selecting: boolean;
   /** A left swipe: open the lane sheet for this mail. */
   onLanes: (email: EmailListItem) => void;
+  /** One of the last rows: its menus open upward so they stay on screen. */
+  nearEnd: boolean;
 }
 
 function MailRowItem(props: MailRowItemProps) {
@@ -282,6 +294,7 @@ function MailRowItem(props: MailRowItemProps) {
                 onSetRead={(isRead) => props.onSetRead(email, isRead)}
                 onRemind={(key) => props.onRemind(email, key)}
                 onMoveLane={(tier) => props.onMoveLane(email, tier)}
+                menuSide={props.nearEnd ? "top" : "bottom"}
               />
             )
           }
@@ -299,7 +312,7 @@ export function MailRows(props: MailRowsProps) {
   return (
     <>
       <ul className="flex flex-col">
-        {emails.map((email) => (
+        {emails.map((email, index) => (
           <MailRowItem
             key={email.id}
             {...rest}
@@ -308,6 +321,7 @@ export function MailRows(props: MailRowsProps) {
             picked={pickedIds.has(email.id)}
             selecting={selecting}
             onLanes={setLaneTarget}
+            nearEnd={index >= emails.length - MENU_UP_ROWS}
           />
         ))}
       </ul>

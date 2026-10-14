@@ -24,10 +24,12 @@
  * - No haptics.
  */
 
-import { type ReactNode, useCallback, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
+  CLICK_SWALLOW_MS,
   directionOf,
   isArmed,
+  isClickSwallowed,
   moveTrack,
   releaseOutcome,
   type SwipeConfig,
@@ -95,8 +97,18 @@ export function SwipeRow(props: SwipeRowProps) {
   const pointer = useRef<number | null>(null);
   const config = useRef<SwipeConfig | null>(null);
   const reduced = useRef(false);
-  const swallowClick = useRef(false);
+  // The click a swipe's release produces is swallowed until this time
+  // (performance.now()), so a later keyboard or screen-reader activation never is.
+  const swallowUntil = useRef(0);
+  // While the row slides out after an exiting commit: no new gesture, no click.
+  const exiting = useRef<{ timer: number; commit: () => void } | null>(null);
+  const onCommitRef = useRef(props.onCommit);
+  onCommitRef.current = props.onCommit;
   const [reveal, setReveal] = useState<Reveal | null>(null);
+  // A sideways drag is in progress (or the row is sliding out). Only then does
+  // the row clip and stack above the reveal; at rest it must not, or it would
+  // clip the row's menus and focus ring and paint the next row over an open menu.
+  const [dragging, setDragging] = useState(false);
 
   const paint = useCallback((offset: number, animate: boolean) => {
     const row = rowRef.current;
@@ -112,6 +124,9 @@ export function SwipeRow(props: SwipeRowProps) {
       pointer.current = null;
       paint(0, animate);
       setReveal(null);
+      if (!animate || reduced.current) setDragging(false);
+      // After the spring back, unless a new drag has started meanwhile.
+      else window.setTimeout(() => !track.current && setDragging(false), SETTLE_MS);
     },
     [paint],
   );
@@ -132,20 +147,45 @@ export function SwipeRow(props: SwipeRowProps) {
     );
   };
 
-  /** Slide the row out, then hand over: the caller removes it. */
+  /**
+   * Slide the row out, then hand over: the caller removes it. Exactly once:
+   * a second touch during the slide is ignored and its click swallowed. If the
+   * row unmounts mid-slide (a refetch replaced the list), the commit still
+   * runs at unmount — the user asked for it and the row already looked gone.
+   */
   const exitThenCommit = (direction: SwipeDirection, width: number) => {
     track.current = null;
     pointer.current = null;
     paint(direction === "right" ? width : -width, true);
-    window.setTimeout(() => {
-      props.onCommit(direction);
+    const commit = () => {
+      exiting.current = null;
+      onCommitRef.current(direction);
+    };
+    const timer = window.setTimeout(() => {
+      commit();
       reset(false);
     }, SETTLE_MS);
+    exiting.current = { timer, commit };
   };
 
+  // Unmount mid-slide: cancel the timer and run the commit now (see above).
+  useEffect(
+    () => () => {
+      const pending = exiting.current;
+      if (!pending) return;
+      window.clearTimeout(pending.timer);
+      pending.commit();
+    },
+    [],
+  );
+
+  // Disabled mid-drag (an action started elsewhere): drop the gesture, no commit.
+  useEffect(() => {
+    if (disabled && track.current) reset(true);
+  }, [disabled, reset]);
+
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    // Any new press starts clean, so a swallowed click never leaks to the next one.
-    swallowClick.current = false;
+    if (exiting.current) return;
     if (disabled || event.pointerType !== "touch" || !event.isPrimary) return;
     const width = rootRef.current?.getBoundingClientRect().width ?? 0;
     if (width <= 0) return;
@@ -170,6 +210,7 @@ export function SwipeRow(props: SwipeRowProps) {
     if (current.axis !== "horizontal") {
       // Locked sideways: keep the rest of this touch even if it leaves the row.
       event.currentTarget.setPointerCapture?.(event.pointerId);
+      setDragging(true);
     }
     const dx = event.clientX - next.origin.x;
     if (!reduced.current) paint(visualOffset(dx, cfg), false);
@@ -181,7 +222,7 @@ export function SwipeRow(props: SwipeRowProps) {
     const cfg = config.current;
     if (!current || !cfg || event.pointerId !== pointer.current) return;
     const finished = moveTrack(current, { x: event.clientX, y: event.clientY, t: event.timeStamp });
-    swallowClick.current = suppressesClick(finished);
+    if (suppressesClick(finished)) swallowUntil.current = performance.now() + CLICK_SWALLOW_MS;
     const outcome = releaseOutcome(finished, cfg);
     if (outcome.kind === "none") {
       reset(true);
@@ -207,8 +248,8 @@ export function SwipeRow(props: SwipeRowProps) {
   };
 
   const onClickCapture = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (!swallowClick.current) return;
-    swallowClick.current = false;
+    if (!exiting.current && !isClickSwallowed(performance.now(), swallowUntil.current)) return;
+    swallowUntil.current = 0;
     event.preventDefault();
     event.stopPropagation();
   };
@@ -224,9 +265,9 @@ export function SwipeRow(props: SwipeRowProps) {
   return (
     <div
       ref={rootRef}
-      className={`relative overflow-hidden rounded-card ${className}`}
-      // pan-y: vertical scroll stays the browser's; sideways is ours.
-      style={{ touchAction: "pan-y" }}
+      className={`relative rounded-card ${dragging ? "overflow-hidden" : ""} ${className}`}
+      // Vertical scroll and pinch-zoom stay the browser's (WCAG 1.4.4); sideways is ours.
+      style={{ touchAction: "pan-y pinch-zoom" }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -246,7 +287,7 @@ export function SwipeRow(props: SwipeRowProps) {
           <span className="line-clamp-2 min-w-0">{side.blockedReason || side.label}</span>
         </div>
       )}
-      <div ref={rowRef} className="relative z-10 bg-surface-panel">
+      <div ref={rowRef} className={dragging ? "relative z-10 bg-surface-panel" : ""}>
         {children}
       </div>
     </div>
