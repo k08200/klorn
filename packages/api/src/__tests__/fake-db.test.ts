@@ -45,7 +45,8 @@ describe("schema checking", () => {
     const m = items();
     await expect(m.findMany({ distinct: ["tier"] } as never)).rejects.toThrow(/distinct/);
     await expect(m.findMany({ where: { tier: { search: "x" } } })).rejects.toThrow(/operator/);
-    await expect(m.updateMany({ where: {}, data: { priority: { increment: 1 } } })).rejects.toThrow(
+    // `increment` is implemented (see below); any other update operator is not.
+    await expect(m.updateMany({ where: {}, data: { priority: { multiply: 2 } } })).rejects.toThrow(
       /operator\/object/,
     );
   });
@@ -169,6 +170,37 @@ describe("upsert", () => {
     await expect(items().upsert({ where: { tier: "QUEUE" }, create, update: {} })).rejects.toThrow(
       /unique selector/,
     );
+  });
+});
+
+describe("atomic increment, as Prisma's `{ increment: n }` on a number column", () => {
+  it("adds to the stored value on update and on an upsert's update", async () => {
+    const d = createFakeDb({ driveSummaryUsage: [] });
+    const where = { userId_dayKey: { userId: "u1", dayKey: "2026-10-14" } };
+    const create = { userId: "u1", dayKey: "2026-10-14", count: 1 };
+    const update = { count: { increment: 1 } };
+    await d.model("driveSummaryUsage").upsert({ where, create, update });
+    await d.model("driveSummaryUsage").upsert({ where, create, update });
+    const third = await d.model("driveSummaryUsage").upsert({
+      where,
+      create,
+      update,
+      select: { count: true },
+    });
+    expect(third).toEqual({ count: 3 });
+    await d.model("driveSummaryUsage").updateMany({ where: { userId: "u1" }, data: update });
+    expect(d.tables.driveSummaryUsage[0].count).toBe(4);
+  });
+
+  it("refuses any other operator, and an increment on a non-number column", async () => {
+    const d = createFakeDb({ driveSummaryUsage: [{ userId: "u1", dayKey: "d", count: 0 }] });
+    const where = { userId: "u1" };
+    await expect(
+      d.model("driveSummaryUsage").updateMany({ where, data: { count: { multiply: 2 } } }),
+    ).rejects.toThrow(/operator\/object writes are not supported/);
+    await expect(
+      d.model("driveSummaryUsage").updateMany({ where, data: { dayKey: { increment: 1 } } }),
+    ).rejects.toThrow(/operator\/object writes are not supported/);
   });
 });
 

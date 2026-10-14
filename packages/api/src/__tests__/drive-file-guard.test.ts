@@ -25,6 +25,8 @@ const ROWS_MODULE = "drive/drive-rows.ts";
 const READ_MODULE = "drive/drive-read.ts";
 const KLORN_READ_MODULE = "drive/klorn-drive-read.ts";
 const EXPORT_MODULE = "drive/drive-export.ts";
+const SUMMARY_SOURCE_MODULE = "drive/summary-source.ts";
+const SUMMARY_STORE_MODULE = "drive/summary-store.ts";
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -154,7 +156,12 @@ describe("every DriveFile read goes through the kill switch", () => {
   const EXEMPT_FROM_KILL_SWITCH = [EXPORT_MODULE];
 
   it("finds the known readers (so this guard cannot pass by scanning nothing)", () => {
-    expect(pathsWith(ROW_READ)).toEqual([EXPORT_MODULE, READ_MODULE, KLORN_READ_MODULE]);
+    expect(pathsWith(ROW_READ)).toEqual([
+      EXPORT_MODULE,
+      READ_MODULE,
+      KLORN_READ_MODULE,
+      SUMMARY_SOURCE_MODULE,
+    ]);
   });
 
   const scoped = pathsWith(ROW_READ).filter((path) => !EXEMPT_FROM_KILL_SWITCH.includes(path));
@@ -259,6 +266,62 @@ describe("no raw SQL touches the table: every query is built by Prisma, so every
   });
 });
 
+describe("the summary tables (D4): one writer, every query names its user", () => {
+  const SUMMARY_CALL =
+    /\b(driveFileSummary|driveSummaryUsage)\s*\.\s*(findMany|findFirst|findUnique|count|aggregate|groupBy|create|createMany|upsert|update|updateMany|delete|deleteMany)\s*\(/g;
+  const SUMMARY_WRITE =
+    /\b(driveFileSummary|driveSummaryUsage)\s*\.\s*(create|createMany|upsert|update|updateMany|delete|deleteMany)\s*\(/g;
+  // The user's purge deletes their rows; the store writes everything else.
+  const WRITERS = ["drive/summary-store.ts", "purge-user-data.ts"];
+  // The job's two queries over every user's rows, each marked `system:` in its doc.
+  const SYSTEM_QUERIES = ["dueSummaries", "pruneSummaryUsage"];
+
+  it("only the summary store writes the tables, besides the user purge", () => {
+    expect(pathsWith(SUMMARY_WRITE)).toEqual(WRITERS);
+    const purge = fileAt("purge-user-data.ts")?.text ?? "";
+    for (const window of callWindows(purge, SUMMARY_WRITE)) {
+      expect(window.slice(0, 60)).toMatch(/^\w+\.deleteMany\(scope\)/);
+    }
+  });
+
+  it("every other query names the user in its where", () => {
+    const callers = pathsWith(SUMMARY_CALL);
+    expect(callers).toEqual(
+      [EXPORT_MODULE, "drive/summary-store.ts", "purge-user-data.ts"].sort(),
+    );
+    const store = fileAt(SUMMARY_STORE_MODULE)?.text ?? "";
+    const functions = store.split(/\nexport async function /).slice(1);
+    let scoped = 0;
+    for (const fn of functions) {
+      const name = fn.slice(0, fn.indexOf("("));
+      for (const window of callWindows(fn, SUMMARY_CALL)) {
+        if (SYSTEM_QUERIES.includes(name)) continue;
+        expect(window.slice(0, 220), name).toMatch(
+          /where: \{\s*(driveFileId, userId|id: row\.id, userId|id: ref\.id, userId: ref\.userId|id: row\.id, userId: row\.userId|userId_dayKey: \{ userId, dayKey \}|userId,)/,
+        );
+        scoped += 1;
+      }
+    }
+    expect(scoped).toBeGreaterThanOrEqual(10);
+    for (const name of SYSTEM_QUERIES) {
+      expect(store).toMatch(new RegExp(`/\\*\\* system: [^*]*\\*/\\nexport async function ${name}\\(`));
+    }
+    expect(fileAt(EXPORT_MODULE)?.text).toMatch(/driveFileSummary\.findMany\(\{\s*where: \{ userId \}/);
+  });
+
+  it("the summary search escapes its text before Prisma's contains, as the name search does", () => {
+    const store = fileAt(SUMMARY_STORE_MODULE)?.text ?? "";
+    expect(store).toContain('summary: { contains: escapeLikePattern(text), mode: "insensitive" }');
+    expect(store.match(/\bcontains:/g)).toHaveLength(1);
+  });
+
+  it("no response carries the extracted text or a storage key", () => {
+    for (const path of ["routes/drive.ts", SUMMARY_STORE_MODULE, EXPORT_MODULE]) {
+      expect(fileAt(path)?.text ?? "", path).not.toMatch(/storageKey|contentText|extractSummaryText/);
+    }
+  });
+});
+
 describe("drive text reaches an LLM only wrapped", () => {
   // Every module that can hold a DriveFile row or a provider's file: it queries
   // the table, or imports a drive module.
@@ -301,7 +364,12 @@ describe("drive text reaches an LLM only wrapped", () => {
     "drive/providers/unsupported.ts",
     "drive/summary-bytes.ts",
     "drive/summary-extract.ts",
+    "drive/summary-job.ts",
     "drive/summary-policy.ts",
+    // Hands the name and text to summary-llm.ts, which wraps them.
+    "drive/summary-run.ts",
+    "drive/summary-source.ts",
+    "drive/summary-store.ts",
     "purge-user-data.ts",
     "routes/drive.ts",
     "routes/klorn-drive.ts",

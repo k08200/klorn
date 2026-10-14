@@ -142,9 +142,12 @@ describe("drive file summary migration", () => {
     expect(usage).toMatch(
       /\n\s+user\s+User\s+@relation\(fields: \[userId\], references: \[id\], onDelete: Cascade\)\n/,
     );
-    expect(block("enum DriveSummaryStatus {").split("\n").slice(1).map((l) => l.trim())).toEqual(
-      ["PENDING", "DONE", "FAILED", "SKIPPED"],
-    );
+    expect(
+      block("enum DriveSummaryStatus {")
+        .split("\n")
+        .slice(1)
+        .map((l) => l.trim()),
+    ).toEqual(["PENDING", "DONE", "FAILED", "SKIPPED"]);
   });
 
   it("stores no extracted file text: no column for it", () => {

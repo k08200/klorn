@@ -238,6 +238,21 @@ function assertValue(info: ModelInfo, f: Field, value: unknown): void {
   }
 }
 
+/**
+ * Prisma's atomic `{ increment: n }` on an Int column, resolved against the row
+ * it updates. Anything else that is an object is left for `checkedData` to refuse.
+ */
+function resolveIncrements(info: ModelInfo, target: Row, data: Row): Row {
+  const out: Row = { ...data };
+  for (const [k, v] of Object.entries(data)) {
+    if (!isPlain(v) || Object.keys(v).join() !== "increment") continue;
+    const f = column(info, k, "update");
+    if (f.type !== "Int" || typeof v.increment !== "number") continue;
+    out[k] = ((target[k] as number | null) ?? 0) + v.increment;
+  }
+  return out;
+}
+
 /** Validate `data` keys and values; undefined is dropped (Prisma ignores it). */
 function checkedData(info: ModelInfo, data: Row, where: string): Row {
   const out: Row = {};
@@ -409,7 +424,7 @@ export function createFakeDb(seed: Record<string, Row[]>, hooks: FakeDbHooks = {
       return project(info, row, select);
     };
     const apply = (target: Row, data: Row): void => {
-      const clean = checkedData(info, data, "update");
+      const clean = checkedData(info, resolveIncrements(info, target, data), "update");
       Object.assign(target, clean);
       touchUpdatedAt(info, target, clean);
     };

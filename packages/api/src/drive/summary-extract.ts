@@ -13,7 +13,10 @@
  * a hint, never a guarantee. The extractor checks the bytes it is given.
  */
 
-import { extractAttachmentContent, isReadableEmailAttachment } from "../mail/email-attachment-text.js";
+import {
+  extractAttachmentContent,
+  isReadableEmailAttachment,
+} from "../mail/email-attachment-text.js";
 import { DRIVE_SUMMARY_MAX_INPUT_CHARS, DRIVE_SUMMARY_MAX_SOURCE_BYTES } from "./summary-policy.js";
 
 const OCTET_STREAM = "application/octet-stream";

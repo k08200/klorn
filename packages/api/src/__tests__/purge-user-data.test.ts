@@ -49,6 +49,8 @@ describe("purgeUserData", () => {
       "emailAttachment",
       "calendarEvent",
       "driveFile",
+      "driveFileSummary",
+      "driveSummaryUsage",
       "devicePushToken",
       "emailProcessingLog",
       "learnedRule",

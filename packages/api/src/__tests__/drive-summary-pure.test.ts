@@ -7,7 +7,6 @@
 
 import { Readable } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MAX_EXTRACTABLE_BYTES } from "../mail/email-attachment-text.js";
 import { readCappedBytes } from "../drive/summary-bytes.js";
 import { extractSummaryText, isSummarisableFile } from "../drive/summary-extract.js";
 import {
@@ -21,6 +20,7 @@ import {
   utcDayKey,
   utcDayKeyBefore,
 } from "../drive/summary-policy.js";
+import { MAX_EXTRACTABLE_BYTES } from "../mail/email-attachment-text.js";
 
 /** A source of `count` chunks of `size` bytes that records how many were pulled. */
 function countingSource(count: number, size: number) {
@@ -108,7 +108,11 @@ describe("the text comes from the attachment pipeline's extractor", () => {
   });
 
   it("a PDF with no text layer is skipped, not summarised from the extractor's placeholder", () => {
-    const result = extractSummaryText(Buffer.from("%PDF-1.4\n%%EOF"), "scan.pdf", "application/pdf");
+    const result = extractSummaryText(
+      Buffer.from("%PDF-1.4\n%%EOF"),
+      "scan.pdf",
+      "application/pdf",
+    );
     expect(result).toEqual({ ok: false, code: "no-text" });
   });
 

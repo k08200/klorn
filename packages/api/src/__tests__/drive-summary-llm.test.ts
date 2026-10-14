@@ -30,15 +30,19 @@ vi.mock("../llm/openai.js", () => {
     DailyCostCapExceededError,
     AllProvidersExhaustedError,
     UserRateLimitedError,
-    createCompletion: vi.fn(async (params: Record<string, unknown>, options: Record<string, unknown>) => {
-      calls.completion.push({ params, options });
-      if (calls.next) return calls.next();
-      return {
-        model: "google/gemini-2.5-flash",
-        choices: [{ message: { content: '{"summary":"A quarterly budget for the design team."}' } }],
-        usage: { prompt_tokens: 1_000, completion_tokens: 200 },
-      };
-    }),
+    createCompletion: vi.fn(
+      async (params: Record<string, unknown>, options: Record<string, unknown>) => {
+        calls.completion.push({ params, options });
+        if (calls.next) return calls.next();
+        return {
+          model: "google/gemini-2.5-flash",
+          choices: [
+            { message: { content: '{"summary":"A quarterly budget for the design team."}' } },
+          ],
+          usage: { prompt_tokens: 1_000, completion_tokens: 200 },
+        };
+      },
+    ),
   };
 });
 vi.mock("../llm/llm-credentials.js", () => ({
@@ -78,7 +82,9 @@ describe("drive text reaches the model only wrapped", () => {
   it("wraps the file name and the file text, each as untrusted content", async () => {
     await summariseDriveText(INPUT);
     const user = userMessage();
-    expect(user).toContain('<untrusted_content source="drive:name">budget.xlsx</untrusted_content>');
+    expect(user).toContain(
+      '<untrusted_content source="drive:name">budget.xlsx</untrusted_content>',
+    );
     expect(user).toContain(
       '<untrusted_content source="drive:text">Q4 budget: design 12,000</untrusted_content>',
     );
@@ -147,7 +153,11 @@ describe("the call goes through the shared LLM layer", () => {
 
 describe("a failure comes back as a code, never as a throw", () => {
   it.each([
-    ["the per-user or global cost cap", () => new openai.DailyCostCapExceededError("cap"), "cost-cap"],
+    [
+      "the per-user or global cost cap",
+      () => new openai.DailyCostCapExceededError("cap"),
+      "cost-cap",
+    ],
     [
       "the daily call limit",
       () => new openai.UserRateLimitedError("daily", 1_000, "background"),
@@ -158,7 +168,11 @@ describe("a failure comes back as a code, never as a throw", () => {
       () => new openai.UserRateLimitedError("rpm", 1_000, "background"),
       "rate-limited",
     ],
-    ["every provider down (#1319)", () => new openai.AllProvidersExhaustedError("402"), "llm-unavailable"],
+    [
+      "every provider down (#1319)",
+      () => new openai.AllProvidersExhaustedError("402"),
+      "llm-unavailable",
+    ],
     ["any other error", () => new Error("socket hang up"), "llm-unavailable"],
   ])("%s", async (_label, makeError, code) => {
     calls.next = () => {
