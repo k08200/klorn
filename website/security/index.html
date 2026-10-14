@@ -59,7 +59,7 @@
   </dl>
 
   <h3>The five Google scopes, and why each one</h3>
-  <p>These five are the Google scopes approved in that review, and the only mail and calendar scopes Klorn requests. It does not ask for Gmail's full-access scope or the full Calendar scope.</p>
+  <p>These five are the Google scopes approved in that review, and the only mail and calendar scopes Klorn requests. It does not ask for Gmail's full-access scope, and on Calendar it asks only for <code>calendar.events</code> and <code>calendar.readonly</code> — never the full Calendar scope.</p>
   <dl class="scopes">
     <div><dt><code>gmail.readonly</code></dt><dd>Read your messages so Klorn can sort them, show the reason for each decision, and summarize a thread when you ask.</dd></div>
     <div><dt><code>gmail.modify</code></dt><dd>Change a message's state when you act in Klorn: archive or unarchive, move to Trash or back, star, mark read or unread, and save a reply draft into Gmail.</dd></div>
@@ -67,7 +67,7 @@
     <div><dt><code>calendar.readonly</code></dt><dd>Read free/busy across all your calendars, so meeting emails are checked against your real schedule and conflicts are caught.</dd></div>
     <div><dt><code>calendar.events</code></dt><dd>Create, change or remove an event on your primary calendar when you ask Klorn to — not calendar settings or sharing.</dd></div>
   </dl>
-  <p>Signing in with Google asks only for your name and email. The mail and calendar scopes are requested separately, when you connect an inbox, and a calendar-only link asks for <code>calendar.readonly</code> and no mail scope at all.</p>
+  <p>Signing in with Google asks only for your name and email. The mail and calendar scopes come later, in a second consent screen, when you connect an inbox — and a calendar-only link asks for <code>calendar.readonly</code> with no mail scope at all. (<code>openid</code> and <code>userinfo.email</code>/<code>userinfo.profile</code> also appear in that file — they identify which account signed in, are not sensitive, and are not part of what Google reviewed.)</p>
 
   <h3>Where the data goes</h3>
   <p>OAuth tokens are encrypted with AES-256-GCM before they are stored, every hosted surface is TLS-only, and analytics never include message content — see the table below for the file behind each. Logs expire on the fixed schedule under <a href="#retention">How long anything is kept</a>. If you would rather your mail not pass through our servers at all, <a href="/self-host/">self-host</a> the same code with your own model key or a <a href="/blog/local-llm-email-triage-ollama/">local model</a>. The privacy policy is at <a href="/privacy/">/privacy</a>.</p>
