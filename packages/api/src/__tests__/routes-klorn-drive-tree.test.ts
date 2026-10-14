@@ -262,6 +262,24 @@ describe("rename and move", () => {
     expect(res.json().code).toBe("too-deep");
   });
 
+  it("a move that exactly fits the depth bound is allowed", async () => {
+    const chain = Array.from({ length: DRIVE_MAX_FOLDER_DEPTH - 2 }, (_, i) =>
+      folder({ externalId: `d${i}`, parentExternalId: i === 0 ? null : `d${i - 1}` }),
+    );
+    t = await buildKlornDriveApp({
+      seed: [
+        ...chain,
+        folder({ externalId: "m" }),
+        folder({ externalId: "m1", parentExternalId: "m" }),
+      ],
+    });
+    const m = rows().find((row) => row.externalId === "m");
+    const res = await call("PATCH", `/files/${m?.id}`, t.me, {
+      parentExternalId: `d${DRIVE_MAX_FOLDER_DEPTH - 3}`,
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
   it("refuses another user's file, a missing parent, and an empty body", async () => {
     const file = await storedFile();
     expect((await call("PATCH", `/files/${file.id}`, t.other, { name: "x" })).statusCode).toBe(404);
@@ -386,6 +404,56 @@ describe("delete", () => {
     expect(t.store.keys()).toEqual([]);
   });
 
+  it(`a folder with exactly ${DRIVE_FOLDER_WALK_MAX_ITEMS} items is deleted in one request`, async () => {
+    const many = Array.from({ length: DRIVE_FOLDER_WALK_MAX_ITEMS }, (_, i) =>
+      klornRow({ externalId: `x${i}`, parentExternalId: "big", storageKey: null }),
+    );
+    t = await buildKlornDriveApp({ seed: [folder({ externalId: "big" }), ...many] });
+    const big = rows().find((row) => row.externalId === "big");
+    const res = await call("DELETE", `/files/${big?.id}`, t.me);
+    expect(res.json()).toEqual({ deleted: { files: DRIVE_FOLDER_WALK_MAX_ITEMS, folders: 1 } });
+    expect(rows()).toEqual([]);
+  });
+
+  it("stops at the first batch with a failure: later batches are not sent", async () => {
+    t = await buildKlornDriveApp({ seed: [folder({ externalId: "top", name: "top" })] });
+    for (let i = 0; i < 20; i++) await storedFile({ name: `f${i}.txt`, parentExternalId: "top" });
+    const del = t.store.deleteObject.bind(t.store);
+    let calls = 0;
+    vi.spyOn(t.store, "deleteObject").mockImplementation(async (key) => {
+      calls += 1;
+      if (calls === 1) throw new StorageError("unreachable", "object storage did not answer");
+      return del(key);
+    });
+    const top = rows().find((row) => row.externalId === "top");
+    expect((await call("DELETE", `/files/${top?.id}`, t.me)).statusCode).toBe(503);
+    expect(calls).toBe(8); // one batch of 8, then stop
+    expect(t.store.keys()).toHaveLength(13);
+    expect(rows()).toHaveLength(14); // the folder and the 13 files still holding objects
+  });
+
+  it("a partial delete whose row cleanup also fails still answers the storage error", async () => {
+    t = await buildKlornDriveApp({ seed: [folder({ externalId: "top", name: "top" })] });
+    for (let i = 0; i < 10; i++) await storedFile({ name: `f${i}.txt`, parentExternalId: "top" });
+    const del = t.store.deleteObject.bind(t.store);
+    let calls = 0;
+    vi.spyOn(t.store, "deleteObject").mockImplementation(async (key) => {
+      calls += 1;
+      if (calls === 9) throw new StorageError("unreachable", "object storage did not answer");
+      return del(key);
+    });
+    const original = t.db.model.bind(t.db);
+    vi.spyOn(t.db, "model").mockImplementation((name: string) => {
+      const model = original(name);
+      if (name !== "driveFile") return model;
+      return { ...model, deleteMany: async () => Promise.reject(new Error("database is down")) };
+    });
+    const top = rows().find((row) => row.externalId === "top");
+    const res = await call("DELETE", `/files/${top?.id}`, t.me);
+    expect(res.statusCode).toBe(503);
+    expect(res.json().code).toBe("storage-unavailable");
+  });
+
   it(`a folder with more than ${DRIVE_FOLDER_WALK_MAX_ITEMS} items is refused, and nothing is deleted`, async () => {
     const many = Array.from({ length: DRIVE_FOLDER_WALK_MAX_ITEMS + 1 }, (_, i) =>
       klornRow({ externalId: `x${i}`, parentExternalId: "big", storageKey: null }),
@@ -427,6 +495,20 @@ describe("rate limits", () => {
     }
     expect((await call(method, path, from(250, t.me))).statusCode).toBe(429);
     expect((await call(method, path, from(251, t.other))).statusCode).toBe(404);
+  });
+
+  it("folders, rename and move: 60 a minute per user, from any address", async () => {
+    t = await buildKlornDriveApp({ withRateLimit: true });
+    for (let i = 0; i < 60; i += 1) {
+      const res = await call("POST", "/folders", from(i, t.me), { name: `f${i}` });
+      expect(res.statusCode).toBe(201);
+    }
+    expect((await call("POST", "/folders", from(250, t.me), { name: "late" })).statusCode).toBe(
+      429,
+    );
+    expect(
+      (await call("PATCH", `/files/${ID}`, from(251, t.other), { name: "x" })).statusCode,
+    ).toBe(404);
   });
 
   it("upload: 20 a minute per user, from any address", async () => {

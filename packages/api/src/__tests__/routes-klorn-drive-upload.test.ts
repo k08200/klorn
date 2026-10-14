@@ -7,6 +7,7 @@
  */
 
 import { createHash } from "node:crypto";
+import { Readable } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildKlornDriveApp,
@@ -31,6 +32,7 @@ import {
   storeKlornUpload,
   UPLOAD_HEAD_TIMEOUT_MS,
 } from "../drive/klorn-upload.js";
+import { uploadRequestFailure } from "../routes/klorn-drive.js";
 import { setObjectStoreForTests } from "../storage/runtime.js";
 
 const text = (value: string) => new TextEncoder().encode(value);
@@ -113,6 +115,48 @@ describe("a clean upload", () => {
   });
 });
 
+describe("a body longer than the sniffed head, sent in many chunks", () => {
+  it("is stored byte for byte, with the etag of every byte", async () => {
+    const data = new Uint8Array(10 * 1024 + 7).map((_, i) => (i * 31) % 251);
+    const body = multipart([
+      { name: "size", value: String(data.length) },
+      { name: "file", filename: "long.bin", data },
+    ]);
+    const CHUNK = 997;
+    const chunks: Buffer[] = [];
+    for (let at = 0; at < body.payload.length; at += CHUNK) {
+      chunks.push(body.payload.subarray(at, at + CHUNK));
+    }
+    const res = await t.app.inject({
+      method: "POST",
+      url: `${PREFIX}/files`,
+      headers: { ...t.me, ...body.headers, "content-length": String(body.payload.length) },
+      payload: Readable.from(chunks),
+    });
+    expect(res.statusCode).toBe(201);
+    const stored = await t.store.getObject(t.store.keys()[0] ?? "");
+    const parts: Buffer[] = [];
+    for await (const chunk of stored?.body ?? []) parts.push(Buffer.from(chunk));
+    expect(Buffer.concat(parts).equals(Buffer.from(data))).toBe(true);
+    expect(rows()[0]?.etag).toBe(`sha256:${createHash("sha256").update(data).digest("hex")}`);
+  });
+});
+
+describe("a client that goes away mid-upload", () => {
+  it.each([
+    "ERR_STREAM_PREMATURE_CLOSE",
+    "FST_MP_PREMATURE_CLOSE",
+  ])("%s is the client's doing: a 400, not a 500", (code) => {
+    const mapped = uploadRequestFailure(Object.assign(new Error("closed"), { code }));
+    expect(mapped).toMatchObject({ code: "invalid-upload" });
+  });
+
+  it("an error without a known code is left as it is", () => {
+    const err = new Error("boom");
+    expect(uploadRequestFailure(err)).toBe(err);
+  });
+});
+
 describe("the type comes from the bytes, never from the client", () => {
   it("PNG bytes sent as text/html are an image/png", async () => {
     const res = await upload(t, t.me, { filename: "x.png", data: PNG, contentType: "text/html" });
@@ -159,7 +203,8 @@ describe("size", () => {
       data,
       size: String(KLORN_DRIVE_MAX_FILE_BYTES),
     });
-    expect([400, 413]).toContain(res.statusCode);
+    expect(res.statusCode).toBe(413);
+    expect(res.json().code).toBe("too-large");
     expect(t.store.keys()).toEqual([]);
     expect(rows()).toEqual([]);
   });
@@ -175,7 +220,7 @@ describe("size", () => {
     expect(rows()).toEqual([]);
   });
 
-  it.each(["", "-1", "1e3", "0x10", " 12x"])("size %j is refused", async (size) => {
+  it.each(["", "-1", "1e3", "0x10", " 12x", " 5", "05"])("size %j is refused", async (size) => {
     const res = await upload(t, t.me, { filename: "a.txt", data: text("hello"), size });
     expect(res.statusCode).toBe(400);
     expect(t.store.keys()).toEqual([]);
@@ -249,10 +294,8 @@ describe("object first, then the row", () => {
     expect(rows()).toEqual([]);
   });
 
-  it("when the object cannot be stored, no row is written", async () => {
-    vi.spyOn(t.store, "putObject").mockRejectedValue(
-      Object.assign(new Error("down"), { name: "StorageError" }),
-    );
+  it("an unexpected store failure is a 500, and no row is written", async () => {
+    vi.spyOn(t.store, "putObject").mockRejectedValue(new Error("unexpected"));
     const res = await upload(t, t.me, { filename: "a.txt", data: text("hello") });
     expect(res.statusCode).toBe(500);
     expect(rows()).toEqual([]);
@@ -323,6 +366,29 @@ describe("while the account's files are being deleted", () => {
     });
     const res = await upload(t, t.me, { filename: "a.txt", data: text("hi") });
     expect(res.statusCode).toBe(409);
+    expect(t.store.keys()).toEqual([]);
+    expect(rows()).toEqual([]);
+  });
+
+  it("when the check after the PUT fails, the object is deleted, not orphaned", async () => {
+    const original = t.db.model.bind(t.db);
+    let checks = 0;
+    vi.spyOn(t.db, "model").mockImplementation((name: string) => {
+      const model = original(name);
+      if (name !== "storagePurge") return model;
+      return {
+        ...model,
+        findUnique: async (args: never) => {
+          checks += 1;
+          // Before anything, right before the PUT, then after it: the third fails.
+          if (checks === 3) throw new Error("database is down");
+          return model.findUnique(args);
+        },
+      };
+    });
+    const res = await upload(t, t.me, { filename: "a.txt", data: text("hi") });
+    expect(res.statusCode).toBe(500);
+    expect(checks).toBe(3);
     expect(t.store.keys()).toEqual([]);
     expect(rows()).toEqual([]);
   });

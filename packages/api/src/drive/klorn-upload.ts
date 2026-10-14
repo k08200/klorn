@@ -29,6 +29,7 @@ import { StorageError } from "../storage/errors.js";
 import { MAX_OBJECT_BYTES } from "../storage/limits.js";
 import { isStoragePurgePending } from "../storage/purge-queue.js";
 import { getUserStorage } from "../storage/runtime.js";
+import type { UserStorage } from "../storage/user-storage.js";
 import { toDriveFileWire } from "./drive-read.js";
 import {
   deleteKlornDriveRows,
@@ -77,10 +78,10 @@ export interface StoredKlornUpload {
 
 /** The declared size, or a refusal before a single byte is read. */
 export function parseDeclaredSize(raw: unknown): number {
-  if (typeof raw !== "string" || !DECIMAL_BYTES.test(raw.trim())) {
+  if (typeof raw !== "string" || !DECIMAL_BYTES.test(raw)) {
     throw new KlornDriveError("invalid-upload");
   }
-  const size = Number(raw.trim());
+  const size = Number(raw);
   if (size > KLORN_DRIVE_MAX_FILE_BYTES) throw new KlornDriveError("too-large");
   return size;
 }
@@ -115,7 +116,7 @@ async function collectHead(reader: AsyncIterator<Uint8Array>): Promise<Head> {
   return { chunks, bytes: Buffer.concat(chunks), ended: false };
 }
 
-/** The head within UPLOAD_HEAD_TIMEOUT_MS; past it, the body is released and refused. */
+/** The head within UPLOAD_HEAD_TIMEOUT_MS; past it, the upload is refused (the caller releases the body). */
 async function readHead(reader: AsyncIterator<Uint8Array>): Promise<Head> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<never>((_, reject) => {
@@ -123,15 +124,15 @@ async function readHead(reader: AsyncIterator<Uint8Array>): Promise<Head> {
   });
   try {
     return await Promise.race([collectHead(reader), deadline]);
-  } catch (err) {
-    await reader.return?.();
-    throw err;
   } finally {
     clearTimeout(timer);
   }
 }
 
-/** The head again, then the rest; releases the source if the reader stops early. */
+/**
+ * The head again, then the rest. Releases the source as soon as the consumer
+ * stops early; storeKlornUpload releases it in every other case.
+ */
 async function* replay(head: Head, reader: AsyncIterator<Uint8Array>): AsyncGenerator<Uint8Array> {
   try {
     yield* head.chunks;
@@ -195,39 +196,59 @@ async function checkKlornUpload(
   return { name, size, parentExternalId };
 }
 
+/** Sniff the head, then stream the whole body to storage. Answers the key and the etag. */
+async function putBody(
+  storage: UserStorage,
+  userId: string,
+  checked: CheckedUpload,
+  reader: AsyncIterator<Uint8Array>,
+): Promise<{ key: string; mimeType: string; etag: string }> {
+  const head = await readHead(reader);
+  const truncated = !head.ended || head.bytes.byteLength > SNIFF_BYTES;
+  // The bytes decide the type. The client's Content-Type is never read.
+  const mimeType = sniffContentType(head.bytes, checked.name, { truncated });
+  await assertNotPurging(userId);
+  const hash = createHash("sha256");
+  try {
+    const stored = await storage.put(userId, "drive", hashing(replay(head, reader), hash), {
+      contentType: mimeType,
+      size: checked.size,
+      contentTypePolicy: klornStoredTypePolicy,
+      maxBytes: KLORN_DRIVE_MAX_FILE_BYTES,
+    });
+    return { key: stored.key, mimeType, etag: `sha256:${hash.digest("hex")}` };
+  } catch (err) {
+    throw uploadFailure(err);
+  }
+}
+
 /** Phase one: every check, the sniff, and the object. No row is written. */
 export async function storeKlornUpload(
   input: KlornUploadInput,
   providerEnabled: DriveProviderEnabledMap = DRIVE_PROVIDER_ENABLED,
 ): Promise<StoredKlornUpload> {
   const { userId } = input;
-  const { name, size, parentExternalId } = await checkKlornUpload(input, providerEnabled);
+  const checked = await checkKlornUpload(input, providerEnabled);
   const storage = await getUserStorage();
   if (!storage) throw new KlornDriveError("storage-unavailable");
 
   const reader = input.body[Symbol.asyncIterator]();
-  const head = await readHead(reader);
-  const truncated = !head.ended || head.bytes.byteLength > SNIFF_BYTES;
-  // The bytes decide the type. The client's Content-Type is never read.
-  const mimeType = sniffContentType(head.bytes, name, { truncated });
-
-  await assertNotPurging(userId);
-  const hash = createHash("sha256");
-  let key: string;
+  let body: { key: string; mimeType: string; etag: string };
   try {
-    const stored = await storage.put(userId, "drive", hashing(replay(head, reader), hash), {
-      contentType: mimeType,
-      size,
-      contentTypePolicy: klornStoredTypePolicy,
-      maxBytes: KLORN_DRIVE_MAX_FILE_BYTES,
-    });
-    key = stored.key;
-  } catch (err) {
-    throw uploadFailure(err);
+    body = await putBody(storage, userId, checked, reader);
+  } finally {
+    // Releases the source whatever happened, also when the PUT never started.
+    await reader.return?.();
   }
-  const etag = `sha256:${hash.digest("hex")}`;
-  const upload: StoredKlornUpload = { userId, key, name, size, mimeType, etag, parentExternalId };
-  if (await isStoragePurgePending(userId)) {
+  const upload: StoredKlornUpload = { userId, ...checked, ...body };
+  let purging: boolean;
+  try {
+    purging = await isStoragePurgePending(userId);
+  } catch (err) {
+    await discardKlornUpload(upload);
+    throw err;
+  }
+  if (purging) {
     await discardKlornUpload(upload);
     throw new KlornDriveError("account-purging");
   }

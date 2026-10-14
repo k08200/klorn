@@ -132,7 +132,6 @@ const SIGNATURES: readonly Signature[] = [
   { offset: 8, bytes: ascii("WEBP"), type: "image/webp" },
   { offset: 0, bytes: [0x49, 0x49, 0x2a, 0x00], type: "image/tiff" },
   { offset: 0, bytes: [0x4d, 0x4d, 0x00, 0x2a], type: "image/tiff" },
-  { offset: 0, bytes: ascii("BM"), type: "image/bmp" },
   { offset: 0, bytes: ascii("{\\rtf"), type: "application/rtf" },
 ];
 
@@ -178,6 +177,13 @@ function extensionOf(name: string): string {
 
 function latin1(head: Uint8Array, from: number, length: number): string {
   return String.fromCharCode(...head.subarray(from, from + length));
+}
+
+/** "BM", then the file size, then four reserved bytes that are zero. */
+const BMP_HEADER_BYTES = 14;
+function isBmp(head: Uint8Array): boolean {
+  if (head.length < BMP_HEADER_BYTES || !startsWith(head, ascii("BM"))) return false;
+  return head.subarray(6, 10).every((byte) => byte === 0);
 }
 
 function heifType(head: Uint8Array): string | null {
@@ -251,6 +257,7 @@ export function sniffContentType(
     return startsWith(sniffed, ascii("RIFF")) ? fixed.type : OCTET_STREAM;
   }
   if (fixed) return fixed.type;
+  if (isBmp(sniffed)) return "image/bmp";
   const heif = heifType(sniffed);
   if (heif) return heif;
   if (startsWith(sniffed, ZIP)) return zipType(sniffed, extension);

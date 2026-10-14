@@ -21,6 +21,7 @@
  *     sending the same request again.
  */
 
+import { captureError } from "../sentry.js";
 import { StorageError } from "../storage/errors.js";
 import { getUserStorage } from "../storage/runtime.js";
 import type { UserStorage } from "../storage/user-storage.js";
@@ -130,6 +131,20 @@ async function deleteObjects(
   return { gone, failure: null };
 }
 
+/**
+ * After a partial folder delete: the rows of the files whose objects are gone.
+ * A failure here is reported and does not replace the storage error the person
+ * must see; the rows left point at deleted objects until the delete is sent again.
+ */
+async function deleteRowsOfGoneFiles(userId: string, gone: readonly string[]): Promise<void> {
+  try {
+    await deleteKlornDriveRows(userId, gone);
+  } catch (err) {
+    console.error(`[DRIVE] partial folder delete could not remove its rows for user ${userId}`);
+    captureError(err, { tags: { scope: "drive.delete.rows" }, extra: { userId } });
+  }
+}
+
 /** Delete one file, or one folder with everything in it. See the header. */
 export async function deleteKlornItem(
   userId: string,
@@ -149,7 +164,7 @@ export async function deleteKlornItem(
   const files = subtree.filter((row) => !row.isFolder);
   const { gone, failure } = await deleteObjects(storage, userId, files);
   if (failure) {
-    await deleteKlornDriveRows(userId, gone);
+    await deleteRowsOfGoneFiles(userId, gone);
     throw storageFailure(failure);
   }
   const folders = subtree.filter((row) => row.isFolder).map((row) => row.externalId);

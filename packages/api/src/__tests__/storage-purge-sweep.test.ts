@@ -13,7 +13,8 @@ vi.mock("../db.js", async () => {
   const prisma = fakePrismaClient(() => dbHolder.current as FakeDb);
   return { prisma, db: prisma };
 });
-vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
+const captureError = vi.hoisted(() => vi.fn());
+vi.mock("../sentry.js", () => ({ captureError }));
 
 import { getSchedulerHealth, resetSchedulerHeartbeats } from "../scheduler-heartbeat.js";
 import { StorageError } from "../storage/errors.js";
@@ -26,6 +27,7 @@ import {
   runStoragePurgeSweep,
   startStoragePurgeScheduler,
   stopStoragePurgeScheduler,
+  storagePurgeTick,
 } from "../storage/purge-sweep.js";
 import { purgeUserObjects, setObjectStoreForTests } from "../storage/runtime.js";
 import { PURGE_DEADLINE_MS } from "../storage/user-storage.js";
@@ -135,6 +137,57 @@ describe("runStoragePurgeSweep", () => {
 });
 
 describe("the scheduler", () => {
+  it("runs the first sweep after the boot delay, then every interval, once however often it is started", async () => {
+    vi.useFakeTimers({
+      toFake: ["Date", "setTimeout", "setInterval", "clearTimeout", "clearInterval"],
+      now: T0,
+    });
+    await put("user-1");
+    await purgeUserObjects("user-1");
+    await put("user-1"); // a late object
+    const duePurgesSpy = vi.spyOn(await import("../storage/purge-queue.js"), "duePurges");
+    startStoragePurgeScheduler();
+    startStoragePurgeScheduler();
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    // Inside the grace: the first sweep ran and found nothing due.
+    expect(store.keys()).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(PURGE_SWEEP_INTERVAL_MS);
+    expect(store.keys()).toEqual([]);
+    expect(pending()).toEqual([]);
+    expect(duePurgesSpy.mock.calls.length).toBe(2);
+    stopStoragePurgeScheduler();
+    await vi.advanceTimersByTimeAsync(3 * PURGE_SWEEP_INTERVAL_MS);
+    expect(duePurgesSpy.mock.calls.length).toBe(2);
+  });
+
+  it("a sweep that throws is reported and records no heartbeat", async () => {
+    resetSchedulerHeartbeats();
+    startStoragePurgeScheduler();
+    const before = getSchedulerHealth().schedulers.find(
+      (s) => s.name === "storage-purge",
+    )?.lastSeenAt;
+    clock(60_000);
+    dbHolder.current = {
+      ...db,
+      model: () => {
+        throw new Error("database is down");
+      },
+    };
+    await storagePurgeTick();
+    expect(captureError).toHaveBeenCalledWith(expect.any(Error), {
+      tags: { scope: "storage.purge.sweep" },
+    });
+    const after = getSchedulerHealth().schedulers.find(
+      (s) => s.name === "storage-purge",
+    )?.lastSeenAt;
+    expect(after).toBe(before);
+    dbHolder.current = db;
+    await storagePurgeTick();
+    expect(
+      getSchedulerHealth().schedulers.find((s) => s.name === "storage-purge")?.lastSeenAt,
+    ).toBe(T0 + 60_000);
+  });
+
   it("registers its heartbeat at the sweep interval and stops cleanly", () => {
     resetSchedulerHeartbeats();
     startStoragePurgeScheduler();

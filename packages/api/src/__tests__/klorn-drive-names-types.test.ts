@@ -58,7 +58,6 @@ describe("sniffContentType", () => {
     ["anim", text("GIF89a"), "image/gif"],
     ["pic", text("RIFF\u0000\u0000\u0000\u0000WEBPVP8 "), "image/webp"],
     ["scan.tif", bytes(0x49, 0x49, 0x2a, 0x00), "image/tiff"],
-    ["old.bmp", text("BM"), "image/bmp"],
     ["note", text("plain words\nand more"), "text/plain"],
     ["table.csv", text("a,b\n1,2\n"), "text/csv"],
     ["readme.md", text("# Title\n"), "text/markdown"],
@@ -66,6 +65,12 @@ describe("sniffContentType", () => {
     ["letter.rtf", text("{\\rtf1\\ansi"), "application/rtf"],
   ])("%s is labelled from its bytes", (name, head, expected) => {
     expect(sniffContentType(head, name)).toBe(expected);
+  });
+
+  it("a BMP needs its header, not just two letters", () => {
+    const header = bytes(0x42, 0x4d, 0x36, 0, 0, 0, 0, 0, 0, 0, 0x36, 0, 0, 0);
+    expect(sniffContentType(header, "x.bmp")).toBe("image/bmp");
+    expect(sniffContentType(text("BMW service schedule, 2026"), "notes.txt")).toBe("text/plain");
   });
 
   it("an iPhone photo (HEIC) is recognised by its ftyp brand", () => {

@@ -69,7 +69,8 @@ export async function isStoragePurgePending(userId: string): Promise<boolean> {
 }
 
 /**
- * A pass that started at `passStartedAt` emptied the prefix. "done" when that pass
+ * A pass that started at `passStartedAt` emptied the prefix. It resets the
+ * failure count, so the stuck alert counts consecutive failures. "done" when that pass
  * started after the grace of the latest request (the record is deleted in the
  * same statement that checks it, so a newer request is never finished by an
  * older pass); otherwise "settling", due again once this pass's grace is over.
@@ -86,6 +87,7 @@ export async function recordPurgePassSucceeded(
   const settling = await prisma.storagePurge.updateMany({
     where: { userId },
     data: {
+      attempts: 0,
       lastError: null,
       nextAttemptAt: new Date(passStartedAt.getTime() + LATE_UPLOAD_GRACE_MS),
     },

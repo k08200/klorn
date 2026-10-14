@@ -17,7 +17,7 @@
  */
 
 import { captureError } from "../sentry.js";
-import { printableStorageError } from "./errors.js";
+import { printableStorageError, StorageError } from "./errors.js";
 import {
   markPurgePending,
   PURGE_ALERT_AFTER_ATTEMPTS,
@@ -42,7 +42,10 @@ async function attemptPurge(userId: string): Promise<Attempt> {
   try {
     const storage = await getUserStorage();
     // Null only when the flag went off between the caller's check and now.
-    if (!storage) return { ok: false, error: new Error("object storage is off") };
+    if (!storage) {
+      const off = "OBJECT_STORAGE_ENABLED went off while a purge was pending";
+      return { ok: false, error: new StorageError("misconfigured", off) };
+    }
     const { deleted } = await storage.purgeUser(userId);
     return { ok: true, deleted };
   } catch (error) {

@@ -3514,7 +3514,10 @@ D3 ships no user-facing copy beyond API error strings, which clients replace by
     purge deletes the object even if that delete fails). A failed row write, a second file part, a field after the file, or
     a truncated part deletes the object (`discardKlornUpload`, best effort,
     reported under `scope: drive.upload.cleanup` if it fails; the object then
-    waits for the account purge).
+    waits for the account purge). So does a purge check after the PUT that
+    fails. A refused request's body is still read to its end and dropped, so the
+    client's write completes and the socket is freed (tested over a real
+    socket); a client that goes away mid-upload is a 400, not a 500.
   - Why `'klorn'` as the per-user `sourceKey`: a user has exactly one Klorn
     drive, the identity already includes `userId`, and D2 fixed the value
     (`KLORN_DRIVE_SOURCE_KEY`). A per-user value would repeat the user id.
@@ -3586,16 +3589,19 @@ D3 ships no user-facing copy beyond API error strings, which clients replace by
   3. An hourly sweep (`storage/purge-sweep.ts`, heartbeat `storage-purge`) runs
      one pass per due record, at most 25 per sweep (under 19 minutes even when
      every pass hits its deadline), one sweep at a time. Backoff: 1 h, doubling,
-     at most 24 h, until the prefix is empty. From the third failed attempt every
-     failure also raises `scope: storage.purge.stuck` with `attempts` and the
-     user id: that is the alert.
+     at most 24 h, until the prefix is empty. From the third consecutive failed
+     attempt (a pass that succeeds resets the count) every failure also raises
+     `scope: storage.purge.stuck` with `attempts` and the user id: that is the
+     alert. The heartbeat is recorded when a sweep ends, so a hung sweep goes
+     stale in `GET /api/health/schedulers`; a sweep that throws is reported
+     under `scope: storage.purge.sweep`.
   4. A record is finished only by a pass that started at least
      `LATE_UPLOAD_GRACE_MS` (10 minutes) after the latest request and emptied the
      prefix; the deletion's own pass leaves it "settling". That pass is the
      sweep that catches late objects.
   - Upload during the purge: while a record exists, uploads answer 409
-    `account-purging`. The drive checks before anything, right before the PUT
-    and after it (deleting the object if a purge started meanwhile). An upload
+    `account-purging`. The drive checks before the body is read, right before
+    the PUT and after it (deleting the object if a purge started meanwhile). An upload
     that passed the second check lands within one PUT (120 s, the S3 store's
     transfer timeout), inside the 10-minute grace, so the finishing pass
     deletes it. After "delete my data" (the account stays), uploads are refused
@@ -3634,7 +3640,7 @@ D3 ships no user-facing copy beyond API error strings, which clients replace by
 - Verify. Tests: `klorn-drive-migration`, `storage-purge-queue`,
   `storage-durable-purge`, `storage-purge-sweep`, `user-deletion-durable`,
   `klorn-drive-names-types`, `routes-klorn-drive-upload`,
-  `routes-klorn-drive-tree`, plus the updated scope, guard and runtime tests;
+  `routes-klorn-drive-tree`, `routes-klorn-drive-socket`, plus the updated scope, guard and runtime tests;
   the fake database gained `aggregate` with `_sum`. Mutation checks, each
   failing at least one test: ownership (the by-id read without the user, the
   Klorn scope without the user, the row delete without the user); object then
@@ -3648,7 +3654,12 @@ D3 ships no user-facing copy beyond API error strings, which clients replace by
   Content-Type used instead of the sniff; the after-PUT purge check; the routes
   always on; KLORN live without object storage; each rate limit; the upsert
   used for a rename; the purge without its record, blocking again, without the
-  grace; the flag-off path through the record. On scratch Postgres 16.14 and
+  grace; the flag-off path through the record; and the review fixes (no drain
+  of a refused body, the heartbeat before the sweep, no reset of the failure
+  count, a two-letter BMP signature, a row-cleanup error replacing the 503, a
+  client abort as a 500, no object delete when the after-PUT check throws, no
+  quota re-check at commit, no purge check after the row, a folder walk that
+  is not cycle-safe, no head timeout). On scratch Postgres 16.14 and
   17.11 (not in the suite), with Supabase-style `anon` and `authenticated` roles
   and default grants created first: `prisma migrate deploy`, the CI drift check
   ("No difference detected"), no privilege for either role on `StoragePurge`,
@@ -3720,9 +3731,10 @@ D3 ships no user-facing copy beyond API error strings, which clients replace by
   leaves nothing behind; and `scripts/start.sh`
   baselines a failed migration only when the live schema has no difference
   from `schema.prisma`, which a missing `StoragePurge` table always is.
-- Rollback: revert the PR. The table and the index can stay. If the flag was on
-  and a record exists, keep the sweep (or run the purge by hand) until
-  `StoragePurge` is empty.
+- Rollback: revert the PR. The table and the index can stay. If a record
+  exists, keep `OBJECT_STORAGE_ENABLED` on and a build with the sweep running
+  (or run the purge by hand) until `StoragePurge` is empty: with the flag off
+  the sweep does nothing.
 **D4 — file summaries and search** (*outline*). Depends on: D1, D2. Reuses the
 attachment analysis pipeline. Cost caps apply.
 **D5 — Google Drive connector** (*outline*). Depends on: D2. Blocked by V2.

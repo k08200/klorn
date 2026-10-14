@@ -93,6 +93,15 @@ describe("recordPurgePassSucceeded", () => {
     expect(await isStoragePurgePending("user-1")).toBe(true);
   });
 
+  it("resets the failure count, so the stuck alert counts consecutive failures", async () => {
+    await markPurgePending("user-1", at(0));
+    await recordPurgePassFailed("user-1", "unreachable", at(1));
+    await recordPurgePassFailed("user-1", "unreachable", at(2));
+    await recordPurgePassSucceeded("user-1", at(3));
+    expect(rows()[0]).toMatchObject({ attempts: 0, lastError: null });
+    expect(await recordPurgePassFailed("user-1", "unreachable", at(4))).toBe(1);
+  });
+
   it("answers done when the record is already gone", async () => {
     expect(await recordPurgePassSucceeded("user-1", at(LATE_UPLOAD_GRACE_MS))).toBe("done");
   });

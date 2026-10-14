@@ -26,7 +26,7 @@
  * authentication) and per user (after it), as the D2 routes are.
  */
 
-import multipart from "@fastify/multipart";
+import multipart, { type MultipartFile } from "@fastify/multipart";
 import type {
   DriveDeleteResponse,
   DriveDownloadResponse,
@@ -76,6 +76,9 @@ const HTTP_CREATED = 201;
 /** Multipart failures the plugin reports by code: the request is malformed or too large. */
 const MULTIPART_TOO_LARGE = new Set(["FST_REQ_FILE_TOO_LARGE"]);
 const MULTIPART_MALFORMED = new Set([
+  // The client closed the connection mid-upload.
+  "ERR_STREAM_PREMATURE_CLOSE",
+  "FST_MP_PREMATURE_CLOSE",
   "FST_FILES_LIMIT",
   "FST_FIELDS_LIMIT",
   "FST_PARTS_LIMIT",
@@ -119,13 +122,16 @@ function sendDriveError(reply: FastifyReply, err: KlornDriveError): FastifyReply
   return reply.code(KLORN_DRIVE_ERROR_STATUS[err.code]).send(body);
 }
 
-/** A multipart plugin error as the drive's own, or the error unchanged. */
-function multipartFailure(err: unknown): unknown {
+/**
+ * A failure while the request is read, as the drive's own error: the multipart
+ * plugin's limits, a malformed body, and a client that went away mid-upload
+ * (not a server fault, so not a 500). Anything else is unchanged.
+ */
+export function uploadRequestFailure(err: unknown): unknown {
   const code = err instanceof Error ? (err as Error & { code?: string }).code : undefined;
-  if (code !== undefined && MULTIPART_TOO_LARGE.has(code)) return new KlornDriveError("too-large");
-  if (code !== undefined && MULTIPART_MALFORMED.has(code)) {
-    return new KlornDriveError("invalid-upload");
-  }
+  if (code === undefined) return err;
+  if (MULTIPART_TOO_LARGE.has(code)) return new KlornDriveError("too-large");
+  if (MULTIPART_MALFORMED.has(code)) return new KlornDriveError("invalid-upload");
   return err;
 }
 
@@ -139,6 +145,45 @@ async function answer<T>(reply: FastifyReply, run: () => Promise<T>): Promise<T 
   }
 }
 
+/**
+ * Read the rest of a refused request's body and drop it. The multipart plugin
+ * stops piping the request into its parser when a part is abandoned, and nothing
+ * else reads it: the client's write would never complete and the socket would be
+ * held until a server timeout.
+ */
+function drainRequest(request: FastifyRequest): void {
+  request.raw.unpipe();
+  request.raw.resume();
+}
+
+type UploadPart = MultipartFile;
+
+/** Store the one file part with the fields read before it. */
+async function storeFilePart(
+  part: UploadPart,
+  userId: string,
+  fields: ReadonlyMap<string, string>,
+  providerEnabled: DriveProviderEnabledMap,
+): Promise<StoredKlornUpload> {
+  const stored = await storeKlornUpload(
+    {
+      userId,
+      fileName: part.filename,
+      declaredSize: fields.get("size"),
+      parentExternalId: fields.get("parentExternalId"),
+      body: part.file,
+    },
+    providerEnabled,
+  );
+  // Defence in depth: unreachable while the plugin's file limit is the cap plus
+  // one byte, because the byte counter refuses the body first.
+  if (part.file.truncated) {
+    await discardKlornUpload(stored);
+    throw new KlornDriveError("too-large");
+  }
+  return stored;
+}
+
 /** Read the request: the fields, then the one file, which is stored on the way. */
 async function readUpload(
   request: FastifyRequest,
@@ -149,40 +194,22 @@ async function readUpload(
   let stored: StoredKlornUpload | null = null;
   try {
     for await (const part of request.parts()) {
-      if (part.type === "field") {
-        if (stored !== null || !UPLOAD_FIELDS.has(part.fieldname)) {
-          throw new KlornDriveError("invalid-upload");
-        }
-        fields.set(part.fieldname, String(part.value));
-        continue;
-      }
-      if (stored !== null || part.fieldname !== UPLOAD_FILE_FIELD) {
-        part.file.resume();
-        throw new KlornDriveError("invalid-upload");
-      }
-      try {
-        stored = await storeKlornUpload(
-          {
-            userId,
-            fileName: part.filename,
-            declaredSize: fields.get("size"),
-            parentExternalId: fields.get("parentExternalId"),
-            body: part.file,
-          },
-          providerEnabled,
-        );
-      } finally {
-        // An unread part holds the parser until the idle timeout.
-        part.file.resume();
-      }
-      if (part.file.truncated) throw new KlornDriveError("too-large");
+      const allowed =
+        stored === null &&
+        (part.type === "field"
+          ? UPLOAD_FIELDS.has(part.fieldname)
+          : part.fieldname === UPLOAD_FILE_FIELD);
+      if (!allowed) throw new KlornDriveError("invalid-upload");
+      if (part.type === "field") fields.set(part.fieldname, String(part.value));
+      else stored = await storeFilePart(part, userId, fields, providerEnabled);
     }
     if (stored === null) throw new KlornDriveError("invalid-upload");
     return stored;
   } catch (err) {
+    drainRequest(request);
     // The object exists but the request did not end cleanly: no row, no object.
     if (stored !== null) await discardKlornUpload(stored);
-    throw multipartFailure(err);
+    throw uploadRequestFailure(err);
   }
 }
 

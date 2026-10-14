@@ -78,12 +78,24 @@ export async function runStoragePurgeSweep(): Promise<PurgeSweepResult> {
 let intervalId: ReturnType<typeof setInterval> | null = null;
 let firstRunTimer: ReturnType<typeof setTimeout> | null = null;
 
-function tick(): void {
-  recordSchedulerTick("storage-purge");
-  runStoragePurgeSweep().catch((err) => {
+/**
+ * One scheduled sweep. The heartbeat is recorded when a sweep ENDS, and not for
+ * a tick that found the previous sweep still running: a sweep that hangs goes
+ * stale in the health check instead of looking alive. A sweep that throws is
+ * reported and records no heartbeat either.
+ */
+export async function storagePurgeTick(): Promise<void> {
+  try {
+    const result = await runStoragePurgeSweep();
+    if (result.state !== "busy") recordSchedulerTick("storage-purge");
+  } catch (err) {
     console.error("[STORAGE] purge sweep failed:", err);
     captureError(err, { tags: { scope: "storage.purge.sweep" } });
-  });
+  }
+}
+
+function tick(): void {
+  void storagePurgeTick();
 }
 
 export function startStoragePurgeScheduler(): void {
