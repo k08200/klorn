@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
+import { useAuth } from "../lib/auth";
+import { ASSISTANT_BRIEFING, assistantHref, TODAY_HOME } from "../lib/home";
 import {
   createHotkeyMatcher,
   hotkeyBlockReason,
@@ -32,20 +34,26 @@ const SHORTCUTS = [
 export default function KeyboardShortcuts() {
   const router = useRouter();
   const triage = useKeyboardTriage();
+  const unifiedHome = useAuth().user?.unifiedHome === true;
   const { toast } = useToast();
   const [showHelp, setShowHelp] = useState(false);
+  // UNIFIED_HOME: Briefing is a page of the Assistant hub (P7).
+  const briefingHref = unifiedHome ? ASSISTANT_BRIEFING : "/briefing";
 
   // Handlers this component owns: briefing, help, and the `g` destinations.
   useHotkeys(
     "global",
     {
-      "nav.briefing": { run: () => router.push("/briefing") },
+      "nav.briefing": { run: () => router.push(briefingHref) },
       "help.toggle": { run: () => setShowHelp((prev) => !prev) },
       "help.open": { run: () => setShowHelp(true) },
       "go.mail": { run: () => router.push("/email") },
       "go.calendar": { run: () => router.push("/calendar") },
       "go.queue": { run: () => router.push("/inbox") },
-      "go.briefing": { run: () => router.push("/briefing") },
+      // Live only under UNIFIED_HOME (the table gates them on the flag).
+      "go.today": { run: () => router.push(TODAY_HOME) },
+      "go.assistant": { run: () => router.push(assistantHref()) },
+      "go.briefing": { run: () => router.push(briefingHref) },
       "go.settings": { run: () => router.push("/settings") },
     },
     true,
@@ -73,7 +81,7 @@ export default function KeyboardShortcuts() {
         matcher.reset();
         return;
       }
-      const ctx = { triage, scopes: hotkeyRegistry.activeScopes() };
+      const ctx = { triage, scopes: hotkeyRegistry.activeScopes(), unifiedHome };
       const match = matcher.feed(e, describeTarget(target), (def) => def.enabled(ctx), Date.now());
       if (match.kind === "pending") {
         e.preventDefault();
@@ -90,9 +98,13 @@ export default function KeyboardShortcuts() {
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [triage, toast]);
+  }, [triage, unifiedHome, toast]);
 
-  if (triage) return <ShortcutSheet open={showHelp} onClose={() => setShowHelp(false)} />;
+  if (triage) {
+    return (
+      <ShortcutSheet open={showHelp} onClose={() => setShowHelp(false)} unifiedHome={unifiedHome} />
+    );
+  }
   return showHelp ? <LegacyShortcutsDialog onClose={() => setShowHelp(false)} /> : null;
 }
 

@@ -1,63 +1,22 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
-import { useEffect, useState } from "react";
-import AuthGuard from "../../components/auth-guard";
-import { Markdown } from "../../components/markdown";
-import ErrorAlert from "../../components/ui/error-alert";
-import LoadingState from "../../components/ui/loading-state";
-import { apiFetch } from "../../lib/api";
-import { useT } from "../../lib/i18n";
-import { queryKeys } from "../../lib/query-keys";
-import { captureClientError } from "../../lib/sentry";
-import { TodayActionsCard } from "./today-actions-card";
-
-interface BriefingStructure {
-  dateLabel: string;
-  headline: string;
-  segments: Array<{ label: string; summary: string; kind: "busy" | "free" | "off" }>;
-  curve: number[];
-  dayStartHour: number;
-  attention: Array<{ rank: number; action: string; reason: string }>;
-}
-
-interface BriefingResponse {
-  briefing: { id: string; content: string; createdAt: string } | null;
-  structured?: BriefingStructure | null;
-}
-
-interface GenerateResponse {
-  briefing: string;
-  note?: { id: string; createdAt: string };
-  notification?: { id: string; createdAt: string } | null;
-}
-
 // Wire shape comes from @klorn/contract — the same type the server builds
 // (pim/briefing-status.ts), so a response-shape change fails to compile here
 // instead of silently desyncing.
 import type { BriefingPushState, BriefingStatus } from "@klorn/contract";
-
-type BriefingFeedbackChoice = "useful" | "wrong" | "later" | "done";
-
-interface BriefingFeedbackResponse {
-  feedback: Record<
-    string,
-    {
-      id: string;
-      rank: number;
-      choice: BriefingFeedbackChoice;
-      signal: string;
-      evidence: string | null;
-      createdAt: string;
-    }
-  >;
-}
-
-interface TopAction {
-  rank: number;
-  label: string;
-}
+import Link from "next/link";
+import AuthGuard from "../../components/auth-guard";
+import { HubHandoff } from "../../components/hub-handoff";
+import { Markdown } from "../../components/markdown";
+import ErrorAlert from "../../components/ui/error-alert";
+import LoadingState from "../../components/ui/loading-state";
+import { useT } from "../../lib/i18n";
+import { TodayActionsCard } from "./today-actions-card";
+import {
+  type BriefingFeedbackChoice,
+  type BriefingStructure,
+  useBriefingPage,
+} from "./use-briefing";
 
 const FEEDBACK_OPTIONS: Array<{ choice: BriefingFeedbackChoice; label: string }> = [
   { choice: "useful", label: "Useful" },
@@ -69,7 +28,9 @@ const FEEDBACK_OPTIONS: Array<{ choice: BriefingFeedbackChoice; label: string }>
 export default function BriefingPage() {
   return (
     <AuthGuard>
-      <BriefingView />
+      <HubHandoff>
+        <BriefingView />
+      </HubHandoff>
     </AuthGuard>
   );
 }
@@ -150,121 +111,20 @@ function DayShapeCard({ structure }: { structure: BriefingStructure }) {
 
 function BriefingView() {
   const { t } = useT();
-  const queryClient = useQueryClient();
-  const [error, setError] = useState<string | null>(null);
-  const [savingRank, setSavingRank] = useState<number | null>(null);
-
-  // Parallel fetch: today's briefing + delivery status. Errors on either
-  // are handled independently so a flaky status endpoint never blocks the
-  // briefing body.
-  const briefingQuery = useQuery({
-    queryKey: queryKeys.briefing.today(),
-    queryFn: () => apiFetch<BriefingResponse>("/api/briefing/today"),
-  });
-  const statusQuery = useQuery({
-    queryKey: queryKeys.briefing.status(),
-    queryFn: () => apiFetch<BriefingStatus>("/api/briefing/status"),
-  });
-
-  const noteId = briefingQuery.data?.briefing?.id ?? null;
-  const structured = briefingQuery.data?.structured ?? null;
-  const content = briefingQuery.data?.briefing?.content ?? null;
-  const createdAt = briefingQuery.data?.briefing?.createdAt ?? null;
-  const status = statusQuery.data ?? null;
-  const loading = briefingQuery.isLoading;
-  const statusError = statusQuery.error
+  const briefing = useBriefingPage();
+  const { noteId, structured, content, createdAt, status, loading, feedback, savingRank } =
+    briefing;
+  const { generating, regenerate, submitFeedback, topActions } = briefing;
+  const error =
+    briefing.actionError === "generate"
+      ? "Could not generate the briefing. Please try again."
+      : briefing.actionError === "feedback"
+        ? "Could not save feedback. Please try again."
+        : null;
+  const statusError = briefing.statusFailed
     ? "Delivery status is unavailable. The briefing can still load."
     : null;
-  const briefingLoadError = briefingQuery.error ? "Could not load today's briefing." : null;
-
-  // Dependent fetch: only call /feedback once we know the briefing id.
-  const feedbackQuery = useQuery({
-    queryKey: noteId ? queryKeys.briefing.feedback(noteId) : queryKeys.briefing.feedback("none"),
-    enabled: Boolean(noteId),
-    queryFn: async () => {
-      if (!noteId) return {} as Record<number, BriefingFeedbackChoice>;
-      const data = await apiFetch<BriefingFeedbackResponse>(
-        `/api/briefing/${noteId}/top-actions/feedback`,
-      );
-      const next: Record<number, BriefingFeedbackChoice> = {};
-      for (const [rank, row] of Object.entries(data.feedback)) {
-        next[Number(rank)] = row.choice;
-      }
-      return next;
-    },
-  });
-  const feedback = feedbackQuery.data ?? {};
-
-  useEffect(() => {
-    if (briefingQuery.error) {
-      captureClientError(briefingQuery.error, { scope: "briefing.load-today" });
-    }
-    if (statusQuery.error) {
-      captureClientError(statusQuery.error, { scope: "briefing.status.load" });
-    }
-    if (feedbackQuery.error) {
-      captureClientError(feedbackQuery.error, {
-        scope: "briefing.feedback.load",
-        noteId,
-      });
-    }
-  }, [briefingQuery.error, statusQuery.error, feedbackQuery.error, noteId]);
-
-  const regenerateMutation = useMutation({
-    mutationFn: () =>
-      apiFetch<GenerateResponse>("/api/briefing/generate", {
-        method: "POST",
-        body: JSON.stringify({}),
-      }),
-    onMutate: () => setError(null),
-    onSuccess: () => {
-      // Truth lives on the server — refetch all 3 dependent queries.
-      void queryClient.invalidateQueries({ queryKey: queryKeys.briefing.all });
-    },
-    onError: (err) => {
-      captureClientError(err, { scope: "briefing.generate" });
-      setError("Could not generate the briefing. Please try again.");
-    },
-  });
-  const generating = regenerateMutation.isPending;
-  const regenerate = () => regenerateMutation.mutate();
-
-  const feedbackMutation = useMutation({
-    mutationFn: async (input: { action: TopAction; choice: BriefingFeedbackChoice }) => {
-      if (!noteId) throw new Error("Missing noteId");
-      await apiFetch(`/api/briefing/${noteId}/top-actions/${input.action.rank}/feedback`, {
-        method: "POST",
-        body: JSON.stringify({ choice: input.choice, label: input.action.label }),
-      });
-      return input;
-    },
-    onMutate: (input) => {
-      setSavingRank(input.action.rank);
-      setError(null);
-    },
-    onSuccess: (input) => {
-      // Optimistic local update; cache will refetch on next focus.
-      if (!noteId) return;
-      queryClient.setQueryData<Record<number, BriefingFeedbackChoice>>(
-        queryKeys.briefing.feedback(noteId),
-        (prev) => ({ ...(prev ?? {}), [input.action.rank]: input.choice }),
-      );
-    },
-    onError: (err, vars) => {
-      captureClientError(err, {
-        scope: "briefing.feedback.submit",
-        noteId,
-        rank: vars.action.rank,
-        choice: vars.choice,
-      });
-      setError("Could not save feedback. Please try again.");
-    },
-    onSettled: () => setSavingRank(null),
-  });
-  const submitFeedback = async (action: TopAction, choice: BriefingFeedbackChoice) => {
-    if (!noteId || savingRank) return;
-    feedbackMutation.mutate({ action, choice });
-  };
+  const briefingLoadError = briefing.loadFailed ? "Could not load today's briefing." : null;
 
   const formattedTime = createdAt
     ? new Date(createdAt).toLocaleTimeString("en-US", {
@@ -272,7 +132,6 @@ function BriefingView() {
         minute: "2-digit",
       })
     : null;
-  const topActions = content ? extractTopActions(content) : [];
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-3 md:py-10">
@@ -643,30 +502,4 @@ function pushReasonLabel(reason: string): string {
     vapid_missing: "Push keys need configuration",
   };
   return labels[reason] || reason;
-}
-
-function extractTopActions(content: string): TopAction[] {
-  const normalized = content.replace(/\r\n/g, "\n");
-  const sectionIndex = normalized.search(/Today's\s*Top\s*3|Today\s*Top\s*3|Top\s*3/i);
-  const target = sectionIndex >= 0 ? normalized.slice(sectionIndex) : normalized;
-  const actions: TopAction[] = [];
-  const lineRegex = /^\s*(\d+)[.)]\s+(.+)$/gm;
-  let match: RegExpExecArray | null;
-
-  while ((match = lineRegex.exec(target)) !== null && actions.length < 3) {
-    const rank = Number.parseInt(match[1], 10);
-    if (!Number.isInteger(rank) || rank < 1 || rank > 3) continue;
-    const label = cleanActionLabel(match[2]);
-    if (label) actions.push({ rank, label });
-  }
-
-  return actions;
-}
-
-function cleanActionLabel(value: string): string {
-  return value
-    .replace(/\*\*/g, "")
-    .replace(/\s+[—-]\s+.+$/, "")
-    .trim()
-    .slice(0, 160);
 }

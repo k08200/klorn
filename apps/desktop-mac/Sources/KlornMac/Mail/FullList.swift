@@ -5,6 +5,17 @@ struct FullList: View {
     let mode: ListMode
     let actions: TopBarActions
     @Binding var keyZone: MailKeyZone
+    /// The offscreen renderer paints the key catcher (an AppKit view) as a
+    /// placeholder over the whole list. The main window's shots leave it
+    /// out; the bar's shots are unchanged from main, placeholder included.
+    var keyCatcherInRender = true
+    /// The main window's lane tab already names the lane and carries its
+    /// count, so the list drops its own title row there; the inbox scope
+    /// and compose move beside the search field. Search results keep theirs.
+    var hidesLaneTitle = false
+    /// `.window` in the main window: the one-badge rows and the token
+    /// metrics. The default is the bar's list, unchanged.
+    var rowStyle: MailRowStyle = .legacy
     /// The user asked for the search field (⌘F, `/`): its focus is theirs,
     /// not the window's opening default.
     @State private var searchRequested = false
@@ -28,6 +39,7 @@ struct FullList: View {
         return inboxMode ? (model.queue?.itemsByTime ?? []) : (model.queue?.items(for: tier) ?? [])
     }
     private var searching: Bool { isSearchActive(query) }
+    private var titleHidden: Bool { hidesLaneTitle && !searching }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotionSwitch
 
@@ -53,62 +65,56 @@ struct FullList: View {
 
     private var tierList: some View {
         VStack(alignment: .leading, spacing: 0) {
+            if !titleHidden {
             HStack(spacing: 8) {
                 if searching {
-                    Image(systemName: "magnifyingglass").font(.body).foregroundStyle(Theme.accent)
+                    Image(systemName: "magnifyingglass").font(metrics.titleIcon).foregroundStyle(Theme.accent)
                         .accessibilityHidden(true)
-                    Text(L("section.search")).font(.title3.weight(.semibold)).foregroundStyle(Theme.text)
+                    Text(L("section.search")).font(metrics.title).foregroundStyle(Theme.text)
                     Text("\(model.searchTotal)")
-                        .font(.title3.monospacedDigit()).foregroundStyle(Theme.textDim)
+                        .font(metrics.titleCount).foregroundStyle(Theme.textDim)
                 } else if let filter = labelFilter {
-                    Image(systemName: filter.icon).font(.body).foregroundStyle(Theme.textDim)
+                    Image(systemName: filter.icon).font(metrics.titleIcon).foregroundStyle(Theme.textDim)
                         .accessibilityHidden(true)
-                    Text(filter.label).font(.title3.weight(.semibold)).foregroundStyle(Theme.text)
-                    Text("\(items.count)").font(.title3.monospacedDigit()).foregroundStyle(Theme.textDim)
+                    Text(filter.label).font(metrics.title).foregroundStyle(Theme.text)
+                    Text("\(items.count)").font(metrics.titleCount).foregroundStyle(Theme.textDim)
                         .contentTransition(.numericText())
                         .animation(.default, value: items.count)
                 } else if inboxMode {
-                    Image(systemName: "tray").font(.body).foregroundStyle(Theme.textDim)
+                    Image(systemName: "tray").font(metrics.titleIcon).foregroundStyle(Theme.textDim)
                         .accessibilityHidden(true)
-                    Text(L("section.inbox")).font(.title3.weight(.semibold)).foregroundStyle(Theme.text)
-                    Text("\(items.count)").font(.title3.monospacedDigit()).foregroundStyle(Theme.textDim)
+                    Text(L("section.inbox")).font(metrics.title).foregroundStyle(Theme.text)
+                    Text("\(items.count)").font(metrics.titleCount).foregroundStyle(Theme.textDim)
                         .contentTransition(.numericText())
                         .animation(.default, value: items.count)
                 } else {
                     Circle().fill(Theme.tint(tier)).frame(width: 9, height: 9)
-                    Text(tier.label).font(.title3.weight(.semibold)).foregroundStyle(Theme.text)
-                    Text("\(items.count)").font(.title3.monospacedDigit()).foregroundStyle(Theme.textDim)
+                    Text(tier.label).font(metrics.title).foregroundStyle(Theme.text)
+                    Text("\(items.count)").font(metrics.titleCount).foregroundStyle(Theme.textDim)
                         .contentTransition(.numericText())
                         .animation(.default, value: items.count)
                 }
                 Spacer()
                 InboxSelectorMenu()
-                Button {
-                    model.showCompose = true
-                } label: {
-                    Image(systemName: "square.and.pencil").font(.callout.weight(.medium))
-                        .iconTarget(30)
-                }
-                .buttonStyle(.plain).foregroundStyle(Theme.textDim)
-                // ⌘N lives in the app menu (File ▸ New Email) — one owner.
-                .help(L("compose.new"))
-                .accessibilityLabel(L("compose.new"))
+                composeButton
             }
-            .padding(.horizontal, 24).padding(.vertical, 18)
+            .padding(.horizontal, metrics.inset).padding(.vertical, metrics.titleVertical)
+            }
 
             // Whole-mailbox search (same endpoint as the web inbox). Debounced;
             // clearing the field returns to the tier list instantly.
             HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass").font(.caption).foregroundStyle(Theme.textDim)
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").font(metrics.fieldIcon).foregroundStyle(Theme.textDim)
                     .accessibilityHidden(true)
                 if Theme.isRenderingOffscreen {
                     Text(L("mail.searchPlaceholder"))
-                        .font(.callout).foregroundStyle(Theme.textDim)
+                        .font(metrics.field).foregroundStyle(Theme.textDim)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 TextField(L("mail.searchPlaceholder"), text: $query)
                     .opacity(Theme.isRenderingOffscreen ? 0 : 1)
-                    .textFieldStyle(.plain).font(.callout).foregroundStyle(Theme.text)
+                    .textFieldStyle(.plain).font(metrics.field).foregroundStyle(Theme.text)
                     .focused($searchFocused)
                     // Esc hands the keyboard back to the list.
                     .onKeyPress(.escape) {
@@ -128,16 +134,21 @@ struct FullList: View {
                 if !query.isEmpty {
                     Button {
                         query = ""
-                    } label: { Image(systemName: "xmark.circle.fill").font(.caption) }
+                    } label: { Image(systemName: "xmark.circle.fill").font(metrics.fieldIcon) }
                         .buttonStyle(.plain).foregroundStyle(Theme.textDim)
                         .accessibilityLabel(L("mail.clearSearch.a11y"))
                 }
             }
-            .padding(.horizontal, 10).padding(.vertical, 7)
-            .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8)
+            .padding(.horizontal, metrics.fieldInset).padding(.vertical, metrics.fieldVertical)
+            .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: metrics.fieldRadius))
+            .overlay(RoundedRectangle(cornerRadius: metrics.fieldRadius)
                 .strokeBorder(searchFocused ? Theme.accent.opacity(0.5) : .clear))
-            .padding(.horizontal, 24).padding(.bottom, 12)
+            if titleHidden {
+                InboxSelectorMenu()
+                composeButton
+            }
+            }
+            .padding(.horizontal, metrics.inset).padding(.top, titleHidden ? metrics.fieldGap : 0).padding(.bottom, metrics.fieldGap)
             .task(id: "\(model.selectedInbox)|\(query)") {
                 // Keyed on scope + query: an inbox switch re-fetches an active
                 // search with the new scope, same debounce path.
@@ -147,7 +158,13 @@ struct FullList: View {
                 await model.search(query)
             }
 
-            Divider().overlay(Theme.line)
+            if rowStyle == .window {
+                // The rows carry their own inset hairlines; a full-width rule
+                // here would box the search field in.
+                Color.clear.frame(height: 0)
+            } else {
+                Divider().overlay(Theme.line)
+            }
 
             if searching {
                 searchResultsList
@@ -159,11 +176,11 @@ struct FullList: View {
             } else if items.isEmpty {
                 Spacer()
                 if let filter = labelFilter {
-                    EmptyState(icon: filter.icon, title: L("label.empty", filter.label))
+                    EmptyState(icon: filter.icon, title: L("label.empty", filter.label), style: rowStyle.shell)
                 } else if inboxMode {
-                    EmptyState(icon: "tray", title: L("inbox.empty"))
+                    EmptyState(icon: "tray", title: L("inbox.empty"), style: rowStyle.shell)
                 } else {
-                    EmptyState(icon: tier.emptyIcon, title: tier.emptyTitle, hint: tier.blurb)
+                    EmptyState(icon: tier.emptyIcon, title: tier.emptyTitle, hint: tier.blurb, style: rowStyle.shell)
                 }
                 Spacer()
             } else if Theme.isRenderingOffscreen {
@@ -174,8 +191,8 @@ struct FullList: View {
                 // shots: lay the rows out directly when rendering offscreen.
                 VStack(spacing: 0) {
                     ForEach(items) { item in
-                        FullRow(item: item, actions: actions, showLaneChip: mixedLanes)
-                        Divider().overlay(Theme.line).padding(.leading, 24)
+                        FullRow(item: item, actions: actions, showLaneChip: mixedLanes, style: rowStyle)
+                        rowDivider
                     }
                     Spacer(minLength: 0)
                 }
@@ -186,10 +203,10 @@ struct FullList: View {
                     ScrollView {
                         LazyVStack(spacing: 0) {
                             ForEach(items) { item in
-                                FullRow(item: item, actions: actions, showLaneChip: mixedLanes)
+                                FullRow(item: item, actions: actions, showLaneChip: mixedLanes, style: rowStyle)
                                     .id(item.id)
                                     .transition(rowTransition)
-                                Divider().overlay(Theme.line).padding(.leading, 24)
+                                rowDivider
                             }
                         }
                         // The one motion that carries product truth (P1): a new
@@ -209,14 +226,43 @@ struct FullList: View {
         }
         // List keys (M3). Mounted with the mail list only, so other list
         // modes never see them.
-        .background(
-            MailListKeyCatcher(
-                onKey: { handleKey($0) },
-                onClickOutsideReader: { keyZone = .list },
-                mayReleaseOpeningFocus: {
-                    !searchRequested && !model.searchFocusPending && !model.fullViewModalOpen
-                }))
+        .background {
+            if keyCatcherInRender || !Theme.isRenderingOffscreen {
+                MailListKeyCatcher(
+                    onKey: { handleKey($0) },
+                    onClickOutsideReader: { keyZone = .list },
+                    mayReleaseOpeningFocus: {
+                        !searchRequested && !model.searchFocusPending && !model.fullViewModalOpen
+                    })
+            }
+        }
         .onDisappear { keyZone = .list }
+    }
+
+    /// The hairline under a row: the bar's, or the main window's inset one.
+    @ViewBuilder
+    private var rowDivider: some View {
+        if rowStyle == .window {
+            Rectangle().fill(Theme.line).frame(height: Theme.hairline)
+                .padding(.horizontal, Theme.s4 + Theme.s1)
+        } else {
+            Divider().overlay(Theme.line).padding(.leading, 24)
+        }
+    }
+
+    private var metrics: MailListMetrics { rowStyle == .window ? .window : .bar }
+
+    private var composeButton: some View {
+        Button {
+            model.showCompose = true
+        } label: {
+            Image(systemName: "square.and.pencil").font(metrics.compose)
+                .iconTarget(30)
+        }
+        .buttonStyle(.plain).foregroundStyle(Theme.textDim)
+        // ⌘N lives in the app menu (File ▸ New Email) — one owner.
+        .help(L("compose.new"))
+        .accessibilityLabel(L("compose.new"))
     }
 
     /// One key press from the catcher: decide with the pure rules, then run
@@ -283,8 +329,8 @@ struct FullList: View {
             ScrollView {
                 LazyVStack(spacing: 0) {
                     ForEach(results) { hit in
-                        SearchHitRow(hit: hit)
-                        Divider().overlay(Theme.line).padding(.leading, 24)
+                        SearchHitRow(hit: hit, style: rowStyle)
+                        rowDivider
                     }
                 }
             }
@@ -295,7 +341,7 @@ struct FullList: View {
                 title: {
                     let q = query.trimmingCharacters(in: .whitespaces)
                     return L("mail.noMatches", q, L10n.josaWaIfKorean(after: q))
-                }())
+                }(), style: rowStyle.shell)
             Spacer()
         }
     }

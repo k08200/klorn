@@ -41,12 +41,20 @@ function rowsOf(live: readonly LiveHotkey[], group: HotkeyGroup) {
   return [...rows.entries()].map(([labelKey, keys]) => ({ labelKey, keys }));
 }
 
-export function ShortcutSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+interface ShortcutSheetProps {
+  open: boolean;
+  onClose: () => void;
+  /** UNIFIED_HOME: lists `g t` and names `g a` as Assistant. */
+  unifiedHome?: boolean;
+}
+
+export function ShortcutSheet({ open, onClose, unifiedHome = false }: ShortcutSheetProps) {
   const { t } = useT();
   // Read the registry when the sheet opens: handlers mount and unmount with pages.
   const live = useMemo(
-    () => (open ? liveHotkeys({ triage: true, scopes: hotkeyRegistry.activeScopes() }) : []),
-    [open],
+    () =>
+      open ? liveHotkeys({ triage: true, scopes: hotkeyRegistry.activeScopes(), unifiedHome }) : [],
+    [open, unifiedHome],
   );
   const mac = isMacPlatform();
 

@@ -10,75 +10,42 @@ import SwiftUI
 /// (the model owns the messages), and a fix lands in both at once.
 struct AssistantThread: View {
     var showsStarters = true
+    /// The main window's thread is laid out directly under the offscreen
+    /// renderer; the dock keeps its scroller there, as before.
+    var inlineWhenOffscreen = false
     @Environment(AppModel.self) private var model
     @State private var draft = ""
     @FocusState private var composerFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 10) {
-                        if model.chatMessages.isEmpty {
-                            VStack(spacing: Theme.s4) {
-                                EmptyState(
-                                    icon: "sparkles",
-                                    title: L("assistant.empty"))
-                                // One-click starters: discoverability beats a
-                                // blank prompt. Each sends immediately. The
-                                // dock is too narrow for them — it opens with
-                                // the mail already in context instead.
-                                if showsStarters {
-                                VStack(spacing: Theme.s2) {
-                                    ForEach([
-                                        "오늘 제일 중요한 메일 뭐야?",
-                                        "답장 안 한 것 중 급한 것만 알려줘",
-                                        "이번 주 미팅 준비할 것 정리해줘",
-                                    ], id: \.self) { suggestion in
-                                        Button {
-                                            Task { await model.sendChat(suggestion) }
-                                        } label: {
-                                            Text(suggestion)
-                                                .font(.caption).foregroundStyle(Theme.text)
-                                                .padding(.horizontal, Theme.s3)
-                                                .padding(.vertical, Theme.s2)
-                                                .background(Theme.surfaceRaised, in: Capsule())
-                                                .overlay(Capsule().strokeBorder(Theme.line))
-                                        }
-                                        .buttonStyle(.plain)
-                                        .disabled(model.isChatting)
-                                    }
-                                }
-                                }
-                            }
-                            .padding(.top, Theme.s6)
+            if Theme.isRenderingOffscreen && inlineWhenOffscreen {
+                // ImageRenderer draws nothing inside a ScrollView.
+                messages
+                Spacer(minLength: 0)
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView { messages }
+                        .onChange(of: model.chatMessages) { _, _ in
+                            withAnimation { proxy.scrollTo("chat-bottom", anchor: .bottom) }
                         }
-                        ForEach(model.chatMessages) { message in
-                            ChatBubble(message: message)
-                        }
-                        if model.isChatting {
-                            HStack(spacing: 6) {
-                                ProgressView().controlSize(.small)
-                                Text(L("assistant.thinking")).font(.caption).foregroundStyle(Theme.textDim)
-                            }
-                            .padding(.horizontal, 16)
-                        }
-                        Color.clear.frame(height: 1).id("chat-bottom")
-                    }
-                    .padding(.vertical, 12)
-                }
-                .onChange(of: model.chatMessages) { _, _ in
-                    withAnimation { proxy.scrollTo("chat-bottom", anchor: .bottom) }
                 }
             }
 
             HStack(spacing: Theme.s2) {
-                TextField(L("assistant.placeholder"), text: $draft, axis: .vertical)
-                    .textFieldStyle(.plain).font(.callout).foregroundStyle(Theme.text)
-                    .lineLimit(1...4)
-                    .focused($composerFocused)
-                    .onSubmit { send() }
-                    .accessibilityLabel(L("assistant.placeholder.a11y"))
+                if Theme.isRenderingOffscreen && inlineWhenOffscreen {
+                    // ImageRenderer paints a text field as a placeholder.
+                    Text(L("assistant.placeholder"))
+                        .font(.callout).foregroundStyle(Theme.textDim)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    TextField(L("assistant.placeholder"), text: $draft, axis: .vertical)
+                        .textFieldStyle(.plain).font(.callout).foregroundStyle(Theme.text)
+                        .lineLimit(1...4)
+                        .focused($composerFocused)
+                        .onSubmit { send() }
+                        .accessibilityLabel(L("assistant.placeholder.a11y"))
+                }
                 Button { send() } label: {
                     Image(systemName: "arrow.up.circle.fill").font(.title2)
                 }
@@ -94,6 +61,57 @@ struct AssistantThread: View {
             .padding(.horizontal, Theme.s4).padding(.vertical, Theme.s3)
         }
         .onAppear { composerFocused = true }
+    }
+
+    private var messages: some View {
+        LazyVStack(alignment: .leading, spacing: 10) {
+            if model.chatMessages.isEmpty {
+                VStack(spacing: Theme.s4) {
+                    EmptyState(
+                        icon: "sparkles",
+                        title: L("assistant.empty"))
+                    // One-click starters: discoverability beats a
+                    // blank prompt. Each sends immediately. The
+                    // dock is too narrow for them — it opens with
+                    // the mail already in context instead.
+                    if showsStarters {
+                    VStack(spacing: Theme.s2) {
+                        ForEach([
+                            "오늘 제일 중요한 메일 뭐야?",
+                            "답장 안 한 것 중 급한 것만 알려줘",
+                            "이번 주 미팅 준비할 것 정리해줘",
+                        ], id: \.self) { suggestion in
+                            Button {
+                                Task { await model.sendChat(suggestion) }
+                            } label: {
+                                Text(suggestion)
+                                    .font(.caption).foregroundStyle(Theme.text)
+                                    .padding(.horizontal, Theme.s3)
+                                    .padding(.vertical, Theme.s2)
+                                    .background(Theme.surfaceRaised, in: Capsule())
+                                    .overlay(Capsule().strokeBorder(Theme.line))
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(model.isChatting)
+                        }
+                    }
+                    }
+                }
+                .padding(.top, Theme.s6)
+            }
+            ForEach(model.chatMessages) { message in
+                ChatBubble(message: message)
+            }
+            if model.isChatting {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text(L("assistant.thinking")).font(.caption).foregroundStyle(Theme.textDim)
+                }
+                .padding(.horizontal, 16)
+            }
+            Color.clear.frame(height: 1).id("chat-bottom")
+        }
+        .padding(.vertical, 12)
     }
 
     private func send() {

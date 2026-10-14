@@ -44,14 +44,26 @@ struct CollapsedBar: View {
                 // show no error at all, forever — staleness matters MORE when
                 // the user believes urgent items are live (2026-08-10, the
                 // 403-freeze hole).
-                if model.loadError != nil {
-                    HStack(spacing: 5) {
-                        Circle().fill(Theme.tint(.push).opacity(0.7)).frame(width: 6, height: 6)
-                        Text(L("bar.offline")).font(.caption)
+                if let notice = model.pillNotice {
+                    // "Offline" only when the network is the cause, and the
+                    // chip is the retry (M6); it used to read "offline" for
+                    // every failure and do nothing.
+                    Button {
+                        Task { await model.retryLoad() }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Circle().fill(Theme.tint(.push).opacity(0.7)).frame(width: 6, height: 6)
+                                .accessibilityHidden(true)
+                            Text(notice.shortLabel).font(.caption)
+                        }
+                        .foregroundStyle(Theme.textDim)
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(Theme.surfaceRaised, in: Capsule())
                     }
-                    .foregroundStyle(Theme.textDim)
-                    .padding(.horizontal, 8).padding(.vertical, 3)
-                    .background(Theme.surfaceRaised, in: Capsule())
+                    .buttonStyle(.plain)
+                    .disabled(!SurfaceStateRules.mayRetry(isLoading: model.isLoadingQueue))
+                    .help(L("bar.retry.help"))
+                    .accessibilityLabel(L("bar.retry.a11y", notice.shortLabel))
                 } else if pushCount == 0 {
                     HStack(spacing: 4) {
                         Image(systemName: "checkmark").font(.caption2.weight(.semibold))

@@ -36,12 +36,14 @@ import { useToast } from "../../components/toast";
 import { TrustDot, type TrustScoreData } from "../../components/trust-badge";
 import ErrorAlert from "../../components/ui/error-alert";
 import { apiFetch } from "../../lib/api";
+import { useAuth } from "../../lib/auth";
 import { useT } from "../../lib/i18n";
 import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
 import { serverErrorMessage } from "../../lib/server-error";
 import { formatRelative } from "../../lib/text";
 import { useKeyboardTriage } from "../../lib/use-hotkeys";
+import { MailV2 } from "./_v2/mail-v2";
 import { UNDO_NOTICE_SECONDS, useLaneMove } from "./use-lane-move";
 import { TRIAGE_ROW_ATTR, useListTriage } from "./use-list-triage";
 
@@ -195,9 +197,15 @@ const DOMAIN_FILTER_KEYS: Filter[] = ["finance", "legal", "sales", "support"];
 export default function EmailPage() {
   return (
     <AuthGuard>
-      <EmailView />
+      <MailSwitch />
     </AuthGuard>
   );
+}
+
+// MAIL_V2 (productization plan P5): the lane-first list, only when the API
+// reports the flag. Anything else renders the list below, unchanged.
+function MailSwitch() {
+  return useAuth().user?.mailV2 === true ? <MailV2 /> : <EmailView />;
 }
 
 function EmailView() {

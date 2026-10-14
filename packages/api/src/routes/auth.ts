@@ -20,7 +20,9 @@ import {
   appleLoginEnabled,
   INIT_SYNC_EMAIL_COUNT,
   keyboardTriageEnabled,
+  mailV2Enabled,
   naverLoginEnabled,
+  unifiedHomeEnabled,
 } from "../config.js";
 import { encryptOptional, encryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
@@ -491,6 +493,10 @@ export function authRoutes(app: FastifyInstance) {
           // configured). The web paywall disables its subscribe button when
           // false so a native-IAP-only launch never shows a dead button.
           webCheckoutAvailable: isWebCheckoutAvailable(),
+          // UNIFIED_HOME, here as well as on /me: a password sign-in routes to
+          // the home before /me is ever read, so it needs the flag to land
+          // on Today rather than the legacy home.
+          unifiedHome: unifiedHomeEnabled(),
         },
       });
     },
@@ -614,6 +620,10 @@ export function authRoutes(app: FastifyInstance) {
           // configured). The web paywall disables its subscribe button when
           // false so a native-IAP-only launch never shows a dead button.
           webCheckoutAvailable: isWebCheckoutAvailable(),
+          // UNIFIED_HOME, here as well as on /me: a password sign-in routes to
+          // the home before /me is ever read, so it needs the flag to land
+          // on Today rather than the legacy home.
+          unifiedHome: unifiedHomeEnabled(),
         },
       });
     },
@@ -698,6 +708,13 @@ export function authRoutes(app: FastifyInstance) {
           // the web turns its hotkey registry, shortcut sheet and optimistic
           // lane moves on only when this is true. An older client ignores it.
           keyboardTriage: keyboardTriageEnabled(),
+          // Server-driven client flag (MAIL_V2, productization plan P5): the
+          // web renders /email as the lane-first list only when this is true.
+          mailV2: mailV2Enabled(),
+          // Server-driven client flag (UNIFIED_HOME, productization plan P6):
+          // the web makes Today the home and switches to the unified nav only
+          // when this is true.
+          unifiedHome: unifiedHomeEnabled(),
         },
       });
     } catch {
@@ -741,6 +758,9 @@ export function authRoutes(app: FastifyInstance) {
           // configured). The web paywall disables its subscribe button when
           // false so a native-IAP-only launch never shows a dead button.
           webCheckoutAvailable: isWebCheckoutAvailable(),
+          // UNIFIED_HOME: a client that replaces its user with this response
+          // must not lose the home it was told at sign-in.
+          unifiedHome: unifiedHomeEnabled(),
         },
       });
     },

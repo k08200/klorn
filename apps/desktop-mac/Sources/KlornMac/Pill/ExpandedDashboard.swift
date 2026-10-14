@@ -11,6 +11,9 @@ struct ExpandedPanel: View {
         VStack(spacing: 0) {
             header
             Divider().overlay(Theme.line).padding(.horizontal, 18)
+            // A snooze from the ticker that did not take says so here too:
+            // the row it was clicked on is back, and silence reads as a bug.
+            if let message = model.actionError { ActionErrorBanner(message: message) }
             HStack(alignment: .top, spacing: 0) {
                 InboxColumn(actions: actions)
                 columnDivider
@@ -292,7 +295,10 @@ private struct RecentPushColumn: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             ColumnHeader(title: L("section.recentPush"))
-            if model.queue == nil {
+            if SurfaceStateRules.isBlocking(model.surfaceState) {
+                // Signed out, offline or failed (M6): never the skeleton.
+                SurfaceStateView(state: model.surfaceState, compact: true)
+            } else if model.queue == nil {
                 FirstSyncState()
             } else if items.isEmpty {
                 EmptyState(icon: Tier.push.emptyIcon, title: Tier.push.emptyTitle)

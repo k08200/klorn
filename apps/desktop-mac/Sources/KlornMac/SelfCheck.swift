@@ -1842,6 +1842,21 @@ func runSelfChecks() async -> Bool {
     print("Token store:")
     for (name, ok) in tokenStoreSelfChecks(sourceDir: sourceDir) { check("token store — \(name)", ok) }
 
+    print("Main window navigation and Today (M4b):")
+    for (name, ok) in await navSelfChecks(sourceDir: sourceDir) { check(name, ok) }
+
+    print("Compose window and sheets (M5):")
+    for (name, ok) in await windowSelfChecks(sourceDir: sourceDir) { check(name, ok) }
+
+    print("States and first launch (M6):")
+    for (name, ok) in await stateSelfChecks(sourceDir: sourceDir) { check(name, ok) }
+
+    print("Session scope:")
+    for (name, ok) in await sessionSelfChecks(sourceDir: sourceDir) { check(name, ok) }
+
+    // Design tokens and the one-badge row rule in the main window (M7).
+    for (name, ok) in tokenSelfChecks(sourceDir: sourceDir) { check(name, ok) }
+
     print("Localization:")
     // A key present in one language and missing in another ships a raw key
     // ("prefs.done") to whoever runs the other language — the kind of bug that
@@ -1979,8 +1994,12 @@ func runSelfChecks() async -> Bool {
     let proseLiteral = try! NSRegularExpression(
         pattern: #""[A-Z][a-z]+(?: [A-Za-z,'’]+){1,}\.?""#)
     var proseOffenders: [String] = []
-    let proseExempt: Set<String> = ["SelfCheck.swift", "PreviewRender.swift"]
-    for url in swiftFiles where !proseExempt.contains(url.lastPathComponent) {
+    // The preview harness files hold fixture DATA (demo mail), not UI copy.
+    let proseExempt: Set<String> = ["SelfCheck.swift"]
+    for url in swiftFiles
+    where !proseExempt.contains(url.lastPathComponent)
+        && !url.lastPathComponent.hasPrefix("PreviewRender")
+    {
         guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
         for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
@@ -2423,7 +2442,7 @@ func runSelfChecks() async -> Bool {
     check("the main window is reused and remembers its frame",
           windowPart.contains("isReleasedWhenClosed = false")
           && windowPart.contains("setFrameAutosaveName(MainWindowRules.frameAutosaveName)")
-          && windowPart.contains("contentMinSize = MainWindowRules.minSize")
+          && windowPart.contains("usable: MainWindowRules.minSize, titlebarInset: titlebar)")
           && windowPart.contains("sizingOptions = []"))
     check("main window state comes from NSWindow callbacks, never onAppear/onDisappear",
           windowPart.contains("func windowWillClose(")
@@ -2432,8 +2451,9 @@ func runSelfChecks() async -> Bool {
           && lineOffenders {
               ($0.contains("onAppear") || $0.contains("onDisappear")) && $0.contains("mainWindowOpen")
           }.isEmpty)
-    check("the main window hosts the unchanged FullView",
-          windowPart.contains("FullView(actions: actions)"))
+    check("the main window hosts the five-item shell (M4b), not the bar's FullView",
+          windowPart.contains("MainShell(actions: actions)")
+          && !windowPart.contains("FullView(actions: actions)"))
     let appSource = swiftFiles.first { $0.lastPathComponent == "KlornApp.swift" }
         .flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? ""
     check("closing the main window never quits the app",

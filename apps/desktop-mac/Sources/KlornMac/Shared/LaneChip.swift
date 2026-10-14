@@ -5,13 +5,22 @@ import SwiftUI
 /// navigation.
 struct LaneChip: View {
     let tier: Tier
+    /// `.window`: the main window's chip (12pt, the AA chip ink). `.bar`
+    /// is the bar's chip, unchanged.
+    var style: ShellStyle = .bar
+
     var body: some View {
-        Text(tier.label)
-            .font(Theme.Typo.micro)
-            .foregroundStyle(Theme.tint(tier))
-            .padding(.horizontal, 6).padding(.vertical, 2)
-            .background(Theme.tint(tier).opacity(0.13), in: Capsule())
-            .accessibilityLabel(tier.label)
+        switch style {
+        case .bar:
+            Text(tier.label)
+                .font(Theme.Typo.micro)
+                .foregroundStyle(Theme.tint(tier))
+                .padding(.horizontal, 6).padding(.vertical, 2)
+                .background(Theme.tint(tier).opacity(0.13), in: Capsule())
+                .accessibilityLabel(tier.label)
+        case .window:
+            WindowLaneChip(tier: tier)
+        }
     }
 }
 

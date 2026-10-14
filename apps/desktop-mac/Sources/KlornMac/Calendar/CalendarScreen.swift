@@ -30,10 +30,20 @@ struct CalendarScreen: View {
     /// The anchor date the visible range derives from (today at first).
     @State private var anchor = Date()
 
-    init(actions: TopBarActions, initialScope: Scope = .month, initialAnchor: Date = Date()) {
+    /// `.window` in the main window: the month grid fills the height it is
+    /// given and the month view wears the type roles. The default is the
+    /// bar's calendar, unchanged.
+    let style: ShellStyle
+    private var m: CalendarMetrics { style == .window ? .window : .bar }
+
+    init(
+        actions: TopBarActions, initialScope: Scope = .month, initialAnchor: Date = Date(),
+        style: ShellStyle = .bar
+    ) {
         self.actions = actions
         self.initialScope = initialScope
         self.initialAnchor = initialAnchor
+        self.style = style
     }
 
     private var calendar: Calendar { Calendar.current }
@@ -122,7 +132,7 @@ struct CalendarScreen: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            Text(rangeTitle).font(.title3.weight(.semibold)).foregroundStyle(Theme.text)
+            Text(rangeTitle).font(m.title).foregroundStyle(Theme.text)
                 .contentTransition(.numericText())
             if model.calendarRangeLoading && !Theme.isRenderingOffscreen {
                 ProgressView().controlSize(.mini)
@@ -160,7 +170,7 @@ struct CalendarScreen: View {
                     }
                 }
                 .padding(2)
-                .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 8))
+                .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: m.scopeRadius))
             } else {
                 Picker("", selection: $scope) {
                     ForEach(Scope.allCases) { s in
@@ -171,7 +181,7 @@ struct CalendarScreen: View {
                 .accessibilityLabel(L("cal.scope.a11y"))
             }
         }
-        .padding(.horizontal, 24).padding(.vertical, 14)
+        .padding(.horizontal, m.headerInset).padding(.vertical, m.headerVertical)
     }
 
     // MARK: 일 — one day, its events in order (all-day first).
@@ -255,27 +265,41 @@ struct CalendarScreen: View {
         let todayKey = localDayKey(Date(), calendar: calendar)
         let symbols = orderedWeekdaySymbols
         let columns = Array(repeating: GridItem(.flexible(), spacing: 1), count: 7)
+        let grid = { (rowHeight: CGFloat) in
+            LazyVGrid(columns: columns, spacing: 1) {
+                ForEach(days, id: \.self) { day in
+                    monthCell(day, inMonth: calendar.component(.month, from: day) == comps.month,
+                              todayKey: todayKey, rowHeight: rowHeight)
+                }
+            }
+            .background(Theme.line)
+        }
         return VStack(spacing: 0) {
             HStack(spacing: 1) {
                 ForEach(symbols, id: \.self) { day in
-                    Text(day).font(Theme.Typo.micro).foregroundStyle(Theme.textDim)
+                    Text(day).font(m.weekday).foregroundStyle(Theme.textDim)
                         .frame(maxWidth: .infinity)
                 }
             }
             .padding(.vertical, 6)
             Divider().overlay(Theme.line)
-            LazyVGrid(columns: columns, spacing: 1) {
-                ForEach(days, id: \.self) { day in
-                    monthCell(day, inMonth: calendar.component(.month, from: day) == comps.month,
-                              todayKey: todayKey)
+            if style == .window {
+                // The weeks share the height the window gives them, so a
+                // large window has no empty band under the last week.
+                GeometryReader { proxy in
+                    grid(CalendarMetrics.monthRowHeight(
+                        available: proxy.size.height, weeks: days.count / 7))
                 }
+            } else {
+                grid(CalendarMetrics.minMonthRow)
+                Spacer(minLength: 0)
             }
-            .background(Theme.line)
-            Spacer(minLength: 0)
         }
     }
 
-    private func monthCell(_ day: Date, inMonth: Bool, todayKey: String) -> some View {
+    private func monthCell(
+        _ day: Date, inMonth: Bool, todayKey: String, rowHeight: CGFloat
+    ) -> some View {
         let key = localDayKey(day, calendar: calendar)
         let events = sortedForDay(buckets[key] ?? [])
         let isToday = key == todayKey
@@ -302,22 +326,22 @@ struct CalendarScreen: View {
                         }
                         Text(event.title).lineLimit(1)
                     }
-                    .font(Theme.Typo.micro)
+                    .font(m.chip)
                     .foregroundStyle(inMonth ? Theme.text : Theme.textDim)
                     .padding(.horizontal, 4).padding(.vertical, 1)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Theme.accent.opacity(inMonth ? 0.16 : 0.08),
-                                in: RoundedRectangle(cornerRadius: 3))
+                                in: RoundedRectangle(cornerRadius: m.chipRadius))
                 }
                 if events.count > 2 {
                     Text(L("cal.more", events.count - 2))
-                        .font(Theme.Typo.micro).foregroundStyle(Theme.textDim)
+                        .font(m.chip).foregroundStyle(Theme.textDim)
                         .padding(.horizontal, 4)
                 }
                 Spacer(minLength: 0)
             }
             .padding(5)
-            .frame(maxWidth: .infinity, minHeight: 84, alignment: .topLeading)
+            .frame(maxWidth: .infinity, minHeight: rowHeight, alignment: .topLeading)
             .background(Theme.panel.opacity(inMonth ? 1 : 0.6))
             .contentShape(Rectangle())
         }
