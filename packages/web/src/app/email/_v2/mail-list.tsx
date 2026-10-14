@@ -12,20 +12,30 @@
  *
  * A row's controls are siblings of its link, never inside it: a select
  * checkbox over the unread dot (hover / focus, or pinned while a selection is
- * in progress; Shift extends the range) and the trailing actions — remind,
- * read state, archive.
+ * in progress; Shift extends the range) and the trailing actions — lane,
+ * remind, read state, archive.
+ *
+ * On touch a row also swipes (P10): right archives, left opens the lane
+ * sheet. Both read the same plan as the trailing actions (row-actions.ts), so
+ * a swipe never offers what the keyboard cannot reach, and a blocked action
+ * says why instead of doing nothing.
  */
 
-import type { EmailListItem, EmailThreadRow } from "@klorn/contract";
-import { useEffect, useRef } from "react";
+import type { EmailListItem, EmailThreadRow, LiveTier } from "@klorn/contract";
+import { useEffect, useRef, useState } from "react";
+import { useToast } from "../../../components/toast";
 import Button from "../../../components/ui/button";
 import EmptyState from "../../../components/ui/empty-state";
 import { MailRow } from "../../../components/ui/mail-row";
-import { Menu } from "../../../components/ui/menu";
+import { Menu, type MenuSection } from "../../../components/ui/menu";
 import { MailRowSkeleton, SkeletonGroup } from "../../../components/ui/skeleton";
+import { SwipeRow } from "../../../components/ui/swipe-row";
 import { useT } from "../../../lib/i18n";
+import { CORE_TIERS } from "../../../lib/tiers";
 import { TRIAGE_ROW_ATTR } from "../use-list-triage";
-import { ArchiveIcon, ClockIcon, InboxIcon, ReadIcon, UnreadIcon } from "./icons";
+import { ArchiveIcon, ClockIcon, InboxIcon, LanesIcon, ReadIcon, UnreadIcon } from "./icons";
+import { LaneSheet } from "./lane-sheet";
+import { LANE_DOT } from "./mail-header";
 import {
   type AccountOption,
   formatRowTime,
@@ -38,6 +48,7 @@ import {
   senderName,
 } from "./model";
 import { REMINDER_KEYS, REMINDER_LABEL_KEYS, type ReminderKey } from "./reminders";
+import { type RowActionPlan, rowActionPlan } from "./row-actions";
 
 const SKELETON_ROWS = ["a", "b", "c", "d", "e", "f", "g", "h"];
 /** Start loading the next page this far before the end scrolls into view. */
@@ -66,6 +77,8 @@ interface MailRowsProps {
   onArchive: (email: EmailListItem) => void;
   onSetRead: (email: EmailListItem, isRead: boolean) => void;
   onRemind: (email: EmailListItem, key: ReminderKey) => void;
+  /** Reclassify only (use-lane-move: optimistic, with undo). */
+  onMoveLane: (email: EmailListItem, tier: LiveTier) => void;
   /** Toggle a row's selection; `range` extends it from the last toggled row. */
   onPick: (email: EmailListItem, range: boolean) => void;
 }
@@ -96,98 +109,221 @@ function RowPick({ label, picked, onPick }: RowPickProps) {
   );
 }
 
-export function MailRows(props: MailRowsProps) {
-  const { emails, view, accounts, time, cursorId, pickedIds } = props;
+/** The lane menu on a row: the reader's lane menu, for one row. */
+function laneMenuSection(
+  email: EmailListItem,
+  plan: RowActionPlan,
+  t: (key: string) => string,
+  onMove: (tier: LiveTier) => void,
+): MenuSection {
+  const blocked = plan.lanes.blockedReason;
+  return {
+    id: "lanes",
+    // The heading doubles as the reason when lanes cannot be changed.
+    heading: blocked ? t(blocked) : t("mailV2.reader.moveTo"),
+    items: CORE_TIERS.map((lane) => ({
+      id: lane,
+      label: lane,
+      leading: <span aria-hidden="true" className={`size-2 rounded-full ${LANE_DOT[lane]}`} />,
+      kind: "radio" as const,
+      checked: email.tier === lane,
+      disabled: blocked !== null,
+      onSelect: () => {
+        if (lane !== email.tier) onMove(lane);
+      },
+    })),
+  };
+}
+
+interface RowActionsProps {
+  email: EmailListItem;
+  plan: RowActionPlan;
+  busy: boolean;
+  archiveBlocked: string | null;
+  onArchive: () => void;
+  onSetRead: (isRead: boolean) => void;
+  onRemind: (key: ReminderKey) => void;
+  onMoveLane: (tier: LiveTier) => void;
+}
+
+/** The row's trailing actions: every swipe action is here too (no swipe-only actions). */
+function RowActions({ email, plan, busy, archiveBlocked, ...on }: RowActionsProps) {
   const { t } = useT();
-  const queue = readerQueue(view.filter);
+  const readKey = email.isRead ? "mailV2.row.markUnread" : "mailV2.row.markRead";
+  return (
+    <>
+      <Menu
+        label={t("mailV2.reader.moveTo")}
+        variant="icon"
+        align="end"
+        disabled={busy}
+        sections={[laneMenuSection(email, plan, t, on.onMoveLane)]}
+      >
+        <LanesIcon />
+      </Menu>
+      <Menu
+        label={t("mailV2.list.remind")}
+        variant="icon"
+        align="end"
+        disabled={busy}
+        sections={[
+          {
+            id: "remind",
+            heading: t("mailV2.list.remind"),
+            items: REMINDER_KEYS.map((key) => ({
+              id: key,
+              label: t(REMINDER_LABEL_KEYS[key]),
+              onSelect: () => on.onRemind(key),
+            })),
+          },
+        ]}
+      >
+        <ClockIcon />
+      </Menu>
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={t(readKey)}
+        title={t(readKey)}
+        disabled={busy}
+        onClick={() => on.onSetRead(!email.isRead)}
+      >
+        {email.isRead ? <UnreadIcon /> : <ReadIcon />}
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={t("mailV2.row.archive")}
+        title={archiveBlocked ?? t("mailV2.row.archive")}
+        disabled={busy || archiveBlocked !== null}
+        onClick={on.onArchive}
+      >
+        <ArchiveIcon />
+      </Button>
+    </>
+  );
+}
+
+interface MailRowItemProps extends Omit<MailRowsProps, "emails" | "cursorId" | "pickedIds"> {
+  email: EmailListItem;
+  cursor: boolean;
+  picked: boolean;
+  selecting: boolean;
+  /** A left swipe: open the lane sheet for this mail. */
+  onLanes: (email: EmailListItem) => void;
+}
+
+function MailRowItem(props: MailRowItemProps) {
+  const { email, view, accounts, time, cursor, picked, selecting } = props;
+  const { t } = useT();
+  const { toast } = useToast();
+  const account = rowAccount(email, accounts);
+  const subject = email.subject || t("mailV2.noSubject");
+  const plan = rowActionPlan({
+    isDemo: props.readOnly,
+    needsReconnect: account?.needsReconnect === true,
+    tier: email.tier,
+  });
+  const archiveBlocked = plan.archive.blockedReason ? t(plan.archive.blockedReason) : null;
+  const laneBlocked = plan.lanes.blockedReason ? t(plan.lanes.blockedReason) : null;
+  return (
+    <li {...{ [TRIAGE_ROW_ATTR]: email.id }}>
+      {picked && <span className="sr-only">{t("mailV2.bulk.rowSelected")}</span>}
+      <SwipeRow
+        disabled={selecting || props.busy}
+        right={{
+          label: t("mailV2.row.archive"),
+          icon: <ArchiveIcon />,
+          blockedReason: archiveBlocked,
+          exits: true,
+        }}
+        left={{ label: t("mailV2.reader.moveTo"), icon: <LanesIcon />, blockedReason: laneBlocked }}
+        onCommit={(direction) => {
+          if (direction === "right") props.onArchive(email);
+          else props.onLanes(email);
+        }}
+        onBlocked={(_direction, reason) => toast(reason, "info")}
+      >
+        <MailRow
+          sender={senderName(email.from)}
+          subject={subject}
+          snippet={email.snippet ?? undefined}
+          time={formatRowTime(email.date, time.now, time.locale, time.timeZone)}
+          timeIso={email.date}
+          tier={rowLane(view, email.tier)}
+          // No AttentionItem yet: the mail is listed, but no lane is claimed.
+          tierPending={email.tier === null ? t("mailV2.row.sorting") : undefined}
+          source={account ? { provider: account.provider, nickname: account.nickname } : null}
+          unread={!email.isRead}
+          hasAttachment={email.attachmentCount > 0}
+          selected={cursor}
+          href={`/email/${email.id}?markRead=false&queue=${readerQueue(view.filter)}`}
+          className={cursor ? CURSOR_CLASS : picked ? PICKED_CLASS : ""}
+          leading={
+            props.readOnly ? undefined : (
+              <RowPick
+                label={t("mailV2.list.select", { subject })}
+                picked={picked}
+                onPick={(range) => props.onPick(email, range)}
+              />
+            )
+          }
+          leadingPinned={selecting}
+          // Four 44px actions: the badges and the time slide clear of them.
+          actionsReserve="group-hover:pr-52 group-focus-within:pr-52"
+          actions={
+            props.readOnly ? undefined : (
+              <RowActions
+                email={email}
+                plan={plan}
+                busy={props.busy}
+                archiveBlocked={archiveBlocked}
+                onArchive={() => props.onArchive(email)}
+                onSetRead={(isRead) => props.onSetRead(email, isRead)}
+                onRemind={(key) => props.onRemind(email, key)}
+                onMoveLane={(tier) => props.onMoveLane(email, tier)}
+              />
+            )
+          }
+        />
+      </SwipeRow>
+    </li>
+  );
+}
+
+export function MailRows(props: MailRowsProps) {
+  const { emails, cursorId, pickedIds, ...rest } = props;
+  const { t } = useT();
+  const [laneTarget, setLaneTarget] = useState<EmailListItem | null>(null);
   const selecting = pickedIds.size > 0;
   return (
-    <ul className="flex flex-col">
-      {emails.map((email) => {
-        const account = rowAccount(email, accounts);
-        const cursor = cursorId === email.id;
-        const picked = pickedIds.has(email.id);
-        const subject = email.subject || t("mailV2.noSubject");
-        return (
-          <li key={email.id} {...{ [TRIAGE_ROW_ATTR]: email.id }}>
-            {picked && <span className="sr-only">{t("mailV2.bulk.rowSelected")}</span>}
-            <MailRow
-              sender={senderName(email.from)}
-              subject={subject}
-              snippet={email.snippet ?? undefined}
-              time={formatRowTime(email.date, time.now, time.locale, time.timeZone)}
-              timeIso={email.date}
-              tier={rowLane(view, email.tier)}
-              // No AttentionItem yet: the mail is listed, but no lane is claimed.
-              tierPending={email.tier === null ? t("mailV2.row.sorting") : undefined}
-              source={account ? { provider: account.provider, nickname: account.nickname } : null}
-              unread={!email.isRead}
-              hasAttachment={email.attachmentCount > 0}
-              selected={cursor}
-              href={`/email/${email.id}?markRead=false&queue=${queue}`}
-              className={cursor ? CURSOR_CLASS : picked ? PICKED_CLASS : ""}
-              leading={
-                props.readOnly ? undefined : (
-                  <RowPick
-                    label={t("mailV2.list.select", { subject })}
-                    picked={picked}
-                    onPick={(range) => props.onPick(email, range)}
-                  />
-                )
-              }
-              leadingPinned={selecting}
-              // Three 44px actions: the badges and the time slide clear of them.
-              actionsReserve="group-hover:pr-40 group-focus-within:pr-40"
-              actions={
-                props.readOnly ? undefined : (
-                  <>
-                    <Menu
-                      label={t("mailV2.list.remind")}
-                      variant="icon"
-                      align="end"
-                      disabled={props.busy}
-                      sections={[
-                        {
-                          id: "remind",
-                          heading: t("mailV2.list.remind"),
-                          items: REMINDER_KEYS.map((key) => ({
-                            id: key,
-                            label: t(REMINDER_LABEL_KEYS[key]),
-                            onSelect: () => props.onRemind(email, key),
-                          })),
-                        },
-                      ]}
-                    >
-                      <ClockIcon />
-                    </Menu>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label={t(email.isRead ? "mailV2.row.markUnread" : "mailV2.row.markRead")}
-                      title={t(email.isRead ? "mailV2.row.markUnread" : "mailV2.row.markRead")}
-                      disabled={props.busy}
-                      onClick={() => props.onSetRead(email, !email.isRead)}
-                    >
-                      {email.isRead ? <UnreadIcon /> : <ReadIcon />}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label={t("mailV2.row.archive")}
-                      title={t("mailV2.row.archive")}
-                      disabled={props.busy}
-                      onClick={() => props.onArchive(email)}
-                    >
-                      <ArchiveIcon />
-                    </Button>
-                  </>
-                )
-              }
-            />
-          </li>
-        );
-      })}
-    </ul>
+    <>
+      <ul className="flex flex-col">
+        {emails.map((email) => (
+          <MailRowItem
+            key={email.id}
+            {...rest}
+            email={email}
+            cursor={cursorId === email.id}
+            picked={pickedIds.has(email.id)}
+            selecting={selecting}
+            onLanes={setLaneTarget}
+          />
+        ))}
+      </ul>
+      <LaneSheet
+        target={
+          laneTarget && {
+            subject: laneTarget.subject || t("mailV2.noSubject"),
+            tier: laneTarget.tier,
+          }
+        }
+        onPick={(tier) => {
+          if (laneTarget) props.onMoveLane(laneTarget, tier);
+        }}
+        onClose={() => setLaneTarget(null)}
+      />
+    </>
   );
 }
 

@@ -26,7 +26,7 @@ export function UndoBar(props: UndoBarProps) {
   const { t } = useT();
   return (
     <div
-      className={`pointer-events-none fixed inset-x-0 z-40 flex justify-center px-4 md:bottom-6 ${
+      className={`pointer-events-none fixed inset-x-0 z-40 flex justify-center px-4 max-md:pr-20 md:bottom-6 ${
         raised
           ? "bottom-[calc(158px+env(safe-area-inset-bottom))]"
           : "bottom-[calc(74px+env(safe-area-inset-bottom))]"

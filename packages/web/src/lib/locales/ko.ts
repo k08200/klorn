@@ -1470,6 +1470,7 @@ const ko: Record<string, string> = {
   "mailV2.reader.back": "메일로 돌아가기",
   "mailV2.reader.actions": "메일 작업",
   "mailV2.reader.moveTo": "레인 이동",
+  "mailV2.swipe.current": "현재",
   "mailV2.reader.noNext": "이 보기에는 아래에 메일이 더 없습니다.",
   "mailV2.reader.noPrev": "이 보기에는 더 새로운 메일이 없습니다.",
   "mailV2.reader.firstContact": "첫 연락",

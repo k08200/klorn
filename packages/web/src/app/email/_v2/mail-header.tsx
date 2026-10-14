@@ -186,7 +186,7 @@ export function MailHeader(props: MailHeaderProps) {
             onKeyDown={onSearchKeyDown}
             placeholder={t("mail.searchMail")}
             aria-label={t("mail.searchMail")}
-            className="focus-ring h-11 w-full rounded-control border border-line bg-surface-panel pl-9 pr-3 text-body text-ink placeholder:text-ink-muted"
+            className="focus-ring h-11 w-full rounded-control border border-line bg-surface-panel pl-9 pr-3 text-body text-ink placeholder:text-ink-muted pointer-coarse:text-field"
           />
         </form>
         <Button

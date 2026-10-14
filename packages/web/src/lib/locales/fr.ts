@@ -1505,6 +1505,7 @@ const fr: Record<string, string> = {
   "mailV2.reader.back": "Retour au courrier",
   "mailV2.reader.actions": "Actions du courrier",
   "mailV2.reader.moveTo": "Déplacer vers une voie",
+  "mailV2.swipe.current": "Actuelle",
   "mailV2.reader.noNext": "Plus de courrier en dessous dans cette vue.",
   "mailV2.reader.noPrev": "Pas de courrier plus récent dans cette vue.",
   "mailV2.reader.firstContact": "Premier contact",

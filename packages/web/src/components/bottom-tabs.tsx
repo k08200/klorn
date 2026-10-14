@@ -47,6 +47,9 @@ export default function BottomTabs() {
   const closeAccount = useCallback(() => setAccountOpen(false), []);
   const unified = user?.unifiedHome === true;
   const tabs = unified ? UNIFIED_TABS : TABS;
+  // UNIFIED_HOME (P10): tab labels move off the retired 10px size to the
+  // caption role (12px); the legacy bar is left as it was.
+  const labelSize = unified ? "text-caption" : "text-[10px]";
 
   const accountActive = ACCOUNT_ROUTES.some((r) => pathname === r || pathname.startsWith(`${r}/`));
 
@@ -73,7 +76,7 @@ export default function BottomTabs() {
                 <Link
                   href={tab.href}
                   aria-current={active ? "page" : undefined}
-                  className={`focus-ring flex min-h-[62px] flex-col items-center justify-center gap-1 py-2 text-[10px] transition ${
+                  className={`focus-ring flex min-h-[62px] flex-col items-center justify-center gap-1 py-2 ${labelSize} transition ${
                     active ? "text-accent-deep" : "text-ink-mid"
                   }`}
                 >
@@ -89,7 +92,7 @@ export default function BottomTabs() {
               onClick={() => setAccountOpen(true)}
               aria-haspopup="dialog"
               aria-expanded={accountOpen}
-              className={`focus-ring flex w-full min-h-[62px] flex-col items-center justify-center gap-1 py-2 text-[10px] transition ${
+              className={`focus-ring flex w-full min-h-[62px] flex-col items-center justify-center gap-1 py-2 ${labelSize} transition ${
                 accountActive || accountOpen ? "text-accent-deep" : "text-ink-mid"
               }`}
             >

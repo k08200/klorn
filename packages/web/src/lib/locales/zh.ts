@@ -1389,6 +1389,7 @@ const zh: Record<string, string> = {
   "mailV2.reader.back": "返回邮件",
   "mailV2.reader.actions": "邮件操作",
   "mailV2.reader.moveTo": "移到其他分类",
+  "mailV2.swipe.current": "当前",
   "mailV2.reader.noNext": "此视图下方没有更多邮件。",
   "mailV2.reader.noPrev": "此视图中没有更新的邮件。",
   "mailV2.reader.firstContact": "首次联系",

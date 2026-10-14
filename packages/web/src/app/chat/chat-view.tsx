@@ -167,7 +167,10 @@ export function ChatView({ hub = false }: { hub?: boolean }) {
             maxLength={4000}
             placeholder={t("chat.inputPlaceholder")}
             aria-label={hub ? t("today.ask.label") : "Message the assistant"}
-            className="max-h-32 flex-1 resize-none bg-transparent text-sm text-ink outline-none placeholder:text-ink-dim"
+            // The hub's composer avoids iOS zoom-on-focus (16px on touch, P10).
+            className={`max-h-32 flex-1 resize-none bg-transparent text-sm text-ink outline-none placeholder:text-ink-dim${
+              hub ? " pointer-coarse:text-field" : ""
+            }`}
           />
           <VoiceButton
             onTranscript={(text) =>

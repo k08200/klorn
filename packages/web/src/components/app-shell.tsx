@@ -135,7 +135,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* Global assistant — bottom-right on every app surface. The full chat
           pages (/chat, and /assistant/chat in the hub) keep their own composer,
           so the dock stays out of the way there. */}
-      {!CHAT_PAGES.some((route) => pathname.startsWith(route)) && <AssistantDock />}
+      {!CHAT_PAGES.some((route) => pathname.startsWith(route)) && (
+        <AssistantDock unified={unifiedHome} />
+      )}
     </div>
   );
 }

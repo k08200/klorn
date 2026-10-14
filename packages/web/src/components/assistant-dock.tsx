@@ -21,7 +21,15 @@ const SUGGESTION_KEYS = [
   "chat.suggestion4",
 ];
 
-export default function AssistantDock() {
+/**
+ * UNIFIED_HOME phone layout (P10): the button and the panel sit one row above
+ * the tab bar *including* the home-indicator inset, so they never touch it on
+ * an iPhone; the undo bar and the reader's action bar share that row and stop
+ * short of the button. Off: the earlier fixed 96px, unchanged.
+ */
+const LIFTED_BOTTOM = "bottom-[calc(74px+env(safe-area-inset-bottom))]";
+
+export default function AssistantDock({ unified = false }: { unified?: boolean }) {
   const { t } = useT();
   const [open, setOpen] = useState(false);
   // The dock floats over whatever page the user is on; on an email page that
@@ -77,7 +85,7 @@ export default function AssistantDock() {
           ref={panelRef}
           role="dialog"
           aria-label={t("nav.assistant")}
-          className="panel-elevated ease-strong fixed bottom-24 right-4 z-[80] flex h-[min(600px,calc(100dvh-8rem))] w-[min(400px,calc(100vw-2rem))] origin-bottom-right flex-col overflow-hidden rounded-2xl border border-line/70 bg-surface-panel transition duration-200 starting:translate-y-2 starting:scale-[0.97] starting:opacity-0 motion-reduce:transition-none md:bottom-[5.25rem] md:right-5"
+          className={`panel-elevated ease-strong fixed ${unified ? LIFTED_BOTTOM : "bottom-24"} right-4 z-[80] flex h-[min(600px,calc(100dvh-8rem))] w-[min(400px,calc(100vw-2rem))] origin-bottom-right flex-col overflow-hidden rounded-2xl border border-line/70 bg-surface-panel transition duration-200 starting:translate-y-2 starting:scale-[0.97] starting:opacity-0 motion-reduce:transition-none md:bottom-[5.25rem] md:right-5`}
         >
           {/* Head */}
           <div className="flex items-center gap-2.5 border-b border-line-soft px-4 py-3">
@@ -194,7 +202,9 @@ export default function AssistantDock() {
                 maxLength={4000}
                 placeholder={t("chat.inputPlaceholder")}
                 aria-label="Message the assistant"
-                className="max-h-24 flex-1 resize-none bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-dim"
+                className={`max-h-24 flex-1 resize-none bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-dim${
+                  unified ? " pointer-coarse:text-field" : ""
+                }`}
               />
               <VoiceButton
                 onTranscript={(text) =>
@@ -233,7 +243,7 @@ export default function AssistantDock() {
         onClick={() => setOpen((p) => !p)}
         aria-expanded={open}
         aria-label={open ? "Close assistant" : "Open assistant"}
-        className="glow-primary ease-strong fixed bottom-24 right-4 z-[81] flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-accent-solid to-accent-solid-hover text-accent-solid-ink transition duration-150 hover:opacity-90 active:scale-[0.94] md:bottom-5 md:right-5"
+        className={`glow-primary ease-strong fixed ${unified ? LIFTED_BOTTOM : "bottom-24"} right-4 z-[81] flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-accent-solid to-accent-solid-hover text-accent-solid-ink transition duration-150 hover:opacity-90 active:scale-[0.94] md:bottom-5 md:right-5`}
       >
         {open ? (
           <svg

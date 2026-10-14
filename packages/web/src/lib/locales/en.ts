@@ -1486,6 +1486,7 @@ const en: Record<string, string> = {
   "mailV2.reader.back": "Back to Mail",
   "mailV2.reader.actions": "Mail actions",
   "mailV2.reader.moveTo": "Move to lane",
+  "mailV2.swipe.current": "Current",
   "mailV2.reader.noNext": "No more mail below in this view.",
   "mailV2.reader.noPrev": "No newer mail in this view.",
   "mailV2.reader.firstContact": "First contact",

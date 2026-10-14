@@ -344,6 +344,11 @@
   --text-caption: 12px;
   --text-caption--line-height: 16px;
   --text-caption--font-weight: 400;
+  /* Text you type on a touch screen: iOS zooms the page into any field under
+     16px, so inputs switch to this with `pointer-coarse:text-field` (P10). */
+  --text-field: 16px;
+  --text-field--line-height: 24px;
+  --text-field--font-weight: 400;
 
   /* Spacing: 4/8/12/16/24/32/48 — Tailwind's default 4px scale already is
      this (1/2/3/4/6/8/12), so no tokens are added. Stay on those steps. */
