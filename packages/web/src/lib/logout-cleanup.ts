@@ -20,6 +20,13 @@ const SENSITIVE_STORAGE_KEYS = [
  * secrets, but they describe the previous user's mail, so logout drops them.
  */
 const MAIL_VIEW_STATE_PREFIX = "klorn.mailV2.";
+// Per-tab view and onboarding-return state. Nothing here is a secret, but it
+// belongs to the signed-out user: a pending onboarding connect marker left in
+// the tab would otherwise route the next account's OAuth return to /onboarding.
+export const SESSION_STATE_PREFIXES: readonly string[] = [
+  MAIL_VIEW_STATE_PREFIX,
+  "klorn.onboardingV2.",
+];
 
 /** The keys under `prefix`, collected first so removing them cannot skip one. */
 export function keysWithPrefix(storage: Pick<Storage, "length" | "key">, prefix: string): string[] {
@@ -37,8 +44,10 @@ export function clearSensitiveStorage(): void {
     localStorage.removeItem(key);
   }
   try {
-    for (const key of keysWithPrefix(sessionStorage, MAIL_VIEW_STATE_PREFIX)) {
-      sessionStorage.removeItem(key);
+    for (const prefix of SESSION_STATE_PREFIXES) {
+      for (const key of keysWithPrefix(sessionStorage, prefix)) {
+        sessionStorage.removeItem(key);
+      }
     }
   } catch {
     // sessionStorage unavailable (private mode): there is nothing to clear.

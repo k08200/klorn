@@ -1607,6 +1607,111 @@ const ko: Record<string, string> = {
   "assistantHub.activity.undo.hint":
     "실행 취소 요청만으로는 되돌려지지 않습니다. 되돌리기 항목이 승인에 추가됩니다.",
   "assistantHub.approvals.unknownTitle": "Klorn이 실행하려는 작업",
+  // Multi-provider first run (productization plan P8, ONBOARDING_V2)
+  "onboardingV2.steps.label": "설정 단계",
+  "onboardingV2.steps.connect": "계정",
+  "onboardingV2.steps.sync": "동기화",
+  "onboardingV2.steps.review": "확인",
+  "onboardingV2.steps.finish": "완료",
+  "onboardingV2.steps.done": "완료됨",
+  "onboardingV2.continue": "계속",
+  "onboardingV2.retry": "다시 시도",
+  "onboardingV2.connect.title": "계정 가져오기",
+  "onboardingV2.connect.body":
+    "Klorn 로그인은 한 번이면 됩니다. 이제 메일 계정마다 한 번씩만 연결하면 Klorn이 그 메일을 한곳에 모아 레인별로 정리합니다. 계정마다 무엇을 가져오는지는 각 카드에 적혀 있습니다.",
+  "onboardingV2.connect.loading": "연결할 수 있는 계정을 불러오는 중",
+  "onboardingV2.connect.loadError": "연결할 수 있는 계정을 불러오지 못했습니다.",
+  "onboardingV2.connect.lanesNote":
+    "Klorn은 메일을 PUSH, MEETING, QUEUE, INFO, SILENT 5개 레인으로 분류합니다. 레인은 라벨일 뿐이며, 분류만으로 메일이 발송·보관·삭제되지 않습니다.",
+  "onboardingV2.connect.skip": "나중에 하기",
+  "onboardingV2.connect.continueHint": "계속하려면 계정을 하나 이상 연결하세요.",
+  "onboardingV2.connect.needsPlan": "현재 요금제로는 이 계정을 추가할 수 없습니다.",
+  "onboardingV2.connect.failed":
+    "연결을 시작하지 못했습니다. 변경된 것은 없습니다. 다시 시도해 주세요.",
+  "onboardingV2.tile.connect": "연결",
+  "onboardingV2.tile.add": "계정 하나 더 추가",
+  "onboardingV2.tile.manage": "관리",
+  "onboardingV2.tile.reconnect": "재연결",
+  "onboardingV2.tile.accountsLabel": "연결된 {provider} 계정",
+  "onboardingV2.tile.google.scope": "Gmail과 Google 캘린더.",
+  "onboardingV2.tile.google.addNote":
+    "두 번째 Google 계정은 메일만 가져오고 캘린더는 가져오지 않습니다.",
+  "onboardingV2.tile.outlook.scope": "Outlook 및 Microsoft 365 메일.",
+  "onboardingV2.tile.naver.scope": "네이버 메일. 앱 비밀번호로 연결합니다.",
+  "onboardingV2.tile.icloud.scope": "iCloud 메일. 앱 암호로 연결합니다.",
+  "onboardingV2.tile.readOnly":
+    "현재는 읽기 전용입니다. 답장, 보관, 읽음 표시는 해당 메일 서비스에서 하세요.",
+  "onboardingV2.health.connected": "연결됨",
+  "onboardingV2.health.syncing": "동기화 중",
+  "onboardingV2.health.reconnect": "재연결 필요",
+  "onboardingV2.sheet.naver.title": "네이버 메일 연결",
+  "onboardingV2.sheet.naver.body":
+    "한 번만 연결하면 됩니다. 네이버 계정 비밀번호가 아니라 메일 앱용으로 만든 앱 비밀번호가 필요합니다. Klorn은 이를 암호화해 저장합니다.",
+  "onboardingV2.sheet.icloud.title": "iCloud 메일 연결",
+  "onboardingV2.sheet.icloud.body":
+    "한 번만 연결하면 됩니다. Apple 계정 비밀번호가 아니라 앱 암호가 필요합니다. Klorn은 이를 암호화해 저장합니다.",
+  "onboardingV2.sheet.close": "닫기",
+  "onboardingV2.sheet.done": "완료",
+  "onboardingV2.return.okTitle": "{provider} 연결 완료.",
+  "onboardingV2.return.failTitle": "{provider}이(가) 연결되지 않았습니다.",
+  "onboardingV2.return.connected": "계정을 더 추가하거나 계속 진행하세요.",
+  "onboardingV2.return.denied": "제공업체 화면에서 접근이 거부되었습니다. 변경된 것은 없습니다.",
+  "onboardingV2.return.offline":
+    "Google이 지속 접근 권한을 주지 않아 Klorn이 계속 동기화할 수 없습니다. 다시 연결하면서 모든 권한을 허용해 주세요. 회사 계정은 관리자가 Klorn을 허용해야 할 수 있습니다.",
+  "onboardingV2.return.unverified": "해당 계정의 이메일 주소가 인증되지 않았습니다.",
+  "onboardingV2.return.self": "이미 연결한 계정입니다.",
+  "onboardingV2.return.limit": "요금제의 계정 한도에 도달했습니다.",
+  "onboardingV2.return.failed": "변경된 것은 없습니다. 다시 시도할 수 있습니다.",
+  "onboardingV2.return.dismiss": "닫기",
+  "onboardingV2.sync.title": "메일을 읽는 중",
+  "onboardingV2.sync.titleDone": "메일을 가져왔습니다",
+  "onboardingV2.sync.titleStatus": "계정 연결 상태",
+  "onboardingV2.sync.body":
+    "Klorn이 계정마다 최근 메일을 읽어 레인으로 분류합니다. 아래 숫자는 지금까지 들어온 양입니다. 계속 진행한 뒤에도 나머지는 백그라운드에서 들어옵니다.",
+  "onboardingV2.sync.bodyNoCounts":
+    "이 계정들은 아직 메일 수를 확인할 수 없습니다. 메일은 백그라운드에서 계속 들어오며, 그대로 계속 진행해도 됩니다.",
+  "onboardingV2.sync.summary": "계정 {total}개 중 {ready}개 대기 종료",
+  "onboardingV2.sync.counting": "세는 중…",
+  "onboardingV2.sync.messages": "메일 {count}통",
+  "onboardingV2.sync.events": "일정 {count}건",
+  "onboardingV2.sync.state.reading": "메일 읽는 중",
+  "onboardingV2.sync.state.ready": "준비됨",
+  "onboardingV2.sync.state.background":
+    "연결됨. 아직 집계가 없으며 메일은 백그라운드에서 들어옵니다.",
+  "onboardingV2.sync.state.attention": "확인 필요",
+  "onboardingV2.sync.reconnect": "재연결",
+  "onboardingV2.sync.waitHint": "몇 초 뒤에는 기다리지 않고 계속할 수 있습니다.",
+  "onboardingV2.sync.continueEarly": "기다리지 않고 계속",
+  "onboardingV2.sync.lanesTitle": "지금까지 분류된 메일",
+  "onboardingV2.sync.lanesNote": "아직 분류되지 않은 메일은 분류될 때까지 QUEUE에 집계됩니다.",
+  "onboardingV2.review.title": "Klorn의 분류 확인하기",
+  "onboardingV2.review.body":
+    "내 메일 몇 통과 각 메일이 들어간 레인입니다. 맞으면 그대로 두고, 아니면 한 번 눌러 옮기세요. Klorn은 이 답을 학습에 반영합니다.",
+  "onboardingV2.review.loading": "메일 몇 통을 불러오는 중",
+  "onboardingV2.review.loadError":
+    "이 확인에 쓸 메일을 불러오지 못했습니다. 그대로 계속해도 잃는 것은 없습니다.",
+  "onboardingV2.review.empty":
+    "아직 분류된 메일이 없습니다. Klorn이 백그라운드에서 계속 분류하며, 레인은 나중에 바로잡을 수 있습니다.",
+  "onboardingV2.review.note": "메일을 옮기면 레인만 바뀝니다. 발송·보관·삭제되는 것은 없습니다.",
+  "onboardingV2.review.looksRight": "맞아요",
+  "onboardingV2.review.moveTo": "또는 이동",
+  "onboardingV2.review.moveToLane": "{lane}(으)로 이동",
+  "onboardingV2.review.keptIn": "{lane}에 유지됨",
+  "onboardingV2.review.movedTo": "{lane}(으)로 이동됨",
+  "onboardingV2.review.undo": "실행 취소",
+  "onboardingV2.review.unknownSender": "알 수 없는 발신자",
+  "onboardingV2.review.noSubject": "(제목 없음)",
+  "onboardingV2.finish.title": "설정이 끝났습니다",
+  "onboardingV2.finish.bodyToday":
+    "오늘 화면에서 연결한 계정의 메일을 레인별로, 캘린더와 함께 볼 수 있습니다.",
+  "onboardingV2.finish.bodyLegacy":
+    "연결한 계정의 메일이 레인별로 분류되어 바로 확인할 수 있습니다.",
+  "onboardingV2.finish.accountsTitle": "연결된 계정",
+  "onboardingV2.finish.briefingNote":
+    "브리핑을 켜 두면 하루에 한 번 도착합니다. 첫 브리핑은 아직 없을 수 있습니다.",
+  "onboardingV2.finish.addAccount": "계정 하나 더 추가",
+  "onboardingV2.finish.openToday": "오늘 열기",
+  "onboardingV2.finish.openHome": "Klorn 열기",
 };
 
 export default ko;

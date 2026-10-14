@@ -1603,6 +1603,114 @@ const ja: Record<string, string> = {
   "assistantHub.activity.undo.hint":
     "取り消しリクエストだけでは元に戻りません。取り消しの項目が「承認」に追加されます。",
   "assistantHub.approvals.unknownTitle": "Klornが実行しようとしている操作",
+  // Multi-provider first run (productization plan P8, ONBOARDING_V2)
+  "onboardingV2.steps.label": "セットアップの手順",
+  "onboardingV2.steps.connect": "アカウント",
+  "onboardingV2.steps.sync": "同期",
+  "onboardingV2.steps.review": "確認",
+  "onboardingV2.steps.finish": "完了",
+  "onboardingV2.steps.done": "完了済み",
+  "onboardingV2.continue": "続ける",
+  "onboardingV2.retry": "再試行",
+  "onboardingV2.connect.title": "アカウントを取り込む",
+  "onboardingV2.connect.body":
+    "Klorn へのサインインは一度で済みます。あとはメールアカウントごとに一度だけ接続すれば、Klorn がそのメールを一か所に集めてレーン別に整理します。各アカウントで取り込む内容はカードに記載しています。",
+  "onboardingV2.connect.loading": "接続できるアカウントを読み込み中",
+  "onboardingV2.connect.loadError": "接続できるアカウントを読み込めませんでした。",
+  "onboardingV2.connect.lanesNote":
+    "Klorn はメールを PUSH・MEETING・QUEUE・INFO・SILENT の 5 つのレーンに分類します。レーンはラベルです。分類によってメールが送信・アーカイブ・削除されることはありません。",
+  "onboardingV2.connect.skip": "あとで",
+  "onboardingV2.connect.continueHint": "続けるにはアカウントを 1 つ以上接続してください。",
+  "onboardingV2.connect.needsPlan": "現在のプランではこのアカウントを追加できません。",
+  "onboardingV2.connect.failed":
+    "接続を開始できませんでした。何も変更されていません。もう一度お試しください。",
+  "onboardingV2.tile.connect": "接続",
+  "onboardingV2.tile.add": "アカウントをもう 1 つ追加",
+  "onboardingV2.tile.manage": "管理",
+  "onboardingV2.tile.reconnect": "再接続",
+  "onboardingV2.tile.accountsLabel": "接続済みの {provider} アカウント",
+  "onboardingV2.tile.google.scope": "Gmail と Google カレンダー。",
+  "onboardingV2.tile.google.addNote":
+    "2 つ目の Google アカウントはメールのみで、カレンダーは取り込みません。",
+  "onboardingV2.tile.outlook.scope": "Outlook と Microsoft 365 のメール。",
+  "onboardingV2.tile.naver.scope": "Naver メール。アプリパスワードで接続します。",
+  "onboardingV2.tile.icloud.scope": "iCloud メール。アプリ用パスワードで接続します。",
+  "onboardingV2.tile.readOnly":
+    "現在は読み取り専用です。返信・アーカイブ・既読は、そのメールサービス側で行ってください。",
+  "onboardingV2.health.connected": "接続済み",
+  "onboardingV2.health.syncing": "同期中",
+  "onboardingV2.health.reconnect": "再接続が必要",
+  "onboardingV2.sheet.naver.title": "Naver メールを接続",
+  "onboardingV2.sheet.naver.body":
+    "接続は一度だけです。Naver のパスワードではなく、メールアプリ用に作成したアプリパスワードが必要です。Klorn は暗号化して保存します。",
+  "onboardingV2.sheet.icloud.title": "iCloud メールを接続",
+  "onboardingV2.sheet.icloud.body":
+    "接続は一度だけです。Apple Account のパスワードではなく、アプリ用パスワードが必要です。Klorn は暗号化して保存します。",
+  "onboardingV2.sheet.close": "閉じる",
+  "onboardingV2.sheet.done": "完了",
+  "onboardingV2.return.okTitle": "{provider} を接続しました。",
+  "onboardingV2.return.failTitle": "{provider} は接続されませんでした。",
+  "onboardingV2.return.connected": "別のアカウントを追加するか、このまま続けてください。",
+  "onboardingV2.return.denied":
+    "プロバイダーの画面でアクセスが拒否されました。何も変更されていません。",
+  "onboardingV2.return.offline":
+    "Google から継続的なアクセスが許可されなかったため、Klorn は同期を続けられません。もう一度接続し、すべての権限を許可してください。職場のアカウントでは管理者による Klorn の許可が必要な場合があります。",
+  "onboardingV2.return.unverified": "そのアカウントのメールアドレスは確認されていません。",
+  "onboardingV2.return.self": "すでに接続済みのアカウントです。",
+  "onboardingV2.return.limit": "プランのアカウント数の上限に達しています。",
+  "onboardingV2.return.failed": "何も変更されていません。もう一度お試しいただけます。",
+  "onboardingV2.return.dismiss": "閉じる",
+  "onboardingV2.sync.title": "メールを読み込み中",
+  "onboardingV2.sync.titleDone": "メールを取り込みました",
+  "onboardingV2.sync.titleStatus": "アカウントの状況",
+  "onboardingV2.sync.body":
+    "Klorn が各アカウントの最近のメールを読み、レーンに分類します。下の数字はこれまでに届いた分です。続行した後も、残りはバックグラウンドで届きます。",
+  "onboardingV2.sync.bodyNoCounts":
+    "これらのアカウントのメール件数はまだ確認できません。メールはバックグラウンドで届き続けるので、このまま続行できます。",
+  "onboardingV2.sync.summary": "{total} アカウント中 {ready} 件が待機完了",
+  "onboardingV2.sync.counting": "集計中…",
+  "onboardingV2.sync.messages": "メール {count} 件",
+  "onboardingV2.sync.events": "予定 {count} 件",
+  "onboardingV2.sync.state.reading": "メールを読み込み中",
+  "onboardingV2.sync.state.ready": "準備完了",
+  "onboardingV2.sync.state.background":
+    "接続済み。件数はまだありません。メールはバックグラウンドで届きます。",
+  "onboardingV2.sync.state.attention": "確認が必要",
+  "onboardingV2.sync.reconnect": "再接続",
+  "onboardingV2.sync.waitHint": "数秒後には待たずに続行できます。",
+  "onboardingV2.sync.continueEarly": "待たずに続ける",
+  "onboardingV2.sync.lanesTitle": "これまでの分類",
+  "onboardingV2.sync.lanesNote":
+    "まだ分類されていないメールは、分類されるまで QUEUE に数えられます。",
+  "onboardingV2.review.title": "Klorn の分類を確認",
+  "onboardingV2.review.body":
+    "あなたのメール数件と、それぞれが入ったレーンです。合っていればそのまま、違えばワンタップで移動してください。Klorn はその回答から学習します。",
+  "onboardingV2.review.loading": "メールを数件読み込み中",
+  "onboardingV2.review.loadError":
+    "確認用のメールを読み込めませんでした。このまま続けても何も失われません。",
+  "onboardingV2.review.empty":
+    "まだ分類されたメールはありません。Klorn はバックグラウンドで分類を続け、レーンは後から修正できます。",
+  "onboardingV2.review.note":
+    "メールを移動してもレーンが変わるだけです。送信・アーカイブ・削除は行われません。",
+  "onboardingV2.review.looksRight": "合っています",
+  "onboardingV2.review.moveTo": "または移動先",
+  "onboardingV2.review.moveToLane": "{lane} に移動",
+  "onboardingV2.review.keptIn": "{lane} のまま",
+  "onboardingV2.review.movedTo": "{lane} に移動しました",
+  "onboardingV2.review.undo": "元に戻す",
+  "onboardingV2.review.unknownSender": "不明な送信者",
+  "onboardingV2.review.noSubject": "(件名なし)",
+  "onboardingV2.finish.title": "セットアップ完了",
+  "onboardingV2.finish.bodyToday":
+    "「今日」では、接続したアカウントのメールをレーン別に、カレンダーと並べて確認できます。",
+  "onboardingV2.finish.bodyLegacy":
+    "接続したアカウントのメールがレーン別に分類され、確認できる状態です。",
+  "onboardingV2.finish.accountsTitle": "接続済みのアカウント",
+  "onboardingV2.finish.briefingNote":
+    "ブリーフィングは、オンにしている間 1 日 1 回届きます。最初の 1 通はまだ届いていない場合があります。",
+  "onboardingV2.finish.addAccount": "アカウントをもう 1 つ追加",
+  "onboardingV2.finish.openToday": "「今日」を開く",
+  "onboardingV2.finish.openHome": "Klorn を開く",
 };
 
 export default ja;
