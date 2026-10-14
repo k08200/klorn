@@ -313,6 +313,14 @@ function assertArgs(model: string, op: string, args: object, allowed: readonly s
 
 // ─── the database ───────────────────────────────────────────────────────────
 
+/** A BigInt column sums to a BigInt (as Prisma answers), anything else to a number. */
+function sumOf(values: unknown[]): bigint | number {
+  if (values.every((v) => typeof v === "bigint")) {
+    return (values as bigint[]).reduce((sum, v) => sum + v, 0n);
+  }
+  return values.reduce<number>((sum, v) => sum + Number(v), 0);
+}
+
 export interface WriteLog {
   op: string;
   where?: Where;
@@ -326,6 +334,7 @@ export interface FakeModel {
   findMany(args?: Args): Promise<Row[]>;
   count(args?: Args): Promise<number>;
   groupBy(args: Args): Promise<Array<Row & { _count: { _all: number } }>>;
+  aggregate(args: Args): Promise<{ _sum: Row }>;
   create(args: { data: Row; select?: Select }): Promise<Row>;
   update(args: { where: Where; data: Row; select?: Select }): Promise<Row>;
   updateMany(args: { where?: Where; data: Row }): Promise<{ count: number }>;
@@ -341,6 +350,7 @@ interface Args {
   skip?: number;
   by?: string[];
   _count?: unknown;
+  _sum?: unknown;
 }
 
 export interface FakeDb {
@@ -447,6 +457,23 @@ export function createFakeDb(seed: Record<string, Row[]>, hooks: FakeDbHooks = {
           ...Object.fromEntries(by.map((f, i) => [f, values[i]])),
           _count: { _all: n },
         }));
+      },
+      async aggregate(args) {
+        assertArgs(name, "aggregate", args, ["where", "_sum"]);
+        const sums = args._sum as Record<string, unknown> | undefined;
+        if (!sums || Object.values(sums).some((v) => v !== true)) {
+          throw new Error("fake-db: aggregate supports only _sum: { <field>: true }");
+        }
+        reads.push(name);
+        const rows = find(args.where);
+        const _sum: Row = {};
+        for (const field of Object.keys(sums)) {
+          column(info, field, "aggregate._sum");
+          // Like Postgres SUM: NULLs are skipped, and no value at all is NULL.
+          const values = rows.map((r) => r[field]).filter((v) => v !== null && v !== undefined);
+          _sum[field] = values.length === 0 ? null : sumOf(values);
+        }
+        return { _sum };
       },
       async create(args) {
         assertArgs(name, "create", args, ["data", "select"]);

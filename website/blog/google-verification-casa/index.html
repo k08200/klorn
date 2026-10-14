@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Google's OAuth review of Klorn is complete. Here is exactly what it covered. — Klorn</title>
+<meta name="description" content="Google completed its OAuth verification review for Klorn on 2026-10-03, after an independent CASA Tier 2 assessment by TAC Security (result: In Compliance). The five scopes, what each one is for, and what the review does not mean.">
+<meta property="og:title" content="Google's OAuth review of Klorn is complete. Here is exactly what it covered.">
+<meta property="og:description" content="Google completed its OAuth verification review for Klorn on 2026-10-03, after an independent CASA Tier 2 assessment by TAC Security (result: In Compliance). The five scopes, what each one is for, and what the review does not mean.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://klorn.ai/blog/google-verification-casa/">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="https://klorn.ai/brand/og-image.png?v=k2">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Google's OAuth review of Klorn is complete. Here is exactly what it covered.">
+<meta name="twitter:description" content="Google completed its OAuth verification review for Klorn on 2026-10-03, after an independent CASA Tier 2 assessment by TAC Security (result: In Compliance). The five scopes, what each one is for, and what the review does not mean.">
+<meta name="twitter:image" content="https://klorn.ai/brand/og-image.png?v=k2">
+<link rel="canonical" href="https://klorn.ai/blog/google-verification-casa/">
+<link rel="preload" as="font" type="font/woff2" href="/fonts/geist-var.woff2" crossorigin>
+<link rel="stylesheet" href="/compare.css">
+<link rel="icon" href="/brand/favicon.svg?v=matte2" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png?v=matte2">
+<style>
+.meta { margin: 14px 0 0; font-size: 13.5px; color: var(--ink-3); }
+article h2 { margin-top: 40px; }
+ol, ul { margin: 12px 0 0; padding-left: 22px; }
+li { margin-top: 6px; }
+</style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "Google's OAuth review of Klorn is complete. Here is exactly what it covered.",
+  "datePublished": "2026-10-14",
+  "dateModified": "2026-10-14",
+  "author": {"@type": "Person", "name": "Yongrean Kim", "url": "https://github.com/k08200"},
+  "publisher": {"@type": "Organization", "name": "Klorn", "url": "https://klorn.ai"},
+  "mainEntityOfPage": "https://klorn.ai/blog/google-verification-casa/"
+}
+</script>
+<script src="/site-nav.js" defer></script>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="home" href="/">Klorn</a>
+    <button type="button" class="menu-btn" data-menu-toggle aria-expanded="false" aria-controls="site-menu" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <nav class="menu" id="site-menu" aria-label="Site">
+      <a href="/pricing/">Pricing</a><a href="/blog/" aria-current="page">Blog</a><a href="/security/">Security</a><a href="/self-host/">Self-host</a>
+      <a href="https://app.klorn.ai/login">Log in</a>
+    </nav>
+    <a class="dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener" data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe">Download</a>
+  </header>
+
+  <article>
+  <h1>Google's OAuth review is <em>complete</em>. Here is what it covered.</h1>
+  <p class="meta">2026-10-14 · security · Google OAuth and CASA</p>
+
+  <p class="thesis">Google completed its OAuth verification review for Klorn on 2026-10-03. Before that, Klorn was independently assessed against CASA Tier 2 by TAC Security; result: In Compliance. This note is the plain version: what was checked, what Klorn can do with your Google account as a result, and what none of this means.</p>
+
+  <h2>What happened, in order</h2>
+  <ul>
+    <li><strong>2026-08-12</strong> — TAC Security evaluated Klorn: a CASA Tier 2 assessment using dynamic application security testing (DAST).</li>
+    <li><strong>2026-08-30</strong> — the report was issued. Result: In Compliance, at assurance level AL1 (OWASP ASVS Level 1).</li>
+    <li><strong>2026-10-02</strong> — the Letter of Validation was submitted to Google.</li>
+    <li><strong>2026-10-03</strong> — Google completed its OAuth verification review for Klorn.</li>
+  </ul>
+
+  <h2>Why it matters if your mail runs through Klorn</h2>
+  <p>Klorn reads your mail so it can decide what deserves your attention. Until now, what it could ask Google for and how its security held up were things you had to take from us or from the source code. Two parts of that are now checked by someone else: a third party has assessed Klorn against CASA Tier 2, and the scopes Klorn uses are the ones Google approved in its review.</p>
+
+  <h2>The five scopes, and what each one is for</h2>
+  <ul>
+    <li><code>gmail.readonly</code> — read your messages so Klorn can sort them, show the reason for each decision, and summarize a thread when you ask.</li>
+    <li><code>gmail.modify</code> — change a message's state when you act in Klorn: archive, move to Trash, star, mark read, or save a reply draft into Gmail.</li>
+    <li><code>gmail.send</code> — send only what you approve, such as a reply you confirm or an unsubscribe you ask for, or an auto-reply under rules you set yourself.</li>
+    <li><code>calendar.readonly</code> — read free/busy across your calendars, so meeting emails are checked against your real schedule.</li>
+    <li><code>calendar.events</code> — add, change or remove an event on your primary calendar when you ask Klorn to.</li>
+  </ul>
+  <p>The shape of the request is part of the point. Signing in with Google asks only for your name and email; the mail and calendar scopes come later, in a second consent screen, when you connect an inbox. A calendar-only link asks for <code>calendar.readonly</code> with no mail scope at all. Klorn does not request Gmail's full-access scope, and on Calendar it asks only for <code>calendar.events</code> and <code>calendar.readonly</code>, never the full Calendar scope. (<code>openid</code> and <code>userinfo.email</code>/<code>userinfo.profile</code> also appear in that file; they only identify which account signed in and were not part of the review.) The whole list lives in one file, <a href="https://github.com/k08200/klorn/blob/main/packages/api/src/mail/gmail.ts" rel="noreferrer noopener">packages/api/src/mail/gmail.ts</a>, so any change to it would show up in a public diff.</p>
+
+  <h2>What this does not mean</h2>
+  <p>It is not an endorsement of Klorn by Google. The review and the assessment check how Klorn handles the Google data it requests; they do not cover anything beyond those scopes. The assessment is not a SOC 2 audit, and we are not claiming one.</p>
+  <p>It also does not add providers. Today you can connect Gmail, Google Calendar and Naver Mail. Other providers are not yet available.</p>
+
+  <h2>What happens next</h2>
+  <p>The assessment is repeated every year; the next one is due in August 2027. Work on additional providers continues, with no date to announce. The <a href="/security/">security page</a> now carries the dates and scopes above next to the file that implements each security claim, so you can check them instead of trusting this post.</p>
+
+  <p>The code behind every claim here is AGPL: <a href="https://github.com/k08200/klorn" rel="noreferrer noopener">github.com/k08200/klorn</a>.</p>
+  <a class="cta" href="https://app.klorn.ai/login?mode=register">Try Klorn free</a>
+  </article>
+
+  <footer>
+    <p>Klorn is <a href="https://github.com/k08200/klorn" rel="noreferrer noopener">AGPL-3.0</a> — every claim in
+      this post is checkable against the source. More notes at <a href="/blog/">/blog</a>.</p>
+    <nav class="foot-links" aria-label="More from Klorn"><a href="/pricing/">Pricing</a><a href="/blog/">Blog</a><a href="/security/">Security</a><a href="/self-host/">Self-host</a><a href="/open-source/">Open source</a><a href="/status/">Status</a><a href="/gdpr/">GDPR</a><a href="/dpa/">DPA</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a><a href="https://github.com/k08200/klorn" rel="noreferrer noopener">GitHub</a></nav>
+  </footer>
+</div>
+<script>
+// Same block as every other page: carry the campaign through to the app so a
+// signup can be credited to the page that earned it.
+(function () {
+  try {
+    var p = new URLSearchParams(location.search);
+    var q = [];
+    ["utm_source", "utm_medium", "utm_campaign", "utm_content"].forEach(function (k) {
+      var v = p.get(k);
+      if (v) q.push(k + "=" + encodeURIComponent(v.slice(0, 60)));
+    });
+    if (document.referrer) {
+      try {
+        var h = new URL(document.referrer).hostname;
+        if (h && h !== location.hostname) q.push("ref=" + encodeURIComponent(h));
+      } catch (e) {}
+    }
+    q.push("lp=" + encodeURIComponent(location.pathname.slice(0, 60)));
+    var qs = q.join("&");
+    document.querySelectorAll('a[href^="https://app.klorn.ai/"]').forEach(function (a) {
+      a.href += (a.href.indexOf("?") === -1 ? "?" : "&") + qs;
+    });
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>

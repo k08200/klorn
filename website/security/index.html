@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Security — Klorn</title>
-<meta name="description" content="What Klorn's architecture actually guarantees: AES-256-GCM token encryption, hash-pinned approval receipts, prompt injection treated as in-scope, and the file that implements each claim.">
+<meta name="description" content="Google OAuth verification, an independent CASA Tier 2 assessment, and what Klorn's architecture actually guarantees: AES-256-GCM token encryption, hash-pinned approval receipts, prompt injection treated as in-scope, and the file that implements each claim.">
 <meta property="og:title" content="Security — Klorn">
-<meta property="og:description" content="What Klorn's architecture actually guarantees: AES-256-GCM token encryption, hash-pinned approval receipts, prompt injection treated as in-scope, and the file that implements each claim.">
+<meta property="og:description" content="Google OAuth verification, an independent CASA Tier 2 assessment, and what Klorn's architecture actually guarantees: AES-256-GCM token encryption, hash-pinned approval receipts, prompt injection treated as in-scope, and the file that implements each claim.">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://klorn.ai/security/">
 <meta property="og:locale" content="en_US">
@@ -15,13 +15,22 @@
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Security — Klorn">
-<meta name="twitter:description" content="What Klorn's architecture actually guarantees: AES-256-GCM token encryption, hash-pinned approval receipts, prompt injection treated as in-scope, and the file that implements each claim.">
+<meta name="twitter:description" content="Google OAuth verification, an independent CASA Tier 2 assessment, and what Klorn's architecture actually guarantees: AES-256-GCM token encryption, hash-pinned approval receipts, prompt injection treated as in-scope, and the file that implements each claim.">
 <meta name="twitter:image" content="https://klorn.ai/brand/og-image.png?v=k2">
 <link rel="canonical" href="https://klorn.ai/security/">
 <link rel="preload" as="font" type="font/woff2" href="/fonts/geist-var.woff2" crossorigin>
 <link rel="stylesheet" href="/compare.css">
 <link rel="icon" href="/brand/favicon.svg?v=matte2" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png?v=matte2">
+<style>
+.verify h3 { color: var(--ink); font-size: 17px; font-weight: 650; margin: 34px 0 0; }
+.verify dl { margin: 20px 0 0; border-top: 1px solid var(--line); }
+.verify dl > div { display: grid; grid-template-columns: 27% 1fr; gap: 4px 14px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.verify dt { color: var(--ink-3); font-weight: 500; }
+.verify dd { margin: 0; color: var(--ink); }
+.verify .scopes dt { color: var(--ink); }
+@media (max-width: 600px) { .verify dl > div { grid-template-columns: 1fr; } }
+</style>
 <script src="/site-nav.js" defer></script>
 </head>
 <body>
@@ -39,6 +48,35 @@
   <h1>&ldquo;Trust us&rdquo; is not<br>an answer.</h1>
   <p class="thesis">Klorn reads other people's email so you don't have to. That sentence <em>is</em> the threat model: the primary input is text written by strangers, some of whom are adversarial. Here is what the architecture actually guarantees, with the file that implements each one.</p>
 
+  <section class="verify" aria-labelledby="google-verification">
+  <h2 id="google-verification">Google verification and independent assessment</h2>
+  <p>Google completed its OAuth verification review for Klorn on <strong>2026-10-03</strong>. Before that, Klorn was independently assessed against <strong>CASA Tier 2</strong> by TAC Security; result: <strong>In Compliance</strong>. The Letter of Validation from that assessment was submitted to Google on 2026-10-02.</p>
+  <dl class="facts">
+    <div><dt>Assessment</dt><dd>CASA Tier 2, dynamic application security testing (DAST), by TAC Security</dd></div>
+    <div><dt>Result</dt><dd>In Compliance, at assurance level AL1 (OWASP ASVS Level 1)</dd></div>
+    <div><dt>Dates</dt><dd>Evaluated 2026-08-12 · report issued 2026-08-30 · Letter of Validation submitted to Google 2026-10-02 · Google review completed 2026-10-03</dd></div>
+    <div><dt>Reassessment</dt><dd>Annual. The next assessment is due in August 2027</dd></div>
+  </dl>
+
+  <h3>The five Google scopes, and why each one</h3>
+  <p>These five are the Google scopes approved in that review, and the only mail and calendar scopes Klorn requests. It does not ask for Gmail's full-access scope, and on Calendar it asks only for <code>calendar.events</code> and <code>calendar.readonly</code> — never the full Calendar scope.</p>
+  <dl class="scopes">
+    <div><dt><code>gmail.readonly</code></dt><dd>Read your messages so Klorn can sort them, show the reason for each decision, and summarize a thread when you ask.</dd></div>
+    <div><dt><code>gmail.modify</code></dt><dd>Change a message's state when you act in Klorn: archive or unarchive, move to Trash or back, star, mark read or unread, and save a reply draft into Gmail.</dd></div>
+    <div><dt><code>gmail.send</code></dt><dd>Send mail only when you approve it — a reply you confirm, a mailto unsubscribe you ask for — or an auto-reply under rules you set yourself.</dd></div>
+    <div><dt><code>calendar.readonly</code></dt><dd>Read free/busy across all your calendars, so meeting emails are checked against your real schedule and conflicts are caught.</dd></div>
+    <div><dt><code>calendar.events</code></dt><dd>Create, change or remove an event on your primary calendar when you ask Klorn to — not calendar settings or sharing.</dd></div>
+  </dl>
+  <p>Signing in with Google asks only for your name and email. The mail and calendar scopes come later, in a second consent screen, when you connect an inbox — and a calendar-only link asks for <code>calendar.readonly</code> with no mail scope at all. (<code>openid</code> and <code>userinfo.email</code>/<code>userinfo.profile</code> also appear in that file — they identify which account signed in, are not sensitive, and are not part of what Google reviewed.)</p>
+
+  <h3>Where the data goes</h3>
+  <p>OAuth tokens are encrypted with AES-256-GCM before they are stored, every hosted surface is TLS-only, and analytics never include message content — see the table below for the file behind each. Logs expire on the fixed schedule under <a href="#retention">How long anything is kept</a>. If you would rather your mail not pass through our servers at all, <a href="/self-host/">self-host</a> the same code with your own model key or a <a href="/blog/local-llm-email-triage-ollama/">local model</a>. The privacy policy is at <a href="/privacy/">/privacy</a>.</p>
+
+  <div class="note">
+    <p><strong>What this does and doesn't mean.</strong> The review and the assessment check how Klorn handles the Google data it asks for. They are not an endorsement of Klorn by Google, and they do not cover anything beyond those scopes. Today you can connect Gmail, Google Calendar and Naver Mail; other providers are not yet available.</p>
+  </div>
+  </section>
+
   <div class="scroll">
   <table>
     <thead><tr><th>Property</th><th>What is actually true</th><th>Where to check</th></tr></thead>
@@ -53,17 +91,14 @@
   </table>
   </div>
 
-  <h2>What Klorn can read</h2>
-  <p>Exactly the scopes shown on your own Google consent screen, and nothing that is not listed there: <code>gmail.readonly</code>, <code>gmail.modify</code>, <code>gmail.send</code>, <code>calendar.readonly</code>, <code>calendar.events</code>, and your account email and profile. A calendar-only link grants read-only calendar access and no mailbox access at all.</p>
-
-  <h2>How long anything is kept</h2>
+  <h2 id="retention">How long anything is kept</h2>
   <p>Log retention is enforced by a scheduled sweep rather than a promise: agent actions, email processing, push delivery and webhook ledgers are deleted after <strong>90 days</strong>, rate-limit rows after <strong>30</strong>, and token accounting after <strong>180</strong> for cost-drift analysis. The windows are a table in the source, not a setting we can quietly widen without it showing in a diff.</p>
 
   <h2>Reporting a vulnerability</h2>
   <p>Email <a href="mailto:k0820086@gmail.com">k0820086@gmail.com</a> with a description and reproduction steps. Please do not open a public issue for an exploitable finding. You'll get an acknowledgment within a few days; fixes to the approval floor and the token-encryption paths take priority over everything else. Machine-readable contact details are at <a href="/.well-known/security.txt">/.well-known/security.txt</a>.</p>
 
   <div class="note">
-    <p><strong>What we are not claiming.</strong> Klorn has not had a third-party penetration test or a SOC 2 audit, and this page does not imply one. It is a solo-maintained product in beta. The compensating control is that the code is AGPL-3.0 and the security-relevant paths are named above by file — you can read them instead of taking our word for it.</p>
+    <p><strong>What we are not claiming.</strong> Apart from the CASA Tier 2 assessment above, Klorn has not had a third-party penetration test or a SOC 2 audit, and this page does not imply one. It is a solo-maintained product in beta. The compensating control is that the code is AGPL-3.0 and the security-relevant paths are named above by file — you can read them instead of taking our word for it.</p>
     <p><a href="https://github.com/k08200/klorn/blob/main/SECURITY.md" rel="noreferrer noopener">SECURITY.md</a> carries the longer version, including the known gaps we chose to state rather than omit.</p>
   </div>
 

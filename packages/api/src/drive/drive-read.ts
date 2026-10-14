@@ -31,6 +31,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../db.js";
 import { safeHttpsLink } from "../safe-https-link.js";
 import { type DriveProviderName, isReadOnlyDriveProvider } from "./drive-providers.js";
+import { KLORN_DRIVE_SOURCE_KEY } from "./drive-rows.js";
 import {
   DRIVE_PROVIDER_ENABLED,
   type DriveProviderEnabledMap,
@@ -84,6 +85,12 @@ export interface DriveListOptions {
   readonly cursor?: DriveCursor;
   readonly provider?: DriveProviderName;
   readonly sourceKey?: string;
+  /**
+   * One folder of the Klorn drive (D3): its `externalId`, or null for the root.
+   * Narrows to KLORN rows, where a null parent IS the root, because D3 writes
+   * only parents that exist (unlike an external source, see D2).
+   */
+  readonly folder?: string | null;
 }
 
 export interface DriveSearchOptions extends DriveListOptions {
@@ -172,6 +179,13 @@ function filtersOf(options: DriveListOptions): Prisma.DriveFileWhereInput[] {
   const filters: Prisma.DriveFileWhereInput[] = [{ userId: options.userId, trashed: false }];
   if (options.provider !== undefined) filters.push({ provider: options.provider });
   if (options.sourceKey !== undefined) filters.push({ sourceKey: options.sourceKey });
+  if (options.folder !== undefined) {
+    filters.push(
+      { provider: "KLORN" },
+      { sourceKey: KLORN_DRIVE_SOURCE_KEY },
+      { parentExternalId: options.folder },
+    );
+  }
   const cursor = options.cursor;
   if (cursor !== undefined) {
     filters.push({

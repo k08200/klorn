@@ -12,6 +12,7 @@ import { type gmail_v1, google } from "googleapis";
 import { planHasFeature } from "../billing/stripe.js";
 import { MULTI_INBOX_SYNC_ENABLED } from "../config.js";
 import { prisma } from "../db.js";
+import { resolveAttentionForEmails } from "../judge/attention-resolve.js";
 import { persistGmailEmail } from "../judge/email-firewall.js";
 import { spamIntakeEnabled } from "../ops/feature-flags.js";
 import { resolveUserEmail } from "../resolve-user-email.js";
@@ -343,28 +344,6 @@ export async function syncSpamLane(userId: string): Promise<number> {
 // ─── Gmail ↔ DB Reconciliation ────────────────────────────────────────────
 
 /**
- * Resolve the EMAIL attention items mirroring the given EmailMessage ids. Called
- * when those emails leave the INBOX (archived/trashed in Gmail) so a handled
- * email also leaves the attention queue — otherwise the AttentionItem is orphaned
- * OPEN and the priority amplifier keeps surfacing it (the stale-PUSH accumulation
- * bug). Only OPEN/SNOOZED are touched, so a terminal user decision (already
- * RESOLVED/DISMISSED) is preserved. Chunked for the bind-param cap.
- */
-async function resolveAttentionForDeletedEmails(userId: string, emailIds: string[]): Promise<void> {
-  for (let i = 0; i < emailIds.length; i += INBOX_PARAM_CAP) {
-    await prisma.attentionItem.updateMany({
-      where: {
-        userId,
-        source: "EMAIL",
-        sourceId: { in: emailIds.slice(i, i + INBOX_PARAM_CAP) },
-        status: { in: ["OPEN", "SNOOZED"] },
-      },
-      data: { status: "RESOLVED", resolvedAt: new Date() },
-    });
-  }
-}
-
-/**
  * On-demand fan-out: sync every LINKED secondary inbox for a user, gated exactly
  * like the scheduler's fan-out (MULTI_INBOX_SYNC_ENABLED + the multi_account
  * feature). This exists so the manual "Force Sync" / open-Mail path syncs linked
@@ -549,7 +528,7 @@ async function reconcileInboxScope(
       where: staleWhere,
       select: { id: true },
     });
-    await resolveAttentionForDeletedEmails(
+    await resolveAttentionForEmails(
       userId,
       stale.map((r) => r.id),
     );
@@ -564,7 +543,7 @@ async function reconcileInboxScope(
     const staleIds = stored
       .filter((e) => !inboxIds.has(e.gmailId) && !(e.labels ?? []).includes("SPAM"))
       .map((e) => e.id);
-    await resolveAttentionForDeletedEmails(userId, staleIds);
+    await resolveAttentionForEmails(userId, staleIds);
     for (let i = 0; i < staleIds.length; i += INBOX_PARAM_CAP) {
       const res = await prisma.emailMessage.deleteMany({
         // ...scope (not just userId): staleIds already come from scope-filtered
