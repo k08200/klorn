@@ -3498,17 +3498,20 @@ D3 ships no user-facing copy beyond API error strings, which clients replace by
     at most 25 MiB (`KLORN_DRIVE_MAX_FILE_BYTES` = D1's `MAX_OBJECT_BYTES`, the
     only decided size); a `Content-Length` more than 64 KiB above it is refused
     before the body is parsed (a cheap early refusal, not covered by a test). The parent must be a folder of the user's Klorn drive. The
-    purge record and the quota are checked. The first 4 KiB are read and the
-    type is sniffed (`drive/klorn-content-type.ts`); the client's Content-Type is
+    purge record and the quota are checked. The first 4 KiB are read (within
+    `UPLOAD_HEAD_TIMEOUT_MS`, 30 s; a body that does not start is released and
+    refused) and the type is sniffed (`drive/klorn-content-type.ts`); the client's Content-Type is
     never read. Then the body streams to `getUserStorage().put(userId,
     "drive", …)` under a key D1 mints, with the caller cap and D1's byte counter.
     The multipart file limit is the cap plus one byte, so an oversized body
     reaches the counter instead of being cut to size. The etag is the SHA-256 of
     the bytes as they streamed (`sha256:<hex>`).
-  - Commit. The DriveFile row (KLORN, `sourceKey` `'klorn'`, `externalId` a fresh
-    UUID, the key, size, type, etag, parent) is written through
-    `upsertDriveFileRow` only after the object exists and the request ended
-    cleanly. A failed row write, a second file part, a field after the file, or
+  - Commit. The quota is checked again, then the DriveFile row (KLORN,
+    `sourceKey` `'klorn'`, `externalId` a fresh UUID, the key, size, type, etag,
+    parent) is written through `upsertDriveFileRow`, only after the object exists
+    and the request ended cleanly. If a data deletion started while the row was
+    written, the row and the object are removed again (row first: the pending
+    purge deletes the object even if that delete fails). A failed row write, a second file part, a field after the file, or
     a truncated part deletes the object (`discardKlornUpload`, best effort,
     reported under `scope: drive.upload.cleanup` if it fails; the object then
     waits for the account purge).
@@ -3555,7 +3558,9 @@ D3 ships no user-facing copy beyond API error strings, which clients replace by
     while not empty: a refusal makes the client walk the tree itself, one
     request per item, and leaves half-deleted trees when it stops. The walk
     reads at most `DRIVE_FOLDER_WALK_MAX_ITEMS` (1,000) rows over at most 32
-    levels; past either it answers 409 `folder-too-large` and deletes nothing.
+    levels; past either it answers 409 `folder-too-large` and deletes nothing. A
+    row already seen is not walked again, so a folder caught in a cycle (see the
+    limits) can still be deleted.
     Objects go in batches of 8 (`DRIVE_DELETE_CONCURRENCY`, D1's own), stopping
     at the first batch with a failure; the rows of the files whose objects are
     gone are deleted; the folder rows go only once every object is gone. A
@@ -3658,17 +3663,33 @@ D3 ships no user-facing copy beyond API error strings, which clients replace by
 - Known limits.
   - Not verified against a real R2 bucket (FA-7). The upload uses D1's PUT and
     the download D1's signed GET, which no real vendor has answered yet.
-  - Quota: computed per upload from recorded sizes; two concurrent uploads can
-    both pass, so it can be overshot by about one file per concurrent upload
-    (bounded by the upload rate limit).
-  - An upload into, or a move into, a folder while that folder is being deleted
-    can leave the item with a parent that no longer exists. It still lists in
-    the flat list and can be moved or deleted; it is not in any folder listing.
+  - Quota: computed from recorded sizes, before the PUT and again right before
+    the row. Uploads that reach the commit at the same moment can all pass, so
+    the limit can be overshot by the files committing at once. It is a soft
+    limit. Unset, there is no limit at all: the flip needs the number (below).
+  - Folder races, with no lock between check and write (Prisma has no row lock
+    without raw SQL, which the drive guard forbids): an upload or a move into a
+    folder that is being deleted, or a file added to a folder after its delete
+    walked it, can leave a row whose parent is gone; and two moves racing each
+    other (A into B, B into A) can leave a cycle. Such rows are in no folder
+    listing but are in the flat list, count toward usage, and can be moved to
+    the root or deleted. A reconcile pass is not built.
   - A row write that fails and whose cleanup delete also fails leaves an object
     without a row; it is reported and goes with the account purge.
   - A rename that races a move can lose one of the two (last write wins on the
     name, read just before the write).
-  - No trash, no preview, no thumbnails, no sharing, no resumable upload.
+  - No trash, no preview, no thumbnails, no sharing, no resumable upload, and
+    no cap on rows per user (folders and files are bounded only by the rate
+    limits; a folder with more than 1,000 items is deleted in parts).
+  - The type is a label from the first 4 KiB and the name. D4 and any preview
+    must treat it as a hint, never a guarantee; downloads stay octet-stream
+    attachments.
+  - A purge pass that hits its 45 s deadline counts as a failed attempt, so a
+    very large prefix backs off like a failing bucket (roughly 7,000 objects
+    per pass at 8 deletes in flight and ~50 ms each: an estimate, not
+    measured). The signal that would tell progress from failure
+    (`delete-incomplete`, retryable) is shared with a failing batch, so it is
+    left as is until real volumes exist.
   - Index use is measured on a three-row scratch table only: a named folder's
     listing used the new index; the root listing planned on
     `(userId, provider, modifiedAt, id)` with a NULL filter. Not measured on
@@ -3693,6 +3714,12 @@ D3 ships no user-facing copy beyond API error strings, which clients replace by
   `u/<userId>/` in the vendor's console; the next pass then finds the prefix
   empty. Never delete the `StoragePurge` row by hand while objects remain: it
   is the only record of them.
+- Migration safety: a migration file is applied all or nothing (checked
+  2026-10-14 with Prisma 6.19.2 on a scratch Postgres 16: a statement that
+  failed after a `CREATE TABLE` left no table), so a lock timeout on the index
+  leaves nothing behind; and `scripts/start.sh`
+  baselines a failed migration only when the live schema has no difference
+  from `schema.prisma`, which a missing `StoragePurge` table always is.
 - Rollback: revert the PR. The table and the index can stay. If the flag was on
   and a record exists, keep the sweep (or run the purge by hand) until
   `StoragePurge` is empty.

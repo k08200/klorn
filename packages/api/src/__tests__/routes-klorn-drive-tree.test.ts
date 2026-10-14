@@ -370,6 +370,22 @@ describe("delete", () => {
     expect(t.store.keys()).toEqual([]);
   });
 
+  it("a folder caught in a cycle (two racing moves) can still be deleted", async () => {
+    t = await buildKlornDriveApp({
+      seed: [
+        folder({ externalId: "a", name: "a", parentExternalId: "b" }),
+        folder({ externalId: "b", name: "b", parentExternalId: "a" }),
+        folder({ externalId: "keep", name: "keep" }),
+      ],
+    });
+    await storedFile({ name: "in-a.txt", parentExternalId: "a" });
+    const a = rows().find((row) => row.externalId === "a");
+    const res = await call("DELETE", `/files/${a?.id}`, t.me);
+    expect(res.json()).toEqual({ deleted: { files: 1, folders: 2 } });
+    expect(names()).toEqual(["keep"]);
+    expect(t.store.keys()).toEqual([]);
+  });
+
   it(`a folder with more than ${DRIVE_FOLDER_WALK_MAX_ITEMS} items is refused, and nothing is deleted`, async () => {
     const many = Array.from({ length: DRIVE_FOLDER_WALK_MAX_ITEMS + 1 }, (_, i) =>
       klornRow({ externalId: `x${i}`, parentExternalId: "big", storageKey: null }),

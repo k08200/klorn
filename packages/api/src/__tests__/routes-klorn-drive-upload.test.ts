@@ -26,7 +26,11 @@ vi.mock("../db.js", async () => {
 });
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
-import { KLORN_DRIVE_MAX_FILE_BYTES } from "../drive/klorn-upload.js";
+import {
+  KLORN_DRIVE_MAX_FILE_BYTES,
+  storeKlornUpload,
+  UPLOAD_HEAD_TIMEOUT_MS,
+} from "../drive/klorn-upload.js";
 import { setObjectStoreForTests } from "../storage/runtime.js";
 
 const text = (value: string) => new TextEncoder().encode(value);
@@ -328,6 +332,72 @@ describe("while the account's files are being deleted", () => {
       { userId: "user-2", requestedAt: new Date(), attempts: 0, nextAttemptAt: new Date() },
     ];
     expect((await upload(t, t.me, { filename: "a.txt", data: text("hi") })).statusCode).toBe(201);
+  });
+});
+
+describe("races the commit closes", () => {
+  it("the quota is checked again right before the row: a file that landed meanwhile counts", async () => {
+    vi.stubEnv("KLORN_DRIVE_QUOTA_BYTES", "10");
+    const put = t.store.putObject.bind(t.store);
+    vi.spyOn(t.store, "putObject").mockImplementation(async (key, body, options) => {
+      const meta = await put(key, body, options);
+      await t.db.model("driveFile").create({ data: klornRow({ sizeBytes: 5n }) }); // another upload committed
+      return meta;
+    });
+    const res = await upload(t, t.me, { filename: "a.txt", data: text("abcdefgh") });
+    expect(res.statusCode).toBe(413);
+    expect(res.json().code).toBe("quota-exceeded");
+    expect(t.store.keys()).toEqual([]);
+    expect(rows()).toHaveLength(1);
+  });
+
+  it("a data deletion that starts while the row is written: row and object go again", async () => {
+    const original = t.db.model.bind(t.db);
+    vi.spyOn(t.db, "model").mockImplementation((name: string) => {
+      const model = original(name);
+      if (name !== "driveFile") return model;
+      return {
+        ...model,
+        upsert: async (args: never) => {
+          const row = await model.upsert(args);
+          t.db.tables.storagePurge = [
+            { userId: "user-1", requestedAt: new Date(), attempts: 0, nextAttemptAt: new Date() },
+          ];
+          return row;
+        },
+      };
+    });
+    const res = await upload(t, t.me, { filename: "a.txt", data: text("hi") });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("account-purging");
+    expect(rows()).toEqual([]);
+    expect(t.store.keys()).toEqual([]);
+  });
+});
+
+describe("a body that never starts", () => {
+  it(`is refused after ${UPLOAD_HEAD_TIMEOUT_MS / 1000} s, and released`, async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const release = vi.fn(async () => ({ done: true as const, value: undefined }));
+    const body: AsyncIterable<Uint8Array> = {
+      [Symbol.asyncIterator]: () => ({
+        next: () => new Promise<IteratorResult<Uint8Array>>(() => {}),
+        return: release,
+      }),
+    };
+    const stored = storeKlornUpload({
+      userId: "user-1",
+      fileName: "slow.txt",
+      declaredSize: "5",
+      parentExternalId: undefined,
+      body,
+    });
+    const outcome = expect(stored).rejects.toMatchObject({ code: "invalid-upload" });
+    await vi.advanceTimersByTimeAsync(UPLOAD_HEAD_TIMEOUT_MS);
+    await outcome;
+    expect(release).toHaveBeenCalled();
+    expect(t.store.keys()).toEqual([]);
+    vi.useRealTimers();
   });
 });
 

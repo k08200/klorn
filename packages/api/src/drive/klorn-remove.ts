@@ -83,6 +83,9 @@ async function subtreeOf(
   providerEnabled: DriveProviderEnabledMap,
 ): Promise<KlornChild[]> {
   const rows: KlornChild[] = [];
+  // A cycle cannot be written through D3, but two moves racing each other could
+  // leave one; a row already seen is not walked again, so the folder still goes.
+  const seen = new Set([folderExternalId]);
   let frontier = [folderExternalId];
   for (let depth = 1; frontier.length > 0; depth++) {
     if (depth > DRIVE_MAX_FOLDER_DEPTH) throw new KlornDriveError("too-deep");
@@ -93,9 +96,11 @@ async function subtreeOf(
       { foldersOnly: false, take },
       providerEnabled,
     );
-    rows.push(...level);
+    const fresh = level.filter((row) => !seen.has(row.externalId));
+    for (const row of fresh) seen.add(row.externalId);
+    rows.push(...fresh);
     if (rows.length > DRIVE_FOLDER_WALK_MAX_ITEMS) throw new KlornDriveError("folder-too-large");
-    frontier = level.filter((row) => row.isFolder).map((row) => row.externalId);
+    frontier = fresh.filter((row) => row.isFolder).map((row) => row.externalId);
   }
   return rows;
 }

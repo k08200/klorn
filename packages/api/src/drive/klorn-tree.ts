@@ -71,23 +71,25 @@ async function folderHeight(
   folderExternalId: string,
   providerEnabled: DriveProviderEnabledMap,
 ): Promise<number> {
+  const seen = new Set([folderExternalId]);
   let frontier = [folderExternalId];
   let height = 1;
-  let seen = 0;
   for (;;) {
-    const take = DRIVE_FOLDER_WALK_MAX_ITEMS - seen + 1;
+    const take = DRIVE_FOLDER_WALK_MAX_ITEMS - seen.size + 2;
     const children = await listKlornChildren(
       userId,
       frontier,
       { foldersOnly: true, take },
       providerEnabled,
     );
-    if (children.length === 0) return height;
-    seen += children.length;
-    if (seen > DRIVE_FOLDER_WALK_MAX_ITEMS) throw new KlornDriveError("folder-too-large");
+    // A folder already counted (a cycle two racing moves left) is not walked again.
+    const fresh = children.filter((child) => !seen.has(child.externalId));
+    if (fresh.length === 0) return height;
+    for (const child of fresh) seen.add(child.externalId);
+    if (seen.size - 1 > DRIVE_FOLDER_WALK_MAX_ITEMS) throw new KlornDriveError("folder-too-large");
     height += 1;
     if (height > DRIVE_MAX_FOLDER_DEPTH) throw new KlornDriveError("too-deep");
-    frontier = children.map((child) => child.externalId);
+    frontier = fresh.map((child) => child.externalId);
   }
 }
 

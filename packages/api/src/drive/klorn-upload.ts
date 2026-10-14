@@ -30,7 +30,12 @@ import { MAX_OBJECT_BYTES } from "../storage/limits.js";
 import { isStoragePurgePending } from "../storage/purge-queue.js";
 import { getUserStorage } from "../storage/runtime.js";
 import { toDriveFileWire } from "./drive-read.js";
-import { KLORN_DRIVE_SOURCE_KEY, klornDriveSource, upsertDriveFileRow } from "./drive-rows.js";
+import {
+  deleteKlornDriveRows,
+  KLORN_DRIVE_SOURCE_KEY,
+  klornDriveSource,
+  upsertDriveFileRow,
+} from "./drive-rows.js";
 import { DRIVE_PROVIDER_ENABLED, type DriveProviderEnabledMap } from "./drive-scope.js";
 import { klornStoredTypePolicy, SNIFF_BYTES, sniffContentType } from "./klorn-content-type.js";
 import { KlornDriveError } from "./klorn-errors.js";
@@ -90,8 +95,15 @@ interface Head {
   readonly ended: boolean;
 }
 
+/**
+ * How long the first SNIFF_BYTES of a body may take to arrive. The PUT that
+ * follows has its own bound (the S3 store's 120 s transfer timeout); without
+ * this one a client could hold an upload open before the PUT starts.
+ */
+export const UPLOAD_HEAD_TIMEOUT_MS = 30_000;
+
 /** Read chunks until SNIFF_BYTES are in hand or the body ends. */
-async function readHead(reader: AsyncIterator<Uint8Array>): Promise<Head> {
+async function collectHead(reader: AsyncIterator<Uint8Array>): Promise<Head> {
   const chunks: Uint8Array[] = [];
   let length = 0;
   while (length < SNIFF_BYTES) {
@@ -101,6 +113,22 @@ async function readHead(reader: AsyncIterator<Uint8Array>): Promise<Head> {
     length += next.value.byteLength;
   }
   return { chunks, bytes: Buffer.concat(chunks), ended: false };
+}
+
+/** The head within UPLOAD_HEAD_TIMEOUT_MS; past it, the body is released and refused. */
+async function readHead(reader: AsyncIterator<Uint8Array>): Promise<Head> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new KlornDriveError("invalid-upload")), UPLOAD_HEAD_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([collectHead(reader), deadline]);
+  } catch (err) {
+    await reader.return?.();
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** The head again, then the rest; releases the source if the reader stops early. */
@@ -143,22 +171,37 @@ function uploadFailure(err: unknown): unknown {
   }
 }
 
+interface CheckedUpload {
+  readonly name: string;
+  readonly size: number;
+  readonly parentExternalId: string | null;
+}
+
+/** Everything that can refuse an upload before a byte of it is read. */
+async function checkKlornUpload(
+  input: KlornUploadInput,
+  providerEnabled: DriveProviderEnabledMap,
+): Promise<CheckedUpload> {
+  const name = cleanKlornFileName(input.fileName);
+  if (name === null) throw new KlornDriveError("invalid-name");
+  const size = parseDeclaredSize(input.declaredSize);
+  const parentExternalId = await resolveKlornParent(
+    input.userId,
+    input.parentExternalId,
+    providerEnabled,
+  );
+  await assertNotPurging(input.userId);
+  await assertWithinKlornQuota(input.userId, size);
+  return { name, size, parentExternalId };
+}
+
 /** Phase one: every check, the sniff, and the object. No row is written. */
 export async function storeKlornUpload(
   input: KlornUploadInput,
   providerEnabled: DriveProviderEnabledMap = DRIVE_PROVIDER_ENABLED,
 ): Promise<StoredKlornUpload> {
   const { userId } = input;
-  const name = cleanKlornFileName(input.fileName);
-  if (name === null) throw new KlornDriveError("invalid-name");
-  const size = parseDeclaredSize(input.declaredSize);
-  const parentExternalId = await resolveKlornParent(
-    userId,
-    input.parentExternalId,
-    providerEnabled,
-  );
-  await assertNotPurging(userId);
-  await assertWithinKlornQuota(userId, size);
+  const { name, size, parentExternalId } = await checkKlornUpload(input, providerEnabled);
   const storage = await getUserStorage();
   if (!storage) throw new KlornDriveError("storage-unavailable");
 
@@ -182,15 +225,8 @@ export async function storeKlornUpload(
   } catch (err) {
     throw uploadFailure(err);
   }
-  const upload: StoredKlornUpload = {
-    userId,
-    key,
-    name,
-    size,
-    mimeType,
-    etag: `sha256:${hash.digest("hex")}`,
-    parentExternalId,
-  };
+  const etag = `sha256:${hash.digest("hex")}`;
+  const upload: StoredKlornUpload = { userId, key, name, size, mimeType, etag, parentExternalId };
   if (await isStoragePurgePending(userId)) {
     await discardKlornUpload(upload);
     throw new KlornDriveError("account-purging");
@@ -218,25 +254,24 @@ export async function discardKlornUpload(upload: StoredKlornUpload): Promise<voi
   }
 }
 
-/** Phase two: the row, written only now that the object exists. */
-export async function commitKlornUpload(
+/** The row of a stored upload; the object is deleted if the row cannot be written. */
+async function writeUploadRow(
   upload: StoredKlornUpload,
-  now: Date = new Date(),
-): Promise<DriveFileWire> {
-  const externalId = randomUUID();
-  const row = {
-    name: upload.name,
-    modifiedAt: now,
-    mimeType: upload.mimeType,
-    isFolder: false,
-    sizeBytes: upload.size,
-    parentExternalId: upload.parentExternalId,
-    storageKey: upload.key,
-    etag: upload.etag,
-  };
+  externalId: string,
+  now: Date,
+): Promise<string> {
   let written: Awaited<ReturnType<typeof upsertDriveFileRow>>;
   try {
-    written = await upsertDriveFileRow(upload.userId, klornDriveSource(externalId), row);
+    written = await upsertDriveFileRow(upload.userId, klornDriveSource(externalId), {
+      name: upload.name,
+      modifiedAt: now,
+      mimeType: upload.mimeType,
+      isFolder: false,
+      sizeBytes: upload.size,
+      parentExternalId: upload.parentExternalId,
+      storageKey: upload.key,
+      etag: upload.etag,
+    });
   } catch (err) {
     await discardKlornUpload(upload);
     throw err;
@@ -245,8 +280,35 @@ export async function commitKlornUpload(
     await discardKlornUpload(upload);
     throw new KlornDriveError("invalid-upload");
   }
+  return written.id;
+}
+
+/**
+ * Phase two: the row, written only now that the object exists. The quota is
+ * checked again right before it, which narrows the window two concurrent
+ * uploads have to both pass from the length of a PUT to the length of a query.
+ * If a deletion of the user's data started meanwhile, the row is removed again
+ * (row first: the pending purge deletes the object even if this delete fails).
+ */
+export async function commitKlornUpload(
+  upload: StoredKlornUpload,
+  now: Date = new Date(),
+): Promise<DriveFileWire> {
+  try {
+    await assertWithinKlornQuota(upload.userId, upload.size);
+  } catch (err) {
+    await discardKlornUpload(upload);
+    throw err;
+  }
+  const externalId = randomUUID();
+  const id = await writeUploadRow(upload, externalId, now);
+  if (await isStoragePurgePending(upload.userId)) {
+    await deleteKlornDriveRows(upload.userId, [externalId]);
+    await discardKlornUpload(upload);
+    throw new KlornDriveError("account-purging");
+  }
   return toDriveFileWire({
-    id: written.id,
+    id,
     provider: "KLORN",
     sourceKey: KLORN_DRIVE_SOURCE_KEY,
     externalId,
