@@ -22,6 +22,7 @@ import {
   syncSettled,
 } from "../../../web/src/app/onboarding/v2/model";
 import type { ConnectedAccount } from "../../../web/src/lib/connected-accounts";
+import { keysWithPrefix, SESSION_STATE_PREFIXES } from "../../../web/src/lib/logout-cleanup";
 import {
   forgetConnect,
   markConnectStarted,
@@ -506,5 +507,26 @@ describe("connect markers", () => {
     expect(() => storeConnectResult("GOOGLE", "connected")).not.toThrow();
     expect(takeConnectResult()).toBeNull();
     expect(() => forgetConnect()).not.toThrow();
+  });
+});
+
+describe("sign-out clears the onboarding connect marker", () => {
+  it("covers both onboarding-return keys with a cleared prefix", () => {
+    const keys = [
+      "klorn.onboardingV2.connect",
+      "klorn.onboardingV2.result",
+      "klorn.mailV2.view",
+      "other",
+    ];
+    const store = { length: keys.length, key: (i: number) => keys[i] ?? null };
+    const cleared = SESSION_STATE_PREFIXES.flatMap((p) => keysWithPrefix(store, p));
+    expect(cleared).toEqual(
+      expect.arrayContaining([
+        "klorn.onboardingV2.connect",
+        "klorn.onboardingV2.result",
+        "klorn.mailV2.view",
+      ]),
+    );
+    expect(cleared).not.toContain("other");
   });
 });
