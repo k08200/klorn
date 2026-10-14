@@ -56,8 +56,12 @@ struct SectionResizeHandle: View {
             // MOVE before SwiftUI's DragGesture ever fires (v0.4.80040 bug —
             // the handle "did nothing"). An NSView that answers
             // mouseDownCanMoveWindow=false is the only reliable refusal.
-            ResizeDragSurface(
-                startHeight: { height }, apply: { height = $0 }, growsDown: growsDown)
+            // Nothing to drag in an offscreen render, where ImageRenderer
+            // would paint the NSView as its "restricted" placeholder.
+            if !Theme.isRenderingOffscreen {
+                ResizeDragSurface(
+                    startHeight: { height }, apply: { height = $0 }, growsDown: growsDown)
+            }
             // macOS-divider look: a hairline across the column with a centred
             // grabber that answers hover — visibly a control, not lint.
             // Quiet at rest (founder 2026-08-21: four identical grabbers

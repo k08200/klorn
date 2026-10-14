@@ -22,7 +22,6 @@ struct MailSection: View {
                     Rectangle().fill(Theme.line).frame(height: 1)
                     FullList(
                         mode: model.listMode, actions: actions, keyZone: $keyZone,
-                        keyCatcherInRender: false,
                         hidesLaneTitle: NavRules.laneFilter(for: model.listMode) != nil,
                         rowStyle: .window)
                 }

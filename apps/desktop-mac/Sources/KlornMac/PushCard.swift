@@ -182,18 +182,22 @@ struct PushCard: View {
                     .foregroundStyle(Theme.accent)
                     .accessibilityLabel(L("push.showAll.a11y"))
             }
-            Menu {
-                ForEach(PushCardSnooze.options) { option in
-                    Button(option.label) { actions.onSnooze(option) }
+            if Theme.isRenderingOffscreen {
+                // Menus are AppKit-backed; ImageRenderer paints them as its
+                // "restricted" placeholder. Same glyph, no menu.
+                snoozeGlyph
+            } else {
+                Menu {
+                    ForEach(PushCardSnooze.options) { option in
+                        Button(option.label) { actions.onSnooze(option) }
+                    }
+                } label: {
+                    snoozeGlyph
                 }
-            } label: {
-                Image(systemName: "moon.zzz")
-                    .font(.caption.weight(.semibold)).foregroundStyle(Theme.textDim)
-                    .frame(width: 28, height: 28)
+                .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                .help(L("push.snooze.help"))
+                .accessibilityLabel(L("push.snooze.a11y"))
             }
-            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-            .help(L("push.snooze.help"))
-            .accessibilityLabel(L("push.snooze.a11y"))
             Button(action: actions.onDismiss) {
                 Image(systemName: "xmark")
                     .font(.caption.weight(.semibold)).foregroundStyle(Theme.textDim)
@@ -202,6 +206,12 @@ struct PushCard: View {
             .buttonStyle(.plain)
             .accessibilityLabel(L("push.dismiss.a11y"))
         }
+    }
+
+    private var snoozeGlyph: some View {
+        Image(systemName: "moon.zzz")
+            .font(.caption.weight(.semibold)).foregroundStyle(Theme.textDim)
+            .frame(width: 28, height: 28)
     }
 
     @ViewBuilder
