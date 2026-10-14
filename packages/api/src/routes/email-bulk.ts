@@ -13,11 +13,13 @@ import type { EmailMessage } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { prisma } from "../db.js";
+import { resolveAttentionForEmails } from "../judge/attention-resolve.js";
 import type { EmailPriorityValue } from "../mail/email-label-feedback.js";
 import { mailActionsFor } from "../mail/providers/dispatch.js";
 import { isImapFamily } from "../mail/providers/error-semantics.js";
 import { logProviderSoftFailure } from "../mail/providers/log-soft-failure.js";
 import type { MailProviderActions } from "../mail/providers/types.js";
+import { captureError } from "../sentry.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
@@ -199,6 +201,16 @@ async function applyBulkArchiveAction(
   }
   if (archivedIds.length > 0) {
     await prisma.emailMessage.deleteMany({ where: { userId, id: { in: archivedIds } } });
+    // The rows are gone, so the inbox sync can never notice they left and
+    // close their attention items the way it does for rows it still sees
+    // (email-sync.ts). Close them here. Fail-soft: the archive already went
+    // out, and a bookkeeping miss must not report it as failed.
+    try {
+      await resolveAttentionForEmails(userId, archivedIds);
+    } catch (err) {
+      console.warn("[EMAIL-BULK] attention resolve failed:", err instanceof Error ? err.message : err);
+      captureError(err, { tags: { scope: "email-bulk.archive.resolve" }, extra: { userId } });
+    }
   }
   return {
     payload: {
