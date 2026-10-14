@@ -104,6 +104,9 @@ final class RealtimeClient {
             do {
                 while !stopped {
                     let message = try await socket.receive()
+                    // A message received just before `stop()` (sign-out) or
+                    // `bounce()` resumes here afterwards: it is not delivered.
+                    if stopped || Task.isCancelled { break }
                     backoff = 1
                     if Self.isWake(message) { onWake() }
                 }

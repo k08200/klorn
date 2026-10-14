@@ -2,6 +2,18 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
+import { useAuth } from "../lib/auth";
+import {
+  ASSISTANT_ACTIVITY,
+  ASSISTANT_BRIEFING,
+  ASSISTANT_CHAT,
+  assistantHref,
+  TODAY_HOME,
+} from "../lib/home";
+import { hotkeyCaps, hotkeyRegistry, liveHotkeys } from "../lib/hotkeys";
+import { useT } from "../lib/i18n";
+import { useHotkeys, useKeyboardTriage } from "../lib/use-hotkeys";
+import { useToast } from "./toast";
 
 interface Command {
   id: string;
@@ -19,14 +31,100 @@ export default function CommandPalette() {
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const listboxId = useId();
   const router = useRouter();
+  const triage = useKeyboardTriage();
+  const unifiedHome = useAuth().user?.unifiedHome === true;
+  const { t } = useT();
+  const { toast } = useToast();
+
+  // Cmd/Ctrl+K is an entry in the HOTKEYS table like every other key; the
+  // palette owns its handler, the shared listener dispatches it.
+  useHotkeys(
+    "global",
+    {
+      "palette.toggle": {
+        run: () => {
+          setOpen((prev) => !prev);
+          setQuery("");
+          setSelected(0);
+        },
+      },
+    },
+    true,
+  );
+
+  // KEYBOARD_TRIAGE: the actions of the current screen, straight from the
+  // hotkey table, so the palette and the keys can never disagree. Read while
+  // open because handlers mount and unmount with pages. Each runs after the
+  // palette has closed and handed focus back.
+  const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+  const actionCommands: Command[] =
+    triage && open
+      ? liveHotkeys({ triage, scopes: hotkeyRegistry.activeScopes(), unifiedHome })
+          .filter(({ def }) => def.palette)
+          .map(({ def, handler }) => ({
+            id: `action-${def.id}`,
+            label: t(def.labelKey),
+            sublabel: hotkeyCaps(def.keys[0], isMac).join(" "),
+            action: () => {
+              window.setTimeout(() => {
+                const reason = handler.disabledReason?.() ?? null;
+                if (reason) toast(reason, "info");
+                else handler.run();
+              }, 0);
+            },
+          }))
+      : [];
+
+  // UNIFIED_HOME: Today is the first destination and the approval surface is
+  // named Approvals; otherwise the list is what it was.
+  const homeCommands: Command[] = unifiedHome
+    ? [
+        { id: "today", label: t("nav.v2.openToday"), action: () => router.push(TODAY_HOME) },
+        {
+          id: "approval-queue",
+          label: t("nav.v2.openApprovals"),
+          action: () => router.push(assistantHref()),
+        },
+      ]
+    : [
+        {
+          id: "approval-queue",
+          label: "Open decision queue",
+          sublabel: "Review decisions waiting for approval",
+          action: () => router.push("/inbox"),
+        },
+      ];
+
+  // UNIFIED_HOME: Briefing, Activity and Chat are pages of the Assistant hub.
+  const briefingCommands: Command[] = unifiedHome
+    ? [
+        {
+          id: "briefing",
+          label: t("keys.go.briefing"),
+          action: () => router.push(ASSISTANT_BRIEFING),
+        },
+        {
+          id: "activity",
+          label: t("assistantHub.palette.activity"),
+          action: () => router.push(ASSISTANT_ACTIVITY),
+        },
+        {
+          id: "assistant-chat",
+          label: t("assistantHub.palette.chat"),
+          action: () => router.push(ASSISTANT_CHAT),
+        },
+      ]
+    : [
+        {
+          id: "briefing",
+          label: "Open briefing",
+          sublabel: "Review today's work signals",
+          action: () => router.push("/briefing"),
+        },
+      ];
 
   const commands: Command[] = [
-    {
-      id: "approval-queue",
-      label: "Open decision queue",
-      sublabel: "Review decisions waiting for approval",
-      action: () => router.push("/inbox"),
-    },
+    ...homeCommands,
     {
       id: "mail",
       label: "Open mail",
@@ -39,12 +137,7 @@ export default function CommandPalette() {
       sublabel: "See meetings and prep context",
       action: () => router.push("/calendar"),
     },
-    {
-      id: "briefing",
-      label: "Open briefing",
-      sublabel: "Review today's work signals",
-      action: () => router.push("/briefing"),
-    },
+    ...briefingCommands,
     {
       id: "settings",
       label: "Open settings",
@@ -59,6 +152,8 @@ export default function CommandPalette() {
         window.dispatchEvent(new KeyboardEvent("keydown", { key: "/", metaKey: true }));
       },
     },
+    // After the destinations, so Enter on an empty query never runs an action.
+    ...actionCommands,
   ];
 
   const filtered = commands.filter((c) => {
@@ -69,12 +164,6 @@ export default function CommandPalette() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        setOpen((prev) => !prev);
-        setQuery("");
-        setSelected(0);
-      }
       if (e.key === "Escape") {
         setOpen(false);
       }

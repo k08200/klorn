@@ -9,6 +9,7 @@ import BriefingCard from "../../components/briefing-card";
 import CommandCenterSummary from "../../components/command-center-summary";
 import type { CommitmentItem } from "../../components/commitment-card";
 import { FirewallBoard } from "../../components/firewall-board";
+import { HubHandoff } from "../../components/hub-handoff";
 import PmfCard from "../../components/pmf-card";
 import { RejectReasonDialog } from "../../components/reject-reason-dialog";
 import ScreenerCard from "../../components/screener-card";
@@ -51,7 +52,9 @@ function parseView(raw: string | null): SegmentView {
 export default function InboxPage() {
   return (
     <AuthGuard>
-      <CommandCenterView />
+      <HubHandoff>
+        <CommandCenterView />
+      </HubHandoff>
     </AuthGuard>
   );
 }

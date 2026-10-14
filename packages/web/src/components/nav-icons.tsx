@@ -11,7 +11,8 @@ export type NavIconType =
   | "graph"
   | "settings"
   | "inbox"
-  | "chat";
+  | "chat"
+  | "today";
 
 interface NavIconProps {
   type: NavIconType;
@@ -33,6 +34,15 @@ export function NavIcon({ type, size = 16, strokeWidth = 1.5 }: NavIconProps) {
   };
 
   switch (type) {
+    case "today":
+      // A sun over the horizon: the day at a glance.
+      return (
+        <svg {...props}>
+          <path d="M12 3v2M5.6 6.6 7 8M18.4 6.6 17 8M3 14h2M19 14h2" />
+          <path d="M7.5 14a4.5 4.5 0 0 1 9 0" />
+          <path d="M3 18h18M7 21h10" />
+        </svg>
+      );
     case "mail":
       return (
         <svg {...props}>

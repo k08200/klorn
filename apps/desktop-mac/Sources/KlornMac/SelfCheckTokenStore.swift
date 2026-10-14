@@ -26,7 +26,7 @@ func tokenStoreSelfChecks(sourceDir: URL) -> [(String, Bool)] {
     func callsKeychain(_ source: String) -> Bool { staticCalls.contains { source.contains($0) } }
     let productionStore = keychain + "TokenStore" + "("
     let defaultModel = "AppModel" + "()"
-    let harnessFiles = sources.filter { $0 == "PreviewRender.swift" || $0.hasPrefix("SelfCheck") }
+    let harnessFiles = sources.filter { $0.hasPrefix("PreviewRender") || $0.hasPrefix("SelfCheck") }
     let harnessOffenders = harnessFiles.filter { file in
         let source = text(file)
         return callsKeychain(source)

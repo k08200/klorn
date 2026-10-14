@@ -19,9 +19,12 @@ function isPaywallBypass(pathname: string): boolean {
 // Naver IMAP — the non-Google way to attach mail); /billing must be reachable
 // so a user can upgrade BEFORE connecting (otherwise a paying customer is
 // bounced to onboarding and can never check out); any path under /auth or
-// /login is the sign-in flow.
+// /login is the sign-in flow. /today (UNIFIED_HOME) shows its own "Connect
+// your first account" state; with the flag off the page leaves for /inbox,
+// which is gated as before.
 const MAIL_OPTIONAL_PREFIXES = [
   "/onboarding",
+  "/today",
   "/settings",
   "/billing",
   "/usage",

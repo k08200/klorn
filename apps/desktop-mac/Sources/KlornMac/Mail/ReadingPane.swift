@@ -12,6 +12,10 @@ struct ReadingPane: View {
     let actions: TopBarActions
     /// The owning FullView's key zone; `.reader` draws the focus ring.
     var keyZone: MailKeyZone = .list
+    /// `.window` in the main window: the type roles, the reader meta line
+    /// and the flat primary button. The default is the bar's pane, unchanged.
+    var style: ShellStyle = .bar
+    private var m: ReadingPaneMetrics { style == .window ? .window : .bar }
     @State private var replying = false
     @State private var replyText = ""
     /// The composer was opened with the ahead-of-time draft (says so above
@@ -38,17 +42,17 @@ struct ReadingPane: View {
                 } else if let detail = model.mailboxDetail {
                     mailboxContent(picked, detail)
                 } else {
-                    centered { EmptyState(icon: "doc.text", title: L("reading.noPreview")) }
+                    centered { EmptyState(icon: "doc.text", title: L("reading.noPreview"), style: style) }
                 }
             } else if model.isLoadingEmail {
                 centered { ProgressView().controlSize(.small) }
             } else if let err = model.emailError {
-                centered { Text(err).font(.callout).foregroundStyle(Theme.textDim) }
+                centered { Text(err).font(m.callout).foregroundStyle(Theme.textDim) }
             } else if let email = model.openedEmail {
                 content(email)
             } else if model.selectedItemId != nil {
                 centered {
-                    EmptyState(icon: "doc.text", title: L("reading.noPreview"))
+                    EmptyState(icon: "doc.text", title: L("reading.noPreview"), style: style)
                 }
             } else {
                 centered {
@@ -56,9 +60,9 @@ struct ReadingPane: View {
                         // The K mark, quiet — the ring identity is retired
                         // (K monogram everywhere since 0.4.80005).
                         LogoRing(size: 44).opacity(0.45)
-                        Text(L("reading.empty.title")).font(.title3).foregroundStyle(Theme.textDim)
+                        Text(L("reading.empty.title")).font(m.title3).foregroundStyle(Theme.textDim)
                         Text(L("reading.empty.detail"))
-                            .font(.caption).foregroundStyle(Theme.textDim)
+                            .font(m.caption).foregroundStyle(Theme.textDim)
                             .multilineTextAlignment(.center)
                     }
                     .accessibilityElement(children: .combine)
@@ -110,13 +114,13 @@ struct ReadingPane: View {
                     let to = senderDisplayName(decodeHTMLEntities(detail.to))
                     Text(L("mailbox.fromTo", from.isEmpty ? detail.from : from,
                            to.isEmpty ? detail.to : to))
-                        .font(.callout).foregroundStyle(Theme.textDim).lineLimit(1)
+                        .font(m.callout).foregroundStyle(Theme.textDim).lineLimit(1)
                     Spacer()
                     Text(Self.formatDate(detail.receivedAt))
-                        .font(.caption).foregroundStyle(Theme.textDim)
+                        .font(m.caption).foregroundStyle(Theme.textDim)
                 }
             }
-            .padding(24)
+            .padding(m.inset)
             Divider().overlay(Theme.line)
             if let renderHtml = detail.renderHtml, !renderHtml.isEmpty {
                 EmailHtmlView(
@@ -132,13 +136,13 @@ struct ReadingPane: View {
             } else {
                 ScrollView {
                     Text(detail.body.isEmpty ? L("reading.noContent") : detail.body)
-                        .font(.callout)
+                        .font(m.callout)
                         .foregroundStyle(Theme.text)
                         .lineSpacing(4)
                         .textSelection(.enabled)
                         .frame(maxWidth: 640, alignment: .leading)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(24)
+                        .padding(m.inset)
                 }
             }
         }
@@ -152,16 +156,20 @@ struct ReadingPane: View {
                     .foregroundStyle(Theme.text).lineLimit(2)
                 HStack {
                     Text(senderDisplayName(email.from.map(decodeHTMLEntities)))
-                        .font(.callout).foregroundStyle(Theme.textDim).lineLimit(1)
+                        .font(m.sender).foregroundStyle(m.senderInk).lineLimit(1)
                     Spacer()
-                    Text(Self.formatDate(email.date)).font(.caption).foregroundStyle(Theme.textDim)
+                    Text(Self.formatDate(email.date)).font(m.caption).foregroundStyle(Theme.textDim)
+                }
+                // The facts the row no longer carries (one-badge rule): the
+                // lane, then category / relationship / reply state as words.
+                if style == .window, let item {
+                    ReaderMetaLine(item: item)
                 }
                 if let item {
                     HStack(spacing: 10) {
-                        Button(email.preparedDraft == nil ? L("reading.replyWithAI") : L("reading.openDraft")) {
-                            startReply(item)
-                        }
-                        .buttonStyle(PrimaryButtonStyle())
+                        primaryButton(
+                            email.preparedDraft == nil ? L("reading.replyWithAI") : L("reading.openDraft")
+                        ) { startReply(item) }
                         // menuIndicator(.hidden) kills the system-blue pull-down
                         // segment (the one off-palette element on this row —
                         // design audit 2026-07-20); a dim chevron in the label
@@ -179,7 +187,7 @@ struct ReadingPane: View {
                             SnoozeMenu(item: item, onSnooze: actions.onSnooze) {
                                 Text(L("mail.snoozePrefix"))
                                     + Text(Image(systemName: "chevron.down"))
-                                    .font(.caption2.weight(.semibold)).foregroundStyle(Theme.textDim)
+                                    .font(m.caption2Semibold).foregroundStyle(Theme.textDim)
                             }
                             .menuStyle(.button).buttonStyle(.bordered).controlSize(.small)
                             .menuIndicator(.hidden).fixedSize()
@@ -190,7 +198,7 @@ struct ReadingPane: View {
                                 Text(L("mail.moveTo", item.tier.label,
                                        L10n.josaRoIfKorean(after: item.tier.label)))
                                     + Text(Image(systemName: "chevron.down"))
-                                    .font(.caption2.weight(.semibold)).foregroundStyle(Theme.textDim)
+                                    .font(m.caption2Semibold).foregroundStyle(Theme.textDim)
                             }
                             .menuStyle(.button).buttonStyle(.bordered).controlSize(.small)
                             .menuIndicator(.hidden).fixedSize()
@@ -201,7 +209,7 @@ struct ReadingPane: View {
                     .padding(.top, 2)
                 }
             }
-            .padding(24)
+            .padding(m.inset)
             Divider().overlay(Theme.line)
             klornBand(email)
             if let item, !replying {
@@ -227,7 +235,7 @@ struct ReadingPane: View {
                     // line spacing — a mail body should read like a document, not
                     // a log dump stretched across the pane.
                     Text(email.text.isEmpty ? L("reading.noContent") : email.text)
-                        .font(.callout)
+                        .font(m.callout)
                         .lineSpacing(4)
                         .foregroundStyle(Theme.text.opacity(0.92))
                         .textSelection(.enabled)
@@ -247,19 +255,19 @@ struct ReadingPane: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(L("reading.replyTo", senderDisplayName(item.email?.from.map(decodeHTMLEntities))))
-                    .font(.caption).foregroundStyle(Theme.textDim).lineLimit(1)
+                    .font(m.caption).foregroundStyle(Theme.textDim).lineLimit(1)
                 Spacer()
                 if model.isDrafting {
                     HStack(spacing: 5) {
                         ProgressView().controlSize(.mini)
-                        Text(L("reading.drafting")).font(.caption).foregroundStyle(Theme.textDim)
+                        Text(L("reading.drafting")).font(m.caption).foregroundStyle(Theme.textDim)
                     }
                 } else {
                     Button {
                         showingPreparedDraft = false
                         Task { if let d = await model.draftReply(item) { replyText = d } }
                     } label: {
-                        Label(L("reading.regenerate"), systemImage: "sparkles").font(.caption)
+                        Label(L("reading.regenerate"), systemImage: "sparkles").font(m.caption)
                     }
                     .buttonStyle(.plain).foregroundStyle(Theme.accent)
                     .help(L("reading.regenerate.help"))
@@ -267,18 +275,18 @@ struct ReadingPane: View {
             }
             if showingPreparedDraft {
                 Text(L("reading.preparedDraft"))
-                    .font(.caption).foregroundStyle(Theme.textDim)
+                    .font(m.caption).foregroundStyle(Theme.textDim)
                     .fixedSize(horizontal: false, vertical: true)
             }
             TextEditor(text: $replyText)
-                .font(.callout).foregroundStyle(Theme.text)
+                .font(m.callout).foregroundStyle(Theme.text)
                 .scrollContentBackground(.hidden)
                 .frame(height: 110)
                 .padding(Theme.s2)
-                .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.field))
+                .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: m.editorRadius))
+                .overlay(RoundedRectangle(cornerRadius: m.editorRadius).strokeBorder(Theme.field))
             if let err = model.replyError {
-                Text(err).font(.caption).foregroundStyle(.orange)
+                Text(err).font(m.caption).foregroundStyle(m.warning)
             }
             HStack {
                 Spacer()
@@ -288,8 +296,7 @@ struct ReadingPane: View {
                     showingPreparedDraft = false
                 }
                 .buttonStyle(.bordered).controlSize(.small)
-                Button(sending ? L("reading.sending") : L("reading.send")) { send(item) }
-                    .buttonStyle(PrimaryButtonStyle())
+                primaryButton(sending ? L("reading.sending") : L("reading.send")) { send(item) }
                     .disabled(sending || model.isDrafting || replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
@@ -319,13 +326,13 @@ struct ReadingPane: View {
                             if let item, let reason, !reason.isEmpty {
                                 Circle().fill(Theme.tint(item.tier)).frame(width: 7, height: 7)
                                 Text(L("mail.whyTier", item.tier.label, reason))
-                                    .font(.caption).foregroundStyle(Theme.textDim)
+                                    .font(m.caption).foregroundStyle(Theme.textDim)
                                     .lineLimit(expanded ? 2 : 1)
                             } else {
                                 Text(L("reading.analysis"))
-                                    .font(.caption).foregroundStyle(Theme.textDim)
+                                    .font(m.caption).foregroundStyle(Theme.textDim)
                             }
-                            Image(systemName: "chevron.down").font(.caption2)
+                            Image(systemName: "chevron.down").font(m.caption2)
                                 .foregroundStyle(Theme.textDim)
                                 .rotationEffect(expanded ? .zero : .degrees(-90))
                                 .accessibilityHidden(true)
@@ -343,17 +350,17 @@ struct ReadingPane: View {
                         Task { await model.summarizeOpenedEmail() }
                     }
                     .buttonStyle(.plain)
-                    .font(.caption.weight(.medium))
+                    .font(m.captionMedium)
                     .foregroundStyle(model.isSummarizing ? Theme.textDim : Theme.accent)
                     .disabled(model.isSummarizing)
                 }
                 if expanded {
                 if model.summarizeFailed {
                     Text(L("mail.summarizeFailed"))
-                        .font(.caption).foregroundStyle(Theme.textDim)
+                        .font(m.caption).foregroundStyle(Theme.textDim)
                 }
                 if let summary = email.summary, !summary.isEmpty {
-                    Text(summary).font(.callout).foregroundStyle(Theme.text.opacity(0.9))
+                    Text(summary).font(m.callout).foregroundStyle(Theme.text.opacity(0.9))
                 }
                 if let points = email.keyPoints, !points.isEmpty {
                     VStack(alignment: .leading, spacing: 3) {
@@ -361,9 +368,9 @@ struct ReadingPane: View {
                         // duplicate \.self identities break SwiftUI diffing.
                         ForEach(Array(points.enumerated()), id: \.offset) { _, point in
                             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                                Text("•").font(.caption).foregroundStyle(Theme.textDim)
+                                Text("•").font(m.caption).foregroundStyle(Theme.textDim)
                                     .accessibilityHidden(true)
-                                Text(point).font(.caption).foregroundStyle(Theme.text.opacity(0.85))
+                                Text(point).font(m.caption).foregroundStyle(Theme.text.opacity(0.85))
                             }
                         }
                     }
@@ -372,9 +379,9 @@ struct ReadingPane: View {
                     VStack(alignment: .leading, spacing: 3) {
                         ForEach(Array(actions.enumerated()), id: \.offset) { _, action in
                             HStack(alignment: .firstTextBaseline, spacing: 5) {
-                                Image(systemName: "checkmark.circle").font(.caption2)
+                                Image(systemName: "checkmark.circle").font(m.caption2)
                                     .foregroundStyle(Theme.accent).accessibilityHidden(true)
-                                Text(action).font(.caption).foregroundStyle(Theme.text.opacity(0.85))
+                                Text(action).font(m.caption).foregroundStyle(Theme.text.opacity(0.85))
                             }
                         }
                     }
@@ -386,10 +393,10 @@ struct ReadingPane: View {
                 // surface in the app — the hue is the signal, the sentence is not.
                 if email.needsReply == true {
                     HStack(spacing: 5) {
-                        Image(systemName: "arrowshape.turn.up.left").font(.caption2)
+                        Image(systemName: "arrowshape.turn.up.left").font(m.caption2)
                             .foregroundStyle(Theme.accent).accessibilityHidden(true)
                         Text((email.needsReplyReason?.isEmpty == false) ? email.needsReplyReason! : L("reading.needsReply"))
-                            .font(.caption).foregroundStyle(Theme.textDim)
+                            .font(m.caption).foregroundStyle(Theme.textDim)
                     }
                 }
                 // Why this arrived NOW — read from the whole thread, both
@@ -398,46 +405,46 @@ struct ReadingPane: View {
                 if let brief = model.threadBrief, !brief.whyNow.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(alignment: .firstTextBaseline, spacing: 5) {
-                            Image(systemName: "arrow.triangle.branch").font(.caption2)
+                            Image(systemName: "arrow.triangle.branch").font(m.caption2)
                                 .foregroundStyle(Theme.accent).accessibilityHidden(true)
-                            Text(brief.whyNow).font(.caption).foregroundStyle(Theme.text)
+                            Text(brief.whyNow).font(m.caption).foregroundStyle(Theme.text)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         if let owe = brief.weOwe, !owe.isEmpty {
                             Text(L("thread.weOwe", owe))
-                                .font(.caption2).foregroundStyle(.orange)
+                                .font(m.caption2).foregroundStyle(m.warning)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         ForEach(brief.asks.prefix(2), id: \.self) { ask in
                             HStack(alignment: .firstTextBaseline, spacing: 5) {
-                                Text("·").font(.caption2).foregroundStyle(Theme.textDim)
-                                Text(ask).font(.caption2).foregroundStyle(Theme.textDim)
+                                Text("·").font(m.caption2).foregroundStyle(Theme.textDim)
+                                Text(ask).font(m.caption2).foregroundStyle(Theme.textDim)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(10)
-                    .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 8))
+                    .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: m.cardRadius))
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel(L("thread.brief.a11y", brief.whyNow))
                 }
                 if let dossier = model.senderDossier, !dossier.summary.isEmpty {
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(alignment: .firstTextBaseline, spacing: 5) {
-                            Image(systemName: "person.crop.circle").font(.caption2)
+                            Image(systemName: "person.crop.circle").font(m.caption2)
                                 .foregroundStyle(Theme.accent).accessibilityHidden(true)
-                            Text(dossier.summary).font(.caption)
+                            Text(dossier.summary).font(m.caption)
                                 .foregroundStyle(Theme.textDim).lineLimit(2)
                         }
                         if !dossier.openThreads.isEmpty {
                             Text(L("dossier.inFlight", dossier.openThreads.joined(separator: " · ")))
-                                .font(.caption2).foregroundStyle(Theme.textDim)
+                                .font(m.caption2).foregroundStyle(Theme.textDim)
                                 .padding(.leading, 13).lineLimit(2)
                         }
                         if let promise = dossier.lastPromise, !promise.isEmpty {
                             Text(L("dossier.promise", promise))
-                                .font(.caption2).foregroundStyle(Theme.textDim)
+                                .font(m.caption2).foregroundStyle(Theme.textDim)
                                 .padding(.leading, 13).lineLimit(2)
                         }
                     }
@@ -453,9 +460,9 @@ struct ReadingPane: View {
                     // on the icon and the meter; see the signal-line rule above.
                     VStack(alignment: .leading, spacing: 5) {
                         HStack(spacing: 5) {
-                            Image(systemName: "arrow.turn.up.left").font(.caption2)
+                            Image(systemName: "arrow.turn.up.left").font(m.caption2)
                                 .foregroundStyle(Theme.engage)
-                            Text(engagement.replyCountLabel).font(.caption)
+                            Text(engagement.replyCountLabel).font(m.caption)
                                 .foregroundStyle(Theme.textDim)
                         }
                         if engagement.showsImportance {
@@ -470,7 +477,7 @@ struct ReadingPane: View {
         // Same measure as the mail body below: intelligence about a document
         // should not run wider than the document itself.
         .frame(maxWidth: 640, alignment: .leading)
-        .padding(.horizontal, 24).padding(.vertical, 14)
+        .padding(.horizontal, m.inset).padding(.vertical, m.bandVertical)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.surfaceRaised)
         Divider().overlay(Theme.line)
@@ -486,31 +493,31 @@ struct ReadingPane: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 5) {
-                Image(systemName: "calendar.badge.clock").font(.caption2)
+                Image(systemName: "calendar.badge.clock").font(m.caption2)
                     .foregroundStyle(Theme.accent).accessibilityHidden(true)
                 Text(L("meeting.proposedSlot", meetingSlotLabel(proposed.startTime, proposed.endTime)))
-                    .font(.caption).foregroundStyle(Theme.textDim)
+                    .font(m.caption).foregroundStyle(Theme.textDim)
             }
             HStack(spacing: 6) {
                 Circle().fill(meetingVerdictColor(context.conflict))
                     .frame(width: 7, height: 7).accessibilityHidden(true)
                 Text(meetingVerdictLabel(context.conflict))
-                    .font(.caption.weight(.medium))
+                    .font(m.captionMedium)
                     .foregroundStyle(context.conflict?.hasConflicts == true ? Theme.text : Theme.textDim)
             }
             if let alts = context.alternatives, !alts.isEmpty {
                 HStack(alignment: .firstTextBaseline, spacing: 5) {
-                    Image(systemName: "calendar.badge.checkmark").font(.caption2)
+                    Image(systemName: "calendar.badge.checkmark").font(m.caption2)
                         .foregroundStyle(Theme.accent).accessibilityHidden(true)
                     Text(L("meeting.alternatives",
                            alts.prefix(3).map { meetingSlotLabel($0.startTime, $0.endTime) }
                                .joined(separator: " · ")))
-                        .font(.caption).foregroundStyle(Theme.textDim)
+                        .font(m.caption).foregroundStyle(Theme.textDim)
                 }
             }
             ForEach(context.nearby.prefix(3)) { event in
                 Text("\(meetingSlotLabel(event.startTime, event.endTime))  \(event.title)")
-                    .font(.caption2).foregroundStyle(Theme.textDim)
+                    .font(m.caption2).foregroundStyle(Theme.textDim)
                     .padding(.leading, 13)
                     .lineLimit(1)
             }
@@ -525,7 +532,7 @@ struct ReadingPane: View {
 
     private func meetingVerdictColor(_ conflict: MeetingContextWire.Conflict?) -> Color {
         guard let conflict else { return Theme.textDim }
-        return conflict.hasConflicts ? .red : .green
+        return conflict.hasConflicts ? m.danger : m.success
     }
 
     /// "Wed Aug 13 · 16:00–17:00" in the user's locale/zone, from the wire's
@@ -554,7 +561,7 @@ struct ReadingPane: View {
                 Capsule().fill(Theme.engage)
                     .frame(width: max(4, trackWidth * engagement.importanceFill), height: 5)
             }
-            Text(engagement.importanceLabel).font(.caption2).foregroundStyle(Theme.textDim)
+            Text(engagement.importanceLabel).font(m.caption2).foregroundStyle(Theme.textDim)
         }
         .accessibilityHidden(true)
     }
@@ -593,10 +600,10 @@ struct ReadingPane: View {
             case .ready:
                 EmptyView()
             case .needsPro:
-                Text(L("push.proRequired")).font(.caption).foregroundStyle(Theme.textDim)
+                Text(L("push.proRequired")).font(m.caption).foregroundStyle(Theme.textDim)
             case .failed(let message):
                 HStack(spacing: Theme.s2) {
-                    Text(message).font(.caption).foregroundStyle(.orange)
+                    Text(message).font(m.caption).foregroundStyle(m.warning)
                         .fixedSize(horizontal: false, vertical: true)
                     Button(L("push.tryAgain")) { loadQuickReplies(item) }
                         .buttonStyle(.bordered).controlSize(.small)
@@ -605,7 +612,7 @@ struct ReadingPane: View {
                 if loadingQuickReplies {
                     HStack(spacing: 5) {
                         ProgressView().controlSize(.mini)
-                        Text(L("push.draftingReplies")).font(.caption).foregroundStyle(Theme.textDim)
+                        Text(L("push.draftingReplies")).font(m.caption).foregroundStyle(Theme.textDim)
                     }
                 } else {
                     // Not fetched on selection: every load is three LLM
@@ -615,7 +622,7 @@ struct ReadingPane: View {
                 }
             }
         }
-        .padding(.horizontal, 24).padding(.vertical, 10)
+        .padding(.horizontal, m.inset).padding(.vertical, m.stripVertical)
         .frame(maxWidth: .infinity, alignment: .leading)
         Divider().overlay(Theme.line)
     }
@@ -660,6 +667,17 @@ struct ReadingPane: View {
             let ok = await model.reply(item, body: replyText)
             sending = false
             if ok { replying = false; replyText = ""; showingPreparedDraft = false }
+        }
+    }
+
+    /// The pane's one primary action: the bar's glow capsule, or the main
+    /// window's flat fill (plan §2: no shadow, no lift).
+    @ViewBuilder
+    private func primaryButton(_ title: String, action: @escaping () -> Void) -> some View {
+        if style == .window {
+            Button(title, action: action).buttonStyle(SolidButtonStyle(compact: true))
+        } else {
+            Button(title, action: action).buttonStyle(PrimaryButtonStyle())
         }
     }
 

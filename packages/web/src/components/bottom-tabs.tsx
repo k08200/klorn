@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../lib/auth";
+import { ASSISTANT_ROUTES, assistantHref, TODAY_HOME } from "../lib/home";
 import { useT } from "../lib/i18n";
 import { NavIcon, type NavIconType } from "./nav-icons";
 
@@ -11,6 +12,8 @@ interface Tab {
   href: string;
   labelKey: string;
   icon: NavIconType;
+  /** Routes that light this tab up; defaults to its own href. */
+  routes?: readonly string[];
 }
 
 // Labels resolve via t() inside the component.
@@ -19,6 +22,15 @@ const TABS: Tab[] = [
   { href: "/email", labelKey: "nav.mail", icon: "mail" },
   { href: "/calendar", labelKey: "nav.calendar", icon: "calendar" },
   { href: "/briefing", labelKey: "nav.briefing", icon: "bell" },
+];
+
+// UNIFIED_HOME (productization plan §1, P6): Today · Mail · Calendar ·
+// Assistant. Files joins only once a drive source exists (FD-7).
+const UNIFIED_TABS: Tab[] = [
+  { href: TODAY_HOME, labelKey: "nav.v2.today", icon: "today" },
+  { href: "/email", labelKey: "nav.mail", icon: "mail" },
+  { href: "/calendar", labelKey: "nav.calendar", icon: "calendar" },
+  { href: assistantHref(), labelKey: "nav.assistant", icon: "chat", routes: ASSISTANT_ROUTES },
 ];
 
 // Routes the account sheet owns — the account tab reads as "active" on these so
@@ -33,6 +45,8 @@ export default function BottomTabs() {
   // Stable identity so the sheet's focus/Escape effect doesn't re-run on every
   // parent re-render (AuthProvider hands a fresh context value each render).
   const closeAccount = useCallback(() => setAccountOpen(false), []);
+  const unified = user?.unifiedHome === true;
+  const tabs = unified ? UNIFIED_TABS : TABS;
 
   const accountActive = ACCOUNT_ROUTES.some((r) => pathname === r || pathname.startsWith(`${r}/`));
 
@@ -51,11 +65,11 @@ export default function BottomTabs() {
         aria-label="Primary navigation"
         className="md:hidden fixed bottom-0 inset-x-0 z-30 border-t border-line bg-surface-panel/92 pb-safe shadow-[0_-16px_44px_rgba(0,0,0,0.35)] backdrop-blur-xl"
       >
-        <ul className="grid grid-cols-6">
-          {TABS.map((tab) => {
-            const active = isActive(pathname, tab.href);
+        <ul className={unified ? "grid grid-cols-5" : "grid grid-cols-6"}>
+          {tabs.map((tab) => {
+            const active = (tab.routes ?? [tab.href]).some((route) => isActive(pathname, route));
             return (
-              <li key={tab.href}>
+              <li key={tab.labelKey}>
                 <Link
                   href={tab.href}
                   aria-current={active ? "page" : undefined}

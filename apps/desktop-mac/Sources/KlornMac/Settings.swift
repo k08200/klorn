@@ -47,8 +47,13 @@ final class AppSettings {
     /// (title bar, Dock, Cmd+Tab while open) instead of the bar's panel
     /// morphing into it. OFF by default until M8 flips it.
     var macMainWindow: Bool {
-        didSet { defaults.set(macMainWindow, forKey: Self.macMainWindowKey) }
+        didSet {
+            defaults.set(macMainWindow, forKey: Self.macMainWindowKey)
+            if macMainWindow != oldValue { onMacMainWindowChanged?() }
+        }
     }
+    /// Wired by the AppDelegate: the compose window follows the switch (M5).
+    var onMacMainWindowChanged: (() -> Void)?
 
     /// A new PUSH posts a macOS banner unless the user turns it off. The top-bar
     /// count always updates regardless — this only gates the system banner.

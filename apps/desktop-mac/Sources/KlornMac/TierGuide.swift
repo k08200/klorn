@@ -103,11 +103,7 @@ struct TierGuide: View {
                 .font(.caption).foregroundStyle(Theme.textDim)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(22)
-        .frame(width: 460)
-        .background(Theme.panel, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.line))
-        .shadow(color: Theme.panelShadow, radius: 24, y: 8)
+        .modalCard(width: 460)
     }
 }
 
@@ -193,11 +189,7 @@ struct PurposePrompt: View {
             case .priorities: prioritiesStep
             }
         }
-        .padding(22)
-        .frame(width: 430)
-        .background(Theme.panel, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.line))
-        .shadow(color: Theme.panelShadow, radius: 24, y: 8)
+        .modalCard(width: 430)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(title)
         .onAppear {

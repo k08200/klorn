@@ -19,7 +19,7 @@ import {
   outlookInboxEnabled,
 } from "./config.js";
 import { makeCorsOriginCallback } from "./cors-origin.js";
-import { db, INTERACTIVE_TX_OPTIONS, prisma } from "./db.js";
+import { db, prisma } from "./db.js";
 import { withDbRetry } from "./db-retry.js";
 import { exportDriveFiles } from "./drive/drive-export.js";
 import { isDevOrTestEnv } from "./env.js";
@@ -34,7 +34,6 @@ import { JUDGE_MODEL_RESOLUTION } from "./llm/openai.js";
 import { IMAP_PROVIDERS } from "./mail/imap-providers.js";
 import { attachPerfMonitor } from "./perf-monitor.js";
 import { briefingRoutes } from "./pim/briefing.js";
-import { purgeUserData } from "./purge-user-data.js";
 import { adminRoutes } from "./routes/admin.js";
 import { analyticsRoutes } from "./routes/analytics.js";
 import { apiKeyRoutes } from "./routes/api-keys.js";
@@ -79,6 +78,8 @@ import { webhookRoutes } from "./routes/webhook.js";
 import { buildSchedulerHealthReport, isBackgroundAgentsDisabled } from "./scheduler-heartbeat.js";
 import { isRateLimitAllowedIp, parseAllowedCidrs } from "./security/scanner-allowlist.js";
 import { captureError, flushSentry, initSentry } from "./sentry.js";
+import { checkObjectStorageAtStartup } from "./storage/runtime.js";
+import { purgeAllUserData } from "./user-deletion.js";
 import { getClientCount, initWebSocket } from "./websocket.js";
 
 // Initialize Sentry FIRST so every captureError() across the app actually
@@ -441,15 +442,9 @@ app.get("/api/user/me/export", { preHandler: requireAuth }, async (request) => {
 
 app.delete("/api/user/me/data", { preHandler: requireAuth }, async (request, reply) => {
   const userId = getUserId(request);
-  // Exhaustive user-data wipe (keeps the account row). See purge-user-data.ts —
-  // the list is CASA/Google "delete my data" critical and regression-tested.
-  // Pool-sized maxWait (#845 P2028 class) + a 60s timeout of its own: a full
-  // purge of a large account is many deletes and must not die at the 5s
-  // interactive default on a compliance-critical endpoint.
-  await prisma.$transaction((tx) => purgeUserData(tx as unknown as typeof db, userId), {
-    ...INTERACTIVE_TX_OPTIONS,
-    timeout: 60_000,
-  });
+  // Exhaustive user-data wipe (keeps the account row): stored objects first,
+  // then every row in one transaction. See user-deletion.ts.
+  await purgeAllUserData(userId);
   return reply.code(204).send();
 });
 
@@ -597,6 +592,14 @@ try {
   // Attach WebSocket server to the underlying HTTP server
   const httpServer = app.server;
   initWebSocket(httpServer);
+
+  // Object storage (step D1 of docs/providers/unified-platform-plan.md). A
+  // no-op while OBJECT_STORAGE_ENABLED is off: nothing is read or connected.
+  // When on, it validates the OBJECT_STORAGE_* variables and lists one key, and
+  // reports a bad config or an unreachable bucket by name ([STORAGE] lines and
+  // Sentry). It never stops the boot: storage is auxiliary to mail, and every
+  // storage call fails closed until the config is fixed. It never rejects.
+  void checkObjectStorageAtStartup();
 
   // Emergency kill switch for ALL background LLM-driven loops. Set
   // BACKGROUND_AGENTS_DISABLED=true on Render when prod is bleeding to

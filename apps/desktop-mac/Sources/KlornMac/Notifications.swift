@@ -42,6 +42,17 @@ enum PushNotifier {
             .requestAuthorization(options: [.alert, .sound])
     }
 
+    /// Sign-out: take this account's banners out of Notification Center and
+    /// drop any still pending. A tap on one that is already gone from the
+    /// queue only expands the bar (`tapAction`), but the sender and subject
+    /// on it are the previous account's and should not stay on screen.
+    static func clearAll() {
+        guard isAvailable else { return }
+        let center = UNUserNotificationCenter.current()
+        center.removeAllDeliveredNotifications()
+        center.removeAllPendingNotificationRequests()
+    }
+
     /// Pure, testable identity for a posted banner.
     nonisolated static func notificationIdentifier(for itemID: String) -> String {
         identifierPrefix + itemID

@@ -7,6 +7,7 @@ import AuthGuard from "../../components/auth-guard";
 import { ONBOARDING_ACTIVE_KEY } from "../../components/google-connect-redirect";
 import { startGoogleConnect } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
+import { homePath } from "../../lib/home";
 import { useT } from "../../lib/i18n";
 import { ReviewStep } from "./review-step";
 
@@ -39,7 +40,7 @@ function deriveStep(
 }
 
 function OnboardingFlow() {
-  const { googleConnected, hasMailSource, initSync } = useAuth();
+  const { user, googleConnected, hasMailSource, initSync } = useAuth();
   const router = useRouter();
   const [manualStep, setManualStep] = useState<Step | null>(null);
   const [connecting, setConnecting] = useState(false);
@@ -55,7 +56,7 @@ function OnboardingFlow() {
   }, [step, initSync.status]);
 
   const handleDone = () => {
-    router.replace("/inbox");
+    router.replace(homePath(user));
   };
 
   const handleConnectClick = async () => {
