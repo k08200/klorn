@@ -804,6 +804,34 @@ model DriveFile {
   @@index([userId, modifiedAt, id])
   // The same list narrowed to one provider.
   @@index([userId, provider, modifiedAt, id])
+  // One folder of the Klorn drive (D3): its children newest first, and the
+  // folder walks (cycle check, recursive delete) by parent. For KLORN a NULL
+  // parent is the root, because D3 only writes a parent that exists.
+  @@index([userId, provider, parentExternalId, modifiedAt, id])
+}
+
+// The objects of an account still to be deleted from object storage (step D3 of
+// docs/providers/unified-platform-plan.md). Written when a deletion starts and
+// OBJECT_STORAGE_ENABLED is on; the account's rows may then go even if the
+// bucket is down, because this row keeps the one handle on the objects (the
+// user id; the prefix is `u/<userId>/`). An hourly sweep (storage/purge-sweep.ts)
+// retries until a pass that started after the late-upload grace finds the prefix
+// empty, then deletes the row. While it exists, uploads for the user are refused.
+// No relation to User on purpose: it must outlive the account row.
+model StoragePurge {
+  userId        String   @id
+  // When the latest deletion asked for the purge. A pass that started at least
+  // the late-upload grace after this is the one that may finish the record.
+  requestedAt   DateTime
+  attempts      Int      @default(0)
+  // The StorageError code of the last failed pass (never a message, never a key).
+  lastError     String?
+  nextAttemptAt DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // The sweep's due query.
+  @@index([nextAttemptAt])
 }
 
 model AutomationConfig {

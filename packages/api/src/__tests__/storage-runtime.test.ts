@@ -1,7 +1,7 @@
 /**
  * The flag gate around object storage (step D1): while OBJECT_STORAGE_ENABLED is
  * off nothing is built, loaded or connected; while it is on, a bad config is
- * reported by name and a purge fails rather than skip.
+ * reported by name. The purge itself (flag on) is storage-durable-purge.test.ts.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -264,6 +264,9 @@ describe("checkObjectStorageAtStartup", () => {
 });
 
 describe("purgeUserObjects", () => {
+  // Flag ON is the durable purge of step D3 (a pending record, one pass, never a
+  // blocked deletion): storage-durable-purge.test.ts. What stays here is D1's
+  // flag-OFF contract, unchanged.
   async function seededStore() {
     const store = new MemoryObjectStore({ deletePageSize: 2 });
     for (const userId of ["user-1", "user-1", "user-1", "user-2"]) {
@@ -273,16 +276,6 @@ describe("purgeUserObjects", () => {
     return store;
   }
 
-  it("deletes the user's objects, and only those, when the flag is on", async () => {
-    stubStorageEnv("true", STORAGE_ENV);
-    const store = await seededStore();
-    setObjectStoreForTests(store);
-    expect(await purgeUserObjects("user-1")).toEqual({ skipped: false, deleted: 3 });
-    expect(store.keys()).toHaveLength(1);
-    expect(store.keys()[0]?.startsWith("u/user-2/")).toBe(true);
-    expect(captureError).not.toHaveBeenCalled();
-  });
-
   it("leaves storage alone when the flag is off, even with a store at hand", async () => {
     stubStorageEnv("false", STORAGE_ENV);
     const store = await seededStore();
@@ -291,45 +284,5 @@ describe("purgeUserObjects", () => {
     expect(await purgeUserObjects("user-1")).toEqual({ skipped: true, deleted: 0 });
     expect(spy).not.toHaveBeenCalled();
     expect(store.keys()).toHaveLength(4);
-  });
-
-  it("fails when the flag is on and the config is not usable", async () => {
-    stubStorageEnv("true", {});
-    expect(await codeOfAsync(() => purgeUserObjects("user-1"))).toBe("misconfigured");
-  });
-
-  it("fails when the bucket fails, instead of reporting a clean purge", async () => {
-    stubStorageEnv("true", STORAGE_ENV);
-    const store = await seededStore();
-    setObjectStoreForTests(store);
-    vi.spyOn(store, "deleteByPrefix").mockRejectedValue(
-      new StorageError("unreachable", "object storage did not answer (TimeoutError)"),
-    );
-    expect(await codeOfAsync(() => purgeUserObjects("user-1"))).toBe("unreachable");
-  });
-
-  it("tags a blocked deletion so an alert can be built on it", async () => {
-    stubStorageEnv("true", STORAGE_ENV);
-    const store = await seededStore();
-    setObjectStoreForTests(store);
-    const failure = new StorageError("unreachable", "object storage did not answer (TimeoutError)");
-    vi.spyOn(store, "deleteByPrefix").mockRejectedValue(failure);
-
-    await expect(purgeUserObjects("user-1")).rejects.toBe(failure);
-    expect(captureError).toHaveBeenCalledTimes(1);
-    expect(captureError).toHaveBeenCalledWith(failure, {
-      tags: { scope: "storage.purge", storageCode: "unreachable", retryable: "true" },
-    });
-    const output = logged(errorSpy);
-    expect(output).toContain("[STORAGE] purge blocked (unreachable)");
-    expectNoValue(output);
-  });
-
-  it("tags a misconfiguration the same way", async () => {
-    stubStorageEnv("true", {});
-    await codeOfAsync(() => purgeUserObjects("user-1"));
-    expect(captureError.mock.calls[0]?.[1]).toMatchObject({
-      tags: { scope: "storage.purge", storageCode: "misconfigured", retryable: "false" },
-    });
   });
 });

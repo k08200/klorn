@@ -278,3 +278,50 @@ export async function upsertDriveFileRow(
   });
   return { ok: true, id: written.id };
 }
+
+export type DriveRowUpdateResult =
+  | { readonly ok: true; readonly updated: boolean }
+  | { readonly ok: false; readonly reason: DriveRowRefusal };
+
+/**
+ * Bring an EXISTING row up to date, and never create one (D3: a rename or a
+ * move). The upsert above would bring back a row that a delete removed while
+ * the rename was in flight, as a file with no bytes; this cannot. `updated` is
+ * false when no row has that identity. Writes only what the input names.
+ */
+export async function updateDriveFileRow(
+  userId: string,
+  source: DriveFileSource,
+  input: DriveFileInput,
+): Promise<DriveRowUpdateResult> {
+  const row = driveRowData(userId, source, input);
+  if (!row.ok) return row;
+  const { provider, sourceKey, externalId } = row.data;
+  const written = await prisma.driveFile.updateMany({
+    where: { userId, provider, sourceKey, externalId },
+    data: row.changes,
+  });
+  return { ok: true, updated: written.count > 0 };
+}
+
+/**
+ * Delete these rows of the user's Klorn drive (D3). Only KLORN rows, only this
+ * user's, by the id D3 minted. The caller deletes a file's object BEFORE its row
+ * (drive/klorn-remove.ts): a row without an object is a broken download, an
+ * object without a row is a file nobody can find.
+ */
+export async function deleteKlornDriveRows(
+  userId: string,
+  externalIds: readonly string[],
+): Promise<number> {
+  if (externalIds.length === 0) return 0;
+  const deleted = await prisma.driveFile.deleteMany({
+    where: {
+      userId,
+      provider: "KLORN",
+      sourceKey: KLORN_DRIVE_SOURCE_KEY,
+      externalId: { in: [...externalIds] },
+    },
+  });
+  return deleted.count;
+}

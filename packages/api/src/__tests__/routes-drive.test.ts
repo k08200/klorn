@@ -366,7 +366,11 @@ describe("rate limits", () => {
     }
     const limited = await get(app, "/files", from(200, me));
     expect(limited.statusCode).toBe(429);
-    expect(limited.json()).toEqual({ error: "Too many drive requests. Try again later." });
+    expect(limited.json()).toEqual({
+      error: "Too many drive requests. Try again later.",
+      code: "rate-limited",
+      retryable: true,
+    });
     expect(Number(limited.headers["retry-after"])).toBeGreaterThan(0);
     // Another user is not held back by it, and neither is this user's by-id read.
     expect((await get(app, "/files", from(201, other))).statusCode).toBe(200);

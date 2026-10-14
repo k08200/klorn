@@ -109,6 +109,8 @@ describe("every CalendarEvent writer states its provider", () => {
     const DRIVE_SOURCE_KEY_FILES = [
       "drive/drive-read.ts",
       "drive/drive-rows.ts",
+      "drive/klorn-drive-read.ts",
+      "drive/klorn-upload.ts",
       "drive/providers/types.ts",
       "routes/drive.ts",
     ];

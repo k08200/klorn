@@ -33,6 +33,7 @@ export const EXPECTED_SCHEDULERS = [
   "autonomous-agent",
   "pattern-learner",
   "log-retention",
+  "storage-purge",
 ] as const;
 
 export type SchedulerName = (typeof EXPECTED_SCHEDULERS)[number];
