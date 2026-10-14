@@ -27,6 +27,7 @@ vi.mock("../db.js", async () => {
 });
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
+import { warnIfKlornDriveQuotaMissing } from "../drive/klorn-quota.js";
 import {
   KLORN_DRIVE_MAX_FILE_BYTES,
   storeKlornUpload,
@@ -139,6 +140,37 @@ describe("a body longer than the sniffed head, sent in many chunks", () => {
     for await (const chunk of stored?.body ?? []) parts.push(Buffer.from(chunk));
     expect(Buffer.concat(parts).equals(Buffer.from(data))).toBe(true);
     expect(rows()[0]?.etag).toBe(`sha256:${createHash("sha256").update(data).digest("hex")}`);
+  });
+});
+
+describe("a malformed multipart body", () => {
+  it("a body cut short is a 400 multipart-malformed, not a 500", async () => {
+    const body = multipart([
+      { name: "size", value: "5" },
+      { name: "file", filename: "a.txt", data: text("hello") },
+    ]);
+    const cut = body.payload.subarray(0, body.payload.length - 30);
+    const res = await t.app.inject({
+      method: "POST",
+      url: `${PREFIX}/files`,
+      headers: { ...t.me, ...body.headers },
+      payload: cut,
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ code: "multipart-malformed", retryable: false });
+    expect(t.store.keys()).toEqual([]);
+    expect(rows()).toEqual([]);
+  });
+
+  it("a body with no closing boundary before the first part is a 400 too", async () => {
+    const res = await t.app.inject({
+      method: "POST",
+      url: `${PREFIX}/files`,
+      headers: { ...t.me, "content-type": "multipart/form-data; boundary=xyz" },
+      payload: '--xyz\r\nContent-Disposition: form-data; name="size"\r\n\r\n5',
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe("multipart-malformed");
   });
 });
 
@@ -479,6 +511,29 @@ describe("quota (P3: a number set at flip time; unset means no limit)", () => {
     expect(t.store.keys()).toEqual([]);
     const fits = await upload(t, t.me, { filename: "b.txt", data: text("ab") });
     expect(fits.statusCode).toBe(201);
+  });
+
+  it("no quota configured: uploads are refused, nothing is stored", async () => {
+    vi.stubEnv("KLORN_DRIVE_QUOTA_BYTES", "");
+    const res = await upload(t, t.me, { filename: "a.txt", data: text("abc") });
+    expect(res.statusCode).toBe(503);
+    expect(res.json()).toMatchObject({ code: "quota-not-configured", retryable: false });
+    expect(t.store.keys()).toEqual([]);
+    expect(rows()).toEqual([]);
+  });
+
+  it("boot names the missing variable while the drive is live, and only then", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.stubEnv("KLORN_DRIVE_QUOTA_BYTES", "");
+    warnIfKlornDriveQuotaMissing();
+    expect(warn.mock.calls.flat().join(" ")).toContain("KLORN_DRIVE_QUOTA_BYTES");
+    warn.mockClear();
+    vi.stubEnv("KLORN_DRIVE_ENABLED", "false");
+    warnIfKlornDriveQuotaMissing();
+    vi.stubEnv("KLORN_DRIVE_ENABLED", "true");
+    vi.stubEnv("KLORN_DRIVE_QUOTA_BYTES", "1000");
+    warnIfKlornDriveQuotaMissing();
+    expect(warn).not.toHaveBeenCalled();
   });
 
   it("an unusable value fails closed, without storing anything", async () => {

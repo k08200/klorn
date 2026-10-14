@@ -5,9 +5,11 @@
  *
  * Usage is computed, not stored: the sum of the recorded sizes of the user's
  * Klorn files (drive/klorn-drive-read.ts). The limit comes from the environment,
- * read per request:
+ * read per request, and the drive fails closed without one:
  *
- *   KLORN_DRIVE_QUOTA_BYTES unset or blank  → no limit (the shipped default);
+ *   KLORN_DRIVE_QUOTA_BYTES unset or blank  → every upload refused, 503
+ *                                            `quota-not-configured` (boot warns
+ *                                            by name while the drive is live);
  *   a whole number of bytes                → that limit, for every user;
  *   anything else                          → uploads fail closed (503), and the
  *                                            log names the variable.
@@ -16,21 +18,22 @@
  * replaces `klornDriveQuotaBytes` and nothing else: `assertWithinKlornQuota` is
  * the only place the limit is applied.
  *
- * Two uploads running at the same moment can both pass the check, so the quota
- * can be overshot by at most one file per concurrent upload. The upload rate
- * limit bounds that; it is a soft limit, not an accounting one.
+ * It is checked before the PUT and again right before the row. Uploads that
+ * reach the commit at the same moment can all pass, so the limit can be
+ * overshot by the files committing at once: a soft limit, not an accounting one.
  */
 
+import { klornDriveRoutesEnabled } from "./drive-scope.js";
 import { klornUsageBytes } from "./klorn-drive-read.js";
 import { KlornDriveError } from "./klorn-errors.js";
 
 export const KLORN_DRIVE_QUOTA_ENV = "KLORN_DRIVE_QUOTA_BYTES";
 const WHOLE_BYTES = /^\d{1,15}$/;
 
-/** The configured limit in bytes; null for none. Throws when the value is not usable. */
-export function klornDriveQuotaBytes(): number | null {
+/** The configured limit in bytes. Throws when it is missing or not usable: no upload without one. */
+export function klornDriveQuotaBytes(): number {
   const raw = (process.env[KLORN_DRIVE_QUOTA_ENV] ?? "").trim();
-  if (raw === "") return null;
+  if (raw === "") throw new KlornDriveError("quota-not-configured");
   if (!WHOLE_BYTES.test(raw)) {
     console.error(`[DRIVE] ${KLORN_DRIVE_QUOTA_ENV} is not a whole number of bytes`);
     throw new KlornDriveError("storage-unavailable", { retryable: false });
@@ -42,9 +45,21 @@ export function klornDriveQuotaBytes(): number | null {
 export async function assertWithinKlornQuota(
   userId: string,
   incomingBytes: number,
-  limit: number | null = klornDriveQuotaBytes(),
+  limit: number = klornDriveQuotaBytes(),
 ): Promise<void> {
-  if (limit === null) return;
   const used = await klornUsageBytes(userId);
   if (used + incomingBytes > limit) throw new KlornDriveError("quota-exceeded");
+}
+
+/**
+ * Boot check: while the Klorn drive is live and no quota is set, every upload is
+ * refused; say so by the variable's name (never a value). The flags are read per
+ * request, so a flip after boot is caught by the refusal itself, not here.
+ */
+export function warnIfKlornDriveQuotaMissing(): void {
+  if (!klornDriveRoutesEnabled()) return;
+  if ((process.env[KLORN_DRIVE_QUOTA_ENV] ?? "").trim() !== "") return;
+  console.warn(
+    `[DRIVE] the Klorn drive is on but ${KLORN_DRIVE_QUOTA_ENV} is not set: every upload is refused (quota-not-configured) until it is.`,
+  );
 }

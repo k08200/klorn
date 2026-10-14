@@ -76,7 +76,8 @@ const HTTP_CREATED = 201;
 /** Multipart failures the plugin reports by code: the request is malformed or too large. */
 const MULTIPART_TOO_LARGE = new Set(["FST_REQ_FILE_TOO_LARGE"]);
 const MULTIPART_MALFORMED = new Set([
-  // The client closed the connection mid-upload.
+  // The client closed the connection mid-upload (readFailure tells this from a
+  // body that ended without closing its form).
   "ERR_STREAM_PREMATURE_CLOSE",
   "FST_MP_PREMATURE_CLOSE",
   "FST_FILES_LIMIT",
@@ -184,6 +185,32 @@ async function storeFilePart(
   return stored;
 }
 
+const PREMATURE_CLOSE = new Set(["ERR_STREAM_PREMATURE_CLOSE", "FST_MP_PREMATURE_CLOSE"]);
+
+/** What the reading of the request knows about a failure, beyond the error itself. */
+interface ReadContext {
+  /** The client sent its whole body: a body that stops short ended without closing its form. */
+  readonly bodyEnded: boolean;
+  /** The parser failed (the parts iterator or the file stream), not our code. */
+  readonly parserFailed: boolean;
+}
+
+/**
+ * A failure while the request was read, as the person should see it. A parser
+ * failure (busboy's "Unexpected end of form", a malformed part header, a body
+ * that ends before its closing boundary; with or without a code) is a 400
+ * `multipart-malformed`. A connection the client dropped is `invalid-upload`.
+ * The plugin's own limits keep their meaning. Anything of ours is unchanged.
+ */
+function readFailure(err: unknown, context: ReadContext): unknown {
+  const code = err instanceof Error ? (err as Error & { code?: string }).code : undefined;
+  const cutShort = code !== undefined && PREMATURE_CLOSE.has(code) && context.bodyEnded;
+  if (cutShort) return new KlornDriveError("multipart-malformed", { cause: err });
+  const mapped = uploadRequestFailure(err);
+  if (mapped instanceof KlornDriveError || !context.parserFailed) return mapped;
+  return new KlornDriveError("multipart-malformed", { cause: err });
+}
+
 /** Read the request: the fields, then the one file, which is stored on the way. */
 async function readUpload(
   request: FastifyRequest,
@@ -191,25 +218,42 @@ async function readUpload(
 ): Promise<StoredKlornUpload> {
   const userId = getUserId(request);
   const fields = new Map<string, string>();
+  const parts = request.parts()[Symbol.asyncIterator]();
   let stored: StoredKlornUpload | null = null;
+  let parserFailed = false;
+  const nextPart = () =>
+    parts.next().catch((err: unknown) => {
+      parserFailed = true;
+      throw err;
+    });
   try {
-    for await (const part of request.parts()) {
+    for (let next = await nextPart(); !next.done; next = await nextPart()) {
+      const part = next.value;
       const allowed =
         stored === null &&
         (part.type === "field"
           ? UPLOAD_FIELDS.has(part.fieldname)
           : part.fieldname === UPLOAD_FILE_FIELD);
       if (!allowed) throw new KlornDriveError("invalid-upload");
-      if (part.type === "field") fields.set(part.fieldname, String(part.value));
-      else stored = await storeFilePart(part, userId, fields, providerEnabled);
+      if (part.type === "field") {
+        fields.set(part.fieldname, String(part.value));
+        continue;
+      }
+      // An error the file stream raises is the parser's, whatever the store
+      // makes of it on the way out (a real bucket reports it as unreachable).
+      part.file.once("error", () => {
+        parserFailed = true;
+      });
+      stored = await storeFilePart(part, userId, fields, providerEnabled);
     }
     if (stored === null) throw new KlornDriveError("invalid-upload");
     return stored;
   } catch (err) {
+    const context = { bodyEnded: request.raw.readableEnded, parserFailed };
     drainRequest(request);
     // The object exists but the request did not end cleanly: no row, no object.
     if (stored !== null) await discardKlornUpload(stored);
-    throw uploadRequestFailure(err);
+    throw readFailure(err, context);
   }
 }
 
@@ -328,5 +372,7 @@ export function klornDriveRoutes(opts: {
   };
 }
 
+/** The boot warning for a live drive without a quota (drive/klorn-quota.ts). */
+export { warnIfKlornDriveQuotaMissing } from "../drive/klorn-quota.js";
 /** The gate index.ts registers these routes behind (drive/drive-scope.ts). */
 export { klornDriveRoutesEnabled };

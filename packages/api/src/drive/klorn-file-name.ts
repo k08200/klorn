@@ -6,8 +6,8 @@
  *
  * Stricter than the shared row writer's `cleanDriveName`, because here the name
  * comes straight from the uploader and a Mac or web client may later save the
- * file under it: every bidi control is removed (embeddings, overrides and
- * isolates, which can disguise an extension, and the marks LRM, RLM and ALM),
+ * file under it: every control and format character is removed (the bidi
+ * controls, which can disguise an extension, and the zero-width characters),
  * and the cap is the usual file-system name limit. A slash is kept: the name is
  * not a path, and the drive's folders are rows (D2).
  */
@@ -15,8 +15,13 @@
 /** The longest name kept, in characters: the common file-system name limit. */
 export const KLORN_FILE_NAME_MAX_CHARS = 255;
 
-/** C0 and C1 controls, and every Unicode bidi control (U+061C, U+200E-F, U+202A-E, U+2066-9). */
-const UNSAFE_CHARACTERS = /[\p{Cc}\p{Bidi_Control}]/gu;
+/**
+ * C0 and C1 controls, and every format character (Cf): the bidi controls
+ * (U+061C, U+200E-F, U+202A-E, U+2066-9), the zero-width space, joiners and
+ * word joiner, the byte-order mark, the soft hyphen. Each is invisible or
+ * reorders text, so it can make two names look alike or hide an extension.
+ */
+const UNSAFE_CHARACTERS = /[\p{Cc}\p{Cf}]/gu;
 
 /** Names a file system reserves for "this folder" and "the parent folder". */
 const RESERVED_NAMES = new Set([".", ".."]);

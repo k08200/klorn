@@ -90,6 +90,9 @@ export type DriveErrorCode =
   | "account-purging"
   | "too-large"
   | "quota-exceeded"
+  | "quota-not-configured"
+  | "multipart-malformed"
+  | "rate-limited"
   | "storage-unavailable";
 
 /** Every 4xx/5xx of the routes below. `retryable`: the same request may pass later. */

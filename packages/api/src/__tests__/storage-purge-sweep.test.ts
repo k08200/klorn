@@ -20,10 +20,16 @@ import { getSchedulerHealth, resetSchedulerHeartbeats } from "../scheduler-heart
 import { StorageError } from "../storage/errors.js";
 import { newObjectKey } from "../storage/keys.js";
 import { MemoryObjectStore } from "../storage/memory-store.js";
-import { LATE_UPLOAD_GRACE_MS, PURGE_RETRY_BASE_MS } from "../storage/purge-queue.js";
 import {
+  LATE_UPLOAD_GRACE_MS,
+  markPurgePending,
+  PURGE_RETRY_BASE_MS,
+} from "../storage/purge-queue.js";
+import {
+  checkStoragePurgesAtStartup,
   PURGE_SWEEP_BATCH,
   PURGE_SWEEP_INTERVAL_MS,
+  resetStalledPurgeReportForTests,
   runStoragePurgeSweep,
   startStoragePurgeScheduler,
   stopStoragePurgeScheduler,
@@ -51,6 +57,8 @@ function clock(ms: number): void {
 
 beforeEach(async () => {
   vi.useFakeTimers({ toFake: ["Date"], now: T0 });
+  resetStalledPurgeReportForTests();
+  captureError.mockReset();
   db = createFakeDb({ storagePurge: [] });
   dbHolder.current = db;
   store = new MemoryObjectStore();
@@ -69,10 +77,12 @@ afterEach(() => {
 });
 
 describe("runStoragePurgeSweep", () => {
-  it("reads nothing while object storage is off", async () => {
+  it("while object storage is off it only counts the pending purges, and runs none", async () => {
     vi.stubEnv("OBJECT_STORAGE_ENABLED", "false");
     expect(await runStoragePurgeSweep()).toEqual({ state: "off", passes: 0, done: 0, failed: 0 });
-    expect(db.reads).toEqual([]);
+    expect(db.reads).toEqual(["storagePurge"]);
+    expect(db.writes).toEqual({});
+    expect(captureError).not.toHaveBeenCalled();
   });
 
   it("catches an object an upload landed after the deletion's pass, then finishes the record", async () => {
@@ -133,6 +143,59 @@ describe("runStoragePurgeSweep", () => {
     expect(await runStoragePurgeSweep()).toEqual({ state: "busy", passes: 0, done: 0, failed: 0 });
     release();
     expect((await first).done).toBe(1);
+  });
+});
+
+describe("purges that cannot run are reported, once per process, by count", () => {
+  async function pendingFor(...userIds: string[]): Promise<void> {
+    for (const userId of userIds) await markPurgePending(userId, new Date());
+  }
+
+  it("object storage off with pending purges: one warning and one Sentry event, no ids", async () => {
+    await pendingFor("user-1", "user-2");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.stubEnv("OBJECT_STORAGE_ENABLED", "false");
+    await runStoragePurgeSweep();
+    await runStoragePurgeSweep();
+    expect(captureError).toHaveBeenCalledTimes(1);
+    expect(captureError.mock.calls[0]?.[1]).toEqual({
+      tags: { scope: "storage.purge.stalled", reason: "object-storage-off" },
+      extra: { pending: 2 },
+    });
+    const output = warn.mock.calls.flat().join(" ");
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(output).toContain("2 account purges");
+    expect(output).not.toContain("user-1");
+  });
+
+  it("at boot with background work disabled", async () => {
+    await pendingFor("user-1");
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    await checkStoragePurgesAtStartup({ backgroundDisabled: true });
+    expect(captureError.mock.calls[0]?.[1]).toEqual({
+      tags: { scope: "storage.purge.stalled", reason: "background-disabled" },
+      extra: { pending: 1 },
+    });
+  });
+
+  it("at boot with object storage off", async () => {
+    await pendingFor("user-1");
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.stubEnv("OBJECT_STORAGE_ENABLED", "false");
+    await checkStoragePurgesAtStartup({ backgroundDisabled: false });
+    expect(captureError.mock.calls[0]?.[1]).toMatchObject({
+      tags: { reason: "object-storage-off" },
+    });
+  });
+
+  it("says nothing when the sweep can run, or when nothing is pending", async () => {
+    await pendingFor("user-1");
+    await checkStoragePurgesAtStartup({ backgroundDisabled: false });
+    expect(db.reads).toEqual([]);
+    db.tables.storagePurge = [];
+    vi.stubEnv("OBJECT_STORAGE_ENABLED", "false");
+    await checkStoragePurgesAtStartup({ backgroundDisabled: true });
+    expect(captureError).not.toHaveBeenCalled();
   });
 });
 

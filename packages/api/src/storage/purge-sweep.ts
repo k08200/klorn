@@ -5,11 +5,19 @@
  * (purge-queue.ts); a pass that started after the late-upload grace and emptied
  * the prefix deletes the record.
  *
- * Off (OBJECT_STORAGE_ENABLED, read per tick): a tick reads nothing. The
- * scheduler still registers its heartbeat, so the flag can flip without a
- * restart and the health check never reports it missing. Like every scheduler
- * it is not started while BACKGROUND_AGENTS_DISABLED is set; pending purges then
- * wait (a deletion's own first pass still runs).
+ * Off (OBJECT_STORAGE_ENABLED, read per tick): a tick runs no purge and only
+ * counts the pending records. The scheduler still registers its heartbeat, so
+ * the flag can flip without a restart and the health check never reports it
+ * missing. Like every scheduler it is not started while
+ * BACKGROUND_AGENTS_DISABLED is set; pending purges then wait (a deletion's own
+ * first pass still runs).
+ *
+ * Purges that cannot run are not silent: when records are pending and the sweep
+ * cannot run them (storage off, here and at boot; background work disabled, at
+ * boot), one warning and one Sentry event (`scope: storage.purge.stalled`) go
+ * out per process, with the count only. Objects of deleted accounts stay in the
+ * bucket meanwhile, and a user whose account remains gets `account-purging` on
+ * every upload; the operator action is in the plan's D3 runbook.
  *
  * One sweep at a time: a tick that finds the previous sweep still running does
  * nothing. A sweep handles at most PURGE_SWEEP_BATCH records, one after the
@@ -23,7 +31,7 @@
 import { objectStorageEnabled } from "../config.js";
 import { recordSchedulerTick, registerScheduler } from "../scheduler-heartbeat.js";
 import { captureError } from "../sentry.js";
-import { duePurges, PURGE_RETRY_BASE_MS } from "./purge-queue.js";
+import { countPendingPurges, duePurges, PURGE_RETRY_BASE_MS } from "./purge-queue.js";
 
 /** The sweep runs once an hour; the first retry waits exactly one sweep. */
 export const PURGE_SWEEP_INTERVAL_MS = PURGE_RETRY_BASE_MS;
@@ -44,6 +52,55 @@ export interface PurgeSweepResult {
 }
 
 let running = false;
+let stalledReported = false;
+
+export type StalledPurgeReason = "object-storage-off" | "background-disabled";
+
+/**
+ * Report, once per process, that purges are pending and cannot run. Counts only:
+ * no user id, no key. Answers the number pending.
+ */
+async function reportStalledPurges(reason: StalledPurgeReason): Promise<number> {
+  const pending = await countPendingPurges();
+  if (pending === 0 || stalledReported) return pending;
+  stalledReported = true;
+  console.warn(
+    `[STORAGE] ${pending} account purges are pending but cannot run (${reason}): ` +
+      "their objects stay in the bucket and those users cannot upload. See the D3 purge runbook.",
+  );
+  captureError(new Error("account purges are pending but the sweep cannot run"), {
+    tags: { scope: "storage.purge.stalled", reason },
+    extra: { pending },
+  });
+  return pending;
+}
+
+/**
+ * Boot check (index.ts): pending purges with object storage off or with
+ * background work disabled are reported. Reads nothing when the sweep can run.
+ * Never throws.
+ */
+export async function checkStoragePurgesAtStartup(opts: {
+  backgroundDisabled: boolean;
+}): Promise<void> {
+  const reason: StalledPurgeReason | null = !objectStorageEnabled()
+    ? "object-storage-off"
+    : opts.backgroundDisabled
+      ? "background-disabled"
+      : null;
+  if (reason === null) return;
+  try {
+    await reportStalledPurges(reason);
+  } catch (err) {
+    console.error("[STORAGE] could not count pending purges at startup:", err);
+    captureError(err, { tags: { scope: "storage.purge.startup" } });
+  }
+}
+
+/** Tests only: the once-per-process report again. */
+export function resetStalledPurgeReportForTests(): void {
+  stalledReported = false;
+}
 
 async function sweepDue(): Promise<PurgeSweepResult> {
   const { runPurgePass } = await import("./durable-purge.js");
@@ -59,7 +116,10 @@ async function sweepDue(): Promise<PurgeSweepResult> {
 
 /** One sweep over the due records. A pass that cannot record its outcome throws. */
 export async function runStoragePurgeSweep(): Promise<PurgeSweepResult> {
-  if (!objectStorageEnabled()) return { state: "off", passes: 0, done: 0, failed: 0 };
+  if (!objectStorageEnabled()) {
+    await reportStalledPurges("object-storage-off");
+    return { state: "off", passes: 0, done: 0, failed: 0 };
+  }
   if (running) return { state: "busy", passes: 0, done: 0, failed: 0 };
   running = true;
   try {

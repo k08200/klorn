@@ -10,6 +10,7 @@ import type { DriveErrorCode } from "@klorn/contract";
 export const KLORN_DRIVE_ERROR_STATUS: Readonly<Record<DriveErrorCode, number>> = {
   "invalid-upload": 400,
   "invalid-name": 400,
+  "multipart-malformed": 400,
   "not-found": 404,
   "parent-not-found": 404,
   "read-only": 409,
@@ -20,12 +21,15 @@ export const KLORN_DRIVE_ERROR_STATUS: Readonly<Record<DriveErrorCode, number>> 
   "account-purging": 409,
   "too-large": 413,
   "quota-exceeded": 413,
+  "rate-limited": 429,
+  "quota-not-configured": 503,
   "storage-unavailable": 503,
 };
 
 const MESSAGES: Readonly<Record<DriveErrorCode, string>> = {
   "invalid-upload": "The upload could not be read.",
   "invalid-name": "That name cannot be used.",
+  "multipart-malformed": "The upload's form data is malformed.",
   "not-found": "File not found",
   "parent-not-found": "Folder not found",
   "read-only": "This file belongs to another service and is read-only in Klorn.",
@@ -36,6 +40,8 @@ const MESSAGES: Readonly<Record<DriveErrorCode, string>> = {
   "account-purging": "Your files are being deleted. Try again later.",
   "too-large": "The file is larger than the upload limit.",
   "quota-exceeded": "Your drive is full.",
+  "quota-not-configured": "Uploads are not available yet.",
+  "rate-limited": "Too many drive requests. Try again later.",
   "storage-unavailable": "File storage is unavailable. Try again later.",
 };
 
@@ -47,6 +53,7 @@ export class KlornDriveError extends Error {
     super(MESSAGES[code], options.cause === undefined ? undefined : { cause: options.cause });
     this.name = "KlornDriveError";
     this.code = code;
-    this.retryable = options.retryable ?? code === "storage-unavailable";
+    this.retryable =
+      options.retryable ?? (code === "storage-unavailable" || code === "rate-limited");
   }
 }

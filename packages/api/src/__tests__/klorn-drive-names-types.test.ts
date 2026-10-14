@@ -36,6 +36,12 @@ describe("cleanKlornFileName", () => {
     expect(cleanKlornFileName("line\nbreak\u0000.txt")).toBe("linebreak.txt");
   });
 
+  it("strips zero-width and other format characters, which hide in a name", () => {
+    expect(cleanKlornFileName("in\u200Bvoice\u200C\u200D\uFEFF\u2060\u00AD.pdf")).toBe(
+      "invoice.pdf",
+    );
+  });
+
   it("caps the length in characters, not bytes", () => {
     const long = `${"가".repeat(KLORN_FILE_NAME_MAX_CHARS + 50)}.txt`;
     expect([...(cleanKlornFileName(long) ?? "")]).toHaveLength(KLORN_FILE_NAME_MAX_CHARS);

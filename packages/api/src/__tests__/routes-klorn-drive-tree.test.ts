@@ -493,7 +493,13 @@ describe("rate limits", () => {
     for (let i = 0; i < max; i += 1) {
       expect((await call(method, path, from(i, t.me))).statusCode).toBe(404);
     }
-    expect((await call(method, path, from(250, t.me))).statusCode).toBe(429);
+    const limited = await call(method, path, from(250, t.me));
+    expect(limited.statusCode).toBe(429);
+    expect(limited.json()).toEqual({
+      error: "Too many drive requests. Try again later.",
+      code: "rate-limited",
+      retryable: true,
+    });
     expect((await call(method, path, from(251, t.other))).statusCode).toBe(404);
   });
 

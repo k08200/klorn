@@ -122,6 +122,11 @@ export async function recordPurgePassFailed(
   return written.count > 0 ? attempts : 0;
 }
 
+/** How many purges are pending: a count only, no user id leaves this function. */
+export async function countPendingPurges(): Promise<number> {
+  return await prisma.storagePurge.count();
+}
+
 /** The users whose purge is due, the longest-waiting first, at most `limit`. */
 export async function duePurges(now: Date, limit: number): Promise<string[]> {
   const rows = await prisma.storagePurge.findMany({

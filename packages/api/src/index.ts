@@ -56,7 +56,11 @@ import { firewallRoutes } from "./routes/firewall.js";
 import { gmailPushRoutes } from "./routes/gmail-push.js";
 import { imapConnectRoutes } from "./routes/imap-connect.js";
 import { inboxRoutes } from "./routes/inbox.js";
-import { klornDriveRoutes, klornDriveRoutesEnabled } from "./routes/klorn-drive.js";
+import {
+  klornDriveRoutes,
+  klornDriveRoutesEnabled,
+  warnIfKlornDriveQuotaMissing,
+} from "./routes/klorn-drive.js";
 import { mcpRoutes } from "./routes/mcp.js";
 import { memoryRoutes } from "./routes/memory.js";
 import { notificationRoutes } from "./routes/notifications.js";
@@ -80,6 +84,7 @@ import { webhookRoutes } from "./routes/webhook.js";
 import { buildSchedulerHealthReport, isBackgroundAgentsDisabled } from "./scheduler-heartbeat.js";
 import { isRateLimitAllowedIp, parseAllowedCidrs } from "./security/scanner-allowlist.js";
 import { captureError, flushSentry, initSentry } from "./sentry.js";
+import { checkStoragePurgesAtStartup } from "./storage/purge-sweep.js";
 import { checkObjectStorageAtStartup } from "./storage/runtime.js";
 import { purgeAllUserData } from "./user-deletion.js";
 import { getClientCount, initWebSocket } from "./websocket.js";
@@ -628,6 +633,12 @@ try {
     );
   }
 
+  // Account purges that are pending but cannot run (object storage off, or no
+  // schedulers) are reported once, by count (step D3). Never rejects.
+  void checkStoragePurgesAtStartup({ backgroundDisabled: BG_DISABLED });
+  // The Klorn drive refuses every upload without KLORN_DRIVE_QUOTA_BYTES (P3).
+  warnIfKlornDriveQuotaMissing();
+
   // Start autonomous background agent
   if (!BG_DISABLED) startBackgroundAgent();
 
@@ -724,8 +735,9 @@ try {
       });
   }
 
-  // Pending account purges in object storage (step D3; hourly). A tick reads
-  // nothing while OBJECT_STORAGE_ENABLED is off.
+  // Pending account purges in object storage (step D3; hourly). While
+  // OBJECT_STORAGE_ENABLED is off a tick runs no purge and only counts pending
+  // records, to report them once.
   if (!BG_DISABLED) {
     import("./storage/purge-sweep.js")
       .then(({ startStoragePurgeScheduler }) => {

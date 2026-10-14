@@ -3215,7 +3215,8 @@ workstream D's turn comes.
   - A HEAD answer has no body, so `headObject` cannot tell a missing object from
     a missing bucket. `ping` and every GET can.
 - Runbook: an account deletion is blocked by storage (flag on). Superseded by D3,
-  where storage no longer blocks a deletion; see D3's runbook.
+  where storage no longer blocks a deletion; see D3's runbooks, including
+  "purges pending but not running" for the flag turned off with records left.
   - What the person sees: "delete my account" or "delete my data" fails with a
     500. Nothing was deleted from the database, and whatever objects were
     already removed stay removed. Trying again is safe and carries on.
@@ -3469,9 +3470,13 @@ D3 ships no user-facing copy beyond API error strings, which clients replace by
     Fastify's default 404 before authentication (`darkRouteGate`) and every Klorn
     row is hidden from the list. Turning it off hides files and stops writes; it
     never deletes anything.
-  - `KLORN_DRIVE_QUOTA_BYTES` (P3): unset or blank is no limit, the shipped
-    default; a whole number of bytes is one limit for every user; anything else
-    refuses every upload with 503 and logs the variable's name.
+  - `KLORN_DRIVE_QUOTA_BYTES` (P3), required: unset or blank refuses every
+    upload with 503 `quota-not-configured` (fail closed: at 20 uploads a minute
+    of 25 MiB, an unbounded drive is an open-ended bucket bill, and the
+    per-address limit trusts the proxy's client address), and boot warns by the
+    variable's name while the drive is live; a whole number of bytes is one
+    limit for every user; anything else refuses every upload with 503 and logs
+    the variable's name.
 - API (`routes/klorn-drive.ts`, types in `packages/contract/src/drive.ts`), all
   session-authenticated, every row found under the session's user id:
 
@@ -3485,10 +3490,14 @@ D3 ships no user-facing copy beyond API error strings, which clients replace by
   | `GET /api/drive/files?folder=<externalId>\|root` (D2's list, new filter) | one Klorn folder's children |
 
   Errors are `{ error, code, retryable }` with a fixed status per code
-  (`drive/klorn-errors.ts`): 400 `invalid-upload`, `invalid-name`; 404
+  (`drive/klorn-errors.ts`): 400 `invalid-upload`, `invalid-name`,
+  `multipart-malformed` (the parser failed: a body cut short, a broken part
+  header, with or without a code); 404
   `not-found`, `parent-not-found`; 409 `read-only` (a visible external file,
   V4), `is-folder`, `cycle`, `too-deep`, `folder-too-large`, `account-purging`;
-  413 `too-large`, `quota-exceeded`; 503 `storage-unavailable`. Another user's
+  413 `too-large`, `quota-exceeded`; 429 `rate-limited` (the shared
+  `rate-limit-hook.ts` now sends `{ error, code, retryable }` for the D2 routes
+  too, `error` unchanged); 503 `storage-unavailable`, `quota-not-configured`. Another user's
   id, an unknown id and a hidden row are the same 404.
 - Upload (`drive/klorn-upload.ts`), in two phases so the row is written only
   once the whole request parsed cleanly:
@@ -3677,7 +3686,18 @@ D3 ships no user-facing copy beyond API error strings, which clients replace by
   - Quota: computed from recorded sizes, before the PUT and again right before
     the row. Uploads that reach the commit at the same moment can all pass, so
     the limit can be overshot by the files committing at once. It is a soft
-    limit. Unset, there is no limit at all: the flip needs the number (below).
+    limit. Unset, every upload is refused.
+  - No transaction around folder writes: concurrent moves (A into B, B into A)
+    can create a cycle, and an upload or move into a folder that is being
+    deleted leaves a row no folder listing shows (both detailed above).
+  - The sweep's one-at-a-time lock is per process. With several instances,
+    sweeps overlap and each failed pass counts, so `attempts` (and the stuck
+    alert) inflate; the deletes themselves are idempotent.
+  - The purge record's reads and writes go through the global client. If the
+    app role drops BYPASSRLS they must move to `withSystem`, or the sweep sees
+    no record and the upload check sees no purge.
+  - A discard that fails (the cleanup delete after a refused upload) leaves an
+    object no row and no record names; it is found only by the account purge.
   - Folder races, with no lock between check and write (Prisma has no row lock
     without raw SQL, which the drive guard forbids): an upload or a move into a
     folder that is being deleted, or a file added to a folder after its delete
@@ -3710,11 +3730,22 @@ D3 ships no user-facing copy beyond API error strings, which clients replace by
      not the merge.
   2. FA-7 and D1's real-bucket run (`storage-s3-real-bucket.test.ts`), then
      `OBJECT_STORAGE_ENABLED` on (D1's flip).
-  3. The quota number (P3) in `KLORN_DRIVE_QUOTA_BYTES`, or a recorded decision
-     to ship without one.
+  3. The quota number (P3) in `KLORN_DRIVE_QUOTA_BYTES`. Required: without it
+     every upload is refused (503 `quota-not-configured`).
   4. The UI step (web and Mac), coordinated with the design work, with its
      vocabulary row.
   5. `DRIVE_ENABLED` and `KLORN_DRIVE_ENABLED` on, founder account first (L23).
+- Runbook: purges pending but not running (`scope: storage.purge.stalled`, tag
+  `reason`, the count in `extra.pending`; or the `[STORAGE] N account purges
+  are pending but cannot run` line). Reported once per process: at boot when
+  `OBJECT_STORAGE_ENABLED` is off or `BACKGROUND_AGENTS_DISABLED` is set, and by
+  the hourly sweep while storage is off. Meanwhile deleted accounts' objects
+  stay in the bucket and a user whose account remains gets `account-purging` on
+  every upload. Action: `object-storage-off`, turn `OBJECT_STORAGE_ENABLED`
+  back on (D1: never turn it off once objects exist); `background-disabled`,
+  clear `BACKGROUND_AGENTS_DISABLED` once the reason for it is gone, or run the
+  sweep from a process that has it. The records then finish on the next sweeps.
+  The deletion path itself is unchanged.
 - Runbook: a purge keeps failing (`scope: storage.purge.stuck`, or the
   `[STORAGE] purge still failing after N attempts` line, which names the user).
   The account's rows are already gone; the objects are not. The code says where

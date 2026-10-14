@@ -70,8 +70,13 @@ export function resetRowIds(): void {
   seq = 0;
 }
 
+/** A quota large enough for every test that is not about the quota (10 GiB). */
+export const TEST_QUOTA_BYTES = String(10 * 1024 ** 3);
+
+/** All three flags on, and a quota: the drive refuses uploads without one. */
 export function flagsOn(): void {
   for (const name of FLAGS) vi.stubEnv(name, "true");
+  vi.stubEnv("KLORN_DRIVE_QUOTA_BYTES", TEST_QUOTA_BYTES);
 }
 
 export async function buildKlornDriveApp(
