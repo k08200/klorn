@@ -13,10 +13,8 @@ import { describe, expect, it } from "vitest";
 const here = dirname(fileURLToPath(import.meta.url));
 const prismaDir = join(here, "..", "..", "prisma");
 const MIGRATION = "20261014010000_klorn_drive";
-/** The latest migration on main when this one was written. */
-const LATEST_ON_MAIN_WHEN_WRITTEN = "20261010010000_attention_override_undo";
-/** The latest one an open PR (#1381) adds; this one must sort after it too. */
-const LATEST_IN_OPEN_PR_WHEN_WRITTEN = "20261010030000_enable_rls_remaining_tables";
+/** The latest migration on main when this one was written (#1381's second). */
+const LATEST_WHEN_WRITTEN = "20261010030000_enable_rls_remaining_tables";
 
 const sql = readFileSync(join(prismaDir, "migrations", MIGRATION, "migration.sql"), "utf8");
 const statements = sql
@@ -112,13 +110,12 @@ describe("Klorn drive migration", () => {
     expect(block("model StoragePurge {")).toContain("@@index([nextAttemptAt])");
   });
 
-  it("sorts after main's latest migration and the open PR's, with a timestamp of its own", () => {
+  it("sorts after the latest migration that existed when it was written, with a timestamp of its own", () => {
     const names = readdirSync(join(prismaDir, "migrations"))
       .filter((name) => /^\d{14}_/.test(name))
       .sort();
-    expect(names.indexOf(MIGRATION)).toBeGreaterThan(names.indexOf(LATEST_ON_MAIN_WHEN_WRITTEN));
-    expect(names.indexOf(LATEST_ON_MAIN_WHEN_WRITTEN)).toBeGreaterThanOrEqual(0);
-    expect(MIGRATION > LATEST_IN_OPEN_PR_WHEN_WRITTEN).toBe(true);
+    expect(names.indexOf(MIGRATION)).toBeGreaterThan(names.indexOf(LATEST_WHEN_WRITTEN));
+    expect(names.indexOf(LATEST_WHEN_WRITTEN)).toBeGreaterThanOrEqual(0);
     expect(names.filter((name) => name.slice(0, 14) === MIGRATION.slice(0, 14))).toEqual([
       MIGRATION,
     ]);

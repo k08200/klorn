@@ -20,8 +20,9 @@
 -- drops BYPASSRLS it moves to withSystem (db-tenant.ts).
 --
 -- Additive only: one table and two indexes. After
--- 20261010010000_attention_override_undo (main) and
--- 20261010030000_enable_rls_remaining_tables (open PR #1381).
+-- 20261010030000_enable_rls_remaining_tables (#1381, the latest on main), whose
+-- default-privilege revoke also covers this table: the Data API roles get no
+-- grant on it.
 SET LOCAL lock_timeout = '5s';
 
 -- CreateTable
