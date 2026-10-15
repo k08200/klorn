@@ -720,6 +720,7 @@
 "driveImport.cap.folders" = "한 번에 가져올 수 있는 한도인 폴더 %d개에서 멈췄습니다.";
 "driveImport.cap.depth" = "%d단계보다 깊이 들어 있는 폴더는 제외했습니다.";
 "driveImport.cap.bytes" = "한 번에 가져올 수 있는 한도인 %dGB에서 멈췄습니다.";
+"driveImport.cap.examined" = "한 번에 가져올 때 살펴볼 수 있는 한도인 항목 %d개에서 멈췄습니다.";
 "driveImport.panel.prompt" = "가져오기";
 "driveImport.panel.message" = "Klorn 드라이브에 업로드할 파일이나 폴더를 고르세요. 고른 것만 업로드됩니다.";
 "driveImport.error.unavailable" = "Klorn 드라이브를 사용할 수 없습니다.";

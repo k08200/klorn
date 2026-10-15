@@ -159,6 +159,13 @@ final class DriveImporter {
 
     func cancel() { runTask?.cancel() }
 
+    /// Remove request bodies an earlier run left behind (a quit or a crash
+    /// mid-import). Called at launch, off the main thread.
+    func sweepLeftovers() async {
+        let directory = bodyDirectory
+        await Task.detached(priority: .utility) { DriveImportBodyWriter.resetDirectory(directory) }.value
+    }
+
     func clearReport() {
         guard !isRunning else { return }
         report = nil
@@ -177,11 +184,18 @@ final class DriveImporter {
         }
         let walkLimits = DriveImportWalkLimits(maxFileBytes: maxFileBytes)
         let source = self.source
-        let plan = await Task.detached(priority: .userInitiated) {
-            DriveImportWalk.plan(picked: urls, source: source, limits: walkLimits)
-        }.value
+        // A detached task does not inherit the cancel: the flag carries Cancel and
+        // sign-out (both cancel this run) into the walk, checked before every entry.
+        let flag = DriveImportCancelFlag()
+        let plan = await withTaskCancellationHandler {
+            await Task.detached(priority: .userInitiated) {
+                DriveImportWalk.plan(picked: urls, source: source, limits: walkLimits, cancel: flag)
+            }.value
+        } onCancel: {
+            flag.cancel()
+        }
         var report = DriveImportReport(notUploaded: plan.skipped, caps: plan.caps)
-        guard !Task.isCancelled else {
+        guard !Task.isCancelled, !plan.cancelled, session == generation else {
             report.cancelled = true
             return finish(report, session: session)
         }
@@ -192,19 +206,25 @@ final class DriveImporter {
         for file in plan.files {
             if let folder = file.folder, folders[folder] == nil {
                 report.notUploaded.append(.init(name: file.name, reason: report.stoppedBy ?? .folderMissing))
-                progress.doneFiles += 1
-                progress.doneBytes += file.size
+                advance(by: file, session: session)
             } else {
                 queue.append(file)
             }
         }
         if report.stoppedBy == nil {
-            await uploadFiles(queue, folders: folders, into: &report)
+            await uploadFiles(queue, folders: folders, session: session, into: &report)
         } else {
             report.notUploaded += queue.map { .init(name: $0.name, reason: report.stoppedBy ?? .cancelled) }
         }
         report.cancelled = Task.isCancelled && report.stoppedBy == nil
         finish(report, session: session)
+    }
+
+    /// One more file done. A run that a sign-out left moves nothing.
+    private func advance(by file: DriveImportPlan.File, session: Int) {
+        guard session == generation else { return }
+        progress.doneFiles += 1
+        progress.doneBytes += file.size
     }
 
     private func finish(_ report: DriveImportReport, session: Int) {
@@ -254,7 +274,8 @@ final class DriveImporter {
 
     /// Up to `uploadConcurrency` uploads at once; a refusal every file would meet stops the rest.
     private func uploadFiles(
-        _ files: [DriveImportPlan.File], folders: [Int: String], into report: inout DriveImportReport
+        _ files: [DriveImportPlan.File], folders: [Int: String], session: Int,
+        into report: inout DriveImportReport
     ) async {
         let api = self.api
         let sleep = self.sleep
@@ -277,8 +298,7 @@ final class DriveImporter {
                 start(file)
             }
             while let (file, failure) = await group.next() {
-                progress.doneFiles += 1
-                progress.doneBytes += file.size
+                advance(by: file, session: session)
                 if let failure {
                     if DriveImportRules.stopsImport(failure), report.stoppedBy == nil {
                         report.stoppedBy = failure
@@ -303,6 +323,8 @@ final class DriveImporter {
         _ file: DriveImportPlan.File, parentExternalId: String?, api: APIClient, maxFileBytes: Int64,
         directory: URL, sleep: @escaping @Sendable (Duration) async throws -> Void
     ) async -> DriveImportFailure? {
+        // A sibling cancelled by `cancelAll()` before it started opens nothing.
+        if Task.isCancelled { return .cancelled }
         let body: DriveImportBody
         do {
             body = try await DriveImportBodyWriter.write(
@@ -333,9 +355,13 @@ final class DriveImporter {
                 return .success(try await operation())
             } catch let error as DriveRequestError {
                 let failure = error.failure
-                guard DriveImportRules.isRetryable(failure), attempt < DriveImportLimits.maxAttempts else {
-                    return .failure(failure)
-                }
+                // The server's `retryable: false` is final (a misconfigured quota answers
+                // 503 storage-unavailable with it). No answer is tried again too, and a
+                // POST whose first try did reach the server can then land twice: D3 has
+                // no idempotency key (documented in the plan).
+                guard DriveImportRules.isRetryable(failure), error.serverAllowsRetry,
+                      attempt < DriveImportLimits.maxAttempts
+                else { return .failure(failure) }
                 let wait = DriveImportRules.backoffSeconds(attempt: attempt, retryAfter: error.retryAfter)
                 do { try await sleep(.seconds(wait)) } catch { return .failure(.cancelled) }
                 attempt += 1

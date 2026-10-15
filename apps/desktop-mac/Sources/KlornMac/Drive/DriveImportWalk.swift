@@ -1,10 +1,14 @@
 import Foundation
+import os
 
 // Step D7: what one import will upload, decided before any byte is read. A
 // picked file is one upload; a picked folder becomes a Klorn folder with what is
-// inside it, walked within the caps of DriveImportLimits. Links are never
-// followed (one inside a picked folder may point anywhere, which the user did
-// not pick: P4), packages are not one file, and hidden files are left out.
+// inside it, walked within the caps of DriveImportLimits. Links and Finder
+// aliases are never followed (one inside a picked folder may point anywhere,
+// which the user did not pick: P4, and an alias's bookmark names its target),
+// packages are not one file, and hidden files are left out. A folder is read one
+// entry at a time, every entry looked at counts toward a cap, and a Cancel is
+// seen before the next entry.
 
 /// One entry of the file system as the walk needs it.
 struct DriveImportEntry: Equatable, Sendable {
@@ -26,8 +30,16 @@ struct DriveImportEntry: Equatable, Sendable {
 protocol DriveImportFileSource: Sendable {
     /// nil: the entry cannot be read.
     func entry(at url: URL) -> DriveImportEntry?
-    /// nil: the folder cannot be read.
-    func children(of url: URL) -> [URL]?
+    /// Each entry of a folder, one at a time, until `body` answers false (the
+    /// listing is never loaded whole). False: the folder could not be read.
+    func forEachChild(of url: URL, _ body: (URL) -> Bool) -> Bool
+}
+
+/// Set by Cancel and by sign-out; the walk checks it before every entry.
+final class DriveImportCancelFlag: Sendable {
+    private let state = OSAllocatedUnfairLock(initialState: false)
+    var isCancelled: Bool { state.withLock { $0 } }
+    func cancel() { state.withLock { $0 = true } }
 }
 
 /// The bounds the walk keeps (DriveImportLimits, with the server's file cap).
@@ -37,11 +49,12 @@ struct DriveImportWalkLimits: Equatable, Sendable {
     var maxDepth = DriveImportLimits.maxFolderDepth
     var maxTotalBytes = DriveImportLimits.maxTotalBytes
     var maxFileBytes = DriveImportLimits.maxFileBytes
+    var maxExamined = DriveImportLimits.maxEntriesExamined
 }
 
 /// A cap one import reached. Whatever lay past it was not walked.
 enum DriveImportCap: String, CaseIterable, Hashable, Sendable {
-    case files, folders, depth, bytes
+    case files, folders, depth, bytes, examined
 }
 
 /// What one import will do, in order: create the folders, then upload the files.
@@ -68,15 +81,19 @@ struct DriveImportPlan: Equatable, Sendable {
     var skipped: [Skipped] = []
     var totalBytes: Int64 = 0
     var caps: Set<DriveImportCap> = []
+    /// The walk was cancelled before it ended.
+    var cancelled = false
 }
 
 enum DriveImportWalk {
     /// The plan for what the user picked, in the order picked; a folder's
-    /// entries in name order. Pure over `source`.
+    /// entries in the order the source hands them out. Pure over `source`;
+    /// `cancel` is checked before every entry.
     static func plan(
-        picked: [URL], source: some DriveImportFileSource, limits: DriveImportWalkLimits = .init()
+        picked: [URL], source: some DriveImportFileSource, limits: DriveImportWalkLimits = .init(),
+        cancel: DriveImportCancelFlag? = nil
     ) -> DriveImportPlan {
-        var walker = Walker(source: source, limits: limits)
+        var walker = Walker(source: source, limits: limits, cancel: cancel)
         for url in picked {
             guard !walker.stopped else { break }
             // The pick itself: a link the user chose is resolved (they chose it);
@@ -89,17 +106,28 @@ enum DriveImportWalk {
     private struct Walker<Source: DriveImportFileSource> {
         let source: Source
         let limits: DriveImportWalkLimits
+        let cancel: DriveImportCancelFlag?
         var plan = DriveImportPlan()
-        /// A file cap (count or bytes) was reached: nothing more is added.
+        /// A file cap (count or bytes), the examined cap or a cancel: nothing more is looked at.
         var stopped = false
+        /// Entries looked at, whatever became of them.
+        var examined = 0
 
-        init(source: Source, limits: DriveImportWalkLimits) {
+        init(source: Source, limits: DriveImportWalkLimits, cancel: DriveImportCancelFlag?) {
             self.source = source
             self.limits = limits
+            self.cancel = cancel
         }
 
         mutating func visit(_ url: URL, parent: Int?, depth: Int, picked: Bool) {
             guard !stopped else { return }
+            if cancel?.isCancelled == true {
+                plan.cancelled = true
+                stopped = true
+                return
+            }
+            guard examined < limits.maxExamined else { return stop(.examined) }
+            examined += 1
             guard let entry = source.entry(at: url) else {
                 plan.skipped.append(.init(name: url.lastPathComponent, reason: .unreadable))
                 return
@@ -144,17 +172,18 @@ enum DriveImportWalk {
                 plan.caps.insert(.folders)
                 return
             }
-            guard let children = source.children(of: url) else {
-                plan.skipped.append(.init(name: name, reason: .unreadable))
-                return
-            }
             let id = plan.folders.count
             plan.folders.append(.init(id: id, name: name, parent: parent))
-            let ordered = children.sorted { $0.lastPathComponent < $1.lastPathComponent }
-            for child in ordered {
-                guard !stopped else { return }
+            var visited = 0
+            let readable = source.forEachChild(of: url) { child in
+                visited += 1
                 visit(child, parent: id, depth: depth + 1, picked: false)
+                return !stopped
             }
+            guard !readable else { return }
+            // Nothing inside was looked at, so this folder is still the last one planned.
+            if visited == 0 { plan.folders.removeLast() }
+            plan.skipped.append(.init(name: name, reason: .unreadable))
         }
 
         private mutating func stop(_ cap: DriveImportCap) {
@@ -168,7 +197,8 @@ enum DriveImportWalk {
 /// not downloaded yet reports too (the walk never downloads anything).
 struct LocalDriveImportFileSource: DriveImportFileSource {
     static let keys: [URLResourceKey] = [
-        .isRegularFileKey, .isDirectoryKey, .isSymbolicLinkKey, .isPackageKey, .isHiddenKey, .fileSizeKey,
+        .isRegularFileKey, .isDirectoryKey, .isSymbolicLinkKey, .isAliasFileKey, .isPackageKey, .isHiddenKey,
+        .fileSizeKey,
     ]
 
     func entry(at url: URL) -> DriveImportEntry? {
@@ -179,7 +209,7 @@ struct LocalDriveImportFileSource: DriveImportFileSource {
             return DriveImportEntry(kind: .placeholder(name: original), name: original, isHidden: false)
         }
         let kind: DriveImportEntry.Kind
-        if values.isSymbolicLink == true {
+        if values.isSymbolicLink == true || values.isAliasFile == true {
             kind = .unsupported
         } else if values.isDirectory == true {
             kind = values.isPackage == true ? .unsupported : .folder
@@ -191,9 +221,21 @@ struct LocalDriveImportFileSource: DriveImportFileSource {
         return DriveImportEntry(kind: kind, name: name, isHidden: hidden)
     }
 
-    func children(of url: URL) -> [URL]? {
-        try? FileManager.default.contentsOfDirectory(
-            at: url, includingPropertiesForKeys: Self.keys, options: [])
+    /// One level, lazily: the enumerator reads the folder as it is asked.
+    func forEachChild(of url: URL, _ body: (URL) -> Bool) -> Bool {
+        final class Failure { var happened = false }
+        let failure = Failure()
+        guard let entries = FileManager.default.enumerator(
+            at: url, includingPropertiesForKeys: Self.keys, options: [.skipsSubdirectoryDescendants],
+            errorHandler: { _, _ in
+                failure.happened = true
+                return false
+            })
+        else { return false }
+        while let child = entries.nextObject() as? URL {
+            if !body(child) { break }
+        }
+        return !failure.happened
     }
 
     /// `.Report.pdf.icloud` → `Report.pdf`: the stub older iCloud Drive left for a

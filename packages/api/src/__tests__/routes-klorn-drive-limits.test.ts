@@ -25,6 +25,20 @@ vi.mock("../db.js", async () => {
   return klornDriveDbMock();
 });
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
+// The usage read, passed through unless a test makes it fail.
+const usage = vi.hoisted(() => ({ fail: null as Error | null }));
+vi.mock("../drive/klorn-drive-read.js", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("../drive/klorn-drive-read.js")>();
+  return {
+    ...mod,
+    klornUsageBytes: async (...args: Parameters<typeof mod.klornUsageBytes>) => {
+      if (usage.fail) throw usage.fail;
+      return await mod.klornUsageBytes(...args);
+    },
+  };
+});
+
+import { KlornDriveError } from "../drive/klorn-errors.js";
 
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
 let t: KlornDriveTestApp;
@@ -40,6 +54,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  usage.fail = null;
   await t.app.close();
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
@@ -90,6 +105,30 @@ describe("GET /api/drive/limits", () => {
     const res = await limits(t.me);
     expect(res.statusCode).toBe(200);
     expect(res.json().quotaBytes).toBeNull();
+  });
+
+  it("a drive error while reading the usage is the drive's own answer, not a 500", async () => {
+    usage.fail = new KlornDriveError("storage-unavailable");
+    const res = await limits(t.me);
+    expect(res.statusCode).toBe(503);
+    expect(res.json()).toEqual({
+      error: "File storage is unavailable. Try again later.",
+      code: "storage-unavailable",
+      retryable: true,
+    });
+  });
+
+  it("a malformed quota is logged once per value, not on every probe", async () => {
+    const errors = vi.mocked(console.error);
+    errors.mockClear();
+    vi.stubEnv("KLORN_DRIVE_QUOTA_BYTES", "12-not-bytes");
+    for (let i = 0; i < 3; i += 1) expect((await limits(t.me)).json().quotaBytes).toBeNull();
+    vi.stubEnv("KLORN_DRIVE_QUOTA_BYTES", "34-not-bytes");
+    expect((await limits(t.me)).json().quotaBytes).toBeNull();
+    const logged = errors.mock.calls.filter(([line]) =>
+      String(line).includes("KLORN_DRIVE_QUOTA_BYTES"),
+    );
+    expect(logged).toHaveLength(2);
   });
 
   it("60 a minute per address, and 60 per user from any address", async () => {

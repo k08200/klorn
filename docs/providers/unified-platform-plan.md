@@ -4052,9 +4052,10 @@ its own: D3's gate decides, and the app hides the feature while it is dark.
 - Opt-in model (P4). The pick is the opt-in. Nothing is read before the user
   confirms the panel; only the picked items, and what is inside a picked folder,
   are read; each import is one act. No background watching, no bookmarks, no
-  re-sync, no second import of the same pick. A link inside a picked folder is
-  never followed (it can point outside the pick); a link the user picked is
-  resolved (they chose it). Hidden files inside a folder (`.DS_Store`) are left
+  re-sync, no second import of the same pick. A link or a Finder alias inside a
+  picked folder is never followed (it can point outside the pick, and an
+  alias's bookmark names its target); a link the user picked is resolved (they
+  chose it). A pipe or a device is not read. Hidden files inside a folder (`.DS_Store`) are left
   out; a hidden file picked by name goes. The self-check pins that the drive
   code has no `NSMetadataQuery`, FSEvents stream, dispatch file source or file
   presenter.
@@ -4066,29 +4067,42 @@ its own: D3's gate decides, and the app hides the feature while it is dark.
   drive code (`not-found`, `parent-not-found`) is not the gate.
 - Walk (`Drive/DriveImportWalk.swift`, off the main thread). Named caps in
   `DriveImportLimits`: 200 files, 50 folders, 8 levels below a picked folder,
-  1 GiB per import, 25 MiB per file (D3's cap; the server's `maxFileBytes` wins
-  when it answers). A picked folder becomes a Klorn folder (`POST
+  1 GiB per import, 10,000 entries looked at (hidden, links, oversized and
+  unreadable ones count too), 25 MiB per file (D3's cap; the server's
+  `maxFileBytes` wins when it answers). A folder is read one entry at a time
+  (`FileManager.enumerator`, one level), never loaded whole. Cancel and
+  sign-out reach the walk through a flag (`DriveImportCancelFlag`; the walk runs
+  in a detached task, which does not inherit a cancel), checked before every
+  entry. A picked folder becomes a Klorn folder (`POST
   /api/drive/folders`) with its folders inside it, parents first; each file goes
-  into its folder (`parentExternalId`). At the file or byte cap the walk stops
-  (later picks included); the folder and depth caps leave that folder out; each
+  into its folder (`parentExternalId`). At the file, byte or examined cap the
+  walk stops (later picks included); the folder and depth caps leave that folder out; each
   cap reached is reported. A file over the size cap is reported before any byte
   is read and counts toward no cap. The target is the drive's root in v1: no
   client has a folder view of the Klorn drive yet, so picking a destination
   folder would need one first.
 - Upload (`Drive/DriveImportBody.swift`, `Drive/DriveAPI.swift`): **streamed**.
   Each file's multipart body (`size`, optional `parentExternalId`, then `file`,
-  D3's order) is written to a temporary file under
-  `$TMPDIR/klorn-drive-import/`, 1 MiB at a time, and sent with
-  `URLSession.upload(for:fromFile:)`. Memory holds one chunk; disk holds one body
-  per upload in flight (at most 25 MiB plus the framing), deleted after the send,
-  and the directory is emptied when an import starts. `size` is the length of
-  the opened file; a file that ends early or goes on past it is refused
+  D3's order) is written to a file under `~/Library/Caches/<bundle id>/
+  drive-import/` (folder 0700, each body 0600, created with `O_EXCL`), 1 MiB at
+  a time, and sent with `URLSession.upload(for:fromFile:)`. Memory holds one
+  chunk; disk holds one body per upload in flight (at most 25 MiB plus the
+  framing), deleted after the send; the folder is emptied at launch and when an
+  import starts. The source is checked with `lstat`, then opened with
+  `O_NOFOLLOW | O_NONBLOCK` and read only if `fstat` says it is a regular file,
+  so a path swapped after the walk for a link or a pipe is refused, never
+  followed or waited on. A cancel seen before the read starts opens nothing.
+  `size` is the length of the opened file; a file that ends early or goes on past it is refused
   (`changedWhileReading`), never sent as a mix. File names keep their UTF-8 (the
   server normalises to NFC); control characters are dropped, `/` and `\` become
   `_` (busboy keeps only what follows the last one), quotes are escaped. Two
   uploads at once (`uploadConcurrency`: D3 allows 20 a minute per user, so more
   buys nothing). A 429, a 503 `storage-unavailable` or no answer is tried again,
-  at most 5 tries, after `Retry-After` (1 to 60 s) or 2, 4, 8 … s.
+  at most 5 tries, after `Retry-After` (1 to 60 s) or 2, 4, 8 … s, unless the
+  server said `retryable: false` (a malformed quota answers 503
+  `storage-unavailable` with it). A retry after no answer can upload a file
+  twice when the first try did reach the server: D3 has no idempotency key, so
+  this is a known limit, not handled by the client.
 - Cloud placeholders. Decision: **download on read**, not "report and skip".
   Each file is read inside `NSFileCoordinator.coordinate(readingItemAt:options:
   .withoutChanges)` on a queue of its own, so a file in iCloud Drive (or another
@@ -4126,8 +4140,9 @@ its own: D3's gate decides, and the app hides the feature while it is dark.
 - Copy: 37 keys in all 7 languages, integers as `%d`; the self-check compares
   each key's format specifiers with English in every language. Vocabulary row
   **Klorn Drive** added to `../product-vocabulary.md`.
-- Verify. `swift run KlornMac --self-check`: 77 cases under "Drive import (D7)",
-  among them the walk caps (files, bytes, folders, depth), hidden files, links,
+- Verify. `swift run KlornMac --self-check`: 94 cases under "Drive import (D7)",
+  among them the walk caps (files, bytes, folders, depth, entries examined), a
+  cancel mid-walk, a folder read one entry at a time, hidden files, links,
   placeholders, the size pre-check, every code against `klorn-errors.ts` with
   its status, the backoff, the multipart framing and name escaping, the
   404-hides rule, the menu rule, the specifier parity; and scenarios over real
@@ -4135,9 +4150,15 @@ its own: D3's gate decides, and the app hides the feature while it is dark.
   folders before files, each file's size, parent and bytes, the token on every
   request, a D4-shaped file answer (with `summary`) and an extended limits answer
   still decoding, the temporary bodies removed, Retry-After honoured, a give-up after 5
-  tries, a quota refusal stopping the rest, a dark 404 mid-import, cancel, and
-  sign-out. Server: `routes-klorn-drive-limits.test.ts` (dark with each flag
-  off, 401, this user's KLORN usage only, quota null when unset or malformed,
+  tries, `retryable: false` not retried, a quota refusal stopping the rest, a
+  dark 404 mid-import, cancel (a sibling cancelled before it starts reads and
+  sends nothing), sign-out (no progress moved by the old run); on the real file
+  system, a link, a Finder alias and a pipe skipped by the walk, a link and a
+  pipe refused at open without waiting, the body folder 0700 and bodies 0600 in
+  Caches, and the launch sweep. Server: `routes-klorn-drive-limits.test.ts`
+  (dark with each flag off, 401, this user's KLORN usage only, quota null when
+  unset or malformed, a drive error while reading the usage answered as the
+  drive's own error rather than a 500, a malformed quota logged once per value,
   both rate limits). Mutation checks, each failing at least one check: the
   code-less 404 not read as the gate, the hidden-file rule inverted, the depth
   cap off by one, a stopping refusal not stopping.
@@ -4154,8 +4175,7 @@ its own: D3's gate decides, and the app hides the feature while it is dark.
   cancelled or stopped import keeps what was already uploaded; the quota is
   the server's to check, per file (no client pre-check of the total);
   `Retry-After` is read as seconds only; if the app quits mid-import, the
-  bodies in flight (at most two) stay in `$TMPDIR` until the next import
-  empties the directory or macOS clears it.
+  bodies in flight (at most two) stay in Caches until the next launch.
 - Rollback: revert the PR. `/limits` can stay; it is dark with the drive.
 The desktop and mobile apps import files from iCloud Drive, MYBOX and on-device
 storage into the Klorn drive: the Mac part is the above; the mobile part is C5's

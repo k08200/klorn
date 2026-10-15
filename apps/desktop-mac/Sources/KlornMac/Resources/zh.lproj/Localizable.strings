@@ -720,6 +720,7 @@
 "driveImport.cap.folders" = "已在 %d 个文件夹处停止，这是单次导入的上限。";
 "driveImport.cap.depth" = "嵌套超过 %d 层的文件夹已被略过。";
 "driveImport.cap.bytes" = "已在 %d GB 处停止，这是单次导入的上限。";
+"driveImport.cap.examined" = "已在查看 %d 个项目后停止，这是单次导入的上限。";
 "driveImport.panel.prompt" = "导入";
 "driveImport.panel.message" = "选择要上传到 Klorn 云盘的文件或文件夹。只有你选择的内容会被上传。";
 "driveImport.error.unavailable" = "Klorn 云盘不可用。";

@@ -108,6 +108,7 @@ struct DriveImportSection: View {
         case .folders: L("driveImport.cap.folders", DriveImportLimits.maxFolders)
         case .depth: L("driveImport.cap.depth", DriveImportLimits.maxFolderDepth)
         case .bytes: L("driveImport.cap.bytes", Int(DriveImportLimits.maxTotalBytes / (1024 * 1024 * 1024)))
+        case .examined: L("driveImport.cap.examined", DriveImportLimits.maxEntriesExamined)
         }
     }
 

@@ -15,19 +15,26 @@ struct DriveLimitsWire: Decodable, Equatable, Sendable {
 
 /// A non-2xx answer of a drive route, or no answer at all.
 enum DriveRequestError: Error, Equatable, Sendable {
-    case refused(status: Int, code: String?, retryAfter: Int?)
+    /// `retryable`: the server's own word on retrying, when it sent one.
+    case refused(status: Int, code: String?, retryable: Bool? = nil, retryAfter: Int?)
     case transport(cancelled: Bool)
 
     var failure: DriveImportFailure {
         switch self {
-        case .refused(let status, let code, _): DriveImportRules.failure(status: status, code: code)
+        case .refused(let status, let code, _, _): DriveImportRules.failure(status: status, code: code)
         case .transport(let cancelled): cancelled ? .cancelled : .offline
         }
     }
 
     var retryAfter: Int? {
-        if case .refused(_, _, let seconds) = self { return seconds }
+        if case .refused(_, _, _, let seconds) = self { return seconds }
         return nil
+    }
+
+    /// False only when the server said so.
+    var serverAllowsRetry: Bool {
+        if case .refused(_, _, let retryable?, _) = self { return retryable }
+        return true
     }
 }
 
@@ -89,10 +96,10 @@ extension APIClient {
         }
         guard let http = resp as? HTTPURLResponse else { throw DriveRequestError.transport(cancelled: false) }
         guard (200...299).contains(http.statusCode) else {
-            struct Refusal: Decodable { let code: String? }
-            let code = (try? JSONDecoder().decode(Refusal.self, from: bytes))?.code
+            struct Refusal: Decodable { let code: String?; let retryable: Bool? }
+            let refusal = try? JSONDecoder().decode(Refusal.self, from: bytes)
             throw DriveRequestError.refused(
-                status: http.statusCode, code: code,
+                status: http.statusCode, code: refusal?.code, retryable: refusal?.retryable,
                 retryAfter: DriveImportRules.retryAfterSeconds(http.value(forHTTPHeaderField: "Retry-After")))
         }
         return bytes

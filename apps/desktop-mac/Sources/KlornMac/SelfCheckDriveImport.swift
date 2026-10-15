@@ -19,11 +19,30 @@ func driveImportSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
 // MARK: Pure
 
 /// A file system in memory: a path is a file (with a size), a folder, or something else.
+/// What a fake source was asked: entries looked at, and children handed out.
+final class FakeDriveImportSourceLog: Sendable {
+    private let state = OSAllocatedUnfairLock(initialState: (entries: 0, yielded: 0))
+    var entries: Int { state.withLock { $0.entries } }
+    var yielded: Int { state.withLock { $0.yielded } }
+    func entry() -> Int { state.withLock { $0.entries += 1; return $0.entries } }
+    func yield() { state.withLock { $0.yielded += 1 } }
+}
+
 struct FakeDriveImportFileSource: DriveImportFileSource {
     enum Node: Sendable { case file(Int64?), folder, unsupported, unreadable, unreadableFolder }
     let nodes: [String: Node]
+    let log = FakeDriveImportSourceLog()
+    /// Sets the flag once this many entries were looked at (a Cancel mid-walk).
+    var cancelAfter: (flag: DriveImportCancelFlag, entries: Int)?
+
+    init(nodes: [String: Node], cancelAfter: (flag: DriveImportCancelFlag, entries: Int)? = nil) {
+        self.nodes = nodes
+        self.cancelAfter = cancelAfter
+    }
 
     func entry(at url: URL) -> DriveImportEntry? {
+        let count = log.entry()
+        if let cancelAfter, count >= cancelAfter.entries { cancelAfter.flag.cancel() }
         let name = url.lastPathComponent
         if let original = LocalDriveImportFileSource.placeholderName(name) {
             return DriveImportEntry(kind: .placeholder(name: original), name: original, isHidden: false)
@@ -37,12 +56,23 @@ struct FakeDriveImportFileSource: DriveImportFileSource {
         }
     }
 
-    func children(of url: URL) -> [URL]? {
+    private func children(of url: URL) -> [URL]? {
         if case .unreadableFolder = nodes[url.path] { return nil }
         let prefix = url.path + "/"
         return nodes.keys
             .filter { $0.hasPrefix(prefix) && !$0.dropFirst(prefix.count).contains("/") }
+            .sorted()
             .map { URL(fileURLWithPath: $0) }
+    }
+
+    /// In name order, one at a time, counting each one handed out.
+    func forEachChild(of url: URL, _ body: (URL) -> Bool) -> Bool {
+        guard let all = children(of: url) else { return false }
+        for child in all {
+            log.yield()
+            if !body(child) { break }
+        }
+        return true
     }
 }
 
@@ -236,6 +266,30 @@ private enum DriveImportPureChecks {
               folderPlan.folders.map(\.name) == ["w", "x"] && folderPlan.files.isEmpty
               && folderPlan.caps == [.folders])
 
+        let flag = DriveImportCancelFlag()
+        var twenty: [String: FakeDriveImportFileSource.Node] = ["/c": .folder]
+        for index in 0..<20 { twenty["/c/f" + String(format: "%02d", index)] = .file(1) }
+        let cancelling = FakeDriveImportFileSource(nodes: twenty, cancelAfter: (flag, 5))
+        let cancelledPlan = DriveImportWalk.plan(picked: [u("/c"), u("/c/f19")], source: cancelling, cancel: flag)
+        check("walk: a cancel stops it before the next entry, later picks included",
+              cancelledPlan.cancelled && cancelling.log.entries == 5 && cancelledPlan.files.count == 4)
+        let notCancelled = DriveImportWalk.plan(
+            picked: [u("/c")], source: FakeDriveImportFileSource(nodes: twenty), cancel: DriveImportCancelFlag())
+        check("walk: an untouched flag changes nothing", !notCancelled.cancelled && notCancelled.files.count == 20)
+
+        var crowd: [String: FakeDriveImportFileSource.Node] = ["/h": .folder, "/h/z.txt": .file(1)]
+        for index in 0..<30 { crowd["/h/.h" + String(format: "%02d", index)] = .file(1) }
+        var examinedLimits = DriveImportWalkLimits()
+        examinedLimits.maxExamined = 10
+        let crowdSource = FakeDriveImportFileSource(nodes: crowd)
+        let crowdPlan = DriveImportWalk.plan(picked: [u("/h")], source: crowdSource, limits: examinedLimits)
+        check("walk: every entry looked at counts (hidden ones too); the examined cap stops the walk",
+              crowdPlan.caps == [.examined] && crowdPlan.files.isEmpty && crowdSource.log.entries == 10)
+        check("walk: a folder is read one entry at a time, never past the stop",
+              crowdSource.log.yielded > 0 && crowdSource.log.yielded <= 10)
+        check("walk: the examined cap is 10,000 by default",
+              DriveImportLimits.maxEntriesExamined == 10_000 && DriveImportWalkLimits().maxExamined == 10_000)
+
         let broken = FakeDriveImportFileSource(nodes: ["/q": .unreadableFolder, "/r": .unreadable])
         let brokenPlan = DriveImportWalk.plan(picked: [u("/q"), u("/r")], source: broken)
         check("walk: an unreadable folder or file is reported, not created",
@@ -309,6 +363,9 @@ private enum DriveImportPureChecks {
               && !MenuRules.isEnabled(.importToDrive, in: modal))
         check("menu: Import has no key equivalent to collide with", MenuRules.shortcut(for: .importToDrive) == nil)
         check("menu: the title is localized", L("menu.importToDrive") != "menu.importToDrive")
+        check("every cap has its own localized line",
+              Set(DriveImportCap.allCases.map(DriveImportSection.capLine)).count == DriveImportCap.allCases.count
+              && DriveImportCap.allCases.allSatisfy { !DriveImportSection.capLine($0).hasPrefix("driveImport.") })
         let report = DriveImportReport(
             uploaded: 3, notUploaded: [.init(name: "x", reason: .tooLarge)], caps: [.files, .depth],
             stoppedBy: .quotaExceeded)
@@ -343,7 +400,7 @@ private enum DriveImportPureChecks {
         let keys = english.keys.filter {
             $0.hasPrefix("driveImport.") || $0 == "menu.importToDrive" || $0 == "prefs.section.driveImport"
         }
-        check("the D7 catalogue has its keys", keys.count == 37)
+        check("the D7 catalogue has its keys", keys.count == 38)
         for code in L10n.shipped where code != "en" {
             let other = table(code)
             let drift = keys.filter { specifiers(english[$0] ?? "") != specifiers(other[$0] ?? "") }.sorted()
@@ -354,6 +411,7 @@ private enum DriveImportPureChecks {
             L("driveImport.progress", 2, 9), L("driveImport.summary.all", 4), L("driveImport.summary", 4, 1),
             L("driveImport.more", 5), L("driveImport.cap.files", 200), L("driveImport.cap.folders", 50),
             L("driveImport.cap.depth", 8), L("driveImport.cap.bytes", 1), L("driveImport.error.tooLarge", 25),
+            L("driveImport.cap.examined", 10_000),
         ].allSatisfy { $0.contains(where: \.isNumber) && !$0.contains("%") }
             && L("driveImport.usage", "1 MB", "2 GB").contains("2 GB"))
         return results
@@ -485,8 +543,10 @@ enum DriveImportScenarios {
             + #""futureField":[1,2]}}"#)
     }
 
-    static func refused(_ status: Int, _ code: String, headers: [String: String] = [:]) -> DriveImportStubProtocol.Reply {
-        .init(status: status, body: #"{"error":"x","code":"\#(code)","retryable":false}"#, headers: headers)
+    static func refused(
+        _ status: Int, _ code: String, retryable: Bool = false, headers: [String: String] = [:]
+    ) -> DriveImportStubProtocol.Reply {
+        .init(status: status, body: #"{"error":"x","code":"\#(code)","retryable":\#(retryable)}"#, headers: headers)
     }
 
     static func api() -> APIClient {
@@ -593,6 +653,8 @@ enum DriveImportScenarios {
         }
         check("body: a file that shrinks or grows while read is refused", Self.changedWhileReading(scratch))
 
+        results += await hardeningScenarios(scratch: scratch, loose: file("loose.txt"))
+
         // Dark server: the probe's 404 hides everything.
         let sleeps = DriveImportSleepLog()
         DriveImportStubProtocol.reset([limitsPath: [dark]])
@@ -660,7 +722,7 @@ enum DriveImportScenarios {
         // Rate limited: waits as told, then succeeds.
         DriveImportStubProtocol.reset([
             limitsPath: [limits()],
-            filesPath: [refused(429, "rate-limited", headers: ["Retry-After": "7"]), created("x")],
+            filesPath: [refused(429, "rate-limited", retryable: true, headers: ["Retry-After": "7"]), created("x")],
         ])
         let limitedSleeps = DriveImportSleepLog()
         let limited = importer(limitedSleeps, bodies: bodies)
@@ -678,7 +740,9 @@ enum DriveImportScenarios {
               && DriveImportStubProtocol.calls.filter { $0.path == "/api/drive/files" }.count == 2)
 
         // Still limited after every try: reported, not looped forever.
-        DriveImportStubProtocol.reset([limitsPath: [limits()], filesPath: [refused(429, "rate-limited")]])
+        DriveImportStubProtocol.reset([
+            limitsPath: [limits()], filesPath: [refused(429, "rate-limited", retryable: true)],
+        ])
         let stuckSleeps = DriveImportSleepLog()
         let stuck = importer(stuckSleeps, bodies: bodies)
         await stuck.refreshAvailability()
@@ -745,6 +809,157 @@ enum DriveImportScenarios {
         check("sign-out: no report, no limits, availability unknown",
               leaving.report == nil && leaving.limits == nil && leaving.availability == .unknown
               && leaving.phase == .idle)
+        return results
+    }
+
+    static func permissions(_ url: URL) -> Int? {
+        (try? FileManager.default.attributesOfItem(atPath: url.path))?[.posixPermissions] as? Int
+    }
+
+    static func isEmptyOrMissing(_ directory: URL) -> Bool {
+        ((try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []).isEmpty
+    }
+
+    /// The review fixes: odd file types, private bodies, the launch sweep, cancel before
+    /// any read, the server's `retryable`, and progress after a sign-out.
+    // swiftlint:disable:next function_body_length
+    static func hardeningScenarios(scratch: URL, loose: URL) async -> [(String, Bool)] {
+        var results: [(String, Bool)] = []
+        func check(_ name: String, _ ok: Bool) { results.append((name, ok)) }
+        let fm = FileManager.default
+
+        // A folder holding a link, a Finder alias and a pipe, next to one real file.
+        let odd = scratch.appendingPathComponent("odd", isDirectory: true)
+        let real = odd.appendingPathComponent("real.txt")
+        do {
+            try fm.createDirectory(at: odd, withIntermediateDirectories: true)
+            try Data("real".utf8).write(to: real)
+            try fm.createSymbolicLink(at: odd.appendingPathComponent("link"), withDestinationURL: real)
+            let bookmark = try real.bookmarkData(
+                options: .suitableForBookmarkFile, includingResourceValuesForKeys: nil, relativeTo: nil)
+            try URL.writeBookmarkData(bookmark, to: odd.appendingPathComponent("alias"))
+            _ = mkfifo(odd.appendingPathComponent("pipe").path, 0o600)
+            let plan = DriveImportWalk.plan(picked: [odd], source: LocalDriveImportFileSource())
+            let unsupported = Set(plan.skipped.filter { $0.reason == .unsupported }.map(\.name))
+            check("real files: a link, a Finder alias and a pipe are skipped, never read",
+                  plan.files.map(\.name) == ["real.txt"] && unsupported == ["link", "alias", "pipe"])
+        } catch {
+            check("real files: a link, a Finder alias and a pipe are skipped, never read", false)
+        }
+
+        // Bodies: private, in the app's Caches folder.
+        let private_ = scratch.appendingPathComponent("private/bodies", isDirectory: true)
+        do {
+            let body = try await DriveImportBodyWriter.write(
+                source: loose, fileName: "loose.txt", parentExternalId: nil, maxFileBytes: 1000, directory: private_)
+            check("bodies: the folder is 0700 and each body 0600",
+                  permissions(private_) == 0o700 && permissions(body.file) == 0o600)
+            try? fm.removeItem(at: body.file)
+        } catch {
+            check("bodies: the folder is 0700 and each body 0600", false)
+        }
+        check("bodies live in the app's Caches folder, not bare $TMPDIR",
+              DriveImportBodyWriter.directory.path.hasSuffix("/Library/Caches/ai.klorn.desktop/drive-import"))
+
+        // The launch sweep.
+        let sweepDir = scratch.appendingPathComponent("sweep", isDirectory: true)
+        let leftover = sweepDir.appendingPathComponent("left.body")
+        try? fm.createDirectory(at: sweepDir, withIntermediateDirectories: true)
+        try? Data("old".utf8).write(to: leftover)
+        let sweeper = DriveImporter(api: api(), pick: { [] }, bodyDirectory: sweepDir, sleep: { _ in })
+        await sweeper.sweepLeftovers()
+        let appModel = (try? String(
+            contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+                .appendingPathComponent("AppModel.swift"), encoding: .utf8)) ?? ""
+        check("launch sweep: a body left by a quit or a crash is removed",
+              !fm.fileExists(atPath: leftover.path))
+        check("launch sweep: it runs when the app starts, not only at the next import",
+              appModel.contains("driveImport.sweepLeftovers()"))
+
+        // A path swapped for a link or a pipe after the walk is refused at open.
+        let linked = scratch.appendingPathComponent("linked.txt")
+        try? fm.createSymbolicLink(at: linked, withDestinationURL: loose)
+        let fifo = scratch.appendingPathComponent("fifo")
+        _ = mkfifo(fifo.path, 0o600)
+        // Unblocks an open that waits for a writer (the behaviour without O_NONBLOCK),
+        // so a regression fails this check instead of hanging the harness.
+        let fifoDone = OSAllocatedUnfairLock(initialState: false)
+        DispatchQueue.global().async {
+            for _ in 0..<100 where !fifoDone.withLock({ $0 }) {
+                let fd = open(fifo.path, O_WRONLY | O_NONBLOCK)
+                if fd >= 0 { close(fd) }
+                usleep(100_000)
+            }
+        }
+        func refusal(_ source: URL) async -> DriveImportFailure? {
+            do {
+                let body = try await DriveImportBodyWriter.write(
+                    source: source, fileName: source.lastPathComponent, parentExternalId: nil,
+                    maxFileBytes: 1000, directory: private_)
+                try? fm.removeItem(at: body.file)
+                return nil
+            } catch {
+                return (error as? DriveImportFailure) ?? .generic
+            }
+        }
+        let linkRefusal = await refusal(linked)
+        let fifoRefusal = await refusal(fifo)
+        fifoDone.withLock { $0 = true }
+        check("open: a link is not followed (O_NOFOLLOW)", linkRefusal == .unsupported)
+        check("open: a pipe is refused without waiting (O_NONBLOCK, then fstat)", fifoRefusal == .unsupported)
+        // The open itself, behind the lstat check: each layer refuses on its own.
+        func openRefusal(_ url: URL) -> DriveImportFailure? {
+            do {
+                let (handle, _) = try DriveImportBodyWriter.openRegularFile(atPath: url.path)
+                try? handle.close()
+                return nil
+            } catch {
+                return (error as? DriveImportFailure) ?? .generic
+            }
+        }
+        check("open layer: O_NOFOLLOW refuses a link, fstat refuses a pipe, a file opens",
+              openRefusal(linked) == .unsupported && openRefusal(fifo) == .unsupported
+              && openRefusal(loose) == nil)
+
+        // Cancelled before it starts: nothing is read, nothing is sent.
+        let quiet = scratch.appendingPathComponent("quiet", isDirectory: true)
+        DriveImportStubProtocol.reset([filesPath: [created("x")]])
+        let planned = DriveImportPlan.File(url: loose, name: "loose.txt", size: 5, folder: nil)
+        let client = api()
+        let outcome = await Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return await DriveImporter.uploadOne(
+                planned, parentExternalId: nil, api: client, maxFileBytes: 1000, directory: quiet,
+                sleep: { _ in })
+        }.value
+        check("cancel: a sibling cancelled before it started reads and sends nothing",
+              outcome == .cancelled && isEmptyOrMissing(quiet) && DriveImportStubProtocol.calls.isEmpty)
+
+        // The server's retryable:false is final.
+        DriveImportStubProtocol.reset([
+            limitsPath: [limits()], filesPath: [refused(503, "storage-unavailable", retryable: false)],
+        ])
+        let noRetrySleeps = DriveImportSleepLog()
+        let noRetry = importer(noRetrySleeps, bodies: quiet)
+        await noRetry.refreshAvailability()
+        await noRetry.importItems([loose])
+        check("a refusal the server marks not retryable is not retried",
+              noRetry.report?.notUploaded == [.init(name: "loose.txt", reason: .storageUnavailable)]
+              && noRetrySleeps.waits.isEmpty
+              && DriveImportStubProtocol.calls.filter { $0.path == "/api/drive/files" }.count == 1)
+
+        // Signed out mid-upload: the progress stays reset.
+        var slow = created("x")
+        slow.delayMs = 1500
+        DriveImportStubProtocol.reset([limitsPath: [limits()], filesPath: [slow]])
+        let leaving = importer(DriveImportSleepLog(), bodies: quiet)
+        await leaving.refreshAvailability()
+        let running = Task { await leaving.importItems([loose]) }
+        try? await Task.sleep(for: .milliseconds(300))
+        leaving.signOut()
+        await running.value
+        check("sign-out mid-upload: the old run moves no progress and leaves no report",
+              leaving.progress == DriveImportProgress() && leaving.report == nil && leaving.phase == .idle)
         return results
     }
 

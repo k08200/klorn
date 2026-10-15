@@ -720,6 +720,7 @@
 "driveImport.cap.folders" = "Bei %d Ordnern angehalten, der Grenze für einen Import.";
 "driveImport.cap.depth" = "Ordner, die tiefer als %d Ebenen verschachtelt sind, wurden ausgelassen.";
 "driveImport.cap.bytes" = "Bei %d GB angehalten, der Grenze für einen Import.";
+"driveImport.cap.examined" = "Nach %d geprüften Einträgen angehalten, der Grenze für einen Import.";
 "driveImport.panel.prompt" = "Importieren";
 "driveImport.panel.message" = "Wähle Dateien oder Ordner, die in Klorn Drive hochgeladen werden sollen. Nur was du auswählst, wird hochgeladen.";
 "driveImport.error.unavailable" = "Klorn Drive ist nicht verfügbar.";

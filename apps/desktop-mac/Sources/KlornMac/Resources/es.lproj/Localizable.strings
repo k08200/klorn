@@ -720,6 +720,7 @@
 "driveImport.cap.folders" = "Se detuvo en %d carpetas, el límite de una importación.";
 "driveImport.cap.depth" = "Se omitieron las carpetas anidadas a más de %d niveles.";
 "driveImport.cap.bytes" = "Se detuvo en %d GB, el límite de una importación.";
+"driveImport.cap.examined" = "Se detuvo tras revisar %d elementos, el límite de una importación.";
 "driveImport.panel.prompt" = "Importar";
 "driveImport.panel.message" = "Elige archivos o carpetas para subir a Klorn Drive. Solo se sube lo que elijas.";
 "driveImport.error.unavailable" = "Klorn Drive no está disponible.";

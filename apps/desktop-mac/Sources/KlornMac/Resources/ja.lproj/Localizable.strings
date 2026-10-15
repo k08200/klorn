@@ -720,6 +720,7 @@
 "driveImport.cap.folders" = "1回の上限である%d個のフォルダで止めました。";
 "driveImport.cap.depth" = "%d階層より深いフォルダは除外しました。";
 "driveImport.cap.bytes" = "1回の上限である%d GBで止めました。";
+"driveImport.cap.examined" = "1回の上限である%d個の項目を調べたところで止めました。";
 "driveImport.panel.prompt" = "読み込む";
 "driveImport.panel.message" = "Klorn ドライブにアップロードするファイルやフォルダを選んでください。選んだものだけがアップロードされます。";
 "driveImport.error.unavailable" = "Klorn ドライブは利用できません。";

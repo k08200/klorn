@@ -746,6 +746,8 @@ final class AppModel {
         // Which sign-in buttons to offer — server-driven, fetched once at
         // launch (unauthed; harmless if it fails: Google stays the default).
         Task { await refreshLoginProviders() }
+        // Request bodies a quit or a crash left mid-import (D7), signed in or not.
+        Task { await driveImport.sweepLeftovers() }
         guard phase == .signedIn else { return }
         Task { await loadQueue() }
         // Resumes uploading only calendars the user already turned on; asks nothing.

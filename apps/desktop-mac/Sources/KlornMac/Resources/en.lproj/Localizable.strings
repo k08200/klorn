@@ -720,6 +720,7 @@
 "driveImport.cap.folders" = "Stopped at %d folders, the limit for one import.";
 "driveImport.cap.depth" = "Folders nested more than %d levels deep were left out.";
 "driveImport.cap.bytes" = "Stopped at %d GB, the limit for one import.";
+"driveImport.cap.examined" = "Stopped after looking at %d items, the limit for one import.";
 "driveImport.panel.prompt" = "Import";
 "driveImport.panel.message" = "Choose files or folders to upload to Klorn Drive. Only what you choose is uploaded.";
 "driveImport.error.unavailable" = "Klorn Drive isn't available.";

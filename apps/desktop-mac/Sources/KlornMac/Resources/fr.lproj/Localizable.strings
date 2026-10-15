@@ -720,6 +720,7 @@
 "driveImport.cap.folders" = "Arrêté à %d dossiers, la limite d’une importation.";
 "driveImport.cap.depth" = "Les dossiers imbriqués sur plus de %d niveaux ont été ignorés.";
 "driveImport.cap.bytes" = "Arrêté à %d Go, la limite d’une importation.";
+"driveImport.cap.examined" = "Arrêté après avoir examiné %d éléments, la limite d’une importation.";
 "driveImport.panel.prompt" = "Importer";
 "driveImport.panel.message" = "Choisissez des fichiers ou des dossiers à envoyer dans Klorn Drive. Seul ce que vous choisissez est envoyé.";
 "driveImport.error.unavailable" = "Klorn Drive n’est pas disponible.";

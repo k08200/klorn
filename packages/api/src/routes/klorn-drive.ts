@@ -292,14 +292,16 @@ export function klornDriveRoutes(opts: {
   async function limitsHandler(
     request: FastifyRequest,
     reply: FastifyReply,
-  ): Promise<DriveLimitsResponse> {
-    const usedBytes = await klornUsageBytes(getUserId(request), providerEnabled);
-    reply.header("cache-control", "no-store");
-    return {
-      maxFileBytes: KLORN_DRIVE_MAX_FILE_BYTES,
-      quotaBytes: klornDriveQuotaOrNull(),
-      usedBytes,
-    };
+  ): Promise<DriveLimitsResponse | FastifyReply> {
+    return await answer(reply, async () => {
+      const usedBytes = await klornUsageBytes(getUserId(request), providerEnabled);
+      reply.header("cache-control", "no-store");
+      return {
+        maxFileBytes: KLORN_DRIVE_MAX_FILE_BYTES,
+        quotaBytes: klornDriveQuotaOrNull(),
+        usedBytes,
+      } satisfies DriveLimitsResponse;
+    });
   }
 
   async function folderHandler(

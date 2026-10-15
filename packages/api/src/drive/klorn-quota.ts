@@ -29,13 +29,18 @@ import { KlornDriveError } from "./klorn-errors.js";
 
 export const KLORN_DRIVE_QUOTA_ENV = "KLORN_DRIVE_QUOTA_BYTES";
 const WHOLE_BYTES = /^\d{1,15}$/;
+/** The last malformed value logged: each one is logged once, not on every upload or probe. */
+let loggedMalformed: string | null = null;
 
 /** The configured limit in bytes. Throws when it is missing or not usable: no upload without one. */
 export function klornDriveQuotaBytes(): number {
   const raw = (process.env[KLORN_DRIVE_QUOTA_ENV] ?? "").trim();
   if (raw === "") throw new KlornDriveError("quota-not-configured");
   if (!WHOLE_BYTES.test(raw)) {
-    console.error(`[DRIVE] ${KLORN_DRIVE_QUOTA_ENV} is not a whole number of bytes`);
+    if (loggedMalformed !== raw) {
+      loggedMalformed = raw;
+      console.error(`[DRIVE] ${KLORN_DRIVE_QUOTA_ENV} is not a whole number of bytes`);
+    }
     throw new KlornDriveError("storage-unavailable", { retryable: false });
   }
   return Number(raw);

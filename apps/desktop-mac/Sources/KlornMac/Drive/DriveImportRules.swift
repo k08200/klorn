@@ -28,6 +28,9 @@ enum DriveImportLimits {
     static let baseBackoffSeconds = 2
     /// No wait is longer than this, whatever the server's `Retry-After` says.
     static let maxBackoffSeconds = 60
+    /// Entries one import looks at, at most, whatever becomes of them (hidden,
+    /// links, oversized and unreadable ones count too).
+    static let maxEntriesExamined = 10_000
     /// Bytes read from the source and written to the request body at a time.
     static let copyChunkBytes = 1024 * 1024
 }
