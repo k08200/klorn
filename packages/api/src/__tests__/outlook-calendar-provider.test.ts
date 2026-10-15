@@ -234,6 +234,18 @@ describe("listEvents - GET /me/calendarView", () => {
     expect(calls()).toHaveLength(1);
   });
 
+  it("does not fetch the next page when maxResults is reached exactly at a page's end", async () => {
+    const next = `${GRAPH}/me/calendarView?$skiptoken=abc`;
+    m.fetch.mockResolvedValueOnce(
+      json({ value: [timed("e1"), timed("e2")], "@odata.nextLink": next }),
+    );
+
+    const events = await (await session()).listEvents({ ...LIST_QUERY, maxResults: 2 });
+
+    expect(events.map((e) => e.externalId)).toEqual(["e1", "e2"]);
+    expect(calls()).toHaveLength(1);
+  });
+
   it("asks for a page no larger than maxResults, and never above Graph's 1000", async () => {
     m.fetch.mockImplementation(async () => json({ value: [] }));
 

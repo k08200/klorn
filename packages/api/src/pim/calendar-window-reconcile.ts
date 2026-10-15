@@ -10,7 +10,9 @@
  * deleted or cancelled upstream. The guard is therefore all-or-nothing:
  *   - the listing must say `complete` (every calendar answered, nothing capped, cut
  *     short by the server, unreadable, or over the event cap);
- *   - the provider must be ICLOUD or NAVER, and CALDAV_CALENDAR_ENABLED on;
+ *   - the provider must be ICLOUD or NAVER with CALDAV_CALENDAR_ENABLED on, or
+ *     OUTLOOK with OUTLOOK_CALENDAR_ENABLED on (Graph's calendarView, read to its
+ *     last page and under its cap, is complete in the same sense);
  *   - only that account's rows (user, provider, source key) are candidates, only
  *     those inside the listing's window (decided with the same overlap rule the
  *     listing used), and only those written before the listing started, so a row a
@@ -38,13 +40,12 @@
  */
 
 import { createHash } from "node:crypto";
-import { caldavCalendarEnabled } from "../config.js";
 import { INTERACTIVE_TX_OPTIONS, prisma } from "../db.js";
 import { captureError } from "../sentry.js";
-import { isCaldavProviderKey } from "./caldav/caldav-providers.js";
 import { type CaldavWindow, overlapsWindow } from "./caldav/ical-events.js";
 import type { CalendarWindowListing } from "./calendar-providers/types.js";
 import { type CalendarProviderName, linkedSourceScope } from "./calendar-rows.js";
+import { reconcilesByAbsence } from "./calendar-scope.js";
 
 /** The largest share of an account's rows in the window one listing may remove. */
 export const CALDAV_DELETE_MAX_SHARE = 0.5;
@@ -76,6 +77,7 @@ interface WindowRow {
   readonly endTime: Date;
   readonly updatedAt: Date;
   readonly caldavCalendarKey: string | null;
+  readonly allDay: boolean;
 }
 
 interface ValveCounts {
@@ -83,12 +85,22 @@ interface ValveCounts {
   readonly inWindow: number;
 }
 
-/** The window's rows the listing shows to be gone (see the header). */
-function vanishedRows(inWindow: readonly WindowRow[], listing: CalendarWindowListing): WindowRow[] {
+/**
+ * The window's rows the listing shows to be gone (see the header). An all-day row
+ * that began before the window is never one: it is stored at UTC midnight while
+ * the provider overlaps the day in its own zone, so near the window's start the
+ * listing can already have dropped an all-day event the row still overlaps.
+ */
+function vanishedRows(
+  inWindow: readonly WindowRow[],
+  listing: CalendarWindowListing,
+  window: CaldavWindow,
+): WindowRow[] {
   const present = new Set(listing.events.map((event) => event.externalId).filter(Boolean));
   const read = new Set(listing.calendarKeys ?? []);
   return inWindow
     .filter((row) => row.updatedAt.getTime() < listing.listedAt.getTime())
+    .filter((row) => !(row.allDay && row.startTime.getTime() < window.start.getTime()))
     .filter((row) => row.caldavCalendarKey !== null && read.has(row.caldavCalendarKey))
     .filter((row) => row.externalId !== null && !present.has(row.externalId));
 }
@@ -180,10 +192,11 @@ async function removeInTransaction(
         endTime: true,
         updatedAt: true,
         caldavCalendarKey: true,
+        allDay: true,
       },
     });
     const inWindow = candidates.filter((row) => overlapsWindow(row.startTime, row.endTime, window));
-    const goneRows = vanishedRows(inWindow, listing);
+    const goneRows = vanishedRows(inWindow, listing, window);
     const empty = emptyCalendars(listing);
     const waiting = goneRows
       .filter((row) => row.caldavCalendarKey !== null && empty.has(row.caldavCalendarKey))
@@ -224,7 +237,7 @@ export async function removeRowsMissingFromWindow(
     emptyCalendarRowsSeen.delete(linkedAccountId);
     return NOTHING;
   }
-  if (!isCaldavProviderKey(provider) || !caldavCalendarEnabled()) return NOTHING;
+  if (!reconcilesByAbsence(provider)) return NOTHING;
 
   const outcome = await removeInTransaction(provider, userId, linkedAccountId, listing, now);
   if ("refused" in outcome) {

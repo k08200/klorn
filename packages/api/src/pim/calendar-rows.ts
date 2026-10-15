@@ -125,7 +125,7 @@ export async function upsertGoogleEventRow(
  * linked rows keep googleId NULL, so an invite that also sits in the primary
  * calendar, or in another provider's calendar, stays a separate row and no other
  * row is ever touched. Identity and ownership never move on update.
- * `caldavCalendarKey` (CalDAV only) records which calendar of the account listed
+ * `caldavCalendarKey` (CalDAV, and Outlook's one `outlook:default`) records which calendar of the account listed
  * the event, so a calendar missing from a later discovery is not read as empty;
  * every other provider passes none and its rows are written exactly as before.
  */
