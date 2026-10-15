@@ -80,10 +80,11 @@ export interface DriveFileResponse {
 
 /**
  * PENDING: queued, or waiting on a cap (`error` says which: `cost-cap`,
- * `daily-limit`, `file-limit`, `rate-limited`) or on an outage it will retry
+ * `daily-limit`, `file-limit`, `rate-limited`) or on an outage it keeps retrying
  * (`llm-unavailable`, `storage-error`). DONE: `text` is the summary. FAILED: gave
- * up (`error`). SKIPPED: nothing to summarise (`folder`, `unsupported-type`,
- * `too-large`, `no-text`).
+ * up on a content error (`llm-bad-output`, `object-missing`, `interrupted`,
+ * `internal`). SKIPPED: nothing to summarise (`folder`, `unsupported-type`,
+ * `too-large`, `no-text`, `source-unavailable`).
  */
 export type DriveSummaryStatusWire = "PENDING" | "DONE" | "FAILED" | "SKIPPED";
 
@@ -102,6 +103,7 @@ export type DriveSummaryErrorCode =
   | "rate-limited"
   | "llm-unavailable"
   | "llm-bad-output"
+  | "interrupted"
   | "internal";
 
 export interface DriveFileSummaryWire {

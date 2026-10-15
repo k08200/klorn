@@ -44,8 +44,8 @@ import {
 import { DRIVE_ID_MAX_CHARS } from "../drive/drive-rows.js";
 import { DRIVE_PROVIDER_ENABLED, type DriveProviderEnabledMap } from "../drive/drive-scope.js";
 import { driveSummariesLive } from "../drive/summary-policy.js";
-import { driveFileIdsMatchingSummary } from "../drive/summary-store.js";
 import { requestDriveSummary, summaryForFile } from "../drive/summary-triggers.js";
+import { captureError } from "../sentry.js";
 import { darkRouteGate } from "./dark-route-gate.js";
 import { rateLimitHook } from "./rate-limit-hook.js";
 
@@ -104,6 +104,16 @@ interface IdParams {
   id: string;
 }
 
+let summarySearchFailureReported = false;
+
+/** A summary search that failed falls back to names; said once per process. */
+function reportSummarySearchFailure(err: unknown): void {
+  if (summarySearchFailureReported) return;
+  summarySearchFailureReported = true;
+  console.error("[DRIVE] summary search failed; answering name matches only");
+  captureError(err, { tags: { scope: "drive.summary.search" } });
+}
+
 export function driveRoutes(opts: {
   gate: () => boolean;
   /** The connector flags the reads honour; a connector's tests pass their own. */
@@ -125,10 +135,13 @@ export function driveRoutes(opts: {
     const options = { userId: getUserId(request), limit, cursor, provider, sourceKey, folder };
     const text = normaliseDriveSearchText(q);
     if (text === null) return await listFiles(options, providerEnabled);
-    const alsoIds = summariesGate()
-      ? await driveFileIdsMatchingSummary(options.userId, text)
-      : undefined;
-    return await searchFiles({ ...options, text, alsoIds }, providerEnabled);
+    if (!summariesGate()) return await searchFiles({ ...options, text }, providerEnabled);
+    try {
+      return await searchFiles({ ...options, text, matchSummaries: true }, providerEnabled);
+    } catch (err) {
+      reportSummarySearchFailure(err);
+      return await searchFiles({ ...options, text }, providerEnabled);
+    }
   }
 
   async function fileHandler(

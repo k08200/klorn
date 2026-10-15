@@ -13,8 +13,8 @@
  *     number. `readOnly` is derived from the provider (decision V4), not read
  *     from the row.
  *
- * The search matches NAMES (and, from D4 while summaries are on, the files whose
- * summary matched: `alsoIds`), with ILIKE inside one user's rows: Prisma's
+ * The search matches NAMES (and, from D4 while summaries are on, summary text:
+ * `matchSummaries`), with ILIKE inside one user's rows: Prisma's
  * `contains`, so the text is a bind parameter, never SQL. It is not trigram:
  * a user's index is small, pg_trgm would need an extension in the migration, and
  * whether its index helps a Korean name depends on the database's locale, which
@@ -97,11 +97,12 @@ export interface DriveListOptions {
 export interface DriveSearchOptions extends DriveListOptions {
   readonly text: string;
   /**
-   * Files that match by something other than the name: the ids whose summary
-   * contains the text (D4, summary-store.ts), already scoped to the user and
-   * bounded. Each still passes the scope, the user and the other filters here.
+   * Also match the files whose DONE summary contains the text (D4). One query:
+   * the summary is joined through its one-to-one relation inside the same AND,
+   * so the scope, the user, the provider and folder filters and the page ceiling
+   * apply to summary matches exactly as to name matches.
    */
-  readonly alsoIds?: readonly string[];
+  readonly matchSummaries?: boolean;
 }
 
 export interface DrivePage {
@@ -238,10 +239,10 @@ export async function searchFiles(
   const text = normaliseDriveSearchText(options.text);
   if (text === null) return EMPTY_PAGE;
   const limit = pageLimit(options.limit);
-  const name = { contains: escapeLikePattern(text), mode: "insensitive" } as const;
-  const alsoIds = options.alsoIds ?? [];
-  const match: Prisma.DriveFileWhereInput =
-    alsoIds.length > 0 ? { OR: [{ name }, { id: { in: [...alsoIds] } }] } : { name };
+  const like = { contains: escapeLikePattern(text), mode: "insensitive" } as const;
+  const match: Prisma.DriveFileWhereInput = options.matchSummaries
+    ? { OR: [{ name: like }, { summary: { is: { status: "DONE", summary: like } } }] }
+    : { name: like };
   const rows = await prisma.driveFile.findMany({
     where: { AND: [driveSourceScope(providerEnabled), ...filtersOf(options), match] },
     orderBy: [{ modifiedAt: "desc" }, { id: "desc" }],

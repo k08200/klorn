@@ -30,19 +30,23 @@ export const DRIVE_SUMMARY_MAX_CHARS = 1_000;
 export const DRIVE_SUMMARIES_PER_USER_PER_DAY = 50;
 /** Summary model calls for one file per UTC day (a retry or a re-summary counts). */
 export const DRIVE_SUMMARY_RUNS_PER_FILE_PER_DAY = 3;
-/** Failed attempts before a summary is given up as FAILED. */
+/**
+ * Attempts before a summary is given up as FAILED. An attempt is counted when a
+ * run claims its row, and given back when the run ends in a deferral (a cap, an
+ * outage), so only content errors and runs that never finish spend it.
+ */
 export const DRIVE_SUMMARY_MAX_ATTEMPTS = 5;
 /** The first retry waits this long; each further one doubles it, up to the cap. */
 export const DRIVE_SUMMARY_RETRY_BASE_MS = 10 * 60_000;
 export const DRIVE_SUMMARY_RETRY_MAX_MS = 6 * 60 * 60_000;
+/** An outage (no provider answers) is retried from the same base, doubling up to a day. */
+export const DRIVE_SUMMARY_OUTAGE_MAX_MS = 24 * 60 * 60_000;
+/** The longest one model call may take: well inside the lease, so a run never outlives it. */
+export const DRIVE_SUMMARY_LLM_TIMEOUT_MS = 90_000;
 /** How long a claimed row is held by its claimant before another may take it. */
 export const DRIVE_SUMMARY_LEASE_MS = 5 * 60_000;
 /** A provider's per-minute limit: try again after this, without counting an attempt. */
 export const DRIVE_SUMMARY_RATE_LIMITED_DELAY_MS = 60_000;
-/** A source that cannot be read right now (storage off, connector off): look again after this. */
-export const DRIVE_SUMMARY_SOURCE_DELAY_MS = 60 * 60_000;
-/** The most files a summary-text search adds to the name matches. */
-export const DRIVE_SUMMARY_SEARCH_MAX_MATCHES = 200;
 /** Usage rows older than this many days are pruned by the job. */
 export const DRIVE_SUMMARY_USAGE_KEEP_DAYS = 7;
 
@@ -73,4 +77,10 @@ export function utcDayKeyBefore(now: Date, days: number): string {
 export function summaryRetryDelayMs(attempts: number): number {
   const exponent = Math.max(0, Math.min(attempts - 1, 20));
   return Math.min(DRIVE_SUMMARY_RETRY_BASE_MS * 2 ** exponent, DRIVE_SUMMARY_RETRY_MAX_MS);
+}
+
+/** The wait after `streak` outages in a row before this one (0-based): doubling, capped at a day. */
+export function summaryOutageDelayMs(streak: number): number {
+  const exponent = Math.max(0, Math.min(streak, 20));
+  return Math.min(DRIVE_SUMMARY_RETRY_BASE_MS * 2 ** exponent, DRIVE_SUMMARY_OUTAGE_MAX_MS);
 }

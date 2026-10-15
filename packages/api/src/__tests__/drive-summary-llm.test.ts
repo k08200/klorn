@@ -51,7 +51,11 @@ vi.mock("../llm/llm-credentials.js", () => ({
 
 import { usdToFractionalCents } from "../billing/cents.js";
 import { summariseDriveText } from "../drive/summary-llm.js";
-import { DRIVE_SUMMARY_MAX_CHARS } from "../drive/summary-policy.js";
+import {
+  DRIVE_SUMMARY_LEASE_MS,
+  DRIVE_SUMMARY_LLM_TIMEOUT_MS,
+  DRIVE_SUMMARY_MAX_CHARS,
+} from "../drive/summary-policy.js";
 import { estimateModelCostUsd } from "../llm/model-fallback.js";
 import * as openai from "../llm/openai.js";
 
@@ -182,6 +186,32 @@ describe("a failure comes back as a code, never as a throw", () => {
     expect(result).toMatchObject({ ok: false, code });
     // Only the per-minute limit says when to come back.
     expect("retryAfterMs" in result).toBe(code === "rate-limited");
+  });
+
+  it("a call past the wall-clock limit is llm-unavailable, so a run never outlives its lease", async () => {
+    calls.next = () => new Promise(() => {});
+    const started = Date.now();
+    await expect(summariseDriveText(INPUT, { timeoutMs: 30 })).resolves.toEqual({
+      ok: false,
+      code: "llm-unavailable",
+    });
+    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(DRIVE_SUMMARY_LLM_TIMEOUT_MS).toBeLessThan(DRIVE_SUMMARY_LEASE_MS);
+  });
+
+  it("strips bidi controls and other format characters from the summary", async () => {
+    calls.next = () => ({
+      model: "m",
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({ summary: "In\u202evoice\u2066 total\u200b 12\u2069\ufeff" }),
+          },
+        },
+      ],
+    });
+    const result = await summariseDriveText(INPUT);
+    expect(result).toMatchObject({ ok: true, summary: "Invoice total 12" });
   });
 
   it("output that is not the JSON asked for, or an empty summary, is llm-bad-output", async () => {

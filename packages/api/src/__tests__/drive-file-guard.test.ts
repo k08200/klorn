@@ -274,7 +274,10 @@ describe("the summary tables (D4): one writer, every query names its user", () =
   // The user's purge deletes their rows; the store writes everything else.
   const WRITERS = ["drive/summary-store.ts", "purge-user-data.ts"];
   // The job's two queries over every user's rows, each marked `system:` in its doc.
-  const SYSTEM_QUERIES = ["dueSummaries", "pruneSummaryUsage"];
+  const SYSTEM_QUERIES = ["dueSummaryUsers", "pruneSummaryUsage"];
+  // How a store query names its user: inline, or through a helper pinned below.
+  const NAMES_USER =
+    /where: (\{\s*(driveFileId, userId|userId_dayKey: \{ userId, dayKey\b|userId,|\.\.\.ref,|id: row\.id, userId|id: lease\.row\.id,\s*userId: lease\.row\.userId)|leased\(lease\)|unchanged\b)/;
 
   it("only the summary store writes the tables, besides the user purge", () => {
     expect(pathsWith(SUMMARY_WRITE)).toEqual(WRITERS);
@@ -288,19 +291,30 @@ describe("the summary tables (D4): one writer, every query names its user", () =
     const callers = pathsWith(SUMMARY_CALL);
     expect(callers).toEqual([EXPORT_MODULE, "drive/summary-store.ts", "purge-user-data.ts"].sort());
     const store = fileAt(SUMMARY_STORE_MODULE)?.text ?? "";
-    const functions = store.split(/\nexport async function /).slice(1);
     let scoped = 0;
-    for (const fn of functions) {
-      const name = fn.slice(0, fn.indexOf("("));
-      for (const window of callWindows(fn, SUMMARY_CALL)) {
-        if (SYSTEM_QUERIES.includes(name)) continue;
-        expect(window.slice(0, 220), name).toMatch(
-          /where: \{\s*(driveFileId, userId|id: row\.id, userId|id: ref\.id, userId: ref\.userId|id: row\.id, userId: row\.userId|userId_dayKey: \{ userId, dayKey\b|userId,)/,
-        );
-        scoped += 1;
+    for (const match of store.matchAll(SUMMARY_CALL)) {
+      const before = store.slice(0, match.index ?? 0);
+      const name = [...before.matchAll(/function (\w+)\(/g)].at(-1)?.[1] ?? "";
+      if (SYSTEM_QUERIES.includes(name)) continue;
+      const window = store.slice(match.index ?? 0, (match.index ?? 0) + 220);
+      if (name === "upsertQueued") {
+        // The unique key only, so Postgres runs one INSERT ... ON CONFLICT; the
+        // caller then refuses another user's row before anything else.
+        expect(window).toMatch(/where: \{ driveFileId \},/);
+        continue;
       }
+      expect(window, name).toMatch(NAMES_USER);
+      scoped += 1;
     }
-    expect(scoped).toBeGreaterThanOrEqual(10);
+    expect(scoped).toBeGreaterThanOrEqual(12);
+    expect(store).toContain(
+      'if (row.userId !== userId) throw new Error("drive summary: the file is another user\'s");',
+    );
+    expect(store).toMatch(
+      /function leased\([^)]*\)[^{]*\{\s*return \{\s*id: lease\.row\.id,\s*userId: lease\.row\.userId,/,
+    );
+    expect(store).toMatch(/const unchanged = \{\s*id: row\.id,\s*userId: row\.userId,/);
+    expect(store).toMatch(/const ref = \{ id: lease\.row\.id, userId: lease\.row\.userId \};/);
     for (const name of SYSTEM_QUERIES) {
       expect(store).toMatch(
         new RegExp(`/\\*\\* system: [^*]*\\*/\\nexport async function ${name}\\(`),
@@ -311,10 +325,14 @@ describe("the summary tables (D4): one writer, every query names its user", () =
     );
   });
 
-  it("the summary search escapes its text before Prisma's contains, as the name search does", () => {
-    const store = fileAt(SUMMARY_STORE_MODULE)?.text ?? "";
-    expect(store).toContain('summary: { contains: escapeLikePattern(text), mode: "insensitive" }');
-    expect(store.match(/\bcontains:/g)).toHaveLength(1);
+  it("the summary search is the name search's escaped pattern, inside the same query", () => {
+    const read = fileAt(READ_MODULE)?.text ?? "";
+    expect(read).toContain(
+      'const like = { contains: escapeLikePattern(text), mode: "insensitive" } as const;',
+    );
+    expect(read).toContain('{ summary: { is: { status: "DONE", summary: like } } }');
+    expect(read.match(/\bcontains:/g)).toHaveLength(1);
+    expect(fileAt(SUMMARY_STORE_MODULE)?.text).not.toMatch(/\bcontains:/);
   });
 
   it("no response carries the extracted text or a storage key", () => {

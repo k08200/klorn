@@ -2,21 +2,31 @@
  * One run of a claimed summary row (step D4 of
  * docs/providers/unified-platform-plan.md), for the job and the on-demand route.
  *
- *   1. The file, through the drive's kill switch: hidden or gone waits.
+ *   1. The file, through the drive's kill switch: hidden, trashed or gone is
+ *      SKIPPED (`source-unavailable`), not deferred again every hour.
  *   2. Cheap refusals before any byte is read: a folder, a type the extractor
  *      has no text for, a recorded size over the cap, a file or a user whose
  *      daily count is spent.
  *   3. The bytes, capped while they stream (summary-bytes.ts).
  *   4. The text, from the attachment pipeline's extractor (summary-extract.ts).
- *   5. The user's daily count, then the file's, then one model call
- *      (summary-llm.ts, the only LLM-facing module).
+ *   5. The user's daily count, then the file's, then one model call with a
+ *      wall-clock limit (summary-llm.ts, the only LLM-facing module).
  *
- * Outcomes. A cap (the user's or the file's daily count, the LLM layer's cost
- * cap or rate limit) leaves the row PENDING with the reason, due when the cap
- * lifts: never FAILED, and not an attempt. An outage (no provider answers, a
- * storage error, output that is not a summary) is an attempt: PENDING again
- * with backoff, FAILED after DRIVE_SUMMARY_MAX_ATTEMPTS. Nothing here throws to
- * an upload or a listing: neither calls it.
+ * Outcomes. The claim counted an attempt (summary-store.ts), so a run that never
+ * ends spends it. A cap (the daily counts, the LLM layer's cost cap or rate
+ * limit) and an outage (no provider answers, a timeout, a retryable storage
+ * error) leave the row PENDING with the code and give the attempt back: a cap
+ * until it lifts, an outage with a backoff doubling up to a day. Neither ever
+ * FAILs. Only a content error (output that is not a summary, a missing object, a
+ * run that throws) keeps the attempt, and FAILED follows the last one.
+ *
+ * Daily slots. The user's and the file's slots are taken just before the call
+ * and given back when the call produced nothing billable to Klorn's counts: a
+ * refusal (cost cap, rate limit) or an outage. They stay spent once a model
+ * answered (DONE, or output that is not a summary). Reserving first and giving
+ * back keeps the counts a hard bound on concurrent calls; reserving only after a
+ * success would let concurrent runs overshoot them. Money is bounded separately
+ * by the LLM layer's cost cap, which pre-bills every call.
  */
 
 import type { DriveSummaryErrorCode } from "@klorn/contract";
@@ -28,14 +38,14 @@ import { type DriveImplementations, driveActionsForProvider } from "./providers/
 import { isDriveUnsupported } from "./providers/types.js";
 import { type CappedBytes, readKlornBytesForSummary } from "./summary-bytes.js";
 import { extractSummaryText, isSummarisableFile } from "./summary-extract.js";
-import { summariseDriveText } from "./summary-llm.js";
+import { type DriveSummaryResult, summariseDriveText } from "./summary-llm.js";
 import {
   DRIVE_SUMMARY_MAX_ATTEMPTS,
   DRIVE_SUMMARY_MAX_SOURCE_BYTES,
   DRIVE_SUMMARY_RATE_LIMITED_DELAY_MS,
   DRIVE_SUMMARY_RUNS_PER_FILE_PER_DAY,
-  DRIVE_SUMMARY_SOURCE_DELAY_MS,
   nextUtcDay,
+  summaryOutageDelayMs,
   summaryRetryDelayMs,
 } from "./summary-policy.js";
 import { findSummarySource, type SummarySource } from "./summary-source.js";
@@ -46,12 +56,15 @@ import {
   markSummaryDeferred,
   markSummaryDone,
   markSummarySkipped,
+  releaseFileRun,
+  releaseUserSummary,
   reserveUserSummary,
-  type SummaryRow,
+  type SummaryLease,
   userDailyCountSpent,
 } from "./summary-store.js";
 
-export type SummaryRunOutcome = "done" | "skipped" | "deferred" | "retry" | "failed";
+/** `lost`: the lease no longer held when the outcome was written, so nothing was. */
+export type SummaryRunOutcome = "done" | "skipped" | "deferred" | "retry" | "failed" | "lost";
 
 export interface SummaryRunOptions {
   readonly priority: CallPriority;
@@ -64,41 +77,53 @@ export interface SummaryRunOptions {
 type ByteRead = CappedBytes | { readonly ok: false; readonly reason: DriveSummaryErrorCode };
 
 interface RunContext {
-  readonly row: SummaryRow;
+  readonly lease: SummaryLease;
   readonly now: Date;
   readonly options: SummaryRunOptions;
 }
 
+const outcome = (written: boolean, ok: SummaryRunOutcome): SummaryRunOutcome =>
+  written ? ok : "lost";
+
 async function defer(ctx: RunContext, code: DriveSummaryErrorCode, until: Date) {
-  await markSummaryDeferred(ctx.row, code, until);
-  return "deferred" as const;
+  return outcome(await markSummaryDeferred(ctx.lease, code, until), "deferred");
 }
 
-async function skip(ctx: RunContext, code: DriveSummaryErrorCode, source: SummarySource) {
-  await markSummarySkipped(ctx.row, code, source.etag);
-  return "skipped" as const;
+/** An outage: PENDING with a backoff that doubles up to a day; never FAILED. */
+async function deferOutage(ctx: RunContext, code: DriveSummaryErrorCode) {
+  const wait = summaryOutageDelayMs(ctx.lease.row.outageStreak);
+  const until = new Date(ctx.now.getTime() + wait);
+  return outcome(await markSummaryDeferred(ctx.lease, code, until, { outage: true }), "deferred");
 }
 
-/** A failed attempt: retried with backoff, given up after the last one. */
+async function skip(ctx: RunContext, code: DriveSummaryErrorCode, etag: string | null) {
+  return outcome(await markSummarySkipped(ctx.lease, code, etag), "skipped");
+}
+
+/** A content error: the claim's attempt stays spent; FAILED after the last one. */
 async function attemptFailed(ctx: RunContext, code: DriveSummaryErrorCode) {
-  const attempts = ctx.row.attempts + 1;
-  const giveUp = attempts >= DRIVE_SUMMARY_MAX_ATTEMPTS;
-  const retryAt = giveUp ? null : new Date(ctx.now.getTime() + summaryRetryDelayMs(attempts));
-  await markSummaryAttemptFailed(ctx.row, code, attempts, retryAt);
-  return giveUp ? ("failed" as const) : ("retry" as const);
+  const giveUp = ctx.lease.row.attempts >= DRIVE_SUMMARY_MAX_ATTEMPTS;
+  const retryAt = giveUp
+    ? null
+    : new Date(ctx.now.getTime() + summaryRetryDelayMs(ctx.lease.row.attempts));
+  return outcome(
+    await markSummaryAttemptFailed(ctx.lease, code, retryAt),
+    giveUp ? "failed" : "retry",
+  );
 }
 
 /** The file's bytes, capped while they stream: from Klorn's storage, or the connector. */
 async function readSourceBytes(ctx: RunContext, source: SummarySource): Promise<ByteRead> {
+  const userId = ctx.lease.row.userId;
   if (source.provider === "KLORN") {
     if (source.storageKey === null) return { ok: false, reason: "object-missing" };
     const read = await readKlornBytesForSummary(
-      ctx.row.userId,
+      userId,
       source.storageKey,
       DRIVE_SUMMARY_MAX_SOURCE_BYTES,
     );
     if (read.ok) return read;
-    // Object storage switched off: the file is hidden too, so it waits like one.
+    // Object storage switched off: the file is hidden too.
     return {
       ok: false,
       reason: read.reason === "storage-unavailable" ? "source-unavailable" : read.reason,
@@ -109,7 +134,7 @@ async function readSourceBytes(ctx: RunContext, source: SummarySource): Promise<
     ctx.options.providerEnabled,
     ctx.options.implementations,
   );
-  const session = await actions.connect({ userId: ctx.row.userId, sourceKey: source.sourceKey });
+  const session = await actions.connect({ userId, sourceKey: source.sourceKey });
   if (session === null || isDriveUnsupported(session)) {
     return { ok: false, reason: "source-unavailable" };
   }
@@ -119,35 +144,38 @@ async function readSourceBytes(ctx: RunContext, source: SummarySource): Promise<
   return fetched ?? { ok: false, reason: "object-missing" };
 }
 
-/** A byte read that came back without bytes: wait, give up, or skip. */
+/** A byte read that came back without bytes. */
 async function settleUnread(
   ctx: RunContext,
   reason: Extract<ByteRead, { ok: false }>["reason"],
   source: SummarySource,
 ): Promise<SummaryRunOutcome> {
-  if (reason === "source-unavailable") {
-    return await defer(ctx, reason, new Date(ctx.now.getTime() + DRIVE_SUMMARY_SOURCE_DELAY_MS));
-  }
+  // A row without its object: nothing to retry until the file is uploaded again.
   if (reason === "object-missing") {
-    // A row without its object: nothing to retry until the file is uploaded again.
-    await markSummaryAttemptFailed(ctx.row, reason, ctx.row.attempts, null);
-    return "failed";
+    return outcome(await markSummaryAttemptFailed(ctx.lease, reason, null), "failed");
   }
-  return await skip(ctx, reason, source);
+  return await skip(ctx, reason, source.etag);
+}
+
+/** Give back both daily slots: the call produced nothing billable to the counts. */
+async function releaseSlots(ctx: RunContext): Promise<void> {
+  await releaseUserSummary(ctx.lease.row.userId, ctx.now);
+  await releaseFileRun(ctx.lease, ctx.now);
 }
 
 /** The model's answer to the row's next state. */
 async function settleResult(
   ctx: RunContext,
-  result: Awaited<ReturnType<typeof summariseDriveText>>,
+  result: DriveSummaryResult,
   source: SummarySource,
 ): Promise<SummaryRunOutcome> {
   if (result.ok) {
     const { summary, model, costMicroCents } = result;
     const done = { summary, model, costMicroCents, sourceEtag: source.etag };
-    await markSummaryDone(ctx.row, done, ctx.now);
-    return "done";
+    return outcome(await markSummaryDone(ctx.lease, done, ctx.now), "done");
   }
+  if (result.code === "llm-bad-output") return await attemptFailed(ctx, result.code);
+  await releaseSlots(ctx);
   if (result.code === "cost-cap" || result.code === "daily-limit") {
     return await defer(ctx, result.code, nextUtcDay(ctx.now));
   }
@@ -155,7 +183,20 @@ async function settleResult(
     const wait = result.retryAfterMs ?? DRIVE_SUMMARY_RATE_LIMITED_DELAY_MS;
     return await defer(ctx, result.code, new Date(ctx.now.getTime() + wait));
   }
-  return await attemptFailed(ctx, result.code);
+  return await deferOutage(ctx, result.code);
+}
+
+/** Take both daily slots, or defer: the user's first, then the file's. */
+async function takeSlots(ctx: RunContext): Promise<SummaryRunOutcome | null> {
+  if (!(await reserveUserSummary(ctx.lease.row.userId, ctx.now))) {
+    await releaseUserSummary(ctx.lease.row.userId, ctx.now);
+    return await defer(ctx, "daily-limit", nextUtcDay(ctx.now));
+  }
+  if (!(await countFileRun(ctx.lease, ctx.now))) {
+    await releaseUserSummary(ctx.lease.row.userId, ctx.now);
+    return await defer(ctx, "file-limit", nextUtcDay(ctx.now));
+  }
+  return null;
 }
 
 /** Steps 3 to 5 for a file that passed the cheap checks. */
@@ -165,20 +206,18 @@ async function summariseSource(ctx: RunContext, source: SummarySource): Promise<
     bytes = await readSourceBytes(ctx, source);
   } catch (err) {
     if (!(err instanceof StorageError)) throw err;
-    return await attemptFailed(ctx, "storage-error");
+    return err.retryable
+      ? await deferOutage(ctx, "storage-error")
+      : await attemptFailed(ctx, "storage-error");
   }
   if (!bytes.ok) return await settleUnread(ctx, bytes.reason, source);
   const text = extractSummaryText(bytes.bytes, source.name, source.mimeType);
-  if (!text.ok) return await skip(ctx, text.code, source);
+  if (!text.ok) return await skip(ctx, text.code, source.etag);
 
-  if (!(await reserveUserSummary(ctx.row.userId, ctx.now))) {
-    return await defer(ctx, "daily-limit", nextUtcDay(ctx.now));
-  }
-  if (!(await countFileRun(ctx.row, ctx.now))) {
-    return await defer(ctx, "file-limit", nextUtcDay(ctx.now));
-  }
+  const refused = await takeSlots(ctx);
+  if (refused !== null) return refused;
   const result = await summariseDriveText({
-    userId: ctx.row.userId,
+    userId: ctx.lease.row.userId,
     name: source.name,
     mimeType: source.mimeType,
     text: text.text,
@@ -187,25 +226,17 @@ async function summariseSource(ctx: RunContext, source: SummarySource): Promise<
   return await settleResult(ctx, result, source);
 }
 
-/** Run one claimed row to its next state. Throws only when the database does. */
-export async function runClaimedSummary(
-  row: SummaryRow,
-  options: SummaryRunOptions,
-): Promise<SummaryRunOutcome> {
-  const ctx: RunContext = { row, now: options.now ?? new Date(), options };
-  const source = await findSummarySource(row.userId, row.driveFileId, options.providerEnabled);
-  // Hidden (a flag off) or gone (its summary row went with it): look again later.
-  if (source === null) {
-    return await defer(
-      ctx,
-      "source-unavailable",
-      new Date(ctx.now.getTime() + DRIVE_SUMMARY_SOURCE_DELAY_MS),
-    );
-  }
-  if (source.isFolder) return await skip(ctx, "folder", source);
+/** The checks that need no byte: a refusal's outcome, or null to go on. */
+async function cheapRefusal(
+  ctx: RunContext,
+  source: SummarySource | null,
+): Promise<SummaryRunOutcome | null> {
+  const { row } = ctx.lease;
+  if (source === null) return await skip(ctx, "source-unavailable", row.sourceEtag);
+  if (source.isFolder) return await skip(ctx, "folder", source.etag);
   if (!isSummarisableFile(source.name, source.mimeType, source.sizeBytes)) {
     const tooLarge = source.sizeBytes !== null && source.sizeBytes > DRIVE_SUMMARY_MAX_SOURCE_BYTES;
-    return await skip(ctx, tooLarge ? "too-large" : "unsupported-type", source);
+    return await skip(ctx, tooLarge ? "too-large" : "unsupported-type", source.etag);
   }
   if (fileRunsToday(row, ctx.now) >= DRIVE_SUMMARY_RUNS_PER_FILE_PER_DAY) {
     return await defer(ctx, "file-limit", nextUtcDay(ctx.now));
@@ -213,6 +244,19 @@ export async function runClaimedSummary(
   if (await userDailyCountSpent(row.userId, ctx.now)) {
     return await defer(ctx, "daily-limit", nextUtcDay(ctx.now));
   }
+  return null;
+}
+
+/** Run one claimed row to its next state. Throws only when the database does. */
+export async function runClaimedSummary(
+  lease: SummaryLease,
+  options: SummaryRunOptions,
+): Promise<SummaryRunOutcome> {
+  const ctx: RunContext = { lease, now: options.now ?? new Date(), options };
+  const { row } = lease;
+  const source = await findSummarySource(row.userId, row.driveFileId, options.providerEnabled);
+  const refused = await cheapRefusal(ctx, source);
+  if (refused !== null || source === null) return refused ?? "skipped";
   try {
     return await summariseSource(ctx, source);
   } catch (err) {

@@ -37,6 +37,7 @@ CREATE TABLE "DriveFileSummary" (
     "costMicroCents" INTEGER NOT NULL DEFAULT 0,
     "error" TEXT,
     "attempts" INTEGER NOT NULL DEFAULT 0,
+    "outageStreak" INTEGER NOT NULL DEFAULT 0,
     "nextAttemptAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "runsDayKey" TEXT,
     "runsToday" INTEGER NOT NULL DEFAULT 0,
@@ -47,7 +48,7 @@ CREATE TABLE "DriveFileSummary" (
     CONSTRAINT "DriveFileSummary_pkey" PRIMARY KEY ("id"),
     CONSTRAINT "DriveFileSummary_summary_check" CHECK ("summary" IS NULL OR char_length("summary") <= 1000),
     CONSTRAINT "DriveFileSummary_error_check" CHECK ("error" IS NULL OR "error" ~ '^[a-z][a-z-]{0,63}$'),
-    CONSTRAINT "DriveFileSummary_counts_check" CHECK ("costMicroCents" >= 0 AND "attempts" >= 0 AND "runsToday" >= 0)
+    CONSTRAINT "DriveFileSummary_counts_check" CHECK ("costMicroCents" >= 0 AND "attempts" >= 0 AND "outageStreak" >= 0 AND "runsToday" >= 0)
 );
 
 -- CreateTable

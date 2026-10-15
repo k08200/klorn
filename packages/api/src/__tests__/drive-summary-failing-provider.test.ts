@@ -5,7 +5,8 @@
  * the real drive routes and the real summary job.
  *
  * Uploads and listings must not notice. A summary waits PENDING with
- * `llm-unavailable`, retries with backoff, and ends FAILED with that code.
+ * `llm-unavailable` and keeps retrying with a backoff capped at a day: an outage
+ * is never a content failure, and it gives the user's daily slots back.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -57,6 +58,12 @@ vi.mock("../billing/llm-usage.js", () => ({
   trueUpCostLedgers: vi.fn(async () => {}),
 }));
 vi.mock("../llm/llm-credentials.js", () => ({ getUserLlmCredentials: vi.fn(async () => ({})) }));
+// The per-user RPM window parks a background call for a slot; the sweeps here
+// run back to back on a test clock, so the wall-clock window would only stall them.
+vi.mock("../billing/quota-limiter.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../billing/quota-limiter.js")>()),
+  awaitUserCallSlot: vi.fn(async () => {}),
+}));
 // The process-wide pacer spaces background calls 4 s apart; the job's runs here
 // would wait on it. Pass-through: the pacing is not what is under test.
 vi.mock("../llm/background-pacer.js", () => ({
@@ -78,7 +85,7 @@ afterEach(async () => {
 });
 
 describe("every provider refuses (#1319)", () => {
-  it("uploads and listings work; the summary waits, retries and fails with a code", async () => {
+  it("uploads and listings work; the summary waits PENDING with a code, never FAILED", async () => {
     const res = await upload(t, t.me, {
       filename: "plan.txt",
       data: Buffer.from("Launch plan: beta on 2026-11-02, 100 seats.", "utf8"),
@@ -112,15 +119,20 @@ describe("every provider refuses (#1319)", () => {
     expect(meta.statusCode).toBe(200);
     expect(meta.json().summary.status).toBe("PENDING");
 
-    // The job takes the retries on later days (the per-file count is 3 a day).
+    // The job keeps retrying on later sweeps: an outage never turns into FAILED,
+    // its wait doubles up to a day, and it spends none of the user's daily count.
     const { runDriveSummarySweep } = await import("../drive/summary-job.js");
+    const { DRIVE_SUMMARY_OUTAGE_MAX_MS } = await import("../drive/summary-policy.js");
     const row = () => holder.db?.tables.driveFileSummary[0];
-    let day = Date.parse("2026-10-20T00:00:00.000Z");
-    for (let i = 0; i < 6 && row()?.status === "PENDING"; i++) {
-      day += 2 * 24 * 60 * 60_000;
-      await runDriveSummarySweep(new Date(day));
+    let now = Date.parse("2026-10-20T00:00:00.000Z");
+    for (let i = 0; i < 15; i++) {
+      now = Math.max(now, (row()?.nextAttemptAt as Date).getTime());
+      await runDriveSummarySweep(new Date(now));
     }
-    expect(row()).toMatchObject({ status: "FAILED", error: "llm-unavailable", summary: null });
+    expect(row()).toMatchObject({ status: "PENDING", error: "llm-unavailable", attempts: 0 });
+    const wait = (row()?.nextAttemptAt as Date).getTime() - now;
+    expect(wait).toBe(DRIVE_SUMMARY_OUTAGE_MAX_MS);
+    expect(holder.db?.tables.driveSummaryUsage.every((u) => u.count === 0)).toBe(true);
 
     const again = await upload(t, t.me, {
       filename: "second.txt",

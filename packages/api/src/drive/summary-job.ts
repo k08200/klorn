@@ -1,8 +1,12 @@
 /**
  * The summary job (step D4 of docs/providers/unified-platform-plan.md). Every
- * DRIVE_SUMMARY_INTERVAL_MS it runs the due PENDING rows: at most
- * DRIVE_SUMMARY_BATCH runs, at most DRIVE_SUMMARY_PER_USER_PER_SWEEP of one user,
- * one after the other, each claimed first (summary-store.ts). A run's own
+ * DRIVE_SUMMARY_INTERVAL_MS it runs due PENDING rows, picked fairly: the
+ * DRIVE_SUMMARY_BATCH users whose oldest due row is oldest, up to
+ * DRIVE_SUMMARY_PER_USER_PER_SWEEP rows of each, taken round-robin (every user's
+ * first row before anyone's second), so one user's thousand rows never hold
+ * another user's one back. At most DRIVE_SUMMARY_BATCH runs that do work; a
+ * cheap skip (a folder, a hidden file) does not use up the batch. Each row is
+ * claimed first (summary-store.ts), the claim counting an attempt; a run's own
  * outcome sets the row's next attempt (summary-run.ts); a run that throws is
  * reported and its lease lets it be taken again later.
  *
@@ -19,15 +23,20 @@ import { recordSchedulerTick, registerScheduler } from "../scheduler-heartbeat.j
 import { captureError } from "../sentry.js";
 import { driveSummariesLive } from "./summary-policy.js";
 import { runClaimedSummary, type SummaryRunOutcome } from "./summary-run.js";
-import { claimSummary, dueSummaries, pruneSummaryUsage } from "./summary-store.js";
+import {
+  claimSummary,
+  dueSummariesOf,
+  dueSummaryUsers,
+  pruneSummaryUsage,
+  type SummaryLease,
+  type SummaryRow,
+} from "./summary-store.js";
 
 export const DRIVE_SUMMARY_INTERVAL_MS = 5 * 60_000;
 /** Runs per sweep: 10 every 5 minutes is at most 120 model calls an hour, fleet-wide. */
 export const DRIVE_SUMMARY_BATCH = 10;
 /** Runs of one user per sweep, so one large upload does not hold everyone else back. */
 export const DRIVE_SUMMARY_PER_USER_PER_SWEEP = 3;
-/** Due rows read per sweep, so the per-user bound still leaves a full batch. */
-const DUE_READ = DRIVE_SUMMARY_BATCH * 4;
 const FIRST_SWEEP_DELAY_MS = 2 * 60_000;
 
 export interface SummarySweepResult {
@@ -43,29 +52,47 @@ function emptyResult(state: SummarySweepResult["state"]): SummarySweepResult {
   return { state, runs: 0, done: 0, failed: 0 };
 }
 
-async function runSafely(row: Parameters<typeof runClaimedSummary>[0], now: Date) {
+async function runSafely(lease: SummaryLease, now: Date): Promise<SummaryRunOutcome> {
   try {
-    return await runClaimedSummary(row, { priority: "background", now });
+    return await runClaimedSummary(lease, { priority: "background", now });
   } catch (err) {
     console.error("[DRIVE] summary run failed; the row is retried after its lease");
-    captureError(err, { tags: { scope: "drive.summary.sweep" }, extra: { userId: row.userId } });
-    return "failed" satisfies SummaryRunOutcome;
+    captureError(err, {
+      tags: { scope: "drive.summary.sweep" },
+      extra: { userId: lease.row.userId },
+    });
+    return "failed";
   }
+}
+
+/** The sweep's candidates: the users oldest-due first, their rows round-robin. */
+async function pickDue(now: Date): Promise<SummaryRow[]> {
+  const users = await dueSummaryUsers(now, DRIVE_SUMMARY_BATCH);
+  const rowsByUser: SummaryRow[][] = [];
+  for (const userId of users) {
+    rowsByUser.push(await dueSummariesOf(userId, now, DRIVE_SUMMARY_PER_USER_PER_SWEEP));
+  }
+  const picked: SummaryRow[] = [];
+  for (let round = 0; round < DRIVE_SUMMARY_PER_USER_PER_SWEEP; round++) {
+    for (const rows of rowsByUser) {
+      const row = rows[round];
+      if (row) picked.push(row);
+    }
+  }
+  return picked;
 }
 
 async function sweepDue(clock: () => Date): Promise<SummarySweepResult> {
   const result: SummarySweepResult = emptyResult("ran");
   const start = clock();
   await pruneSummaryUsage(start);
-  const perUser = new Map<string, number>();
-  for (const row of await dueSummaries(start, DUE_READ)) {
+  for (const row of await pickDue(start)) {
     if (result.runs >= DRIVE_SUMMARY_BATCH) break;
-    const taken = perUser.get(row.userId) ?? 0;
-    if (taken >= DRIVE_SUMMARY_PER_USER_PER_SWEEP) continue;
     const now = clock();
-    if (!(await claimSummary(row, now))) continue;
-    perUser.set(row.userId, taken + 1);
-    const outcome = await runSafely(row, now);
+    const lease = await claimSummary(row, now);
+    if (lease === null) continue;
+    const outcome = await runSafely(lease, now);
+    if (outcome === "skipped") continue;
     result.runs += 1;
     if (outcome === "done") result.done += 1;
     if (outcome === "failed") result.failed += 1;

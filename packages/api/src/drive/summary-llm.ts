@@ -27,11 +27,13 @@ import {
   UserRateLimitedError,
 } from "../llm/openai.js";
 import { wrapUntrusted } from "../untrusted.js";
-import { DRIVE_SUMMARY_MAX_CHARS } from "./summary-policy.js";
+import { DRIVE_SUMMARY_LLM_TIMEOUT_MS, DRIVE_SUMMARY_MAX_CHARS } from "./summary-policy.js";
 
 /** 0.0001 cent units, as GlobalCostLedger.microCents (billing/cost-guard.ts). */
 const MICRO_PER_CENT = 10_000;
-const CONTROL_CHARACTERS = /\p{Cc}/gu;
+/** Control and format characters: C0/C1 controls, bidi overrides and isolates, zero-width marks. */
+const INVISIBLE_CHARACTERS = /[\p{Cc}\p{Cf}]/gu;
+const TIMED_OUT = Symbol("timed-out");
 
 export interface DriveSummaryInput {
   readonly userId: string;
@@ -75,12 +77,12 @@ File text:
 ${wrapUntrusted(input.text, "drive:text")}`;
 }
 
-/** The summary as stored: no control characters, trimmed, at most DRIVE_SUMMARY_MAX_CHARS. */
+/** The summary as stored: no control or format characters, trimmed, at most DRIVE_SUMMARY_MAX_CHARS. */
 function cleanSummary(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const cleaned = value
     .slice(0, DRIVE_SUMMARY_MAX_CHARS * 4)
-    .replace(CONTROL_CHARACTERS, "")
+    .replace(INVISIBLE_CHARACTERS, "")
     .trim();
   const capped = [...cleaned].slice(0, DRIVE_SUMMARY_MAX_CHARS).join("").trim();
   return capped.length > 0 ? capped : null;
@@ -107,23 +109,49 @@ function failureOf(err: unknown): Extract<DriveSummaryResult, { ok: false }> {
   return { ok: false, code: "llm-unavailable" };
 }
 
-/** Summarise one file's text. Never throws. */
-export async function summariseDriveText(input: DriveSummaryInput): Promise<DriveSummaryResult> {
+/** `work`, or TIMED_OUT after `ms`. A late answer or failure of `work` is ignored. */
+async function withTimeout<T>(work: Promise<T>, ms: number): Promise<T | typeof TIMED_OUT> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<typeof TIMED_OUT>((resolve) => {
+    timer = setTimeout(() => resolve(TIMED_OUT), ms);
+    timer.unref?.();
+  });
+  try {
+    return await Promise.race([work, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Summarise one file's text. Never throws. The call (pacing and failover
+ * included) has DRIVE_SUMMARY_LLM_TIMEOUT_MS of wall clock; past it the answer is
+ * `llm-unavailable`, so a run ends well inside its lease.
+ */
+export async function summariseDriveText(
+  input: DriveSummaryInput,
+  options: { readonly timeoutMs?: number } = {},
+): Promise<DriveSummaryResult> {
   let response: ChatCompletion;
   try {
     const credentials = await getUserLlmCredentials(input.userId);
-    response = await createCompletion(
-      {
-        model: MODEL,
-        temperature: 0.1,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: userPrompt(input) },
-        ],
-      },
-      { userId: input.userId, credentials, priority: input.priority },
+    const answer = await withTimeout(
+      createCompletion(
+        {
+          model: MODEL,
+          temperature: 0.1,
+          response_format: { type: "json_object" },
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            { role: "user", content: userPrompt(input) },
+          ],
+        },
+        { userId: input.userId, credentials, priority: input.priority },
+      ),
+      options.timeoutMs ?? DRIVE_SUMMARY_LLM_TIMEOUT_MS,
     );
+    if (answer === TIMED_OUT) return { ok: false, code: "llm-unavailable" };
+    response = answer;
   } catch (err) {
     return failureOf(err);
   }

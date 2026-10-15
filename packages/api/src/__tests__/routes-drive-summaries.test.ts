@@ -17,7 +17,9 @@ import {
   flagsOn,
   holder,
   type KlornDriveTestApp,
+  klornRow,
   PREFIX,
+  resetRowIds,
   upload,
 } from "./helpers/klorn-drive-app.js";
 
@@ -224,6 +226,71 @@ describe("while DRIVE_SUMMARIES_ENABLED is on", () => {
     vi.spyOn(summaries, "upsert").mockRejectedValueOnce(new Error("database is down"));
     const file = await uploadText();
     expect(file.id).toEqual(expect.any(String));
+  });
+});
+
+describe("the summary search, with summaries on", () => {
+  beforeEach(() => {
+    vi.stubEnv("DRIVE_SUMMARIES_ENABLED", "true");
+  });
+
+  /** A Klorn file with a DONE summary, without the upload round trip. */
+  function summarised(n: number, parent: string | null, text: string) {
+    const file = klornRow({ name: `file-${n}.txt`, parentExternalId: parent });
+    const summary = {
+      id: `sum-${n}`,
+      driveFileId: file.id,
+      userId: "user-1",
+      status: "DONE",
+      summary: text,
+      summarizedAt: new Date(0),
+    };
+    return { file, summary };
+  }
+
+  it("applies the folder filter and the page ceiling to summary matches, with no cap before them", async () => {
+    resetRowIds();
+    const inFolder = Array.from({ length: 205 }, (_, i) => summarised(i, "fold-1", "Budget plan"));
+    const atRoot = Array.from({ length: 5 }, (_, i) => summarised(300 + i, null, "Budget plan"));
+    t = await buildKlornDriveApp({ seed: [...inFolder, ...atRoot].map((x) => x.file) });
+    holder.db?.tables.driveFileSummary.push(...[...inFolder, ...atRoot].map((x) => x.summary));
+    const seen: string[] = [];
+    let cursor: string | null = null;
+    do {
+      const query = `q=budget&folder=fold-1&limit=100${cursor ? `&cursor=${cursor}` : ""}`;
+      const res = await t.app.inject({
+        method: "GET",
+        url: `${PREFIX}/files?${query}`,
+        headers: t.me,
+      });
+      expect(res.statusCode).toBe(200);
+      seen.push(...res.json().files.map((f: { id: string }) => f.id));
+      cursor = res.json().nextCursor;
+    } while (cursor);
+    expect(new Set(seen)).toEqual(new Set(inFolder.map((x) => x.file.id)));
+  });
+
+  it("a failing summary search answers the name matches, logged once, never a 500", async () => {
+    const named = klornRow({ name: "budget.txt" });
+    const other = summarised(1, null, "Budget plan");
+    t = await buildKlornDriveApp({ seed: [named, other.file] });
+    holder.db?.tables.driveFileSummary.push(other.summary);
+    const files = holder.db?.model("driveFile");
+    if (!files) throw new Error("no db");
+    const findMany = files.findMany.bind(files);
+    vi.spyOn(files, "findMany").mockImplementation(async (args) => {
+      if (JSON.stringify(args).includes('"summary"')) throw new Error("relation filter failed");
+      return await findMany(args);
+    });
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    for (let i = 0; i < 2; i++) {
+      const res = await search("budget");
+      expect(res.statusCode).toBe(200);
+      expect(res.json().files.map((f: { id: string }) => f.id)).toEqual([named.id]);
+    }
+    expect(
+      errors.mock.calls.filter((c) => String(c[0]).includes("summary search failed")),
+    ).toHaveLength(1);
   });
 });
 

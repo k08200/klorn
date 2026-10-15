@@ -41,16 +41,18 @@ import {
   DRIVE_SUMMARY_LEASE_MS,
   DRIVE_SUMMARY_MAX_ATTEMPTS,
   DRIVE_SUMMARY_MAX_SOURCE_BYTES,
+  DRIVE_SUMMARY_OUTAGE_MAX_MS,
   DRIVE_SUMMARY_RETRY_BASE_MS,
   DRIVE_SUMMARY_RUNS_PER_FILE_PER_DAY,
 } from "../drive/summary-policy.js";
 import { runClaimedSummary } from "../drive/summary-run.js";
 import {
   claimSummary,
-  driveFileIdsMatchingSummary,
+  countFileRun,
   enqueueDriveFileSummary,
   findSummaryRow,
   reserveUserSummary,
+  type SummaryLease,
   userDailyCountSpent,
 } from "../drive/summary-store.js";
 import { allowAnyContentType } from "../storage/limits.js";
@@ -210,22 +212,58 @@ describe("the queue: one row per file, at the file's version", () => {
     expect(await userDailyCountSpent(OTHER, NOW)).toBe(false);
   });
 
-  it("a claim holds the row for the lease; a second claimant gets nothing", async () => {
+  it("a claim holds the row for the lease and counts an attempt; a second claimant gets nothing", async () => {
     const file = await storedFile("hello");
     const row = await queued(file);
-    expect(await claimSummary(row, NOW)).toBe(true);
-    expect(await claimSummary(row, NOW)).toBe(false);
-    expect((summaryOf(file.id)?.nextAttemptAt as Date).getTime()).toBe(
-      NOW.getTime() + DRIVE_SUMMARY_LEASE_MS,
+    expect(await claimSummary(row, NOW)).not.toBeNull();
+    expect(await claimSummary(row, NOW)).toBeNull();
+    expect(summaryOf(file.id)).toMatchObject({
+      nextAttemptAt: new Date(NOW.getTime() + DRIVE_SUMMARY_LEASE_MS),
+      attempts: 1,
+    });
+  });
+
+  it("a first enqueue that loses the insert race (P2002) answers the winner's row", async () => {
+    const file = await storedFile("hello");
+    await queued(file);
+    const summaries = db.model("driveFileSummary");
+    vi.spyOn(summaries, "upsert").mockRejectedValueOnce(
+      Object.assign(new Error("Unique constraint failed"), { code: "P2002" }),
     );
+    const row = await queued(file);
+    expect(row).toMatchObject({ driveFileId: file.id, userId: ME, status: "PENDING" });
+  });
+
+  it("the per-file count is taken atomically: a stale snapshot cannot pass the cap", async () => {
+    const file = await storedFile("hello");
+    await queued(file);
+    Object.assign(summaryOf(file.id) as Row, {
+      runsDayKey: "2026-10-14",
+      runsToday: DRIVE_SUMMARY_RUNS_PER_FILE_PER_DAY - 1,
+    });
+    const lease = await leaseOf(file);
+    expect(await countFileRun(lease, NOW)).toBe(true);
+    // The same snapshot again, as a second process holding it would.
+    expect(await countFileRun(lease, NOW)).toBe(false);
+    expect(summaryOf(file.id)?.runsToday).toBe(DRIVE_SUMMARY_RUNS_PER_FILE_PER_DAY);
   });
 });
 
-async function runOne(file: Row, now = NOW) {
-  const row = await queued(file, now);
-  expect(await claimSummary(row, now)).toBe(true);
-  return await runClaimedSummary(row, { priority: "background", now });
+async function leaseOf(file: Row, now = NOW): Promise<SummaryLease> {
+  const row = await findSummaryRow(file.userId as string, file.id as string);
+  if (row === null) throw new Error("no row");
+  const lease = await claimSummary(row, now);
+  if (lease === null) throw new Error("not claimed");
+  return lease;
 }
+
+async function runOne(file: Row, now = NOW) {
+  await queued(file, now);
+  return await runClaimedSummary(await leaseOf(file, now), { priority: "background", now });
+}
+
+const runLease = (lease: SummaryLease, now = NOW) =>
+  runClaimedSummary(lease, { priority: "background", now });
 
 describe("one run", () => {
   it("summarises the extracted text and records the summary, its version, model and cost", async () => {
@@ -329,15 +367,16 @@ describe("one run", () => {
     expect(summaryOf(file.id)).toMatchObject({ status: "FAILED", error: "object-missing" });
   });
 
-  it("a hidden file (storage switched off) waits, without counting an attempt", async () => {
-    const file = await storedFile("hello");
+  it("a hidden or trashed file is skipped, not deferred again every hour", async () => {
+    const hidden = await storedFile("hello");
+    const trashed = await storedFile("bye", { trashed: true });
     vi.stubEnv("OBJECT_STORAGE_ENABLED", "");
-    expect(await runOne(file)).toBe("deferred");
-    expect(summaryOf(file.id)).toMatchObject({
-      status: "PENDING",
-      error: "source-unavailable",
-      attempts: 0,
-    });
+    expect(await runOne(hidden)).toBe("skipped");
+    vi.stubEnv("OBJECT_STORAGE_ENABLED", "true");
+    expect(await runOne(trashed)).toBe("skipped");
+    for (const file of [hidden, trashed]) {
+      expect(summaryOf(file.id)).toMatchObject({ status: "SKIPPED", error: "source-unavailable" });
+    }
     expect(llm.calls).toEqual([]);
   });
 });
@@ -384,13 +423,11 @@ describe("caps defer, they never fail", () => {
       runsDayKey: "2026-10-14",
       runsToday: DRIVE_SUMMARY_RUNS_PER_FILE_PER_DAY,
     });
-    const row = await findSummaryRow(ME, file.id as string);
-    if (row === null) throw new Error("no row");
-    expect(await claimSummary(row, NOW)).toBe(true);
-    expect(await runClaimedSummary(row, { priority: "background", now: NOW })).toBe("deferred");
+    expect(await runLease(await leaseOf(file))).toBe("deferred");
     expect(summaryOf(file.id)).toMatchObject({
       status: "PENDING",
       error: "file-limit",
+      attempts: 0,
       nextAttemptAt: TOMORROW,
     });
     expect(llm.calls).toEqual([]);
@@ -400,14 +437,11 @@ describe("caps defer, they never fail", () => {
     const file = await storedFile("hello");
     await queued(file);
     Object.assign(summaryOf(file.id) as Row, { runsDayKey: "2026-10-13", runsToday: 3 });
-    const row = await findSummaryRow(ME, file.id as string);
-    if (row === null) throw new Error("no row");
-    await claimSummary(row, NOW);
-    expect(await runClaimedSummary(row, { priority: "background", now: NOW })).toBe("done");
+    expect(await runLease(await leaseOf(file))).toBe("done");
     expect(summaryOf(file.id)).toMatchObject({ runsDayKey: "2026-10-14", runsToday: 1 });
   });
 
-  it("the LLM layer's cost cap: PENDING until the next UTC day, not an attempt", async () => {
+  it("the LLM layer's cost cap: PENDING until the next UTC day, not an attempt, slots given back", async () => {
     llm.result = { ok: false, code: "cost-cap" };
     const file = await storedFile("hello");
     expect(await runOne(file)).toBe("deferred");
@@ -416,7 +450,9 @@ describe("caps defer, they never fail", () => {
       error: "cost-cap",
       nextAttemptAt: TOMORROW,
       attempts: 0,
+      runsToday: 0,
     });
+    expect(db.tables.driveSummaryUsage[0]?.count).toBe(0);
   });
 
   it("a per-minute limit: PENDING after the wait the layer gave", async () => {
@@ -428,35 +464,110 @@ describe("caps defer, they never fail", () => {
       error: "rate-limited",
       nextAttemptAt: new Date(NOW.getTime() + 30_000),
       attempts: 0,
+      runsToday: 0,
     });
+    expect(db.tables.driveSummaryUsage[0]?.count).toBe(0);
   });
 });
 
-describe("an outage retries with backoff, then gives up", () => {
-  it("PENDING with a code and a growing wait, FAILED after the last attempt", async () => {
+describe("an outage waits; only a content error spends the failure budget", () => {
+  it("provider unavailable: PENDING with a growing wait capped at a day, never FAILED, slots given back", async () => {
     llm.result = { ok: false, code: "llm-unavailable" };
+    const file = await storedFile("hello");
+    await queued(file);
+    let now = NOW;
+    const waits: number[] = [];
+    for (let i = 0; i < 12; i++) {
+      expect(await runLease(await leaseOf(file, now), now)).toBe("deferred");
+      const row = summaryOf(file.id) as Row;
+      expect(row).toMatchObject({ status: "PENDING", error: "llm-unavailable", attempts: 0 });
+      waits.push((row.nextAttemptAt as Date).getTime() - now.getTime());
+      now = row.nextAttemptAt as Date;
+    }
+    expect(waits[0]).toBe(DRIVE_SUMMARY_RETRY_BASE_MS);
+    expect(waits[1]).toBe(2 * DRIVE_SUMMARY_RETRY_BASE_MS);
+    expect(Math.max(...waits)).toBe(DRIVE_SUMMARY_OUTAGE_MAX_MS);
+    // About 17 failing files used to spend a user's day; now none is spent.
+    expect(db.tables.driveSummaryUsage.every((r) => r.count === 0)).toBe(true);
+    expect(summaryOf(file.id)?.runsToday).toBe(0);
+  });
+
+  it("a content error: PENDING with backoff, FAILED after the last attempt; its slot stays spent", async () => {
+    llm.result = { ok: false, code: "llm-bad-output" };
     const file = await storedFile("hello");
     expect(await runOne(file)).toBe("retry");
     expect(summaryOf(file.id)).toMatchObject({
       status: "PENDING",
-      error: "llm-unavailable",
+      error: "llm-bad-output",
       attempts: 1,
       nextAttemptAt: new Date(NOW.getTime() + DRIVE_SUMMARY_RETRY_BASE_MS),
     });
+    expect(db.tables.driveSummaryUsage[0]?.count).toBe(1);
     Object.assign(summaryOf(file.id) as Row, {
       attempts: DRIVE_SUMMARY_MAX_ATTEMPTS - 1,
       nextAttemptAt: NOW,
       runsToday: 0,
     });
-    const row = await findSummaryRow(ME, file.id as string);
-    if (row === null) throw new Error("no row");
-    await claimSummary(row, NOW);
-    expect(await runClaimedSummary(row, { priority: "background", now: NOW })).toBe("failed");
+    expect(await runLease(await leaseOf(file))).toBe("failed");
     expect(summaryOf(file.id)).toMatchObject({
       status: "FAILED",
-      error: "llm-unavailable",
+      error: "llm-bad-output",
       attempts: DRIVE_SUMMARY_MAX_ATTEMPTS,
       summary: null,
+    });
+  });
+
+  it("a row whose run never finishes (a crash, a freeze) is FAILED after the last attempt", async () => {
+    const file = await storedFile("hello");
+    await queued(file);
+    let now = NOW;
+    for (let i = 0; i < DRIVE_SUMMARY_MAX_ATTEMPTS; i++) {
+      await leaseOf(file, now); // claimed, and the process dies before any outcome
+      now = new Date(now.getTime() + DRIVE_SUMMARY_LEASE_MS);
+    }
+    const row = await findSummaryRow(ME, file.id as string);
+    if (row === null) throw new Error("no row");
+    expect(await claimSummary(row, now)).toBeNull();
+    expect(summaryOf(file.id)).toMatchObject({ status: "FAILED", error: "interrupted" });
+    expect(llm.calls).toEqual([]);
+  });
+});
+
+describe("a run that lost its lease writes nothing", () => {
+  it("after the lease expires another claimant takes the row; the first one's result is dropped", async () => {
+    const file = await storedFile("hello");
+    await queued(file);
+    const first = await leaseOf(file, NOW);
+    const later = new Date(NOW.getTime() + DRIVE_SUMMARY_LEASE_MS);
+    const second = await leaseOf(file, later);
+    llm.result = { ...DONE, summary: "from the first claimant" };
+    expect(await runLease(first, NOW)).toBe("lost");
+    expect(summaryOf(file.id)).toMatchObject({ status: "PENDING", summary: null });
+    llm.result = { ...DONE, summary: "from the second claimant" };
+    expect(await runLease(second, later)).toBe("done");
+    expect(summaryOf(file.id)).toMatchObject({
+      status: "DONE",
+      summary: "from the second claimant",
+    });
+  });
+
+  it("a file that changes during the run: the old version's summary is dropped, the lease kept", async () => {
+    const file = await storedFile("hello");
+    await queued(file);
+    const lease = await leaseOf(file);
+    llm.result = null;
+    const { summariseDriveText } = await import("../drive/summary-llm.js");
+    vi.mocked(summariseDriveText).mockImplementationOnce(async () => {
+      await enqueueDriveFileSummary(ME, file.id as string, "sha256:edited", {}, NOW);
+      return DONE as never;
+    });
+    expect(await runLease(lease)).toBe("lost");
+    expect(summaryOf(file.id)).toMatchObject({
+      status: "PENDING",
+      summary: null,
+      sourceEtag: "sha256:edited",
+      // The live lease is not cut short: the new version waits for it.
+      nextAttemptAt: lease.until,
     });
   });
 });
@@ -477,6 +588,29 @@ describe("the job", () => {
   it("does nothing while DRIVE_ENABLED is off either", async () => {
     vi.stubEnv("DRIVE_ENABLED", "");
     expect(await runDriveSummarySweep(NOW)).toMatchObject({ state: "off", runs: 0 });
+  });
+
+  it("picks fairly: 60 due rows of one user do not hold back another user's one", async () => {
+    for (let i = 0; i < 60; i++) await queued(await storedFile(`mine ${i}`));
+    const theirs = await storedFile("theirs", {}, OTHER);
+    await queued(theirs, new Date(NOW.getTime() + 1));
+    const result = await runDriveSummarySweep(new Date(NOW.getTime() + 2));
+    expect(llm.calls.filter((c) => c.userId === OTHER)).toHaveLength(1);
+    expect(llm.calls.filter((c) => c.userId === ME)).toHaveLength(3);
+    expect(result).toMatchObject({ state: "ran", runs: 4, done: 4 });
+  });
+
+  it("cheap skips do not use up the batch", async () => {
+    for (let u = 0; u < 10; u++) {
+      const userId = `user-${u + 10}`;
+      const folder = fileRow({ userId, isFolder: true, mimeType: null, sizeBytes: null });
+      db.tables.driveFile.push(folder);
+      await queued(folder);
+      await queued(await storedFile(`file of ${userId}`, {}, userId), new Date(NOW.getTime() + 1));
+    }
+    const result = await runDriveSummarySweep(new Date(NOW.getTime() + 2));
+    expect(result).toMatchObject({ runs: 10, done: 10 });
+    expect(db.tables.driveFileSummary.filter((r) => r.status === "SKIPPED")).toHaveLength(10);
   });
 
   it("runs the due rows only, and no more than three of one user per sweep", async () => {
@@ -500,22 +634,5 @@ describe("the job", () => {
     );
     await runDriveSummarySweep(NOW);
     expect(db.tables.driveSummaryUsage.map((r) => r.dayKey)).toEqual(["2026-10-13"]);
-  });
-});
-
-describe("the summary search", () => {
-  it("matches one user's DONE summaries, case-insensitively, with % and _ as themselves", async () => {
-    const a = await storedFile("a");
-    const b = await storedFile("b");
-    const c = await storedFile("c", {}, OTHER);
-    for (const file of [a, b, c]) await queued(file);
-    Object.assign(summaryOf(a.id) as Row, { status: "DONE", summary: "Budget at 100% for Q4" });
-    Object.assign(summaryOf(b.id) as Row, { status: "DONE", summary: "Budget at 1000 for Q4" });
-    Object.assign(summaryOf(c.id) as Row, { status: "DONE", summary: "budget at 100% too" });
-    expect(await driveFileIdsMatchingSummary(ME, "BUDGET")).toEqual(
-      expect.arrayContaining([a.id, b.id]),
-    );
-    expect(await driveFileIdsMatchingSummary(ME, "100%")).toEqual([a.id]);
-    expect(await driveFileIdsMatchingSummary(ME, "at_1")).toEqual([]);
   });
 });

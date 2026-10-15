@@ -71,9 +71,10 @@ export async function requestDriveSummary(
     { retryFailed: true },
     now,
   );
-  if (row.status === "PENDING" && (await claimSummary(row, now))) {
+  const lease = row.status === "PENDING" ? await claimSummary(row, now) : null;
+  if (lease !== null) {
     const { runClaimedSummary } = await import("./summary-run.js");
-    await runClaimedSummary(row, { priority: "foreground", now, providerEnabled });
+    await runClaimedSummary(lease, { priority: "foreground", now, providerEnabled });
   }
   return await summaryForFile(userId, source.id);
 }

@@ -836,8 +836,10 @@ enum DriveSummaryStatus {
 //   - costMicroCents: the estimated provider cost of the summary call, in
 //     0.0001 cent units like GlobalCostLedger.microCents.
 //   - error: a code only (the migration's CHECK), never a provider message.
-//   - attempts / nextAttemptAt: the job's retry backoff; runsDayKey /
-//     runsToday: model calls for this file on that UTC day (the per-file cap).
+//   - attempts: counted at each claim, given back by a deferral, so only
+//     content errors and runs that never finish spend it; outageStreak: outages
+//     in a row (their backoff); nextAttemptAt: due time, or a live lease's end;
+//     runsDayKey / runsToday: model calls for this file on that UTC day.
 model DriveFileSummary {
   id             String             @id @default(uuid())
   driveFileId    String             @unique
@@ -851,6 +853,7 @@ model DriveFileSummary {
   costMicroCents Int                @default(0)
   error          String?
   attempts       Int                @default(0)
+  outageStreak   Int                @default(0)
   nextAttemptAt  DateTime           @default(now())
   runsDayKey     String?
   runsToday      Int                @default(0)
