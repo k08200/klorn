@@ -14,8 +14,8 @@ enum OnboardingRules {
     enum LaunchAction: Equatable { case onboarding, fullView, none }
 
     /// No account yet: the onboarding window, not a logged-out full view.
-    /// Already signed in (a restored token): the full view, as before.
-    /// The same for both values of `macMainWindow`.
+    /// Already signed in (a restored token): the full view, as before (the
+    /// main window; the expanded panel with `macMainWindow` stored OFF).
     static func launchAction(firstLaunch: Bool, signedIn: Bool) -> LaunchAction {
         guard firstLaunch else { return .none }
         return signedIn ? .fullView : .onboarding

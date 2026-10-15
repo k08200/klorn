@@ -25,8 +25,8 @@ struct ReplyRequest: Equatable, Sendable {
 struct MenuState: Equatable {
     var signedIn: Bool
     var fullViewOpen: Bool
-    /// A window showing the full view (the bar's full panel or the main
-    /// window) is key — not Settings or another window.
+    /// The main window (the full view) is key — not Settings or another
+    /// window.
     var mailSurfaceIsKey: Bool
     var modalOpen: Bool
     /// The lane of the firewall item the reading pane shows, nil if none.
@@ -86,13 +86,11 @@ enum MenuRules {
         .mailbox(.sent), .mailbox(.drafts), .mailbox(.archived), .teams,
     ]
 
-    /// Whether the key window is one that shows the full view: the bar's
-    /// panel only counts in its full state (the pill and the compact panel
-    /// show no reading pane), the main window whenever it is open.
-    static func mailSurfaceIsKey(
-        barPanelIsKey: Bool, barFullOpen: Bool, mainWindowIsKey: Bool, mainWindowOpen: Bool
-    ) -> Bool {
-        (barPanelIsKey && barFullOpen) || (mainWindowIsKey && mainWindowOpen)
+    /// Whether the key window is one that shows the full view: only the
+    /// main window, while it is open. The bar's pill and compact panel show
+    /// no reading pane (M8 deleted the bar's full state).
+    static func mailSurfaceIsKey(mainWindowIsKey: Bool, mainWindowOpen: Bool) -> Bool {
+        mainWindowIsKey && mainWindowOpen
     }
 
     static func isEnabled(_ command: MenuCommand, in s: MenuState) -> Bool {

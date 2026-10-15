@@ -205,13 +205,10 @@ enum PreviewRender {
         shot("briefing", size: CGSize(width: 380, height: 260), align: .top) {
             BriefingCardRenderProbe()
         }
-        // The narrowest real embedding (full-mode sidebar is 220pt wide) —
-        // the card must survive it, not just the roomy probe.
+        // The narrowest real embedding (a 220pt-wide sidebar column) — the
+        // card must survive it, not just the roomy probe.
         shot("briefing-narrow", size: CGSize(width: 220, height: 340), align: .top) {
             BriefingCardRenderProbe()
-        }
-        shot("full", size: TopBarMetrics.size(for: .full)) {
-            TopBarRoot(state: .full, actions: actions)
         }
         shot("expanded", size: TopBarMetrics.size(for: .expanded)) {
             TopBarRoot(state: .expanded, actions: actions)
@@ -260,15 +257,7 @@ enum PreviewRender {
                 actions: actions, initialScope: .week,
                 initialAnchor: ISO8601DateFormatter().date(from: "2026-07-29T03:00:00Z") ?? Date())
         }
-        // The mail level of the two-level sidebar — Back / Compose / folders /
-        // categories. Shot with the level flipped, then restored so the full
-        // shot above stays the ROOT (first-open) state.
-        model.sidebarLevel = .mail
-        shot("full-mail", size: TopBarMetrics.size(for: .full)) {
-            FullView(actions: actions)
-        }
-        model.sidebarLevel = .root
-        // The reading pane on its own. Shrinking the whole 1400pt window into a
+        // The reading pane on its own. Shrinking the whole window into a
         // landing-page card renders the app's body text at under 7px; this fits
         // the same card at over 100%, so it can actually be read.
         shot("reading", size: CGSize(width: tourW, height: 430), align: .top) {

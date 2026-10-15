@@ -1,9 +1,11 @@
 import SwiftUI
 
 /// Where a shared view is drawn. The bar's surfaces keep the look they
-/// shipped with until `BarState.full` is deleted (M8); the main window
-/// (`macMainWindow`) wears the design system (productization plan §2).
-/// Every shared view defaults to `.bar`, so the bar never changes by accident.
+/// shipped with; the main window wears the design system (productization
+/// plan §2). Every shared view defaults to `.bar`, so the bar never changes
+/// by accident. Since M8 deleted the bar's full view, the `.bar` variants of
+/// FullList, ReadingPane and CalendarScreen draw only in the offscreen
+/// preview shots; collapsing them is a separate cleanup.
 enum ShellStyle: Sendable {
     case bar
     case window

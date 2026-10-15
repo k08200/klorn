@@ -35,14 +35,15 @@ enum MainWindowRules {
         NSSize(width: usable.width, height: usable.height + titlebarInset)
     }
 
-    /// Whether an open request may create (or show) the window. With the
-    /// flag off no window object is ever made, so flag-off is unchanged.
+    /// Whether an open request may create (or show) the window. ON by
+    /// default since M8; with a stored OFF no window object is ever made.
     static func mayOpen(macMainWindow: Bool) -> Bool {
         macMainWindow
     }
 
-    /// Settings ▸ General shows the beta toggle while Option is held, and
-    /// always once it is on, so it can be turned back off.
+    /// Settings ▸ General shows the toggle whenever it is on (everyone, by
+    /// default since M8), so it can be turned off; once off, it is revealed
+    /// again while Option is held.
     static func showsBetaToggle(optionHeld: Bool, macMainWindow: Bool) -> Bool {
         optionHeld || macMainWindow
     }
@@ -69,8 +70,9 @@ struct MainWindowRoot: View {
 
 /// Owns the standard main window: a plain AppKit NSWindow hosting the full
 /// view, created lazily on the first open request while `macMainWindow` is
-/// on and reused afterwards. There is no SwiftUI `Window` scene, so nothing
-/// is instantiated at launch and the flag-off app never has this window.
+/// on (the default since M8) and reused afterwards. There is no SwiftUI
+/// `Window` scene, so nothing is instantiated at launch and an app with the
+/// switch stored OFF never has this window.
 ///
 /// Open/closed and key state come from the window's own delegate callbacks
 /// (shown → open, willClose → closed), never from view lifecycle.
@@ -216,10 +218,10 @@ private final class SheetWindow: NSWindow {
     }
 }
 
-/// Settings ▸ General: the hidden switch for the main-window beta. Revealed
-/// while Option is held (the macOS convention for advanced items), and kept
-/// visible once on so it can be turned back off. The same switch is
-/// `defaults write ai.klorn.desktop macMainWindow -bool YES`.
+/// Settings ▸ General: the main-window switch. Visible while on (the default
+/// since M8) so it can be turned off; once off, revealed while Option is
+/// held (the macOS convention for advanced items). The same switch is
+/// `defaults write ai.klorn.desktop macMainWindow -bool NO|YES`.
 struct MainWindowBetaToggle: View {
     @Bindable var settings: AppSettings
     @State private var optionHeld = NSEvent.modifierFlags.contains(.option)

@@ -300,18 +300,19 @@ func runSelfChecks() async -> Bool {
     check("detail nil when both empty", cardDetailText(summary: nil, snippet: " ") == nil)
 
     print("Top bar window fit:")
-    // Small-display fit: full was a hardcoded 1400×860 that clipped on 13"
-    // screens, and the frame math never consulted the screen (2026-08-05).
-    let smallScreen = NSRect(x: 0, y: 0, width: 1280, height: 775)
-    let fittedFull = TopBarMetrics.fittedSize(
-        ideal: TopBarMetrics.full, visible: smallScreen.size, floor: TopBarMetrics.fullMin)
-    check("full shrinks to fit a small display",
-          fittedFull.width <= smallScreen.width - TopBarMetrics.screenMargin * 2
-          && fittedFull.height <= smallScreen.height - TopBarMetrics.screenMargin * 2)
+    // Small-display fit: a hardcoded 1400×860 clipped on 13" screens, and
+    // the frame math never consulted the screen (2026-08-05).
+    let smallScreen = NSRect(x: 0, y: 0, width: 1024, height: 640)
+    let bigIdeal = NSSize(width: 1400, height: 860)
+    let fittedBig = TopBarMetrics.fittedSize(
+        ideal: bigIdeal, visible: smallScreen.size, floor: TopBarMetrics.expandedMin)
+    check("a large ideal shrinks to fit a small display",
+          fittedBig.width <= smallScreen.width - TopBarMetrics.screenMargin * 2
+          && fittedBig.height <= smallScreen.height - TopBarMetrics.screenMargin * 2)
     check("screen clamp beats the floor — no off-screen window on tiny displays",
           {
               let s = TopBarMetrics.fittedSize(
-                  ideal: TopBarMetrics.full, visible: NSSize(width: 640, height: 400),
+                  ideal: bigIdeal, visible: NSSize(width: 640, height: 400),
                   floor: TopBarMetrics.fullMin)
               return s.width <= 640 - TopBarMetrics.screenMargin * 2
                   && s.height <= 400 - TopBarMetrics.screenMargin * 2
@@ -322,9 +323,9 @@ func runSelfChecks() async -> Bool {
               floor: TopBarMetrics.fullMin) == TopBarMetrics.fullMin)
     check("large displays keep the ideal size",
           TopBarMetrics.fittedSize(
-              ideal: TopBarMetrics.full, visible: NSSize(width: 1512, height: 950),
-              floor: TopBarMetrics.fullMin) == TopBarMetrics.full)
-    let fittedFrame = TopBarMetrics.pinnedFrame(size: fittedFull, visible: smallScreen, topMargin: 8)
+              ideal: TopBarMetrics.expanded, visible: NSSize(width: 1512, height: 950),
+              floor: TopBarMetrics.expandedMin) == TopBarMetrics.expanded)
+    let fittedFrame = TopBarMetrics.pinnedFrame(size: fittedBig, visible: smallScreen, topMargin: 8)
     check("pinned frame stays fully on screen", smallScreen.contains(fittedFrame))
     check("pinned frame is top-centered",
           abs(fittedFrame.midX - smallScreen.midX) < 0.5
@@ -332,7 +333,7 @@ func runSelfChecks() async -> Bool {
     check("GitHub items get a source caption; mail items keep their sender line",
           sourceBadgeLabel("GITHUB") != nil && sourceBadgeLabel("GITHUB") != ""
           && sourceBadgeLabel("EMAIL") == nil && sourceBadgeLabel("PENDING_ACTION") == nil)
-    check("full panel is user-resizable",
+    check("expanded panel is user-resizable",
           TopBarController.styleMask(focusable: true).contains(.resizable))
     // The AppKit-level clamp is the last line of defense: whatever sets the
     // frame, the top edge stays reachable and the size fits the screen.
@@ -358,14 +359,14 @@ func runSelfChecks() async -> Bool {
               visible: NSRect(x: 0, y: 0, width: 1440, height: 875)))
     check("same-state re-render never reframes (snap-back fix)",
           !TopBarController.shouldSetFrame(
-              renderedState: .full, state: .full, panelVisible: true, frameLost: false))
+              renderedState: .expanded, state: .expanded, panelVisible: true, frameLost: false))
     check("state morph, first show, and a lost frame each reframe",
           TopBarController.shouldSetFrame(
-              renderedState: .collapsed, state: .full, panelVisible: true, frameLost: false)
+              renderedState: .collapsed, state: .expanded, panelVisible: true, frameLost: false)
           && TopBarController.shouldSetFrame(
-              renderedState: .full, state: .full, panelVisible: false, frameLost: false)
+              renderedState: .expanded, state: .expanded, panelVisible: false, frameLost: false)
           && TopBarController.shouldSetFrame(
-              renderedState: .full, state: .full, panelVisible: true, frameLost: true))
+              renderedState: .expanded, state: .expanded, panelVisible: true, frameLost: true))
     check("drag floor is screen-clamped on small displays",
           TopBarMetrics.fittedSize(
               ideal: TopBarMetrics.fullMin, visible: NSSize(width: 800, height: 500)).width
@@ -373,7 +374,7 @@ func runSelfChecks() async -> Bool {
     // Cmd+Tab needs a real managed window, not a floating utility overlay
     // (dogfood 2026-08-18: the full view was unswitchable while it was a
     // floating .canJoinAllSpaces panel).
-    check("pill is the only utility overlay; expanded/full are real windows",
+    check("pill is the only utility overlay; expanded is a real window",
           TopBarController.isUtilityWindow(focusable: false)
           && !TopBarController.isUtilityWindow(focusable: true))
     check("pill panel stays fixed and non-activating",
@@ -381,10 +382,8 @@ func runSelfChecks() async -> Bool {
           && TopBarController.styleMask(focusable: false).contains(.nonactivatingPanel))
     // Expanded joined the key-able/resizable family (Cmd+Tab needs a window
     // that can raise; 1140pt clipped narrow displays — 2026-08-15).
-    check("expanded uses the full-family style, with its own smaller floor",
-          TopBarController.minSize(for: .expanded) == TopBarMetrics.expandedMin
-          && TopBarController.minSize(for: .full) == TopBarMetrics.fullMin
-          && TopBarMetrics.expandedMin.width < TopBarMetrics.fullMin.width)
+    check("expanded has its own floor, smaller than the main window's",
+          TopBarMetrics.expandedMin.width < TopBarMetrics.fullMin.width)
     check("expanded shrinks to fit a narrow display",
           {
               let s = TopBarMetrics.fittedSize(
@@ -393,17 +392,17 @@ func runSelfChecks() async -> Bool {
               return s.width <= 1024 - TopBarMetrics.screenMargin * 2
           }())
     check("stored expanded size below its floor is lifted",
-          AppSettings.resolveFullWindowSize(
+          AppSettings.resolveWindowSize(
               ["width": 100.0, "height": 100.0], floor: TopBarMetrics.expandedMin)
               == TopBarMetrics.expandedMin)
     check("stored size below the floor is lifted",
-          AppSettings.resolveFullWindowSize(
+          AppSettings.resolveWindowSize(
               ["width": 100.0, "height": 100.0], floor: TopBarMetrics.fullMin)
               == TopBarMetrics.fullMin)
     check("malformed stored size resolves nil",
-          AppSettings.resolveFullWindowSize("junk", floor: TopBarMetrics.fullMin) == nil)
+          AppSettings.resolveWindowSize("junk", floor: TopBarMetrics.fullMin) == nil)
     check("valid stored size round-trips",
-          AppSettings.resolveFullWindowSize(
+          AppSettings.resolveWindowSize(
               ["width": 1200.0, "height": 700.0], floor: TopBarMetrics.fullMin)
               == NSSize(width: 1200, height: 700))
     check("first launch fires exactly once",
@@ -570,7 +569,6 @@ func runSelfChecks() async -> Bool {
     check("collapsed pill draws when visible", TopBarController.shouldDraw(state: .collapsed, pillVisible: true))
     check("collapsed pill hides when hidden-mode", !TopBarController.shouldDraw(state: .collapsed, pillVisible: false))
     check("expanded panel draws even in hidden-mode", TopBarController.shouldDraw(state: .expanded, pillVisible: false))
-    check("full view draws even in hidden-mode", TopBarController.shouldDraw(state: .full, pillVisible: false))
 
     print("Card chime:")
     // The arrival sound plays once per NEW batch, only when alerts are on,
@@ -1159,11 +1157,6 @@ func runSelfChecks() async -> Bool {
     }
 
     print("Sections & mode:")
-    check("today section height clamps junk and keeps sane values",
-          AppSettings.resolveTodaySectionHeight("junk") == 240
-          && AppSettings.resolveTodaySectionHeight(50.0) == 120
-          && AppSettings.resolveTodaySectionHeight(9_999.0) == 520
-          && AppSettings.resolveTodaySectionHeight(300.0) == 300)
     check("unknown attention mode decodes as BASIC (fail-closed)",
           AttentionMode(rawValue: "WEIRD") == nil
           && (AttentionMode(rawValue: "AUTO") ?? .basic) == .auto)
@@ -1192,10 +1185,6 @@ func runSelfChecks() async -> Bool {
           Tier.sidebarLanes(counts: { [.info: 4, .silent: 91][$0] ?? 0 })
               == Tier.SidebarLanes(
                   primary: [.push, .queue], filed: [.info, .silent], filedTotal: 95))
-    check("section height resolvers clamp junk",
-          AppSettings.resolveInboxSectionHeight("junk") == 620
-          && AppSettings.resolveInboxSectionHeight(10.0) == 180
-          && AppSettings.resolveUpcomingSectionHeight(9_999.0) == 600)
     check("guide teaches the five live lanes",
           Tier.coreOrder == [.push, .meeting, .queue, .info, .silent])
     // A v1 server's summary (no MEETING/INFO keys) must still decode.
@@ -1360,16 +1349,25 @@ func runSelfChecks() async -> Bool {
           !Entry.shouldDeferToExistingInstance(bundleID: nil, otherInstanceCount: 2))
 
     print("Summon cycle:")
-    // ⌥⌘K steps UP one size per press — pill, expanded, full — and from full
-    // it dismisses back to rest. Never jumps straight to the big panel.
+    // ⌥⌘K steps UP one size per press — pill, expanded, main window (M8:
+    // the bar's own full state is gone). Never jumps straight to the big
+    // panel. Without the main window the expanded panel is the top step.
     check("nothing on screen → show the pill",
-          TopBarController.summonAction(isVisible: false, state: .collapsed) == .showPill)
+          [false, true].allSatisfy {
+              TopBarController.summonAction(isVisible: false, state: .collapsed, macMainWindow: $0)
+                  == .showPill
+          })
     check("pill → expand",
-          TopBarController.summonAction(isVisible: true, state: .collapsed) == .expand)
-    check("expanded → full",
-          TopBarController.summonAction(isVisible: true, state: .expanded) == .expandFull)
-    check("full → dismiss",
-          TopBarController.summonAction(isVisible: true, state: .full) == .dismissToRest)
+          [false, true].allSatisfy {
+              TopBarController.summonAction(isVisible: true, state: .collapsed, macMainWindow: $0)
+                  == .expand
+          })
+    check("expanded → the main window",
+          TopBarController.summonAction(isVisible: true, state: .expanded, macMainWindow: true)
+              == .openMainWindow)
+    check("main window opted out: expanded → dismiss",
+          TopBarController.summonAction(isVisible: true, state: .expanded, macMainWindow: false)
+              == .dismissToRest)
     // A summon draws the pill even in hidden-pill mode (pillVisible=false):
     // the summon is explicit intent, the setting only governs the resting pill.
     check("summon draws the pill in hidden mode",
@@ -1618,7 +1616,7 @@ func runSelfChecks() async -> Bool {
     // capInsets summing to ≥ the masked dimension breaks NSImage stretching
     // and the square blur backdrop bleeds past the corner (pill capsule,
     // dogfood zoom 2026-07-20).
-    for state in [BarState.collapsed, .expanded, .full] {
+    for state in [BarState.collapsed, .expanded] {
         let mask = NSImage.roundedCornerMask(radius: TopBarMetrics.corner(for: state))
         let minSide = min(TopBarMetrics.size(for: state).width, TopBarMetrics.size(for: state).height)
         check("mask caps fit \(state) surface",
@@ -1738,8 +1736,6 @@ func runSelfChecks() async -> Bool {
           TopBarController.activationPolicy(for: .collapsed) == .accessory)
     check("expanded joins Cmd+Tab",
           TopBarController.activationPolicy(for: .expanded) == .regular)
-    check("full joins Cmd+Tab",
-          TopBarController.activationPolicy(for: .full) == .regular)
 
     // Opt-in escape hatch: people who expect Cmd+Tab to reach every running app
     // can have that, without changing what Klorn is by default. The default
@@ -1749,8 +1745,7 @@ func runSelfChecks() async -> Bool {
     check("showInDock puts the resting app in Cmd+Tab and the Dock",
           TopBarController.activationPolicy(for: .collapsed, showInDock: true) == .regular)
     check("showInDock does not change an already-open panel",
-          TopBarController.activationPolicy(for: .expanded, showInDock: true) == .regular
-          && TopBarController.activationPolicy(for: .full, showInDock: true) == .regular)
+          TopBarController.activationPolicy(for: .expanded, showInDock: true) == .regular)
     check("show-in-Dock defaults to off when nothing is stored",
           !AppSettings.resolveShowInDock(nil))
     check("show-in-Dock honors a stored true",
@@ -1773,14 +1768,15 @@ func runSelfChecks() async -> Bool {
         return total + text.components(separatedBy: "actions.onSignOut()").count - 1
     }
     // One per surface that has an account area: the expanded panel's account
-    // column and the full sidebar (via actions), plus the Settings window's
-    // Accounts tab, which has no TopBarActions and calls the model directly.
-    // None in a header.
+    // column (via actions), plus the Settings window's Accounts tab, which
+    // has no TopBarActions and calls the model directly. The bar's full
+    // sidebar was the second action call site until M8 deleted it; the main
+    // window signs out through Settings. None in a header.
     let settingsSignOut = (try? String(
         contentsOf: sourceDir.appendingPathComponent("PreferencesView.swift"), encoding: .utf8))
         .map { $0.components(separatedBy: "model.signOut()").count - 1 } ?? 0
     check("sign-out is offered once per surface, not twice",
-          signOutCallSites == 2 && settingsSignOut == 1)
+          signOutCallSites == 1 && settingsSignOut == 1)
     let headerSignOut = swiftFiles.contains { url in
         guard let text = try? String(contentsOf: url, encoding: .utf8) else { return false }
         return text.contains("Button(L(\"auth.signOut\")")
@@ -2192,11 +2188,10 @@ func runSelfChecks() async -> Bool {
     }
     check("root content pins to the top (overflow clips at the bottom)",
           rootTopPinned.contains("TopBarRoot.swift"))
-    let sidebarScrolls = lineOffenders {
-        $0.contains("minHeight: geo.size.height, alignment: .top")
-    }
     check("sidebar scrolls instead of clipping when the window is short",
-          sidebarScrolls.contains("Sidebar.swift"))
+          (swiftFiles.first { $0.lastPathComponent == "NavSidebar.swift" }
+              .flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? "")
+              .contains("OffscreenFriendlyScroll {"))
 
     // Mail HTML is authored against a white page; the reading surface must
     // pin one regardless of app theme (dark mode ghost-text recording,
@@ -2362,18 +2357,17 @@ func runSelfChecks() async -> Bool {
           && !ListMode.proposals.isMailFamily && !ListMode.calendar.isMailFamily)
 
     print("Main window (M2):")
-    check("macMainWindow defaults OFF and reads only a stored Bool",
-          !AppSettings.resolveMacMainWindow(nil)
+    // M8: ON unless the user explicitly stored OFF; malformed values are
+    // treated as never set (ON), only a stored Bool false keeps it off.
+    check("macMainWindow defaults ON (M8); an explicit stored OFF stays OFF",
+          AppSettings.resolveMacMainWindow(nil)
           && AppSettings.resolveMacMainWindow(true)
           && !AppSettings.resolveMacMainWindow(false)
-          && !AppSettings.resolveMacMainWindow("YES"))
-    check("flag on: only the full state routes to the main window",
-          TopBarController.routesToMainWindow(.full, macMainWindow: true)
-          && !TopBarController.routesToMainWindow(.expanded, macMainWindow: true)
-          && !TopBarController.routesToMainWindow(.collapsed, macMainWindow: true))
-    check("flag off: nothing routes to the main window",
-          [BarState.collapsed, .expanded, .full]
-              .allSatisfy { !TopBarController.routesToMainWindow($0, macMainWindow: false) })
+          && AppSettings.resolveMacMainWindow("YES"))
+    check("flag on: a full-view request opens the main window",
+          TopBarController.fullViewTarget(macMainWindow: true) == .mainWindow)
+    check("flag off: a full-view request opens the expanded panel (no main window)",
+          TopBarController.fullViewTarget(macMainWindow: false) == .expandedPanel)
     check("an open main window makes the app regular (Dock + Cmd+Tab)",
           TopBarController.activationPolicy(for: .collapsed, mainWindowOpen: true) == .regular)
     check("closing the main window returns the resting app to ambient",
@@ -2384,7 +2378,7 @@ func runSelfChecks() async -> Bool {
           && TopBarController.activationPolicy(
               for: .collapsed, settingsOpen: false, mainWindowOpen: true) == .regular)
     check("main window closed: policy is exactly the pre-M2 rule",
-          [BarState.collapsed, .expanded, .full].allSatisfy { state in
+          [BarState.collapsed, .expanded].allSatisfy { state in
               [false, true].allSatisfy { dock in
                   [false, true].allSatisfy { settings in
                       TopBarController.activationPolicy(
@@ -2394,20 +2388,13 @@ func runSelfChecks() async -> Bool {
                   }
               }
           })
-    check("mail surface is key: bar only in its full state, main window only while open",
-          MenuRules.mailSurfaceIsKey(
-              barPanelIsKey: true, barFullOpen: true, mainWindowIsKey: false, mainWindowOpen: false)
-          && MenuRules.mailSurfaceIsKey(
-              barPanelIsKey: false, barFullOpen: false, mainWindowIsKey: true, mainWindowOpen: true)
-          && !MenuRules.mailSurfaceIsKey(
-              barPanelIsKey: true, barFullOpen: false, mainWindowIsKey: false, mainWindowOpen: false)
-          && !MenuRules.mailSurfaceIsKey(
-              barPanelIsKey: false, barFullOpen: false, mainWindowIsKey: true, mainWindowOpen: false)
-          && !MenuRules.mailSurfaceIsKey(
-              barPanelIsKey: false, barFullOpen: true, mainWindowIsKey: false, mainWindowOpen: true))
+    check("mail surface is key: only the main window, only while open",
+          MenuRules.mailSurfaceIsKey(mainWindowIsKey: true, mainWindowOpen: true)
+          && !MenuRules.mailSurfaceIsKey(mainWindowIsKey: true, mainWindowOpen: false)
+          && !MenuRules.mailSurfaceIsKey(mainWindowIsKey: false, mainWindowOpen: true)
+          && !MenuRules.mailSurfaceIsKey(mainWindowIsKey: false, mainWindowOpen: false))
     var mainKey = signedInFull
-    mainKey.mailSurfaceIsKey = MenuRules.mailSurfaceIsKey(
-        barPanelIsKey: false, barFullOpen: false, mainWindowIsKey: true, mainWindowOpen: true)
+    mainKey.mailSurfaceIsKey = MenuRules.mailSurfaceIsKey(mainWindowIsKey: true, mainWindowOpen: true)
     check("message commands work against a key main window",
           MenuRules.isEnabled(.reply, in: mainKey) && MenuRules.isEnabled(.dismiss, in: mainKey)
           && MenuRules.isEnabled(.moveTo(.push), in: mainKey))
@@ -2462,9 +2449,13 @@ func runSelfChecks() async -> Bool {
     check("closing the main window never quits the app",
           appSource.contains("func applicationShouldTerminateAfterLastWindowClosed")
           && appSource.contains("-> Bool {\n        false\n    }"))
-    check("BarState.full still exists until M8",
-          lineOffenders { $0.contains("enum BarState { case collapsed, expanded, full }") }
-              .contains("TopBarRoot.swift"))
+    check("BarState.full is gone (M8): the bar is the pill and the expanded panel",
+          lineOffenders { $0.contains("enum BarState { case collapsed, expanded }") }
+              == ["TopBarRoot.swift"]
+          && lineOffenders {
+              $0.contains("setState(.full)") || $0.contains("case .full:")
+                  || $0.contains("state: .full") || $0.contains("for: .full")
+          }.isEmpty)
 
     print("Mail list keyboard (M3):")
     // Every combination of the inputs the decision reads, for every key.
@@ -2632,7 +2623,7 @@ func runSelfChecks() async -> Bool {
         swiftFiles.first { $0.lastPathComponent == name }
             .flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? ""
     }
-    let fullViewSource = source(named: "FullView.swift")
+    let mailSectionSource = source(named: "MailSection.swift")
     // FullList's own source: the struct is the only declaration in its file.
     let fullListFile = source(named: "FullList.swift")
     let fullListSource = fullListFile.components(separatedBy: "struct FullList: View").dropFirst().first ?? ""
@@ -2649,9 +2640,9 @@ func runSelfChecks() async -> Bool {
           lineOffenders { $0.contains("List(selection:") }.isEmpty
           && fullListSource.contains("ScrollViewReader") && fullListSource.contains("LazyVStack(")
           && fullListSource.contains("proxy.scrollTo("))
-    check("the key zone is per window: owned by FullView, not the shared model",
+    check("the key zone is per window: owned by MailSection, not the shared model",
           lineOffenders { $0.contains("mailKeyZone") }.isEmpty
-          && fullViewSource.contains("@State private var keyZone: MailKeyZone")
+          && mailSectionSource.contains("@State private var keyZone: MailKeyZone")
           && fullListSource.contains("@Binding var keyZone: MailKeyZone"))
     let listKeysSource = swiftFiles.first { $0.lastPathComponent == "ListKeys.swift" }
         .flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? ""

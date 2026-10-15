@@ -12,18 +12,13 @@ final class AppSettings {
     static let pillVisibleKey = "klorn.pillVisible"
     static let shortcutKey = "klorn.toggleShortcut"
     static let showInDockKey = "klorn.showInDock"
-    static let fullWindowSizeKey = "klorn.fullWindowSize"
     static let expandedWindowSizeKey = "klorn.expandedWindowSize"
     static let hasLaunchedKey = "klorn.hasLaunchedBefore"
     static let loadRemoteImagesKey = "klorn.mail.loadRemoteImages"
     static let readingBandExpandedKey = "klorn.reading.bandExpanded"
     static let appearanceKey = "klorn.appearance"
-    static let inboxSectionHeightKey = "klorn.inboxSectionHeight"
-    static let upcomingSectionHeightKey = "klorn.upcomingSectionHeight"
-    static let todaySectionHeightKey = "klorn.todaySectionHeight"
-    static let accountSectionHeightKey = "klorn.sidebar.accountHeight"
     /// Un-prefixed on purpose: it is the documented developer switch
-    /// (`defaults write ai.klorn.desktop macMainWindow -bool YES`).
+    /// (`defaults write ai.klorn.desktop macMainWindow -bool NO` opts out).
     static let macMainWindowKey = "macMainWindow"
 
     private let defaults: UserDefaults
@@ -43,17 +38,13 @@ final class AppSettings {
     /// persisted (wired at launch).
     var onShowInDockChanged: ((Bool) -> Void)?
 
-    /// Productization M2: the full view opens as a standard main window
-    /// (title bar, Dock, Cmd+Tab while open) instead of the bar's panel
-    /// morphing into it. OFF by default until M8 flips it.
+    /// Productization M2/M8: the full view is a standard main window (title
+    /// bar, Dock, Cmd+Tab while open). ON by default since M8; a user who
+    /// stored OFF keeps it OFF, and then the expanded panel is the largest
+    /// view (the bar's own full state is gone).
     var macMainWindow: Bool {
-        didSet {
-            defaults.set(macMainWindow, forKey: Self.macMainWindowKey)
-            if macMainWindow != oldValue { onMacMainWindowChanged?() }
-        }
+        didSet { defaults.set(macMainWindow, forKey: Self.macMainWindowKey) }
     }
-    /// Wired by the AppDelegate: the compose window follows the switch (M5).
-    var onMacMainWindowChanged: (() -> Void)?
 
     /// A new PUSH posts a macOS banner unless the user turns it off. The top-bar
     /// count always updates regardless — this only gates the system banner.
@@ -90,24 +81,6 @@ final class AppSettings {
     /// Fired when the appearance choice changes (wired at launch, not persisted).
     var onAppearanceChanged: ((AppearanceChoice) -> Void)?
 
-    /// User-dragged height of the sidebar's ACCOUNT section. The TODAY/
-    /// UPCOMING region flexes to absorb whatever this gives or takes.
-    var accountSectionHeight: Double {
-        didSet { defaults.set(accountSectionHeight, forKey: Self.accountSectionHeightKey) }
-    }
-
-    var todaySectionHeight: Double {
-        didSet { defaults.set(todaySectionHeight, forKey: Self.todaySectionHeightKey) }
-    }
-
-    var inboxSectionHeight: Double {
-        didSet { defaults.set(inboxSectionHeight, forKey: Self.inboxSectionHeightKey) }
-    }
-
-    var upcomingSectionHeight: Double {
-        didSet { defaults.set(upcomingSectionHeight, forKey: Self.upcomingSectionHeightKey) }
-    }
-
     /// Whether the collapsed pill stays on screen. OFF = ambient-invisible mode:
     /// nothing is drawn until ⌥⌘K summons the panel or a PUSH card appears —
     /// the card and the background engine are unaffected.
@@ -125,20 +98,9 @@ final class AppSettings {
         }
     }
 
-    /// The full view's user-chosen window size (drag-resize), persisted so it
-    /// survives state changes and relaunch. nil until the user first resizes —
-    /// the screen-fitted default applies.
-    var fullWindowSize: NSSize? {
-        didSet {
-            guard let size = fullWindowSize else { return }
-            defaults.set(
-                ["width": Double(size.width), "height": Double(size.height)],
-                forKey: Self.fullWindowSizeKey)
-        }
-    }
-
-    /// The expanded panel's user-chosen size — same contract as
-    /// `fullWindowSize`, one slot per resizable state.
+    /// The expanded panel's user-chosen window size (drag-resize), persisted
+    /// so it survives state changes and relaunch. nil until the user first
+    /// resizes — the screen-fitted default applies.
     var expandedWindowSize: NSSize? {
         didSet {
             guard let size = expandedWindowSize else { return }
@@ -213,28 +175,18 @@ final class AppSettings {
         self.loadRemoteImages = Self.resolveLoadRemoteImages(defaults.object(forKey: Self.loadRemoteImagesKey))
         self.readingBandExpanded = defaults.object(forKey: Self.readingBandExpandedKey) as? Bool ?? false
         self.appearance = Self.resolveAppearance(defaults.object(forKey: Self.appearanceKey))
-        self.accountSectionHeight = Self.resolveAccountSectionHeight(
-            defaults.object(forKey: Self.accountSectionHeightKey))
-        self.todaySectionHeight = Self.resolveTodaySectionHeight(
-            defaults.object(forKey: Self.todaySectionHeightKey))
-        self.inboxSectionHeight = Self.resolveInboxSectionHeight(
-            defaults.object(forKey: Self.inboxSectionHeightKey))
-        self.upcomingSectionHeight = Self.resolveUpcomingSectionHeight(
-            defaults.object(forKey: Self.upcomingSectionHeightKey))
         self.showInDock = Self.resolveShowInDock(defaults.object(forKey: Self.showInDockKey))
         self.macMainWindow = Self.resolveMacMainWindow(defaults.object(forKey: Self.macMainWindowKey))
         self.pillVisible = Self.resolvePillVisible(defaults.object(forKey: Self.pillVisibleKey))
         self.shortcut = Self.resolveShortcut(defaults.object(forKey: Self.shortcutKey))
-        self.fullWindowSize = Self.resolveFullWindowSize(
-            defaults.object(forKey: Self.fullWindowSizeKey), floor: TopBarMetrics.fullMin)
-        self.expandedWindowSize = Self.resolveFullWindowSize(
+        self.expandedWindowSize = Self.resolveWindowSize(
             defaults.object(forKey: Self.expandedWindowSizeKey), floor: TopBarMetrics.expandedMin)
     }
 
     /// Restore a stored {width,height}; malformed → nil (the screen-fitted
     /// default applies). Values below `floor` are lifted to it — a too-small
     /// stored size would re-clip the fixed columns the floor protects. Pure.
-    nonisolated static func resolveFullWindowSize(_ stored: Any?, floor: NSSize) -> NSSize? {
+    nonisolated static func resolveWindowSize(_ stored: Any?, floor: NSSize) -> NSSize? {
         guard let dict = stored as? [String: Any],
               let w = (dict["width"] as? NSNumber)?.doubleValue ?? (dict["width"] as? Double),
               let h = (dict["height"] as? NSNumber)?.doubleValue ?? (dict["height"] as? Double)
@@ -282,41 +234,17 @@ final class AppSettings {
         AppearanceChoice(rawValue: stored as? String ?? "") ?? .system
     }
 
-    /// Clamp so a wild stored value can never crush the mail list or push the
-    /// account actions off-screen. Pure.
-    nonisolated static func resolveAccountSectionHeight(_ stored: Any?) -> Double {
-        let raw = (stored as? NSNumber)?.doubleValue ?? (stored as? Double) ?? 260
-        return min(max(raw, 140), 460)
-    }
-    /// TODAY(브리핑+오늘) section height — same clamp discipline as the
-    /// account section: a stored junk value can't collapse or explode the
-    /// sidebar. Pure.
-    nonisolated static func resolveTodaySectionHeight(_ stored: Any?) -> Double {
-        let raw = (stored as? NSNumber)?.doubleValue ?? (stored as? Double) ?? 240
-        return min(max(raw, 120), 520)
-    }
-    /// 수신함 nav cap — default generous so nothing changes until dragged.
-    nonisolated static func resolveInboxSectionHeight(_ stored: Any?) -> Double {
-        let raw = (stored as? NSNumber)?.doubleValue ?? (stored as? Double) ?? 620
-        return min(max(raw, 180), 800)
-    }
-
-    /// 예정(UPCOMING) cap — same clamp discipline.
-    nonisolated static func resolveUpcomingSectionHeight(_ stored: Any?) -> Double {
-        let raw = (stored as? NSNumber)?.doubleValue ?? (stored as? Double) ?? 300
-        return min(max(raw, 100), 600)
-    }
-
-
-
     /// Default ON (pill shown) when never set; otherwise honor the stored flag. Pure.
     nonisolated static func resolvePillVisible(_ stored: Any?) -> Bool {
         (stored as? Bool) ?? true
     }
 
-    /// OFF unless explicitly stored true. Pure.
+    /// ON unless explicitly stored false (M8). Only a stored Bool counts:
+    /// a missing or malformed value is "never set", so it gets the default.
+    /// The key is only ever written by the Settings toggle (or a manual
+    /// `defaults write`), so a stored false is a deliberate opt-out. Pure.
     nonisolated static func resolveMacMainWindow(_ stored: Any?) -> Bool {
-        (stored as? Bool) ?? false
+        (stored as? Bool) ?? true
     }
 
     /// Default OFF when never set: the resting app stays ambient (no Dock icon,

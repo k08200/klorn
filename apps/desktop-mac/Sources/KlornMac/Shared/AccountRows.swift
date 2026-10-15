@@ -1,117 +1,5 @@
 import SwiftUI
 
-/// Account section: the declared company domains, editable in place. Enter
-/// or the save button PATCHes; the server validates and the row reflects
-/// the canonical list. Offscreen: a text stand-in (ImageRenderer draws
-/// NSTextField as a placeholder).
-struct CompanyDomainsRow: View {
-    @Environment(AppModel.self) private var model
-    @State private var text = ""
-    @State private var editing = false
-
-    private var current: String {
-        model.companyDomains.isEmpty ? L("company.none") : model.companyDomains.joined(separator: ", ")
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Text(L("company.label")).font(.caption).foregroundStyle(Theme.textDim)
-                Spacer()
-                if !editing {
-                    Button {
-                        text = model.companyDomains.joined(separator: ", ")
-                        editing = true
-                    } label: {
-                        Text(current).font(Theme.Typo.label).foregroundStyle(Theme.text)
-                            .lineLimit(1).truncationMode(.middle)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("\(L("company.label")). \(current)")
-                }
-            }
-            if editing {
-                if Theme.isRenderingOffscreen {
-                    Text(text.isEmpty ? L("company.placeholder") : text)
-                        .font(Theme.Typo.label).foregroundStyle(Theme.textDim)
-                } else {
-                    TextField(L("company.placeholder"), text: $text)
-                        .textFieldStyle(.roundedBorder).font(Theme.Typo.label)
-                        .onSubmit { Task { await save() } }
-                        .accessibilityLabel(L("company.label"))
-                }
-                if let error = model.companyDomainsError {
-                    Text(error).font(.caption2).foregroundStyle(Theme.tint(.push))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                HStack(spacing: 8) {
-                    SubtleTextButton(title: L("company.save"), dim: false) { Task { await save() } }
-                    SubtleTextButton(title: L("compose.cancel")) { editing = false }
-                }
-            }
-        }
-        .padding(.horizontal, 20).padding(.vertical, 3)
-    }
-
-    private func save() async {
-        // An empty field clears the list — that is a valid answer ("no
-        // company domain"), and the server accepts [] as such.
-        if await model.setCompanyDomains(parseCompanyDomainsInput(text)) {
-            editing = false
-        }
-    }
-}
-
-/// Account section: the user's priorities text, editable in place. Save
-/// PATCHes; the server collapses whitespace and caps length, and its
-/// message shows inline. Offscreen: text stand-in.
-struct PrioritiesRow: View {
-    @Environment(AppModel.self) private var model
-    @State private var text = ""
-    @State private var editing = false
-
-    private var current: String { model.triagePriorities ?? L("priorities.none") }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Text(L("priorities.label")).font(.caption).foregroundStyle(Theme.textDim)
-                Spacer()
-                if !editing {
-                    Button {
-                        text = model.triagePriorities ?? ""
-                        editing = true
-                    } label: {
-                        Text(current).font(Theme.Typo.label).foregroundStyle(Theme.text)
-                            .lineLimit(1).truncationMode(.tail)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("\(L("priorities.label")). \(current)")
-                }
-            }
-            if editing {
-                if Theme.isRenderingOffscreen {
-                    Text(text.isEmpty ? L("priorities.placeholder") : text)
-                        .font(Theme.Typo.label).foregroundStyle(Theme.textDim)
-                } else {
-                    PrioritiesEditor(text: $text)
-                }
-                if let error = model.prioritiesError {
-                    Text(error).font(.caption2).foregroundStyle(Theme.tint(.push))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                HStack(spacing: 8) {
-                    SubtleTextButton(title: L("company.save"), dim: false) {
-                        Task { if await model.setTriagePriorities(text) { editing = false } }
-                    }
-                    SubtleTextButton(title: L("compose.cancel")) { editing = false }
-                }
-            }
-        }
-        .padding(.horizontal, 20).padding(.vertical, 3)
-    }
-}
-
 /// Login button label per advertised provider id. Data-driven from
 /// GET /api/auth/providers, so a provider the founder flips on later (naver)
 /// appears WITHOUT an app update; an id the app has no string for degrades
@@ -140,8 +28,7 @@ func openSupportMail() {
     NSWorkspace.shared.open(url)
 }
 
-/// The update affordance, shared by the panel's ACCOUNT column and the
-/// full-window sidebar. Never a popup (never-steal-focus) — but no longer
+/// The update affordance in the panel's ACCOUNT column. Never a popup (never-steal-focus) — but no longer
 /// invisible either: a tinted capsule with a pulsing dot and a gentle
 /// appear transition says "one click waiting" the moment the row exists.
 /// Pulse respects Reduce Motion.

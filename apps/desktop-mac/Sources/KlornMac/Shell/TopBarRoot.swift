@@ -1,27 +1,28 @@
 import SwiftUI
 
-/// The three sizes the bar can take: a glanceable pill, the compact 3-column
-/// panel, and a full "real app" window.
-enum BarState { case collapsed, expanded, full }
+/// The two sizes the bar can take: a glanceable pill and the compact
+/// 3-column panel. The full view is the standard main window (M8 deleted the
+/// bar's own full state).
+enum BarState { case collapsed, expanded }
 
 /// Actions the top bar delegates back to the controller / model.
 struct TopBarActions {
     let onExpand: () -> Void        // collapsed → expanded
-    let onExpandFull: () -> Void    // expanded → full
-    let onRestore: () -> Void       // full → expanded
+    let onExpandFull: () -> Void    // expanded → main window
+    let onRestore: () -> Void       // main window → expanded
     let onCollapse: () -> Void      // → collapsed
     /// Close the open panel back to the resting state (pill, or nothing in
-    /// hidden-pill mode) — the ✕ in the expanded/full headers.
+    /// hidden-pill mode) — the ✕ in the expanded header.
     let onClose: () -> Void
     let onSignIn: () -> Void
     let onSignOut: () -> Void
-    /// Open an item IN-APP: jump to the full view and show it in the reading pane.
+    /// Open an item IN-APP: open the main window and show it in the reading pane.
     let onOpenInApp: (FirewallItem) -> Void
-    /// Open a whole tier IN-APP: jump to the full view with that tier listed.
+    /// Open a whole tier IN-APP: open the main window with that tier listed.
     let onOpenTier: (Tier) -> Void
-    /// Jump to the full view without changing what it is showing.
+    /// Open the main window without changing what it is showing.
     let onOpenFull: () -> Void
-    /// Jump to the full view's proposals list — the actions awaiting approval.
+    /// Open the main window on the proposals list — the actions awaiting approval.
     let onOpenProposals: () -> Void
     /// Dismiss (archive) an item out of the queue.
     let onDismiss: (FirewallItem) -> Void
@@ -34,7 +35,7 @@ struct TopBarActions {
     let onPinSender: (FirewallItem, Tier) -> Void
     /// Remove the sender's pin; triage goes back to learned/predicted tiers.
     let onUnpinSender: (FirewallItem) -> Void
-    /// Select a row in the full view — loads its email into the reading pane.
+    /// Select a row in the mail list — loads its email into the reading pane.
     let onSelect: (FirewallItem) -> Void
     /// Open the Settings window.
     let onOpenPreferences: () -> Void
@@ -46,12 +47,11 @@ struct TopBarActions {
 enum TopBarMetrics {
     static let collapsed = NSSize(width: 400, height: 52)
     static let expanded = NSSize(width: 1140, height: 380)
-    static let full = NSSize(width: 1400, height: 860)
-    /// Smallest full window the user may drag-resize down to. 880 keeps the
+    /// Smallest main window the user may drag-resize down to. 880 keeps the
     /// fixed sidebar (220) + list (420) columns with a readable ~240pt
     /// reading pane — the previous 1000×560 floor sat above many fitted
     /// window sizes, which made edge-drag feel dead ("can't shrink it",
-    /// 2026-08-07). Floor for the panel's contentMinSize and screen fitting.
+    /// 2026-08-07). `MainWindowRules.minSize`.
     static let fullMin = NSSize(width: 880, height: 520)
     /// Smallest expanded panel a drag-resize may reach. 720 keeps the tier
     /// columns readable; anything narrower belongs to the pill.
@@ -69,7 +69,6 @@ enum TopBarMetrics {
         switch state {
         case .collapsed: collapsed
         case .expanded: expanded
-        case .full: full
         }
     }
 
@@ -101,7 +100,7 @@ enum TopBarMetrics {
     }
 }
 
-/// Root that switches between the three states. The controller animates the
+/// Root that switches between the two states. The controller animates the
 /// window frame; this just renders the right content.
 struct TopBarRoot: View {
     let state: BarState
@@ -112,7 +111,6 @@ struct TopBarRoot: View {
             switch state {
             case .collapsed: CollapsedBar(actions: actions)
             case .expanded: ExpandedPanel(actions: actions)
-            case .full: FullView(actions: actions)
             }
         }
         .glassPanel(cornerRadius: TopBarMetrics.corner(for: state))

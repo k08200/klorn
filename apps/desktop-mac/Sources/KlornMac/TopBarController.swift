@@ -73,14 +73,9 @@ final class TopBarController {
         resizeRecorder.onMoveOrResize = { [weak self] in
             MainActor.assumeIsolated { self?.reclampIfLost() }
         }
-        // Message-menu enablement needs to know the panel (not Settings) is key.
-        resizeRecorder.onKeyChange = { [weak self] isKey in
-            MainActor.assumeIsolated { self?.model.barPanelIsKey = isKey }
-        }
         resizeRecorder.onLiveResizeEnd = { [weak self] size in
             guard let self else { return }
             switch self.state {
-            case .full: self.model.settings.fullWindowSize = size
             case .expanded: self.model.settings.expandedWindowSize = size
             case .collapsed: break  // pill is never resizable
             }
@@ -132,7 +127,8 @@ final class TopBarController {
     /// Opens the Settings window (wired by the AppDelegate to SettingsOpener).
     var onOpenSettings: (() -> Void)?
     /// Opens/focuses and closes the standard main window (M2). Wired by the
-    /// AppDelegate to MainWindowOpener; only used while `macMainWindow` is on.
+    /// AppDelegate to MainWindowController; only used while `macMainWindow`
+    /// is on (the default since M8).
     var onOpenMainWindow: (() -> Void)?
     var onCloseMainWindow: (() -> Void)?
 
@@ -143,38 +139,60 @@ final class TopBarController {
         onOpenSettings?()
     }
 
-    /// First launch + Finder/Dock reopen: show the real app window. An
-    /// explicit summon, so hidden-pill mode must not eat it.
-    func openFull() {
-        summoned = true
-        setState(.full)
+    /// Where a full-view request lands (M8): the standard main window, or,
+    /// for a user who stored `macMainWindow` OFF, the expanded panel — the
+    /// largest view the bar has now that its full state is gone. Pure.
+    enum FullViewTarget: Equatable, Sendable { case mainWindow, expandedPanel }
+    nonisolated static func fullViewTarget(macMainWindow: Bool) -> FullViewTarget {
+        macMainWindow ? .mainWindow : .expandedPanel
+    }
+
+    /// Every "open the full view" entry point — first launch, Finder/Dock
+    /// reopen, menus, panel buttons, cards and banners — lands here. An
+    /// explicit summon, so hidden-pill mode must not eat the fallback.
+    func openMainWindow() {
+        switch Self.fullViewTarget(macMainWindow: model.settings.macMainWindow) {
+        case .mainWindow:
+            // Rest the bar first, then open the window, so the window's own
+            // tracker has the last word on the activation policy.
+            dismiss()
+            onOpenMainWindow?()
+        case .expandedPanel:
+            summoned = true
+            setState(.expanded)
+        }
     }
 
     /// What ⌥⌘K does, given whether the bar is on screen and its state. Pure so
     /// the self-check pins the cycle: nothing → the MINIMAL pill (not the big
-    /// panel), pill → expanded → FULL (dogfood 2026-07-20: the shortcut must
-    /// reach the largest view), full → dismiss back to rest.
-    enum SummonAction: Equatable, Sendable { case showPill, expand, expandFull, dismissToRest }
-    nonisolated static func summonAction(isVisible: Bool, state: BarState) -> SummonAction {
+    /// panel), pill → expanded → the main window (dogfood 2026-07-20: the
+    /// shortcut must reach the largest view). Without the main window the
+    /// expanded panel is the largest view, so the next press rests the bar.
+    enum SummonAction: Equatable, Sendable { case showPill, expand, openMainWindow, dismissToRest }
+    nonisolated static func summonAction(
+        isVisible: Bool, state: BarState, macMainWindow: Bool
+    ) -> SummonAction {
         guard isVisible else { return .showPill }
         switch state {
         case .collapsed: return .expand
-        case .expanded: return .expandFull
-        case .full: return .dismissToRest
+        case .expanded: return macMainWindow ? .openMainWindow : .dismissToRest
         }
     }
 
     /// Global-hotkey entry point. Never steals focus on the first press; each
-    /// further press steps up one size, and from full it closes back to rest.
+    /// further press steps up one size, and past the largest it rests.
     func toggle() {
-        switch Self.summonAction(isVisible: panel?.isVisible ?? false, state: state) {
+        switch Self.summonAction(
+            isVisible: panel?.isVisible ?? false, state: state,
+            macMainWindow: model.settings.macMainWindow)
+        {
         case .showPill:
             summoned = true          // draw the pill even in hidden-pill mode
             setState(.collapsed)
         case .expand:
             setState(.expanded)
-        case .expandFull:
-            setState(.full)
+        case .openMainWindow:
+            openMainWindow()
         case .dismissToRest:
             dismiss()
         }
@@ -197,31 +215,16 @@ final class TopBarController {
             composeWindowOpen: model.composeWindowOpen,
             onboardingOpen: model.onboardingWindowOpen))
             panel?.orderOut(nil)
-            model.barFullOpen = false
         }
     }
 
     private func setState(_ newState: BarState) {
-        // M2: with the flag on, "full" is the standard main window, not a
-        // morph of this panel. Rest the bar first, then open the window, so
-        // the window's own tracker has the last word on the policy.
-        if Self.routesToMainWindow(newState, macMainWindow: model.settings.macMainWindow) {
-            dismiss()
-            onOpenMainWindow?()
-            return
-        }
         state = newState
         render()
     }
 
-    /// Whether a request for `state` opens the main window instead of the
-    /// bar's full state. Pure for the harness.
-    nonisolated static func routesToMainWindow(_ state: BarState, macMainWindow: Bool) -> Bool {
-        macMainWindow && state == .full
-    }
-
     /// Whether the bar draws at all for this state. Hidden-pill mode only
-    /// suppresses the COLLAPSED pill — the expanded/full states are always
+    /// suppresses the COLLAPSED pill — the expanded state is always
     /// user-summoned (☰, ⌥⌘K) and must never be eaten. Pure for testing.
     nonisolated static func shouldDraw(state: BarState, pillVisible: Bool) -> Bool {
         pillVisible || state != .collapsed
@@ -241,7 +244,6 @@ final class TopBarController {
             mainWindowOpen: model.mainWindowOpen,
             composeWindowOpen: model.composeWindowOpen,
             onboardingOpen: model.onboardingWindowOpen))
-        model.barFullOpen = (state == .full)
         guard Self.shouldDraw(state: state, pillVisible: effectiveVisible) else {
             panel?.orderOut(nil)
             return
@@ -368,24 +370,25 @@ final class TopBarController {
             onboardingOpen: model.onboardingWindowOpen))
     }
 
-    /// Show one item in the full view's reading pane. The single in-app answer
-    /// to "open this", shared by the panel rows and the urgent-mail card.
+    /// Show one item in the main window's reading pane. The single in-app
+    /// answer to "open this", shared by the panel rows, the urgent-mail card
+    /// and notification banners.
     func openInApp(_ item: FirewallItem) {
-        setState(.full)
+        openMainWindow()
         // The main window may be on Today or another section: bring Mail
         // forward on a facet that lists the item (M4b).
         if model.settings.macMainWindow { model.revealInMail(item) }
         Task { await model.select(item) }
     }
 
-    /// Actions for the FullView hosted by the standard main window (M2).
+    /// Actions for the shell hosted by the standard main window (M2).
     /// Same as the bar's, except leaving the full view closes the window:
     /// "Smaller" hands over to the expanded panel, ✕ just closes.
     func mainWindowActions() -> TopBarActions {
         makeActions(surface: .mainWindow)
     }
 
-    /// Which window a FullView's header buttons belong to.
+    /// Which window the actions belong to: the bar's panels or the main window.
     enum FullViewSurface { case bar, mainWindow }
 
     private func makeActions(surface: FullViewSurface = .bar) -> TopBarActions {
@@ -398,7 +401,7 @@ final class TopBarController {
         }
         return TopBarActions(
             onExpand: { [weak self] in self?.setState(.expanded) },
-            onExpandFull: { [weak self] in self?.setState(.full) },
+            onExpandFull: { [weak self] in self?.openMainWindow() },
             onRestore: { [weak self] in
                 guard let self else { return }
                 if surface == .mainWindow {
@@ -415,13 +418,13 @@ final class TopBarController {
             onOpenTier: { [weak self] tier in
                 guard let self else { return }
                 self.model.showTier(tier)
-                self.setState(.full)
+                self.openMainWindow()
             },
-            onOpenFull: { [weak self] in self?.setState(.full) },
+            onOpenFull: { [weak self] in self?.openMainWindow() },
             onOpenProposals: { [weak self] in
                 guard let self else { return }
                 self.model.listMode = .proposals
-                self.setState(.full)
+                self.openMainWindow()
             },
             onDismiss: { [weak self] item in guard let self else { return }; Task { await self.model.dismiss(item) } },
             onSnooze: { [weak self] item, option in
@@ -450,24 +453,18 @@ final class TopBarController {
             onQuit: { NSApplication.shared.terminate(nil) })
     }
 
-    /// The frame size for a state: expanded and full fit the screen (the
-    /// fixed 1140pt expanded overflowed narrow displays — clipping report,
-    /// 2026-08-15) and honor the user's drag-resize; the pill stays fixed.
+    /// The frame size for a state: expanded fits the screen (the fixed
+    /// 1140pt overflowed narrow displays — clipping report, 2026-08-15) and
+    /// honors the user's drag-resize; the pill stays fixed.
     private func panelSize(for state: BarState) -> NSSize {
         let ideal: NSSize
         switch state {
         case .collapsed: return TopBarMetrics.collapsed
         case .expanded: ideal = model.settings.expandedWindowSize ?? TopBarMetrics.expanded
-        case .full: ideal = model.settings.fullWindowSize ?? TopBarMetrics.full
         }
         guard let visible = (panel?.screen ?? NSScreen.main)?.visibleFrame else { return ideal }
         return TopBarMetrics.fittedSize(
-            ideal: ideal, visible: visible.size, floor: Self.minSize(for: state))
-    }
-
-    /// Per-state drag-resize floor. Pure for the harness.
-    nonisolated static func minSize(for state: BarState) -> NSSize {
-        state == .full ? TopBarMetrics.fullMin : TopBarMetrics.expandedMin
+            ideal: ideal, visible: visible.size, floor: TopBarMetrics.expandedMin)
     }
 
     /// Re-clamp the live panel when its frame went bad between renders
@@ -566,10 +563,10 @@ final class TopBarController {
         // is the exact clipping fittedSize exists to prevent.
         if panelIsFocusable {
             panel.contentMinSize = TopBarMetrics.fittedSize(
-                ideal: Self.minSize(for: state), visible: visible.size)
+                ideal: TopBarMetrics.expandedMin, visible: visible.size)
         }
-        // Honor Reduce Motion (WCAG 2.3.3 + CLAUDE.md): a full-window morph up to
-        // 1400px is exactly the large motion the setting exists to suppress.
+        // Honor Reduce Motion (WCAG 2.3.3 + CLAUDE.md): a panel morph up to
+        // 1140px is exactly the large motion the setting exists to suppress.
         let animate = Self.shouldAnimateFrame(
             reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
         let frame = TopBarMetrics.pinnedFrame(
@@ -591,16 +588,12 @@ final class TopBarController {
 }
 
 /// NSWindowDelegate hook that reports the size a user drag-resize settled on,
-/// so the full window's size survives state changes and relaunch. A separate
+/// so the expanded panel's size survives state changes and relaunch. A separate
 /// NSObject because the controller is a plain class.
 @MainActor
 final class PanelResizeRecorder: NSObject, NSWindowDelegate {
     var onLiveResizeEnd: ((NSSize) -> Void)?
     var onMoveOrResize: (() -> Void)?
-    var onKeyChange: ((Bool) -> Void)?
-
-    func windowDidBecomeKey(_ notification: Notification) { onKeyChange?(true) }
-    func windowDidResignKey(_ notification: Notification) { onKeyChange?(false) }
 
     func windowDidEndLiveResize(_ notification: Notification) {
         guard let window = notification.object as? NSWindow else { return }
