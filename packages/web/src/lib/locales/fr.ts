@@ -168,7 +168,7 @@ const fr: Record<string, string> = {
   "auth.headline": "Tous vos e-mails et agendas,",
   "auth.headlineAccent": "dans un seul endroit calme.",
   "auth.subline":
-    "Connectez dès aujourd'hui Gmail, Google Agenda et Naver Mail ; d'autres comptes arrivent. Chaque message est rangé dans l'une des cinq voies, avec la raison.",
+    "Connectez Gmail, Google Agenda, Naver Mail et iCloud Mail. Chaque message est rangé dans l'une des cinq voies, avec la raison.",
   "auth.formTitleLogin": "Se connecter à Klorn",
   "auth.formTitleRegister": "Créer votre compte Klorn",
   "auth.trustLine":

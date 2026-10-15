@@ -169,7 +169,7 @@ const en: Record<string, string> = {
   "auth.headline": "All your mail and calendars,",
   "auth.headlineAccent": "in one calm place.",
   "auth.subline":
-    "Connect Gmail, Google Calendar and Naver Mail today, with more accounts coming. Every message lands in one of five lanes, with the reason.",
+    "Connect Gmail, Google Calendar, Naver Mail and iCloud Mail. Every message lands in one of five lanes, with the reason.",
   "auth.formTitleLogin": "Sign in to Klorn",
   "auth.formTitleRegister": "Create your Klorn account",
   "auth.trustLine":

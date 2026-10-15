@@ -159,7 +159,7 @@ const zh: Record<string, string> = {
   "auth.headline": "所有邮件和日历，",
   "auth.headlineAccent": "汇聚在一个安静的地方。",
   "auth.subline":
-    "目前支持连接 Gmail、Google 日历和 Naver 邮箱，更多账户即将支持。每封邮件都会归入五个通道之一，并附上原因。",
+    "可连接 Gmail、Google 日历、Naver 邮箱和 iCloud 邮件。每封邮件都会归入五个通道之一，并附上原因。",
   "auth.formTitleLogin": "登录 Klorn",
   "auth.formTitleRegister": "创建 Klorn 账户",
   "auth.trustLine": "已完成 Google OAuth 审核（2026 年 10 月）· 已通过独立安全评估（CASA Tier 2）",

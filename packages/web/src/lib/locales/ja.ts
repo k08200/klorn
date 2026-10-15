@@ -165,7 +165,7 @@ const ja: Record<string, string> = {
   "auth.headline": "すべてのメールとカレンダーを、",
   "auth.headlineAccent": "ひとつの落ち着いた場所に。",
   "auth.subline":
-    "現在はGmail、Googleカレンダー、NAVERメールに対応し、ほかのアカウントも順次対応します。すべてのメールを5つのレーンに振り分け、理由も表示します。",
+    "Gmail、Googleカレンダー、NAVERメール、iCloudメールに対応しています。すべてのメールを5つのレーンに振り分け、理由も表示します。",
   "auth.formTitleLogin": "Klornにサインイン",
   "auth.formTitleRegister": "Klornアカウントを作成",
   "auth.trustLine": "Google OAuth 審査完了(2026年10月) · 第三者評価済み(CASA Tier 2)",

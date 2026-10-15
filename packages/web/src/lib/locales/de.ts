@@ -171,7 +171,7 @@ const de: Record<string, string> = {
   "auth.headline": "All deine E-Mails und Kalender,",
   "auth.headlineAccent": "an einem ruhigen Ort.",
   "auth.subline":
-    "Verbinde heute Gmail, Google Kalender und Naver Mail, weitere Konten folgen. Jede Nachricht landet in einer von fünf Spuren, mit Begründung.",
+    "Verbinde Gmail, Google Kalender, Naver Mail und iCloud Mail. Jede Nachricht landet in einer von fünf Spuren, mit Begründung.",
   "auth.formTitleLogin": "Bei Klorn anmelden",
   "auth.formTitleRegister": "Klorn-Konto erstellen",
   "auth.trustLine":

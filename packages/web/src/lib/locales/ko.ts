@@ -168,7 +168,7 @@ const ko: Record<string, string> = {
   "auth.headline": "모든 메일과 캘린더를,",
   "auth.headlineAccent": "한 곳에서 차분하게.",
   "auth.subline":
-    "지금은 Gmail, Google 캘린더, 네이버 메일을 연결할 수 있고, 다른 계정도 곧 이어집니다. 메일마다 다섯 레인 중 하나로 나누고 이유를 함께 보여 줍니다.",
+    "Gmail, Google 캘린더, 네이버 메일, iCloud 메일을 연결할 수 있습니다. 메일마다 다섯 레인 중 하나로 나누고 이유를 함께 보여 줍니다.",
   "auth.formTitleLogin": "Klorn에 로그인",
   "auth.formTitleRegister": "Klorn 계정 만들기",
   "auth.trustLine": "Google OAuth 검증 완료(2026년 10월) · 독립 보안 평가 완료(CASA Tier 2)",

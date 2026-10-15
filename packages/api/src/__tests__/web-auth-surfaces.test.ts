@@ -104,6 +104,22 @@ describe("sign-in surface vocabulary", () => {
     for (const key of required) expect(table[key], key).toBeTruthy();
   });
 
+  // Founder decision 2026-10-14: name only accounts that can be connected
+  // today, and never promise unconnectable ones — not even as "coming".
+  it.each(
+    Object.entries(LOCALES),
+  )("%s: the subline names only connectable accounts", (_code, table) => {
+    const subline = table["auth.subline"];
+    for (const live of [/Gmail/, /Google/, /Naver|NAVER|네이버/, /iCloud/]) {
+      expect(subline, String(live)).toMatch(live);
+    }
+    expect(subline).not.toMatch(/outlook|microsoft|imap|caldav/i);
+  });
+
+  it("the English subline makes no 'coming' promise", () => {
+    expect(en["auth.subline"]).not.toMatch(/coming|soon|next|more accounts/i);
+  });
+
   it("the trust line states only what klorn.ai/security states", () => {
     expect(en["auth.trustLine"]).toContain("CASA Tier 2");
     expect(en["auth.trustLine"]).toMatch(/Oct(ober)? 2026/);
