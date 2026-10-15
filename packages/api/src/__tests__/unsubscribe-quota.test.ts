@@ -20,7 +20,10 @@ function userUpdateMany({ where, data }: { where: Where; data: Data }) {
   const row = state.users.get(where.id as string) ?? { day: null, count: 0 };
   state.users.set(where.id as string, row);
   if (Array.isArray(where.OR)) {
-    if (row.day === data.autoUnsubscribeDay) return { count: 0 };
+    // Rolls over only a null or OLDER day (ISO dates sort as strings).
+    const olderThan = (where.OR as Array<{ autoUnsubscribeDay: { lt?: string } | null }>)[1]
+      .autoUnsubscribeDay as { lt: string };
+    if (row.day !== null && !(row.day < olderThan.lt)) return { count: 0 };
     row.day = data.autoUnsubscribeDay as string;
     row.count = data.autoUnsubscribeCount as number;
     return { count: 1 };
@@ -35,14 +38,19 @@ function userUpdateMany({ where, data }: { where: Where; data: Data }) {
 function sharedUpsert(strings: TemplateStringsArray, key: string, day: string, cap: number) {
   state.sql.push(strings.join("?"));
   const row = state.shared.get(key);
-  if (!row || row.day !== day) {
+  if (!row || row.day < day) {
     state.shared.set(key, { day, count: 1 });
     return [{ count: 1 }];
   }
+  // A stored day newer than the caller's: the WHERE is false, nothing returned.
+  if (row.day > day) return [];
   if (row.count >= cap) return [];
   row.count += 1;
   return [{ count: row.count }];
 }
+
+const captureError = vi.hoisted(() => vi.fn());
+vi.mock("../sentry.js", () => ({ captureError }));
 
 vi.mock("../db.js", () => ({
   prisma: {
@@ -60,6 +68,7 @@ import {
   autoUnsubscribeHostCap,
   autoUnsubscribeUserCap,
   reserveAutoUnsubscribe,
+  resetCapTripReportsForTests,
   targetDomain,
 } from "../mail/unsubscribe-quota.js";
 
@@ -75,6 +84,8 @@ beforeEach(() => {
   state.users.clear();
   state.shared.clear();
   state.sql.length = 0;
+  captureError.mockClear();
+  resetCapTripReportsForTests();
 });
 
 afterEach(() => {
@@ -193,7 +204,7 @@ describe("reserveAutoUnsubscribe", () => {
     const sql = state.sql[0].replace(/\s+/g, " ");
     expect(sql).toContain('ON CONFLICT ("key") DO UPDATE');
     expect(sql).toContain(
-      'WHERE "UnsubscribeQuota"."day" <> EXCLUDED."day" OR "UnsubscribeQuota"."count" < ?',
+      'WHERE "UnsubscribeQuota"."day" < EXCLUDED."day" OR ("UnsubscribeQuota"."day" = EXCLUDED."day" AND "UnsubscribeQuota"."count" < ?)',
     );
     expect(sql).toContain('RETURNING "count"');
   });
@@ -204,5 +215,47 @@ describe("reserveAutoUnsubscribe", () => {
     await expect(reserveAutoUnsubscribe("u1", "https://shop.com/u", NOW)).rejects.toThrow(
       "db down",
     );
+  });
+});
+
+describe("review hardening (2026-10-15)", () => {
+  it("refuses IP literals, empty labels and over-long names; strips every trailing dot", () => {
+    expect(targetDomain("https://1.2.3.4/u")).toBeNull();
+    expect(targetDomain("https://[::ffff:102:304]/u")).toBeNull();
+    expect(targetDomain("https://[64:ff9b::102:304]/u")).toBeNull();
+    expect(targetDomain(`https://${"a".repeat(250)}.com/u`)).toBeNull();
+    expect(targetDomain("https://a.victim.com../u")).toBe("victim.com");
+  });
+
+  it("a caller whose day is older than the stored one never resets today's counts", async () => {
+    process.env.AUTO_UNSUBSCRIBE_USER_DAILY_CAP = "1";
+    expect(await reserveAutoUnsubscribe("u1", "https://shop.com/u", TOMORROW)).toEqual({ ok: true });
+    // A stale call computed for the day before.
+    expect(await reserveAutoUnsubscribe("u1", "https://shop.com/u", NOW)).toEqual({
+      ok: false,
+      reason: "user-cap",
+    });
+    expect(state.users.get("u1")).toEqual({ day: "2026-10-16", count: 1 });
+    // The shared counter likewise refuses a stale day instead of resetting.
+    state.shared.set("host:other.com", { day: "2026-10-16", count: 3 });
+    expect(await reserveAutoUnsubscribe("u2", "https://other.com/u", NOW)).toEqual({
+      ok: false,
+      reason: "host-cap",
+    });
+    expect(state.shared.get("host:other.com")).toEqual({ day: "2026-10-16", count: 3 });
+  });
+
+  it("a tripped host cap is reported once per target per day, with the domain only in extra", async () => {
+    process.env.AUTO_UNSUBSCRIBE_HOST_DAILY_CAP = "1";
+    await reserveAutoUnsubscribe("u1", "https://a.victim.com/u", NOW);
+    await reserveAutoUnsubscribe("u2", "https://b.victim.com/u", NOW);
+    await reserveAutoUnsubscribe("u3", "https://c.victim.com/u", NOW);
+    expect(captureError).toHaveBeenCalledTimes(1);
+    const [err, context] = captureError.mock.calls[0];
+    expect((err as Error).message).toBe("auto-unsubscribe host-cap reached");
+    expect(context).toEqual({
+      tags: { scope: "auto-unsubscribe.cap" },
+      extra: { reason: "host-cap", domain: "victim.com", day: "2026-10-15" },
+    });
   });
 });
