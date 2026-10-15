@@ -88,8 +88,14 @@ const K_WORK = calendarKeyOf(new URL(WORK, `https://${ICLOUD_PARTITION}`));
 const WINDOW = { timeMin: "2026-10-01T00:00:00.000Z", timeMax: "2026-10-31T00:00:00.000Z" };
 const ACCOUNT = "acct-icloud";
 
-function event(externalId: string, start: string, end: string): ProviderCalendarEvent {
+function event(
+  externalId: string,
+  start: string,
+  end: string,
+  calendarKey: string = K_HOME,
+): ProviderCalendarEvent {
   return {
+    calendarKey,
     externalId,
     summary: externalId,
     description: null,
@@ -257,7 +263,8 @@ describe("unknown calendars and the deletion valve", () => {
       "ICLOUD",
       "u1",
       ACCOUNT,
-      listing([], true, [K_HOME]),
+      // Not empty (a new event), so this is about the calendars, not the empty-listing wait.
+      listing([event("new@x", "", "")], true, [K_HOME]),
       NOW,
     );
     expect(result.removed).toBe(1);
@@ -284,7 +291,12 @@ describe("unknown calendars and the deletion valve", () => {
   ])("of %d rows in the window, %d vanished: removed (%d)", async (total, gone, removed) => {
     const all = rows(total);
     db.tx.calendarEvent.findMany.mockResolvedValue(all);
-    const kept = all.slice(gone).map((r) => event(r.externalId as string, "", ""));
+    // One event the window has no row for yet keeps the listing non-empty, so the
+    // valve alone decides (an empty listing waits for a second one, below).
+    const kept = all
+      .slice(gone)
+      .map((r) => event(r.externalId as string, "", ""))
+      .concat(event("new@x", "", ""));
     const result = await removeRowsMissingFromWindow(
       "ICLOUD",
       "u1",
@@ -326,6 +338,138 @@ describe("unknown calendars and the deletion valve", () => {
     await removeRowsMissingFromWindow("NAVER", "u2", "acct-naver", listing([], true), NOW);
     expect(captureError).toHaveBeenCalledTimes(2);
     expect(db.tx.calendarEvent.deleteMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("an empty listing removes only when the next sync confirms it", () => {
+  const empty = () => listing([], true);
+  const remove = (account = ACCOUNT, l = empty()) =>
+    removeRowsMissingFromWindow("ICLOUD", "u1", account, l, NOW);
+
+  it("the first empty listing over a few rows keeps them (a transient empty 207)", async () => {
+    db.tx.calendarEvent.findMany.mockResolvedValue(rows(3));
+    expect(await remove()).toEqual({ removed: 0, resolved: 0 });
+    expect(db.tx.calendarEvent.deleteMany).not.toHaveBeenCalled();
+    expect(db.tx.attentionItem.updateMany).not.toHaveBeenCalled();
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("the same empty listing on the next sync removes them", async () => {
+    db.tx.calendarEvent.findMany.mockResolvedValue(rows(3));
+    await remove();
+    expect(await remove()).toEqual({ removed: 3, resolved: 0 });
+    expect(db.tx.calendarEvent.deleteMany).toHaveBeenCalledWith({
+      where: { userId: "u1", id: { in: ["r-0", "r-1", "r-2"] } },
+    });
+  });
+
+  it("a listing with events in between starts the wait again", async () => {
+    const all = rows(3);
+    db.tx.calendarEvent.findMany.mockResolvedValue(all);
+    await remove();
+    const everyRow = all.map((r) => event(r.externalId as string, "", ""));
+    await remove(ACCOUNT, listing(everyRow, true));
+    expect(await remove()).toEqual({ removed: 0, resolved: 0 });
+    expect(await remove()).toEqual({ removed: 3, resolved: 0 });
+  });
+
+  it("a different set of vanished rows does not confirm the first", async () => {
+    db.tx.calendarEvent.findMany.mockResolvedValueOnce(rows(3)).mockResolvedValue(rows(2));
+    await remove();
+    expect(await remove()).toEqual({ removed: 0, resolved: 0 });
+    expect(await remove()).toEqual({ removed: 2, resolved: 0 });
+  });
+
+  it("another account's empty listing does not confirm this one", async () => {
+    db.tx.calendarEvent.findMany.mockResolvedValue(rows(3));
+    await remove("acct-a");
+    expect(await remove("acct-b")).toEqual({ removed: 0, resolved: 0 });
+    expect(db.tx.calendarEvent.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("a confirmed empty listing still meets the valve", async () => {
+    db.tx.calendarEvent.findMany.mockResolvedValue(rows(8));
+    await remove();
+    expect(await remove()).toEqual({ removed: 0, resolved: 0 });
+    expect(db.tx.calendarEvent.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("an empty calendar's rows wait while another calendar's vanished row goes at once", async () => {
+    const home = row("r-home", "home@x", "2026-10-05T01:00:00Z", "2026-10-05T02:00:00Z");
+    const work = row("r-work", "work@x", "2026-10-06T01:00:00Z", "2026-10-06T02:00:00Z", K_WORK);
+    const homeGone = row("r-home-gone", "hg@x", "2026-10-07T01:00:00Z", "2026-10-07T02:00:00Z");
+    db.tx.calendarEvent.findMany.mockResolvedValue([home, work, homeGone]);
+    const homeOnly = () => listing([event("home@x", "", "")], true);
+    expect(await remove(ACCOUNT, homeOnly())).toEqual({ removed: 1, resolved: 0 });
+    expect(db.tx.calendarEvent.deleteMany).toHaveBeenLastCalledWith({
+      where: { userId: "u1", id: { in: ["r-home-gone"] } },
+    });
+    const logged = vi.mocked(console.log).mock.calls.map((c) => String(c[0]));
+    expect(logged.at(-1)).toContain("rows=1 attentionResolved=0 heldUntilConfirmed=1");
+    // The mock still returns r-home-gone (its delete is not applied to the mock), so
+    // the second sync removes it again along with the confirmed work row.
+    expect(await remove(ACCOUNT, homeOnly())).toEqual({ removed: 2, resolved: 0 });
+    expect(db.tx.calendarEvent.deleteMany).toHaveBeenLastCalledWith({
+      where: { userId: "u1", id: { in: ["r-work", "r-home-gone"] } },
+    });
+  });
+
+  it("a listing that removes only from calendars with events starts the wait again", async () => {
+    const all = rows(3);
+    db.tx.calendarEvent.findMany.mockResolvedValue(all);
+    await remove();
+    await remove(ACCOUNT, listing([event(all[0].externalId as string, "", "")], true));
+    expect(await remove()).toEqual({ removed: 0, resolved: 0 });
+  });
+
+  it("an empty listing with nothing to remove starts the wait again", async () => {
+    db.tx.calendarEvent.findMany
+      .mockResolvedValueOnce(rows(3))
+      .mockResolvedValueOnce([])
+      .mockResolvedValue(rows(3));
+    await remove();
+    await remove();
+    expect(await remove()).toEqual({ removed: 0, resolved: 0 });
+    expect(await remove()).toEqual({ removed: 3, resolved: 0 });
+  });
+
+  it("confirms the same rows read in another order", async () => {
+    db.tx.calendarEvent.findMany
+      .mockResolvedValueOnce(rows(3))
+      .mockResolvedValue(rows(3).reverse());
+    await remove();
+    expect((await remove()).removed).toBe(3);
+  });
+
+  it("a valve refusal neither starts nor confirms the wait", async () => {
+    db.tx.calendarEvent.findMany.mockResolvedValueOnce(rows(8)).mockResolvedValue(rows(3));
+    await remove();
+    expect(await remove()).toEqual({ removed: 0, resolved: 0 });
+    expect(await remove()).toEqual({ removed: 3, resolved: 0 });
+  });
+
+  it("a listing that is not complete starts the wait again", async () => {
+    db.tx.calendarEvent.findMany.mockResolvedValue(rows(3));
+    await remove();
+    await remove(ACCOUNT, listing([], false));
+    expect(await remove()).toEqual({ removed: 0, resolved: 0 });
+    expect(await remove()).toEqual({ removed: 3, resolved: 0 });
+  });
+
+  it("a removal that fails starts the wait again (rows kept, the error propagates)", async () => {
+    db.tx.calendarEvent.findMany.mockResolvedValue(rows(3));
+    await remove();
+    db.tx.calendarEvent.deleteMany.mockRejectedValueOnce(new Error("db down"));
+    await expect(remove()).rejects.toThrow("db down");
+    expect(await remove()).toEqual({ removed: 0, resolved: 0 });
+    expect(await remove()).toEqual({ removed: 3, resolved: 0 });
+  });
+
+  it("a listing with events removes on the first sync, as before", async () => {
+    const all = rows(3);
+    db.tx.calendarEvent.findMany.mockResolvedValue(all);
+    const kept = [event(all[0].externalId as string, "", "")];
+    expect(await remove(ACCOUNT, listing(kept, true))).toEqual({ removed: 2, resolved: 0 });
   });
 });
 
@@ -440,6 +584,37 @@ describe("syncLinkedCalendarWindow with a CalDAV session (fake server)", () => {
     expect(db.tx.calendarEvent.deleteMany).not.toHaveBeenCalled();
     expect(db.tx.attentionItem.updateMany).not.toHaveBeenCalled();
     expect(captureError).toHaveBeenCalledTimes(1);
+  });
+
+  it("one calendar's empty 207 while the other lists events: its rows wait a sync", async () => {
+    const work = row("r-work", "work@x", "2026-10-06T01:00:00Z", "2026-10-06T02:00:00Z", K_WORK);
+    db.tx.calendarEvent.findMany.mockResolvedValue([STALE, work]);
+    const pages = {
+      [HOME]: { status: 207, body: icloudReportXml([ICLOUD_TIMED]) },
+      [WORK]: { status: 207, body: icloudReportXml([]) },
+    };
+    await syncLinkedCalendarWindow(await session(pages), "u1", ACCOUNT, "Asia/Seoul", NOW);
+    expect(db.tx.calendarEvent.deleteMany).toHaveBeenLastCalledWith({
+      where: { userId: "u1", id: { in: ["r-stale"] } },
+    });
+    await syncLinkedCalendarWindow(await session(pages), "u1", ACCOUNT, "Asia/Seoul", NOW);
+    expect(db.tx.calendarEvent.deleteMany).toHaveBeenLastCalledWith({
+      where: { userId: "u1", id: { in: ["r-stale", "r-work"] } },
+    });
+  });
+
+  it("an empty 207 over a few rows: kept, then removed when the next sync is empty too", async () => {
+    db.tx.calendarEvent.findMany.mockResolvedValue(rows(2));
+    const empty207 = {
+      [HOME]: { status: 207, body: icloudReportXml([]) },
+      [WORK]: { status: 207, body: icloudReportXml([]) },
+    };
+    await syncLinkedCalendarWindow(await session(empty207), "u1", ACCOUNT, "Asia/Seoul", NOW);
+    expect(db.tx.calendarEvent.deleteMany).not.toHaveBeenCalled();
+    await syncLinkedCalendarWindow(await session(empty207), "u1", ACCOUNT, "Asia/Seoul", NOW);
+    expect(db.tx.calendarEvent.deleteMany).toHaveBeenCalledWith({
+      where: { userId: "u1", id: { in: ["r-0", "r-1"] } },
+    });
   });
 
   it("a calendar missing from discovery: its rows are kept, the listed calendar's stale row goes", async () => {
