@@ -2344,11 +2344,17 @@ needs FA-9 and the admin guidance from F0.
     one invite are two entries unless they share provider and UID. (4) Discovery runs
     every sync (3 PROPFINDs per account per 15 minutes); the home set is not cached.
     (5) Rows store no transparency, so a transparent timed event is a row conflict
-    (C7's limit (2)). (6) Found while wiring, NOT fixed (pre-existing, outside C3):
-    `readSyncTimezone` in `pim/calendar-sync.ts` reads `User.timezone`, which does
-    not exist (the zone is on `AutomationConfig`), so every sync passes the default
-    `Asia/Seoul`; CalDAV floating times are read in Seoul during the sync, as are
-    Google's offset-less times. `busyBlocks` reads the configured zone. (7) ical.js
+    (C7's limit (2)). (6) Found while wiring (pre-existing, outside C3), fixed
+    2026-10-15: `readSyncTimezone` in `pim/calendar-sync.ts` read `User.timezone`,
+    which does not exist (the zone is on `AutomationConfig`), so every sync passed
+    the default `Asia/Seoul`: CalDAV floating times, Google's offset-less times and
+    Outlook's `Prefer: outlook.timezone` were all Seoul. It now reads
+    `getUserTimeZone` (`AutomationConfig.timezone`), like `busyBlocks`. The tests
+    had mocked the missing column, so they passed. Side effect, once per zone
+    change: a floating-time CalDAV series is keyed `UID#<UTC start>`, so a new zone
+    gives its occurrences new ids; the next complete listing writes them and the
+    window reconcile removes the old ones (an incomplete listing leaves them until
+    they age out). Prod had no ICLOUD, NAVER or OUTLOOK row when this shipped. (7) ical.js
     2.2.1 does not expand a YEARLY rule with BYHOUR, BYMINUTE or BYSECOND as RFC
     5545 says (`FREQ=YEARLY;BYHOUR=9,10` gives one time a year; with BYSECOND as well,
     nothing). Such a series is missing or wrong, the same way every sync, so it never

@@ -232,7 +232,7 @@ beforeEach(() => {
   ]);
   override("user.findMany", () => [{ id: USER, plan: "PRO", role: "USER" }]);
   override("userToken.findMany", () => [{ userId: USER }]);
-  override("user.findUnique", () => ({ id: USER, timezone: "Asia/Seoul" }));
+  override("automationConfig.findUnique", () => ({ timezone: "Asia/Seoul" }));
   override("calendarEvent.upsert", (arg) => {
     upsertArgs.push(arg);
     return {};
@@ -447,6 +447,29 @@ describe("scheduler calendar step — primary calendar", () => {
     });
   });
 
+  it("reads a naive timed value in the zone the user configured (AutomationConfig)", async () => {
+    override("automationConfig.findUnique", () => ({ timezone: "America/New_York" }));
+    m.eventsList.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "g-naive-ny",
+            summary: "Naive",
+            start: { dateTime: "2026-10-02T09:00:00" },
+            end: { dateTime: "2026-10-02T10:00:00" },
+          },
+        ],
+      },
+    });
+
+    await runOneTick();
+
+    expect(eventUpserts()[0]?.create).toMatchObject({
+      startTime: new Date("2026-10-02T13:00:00.000Z"),
+      endTime: new Date("2026-10-02T14:00:00.000Z"),
+    });
+  });
+
   it("does not sync a user who never connected Google, and never asks for a client", async () => {
     override("userToken.findMany", () => []);
     await runOneTick();
@@ -537,7 +560,7 @@ describe("scheduler calendar step — linked calendars (LINKED_CALENDAR_SYNC_ENA
       expect(m.googleCalendar).toHaveBeenCalledTimes(1);
       expect(m.googleCalendar).toHaveBeenCalledWith({ version: "v3", auth: AUTH });
       expect(m.eventsList).toHaveBeenCalledTimes(1);
-      expect(callsTo("user.findUnique")).toBe(1);
+      expect(callsTo("automationConfig.findUnique")).toBe(1);
       const rows = eventUpserts();
       expect(rows).toHaveLength(1);
       expect(rows[0]?.create).toMatchObject({ googleId: "g-primary", sourceAccountId: null });
@@ -634,7 +657,7 @@ describe("scheduler calendar step — linked calendars (LINKED_CALENDAR_SYNC_ENA
       await runOneTick();
 
       expect(m.eventsList).toHaveBeenCalledTimes(1);
-      expect(callsTo("user.findUnique")).toBe(1);
+      expect(callsTo("automationConfig.findUnique")).toBe(1);
     });
 
     it("reads the linked accounts once per cycle and looks nothing else up per account", async () => {
