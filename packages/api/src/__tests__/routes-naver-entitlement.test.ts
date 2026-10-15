@@ -8,10 +8,14 @@
 
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { type LinkedRowFixture, linkedRowsFindFirst } from "./helpers/linked-rows-find-first.js";
 
 const state = vi.hoisted(() => ({ plan: "FREE", role: "USER" }));
 const tokenFindFirst = vi.hoisted(() => vi.fn(async (_args?: unknown) => null as unknown));
+/** The LinkedInboxAccount rows this user owns (read by every findFirst). */
+const rows = vi.hoisted(() => ({ list: [] as LinkedRowFixture[] }));
 const linkedFindFirst = vi.hoisted(() => vi.fn(async (_args?: unknown) => null as unknown));
+const linkedUpsert = vi.hoisted(() => vi.fn(async (_args?: unknown) => ({ id: "row-1" })));
 const linkedDeleteMany = vi.hoisted(() => vi.fn(async (_args?: unknown) => ({ count: 0 })));
 const verifyImapCredentials = vi.hoisted(() => vi.fn(async (_args?: unknown) => ({ ok: true })));
 
@@ -33,7 +37,7 @@ vi.mock("../db.js", () => {
       findUnique: vi.fn(async () => null),
       findFirst: linkedFindFirst,
       count: vi.fn(async () => 0),
-      upsert: vi.fn(async () => ({ id: "row-1" })),
+      upsert: linkedUpsert,
       deleteMany: linkedDeleteMany,
     },
     device: {
@@ -71,7 +75,9 @@ beforeEach(() => {
   state.plan = "FREE";
   state.role = "USER";
   tokenFindFirst.mockResolvedValue(null);
-  linkedFindFirst.mockResolvedValue(null);
+  rows.list = [];
+  linkedFindFirst.mockImplementation(linkedRowsFindFirst(() => rows.list));
+  linkedUpsert.mockImplementation(async () => ({ id: "row-1" }));
 });
 
 const connect = (app: Awaited<ReturnType<typeof buildApp>>["app"], headers: object) =>
@@ -113,7 +119,7 @@ describe("Naver multi-account gating (PAYWALL_ENABLED=true)", () => {
   });
 
   it("403s a FREE user who already has another linked mailbox (even one needing reconnect)", async () => {
-    linkedFindFirst.mockResolvedValue({ id: "icloud-row" });
+    rows.list = [{ id: "icloud-row", provider: "ICLOUD", email: "me@icloud.com" }];
     const { app, headers } = await buildApp();
     const res = await connect(app, headers);
     expect(res.statusCode).toBe(403);
@@ -121,23 +127,57 @@ describe("Naver multi-account gating (PAYWALL_ENABLED=true)", () => {
     await app.close();
   });
 
-  it("does not count the account being re-connected against itself", async () => {
+  it("always lets a FREE user re-connect a Naver account they already own, even with other sources", async () => {
+    // Grandfathered: primary Gmail + this Naver row from before the paywall flipped.
+    tokenFindFirst.mockResolvedValue({ id: "google-token" });
+    rows.list = [{ id: "naver-row", provider: "NAVER", email: "me@naver.com" }];
     const { app, headers } = await buildApp();
-    await connect(app, headers);
-    expect(linkedFindFirst.mock.calls[0]?.[0]).toMatchObject({
-      where: { userId: "user-1", NOT: { provider: "NAVER", email: "me@naver.com" } },
+    const res = await connect(app, headers);
+    expect(res.statusCode).toBe(200);
+    expect(linkedDeleteMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("matches the owned account case-insensitively and re-verifies THAT row (no duplicate)", async () => {
+    tokenFindFirst.mockResolvedValue({ id: "google-token" });
+    rows.list = [{ id: "naver-row", provider: "NAVER", email: "Me@Naver.com" }];
+    const { app, headers } = await buildApp();
+    const res = await connect(app, headers); // typed me@naver.com
+    expect(res.statusCode).toBe(200);
+    expect(linkedUpsert.mock.calls[0]?.[0]).toMatchObject({
+      where: {
+        userId_provider_email: { userId: "user-1", provider: "NAVER", email: "Me@Naver.com" },
+      },
     });
     await app.close();
   });
 
   it("removes a NEW row when a parallel first connect committed meanwhile (check-after-insert)", async () => {
-    // Pre-check: nothing else. Post-insert check: another mailbox now exists.
-    linkedFindFirst.mockResolvedValueOnce(null).mockResolvedValue({ id: "parallel-row" });
+    // Pre-check: nothing else. By the time this row is written, another mailbox exists.
+    linkedUpsert.mockImplementation(async () => {
+      rows.list = [
+        { id: "row-1", provider: "NAVER", email: "me@naver.com" },
+        { id: "parallel-row", provider: "ICLOUD", email: "me@icloud.com" },
+      ];
+      return { id: "row-1" };
+    });
     const { app, headers } = await buildApp();
     const res = await connect(app, headers);
     expect(res.statusCode).toBe(403);
     expect(res.json().code).toBe("ENTITLEMENT_REQUIRED");
     expect(linkedDeleteMany).toHaveBeenCalledWith({ where: { id: "row-1", userId: "user-1" } });
+    await app.close();
+  });
+
+  it("keeps a NEW row when it is still the only mailbox after the write", async () => {
+    linkedUpsert.mockImplementation(async () => {
+      rows.list = [{ id: "row-1", provider: "NAVER", email: "me@naver.com" }];
+      return { id: "row-1" };
+    });
+    const { app, headers } = await buildApp();
+    const res = await connect(app, headers);
+    expect(res.statusCode).toBe(200);
+    expect(linkedDeleteMany).not.toHaveBeenCalled();
     await app.close();
   });
 

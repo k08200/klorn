@@ -38,6 +38,7 @@ import {
   canConnectNewMailAccount,
   keepIfOnlyMailSource,
   mayConnectMailAccount,
+  normalizeMailAccountEmail,
   SECOND_MAIL_ACCOUNT_REFUSAL,
 } from "../billing/mail-account-entitlement.js";
 import { encryptToken } from "../crypto-tokens.js";
@@ -135,6 +136,8 @@ function isServerChange(
 interface ExistingAccount {
   id: string;
   imapHost: string | null;
+  /** The address as stored — the row's key, whatever case this request typed. */
+  email: string;
 }
 
 async function findExistingAccount(
@@ -142,9 +145,21 @@ async function findExistingAccount(
   userId: string,
   email: string,
 ): Promise<ExistingAccount | null> {
-  return prisma.linkedInboxAccount.findUnique({
+  const select = { id: true, imapHost: true, email: true } as const;
+  const exact = await prisma.linkedInboxAccount.findUnique({
     where: { userId_provider_email: { userId, provider: cfg.provider, email } },
-    select: { id: true, imapHost: true },
+    select,
+  });
+  if (exact) return exact;
+  // The same mailbox typed in another case (A@x.com vs a@x.com): re-verify that
+  // row instead of adding a duplicate of it.
+  return prisma.linkedInboxAccount.findFirst({
+    where: {
+      userId,
+      provider: cfg.provider,
+      email: { equals: normalizeMailAccountEmail(email), mode: "insensitive" },
+    },
+    select,
   });
 }
 
@@ -375,7 +390,14 @@ export function imapConnectRoutes(
           return { ok: false, message: verify.message };
         }
 
-        const saved = await saveAccount(cfg, { userId, email, imapHost, password, existing });
+        // An existing row keeps its stored address as the key.
+        const saved = await saveAccount(cfg, {
+          userId,
+          email: existing?.email ?? email,
+          imapHost,
+          password,
+          existing,
+        });
         if (!saved.ok) {
           // Another request changed the account's server while this one was being verified.
           reply.code(409);

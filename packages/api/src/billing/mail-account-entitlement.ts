@@ -5,22 +5,26 @@
  * `multi_account` feature (Pro). Every connect route asks here; nothing else
  * decides it.
  *
- * What counts as an existing source: the primary Google token, or ANY
- * LinkedInboxAccount row — including one marked needsReconnect. Counting only
- * working rows would let a Free user hold two mailboxes by rotation (connect A,
- * let A break, connect B, then "repair" A). The repair case is handled the
- * other way: the account being (re)connected is identified by its
- * (provider, email) key and never counts against itself, so a user can always
- * re-verify their own mailbox. To switch mailboxes on Free, disconnect first.
+ * Only NEW accounts are gated. Re-verifying or reconnecting a row (or the
+ * primary Google token) the user ALREADY owns is always allowed, so nobody is
+ * ever locked out of repairing a mailbox they have — including a Free user who
+ * holds several from before the paywall flipped. The key is (provider, email),
+ * the email compared trimmed and case-insensitively.
  *
- * Race: the check runs before the write, and again after a NEW row was
- * inserted (keepIfOnlyMailSource). The second check fails closed: if any other
- * source exists by then, the new row is removed. Two parallel first connects of
- * different accounts can therefore at worst both be refused (the user retries
- * one), never both kept.
+ * What counts as an existing source for a NEW account: the primary Google
+ * token, or ANY LinkedInboxAccount row — including one marked needsReconnect.
+ * Counting only working rows would let a Free user hold two mailboxes by
+ * rotation (connect A, let A break, connect B). To switch mailboxes on Free,
+ * disconnect first.
  *
- * Sign-in with Google stores the primary token through the sign-in flow, which
- * is not gated here.
+ * Race: the check runs before the write, and again after a NEW row or token was
+ * created (keepIfOnlyMailSource / keepPrimaryGoogleIfOnlyMailSource). The
+ * second check fails closed — on a refusal AND on an error — by removing what
+ * was just created. Two parallel first connects of different accounts can at
+ * worst both be refused (the user retries one), never both kept.
+ *
+ * Google sign-in does not store the primary token (only the connect callback
+ * does), so it is not gated here.
  *
  * PAYWALL_ENABLED off: everything is allowed, before any DB read.
  */
@@ -31,6 +35,7 @@ import { getUserId } from "../auth.js";
 import { PAYWALL_ENABLED } from "../config.js";
 import { prisma } from "../db.js";
 import { hasAnyMailSource } from "../mail/mail-source.js";
+import { captureError } from "../sentry.js";
 import { planHasFeature } from "./stripe.js";
 
 export interface MailAccountKey {
@@ -44,6 +49,19 @@ export const SECOND_MAIL_ACCOUNT_REFUSAL = {
   code: "ENTITLEMENT_REQUIRED",
 } as const;
 
+/** The account key's email in the form every comparison uses. */
+export function normalizeMailAccountEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+/** A Prisma filter matching this account's rows, email compared case-insensitively. */
+function accountWhere(account: MailAccountKey) {
+  return {
+    provider: account.provider,
+    email: { equals: normalizeMailAccountEmail(account.email), mode: "insensitive" as const },
+  };
+}
+
 async function hasMultiAccount(userId: string): Promise<boolean> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -52,25 +70,44 @@ async function hasMultiAccount(userId: string): Promise<boolean> {
   return planHasFeature(user?.plan ?? "FREE", "multi_account", user?.role ?? undefined);
 }
 
+async function hasPrimaryGoogleToken(userId: string): Promise<boolean> {
+  const token = await prisma.userToken.findFirst({
+    where: { userId, provider: "google" },
+    select: { id: true },
+  });
+  return token !== null;
+}
+
 type Excluding = { account: MailAccountKey } | { provider: InboxProvider };
 
 /** Any mail source other than the excluded account (or provider)? Scoped by userId. */
 async function hasOtherMailSource(userId: string, excluding: Excluding): Promise<boolean> {
   const notExcluded =
     "account" in excluding
-      ? { NOT: { provider: excluding.account.provider, email: excluding.account.email } }
+      ? { NOT: accountWhere(excluding.account) }
       : { provider: { not: excluding.provider } };
-  const [googleToken, otherLinked] = await Promise.all([
-    prisma.userToken.findFirst({
-      where: { userId, provider: "google" },
-      select: { id: true },
-    }),
+  const [primary, otherLinked] = await Promise.all([
+    hasPrimaryGoogleToken(userId),
     prisma.linkedInboxAccount.findFirst({
       where: { userId, ...notExcluded },
       select: { id: true },
     }),
   ]);
-  return googleToken !== null || otherLinked !== null;
+  return primary || otherLinked !== null;
+}
+
+async function ownsLinkedAccount(userId: string, account: MailAccountKey): Promise<boolean> {
+  const row = await prisma.linkedInboxAccount.findFirst({
+    where: { userId, ...accountWhere(account) },
+    select: { id: true },
+  });
+  return row !== null;
+}
+
+/** May this user ADD this account as a new one (ignoring rows of the same key)? */
+async function mayAddMailAccount(userId: string, account: MailAccountKey): Promise<boolean> {
+  if (await hasMultiAccount(userId)) return true;
+  return !(await hasOtherMailSource(userId, { account }));
 }
 
 /** May this user connect (or re-connect) exactly this account? */
@@ -79,42 +116,76 @@ export async function mayConnectMailAccount(
   account: MailAccountKey,
 ): Promise<boolean> {
   if (!PAYWALL_ENABLED) return true;
-  if (await hasMultiAccount(userId)) return true;
-  return !(await hasOtherMailSource(userId, { account }));
+  if (await ownsLinkedAccount(userId, account)) return true; // a repair, never gated
+  return mayAddMailAccount(userId, account);
 }
 
 /**
- * OAuth start, where the address is not known yet: ignore this provider's rows
- * (the user may be re-linking one of them). The callback then runs
+ * OAuth start, where the address is not known yet. A user who already owns a
+ * row of this provider may be repairing it, and every row of this provider is
+ * ignored when looking for other sources. The callback then runs
  * mayConnectMailAccount with the real address, so this is only a pre-filter.
  */
 export async function mayStartMailLink(userId: string, provider: InboxProvider): Promise<boolean> {
   if (!PAYWALL_ENABLED) return true;
   if (await hasMultiAccount(userId)) return true;
+  const ownsProviderRow = await prisma.linkedInboxAccount.findFirst({
+    where: { userId, provider },
+    select: { id: true },
+  });
+  if (ownsProviderRow) return true;
   return !(await hasOtherMailSource(userId, { provider }));
+}
+
+/**
+ * Runs the post-write re-check and removes what was just created when it
+ * refuses OR throws (fail closed). The removal itself is best effort: its own
+ * failure is reported, and the answer is still a refusal.
+ */
+async function keepOrRollBack(
+  scope: string,
+  userId: string,
+  allowed: () => Promise<boolean>,
+  rollBack: () => Promise<unknown>,
+): Promise<boolean> {
+  let keep = false;
+  try {
+    keep = await allowed();
+  } catch (err) {
+    console.warn(`[MAIL-ENTITLEMENT] ${scope} re-check failed for ${userId}; rolling back:`, err);
+    captureError(err, { tags: { scope: `mail-entitlement.${scope}.recheck`, userId } });
+  }
+  if (keep) return true;
+  try {
+    await rollBack();
+  } catch (err) {
+    console.error(`[MAIL-ENTITLEMENT] ${scope} rollback failed for ${userId}:`, err);
+    captureError(err, { tags: { scope: `mail-entitlement.${scope}.rollback`, userId } });
+  }
+  return false;
 }
 
 /**
  * Check-after-insert for a row this request just CREATED. Returns false (and
  * deletes the row, scoped to the user) when a Free user now has another source,
- * e.g. a parallel first connect that committed meanwhile.
+ * e.g. a parallel first connect that committed meanwhile, or when the check
+ * itself fails.
  */
 export async function keepIfOnlyMailSource(
   userId: string,
   saved: MailAccountKey & { id: string },
 ): Promise<boolean> {
-  if (await mayConnectMailAccount(userId, saved)) return true;
-  await prisma.linkedInboxAccount.deleteMany({ where: { id: saved.id, userId } });
-  return false;
+  if (!PAYWALL_ENABLED) return true;
+  return keepOrRollBack(
+    "linked",
+    userId,
+    () => mayAddMailAccount(userId, saved),
+    () => prisma.linkedInboxAccount.deleteMany({ where: { id: saved.id, userId } }),
+  );
 }
 
-/**
- * The primary Google slot (POST /google/start and its integration callback) is
- * one per user: an existing primary token is the same slot being repaired or
- * replaced, never "another" source. So on Free it only needs no linked row.
- */
-export async function mayConnectPrimaryGoogle(userId: string): Promise<boolean> {
-  if (!PAYWALL_ENABLED) return true;
+/** Free + no multi_account: may this user add a primary Google inbox (no linked row)? */
+async function mayAddPrimaryGoogle(userId: string): Promise<boolean> {
   if (await hasMultiAccount(userId)) return true;
   const linked = await prisma.linkedInboxAccount.findFirst({
     where: { userId },
@@ -124,48 +195,32 @@ export async function mayConnectPrimaryGoogle(userId: string): Promise<boolean> 
 }
 
 /**
- * Check-after-write for a primary token this request just CREATED. Fails
- * closed like keepIfOnlyMailSource: a Free user who now also has a linked row
- * loses the new token. Only call it when no token existed before the write.
+ * The primary Google slot (POST /google/start and its integration callback) is
+ * one per user. A user who already has a primary token is repairing it, which is
+ * never gated; a NEW primary inbox on Free needs no linked row.
  */
-export async function keepPrimaryGoogleIfOnlyMailSource(userId: string): Promise<boolean> {
-  if (await mayConnectPrimaryGoogle(userId)) return true;
-  await prisma.userToken.deleteMany({ where: { userId, provider: "google" } });
-  return false;
+export async function mayConnectPrimaryGoogle(userId: string): Promise<boolean> {
+  if (!PAYWALL_ENABLED) return true;
+  if (await hasPrimaryGoogleToken(userId)) return true;
+  return mayAddPrimaryGoogle(userId);
 }
 
 /**
- * The one linked inbox a user WITHOUT multi_account may sync: their first
- * mailbox, when it is a linked row (no primary Google token). Null when the
- * primary Google inbox is the first mailbox, or there is none.
+ * Check-after-write for a primary token this request just CREATED (call it
+ * only when no token existed before the write). Fails closed like
+ * keepIfOnlyMailSource and deletes exactly that token, by id.
  */
-export async function firstLinkedMailSourceId(userId: string): Promise<string | null> {
-  const [googleToken, oldest] = await Promise.all([
-    prisma.userToken.findFirst({
-      where: { userId, provider: "google" },
-      select: { id: true },
-    }),
-    prisma.linkedInboxAccount.findFirst({
-      where: { userId },
-      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-      select: { id: true },
-    }),
-  ]);
-  if (googleToken) return null;
-  return oldest?.id ?? null;
-}
-
-/**
- * Which linked inboxes a sync pass may touch: all of them with multi_account,
- * otherwise only the user's first mailbox (firstLinkedMailSourceId), if any.
- */
-export function linkedInboxesToSync<T extends { id: string }>(
-  inboxes: readonly T[],
-  multiAccount: boolean,
-  firstLinkedId: string | null,
-): T[] {
-  if (multiAccount) return [...inboxes];
-  return firstLinkedId ? inboxes.filter((inbox) => inbox.id === firstLinkedId) : [];
+export async function keepPrimaryGoogleIfOnlyMailSource(
+  userId: string,
+  tokenId: string,
+): Promise<boolean> {
+  if (!PAYWALL_ENABLED) return true;
+  return keepOrRollBack(
+    "primary",
+    userId,
+    () => mayAddPrimaryGoogle(userId),
+    () => prisma.userToken.deleteMany({ where: { id: tokenId, userId } }),
+  );
 }
 
 /** For the settings UI: may this user connect a NEW mail account right now? */

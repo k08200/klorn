@@ -1576,7 +1576,7 @@ export function authRoutes(app: FastifyInstance) {
           return reply.redirect(`${webUrl}/settings?google=pro`);
         }
 
-        await withDbRetry(
+        const savedToken = await withDbRetry(
           () =>
             prisma.userToken.upsert({
               where: { userId_provider: { userId: user.id, provider: "google" } },
@@ -1600,7 +1600,10 @@ export function authRoutes(app: FastifyInstance) {
         );
         // Check-after-write for a NEW primary token: a parallel first connect
         // of a linked mailbox may have committed meanwhile. Fails closed.
-        if (!existingIntegrationToken && !(await keepPrimaryGoogleIfOnlyMailSource(user.id))) {
+        if (
+          !existingIntegrationToken &&
+          !(await keepPrimaryGoogleIfOnlyMailSource(user.id, savedToken.id))
+        ) {
           return reply.redirect(`${webUrl}/settings?google=pro`);
         }
 

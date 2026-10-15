@@ -9,8 +9,11 @@
 
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { type LinkedRowFixture, linkedRowsFindFirst } from "./helpers/linked-rows-find-first.js";
 
 const state = vi.hoisted(() => ({ plan: "PRO", role: "USER" }));
+/** The LinkedInboxAccount rows this user owns (read by every findFirst). */
+const rows = vi.hoisted(() => ({ list: [] as LinkedRowFixture[] }));
 // The primary Google token: present = the user already has their first mailbox.
 const tokenFindFirst = vi.hoisted(() => vi.fn(async (_args?: unknown) => null as unknown));
 
@@ -19,7 +22,7 @@ const db = vi.hoisted(() => ({
   findFirst: vi.fn(async (_args?: unknown) => null as unknown),
   findUnique: vi.fn(async () => null),
   count: vi.fn(async () => 0),
-  upsert: vi.fn(async () => ({ id: "row-1" })),
+  upsert: vi.fn(async (_args?: unknown) => ({ id: "row-1" })),
   deleteMany: vi.fn(async () => ({ count: 0 })),
 }));
 
@@ -82,7 +85,9 @@ beforeEach(() => {
   db.findUnique.mockResolvedValue(null);
   db.count.mockResolvedValue(0);
   db.deleteMany.mockResolvedValue({ count: 0 });
-  db.findFirst.mockResolvedValue(null);
+  rows.list = [];
+  db.findFirst.mockImplementation(linkedRowsFindFirst(() => rows.list));
+  db.upsert.mockImplementation(async () => ({ id: "row-1" }));
   tokenFindFirst.mockResolvedValue(null);
   oauth.outlookConfigured.mockReturnValue(true);
   oauth.fetchOutlookAccountEmail.mockResolvedValue("Me@Outlook.com");
@@ -359,7 +364,13 @@ describe("flag ON — callback", () => {
 
   it("removes a NEW row when a parallel first connect committed meanwhile", async () => {
     state.plan = "FREE";
-    db.findFirst.mockResolvedValueOnce(null).mockResolvedValue({ id: "parallel-row" });
+    db.upsert.mockImplementation(async () => {
+      rows.list = [
+        { id: "row-1", provider: "OUTLOOK", email: "me@outlook.com" },
+        { id: "parallel-row", provider: "ICLOUD", email: "me@icloud.com" },
+      ];
+      return { id: "row-1" };
+    });
     process.env.PAYWALL_ENABLED = "true";
     try {
       const res = await runCallback();

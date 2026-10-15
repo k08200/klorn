@@ -6,6 +6,7 @@
 
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { type LinkedRowFixture, linkedRowsFindFirst } from "./helpers/linked-rows-find-first.js";
 
 vi.mock("../mail/gmail.js", () => ({
   getAuthUrl: vi.fn(() => "https://example.com/oauth"),
@@ -40,6 +41,8 @@ vi.mock("../crypto-tokens.js", () => ({
 }));
 
 const state = vi.hoisted(() => ({ plan: "FREE", role: "USER" }));
+/** The LinkedInboxAccount rows this user owns (read by every findFirst). */
+const rows = vi.hoisted(() => ({ list: [] as LinkedRowFixture[] }));
 const linked = vi.hoisted(() => ({
   findUnique: vi.fn(async (_a?: unknown) => null as unknown),
   findFirst: vi.fn(async (_a?: unknown) => null as unknown),
@@ -110,8 +113,11 @@ beforeEach(() => {
   state.plan = "FREE";
   state.role = "USER";
   tokenFindFirst.mockResolvedValue(null);
-  linked.findFirst.mockResolvedValue(null);
+  rows.list = [];
+  linked.findFirst.mockImplementation(linkedRowsFindFirst(() => rows.list));
   linked.findUnique.mockResolvedValue(null);
+  linked.upsert.mockImplementation(async () => ({ id: "new-row" }));
+  tokenUpsert.mockImplementation(async () => ({ id: "tok" }));
   tokenFindUnique.mockResolvedValue(null);
 });
 
@@ -152,32 +158,35 @@ describe("GET /google/callback (__link_inbox__)", () => {
   });
 
   it("refuses (inbox=pro) when the FREE user has another mailbox, without writing", async () => {
-    linked.findFirst.mockResolvedValue({ id: "icloud-row" });
+    rows.list = [{ id: "icloud-row", provider: "ICLOUD", email: "me@icloud.com" }];
     const res = await callback();
     expect(res.headers.location).toContain("inbox=pro");
     expect(linked.upsert).not.toHaveBeenCalled();
   });
 
-  it("checks with the real, normalized address so the same account never counts against itself", async () => {
-    await callback();
-    expect(linked.findFirst.mock.calls[0]?.[0]).toMatchObject({
-      where: { userId: "u1", NOT: { provider: "GOOGLE", email: "linked@example.com" } },
-    });
-  });
-
-  it("removes a NEW row when a parallel first connect committed meanwhile", async () => {
-    linked.findFirst.mockResolvedValueOnce(null).mockResolvedValue({ id: "parallel-row" });
-    const res = await callback();
-    expect(res.headers.location).toContain("inbox=pro");
-    expect(linked.deleteMany).toHaveBeenCalledWith({ where: { id: "new-row", userId: "u1" } });
-  });
-
-  it("never deletes on a re-link of an existing row", async () => {
+  it("lets a FREE user re-link a Google inbox they already own, even with other mailboxes", async () => {
+    tokenFindFirst.mockResolvedValue({ id: "google-token" });
+    rows.list = [
+      { id: "existing", provider: "GOOGLE", email: "linked@example.com" },
+      { id: "icloud-row", provider: "ICLOUD", email: "me@icloud.com" },
+    ];
     linked.findUnique.mockResolvedValue({ id: "existing" });
-    linked.findFirst.mockResolvedValueOnce(null).mockResolvedValue({ id: "other" });
     const res = await callback();
     expect(res.headers.location).toContain("inbox=success");
     expect(linked.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("removes a NEW row when a parallel first connect committed meanwhile", async () => {
+    linked.upsert.mockImplementation(async () => {
+      rows.list = [
+        { id: "new-row", provider: "GOOGLE", email: "linked@example.com" },
+        { id: "parallel-row", provider: "ICLOUD", email: "me@icloud.com" },
+      ];
+      return { id: "new-row" };
+    });
+    const res = await callback();
+    expect(res.headers.location).toContain("inbox=pro");
+    expect(linked.deleteMany).toHaveBeenCalledWith({ where: { id: "new-row", userId: "u1" } });
   });
 });
 
@@ -206,8 +215,9 @@ describe("primary Google slot: POST /google/start + __oauth_state__ callback", (
     return res;
   }
 
-  it("lets a FREE user with no linked mailbox start (first connect or primary repair)", async () => {
+  it("lets a FREE user repair their primary Google inbox even with a linked mailbox", async () => {
     tokenFindFirst.mockResolvedValue({ id: "google-token" });
+    rows.list = [{ id: "icloud-row", provider: "ICLOUD", email: "me@icloud.com" }];
     const { app, headers } = await buildApp();
     const res = await app.inject({ method: "POST", url: "/api/auth/google/start", headers });
     expect(res.statusCode).toBe(200);
@@ -215,7 +225,7 @@ describe("primary Google slot: POST /google/start + __oauth_state__ callback", (
   });
 
   it("403s a FREE user whose first mailbox is a linked one", async () => {
-    linked.findFirst.mockResolvedValue({ id: "icloud-row" });
+    rows.list = [{ id: "icloud-row", provider: "ICLOUD", email: "me@icloud.com" }];
     const { app, headers } = await buildApp();
     const res = await app.inject({ method: "POST", url: "/api/auth/google/start", headers });
     expect(res.statusCode).toBe(403);
@@ -224,7 +234,7 @@ describe("primary Google slot: POST /google/start + __oauth_state__ callback", (
   });
 
   it("callback refuses (google=pro) without writing when a linked mailbox exists", async () => {
-    linked.findFirst.mockResolvedValue({ id: "icloud-row" });
+    rows.list = [{ id: "icloud-row", provider: "ICLOUD", email: "me@icloud.com" }];
     const res = await connectCallback();
     expect(res.headers.location).toContain("google=pro");
     expect(tokenUpsert).not.toHaveBeenCalled();
@@ -237,16 +247,22 @@ describe("primary Google slot: POST /google/start + __oauth_state__ callback", (
     expect(tokenDeleteMany).not.toHaveBeenCalled();
   });
 
-  it("removes a NEW primary token when a linked mailbox committed meanwhile", async () => {
-    linked.findFirst.mockResolvedValueOnce(null).mockResolvedValue({ id: "parallel-row" });
+  it("removes the NEW primary token, by id, when a linked mailbox committed meanwhile", async () => {
+    tokenUpsert.mockImplementation(async () => {
+      rows.list = [{ id: "parallel-row", provider: "ICLOUD", email: "me@icloud.com" }];
+      return { id: "tok-new" };
+    });
     const res = await connectCallback();
     expect(res.headers.location).toContain("google=pro");
-    expect(tokenDeleteMany).toHaveBeenCalledWith({ where: { userId: "u1", provider: "google" } });
+    expect(tokenDeleteMany).toHaveBeenCalledWith({ where: { id: "tok-new", userId: "u1" } });
   });
 
   it("never removes a primary token that existed before (a repair)", async () => {
     tokenFindUnique.mockResolvedValue({ refreshToken: "enc:old" });
-    linked.findFirst.mockResolvedValueOnce(null).mockResolvedValue({ id: "other" });
+    tokenUpsert.mockImplementation(async () => {
+      rows.list = [{ id: "other", provider: "ICLOUD", email: "me@icloud.com" }];
+      return { id: "tok" };
+    });
     const res = await connectCallback();
     expect(res.headers.location).toContain("google=connected");
     expect(tokenDeleteMany).not.toHaveBeenCalled();

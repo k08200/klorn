@@ -23,6 +23,7 @@ import {
   sendAutoReplyViaFloor,
 } from "./agentcore/auto-reply-send.js";
 import { runProactiveActions } from "./agentcore/proactive-actions.js";
+import { syncsEveryLinkedInbox } from "./billing/mail-sync-scope.js";
 import { isEntitled, planHasFeature } from "./billing/stripe.js";
 import {
   AUTO_REPLY_LINKED_INBOX_ENABLED,
@@ -61,6 +62,7 @@ import {
   reconcileLinkedInboxes,
   summarizeUnsummarizedEmails,
   syncEmails,
+  syncLinkedInboxesForUser,
   syncSpamLane,
 } from "./mail/email-sync.js";
 import { getLinkedInboxClients, renewExpiringGmailWatches } from "./mail/gmail.js";
@@ -1001,8 +1003,22 @@ async function runAutomations() {
         select: { userId: true },
       });
       const googleConnectedUserIds = new Set(googleTokens.map((t) => t.userId));
+      // Users with a linked Google inbox, for the linked-only sync below (users
+      // WITHOUT a primary token). One query per batch, and none while linked
+      // sync is dark.
+      const linkedGoogleRows = MULTI_INBOX_SYNC_ENABLED
+        ? await prisma.linkedInboxAccount.findMany({
+            where: { userId: { in: configUserIds }, provider: "GOOGLE" },
+            select: { userId: true },
+          })
+        : [];
+      const linkedGoogleUserIds = new Set(linkedGoogleRows.map((r) => r.userId));
 
-      const ctx: UserCycleContext = { automationPlanMap, googleConnectedUserIds };
+      const ctx: UserCycleContext = {
+        automationPlanMap,
+        googleConnectedUserIds,
+        linkedGoogleUserIds,
+      };
 
       for (const config of configs) {
         // Bound each user's per-tick work by wall-clock time. One hung Gmail
@@ -1221,6 +1237,25 @@ type PlanRole = Pick<Awaited<ReturnType<typeof prisma.user.findMany>>[number], "
 interface UserCycleContext {
   automationPlanMap: Map<string, PlanRole>;
   googleConnectedUserIds: Set<string>;
+  /** Users with at least one linked GOOGLE inbox (empty while MULTI_INBOX_SYNC_ENABLED is off). */
+  linkedGoogleUserIds: Set<string>;
+}
+
+/**
+ * Scheduled sync for a user whose mailbox is a linked Google inbox and who has
+ * no primary Google token: sync (billing-scoped inside), then re-judge any
+ * stranded rows. Never throws — a failure is logged and reported, and the tick
+ * moves on.
+ */
+async function syncLinkedOnlyMailbox(userId: string): Promise<void> {
+  try {
+    const { newCount } = await syncLinkedInboxesForUser(userId);
+    if (newCount > 0) notifyConversationsUpdated(userId);
+    await backfillEmailAttentionItems(userId);
+  } catch (err) {
+    console.warn(`[AUTOMATION] Linked-only mailbox sync failed for ${userId}:`, err);
+    captureError(err, { tags: { scope: "automation.linked-only-sync", userId } });
+  }
 }
 
 /**
@@ -1235,7 +1270,7 @@ async function runUserCycle(
   config: Awaited<ReturnType<typeof prisma.automationConfig.findMany>>[number],
   ctx: UserCycleContext,
 ): Promise<void> {
-  const { automationPlanMap, googleConnectedUserIds } = ctx;
+  const { automationPlanMap, googleConnectedUserIds, linkedGoogleUserIds } = ctx;
   const configUserEntry = automationPlanMap.get(config.userId);
   const configUserPlan = configUserEntry?.plan || "FREE";
   const configUserRole = configUserEntry?.role;
@@ -1379,10 +1414,11 @@ async function runUserCycle(
         // widening below (per-account send routing, Phase 1).
         const syncedLinkedInboxIds: string[] = [];
         let linkedNewCount = 0;
-        if (
-          MULTI_INBOX_SYNC_ENABLED &&
-          planHasFeature(configUserPlan, "multi_account", configUserRole)
-        ) {
+        // Scoped like connecting (billing/mail-sync-scope.ts): paywall off or
+        // multi_account → every linked inbox. A user without either has the
+        // primary Gmail as their first (free) mailbox, so a linked one here is
+        // a second mailbox and is not synced.
+        if (MULTI_INBOX_SYNC_ENABLED && syncsEveryLinkedInbox(configUserPlan, configUserRole)) {
           // The lookup itself is wrapped so a DB blip degrades to "skip the
           // fan-out this tick" — never escaping to the outer catch and
           // silently skipping the primary account's backfill/auto-reply/
@@ -1821,6 +1857,24 @@ async function runUserCycle(
         }
       }
     }
+  }
+
+  // --- Linked-only mailbox (no primary Google token) ---
+  // The fan-out above lives inside the primary Gmail block, so a user whose
+  // mailbox is a LINKED Google inbox (e.g. a Free user's first, free mailbox
+  // after an Apple or password sign-in) was only synced on a manual /sync.
+  // syncLinkedInboxesForUser applies the same billing scope as connecting
+  // (all with multi_account, else only the first mailbox) and stays behind
+  // MULTI_INBOX_SYNC_ENABLED like every linked Google sync.
+  if (
+    config.emailAutoClassify &&
+    planHasFeature(configUserPlan, "email_auto_classify", configUserRole) &&
+    !googleConnectedUserIds.has(config.userId) &&
+    linkedGoogleUserIds.has(config.userId) &&
+    isEmailSyncDue(config.userId)
+  ) {
+    lastEmailSyncAt.set(config.userId, Date.now());
+    await syncLinkedOnlyMailbox(config.userId);
   }
 
   // --- Proactive Actions (rule-based, no LLM cost) ---
