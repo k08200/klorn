@@ -8,6 +8,10 @@
  *   GET    /files/:id/download   a signed download link      { url, expiresInSeconds }
  *   PATCH  /files/:id            rename and/or move          { file }
  *   DELETE /files/:id            delete (a folder: with all) { deleted }
+ *   GET    /limits               file cap, quota, usage      { maxFileBytes, quotaBytes, usedBytes }
+ *
+ * `/limits` is the probe a client reads before it offers an upload (the Mac
+ * app's import, D7): behind the same gate, so its 404 says the drive is off.
  *
  * Dark unless DRIVE_ENABLED, KLORN_DRIVE_ENABLED and OBJECT_STORAGE_ENABLED are
  * all on (`klornDriveRoutesEnabled`, read per request): Fastify's default 404,
@@ -31,6 +35,7 @@ import type {
   DriveDeleteResponse,
   DriveDownloadResponse,
   DriveErrorResponse,
+  DriveLimitsResponse,
   DriveUploadResponse,
 } from "@klorn/contract";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
@@ -41,7 +46,9 @@ import {
   type DriveProviderEnabledMap,
   klornDriveRoutesEnabled,
 } from "../drive/drive-scope.js";
+import { klornUsageBytes } from "../drive/klorn-drive-read.js";
 import { KLORN_DRIVE_ERROR_STATUS, KlornDriveError } from "../drive/klorn-errors.js";
+import { klornDriveQuotaOrNull } from "../drive/klorn-quota.js";
 import { deleteKlornItem, klornDownloadLink } from "../drive/klorn-remove.js";
 import { createKlornFolder, updateKlornItem } from "../drive/klorn-tree.js";
 import {
@@ -62,6 +69,8 @@ export const KLORN_DOWNLOAD_RATE_LIMIT = { max: 60, timeWindow: "1 minute" } as 
 export const KLORN_DELETE_RATE_LIMIT = { max: 30, timeWindow: "1 minute" } as const;
 /** Creating a folder, renaming and moving: metadata only. */
 export const KLORN_EDIT_RATE_LIMIT = { max: 60, timeWindow: "1 minute" } as const;
+/** The limits probe: one per Settings visit or import, one aggregate each. */
+export const KLORN_LIMITS_RATE_LIMIT = { max: 60, timeWindow: "1 minute" } as const;
 
 const RATE_LIMITED = "Too many drive requests. Try again later.";
 
@@ -280,6 +289,21 @@ export function klornDriveRoutes(opts: {
     });
   }
 
+  async function limitsHandler(
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ): Promise<DriveLimitsResponse | FastifyReply> {
+    return await answer(reply, async () => {
+      const usedBytes = await klornUsageBytes(getUserId(request), providerEnabled);
+      reply.header("cache-control", "no-store");
+      return {
+        maxFileBytes: KLORN_DRIVE_MAX_FILE_BYTES,
+        quotaBytes: klornDriveQuotaOrNull(),
+        usedBytes,
+      } satisfies DriveLimitsResponse;
+    });
+  }
+
   async function folderHandler(
     request: FastifyRequest<{ Body: FolderBody }>,
     reply: FastifyReply,
@@ -349,6 +373,7 @@ export function klornDriveRoutes(opts: {
     });
 
     app.post("/files", guarded("upload", KLORN_UPLOAD_RATE_LIMIT), uploadHandler);
+    app.get("/limits", guarded("limits", KLORN_LIMITS_RATE_LIMIT), limitsHandler);
     app.post<{ Body: FolderBody }>(
       "/folders",
       { ...guarded("folder", KLORN_EDIT_RATE_LIMIT), schema: { body: createFolderSchema } },
