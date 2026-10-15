@@ -12,7 +12,8 @@ export type NavIconType =
   | "settings"
   | "inbox"
   | "chat"
-  | "today";
+  | "today"
+  | "files";
 
 interface NavIconProps {
   type: NavIconType;
@@ -41,6 +42,13 @@ export function NavIcon({ type, size = 16, strokeWidth = 1.5 }: NavIconProps) {
           <path d="M12 3v2M5.6 6.6 7 8M18.4 6.6 17 8M3 14h2M19 14h2" />
           <path d="M7.5 14a4.5 4.5 0 0 1 9 0" />
           <path d="M3 18h18M7 21h10" />
+        </svg>
+      );
+    case "files":
+      // A folder: the files of every connected source.
+      return (
+        <svg {...props}>
+          <path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4l2 2.5h9A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5v-12Z" />
         </svg>
       );
     case "mail":

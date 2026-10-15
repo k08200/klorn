@@ -395,6 +395,8 @@ describe("drive text reaches an LLM only wrapped", () => {
     // Loads summary-run.ts on demand; imports nothing from the LLM itself.
     "drive/summary-triggers.ts",
     "purge-user-data.ts",
+    // Reads only whether any drive source is on (user.files on /me, P12); no rows.
+    "routes/auth.ts",
     "routes/drive.ts",
     "routes/klorn-drive.ts",
   ];
@@ -418,6 +420,20 @@ describe("drive text reaches an LLM only wrapped", () => {
       ENTRY_POINT,
     ]);
     expect(consumers.filter((path) => !accounted.has(path))).toEqual([]);
+  });
+
+  // routes/auth.ts is exempt only because it reads whether a drive source is on
+  // (user.files, P12). A module-level exemption must not cover rows: it may not
+  // touch the table, and may import from the drive only the source switch.
+  it("routes/auth.ts reads only the drive's source switch, never its rows", () => {
+    const text = fileAt("routes/auth.ts")?.text ?? "";
+    expect(text.length).toBeGreaterThan(0);
+    expect(text).not.toMatch(/\bdriveFile\b|prisma\.drive|DriveFile/);
+    const driveImports = [...text.matchAll(/from\s*["']([^"']*\/drive\/[^"']+)["']/g)].map(
+      (match) => match[1],
+    );
+    expect(driveImports).toEqual(["../drive/drive-scope.js"]);
+    expect(text).toMatch(/import \{ visibleDriveProviders \} from "\.\.\/drive\/drive-scope\.js";/);
   });
 
   it("the lists name no module that has stopped holding drive rows", () => {

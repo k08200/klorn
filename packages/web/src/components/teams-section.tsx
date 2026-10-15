@@ -4,9 +4,11 @@
 // around ("AX팀 내일 언제 다 돼?"). Mirrors the desktop Preferences → TEAMS
 // section; availability honesty (unknown ≠ free) lives server-side.
 
+import { useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../lib/api";
 import { useT } from "../lib/i18n";
+import { queryKeys } from "../lib/query-keys";
 import { captureClientError } from "../lib/sentry";
 
 interface Team {
@@ -25,12 +27,15 @@ export function TeamsSection({ wrapper }: { wrapper?: (children: ReactNode) => R
   // Team mode is a paid team-tier capability shipped dark; a 403
   // TEAM_REQUIRED hides the whole section rather than showing a dead form.
   const [available, setAvailable] = useState(false);
+  const queryClient = useQueryClient();
 
   const load = useCallback(async () => {
     try {
       const data = await apiFetch<{ teams: Team[] }>("/api/teams");
       setTeams(data.teams);
       setAvailable(true);
+      // Today's "When is everyone free?" reads the same list from the cache.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.teams.all });
     } catch (err) {
       if (err instanceof Error && err.message.startsWith("API 403")) {
         setAvailable(false);
@@ -38,7 +43,7 @@ export function TeamsSection({ wrapper }: { wrapper?: (children: ReactNode) => R
       }
       captureClientError(err, { scope: "teams.load" });
     }
-  }, []);
+  }, [queryClient]);
 
   useEffect(() => {
     load();

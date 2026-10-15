@@ -47,6 +47,13 @@ interface User {
   // P8). True renders /onboarding as the multi-provider first run. Undefined
   // (older API) = off.
   onboardingV2?: boolean;
+  // Server-driven client flag (productization plan P12, FD-7): true while the
+  // drive and at least one of its sources are on. Shows the Files tab and
+  // Today's recent files. Undefined (older API) = off.
+  files?: boolean;
+  // Server-driven client flag: the API's TEAM_MODE_ENABLED (P12). True offers
+  // "When is everyone free?" to a user with a saved team. Undefined = off.
+  teamMode?: boolean;
 }
 
 interface AuthContextType {
