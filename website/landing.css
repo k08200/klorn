@@ -1,5 +1,7 @@
-/* Preview landing (P11a). Shared by /next/ and /ko/next/.
-   Reuses the live site's fonts and tokens; light only, like the live site. */
+/* The landing, shared by / and every /<lang>/ translation (P11b).
+   Light only, like the rest of the site. The pages have no build step, so this
+   file is the one place landing styles live; structure is kept in lockstep by
+   .github/scripts/check-website-lockstep.sh. */
 @font-face{font-family:'Geist';src:url('/fonts/geist-var.woff2') format('woff2');
   font-weight:100 900;font-style:normal;font-display:swap}
 @font-face{font-family:'Instrument Serif';src:url('/fonts/instrument-serif-italic.woff2') format('woff2');
@@ -38,7 +40,13 @@ a{color:inherit}
 .wrap{max-width:var(--maxw);margin:0 auto;padding:0 var(--gutter)}
 .ser{font-family:'Instrument Serif','Iowan Old Style',Georgia,serif;font-style:italic;font-weight:400;
   letter-spacing:-.01em}
-html[lang=ko] .ser{font-family:inherit;font-style:normal;font-weight:700;letter-spacing:-.04em}
+/* Instrument Serif has no CJK glyphs; a synthetic italic of the system face
+   reads as a rendering bug, so CJK pages set the accent in heavy upright type. */
+html[lang=ko] .ser,html[lang=ja] .ser,html[lang=zh] .ser{font-family:inherit;font-style:normal;font-weight:700;letter-spacing:-.04em}
+html[lang=ja] body{line-break:strict;overflow-wrap:anywhere;
+  font-family:'Geist',-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku Gothic ProN','Noto Sans JP',system-ui,sans-serif}
+html[lang=zh] body{line-break:strict;overflow-wrap:anywhere;
+  font-family:'Geist',-apple-system,BlinkMacSystemFont,'PingFang SC','Hiragino Sans GB','Noto Sans SC','Microsoft YaHei',system-ui,sans-serif}
 
 /* ── Nav ─────────────────────────────────────────── */
 .nav{position:fixed;top:16px;left:0;right:0;z-index:50;display:flex;justify-content:center;
@@ -51,15 +59,49 @@ html[lang=ko] .ser{font-family:inherit;font-style:normal;font-weight:700;letter-
 .nav a{text-decoration:none;display:inline-flex;align-items:center;min-height:44px;white-space:nowrap}
 .nav-brand{color:#fff;font-weight:700;letter-spacing:-.015em;font-size:15px;margin-right:10px;padding:0 4px}
 .nav-links{display:flex}
-.nav-links a,.nav-lang{color:rgba(255,255,255,.76);font-size:13.5px;padding:0 13px;border-radius:9999px;
+.nav-links a{color:rgba(255,255,255,.76);font-size:13.5px;padding:0 13px;border-radius:9999px;
   transition:color .4s var(--ease),background .4s var(--ease)}
-.nav-links a:hover,.nav-lang:hover{color:#fff;background:rgba(255,255,255,.1)}
+.nav-links a:hover{color:#fff;background:rgba(255,255,255,.1)}
 .nav-login{color:rgba(255,255,255,.9);font-size:13.5px;font-weight:600;padding:0 14px;border-radius:9999px}
 .nav-login:hover{background:rgba(255,255,255,.1)}
 .nav-cta{background:#fff;color:var(--ink);font-size:13.5px;font-weight:650;padding:0 16px;
   border-radius:9999px;margin-left:4px;min-height:40px!important}
-@media (max-width:900px){.nav-links{display:none}}
-@media (max-width:420px){.nav-lang{display:none}.nav-pill{padding-left:12px}
+/* Language: a menu, not a row — seven languages do not fit side by side. The
+   trigger names the current language. Behaviour lives in the page script. */
+.nav-lang{position:relative;display:inline-flex;align-items:center}
+.nav-lang-btn{display:inline-flex;align-items:center;gap:5px;min-height:44px;font:inherit;font-size:13px;
+  font-weight:600;color:rgba(255,255,255,.82);padding:0 12px;border-radius:9999px;background:transparent;
+  border:0;cursor:pointer;transition:color .4s var(--ease),background .4s var(--ease)}
+.nav-lang-btn:hover{color:#fff;background:rgba(255,255,255,.1)}
+.nav-lang-btn i{font-style:normal;font-size:9px;opacity:.7;transition:transform .3s var(--ease)}
+.nav-lang-btn[aria-expanded="true"] i{transform:rotate(180deg)}
+.nav-lang-menu{position:absolute;top:calc(100% + 8px);right:0;min-width:150px;padding:5px;
+  border-radius:16px;background:#181a20;border:1px solid rgba(255,255,255,.12);
+  box-shadow:0 18px 40px rgba(0,0,0,.34);display:none;flex-direction:column;gap:1px;z-index:60}
+.nav-lang-menu[data-open]{display:flex}
+.nav .nav-lang-menu a{font-size:13px;font-weight:600;color:rgba(255,255,255,.76);padding:0 12px;
+  border-radius:11px;transition:color .3s var(--ease),background .3s var(--ease)}
+.nav .nav-lang-menu a:hover{color:#fff;background:rgba(255,255,255,.1)}
+.nav .nav-lang-menu a[aria-current]{color:#fff;background:rgba(255,255,255,.14)}
+/* Below the breakpoint the section links fold behind a button and reopen as a
+   panel under the pill (behaviour in /site-nav.js). */
+.nav-menu-btn{display:none;align-items:center;justify-content:center;width:40px;height:40px;margin-right:2px;
+  padding:0;border-radius:9999px;border:1px solid rgba(255,255,255,.22);background:transparent;color:#fff;cursor:pointer}
+.nav-menu-btn:hover{background:rgba(255,255,255,.1)}
+.nav-menu-btn svg{width:17px;height:17px}
+@media (max-width:900px){
+  .nav-links{display:none}
+  .nav-menu-btn{display:inline-flex}
+  .nav-pill{position:relative}
+  .nav-links[data-open]{display:flex;position:absolute;top:calc(100% + 8px);left:0;right:0;flex-direction:column;gap:1px;
+    padding:6px;border-radius:18px;background:#181a20;border:1px solid rgba(255,255,255,.12);
+    box-shadow:0 18px 40px rgba(0,0,0,.34)}
+  .nav-links[data-open] a{padding:0 14px;border-radius:12px;color:rgba(255,255,255,.86)}
+}
+/* Phones: brand + menu + Log in + Download. The language switch is the one
+   control that is not load-bearing here — the footer carries the full set. */
+@media (max-width:520px){.nav-lang{display:none}}
+@media (max-width:420px){.nav-pill{padding-left:12px}
   .nav-brand{margin-right:2px}.nav-login{padding:0 10px}.nav-cta{padding:0 13px}}
 
 /* ── Buttons ─────────────────────────────────────── */
@@ -85,13 +127,23 @@ html[lang=ko] .ser{font-family:inherit;font-style:normal;font-weight:700;letter-
 h1{font-size:clamp(40px,6.6vw,86px);line-height:1;letter-spacing:-.045em;font-weight:700;
   margin:0 auto 22px;max-width:14ch;text-wrap:balance}
 h1 .ser{display:block;color:#0277b3;font-size:1.06em;line-height:1.02;padding-right:.04em}
-html[lang=ko] h1{max-width:13ch;letter-spacing:-.05em;line-height:1.12}
-html[lang=ko] h1 .ser{font-size:1em;color:#0270aa}
+html[lang=ko] h1,html[lang=ja] h1,html[lang=zh] h1{max-width:13ch;letter-spacing:-.05em;line-height:1.12}
+html[lang=ko] h1 .ser,html[lang=ja] h1 .ser,html[lang=zh] h1 .ser{font-size:1em;color:#0270aa}
+html[lang=es] h1,html[lang=fr] h1,html[lang=de] h1{max-width:16ch}
+/* Japanese and Chinese have no spaces to break on. Headlines break only at
+   punctuation and the <wbr> hints in the copy, falling back to any point
+   rather than overflowing; elsewhere Chrome's phrase-aware breaking helps. */
+html[lang=ja] h1,html[lang=zh] h1{word-break:keep-all;overflow-wrap:anywhere}
+html[lang=ja] h2,html[lang=ja] h3,html[lang=ja] .rule{word-break:auto-phrase}
 .lead{font-size:clamp(17px,1.7vw,20px);color:var(--ink-2);max-width:620px;margin:0 auto 34px;text-wrap:pretty}
 .lead b{color:var(--ink);font-weight:600}
 .actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
 .meta{margin:20px 0 0;font-size:14px;color:var(--ink-2);letter-spacing:.005em}
-.meta span{display:inline-block;margin:0 8px;color:var(--ink-3)}
+.meta span{white-space:nowrap}
+.meta i{font-style:normal;display:inline-block;margin:0 8px;color:var(--ink-3)}
+/* When the line has to wrap, a separator would start or end a line; on
+   phones the items wrap as spaced chips instead. */
+@media (max-width:480px){.meta i{display:none}.meta span{display:inline-block;margin:0 9px}}
 
 .shot{position:relative;z-index:2;margin:clamp(56px,7vw,88px) auto 0;max-width:1240px;padding:0 var(--gutter)}
 .win{position:relative;border-radius:16px;background:#f6f6f4;overflow:hidden;
@@ -119,7 +171,7 @@ html[lang=ko] h1 .ser{font-size:1em;color:#0270aa}
   color:var(--accent);margin:0 0 16px}
 h2{font-size:clamp(32px,4.4vw,56px);line-height:1.04;letter-spacing:-.04em;font-weight:700;
   margin:0 0 18px;max-width:17ch;text-wrap:balance}
-html[lang=ko] h2{line-height:1.18;letter-spacing:-.045em;max-width:15ch}
+html[lang=ko] h2,html[lang=ja] h2,html[lang=zh] h2{line-height:1.18;letter-spacing:-.045em;max-width:15ch}
 h2 .ser{color:var(--accent)}
 .sec-lead{font-size:clamp(17px,1.5vw,19px);color:var(--ink-2);max-width:580px;margin:0;text-wrap:pretty}
 .sec-head{margin-bottom:clamp(40px,5vw,64px)}
@@ -190,6 +242,11 @@ a.trust:hover{border-color:var(--line-2);transform:translateY(-2px);box-shadow:0
 .fact dd a{color:var(--accent);font-weight:600;text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px}
 @media (max-width:767px){.fact,.fact + .fact{padding:22px 0;border-left:0}
   .fact + .fact{border-top:1px solid var(--line-2)}}
+/* Four facts: 2×2 on tablets, one row on wide screens — never 3 + an orphan. */
+@media (min-width:768px) and (max-width:1099px){.facts{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .fact:nth-child(odd){padding-left:0;border-left:0}
+  .fact:nth-child(n+3){border-top:1px solid var(--line-2)}}
+@media (min-width:1100px){.facts{grid-template-columns:repeat(4,minmax(0,1fr))}}
 
 /* ── Pricing ─────────────────────────────────────── */
 .prices{display:grid;grid-template-columns:1fr;gap:16px;max-width:900px}
@@ -237,21 +294,42 @@ a.trust:hover{border-color:var(--line-2);transform:translateY(-2px);box-shadow:0
 .final .meta{margin-top:22px}
 
 /* ── Footer ──────────────────────────────────────── */
-.foot{border-top:1px solid var(--line);padding:40px 0 48px;font-size:14px;color:var(--ink-2)}
-.foot .wrap{display:flex;flex-wrap:wrap;gap:12px 28px;align-items:center;justify-content:space-between}
-.foot nav{display:flex;flex-wrap:wrap;gap:0 4px}
-.foot a{text-decoration:none;display:inline-flex;align-items:center;min-height:44px;padding:0 8px;border-radius:8px}
-.foot a:hover{color:var(--ink)}
-.foot .brand{font-weight:700;color:var(--ink);padding-left:0}
+.foot{border-top:1px solid var(--line);padding:56px 0 40px;font-size:14px;color:var(--ink-2)}
+.foot-grid{display:grid;grid-template-columns:1fr;gap:28px}
+@media (min-width:640px){.foot-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (min-width:1000px){.foot-grid{grid-template-columns:minmax(0,1.6fr) repeat(4,minmax(0,1fr))}}
+.foot .brand{font-weight:700;color:var(--ink);text-decoration:none;font-size:17px;letter-spacing:-.015em}
+.foot-note{margin:10px 0 0;max-width:30ch;line-height:1.5}
+.socials{display:flex;gap:4px;margin-top:12px}
+.socials a{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:10px;color:var(--ink-2)}
+.socials a:hover{color:var(--ink);background:var(--wash)}
+.socials svg{width:18px;height:18px}
+.foot nav{display:flex;flex-direction:column;align-items:flex-start}
+.foot h4{margin:0 0 6px;font-size:12px;font-weight:650;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.foot nav a{text-decoration:none;display:inline-flex;align-items:center;min-height:36px;color:var(--ink-2)}
+.foot nav a:hover,.langsw a:hover{color:var(--ink)}
+.foot-base{display:flex;flex-wrap:wrap;gap:8px 24px;align-items:center;justify-content:space-between;
+  margin-top:36px;padding-top:20px;border-top:1px solid var(--line);font-size:13px;color:var(--ink-3)}
+.langsw{display:flex;flex-wrap:wrap;align-items:center}
+.langsw a{display:inline-flex;align-items:center;min-height:44px;padding:0 7px;text-decoration:none;color:var(--ink-2);font-weight:600}
+.langsw a[aria-current]{color:var(--ink);text-decoration:underline;text-underline-offset:4px}
+.langsw i{font-style:normal;color:var(--ink-3)}
+
+/* ── Compare links (trust band) ──────────────────── */
+.vs-row{margin:28px 0 0;font-size:14.5px;color:var(--ink-2);display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px}
+.vs-row a{color:var(--accent);font-weight:600;display:inline-flex;align-items:center;min-height:44px;padding:0 6px;
+  text-underline-offset:3px}
+.meta a{color:inherit;text-underline-offset:3px}
+.meta a:hover{color:var(--ink)}
 
 /* ── Polish pass ─────────────────────────────────── */
 .meta{text-wrap:balance}
 h2 .ser{display:inline-block}
-html[lang=ko] .eyebrow{letter-spacing:.02em;font-size:14px}
+html[lang=ko] .eyebrow,html[lang=ja] .eyebrow,html[lang=zh] .eyebrow{letter-spacing:.02em;font-size:14px}
 @media (max-width:640px){.tile{padding:18px;gap:14px}.hero{padding-bottom:24px}}
 @media (max-width:420px){.lane{grid-template-columns:1fr;gap:8px;padding:16px 0}}
 figure{margin:0}
 .trust-grid{grid-template-columns:1fr}
 @media (min-width:600px){.trust-grid{grid-template-columns:repeat(2,1fr)}}
 @media (min-width:1100px){.trust-grid{grid-template-columns:repeat(4,1fr)}}
-html[lang=ko] h2{max-width:22ch}
+html[lang=ko] h2,html[lang=ja] h2,html[lang=zh] h2{max-width:22ch}
