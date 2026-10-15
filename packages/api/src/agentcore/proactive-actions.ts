@@ -25,6 +25,7 @@ import {
 } from "../config.js";
 import { prisma } from "../db.js";
 import { escapeLikePattern } from "../db-like.js";
+import { parseAddress } from "../mail/email-address.js";
 import { senderName } from "../notify/notification-format.js";
 import type { NotifCategory } from "../notify/notification-prefs.js";
 import { sendPushNotification } from "../notify/push.js";
@@ -347,7 +348,7 @@ async function checkDeadlineCountdown(userId: string, tz: string): Promise<void>
  * part of it (`ceo@` of ceo@evil.com, or an empty one) must not pick a contact.
  */
 export async function getContactContext(userId: string, fromEmail: string): Promise<string> {
-  const email = fromEmail.match(/<([^>]+)>/)?.[1] || fromEmail.trim().toLowerCase();
+  const email = parseAddress(fromEmail);
   const contact = await prisma.contact.findFirst({
     where: { userId, email: { equals: email.trim(), mode: "insensitive" } },
     select: { name: true, company: true, role: true, tags: true },

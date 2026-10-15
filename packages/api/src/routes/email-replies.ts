@@ -20,7 +20,7 @@ import { buildVoicePromptHint } from "../learning/voice-profile-extractor.js";
 import { describeLlmFailure } from "../llm/describe-failure.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 import { createCompletion, DRAFT_MODEL } from "../llm/openai.js";
-import { extractEmailAddress } from "../mail/email-address.js";
+import { extractEmailAddress, parseAddress } from "../mail/email-address.js";
 import {
   buildAttachmentCandidateProfile,
   listEmailAttachments,
@@ -106,8 +106,9 @@ async function fetchOriginalAttachmentsForDraft(input: {
 }
 
 function extractReplyAddress(raw: string): string {
-  const match = raw.match(/<([^>]+)>/);
-  return (match?.[1] || raw).replace(/^["']|["']$/g, "").trim();
+  return parseAddress(raw)
+    .replace(/^["']|["']$/g, "")
+    .trim();
 }
 
 /**

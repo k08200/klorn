@@ -24,6 +24,7 @@
 
 import { persistGmailEmail } from "../judge/email-firewall.js";
 import { captureError } from "../sentry.js";
+import { formatMailbox } from "./email-address.js";
 
 const GRAPH_ORIGIN = "https://graph.microsoft.com/";
 const PAGE_SIZE = 50;
@@ -78,8 +79,7 @@ interface GraphDeltaPage {
 function formatAddress(addr: GraphEmailAddress | null | undefined): string {
   const a = addr?.emailAddress?.address?.trim() ?? "";
   const n = addr?.emailAddress?.name?.trim() ?? "";
-  if (n && a && n !== a) return `${n} <${a}>`;
-  return a || n;
+  return formatMailbox(n === a ? "" : n, a);
 }
 
 function initialDeltaUrl(): string {

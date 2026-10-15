@@ -31,6 +31,7 @@ import { prisma } from "../db.js";
 import { withDbRetry } from "../db-retry.js";
 import { visibleDriveProviders } from "../drive/drive-scope.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../mail/email.js";
+import { extractEmailAddress } from "../mail/email-address.js";
 import { syncLinkedInboxesForUser } from "../mail/email-sync.js";
 import {
   getAuthedClient,
@@ -1990,8 +1991,7 @@ export function authRoutes(app: FastifyInstance) {
         });
         const fromHeader =
           detail.data.payload?.headers?.find((h) => h.name === "From")?.value || "";
-        const match = fromHeader.match(/<([^>]+)>/) || [null, fromHeader.trim()];
-        const email = (match[1] || "").toLowerCase().trim();
+        const email = extractEmailAddress(fromHeader);
         if (!email || seenEmails.has(email)) continue;
         seenEmails.add(email);
 
