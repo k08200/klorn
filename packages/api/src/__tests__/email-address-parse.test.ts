@@ -16,7 +16,13 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { recipientFromHeader } from "../agentcore/auto-mode-sweep.js";
 import { isSingleRecipient } from "../agentcore/auto-reply-send.js";
-import { extractEmailAddress, formatMailbox, parseAddress } from "../mail/email-address.js";
+import {
+  displayNameOf,
+  extractEmailAddress,
+  formatMailbox,
+  isPlainAddress,
+  parseAddress,
+} from "../mail/email-address.js";
 import { expectLinear, repeatTo } from "./helpers/linear-timing.js";
 
 describe("parseAddress", () => {
@@ -58,6 +64,23 @@ describe("parseAddress", () => {
     ["<victim@target.com"],
     ["<a<victim@target.com>"],
   ])("refuses an ambiguous header: %j", (header) => {
+    expect(parseAddress(header)).toBe("");
+  });
+
+  it.each([
+    ["Sarah :( <s@x.com>", "s@x.com"],
+    ["CORP\\jsmith <j@x.com>", "j@x.com"],
+    ['5" Pipes <p@x.com>', "p@x.com"],
+    ['"Sarah <s@x.com>', "s@x.com"],
+  ])("an unbalanced display name still yields its one plain mailbox: %j", (header, address) => {
+    expect(parseAddress(header)).toBe(address);
+  });
+
+  it.each([
+    ["Sarah :( <s@x.com> <t@y.com>"],
+    ["Sarah :( <not an address>"],
+    ["Sarah :( >s@x.com<"],
+  ])("but only when nothing else there could be a mailbox: %j", (header) => {
     expect(parseAddress(header)).toBe("");
   });
 
@@ -112,6 +135,30 @@ describe("formatMailbox", () => {
   });
 });
 
+describe("displayNameOf and isPlainAddress", () => {
+  it.each([
+    ["Name <a@b.com>", "Name"],
+    ['"Doe, John" <j@x.com>', "Doe, John"],
+    ["<a@b.com>", null],
+    ["a@b.com", null],
+  ])("the display name of %j is %j", (header, name) => {
+    expect(displayNameOf(header)).toBe(name);
+  });
+
+  it.each([
+    ["a@b.com", true],
+    ["first.last+tag@sub.example.co", true],
+    ["", false],
+    ["no-at", false],
+    ["a@b@c.com", false],
+    ["a b@c.com", false],
+    ["a@b.com, c@d.com", false],
+    ["victim@t.com>x@evil.co", false],
+  ])("isPlainAddress(%j) is %s", (address, plain) => {
+    expect(isPlainAddress(address)).toBe(plain);
+  });
+});
+
 describe("extractEmailAddress", () => {
   it("is the parsed address, lowercased", () => {
     expect(extractEmailAddress('"<Victim@Target.com>" <Attacker@Evil.co>')).toBe(
@@ -137,10 +184,20 @@ describe("From-header parsing in the source", () => {
       return entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts") ? [full] : [];
     });
 
-  it("goes through mail/email-address.ts: no other first-angle-bracket parser", () => {
+  it("goes through mail/email-address.ts: no other angle-bracket address parser", () => {
+    // list-unsubscribe.ts reads List-Unsubscribe's <url> list; outbound-message.ts
+    // checks a `to` the caller already chose. Neither reads a sender.
+    const allowed = new Set([
+      "mail/email-address.ts",
+      "mail/list-unsubscribe.ts",
+      "mail/outbound-message.ts",
+    ]);
     const offenders = files(srcDir)
-      .filter((full) => relative(srcDir, full) !== "mail/email-address.ts")
-      .filter((full) => readFileSync(full, "utf8").includes("/<([^>]+)>/"))
+      .filter((full) => !allowed.has(relative(srcDir, full)))
+      .filter((full) => {
+        const text = readFileSync(full, "utf8");
+        return text.includes("<([^") || text.includes('lastIndexOf("<")');
+      })
       .map((full) => relative(srcDir, full));
     expect(offenders).toEqual([]);
   });

@@ -12,6 +12,7 @@
  * follows the language of the mail it answers).
  */
 
+import { extractEmailAddress } from "../mail/email-address.js";
 import { notificationCopy } from "./notification-strings.js";
 
 interface ToolArgs {
@@ -43,17 +44,8 @@ export function senderName(raw: string | null | undefined, language?: string | n
  */
 export function senderEmail(raw: string | null | undefined): string {
   if (!raw) return "";
-  const trimmed = raw.trim();
-  if (trimmed.endsWith(">")) {
-    const open = trimmed.lastIndexOf("<");
-    if (open !== -1)
-      return trimmed
-        .slice(open + 1, -1)
-        .trim()
-        .toLowerCase();
-  }
-  if (trimmed.includes("@")) return trimmed.toLowerCase();
-  return "";
+  const address = extractEmailAddress(raw);
+  return address.includes("@") ? address : "";
 }
 
 /** Map autonomous-agent tool calls to a clear user-facing summary. */
