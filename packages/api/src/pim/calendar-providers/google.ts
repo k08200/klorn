@@ -101,6 +101,8 @@ function toProviderEvent(
     allDay: !item.start?.dateTime,
     startTime: times?.startTime ?? null,
     endTime: times?.endTime ?? null,
+    declinedBySelf:
+      item.attendees?.some((a) => a.self === true && a.responseStatus === "declined") === true,
   };
 }
 

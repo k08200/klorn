@@ -156,7 +156,7 @@ const zh: Record<string, string> = {
   "auth.welcomeBack": "欢迎回来",
   "auth.inviteOnlyTitle": "Klorn 目前是邀请制。",
   "auth.inviteOnlyBody":
-    "在 Google 安全审核完成前，我们限制了内测名额，每个账户都由人工审批。请先申请 — 审批通过后即可登录。",
+    "我们限制了内测名额，每个账户都由人工审批。请先申请 — 审批通过后即可登录。",
   "auth.requestEarlyAccess": "申请抢先体验",
   "auth.alreadyApproved": "已通过审批？在下方登录。",
   "auth.providerLaneLabel": "使用已连接的账户登录",

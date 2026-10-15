@@ -249,16 +249,23 @@ a.trust:hover{border-color:var(--line-2);transform:translateY(-2px);box-shadow:0
 @media (min-width:1100px){.facts{grid-template-columns:repeat(4,minmax(0,1fr))}}
 
 /* ── Pricing ─────────────────────────────────────── */
-.prices{display:grid;grid-template-columns:1fr;gap:16px;max-width:900px}
-@media (min-width:720px){.prices{grid-template-columns:1fr 1fr}}
+.prices{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;max-width:900px}
+@media (min-width:720px){.prices{grid-template-columns:repeat(2,minmax(0,1fr))}.price.org{grid-column:1 / -1}}
+@media (min-width:1100px){.prices{grid-template-columns:repeat(3,minmax(0,1fr));max-width:none}
+  .price.org{grid-column:auto}}
 .price{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:30px;
   display:flex;flex-direction:column}
 .price.feat{background:var(--ink);color:#fff;border-color:var(--ink)}
 .price .plan{font-size:14px;font-weight:650;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-2)}
 .price.feat .plan{color:rgba(255,255,255,.78)}
-.amt{font-size:56px;font-weight:700;letter-spacing:-.05em;line-height:1;margin:14px 0 6px}
+.amt{display:flex;flex-wrap:wrap;align-items:baseline;font-size:56px;font-weight:700;letter-spacing:-.05em;line-height:1;margin:14px 0 6px}
 .amt small{font-size:16px;font-weight:500;letter-spacing:0;color:var(--ink-2);margin-left:4px}
 .price.feat .amt small,.price.feat .pnote{color:rgba(255,255,255,.78)}
+/* Company plan: no number yet, so the price line is words at a smaller size,
+   held to the numeric line's height so the notes start level across cards. */
+.price.org{background:transparent;border-color:var(--line-2)}
+.amt.amt-ask{font-size:32px;letter-spacing:-.03em;line-height:1.1;min-height:56px;
+  display:flex;align-items:flex-end;overflow-wrap:break-word}
 .pnote{font-size:14.5px;color:var(--ink-2);margin:0 0 20px}
 .price ul{list-style:none;margin:0 0 28px;padding:0;display:grid;gap:10px}
 .price li{position:relative;padding-left:26px;font-size:15.5px;line-height:1.45}

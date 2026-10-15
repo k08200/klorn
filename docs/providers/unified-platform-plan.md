@@ -2370,8 +2370,9 @@ needs FA-9 and the admin guidance from F0.
     nothing). Such a series is missing or wrong, the same way every sync, so it never
     had rows to remove; neither provider's UI writes such a rule. (8) PARTSTAT is
     not read: an invitation the user DECLINED is still a busy block and a row (no
-    code change; review 2026-10-02). (9) Every fixture is hand-written from RFC
-    4791 / 5545 shapes; none was captured from a real iCloud or Naver answer.
+    code change; review 2026-10-02; Google's equivalent: the next item). (9) Every
+    fixture is hand-written from RFC 4791 / 5545 shapes; none was captured from a
+    real iCloud or Naver answer.
     (10) The deletion valve also refuses a real mass deletion (more than half of a
     month, over 5 rows): those rows stay until they leave the window. (11) An
     override of an EXDATE'd instance is dropped (EXDATE wins). (12) Found by the
@@ -2379,6 +2380,18 @@ needs FA-9 and the admin guidance from F0.
     without its DTSTART instance, so that instance has no row. (13) One object's
     ical.js parse is not sliced (~60-100 ms for 3-4 MB, bounded by the response
     cap). (14) The IMAP connect route's link limit is per IP only (see Link).
+  - Declined Google invitations (2026-10-15, `CALENDAR_HIDE_DECLINED_ENABLED`, OFF).
+    Google lists an invitation the user declined; its own attendee entry
+    (`self: true`) says `declined`. With the flag on, a primary or linked Google sync
+    writes no row for it, and the row an earlier sync wrote is removed through C2b's
+    `removeCancelledGoogleEventRows`: that account's rows only, exact ids (each
+    instance of a series has its own), attention items resolved, a dismissed item
+    kept, one transaction. A failure never fails the sync and is reported once per
+    account until a removal succeeds. Accepting later writes the row again on the
+    next sync. Scope is rows only: live Google reads (`listEvents` callers, the
+    conflict summary) still return declined events, and Google's free/busy already
+    treats them as free. Declined events still count toward the 100-event listing
+    cap. Outlook and CalDAV unchanged (limit 8 above).
   - Rollback. Flags never on: revert the PR. Ever on: set
     `CALDAV_CALENDAR_ENABLED` OFF (rows hidden at once), then `DELETE FROM
     "AttentionItem" WHERE "source" = 'CALENDAR_EVENT' AND "sourceId" IN (SELECT "id"
