@@ -5,6 +5,7 @@ import {
   inflateRawCapped,
   isReadableEmailAttachment,
 } from "../mail/email-attachment-text.js";
+import { expectLinear, repeatTo } from "./helpers/linear-timing.js";
 
 describe("inflateRawCapped — decompression-bomb guard", () => {
   it("inflates a normal stream back to the original", () => {
@@ -131,6 +132,64 @@ describe("email attachment text extraction", () => {
     expect(result.status).toBe("metadata");
     expect(result.text).toContain("OCR 분석 대기");
     expect(result.text).toContain("headshot.jpg");
+  });
+});
+
+describe("email attachment extraction stays linear on crafted attachments", () => {
+  const extract = (buffer: Buffer, filename: string, mimeType: string) => () =>
+    extractAttachmentContent(buffer, filename, mimeType);
+  const zipped = (entry: string, filename: string, mimeType: string) => (xml: string) =>
+    extract(makeZip({ [entry]: xml }), filename, mimeType)();
+
+  it("pdf literal-string flood", () => {
+    expectLinear(
+      (n) => repeatTo(n, "\\(", "%PDF-1.4\n("),
+      (raw) => extract(Buffer.from(raw, "latin1"), "x.pdf", "application/pdf")(),
+    );
+  });
+
+  it("docx text-run, tab and tag-strip floods", () => {
+    const docx = zipped(
+      "word/document.xml",
+      "x.docx",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    );
+    expectLinear((n) => repeatTo(n, "<w:t>"), docx);
+    expectLinear((n) => repeatTo(n, "<w:tab "), docx);
+    expectLinear((n) => repeatTo(n, "<"), docx);
+  });
+
+  it("xlsx and pptx text-run floods", () => {
+    const xlsx = zipped(
+      "xl/sharedStrings.xml",
+      "x.xlsx",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+    const pptx = zipped(
+      "ppt/slides/slide1.xml",
+      "x.pptx",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    );
+    expectLinear((n) => repeatTo(n, "<t>"), xlsx);
+    expectLinear((n) => repeatTo(n, "<"), pptx);
+  });
+
+  it("hwpx tab, br and closing-tag floods", () => {
+    const hwpx = zipped("Contents/section0.xml", "x.hwpx", "application/haansofthwpx");
+    expectLinear((n) => repeatTo(n, "<tab", "", "/>"), hwpx);
+    expectLinear((n) => repeatTo(n, "<br", "", "/>"), hwpx);
+    expectLinear((n) => repeatTo(n, "</"), hwpx);
+  });
+
+  it("keeps a fetched body over the 8MB budget as metadata instead of scanning it", () => {
+    const result = extractAttachmentContent(
+      Buffer.alloc(8_000_001, 0x28),
+      "x.pdf",
+      "application/pdf",
+    );
+
+    expect(result.status).toBe("metadata");
+    expect(result.text).toContain("8000001 bytes");
   });
 });
 
