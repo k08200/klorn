@@ -129,7 +129,7 @@ window it covers stated — same rule as every other number on that page.
 
 ### E2. Demo and promo videos — re-render needed
 
-`website/media/klorn-demo.mp4` and `klorn-promo.mp4` were recorded 2026-08-10,
+Removed from the site 2026-10-15 (the new landing uses app screenshots, PR #1415). If a video is wanted again: the old `klorn-demo.mp4` and `klorn-promo.mp4` were recorded 2026-08-10,
 before the five-lane flip, so their burnt-in captions still read
 `PUSH / QUEUE / SILENT / AUTO`. Both generators are corrected and CI now fails
 on a retired lane in either of them, but the rendered assets can only be
