@@ -216,7 +216,14 @@ final class SystemPushNotifier: PushNotifying {
 
     func permission() async -> NotificationPermission {
         guard isAvailable else { return .unavailable }
-        let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        // Read the status inside the callback: UNNotificationSettings is not
+        // Sendable on the Xcode 16 SDK CI builds with, so it can't cross the
+        // await. UNAuthorizationStatus (a plain enum) can.
+        let status: UNAuthorizationStatus = await withCheckedContinuation { continuation in
+            UNUserNotificationCenter.current().getNotificationSettings { settings in
+                continuation.resume(returning: settings.authorizationStatus)
+            }
+        }
         return PushNotifier.permission(for: status)
     }
 
