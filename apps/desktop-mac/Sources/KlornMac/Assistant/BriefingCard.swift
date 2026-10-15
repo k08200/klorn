@@ -1,9 +1,8 @@
 import SwiftUI
 
-/// BRIEFING preview card — the day's AI briefing. One view shared by the
-/// compact panel's TodayColumn and the full-mode sidebar so both surfaces
-/// render the same card (dogfood 2026-07-23). Clicking opens the full view,
-/// which is where the day is actually worked.
+/// BRIEFING preview card — the day's AI briefing, shown in the main
+/// window's Assistant section (it also sat in the expanded panel until the
+/// panel was removed, 2026-10-15).
 struct BriefingCard: View {
     let briefing: String?
     let structure: BriefingStructure?

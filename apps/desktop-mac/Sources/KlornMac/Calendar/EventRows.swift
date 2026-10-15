@@ -6,7 +6,7 @@ import SwiftUI
 /// compact panel's TodayColumn and the full-mode sidebar — same view, same
 /// `model.weekAhead` + `upcomingAgenda` data path.
 struct UpcomingSection: View {
-    let actions: TopBarActions
+    let actions: ShellActions
     @Environment(AppModel.self) private var model
 
     var body: some View {
@@ -39,7 +39,7 @@ struct UpcomingSection: View {
 
 struct UpcomingEventRow: View {
     let event: CalendarEventWire
-    let actions: TopBarActions
+    let actions: ShellActions
     @State private var showDetail = false
     @State private var hovering = false
 
@@ -90,7 +90,7 @@ struct UpcomingEventRow: View {
 struct WeekEventChip: View {
     let event: CalendarEventWire
     let continuation: Bool
-    let actions: TopBarActions
+    let actions: ShellActions
     @State private var showDetail = false
 
     private var timeLabel: String {
@@ -132,7 +132,7 @@ struct WeekEventChip: View {
 private struct EventDetailPopover: View {
     @Environment(AppModel.self) private var model
     let event: CalendarEventWire
-    let actions: TopBarActions
+    let actions: ShellActions
     /// Delete is two clicks inside the popover (no system dialog over a
     /// floating panel): 삭제 → 정말 삭제.
     @State private var confirmDelete = false

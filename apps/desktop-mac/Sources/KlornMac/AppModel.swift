@@ -23,58 +23,28 @@ final class AppModel {
     private(set) var loadOffline = false
     private(set) var isLoadingQueue = false
 
-    /// Called with newly-arrived PUSH items (never the first-load baseline).
-    /// The AppDelegate wires this to the HUD; if unset, PUSH surfacing is a no-op.
+    /// Called with newly-arrived PUSH items (never the first-sync baseline).
+    /// The AppDelegate wires this to `PushAlerter`; if unset, it is a no-op.
     var onNewPush: (([FirewallItem]) -> Void)?
 
     /// User preferences (persisted). Observed by the Preferences panel and read
     /// by the controller before posting an OS banner.
     let settings = AppSettings()
 
-    /// True while the Settings scene's window is on screen. Part of the
-    /// activation-policy decision (Cmd+Tab compromise): an open Settings
-    /// window keeps the app .regular even with the bar collapsed.
-    var settingsWindowOpen = false {
-        didSet {
-            guard settingsWindowOpen != oldValue else { return }
-            onWindowPresenceChanged?()
-        }
-    }
-    /// True while the standard main window (M2, `macMainWindow`) is open.
-    /// Same rule as Settings: an open window keeps the app .regular.
-    var mainWindowOpen = false {
-        didSet {
-            guard mainWindowOpen != oldValue else { return }
-            onWindowPresenceChanged?()
-        }
-    }
-    /// True while the compose window (M5) is on screen. It
-    /// counts like the main window: an open window keeps the app .regular.
-    var composeWindowOpen = false {
-        didSet {
-            guard composeWindowOpen != oldValue else { return }
-            onWindowPresenceChanged?()
-        }
-    }
-    /// True while the first-launch onboarding window (M6) is on screen. A
-    /// window the user has to act in must be reachable from the Dock.
-    var onboardingWindowOpen = false {
-        didSet {
-            guard onboardingWindowOpen != oldValue else { return }
-            onWindowPresenceChanged?()
-        }
-    }
-    /// Wired by the AppDelegate to re-apply the activation policy when a
-    /// window (Settings, main, compose, onboarding) opens or closes.
-    @ObservationIgnored var onWindowPresenceChanged: (() -> Void)?
+    /// True while the Settings scene's window is on screen (written by its
+    /// window tracker).
+    var settingsWindowOpen = false
+    /// True while the standard main window is open.
+    var mainWindowOpen = false
+    /// True while the compose window (M5) is on screen.
+    var composeWindowOpen = false
+    /// True while the first-launch onboarding window (M6) is on screen: a
+    /// Dock click or ⌥⌘K brings it forward instead of the main window.
+    var onboardingWindowOpen = false
     /// Wired by the AppDelegate to the compose window (M5): fires when the
     /// composer is asked for (again) or put away.
     @ObservationIgnored var onComposePresentationChanged: (() -> Void)?
 
-    /// A full-view request fell back to the expanded panel because the user
-    /// stored `macMainWindow` OFF: the panel says so once, with a way to
-    /// Settings. Written by TopBarController; cleared when the bar rests.
-    var mainWindowOffHint = false
     /// Whether the full view (the main window) is up, so the app menus
     /// enable only what the UI can act on.
     var isFullViewOpen: Bool { mainWindowOpen }
@@ -165,7 +135,7 @@ final class AppModel {
     var listMode: ListMode = .inbox {
         // The main window (M4b) follows every write, same value included:
         // a deep link to the list mode already set must still bring its
-        // section forward. Unused while `macMainWindow` is off.
+        // section forward.
         //
         // Every write must therefore be USER INTENT (a click, a menu
         // command, a deep link the user followed). A background writer
@@ -175,9 +145,7 @@ final class AppModel {
             mainNav = NavRules.following(listMode, from: mainNav)
             // Leaving Mail takes the reader off screen; drop its selection
             // so nothing invisible stays selected (main window only).
-            if NavRules.clearsSelection(
-                macMainWindow: settings.macMainWindow, section: mainNav.section)
-            {
+            if NavRules.clearsSelection(section: mainNav.section) {
                 clearSelection()
             }
         }
@@ -185,7 +153,7 @@ final class AppModel {
     /// Whether a reading pane is on screen for the Message menu: always in
     /// the bar's full view, only in Mail in the main window.
     var readerVisible: Bool {
-        NavRules.readerVisible(macMainWindow: settings.macMainWindow, section: mainNav.section)
+        NavRules.readerVisible(section: mainNav.section)
     }
     /// Where the main window is (M4b): section, Assistant pane, last mail facet.
     var mainNav = MainNav()
@@ -217,12 +185,19 @@ final class AppModel {
     /// Refresh cadence so new PUSH mail surfaces a notification even with the
     /// window closed (also keeps the free-tier API warm).
     static let pollIntervalSeconds: Double = 60
-    private var seenPush: Set<String> = []
+    /// Which PUSH mail has been announced, per account, across launches.
+    /// Loaded per reconcile from `pushLedgerStore` (see `PushLedger`).
+    @ObservationIgnored let pushLedgerStore: any PushLedgerStoring
     /// AttentionItem ids the user dismissed locally; hidden until the server's
     /// async reconcile drops them from the queue (then pruned here).
     private var dismissed: Set<String> = []
-    private var baselineEstablished = false
     private var didRequestNotifyAuth = false
+    /// The notification center. A seam: the self-check injects a fake, so
+    /// it never posts a banner or raises a permission prompt.
+    @ObservationIgnored var pushNotifier: any PushNotifying = SystemPushNotifier()
+    /// Whether macOS lets Klorn post banners; Settings ▸ Notifications shows
+    /// a one-line hint when it is `.denied`.
+    private(set) var notificationPermission: NotificationPermission = .notDetermined
     private var pollTask: Task<Void, Never>?
     private var realtime: RealtimeClient?
     /// Error from the last add-account attempt; cleared on the next attempt.
@@ -274,8 +249,16 @@ final class AppModel {
 
     /// `api` defaults to a client that reads its bearer token from `tokenStore`,
     /// as does the device-calendar bridge — one injected store covers them all.
-    init(tokenStore: any TokenStore = AppModel.productionTokenStore(), api: APIClient? = nil) {
+    init(
+        tokenStore: any TokenStore = AppModel.productionTokenStore(), api: APIClient? = nil,
+        pushLedgerStore: (any PushLedgerStoring)? = nil
+    ) {
         let api = api ?? APIClient(token: { tokenStore.load() })
+        // The shipped app (Keychain token) persists the ledger; a harness
+        // model with an injected token store never touches UserDefaults.
+        self.pushLedgerStore = pushLedgerStore
+            ?? (tokenStore is KeychainTokenStore
+                ? UserDefaultsPushLedgerStore() : InMemoryPushLedgerStore())
         self.api = api
         self.tokenStore = tokenStore
         self.deviceCalendars = DeviceCalendarBridge(
@@ -1093,25 +1076,8 @@ final class AppModel {
         }
     }
 
-    /// Load an email's detail for the card's expanded view — Klorn's AI summary
-    /// lives there, not on the firewall wire. Plain GET, never `markRead`: an
-    /// unattended card must not silently mark mail as read. Best-effort — the
-    /// expanded view falls back to the snippet when this returns nil.
-    func fetchEmailDetail(_ item: FirewallItem, session: Int? = nil) async -> EmailDetail? {
-        let session = session ?? sessionGeneration
-        guard isCurrent(session), let emailDbId = item.email?.emailDbId else { return nil }
-        do {
-            let detail = try await api.get("/api/email/\(emailDbId)", as: EmailDetail.self)
-            return isCurrent(session) ? detail : nil
-        } catch {
-            Log.app.debug("card detail fetch failed: \(String(describing: error), privacy: .private)")
-            return nil
-        }
-    }
-
-    /// Whether the composer is presented: an overlay on the bar's full view,
-    /// its own window while `macMainWindow` is on (M5). Asking again while
-    /// it is up still notifies, so the window comes forward.
+    /// Whether the composer is presented: its own window (M5). Asking again
+    /// while it is up still notifies, so the window comes forward.
     var showCompose = false {
         didSet {
             if showCompose || oldValue { onComposePresentationChanged?() }
@@ -1263,9 +1229,8 @@ final class AppModel {
 
     /// Send a threaded reply to an email's sender (POST /api/email/:id/reply).
     /// Returns nil on success or a user-facing error message. Deliberately does
-    /// NOT touch the shared `replyError` slot: the PushCard and the reading-pane
-    /// composer can both be mid-send for DIFFERENT emails at once, and a shared
-    /// slot would let one surface clear or overwrite the other's live error.
+    /// NOT touch the shared `replyError` slot itself; `reply(_:body:)` publishes
+    /// the outcome for the reading-pane composer.
     /// A 403 means the account isn't entitled (Pro) — surfaced, NOT a sign-out.
     /// `session`: the session the sending surface belongs to. A reply from a
     /// surface whose session has ended is refused before any request: the
@@ -2174,10 +2139,9 @@ final class AppModel {
         linkAccountError = nil
         realtime?.stop()
         realtime = nil
-        seenPush = []
+        pushLedgerStore.clear()
         dismissed = []
         clearSelection()
-        baselineEstablished = false
         didRequestNotifyAuth = false
         // Read before the Keychain is cleared: the device-calendar removals owed at
         // sign-out are sent with this session's token.
@@ -2389,31 +2353,6 @@ final class AppModel {
         }
     }
 
-    /// True while a user-initiated update check is in flight, and the result
-    /// of the last one ("up to date" / failure) — the background check is
-    /// silent by design, but a button the user pressed must answer.
-    private(set) var updateCheckInFlight = false
-    private(set) var updateCheckResult: String?
-
-    /// Explicit "check for updates" — ignores the interval leash entirely,
-    /// because the user asked. The full window only ever showed an update row
-    /// when one happened to be known already; there was no way to ASK
-    /// (founder, 2026-08-10).
-    func checkForUpdateNow() async {
-        guard !updateCheckInFlight else { return }
-        updateCheckInFlight = true
-        updateCheckResult = nil
-        defer { updateCheckInFlight = false }
-        lastUpdateCheck = Date()
-        if case .updateAvailable(let version) = await updateCheck() {
-            updateAvailable = version
-            updateCheckResult = nil  // the update row itself is the answer
-        } else {
-            updateAvailable = nil
-            updateCheckResult = L("update.upToDate")
-        }
-    }
-
     /// Per-account readiness, on demand. "왜 메일이 안 와" was answered by
     /// guesswork three times running; this makes the app state the facts.
     private(set) var diagnostics: [ReadinessCheck] = []
@@ -2440,9 +2379,9 @@ final class AppModel {
         }
     }
 
-    /// Called when the expanded panel opens — the moment the user is actually
-    /// looking at the ACCOUNT column where the update row lives.
-    func checkForUpdateOnPanelOpen() {
+    /// Called when the main window opens — the moment the user is actually
+    /// looking at the app (the update row is in Settings ▸ General).
+    func checkForUpdateOnWindowOpen() {
         Task {
             await checkForUpdateIfDue(
                 intervalSeconds: Self.updateCheckPanelIntervalMinutes * 60)
@@ -2696,23 +2635,27 @@ final class AppModel {
         }
     }
 
-    /// Surface PUSH items new since the last load (the first load is a silent
-    /// baseline). Routed to `onNewPush` (the HUD); the HUD falls back to an OS
-    /// banner when it can't draw a panel.
+    /// Surface PUSH items not announced before (the first sync for an account
+    /// is a silent baseline; the record persists across launches). Routed to
+    /// `onNewPush`, which the AppDelegate wires to `PushAlerter` (banners).
     private func reconcilePush() {
         guard let queue else { return }
-        let plan = planPushNotifications(
-            seen: seenPush,
-            baselineEstablished: baselineEstablished,
-            pushItems: queue.items(for: .push))
+        let owner = SessionIdentity.userId(fromToken: tokenStore.load())
+        let ledger = PushLedger.resolve(stored: pushLedgerStore.load(), owner: owner)
+        let plan = ledger.plan(pushItems: queue.items(for: .push))
         // Respect the user's "Urgent mail" category. Seen-tracking still runs on
         // the muted path so re-enabling the category doesn't dump a backlog of
         // interrupts for mail that arrived while it was off.
         if !plan.toNotify.isEmpty, automation.allowsInterrupt(for: .emailUrgent) {
             onNewPush?(plan.toNotify)
         }
-        seenPush = plan.seen
-        baselineEstablished = true
+        pushLedgerStore.save(plan.next)
+    }
+
+    /// Re-read the permission (the user may have changed it in System
+    /// Settings since). Called when Settings ▸ Notifications shows.
+    func refreshNotificationPermission() async {
+        notificationPermission = await pushNotifier.permission()
     }
 
     /// Once signed in: request notification permission (once) and start the
@@ -2721,7 +2664,10 @@ final class AppModel {
         guard phase == .signedIn else { return }
         if !didRequestNotifyAuth {
             didRequestNotifyAuth = true
-            Task { await PushNotifier.requestAuthorization() }
+            Task { [weak self] in
+                guard let self else { return }
+                self.notificationPermission = await self.pushNotifier.requestAuthorization()
+            }
         }
         if pollTask == nil { startPolling() }
         startRealtime()

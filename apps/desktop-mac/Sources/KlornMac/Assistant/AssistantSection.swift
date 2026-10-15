@@ -5,7 +5,7 @@ import SwiftUI
 /// the user-facing name of the proposals list (FD-1).
 struct AssistantSection: View {
     @Environment(AppModel.self) private var model
-    let actions: TopBarActions
+    let actions: ShellActions
 
     private var segments: [BarSegment<AssistantPane>] {
         AssistantPane.allCases.map { pane in

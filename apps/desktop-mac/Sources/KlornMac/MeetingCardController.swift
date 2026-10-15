@@ -1,9 +1,8 @@
 import AppKit
 import SwiftUI
 
-/// Owns the meeting-prep card: same top-center slot, morph, and focus
-/// contract as the PushCard (never takes the keyboard — the card is
-/// mouse-only). One meeting at a time; each event id surfaces at most once
+/// Owns the meeting-prep card: a top-center floating card that never takes
+/// the keyboard (the card is mouse-only). One meeting at a time; each event id surfaces at most once
 /// per app run (`shownMeetingIds` lives in AppModel so replans stay pure).
 @MainActor
 final class MeetingCardController {
@@ -13,9 +12,13 @@ final class MeetingCardController {
     /// Self-check mode: no panel, no sound.
     private let headless: Bool
     private var panel: NSPanel?
-    /// Defers to the PushCard when both want the slot (mail interrupt wins);
-    /// the planner will re-offer the meeting on the next refresh tick.
+    /// Defers when something else holds the slot; the planner re-offers the
+    /// meeting on the next refresh tick. Nothing shares it since the
+    /// urgent-mail card was removed (2026-10-15), so the app passes `false`.
     private let isSlotBusy: () -> Bool
+
+    /// The arrival chime follows the local banner switch. Pure for testing.
+    nonisolated static func shouldChime(alertsEnabled: Bool) -> Bool { alertsEnabled }
 
     var isVisible: Bool { panel?.isVisible ?? false }
 
@@ -41,9 +44,7 @@ final class MeetingCardController {
         state.event = event
         state.pack = nil
         render()
-        if !headless,
-           PushCardController.shouldChime(newCount: 1, alertsEnabled: model.settings.notificationsEnabled)
-        {
+        if !headless, Self.shouldChime(alertsEnabled: model.settings.notificationsEnabled) {
             NSSound(named: "Glass")?.play()
         }
         let stamp = model.sessionGeneration
@@ -81,11 +82,11 @@ final class MeetingCardController {
                     onDismiss: { [weak self] in self?.dismiss() })))
         }
         guard let visible = NSScreen.main?.visibleFrame else { return }
-        let target = PushCardController.cardFrame(size: PushCardMetrics.compact, visible: visible)
-        let animate = TopBarController.shouldAnimateFrame(
+        let target = MeetingCardMetrics.cardFrame(size: MeetingCardMetrics.compact, visible: visible)
+        let animate = WindowGeometry.shouldAnimateFrame(
             reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
         if !wasVisible && animate {
-            panel.setFrame(PushCardMetrics.presentStartFrame(target: target), display: false)
+            panel.setFrame(MeetingCardMetrics.presentStartFrame(target: target), display: false)
             panel.alphaValue = 0
             panel.orderFrontRegardless()
             NSAnimationContext.runAnimationGroup { context in
@@ -98,7 +99,7 @@ final class MeetingCardController {
             panel.setFrame(target, display: true, animate: false)
             panel.orderFrontRegardless()
         }
-        panel.applyGlassShape(cornerRadius: PushCardMetrics.corner)
+        panel.applyGlassShape(cornerRadius: MeetingCardMetrics.corner)
         let settle = panel.animationResizeTime(target) + 0.05
         DispatchQueue.main.asyncAfter(deadline: .now() + settle) { [weak panel] in
             panel?.invalidateShadow()
@@ -107,7 +108,7 @@ final class MeetingCardController {
 
     private func makePanel() -> NSPanel {
         let panel = NSPanel(
-            contentRect: NSRect(origin: .zero, size: PushCardMetrics.compact),
+            contentRect: NSRect(origin: .zero, size: MeetingCardMetrics.compact),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered, defer: false)
         panel.isFloatingPanel = true

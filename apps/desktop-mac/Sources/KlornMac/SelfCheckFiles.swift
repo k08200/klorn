@@ -133,8 +133,8 @@ private func filesGatingChecks() -> [(String, Bool)] {
           !offFiles && MenuRules.isEnabled(.section(.files), in: menu)
           && MenuRules.isEnabled(.section(.today), in: menu))
     check("Files has no reader: entering it drops the mail selection",
-          !NavRules.readerVisible(macMainWindow: true, section: .files)
-          && NavRules.clearsSelection(macMainWindow: true, section: .files)
+          !NavRules.readerVisible(section: .files)
+          && NavRules.clearsSelection(section: .files)
           && NavRules.listMode(entering: .files, nav: MainNav(), current: .inbox) == nil)
     check("the Files section with its flag off shows and lights Today",
           FilesRules.displayed(.files, files: false) == .today

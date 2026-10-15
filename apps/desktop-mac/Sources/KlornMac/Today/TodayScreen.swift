@@ -6,7 +6,7 @@ import SwiftUI
 /// nothing of its own.
 struct TodayScreen: View {
     @Environment(AppModel.self) private var model
-    let actions: TopBarActions
+    let actions: ShellActions
     /// Injectable so the offscreen renderer shows a fixed date.
     var now = Date()
 

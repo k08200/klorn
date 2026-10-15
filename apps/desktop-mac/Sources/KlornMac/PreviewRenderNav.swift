@@ -180,7 +180,7 @@ extension PreviewRender {
         return model
     }
 
-    static func renderMainWindow(dir: URL, dark: Bool, actions: TopBarActions) -> Bool {
+    static func renderMainWindow(dir: URL, dark: Bool, actions: ShellActions) -> Bool {
         let size = CGSize(width: 1280, height: 800)
         let date = ISO8601DateFormatter().date(from: "2026-07-29T08:30:00Z") ?? Date()
         var ok = true

@@ -5,7 +5,7 @@ import SwiftUI
 /// while the server grants team mode (productization plan §4).
 struct CalendarSection: View {
     @Environment(AppModel.self) private var model
-    let actions: TopBarActions
+    let actions: ShellActions
     /// Render seam: the offscreen shots pin the visible month.
     var initialScope: CalendarScreen.Scope = .month
     var initialAnchor = Date()

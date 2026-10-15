@@ -3,7 +3,7 @@ import SwiftUI
 struct FullList: View {
     @Environment(AppModel.self) private var model
     let mode: ListMode
-    let actions: TopBarActions
+    let actions: ShellActions
     @Binding var keyZone: MailKeyZone
     /// The main window's lane tab already names the lane and carries its
     /// count, so the list drops its own title row there; the inbox scope

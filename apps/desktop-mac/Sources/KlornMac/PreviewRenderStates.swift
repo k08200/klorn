@@ -15,16 +15,6 @@ extension PreviewRender {
         (try? JSONDecoder().decode([String].self, from: Data(stateErrorJSON.utf8))) ?? ["", ""]
     }
 
-    private static let cardDraftsJSON = """
-    [{"tone":"accept","body":"Signed off. Please send it on to the counterparty."},
-     {"tone":"decline","body":"I can't sign off today. Can the deadline move to tomorrow?"},
-     {"tone":"info","body":"Which of the two changes touches the indemnity cap?"}]
-    """
-
-    private static var cardDrafts: [ReplyOption] {
-        (try? JSONDecoder().decode([ReplyOption].self, from: Data(cardDraftsJSON.utf8))) ?? []
-    }
-
     /// A model in one state, on the in-memory token store (see `run`).
     static func stateModel(
         phase: AppModel.Phase, firewallJSON: String? = nil, loadError: String? = nil,
@@ -40,7 +30,7 @@ extension PreviewRender {
         return model
     }
 
-    static func renderStates(dir: URL, dark: Bool, actions: TopBarActions, firewallJSON: String) -> Bool {
+    static func renderStates(dir: URL, dark: Bool, actions: ShellActions, firewallJSON: String) -> Bool {
         var ok = true
         func shot(
             _ name: String, size: CGSize, align: Alignment = .center, _ model: AppModel,
@@ -49,46 +39,7 @@ extension PreviewRender {
             ok = writeShot(name, size: size, align: align, model: model, dir: dir, dark: dark, content) && ok
         }
         let strings = stateStrings()
-        let network = L("error.network")
         let everyProvider = ["google", "apple", "naver"]
-
-        let expanded = TopBarMetrics.size(for: .expanded)
-        shot("expanded-signed-out", size: expanded, stateModel(phase: .signedOut)) {
-            TopBarRoot(state: .expanded, actions: actions)
-        }
-        shot("expanded-offline", size: expanded,
-             stateModel(phase: .signedIn, loadError: network, offline: true)) {
-            TopBarRoot(state: .expanded, actions: actions)
-        }
-
-        // A failed snooze, on the two surfaces that used to say nothing.
-        let actionFailed = stateModel(phase: .signedIn, firewallJSON: firewallJSON)
-        actionFailed.showActionError(strings[0])
-        shot("expanded-action-error", size: expanded, actionFailed) {
-            TopBarRoot(state: .expanded, actions: actions)
-        }
-        let card = PushCardState()
-        card.item = actionFailed.queue?.items(for: .push).first
-        card.drafts = .ready(Self.cardDrafts)
-        card.actionError = strings[0]
-        shot("push-card-snooze-failed", size: CGSize(
-            width: PushCardMetrics.compact.width, height: PushCardMetrics.compact.height), actionFailed) {
-            PushCard(state: card, actions: PushCardActions(
-                onSend: { _ in }, onOpen: {}, onDismiss: {}, onSnooze: { _ in }, onRetry: {},
-                onToggleExpand: {}, onShowAll: {}))
-        }
-
-        let pill = CGSize(
-            width: TopBarMetrics.size(for: .collapsed).width + 80,
-            height: TopBarMetrics.size(for: .collapsed).height + 40)
-        shot("collapsed-offline", size: pill, stateModel(
-            phase: .signedIn, firewallJSON: firewallJSON, loadError: network, offline: true)) {
-            TopBarRoot(state: .collapsed, actions: actions)
-        }
-        shot("collapsed-not-updating", size: pill, stateModel(
-            phase: .signedIn, firewallJSON: firewallJSON, loadError: strings[0])) {
-            TopBarRoot(state: .collapsed, actions: actions)
-        }
 
         // First launch, no account.
         let onboarding = CGSize(width: OnboardingRules.size.width, height: OnboardingRules.size.height)

@@ -4,30 +4,13 @@
    fails the build if they drift. */
 
 /* Bar */
-"bar.expand" = "展開";
-"bar.expand.a11y" = "Klornを展開";
-"bar.hide" = "バーを隠す（メニューバーで動作を続けます）";
-"bar.hide.a11y" = "トップバーを隠す";
-"bar.close" = "閉じる";
-"bar.close.a11y" = "パネルを閉じる";
-"bar.fullView" = "全画面";
-"bar.fullView.a11y" = "全画面を開く";
-"bar.smaller" = "小さく";
-"bar.smaller.help" = "コンパクトパネルに戻る";
-"bar.push" = "PUSH %d件";
 "bar.offline" = "オフライン";
-"bar.allClear" = "対応済み";
-"bar.signingIn" = "サインイン中…";
 "bar.loading" = "読み込み中…";
-"bar.more" = "他 %d件";
-"bar.menuBar.signedOut" = "Klorn — 未サインイン";
 
 /* Auth */
-"auth.logIn" = "ログイン";
 "auth.signOut" = "サインアウト";
 
 /* Columns / sections */
-"section.today" = "KLORN 今日";
 "section.now" = "現在";
 "section.briefing" = "ブリーフィング";
 "section.aiToday" = "AI 今日";
@@ -35,7 +18,6 @@
 "section.assistant" = "アシスタント";
 "section.search" = "検索";
 
-"today.a11y" = "Klornの今日: %@。ウェブ受信トレイを開いて確認します。";
 "briefing.a11y" = "今日のブリーフィング: %@";
 "aiUsage.a11y" = "本日のAI使用: %2$d 中 %1$d";
 "commitments.a11y" = "約束、未完了 %d件";
@@ -82,9 +64,7 @@
 "mail.summarizing" = "要約中…";
 "mail.summarizeFailed" = "要約できませんでした — もう一度お試しください。";
 "mail.actionItems" = "対応事項";
-"section.filed" = "整理済み";
 "section.filed.help" = "Klornが整理済みのメール — 記録と静かな通知。クリックで展開。";
-"filed.a11y" = "整理済みメール、%d件";
 "dossier.inFlight" = "進行中: %@";
 "dossier.promise" = "最後の約束: %@";
 "dossier.a11y" = "差出人の背景";
@@ -130,21 +110,9 @@
 "reading.cancel" = "キャンセル";
 
 /* Push card */
-"push.card.a11y" = "緊急メールカード";
-"push.summary" = "要約";
-"push.message" = "本文";
-"push.showAll.a11y" = "待機中の緊急メールをすべて表示";
-"push.snooze.help" = "後でにする";
-"push.snooze.a11y" = "このメールをスヌーズ";
-"push.dismiss.a11y" = "カードを閉じる";
 "push.draftingReplies" = "返信を作成中…";
 "push.proRequired" = "クイック返信にはKlorn Proが必要です。";
-"push.proRequired.detail" = "⏎ を押すか「開く」でウェブ受信トレイで対応できます。";
 "push.tryAgain" = "再試行";
-"push.open" = "開く";
-"push.open.a11y" = "ウェブ受信トレイで開く";
-"push.sent.a11y" = "送信済み";
-"push.sendReply.a11y" = "%1$@ の返信を送信: %2$@";
 
 /* Assistant */
 "assistant.placeholder" = "Klornにメッセージ…";
@@ -156,14 +124,17 @@
 "prefs.title" = "環境設定";
 "prefs.section.notifications" = "通知";
 "prefs.section.general" = "一般";
-"prefs.section.topBar" = "トップバー";
 "prefs.section.keyboard" = "キーボード";
 "prefs.section.language" = "言語";
 "prefs.section.account" = "アカウント";
 "prefs.section.about" = "情報";
 
 "prefs.banners" = "このMacでmacOS通知バナーを表示";
-"prefs.banners.detail" = "ローカルの一括スイッチです。オフにすると上の分類に関わらずここでのバナーを止めます。トップバーのPUSH件数は更新され続けます。";
+"prefs.banners.detail" = "新しいPUSHメールごとに、差出人と件名だけを表示するバナーを出します。ローカルの一括スイッチです。オフにすると上の分類に関わらずここでのバナーを止めます。メインウィンドウのPUSH件数は更新され続けます。";
+"prefs.banners.denied" = "macOSがKlornの通知をブロックしています。システム設定 ▸ 通知で許可してください。";
+"prefs.banners.openSystemSettings" = "システム設定を開く";
+"prefs.section.support" = "アプリとサポート";
+"push.announce" = "新しいPUSHメール：%d件";
 "prefs.launchAtLogin" = "ログイン時にKlornを起動";
 "prefs.launchAtLogin.unavailable.label" = "ログイン時に起動";
 "prefs.launchAtLogin.unavailable.value" = "パッケージ版のみ";
@@ -173,10 +144,6 @@
 "prefs.updates.unknown" = "確認できませんでした — リリースページをご覧ください";
 "prefs.updates.check" = "アップデートを確認";
 "prefs.updates.checking" = "確認中…";
-"prefs.pillVisible" = "トップバーを常に表示";
-"prefs.pillVisible.detail" = "オフ: ⌥⌘K で呼び出すまでバーは隠れます。緊急メールのカードは表示されます。";
-"prefs.showInDock" = "Dockと⌘Tabに表示";
-"prefs.showInDock.detail" = "オフ（既定）: Klornは表に出ず、⌥⌘K で呼び出します。オン: ⌘Tabで切り替えられる通常のアプリとして動作します。";
 "prefs.shortcut" = "呼び出し / 展開";
 "prefs.shortcut.recording" = "ショートカットを入力 — ⌘、⌥、⌃ のいずれかが必要です。Escで中止。";
 "prefs.shortcut.idle" = "バーを呼び出すグローバルショートカット。クリックで変更。";
@@ -251,8 +218,6 @@
 "auto.error.generic" = "その設定を保存できませんでした。";
 
 /* Menu bar */
-"bar.menuBar.clear" = "Klorn — 緊急メールなし";
-"bar.menuBar.push" = "Klorn — PUSH %d件 待機中";
 
 /* Sender engagement */
 "engagement.repliedOnce" = "よくやり取りする相手 · 1回返信";
@@ -279,17 +244,10 @@
 "calendar.allDay" = "終日";
 
 /* Menu bar menu */
-"menu.showBar" = "トップバーを表示";
-"menu.preferences" = "環境設定…";
-"menu.signIn" = "サインイン…";
-"menu.quit" = "Klornを終了";
 "menu.restart" = "Klornを再起動";
 "menu.diagnostics" = "接続状態…";
 "menu.contactSupport" = "サポートにメールする…";
 "diagnostics.checking" = "確認中…";
-"menu.checkUpdates" = "アップデートを確認…";
-"update.upToDate" = "Klornは最新です。";
-"push.tryAgainIn" = "%d秒後に再試行";
 "mail.reclassifying" = "再分類中";
 
 /* Proposals — actions awaiting approval */
@@ -303,13 +261,9 @@
 
 /* Column headers and states the first pass missed */
 "section.inbox" = "受信トレイ";
-"section.recentPush" = "最近のPUSH";
-"section.todayShort" = "今日";
 "push.nothingNeedsYou" = "今すぐ対応が必要なものはありません。";
 "auth.signInNaver" = "Naverで続ける";
 "auth.signInApple" = "Appleで続ける";
-"auth.signInGoogle" = "Googleでサインイン";
-"calendar.noEvents" = "今日の予定はありません";
 "calendar.eventRow.a11y" = "%1$@、%2$@。詳細を表示します。";
 "mail.needsReconnect" = "%@ — 再接続が必要";
 
@@ -362,8 +316,6 @@
 "meeting.needsReview" = "確認が必要";
 "mail.inboxPrimary" = "メイン";
 "mail.inboxLinked" = "連携した受信トレイ";
-"push.expand.hint" = "クリックで展開";
-"push.collapse.hint" = "クリックで折りたたむ";
 "mail.unknownSender" = "（差出人不明）";
 "account.add" = "Googleアカウントを追加…";
 "account.add.hint" = "ブラウザを開き、別のGmail受信トレイをKlornに接続します。";
@@ -626,10 +578,6 @@
 "chip.draftReady" = "下書きあり";
 "reading.openDraft" = "下書きを開く";
 "reading.preparedDraft" = "Klornが事前に用意した下書きです — 送信前に確認してください。";
-"prefs.mainWindow" = "標準のメインウインドウを使う";
-"prefs.mainWindow.detail" = "デフォルトでオンです。フルビューを通常のウインドウで開き、開いている間はDockと⌘Tabに表示されます。オフにすると、トップバーの拡張パネルが最大の表示になります。";
-"bar.mainWindowOff.hint" = "ここでメールを読むには、設定でメインウインドウをオンにしてください。";
-"bar.mainWindowOff.settings" = "設定…";
 
 /* Device calendars (C6): EventKit calendars the user uploads, one by one. */
 "prefs.section.deviceCalendars" = "デバイスのカレンダー";
@@ -688,8 +636,6 @@
 "banner.offline" = "オフラインです。最後に同期したときのメールを表示しています。";
 "banner.stale" = "更新できませんでした。最後に同期したときのメールを表示しています。";
 "bar.notUpdating" = "更新停止中";
-"bar.retry.help" = "再試行";
-"bar.retry.a11y" = "%@。再試行";
 "error.server" = "サーバーエラー（%d）。";
 "error.network" = "ネットワークエラーです。接続を確認してください。";
 "onboarding.windowTitle" = "Klornへようこそ";

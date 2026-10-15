@@ -2,10 +2,10 @@ import AppKit
 import Carbon.HIToolbox
 
 /// A single system-wide hotkey via Carbon `RegisterEventHotKey` — the standard
-/// way to get a global shortcut that fires even when the app has no focus (which
-/// an `.accessory` app never does). Unlike an `NSEvent` global monitor it needs
-/// NO Accessibility permission and consumes the key. Default: ⌥⌘K to toggle the
-/// bar from anywhere, keeping the "keyboard-completable" promise.
+/// way to get a global shortcut that fires even when the app has no focus.
+/// Unlike an `NSEvent` global monitor it needs NO Accessibility permission and
+/// consumes the key. Default: ⌥⌘K raises the main window from anywhere (or
+/// hides Klorn when it is already frontmost — `AppRules.hotKeyAction`).
 @MainActor
 final class HotKey {
     private var ref: EventHotKeyRef?

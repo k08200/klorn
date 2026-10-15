@@ -17,7 +17,8 @@ struct MeetingCardActions {
 /// The pre-meeting interrupt: title · time · readiness + the prep checklist,
 /// with Join as the one primary action. Mouse-only by design (nothing here is
 /// send-like enough to deserve armed keys); appears in the same top-center
-/// slot and morph as the PushCard.
+/// slot and morph as the urgent-mail card had (that card was removed with
+/// the pill, founder decision 2026-10-15).
 struct MeetingCard: View {
     let state: MeetingCardState
     let actions: MeetingCardActions
@@ -40,9 +41,9 @@ struct MeetingCard: View {
             footer
         }
         .padding(14)
-        .frame(width: PushCardMetrics.compact.width, height: PushCardMetrics.compact.height,
+        .frame(width: MeetingCardMetrics.compact.width, height: MeetingCardMetrics.compact.height,
                alignment: .top)
-        .glassPanel(cornerRadius: PushCardMetrics.corner)
+        .glassPanel(cornerRadius: MeetingCardMetrics.corner)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(L("calendar.card.a11y"))
     }
@@ -113,5 +114,31 @@ struct MeetingCard: View {
                     .buttonStyle(PrimaryButtonStyle())
             }
         }
+    }
+}
+
+/// The meeting card's size and placement. Owned here since the urgent-mail
+/// card it was borrowed from was removed (founder decision 2026-10-15).
+enum MeetingCardMetrics {
+    static let compact = NSSize(width: 460, height: 344)
+    static let corner: CGFloat = 16
+    /// Gap between the card's top edge and the top of the visible area.
+    /// The pill used to sit in it; it is gone, so only the margin remains.
+    static let topOffset: CGFloat = 8
+
+    /// Where the present-morph begins: a thin strip hugging the target's top
+    /// edge, centered on the same axis. Pure for testing.
+    static func presentStartFrame(target: NSRect) -> NSRect {
+        let height: CGFloat = 60
+        let width = target.width * 0.8
+        return NSRect(
+            x: target.midX - width / 2, y: target.maxY - height, width: width, height: height)
+    }
+
+    /// Card frame pinned top-center. Pure for testing.
+    static func cardFrame(size: NSSize, visible: NSRect) -> NSRect {
+        NSRect(
+            x: visible.midX - size.width / 2, y: visible.maxY - topOffset - size.height,
+            width: size.width, height: size.height)
     }
 }

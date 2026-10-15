@@ -9,7 +9,7 @@ enum MenuCommand: Hashable {
     case dismiss
     case moveTo(Tier)
     case go(ListMode)
-    /// A main-window section (M4b). Only offered while `macMainWindow` is on.
+    /// A main-window section (M4b).
     case section(NavSection)
     /// "Import to Klorn Drive…" (D7). Only offered while the server has the drive.
     case importToDrive
@@ -37,14 +37,11 @@ struct MenuState: Equatable {
     /// The list column currently shows the search field (Find needs no
     /// mode switch, so it can't unmount the reading pane).
     var listHasSearchField: Bool
-    /// A reading pane is on screen: always in the bar's full view, only in
-    /// Mail in the main window (M4b). Message commands need it.
+    /// A reading pane is on screen: only in Mail in the main window (M4b).
+    /// Message commands need it.
     var readerVisible: Bool
     /// The Klorn drive is live with a quota and no import runs (D7).
     var driveImportReady: Bool
-    /// `macMainWindow` is on (the default since M8). Off, there is no main
-    /// window to search in or navigate, so Find, Go and the sections are off.
-    var mainWindowAvailable: Bool = true
     /// The server reports a drive source (FD-7): Files is a section.
     var filesAvailable: Bool = false
 
@@ -61,7 +58,6 @@ struct MenuState: Equatable {
         listHasSearchField = model.listMode.hasSearchField
         readerVisible = model.readerVisible
         driveImportReady = model.driveImport.canImport
-        mainWindowAvailable = model.settings.macMainWindow
         filesAvailable = model.clientFlags.files
     }
 
@@ -96,26 +92,15 @@ enum MenuRules {
     ]
 
     /// Whether the key window is one that shows the full view: only the
-    /// main window, while it is open. The bar's pill and compact panel show
-    /// no reading pane (M8 deleted the bar's full state).
+    /// main window, while it is open.
     static func mailSurfaceIsKey(mainWindowIsKey: Bool, mainWindowOpen: Bool) -> Bool {
         mainWindowIsKey && mainWindowOpen
     }
 
-    /// Find, Go and the sections act on the main window; with it stored OFF
-    /// they have nothing to show and are dropped. Everything else is
-    /// unaffected (New Email is its own window). Pure for the harness.
-    static func mainWindowCommandAllowed(_ command: MenuCommand, macMainWindow: Bool) -> Bool {
-        switch command {
-        case .find, .go, .section: macMainWindow
-        default: true
-        }
-    }
-
     static func isEnabled(_ command: MenuCommand, in s: MenuState) -> Bool {
-        guard s.signedIn,
-              mainWindowCommandAllowed(command, macMainWindow: s.mainWindowAvailable)
-        else { return false }
+        // Find, Go and the sections open the main window themselves, so
+        // signed in they never wait for it to be open (2026-10-15).
+        guard s.signedIn else { return false }
         // Message commands act on the mail visible in the reading pane, so
         // they need the full view up AND key (not Settings), no modal over
         // it, and a firewall item.
@@ -220,9 +205,8 @@ enum MenuRules {
     }
 }
 
-/// The app menus. Only visible while the app is `.regular` (bar expanded or
-/// full, Settings open, or show-in-Dock on) — the menu bar belongs to the
-/// frontmost regular app, which is the Cmd+Tab compromise working as meant.
+/// The app menus. Klorn is always `.regular`, so they are there whenever it
+/// is the frontmost app, with or without a window open.
 struct KlornCommands: Commands {
     let model: AppModel
     let perform: @MainActor (MenuCommand) -> Void
@@ -255,36 +239,24 @@ struct KlornCommands: Commands {
 }
 
 /// Go menu body. A View (not inline Commands content) so it observes the
-/// model and can hide Teams exactly when the sidebar does. With
-/// `macMainWindow` off it is the pre-M4b menu, item for item.
+/// model and can hide Teams exactly when the sidebar does.
 private struct GoMenuItems: View {
     let model: AppModel
     let perform: @MainActor (MenuCommand) -> Void
 
     var body: some View {
-        if model.settings.macMainWindow {
-            ForEach(FilesRules.sections(files: model.clientFlags.files)) { section in
+        ForEach(FilesRules.sections(files: model.clientFlags.files)) { section in
+            CommandButton(
+                model: model, command: .section(section), title: section.title,
+                perform: perform)
+        }
+        Divider()
+        ForEach(NavRules.secondaryDestinations, id: \.self) { mode in
+            if mode != .teams || model.teamModeAvailable {
                 CommandButton(
-                    model: model, command: .section(section), title: section.title,
-                    perform: perform)
-            }
-            Divider()
-            ForEach(NavRules.secondaryDestinations, id: \.self) { mode in
-                if mode != .teams || model.teamModeAvailable {
-                    CommandButton(
-                        model: model, command: .go(mode),
-                        title: MenuRules.mainWindowTitle(for: mode), perform: perform,
-                        shortcut: MenuRules.mainWindowShortcut(for: .go(mode)))
-                }
-            }
-        } else {
-            ForEach(MenuRules.destinations, id: \.self) { mode in
-                if mode == .mailbox(.sent) { Divider() }
-                if mode != .teams || model.teamModeAvailable {
-                    CommandButton(
-                        model: model, command: .go(mode), title: MenuRules.title(for: mode),
-                        perform: perform)
-                }
+                    model: model, command: .go(mode),
+                    title: MenuRules.mainWindowTitle(for: mode), perform: perform,
+                    shortcut: MenuRules.mainWindowShortcut(for: .go(mode)))
             }
         }
     }

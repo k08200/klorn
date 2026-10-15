@@ -60,11 +60,6 @@ func stateSelfChecks(sourceDir: URL) -> [(String, Bool)] {
                   }
               }
           })
-    check("the pill says offline only for the network, and nothing while signed out",
-          SurfaceStateRules.pillNotice(phase: .signedIn, loadError: "x", offline: true) == .offline
-          && SurfaceStateRules.pillNotice(phase: .signedIn, loadError: "x", offline: false) == .stale
-          && SurfaceStateRules.pillNotice(phase: .signedIn, loadError: nil, offline: false) == nil
-          && SurfaceStateRules.pillNotice(phase: .signedOut, loadError: "x", offline: true) == nil)
     func kind(_ code: URLError.Code?) -> SurfaceStateRules.FailureKind {
         SurfaceStateRules.failureKind(APIError.transport("x", code: code?.rawValue))
     }
@@ -95,12 +90,9 @@ func stateSelfChecks(sourceDir: URL) -> [(String, Bool)] {
           && TodayRules.state(phase: .signedIn, hasQueue: false, loadError: "x", offline: true) == .offline)
 
     // MARK: first launch
-    check("first launch with no account opens onboarding, not a logged-out full view",
-          OnboardingRules.launchAction(firstLaunch: true, signedIn: false) == .onboarding)
-    check("first launch with an account opens the full view, as before",
-          OnboardingRules.launchAction(firstLaunch: true, signedIn: true) == .fullView)
-    check("later launches open nothing",
-          bools.allSatisfy { OnboardingRules.launchAction(firstLaunch: false, signedIn: $0) == .none })
+    check("a launch with no account opens onboarding, not a logged-out main window",
+          AppRules.launchAction(signedIn: false, loginLaunch: false, mainWindowOpenAtQuit: false)
+              == .onboarding)
     check("onboarding is done exactly when an account is signed in",
           OnboardingRules.completes(phase: .signedIn) && !OnboardingRules.completes(phase: .signingIn)
           && !OnboardingRules.completes(phase: .signedOut))
@@ -117,34 +109,16 @@ func stateSelfChecks(sourceDir: URL) -> [(String, Bool)] {
     check("every lane has its own line in the explainer",
           Set(OnboardingRules.lanes.map(\.onboardingLine)).count == OnboardingRules.lanes.count
           && OnboardingRules.lanes.allSatisfy { !$0.onboardingLine.hasPrefix("onboarding.") })
-    check("an open onboarding window makes the app regular; closed is the pre-M6 rule",
-          TopBarController.activationPolicy(for: .collapsed, onboardingOpen: true) == .regular
-          && [BarState.collapsed, .expanded].allSatisfy { state in
-              bools.allSatisfy { dock in
-                  bools.allSatisfy { main in
-                      bools.allSatisfy { compose in
-                          TopBarController.activationPolicy(
-                              for: state, showInDock: dock, mainWindowOpen: main,
-                              composeWindowOpen: compose, onboardingOpen: false)
-                              == TopBarController.activationPolicy(
-                                  for: state, showInDock: dock, mainWindowOpen: main,
-                                  composeWindowOpen: compose)
-                      }
-                  }
-              }
-          })
 
     // MARK: strings
     check("new integer formats render",
           L("onboarding.value", 5).contains("5") && !L("onboarding.value", 5).contains("%")
           && L("error.server", 503).contains("503") && !L("error.server", 503).contains("%"))
-    check("new string formats render",
-          L("bar.retry.a11y", "x").contains("x") && !L("bar.retry.a11y", "x").contains("%"))
 
     // MARK: model (in-memory store)
     let model = AppModel(tokenStore: InMemoryTokenStore())
     check("a model with no token is signed out, with no banner",
-          model.surfaceState == .signedOut && model.connectionNotice == nil && model.pillNotice == nil)
+          model.surfaceState == .signedOut && model.connectionNotice == nil)
     model.seedStateForRender(phase: .signedIn, loadError: "x", offline: true)
     let offline = model.surfaceState
     model.seedStateForRender(phase: .signedIn, loadError: nil, offline: true)
@@ -163,7 +137,7 @@ func stateSelfChecks(sourceDir: URL) -> [(String, Bool)] {
     model.showActionError("pin failed")
     check("a failed action is its own notice: no banner, no pill chip, no offline state",
           model.actionError == "pin failed" && model.loadError == nil && !model.loadOffline
-          && model.connectionNotice == nil && model.pillNotice == nil)
+          && model.connectionNotice == nil)
     model.dismissActionError()
     check("an action error can be dismissed", model.actionError == nil)
     check("restarting sign-in defaults to Google until a provider was chosen", model.signInProvider == "google")
@@ -179,11 +153,6 @@ func stateSelfChecks(sourceDir: URL) -> [(String, Bool)] {
     check("the sign-in error ink clears 4.5:1 on the canvas in light and dark",
           ratio(Theme.laneComponents(.push, dark: false), Theme.bgLight) >= 4.5
           && ratio(Theme.laneComponents(.push, dark: true), Theme.bgDark) >= 4.5)
-    var presence = 0
-    model.onWindowPresenceChanged = { presence += 1 }
-    model.onboardingWindowOpen = true
-    model.onboardingWindowOpen = false
-    check("the onboarding window opening and closing re-applies the activation policy", presence == 2)
 
     // MARK: source pins
     let files = swiftSources(under: sourceDir)
@@ -197,16 +166,12 @@ func stateSelfChecks(sourceDir: URL) -> [(String, Bool)] {
     }
     let blockingGuard = "SurfaceStateRules.isBlocking(model.surfaceState)"
     check("every surface that draws the skeleton for a missing queue checks the state first",
-          ["ExpandedDashboard.swift", "MailSection.swift"]
-              .allSatisfy { text($0).contains(blockingGuard) }
+          text("MailSection.swift").contains(blockingGuard)
           && text("TodayScreen.swift").contains("case .signedOut, .signingIn, .offline, .failed:"))
     check("the skeleton has only its known call sites",
           users(of: "FirstSync" + "State()") == [
-              "ExpandedDashboard.swift", "FullList.swift", "MailboxList.swift", "TodayScreen.swift",
+              "FullList.swift", "MailboxList.swift", "TodayScreen.swift",
           ])
-    check("the pill's chip is labelled by the rule, never a fixed 'offline'",
-          !text("CollapsedPill.swift").contains("L(\"bar.offline\")")
-          && text("CollapsedPill.swift").contains("model.pillNotice"))
     check("load failures are recorded with their kind, in one place",
           text("AppModel.swift").components(separatedBy: "loadError = Self.describe(error)").count == 2
           && text("AppModel.swift").contains("loadOffline = kind == .offline"))
@@ -216,9 +181,7 @@ func stateSelfChecks(sourceDir: URL) -> [(String, Bool)] {
           text("AppModel.swift").components(separatedBy: "            noteLoadFailure(error)\n").count == 2
           && text("AppModel.swift").components(separatedBy: "noteActionFailure(error)\n").count == 4)
     check("every retry control goes through the guarded retry",
-          users(of: "await model.retry" + "Load()") == ["CollapsedPill.swift", "SurfaceState.swift"]
-          && text("CollapsedPill.swift")
-              .contains(".disabled(!SurfaceStateRules.mayRetry(isLoading: model.isLoadingQueue))")
+          users(of: "await model.retry" + "Load()") == ["SurfaceState.swift"]
           && !text("SurfaceState.swift").contains("await model.loadQueue()"))
     check("restarting sign-in keeps the provider the user chose",
           users(of: "await model.restart" + "SignIn()") == ["OnboardingView.swift", "SurfaceState.swift"]
@@ -235,9 +198,9 @@ func stateSelfChecks(sourceDir: URL) -> [(String, Bool)] {
                   && !source.contains("tokenStore") && !source.contains("URLSession")
           }
           && text("SurfaceState.swift").contains("await model.signIn(provider: provider)"))
-    check("first launch goes through the rule, and nothing else is gated on it",
-          text("KlornApp.swift").contains("switch OnboardingRules.launchAction(")
-          && users(of: "consumeFirst" + "Launch()") == ["KlornApp.swift", "Settings.swift"]
+    check("launch goes through the rule, and no first-launch marker gates anything",
+          text("WindowRouter.swift").contains("switch AppRules.launchAction(")
+          && users(of: "consumeFirst" + "Launch(").isEmpty
           && users(of: "OnboardingWindow" + "Controller(model:") == ["KlornApp.swift"])
     let m6Files = onboardingFiles + ["PreviewRenderStates.swift", "MainShell.swift", "TodayScreen.swift"]
     check("every M6 file exists and stays under 400 lines",

@@ -13,7 +13,7 @@ import SwiftUI
 /// responses for a range the user already left are dropped.
 struct CalendarScreen: View {
     @Environment(AppModel.self) private var model
-    let actions: TopBarActions
+    let actions: ShellActions
 
     enum Scope: String, CaseIterable, Identifiable {
         case day, week, month, year
@@ -37,7 +37,7 @@ struct CalendarScreen: View {
     private var m: CalendarMetrics { style == .window ? .window : .bar }
 
     init(
-        actions: TopBarActions, initialScope: Scope = .month, initialAnchor: Date = Date(),
+        actions: ShellActions, initialScope: Scope = .month, initialAnchor: Date = Date(),
         style: ShellStyle = .bar
     ) {
         self.actions = actions

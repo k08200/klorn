@@ -4,30 +4,13 @@
    fails the build if they drift. */
 
 /* Bar */
-"bar.expand" = "Ausklappen";
-"bar.expand.a11y" = "Klorn ausklappen";
-"bar.hide" = "Leiste ausblenden (läuft in der Menüleiste weiter)";
-"bar.hide.a11y" = "Obere Leiste ausblenden";
-"bar.close" = "Schließen";
-"bar.close.a11y" = "Panel schließen";
-"bar.fullView" = "Vollansicht";
-"bar.fullView.a11y" = "Vollansicht öffnen";
-"bar.smaller" = "Verkleinern";
-"bar.smaller.help" = "Zurück zum kompakten Panel";
-"bar.push" = "%d PUSH";
 "bar.offline" = "Offline";
-"bar.allClear" = "Alles erledigt";
-"bar.signingIn" = "Anmeldung…";
 "bar.loading" = "Lädt…";
-"bar.more" = "+%d weitere";
-"bar.menuBar.signedOut" = "Klorn — nicht angemeldet";
 
 /* Auth */
-"auth.logIn" = "Anmelden";
 "auth.signOut" = "Abmelden";
 
 /* Columns / sections */
-"section.today" = "KLORN HEUTE";
 "section.now" = "JETZT";
 "section.briefing" = "BRIEFING";
 "section.aiToday" = "KI HEUTE";
@@ -35,7 +18,6 @@
 "section.assistant" = "Assistent";
 "section.search" = "Suche";
 
-"today.a11y" = "Klorn heute: %@. Öffnet den Web-Posteingang zur Durchsicht.";
 "briefing.a11y" = "Briefing für heute: %@";
 "aiUsage.a11y" = "KI-Nutzung heute: %1$d von %2$d";
 "commitments.a11y" = "Zusagen, %d offen";
@@ -82,9 +64,7 @@
 "mail.summarizing" = "Wird zusammengefasst…";
 "mail.summarizeFailed" = "Zusammenfassung fehlgeschlagen — bitte erneut versuchen.";
 "mail.actionItems" = "To-dos";
-"section.filed" = "Abgelegt";
 "section.filed.help" = "Mail, die Klorn bereits abgelegt hat — Belege und stiller Lärm. Zum Ausklappen klicken.";
-"filed.a11y" = "Abgelegte Mail, %d Einträge";
 "dossier.inFlight" = "Läuft: %@";
 "dossier.promise" = "Letzte Zusage: %@";
 "dossier.a11y" = "Kontext zum Absender";
@@ -130,21 +110,9 @@
 "reading.cancel" = "Abbrechen";
 
 /* Push card */
-"push.card.a11y" = "Karte für dringende Mail";
-"push.summary" = "Zusammenfassung";
-"push.message" = "Nachricht";
-"push.showAll.a11y" = "Alle wartenden dringenden Mails anzeigen";
-"push.snooze.help" = "Auf später verschieben";
-"push.snooze.a11y" = "Diese Mail zurückstellen";
-"push.dismiss.a11y" = "Karte ausblenden";
 "push.draftingReplies" = "Antworten werden entworfen…";
 "push.proRequired" = "Schnellantworten brauchen Klorn Pro.";
-"push.proRequired.detail" = "Drücke ⏎ oder klicke auf Öffnen, um es im Web-Posteingang zu erledigen.";
 "push.tryAgain" = "Erneut versuchen";
-"push.open" = "Öffnen";
-"push.open.a11y" = "Im Web-Posteingang öffnen";
-"push.sent.a11y" = "Gesendet";
-"push.sendReply.a11y" = "%1$@-Antwort senden: %2$@";
 
 /* Assistant */
 "assistant.placeholder" = "Klorn schreiben…";
@@ -156,14 +124,17 @@
 "prefs.title" = "Einstellungen";
 "prefs.section.notifications" = "MITTEILUNGEN";
 "prefs.section.general" = "ALLGEMEIN";
-"prefs.section.topBar" = "OBERE LEISTE";
 "prefs.section.keyboard" = "TASTATUR";
 "prefs.section.language" = "SPRACHE";
 "prefs.section.account" = "ACCOUNT";
 "prefs.section.about" = "ÜBER";
 
 "prefs.banners" = "macOS-Banner auf diesem Mac zeigen";
-"prefs.banners.detail" = "Ein lokaler Hauptschalter. Aus schaltet hier jedes Banner stumm, unabhängig von den Kategorien oben; die obere Leiste aktualisiert ihren PUSH-Zähler weiterhin.";
+"prefs.banners.detail" = "Für jede neue PUSH-Mail ein Banner, nur mit Absender und Betreff. Ein lokaler Hauptschalter: Aus schaltet hier jedes Banner stumm, unabhängig von den Kategorien oben; die PUSH-Anzahl im Hauptfenster wird weiter aktualisiert.";
+"prefs.banners.denied" = "macOS blockiert die Mitteilungen von Klorn. Erlaube sie in Systemeinstellungen ▸ Mitteilungen.";
+"prefs.banners.openSystemSettings" = "Systemeinstellungen öffnen";
+"prefs.section.support" = "APP & SUPPORT";
+"push.announce" = "Neue PUSH-Mail: %d";
 "prefs.launchAtLogin" = "Klorn beim Anmelden starten";
 "prefs.launchAtLogin.unavailable.label" = "Beim Anmelden starten";
 "prefs.launchAtLogin.unavailable.value" = "Nur in der gepackten App";
@@ -173,10 +144,6 @@
 "prefs.updates.unknown" = "Prüfung fehlgeschlagen — sieh auf der Releases-Seite nach";
 "prefs.updates.check" = "Nach Updates suchen";
 "prefs.updates.checking" = "Wird geprüft…";
-"prefs.pillVisible" = "Obere Leiste immer zeigen";
-"prefs.pillVisible.detail" = "Aus: Die Leiste bleibt verborgen, bis ⌥⌘K sie holt. Karten für dringende Mails erscheinen trotzdem.";
-"prefs.showInDock" = "Im Dock und mit ⌘Tab zeigen";
-"prefs.showInDock.detail" = "Aus (Standard): Klorn bleibt außer Sicht — kein Dock-Symbol, und ⌥⌘K holt es. An: Es verhält sich wie eine normale App, zu der du mit ⌘Tab wechselst.";
 "prefs.shortcut" = "Holen / ausklappen";
 "prefs.shortcut.recording" = "Kurzbefehl eingeben — muss ⌘, ⌥ oder ⌃ enthalten. Esc bricht ab.";
 "prefs.shortcut.idle" = "Globaler Kurzbefehl, um die Leiste zu holen. Zum Ändern klicken.";
@@ -251,8 +218,6 @@
 "auto.error.generic" = "Diese Einstellung konnte nicht gespeichert werden.";
 
 /* Menu bar */
-"bar.menuBar.clear" = "Klorn — keine dringende Mail";
-"bar.menuBar.push" = "Klorn — %d PUSH warten";
 
 /* Sender engagement */
 "engagement.repliedOnce" = "Du hast mit diesem Absender zu tun · einmal geantwortet";
@@ -279,17 +244,10 @@
 "calendar.allDay" = "Ganztägig";
 
 /* Menu bar menu */
-"menu.showBar" = "Obere Leiste zeigen";
-"menu.preferences" = "Einstellungen…";
-"menu.signIn" = "Anmelden…";
-"menu.quit" = "Klorn beenden";
 "menu.restart" = "Klorn neu starten";
 "menu.diagnostics" = "Verbindungsstatus…";
 "menu.contactSupport" = "Support anschreiben…";
 "diagnostics.checking" = "Wird geprüft…";
-"menu.checkUpdates" = "Nach Updates suchen…";
-"update.upToDate" = "Klorn ist aktuell.";
-"push.tryAgainIn" = "Erneut versuchen in %d s";
 "mail.reclassifying" = "wird neu eingestuft";
 
 /* Proposals — actions awaiting approval */
@@ -303,13 +261,9 @@
 
 /* Column headers and states the first pass missed */
 "section.inbox" = "POSTEINGANG";
-"section.recentPush" = "LETZTE PUSH";
-"section.todayShort" = "HEUTE";
 "push.nothingNeedsYou" = "Gerade braucht dich nichts.";
 "auth.signInNaver" = "Mit Naver fortfahren";
 "auth.signInApple" = "Mit Apple fortfahren";
-"auth.signInGoogle" = "Mit Google anmelden";
-"calendar.noEvents" = "Heute keine Termine";
 "calendar.eventRow.a11y" = "%1$@, %2$@. Zeigt die Details.";
 "mail.needsReconnect" = "%@ — muss neu verbunden werden";
 
@@ -362,8 +316,6 @@
 "meeting.needsReview" = "Muss geprüft werden";
 "mail.inboxPrimary" = "Hauptkonto";
 "mail.inboxLinked" = "Verknüpftes Postfach";
-"push.expand.hint" = "Zum Ausklappen klicken";
-"push.collapse.hint" = "Zum Einklappen klicken";
 "mail.unknownSender" = "(unbekannter Absender)";
 "account.add" = "Google-Account hinzufügen…";
 "account.add.hint" = "Öffnet den Browser, um ein weiteres Gmail-Postfach mit Klorn zu verbinden.";
@@ -626,10 +578,6 @@
 "chip.draftReady" = "Entwurf bereit";
 "reading.openDraft" = "Entwurf öffnen";
 "reading.preparedDraft" = "Klorn hat diesen Entwurf vorab geschrieben — vor dem Senden prüfen.";
-"prefs.mainWindow" = "Standard-Hauptfenster verwenden";
-"prefs.mainWindow.detail" = "Standardmäßig aktiviert. Die Vollansicht öffnet sich in einem normalen Fenster, das im Dock und mit ⌘Tab erscheint, solange es offen ist. Ist die Option aus, ist das erweiterte Panel der oberen Leiste die größte Ansicht.";
-"bar.mainWindowOff.hint" = "Aktiviere das Hauptfenster in den Einstellungen, um Mails hier zu lesen.";
-"bar.mainWindowOff.settings" = "Einstellungen…";
 
 /* Device calendars (C6): EventKit calendars the user uploads, one by one. */
 "prefs.section.deviceCalendars" = "GERÄTEKALENDER";
@@ -688,8 +636,6 @@
 "banner.offline" = "Du bist offline. Das sind die Mails der letzten Synchronisierung.";
 "banner.stale" = "Aktualisieren fehlgeschlagen. Das sind die Mails der letzten Synchronisierung.";
 "bar.notUpdating" = "Keine Aktualisierung";
-"bar.retry.help" = "Erneut versuchen";
-"bar.retry.a11y" = "%@. Erneut versuchen";
 "error.server" = "Serverfehler (%d).";
 "error.network" = "Netzwerkfehler. Prüfe deine Verbindung.";
 "onboarding.windowTitle" = "Willkommen bei Klorn";

@@ -198,7 +198,7 @@ private struct WindowRowChrome: ViewModifier {
 struct WindowMailRow: View {
     @Environment(AppModel.self) private var model
     let item: FirewallItem
-    let actions: TopBarActions
+    let actions: ShellActions
     var showLaneChip = false
     @FocusState private var focused: Bool
     @State private var hovering = false

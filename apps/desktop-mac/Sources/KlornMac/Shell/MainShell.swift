@@ -10,10 +10,10 @@ import SwiftUI
 /// AppKit-backed containers. A selectable sidebar `List` would take the
 /// arrow keys, and the split view would add its own toolbar and column
 /// autosave next to ours. The structure is the same, so the swap stays
-/// local now that `BarState.full` is deleted (M8).
+/// local now that the bar's full state is deleted (M8).
 struct MainShell: View {
     @Environment(AppModel.self) private var model
-    let actions: TopBarActions
+    let actions: ShellActions
     /// Render seam: pins Today's date and the calendar's month in the
     /// offscreen shots. nil in the app.
     var renderDate: Date? = nil

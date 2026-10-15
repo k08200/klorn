@@ -54,15 +54,6 @@ enum SurfaceStateRules {
         return offline ? .offline : .stale
     }
 
-    /// The pill's status chip. The pill has no room for a state view, so any
-    /// failed load shows there, with or without a queue behind it.
-    static func pillNotice(
-        phase: AppModel.Phase, loadError: String?, offline: Bool
-    ) -> ConnectionNotice? {
-        guard phase == .signedIn, loadError != nil else { return nil }
-        return offline ? .offline : .stale
-    }
-
     /// The `URLError` codes that mean this Mac has no usable network.
     /// Timeouts, TLS failures and the rest mean the server could not be
     /// reached, which is a failure, not "offline".
@@ -113,10 +104,6 @@ extension AppModel {
     var connectionNotice: ConnectionNotice? {
         SurfaceStateRules.notice(
             phase: phase, hasQueue: queue != nil, loadError: loadError, offline: loadOffline)
-    }
-
-    var pillNotice: ConnectionNotice? {
-        SurfaceStateRules.pillNotice(phase: phase, loadError: loadError, offline: loadOffline)
     }
 }
 

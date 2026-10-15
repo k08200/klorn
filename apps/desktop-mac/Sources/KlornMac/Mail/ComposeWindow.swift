@@ -177,7 +177,7 @@ final class ComposeWindowController: NSObject, NSWindowDelegate {
     /// not leave the title bar unreachable (clipping lessons, 2026-08-20).
     private func clampOnScreen(_ window: NSWindow) {
         guard let visible = (window.screen ?? NSScreen.main)?.visibleFrame else { return }
-        let clamped = KeyablePanel.clamped(window.frame, into: visible)
+        let clamped = WindowGeometry.clamped(window.frame, into: visible)
         if clamped != window.frame { window.setFrame(clamped, display: true) }
     }
 }

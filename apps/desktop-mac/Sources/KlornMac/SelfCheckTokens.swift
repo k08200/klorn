@@ -8,8 +8,8 @@ import Foundation
 // verdict never depends on the machine's appearance), pure rules, and a
 // source guard that keeps the main window's own files on the tokens.
 
-/// The files that draw only in the main window (`macMainWindow`). They are
-/// held at zero raw style literals; the bar's files are not.
+/// The files that draw only in the main window. They are held at zero raw
+/// style literals.
 enum TokenGuard {
     static let scope = [
         "Shell/MainShell", "Shell/NavSidebar", "Shell/MainNav", "Shell/MainSheets", "Today/",

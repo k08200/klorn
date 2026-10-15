@@ -4,7 +4,7 @@ import SwiftUI
 /// One existing Preferences section. The Settings window regroups these into
 /// tabs; it adds no new settings (productization plan, macOS M0).
 enum PrefsSection: CaseIterable, Hashable, Sendable {
-    case general, topBar, keyboard, about
+    case general, support, keyboard, about
     case account, inboxes, deviceCalendars, driveImport
     case mode, behaviour, replies
     case banners, interrupts
@@ -26,7 +26,7 @@ enum PrefsSection: CaseIterable, Hashable, Sendable {
 /// already has; plan groups with no Mac settings yet (Lanes & rules, Team,
 /// Integrations, billing) are deliberately absent rather than shown empty.
 /// `general` is the macOS-convention home for app chrome (login item,
-/// updates, top bar, hotkey, about), which the web IA has no slot for.
+/// updates, app & support, hotkey, about), which the web IA has no slot for.
 enum SettingsTab: String, CaseIterable, Identifiable, Sendable {
     case general, accounts, assistant, notifications, appearance, privacy
 
@@ -50,7 +50,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Sendable {
 
     var sections: [PrefsSection] {
         switch self {
-        case .general: [.general, .topBar, .keyboard, .about]
+        case .general: [.general, .support, .keyboard, .about]
         case .accounts: [.account, .inboxes, .deviceCalendars, .driveImport]
         case .assistant: [.mode, .behaviour, .replies]
         case .notifications: [.banners, .interrupts]
@@ -98,11 +98,9 @@ struct SettingsRoot: View {
             // torn down by a language switch.
             .id(model.settings.languageRevision)
             .frame(width: SettingsMetrics.width, height: SettingsMetrics.height)
-            // Cmd+Tab compromise: an open Settings window is a summoned app
-            // window, so the app is .regular while it is up (see
-            // TopBarController.activationPolicy). Driven by the real NSWindow,
-            // not view lifecycle: SwiftUI may keep this content alive after
-            // the window closes, so onDisappear is not a close signal.
+            // Open/closed comes from the real NSWindow, not view lifecycle:
+            // SwiftUI may keep this content alive after the window closes,
+            // so onDisappear is not a close signal.
             .background(SettingsWindowTracker { open in model.settingsWindowOpen = open })
     }
 
@@ -130,9 +128,8 @@ enum SettingsWindowEvent: Sendable {
 
 extension SettingsWindowEvent {
     /// Whether Settings counts as open after `event`. Only a real close
-    /// clears it: hiding the app (⌘H) or covering the window must not drop
-    /// the app to .accessory, which would leave a hidden accessory app that
-    /// Cmd+Tab can no longer bring back. Pure for the harness.
+    /// clears it: hiding the app (⌘H) or covering the window does not close
+    /// it. Pure for the harness.
     func openState(current: Bool) -> Bool {
         switch self {
         case .willClose: false

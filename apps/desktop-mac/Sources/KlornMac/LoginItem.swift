@@ -2,7 +2,8 @@ import Foundation
 import ServiceManagement
 
 /// Launch-at-login via SMAppService (macOS 13+). An always-on firewall that
-/// dies on reboot isn't always-on — this makes the pill/card survive restarts.
+/// dies on reboot isn't always-on — this keeps the PUSH banners working after
+/// a restart. A login launch opens no window (see `AppRules.launchAction`).
 /// Registration needs a real bundle identity, so the unbundled `swift run`
 /// degrades to a visible "Packaged app only" state instead of a silent no-op.
 @MainActor

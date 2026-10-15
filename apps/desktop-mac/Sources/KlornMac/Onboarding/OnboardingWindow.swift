@@ -9,18 +9,6 @@ enum OnboardingRules {
     /// nothing to resize into.
     static let styleMask: NSWindow.StyleMask = [.titled, .closable]
 
-    /// What the first launch after install opens. Later launches open
-    /// nothing: the pill is the resting surface.
-    enum LaunchAction: Equatable { case onboarding, fullView, none }
-
-    /// No account yet: the onboarding window, not a logged-out full view.
-    /// Already signed in (a restored token): the full view, as before (the
-    /// main window; the expanded panel with `macMainWindow` stored OFF).
-    static func launchAction(firstLaunch: Bool, signedIn: Bool) -> LaunchAction {
-        guard firstLaunch else { return .none }
-        return signedIn ? .fullView : .onboarding
-    }
-
     /// The window has done its job the moment an account is signed in.
     static func completes(phase: AppModel.Phase) -> Bool {
         phase == .signedIn
@@ -63,7 +51,7 @@ struct OnboardingRoot: View {
 /// existing entry points; when it lands the window closes and hands over to
 /// the existing post-login flow (`onSignedIn`).
 @MainActor
-final class OnboardingWindowController: NSObject, NSWindowDelegate {
+final class OnboardingWindowController: NSObject, NSWindowDelegate, OnboardingPresenting {
     private let model: AppModel
     private let onSignedIn: () -> Void
     private(set) var window: NSWindow?

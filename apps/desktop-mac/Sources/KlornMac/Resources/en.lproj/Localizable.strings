@@ -4,30 +4,13 @@
    fails the build if they drift. */
 
 /* Bar */
-"bar.expand" = "Expand";
-"bar.expand.a11y" = "Expand Klorn";
-"bar.hide" = "Hide the bar (it keeps running in the menu bar)";
-"bar.hide.a11y" = "Hide top bar";
-"bar.close" = "Close";
-"bar.close.a11y" = "Close panel";
-"bar.fullView" = "Full view";
-"bar.fullView.a11y" = "Open full view";
-"bar.smaller" = "Smaller";
-"bar.smaller.help" = "Back to the compact panel";
-"bar.push" = "%d PUSH";
 "bar.offline" = "Offline";
-"bar.allClear" = "All clear";
-"bar.signingIn" = "Signing in…";
 "bar.loading" = "Loading…";
-"bar.more" = "+%d more";
-"bar.menuBar.signedOut" = "Klorn — not signed in";
 
 /* Auth */
-"auth.logIn" = "Log In";
 "auth.signOut" = "Sign Out";
 
 /* Columns / sections */
-"section.today" = "KLORN TODAY";
 "section.now" = "NOW";
 "section.briefing" = "BRIEFING";
 "section.aiToday" = "AI TODAY";
@@ -35,7 +18,6 @@
 "section.assistant" = "Assistant";
 "section.search" = "Search";
 
-"today.a11y" = "Klorn today: %@. Opens the web inbox to review.";
 "briefing.a11y" = "Today's briefing: %@";
 "aiUsage.a11y" = "AI usage today: %1$d of %2$d";
 "commitments.a11y" = "Commitments, %d open";
@@ -82,9 +64,7 @@
 "mail.summarizing" = "Summarizing…";
 "mail.summarizeFailed" = "Couldn't summarize — try again.";
 "mail.actionItems" = "Action items";
-"section.filed" = "Filed";
 "section.filed.help" = "Mail Klorn already filed — Info records and Silent noise. Click to expand.";
-"filed.a11y" = "Filed mail, %d items";
 "dossier.inFlight" = "In flight: %@";
 "dossier.promise" = "Last promise: %@";
 "dossier.a11y" = "Sender context";
@@ -130,21 +110,9 @@
 "reading.cancel" = "Cancel";
 
 /* Push card */
-"push.card.a11y" = "Urgent email card";
-"push.summary" = "Summary";
-"push.message" = "Message";
-"push.showAll.a11y" = "Show all queued urgent emails";
-"push.snooze.help" = "Snooze until later";
-"push.snooze.a11y" = "Snooze this email";
-"push.dismiss.a11y" = "Dismiss card";
 "push.draftingReplies" = "Drafting replies…";
 "push.proRequired" = "Quick replies need Klorn Pro.";
-"push.proRequired.detail" = "Press ⏎ or click Open to handle it on the web inbox.";
 "push.tryAgain" = "Try again";
-"push.open" = "Open";
-"push.open.a11y" = "Open on web inbox";
-"push.sent.a11y" = "Sent";
-"push.sendReply.a11y" = "Send %1$@ reply: %2$@";
 
 /* Assistant */
 "assistant.placeholder" = "Message Klorn…";
@@ -156,14 +124,17 @@
 "prefs.title" = "Preferences";
 "prefs.section.notifications" = "NOTIFICATIONS";
 "prefs.section.general" = "GENERAL";
-"prefs.section.topBar" = "TOP BAR";
 "prefs.section.keyboard" = "KEYBOARD";
 "prefs.section.language" = "LANGUAGE";
 "prefs.section.account" = "ACCOUNT";
 "prefs.section.about" = "ABOUT";
 
 "prefs.banners" = "Show macOS banners on this Mac";
-"prefs.banners.detail" = "A local master switch. Off silences every banner here regardless of the categories above; the top bar still updates its PUSH count.";
+"prefs.banners.detail" = "A banner for each new PUSH mail, showing the sender and subject only. A local master switch: off silences every banner here regardless of the categories above; the PUSH count in the main window still updates.";
+"prefs.banners.denied" = "macOS is blocking Klorn's notifications. Allow them in System Settings ▸ Notifications.";
+"prefs.banners.openSystemSettings" = "Open System Settings";
+"prefs.section.support" = "APP & SUPPORT";
+"push.announce" = "New PUSH mail: %d";
 "prefs.launchAtLogin" = "Start Klorn at login";
 "prefs.launchAtLogin.unavailable.label" = "Start at login";
 "prefs.launchAtLogin.unavailable.value" = "Packaged app only";
@@ -173,10 +144,6 @@
 "prefs.updates.unknown" = "Couldn't check — try the releases page";
 "prefs.updates.check" = "Check for updates";
 "prefs.updates.checking" = "Checking…";
-"prefs.pillVisible" = "Always show the top bar";
-"prefs.pillVisible.detail" = "Off: the bar stays hidden until ⌥⌘K summons it. Urgent-email cards still appear.";
-"prefs.showInDock" = "Show in the Dock and Cmd+Tab";
-"prefs.showInDock.detail" = "Off (default): Klorn rests out of sight — no Dock icon, and ⌥⌘K is how you summon it. On: it behaves like a normal app you can Cmd+Tab to.";
 "prefs.shortcut" = "Summon / expand";
 "prefs.shortcut.recording" = "Type a shortcut — must include ⌘, ⌥, or ⌃. Esc to cancel.";
 "prefs.shortcut.idle" = "Global shortcut to summon the bar. Click to change.";
@@ -251,8 +218,6 @@
 "auto.error.generic" = "Couldn't save that setting.";
 
 /* Menu bar */
-"bar.menuBar.clear" = "Klorn — no urgent mail";
-"bar.menuBar.push" = "Klorn — %d PUSH waiting";
 
 /* Sender engagement */
 "engagement.repliedOnce" = "You engage with this sender · replied once";
@@ -279,17 +244,10 @@
 "calendar.allDay" = "All day";
 
 /* Menu bar menu */
-"menu.showBar" = "Show top bar";
-"menu.preferences" = "Preferences…";
-"menu.signIn" = "Sign in…";
-"menu.quit" = "Quit Klorn";
 "menu.restart" = "Restart Klorn";
 "menu.diagnostics" = "Connection status…";
 "menu.contactSupport" = "Email support…";
 "diagnostics.checking" = "Checking…";
-"menu.checkUpdates" = "Check for updates…";
-"update.upToDate" = "Klorn is up to date.";
-"push.tryAgainIn" = "Try again in %ds";
 "mail.reclassifying" = "re-classifying";
 
 /* Proposals — actions awaiting approval */
@@ -303,13 +261,9 @@
 
 /* Column headers and states the first pass missed */
 "section.inbox" = "INBOX";
-"section.recentPush" = "RECENT PUSH";
-"section.todayShort" = "TODAY";
 "push.nothingNeedsYou" = "Nothing needs you right now.";
 "auth.signInNaver" = "Continue with Naver";
 "auth.signInApple" = "Continue with Apple";
-"auth.signInGoogle" = "Sign in with Google";
-"calendar.noEvents" = "No events today";
 "calendar.eventRow.a11y" = "%1$@, %2$@. Shows details.";
 "mail.needsReconnect" = "%@ — needs reconnect";
 
@@ -362,8 +316,6 @@
 "meeting.needsReview" = "Needs review";
 "mail.inboxPrimary" = "Primary";
 "mail.inboxLinked" = "Linked inbox";
-"push.expand.hint" = "Click to expand";
-"push.collapse.hint" = "Click to collapse";
 "mail.unknownSender" = "(unknown sender)";
 "account.add" = "Add Google account…";
 "account.add.hint" = "Opens your browser to connect another Gmail inbox to Klorn.";
@@ -626,10 +578,6 @@
 "chip.draftReady" = "Draft ready";
 "reading.openDraft" = "Open draft";
 "reading.preparedDraft" = "Klorn drafted this ahead of time — review it before sending.";
-"prefs.mainWindow" = "Use standard main window";
-"prefs.mainWindow.detail" = "On by default. The full view opens in a regular window that shows in the Dock and Cmd+Tab while it is open. When off, the top bar's expanded panel is the largest view.";
-"bar.mainWindowOff.hint" = "Turn on the main window in Settings to read mail here.";
-"bar.mainWindowOff.settings" = "Settings…";
 
 /* Device calendars (C6): EventKit calendars the user uploads, one by one. */
 "prefs.section.deviceCalendars" = "DEVICE CALENDARS";
@@ -688,8 +636,6 @@
 "banner.offline" = "You're offline. This is the mail from the last sync.";
 "banner.stale" = "Klorn couldn't refresh. This is the mail from the last sync.";
 "bar.notUpdating" = "Not updating";
-"bar.retry.help" = "Try again";
-"bar.retry.a11y" = "%@. Try again";
 "error.server" = "Server error (%d).";
 "error.network" = "Network error. Check your connection.";
 "onboarding.windowTitle" = "Welcome to Klorn";

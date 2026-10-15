@@ -210,14 +210,6 @@ enum PreviewRender {
         shot("briefing-narrow", size: CGSize(width: 220, height: 340), align: .top) {
             BriefingCardRenderProbe()
         }
-        shot("expanded", size: TopBarMetrics.size(for: .expanded)) {
-            TopBarRoot(state: .expanded, actions: actions)
-        }
-        shot("collapsed", size: CGSize(
-            width: TopBarMetrics.size(for: .collapsed).width + 80,
-            height: TopBarMetrics.size(for: .collapsed).height + 40)) {
-            TopBarRoot(state: .collapsed, actions: actions)
-        }
         // ImageRenderer draws nothing inside a ScrollView, so the mail rows —
         // the densest and most design-critical surface in the app — are composed
         // directly here instead of being lost inside the list's scroller.
@@ -333,14 +325,12 @@ enum PreviewRender {
 
     /// No-op actions: the renderer never interacts, and a fixture must not be
     /// able to fire a real network call.
-    static func previewActions() -> TopBarActions {
-        TopBarActions(
-            onExpand: {}, onExpandFull: {}, onRestore: {}, onCollapse: {}, onClose: {},
+    static func previewActions() -> ShellActions {
+        ShellActions(
             onSignIn: {}, onSignOut: {},
             onOpenInApp: { _ in }, onOpenTier: { _ in }, onOpenFull: {}, onOpenProposals: {},
             onDismiss: { _ in }, onSnooze: { _, _ in }, onSetTier: { _, _ in },
             onPinSender: { _, _ in }, onUnpinSender: { _ in },
-            onSelect: { _ in }, onOpenPreferences: {}, onOpenMainWindowSettings: {},
-            onHideBar: {}, onQuit: {})
+            onSelect: { _ in }, onOpenPreferences: {}, onQuit: {})
     }
 }

@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Where the composer is drawn: a card over the bar's full view, or filling
-/// its own window (M5, `macMainWindow`).
+/// Where the composer is drawn: a free-standing card (the design renderer's
+/// probe), or filling its own window (M5).
 enum ComposeStyle { case overlay, window }
 
 /// New-mail composer: to / subject / body, manual send through

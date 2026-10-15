@@ -1,57 +1,245 @@
+import AppKit
 import Foundation
+import SwiftUI
 import UserNotifications
 
-/// Plan which PUSH items deserve an OS notification. Pure + testable.
+// MARK: - Which PUSH mail gets a banner
+
+/// What has already been announced, for one account, across launches.
 ///
-/// First load establishes a silent baseline (don't fire N notifications for the
-/// inbox that already exists); after that, only genuinely new PUSH items notify.
-/// This is the firewall's whole promise: interrupt only for what's new and loud.
-struct PushNotifyPlan: Equatable {
-    let toNotify: [FirewallItem]
-    let seen: Set<String>
-}
+/// Founder decision 2026-10-15: PUSH mail is announced with standard macOS
+/// notification banners (the pill and its cards are gone). The ledger is what
+/// keeps that honest:
+/// - the first sync for an account is a silent baseline, so signing in never
+///   fires a banner per message already sitting in the inbox;
+/// - an id is announced at most once, and the record survives relaunch, so a
+///   restart neither repeats banners nor (unlike the old per-launch baseline)
+///   silently swallows PUSH mail that arrived while Klorn was quit.
+struct PushLedger: Codable, Equatable, Sendable {
+    /// The account (JWT subject) the ids belong to. A ledger written for
+    /// another account is never reused — that account starts a new baseline.
+    var owner: String?
+    var baselineEstablished: Bool
+    /// Announced (or baselined) item ids, oldest first, capped at `cap`.
+    var notified: [String]
 
-func planPushNotifications(
-    seen: Set<String>,
-    baselineEstablished: Bool,
-    pushItems: [FirewallItem]
-) -> PushNotifyPlan {
-    let currentIDs = Set(pushItems.map(\.id))
-    guard baselineEstablished else {
-        // First observation — record everything, notify for nothing.
-        return PushNotifyPlan(toNotify: [], seen: currentIDs)
+    /// Ids kept. Far above any PUSH lane's size, so trimming only ever drops
+    /// ids that left the lane long ago.
+    static let cap = 2000
+    /// Banners posted for one sync at most. More than this at once (a long
+    /// time offline) is recorded as seen without a banner each — the lane
+    /// count in the main window covers the rest, and a wall of banners is
+    /// noise, not an interrupt.
+    static let maxBannersPerSync = 5
+
+    static func fresh(owner: String?) -> PushLedger {
+        PushLedger(owner: owner, baselineEstablished: false, notified: [])
     }
-    let fresh = pushItems.filter { !seen.contains($0.id) }
-    return PushNotifyPlan(toNotify: fresh, seen: seen.union(currentIDs))
+
+    /// The ledger to use for `owner`: the stored one if it is theirs, else a
+    /// new baseline. Pure.
+    static func resolve(stored: PushLedger?, owner: String?) -> PushLedger {
+        guard let stored, stored.owner == owner else { return fresh(owner: owner) }
+        return stored
+    }
+
+    struct Plan: Equatable {
+        let toNotify: [FirewallItem]
+        let next: PushLedger
+    }
+
+    /// Plan the banners for the PUSH lane as it is now. Pure.
+    func plan(pushItems: [FirewallItem]) -> Plan {
+        let known = Set(notified)
+        var seenNow = Set<String>()
+        let unseen = pushItems.filter { !known.contains($0.id) && seenNow.insert($0.id).inserted }
+        var next = self
+        next.notified = Array((notified + unseen.map(\.id)).suffix(Self.cap))
+        next.baselineEstablished = true
+        guard baselineEstablished else { return Plan(toNotify: [], next: next) }
+        return Plan(toNotify: Array(unseen.prefix(Self.maxBannersPerSync)), next: next)
+    }
 }
 
-/// OS notifications for PUSH items. Gated on a bundle identifier: an unbundled
-/// `swift run` has none, and UNUserNotificationCenter is unusable there, so we
-/// skip cleanly (the app still works) — a packaged `.app` gets real banners.
+/// Where the ledger persists. A seam: the shipped app uses UserDefaults, the
+/// self-check an in-memory store.
 @MainActor
-enum PushNotifier {
-    /// Namespace for our request identifiers. The item id is appended verbatim,
-    /// so a tap can recover it — see `itemID(fromNotificationIdentifier:)`.
-    nonisolated static let identifierPrefix = "klorn-push-"
+protocol PushLedgerStoring: AnyObject {
+    func load() -> PushLedger?
+    func save(_ ledger: PushLedger)
+    func clear()
+}
 
-    static var isAvailable: Bool { Bundle.main.bundleIdentifier != nil }
+@MainActor
+final class UserDefaultsPushLedgerStore: PushLedgerStoring {
+    static let key = "klorn.push.ledger"
+    private let defaults: UserDefaults
 
-    static func requestAuthorization() async {
-        guard isAvailable else { return }
-        _ = try? await UNUserNotificationCenter.current()
-            .requestAuthorization(options: [.alert, .sound])
+    init(defaults: UserDefaults = .standard) { self.defaults = defaults }
+
+    func load() -> PushLedger? {
+        guard let data = defaults.data(forKey: Self.key) else { return nil }
+        do {
+            return try JSONDecoder().decode(PushLedger.self, from: data)
+        } catch {
+            // A corrupt record must not block banners forever: start a new
+            // baseline (silent), which is the safe direction.
+            Log.app.error("push ledger unreadable, starting a new baseline")
+            return nil
+        }
     }
 
-    /// Sign-out: take this account's banners out of Notification Center and
-    /// drop any still pending. A tap on one that is already gone from the
-    /// queue only expands the bar (`tapAction`), but the sender and subject
-    /// on it are the previous account's and should not stay on screen.
-    static func clearAll() {
+    func save(_ ledger: PushLedger) {
+        do {
+            defaults.set(try JSONEncoder().encode(ledger), forKey: Self.key)
+        } catch {
+            Log.app.error("push ledger not saved: \(String(describing: error), privacy: .private)")
+        }
+    }
+
+    func clear() { defaults.removeObject(forKey: Self.key) }
+}
+
+@MainActor
+final class InMemoryPushLedgerStore: PushLedgerStoring {
+    private(set) var stored: PushLedger?
+    init(_ stored: PushLedger? = nil) { self.stored = stored }
+    func load() -> PushLedger? { stored }
+    func save(_ ledger: PushLedger) { stored = ledger }
+    func clear() { stored = nil }
+}
+
+// MARK: - Posting banners
+
+/// What one banner says. Sender and subject only: no body text, so a
+/// banner on a shared screen never shows the mail's contents. Pure.
+struct PushBanner: Equatable, Sendable {
+    let identifier: String
+    let title: String
+    let body: String
+
+    static func make(for item: FirewallItem) -> PushBanner {
+        let sender = senderDisplayName(item.email?.from.map(decodeHTMLEntities))
+        let subject = decodeHTMLEntities(item.email?.subject ?? item.title)
+        return PushBanner(
+            identifier: PushNotifier.notificationIdentifier(for: item.id),
+            title: sender.isEmpty ? "Klorn" : sender,
+            body: subject)
+    }
+}
+
+/// Whether macOS lets Klorn post banners.
+enum NotificationPermission: Equatable, Sendable {
+    case notDetermined, authorized, denied
+    /// Unbundled `swift run`: there is no notification center to ask.
+    case unavailable
+}
+
+/// The notification center, behind a seam so the self-check never posts a
+/// real banner or raises a real permission prompt.
+@MainActor
+protocol PushNotifying: AnyObject {
+    func requestAuthorization() async -> NotificationPermission
+    func permission() async -> NotificationPermission
+    func post(_ banner: PushBanner)
+    func clearAll()
+}
+
+/// The real notification center. Gated on a bundle identifier: an unbundled
+/// `swift run` has none and UNUserNotificationCenter is unusable there.
+@MainActor
+final class SystemPushNotifier: PushNotifying {
+    private var isAvailable: Bool { PushNotifier.isAvailable }
+
+    func requestAuthorization() async -> NotificationPermission {
+        guard isAvailable else { return .unavailable }
+        do {
+            _ = try await UNUserNotificationCenter.current()
+                .requestAuthorization(options: [.alert, .sound])
+        } catch {
+            Log.app.error("notification permission request failed: \(String(describing: error), privacy: .private)")
+        }
+        return await permission()
+    }
+
+    func permission() async -> NotificationPermission {
+        guard isAvailable else { return .unavailable }
+        let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        return PushNotifier.permission(for: status)
+    }
+
+    func post(_ banner: PushBanner) {
+        guard isAvailable else {
+            Log.app.debug("push banner skipped (unbundled run): \(banner.identifier, privacy: .public)")
+            return
+        }
+        let content = UNMutableNotificationContent()
+        content.title = banner.title
+        content.body = banner.body
+        content.sound = .default
+        content.threadIdentifier = PushNotifier.threadIdentifier
+        let request = UNNotificationRequest(identifier: banner.identifier, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error {
+                Log.app.error("push banner not posted: \(String(describing: error), privacy: .private)")
+            }
+        }
+    }
+
+    /// Sign-out: take this account's banners out of Notification Center —
+    /// the sender and subject on them belong to the account that left.
+    func clearAll() {
         guard isAvailable else { return }
         let center = UNUserNotificationCenter.current()
         center.removeAllDeliveredNotifications()
         center.removeAllPendingNotificationRequests()
     }
+}
+
+/// Announces newly arrived PUSH mail: a VoiceOver announcement always, and a
+/// banner per item while the Settings ▸ Notifications switch is on. The
+/// banner is informational only — lanes classify, nothing here acts on mail.
+@MainActor
+final class PushAlerter {
+    private let model: AppModel
+    private let announce: @MainActor (String) -> Void
+
+    init(model: AppModel, announce: @escaping @MainActor (String) -> Void = PushAlerter.voiceOver) {
+        self.model = model
+        self.announce = announce
+    }
+
+    /// Returns what was posted, for the harness.
+    @discardableResult
+    func handleNewPush(_ items: [FirewallItem]) -> [PushBanner] {
+        guard !items.isEmpty else { return [] }
+        // WCAG 4.1.3 Status Messages: fires whatever the banner switch says.
+        announce(Self.pushAnnouncement(newCount: items.count))
+        guard model.settings.notificationsEnabled else { return [] }
+        let banners = items.map(PushBanner.make(for:))
+        banners.forEach { model.pushNotifier.post($0) }
+        return banners
+    }
+
+    /// VoiceOver announcement for newly arrived PUSH. Pure for testing.
+    nonisolated static func pushAnnouncement(newCount n: Int) -> String {
+        L("push.announce", n)
+    }
+
+    static func voiceOver(_ message: String) {
+        AccessibilityNotification.Announcement(message).post()
+    }
+}
+
+/// Identifiers and permission mapping for our banners.
+enum PushNotifier {
+    /// Namespace for our request identifiers. The item id is appended verbatim,
+    /// so a tap can recover it — see `itemID(fromNotificationIdentifier:)`.
+    nonisolated static let identifierPrefix = "klorn-push-"
+    /// Groups Klorn's banners into one stack in Notification Center.
+    nonisolated static let threadIdentifier = "klorn-push"
+
+    @MainActor static var isAvailable: Bool { Bundle.main.bundleIdentifier != nil }
 
     /// Pure, testable identity for a posted banner.
     nonisolated static func notificationIdentifier(for itemID: String) -> String {
@@ -66,6 +254,23 @@ enum PushNotifier {
         guard identifier.hasPrefix(identifierPrefix) else { return nil }
         return String(identifier.dropFirst(identifierPrefix.count))
     }
+
+    nonisolated static func permission(for status: UNAuthorizationStatus) -> NotificationPermission {
+        switch status {
+        case .notDetermined: .notDetermined
+        case .denied: .denied
+        case .authorized, .provisional, .ephemeral: .authorized
+        @unknown default: .notDetermined
+        }
+    }
+
+    nonisolated static func tapAction(
+        identifier: String,
+        isKnownItem: (String) -> Bool
+    ) -> NotificationTapAction {
+        guard let id = itemID(fromNotificationIdentifier: identifier) else { return .ignore }
+        return isKnownItem(id) ? .open(itemID: id) : .openApp
+    }
 }
 
 /// What a tapped banner should do. Pure so the routing is verifiable without
@@ -73,34 +278,9 @@ enum PushNotifier {
 enum NotificationTapAction: Equatable {
     /// Not our notification — leave it alone.
     case ignore
-    /// Open this item in the reading pane.
+    /// Open this item in the main window's reading pane.
     case open(itemID: String)
     /// Ours, but the item is no longer in the queue (handled elsewhere, or the
-    /// queue refreshed). Show the bar anyway: a tap must never do nothing.
-    case expand
-}
-
-extension PushNotifier {
-    nonisolated static func tapAction(
-        identifier: String,
-        isKnownItem: (String) -> Bool
-    ) -> NotificationTapAction {
-        guard let id = itemID(fromNotificationIdentifier: identifier) else { return .ignore }
-        return isKnownItem(id) ? .open(itemID: id) : .expand
-    }
-
-    static func post(_ item: FirewallItem) {
-        guard isAvailable else {
-            Log.app.debug("push notification skipped (unbundled run): \(item.id, privacy: .public)")
-            return
-        }
-        let content = UNMutableNotificationContent()
-        content.title = item.email?.from ?? "Klorn"
-        content.subtitle = item.email?.subject ?? item.title
-        if let snippet = item.email?.snippet, !snippet.isEmpty { content.body = snippet }
-        content.sound = .default
-        let request = UNNotificationRequest(
-            identifier: notificationIdentifier(for: item.id), content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request)
-    }
+    /// queue refreshed). Open the main window anyway: a tap never does nothing.
+    case openApp
 }

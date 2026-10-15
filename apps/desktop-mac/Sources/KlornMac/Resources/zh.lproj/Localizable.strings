@@ -4,30 +4,13 @@
    fails the build if they drift. */
 
 /* Bar */
-"bar.expand" = "展开";
-"bar.expand.a11y" = "展开 Klorn";
-"bar.hide" = "隐藏栏（仍在菜单栏运行）";
-"bar.hide.a11y" = "隐藏顶部栏";
-"bar.close" = "关闭";
-"bar.close.a11y" = "关闭面板";
-"bar.fullView" = "全屏视图";
-"bar.fullView.a11y" = "打开全屏视图";
-"bar.smaller" = "缩小";
-"bar.smaller.help" = "回到紧凑面板";
-"bar.push" = "%d 条 PUSH";
 "bar.offline" = "离线";
-"bar.allClear" = "已处理完";
-"bar.signingIn" = "正在登录…";
 "bar.loading" = "加载中…";
-"bar.more" = "还有 %d 条";
-"bar.menuBar.signedOut" = "Klorn — 未登录";
 
 /* Auth */
-"auth.logIn" = "登录";
 "auth.signOut" = "退出登录";
 
 /* Columns / sections */
-"section.today" = "KLORN 今天";
 "section.now" = "现在";
 "section.briefing" = "简报";
 "section.aiToday" = "AI 今天";
@@ -35,7 +18,6 @@
 "section.assistant" = "助理";
 "section.search" = "搜索";
 
-"today.a11y" = "Klorn 今天：%@。打开网页收件箱查看。";
 "briefing.a11y" = "今天的简报：%@";
 "aiUsage.a11y" = "今日 AI 用量：%2$d 中的 %1$d";
 "commitments.a11y" = "承诺，未完成 %d 项";
@@ -82,9 +64,7 @@
 "mail.summarizing" = "正在摘要…";
 "mail.summarizeFailed" = "无法生成摘要 — 请重试。";
 "mail.actionItems" = "待办事项";
-"section.filed" = "已归档";
 "section.filed.help" = "Klorn 已归档的邮件 — 记录与静音噪音。点击展开。";
-"filed.a11y" = "已归档邮件，%d 条";
 "dossier.inFlight" = "进行中：%@";
 "dossier.promise" = "最近的承诺：%@";
 "dossier.a11y" = "发件人背景";
@@ -130,21 +110,9 @@
 "reading.cancel" = "取消";
 
 /* Push card */
-"push.card.a11y" = "紧急邮件卡片";
-"push.summary" = "摘要";
-"push.message" = "正文";
-"push.showAll.a11y" = "显示所有待处理的紧急邮件";
-"push.snooze.help" = "稍后再看";
-"push.snooze.a11y" = "稍后提醒这封邮件";
-"push.dismiss.a11y" = "关闭卡片";
 "push.draftingReplies" = "正在起草回复…";
 "push.proRequired" = "快捷回复需要 Klorn Pro。";
-"push.proRequired.detail" = "按 ⏎ 或点击“打开”，在网页收件箱中处理。";
 "push.tryAgain" = "重试";
-"push.open" = "打开";
-"push.open.a11y" = "在网页收件箱中打开";
-"push.sent.a11y" = "已发送";
-"push.sendReply.a11y" = "发送 %1$@ 回复：%2$@";
 
 /* Assistant */
 "assistant.placeholder" = "给 Klorn 发消息…";
@@ -156,14 +124,17 @@
 "prefs.title" = "偏好设置";
 "prefs.section.notifications" = "通知";
 "prefs.section.general" = "通用";
-"prefs.section.topBar" = "顶部栏";
 "prefs.section.keyboard" = "键盘";
 "prefs.section.language" = "语言";
 "prefs.section.account" = "账户";
 "prefs.section.about" = "关于";
 
 "prefs.banners" = "在这台 Mac 上显示 macOS 横幅通知";
-"prefs.banners.detail" = "本机总开关。关闭后，无论上面的分类如何都不会在这里弹出横幅；顶部栏的 PUSH 计数仍会更新。";
+"prefs.banners.detail" = "每封新的 PUSH 邮件都会显示一条横幅，仅包含发件人和主题。这是本机的总开关：关闭后无论上方分类如何，这里的横幅都会静音；主窗口中的 PUSH 数量仍会更新。";
+"prefs.banners.denied" = "macOS 正在阻止 Klorn 的通知。请在“系统设置 ▸ 通知”中允许。";
+"prefs.banners.openSystemSettings" = "打开系统设置";
+"prefs.section.support" = "应用与支持";
+"push.announce" = "新的 PUSH 邮件：%d 封";
 "prefs.launchAtLogin" = "登录时启动 Klorn";
 "prefs.launchAtLogin.unavailable.label" = "登录时启动";
 "prefs.launchAtLogin.unavailable.value" = "仅打包版可用";
@@ -173,10 +144,6 @@
 "prefs.updates.unknown" = "无法检查 — 请查看发布页";
 "prefs.updates.check" = "检查更新";
 "prefs.updates.checking" = "检查中…";
-"prefs.pillVisible" = "始终显示顶部栏";
-"prefs.pillVisible.detail" = "关闭：顶部栏会隐藏，直到用 ⌥⌘K 呼出。紧急邮件卡片仍会出现。";
-"prefs.showInDock" = "在 Dock 和 ⌘Tab 中显示";
-"prefs.showInDock.detail" = "关闭（默认）：Klorn 不占位置 — 没有 Dock 图标，用 ⌥⌘K 呼出。开启：它像普通应用一样可以 ⌘Tab 切换。";
 "prefs.shortcut" = "呼出 / 展开";
 "prefs.shortcut.recording" = "输入快捷键 — 必须包含 ⌘、⌥ 或 ⌃。按 Esc 取消。";
 "prefs.shortcut.idle" = "呼出顶部栏的全局快捷键。点击可更改。";
@@ -251,8 +218,6 @@
 "auto.error.generic" = "无法保存该设置。";
 
 /* Menu bar */
-"bar.menuBar.clear" = "Klorn — 没有紧急邮件";
-"bar.menuBar.push" = "Klorn — %d 条 PUSH 待处理";
 
 /* Sender engagement */
 "engagement.repliedOnce" = "你和这位发件人有来往 · 回复过 1 次";
@@ -279,17 +244,10 @@
 "calendar.allDay" = "全天";
 
 /* Menu bar menu */
-"menu.showBar" = "显示顶部栏";
-"menu.preferences" = "偏好设置…";
-"menu.signIn" = "登录…";
-"menu.quit" = "退出 Klorn";
 "menu.restart" = "重启 Klorn";
 "menu.diagnostics" = "连接状态…";
 "menu.contactSupport" = "发邮件联系支持…";
 "diagnostics.checking" = "检查中…";
-"menu.checkUpdates" = "检查更新…";
-"update.upToDate" = "Klorn 已是最新。";
-"push.tryAgainIn" = "%d 秒后重试";
 "mail.reclassifying" = "重新分类中";
 
 /* Proposals — actions awaiting approval */
@@ -303,13 +261,9 @@
 
 /* Column headers and states the first pass missed */
 "section.inbox" = "收件箱";
-"section.recentPush" = "最近的 PUSH";
-"section.todayShort" = "今天";
 "push.nothingNeedsYou" = "目前没有需要你处理的事。";
 "auth.signInNaver" = "使用 Naver 继续";
 "auth.signInApple" = "使用 Apple 继续";
-"auth.signInGoogle" = "使用 Google 登录";
-"calendar.noEvents" = "今天没有日程";
 "calendar.eventRow.a11y" = "%1$@，%2$@。显示详情。";
 "mail.needsReconnect" = "%@ — 需要重新连接";
 
@@ -362,8 +316,6 @@
 "meeting.needsReview" = "需要确认";
 "mail.inboxPrimary" = "主账户";
 "mail.inboxLinked" = "已连接的收件箱";
-"push.expand.hint" = "点击展开";
-"push.collapse.hint" = "点击收起";
 "mail.unknownSender" = "（发件人未知）";
 "account.add" = "添加 Google 账户…";
 "account.add.hint" = "打开浏览器，把另一个 Gmail 收件箱连接到 Klorn。";
@@ -626,10 +578,6 @@
 "chip.draftReady" = "草稿已备好";
 "reading.openDraft" = "打开草稿";
 "reading.preparedDraft" = "这是 Klorn 提前写好的草稿 — 发送前请确认。";
-"prefs.mainWindow" = "使用标准主窗口";
-"prefs.mainWindow.detail" = "默认开启。完整视图在普通窗口中打开，窗口打开期间显示在 Dock 和 ⌘Tab 中。关闭后，顶部栏的展开面板是最大的视图。";
-"bar.mainWindowOff.hint" = "请在设置中开启主窗口，以便在此阅读邮件。";
-"bar.mainWindowOff.settings" = "设置…";
 
 /* Device calendars (C6): EventKit calendars the user uploads, one by one. */
 "prefs.section.deviceCalendars" = "设备日历";
@@ -688,8 +636,6 @@
 "banner.offline" = "你已离线。这是上次同步时的邮件。";
 "banner.stale" = "无法刷新。这是上次同步时的邮件。";
 "bar.notUpdating" = "未更新";
-"bar.retry.help" = "重试";
-"bar.retry.a11y" = "%@。重试";
 "error.server" = "服务器错误（%d）。";
 "error.network" = "网络错误。请检查网络连接。";
 "onboarding.windowTitle" = "欢迎使用 Klorn";

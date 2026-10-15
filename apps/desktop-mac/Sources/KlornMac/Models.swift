@@ -1737,11 +1737,11 @@ func showAllLabel(pendingCount: Int) -> String? {
     pendingCount > 0 ? "Show all \(pendingCount + 1)" : nil
 }
 
-// MARK: - Reply options (PushCard quick reply)
+// MARK: - Reply options (reading-pane quick reply)
 
 /// One of the 3 tone-differentiated drafts from POST /api/email/:id/reply-options.
 /// Mirrors packages/contract reply-options.ts — the array order (accept /
-/// decline / info) is wire contract: the card binds keys 1/2/3 positionally.
+/// decline / info) is wire contract: the reading pane binds keys 1/2/3 positionally.
 struct ReplyOption: Codable, Sendable, Hashable {
     let tone: String
     let body: String
@@ -1763,22 +1763,6 @@ struct ReplyOptionsResponse: Codable, Sendable {
     let to: String
     let subject: String
     let options: [ReplyOption]
-}
-
-/// Email body for the expanded card's inline reader: trimmed, nil when blank
-/// (no empty scroll box), and capped so one card can't grow unbounded on a
-/// huge message. Pure for testing.
-func cardBodyText(_ body: String?) -> String? {
-    let trimmed = body?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    if trimmed.isEmpty { return nil }
-    return String(trimmed.prefix(4000))
-}
-
-/// The snooze options the PushCard offers — the full SnoozeOption set, in
-/// display order. A single source of truth shared with the reading pane so the
-/// two surfaces never drift.
-enum PushCardSnooze {
-    static let options: [SnoozeOption] = SnoozeOption.allCases
 }
 
 // MARK: - Snooze options

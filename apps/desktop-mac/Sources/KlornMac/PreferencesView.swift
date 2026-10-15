@@ -60,7 +60,7 @@ struct PreferencesView: View {
         case .appearance: appearanceSection
         case .mail: mailSection
         case .general: generalSection
-        case .topBar: topBarSection
+        case .support: section(L("prefs.section.support")) { SupportSection() }
         case .keyboard: keyboardSection
         case .language: languageSection
         case .account: accountSection
@@ -98,7 +98,21 @@ struct PreferencesView: View {
             .toggleStyle(.switch).tint(Theme.accent)
             Text(L("prefs.banners.detail"))
                 .font(.caption).foregroundStyle(Theme.textDim).fixedSize(horizontal: false, vertical: true)
+            // macOS said no: the switch above cannot help, System Settings can.
+            if NotificationHint.showsDeniedHint(model.notificationPermission) {
+                HStack(spacing: 8) {
+                    Text(L("prefs.banners.denied"))
+                        .font(.caption).foregroundStyle(Theme.warningInk)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 8)
+                    Button(L("prefs.banners.openSystemSettings")) {
+                        NSWorkspace.shared.open(NotificationHint.systemSettingsURL)
+                    }
+                    .buttonStyle(.bordered).controlSize(.small)
+                }
+            }
         }
+        .task { await model.refreshNotificationPermission() }
     }
 
     @ViewBuilder
@@ -156,7 +170,6 @@ struct PreferencesView: View {
                 infoRow(L("prefs.launchAtLogin.unavailable.label"), L("prefs.launchAtLogin.unavailable.value"))
             }
             updatesRow
-            MainWindowToggle(settings: model.settings)
         }
     }
 
@@ -185,26 +198,6 @@ struct PreferencesView: View {
                 }
             }
             .buttonStyle(.bordered).controlSize(.small).disabled(updateChecking)
-        }
-    }
-
-    @ViewBuilder
-    private var topBarSection: some View {
-        @Bindable var settings = model.settings
-        section(L("prefs.section.topBar")) {
-            Toggle(isOn: $settings.pillVisible) {
-                Text(L("prefs.pillVisible")).foregroundStyle(Theme.text)
-            }
-            .toggleStyle(.switch).tint(Theme.accent)
-            Text(L("prefs.pillVisible.detail"))
-                .font(.caption).foregroundStyle(Theme.textDim).fixedSize(horizontal: false, vertical: true)
-
-            Toggle(isOn: $settings.showInDock) {
-                Text(L("prefs.showInDock")).foregroundStyle(Theme.text)
-            }
-            .toggleStyle(.switch).tint(Theme.accent)
-            Text(L("prefs.showInDock.detail"))
-                .font(.caption).foregroundStyle(Theme.textDim).fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -269,6 +262,11 @@ struct PreferencesView: View {
             if model.phase == .signedIn {
                 Button(L("prefs.account.signOut")) { model.signOut() }
                     .buttonStyle(.bordered).controlSize(.small)
+                // Always offered, not only when an inbox already reports
+                // needsReconnect: a dead primary token is exactly the state
+                // where the app cannot be trusted to know it is dead.
+                Button(L("account.reconnectPrimary")) { Task { await model.reconnectPrimary() } }
+                    .buttonStyle(.bordered).controlSize(.small)
                 Button(L("account.add")) { Task { await model.addAccount() } }
                     .buttonStyle(.bordered).controlSize(.small)
                 Text(L("account.add.hint"))
@@ -282,6 +280,9 @@ struct PreferencesView: View {
                 // purpose prompt asks once, this is where they change later.
                 CompanyDomainsRow()
                 PrioritiesRow()
+                if let usage = model.usage {
+                    AIUsageMeter(used: usage.dailyUsed, cap: usage.dailyCap).padding(.top, 4)
+                }
             }
         }
     }
@@ -514,4 +515,16 @@ private struct InboxAccountsSection: View {
                 .accessibilityLabel(label)
         }
     }
+}
+
+/// Settings ▸ Notifications' one-line hint when macOS has denied Klorn
+/// banners. Pure for the harness.
+enum NotificationHint {
+    static func showsDeniedHint(_ permission: NotificationPermission) -> Bool {
+        permission == .denied
+    }
+
+    /// System Settings ▸ Notifications.
+    static let systemSettingsURL = URL(
+        string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")!
 }

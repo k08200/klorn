@@ -6,7 +6,7 @@ import SwiftUI
 /// group reports and never switches (FD-2).
 struct NavSidebar: View {
     @Environment(AppModel.self) private var model
-    let actions: TopBarActions
+    let actions: ShellActions
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -72,14 +72,6 @@ struct NavSidebar: View {
             }
             .buttonStyle(.plain).hoverDim()
             .accessibilityLabel(L("prefs.title"))
-            // The compact panel is still one click away from the window.
-            Button(action: actions.onRestore) {
-                Image(systemName: "arrow.down.right.and.arrow.up.left")
-                    .font(Theme.Typo.icon).iconTarget()
-            }
-            .buttonStyle(.plain).hoverDim()
-            .help(L("bar.smaller.help"))
-            .accessibilityLabel(L("bar.smaller"))
         }
         .padding(.horizontal, Theme.s4).padding(.vertical, Theme.s2)
     }
@@ -177,7 +169,7 @@ private struct MailFacetRows: View {
 /// (tooltip, VoiceOver, and a visible line when it needs the user).
 private struct AccountRows: View {
     @Environment(AppModel.self) private var model
-    let actions: TopBarActions
+    let actions: ShellActions
 
     var body: some View {
         if model.phase != .signedIn {

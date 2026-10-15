@@ -70,7 +70,7 @@ struct SearchHitRow: View {
 struct FullRow: View {
     @Environment(AppModel.self) private var model
     let item: FirewallItem
-    let actions: TopBarActions
+    let actions: ShellActions
     /// True on mixed-lane surfaces (the chronological inbox, search) where
     /// the row must carry its own lane; lane views leave it off — the lane
     /// is the screen title there.

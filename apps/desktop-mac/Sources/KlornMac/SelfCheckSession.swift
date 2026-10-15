@@ -303,16 +303,6 @@ func sessionSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
     let lateRefusal = await lateTask.value
     check("a snooze that fails after the account changed rolls nothing back and shows nothing",
           lateRefusal == nil && lateSnooze.actionError == nil && lateSnooze.queue == nil)
-    var cards = PushCardQueue()
-    cards.enqueue([lateItem, pushItem].compactMap { $0 })
-    let cardItem = cards.current
-    cards.advance()
-    if let cardItem {
-        cards.restore(cardItem)
-        cards.restore(cardItem)
-    }
-    check("the card queue takes a failed item back at the front, once",
-          cardItem != nil && cards.items.map(\.id) == ["p1"] && cards.current?.id == "p1")
 
     // MARK: a cancelled first load
     typealias Rules = SurfaceStateRules
@@ -377,18 +367,16 @@ func sessionSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
           && appModel.contains("guard phase == .signedIn else { return }\n        signOut()\n"))
     check("sign-out ends the session before anything else, and stops the poll and the socket",
           appModel.contains("guard phase != .signedOut else { return }\n        signInTask?.cancel()\n        // First: from here on, nothing the leaving session started is current.\n        sessionGeneration += 1\n        stopPolling()")
-          && appModel.contains("realtime?.stop()\n        realtime = nil\n        seenPush = []"))
+          && appModel.contains("realtime?.stop()\n        realtime = nil\n        pushLedgerStore.clear()"))
     check("the poll loop and the wake channel are bound to the session that started them",
           appModel.contains("guard !Task.isCancelled, let self, self.isCurrent(session) else { break }")
           && appModel.contains("self?.realtimeDidWake(session: session)")
           && text("RealtimeClient.swift").contains("if stopped || Task.isCancelled { break }\n                    backoff = 1"))
-    check("the failed-action notice is drawn on the expanded panel and the HUD card too",
+    check("the failed-action notice is drawn in the main window",
           files.map(\.lastPathComponent)
               .filter { !$0.hasPrefix("SelfCheck") && !$0.hasPrefix("PreviewRender") }
               .filter { text($0).contains("ActionErrorBanner(message: message)") }.sorted()
-              == ["ExpandedDashboard.swift", "MainShell.swift"]
-          && text("PushCard.swift").contains("if let message = state.actionError { actionErrorRow(message) }")
-          && text("PushCardController.swift").contains("self.restore(item, failure: failure, stamp: stamp)"))
+              == ["MainShell.swift"])
     for result in await sessionCardSelfChecks(sourceDir: sourceDir) { results.append(result) }
     return results
 }

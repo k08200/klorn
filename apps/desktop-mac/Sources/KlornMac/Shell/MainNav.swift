@@ -147,16 +147,15 @@ enum NavRules {
         return (defaultMailMode, nav)
     }
 
-    /// The main window shows the reader only in Mail; the bar's full view
-    /// (flag off) always has it.
-    static func readerVisible(macMainWindow: Bool, section: NavSection) -> Bool {
-        !macMainWindow || section == .mail
+    /// The main window shows the reader only in Mail.
+    static func readerVisible(section: NavSection) -> Bool {
+        section == .mail
     }
 
     /// Whether arriving at `section` drops the reading-pane selection: only
-    /// in the main window, and only when the reader goes off screen.
-    static func clearsSelection(macMainWindow: Bool, section: NavSection) -> Bool {
-        !readerVisible(macMainWindow: macMainWindow, section: section)
+    /// when the reader goes off screen.
+    static func clearsSelection(section: NavSection) -> Bool {
+        !readerVisible(section: section)
     }
 
     /// Mail's sidebar count: everything a lane segment can show. SILENT is

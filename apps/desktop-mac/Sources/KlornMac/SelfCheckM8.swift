@@ -1,9 +1,9 @@
 import Foundation
 
 // Self-check for M8 follow-ups, run by `KlornMac --self-check`: the account
-// editors that lived in the deleted full sidebar, and a coherent mode for a
-// user who stored `macMainWindow` OFF (no main window, the expanded panel is
-// the largest view).
+// editors that lived in the deleted full sidebar, and the menus now that the
+// main window is the only surface (the `macMainWindow` OFF mode was removed
+// with the pill, founder decision 2026-10-15).
 
 /// Every M8 follow-up check, as (name, passed).
 @MainActor
@@ -32,56 +32,23 @@ func m8SelfChecks(sourceDir: URL) -> [(String, Bool)] {
            "priorities.label", "priorities.none", "priorities.placeholder"]
               .allSatisfy { L($0) != $0 })
 
-    // MARK: main window stored OFF
-    check("the expanded panel offers the full-view button only with the main window",
-          ExpandedPanelRules.showsFullViewButton(macMainWindow: true)
-          && !ExpandedPanelRules.showsFullViewButton(macMainWindow: false))
-    var on = MenuState(
+    // MARK: menus with the main window as the only surface (2026-10-15)
+    let closed = MenuState(
         signedIn: true, fullViewOpen: false, mailSurfaceIsKey: false, modalOpen: false,
         targetTier: nil, emailLoaded: false, readerReplying: false, teamModeAvailable: true,
         listHasSearchField: true)
-    on.mainWindowAvailable = true
-    var off = on
-    off.mainWindowAvailable = false
     let navCommands: [MenuCommand] = [.find, .go(.inbox), .go(.calendar), .section(.mail), .section(.today)]
-    check("main window on: Find, Go and the sections stay live",
-          navCommands.allSatisfy { MenuRules.isEnabled($0, in: on) })
-    check("main window off: Find, Go and the sections are disabled (nothing to show them in)",
-          navCommands.allSatisfy { !MenuRules.isEnabled($0, in: off) })
-    check("main window off: New Email still works (the composer is its own window)",
-          MenuRules.isEnabled(.compose, in: off))
+    check("signed in: Find, Go and the sections are enabled even with the window closed",
+          navCommands.allSatisfy { MenuRules.isEnabled($0, in: closed) }
+          && MenuRules.isEnabled(.compose, in: closed))
+    var signedOut = closed
+    signedOut.signedIn = false
+    check("signed out: Find, Go and the sections stay disabled",
+          navCommands.allSatisfy { !MenuRules.isEnabled($0, in: signedOut) })
     let perform = text("KlornApp.swift").components(separatedBy: "func perform(_ command: MenuCommand) {")
-        .dropFirst().first?.components(separatedBy: "private func ensureFullView()").first ?? ""
-    check("main window off: the delegate drops Find/Go/section, so no search focus is left pending",
-          perform.contains("guard MenuRules.mainWindowCommandAllowed(command, macMainWindow: model.settings.macMainWindow) else { return }")
-          && MenuRules.mainWindowCommandAllowed(.find, macMainWindow: true)
-          && !MenuRules.mainWindowCommandAllowed(.find, macMainWindow: false)
-          && !MenuRules.mainWindowCommandAllowed(.go(.inbox), macMainWindow: false)
-          && !MenuRules.mainWindowCommandAllowed(.section(.mail), macMainWindow: false)
-          && MenuRules.mainWindowCommandAllowed(.compose, macMainWindow: false))
-    check("a fallback to the expanded panel raises the Settings hint; resting clears it",
-          text("TopBarController.swift").contains("model.mainWindowOffHint = true")
-          && text("TopBarController.swift").contains("model.mainWindowOffHint = false"))
-    check("the hint offers Settings, and Settings opens on General where the switch is",
-          text("ExpandedDashboard.swift").contains("if model.mainWindowOffHint")
-          && text("ExpandedDashboard.swift").contains("actions.onOpenMainWindowSettings")
-          && text("TopBarController.swift").contains("SettingsTab.general.rawValue"))
-    check("the main-window switch is always visible in Settings (no Option needed to turn it back on)",
-          !text("MainWindow.swift").contains("optionHeld"))
-    let hintKeys = ["bar.mainWindowOff.hint", "bar.mainWindowOff.settings"]
-    check("the hint strings exist in every locale",
-          hintKeys.allSatisfy { L($0) != $0 }
-          && ["en", "ko", "de", "es", "fr", "ja", "zh"].allSatisfy { locale in
-              let strings = (try? String(
-                  contentsOf: sourceDir.appendingPathComponent("Resources/\(locale).lproj/Localizable.strings"),
-                  encoding: .utf8)) ?? ""
-              return hintKeys.allSatisfy { strings.contains("\"\($0)\" = ") }
-          })
-
-    // MARK: same-state requests
-    check("a same-state request on a visible panel does not re-render it",
-          !TopBarController.needsRender(current: .expanded, requested: .expanded, panelVisible: true)
-          && TopBarController.needsRender(current: .expanded, requested: .expanded, panelVisible: false)
-          && TopBarController.needsRender(current: .collapsed, requested: .expanded, panelVisible: true))
+        .dropFirst().first?.components(separatedBy: "private func ensureMainWindow()").first ?? ""
+    check("Find, Go and the sections open the main window before acting",
+          perform.components(separatedBy: "ensureMainWindow()").count - 1 == 3
+          && !perform.contains("macMainWindow"))
     return results
 }

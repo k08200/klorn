@@ -1,9 +1,10 @@
 import Foundation
 
-// Self-check for what lives outside the model when a session ends: the HUD
-// push card, the meeting card, and sign-in itself. Run by `--self-check`
+// Self-check for what lives outside the model when a session ends: the
+// meeting card, the PUSH banners, and sign-in itself. Run by `--self-check`
 // through `sessionSelfChecks`; same stubbed network, in-memory token store.
-// The cards run headless: their whole lifecycle, with no panel and no sound.
+// The meeting card runs headless: its whole lifecycle, no panel, no sound.
+// (The urgent-mail card was removed with the pill, 2026-10-15.)
 
 /// Holds a sign-in "in the browser" until the check lets it finish.
 @MainActor
@@ -32,7 +33,6 @@ enum CardScenarios {
     static let drafts = "POST /api/email/d1/reply-options"
     static let reply = "POST /api/email/d1/reply"
     static let snooze = "POST /api/inbox/firewall/p1/snooze"
-    static let detail = "GET /api/email/d1"
     static let prepPack = "GET /api/calendar/ev-A/prep-pack"
     static let draftsBody = #"{"to":"a@a.example","subject":"s","options":[{"tone":"accept","body":"ok"}]}"#
 
@@ -50,23 +50,11 @@ enum CardScenarios {
         id: eventId, title: eventId, startTime: "2026-07-29T08:00:00Z",
         endTime: "2026-07-29T09:00:00Z", location: nil, meetingLink: nil, allDay: false)
 
-    /// A signed-in model with A's PUSH mail loaded, and a card showing it
-    /// with its drafts fetched. `wired`: the card is torn down with the
-    /// session, as in the app. Unwired is the teardown having been missed.
-    static func presented(
-        wired: Bool, hold: Set<String> = [], snoozeStatus: Int = 200
-    ) async -> (model: AppModel, card: PushCardController, item: FirewallItem?) {
-        let model = S.model(
-            [drafts: .init(body: draftsBody), snooze: .init(status: snoozeStatus)], hold: hold)
+    /// A signed-in model with A's PUSH mail loaded.
+    static func seeded(snoozeStatus: Int = 200) -> (model: AppModel, item: FirewallItem?) {
+        let model = S.model([drafts: .init(body: draftsBody), snooze: .init(status: snoozeStatus)])
         model.seedForPreview(firewallJSON: queue("p1", email: "d1"), emailJSON: "", selectedItemId: nil)
-        let card = PushCardController(model: model, headless: true)
-        if wired { model.onSessionEnded = { [weak card] in card?.reset() } }
-        let item = item("p1", email: "d1")
-        if let item { card.present([item]) }
-        if !hold.contains(drafts) {
-            _ = await S.waitUntil { if case .ready = card.state.drafts { true } else { false } }
-        }
-        return (model, card, item)
+        return (model, item("p1", email: "d1"))
     }
 
     static func settle() async {
@@ -86,53 +74,27 @@ func sessionCardSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
     var results: [(String, Bool)] = []
     func check(_ name: String, _ passed: Bool) { results.append((name, passed)) }
 
-    // MARK: the cards go with the session
-    let shown = await C.presented(wired: true)
+    // MARK: the meeting card and the banners go with the session
+    let shown = C.seeded()
+    let notifier = FakePushNotifier()
+    shown.model.pushNotifier = notifier
     let meeting = MeetingCardController(model: shown.model, headless: true, isSlotBusy: { false })
-    let cardReset = shown.model.onSessionEnded
-    shown.model.onSessionEnded = { [weak meeting] in
-        cardReset?()
+    shown.model.onSessionEnded = { [weak meeting, weak model = shown.model] in
         meeting?.reset()
+        model?.pushNotifier.clearAll()
     }
     let meetingShown = meeting.present(C.event)
-    let before = (item: shown.card.state.item?.id, drafts: shown.card.state.drafts, event: meeting.state.event?.id)
+    let before = meeting.state.event?.id
     shown.model.signOut()
-    check("control: a card shows the mail and its drafts, the meeting card its event",
-          before.item == "p1" && before.drafts != .loading && meetingShown && before.event == "ev-A")
-    check("sign-out takes the push card down and empties it",
-          shown.card.state.item == nil && shown.card.state.drafts == .loading
-          && shown.card.state.detail == nil && shown.card.state.pendingCount == 0
-          && shown.card.state.actionError == nil && shown.card.state.sendError == nil
-          && !shown.card.state.keysArmed && !shown.card.isVisible)
+    check("control: the meeting card shows its event",
+          meetingShown && before == "ev-A")
     check("sign-out takes the meeting card down and empties it",
           meeting.state.event == nil && meeting.state.pack == nil && !meeting.isVisible)
-    shown.model.beginSessionForCheck(token: "token-B")
-    let itemB = C.item("b1", email: "d9")
-    let presentedB = itemB.map { shown.card.present([$0]) } ?? false
-    check("the next account's first PUSH presents normally, alone on the card",
-          presentedB && shown.card.state.item?.id == "b1" && shown.card.state.pendingCount == 0)
-
-    // MARK: a card whose teardown was missed still cannot act
-    let stale = await C.presented(wired: false)
-    var opened = 0
-    stale.card.onOpenInApp = { _ in opened += 1 }
-    stale.model.signOut()
-    stale.model.beginSessionForCheck(token: "token-B")
-    let stillShowingA = stale.card.state.item?.id == "p1"
-    let actions = stale.card.actionsForCheck()
-    actions.onSend(0)
-    let resetOnFirstTouch = stale.card.state.item == nil
-    actions.onSnooze(.tomorrow)
-    actions.onRetry()
-    actions.onOpen()
-    await C.settle()
-    check("a card left over from the previous session sends, snoozes, retries and opens nothing",
-          stillShowingA && resetOnFirstTouch && opened == 0
-          && Stub.calls(C.reply).isEmpty && Stub.calls(C.snooze).isEmpty
-          && Stub.calls(C.drafts).count == 1)
+    check("sign-out clears the previous account's banners from Notification Center",
+          notifier.clearCount == 1)
 
     // MARK: the model refuses a stale stamp before any request
-    let stamped = await C.presented(wired: false)
+    let stamped = C.seeded()
     let oldStamp = stamped.model.sessionGeneration
     stamped.model.signOut()
     stamped.model.beginSessionForCheck(token: "token-B")
@@ -143,13 +105,12 @@ func sessionCardSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
         let sent = await stamped.model.sendReply(item, body: "hello", session: oldStamp)
         let snoozed = await stamped.model.snooze(item, session: oldStamp)
         let options = await stamped.model.fetchReplyOptions(item, session: oldStamp)
-        let detail = await stamped.model.fetchEmailDetail(item, session: oldStamp)
         let pack = await stamped.model.fetchPrepPack(eventId: "ev-A", session: oldStamp)
         var optionsRefused = false
         if case .failed = options { optionsRefused = true }
-        refused = sent != nil && snoozed == nil && optionsRefused && detail == nil && pack == nil
+        refused = sent != nil && snoozed == nil && optionsRefused && pack == nil
     }
-    check("reply, snooze, drafts, detail and prep pack stamped with an ended session issue no request",
+    check("reply, snooze, drafts and prep pack stamped with an ended session issue no request",
           refused && Stub.calls.count == callsBefore
           && stamped.model.queue?.items(for: .push).map(\.id) == ["p1"])
     var sentNow: String? = "not run"
@@ -159,32 +120,6 @@ func sessionCardSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
     }
     check("control: the same reply stamped with the live session is sent, with its token",
           sentNow == nil && Stub.calls(C.reply).map(\.bearer) == ["Bearer token-B"])
-
-    // MARK: late results on a card
-    let drafting = await C.presented(wired: false, hold: [C.drafts])
-    _ = await S.waitUntil { Stub.parked(C.drafts) == 1 }
-    drafting.model.signOut()
-    Stub.release(C.drafts)
-    await C.settle()
-    check("drafts that arrive after sign-out are not shown, and neither is a session-expired line",
-          drafting.card.state.drafts == .loading && drafting.card.state.sendError == nil)
-
-    let restoring = await C.presented(wired: true, hold: [C.snooze], snoozeStatus: 500)
-    restoring.card.actionsForCheck().onSnooze(.tomorrow)
-    _ = await S.waitUntil { Stub.parked(C.snooze) == 1 }
-    restoring.model.signOut()
-    restoring.model.beginSessionForCheck(token: "token-B")
-    if let itemB { restoring.card.present([itemB]) }
-    Stub.release(C.snooze)
-    await C.settle()
-    check("a snooze that fails after the account changed never puts that mail back on the card",
-          restoring.card.state.item?.id == "b1" && restoring.card.state.actionError == nil
-          && restoring.card.state.pendingCount == 0)
-    let failing = await C.presented(wired: true, snoozeStatus: 500)
-    failing.card.actionsForCheck().onSnooze(.tomorrow)
-    let restored = await S.waitUntil { failing.card.state.actionError != nil }
-    check("control: within one session a failed snooze brings the mail back with the reason",
-          restored && failing.card.state.item?.id == "p1")
 
     // MARK: sign-in is not undone by a stray 401
     let gate = SignInGate()
@@ -240,23 +175,18 @@ func sessionCardSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
         files.first { $0.lastPathComponent == name }
             .flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? ""
     }
-    check("the app tears the cards and the OS banners down with the session",
+    check("the app tears the meeting card and the OS banners down with the session",
           text("KlornApp.swift").contains(
-              "model.onSessionEnded = { [weak card, weak meetingCard] in\n            card?.reset()\n            meetingCard?.reset()\n            PushNotifier.clearAll()\n        }")
+              "model.onSessionEnded = { [weak meetingCard, weak model] in\n            meetingCard?.reset()\n            model?.pushNotifier.clearAll()\n        }")
           && text("Notifications.swift").contains("center.removeAllDeliveredNotifications()\n        center.removeAllPendingNotificationRequests()")
           && text("AppModel.swift").components(separatedBy: "onSessionEnded?()").count == 3)
     let goneTap = PushNotifier.tapAction(
         identifier: PushNotifier.notificationIdentifier(for: "p1"), isKnownItem: { _ in false })
     check("a banner tap opens only mail that is in the current queue",
-          goneTap == .expand
-          && text("KlornApp.swift").contains("let queue = model.queue\n")
-          && text("KlornApp.swift").contains("found = queue?.item(id: id)"))
-    let cardSource = text("PushCardController.swift")
-    check("every card request carries the card's session stamp",
-          ["fetchEmailDetail(item, session: stamp)", "fetchReplyOptions(item, session: stamp)",
-           "item, body: options[index].body, session: stamp)",
-           "item, until: option.resurface(), session: stamp)"].allSatisfy { cardSource.contains($0) }
-          && !cardSource.contains("model.sendReply(item, body: options[index].body)")
-          && text("MeetingCardController.swift").contains("fetchPrepPack(eventId: event.id, session: stamp)"))
+          goneTap == .openApp
+          && text("WindowRouter.swift").contains("let queue = model.queue\n")
+          && text("WindowRouter.swift").contains("found = queue?.item(id: id)"))
+    check("the meeting card's prep pack carries the card's session stamp",
+          text("MeetingCardController.swift").contains("fetchPrepPack(eventId: event.id, session: stamp)"))
     return results
 }

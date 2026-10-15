@@ -42,26 +42,6 @@ func windowSelfChecks(sourceDir: URL) -> [(String, Bool)] {
           ComposeWindowRules.title(editingDraft: false) == L("compose.title")
           && ComposeWindowRules.title(editingDraft: true) == L("compose.editDraft"))
 
-    // MARK: activation policy
-    check("an open compose window makes the app regular, like the main window",
-          TopBarController.activationPolicy(for: .collapsed, composeWindowOpen: true) == .regular
-          && TopBarController.activationPolicy(for: .collapsed, composeWindowOpen: false) == .accessory)
-    check("compose window closed: policy is exactly the pre-M5 rule",
-          [BarState.collapsed, .expanded].allSatisfy { state in
-              bools.allSatisfy { dock in
-                  bools.allSatisfy { settings in
-                      bools.allSatisfy { main in
-                          TopBarController.activationPolicy(
-                              for: state, showInDock: dock, settingsOpen: settings,
-                              mainWindowOpen: main, composeWindowOpen: false)
-                              == TopBarController.activationPolicy(
-                                  for: state, showInDock: dock, settingsOpen: settings,
-                                  mainWindowOpen: main)
-                      }
-                  }
-              }
-          })
-
     // MARK: menus
     // The main window is open with a mail selected, but the compose window
     // is key: nothing may act on the mail behind it.
@@ -152,13 +132,6 @@ func windowSelfChecks(sourceDir: URL) -> [(String, Bool)] {
     model.showCompose = false
     check("the compose window hears every request and the close, never a no-op",
           afterNoop == 0 && afterTwoAsks == 2 && notified == 3)
-    var presence = 0
-    model.onWindowPresenceChanged = { presence += 1 }
-    model.composeWindowOpen = true
-    model.composeWindowOpen = true
-    model.composeWindowOpen = false
-    check("the compose window opening and closing re-applies the activation policy once each",
-          presence == 2)
     model.composeTo = "a@b.example"
     model.composeBody = "draft"
     model.showCompose = true

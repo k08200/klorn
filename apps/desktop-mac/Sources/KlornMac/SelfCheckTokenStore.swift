@@ -60,7 +60,7 @@ func tokenStoreSelfChecks(sourceDir: URL) -> [(String, Bool)] {
          startsEmpty && saved && overwritten && cleared && isolated),
         ("the app's default token store is the Keychain store",
          type(of: AppModel.productionTokenStore()) == KeychainTokenStore.self
-         && appModel.contains("init(tokenStore: any TokenStore = AppModel.productionTokenStore(), api: APIClient? = nil)")
+         && appModel.contains("tokenStore: any TokenStore = AppModel.productionTokenStore(), api: APIClient? = nil,")
          && text("KlornApp.swift").contains("let model = " + defaultModel)),
         ("the Keychain store forwards to the same Keychain item as before",
          tokenStore.contains("func load() -> String? { " + staticCalls[0] + ") }")
