@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Klorn 측정 방법</title>
+<meta name="description" content="Klorn이 공개하는 수치의 출처: 저장소에 커밋된 평가 세트, pnpm eval:real 실행기, 분류기 변경마다 CI가 강제하는 하한.">
+<link rel="canonical" href="https://klorn.ai/ko/methodology/">
+<link rel="alternate" hreflang="en" href="https://klorn.ai/methodology/">
+<link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/methodology/">
+<link rel="alternate" hreflang="x-default" href="https://klorn.ai/methodology/">
+<meta property="og:title" content="Klorn 측정 방법">
+<meta property="og:description" content="Klorn이 공개하는 수치의 출처: 저장소에 커밋된 평가 세트, pnpm eval:real 실행기, 분류기 변경마다 CI가 강제하는 하한.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://klorn.ai/ko/methodology/">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:image" content="https://klorn.ai/brand/og-image.png?v=k2">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Klorn 측정 방법">
+<meta name="twitter:description" content="Klorn이 공개하는 수치의 출처: 저장소에 커밋된 평가 세트, pnpm eval:real 실행기, 분류기 변경마다 CI가 강제하는 하한.">
+<meta name="twitter:image" content="https://klorn.ai/brand/og-image.png?v=k2">
+<link rel="preload" as="font" type="font/woff2" href="/fonts/geist-var.woff2" crossorigin>
+<link rel="icon" href="/brand/favicon.svg?v=matte2" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png?v=matte2">
+<link rel="stylesheet" href="/landing.css">
+<link rel="stylesheet" href="/subpage.css">
+<script src="/site-nav.js" defer></script>
+</head>
+<body class="sub">
+<a class="skip" href="#main">본문으로 건너뛰기</a>
+
+<nav class="nav" aria-label="메인"><div class="nav-pill">
+  <a class="nav-brand" href="/ko/">Klorn</a>
+  <button type="button" class="nav-menu-btn" data-menu-toggle aria-expanded="false" aria-controls="nav-menu" aria-label="메뉴"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <span class="nav-links" id="nav-menu" role="group" aria-label="섹션"><a href="/ko/#accounts">계정</a><a href="/ko/#lanes">레인</a><a href="/ko/#pricing">요금</a><a href="/ko/methodology/" aria-current="page">측정 방법</a><a href="/blog/">블로그</a></span>
+  <span class="nav-lang">
+    <button type="button" class="nav-lang-btn" data-menu-toggle
+            aria-haspopup="true" aria-expanded="false" aria-controls="lang-menu">한국어 <i aria-hidden="true">▾</i></button>
+    <span class="nav-lang-menu" id="lang-menu" role="menu">
+      <a href="/methodology/" role="menuitem" lang="en">English</a>
+      <a href="/ko/methodology/" role="menuitem" lang="ko" aria-current="true">한국어</a>
+    </span>
+  </span>
+  <a class="nav-login" href="https://app.klorn.ai/login">로그인</a>
+  <a class="nav-cta dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
+     data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe" data-win-label="다운로드">다운로드</a>
+</div></nav>
+
+<main id="main">
+<header class="sub-hero" id="top">
+  <div class="wrap">
+    <span class="eyebrow">측정 방법</span>
+    <h1>약속이 아니라 <span class="ser">측정.</span></h1>
+    <p class="lead">Klorn이 공개하는 수치, 각 수치의 출처, 그리고 각 수치가 말해 주지 못하는 것.
+      여기 나오는 데이터셋과 스크립트는 모두 공개 저장소에 있습니다.</p>
+  </div>
+</header>
+
+<section class="sec" id="measured" aria-labelledby="measured-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2 id="measured-h">세 가지 수치와 출처</h2>
+    </div>
+    <ul class="figs">
+      <li class="fig"><div class="sv">&ge;90%</div><div class="sl">긴급 메일 재현율 (CI 하한)</div>
+        <p>합성 게이트셋에서 긴급 메일 재현율을 90% 아래로 떨어뜨리는 분류기 변경은 빌드가 실패합니다.</p>
+        <span class="src">출처: <a href="https://github.com/k08200/klorn/blob/main/packages/api/src/eval-floors.ts" rel="noreferrer noopener">eval-floors.ts</a></span></li>
+      <li class="fig"><div class="sv">95.5%</div><div class="sl">Silent 정밀도</div>
+        <p>직접 라벨링한 실제 메일 세트에서 측정: Klorn이 Silent로 보낸 22건 중 21건이 실제로 Silent 라벨이었습니다. 2026-08-26 세 번 실행, 매번 같은 결과.</p>
+        <span class="src">출처: <a href="https://github.com/k08200/klorn/blob/main/packages/api/eval/README.md" rel="noreferrer noopener">eval/README.md</a></span></li>
+      <li class="fig"><div class="sv">0</div><div class="sl">미승인 실행</div>
+        <p>전송·영구 삭제·외부 전달은 승인을 기다리고, 나간 내용의 해시가 박힌 영수증을 남깁니다. 직접 만든 자동 답장 규칙은 그 승인으로 칩니다.</p>
+        <span class="src">코드로 강제: <a href="https://github.com/k08200/klorn/blob/main/packages/api/src/judge/attention-floor.ts" rel="noreferrer noopener">attention-floor.ts</a></span></li>
+    </ul>
+    <p class="caveat"><b>대표 정확도는 싣지 않습니다.</b> 실제 메일 세트는 Meeting·Info 레인이 생기기 전에 만들어졌습니다.
+      라벨이 세 레인뿐이라 나머지 두 레인을 채점할 수 없고, 다섯 레인 기준으로 다시 라벨링해야 합니다. 그 전까지는 이 세트에서
+      나온 대표 정확도를 싣지 않습니다. 위의 Silent 정밀도도 같은 세트에서 나왔고 같은 한계를 갖습니다.</p>
+  </div>
+</section>
+
+<section class="sec sec-alt" id="how" aria-labelledby="how-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2 id="how-h">평가는 이렇게 돌아갑니다</h2>
+    </div>
+    <div class="prose">
+      <h3>커밋된 데이터셋</h3>
+      <p><code>packages/api/eval/</code>에 두 세트가 있습니다. 실제 메일 세트(<code>real-eval-set.json</code>)는
+        직접 라벨링하고 개인정보를 지운 실제 메일 53건입니다. 합성 게이트셋(<code>judge-eval-set.json</code>)은 개인정보가 없는
+        가상의 메일 56건입니다.</p>
+      <h3>실행기</h3>
+      <p><code>packages/api</code>에서 <code>pnpm eval:real</code>을 실행하면 실제 메일 세트로 분류기를 채점합니다.
+        <code>pnpm eval:judge</code>는 합성 세트로 같은 일을 합니다.</p>
+      <h3>CI 게이트</h3>
+      <p>분류기를 바꾸는 모든 풀 리퀘스트는 합성 게이트셋을 모델에 돌리고, 세 하한을 강제합니다: 전체 80%, 긴급 메일 재현율 90%,
+        Silent 정밀도 90%. 하나라도 못 미치면 실패합니다. 포크에서 온 풀 리퀘스트처럼 모델 키가 없으면 통과가 아니라 안내와 함께 건너뜁니다.</p>
+      <p>모델이 필요 없는 두 번째 검사는 모든 CI 테스트 실행에서 돕니다. 규칙 기반 빠른 경로와 키워드 대체 경로가 같은 세트에서 70%에
+        닿아야 하고, 놓친 긴급 메일은 Silent가 아니라 Queue로 떨어져야 하며, 마케팅 메일은 절대 긴급으로 분류되면 안 됩니다.</p>
+      <p>실제 메일 세트도 같은 풀 리퀘스트에서 채점하지만 보고용입니다. 긴급 레인 라벨이 4건뿐이라 90% 하한이 의미를 갖기 어렵습니다.</p>
+      <p><a href="https://github.com/k08200/klorn/tree/main/packages/api/eval" rel="noreferrer noopener">데이터셋, 실행기, 측정 이력을 GitHub에서 보기</a></p>
+    </div>
+    <p class="checked">2026-10-14에 저장소 기준으로 확인했습니다. 틀린 내용이 있나요? <a href="mailto:k0820086@gmail.com">알려 주세요</a>.</p>
+  </div>
+</section>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-grid">
+    <div>
+      <a class="brand" href="/ko/">Klorn</a>
+      <p class="foot-note">메일과 캘린더를 한 곳에서, 이유와 함께 정리합니다. 오픈소스.</p>
+      <div class="socials">
+        <a href="https://github.com/k08200/klorn" rel="noreferrer noopener" aria-label="GitHub"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a>
+        <a href="https://x.com/klornai" rel="noreferrer noopener" aria-label="X"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+        <a href="https://join.slack.com/t/klorn/shared_invite/zt-3zkj8lqxg-L4LK8dNPkzgupHEdmXgbIg" rel="noreferrer noopener" aria-label="Slack"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52zm1.271 0a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52zm0 1.271a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522zm-1.268 0a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522zm0-1.268a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523z"/></svg></a>
+      </div>
+    </div>
+    <nav aria-label="제품"><h4>제품</h4>
+      <a href="/ko/download/">모든 다운로드</a>
+      <a href="/pricing/">요금</a>
+      <a href="https://app.klorn.ai/login">로그인</a>
+      <a href="/status/">서비스 상태</a>
+      <a href="/blog/">블로그</a></nav>
+    <nav aria-label="오픈소스"><h4>오픈소스</h4>
+      <a href="https://github.com/k08200/klorn" rel="noreferrer noopener">GitHub 저장소</a>
+      <a href="https://github.com/k08200/klorn/releases/latest" rel="noreferrer noopener">릴리스</a>
+      <a href="https://github.com/k08200/klorn/tree/main/packages/api/eval" rel="noreferrer noopener">평가 세트</a>
+      <a href="/ko/methodology/" aria-current="page">측정 방법</a>
+      <a href="https://github.com/k08200/klorn/blob/main/LICENSE" rel="noreferrer noopener">AGPLv3 라이선스</a>
+      <a href="/ko/open-source/">추가 조항 없는 AGPL인 이유</a>
+      <a href="/self-host/">직접 설치</a></nav>
+    <nav aria-label="비교"><h4>비교</h4>
+      <a href="/ko/vs/fyxer/">Fyxer와 비교</a>
+      <a href="/ko/vs/superhuman/">Superhuman과 비교</a>
+      <a href="/ko/vs/sanebox/">SaneBox와 비교</a>
+      <a href="/ko/vs/inbox-zero/">Inbox Zero와 비교</a></nav>
+    <nav aria-label="법적 고지"><h4>법적 고지</h4>
+      <a href="https://app.klorn.ai/privacy">개인정보처리방침</a>
+      <a href="https://app.klorn.ai/terms">이용약관</a>
+      <a href="https://app.klorn.ai/refund">환불 정책</a>
+      <a href="/security/">보안</a>
+      <a href="/gdpr/">GDPR</a>
+      <a href="/dpa/">DPA</a>
+      <a href="mailto:k0820086@gmail.com">문의</a></nav>
+  </div>
+  <div class="wrap foot-base">
+    <span>© 2026 Klorn · AGPLv3</span>
+    <span class="langsw"><a href="/methodology/" lang="en">EN</a><i aria-hidden="true">·</i><a href="/ko/methodology/" lang="ko" aria-current="true">KO</a></span>
+  </div>
+</footer>
+
+<script>
+// Windows visitors get the installer: /site-nav.js swaps the href on every
+// .dl-cta, and this swaps the label to match. Same block as the landings.
+(function () {
+  var uaData = navigator.userAgentData;
+  var raw = String((uaData && uaData.platform) || navigator.platform || navigator.userAgent || '');
+  if (!/win/i.test(raw) || /mac|iphone|ipad|ipod/i.test(raw)) return;
+  document.querySelectorAll('[data-mac-dl]').forEach(function (a) {
+    var label = a.getAttribute('data-win-label');
+    if (!label) return;
+    Array.prototype.forEach.call(a.childNodes, function (n) {
+      if (n.nodeType !== 3 || !n.textContent.trim()) return;
+      var pad = n.textContent.match(/^(\s*)[\s\S]*?(\s*)$/);
+      n.textContent = pad[1] + label + pad[2];
+    });
+  });
+})();
+</script>
+<script>
+// Inflow attribution: utm_campaign and friends, the referrer and this page's
+// path ride along on every app.klorn.ai link, so a signup can be credited to
+// the page that earned it.
+(function () {
+  try {
+    var p = new URLSearchParams(location.search);
+    var q = [];
+    ["utm_source", "utm_medium", "utm_campaign", "utm_content"].forEach(function (k) {
+      var v = p.get(k);
+      if (v) q.push(k + "=" + encodeURIComponent(v.slice(0, 60)));
+    });
+    if (document.referrer) {
+      try {
+        var h = new URL(document.referrer).hostname;
+        if (h && h !== location.hostname) q.push("ref=" + encodeURIComponent(h));
+      } catch (e) {}
+    }
+    q.push("lp=" + encodeURIComponent(location.pathname.slice(0, 60)));
+    var qs = q.join("&");
+    document.querySelectorAll('a[href^="https://app.klorn.ai/"]').forEach(function (a) {
+      a.href += (a.href.indexOf("?") === -1 ? "?" : "&") + qs;
+    });
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>

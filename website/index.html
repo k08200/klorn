@@ -17,7 +17,7 @@
 <title>Klorn — All your mail and calendars. One calm place.</title>
 <meta name="description" content="Gmail and Google Calendar, plus Naver Mail and iCloud Mail in beta, in one view. Klorn sorts every message by what it needs from you and tells you why. Free plan; Klorn Pro is $29.99/month.">
 <meta property="og:title" content="Klorn — All your mail and calendars. One calm place.">
-<meta property="og:description" content="One view for your mail and calendars, sorted into five lanes with the reason on every message. Sending always waits for your approval.">
+<meta property="og:description" content="One view for your mail and calendars, sorted into five lanes with the reason on every message. You decide what gets sent.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://klorn.ai/">
 <meta property="og:image" content="https://klorn.ai/brand/og-image.png?v=k2">
@@ -44,7 +44,7 @@
  "applicationCategory": "BusinessApplication",
  "url": "https://klorn.ai/",
  "inLanguage": "en",
- "description": "Klorn brings Gmail, Google Calendar, Naver Mail and iCloud Mail into one view and sorts every message into five lanes — Push, Meeting, Queue, Info, Silent — with the reason on each one. Sending always waits for your approval.",
+ "description": "Klorn brings Gmail, Google Calendar, Naver Mail and iCloud Mail into one view and sorts every message into five lanes — Push, Meeting, Queue, Info, Silent — with the reason on each one. You decide what gets sent.",
  "sameAs": [
   "https://github.com/k08200/klorn",
   "https://dev.to/k08200",
@@ -123,7 +123,7 @@
    "name": "Does Klorn send or delete mail on its own?",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "No. Lanes only sort. Replies, deletes and archives wait for your approval. If you turn on automation, the assistant may run low-risk steps by itself, and sending is never one of them."
+    "text": "Not unless you tell it to. Lanes only sort. Sends, permanent deletes and forwards wait for your approval; an auto-reply rule you create yourself counts as that approval. With automation on, the assistant may run low-risk steps by itself. Every send leaves a receipt."
    }
   },
   {
@@ -198,7 +198,7 @@
 
   <div class="wrap hero-copy">
     <h1>All your mail and calendars. <span class="ser">One calm place.</span></h1>
-    <p class="lead">Klorn brings <b>Gmail, Google Calendar, Naver Mail and iCloud Mail</b> into one view, sorts every
+    <p class="lead">Klorn brings <b>Gmail, Google Calendar, Naver Mail (beta) and iCloud Mail (beta)</b> into one view, sorts every
       message by what it needs from you, and tells you why.</p>
     <div class="actions">
       <a class="btn btn-1 dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
@@ -353,10 +353,10 @@
       <p class="sec-lead">Something that reads your mail should show its work. Here is what you can verify yourself.</p>
     </div>
     <dl class="facts">
-      <div class="fact"><dt>Sending always waits for you</dt>
-        <dd>Replies, deletes and archives need your approval, even with automation on.</dd></div>
+      <div class="fact"><dt>Nothing goes out without your say-so</dt>
+        <dd>Sends, permanent deletes and forwards wait for your approval, or for an auto-reply rule you set up yourself.</dd></div>
       <div class="fact"><dt>The test set is public</dt>
-        <dd>Every change to the classifier runs against a committed set of labelled messages. <a href="https://github.com/k08200/klorn/tree/main/packages/api/eval" rel="noreferrer noopener">See it</a></dd></div>
+        <dd>Every change to the classifier runs against a committed set of labelled messages. <a href="/methodology/">See it</a></dd></div>
       <div class="fact"><dt>The AI bill has a ceiling</dt>
         <dd>Klorn caps its own daily AI spend and stops rather than overspend.</dd></div>
       <div class="fact"><dt>Google OAuth verification completed</dt>
@@ -421,8 +421,7 @@
           <p>Yes, once each. Signing in brings your first Google account; add the others from Settings,
             and from then on they all arrive in the same list.</p></details>
         <details><summary>Does Klorn send or delete mail on its own?</summary>
-          <p>No. Lanes only sort. Replies, deletes and archives wait for your approval. If you turn on
-            automation, the assistant may run low-risk steps by itself, and sending is never one of them.</p></details>
+          <p>Not unless you tell it to. Lanes only sort. Sends, permanent deletes and forwards wait for your approval; an auto-reply rule you create yourself counts as that approval. With automation on, the assistant may run low-risk steps by itself. Every send leaves a receipt.</p></details>
         <details><summary>Which accounts work today?</summary>
           <p>Gmail and Google Calendar, plus Naver Mail and iCloud Mail in beta. That&rsquo;s the
             full list today; this page changes the day another account can be connected.</p></details>
@@ -455,7 +454,7 @@
     </div>
     <!-- The Windows entry stays a visible link so a Windows visitor with
          scripting off is not left with a page that only offers a .dmg. -->
-    <p class="meta"><span>macOS 14+</span><i aria-hidden="true">·</i><span><a href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe">Windows beta</a></span><i aria-hidden="true">·</i><span>Any modern browser</span></p>
+    <p class="meta"><span>macOS 14+</span><i aria-hidden="true">·</i><span><a href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe">Windows beta</a></span><i aria-hidden="true">·</i><span>Any modern browser</span><i aria-hidden="true">·</i><span><a href="/download/">System requirements</a></span></p>
   </div>
 </section>
 </main>
@@ -474,6 +473,7 @@
     <nav aria-label="Product"><h4>Product</h4>
       <a class="dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
          data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe" data-win-label="Download for Windows">Download for Mac</a>
+      <a href="/download/">All downloads</a>
       <a href="/pricing/">Pricing</a>
       <a href="https://app.klorn.ai/login">Log in</a>
       <a href="/status/">Status</a><a href="/blog/">Blog</a></nav>
@@ -481,6 +481,7 @@
       <a href="https://github.com/k08200/klorn" rel="noreferrer noopener">GitHub repository</a>
       <a href="https://github.com/k08200/klorn/releases/latest" rel="noreferrer noopener">Releases</a>
       <a href="https://github.com/k08200/klorn/tree/main/packages/api/eval" rel="noreferrer noopener">Eval set</a>
+      <a href="/methodology/">Methodology</a>
       <a href="https://github.com/k08200/klorn/blob/main/LICENSE" rel="noreferrer noopener">AGPLv3 licence</a>
       <a href="/open-source/">Why AGPL, with nothing added</a>
       <a href="/self-host/">Self-host</a></nav>
