@@ -20,6 +20,7 @@
 
 import { calendarCancellationSyncEnabled } from "../config.js";
 import { INTERACTIVE_TX_OPTIONS, prisma } from "../db.js";
+import { escapeLikePattern } from "../db-like.js";
 import { captureError } from "../sentry.js";
 import type { CalendarSession, CancelledEventsResult } from "./calendar-providers/types.js";
 import { googleSourceScope, sourceKeyFor } from "./calendar-rows.js";
@@ -149,13 +150,13 @@ export async function removeCancelledGoogleEventRows(
         ...googleSourceScope(userId, linkedAccountId),
         OR: [
           { externalId: { in: ids } },
-          ...prefixes.map((prefix) => ({ externalId: { startsWith: prefix } })),
+          ...prefixes.map((prefix) => ({ externalId: { startsWith: escapeLikePattern(prefix) } })),
           ...(primary
             ? [
                 { externalId: null, googleId: { in: ids } },
                 ...prefixes.map((prefix) => ({
                   externalId: null,
-                  googleId: { startsWith: prefix },
+                  googleId: { startsWith: escapeLikePattern(prefix) },
                 })),
               ]
             : []),

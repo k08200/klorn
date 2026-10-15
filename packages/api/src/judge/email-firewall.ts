@@ -12,6 +12,7 @@
 
 import { scheduleAgentForActionableEmail } from "../agentcore/email-action-trigger.js";
 import { prisma } from "../db.js";
+import { escapeLikePattern } from "../db-like.js";
 import { engagementKindOf } from "../learning/sender-policy.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 import { extractEmailAddress } from "../mail/email-address.js";
@@ -549,10 +550,10 @@ async function pushForFirewallEmail(userId: string, email: JudgeableEmailRow): P
       // Naver PUSH. Gmail ids are non-nesting hex, but Naver UIDs are
       // sequential integers, so the substring nesting is real for that source.
       OR: [
-        { message: { contains: `[${id}]` } },
-        { message: { contains: `[${id},` } },
-        { message: { contains: `,${id},` } },
-        { message: { contains: `,${id}]` } },
+        { message: { contains: escapeLikePattern(`[${id}]`) } },
+        { message: { contains: escapeLikePattern(`[${id},`) } },
+        { message: { contains: escapeLikePattern(`,${id},`) } },
+        { message: { contains: escapeLikePattern(`,${id}]`) } },
       ],
       createdAt: { gte: since },
     },

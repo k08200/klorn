@@ -16,6 +16,7 @@ import { detectSkillsForAllUsers } from "../agentcore/skill-recorder.js";
 import { planHasFeature } from "../billing/stripe.js";
 import { PATTERN_ANALYSIS_HOURS as CFG_PATTERN_HOURS, PATTERN_MIN_OCCURRENCES } from "../config.js";
 import { db, prisma } from "../db.js";
+import { escapeLikePattern } from "../db-like.js";
 import { recordSchedulerTick, registerScheduler } from "../scheduler-heartbeat.js";
 import { runFeedbackAdaptationForAllUsers } from "./feedback-adaptor.js";
 import { buildInteractionGraphsForAllUsers } from "./interaction-graph.js";
@@ -72,8 +73,8 @@ export async function learnFromRejection(
       where: {
         userId,
         type: "FEEDBACK",
-        key: { startsWith: `rejected_${toolName}` },
-        content: { contains: toolName },
+        key: { startsWith: escapeLikePattern(`rejected_${toolName}`) },
+        content: { contains: escapeLikePattern(toolName) },
       },
     });
 

@@ -31,6 +31,7 @@ import { AGENT_SYSTEM_PROMPT, NOTIFY_TOOL, PROPOSE_ACTION_TOOL } from "../agent/
 import { trackTokenUsage } from "../billing/token-usage.js";
 import { AGENT_MAX_CONTEXT_ITEMS, AGENT_MAX_TOOLS_PER_LOOP } from "../config.js";
 import { db, prisma } from "../db.js";
+import { escapeLikePattern } from "../db-like.js";
 import { isFloorAction } from "../judge/attention-floor.js";
 import { upsertAttentionForPendingAction } from "../judge/attention-mirror.js";
 import { recipientFromToolArgs, recordFeedback } from "../learning/feedback.js";
@@ -1131,7 +1132,7 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
               userId,
               action: "auto_action",
               tool: fnName,
-              summary: { contains: JSON.stringify(args).slice(0, 50) },
+              summary: { contains: escapeLikePattern(JSON.stringify(args).slice(0, 50)) },
               createdAt: { gte: toolDedupSince },
             },
           });

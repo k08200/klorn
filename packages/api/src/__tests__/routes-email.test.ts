@@ -1284,6 +1284,12 @@ describe("emailSearchOr — search query builder", () => {
     const [subjectCond] = emailSearchOr("Q3 report");
     expect(subjectCond).toEqual({ subject: { contains: "Q3 report", mode: "insensitive" } });
   });
+
+  it("matches LIKE's own characters literally (Prisma does not escape them)", async () => {
+    const { emailSearchOr } = await import("../routes/email.js");
+    const [subjectCond] = emailSearchOr("50%_off\\");
+    expect(subjectCond).toEqual({ subject: { contains: "50\\%\\_off\\\\", mode: "insensitive" } });
+  });
 });
 
 describe("POST /api/email/:id/create-tasks — dedup via createTask", () => {

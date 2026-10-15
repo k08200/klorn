@@ -16,6 +16,7 @@
  */
 
 import { prisma } from "../db.js";
+import { likeContainsPattern } from "../db-like.js";
 import { createCompletion, MODEL } from "../llm/openai.js";
 
 const MIN_REPEAT = 3; // sequence must repeat this many times
@@ -167,7 +168,7 @@ async function proposalAlreadyPending(userId: string, tools: string[]): Promise<
     WHERE "userId" = ${userId}
       AND "toolName" = 'record_skill'
       AND "status" = 'PENDING'
-      AND "toolArgs"::text ILIKE ${`%${toolSignature}%`}
+      AND "toolArgs"::text ILIKE ${likeContainsPattern(toolSignature)}
       AND "createdAt" >= ${new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)}
     LIMIT 1
   `;

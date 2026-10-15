@@ -9,6 +9,7 @@
 import type { EmailLaneCounts, LiveTier } from "@klorn/contract";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db.js";
+import { likeContainsPattern } from "../db-like.js";
 import { captureError } from "../sentry.js";
 import { toLiveTier } from "./tiers.js";
 
@@ -133,15 +134,10 @@ export function isLanePageFilter(filter: string | undefined): boolean {
   return !filter || LANE_PAGE_FILTERS.has(filter);
 }
 
-/** `%term%` with LIKE's own wildcards escaped, as Prisma's `contains` does. */
-function containsPattern(term: string): string {
-  return `%${term.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
-}
-
 /** The same fields as the list's Prisma search (emailSearchOr in routes/email.ts). */
 function searchSql(search: string | undefined): Prisma.Sql {
   if (!search) return Prisma.empty;
-  const like = containsPattern(search);
+  const like = likeContainsPattern(search);
   return Prisma.sql`AND (
     e."subject" ILIKE ${like} OR e."from" ILIKE ${like} OR e."snippet" ILIKE ${like}
     OR e."body" ILIKE ${like} OR e."summary" ILIKE ${like}

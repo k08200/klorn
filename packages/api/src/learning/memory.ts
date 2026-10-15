@@ -6,6 +6,7 @@
  */
 
 import { prisma } from "../db.js";
+import { escapeLikePattern } from "../db-like.js";
 
 // biome-ignore lint/suspicious/noExplicitAny: Prisma dynamic model access requires untyped delegate
 const db: Record<string, Record<string, (...args: any[]) => Promise<any>>> = prisma as never;
@@ -122,10 +123,8 @@ export async function recall(userId: string, query?: string, type?: string): Pro
   const where: Record<string, unknown> = { userId };
   if (type) where.type = type;
   if (query) {
-    where.OR = [
-      { key: { contains: query, mode: "insensitive" } },
-      { content: { contains: query, mode: "insensitive" } },
-    ];
+    const ci = { contains: escapeLikePattern(query), mode: "insensitive" as const };
+    where.OR = [{ key: ci }, { content: ci }];
   }
 
   const memories = await db.memory.findMany({
