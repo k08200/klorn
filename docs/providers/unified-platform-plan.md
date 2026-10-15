@@ -4126,14 +4126,15 @@ its own: D3's gate decides, and the app hides the feature while it is dark.
 - Copy: 37 keys in all 7 languages, integers as `%d`; the self-check compares
   each key's format specifiers with English in every language. Vocabulary row
   **Klorn Drive** added to `../product-vocabulary.md`.
-- Verify. `swift run KlornMac --self-check`: 75 cases under "Drive import (D7)",
+- Verify. `swift run KlornMac --self-check`: 77 cases under "Drive import (D7)",
   among them the walk caps (files, bytes, folders, depth), hidden files, links,
   placeholders, the size pre-check, every code against `klorn-errors.ts` with
   its status, the backoff, the multipart framing and name escaping, the
   404-hides rule, the menu rule, the specifier parity; and scenarios over real
   temporary files and a URLProtocol stub that parses every multipart body sent:
   folders before files, each file's size, parent and bytes, the token on every
-  request, the temporary bodies removed, Retry-After honoured, a give-up after 5
+  request, a D4-shaped file answer (with `summary`) and an extended limits answer
+  still decoding, the temporary bodies removed, Retry-After honoured, a give-up after 5
   tries, a quota refusal stopping the rest, a dark 404 mid-import, cancel, and
   sign-out. Server: `routes-klorn-drive-limits.test.ts` (dark with each flag
   off, 401, this user's KLORN usage only, quota null when unset or malformed,

@@ -478,8 +478,11 @@ enum DriveImportScenarios {
         .init(status: 200, body: #"{"maxFileBytes":\#(maxFileBytes),"quotaBytes":\#(quota),"usedBytes":5}"#)
     }
 
+    /// A D3 answer as main sends it since D4: `summary` and fields the Mac does not read are ignored.
     static func created(_ externalId: String) -> DriveImportStubProtocol.Reply {
-        .init(status: 201, body: #"{"file":{"id":"r","externalId":"\#(externalId)","name":"n","isFolder":false}}"#)
+        .init(status: 201, body: #"{"file":{"id":"r","externalId":"\#(externalId)","name":"n","isFolder":false,"#
+            + #""summary":{"status":"PENDING","text":null,"error":null,"summarizedAt":null},"#
+            + #""futureField":[1,2]}}"#)
     }
 
     static func refused(_ status: Int, _ code: String, headers: [String: String] = [:]) -> DriveImportStubProtocol.Reply {
@@ -663,6 +666,13 @@ enum DriveImportScenarios {
         let limited = importer(limitedSleeps, bodies: bodies)
         await limited.refreshAvailability()
         await limited.importItems([file("loose.txt")])
+        check("import: a file answer carrying D4's summary (and unknown fields) still decodes",
+              created("x").body.contains(#""summary":{"status":"PENDING""#) && report?.uploaded == 4)
+        let limitsWithExtra = Data(#"{"maxFileBytes":1,"quotaBytes":null,"usedBytes":0,"later":true}"#.utf8)
+        check("limits: an answer with a field added later still decodes",
+              (try? JSONDecoder().decode(DriveLimitsWire.self, from: limitsWithExtra))?.quotaBytes == nil
+              && (try? JSONDecoder().decode(DriveLimitsWire.self, from: limitsWithExtra))?.maxFileBytes == 1)
+
         check("rate limited: waits Retry-After, then uploads",
               limited.report?.uploaded == 1 && limitedSleeps.waits == [.seconds(7)]
               && DriveImportStubProtocol.calls.filter { $0.path == "/api/drive/files" }.count == 2)
