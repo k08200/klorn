@@ -38,6 +38,8 @@ interface ListPage {
   emails: EmailListItem[];
   threads: EmailThreadRow[];
   source: "gmail" | "demo";
+  /** No mail source connected at all — the page is empty, not demo mail. */
+  needsConnection: boolean;
   total: number;
   page: number;
 }
@@ -57,10 +59,24 @@ async function fetchPage(view: ListView, page: number): Promise<ListPage> {
   try {
     if (view.filter === "threads") {
       const data = await apiFetch<EmailThreadListResponse>(path);
-      return { emails: [], threads: data.threads, source: data.source, total: data.total, page };
+      return {
+        emails: [],
+        threads: data.threads,
+        source: data.source,
+        needsConnection: data.needsConnection === true,
+        total: data.total,
+        page,
+      };
     }
     const data = await apiFetch<EmailListResponse>(path);
-    return { emails: data.emails, threads: [], source: data.source, total: data.total, page };
+    return {
+      emails: data.emails,
+      threads: [],
+      source: data.source,
+      needsConnection: data.needsConnection === true,
+      total: data.total,
+      page,
+    };
   } catch (err) {
     captureClientError(err, { scope: "email.v2.load", lane: view.lane, page });
     throw err;
@@ -146,6 +162,7 @@ export function useMailList(view: ListView) {
     threads: useMemo(() => pages.flatMap((page) => page.threads), [pages]),
     total: pages[pages.length - 1]?.total ?? 0,
     isDemo: pages[0]?.source === "demo",
+    needsConnection: pages[0]?.needsConnection === true,
     loading: listQuery.isLoading,
     /** The first load failed: there is nothing to show but the error. */
     failed: listQuery.isError && pages.length === 0,

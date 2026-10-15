@@ -14,6 +14,7 @@ import { TIERS, type Tier } from "./judge/tiers.js";
 import type { LearnedRule, RulePattern } from "./learning/learned-rules.js";
 import type { CorrectionExample, SenderFacts, SenderPrior } from "./learning/sender-policy.js";
 import type { SenderTraitFact } from "./learning/sender-trait-store.js";
+import { extractEmailAddress, isPlainAddress } from "./mail/email-address.js";
 
 const FIXTURE_KEYS = new Set([
   "corrections",
@@ -285,10 +286,8 @@ export function assessInstrumentIntegrity(sources: readonly string[]): {
 export function findScrubbedSenders(froms: Iterable<string>): string[] {
   const scrubbed = new Set<string>();
   for (const from of froms) {
-    const angled = /<([^<>\s]+@[^<>\s]+)>/.exec(from);
-    const bare = /^([^<>\s]+@[^<>\s]+)$/.exec(from.trim());
-    const address = (angled?.[1] ?? bare?.[1])?.toLowerCase();
-    if (address && RESERVED_SENDER_RE.test(address)) scrubbed.add(address);
+    const address = extractEmailAddress(from);
+    if (isPlainAddress(address) && RESERVED_SENDER_RE.test(address)) scrubbed.add(address);
   }
   return [...scrubbed];
 }

@@ -28,6 +28,7 @@ import { gmailCategoryOf, rowSignalFor } from "../judge/row-signals.js";
 import { resolveTierReason } from "../judge/tier-reason-strings.js";
 import { toLiveTier } from "../judge/tiers.js";
 import { isInternalSender } from "../mail/company-domains.js";
+import { hasAnyMailSource } from "../mail/mail-source.js";
 import { senderLabelsFor } from "../mail/sender-labels.js";
 import { senderEmail } from "../notify/notification-format.js";
 import { getUserNotificationLanguage } from "../notify/notification-strings.js";
@@ -149,16 +150,10 @@ export function registerEmailLaneRoutes(
     async (request): Promise<EmailLaneCountsResponse> => {
       const uid = getUserId(request);
       const { inbox } = request.query as { inbox?: string };
-      // Same demo switch as the list, so the control and the rows agree.
-      const token = await prisma.userToken.findFirst({
-        where: { userId: uid, provider: "google" },
-        select: { id: true },
-      });
-      if (!token) {
-        const rows = options
-          .demoRows()
-          .map((row) => ({ tier: row.tier, total: 1, unread: row.isRead ? 0 : 1 }));
-        return { counts: foldLaneCounts(rows), source: "demo" };
+      // Same source rule as the list (hasAnyMailSource), so the control and the
+      // rows agree: no source → every lane zero, flagged; never demo counts.
+      if (!(await hasAnyMailSource(uid))) {
+        return { counts: foldLaneCounts([]), source: "demo", needsConnection: true };
       }
       // A linked id is checked against its owner; one that is not the caller's
       // counts nothing.

@@ -376,14 +376,14 @@ describe("GET /api/email?tier= — lane page", () => {
     await app.close();
   });
 
-  it("filters the demo rows by lane too", async () => {
+  it("no mail source: a lane page is empty and flagged, never demo rows", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "GET", url: "/api/email?tier=PUSH", headers: auth() });
     const body = res.json();
     expect(body.source).toBe("demo");
-    expect(body.emails.length).toBeGreaterThan(0);
-    for (const email of body.emails) expect(email.tier).toBe("PUSH");
-    expect(body.total).toBe(body.emails.length);
+    expect(body.needsConnection).toBe(true);
+    expect(body.emails).toEqual([]);
+    expect(body.total).toBe(0);
     await app.close();
   });
 
@@ -418,7 +418,10 @@ describe("GET /api/email?tier= — lane page", () => {
       { userId: "user-1", linkedInboxAccountId: "linked-9", isRead: false },
     ]);
     expect(queryRaw).not.toHaveBeenCalled();
-    expect(linkedInboxFindFirst).not.toHaveBeenCalled();
+    // Only the source check (userId-only) runs — no per-inbox scope lookup.
+    expect(linkedInboxFindFirst).not.toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ id: expect.anything() }) }),
+    );
     await app.close();
   });
 });
@@ -449,6 +452,36 @@ describe("GET /api/email/lane-counts", () => {
       },
     });
     expect(queryRaw).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
+
+  it("no mail source: every lane is zero and the answer is flagged needsConnection", async () => {
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/email/lane-counts", headers: auth() });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.source).toBe("demo");
+    expect(body.needsConnection).toBe(true);
+    for (const lane of Object.keys(body.counts)) {
+      expect(body.counts[lane]).toEqual({ total: 0, unread: 0 });
+    }
+    expect(queryRaw).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("an IMAP-only user (no Google token) gets the real per-lane counts", async () => {
+    linkedInboxFindFirst.mockResolvedValue({ id: "li-icloud" });
+    queryRaw.mockResolvedValue([{ tier: "PUSH", total: 2, unread: 1 }]);
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/email/lane-counts", headers: auth() });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().source).toBe("gmail");
+    expect(res.json().needsConnection).toBeUndefined();
+    expect(res.json().counts.PUSH).toEqual({ total: 2, unread: 1 });
+    expect(linkedInboxFindFirst).toHaveBeenCalledWith({
+      where: { userId: "user-1" },
+      select: { id: true },
+    });
     await app.close();
   });
 
@@ -511,17 +544,6 @@ describe("GET /api/email/lane-counts", () => {
     await app.register(emailRoutes, { prefix: "/api/email" });
     await app.ready();
     expect(limits).toEqual([{ max: 120, timeWindow: "1 minute" }]);
-    await app.close();
-  });
-
-  it("counts the demo rows when no mail account is connected", async () => {
-    const app = await buildApp();
-    const res = await app.inject({ method: "GET", url: "/api/email/lane-counts", headers: auth() });
-    const body = res.json();
-    expect(body.source).toBe("demo");
-    expect(Object.keys(body.counts).sort()).toEqual(["INFO", "MEETING", "PUSH", "QUEUE", "SILENT"]);
-    expect(body.counts.PUSH.total).toBeGreaterThan(0);
-    expect(queryRaw).not.toHaveBeenCalled();
     await app.close();
   });
 

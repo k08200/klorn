@@ -86,9 +86,7 @@ export async function cronRoutes(app: FastifyInstance) {
     let failed = 0;
 
     for (const config of configs) {
-      const timeZone = normalizeTimeZone(
-        (config as unknown as { timezone?: string | null }).timezone,
-      );
+      const timeZone = normalizeTimeZone(config.timezone);
 
       if (!isBriefingDue(config.briefingTime, timeZone)) {
         skipped += 1;

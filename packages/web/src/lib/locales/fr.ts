@@ -1553,6 +1553,15 @@ const fr: Record<string, string> = {
   "mailV2.shown": "{shown} sur {total}",
   "mailV2.demo": "Ceci est du courrier de démonstration.",
   "mailV2.demo.connect": "Connectez un compte pour voir le vôtre",
+  "mailV2.noSource": "Aucun compte de messagerie n’est encore connecté.",
+  "imapConnect.proGate.title": "Connecter {provider} est une fonctionnalité Pro.",
+  "imapConnect.proGate.body":
+    "Free inclut un compte Google. Passez à Pro pour étendre le pare-feu à cette boîte aussi.",
+  "imapConnect.proGate.upgrade": "Passer à Pro",
+  "imapConnect.firstSync.started":
+    "Récupération de vos e-mails en cours. Ils apparaîtront bientôt dans Mail.",
+  "imapConnect.firstSync.delayed":
+    "Le premier e-mail de ce compte peut mettre jusqu’à ~5 minutes à arriver.",
   "mailV2.archive.done": "Archivé",
   "mailV2.archive.doneMany": "{count} archivés",
   "mailV2.delete.done": "Supprimé",

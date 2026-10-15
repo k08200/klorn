@@ -117,7 +117,14 @@ export interface EmailListItem {
 /** `GET /api/email` — the paged inbox list. */
 export interface EmailListResponse {
   emails: EmailListItem[];
+  /** "gmail" = the real DB-backed inbox (any connected source, IMAP included). */
   source: "gmail" | "demo";
+  /**
+   * true when the user has no connected mail source at all (no Google token,
+   * no linked or IMAP inbox). The answer is then empty — never demo mail.
+   * `source` stays "demo" alongside it for older clients; absent otherwise.
+   */
+  needsConnection?: true;
   total: number;
   unread: number;
   page: number;
@@ -139,6 +146,12 @@ export type EmailLaneCounts = Record<LiveTier, EmailLaneCount>;
 export interface EmailLaneCountsResponse {
   counts: EmailLaneCounts;
   source: "gmail" | "demo";
+  /**
+   * true when the user has no connected mail source at all (no Google token,
+   * no linked or IMAP inbox). The answer is then empty — never demo mail.
+   * `source` stays "demo" alongside it for older clients; absent otherwise.
+   */
+  needsConnection?: true;
 }
 
 /**
@@ -226,6 +239,12 @@ export interface EmailThreadRow {
 export interface EmailThreadListResponse {
   threads: EmailThreadRow[];
   source: "gmail" | "demo";
+  /**
+   * true when the user has no connected mail source at all (no Google token,
+   * no linked or IMAP inbox). The answer is then empty — never demo mail.
+   * `source` stays "demo" alongside it for older clients; absent otherwise.
+   */
+  needsConnection?: true;
   total: number;
   page: number;
 }

@@ -40,6 +40,7 @@ import { prisma } from "../db.js";
 import { takeGenericImapAttempt } from "../mail/generic-imap-attempts.js";
 import { type HostRejection, parseGenericImapHost } from "../mail/generic-imap-host.js";
 import { verifyGenericImapCredentials } from "../mail/generic-imap-verify.js";
+import { startFirstImapSync } from "../mail/imap-first-sync.js";
 import { clearPollBackoff } from "../mail/imap-poll-backoff.js";
 import { hostMatchesProvider, type ImapProviderConfig } from "../mail/imap-providers.js";
 import { verifyImapCredentials } from "../mail/imap-sync.js";
@@ -365,8 +366,11 @@ export function imapConnectRoutes(
         }
         // A relink starts the poll over: no leftover backoff for this account.
         if (saved.id && cfg.hostPolicy === "user-supplied") clearPollBackoff(saved.id);
+        // First mail now, not at the next 5-minute tick. false = this process
+        // does not poll; the client then says the first mail can take ~5 min.
+        const firstSync = saved.id ? startFirstImapSync(userId, cfg, saved.id) : false;
 
-        return { ok: true, email, host: imapHost };
+        return { ok: true, email, host: imapHost, firstSync };
       },
     );
 
