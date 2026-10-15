@@ -70,14 +70,16 @@ vi.mock("../db.js", () => {
   const prisma = {
     linkedCalendarAccount: { upsert: linkedUpsert, findMany: linkedFindMany },
     calendarEvent: { upsert: eventUpsert },
-    automationConfig: { upsert: vi.fn(async () => ({})) },
+    automationConfig: {
+      upsert: vi.fn(async () => ({})),
+      findUnique: vi.fn(async () => ({ timezone: "Asia/Seoul" })),
+    },
     user: {
       findUnique: vi.fn(async () => ({
         id: "u1",
         plan: "PRO",
         role: "USER",
         email: "owner@example.com",
-        timezone: "Asia/Seoul",
       })),
     },
     device: {

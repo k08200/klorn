@@ -19,6 +19,7 @@
  */
 
 import { db, prisma } from "../db.js";
+import { escapeLikePattern } from "../db-like.js";
 import { areSimilarProposalIssues, getNotifKey, proposalIssueTokens } from "./agent-logic.js";
 
 export const NOTIFY_DEDUP_HOURS = 2;
@@ -274,7 +275,7 @@ export async function hasRepliedToEmail(userId: string, emailSubject: string): P
       userId,
       action: "auto_action",
       tool: "send_email",
-      summary: { contains: normalizedSubject },
+      summary: { contains: escapeLikePattern(normalizedSubject) },
       createdAt: { gte: since },
     },
   });

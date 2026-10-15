@@ -3,16 +3,13 @@
  */
 
 import { prisma } from "../db.js";
+import { escapeLikePattern } from "../db-like.js";
 
 export async function listContacts(userId: string, search?: string) {
   const where: Record<string, unknown> = { userId };
   if (search) {
-    where.OR = [
-      { name: { contains: search, mode: "insensitive" } },
-      { email: { contains: search, mode: "insensitive" } },
-      { company: { contains: search, mode: "insensitive" } },
-      { tags: { contains: search, mode: "insensitive" } },
-    ];
+    const ci = { contains: escapeLikePattern(search), mode: "insensitive" as const };
+    where.OR = [{ name: ci }, { email: ci }, { company: ci }, { tags: ci }];
   }
 
   const contacts = await prisma.contact.findMany({

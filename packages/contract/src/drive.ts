@@ -166,6 +166,20 @@ export interface DriveErrorResponse {
 }
 
 /**
+ * `GET /api/drive/limits` — what an upload may be, read before a client offers
+ * one (the Mac app's import, D7). Behind the same gate as the routes below: the
+ * server's default 404 while the Klorn drive is off. `Cache-Control: no-store`.
+ */
+export interface DriveLimitsResponse {
+  /** The largest file an upload accepts, in bytes (25 MiB). */
+  maxFileBytes: number;
+  /** The user's limit in bytes; null while every upload is refused for want of one (`quota-not-configured`). */
+  quotaBytes: number | null;
+  /** The recorded size of the user's Klorn files, in bytes. */
+  usedBytes: number;
+}
+
+/**
  * `POST /api/drive/files` — multipart/form-data, in this order:
  *   - `size`: the file's exact byte length (decimal), required;
  *   - `parentExternalId`: a Klorn folder's `externalId`, optional (root when absent);

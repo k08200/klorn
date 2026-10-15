@@ -23,6 +23,7 @@ import {
   SENDER_TRAITS_IN_JUDGE,
 } from "../config.js";
 import { db } from "../db.js";
+import { escapeLikePattern } from "../db-like.js";
 import { embedTexts, isEmbeddingEnabled, rankBySimilarity } from "../embedding.js";
 import {
   getCachedInteractionGraph,
@@ -300,7 +301,7 @@ async function fetchSenderEmailIdsLegacy(
   const emails = (await db.emailMessage.findMany({
     where: {
       userId,
-      from: { contains: senderAddress, mode: "insensitive" },
+      from: { contains: escapeLikePattern(senderAddress), mode: "insensitive" },
       ...(excludeEmailId ? { id: { not: excludeEmailId } } : {}),
     },
     orderBy: { receivedAt: "desc" },
@@ -505,7 +506,7 @@ async function fetchReadBehaviorFact(
     const since = new Date(Date.now() - READ_BEHAVIOR.windowDays * DAY_MS);
     const senderWindow = {
       userId,
-      from: { contains: senderAddress, mode: "insensitive" as const },
+      from: { contains: escapeLikePattern(senderAddress), mode: "insensitive" as const },
       receivedAt: { gte: since },
     };
     const [total, read] = await Promise.all([

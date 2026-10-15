@@ -24,6 +24,7 @@ import {
   WEEKLY_REVIEW_DAY,
 } from "../config.js";
 import { prisma } from "../db.js";
+import { escapeLikePattern } from "../db-like.js";
 import { senderName } from "../notify/notification-format.js";
 import type { NotifCategory } from "../notify/notification-prefs.js";
 import { sendPushNotification } from "../notify/push.js";
@@ -125,7 +126,7 @@ async function checkUpcomingMeetings(userId: string, tz: string): Promise<void> 
       where: {
         userId,
         type: "calendar",
-        title: { contains: event.title.slice(0, 20) },
+        title: { contains: escapeLikePattern(event.title.slice(0, 20)) },
         createdAt: { gte: new Date(Date.now() - 2 * 60 * 60 * 1000) },
       },
     });
@@ -340,11 +341,15 @@ async function checkDeadlineCountdown(userId: string, tz: string): Promise<void>
 
 // ─── NEW: Contact context on emails ────────────────────────────────────
 
-/** Enrich unanswered email notifications with contact history */
-async function getContactContext(userId: string, fromEmail: string): Promise<string> {
+/**
+ * Enrich unanswered email notifications with contact history. The sender is
+ * matched on the whole address: the From header is the sender's to write, so a
+ * part of it (`ceo@` of ceo@evil.com, or an empty one) must not pick a contact.
+ */
+export async function getContactContext(userId: string, fromEmail: string): Promise<string> {
   const email = fromEmail.match(/<([^>]+)>/)?.[1] || fromEmail.trim().toLowerCase();
   const contact = await prisma.contact.findFirst({
-    where: { userId, email: { contains: email.split("@")[0], mode: "insensitive" } },
+    where: { userId, email: { equals: email.trim(), mode: "insensitive" } },
     select: { name: true, company: true, role: true, tags: true },
   });
   if (!contact) return "";

@@ -26,7 +26,6 @@ import {
   DRIVE_SEARCH_MAX_CHARS,
   decodeDriveCursor,
   encodeDriveCursor,
-  escapeLikePattern,
   getFile,
   listFiles,
   normaliseDriveSearchText,
@@ -401,11 +400,6 @@ describe("the search text", () => {
 
   it.each([undefined, null, 7, "", "   ", "\u0000"])("is null for %j", (raw) => {
     expect(normaliseDriveSearchText(raw)).toBeNull();
-  });
-
-  it("escapes exactly the three characters LIKE gives a meaning to", () => {
-    expect(escapeLikePattern("100%_a\\b")).toBe("100\\%\\_a\\\\b");
-    expect(escapeLikePattern("plain.*(text)")).toBe("plain.*(text)");
   });
 });
 

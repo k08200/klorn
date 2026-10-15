@@ -38,6 +38,7 @@ import {
   SCHEDULER_WATCH_RENEWAL_INTERVAL_MS,
 } from "./config.js";
 import { prisma } from "./db.js";
+import { escapeLikePattern } from "./db-like.js";
 import { withDbRetry } from "./db-retry.js";
 import { sweepAttentionAging } from "./judge/attention-aging.js";
 import {
@@ -549,7 +550,7 @@ export async function hasAutoReplyClaim(userId: string, gmailId: string): Promis
       userId,
       type: "email",
       title: "Auto-reply sent",
-      message: { contains: `[${gmailId}]` },
+      message: { contains: escapeLikePattern(`[${gmailId}]`) },
     },
     select: { id: true },
   });

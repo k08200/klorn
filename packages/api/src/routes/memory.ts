@@ -2,6 +2,7 @@ import type { MemoryType } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { db } from "../db.js";
+import { escapeLikePattern } from "../db-like.js";
 
 // Per-route rate limit config
 const rateLimitConfig = { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } };
@@ -28,10 +29,8 @@ export async function memoryRoutes(app: FastifyInstance) {
       const where: Record<string, unknown> = { userId };
       if (type) where.type = type;
       if (search) {
-        where.OR = [
-          { key: { contains: search, mode: "insensitive" } },
-          { content: { contains: search, mode: "insensitive" } },
-        ];
+        const ci = { contains: escapeLikePattern(search), mode: "insensitive" as const };
+        where.OR = [{ key: ci }, { content: ci }];
       }
 
       const memories = await db.memory.findMany({

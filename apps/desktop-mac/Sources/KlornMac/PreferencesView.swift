@@ -37,10 +37,13 @@ struct PreferencesView: View {
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .onAppear { launchAtLogin = LoginItem.isEnabled }
-        // Re-ask the server whether device calendars exist each time Settings shows
-        // this tab, so a server-side flip shows (or hides) the section without a relaunch.
+        // Re-ask the server whether device calendars and the Klorn drive exist each
+        // time Settings shows this tab, so a server-side flip shows (or hides) the
+        // section without a relaunch.
         .task {
-            if model.phase == .signedIn && tab.sections.contains(.deviceCalendars) {
+            guard model.phase == .signedIn else { return }
+            if tab.sections.contains(.driveImport) { await model.driveImport.refreshAvailability() }
+            if tab.sections.contains(.deviceCalendars) {
                 await model.deviceCalendars.refreshAvailability()
             }
         }
@@ -69,6 +72,11 @@ struct PreferencesView: View {
                 section(L("prefs.section.deviceCalendars")) {
                     DeviceCalendarSection(bridge: model.deviceCalendars)
                 }
+            }
+        case .driveImport:
+            // Step D7: drawn only while the server has the Klorn drive (its 404 hides it).
+            if model.driveImport.availability == .available {
+                section(L("prefs.section.driveImport")) { DriveImportSection(importer: model.driveImport) }
             }
         case .about:
             section(L("prefs.section.about")) {

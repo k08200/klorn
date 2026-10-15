@@ -1839,6 +1839,9 @@ func runSelfChecks() async -> Bool {
     print("Device calendars (C6):")
     for (name, ok) in await deviceCalendarSelfChecks(sourceDir: sourceDir) { check(name, ok) }
 
+    print("Drive import (D7):")
+    for (name, ok) in await driveImportSelfChecks(sourceDir: sourceDir) { check(name, ok) }
+
     print("Token store:")
     for (name, ok) in tokenStoreSelfChecks(sourceDir: sourceDir) { check("token store — \(name)", ok) }
 

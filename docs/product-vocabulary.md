@@ -28,6 +28,9 @@ off the hub routes hand back and the legacy pages are unchanged. With
 `MAIL_V2` on as well, `/inbox/firewall` hands over to `/email` (the lane view
 lives in Mail). Added **Activity**.
 
+Updated 2026-10-14: added **Klorn Drive**, the noun of the Mac app's import
+(step D7 of `providers/unified-platform-plan.md`).
+
 ## The nouns
 
 | Term | Means | Where it appears | Never means |
@@ -37,6 +40,7 @@ lives in Mail). Added **Activity**.
 | **Assistant** | The nav section holding chat, **Approvals**, Briefing and Receipt (shown as **Activity**). Lives at `/assistant/*` behind `UNIFIED_HOME` (default OFF, P7). | Sidebar nav; a tab row on phones | A lane or an agent mode. |
 | **Approvals** | The list of things waiting for the user's approval. Formerly the **Decision queue**. | Under Assistant | A mail list. Nothing lands here unless it needs a decision. With `UNIFIED_HOME` on it is `/assistant/approvals` (P7) and `/inbox` hands over to it; the screener's new senders and open commitments sit on the same page as secondary lists. With the flag off `/inbox` is still the "Decision queue". New copy uses "Approvals". |
 | **Files** | Documents from connected drive sources. | Sidebar nav, only when a drive source is enabled | Mail attachments. |
+| **Klorn Drive** | The person's own file storage in Klorn (D3). It holds only what the person uploads or imports; an import (D7) copies the files they pick, once. | Mac: File › "Import to Klorn Drive…" and Settings › Accounts, only while the drive is on | A view of iCloud Drive, MYBOX or any other service, or a sync: nothing appears there that the person did not put there, and a later change in that service is not reflected. |
 | **SourceBadge** (source) | The small monochrome glyph showing which connected account a row or event came from. | Every mail row and calendar event | A lane or a category. |
 | **Firewall board** | Internal-docs term for the lane classification view. The separate screen is **retired as a user-facing term**: lanes are Mail's primary filter (PUSH / MEETING / QUEUE / INFO / SILENT). `/inbox/firewall` and the desktop tier columns persist in code until migration. | Internal docs only | A place to read mail, and never user-facing copy. |
 | **Receipt** / **Activity** | The record of what Klorn did and decided today, after the fact. "Receipt" is the concept and the legacy page; the hub page that shows it is labelled **Activity**. | `/assistant/activity` with `UNIFIED_HOME` on (P7); `/inbox/receipt` with it off | Something to act on. It is read-only history; "Request undo" only adds a reversal to Approvals. |

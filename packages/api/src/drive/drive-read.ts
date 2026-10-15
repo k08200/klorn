@@ -30,6 +30,7 @@
 import type { DriveFileWire } from "@klorn/contract";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../db.js";
+import { escapeLikePattern } from "../db-like.js";
 import { safeHttpsLink } from "../safe-https-link.js";
 import { type DriveProviderName, isReadOnlyDriveProvider } from "./drive-providers.js";
 import { KLORN_DRIVE_SOURCE_KEY } from "./drive-rows.js";
@@ -55,7 +56,6 @@ const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 /** What a DriveFile id can look like (a uuid): checked before any query. */
 const DRIVE_FILE_ID = /^[A-Za-z0-9-]{1,64}$/;
 const CONTROL_CHARACTERS = /\p{Cc}/gu;
-const LIKE_SPECIAL = /[\\%_]/g;
 
 /** The columns the wire shape is built from. The storage key is not among them. */
 export const DRIVE_WIRE_SELECT = {
@@ -165,14 +165,6 @@ export function normaliseDriveSearchText(raw: unknown): string | null {
   const cleaned = raw.replace(CONTROL_CHARACTERS, "").normalize("NFC").trim();
   const capped = [...cleaned].slice(0, DRIVE_SEARCH_MAX_CHARS).join("").trim();
   return capped.length > 0 ? capped : null;
-}
-
-/**
- * Prisma sends `contains` as LIKE '%value%' without escaping, so `%` and `_` in
- * the value would be wildcards. Escaped, they are the characters themselves.
- */
-export function escapeLikePattern(text: string): string {
-  return text.replace(LIKE_SPECIAL, "\\$&");
 }
 
 function pageLimit(requested: number | undefined): number {
