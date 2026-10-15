@@ -71,6 +71,7 @@ import {
 import { coercePlainBody, htmlToPlainText, renderableEmailHtmlFor } from "../mail/email-text.js";
 import { getLinkedInboxClients, resolveMailClient } from "../mail/gmail.js";
 import { executeOneClickUnsubscribe, parseMailtoTarget } from "../mail/list-unsubscribe.js";
+import { hasAnyMailSource } from "../mail/mail-source.js";
 import { getMeetingContext } from "../mail/meeting-context.js";
 import { mailActionsFor } from "../mail/providers/dispatch.js";
 import { isPublicMailboxDomain } from "../mail/public-mailbox-domains.js";
@@ -453,6 +454,16 @@ function normalizeEmailQueue(value: unknown): EmailQueueKey {
   return "all";
 }
 
+/**
+ * GET / for a user with no connected mail source. `source: "demo"` is kept
+ * as the wire marker clients already read as "not connected" (actions
+ * disabled, connect prompt), but no rows: nobody is shown an inbox that is not
+ * theirs. `needsConnection` says why it is empty.
+ */
+function noMailSourceList(): EmailListResponse {
+  return { emails: [], source: "demo", needsConnection: true, total: 0, unread: 0, page: 1 };
+}
+
 function demoEmailMatchesQueue(email: (typeof DEMO_EMAILS)[number], queue: EmailQueueKey): boolean {
   if (queue === "unread") return !email.isRead;
   if (queue === "urgent") return email.priority === "URGENT";
@@ -741,65 +752,11 @@ export async function emailRoutes(app: FastifyInstance) {
       // scores; the cap stays as a Gmail throttle guardrail.
       const pageSize = 50;
 
-      // Check if Gmail is connected
-      const token = await prisma.userToken.findFirst({
-        where: { userId: uid, provider: "google" },
-      });
-
-      if (!token) {
-        // Demo mode
-        let emails = [...DEMO_EMAILS];
-        if (filter === "unread") emails = emails.filter((e) => !e.isRead);
-        if (filter === "urgent") emails = emails.filter((e) => e.priority === "URGENT");
-        if (filter === "reply-needed") {
-          emails = emails.filter((e) =>
-            looksReplyNeeded({
-              priority: e.priority,
-              category: e.category,
-              actionItems: e.actionItems,
-              from: e.from,
-            }),
-          );
-        }
-        if (filter === "attachments" || filter === "candidates") emails = [];
-        if (laneOnly) emails = emails.filter((e) => e.tier === laneOnly);
-        if (search) {
-          const s = search.toLowerCase();
-          emails = emails.filter(
-            (e) =>
-              e.subject.toLowerCase().includes(s) ||
-              e.from.toLowerCase().includes(s) ||
-              e.snippet.toLowerCase().includes(s),
-          );
-        }
-        if (category) emails = emails.filter((e) => e.category === category);
-        return {
-          emails: emails.map((e) => ({
-            ...e,
-            linkedInboxAccountId: null,
-            senderEmail: senderEmail(e.from) || null,
-            trust: null,
-            needsReply: looksReplyNeeded({
-              priority: e.priority,
-              category: e.category,
-              actionItems: e.actionItems,
-              from: e.from,
-            }),
-            attachmentCount: 0,
-            attachmentCandidateCount: 0,
-            attachmentPendingCount: 0,
-            attachmentFallbackCount: 0,
-            attachmentUnsupportedCount: 0,
-            attachmentCategories: [],
-            candidateProfilePreview: null,
-            candidateIntake: null,
-          })),
-          source: "demo",
-          total: emails.length,
-          unread: emails.filter((e) => !e.isRead).length,
-          page: 1,
-        };
-      }
+      // Any connected source (Google, a linked inbox, an IMAP account such as
+      // iCloud or Naver) gets the real DB-backed list — this path never calls
+      // Gmail. No source at all is an honest empty inbox flagged
+      // needsConnection, never demo mail dressed up as the user's.
+      if (!(await hasAnyMailSource(uid))) return noMailSourceList();
 
       // Build query (reads from DB only — sync via POST /api/email/sync)
       // biome-ignore lint/suspicious/noExplicitAny: dynamic Prisma where clause
@@ -1004,28 +961,8 @@ export async function emailRoutes(app: FastifyInstance) {
       };
       const uid = getUserId(request);
 
-      const token = await prisma.userToken.findFirst({
-        where: { userId: uid, provider: "google" },
-      });
-      if (!token) {
-        // Demo thread view
-        const threads = DEMO_EMAILS.map((e) => ({
-          threadId: e.threadId,
-          subject: e.subject,
-          participants: [e.from],
-          messageCount: 1,
-          lastMessage: {
-            id: e.id,
-            from: e.from,
-            snippet: e.snippet,
-            receivedAt: e.receivedAt,
-            isRead: e.isRead,
-          },
-          hasUnread: !e.isRead,
-          latestPriority: e.priority,
-          summary: e.summary,
-        }));
-        return { threads, total: threads.length, source: "demo", page: 1 };
+      if (!(await hasAnyMailSource(uid))) {
+        return { threads: [], total: 0, source: "demo", needsConnection: true, page: 1 };
       }
 
       const pageNum = parsePageNum(page);
@@ -1981,17 +1918,15 @@ export async function emailRoutes(app: FastifyInstance) {
   app.get("/stats/summary", async (request) => {
     const uid = getUserId(request);
 
-    const token = await prisma.userToken.findFirst({ where: { userId: uid, provider: "google" } });
-    if (!token) {
+    if (!(await hasAnyMailSource(uid))) {
       return {
-        total: DEMO_EMAILS.length,
-        unread: DEMO_EMAILS.filter((e) => !e.isRead).length,
-        urgent: DEMO_EMAILS.filter((e) => e.priority === "URGENT").length,
-        today: DEMO_EMAILS.filter(
-          (e) => new Date(e.date).toDateString() === new Date().toDateString(),
-        ).length,
-        categories: { business: 2, automated: 1, engineering: 1, billing: 1 },
+        total: 0,
+        unread: 0,
+        urgent: 0,
+        today: 0,
+        categories: {},
         source: "demo",
+        needsConnection: true,
       };
     }
 
