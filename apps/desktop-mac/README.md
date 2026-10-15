@@ -115,7 +115,8 @@ and open are refused for a stamp that has ended, before any request.
   Accessibility permission** and never takes focus.
 - **`⌘,`** — the Settings window (also the status-item *Preferences…* and the
   in-app Preferences buttons). Tabs: General, Accounts, Assistant,
-  Notifications, Appearance, Privacy.
+  Notifications, Appearance, Privacy. Accounts also edits the company
+  domains and the triage priorities (asked once by the purpose prompt).
 
 ### Standard main window (on by default)
 
@@ -198,11 +199,15 @@ defaults to the bar's look, so the bar's previews are byte-identical.
   sidebar. The shell stays inside the safe area.
 
 The `macMainWindow` user default is ON when never set (M8). A stored OFF
-is kept: that user has no main window, the expanded panel is the largest
-view, and ⌥⌘K from the expanded panel rests the bar. Switch it with either:
+is kept: that user has no main window and the expanded panel is the largest
+view. ⌥⌘K from the expanded panel rests the bar, the panel hides its ⤢
+button, and Find, Go and the sections are disabled in the menus (New Email
+still opens the compose window). A request that would open the full view
+(a row, a lane count, approvals, the urgent-mail card, a banner) opens the
+expanded panel with a one-line hint and a *Settings…* button that opens
+Settings ▸ General. Switch it with either:
 
-- Settings ▸ General ▸ *Use standard main window* (visible while on; once
-  off, hold **Option** to reveal it), or
+- Settings ▸ General ▸ *Use standard main window* (always visible), or
 - `defaults write ai.klorn.desktop macMainWindow -bool NO` (or `YES`;
   packaged app — an unbundled `swift run` reads the `KlornMac` domain), then
   relaunch Klorn.

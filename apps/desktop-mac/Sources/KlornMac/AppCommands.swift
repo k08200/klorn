@@ -42,6 +42,9 @@ struct MenuState: Equatable {
     var readerVisible: Bool
     /// The Klorn drive is live with a quota and no import runs (D7).
     var driveImportReady: Bool
+    /// `macMainWindow` is on (the default since M8). Off, there is no main
+    /// window to search in or navigate, so Find, Go and the sections are off.
+    var mainWindowAvailable: Bool = true
 
     @MainActor
     init(model: AppModel) {
@@ -56,6 +59,7 @@ struct MenuState: Equatable {
         listHasSearchField = model.listMode.hasSearchField
         readerVisible = model.readerVisible
         driveImportReady = model.driveImport.canImport
+        mainWindowAvailable = model.settings.macMainWindow
     }
 
     init(
@@ -93,8 +97,20 @@ enum MenuRules {
         mainWindowIsKey && mainWindowOpen
     }
 
+    /// Find, Go and the sections act on the main window; with it stored OFF
+    /// they have nothing to show and are dropped. Everything else is
+    /// unaffected (New Email is its own window). Pure for the harness.
+    static func mainWindowCommandAllowed(_ command: MenuCommand, macMainWindow: Bool) -> Bool {
+        switch command {
+        case .find, .go, .section: macMainWindow
+        default: true
+        }
+    }
+
     static func isEnabled(_ command: MenuCommand, in s: MenuState) -> Bool {
-        guard s.signedIn else { return false }
+        guard s.signedIn,
+              mainWindowCommandAllowed(command, macMainWindow: s.mainWindowAvailable)
+        else { return false }
         // Message commands act on the mail visible in the reading pane, so
         // they need the full view up AND key (not Settings), no modal over
         // it, and a firewall item.

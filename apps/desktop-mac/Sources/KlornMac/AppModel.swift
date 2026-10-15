@@ -71,6 +71,10 @@ final class AppModel {
     /// composer is asked for (again) or put away.
     @ObservationIgnored var onComposePresentationChanged: (() -> Void)?
 
+    /// A full-view request fell back to the expanded panel because the user
+    /// stored `macMainWindow` OFF: the panel says so once, with a way to
+    /// Settings. Written by TopBarController; cleared when the bar rests.
+    var mainWindowOffHint = false
     /// Whether the full view (the main window) is up, so the app menus
     /// enable only what the UI can act on.
     var isFullViewOpen: Bool { mainWindowOpen }

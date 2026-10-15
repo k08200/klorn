@@ -10,8 +10,8 @@ enum ListKey: CaseIterable, Hashable {
 
 /// Which pane the list keys are talking to. `reader` is entered with
 /// Return/o and left with Esc; while there the list keys pause so the
-/// message can be scrolled with the arrows. Owned by each FullView, so the
-/// bar's panel and the main window never share it.
+/// message can be scrolled with the arrows. Owned per window by
+/// `MailSection` (`@State`), never by the shared model.
 enum MailKeyZone: Equatable { case list, reader }
 
 /// What a key press does. Every case is an action the UI already had.

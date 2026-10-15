@@ -39,6 +39,9 @@ struct TopBarActions {
     let onSelect: (FirewallItem) -> Void
     /// Open the Settings window.
     let onOpenPreferences: () -> Void
+    /// Open Settings on General, where the main-window switch is (the
+    /// expanded panel's hint while `macMainWindow` is stored OFF).
+    let onOpenMainWindowSettings: () -> Void
     /// Hide the bar entirely (pill ✕) — the menu-bar icon takes over as anchor.
     let onHideBar: () -> Void
     let onQuit: () -> Void

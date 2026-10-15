@@ -628,6 +628,8 @@
 "reading.preparedDraft" = "Klorn a préparé ce brouillon à l'avance — relisez-le avant d'envoyer.";
 "prefs.mainWindow" = "Utiliser la fenêtre principale standard";
 "prefs.mainWindow.detail" = "Activé par défaut. La vue complète s'ouvre dans une fenêtre normale, visible dans le Dock et ⌘Tab tant qu'elle est ouverte. Désactivé, le panneau étendu de la barre du haut est la plus grande vue.";
+"bar.mainWindowOff.hint" = "Activez la fenêtre principale dans les Réglages pour lire vos e-mails ici.";
+"bar.mainWindowOff.settings" = "Réglages…";
 
 /* Device calendars (C6): EventKit calendars the user uploads, one by one. */
 "prefs.section.deviceCalendars" = "CALENDRIERS DE L’APPAREIL";

@@ -1846,6 +1846,8 @@ func runSelfChecks() async -> Bool {
 
     print("Compose window and sheets (M5):")
     for (name, ok) in await windowSelfChecks(sourceDir: sourceDir) { check(name, ok) }
+    print("M8 follow-ups:")
+    for (name, ok) in await m8SelfChecks(sourceDir: sourceDir) { check(name, ok) }
 
     print("States and first launch (M6):")
     for (name, ok) in await stateSelfChecks(sourceDir: sourceDir) { check(name, ok) }
@@ -2400,10 +2402,6 @@ func runSelfChecks() async -> Bool {
           && MenuRules.isEnabled(.moveTo(.push), in: mainKey))
     check("flag off: an open request never creates the main window",
           !MainWindowRules.mayOpen(macMainWindow: false) && MainWindowRules.mayOpen(macMainWindow: true))
-    check("beta toggle: hidden until Option, visible while on",
-          !MainWindowRules.showsBetaToggle(optionHeld: false, macMainWindow: false)
-          && MainWindowRules.showsBetaToggle(optionHeld: true, macMainWindow: false)
-          && MainWindowRules.showsBetaToggle(optionHeld: false, macMainWindow: true))
     let titleBarHeight: CGFloat = 28
     check("main window floor holds the full view and fits the smallest display",
           MainWindowRules.minSize == TopBarMetrics.fullMin
@@ -2418,7 +2416,7 @@ func runSelfChecks() async -> Bool {
         .flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? ""
     // The window part of the file, up to the Settings toggle (whose key
     // monitor legitimately uses view lifecycle).
-    let windowPart = mainWindowSource.components(separatedBy: "struct MainWindowBetaToggle").first ?? ""
+    let windowPart = mainWindowSource.components(separatedBy: "struct MainWindowToggle").first ?? ""
     let openBody = windowPart.components(separatedBy: "func open() {").dropFirst().first?
         .components(separatedBy: "func close()").first ?? ""
     check("no SwiftUI Window scene: nothing is instantiated at launch",

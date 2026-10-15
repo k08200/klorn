@@ -158,6 +158,8 @@ final class TopBarController {
             dismiss()
             onOpenMainWindow?()
         case .expandedPanel:
+            // No reader here: say so once, with the way to Settings.
+            model.mainWindowOffHint = true
             summoned = true
             setState(.expanded)
         }
@@ -202,6 +204,7 @@ final class TopBarController {
     /// nothing (the menu-bar icon is the anchor in hidden-pill mode).
     private func dismiss() {
         summoned = false
+        model.mainWindowOffHint = false
         if model.settings.pillVisible {
             setState(.collapsed)
         } else {
@@ -219,8 +222,19 @@ final class TopBarController {
     }
 
     private func setState(_ newState: BarState) {
+        // A same-state request on a visible panel (e.g. a second "open" while
+        // the expanded panel is up) must not rebuild the hosting view, which
+        // would reset in-progress UI state.
+        guard Self.needsRender(
+            current: state, requested: newState, panelVisible: panel?.isVisible ?? false)
+        else { return }
         state = newState
         render()
+    }
+
+    /// Whether a state request must render. Pure for the harness.
+    nonisolated static func needsRender(current: BarState, requested: BarState, panelVisible: Bool) -> Bool {
+        current != requested || !panelVisible
     }
 
     /// Whether the bar draws at all for this state. Hidden-pill mode only
@@ -445,6 +459,12 @@ final class TopBarController {
             },
             onSelect: { [weak self] item in guard let self else { return }; Task { await self.model.select(item) } },
             onOpenPreferences: { [weak self] in self?.openPreferences() },
+            onOpenMainWindowSettings: { [weak self] in
+                guard let self else { return }
+                self.model.mainWindowOffHint = false
+                UserDefaults.standard.set(SettingsTab.general.rawValue, forKey: SettingsTab.storageKey)
+                self.openPreferences()
+            },
             onHideBar: { [weak self] in
                 guard let self else { return }
                 self.model.settings.pillVisible = false  // status icon takes over

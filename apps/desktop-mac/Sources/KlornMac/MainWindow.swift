@@ -40,13 +40,6 @@ enum MainWindowRules {
     static func mayOpen(macMainWindow: Bool) -> Bool {
         macMainWindow
     }
-
-    /// Settings ▸ General shows the toggle whenever it is on (everyone, by
-    /// default since M8), so it can be turned off; once off, it is revealed
-    /// again while Option is held.
-    static func showsBetaToggle(optionHeld: Bool, macMainWindow: Bool) -> Bool {
-        optionHeld || macMainWindow
-    }
 }
 
 /// The main window's content: the five-item shell (M4b). Actions come from
@@ -79,7 +72,7 @@ struct MainWindowRoot: View {
 @MainActor
 final class MainWindowController: NSObject, NSWindowDelegate {
     private let model: AppModel
-    /// FullView actions for the window; wired by the AppDelegate to the bar.
+    /// The shell's actions for the window; wired by the AppDelegate to the bar.
     var actionsProvider: (() -> TopBarActions?)?
     private(set) var window: NSWindow?
     /// The attached sheet (M5) and which one it is.
@@ -218,40 +211,20 @@ private final class SheetWindow: NSWindow {
     }
 }
 
-/// Settings ▸ General: the main-window switch. Visible while on (the default
-/// since M8) so it can be turned off; once off, revealed while Option is
-/// held (the macOS convention for advanced items). The same switch is
+/// Settings ▸ General: the main-window switch, always visible (M8: it is ON
+/// by default, and a user who turned it off must find it again without a
+/// hidden modifier). The same switch is
 /// `defaults write ai.klorn.desktop macMainWindow -bool NO|YES`.
-struct MainWindowBetaToggle: View {
+struct MainWindowToggle: View {
     @Bindable var settings: AppSettings
-    @State private var optionHeld = NSEvent.modifierFlags.contains(.option)
-    @State private var monitor: Any?
 
     var body: some View {
-        Group {
-            if MainWindowRules.showsBetaToggle(
-                optionHeld: optionHeld, macMainWindow: settings.macMainWindow)
-            {
-                Toggle(isOn: $settings.macMainWindow) {
-                    Text(L("prefs.mainWindow")).foregroundStyle(Theme.text)
-                }
-                .toggleStyle(.switch).tint(Theme.accent)
-                Text(L("prefs.mainWindow.detail"))
-                    .font(.caption).foregroundStyle(Theme.textDim)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+        Toggle(isOn: $settings.macMainWindow) {
+            Text(L("prefs.mainWindow")).foregroundStyle(Theme.text)
         }
-        // A key-modifier monitor, not window tracking: view lifecycle is
-        // the right scope for it.
-        .onAppear {
-            monitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
-                optionHeld = event.modifierFlags.contains(.option)
-                return event
-            }
-        }
-        .onDisappear {
-            if let monitor { NSEvent.removeMonitor(monitor) }
-            monitor = nil
-        }
+        .toggleStyle(.switch).tint(Theme.accent)
+        Text(L("prefs.mainWindow.detail"))
+            .font(.caption).foregroundStyle(Theme.textDim)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }

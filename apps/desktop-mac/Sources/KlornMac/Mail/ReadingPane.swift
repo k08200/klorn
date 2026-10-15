@@ -10,7 +10,7 @@ import SwiftUI
 struct ReadingPane: View {
     @Environment(AppModel.self) private var model
     let actions: TopBarActions
-    /// The owning FullView's key zone; `.reader` draws the focus ring.
+    /// The owning window's key zone; `.reader` draws the focus ring.
     var keyZone: MailKeyZone = .list
     /// `.window` in the main window: the type roles, the reader meta line
     /// and the flat primary button. The default is the bar's pane, unchanged.

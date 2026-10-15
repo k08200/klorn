@@ -263,6 +263,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     /// that need the full view open it first (menus also show with the bar
     /// collapsed when show-in-Dock or Settings keeps the app .regular).
     func perform(_ command: MenuCommand) {
+        // Stored OFF: no main window, so Find/Go/section have nowhere to
+        // land — and must not leave a search focus pending for later.
+        guard MenuRules.mainWindowCommandAllowed(command, macMainWindow: model.settings.macMainWindow) else { return }
         switch command {
         case .compose:
             // The composer is its own window (M5) and needs no full view

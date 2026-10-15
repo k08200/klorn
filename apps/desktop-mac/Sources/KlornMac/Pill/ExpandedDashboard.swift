@@ -2,6 +2,15 @@ import SwiftUI
 
 // MARK: - Expanded (3 columns)
 
+/// Pure rules for the expanded panel, pinned by the self-check.
+enum ExpandedPanelRules {
+    /// The header's ⤢ opens the main window; with `macMainWindow` stored OFF
+    /// there is none, and the expanded panel is already the largest view.
+    static func showsFullViewButton(macMainWindow: Bool) -> Bool {
+        macMainWindow
+    }
+}
+
 /// Expanded panel: header + 3 columns (INBOX / RECENT PUSH / ACCOUNT).
 struct ExpandedPanel: View {
     @Environment(AppModel.self) private var model
@@ -14,6 +23,9 @@ struct ExpandedPanel: View {
             // A snooze from the ticker that did not take says so here too:
             // the row it was clicked on is back, and silence reads as a bug.
             if let message = model.actionError { ActionErrorBanner(message: message) }
+            // `macMainWindow` stored OFF: a full-view request landed here,
+            // where there is no reader. Say so, with the way to turn it on.
+            if model.mainWindowOffHint { mainWindowOffHint }
             HStack(alignment: .top, spacing: 0) {
                 InboxColumn(actions: actions)
                 columnDivider
@@ -30,6 +42,19 @@ struct ExpandedPanel: View {
         .onAppear { model.checkForUpdateOnPanelOpen() }
     }
 
+    private var mainWindowOffHint: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "macwindow").font(.caption).foregroundStyle(Theme.textDim)
+                .accessibilityHidden(true)
+            Text(L("bar.mainWindowOff.hint")).font(.caption).foregroundStyle(Theme.text)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            Button(L("bar.mainWindowOff.settings"), action: actions.onOpenMainWindowSettings)
+                .buttonStyle(.bordered).controlSize(.small)
+        }
+        .padding(.horizontal, 18).padding(.vertical, 6)
+    }
+
     private var header: some View {
         HStack {
             // The ✕ on the right is the one way out (dogfood 2026-07-20) —
@@ -43,12 +68,14 @@ struct ExpandedPanel: View {
 
             HStack(spacing: 14) {
                 AppearanceToggle()
-                Button(action: actions.onExpandFull) {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right").font(.callout).iconTarget()
+                if ExpandedPanelRules.showsFullViewButton(macMainWindow: model.settings.macMainWindow) {
+                    Button(action: actions.onExpandFull) {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right").font(.callout).iconTarget()
+                    }
+                    .buttonStyle(.plain).hoverDim()
+                    .help(L("bar.fullView"))
+                    .accessibilityLabel(L("bar.fullView.a11y"))
                 }
-                .buttonStyle(.plain).hoverDim()
-                .help(L("bar.fullView"))
-                .accessibilityLabel(L("bar.fullView.a11y"))
 
                 // Sign-out lives under the account heading, not here: two
                 // controls for one destructive action reads as though they
