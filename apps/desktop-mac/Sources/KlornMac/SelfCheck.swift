@@ -385,10 +385,6 @@ func runSelfChecks() async -> Bool {
     check("pong flag latches", pongBox.isMarked)
 
     print("Accessibility:")
-    check("reduce motion disables the card morph",
-          !WindowGeometry.shouldAnimateFrame(reduceMotion: true))
-    check("normal motion keeps the card morph",
-          WindowGeometry.shouldAnimateFrame(reduceMotion: false))
     check("reduce transparency → opaque panel",
           Theme.panelOpacity(reduceTransparency: true) == 1.0)
     check("normal transparency keeps the translucent panel",
@@ -402,11 +398,6 @@ func runSelfChecks() async -> Bool {
     check("notifications honor stored false", !AppSettings.resolveNotifications(false))
     check("notifications honor stored true", AppSettings.resolveNotifications(true))
     check("notifications ignore non-bool", AppSettings.resolveNotifications("nope"))
-    print("Meeting card chime:")
-    check("the meeting card chimes only with alerts on",
-          MeetingCardController.shouldChime(alertsEnabled: true)
-          && !MeetingCardController.shouldChime(alertsEnabled: false))
-
     print("Briefing:")
     // The TODAY column shows a one-line preview of the day's briefing note:
     // markdown bold stripped, whitespace collapsed, capped; nil when empty.
@@ -1193,7 +1184,7 @@ func runSelfChecks() async -> Bool {
     check("show-all label counts the whole queue", showAllLabel(pendingCount: 2) == "Show all 3")
     check("show-all hidden with an empty queue", showAllLabel(pendingCount: 0) == nil)
 
-    print("Meeting card:")
+    print("Meeting banner plan:")
     // Lead-window planner: surface the FIRST upcoming event whose start is
     // within leadMinutes, once per event id — never one that already started,
     // never twice, never outside the window.
@@ -1210,47 +1201,30 @@ func runSelfChecks() async -> Bool {
     }
     let planNow = ISO8601DateFormatter().date(from: "2026-07-16T09:00:00Z")!
     check("inside the lead window → surfaces",
-          meetingCardPlan(now: planNow, events: [event("m1", minutesAway: 8)],
+          meetingAlertPlan(now: planNow, events: [event("m1", minutesAway: 8)],
                           leadMinutes: 10, shown: [])?.id == "m1")
     check("too early → nil",
-          meetingCardPlan(now: planNow, events: [event("m2", minutesAway: 45)],
+          meetingAlertPlan(now: planNow, events: [event("m2", minutesAway: 45)],
                           leadMinutes: 10, shown: []) == nil)
     check("already started → nil",
-          meetingCardPlan(now: planNow, events: [event("m3", minutesAway: -5)],
+          meetingAlertPlan(now: planNow, events: [event("m3", minutesAway: -5)],
                           leadMinutes: 10, shown: []) == nil)
     check("already shown → nil",
-          meetingCardPlan(now: planNow, events: [event("m4", minutesAway: 8)],
+          meetingAlertPlan(now: planNow, events: [event("m4", minutesAway: 8)],
                           leadMinutes: 10, shown: ["m4"]) == nil)
     check("earliest qualifying event wins",
-          meetingCardPlan(now: planNow, events: [event("m6", minutesAway: 9), event("m5", minutesAway: 4)],
+          meetingAlertPlan(now: planNow, events: [event("m6", minutesAway: 9), event("m5", minutesAway: 4)],
                           leadMinutes: 10, shown: [])?.id == "m5")
     check("all-day events never interrupt", {
         var allDay = event("m7", minutesAway: 5)
         allDay = CalendarEventWire(id: allDay.id, title: allDay.title, startTime: allDay.startTime,
                                    endTime: allDay.endTime, location: nil, meetingLink: nil, allDay: true)
-        return meetingCardPlan(now: planNow, events: [allDay], leadMinutes: 10, shown: []) == nil
+        return meetingAlertPlan(now: planNow, events: [allDay], leadMinutes: 10, shown: []) == nil
     }())
 
-    // Readiness display mapping is fixed vocabulary (server enum).
-    check("readiness labels", readinessLabel("ready") == "Ready"
-          && readinessLabel("watch") == "Watch"
-          && readinessLabel("needs_review") == L("meeting.needsReview")
-          && readinessLabel("???") == "Prep")
-
-    // Prep-pack wire decode (subset the card renders).
-    let packJSON = """
-    {"generatedAt":"2026-07-16T08:55:00.000Z","event":{"id":"m1","title":"Board sync",
-    "description":null,"startTime":"2026-07-16T09:10:00.000Z","endTime":"2026-07-16T10:00:00.000Z",
-    "location":"Zoom","meetingLink":"https://zoom.us/j/1"},"readiness":"watch",
-    "checklist":["Skim the term sheet","Reply to Alex"],"relatedEmails":[],
-    "openTasks":[],"openCommitments":[]}
-    """
-    if let pack = try? JSONDecoder().decode(MeetingPrepPack.self, from: Data(packJSON.utf8)) {
-        check("MeetingPrepPack decodes", pack.readiness == "watch"
-              && pack.checklist.count == 2 && pack.event.meetingLink != nil)
-    } else {
-        check("MeetingPrepPack decodes", false)
-    }
+    check("start times parse with or without fractional seconds",
+          meetingStart("2026-07-16T09:10:00.000Z") != nil && meetingStart("2026-07-16T09:10:00Z") != nil
+          && meetingStart("nope") == nil)
 
     print("Meeting links:")
     // meetingLink is invite data anyone can set. Only an absolute https URL with
@@ -1386,16 +1360,6 @@ func runSelfChecks() async -> Bool {
     check("plain text untouched", String(chatMarkdown("hello").characters) == "hello")
     check("newlines preserved", String(chatMarkdown("a\nb").characters) == "a\nb")
 
-    print("Glass mask:")
-    // The stretchable blur mask must stay non-degenerate on EVERY surface:
-    // capInsets summing to ≥ the masked dimension breaks NSImage stretching
-    // and the square blur backdrop bleeds past the corner (pill capsule,
-    // dogfood zoom 2026-07-20).
-    let cardMask = NSImage.roundedCornerMask(radius: MeetingCardMetrics.corner)
-    check("mask caps fit the meeting card",
-          cardMask.capInsets.top + cardMask.capInsets.bottom < MeetingCardMetrics.compact.height
-          && cardMask.capInsets.left + cardMask.capInsets.right < MeetingCardMetrics.compact.width)
-
     print("Automation settings:")
     // Decoding must survive an older desktop build meeting a newer server (and
     // vice versa): every field absent has to land on the server's own defaults,
@@ -1452,7 +1416,7 @@ func runSelfChecks() async -> Bool {
     check("urgent mail off leaves meetings alone",
           mutedMail.allowsInterrupt(for: .meeting))
     let mutedMeeting = AutomationSettings(notifyMeeting: false)
-    check("meetings off suppresses the meeting card",
+    check("meetings off suppresses the meeting banner",
           !mutedMeeting.allowsInterrupt(for: .meeting))
     check("meetings off leaves urgent mail alone",
           mutedMeeting.allowsInterrupt(for: .emailUrgent))

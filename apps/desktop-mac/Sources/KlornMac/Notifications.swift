@@ -43,6 +43,14 @@ struct PushLedger: Codable, Equatable, Sendable {
         return stored
     }
 
+    /// This ledger with `id` recorded (newest last, capped). Pure.
+    func recording(_ id: String) -> PushLedger {
+        var next = self
+        next.notified = Array((notified.filter { $0 != id } + [id]).suffix(Self.cap))
+        next.baselineEstablished = true
+        return next
+    }
+
     struct Plan: Equatable {
         let toNotify: [FirewallItem]
         let next: PushLedger
@@ -73,12 +81,18 @@ protocol PushLedgerStoring: AnyObject {
 @MainActor
 final class UserDefaultsPushLedgerStore: PushLedgerStoring {
     static let key = "klorn.push.ledger"
+    /// The meeting-banner ledger: same shape, its own record.
+    static let meetingKey = "klorn.meeting.ledger"
     private let defaults: UserDefaults
+    private let key: String
 
-    init(defaults: UserDefaults = .standard) { self.defaults = defaults }
+    init(defaults: UserDefaults = .standard, key: String = UserDefaultsPushLedgerStore.key) {
+        self.defaults = defaults
+        self.key = key
+    }
 
     func load() -> PushLedger? {
-        guard let data = defaults.data(forKey: Self.key) else { return nil }
+        guard let data = defaults.data(forKey: key) else { return nil }
         do {
             return try JSONDecoder().decode(PushLedger.self, from: data)
         } catch {
@@ -91,13 +105,13 @@ final class UserDefaultsPushLedgerStore: PushLedgerStoring {
 
     func save(_ ledger: PushLedger) {
         do {
-            defaults.set(try JSONEncoder().encode(ledger), forKey: Self.key)
+            defaults.set(try JSONEncoder().encode(ledger), forKey: key)
         } catch {
             Log.app.error("push ledger not saved: \(String(describing: error), privacy: .private)")
         }
     }
 
-    func clear() { defaults.removeObject(forKey: Self.key) }
+    func clear() { defaults.removeObject(forKey: key) }
 }
 
 @MainActor
@@ -125,6 +139,24 @@ struct PushBanner: Equatable, Sendable {
             identifier: PushNotifier.notificationIdentifier(for: item.id),
             title: sender.isEmpty ? "Klorn" : sender,
             body: subject)
+    }
+}
+
+/// The "starting soon" banner for a meeting: the title and start time, and
+/// a short line with the minutes left. No description, attendees or mail
+/// content. Pure (`now` and the time formatter are inputs).
+enum MeetingBanner {
+    static func make(
+        for event: CalendarEventWire, now: Date,
+        time: (Date) -> String = { $0.formatted(date: .omitted, time: .shortened) }
+    ) -> PushBanner {
+        let start = meetingStart(event.startTime)
+        let title = event.title.isEmpty ? "Klorn" : event.title
+        let minutes = start.map { max(1, Int(($0.timeIntervalSince(now) / 60).rounded())) } ?? 1
+        return PushBanner(
+            identifier: PushNotifier.meetingIdentifier(for: event.id),
+            title: start.map { "\(title) · \(time($0))" } ?? title,
+            body: L("meeting.banner.body", minutes))
     }
 }
 
@@ -221,6 +253,17 @@ final class PushAlerter {
         return banners
     }
 
+    /// A meeting enters its lead window: one banner while the banner switch
+    /// is on. Always reports it handled, so each meeting is offered once —
+    /// a muted switch must not queue the banner for later.
+    @discardableResult
+    func handleMeetingSoon(_ event: CalendarEventWire, now: Date = Date()) -> Bool {
+        let banner = MeetingBanner.make(for: event, now: now)
+        announce(banner.title)
+        if model.settings.notificationsEnabled { model.pushNotifier.post(banner) }
+        return true
+    }
+
     /// VoiceOver announcement for newly arrived PUSH. Pure for testing.
     nonisolated static func pushAnnouncement(newCount n: Int) -> String {
         L("push.announce", n)
@@ -231,11 +274,13 @@ final class PushAlerter {
     }
 }
 
-/// Identifiers and permission mapping for our banners.
+/// Identifiers and permission mapping for our banners (PUSH and meetings).
 enum PushNotifier {
     /// Namespace for our request identifiers. The item id is appended verbatim,
     /// so a tap can recover it — see `itemID(fromNotificationIdentifier:)`.
     nonisolated static let identifierPrefix = "klorn-push-"
+    /// Meeting banners: the event id appended verbatim, like PUSH.
+    nonisolated static let meetingPrefix = "klorn-meeting-"
     /// Groups Klorn's banners into one stack in Notification Center.
     nonisolated static let threadIdentifier = "klorn-push"
 
@@ -244,6 +289,10 @@ enum PushNotifier {
     /// Pure, testable identity for a posted banner.
     nonisolated static func notificationIdentifier(for itemID: String) -> String {
         identifierPrefix + itemID
+    }
+
+    nonisolated static func meetingIdentifier(for eventID: String) -> String {
+        meetingPrefix + eventID
     }
 
     /// Recover the item id a banner was posted for. Returns nil for anything we
@@ -268,6 +317,9 @@ enum PushNotifier {
         identifier: String,
         isKnownItem: (String) -> Bool
     ) -> NotificationTapAction {
+        if identifier.hasPrefix(meetingPrefix) {
+            return .openMeeting(eventID: String(identifier.dropFirst(meetingPrefix.count)))
+        }
         guard let id = itemID(fromNotificationIdentifier: identifier) else { return .ignore }
         return isKnownItem(id) ? .open(itemID: id) : .openApp
     }
@@ -283,4 +335,6 @@ enum NotificationTapAction: Equatable {
     /// Ours, but the item is no longer in the queue (handled elsewhere, or the
     /// queue refreshed). Open the main window anyway: a tap never does nothing.
     case openApp
+    /// A meeting banner: open the main window on Calendar.
+    case openMeeting(eventID: String)
 }

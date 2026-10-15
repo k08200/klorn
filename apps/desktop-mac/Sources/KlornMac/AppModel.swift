@@ -256,9 +256,12 @@ final class AppModel {
         let api = api ?? APIClient(token: { tokenStore.load() })
         // The shipped app (Keychain token) persists the ledger; a harness
         // model with an injected token store never touches UserDefaults.
+        let persists = tokenStore is KeychainTokenStore
         self.pushLedgerStore = pushLedgerStore
-            ?? (tokenStore is KeychainTokenStore
-                ? UserDefaultsPushLedgerStore() : InMemoryPushLedgerStore())
+            ?? (persists ? UserDefaultsPushLedgerStore() : InMemoryPushLedgerStore())
+        self.meetingAlertStore = persists
+            ? UserDefaultsPushLedgerStore(key: UserDefaultsPushLedgerStore.meetingKey)
+            : InMemoryPushLedgerStore()
         self.api = api
         self.tokenStore = tokenStore
         self.deviceCalendars = DeviceCalendarBridge(
@@ -2163,7 +2166,7 @@ final class AppModel {
         inboxes = []
         selectedInbox = "all"
         UserDefaults.standard.removeObject(forKey: Self.selectedInboxKey)
-        shownMeetingIds = []
+        meetingAlertStore.clear()
         // The device-calendar opt-in belongs to the account that gave it.
         deviceCalendars.signOut(token: sessionToken)
         // An import in flight belongs to the account that started it.
@@ -2302,17 +2305,20 @@ final class AppModel {
         for field in Self.accountFields() { field.dirty?(self) }
     }
 
-    /// Today's calendar (expanded panel's TODAY column). Best-effort: a
+    /// Today's calendar (Today screen and the meeting banner). Best-effort: a
     /// calendar hiccup must never block the mail queue, so failures just keep
     /// the previous value.
     private(set) var today: TodaySummary?
 
-    /// Meeting-prep interrupt: fires once per event when its start enters the
-    /// lead window. The AppDelegate wires this to the meeting card; a false
-    /// return means "slot busy — offer it again on the next tick".
+    /// Meeting "starting soon" interrupt: fires once per event when its start
+    /// enters the lead window. The AppDelegate wires this to `PushAlerter`
+    /// (a macOS banner; the floating meeting card was removed 2026-10-15). A
+    /// false return means "not handled — offer it again on the next tick".
     var onMeetingSoon: ((CalendarEventWire) -> Bool)?
     static let meetingLeadMinutes = 10
-    private var shownMeetingIds: Set<String> = []
+    /// Which meetings have been announced, per account, across launches —
+    /// the same ledger shape as PUSH (`PushLedger`), its own key.
+    @ObservationIgnored let meetingAlertStore: any PushLedgerStoring
 
     /// Today's daily-briefing preview (TODAY column). Best-effort like the rest.
     private(set) var briefing: String?
@@ -2409,20 +2415,21 @@ final class AppModel {
         } catch {
             Log.app.debug("today summary fetch failed: \(String(describing: error), privacy: .private)")
         }
-        // The meeting card below is planned from this session's calendar only.
+        // The meeting banner below is planned from this session's calendar only.
         guard isCurrent(session) else { return }
         // Replan on every refresh tick (poll + WS wake — the same cadence that
         // keeps the TODAY column fresh keeps the lead window honest).
-        // Gated on the user's "Meetings" category: this card is an interrupt,
-        // and turning the category off used to change nothing here.
+        // Gated on the user's "Meetings" category: this banner is an interrupt.
+        let owner = SessionIdentity.userId(fromToken: tokenStore.load())
+        let announced = PushLedger.resolve(stored: meetingAlertStore.load(), owner: owner)
         if automation.allowsInterrupt(for: .meeting),
            let upcoming = today?.upcoming,
-           let due = meetingCardPlan(
+           let due = meetingAlertPlan(
                now: Date(), events: upcoming,
-               leadMinutes: Self.meetingLeadMinutes, shown: shownMeetingIds),
+               leadMinutes: Self.meetingLeadMinutes, shown: Set(announced.notified)),
            onMeetingSoon?(due) == true
         {
-            shownMeetingIds.insert(due.id)
+            meetingAlertStore.save(announced.recording(due.id))
         }
     }
 
@@ -2571,19 +2578,6 @@ final class AppModel {
             }
             guard isCurrent(session) else { return }
             resolvingActions.remove(action.id)
-        }
-    }
-
-    /// GET /api/calendar/:id/prep-pack for the meeting card. Best-effort.
-    func fetchPrepPack(eventId: String, session: Int? = nil) async -> MeetingPrepPack? {
-        let session = session ?? sessionGeneration
-        guard isCurrent(session) else { return nil }
-        do {
-            let pack = try await api.get("/api/calendar/\(eventId)/prep-pack", as: MeetingPrepPack.self)
-            return isCurrent(session) ? pack : nil
-        } catch {
-            Log.app.debug("prep pack fetch failed: \(String(describing: error), privacy: .private)")
-            return nil
         }
     }
 

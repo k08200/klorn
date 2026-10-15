@@ -1,10 +1,9 @@
 import Foundation
 
 // Self-check for what lives outside the model when a session ends: the
-// meeting card, the PUSH banners, and sign-in itself. Run by `--self-check`
+// banners (PUSH and meetings), and sign-in itself. Run by `--self-check`
 // through `sessionSelfChecks`; same stubbed network, in-memory token store.
-// The meeting card runs headless: its whole lifecycle, no panel, no sound.
-// (The urgent-mail card was removed with the pill, 2026-10-15.)
+// (The urgent-mail and meeting cards were removed, 2026-10-15.)
 
 /// Holds a sign-in "in the browser" until the check lets it finish.
 @MainActor
@@ -33,7 +32,6 @@ enum CardScenarios {
     static let drafts = "POST /api/email/d1/reply-options"
     static let reply = "POST /api/email/d1/reply"
     static let snooze = "POST /api/inbox/firewall/p1/snooze"
-    static let prepPack = "GET /api/calendar/ev-A/prep-pack"
     static let draftsBody = #"{"to":"a@a.example","subject":"s","options":[{"tone":"accept","body":"ok"}]}"#
 
     static func queue(_ id: String, email: String) -> String {
@@ -44,11 +42,6 @@ enum CardScenarios {
         (try? JSONDecoder().decode(FirewallResponse.self, from: Data(queue(id, email: email).utf8)))?
             .items(for: .push).first
     }
-
-    static let eventId = "ev-A"
-    static let event = CalendarEventWire(
-        id: eventId, title: eventId, startTime: "2026-07-29T08:00:00Z",
-        endTime: "2026-07-29T09:00:00Z", location: nil, meetingLink: nil, allDay: false)
 
     /// A signed-in model with A's PUSH mail loaded.
     static func seeded(snoozeStatus: Int = 200) -> (model: AppModel, item: FirewallItem?) {
@@ -74,22 +67,12 @@ func sessionCardSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
     var results: [(String, Bool)] = []
     func check(_ name: String, _ passed: Bool) { results.append((name, passed)) }
 
-    // MARK: the meeting card and the banners go with the session
+    // MARK: the banners go with the session
     let shown = C.seeded()
     let notifier = FakePushNotifier()
     shown.model.pushNotifier = notifier
-    let meeting = MeetingCardController(model: shown.model, headless: true, isSlotBusy: { false })
-    shown.model.onSessionEnded = { [weak meeting, weak model = shown.model] in
-        meeting?.reset()
-        model?.pushNotifier.clearAll()
-    }
-    let meetingShown = meeting.present(C.event)
-    let before = meeting.state.event?.id
+    shown.model.onSessionEnded = { [weak model = shown.model] in model?.pushNotifier.clearAll() }
     shown.model.signOut()
-    check("control: the meeting card shows its event",
-          meetingShown && before == "ev-A")
-    check("sign-out takes the meeting card down and empties it",
-          meeting.state.event == nil && meeting.state.pack == nil && !meeting.isVisible)
     check("sign-out clears the previous account's banners from Notification Center",
           notifier.clearCount == 1)
 
@@ -105,12 +88,11 @@ func sessionCardSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
         let sent = await stamped.model.sendReply(item, body: "hello", session: oldStamp)
         let snoozed = await stamped.model.snooze(item, session: oldStamp)
         let options = await stamped.model.fetchReplyOptions(item, session: oldStamp)
-        let pack = await stamped.model.fetchPrepPack(eventId: "ev-A", session: oldStamp)
         var optionsRefused = false
         if case .failed = options { optionsRefused = true }
-        refused = sent != nil && snoozed == nil && optionsRefused && pack == nil
+        refused = sent != nil && snoozed == nil && optionsRefused
     }
-    check("reply, snooze, drafts and prep pack stamped with an ended session issue no request",
+    check("reply, snooze and drafts stamped with an ended session issue no request",
           refused && Stub.calls.count == callsBefore
           && stamped.model.queue?.items(for: .push).map(\.id) == ["p1"])
     var sentNow: String? = "not run"
@@ -175,9 +157,9 @@ func sessionCardSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
         files.first { $0.lastPathComponent == name }
             .flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? ""
     }
-    check("the app tears the meeting card and the OS banners down with the session",
+    check("the app tears the OS banners down with the session",
           text("KlornApp.swift").contains(
-              "model.onSessionEnded = { [weak meetingCard, weak model] in\n            meetingCard?.reset()\n            model?.pushNotifier.clearAll()\n        }")
+              "model.onSessionEnded = { [weak model] in\n            model?.pushNotifier.clearAll()\n        }")
           && text("Notifications.swift").contains("center.removeAllDeliveredNotifications()\n        center.removeAllPendingNotificationRequests()")
           && text("AppModel.swift").components(separatedBy: "onSessionEnded?()").count == 3)
     let goneTap = PushNotifier.tapAction(
@@ -186,7 +168,5 @@ func sessionCardSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
           goneTap == .openApp
           && text("WindowRouter.swift").contains("let queue = model.queue\n")
           && text("WindowRouter.swift").contains("found = queue?.item(id: id)"))
-    check("the meeting card's prep pack carries the card's session stamp",
-          text("MeetingCardController.swift").contains("fetchPrepPack(eventId: event.id, session: stamp)"))
     return results
 }

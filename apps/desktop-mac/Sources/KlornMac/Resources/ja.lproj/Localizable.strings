@@ -31,10 +31,6 @@
 "calendar.join" = "参加";
 "calendar.join.a11y" = "%@ に参加";
 "calendar.openInKlorn" = "Klornで開く";
-"calendar.startingSoon" = "まもなく開始";
-"calendar.prepPack" = "準備資料を作成中…";
-"calendar.card.a11y" = "次の会議カード";
-"calendar.dismiss.a11y" = "会議カードを閉じる";
 "calendar.addToCalendar" = "カレンダーに追加";
 "calendar.ignore" = "無視";
 "calendar.proposed.a11y" = "提案された予定: %@";
@@ -313,7 +309,6 @@
 "error.badResponse" = "サーバーから予期しない応答がありました。";
 "error.needsPro" = "この操作にはKlorn Proが必要です。";
 "error.generic" = "問題が発生しました。";
-"meeting.needsReview" = "確認が必要";
 "mail.inboxPrimary" = "メイン";
 "mail.inboxLinked" = "連携した受信トレイ";
 "mail.unknownSender" = "（差出人不明）";
@@ -343,6 +338,7 @@
 
 /* Meeting <-> calendar cross-reference (2026-08-13) */
 "meeting.alternatives" = "両者空き: %@";
+"meeting.banner.body" = "%d分後に始まります。";
 "meeting.proposedSlot" = "提案: %@";
 "meeting.slotFree" = "その時間はカレンダーが空いています";
 "meeting.slotBusy" = "既存の予定と重なります";

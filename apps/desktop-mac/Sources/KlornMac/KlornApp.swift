@@ -62,7 +62,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     let model = AppModel()
     private var router: WindowRouter?
     private var alerter: PushAlerter?
-    private var meetingCard: MeetingCardController?
     private var hotKey: HotKey?
     private var settingsOpener: SettingsOpener?
     private var mainWindow: MainWindowController?
@@ -157,16 +156,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         let alerter = PushAlerter(model: model)
         self.alerter = alerter
         model.onNewPush = { [weak alerter] items in alerter?.handleNewPush(items) }
-        // Meeting-prep card. Nothing else shares its slot now.
-        let meetingCard = MeetingCardController(model: model, isSlotBusy: { false })
-        model.onMeetingSoon = { [weak meetingCard] event in
-            meetingCard?.present(event) ?? false
-        }
-        self.meetingCard = meetingCard
-        // Sign-out (or another account signing in): the card and the banners
-        // still show the account that left. Take them down with the session.
-        model.onSessionEnded = { [weak meetingCard, weak model] in
-            meetingCard?.reset()
+        // A meeting entering its lead window is a banner too (the floating
+        // meeting card was removed, 2026-10-15: no floating Klorn surfaces).
+        model.onMeetingSoon = { [weak alerter] event in alerter?.handleMeetingSoon(event) ?? false }
+        // Sign-out (or another account signing in): the banners still show
+        // the account that left. Take them down with the session.
+        model.onSessionEnded = { [weak model] in
             model?.pushNotifier.clearAll()
         }
         // No account yet: the onboarding window. Signing in there continues

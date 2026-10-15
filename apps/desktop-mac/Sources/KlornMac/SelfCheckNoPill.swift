@@ -4,7 +4,8 @@ import Foundation
 // Self-check for the 2026-10-15 founder decision (LOCKED): no pill, no
 // expanded panel — Klorn on Mac is a standard app (main window + Dock icon)
 // and PUSH mail is announced with macOS notification banners. Run by
-// `KlornMac --self-check`. Nothing here posts a real banner, raises a real
+// `KlornMac --self-check`. The meeting card went too: no floating Klorn
+// surfaces at all. Nothing here posts a real banner, raises a real
 // permission prompt, opens a window or touches the Keychain: the window and
 // the notification center sit behind seams with fakes below.
 
@@ -354,20 +355,90 @@ func noPillSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
     check("the main-window switch is gone from Settings",
           !prefs.contains("MainWindowToggle") && !text("MainWindow.swift").contains("MainWindowToggle"))
 
-    // MARK: the meeting card's own geometry (it used the urgent-mail card's)
-    let target = NSRect(x: 100, y: 100, width: 460, height: 344)
-    let start = MeetingCardMetrics.presentStartFrame(target: target)
-    let screen = NSRect(x: 0, y: 0, width: 1512, height: 950)
-    let frame = MeetingCardMetrics.cardFrame(size: MeetingCardMetrics.compact, visible: screen)
-    check("the meeting card unrolls from its top edge, centered",
-          start.maxY == target.maxY && start.height < target.height
-          && abs(start.midX - target.midX) < 0.5)
-    check("the meeting card sits top-center, just under the menu bar",
-          frame.midX == screen.midX && frame.maxY == screen.maxY - MeetingCardMetrics.topOffset)
+    // MARK: no floating Klorn surfaces (meeting card removed too)
+    // Type scan: the only windows the app may create are the main window
+    // (and its sheets), onboarding and compose; Settings is the SwiftUI
+    // scene. No NSPanel, no floating level, no all-Spaces overlay.
+    var windowMakers: Set<String> = []
+    var floatingOffenders: Set<String> = []
+    for url in shipping {
+        let source = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        let name = url.lastPathComponent
+        if source.contains("NSWin" + "dow(") || source.contains(": NS" + "Window {")
+            || source.contains("NSPanel")
+        {
+            windowMakers.insert(name)
+        }
+        if ["NSPanel", ".floating", "isFloatingPanel", "canJoinAllSpaces",
+            "nonactivatingPanel", "orderFrontRegardless"].contains(where: source.contains)
+        {
+            floatingOffenders.insert(name)
+        }
+    }
+    check("only the main, onboarding and compose windows are ever created (Settings is a scene)",
+          windowMakers == ["MainWindow.swift", "OnboardingWindow.swift", "ComposeWindow.swift"])
+    check("no NSPanel, floating level or all-Spaces overlay anywhere", floatingOffenders.isEmpty)
+    if !floatingOffenders.isEmpty { print("    floating: \(floatingOffenders.sorted())") }
+    check("the meeting card files are gone",
+          !shipping.contains { ["MeetingCard.swift", "MeetingCardController.swift"].contains($0.lastPathComponent) }
+          && users(of: "MeetingCard").isEmpty && users(of: "GlassPanel").isEmpty)
+
+    // MARK: meeting banners
+    let meetingStartISO = "2026-10-15T09:10:00Z"
+    let meetingNow = ISO8601DateFormatter().date(from: "2026-10-15T09:02:00Z")!
+    let standup = CalendarEventWire(
+        id: "ev-9",
+        title: "Standup", startTime: meetingStartISO, endTime: "2026-10-15T09:30:00Z",
+        location: "Room 4", meetingLink: "https://meet.example/x", allDay: false)
+    let meetingBanner = MeetingBanner.make(for: standup, now: meetingNow, time: { _ in "9:10" })
+    check("a meeting banner says the title and start time, and the minutes left",
+          meetingBanner.title == "Standup · 9:10"
+          && meetingBanner.body == L("meeting.banner.body", 8)
+          && meetingBanner.identifier == PushNotifier.meetingIdentifier(for: "ev-9"))
+    check("a meeting banner carries no location, link or description",
+          !meetingBanner.body.contains("Room") && !meetingBanner.body.contains("http")
+          && !meetingBanner.title.contains("Room"))
+    let meetingModel = AppModel(tokenStore: InMemoryTokenStore())
+    let meetingFake = FakePushNotifier()
+    meetingModel.pushNotifier = meetingFake
+    let meetingAlerter = PushAlerter(model: meetingModel, announce: { _ in })
+    meetingModel.settings.notificationsEnabled = true
+    let handledOn = meetingAlerter.handleMeetingSoon(standup, now: meetingNow)
+    meetingModel.settings.notificationsEnabled = false
+    let handledOff = meetingAlerter.handleMeetingSoon(standup, now: meetingNow)
+    meetingModel.settings.notificationsEnabled = true
+    check("the banner switch gates meeting banners too; a muted one is still handled once",
+          handledOn && handledOff && meetingFake.posted.map(\.identifier) == [meetingBanner.identifier])
+    let meetingLedger = PushLedger.fresh(owner: "u1").recording("ev-9")
+    check("each meeting is announced once per account, across launches",
+          meetingAlertPlan(now: meetingNow, events: [standup], leadMinutes: 10,
+                           shown: Set(meetingLedger.notified)) == nil
+          && meetingAlertPlan(now: meetingNow, events: [standup], leadMinutes: 10, shown: [])?.id == "ev-9"
+          && meetingLedger.recording("ev-9").notified == ["ev-9"]
+          && UserDefaultsPushLedgerStore.meetingKey != UserDefaultsPushLedgerStore.key)
+    check("the meeting ledger is saved only after the banner is handled, and the Meetings category gates it",
+          text("AppModel.swift").contains("onMeetingSoon?(due) == true\n        {\n            meetingAlertStore.save(announced.recording(due.id))")
+          && text("AppModel.swift").contains("if automation.allowsInterrupt(for: .meeting),")
+          && app.contains("model.onMeetingSoon = { [weak alerter] event in alerter?.handleMeetingSoon(event) ?? false }"))
+    check("a meeting banner tap opens the main window on Calendar",
+          PushNotifier.tapAction(identifier: PushNotifier.meetingIdentifier(for: "ev-9"), isKnownItem: { _ in true })
+              == .openMeeting(eventID: "ev-9"))
+    do {
+        let (r, w, _, m) = router(signedIn: true)
+        m.navigate(to: .today)
+        r.handleNotificationTap(identifier: PushNotifier.meetingIdentifier(for: "ev-9"))
+        check("routing a meeting tap: window opened, Calendar showing",
+              w.opens == [true] && m.mainNav.section == .calendar)
+    }
+    do {
+        let signedOutModel = AppModel(tokenStore: InMemoryTokenStore(token: "t"))
+        signedOutModel.signOut()
+        check("sign-out forgets the meeting ledger", signedOutModel.meetingAlertStore.load() == nil)
+    }
 
     // MARK: strings
     let newKeys = ["push.announce", "prefs.section.support", "prefs.banners.denied",
-                   "prefs.banners.openSystemSettings"]
+                   "prefs.banners.openSystemSettings", "meeting.banner.body"]
     check("new strings exist in every locale",
           ["en", "ko", "de", "es", "fr", "ja", "zh"].allSatisfy { locale in
               let strings = (try? String(

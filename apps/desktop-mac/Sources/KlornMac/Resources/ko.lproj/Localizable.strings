@@ -31,10 +31,6 @@
 "calendar.join" = "참여";
 "calendar.join.a11y" = "%@ 참여";
 "calendar.openInKlorn" = "Klorn에서 열기";
-"calendar.startingSoon" = "곧 시작";
-"calendar.prepPack" = "준비 자료를 만드는 중…";
-"calendar.card.a11y" = "다가오는 회의 카드";
-"calendar.dismiss.a11y" = "회의 카드 지우기";
 "calendar.addToCalendar" = "캘린더에 추가";
 "calendar.ignore" = "무시";
 "calendar.proposed.a11y" = "제안된 일정: %@";
@@ -313,7 +309,6 @@
 "error.badResponse" = "서버 응답을 이해하지 못했습니다.";
 "error.needsPro" = "이 기능은 Klorn Pro가 필요합니다.";
 "error.generic" = "문제가 발생했습니다.";
-"meeting.needsReview" = "확인 필요";
 "mail.inboxPrimary" = "기본";
 "mail.inboxLinked" = "연결된 수신함";
 "mail.unknownSender" = "(발신자 없음)";
@@ -343,6 +338,7 @@
 
 /* Meeting <-> calendar cross-reference (2026-08-13) */
 "meeting.alternatives" = "함께 가능한 시간: %@";
+"meeting.banner.body" = "%d분 후 시작합니다.";
 "meeting.proposedSlot" = "제안 시간: %@";
 "meeting.slotFree" = "캘린더에서 비어 있는 시간";
 "meeting.slotBusy" = "기존 일정과 겹침";

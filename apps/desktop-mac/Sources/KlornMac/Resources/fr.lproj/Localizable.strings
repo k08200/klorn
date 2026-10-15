@@ -31,10 +31,6 @@
 "calendar.join" = "Rejoindre";
 "calendar.join.a11y" = "Rejoindre %@";
 "calendar.openInKlorn" = "Ouvrir dans Klorn";
-"calendar.startingSoon" = "Commence bientôt";
-"calendar.prepPack" = "Préparation de votre dossier…";
-"calendar.card.a11y" = "Carte de la prochaine réunion";
-"calendar.dismiss.a11y" = "Ignorer la carte de réunion";
 "calendar.addToCalendar" = "Ajouter au calendrier";
 "calendar.ignore" = "Ignorer";
 "calendar.proposed.a11y" = "Événement proposé : %@";
@@ -313,7 +309,6 @@
 "error.badResponse" = "Réponse inattendue du serveur.";
 "error.needsPro" = "Cette action nécessite Klorn Pro.";
 "error.generic" = "Un problème est survenu.";
-"meeting.needsReview" = "À vérifier";
 "mail.inboxPrimary" = "Principale";
 "mail.inboxLinked" = "Boîte liée";
 "mail.unknownSender" = "(expéditeur inconnu)";
@@ -343,6 +338,7 @@
 
 /* Meeting <-> calendar cross-reference (2026-08-13) */
 "meeting.alternatives" = "Tous deux libres : %@";
+"meeting.banner.body" = "Commence dans %d min.";
 "meeting.proposedSlot" = "Proposé : %@";
 "meeting.slotFree" = "Ce créneau est libre dans votre agenda";
 "meeting.slotBusy" = "Chevauche un événement existant";

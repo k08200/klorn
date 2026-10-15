@@ -1,7 +1,6 @@
 import AppKit
 
-/// Screen-fit rules shared by the app's windows (main, compose, meeting
-/// card). Pure, so the self-check pins them without a window server.
+/// Screen-fit rule shared by the app's windows (main, compose). Pure, so the self-check pins them without a window server.
 enum WindowGeometry {
     /// Shrink `frame` to fit `visible`, then shift it fully on-screen
     /// (top-priority: the title bar at the top must stay reachable — the
@@ -16,8 +15,4 @@ enum WindowGeometry {
         if f.minX < visible.minX { f.origin.x = visible.minX }
         return f
     }
-
-    /// Animate a frame change unless the user asked for reduced motion
-    /// (WCAG 2.3.3).
-    nonisolated static func shouldAnimateFrame(reduceMotion: Bool) -> Bool { !reduceMotion }
 }

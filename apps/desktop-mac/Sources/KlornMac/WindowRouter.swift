@@ -144,6 +144,10 @@ final class WindowRouter {
             if let item = found { openInApp(item) } else { openMainWindow() }
         case .openApp:
             openMainWindow()
+        case .openMeeting:
+            // The calendar shows the day's events with their join links.
+            openMainWindow()
+            model.navigate(to: .calendar)
         }
     }
 

@@ -31,10 +31,6 @@
 "calendar.join" = "加入";
 "calendar.join.a11y" = "加入 %@";
 "calendar.openInKlorn" = "在 Klorn 中打开";
-"calendar.startingSoon" = "即将开始";
-"calendar.prepPack" = "正在准备会前资料…";
-"calendar.card.a11y" = "即将开始的会议卡片";
-"calendar.dismiss.a11y" = "关闭会议卡片";
 "calendar.addToCalendar" = "添加到日历";
 "calendar.ignore" = "忽略";
 "calendar.proposed.a11y" = "建议的日程：%@";
@@ -313,7 +309,6 @@
 "error.badResponse" = "服务器返回了意外的响应。";
 "error.needsPro" = "此操作需要 Klorn Pro。";
 "error.generic" = "出了点问题。";
-"meeting.needsReview" = "需要确认";
 "mail.inboxPrimary" = "主账户";
 "mail.inboxLinked" = "已连接的收件箱";
 "mail.unknownSender" = "（发件人未知）";
@@ -343,6 +338,7 @@
 
 /* Meeting <-> calendar cross-reference (2026-08-13) */
 "meeting.alternatives" = "双方都有空：%@";
+"meeting.banner.body" = "%d 分钟后开始。";
 "meeting.proposedSlot" = "建议：%@";
 "meeting.slotFree" = "你的日历上这个时段是空的";
 "meeting.slotBusy" = "与已有日程冲突";

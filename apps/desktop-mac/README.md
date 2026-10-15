@@ -8,7 +8,8 @@ screen). Lanes only classify; a banner is informational and acts on nothing.
 > **Founder decision 2026-10-15 (LOCKED):** the top-bar pill and the expanded
 > panel are removed. This supersedes FD-5 "the pill stays" and the older
 > Cmd+Tab compromise (`.accessory` while collapsed). Never reintroduce a
-> pill, a floating bar or an always-on-top surface for mail.
+> pill, a floating bar, a floating card or any always-on-top surface. The
+> meeting-prep card went in the same change: meetings are banners too.
 
 This replaces the old Electron `packages/desktop` shell. It's a Swift Package
 (text-based, reproducible, diffable) rather than an `.xcodeproj` — a deliberate
@@ -105,10 +106,9 @@ signed out or signing in it ends nothing, so it cannot discard a sign-in in
 flight. The poll loop starts with the session, so a sign-in whose first load
 fails recovers on the next tick.
 
-The meeting card is taken down with the session (`onSessionEnded`), along
-with delivered OS banners and the PUSH ledger (see below). Reply, snooze,
-drafts and the prep pack are refused for a session stamp that has ended,
-before any request.
+Delivered OS banners are taken down with the session (`onSessionEnded`), and
+sign-out clears the PUSH and meeting ledgers (see below). Reply, snooze and
+drafts are refused for a session stamp that has ended, before any request.
 
 ### PUSH notifications
 
@@ -137,6 +137,22 @@ before any request.
   Settings*.
 - An unbundled `swift run` has no notification center: banners are logged
   and skipped.
+
+### Meeting banners
+
+The floating meeting-prep card is gone (no floating Klorn surfaces). When a
+timed event enters its 10-minute lead window (`meetingAlertPlan`), one banner
+goes through the same `PushNotifying` seam: title = meeting title · start
+time, body = "Starts in N min." — no description, location, link or mail
+content. Each event id is announced once per account across launches
+(`PushLedger` under `klorn.meeting.ledger`). The same banner switch and the
+*Meetings* interrupt category gate it. Clicking opens the main window on
+Calendar, where the event and its join link are.
+
+The only windows Klorn creates are the main window (and its sheets),
+onboarding and compose; Settings is the SwiftUI scene. The self-check scans
+the sources for any other window, `NSPanel`, floating level or all-Spaces
+overlay.
 
 ### Keyboard
 
@@ -434,7 +450,8 @@ A full XCTest suite can be added when building under Xcode/CI.
 | `Shell/MainSheets.swift` | the main window's sheets (M5): `MainSheet`, `MainSheetRules`, the shared modal-card chrome (`modalCard`) |
 | `AppCommands.swift` | app menus (`.commands`) and their pure enablement/shortcut rules |
 | `ListKeys.swift` | mail list keyboard (M3): pure key rules, the window-scoped key catcher |
-| `WindowGeometry.swift` | the on-screen clamp shared by the windows, reduce-motion rule |
+| `WindowGeometry.swift` | the on-screen clamp shared by the windows |
+| `MeetingSupport.swift` | `MeetingLink` (join-link gate), `meetingAlertPlan`, `meetingStart` |
 | `HotKey.swift` | Carbon `RegisterEventHotKey` global shortcut (`⌥⌘K`) |
 | `RealtimeClient.swift` | WebSocket wake channel (reuses the API's `/ws` hub) |
 | `AppModel.swift` | `@MainActor @Observable` state (auth, queue, poll, snooze/dismiss) |

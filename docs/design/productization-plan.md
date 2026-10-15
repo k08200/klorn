@@ -89,7 +89,7 @@ SourceBadge is a neutral monochrome glyph (G, M, N, iC, IMAP, K). Calendar colou
 is a 3px left bar. Category labels are neutral.
 
 Elevation: L0 canvas, L1 hairline, L2 `0 8 24 12%`, L3 `0 24 48 18%` plus 40%
-scrim. Glass only on floating cards and the command palette (the mac pill was removed 2026-10-15).
+scrim. Glass only on the command palette (the mac pill and floating cards were removed 2026-10-15).
 
 Motion: 120ms state, 200ms enter, 160ms exit, `--ease-fluid`; no springs (the
 mac pill that had them was removed 2026-10-15); reduced-motion falls back to fade.
@@ -187,7 +187,8 @@ Nothing in the URL chooses a destination and `safeNextPath` is untouched.
 > Klorn on Mac is a standard app — one main window plus a Dock icon, activation
 > policy always `.regular` — and PUSH mail is announced with standard macOS
 > notification banners (sender + subject; click opens the main window on that
-> mail). The urgent-mail card and the menu-bar status item went with the pill.
+> mail). The urgent-mail card, the meeting-prep card (now a banner too) and the
+> menu-bar status item went with the pill: no floating Klorn surfaces.
 > Closing the window keeps the app running; a login launch opens no window
 > unless it was open at quit. Reason: after desktop-v0.4.80105 three Klorn
 > surfaces showed at once, and the pill never goes away. Details in
@@ -212,7 +213,7 @@ This reverses the HUD-only full view in `REBUILD_BLUEPRINT.md` §2/§4.
 | M6 | Logged-out, error and onboarding states |
 | M7 | Tokens |
 | M8 | Flip the flag; delete `BarState.full` |
-| M9 (2026-10-15) | Delete the pill, the expanded panel, the urgent-mail card and the status item; always `.regular`; PUSH via notification banners; remove `macMainWindow` |
+| M9 (2026-10-15) | Delete the pill, the expanded panel, the urgent-mail and meeting cards and the status item; meetings as banners; always `.regular`; PUSH via notification banners; remove `macMainWindow` |
 
 `REBUILD_BLUEPRINT.md` is rewritten after M-series sign-off.
 
