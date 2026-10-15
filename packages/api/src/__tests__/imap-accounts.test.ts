@@ -75,6 +75,24 @@ describe("syncImapAccountsForUser", () => {
     );
   });
 
+  it("rowId scopes the fan-out to that one row of the caller (first sync after connect)", async () => {
+    m.findMany.mockResolvedValue([]);
+    const { syncImapAccountsForUser } = await import("../mail/imap-accounts.js");
+    await syncImapAccountsForUser("u1", NAVER, { rowId: "row-new" });
+    expect(m.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: "u1", provider: "NAVER", id: "row-new" } }),
+    );
+  });
+
+  it("without rowId the fan-out covers every row (no id filter)", async () => {
+    m.findMany.mockResolvedValue([]);
+    const { syncImapAccountsForUser } = await import("../mail/imap-accounts.js");
+    await syncImapAccountsForUser("u1", NAVER);
+    expect(m.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: "u1", provider: "NAVER" } }),
+    );
+  });
+
   it("syncs each NAVER row with its own decrypted password and row id", async () => {
     m.findMany.mockResolvedValue([
       naverRow(),
