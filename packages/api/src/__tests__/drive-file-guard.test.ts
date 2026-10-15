@@ -395,6 +395,8 @@ describe("drive text reaches an LLM only wrapped", () => {
     // Loads summary-run.ts on demand; imports nothing from the LLM itself.
     "drive/summary-triggers.ts",
     "purge-user-data.ts",
+    // Reads only whether any drive source is on (user.files on /me, P12); no rows.
+    "routes/auth.ts",
     "routes/drive.ts",
     "routes/klorn-drive.ts",
   ];

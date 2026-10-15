@@ -23,11 +23,13 @@ import {
   mailV2Enabled,
   naverLoginEnabled,
   onboardingV2Enabled,
+  teamModeEnabled,
   unifiedHomeEnabled,
 } from "../config.js";
 import { encryptOptional, encryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
 import { withDbRetry } from "../db-retry.js";
+import { visibleDriveProviders } from "../drive/drive-scope.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../mail/email.js";
 import { syncLinkedInboxesForUser } from "../mail/email-sync.js";
 import {
@@ -731,6 +733,15 @@ export function authRoutes(app: FastifyInstance) {
           // the web renders /onboarding as the multi-provider first run only
           // when this is true.
           onboardingV2: onboardingV2Enabled(),
+          // Server-driven client flag (productization plan P12, FD-7): the
+          // Files tab and Today's recent files show only while the drive is on
+          // and at least one of its sources is (DRIVE_ENABLED plus a
+          // connector's own flag), the same switch every drive reader honours.
+          files: visibleDriveProviders().length > 0,
+          // Server-driven client flag (TEAM_MODE_ENABLED, P12): the web offers
+          // "When is everyone free?" only when this is true and the user has a
+          // saved team. /api/teams answers 403 TEAM_REQUIRED while it is off.
+          teamMode: teamModeEnabled(),
         },
       });
     } catch {
