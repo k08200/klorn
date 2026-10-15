@@ -50,8 +50,9 @@ export async function summaryForFile(
 }
 
 /**
- * Summarise the user's file now if it is due (new, changed, or FAILED, which
- * this retries), and answer its state. Null when the file is not the user's,
+ * Summarise the user's file now if it is due (new, changed, FAILED but not
+ * `interrupted`, or waiting out an outage, whose wait this lifts), and answer
+ * its state. Null when the file is not the user's,
  * not visible or gone: the route's 404. A cap still holds: a deferred summary
  * stays PENDING with its reason.
  */
@@ -68,7 +69,7 @@ export async function requestDriveSummary(
     userId,
     source.id,
     source.etag,
-    { retryFailed: true },
+    { onDemand: true },
     now,
   );
   const lease = row.status === "PENDING" ? await claimSummary(row, now) : null;

@@ -43,6 +43,13 @@ export const DRIVE_SUMMARY_RETRY_MAX_MS = 6 * 60 * 60_000;
 export const DRIVE_SUMMARY_OUTAGE_MAX_MS = 24 * 60 * 60_000;
 /** The longest one model call may take: well inside the lease, so a run never outlives it. */
 export const DRIVE_SUMMARY_LLM_TIMEOUT_MS = 90_000;
+/** The longest a storage read (the object and all its bytes) may take; likewise inside the lease. */
+export const DRIVE_SUMMARY_READ_TIMEOUT_MS = 60_000;
+/**
+ * A file that cannot be read for now (trashed, its provider hidden, storage off):
+ * looked at again after this, doubling up to a day. Not an attempt.
+ */
+export const DRIVE_SUMMARY_SOURCE_DELAY_MS = 60 * 60_000;
 /** How long a claimed row is held by its claimant before another may take it. */
 export const DRIVE_SUMMARY_LEASE_MS = 5 * 60_000;
 /** A provider's per-minute limit: try again after this, without counting an attempt. */
@@ -77,6 +84,12 @@ export function utcDayKeyBefore(now: Date, days: number): string {
 export function summaryRetryDelayMs(attempts: number): number {
   const exponent = Math.max(0, Math.min(attempts - 1, 20));
   return Math.min(DRIVE_SUMMARY_RETRY_BASE_MS * 2 ** exponent, DRIVE_SUMMARY_RETRY_MAX_MS);
+}
+
+/** The wait for a file that cannot be read for now, after `streak` such waits in a row. */
+export function summarySourceDelayMs(streak: number): number {
+  const exponent = Math.max(0, Math.min(streak, 20));
+  return Math.min(DRIVE_SUMMARY_SOURCE_DELAY_MS * 2 ** exponent, DRIVE_SUMMARY_OUTAGE_MAX_MS);
 }
 
 /** The wait after `streak` outages in a row before this one (0-based): doubling, capped at a day. */

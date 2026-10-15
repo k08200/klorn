@@ -44,6 +44,7 @@ import {
   DRIVE_SUMMARY_OUTAGE_MAX_MS,
   DRIVE_SUMMARY_RETRY_BASE_MS,
   DRIVE_SUMMARY_RUNS_PER_FILE_PER_DAY,
+  DRIVE_SUMMARY_SOURCE_DELAY_MS,
 } from "../drive/summary-policy.js";
 import { runClaimedSummary } from "../drive/summary-run.js";
 import {
@@ -181,10 +182,66 @@ describe("the queue: one row per file, at the file's version", () => {
       ME,
       file.id as string,
       file.etag as string,
-      { retryFailed: true },
+      { onDemand: true },
       NOW,
     );
     expect(summaryOf(file.id)).toMatchObject({ status: "PENDING", error: null, attempts: 0 });
+  });
+
+  it("on demand never revives an interrupted row (a poison file); only new content does", async () => {
+    const file = await storedFile("hello");
+    await queued(file);
+    Object.assign(summaryOf(file.id) as Row, {
+      status: "FAILED",
+      error: "interrupted",
+      attempts: 5,
+    });
+    await enqueueDriveFileSummary(
+      ME,
+      file.id as string,
+      file.etag as string,
+      { onDemand: true },
+      NOW,
+    );
+    expect(summaryOf(file.id)).toMatchObject({
+      status: "FAILED",
+      error: "interrupted",
+      attempts: 5,
+    });
+    await enqueueDriveFileSummary(
+      ME,
+      file.id as string,
+      "sha256:new-bytes",
+      { onDemand: true },
+      NOW,
+    );
+    expect(summaryOf(file.id)).toMatchObject({ status: "PENDING", error: null, attempts: 0 });
+  });
+
+  it("on demand lifts an outage's backoff, never a cap's or a live lease's", async () => {
+    const file = await storedFile("hello");
+    await queued(file);
+    const later = new Date(NOW.getTime() + 6 * 3_600_000);
+    const set = (over: Row) => Object.assign(summaryOf(file.id) as Row, over);
+    const ask = () =>
+      enqueueDriveFileSummary(ME, file.id as string, file.etag as string, { onDemand: true }, NOW);
+    set({ status: "PENDING", error: "llm-unavailable", outageStreak: 7, nextAttemptAt: later });
+    await ask();
+    expect(summaryOf(file.id)).toMatchObject({ nextAttemptAt: NOW, outageStreak: 0, attempts: 0 });
+    set({ error: "daily-limit", nextAttemptAt: later });
+    await ask();
+    expect(summaryOf(file.id)).toMatchObject({ error: "daily-limit", nextAttemptAt: later });
+    set({ error: null, nextAttemptAt: later }); // a claimed row: the claim clears the code
+    await ask();
+    expect(summaryOf(file.id)).toMatchObject({ nextAttemptAt: later });
+  });
+
+  it("a claim clears the code, so a live lease never reads as an outage", async () => {
+    const file = await storedFile("hello");
+    await queued(file);
+    Object.assign(summaryOf(file.id) as Row, { error: "llm-unavailable" });
+    await leaseOf(file);
+    expect(summaryOf(file.id)).toMatchObject({ error: null });
   });
 
   it("is scoped to its user: another user's file is neither found nor queued", async () => {
@@ -367,17 +424,60 @@ describe("one run", () => {
     expect(summaryOf(file.id)).toMatchObject({ status: "FAILED", error: "object-missing" });
   });
 
-  it("a hidden or trashed file is skipped, not deferred again every hour", async () => {
-    const hidden = await storedFile("hello");
-    const trashed = await storedFile("bye", { trashed: true });
+  it("a trashed file waits (no attempt, a long backoff) and is summarised once restored", async () => {
+    const file = await storedFile("hello", { trashed: true });
+    expect(await runOne(file)).toBe("waiting");
+    const row = summaryOf(file.id) as Row;
+    expect(row).toMatchObject({ status: "PENDING", error: "source-unavailable", attempts: 0 });
+    const wait = (row.nextAttemptAt as Date).getTime() - NOW.getTime();
+    expect(wait).toBe(DRIVE_SUMMARY_SOURCE_DELAY_MS);
+    Object.assign(db.tables.driveFile.find((r) => r.id === file.id) as Row, { trashed: false });
+    const later = row.nextAttemptAt as Date;
+    expect(await runLease(await leaseOf(file, later), later)).toBe("done");
+    expect(llm.calls).toHaveLength(1);
+  });
+
+  it("object storage switched OFF then ON: the file waits, then is summarised", async () => {
+    const file = await storedFile("hello");
     vi.stubEnv("OBJECT_STORAGE_ENABLED", "");
-    expect(await runOne(hidden)).toBe("skipped");
+    expect(await runOne(file)).toBe("waiting");
+    expect(summaryOf(file.id)).toMatchObject({
+      status: "PENDING",
+      error: "source-unavailable",
+      attempts: 0,
+    });
     vi.stubEnv("OBJECT_STORAGE_ENABLED", "true");
-    expect(await runOne(trashed)).toBe("skipped");
-    for (const file of [hidden, trashed]) {
-      expect(summaryOf(file.id)).toMatchObject({ status: "SKIPPED", error: "source-unavailable" });
-    }
-    expect(llm.calls).toEqual([]);
+    const later = summaryOf(file.id)?.nextAttemptAt as Date;
+    expect(await runLease(await leaseOf(file, later), later)).toBe("done");
+  });
+
+  it("a connector that is not connected right now: the file waits, not an attempt", async () => {
+    const file = fileRow({ provider: "GOOGLE", sourceKey: "acct-1", storageKey: null });
+    db.tables.driveFile.push(file);
+    await queued(file);
+    const options = {
+      priority: "background" as const,
+      now: NOW,
+      providerEnabled: { GOOGLE: () => true },
+      implementations: { GOOGLE: { provider: "GOOGLE" as const, connect: async () => null } },
+    };
+    expect(await runClaimedSummary(await leaseOf(file), options)).toBe("waiting");
+    expect(summaryOf(file.id)).toMatchObject({
+      status: "PENDING",
+      error: "source-unavailable",
+      attempts: 0,
+    });
+  });
+
+  it("a provider rejection (a 4xx that is not 402/408/429) is a content error: it spends the budget", async () => {
+    llm.result = { ok: false, code: "llm-rejected" };
+    const file = await storedFile("hello");
+    expect(await runOne(file)).toBe("retry");
+    expect(summaryOf(file.id)).toMatchObject({
+      status: "PENDING",
+      error: "llm-rejected",
+      attempts: 1,
+    });
   });
 });
 

@@ -220,6 +220,41 @@ describe("while DRIVE_SUMMARIES_ENABLED is on", () => {
     await uploadText("second.txt");
   });
 
+  it("once credits return, asking again runs at once: an outage's backoff does not hold it for a day", async () => {
+    llm.result = { ok: false, code: "llm-unavailable" };
+    const file = await uploadText();
+    expect((await summarize(file.id)).json().summary).toMatchObject({
+      status: "PENDING",
+      error: "llm-unavailable",
+    });
+    llm.result = { ok: true, summary: SUMMARY, model: "m", costMicroCents: 1 };
+    expect((await summarize(file.id)).json().summary).toMatchObject({
+      status: "DONE",
+      text: SUMMARY,
+    });
+    expect(llm.calls).toHaveLength(2);
+  });
+
+  it("asking does not revive an interrupted (poison) file", async () => {
+    const file = await uploadText();
+    const row = holder.db?.tables.driveFileSummary.find((r) => r.driveFileId === file.id);
+    Object.assign(row ?? {}, { status: "FAILED", error: "interrupted", attempts: 5 });
+    const res = await summarize(file.id);
+    expect(res.json().summary).toMatchObject({ status: "FAILED", error: "interrupted" });
+    expect(llm.calls).toEqual([]);
+  });
+
+  it("a failing summary read answers the file without its summary, never a 500", async () => {
+    const file = await uploadText();
+    const summaries = holder.db?.model("driveFileSummary");
+    if (!summaries) throw new Error("no db");
+    vi.spyOn(summaries, "findUnique").mockRejectedValue(new Error("summary table unreachable"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await getFile(file.id);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ file: expect.objectContaining({ id: file.id }) });
+  });
+
   it("a queue failure never fails the upload", async () => {
     const summaries = holder.db?.model("driveFileSummary");
     if (!summaries) throw new Error("no db");

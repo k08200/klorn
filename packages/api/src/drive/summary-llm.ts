@@ -49,7 +49,25 @@ export type DriveSummaryFailure =
   | "daily-limit"
   | "rate-limited"
   | "llm-unavailable"
-  | "llm-bad-output";
+  | "llm-bad-output"
+  | "llm-rejected";
+
+/**
+ * Provider statuses that are not about this request's content: no credits (402),
+ * a timeout (408), a rate limit (429), and a key or permission problem (401,
+ * 403), which hits every file alike (a key rotation must not FAIL them all).
+ * Any other 4xx is about the request itself: a content error.
+ */
+const NOT_CONTENT_4XX = new Set([401, 402, 403, 408, 429]);
+
+/** The HTTP status of a provider error, raw or as the exhausted chain's cause. */
+function providerStatus(err: unknown): number | null {
+  for (const candidate of [err, (err as { cause?: unknown } | null)?.cause]) {
+    const status = (candidate as { status?: unknown } | null)?.status;
+    if (typeof status === "number") return status;
+  }
+  return null;
+}
 
 export type DriveSummaryResult =
   | {
@@ -104,8 +122,15 @@ function failureOf(err: unknown): Extract<DriveSummaryResult, { ok: false }> {
       ? { ok: false, code: "daily-limit" }
       : { ok: false, code: "rate-limited", retryAfterMs: err.retryAfterMs };
   }
-  // Every provider failing (#1319: no OpenRouter credits), no provider at all, a
-  // network error: the job retries with backoff and gives up as FAILED.
+  const status = providerStatus(err);
+  if (status !== null && status >= 400 && status < 500 && !NOT_CONTENT_4XX.has(status)) {
+    // The provider refused this request (400, 413, 422...): it will refuse it
+    // again, so it spends the failure budget and ends FAILED.
+    return { ok: false, code: "llm-rejected" };
+  }
+  // An outage: every provider failing (#1319: no OpenRouter credits), 5xx, no
+  // provider at all, a network error. The run keeps the row PENDING with a
+  // backoff capped at a day; it never turns into FAILED.
   return { ok: false, code: "llm-unavailable" };
 }
 

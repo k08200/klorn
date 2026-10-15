@@ -88,6 +88,7 @@ const ERROR_CODES = {
   "rate-limited": true,
   "llm-unavailable": true,
   "llm-bad-output": true,
+  "llm-rejected": true,
   interrupted: true,
   internal: true,
 } as const satisfies Record<DriveSummaryErrorCode, true>;
@@ -161,26 +162,62 @@ async function upsertQueued(
   }
 }
 
+/** Waits that a user's request may lift: outages and unreadable sources, never a cap. */
+const LIFTABLE_ON_DEMAND = new Set<string>([
+  "llm-unavailable",
+  "storage-error",
+  "source-unavailable",
+]);
+
+/**
+ * On demand, a PENDING row waiting out an outage is due now again, with its
+ * backoff reset; the daily caps still apply when it runs. A cap's wait is not
+ * lifted, and neither is a live lease (a claim clears `error`, so it never
+ * reads as an outage).
+ */
+async function liftOutageWait(row: SummaryRow, now: Date): Promise<SummaryRow> {
+  const waiting =
+    row.status === "PENDING" &&
+    row.error !== null &&
+    LIFTABLE_ON_DEMAND.has(row.error) &&
+    row.nextAttemptAt.getTime() > now.getTime();
+  if (!waiting) return row;
+  const lifted = await prisma.driveFileSummary.updateMany({
+    where: {
+      id: row.id,
+      userId: row.userId,
+      status: "PENDING",
+      nextAttemptAt: row.nextAttemptAt,
+      error: row.error,
+    },
+    data: { nextAttemptAt: now, outageStreak: 0 },
+  });
+  return lifted.count === 1 ? { ...row, nextAttemptAt: now, outageStreak: 0 } : row;
+}
+
 /**
  * Queue a summary of the user's file at version `etag`. A new file gets a PENDING
- * row due now. An existing row is left alone at the same version, except a
- * FAILED one when `retryFailed` (an on-demand request); at another version it is
- * queued again from scratch, but a PENDING row keeps its `nextAttemptAt`: it may
- * be a live lease (whose run then finds the version changed and writes nothing)
- * or a deferral. The caller has checked that the file is the user's.
+ * row due now. An existing row is left alone at the same version, except on
+ * demand: a FAILED row is retried (never an `interrupted` one, a poison file: only
+ * new content re-queues it), and an outage's wait is lifted. At another version
+ * the row is queued again from scratch, but a PENDING row keeps its
+ * `nextAttemptAt`: it may be a live lease (whose run then finds the version
+ * changed and writes nothing) or a deferral. The caller has checked that the file
+ * is the user's.
  */
 export async function enqueueDriveFileSummary(
   userId: string,
   driveFileId: string,
   etag: string | null,
-  options: { readonly retryFailed?: boolean } = {},
+  options: { readonly onDemand?: boolean } = {},
   now: Date = new Date(),
 ): Promise<SummaryRow> {
   const row = await upsertQueued(userId, driveFileId, etag, now);
   if (row.userId !== userId) throw new Error("drive summary: the file is another user's");
   const changed = row.sourceEtag !== etag;
-  const retry = options.retryFailed === true && row.status === "FAILED";
-  if (!changed && !retry) return row;
+  const onDemand = options.onDemand === true;
+  const retry = onDemand && row.status === "FAILED" && row.error !== "interrupted";
+  if (!changed && !retry) return onDemand ? await liftOutageWait(row, now) : row;
   const keepsTime = row.status === "PENDING" && row.nextAttemptAt.getTime() > now.getTime();
   const reset = {
     ...REQUEUED,
@@ -255,9 +292,12 @@ export async function claimSummary(row: SummaryRow, now: Date): Promise<SummaryL
   const until = new Date(now.getTime() + DRIVE_SUMMARY_LEASE_MS);
   const claimed = await prisma.driveFileSummary.updateMany({
     where: unchanged,
-    data: { nextAttemptAt: until, attempts: { increment: 1 } },
+    // The code goes: a claimed row is never mistaken for an outage's wait.
+    data: { nextAttemptAt: until, attempts: { increment: 1 }, error: null },
   });
-  return claimed.count === 1 ? { row: { ...row, attempts: row.attempts + 1 }, until } : null;
+  return claimed.count === 1
+    ? { row: { ...row, attempts: row.attempts + 1, error: null }, until }
+    : null;
 }
 
 /** The `where` of every outcome write: the lease still holds. */

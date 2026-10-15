@@ -2,8 +2,11 @@
  * One run of a claimed summary row (step D4 of
  * docs/providers/unified-platform-plan.md), for the job and the on-demand route.
  *
- *   1. The file, through the drive's kill switch: hidden, trashed or gone is
- *      SKIPPED (`source-unavailable`), not deferred again every hour.
+ *   1. The file, through the drive's kill switch: hidden or trashed waits
+ *      (`source-unavailable`, PENDING, not an attempt, an hour doubling up to a
+ *      day), since a flag can flip back and a file can be restored; a file that
+ *      is gone took its summary row with it. SKIPPED is only for what can never
+ *      be summarised: a folder, an unsupported or oversized type, no text.
  *   2. Cheap refusals before any byte is read: a folder, a type the extractor
  *      has no text for, a recorded size over the cap, a file or a user whose
  *      daily count is spent.
@@ -47,6 +50,7 @@ import {
   nextUtcDay,
   summaryOutageDelayMs,
   summaryRetryDelayMs,
+  summarySourceDelayMs,
 } from "./summary-policy.js";
 import { findSummarySource, type SummarySource } from "./summary-source.js";
 import {
@@ -63,8 +67,19 @@ import {
   userDailyCountSpent,
 } from "./summary-store.js";
 
-/** `lost`: the lease no longer held when the outcome was written, so nothing was. */
-export type SummaryRunOutcome = "done" | "skipped" | "deferred" | "retry" | "failed" | "lost";
+/**
+ * `waiting`: the file cannot be read for now (a cheap check, like a skip, so it
+ * does not use up the job's batch). `lost`: the lease no longer held when the
+ * outcome was written, so nothing was.
+ */
+export type SummaryRunOutcome =
+  | "done"
+  | "skipped"
+  | "waiting"
+  | "deferred"
+  | "retry"
+  | "failed"
+  | "lost";
 
 export interface SummaryRunOptions {
   readonly priority: CallPriority;
@@ -74,7 +89,9 @@ export interface SummaryRunOptions {
   readonly implementations?: DriveImplementations;
 }
 
-type ByteRead = CappedBytes | { readonly ok: false; readonly reason: DriveSummaryErrorCode };
+type ByteRead =
+  | CappedBytes
+  | { readonly ok: false; readonly reason: DriveSummaryErrorCode | "storage-timeout" };
 
 interface RunContext {
   readonly lease: SummaryLease;
@@ -94,6 +111,15 @@ async function deferOutage(ctx: RunContext, code: DriveSummaryErrorCode) {
   const wait = summaryOutageDelayMs(ctx.lease.row.outageStreak);
   const until = new Date(ctx.now.getTime() + wait);
   return outcome(await markSummaryDeferred(ctx.lease, code, until, { outage: true }), "deferred");
+}
+
+/** A file that cannot be read for now: PENDING, not an attempt, a long backoff. */
+async function waitForSource(ctx: RunContext) {
+  const until = new Date(ctx.now.getTime() + summarySourceDelayMs(ctx.lease.row.outageStreak));
+  const written = await markSummaryDeferred(ctx.lease, "source-unavailable", until, {
+    outage: true,
+  });
+  return outcome(written, "waiting");
 }
 
 async function skip(ctx: RunContext, code: DriveSummaryErrorCode, etag: string | null) {
@@ -154,6 +180,9 @@ async function settleUnread(
   if (reason === "object-missing") {
     return outcome(await markSummaryAttemptFailed(ctx.lease, reason, null), "failed");
   }
+  if (reason === "source-unavailable") return await waitForSource(ctx);
+  // A read that hung past its deadline is an outage of the store.
+  if (reason === "storage-timeout") return await deferOutage(ctx, "storage-error");
   return await skip(ctx, reason, source.etag);
 }
 
@@ -174,7 +203,9 @@ async function settleResult(
     const done = { summary, model, costMicroCents, sourceEtag: source.etag };
     return outcome(await markSummaryDone(ctx.lease, done, ctx.now), "done");
   }
-  if (result.code === "llm-bad-output") return await attemptFailed(ctx, result.code);
+  if (result.code === "llm-bad-output" || result.code === "llm-rejected") {
+    return await attemptFailed(ctx, result.code);
+  }
   await releaseSlots(ctx);
   if (result.code === "cost-cap" || result.code === "daily-limit") {
     return await defer(ctx, result.code, nextUtcDay(ctx.now));
@@ -232,7 +263,7 @@ async function cheapRefusal(
   source: SummarySource | null,
 ): Promise<SummaryRunOutcome | null> {
   const { row } = ctx.lease;
-  if (source === null) return await skip(ctx, "source-unavailable", row.sourceEtag);
+  if (source === null) return await waitForSource(ctx);
   if (source.isFolder) return await skip(ctx, "folder", source.etag);
   if (!isSummarisableFile(source.name, source.mimeType, source.sizeBytes)) {
     const tooLarge = source.sizeBytes !== null && source.sizeBytes > DRIVE_SUMMARY_MAX_SOURCE_BYTES;

@@ -5,7 +5,7 @@
  * DRIVE_SUMMARY_PER_USER_PER_SWEEP rows of each, taken round-robin (every user's
  * first row before anyone's second), so one user's thousand rows never hold
  * another user's one back. At most DRIVE_SUMMARY_BATCH runs that do work; a
- * cheap skip (a folder, a hidden file) does not use up the batch. Each row is
+ * cheap skip or wait (a folder, a hidden file) does not use up the batch. Each row is
  * claimed first (summary-store.ts), the claim counting an attempt; a run's own
  * outcome sets the row's next attempt (summary-run.ts); a run that throws is
  * reported and its lease lets it be taken again later.
@@ -92,7 +92,7 @@ async function sweepDue(clock: () => Date): Promise<SummarySweepResult> {
     const lease = await claimSummary(row, now);
     if (lease === null) continue;
     const outcome = await runSafely(lease, now);
-    if (outcome === "skipped") continue;
+    if (outcome === "skipped" || outcome === "waiting") continue;
     result.runs += 1;
     if (outcome === "done") result.done += 1;
     if (outcome === "failed") result.failed += 1;

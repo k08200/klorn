@@ -16,7 +16,11 @@ const calls = vi.hoisted(() => ({
 
 vi.mock("../llm/openai.js", () => {
   class DailyCostCapExceededError extends Error {}
-  class AllProvidersExhaustedError extends Error {}
+  class AllProvidersExhaustedError extends Error {
+    constructor(message: string, options?: { cause?: unknown }) {
+      super(message, options);
+    }
+  }
   class UserRateLimitedError extends Error {
     constructor(
       readonly reason: "rpm" | "daily",
@@ -212,6 +216,33 @@ describe("a failure comes back as a code, never as a throw", () => {
     });
     const result = await summariseDriveText(INPUT);
     expect(result).toMatchObject({ ok: true, summary: "Invoice total 12" });
+  });
+
+  it.each([
+    [400, "llm-rejected"],
+    [404, "llm-rejected"],
+    [413, "llm-rejected"],
+    [422, "llm-rejected"],
+    [401, "llm-unavailable"],
+    [402, "llm-unavailable"],
+    [403, "llm-unavailable"],
+    [408, "llm-unavailable"],
+    [429, "llm-unavailable"],
+    [500, "llm-unavailable"],
+    [503, "llm-unavailable"],
+  ])("a provider %i, raw or as the exhausted chain's cause, is %s", async (status, code) => {
+    for (const make of [
+      () => Object.assign(new Error("provider said no"), { status }),
+      () =>
+        new openai.AllProvidersExhaustedError("all down", {
+          cause: Object.assign(new Error("x"), { status }),
+        }),
+    ]) {
+      calls.next = () => {
+        throw make();
+      };
+      await expect(summariseDriveText(INPUT)).resolves.toEqual({ ok: false, code });
+    }
   });
 
   it("output that is not the JSON asked for, or an empty summary, is llm-bad-output", async () => {

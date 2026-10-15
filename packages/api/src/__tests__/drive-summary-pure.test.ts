@@ -7,11 +7,13 @@
 
 import { Readable } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { readCappedBytes } from "../drive/summary-bytes.js";
+import { readCappedBytes, readKlornBytesForSummary } from "../drive/summary-bytes.js";
 import { extractSummaryText, isSummarisableFile } from "../drive/summary-extract.js";
 import {
+  DRIVE_SUMMARY_LEASE_MS,
   DRIVE_SUMMARY_MAX_INPUT_CHARS,
   DRIVE_SUMMARY_MAX_SOURCE_BYTES,
+  DRIVE_SUMMARY_READ_TIMEOUT_MS,
   DRIVE_SUMMARY_RETRY_BASE_MS,
   DRIVE_SUMMARY_RETRY_MAX_MS,
   driveSummariesLive,
@@ -21,6 +23,9 @@ import {
   utcDayKeyBefore,
 } from "../drive/summary-policy.js";
 import { MAX_EXTRACTABLE_BYTES } from "../mail/email-attachment-text.js";
+import { MemoryObjectStore } from "../storage/memory-store.js";
+import type { ObjectStore } from "../storage/object-store.js";
+import { setObjectStoreForTests } from "../storage/runtime.js";
 
 /** A source of `count` chunks of `size` bytes that records how many were pulled. */
 function countingSource(count: number, size: number) {
@@ -83,6 +88,35 @@ describe("readCappedBytes: the cap is checked while the bytes stream", () => {
 
   it("the summary cap is the attachment extractor's own", () => {
     expect(DRIVE_SUMMARY_MAX_SOURCE_BYTES).toBe(MAX_EXTRACTABLE_BYTES);
+  });
+});
+
+describe("a storage read has a deadline", () => {
+  afterEach(() => {
+    setObjectStoreForTests(null);
+    vi.unstubAllEnvs();
+  });
+
+  it("a body that never ends is given up as storage-timeout, and released", async () => {
+    vi.stubEnv("OBJECT_STORAGE_ENABLED", "true");
+    const body = new Readable({ read() {} }); // never pushes, never ends
+    const store = Object.assign(Object.create(new MemoryObjectStore()) as ObjectStore, {
+      async getObject(key: string) {
+        return { key, size: 10, contentType: "text/plain", body };
+      },
+    });
+    setObjectStoreForTests(store);
+    const started = Date.now();
+    const result = await readKlornBytesForSummary(
+      "user-1",
+      "u/user-1/drive/11111111-1111-4111-8111-111111111111",
+      1_000,
+      { timeoutMs: 30 },
+    );
+    expect(result.ok ? "ok" : result.reason).toBe("storage-timeout");
+    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(body.destroyed).toBe(true);
+    expect(DRIVE_SUMMARY_READ_TIMEOUT_MS).toBeLessThan(DRIVE_SUMMARY_LEASE_MS);
   });
 });
 

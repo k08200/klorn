@@ -11,7 +11,9 @@
  * `DriveProviderSession.fetchForSummary` with `readCappedBytes` underneath.
  */
 
+import type { Readable } from "node:stream";
 import { getUserStorage } from "../storage/runtime.js";
+import { DRIVE_SUMMARY_READ_TIMEOUT_MS } from "./summary-policy.js";
 
 export type CappedBytes =
   | { readonly ok: true; readonly bytes: Buffer }
@@ -34,25 +36,50 @@ export async function readCappedBytes(
 
 export type KlornBytesResult =
   | CappedBytes
-  | { readonly ok: false; readonly reason: "storage-unavailable" | "object-missing" };
+  | {
+      readonly ok: false;
+      readonly reason: "storage-unavailable" | "object-missing" | "storage-timeout";
+    };
 
 /**
- * A Klorn file's bytes, capped. `storage-unavailable` while object storage is
- * off; `object-missing` when the key holds nothing. A storage failure throws
- * (the caller maps it to a retry).
+ * A Klorn file's bytes, capped, within `timeoutMs` for the object and all its
+ * bytes (DRIVE_SUMMARY_READ_TIMEOUT_MS), so a hung read cannot hold a run past its
+ * lease: past the deadline the body is destroyed and the answer is
+ * `storage-timeout`. `storage-unavailable` while object storage is off;
+ * `object-missing` when the key holds nothing. A storage failure throws (the
+ * caller maps it to a retry).
  */
 export async function readKlornBytesForSummary(
   userId: string,
   storageKey: string,
   maxBytes: number,
+  options: { readonly timeoutMs?: number } = {},
 ): Promise<KlornBytesResult> {
   const storage = await getUserStorage();
   if (storage === null) return { ok: false, reason: "storage-unavailable" };
-  const stored = await storage.get(userId, storageKey);
-  if (stored === null) return { ok: false, reason: "object-missing" };
-  if (stored.size > maxBytes) {
-    stored.body.destroy();
-    return { ok: false, reason: "too-large" };
+  let body: Readable | null = null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<KlornBytesResult>((resolve) => {
+    timer = setTimeout(
+      () => resolve({ ok: false, reason: "storage-timeout" }),
+      options.timeoutMs ?? DRIVE_SUMMARY_READ_TIMEOUT_MS,
+    );
+    timer.unref?.();
+  });
+  const read = (async (): Promise<KlornBytesResult> => {
+    const stored = await storage.get(userId, storageKey);
+    if (stored === null) return { ok: false, reason: "object-missing" };
+    body = stored.body;
+    if (stored.size > maxBytes) return { ok: false, reason: "too-large" };
+    return await readCappedBytes(stored.body, maxBytes);
+  })();
+  try {
+    return await Promise.race([read, deadline]);
+  } finally {
+    clearTimeout(timer);
+    // Released whatever the outcome: read whole, stopped at the cap, or abandoned.
+    (body as Readable | null)?.destroy();
+    // A read that loses the race and then fails has nothing to report to.
+    read.catch(() => {});
   }
-  return await readCappedBytes(stored.body, maxBytes);
 }

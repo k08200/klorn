@@ -277,7 +277,7 @@ describe("the summary tables (D4): one writer, every query names its user", () =
   const SYSTEM_QUERIES = ["dueSummaryUsers", "pruneSummaryUsage"];
   // How a store query names its user: inline, or through a helper pinned below.
   const NAMES_USER =
-    /where: (\{\s*(driveFileId, userId|userId_dayKey: \{ userId, dayKey\b|userId,|\.\.\.ref,|id: row\.id, userId|id: lease\.row\.id,\s*userId: lease\.row\.userId)|leased\(lease\)|unchanged\b)/;
+    /where: (\{\s*(driveFileId, userId|userId_dayKey: \{ userId, dayKey\b|userId,|\.\.\.ref,|id: row\.id,\s*userId|id: lease\.row\.id,\s*userId: lease\.row\.userId)|leased\(lease\)|unchanged\b)/;
 
   it("only the summary store writes the tables, besides the user purge", () => {
     expect(pathsWith(SUMMARY_WRITE)).toEqual(WRITERS);

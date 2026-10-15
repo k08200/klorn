@@ -105,6 +105,7 @@ interface IdParams {
 }
 
 let summarySearchFailureReported = false;
+let summaryReadFailureReported = false;
 
 /** A summary search that failed falls back to names; said once per process. */
 function reportSummarySearchFailure(err: unknown): void {
@@ -112,6 +113,14 @@ function reportSummarySearchFailure(err: unknown): void {
   summarySearchFailureReported = true;
   console.error("[DRIVE] summary search failed; answering name matches only");
   captureError(err, { tags: { scope: "drive.summary.search" } });
+}
+
+/** A summary read that failed leaves the file without it; said once per process. */
+function reportSummaryReadFailure(err: unknown): void {
+  if (summaryReadFailureReported) return;
+  summaryReadFailureReported = true;
+  console.error("[DRIVE] summary read failed; answering the file without its summary");
+  captureError(err, { tags: { scope: "drive.summary.read" } });
 }
 
 export function driveRoutes(opts: {
@@ -152,7 +161,13 @@ export function driveRoutes(opts: {
     const file = await getFile(userId, request.params.id, providerEnabled);
     if (file === null) return reply.code(HTTP_NOT_FOUND).send(FILE_NOT_FOUND);
     if (!summariesGate()) return { file };
-    return { file, summary: await summaryForFile(userId, file.id) };
+    try {
+      return { file, summary: await summaryForFile(userId, file.id) };
+    } catch (err) {
+      // The file without its summary, as with the flag off: never a 500.
+      reportSummaryReadFailure(err);
+      return { file };
+    }
   }
 
   async function summarizeHandler(

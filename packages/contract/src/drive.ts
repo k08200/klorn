@@ -66,7 +66,8 @@ export interface DriveFileResponse {
   file: DriveFileWire;
   /**
    * The file's summary (D4). Present only while DRIVE_SUMMARIES_ENABLED is on:
-   * null when the file has none yet. Absent while off, so the response is D2's.
+   * null when the file has none yet. Absent while off, so the response is D2's,
+   * and absent when the summary could not be read.
    */
   summary?: DriveFileSummaryWire | null;
 }
@@ -80,11 +81,12 @@ export interface DriveFileResponse {
 
 /**
  * PENDING: queued, or waiting on a cap (`error` says which: `cost-cap`,
- * `daily-limit`, `file-limit`, `rate-limited`) or on an outage it keeps retrying
- * (`llm-unavailable`, `storage-error`). DONE: `text` is the summary. FAILED: gave
- * up on a content error (`llm-bad-output`, `object-missing`, `interrupted`,
- * `internal`). SKIPPED: nothing to summarise (`folder`, `unsupported-type`,
- * `too-large`, `no-text`, `source-unavailable`).
+ * `daily-limit`, `file-limit`, `rate-limited`), on an outage it keeps retrying
+ * (`llm-unavailable`, `storage-error`), or on a file it cannot read for now
+ * (`source-unavailable`: trashed, hidden, storage off). DONE: `text` is the
+ * summary. FAILED: gave up on a content error (`llm-bad-output`,
+ * `llm-rejected`, `object-missing`, `interrupted`, `internal`). SKIPPED: nothing
+ * to summarise (`folder`, `unsupported-type`, `too-large`, `no-text`).
  */
 export type DriveSummaryStatusWire = "PENDING" | "DONE" | "FAILED" | "SKIPPED";
 
@@ -103,6 +105,7 @@ export type DriveSummaryErrorCode =
   | "rate-limited"
   | "llm-unavailable"
   | "llm-bad-output"
+  | "llm-rejected"
   | "interrupted"
   | "internal";
 
@@ -117,7 +120,8 @@ export interface DriveFileSummaryWire {
 
 /**
  * `POST /api/drive/files/:id/summarize` — summarise the file now if it is due
- * (a new or changed file, or a FAILED one, which this retries), else answer its
+ * (a new or changed file; a FAILED one, which this retries unless it was
+ * `interrupted`; one waiting out an outage, whose wait this lifts), else answer its
  * current state. 404 `{ error }` as `GET /api/drive/files/:id`. Rate limited
  * (429). The extracted file text is never returned.
  */

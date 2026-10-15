@@ -3846,9 +3846,11 @@ both.
     with due rows, the prune), each marked `system:`, and the first enqueue
     above.
 - A run (`drive/summary-run.ts`), cheapest refusal first: the row through the
-  kill switch (hidden, trashed or gone: SKIPPED `source-unavailable`, so it
-  neither recurs nor uses the batch; an on-demand request or a new version
-  queues it again); a
+  kill switch (hidden or trashed, or object storage off: PENDING
+  `source-unavailable`, not an attempt, looked at again after an hour doubling
+  up to a day, and not counted against the job's batch, since a flag can flip
+  back and a file can be restored; a file that is gone took its row with it);
+  a
   folder, a type the extractor has no text for, or a recorded size over the cap:
   SKIPPED without reading a byte; the per-file count and the user's daily
   count (a read), so a user at the count costs no download; the bytes, read through
@@ -3861,7 +3863,13 @@ both.
   both take the last call: 10 concurrent on the last slot, exactly 1 passed on
   Postgres); one model call with a 90 s wall-clock limit
   (`DRIVE_SUMMARY_LLM_TIMEOUT_MS`, pacing and failover included), so a run ends
-  well inside its lease.
+  well inside its lease. The storage read (the object and all its bytes) has a
+  60 s deadline too (`DRIVE_SUMMARY_READ_TIMEOUT_MS`): past it the body is
+  destroyed and the run defers as a storage outage, so a hung read cannot hold
+  the job's one-sweep-at-a-time flag. A timed-out model call is abandoned, not
+  aborted: `createCompletion` takes no AbortSignal, so the `Promise.race` cannot
+  cancel it, and the provider may still answer and bill it. The per-user cost
+  cap still holds, because the LLM layer pre-bills the call before it is sent.
 - Cost model and caps (`drive/summary-policy.ts`, named constants):
   - at most 8,000,000 bytes read and 8,000 characters sent per summary;
   - `DRIVE_SUMMARIES_PER_USER_PER_DAY` 50 and
@@ -3900,7 +3908,10 @@ both.
   doubling up to 24 hours (`DRIVE_SUMMARY_OUTAGE_MAX_MS`), indefinitely; a
   retryable storage error is the same with `storage-error`. FAILED is kept for
   content errors, after 5 attempts: output that is not a summary
-  (`llm-bad-output`), a non-retryable storage error, a run that throws
+  (`llm-bad-output`), a provider 4xx about the request itself (`llm-rejected`:
+  any 4xx but 401, 402, 403, 408 and 429; 401 and 403 are key or permission
+  problems that hit every file alike, so they stay outages and a key rotation
+  does not FAIL every summary), a non-retryable storage error, a run that throws
   (`internal`) or never ends (`interrupted`); a Klorn row whose object is
   missing is FAILED `object-missing` at once. A queue write that fails is
   logged and reported (`scope: drive.summary.enqueue`) and never fails the
@@ -3913,9 +3924,14 @@ both.
   `drive-summary`, started with the others unless BACKGROUND_AGENTS_DISABLED)
   runs due rows and prunes usage rows older than 7 days; `POST
   /api/drive/files/:id/summarize` (session, user-scoped, 404 as the file route)
-  queues the file, runs it now in the foreground when it is due (new, changed,
-  or FAILED, which it retries) and answers `{ summary }`. A deferred row is not
-  forced: the answer is PENDING with its reason.
+  queues the file, runs it now in the foreground when it is due and answers
+  `{ summary }`. Due on demand: new, changed, FAILED (retried, except an
+  `interrupted` row: a poison file is re-queued only by new content, never by a
+  click), or waiting out an outage or an unreadable source (the wait and its
+  backoff are reset, so a summary runs as soon as credits return). A cap's wait
+  is not lifted and the daily caps apply to the run; a live lease is never
+  lifted (a claim clears the code, so it never reads as an outage). The route's
+  rate limit is unchanged.
 - API (`packages/contract/src/drive.ts`): `DriveFileSummaryWire` (`status`,
   `text` only when DONE, `error` code, `summarizedAt`), `DriveFileResponse`
   gains `summary` while on, `DriveSummarizeResponse`. The extracted text and the
@@ -3930,7 +3946,9 @@ both.
   folder page through whole). The pattern is the name search's escaped ILIKE
   (`%`, `_`, `\` match themselves). If that query fails, the route answers the
   name-only search instead, logged and reported once per process
-  (`scope: drive.summary.search`), never a 500.
+  (`scope: drive.summary.search`), never a 500. `GET /api/drive/files/:id`
+  likewise answers the file without `summary` if the summary cannot be read
+  (`scope: drive.summary.read`).
 - Seam: `DriveProviderSession.fetchForSummary(externalId, { maxBytes })` answers
   `CappedBytes` (the streaming reader's result) or null. D5 and D6 implement it
   with `readCappedBytes` over their own API host only, call
@@ -3990,9 +4008,6 @@ both.
     (userId, status, nextAttemptAt) index.
   - A summary search joins one user's rows to their summaries with ILIKE:
     bounded by the rate limits and the page ceiling, not by a trigram index.
-  - A hidden or trashed file is SKIPPED, so turning a provider's flag back on
-    does not re-queue its files: they are summarised on demand or on their next
-    version.
   - The extractor's quality is the attachment pipeline's (heuristic PDF text,
     no OCR); a scanned PDF is SKIPPED `no-text`.
   - A timed-out call is abandoned, not cancelled: the LLM layer may still
