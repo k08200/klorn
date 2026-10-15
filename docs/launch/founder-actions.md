@@ -51,7 +51,7 @@ is merged and dark. It needs one registration:
    by design — the connect endpoint answers 503 without the credentials, which
    is the intended loud failure rather than a broken consent screen.
 
-## C. Paddle → billing at $8.99/mo
+## C. Paddle → billing at $29.99/mo
 
 Payment provider is Paddle, not Stripe (`billing/paddle.ts`,
 `routes/webhook.ts`). Paddle support confirmed 2026-08-10 that a **sole
@@ -60,7 +60,7 @@ trader / individual** can sign up — no company registration needed.
 1. Sign up; submit `klorn.ai` for domain review. Have terms, privacy, and
    refund pages reachable from the landing — domain review checks them.
 2. Identity verification (they email you), then their final review.
-3. Create the product and a **$8.99/mo** price. Copy the price id.
+3. Create the product and a **$29.99/mo** price. Copy the price id.
 4. Render → klorn-api: `PADDLE_API_KEY`, `PADDLE_PRO_PRICE_ID`,
    `PADDLE_WEBHOOK_SECRET`, `PADDLE_ENV` — start at `sandbox`.
 4b. Vercel → klorn-web: `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN` (and
@@ -82,7 +82,7 @@ trader / individual** can sign up — no company registration needed.
    the per-method country/currency table are in
    `docs/launch/paywall-flip-runbook.md` → "Payment methods at checkout".
 
-Keep three numbers in sync: the landing copy ($8.99, EN + KO), the Paddle
+Keep three numbers in sync: the landing copy ($30, all 7 locales), the Paddle
 price, and `TRIAL_DAYS` (7).
 
 ## D. Standing config decisions already made

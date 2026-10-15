@@ -19,7 +19,7 @@ mechanism is the per-user daily LLM cost cap.
 
 | # | Decision | Where it lands |
 |---|----------|----------------|
-| D1 | **Final price — DECIDED 2026-08-10, live-verified 2026-08-22: `$8.99` web / `$9.99` native.** The web number's single source of truth is `packages/web/src/lib/pricing.ts` (`PRO_PRICE_WEB`); quote it from there, never inline. UI copy reads it from `pricing.ts`. The payment provider price/offering must charge exactly these amounts. | Provider dashboard price/offering (UI already aligned) |
+| D1 | **Final price — RAISED 2026-10-14: `$29.99` web / `$34.99` native** (was `$8.99`/`$9.99`, live-verified 2026-08-22). The web number's single source of truth is `packages/web/src/lib/pricing.ts` (`PRO_PRICE_WEB`); quote it from there, never inline. UI copy reads it from `pricing.ts`. The payment provider price/offering must charge exactly these amounts. | Provider dashboard price/offering (UI already aligned) |
 | D2 | **Free-tier daily AI budget.** `FREE_DAILY_COST_CAP_CENTS` (default 10¢/day) bounds free-user COGS once the paywall is on. | Render env |
 | D3 | **Trial length.** `TRIAL_DAYS` (default 7) drives the Stripe path and the paywall copy; on Paddle the trial lives on the price itself — keep both at 7 days. | Render env + Paddle price |
 | D4 | **Web payment provider — DECIDED 2026-07-06: Paddle** (merchant of record — Paddle is the legal seller, so no Korean business registration is needed; individual/sole-trader onboarding with identity verification only). The integration is fully coded and inert until `PADDLE_*` env is set. Stripe code remains as the dormant alternative for a future entity. | Paddle account (founder) + `PADDLE_*` env on Render |
@@ -30,7 +30,7 @@ mechanism is the per-user daily LLM cost cap.
 1. Sign up at paddle.com as an individual/sole trader (identity + product/domain
    review; approval can take a few days — start early). A sandbox account is
    separate and instant; use it for the end-to-end test first.
-2. Create the Pro product + recurring Price at the D1 amount (`$8.99`/mo) with
+2. Create the Pro product + recurring Price at the D1 amount (`$29.99`/mo) with
    a **7-day trial configured on the price** (the code does not pass a trial —
    Paddle applies the price's own trial).
 3. Checkout settings → set the **default payment link** domain (app.klorn.ai).

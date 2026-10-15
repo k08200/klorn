@@ -208,7 +208,7 @@ This reverses the HUD-only full view in `REBUILD_BLUEPRINT.md` §2/§4.
 
 1. **Hero**: outcome claim and a real Mac Today loop with Gmail/Outlook/Naver
    badges; "All your mail and calendars. One calm place."; CTAs Download for Mac
-   and Open in browser; "$8.99/mo · bring your own AI key". No CI, AGPL, eval or
+   and Open in browser; "$29.99/mo · bring your own AI key". No CI, AGPL, eval or
    competitor mentions here.
 2. **Every account, one view**: connector strip with honest status (Available /
    Beta / Via phone app / Coming).

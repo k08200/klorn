@@ -96,6 +96,14 @@ jobs:
       - name: Website lane consistency
         run: node .github/scripts/check-website-lanes.mjs
 
+      # website/ imports nothing from lib/pricing.ts, so the constant that was
+      # created to stop the 2026-08-12 price drift ($7.99 advertised, $8.99
+      # charged) could not actually see the pages doing the advertising. It
+      # also catches the native price falling below the web one, which the
+      # $8.99 → $29.99 raise did to PRO_PRICE_NATIVE on 2026-10-14.
+      - name: Price consistency
+        run: node .github/scripts/check-price-consistency.mjs
+
       # sitemap.xml is hand-maintained and had drifted both ways at once: it
       # submitted three noindex redirect stubs while omitting all ten /vs/*
       # and /open-source/ pages (#1219), whose only purpose is being found.

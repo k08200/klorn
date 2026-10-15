@@ -9,7 +9,7 @@ import { timingSafeEqualStr } from "../timing-safe-equal.js";
  * isPaddleConfigured() is false and every surface stays inert, mirroring
  * how stripe.ts behaves without STRIPE_SECRET_KEY. Required env at launch:
  *   PADDLE_API_KEY        server-side API key (Paddle → Developer tools)
- *   PADDLE_PRO_PRICE_ID   the $8.99/mo price (pri_…) with the 7-day trial
+ *   PADDLE_PRO_PRICE_ID   the $29.99/mo price (pri_…) with the 7-day trial
  *   PADDLE_WEBHOOK_SECRET notification endpoint secret (webhook signature)
  *   PADDLE_ENV            "sandbox" for the sandbox account; unset = live
  */

@@ -2,7 +2,7 @@
 
 Two founder-only setup jobs the code cannot do for itself. Both are
 prerequisites for launch claims: "mail appears the second it arrives" and
-"$8.99/mo".
+"$29.99/mo".
 
 ## 1. Gmail realtime push (Pub/Sub)
 
@@ -69,7 +69,7 @@ tier is load-bearing).
 call, so opening any client always pulls — push turns "within a minute" into
 "immediately", it is no longer the only path.
 
-## 2. Paddle billing at $8.99/mo
+## 2. Paddle billing at $29.99/mo
 
 Payment provider is **Paddle** (not Stripe) — `billing/paddle.ts`,
 `routes/webhook.ts`. Paddle confirmed 2026-08-10 that a **sole trader /
@@ -81,7 +81,7 @@ Founder steps:
 1. Sign up as sole trader; submit `klorn.ai` for domain review. Have the
    legal pages reachable from the landing (terms, privacy, refund) — domain
    review checks them.
-2. Create the product + a **$8.99/mo** price. Copy the price id.
+2. Create the product + a **$29.99/mo** price. Copy the price id.
 3. Render → klorn-api → `PADDLE_API_KEY`, `PADDLE_PRO_PRICE_ID`,
    `PADDLE_WEBHOOK_SECRET`, `PADDLE_ENV` (`sandbox` first, then
    `production`).
@@ -94,6 +94,6 @@ Founder steps:
    (`docs/launch/paywall-flip-runbook.md`). Until it flips, every gate is
    inert and multi-inbox stays free.
 
-The landing already says $8.99/mo with a 7-day trial (EN + KO). Keep the
+The landing already says $29.99/mo with a 7-day trial (all 7 locales). Keep the
 price string, the Paddle price, and `TRIAL_DAYS` in sync — three places,
 one number.
