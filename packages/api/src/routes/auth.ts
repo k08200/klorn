@@ -15,6 +15,15 @@ import {
   verifyToken,
 } from "../auth.js";
 import { requireEntitled } from "../billing/entitlement-guard.js";
+import {
+  canConnectNewMailAccount,
+  keepIfOnlyMailSource,
+  keepPrimaryGoogleIfOnlyMailSource,
+  mayConnectMailAccount,
+  mayConnectPrimaryGoogle,
+  requireMailLinkStart,
+  SECOND_MAIL_ACCOUNT_REFUSAL,
+} from "../billing/mail-account-entitlement.js";
 import { isEntitled, isHardPaywalled, isWebCheckoutAvailable } from "../billing/stripe.js";
 import {
   appleLoginEnabled,
@@ -1063,6 +1072,13 @@ export function authRoutes(app: FastifyInstance) {
     if (isDemoUser(userId)) {
       return reply.code(403).send({ error: "Authentication required to connect Google" });
     }
+    // The primary Gmail inbox is a mail account like any other: free as the
+    // first one, Pro as a second (after an iCloud/Naver/linked one). Repairing
+    // an existing primary is the same slot and always allowed. The callback
+    // re-checks.
+    if (!(await mayConnectPrimaryGoogle(userId))) {
+      return reply.code(403).send(SECOND_MAIL_ACCOUNT_REFUSAL);
+    }
     // Short-lived (10m), matching link-calendar/link-inbox: the callback attaches
     // a credential-bearing Google token to this user's row, so an intercepted
     // state URL (access logs, Referer) must not be replayable for the default
@@ -1096,13 +1112,15 @@ export function authRoutes(app: FastifyInstance) {
 
   // POST /api/auth/google/link-inbox — Start OAuth to link a SECONDARY Google
   // account as a FULL INBOX (gmail read/send/modify) so the firewall runs across
-  // it too. Pro-gated (multi_account). Mirrors /google/link-calendar exactly —
+  // it too. The first mailbox is free, a second one Pro (mail-account-
+  // entitlement.ts; the callback re-checks with the real address). Mirrors
+  // /google/link-calendar —
   // short-lived signed state so an intercepted URL can't be replayed for the
   // default 7-day token window; the session JWT never enters the redirect.
   app.post(
     "/google/link-inbox",
     {
-      preHandler: [requireAuth, requireEntitled],
+      preHandler: [requireAuth, requireMailLinkStart("GOOGLE")],
       // OAuth-start endpoint on a public repo: cap starts so a valid token
       // can't spam consent redirects. (Calendar link lacks this today — worth a
       // follow-up to add there too; adding it to the new surface regardless.)
@@ -1241,17 +1259,23 @@ export function authRoutes(app: FastifyInstance) {
           if (profile.verified_email !== true) {
             return reply.redirect(`${webUrl}/settings?inbox=unverified`);
           }
-          // Re-verify entitlement at callback time (TOCTOU): a Pro user who
-          // downgraded during the 10-min OAuth window must not complete a Pro-only
-          // inbox link. Inert while PAYWALL is off; load-bearing once it flips.
           const inboxLinker = await prisma.user.findUnique({
             where: { id: statePayload.userId },
-            select: { plan: true, role: true },
+            select: { id: true },
           });
-          if (!inboxLinker || !isEntitled(inboxLinker.plan, inboxLinker.role)) {
+          if (!inboxLinker) {
             return reply.redirect(`${webUrl}/settings?inbox=failed`);
           }
           const linkedEmail = normalizeEmail(profile.email);
+          // Re-check at callback time, with the real address (TOCTOU): the
+          // first mailbox is free, a second one needs Pro — a user who got a
+          // mailbox or downgraded during the 10-min OAuth window cannot finish.
+          // Re-linking this same account is never refused. Inert while the
+          // paywall is off.
+          const inboxAccount = { provider: "GOOGLE" as const, email: linkedEmail };
+          if (!(await mayConnectMailAccount(statePayload.userId, inboxAccount))) {
+            return reply.redirect(`${webUrl}/settings?inbox=pro`);
+          }
           const expiresAt = tokens.expiry_date ? new Date(tokens.expiry_date) : null;
           // Cap NEW links only: a re-link (existing row → update path) must always
           // be allowed so a user can never lock themselves out of reconnecting an
@@ -1278,7 +1302,7 @@ export function authRoutes(app: FastifyInstance) {
               return reply.redirect(`${webUrl}/settings?inbox=limit`);
             }
           }
-          await prisma.linkedInboxAccount.upsert({
+          const savedInbox = await prisma.linkedInboxAccount.upsert({
             where: {
               userId_provider_email: {
                 userId: statePayload.userId,
@@ -1301,6 +1325,17 @@ export function authRoutes(app: FastifyInstance) {
               expiresAt,
             },
           });
+          // Check-after-insert for a NEW row: a parallel first connect of
+          // another account may have committed meanwhile. Fails closed.
+          if (
+            !existingLink &&
+            !(await keepIfOnlyMailSource(statePayload.userId, {
+              ...inboxAccount,
+              id: savedInbox.id,
+            }))
+          ) {
+            return reply.redirect(`${webUrl}/settings?inbox=pro`);
+          }
           return reply.redirect(`${webUrl}/settings?inbox=success`);
         }
 
@@ -1535,6 +1570,12 @@ export function authRoutes(app: FastifyInstance) {
           return reply.redirect(`${webUrl}/settings?google=offline_access_denied`);
         }
 
+        // Re-check at callback time (TOCTOU): a Free user who connected a
+        // linked mailbox during the OAuth window cannot add Gmail as a second.
+        if (!(await mayConnectPrimaryGoogle(user.id))) {
+          return reply.redirect(`${webUrl}/settings?google=pro`);
+        }
+
         await withDbRetry(
           () =>
             prisma.userToken.upsert({
@@ -1557,6 +1598,11 @@ export function authRoutes(app: FastifyInstance) {
             }),
           { label: "oauth.integration.upsert_user_token" },
         );
+        // Check-after-write for a NEW primary token: a parallel first connect
+        // of a linked mailbox may have committed meanwhile. Fails closed.
+        if (!existingIntegrationToken && !(await keepPrimaryGoogleIfOnlyMailSource(user.id))) {
+          return reply.redirect(`${webUrl}/settings?google=pro`);
+        }
 
         // Register the Gmail Pub/Sub watch so new mail pushes in near-real-time
         // from the moment the account is connected. This used to live only on
@@ -1659,30 +1705,28 @@ export function authRoutes(app: FastifyInstance) {
 
   // GET /api/auth/google/linked-inboxes — list the user's linked secondary
   // inboxes (never returns tokens — id + email + connectedAt + last-sync only).
-  // Pro-gated to match the connect route so a lapsed user can't read the paid
-  // feature's data. lastSyncedAt lets the UI confirm an inbox is actually syncing
-  // after MULTI_INBOX_SYNC_ENABLED flips (null until the first sync tick).
-  app.get(
-    "/google/linked-inboxes",
-    { preHandler: [requireAuth, requireEntitled] },
-    async (request) => {
-      const userId = getUserId(request);
-      const accounts = await prisma.linkedInboxAccount.findMany({
-        // This is the GOOGLE linked-inboxes surface; NAVER rows share the
-        // table since Phase 0b and list on /api/naver-imap/status instead.
-        where: { userId, provider: "GOOGLE" },
-        select: {
-          id: true,
-          email: true,
-          createdAt: true,
-          lastSyncedAt: true,
-          needsReconnect: true,
-        },
-        orderBy: { createdAt: "asc" },
-      });
-      return { accounts };
-    },
-  );
+  // Auth-only (like the IMAP /status): a Free user's FIRST mailbox may be a
+  // linked Google one, and a downgraded user must still see what they can
+  // remove. canConnect tells the UI whether a NEW one may be added.
+  // lastSyncedAt lets the UI confirm an inbox is actually syncing after
+  // MULTI_INBOX_SYNC_ENABLED flips (null until the first sync tick).
+  app.get("/google/linked-inboxes", { preHandler: requireAuth }, async (request) => {
+    const userId = getUserId(request);
+    const accounts = await prisma.linkedInboxAccount.findMany({
+      // This is the GOOGLE linked-inboxes surface; NAVER rows share the
+      // table since Phase 0b and list on /api/naver-imap/status instead.
+      where: { userId, provider: "GOOGLE" },
+      select: {
+        id: true,
+        email: true,
+        createdAt: true,
+        lastSyncedAt: true,
+        needsReconnect: true,
+      },
+      orderBy: { createdAt: "asc" },
+    });
+    return { accounts, canConnect: await canConnectNewMailAccount(userId) };
+  });
 
   // DELETE /api/auth/google/linked-inboxes/:id — unlink one secondary inbox.
   // Scoped by userId so a token can only remove its OWN linked accounts. Auth-only

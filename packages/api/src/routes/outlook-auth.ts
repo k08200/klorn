@@ -25,8 +25,12 @@
 
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth, signToken, verifyToken } from "../auth.js";
-import { requireEntitled } from "../billing/entitlement-guard.js";
-import { isEntitled } from "../billing/stripe.js";
+import {
+  canConnectNewMailAccount,
+  keepIfOnlyMailSource,
+  mayConnectMailAccount,
+  requireMailLinkStart,
+} from "../billing/mail-account-entitlement.js";
 import { outlookCalendarEnabled } from "../config.js";
 import { encryptOptional, encryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
@@ -94,13 +98,15 @@ export function outlookAuthRoutes(opts: {
     await app.register(outlookCalendarRoutes({ gate: calendarGate }));
 
     // POST /link-inbox — start OAuth to link an Outlook account as a full
-    // inbox. Pro-gated (multi_account). Short-lived signed state (10 min):
+    // inbox. The first mailbox is free, a second one Pro. Short-lived signed state (10 min):
     // the callback attaches a credential-bearing row, so an intercepted
     // state URL must not be replayable for the default 7-day token window.
     app.post(
       "/link-inbox",
       {
-        preHandler: [requireAuth, requireEntitled],
+        // First mailbox free, a second one Pro (mail-account-entitlement.ts);
+        // the callback re-checks with the real address.
+        preHandler: [requireAuth, requireMailLinkStart("OUTLOOK")],
         // OAuth-start endpoint on a public repo: cap starts so a valid token
         // can't spam consent redirects (same limit as the Google link route).
         config: { rateLimit: { max: 10, timeWindow: "15 minutes" } },
@@ -190,17 +196,23 @@ export function outlookAuthRoutes(opts: {
           if (!accountEmail) {
             return reply.redirect(`${webUrl}/settings?inbox=failed`);
           }
-          // Re-verify entitlement at callback time (TOCTOU): a Pro user who
-          // downgraded during the 10-min OAuth window must not complete a
-          // Pro-only inbox link. Inert while PAYWALL is off.
           const linker = await prisma.user.findUnique({
             where: { id: statePayload.userId },
-            select: { plan: true, role: true },
+            select: { id: true },
           });
-          if (!linker || !isEntitled(linker.plan, linker.role)) {
+          if (!linker) {
             return reply.redirect(`${webUrl}/settings?inbox=failed`);
           }
           const linkedEmail = normalizeEmail(accountEmail);
+          // Re-check at callback time, with the real address (TOCTOU): the
+          // first mailbox is free, a second one needs Pro — a user who got a
+          // mailbox or downgraded during the 10-min OAuth window cannot finish.
+          // Re-linking this same account is never refused. Inert while the
+          // paywall is off.
+          const account = { provider: "OUTLOOK" as const, email: linkedEmail };
+          if (!(await mayConnectMailAccount(statePayload.userId, account))) {
+            return reply.redirect(`${webUrl}/settings?inbox=pro`);
+          }
           // Cap NEW links only: a re-link (existing row → update path) must
           // always be allowed so a user can never lock themselves out of
           // reconnecting an inbox they already have.
@@ -222,7 +234,7 @@ export function outlookAuthRoutes(opts: {
               return reply.redirect(`${webUrl}/settings?inbox=limit`);
             }
           }
-          await prisma.linkedInboxAccount.upsert({
+          const saved = await prisma.linkedInboxAccount.upsert({
             where: {
               userId_provider_email: {
                 userId: statePayload.userId,
@@ -247,6 +259,14 @@ export function outlookAuthRoutes(opts: {
               expiresAt: tokens.expiresAt,
             },
           });
+          // Check-after-insert for a NEW row: a parallel first connect of
+          // another account may have committed meanwhile. Fails closed.
+          if (
+            !existingLink &&
+            !(await keepIfOnlyMailSource(statePayload.userId, { ...account, id: saved.id }))
+          ) {
+            return reply.redirect(`${webUrl}/settings?inbox=pro`);
+          }
           return reply.redirect(`${webUrl}/settings?inbox=success`);
         } catch (err) {
           // console first — captureError is a no-op without a Sentry DSN.
@@ -257,9 +277,9 @@ export function outlookAuthRoutes(opts: {
       },
     );
 
-    // GET /linked-inboxes — list OUTLOOK rows (never tokens). Pro-gated to
-    // match the connect route, same as the Google surface.
-    app.get("/linked-inboxes", { preHandler: [requireAuth, requireEntitled] }, async (request) => {
+    // GET /linked-inboxes — list OUTLOOK rows (never tokens). Auth-only (like the IMAP /status): a Free user's FIRST mailbox may be an
+    // Outlook one, and a downgraded user must still see what they can remove.
+    app.get("/linked-inboxes", { preHandler: requireAuth }, async (request) => {
       const userId = getUserId(request);
       const accounts = await prisma.linkedInboxAccount.findMany({
         where: { userId, provider: "OUTLOOK" },
@@ -272,7 +292,7 @@ export function outlookAuthRoutes(opts: {
         },
         orderBy: { createdAt: "asc" },
       });
-      return { accounts };
+      return { accounts, canConnect: await canConnectNewMailAccount(userId) };
     });
 
     // DELETE /linked-inboxes/:id — unlink one. Scoped by userId so a token

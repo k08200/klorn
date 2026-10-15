@@ -15,6 +15,7 @@ const state = vi.hoisted(() => ({ plan: "PRO", role: "USER" }));
 
 const db = vi.hoisted(() => ({
   findMany: vi.fn(async () => []),
+  findFirst: vi.fn(async () => null),
   findUnique: vi.fn(async () => null),
   count: vi.fn(async () => 0),
   upsert: vi.fn(async () => ({ id: "row-1" })),
@@ -37,6 +38,8 @@ vi.mock("../db.js", () => {
       findUnique: vi.fn(async () => ({ id: "user-1", plan: state.plan, role: state.role })),
       update: vi.fn(async () => ({ id: "user-1" })),
     },
+    // A primary Google token: the user already has their first (free) mailbox.
+    userToken: { findFirst: vi.fn(async () => ({ id: "google-token" })) },
     linkedInboxAccount: db,
     device: {
       findUnique: vi.fn(async () => ({ id: "device-1" })),
@@ -598,7 +601,7 @@ describe("flag ON: connect with a user-supplied host", () => {
     });
   });
 
-  it("still enforces the entitlement gate (FREE gets 403)", async () => {
+  it("refuses a SECOND mailbox on FREE (403) before any connection", async () => {
     state.plan = "FREE";
     process.env.PAYWALL_ENABLED = "true";
     try {

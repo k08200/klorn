@@ -9,6 +9,10 @@
  */
 
 import { type gmail_v1, google } from "googleapis";
+import {
+  firstLinkedMailSourceId,
+  linkedInboxesToSync,
+} from "../billing/mail-account-entitlement.js";
 import { planHasFeature } from "../billing/stripe.js";
 import { MULTI_INBOX_SYNC_ENABLED } from "../config.js";
 import { prisma } from "../db.js";
@@ -344,9 +348,10 @@ export async function syncSpamLane(userId: string): Promise<number> {
 // ─── Gmail ↔ DB Reconciliation ────────────────────────────────────────────
 
 /**
- * On-demand fan-out: sync every LINKED secondary inbox for a user, gated exactly
- * like the scheduler's fan-out (MULTI_INBOX_SYNC_ENABLED + the multi_account
- * feature). This exists so the manual "Force Sync" / open-Mail path syncs linked
+ * On-demand fan-out: sync every LINKED secondary inbox for a user, gated like
+ * the scheduler's fan-out (MULTI_INBOX_SYNC_ENABLED + the multi_account
+ * feature), except that a user without multi_account still syncs the one
+ * linked inbox that is their first (free) mailbox. This exists so the manual "Force Sync" / open-Mail path syncs linked
  * inboxes too — before, linked mail ONLY synced on a scheduler tick (which needs
  * automation enabled), so a user who opened Mail saw their primary account
  * refresh but the linked inbox stayed "Not yet synced". Per-account isolation +
@@ -358,10 +363,14 @@ export async function syncLinkedInboxesForUser(userId: string): Promise<{ newCou
     where: { id: userId },
     select: { plan: true, role: true, email: true },
   });
-  if (!user || !planHasFeature(user.plan, "multi_account", user.role)) {
-    return { newCount: 0 };
-  }
-  const linked = await getLinkedInboxClients(userId);
+  if (!user) return { newCount: 0 };
+  // Without multi_account a user still syncs their FIRST mailbox when it is a
+  // linked inbox (no primary Google token) — the first mailbox is free
+  // whatever the provider (billing/mail-account-entitlement.ts).
+  const multiAccount = planHasFeature(user.plan, "multi_account", user.role);
+  const onlyId = multiAccount ? null : await firstLinkedMailSourceId(userId);
+  if (!multiAccount && !onlyId) return { newCount: 0 };
+  const linked = linkedInboxesToSync(await getLinkedInboxClients(userId), multiAccount, onlyId);
   // A linked row mirroring the primary address (pre-guard data) would sync
   // the same mailbox twice per pass — skip it; the primary sync covers it.
   const primaryEmail = (user.email ?? "").trim().toLowerCase();

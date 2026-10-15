@@ -69,8 +69,11 @@ Google token.
 
 ## P2 — Monetization
 
-- Multi-account = paid is ALREADY the shipped shape (link/connect routes are
-  requireEntitled; entitlement inert while PAYWALL_ENABLED=false). LOCKED.
+- Multi-account = paid. LOCKED. Refined 2026-10-15 (founder, LOCKED): the FIRST
+  mail account is free whatever the provider (Google, iCloud, Naver, Outlook);
+  connecting a SECOND one needs Pro (`multi_account`). Every connect route asks
+  `packages/api/src/billing/mail-account-entitlement.ts`; inert while
+  PAYWALL_ENABLED=false.
 - Price RAISED 2026-10-14: `$29.99`/mo web, `$34.99`/mo native (was `$8.99`/`$9.99`,
   decided 2026-08-10). The category sits at $30 and no one had subscribed yet. The
   single source of truth is `packages/web/src/lib/pricing.ts`; an annual tier

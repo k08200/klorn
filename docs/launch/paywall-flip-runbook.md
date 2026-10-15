@@ -196,6 +196,9 @@ What changes at that moment (all code paths already live):
 - FREE shrinks from the historical feature set to the taster set
   (`FREE_TASTER` in `packages/api/src/stripe.ts`); `multi_account` and other
   `TOOL_FEATURE_MAP` tools gate per plan.
+- Mail accounts: a FREE user may connect ONE mail account of any provider
+  (their first); a second one answers 403 `ENTITLEMENT_REQUIRED`
+  (`billing/mail-account-entitlement.ts`, founder decision 2026-10-15).
 - Free users' daily LLM cap drops from `DAILY_COST_CAP_CENTS` (100¢) to
   `FREE_DAILY_COST_CAP_CENTS`; on cap they now get the **upgrade nudge**
   message instead of the BYOK-only one.
