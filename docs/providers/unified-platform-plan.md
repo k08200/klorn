@@ -2638,9 +2638,13 @@ needs FA-9 and the admin guidance from F0.
     from an account whose own zone is on the other side, and record whether Graph
     returns it at midnight or converted (the code handles both; the converted case
     needs `originalStartTimeZone` to be a name in the table). An event cancelled
-    AFTER its first sync stays as a row: removal of upstream-cancelled events
-    (C2b, in flight, Google only) must be extended to Outlook before the flip,
-    or the calendar shows meetings that were cancelled. (d) `Prefer: outlook.timezone` accepts an
+    or deleted AFTER its first sync: done 2026-10-15 through the C3 window
+    reconcile. The Outlook session lists through `listWindow`; a calendarView
+    read to its last page and under `OUTLOOK_LISTING_MAX_EVENTS` (500) is the
+    window's whole set, rows carry the key `outlook:default`, and the rows it
+    lacks go with the deletion valve and the empty-calendar wait (#1425), behind
+    `OUTLOOK_CALENDAR_ENABLED`. Check it here: cancel one meeting and delete one
+    event after their first sync; both rows go on the next sync. (d) `Prefer: outlook.timezone` accepts an
     IANA name and echoes it; a moved event keeps its id. (e) getSchedule on the
     work account returns the account's own busy time; record the exact status a
     personal account answers, because the fallback rule (any 4xx except 401, 408

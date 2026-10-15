@@ -19,6 +19,9 @@ const m = vi.hoisted(() => ({
   accountUpdateMany: vi.fn(async () => ({ count: 1 })),
   refreshOutlookTokens: vi.fn(),
   captureError: vi.fn(),
+  existingRows: [] as Array<Record<string, unknown>>,
+  eventDeleteMany: vi.fn(),
+  attentionUpdateMany: vi.fn(),
 }));
 
 vi.mock("googleapis", () => ({
@@ -44,7 +47,12 @@ vi.mock("../db.js", () => {
   const prisma = {
     user: { findUnique: m.userFindUnique },
     automationConfig: { findUnique: m.configFindUnique },
-    calendarEvent: { upsert: m.eventUpsert },
+    calendarEvent: {
+      upsert: m.eventUpsert,
+      findMany: vi.fn(async () => m.existingRows),
+      deleteMany: m.eventDeleteMany,
+    },
+    attentionItem: { updateMany: m.attentionUpdateMany },
     linkedCalendarAccount: {
       findMany: vi.fn(async () => m.linkedRows),
       updateMany: m.accountUpdateMany,
@@ -52,11 +60,21 @@ vi.mock("../db.js", () => {
       findFirst: vi.fn(async () => null),
     },
   };
-  return { prisma, db: prisma };
+  const client = {
+    ...prisma,
+    $transaction: vi.fn(async (fn: (tx: typeof prisma) => Promise<unknown>) => fn(prisma)),
+  };
+  return {
+    prisma: client,
+    db: client,
+    INTERACTIVE_TX_OPTIONS: { maxWait: 10_000, timeout: 15_000 },
+  };
 });
 vi.mock("../sentry.js", () => ({ captureError: m.captureError }));
 
+import { OUTLOOK_CALENDAR_KEY } from "../pim/calendar-providers/outlook.js";
 import { syncLinkedCalendars } from "../pim/calendar-sync.js";
+import { _resetDeletionValveForTests } from "../pim/calendar-window-reconcile.js";
 import { _resetLinkedCalendarFailureLogForTests } from "../pim/linked-calendar-failure.js";
 
 const NOW = new Date("2026-09-30T05:00:00.000Z");
@@ -127,6 +145,12 @@ beforeEach(() => {
   m.linkedRows = [outlookRow("acct-out")];
   m.configFindUnique.mockResolvedValue({ timezone: "Asia/Seoul" });
   m.eventsList.mockResolvedValue({ data: { items: [] } });
+  m.existingRows = [];
+  m.eventDeleteMany.mockImplementation(async ({ where }: { where: { id: { in: string[] } } }) => ({
+    count: where.id.in.length,
+  }));
+  m.attentionUpdateMany.mockResolvedValue({ count: 0 });
+  _resetDeletionValveForTests();
 });
 afterEach(() => {
   for (const k of KEYS) {
@@ -165,7 +189,8 @@ describe("syncing an OUTLOOK account", () => {
     expect(url.origin + url.pathname).toBe(`${GRAPH}/me/calendarView`);
     expect(url.searchParams.get("startDateTime")).toBe("2026-09-30T05:00:00.000Z");
     expect(url.searchParams.get("endDateTime")).toBe("2026-10-30T05:00:00.000Z");
-    expect(url.searchParams.get("$top")).toBe("100");
+    // The sync's listing is complete up to the Outlook cap (500), not Google's page of 100.
+    expect(url.searchParams.get("$top")).toBe("500");
     const init = m.fetch.mock.calls[0]?.[1] as { headers: Record<string, string> };
     expect(init.headers.Authorization).toBe("Bearer at-acct-out");
     expect(init.headers.Prefer).toContain('outlook.timezone="Asia/Seoul"');
@@ -423,5 +448,80 @@ describe("failures", () => {
 
     expect(result).toEqual({ accounts: 1, events: 0, failedAccounts: 0 });
     expect(m.captureError).not.toHaveBeenCalled();
+  });
+});
+
+describe("removing the rows of events gone upstream (a complete listing)", () => {
+  const OLD = new Date("2026-09-01T00:00:00.000Z");
+  function existing(id: string, externalId: string) {
+    return {
+      id,
+      externalId,
+      startTime: new Date("2026-10-02T00:00:00.000Z"),
+      endTime: new Date("2026-10-02T01:00:00.000Z"),
+      updatedAt: OLD,
+      caldavCalendarKey: OUTLOOK_CALENDAR_KEY,
+      allDay: false,
+    };
+  }
+  const removedIds = () =>
+    m.eventDeleteMany.mock.calls.flatMap(
+      (c) => ((c as unknown[])[0] as { where: { id: { in: string[] } } }).where.id.in,
+    );
+
+  it("removes the account's row whose event the listing no longer has (deleted upstream)", async () => {
+    m.existingRows = [existing("r-1", "AAMk-1"), existing("r-gone", "AAMk-gone")];
+    await syncLinkedCalendars("u1", NOW);
+    expect(removedIds()).toEqual(["r-gone"]);
+    expect(m.attentionUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ source: "CALENDAR_EVENT", sourceId: { in: ["r-gone"] } }),
+        data: expect.objectContaining({ status: "RESOLVED" }),
+      }),
+    );
+  });
+
+  it("a listing of exactly the cap (500) on one last page is complete", async () => {
+    m.fetch.mockResolvedValue(page(Array.from({ length: 500 }, (_, k) => graphEvent(`AAMk-${k}`))));
+    m.existingRows = [existing("r-gone", "AAMk-gone"), existing("r-0", "AAMk-0")];
+    await syncLinkedCalendars("u1", NOW);
+    expect(removedIds()).toEqual(["r-gone"]);
+  });
+
+  it("removes the row of an event cancelled after its first sync (isCancelled)", async () => {
+    m.fetch.mockResolvedValue(
+      page([graphEvent("AAMk-1"), graphEvent("AAMk-c", { isCancelled: true })]),
+    );
+    m.existingRows = [existing("r-1", "AAMk-1"), existing("r-c", "AAMk-c")];
+    await syncLinkedCalendars("u1", NOW);
+    expect(removedIds()).toEqual(["r-c"]);
+  });
+
+  it("a listing cut at the page cap removes nothing", async () => {
+    m.fetch.mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({
+            value: [graphEvent("AAMk-1")],
+            "@odata.nextLink": `${GRAPH}/me/calendarView?$skip=1`,
+          }),
+          { status: 200 },
+        ),
+    );
+    m.existingRows = [existing("r-1", "AAMk-1"), existing("r-gone", "AAMk-gone")];
+    await syncLinkedCalendars("u1", NOW);
+    expect(m.eventDeleteMany).not.toHaveBeenCalled();
+  });
+
+  it("a listing over the Outlook cap removes nothing", async () => {
+    m.fetch.mockResolvedValue(page(Array.from({ length: 501 }, (_, k) => graphEvent(`AAMk-${k}`))));
+    m.existingRows = [existing("r-gone", "AAMk-gone")];
+    await syncLinkedCalendars("u1", NOW);
+    expect(m.eventDeleteMany).not.toHaveBeenCalled();
+  });
+
+  it("writes each row with the account's calendar key, so a later listing can account for it", async () => {
+    await syncLinkedCalendars("u1", NOW);
+    expect(upserts()[0]?.create).toMatchObject({ caldavCalendarKey: OUTLOOK_CALENDAR_KEY });
   });
 });

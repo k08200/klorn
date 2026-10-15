@@ -68,7 +68,7 @@ export function syncRowFields(event: ProviderCalendarEvent): CalendarEventFields
 interface SyncRow {
   readonly externalId: string;
   readonly fields: CalendarEventFields;
-  /** CalDAV only: the calendar of the account that listed it. */
+  /** CalDAV and Outlook: the calendar of the account that listed it (window reconcile). */
   readonly calendarKey?: string;
 }
 
