@@ -9,7 +9,7 @@ import Foundation
 // source guard that keeps the main window's own files on the tokens.
 
 /// The files that draw only in the main window (`macMainWindow`). They are
-/// held at zero raw style literals; the bar's files are not, until M8.
+/// held at zero raw style literals; the bar's files are not.
 enum TokenGuard {
     static let scope = [
         "Shell/MainShell", "Shell/NavSidebar", "Shell/MainNav", "Shell/MainSheets", "Today/",
@@ -236,7 +236,6 @@ func tokenSelfChecks(sourceDir: URL) -> [(String, Bool)] {
         text("Mail/MailSection.swift").contains("rowStyle: .window")
             && text("Mail/MailSection.swift").contains("style: .window")
             && text("Calendar/CalendarSection.swift").contains("style: .window")
-            && !text("Shell/FullView.swift").contains(".window")
             && text("Mail/MailRow.swift").components(separatedBy: "var style: MailRowStyle = .legacy").count == 3
             && text("Mail/FullList.swift").contains("var rowStyle: MailRowStyle = .legacy")
             && text("Mail/ReadingPane.swift").contains("var style: ShellStyle = .bar")

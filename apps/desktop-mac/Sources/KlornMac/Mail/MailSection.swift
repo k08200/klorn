@@ -7,7 +7,8 @@ import SwiftUI
 struct MailSection: View {
     @Environment(AppModel.self) private var model
     let actions: TopBarActions
-    /// Which pane this window's list keys address (M3), as in `FullView`.
+    /// Which pane this window's list keys address (M3). Per window, so it
+    /// never lives on the shared model.
     @State private var keyZone: MailKeyZone = .list
 
     var body: some View {

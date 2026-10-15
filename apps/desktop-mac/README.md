@@ -56,12 +56,13 @@ window** instead of a logged-out full view: the logo, one sentence, the
 sign-in buttons the server offers (Google always; Apple and Naver when
 enabled), the five lanes with what each means, and what Klorn does with the
 mail it reads. Signing in closes it and opens the full view, where the lane
-guide and the mailbox question follow as before. It is the same for both
-values of `macMainWindow`. A first launch that already has a token opens the
-full view, and later launches open nothing.
+guide and the mailbox question follow as before. A first launch that already
+has a token opens the full view, and later launches open nothing. (The full
+view is the main window; with `macMainWindow` stored OFF it is the expanded
+panel.)
 
-Every mail surface (the bar's full view and expanded panel, the main
-window) maps the model to one `SurfaceState`:
+Every mail surface (the expanded panel and the main window) maps the model
+to one `SurfaceState`:
 
 | State | Shows |
 |-------|-------|
@@ -83,8 +84,8 @@ not connected, connection lost, host not found, DNS failure, data not
 allowed, roaming off. A cancelled request is no error; everything else is
 "Klorn can't reach its server". A failed action on one mail (pin, unpin,
 dismiss, snooze) shows a short notice of its own and never raises the
-refresh banner: a row in the full view, the main window and the expanded
-panel, and on the HUD card the mail comes back with the reason. A first load
+refresh banner: a row in the main window and the expanded panel, and on
+the HUD card the mail comes back with the reason. A first load
 that was cancelled is retried once, then shows the failed state.
 
 Results belong to the session that asked for them. The model counts its
@@ -114,18 +115,21 @@ and open are refused for a stamp that has ended, before any request.
   Accessibility permission** and never takes focus.
 - **`⌘,`** — the Settings window (also the status-item *Preferences…* and the
   in-app Preferences buttons). Tabs: General, Accounts, Assistant,
-  Notifications, Appearance, Privacy.
+  Notifications, Appearance, Privacy. Accounts also edits the company
+  domains and the triage priorities (asked once by the purpose prompt).
 
-### Standard main window (beta, off by default)
+### Standard main window (on by default)
 
-Behind the `macMainWindow` user default (productization plan, macOS M2), the
-full view opens as a standard titled window (traffic lights, resizable,
-frame remembered across relaunch) instead of the bar's panel morphing into
-it. The pill and the expanded panel are unchanged. While the window is open
-Klorn is a regular app (Dock + Cmd+Tab + menus); closing it (⌘W, the red
-button, or the header ✕) returns Klorn to ambient unless Settings is still
-open. The header's *Smaller* closes the window and opens the expanded panel.
-With the default off, nothing changes.
+The full view is a standard titled window (traffic lights, resizable, frame
+remembered across relaunch); productization plan, macOS M2–M8. The bar is
+the pill and the expanded panel: M8 deleted the bar's own full state, and
+every "open the full view" entry point (first launch, Finder/Dock reopen,
+⌥⌘K from the expanded panel, the panel's buttons and rows, the urgent-mail
+card, notification banners, the app menus) opens or raises this window.
+While the window is open Klorn is a regular app (Dock + Cmd+Tab + menus);
+closing it (⌘W, the red button, or the header ✕) returns Klorn to ambient
+unless Settings is still open. The header's *Smaller* closes the window and
+opens the expanded panel. The composer is always its own window.
 
 The window's content is the five-item navigation (M4b), not the bar's full
 view: a sidebar with **Today · Mail · Calendar · Assistant** (Files joins
@@ -194,12 +198,19 @@ defaults to the bar's look, so the bar's previews are byte-identical.
   sidebar's rule run to the top and the traffic lights sit over the
   sidebar. The shell stays inside the safe area.
 
-Turn it on with either:
+The `macMainWindow` user default is ON when never set (M8). A stored OFF
+is kept: that user has no main window and the expanded panel is the largest
+view. ⌥⌘K from the expanded panel rests the bar, the panel hides its ⤢
+button, and Find, Go and the sections are disabled in the menus (New Email
+still opens the compose window). A request that would open the full view
+(a row, a lane count, approvals, the urgent-mail card, a banner) opens the
+expanded panel with a one-line hint and a *Settings…* button that opens
+Settings ▸ General. Switch it with either:
 
-- Settings ▸ General ▸ hold **Option** ▸ *Use standard main window (beta)*
-  (the switch stays visible once on, so it can be turned back off), or
-- `defaults write ai.klorn.desktop macMainWindow -bool YES` (packaged app;
-  an unbundled `swift run` reads the `KlornMac` domain), then relaunch Klorn.
+- Settings ▸ General ▸ *Use standard main window* (always visible), or
+- `defaults write ai.klorn.desktop macMainWindow -bool NO` (or `YES`;
+  packaged app — an unbundled `swift run` reads the `KlornMac` domain), then
+  relaunch Klorn.
 
 App menus (shown while Klorn is a regular app, i.e. a window is open):
 
@@ -212,7 +223,7 @@ App menus (shown while Klorn is a regular app, i.e. a window is open):
 | Go | Inbox · Calendar · Proposals · Commitments · Waiting on | `⌘1`–`⌘5` |
 | Go | Sent · Drafts · Archived · Teams (when granted) | — |
 
-With `macMainWindow` on, Go is the sections instead: Today `⌘1`, Mail `⌘2`,
+With `macMainWindow` on (the default), Go is the sections instead: Today `⌘1`, Mail `⌘2`,
 Calendar `⌘3`, Assistant `⌘4`, then Approvals `⌘5` and, without a key,
 Commitments · Waiting on · Sent · Drafts · Archived · Teams (when granted).
 
@@ -223,13 +234,11 @@ open mail's selection.
 Lane moves use `⌃⌘`, not bare digits: the reading pane binds bare `1`/`2`/`3`
 to its quick replies, and `⌃1`–`⌃5` are macOS's "Switch to Desktop N".
 Items disable when signed out or under a modal. Message items also need the
-full view to be key — the bar's full panel, or the main window when
-`macMainWindow` is on (not Settings) — and a selected message. While an inline
+main window to be key (not Settings) and a selected message. While an inline
 reply is open, Reply, Dismiss, Move to Lane, Go, and a mode-switching Search
 stay disabled so the draft can't be lost. File ▸ New Email is the only `⌘N`.
 
-Mail list keys (the full view's list in Inbox, a lane or a label; same in
-the bar's full panel and the main window):
+Mail list keys (the main window's list in Inbox, a lane or a label):
 
 | Key | Action |
 |-----|--------|
@@ -397,7 +406,7 @@ A full XCTest suite can be added when building under Xcode/CI.
 | File | Role |
 |------|------|
 | `KlornApp.swift` | `@main` entry (+ `--self-check`); `.accessory` app, `AppDelegate` owns the model, top bar, and hotkey |
-| `Shell/` | the SwiftUI shell (M4a split of the former `TopBar.swift`): `TopBarRoot.swift` (`BarState`, `TopBarActions`, `TopBarMetrics`, `TopBarRoot`), `FullView.swift` (`ListMode`, `FullView`, `FullViewModals`), `Sidebar.swift` (`FullSidebar`), `SidebarResize.swift` (section resize handle), `TeamsColumn.swift`; the main window (M4b): `MainNav.swift` (`NavSection`, `LaneFilter`, `NavRules`), `MainShell.swift`, `NavSidebar.swift` |
+| `Shell/` | the SwiftUI shell (M4a split of the former `TopBar.swift`): `TopBarRoot.swift` (`BarState`, `TopBarActions`, `TopBarMetrics`, `TopBarRoot`), `ListMode.swift` (`ListMode`), `OffscreenFriendlyScroll.swift`, `TeamsColumn.swift`; the main window (M4b): `MainNav.swift` (`NavSection`, `LaneFilter`, `NavRules`), `MainShell.swift`, `NavSidebar.swift` |
 | `Today/` | the main window's home (M4b): `TodayRules.swift` (pure composition), `TodayScreen.swift`, `TodayPanels.swift` (calendar and assistant panels) |
 | `Pill/` | `CollapsedPill.swift` (`CollapsedBar`), `ExpandedDashboard.swift` (`ExpandedPanel` and its columns), `BriefingCard.swift`, `AccountColumn.swift` |
 | `Mail/` | `FullList.swift` (the list column, alone in its file), `MailRow.swift` (`FullRow`, `SearchHitRow`), `MailboxList.swift`, `WaitingOnList.swift`, `CommitmentsList.swift`, `ReadingPane.swift`, `Compose.swift` (`ComposePanel`), `MailSection.swift` (main window: lane bar + list + reader) |
@@ -406,7 +415,7 @@ A full XCTest suite can be added when building under Xcode/CI.
 | `Onboarding/` | first launch (M6): `OnboardingWindow.swift` (`OnboardingRules`, `OnboardingWindowController`), `OnboardingView.swift` (the window's content, `LaneExplainer`) |
 | `Shared/` | `SurfaceState.swift` (M6: `SurfaceState`, `SurfaceStateRules`, `SurfaceStateView`, `ConnectionBanner`, `SignInButtons`, `SolidButtonStyle`); views used by more than one feature: `Controls.swift`, `TierMenus.swift` (`SnoozeMenu`, `TierMenu`), `LaneChip.swift` (lane, signal, reply-state and label chips), `AccountRows.swift` (account rows, diagnostics, update row), `SegmentedBar.swift` (filter tabs, `SourceBadge`) |
 | `SettingsWindow.swift` | `Settings` scene root (`TabView`), tab grouping, `SettingsOpener` |
-| `MainWindow.swift` | standard main window (M2, `macMainWindow`): `MainWindowController` (a lazily created AppKit `NSWindow`, never a SwiftUI scene; also attaches the sheets, M5), its rules, the Settings beta switch |
+| `MainWindow.swift` | standard main window (M2, `macMainWindow`): `MainWindowController` (a lazily created AppKit `NSWindow`, never a SwiftUI scene; also attaches the sheets, M5), its rules, the Settings switch |
 | `Mail/ComposeWindow.swift` | compose window (M5, same flag): `ComposeWindowRules`, `ComposeWindowController` (lazily created, driven by the model's `showCompose`) |
 | `Shell/MainSheets.swift` | the main window's sheets (M5): `MainSheet`, `MainSheetRules`, the shared modal-card chrome (`modalCard`) |
 | `AppCommands.swift` | app menus (`.commands`) and their pure enablement/shortcut rules |

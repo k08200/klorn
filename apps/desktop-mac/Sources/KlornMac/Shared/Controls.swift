@@ -102,29 +102,6 @@ struct SubtleTextButton: View {
     }
 }
 
-/// Sidebar nav row chrome: the same selection language as list rows — accent
-/// leading bar + the surface ladder's selected rung; hover uses the hover rung.
-/// One modifier so every nav row (tiers, Commitments, Assistant) stays in sync.
-struct SidebarRowChrome: ViewModifier {
-    let selected: Bool
-    @State private var hovering = false
-
-    func body(content: Content) -> some View {
-        content
-            .padding(.horizontal, 12).padding(.vertical, 9)
-            .background(alignment: .leading) {
-                if selected {
-                    RoundedRectangle(cornerRadius: 1.5).fill(Theme.accent)
-                        .frame(width: 3).padding(.vertical, 5)
-                }
-            }
-            .background(
-                selected ? Theme.surfaceSelected : hovering ? Theme.surfaceHover : .clear,
-                in: RoundedRectangle(cornerRadius: 8))
-            .onHover { hovering = $0 }
-    }
-}
-
 /// Stand-in for a `Menu` while the offscreen renderer runs. Menus are
 /// AppKit-backed and ImageRenderer paints them as a "restricted" placeholder
 /// glyph, which would otherwise end up in the screenshots the landing page
@@ -137,30 +114,6 @@ struct OffscreenMenuLabel: View {
             .padding(.horizontal, 9).padding(.vertical, 4)
             .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 6))
             .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.line))
-    }
-}
-
-/// Stand-in for a segmented `Picker` while the offscreen renderer runs, for
-/// the same reason as `OffscreenMenuLabel`: the control is AppKit-backed.
-struct OffscreenSegmentedLabel: View {
-    let titles: [String]
-    let selected: String
-    var body: some View {
-        HStack(spacing: 0) {
-            ForEach(titles, id: \.self) { title in
-                Text(title)
-                    .font(.caption.weight(title == selected ? .semibold : .regular))
-                    .foregroundStyle(title == selected ? Theme.text : Theme.textDim)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity).padding(.vertical, 3)
-                    .background(
-                        title == selected ? Theme.surfaceSelected : .clear,
-                        in: RoundedRectangle(cornerRadius: 5))
-            }
-        }
-        .padding(2)
-        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 7))
-        .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.line))
     }
 }
 

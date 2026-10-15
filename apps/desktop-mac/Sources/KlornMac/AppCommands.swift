@@ -25,8 +25,8 @@ struct ReplyRequest: Equatable, Sendable {
 struct MenuState: Equatable {
     var signedIn: Bool
     var fullViewOpen: Bool
-    /// A window showing the full view (the bar's full panel or the main
-    /// window) is key — not Settings or another window.
+    /// The main window (the full view) is key — not Settings or another
+    /// window.
     var mailSurfaceIsKey: Bool
     var modalOpen: Bool
     /// The lane of the firewall item the reading pane shows, nil if none.
@@ -42,6 +42,9 @@ struct MenuState: Equatable {
     var readerVisible: Bool
     /// The Klorn drive is live with a quota and no import runs (D7).
     var driveImportReady: Bool
+    /// `macMainWindow` is on (the default since M8). Off, there is no main
+    /// window to search in or navigate, so Find, Go and the sections are off.
+    var mainWindowAvailable: Bool = true
 
     @MainActor
     init(model: AppModel) {
@@ -56,6 +59,7 @@ struct MenuState: Equatable {
         listHasSearchField = model.listMode.hasSearchField
         readerVisible = model.readerVisible
         driveImportReady = model.driveImport.canImport
+        mainWindowAvailable = model.settings.macMainWindow
     }
 
     init(
@@ -86,17 +90,27 @@ enum MenuRules {
         .mailbox(.sent), .mailbox(.drafts), .mailbox(.archived), .teams,
     ]
 
-    /// Whether the key window is one that shows the full view: the bar's
-    /// panel only counts in its full state (the pill and the compact panel
-    /// show no reading pane), the main window whenever it is open.
-    static func mailSurfaceIsKey(
-        barPanelIsKey: Bool, barFullOpen: Bool, mainWindowIsKey: Bool, mainWindowOpen: Bool
-    ) -> Bool {
-        (barPanelIsKey && barFullOpen) || (mainWindowIsKey && mainWindowOpen)
+    /// Whether the key window is one that shows the full view: only the
+    /// main window, while it is open. The bar's pill and compact panel show
+    /// no reading pane (M8 deleted the bar's full state).
+    static func mailSurfaceIsKey(mainWindowIsKey: Bool, mainWindowOpen: Bool) -> Bool {
+        mainWindowIsKey && mainWindowOpen
+    }
+
+    /// Find, Go and the sections act on the main window; with it stored OFF
+    /// they have nothing to show and are dropped. Everything else is
+    /// unaffected (New Email is its own window). Pure for the harness.
+    static func mainWindowCommandAllowed(_ command: MenuCommand, macMainWindow: Bool) -> Bool {
+        switch command {
+        case .find, .go, .section: macMainWindow
+        default: true
+        }
     }
 
     static func isEnabled(_ command: MenuCommand, in s: MenuState) -> Bool {
-        guard s.signedIn else { return false }
+        guard s.signedIn,
+              mainWindowCommandAllowed(command, macMainWindow: s.mainWindowAvailable)
+        else { return false }
         // Message commands act on the mail visible in the reading pane, so
         // they need the full view up AND key (not Settings), no modal over
         // it, and a firewall item.

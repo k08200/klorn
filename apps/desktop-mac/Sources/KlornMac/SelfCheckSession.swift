@@ -386,7 +386,7 @@ func sessionSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
           files.map(\.lastPathComponent)
               .filter { !$0.hasPrefix("SelfCheck") && !$0.hasPrefix("PreviewRender") }
               .filter { text($0).contains("ActionErrorBanner(message: message)") }.sorted()
-              == ["ExpandedDashboard.swift", "FullView.swift", "MainShell.swift"]
+              == ["ExpandedDashboard.swift", "MainShell.swift"]
           && text("PushCard.swift").contains("if let message = state.actionError { actionErrorRow(message) }")
           && text("PushCardController.swift").contains("self.restore(item, failure: failure, stamp: stamp)"))
     for result in await sessionCardSelfChecks(sourceDir: sourceDir) { results.append(result) }

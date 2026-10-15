@@ -48,7 +48,7 @@ final class AppModel {
             onWindowPresenceChanged?()
         }
     }
-    /// True while the compose window (M5, `macMainWindow`) is on screen. It
+    /// True while the compose window (M5) is on screen. It
     /// counts like the main window: an open window keeps the app .regular.
     var composeWindowOpen = false {
         didSet {
@@ -68,31 +68,27 @@ final class AppModel {
     /// window (Settings, main, compose, onboarding) opens or closes.
     @ObservationIgnored var onWindowPresenceChanged: (() -> Void)?
     /// Wired by the AppDelegate to the compose window (M5): fires when the
-    /// composer is asked for (again) or put away. Unused with the flag off.
+    /// composer is asked for (again) or put away.
     @ObservationIgnored var onComposePresentationChanged: (() -> Void)?
 
-    /// Mirrors whether the top bar is in its full (app window) state.
-    /// Written by TopBarController on every render.
-    var barFullOpen = false
-    /// Whether the full view is up anywhere — the bar's full state or the
-    /// main window — so the app menus enable only what the UI can act on.
-    var isFullViewOpen: Bool { barFullOpen || mainWindowOpen }
+    /// A full-view request fell back to the expanded panel because the user
+    /// stored `macMainWindow` OFF: the panel says so once, with a way to
+    /// Settings. Written by TopBarController; cleared when the bar rests.
+    var mainWindowOffHint = false
+    /// Whether the full view (the main window) is up, so the app menus
+    /// enable only what the UI can act on.
+    var isFullViewOpen: Bool { mainWindowOpen }
     /// Mirrors the reading pane's inline reply composer being open: Reply in
     /// the Message menu is disabled then, since re-drafting would wipe
     /// what the user has typed.
     var readerReplying = false
-    /// Mirrors whether the top bar's panel is the key window. Written by
-    /// TopBarController.
-    var barPanelIsKey = false
     /// Mirrors whether the main window is the key window. Written by its
     /// window tracker.
     var mainWindowIsKey = false
     /// Message-menu commands act on what the full view shows, so they stay
     /// off while another window (Settings) is key.
     var mailSurfaceIsKey: Bool {
-        MenuRules.mailSurfaceIsKey(
-            barPanelIsKey: barPanelIsKey, barFullOpen: barFullOpen,
-            mainWindowIsKey: mainWindowIsKey, mainWindowOpen: mainWindowOpen)
+        MenuRules.mailSurfaceIsKey(mainWindowIsKey: mainWindowIsKey, mainWindowOpen: mainWindowOpen)
     }
     /// Set by the Message menu's Reply; the reading pane answers by starting
     /// the same AI-drafted reply as its own button — for this item only.
@@ -108,11 +104,9 @@ final class AppModel {
         replyRequest = ReplyRequest(token: (replyRequest?.token ?? 0) &+ 1, itemId: item.id)
     }
 
-    /// Go-menu navigation: switch the list column and put the sidebar on the
-    /// level that owns the destination (mail family vs root features).
+    /// Go-menu navigation: switch the list column.
     func go(to mode: ListMode) {
         listMode = mode
-        sidebarLevel = mode.isMailFamily ? .mail : .root
         clearSelection()
     }
 
@@ -128,23 +122,15 @@ final class AppModel {
         return queue?.item(id: id)
     }
 
-    /// A modal overlay covers the full view (its background is disabled).
-    var fullViewModalOpen: Bool {
-        MainSheetRules.modalOpen(
-            macMainWindow: settings.macMainWindow,
-            overlayModal: composeOverlayOpen || showTierGuide || showEventEditor || showPurposePrompt,
-            sheetAttached: mainSheetAttached)
-    }
+    /// A modal covers the full view (its background is disabled): only a
+    /// sheet actually attached to the open main window, so a flag left set
+    /// while that window is closed never disables ⌘N, Find or Go. The
+    /// compose window is its own window and covers nothing.
+    var fullViewModalOpen: Bool { mainSheetAttached }
     /// A sheet is attached to the open main window (M5). Written by
     /// `MainWindowController`; a sheet flag left set while the window is
     /// closed blocks nothing.
     var mainSheetAttached = false
-    /// The composer as an in-window overlay (the bar's full view). With
-    /// `macMainWindow` on it is its own window (M5) and covers nothing.
-    var composeOverlayOpen: Bool {
-        ComposeWindowRules.overlayOpen(
-            showCompose: showCompose, macMainWindow: settings.macMainWindow)
-    }
     /// Device calendars uploaded from EventKit (step C6): opt-in per calendar.
     let deviceCalendars: DeviceCalendarBridge
     /// Files the user picks, imported into the Klorn drive (step D7): opt-in per pick.
@@ -203,17 +189,11 @@ final class AppModel {
     }
     /// Where the main window is (M4b): section, Assistant pane, last mail facet.
     var mainNav = MainNav()
-    /// Which sidebar the full view shows: the root feature nav, or the mail
-    /// client's own sidebar (folders + categories, with a Back row). The
-    /// reference clients swap ONE sidebar between levels — two stacked nav
-    /// groups was the founder's first complaint about the previous shell.
-    var sidebarLevel: SidebarLevel = .root
 
     /// Open the full view on `tier`, and clear any reading-pane selection so the
     /// pane doesn't keep showing a message from the tier the user just left.
     func showTier(_ tier: Tier) {
         listMode = .tier(tier)
-        sidebarLevel = .mail  // a lane IS the mail level — Back must be there
         clearSelection()
     }
 

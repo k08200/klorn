@@ -30,14 +30,6 @@ enum MainSheetRules {
         windowVisible || miniaturized ? active : nil
     }
 
-    /// Whether a modal covers the full view, for the menus and list keys.
-    /// Flag off: the bar's overlays, by their flags, as always. Flag on:
-    /// only a sheet actually attached to the open main window, so a flag
-    /// left set while that window is closed never disables ⌘N, Find or Go.
-    static func modalOpen(macMainWindow: Bool, overlayModal: Bool, sheetAttached: Bool) -> Bool {
-        macMainWindow ? sheetAttached : overlayModal
-    }
-
     /// Whether the main window's keys and menus stand down: exactly while a
     /// sheet is up or waiting behind another one. The compose window is not
     /// a sheet and blocks nothing.

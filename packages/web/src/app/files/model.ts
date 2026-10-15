@@ -18,14 +18,22 @@ export interface FilesListRequest {
   q?: string;
   cursor?: string | null;
   limit?: number;
+  /** One Klorn drive folder's `externalId`; absent or null lists every source. */
+  folder?: string | null;
 }
 
-/** GET /api/drive/files with the search, page and size, URL-encoded. */
-export function filesListPath({ q, cursor, limit = FILES_PAGE_SIZE }: FilesListRequest): string {
+/** GET /api/drive/files with the search, page, size and folder, URL-encoded. */
+export function filesListPath({
+  q,
+  cursor,
+  limit = FILES_PAGE_SIZE,
+  folder,
+}: FilesListRequest): string {
   const params = new URLSearchParams({ limit: String(limit) });
   const text = q?.trim().slice(0, SEARCH_MAX_CHARS);
   if (text) params.set("q", text);
   if (cursor) params.set("cursor", cursor);
+  if (folder) params.set("folder", folder);
   return `${DRIVE_FILES_PATH}?${params.toString()}`;
 }
 

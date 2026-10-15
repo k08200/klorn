@@ -626,8 +626,10 @@
 "chip.draftReady" = "Borrador listo";
 "reading.openDraft" = "Abrir borrador";
 "reading.preparedDraft" = "Klorn preparó este borrador por adelantado — revísalo antes de enviar.";
-"prefs.mainWindow" = "Usar la ventana principal estándar (beta)";
-"prefs.mainWindow.detail" = "Abre la vista completa en una ventana normal que aparece en el Dock y en ⌘Tab mientras está abierta. La barra superior no cambia.";
+"prefs.mainWindow" = "Usar la ventana principal estándar";
+"prefs.mainWindow.detail" = "Activado de forma predeterminada. La vista completa se abre en una ventana normal que aparece en el Dock y en ⌘Tab mientras está abierta. Si se desactiva, el panel ampliado de la barra superior es la vista más grande.";
+"bar.mainWindowOff.hint" = "Activa la ventana principal en Ajustes para leer el correo aquí.";
+"bar.mainWindowOff.settings" = "Ajustes…";
 
 /* Device calendars (C6): EventKit calendars the user uploads, one by one. */
 "prefs.section.deviceCalendars" = "CALENDARIOS DEL DISPOSITIVO";

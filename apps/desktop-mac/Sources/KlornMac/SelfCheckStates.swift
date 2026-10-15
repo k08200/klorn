@@ -119,7 +119,7 @@ func stateSelfChecks(sourceDir: URL) -> [(String, Bool)] {
           && OnboardingRules.lanes.allSatisfy { !$0.onboardingLine.hasPrefix("onboarding.") })
     check("an open onboarding window makes the app regular; closed is the pre-M6 rule",
           TopBarController.activationPolicy(for: .collapsed, onboardingOpen: true) == .regular
-          && [BarState.collapsed, .expanded, .full].allSatisfy { state in
+          && [BarState.collapsed, .expanded].allSatisfy { state in
               bools.allSatisfy { dock in
                   bools.allSatisfy { main in
                       bools.allSatisfy { compose in
@@ -197,7 +197,7 @@ func stateSelfChecks(sourceDir: URL) -> [(String, Bool)] {
     }
     let blockingGuard = "SurfaceStateRules.isBlocking(model.surfaceState)"
     check("every surface that draws the skeleton for a missing queue checks the state first",
-          ["FullView.swift", "ExpandedDashboard.swift", "MailSection.swift"]
+          ["ExpandedDashboard.swift", "MailSection.swift"]
               .allSatisfy { text($0).contains(blockingGuard) }
           && text("TodayScreen.swift").contains("case .signedOut, .signingIn, .offline, .failed:"))
     check("the skeleton has only its known call sites",

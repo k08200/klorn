@@ -35,16 +35,10 @@ enum MainWindowRules {
         NSSize(width: usable.width, height: usable.height + titlebarInset)
     }
 
-    /// Whether an open request may create (or show) the window. With the
-    /// flag off no window object is ever made, so flag-off is unchanged.
+    /// Whether an open request may create (or show) the window. ON by
+    /// default since M8; with a stored OFF no window object is ever made.
     static func mayOpen(macMainWindow: Bool) -> Bool {
         macMainWindow
-    }
-
-    /// Settings ▸ General shows the beta toggle while Option is held, and
-    /// always once it is on, so it can be turned back off.
-    static func showsBetaToggle(optionHeld: Bool, macMainWindow: Bool) -> Bool {
-        optionHeld || macMainWindow
     }
 }
 
@@ -69,15 +63,16 @@ struct MainWindowRoot: View {
 
 /// Owns the standard main window: a plain AppKit NSWindow hosting the full
 /// view, created lazily on the first open request while `macMainWindow` is
-/// on and reused afterwards. There is no SwiftUI `Window` scene, so nothing
-/// is instantiated at launch and the flag-off app never has this window.
+/// on (the default since M8) and reused afterwards. There is no SwiftUI
+/// `Window` scene, so nothing is instantiated at launch and an app with the
+/// switch stored OFF never has this window.
 ///
 /// Open/closed and key state come from the window's own delegate callbacks
 /// (shown → open, willClose → closed), never from view lifecycle.
 @MainActor
 final class MainWindowController: NSObject, NSWindowDelegate {
     private let model: AppModel
-    /// FullView actions for the window; wired by the AppDelegate to the bar.
+    /// The shell's actions for the window; wired by the AppDelegate to the bar.
     var actionsProvider: (() -> TopBarActions?)?
     private(set) var window: NSWindow?
     /// The attached sheet (M5) and which one it is.
@@ -216,40 +211,20 @@ private final class SheetWindow: NSWindow {
     }
 }
 
-/// Settings ▸ General: the hidden switch for the main-window beta. Revealed
-/// while Option is held (the macOS convention for advanced items), and kept
-/// visible once on so it can be turned back off. The same switch is
-/// `defaults write ai.klorn.desktop macMainWindow -bool YES`.
-struct MainWindowBetaToggle: View {
+/// Settings ▸ General: the main-window switch, always visible (M8: it is ON
+/// by default, and a user who turned it off must find it again without a
+/// hidden modifier). The same switch is
+/// `defaults write ai.klorn.desktop macMainWindow -bool NO|YES`.
+struct MainWindowToggle: View {
     @Bindable var settings: AppSettings
-    @State private var optionHeld = NSEvent.modifierFlags.contains(.option)
-    @State private var monitor: Any?
 
     var body: some View {
-        Group {
-            if MainWindowRules.showsBetaToggle(
-                optionHeld: optionHeld, macMainWindow: settings.macMainWindow)
-            {
-                Toggle(isOn: $settings.macMainWindow) {
-                    Text(L("prefs.mainWindow")).foregroundStyle(Theme.text)
-                }
-                .toggleStyle(.switch).tint(Theme.accent)
-                Text(L("prefs.mainWindow.detail"))
-                    .font(.caption).foregroundStyle(Theme.textDim)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+        Toggle(isOn: $settings.macMainWindow) {
+            Text(L("prefs.mainWindow")).foregroundStyle(Theme.text)
         }
-        // A key-modifier monitor, not window tracking: view lifecycle is
-        // the right scope for it.
-        .onAppear {
-            monitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
-                optionHeld = event.modifierFlags.contains(.option)
-                return event
-            }
-        }
-        .onDisappear {
-            if let monitor { NSEvent.removeMonitor(monitor) }
-            monitor = nil
-        }
+        .toggleStyle(.switch).tint(Theme.accent)
+        Text(L("prefs.mainWindow.detail"))
+            .font(.caption).foregroundStyle(Theme.textDim)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }

@@ -169,19 +169,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
         model.onWindowPresenceChanged = { [weak bar] in bar?.refreshActivationPolicy() }
         settingsOpener = opener
-        // Main window (M2, behind `macMainWindow`): the bar routes every
-        // "open the full view" to it while the flag is on.
+        // Main window (M2; the default since M8): the bar routes every
+        // "open the full view" to it. A user who stored `macMainWindow` OFF
+        // gets the expanded panel instead (TopBarController.openMainWindow).
         let mainWindow = MainWindowController(model: model)
         mainWindow.actionsProvider = { [weak bar] in bar?.mainWindowActions() }
         self.mainWindow = mainWindow
         bar.onOpenMainWindow = { [weak mainWindow] in mainWindow?.open() }
         bar.onCloseMainWindow = { [weak mainWindow] in mainWindow?.close() }
-        // Compose window (M5, same flag): the model's composer state drives it.
+        // Compose window (M5): the model's composer state drives it. It is
+        // the only composer since M8, with or without the main window.
         let composeWindow = ComposeWindowController(model: model)
         model.onComposePresentationChanged = { [weak composeWindow] in composeWindow?.sync() }
-        // Switching the main window off puts an open compose window away
-        // (draft kept), so it can never sit beside the overlay composer.
-        model.settings.onMacMainWindowChanged = { [weak composeWindow] in composeWindow?.sync() }
         self.composeWindow = composeWindow
         // Menu-bar anchor while the pill is hidden (one-anchor rule): appears
         // when the pill's ✕ / Preferences hides the bar, disappears when the
@@ -224,13 +223,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         // With no account yet that window is the onboarding window (M6),
         // not a logged-out full view; signing in there continues into the
         // full view, where the existing post-login flow takes over.
-        let onboarding = OnboardingWindowController(model: model) { [weak bar] in bar?.openFull() }
+        let onboarding = OnboardingWindowController(model: model) { [weak bar] in bar?.openMainWindow() }
         self.onboarding = onboarding
         switch OnboardingRules.launchAction(
             firstLaunch: model.settings.consumeFirstLaunch(), signedIn: model.phase == .signedIn)
         {
         case .onboarding: onboarding.open()
-        case .fullView: bar.openFull()
+        case .fullView: bar.openMainWindow()
         case .none: break
         }
 
@@ -264,13 +263,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     /// that need the full view open it first (menus also show with the bar
     /// collapsed when show-in-Dock or Settings keeps the app .regular).
     func perform(_ command: MenuCommand) {
+        // Stored OFF: no main window, so Find/Go/section have nowhere to
+        // land — and must not leave a search focus pending for later.
+        guard MenuRules.mainWindowCommandAllowed(command, macMainWindow: model.settings.macMainWindow) else { return }
         switch command {
         case .compose:
-            // With its own window (M5) the composer needs no full view
+            // The composer is its own window (M5) and needs no full view
             // under it; ⌘N on an open composer brings it forward.
-            if !ComposeWindowRules.usesWindow(macMainWindow: model.settings.macMainWindow) {
-                ensureFullView()
-            }
             model.showCompose = true
         case .find:
             ensureFullView()
@@ -301,7 +300,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     /// Open the full view only if it isn't already up: a same-state render
     /// rebuilds the hosting view, which would reset in-progress UI state.
     private func ensureFullView() {
-        if !model.isFullViewOpen { topBar?.openFull() }
+        if !model.isFullViewOpen { topBar?.openMainWindow() }
     }
 
     /// Closing the main window must never quit Klorn: the bar and the poll
@@ -320,7 +319,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     ) -> Bool {
         switch OnboardingRules.reopenTarget(onboardingOpen: model.onboardingWindowOpen) {
         case .onboarding: onboarding?.open()
-        case .fullView: topBar?.openFull()
+        case .fullView: topBar?.openMainWindow()
         }
         return false
     }

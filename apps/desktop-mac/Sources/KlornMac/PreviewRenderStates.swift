@@ -52,22 +52,6 @@ extension PreviewRender {
         let network = L("error.network")
         let everyProvider = ["google", "apple", "naver"]
 
-        // The bar's full view: the surface everyone has while `macMainWindow`
-        // is off.
-        let full = TopBarMetrics.size(for: .full)
-        let barStates: [(String, AppModel)] = [
-            ("full-signed-out", stateModel(phase: .signedOut, loginProviders: everyProvider)),
-            ("full-signing-in", stateModel(phase: .signingIn)),
-            ("full-offline", stateModel(phase: .signedIn, loadError: network, offline: true)),
-            ("full-error", stateModel(phase: .signedIn, loadError: strings[0])),
-            // Loaded mail, refresh failing: the banner, the mail still there.
-            ("full-stale-offline", stateModel(
-                phase: .signedIn, firewallJSON: firewallJSON, loadError: network, offline: true)),
-        ]
-        for (name, model) in barStates {
-            shot(name, size: full, model) { TopBarRoot(state: .full, actions: actions) }
-        }
-
         let expanded = TopBarMetrics.size(for: .expanded)
         shot("expanded-signed-out", size: expanded, stateModel(phase: .signedOut)) {
             TopBarRoot(state: .expanded, actions: actions)

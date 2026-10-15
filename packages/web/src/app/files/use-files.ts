@@ -36,21 +36,25 @@ async function readFiles(path: string, scope: string): Promise<DriveFilesListRes
   }
 }
 
-export function useFilesList(q: string) {
+/** The list, or one Klorn drive folder of it (`folder`: its externalId). */
+export function useFilesList(q: string, folder: string | null = null, enabled = true) {
   const text = q.trim();
   const query = useInfiniteQuery({
-    queryKey: queryKeys.drive.files(text),
+    queryKey: queryKeys.drive.files(text, folder),
     queryFn: ({ pageParam }) =>
-      readFiles(filesListPath({ q: text, cursor: pageParam }), "files.list"),
+      readFiles(filesListPath({ q: text, cursor: pageParam, folder }), "files.list"),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
-    // A new search keeps the last list on screen until it answers.
-    placeholderData: keepPreviousData,
+    // A new search keeps the last list on screen until it answers; a new
+    // folder does not, so no row of the folder just left stays clickable.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[3] === folder ? keepPreviousData(previous) : undefined,
     staleTime: FILES_STALE_MS,
+    enabled,
   });
   return {
     files: query.data?.pages.flatMap((page) => page.files) ?? [],
-    loading: query.isLoading,
+    loading: !enabled || query.isLoading,
     failed: query.isError && !query.data,
     // keepPreviousData: the last search's list is on screen while a new one
     // loads. It is not this search's answer, so it pages nothing and counts nothing.

@@ -156,7 +156,7 @@ struct PreferencesView: View {
                 infoRow(L("prefs.launchAtLogin.unavailable.label"), L("prefs.launchAtLogin.unavailable.value"))
             }
             updatesRow
-            MainWindowBetaToggle(settings: model.settings)
+            MainWindowToggle(settings: model.settings)
         }
     }
 
@@ -278,6 +278,10 @@ struct PreferencesView: View {
                     Text(error).font(.caption).foregroundStyle(Theme.textDim)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                // Edited in the bar's full sidebar until M8 deleted it; the
+                // purpose prompt asks once, this is where they change later.
+                CompanyDomainsRow()
+                PrioritiesRow()
             }
         }
     }

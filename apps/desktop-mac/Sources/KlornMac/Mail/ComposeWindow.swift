@@ -11,20 +11,7 @@ enum ComposeWindowRules {
     static let defaultSize = NSSize(width: 620, height: 520)
     static let styleMask: NSWindow.StyleMask = [.titled, .closable, .miniaturizable, .resizable]
 
-    /// The composer is its own window exactly while the main window is the
-    /// full view. With the flag off it stays the bar's in-window overlay and
-    /// no window object is ever made.
-    static func usesWindow(macMainWindow: Bool) -> Bool {
-        macMainWindow
-    }
-
-    /// Whether the composer covers the full view as a modal overlay. A
-    /// separate window covers nothing, so the mail stays readable under it.
-    static func overlayOpen(showCompose: Bool, macMainWindow: Bool) -> Bool {
-        showCompose && !usesWindow(macMainWindow: macMainWindow)
-    }
-
-    /// The window refuses to close mid-send (same as the overlay's ✕), so a
+    /// The window refuses to close mid-send, so a
     /// send result always has a composer to land in.
     static func mayClose(sending: Bool) -> Bool {
         !sending
@@ -34,12 +21,12 @@ enum ComposeWindowRules {
     /// touches the draft; only Discard and a successful send clear it.
     enum Step: Equatable { case show, close, none }
 
-    static func step(
-        macMainWindow: Bool, signedIn: Bool, showCompose: Bool, windowVisible: Bool
-    ) -> Step {
-        // Switched off, or signed out, with the window up: close it. With
-        // the flag off the overlay is the composer, and two must not coexist.
-        guard usesWindow(macMainWindow: macMainWindow), signedIn else {
+    /// The composer is always its own window (M8: the bar's in-window
+    /// overlay went with the bar's full state), with or without the main
+    /// window.
+    static func step(signedIn: Bool, showCompose: Bool, windowVisible: Bool) -> Step {
+        // Signed out with the window up: close it.
+        guard signedIn else {
             return windowVisible ? .close : .none
         }
         if showCompose { return .show }
@@ -71,8 +58,8 @@ struct ComposeWindowRoot: View {
 }
 
 /// Owns the compose window: a plain AppKit NSWindow hosting the composer,
-/// created lazily the first time the composer is asked for while
-/// `macMainWindow` is on, and reused afterwards. The draft lives on the
+/// created lazily the first time the composer is asked for, and reused
+/// afterwards. The draft lives on the
 /// model, so there is one composer and one window.
 ///
 /// The model's `showCompose` is the single source of truth; `sync()` moves
@@ -95,8 +82,7 @@ final class ComposeWindowController: NSObject, NSWindowDelegate {
     /// request, so asking for an open composer brings it forward.
     func sync() {
         let step = ComposeWindowRules.step(
-            macMainWindow: model.settings.macMainWindow, signedIn: model.phase == .signedIn,
-            showCompose: model.showCompose,
+            signedIn: model.phase == .signedIn, showCompose: model.showCompose,
             windowVisible: (window?.isVisible ?? false) || (window?.isMiniaturized ?? false))
         switch step {
         case .show: show()

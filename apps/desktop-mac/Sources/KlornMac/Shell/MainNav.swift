@@ -251,7 +251,6 @@ extension AppModel {
     /// and the reader together.
     func revealInMail(_ item: FirewallItem) {
         listMode = NavRules.mailMode(showing: item.tier, current: mainNav.lastMailMode)
-        sidebarLevel = .mail
     }
 
     /// Called once when the main window is first built.
