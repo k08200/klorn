@@ -15,11 +15,11 @@ import { apiFetch } from "../../lib/api";
 import { captureFirstTouchAttribution } from "../../lib/attribution";
 import { useAuth } from "../../lib/auth";
 import { readCachedProviders, writeCachedProviders } from "../../lib/auth-providers-cache";
-import { providerLane } from "../../lib/provider-lane";
 import { homePath } from "../../lib/home";
 import { useT } from "../../lib/i18n";
 import { startNativeGoogleLogin } from "../../lib/native/native-auth";
 import { isNativeShell } from "../../lib/native/shell";
+import { providerLane } from "../../lib/provider-lane";
 
 const MIN_PASSWORD_LENGTH = 8;
 

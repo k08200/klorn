@@ -39,13 +39,13 @@ describe("providerLane", () => {
 describe("invite-only notice", () => {
   // Google approved Klorn's OAuth verification on 2026-10-03; the cap is a
   // beta decision now, not a review the user is waiting on.
-  const REVIEW = /Google|security review|보안 심사|セキュリティ審査|安全审核|revisión de seguridad|revue de sécurité|Sicherheitsprüfung/i;
-  it.each(Object.entries({ en, ko, ja, zh, es, fr, de }))(
-    "%s no longer blames a pending Google review",
-    (_locale, dict) => {
-      const body = (dict as Record<string, string>)["auth.inviteOnlyBody"];
-      expect(body).toBeTruthy();
-      expect(body).not.toMatch(REVIEW);
-    },
-  );
+  const REVIEW =
+    /Google|security review|보안 심사|セキュリティ審査|安全审核|revisión de seguridad|revue de sécurité|Sicherheitsprüfung/i;
+  it.each(
+    Object.entries({ en, ko, ja, zh, es, fr, de }),
+  )("%s no longer blames a pending Google review", (_locale, dict) => {
+    const body = (dict as Record<string, string>)["auth.inviteOnlyBody"];
+    expect(body).toBeTruthy();
+    expect(body).not.toMatch(REVIEW);
+  });
 });
