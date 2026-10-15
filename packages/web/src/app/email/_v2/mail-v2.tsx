@@ -11,7 +11,7 @@
  * also on — the P4 hotkey registry.
  */
 
-import type { EmailListItem, EmailUndoActionResponse } from "@klorn/contract";
+import type { EmailListItem, EmailUndoActionResponse, LiveTier } from "@klorn/contract";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -172,6 +172,12 @@ export function MailV2() {
   };
 
   const { laneMove, archived } = actions;
+  // One lane move for the keyboard, the row's lane menu and a swipe.
+  const moveLane = (email: EmailListItem, tier: LiveTier) => {
+    actions.setError(null);
+    actions.dismissArchived();
+    laneMove.move({ id: email.id, subject: email.subject || null, tier: email.tier }, tier);
+  };
   const undoLabel = t(keyboardTriage ? "undo.action" : "mailV2.undo");
   const undoLatest = () => {
     if (laneMove.notice) void laneMove.undo();
@@ -190,11 +196,7 @@ export function MailV2() {
     archiveBlockedReason: () =>
       isDemo ? t("keys.reason.demo") : actions.busy ? t("keys.reason.busy") : null,
     laneBlockedReason: () => (isDemo ? t("keys.reason.demo") : null),
-    moveLane: (email, tier) => {
-      actions.setError(null);
-      actions.dismissArchived();
-      laneMove.move({ id: email.id, subject: email.subject || null, tier: email.tier }, tier);
-    },
+    moveLane,
     undo: undoLatest,
     canUndo: Boolean(laneMove.notice || archived || readerUndo) && !actions.busy,
     compose: () => setComposeOpen(true),
@@ -322,6 +324,7 @@ export function MailV2() {
                   onArchive={(email) => void actions.archive([email])}
                   onSetRead={(email, isRead) => void actions.setRead([email], isRead)}
                   onRemind={(email, key) => void actions.remind(email, key)}
+                  onMoveLane={moveLane}
                   onPick={pick}
                 />
               )}

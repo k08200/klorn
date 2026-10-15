@@ -2,13 +2,17 @@
 
 Native Android + iOS app for Klorn. Two run modes share one project:
 
-- **PROBE (default)** — a self-contained on-device test (`www/index.html`) that
+- **SHELL (default, product)** — loads the hosted web app (`https://app.klorn.ai`)
+  and adds native push (FCM) + on-device calendar. All native-aware JS lives in
+  `packages/web/src/lib/native/`, guarded by `Capacitor.isNativePlatform()`.
+  Its bundled web dir `www/` holds only the offline / load-failure page
+  (`www/index.html`), which Capacitor shows via `server.errorPath` when
+  app.klorn.ai cannot be reached; its Retry reloads `server.url`.
+- **PROBE (opt-in, `KLORN_PROBE=1`)** — a self-contained on-device test
+  (`probe/index.html`, its own web dir so store builds never contain it) that
   lists every calendar the device exposes. It answers the one make-or-break
   question — **does Samsung Calendar surface via the standard Android provider?**
-  — with **no backend, no login, no Firebase**. Run this first.
-- **SHELL (product)** — loads the hosted web app (`https://app.klorn.ai`) and
-  adds native push (FCM) + on-device calendar. All native-aware JS lives in
-  `packages/web/src/lib/native/`, guarded by `Capacitor.isNativePlatform()`.
+  — with **no backend, no login, no Firebase**.
 
 > **Standalone package** — NOT in the pnpm workspace. Use **npm** here (like
 > `apps/desktop-mac`). The `android/` project IS committed (it carries our
@@ -63,7 +67,7 @@ source ~/.zshrc && adb version
 ```bash
 cd apps/mobile
 npm install
-npx cap sync android          # android/ is committed; this repopulates web assets
+KLORN_PROBE=1 npx cap sync android   # android/ is committed; this copies probe/ in
 npx cap run android           # pick your Galaxy from the list
 #   or: npx cap open android  → press Run (▶) in Android Studio
 ```
@@ -119,7 +123,7 @@ Do it in two stages.
 
 ### Stage A — smoke test on iPhone (no deploy, no keys, no Apple paid account)
 
-Default config is PROBE mode: the app loads the bundled probe page and reads the
+With `KLORN_PROBE=1` the app loads the bundled probe page and reads the
 device calendar via EventKit. Confirms the app builds + runs on your iPhone and
 the calendar plugin works — before any backend/keys.
 

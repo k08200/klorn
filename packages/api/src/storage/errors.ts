@@ -71,3 +71,20 @@ export class StorageError extends Error {
     this.retryable = details.retryable ?? retryableByDefault(code, details.status);
   }
 }
+
+/**
+ * The parts of an error that are safe to print, tag and store. A StorageError
+ * message is built from variable names, HTTP statuses and the vendor's error
+ * code; anything else is not trusted to be free of secrets, so it is reduced to
+ * a code.
+ */
+export function printableStorageError(err: unknown): {
+  code: StorageErrorCode;
+  message: string;
+  retryable: boolean;
+} {
+  if (err instanceof StorageError) {
+    return { code: err.code, message: err.message, retryable: err.retryable };
+  }
+  return { code: "upstream", message: "unexpected error", retryable: false };
+}

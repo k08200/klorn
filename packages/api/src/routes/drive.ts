@@ -2,13 +2,14 @@
  * Drive routes — step D2 of docs/providers/unified-platform-plan.md. A read-only
  * view of the metadata index of the user's files across sources.
  *
- *   GET /files       — list, newest first; `q` searches names; paged
+ *   GET /files       — list, newest first; `q` searches names; `folder` lists
+ *                      one Klorn drive folder (D3); paged
  *   GET /files/:id   — one file's metadata
  *
- * There is no upload, download or delete here: those arrive with the Klorn drive
- * (D3). Session-authenticated and user-scoped through drive/drive-read.ts, which
- * also applies the provider kill switch; with no connector implemented the list
- * is empty and every id is a 404.
+ * Upload, folders, download, rename/move and delete of the Klorn drive (D3) are
+ * routes/klorn-drive.ts, under the same prefix. Session-authenticated and
+ * user-scoped through drive/drive-read.ts, which also applies the provider kill
+ * switch.
  *
  * Each route is rate limited twice: per client address (route config, before
  * authentication) and per user (after it), so neither many users behind one
@@ -64,8 +65,13 @@ const listQuerySchema = {
     // large limit is served the largest page instead of an error.
     limit: { type: "integer", minimum: 1 },
     cursor: { type: "string", minLength: 1, maxLength: DRIVE_CURSOR_MAX_CHARS },
+    // One folder of the Klorn drive (D3): a folder's externalId, or "root".
+    folder: { type: "string", minLength: 1, maxLength: DRIVE_ID_MAX_CHARS },
   },
 } as const;
+
+/** The `folder` value that names the Klorn drive's root. */
+export const DRIVE_ROOT_FOLDER = "root";
 
 interface ListQuery {
   q?: string;
@@ -73,6 +79,7 @@ interface ListQuery {
   sourceKey?: string;
   limit?: number;
   cursor?: string;
+  folder?: string;
 }
 
 interface IdParams {
@@ -90,10 +97,11 @@ export function driveRoutes(opts: {
     request: FastifyRequest<{ Querystring: ListQuery }>,
     reply: FastifyReply,
   ): Promise<DriveFilesListResponse | FastifyReply> {
-    const { q, provider, sourceKey, limit, cursor: rawCursor } = request.query;
+    const { q, provider, sourceKey, limit, cursor: rawCursor, folder: rawFolder } = request.query;
     const cursor = rawCursor === undefined ? undefined : decodeDriveCursor(rawCursor);
     if (cursor === null) return reply.code(HTTP_BAD_REQUEST).send(INVALID_CURSOR);
-    const options = { userId: getUserId(request), limit, cursor, provider, sourceKey };
+    const folder = rawFolder === DRIVE_ROOT_FOLDER ? null : rawFolder;
+    const options = { userId: getUserId(request), limit, cursor, provider, sourceKey, folder };
     const text = normaliseDriveSearchText(q);
     return text === null
       ? await listFiles(options, providerEnabled)

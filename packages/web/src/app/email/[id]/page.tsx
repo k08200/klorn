@@ -1528,6 +1528,8 @@ function ReplyDraftBox({
   onSend: () => void;
 }) {
   const { t } = useT();
+  // MAIL_V2 (P10): fields type at 16px on touch so iOS does not zoom into them.
+  const touchField = useAuth().user?.mailV2 === true ? " pointer-coarse:text-field" : "";
   const [mode, setMode] = useState<EmailWorkMode>("founder");
   const toggleAttachment = (attachmentId: string) => {
     onSelectedAttachmentIdsChange(
@@ -1608,7 +1610,7 @@ function ReplyDraftBox({
         value={intent}
         onChange={(e) => onIntentChange(e.target.value)}
         placeholder={t("emailDetail.replyDraft.intentPlaceholder")}
-        className="mb-3 w-full rounded-lg border border-line bg-surface-panel/80 px-3 py-2 text-xs text-ink-soft placeholder-ink-dim outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15"
+        className={`mb-3 w-full rounded-lg border border-line bg-surface-panel/80 px-3 py-2 text-xs text-ink-soft placeholder-ink-dim outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15${touchField}`}
       />
       {presets === "collapsed" ? (
         <details
@@ -1656,7 +1658,7 @@ function ReplyDraftBox({
               <input
                 value={draft.subject}
                 onChange={(e) => onDraftChange({ ...draft, subject: e.target.value })}
-                className="w-full rounded-lg border border-line bg-surface-panel/80 px-2 py-1.5 text-ink-soft outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15"
+                className={`w-full rounded-lg border border-line bg-surface-panel/80 px-2 py-1.5 text-ink-soft outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15${touchField}`}
               />
             </label>
           </div>
@@ -1664,7 +1666,7 @@ function ReplyDraftBox({
             value={draft.body}
             onChange={(e) => onDraftChange({ ...draft, body: e.target.value })}
             rows={7}
-            className="w-full rounded-lg border border-line bg-surface-panel/80 px-3 py-2 text-sm leading-6 text-ink outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15"
+            className={`w-full rounded-lg border border-line bg-surface-panel/80 px-3 py-2 text-sm leading-6 text-ink outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15${touchField}`}
           />
           {attachments.length > 0 && (
             <div className="space-y-2 rounded-lg border border-line-soft bg-surface-raised/70 px-3 py-2">

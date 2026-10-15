@@ -24,7 +24,7 @@ account-deletion flow, permission strings, binary settings, real user flows).
 | **Permission usage strings** | ✅ PASS | `Info.plist` has `NSMicrophoneUsageDescription` + `NSSpeechRecognitionUsageDescription` (voice) + push; calendar strings correctly removed (no feature = no prompt). |
 | **Binary settings** | ✅ PASS | `ITSAppUsesNonExemptEncryption=false`, versions aligned (1.0 / build 1), Background Modes present. |
 | **Redesign flows in** | ✅ AUTO | Shell loads `app.klorn.ai`; the new light+sky web redesign ships to mobile automatically — no mobile code change needed. |
-| **4.2 thin-wrapper** | ⚠️ founder | De-risked once native push delivers a visible notification at launch — needs the APNs key (B.4). Native sign-in + voice + push make the case. |
+| **4.2 thin-wrapper** | ⚠️ founder | De-risked once native push delivers a visible notification at launch — needs the APNs key (B.4). Native sign-in + voice + push make the case. A bundled offline page (P10) now replaces the blank / system error WebView when the network is down — one less "website in a frame" signal, not a fix on its own. |
 
 **Only true code item left is optional:** Sign in with Apple (4.8 de-risk). Flag me if you want it wired.
 
@@ -34,6 +34,14 @@ account-deletion flow, permission strings, binary settings, real user flows).
   by default; the throwaway Samsung-calendar probe is opt-in only
   (`KLORN_PROBE=1 npx cap sync`). A plain `npx cap sync` can no longer ship the
   probe screen. **Store builds must NOT set `KLORN_PROBE`.**
+- **Offline / load-failure page (P10).** `www/` now holds only a branded,
+  bundled page (EN/KO, light/dark, safe-area aware) that Capacitor shows via
+  `server.errorPath` when `app.klorn.ai` fails to load (no network, DNS, TLS,
+  or an HTTP error on the main frame). "Try again" reloads the server URL, and
+  it retries on its own when the device comes back online. The Samsung probe
+  moved to `probe/` (its own web dir), so it cannot end up in a store build.
+  **Not yet verified on a device** — check airplane-mode launch on iPhone and
+  Android before submitting (see the 4.2 note below).
 - **Calendar permission prompt removed.** The on-device calendar probe (which
   asked for calendar access then only logged) is no longer called on native
   launch — it was an App Store **5.1.1** risk (permission with no feature). The
@@ -77,6 +85,14 @@ native first-session behavior is the system-browser Google sign-in. **To de-risk
 before submitting, native push must actually deliver a visible notification**
 (needs the iOS entitlement + APNs key + FCM below). With live push + native
 sign-in demonstrable at launch, the app moves from "thin wrapper" to defensible.
+
+Reviewers often launch once in airplane mode. A blank WebView or the system
+"cannot connect" screen reads as a website in a frame; since P10 the shell shows
+its own bundled offline page instead (`www/index.html`, via `server.errorPath`).
+That helps the impression but does not answer 4.2 by itself — live push and
+native sign-in still have to carry the case. The mobile web app itself also has
+touch-native swipe triage on Mail rows (P10, behind `MAIL_V2`), worth showing in
+the review notes once that flag is on in production.
 
 ---
 

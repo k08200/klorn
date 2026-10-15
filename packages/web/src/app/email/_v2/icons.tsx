@@ -106,3 +106,11 @@ export const ChevronDownIcon = () => (
     <path d="m4 6 4 4 4-4" />
   </Glyph>
 );
+
+/** Lanes: three stacked rows, one marked — "move to another lane". */
+export const LanesIcon = () => (
+  <Glyph>
+    <path d="M6 4h7.5M6 8h7.5M6 12h7.5" />
+    <circle cx="3" cy="8" r="1.2" fill="currentColor" stroke="none" />
+  </Glyph>
+);

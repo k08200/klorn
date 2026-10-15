@@ -5,13 +5,13 @@
  *   - `purgeAllUserData`: the data goes, the account row stays
  *     (`DELETE /api/user/me/data`).
  *
- * Both delete the user's stored objects FIRST (step D1 of
- * docs/providers/unified-platform-plan.md) and stop if that fails. The user id
- * is the only handle on those objects: once the rows are gone, files left in
- * the bucket could never be found again, and the request would have been
- * answered "deleted" while they still existed. A failed deletion leaves every
- * row in place and is safe to retry; it is reported under the Sentry tag
- * `scope: storage.purge` (runbook in the plan's D1 entry). While
+ * Both start with the user's stored objects (`purgeUserObjects`, steps D1 and
+ * D3 of docs/providers/unified-platform-plan.md), before any row goes. The user
+ * id is the only handle on those objects, so with OBJECT_STORAGE_ENABLED on that
+ * call first records a pending purge (StoragePurge, which outlives the rows),
+ * then tries the bucket once. A bucket that fails no longer stops the deletion:
+ * the hourly sweep finishes the purge (runbook in the plan's D3 entry). The call
+ * throws, and no row goes, only when that record cannot be written. While
  * OBJECT_STORAGE_ENABLED is off the object step is a no-op.
  */
 

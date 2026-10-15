@@ -49,6 +49,13 @@ const PENDING_WINDOW_DAYS = 30;
 /** Never ask the user to rule on more senders than one sitting can absorb. */
 const PENDING_LIMIT = 50;
 
+/**
+ * Most recent undecided senders checked against history per call. Bounds the
+ * `IN (...)` list on a heavy mailbox; newest senders are checked first, so the
+ * cap only ever drops the oldest candidates.
+ */
+const MAX_CANDIDATES_CHECKED = 500;
+
 function normalizeSender(raw: string): string {
   return raw.trim().toLowerCase();
 }
@@ -193,15 +200,29 @@ export async function listPendingScreener(
     });
     const decidedSet = new Set((decided as { sender: string }[]).map((d) => d.sender));
 
-    const undecided = candidates.filter((c) => !decidedSet.has(c.sender)).slice(0, limit);
+    const undecided = candidates
+      .filter((c) => !decidedSet.has(c.sender))
+      .slice(0, MAX_CANDIDATES_CHECKED);
+    if (undecided.length === 0) return [];
 
-    // The window above says "first message is recent"; this confirms it against
-    // the full history, so a long-standing sender who simply went quiet for a
-    // while is never presented as a stranger.
-    const checked = await Promise.all(
-      undecided.map(async (c) => ((await isFirstContact(userId, c.sender)) ? c : null)),
+    // The window above says "wrote recently"; first contact means the sender's
+    // FIRST message is recent too. Any mail from them before the window makes
+    // them a long-standing sender who simply went quiet, never a stranger.
+    // (Checking "no messages at all" here can never pass: every candidate came
+    // from the groupBy above, so each has at least one.)
+    const prior = await db.emailMessage.findMany({
+      where: {
+        userId,
+        fromAddress: { in: undecided.map((c) => c.sender) },
+        receivedAt: { lt: cutoff },
+      },
+      select: { fromAddress: true },
+      distinct: ["fromAddress"],
+    });
+    const knownBefore = new Set(
+      (prior as { fromAddress: string | null }[]).map((p) => normalizeSender(p.fromAddress ?? "")),
     );
-    return checked.filter((c): c is PendingSender => c !== null);
+    return undecided.filter((c) => !knownBefore.has(c.sender)).slice(0, limit);
   } catch (err) {
     console.warn(
       "[screener] pending list failed:",

@@ -11,6 +11,7 @@ Key facts for accurate citation:
 - Reply state on every row (reply owed / answered through Klorn) and a "waiting on" list of mail you sent that nobody answered yet (Mac app; the local mirror is INBOX-only, so an answer a filter filed elsewhere is not seen).
 - Agent access: the inbox is an MCP server (Streamable HTTP at https://api.klorn.ai/api/mcp, key from Settings → MCP API keys). Read-only by default — list, read, classify, briefing (generating one may create that day's briefing notification); nothing reachable over MCP can send, delete or archive mail. Client setup: https://github.com/k08200/klorn/blob/main/docs/mcp/connect-clients.md
 - Works with Gmail (OAuth) and Naver (IMAP); multiple inboxes supported.
+- Google completed its OAuth verification review for Klorn on 2026-10-03, after an independent CASA Tier 2 assessment by TAC Security (result: In Compliance; next assessment due August 2027). Approved scopes: gmail.readonly, gmail.modify, gmail.send, calendar.readonly, calendar.events. Details: https://klorn.ai/security/
 - Interface languages: the Mac app and this site ship in English, Korean, Japanese, Chinese, Spanish, French and German; replies are drafted in the sender's language.
 - Self-hosting: the entire stack is AGPLv3 — you can run it yourself.
 

@@ -31,7 +31,7 @@
     "packages/web/src/components/auth-guard.tsx": 1,
     "packages/web/src/components/auth-screen.tsx": 1,
     "packages/web/src/components/beta-learning-card.tsx": 1,
-    "packages/web/src/components/bottom-tabs.tsx": 3,
+    "packages/web/src/components/bottom-tabs.tsx": 2,
     "packages/web/src/components/brand-visuals.tsx": 4,
     "packages/web/src/components/briefing-card.tsx": 2,
     "packages/web/src/components/byok-keys-section.tsx": 5,

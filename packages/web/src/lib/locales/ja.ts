@@ -1465,6 +1465,7 @@ const ja: Record<string, string> = {
   "mailV2.reader.back": "メールに戻る",
   "mailV2.reader.actions": "メールの操作",
   "mailV2.reader.moveTo": "レーンを移動",
+  "mailV2.swipe.current": "現在",
   "mailV2.reader.noNext": "この表示にはこれより下のメールはありません。",
   "mailV2.reader.noPrev": "この表示にはこれより新しいメールはありません。",
   "mailV2.reader.firstContact": "初めての連絡",

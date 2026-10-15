@@ -22,6 +22,7 @@ const h = vi.hoisted(() => ({
   emailFindFirst: vi.fn(),
   emailFindMany: vi.fn(),
   emailDeleteMany: vi.fn(async () => ({ count: 1 })),
+  attentionUpdateMany: vi.fn(async () => ({ count: 1 })),
   emailUpdate: vi.fn(async () => ({})),
   mailActionsFor: vi.fn(),
   syncEmailByGmailId: vi.fn(),
@@ -38,6 +39,7 @@ vi.mock("../db.js", () => {
       deleteMany: h.emailDeleteMany,
       update: h.emailUpdate,
     },
+    attentionItem: { updateMany: h.attentionUpdateMany },
     user: {
       findUnique: vi.fn(async () => ({
         id: "user-1",
@@ -335,6 +337,45 @@ describe("POST /api/email/bulk archive", () => {
     expect(h.emailDeleteMany).toHaveBeenCalledWith({
       where: { userId: "user-1", id: { in: ["e-a", "e-c"] } },
     });
+    // The sync can never see these rows leave, so the archive closes their
+    // attention items itself — only the ones that actually went out.
+    expect(h.attentionUpdateMany).toHaveBeenCalledTimes(1);
+    expect(h.attentionUpdateMany).toHaveBeenCalledWith({
+      where: {
+        userId: "user-1",
+        source: "EMAIL",
+        sourceId: { in: ["e-a", "e-c"] },
+        status: { in: ["OPEN", "SNOOZED"] },
+      },
+      data: { status: "RESOLVED", resolvedAt: expect.any(Date) },
+    });
+  });
+
+  it("a failed attention bookkeeping never fails an archive that already went out", async () => {
+    h.emailFindMany.mockResolvedValue([{ id: "e-a", gmailId: "gm-a", linkedInboxAccountId: null }]);
+    h.mailActionsFor.mockResolvedValue({
+      ...surface("GOOGLE"),
+      archive: vi.fn(async () => ({ success: true })),
+    });
+    h.attentionUpdateMany.mockRejectedValueOnce(new Error("db down"));
+
+    const res = await bulk(await buildApp(), ["e-a"]);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ success: true, updatedCount: 1, failed: [] });
+  });
+
+  it("touches no attention item when nothing was archived", async () => {
+    h.emailFindMany.mockResolvedValue([{ id: "e-a", gmailId: "gm-a", linkedInboxAccountId: null }]);
+    h.mailActionsFor.mockResolvedValue({
+      ...surface("GOOGLE"),
+      archive: vi.fn(async () => ({ error: "Gmail archive failed" })),
+    });
+
+    const res = await bulk(await buildApp(), ["e-a"]);
+
+    expect(res.json()).toMatchObject({ success: false, updatedCount: 0 });
+    expect(h.attentionUpdateMany).not.toHaveBeenCalled();
   });
 
   it("isolates a provider lookup failure to its own item", async () => {

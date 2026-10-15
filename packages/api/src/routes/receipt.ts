@@ -27,6 +27,8 @@ import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireEntitled } from "../billing/entitlement-guard.js";
 import { prisma } from "../db.js";
+import { localDayUtcRange } from "../time-zone.js";
+import { getUserTimeZone } from "../user-timezone.js";
 
 export async function receiptRoutes(app: FastifyInstance) {
   // Plugin-level auth + paywall gate (the per-route requireAuth below is kept
@@ -39,13 +41,10 @@ export async function receiptRoutes(app: FastifyInstance) {
   app.get("/today", { preHandler: requireAuth }, async (request): Promise<DailyReceipt> => {
     const userId = getUserId(request);
 
-    // Determine today's date window in user's timezone
-    const config = await prisma.automationConfig.findUnique({
-      where: { userId },
-      select: { timezone: true },
-    });
-    const tz = config?.timezone || "UTC";
-    const { todayStart, todayEnd } = getTodayWindow(tz);
+    // Today's window in the user's timezone (product default when unset), so
+    // the receipt's day matches the briefing's and the activity page's.
+    const tz = await getUserTimeZone(userId);
+    const { dateKey, gte: todayStart, lt: todayEnd } = localDayUtcRange(new Date(), tz);
 
     // Fetch all AttentionItems surfaced today
     const attentionItems = await (
@@ -173,7 +172,7 @@ export async function receiptRoutes(app: FastifyInstance) {
     const narrative = buildNarrative(totalSeen, totalInterrupted, savedFromInbox, autoHandled);
 
     return {
-      date: todayStart.toISOString().slice(0, 10),
+      date: dateKey,
       silenced: allSilenced,
       queued,
       pushed,
@@ -235,30 +234,6 @@ export async function receiptRoutes(app: FastifyInstance) {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function getTodayWindow(timezone: string): { todayStart: Date; todayEnd: Date } {
-  try {
-    const now = new Date();
-    const formatter = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, dateStyle: "short" });
-    const localDateStr = formatter.format(now); // YYYY-MM-DD
-    const todayStart = new Date(`${localDateStr}T00:00:00`);
-    const todayEnd = new Date(`${localDateStr}T23:59:59.999`);
-    // Convert local midnight to UTC
-    const offset = now.getTime() - Date.parse(now.toLocaleString("en-US", { timeZone: timezone }));
-    return {
-      todayStart: new Date(todayStart.getTime() + offset),
-      todayEnd: new Date(todayEnd.getTime() + offset),
-    };
-  } catch {
-    // Fallback to UTC day
-    const now = new Date();
-    const todayStart = new Date(now);
-    todayStart.setUTCHours(0, 0, 0, 0);
-    const todayEnd = new Date(now);
-    todayEnd.setUTCHours(23, 59, 59, 999);
-    return { todayStart, todayEnd };
-  }
-}
 
 function buildNarrative(
   totalSeen: number,

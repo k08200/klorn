@@ -19,7 +19,8 @@ export interface RouteRateLimit {
 
 /**
  * A hook enforcing `limit` per `keyGenerator(request)`, answering 429
- * `{ error: message }` with a retry-after header once it is passed. It does
+ * `{ error: message, code: "rate-limited", retryable: true }` with a
+ * retry-after header once it is passed. It does
  * nothing when the rate-limit plugin is not registered (some tests), or when an
  * earlier hook already answered.
  */
@@ -37,6 +38,9 @@ export function rateLimitHook(
     const result = await limiter(request);
     if (result.isAllowed || !result.isExceeded) return;
     reply.header("retry-after", String(result.ttlInSeconds));
-    return reply.code(HTTP_TOO_MANY_REQUESTS).send({ error: message });
+    // `error` as before; `code` and `retryable` as every drive error carries them.
+    return reply
+      .code(HTTP_TOO_MANY_REQUESTS)
+      .send({ error: message, code: "rate-limited", retryable: true });
   };
 }

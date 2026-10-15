@@ -1,201 +1,205 @@
 <!doctype html>
+<!--
+  Klorn app shell — offline / load-failure page (productization plan P10).
+
+  The shell loads the hosted web app (capacitor.config.ts `server.url`). When
+  that load fails (no network, DNS, TLS, or an HTTP error on the main frame),
+  Capacitor swaps in this bundled page via `server.errorPath`. It must work
+  with no network at all: no external fonts, scripts or images, and no
+  Capacitor plugins (Android does not expose them to the error page).
+
+  Retry goes back to APP_URL, which MUST match `server.url` in
+  capacitor.config.ts. The page also retries on its own when the device comes
+  back online.
+-->
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="color-scheme" content="light dark" />
+    <!-- Nothing leaves this page but the Retry navigation (not governed by CSP):
+         its own image, inline style and inline script only. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"
     />
     <title>Klorn</title>
     <style>
       :root {
-        color-scheme: dark;
+        --canvas: #fafafa;
+        --panel: #ffffff;
+        --ink: #0f172a;
+        --ink-muted: #475569;
+        --line: #e2e8f0;
+        --accent: #0369a1;
+        --accent-ink: #ffffff;
+        --focus: #0369a1;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --canvas: #0b1220;
+          --panel: #111a2c;
+          --ink: #f1f5f9;
+          --ink-muted: #a3b1c6;
+          --line: #233047;
+          --accent: #38bdf8;
+          --accent-ink: #082f49;
+          --focus: #38bdf8;
+        }
       }
       * {
         box-sizing: border-box;
       }
+      html,
       body {
         margin: 0;
-        padding: 20px;
-        background: #10100d;
-        color: #e7e2d6;
-        font-family: system-ui, -apple-system, sans-serif;
-        line-height: 1.5;
+        height: 100%;
+        background: var(--canvas);
+        color: var(--ink);
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Apple SD Gothic Neo",
+          "Noto Sans KR", sans-serif;
+        -webkit-text-size-adjust: 100%;
+      }
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: calc(24px + env(safe-area-inset-top)) calc(24px + env(safe-area-inset-right))
+          calc(24px + env(safe-area-inset-bottom)) calc(24px + env(safe-area-inset-left));
+        word-break: keep-all;
+      }
+      main {
+        width: 100%;
+        max-width: 360px;
+        text-align: center;
+      }
+      .mark {
+        width: 72px;
+        height: 72px;
+        margin: 0 auto 24px;
+        border-radius: 16px;
+        background: #ffffff;
+        border: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .mark img {
+        width: 52px;
+        height: 52px;
       }
       h1 {
-        color: #d8a45d;
+        margin: 0 0 8px;
         font-size: 20px;
-        margin: 0 0 4px;
+        line-height: 28px;
+        font-weight: 600;
       }
-      p.sub {
-        color: #8a8678;
-        font-size: 13px;
-        margin: 0 0 16px;
+      p {
+        margin: 0 0 24px;
+        font-size: 15px;
+        line-height: 22px;
+        color: var(--ink-muted);
       }
       button {
-        width: 100%;
-        padding: 14px;
-        font-size: 16px;
-        font-weight: 600;
-        color: #10100d;
-        background: #d8a45d;
+        appearance: none;
+        min-height: 48px;
+        min-width: 160px;
+        padding: 0 24px;
         border: 0;
         border-radius: 10px;
-        margin-bottom: 16px;
+        background: var(--accent);
+        color: var(--accent-ink);
+        font: inherit;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
       }
-      button:active {
-        opacity: 0.8;
+      button:focus-visible {
+        outline: 2px solid var(--focus);
+        outline-offset: 3px;
       }
-      #status {
-        font-size: 14px;
-        padding: 10px 12px;
-        border-radius: 8px;
-        margin-bottom: 16px;
-        background: #1c1b16;
-        border: 1px solid #2c2a22;
+      button[aria-busy="true"] {
+        opacity: 0.7;
       }
-      .ok {
-        color: #7fd88f;
-      }
-      .err {
-        color: #f08a7a;
-      }
-      .count {
-        color: #d8a45d;
-        font-weight: 700;
-      }
-      .cal {
-        background: #1c1b16;
-        border: 1px solid #2c2a22;
-        border-radius: 10px;
-        padding: 12px;
-        margin-bottom: 10px;
-      }
-      .cal.samsung {
-        border-color: #d8a45d;
-        box-shadow: 0 0 0 1px #d8a45d44;
-      }
-      .cal .title {
-        font-weight: 700;
-        font-size: 15px;
-        margin-bottom: 6px;
-      }
-      .cal .badge {
-        display: inline-block;
-        font-size: 11px;
-        font-weight: 700;
-        color: #10100d;
-        background: #d8a45d;
-        border-radius: 5px;
-        padding: 1px 6px;
-        margin-left: 6px;
-      }
-      pre {
-        margin: 0;
-        font-size: 12px;
-        color: #b6b1a3;
-        white-space: pre-wrap;
-        word-break: break-all;
+      .status {
+        min-height: 20px;
+        margin: 16px 0 0;
+        font-size: 13px;
+        line-height: 18px;
       }
     </style>
   </head>
   <body>
-    <h1>Samsung Calendar Probe</h1>
-    <p class="sub">
-      Confirms whether Samsung Calendar (and Google) surface via the standard
-      Android calendar provider — the gate for Klorn's on-device calendar.
-    </p>
-    <button id="run">Read device calendars</button>
-    <div id="status">Tap the button (or it runs automatically) to read calendars.</div>
-    <div id="list"></div>
-
+    <main>
+      <div class="mark"><img src="mark.png" alt="" width="52" height="52" /></div>
+      <h1 id="title">Klorn can't load right now</h1>
+      <p id="body">Something went wrong reaching Klorn. Your mail is safe; try again in a moment.</p>
+      <button id="retry" type="button">Try again</button>
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+    </main>
     <script>
-      const statusEl = document.getElementById("status");
-      const listEl = document.getElementById("list");
+      (function () {
+        // Must match capacitor.config.ts `server.url`.
+        var APP_URL = "https://app.klorn.ai";
 
-      function setStatus(html, cls) {
-        statusEl.innerHTML = html;
-        statusEl.className = cls || "";
-      }
+        var COPY = {
+          en: {
+            offlineTitle: "You're offline",
+            offlineBody: "Klorn needs a connection to show your mail. It will reload when you're back online.",
+            errorTitle: "Klorn can't load right now",
+            errorBody: "Something went wrong reaching Klorn. Your mail is safe; try again in a moment.",
+            retry: "Try again",
+            retrying: "Connecting…",
+            stillOffline: "Still offline. Check Wi-Fi or mobile data.",
+          },
+          ko: {
+            offlineTitle: "오프라인 상태입니다",
+            offlineBody: "메일을 보려면 인터넷 연결이 필요합니다. 연결되면 자동으로 다시 불러옵니다.",
+            errorTitle: "지금은 Klorn을 불러올 수 없습니다",
+            errorBody: "Klorn에 연결하지 못했습니다. 메일은 안전합니다. 잠시 후 다시 시도해 주세요.",
+            retry: "다시 시도",
+            retrying: "연결 중…",
+            stillOffline: "아직 오프라인입니다. Wi-Fi나 모바일 데이터를 확인해 주세요.",
+          },
+        };
 
-      // Heuristic: does this calendar look like it belongs to a Samsung account?
-      function looksSamsung(cal) {
-        const blob = JSON.stringify(cal).toLowerCase();
-        return (
-          blob.includes("samsung") ||
-          blob.includes("com.osp.app.signin") || // Samsung account type
-          blob.includes("vnd.sec.") || // Samsung phone/local providers
-          blob.includes("sec.android")
-        );
-      }
+        var lang = String(navigator.language || "en").toLowerCase().indexOf("ko") === 0 ? "ko" : "en";
+        var copy = COPY[lang];
+        document.documentElement.lang = lang;
 
-      async function run() {
-        listEl.innerHTML = "";
-        const Cap = window.Capacitor;
-        if (!Cap || !Cap.isNativePlatform || !Cap.isNativePlatform()) {
-          setStatus(
-            "Not running inside the native app. Build & run on a real Galaxy: <code>npx cap run android</code>.",
-            "err",
-          );
-          return;
+        var title = document.getElementById("title");
+        var body = document.getElementById("body");
+        var retry = document.getElementById("retry");
+        var status = document.getElementById("status");
+
+        function render() {
+          var offline = navigator.onLine === false;
+          title.textContent = offline ? copy.offlineTitle : copy.errorTitle;
+          body.textContent = offline ? copy.offlineBody : copy.errorBody;
+          retry.textContent = copy.retry;
+          retry.removeAttribute("aria-busy");
         }
-        const Calendar = Cap.Plugins && Cap.Plugins.CapacitorCalendar;
-        if (!Calendar) {
-          setStatus("CapacitorCalendar plugin not found — did `cap sync` run?", "err");
-          return;
-        }
 
-        try {
-          setStatus("Requesting calendar read permission…");
-          // Cross-platform: requestReadOnlyCalendarAccess is Android-only (iOS has
-          // no read-only — reading needs full access). requestPermission with the
-          // readCalendar scope maps to full access on iOS and READ_CALENDAR on Android.
-          const perm = await Calendar.requestPermission({ scope: "readCalendar" });
-          if (perm.result !== "granted") {
-            setStatus(`Permission not granted: <b>${perm.result}</b>`, "err");
+        function reload() {
+          if (navigator.onLine === false) {
+            status.textContent = copy.stillOffline;
             return;
           }
-
-          setStatus("Reading calendars…");
-          const { result: calendars } = await Calendar.listCalendars();
-          const samsung = calendars.filter(looksSamsung);
-
-          setStatus(
-            `<span class="count">${calendars.length}</span> calendar(s) found · ` +
-              (samsung.length
-                ? `<span class="ok">${samsung.length} look Samsung ✓</span>`
-                : `<span class="err">none look Samsung</span>`),
-            "ok",
-          );
-
-          for (const cal of calendars) {
-            const div = document.createElement("div");
-            const isSamsung = looksSamsung(cal);
-            div.className = "cal" + (isSamsung ? " samsung" : "");
-            const title = cal.title || cal.name || cal.id || "(untitled)";
-            div.innerHTML =
-              `<div class="title">${escapeHtml(String(title))}` +
-              (isSamsung ? `<span class="badge">SAMSUNG?</span>` : "") +
-              `</div><pre>${escapeHtml(JSON.stringify(cal, null, 2))}</pre>`;
-            listEl.appendChild(div);
-          }
-        } catch (err) {
-          setStatus("Failed: " + escapeHtml(String(err && err.message ? err.message : err)), "err");
-          console.error("[CALENDAR-PROBE]", err);
+          retry.setAttribute("aria-busy", "true");
+          retry.textContent = copy.retrying;
+          status.textContent = "";
+          window.location.replace(APP_URL);
         }
-      }
 
-      function escapeHtml(s) {
-        return s.replace(
-          /[&<>"']/g,
-          (c) =>
-            ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
-        );
-      }
-
-      document.getElementById("run").addEventListener("click", run);
-      // Auto-run once the Capacitor bridge is ready.
-      document.addEventListener("DOMContentLoaded", () => setTimeout(run, 400));
+        render();
+        retry.addEventListener("click", reload);
+        window.addEventListener("online", reload);
+        window.addEventListener("offline", render);
+      })();
     </script>
   </body>
 </html>

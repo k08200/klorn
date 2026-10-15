@@ -3214,7 +3214,9 @@ workstream D's turn comes.
     a stored `Content-Disposition`, and lets a bucket-scoped token list.
   - A HEAD answer has no body, so `headObject` cannot tell a missing object from
     a missing bucket. `ping` and every GET can.
-- Runbook: an account deletion is blocked by storage (flag on).
+- Runbook: an account deletion is blocked by storage (flag on). Superseded by D3,
+  where storage no longer blocks a deletion; see D3's runbooks, including
+  "purges pending but not running" for the flag turned off with records left.
   - What the person sees: "delete my account" or "delete my data" fails with a
     500. Nothing was deleted from the database, and whatever objects were
     already removed stay removed. Trying again is safe and carries on.
@@ -3389,7 +3391,8 @@ with no connector behind it yet, and two read-only routes.
   and the export; every list has the scope inside its `AND` and every by-id
   read the visibility check; every read names the user and selects its
   columns; an update writes only the changes; no raw SQL names the table. The
-  calendar guard exempts exactly the four drive files that name a `sourceKey`.
+  calendar guard exempts exactly the four drive files that name a `sourceKey`
+  (six since D3).
 - Untrusted text. A file name is written by whoever shared the file. No module
   that holds drive rows imports the LLM today, and the guard fails for a new
   one until it is listed: as not LLM-facing, or as LLM-facing with the pattern
@@ -3449,9 +3452,320 @@ with no connector behind it yet, and two read-only routes.
   policies: with a role that has no BYPASSRLS, no tenant set sees no row, a
   tenant sees only its own, and the system setting sees all.
 - Rollback: revert the PR. The table and the enum can stay; nothing reads them.
-**D3 — Klorn drive** (*outline*). Depends on: D1, D2. Upload, list, download,
-delete. Upload is inherent here; V4 restricts external connectors, not
-Klorn-owned storage.
+**D3 — Klorn drive.** Depends on: D1, D2. Upload, list, download, rename/move
+and delete of the user's own files. Upload is inherent here; V4 restricts
+external connectors, not Klorn-owned storage. Landed 2026-10-14 (branch
+`feat/klorn-drive`, PR not yet opened), flag OFF. Server and API only: **the web
+and Mac UI follow in a later step coordinated with the product design work**,
+which also adds the vocabulary row (`../product-vocabulary.md`) and the copy.
+D3 ships no user-facing copy beyond API error strings, which clients replace by
+`code`.
+- Flags, read per request:
+  - `KLORN_DRIVE_ENABLED` (default off). The drive is live only while
+    `DRIVE_ENABLED` and `OBJECT_STORAGE_ENABLED` are on too: KLORN is registered
+    in `DRIVE_PROVIDER_ENABLED` as `klornDriveLive` (`KLORN_DRIVE_ENABLED` and
+    `OBJECT_STORAGE_ENABLED`; `DRIVE_ENABLED` is checked by the scope itself), and
+    the D3 routes are gated by `klornDriveRoutesEnabled`, which is exactly "KLORN
+    rows are visible". With any of the three off, every D3 route answers
+    Fastify's default 404 before authentication (`darkRouteGate`) and every Klorn
+    row is hidden from the list. Turning it off hides files and stops writes; it
+    never deletes anything.
+  - `KLORN_DRIVE_QUOTA_BYTES` (P3), required: unset or blank refuses every
+    upload with 503 `quota-not-configured` (fail closed: at 20 uploads a minute
+    of 25 MiB, an unbounded drive is an open-ended bucket bill, and the
+    per-address limit trusts the proxy's client address), and boot warns by the
+    variable's name while the drive is live; a whole number of bytes is one
+    limit for every user; anything else refuses every upload with 503 and logs
+    the variable's name.
+- API (`routes/klorn-drive.ts`, types in `packages/contract/src/drive.ts`), all
+  session-authenticated, every row found under the session's user id:
+
+  | Route | Answer |
+  |---|---|
+  | `POST /api/drive/files` (multipart: `size`, optional `parentExternalId`, then one `file`) | 201 `{ file }` |
+  | `POST /api/drive/folders` `{ name, parentExternalId? }` | 201 `{ file }` |
+  | `GET /api/drive/files/:id/download` | `{ url, expiresInSeconds }`, `Cache-Control: no-store` |
+  | `PATCH /api/drive/files/:id` `{ name?, parentExternalId? }` (null: the root) | `{ file }` |
+  | `DELETE /api/drive/files/:id` | `{ deleted: { files, folders } }` |
+  | `GET /api/drive/files?folder=<externalId>\|root` (D2's list, new filter) | one Klorn folder's children |
+
+  Errors are `{ error, code, retryable }` with a fixed status per code
+  (`drive/klorn-errors.ts`): 400 `invalid-upload`, `invalid-name`,
+  `multipart-malformed` (the parser failed: a body cut short, a broken part
+  header, with or without a code); 404
+  `not-found`, `parent-not-found`; 409 `read-only` (a visible external file,
+  V4), `is-folder`, `cycle`, `too-deep`, `folder-too-large`, `account-purging`;
+  413 `too-large`, `quota-exceeded`; 429 `rate-limited` (the shared
+  `rate-limit-hook.ts` now sends `{ error, code, retryable }` for the D2 routes
+  too, `error` unchanged); 503 `storage-unavailable`, `quota-not-configured`. Another user's
+  id, an unknown id and a hidden row are the same 404.
+- Upload (`drive/klorn-upload.ts`), in two phases so the row is written only
+  once the whole request parsed cleanly:
+  - Store. The name is cleaned (`drive/klorn-file-name.ts`: control and every
+    bidi control character removed, NFC, 255 characters, `.` and `..` refused;
+    metadata only, never a key segment). `size` must be plain decimal digits and
+    at most 25 MiB (`KLORN_DRIVE_MAX_FILE_BYTES` = D1's `MAX_OBJECT_BYTES`, the
+    only decided size); a `Content-Length` more than 64 KiB above it is refused
+    before the body is parsed (a cheap early refusal, not covered by a test). The parent must be a folder of the user's Klorn drive. The
+    purge record and the quota are checked. The first 4 KiB are read (within
+    `UPLOAD_HEAD_TIMEOUT_MS`, 30 s; a body that does not start is released and
+    refused) and the type is sniffed (`drive/klorn-content-type.ts`); the client's Content-Type is
+    never read. Then the body streams to `getUserStorage().put(userId,
+    "drive", …)` under a key D1 mints, with the caller cap and D1's byte counter.
+    The multipart file limit is the cap plus one byte, so an oversized body
+    reaches the counter instead of being cut to size. The etag is the SHA-256 of
+    the bytes as they streamed (`sha256:<hex>`).
+  - Commit. The quota is checked again, then the DriveFile row (KLORN,
+    `sourceKey` `'klorn'`, `externalId` a fresh UUID, the key, size, type, etag,
+    parent) is written through `upsertDriveFileRow`, only after the object exists
+    and the request ended cleanly. If a data deletion started while the row was
+    written, the row and the object are removed again (row first: the pending
+    purge deletes the object even if that delete fails). A failed row write, a second file part, a field after the file, or
+    a truncated part deletes the object (`discardKlornUpload`, best effort,
+    reported under `scope: drive.upload.cleanup` if it fails; the object then
+    waits for the account purge). So does a purge check after the PUT that
+    fails. A refused request's body is still read to its end and dropped, so the
+    client's write completes and the socket is freed (tested over a real
+    socket); a client that goes away mid-upload is a 400, not a 500.
+  - Why `'klorn'` as the per-user `sourceKey`: a user has exactly one Klorn
+    drive, the identity already includes `userId`, and D2 fixed the value
+    (`KLORN_DRIVE_SOURCE_KEY`). A per-user value would repeat the user id.
+  - Types: the bytes decide. Kept as a label only when on the allowlist: PDF;
+    PNG, JPEG, GIF, WebP, HEIC/HEIF, AVIF, TIFF, BMP; UTF-8 text as text/plain,
+    CSV, TSV, Markdown or JSON (by extension); RTF; Word, Excel, PowerPoint and
+    HWP (OLE compound file plus the matching extension); DOCX, XLSX, PPTX and
+    HWPX (zip plus the matching extension); OpenDocument (declared in the zip's
+    first entry). Everything else is stored as `application/octet-stream`:
+    executables (PE, ELF, Mach-O, a `#!` line, whatever the name), HTML, SVG,
+    XML and script extensions, text that starts with `<`, and unknown bytes.
+    Nothing is refused for its type. `klornStoredTypePolicy` is handed to
+    `put` as a second lock, so no object can carry `text/html` or
+    `image/svg+xml`. Every download is an octet-stream attachment anyway (D1).
+- Download: JSON with the link, not a 302. Decision: the web app calls the API
+  with an `Authorization` header, so it uses `fetch`, and `fetch` would follow a
+  302 to the storage origin, which has no CORS rule (FA-7); with JSON the page
+  navigates to the link as a plain download. A native client that follows a
+  redirect can carry the original request's headers to the new host; with JSON
+  the Mac app opens the link in a fresh request without Klorn's token. The link
+  lives 60 s (`KLORN_DOWNLOAD_URL_TTL_SECONDS`, under D1's 300 s cap): the
+  signature is checked when the transfer starts, so a large file still
+  completes, and a leaked link dies quickly. Folders answer 409 `is-folder`.
+- Rename and move (`drive/klorn-tree.ts`) go through a new update-only writer,
+  `updateDriveFileRow` (`updateMany` on the identity, `row.changes` only). The
+  upsert would bring back a row that a delete removed while the rename was in
+  flight, as a file with no bytes. The row keeps its `modifiedAt`. A folder
+  cannot move into itself or into one of its own folders: the walk from the new
+  parent up to the root must not meet it. `DRIVE_MAX_FOLDER_DEPTH` (32) bounds
+  every folder's depth on create and move, and bounds the upward walk, so even a
+  cycle that reached the rows by another route ends.
+- Delete (`drive/klorn-remove.ts`) is a hard delete, object first, row second.
+  - Decision, hard rather than `trashed`: a trash needs a trash view, a restore
+    route, a retention sweep and a quota rule for trashed bytes, none of which
+    exists. A soft-deleted file would also keep its bytes after the person
+    deleted it. The client confirms before it sends the request. `trashed`
+    stays for D5 and D6, whose sources report it.
+  - A file: its object, then its row. If the object cannot be deleted the row
+    stays and the answer is 503 retryable.
+  - Decision, a folder is deleted recursively with bounds rather than refused
+    while not empty: a refusal makes the client walk the tree itself, one
+    request per item, and leaves half-deleted trees when it stops. The walk
+    reads at most `DRIVE_FOLDER_WALK_MAX_ITEMS` (1,000) rows over at most 32
+    levels; past either it answers 409 `folder-too-large` and deletes nothing. A
+    row already seen is not walked again, so a folder caught in a cycle (see the
+    limits) can still be deleted.
+    Objects go in batches of 8 (`DRIVE_DELETE_CONCURRENCY`, D1's own), stopping
+    at the first batch with a failure; the rows of the files whose objects are
+    gone are deleted; the folder rows go only once every object is gone. A
+    partial delete answers 503 retryable, and the same request continues.
+  - The row delete is `deleteKlornDriveRows` in the one writer module: only
+    KLORN rows, only this user's, by the ids D3 minted.
+- Folder listing: `listFiles` takes `folder` (an `externalId`, or null for the
+  root), which narrows to KLORN rows. For KLORN a null parent is the root,
+  because D3 only writes a parent that exists. Index
+  `(userId, provider, parentExternalId, modifiedAt, id)`, migration
+  `20261014010000_klorn_drive`.
+- Account purge durability (D1 review M2). `purgeUserObjects` (storage/runtime.ts)
+  is still the first step of both deletion paths and `user-deletion.ts` code is
+  unchanged. With `OBJECT_STORAGE_ENABLED` on it now:
+  1. records a pending purge, `StoragePurge` (`userId` primary key, `attempts`,
+     `lastError` (a StorageError code only), `requestedAt`, `nextAttemptAt`,
+     timestamps; no foreign key, so it outlives the user row; RLS in the
+     per-user form). If this write fails the deletion stops, as before: nothing
+     else would remember the objects.
+  2. runs one pass (D1's `purgeUser`, 45 s deadline) and resolves whatever the
+     bucket does. The rows are deleted as before. A failed pass is reported as
+     before (`scope: storage.purge`) and recorded with backoff.
+  3. An hourly sweep (`storage/purge-sweep.ts`, heartbeat `storage-purge`) runs
+     one pass per due record, at most 25 per sweep (under 19 minutes even when
+     every pass hits its deadline), one sweep at a time. Backoff: 1 h, doubling,
+     at most 24 h, until the prefix is empty. From the third consecutive failed
+     attempt (a pass that succeeds resets the count) every failure also raises
+     `scope: storage.purge.stuck` with `attempts` and the user id: that is the
+     alert. The heartbeat is recorded when a sweep ends, so a hung sweep goes
+     stale in `GET /api/health/schedulers`; a sweep that throws is reported
+     under `scope: storage.purge.sweep`.
+  4. A record is finished only by a pass that started at least
+     `LATE_UPLOAD_GRACE_MS` (10 minutes) after the latest request and emptied the
+     prefix; the deletion's own pass leaves it "settling". That pass is the
+     sweep that catches late objects.
+  - Upload during the purge: while a record exists, uploads answer 409
+    `account-purging`. The drive checks before the body is read, right before
+    the PUT and after it (deleting the object if a purge started meanwhile). An upload
+    that passed the second check lands within one PUT (120 s, the S3 store's
+    transfer timeout), inside the 10-minute grace, so the finishing pass
+    deletes it. After "delete my data" (the account stays), uploads are refused
+    until the record is finished: at most the grace plus one sweep interval,
+    about 70 minutes. The refusal is required: the finishing pass deletes the
+    whole prefix, which would take a new upload with it.
+  - Flag off: `purgeUserObjects` returns `{ skipped: true, deleted: 0 }` before
+    anything else; the record module is loaded dynamically and only when the
+    flag is on. Proved by the unchanged `user-deletion.test.ts`, D1's flag-off
+    test in `storage-runtime.test.ts`, and a new test that the flag-off call
+    reads and writes nothing in the database.
+  - The other D1 items left to D3: D3 stays on `getUserStorage()` (the routes and
+    the purge never touch the raw store). The purge still deletes one object per
+    request, eight at a time. Decision: unchanged. The purge now runs in the
+    background with retries, so its speed no longer holds a deletion request;
+    S3 multi-object delete (`POST ?delete`, a Content-MD5 and an XML body) is
+    new code in `s3-store.ts` that no real bucket has checked yet (FA-7); and
+    the drive's volumes are unknown until the flip. Revisit with real volumes.
+  - When `BACKGROUND_AGENTS_DISABLED` is set no scheduler starts, this sweep
+    included: pending purges wait (the deletion's own pass still runs).
+  - When the app role drops BYPASSRLS, the sweep's reads move to `withSystem`
+    and the drive's to `withTenant` (`db-tenant.ts`).
+- Guards. `drive-file-guard.test.ts` now admits exactly one upsert and one
+  update-only write (both keyed on the identity), the KLORN row delete in the
+  writer (pinned) besides the user purge, a third reader
+  (`drive/klorn-drive-read.ts`, held to the same scope, user and select rules;
+  its one aggregate names only `_sum: { sizeBytes: true }`), the D3 routes
+  behind their gate, and that the Klorn delete deletes objects before rows. The
+  calendar guard exempts six drive files that name a `sourceKey` (was four).
+  Every new drive module is listed as not LLM-facing: nothing in D3 sends a file
+  name or content to a model (D4 is the first).
+- RLS: `StoragePurge` has ENABLE, `StoragePurge_tenant_isolation` and
+  `StoragePurge_system_bypass` in the repo's form; main's
+  `rls-coverage-guard.test.ts` (#1381) passes and fails for each of the three
+  statements removed. #1381's default-privilege revoke covers the new table.
+- Verify. Tests: `klorn-drive-migration`, `storage-purge-queue`,
+  `storage-durable-purge`, `storage-purge-sweep`, `user-deletion-durable`,
+  `klorn-drive-names-types`, `routes-klorn-drive-upload`,
+  `routes-klorn-drive-tree`, `routes-klorn-drive-socket`, plus the updated scope, guard and runtime tests;
+  the fake database gained `aggregate` with `_sum`. Mutation checks, each
+  failing at least one test: ownership (the by-id read without the user, the
+  Klorn scope without the user, the row delete without the user); object then
+  row on upload (no delete after a failed row write, no delete after an unclean
+  request); row after object on delete (rows first; a folder delete that
+  ignores failures); the cycle check; the depth bound on move; the size cap and
+  the streaming cap (each defended in three layers: D3's declared check, the
+  caller cap and D1's store for the size; the file limit, the truncated check
+  and the multipart plugin's own error for the stream; removing one layer is
+  caught by the next, removing all three fails the tests); the client's
+  Content-Type used instead of the sniff; the after-PUT purge check; the routes
+  always on; KLORN live without object storage; each rate limit; the upsert
+  used for a rename; the purge without its record, blocking again, without the
+  grace; the flag-off path through the record; and the review fixes (no drain
+  of a refused body, the heartbeat before the sweep, no reset of the failure
+  count, a two-letter BMP signature, a row-cleanup error replacing the 503, a
+  client abort as a 500, no object delete when the after-PUT check throws, no
+  quota re-check at commit, no purge check after the row, a folder walk that
+  is not cycle-safe, no head timeout). On scratch Postgres 16.14 and
+  17.11 (not in the suite), with Supabase-style `anon` and `authenticated` roles
+  and default grants created first: `prisma migrate deploy`, the CI drift check
+  ("No difference detected"), no privilege for either role on `StoragePurge`,
+  RLS enabled and not forced, with a NOBYPASSRLS role no tenant sees no record,
+  a tenant sees only its own and cannot insert another's, the system setting
+  sees all; the `attempts` CHECK; the folder listing an `Index Scan Backward` on
+  the new index; the due query on `StoragePurge_nextAttemptAt_idx`; the record
+  surviving a user delete while the drive rows cascade; and the modules' own
+  Prisma queries run against both (purge record lifecycle, a 5 GB size summed
+  as a JSON number, the folder and root listings, the update-only writer not
+  creating a row, the KLORN delete leaving another user's row).
+- Known limits.
+  - Not verified against a real R2 bucket (FA-7). The upload uses D1's PUT and
+    the download D1's signed GET, which no real vendor has answered yet.
+  - Quota: computed from recorded sizes, before the PUT and again right before
+    the row. Uploads that reach the commit at the same moment can all pass, so
+    the limit can be overshot by the files committing at once. It is a soft
+    limit. Unset, every upload is refused.
+  - No transaction around folder writes: concurrent moves (A into B, B into A)
+    can create a cycle, and an upload or move into a folder that is being
+    deleted leaves a row no folder listing shows (both detailed above).
+  - The sweep's one-at-a-time lock is per process. With several instances,
+    sweeps overlap and each failed pass counts, so `attempts` (and the stuck
+    alert) inflate; the deletes themselves are idempotent.
+  - The purge record's reads and writes go through the global client. If the
+    app role drops BYPASSRLS they must move to `withSystem`, or the sweep sees
+    no record and the upload check sees no purge.
+  - A discard that fails (the cleanup delete after a refused upload) leaves an
+    object no row and no record names; it is found only by the account purge.
+  - Folder races, with no lock between check and write (Prisma has no row lock
+    without raw SQL, which the drive guard forbids): an upload or a move into a
+    folder that is being deleted, or a file added to a folder after its delete
+    walked it, can leave a row whose parent is gone; and two moves racing each
+    other (A into B, B into A) can leave a cycle. Such rows are in no folder
+    listing but are in the flat list, count toward usage, and can be moved to
+    the root or deleted. A reconcile pass is not built.
+  - A row write that fails and whose cleanup delete also fails leaves an object
+    without a row; it is reported and goes with the account purge.
+  - A rename that races a move can lose one of the two (last write wins on the
+    name, read just before the write).
+  - No trash, no preview, no thumbnails, no sharing, no resumable upload, and
+    no cap on rows per user (folders and files are bounded only by the rate
+    limits; a folder with more than 1,000 items is deleted in parts).
+  - The type is a label from the first 4 KiB and the name. D4 and any preview
+    must treat it as a hint, never a guarantee; downloads stay octet-stream
+    attachments.
+  - A purge pass that hits its 45 s deadline counts as a failed attempt, so a
+    very large prefix backs off like a failing bucket (roughly 7,000 objects
+    per pass at 8 deletes in flight and ~50 ms each: an estimate, not
+    measured). The signal that would tell progress from failure
+    (`delete-incomplete`, retryable) is shared with a failing batch, so it is
+    left as is until real volumes exist.
+  - Index use is measured on a three-row scratch table only: a named folder's
+    listing used the new index; the root listing planned on
+    `(userId, provider, modifiedAt, id)` with a NULL filter. Not measured on
+    real volumes.
+- Before the flip (in this order):
+  1. FA-5: the privacy policy and terms say Klorn stores files. Blocks the flip,
+     not the merge.
+  2. FA-7 and D1's real-bucket run (`storage-s3-real-bucket.test.ts`), then
+     `OBJECT_STORAGE_ENABLED` on (D1's flip).
+  3. The quota number (P3) in `KLORN_DRIVE_QUOTA_BYTES`. Required: without it
+     every upload is refused (503 `quota-not-configured`).
+  4. The UI step (web and Mac), coordinated with the design work, with its
+     vocabulary row.
+  5. `DRIVE_ENABLED` and `KLORN_DRIVE_ENABLED` on, founder account first (L23).
+- Runbook: purges pending but not running (`scope: storage.purge.stalled`, tag
+  `reason`, the count in `extra.pending`; or the `[STORAGE] N account purges
+  are pending but cannot run` line). Reported once per process: at boot when
+  `OBJECT_STORAGE_ENABLED` is off or `BACKGROUND_AGENTS_DISABLED` is set, and by
+  the hourly sweep while storage is off. Meanwhile deleted accounts' objects
+  stay in the bucket and a user whose account remains gets `account-purging` on
+  every upload. Action: `object-storage-off`, turn `OBJECT_STORAGE_ENABLED`
+  back on (D1: never turn it off once objects exist); `background-disabled`,
+  clear `BACKGROUND_AGENTS_DISABLED` once the reason for it is gone, or run the
+  sweep from a process that has it. The records then finish on the next sweeps.
+  The deletion path itself is unchanged.
+- Runbook: a purge keeps failing (`scope: storage.purge.stuck`, or the
+  `[STORAGE] purge still failing after N attempts` line, which names the user).
+  The account's rows are already gone; the objects are not. The code says where
+  to look, as in D1's runbook (`misconfigured`, `access-denied`,
+  `bucket-not-found`, `unreachable` or `upstream`, `delete-incomplete`). Fix the
+  cause and the sweep finishes on its next due pass; to hurry it, set that
+  record's `nextAttemptAt` to now. For an unaddressable key, delete
+  `u/<userId>/` in the vendor's console; the next pass then finds the prefix
+  empty. Never delete the `StoragePurge` row by hand while objects remain: it
+  is the only record of them.
+- Migration safety: a migration file is applied all or nothing (checked
+  2026-10-14 with Prisma 6.19.2 on a scratch Postgres 16: a statement that
+  failed after a `CREATE TABLE` left no table), so a lock timeout on the index
+  leaves nothing behind; and `scripts/start.sh`
+  baselines a failed migration only when the live schema has no difference
+  from `schema.prisma`, which a missing `StoragePurge` table always is.
+- Rollback: revert the PR. The table and the index can stay. If a record
+  exists, keep `OBJECT_STORAGE_ENABLED` on and a build with the sweep running
+  (or run the purge by hand) until `StoragePurge` is empty: with the flag off
+  the sweep does nothing.
 **D4 — file summaries and search** (*outline*). Depends on: D1, D2. Reuses the
 attachment analysis pipeline. Cost caps apply.
 **D5 — Google Drive connector** (*outline*). Depends on: D2. Blocked by V2.
