@@ -136,7 +136,11 @@ export function resetCapTripReportsForTests(): void {
   reportedTrips.clear();
 }
 
-function reportCapTrip(reason: "host-cap" | "global-cap", domain: string | null, day: string): void {
+function reportCapTrip(
+  reason: "host-cap" | "global-cap",
+  domain: string | null,
+  day: string,
+): void {
   const key = `${day}:${reason}:${domain ?? "*"}`;
   if (reportedTrips.has(key)) return;
   if (reportedTrips.size > 10_000) reportedTrips.clear();

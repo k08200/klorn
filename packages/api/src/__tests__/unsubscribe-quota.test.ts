@@ -229,7 +229,9 @@ describe("review hardening (2026-10-15)", () => {
 
   it("a caller whose day is older than the stored one never resets today's counts", async () => {
     process.env.AUTO_UNSUBSCRIBE_USER_DAILY_CAP = "1";
-    expect(await reserveAutoUnsubscribe("u1", "https://shop.com/u", TOMORROW)).toEqual({ ok: true });
+    expect(await reserveAutoUnsubscribe("u1", "https://shop.com/u", TOMORROW)).toEqual({
+      ok: true,
+    });
     // A stale call computed for the day before.
     expect(await reserveAutoUnsubscribe("u1", "https://shop.com/u", NOW)).toEqual({
       ok: false,
