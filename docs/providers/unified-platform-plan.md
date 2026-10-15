@@ -3766,8 +3766,262 @@ D3 ships no user-facing copy beyond API error strings, which clients replace by
   exists, keep `OBJECT_STORAGE_ENABLED` on and a build with the sweep running
   (or run the purge by hand) until `StoragePurge` is empty: with the flag off
   the sweep does nothing.
-**D4 — file summaries and search** (*outline*). Depends on: D1, D2. Reuses the
-attachment analysis pipeline. Cost caps apply.
+**D4 — file summaries and search.** Depends on: D1, D2 (and D3 for the first
+files). A summary of each drive file's text, made through the attachment
+analysis pipeline and the shared LLM layer, kept in a table of its own; the name
+search also matches summary text. Landed 2026-10-14 (branch
+`feat/drive-summaries`, PR not yet opened), flag OFF. Server and API only, like
+D3: no UI and no user-facing copy, so no vocabulary row yet; the UI step adds
+both.
+- Flag: `DRIVE_SUMMARIES_ENABLED`, default off, read at request and job time. It
+  acts only while `DRIVE_ENABLED` is on too (`driveSummariesLive`), and only on
+  files whose provider is visible: a Klorn file needs `KLORN_DRIVE_ENABLED` and
+  `OBJECT_STORAGE_ENABLED` (the D2 kill switch, `isDriveRowVisible`). While off:
+  an upload queues nothing, the job reads nothing, `POST
+  /api/drive/files/:id/summarize` answers Fastify's default 404 before
+  authentication (its own `darkRouteGate` after the drive's), `GET
+  /api/drive/files/:id` has no `summary` key (D2's response exactly), and `q`
+  matches names only without reading the summary table.
+- Reuse, not a copy:
+  - Text extraction is `extractAttachmentContent` / `isReadableEmailAttachment`
+    (`mail/email-attachment-text.ts`), the same readers and zip-bomb caps the
+    mail attachments use. Only a `readable` result is summarised; the
+    extractor's `metadata` placeholder (an image, a PDF without a text layer) is
+    `no-text`, and images are not fetched at all. Its byte cap
+    (`MAX_EXTRACTABLE_BYTES`, 8,000,000) is now exported and is D4's byte cap.
+  - The prompt is the attachment analyser's (`analyzeAttachment` in
+    `mail/email-attachments.ts`): JSON only, temperature 0.1, the untrusted-data
+    line, and `createCompletion(..., { credentials, userId, priority })` with the
+    user's own credentials, so the per-user daily cost cap, the global ceiling,
+    the usage ledger and BYOK apply unchanged. The file name, the type label and
+    the text each go through `wrapUntrusted` (#1345's version). The stored
+    summary has control and format characters (bidi overrides and isolates,
+    zero-width marks) stripped.
+  - **Founder-reviewable choice: the summary language.** The summary is asked
+    for in the main language of the file's text, so the summary search works in
+    that language; the attachment prompt asks for English. Kept after review
+    (2026-10-15); reversing it is one line in `drive/summary-llm.ts`
+    (`SYSTEM_PROMPT`).
+- Model. Migration `20261014020000_drive_file_summary` (after D3's
+  `20261014010000_klorn_drive`), additive: one enum, two tables, four indexes,
+  three foreign keys, RLS on both tables in the repo's form (ENABLE, never FORCE,
+  tenant and system policies; `rls-coverage-guard.test.ts` passes and fails for
+  each statement removed).
+  - `DriveFileSummary`, one row per file (`driveFileId` unique, cascades with
+    the file and with the user): `status` PENDING / DONE / FAILED / SKIPPED,
+    `summary` (CHECK at most 1,000 characters; the app caps at the same
+    `DRIVE_SUMMARY_MAX_CHARS`), `sourceEtag` (the file's `etag` the row is for),
+    `model`, `costMicroCents` (0.0001 ¢ units, as `GlobalCostLedger.microCents`),
+    `error` (CHECK: a lower-case code, never a provider message), `attempts`
+    (the failure budget), `outageStreak` (outages in a row, their backoff),
+    `nextAttemptAt` (due time, or a live lease's end), `runsDayKey` /
+    `runsToday` (the per-file daily count),
+    `summarizedAt`. The extracted text is never stored. `DriveFile` itself only
+    gains the back-relation (no column), so D2's "metadata only" holds.
+  - `DriveSummaryUsage` (userId, dayKey, count): summary calls per user per UTC
+    day. A ledger of its own so deleting a file does not give its count back.
+  - Indexes: (status, nextAttemptAt) for the job, (userId, status,
+    summarizedAt) for the summary search, (dayKey) for the prune. On the
+    scratch database each query plans on its index.
+- Queue (`drive/summary-store.ts`, the only writer besides the user purge).
+  `enqueueDriveFileSummary` upserts the row at the file's etag: a new file is
+  PENDING and due now; the same etag leaves the row alone (DONE stays DONE); a
+  different etag re-queues it from scratch (summary, model, cost, attempts
+  cleared), except that a PENDING row keeps its `nextAttemptAt` (a live lease is
+  never cut short, a deferral never brought forward). FAILED is retried only on
+  demand. The first enqueue's upsert names the unique key only, so Postgres runs
+  it as one INSERT ... ON CONFLICT (10 concurrent first enqueues: one row, all
+  fulfilled), then refuses another user's row; a P2002 still answers the
+  winner's row.
+  - Leases. Before a run the row is claimed: `nextAttemptAt` moves a lease
+    (5 min) ahead and `attempts` goes up by one, conditional on the values read,
+    so the job and an on-demand request (or two instances) never run one row
+    twice, and a row whose run never ends (a crash, or a freeze in the
+    extractor) spends its attempts: after 5 the claim marks it FAILED
+    `interrupted` instead of running it again. Every outcome write is
+    conditional on the lease still holding (PENDING, `nextAttemptAt` at the
+    lease's end, `sourceEtag` as read): a run whose lease expired and was
+    reclaimed, or whose file changed meanwhile, writes nothing (`lost`).
+  - Every query names the user except the job's two system queries (the users
+    with due rows, the prune), each marked `system:`, and the first enqueue
+    above.
+- A run (`drive/summary-run.ts`), cheapest refusal first: the row through the
+  kill switch (hidden or trashed, or object storage off: PENDING
+  `source-unavailable`, not an attempt, looked at again after an hour doubling
+  up to a day, and not counted against the job's batch, since a flag can flip
+  back and a file can be restored; a file that is gone took its row with it);
+  a
+  folder, a type the extractor has no text for, or a recorded size over the cap:
+  SKIPPED without reading a byte; the per-file count and the user's daily
+  count (a read), so a user at the count costs no download; the bytes, read through
+  D1's user-scoped storage with the cap counted while they stream
+  (`readCappedBytes`: it stops at the chunk that crosses 8,000,000 bytes and
+  destroys the stream; a store that under-reports the size still stops there);
+  the text, cut to 8,000 characters before any model sees it; the user's daily
+  count (atomic increment, the count after it decides); the file's (each update
+  checks the count in its own `where`, so two holders of one snapshot cannot
+  both take the last call: 10 concurrent on the last slot, exactly 1 passed on
+  Postgres); one model call with a 90 s wall-clock limit
+  (`DRIVE_SUMMARY_LLM_TIMEOUT_MS`, pacing and failover included), so a run ends
+  well inside its lease. The storage read (the object and all its bytes) has a
+  60 s deadline too (`DRIVE_SUMMARY_READ_TIMEOUT_MS`): past it the body is
+  destroyed and the run defers as a storage outage, so a hung read cannot hold
+  the job's one-sweep-at-a-time flag. A timed-out model call is abandoned, not
+  aborted: `createCompletion` takes no AbortSignal, so the `Promise.race` cannot
+  cancel it, and the provider may still answer and bill it. The per-user cost
+  cap still holds, because the LLM layer pre-bills the call before it is sent.
+- Cost model and caps (`drive/summary-policy.ts`, named constants):
+  - at most 8,000,000 bytes read and 8,000 characters sent per summary;
+  - `DRIVE_SUMMARIES_PER_USER_PER_DAY` 50 and
+    `DRIVE_SUMMARY_RUNS_PER_FILE_PER_DAY` 3 model calls per UTC day (a retry
+    counts; slots are given back when no model answered, below); the job runs
+    at most 10 a sweep every 5 minutes, so at most 120 calls an hour
+    fleet-wide, picked fairly: the 10 users whose oldest due row is oldest
+    (one `groupBy`), up to 3 rows of each, round-robin, so 60 due rows of one
+    user do not hold back another user's one (tested); a cheap skip does not use
+    up the batch; the on-demand route is limited to 10 a minute per user and
+    per address;
+  - every call is charged to the user's daily cost cap and the global ceiling
+    by the LLM layer (BYOK: on the user's own key, $0 to Klorn). The row's
+    `costMicroCents` is the call's estimated cost from its token counts with the
+    repo's rate table, whoever paid; the ledgers stay the caps' source of truth.
+    Estimate, not measured: the production default model
+    (`google/gemini-2.5-flash`) at 3,000 to 8,000 prompt and 200 completion
+    tokens is $0.0014 to $0.003 a summary, so at most about $0.15 per user per
+    day and $0.36 an hour fleet-wide from the job.
+  - A cap never fails a summary: the user's or the file's daily count, the
+    LLM layer's cost cap (`DailyCostCapExceededError`) and its daily call limit
+    leave it PENDING with the code, due at the next UTC midnight; a per-minute
+    limit leaves it PENDING for the wait the layer gave. None is an attempt.
+  - Slots: the user's and the file's daily slots are taken just before the
+    call and given back when no model answered (a cost-cap or rate-limit
+    refusal, an outage, a timeout); they stay spent once a model answered (DONE,
+    or output that is not a summary). Reserving first keeps the counts a hard
+    bound on concurrent calls (reserving only after success would let concurrent
+    runs overshoot); giving back keeps an outage from spending a user's day
+    (before the review, about 17 failing files did). Money stays bounded by the
+    LLM layer's cost cap, which pre-bills every call, failed or not.
+- Degrading (#1319, the LLM failing in production). An outage is never a
+  content failure: every provider failing (402, 429, 5xx), no provider
+  configured, a network error or the 90 s timeout leaves the summary PENDING
+  `llm-unavailable` with the attempt given back and a backoff from 10 minutes
+  doubling up to 24 hours (`DRIVE_SUMMARY_OUTAGE_MAX_MS`), indefinitely; a
+  retryable storage error is the same with `storage-error`. FAILED is kept for
+  content errors, after 5 attempts: output that is not a summary
+  (`llm-bad-output`), a provider 4xx about the request itself (`llm-rejected`:
+  any 4xx but 401, 402, 403, 408 and 429; 401 and 403 are key or permission
+  problems that hit every file alike, so they stay outages and a key rotation
+  does not FAIL every summary), a non-retryable storage error, a run that throws
+  (`internal`) or never ends (`interrupted`); a Klorn row whose object is
+  missing is FAILED `object-missing` at once. A queue write that fails is
+  logged and reported (`scope: drive.summary.enqueue`) and never fails the
+  upload. Tested with the real `createCompletion` and a provider chain that
+  answers 402: the upload is 201, the list and the file are 200, the summary
+  stays PENDING `llm-unavailable` through 15 sweeps with its wait at the 24 h
+  cap and none of the user's daily count spent, and a second upload is 201.
+- Triggers (`drive/summary-triggers.ts`): D3's `commitKlornUpload` queues the
+  new file at its etag; the job (`drive/summary-job.ts`, scheduler
+  `drive-summary`, started with the others unless BACKGROUND_AGENTS_DISABLED)
+  runs due rows and prunes usage rows older than 7 days; `POST
+  /api/drive/files/:id/summarize` (session, user-scoped, 404 as the file route)
+  queues the file, runs it now in the foreground when it is due and answers
+  `{ summary }`. Due on demand: new, changed, FAILED (retried, except an
+  `interrupted` row: a poison file is re-queued only by new content, never by a
+  click), or waiting out an outage or an unreadable source (the wait and its
+  backoff are reset, so a summary runs as soon as credits return). A cap's wait
+  is not lifted and the daily caps apply to the run; a live lease is never
+  lifted (a claim clears the code, so it never reads as an outage). The route's
+  rate limit is unchanged.
+- API (`packages/contract/src/drive.ts`): `DriveFileSummaryWire` (`status`,
+  `text` only when DONE, `error` code, `summarizedAt`), `DriveFileResponse`
+  gains `summary` while on, `DriveSummarizeResponse`. The extracted text and the
+  storage key never cross the wire. The data export now carries each file's
+  `summary`, whatever the flags (the user's own rows only).
+- Search: with summaries on, `GET /api/drive/files?q=` also returns the files
+  whose DONE summary contains the text, in the same query as the name match
+  (`matchSummaries` in `drive-read.ts`: `OR` of the name and the summary
+  through its one-to-one relation, inside the AND), so the scope, the user, the
+  provider and folder filters, the order and the page ceiling apply to summary
+  matches exactly as to names; there is no separate id cap (205 matches in a
+  folder page through whole). The pattern is the name search's escaped ILIKE
+  (`%`, `_`, `\` match themselves). If that query fails, the route answers the
+  name-only search instead, logged and reported once per process
+  (`scope: drive.summary.search`), never a 500. `GET /api/drive/files/:id`
+  likewise answers the file without `summary` if the summary cannot be read
+  (`scope: drive.summary.read`).
+- Seam: `DriveProviderSession.fetchForSummary(externalId, { maxBytes })` answers
+  `CappedBytes` (the streaming reader's result) or null. D5 and D6 implement it
+  with `readCappedBytes` over their own API host only, call
+  `enqueueSummaryOnWrite` after each `upsertDriveFileRow` of a file (it compares
+  the etag), and get summaries and search with no change here: the run already
+  dispatches a non-KLORN row to its connector, and V4 still holds (the seam only
+  reads).
+- Guards: `drive-file-guard.test.ts` lists `drive/summary-llm.ts` as the one
+  LLM-facing drive module (the pattern shows the name, the type and the text
+  inside `wrapUntrusted`) and fails if any other drive module imports the LLM;
+  the summary source is a fourth DriveFile reader held to the scope, user and
+  select rules; the summary tables have one writer besides the purge; every
+  other summary query names its user (inline, or through the pinned `leased`,
+  `unchanged` and `ref` helpers); the summary search is the name search's
+  escaped pattern; no response module names the storage key or the extracted
+  text.
+  `drive-summary-llm.test.ts` proves the wrap on what is actually sent. The
+  calendar guard exempts eight drive files that name a `sourceKey` (was six).
+- Verify. Tests: `drive-file-summary-migration`, `drive-summary-pure`,
+  `drive-summary-llm`, `drive-summary-run`, `routes-drive-summaries`,
+  `drive-summary-failing-provider`, plus additions to `drive-file-guard`,
+  `drive-file-migration`, `drive-provider-dispatch`, `drive-read` (export),
+  `fake-db` (`{ increment }`, `groupBy` with `_min`, relation `is` filters),
+  `purge-user-data`. Mutation checks (single
+  changes, each failing at least one test): each `wrapUntrusted`, the in-stream
+  byte check, the cost-cap deferral in the run and its mapping in the
+  summariser, user scoping of the row read, a write, the summary search and the
+  source read, each flag-off gate (job, route, upload, file response, search),
+  the search escape, both daily counts and the user's pre-fetch check, the
+  give-up bound, two RLS statements, the purge of summaries; after the review
+  (2026-10-15), 23 more: fair picking (two), the attempt at claim and the
+  `interrupted` bound, the LLM timeout, the slot release, the outage rule and
+  its 24 h cap, the atomic file count, the enqueue keeping a live lease, each
+  lease condition of an outcome write (time, etag, user), the P2002 path, the
+  search fallback and escape, hidden-is-skipped, the format-character strip,
+  skips sparing the batch, and others. On a scratch Postgres 16 (not in the suite): `prisma
+  migrate deploy`, the CI drift check ("No difference detected"), each CHECK
+  refusing a row, one row per file, the policies (no tenant sees nothing, a
+  tenant only its own, the system setting all), both cascades; and the store
+  against the real client: a cross-user enqueue refused (P2002), a cross-user
+  write ignored, 60 concurrent reservations on a count of 3 letting exactly 47
+  through, the escapes, the re-queue on a new etag, the prune; after the review
+  (migration re-run with `outageStreak`): the drift check again, the
+  `outageStreak` CHECK, 10 concurrent first enqueues (one row), the cross-user
+  enqueue refused with the other row untouched, the fair `groupBy`, the claim
+  counting an attempt, a reclaim at the lease's end and the stale write dropped,
+  10 concurrent file counts on the last slot (one passed), a release that never
+  goes below zero, and the joined summary search (escapes, folder filter, other
+  user).
+- Known limits.
+  - Files that exist before the flip are summarised only on demand (no
+    backfill); a backfill would be the job queueing visible files without a
+    row, bounded by the same daily counts.
+  - The fair pick's `groupBy` reads every due row to find each user's oldest;
+    bounded by the rows that exist, not by an index of its own. Each user's
+    rows are then read on (userId, status, summarizedAt), not a
+    (userId, status, nextAttemptAt) index.
+  - A summary search joins one user's rows to their summaries with ILIKE:
+    bounded by the rate limits and the page ceiling, not by a trigram index.
+  - The extractor's quality is the attachment pipeline's (heuristic PDF text,
+    no OCR); a scanned PDF is SKIPPED `no-text`.
+  - A timed-out call is abandoned, not cancelled: the LLM layer may still
+    finish it and bill it, which the cost cap counts; its slot was given back.
+  - When the app role drops BYPASSRLS, the store moves to `withTenant` and the
+    job's two system queries to `withSystem`, like the other drive modules.
+- Before the flip (in this order): D3's flip conditions (the files must exist);
+  the LLM working in production (#1319: credits on the OpenRouter key, or the
+  founder's decision to rely on BYOK only); FA-5 covering that file contents are
+  sent to the model provider for summaries; the UI step with its vocabulary
+  row; then `DRIVE_SUMMARIES_ENABLED` on, founder account first (L23). Watch
+  `LlmUsageLog` and `DriveSummaryUsage` the first days.
+- Rollback: revert the PR. The tables and the enum can stay; nothing reads them.
+  With the flag off nothing writes them.
 **D5 — Google Drive connector** (*outline*). Depends on: D2. Blocked by V2.
 Scope path per P5.
 **D6 — OneDrive connector** (*outline*). Depends on: D2, FA-9 with file

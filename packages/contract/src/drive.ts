@@ -64,6 +64,69 @@ export interface DriveFilesListResponse {
  */
 export interface DriveFileResponse {
   file: DriveFileWire;
+  /**
+   * The file's summary (D4). Present only while DRIVE_SUMMARIES_ENABLED is on:
+   * null when the file has none yet. Absent while off, so the response is D2's,
+   * and absent when the summary could not be read.
+   */
+  summary?: DriveFileSummaryWire | null;
+}
+
+// ── File summaries (step D4) ────────────────────────────────────────────────
+//
+// Behind DRIVE_SUMMARIES_ENABLED (and DRIVE_ENABLED; a file is summarised only
+// while its provider is visible). While off, POST .../summarize answers exactly
+// like an unregistered route, the file response has no `summary` and the `q`
+// search matches names only. While on, `q` also matches summary text.
+
+/**
+ * PENDING: queued, or waiting on a cap (`error` says which: `cost-cap`,
+ * `daily-limit`, `file-limit`, `rate-limited`), on an outage it keeps retrying
+ * (`llm-unavailable`, `storage-error`), or on a file it cannot read for now
+ * (`source-unavailable`: trashed, hidden, storage off). DONE: `text` is the
+ * summary. FAILED: gave up on a content error (`llm-bad-output`,
+ * `llm-rejected`, `object-missing`, `interrupted`, `internal`). SKIPPED: nothing
+ * to summarise (`folder`, `unsupported-type`, `too-large`, `no-text`).
+ */
+export type DriveSummaryStatusWire = "PENDING" | "DONE" | "FAILED" | "SKIPPED";
+
+/** Why a summary is not DONE. Branch on this; there is no message. */
+export type DriveSummaryErrorCode =
+  | "folder"
+  | "unsupported-type"
+  | "too-large"
+  | "no-text"
+  | "object-missing"
+  | "source-unavailable"
+  | "storage-error"
+  | "cost-cap"
+  | "daily-limit"
+  | "file-limit"
+  | "rate-limited"
+  | "llm-unavailable"
+  | "llm-bad-output"
+  | "llm-rejected"
+  | "interrupted"
+  | "internal";
+
+export interface DriveFileSummaryWire {
+  status: DriveSummaryStatusWire;
+  /** The summary, model output about the file: show it as text, never as markup. Null unless DONE. */
+  text: string | null;
+  error: DriveSummaryErrorCode | null;
+  /** ISO 8601, when `text` was made. Null unless DONE. */
+  summarizedAt: string | null;
+}
+
+/**
+ * `POST /api/drive/files/:id/summarize` — summarise the file now if it is due
+ * (a new or changed file; a FAILED one, which this retries unless it was
+ * `interrupted`; one waiting out an outage, whose wait this lifts), else answer its
+ * current state. 404 `{ error }` as `GET /api/drive/files/:id`. Rate limited
+ * (429). The extracted file text is never returned.
+ */
+export interface DriveSummarizeResponse {
+  summary: DriveFileSummaryWire;
 }
 
 // ── The Klorn drive (step D3) ───────────────────────────────────────────────

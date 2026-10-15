@@ -103,7 +103,7 @@ const SELF = ".github/scripts/check-price-consistency.mjs";
  * having become correct.
  */
 const QUOTES_A_PRICE =
-  /^website\/(?:[a-z]{2}\/)?(?:index\.html|next\/index\.html|pricing\/index\.html|(?:[a-z]{2}\/)?vs\/[^/]+\/index\.html)$/;
+  /^website\/(?:[a-z]{2}\/)?(?:index\.html|pricing\/index\.html|(?:[a-z]{2}\/)?vs\/[^/]+\/index\.html)$/;
 
 for (const page of pages) {
   const html = readFileSync(page, "utf8");

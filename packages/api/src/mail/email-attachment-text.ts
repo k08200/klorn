@@ -1,6 +1,16 @@
 import { inflateRawSync } from "node:zlib";
+import {
+  collectPdfLiteralStrings,
+  collectTextRuns,
+  collectWordTextRuns,
+  replaceNamespacedClosingTag,
+  replaceNamespacedSelfClosingTag,
+  replaceSelfClosingTag,
+  stripTags,
+} from "./attachment-text-scan.js";
 
-const MAX_EXTRACTABLE_BYTES = 8_000_000;
+/** The most bytes a file may have for its text to be extracted (also the drive summary cap, D4). */
+export const MAX_EXTRACTABLE_BYTES = 8_000_000;
 // Aggregate caps across a whole archive. inflateRawCapped bounds ONE stream,
 // but a multi-entry archive (docx/xlsx/pptx/hwpx are ZIPs) can still declare
 // thousands of entries that each inflate near the per-stream cap — N × 8MB =
@@ -60,6 +70,15 @@ export function extractAttachmentContent(
   mimeType: string,
 ): ExtractedAttachmentContent {
   const lower = filename.toLowerCase();
+
+  // isReadableEmailAttachment only bounds the size when the provider reports
+  // one; bound the bytes actually fetched so every scan below is capped too.
+  if (buffer.length > MAX_EXTRACTABLE_BYTES) {
+    return {
+      text: metadataText(filename, mimeType, buffer.length, "추출 크기 제한 초과"),
+      status: "metadata",
+    };
+  }
 
   if (isDocx(lower, mimeType)) {
     const text = extractDocxText(buffer);
@@ -454,18 +473,21 @@ function readZipEntryFromLocalHeader(
   return null;
 }
 
+// Attachment XML is sender-controlled and parsed on the event loop: tag
+// patterns go through the linear scanners in attachment-text-scan.ts, never a
+// backtracking regex (2026-10-14 DoS). Only literal patterns stay as regexes.
 function extractWordXmlText(xml: string): string {
-  const withBreaks = xml
-    .replace(/<w:tab\b[^>]*\/>/g, "\t")
-    .replace(/<w:br\b[^>]*\/>/g, "\n")
+  const withBreaks = replaceSelfClosingTag(
+    replaceSelfClosingTag(xml, "<w:tab", "\t"),
+    "<w:br",
+    "\n",
+  )
     .replace(/<\/w:p>/g, "\n")
     .replace(/<\/w:tr>/g, "\n")
     .replace(/<\/w:tc>/g, "\t");
 
-  const chunks = Array.from(withBreaks.matchAll(/<w:t\b[^>]*>([\s\S]*?)<\/w:t>/g)).map((match) =>
-    decodeXml(match[1]),
-  );
-  const text = chunks.length > 0 ? chunks.join("") : withBreaks.replace(/<[^>]+>/g, " ");
+  const chunks = collectWordTextRuns(withBreaks).map(decodeXml);
+  const text = chunks.length > 0 ? chunks.join("") : stripTags(withBreaks);
   return (
     cleanText(
       decodeXml(text)
@@ -476,31 +498,33 @@ function extractWordXmlText(xml: string): string {
 }
 
 function extractXmlText(xml: string): string[] {
-  const chunks = Array.from(xml.matchAll(/<[^:>\s]*:?t\b[^>]*>([\s\S]*?)<\/[^:>\s]*:?t\b[^>]*>/gi))
-    .map((match) => cleanText(decodeXml(match[1])))
+  const chunks = collectTextRuns(xml)
+    .map((run) => cleanText(decodeXml(run)))
     .filter((value): value is string => !!value);
   if (chunks.length > 0) return chunks;
-  const fallback = cleanText(decodeXml(xml.replace(/<[^>]+>/g, " ")));
+  const fallback = cleanText(decodeXml(stripTags(xml)));
   return fallback ? [fallback] : [];
 }
 
-function extractHwpxXmlText(xml: string): string[] {
-  const withBreaks = xml
-    .replace(/<[^:>]*:?tab\b[^>]*\/>/g, "\t")
-    .replace(/<[^:>]*:?lineBreak\b[^>]*\/>/g, "\n")
-    .replace(/<[^:>]*:?br\b[^>]*\/>/g, "\n")
-    .replace(/<\/[^:>]*:?p>/g, "\n")
-    .replace(/<\/[^:>]*:?tr>/g, "\n")
-    .replace(/<\/[^:>]*:?tc>/g, "\t");
+/** Applied in this order, as the regex chain it replaces was. */
+const HWPX_BREAKS: ReadonlyArray<(xml: string) => string> = [
+  (xml) => replaceNamespacedSelfClosingTag(xml, "tab", "\t"),
+  (xml) => replaceNamespacedSelfClosingTag(xml, "lineBreak", "\n"),
+  (xml) => replaceNamespacedSelfClosingTag(xml, "br", "\n"),
+  (xml) => replaceNamespacedClosingTag(xml, "p", "\n"),
+  (xml) => replaceNamespacedClosingTag(xml, "tr", "\n"),
+  (xml) => replaceNamespacedClosingTag(xml, "tc", "\t"),
+];
 
-  const chunks = Array.from(
-    withBreaks.matchAll(/<[^:>\s]*:?t\b[^>]*>([\s\S]*?)<\/[^:>\s]*:?t\b[^>]*>/gi),
-  )
-    .map((match) => cleanText(decodeXml(match[1])))
+function extractHwpxXmlText(xml: string): string[] {
+  const withBreaks = HWPX_BREAKS.reduce((current, applyBreak) => applyBreak(current), xml);
+
+  const chunks = collectTextRuns(withBreaks)
+    .map((run) => cleanText(decodeXml(run)))
     .filter((value): value is string => !!value);
   if (chunks.length > 0) return chunks;
 
-  const fallback = cleanText(decodeXml(withBreaks.replace(/<[^>]+>/g, " ")));
+  const fallback = cleanText(decodeXml(stripTags(withBreaks)));
   return fallback ? fallback.split("\n") : [];
 }
 
@@ -526,10 +550,11 @@ function decodeXml(value: string): string {
 }
 
 function extractPdfTextHeuristic(buffer: Buffer): string | null {
+  // Bounded: extractAttachmentContent rejects buffers over MAX_EXTRACTABLE_BYTES.
   const raw = buffer.toString("latin1");
-  const literalStrings = Array.from(raw.matchAll(/\(([^()\\]*(?:\\.[^()\\]*)*)\)/g))
-    .map((match) =>
-      match[1].replace(/\\([nrtbf()\\])/g, (_, ch: string) => {
+  const literalStrings = collectPdfLiteralStrings(raw)
+    .map((literal) =>
+      literal.replace(/\\([nrtbf()\\])/g, (_, ch: string) => {
         if (ch === "n" || ch === "r") return "\n";
         if (ch === "t") return "\t";
         if (ch === "b" || ch === "f") return "";

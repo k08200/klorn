@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
+import AuthStatus from "../../components/auth/auth-status";
 import AuthScreen from "../../components/auth-screen";
+import Button from "../../components/ui/button";
 import { API_BASE, apiFetch } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import { useT } from "../../lib/i18n";
@@ -57,23 +59,13 @@ function VerifyEmailContent() {
   };
 
   // While loading (no decision yet) or verifying a link token (browser is being
-  // handed to the API), show a spinner — never a premature success claim.
+  // handed to the API), show a status — never a premature success claim.
   if (status === "loading" || status === "verifying") {
-    return (
-      <div className="flex h-screen flex-col items-center justify-center gap-4 bg-surface-app">
-        <div className="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-        {status === "verifying" && (
-          <p className="text-sm text-ink-mid" aria-live="polite">
-            {t("verifyEmail.verifying")}
-          </p>
-        )}
-      </div>
-    );
+    return <AuthStatus label={status === "verifying" ? t("verifyEmail.verifying") : undefined} />;
   }
 
   return (
     <AuthScreen
-      eyebrow={t("verifyEmail.eyebrow")}
       title={
         status === "sent"
           ? t("verifyEmail.title.sent")
@@ -88,43 +80,37 @@ function VerifyEmailContent() {
             ? t("verifyEmail.description.pending")
             : t("verifyEmail.description.error")
       }
-      footer={
-        <Link href="/login" className="transition hover:text-ink">
+    >
+      <p className="rounded-card border border-line bg-surface-raised px-4 py-3 text-body text-ink-mid">
+        {status === "sent"
+          ? t("verifyEmail.nextStepBody.sent")
+          : status === "pending"
+            ? t("verifyEmail.nextStepBody.pending")
+            : t("verifyEmail.nextStepBody.error")}
+      </p>
+
+      {status === "pending" || status === "sent" ? (
+        <>
+          <Button size="lg" className="mt-6 w-full" onClick={resend}>
+            {status === "sent" ? t("verifyEmail.resendAgain") : t("verifyEmail.resendVerification")}
+          </Button>
+          <p className="mt-6 text-center">
+            <Link
+              href="/login"
+              className="focus-ring inline-flex min-h-11 items-center rounded-control px-1 text-label text-accent-deep underline-offset-2 hover:underline"
+            >
+              {t("auth.backToLogin")}
+            </Link>
+          </p>
+        </>
+      ) : (
+        <Link
+          href="/login"
+          className="focus-ring mt-6 flex h-11 w-full items-center justify-center rounded-control border border-line bg-surface-panel text-label text-ink transition-colors duration-120 ease-fluid hover:border-line-strong hover:bg-surface-hover"
+        >
           {t("auth.backToLogin")}
         </Link>
-      }
-    >
-      <div className="space-y-4">
-        <div className="rounded-md border border-line bg-surface-raised p-4">
-          <p className="text-xs font-medium uppercase tracking-[0.16em] text-ink-dim">
-            {t("verifyEmail.nextStep")}
-          </p>
-          <p className="mt-2 text-sm leading-6 text-ink-mid">
-            {status === "sent"
-              ? t("verifyEmail.nextStepBody.sent")
-              : status === "pending"
-                ? t("verifyEmail.nextStepBody.pending")
-                : t("verifyEmail.nextStepBody.error")}
-          </p>
-        </div>
-
-        {status === "pending" || status === "sent" ? (
-          <button
-            type="button"
-            onClick={resend}
-            className="flex h-11 w-full items-center justify-center rounded-md bg-accent-solid text-sm font-semibold text-accent-solid-ink transition hover:bg-accent-solid-hover focus-ring"
-          >
-            {status === "sent" ? t("verifyEmail.resendAgain") : t("verifyEmail.resendVerification")}
-          </button>
-        ) : (
-          <Link
-            href="/login"
-            className="flex h-11 w-full items-center justify-center rounded-md border border-line bg-surface-raised text-sm font-semibold text-ink transition hover:border-line-strong focus-ring"
-          >
-            {t("auth.backToLogin")}
-          </Link>
-        )}
-      </div>
+      )}
     </AuthScreen>
   );
 }

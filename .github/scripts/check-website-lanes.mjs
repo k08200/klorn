@@ -45,16 +45,19 @@ const TIERS_FILE = "packages/api/src/judge/tiers.ts";
  * and a four-tier compare table. A hardcoded pair would not have seen any of
  * it, and would not see the next language either.
  *
- * A landing is any `website/index.html` or `website/<lang>/index.html` that
- * actually renders the hero demo; `privacy/`, `vs/*` and friends have no
- * lane surface and are skipped by that test, not by a list to maintain.
+ * A landing is `website/index.html` or any `website/<two-letter>/index.html`.
+ * Every one of them must carry a lane surface: the six-section landing (P11b)
+ * renders the lanes as a `.lane-list`, the older one as a hero demo plus a
+ * replica. A landing with neither is a failure, not a skip — otherwise moving
+ * the markup would turn this guard into a silent pass over zero pages.
  */
 const LANDINGS = ["website/index.html", ...readdirSync("website", { withFileTypes: true })
-  .filter((e) => e.isDirectory())
+  .filter((e) => e.isDirectory() && /^[a-z]{2}$/.test(e.name))
   .map((e) => `website/${e.name}/index.html`)]
   .filter((f) => {
     try {
-      return readFileSync(f, "utf8").includes('id="dm-buckets"');
+      readFileSync(f, "utf8");
+      return true;
     } catch {
       return false;
     }
@@ -92,9 +95,51 @@ function arrayAfter(src, needle) {
   return null;
 }
 
+/**
+ * The six-section landing: one `<li class="lane" data-lane="…">` per lane, each
+ * with a `.chip c-<lane>` whose label is the lane name. The set must be exactly
+ * the live lanes — none missing, none retired, none twice — and the chip must
+ * agree with its row, or a copy edit could show "MEETING" over the Push row.
+ */
+function checkLaneList(file, src, lanes) {
+  const where = (what) => `${file}: ${what}`;
+  const rows = [...src.matchAll(
+    /<li class="lane" data-lane="([a-z]+)"><span class="chip c-([a-z]+)">([A-Z]+)<\/span>/g,
+  )];
+  const listed = [...src.matchAll(/data-lane="([a-z]+)"/g)].map((m) => m[1]);
+  if (rows.length !== listed.length) {
+    problems.push(where(`${listed.length} data-lane rows but only ${rows.length} in the expected chip shape`));
+  }
+  for (const [, lane, cls, label] of rows) {
+    if (cls !== lane || label.toLowerCase() !== lane) {
+      problems.push(where(`lane row ${lane} renders chip c-${cls} "${label}"`));
+    }
+  }
+  const retired = listed.filter((l) => RETIRED.has(l));
+  if (retired.length) problems.push(where(`lane list renders a RETIRED lane: ${retired.join(", ")}`));
+  const missing = lanes.filter((l) => !listed.includes(l));
+  if (missing.length) problems.push(where(`lane list is missing lanes: ${missing.join(", ")}`));
+  const dupes = listed.filter((l, i) => listed.indexOf(l) !== i);
+  if (dupes.length) problems.push(where(`lane list repeats: ${[...new Set(dupes)].join(", ")}`));
+  const unknown = listed.filter((l) => !lanes.includes(l) && !RETIRED.has(l));
+  if (unknown.length) problems.push(where(`lane list has lanes the API does not: ${unknown.join(", ")}`));
+  // A retired lane as a chip anywhere on the page, not just inside the list.
+  const strayChips = [...src.matchAll(/class="chip c-(auto|call)"/g)].map((m) => m[1]);
+  if (strayChips.length) problems.push(where(`page renders a RETIRED lane chip: ${strayChips.join(", ")}`));
+}
+
 function check(file, lanes) {
   const src = readFileSync(file, "utf8");
   const where = (what) => `${file}: ${what}`;
+
+  const hasList = src.includes('class="lane-list"');
+  const hasDemo = src.includes('id="dm-buckets"');
+  if (!hasList && !hasDemo) {
+    problems.push(where("no lane surface found (.lane-list or the hero demo) — did the lanes move?"));
+    return;
+  }
+  if (hasList) checkLaneList(file, src, lanes);
+  if (!hasDemo) return;
 
   // --- hero demo ------------------------------------------------------
   const buckets = [...src.matchAll(/class="bk" data-t="([a-z]+)"/g)].map((m) => m[1]);
@@ -220,14 +265,14 @@ if (problems.length) {
   console.error("::error::website lane drift");
   for (const p of problems) console.error(`✗ ${p}`);
   console.error("");
-  console.error("The landing has TWO lane surfaces (hero demo, interactive replica)");
-  console.error("with independent data. Fix both, in every language the site ships.");
+  console.error("Every landing renders the five live lanes (the .lane-list; older pages a");
+  console.error("hero demo plus a replica). Fix it in every language the site ships.");
   console.error("The demo/promo video sources carry the lane names too — see VIDEO_SOURCES.");
   process.exit(1);
 }
 
 console.log(
   `✓ website lanes: ${lanes.length} live lanes (${lanes.join(", ")}) consistent across ` +
-    `hero buckets, samples, totals and the replica in ${LANDINGS.length} landings, ` +
+    `the lane lists (and any hero demo/replica) in ${LANDINGS.length} landings, ` +
     `and in ${VIDEO_SOURCES.length} video sources.`,
 );

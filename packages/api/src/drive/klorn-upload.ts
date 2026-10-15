@@ -43,6 +43,7 @@ import { KlornDriveError } from "./klorn-errors.js";
 import { cleanKlornFileName } from "./klorn-file-name.js";
 import { assertWithinKlornQuota } from "./klorn-quota.js";
 import { resolveKlornParent } from "./klorn-tree.js";
+import { enqueueSummaryOnWrite } from "./summary-triggers.js";
 
 /**
  * The largest file: D1's cap (25 MiB, L14), the only size the plan has decided.
@@ -328,6 +329,8 @@ export async function commitKlornUpload(
     await discardKlornUpload(upload);
     throw new KlornDriveError("account-purging");
   }
+  // D4: queue its summary (a no-op while summaries are off). Never throws.
+  await enqueueSummaryOnWrite(upload.userId, id, upload.etag);
   return toDriveFileWire({
     id,
     provider: "KLORN",

@@ -72,6 +72,11 @@ export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> 
   await tx.agentLog.deleteMany(scope);
   await tx.automationConfig.deleteMany(scope);
   await tx.calendarEvent.deleteMany(scope);
+  // DriveFileSummary: model summaries of the user's files (D4); DriveSummaryUsage:
+  // their daily count. Both cascade with DriveFile and User; deleted by name so
+  // this list stays the complete record.
+  await tx.driveFileSummary.deleteMany(scope);
+  await tx.driveSummaryUsage.deleteMany(scope);
   // DriveFile: the metadata index of the user's files (names, sizes, links). D2
   // writes no bytes; D3 must delete a Klorn file's object before its row goes.
   await tx.driveFile.deleteMany(scope);

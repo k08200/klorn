@@ -120,9 +120,9 @@ test.describe("Navigation", () => {
     await expect(page).toHaveURL(/\/login/);
   });
 
-  test("back to home link works from login", async ({ page }) => {
+  test("the brand mark links home from login", async ({ page }) => {
     await page.goto("/login");
-    await page.click("text=Back to home");
+    await page.getByRole("link", { name: "Klorn", exact: true }).click();
     await expect(page).toHaveURL("/");
   });
 

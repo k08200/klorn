@@ -3,13 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-
-<!-- English is always the default at klorn.ai. Korean is reached via the language
-     toggle in the nav, which also auto-redirects a Korean-locale first visit. -->
-<title>Klorn — 割り込みが減る。速くなるのではなく</title>
-<meta name="description" content="すべてのメールを5つのレーンに振り分け、1通ごとに理由を添えます。Gmail・Naver・Googleカレンダーをひとつの場所に。仕分けは無料、Klorn Proは月$29.99。">
-<meta property="og:title" content="Klorn — 割り込みが減る。速くなるのではなく">
-<meta property="og:description" content="Klornはすべてのメールを5つのレーン — Push, Meeting, Queue, Info, Silent — に振り分け、1通ごとにその理由を添えます。Superhumanは速さを、Fyxerは代筆を売ります。どちらも月$30で、どちらも「なぜ届いたか」は見せません。AGPL-3.0、セルフホスト可、承認していないものは送りません。">
+<link rel="alternate" hreflang="en" href="https://klorn.ai/">
+<link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/">
+<link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/">
+<link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/">
+<link rel="alternate" hreflang="es" href="https://klorn.ai/es/">
+<link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/">
+<link rel="alternate" hreflang="de" href="https://klorn.ai/de/">
+<link rel="alternate" hreflang="x-default" href="https://klorn.ai/">
+<link rel="canonical" href="https://klorn.ai/ja/">
+<!-- English is the default at klorn.ai. Other languages are reached from the
+     language menu; a Korean-locale first visit to / is routed to /ko/ once. -->
+<title>Klorn — メールもカレンダーも、ひとつの落ち着いた場所に。</title>
+<meta name="description" content="GmailとGoogleカレンダー、ベータ版のNaverメールとiCloudメールをひとつの画面に。Klornはすべてのメールを、あなたに何が必要かで振り分け、その理由を添えます。無料プランあり、Klorn Proは月$29.99。">
+<meta property="og:title" content="Klorn — メールもカレンダーも、ひとつの落ち着いた場所に。">
+<meta property="og:description" content="メールとカレンダーをひとつの画面に。すべてのメールを5つのレーンに振り分け、1通ごとに理由を添えます。あなたが許可しないメールは送られません。">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://klorn.ai/ja/">
 <meta property="og:image" content="https://klorn.ai/brand/og-image.png?v=k2">
@@ -17,771 +25,16 @@
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://klorn.ai/brand/og-image.png?v=k2">
-<!-- The hero photograph is the LCP element; preloading it with the same srcset
-     the <picture> uses lets the fetch start before the CSS resolves. -->
 <link rel="preload" as="font" type="font/woff2" href="/fonts/geist-var.woff2" crossorigin>
-<link rel="preload" as="font" type="font/woff2" href="/fonts/instrument-serif-italic.woff2" crossorigin>
-<link rel="preload" as="image" type="image/webp"
-      imagesrcset="/media/sky/dusk-1280.webp 1280w, /media/sky/dusk-1920.webp 1920w, /media/sky/dusk-2560.webp 2560w"
-      imagesizes="100vw" fetchpriority="high">
+<link rel="preload" as="image" type="image/webp" media="(max-width:640px)"
+      imagesrcset="/media/app-2026-10/today-m-light-720.webp 720w, /media/app-2026-10/today-m-light-1440.webp 1440w"
+      imagesizes="94vw" fetchpriority="high">
+<link rel="preload" as="image" type="image/webp" media="(min-width:641px)"
+      imagesrcset="/media/app-2026-10/today-light-1200.webp 1200w, /media/app-2026-10/today-light-2000.webp 2000w, /media/app-2026-10/today-light-2560.webp 2560w"
+      imagesizes="(min-width:1240px) 1176px, 94vw" fetchpriority="high">
 <link rel="icon" href="/brand/favicon.svg?v=matte2" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png?v=matte2">
-<style>
-/* Self-hosted webfonts (fonts/SOURCE.md). The stacks below referenced Geist and
-   a commercial serif that were never actually loaded, so every visitor rendered
-   the system-font fallback. Geist is the intended sans; the serif accent loads
-   Instrument Serif (OFL) in place of the unlicensed face the stack named.
-   font-display swap: text renders immediately in the fallback, then upgrades. */
-@font-face{font-family:'Geist';src:url('/fonts/geist-var.woff2') format('woff2');
-  font-weight:100 900;font-style:normal;font-display:swap}
-@font-face{font-family:'Instrument Serif';src:url('/fonts/instrument-serif-italic.woff2') format('woff2');
-  font-weight:400;font-style:italic;font-display:swap}
-@font-face{font-family:'Instrument Serif';src:url('/fonts/instrument-serif.woff2') format('woff2');
-  font-weight:400;font-style:normal;font-display:swap}
-:root{
-  --ink:#0a0e14; --ink-2:#39424e;
-  /* #6a7480 measured 4.17:1 on the band wash and 3.71:1 over the sky bands —
-     under AA for the small text it is used for. This clears 4.5:1 on every
-     surface it lands on, white cards through photograph. */
-  --ink-3:#5c656f;
-  --paper:#fbfaf6;            /* warm, not clinical white (ref: Trajectory) */
-  --line:rgba(10,14,20,.09);
-  --sky-600:#0284c7;
-  /* --sky-600 is the accent for fills, borders and large display type. As a
-     TEXT colour it fails AA at small sizes on every surface here — 4.10:1
-     even on a white card, 3.46:1 over the sky. Small text uses this instead. */
-  --sky-ink:#0369a1;
-  --ease:cubic-bezier(.32,.72,0,1);
-}
-*{box-sizing:border-box}
-html{scroll-behavior:smooth}
-@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
-body{position:relative;margin:0;background:var(--paper);color:var(--ink);
-  font-family:'Geist','Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
-  line-height:1.6;-webkit-font-smoothing:antialiased}
-a{color:inherit;text-decoration:none}
-/* One visible focus ring for everything. Two rings — a white halo under a dark
-   one — so it survives both the dark nav pill and the pale paper. */
-:focus-visible{outline:2px solid var(--sky-600);outline-offset:3px;border-radius:6px;
-  box-shadow:0 0 0 6px rgba(255,255,255,.85)}
-.nav-pill :focus-visible{outline-color:#fff;box-shadow:0 0 0 6px rgba(4,12,26,.6)}
-
-/* Film grain — fixed, never on a scroller (perf). */
-.grain{position:fixed;inset:0;z-index:60;pointer-events:none;opacity:.30;mix-blend-mode:multiply;
-  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='4'/></filter><rect width='180' height='180' filter='url(%23n)' opacity='.42'/></svg>")}
-
-
-/* Page-wide atmosphere. The middle of the page measured flat — 4,500px where the
-   background moved less than 6% in luminance — so instead of scattered blooms it
-   now descends continuously through the photograph's own palette: cream, blush,
-   lavender, the pale blue at the top of the frame, back to cream at the footer.
-   Three soft lateral washes keep that descent from reading as a flat ramp.
-   Every stop stays lighter than #e1e1e1, the point where --ink-3 would drop
-   under 4.5:1. */
-.field{position:absolute;top:0;left:0;right:0;height:100%;z-index:0;pointer-events:none;
-  background-image:
-    radial-gradient(62% 13% at 88% 24%, rgba(212,226,240,.50), transparent 72%),
-    radial-gradient(58% 12% at 5% 45%, rgba(240,222,226,.52), transparent 72%),
-    radial-gradient(64% 14% at 94% 67%, rgba(230,222,240,.46), transparent 72%),
-    radial-gradient(56% 12% at 8% 84%, rgba(216,230,240,.44), transparent 74%),
-    linear-gradient(180deg,
-      #f8f6f1 0%, #f7efeb 17%, #f4ecef 32%, #f2ebf1 46%,
-      #edf1f6 62%, #eff3f7 76%, #f5f3f1 90%, #f8f6f1 100%);
-  -webkit-mask-image:linear-gradient(180deg,transparent 0,#000 5%,#000 97%,transparent 100%);
-          mask-image:linear-gradient(180deg,transparent 0,#000 5%,#000 97%,transparent 100%)}
-
-/* ── Fluid island nav ─────────────────────────────── */
-.nav{position:fixed;top:22px;left:0;right:0;z-index:50;display:flex;justify-content:center;padding:0 16px;pointer-events:none}
-.nav-pill{pointer-events:auto;display:flex;align-items:center;gap:2px;padding:7px 7px 7px 18px;border-radius:9999px;
-  background:rgba(12,16,22,.66);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);
-  border:1px solid rgba(255,255,255,.13);box-shadow:0 18px 44px -20px rgba(4,12,26,.7),inset 0 1px 0 rgba(255,255,255,.10);
-  transition:transform .7s var(--ease),box-shadow .7s var(--ease)}
-.nav-pill:hover{transform:translateY(-1px);box-shadow:0 24px 56px -22px rgba(4,12,26,.78),inset 0 1px 0 rgba(255,255,255,.14)}
-.nav-brand{color:#fff;font-weight:700;letter-spacing:-.015em;font-size:15px;margin-right:14px;
-  padding:6px 2px;border-radius:8px;transition:opacity .5s var(--ease)}
-.nav-brand:hover{opacity:.72}
-.nav-links{display:flex;gap:2px}
-.nav-links a{color:rgba(255,255,255,.72);font-size:13.5px;padding:9px 14px;border-radius:9999px;
-  transition:color .5s var(--ease),background .5s var(--ease)}
-.nav-links a:hover{color:#fff;background:rgba(255,255,255,.10)}
-.nav-cta{display:inline-flex;align-items:center;gap:9px;height:38px;padding:0 6px 0 17px;border-radius:9999px;
-  background:#fff;color:var(--ink);font-size:13.5px;font-weight:650;margin-left:8px;
-  transition:transform .6s var(--ease)}
-.nav-cta:active{transform:scale(.97)}
-.nav-cta i{width:26px;height:26px;border-radius:9999px;background:rgba(10,14,20,.07);display:grid;place-items:center;
-  font-style:normal;font-size:12px;transition:transform .6s var(--ease),background .6s var(--ease)}
-.nav-cta:hover i{transform:translate(2px,-1px) scale(1.06);background:rgba(10,14,20,.12)}
-/* Web sign-in lives in the pill, NOT in .nav-links — those collapse under
-   880px, and someone reaching for the web app is most likely on a phone.
-   Outlined rather than filled so it reads as the secondary action next to the
-   white download CTA without disappearing into the glass. */
-.nav-login{position:relative;display:inline-flex;align-items:center;height:38px;padding:0 15px;
-  border-radius:9999px;margin-left:8px;color:rgba(255,255,255,.88);font-size:13.5px;font-weight:600;
-  border:1px solid rgba(255,255,255,.22);white-space:nowrap;
-  transition:color .5s var(--ease),background .5s var(--ease),border-color .5s var(--ease)}
-.nav-login:hover{color:#fff;background:rgba(255,255,255,.10);border-color:rgba(255,255,255,.34)}
-/* 38px keeps the pill's height; the overlay takes the touch target to 44px by
-   claiming the pill's own padding, so nothing reflows to buy the AA target. */
-.nav-login::before{content:"";position:absolute;inset:-3px -2px;border-radius:inherit}
-@media(max-width:880px){.nav-links{display:none}}
-/* Phones drop .nav-links, leaving brand + Log in + Download in the pill. Tighten its
-   own spacing before anything is allowed to clip: measured 378px into a
-   343px budget at 375px wide before this block. The band runs to 480px so the
-   first full-padding width (481px) still clears its budget by ~70px, not ~10. */
-@media(max-width:480px){
-  .nav-pill{padding:5px 5px 5px 13px}
-  .nav-brand{margin-right:8px}
-  .nav-login{margin-left:6px;padding:0 11px;font-size:13px}
-  .nav-cta{margin-left:6px;padding:0 12px;font-size:13px}
-  /* The arrow puck is decoration and the widest thing here (26px + 9px gap);
-     dropping it on phones buys the room without unlabelling a single control. */
-  .nav-cta i{display:none}
-}
-
-/* ── Hero ─────────────────────────────────────────── */
-.hero{position:relative;overflow:hidden;padding:196px 0 0;text-align:center}
-/* Hero sky. The gradient is the photograph's own measured band averages, so it
-   stands in with the right colour while the file loads instead of flashing a
-   different hue. The image fades out at the bottom into --paper, which is what
-   the drawn SVG this replaced used to do with a gradient stop. */
-.hero-sky{position:absolute;top:0;left:0;width:100%;height:1400px;z-index:0;overflow:hidden;
-  background:linear-gradient(180deg,#f3f3ec 0%,#ede8e5 22%,#ecd5cd 40%,
-    #e5c7c2 58%,#d7c1c6 74%,#cdc1cc 88%,#cdc1cc 100%);
-  /* The mask has to sit on the picture, not on the img. It was on the img alone,
-     so the placeholder gradient underneath stayed at full strength and cut off
-     square at the element's edge — that hard line was the background, not the
-     photograph. Masking the container fades both together. */
-  -webkit-mask-image:linear-gradient(180deg,#000 0%,#000 58%,rgba(0,0,0,.55) 82%,transparent 100%);
-          mask-image:linear-gradient(180deg,#000 0%,#000 58%,rgba(0,0,0,.55) 82%,transparent 100%)}
-.hero-sky img{width:100%;height:100%;object-fit:cover;object-position:center 42%;display:block}
-.wrap{position:relative;z-index:3;max-width:1180px;margin:0 auto;padding:0 24px}
-
-.eyebrow{display:inline-flex;align-items:center;gap:9px;padding:7px 8px 7px 15px;border-radius:9999px;
-  background:rgba(255,255,255,.72);border:1px solid rgba(255,255,255,.85);
-  box-shadow:0 8px 26px -14px rgba(10,50,90,.5);
-  font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:#0b5f8a;
-  backdrop-filter:blur(12px)}
-.eyebrow b{font-weight:700;letter-spacing:0;text-transform:none;font-size:12.5px;color:var(--ink);
-  background:#fff;padding:3px 10px;border-radius:9999px}
-
-h1{font-size:clamp(46px,7.2vw,88px);line-height:.98;letter-spacing:-.042em;font-weight:700;margin:26px 0 20px}
-/* Measured against the photograph's bands: --sky-600 lands at 2.69:1, under the
-   3:1 floor for large text. This shade clears it (3.23:1) and still reads as the
-   same accent; the paper sections keep --sky-600 unchanged. */
-h1 .ser{font-family:'Instrument Serif','Iowan Old Style',Georgia,serif;font-style:italic;font-weight:400;
-  color:#0277b3;padding-right:.06em}
-.lead{font-size:19px;color:var(--ink-2);max-width:600px;margin:0 auto 34px}
-/* The serif accent is a Latin display face. Korean has no glyphs in it, so the
-   browser substitutes whatever Hangul serif it finds — on macOS a cursive one
-   that reads as a different, wrong voice next to the sans headline. Give Hangul
-   an explicit Myeongjo stack and drop the italic, which Hangul does not have. */
-/* Hangul has no spaces inside a word but CSS will happily break between any two
-   syllables, so "당신에게" wraps as "당신에 / 게". keep-all breaks on spaces only. */
-html[lang=ko] body{word-break:keep-all;overflow-wrap:break-word}
-html[lang=ko] h1 .ser,
-html[lang=ko] .stmt-h .ser,
-html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','AppleMyungjo',serif;
-  font-style:normal;font-weight:600;padding-right:0}
-
-.actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
-.btn{display:inline-flex;align-items:center;gap:10px;height:54px;padding:0 8px 0 26px;border-radius:9999px;
-  font-size:15px;font-weight:650;transition:transform .6s var(--ease),box-shadow .6s var(--ease)}
-.btn:active{transform:scale(.98)}
-.btn i{width:34px;height:34px;border-radius:9999px;display:grid;place-items:center;font-style:normal;font-size:14px;
-  transition:transform .6s var(--ease),background .6s var(--ease)}
-.btn-1{background:var(--ink);color:#fff;box-shadow:0 20px 44px -22px rgba(10,14,20,.85)}
-.btn-1 i{background:rgba(255,255,255,.14)}
-.btn-1:hover{box-shadow:0 26px 54px -22px rgba(10,14,20,.9)}
-.btn-1:hover i{transform:translate(3px,-2px) scale(1.07);background:rgba(255,255,255,.22)}
-.btn-2{background:rgba(255,255,255,.78);color:var(--ink);border:1px solid rgba(255,255,255,.9);padding-right:26px;
-  backdrop-filter:blur(12px);box-shadow:0 10px 30px -18px rgba(10,50,90,.5)}
-.btn-2:hover{background:#fff}
-.btn-dl{padding-left:22px}
-.btn-dl svg{width:17px;height:17px;transition:transform .6s var(--ease)}
-.btn-dl:hover svg{transform:translateY(2px)}
-/* Two platform cards instead of one Download button. Both render without JS —
-   OS detection only promotes the matching one, so a Windows visitor with
-   scripting off still sees their entry rather than a Mac-only page. */
-.dl-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:20px auto 0;max-width:660px}
-.dl{display:flex;align-items:center;gap:12px;text-align:left;padding:12px 18px 12px 15px;border-radius:16px;
-  background:rgba(255,255,255,.72);border:1px solid rgba(255,255,255,.9);
-  box-shadow:0 10px 30px -18px rgba(10,50,90,.5);backdrop-filter:blur(12px);
-  transition:transform .6s var(--ease),box-shadow .6s var(--ease),background .6s var(--ease)}
-.dl:hover{background:#fff;transform:translateY(-2px);box-shadow:0 18px 40px -20px rgba(10,50,90,.55)}
-.dl:active{transform:scale(.985)}
-.dl svg{width:22px;height:22px;flex:0 0 22px;color:var(--ink-2)}
-.dl .t{display:block}
-.dl b{display:block;font-size:14px;font-weight:650;letter-spacing:-.01em;color:var(--ink)}
-.dl .t span{display:block;font-size:11.5px;color:var(--ink-3);margin-top:1px}
-.dl.is-yours{background:var(--ink);border-color:var(--ink);box-shadow:0 20px 44px -22px rgba(10,14,20,.85)}
-.dl.is-yours b{color:#fff}
-.dl.is-yours .t span{color:rgba(255,255,255,.66)}
-.dl.is-yours svg{color:#fff}
-.dl.is-yours:hover{background:#11161f}
-/* --ink-3 measured 2.75-4.28:1 against the photograph's bands — under the 4.5
-   AA floor for body-size text. --ink-2 clears it everywhere (5.89-9.18:1). */
-.actions-note{max-width:560px;margin:18px auto 0;font-size:12.5px;line-height:1.6;color:var(--ink-2)}
-/* 12.5px on the photograph needs 4.5:1; #0b5f8a gives 3.44:1 there. */
-.actions-note a{color:#084869;font-weight:600;border-bottom:1px solid rgba(8,72,105,.32)}
-.actions-note a:hover{border-bottom-color:#084869}
-
-/* ── The real app, floating ───────────────────────── */
-/* 56px sat the replica right under the sorting demo — two dense panels with no
-   air between them. */
-.stage{position:relative;z-index:3;margin:120px auto 0;max-width:1160px;padding:0 24px 96px}
-/* Caption above the frame. Below it the stage fade washes it out, and this one
-   has to stay readable — it is the honesty label on a fake inbox. */
-.stage-cap{display:flex;align-items:center;justify-content:center;gap:9px;flex-wrap:wrap;
-  margin:0 0 14px;font-size:12.5px;color:var(--ink-2)}
-.stage-cap b{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:700;
-  letter-spacing:.14em;text-transform:uppercase;color:#fff;background:var(--sky-ink);
-  border-radius:999px;padding:4px 10px}
-.stage-cap b::before{content:'';width:5px;height:5px;border-radius:50%;background:#fff}
-.shell{position:relative;border-radius:30px;padding:10px;
-  background:linear-gradient(180deg,rgba(255,255,255,.72),rgba(255,255,255,.34));
-  border:1px solid rgba(255,255,255,.8);
-  /* Was 0.55 alpha of a navy at 130px blur — over the pale sky that pooled
-     under the panel as a grey smudge rather than reading as lift. Lighter,
-     tighter, and tinted to the background it falls on. */
-  box-shadow:0 34px 70px -34px rgba(90,80,96,.20),0 10px 26px -18px rgba(90,80,96,.16);
-  backdrop-filter:blur(10px)}
-.core{border-radius:22px;overflow:hidden;background:#fff;border:1px solid var(--line);
-  box-shadow:inset 0 1px 1px rgba(255,255,255,.9)}
-.core img{display:block;width:100%;height:auto}
-
-/* Floating signal cards pinned to the app (ref: Screenote) */
-.chip{position:absolute;z-index:5;display:flex;gap:11px;align-items:flex-start;width:238px;padding:13px 15px;
-  border-radius:17px;background:rgba(255,255,255,.82);border:1px solid rgba(255,255,255,.94);
-  box-shadow:0 26px 54px -26px rgba(8,42,80,.5);backdrop-filter:blur(16px) saturate(1.3);
-  text-align:left;animation:float 7s var(--ease) infinite alternate}
-.chip .d{width:8px;height:8px;border-radius:50%;margin-top:6px;flex:0 0 8px}
-.chip h4{margin:0;font-size:13px;font-weight:650;letter-spacing:-.01em}
-.chip p{margin:2px 0 0;font-size:11.5px;line-height:1.45;color:var(--ink-3)}
-.chip-a{left:-14px;top:120px;animation-delay:-1.4s}
-.chip-b{right:-18px;top:238px;animation-delay:-3.2s}
-.chip-c{left:34px;bottom:150px;animation-delay:-5s}
-@keyframes float{from{transform:translateY(-7px)}to{transform:translateY(7px)}}
-@media(max-width:1080px){.chip{display:none}}
-
-/* ── Cards ────────────────────────────────────────── */
-.sec{position:relative;z-index:1;padding:104px 0 28px}
-.sec-head{max-width:1180px;margin:0 auto 40px;padding:0 24px;display:flex;gap:48px;align-items:flex-end;flex-wrap:wrap}
-.sec-head h2{flex:1 1 420px;margin:0;font-size:clamp(32px,4.2vw,52px);line-height:1.04;letter-spacing:-.035em;font-weight:700}
-.sec-head p{flex:1 1 300px;margin:0;color:var(--ink-2);font-size:16px;max-width:420px}
-.tag{display:inline-block;font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-3);
-  font-weight:600;margin-bottom:18px}
-
-/* The four screenshots have ratios from 1.63 to 0.52, so forcing the cards to a
-   shared height opens a void under whichever one is shorter. Each card ends
-   where its own content ends instead. */
-.cards{max-width:1180px;margin:0 auto;padding:0 24px;display:grid;grid-template-columns:repeat(12,1fr);
-  gap:18px;align-items:start}
-.card{border-radius:26px;padding:8px;background:rgba(10,14,20,.035);border:1px solid var(--line);
-  transition:transform .8s var(--ease),box-shadow .8s var(--ease)}
-.card:hover{transform:translateY(-5px);box-shadow:0 40px 80px -46px rgba(8,42,80,.5)}
-.card-in{border-radius:19px;overflow:hidden;background:#fff;border:1px solid var(--line);height:100%;
-  box-shadow:inset 0 1px 1px rgba(255,255,255,.9);display:flex;flex-direction:column}
-/* Product tour. Four surfaces, one frame, switched by tabs.
-   A grid of screenshots cannot be made tidy here: the four have ratios from 1.79
-   to 0.84, so a shared row height opens voids and a natural height leaves ragged
-   bottoms. One frame removes the problem instead of balancing it — and the tabs
-   are the interaction the page was missing below the fold.
-   Every shot is rendered at the same 520x330pt, so the frame never letterboxes. */
-.tour{max-width:1180px;margin:0 auto;padding:0 24px;display:grid;
-  grid-template-columns:352px 1fr;gap:28px;align-items:start}
-.tour-nav{display:grid;gap:8px;align-content:start}
-.tour-t{display:grid;gap:3px;text-align:left;padding:15px 17px;border-radius:15px;border:1px solid transparent;
-  background:transparent;font:inherit;color:var(--ink);cursor:pointer;
-  transition:background .5s var(--ease),border-color .5s var(--ease),transform .5s var(--ease)}
-.tour-t:hover{background:rgba(255,255,255,.55)}
-.tour-t b{font-size:15.5px;font-weight:650;letter-spacing:-.015em}
-.tour-t span{font-size:13px;color:var(--ink-3);line-height:1.5}
-.tour-t[aria-selected=true]{background:#fff;border-color:var(--line);
-  box-shadow:0 18px 40px -28px rgba(10,50,90,.42)}
-.tour-t[aria-selected=true] span{color:var(--ink-2)}
-.tour-stage{border-radius:26px;padding:8px;background:rgba(10,14,20,.035);border:1px solid var(--line)}
-.tour-panel{border-radius:19px;overflow:hidden;background:#fff;border:1px solid var(--line)}
-.tour-panel img{display:block;width:100%;height:auto;aspect-ratio:1040/660;object-fit:cover}
-/* Opt-IN single-panel mode: without JS every panel stays in the document, so the
-   section degrades to a plain stack instead of one visible tab. */
-.js .tour-panel[hidden]{display:none}
-.js .tour-panel+.tour-panel{margin-top:0}
-.tour-panel+.tour-panel{margin-top:10px}
-@media(max-width:900px){
-  .tour{grid-template-columns:1fr;gap:18px}
-  .tour-nav{grid-template-columns:repeat(2,1fr);gap:8px}
-}
-@media(max-width:900px){.c8,.c4,.c6{grid-column:span 12}}
-
-
-/* ── Shared section furniture ─────────────────────── */
-.wrapl{max-width:1180px;margin:0 auto;padding:0 24px}
-/* Sections separate by tone, never by a rule drawn across the page. The wash
-   is a masked pseudo-element so its top and bottom edges dissolve instead of
-   landing as a hairline. */
-/* A third pass of the same sky, hazed right back, so the middle of the page has
-   weather in it too instead of flat tone. Same cached file as the hero — no
-   extra request — cropped elsewhere in the frame and not mirrored, so it reads
-   as a different part of the sky rather than a repeat of the closing band. */
-.sec-sky{position:absolute;inset:0;z-index:-1;pointer-events:none;display:block}
-.sec-sky img{width:100%;height:100%;object-fit:cover;object-position:center 12%;display:block;
-  opacity:.55;
-  -webkit-mask-image:linear-gradient(180deg,transparent 0,#000 30%,#000 70%,transparent 100%);
-          mask-image:linear-gradient(180deg,transparent 0,#000 30%,#000 70%,transparent 100%)}
-.band::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
-  background:rgba(238,236,227,.62);
-  -webkit-mask-image:linear-gradient(180deg,transparent 0,#000 14%,#000 86%,transparent 100%);
-          mask-image:linear-gradient(180deg,transparent 0,#000 14%,#000 86%,transparent 100%)}
-.sec.band{padding-block:96px}
-
-.stmt{max-width:780px}
-.stmt-h{font-size:clamp(30px,4.4vw,54px);line-height:1.06;letter-spacing:-.035em;font-weight:700;margin:0 0 22px}
-.stmt-h .ser{font-family:'Instrument Serif','Iowan Old Style',Georgia,serif;font-style:italic;font-weight:400;color:var(--sky-ink)}
-.stmt-p{font-size:18px;color:var(--ink-2);margin:0 0 30px;max-width:640px}
-.pips{display:flex;gap:10px;flex-wrap:wrap}
-.pip{display:inline-flex;align-items:center;gap:9px;padding:8px 15px;border-radius:9999px;background:#fff;
-  border:1px solid var(--line);font-size:13px;font-weight:550;color:var(--ink-2)}
-.pip i{width:6px;height:6px;border-radius:50%;background:var(--sky-600)}
-
-.steps{max-width:1180px;margin:0 auto;padding:0 24px;display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
-.step{border-radius:26px;padding:8px;background:rgba(10,14,20,.035);border:1px solid var(--line)}
-.step>*{margin:0}
-.step .sn{display:block;font-size:11px;letter-spacing:.2em;font-weight:700;color:var(--sky-ink);padding:22px 24px 0}
-.step h3{font-size:20px;letter-spacing:-.02em;padding:10px 24px 0}
-.step p{color:var(--ink-3);font-size:14px;padding:8px 24px 22px}
-@media(max-width:860px){.steps{grid-template-columns:1fr}}
-
-/* Compatibility. Every comparable landing puts this somewhere a visitor reaches
-   before installing; without it the only mention of a mail provider on this page
-   was one word inside a pricing bullet. */
-.works{max-width:1180px;margin:0 auto;padding:0 24px;display:grid;
-  grid-template-columns:repeat(5,1fr);gap:18px}
-.work{border-radius:20px;padding:22px 22px;background:#fff;border:1px solid var(--line);
-  display:grid;gap:5px;align-content:start}
-.work b{font-size:15px;font-weight:650;letter-spacing:-.015em}
-.work span{font-size:13px;color:var(--ink-3);line-height:1.5}
-.works-note{max-width:1180px;margin:20px auto 0;padding:0 24px;font-size:13px;color:var(--ink-3)}
-.works-note b{color:var(--ink-2);font-weight:650}
-@media(max-width:1140px){.works{grid-template-columns:repeat(3,1fr)}}
-@media(max-width:900px){.works{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:560px){.works{grid-template-columns:1fr}}
-
-/* Questions a beta actually gets asked, as a native <details> accordion: three
-   of the four landings measured against use one here, and it works with no
-   script at all — the disclosure, the keyboard and the focus ring are the
-   browser's. Six open answers made this the longest section on the page. */
-.faq{max-width:820px;margin:0 auto;padding:0 24px;display:grid;gap:0}
-.faq-i{border-top:1px solid var(--line)}
-.faq-i:last-child{border-bottom:1px solid var(--line)}
-.faq-i summary{list-style:none;cursor:pointer;display:flex;align-items:flex-start;gap:16px;
-  padding:20px 2px;font-size:16.5px;font-weight:650;letter-spacing:-.015em;
-  transition:color .4s var(--ease)}
-.faq-i summary::-webkit-details-marker{display:none}
-.faq-i summary:hover{color:var(--sky-ink)}
-.faq-i summary::after{content:"+";margin-left:auto;font-size:20px;font-weight:400;line-height:1;
-  color:var(--ink-3);transition:transform .5s var(--ease);flex:0 0 auto}
-.faq-i[open] summary::after{transform:rotate(45deg)}
-.faq-i p{margin:0;padding:0 40px 22px 2px;font-size:14.5px;color:var(--ink-2);line-height:1.65}
-.faq-i a{color:var(--sky-ink);font-weight:600}
-
-.stats{max-width:1180px;margin:0 auto;padding:0 24px;display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
-.stat{border-radius:26px;padding:26px 26px;background:#fff;border:1px solid var(--line);
-  box-shadow:0 22px 50px -38px rgba(8,42,80,.45)}
-.stat .sv{font-size:clamp(38px,4.6vw,54px);line-height:1;letter-spacing:-.04em;font-weight:700;font-variant-numeric:tabular-nums}
-.stat .sl{margin-top:10px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);font-weight:650}
-.stat p{margin:12px 0 0;font-size:13.5px;color:var(--ink-3);line-height:1.55}
-@media(max-width:860px){.stats{grid-template-columns:1fr}}
-.foot{max-width:1180px;margin:34px auto 0;padding:0 24px;font-size:13px;color:var(--ink-3)}
-.foot a{color:var(--sky-ink);font-weight:600}
-
-.os{border-radius:30px;padding:10px;background:rgba(10,14,20,.04);border:1px solid var(--line);
-  max-width:720px;margin:0 auto}
-/* The right-hand column held four bullets the page had already made three times
-   over, so the card is a single column now: the claim and the two links. The
-   card is capped to that column's width, or it renders as a full-width box
-   with its right half empty. */
-.os-in{border-radius:22px;background:#fff;border:1px solid var(--line);padding:34px 38px;
-  display:grid;gap:0;align-items:start}
-.os-h{font-size:clamp(26px,3.2vw,40px);line-height:1.08;letter-spacing:-.03em;margin:0 0 16px;font-weight:700}
-.os-p{color:var(--ink-2);font-size:15.5px;margin:0 0 26px}
-.os-cta{display:flex;gap:12px;flex-wrap:wrap}
-/* Recently shipped. On the landings measured, developer-facing tools surface
-   shipping velocity on the page itself (linear, warp, cursor, resend, vercel);
-   for an AGPL project the release feed is the one trust signal that cannot be
-   faked. Hidden until the GitHub fetch succeeds, so a failure costs nothing —
-   the footer's Releases link already covers it. */
-.ship{margin-top:26px}
-.ship h3{margin:0 0 10px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;
-  color:var(--ink-3);font-weight:700}
-.ship ol{list-style:none;margin:0 0 10px;padding:0;display:flex;gap:8px;flex-wrap:wrap}
-.ship li{display:inline-flex;align-items:baseline;gap:8px;padding:7px 12px;border-radius:9999px;
-  background:rgba(10,14,20,.045);font-size:12.5px}
-.ship li a{font-weight:650;color:var(--ink)}
-.ship li span{color:var(--ink-3);font-size:11.5px}
-.ship>a{font-size:12.5px;color:var(--sky-ink);font-weight:600}
-@media(max-width:900px){.os-in{grid-template-columns:1fr;gap:34px;padding:32px 26px}}
-
-.prices{max-width:1000px;margin:0 auto;padding:0 24px;display:grid;grid-template-columns:1fr 1fr;gap:18px}
-.price{border-radius:28px;padding:8px;background:rgba(10,14,20,.035);border:1px solid var(--line)}
-.price.feat{background:var(--ink);border-color:var(--ink)}
-.price-in{border-radius:21px;background:#fff;border:1px solid var(--line);padding:28px 28px;height:100%;
-  display:flex;flex-direction:column}
-.chip-s{align-self:flex-start;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:700;
-  padding:6px 12px;border-radius:9999px;background:rgba(10,14,20,.06);color:var(--ink-2)}
-.chip-s.dark{background:var(--ink);color:#fff}
-.price h3{margin:16px 0 4px;font-size:19px;letter-spacing:-.02em}
-.amt{font-size:44px;letter-spacing:-.04em;font-weight:700;line-height:1.1}
-.amt span{font-size:15px;font-weight:500;color:var(--ink-3);letter-spacing:0}
-.note{margin:8px 0 22px;font-size:13px;color:var(--ink-3)}
-.price ul{list-style:none;margin:0 0 26px;padding:0;display:grid;gap:11px}
-.price li{position:relative;padding-left:24px;font-size:14px;color:var(--ink-2);line-height:1.5}
-.price li::before{content:"";position:absolute;left:2px;top:8px;width:9px;height:9px;border-radius:50%;
-  background:var(--sky-600);opacity:.85}
-.btn.full{width:100%;justify-content:center;margin-top:auto;padding-inline:26px}
-@media(max-width:820px){.prices{grid-template-columns:1fr}}
-
-/* The closing section bookends the hero with the same sky. It reuses the hero's
-   file — mirrored and cropped to a different part of the frame — so it reads as
-   the same weather from another angle and costs no extra bytes: the browser
-   already has it. Lazy, because it sits far below the fold. */
-.final{position:relative;overflow:hidden;padding:112px 0 28px;text-align:center}
-.final-sky{position:absolute;inset:0;z-index:0;pointer-events:none;display:block}
-.final-sky img{width:100%;height:100%;object-fit:cover;object-position:center 78%;display:block;
-  transform:scaleX(-1);opacity:.82;
-  -webkit-mask-image:linear-gradient(180deg,transparent 0,#000 26%,#000 74%,transparent 100%);
-          mask-image:linear-gradient(180deg,transparent 0,#000 26%,#000 74%,transparent 100%)}
-.final>.wrapl{position:relative;z-index:1}
-
-/* Scroll-linked sky pan. All three bands are the same photograph; panning each
-   one as it crosses the viewport makes them read as one sky being moved through
-   rather than three copies of a still. Transform only, so it composites on the
-   GPU and never triggers layout.
-
-   Progressive enhancement on purpose: scroll-driven animation is not universal
-   yet, and without it the images simply sit still — which is the design that
-   was measured. The taller img is scoped to the same guard so unsupported
-   browsers keep the crop that was verified. */
-@media (prefers-reduced-motion:no-preference){
-  @supports (animation-timeline:view()){
-    /* 124% left only 6px of cover at the end of the pan — one rounding away
-       from a sliver of background. 130% keeps ~5% of the container in hand. */
-    .hero-sky img,.sec-sky img,.final-sky img{height:130%}
-    .hero-sky img,.sec-sky img{animation:sky-pan linear both;
-      animation-timeline:view();animation-range:cover 0% cover 100%}
-    /* keeps the mirror: an animation on transform would otherwise drop it */
-    .final-sky img{animation:sky-pan-flip linear both;
-      animation-timeline:view();animation-range:cover 0% cover 100%}
-  }
-}
-@keyframes sky-pan{from{transform:translateY(0)}to{transform:translateY(-19%)}}
-@keyframes sky-pan-flip{from{transform:scaleX(-1) translateY(0)}
-                          to{transform:scaleX(-1) translateY(-19%)}}
-.final-h{font-size:clamp(34px,5.4vw,68px);line-height:1.02;letter-spacing:-.04em;font-weight:700;margin:0 0 18px}
-/* Now sits on the closing photograph too: --sky-600 measures 2.93:1 there,
-   under the 3:1 floor. Same shade as the hero accent. */
-.final-h .ser{font-family:'Instrument Serif','Iowan Old Style',Georgia,serif;font-style:italic;font-weight:400;color:#0277b3}
-.final-p{color:var(--ink-2);margin:0 auto 30px;max-width:520px}
-.final .actions{justify-content:center}
-
-.foot-nav{position:relative;z-index:1;padding:56px 0 28px;margin-top:76px}
-.foot-grid{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;gap:40px}
-.foot-brand{display:inline-block;font-size:19px;font-weight:700;letter-spacing:-.02em;
-  transition:opacity .5s var(--ease)}
-.foot-brand:hover{opacity:.6}
-.foot-note{margin:8px 0 0;font-size:13.5px;color:var(--ink-3);max-width:280px}
-.foot-nav h4{margin:0 0 14px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);font-weight:650}
-.foot-nav nav a{display:block;font-size:14px;color:var(--ink-2);padding:5px 0;
-  transition:color .4s var(--ease)}
-.foot-nav nav a:hover{color:var(--ink)}
-.foot-base{display:flex;justify-content:space-between;align-items:center;margin-top:54px;padding-top:24px;
-  font-size:12.5px;color:var(--ink-3)}
-.langsw{display:inline-flex;gap:9px;align-items:center}
-.langsw a{font-weight:650}
-.langsw a[aria-current]{color:var(--ink)}
-.langsw i{opacity:.4;font-style:normal}
-@media(max-width:820px){.foot-grid{grid-template-columns:1fr 1fr;gap:30px}}
-
-.proof{max-width:1180px;margin:26px auto 0;padding:0 24px;font-size:13.5px;color:var(--ink-3);max-width:720px}
-.proof a{color:var(--sky-ink);font-weight:600}
-
-
-/* ── Opinionated stance rows ──────────────────────── */
-
-
-
-
-.socials{display:flex;gap:8px;margin-top:18px}
-.socials a{width:36px;height:36px;border-radius:9999px;display:grid;place-items:center;
-  border:1px solid var(--line);background:#fff;color:var(--ink-2);
-  transition:transform .5s var(--ease),color .5s var(--ease),border-color .5s var(--ease)}
-.socials a:hover{transform:translateY(-2px);color:var(--ink);border-color:var(--line-strong,rgba(10,14,20,.2))}
-.socials svg{width:16px;height:16px}
-
-
-/* ── Side-by-side comparison ──────────────────────── */
-.vsgrid{max-width:1180px;margin:0 auto;padding:0 24px}
-.vshead{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:6px}
-.vscol{display:flex;align-items:center;gap:10px;padding:16px 22px;border-radius:16px 16px 0 0}
-.vscol.ours{background:var(--ink);color:#fff}
-.vscol.them{background:rgba(10,14,20,.05);color:var(--ink-3);border:1px solid var(--line);border-bottom:0}
-.vscol b{font-size:15px;font-weight:650;letter-spacing:-.015em}
-.vscol .mk{width:20px;height:20px;border-radius:9999px;display:grid;place-items:center;font-size:11px;font-weight:700}
-.vscol.ours .mk{background:rgba(255,255,255,.16);color:#fff}
-.vscol.them .mk{background:rgba(10,14,20,.08);color:var(--ink-3)}
-.vsrow{display:grid;grid-template-columns:1fr 1fr;gap:18px;padding:0 0 12px}
-.vscell{padding:20px 22px;border:1px solid var(--line);background:#fff}
-.vscell.ours{border-color:rgba(10,14,20,.16);box-shadow:0 18px 40px -34px rgba(8,42,80,.5)}
-.vscell.them{background:rgba(10,14,20,.02);color:var(--ink-3)}
-.vsrow:last-of-type .vscell{border-radius:0 0 16px 16px}
-.vscell .k{display:block;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;font-weight:700;
-  color:var(--ink-3);margin-bottom:8px}
-.vscell p{margin:0;font-size:14.5px;line-height:1.6}
-.vscell.ours p{color:var(--ink);font-weight:500}
-.vscell.ours p b{color:var(--sky-ink);font-weight:650}
-@media(max-width:820px){
-  .vshead{display:none}
-  .vsrow{grid-template-columns:1fr;gap:0;padding-bottom:18px}
-  .vscell{border-radius:16px!important;margin-bottom:8px}
-  .vscell::before{content:attr(data-who);display:block;font-size:10.5px;letter-spacing:.16em;
-    text-transform:uppercase;font-weight:700;color:var(--sky-ink);margin-bottom:8px}
-  .vscell.them::before{color:var(--ink-3)}
-}
-
-/* The four products a buyer is actually deciding between, named, each linked to
-   the page that carries the receipt. These pages existed but were reachable only
-   from the footer, which is the same as not existing: a comparison nobody
-   reaches persuades nobody. Kept below the grid, not above it — the argument
-   earns the click, the click does not replace the argument. */
-.vslinks{max-width:1180px;margin:24px auto 0;padding:0 24px;display:grid;
-  grid-template-columns:repeat(4,1fr);gap:12px}
-.vslink{display:block;padding:16px 18px;border:1px solid var(--line);border-radius:14px;
-  background:#fff;transition:border-color .2s var(--ease),transform .2s var(--ease)}
-.vslink:hover{border-color:rgba(3,105,161,.34);transform:translateY(-2px)}
-.vslink b{display:block;font-size:14px;font-weight:650;color:var(--sky-ink);
-  letter-spacing:-.01em;margin-bottom:5px}
-.vslink b::after{content:' \2192';font-weight:500}
-.vslink span{display:block;font-size:12.5px;line-height:1.5;color:var(--ink-3)}
-.vsnote{max-width:1180px;margin:16px auto 0;padding:0 24px;font-size:12px;line-height:1.6;
-  color:var(--ink-3)}
-.vsnote a{color:var(--sky-ink);font-weight:600}
-@media(max-width:980px){.vslinks{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:560px){.vslinks{grid-template-columns:1fr}}
-@media(prefers-reduced-motion:reduce){.vslink{transition:none}.vslink:hover{transform:none}}
-
-/* Language switch, in the nav where it belongs.
-   A menu, not a row of buttons: two languages fit side by side, seven do not,
-   and a control that has to be redesigned every time a language ships is the
-   wrong shape. The trigger names the CURRENT language; the choices open
-   below it. */
-.nav-lang{position:relative;margin-left:8px}
-.nav-lang-btn{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:650;
-  letter-spacing:.04em;color:rgba(255,255,255,.82);padding:6px 10px;border-radius:9999px;
-  background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.12);cursor:pointer;
-  font-family:inherit;transition:color .4s var(--ease),background .4s var(--ease)}
-.nav-lang-btn:hover{color:#fff;background:rgba(255,255,255,.16)}
-.nav-lang-btn i{font-style:normal;font-size:9px;opacity:.7;transition:transform .3s var(--ease)}
-.nav-lang-btn[aria-expanded="true"] i{transform:rotate(180deg)}
-.nav-lang-menu{position:absolute;top:calc(100% + 8px);right:0;min-width:132px;padding:5px;
-  border-radius:14px;background:rgba(24,26,32,.96);border:1px solid rgba(255,255,255,.12);
-  box-shadow:0 18px 40px rgba(0,0,0,.34);display:none;flex-direction:column;gap:1px;z-index:40}
-.nav-lang-menu[data-open]{display:flex}
-.nav-lang-menu a{display:block;font-size:12px;font-weight:600;color:rgba(255,255,255,.72);
-  padding:7px 11px;border-radius:9px;white-space:nowrap;
-  transition:color .3s var(--ease),background .3s var(--ease)}
-.nav-lang-menu a:hover,.nav-lang-menu a:focus-visible{color:#fff;background:rgba(255,255,255,.10)}
-.nav-lang-menu a[aria-current]{color:#fff;background:rgba(255,255,255,.14)}
-@media(max-width:880px){.nav-lang{margin-left:4px}}
-@media(prefers-reduced-motion:reduce){.nav-lang-btn i{transition:none}}
-/* Phones: the pill carries brand + Log in + Download, and the language switch is
-   the one control here that is not load-bearing — the first visit is routed by
-   navigator.languages, the choice persists in localStorage, and the footer keeps
-   a manual EN/KO switch. Keeping it left only 7px of slack at 361px on the EN
-   copy, which will not survive real device font metrics. (The pill already
-   overflowed a 320px viewport before the Log in button existed — 301px into a
-   288px budget — so this closes that too.) Placed below the base rule on purpose:
-   .nav-lang is defined after the pill's own media queries, so an override up
-   there loses on source order. */
-@media(max-width:480px){.nav-lang{display:none}}
-/* Under 880px .nav-links collapse, which left Pricing, Blog and the rest of
-   the sections unreachable on phones. A disclosure button reopens them as a
-   panel under the pill (behaviour in /site-nav.js). 38px keeps the pill's
-   height; the overlay takes the hit area to 44px, as with .nav-login. */
-.nav-menu-btn{display:none;position:relative;align-items:center;justify-content:center;width:38px;height:38px;
-  margin-right:6px;padding:0;border-radius:9999px;border:1px solid rgba(255,255,255,.22);background:transparent;
-  color:#fff;cursor:pointer;transition:background .4s var(--ease)}
-.nav-menu-btn::before{content:"";position:absolute;inset:-3px}
-.nav-menu-btn:hover{background:rgba(255,255,255,.10)}
-.nav-menu-btn svg{width:17px;height:17px}
-@media(max-width:880px){
-  .nav-menu-btn{display:inline-flex}
-  .nav-pill{position:relative}
-  .nav-links[data-open]{display:flex;position:absolute;top:calc(100% + 8px);left:0;right:0;flex-direction:column;gap:1px;
-    padding:6px;border-radius:18px;background:rgba(24,26,32,.96);border:1px solid rgba(255,255,255,.12);
-    box-shadow:0 18px 40px rgba(0,0,0,.34)}
-  .nav-links[data-open] a{display:flex;align-items:center;min-height:44px;padding:0 14px;border-radius:12px;color:rgba(255,255,255,.86)}
-}
-@media(max-width:480px){.nav-menu-btn{margin-right:4px}}
-@media(prefers-reduced-motion:reduce){.nav-menu-btn{transition:none}}
-
-
-@media (max-height: 900px){
-  .hero{padding-top:150px}
-  h1{font-size:clamp(40px,5.4vw,62px)}
-  .lead{font-size:17px;margin-bottom:24px}
-  .eyebrow{margin-bottom:0}
-  .btn{height:48px}
-  .demo{margin-top:26px}
-  .stage{margin-top:40px}
-}
-@media (max-height: 760px){
-  .hero{padding-top:132px}
-  h1{font-size:clamp(36px,4.6vw,52px);margin:18px 0 14px}
-  .lead{font-size:16px;margin-bottom:20px}
-  .demo-stage{height:44px}
-  .bk .v{font-size:22px}
-}
-
-/* ── Live sort: the product, demonstrated before it is described ── */
-.demo{position:relative;z-index:3;max-width:960px;margin:34px auto 0;padding:0 24px}
-.demo-in{border-radius:26px;padding:8px;background:rgba(255,255,255,.55);border:1px solid rgba(255,255,255,.8);
-  box-shadow:0 40px 80px -44px rgba(8,42,80,.45);backdrop-filter:blur(14px)}
-.demo-core{border-radius:19px;background:rgba(255,255,255,.94);border:1px solid var(--line);
-  padding:18px 20px 16px;text-align:left}
-.demo-top{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px}
-.demo-top .lab{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;font-weight:700;color:var(--ink-3)}
-.demo-top .cnt{font-size:12.5px;color:var(--ink-3);font-variant-numeric:tabular-nums}
-.demo-top .cnt b{color:var(--ink);font-weight:700}
-.demo-stage{position:relative;height:52px;overflow:hidden;border-radius:12px;background:rgba(10,14,20,.035);
-  border:1px solid var(--line);margin-bottom:14px}
-.mail{position:absolute;left:14px;top:9px;display:flex;align-items:center;gap:9px;max-width:calc(100% - 28px);
-  font-size:13px;opacity:0}
-.mail .from{font-weight:650;white-space:nowrap}
-.mail .subj{color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mail.run{animation:sweep 1.05s var(--ease) forwards}
-@keyframes sweep{
-  0%{opacity:0;transform:translateY(9px)}
-  22%{opacity:1;transform:translateY(0)}
-  74%{opacity:1;transform:translateY(0)}
-  100%{opacity:0;transform:translateY(-9px)}
-}
-.buckets{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
-.bk{border-radius:13px;padding:12px 13px;background:#fff;border:1px solid var(--line);
-  transition:border-color .5s var(--ease),transform .5s var(--ease),box-shadow .5s var(--ease)}
-.bk.hit{transform:translateY(-3px);box-shadow:0 16px 30px -20px rgba(8,42,80,.5)}
-.bk .top{display:flex;align-items:center;gap:7px;margin-bottom:5px}
-.bk .dot{width:8px;height:8px;border-radius:50%}
-.bk .nm{font-size:11.5px;font-weight:700;letter-spacing:.04em}
-.bk .v{font-size:26px;font-weight:700;letter-spacing:-.03em;line-height:1;font-variant-numeric:tabular-nums}
-.bk .d{margin:4px 0 0;font-size:11px;color:var(--ink-3);line-height:1.4}
-.bk[data-t=push]{--c:#fb7185}.bk[data-t=queue]{--c:#fbbf24}
-.bk[data-t=silent]{--c:#a8a29e}.bk[data-t=meeting]{--c:#818cf8}
-.bk[data-t=info]{--c:#22d3ee}
-.bk .dot{background:var(--c)}
-.bk.hit{border-color:var(--c)}
-.demo-foot{margin:13px 0 0;font-size:12px;color:var(--ink-3)}
-/* Three checkable facts under the fold-line. Every competitor in this category
-   puts a number on its hero; ours have to be ones a reader can go and verify. */
-.hero-proof{list-style:none;margin:22px auto 0;padding:0;display:flex;flex-wrap:wrap;justify-content:center;gap:9px 26px;max-width:720px}
-.hero-proof li{font-size:12.5px;line-height:1.5;color:var(--ink-2)}
-.hero-proof b{color:var(--ink);font-weight:700}
-.price-anchor{margin:22px auto 0;max-width:760px;text-align:center;font-size:12.5px;line-height:1.65;color:var(--ink-3)}
-.price-anchor b{color:var(--ink-2);font-weight:650}
-@media(max-width:760px){.buckets{grid-template-columns:repeat(2,1fr)}
-  .buckets .bk:last-child{grid-column:1/-1}}
-@media(prefers-reduced-motion:reduce){.mail.run{animation:none;opacity:1}}
-
-
-/* ── Playable replica ─────────────────────────────── */
-.play{display:grid;grid-template-columns:186px 300px 1fr;height:466px;
-  font-size:13px;text-align:left;background:#fff}
-.play *{min-width:0}
-.pl-side{border-right:1px solid var(--line);background:rgba(10,14,20,.018);padding:14px 10px;overflow:auto}
-.pl-lab{font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);font-weight:700;
-  padding:0 8px 8px}
-.pl-t{width:100%;display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:9px;border:0;
-  background:transparent;font:inherit;color:var(--ink);cursor:pointer;text-align:left;
-  transition:background .35s var(--ease)}
-.pl-t:hover{background:rgba(10,14,20,.05)}
-.pl-t[aria-pressed=true]{background:rgba(2,132,199,.11);font-weight:650;
-  box-shadow:inset 2px 0 0 var(--sky-600)}
-.pl-t .dt{width:7px;height:7px;border-radius:50%}
-.pl-t .cn{margin-left:auto;color:var(--ink-3);font-variant-numeric:tabular-nums}
-.pl-list{border-right:1px solid var(--line);overflow:auto}
-.pl-h{padding:12px 14px;font-weight:650;display:flex;align-items:center;gap:8px;
-  border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff}
-.pl-h .dt{width:8px;height:8px;border-radius:50%}
-.pl-h .cn{margin-left:auto;color:var(--ink-3);font-weight:500}
-.pl-r{width:100%;display:block;text-align:left;border:0;border-bottom:1px solid var(--line);
-  background:transparent;font:inherit;padding:11px 14px;cursor:pointer;
-  transition:background .35s var(--ease)}
-.pl-r:hover{background:rgba(10,14,20,.035)}
-.pl-r[aria-current=true]{background:rgba(2,132,199,.10);box-shadow:inset 2px 0 0 var(--sky-600)}
-.pl-r .fr{display:block;font-size:11px;color:var(--ink-3);font-weight:600}
-.pl-r .sj{display:block;font-size:13.5px;font-weight:550;margin-top:1px;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pl-r .rs{display:block;font-size:10.5px;color:var(--ink-3);margin-top:2px}
-.pl-read{overflow:auto;display:flex;flex-direction:column}
-.pl-top{padding:16px 18px 12px;border-bottom:1px solid var(--line)}
-.pl-sub{font-size:16px;font-weight:650;letter-spacing:-.015em;line-height:1.25}
-.pl-from{font-size:12px;color:var(--ink-3);margin-top:3px}
-.pl-acts{display:flex;gap:7px;margin-top:11px;flex-wrap:wrap}
-.pl-b{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 11px;font:inherit;
-  font-size:12px;cursor:pointer;transition:background .35s var(--ease),border-color .35s var(--ease)}
-.pl-b:hover{background:rgba(10,14,20,.04)}
-/* White on --sky-600 is 4.10:1 — under AA. --sky-ink carries the same accent
-   at 5.93:1. */
-.pl-b.on{background:var(--sky-ink);border-color:var(--sky-ink);color:#fff}
-.pl-b.on:hover{background:#025683}
-.pl-why{padding:12px 18px;background:rgba(10,14,20,.028);border-bottom:1px solid var(--line);font-size:12px}
-.pl-why .w{color:var(--ink-3)}
-.pl-why .sm{margin-top:6px;color:var(--ink);line-height:1.5}
-.pl-body{padding:16px 18px;color:var(--ink-2);line-height:1.6;font-size:12.5px;white-space:pre-line;flex:1}
-.pl-opts{padding:12px 18px;border-bottom:1px solid var(--line);display:grid;gap:7px;
-  background:rgba(2,132,199,.035)}
-.pl-opt{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);background:#fff;
-  border-radius:10px;padding:9px 11px;font:inherit;font-size:12px;text-align:left;cursor:pointer;
-  transition:border-color .35s var(--ease),background .35s var(--ease)}
-.pl-opt:hover{border-color:var(--sky-600);background:rgba(2,132,199,.04)}
-.pl-opt kbd{flex:0 0 18px;height:18px;border-radius:5px;background:rgba(10,14,20,.07);display:grid;
-  place-items:center;font:inherit;font-size:10px;font-weight:700}
-.pl-opt b{display:block;font-size:11px;color:var(--sky-ink);margin-bottom:1px}
-.pl-hint{margin:0;padding:11px 18px;border-bottom:1px solid var(--line);font-size:11.5px;color:var(--ink-3);
-  background:rgba(10,14,20,.02)}
-.pl-hint b{color:var(--ink-2);font-weight:650}
-.pl-hint kbd{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:4px;
-  background:rgba(10,14,20,.07);font:inherit;font-size:10px;font-weight:700;color:var(--ink-2);
-  vertical-align:baseline}
-.pl-comp{padding:12px 18px;border-bottom:1px solid var(--line);background:rgba(2,132,199,.035)}
-.pl-comp textarea{width:100%;height:74px;border:1px solid var(--line);border-radius:9px;padding:9px 10px;
-  font:inherit;font-size:12.5px;resize:none;color:var(--ink);background:rgba(10,14,20,.02)}
-.pl-comp textarea:focus{outline:2px solid var(--sky-600);outline-offset:1px}
-.pl-comp .row{display:flex;gap:7px;justify-content:flex-end;margin-top:8px;align-items:center}
-.pl-sent{margin-right:auto;font-size:11.5px;color:#15803d;font-weight:600}
-.pl-empty{margin:auto;text-align:center;color:var(--ink-3);font-size:13px;padding:40px}
-@media(max-width:1000px){
-  .play{grid-template-columns:1fr;height:auto}
-  .pl-side,.pl-list{border-right:0;border-bottom:1px solid var(--line)}
-  .pl-side{padding:10px}
-  /* The buttons live inside .pl-tiers, so flexing .pl-side only laid out its one
-     child and the tiers stayed a tall vertical list on a phone. */
-  .pl-side .pl-tiers{display:flex;gap:6px;overflow-x:auto}
-  .pl-lab{display:none}
-  .pl-t{width:auto;white-space:nowrap}
-  .pl-list{max-height:260px}
-}
-
-/* Scroll reveal */
-/* Reveal is opt-IN: content is visible by default and JS arms the "from"
-   state only once it is running. The usual way round leaves anything waiting
-   on an observer permanently invisible when scripting is off — which is
-   exactly the bug this page's predecessor shipped. */
-.rv{transition:opacity .9s var(--ease),transform .9s var(--ease),filter .9s var(--ease)}
-.js .rv:not(.in){opacity:0;transform:translateY(46px);filter:blur(8px)}
-@media(prefers-reduced-motion:reduce){
-  .rv{opacity:1;transform:none;filter:none;transition:none}
-  .chip{animation:none}
-}
-</style>
+<link rel="stylesheet" href="/landing.css">
 <script type="application/ld+json">
 {
  "@context": "https://schema.org",
@@ -789,9 +42,9 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
  "name": "Klorn",
  "operatingSystem": "macOS, Windows, Web",
  "applicationCategory": "BusinessApplication",
- "url": "https://klorn.ai/",
+ "url": "https://klorn.ai/ja/",
  "inLanguage": "ja",
- "description": "Klornはすべてのメールを5つのレーン — Push, Meeting, Queue, Info, Silent — に振り分け、1通ごとにその理由を添えます。Superhumanは速さを、Fyxerは代筆を売ります。どちらも月$30で、どちらも「なぜ届いたか」は見せません。AGPL-3.0、セルフホスト可、承認していないものは送りません。",
+ "description": "Gmail、Googleカレンダー、Naverメール、iCloudメールをひとつの画面にまとめ、すべてのメールを5つのレーン — Push, Meeting, Queue, Info, Silent — に振り分けて、1通ごとに理由を添えます。あなたが許可しないメールは送られません。",
  "sameAs": [
   "https://github.com/k08200/klorn",
   "https://dev.to/k08200",
@@ -852,79 +105,71 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
  "license": "https://github.com/k08200/klorn/blob/main/LICENSE"
 }
 </script>
-<script type="application/ld+json">{
+<script type="application/ld+json">
+{
  "@context": "https://schema.org",
  "@type": "FAQPage",
  "mainEntity": [
   {
    "@type": "Question",
-   "name": "私の承認なしに何かを送信することはありますか？",
+   "name": "アカウントはそれぞれ接続する必要がありますか？",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "ありません。送信、削除、転送は必ず明示的な承認を待ち、実際に出た内容のハッシュを固定したレシートを\n        それぞれ記録します。"
+    "text": "はい、それぞれ一度ずつです。ログインすると最初のGoogleアカウントが接続され、ほかは設定から追加します。 その後はすべて同じリストに届きます。"
    }
   },
   {
    "@type": "Question",
-   "name": "私のメールは実際どこへ行くのですか？",
+   "name": "Klornが勝手にメールを送ったり削除したりしますか？",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "分類器に渡り、戻ってくるだけです。OAuthトークンは保存時に暗号化されます。全体がAGPLv3なので、トークンに触れるコードを自分で読むことも、自分で動かすこともできます。"
+    "text": "指示しない限りしません。レーンは振り分けるだけです。送信・完全削除・転送は承認を待ち、自分で作った自動返信ルールはその承認として扱われます。自動化をオンにすると、アシスタントがリスクの低い一部の作業を自分で行います。送信のたびに記録が残ります。"
    }
   },
   {
    "@type": "Question",
-   "name": "誤った場所に仕分けされたらどうなりますか？",
+   "name": "今接続できるアカウントは？",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "動かしてください。すべてのメールにはそこへ入った理由が表示され、その修正から分類器が学習します —\n        コールドスタートと、あなたの送信者をすでに知っている分類器の差です。"
+    "text": "GmailとGoogleカレンダー、そしてベータ版のNaverメールとiCloudメールです。現時点ではこれがすべてで、 ほかのアカウントが接続できるようになった日にこのページを更新します。"
    }
   },
   {
    "@type": "Question",
-   "name": "Windows版はいつですか？",
+   "name": "私のメールはどこへ行きますか？",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "未署名ベータとして出荷済みです — コード署名が済むまではSmartScreenが一度警告します。ウェブアプリは\n        同じアカウントとティアで、どのブラウザからでも引き続き利用できます。"
+    "text": "Klornの分類器へ渡り、戻ってきます。トークンは暗号化して保存され、それを扱うコードは公開されています。 自分で管理したい場合は、自分のサーバーでKlornを動かせます。"
    }
   },
   {
    "@type": "Question",
-   "name": "AIが請求を膨らませることはありますか？",
+   "name": "「自分のAIキーを使う」とはどういう意味ですか？",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "ありません。Klornは1日あたりの支出に自分で上限を設け、使いすぎるくらいなら停止します — 暴走した\n        ループにコストはかかりません。この上限があるから、仕分けは無料のままです。"
+    "text": "Klornが私たちのキーの代わりに、あなたが持つモデル提供元のキーやローカルモデルを使えるということです。 どのプランでも使えます。"
    }
   },
   {
    "@type": "Question",
-   "name": "サインインするとGoogleが警告を出すのはなぜですか？",
+   "name": "Windows版はありますか？",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "メールを読むにはGoogleの制限付きスコープが必要で、アプリが確認済みになるにはセキュリティレビューを\n        通す必要があります。それが通るまでは未確認アプリの画面が一度表示され、ベータは先着100アカウントに\n        限定されます。"
+    "text": "はい、ベータ版があります。コード署名が済むまでは、初回起動時にWindowsのSmartScreen警告が一度表示されることがあります。 ウェブアプリは同じアカウントで、最新のブラウザならどこからでも使えます。"
    }
   }
  ]
-}</script>
-<link rel="alternate" hreflang="en" href="https://klorn.ai/">
-<link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/">
-<link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/">
-<link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/">
-<link rel="alternate" hreflang="es" href="https://klorn.ai/es/">
-<link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/">
-<link rel="alternate" hreflang="de" href="https://klorn.ai/de/">
-<link rel="alternate" hreflang="x-default" href="https://klorn.ai/">
-<link rel="canonical" href="https://klorn.ai/ja/">
+}
+</script>
 <script src="/site-nav.js" defer></script>
 </head>
 <body>
-<div class="grain"></div>
-<div class="field" aria-hidden="true"></div>
+<a class="skip" href="#main">本文へスキップ</a>
 
-<nav class="nav"><div class="nav-pill">
-  <a class="nav-brand" href="#top" data-top>Klorn</a>
+<nav class="nav" aria-label="メイン"><div class="nav-pill">
+  <a class="nav-brand" href="#top">Klorn</a>
   <button type="button" class="nav-menu-btn" data-menu-toggle aria-expanded="false" aria-controls="nav-menu" aria-label="メニュー"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
-  <span class="nav-links" id="nav-menu" role="group" aria-label="セクション"><a href="#cards">製品</a><a href="#day">仕組み</a><a href="#compare">なぜKlorn</a><a href="#pricing">料金</a><a href="#open">オープンソース</a><a href="/blog/">ブログ</a></span>
+  <span class="nav-links" id="nav-menu" role="group" aria-label="セクション"><a href="#accounts">アカウント</a><a href="#lanes">レーン</a><a href="#day">1日</a><a href="#pricing">料金</a><a href="/blog/">ブログ</a></span>
   <span class="nav-lang">
     <button type="button" class="nav-lang-btn" data-lang-toggle
             aria-haspopup="true" aria-expanded="false" aria-controls="lang-menu">日本語 <i aria-hidden="true">▾</i></button>
@@ -939,392 +184,285 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
     </span>
   </span>
   <a class="nav-login" href="https://app.klorn.ai/login">ログイン</a>
-  <a class="nav-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
-     data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe" data-win-label="Download">ダウンロード <i>↓</i></a>
+  <a class="nav-cta dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
+     data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe" data-win-label="ダウンロード">ダウンロード</a>
 </div></nav>
 
+<main id="main">
 <header class="hero" id="top">
-  <picture class="hero-sky">
+  <picture class="hero-sky" aria-hidden="true">
     <source type="image/webp" sizes="100vw"
             srcset="/media/sky/dusk-1280.webp 1280w, /media/sky/dusk-1920.webp 1920w, /media/sky/dusk-2560.webp 2560w">
-    <img src="/media/sky/dusk-1920.jpg" sizes="100vw"
-         srcset="/media/sky/dusk-1280.jpg 1280w, /media/sky/dusk-1920.jpg 1920w, /media/sky/dusk-2560.jpg 2560w"
-         alt="" aria-hidden="true" fetchpriority="high" decoding="async" width="2560" height="1709">
+    <img src="/media/sky/dusk-1920.jpg" alt="" decoding="async" width="2560" height="1709">
   </picture>
 
-  <div class="wrap">
-    <span class="eyebrow rv">Gmail・Naver・Googleカレンダー &mdash; <b>ひとつの場所に</b></span>
-    <h1 class="rv">割り込みが減る。<br>速く<span class="ser">なる</span>のではなく。</h1>
-    <p class="lead rv"><b style="color:var(--ink);font-weight:650">Klornはすべてのメールを5つのレーンに振り分け、1通ごとにその理由を添えます。</b> ウェブ・macOS・Windows。 行を動かせばその修正は残ります — 同じ修正が2回でその送信者はルールになります。
-      承認していないものは送りません。</p>
-    <div class="actions rv">
-      <a class="btn btn-1" href="https://app.klorn.ai/login?mode=register">無料で始める <i>↗</i></a>
+  <div class="wrap hero-copy">
+    <h1>メールも<wbr>カレンダーも、 <span class="ser">ひとつの<wbr>落ち着いた<wbr>場所に。</span></h1>
+    <p class="lead"><b>Gmail、Googleカレンダー、Naverメール（ベータ）、iCloudメール（ベータ）</b>をひとつの画面にまとめます。
+      すべてのメールを、あなたに何が必要かで振り分け、その理由を一行で伝えます。</p>
+    <div class="actions">
+      <a class="btn btn-1 dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
+         data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe" data-win-label="Windows版をダウンロード">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.05 12.54c.02-2.3 1.87-3.4 1.95-3.45-1.06-1.56-2.71-1.77-3.3-1.8-1.4-.11-2.58.78-3.25.78-.68 0-1.72-.76-2.83-.74-1.46.02-2.8.85-3.55 2.15-1.51 2.63-.39 6.52 1.09 8.66.72 1.04 1.58 2.21 2.71 2.17 1.09-.04 1.5-.7 2.82-.7 1.31 0 1.68.7 2.83.68 1.17-.02 1.92-1.06 2.64-2.11.83-1.2 1.17-2.37 1.19-2.43-.03-.01-2.28-.88-2.3-3.48zM14.9 5.6c.6-.72 1-1.72.89-2.72-.86.04-1.9.57-2.52 1.29-.55.63-1.02 1.65-.89 2.63.96.07 1.92-.49 2.52-1.2z"/></svg>
+        Mac版をダウンロード</a>
+      <a class="btn btn-2" href="https://app.klorn.ai/login?mode=register">ブラウザで開く</a>
     </div>
-    <div class="dl-row rv" id="dl-row">
-      <a class="dl" data-os="mac" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener">
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.05 12.54c.02-2.3 1.87-3.4 1.95-3.45-1.06-1.56-2.71-1.77-3.3-1.8-1.4-.11-2.58.78-3.25.78-.68 0-1.72-.76-2.83-.74-1.46.02-2.8.85-3.55 2.15-1.51 2.63-.39 6.52 1.09 8.66.72 1.04 1.58 2.21 2.71 2.17 1.09-.04 1.5-.7 2.82-.7 1.31 0 1.68.7 2.83.681.17-.02 1.92-1.06 2.64-2.11.83-1.2 1.17-2.37 1.19-2.43-.03-.01-2.28-.88-2.3-3.48zM14.9 5.6c.6-.72 1-1.72.89-2.72-.86.04-1.9.57-2.52 1.29-.55.63-1.02 1.65-.89 2.63.96.07 1.92-.49 2.52-1.2z"/></svg>
-        <span class="t"><b>Mac版をダウンロード</b><span>Universal · macOS 14+ · 公証済み</span></span></a>
-      <a class="dl" data-os="win" href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe" rel="noreferrer noopener">
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.6l7.2-1v7.1H3V5.6zm0 12.8l7.2 1v-7H3v6zM11.2 4.4L21 3v8.7h-9.8V4.4zm0 15.2L21 21v-8.6h-9.8v7.2z"/></svg>
-        <span class="t"><b>Windows版をダウンロード</b><span>Windows 10+ · ベータ</span></span></a>
-    </div>
-    <!-- The download alone is a dead end without an account, so say what the
-         app expects next to the button rather than after the click. -->
-    <p class="actions-note rv">無料、AGPLv3。アプリはKlornアカウントでサインインします —
-      作成は1分ほどです。
-      <a href="https://github.com/k08200/klorn/releases/latest" rel="noreferrer noopener">初回起動時の注意 ↗</a></p>
-    <ul class="hero-proof rv">
-      <li><b>仕分けは無料</b> &mdash; カードなしで開始</li>
-      <li><b>承認なしには</b>何も送りません &mdash; 送信ごとに受領記録</li>
-      <li><b>あなたの言語でも、相手の言語でも</b> &mdash; UIは7言語、返信は送信者の言語で</li>
-    </ul>
+    <p class="meta"><span>月$29.99</span><i aria-hidden="true">·</i><span>無料プラン</span><i aria-hidden="true">·</i><span>自分のAIキーも使えます</span></p>
   </div>
 
-
-  <div class="demo rv">
-    <div class="demo-in"><div class="demo-core">
-      <div class="demo-top">
-        <span class="lab">今朝の受信トレイを仕分け中</span>
-        <span class="cnt"><b id="dm-done">0</b> / 64 · <span id="dm-state">実行中</span></span>
-      </div>
-      <div class="demo-stage" id="dm-stage" aria-hidden="true"></div>
-      <div class="buckets" id="dm-buckets">
-        <div class="bk" data-t="push"><div class="top"><span class="dot"></span><span class="nm">PUSH</span></div>
-          <div class="v" data-v>0</div><p class="d">今すぐ割り込む</p></div>
-        <div class="bk" data-t="meeting"><div class="top"><span class="dot"></span><span class="nm">MEETING</span></div>
-          <div class="v" data-v>0</div><p class="d">日程調整 — カレンダーと照合します</p></div>
-        <div class="bk" data-t="queue"><div class="top"><span class="dot"></span><span class="nm">QUEUE</span></div>
-          <div class="v" data-v>0</div><p class="d">今日中に読む</p></div>
-        <div class="bk" data-t="info"><div class="top"><span class="dot"></span><span class="nm">INFO</span></div>
-          <div class="v" data-v>0</div><p class="d">領収書・確認 — 返信は不要です</p></div>
-        <div class="bk" data-t="silent"><div class="top"><span class="dot"></span><span class="nm">SILENT</span></div>
-          <div class="v" data-v>0</div><p class="d">削除ではなく保管</p></div>
-      </div>
-      <p class="demo-foot">5つのレーンの図解であり、ベンチマークの実行結果ではありません。計測した数値と、まだ計測できていないレーンは下にあります。</p>
-    </div></div>
-  </div>
-
-  <div class="stage rv">
-    <p class="stage-cap"><b>ライブ</b> 実際に動くレプリカです — ティアや行をクリックし、返信や再分類を試せます。
-      この下のスクリーンショットは、出荷中のアプリそのものです。</p>
-    <div class="shell" data-tilt>
-      <div class="core">
-        <div class="play" id="play" role="application" aria-label="Klornのインタラクティブデモ">
-          <div class="pl-side">
-            <div class="pl-lab">受信トレイ</div>
-            <div class="pl-tiers" id="pl-tiers"></div>
-          </div>
-          <div class="pl-list">
-            <div class="pl-h"><span class="dt" id="pl-hdot"></span><span id="pl-hname"></span>
-              <span class="cn" id="pl-hcount"></span></div>
-            <div id="pl-rows"></div>
-          </div>
-          <div class="pl-read" id="pl-read"></div>
-        </div>
-      </div>
+  <figure class="shot">
+    <div class="win">
+      <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+      <picture>
+      <source media="(max-width:640px)" sizes="94vw" width="1440" height="1240"
+              srcset="/media/app-2026-10/today-m-light-720.webp 720w, /media/app-2026-10/today-m-light-1440.webp 1440w">
+      <img src="/media/app-2026-10/today-light-2000.webp"
+           srcset="/media/app-2026-10/today-light-1200.webp 1200w, /media/app-2026-10/today-light-2000.webp 2000w, /media/app-2026-10/today-light-2560.webp 2560w"
+           sizes="(min-width:1240px) 1176px, 94vw" width="2560" height="1600" fetchpriority="high" decoding="async"
+           alt="MacのKlorn「今日」画面：4つのアカウントのメールがPush、Meeting、Queueに分かれ、各行にアカウントの印が付き、横に今日の予定とアシスタントがあります。"></picture>
     </div>
-  </div>
-
+    <img class="pill" src="/media/app-2026-10/pill-light-396.webp"
+         srcset="/media/app-2026-10/pill-light-396.webp 396w, /media/app-2026-10/pill-light-792.webp 792w"
+         sizes="320px" width="792" height="98" decoding="async"
+         alt="Macのデスクトップに表示されたKlornのピル。Pushのメールが3通あることを示しています。">
+    <figcaption class="cap"><span class="demo-tag">デモデータ</span>Macの<b>今日</b>画面。接続したすべてのアカウントがひとつのリストに。</figcaption>
+  </figure>
 </header>
 
-<section class="sec" id="cards">
-  <div class="sec-head">
-    <div style="flex:1 1 420px">
-      <span class="tag rv">実際のアプリ</span>
-      <h2 class="rv">文字まで<br>読める距離で。</h2>
+<!-- 2 · Every account, one view -->
+<section class="sec" id="accounts" aria-labelledby="accounts-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">すべてのアカウント</span>
+      <h2 id="accounts-h">アカウントはいくつでも、 <span class="ser">画面はひとつ。</span></h2>
+      <p class="sec-lead">アカウントごとに一度接続するだけ。すべてのアカウントのメールと予定がひとつのリストに届き、どこから来たかが表示されます。</p>
     </div>
-    <p class="rv">Klornは画面上部のネイティブな一行に収まります。展開したときに表示されるのがこれで —
-      これが、あなたに変更を許されているすべてです。</p>
-  </div>
-
-  <div class="tour rv">
-    <div class="tour-nav" role="tablist" aria-label="製品ツアー">
-      <button class="tour-t" role="tab" aria-selected="true" aria-controls="tp-1" id="tt-1">
-        <b>なぜこれが割り込んだのか</b><span>PUSHの根拠と、ワンキーで送れる3つの返信。</span></button>
-      <button class="tour-t" role="tab" aria-selected="false" aria-controls="tp-2" id="tt-2">
-        <b>理由つきのキュー</b><span>各行がそこに入った理由を示します — 修正はワンクリックです。</span></button>
-      <button class="tour-t" role="tab" aria-selected="false" aria-controls="tp-3" id="tt-3">
-        <b>5つのレーン、説明つき</b><span>Silentは削除ではなく、Infoは返信を求めません。アプリがそう言います。</span></button>
-      <button class="tour-t" role="tab" aria-selected="false" aria-controls="tp-4" id="tt-4">
-        <b>設定はあなたの手に</b><span>どこまで自動で行うか、そして何が割り込んでよいか。</span></button>
-    </div>
-    <div class="tour-stage">
-      <div class="tour-panel" role="tabpanel" id="tp-1" aria-labelledby="tt-1">
-        <img src="/media/app/ja/reading.jpg" alt="PUSHメッセージとその根拠：判定の理由、期限、そしてワンキー返信のアクション" width="1040" height="660" loading="lazy" decoding="async"></div>
-      <div class="tour-panel" role="tabpanel" id="tp-2" aria-labelledby="tt-2" hidden>
-        <img src="/media/app/ja/rows.jpg" alt="送信者、件名、そして各メールがそのティアに入った理由を示す一覧" width="1040" height="660" loading="lazy" decoding="async"></div>
-      <div class="tour-panel" role="tabpanel" id="tp-3" aria-labelledby="tt-3" hidden>
-        <img src="/media/app/ja/tier-guide.jpg" alt="5つのレーン — Push、Meeting、Queue、Info、Silent — を説明する初回起動ガイド" width="1040" height="1040" loading="lazy" decoding="async"></div>
-      <div class="tour-panel" role="tabpanel" id="tp-4" aria-labelledby="tt-4" hidden>
-        <img src="/media/app/ja/preferences.jpg" alt="設定：エージェントモード、返信トーン、通知カテゴリ、通知オフ時間" width="1040" height="1800" loading="lazy" decoding="async"></div>
-    </div>
-  </div>
-  <p class="proof rv">各スクリーンショットは <code>KlornMac --render-previews</code>が出荷中のSwiftUIビューを
-    そのままディスクへ書き出したものです。画面が変われば、画像も一緒に変わります —
-    古くなるマーケティング用の別素材は存在しません。
-    <a href="https://github.com/k08200/klorn/tree/main/apps/desktop-mac" rel="noreferrer noopener">アプリのソースを読む →</a></p>
-</section>
-
-
-
-
-<!-- ══ A DAY WITH IT ════════════════════════════════ -->
-<section class="sec band" id="day">
-  <div class="sec-head">
-    <div style="flex:1 1 420px">
-      <span class="tag rv">Klornのある一日</span>
-      <h2 class="rv">3つの場面、<br>あなたが要るのは1つだけ。</h2>
-    </div>
-    <p class="rv">Klornは開いて使うものではありません。一日中あなたの受信トレイに対して動き続け、あなたを呼ぶのは
-      ちょうど一度だけ — あなたなしでは本当に答えられないメールが届いたときです。</p>
-  </div>
-  <div class="steps">
-    <article class="step rv"><span class="sn">朝</span>
-      <h3>すでに仕分け済み</h3>
-      <p>夜のあいだに届いたメールは、席に着く前にそれぞれのティアへ。どれにもそこへ入った理由が添えられています。
-        64件のうち、あなたのものは3件でした。</p></article>
-    <article class="step rv"><span class="sn">作業中</span>
-      <h3>一行だけ、バナーなし</h3>
-      <p>Klornは画面上部のネイティブな1行にとどまります。Queue・Info・Silentは決して割り込みません。割り込むのはPushと、時間の返事が要るMeetingだけ — 基準はあなたが決めます。</p></article>
-    <article class="step rv"><span class="sn">返信するとき</span>
-      <h3>3つの下書き、決めるのはあなた</h3>
-      <p>承諾、辞退、質問 — それぞれワンキーで、あなたの語調と差出人の言語で。勝手に送信されることはなく、
-        送信のたびにレシートが発行されます。</p></article>
+    <ul class="acct-grid">
+      <li class="acct"><div class="acct-top"><b>Gmail</b><span class="st st-live">利用可能</span></div>
+        <p>振り分け、要約し、検索できます。</p></li>
+      <li class="acct"><div class="acct-top"><b>Googleカレンダー</b><span class="st st-live">利用可能</span></div>
+        <p>メールの横に予定を。新しい予定は、あなたが言ったときだけ作成します。</p></li>
+      <li class="acct"><div class="acct-top"><b>Naverメール</b><span class="st st-beta">ベータ</span></div>
+        <p>ほかのメールと一緒に読み込み、振り分けます。</p></li>
+      <li class="acct"><div class="acct-top"><b>iCloudメール</b><span class="st st-beta">ベータ</span></div>
+        <p>Appleのアドレスも同じリストに。</p></li>
+    </ul>
+    <figure class="acct-shot">
+      <div class="win">
+        <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+        <picture>
+        <source media="(max-width:640px)" sizes="94vw" width="840" height="1000" srcset="/media/app-2026-10/mail-m-light-840.webp 840w">
+        <img src="/media/app-2026-10/mail-light-2000.webp"
+             srcset="/media/app-2026-10/mail-light-1200.webp 1200w, /media/app-2026-10/mail-light-2000.webp 2000w"
+             sizes="(min-width:1240px) 1116px, 94vw" width="2000" height="1250" loading="lazy" decoding="async"
+             alt="MacのKlornメール画面：複数のアカウントのメールがひとつのリストに混在し、各行に小さなアカウントバッジとレーンの表示があり、右側に開いたメールがあります。"></picture>
+      </div>
+      <figcaption class="cap"><span class="demo-tag">デモデータ</span>画面に写っている一部のアカウントは、まだ接続できません。</figcaption>
+    </figure>
   </div>
 </section>
 
-<!-- ══ COMPARISON ═══════════════════════════════════ -->
-<section class="sec" id="compare">
-  <div class="sec-head">
-    <div style="flex:1 1 420px">
-      <span class="tag rv">私たちが異を唱えるところ</span>
-      <h2 class="rv">ほとんどのメールAIが<br>持たない4つの考え。</h2>
+<!-- 3 · Five lanes, with the reason. The lane list is the landing's lane
+     surface: .github/scripts/check-website-lanes.mjs holds data-lane to the
+     API's live TIERS (never AUTO or CALL) in every language. -->
+<section class="sec sec-alt" id="lanes" aria-labelledby="lanes-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">5つのレーン</span>
+      <h2 id="lanes-h">5つのレーン。 <span class="ser">それぞれに理由を。</span></h2>
+      <p class="sec-lead">すべてのメールは5つのレーンのどれかに入り、なぜそこにあるのかが一文で書かれています。</p>
     </div>
-    <p class="rv">これらは機能ではなく選択であり、それぞれKlornに代償があります。あなたが実際に比べている4製品と、実名で、主張ごとの根拠ページ付きで並べます。</p>
-  </div>
-  <div class="vsgrid rv">
-    <div class="vshead">
-      <div class="vscol ours"><span class="mk">K</span><b>Klorn</b></div>
-      <div class="vscol them"><span class="mk">4</span><b>Fyxer &middot; Superhuman &middot; Inbox Zero &middot; SaneBox</b></div>
-    </div>
-
-    <div class="vsrow">
-      <div class="vscell ours" data-who="Klorn"><span class="k">01 &middot; 何があなたに届くかを誰が決めるか</span>
-        <p>Klornが決めます — 1通につき1つの判定を<b>5つのレーン</b>へ。送信・削除・転送はいまもあなたを待ち、そのたびにレシートを発行します。</p></div>
-      <div class="vscell them" data-who="Fyxer &middot; Superhuman"><span class="k">01 &middot; 何があなたに届くかを誰が決めるか</span>
-        <p><b>Fyxer</b>と<b>Superhuman</b>は、すでに開いたメールを速く片づけさせます。何を開く価値があったかの判断は、1日中、1通ごとにあなたに残ります。</p></div>
-    </div>
-    <div class="vsrow">
-      <div class="vscell ours" data-who="Klorn"><span class="k">02 &middot; なぜそう判定したか</span>
-        <p><b>理由が全行に書かれています。</b>行を動かせばその修正が学習信号になり、同じ修正が2回そろえばその送信者は決定論的になります。</p></div>
-      <div class="vscell them" data-who="Fyxer &middot; SaneBox"><span class="k">02 &middot; なぜそう判定したか</span>
-        <p><b>Fyxer</b>は理由を出しません。<b>SaneBox</b>は、届いたフォルダから推測させます。どちらの判定も、あとから監査できません。</p></div>
-    </div>
-    <div class="vsrow">
-      <div class="vscell ours" data-who="Klorn"><span class="k">03 &middot; 何を主張するか</span>
-        <p><b>再実行できる数値</b> &mdash; 評価セットはすべてリポジトリにあります（<b>pnpm eval:judge</b>、<b>pnpm eval:real</b>）。再現しなくなった数値は、このページから取り下げました。</p></div>
-      <div class="vscell them" data-who="4製品すべて"><span class="k">03 &middot; 何を主張するか</span>
-        <p>「AI搭載」。公開された評価セットも、コールド／ウォームの区別も、自分で数値を確かめる手段もありません。</p></div>
-    </div>
-    <div class="vsrow">
-      <div class="vscell ours" data-who="Klorn"><span class="k">04 &middot; 抜けたくなったら</span>
-        <p><b>無改変のAGPL-3.0。</b>追加条項なし、商用利用の制限なし、5人条項なし。自分の鍵でセルフホストしても、フォークして去っても構いません。</p></div>
-      <div class="vscell them" data-who="Inbox Zero"><span class="k">04 &middot; 抜けたくなったら</span>
-        <p><b>Inbox Zero</b>はAGPLのうしろにADDITIONAL TERMSを足しています — 商用の収益化を制限し、5人以上の組織はライセンス取得が必要です。GitHubはそのファイルを<b>NOASSERTION</b>と判定します。残り3つはクローズドです。</p></div>
-    </div>
-  </div>
-  <div class="vslinks rv">
-    <a class="vslink" href="/vs/fyxer/"><b>vs Fyxer</b><span>ユーザー1人あたり月$30で、あなたの文体の下書き。クローズド、クラウド専用、理由の提示なし。</span></a>
-    <a class="vslink" href="/vs/superhuman/"><b>vs Superhuman</b><span>1通あたりの時間を半分にするのは、あなたが選んでいない数への掛け算です。</span></a>
-    <a class="vslink" href="/vs/inbox-zero/"><b>vs Inbox Zero</b><span>両方のLICENSEを2つのタブで開いてください。片方はAGPLで、そこで終わります。</span></a>
-    <a class="vslink" href="/vs/sanebox/"><b>vs SaneBox</b><span>本文を一切読まない — より強いプライバシーの一文と、その代償。</span></a>
-  </div>
-  <p class="vsnote rv">価格と製品事実は各社の公開情報、2026-08-23時点。どれとも直接の精度比較テストは行っておらず、このページはそのふりもしません。間違いがありましたか？ <a href="mailto:k0820086@gmail.com">教えてください、直します。</a></p>
-</section>
-
-<!-- ══ MEASURED ═════════════════════════════════════ -->
-<section class="sec band" id="measured">
-  <picture class="sec-sky" aria-hidden="true">
-    <source type="image/webp" sizes="100vw"
-            srcset="/media/sky/dusk-1280.webp 1280w, /media/sky/dusk-1920.webp 1920w, /media/sky/dusk-2560.webp 2560w">
-    <img src="/media/sky/dusk-1920.jpg" sizes="100vw"
-         srcset="/media/sky/dusk-1280.jpg 1280w, /media/sky/dusk-1920.jpg 1920w, /media/sky/dusk-2560.jpg 2560w"
-         alt="" loading="lazy" decoding="async" width="2560" height="1709">
-  </picture>
-  <div class="sec-head">
-    <div style="flex:1 1 420px">
-      <span class="tag rv">約束ではなく計測</span>
-      <h2 class="rv">実際の受信トレイから出た数値。</h2>
-    </div>
-    <p class="rv">すべてのリリースは、出荷前に実メールの手作業ラベル付きセットで採点されます。
-      これが最新の数値で、評価セットは公開リポジトリにあります。</p>
-  </div>
-  <div class="stats">
-    <div class="stat rv"><div class="sv">&ge;90%</div><div class="sl">緊急メールの再現率（CI下限）</div>
-      <p>緊急メールの再現率が下限を割る変更はビルドが失敗します。</p></div>
-    <div class="stat rv"><div class="sv">95.5%</div><div class="sl">SILENTの適合率</div>
-      <p>Klornがノイズとして保管するとき、本物のシグナルを埋もれさせることはほとんどありません。</p></div>
-    <div class="stat rv"><div class="sv">0</div><div class="sl">未承認の操作</div>
-      <p>送信、削除、転送はすべてあなたを待ち、送った内容のハッシュを固定したレシートを記録します。</p></div>
-  </div>
-  <p class="foot rv">手作業でラベル付けした実メールのセットは、現在ラベルを付け直しています。このセットはMeetingとInfoのレーンが生まれる前のもので両レーンを採点できないため、このセットから代表的な精度の数値を出すのはやめました。上のSilent精度は同じセットで計測していますが、この問題の影響を受けません。リポジトリに含まれる合成ゲートセットは、判定器が変わるたびに下限とともにCIで実行されます。
-    <a href="https://github.com/k08200/klorn/tree/main/packages/api/eval" rel="noreferrer noopener">計測方法と評価セット →</a></p>
-</section>
-
-<!-- ══ OPEN SOURCE ══════════════════════════════════ -->
-<section class="sec" id="open">
-  <div class="wrapl">
-    <div class="os rv">
-      <div class="os-in">
-        <div>
-          <span class="tag">オープンソース</span>
-          <h2 class="os-h">読める。自分で動かせる。<br>いつでも去れる。</h2>
-          <p class="os-p">メールエージェントはあなたが受け取るすべてを見ます。だから「信じてください」は答えになりません。
-            分類器もプロンプトも評価セットも、すべてリポジトリにあります。</p>
-          <div class="os-cta">
-            <a class="btn btn-1" href="https://github.com/k08200/klorn" rel="noreferrer noopener">リポジトリを見る <i>↗</i></a>
-            <a class="btn btn-2" href="https://github.com/k08200/klorn/tree/main/packages/api/eval" rel="noreferrer noopener">評価セットを見る</a>
-          </div>
-          <div class="ship" id="ship" hidden>
-            <h3>最近の出荷</h3>
-            <ol></ol>
-            <a href="https://github.com/k08200/klorn/releases" rel="noreferrer noopener">すべてのリリース →</a>
-          </div>
+    <div class="lanes-grid">
+      <div>
+        <ul class="lane-list">
+          <li class="lane" data-lane="push"><span class="chip c-push">PUSH</span><p>今すぐ割り込む。<span>待てない数通だけ。</span></p></li>
+          <li class="lane" data-lane="meeting"><span class="chip c-meeting">MEETING</span><p>日程調整、カレンダーと照合して。<span>提案された時間、重なる予定、空いている時間まで。</span></p></li>
+          <li class="lane" data-lane="queue"><span class="chip c-queue">QUEUE</span><p>今日中に読む価値があるもの。<span>通知はせず、今日のリストに置くだけ。</span></p></li>
+          <li class="lane" data-lane="info"><span class="chip c-info">INFO</span><p>領収書やお知らせを整理。<span>返信は不要です。</span></p></li>
+          <li class="lane" data-lane="silent"><span class="chip c-silent">SILENT</span><p>保管しつつ、目の前からは片付けます。<span>削除はしません。</span></p></li>
+        </ul>
+        <p class="rule">レーンは振り分けるだけ。代わりに行動はしません。<span>納得できなければメールを移動してください。Klornはその修正から学びます。</span></p>
+      </div>
+      <figure>
+        <div class="card-shot">
+          <img src="/media/app-2026-10/reason-light-1278.webp"
+               srcset="/media/app-2026-10/reason-light-640.webp 640w, /media/app-2026-10/reason-light-1278.webp 1278w"
+               sizes="(min-width:980px) 620px, 92vw" width="1278" height="640" loading="lazy" decoding="async"
+               alt="Queueレーンで開いたメール。ヘッダーの下に「Why Queue · A colleague, no deadline」という理由と一文の要約があります。">
         </div>
+        <figcaption class="cap"><span class="demo-tag">デモデータ</span>すべてのメールの上に理由が表示されます。</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- 4 · Your day, merged, plus assistant -->
+<section class="sec" id="day" aria-labelledby="day-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">あなたの1日</span>
+      <h2 id="day-h">1日がひとつの画面に。 <span class="ser">その1日を知るアシスタント。</span></h2>
+      <p class="sec-lead">メールの横のカレンダー、朝のブリーフィング、そして自分の受信トレイをもとに答え、行動の前には必ず確認するアシスタント。</p>
+    </div>
+    <div class="day-grid">
+      <article class="tile">
+        <div><h3>聞いて、承認する</h3>
+          <p>午前中に対応すべきことを聞いてみてください。返信の下書きと新しい予定は、あなたが承認するまで「承認待ち」で待機します。</p></div>
+        <div class="tile-media card-shot">
+          <picture>
+          <source media="(max-width:640px)" sizes="88vw" width="840" height="700" srcset="/media/app-2026-10/assistant-m-light-840.webp 840w">
+          <img src="/media/app-2026-10/assistant-light-2000.webp"
+               srcset="/media/app-2026-10/assistant-light-1200.webp 1200w, /media/app-2026-10/assistant-light-2000.webp 2000w"
+               sizes="(min-width:1240px) 700px, (min-width:900px) 60vw, 90vw" width="2000" height="1250" loading="lazy" decoding="async"
+               alt="Macのアシスタント画面：返信と予定作成の2件が承認・拒否ボタン付きで待機し、横のチャットが午前中に対応すべきことに答えています。"></picture>
+        </div>
+      </article>
+      <div class="tile-col">
+        <article class="tile tile-day">
+          <div><h3>すべてのカレンダーを1日に</h3>
+            <p>接続したカレンダーの予定を、関連するメールの横に。</p></div>
+          <div class="tile-media card-shot">
+            <img src="/media/app-2026-10/day-light-640.webp"
+                 srcset="/media/app-2026-10/day-light-320.webp 320w, /media/app-2026-10/day-light-640.webp 640w"
+                 sizes="(min-width:900px) 380px, 88vw" width="640" height="370" loading="lazy" decoding="async"
+                 alt="4件の予定がある今日のカレンダーカードと、1日を要約し承認待ち2件を示すアシスタントカード。">
+          </div>
+        </article>
+        <article class="tile">
+          <div><h3>始める前のブリーフィング</h3>
+            <p>今日1日の流れと、落とせない2つのこと。</p></div>
+          <div class="tile-media card-shot">
+            <img src="/media/app-2026-10/briefing-light-776.webp" width="776" height="274" loading="lazy" decoding="async"
+                 alt="朝のブリーフィング：忙しい午前、4時以降は空き。時間帯ごとの忙しさを示す線と、2つの優先事項。">
+          </div>
+        </article>
+      </div>
+    </div>
+    <p class="cap" style="text-align:left"><span class="demo-tag">デモデータ</span>アシスタントとカレンダーはMac、ブリーフィングはウェブの画面です。</p>
+  </div>
+</section>
+
+<!-- 5 · Proof and trust. Licence, Google verification and the comparisons
+     live here, not in the hero or the meta description (FD-6). -->
+<section class="sec sec-alt" id="trust" aria-labelledby="trust-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">信頼</span>
+      <h2 id="trust-h">自分で <span class="ser">確かめられるように。</span></h2>
+      <p class="sec-lead">メールを読むものなら、根拠を見せるべきです。あなた自身で確認できることをまとめました。</p>
+    </div>
+    <dl class="facts">
+      <div class="fact"><dt>許可したものだけが送られます</dt>
+        <dd>送信・完全削除・転送は承認を待ちます。自分で作った自動返信ルールも承認として扱われます。</dd></div>
+      <div class="fact"><dt>テストセットは公開されています</dt>
+        <dd>分類器を変更するたびに、リポジトリにあるラベル付きメールのセットで検証します。 <a href="/methodology/">見る</a></dd></div>
+      <div class="fact"><dt>AIの費用には上限があります</dt>
+        <dd>Klornは1日のAI利用額に自ら上限を設け、超える前に停止します。</dd></div>
+      <div class="fact"><dt>Google OAuth検証 完了</dt>
+        <dd>2026-10-03に完了。CASA Tier 2に基づく独立した評価を受けています。 <a href="/security/#google-verification">詳細</a></dd></div>
+    </dl>
+    <div class="trust-grid">
+      <a class="trust" href="/open-source/"><h3>オープンソース</h3>
+        <p>メールに触れるコードはすべて公開。ライセンスは改変なしのAGPL-3.0です。</p><span class="go">オープンソースである理由 →</span></a>
+      <a class="trust" href="/self-host/"><h3>セルフホスト</h3>
+        <p>自分のサーバーで全体を動かせます。自分のモデルキーでも、ローカルモデルでも。</p><span class="go">セルフホストのガイド →</span></a>
+      <a class="trust" href="/security/"><h3>セキュリティ</h3>
+        <p>アカウントのトークンは暗号化して保存します。データの扱いを詳しく公開しています。</p><span class="go">セキュリティ →</span></a>
+      <a class="trust" href="/pricing/"><h3>自分のAIキー</h3>
+        <p>どのプランでも、自分のモデルキーをKlornに設定できます。</p><span class="go">仕組み →</span></a>
+    </div>
+    <p class="vs-row">ほかのツールと比べるなら：
+      <a href="/vs/fyxer/">Fyxerと比較</a><a href="/vs/superhuman/">Superhumanと比較</a>
+      <a href="/vs/sanebox/">SaneBoxと比較</a><a href="/vs/inbox-zero/">Inbox Zeroと比較</a></p>
+  </div>
+</section>
+
+<!-- 6 · Pricing, FAQ, final CTA -->
+<section class="sec" id="pricing" aria-labelledby="pricing-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">料金</span>
+      <h2 id="pricing-h">振り分けは無料。 <span class="ser">もっと任せるなら$29.99。</span></h2>
+      <p class="sec-lead">レーンと理由は期間の制限なく無料です。実際にAIの費用がかかる機能だけがProにあります。</p>
+    </div>
+    <div class="prices">
+      <article class="price">
+        <span class="plan">Free</span>
+        <div class="amt">$0<small>/月</small></div>
+        <p class="pnote">カード登録も、期限もありません。</p>
+        <ul>
+          <li>5つのレーン、すべてのメールに理由を表示</li>
+          <li>朝のブリーフィングとカレンダー</li>
+          <li>自分のメールをもとに答えるアシスタント</li>
+          <li>上限付きの1日のAI予算</li>
+        </ul>
+        <a class="btn btn-2" href="https://app.klorn.ai/login?mode=register">無料で始める</a>
+      </article>
+      <article class="price feat">
+        <span class="plan">Pro</span>
+        <div class="amt">$29.99<small>/月</small></div>
+        <p class="pnote">7日間の体験。アプリからいつでも解約できます。</p>
+        <ul>
+          <li>Freeのすべての機能</li>
+          <li>承認してから送る返信の下書き</li>
+          <li>複数のGmail受信トレイ</li>
+          <li>より大きな1日のAI予算</li>
+        </ul>
+        <a class="btn btn-1" href="https://app.klorn.ai/login?mode=register">Proの体験を始める</a>
+      </article>
+    </div>
+    <p class="price-foot">価格は米ドルです。 <a href="/pricing/">プランの詳細</a></p>
+
+    <div class="faq-wrap" id="faq">
+      <h2>よくある質問</h2>
+      <div class="faq">
+        <details><summary>アカウントはそれぞれ接続する必要がありますか？</summary>
+          <p>はい、それぞれ一度ずつです。ログインすると最初のGoogleアカウントが接続され、ほかは設定から追加します。
+            その後はすべて同じリストに届きます。</p></details>
+        <details><summary>Klornが勝手にメールを送ったり削除したりしますか？</summary>
+          <p>指示しない限りしません。レーンは振り分けるだけです。送信・完全削除・転送は承認を待ち、自分で作った自動返信ルールはその承認として扱われます。自動化をオンにすると、アシスタントがリスクの低い一部の作業を自分で行います。送信のたびに記録が残ります。</p></details>
+        <details><summary>今接続できるアカウントは？</summary>
+          <p>GmailとGoogleカレンダー、そしてベータ版のNaverメールとiCloudメールです。現時点ではこれがすべてで、
+            ほかのアカウントが接続できるようになった日にこのページを更新します。</p></details>
+        <details><summary>私のメールはどこへ行きますか？</summary>
+          <p>Klornの分類器へ渡り、戻ってきます。トークンは暗号化して保存され、それを扱うコードは公開されています。
+            自分で管理したい場合は、<a href="/self-host/">自分のサーバーでKlornを動かせます</a>。</p></details>
+        <details><summary>「自分のAIキーを使う」とはどういう意味ですか？</summary>
+          <p>Klornが私たちのキーの代わりに、あなたが持つモデル提供元のキーやローカルモデルを使えるということです。
+            どのプランでも使えます。</p></details>
+        <details><summary>Windows版はありますか？</summary>
+          <p>はい、ベータ版があります。コード署名が済むまでは、初回起動時にWindowsのSmartScreen警告が一度表示されることがあります。
+            ウェブアプリは同じアカウントで、最新のブラウザならどこからでも使えます。</p></details>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ══ PRICING ══════════════════════════════════════ -->
-<section class="sec band" id="pricing">
-  <div class="sec-head">
-    <div style="flex:1 1 420px">
-      <span class="tag rv">料金</span>
-      <h2 class="rv">$29.99、FyxerやSuperhumanと同じ価格。<br>ただし自分で動かせます。</h2>
-    </div>
-    <p class="rv">仕分けは永久に無料です。ここでの無料は体験版ではなく料金プランです — レーンも、1行ごとの理由も、教え直しのループも費用は0です。課金が始まるのは、Klornがあなたの承認で下書きを書き、送信するところから。メール1通ごとに実費がかかる部分です。</p>
-  </div>
-  <div class="prices">
-    <article class="price rv"><div class="price-in">
-      <span class="chip-s">無料</span>
-      <h3>ファイアウォール</h3>
-      <div class="amt">$0<span>/月</span></div>
-      <p class="note">カード登録なし、期限なし。Klornは1日の支出に自ら上限を設け、超過するくらいなら止まります。暴走ループが回ってもあなたに請求は来ません — その上限があるから、仕分けは体験版ではなく無料のままでいられます。</p>
-      <ul>
-        <li>5レーンのメールファイアウォール — 割り込むのは本物のシグナルだけ</li>
-        <li>すべてのカードに根拠がつく判断キュー</li>
-        <li>朝のブリーフィングとカレンダービュー</li>
-        <li>自分のメールから答えるアシスタント</li>
-      </ul>
-      <a class="btn btn-2 full" href="https://app.klorn.ai/login?mode=register">無料で始める</a>
-    </div></article>
-    <article class="price feat rv"><div class="price-in">
-      <span class="chip-s dark">Pro</span>
-      <h3>Klorn Pro</h3>
-      <div class="amt">$29.99<span>/月</span></div>
-      <p class="note">7日間のPro体験のあと、月$29.99。いつでも解約できます。</p>
-      <ul>
-        <li>無料プランのすべてと、より大きなAI予算</li>
-        <li>Klornから承認して送る返信の下書き</li>
-        <li>音声やチャットでカレンダーの予定を作成</li>
-        <li>複数のGmail受信トレイと、自動処理されるノイズ</li>
-      </ul>
-      <a class="btn btn-1 full" href="https://app.klorn.ai/login?mode=register">7日間のProトライアルを開始 <i>↗</i></a>
-    </div></article>
-  </div>
-  <p class="price-anchor rv">各社が自ら公開している月額、2026-08-23時点：
-    <b>Fyxer $30</b> · <b>Superhuman $30</b> · <b>Inbox Zero $20</b> · <b>SaneBox $3.49–16.99</b>。
-    どれとも直接対決のテストは行っておらず、このページはそのふりもしません —
-    <a href="/vs/fyxer/">比較ページ</a>に、何が計測済みで何がそうでないかをそのまま書いています。</p>
-</section>
-
-<!-- ══ WORKS WITH ═══════════════════════════════════ -->
-<section class="sec" id="works">
-  <div class="sec-head">
-    <div style="flex:1 1 420px">
-      <span class="tag rv">対応環境</span>
-      <h2 class="rv">ダウンロードの前に<br>確認してください。</h2>
-    </div>
-    <p class="rv">Klornはあなたのメールを読みます。だから何に接続するのかが、最初に知る価値のあることです —
-      まだ接続しないものも含めて。</p>
-  </div>
-  <div class="works rv">
-    <div class="work"><b>Gmail</b><span>Googleでサインイン。Proでは複数の受信トレイに対応。</span></div>
-    <div class="work"><b>Naverメール</b><span>設定からIMAPで接続します。</span></div>
-    <div class="work"><b>iCloudメール</b><span>設定からIMAPで接続します。</span></div>
-    <div class="work"><b>Google Calendar</b><span>読み取りと、あなたの承認による予定の作成。</span></div>
-    <div class="work"><b>macOS 14+</b><span>Universal — Apple SiliconとIntel。</span></div>
-    <div class="work"><b>メールの言語を問わない</b><span>返信は、届いたメールと同じ言語で返ります。</span></div>
-    <div class="work"><b>7つのUI言語</b><span>English, 한국어, 日本語, 中文, Español, Français, Deutsch.</span></div>
-  </div>
-  <p class="works-note rv"><b>非対応：</b> NaverとiCloud以外のIMAPホスト。Klornへのサインインは
-    Googleのみで、ネイティブのモバイルアプリはありません — モバイルは現在ブラウザで動作します。
-    Windowsではデスクトップアプリはベータ版です。
-    Linuxではブラウザで動作します。セルフホストは、自分のデータベースとモデルキーで利用できます。</p>
-</section>
-
-<!-- ══ FAQ ══════════════════════════════════════════ -->
-<section class="sec band" id="faq">
-  <div class="sec-head">
-    <div style="flex:1 1 420px">
-      <span class="tag rv">よくある質問</span>
-      <h2 class="rv">実際に<br>届く質問。</h2>
-    </div>
-  </div>
-  <div class="faq">
-    <details class="faq-i rv"><summary>私の承認なしに何かを送信することはありますか？</summary>
-      <p>ありません。送信、削除、転送は必ず明示的な承認を待ち、実際に出た内容のハッシュを固定したレシートを
-        それぞれ記録します。</p></details>
-    <details class="faq-i rv"><summary>私のメールは実際どこへ行くのですか？</summary>
-      <p>分類器へ渡り、戻ってくるだけです。OAuthトークンは保存時に暗号化されており、全体がAGPLv3なので
-        それに触れるコードを自分で読めます —
-        <a href="https://github.com/k08200/klorn" rel="noreferrer noopener">自分で動かすこともできます</a>.</p></details>
-    <details class="faq-i rv"><summary>誤った場所に仕分けされたらどうなりますか？</summary>
-      <p>動かしてください。すべてのメールにはそこへ入った理由が表示され、その修正から分類器が学習します —
-        コールドスタートと、あなたの送信者をすでに知っている分類器の差です。</p></details>
-    <details class="faq-i rv"><summary>Windows版はいつですか？</summary>
-      <p>未署名ベータとして出荷済みです — コード署名が済むまではSmartScreenが一度警告します。ウェブアプリは
-        同じアカウントとティアで、どのブラウザからでも引き続き利用できます。</p></details>
-    <details class="faq-i rv"><summary>AIが請求を膨らませることはありますか？</summary>
-      <p>ありません。Klornは1日あたりの支出に自分で上限を設け、使いすぎるくらいなら停止します — 暴走した
-        ループにコストはかかりません。この上限があるから、仕分けは無料のままです。</p></details>
-    <details class="faq-i rv"><summary>サインインするとGoogleが警告を出すのはなぜですか？</summary>
-      <p>メールを読むにはGoogleの制限付きスコープが必要で、アプリが確認済みになるにはセキュリティレビューを
-        通す必要があります。それが通るまでは未確認アプリの画面が一度表示され、ベータは先着100アカウントに
-        限定されます。</p></details>
-  </div>
-</section>
-
-<!-- ══ FINAL ════════════════════════════════════════ -->
-<section class="sec final">
-  <picture class="final-sky" aria-hidden="true">
+<section class="final" aria-labelledby="final-h">
+  <picture class="hero-sky" aria-hidden="true">
     <source type="image/webp" sizes="100vw"
             srcset="/media/sky/dusk-1280.webp 1280w, /media/sky/dusk-1920.webp 1920w, /media/sky/dusk-2560.webp 2560w">
-    <img src="/media/sky/dusk-1920.jpg" sizes="100vw"
-         srcset="/media/sky/dusk-1280.jpg 1280w, /media/sky/dusk-1920.jpg 1920w, /media/sky/dusk-2560.jpg 2560w"
-         alt="" loading="lazy" decoding="async" width="2560" height="1709">
+    <img src="/media/sky/dusk-1920.jpg" alt="" loading="lazy" decoding="async" width="2560" height="1709">
   </picture>
-  <div class="wrapl rv">
-    <h2 class="final-h">次に来る受信トレイ、<br>それは <span class="ser">判断キュー。</span></h2>
-    <p class="final-p">仕分けは無料で、これからも無料です。ログインはGoogle OAuthでそのまま — 招待も順番待ちもありません。制限は先着100アカウントだけです。</p>
+  <div class="wrap">
+    <h2 id="final-h">散らばったメールと予定を、 <span class="ser">ひとつの場所に。</span></h2>
     <div class="actions">
-      <a class="btn btn-1" href="https://app.klorn.ai/login?mode=register">無料で始める <i>↗</i></a>
-      <a class="btn btn-2 btn-dl" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
-         data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe" data-win-label="Download for Windows">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 11l5 5 5-5"/><path d="M5 21h14"/></svg>
-        Mac版をダウンロード</a>
+      <a class="btn btn-1 dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
+         data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe" data-win-label="Windows版をダウンロード">Mac版をダウンロード</a>
+      <a class="btn btn-2" href="https://app.klorn.ai/login?mode=register">ブラウザで開く</a>
     </div>
-    <p class="actions-note">すでに承認済みですか？ <a href="https://app.klorn.ai/login">ログイン</a> ·
-      macOS 14+ universal · Windows 10+ ベータ · AGPLv3</p>
+    <!-- The Windows entry stays a visible link so a Windows visitor with
+         scripting off is not left with a page that only offers a .dmg. -->
+    <p class="meta"><span>macOS 14以降</span><i aria-hidden="true">·</i><span><a href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe">Windowsベータ</a></span><i aria-hidden="true">·</i><span>最新のブラウザ</span><i aria-hidden="true">·</i><span><a href="/download/">動作環境</a></span></p>
   </div>
 </section>
+</main>
 
-<footer class="foot-nav">
-  <div class="wrapl foot-grid">
+<footer class="foot">
+  <div class="wrap foot-grid">
     <div>
-      <a class="foot-brand" href="#top" data-top>Klorn</a>
-      <p class="foot-note">読めて、自分で動かせて、いつでも去れる注意のファイアウォール。AGPL-3.0、追加条項なし。</p>
+      <a class="brand" href="#top">Klorn</a>
+      <p class="foot-note">メールとカレンダーをひとつの場所で、理由とともに整理します。オープンソース。</p>
       <div class="socials">
         <a href="https://github.com/k08200/klorn" rel="noreferrer noopener" aria-label="GitHub"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a>
         <a href="https://x.com/klornai" rel="noreferrer noopener" aria-label="X"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
@@ -1332,18 +470,20 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
       </div>
     </div>
     <nav aria-label="製品"><h4>製品</h4>
-      <a href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
-         data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe" data-win-label="Download for Windows">Mac版をダウンロード</a>
-      <a href="#compare">なぜKlorn</a><a href="#works">対応環境</a><a href="#measured">精度</a><a href="#pricing">料金</a>
+      <a class="dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
+         data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe" data-win-label="Windows版をダウンロード">Mac版をダウンロード</a>
+      <a href="/download/">すべてのダウンロード</a>
+      <a href="/pricing/">料金</a>
       <a href="https://app.klorn.ai/login">ログイン</a>
-      <a href="/status/">ステータス</a></nav>
+      <a href="/status/">ステータス</a><a href="/blog/">ブログ</a></nav>
     <nav aria-label="オープンソース"><h4>オープンソース</h4>
       <a href="https://github.com/k08200/klorn" rel="noreferrer noopener">GitHubリポジトリ</a>
-      <a href="https://github.com/k08200/klorn/tree/main/packages/api/eval" rel="noreferrer noopener">評価セット</a>
       <a href="https://github.com/k08200/klorn/releases/latest" rel="noreferrer noopener">リリース</a>
+      <a href="https://github.com/k08200/klorn/tree/main/packages/api/eval" rel="noreferrer noopener">評価セット</a>
+      <a href="/methodology/">評価方法</a>
       <a href="https://github.com/k08200/klorn/blob/main/LICENSE" rel="noreferrer noopener">AGPLv3ライセンス</a>
       <a href="/open-source/">なぜAGPLなのか、付け足しなしで</a>
-      <a href="/self-host/">セルフホスト</a><a href="/blog/">ブログ</a></nav>
+      <a href="/self-host/">セルフホスト</a></nav>
     <nav aria-label="比較"><h4>比較</h4>
       <a href="/vs/fyxer/">Fyxerと比較</a><a href="/vs/superhuman/">Superhumanと比較</a>
       <a href="/vs/sanebox/">SaneBoxと比較</a><a href="/vs/inbox-zero/">Inbox Zeroと比較</a></nav>
@@ -1353,87 +493,25 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
       <a href="/security/">セキュリティ</a><a href="/gdpr/">GDPR</a><a href="/dpa/">DPA</a>
       <a href="mailto:k0820086@gmail.com">お問い合わせ</a></nav>
   </div>
-  <div class="wrapl foot-base">
+  <div class="wrap foot-base">
     <span>© 2026 Klorn · AGPLv3</span>
     <span class="langsw">
-      <a href="/" data-lang-pick="en">EN</a><i>·</i><a href="/ko/" data-lang-pick="ko">KO</a><i>·</i><a href="/ja/" data-lang-pick="ja" aria-current="true">JA</a><i>·</i><a href="/zh/" data-lang-pick="zh">ZH</a><i>·</i><a href="/es/" data-lang-pick="es">ES</a><i>·</i><a href="/fr/" data-lang-pick="fr">FR</a><i>·</i><a href="/de/" data-lang-pick="de">DE</a>
+      <a href="/" lang="en" data-lang-pick="en">EN</a><i aria-hidden="true">·</i><a href="/ko/" lang="ko" data-lang-pick="ko">KO</a><i aria-hidden="true">·</i><a href="/ja/" lang="ja" data-lang-pick="ja" aria-current="true">JA</a><i aria-hidden="true">·</i><a href="/zh/" lang="zh" data-lang-pick="zh">ZH</a><i aria-hidden="true">·</i><a href="/es/" lang="es" data-lang-pick="es">ES</a><i aria-hidden="true">·</i><a href="/fr/" lang="fr" data-lang-pick="fr">FR</a><i aria-hidden="true">·</i><a href="/de/" lang="de" data-lang-pick="de">DE</a>
     </span>
   </div>
 </footer>
 
-
 <script>
-// A reload has to land on the hero. Browsers restore the old scroll position by
-// default, which on a page built around a first-screen demo drops the visitor
-// back into the middle of the pricing table with no idea what the site is.
-// Turning restoration off is not enough on its own — Safari still restores
-// after the load event, so the reset is repeated once the page has settled.
-if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
-if (!location.hash) {
-  window.scrollTo(0, 0);
-  addEventListener('load', function () { if (!location.hash) window.scrollTo(0, 0); });
-}
-
-// Reveal on enter. IntersectionObserver, never a scroll listener.
-document.documentElement.classList.add('js');
-const io = new IntersectionObserver((es) => {
-  es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
-}, { threshold: .12, rootMargin: '0px 0px -8% 0px' });
-document.querySelectorAll('.rv').forEach((el, i) => { el.style.transitionDelay = (i % 5) * 70 + 'ms'; io.observe(el); });
-
-// Pointer tilt on the app shell — small angles only; this is a product shot,
-// not a toy. Disabled for reduced motion and on coarse pointers.
-const shell = document.querySelector('[data-tilt]');
-const fine = matchMedia('(pointer:fine)').matches && !matchMedia('(prefers-reduced-motion:reduce)').matches;
-if (shell && fine) {
-  let raf = 0;
-  addEventListener('pointermove', (ev) => {
-    if (raf) return;
-    raf = requestAnimationFrame(() => {
-      raf = 0;
-      const r = shell.getBoundingClientRect();
-      const dx = (ev.clientX - (r.left + r.width / 2)) / r.width;
-      const dy = (ev.clientY - (r.top + r.height / 2)) / r.height;
-      shell.style.transform = `perspective(1600px) rotateY(${dx * 3.2}deg) rotateX(${-dy * 2.2}deg)`;
-    });
-  }, { passive: true });
-  shell.style.transition = 'transform .9s cubic-bezier(.32,.72,0,1)';
-}
-
-// Which platform is this? The download row renders both entries either way —
-// this only promotes the matching one and retargets the Mac-specific buttons, so
-// a Windows visitor with scripting off still sees a Windows entry rather than a
-// page that only offers a .dmg.
-//
-// navigator.platform is deprecated but still the most reliable macOS/Windows
-// signal across current browsers; userAgentData is preferred where present and
-// its synchronous `platform` field is enough — no need for the async hints.
+// Windows visitors get the installer: /site-nav.js swaps the href on every
+// .dl-cta, and this swaps the label to match. Only the text node changes, so
+// the icon survives.
 (function () {
   var uaData = navigator.userAgentData;
-  var raw = String((uaData && uaData.platform) || navigator.platform ||
-                   navigator.userAgent || '');
-  var os = /mac|iphone|ipad|ipod/i.test(raw) ? 'mac'
-         : /win/i.test(raw) ? 'win'
-         : null;
-  if (!os) return;                       // Linux and anything unknown: leave both neutral
-
-  var mine = document.querySelector('.dl[data-os=' + os + ']');
-  if (mine) {
-    mine.classList.add('is-yours');
-    // Put the visitor's platform first without touching source order for
-    // everyone else — a plain flex reorder, not a DOM move.
-    mine.style.order = '-1';
-  }
-
-  if (os !== 'win') return;
+  var raw = String((uaData && uaData.platform) || navigator.platform || navigator.userAgent || '');
+  if (!/win/i.test(raw) || /mac|iphone|ipad|ipod/i.test(raw)) return;
   document.querySelectorAll('[data-mac-dl]').forEach(function (a) {
-    var href = a.getAttribute('data-win-href');
     var label = a.getAttribute('data-win-label');
-    if (href) { a.setAttribute('href', href); a.removeAttribute('rel'); }
     if (!label) return;
-    // Replace only the text node, so the arrow/icon markup survives — and keep
-    // its surrounding whitespace, or "Download <i>↓</i>" relabels to the
-    // spaceless "Open Klorn↓".
     Array.prototype.forEach.call(a.childNodes, function (n) {
       if (n.nodeType !== 3 || !n.textContent.trim()) return;
       var pad = n.textContent.match(/^(\s*)[\s\S]*?(\s*)$/);
@@ -1442,443 +520,61 @@ if (shell && fine) {
   });
 })();
 
-// Product tour: one frame, four surfaces. Progressive enhancement — the panels
-// are all in the document, and this is what collapses them to one at a time, so
-// without JS the section is a readable stack rather than a single stuck tab.
-(function () {
-  var nav = document.querySelector('.tour-nav');
-  if (!nav) return;
-  var tabs = Array.prototype.slice.call(nav.querySelectorAll('[role=tab]'));
-  var panels = tabs.map(function (t) { return document.getElementById(t.getAttribute('aria-controls')); });
-
-  function select(i, focus) {
-    tabs.forEach(function (t, n) {
-      t.setAttribute('aria-selected', String(n === i));
-      t.tabIndex = n === i ? 0 : -1;
-      if (panels[n]) panels[n].hidden = n !== i;
-    });
-    if (focus) tabs[i].focus();
-  }
-  tabs.forEach(function (t, i) {
-    t.addEventListener('click', function () { select(i); });
-  });
-  // Arrow keys move between tabs — the pattern a tablist is expected to follow.
-  nav.addEventListener('keydown', function (ev) {
-    var i = tabs.indexOf(document.activeElement);
-    if (i < 0) return;
-    var next = ev.key === 'ArrowDown' || ev.key === 'ArrowRight' ? i + 1
-             : ev.key === 'ArrowUp' || ev.key === 'ArrowLeft' ? i - 1
-             : ev.key === 'Home' ? 0
-             : ev.key === 'End' ? tabs.length - 1 : null;
-    if (next === null) return;
-    ev.preventDefault();
-    select((next + tabs.length) % tabs.length, true);
-  });
-  select(0);
-})();
-
-// Recently shipped — populated from the public GitHub releases feed, because a
-// hand-maintained list would rot. The block stays hidden unless the fetch
-// succeeds, so offline/rate-limited visitors simply never see it.
-(function () {
-  var box = document.getElementById('ship');
-  if (!box || !window.fetch) return;
-  fetch('https://api.github.com/repos/k08200/klorn/releases?per_page=3')
-    .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
-    .then(function (rel) {
-      if (!rel || !rel.length) return;
-      var list = box.querySelector('ol');
-      var loc = document.documentElement.lang || 'en';
-      // Release tags are build ids (desktop-v0.4.80103): the trailing build
-      // number means nothing to a visitor, so show major.minor plus the
-      // platform when it is not the Mac app. The raw tag stays in the title.
-      var human = function (tag) {
-        var m = /^desktop-(win-)?v(\d+)\.(\d+)/.exec(tag || '');
-        if (!m) return tag;
-        return (m[1] ? 'Windows ' : '') + 'v' + m[2] + '.' + m[3];
-      };
-      rel.slice(0, 3).forEach(function (r) {
-        var li = document.createElement('li');
-        var a = document.createElement('a');
-        a.href = r.html_url; a.rel = 'noreferrer noopener';
-        a.textContent = human(r.tag_name); a.title = r.tag_name;
-        var s = document.createElement('span');
-        s.textContent = '· ' + new Date(r.published_at)
-          .toLocaleDateString(loc, { month: 'short', day: 'numeric' });
-        li.appendChild(a); li.appendChild(s); list.appendChild(li);
-      });
-      box.hidden = false;
-    })
-    .catch(function () { /* stays hidden — the footer Releases link covers it */ });
-})();
-
-// The measured numbers count up the first time they scroll into view. Motion
-// only — the markup already holds the final values, so no JS, reduced motion,
-// or a missed observer all land on the true numbers.
-(function () {
-  var els = document.querySelectorAll('#measured .sv');
-  if (!els.length || matchMedia('(prefers-reduced-motion:reduce)').matches) return;
-  var io = new IntersectionObserver(function (es) {
-    es.forEach(function (e) {
-      if (!e.isIntersecting) return;
-      io.unobserve(e.target);
-      var el = e.target, txt = el.textContent.trim();
-      var m = txt.match(/^([0-9.]+)(.*)$/);
-      if (!m) return;
-      var target = parseFloat(m[1]), suffix = m[2];
-      var dec = (m[1].split('.')[1] || '').length, t0 = null;
-      function step(ts) {
-        if (t0 === null) t0 = ts;
-        var p = Math.min(1, (ts - t0) / 800);
-        el.textContent = (target * (1 - Math.pow(1 - p, 3))).toFixed(dec) + suffix;
-        if (p < 1) requestAnimationFrame(step);
-        else el.textContent = txt;          // land on the exact original string
-      }
-      requestAnimationFrame(step);
-    });
-  }, { threshold: .6 });
-  els.forEach(function (el) { io.observe(el); });
-})();
-
-// The wordmark returns to the top. href="#top" is the no-JS fallback; with JS we
-// scroll instead of jumping and drop the hash again, so a later reload still
-// takes the "no hash" path above.
-document.querySelectorAll('[data-top]').forEach(function (a) {
-  a.addEventListener('click', function (ev) {
-    ev.preventDefault();
-    var smooth = !matchMedia('(prefers-reduced-motion:reduce)').matches;
-    window.scrollTo({ top: 0, behavior: smooth ? 'smooth' : 'auto' });
-    history.replaceState(null, '', location.pathname + location.search);
-  });
-});
-
-// The language menu. Click to open, click away or Escape to close — the same
-// contract every OS menu has, so nothing here needs explaining.
+// The language menu. Click to open, click away or Escape to close; Escape
+// returns focus to the trigger.
 (function () {
   var btn = document.querySelector('[data-lang-toggle]');
   var menu = document.getElementById('lang-menu');
   if (!btn || !menu) return;
-
-  function close() {
-    menu.removeAttribute('data-open');
-    btn.setAttribute('aria-expanded', 'false');
+  function setOpen(open) {
+    if (open) menu.setAttribute('data-open', '');
+    else menu.removeAttribute('data-open');
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
   }
-  function open() {
-    menu.setAttribute('data-open', '');
-    btn.setAttribute('aria-expanded', 'true');
-  }
-
   btn.addEventListener('click', function (e) {
     e.stopPropagation();
-    if (menu.hasAttribute('data-open')) close();
-    else open();
+    setOpen(!menu.hasAttribute('data-open'));
   });
-  // Clicking a choice navigates; closing first avoids a menu flashing over
-  // the new page during the load.
-  menu.addEventListener('click', function () { close(); });
+  menu.addEventListener('click', function () { setOpen(false); });
   document.addEventListener('click', function (e) {
     if (!menu.hasAttribute('data-open')) return;
     if (menu.contains(e.target) || btn.contains(e.target)) return;
-    close();
+    setOpen(false);
   });
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape' || !menu.hasAttribute('data-open')) return;
-    close();
-    btn.focus();          // Escape must return focus, not strand it
+    setOpen(false);
+    btn.focus();
   });
 })();
 
-// Language: follow the OS/browser preference on a first visit, and never again.
-// Rules that keep this from being hostile: an explicit EN/KO click is remembered
-// forever, the redirect fires at most once per browser, and it only ever runs on
-// the site root — deep links stay where they point.
+// Language: follow the browser preference on a first visit to the root, and
+// never again. An explicit pick is remembered, the redirect fires at most once
+// per browser session, and deep links stay where they point.
 (function () {
   var KEY = 'klorn.lang';
-  var picks = document.querySelectorAll('[data-lang-pick]');
-  picks.forEach(function (a) {
+  document.querySelectorAll('[data-lang-pick]').forEach(function (a) {
     a.addEventListener('click', function () {
       try { localStorage.setItem(KEY, a.getAttribute('data-lang-pick')); } catch (e) {}
     });
   });
-
   var stored = null;
   try { stored = localStorage.getItem(KEY); } catch (e) {}
-  if (stored) return;                                   // the user has decided
+  if (stored) return;
   try { if (sessionStorage.getItem(KEY + '.tried')) return; } catch (e) {}
-
-  // Only on the deployed site: a file:// or preview open has no /ko/ to reach,
-  // and a failed replace() would stop the rest of this script.
   if (location.protocol !== 'http:' && location.protocol !== 'https:') return;
   var path = location.pathname;
-  // Never from inside /ko/ — /ko/index.html would otherwise match the root test
-  // below and redirect the Korean page to itself.
-  if (path.indexOf('/ko/') === 0) return;
-  if (path !== '/' && !/\/index\.html$/.test(path)) return;
-
+  if (path !== '/' && path !== '/index.html') return;
   var prefers = (navigator.languages && navigator.languages[0]) || navigator.language || '';
-  if (!/^ko\b/i.test(prefers)) return;                  // English page is already right
-
+  if (!/^ko\b/i.test(prefers)) return;
   try { sessionStorage.setItem(KEY + '.tried', '1'); } catch (e) {}
   location.replace('/ko/');
 })();
-
-// The hero demonstration. A visitor who reads only the headline still sees the
-// product do its one job: sixty-four messages arrive, four of them are yours.
-(function () {
-  var stage = document.getElementById('dm-stage');
-  if (!stage) return;
-  var mails = [
-    ['Sarah Kim', 'Re: Contract review — needs your sign-off today', 'push'],
-    ['AWS Billing', 'Your July invoice is ready', 'silent'],
-    ['Alex Carter', 'Standup moved to 10:30 — does that work?', 'meeting'],
-    ['Product Hunt', 'Today in tech: 12 new launches', 'silent'],
-    ['Jordan Lee', 'Revised dashboard specs', 'queue'],
-    ['Calendar', 'Invitation accepted by 3 people', 'info'],
-    ['billing@vendor.io', 'Invoice #4821 is overdue', 'push'],
-    ['Morning Brew', 'The 5 things you need to know', 'silent'],
-    ['Casey Park', 'Onboarding flow ideas', 'queue'],
-    ['Stripe', 'Payment receipt', 'info']
-  ];
-  var totals = { push: 3, meeting: 2, queue: 12, info: 8, silent: 39 };
-  var cells = {};
-  document.querySelectorAll('#dm-buckets .bk').forEach(function (b) {
-    cells[b.dataset.t] = { box: b, num: b.querySelector('[data-v]'), n: 0 };
-  });
-  var doneEl = document.getElementById('dm-done');
-  var stateEl = document.getElementById('dm-state');
-  var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-  // Reduced motion gets the answer, not the animation.
-  if (reduce) {
-    Object.keys(totals).forEach(function (k) { cells[k].num.textContent = totals[k]; });
-    doneEl.textContent = '64';
-    stateEl.textContent = 'sorted';
-    return;
-  }
-
-  var i = 0, shown = 0;
-  function step() {
-    var m = mails[i % mails.length];
-    var el = document.createElement('div');
-    el.className = 'mail run';
-    el.innerHTML = '<span class="from"></span><span class="subj"></span>';
-    el.firstChild.textContent = m[0];
-    el.lastChild.textContent = m[1];
-    // One chip at a time: the slot is a single absolute position, so a
-    // second arrival before the first leaves lands on top of it.
-    stage.replaceChildren(el);
-    setTimeout(function () { el.remove(); }, 1050);
-
-    setTimeout(function () {
-      var c = cells[m[2]];
-      c.box.classList.add('hit');
-      setTimeout(function () { c.box.classList.remove('hit'); }, 480);
-      // Walk each tier toward its real total rather than counting one at a time,
-      // so the numbers land on the figures the eval actually produced.
-      var target = totals[m[2]];
-      var stepSize = Math.max(1, Math.round(target / 6));
-      c.n = Math.min(target, c.n + stepSize);
-      c.num.textContent = c.n;
-      shown = Object.keys(cells).reduce(function (a, k) { return a + cells[k].n; }, 0);
-      doneEl.textContent = shown;
-      if (shown >= 64) {
-        stateEl.textContent = 'sorted';
-        // Hold the finished board, then run the morning again. A demo that
-        // stops dead reads as broken to anyone who scrolls back to it.
-        setTimeout(function () {
-          Object.keys(cells).forEach(function (k) { cells[k].n = 0; cells[k].num.textContent = 0; });
-          shown = 0; doneEl.textContent = 0;
-          stateEl.textContent = 'running';
-          setTimeout(step, 700);
-        }, 2600);
-      }
-    }, 560);
-
-    i++;
-    if (shown < 64) setTimeout(step, 1120);
-  }
-  // Only run once the strip is actually on screen.
-  new IntersectionObserver(function (es, ob) {
-    if (es[0].isIntersecting) { ob.disconnect(); step(); }
-  }, { threshold: .4 }).observe(stage);
-})();
-
-// The playable replica. A screenshot proves the app exists; it does not let
-// anyone find out whether they'd like using it. Everything here responds:
-// switch tiers, open a message, read why it was ranked, draft a reply from the
-// three one-key options, send it, or move it to another tier and watch the
-// counts follow. No network, no data leaves the page.
-(function () {
-  var root = document.getElementById('play');
-  if (!root) return;
-
-  var TIERS = [
-    { id: 'push', name: 'Push', c: '#fb7185', blurb: '今すぐ割り込む' },
-    { id: 'meeting', name: 'Meeting', c: '#818cf8', blurb: '日程調整 — カレンダーと照合します' },
-    { id: 'queue', name: 'Queue', c: '#fbbf24', blurb: '今日中に読む' },
-    { id: 'info', name: 'Info', c: '#22d3ee', blurb: '領収書・確認 — 返信は不要です' },
-    { id: 'silent', name: 'Silent', c: '#a8a29e', blurb: '削除ではなく保管' }
-  ];
-  var mail = [
-    { id: 1, t: 'push', from: 'Sarah Kim', subj: 'Re: 契約書レビュー — 本日中に承認が必要です',
-      why: 'この送信者に6回返信しています',
-      sum: '法務が第4条に2点の修正を戻してきました。先方が本日中に副署できるよう、17時までの承認が必要です。',
-      body: 'お疲れさまです。\n\n法務から第4条について2点戻ってきました — 補償上限と通知期間です。どちらも軽微ですが、本日17時までに承認が必要です。\n\nレッドラインを添付しました。\n\nよろしくお願いします。\nSarah', 
-      r: ['確認しました — レッドラインは2点とも問題ありません。17時までに署名します。',
-          '本日17時までは対応できません。副署を明朝に動かせますか？',
-          '署名の前に — 補償上限は先週合意した数字のままですか、それとも動きましたか？'] },
-    { id: 2, t: 'push', from: 'billing@vendor.io', subj: '請求書 #4821 が支払期限を過ぎています',
-      why: '本日が支払期限です',
-      sum: '請求書 #4821 は7月26日が期限で、現在3日超過しています。',
-      body: '請求書 #4821（$2,400）の支払期限は7月26日でした。\n\nお早めにお支払い手続きをお願いいたします。', 
-      r: ['本日中に支払います — 遅れて申し訳ありません。',
-          'この件は係争中です。担当チームから今週別途ご連絡します。',
-          'PO番号を記載した請求書を再送していただけますか？'] },
-    { id: 3, t: 'meeting', from: 'Alex Carter', subj: 'スタンドアップを10:30に変更しました',
-      why: 'カレンダーが重複しています',
-      sum: '明日のスタンドアップが10:30に移り、10:15のレビューと重なります。',
-      body: '明日のスタンドアップを10:30に移しました。\n\nそれでも大丈夫でしょうか？', 
-      r: ['10:30で問題ありません。',
-          'その時間はレビューが入っています — 11:00にできませんか？',
-          '10:15のレビューと重なります。15分早く始められませんか？'] },
-    { id: 4, t: 'queue', from: 'Jordan Lee', subj: 'ダッシュボード仕様の改訂版',
-      why: '期限の記載がありません',
-      sum: 'レポート用ダッシュボードの更新仕様です。お時間のあるときにレビューをどうぞ。',
-      body: '改訂した仕様を添付しました — ほとんどはレポート画面のレイアウト変更です。\n\n急ぎではありません。', 
-      r: ['受け取りました。今週中に読みます。',
-          '自分で読む代わりにデザインレビューに回します。',
-          'どのセクションの変更が一番大きいですか？そこから見ます。'] },
-    { id: 5, t: 'queue', from: 'Casey Park', subj: 'オンボーディングのフロー案',
-      why: '進行中のスレッドで、依頼はありません',
-      sum: '初回フローへの提案が3つ。まだ判断は求められていません。',
-      body: '直近2回のオンボーディングを見て思いついたことをいくつか。\n\n必要なら口頭で説明します。', 
-      r: ['どれも試す価値がありそうです — 木曜に話しましょう。',
-          'ベータのあとまで保留にします。',
-          '3つのうち、どれから出しますか？'] },
-    { id: 6, t: 'silent', from: 'Morning Brew', subj: '今日押さえておくべき5つのこと',
-      why: 'ニュースレター、返信歴なし',
-      sum: '日刊ニュースレターです。',
-      body: '本日のビジネス...', r: null },
-    { id: 7, t: 'info', from: 'AWS Billing', subj: '7月分の請求書が準備できました',
-      why: '自動送信の領収書',
-      sum: '月次のインフラ請求書です。対応は不要です。',
-      body: '請求書は課金コンソールでご確認いただけます。', r: null },
-    { id: 8, t: 'info', from: 'Calendar', subj: '3名が招待を承諾しました',
-      why: '記録です — 返信を待っているものはありません',
-      sum: '木曜のレビューに3名が承諾しました。',
-      body: '承諾: Jordan Lee, Casey Park, Sarah Kim。', r: null },
-    { id: 9, t: 'meeting', from: 'Priya Raman', subj: '木曜14時に変更できますか？',
-      why: '提案された時間がデザインレビュー（14:00–15:00）と重なります',
-      sum: 'ロードマップの打ち合わせを木曜14時に動かしたいという提案です。その時間は既に埋まっており、15時なら双方のカレンダーが空いています。',
-      body: 'お疲れさまです。\n\nロードマップの打ち合わせは木曜14時のほうがこちらは都合が良いのですが — ご対応いただけますか？\n\nPriya', 
-      r: ['木曜14時はこちらが埋まっています。15時なら双方空いていますが、それでいかがでしょう？',
-          '今週の木曜は難しいです。金曜午前なら空いています。',
-          '動かす前に — 価格の議題はそのまま残りますか？'] }
-  ];
-  var TONE = ['承諾', '辞退', '質問'];
-
-  var cur = 'push', open = null, replying = false, draft = null, sent = false;
-  var elT = document.getElementById('pl-tiers');
-  var elR = document.getElementById('pl-rows');
-  var elRead = document.getElementById('pl-read');
-
-  function count(t) { return mail.filter(function (m) { return m.t === t; }).length; }
-  function tier(id) { return TIERS.filter(function (x) { return x.id === id; })[0]; }
-  function esc(v) { return String(v).replace(/[&<>"]/g, function (c) {
-    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
-
-  function renderTiers() {
-    elT.innerHTML = TIERS.map(function (t) {
-      return '<button class="pl-t" data-tier="' + t.id + '" aria-pressed="' + (t.id === cur) + '">' +
-        '<span class="dt" style="background:' + t.c + '"></span>' + t.name +
-        '<span class="cn">' + count(t.id) + '</span></button>';
-    }).join('');
-  }
-  function renderList() {
-    var t = tier(cur), rows = mail.filter(function (m) { return m.t === cur; });
-    document.getElementById('pl-hdot').style.background = t.c;
-    document.getElementById('pl-hname').textContent = t.name;
-    document.getElementById('pl-hcount').textContent = t.blurb;
-    elR.innerHTML = rows.length ? rows.map(function (m) {
-      return '<button class="pl-r" data-id="' + m.id + '" aria-current="' + (open === m.id) + '">' +
-        '<span class="fr">' + esc(m.from) + '</span>' +
-        '<span class="sj">' + esc(m.subj) + '</span>' +
-        '<span class="rs">' + esc(m.why) + '</span></button>';
-    }).join('') : '<p class="pl-empty">Nothing in ' + t.name + '. ' + t.blurb + '.</p>';
-  }
-  function renderRead() {
-    var m = mail.filter(function (x) { return x.id === open; })[0];
-    if (!m) {
-      elRead.innerHTML = '<p class="pl-empty">左のメールを選んでください。<br>ここにあるものは全部反応します。</p>';
-      return;
-    }
-    var opts = m.r && replying && draft === null
-      ? '<div class="pl-opts">' + m.r.map(function (txt, i) {
-          return '<button class="pl-opt" data-draft="' + i + '"><kbd>' + (i + 1) + '</kbd>' +
-            '<span><b>' + TONE[i] + '</b>' + esc(txt) + '</span></button>'; }).join('') + '</div>'
-      : (m.r && draft === null
-          ? '<p class="pl-hint"><b>AIで返信</b>を押すか、<kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> を押すと、' +
-            'あなたの文体の下書きが3つ出ます。</p>'
-          : '');
-    var comp = draft !== null
-      ? '<div class="pl-comp"><textarea id="pl-ta" aria-label="返信の下書き">' + esc(m.r[draft]) + '</textarea>' +
-        '<div class="row">' + (sent ? '<span class="pl-sent">送信済み · レシート記録</span>' : '') +
-        '<button class="pl-b" data-cancel>キャンセル</button>' +
-        '<button class="pl-b on" data-send>' + (sent ? '送信済み' : '送信') + '</button></div></div>'
-      : '';
-    var others = TIERS.filter(function (t) { return t.id !== m.t; });
-    elRead.innerHTML =
-      '<div class="pl-top"><div class="pl-sub">' + esc(m.subj) + '</div>' +
-      '<div class="pl-from">' + esc(m.from) + '</div>' +
-      '<div class="pl-acts">' +
-        (m.r ? '<button class="pl-b on" data-reply>AIで返信</button>' : '') +
-        others.map(function (t) {
-          return '<button class="pl-b" data-move="' + t.id + '">' + t.name + 'へ移動</button>'; }).join('') +
-      '</div></div>' +
-      // Drafts sit directly under the action row, not after the body — at the
-      // bottom they fall below the panel's fold and "Reply with AI" reads as a
-      // dead button on a short screen.
-      opts + comp +
-      '<div class="pl-why"><span class="w">' + tier(m.t).name + 'の判定理由 · ' + esc(m.why) + '</span>' +
-      '<div class="sm">' + esc(m.sum) + '</div></div>' +
-      '<div class="pl-body">' + esc(m.body) + '</div>';
-  }
-  function draw() { renderTiers(); renderList(); renderRead(); }
-  function reset() { replying = false; draft = null; sent = false; }
-
-  root.addEventListener('click', function (ev) {
-    var b = ev.target.closest('button');
-    if (!b) return;
-    if (b.dataset.tier) { cur = b.dataset.tier; open = null; reset(); return draw(); }
-    if (b.dataset.id) { open = +b.dataset.id; reset(); return draw(); }
-    if (b.hasAttribute('data-reply')) { replying = true; draft = null; sent = false; return renderRead(); }
-    // dataset.draft is "0" for the first option — a truthiness check would make
-    // Accept the one unclickable draft.
-    if (b.dataset.draft !== undefined) { draft = +b.dataset.draft; sent = false; return renderRead(); }
-    if (b.hasAttribute('data-cancel')) { replying = false; draft = null; sent = false; return renderRead(); }
-    if (b.hasAttribute('data-send')) { sent = true; return renderRead(); }
-    if (b.dataset.move) {
-      var m = mail.filter(function (x) { return x.id === open; })[0];
-      if (m) { m.t = b.dataset.move; m.why = 'あなたが移動しました — Klornはここから学びます'; }
-      open = null; reset(); return draw();
-    }
-  });
-  // 1/2/3 pick a draft, matching the app's key bindings.
-  root.addEventListener('keydown', function (ev) {
-    if (!open || draft !== null) return;
-    var i = ['1', '2', '3'].indexOf(ev.key);
-    var m = mail.filter(function (x) { return x.id === open; })[0];
-    if (i > -1 && m && m.r) { replying = true; draft = i; sent = false; renderRead(); }
-  });
-
-  open = 1;
-  draw();
-})();
 </script>
 <script>
-// Inflow attribution: pass utm_*/referrer/landing-path along to the app so
-// the signup can report which channel brought the person in. The selector
-// covers every app.klorn.ai link, so it keeps working wherever the CTAs point.
+// Inflow attribution: utm_campaign and friends, the referrer and this landing
+// path ride along on every app.klorn.ai link, so a signup can report which
+// channel brought the person in.
 (function () {
   try {
     var p = new URLSearchParams(location.search);

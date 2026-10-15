@@ -31,6 +31,7 @@ function fakeSession(provider: DriveProviderName): DriveProviderSession {
     list: vi.fn(async () => ({ files: [], nextPageToken: null })),
     search: vi.fn(async () => ({ files: [], nextPageToken: null })),
     getMetadata: vi.fn(async () => null),
+    fetchForSummary: vi.fn(async () => null),
   };
 }
 
@@ -133,25 +134,28 @@ describe("what a provider reports about a file", () => {
   });
 });
 
-describe("the seam reads metadata only", () => {
+describe("the seam only reads", () => {
   const dir = join(dirname(fileURLToPath(import.meta.url)), "..", "drive", "providers");
   const types = readFileSync(join(dir, "types.ts"), "utf8");
   const dispatch = readFileSync(join(dir, "dispatch.ts"), "utf8");
   const body = types.slice(types.indexOf("export interface DriveProviderSession {"));
   const session = body.slice(0, body.indexOf("\n}"));
 
-  it("a session has exactly these three methods", () => {
+  it("a session has exactly these four methods: reads only (V4), the byte read is D4's", () => {
     const methods = [...session.matchAll(/^ {2}(\w+)\(/gm)].map((match) => match[1]);
-    expect(methods).toEqual(["list", "search", "getMetadata"]);
+    expect(methods).toEqual(["list", "search", "getMetadata", "fetchForSummary"]);
   });
 
   it("decision V4: no type of the seam names a write", () => {
     expect(types).not.toMatch(/\b(upload|create|update|delete|rename|move|write|trash)\w*\s*\(/i);
   });
 
-  it("nothing fetches a file's bytes yet: D4 adds that, with its own size check", () => {
-    for (const text of [types, dispatch]) {
-      expect(text).not.toMatch(/fetchForSummary\s*\(|SUMMARY_MAX_BYTES|Uint8Array/);
-    }
+  it("the one byte read (D4) takes a cap and answers the streaming reader's result", () => {
+    expect(session).toMatch(
+      /fetchForSummary\(\s*externalId: string,\s*options: \{ readonly maxBytes: number \},\s*\): Promise<CappedBytes \| null>;/,
+    );
+    expect(types).toContain('import type { CappedBytes } from "../summary-bytes.js";');
+    // The dispatcher picks an implementation; it reads no bytes itself.
+    expect(dispatch).not.toMatch(/fetchForSummary|Uint8Array|Buffer/);
   });
 });

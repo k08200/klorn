@@ -1,6 +1,7 @@
 /**
  * A test app for the Klorn drive (D3): the D2 read routes and the D3 routes over
- * a fake database (driveFile, storagePurge) and the in-memory object store,
+ * a fake database (driveFile, storagePurge, and D4's summary tables) and the
+ * in-memory object store,
  * with all three flags on. The test file mocks ../db.js with `klornDriveDbMock`
  * and ../sentry.js.
  */
@@ -26,6 +27,13 @@ export function klornDriveDbMock(): { prisma: unknown; db: unknown } {
     },
     get storagePurge() {
       return fake.storagePurge;
+    },
+    // D4: the summary tables, reached only while DRIVE_SUMMARIES_ENABLED is on.
+    get driveFileSummary() {
+      return fake.driveFileSummary;
+    },
+    get driveSummaryUsage() {
+      return fake.driveSummaryUsage;
     },
     user: { findUnique: vi.fn(async () => ({ id: "user-1", plan: "PRO", role: "USER" })) },
     device: {
@@ -82,7 +90,12 @@ export function flagsOn(): void {
 export async function buildKlornDriveApp(
   options: { seed?: Row[]; withRateLimit?: boolean } = {},
 ): Promise<KlornDriveTestApp> {
-  const db = createFakeDb({ driveFile: options.seed ?? [], storagePurge: [] });
+  const db = createFakeDb({
+    driveFile: options.seed ?? [],
+    storagePurge: [],
+    driveFileSummary: [],
+    driveSummaryUsage: [],
+  });
   holder.db = db;
   const store = new MemoryObjectStore();
   setObjectStoreForTests(store);
