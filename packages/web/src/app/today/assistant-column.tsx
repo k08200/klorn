@@ -17,6 +17,7 @@ import { askAssistant } from "../../lib/assistant-ask";
 import { ASSISTANT_BRIEFING, assistantHref } from "../../lib/home";
 import { useT } from "../../lib/i18n";
 import { BlockError, BlockLink, Chevron, LinesSkeleton, TodayBlock } from "./block";
+import { FreeTimeRow } from "./free-time";
 import { useBriefing, usePendingApprovals } from "./use-today-data";
 
 const BRIEFING_SETTINGS_HREF = "/settings/notifications";
@@ -28,6 +29,7 @@ export function AssistantColumn({ className = "" }: { className?: string }) {
     <TodayBlock headingId="today-assistant" title={t("nav.assistant")} className={className}>
       <BriefingSummary />
       <ApprovalsRow />
+      <FreeTimeRow />
       <AskBox />
     </TodayBlock>
   );
