@@ -29,10 +29,8 @@ function capFromEnv(name: string, fallback: number, max: number): number {
   return Math.min(max, Math.floor(parsed));
 }
 
-export const autoUnsubscribeUserCap = () =>
-  capFromEnv("AUTO_UNSUBSCRIBE_USER_DAILY_CAP", 20, 100);
-export const autoUnsubscribeHostCap = () =>
-  capFromEnv("AUTO_UNSUBSCRIBE_HOST_DAILY_CAP", 50, 1000);
+export const autoUnsubscribeUserCap = () => capFromEnv("AUTO_UNSUBSCRIBE_USER_DAILY_CAP", 20, 100);
+export const autoUnsubscribeHostCap = () => capFromEnv("AUTO_UNSUBSCRIBE_HOST_DAILY_CAP", 50, 1000);
 export const autoUnsubscribeGlobalCap = () =>
   capFromEnv("AUTO_UNSUBSCRIBE_GLOBAL_DAILY_CAP", 1000, 10_000);
 
@@ -42,7 +40,18 @@ export function quotaDay(now: Date): string {
 }
 
 /** Second-level labels under a two-letter country code (co.uk, co.kr, com.au …). */
-const SECOND_LEVEL_LABELS = new Set(["ac", "co", "com", "edu", "go", "gov", "ne", "net", "or", "org"]);
+const SECOND_LEVEL_LABELS = new Set([
+  "ac",
+  "co",
+  "com",
+  "edu",
+  "go",
+  "gov",
+  "ne",
+  "net",
+  "or",
+  "org",
+]);
 
 /**
  * The domain a target is counted under: its last two labels, or three when it

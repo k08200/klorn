@@ -89,21 +89,27 @@ async function reserveTimes(n: number, userId: string, url: string, now = NOW) {
 
 describe("caps from the environment", () => {
   it("default 20 / 50 / 1000; garbage and < 1 fall back; huge values clamp", () => {
-    expect([autoUnsubscribeUserCap(), autoUnsubscribeHostCap(), autoUnsubscribeGlobalCap()]).toEqual([
-      20, 50, 1000,
-    ]);
+    expect([
+      autoUnsubscribeUserCap(),
+      autoUnsubscribeHostCap(),
+      autoUnsubscribeGlobalCap(),
+    ]).toEqual([20, 50, 1000]);
     process.env.AUTO_UNSUBSCRIBE_USER_DAILY_CAP = "abc";
     process.env.AUTO_UNSUBSCRIBE_HOST_DAILY_CAP = "0";
     process.env.AUTO_UNSUBSCRIBE_GLOBAL_DAILY_CAP = "Infinity";
-    expect([autoUnsubscribeUserCap(), autoUnsubscribeHostCap(), autoUnsubscribeGlobalCap()]).toEqual([
-      20, 50, 1000,
-    ]);
+    expect([
+      autoUnsubscribeUserCap(),
+      autoUnsubscribeHostCap(),
+      autoUnsubscribeGlobalCap(),
+    ]).toEqual([20, 50, 1000]);
     process.env.AUTO_UNSUBSCRIBE_USER_DAILY_CAP = "500";
     process.env.AUTO_UNSUBSCRIBE_HOST_DAILY_CAP = "1e9";
     process.env.AUTO_UNSUBSCRIBE_GLOBAL_DAILY_CAP = "7.9";
-    expect([autoUnsubscribeUserCap(), autoUnsubscribeHostCap(), autoUnsubscribeGlobalCap()]).toEqual([
-      100, 1000, 7,
-    ]);
+    expect([
+      autoUnsubscribeUserCap(),
+      autoUnsubscribeHostCap(),
+      autoUnsubscribeGlobalCap(),
+    ]).toEqual([100, 1000, 7]);
   });
 });
 
@@ -122,7 +128,12 @@ describe("targetDomain", () => {
 
 describe("reserveAutoUnsubscribe", () => {
   it("refuses an unsafe target before writing anything", async () => {
-    for (const url of ["http://shop.com/u", "https://127.0.0.1/u", "https://localhost/u", "garbage"]) {
+    for (const url of [
+      "http://shop.com/u",
+      "https://127.0.0.1/u",
+      "https://localhost/u",
+      "garbage",
+    ]) {
       expect(await reserveAutoUnsubscribe("u1", url, NOW)).toEqual({
         ok: false,
         reason: "unsafe-endpoint",
@@ -171,7 +182,9 @@ describe("reserveAutoUnsubscribe", () => {
       ok: false,
       reason: "user-cap",
     });
-    expect(await reserveAutoUnsubscribe("u1", "https://shop.com/u", TOMORROW)).toEqual({ ok: true });
+    expect(await reserveAutoUnsubscribe("u1", "https://shop.com/u", TOMORROW)).toEqual({
+      ok: true,
+    });
     expect(state.users.get("u1")).toEqual({ day: "2026-10-16", count: 1 });
   });
 
@@ -179,13 +192,17 @@ describe("reserveAutoUnsubscribe", () => {
     await reserveAutoUnsubscribe("u1", "https://shop.com/u", NOW);
     const sql = state.sql[0].replace(/\s+/g, " ");
     expect(sql).toContain('ON CONFLICT ("key") DO UPDATE');
-    expect(sql).toContain('WHERE "UnsubscribeQuota"."day" <> EXCLUDED."day" OR "UnsubscribeQuota"."count" < ?');
+    expect(sql).toContain(
+      'WHERE "UnsubscribeQuota"."day" <> EXCLUDED."day" OR "UnsubscribeQuota"."count" < ?',
+    );
     expect(sql).toContain('RETURNING "count"');
   });
 
   it("a database error surfaces — the caller decides, and must decide no", async () => {
     const { prisma } = await import("../db.js");
     vi.mocked(prisma.$queryRaw).mockRejectedValueOnce(new Error("db down"));
-    await expect(reserveAutoUnsubscribe("u1", "https://shop.com/u", NOW)).rejects.toThrow("db down");
+    await expect(reserveAutoUnsubscribe("u1", "https://shop.com/u", NOW)).rejects.toThrow(
+      "db down",
+    );
   });
 });
