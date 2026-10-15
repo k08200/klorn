@@ -1518,6 +1518,14 @@ const ko: Record<string, string> = {
   "mailV2.shown": "{total}개 중 {shown}개",
   "mailV2.demo": "데모 메일입니다.",
   "mailV2.demo.connect": "계정을 연결하면 내 메일이 보입니다",
+  "mailV2.noSource": "아직 연결된 메일 계정이 없습니다.",
+  "imapConnect.proGate.title": "{provider} 연결은 Pro 기능입니다.",
+  "imapConnect.proGate.body":
+    "Free에는 Google 계정 하나가 포함됩니다. 이 메일함에도 방화벽을 적용하려면 업그레이드하세요.",
+  "imapConnect.proGate.upgrade": "업그레이드",
+  "imapConnect.firstSync.started": "지금 메일을 가져오는 중입니다. 곧 메일함에 표시됩니다.",
+  "imapConnect.firstSync.delayed":
+    "이 계정의 첫 메일이 표시되기까지 최대 5분 정도 걸릴 수 있습니다.",
   "mailV2.archive.done": "보관했습니다",
   "mailV2.archive.doneMany": "{count}개 보관했습니다",
   "mailV2.delete.done": "삭제했습니다",

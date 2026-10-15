@@ -1568,6 +1568,14 @@ const de: Record<string, string> = {
   "mailV2.shown": "{shown} von {total}",
   "mailV2.demo": "Das sind Demo-Mails.",
   "mailV2.demo.connect": "Konto verbinden, um die eigenen zu sehen",
+  "mailV2.noSource": "Noch kein E-Mail-Konto verbunden.",
+  "imapConnect.proGate.title": "{provider} zu verbinden ist eine Pro-Funktion.",
+  "imapConnect.proGate.body":
+    "Free umfasst ein Google-Konto. Mit einem Upgrade läuft die Firewall auch über dieses Postfach.",
+  "imapConnect.proGate.upgrade": "Upgraden",
+  "imapConnect.firstSync.started":
+    "Deine Mails werden jetzt abgerufen und erscheinen gleich in Mail.",
+  "imapConnect.firstSync.delayed": "Die erste Mail dieses Kontos kann bis zu ~5 Minuten dauern.",
   "mailV2.archive.done": "Archiviert",
   "mailV2.archive.doneMany": "{count} archiviert",
   "mailV2.delete.done": "Gelöscht",

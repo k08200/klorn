@@ -85,7 +85,7 @@ export function MailV2() {
 
   const list = useMailList(view);
   const actions = useMailActions(list);
-  const { emails, threads, isDemo } = list;
+  const { emails, threads, isDemo, needsConnection } = list;
   const readerUndo = useMemo(() => readerUndoFrom(searchParams), [searchParams]);
 
   const { lane, account, filter, search } = view;
@@ -270,7 +270,7 @@ export function MailV2() {
 
         {isDemo && (
           <p className="flex flex-wrap items-center gap-x-2 rounded-card border border-state-info-line bg-state-info-bg px-3 py-2 text-body text-state-info-ink">
-            {t("mailV2.demo")}
+            {needsConnection ? t("mailV2.noSource") : t("mailV2.demo")}
             <Link
               href="/settings/accounts"
               className="focus-ring rounded-control font-medium underline"
