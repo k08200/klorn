@@ -1252,6 +1252,54 @@ describe("GET /api/auth/me", () => {
     await app.close();
   });
 
+  it("reports user.files only while the drive and one of its sources are on (FD-7)", async () => {
+    const app = await buildApp();
+    const token = await registerAndGetToken(app, "files@example.com");
+    const me = async () =>
+      (await app.inject({ method: "GET", url: "/api/auth/me", headers: authHeader(token) })).json()
+        .user.files;
+    const flags = ["DRIVE_ENABLED", "KLORN_DRIVE_ENABLED", "OBJECT_STORAGE_ENABLED"] as const;
+    const clear = () => {
+      for (const flag of flags) delete process.env[flag];
+    };
+
+    clear();
+    try {
+      expect(await me()).toBe(false);
+      // The drive alone has no source to show: Files stays hidden.
+      process.env.DRIVE_ENABLED = "true";
+      expect(await me()).toBe(false);
+      // A source's flag without the drive's: still hidden.
+      delete process.env.DRIVE_ENABLED;
+      process.env.KLORN_DRIVE_ENABLED = "true";
+      process.env.OBJECT_STORAGE_ENABLED = "true";
+      expect(await me()).toBe(false);
+      process.env.DRIVE_ENABLED = "true";
+      expect(await me()).toBe(true);
+    } finally {
+      clear();
+    }
+    await app.close();
+  });
+
+  it("reports TEAM_MODE_ENABLED as user.teamMode, false unless the flag is on", async () => {
+    const app = await buildApp();
+    const token = await registerAndGetToken(app, "team-mode@example.com");
+    const me = async () =>
+      (await app.inject({ method: "GET", url: "/api/auth/me", headers: authHeader(token) })).json()
+        .user.teamMode;
+
+    delete process.env.TEAM_MODE_ENABLED;
+    expect(await me()).toBe(false);
+    process.env.TEAM_MODE_ENABLED = "true";
+    try {
+      expect(await me()).toBe(true);
+    } finally {
+      delete process.env.TEAM_MODE_ENABLED;
+    }
+    await app.close();
+  });
+
   it("reports ONBOARDING_V2 as user.onboardingV2 on /me, login and register, false unless on", async () => {
     const app = await buildApp();
     const register = async (email: string) =>

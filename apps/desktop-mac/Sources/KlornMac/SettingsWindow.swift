@@ -5,7 +5,7 @@ import SwiftUI
 /// tabs; it adds no new settings (productization plan, macOS M0).
 enum PrefsSection: CaseIterable, Hashable, Sendable {
     case general, topBar, keyboard, about
-    case account, inboxes, deviceCalendars
+    case account, inboxes, deviceCalendars, driveImport
     case mode, behaviour, replies
     case banners, interrupts
     case appearance, language
@@ -14,7 +14,7 @@ enum PrefsSection: CaseIterable, Hashable, Sendable {
     /// Server-backed sections only make sense with an account behind them.
     var requiresSignIn: Bool {
         switch self {
-        case .inboxes, .deviceCalendars, .mode, .behaviour, .replies, .interrupts: true
+        case .inboxes, .deviceCalendars, .driveImport, .mode, .behaviour, .replies, .interrupts: true
         default: false
         }
     }
@@ -29,6 +29,9 @@ enum PrefsSection: CaseIterable, Hashable, Sendable {
 /// updates, top bar, hotkey, about), which the web IA has no slot for.
 enum SettingsTab: String, CaseIterable, Identifiable, Sendable {
     case general, accounts, assistant, notifications, appearance, privacy
+
+    /// The defaults key of the selected tab (the Settings window and the D7 import share it).
+    static let storageKey = "settings.selectedTab"
 
     var id: String { rawValue }
     var titleKey: String { "settings.tab.\(rawValue)" }
@@ -48,7 +51,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Sendable {
     var sections: [PrefsSection] {
         switch self {
         case .general: [.general, .topBar, .keyboard, .about]
-        case .accounts: [.account, .inboxes, .deviceCalendars]
+        case .accounts: [.account, .inboxes, .deviceCalendars, .driveImport]
         case .assistant: [.mode, .behaviour, .replies]
         case .notifications: [.banners, .interrupts]
         case .appearance: [.appearance, .language]
@@ -85,7 +88,7 @@ enum SettingsMetrics {
 /// Root of the `Settings` scene: a native toolbar-tab Settings window.
 struct SettingsRoot: View {
     @Environment(AppModel.self) private var model
-    @AppStorage("settings.selectedTab") private var selectedRaw = SettingsTab.general.rawValue
+    @AppStorage(SettingsTab.storageKey) private var selectedRaw = SettingsTab.general.rawValue
 
     var body: some View {
         tabs

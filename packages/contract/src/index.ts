@@ -23,3 +23,4 @@ export type * from "./providers.js";
 export type * from "./receipt.js";
 export type * from "./reply-needed.js";
 export type * from "./reply-options.js";
+export type * from "./teams.js";

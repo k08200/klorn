@@ -4,7 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../lib/auth";
-import { ASSISTANT_ROUTES, assistantHref, TODAY_HOME } from "../lib/home";
+import {
+  ASSISTANT_ROUTES,
+  assistantHref,
+  FILES_HOME,
+  showFilesNav,
+  TODAY_HOME,
+  withFiles,
+} from "../lib/home";
 import { useT } from "../lib/i18n";
 import { NavIcon, type NavIconType } from "./nav-icons";
 
@@ -33,6 +40,8 @@ const UNIFIED_TABS: Tab[] = [
   { href: assistantHref(), labelKey: "nav.assistant", icon: "chat", routes: ASSISTANT_ROUTES },
 ];
 
+const FILES_TAB: Tab = { href: FILES_HOME, labelKey: "nav.files", icon: "files" };
+
 // Routes the account sheet owns — the account tab reads as "active" on these so
 // the bottom bar still reflects where you are after tapping through the sheet.
 const ACCOUNT_ROUTES = ["/settings", "/admin"];
@@ -46,7 +55,7 @@ export default function BottomTabs() {
   // parent re-render (AuthProvider hands a fresh context value each render).
   const closeAccount = useCallback(() => setAccountOpen(false), []);
   const unified = user?.unifiedHome === true;
-  const tabs = unified ? UNIFIED_TABS : TABS;
+  const tabs = unified ? withFiles(UNIFIED_TABS, FILES_TAB, showFilesNav(user)) : TABS;
   // UNIFIED_HOME (P10): tab labels move off the retired 10px size to the
   // caption role (12px); the legacy bar is left as it was.
   const labelSize = unified ? "text-caption" : "text-[10px]";
@@ -68,7 +77,11 @@ export default function BottomTabs() {
         aria-label="Primary navigation"
         className="md:hidden fixed bottom-0 inset-x-0 z-30 border-t border-line bg-surface-panel/92 pb-safe shadow-[0_-16px_44px_rgba(0,0,0,0.35)] backdrop-blur-xl"
       >
-        <ul className={unified ? "grid grid-cols-5" : "grid grid-cols-6"}>
+        <ul
+          className={
+            unified && tabs.length === UNIFIED_TABS.length ? "grid grid-cols-5" : "grid grid-cols-6"
+          }
+        >
           {tabs.map((tab) => {
             const active = (tab.routes ?? [tab.href]).some((route) => isActive(pathname, route));
             return (

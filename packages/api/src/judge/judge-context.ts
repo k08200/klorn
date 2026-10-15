@@ -23,6 +23,7 @@ import {
   SENDER_TRAITS_IN_JUDGE,
 } from "../config.js";
 import { db } from "../db.js";
+import { escapeLikePattern } from "../db-like.js";
 import { embedTexts, isEmbeddingEnabled, rankBySimilarity } from "../embedding.js";
 import {
   getCachedInteractionGraph,
@@ -61,6 +62,8 @@ const {
   historySample: SENDER_HISTORY_SAMPLE,
 } = SENDER_PRIOR_POLICY;
 const DAY_MS = 24 * 60 * 60 * 1000;
+/** Without the sender index, the newest rows of the window the read-behavior fact re-checks. */
+const READ_BEHAVIOR_CANDIDATE_LIMIT = 500;
 
 export interface JudgeContextInput {
   from: string;
@@ -300,7 +303,7 @@ async function fetchSenderEmailIdsLegacy(
   const emails = (await db.emailMessage.findMany({
     where: {
       userId,
-      from: { contains: senderAddress, mode: "insensitive" },
+      from: { contains: escapeLikePattern(senderAddress), mode: "insensitive" },
       ...(excludeEmailId ? { id: { not: excludeEmailId } } : {}),
     },
     orderBy: { receivedAt: "desc" },
@@ -488,6 +491,48 @@ async function fetchSenderTraits(
   }
 }
 
+/** The window's mail from this sender and how much was read, by the indexed fromAddress column. */
+async function countReadBehaviorIndexed(
+  userId: string,
+  senderAddress: string,
+  since: Date,
+): Promise<{ read: number; total: number }> {
+  const senderWindow = { userId, fromAddress: senderAddress, receivedAt: { gte: since } };
+  const [total, read] = await Promise.all([
+    db.emailMessage.count({ where: senderWindow }),
+    db.emailMessage.count({ where: { ...senderWindow, isRead: true } }),
+  ]);
+  return { read, total };
+}
+
+/**
+ * The same counts without the index. `contains` on the raw From header is only a
+ * prefilter: the header is the sender's to write, so a spoofed display name
+ * ('"alice@corp.com" <x@evil.co>') or a substring address (malice@corp.com) also
+ * matches it. The parsed address decides, as in fetchSenderEmailIdsLegacy. Only the
+ * newest READ_BEHAVIOR_CANDIDATE_LIMIT candidates are read, so past that many in the
+ * window (a very busy sender, or a flood of lookalikes) the sample is the most
+ * recent mail, which leans unread; the indexed path counts the whole window.
+ */
+async function countReadBehaviorLegacy(
+  userId: string,
+  senderAddress: string,
+  since: Date,
+): Promise<{ read: number; total: number }> {
+  const candidates = (await db.emailMessage.findMany({
+    where: {
+      userId,
+      from: { contains: escapeLikePattern(senderAddress), mode: "insensitive" },
+      receivedAt: { gte: since },
+    },
+    select: { from: true, isRead: true },
+    orderBy: { receivedAt: "desc" },
+    take: READ_BEHAVIOR_CANDIDATE_LIMIT,
+  })) as Array<{ from: string; isRead: boolean }>;
+  const own = candidates.filter((mail) => extractEmailAddress(mail.from) === senderAddress);
+  return { read: own.filter((mail) => mail.isRead).length, total: own.length };
+}
+
 /**
  * Measured read behavior for the sender — the passive half of the engagement
  * channel (CONTACT_ENGAGEMENT_IN_JUDGE). Counts the sender's mail in the
@@ -503,15 +548,9 @@ async function fetchReadBehaviorFact(
   if (!CONTACT_ENGAGEMENT_IN_JUDGE || !senderAddress) return null;
   try {
     const since = new Date(Date.now() - READ_BEHAVIOR.windowDays * DAY_MS);
-    const senderWindow = {
-      userId,
-      from: { contains: senderAddress, mode: "insensitive" as const },
-      receivedAt: { gte: since },
-    };
-    const [total, read] = await Promise.all([
-      db.emailMessage.count({ where: senderWindow }),
-      db.emailMessage.count({ where: { ...senderWindow, isRead: true } }),
-    ]);
+    const { read, total } = isSenderAddressIndexEnabled()
+      ? await countReadBehaviorIndexed(userId, senderAddress, since)
+      : await countReadBehaviorLegacy(userId, senderAddress, since);
     if (total < READ_BEHAVIOR.minSample) return null;
     return { read, total };
   } catch (err) {

@@ -162,6 +162,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         // Preferences buttons, and anything else outside SwiftUI's own ⌘,.
         let opener = SettingsOpener()
         bar.onOpenSettings = { [weak opener] in opener?.open() }
+        // An import shows its progress in Settings › Accounts (D7).
+        model.driveImport.onImportStarted = { [weak opener] in
+            UserDefaults.standard.set(SettingsTab.accounts.rawValue, forKey: SettingsTab.storageKey)
+            opener?.open()
+        }
         model.onWindowPresenceChanged = { [weak bar] in bar?.refreshActivationPolicy() }
         settingsOpener = opener
         // Main window (M2, behind `macMainWindow`): the bar routes every
@@ -287,6 +292,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         case .moveTo(let tier):
             guard let item = model.menuTargetItem else { return }
             Task { await model.setTier(item, to: tier) }
+        case .importToDrive:
+            // The open panel first; nothing is read unless the user picks something.
+            Task { await model.driveImport.chooseAndImport() }
         }
     }
 

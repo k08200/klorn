@@ -28,6 +28,7 @@ import {
   providerInboxSelectorEnabled,
 } from "../config.js";
 import { prisma } from "../db.js";
+import { escapeLikePattern } from "../db-like.js";
 import {
   isLanePageFilter,
   LANE_FILTERS,
@@ -581,7 +582,7 @@ export function replyNeededSourceId(emailId: string): string {
  * is already searchable via filename / summary / contentText.
  */
 export function emailSearchOr(search: string): Prisma.EmailMessageWhereInput[] {
-  const ci = { contains: search, mode: "insensitive" as const };
+  const ci = { contains: escapeLikePattern(search), mode: "insensitive" as const };
   return [
     { subject: ci },
     { from: ci },

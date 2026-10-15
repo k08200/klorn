@@ -33,6 +33,36 @@ export function signInDestination(
   return next || homePath(user);
 }
 
+/** The Files tab (productization plan P12). */
+export const FILES_HOME = "/files";
+
+interface FilesFlag {
+  files?: boolean;
+}
+
+/**
+ * Whether /files is open: the server's `user.files`, true only while the
+ * drive and at least one of its sources are on (FD-7).
+ */
+export function filesEnabled(user: FilesFlag | null | undefined): boolean {
+  return user?.files === true;
+}
+
+/** FD-7: Files joins the unified nav only while a drive source is on. */
+export function showFilesNav(user: (FilesFlag & HomeFlag) | null | undefined): boolean {
+  return user?.unifiedHome === true && filesEnabled(user);
+}
+
+/**
+ * The unified nav with Files in its place (§1: Today · Mail · Calendar ·
+ * Files · Assistant): before the last item, and only when `show`. A new
+ * array either way; the table passed in is never changed.
+ */
+export function withFiles<T>(items: readonly T[], files: T, show: boolean): T[] {
+  if (!show || items.length === 0) return [...items];
+  return [...items.slice(0, -1), files, ...items.slice(-1)];
+}
+
 /** The Assistant hub (productization plan P7). Dark while the flag is off. */
 export const ASSISTANT_HUB = "/assistant";
 export const ASSISTANT_APPROVALS = "/assistant/approvals";

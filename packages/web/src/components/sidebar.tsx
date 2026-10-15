@@ -13,7 +13,10 @@ import {
   ASSISTANT_CHAT,
   ASSISTANT_ROUTES,
   assistantHref,
+  FILES_HOME,
+  showFilesNav,
   TODAY_HOME,
+  withFiles,
 } from "../lib/home";
 import { useT } from "../lib/i18n";
 import { NavIcon, type NavIconType } from "./nav-icons";
@@ -104,6 +107,8 @@ const NAV_ITEMS: NavItem[] = [
 // Assistant. Files joins only once a drive source exists (FD-7). Assistant
 // opens the hub's Approvals page; the hub's four pages sit under it, which is
 // the hub's own navigation at this width.
+const FILES_NAV_ITEM: NavItem = { href: FILES_HOME, labelKey: "nav.files", icon: "files" };
+
 const UNIFIED_NAV_ITEMS: NavItem[] = [
   { href: TODAY_HOME, labelKey: "nav.v2.today", icon: "today" },
   { href: "/email", labelKey: "nav.mail", icon: "mail" },
@@ -134,7 +139,9 @@ export default function Sidebar() {
   const userMenuRef = useRef<HTMLDivElement>(null);
   const navCounts = useNavCounts(!!user);
   const unified = user?.unifiedHome === true;
-  const navItems = unified ? UNIFIED_NAV_ITEMS : NAV_ITEMS;
+  const navItems = unified
+    ? withFiles(UNIFIED_NAV_ITEMS, FILES_NAV_ITEM, showFilesNav(user))
+    : NAV_ITEMS;
 
   // Close user menu on outside click
   useEffect(() => {

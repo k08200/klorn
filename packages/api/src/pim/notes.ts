@@ -1,12 +1,11 @@
 import { prisma } from "../db.js";
+import { escapeLikePattern } from "../db-like.js";
 
 export async function listNotes(userId: string, search?: string) {
   const where: Record<string, unknown> = { userId };
   if (search) {
-    where.OR = [
-      { title: { contains: search, mode: "insensitive" } },
-      { content: { contains: search, mode: "insensitive" } },
-    ];
+    const ci = { contains: escapeLikePattern(search), mode: "insensitive" as const };
+    where.OR = [{ title: ci }, { content: ci }];
   }
 
   const notes = await prisma.note.findMany({

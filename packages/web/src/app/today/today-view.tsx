@@ -14,10 +14,12 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import EmptyState from "../../components/ui/empty-state";
 import { useAuth } from "../../lib/auth";
+import { filesEnabled } from "../../lib/home";
 import { useT } from "../../lib/i18n";
 import { useConnectedAccounts } from "../../lib/use-connected-accounts";
 import { AssistantColumn } from "./assistant-column";
 import { CalendarColumn } from "./calendar-column";
+import { RecentFilesBlock } from "./files-block";
 import { MailColumn, type TimeContext } from "./mail-column";
 import { ACCOUNTS_HREF, TodayHeader } from "./today-header";
 import { useRefreshOnNewMail } from "./use-today-data";
@@ -69,7 +71,10 @@ export function TodayView() {
             time={time}
             className="md:col-start-1 md:row-span-2 md:row-start-1 xl:row-span-1"
           />
-          <CalendarColumn time={time} className="order-3 md:col-start-2 md:row-start-1" />
+          <div className="order-3 flex min-w-0 flex-col gap-8 md:col-start-2 md:row-start-1">
+            <CalendarColumn time={time} />
+            {filesEnabled(user) && <RecentFilesBlock timeZone={time.timeZone} />}
+          </div>
           <AssistantColumn className="order-6 md:col-start-2 md:row-start-2 xl:col-start-3 xl:row-start-1" />
         </div>
       )}

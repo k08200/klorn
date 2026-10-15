@@ -14,6 +14,7 @@ const m = vi.hoisted(() => ({
   linkedRows: [] as Array<Record<string, unknown>>,
   markLinkedCalendarForReconnect: vi.fn(async () => {}),
   userFindUnique: vi.fn(),
+  configFindUnique: vi.fn(),
   eventUpsert: vi.fn(async () => ({})),
   accountUpdateMany: vi.fn(async () => ({ count: 1 })),
   refreshOutlookTokens: vi.fn(),
@@ -42,6 +43,7 @@ vi.mock("../mail/outlook-oauth.js", () => ({ refreshOutlookTokens: m.refreshOutl
 vi.mock("../db.js", () => {
   const prisma = {
     user: { findUnique: m.userFindUnique },
+    automationConfig: { findUnique: m.configFindUnique },
     calendarEvent: { upsert: m.eventUpsert },
     linkedCalendarAccount: {
       findMany: vi.fn(async () => m.linkedRows),
@@ -123,7 +125,7 @@ beforeEach(() => {
   m.fetch.mockResolvedValue(page([graphEvent("AAMk-1")]));
   vi.spyOn(console, "warn").mockImplementation(() => {});
   m.linkedRows = [outlookRow("acct-out")];
-  m.userFindUnique.mockResolvedValue({ id: "u1", timezone: "Asia/Seoul" });
+  m.configFindUnique.mockResolvedValue({ timezone: "Asia/Seoul" });
   m.eventsList.mockResolvedValue({ data: { items: [] } });
 });
 afterEach(() => {
@@ -220,7 +222,7 @@ describe("syncing an OUTLOOK account", () => {
   });
 
   it("stores a KST all-day event read in America/Los_Angeles on its KST date, like a Google all-day row", async () => {
-    m.userFindUnique.mockResolvedValue({ id: "u1", timezone: "America/Los_Angeles" });
+    m.configFindUnique.mockResolvedValue({ timezone: "America/Los_Angeles" });
     // 2026-10-05 00:00 KST = 2026-10-04 08:00 PDT: Graph converted it to the asked-for zone.
     m.fetch.mockResolvedValue(
       page([

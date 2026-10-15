@@ -2297,6 +2297,16 @@ needs FA-9 and the admin guidance from F0.
     including the ones this sync just wrote. (c) Unchanged: only a complete listing
     removes. Tested: an empty 207 over 8 rows, a calendar missing from discovery, a
     single legitimate removal, the valve's edges, 150 occurrences still complete.
+    Follow-up 2026-10-15: under the valve's floor an empty 207 still removed up to 5
+    rows, and one calendar's empty 207 removed its rows whenever another calendar of
+    the account listed events. Now a vanished row of a calendar the listing read but
+    found no event in is removed only when the account's previous complete listing
+    showed the same such rows gone (a sha-256 of the sorted ids, in process memory,
+    bounded like the valve's reports); a vanished row of a calendar that lists
+    events goes at once, as before. A listing with no such rows, one that is not
+    complete, a failed removal and a restart all start the wait again. A calendar
+    really emptied loses its rows one sync later. The valve is checked first, so its
+    report is unchanged.
   - Free/busy. `busyBlocks` is a live listing of the window: timed occurrences not
     `TRANSP:TRANSPARENT`, label `calendar`, no title. `peopleFreeBusy` answers
     unknown for everyone (CalDAV shows no one else's calendar). Writes reject with
@@ -2344,18 +2354,25 @@ needs FA-9 and the admin guidance from F0.
     one invite are two entries unless they share provider and UID. (4) Discovery runs
     every sync (3 PROPFINDs per account per 15 minutes); the home set is not cached.
     (5) Rows store no transparency, so a transparent timed event is a row conflict
-    (C7's limit (2)). (6) Found while wiring, NOT fixed (pre-existing, outside C3):
-    `readSyncTimezone` in `pim/calendar-sync.ts` reads `User.timezone`, which does
-    not exist (the zone is on `AutomationConfig`), so every sync passes the default
-    `Asia/Seoul`; CalDAV floating times are read in Seoul during the sync, as are
-    Google's offset-less times. `busyBlocks` reads the configured zone. (7) ical.js
+    (C7's limit (2)). (6) Found while wiring (pre-existing, outside C3), fixed
+    2026-10-15: `readSyncTimezone` in `pim/calendar-sync.ts` read `User.timezone`,
+    which does not exist (the zone is on `AutomationConfig`), so every sync passed
+    the default `Asia/Seoul`: CalDAV floating times, Google's offset-less times and
+    Outlook's `Prefer: outlook.timezone` were all Seoul. It now reads
+    `getUserTimeZone` (`AutomationConfig.timezone`), like `busyBlocks`. The tests
+    had mocked the missing column, so they passed. Side effect, once per zone
+    change: a floating-time CalDAV series is keyed `UID#<UTC start>`, so a new zone
+    gives its occurrences new ids; the next complete listing writes them and the
+    window reconcile removes the old ones (an incomplete listing leaves them until
+    they age out). Prod had no ICLOUD, NAVER or OUTLOOK row when this shipped. (7) ical.js
     2.2.1 does not expand a YEARLY rule with BYHOUR, BYMINUTE or BYSECOND as RFC
     5545 says (`FREQ=YEARLY;BYHOUR=9,10` gives one time a year; with BYSECOND as well,
     nothing). Such a series is missing or wrong, the same way every sync, so it never
     had rows to remove; neither provider's UI writes such a rule. (8) PARTSTAT is
     not read: an invitation the user DECLINED is still a busy block and a row (no
-    code change; review 2026-10-02). (9) Every fixture is hand-written from RFC
-    4791 / 5545 shapes; none was captured from a real iCloud or Naver answer.
+    code change; review 2026-10-02; Google's equivalent: the next item). (9) Every
+    fixture is hand-written from RFC 4791 / 5545 shapes; none was captured from a
+    real iCloud or Naver answer.
     (10) The deletion valve also refuses a real mass deletion (more than half of a
     month, over 5 rows): those rows stay until they leave the window. (11) An
     override of an EXDATE'd instance is dropped (EXDATE wins). (12) Found by the
@@ -2363,6 +2380,18 @@ needs FA-9 and the admin guidance from F0.
     without its DTSTART instance, so that instance has no row. (13) One object's
     ical.js parse is not sliced (~60-100 ms for 3-4 MB, bounded by the response
     cap). (14) The IMAP connect route's link limit is per IP only (see Link).
+  - Declined Google invitations (2026-10-15, `CALENDAR_HIDE_DECLINED_ENABLED`, OFF).
+    Google lists an invitation the user declined; its own attendee entry
+    (`self: true`) says `declined`. With the flag on, a primary or linked Google sync
+    writes no row for it, and the row an earlier sync wrote is removed through C2b's
+    `removeCancelledGoogleEventRows`: that account's rows only, exact ids (each
+    instance of a series has its own), attention items resolved, a dismissed item
+    kept, one transaction. A failure never fails the sync and is reported once per
+    account until a removal succeeds. Accepting later writes the row again on the
+    next sync. Scope is rows only: live Google reads (`listEvents` callers, the
+    conflict summary) still return declined events, and Google's free/busy already
+    treats them as free. Declined events still count toward the 100-event listing
+    cap. Outlook and CalDAV unchanged (limit 8 above).
   - Rollback. Flags never on: revert the PR. Ever on: set
     `CALDAV_CALENDAR_ENABLED` OFF (rows hidden at once), then `DELETE FROM
     "AttentionItem" WHERE "source" = 'CALENDAR_EVENT' AND "sourceId" IN (SELECT "id"
@@ -3488,6 +3517,7 @@ D3 ships no user-facing copy beyond API error strings, which clients replace by
   | `PATCH /api/drive/files/:id` `{ name?, parentExternalId? }` (null: the root) | `{ file }` |
   | `DELETE /api/drive/files/:id` | `{ deleted: { files, folders } }` |
   | `GET /api/drive/files?folder=<externalId>\|root` (D2's list, new filter) | one Klorn folder's children |
+  | `GET /api/drive/limits` (added by D7) | `{ maxFileBytes, quotaBytes, usedBytes }`, `Cache-Control: no-store` |
 
   Errors are `{ error, code, retryable }` with a fixed status per code
   (`drive/klorn-errors.ts`): 400 `invalid-upload`, `invalid-name`,
@@ -4026,13 +4056,164 @@ both.
 Scope path per P5.
 **D6 — OneDrive connector** (*outline*). Depends on: D2, FA-9 with file
 permissions.
-**D7 — device import** (*outline*). Depends on: D3. Upload policy per P4. The desktop
-and mobile apps import files from iCloud Drive, MYBOX and on-device storage
-into the Klorn drive.
+**D7 — device import.** Depends on: D3. Upload policy per P4. Landed 2026-10-14
+(branch `feat/mac-drive-import`, PR not yet opened). **Mac app only**: it reaches
+users only with a desktop release, and only while D3's flags are on. No flag of
+its own: D3's gate decides, and the app hides the feature while it is dark.
+- What shipped:
+  - Mac entry points: File › "Import to Klorn Drive…" (under New Email) and
+    Settings › Accounts › Klorn Drive (after Device calendars, the other opt-in
+    for data on this Mac). Both open one `NSOpenPanel`:
+    files and folders, several at once, aliases resolved, packages not opened.
+    An import started from the menu shows its progress in Settings › Accounts.
+    While it runs: a progress bar, "Uploading N of M", and Cancel. Afterwards: a
+    report (uploaded, not uploaded with the reason per item, and each cap
+    reached), cleared by the user.
+  - Server: `GET /api/drive/limits` → `{ maxFileBytes, quotaBytes, usedBytes }`
+    (`DriveLimitsResponse`), `Cache-Control: no-store`. In `routes/klorn-drive.ts`
+    behind the same `darkRouteGate(klornDriveRoutesEnabled)`, session-
+    authenticated, 60 a minute per address and per user
+    (`KLORN_LIMITS_RATE_LIMIT`). `quotaBytes` is null while
+    `KLORN_DRIVE_QUOTA_BYTES` is unset or unusable (`klornDriveQuotaOrNull`):
+    every upload would be refused, so the app says so before the user picks.
+    It exists because no D3 route answers a GET without an id: D2's list is
+    gated by `DRIVE_ENABLED` alone and would answer 200 with the Klorn drive off.
+- Opt-in model (P4). The pick is the opt-in. Nothing is read before the user
+  confirms the panel; only the picked items, and what is inside a picked folder,
+  are read; each import is one act. No background watching, no bookmarks, no
+  re-sync, no second import of the same pick. A link or a Finder alias inside a
+  picked folder is never followed (it can point outside the pick, and an
+  alias's bookmark names its target); a link the user picked is resolved (they
+  chose it). A pipe or a device is not read. Hidden files inside a folder (`.DS_Store`) are left
+  out; a hidden file picked by name goes. The self-check pins that the drive
+  code has no `NSMetadataQuery`, FSEvents stream, dispatch file source or file
+  presenter.
+- Gate (C6's pattern). The probe runs at launch, at sign-in, each time
+  Settings › Accounts shows, and before every import. 200 shows the menu item
+  and the section; the dark gate's 404 (a body with no drive `code`) hides both;
+  any other failure leaves the state as it was and asks again after 5 minutes.
+  A code-less 404 during an import stops it and hides the feature. A 404 with a
+  drive code (`not-found`, `parent-not-found`) is not the gate.
+- Walk (`Drive/DriveImportWalk.swift`, off the main thread). Named caps in
+  `DriveImportLimits`: 200 files, 50 folders, 8 levels below a picked folder,
+  1 GiB per import, 10,000 entries looked at (hidden, links, oversized and
+  unreadable ones count too), 25 MiB per file (D3's cap; the server's
+  `maxFileBytes` wins when it answers). A folder is read one entry at a time
+  (`FileManager.enumerator`, one level), never loaded whole. Cancel and
+  sign-out reach the walk through a flag (`DriveImportCancelFlag`; the walk runs
+  in a detached task, which does not inherit a cancel), checked before every
+  entry. A picked folder becomes a Klorn folder (`POST
+  /api/drive/folders`) with its folders inside it, parents first; each file goes
+  into its folder (`parentExternalId`). At the file, byte or examined cap the
+  walk stops (later picks included); the folder and depth caps leave that folder out; each
+  cap reached is reported. A file over the size cap is reported before any byte
+  is read and counts toward no cap. The target is the drive's root in v1: no
+  client has a folder view of the Klorn drive yet, so picking a destination
+  folder would need one first.
+- Upload (`Drive/DriveImportBody.swift`, `Drive/DriveAPI.swift`): **streamed**.
+  Each file's multipart body (`size`, optional `parentExternalId`, then `file`,
+  D3's order) is written to a file under `~/Library/Caches/<bundle id>/
+  drive-import/` (folder 0700, each body 0600, created with `O_EXCL`), 1 MiB at
+  a time, and sent with `URLSession.upload(for:fromFile:)`. Memory holds one
+  chunk; disk holds one body per upload in flight (at most 25 MiB plus the
+  framing), deleted after the send; the folder is emptied at launch and when an
+  import starts. The source is checked with `lstat`, then opened with
+  `O_NOFOLLOW | O_NONBLOCK` and read only if `fstat` says it is a regular file,
+  so a path swapped after the walk for a link or a pipe is refused, never
+  followed or waited on. A cancel seen before the read starts opens nothing.
+  `size` is the length of the opened file; a file that ends early or goes on past it is refused
+  (`changedWhileReading`), never sent as a mix. File names keep their UTF-8 (the
+  server normalises to NFC); control characters are dropped, `/` and `\` become
+  `_` (busboy keeps only what follows the last one), quotes are escaped. Two
+  uploads at once (`uploadConcurrency`: D3 allows 20 a minute per user, so more
+  buys nothing). A 429, a 503 `storage-unavailable` or no answer is tried again,
+  at most 5 tries, after `Retry-After` (1 to 60 s) or 2, 4, 8 … s, unless the
+  server said `retryable: false` (a malformed quota answers 503
+  `storage-unavailable` with it). A retry after no answer can upload a file
+  twice when the first try did reach the server: D3 has no idempotency key, so
+  this is a known limit, not handled by the client.
+- Cloud placeholders. Decision: **download on read**, not "report and skip".
+  Each file is read inside `NSFileCoordinator.coordinate(readingItemAt:options:
+  .withoutChanges)` on a queue of its own, so a file in iCloud Drive (or another
+  File Provider folder, such as a MYBOX folder where its Mac app provides one)
+  that is not on the Mac yet is downloaded by the system before it is read; a
+  cancel cancels the coordination. If the read fails for an iCloud or File
+  Provider item the file is reported as "Couldn't download it to this Mac";
+  an old-style `.Name.icloud` stub is reported the same way without a read. Why:
+  the user picked a file they see in Finder; reporting instead would fail every
+  file macOS has evicted from this Mac.
+- Errors (`DriveImportRules.failure`, by `code` first, then status), each with its
+  own text in 7 languages:
+
+  | Answer | Means | Import |
+  |---|---|---|
+  | 503 `quota-not-configured` | uploads not available yet | stops |
+  | 413 `quota-exceeded` | drive full | stops |
+  | 409 `account-purging` | a data deletion is running | stops |
+  | 404 without a drive code | the drive is off (dark gate) | stops, hides |
+  | 401 | session ended | stops |
+  | 413 `too-large` (or any code-less 413) | over the cap | per file |
+  | 429 (with or without `rate-limited`) | rate limited | retried, then per file |
+  | 400 `multipart-malformed`, `invalid-upload` | body did not arrive whole | per file |
+  | 400 `invalid-name` | name refused | per file |
+  | 404 `parent-not-found` | its folder is gone | per file |
+  | 503 `storage-unavailable` | storage down | retried, then per file |
+  | anything else | generic | per file |
+
+  Local outcomes: not downloaded, unreadable, changed while read, unsupported
+  (a link or a package), cancelled. A folder that cannot be created takes its
+  files and folders with it ("Its folder couldn't be created").
+- Sign-out cancels an import in flight and forgets the limits, the report and
+  the availability; an answer or a report of the previous session changes
+  nothing (a session counter).
+- Copy: 37 keys in all 7 languages, integers as `%d`; the self-check compares
+  each key's format specifiers with English in every language. Vocabulary row
+  **Klorn Drive** added to `../product-vocabulary.md`.
+- Verify. `swift run KlornMac --self-check`: 94 cases under "Drive import (D7)",
+  among them the walk caps (files, bytes, folders, depth, entries examined), a
+  cancel mid-walk, a folder read one entry at a time, hidden files, links,
+  placeholders, the size pre-check, every code against `klorn-errors.ts` with
+  its status, the backoff, the multipart framing and name escaping, the
+  404-hides rule, the menu rule, the specifier parity; and scenarios over real
+  temporary files and a URLProtocol stub that parses every multipart body sent:
+  folders before files, each file's size, parent and bytes, the token on every
+  request, a D4-shaped file answer (with `summary`) and an extended limits answer
+  still decoding, the temporary bodies removed, Retry-After honoured, a give-up after 5
+  tries, `retryable: false` not retried, a quota refusal stopping the rest, a
+  dark 404 mid-import, cancel (a sibling cancelled before it starts reads and
+  sends nothing), sign-out (no progress moved by the old run); on the real file
+  system, a link, a Finder alias and a pipe skipped by the walk, a link and a
+  pipe refused at open without waiting, the body folder 0700 and bodies 0600 in
+  Caches, and the launch sweep. Server: `routes-klorn-drive-limits.test.ts`
+  (dark with each flag off, 401, this user's KLORN usage only, quota null when
+  unset or malformed, a drive error while reading the usage answered as the
+  drive's own error rather than a 500, a malformed quota logged once per value,
+  both rate limits). Mutation checks, each failing at least one check: the
+  code-less 404 not read as the gate, the hidden-file rule inverted, the depth
+  cap off by one, a stopping refusal not stopping.
+- Not verified: a real upload from a real Mac to a real R2 bucket (FA-7; D3
+  itself has not met a real bucket); any GUI run (the panel, the menu item,
+  the section and the progress were never drawn: `swift build` and the headless
+  self-check only); a real iCloud Drive or MYBOX download through the
+  coordinated read (exercised on local files only); the global per-address
+  429 body (no `code`; the status maps it).
+- Known limits: no background sync or watching (v1, P4); no Galaxy, Android or
+  iOS import (C5, FA-8); root only as the target; packages (apps, some Pages
+  or Keynote documents) are not uploaded; names are not deduplicated (D3 allows
+  two files of one name, so a second import of the same pick adds copies); a
+  cancelled or stopped import keeps what was already uploaded; the quota is
+  the server's to check, per file (no client pre-check of the total);
+  `Retry-After` is read as seconds only; if the app quits mid-import, the
+  bodies in flight (at most two) stay in Caches until the next launch.
+- Rollback: revert the PR. `/limits` can stay; it is dark with the drive.
+The desktop and mobile apps import files from iCloud Drive, MYBOX and on-device
+storage into the Klorn drive: the Mac part is the above; the mobile part is C5's
+(blocked on FA-8).
 
 A Klorn drive shows what a person puts into it. Files that stay in a service
 with no API remain invisible until D7 imports them. Product copy must not
-claim otherwise.
+claim otherwise. An import is a copy made once: a file changed or deleted in
+that service later is not changed in Klorn.
 
 ### Workstream E — Klorn mailbox (auxiliary)
 
@@ -4081,6 +4262,8 @@ time, whatever the graph says. The later step rebases, reruns
 |---|---|
 | `packages/api/prisma/schema.prisma` | A1, A2a, A2b, B2, C1, D2, D5, D6, E1, F |
 | `drive/drive-scope.ts`, `drive/drive-rows.ts`, `drive/providers/dispatch.ts`, `routes/drive.ts` | D3, D5, D6, D7 |
+| `routes/klorn-drive.ts`, `drive/klorn-quota.ts` | D3, D7 |
+| `packages/contract/src/drive.ts` | D3, D4, D7 |
 | `packages/api/src/mcp/tool-gate.ts`, `mcp/write-call.ts`, `mcp/server.ts` | A2a, A2b, A4 |
 | `mail/providers/types.ts`, `dispatch.ts` | A4, B0, B0b, B1, B2, B3, E2 |
 | `mail/imap-connection.ts`, `mail/imap-sync.ts`, `mail/providers/imap.ts` | B1, B2, B3 |

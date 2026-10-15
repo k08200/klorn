@@ -14,6 +14,7 @@
 
 import { HIDDEN_CLAIM_TYPE, REPLY_CLAIM_ROWS } from "./agentcore/auto-reply-ledger-keys.js";
 import { prisma } from "./db.js";
+import { escapeLikePattern } from "./db-like.js";
 import { getUpcomingMeetings } from "./pim/meeting.js";
 import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
 import { captureError } from "./sentry.js";
@@ -194,7 +195,7 @@ async function checkUpcomingMeetings() {
               where: {
                 userId,
                 type: "meeting",
-                message: { contains: meeting.id },
+                message: { contains: escapeLikePattern(meeting.id) },
                 createdAt: { gte: new Date(Date.now() - 12 * 60 * 60 * 1000) },
               },
             });

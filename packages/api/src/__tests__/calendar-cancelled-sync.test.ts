@@ -20,7 +20,26 @@ import { cancelledScanRequest } from "./helpers/google-cancelled-scan.js";
 
 const h = vi.hoisted(() => {
   type Rec = Record<string, unknown>;
-  const state = { events: [] as Rec[], attention: [] as Rec[], created: 0, likeWildcards: false };
+  // overMatch: a database whose prefix filter drops the `\` escapes, so `_` is a
+  // wildcard again. The code's own test must still hold the set exact.
+  const state = { events: [] as Rec[], attention: [] as Rec[], created: 0, overMatch: false };
+  const regExpLiteral = (ch: string) => ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  /** Postgres `LIKE prefix || '%'` with `\` as the escape: `_` any one character, `%` any run. */
+  const likePrefix = (prefix: string, honourEscapes: boolean): RegExp => {
+    let source = "";
+    for (let i = 0; i < prefix.length; i++) {
+      let ch = prefix[i];
+      if (ch === "\\" && i + 1 < prefix.length) {
+        ch = prefix[++i];
+        if (honourEscapes) {
+          source += regExpLiteral(ch);
+          continue;
+        }
+      }
+      source += ch === "_" ? "." : ch === "%" ? ".*" : regExpLiteral(ch);
+    }
+    return new RegExp(`^${source}`, "s");
+  };
   const matches = (row: Rec, where: Rec): boolean =>
     Object.entries(where).every(([key, want]) => {
       if (key === "OR") return (want as Rec[]).some((clause) => matches(row, clause));
@@ -31,15 +50,7 @@ const h = vi.hoisted(() => {
         const value = row[key];
         const prefix = (want as { startsWith: string }).startsWith;
         if (typeof value !== "string") return false;
-        // Postgres LIKE 'prefix%': `_` stands for any one character, `%` for any run.
-        if (state.likeWildcards) {
-          const pattern = prefix
-            .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-            .replace(/_/g, ".")
-            .replace(/%/g, ".*");
-          return new RegExp(`^${pattern}`).test(value);
-        }
-        return value.startsWith(prefix);
+        return likePrefix(prefix, !state.overMatch).test(value);
       }
       return row[key] === want;
     });
@@ -231,7 +242,7 @@ beforeEach(() => {
   h.state.events = [];
   h.state.attention = [];
   h.state.created = 0;
-  h.state.likeWildcards = false;
+  h.state.overMatch = false;
   nextId = 0;
   _resetCancelledScanStateForTests();
   process.env[FLAG] = "true";
@@ -1010,9 +1021,25 @@ describe("what the scan warns about", () => {
   });
 });
 
+describe("the database prefix filter", () => {
+  it("escapes the separator, so a lookalike is not even a candidate", async () => {
+    const instance = eventRow("standup_20261005T000000Z");
+    const lookalike = eventRow("standupX_20261005T000000Z");
+    const { session } = makeSession({ cancelled: ["standup"] });
+
+    await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
+
+    const candidates = (await h.tx.calendarEvent.findMany.mock.results[0]?.value) as {
+      id: string;
+    }[];
+    expect(candidates.map((row) => row.id)).toEqual([instance.id]);
+    expect(eventIds()).toEqual([lookalike.id]);
+  });
+});
+
 describe("the database prefix filter may match more than the code accepts", () => {
   it("rejects a candidate that only matches because LIKE reads `_` as any character", async () => {
-    h.state.likeWildcards = true;
+    h.state.overMatch = true;
     const instance = eventRow("standup_20261005T000000Z");
     const lookalike = eventRow("standupX_20261005T000000Z"); // the pattern `standup_%` matches it
     const noSeparator = eventRow("standupX20261005T000000Z");
@@ -1029,7 +1056,7 @@ describe("the database prefix filter may match more than the code accepts", () =
   });
 
   it("rejects it in a linked account too", async () => {
-    h.state.likeWildcards = true;
+    h.state.overMatch = true;
     const instance = eventRow("standup_20261005T000000Z", { sourceKey: "acct-work" });
     const lookalike = eventRow("standupX_20261005T000000Z", { sourceKey: "acct-work" });
     const { session } = makeSession({ cancelled: ["standup"] });
