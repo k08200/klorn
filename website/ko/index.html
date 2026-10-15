@@ -17,7 +17,7 @@
 <title>Klorn — 모든 메일과 캘린더를, 한 곳에서 차분하게.</title>
 <meta name="description" content="Gmail, Google 캘린더, 그리고 베타로 네이버 메일과 iCloud 메일을 한 화면에 모으고, 메일마다 무엇이 필요한지 나눠 그 이유와 함께 보여줍니다. 무료 플랜, Klorn Pro는 월 $29.99.">
 <meta property="og:title" content="Klorn — 모든 메일과 캘린더를, 한 곳에서 차분하게.">
-<meta property="og:description" content="메일과 캘린더를 한 화면에. 모든 메일을 다섯 레인으로 나누고, 이유를 함께 보여줍니다. 보내기는 언제나 내 승인 후에.">
+<meta property="og:description" content="메일과 캘린더를 한 화면에. 모든 메일을 다섯 레인으로 나누고, 이유를 함께 보여줍니다. 내가 허락하지 않은 메일은 나가지 않습니다.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://klorn.ai/ko/">
 <meta property="og:image" content="https://klorn.ai/brand/og-image.png?v=k2">
@@ -44,7 +44,7 @@
  "applicationCategory": "BusinessApplication",
  "url": "https://klorn.ai/ko/",
  "inLanguage": "ko",
- "description": "Gmail, Google 캘린더, 네이버 메일, iCloud 메일을 한 화면에 모으고, 모든 메일을 다섯 레인 — Push, Meeting, Queue, Info, Silent — 으로 나눠 이유를 함께 보여줍니다. 보내기는 언제나 내 승인 후에.",
+ "description": "Gmail, Google 캘린더, 네이버 메일, iCloud 메일을 한 화면에 모으고, 모든 메일을 다섯 레인 — Push, Meeting, Queue, Info, Silent — 으로 나눠 이유를 함께 보여줍니다. 내가 허락하지 않은 메일은 나가지 않습니다.",
  "sameAs": [
   "https://github.com/k08200/klorn",
   "https://dev.to/k08200",
@@ -123,7 +123,7 @@
    "name": "Klorn이 알아서 메일을 보내거나 지우나요?",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "아니요. 레인은 분류만 합니다. 답장, 삭제, 보관은 모두 승인을 기다립니다. 자동화를 켜면 어시스턴트가 위험이 낮은 일부 작업을 스스로 처리하지만, 메일 보내기는 여기에 절대 포함되지 않습니다."
+    "text": "시키지 않으면 하지 않습니다. 레인은 분류만 합니다. 보내기, 영구 삭제, 전달은 승인을 기다리고, 내가 직접 만든 자동 답장 규칙은 그 승인으로 칩니다. 자동화를 켜면 어시스턴트가 위험이 낮은 일부 작업을 스스로 처리합니다. 보낸 메일마다 기록이 남습니다."
    }
   },
   {
@@ -352,8 +352,8 @@
       <p class="sec-lead">메일을 읽는 서비스라면 근거를 보여줘야 합니다. 직접 확인할 수 있는 것들입니다.</p>
     </div>
     <dl class="facts">
-      <div class="fact"><dt>보내기는 언제나 내 승인 후에</dt>
-        <dd>답장, 삭제, 보관은 자동화를 켜도 승인을 거쳐야 합니다.</dd></div>
+      <div class="fact"><dt>내가 허락한 것만 나갑니다</dt>
+        <dd>보내기, 영구 삭제, 전달은 내 승인을 기다립니다. 내가 직접 만든 자동 답장 규칙도 승인으로 칩니다.</dd></div>
       <div class="fact"><dt>테스트 세트는 공개되어 있습니다</dt>
         <dd>분류기를 바꿀 때마다 저장소에 있는 라벨링된 메일 세트로 검사합니다. <a href="/ko/methodology/">보기</a></dd></div>
       <div class="fact"><dt>AI 비용에는 상한이 있습니다</dt>
@@ -420,8 +420,7 @@
           <p>네, 계정마다 한 번씩입니다. 로그인할 때 첫 Google 계정이 연결되고, 나머지는 설정에서 추가하면
             그때부터 모두 같은 목록으로 들어옵니다.</p></details>
         <details><summary>Klorn이 알아서 메일을 보내거나 지우나요?</summary>
-          <p>아니요. 레인은 분류만 합니다. 답장, 삭제, 보관은 모두 승인을 기다립니다. 자동화를 켜면
-            어시스턴트가 위험이 낮은 일부 작업을 스스로 처리하지만, 메일 보내기는 여기에 절대 포함되지 않습니다.</p></details>
+          <p>시키지 않으면 하지 않습니다. 레인은 분류만 합니다. 보내기, 영구 삭제, 전달은 승인을 기다리고, 내가 직접 만든 자동 답장 규칙은 그 승인으로 칩니다. 자동화를 켜면 어시스턴트가 위험이 낮은 일부 작업을 스스로 처리합니다. 보낸 메일마다 기록이 남습니다.</p></details>
         <details><summary>지금 연결할 수 있는 계정은 무엇인가요?</summary>
           <p>Gmail과 Google 캘린더, 그리고 베타로 네이버 메일과 iCloud 메일입니다. 지금은 여기까지이고,
             다른 계정이 연결되는 날 이 페이지를 바로 고칩니다.</p></details>

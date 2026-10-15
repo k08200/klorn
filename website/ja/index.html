@@ -17,7 +17,7 @@
 <title>Klorn — メールもカレンダーも、ひとつの落ち着いた場所に。</title>
 <meta name="description" content="GmailとGoogleカレンダー、ベータ版のNaverメールとiCloudメールをひとつの画面に。Klornはすべてのメールを、あなたに何が必要かで振り分け、その理由を添えます。無料プランあり、Klorn Proは月$29.99。">
 <meta property="og:title" content="Klorn — メールもカレンダーも、ひとつの落ち着いた場所に。">
-<meta property="og:description" content="メールとカレンダーをひとつの画面に。すべてのメールを5つのレーンに振り分け、1通ごとに理由を添えます。送信は必ずあなたの承認を待ちます。">
+<meta property="og:description" content="メールとカレンダーをひとつの画面に。すべてのメールを5つのレーンに振り分け、1通ごとに理由を添えます。あなたが許可しないメールは送られません。">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://klorn.ai/ja/">
 <meta property="og:image" content="https://klorn.ai/brand/og-image.png?v=k2">
@@ -44,7 +44,7 @@
  "applicationCategory": "BusinessApplication",
  "url": "https://klorn.ai/ja/",
  "inLanguage": "ja",
- "description": "Gmail、Googleカレンダー、Naverメール、iCloudメールをひとつの画面にまとめ、すべてのメールを5つのレーン — Push, Meeting, Queue, Info, Silent — に振り分けて、1通ごとに理由を添えます。送信は必ずあなたの承認を待ちます。",
+ "description": "Gmail、Googleカレンダー、Naverメール、iCloudメールをひとつの画面にまとめ、すべてのメールを5つのレーン — Push, Meeting, Queue, Info, Silent — に振り分けて、1通ごとに理由を添えます。あなたが許可しないメールは送られません。",
  "sameAs": [
   "https://github.com/k08200/klorn",
   "https://dev.to/k08200",
@@ -123,7 +123,7 @@
    "name": "Klornが勝手にメールを送ったり削除したりしますか？",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "いいえ。レーンは振り分けるだけです。返信・削除・アーカイブはすべて承認を待ちます。自動化をオンにすると、 アシスタントがリスクの低い一部の作業を自分で行いますが、送信がそこに含まれることはありません。"
+    "text": "指示しない限りしません。レーンは振り分けるだけです。送信・完全削除・転送は承認を待ち、自分で作った自動返信ルールはその承認として扱われます。自動化をオンにすると、アシスタントがリスクの低い一部の作業を自分で行います。送信のたびに記録が残ります。"
    }
   },
   {
@@ -352,8 +352,8 @@
       <p class="sec-lead">メールを読むものなら、根拠を見せるべきです。あなた自身で確認できることをまとめました。</p>
     </div>
     <dl class="facts">
-      <div class="fact"><dt>送信は必ずあなたを待ちます</dt>
-        <dd>返信・削除・アーカイブは、自動化をオンにしても承認が必要です。</dd></div>
+      <div class="fact"><dt>許可したものだけが送られます</dt>
+        <dd>送信・完全削除・転送は承認を待ちます。自分で作った自動返信ルールも承認として扱われます。</dd></div>
       <div class="fact"><dt>テストセットは公開されています</dt>
         <dd>分類器を変更するたびに、リポジトリにあるラベル付きメールのセットで検証します。 <a href="/methodology/">見る</a></dd></div>
       <div class="fact"><dt>AIの費用には上限があります</dt>
@@ -420,8 +420,7 @@
           <p>はい、それぞれ一度ずつです。ログインすると最初のGoogleアカウントが接続され、ほかは設定から追加します。
             その後はすべて同じリストに届きます。</p></details>
         <details><summary>Klornが勝手にメールを送ったり削除したりしますか？</summary>
-          <p>いいえ。レーンは振り分けるだけです。返信・削除・アーカイブはすべて承認を待ちます。自動化をオンにすると、
-            アシスタントがリスクの低い一部の作業を自分で行いますが、送信がそこに含まれることはありません。</p></details>
+          <p>指示しない限りしません。レーンは振り分けるだけです。送信・完全削除・転送は承認を待ち、自分で作った自動返信ルールはその承認として扱われます。自動化をオンにすると、アシスタントがリスクの低い一部の作業を自分で行います。送信のたびに記録が残ります。</p></details>
         <details><summary>今接続できるアカウントは？</summary>
           <p>GmailとGoogleカレンダー、そしてベータ版のNaverメールとiCloudメールです。現時点ではこれがすべてで、
             ほかのアカウントが接続できるようになった日にこのページを更新します。</p></details>

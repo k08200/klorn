@@ -17,7 +17,7 @@
 <title>Klorn — 所有邮件和日历，集中在一个安静的地方。</title>
 <meta name="description" content="Gmail 和 Google 日历，以及测试版的 Naver 邮箱和 iCloud 邮箱，集中在一个视图里。Klorn 按每封邮件需要你做什么来分拣，并告诉你理由。提供免费方案，Klorn Pro 每月 $29.99。">
 <meta property="og:title" content="Klorn — 所有邮件和日历，集中在一个安静的地方。">
-<meta property="og:description" content="邮件和日历集中在一个视图里。每封邮件都分到五个分类之一，并注明理由。发送始终等待你的批准。">
+<meta property="og:description" content="邮件和日历集中在一个视图里。每封邮件都分到五个分类之一，并注明理由。未经你同意，不会发出任何邮件。">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://klorn.ai/zh/">
 <meta property="og:image" content="https://klorn.ai/brand/og-image.png?v=k2">
@@ -44,7 +44,7 @@
  "applicationCategory": "BusinessApplication",
  "url": "https://klorn.ai/zh/",
  "inLanguage": "zh",
- "description": "把 Gmail、Google 日历、Naver 邮箱和 iCloud 邮箱集中到一个视图，把每封邮件分到五个分类 — Push、Meeting、Queue、Info、Silent — 并注明理由。发送始终等待你的批准。",
+ "description": "把 Gmail、Google 日历、Naver 邮箱和 iCloud 邮箱集中到一个视图，把每封邮件分到五个分类 — Push、Meeting、Queue、Info、Silent — 并注明理由。未经你同意，不会发出任何邮件。",
  "sameAs": [
   "https://github.com/k08200/klorn",
   "https://dev.to/k08200",
@@ -123,7 +123,7 @@
    "name": "Klorn 会自己发送或删除邮件吗？",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "不会。分类只负责分拣。回复、删除和归档都会等待你的批准。如果你开启自动化， 助手可能会自行执行一些低风险的步骤，但发送永远不在其中。"
+    "text": "除非你让它做。分类只负责分拣。发送、永久删除和转发都会等待你的批准，你自己创建的自动回复规则算作批准。开启自动化后，助手可能会自行执行一些低风险的步骤。每次发送都会留下记录。"
    }
   },
   {
@@ -352,8 +352,8 @@
       <p class="sec-lead">读你邮件的东西，应该拿出依据。以下是你可以亲自核实的内容。</p>
     </div>
     <dl class="facts">
-      <div class="fact"><dt>发送始终等你决定</dt>
-        <dd>回复、删除和归档都需要你的批准，即使开启了自动化也一样。</dd></div>
+      <div class="fact"><dt>只有你同意的才会发出</dt>
+        <dd>发送、永久删除和转发都会等待你的批准；你自己设置的自动回复规则也算作批准。</dd></div>
       <div class="fact"><dt>测试集是公开的</dt>
         <dd>分类器的每次改动，都会用仓库中一套已标注的邮件进行检验。 <a href="/methodology/">查看</a></dd></div>
       <div class="fact"><dt>AI 费用有上限</dt>
@@ -420,8 +420,7 @@
           <p>是的，每个账户连接一次。登录时会连接你的第一个 Google 账户，其他账户在设置中添加，
             之后它们都会进入同一个列表。</p></details>
         <details><summary>Klorn 会自己发送或删除邮件吗？</summary>
-          <p>不会。分类只负责分拣。回复、删除和归档都会等待你的批准。如果你开启自动化，
-            助手可能会自行执行一些低风险的步骤，但发送永远不在其中。</p></details>
+          <p>除非你让它做。分类只负责分拣。发送、永久删除和转发都会等待你的批准，你自己创建的自动回复规则算作批准。开启自动化后，助手可能会自行执行一些低风险的步骤。每次发送都会留下记录。</p></details>
         <details><summary>现在可以连接哪些账户？</summary>
           <p>Gmail 和 Google 日历，以及测试版的 Naver 邮箱和 iCloud 邮箱。目前就是这些；
             哪天可以连接新的账户，这个页面当天就会更新。</p></details>
