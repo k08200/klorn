@@ -117,7 +117,7 @@ const es: Record<string, string> = {
   "auth.welcomeBack": "Bienvenido de nuevo",
   "auth.inviteOnlyTitle": "Klorn es solo por invitación.",
   "auth.inviteOnlyBody":
-    "La beta está limitada mientras se resuelve la revisión de seguridad de Google, así que cada cuenta se aprueba a mano. Solicita acceso primero: podrás entrar en cuanto te aprueben.",
+    "La beta está limitada, así que cada cuenta se aprueba a mano. Solicita acceso primero: podrás entrar en cuanto te aprueben.",
   "auth.requestEarlyAccess": "Solicitar acceso anticipado",
   "auth.alreadyApproved": "¿Ya te aprobaron? Inicia sesión abajo.",
   "auth.providerLaneLabel": "Inicia sesión con una cuenta conectada",

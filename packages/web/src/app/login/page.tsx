@@ -1,6 +1,6 @@
 "use client";
 
-import type { AuthProviderId, AuthProvidersResponse } from "@klorn/contract";
+import type { AuthProvidersResponse } from "@klorn/contract";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -15,6 +15,7 @@ import { apiFetch } from "../../lib/api";
 import { captureFirstTouchAttribution } from "../../lib/attribution";
 import { useAuth } from "../../lib/auth";
 import { readCachedProviders, writeCachedProviders } from "../../lib/auth-providers-cache";
+import { providerLane } from "../../lib/provider-lane";
 import { homePath } from "../../lib/home";
 import { useT } from "../../lib/i18n";
 import { startNativeGoogleLogin } from "../../lib/native/native-auth";
@@ -122,7 +123,9 @@ function LoginForm() {
     initialDataUpdatedAt: () => readCachedProviders()?.at,
     staleTime: 5 * 60_000,
   });
-  const [nativeShell, setNativeShell] = useState(false);
+  // null until mount: see providerLane — the first client render must match
+  // the server's, which cannot know this or read the provider cache.
+  const [nativeShell, setNativeShell] = useState<boolean | null>(null);
   useEffect(() => {
     setNativeShell(isNativeShell());
   }, []);
@@ -133,14 +136,13 @@ function LoginForm() {
   useEffect(() => {
     captureFirstTouchAttribution();
   }, []);
-  const extraProviders: AuthProviderId[] = nativeShell
-    ? []
-    : (providersQuery.data?.providers ?? [])
-        .map((p) => p.id)
-        .filter((id): id is AuthProviderId => id === "apple" || id === "naver");
-  // Reveal as soon as we have an answer — the seeded cache counts, so a
-  // repeat visitor never sees the lane grow.
-  const providersResolved = !nativeShell && providersQuery.data !== undefined;
+  // Reveal as soon as we have an answer after mount — the seeded cache
+  // counts, so a repeat visitor sees the lane open at hydration instead of
+  // after the probe.
+  const { extras: extraProviders, resolved: providersResolved } = providerLane(
+    nativeShell,
+    providersQuery.data,
+  );
 
   useEffect(() => {
     if (!authLoading && user) {

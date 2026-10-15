@@ -119,7 +119,7 @@ const fr: Record<string, string> = {
   "auth.welcomeBack": "Content de vous revoir",
   "auth.inviteOnlyTitle": "Klorn est sur invitation.",
   "auth.inviteOnlyBody":
-    "La bêta est limitée le temps que la revue de sécurité Google aboutisse, donc chaque compte est validé à la main. Demandez l'accès d'abord — vous pourrez vous connecter dès validation.",
+    "La bêta est limitée, donc chaque compte est validé à la main. Demandez l'accès d'abord — vous pourrez vous connecter dès validation.",
   "auth.requestEarlyAccess": "Demander l'accès anticipé",
   "auth.alreadyApproved": "Déjà validé ? Connectez-vous ci-dessous.",
   "auth.providerLaneLabel": "Se connecter avec un compte lié",
