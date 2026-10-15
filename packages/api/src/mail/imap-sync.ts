@@ -23,9 +23,9 @@
  */
 
 import sanitizeHtml from "sanitize-html";
-
 import { persistGmailEmail } from "../judge/email-firewall.js";
 import { captureError } from "../sentry.js";
+import { formatMailbox } from "./email-address.js";
 import { fetchCapReached, textBodyPart } from "./generic-imap-bounds.js";
 import { createImapClient, endImapSession } from "./imap-connection.js";
 import { capStored, envelopeSubject, MAX_STORED_CC_LENGTH } from "./imap-envelope.js";
@@ -136,10 +136,7 @@ interface ImapFetchMessage {
 
 function formatAddress(addr: ImapEnvelopeAddress | undefined): string {
   if (!addr) return "";
-  const a = addr.address?.trim() ?? "";
-  const n = addr.name?.trim() ?? "";
-  if (n && a) return `${n} <${a}>`;
-  return a || n;
+  return formatMailbox(addr.name ?? "", addr.address ?? "");
 }
 
 function snippetFromBody(buf: Buffer | undefined, max = 200): string | null {

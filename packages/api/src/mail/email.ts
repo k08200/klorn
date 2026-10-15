@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { captureError } from "../sentry.js";
+import { parseAddress } from "./email-address.js";
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
@@ -15,8 +16,7 @@ function maskEmail(email: string): string {
 
 /** Extract the bare address from a `Name <addr@x>` header, or pass through. */
 function addressOf(fromHeader: string): string {
-  const m = fromHeader.match(/<([^>]+)>/);
-  return (m ? m[1] : fromHeader).trim();
+  return parseAddress(fromHeader);
 }
 
 /** Strip angle brackets so a name can't break out of an HTML/email header. */

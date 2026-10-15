@@ -17,6 +17,8 @@
  * caller already decided the sweep should run.
  */
 
+import { parseAddress } from "../mail/email-address.js";
+
 /// Sweep bounds: only items judged within the lookback are candidates (older
 /// mail deserves a human, not a late robot reply), and each tick answers at
 /// most a handful so a burst can't drain the LLM budget.
@@ -87,8 +89,7 @@ export interface AutoModeSweepDeps {
 
 /** Extract the reply-to address from a From header. Pure for the tests. */
 export function recipientFromHeader(from: string): string {
-  const match = from.match(/<([^>]+)>/);
-  return (match ? match[1] : from).trim();
+  return parseAddress(from);
 }
 
 export async function runAutoModeSweep(
