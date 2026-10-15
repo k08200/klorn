@@ -11,6 +11,8 @@ enum MenuCommand: Hashable {
     case go(ListMode)
     /// A main-window section (M4b). Only offered while `macMainWindow` is on.
     case section(NavSection)
+    /// "Import to Klorn Drive…" (D7). Only offered while the server has the drive.
+    case importToDrive
 }
 
 /// A Reply request from the menu, bound to the item it was issued for.
@@ -38,6 +40,8 @@ struct MenuState: Equatable {
     /// A reading pane is on screen: always in the bar's full view, only in
     /// Mail in the main window (M4b). Message commands need it.
     var readerVisible: Bool
+    /// The Klorn drive is live with a quota and no import runs (D7).
+    var driveImportReady: Bool
 
     @MainActor
     init(model: AppModel) {
@@ -51,12 +55,13 @@ struct MenuState: Equatable {
         teamModeAvailable = model.teamModeAvailable
         listHasSearchField = model.listMode.hasSearchField
         readerVisible = model.readerVisible
+        driveImportReady = model.driveImport.canImport
     }
 
     init(
         signedIn: Bool, fullViewOpen: Bool, mailSurfaceIsKey: Bool, modalOpen: Bool, targetTier: Tier?,
         emailLoaded: Bool, readerReplying: Bool, teamModeAvailable: Bool,
-        listHasSearchField: Bool, readerVisible: Bool = true
+        listHasSearchField: Bool, readerVisible: Bool = true, driveImportReady: Bool = false
     ) {
         self.signedIn = signedIn
         self.fullViewOpen = fullViewOpen
@@ -68,6 +73,7 @@ struct MenuState: Equatable {
         self.teamModeAvailable = teamModeAvailable
         self.listHasSearchField = listHasSearchField
         self.readerVisible = readerVisible
+        self.driveImportReady = driveImportReady
     }
 }
 
@@ -118,6 +124,8 @@ enum MenuRules {
             return canActOnMessage && keepsDraft
         case .moveTo(let tier):
             return canActOnMessage && keepsDraft && s.targetTier != tier
+        case .importToDrive:
+            return !s.modalOpen && s.driveImportReady
         }
     }
 
@@ -143,7 +151,7 @@ enum MenuRules {
         case .compose: return KeyboardShortcut("n", modifiers: .command)
         case .find: return KeyboardShortcut("f", modifiers: .command)
         case .reply: return KeyboardShortcut("r", modifiers: .command)
-        case .dismiss: return nil
+        case .dismiss, .importToDrive: return nil
         case .moveTo(let tier):
             guard let index = Tier.allCases.firstIndex(of: tier) else { return nil }
             return KeyboardShortcut(
@@ -204,6 +212,7 @@ struct KlornCommands: Commands {
         // No document model: Compose is the app's "New".
         CommandGroup(replacing: .newItem) {
             CommandButton(model: model, command: .compose, title: L("menu.compose"), perform: perform)
+            DriveImportMenuItem(model: model, perform: perform)
         }
         CommandGroup(after: .textEditing) {
             CommandButton(model: model, command: .find, title: L("menu.find"), perform: perform)
@@ -258,6 +267,21 @@ private struct GoMenuItems: View {
                         perform: perform)
                 }
             }
+        }
+    }
+}
+
+/// File › "Import to Klorn Drive…" (D7): present only while the server has the
+/// Klorn drive (its dark 404 hides it, as it hides the Settings section).
+private struct DriveImportMenuItem: View {
+    let model: AppModel
+    let perform: @MainActor (MenuCommand) -> Void
+
+    var body: some View {
+        if model.driveImport.availability == .available {
+            Divider()
+            CommandButton(
+                model: model, command: .importToDrive, title: L("menu.importToDrive"), perform: perform)
         }
     }
 }

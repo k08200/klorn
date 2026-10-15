@@ -147,6 +147,8 @@ final class AppModel {
     }
     /// Device calendars uploaded from EventKit (step C6): opt-in per calendar.
     let deviceCalendars: DeviceCalendarBridge
+    /// Files the user picks, imported into the Klorn drive (step D7): opt-in per pick.
+    let driveImport: DriveImporter
 
     /// Drives the tier explainer. Set on first run and by the sidebar's
     /// "How sorting works", which is what keeps it re-readable.
@@ -299,6 +301,7 @@ final class AppModel {
         self.deviceCalendars = DeviceCalendarBridge(
             api: api,
             currentUser: { SessionIdentity.userId(fromToken: tokenStore.load()) })
+        self.driveImport = DriveImporter(api: api)
         self.phase = tokenStore.load() != nil ? .signedIn : .signedOut
         self.selectedInbox =
             UserDefaults.standard.string(forKey: Self.selectedInboxKey) ?? "all"
@@ -747,6 +750,8 @@ final class AppModel {
         Task { await loadQueue() }
         // Resumes uploading only calendars the user already turned on; asks nothing.
         deviceCalendars.start()
+        // Whether the Klorn drive is live (D7): shows or hides "Import to Klorn Drive…".
+        Task { await driveImport.refreshAvailability() }
         // Team mode availability probe (403 while dark) — decides whether the
         // 팀 sidebar row and screen render at all.
         Task { await refreshTeams() }
@@ -793,6 +798,7 @@ final class AppModel {
         case .success(let token):
             beginSession(token: token)
             deviceCalendars.start()
+            Task { await driveImport.refreshAvailability() }
             await loadQueue()
         case .failure(let reason, let detail):
             Log.app.error("sign-in failed: \(reason.rawValue, privacy: .public) \(detail, privacy: .private)")
@@ -2150,6 +2156,8 @@ final class AppModel {
         shownMeetingIds = []
         // The device-calendar opt-in belongs to the account that gave it.
         deviceCalendars.signOut(token: sessionToken)
+        // An import in flight belongs to the account that started it.
+        driveImport.signOut()
         // A draft belongs to the account that wrote it: the next account
         // must not find it, send it, or delete the Gmail draft it edits.
         // Putting the composer away also closes the compose window (M5).
