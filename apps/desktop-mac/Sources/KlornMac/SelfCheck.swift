@@ -774,35 +774,7 @@ func runSelfChecks() async -> Bool {
     }
 
 
-    print("Upcoming agenda:")
-    // 7-day grouping for the UPCOMING section: today excluded (the TODAY rows
-    // own it), window ends 7 days after tomorrow's start, malformed ISO drops
-    // the event. Calendar + locale injected so labels are deterministic.
-    var agendaCal = Calendar(identifier: .gregorian)
-    agendaCal.timeZone = TimeZone(identifier: "UTC")!
-    agendaCal.locale = Locale(identifier: "en_US_POSIX")
-    // Wed 2026-07-22 09:00 UTC → tomorrow = Thu Jul 23, window ends Jul 30 00:00.
-    let agendaNow = ISO8601DateFormatter().date(from: "2026-07-22T09:00:00Z")!
-    func agendaEvent(_ id: String, _ startISO: String) -> CalendarEventWire {
-        CalendarEventWire(id: id, title: id, startTime: startISO, endTime: startISO,
-                          location: nil, meetingLink: nil, allDay: false)
-    }
-    let agenda = upcomingAgenda(now: agendaNow, events: [
-        agendaEvent("today", "2026-07-22T15:00:00.000Z"),        // today → excluded
-        agendaEvent("tmrw2", "2026-07-23T10:00:00.000Z"),
-        agendaEvent("tmrw1", "2026-07-23T08:00:00.000Z"),        // out of order on purpose
-        agendaEvent("sat", "2026-07-25T09:00:00Z"),              // no-millis ISO tolerated
-        agendaEvent("beyond", "2026-07-30T09:00:00.000Z"),       // day 8 → excluded
-        agendaEvent("bad", "not-a-date"),                        // malformed → dropped
-    ], calendar: agendaCal)
-    check("agenda keeps only tomorrow → +7 days",
-          agenda.flatMap(\.events).map(\.id) == ["tmrw1", "tmrw2", "sat"])
-    check("agenda groups by day, first labeled Tomorrow",
-          agenda.count == 2 && agenda[0].label == L("calendar.tomorrow") && agenda[0].events.count == 2)
-    check("agenda later day gets its weekday name", agenda[1].label == "Saturday")
-    check("agenda sorts within a day", agenda[0].events.map(\.id) == ["tmrw1", "tmrw2"])
-    check("agenda empty input → empty",
-          upcomingAgenda(now: agendaNow, events: [], calendar: agendaCal).isEmpty)
+    print("Calendar list:")
     // GET /api/calendar list envelope ({events}) decodes the wire subset.
     let calListJSON = """
     {"events":[{"id":"u1","title":"Offsite","description":null,"startTime":"2026-07-23T01:00:00.000Z",
@@ -884,14 +856,6 @@ func runSelfChecks() async -> Bool {
                                      from: Data(#"{"reply":"ok"}"#.utf8)))?.eventDraft == nil)
 
     print("Agent activity:")
-    func totals(_ e: Int, _ p: Int, _ r: Int) -> TodayActions.Totals {
-        TodayActions.Totals(executed: e, rejected: r, pending: p, urgent: 0)
-    }
-    check("all-zero day hides the block", agentActivityLine(totals(0, 0, 0)) == nil)
-    check("executed only", agentActivityLine(totals(2, 0, 0)) == "2 done")
-    check("pending only", agentActivityLine(totals(0, 1, 0)) == "1 awaiting approval")
-    check("combined keeps done · pending · declined order",
-          agentActivityLine(totals(2, 1, 3)) == "2 done · 1 awaiting approval · 3 declined")
     let taJSON = """
     {"executed":[],"rejected":[],"urgent":[],"sinceUtc":"2026-07-19T00:00:00Z",
     "pending":[{"id":"p1","toolName":"send_email","summary":"[확인 필요] send_email",

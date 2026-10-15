@@ -1,42 +1,5 @@
 import SwiftUI
 
-/// UPCOMING — tomorrow through the next 7 days, grouped by day (calendar
-/// parity with the web: the desktop must not know less about the week
-/// than it knows about the day). Rows open a detail popover. Shared by the
-/// compact panel's TodayColumn and the full-mode sidebar — same view, same
-/// `model.weekAhead` + `upcomingAgenda` data path.
-struct UpcomingSection: View {
-    let actions: ShellActions
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ColumnHeader(title: L("section.upcoming"))
-            if let week = model.weekAhead {
-                let days = upcomingAgenda(now: Date(), events: week)
-                if days.isEmpty {
-                    EmptyState(icon: "calendar", title: L("calendar.noEventsWeek"))
-                        .padding(.vertical, Theme.s2)
-                } else {
-                    ForEach(days) { day in
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(day.label)
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(Theme.textDim)
-                            ForEach(day.events) { event in
-                                UpcomingEventRow(event: event, actions: actions)
-                            }
-                        }
-                    }
-                }
-            } else {
-                Text(L("bar.loading")).font(.caption).foregroundStyle(Theme.textDim)
-            }
-        }
-        .padding(.top, 6)
-    }
-}
-
 struct UpcomingEventRow: View {
     let event: CalendarEventWire
     let actions: ShellActions

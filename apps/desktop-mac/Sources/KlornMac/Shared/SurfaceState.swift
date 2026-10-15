@@ -121,14 +121,6 @@ extension ConnectionNotice {
         case .stale: L("banner.stale")
         }
     }
-
-    /// The pill's two-word version.
-    var shortLabel: String {
-        switch self {
-        case .offline: L("bar.offline")
-        case .stale: L("bar.notUpdating")
-        }
-    }
 }
 
 /// The one button look of the state and onboarding views: a flat fill on
@@ -186,13 +178,11 @@ struct SignInButtons: View {
 }
 
 /// A blocking state, drawn: icon, title, one line, one action. Used by the
-/// bar's full view, the expanded panel and the main window alike. Draws
+/// main window's sections. Draws
 /// nothing for `loading` and `ready`, which have their own content.
 struct SurfaceStateView: View {
     @Environment(AppModel.self) private var model
     let state: SurfaceState
-    /// The expanded panel's column: no icon, tighter, leading.
-    var compact = false
 
     var body: some View {
         switch state {
@@ -232,26 +222,22 @@ struct SurfaceStateView: View {
     private func message(
         icon: String, title: String, detail: String, @ViewBuilder action: () -> some View
     ) -> some View {
-        VStack(alignment: compact ? .leading : .center, spacing: Theme.s3) {
-            if !compact {
-                Image(systemName: icon)
-                    .font(Theme.Typo.stateGlyph)
-                    .foregroundStyle(Theme.textDim)
-                    .accessibilityHidden(true)
-            }
+        VStack(alignment: .center, spacing: Theme.s3) {
+            Image(systemName: icon)
+                .font(Theme.Typo.stateGlyph)
+                .foregroundStyle(Theme.textDim)
+                .accessibilityHidden(true)
             Text(title).font(Theme.Typo.head).foregroundStyle(Theme.text)
-                .multilineTextAlignment(compact ? .leading : .center)
+                .multilineTextAlignment(.center)
                 .accessibilityAddTraits(.isHeader)
             Text(detail).font(Theme.Typo.body).foregroundStyle(Theme.textDim)
-                .multilineTextAlignment(compact ? .leading : .center)
+                .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
             action().padding(.top, Theme.s1)
         }
-        .frame(maxWidth: compact ? .infinity : 360, alignment: compact ? .leading : .center)
-        .frame(
-            maxWidth: .infinity, maxHeight: compact ? nil : .infinity,
-            alignment: compact ? .topLeading : .center)
-        .padding(compact ? 0 : Theme.s6)
+        .frame(maxWidth: 360, alignment: .center)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .padding(Theme.s6)
     }
 }
 

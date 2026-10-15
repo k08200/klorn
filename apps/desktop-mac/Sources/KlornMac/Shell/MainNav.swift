@@ -83,7 +83,7 @@ enum NavRules {
     }
 
     /// The navigation after `mode` was written (a click, the Go menu, a
-    /// deep link from the pill or a card): the window follows it.
+    /// deep link from a banner): the window follows it.
     static func following(_ mode: ListMode, from nav: MainNav) -> MainNav {
         var next = nav
         next.section = section(for: mode)

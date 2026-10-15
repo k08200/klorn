@@ -129,12 +129,12 @@ final class WindowRouter {
     /// A tapped banner lands on the mail it announced; if that mail is gone
     /// from the queue the main window still opens — a tap never does nothing.
     func handleNotificationTap(identifier: String) {
-        // One lookup, reused: `queue` is an immutable snapshot, so the item
-        // found while routing is the item we open.
+        // One lookup, reused: the item found while routing is the item we
+        // open (the list on screen, or the all-inbox snapshot banners use).
         let queue = model.queue
         var found: FirewallItem?
         let action = PushNotifier.tapAction(identifier: identifier) { id in
-            found = queue?.item(id: id)
+            found = self.model.knownItem(id: id)
             return found != nil
         }
         switch action {
@@ -144,6 +144,11 @@ final class WindowRouter {
             if let item = found { openInApp(item) } else { openMainWindow() }
         case .openApp:
             openMainWindow()
+            // Cold launch: no queue yet, so the mail cannot be known. Open it
+            // when the first sync lands instead of dropping the tap.
+            if queue == nil, let id = PushNotifier.itemID(fromNotificationIdentifier: identifier) {
+                model.pendingRevealItemID = id
+            }
         case .openMeeting:
             // The calendar shows the day's events with their join links.
             openMainWindow()

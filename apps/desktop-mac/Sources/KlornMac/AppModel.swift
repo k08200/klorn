@@ -128,7 +128,7 @@ final class AppModel {
 
     /// What the full view's list column shows. Model state rather than view
     /// state so any surface can open the full view already pointed at the right
-    /// thing — a tier count in the compact panel, or an urgent-mail card.
+    /// thing — a lane count, the Go menu, or a banner.
     /// The mail-first default (shell 2026-08-26): people read a mailbox top
     /// to bottom — the lanes ride on the rows as chips and remain one click
     /// away as categories, but navigation no longer starts lane-first.
@@ -150,8 +150,8 @@ final class AppModel {
             }
         }
     }
-    /// Whether a reading pane is on screen for the Message menu: always in
-    /// the bar's full view, only in Mail in the main window.
+    /// Whether a reading pane is on screen for the Message menu: only in
+    /// Mail in the main window.
     var readerVisible: Bool {
         NavRules.readerVisible(section: mainNav.section)
     }
@@ -198,6 +198,12 @@ final class AppModel {
     /// Whether macOS lets Klorn post banners; Settings ▸ Notifications shows
     /// a one-line hint when it is `.denied`.
     private(set) var notificationPermission: NotificationPermission = .notDetermined
+    /// The user has been shown a window they opened (the main window
+    /// activated). Gates the permission prompt: a login launch never sets it.
+    @ObservationIgnored var windowShownByUser = false
+    /// A banner tapped before the first sync (cold launch): its item opens
+    /// as soon as a queue arrives (`applyPendingReveal`).
+    @ObservationIgnored var pendingRevealItemID: String?
     private var pollTask: Task<Void, Never>?
     private var realtime: RealtimeClient?
     /// Error from the last add-account attempt; cleared on the next attempt.
@@ -1014,9 +1020,8 @@ final class AppModel {
         }
     }
 
-    /// Outcome of fetching the 3 quick-reply drafts for the PushCard. Its own
-    /// type (not replyError) because the card owns its state independently of
-    /// the reading pane.
+    /// Outcome of fetching the 3 quick-reply drafts for the reading pane. Its
+    /// own type (not replyError): drafts and a send error are separate states.
     enum ReplyOptionsFetch: Sendable {
         case ready(ReplyOptionsResponse)
         case needsPro
@@ -1308,7 +1313,7 @@ final class AppModel {
             clearEventDraft(messageId)
             chatMessages.append(ChatMessage(
                 role: .assistant, text: L("calendar.addedConfirm", eventDraftLabel(draft))))
-            Task { await refreshToday() }  // the TODAY column should show it now
+            Task { await refreshToday() }  // Today should show it now
         } catch _ where !isCurrent(session) {
             return
         } catch APIError.unauthorized {
@@ -2146,6 +2151,7 @@ final class AppModel {
         dismissed = []
         clearSelection()
         didRequestNotifyAuth = false
+        pendingRevealItemID = nil
         // Read before the Keychain is cleared: the device-calendar removals owed at
         // sign-out are sent with this session's token.
         let sessionToken = tokenStore.load()
@@ -2159,7 +2165,6 @@ final class AppModel {
         // Cross-account hygiene: every per-account surface must reset, or the
         // next sign-in briefly shows the previous account's data.
         today = nil
-        weekAhead = nil
         usage = nil
         briefing = nil
         briefingStructure = nil
@@ -2320,7 +2325,7 @@ final class AppModel {
     /// the same ledger shape as PUSH (`PushLedger`), its own key.
     @ObservationIgnored let meetingAlertStore: any PushLedgerStoring
 
-    /// Today's daily-briefing preview (TODAY column). Best-effort like the rest.
+    /// Today's daily-briefing preview (Today and Assistant). Best-effort like the rest.
     private(set) var briefing: String?
     private(set) var briefingStructure: BriefingStructure?
 
@@ -2418,7 +2423,7 @@ final class AppModel {
         // The meeting banner below is planned from this session's calendar only.
         guard isCurrent(session) else { return }
         // Replan on every refresh tick (poll + WS wake — the same cadence that
-        // keeps the TODAY column fresh keeps the lead window honest).
+        // keeps Today fresh keeps the lead window honest).
         // Gated on the user's "Meetings" category: this banner is an interrupt.
         let owner = SessionIdentity.userId(fromToken: tokenStore.load())
         let announced = PushLedger.resolve(stored: meetingAlertStore.load(), owner: owner)
@@ -2433,26 +2438,7 @@ final class AppModel {
         }
     }
 
-    /// The raw 7-day-ahead event window (tomorrow onward) behind the UPCOMING
-    /// section. nil until first load; best-effort like the TODAY summary.
-    private(set) var weekAhead: [CalendarEventWire]?
-
-    /// GET /api/calendar?days=8 — the same list endpoint (and params) the web
-    /// calendar page uses. days=8 from today 00:00 covers tomorrow → +7 days;
-    /// today's rows are filtered out by the pure grouping.
-    private func refreshWeekAhead() async {
-        let session = sessionGeneration
-        do {
-            let resp: CalendarListResponse = try await api.get(
-                "/api/calendar?days=8", as: CalendarListResponse.self)
-            guard isCurrent(session) else { return }
-            weekAhead = resp.events
-        } catch {
-            Log.app.debug("week-ahead fetch failed: \(String(describing: error), privacy: .private)")
-        }
-    }
-
-    /// Daily AI quota for the ACCOUNT gauge. Best-effort on the same tick.
+    /// Daily AI quota for Settings ▸ Accounts. Best-effort on the same tick.
     private(set) var usage: BillingStatusWire.Usage?
 
     private func refreshUsage() async {
@@ -2588,7 +2574,6 @@ final class AppModel {
         // Piggyback on the same cadence as the queue (poll + WS wake) without
         // serializing the fetches.
         Task { await refreshToday() }
-        Task { await refreshWeekAhead() }
         Task { await refreshInboxes() }
         Task { await refreshUsage() }
         Task { await refreshBriefing() }
@@ -2618,7 +2603,11 @@ final class AppModel {
             guard isCurrent(session) else { return }
             loadError = nil
             cancelledLoadRetried = false
-            reconcilePush()
+            applyPendingReveal()
+            if let pushItems = await bannerPushItems(fetched: fetched, selection: selectionAtFetch, session: session) {
+                reconcilePush(pushItems)
+            }
+            guard isCurrent(session) else { return }
             ensureActive()
         } catch _ where !isCurrent(session) {
             return
@@ -2632,18 +2621,52 @@ final class AppModel {
     /// Surface PUSH items not announced before (the first sync for an account
     /// is a silent baseline; the record persists across launches). Routed to
     /// `onNewPush`, which the AppDelegate wires to `PushAlerter` (banners).
-    private func reconcilePush() {
-        guard let queue else { return }
+    private func reconcilePush(_ pushItems: [FirewallItem]) {
         let owner = SessionIdentity.userId(fromToken: tokenStore.load())
         let ledger = PushLedger.resolve(stored: pushLedgerStore.load(), owner: owner)
-        let plan = ledger.plan(pushItems: queue.items(for: .push))
+        let plan = ledger.plan(pushItems: pushItems)
         // Respect the user's "Urgent mail" category. Seen-tracking still runs on
         // the muted path so re-enabling the category doesn't dump a backlog of
         // interrupts for mail that arrived while it was off.
         if !plan.toNotify.isEmpty, automation.allowsInterrupt(for: .emailUrgent) {
             onNewPush?(plan.toNotify)
         }
-        pushLedgerStore.save(plan.next)
+        if plan.next != ledger { pushLedgerStore.save(plan.next) }
+    }
+
+    /// The PUSH lane across every inbox, for banners (`PushBannerSource`).
+    /// nil when the extra read failed or the session ended: nothing is marked
+    /// seen, so the next tick announces it instead.
+    func bannerPushItems(
+        fetched: FirewallResponse, selection: String, session: Int
+    ) async -> [FirewallItem]? {
+        guard PushBannerSource.needsUnscopedFetch(selection: selection) else {
+            return fetched.removingIDs(dismissed).items(for: .push)
+        }
+        do {
+            let all = try await api.get(firewallPath(selected: "all"), as: FirewallResponse.self)
+            guard isCurrent(session) else { return nil }
+            queueCache["all"] = all
+            return all.removingIDs(dismissed).items(for: .push)
+        } catch {
+            Log.app.debug("all-inbox PUSH read failed: \(String(describing: error), privacy: .private)")
+            return nil
+        }
+    }
+
+    /// An item by id, from the list on screen or the all-inbox snapshot.
+    func knownItem(id: String) -> FirewallItem? {
+        queue?.item(id: id) ?? queueCache["all"]?.item(id: id)
+    }
+
+    /// Open the item a cold-launch banner tap asked for, once a queue is in.
+    /// Cleared either way: a tap must not jump the window later on.
+    private func applyPendingReveal() {
+        guard let id = pendingRevealItemID else { return }
+        pendingRevealItemID = nil
+        guard let item = knownItem(id: id) else { return }
+        revealInMail(item)
+        Task { await select(item) }
     }
 
     /// Re-read the permission (the user may have changed it in System
@@ -2652,17 +2675,23 @@ final class AppModel {
         notificationPermission = await pushNotifier.permission()
     }
 
-    /// Once signed in: request notification permission (once) and start the
+    /// Ask macOS for banner permission once per session, under
+    /// `NotificationPermissionRules` (signed in + a window the user opened).
+    func requestNotificationPermissionIfNeeded() async {
+        guard NotificationPermissionRules.shouldRequest(
+            signedIn: phase == .signedIn, alreadyRequested: didRequestNotifyAuth,
+            shownByUser: windowShownByUser)
+        else { return }
+        didRequestNotifyAuth = true
+        notificationPermission = await pushNotifier.requestAuthorization()
+    }
+
+    /// Once signed in: request notification permission (when allowed) and start the
     /// background refresh loop. Idempotent.
     private func ensureActive() {
         guard phase == .signedIn else { return }
-        if !didRequestNotifyAuth {
-            didRequestNotifyAuth = true
-            Task { [weak self] in
-                guard let self else { return }
-                self.notificationPermission = await self.pushNotifier.requestAuthorization()
-            }
-        }
+        // Asks only once a user-opened window was shown — never at login.
+        Task { await requestNotificationPermissionIfNeeded() }
         if pollTask == nil { startPolling() }
         startRealtime()
     }
@@ -2791,7 +2820,7 @@ final class AppModel {
         actionError = nil
     }
 
-    /// Try again, from a state view, the banner or the pill's chip. One
+    /// Try again, from a state view or the refresh banner. One
     /// retry at a time: clicks while a load is in flight do nothing.
     func retryLoad() async {
         guard SurfaceStateRules.mayRetry(isLoading: isLoadingQueue) else { return }

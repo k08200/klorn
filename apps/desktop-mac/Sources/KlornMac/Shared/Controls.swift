@@ -4,8 +4,8 @@ import SwiftUI
 struct LogoRing: View {
     var size: CGFloat = 16
     var body: some View {
-        // The K mark — the app icon in miniature, so pill, panel, menu bar,
-        // and Dock all say the same thing: Klorn. Ink on the light panel,
+        // The K mark — the app icon in miniature, so the window and the
+        // Dock say the same thing: Klorn. Ink on the light panel,
         // matching the B&W brand icon (founder direction 2026-07-20: no orange).
         Text("K")
             .font(.system(size: size * 0.82, weight: .heavy, design: .rounded))
@@ -117,31 +117,3 @@ struct OffscreenMenuLabel: View {
     }
 }
 
-/// Sun/moon appearance toggle (founder 2026-08-27: switchable from the top
-/// right). Shows the mode a CLICK gives you — the universal toggle idiom —
-/// and writes an explicit choice over "system" (the Preferences picker still
-/// offers system-follow for those who want it back).
-struct AppearanceToggle: View {
-    @Environment(AppModel.self) private var model
-    @Environment(\.colorScheme) private var colorScheme
-
-    private var isDark: Bool {
-        switch model.settings.appearance {
-        case .dark: true
-        case .light: false
-        case .system: colorScheme == .dark
-        }
-    }
-
-    var body: some View {
-        Button {
-            model.settings.appearance = isDark ? .light : .dark
-        } label: {
-            Image(systemName: isDark ? "sun.max" : "moon")
-                .font(.callout).iconTarget()
-        }
-        .buttonStyle(.plain).hoverDim()
-        .help(isDark ? L("appearance.toLight") : L("appearance.toDark"))
-        .accessibilityLabel(isDark ? L("appearance.toLight") : L("appearance.toDark"))
-    }
-}

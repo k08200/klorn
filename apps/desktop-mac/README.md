@@ -131,10 +131,20 @@ drafts are refused for a session stamp that has ended, before any request.
 - **Preferences.** Settings ▸ Notifications ▸ *Show macOS banners on this
   Mac* (ON by default) and the existing *Urgent mail* interrupt category
   both gate banners. VoiceOver hears an announcement either way.
-- **Permission.** Requested once per session when signed in (right after
-  onboarding, or at launch with a stored token). If macOS denied it,
-  Settings ▸ Notifications shows a one-line hint with *Open System
-  Settings*.
+- **Every inbox.** Banners come from the all-inbox PUSH lane whatever the
+  list is scoped to: with one inbox selected, a sync makes one extra
+  unscoped read (the firewall endpoint has no lane filter), cached as the
+  "All" snapshot and dropped if the session ended (`PushBannerSource`).
+- **Cold-launch tap.** A banner tapped before the first sync opens the
+  window at once and the mail as soon as the queue loads
+  (`pendingRevealItemID`).
+- **Permission.** Requested once per session, only when signed in **and**
+  after the user was shown a window they opened (the main window activated,
+  which includes onboarding finishing into it) —
+  `NotificationPermissionRules`. A launch at login never raises the system
+  dialog. If macOS denied it, Settings ▸ Notifications shows a one-line hint
+  with *Open System Settings*.
+- The ledger is written only when it changed.
 - An unbundled `swift run` has no notification center: banners are logged
   and skipped.
 

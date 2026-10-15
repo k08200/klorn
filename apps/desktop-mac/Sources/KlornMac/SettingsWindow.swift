@@ -93,7 +93,7 @@ struct SettingsRoot: View {
     var body: some View {
         tabs
             // L() is not observable; rebuild the tabs on a language change
-            // (same trick as the top bar) — the tab survives via @AppStorage.
+            // (same trick as the main window) — the tab survives via @AppStorage.
             // Scoped to the tabs only, so the window tracker below is never
             // torn down by a language switch.
             .id(model.settings.languageRevision)
@@ -201,12 +201,12 @@ struct SettingsWindowTracker: NSViewRepresentable {
     }
 }
 
-/// Opens the `Settings` scene from AppKit code (status item, top bar).
+/// Opens the `Settings` scene from AppKit code (the shell, the drive import).
 ///
 /// `NSApp.sendAction(Selector(("showSettingsWindow:")))` returns true but
 /// opens nothing on macOS 14+ (verified 2026-10-02), so this captures
 /// SwiftUI's own `openSettings` action from a window-less hosting view —
-/// independent of whether the pill is drawn (hidden-pill mode has no panel).
+/// independent of whether the main window is open.
 @MainActor
 final class SettingsOpener {
     private var action: OpenSettingsAction?

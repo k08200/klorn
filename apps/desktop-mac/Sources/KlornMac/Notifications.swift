@@ -160,6 +160,26 @@ enum MeetingBanner {
     }
 }
 
+/// When Klorn may ask macOS for banner permission: signed in, not yet asked
+/// this session, and only after the user has been shown a window they opened
+/// (the main window activated, or onboarding finished into it). Never on a
+/// launch at login, where a system dialog would appear unasked. Pure.
+enum NotificationPermissionRules {
+    static func shouldRequest(signedIn: Bool, alreadyRequested: Bool, shownByUser: Bool) -> Bool {
+        signedIn && !alreadyRequested && shownByUser
+    }
+}
+
+/// Banners cover every inbox, whatever the list is scoped to. With a scoped
+/// selection the queue holds one inbox only, so a sync also reads the
+/// unscoped lane for banners (the firewall endpoint has no lane filter; the
+/// response is cached as the "all" snapshot, which a switch to All paints).
+enum PushBannerSource {
+    static func needsUnscopedFetch(selection: String) -> Bool {
+        inboxQueryParam(selected: selection) != nil
+    }
+}
+
 /// Whether macOS lets Klorn post banners.
 enum NotificationPermission: Equatable, Sendable {
     case notDetermined, authorized, denied

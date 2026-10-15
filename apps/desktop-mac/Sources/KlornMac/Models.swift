@@ -644,17 +644,6 @@ struct PendingActionsResponse: Codable, Sendable {
     let actions: [Action]
 }
 
-/// One glanceable line for the TODAY column — "2 done · 1 awaiting approval".
-/// nil when the agent did nothing today (the block hides entirely; an empty
-/// receipt is noise, not signal). Pure.
-func agentActivityLine(_ totals: TodayActions.Totals) -> String? {
-    var parts: [String] = []
-    if totals.executed > 0 { parts.append("\(totals.executed) done") }
-    if totals.pending > 0 { parts.append("\(totals.pending) awaiting approval") }
-    if totals.rejected > 0 { parts.append("\(totals.rejected) declined") }
-    return parts.isEmpty ? nil : parts.joined(separator: " · ")
-}
-
 // MARK: - Assistant (chat)
 
 /// POST /api/chat/conversations → the conversation the desktop lazily creates.
@@ -1133,7 +1122,7 @@ struct BriefingStructure: Codable, Sendable, Hashable {
     let attention: [Attention]
 }
 
-/// One-line preview of the briefing note for the TODAY column: strip markdown
+/// One-line preview of the briefing note for Today: strip markdown
 /// bold, collapse whitespace/newlines to single spaces, cap length. nil when
 /// there's nothing to show. Pure for testing.
 func briefingPreview(_ content: String?) -> String? {
@@ -1184,53 +1173,6 @@ func calendarEventSourceLabel(_ event: CalendarEventWire) -> String? {
 /// rows as the today summary; CalendarEventWire ignores the extra fields.
 struct CalendarListResponse: Codable, Sendable {
     let events: [CalendarEventWire]
-}
-
-/// One day of the UPCOMING agenda (tomorrow → +7 days): label + its events.
-struct AgendaDay: Sendable, Identifiable, Hashable {
-    let label: String  // "Tomorrow", then weekday names — unique in a 7-day window
-    let events: [CalendarEventWire]
-    var id: String { label }
-}
-
-/// Group events into the 7 days AFTER today — today is excluded (the TODAY
-/// rows above the section already show it). Days with no events are omitted;
-/// events keep start order; a malformed startTime drops that event, never a
-/// crash. Calendar injectable so the harness pins the boundaries in UTC.
-func upcomingAgenda(
-    now: Date,
-    events: [CalendarEventWire],
-    calendar: Calendar = .current
-) -> [AgendaDay] {
-    let withMillis = ISO8601DateFormatter()
-    withMillis.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    let plain = ISO8601DateFormatter()  // tolerate writers that omit millis
-    guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)),
-          let windowEnd = calendar.date(byAdding: .day, value: 7, to: tomorrow)
-    else { return [] }
-    let dated: [(day: Date, start: Date, event: CalendarEventWire)] = events.compactMap { event in
-        guard let start = withMillis.date(from: event.startTime)
-            ?? plain.date(from: event.startTime),
-            start >= tomorrow, start < windowEnd
-        else { return nil }
-        return (calendar.startOfDay(for: start), start, event)
-    }
-    let groups = Dictionary(grouping: dated, by: \.day)
-    return groups.keys.sorted().map { day in
-        AgendaDay(
-            label: agendaDayLabel(day: day, tomorrow: tomorrow, calendar: calendar),
-            events: groups[day, default: []].sorted { $0.start < $1.start }.map(\.event))
-    }
-}
-
-/// "Tomorrow" for the first agenda day, else the weekday name — unique within
-/// the 7-day window. Pure.
-func agendaDayLabel(day: Date, tomorrow: Date, calendar: Calendar) -> String {
-    if calendar.isDate(day, inSameDayAs: tomorrow) { return L("calendar.tomorrow") }
-    let symbols = calendar.weekdaySymbols
-    let index = calendar.component(.weekday, from: day) - 1
-    guard symbols.indices.contains(index) else { return "" }
-    return symbols[index]
 }
 
 // MARK: - Calendar grid math (real calendar views, 2026-08-26)

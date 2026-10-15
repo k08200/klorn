@@ -166,7 +166,7 @@ func sessionCardSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
         identifier: PushNotifier.notificationIdentifier(for: "p1"), isKnownItem: { _ in false })
     check("a banner tap opens only mail that is in the current queue",
           goneTap == .openApp
-          && text("WindowRouter.swift").contains("let queue = model.queue\n")
-          && text("WindowRouter.swift").contains("found = queue?.item(id: id)"))
+          && text("WindowRouter.swift").contains("found = self.model.knownItem(id: id)")
+          && text("AppModel.swift").contains("queue?.item(id: id) ?? queueCache[\"all\"]?.item(id: id)"))
     return results
 }

@@ -137,9 +137,7 @@ func L(_ key: String, _ args: CVarArg...) -> String {
 
 /// Korean postpositions agree with the final consonant (받침) of the word they
 /// follow, so a fixed string can't be correct for both. The shipped copy used
-/// the "%@(으)로" escape hatch, which is a workaround rather than Korean — and
-/// the app already contradicted itself, since the collapsed pill renders a
-/// correct "PUSH 3건".
+/// the "%@(으)로" escape hatch, which is a workaround rather than Korean.
 ///
 /// The word in front is user- or server-supplied (a tier name, a search query),
 /// so the particle has to be chosen at runtime.

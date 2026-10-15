@@ -122,6 +122,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(AppRules.activationPolicy)
+        RetiredFiles.removePillTrace()
         // Appearance: system by default, or the Preferences override. Set
         // before any window draws so the first frame is already themed.
         NSApp.appearance = model.settings.appearance.nsAppearance

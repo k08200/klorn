@@ -277,7 +277,7 @@ func noPillSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
           app.contains("model.onNewPush = { [weak alerter] items in alerter?.handleNewPush(items) }")
           && text("Notifications.swift").contains("model.pushNotifier.post($0)"))
     check("the permission request goes through the seam, once a session is active",
-          text("AppModel.swift").contains("await self.pushNotifier.requestAuthorization()")
+          text("AppModel.swift").contains("notificationPermission = await pushNotifier.requestAuthorization()")
           && users(of: "requestAuthorization(options:").sorted() == ["Notifications.swift"])
     check("UNUserNotificationCenter is touched only by the notifier and the tap delegate",
           users(of: "UNUserNotificationCenter.current()") == ["KlornApp.swift", "Notifications.swift"])
@@ -417,7 +417,13 @@ func noPillSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
           && meetingLedger.recording("ev-9").notified == ["ev-9"]
           && UserDefaultsPushLedgerStore.meetingKey != UserDefaultsPushLedgerStore.key)
     check("the meeting ledger is saved only after the banner is handled, and the Meetings category gates it",
-          text("AppModel.swift").contains("onMeetingSoon?(due) == true\n        {\n            meetingAlertStore.save(announced.recording(due.id))")
+          {
+              let model = text("AppModel.swift")
+              guard let asked = model.range(of: "onMeetingSoon?(due) == true"),
+                    let saved = model.range(of: "meetingAlertStore.save(announced.recording(due.id))")
+              else { return false }
+              return asked.upperBound <= saved.lowerBound
+          }()
           && text("AppModel.swift").contains("if automation.allowsInterrupt(for: .meeting),")
           && app.contains("model.onMeetingSoon = { [weak alerter] event in alerter?.handleMeetingSoon(event) ?? false }"))
     check("a meeting banner tap opens the main window on Calendar",
@@ -435,6 +441,84 @@ func noPillSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
         signedOutModel.signOut()
         check("sign-out forgets the meeting ledger", signedOutModel.meetingAlertStore.load() == nil)
     }
+
+    // MARK: review fixes (2026-10-15)
+    // A banner tapped on a cold launch, before the first sync: the window
+    // opens at once, and the mail opens when the queue arrives.
+    do {
+        let cold = S.model([S.firewall: .init(body: lane(["p9"]))])
+        let window = FakeMainWindow()
+        let coldRouter = WindowRouter(model: cold, mainWindow: window)
+        cold.navigate(to: .today)
+        coldRouter.handleNotificationTap(identifier: PushNotifier.notificationIdentifier(for: "p9"))
+        let waiting = window.opens == [true] && cold.pendingRevealItemID == "p9"
+        await cold.loadQueue()
+        let opened = await S.waitUntil { cold.selectedItemId == "p9" }
+        check("a cold-launch banner tap opens the window, then the mail once the queue loads",
+              waiting && opened && cold.pendingRevealItemID == nil && cold.mainNav.section == .mail)
+        cold.signOut()
+    }
+    // Permission: never on a login launch — only once the user has been shown
+    // a window they opened (main window activated, or onboarding finished).
+    check("the permission rule: signed in, not yet asked, and a window the user opened",
+          NotificationPermissionRules.shouldRequest(signedIn: true, alreadyRequested: false, shownByUser: true)
+          && !NotificationPermissionRules.shouldRequest(signedIn: true, alreadyRequested: false, shownByUser: false)
+          && !NotificationPermissionRules.shouldRequest(signedIn: true, alreadyRequested: true, shownByUser: true)
+          && !NotificationPermissionRules.shouldRequest(signedIn: false, alreadyRequested: false, shownByUser: true))
+    do {
+        let asking = AppModel(tokenStore: InMemoryTokenStore(token: "t"))
+        let askFake = FakePushNotifier()
+        asking.pushNotifier = askFake
+        await asking.requestNotificationPermissionIfNeeded()
+        let silentAtLogin = askFake.authorizationRequests == 0
+        asking.windowShownByUser = true
+        await asking.requestNotificationPermissionIfNeeded()
+        await asking.requestNotificationPermissionIfNeeded()
+        check("no permission prompt before a user-opened window (login launch); then exactly once",
+              silentAtLogin && askFake.authorizationRequests == 1)
+    }
+    let mainWindowSource = text("MainWindow.swift")
+    check("only an activated main-window open marks the window as shown by the user",
+          mainWindowSource.contains("if activate {")
+          && mainWindowSource.contains("model.windowShownByUser = true")
+          && !text("AppModel.swift").contains("pushNotifier.requestAuthorization()\n            }\n        }\n        if pollTask"))
+    // Banners cover every inbox, whatever the list is scoped to.
+    check("a scoped list needs an unscoped PUSH fetch for banners; All does not",
+          PushBannerSource.needsUnscopedFetch(selection: "linked-1")
+          && PushBannerSource.needsUnscopedFetch(selection: "primary")
+          && !PushBannerSource.needsUnscopedFetch(selection: "all")
+          && !PushBannerSource.needsUnscopedFetch(selection: ""))
+    do {
+        let scoped = S.model([S.firewall: .init(body: lane(["s1", "s2"]))])
+        let scopedList = try! JSONDecoder().decode(FirewallResponse.self, from: Data(lane(["s1"]).utf8))
+        let before = Stub.calls(S.firewall).count
+        let unscoped = await scoped.bannerPushItems(
+            fetched: scopedList, selection: "linked-1", session: scoped.sessionGeneration)
+        let scopedFetches = Stub.calls(S.firewall).count - before
+        let allSelected = await scoped.bannerPushItems(
+            fetched: scopedList, selection: "all", session: scoped.sessionGeneration)
+        check("with a scoped list, banners come from one extra all-inbox read",
+              unscoped?.map(\.id) == ["s1", "s2"] && scopedFetches == 1)
+        check("with All selected, banners reuse the fetched list (no extra read)",
+              allSelected?.map(\.id) == ["s1"] && Stub.calls(S.firewall).count - before == 1)
+        check("an all-inbox read for an ended session announces nothing",
+              await scoped.bannerPushItems(
+                  fetched: scopedList, selection: "linked-1", session: scoped.sessionGeneration - 1) == nil)
+        check("the sync path takes banners from that source, after the session guard",
+              text("AppModel.swift").contains(
+                  "if let pushItems = await bannerPushItems(fetched: fetched, selection: selectionAtFetch, session: session) {"))
+        scoped.signOut()
+    }
+    check("the ledger is written only when it changed",
+          text("AppModel.swift").contains("if plan.next != ledger { pushLedgerStore.save(plan.next) }"))
+    check("the retired pill trace log is removed once at launch, best effort",
+          app.contains("RetiredFiles.removePillTrace()")
+          && RetiredFiles.pillTraceURL(appSupport: URL(fileURLWithPath: "/x"))?.path
+              == "/x/Klorn/pill-trace.log")
+    check("no pill, panel or card wording is left in the shipping comments",
+          ["the pill's", "the PushCard", "pill renders", "hidden-pill", "compact panel",
+           "TODAY column", "ACCOUNT column", "status item, top bar", "trick as the top bar"]
+              .allSatisfy { users(of: $0).isEmpty })
 
     // MARK: strings
     let newKeys = ["push.announce", "prefs.section.support", "prefs.banners.denied",

@@ -4,7 +4,6 @@
    fails the build if they drift. */
 
 /* Bar */
-"bar.offline" = "Offline";
 "bar.loading" = "Lädt…";
 
 /* Auth */
@@ -236,7 +235,6 @@
 
 /* Misc labels */
 "mail.allInboxes" = "Alle Postfächer";
-"calendar.tomorrow" = "Morgen";
 "calendar.allDay" = "Ganztägig";
 
 /* Menu bar menu */
@@ -285,11 +283,9 @@
 "guide.reopen" = "Wie das Sortieren funktioniert";
 
 "tier.row.a11y" = "%1$@, %2$d Nachrichten. %3$@";
-"calendar.noEventsWeek" = "Diese Woche keine Termine";
 "reading.noPreview" = "Für diesen Eintrag gibt es keine Vorschau.";
 "mail.noMatches" = "Keine Mail passt zu „%1$@\"%2$@";
 
-"section.upcoming" = "DEMNÄCHST";
 "section.waitingOn" = "WARTE AUF";
 "section.iOwe" = "ICH SCHULDE";
 "assistant.empty" = "Frag nach deiner Mail, deinem Kalender oder deinem Tag.";
@@ -474,8 +470,6 @@
 "chip.customer" = "Kunde";
 "chip.investor" = "Investor";
 "chip.system" = "System";
-"appearance.toLight" = "Zum hellen Modus wechseln";
-"appearance.toDark" = "Zum dunklen Modus wechseln";
 "compose.editDraft" = "Entwurf bearbeiten";
 "compose.discard" = "Entwurf verwerfen";
 "compose.discard.confirm.title" = "Diesen Entwurf verwerfen?";
@@ -497,7 +491,6 @@
 "reading.analysis" = "Klorn-Analyse";
 "reading.analysis.expand" = "Analyse zeigen";
 "reading.analysis.collapse" = "Analyse ausblenden";
-"purpose.loginPick" = "DIESES KONTO IST FÜR";
 // Linked-account purpose question (2026-09-03).
 "purpose.title.linked" = "Wofür ist %@?";
 
@@ -631,7 +624,6 @@
 "state.offline.detail" = "Klorn erreicht den Server nicht. Prüfe deine Verbindung und versuche es erneut.";
 "banner.offline" = "Du bist offline. Das sind die Mails der letzten Synchronisierung.";
 "banner.stale" = "Aktualisieren fehlgeschlagen. Das sind die Mails der letzten Synchronisierung.";
-"bar.notUpdating" = "Keine Aktualisierung";
 "error.server" = "Serverfehler (%d).";
 "error.network" = "Netzwerkfehler. Prüfe deine Verbindung.";
 "onboarding.windowTitle" = "Willkommen bei Klorn";

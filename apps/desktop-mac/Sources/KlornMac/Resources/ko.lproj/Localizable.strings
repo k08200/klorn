@@ -4,7 +4,6 @@
    폐기된 AUTO도 레거시 행 표시용으로 남아 있으므로 마찬가지로 번역하지 않는다. */
 
 /* Bar */
-"bar.offline" = "오프라인";
 "bar.loading" = "불러오는 중…";
 
 /* Auth */
@@ -236,7 +235,6 @@
 
 /* Misc labels */
 "mail.allInboxes" = "전체 수신함";
-"calendar.tomorrow" = "내일";
 "calendar.allDay" = "하루 종일";
 
 /* Menu bar menu */
@@ -285,11 +283,9 @@
 "guide.reopen" = "분류 방식 보기";
 
 "tier.row.a11y" = "%1$@, 메일 %2$d건. %3$@";
-"calendar.noEventsWeek" = "이번 주 일정 없음";
 "reading.noPreview" = "미리 볼 내용이 없습니다.";
 "mail.noMatches" = "\u201C%1$@\u201D%2$@ 일치하는 메일이 없습니다.";
 
-"section.upcoming" = "예정";
 "section.waitingOn" = "기다리는 중";
 "section.iOwe" = "내가 할 일";
 "assistant.empty" = "메일·일정·오늘 하루에 대해 물어보세요.";
@@ -474,8 +470,6 @@
 "chip.customer" = "고객";
 "chip.investor" = "투자자";
 "chip.system" = "시스템";
-"appearance.toLight" = "라이트 모드로 전환";
-"appearance.toDark" = "다크 모드로 전환";
 "compose.editDraft" = "임시보관 메일 편집";
 "compose.discard" = "초안 삭제";
 "compose.discard.confirm.title" = "이 초안을 삭제할까요?";
@@ -497,7 +491,6 @@
 "reading.analysis" = "Klorn 분석";
 "reading.analysis.expand" = "분석 펼치기";
 "reading.analysis.collapse" = "분석 접기";
-"purpose.loginPick" = "이 계정의 용도";
 // Linked-account purpose question (2026-09-03).
 "purpose.title.linked" = "%@ 계정은 어떤 용도인가요?";
 
@@ -631,7 +624,6 @@
 "state.offline.detail" = "Klorn 서버에 연결할 수 없습니다. 네트워크를 확인한 뒤 다시 시도하세요.";
 "banner.offline" = "오프라인 상태입니다. 마지막 동기화 때의 메일입니다.";
 "banner.stale" = "새로 고치지 못했습니다. 마지막 동기화 때의 메일입니다.";
-"bar.notUpdating" = "업데이트 중단";
 "error.server" = "서버 오류(%d).";
 "error.network" = "네트워크 오류입니다. 연결을 확인하세요.";
 "onboarding.windowTitle" = "Klorn 시작하기";

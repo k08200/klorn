@@ -4,7 +4,6 @@
    fails the build if they drift. */
 
 /* Bar */
-"bar.offline" = "オフライン";
 "bar.loading" = "読み込み中…";
 
 /* Auth */
@@ -236,7 +235,6 @@
 
 /* Misc labels */
 "mail.allInboxes" = "すべての受信トレイ";
-"calendar.tomorrow" = "明日";
 "calendar.allDay" = "終日";
 
 /* Menu bar menu */
@@ -285,11 +283,9 @@
 "guide.reopen" = "振り分けの仕組み";
 
 "tier.row.a11y" = "%1$@、%2$d件。%3$@";
-"calendar.noEventsWeek" = "今週の予定はありません";
 "reading.noPreview" = "この項目のプレビューはありません。";
 "mail.noMatches" = "「%1$@」に一致するメールはありません%2$@";
 
-"section.upcoming" = "予定";
 "section.waitingOn" = "相手待ち";
 "section.iOwe" = "自分の宿題";
 "assistant.empty" = "メール、カレンダー、今日の予定について聞いてください。";
@@ -474,8 +470,6 @@
 "chip.customer" = "顧客";
 "chip.investor" = "投資家";
 "chip.system" = "システム";
-"appearance.toLight" = "ライトモードに切り替え";
-"appearance.toDark" = "ダークモードに切り替え";
 "compose.editDraft" = "下書きを編集";
 "compose.discard" = "下書きを破棄";
 "compose.discard.confirm.title" = "この下書きを破棄しますか？";
@@ -497,7 +491,6 @@
 "reading.analysis" = "Klornの分析";
 "reading.analysis.expand" = "分析を表示";
 "reading.analysis.collapse" = "分析を隠す";
-"purpose.loginPick" = "このアカウントの用途";
 // Linked-account purpose question (2026-09-03).
 "purpose.title.linked" = "%@ の用途は？";
 
@@ -631,7 +624,6 @@
 "state.offline.detail" = "Klornのサーバーに接続できません。接続を確認して、もう一度お試しください。";
 "banner.offline" = "オフラインです。最後に同期したときのメールを表示しています。";
 "banner.stale" = "更新できませんでした。最後に同期したときのメールを表示しています。";
-"bar.notUpdating" = "更新停止中";
 "error.server" = "サーバーエラー（%d）。";
 "error.network" = "ネットワークエラーです。接続を確認してください。";
 "onboarding.windowTitle" = "Klornへようこそ";

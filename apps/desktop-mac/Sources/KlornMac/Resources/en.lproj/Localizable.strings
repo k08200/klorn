@@ -4,7 +4,6 @@
    fails the build if they drift. */
 
 /* Bar */
-"bar.offline" = "Offline";
 "bar.loading" = "Loading…";
 
 /* Auth */
@@ -236,7 +235,6 @@
 
 /* Misc labels */
 "mail.allInboxes" = "All inboxes";
-"calendar.tomorrow" = "Tomorrow";
 "calendar.allDay" = "All day";
 
 /* Menu bar menu */
@@ -285,11 +283,9 @@
 "guide.reopen" = "How sorting works";
 
 "tier.row.a11y" = "%1$@, %2$d messages. %3$@";
-"calendar.noEventsWeek" = "No events this week";
 "reading.noPreview" = "No preview for this item.";
 "mail.noMatches" = "No mail matches \u201C%1$@\u201D%2$@";
 
-"section.upcoming" = "UPCOMING";
 "section.waitingOn" = "WAITING ON";
 "section.iOwe" = "I OWE";
 "assistant.empty" = "Ask about your mail, calendar, or day.";
@@ -474,8 +470,6 @@
 "chip.customer" = "Customer";
 "chip.investor" = "Investor";
 "chip.system" = "System";
-"appearance.toLight" = "Switch to light mode";
-"appearance.toDark" = "Switch to dark mode";
 "compose.editDraft" = "Edit draft";
 "compose.discard" = "Discard Draft";
 "compose.discard.confirm.title" = "Discard this draft?";
@@ -497,7 +491,6 @@
 "reading.analysis" = "Klorn's read";
 "reading.analysis.expand" = "Show the analysis";
 "reading.analysis.collapse" = "Hide the analysis";
-"purpose.loginPick" = "THIS ACCOUNT IS FOR";
 // Linked-account purpose question (2026-09-03).
 "purpose.title.linked" = "What is %@ for?";
 
@@ -631,7 +624,6 @@
 "state.offline.detail" = "Klorn can't reach its server. Check your connection, then try again.";
 "banner.offline" = "You're offline. This is the mail from the last sync.";
 "banner.stale" = "Klorn couldn't refresh. This is the mail from the last sync.";
-"bar.notUpdating" = "Not updating";
 "error.server" = "Server error (%d).";
 "error.network" = "Network error. Check your connection.";
 "onboarding.windowTitle" = "Welcome to Klorn";

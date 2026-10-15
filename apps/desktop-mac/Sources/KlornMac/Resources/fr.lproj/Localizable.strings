@@ -4,7 +4,6 @@
    fails the build if they drift. */
 
 /* Bar */
-"bar.offline" = "Hors ligne";
 "bar.loading" = "Chargement…";
 
 /* Auth */
@@ -236,7 +235,6 @@
 
 /* Misc labels */
 "mail.allInboxes" = "Toutes les boîtes";
-"calendar.tomorrow" = "Demain";
 "calendar.allDay" = "Toute la journée";
 
 /* Menu bar menu */
@@ -285,11 +283,9 @@
 "guide.reopen" = "Comment fonctionne le tri";
 
 "tier.row.a11y" = "%1$@, %2$d messages. %3$@";
-"calendar.noEventsWeek" = "Aucun événement cette semaine";
 "reading.noPreview" = "Pas d'aperçu pour cet élément.";
 "mail.noMatches" = "Aucun message ne correspond à « %1$@ »%2$@";
 
-"section.upcoming" = "À VENIR";
 "section.waitingOn" = "J'ATTENDS";
 "section.iOwe" = "JE DOIS";
 "assistant.empty" = "Posez une question sur votre courrier, votre agenda ou votre journée.";
@@ -474,8 +470,6 @@
 "chip.customer" = "Client";
 "chip.investor" = "Investisseur";
 "chip.system" = "Système";
-"appearance.toLight" = "Passer en mode clair";
-"appearance.toDark" = "Passer en mode sombre";
 "compose.editDraft" = "Modifier le brouillon";
 "compose.discard" = "Supprimer le brouillon";
 "compose.discard.confirm.title" = "Supprimer ce brouillon ?";
@@ -497,7 +491,6 @@
 "reading.analysis" = "Analyse Klorn";
 "reading.analysis.expand" = "Afficher l'analyse";
 "reading.analysis.collapse" = "Masquer l'analyse";
-"purpose.loginPick" = "CE COMPTE SERT À";
 // Linked-account purpose question (2026-09-03).
 "purpose.title.linked" = "À quoi sert %@ ?";
 
@@ -631,7 +624,6 @@
 "state.offline.detail" = "Klorn ne parvient pas à joindre le serveur. Vérifiez votre connexion, puis réessayez.";
 "banner.offline" = "Vous êtes hors ligne. Voici le courrier de la dernière synchronisation.";
 "banner.stale" = "Actualisation impossible. Voici le courrier de la dernière synchronisation.";
-"bar.notUpdating" = "Non actualisé";
 "error.server" = "Erreur du serveur (%d).";
 "error.network" = "Erreur réseau. Vérifiez votre connexion.";
 "onboarding.windowTitle" = "Bienvenue dans Klorn";

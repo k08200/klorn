@@ -144,6 +144,30 @@ final class AppSettings {
     }
 }
 
+/// Files left behind by removed features, deleted once at launch.
+enum RetiredFiles {
+    /// The pill's visibility trace (removed with the pill, 2026-10-15).
+    static func pillTraceURL(appSupport: URL?) -> URL? {
+        appSupport?.appendingPathComponent("Klorn", isDirectory: true)
+            .appendingPathComponent("pill-trace.log")
+    }
+
+    /// Best effort: a missing file is the normal case, any other failure is
+    /// logged and ignored — nothing depends on it.
+    static func removePillTrace() {
+        let fm = FileManager.default
+        guard let url = pillTraceURL(
+            appSupport: fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first),
+            fm.fileExists(atPath: url.path)
+        else { return }
+        do {
+            try fm.removeItem(at: url)
+        } catch {
+            Log.app.debug("pill trace not removed: \(String(describing: error), privacy: .private)")
+        }
+    }
+}
+
 /// Static app metadata for the About section. Reads the packaged `.app`'s
 /// Info.plist; falls back to "dev" under `swift run` (no bundle version).
 enum AppInfo {

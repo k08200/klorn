@@ -140,7 +140,7 @@ func openSupportMail() {
     NSWorkspace.shared.open(url)
 }
 
-/// The update affordance in the panel's ACCOUNT column. Never a popup (never-steal-focus) — but no longer
+/// The update affordance in Settings ▸ General ▸ App & support. Never a popup — but no longer
 /// invisible either: a tinted capsule with a pulsing dot and a gentle
 /// appear transition says "one click waiting" the moment the row exists.
 /// Pulse respects Reduce Motion.

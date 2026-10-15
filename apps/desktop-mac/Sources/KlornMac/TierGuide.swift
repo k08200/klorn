@@ -315,39 +315,3 @@ func purposeLabel(_ purpose: String) -> String {
     }
 }
 
-/// The pre-OAuth pick (founder 2026-09-01: "로그인 하면서 고르게"): a caption
-/// and three capsules bound to `AppModel.pendingPurpose`, applied the moment
-/// sign-in lands. Shared by the full sidebar and the expanded panel so the
-/// two sign-in entrances ask the same question the same way.
-struct PurposePickRow: View {
-    @Environment(AppModel.self) private var model
-    let horizontalPadding: CGFloat
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(L("purpose.loginPick"))
-                .font(Theme.Typo.micro).foregroundStyle(Theme.textDim)
-            HStack(spacing: 6) {
-                ForEach(["work", "personal", "mixed"], id: \.self) { choice in
-                    let selected = model.pendingPurpose == choice
-                    Button {
-                        model.pendingPurpose = selected ? nil : choice
-                    } label: {
-                        Text(purposeLabel(choice))
-                            .font(Theme.Typo.label)
-                            .foregroundStyle(selected ? Theme.text : Theme.textDim)
-                            .padding(.horizontal, 10).padding(.vertical, 5)
-                            .background(
-                                selected ? Theme.surfaceSelected : Theme.surfaceRaised,
-                                in: Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(purposeLabel(choice))
-                    .accessibilityAddTraits(selected ? .isSelected : [])
-                }
-            }
-        }
-        .padding(.horizontal, horizontalPadding)
-        .padding(.vertical, 4)
-    }
-}

@@ -110,8 +110,8 @@ private struct BriefingSegmentsRow: View {
     let segments: [BriefingStructure.Segment]
 
     var body: some View {
-        // Columns where they fit (expanded panel); the 220pt full-mode
-        // sidebar can't hold three columns, so it stacks instead.
+        // Columns where they fit; a narrow column (220pt) can't hold three,
+        // so it stacks instead.
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .top, spacing: 0) {
                 ForEach(Array(segments.enumerated()), id: \.offset) { i, seg in
