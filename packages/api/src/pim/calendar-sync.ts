@@ -6,9 +6,8 @@
  */
 
 import { calendarHideDeclinedEnabled } from "../config.js";
-import { prisma } from "../db.js";
 import { captureError } from "../sentry.js";
-import { normalizeTimeZone } from "../time-zone.js";
+import { getUserTimeZone } from "../user-timezone.js";
 import {
   reconcileCancelledEvents,
   removeCancelledGoogleEventRows,
@@ -32,12 +31,13 @@ export const CALENDAR_SYNC_WINDOW_DAYS = 30;
 export const CALENDAR_SYNC_MAX_RESULTS = 100;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** The user's stored timezone, the zone naive event times are read in. */
-export async function readSyncTimezone(userId: string): Promise<string> {
-  const userRow = (await prisma.user.findUnique({ where: { id: userId } })) as {
-    timezone?: string | null;
-  } | null;
-  return normalizeTimeZone(userRow?.timezone);
+/**
+ * The user's configured timezone (AutomationConfig), the zone naive event times
+ * are read in. User has no timezone column: reading it there gave every sync the
+ * default zone.
+ */
+export function readSyncTimezone(userId: string): Promise<string> {
+  return getUserTimeZone(userId);
 }
 
 /** The listing every sync asks for: the next 30 days, in the user's zone. */
