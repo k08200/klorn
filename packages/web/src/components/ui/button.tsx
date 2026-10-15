@@ -2,7 +2,7 @@
 
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
-type Variant = "primary" | "secondary" | "danger" | "ghost";
+type Variant = "primary" | "secondary" | "danger" | "ghost" | "link";
 type TextSize = "sm" | "md" | "lg";
 type Size = TextSize | "icon";
 
@@ -41,6 +41,9 @@ const variantStyles: Record<Variant, string> = {
   danger:
     "bg-danger-solid/10 hover:bg-danger-solid text-state-danger-ink hover:text-danger-solid-ink border border-state-danger-line hover:border-danger-solid",
   ghost: "bg-transparent hover:bg-surface-hover text-ink-mid hover:text-ink",
+  // Inline text action ("Create an account"): link-coloured, underline on
+  // hover, and still a 44px-tall hit area via the size padding.
+  link: "bg-transparent text-accent-deep underline-offset-2 hover:underline",
 };
 
 const sizeStyles: Record<Size, string> = {
@@ -53,6 +56,10 @@ const sizeStyles: Record<Size, string> = {
   // Square 44×44 (WCAG 2.5.8 target), glyph centred, no padding.
   icon: "h-11 w-11 shrink-0 p-0",
 };
+
+// A text link keeps the 44px-tall hit area but only a hairline of side
+// padding, so it sits inline with the sentence it finishes.
+const LINK_SIZE = "min-h-11 px-1 gap-1.5";
 
 export default function Button({
   variant = "primary",
@@ -68,7 +75,7 @@ export default function Button({
     <button
       type="button"
       disabled={disabled || loading}
-      className={`focus-ring inline-flex items-center justify-center text-label rounded-control transition-colors duration-120 ease-fluid cursor-pointer disabled:cursor-not-allowed ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}
+      className={`focus-ring inline-flex items-center justify-center text-label rounded-control transition-colors duration-120 ease-fluid cursor-pointer disabled:cursor-not-allowed ${variantStyles[variant]} ${variant === "link" ? LINK_SIZE : sizeStyles[size]} ${className}`}
       {...props}
     >
       {loading ? (

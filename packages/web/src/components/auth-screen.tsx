@@ -2,168 +2,121 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { accentSerif } from "../lib/fonts/accent-serif";
 import { useT } from "../lib/i18n";
 
+/** Published facts behind the trust line live here; the line links to them. */
+const SECURITY_URL = "https://klorn.ai/security/";
+
+/** Locales whose script the accent serif covers (it ships a Latin subset). */
+const SERIF_LOCALES = new Set(["en", "de", "fr", "es"]);
+
 interface AuthScreenProps {
-  eyebrow: string;
-  title: string;
-  description: string;
+  /** The page's h1 — a string, or <BrandHeadline /> on the sign-in page. */
+  title: ReactNode;
+  description?: string;
   children: ReactNode;
-  asideTitle?: string;
-  asideBody?: string;
-  asideItems?: Array<{ label: string; value: string }>;
-  footer?: ReactNode;
-  navCtaHref?: string;
-  navCtaLabel?: string;
+  /**
+   * Wide-screen product panel (lg and up). Omitted on the secondary flows
+   * (reset, verify), which centre a single column instead.
+   */
+  preview?: ReactNode;
+}
+
+/** Entry stagger: two beats, under 200ms in total — this is a task surface. */
+const STEP_MS = 80;
+const rise = (step: number) => ({ animationDelay: `${step * STEP_MS}ms` });
+
+/**
+ * The shell every sign-in surface shares: brand mark, one column holding the
+ * task, a quiet footer, and — on the sign-in page at desktop width — a panel
+ * showing the product itself. Flat hue-free canvas (productization plan §2);
+ * the old landing-sky wash and marketing aside are gone.
+ */
+export default function AuthScreen({ title, description, children, preview }: AuthScreenProps) {
+  return (
+    <main
+      id="main"
+      className={`grid min-h-dvh bg-surface-panel text-ink ${
+        preview ? "lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]" : ""
+      }`}
+    >
+      <div className="flex min-h-dvh min-w-0 flex-col px-4 pt-safe sm:px-8">
+        <header className="flex h-16 shrink-0 items-center">
+          <Link
+            href="/"
+            className="focus-ring -mx-2 inline-flex min-h-11 items-center gap-2.5 rounded-control px-2"
+          >
+            <img src="/brand/mark.svg?v=matte2" alt="" className="h-7 w-7" />
+            <span className="text-head text-ink">Klorn</span>
+          </Link>
+        </header>
+
+        <div className="flex flex-1 items-start justify-center py-6 sm:items-center sm:py-8">
+          <div className="w-full max-w-sm">
+            <div className="rise" style={rise(0)}>
+              <h1 className="text-display text-balance text-ink">{title}</h1>
+              {description && (
+                <p className="mt-3 text-body text-pretty text-ink-mid">{description}</p>
+              )}
+            </div>
+            <div className="rise mt-8" style={rise(1)}>
+              {children}
+            </div>
+          </div>
+        </div>
+
+        <AuthFooter />
+      </div>
+
+      {preview && (
+        <aside className="hidden min-w-0 items-center justify-center border-l border-line bg-surface-app px-12 py-16 lg:flex xl:px-20">
+          {preview}
+        </aside>
+      )}
+    </main>
+  );
 }
 
 /**
- * Entry stagger. Each shelf arrives one beat after the last so the eye is led
- * down the page instead of being handed everything at once. Kept under half a
- * second in total — this is a task surface, not a landing page, and a visitor
- * who came here to sign in must not wait on choreography.
+ * "All your mail and calendars, in one calm place." — the landing's promise,
+ * with its serif accent. CJK locales keep the UI face for the accent, as the
+ * landing does: the serif has no glyphs for them and a synthetic italic of a
+ * fallback font reads as a rendering bug.
  */
-const STEP_MS = 70;
-const rise = (step: number) => ({ animationDelay: `${step * STEP_MS}ms` });
-
-export default function AuthScreen({
-  eyebrow,
-  title,
-  description,
-  children,
-  asideTitle,
-  asideBody,
-  asideItems,
-  footer,
-  navCtaHref = "/login?mode=register",
-  navCtaLabel,
-}: AuthScreenProps) {
-  const { t } = useT();
-  // Callers may override the marketing aside (e.g. early-access); otherwise
-  // fall back to the translated defaults so the panel matches the app locale.
-  const resolvedAsideTitle = asideTitle ?? t("auth.asideTitle");
-  const resolvedAsideBody = asideBody ?? t("auth.asideBody");
-  const resolvedAsideItems = asideItems ?? [
-    { label: t("auth.stepSignal"), value: t("auth.stepSignalDesc") },
-    { label: t("auth.stepContext"), value: t("auth.stepContextDesc") },
-    { label: t("auth.stepApproval"), value: t("auth.stepApprovalDesc") },
-  ];
-  const resolvedNavCtaLabel = navCtaLabel ?? t("nav.getStarted");
+export function BrandHeadline() {
+  const { t, locale } = useT();
+  const accentFace = SERIF_LOCALES.has(locale) ? `${accentSerif.className} font-normal` : "";
   return (
-    <main id="main" className="min-h-[100dvh] overflow-x-hidden sky-bg text-ink">
-      <nav className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-5 py-5 sm:px-6">
-        <Link href="/" className="flex items-center gap-3">
-          <img src="/brand/mark.svg?v=matte2" alt="" className="h-8 w-8" />
-          <span className="text-sm font-semibold tracking-[0.14em] text-ink">Klorn</span>
+    <>
+      {t("auth.headline")}{" "}
+      <span className={`block text-accent-deep ${accentFace}`}>{t("auth.headlineAccent")}</span>
+    </>
+  );
+}
+
+function AuthFooter() {
+  const { t } = useT();
+  const linkClass =
+    "focus-ring inline-flex min-h-11 items-center rounded-control text-ink-mid transition-colors duration-120 ease-fluid hover:text-ink";
+  return (
+    <footer className="flex shrink-0 flex-col gap-1 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 text-caption text-ink-mid sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+      <a
+        href={SECURITY_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`${linkClass} text-pretty underline decoration-line-strong underline-offset-2`}
+      >
+        {t("auth.trustLine")}
+      </a>
+      <nav aria-label={t("auth.legalNav")} className="flex shrink-0 items-center gap-4">
+        <Link href="/privacy" className={linkClass}>
+          {t("auth.privacy")}
         </Link>
-        {/* Landing nav (Home / Early access) is noise on the app login —
-            hide it on phones; the logo stays. */}
-        <div className="hidden items-center gap-3 text-sm sm:flex">
-          <Link
-            className="inline-flex min-h-11 items-center whitespace-nowrap text-ink-mid transition duration-300 ease-fluid hover:text-ink"
-            href="/"
-          >
-            {t("nav.home")}
-          </Link>
-          <Link
-            className="inline-flex min-h-11 items-center whitespace-nowrap rounded-lg border border-line px-3 py-2 text-ink-mid transition duration-300 ease-fluid hover:border-line-strong hover:bg-surface-hover hover:text-ink"
-            href={navCtaHref}
-          >
-            {resolvedNavCtaLabel}
-          </Link>
-        </div>
+        <Link href="/terms" className={linkClass}>
+          {t("auth.terms")}
+        </Link>
       </nav>
-
-      <section className="relative z-10 mx-auto grid min-h-[calc(100dvh-76px)] max-w-6xl items-start gap-8 px-5 pb-16 pt-6 sm:px-6 lg:grid-cols-[1fr_0.9fr] lg:items-center lg:gap-14">
-        <aside className="hidden lg:block">
-          {/* No eyebrow here: the headline already names the surface, and a
-              third wide-tracked all-caps label on one screen is a tic, not a
-              hierarchy. */}
-          <h2
-            className="rise max-w-xl text-5xl font-semibold leading-[0.98] tracking-[-0.03em] text-balance text-ink xl:text-6xl"
-            style={rise(0)}
-          >
-            {resolvedAsideTitle}
-          </h2>
-          <p
-            className="rise mt-6 max-w-[46ch] text-base leading-7 text-ink-mid text-pretty"
-            style={rise(1)}
-          >
-            {resolvedAsideBody}
-          </p>
-
-          {/* Was a bordered card of three equal rows — the most generic shape
-              in the deck. The numbers now hang in their own gutter as mono
-              tabular figures and the rows are separated by hairlines alone, so
-              the sequence reads as an editorial list rather than a widget. */}
-          <ol className="rise mt-12 max-w-xl" style={rise(2)}>
-            {resolvedAsideItems.map((item, index) => (
-              <li
-                key={item.label}
-                className="grid grid-cols-[3rem_1fr] gap-6 border-t border-line py-5 last:border-b last:border-line"
-              >
-                <span className="font-mono text-sm tabular-nums leading-6 text-ink-dim">
-                  {String(index + 1).padStart(2, "0")}
-                </span>
-                <div>
-                  <p className="text-[0.9375rem] font-medium leading-6 text-ink">{item.label}</p>
-                  <p className="mt-1 text-sm leading-6 text-ink-mid text-pretty">{item.value}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
-        </aside>
-
-        <div className="mx-auto w-full max-w-md">
-          <div className="rise mb-6" style={rise(1)}>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-muted">
-              {eyebrow}
-            </p>
-            <h1 className="mt-3 text-3xl font-semibold leading-[1.1] tracking-[-0.02em] text-balance text-ink">
-              {title}
-            </h1>
-            <p className="mt-3 text-sm leading-6 text-ink-mid text-pretty">{description}</p>
-          </div>
-
-          {/* Condensed reassurance for mobile + WebView users — the full <aside>
-              is hidden below lg, so surface the same three signals compactly
-              above the form so phone visitors still get context. */}
-          <ol className="rise mb-5 lg:hidden" style={rise(2)}>
-            <li className="border-t border-line pb-2 pt-3 text-sm font-medium text-ink">
-              {resolvedAsideTitle}
-            </li>
-            {resolvedAsideItems.map((item) => (
-              // Fixed label column: flex let each value start at a different
-              // x depending on its label's width, so the three rows never
-              // lined up. The desktop list has the same gutter.
-              <li
-                key={item.label}
-                className="grid grid-cols-[4.5rem_1fr] gap-3 border-t border-line py-2.5"
-              >
-                <span className="text-xs font-medium text-ink">{item.label}</span>
-                <span className="text-xs leading-5 text-ink-mid">{item.value}</span>
-              </li>
-            ))}
-          </ol>
-
-          {/* Double bezel: a tray holding a plate. The shell carries the
-              hairline and the ambient shadow, the core carries the fill and
-              its own lit top edge, and the radii are concentric (core = shell
-              minus the 6px inset) so the curves stay parallel. */}
-          <div
-            className="rise rounded-[1.375rem] border border-line bg-surface-raised/70 p-1.5 shadow-[0_28px_64px_-32px_rgba(2,60,110,0.34)] backdrop-blur-[2px]"
-            style={rise(3)}
-          >
-            <div className="edge-lit rounded-[1rem] bg-surface-panel p-4 sm:p-5">{children}</div>
-          </div>
-
-          {footer && (
-            <div className="rise mt-5 text-center text-xs text-ink-muted" style={rise(4)}>
-              {footer}
-            </div>
-          )}
-        </div>
-      </section>
-    </main>
+    </footer>
   );
 }

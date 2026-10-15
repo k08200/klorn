@@ -767,15 +767,13 @@ body {
   color: #0a0e14;
 }
 
-/* ── Auth surface: entry motion and edge light ──────────────────────────
-   The login card and its lane used to mount statically, all at once. These
-   two utilities stagger that arrival and give the nested card a physical
-   top rim instead of a flat fill. */
+/* ── Auth surface: entry motion ─────────────────────────────────────────
+   The sign-in column arrives in two short beats instead of all at once. */
 
 @keyframes rise {
   from {
     opacity: 0;
-    transform: translate3d(0, 12px, 0);
+    transform: translate3d(0, 6px, 0);
   }
   to {
     opacity: 1;
@@ -786,27 +784,11 @@ body {
 /* `both` holds the from-state before the delay elapses, so a staggered child
    cannot flash at full opacity for one frame before its turn. */
 .rise {
-  animation: rise 620ms var(--ease-fluid) both;
+  animation: rise var(--motion-enter, 200ms) var(--ease-fluid) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .rise {
     animation: none;
   }
-}
-
-/* A 1px inner highlight along the top edge — the difference between a filled
-   rectangle and a surface with a light source. Tuned per theme: the dark
-   theme needs a white rim, the light theme a white rim would be invisible so
-   it takes a soft downward shadow instead. */
-.edge-lit {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.65),
-    0 1px 2px rgba(15, 23, 42, 0.04);
-}
-
-.dark .edge-lit {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 1px 2px rgba(0, 0, 0, 0.3);
 }
