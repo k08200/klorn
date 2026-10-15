@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import AuthGuard from "../../components/auth-guard";
 import { useAuth } from "../../lib/auth";
 import { filesEnabled, homePath } from "../../lib/home";
@@ -27,5 +27,10 @@ function FilesGate() {
   useEffect(() => {
     if (user && !enabled) router.replace(homePath(user));
   }, [user, enabled, router]);
-  return enabled ? <FilesView /> : null;
+  // FilesView reads ?folder= (useSearchParams), which needs a Suspense boundary.
+  return enabled ? (
+    <Suspense>
+      <FilesView />
+    </Suspense>
+  ) : null;
 }

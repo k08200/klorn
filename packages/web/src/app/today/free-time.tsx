@@ -11,7 +11,7 @@
 
 import type { TeamAvailabilityResponse, TeamsListResponse } from "@klorn/contract";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Button from "../../components/ui/button";
 import { apiFetch } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
@@ -24,11 +24,27 @@ import {
   FREE_TIME_WINDOW_DAYS,
   formatSlot,
   freeTimeScope,
+  freeTimeStale,
   freeTimeVisible,
+  upcomingSlots,
 } from "./free-time-model";
 
 const TEAMS_STALE_MS = 5 * 60_000;
 const DEFAULT_TIME_ZONE = "Asia/Seoul";
+/** How often a shown result re-checks the clock, so past slots drop off. */
+const CLOCK_TICK_MS = 60_000;
+
+/** The current time, re-read every CLOCK_TICK_MS while `active`. */
+function useNow(active: boolean): Date {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    if (!active) return;
+    setNow(new Date());
+    const timer = window.setInterval(() => setNow(new Date()), CLOCK_TICK_MS);
+    return () => window.clearInterval(timer);
+  }, [active]);
+  return now;
+}
 
 function useTeams(enabled: boolean) {
   const query = useQuery({
@@ -52,7 +68,14 @@ function FreeTimeFinder({ teams }: { teams: TeamsListResponse["teams"] }) {
   const { user } = useAuth();
   const [teamId, setTeamId] = useState(teams[0]?.id ?? "");
   const selected = teams.some((team) => team.id === teamId) ? teamId : (teams[0]?.id ?? "");
+  // The last answer stays on screen while "Check again" runs: a new mutate()
+  // clears the mutation's own data, which would unmount the button in use.
+  const [shown, setShown] = useState<{
+    result: TeamAvailabilityResponse;
+    fetchedAtMs: number;
+  } | null>(null);
   const find = useMutation({
+    onSuccess: (result) => setShown({ result, fetchedAtMs: Date.now() }),
     mutationFn: async (id: string) => {
       try {
         return await apiFetch<TeamAvailabilityResponse>(availabilityPath(id, new Date()));
@@ -65,7 +88,8 @@ function FreeTimeFinder({ teams }: { teams: TeamsListResponse["teams"] }) {
   const run = () => {
     if (selected) find.mutate(selected);
   };
-  const timeZone = find.data?.timeZone ?? user?.timezone ?? DEFAULT_TIME_ZONE;
+  const timeZone = shown?.result.timeZone ?? user?.timezone ?? DEFAULT_TIME_ZONE;
+  const now = useNow(shown !== null);
 
   return (
     <div className="flex flex-col gap-2 border-t border-line-soft py-3">
@@ -82,6 +106,7 @@ function FreeTimeFinder({ teams }: { teams: TeamsListResponse["teams"] }) {
               onChange={(event) => {
                 setTeamId(event.target.value);
                 find.reset();
+                setShown(null);
               }}
               className="focus-ring h-11 min-w-0 flex-1 rounded-control border border-line bg-surface-panel px-3 text-body text-ink"
             >
@@ -99,7 +124,17 @@ function FreeTimeFinder({ teams }: { teams: TeamsListResponse["teams"] }) {
       </div>
       <div aria-live="polite">
         {find.isError && <BlockError message={t("today.freeTime.error")} onRetry={run} />}
-        {find.data && <FreeTimeResult result={find.data} locale={locale} timeZone={timeZone} />}
+        {shown && (
+          <FreeTimeResult
+            result={shown.result}
+            locale={locale}
+            timeZone={timeZone}
+            now={now}
+            fetchedAtMs={shown.fetchedAtMs}
+            onRecheck={run}
+            rechecking={find.isPending}
+          />
+        )}
       </div>
     </div>
   );
@@ -107,19 +142,30 @@ function FreeTimeFinder({ teams }: { teams: TeamsListResponse["teams"] }) {
 
 /**
  * The slots, after the notice about whose calendars were not seen. With no
- * member checked at all, the slots are only the user's own and say so.
+ * member checked at all, the slots are only the user's own and say so. A slot
+ * that has started is not shown; an old result offers "Check again".
  */
 function FreeTimeResult({
   result,
   locale,
   timeZone,
+  now,
+  fetchedAtMs,
+  onRecheck,
+  rechecking,
 }: {
   result: TeamAvailabilityResponse;
   locale: string;
   timeZone: string;
+  now: Date;
+  fetchedAtMs: number;
+  onRecheck: () => void;
+  rechecking: boolean;
 }) {
   const { t } = useT();
   const selfOnly = freeTimeScope(result) === "self-only";
+  const slots = upcomingSlots(result.slots, now);
+  const stale = freeTimeStale(fetchedAtMs, result.slots, now);
   return (
     <>
       {selfOnly ? (
@@ -133,15 +179,26 @@ function FreeTimeResult({
           </p>
         )
       )}
+      {stale && (
+        <div className="flex flex-wrap items-center gap-x-3 pt-1">
+          <p className="min-w-0 flex-1 py-2 text-caption text-ink-muted [word-break:keep-all]">
+            {t("today.freeTime.stale")}
+          </p>
+          <Button variant="secondary" size="sm" onClick={onRecheck} disabled={rechecking}>
+            {rechecking ? t("today.freeTime.finding") : t("today.freeTime.recheck")}
+          </Button>
+        </div>
+      )}
+      {/* Every slot already past: "Check again" says it better than "none". */}
       {result.slots.length === 0 && (
         <BlockNote>{t("today.freeTime.none", { days: String(FREE_TIME_WINDOW_DAYS) })}</BlockNote>
       )}
-      {result.slots.length > 0 && (
+      {slots.length > 0 && (
         <ul
           aria-label={selfOnly ? t("today.freeTime.selfOnlyList") : t("today.freeTime.teamList")}
           className="flex flex-col gap-1 pt-1"
         >
-          {result.slots.map((slot) => (
+          {slots.map((slot) => (
             <li key={slot.startTime} className="text-body tabular-nums text-ink-strong">
               {formatSlot(slot, locale, timeZone)}
             </li>

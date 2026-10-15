@@ -12,6 +12,9 @@ export const FREE_TIME_WINDOW_DAYS = 7;
 /** The length of a common slot. */
 export const FREE_TIME_DURATION_MINUTES = 30;
 
+/** A result older than this offers "Check again": calendars move. */
+export const FREE_TIME_STALE_MS = 10 * 60_000;
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FALLBACK_TIME_ZONE = "UTC";
 
@@ -74,4 +77,28 @@ export function formatSlot(slot: TeamFreeSlotWire, locale: string, timeZone: str
     f = formatters(locale, FALLBACK_TIME_ZONE);
   }
   return `${f.day.format(start)} ${f.time.format(start)}–${f.time.format(end)}`;
+}
+
+function startMs(slot: TeamFreeSlotWire): number {
+  return new Date(slot.startTime).getTime();
+}
+
+/** The slots that have not started yet, in order; an unreadable one is dropped. */
+export function upcomingSlots(slots: readonly TeamFreeSlotWire[], now: Date): TeamFreeSlotWire[] {
+  return slots.filter((slot) => startMs(slot) >= now.getTime());
+}
+
+/**
+ * Whether a result should be checked again: fetched more than
+ * FREE_TIME_STALE_MS ago (or at an unknown time), or its first slot has
+ * already started.
+ */
+export function freeTimeStale(
+  fetchedAtMs: number,
+  slots: readonly TeamFreeSlotWire[],
+  now: Date,
+): boolean {
+  if (!(fetchedAtMs > 0) || now.getTime() - fetchedAtMs > FREE_TIME_STALE_MS) return true;
+  const first = slots[0];
+  return first !== undefined && !(startMs(first) >= now.getTime());
 }

@@ -132,7 +132,8 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
       let str = translations[locale]?.[key] || translations.en[key] || key;
       if (vars) {
         for (const [k, v] of Object.entries(vars)) {
-          str = str.replace(`{${k}}`, v);
+          // A function replacement: a value such as a file name may hold "$&".
+          str = str.replace(`{${k}}`, () => v);
         }
       }
       return str;
