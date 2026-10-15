@@ -97,6 +97,12 @@ enum FilesRules {
     private static let httpTooMany = 429
     private static let loopbackHosts: Set<String> = ["localhost", "127.0.0.1", "::1", "[::1]"]
 
+    /// The section the window shows and the sidebar lights: Files with its
+    /// flag off falls back to Today (FD-7), and Today is what is lit.
+    static func displayed(_ section: NavSection, files: Bool) -> NavSection {
+        section == .files && !files ? .today : section
+    }
+
     /// Files is in the navigation only while the server reports a drive source.
     static func sections(files: Bool) -> [NavSection] {
         NavSection.allCases.filter { $0 != .files || files }
@@ -138,15 +144,36 @@ enum FilesRules {
         return url
     }
 
-    /// The signed link, only when it is absolute https without credentials
-    /// (or http to a loopback host: a local object store in development).
-    static func safeDownloadURL(_ raw: String?) -> URL? {
+    /// The signed link, only when it is absolute https without credentials.
+    /// http is accepted only to a loopback host AND only while the API itself
+    /// is on loopback (a local object store in development); against a real
+    /// server the link must be https.
+    static func safeDownloadURL(_ raw: String?, apiBase: String = Config.apiBaseURL) -> URL? {
         guard let raw, !raw.isEmpty, let url = URL(string: raw), noCredentials(url), hasHost(url),
               let scheme = url.scheme?.lowercased()
         else { return nil }
         if scheme == "https" { return url }
-        if scheme == "http", let host = url.host?.lowercased(), loopbackHosts.contains(host) { return url }
+        if scheme == "http", isLoopback(url), let base = URL(string: apiBase), isLoopback(base) { return url }
         return nil
+    }
+
+    private static func isLoopback(_ url: URL) -> Bool {
+        url.host.map { loopbackHosts.contains($0.lowercased()) } ?? false
+    }
+
+    /// A request that ended because its task was cancelled (the view went
+    /// away, or a newer search replaced it): no error to show.
+    static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if case APIError.transport(_, let code) = error, code == URLError.cancelled.rawValue { return true }
+        return false
+    }
+
+    /// `next` appended to `rows`, each id once (a row modified between two
+    /// pages can appear on both).
+    static func appending(_ next: [DriveFileWire], to rows: [DriveFileWire]) -> [DriveFileWire] {
+        var seen = Set(rows.map(\.id))
+        return rows + next.filter { seen.insert($0.id).inserted }
     }
 
     private static func noCredentials(_ url: URL) -> Bool {

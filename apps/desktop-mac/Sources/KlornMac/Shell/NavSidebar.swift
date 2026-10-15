@@ -33,7 +33,7 @@ struct NavSidebar: View {
     }
 
     private func sectionRow(_ section: NavSection) -> some View {
-        let selected = model.mainNav.section == section
+        let selected = FilesRules.displayed(model.mainNav.section, files: model.clientFlags.files) == section
         return Button { model.navigate(to: section) } label: {
             NavRowLabel(
                 icon: section.icon, title: section.title, count: count(for: section),

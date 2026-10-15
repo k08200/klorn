@@ -16,6 +16,8 @@ final class FilesStubProtocol: URLProtocol, @unchecked Sendable {
     struct Reply: Sendable {
         let status: Int
         let body: String
+        /// Answer this long after the request starts (a response "in flight").
+        var delayMs = 0
     }
 
     static let state = OSAllocatedUnfairLock(initialState: (replies: [String: Reply](), calls: [Call]()))
@@ -30,10 +32,19 @@ final class FilesStubProtocol: URLProtocol, @unchecked Sendable {
         guard let url = request.url else { return }
         let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         let call = Call(path: url.path, query: components?.percentEncodedQuery ?? "")
+        // "path?query" answers one exact request; "path" answers the rest.
         let reply: Reply = Self.state.withLock { state in
             state.calls.append(call)
-            return state.replies[url.path] ?? Reply(status: 404, body: #"{"error":"not found"}"#)
+            return state.replies["\(url.path)?\(call.query)"] ?? state.replies[url.path]
+                ?? Reply(status: 404, body: #"{"error":"not found"}"#)
         }
+        guard reply.delayMs > 0 else { return answer(reply, url: url) }
+        DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(reply.delayMs)) { [self] in
+            answer(reply, url: url)
+        }
+    }
+
+    private func answer(_ reply: Reply, url: URL) {
         let response = HTTPURLResponse(
             url: url, statusCode: reply.status, httpVersion: "HTTP/1.1",
             headerFields: ["Content-Type": "application/json"])
@@ -89,6 +100,7 @@ func filesSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
     results += await filesStoreChecks()
     results += await freeTimeStoreChecks()
     results += await filesModelChecks()
+    results += await filesRaceChecks()
     results += filesStringChecks()
     results += filesSourcePins(sourceDir: sourceDir)
     return results.map { ("P12 — \($0.0)", $0.1) }
@@ -124,6 +136,10 @@ private func filesGatingChecks() -> [(String, Bool)] {
           !NavRules.readerVisible(macMainWindow: true, section: .files)
           && NavRules.clearsSelection(macMainWindow: true, section: .files)
           && NavRules.listMode(entering: .files, nav: MainNav(), current: .inbox) == nil)
+    check("the Files section with its flag off shows and lights Today",
+          FilesRules.displayed(.files, files: false) == .today
+          && FilesRules.displayed(.files, files: true) == .files
+          && FilesRules.displayed(.mail, files: false) == .mail)
     check("free time is offered only with team mode on and a saved team",
           FreeTimeRules.visible(teamMode: true, teamCount: 1)
           && !FreeTimeRules.visible(teamMode: true, teamCount: 0)
@@ -175,7 +191,8 @@ private func filesURLChecks() -> [(String, Bool)] {
           && web("https://user:pw@drive.example/x") == nil
           && web("https://user@drive.example/x") == nil
           && web(nil) == nil && web("") == nil)
-    let signed = FilesRules.safeDownloadURL
+    let local = "http://localhost:4000"
+    func signed(_ raw: String?) -> URL? { FilesRules.safeDownloadURL(raw, apiBase: local) }
     check("a signed link is opened only when https, credential-free (or http to loopback)",
           signed("https://store.example/o?sig=1") != nil
           && signed("http://localhost:9000/o") != nil
@@ -185,6 +202,10 @@ private func filesURLChecks() -> [(String, Bool)] {
           && signed("javascript:alert(1)") == nil
           && signed("file:///etc/passwd") == nil
           && signed("/api/x") == nil && signed("") == nil && signed(nil) == nil)
+    check("http to loopback only while the API itself is local; production is https only",
+          FilesRules.safeDownloadURL("http://localhost:9000/o", apiBase: "https://api.klorn.example") == nil
+          && FilesRules.safeDownloadURL("http://127.0.0.1:9000/o", apiBase: "https://api.klorn.example") == nil
+          && FilesRules.safeDownloadURL("https://store.example/o", apiBase: "https://api.klorn.example") != nil)
     let f = FilesScenarios.file
     check("open: a Klorn folder walks in, a Klorn file downloads",
           FilesRules.openAction(for: f("a", "KLORN", true, nil)) == .folder
@@ -278,9 +299,10 @@ private func filesStoreChecks() async -> [(String, Bool)] {
           store.phase == .loaded && store.files.map(\.id) == ["f1", "d1"] && store.hasMore
           && FilesStubProtocol.calls.last?.query == "limit=50")
 
-    FilesStubProtocol.reset([listPath: S.page([S.fileJSON(id: "f2")])])
+    // The next page repeats d1 (a row modified between pages moves up).
+    FilesStubProtocol.reset([listPath: S.page([S.fileJSON(id: "d1", folder: true), S.fileJSON(id: "f2")])])
     await store.loadMore()
-    check("paging: the cursor is passed back and rows are appended",
+    check("paging: the cursor is passed back, rows are appended once each",
           FilesStubProtocol.calls.last?.query == "limit=50&cursor=c2"
           && store.files.map(\.id) == ["f1", "d1", "f2"] && !store.hasMore)
 
@@ -355,13 +377,21 @@ private func freeTimeStoreChecks() async -> [(String, Bool)] {
     check("find: GET only, the 7-day 30-minute window, and the answer is kept",
           call?.path == "/api/teams/t1/availability"
           && call?.query.contains("duration_minutes=30") == true
-          && store.result.map(FreeTimeRules.scope) == .selfOnly && store.fetchedAt != nil && !store.failed)
+          && store.result(for: "t1").map(FreeTimeRules.scope) == .selfOnly && store.fetchedAt != nil
+          && !store.failed(for: "t1"))
+    // The picked team is deleted elsewhere: the selection falls back to
+    // another team, and t1's answer must not show under it.
+    check("an answer is shown only under the team it was asked for",
+          store.result(for: "t2") == nil
+          && store.teamId(in: [TeamWire(id: "t3", name: "Other", members: [])]) == "t3"
+          && store.result(for: store.teamId(in: [TeamWire(id: "t3", name: "Other", members: [])])) == nil)
     store.select(teamId: "t2")
     check("another team clears the last team's answer",
-          store.result == nil && store.teamId(in: teams) == "t2")
+          store.result(for: "t1") == nil && store.result(for: "t2") == nil && store.teamId(in: teams) == "t2")
     FilesStubProtocol.reset([:])
     await store.find(teamId: "t2")
-    check("a failed check says so and shows no slots", store.failed && store.result == nil)
+    check("a failed check says so and shows no slots",
+          store.failed(for: "t2") && !store.failed(for: "t1") && store.result(for: "t2") == nil)
     store.reset()
     check("sign-out: free time is clean", store.isClean)
     return results
@@ -445,5 +475,90 @@ private func filesSourcePins(sourceDir: URL) -> [(String, Bool)] {
               .contains(where: drive.contains))
     check("every opener goes through the validated URL",
           text("FilesStore.swift").components(separatedBy: "openURL(").count == 3)
+    return results
+}
+
+// MARK: Races (stubbed network with delays)
+
+@MainActor
+private func filesRaceChecks() async -> [(String, Bool)] {
+    var results: [(String, Bool)] = []
+    func check(_ name: String, _ passed: Bool) { results.append((name, passed)) }
+    typealias S = FilesScenarios
+    let listPath = "/api/drive/files"
+    func slow(_ reply: FilesStubProtocol.Reply, _ ms: Int = 300) -> FilesStubProtocol.Reply {
+        var delayed = reply
+        delayed.delayMs = ms
+        return delayed
+    }
+
+    // A list answer that arrives after sign-out writes nothing.
+    FilesStubProtocol.reset([listPath: slow(S.page([S.fileJSON(id: "late")]))])
+    let store = FilesStore(api: S.api())
+    let pending = Task { await store.search("") }
+    try? await Task.sleep(for: .milliseconds(50))
+    store.reset()
+    await pending.value
+    check("a list answer after sign-out is dropped", store.isClean)
+
+    // A next page superseded by a new search must not wedge the pager.
+    FilesStubProtocol.reset([listPath: S.page([S.fileJSON(id: "a")], next: "c2")])
+    await store.search("")
+    FilesStubProtocol.reset([
+        "\(listPath)?limit=50&cursor=c2": slow(S.page([S.fileJSON(id: "old")])),
+        "\(listPath)?limit=50&q=new": S.page([S.fileJSON(id: "n1")], next: "n2"),
+    ])
+    let more = Task { await store.loadMore() }
+    try? await Task.sleep(for: .milliseconds(50))
+    await store.search("new")
+    await more.value
+    check("a next page superseded by a search: no stale rows, the pager works again",
+          store.files.map(\.id) == ["n1"] && !store.loadingMore && store.hasMore)
+
+    // The view goes away mid-search: the cancelled request is no error.
+    FilesStubProtocol.reset([listPath: S.page([S.fileJSON(id: "kept")])])
+    await store.search("")
+    FilesStubProtocol.reset([listPath: slow(S.page([S.fileJSON(id: "never")]), 2000)])
+    let cancelled = Task { await store.search("budget") }
+    try? await Task.sleep(for: .milliseconds(50))
+    cancelled.cancel()
+    await cancelled.value
+    check("a cancelled search shows no error and keeps the list it had",
+          store.phase == .loaded && store.files.map(\.id) == ["kept"] && !store.stale
+          && store.appliedQuery.isEmpty)
+    // The same search asked again does run (it was not marked as answered).
+    FilesStubProtocol.reset([listPath: S.page([S.fileJSON(id: "b1")])])
+    await store.search("budget")
+    check("after a cancelled search the same search runs again", store.files.map(\.id) == ["b1"])
+
+    // A download link that arrives after sign-out opens nothing.
+    var opened: [URL] = []
+    store.openURL = { opened.append($0); return true }
+    FilesStubProtocol.reset([
+        "/api/drive/files/f1/download": slow(S.ok(#"{"url":"https://store.example/o","expiresInSeconds":300}"#)),
+    ])
+    let download = Task { await store.download(S.file(id: "f1")) }
+    try? await Task.sleep(for: .milliseconds(50))
+    store.reset()
+    await download.value
+    check("a download answer after sign-out opens nothing", opened.isEmpty && store.isClean)
+
+    // Today hands over a folder: a previous download error does not follow.
+    store.seedForRender(files: [], downloadError: (.gone, "x"))
+    store.startAt(folder: S.file(id: "d9", folder: true))
+    check("opening Files at a folder clears the last download error",
+          store.downloadError == nil && store.trail.map(\.id) == ["d9"] && !store.loadingMore)
+
+    // Flags off: the poll asks for no drive rows and no availability.
+    FilesStubProtocol.reset(["/api/auth/me": S.ok(#"{"user":{"files":false,"teamMode":false}}"#)])
+    let model = AppModel(tokenStore: InMemoryTokenStore(token: "t"), api: S.api())
+    model.opensRealtime = false
+    await model.loadQueue()
+    try? await Task.sleep(for: .milliseconds(400))
+    let paths = FilesStubProtocol.calls.map(\.path)
+    check("flags off: the poll reads /me and asks for no files and no free time",
+          paths.contains("/api/auth/me")
+          && !paths.contains { $0.hasPrefix("/api/drive/files") || $0.hasSuffix("/availability") })
+    model.signOut()
     return results
 }

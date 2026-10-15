@@ -95,11 +95,11 @@ struct TodayFreeTimePanel: View {
             }
             .buttonStyle(SolidButtonStyle(prominent: false, fullWidth: true))
             .disabled(store.pending || teamId == nil)
-            if store.failed {
+            if store.failed(for: teamId) {
                 Text(L("today.freeTime.error")).font(Theme.Typo.caption).foregroundStyle(Theme.warningInk)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if let result = store.result {
+            if let result = store.result(for: teamId) {
                 if let renderNow {
                     FreeTimeResultView(result: result, now: renderNow, recheck: recheck(teamId))
                 } else {

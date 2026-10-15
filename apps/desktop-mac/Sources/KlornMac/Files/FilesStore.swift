@@ -97,7 +97,10 @@ final class FilesStore {
         listRequest += 1
         let request = listRequest
         let session = generation
+        let previous = (query: appliedQuery, phase: phase)
         appliedQuery = query
+        // A next page in flight belongs to the list this one replaces.
+        loadingMore = false
         stale = !files.isEmpty
         if files.isEmpty { phase = .loading }
         loadMoreFailed = false
@@ -108,6 +111,13 @@ final class FilesStore {
             files = page.files
             nextCursor = page.nextCursor
             phase = .loaded
+            stale = false
+        } catch where FilesRules.isCancellation(error) || Task.isCancelled {
+            // Not a failure: put back the list's own state, so the search
+            // is asked again next time instead of flashing an error.
+            guard session == generation, request == listRequest else { return }
+            appliedQuery = previous.query
+            phase = files.isEmpty ? .idle : previous.phase
             stale = false
         } catch {
             guard session == generation, request == listRequest else { return }
@@ -126,16 +136,20 @@ final class FilesStore {
         loadingMore = true
         loadMoreFailed = false
         let path = FilesRules.listPath(query: appliedQuery, cursor: cursor, folder: folder?.externalId)
+        // Superseded (a new search or folder) or signed out: the newer list
+        // owns `loadingMore` now and already cleared it.
+        defer { if session == generation, request == listRequest { loadingMore = false } }
         do {
             let page = try await api.get(path, as: DriveFilesPage.self)
             guard session == generation, request == listRequest else { return }
-            files += page.files
+            files = FilesRules.appending(page.files, to: files)
             nextCursor = page.nextCursor
+        } catch where FilesRules.isCancellation(error) || Task.isCancelled {
+            return
         } catch {
             guard session == generation, request == listRequest else { return }
             loadMoreFailed = true
         }
-        loadingMore = false
     }
 
     func refreshRecent() async {
@@ -148,7 +162,7 @@ final class FilesStore {
             recent = Array(page.files.prefix(FilesRules.recentLimit))
             recentPhase = .loaded
         } catch {
-            guard session == generation else { return }
+            guard session == generation, !FilesRules.isCancellation(error) else { return }
             // A failed refresh keeps rows already shown.
             if recent.isEmpty { recentPhase = .failed }
         }
@@ -207,14 +221,14 @@ final class FilesStore {
             let answer = try await api.get(
                 FilesRules.downloadLinkPath(id: file.id), as: DriveDownloadWire.self)
             guard session == generation else { return }
-            guard let url = FilesRules.safeDownloadURL(answer.url) else {
+            guard let url = FilesRules.safeDownloadURL(answer.url, apiBase: api.base) else {
                 Log.app.error("drive download: the API answered an unusable link")
                 downloadError = (.failed, file.name)
                 return
             }
             if !openURL(url) { downloadError = (.failed, file.name) }
         } catch {
-            guard session == generation else { return }
+            guard session == generation, !FilesRules.isCancellation(error) else { return }
             downloadError = (FilesRules.downloadError(for: error), file.name)
         }
     }
@@ -227,6 +241,9 @@ final class FilesStore {
         trail = [FolderCrumb(id: file.id, externalId: file.externalId, name: file.name)]
         files = []
         nextCursor = nil
+        loadingMore = false
+        loadMoreFailed = false
+        downloadError = nil
         phase = .idle
         appliedQuery = ""
         stale = false

@@ -10,12 +10,26 @@ import Observation
 final class FreeTimeStore {
     private let api: APIClient
 
-    private(set) var result: TeamAvailabilityWire?
+    /// Read through `result(for:)`: an answer belongs to one team.
+    private var result: TeamAvailabilityWire?
     private(set) var fetchedAt: Date?
     private(set) var pending = false
-    private(set) var failed = false
+    private var failed = false
     /// The team the user picked; nil follows the first saved team.
     var selectedTeamId: String?
+
+    /// The team `result` / `failed` were asked for. An answer is shown only
+    /// under that team: when the picked team is deleted and the selection
+    /// falls back to another, the old answer must not read as the new team's.
+    private(set) var answeredTeamId: String?
+
+    func result(for teamId: String?) -> TeamAvailabilityWire? {
+        teamId != nil && teamId == answeredTeamId ? result : nil
+    }
+
+    func failed(for teamId: String?) -> Bool {
+        teamId != nil && teamId == answeredTeamId && failed
+    }
 
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var request = 0
@@ -39,6 +53,7 @@ final class FreeTimeStore {
         fetchedAt = nil
         failed = false
         pending = false
+        answeredTeamId = nil
     }
 
     func find(teamId: String, now: Date = Date()) async {
@@ -47,12 +62,19 @@ final class FreeTimeStore {
         let session = generation
         pending = true
         failed = false
+        if answeredTeamId != teamId {
+            result = nil
+            fetchedAt = nil
+        }
+        answeredTeamId = teamId
         do {
             let answer = try await api.get(
                 FreeTimeRules.availabilityPath(teamId: teamId, now: now), as: TeamAvailabilityWire.self)
             guard session == generation, ticket == request else { return }
             result = answer
             fetchedAt = Date()
+        } catch where FilesRules.isCancellation(error) {
+            guard session == generation, ticket == request else { return }
         } catch {
             guard session == generation, ticket == request else { return }
             Log.app.debug("free time failed: \(String(describing: error), privacy: .private)")
@@ -69,14 +91,17 @@ final class FreeTimeStore {
         pending = false
         failed = false
         selectedTeamId = nil
+        answeredTeamId = nil
     }
 
     var isClean: Bool {
         result == nil && fetchedAt == nil && !pending && !failed && selectedTeamId == nil
+            && answeredTeamId == nil
     }
 
     /// Offscreen previews only.
-    func seedForRender(result: TeamAvailabilityWire, fetchedAt: Date) {
+    func seedForRender(result: TeamAvailabilityWire, fetchedAt: Date, teamId: String) {
+        answeredTeamId = teamId
         self.result = result
         self.fetchedAt = fetchedAt
     }

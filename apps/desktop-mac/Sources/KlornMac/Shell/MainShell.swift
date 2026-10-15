@@ -72,13 +72,12 @@ struct MainShell: View {
                 SurfaceStateView(state: model.surfaceState)
             }
         } else {
-            switch model.mainNav.section {
+            switch FilesRules.displayed(model.mainNav.section, files: model.clientFlags.files) {
             case .today: TodayScreen(actions: actions, now: renderDate ?? Date())
             case .mail: MailSection(actions: actions)
             case .calendar: CalendarSection(actions: actions, initialAnchor: renderDate ?? Date())
-            // FD-7: a section the flag no longer allows falls back to Today.
-            case .files where model.clientFlags.files: FilesSection()
-            case .files: TodayScreen(actions: actions, now: renderDate ?? Date())
+            // FD-7: with the flag off `displayed` already answered Today.
+            case .files: FilesSection()
             case .assistant: AssistantSection(actions: actions)
             }
         }

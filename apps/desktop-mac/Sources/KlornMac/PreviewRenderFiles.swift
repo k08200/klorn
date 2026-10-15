@@ -101,7 +101,7 @@ extension PreviewRender {
         shot("today-p12") {
             $0.files.seedForRender(files: files, recent: Array(files.prefix(5)))
             if let result = availability(freeTimeTeamJSON) {
-                $0.freeTime.seedForRender(result: result, fetchedAt: date)
+                $0.freeTime.seedForRender(result: result, fetchedAt: date, teamId: "t1")
             }
             $0.navigate(to: .today)
         }
@@ -109,7 +109,8 @@ extension PreviewRender {
         shot("today-free-time-self-only", teamMode: true) {
             if let result = availability(freeTimeSelfOnlyJSON) {
                 // Fetched 20 minutes before the shot: "Check again" is offered.
-                $0.freeTime.seedForRender(result: result, fetchedAt: date.addingTimeInterval(-20 * 60))
+                $0.freeTime.seedForRender(
+                    result: result, fetchedAt: date.addingTimeInterval(-20 * 60), teamId: "t1")
             }
             $0.files.seedForRender(files: [], recent: [])
             $0.navigate(to: .today)
