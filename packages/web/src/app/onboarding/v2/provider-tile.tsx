@@ -7,6 +7,7 @@
  * health in words, and at most one button.
  */
 
+import Link from "next/link";
 import Button from "../../../components/ui/button";
 import type { AccountHealth } from "../../../lib/connected-accounts";
 import { useT } from "../../../lib/i18n";
@@ -87,6 +88,18 @@ export function ProviderTileCard({ tile, busy, disabled, onAction }: ProviderTil
             </li>
           ))}
         </ul>
+      )}
+
+      {tile.action === "pro" && (
+        <p className="mt-auto text-caption text-ink-mid">
+          {t("mailAccount.proGate.title")}{" "}
+          <Link
+            href="/billing"
+            className="focus-ring inline-flex min-h-11 items-center rounded-control font-medium text-accent-deep underline"
+          >
+            {t("mailAccount.proGate.upgrade")}
+          </Link>
+        </p>
       )}
 
       {actionKey && (

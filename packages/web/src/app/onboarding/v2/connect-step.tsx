@@ -12,6 +12,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useState } from "react";
 import { ICloudImapSection } from "../../../components/icloud-imap-section";
+import {
+  isEntitlementRefusal,
+  MailAccountProGate,
+} from "../../../components/mail-account-pro-gate";
 import { NaverImapSection } from "../../../components/naver-imap-section";
 import Button from "../../../components/ui/button";
 import { Sheet } from "../../../components/ui/sheet";
@@ -28,7 +32,7 @@ import {
 import { queryKeys } from "../../../lib/query-keys";
 import { captureClientError } from "../../../lib/sentry";
 import type { ConnectedAccountsState } from "../../../lib/use-connected-accounts";
-import { hasPrimaryGoogle, type ProviderTile, providerTiles } from "./model";
+import { canAddMailAccount, hasPrimaryGoogle, type ProviderTile, providerTiles } from "./model";
 import { ProviderTileCard } from "./provider-tile";
 import { ReturnNotice } from "./return-notice";
 import { useProviderAvailability } from "./use-provider-availability";
@@ -57,11 +61,13 @@ interface ConnectStepProps {
 export function ConnectStep(props: ConnectStepProps) {
   const { accounts, returned, onDismissReturned, onContinue, onSkip } = props;
   const { t } = useT();
-  const { googleNeedsReconnect } = useAuth();
+  const { googleNeedsReconnect, user } = useAuth();
   const queryClient = useQueryClient();
   const availability = useProviderAvailability();
   const [sheet, setSheet] = useState<FormProvider | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
+  // The server refused a start with the second-account gate.
+  const [proRefused, setProRefused] = useState(false);
   // The start request has answered and the browser is leaving for the
   // provider: the tiles stay inert until this page is shown again (a return
   // through the back/forward cache does not remount it).
@@ -72,7 +78,9 @@ export function ConnectStep(props: ConnectStepProps) {
     return () => window.removeEventListener("pageshow", onShow);
   }, []);
 
-  const tiles = providerTiles(availability.providers, accounts.accounts);
+  // `entitled` is server-computed (true while the paywall is off).
+  const canAdd = canAddMailAccount(user?.entitled !== false, accounts.accounts);
+  const tiles = providerTiles(availability.providers, accounts.accounts, canAdd);
   const connected = accounts.accounts.length > 0;
   const refreshAccounts = () =>
     void queryClient.invalidateQueries({ queryKey: queryKeys.email.inboxes() });
@@ -90,6 +98,7 @@ export function ConnectStep(props: ConnectStepProps) {
     },
     onMutate: () => {
       setStartError(null);
+      setProRefused(false);
       onDismissReturned();
     },
     onSuccess: () => {
@@ -97,15 +106,19 @@ export function ConnectStep(props: ConnectStepProps) {
     },
     onError: (err, tile) => {
       forgetConnect();
+      if (err instanceof Error && isEntitlementRefusal(err.message)) {
+        setProRefused(true);
+        return;
+      }
       captureClientError(err, { scope: "onboarding-v2.connect", provider: tile.provider });
-      const refused = err instanceof Error && err.message.startsWith("API 403");
-      setStartError(t(refused ? "mailAccount.proGate.title" : "onboardingV2.connect.failed"));
+      setStartError(t("onboardingV2.connect.failed"));
     },
   });
 
   const onAction = (tile: ProviderTile) => {
     if (tile.kind === "form") {
       setStartError(null);
+      setProRefused(false);
       setSheet(tile.provider === "ICLOUD" ? "ICLOUD" : "NAVER");
       return;
     }
@@ -141,6 +154,7 @@ export function ConnectStep(props: ConnectStepProps) {
           </p>
         )}
         {returned && <ReturnNotice result={returned} onDismiss={onDismissReturned} />}
+        {proRefused && <MailAccountProGate />}
         {startError && (
           <p
             role="alert"

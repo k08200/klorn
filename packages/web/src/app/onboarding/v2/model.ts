@@ -34,8 +34,13 @@ const CONNECT_KIND: ReadonlyMap<ConnectableProvider, ConnectKind> = new Map([
   ["ICLOUD", "form"],
 ]);
 
-/** What pressing the tile's button does; `none` draws no button. */
-export type TileAction = "connect" | "add" | "reconnect" | "manage" | "none";
+/**
+ * What pressing the tile's button does; `none` draws no button. `pro`: this
+ * would be a NEW mail account and the user's plan covers only the one they
+ * have (the first mail account is free, a second one Pro) — the tile shows the
+ * Pro note instead of a button that would be refused after the click.
+ */
+export type TileAction = "connect" | "add" | "reconnect" | "manage" | "pro" | "none";
 
 export interface ProviderTile {
   provider: ConnectableProvider;
@@ -90,6 +95,7 @@ function tileNotes(available: ProviderAvailability, action: TileAction): string[
 export function providerTiles(
   available: readonly ProviderAvailability[],
   accounts: readonly ConnectedAccount[],
+  canAddAccount = true,
 ): ProviderTile[] {
   const tiles: ProviderTile[] = [];
   for (const entry of available) {
@@ -97,7 +103,9 @@ export function providerTiles(
     const scopeKey = SCOPE_KEY.get(entry.provider);
     if (!kind || !scopeKey) continue;
     const own = accounts.filter((account) => account.provider === entry.provider);
-    const action = tileAction(entry, own, kind);
+    const wanted = tileAction(entry, own, kind);
+    // Reconnecting or managing an account the user has is never gated.
+    const action = !canAddAccount && (wanted === "connect" || wanted === "add") ? "pro" : wanted;
     tiles.push({
       provider: entry.provider,
       kind,
@@ -108,6 +116,19 @@ export function providerTiles(
     });
   }
   return tiles;
+}
+
+/**
+ * Whether a NEW mail account may be connected: a plan with multi_account
+ * (server-computed `entitled`, which is also true while the paywall is off), or
+ * no account yet — the first one is free whatever the provider. The server
+ * re-checks every connect; this only avoids offering a button it would refuse.
+ */
+export function canAddMailAccount(
+  entitled: boolean,
+  accounts: readonly ConnectedAccount[],
+): boolean {
+  return entitled || accounts.length === 0;
 }
 
 /** Whether the primary Google grant is among the accounts (its row has no linked id). */

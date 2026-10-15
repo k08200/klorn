@@ -6,6 +6,7 @@
  * own sentence, and only "connected" reads as a success.
  */
 
+import { MailAccountProGate } from "../../../components/mail-account-pro-gate";
 import Button from "../../../components/ui/button";
 import { useT } from "../../../lib/i18n";
 import type { ConnectOutcome, ConnectResult } from "../../../lib/onboarding-return";
@@ -18,7 +19,6 @@ const MESSAGE_KEY: ReadonlyMap<ConnectOutcome, string> = new Map([
   ["unverified", "onboardingV2.return.unverified"],
   ["self", "onboardingV2.return.self"],
   ["limit", "onboardingV2.return.limit"],
-  ["pro", "mailAccount.proGate.title"],
   ["failed", "onboardingV2.return.failed"],
 ]);
 
@@ -32,6 +32,17 @@ export function ReturnNotice({
   const { t } = useT();
   const ok = result.outcome === "connected";
   const provider = sourceGlyph(result.provider).name;
+  // A second mail account on Free: the shared Pro note, with its upgrade link.
+  if (result.outcome === "pro") {
+    return (
+      <div role="alert" data-outcome="pro" className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <MailAccountProGate />
+        </div>
+        <DismissButton label={t("onboardingV2.return.dismiss")} onDismiss={onDismiss} />
+      </div>
+    );
+  }
   return (
     <div
       role={ok ? "status" : "alert"}
@@ -48,24 +59,25 @@ export function ReturnNotice({
         </span>{" "}
         {t(MESSAGE_KEY.get(result.outcome) ?? "onboardingV2.return.failed")}
       </p>
-      <Button
-        variant="ghost"
-        size="icon"
-        aria-label={t("onboardingV2.return.dismiss")}
-        onClick={onDismiss}
-      >
-        <svg
-          aria-hidden="true"
-          viewBox="0 0 16 16"
-          className="size-4"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-        >
-          <path d="M4 4l8 8M12 4l-8 8" />
-        </svg>
-      </Button>
+      <DismissButton label={t("onboardingV2.return.dismiss")} onDismiss={onDismiss} />
     </div>
+  );
+}
+
+function DismissButton({ label, onDismiss }: { label: string; onDismiss: () => void }) {
+  return (
+    <Button variant="ghost" size="icon" aria-label={label} onClick={onDismiss}>
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 16 16"
+        className="size-4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      >
+        <path d="M4 4l8 8M12 4l-8 8" />
+      </svg>
+    </Button>
   );
 }
