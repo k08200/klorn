@@ -15,6 +15,7 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { recipientFromHeader } from "../agentcore/auto-mode-sweep.js";
+import { isSingleRecipient } from "../agentcore/auto-reply-send.js";
 import { extractEmailAddress, formatMailbox, parseAddress } from "../mail/email-address.js";
 import { expectLinear, repeatTo } from "./helpers/linear-timing.js";
 
@@ -87,9 +88,27 @@ describe("formatMailbox", () => {
     }
   });
 
+  it.each([
+    ["victim@target.com>x@evil.co"],
+    ["victim@target.com>@evil.co"],
+    ["a@b.com, victim@target.com"],
+    ["no-at-sign"],
+    ["two@at@signs.com"],
+    ["sp ace@x.com"],
+  ])("never lets the address field name another mailbox: %j", (address) => {
+    const from = formatMailbox("Mallory", address);
+    expect(from).toBe(address);
+    expect(isSingleRecipient(parseAddress(from))).toBe(false);
+  });
+
   it("is the address alone, or the name alone, when one is missing", () => {
     expect(formatMailbox("", "a@b.com")).toBe("a@b.com");
     expect(formatMailbox("Name", "")).toBe("Name");
+  });
+
+  it("a name with no address cannot name a mailbox either", () => {
+    const from = formatMailbox("<victim@target.com>", "");
+    expect(isSingleRecipient(parseAddress(from))).toBe(false);
   });
 });
 

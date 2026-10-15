@@ -72,18 +72,24 @@ export function parseAddress(value: string): string {
 
 /** Characters that would change how parseAddress reads a display name left unquoted. */
 const DISPLAY_NAME_SPECIALS = /["\\()<>]/;
+/** An address safe inside `<...>`: one "@", nothing that ends, splits or quotes a mailbox. */
+const PLAIN_ADDRESS = /^[^\s<>"\\(),;:@\p{Cc}]+@[^\s<>"\\(),;:@\p{Cc}]+$/u;
 
 /**
  * A From value for a name and an address a provider gave separately (IMAP's
  * envelope, Graph's emailAddress). The name is quoted, its `"` and `\` escaped,
  * only when it holds a character that would otherwise change the parse, so the
- * value names that one address whatever the sender put in their name.
+ * value names that one address whatever the sender put in their name. An address
+ * that is not plain (`victim@t.com>x@evil.co`, two "@", a space, a comma) is
+ * returned bare: inside `<...>` it could close early and name another mailbox,
+ * bare it fails every single-recipient check.
  */
 export function formatMailbox(name: string, address: string): string {
   const n = name.trim();
   const a = address.trim();
-  if (!n || !a) return a || n;
   const shown = DISPLAY_NAME_SPECIALS.test(n) ? `"${n.replace(/["\\]/g, "\\$&")}"` : n;
+  if (!a) return shown;
+  if (!n || !PLAIN_ADDRESS.test(a)) return a;
   return `${shown} <${a}>`;
 }
 
