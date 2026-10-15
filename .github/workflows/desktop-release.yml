@@ -161,7 +161,12 @@ jobs:
             --team-id "$NOTARY_TEAM_ID" \
             --password "$NOTARY_PASSWORD" \
             --wait
-          xcrun stapler staple Klorn.app
+          # Apple's ticket service (api.apple-cloudkit.com) drops connections from
+          # hosted runners now and then (NSURLError -1005, stapler "Error 68").
+          # Retry only the network-bound calls; a genuinely bad ticket or
+          # signature fails all five attempts, so the gate stays strict.
+          retry() { for n in 1 2 3 4 5; do "$@" && return 0; echo "attempt $n failed: $*"; sleep $((n * 15)); done; return 1; }
+          retry xcrun stapler staple Klorn.app
 
       - name: Verify Gatekeeper acceptance (the real double-click gate)
         if: steps.signing.outputs.enabled == 'true'
@@ -172,8 +177,10 @@ jobs:
           # a user's Mac. Assert that here so a mis-signed build fails the
           # release loudly instead of shipping a "notarized" app that still
           # bounces at first launch. -vvv prints "source=Notarized Developer ID".
-          spctl --assess --type execute -vvv Klorn.app
-          stapler validate Klorn.app
+          # Network-bound Apple calls retry; see "Notarize & staple".
+          retry() { for n in 1 2 3 4 5; do "$@" && return 0; echo "attempt $n failed: $*"; sleep $((n * 15)); done; return 1; }
+          retry spctl --assess --type execute -vvv Klorn.app
+          retry stapler validate Klorn.app
 
       # Both packages are built from the app AFTER it has been signed, notarized
       # and stapled, so each carries the ticket and opens offline.
@@ -202,7 +209,9 @@ jobs:
             --team-id "$NOTARY_TEAM_ID" \
             --password "$NOTARY_PASSWORD" \
             --wait
-          xcrun stapler staple "$RUNNER_TEMP/Klorn.dmg"
+          # Network-bound Apple calls retry; see "Notarize & staple".
+          retry() { for n in 1 2 3 4 5; do "$@" && return 0; echo "attempt $n failed: $*"; sleep $((n * 15)); done; return 1; }
+          retry xcrun stapler staple "$RUNNER_TEMP/Klorn.dmg"
 
       - name: Verify the DMG passes Gatekeeper
         if: steps.signing.outputs.enabled == 'true'
@@ -210,9 +219,11 @@ jobs:
           # A disk image is assessed as "open", not "execute", and needs the
           # primary-signature context — `--type execute` on a .dmg reports a
           # misleading pass.
-          spctl --assess --type open \
+          # Network-bound Apple calls retry; see "Notarize & staple".
+          retry() { for n in 1 2 3 4 5; do "$@" && return 0; echo "attempt $n failed: $*"; sleep $((n * 15)); done; return 1; }
+          retry spctl --assess --type open \
             --context context:primary-signature -vvv "$RUNNER_TEMP/Klorn.dmg"
-          stapler validate "$RUNNER_TEMP/Klorn.dmg"
+          retry stapler validate "$RUNNER_TEMP/Klorn.dmg"
 
       - name: Publish GitHub Release
         env:
