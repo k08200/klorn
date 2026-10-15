@@ -17,6 +17,10 @@ const judgeEmail = vi.hoisted(() => vi.fn());
 const markAsRead = vi.hoisted(() => vi.fn(async () => ({ success: true })));
 const oneClickMock = vi.hoisted(() => vi.fn(async () => ({ ok: true })));
 const scheduleAgent = vi.hoisted(() => vi.fn());
+const reserveQuota = vi.hoisted(() =>
+  vi.fn(async () => ({ ok: true }) as { ok: boolean; reason?: string }),
+);
+const captureError = vi.hoisted(() => vi.fn());
 
 vi.mock("../db.js", () => {
   const prisma = { emailMessage: { findUnique, create, update: vi.fn(async () => ({})) } };
@@ -44,7 +48,8 @@ vi.mock("../mail/email-attachments.js", () => ({
   upsertEmailAttachments: vi.fn(async () => {}),
   analyzePendingEmailAttachments: vi.fn(async () => 0),
 }));
-vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
+vi.mock("../sentry.js", () => ({ captureError }));
+vi.mock("../mail/unsubscribe-quota.js", () => ({ reserveAutoUnsubscribe: reserveQuota }));
 vi.mock("../mail/list-unsubscribe.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../mail/list-unsubscribe.js")>();
   return { ...original, executeOneClickUnsubscribe: oneClickMock };
@@ -91,6 +96,9 @@ beforeEach(() => {
   markAsRead.mockClear();
   oneClickMock.mockClear();
   scheduleAgent.mockClear();
+  reserveQuota.mockReset();
+  reserveQuota.mockResolvedValue({ ok: true });
+  captureError.mockClear();
   process.env.AUTO_UNSUBSCRIBE_ENABLED = "true";
 });
 
@@ -103,6 +111,28 @@ describe("auto-unsubscribe hook", () => {
     await persistGmailEmail("u1", promoEmail());
     await vi.waitFor(() => expect(oneClickMock).toHaveBeenCalledTimes(1));
     expect(oneClickMock).toHaveBeenCalledWith("https://shop.com/unsub");
+    // The caps are asked first, for this user and this target.
+    expect(reserveQuota).toHaveBeenCalledWith("u1", "https://shop.com/unsub");
+  });
+
+  it("sends nothing when a cap refuses", async () => {
+    reserveQuota.mockResolvedValue({ ok: false, reason: "host-cap" });
+    await persistGmailEmail("u1", promoEmail());
+    await vi.waitFor(() => expect(reserveQuota).toHaveBeenCalledTimes(1));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(oneClickMock).not.toHaveBeenCalled();
+  });
+
+  it("fails closed: a quota error sends nothing and is captured", async () => {
+    reserveQuota.mockRejectedValue(new Error("db down"));
+    await persistGmailEmail("u1", promoEmail());
+    await vi.waitFor(() =>
+      expect(captureError).toHaveBeenCalledWith(expect.any(Error), {
+        tags: { scope: "firewall.auto_unsubscribe_quota" },
+        extra: { userId: "u1" },
+      }),
+    );
+    expect(oneClickMock).not.toHaveBeenCalled();
   });
 
   it("does nothing when the flag is off", async () => {
