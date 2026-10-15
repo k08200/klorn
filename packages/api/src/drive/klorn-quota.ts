@@ -41,6 +41,19 @@ export function klornDriveQuotaBytes(): number {
   return Number(raw);
 }
 
+/**
+ * The limit, or null while every upload is refused for want of a usable one:
+ * what a client shows before it offers an upload (`GET /api/drive/limits`).
+ */
+export function klornDriveQuotaOrNull(): number | null {
+  try {
+    return klornDriveQuotaBytes();
+  } catch (err) {
+    if (err instanceof KlornDriveError) return null;
+    throw err;
+  }
+}
+
 /** Throws `quota-exceeded` when `incomingBytes` more would pass the user's limit. */
 export async function assertWithinKlornQuota(
   userId: string,
