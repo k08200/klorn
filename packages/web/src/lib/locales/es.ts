@@ -76,6 +76,10 @@ const es: Record<string, string> = {
   "today.freeTime.error": "No se pudieron revisar los calendarios del equipo.",
   "today.freeTime.none": "No hay tiempo libre común en los próximos {days} días.",
   "today.freeTime.unknown": "Calendarios no visibles, no contados como libres: {members}",
+  "today.freeTime.selfOnly":
+    "Klorn aún no puede ver el calendario de nadie más, así que estos son solo tus huecos libres.",
+  "today.freeTime.selfOnlyList": "Tus huecos libres",
+  "today.freeTime.teamList": "Horas en que todas las personas visibles están libres",
   "today.accounts.label": "Cuentas conectadas",
   "today.accounts.loading": "Cargando cuentas",
   "today.accounts.error": "No se pudieron cargar tus cuentas.",

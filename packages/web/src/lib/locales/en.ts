@@ -78,6 +78,10 @@ const en: Record<string, string> = {
   "today.freeTime.error": "Couldn't check the team's calendars.",
   "today.freeTime.none": "No common free time in the next {days} days.",
   "today.freeTime.unknown": "Calendars not visible, not counted as free: {members}",
+  "today.freeTime.selfOnly":
+    "Klorn can't see anyone else's calendar yet, so these are only your free times.",
+  "today.freeTime.selfOnlyList": "Your free times",
+  "today.freeTime.teamList": "Times everyone visible is free",
   "today.accounts.label": "Connected accounts",
   "today.accounts.loading": "Loading accounts",
   "today.accounts.error": "Could not load your accounts.",

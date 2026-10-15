@@ -27,6 +27,15 @@ export function freeTimeVisible(
   return user?.teamMode === true && teams.length > 0;
 }
 
+/**
+ * Whose free time the slots are. With no member actually checked (every
+ * calendar hidden), the slots are only the user's own and must not read as
+ * "everyone is free".
+ */
+export function freeTimeScope(result: { checkedMembers: readonly string[] }): "team" | "self-only" {
+  return result.checkedMembers.length > 0 ? "team" : "self-only";
+}
+
 /** GET /api/teams/:id/availability for the next FREE_TIME_WINDOW_DAYS days. */
 export function availabilityPath(teamId: string, now: Date): string {
   const params = new URLSearchParams({
@@ -47,7 +56,6 @@ function formatters(locale: string, timeZone: string) {
   const time = new Intl.DateTimeFormat(locale, {
     hour: "2-digit",
     minute: "2-digit",
-    hourCycle: "h23",
     timeZone,
   });
   return { day, time };

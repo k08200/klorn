@@ -77,6 +77,10 @@ const de: Record<string, string> = {
   "today.freeTime.error": "Die Kalender des Teams konnten nicht geprüft werden.",
   "today.freeTime.none": "Keine gemeinsame freie Zeit in den nächsten {days} Tagen.",
   "today.freeTime.unknown": "Kalender nicht sichtbar, nicht als frei gezählt: {members}",
+  "today.freeTime.selfOnly":
+    "Klorn kann noch keinen anderen Kalender sehen – das sind nur deine freien Zeiten.",
+  "today.freeTime.selfOnlyList": "Deine freien Zeiten",
+  "today.freeTime.teamList": "Zeiten, in denen alle Sichtbaren frei sind",
   "today.accounts.label": "Verbundene Konten",
   "today.accounts.loading": "Konten werden geladen",
   "today.accounts.error": "Deine Konten konnten nicht geladen werden.",

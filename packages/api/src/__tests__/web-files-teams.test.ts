@@ -19,6 +19,7 @@ import {
   FREE_TIME_DURATION_MINUTES,
   FREE_TIME_WINDOW_DAYS,
   formatSlot,
+  freeTimeScope,
   freeTimeVisible,
 } from "../../../web/src/app/today/free-time-model";
 import { FILES_HOME, filesEnabled, showFilesNav, withFiles } from "../../../web/src/lib/home";
@@ -126,6 +127,31 @@ describe("safeWebUrl", () => {
     expect(safeWebUrl("not a url")).toBeNull();
     expect(safeWebUrl(null)).toBeNull();
     expect(safeWebUrl("")).toBeNull();
+  });
+});
+
+describe("safeWebUrl hardening", () => {
+  it("refuses a link that carries credentials", () => {
+    expect(safeWebUrl("https://user:pass@drive.example.com/x")).toBeNull();
+    expect(safeWebUrl("https://user@drive.example.com/x")).toBeNull();
+  });
+
+  it("returns the normalised href, not the source's string", () => {
+    expect(safeWebUrl("HTTPS://Drive.Example.com/a b")).toBe("https://drive.example.com/a%20b");
+    expect(safeWebUrl("  https://drive.example.com/x  ")).toBe("https://drive.example.com/x");
+  });
+
+  it("refuses a protocol-relative link and script schemes in any case", () => {
+    expect(safeWebUrl("//drive.example.com/x")).toBeNull();
+    expect(safeWebUrl("JavaScript:alert(1)")).toBeNull();
+    expect(safeWebUrl(" javascript:alert(1)")).toBeNull();
+  });
+});
+
+describe("freeTimeScope", () => {
+  it("is the team's time only when at least one member was actually checked", () => {
+    expect(freeTimeScope({ checkedMembers: ["a@x.com"] })).toBe("team");
+    expect(freeTimeScope({ checkedMembers: [] })).toBe("self-only");
   });
 });
 

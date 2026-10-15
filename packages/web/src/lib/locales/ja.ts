@@ -76,6 +76,10 @@ const ja: Record<string, string> = {
   "today.freeTime.error": "チームのカレンダーを確認できませんでした。",
   "today.freeTime.none": "今後{days}日間に全員の空き時間はありません。",
   "today.freeTime.unknown": "カレンダーが見えないため空きとして扱っていないメンバー: {members}",
+  "today.freeTime.selfOnly":
+    "まだ他のメンバーのカレンダーが見えないため、以下はあなたの空き時間だけです。",
+  "today.freeTime.selfOnlyList": "あなたの空き時間",
+  "today.freeTime.teamList": "確認できた全員の空き時間",
   "today.accounts.label": "接続済みアカウント",
   "today.accounts.loading": "アカウントを読み込み中",
   "today.accounts.error": "アカウントを読み込めませんでした。",

@@ -46,14 +46,19 @@ export function formatFileSize(bytes: number | null, locale: string): string {
 }
 
 /**
- * A file's link into its own service, only when it is https. The name and the
- * link come from the source, so anything else (javascript:, data:, http:, a
- * relative path) is never rendered as a link.
+ * A file's link into its own service, only when it is https and carries no
+ * credentials. The name and the link come from the source, so anything else
+ * (javascript:, data:, http:, a relative or protocol-relative path, user:pass@)
+ * is never rendered as a link. The parsed, normalised href is returned, never
+ * the source's own string.
  */
 export function safeWebUrl(url: string | null | undefined): string | null {
   if (!url) return null;
   try {
-    return new URL(url).protocol === "https:" ? url : null;
+    const parsed = new URL(url.trim());
+    if (parsed.protocol !== "https:") return null;
+    if (parsed.username !== "" || parsed.password !== "") return null;
+    return parsed.href;
   } catch {
     return null;
   }

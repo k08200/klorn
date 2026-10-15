@@ -23,6 +23,7 @@ import {
   availabilityPath,
   FREE_TIME_WINDOW_DAYS,
   formatSlot,
+  freeTimeScope,
   freeTimeVisible,
 } from "./free-time-model";
 
@@ -98,24 +99,55 @@ function FreeTimeFinder({ teams }: { teams: TeamsListResponse["teams"] }) {
       </div>
       <div aria-live="polite">
         {find.isError && <BlockError message={t("today.freeTime.error")} onRetry={run} />}
-        {find.data && find.data.slots.length === 0 && (
-          <BlockNote>{t("today.freeTime.none", { days: String(FREE_TIME_WINDOW_DAYS) })}</BlockNote>
-        )}
-        {find.data && find.data.slots.length > 0 && (
-          <ul className="flex flex-col gap-1 pt-1">
-            {find.data.slots.map((slot) => (
-              <li key={slot.startTime} className="text-body tabular-nums text-ink-strong">
-                {formatSlot(slot, locale, timeZone)}
-              </li>
-            ))}
-          </ul>
-        )}
-        {find.data && find.data.unknownMembers.length > 0 && (
-          <p className="pt-2 text-caption text-ink-muted [word-break:keep-all]">
-            {t("today.freeTime.unknown", { members: find.data.unknownMembers.join(", ") })}
-          </p>
-        )}
+        {find.data && <FreeTimeResult result={find.data} locale={locale} timeZone={timeZone} />}
       </div>
     </div>
+  );
+}
+
+/**
+ * The slots, after the notice about whose calendars were not seen. With no
+ * member checked at all, the slots are only the user's own and say so.
+ */
+function FreeTimeResult({
+  result,
+  locale,
+  timeZone,
+}: {
+  result: TeamAvailabilityResponse;
+  locale: string;
+  timeZone: string;
+}) {
+  const { t } = useT();
+  const selfOnly = freeTimeScope(result) === "self-only";
+  return (
+    <>
+      {selfOnly ? (
+        <p className="pt-1 text-caption text-ink-muted [word-break:keep-all]">
+          {t("today.freeTime.selfOnly")}
+        </p>
+      ) : (
+        result.unknownMembers.length > 0 && (
+          <p className="pt-1 text-caption text-ink-muted [word-break:keep-all]">
+            {t("today.freeTime.unknown", { members: result.unknownMembers.join(", ") })}
+          </p>
+        )
+      )}
+      {result.slots.length === 0 && (
+        <BlockNote>{t("today.freeTime.none", { days: String(FREE_TIME_WINDOW_DAYS) })}</BlockNote>
+      )}
+      {result.slots.length > 0 && (
+        <ul
+          aria-label={selfOnly ? t("today.freeTime.selfOnlyList") : t("today.freeTime.teamList")}
+          className="flex flex-col gap-1 pt-1"
+        >
+          {result.slots.map((slot) => (
+            <li key={slot.startTime} className="text-body tabular-nums text-ink-strong">
+              {formatSlot(slot, locale, timeZone)}
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
   );
 }

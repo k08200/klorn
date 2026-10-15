@@ -76,6 +76,10 @@ const fr: Record<string, string> = {
   "today.freeTime.error": "Impossible de vérifier les agendas de l’équipe.",
   "today.freeTime.none": "Aucun créneau libre commun dans les {days} prochains jours.",
   "today.freeTime.unknown": "Agendas non visibles, non comptés comme libres : {members}",
+  "today.freeTime.selfOnly":
+    "Klorn ne voit encore l’agenda de personne d’autre : ce sont seulement vos créneaux libres.",
+  "today.freeTime.selfOnlyList": "Vos créneaux libres",
+  "today.freeTime.teamList": "Créneaux où toutes les personnes visibles sont libres",
   "today.accounts.label": "Comptes connectés",
   "today.accounts.loading": "Chargement des comptes",
   "today.accounts.error": "Impossible de charger vos comptes.",
