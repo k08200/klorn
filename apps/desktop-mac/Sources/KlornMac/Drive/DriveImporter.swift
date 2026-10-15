@@ -153,7 +153,8 @@ final class DriveImporter {
         }
         runTask = task
         await task.value
-        runTask = nil
+        // A sign-out and a new import may have replaced it meanwhile.
+        if runTask == task { runTask = nil }
     }
 
     func cancel() { runTask?.cancel() }
@@ -271,7 +272,8 @@ final class DriveImporter {
                 }
             }
             for _ in 0..<DriveImportLimits.uploadConcurrency {
-                guard let file = pending.popFirst() else { break }
+                // Cancelled while the folders were made: nothing more is read.
+                guard !Task.isCancelled, let file = pending.popFirst() else { break }
                 start(file)
             }
             while let (file, failure) = await group.next() {
