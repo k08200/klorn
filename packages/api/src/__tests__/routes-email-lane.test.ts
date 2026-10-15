@@ -20,6 +20,7 @@ const attentionFindMany = vi.hoisted(() => vi.fn(async () => [] as unknown[]));
 vi.mock("../db.js", () => {
   const prisma = {
     userToken: { findFirst: userTokenFindFirst },
+    linkedInboxAccount: { findFirst: vi.fn(async () => null) },
     emailMessage: { findMany: emailFindMany, count: emailCount },
     attentionItem: { findMany: attentionFindMany },
     user: { findUnique: vi.fn(async () => ({ id: "user-1", plan: "FREE", role: "USER" })) },
@@ -146,15 +147,12 @@ describe("GET /api/email — lane on every row", () => {
     await app.close();
   });
 
-  it("demo rows ship a lane so the logged-out list shows chips too", async () => {
+  it("no mail source: no rows at all, so no demo chips pretend to be the user's mail", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "GET", url: "/api/email", headers: auth() });
     expect(res.statusCode).toBe(200);
-    const { emails } = res.json();
-    expect(emails.length).toBeGreaterThan(0);
-    for (const email of emails) {
-      expect(["PUSH", "MEETING", "QUEUE", "INFO", "SILENT"]).toContain(email.tier);
-    }
+    expect(res.json().emails).toEqual([]);
+    expect(res.json().needsConnection).toBe(true);
     await app.close();
   });
 });

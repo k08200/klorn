@@ -89,7 +89,7 @@ vi.mock("../db.js", () => {
       })),
     },
     attentionItem: { upsert: vi.fn(async () => ({})) },
-    linkedInboxAccount: { findMany: vi.fn(async () => []) },
+    linkedInboxAccount: { findMany: vi.fn(async () => []), findFirst: vi.fn(async () => null) },
     user: {
       findUnique: vi.fn(async () => ({ id: "user-1", plan: "FREE", role: "USER" })),
       update: vi.fn(async () => ({})),
@@ -124,12 +124,60 @@ async function buildApp() {
 }
 
 describe("email routes (demo mode)", () => {
-  it("returns demo emails when Gmail not connected", async () => {
+  it("answers an honest empty inbox, flagged needsConnection, when no mail source is connected", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "GET", url: "/api/email", headers: auth() });
     expect(res.statusCode).toBe(200);
-    expect(res.json().source).toBe("demo");
-    expect(res.json().emails.length).toBeGreaterThan(0);
+    const body = res.json();
+    expect(body.source).toBe("demo");
+    expect(body.needsConnection).toBe(true);
+    expect(body.emails).toEqual([]);
+    expect(body.total).toBe(0);
+    expect(JSON.stringify(body)).not.toContain("investor@vc.com");
+    await app.close();
+  });
+
+  it("serves the real DB inbox to an IMAP-only (iCloud / Naver) user with no Google token", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.linkedInboxAccount.findFirst).mockResolvedValueOnce({
+      id: "li-icloud",
+    } as never);
+    vi.mocked(prisma.emailMessage.findMany).mockResolvedValueOnce([
+      {
+        id: "imap-1",
+        gmailId: "icloud:42",
+        threadId: null,
+        linkedInboxAccountId: "li-icloud",
+        from: "Friend <friend@icloud.com>",
+        to: "me@icloud.com",
+        subject: "Dinner Friday?",
+        snippet: "Are you free",
+        body: "Are you free",
+        receivedAt: new Date("2026-10-15T01:00:00.000Z"),
+        labels: [],
+        isRead: false,
+        isStarred: false,
+        priority: "NORMAL",
+        category: null,
+        summary: null,
+        keyPoints: null,
+        actionItems: null,
+        sentiment: null,
+        needsReply: false,
+      },
+    ] as never);
+    vi.mocked(prisma.emailMessage.count).mockResolvedValueOnce(1);
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/email", headers: auth() });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.source).toBe("gmail");
+    expect(body.needsConnection).toBeUndefined();
+    expect(body.emails.map((e: { id: string }) => e.id)).toEqual(["imap-1"]);
+    expect(body.emails[0].linkedInboxAccountId).toBe("li-icloud");
+    expect(prisma.emailMessage.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ userId: "user-1" }) }),
+    );
     await app.close();
   });
 
@@ -138,20 +186,6 @@ describe("email routes (demo mode)", () => {
     const res = await app.inject({ method: "GET", url: "/api/email/demo-1", headers: auth() });
     expect(res.statusCode).toBe(200);
     expect(res.json().id).toBe("demo-1");
-    await app.close();
-  });
-
-  it("filters demo emails by unread", async () => {
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "GET",
-      url: "/api/email?filter=unread",
-      headers: auth(),
-    });
-    expect(res.statusCode).toBe(200);
-    for (const email of res.json().emails) {
-      expect(email.isRead).toBe(false);
-    }
     await app.close();
   });
 
@@ -679,7 +713,7 @@ describe("email routes (demo mode)", () => {
     await app.close();
   });
 
-  it("returns demo stats summary", async () => {
+  it("answers zeroed stats, flagged needsConnection, when no mail source is connected", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "GET",
@@ -687,17 +721,43 @@ describe("email routes (demo mode)", () => {
       headers: auth(),
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json().source).toBe("demo");
-    expect(res.json()).toHaveProperty("total");
-    expect(res.json()).toHaveProperty("unread");
+    expect(res.json()).toEqual({
+      total: 0,
+      unread: 0,
+      urgent: 0,
+      today: 0,
+      categories: {},
+      source: "demo",
+      needsConnection: true,
+    });
     await app.close();
   });
 
-  it("returns demo threads", async () => {
+  it("answers no threads, flagged needsConnection, when no mail source is connected", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "GET", url: "/api/email/threads", headers: auth() });
     expect(res.statusCode).toBe(200);
-    expect(res.json().source).toBe("demo");
+    expect(res.json()).toEqual({
+      threads: [],
+      total: 0,
+      source: "demo",
+      needsConnection: true,
+      page: 1,
+    });
+    await app.close();
+  });
+
+  it("serves real threads to an IMAP-only user with no Google token", async () => {
+    const { prisma } = await import("../db.js");
+    const emailSync = await import("../mail/email-sync.js");
+    vi.mocked(prisma.linkedInboxAccount.findFirst).mockResolvedValueOnce({
+      id: "li-naver",
+    } as never);
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/email/threads", headers: auth() });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().source).toBe("gmail");
+    expect(emailSync.getEmailThreads).toHaveBeenCalledWith("user-1", expect.anything());
     await app.close();
   });
 

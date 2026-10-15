@@ -1511,6 +1511,14 @@ const ja: Record<string, string> = {
   "mailV2.shown": "{total} 件中 {shown} 件",
   "mailV2.demo": "これはデモメールです。",
   "mailV2.demo.connect": "アカウントを接続すると自分のメールが表示されます",
+  "mailV2.noSource": "まだメールアカウントが接続されていません。",
+  "imapConnect.proGate.title": "{provider} の接続は Pro の機能です。",
+  "imapConnect.proGate.body":
+    "Free には Google アカウント 1 件が含まれます。このメールボックスにもファイアウォールを適用するにはアップグレードしてください。",
+  "imapConnect.proGate.upgrade": "アップグレード",
+  "imapConnect.firstSync.started": "メールを取得しています。まもなくメールに表示されます。",
+  "imapConnect.firstSync.delayed":
+    "このアカウントの最初のメールが表示されるまで最大 5 分ほどかかる場合があります。",
   "mailV2.archive.done": "アーカイブしました",
   "mailV2.archive.doneMany": "{count} 件をアーカイブしました",
   "mailV2.delete.done": "削除しました",

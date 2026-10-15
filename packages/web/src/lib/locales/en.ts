@@ -1533,6 +1533,13 @@ const en: Record<string, string> = {
   "mailV2.shown": "{shown} of {total}",
   "mailV2.demo": "This is demo mail.",
   "mailV2.demo.connect": "Connect an account to see your own",
+  "mailV2.noSource": "No mail account is connected yet.",
+  "imapConnect.proGate.title": "Connecting {provider} is a Pro feature.",
+  "imapConnect.proGate.body":
+    "Free includes one Google account. Upgrade to run the firewall across this mailbox too.",
+  "imapConnect.proGate.upgrade": "Upgrade",
+  "imapConnect.firstSync.started": "Fetching your mail now. It shows up in Mail shortly.",
+  "imapConnect.firstSync.delayed": "First mail from this account can take up to ~5 minutes.",
   "mailV2.archive.done": "Archived",
   "mailV2.archive.doneMany": "{count} archived",
   "mailV2.delete.done": "Deleted",

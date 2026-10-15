@@ -48,6 +48,7 @@ vi.mock("../db.js", () => {
   return { prisma, db: prisma };
 });
 vi.mock("../crypto-tokens.js", () => ({ encryptToken: vi.fn(() => "cipher") }));
+vi.mock("../mail/imap-first-sync.js", () => ({ startFirstImapSync: vi.fn(() => true) }));
 vi.mock("../mail/imap-sync.js", () => ({
   verifyImapCredentials: (...args: unknown[]) =>
     (imapSync.verifyImapCredentials as (...a: unknown[]) => unknown)(...args),
@@ -159,6 +160,7 @@ describe("flag ON: connect with a user-supplied host", () => {
       ok: true,
       email: "me@fastmail.com",
       host: "imap.fastmail.com:993",
+      firstSync: true,
     });
     expect(imapSync.verifyImapCredentials).toHaveBeenCalledWith(
       expect.objectContaining({

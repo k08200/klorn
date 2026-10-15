@@ -842,7 +842,7 @@ function EmailView() {
             </h1>
             <p className="mt-1.5 text-sm text-ink-mid">
               {source === "demo"
-                ? "Demo data — connect Gmail"
+                ? "No account connected — connect one in Settings"
                 : replyCount > 0
                   ? `${replyCount} need a reply`
                   : unreadCount > 0
@@ -982,7 +982,9 @@ function EmailView() {
             </div>
             <p className="mt-2 text-sm text-ink-mid">
               {source === "demo" ? (
-                <span className="text-accent-deep">Demo data — connect Gmail in Settings</span>
+                <span className="text-accent-deep">
+                  No mail account connected — connect one in Settings
+                </span>
               ) : replyCount > 0 ? (
                 <>
                   <span className="font-medium text-ink-soft">{replyCount}</span>

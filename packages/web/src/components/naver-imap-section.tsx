@@ -6,6 +6,7 @@ import { apiFetch } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { captureClientError } from "../lib/sentry";
 import { useConfirm } from "./confirm-dialog";
+import { FirstSyncNote, ImapProGate, isEntitlementRefusal } from "./imap-connect-notes";
 import Button from "./ui/button";
 import ErrorAlert from "./ui/error-alert";
 import { Input } from "./ui/input";
@@ -23,6 +24,8 @@ interface ConnectResponse {
   email?: string;
   host?: string;
   message?: string;
+  /** true = the first poll started now; false/absent = next scheduler tick. */
+  firstSync?: boolean;
 }
 
 const DEFAULT_HOST = "imap.naver.com:993";
@@ -43,7 +46,7 @@ interface NaverImapSectionProps {
 export function NaverImapSection({ embedded = false, onChanged }: NaverImapSectionProps = {}) {
   const { user } = useAuth();
   const { confirm } = useConfirm();
-  // Multi-account (a second inbox) is a paid feature. `entitled` is server-
+  // Any IMAP mailbox is Pro (Free = one Google account), first source or not. `entitled` is server-
   // computed and always true while the paywall is off, so this gate is inert
   // pre-launch. An already-connected mailbox stays visible so a user who
   // downgraded can still see and disconnect it.
@@ -56,6 +59,11 @@ export function NaverImapSection({ embedded = false, onChanged }: NaverImapSecti
   const [passwordInput, setPasswordInput] = useState("");
   const [hostInput, setHostInput] = useState(DEFAULT_HOST);
   const [submitting, setSubmitting] = useState(false);
+  // Set by a connect: whether its first poll started now (shown under the account).
+  const [firstSync, setFirstSync] = useState<boolean | null>(null);
+  // The server refused with the Pro gate even though `entitled` said otherwise
+  // (stale session flag): show the same upgrade panel, not a raw API error.
+  const [proGated, setProGated] = useState(false);
 
   const loadStatus = useCallback(async () => {
     setLoading(true);
@@ -94,11 +102,16 @@ export function NaverImapSection({ embedded = false, onChanged }: NaverImapSecti
       } else {
         setEmailInput("");
         setPasswordInput("");
+        setFirstSync(data.firstSync === true);
         await loadStatus();
         onChanged?.();
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      if (isEntitlementRefusal(msg)) {
+        setProGated(true);
+        return;
+      }
       captureClientError(err, { scope: "naver-imap.connect" });
       setError(msg || "Connection failed.");
     } finally {
@@ -172,23 +185,15 @@ export function NaverImapSection({ embedded = false, onChanged }: NaverImapSecti
               </Button>
             </div>
           </div>
+          {firstSync !== null && <FirstSyncNote started={firstSync} />}
           {error && (
             <p role="alert" className="text-xs text-state-danger-ink">
               {error}
             </p>
           )}
         </div>
-      ) : !entitled ? (
-        <div className="rounded-xl border border-state-info-line bg-state-info-bg p-4">
-          <p className="text-sm text-ink">
-            Connecting a second inbox is a{" "}
-            <span className="font-semibold text-accent-deep">Pro</span> feature.
-          </p>
-          <p className="mt-1 text-xs text-ink-mid">
-            Free covers your primary Google account. Upgrade in the Subscription section to run the
-            firewall across a Naver mailbox too.
-          </p>
-        </div>
+      ) : !entitled || proGated ? (
+        <ImapProGate provider="Naver Mail" />
       ) : (
         <form onSubmit={handleConnect} className="space-y-3">
           <Input
