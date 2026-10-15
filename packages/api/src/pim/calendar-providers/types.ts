@@ -112,6 +112,11 @@ export interface ProviderCalendarEvent {
    * `calendarKeyOf` (pim/caldav/caldav-listing.ts) names it. Absent elsewhere.
    */
   readonly calendarKey?: string;
+  /**
+   * Google only: the calendar's owner declined this invitation (their own attendee
+   * entry, `self: true`, is `declined`). Absent elsewhere.
+   */
+  readonly declinedBySelf?: boolean;
 }
 
 export interface CalendarCreateInput {

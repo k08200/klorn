@@ -150,7 +150,7 @@ const de: Record<string, string> = {
   "auth.welcomeBack": "Willkommen zurück",
   "auth.inviteOnlyTitle": "Klorn ist nur auf Einladung.",
   "auth.inviteOnlyBody":
-    "Die Beta ist begrenzt, solange die Sicherheitsprüfung von Google läuft, deshalb wird jedes Konto von Hand freigegeben. Fordere zuerst Zugang an — sobald du freigegeben bist, kannst du dich anmelden.",
+    "Die Beta ist begrenzt, deshalb wird jedes Konto von Hand freigegeben. Fordere zuerst Zugang an — sobald du freigegeben bist, kannst du dich anmelden.",
   "auth.requestEarlyAccess": "Frühen Zugang anfragen",
   "auth.alreadyApproved": "Schon freigegeben? Melde dich unten an.",
   "auth.providerLaneLabel": "Mit einem verbundenen Konto anmelden",

@@ -148,7 +148,7 @@ const ja: Record<string, string> = {
   "auth.welcomeBack": "おかえりなさい",
   "auth.inviteOnlyTitle": "Klornは招待制です。",
   "auth.inviteOnlyBody":
-    "Googleのセキュリティ審査が完了するまでベータの枠を絞っており、アカウントは一件ずつ手動で承認しています。まず利用申請をしてください — 承認され次第サインインできます。",
+    "ベータの枠を絞っており、アカウントは一件ずつ手動で承認しています。まず利用申請をしてください — 承認され次第サインインできます。",
   "auth.requestEarlyAccess": "先行アクセスを申請",
   "auth.alreadyApproved": "すでに承認済みですか? 下からサインイン。",
   "auth.providerLaneLabel": "連携済みアカウントでサインイン",

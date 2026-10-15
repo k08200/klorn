@@ -23,6 +23,11 @@ model User {
   /// PROACTIVE_DRAFT_DAILY_CAP a hard bound.
   proactiveDraftDay         String?
   proactiveDraftCount       Int                        @default(0)
+  /// Automatic one-click unsubscribes: today's per-user slot counter
+  /// (mail/unsubscribe-quota.ts). Same conditional-update pattern as
+  /// proactiveDraftDay/Count — AUTO_UNSUBSCRIBE_USER_DAILY_CAP is a hard bound.
+  autoUnsubscribeDay        String?
+  autoUnsubscribeCount      Int                        @default(0)
   passwordHash              String?
   name                      String?
   role                      UserRole                   @default(USER)
@@ -2426,4 +2431,15 @@ model AnalyticsEvent {
   @@index([event, createdAt])
   @@index([userId, event, createdAt])
   @@index([createdAt])
+}
+
+/// Fleet-wide daily counters for automatic one-click unsubscribes
+/// (mail/unsubscribe-quota.ts): "host:<domain>" per target domain and
+/// "global". No user data — the per-user count lives on User. System-only
+/// under RLS (bypass policy, no tenant line).
+model UnsubscribeQuota {
+  key       String   @id
+  day       String
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt
 }

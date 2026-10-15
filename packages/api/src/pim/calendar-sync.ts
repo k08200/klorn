@@ -5,9 +5,13 @@
  * copy of this; they now differ only in how they handle a failure.
  */
 
-import { prisma } from "../db.js";
+import { calendarHideDeclinedEnabled } from "../config.js";
+import { captureError } from "../sentry.js";
 import { getUserTimeZone } from "../user-timezone.js";
-import { reconcileCancelledEvents } from "./calendar-cancellation.js";
+import {
+  reconcileCancelledEvents,
+  removeCancelledGoogleEventRows,
+} from "./calendar-cancellation.js";
 import { connectLinkedCalendars } from "./calendar-providers/dispatch.js";
 import type {
   CalendarListQuery,
@@ -76,13 +80,81 @@ function toSyncRows(events: readonly ProviderCalendarEvent[]): SyncRow[] {
   });
 }
 
-/** One account's sync window as rows. */
-async function listSyncRows(
+interface SplitEvents {
+  readonly kept: readonly ProviderCalendarEvent[];
+  /** Ids of the Google invitations the user declined, when CALENDAR_HIDE_DECLINED_ENABLED is on. */
+  readonly declined: readonly string[];
+}
+
+/** Behind CALENDAR_HIDE_DECLINED_ENABLED, a Google invitation the user declined is no row. */
+function splitDeclined(
   session: CalendarSession,
-  userTimezone: string,
+  events: readonly ProviderCalendarEvent[],
+): SplitEvents {
+  if (session.provider !== "GOOGLE" || !calendarHideDeclinedEnabled()) {
+    return { kept: events, declined: [] };
+  }
+  return {
+    kept: events.filter((event) => event.declinedBySelf !== true),
+    declined: events
+      .filter((event) => event.declinedBySelf === true && event.externalId)
+      .map((event) => event.externalId),
+  };
+}
+
+/** Accounts whose declined-row removal failure was reported; the oldest is forgotten past the cap. */
+const reportedDeclinedFailures = new Set<string>();
+const MAX_REPORTED_DECLINED_FAILURES = 5000;
+
+export function _resetDeclinedRemovalReportsForTests(): void {
+  reportedDeclinedFailures.clear();
+}
+
+/**
+ * Remove the rows an earlier sync wrote for invitations the user has since declined,
+ * through C2b's removal (this account's rows only, attention items resolved, one
+ * transaction). Like the cancellation scan it never fails the sync: the live rows
+ * are already written, and the next sync tries again. A failure is logged and sent
+ * to Sentry once per account until a removal for it succeeds again, so a lasting
+ * failure is not one event per account per sync cycle.
+ */
+async function removeDeclinedRows(
+  userId: string,
+  linkedAccountId: string | null,
+  ids: readonly string[],
   now: Date,
-): Promise<SyncRow[]> {
-  return toSyncRows(await session.listEvents(syncQuery(now, userTimezone)));
+): Promise<void> {
+  if (ids.length === 0) return;
+  const account = `${userId}:${linkedAccountId ?? "primary"}`;
+  try {
+    const { removed, resolved } = await removeCancelledGoogleEventRows(
+      userId,
+      linkedAccountId,
+      { externalIds: [...ids], seriesIds: [] },
+      now,
+    );
+    reportedDeclinedFailures.delete(account);
+    if (removed > 0) {
+      console.log(
+        `[CALENDAR] declined invitations removed ${userId}:${linkedAccountId ?? "primary"} rows=${removed} attentionResolved=${resolved}`,
+      );
+    }
+  } catch (err) {
+    if (reportedDeclinedFailures.has(account)) return;
+    if (reportedDeclinedFailures.size >= MAX_REPORTED_DECLINED_FAILURES) {
+      const oldest = reportedDeclinedFailures.values().next().value;
+      if (oldest !== undefined) reportedDeclinedFailures.delete(oldest);
+    }
+    reportedDeclinedFailures.add(account);
+    console.warn(
+      "[CALENDAR] declined-invitation removal failed (reported once per account until it succeeds):",
+      err instanceof Error ? err.message : String(err),
+    );
+    captureError(err, {
+      tags: { scope: "calendar.declined_removal" },
+      extra: { userId, linkedAccountId },
+    });
+  }
 }
 
 /**
@@ -98,10 +170,15 @@ export async function syncPrimaryCalendarWindow(
   userTimezone: string,
   now: Date = new Date(),
 ): Promise<number> {
-  const rows = await listSyncRows(session, userTimezone, now);
+  const { kept, declined } = splitDeclined(
+    session,
+    await session.listEvents(syncQuery(now, userTimezone)),
+  );
+  const rows = toSyncRows(kept);
   for (const row of rows) {
     await upsertGoogleEventRow(userId, row.externalId, row.fields);
   }
+  await removeDeclinedRows(userId, null, declined, now);
   await reconcileCancelledEvents(session, userId, null, now);
   return rows.length;
 }
@@ -123,7 +200,11 @@ export async function syncLinkedCalendarWindow(
 ): Promise<number> {
   const query = syncQuery(now, userTimezone);
   const listing = session.listWindow ? await session.listWindow(query) : null;
-  const rows = toSyncRows(listing ? listing.events : await session.listEvents(query));
+  const { kept, declined } = splitDeclined(
+    session,
+    listing ? listing.events : await session.listEvents(query),
+  );
+  const rows = toSyncRows(kept);
   for (const row of rows) {
     await upsertLinkedEventRow(
       session.provider,
@@ -134,6 +215,7 @@ export async function syncLinkedCalendarWindow(
       row.calendarKey,
     );
   }
+  await removeDeclinedRows(userId, linkedAccountId, declined, now);
   if (listing) {
     await removeRowsMissingFromWindow(session.provider, userId, linkedAccountId, listing, now);
   }
