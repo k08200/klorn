@@ -2364,7 +2364,13 @@ needs FA-9 and the admin guidance from F0.
     nothing). Such a series is missing or wrong, the same way every sync, so it never
     had rows to remove; neither provider's UI writes such a rule. (8) PARTSTAT is
     not read: an invitation the user DECLINED is still a busy block and a row (no
-    code change; review 2026-10-02). (9) Every fixture is hand-written from RFC
+    code change; review 2026-10-02). Google, 2026-10-15: behind
+    `CALENDAR_HIDE_DECLINED_ENABLED` (OFF), an event whose own attendee entry
+    (`self: true`) is `declined` gets no row on a primary or linked Google sync, and
+    the row an earlier sync wrote is removed through C2b's
+    `removeCancelledGoogleEventRows` (that account's rows, attention items resolved,
+    one transaction; a failure is reported and never fails the sync). Google's
+    free/busy already treats a declined event as free. Outlook and CalDAV unchanged. (9) Every fixture is hand-written from RFC
     4791 / 5545 shapes; none was captured from a real iCloud or Naver answer.
     (10) The deletion valve also refuses a real mass deletion (more than half of a
     month, over 5 rows): those rows stay until they leave the window. (11) An

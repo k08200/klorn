@@ -330,6 +330,18 @@ export function calendarCancellationSyncEnabled(): boolean {
     (process.env.CALENDAR_CANCELLATION_SYNC_ENABLED ?? "").trim().toLowerCase(),
   );
 }
+// Google invitations the user declined. OFF by default (repo doctrine). While
+// unset/false a sync writes a row for a declined invitation like any event. When
+// on, a sync writes no row for it and removes the row an earlier sync wrote,
+// resolving its open attention items (the same removal as C2b's), so the briefing,
+// the reminders and the conflict checks stop showing meetings the user said no to.
+// Read at sync time with the same lenient truthy parse. Turning it off lets the next
+// sync write the rows again.
+export function calendarHideDeclinedEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.CALENDAR_HIDE_DECLINED_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
 // Archive, trash and their inverses for Naver and iCloud over IMAP MOVE — step B2
 // of docs/providers/unified-platform-plan.md. OFF by default (repo doctrine) and
 // independent of IMAP_ACTIONS_ENABLED and IMAP_SEND_ENABLED. While OFF,
