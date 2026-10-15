@@ -1274,7 +1274,7 @@ async function runUserCycle(
   const configUserEntry = automationPlanMap.get(config.userId);
   const configUserPlan = configUserEntry?.plan || "FREE";
   const configUserRole = configUserEntry?.role;
-  const timeZone = normalizeTimeZone((config as unknown as { timezone?: string }).timezone);
+  const timeZone = normalizeTimeZone(config.timezone);
   const today = localDateKey(new Date(), timeZone);
 
   // --- Daily Briefing ---

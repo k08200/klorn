@@ -59,10 +59,16 @@ interface GraphEventPage {
   readonly "@odata.nextLink"?: unknown;
 }
 
-function calendarViewUrl(query: CalendarListQuery): string {
+/** The window a calendarView request covers: the query's, an open end closed at a year. */
+export function calendarViewWindow(query: CalendarListQuery): { timeMin: string; timeMax: string } {
   const timeMax =
     query.timeMax ??
     new Date(Date.parse(query.timeMin) + OPEN_ENDED_WINDOW_DAYS * DAY_MS).toISOString();
+  return { timeMin: query.timeMin, timeMax };
+}
+
+function calendarViewUrl(query: CalendarListQuery): string {
+  const { timeMax } = calendarViewWindow(query);
   const top = Math.min(query.maxResults, MAX_PAGE_SIZE);
   // `$` stays literal in the names: Graph documents them that way, and the
   // values are the only part that needs encoding.
@@ -73,15 +79,45 @@ function calendarViewUrl(query: CalendarListQuery): string {
   );
 }
 
+export interface CalendarViewListing {
+  readonly events: GraphEvent[];
+  /**
+   * True only when every page was read and nothing was left past `maxResults`:
+   * then the listing is the window's whole current set (calendarView expands
+   * every occurrence in range), and a row it lacks was deleted or cancelled.
+   */
+  readonly complete: boolean;
+}
+
 /**
  * The raw events of the window in start order, cancelled ones left out (they are
- * not counted toward `maxResults` either), at most `maxResults` of them.
- * `timeZone` is the zone Graph renders times in (UTC when absent).
+ * not counted toward `maxResults` either), at most `maxResults` of them, and
+ * whether that is all of them. `timeZone` is the zone Graph renders times in
+ * (UTC when absent).
+ */
+export async function readCalendarView(
+  token: string,
+  query: CalendarListQuery,
+): Promise<CalendarViewListing> {
+  return collectCalendarView(token, query, true);
+}
+
+/**
+ * The window's events, at most `maxResults`, without proving the listing complete:
+ * it stops as soon as it has them (no page fetched only to see whether more exist).
  */
 export async function listCalendarView(
   token: string,
   query: CalendarListQuery,
 ): Promise<GraphEvent[]> {
+  return (await collectCalendarView(token, query, false)).events;
+}
+
+async function collectCalendarView(
+  token: string,
+  query: CalendarListQuery,
+  proveComplete: boolean,
+): Promise<CalendarViewListing> {
   const events: GraphEvent[] = [];
   let url: string | null = calendarViewUrl(query);
   for (let page = 0; url !== null && page < MAX_PAGES; page += 1) {
@@ -91,16 +127,25 @@ export async function listCalendarView(
     });
     for (const item of body.value ?? []) {
       if (item.isCancelled === true) continue;
+      if (events.length >= query.maxResults) return overCap(events, query.maxResults);
       events.push(item);
-      if (events.length >= query.maxResults) return events;
+      if (!proveComplete && events.length >= query.maxResults) return { events, complete: false };
     }
     url = nextLinkOf(body);
   }
   // A page cap, not the end of the data: say so, so a truncated sync is visible.
   if (url !== null) {
     console.warn(`[OUTLOOK-CAL] calendarView truncated after ${MAX_PAGES} pages`);
+    return { events, complete: false };
   }
-  return events;
+  return { events, complete: true };
+}
+
+function overCap(events: GraphEvent[], max: number): CalendarViewListing {
+  console.warn(
+    `[OUTLOOK-CAL] calendarView over ${max} events: listing incomplete, nothing removed`,
+  );
+  return { events, complete: false };
 }
 
 /**

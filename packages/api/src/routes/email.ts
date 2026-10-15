@@ -283,23 +283,6 @@ const DEMO_EMAILS = [
   },
 ];
 
-/** Parse email From header */
-function _parseFromHeader(from: string): { name: string; email: string } | null {
-  if (!from) return null;
-  const match = from.match(/^(.+?)\s*<([^>]+)>$/);
-  if (match) {
-    return {
-      name: match[1].replace(/^["']|["']$/g, "").trim(),
-      email: match[2].trim().toLowerCase(),
-    };
-  }
-  const emailOnly = from.trim().toLowerCase();
-  if (emailOnly.includes("@")) {
-    return { name: emailOnly.split("@")[0], email: emailOnly };
-  }
-  return null;
-}
-
 const SKIP_PATTERNS = [
   /noreply@/i,
   /no-reply@/i,

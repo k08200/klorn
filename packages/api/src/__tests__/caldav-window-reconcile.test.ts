@@ -132,6 +132,7 @@ function row(
     endTime: new Date(end),
     updatedAt,
     caldavCalendarKey: calendar,
+    allDay: false,
   };
 }
 
@@ -233,6 +234,75 @@ describe("removeRowsMissingFromWindow", () => {
   ] as const)("never for %s, whatever its listing claims (absence is not a signal there)", async (provider) => {
     await removeRowsMissingFromWindow(provider, "u1", ACCOUNT, listing([], true), NOW);
     expect(db.prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("OUTLOOK removes only while OUTLOOK_CALENDAR_ENABLED is on, and never needs the CalDAV flag", async () => {
+    const savedOutlook = process.env.OUTLOOK_CALENDAR_ENABLED;
+    const savedInbox = process.env.OUTLOOK_INBOX_ENABLED;
+    try {
+      process.env.OUTLOOK_INBOX_ENABLED = "true";
+      delete process.env.CALDAV_CALENDAR_ENABLED;
+      db.tx.calendarEvent.findMany.mockResolvedValue([
+        row("r-kept", "kept@x", "2026-10-05T01:00:00Z", "2026-10-05T02:00:00Z"),
+        row("r-gone", "gone@x", "2026-10-06T01:00:00Z", "2026-10-06T02:00:00Z"),
+      ]);
+      const listed = listing([event("kept@x", "", "")], true, [K_HOME]);
+      delete process.env.OUTLOOK_CALENDAR_ENABLED;
+      expect(await removeRowsMissingFromWindow("OUTLOOK", "u1", ACCOUNT, listed, NOW)).toEqual({
+        removed: 0,
+        resolved: 0,
+      });
+      expect(db.tx.calendarEvent.findMany).not.toHaveBeenCalled();
+      process.env.OUTLOOK_CALENDAR_ENABLED = "true";
+      expect(await removeRowsMissingFromWindow("OUTLOOK", "u1", ACCOUNT, listed, NOW)).toEqual({
+        removed: 1,
+        resolved: 0,
+      });
+    } finally {
+      if (savedOutlook === undefined) delete process.env.OUTLOOK_CALENDAR_ENABLED;
+      else process.env.OUTLOOK_CALENDAR_ENABLED = savedOutlook;
+      if (savedInbox === undefined) delete process.env.OUTLOOK_INBOX_ENABLED;
+      else process.env.OUTLOOK_INBOX_ENABLED = savedInbox;
+    }
+  });
+
+  it("GOOGLE never removes by absence, whatever the flags", async () => {
+    process.env.OUTLOOK_CALENDAR_ENABLED = "true";
+    process.env.OUTLOOK_INBOX_ENABLED = "true";
+    try {
+      db.tx.calendarEvent.findMany.mockResolvedValue(rows(2));
+      await removeRowsMissingFromWindow("GOOGLE", "u1", ACCOUNT, listing([], true), NOW);
+      expect(db.tx.calendarEvent.findMany).not.toHaveBeenCalled();
+    } finally {
+      delete process.env.OUTLOOK_CALENDAR_ENABLED;
+      delete process.env.OUTLOOK_INBOX_ENABLED;
+    }
+  });
+
+  it("an all-day row that began before the window is never removed; one inside it is", async () => {
+    db.tx.calendarEvent.findMany.mockResolvedValue([
+      // Stored at UTC midnight; the provider may already have dropped the day in its zone.
+      {
+        ...row("r-started", "started@x", "2026-09-30T00:00:00Z", "2026-10-01T00:00:01Z"),
+        allDay: true,
+      },
+      {
+        ...row("r-inside", "inside@x", "2026-10-05T00:00:00Z", "2026-10-06T00:00:00Z"),
+        allDay: true,
+      },
+      row("r-kept", "kept@x", "2026-10-07T01:00:00Z", "2026-10-07T02:00:00Z"),
+    ]);
+    const result = await removeRowsMissingFromWindow(
+      "ICLOUD",
+      "u1",
+      ACCOUNT,
+      listing([event("kept@x", "", "")], true),
+      NOW,
+    );
+    expect(result.removed).toBe(1);
+    expect(db.tx.calendarEvent.deleteMany).toHaveBeenCalledWith({
+      where: { userId: "u1", id: { in: ["r-inside"] } },
+    });
   });
 
   it("nothing to remove: no attention or delete write", async () => {
