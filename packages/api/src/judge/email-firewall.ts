@@ -28,6 +28,7 @@ import { findReingestedHistory } from "../mail/imap-history.js";
 import { isImapMessageId } from "../mail/imap-message-id.js";
 import { autoUnsubscribeEnabled, executeOneClickUnsubscribe } from "../mail/list-unsubscribe.js";
 import { mailActionsFor } from "../mail/providers/dispatch.js";
+import { reserveAutoUnsubscribe } from "../mail/unsubscribe-quota.js";
 import { notifyConversationsUpdated } from "../notify/conversations-updated.js";
 import { getUserNotificationLanguage } from "../notify/notification-strings.js";
 import { extractAndUpsertCommitmentsFromText } from "../pim/commitment-ingestion.js";
@@ -246,7 +247,7 @@ export async function persistGmailEmail(
         // browser, so neither may run unattended. Same double gate as the
         // read-marking above; fire-and-forget for the same reason.
         if (autoUnsubscribeEnabled() && email.listUnsubscribeOneClick && email.listUnsubscribeUrl) {
-          void autoUnsubscribePromotional(email.listUnsubscribeUrl);
+          void autoUnsubscribePromotional(userId, email.listUnsubscribeUrl);
         }
       }
     })
@@ -307,7 +308,21 @@ async function markPromotionalEmailRead(
  * Sentry noise here would bury real signal (same rationale as the benign
  * branch of promo auto-read above).
  */
-async function autoUnsubscribePromotional(url: string): Promise<void> {
+async function autoUnsubscribePromotional(userId: string, url: string): Promise<void> {
+  // Capped per user, per target domain and fleet-wide (unsubscribe-quota.ts).
+  // Fail closed: if the caps cannot be checked, nothing is sent.
+  let quota: Awaited<ReturnType<typeof reserveAutoUnsubscribe>>;
+  try {
+    quota = await reserveAutoUnsubscribe(userId, url);
+  } catch (err) {
+    console.warn("[FIREWALL] auto-unsubscribe skipped: quota check failed", err);
+    captureError(err, { tags: { scope: "firewall.auto_unsubscribe_quota" }, extra: { userId } });
+    return;
+  }
+  if (!quota.ok) {
+    console.warn(`[FIREWALL] auto-unsubscribe skipped: ${quota.reason}`);
+    return;
+  }
   const result = await executeOneClickUnsubscribe(url);
   if (!result.ok) {
     console.warn(`[FIREWALL] auto-unsubscribe failed: ${result.reason}`);
