@@ -282,6 +282,8 @@ final class AppModel {
             api: api,
             currentUser: { SessionIdentity.userId(fromToken: tokenStore.load()) })
         self.driveImport = DriveImporter(api: api)
+        self.files = FilesStore(api: api)
+        self.freeTime = FreeTimeStore(api: api)
         self.phase = tokenStore.load() != nil ? .signedIn : .signedOut
         self.selectedInbox =
             UserDefaults.standard.string(forKey: Self.selectedInboxKey) ?? "all"
@@ -333,6 +335,59 @@ final class AppModel {
             loginProviders = resp.providers.map(\.id)
         }
     }
+    // MARK: Files and team free-time (P12)
+
+    /// The drive list behind the Files section and Today's recent files.
+    let files: FilesStore
+    /// Today's "When is everyone free?".
+    let freeTime: FreeTimeStore
+    /// `user.files` / `user.teamMode` from GET /api/auth/me; both false until read.
+    private(set) var clientFlags = ClientFlags()
+    @ObservationIgnored private var clientFlagsFetchedAt: Date?
+
+    /// Re-reads the flags at most every `clientFlagsInterval` (the poll runs
+    /// every minute; the flags move with a server deploy). A failed read keeps
+    /// the last known flags.
+    func refreshClientFlags(now: Date = Date()) async {
+        if let fetched = clientFlagsFetchedAt, now.timeIntervalSince(fetched) < Self.clientFlagsInterval { return }
+        let session = sessionGeneration
+        clientFlagsFetchedAt = now
+        do {
+            let me = try await api.get("/api/auth/me", as: MeFlagsResponse.self)
+            guard isCurrent(session) else { return }
+            applyClientFlags(me.user)
+        } catch _ where !isCurrent(session) {
+            return
+        } catch {
+            clientFlagsFetchedAt = nil
+            Log.app.debug("client flags fetch failed: \(String(describing: error), privacy: .private)")
+        }
+    }
+
+    static let clientFlagsInterval: TimeInterval = 10 * 60
+
+    /// Takes new flags. Files switched off leaves the Files section; team
+    /// mode switched on reads the saved teams (sign-in never did).
+    func applyClientFlags(_ flags: ClientFlags) {
+        let previous = clientFlags
+        clientFlags = flags
+        if !flags.files {
+            files.reset()
+            if mainNav.section == .files { navigate(to: .today) }
+        } else if !previous.files {
+            Task { await files.refreshRecent() }
+        }
+        if flags.teamMode, !previous.teamMode { Task { await refreshTeams() } }
+        if !flags.teamMode { freeTime.reset() }
+    }
+
+    /// The per-account P12 state, at sign-out and when a session begins.
+    private func resetFilesState() {
+        files.reset()
+        freeTime.reset()
+        clientFlagsFetchedAt = nil
+    }
+
     // MARK: Teams (team mode P1)
 
     /// The user's saved teams for team-availability questions.
@@ -690,6 +745,13 @@ final class AppModel {
         }
     }
 
+    /// Render-probe seam for the P12 shots: the /me flags and the saved
+    /// teams. No network, no disk.
+    func seedP12ForRender(flags: ClientFlags, teams: [TeamWire]) {
+        clientFlags = flags
+        self.teams = teams
+    }
+
     /// Render-probe seam for the main-window shots (M4b): the state the
     /// fixtures cannot reach through `seedForPreview`. No network, no disk.
     func seedMainWindowForRender(
@@ -796,6 +858,8 @@ final class AppModel {
             Log.app.warning("Keychain save denied (unsigned dev build?) — token kept in memory for this session only")
         }
         sessionGeneration += 1
+        resetFilesState()
+        clientFlags = ClientFlags()
         // The poll loop and the socket belong to the session that started
         // them. A socket opened under the PREVIOUS token would also 4001-loop
         // forever (RealtimeClient captures its token once). Both stop here.
@@ -2146,6 +2210,7 @@ final class AppModel {
         discardComposeDraft()
         showCompose = false
         resetAccountState()
+        resetFilesState()
         phase = .signedOut
         onSessionEnded?()
     }
@@ -2243,6 +2308,9 @@ final class AppModel {
             field("teams", \.teams, [], isClean: { $0.isEmpty }),
             text("teamError", \.teamError),
             flag("teamModeAvailable", \.teamModeAvailable),
+            field(
+                "clientFlags", \.clientFlags, ClientFlags(),
+                dirty: ClientFlags(files: true, teamMode: true)),
             field("teamAvailability", \.teamAvailability, nil, isClean: { $0 == nil }),
             text("checkingTeamId", \.checkingTeamId),
             text("teamBookingResult", \.teamBookingResult),
@@ -2594,6 +2662,8 @@ final class AppModel {
         Task { await refreshCommitments() }
         Task { await refreshAgentToday() }
         Task { await refreshAutomation() }
+        Task { await refreshClientFlags() }
+        if clientFlags.files { Task { await files.refreshRecent() } }
         Task { await refreshPendingActions() }
         Task { await checkForUpdateIfDue() }
         do {

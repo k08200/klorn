@@ -12,7 +12,7 @@ struct NavSidebar: View {
         VStack(alignment: .leading, spacing: 0) {
             OffscreenFriendlyScroll {
                 VStack(alignment: .leading, spacing: 2) {
-                    ForEach(NavSection.allCases) { section in
+                    ForEach(FilesRules.sections(files: model.clientFlags.files)) { section in
                         sectionRow(section)
                         if section == .mail, model.mainNav.section == .mail {
                             MailFacetRows()
@@ -54,7 +54,7 @@ struct NavSidebar: View {
             return count > 0 ? count : nil
         case .assistant:
             return model.pendingActions.isEmpty ? nil : model.pendingActions.count
-        case .today, .calendar:
+        case .today, .calendar, .files:
             return nil
         }
     }

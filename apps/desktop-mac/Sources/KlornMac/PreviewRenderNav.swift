@@ -223,6 +223,9 @@ extension PreviewRender {
         shot("today-stale", navModel(
             firewallJSON: navFirewallJSON,
             loadError: "The server did not respond (timed out after 30 s)."))
+        // P12: Files and Teams free-time on the same fixtures.
+        ok = renderFiles(
+            dir: dir, dark: dark, base: { navModel(firewallJSON: navFirewallJSON) }, actions: actions) && ok
         return ok
     }
 }

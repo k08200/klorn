@@ -1,10 +1,10 @@
 import Foundation
 
 /// The main window's primary navigation (productization plan §1, macOS M4b).
-/// Files joins this list only once a drive source exists (FD-7); there is
-/// none yet, so it has no case.
+/// Files is listed only while the server reports a drive source (FD-7,
+/// `ClientFlags.files`); `FilesRules.sections(files:)` is the visible list.
 enum NavSection: String, CaseIterable, Identifiable, Sendable {
-    case today, mail, calendar, assistant
+    case today, mail, calendar, files, assistant
 
     var id: String { rawValue }
 
@@ -15,6 +15,7 @@ enum NavSection: String, CaseIterable, Identifiable, Sendable {
         case .today: "sun.max"
         case .mail: "envelope"
         case .calendar: "calendar"
+        case .files: "folder"
         // A conversation, not a sparkle (FeatureIcon's rule).
         case .assistant: "bubble.left"
         }
@@ -96,7 +97,7 @@ enum NavRules {
     /// the section has none of its own (Today, Assistant's briefing).
     static func listMode(entering section: NavSection, nav: MainNav, current: ListMode) -> ListMode? {
         switch section {
-        case .today:
+        case .today, .files:
             return nil
         case .mail:
             return current.isMailFamily ? current : nav.lastMailMode
@@ -164,10 +165,18 @@ enum NavRules {
         LaneFilter.allCases.compactMap(\.tier).reduce(0) { $0 + count($1) }
     }
 
-    /// Go-menu digit for a section. Assistant is 4 while Files does not
-    /// exist; 5 goes to Approvals, the old menu's most-used numbered target.
+    /// Go-menu digit for a section. The digits shipped before Files stay
+    /// put (Assistant ⌘4, Approvals ⌘5), so a flag flip never moves a
+    /// shortcut under the user's fingers; Files, present only with a drive
+    /// source, takes ⌘6.
     static func shortcutDigit(for section: NavSection) -> Int {
-        (NavSection.allCases.firstIndex(of: section) ?? 0) + 1
+        switch section {
+        case .today: 1
+        case .mail: 2
+        case .calendar: 3
+        case .assistant: 4
+        case .files: 6
+        }
     }
 
     /// Existing Go destinations kept reachable under the sections. Inbox and

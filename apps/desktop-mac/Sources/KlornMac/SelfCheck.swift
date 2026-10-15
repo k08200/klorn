@@ -1848,6 +1848,8 @@ func runSelfChecks() async -> Bool {
     for (name, ok) in await windowSelfChecks(sourceDir: sourceDir) { check(name, ok) }
     print("M8 follow-ups:")
     for (name, ok) in await m8SelfChecks(sourceDir: sourceDir) { check(name, ok) }
+    print("Files and team free-time (P12):")
+    for (name, ok) in await filesSelfChecks(sourceDir: sourceDir) { check(name, ok) }
 
     print("States and first launch (M6):")
     for (name, ok) in await stateSelfChecks(sourceDir: sourceDir) { check(name, ok) }

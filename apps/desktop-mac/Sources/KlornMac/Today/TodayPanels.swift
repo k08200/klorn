@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Header shared by Today's side panels: a title and one quiet link.
-private struct PanelHeader: View {
+struct PanelHeader: View {
     let title: String
     let linkTitle: String
     let action: () -> Void

@@ -65,6 +65,11 @@ struct TodayScreen: View {
             .frame(maxWidth: .infinity, alignment: .topLeading)
             VStack(alignment: .leading, spacing: Theme.s4) {
                 TodayCalendarPanel()
+                // P12: each only with its server flag (and, for free time, a saved team).
+                if FreeTimeRules.visible(teamMode: model.clientFlags.teamMode, teamCount: model.teams.count) {
+                    TodayFreeTimePanel(renderNow: Theme.isRenderingOffscreen ? now : nil)
+                }
+                if model.clientFlags.files { TodayRecentFilesPanel() }
                 TodayAssistantPanel()
             }
             .frame(width: Self.sideColumnWidth)

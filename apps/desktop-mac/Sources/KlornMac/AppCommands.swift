@@ -45,6 +45,8 @@ struct MenuState: Equatable {
     /// `macMainWindow` is on (the default since M8). Off, there is no main
     /// window to search in or navigate, so Find, Go and the sections are off.
     var mainWindowAvailable: Bool = true
+    /// The server reports a drive source (FD-7): Files is a section.
+    var filesAvailable: Bool = false
 
     @MainActor
     init(model: AppModel) {
@@ -60,13 +62,16 @@ struct MenuState: Equatable {
         readerVisible = model.readerVisible
         driveImportReady = model.driveImport.canImport
         mainWindowAvailable = model.settings.macMainWindow
+        filesAvailable = model.clientFlags.files
     }
 
     init(
         signedIn: Bool, fullViewOpen: Bool, mailSurfaceIsKey: Bool, modalOpen: Bool, targetTier: Tier?,
         emailLoaded: Bool, readerReplying: Bool, teamModeAvailable: Bool,
-        listHasSearchField: Bool, readerVisible: Bool = true, driveImportReady: Bool = false
+        listHasSearchField: Bool, readerVisible: Bool = true, driveImportReady: Bool = false,
+        filesAvailable: Bool = false
     ) {
+        self.filesAvailable = filesAvailable
         self.signedIn = signedIn
         self.fullViewOpen = fullViewOpen
         self.mailSurfaceIsKey = mailSurfaceIsKey
@@ -128,9 +133,9 @@ enum MenuRules {
             return !s.modalOpen && (s.listHasSearchField || keepsDraft)
         case .go(let mode):
             return !s.modalOpen && keepsDraft && (mode != .teams || s.teamModeAvailable)
-        case .section:
+        case .section(let section):
             // Same rule as Go: leaving Mail unmounts the inline reply.
-            return !s.modalOpen && keepsDraft
+            return !s.modalOpen && keepsDraft && (section != .files || s.filesAvailable)
         case .reply:
             // Re-drafting while the inline composer is open would wipe it.
             return canActOnMessage && s.emailLoaded && keepsDraft
@@ -180,7 +185,7 @@ enum MenuRules {
     }
 
     /// The Go menu while the main window is the full view (M4b): the
-    /// sections take ⌘1–4 and Approvals keeps a digit (⌘5); every other old
+    /// sections take ⌘1–4 (Files ⌘6) and Approvals keeps a digit (⌘5); every other old
     /// destination stays in the menu without one.
     static func mainWindowShortcut(for command: MenuCommand) -> KeyboardShortcut? {
         switch command {
@@ -258,7 +263,7 @@ private struct GoMenuItems: View {
 
     var body: some View {
         if model.settings.macMainWindow {
-            ForEach(NavSection.allCases) { section in
+            ForEach(FilesRules.sections(files: model.clientFlags.files)) { section in
                 CommandButton(
                     model: model, command: .section(section), title: section.title,
                     perform: perform)
