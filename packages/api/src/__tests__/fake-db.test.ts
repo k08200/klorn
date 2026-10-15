@@ -204,6 +204,89 @@ describe("atomic increment, as Prisma's `{ increment: n }` on a number column", 
   });
 });
 
+describe("groupBy with _min, ordered and bounded", () => {
+  it("answers distinct groups ordered by their smallest value, at most `take`", async () => {
+    const at = (m: number) => new Date(Date.UTC(2026, 9, 14, 0, m));
+    const row = (id: string, userId: string, m: number, status = "PENDING") => ({
+      id,
+      driveFileId: `f-${id}`,
+      userId,
+      status,
+      nextAttemptAt: at(m),
+    });
+    const d = createFakeDb({
+      driveFileSummary: [
+        row("a1", "A", 1),
+        row("a2", "A", 2),
+        row("b1", "B", 5),
+        row("c1", "C", 3),
+        row("d1", "D", 0, "DONE"),
+      ],
+    });
+    const groups = await d.model("driveFileSummary").groupBy({
+      by: ["userId"],
+      where: { status: "PENDING" },
+      _min: { nextAttemptAt: true },
+      orderBy: { _min: { nextAttemptAt: "asc" } },
+      take: 2,
+    });
+    expect(groups).toEqual([
+      { userId: "A", _min: { nextAttemptAt: at(1) } },
+      { userId: "C", _min: { nextAttemptAt: at(3) } },
+    ]);
+  });
+});
+
+describe("a relation filter (`is`) on a one-to-one relation, either side", () => {
+  const file = (id: string, userId = "u1") => ({
+    id,
+    userId,
+    provider: "KLORN",
+    sourceKey: "klorn",
+    externalId: id,
+    name: id,
+    modifiedAt: new Date(0),
+  });
+  const summary = (id: string, driveFileId: string, text: string | null) => ({
+    id,
+    driveFileId,
+    userId: "u1",
+    status: text ? "DONE" : "PENDING",
+    summary: text,
+  });
+  const d = () =>
+    createFakeDb({
+      driveFile: [file("f1"), file("f2"), file("f3")],
+      driveFileSummary: [summary("s1", "f1", "Quarterly budget"), summary("s2", "f2", null)],
+    });
+
+  it("matches the rows whose related row matches, from the back-relation side", async () => {
+    const got = await d()
+      .model("driveFile")
+      .findMany({
+        where: {
+          summary: { is: { status: "DONE", summary: { contains: "budget", mode: "insensitive" } } },
+        },
+      });
+    expect(got.map((r) => r.id)).toEqual(["f1"]);
+  });
+
+  it("`isNot` and the forward side work too; any other relation operator is refused", async () => {
+    const db = d();
+    const notDone = await db
+      .model("driveFile")
+      .findMany({ where: { summary: { isNot: { status: "DONE" } } } });
+    expect(notDone.map((r) => r.id)).toEqual(["f2", "f3"]);
+    const forward = await db
+      .model("driveFileSummary")
+      .findMany({ where: { driveFile: { is: { name: "f2" } } } });
+    expect(forward.map((r) => r.id)).toEqual(["s2"]);
+    await expect(
+      db.model("driveFile").findMany({ where: { summary: { some: {} } } }),
+    ).rejects.toThrow(/relation filter/);
+  });
+});
+
 describe("create, update and ordering", () => {
   it("create enforces required columns and unique keys", async () => {
     const d = db();

@@ -49,11 +49,52 @@ interface ModelInfo {
   compound: Map<string, string[]>;
   /** every unique column set: single columns, ids and compound keys. */
   uniqueSets: string[][];
+  /** relation field -> how a row of this model meets the rows of the other. */
+  relations: Map<string, Relation>;
+}
+
+/** row[ownKeys[i]] === other[otherKeys[i]] for every i, in model `target`. */
+interface Relation {
+  target: string;
+  ownKeys: string[];
+  otherKeys: string[];
+}
+
+type DmmfModel = (typeof Prisma.dmmf.datamodel.models)[number];
+
+/** Both sides of a relation: the forward side names its keys, the back side borrows them. */
+function relationsOf(model: DmmfModel, all: readonly DmmfModel[]): Map<string, Relation> {
+  const relations = new Map<string, Relation>();
+  for (const f of model.fields) {
+    if (f.kind !== "object") continue;
+    const target = lowerFirst(f.type);
+    const from = f.relationFromFields ?? [];
+    if (from.length > 0) {
+      relations.set(f.name, {
+        target,
+        ownKeys: [...from],
+        otherKeys: [...(f.relationToFields ?? [])],
+      });
+      continue;
+    }
+    const other = all
+      .find((m) => m.name === f.type)
+      ?.fields.find(
+        (g) => g.relationName === f.relationName && (g.relationFromFields ?? []).length > 0,
+      );
+    if (!other) continue;
+    relations.set(f.name, {
+      target,
+      ownKeys: [...(other.relationToFields ?? [])],
+      otherKeys: [...(other.relationFromFields ?? [])],
+    });
+  }
+  return relations;
 }
 
 const lowerFirst = (s: string): string => s.charAt(0).toLowerCase() + s.slice(1);
 
-function buildModelInfo(model: (typeof Prisma.dmmf.datamodel.models)[number]): ModelInfo {
+function buildModelInfo(model: DmmfModel, all: readonly DmmfModel[]): ModelInfo {
   const columns = new Map<string, Field>();
   for (const f of model.fields) {
     if (f.kind === "scalar" || f.kind === "enum") columns.set(f.name, f as unknown as Field);
@@ -69,11 +110,20 @@ function buildModelInfo(model: (typeof Prisma.dmmf.datamodel.models)[number]): M
   for (const fields of model.uniqueFields) addCompound(null, fields);
   if (model.primaryKey) addCompound(model.primaryKey.name, model.primaryKey.fields);
   for (const f of columns.values()) if (f.isId || f.isUnique) sets.push([f.name]);
-  return { name: model.name, columns, compound, uniqueSets: sets };
+  return {
+    name: model.name,
+    columns,
+    compound,
+    uniqueSets: sets,
+    relations: relationsOf(model, all),
+  };
 }
 
 const MODELS = new Map(
-  Prisma.dmmf.datamodel.models.map((m) => [lowerFirst(m.name), buildModelInfo(m)]),
+  Prisma.dmmf.datamodel.models.map((m) => [
+    lowerFirst(m.name),
+    buildModelInfo(m, Prisma.dmmf.datamodel.models),
+  ]),
 );
 
 function infoFor(modelName: string): ModelInfo {
@@ -184,21 +234,48 @@ function matchesField(info: ModelInfo, row: Row, name: string, cond: unknown): b
   return same(actual, cond);
 }
 
-function matchesWhere(info: ModelInfo, row: Row, where: Where | undefined): boolean {
+/** The live rows of another model, for a relation filter. */
+type RowsOf = (model: string) => Row[];
+
+/** `{ is: where }` / `{ isNot: where }` on a relation: does a related row match? */
+function matchesRelation(rel: Relation, row: Row, cond: unknown, rowsOf: RowsOf): boolean {
+  const ops = cond as Record<string, unknown>;
+  const keys = isPlain(cond) ? Object.keys(ops) : [];
+  if (keys.length !== 1 || !["is", "isNot"].includes(keys[0] ?? "")) {
+    throw new Error(`fake-db: relation filter supports only { is } or { isNot }, got ${keys}`);
+  }
+  const target = infoFor(rel.target);
+  const related = rowsOf(rel.target).filter((other) =>
+    rel.ownKeys.every((k, i) => row[k] != null && same(row[k], other[rel.otherKeys[i] ?? ""])),
+  );
+  const hit = related.some((other) =>
+    matchesWhere(target, other, ops[keys[0] ?? ""] as Where, rowsOf),
+  );
+  return keys[0] === "is" ? hit : !hit;
+}
+
+function matchesWhere(
+  info: ModelInfo,
+  row: Row,
+  where: Where | undefined,
+  rowsOf: RowsOf = () => [],
+): boolean {
   if (!where) return true;
   return Object.entries(where).every(([key, cond]) => {
     if (cond === undefined) return true;
-    if (key === "AND") return (cond as Where[]).every((w) => matchesWhere(info, row, w));
-    if (key === "OR") return (cond as Where[]).some((w) => matchesWhere(info, row, w));
+    if (key === "AND") return (cond as Where[]).every((w) => matchesWhere(info, row, w, rowsOf));
+    if (key === "OR") return (cond as Where[]).some((w) => matchesWhere(info, row, w, rowsOf));
     if (key === "NOT") {
       const list = Array.isArray(cond) ? (cond as Where[]) : [cond as Where];
-      return !list.some((w) => matchesWhere(info, row, w));
+      return !list.some((w) => matchesWhere(info, row, w, rowsOf));
     }
+    const rel = info.relations.get(key);
+    if (rel) return matchesRelation(rel, row, cond, rowsOf);
     const parts = info.compound.get(key);
     if (parts) {
       const sub = cond as Where;
       for (const p of Object.keys(sub)) column(info, p, `compound ${key}`);
-      return matchesWhere(info, row, sub);
+      return matchesWhere(info, row, sub, rowsOf);
     }
     return matchesField(info, row, key, cond);
   });
@@ -211,6 +288,43 @@ function assertUniqueSelector(info: ModelInfo, where: Where | undefined, op: str
     (k) => info.compound.has(k) || info.uniqueSets.some((s) => s.length === 1 && s[0] === k),
   );
   if (!ok) throw new Error(`fake-db: ${info.name}.${op} needs a unique selector, got ${keys}`);
+}
+
+// ─── groupBy helpers ────────────────────────────────────────────────────────
+
+function minFieldsOf(info: ModelInfo, spec: unknown): string[] {
+  if (spec === undefined) return [];
+  if (!isPlain(spec)) throw new Error("fake-db: groupBy _min must be an object");
+  return Object.entries(spec).map(([f, on]) => {
+    column(info, f, "groupBy._min");
+    if (on !== true) throw new Error(`fake-db: groupBy _min.${f} must be true`);
+    return f;
+  });
+}
+
+/** The smallest non-null value (SQL MIN), or null. */
+function smallest(values: unknown[]): unknown {
+  const present = values.filter((v) => v != null);
+  if (present.length === 0) return null;
+  return present.reduce((a, b) => (cmp(b) < cmp(a) ? b : a));
+}
+
+/** orderBy on a group: `{ _min: { f: dir } }` or a `by` field `{ f: dir }`. */
+function sortGroups(groups: Row[], orderBy: unknown): Row[] {
+  if (orderBy === undefined) return groups;
+  if (!isPlain(orderBy) || Object.keys(orderBy).length !== 1) {
+    throw new Error("fake-db: groupBy orderBy supports one key");
+  }
+  const [key, spec] = Object.entries(orderBy)[0] ?? [];
+  const pick = (g: Row): unknown =>
+    key === "_min" && isPlain(spec) ? (g._min as Row)[Object.keys(spec)[0] ?? ""] : g[key ?? ""];
+  const dir = key === "_min" && isPlain(spec) ? Object.values(spec)[0] : spec;
+  const sign = dir === "desc" ? -1 : 1;
+  return [...groups].sort((a, b) => {
+    const x = cmp(pick(a));
+    const y = cmp(pick(b));
+    return x < y ? -sign : x > y ? sign : 0;
+  });
 }
 
 // ─── rows, defaults, validation ─────────────────────────────────────────────
@@ -348,7 +462,7 @@ export interface FakeModel {
   findUnique(args: Args): Promise<Row | null>;
   findMany(args?: Args): Promise<Row[]>;
   count(args?: Args): Promise<number>;
-  groupBy(args: Args): Promise<Array<Row & { _count: { _all: number } }>>;
+  groupBy(args: Args): Promise<Array<Row & { _count?: { _all: number }; _min?: Row }>>;
   aggregate(args: Args): Promise<{ _sum: Row }>;
   create(args: { data: Row; select?: Select }): Promise<Row>;
   update(args: { where: Where; data: Row; select?: Select }): Promise<Row>;
@@ -366,6 +480,7 @@ interface Args {
   by?: string[];
   _count?: unknown;
   _sum?: unknown;
+  _min?: unknown;
 }
 
 export interface FakeDb {
@@ -403,7 +518,9 @@ export function createFakeDb(seed: Record<string, Row[]>, hooks: FakeDbHooks = {
       tables[name] ??= [];
       return tables[name];
     };
-    const find = (where: Where | undefined) => rowsOf().filter((r) => matchesWhere(info, r, where));
+    const otherRows: RowsOf = (model) => tables[model] ?? [];
+    const find = (where: Where | undefined) =>
+      rowsOf().filter((r) => matchesWhere(info, r, where, otherRows));
     const page = (rows: Row[], args: Args) => {
       const sorted = sortRows(info, rows, args.orderBy);
       const from = args.skip ?? 0;
@@ -454,24 +571,33 @@ export function createFakeDb(seed: Record<string, Row[]>, hooks: FakeDbHooks = {
         return find(args.where).length;
       },
       async groupBy(args) {
-        assertArgs(name, "groupBy", args, ["by", "where", "_count"]);
+        assertArgs(name, "groupBy", args, ["by", "where", "_count", "_min", "orderBy", "take"]);
         const by = args.by ?? [];
         for (const f of by) column(info, f, "groupBy.by");
         const counts = args._count as Record<string, unknown> | undefined;
-        if (!counts || Object.keys(counts).join() !== "_all") {
+        const mins = minFieldsOf(info, args._min);
+        if (counts && Object.keys(counts).join() !== "_all") {
           throw new Error("fake-db: groupBy supports only _count: { _all: true }");
         }
+        if (!counts && mins.length === 0) throw new Error("fake-db: groupBy needs _count or _min");
         reads.push(name);
-        const groups = new Map<string, { values: unknown[]; n: number }>();
+        const groups = new Map<string, { values: unknown[]; rows: Row[] }>();
         for (const r of find(args.where)) {
           const values = by.map((f) => r[f]);
           const key = JSON.stringify(values);
-          groups.set(key, { values, n: (groups.get(key)?.n ?? 0) + 1 });
+          const group = groups.get(key) ?? { values, rows: [] };
+          group.rows.push(r);
+          groups.set(key, group);
         }
-        return [...groups.values()].map(({ values, n }) => ({
+        const out = [...groups.values()].map(({ values, rows }) => ({
           ...Object.fromEntries(by.map((f, i) => [f, values[i]])),
-          _count: { _all: n },
+          ...(counts && { _count: { _all: rows.length } }),
+          ...(mins.length > 0 && {
+            _min: Object.fromEntries(mins.map((f) => [f, smallest(rows.map((r) => r[f]))])),
+          }),
         }));
+        const sorted = sortGroups(out, args.orderBy);
+        return args.take === undefined ? sorted : sorted.slice(0, args.take);
       },
       async aggregate(args) {
         assertArgs(name, "aggregate", args, ["where", "_sum"]);
