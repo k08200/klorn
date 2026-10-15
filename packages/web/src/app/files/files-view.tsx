@@ -51,7 +51,7 @@ export function FilesView() {
           className="focus-ring h-11 w-full rounded-control border border-line bg-surface-panel px-3 text-body text-ink placeholder:text-ink-muted pointer-coarse:text-field"
         />
       </div>
-      <section aria-labelledby="files-list-heading" aria-busy={list.loading}>
+      <section aria-labelledby="files-list-heading" aria-busy={list.loading || list.stale}>
         <h2 id="files-list-heading" className="sr-only">
           {searching ? t("files.results") : t("files.recent")}
         </h2>
@@ -73,7 +73,7 @@ export function FilesView() {
           />
         )}
         <p aria-live="polite" className="sr-only">
-          {list.loading || list.failed
+          {list.loading || list.failed || list.stale
             ? ""
             : t("files.count", { count: String(list.files.length) })}
         </p>

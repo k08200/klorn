@@ -52,7 +52,10 @@ export function useFilesList(q: string) {
     files: query.data?.pages.flatMap((page) => page.files) ?? [],
     loading: query.isLoading,
     failed: query.isError && !query.data,
-    hasMore: query.hasNextPage,
+    // keepPreviousData: the last search's list is on screen while a new one
+    // loads. It is not this search's answer, so it pages nothing and counts nothing.
+    stale: query.isPlaceholderData,
+    hasMore: query.hasNextPage && !query.isPlaceholderData,
     loadingMore: query.isFetchingNextPage,
     loadMore: () => void query.fetchNextPage(),
     retry: () => void query.refetch(),
