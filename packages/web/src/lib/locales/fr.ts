@@ -1554,10 +1554,11 @@ const fr: Record<string, string> = {
   "mailV2.demo": "Ceci est du courrier de démonstration.",
   "mailV2.demo.connect": "Connectez un compte pour voir le vôtre",
   "mailV2.noSource": "Aucun compte de messagerie n’est encore connecté.",
-  "imapConnect.proGate.title": "Connecter {provider} est une fonctionnalité Pro.",
-  "imapConnect.proGate.body":
-    "Free inclut un compte Google. Passez à Pro pour étendre le pare-feu à cette boîte aussi.",
-  "imapConnect.proGate.upgrade": "Passer à Pro",
+  "mailAccount.proGate.title":
+    "Connecter un deuxième compte de messagerie est une fonctionnalité Pro.",
+  "mailAccount.proGate.body":
+    "Free inclut un compte de messagerie (Gmail, iCloud Mail ou Naver Mail). Passez à Pro pour étendre le pare-feu à plusieurs comptes.",
+  "mailAccount.proGate.upgrade": "Passer à Pro",
   "imapConnect.firstSync.started":
     "Récupération de vos e-mails en cours. Ils apparaîtront bientôt dans Mail.",
   "imapConnect.firstSync.delayed":
@@ -1740,7 +1741,6 @@ const fr: Record<string, string> = {
     "Klorn trie le courrier en 5 voies : PUSH, MEETING, QUEUE, INFO et SILENT. Une voie est une étiquette. Le tri n'envoie, n'archive et ne supprime jamais rien.",
   "onboardingV2.connect.skip": "Passer pour l'instant",
   "onboardingV2.connect.continueHint": "Connectez au moins un compte pour continuer.",
-  "onboardingV2.connect.needsPlan": "Votre offre ne permet pas d'ajouter ce compte.",
   "onboardingV2.connect.failed":
     "Impossible de lancer la connexion. Rien n'a été modifié. Réessayez.",
   "onboardingV2.tile.connect": "Connecter",

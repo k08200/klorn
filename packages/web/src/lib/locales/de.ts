@@ -1569,10 +1569,10 @@ const de: Record<string, string> = {
   "mailV2.demo": "Das sind Demo-Mails.",
   "mailV2.demo.connect": "Konto verbinden, um die eigenen zu sehen",
   "mailV2.noSource": "Noch kein E-Mail-Konto verbunden.",
-  "imapConnect.proGate.title": "{provider} zu verbinden ist eine Pro-Funktion.",
-  "imapConnect.proGate.body":
-    "Free umfasst ein Google-Konto. Mit einem Upgrade läuft die Firewall auch über dieses Postfach.",
-  "imapConnect.proGate.upgrade": "Upgraden",
+  "mailAccount.proGate.title": "Ein zweites E-Mail-Konto zu verbinden ist eine Pro-Funktion.",
+  "mailAccount.proGate.body":
+    "Free umfasst ein E-Mail-Konto (Gmail, iCloud Mail oder Naver Mail). Mit einem Upgrade läuft die Firewall über mehr als eines.",
+  "mailAccount.proGate.upgrade": "Upgraden",
   "imapConnect.firstSync.started":
     "Deine Mails werden jetzt abgerufen und erscheinen gleich in Mail.",
   "imapConnect.firstSync.delayed": "Die erste Mail dieses Kontos kann bis zu ~5 Minuten dauern.",
@@ -1758,7 +1758,6 @@ const de: Record<string, string> = {
     "Klorn sortiert Mail in 5 Spuren: PUSH, MEETING, QUEUE, INFO und SILENT. Eine Spur ist ein Etikett. Das Sortieren sendet, archiviert oder löscht nie etwas.",
   "onboardingV2.connect.skip": "Vorerst überspringen",
   "onboardingV2.connect.continueHint": "Verbinden Sie mindestens ein Konto, um fortzufahren.",
-  "onboardingV2.connect.needsPlan": "Ihr Tarif umfasst das Hinzufügen dieses Kontos nicht.",
   "onboardingV2.connect.failed":
     "Die Verbindung konnte nicht gestartet werden. Es wurde nichts geändert. Versuchen Sie es erneut.",
   "onboardingV2.tile.connect": "Verbinden",

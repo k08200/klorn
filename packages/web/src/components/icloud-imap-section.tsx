@@ -6,7 +6,8 @@ import { apiFetch } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { captureClientError } from "../lib/sentry";
 import { useConfirm } from "./confirm-dialog";
-import { FirstSyncNote, ImapProGate, isEntitlementRefusal } from "./imap-connect-notes";
+import { FirstSyncNote } from "./imap-connect-notes";
+import { isEntitlementRefusal, MailAccountProGate } from "./mail-account-pro-gate";
 import Button from "./ui/button";
 import ErrorAlert from "./ui/error-alert";
 import { Input } from "./ui/input";
@@ -14,6 +15,8 @@ import StatusChip from "./ui/status-chip";
 
 interface ICloudImapStatus {
   connected: boolean;
+  /** Whether a NEW mailbox may be connected now (first free, second Pro). */
+  canConnect?: boolean;
   email: string | null;
   host: string | null;
   connectedAt: string | null;
@@ -44,10 +47,11 @@ interface ICloudImapSectionProps {
 export function ICloudImapSection({ embedded = false, onChanged }: ICloudImapSectionProps = {}) {
   const { user } = useAuth();
   const { confirm } = useConfirm();
-  // Any IMAP mailbox is Pro (Free = one Google account), first source or not. `entitled` is server-
-  // computed and always true while the paywall is off, so this gate is inert
-  // pre-launch. An already-connected mailbox stays visible so a user who
-  // downgraded can still see and disconnect it.
+  // The first mail account is free whatever the provider; a second one is
+  // Pro. The server answers `canConnect` on /status (always true while the
+  // paywall is off); `entitled` is only the fallback for an older API. An
+  // already-connected mailbox stays visible so a user who downgraded can
+  // still see and disconnect it.
   const entitled = user?.entitled !== false;
   const [status, setStatus] = useState<ICloudImapStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -62,8 +66,9 @@ export function ICloudImapSection({ embedded = false, onChanged }: ICloudImapSec
   const [submitting, setSubmitting] = useState(false);
   // Set by a connect: whether its first poll started now (shown under the account).
   const [firstSync, setFirstSync] = useState<boolean | null>(null);
-  // The server refused with the Pro gate even though `entitled` said otherwise
-  // (stale session flag): show the same upgrade panel, not a raw API error.
+  // The server refused with the Pro gate even though /status said otherwise
+  // (e.g. another mailbox was connected meanwhile): show the same upgrade
+  // panel, not a raw API error.
   const [proGated, setProGated] = useState(false);
 
   const loadStatus = useCallback(async () => {
@@ -203,8 +208,8 @@ export function ICloudImapSection({ embedded = false, onChanged }: ICloudImapSec
             </p>
           )}
         </div>
-      ) : !entitled || proGated ? (
-        <ImapProGate provider="iCloud Mail" />
+      ) : !(status?.canConnect ?? entitled) || proGated ? (
+        <MailAccountProGate />
       ) : (
         <form onSubmit={handleConnect} className="space-y-3">
           <Input

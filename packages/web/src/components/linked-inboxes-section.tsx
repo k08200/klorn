@@ -6,9 +6,11 @@ import { useEffect } from "react";
 import { TIER_COUNT } from "@/lib/tiers";
 import { apiFetch, startLinkInbox } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { useT } from "../lib/i18n";
 import { pendingConnect } from "../lib/onboarding-return";
 import { queryKeys } from "../lib/query-keys";
 import { captureClientError } from "../lib/sentry";
+import { isEntitlementRefusal, MailAccountProGate } from "./mail-account-pro-gate";
 import { useToast } from "./toast";
 
 interface LinkedAccount {
@@ -40,35 +42,40 @@ function formatLastSynced(iso: string | null): string {
 }
 
 /**
- * "Connected inboxes" — link a SECONDARY Google account (e.g. work Gmail) as a
- * full inbox so the firewall classifies its mail too. Pro feature: for a
- * non-entitled user we show the upsell instead of the connect button. Must
- * render inside a <Suspense> (uses useSearchParams).
+ * "Connected inboxes" — link another Google account (e.g. work Gmail) as a
+ * full inbox so the firewall classifies its mail too. The first mail account
+ * is free whatever the provider, a second one is Pro: the server's canConnect
+ * decides between the connect button and the Pro note. Must render inside a
+ * <Suspense> (uses useSearchParams).
  */
 export function LinkedInboxesSection() {
   const { user } = useAuth();
-  // `entitled` is server-computed and always true while the paywall is off, so
-  // this gate is inert pre-launch.
+  // Fallback only, for an API that does not answer canConnect yet.
   const entitled = user?.entitled !== false;
+  const { t } = useT();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const { data: accounts = [] } = useQuery({
+  // canConnect: may a NEW mail account be connected now (always true while
+  // the paywall is off).
+  const { data: listing } = useQuery({
     queryKey: queryKeys.inbox.linkedAccounts(),
-    queryFn: async () => {
+    queryFn: async (): Promise<{ accounts: LinkedAccount[]; canConnect: boolean }> => {
       try {
-        const res = await apiFetch<{ accounts: LinkedAccount[] }>(
+        const res = await apiFetch<{ accounts: LinkedAccount[]; canConnect?: boolean }>(
           "/api/auth/google/linked-inboxes",
         );
-        return res.accounts ?? [];
+        return { accounts: res.accounts ?? [], canConnect: res.canConnect ?? entitled };
       } catch {
-        // 403 (not entitled) or not connected — show the connect prompt, no list.
-        return [] as LinkedAccount[];
+        // Transient failure — show the connect prompt; the server still gates it.
+        return { accounts: [], canConnect: entitled };
       }
     },
   });
+  const accounts = listing?.accounts ?? [];
+  const canConnect = listing?.canConnect ?? entitled;
 
   // Toast the OAuth redirect result (?inbox=success|failed|unverified) once,
   // then strip the param so a refresh doesn't re-toast.
@@ -86,11 +93,13 @@ export function LinkedInboxesSection() {
       toast("That Google account's email isn't verified — couldn't link it.", "error");
     } else if (linked === "self") {
       toast("That's already your primary inbox — no need to link it.", "error");
+    } else if (linked === "pro") {
+      toast(t("mailAccount.proGate.title"), "error");
     } else {
       toast("Couldn't connect that inbox. Try again.", "error");
     }
     router.replace("/settings/accounts");
-  }, [searchParams, toast, queryClient, router]);
+  }, [searchParams, toast, queryClient, router, t]);
 
   const disconnect = useMutation({
     mutationFn: (id: string) =>
@@ -110,8 +119,13 @@ export function LinkedInboxesSection() {
   const connect = useMutation({
     mutationFn: () => startLinkInbox(),
     onError: (err) => {
+      const msg = err instanceof Error ? err.message : "";
+      if (isEntitlementRefusal(msg)) {
+        toast(t("mailAccount.proGate.title"), "error");
+        return;
+      }
       captureClientError(err, { scope: "inbox.linked.connect" });
-      toast("Connecting another inbox needs a Pro subscription.", "error");
+      toast("Couldn't start Google sign-in. Try again.", "error");
     },
   });
 
@@ -168,7 +182,7 @@ export function LinkedInboxesSection() {
         </ul>
       )}
 
-      {entitled ? (
+      {canConnect ? (
         <button
           type="button"
           onClick={() => connect.mutate()}
@@ -178,15 +192,8 @@ export function LinkedInboxesSection() {
           Connect another inbox
         </button>
       ) : (
-        <div className="mt-3 rounded-xl border border-state-info-line bg-state-info-bg p-4">
-          <p className="text-sm text-ink">
-            Multiple inboxes is a <span className="font-semibold text-accent-deep">Pro</span>{" "}
-            feature.
-          </p>
-          <p className="mt-1 text-xs text-ink-mid">
-            Free covers your primary Google account. Upgrade in the Subscription section to run the
-            firewall across a second inbox.
-          </p>
+        <div className="mt-3">
+          <MailAccountProGate />
         </div>
       )}
     </section>

@@ -99,7 +99,7 @@ export function ConnectStep(props: ConnectStepProps) {
       forgetConnect();
       captureClientError(err, { scope: "onboarding-v2.connect", provider: tile.provider });
       const refused = err instanceof Error && err.message.startsWith("API 403");
-      setStartError(t(refused ? "onboardingV2.connect.needsPlan" : "onboardingV2.connect.failed"));
+      setStartError(t(refused ? "mailAccount.proGate.title" : "onboardingV2.connect.failed"));
     },
   });
 

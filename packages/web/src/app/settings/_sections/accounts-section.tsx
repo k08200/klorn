@@ -6,6 +6,7 @@ import { GoogleConnectRedirect } from "../../../components/google-connect-redire
 import { ICloudImapSection } from "../../../components/icloud-imap-section";
 import InAppBrowserNotice from "../../../components/in-app-browser-notice";
 import { LinkedInboxesSection } from "../../../components/linked-inboxes-section";
+import { isEntitlementRefusal } from "../../../components/mail-account-pro-gate";
 import { NaverImapSection } from "../../../components/naver-imap-section";
 import { OAuthErrorBanner } from "../../../components/oauth-error-banner";
 import { OnboardingReturn } from "../../../components/onboarding-return";
@@ -206,7 +207,15 @@ export function AccountsSection() {
                 ) : int.connectUrl === "google-oauth-start" ? (
                   <Button
                     onClick={() => {
-                      void startGoogleConnect();
+                      startGoogleConnect().catch((err: unknown) => {
+                        const msg = err instanceof Error ? err.message : String(err);
+                        // A second mail account on Free: say so instead of failing silently.
+                        if (isEntitlementRefusal(msg)) {
+                          toast(t("mailAccount.proGate.title"), "error");
+                          return;
+                        }
+                        captureClientError(err, { scope: "settings.google.connect" });
+                      });
                     }}
                   >
                     {t("settings.connect")}

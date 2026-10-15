@@ -1519,10 +1519,10 @@ const ko: Record<string, string> = {
   "mailV2.demo": "데모 메일입니다.",
   "mailV2.demo.connect": "계정을 연결하면 내 메일이 보입니다",
   "mailV2.noSource": "아직 연결된 메일 계정이 없습니다.",
-  "imapConnect.proGate.title": "{provider} 연결은 Pro 기능입니다.",
-  "imapConnect.proGate.body":
-    "Free에는 Google 계정 하나가 포함됩니다. 이 메일함에도 방화벽을 적용하려면 업그레이드하세요.",
-  "imapConnect.proGate.upgrade": "업그레이드",
+  "mailAccount.proGate.title": "두 번째 메일 계정 연결은 Pro 기능입니다.",
+  "mailAccount.proGate.body":
+    "Free에는 메일 계정 하나(Gmail, iCloud Mail 또는 Naver Mail)가 포함됩니다. 여러 계정에 방화벽을 적용하려면 업그레이드하세요.",
+  "mailAccount.proGate.upgrade": "업그레이드",
   "imapConnect.firstSync.started": "지금 메일을 가져오는 중입니다. 곧 메일함에 표시됩니다.",
   "imapConnect.firstSync.delayed":
     "이 계정의 첫 메일이 표시되기까지 최대 5분 정도 걸릴 수 있습니다.",
@@ -1699,7 +1699,6 @@ const ko: Record<string, string> = {
     "Klorn은 메일을 PUSH, MEETING, QUEUE, INFO, SILENT 5개 레인으로 분류합니다. 레인은 라벨일 뿐이며, 분류만으로 메일이 발송·보관·삭제되지 않습니다.",
   "onboardingV2.connect.skip": "나중에 하기",
   "onboardingV2.connect.continueHint": "계속하려면 계정을 하나 이상 연결하세요.",
-  "onboardingV2.connect.needsPlan": "현재 요금제로는 이 계정을 추가할 수 없습니다.",
   "onboardingV2.connect.failed":
     "연결을 시작하지 못했습니다. 변경된 것은 없습니다. 다시 시도해 주세요.",
   "onboardingV2.tile.connect": "연결",

@@ -1544,10 +1544,10 @@ const es: Record<string, string> = {
   "mailV2.demo": "Este es correo de demostración.",
   "mailV2.demo.connect": "Conecta una cuenta para ver el tuyo",
   "mailV2.noSource": "Aún no hay ninguna cuenta de correo conectada.",
-  "imapConnect.proGate.title": "Conectar {provider} es una función Pro.",
-  "imapConnect.proGate.body":
-    "Free incluye una cuenta de Google. Mejora tu plan para que el cortafuegos cubra también este buzón.",
-  "imapConnect.proGate.upgrade": "Mejorar plan",
+  "mailAccount.proGate.title": "Conectar una segunda cuenta de correo es una función Pro.",
+  "mailAccount.proGate.body":
+    "Free incluye una cuenta de correo (Gmail, iCloud Mail o Naver Mail). Mejora tu plan para que el cortafuegos cubra más de una.",
+  "mailAccount.proGate.upgrade": "Mejorar plan",
   "imapConnect.firstSync.started": "Obteniendo tu correo ahora. Aparecerá en Correo en breve.",
   "imapConnect.firstSync.delayed": "El primer correo de esta cuenta puede tardar hasta ~5 minutos.",
   "mailV2.archive.done": "Archivado",
@@ -1728,7 +1728,6 @@ const es: Record<string, string> = {
     "Klorn ordena el correo en 5 carriles: PUSH, MEETING, QUEUE, INFO y SILENT. Un carril es una etiqueta. Ordenar nunca envía, archiva ni elimina correo.",
   "onboardingV2.connect.skip": "Omitir por ahora",
   "onboardingV2.connect.continueHint": "Conecta al menos una cuenta para continuar.",
-  "onboardingV2.connect.needsPlan": "Tu plan no incluye añadir esta cuenta.",
   "onboardingV2.connect.failed":
     "No se pudo iniciar la conexión. No se cambió nada. Inténtalo de nuevo.",
   "onboardingV2.tile.connect": "Conectar",

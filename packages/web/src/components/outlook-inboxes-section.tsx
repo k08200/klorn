@@ -6,8 +6,10 @@ import { useEffect } from "react";
 import { TIER_COUNT } from "@/lib/tiers";
 import { apiFetch, startLinkOutlookInbox } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { useT } from "../lib/i18n";
 import { queryKeys } from "../lib/query-keys";
 import { captureClientError } from "../lib/sentry";
+import { isEntitlementRefusal, MailAccountProGate } from "./mail-account-pro-gate";
 import { useToast } from "./toast";
 
 interface OutlookAccount {
@@ -50,26 +52,30 @@ function formatLastSynced(iso: string | null): string {
  */
 export function OutlookInboxesSection() {
   const { user } = useAuth();
-  // Server-computed; always true while the paywall is off (inert pre-launch).
+  // Fallback only, for an API that does not answer canConnect yet.
   const entitled = user?.entitled !== false;
+  const { t } = useT();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
 
   // null = surface unavailable (flag off server-side) → render nothing.
-  const { data: accounts } = useQuery({
+  // canConnect: may a NEW mail account be connected now (the first one is
+  // free whatever the provider, a second one Pro; always true while the
+  // paywall is off).
+  const { data: listing } = useQuery({
     queryKey: queryKeys.inbox.outlookAccounts(),
-    queryFn: async (): Promise<OutlookAccount[] | null> => {
+    queryFn: async (): Promise<{ accounts: OutlookAccount[]; canConnect: boolean } | null> => {
       try {
-        const res = await apiFetch<{ accounts: OutlookAccount[] }>(
+        const res = await apiFetch<{ accounts: OutlookAccount[]; canConnect?: boolean }>(
           "/api/auth/outlook/linked-inboxes",
         );
-        return res.accounts ?? [];
+        return { accounts: res.accounts ?? [], canConnect: res.canConnect ?? entitled };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         if (msg.startsWith("API 404")) return null;
-        // 403 (not entitled) or transient failure — show the connect prompt.
-        return [];
+        // Transient failure — show the connect prompt; the server still gates it.
+        return { accounts: [], canConnect: entitled };
       }
     },
   });
@@ -98,18 +104,23 @@ export function OutlookInboxesSection() {
   const connect = useMutation({
     mutationFn: () => startLinkOutlookInbox(),
     onError: (err) => {
-      captureClientError(err, { scope: "inbox.outlook.connect" });
       const msg = err instanceof Error ? err.message : "";
+      if (isEntitlementRefusal(msg)) {
+        toast(t("mailAccount.proGate.title"), "error");
+        return;
+      }
+      captureClientError(err, { scope: "inbox.outlook.connect" });
       toast(
         msg.startsWith("API 503")
           ? "Outlook linking isn't configured yet. Try again later."
-          : "Couldn't start Outlook sign-in. A Pro subscription may be required.",
+          : "Couldn't start Outlook sign-in. Try again.",
         "error",
       );
     },
   });
 
-  if (accounts === null || accounts === undefined) return null;
+  if (listing === null || listing === undefined) return null;
+  const { accounts, canConnect } = listing;
 
   return (
     <section className="panel-elevated mb-8 rounded-2xl border border-line/70 bg-surface-panel p-5">
@@ -164,7 +175,7 @@ export function OutlookInboxesSection() {
         </ul>
       )}
 
-      {entitled ? (
+      {canConnect ? (
         <button
           type="button"
           onClick={() => connect.mutate()}
@@ -174,15 +185,8 @@ export function OutlookInboxesSection() {
           Connect Outlook inbox
         </button>
       ) : (
-        <div className="mt-3 rounded-xl border border-state-info-line bg-state-info-bg p-4">
-          <p className="text-sm text-ink">
-            Multiple inboxes is a <span className="font-semibold text-accent-deep">Pro</span>{" "}
-            feature.
-          </p>
-          <p className="mt-1 text-xs text-ink-mid">
-            Free covers your primary Google account. Upgrade in the Subscription section to run the
-            firewall across an Outlook inbox too.
-          </p>
+        <div className="mt-3">
+          <MailAccountProGate />
         </div>
       )}
     </section>

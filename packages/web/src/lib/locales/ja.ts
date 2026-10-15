@@ -1512,10 +1512,10 @@ const ja: Record<string, string> = {
   "mailV2.demo": "これはデモメールです。",
   "mailV2.demo.connect": "アカウントを接続すると自分のメールが表示されます",
   "mailV2.noSource": "まだメールアカウントが接続されていません。",
-  "imapConnect.proGate.title": "{provider} の接続は Pro の機能です。",
-  "imapConnect.proGate.body":
-    "Free には Google アカウント 1 件が含まれます。このメールボックスにもファイアウォールを適用するにはアップグレードしてください。",
-  "imapConnect.proGate.upgrade": "アップグレード",
+  "mailAccount.proGate.title": "2 つ目のメールアカウントの接続は Pro の機能です。",
+  "mailAccount.proGate.body":
+    "Free にはメールアカウント 1 件（Gmail、iCloud メール、Naver メールのいずれか）が含まれます。複数のアカウントにファイアウォールを適用するにはアップグレードしてください。",
+  "mailAccount.proGate.upgrade": "アップグレード",
   "imapConnect.firstSync.started": "メールを取得しています。まもなくメールに表示されます。",
   "imapConnect.firstSync.delayed":
     "このアカウントの最初のメールが表示されるまで最大 5 分ほどかかる場合があります。",
@@ -1693,7 +1693,6 @@ const ja: Record<string, string> = {
     "Klorn はメールを PUSH・MEETING・QUEUE・INFO・SILENT の 5 つのレーンに分類します。レーンはラベルです。分類によってメールが送信・アーカイブ・削除されることはありません。",
   "onboardingV2.connect.skip": "あとで",
   "onboardingV2.connect.continueHint": "続けるにはアカウントを 1 つ以上接続してください。",
-  "onboardingV2.connect.needsPlan": "現在のプランではこのアカウントを追加できません。",
   "onboardingV2.connect.failed":
     "接続を開始できませんでした。何も変更されていません。もう一度お試しください。",
   "onboardingV2.tile.connect": "接続",

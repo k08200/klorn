@@ -3,6 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { startGoogleConnect } from "../lib/api";
+import { MailAccountProGate } from "./mail-account-pro-gate";
 
 /**
  * Shows an explicit error card when the OAuth callback came back without a
@@ -22,7 +23,17 @@ export function OAuthErrorBanner() {
     setDismissed(false);
   }, [status]);
 
-  if (status !== "offline_access_denied" || dismissed) return null;
+  if (dismissed) return null;
+  // ?google=pro: the primary Gmail connect was refused because Gmail would be
+  // a second mail account on Free.
+  if (status === "pro") {
+    return (
+      <div className="mb-4">
+        <MailAccountProGate />
+      </div>
+    );
+  }
+  if (status !== "offline_access_denied") return null;
 
   return (
     <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/5 p-4">

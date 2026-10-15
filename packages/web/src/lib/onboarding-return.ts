@@ -37,6 +37,7 @@ export const CONNECT_OUTCOMES = [
   "unverified",
   "self",
   "limit",
+  "pro",
   "failed",
 ] as const;
 export type ConnectOutcome = (typeof CONNECT_OUTCOMES)[number];
@@ -50,6 +51,8 @@ export interface ConnectResult {
 const GOOGLE_STATUS: ReadonlyMap<string, ConnectOutcome> = new Map([
   ["connected", "connected"],
   ["offline_access_denied", "offline"],
+  // A second mail account on Free (api billing/mail-account-entitlement.ts).
+  ["pro", "pro"],
 ]);
 
 /** `?inbox=` statuses the linked-inbox callbacks (Google and Outlook) send. */
@@ -59,6 +62,7 @@ const INBOX_STATUS: ReadonlyMap<string, ConnectOutcome> = new Map([
   ["unverified", "unverified"],
   ["self", "self"],
   ["limit", "limit"],
+  ["pro", "pro"],
   ["failed", "failed"],
 ]);
 

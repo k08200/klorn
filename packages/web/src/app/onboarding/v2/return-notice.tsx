@@ -18,6 +18,7 @@ const MESSAGE_KEY: ReadonlyMap<ConnectOutcome, string> = new Map([
   ["unverified", "onboardingV2.return.unverified"],
   ["self", "onboardingV2.return.self"],
   ["limit", "onboardingV2.return.limit"],
+  ["pro", "mailAccount.proGate.title"],
   ["failed", "onboardingV2.return.failed"],
 ]);
 

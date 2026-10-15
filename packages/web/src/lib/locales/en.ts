@@ -1534,10 +1534,10 @@ const en: Record<string, string> = {
   "mailV2.demo": "This is demo mail.",
   "mailV2.demo.connect": "Connect an account to see your own",
   "mailV2.noSource": "No mail account is connected yet.",
-  "imapConnect.proGate.title": "Connecting {provider} is a Pro feature.",
-  "imapConnect.proGate.body":
-    "Free includes one Google account. Upgrade to run the firewall across this mailbox too.",
-  "imapConnect.proGate.upgrade": "Upgrade",
+  "mailAccount.proGate.title": "Connecting a second mail account is a Pro feature.",
+  "mailAccount.proGate.body":
+    "Free covers one mail account (Gmail, iCloud Mail or Naver Mail). Upgrade to run the firewall across more than one.",
+  "mailAccount.proGate.upgrade": "Upgrade",
   "imapConnect.firstSync.started": "Fetching your mail now. It shows up in Mail shortly.",
   "imapConnect.firstSync.delayed": "First mail from this account can take up to ~5 minutes.",
   "mailV2.archive.done": "Archived",
@@ -1712,7 +1712,6 @@ const en: Record<string, string> = {
     "Klorn sorts mail into 5 lanes: PUSH, MEETING, QUEUE, INFO and SILENT. A lane is a label. Sorting never sends, archives or deletes mail.",
   "onboardingV2.connect.skip": "Skip for now",
   "onboardingV2.connect.continueHint": "Connect at least one account to continue.",
-  "onboardingV2.connect.needsPlan": "Your plan doesn't include adding this account.",
   "onboardingV2.connect.failed": "Couldn't start the connection. Nothing was changed. Try again.",
   "onboardingV2.tile.connect": "Connect",
   "onboardingV2.tile.add": "Add another account",
