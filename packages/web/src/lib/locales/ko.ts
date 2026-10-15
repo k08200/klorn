@@ -148,7 +148,7 @@ const ko: Record<string, string> = {
   "auth.welcomeBack": "다시 오신 것을 환영해요",
   "auth.inviteOnlyTitle": "Klorn은 현재 초대 전용입니다.",
   "auth.inviteOnlyBody":
-    "Google 보안 심사가 끝날 때까지 베타 인원이 제한되어, 모든 계정을 직접 승인하고 있습니다. 먼저 액세스를 요청하세요 — 승인되는 즉시 로그인할 수 있어요.",
+    "베타 인원이 제한되어 있어, 모든 계정을 직접 승인하고 있습니다. 먼저 액세스를 요청하세요 — 승인되는 즉시 로그인할 수 있어요.",
   "auth.requestEarlyAccess": "얼리 액세스 요청",
   "auth.alreadyApproved": "이미 승인되셨나요? 아래에서 로그인하세요.",
   "auth.providerLaneLabel": "연결된 계정으로 로그인",

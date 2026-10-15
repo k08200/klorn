@@ -150,7 +150,7 @@ const en: Record<string, string> = {
   "auth.welcomeBack": "Welcome back",
   "auth.inviteOnlyTitle": "Klorn is invite-only.",
   "auth.inviteOnlyBody":
-    "The beta is capped while Google's security review clears, so every account is approved by hand. Request access first — you can sign in the moment you're approved.",
+    "The beta is capped, so every account is approved by hand. Request access first — you can sign in the moment you're approved.",
   "auth.requestEarlyAccess": "Request early access",
   "auth.alreadyApproved": "Already approved? Sign in below.",
   "auth.providerLaneLabel": "Sign in with a connected account",
