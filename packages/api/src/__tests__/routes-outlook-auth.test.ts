@@ -362,6 +362,25 @@ describe("flag ON — callback", () => {
     }
   });
 
+  it("re-links a legacy mixed-case row instead of adding a duplicate (keeps the stored case)", async () => {
+    state.plan = "FREE";
+    tokenFindFirst.mockResolvedValue({ id: "google-token" });
+    rows.list = [{ id: "legacy", provider: "OUTLOOK", email: "ME@Outlook.com" }];
+    process.env.PAYWALL_ENABLED = "true";
+    try {
+      const res = await runCallback();
+      expect(res.headers.location).toBe("https://app.example.com/settings?inbox=success");
+      expect(db.upsert.mock.calls[0]?.[0]).toMatchObject({
+        where: {
+          userId_provider_email: { userId: "user-1", provider: "OUTLOOK", email: "ME@Outlook.com" },
+        },
+      });
+      expect(db.deleteMany).not.toHaveBeenCalled();
+    } finally {
+      delete process.env.PAYWALL_ENABLED;
+    }
+  });
+
   it("removes a NEW row when a parallel first connect committed meanwhile", async () => {
     state.plan = "FREE";
     db.upsert.mockImplementation(async () => {

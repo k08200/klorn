@@ -27,6 +27,7 @@ import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth, signToken, verifyToken } from "../auth.js";
 import {
   canConnectNewMailAccount,
+  findOwnedLinkedAccount,
   keepIfOnlyMailSource,
   mayConnectMailAccount,
   requireMailLinkStart,
@@ -216,15 +217,11 @@ export function outlookAuthRoutes(opts: {
           // Cap NEW links only: a re-link (existing row → update path) must
           // always be allowed so a user can never lock themselves out of
           // reconnecting an inbox they already have.
-          const existingLink = await prisma.linkedInboxAccount.findUnique({
-            where: {
-              userId_provider_email: {
-                userId: statePayload.userId,
-                provider: "OUTLOOK",
-                email: linkedEmail,
-              },
-            },
-            select: { id: true },
+          // Case-insensitive: a legacy mixed-case row of this address is the
+          // same account, re-linked in place (its stored address kept).
+          const existingLink = await findOwnedLinkedAccount(statePayload.userId, {
+            provider: "OUTLOOK",
+            email: linkedEmail,
           });
           if (!existingLink) {
             const linkedCount = await prisma.linkedInboxAccount.count({
@@ -239,7 +236,7 @@ export function outlookAuthRoutes(opts: {
               userId_provider_email: {
                 userId: statePayload.userId,
                 provider: "OUTLOOK",
-                email: linkedEmail,
+                email: existingLink?.email ?? linkedEmail,
               },
             },
             update: {

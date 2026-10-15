@@ -17,6 +17,7 @@ import {
 import { requireEntitled } from "../billing/entitlement-guard.js";
 import {
   canConnectNewMailAccount,
+  findOwnedLinkedAccount,
   keepIfOnlyMailSource,
   keepPrimaryGoogleIfOnlyMailSource,
   mayConnectMailAccount,
@@ -1280,17 +1281,11 @@ export function authRoutes(app: FastifyInstance) {
           // Cap NEW links only: a re-link (existing row → update path) must always
           // be allowed so a user can never lock themselves out of reconnecting an
           // inbox they already have.
-          const existingLink = await prisma.linkedInboxAccount.findUnique({
-            // The dedup key gained provider (Phase 0a): this route links Google
-            // accounts, so it addresses the GOOGLE slice of the key explicitly.
-            where: {
-              userId_provider_email: {
-                userId: statePayload.userId,
-                provider: "GOOGLE",
-                email: linkedEmail,
-              },
-            },
-            select: { id: true },
+          // Case-insensitive: a legacy mixed-case row of this address is the
+          // same account, re-linked in place (its stored address kept).
+          const existingLink = await findOwnedLinkedAccount(statePayload.userId, {
+            provider: "GOOGLE",
+            email: linkedEmail,
           });
           if (!existingLink) {
             const linkedCount = await prisma.linkedInboxAccount.count({
@@ -1307,7 +1302,7 @@ export function authRoutes(app: FastifyInstance) {
               userId_provider_email: {
                 userId: statePayload.userId,
                 provider: "GOOGLE",
-                email: linkedEmail,
+                email: existingLink?.email ?? linkedEmail,
               },
             },
             update: {

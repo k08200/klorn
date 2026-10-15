@@ -176,6 +176,19 @@ describe("GET /google/callback (__link_inbox__)", () => {
     expect(linked.deleteMany).not.toHaveBeenCalled();
   });
 
+  it("re-links a legacy mixed-case row instead of adding a duplicate (keeps the stored case)", async () => {
+    tokenFindFirst.mockResolvedValue({ id: "google-token" });
+    rows.list = [{ id: "legacy", provider: "GOOGLE", email: "Linked@Example.com" }];
+    const res = await callback();
+    expect(res.headers.location).toContain("inbox=success");
+    expect(linked.upsert.mock.calls[0]?.[0]).toMatchObject({
+      where: {
+        userId_provider_email: { userId: "u1", provider: "GOOGLE", email: "Linked@Example.com" },
+      },
+    });
+    expect(linked.deleteMany).not.toHaveBeenCalled();
+  });
+
   it("removes a NEW row when a parallel first connect committed meanwhile", async () => {
     linked.upsert.mockImplementation(async () => {
       rows.list = [

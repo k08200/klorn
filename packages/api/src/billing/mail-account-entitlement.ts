@@ -104,6 +104,30 @@ async function ownsLinkedAccount(userId: string, account: MailAccountKey): Promi
   return row !== null;
 }
 
+/**
+ * The row this user already has for this account, or null: the exact key
+ * first, then the same address in another case (a legacy mixed-case row), so a
+ * re-link updates that row — keeping its stored address — instead of adding a
+ * duplicate. Scoped by userId.
+ */
+export async function findOwnedLinkedAccount(
+  userId: string,
+  account: MailAccountKey,
+): Promise<{ id: string; email: string } | null> {
+  const select = { id: true, email: true } as const;
+  const exact = await prisma.linkedInboxAccount.findUnique({
+    where: {
+      userId_provider_email: { userId, provider: account.provider, email: account.email },
+    },
+    select,
+  });
+  if (exact) return exact;
+  return prisma.linkedInboxAccount.findFirst({
+    where: { userId, ...accountWhere(account) },
+    select,
+  });
+}
+
 /** May this user ADD this account as a new one (ignoring rows of the same key)? */
 async function mayAddMailAccount(userId: string, account: MailAccountKey): Promise<boolean> {
   if (await hasMultiAccount(userId)) return true;

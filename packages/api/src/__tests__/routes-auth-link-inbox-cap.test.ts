@@ -59,6 +59,8 @@ vi.mock("../db.js", () => {
   const prisma = {
     linkedInboxAccount: {
       findUnique: linkedFindUnique,
+      // The case-insensitive fallback of the owned-row lookup: no mixed-case row here.
+      findFirst: vi.fn(async () => null),
       count: linkedCount,
       upsert: linkedUpsert,
     },
