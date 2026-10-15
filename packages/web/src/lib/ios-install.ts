@@ -17,7 +17,7 @@ const IOS_DEVICE = /iPad|iPhone|iPod/;
 // Chrome/Firefox/Edge on iOS and in-app browsers (Google app, Facebook, Line,
 // KakaoTalk) cannot add a web app to the Home Screen, so the steps would be
 // wrong there.
-const CANNOT_INSTALL = /CriOS|FxiOS|EdgiOS|GSA|FBAN|FBAV|Line|KAKAOTALK/;
+const CANNOT_INSTALL = /CriOS|FxiOS|EdgiOS|GSA|FBAN|FBAV|\bLine\/|KAKAOTALK/;
 
 export interface IosInstallContext {
   userAgent: string;

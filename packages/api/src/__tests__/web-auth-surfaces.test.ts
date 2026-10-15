@@ -43,6 +43,11 @@ describe("shouldOfferIosInstall", () => {
     expect(shouldOfferIosInstall({ ...base, standalone: true })).toBe(false);
   });
 
+  it("matches LINE only by its own token, not any word containing 'Line'", () => {
+    const userAgent = `${IPHONE_SAFARI} Pipeline/1.0`;
+    expect(shouldOfferIosInstall({ ...base, userAgent })).toBe(true);
+  });
+
   it("never offers it inside a native shell (Capacitor / desktop wrapper)", () => {
     expect(shouldOfferIosInstall({ ...base, native: true })).toBe(false);
   });
@@ -50,6 +55,7 @@ describe("shouldOfferIosInstall", () => {
   it.each([
     ["Chrome on iOS", IPHONE_CHROME],
     ["an in-app browser", IPHONE_KAKAO],
+    ["the LINE in-app browser", `${IPHONE_SAFARI} Line/13.6.1`],
     ["Android", ANDROID_CHROME],
     ["desktop Safari", MAC_SAFARI],
   ])("never offers it in %s, which cannot add to the Home Screen", (_name, userAgent) => {
