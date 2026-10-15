@@ -112,6 +112,9 @@ describe("every CalendarEvent writer states its provider", () => {
       "drive/klorn-drive-read.ts",
       "drive/klorn-upload.ts",
       "drive/providers/types.ts",
+      // D4: the summary's source row and the connector it dispatches to.
+      "drive/summary-run.ts",
+      "drive/summary-source.ts",
       "routes/drive.ts",
     ];
     const naming = files.filter((f) => /\bsourceKey\s*:/.test(f.text)).map((f) => f.path);

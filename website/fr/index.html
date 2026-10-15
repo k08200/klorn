@@ -3,13 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-
-<!-- English is always the default at klorn.ai. Korean is reached via the language
-     toggle in the nav, which also auto-redirects a Korean-locale first visit. -->
-<title>Klorn — Moins d'interruptions, pas un courrier plus rapide</title>
-<meta name="description" content="Range chaque message dans cinq files et y attache le motif. Gmail, Naver et Google Agenda au même endroit. Le tri est gratuit ; Klorn Pro coûte 29,99 $ par mois.">
-<meta property="og:title" content="Klorn — Moins d'interruptions, pas un courrier plus rapide">
-<meta property="og:description" content="Klorn range chaque message dans l'une des cinq files — Push, Meeting, Queue, Info, Silent — et y attache le motif. Superhuman vend de la vitesse, Fyxer rédige la réponse ; les deux coûtent 30 $ par mois et aucun ne vous dit pourquoi un message est arrivé jusqu'à vous. AGPL-3.0, auto-hébergeable, et rien n'est envoyé sans votre accord.">
+<link rel="alternate" hreflang="en" href="https://klorn.ai/">
+<link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/">
+<link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/">
+<link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/">
+<link rel="alternate" hreflang="es" href="https://klorn.ai/es/">
+<link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/">
+<link rel="alternate" hreflang="de" href="https://klorn.ai/de/">
+<link rel="alternate" hreflang="x-default" href="https://klorn.ai/">
+<link rel="canonical" href="https://klorn.ai/fr/">
+<!-- English is the default at klorn.ai. Other languages are reached from the
+     language menu; a Korean-locale first visit to / is routed to /ko/ once. -->
+<title>Klorn — Tous vos e-mails et agendas. Au même endroit, au calme.</title>
+<meta name="description" content="Gmail et Google Agenda, ainsi que Naver Mail et iCloud Mail en bêta, dans une seule vue. Klorn trie chaque message selon ce qu’il attend de vous et vous dit pourquoi. Plan gratuit ; Klorn Pro coûte 29,99 $ par mois.">
+<meta property="og:title" content="Klorn — Tous vos e-mails et agendas. Au même endroit, au calme.">
+<meta property="og:description" content="Une seule vue pour vos e-mails et vos agendas, triés en cinq files avec le motif sur chaque message. Vous décidez de ce qui part.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://klorn.ai/fr/">
 <meta property="og:image" content="https://klorn.ai/brand/og-image.png?v=k2">
@@ -17,771 +25,16 @@
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://klorn.ai/brand/og-image.png?v=k2">
-<!-- The hero photograph is the LCP element; preloading it with the same srcset
-     the <picture> uses lets the fetch start before the CSS resolves. -->
 <link rel="preload" as="font" type="font/woff2" href="/fonts/geist-var.woff2" crossorigin>
-<link rel="preload" as="font" type="font/woff2" href="/fonts/instrument-serif-italic.woff2" crossorigin>
-<link rel="preload" as="image" type="image/webp"
-      imagesrcset="/media/sky/dusk-1280.webp 1280w, /media/sky/dusk-1920.webp 1920w, /media/sky/dusk-2560.webp 2560w"
-      imagesizes="100vw" fetchpriority="high">
+<link rel="preload" as="image" type="image/webp" media="(max-width:640px)"
+      imagesrcset="/media/app-2026-10/today-m-light-720.webp 720w, /media/app-2026-10/today-m-light-1440.webp 1440w"
+      imagesizes="94vw" fetchpriority="high">
+<link rel="preload" as="image" type="image/webp" media="(min-width:641px)"
+      imagesrcset="/media/app-2026-10/today-light-1200.webp 1200w, /media/app-2026-10/today-light-2000.webp 2000w, /media/app-2026-10/today-light-2560.webp 2560w"
+      imagesizes="(min-width:1240px) 1176px, 94vw" fetchpriority="high">
 <link rel="icon" href="/brand/favicon.svg?v=matte2" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png?v=matte2">
-<style>
-/* Self-hosted webfonts (fonts/SOURCE.md). The stacks below referenced Geist and
-   a commercial serif that were never actually loaded, so every visitor rendered
-   the system-font fallback. Geist is the intended sans; the serif accent loads
-   Instrument Serif (OFL) in place of the unlicensed face the stack named.
-   font-display swap: text renders immediately in the fallback, then upgrades. */
-@font-face{font-family:'Geist';src:url('/fonts/geist-var.woff2') format('woff2');
-  font-weight:100 900;font-style:normal;font-display:swap}
-@font-face{font-family:'Instrument Serif';src:url('/fonts/instrument-serif-italic.woff2') format('woff2');
-  font-weight:400;font-style:italic;font-display:swap}
-@font-face{font-family:'Instrument Serif';src:url('/fonts/instrument-serif.woff2') format('woff2');
-  font-weight:400;font-style:normal;font-display:swap}
-:root{
-  --ink:#0a0e14; --ink-2:#39424e;
-  /* #6a7480 measured 4.17:1 on the band wash and 3.71:1 over the sky bands —
-     under AA for the small text it is used for. This clears 4.5:1 on every
-     surface it lands on, white cards through photograph. */
-  --ink-3:#5c656f;
-  --paper:#fbfaf6;            /* warm, not clinical white (ref: Trajectory) */
-  --line:rgba(10,14,20,.09);
-  --sky-600:#0284c7;
-  /* --sky-600 is the accent for fills, borders and large display type. As a
-     TEXT colour it fails AA at small sizes on every surface here — 4.10:1
-     even on a white card, 3.46:1 over the sky. Small text uses this instead. */
-  --sky-ink:#0369a1;
-  --ease:cubic-bezier(.32,.72,0,1);
-}
-*{box-sizing:border-box}
-html{scroll-behavior:smooth}
-@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
-body{position:relative;margin:0;background:var(--paper);color:var(--ink);
-  font-family:'Geist','Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
-  line-height:1.6;-webkit-font-smoothing:antialiased}
-a{color:inherit;text-decoration:none}
-/* One visible focus ring for everything. Two rings — a white halo under a dark
-   one — so it survives both the dark nav pill and the pale paper. */
-:focus-visible{outline:2px solid var(--sky-600);outline-offset:3px;border-radius:6px;
-  box-shadow:0 0 0 6px rgba(255,255,255,.85)}
-.nav-pill :focus-visible{outline-color:#fff;box-shadow:0 0 0 6px rgba(4,12,26,.6)}
-
-/* Film grain — fixed, never on a scroller (perf). */
-.grain{position:fixed;inset:0;z-index:60;pointer-events:none;opacity:.30;mix-blend-mode:multiply;
-  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='4'/></filter><rect width='180' height='180' filter='url(%23n)' opacity='.42'/></svg>")}
-
-
-/* Page-wide atmosphere. The middle of the page measured flat — 4,500px where the
-   background moved less than 6% in luminance — so instead of scattered blooms it
-   now descends continuously through the photograph's own palette: cream, blush,
-   lavender, the pale blue at the top of the frame, back to cream at the footer.
-   Three soft lateral washes keep that descent from reading as a flat ramp.
-   Every stop stays lighter than #e1e1e1, the point where --ink-3 would drop
-   under 4.5:1. */
-.field{position:absolute;top:0;left:0;right:0;height:100%;z-index:0;pointer-events:none;
-  background-image:
-    radial-gradient(62% 13% at 88% 24%, rgba(212,226,240,.50), transparent 72%),
-    radial-gradient(58% 12% at 5% 45%, rgba(240,222,226,.52), transparent 72%),
-    radial-gradient(64% 14% at 94% 67%, rgba(230,222,240,.46), transparent 72%),
-    radial-gradient(56% 12% at 8% 84%, rgba(216,230,240,.44), transparent 74%),
-    linear-gradient(180deg,
-      #f8f6f1 0%, #f7efeb 17%, #f4ecef 32%, #f2ebf1 46%,
-      #edf1f6 62%, #eff3f7 76%, #f5f3f1 90%, #f8f6f1 100%);
-  -webkit-mask-image:linear-gradient(180deg,transparent 0,#000 5%,#000 97%,transparent 100%);
-          mask-image:linear-gradient(180deg,transparent 0,#000 5%,#000 97%,transparent 100%)}
-
-/* ── Fluid island nav ─────────────────────────────── */
-.nav{position:fixed;top:22px;left:0;right:0;z-index:50;display:flex;justify-content:center;padding:0 16px;pointer-events:none}
-.nav-pill{pointer-events:auto;display:flex;align-items:center;gap:2px;padding:7px 7px 7px 18px;border-radius:9999px;
-  background:rgba(12,16,22,.66);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);
-  border:1px solid rgba(255,255,255,.13);box-shadow:0 18px 44px -20px rgba(4,12,26,.7),inset 0 1px 0 rgba(255,255,255,.10);
-  transition:transform .7s var(--ease),box-shadow .7s var(--ease)}
-.nav-pill:hover{transform:translateY(-1px);box-shadow:0 24px 56px -22px rgba(4,12,26,.78),inset 0 1px 0 rgba(255,255,255,.14)}
-.nav-brand{color:#fff;font-weight:700;letter-spacing:-.015em;font-size:15px;margin-right:14px;
-  padding:6px 2px;border-radius:8px;transition:opacity .5s var(--ease)}
-.nav-brand:hover{opacity:.72}
-.nav-links{display:flex;gap:2px}
-.nav-links a{color:rgba(255,255,255,.72);font-size:13.5px;padding:9px 14px;border-radius:9999px;
-  transition:color .5s var(--ease),background .5s var(--ease)}
-.nav-links a:hover{color:#fff;background:rgba(255,255,255,.10)}
-.nav-cta{display:inline-flex;align-items:center;gap:9px;height:38px;padding:0 6px 0 17px;border-radius:9999px;
-  background:#fff;color:var(--ink);font-size:13.5px;font-weight:650;margin-left:8px;
-  transition:transform .6s var(--ease)}
-.nav-cta:active{transform:scale(.97)}
-.nav-cta i{width:26px;height:26px;border-radius:9999px;background:rgba(10,14,20,.07);display:grid;place-items:center;
-  font-style:normal;font-size:12px;transition:transform .6s var(--ease),background .6s var(--ease)}
-.nav-cta:hover i{transform:translate(2px,-1px) scale(1.06);background:rgba(10,14,20,.12)}
-/* Web sign-in lives in the pill, NOT in .nav-links — those collapse under
-   880px, and someone reaching for the web app is most likely on a phone.
-   Outlined rather than filled so it reads as the secondary action next to the
-   white download CTA without disappearing into the glass. */
-.nav-login{position:relative;display:inline-flex;align-items:center;height:38px;padding:0 15px;
-  border-radius:9999px;margin-left:8px;color:rgba(255,255,255,.88);font-size:13.5px;font-weight:600;
-  border:1px solid rgba(255,255,255,.22);white-space:nowrap;
-  transition:color .5s var(--ease),background .5s var(--ease),border-color .5s var(--ease)}
-.nav-login:hover{color:#fff;background:rgba(255,255,255,.10);border-color:rgba(255,255,255,.34)}
-/* 38px keeps the pill's height; the overlay takes the touch target to 44px by
-   claiming the pill's own padding, so nothing reflows to buy the AA target. */
-.nav-login::before{content:"";position:absolute;inset:-3px -2px;border-radius:inherit}
-@media(max-width:880px){.nav-links{display:none}}
-/* Phones drop .nav-links, leaving brand + Log in + Download in the pill. Tighten its
-   own spacing before anything is allowed to clip: measured 378px into a
-   343px budget at 375px wide before this block. The band runs to 480px so the
-   first full-padding width (481px) still clears its budget by ~70px, not ~10. */
-@media(max-width:480px){
-  .nav-pill{padding:5px 5px 5px 13px}
-  .nav-brand{margin-right:8px}
-  .nav-login{margin-left:6px;padding:0 11px;font-size:13px}
-  .nav-cta{margin-left:6px;padding:0 12px;font-size:13px}
-  /* The arrow puck is decoration and the widest thing here (26px + 9px gap);
-     dropping it on phones buys the room without unlabelling a single control. */
-  .nav-cta i{display:none}
-}
-
-/* ── Hero ─────────────────────────────────────────── */
-.hero{position:relative;overflow:hidden;padding:196px 0 0;text-align:center}
-/* Hero sky. The gradient is the photograph's own measured band averages, so it
-   stands in with the right colour while the file loads instead of flashing a
-   different hue. The image fades out at the bottom into --paper, which is what
-   the drawn SVG this replaced used to do with a gradient stop. */
-.hero-sky{position:absolute;top:0;left:0;width:100%;height:1400px;z-index:0;overflow:hidden;
-  background:linear-gradient(180deg,#f3f3ec 0%,#ede8e5 22%,#ecd5cd 40%,
-    #e5c7c2 58%,#d7c1c6 74%,#cdc1cc 88%,#cdc1cc 100%);
-  /* The mask has to sit on the picture, not on the img. It was on the img alone,
-     so the placeholder gradient underneath stayed at full strength and cut off
-     square at the element's edge — that hard line was the background, not the
-     photograph. Masking the container fades both together. */
-  -webkit-mask-image:linear-gradient(180deg,#000 0%,#000 58%,rgba(0,0,0,.55) 82%,transparent 100%);
-          mask-image:linear-gradient(180deg,#000 0%,#000 58%,rgba(0,0,0,.55) 82%,transparent 100%)}
-.hero-sky img{width:100%;height:100%;object-fit:cover;object-position:center 42%;display:block}
-.wrap{position:relative;z-index:3;max-width:1180px;margin:0 auto;padding:0 24px}
-
-.eyebrow{display:inline-flex;align-items:center;gap:9px;padding:7px 8px 7px 15px;border-radius:9999px;
-  background:rgba(255,255,255,.72);border:1px solid rgba(255,255,255,.85);
-  box-shadow:0 8px 26px -14px rgba(10,50,90,.5);
-  font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:#0b5f8a;
-  backdrop-filter:blur(12px)}
-.eyebrow b{font-weight:700;letter-spacing:0;text-transform:none;font-size:12.5px;color:var(--ink);
-  background:#fff;padding:3px 10px;border-radius:9999px}
-
-h1{font-size:clamp(46px,7.2vw,88px);line-height:.98;letter-spacing:-.042em;font-weight:700;margin:26px 0 20px}
-/* Measured against the photograph's bands: --sky-600 lands at 2.69:1, under the
-   3:1 floor for large text. This shade clears it (3.23:1) and still reads as the
-   same accent; the paper sections keep --sky-600 unchanged. */
-h1 .ser{font-family:'Instrument Serif','Iowan Old Style',Georgia,serif;font-style:italic;font-weight:400;
-  color:#0277b3;padding-right:.06em}
-.lead{font-size:19px;color:var(--ink-2);max-width:600px;margin:0 auto 34px}
-/* The serif accent is a Latin display face. Korean has no glyphs in it, so the
-   browser substitutes whatever Hangul serif it finds — on macOS a cursive one
-   that reads as a different, wrong voice next to the sans headline. Give Hangul
-   an explicit Myeongjo stack and drop the italic, which Hangul does not have. */
-/* Hangul has no spaces inside a word but CSS will happily break between any two
-   syllables, so "당신에게" wraps as "당신에 / 게". keep-all breaks on spaces only. */
-html[lang=ko] body{word-break:keep-all;overflow-wrap:break-word}
-html[lang=ko] h1 .ser,
-html[lang=ko] .stmt-h .ser,
-html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','AppleMyungjo',serif;
-  font-style:normal;font-weight:600;padding-right:0}
-
-.actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
-.btn{display:inline-flex;align-items:center;gap:10px;height:54px;padding:0 8px 0 26px;border-radius:9999px;
-  font-size:15px;font-weight:650;transition:transform .6s var(--ease),box-shadow .6s var(--ease)}
-.btn:active{transform:scale(.98)}
-.btn i{width:34px;height:34px;border-radius:9999px;display:grid;place-items:center;font-style:normal;font-size:14px;
-  transition:transform .6s var(--ease),background .6s var(--ease)}
-.btn-1{background:var(--ink);color:#fff;box-shadow:0 20px 44px -22px rgba(10,14,20,.85)}
-.btn-1 i{background:rgba(255,255,255,.14)}
-.btn-1:hover{box-shadow:0 26px 54px -22px rgba(10,14,20,.9)}
-.btn-1:hover i{transform:translate(3px,-2px) scale(1.07);background:rgba(255,255,255,.22)}
-.btn-2{background:rgba(255,255,255,.78);color:var(--ink);border:1px solid rgba(255,255,255,.9);padding-right:26px;
-  backdrop-filter:blur(12px);box-shadow:0 10px 30px -18px rgba(10,50,90,.5)}
-.btn-2:hover{background:#fff}
-.btn-dl{padding-left:22px}
-.btn-dl svg{width:17px;height:17px;transition:transform .6s var(--ease)}
-.btn-dl:hover svg{transform:translateY(2px)}
-/* Two platform cards instead of one Download button. Both render without JS —
-   OS detection only promotes the matching one, so a Windows visitor with
-   scripting off still sees their entry rather than a Mac-only page. */
-.dl-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:20px auto 0;max-width:660px}
-.dl{display:flex;align-items:center;gap:12px;text-align:left;padding:12px 18px 12px 15px;border-radius:16px;
-  background:rgba(255,255,255,.72);border:1px solid rgba(255,255,255,.9);
-  box-shadow:0 10px 30px -18px rgba(10,50,90,.5);backdrop-filter:blur(12px);
-  transition:transform .6s var(--ease),box-shadow .6s var(--ease),background .6s var(--ease)}
-.dl:hover{background:#fff;transform:translateY(-2px);box-shadow:0 18px 40px -20px rgba(10,50,90,.55)}
-.dl:active{transform:scale(.985)}
-.dl svg{width:22px;height:22px;flex:0 0 22px;color:var(--ink-2)}
-.dl .t{display:block}
-.dl b{display:block;font-size:14px;font-weight:650;letter-spacing:-.01em;color:var(--ink)}
-.dl .t span{display:block;font-size:11.5px;color:var(--ink-3);margin-top:1px}
-.dl.is-yours{background:var(--ink);border-color:var(--ink);box-shadow:0 20px 44px -22px rgba(10,14,20,.85)}
-.dl.is-yours b{color:#fff}
-.dl.is-yours .t span{color:rgba(255,255,255,.66)}
-.dl.is-yours svg{color:#fff}
-.dl.is-yours:hover{background:#11161f}
-/* --ink-3 measured 2.75-4.28:1 against the photograph's bands — under the 4.5
-   AA floor for body-size text. --ink-2 clears it everywhere (5.89-9.18:1). */
-.actions-note{max-width:560px;margin:18px auto 0;font-size:12.5px;line-height:1.6;color:var(--ink-2)}
-/* 12.5px on the photograph needs 4.5:1; #0b5f8a gives 3.44:1 there. */
-.actions-note a{color:#084869;font-weight:600;border-bottom:1px solid rgba(8,72,105,.32)}
-.actions-note a:hover{border-bottom-color:#084869}
-
-/* ── The real app, floating ───────────────────────── */
-/* 56px sat the replica right under the sorting demo — two dense panels with no
-   air between them. */
-.stage{position:relative;z-index:3;margin:120px auto 0;max-width:1160px;padding:0 24px 96px}
-/* Caption above the frame. Below it the stage fade washes it out, and this one
-   has to stay readable — it is the honesty label on a fake inbox. */
-.stage-cap{display:flex;align-items:center;justify-content:center;gap:9px;flex-wrap:wrap;
-  margin:0 0 14px;font-size:12.5px;color:var(--ink-2)}
-.stage-cap b{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:700;
-  letter-spacing:.14em;text-transform:uppercase;color:#fff;background:var(--sky-ink);
-  border-radius:999px;padding:4px 10px}
-.stage-cap b::before{content:'';width:5px;height:5px;border-radius:50%;background:#fff}
-.shell{position:relative;border-radius:30px;padding:10px;
-  background:linear-gradient(180deg,rgba(255,255,255,.72),rgba(255,255,255,.34));
-  border:1px solid rgba(255,255,255,.8);
-  /* Was 0.55 alpha of a navy at 130px blur — over the pale sky that pooled
-     under the panel as a grey smudge rather than reading as lift. Lighter,
-     tighter, and tinted to the background it falls on. */
-  box-shadow:0 34px 70px -34px rgba(90,80,96,.20),0 10px 26px -18px rgba(90,80,96,.16);
-  backdrop-filter:blur(10px)}
-.core{border-radius:22px;overflow:hidden;background:#fff;border:1px solid var(--line);
-  box-shadow:inset 0 1px 1px rgba(255,255,255,.9)}
-.core img{display:block;width:100%;height:auto}
-
-/* Floating signal cards pinned to the app (ref: Screenote) */
-.chip{position:absolute;z-index:5;display:flex;gap:11px;align-items:flex-start;width:238px;padding:13px 15px;
-  border-radius:17px;background:rgba(255,255,255,.82);border:1px solid rgba(255,255,255,.94);
-  box-shadow:0 26px 54px -26px rgba(8,42,80,.5);backdrop-filter:blur(16px) saturate(1.3);
-  text-align:left;animation:float 7s var(--ease) infinite alternate}
-.chip .d{width:8px;height:8px;border-radius:50%;margin-top:6px;flex:0 0 8px}
-.chip h4{margin:0;font-size:13px;font-weight:650;letter-spacing:-.01em}
-.chip p{margin:2px 0 0;font-size:11.5px;line-height:1.45;color:var(--ink-3)}
-.chip-a{left:-14px;top:120px;animation-delay:-1.4s}
-.chip-b{right:-18px;top:238px;animation-delay:-3.2s}
-.chip-c{left:34px;bottom:150px;animation-delay:-5s}
-@keyframes float{from{transform:translateY(-7px)}to{transform:translateY(7px)}}
-@media(max-width:1080px){.chip{display:none}}
-
-/* ── Cards ────────────────────────────────────────── */
-.sec{position:relative;z-index:1;padding:104px 0 28px}
-.sec-head{max-width:1180px;margin:0 auto 40px;padding:0 24px;display:flex;gap:48px;align-items:flex-end;flex-wrap:wrap}
-.sec-head h2{flex:1 1 420px;margin:0;font-size:clamp(32px,4.2vw,52px);line-height:1.04;letter-spacing:-.035em;font-weight:700}
-.sec-head p{flex:1 1 300px;margin:0;color:var(--ink-2);font-size:16px;max-width:420px}
-.tag{display:inline-block;font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-3);
-  font-weight:600;margin-bottom:18px}
-
-/* The four screenshots have ratios from 1.63 to 0.52, so forcing the cards to a
-   shared height opens a void under whichever one is shorter. Each card ends
-   where its own content ends instead. */
-.cards{max-width:1180px;margin:0 auto;padding:0 24px;display:grid;grid-template-columns:repeat(12,1fr);
-  gap:18px;align-items:start}
-.card{border-radius:26px;padding:8px;background:rgba(10,14,20,.035);border:1px solid var(--line);
-  transition:transform .8s var(--ease),box-shadow .8s var(--ease)}
-.card:hover{transform:translateY(-5px);box-shadow:0 40px 80px -46px rgba(8,42,80,.5)}
-.card-in{border-radius:19px;overflow:hidden;background:#fff;border:1px solid var(--line);height:100%;
-  box-shadow:inset 0 1px 1px rgba(255,255,255,.9);display:flex;flex-direction:column}
-/* Product tour. Four surfaces, one frame, switched by tabs.
-   A grid of screenshots cannot be made tidy here: the four have ratios from 1.79
-   to 0.84, so a shared row height opens voids and a natural height leaves ragged
-   bottoms. One frame removes the problem instead of balancing it — and the tabs
-   are the interaction the page was missing below the fold.
-   Every shot is rendered at the same 520x330pt, so the frame never letterboxes. */
-.tour{max-width:1180px;margin:0 auto;padding:0 24px;display:grid;
-  grid-template-columns:352px 1fr;gap:28px;align-items:start}
-.tour-nav{display:grid;gap:8px;align-content:start}
-.tour-t{display:grid;gap:3px;text-align:left;padding:15px 17px;border-radius:15px;border:1px solid transparent;
-  background:transparent;font:inherit;color:var(--ink);cursor:pointer;
-  transition:background .5s var(--ease),border-color .5s var(--ease),transform .5s var(--ease)}
-.tour-t:hover{background:rgba(255,255,255,.55)}
-.tour-t b{font-size:15.5px;font-weight:650;letter-spacing:-.015em}
-.tour-t span{font-size:13px;color:var(--ink-3);line-height:1.5}
-.tour-t[aria-selected=true]{background:#fff;border-color:var(--line);
-  box-shadow:0 18px 40px -28px rgba(10,50,90,.42)}
-.tour-t[aria-selected=true] span{color:var(--ink-2)}
-.tour-stage{border-radius:26px;padding:8px;background:rgba(10,14,20,.035);border:1px solid var(--line)}
-.tour-panel{border-radius:19px;overflow:hidden;background:#fff;border:1px solid var(--line)}
-.tour-panel img{display:block;width:100%;height:auto;aspect-ratio:1040/660;object-fit:cover}
-/* Opt-IN single-panel mode: without JS every panel stays in the document, so the
-   section degrades to a plain stack instead of one visible tab. */
-.js .tour-panel[hidden]{display:none}
-.js .tour-panel+.tour-panel{margin-top:0}
-.tour-panel+.tour-panel{margin-top:10px}
-@media(max-width:900px){
-  .tour{grid-template-columns:1fr;gap:18px}
-  .tour-nav{grid-template-columns:repeat(2,1fr);gap:8px}
-}
-@media(max-width:900px){.c8,.c4,.c6{grid-column:span 12}}
-
-
-/* ── Shared section furniture ─────────────────────── */
-.wrapl{max-width:1180px;margin:0 auto;padding:0 24px}
-/* Sections separate by tone, never by a rule drawn across the page. The wash
-   is a masked pseudo-element so its top and bottom edges dissolve instead of
-   landing as a hairline. */
-/* A third pass of the same sky, hazed right back, so the middle of the page has
-   weather in it too instead of flat tone. Same cached file as the hero — no
-   extra request — cropped elsewhere in the frame and not mirrored, so it reads
-   as a different part of the sky rather than a repeat of the closing band. */
-.sec-sky{position:absolute;inset:0;z-index:-1;pointer-events:none;display:block}
-.sec-sky img{width:100%;height:100%;object-fit:cover;object-position:center 12%;display:block;
-  opacity:.55;
-  -webkit-mask-image:linear-gradient(180deg,transparent 0,#000 30%,#000 70%,transparent 100%);
-          mask-image:linear-gradient(180deg,transparent 0,#000 30%,#000 70%,transparent 100%)}
-.band::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
-  background:rgba(238,236,227,.62);
-  -webkit-mask-image:linear-gradient(180deg,transparent 0,#000 14%,#000 86%,transparent 100%);
-          mask-image:linear-gradient(180deg,transparent 0,#000 14%,#000 86%,transparent 100%)}
-.sec.band{padding-block:96px}
-
-.stmt{max-width:780px}
-.stmt-h{font-size:clamp(30px,4.4vw,54px);line-height:1.06;letter-spacing:-.035em;font-weight:700;margin:0 0 22px}
-.stmt-h .ser{font-family:'Instrument Serif','Iowan Old Style',Georgia,serif;font-style:italic;font-weight:400;color:var(--sky-ink)}
-.stmt-p{font-size:18px;color:var(--ink-2);margin:0 0 30px;max-width:640px}
-.pips{display:flex;gap:10px;flex-wrap:wrap}
-.pip{display:inline-flex;align-items:center;gap:9px;padding:8px 15px;border-radius:9999px;background:#fff;
-  border:1px solid var(--line);font-size:13px;font-weight:550;color:var(--ink-2)}
-.pip i{width:6px;height:6px;border-radius:50%;background:var(--sky-600)}
-
-.steps{max-width:1180px;margin:0 auto;padding:0 24px;display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
-.step{border-radius:26px;padding:8px;background:rgba(10,14,20,.035);border:1px solid var(--line)}
-.step>*{margin:0}
-.step .sn{display:block;font-size:11px;letter-spacing:.2em;font-weight:700;color:var(--sky-ink);padding:22px 24px 0}
-.step h3{font-size:20px;letter-spacing:-.02em;padding:10px 24px 0}
-.step p{color:var(--ink-3);font-size:14px;padding:8px 24px 22px}
-@media(max-width:860px){.steps{grid-template-columns:1fr}}
-
-/* Compatibility. Every comparable landing puts this somewhere a visitor reaches
-   before installing; without it the only mention of a mail provider on this page
-   was one word inside a pricing bullet. */
-.works{max-width:1180px;margin:0 auto;padding:0 24px;display:grid;
-  grid-template-columns:repeat(5,1fr);gap:18px}
-.work{border-radius:20px;padding:22px 22px;background:#fff;border:1px solid var(--line);
-  display:grid;gap:5px;align-content:start}
-.work b{font-size:15px;font-weight:650;letter-spacing:-.015em}
-.work span{font-size:13px;color:var(--ink-3);line-height:1.5}
-.works-note{max-width:1180px;margin:20px auto 0;padding:0 24px;font-size:13px;color:var(--ink-3)}
-.works-note b{color:var(--ink-2);font-weight:650}
-@media(max-width:1140px){.works{grid-template-columns:repeat(3,1fr)}}
-@media(max-width:900px){.works{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:560px){.works{grid-template-columns:1fr}}
-
-/* Questions a beta actually gets asked, as a native <details> accordion: three
-   of the four landings measured against use one here, and it works with no
-   script at all — the disclosure, the keyboard and the focus ring are the
-   browser's. Six open answers made this the longest section on the page. */
-.faq{max-width:820px;margin:0 auto;padding:0 24px;display:grid;gap:0}
-.faq-i{border-top:1px solid var(--line)}
-.faq-i:last-child{border-bottom:1px solid var(--line)}
-.faq-i summary{list-style:none;cursor:pointer;display:flex;align-items:flex-start;gap:16px;
-  padding:20px 2px;font-size:16.5px;font-weight:650;letter-spacing:-.015em;
-  transition:color .4s var(--ease)}
-.faq-i summary::-webkit-details-marker{display:none}
-.faq-i summary:hover{color:var(--sky-ink)}
-.faq-i summary::after{content:"+";margin-left:auto;font-size:20px;font-weight:400;line-height:1;
-  color:var(--ink-3);transition:transform .5s var(--ease);flex:0 0 auto}
-.faq-i[open] summary::after{transform:rotate(45deg)}
-.faq-i p{margin:0;padding:0 40px 22px 2px;font-size:14.5px;color:var(--ink-2);line-height:1.65}
-.faq-i a{color:var(--sky-ink);font-weight:600}
-
-.stats{max-width:1180px;margin:0 auto;padding:0 24px;display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
-.stat{border-radius:26px;padding:26px 26px;background:#fff;border:1px solid var(--line);
-  box-shadow:0 22px 50px -38px rgba(8,42,80,.45)}
-.stat .sv{font-size:clamp(38px,4.6vw,54px);line-height:1;letter-spacing:-.04em;font-weight:700;font-variant-numeric:tabular-nums}
-.stat .sl{margin-top:10px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);font-weight:650}
-.stat p{margin:12px 0 0;font-size:13.5px;color:var(--ink-3);line-height:1.55}
-@media(max-width:860px){.stats{grid-template-columns:1fr}}
-.foot{max-width:1180px;margin:34px auto 0;padding:0 24px;font-size:13px;color:var(--ink-3)}
-.foot a{color:var(--sky-ink);font-weight:600}
-
-.os{border-radius:30px;padding:10px;background:rgba(10,14,20,.04);border:1px solid var(--line);
-  max-width:720px;margin:0 auto}
-/* The right-hand column held four bullets the page had already made three times
-   over, so the card is a single column now: the claim and the two links. The
-   card is capped to that column's width, or it renders as a full-width box
-   with its right half empty. */
-.os-in{border-radius:22px;background:#fff;border:1px solid var(--line);padding:34px 38px;
-  display:grid;gap:0;align-items:start}
-.os-h{font-size:clamp(26px,3.2vw,40px);line-height:1.08;letter-spacing:-.03em;margin:0 0 16px;font-weight:700}
-.os-p{color:var(--ink-2);font-size:15.5px;margin:0 0 26px}
-.os-cta{display:flex;gap:12px;flex-wrap:wrap}
-/* Recently shipped. On the landings measured, developer-facing tools surface
-   shipping velocity on the page itself (linear, warp, cursor, resend, vercel);
-   for an AGPL project the release feed is the one trust signal that cannot be
-   faked. Hidden until the GitHub fetch succeeds, so a failure costs nothing —
-   the footer's Releases link already covers it. */
-.ship{margin-top:26px}
-.ship h3{margin:0 0 10px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;
-  color:var(--ink-3);font-weight:700}
-.ship ol{list-style:none;margin:0 0 10px;padding:0;display:flex;gap:8px;flex-wrap:wrap}
-.ship li{display:inline-flex;align-items:baseline;gap:8px;padding:7px 12px;border-radius:9999px;
-  background:rgba(10,14,20,.045);font-size:12.5px}
-.ship li a{font-weight:650;color:var(--ink)}
-.ship li span{color:var(--ink-3);font-size:11.5px}
-.ship>a{font-size:12.5px;color:var(--sky-ink);font-weight:600}
-@media(max-width:900px){.os-in{grid-template-columns:1fr;gap:34px;padding:32px 26px}}
-
-.prices{max-width:1000px;margin:0 auto;padding:0 24px;display:grid;grid-template-columns:1fr 1fr;gap:18px}
-.price{border-radius:28px;padding:8px;background:rgba(10,14,20,.035);border:1px solid var(--line)}
-.price.feat{background:var(--ink);border-color:var(--ink)}
-.price-in{border-radius:21px;background:#fff;border:1px solid var(--line);padding:28px 28px;height:100%;
-  display:flex;flex-direction:column}
-.chip-s{align-self:flex-start;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:700;
-  padding:6px 12px;border-radius:9999px;background:rgba(10,14,20,.06);color:var(--ink-2)}
-.chip-s.dark{background:var(--ink);color:#fff}
-.price h3{margin:16px 0 4px;font-size:19px;letter-spacing:-.02em}
-.amt{font-size:44px;letter-spacing:-.04em;font-weight:700;line-height:1.1}
-.amt span{font-size:15px;font-weight:500;color:var(--ink-3);letter-spacing:0}
-.note{margin:8px 0 22px;font-size:13px;color:var(--ink-3)}
-.price ul{list-style:none;margin:0 0 26px;padding:0;display:grid;gap:11px}
-.price li{position:relative;padding-left:24px;font-size:14px;color:var(--ink-2);line-height:1.5}
-.price li::before{content:"";position:absolute;left:2px;top:8px;width:9px;height:9px;border-radius:50%;
-  background:var(--sky-600);opacity:.85}
-.btn.full{width:100%;justify-content:center;margin-top:auto;padding-inline:26px}
-@media(max-width:820px){.prices{grid-template-columns:1fr}}
-
-/* The closing section bookends the hero with the same sky. It reuses the hero's
-   file — mirrored and cropped to a different part of the frame — so it reads as
-   the same weather from another angle and costs no extra bytes: the browser
-   already has it. Lazy, because it sits far below the fold. */
-.final{position:relative;overflow:hidden;padding:112px 0 28px;text-align:center}
-.final-sky{position:absolute;inset:0;z-index:0;pointer-events:none;display:block}
-.final-sky img{width:100%;height:100%;object-fit:cover;object-position:center 78%;display:block;
-  transform:scaleX(-1);opacity:.82;
-  -webkit-mask-image:linear-gradient(180deg,transparent 0,#000 26%,#000 74%,transparent 100%);
-          mask-image:linear-gradient(180deg,transparent 0,#000 26%,#000 74%,transparent 100%)}
-.final>.wrapl{position:relative;z-index:1}
-
-/* Scroll-linked sky pan. All three bands are the same photograph; panning each
-   one as it crosses the viewport makes them read as one sky being moved through
-   rather than three copies of a still. Transform only, so it composites on the
-   GPU and never triggers layout.
-
-   Progressive enhancement on purpose: scroll-driven animation is not universal
-   yet, and without it the images simply sit still — which is the design that
-   was measured. The taller img is scoped to the same guard so unsupported
-   browsers keep the crop that was verified. */
-@media (prefers-reduced-motion:no-preference){
-  @supports (animation-timeline:view()){
-    /* 124% left only 6px of cover at the end of the pan — one rounding away
-       from a sliver of background. 130% keeps ~5% of the container in hand. */
-    .hero-sky img,.sec-sky img,.final-sky img{height:130%}
-    .hero-sky img,.sec-sky img{animation:sky-pan linear both;
-      animation-timeline:view();animation-range:cover 0% cover 100%}
-    /* keeps the mirror: an animation on transform would otherwise drop it */
-    .final-sky img{animation:sky-pan-flip linear both;
-      animation-timeline:view();animation-range:cover 0% cover 100%}
-  }
-}
-@keyframes sky-pan{from{transform:translateY(0)}to{transform:translateY(-19%)}}
-@keyframes sky-pan-flip{from{transform:scaleX(-1) translateY(0)}
-                          to{transform:scaleX(-1) translateY(-19%)}}
-.final-h{font-size:clamp(34px,5.4vw,68px);line-height:1.02;letter-spacing:-.04em;font-weight:700;margin:0 0 18px}
-/* Now sits on the closing photograph too: --sky-600 measures 2.93:1 there,
-   under the 3:1 floor. Same shade as the hero accent. */
-.final-h .ser{font-family:'Instrument Serif','Iowan Old Style',Georgia,serif;font-style:italic;font-weight:400;color:#0277b3}
-.final-p{color:var(--ink-2);margin:0 auto 30px;max-width:520px}
-.final .actions{justify-content:center}
-
-.foot-nav{position:relative;z-index:1;padding:56px 0 28px;margin-top:76px}
-.foot-grid{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;gap:40px}
-.foot-brand{display:inline-block;font-size:19px;font-weight:700;letter-spacing:-.02em;
-  transition:opacity .5s var(--ease)}
-.foot-brand:hover{opacity:.6}
-.foot-note{margin:8px 0 0;font-size:13.5px;color:var(--ink-3);max-width:280px}
-.foot-nav h4{margin:0 0 14px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);font-weight:650}
-.foot-nav nav a{display:block;font-size:14px;color:var(--ink-2);padding:5px 0;
-  transition:color .4s var(--ease)}
-.foot-nav nav a:hover{color:var(--ink)}
-.foot-base{display:flex;justify-content:space-between;align-items:center;margin-top:54px;padding-top:24px;
-  font-size:12.5px;color:var(--ink-3)}
-.langsw{display:inline-flex;gap:9px;align-items:center}
-.langsw a{font-weight:650}
-.langsw a[aria-current]{color:var(--ink)}
-.langsw i{opacity:.4;font-style:normal}
-@media(max-width:820px){.foot-grid{grid-template-columns:1fr 1fr;gap:30px}}
-
-.proof{max-width:1180px;margin:26px auto 0;padding:0 24px;font-size:13.5px;color:var(--ink-3);max-width:720px}
-.proof a{color:var(--sky-ink);font-weight:600}
-
-
-/* ── Opinionated stance rows ──────────────────────── */
-
-
-
-
-.socials{display:flex;gap:8px;margin-top:18px}
-.socials a{width:36px;height:36px;border-radius:9999px;display:grid;place-items:center;
-  border:1px solid var(--line);background:#fff;color:var(--ink-2);
-  transition:transform .5s var(--ease),color .5s var(--ease),border-color .5s var(--ease)}
-.socials a:hover{transform:translateY(-2px);color:var(--ink);border-color:var(--line-strong,rgba(10,14,20,.2))}
-.socials svg{width:16px;height:16px}
-
-
-/* ── Side-by-side comparison ──────────────────────── */
-.vsgrid{max-width:1180px;margin:0 auto;padding:0 24px}
-.vshead{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:6px}
-.vscol{display:flex;align-items:center;gap:10px;padding:16px 22px;border-radius:16px 16px 0 0}
-.vscol.ours{background:var(--ink);color:#fff}
-.vscol.them{background:rgba(10,14,20,.05);color:var(--ink-3);border:1px solid var(--line);border-bottom:0}
-.vscol b{font-size:15px;font-weight:650;letter-spacing:-.015em}
-.vscol .mk{width:20px;height:20px;border-radius:9999px;display:grid;place-items:center;font-size:11px;font-weight:700}
-.vscol.ours .mk{background:rgba(255,255,255,.16);color:#fff}
-.vscol.them .mk{background:rgba(10,14,20,.08);color:var(--ink-3)}
-.vsrow{display:grid;grid-template-columns:1fr 1fr;gap:18px;padding:0 0 12px}
-.vscell{padding:20px 22px;border:1px solid var(--line);background:#fff}
-.vscell.ours{border-color:rgba(10,14,20,.16);box-shadow:0 18px 40px -34px rgba(8,42,80,.5)}
-.vscell.them{background:rgba(10,14,20,.02);color:var(--ink-3)}
-.vsrow:last-of-type .vscell{border-radius:0 0 16px 16px}
-.vscell .k{display:block;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;font-weight:700;
-  color:var(--ink-3);margin-bottom:8px}
-.vscell p{margin:0;font-size:14.5px;line-height:1.6}
-.vscell.ours p{color:var(--ink);font-weight:500}
-.vscell.ours p b{color:var(--sky-ink);font-weight:650}
-@media(max-width:820px){
-  .vshead{display:none}
-  .vsrow{grid-template-columns:1fr;gap:0;padding-bottom:18px}
-  .vscell{border-radius:16px!important;margin-bottom:8px}
-  .vscell::before{content:attr(data-who);display:block;font-size:10.5px;letter-spacing:.16em;
-    text-transform:uppercase;font-weight:700;color:var(--sky-ink);margin-bottom:8px}
-  .vscell.them::before{color:var(--ink-3)}
-}
-
-/* The four products a buyer is actually deciding between, named, each linked to
-   the page that carries the receipt. These pages existed but were reachable only
-   from the footer, which is the same as not existing: a comparison nobody
-   reaches persuades nobody. Kept below the grid, not above it — the argument
-   earns the click, the click does not replace the argument. */
-.vslinks{max-width:1180px;margin:24px auto 0;padding:0 24px;display:grid;
-  grid-template-columns:repeat(4,1fr);gap:12px}
-.vslink{display:block;padding:16px 18px;border:1px solid var(--line);border-radius:14px;
-  background:#fff;transition:border-color .2s var(--ease),transform .2s var(--ease)}
-.vslink:hover{border-color:rgba(3,105,161,.34);transform:translateY(-2px)}
-.vslink b{display:block;font-size:14px;font-weight:650;color:var(--sky-ink);
-  letter-spacing:-.01em;margin-bottom:5px}
-.vslink b::after{content:' \2192';font-weight:500}
-.vslink span{display:block;font-size:12.5px;line-height:1.5;color:var(--ink-3)}
-.vsnote{max-width:1180px;margin:16px auto 0;padding:0 24px;font-size:12px;line-height:1.6;
-  color:var(--ink-3)}
-.vsnote a{color:var(--sky-ink);font-weight:600}
-@media(max-width:980px){.vslinks{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:560px){.vslinks{grid-template-columns:1fr}}
-@media(prefers-reduced-motion:reduce){.vslink{transition:none}.vslink:hover{transform:none}}
-
-/* Language switch, in the nav where it belongs.
-   A menu, not a row of buttons: two languages fit side by side, seven do not,
-   and a control that has to be redesigned every time a language ships is the
-   wrong shape. The trigger names the CURRENT language; the choices open
-   below it. */
-.nav-lang{position:relative;margin-left:8px}
-.nav-lang-btn{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:650;
-  letter-spacing:.04em;color:rgba(255,255,255,.82);padding:6px 10px;border-radius:9999px;
-  background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.12);cursor:pointer;
-  font-family:inherit;transition:color .4s var(--ease),background .4s var(--ease)}
-.nav-lang-btn:hover{color:#fff;background:rgba(255,255,255,.16)}
-.nav-lang-btn i{font-style:normal;font-size:9px;opacity:.7;transition:transform .3s var(--ease)}
-.nav-lang-btn[aria-expanded="true"] i{transform:rotate(180deg)}
-.nav-lang-menu{position:absolute;top:calc(100% + 8px);right:0;min-width:132px;padding:5px;
-  border-radius:14px;background:rgba(24,26,32,.96);border:1px solid rgba(255,255,255,.12);
-  box-shadow:0 18px 40px rgba(0,0,0,.34);display:none;flex-direction:column;gap:1px;z-index:40}
-.nav-lang-menu[data-open]{display:flex}
-.nav-lang-menu a{display:block;font-size:12px;font-weight:600;color:rgba(255,255,255,.72);
-  padding:7px 11px;border-radius:9px;white-space:nowrap;
-  transition:color .3s var(--ease),background .3s var(--ease)}
-.nav-lang-menu a:hover,.nav-lang-menu a:focus-visible{color:#fff;background:rgba(255,255,255,.10)}
-.nav-lang-menu a[aria-current]{color:#fff;background:rgba(255,255,255,.14)}
-@media(max-width:880px){.nav-lang{margin-left:4px}}
-@media(prefers-reduced-motion:reduce){.nav-lang-btn i{transition:none}}
-/* Phones: the pill carries brand + Log in + Download, and the language switch is
-   the one control here that is not load-bearing — the first visit is routed by
-   navigator.languages, the choice persists in localStorage, and the footer keeps
-   a manual EN/KO switch. Keeping it left only 7px of slack at 361px on the EN
-   copy, which will not survive real device font metrics. (The pill already
-   overflowed a 320px viewport before the Log in button existed — 301px into a
-   288px budget — so this closes that too.) Placed below the base rule on purpose:
-   .nav-lang is defined after the pill's own media queries, so an override up
-   there loses on source order. */
-@media(max-width:480px){.nav-lang{display:none}}
-/* Under 880px .nav-links collapse, which left Pricing, Blog and the rest of
-   the sections unreachable on phones. A disclosure button reopens them as a
-   panel under the pill (behaviour in /site-nav.js). 38px keeps the pill's
-   height; the overlay takes the hit area to 44px, as with .nav-login. */
-.nav-menu-btn{display:none;position:relative;align-items:center;justify-content:center;width:38px;height:38px;
-  margin-right:6px;padding:0;border-radius:9999px;border:1px solid rgba(255,255,255,.22);background:transparent;
-  color:#fff;cursor:pointer;transition:background .4s var(--ease)}
-.nav-menu-btn::before{content:"";position:absolute;inset:-3px}
-.nav-menu-btn:hover{background:rgba(255,255,255,.10)}
-.nav-menu-btn svg{width:17px;height:17px}
-@media(max-width:880px){
-  .nav-menu-btn{display:inline-flex}
-  .nav-pill{position:relative}
-  .nav-links[data-open]{display:flex;position:absolute;top:calc(100% + 8px);left:0;right:0;flex-direction:column;gap:1px;
-    padding:6px;border-radius:18px;background:rgba(24,26,32,.96);border:1px solid rgba(255,255,255,.12);
-    box-shadow:0 18px 40px rgba(0,0,0,.34)}
-  .nav-links[data-open] a{display:flex;align-items:center;min-height:44px;padding:0 14px;border-radius:12px;color:rgba(255,255,255,.86)}
-}
-@media(max-width:480px){.nav-menu-btn{margin-right:4px}}
-@media(prefers-reduced-motion:reduce){.nav-menu-btn{transition:none}}
-
-
-@media (max-height: 900px){
-  .hero{padding-top:150px}
-  h1{font-size:clamp(40px,5.4vw,62px)}
-  .lead{font-size:17px;margin-bottom:24px}
-  .eyebrow{margin-bottom:0}
-  .btn{height:48px}
-  .demo{margin-top:26px}
-  .stage{margin-top:40px}
-}
-@media (max-height: 760px){
-  .hero{padding-top:132px}
-  h1{font-size:clamp(36px,4.6vw,52px);margin:18px 0 14px}
-  .lead{font-size:16px;margin-bottom:20px}
-  .demo-stage{height:44px}
-  .bk .v{font-size:22px}
-}
-
-/* ── Live sort: the product, demonstrated before it is described ── */
-.demo{position:relative;z-index:3;max-width:960px;margin:34px auto 0;padding:0 24px}
-.demo-in{border-radius:26px;padding:8px;background:rgba(255,255,255,.55);border:1px solid rgba(255,255,255,.8);
-  box-shadow:0 40px 80px -44px rgba(8,42,80,.45);backdrop-filter:blur(14px)}
-.demo-core{border-radius:19px;background:rgba(255,255,255,.94);border:1px solid var(--line);
-  padding:18px 20px 16px;text-align:left}
-.demo-top{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px}
-.demo-top .lab{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;font-weight:700;color:var(--ink-3)}
-.demo-top .cnt{font-size:12.5px;color:var(--ink-3);font-variant-numeric:tabular-nums}
-.demo-top .cnt b{color:var(--ink);font-weight:700}
-.demo-stage{position:relative;height:52px;overflow:hidden;border-radius:12px;background:rgba(10,14,20,.035);
-  border:1px solid var(--line);margin-bottom:14px}
-.mail{position:absolute;left:14px;top:9px;display:flex;align-items:center;gap:9px;max-width:calc(100% - 28px);
-  font-size:13px;opacity:0}
-.mail .from{font-weight:650;white-space:nowrap}
-.mail .subj{color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mail.run{animation:sweep 1.05s var(--ease) forwards}
-@keyframes sweep{
-  0%{opacity:0;transform:translateY(9px)}
-  22%{opacity:1;transform:translateY(0)}
-  74%{opacity:1;transform:translateY(0)}
-  100%{opacity:0;transform:translateY(-9px)}
-}
-.buckets{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
-.bk{border-radius:13px;padding:12px 13px;background:#fff;border:1px solid var(--line);
-  transition:border-color .5s var(--ease),transform .5s var(--ease),box-shadow .5s var(--ease)}
-.bk.hit{transform:translateY(-3px);box-shadow:0 16px 30px -20px rgba(8,42,80,.5)}
-.bk .top{display:flex;align-items:center;gap:7px;margin-bottom:5px}
-.bk .dot{width:8px;height:8px;border-radius:50%}
-.bk .nm{font-size:11.5px;font-weight:700;letter-spacing:.04em}
-.bk .v{font-size:26px;font-weight:700;letter-spacing:-.03em;line-height:1;font-variant-numeric:tabular-nums}
-.bk .d{margin:4px 0 0;font-size:11px;color:var(--ink-3);line-height:1.4}
-.bk[data-t=push]{--c:#fb7185}.bk[data-t=queue]{--c:#fbbf24}
-.bk[data-t=silent]{--c:#a8a29e}.bk[data-t=meeting]{--c:#818cf8}
-.bk[data-t=info]{--c:#22d3ee}
-.bk .dot{background:var(--c)}
-.bk.hit{border-color:var(--c)}
-.demo-foot{margin:13px 0 0;font-size:12px;color:var(--ink-3)}
-/* Three checkable facts under the fold-line. Every competitor in this category
-   puts a number on its hero; ours have to be ones a reader can go and verify. */
-.hero-proof{list-style:none;margin:22px auto 0;padding:0;display:flex;flex-wrap:wrap;justify-content:center;gap:9px 26px;max-width:720px}
-.hero-proof li{font-size:12.5px;line-height:1.5;color:var(--ink-2)}
-.hero-proof b{color:var(--ink);font-weight:700}
-.price-anchor{margin:22px auto 0;max-width:760px;text-align:center;font-size:12.5px;line-height:1.65;color:var(--ink-3)}
-.price-anchor b{color:var(--ink-2);font-weight:650}
-@media(max-width:760px){.buckets{grid-template-columns:repeat(2,1fr)}
-  .buckets .bk:last-child{grid-column:1/-1}}
-@media(prefers-reduced-motion:reduce){.mail.run{animation:none;opacity:1}}
-
-
-/* ── Playable replica ─────────────────────────────── */
-.play{display:grid;grid-template-columns:186px 300px 1fr;height:466px;
-  font-size:13px;text-align:left;background:#fff}
-.play *{min-width:0}
-.pl-side{border-right:1px solid var(--line);background:rgba(10,14,20,.018);padding:14px 10px;overflow:auto}
-.pl-lab{font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);font-weight:700;
-  padding:0 8px 8px}
-.pl-t{width:100%;display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:9px;border:0;
-  background:transparent;font:inherit;color:var(--ink);cursor:pointer;text-align:left;
-  transition:background .35s var(--ease)}
-.pl-t:hover{background:rgba(10,14,20,.05)}
-.pl-t[aria-pressed=true]{background:rgba(2,132,199,.11);font-weight:650;
-  box-shadow:inset 2px 0 0 var(--sky-600)}
-.pl-t .dt{width:7px;height:7px;border-radius:50%}
-.pl-t .cn{margin-left:auto;color:var(--ink-3);font-variant-numeric:tabular-nums}
-.pl-list{border-right:1px solid var(--line);overflow:auto}
-.pl-h{padding:12px 14px;font-weight:650;display:flex;align-items:center;gap:8px;
-  border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff}
-.pl-h .dt{width:8px;height:8px;border-radius:50%}
-.pl-h .cn{margin-left:auto;color:var(--ink-3);font-weight:500}
-.pl-r{width:100%;display:block;text-align:left;border:0;border-bottom:1px solid var(--line);
-  background:transparent;font:inherit;padding:11px 14px;cursor:pointer;
-  transition:background .35s var(--ease)}
-.pl-r:hover{background:rgba(10,14,20,.035)}
-.pl-r[aria-current=true]{background:rgba(2,132,199,.10);box-shadow:inset 2px 0 0 var(--sky-600)}
-.pl-r .fr{display:block;font-size:11px;color:var(--ink-3);font-weight:600}
-.pl-r .sj{display:block;font-size:13.5px;font-weight:550;margin-top:1px;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pl-r .rs{display:block;font-size:10.5px;color:var(--ink-3);margin-top:2px}
-.pl-read{overflow:auto;display:flex;flex-direction:column}
-.pl-top{padding:16px 18px 12px;border-bottom:1px solid var(--line)}
-.pl-sub{font-size:16px;font-weight:650;letter-spacing:-.015em;line-height:1.25}
-.pl-from{font-size:12px;color:var(--ink-3);margin-top:3px}
-.pl-acts{display:flex;gap:7px;margin-top:11px;flex-wrap:wrap}
-.pl-b{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 11px;font:inherit;
-  font-size:12px;cursor:pointer;transition:background .35s var(--ease),border-color .35s var(--ease)}
-.pl-b:hover{background:rgba(10,14,20,.04)}
-/* White on --sky-600 is 4.10:1 — under AA. --sky-ink carries the same accent
-   at 5.93:1. */
-.pl-b.on{background:var(--sky-ink);border-color:var(--sky-ink);color:#fff}
-.pl-b.on:hover{background:#025683}
-.pl-why{padding:12px 18px;background:rgba(10,14,20,.028);border-bottom:1px solid var(--line);font-size:12px}
-.pl-why .w{color:var(--ink-3)}
-.pl-why .sm{margin-top:6px;color:var(--ink);line-height:1.5}
-.pl-body{padding:16px 18px;color:var(--ink-2);line-height:1.6;font-size:12.5px;white-space:pre-line;flex:1}
-.pl-opts{padding:12px 18px;border-bottom:1px solid var(--line);display:grid;gap:7px;
-  background:rgba(2,132,199,.035)}
-.pl-opt{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);background:#fff;
-  border-radius:10px;padding:9px 11px;font:inherit;font-size:12px;text-align:left;cursor:pointer;
-  transition:border-color .35s var(--ease),background .35s var(--ease)}
-.pl-opt:hover{border-color:var(--sky-600);background:rgba(2,132,199,.04)}
-.pl-opt kbd{flex:0 0 18px;height:18px;border-radius:5px;background:rgba(10,14,20,.07);display:grid;
-  place-items:center;font:inherit;font-size:10px;font-weight:700}
-.pl-opt b{display:block;font-size:11px;color:var(--sky-ink);margin-bottom:1px}
-.pl-hint{margin:0;padding:11px 18px;border-bottom:1px solid var(--line);font-size:11.5px;color:var(--ink-3);
-  background:rgba(10,14,20,.02)}
-.pl-hint b{color:var(--ink-2);font-weight:650}
-.pl-hint kbd{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:4px;
-  background:rgba(10,14,20,.07);font:inherit;font-size:10px;font-weight:700;color:var(--ink-2);
-  vertical-align:baseline}
-.pl-comp{padding:12px 18px;border-bottom:1px solid var(--line);background:rgba(2,132,199,.035)}
-.pl-comp textarea{width:100%;height:74px;border:1px solid var(--line);border-radius:9px;padding:9px 10px;
-  font:inherit;font-size:12.5px;resize:none;color:var(--ink);background:rgba(10,14,20,.02)}
-.pl-comp textarea:focus{outline:2px solid var(--sky-600);outline-offset:1px}
-.pl-comp .row{display:flex;gap:7px;justify-content:flex-end;margin-top:8px;align-items:center}
-.pl-sent{margin-right:auto;font-size:11.5px;color:#15803d;font-weight:600}
-.pl-empty{margin:auto;text-align:center;color:var(--ink-3);font-size:13px;padding:40px}
-@media(max-width:1000px){
-  .play{grid-template-columns:1fr;height:auto}
-  .pl-side,.pl-list{border-right:0;border-bottom:1px solid var(--line)}
-  .pl-side{padding:10px}
-  /* The buttons live inside .pl-tiers, so flexing .pl-side only laid out its one
-     child and the tiers stayed a tall vertical list on a phone. */
-  .pl-side .pl-tiers{display:flex;gap:6px;overflow-x:auto}
-  .pl-lab{display:none}
-  .pl-t{width:auto;white-space:nowrap}
-  .pl-list{max-height:260px}
-}
-
-/* Scroll reveal */
-/* Reveal is opt-IN: content is visible by default and JS arms the "from"
-   state only once it is running. The usual way round leaves anything waiting
-   on an observer permanently invisible when scripting is off — which is
-   exactly the bug this page's predecessor shipped. */
-.rv{transition:opacity .9s var(--ease),transform .9s var(--ease),filter .9s var(--ease)}
-.js .rv:not(.in){opacity:0;transform:translateY(46px);filter:blur(8px)}
-@media(prefers-reduced-motion:reduce){
-  .rv{opacity:1;transform:none;filter:none;transition:none}
-  .chip{animation:none}
-}
-</style>
+<link rel="stylesheet" href="/landing.css">
 <script type="application/ld+json">
 {
  "@context": "https://schema.org",
@@ -789,9 +42,9 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
  "name": "Klorn",
  "operatingSystem": "macOS, Windows, Web",
  "applicationCategory": "BusinessApplication",
- "url": "https://klorn.ai/",
+ "url": "https://klorn.ai/fr/",
  "inLanguage": "fr",
- "description": "Klorn range chaque message dans l'une des cinq files — Push, Meeting, Queue, Info, Silent — et y attache le motif. Superhuman vend de la vitesse, Fyxer rédige la réponse ; les deux coûtent 30 $ par mois et aucun ne vous dit pourquoi un message est arrivé jusqu'à vous. AGPL-3.0, auto-hébergeable, et rien n'est envoyé sans votre accord.",
+ "description": "Klorn réunit Gmail, Google Agenda, Naver Mail et iCloud Mail dans une seule vue et range chaque message dans l’une des cinq files — Push, Meeting, Queue, Info, Silent — avec le motif sur chacun. Vous décidez de ce qui part.",
  "sameAs": [
   "https://github.com/k08200/klorn",
   "https://dev.to/k08200",
@@ -852,79 +105,71 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
  "license": "https://github.com/k08200/klorn/blob/main/LICENSE"
 }
 </script>
-<script type="application/ld+json">{
+<script type="application/ld+json">
+{
  "@context": "https://schema.org",
  "@type": "FAQPage",
  "mainEntity": [
   {
    "@type": "Question",
-   "name": "Peut-il envoyer quelque chose sans moi ?",
+   "name": "Faut-il connecter chaque compte séparément ?",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "Non. L'envoi, la suppression et le transfert attendent toujours une approbation explicite, et chacun écrit un reçu\n        qui épingle une empreinte de ce qui est parti, exactement."
+    "text": "Oui, une fois chacun. La connexion apporte votre premier compte Google ; ajoutez les autres depuis les Réglages, et ensuite tous arrivent dans la même liste."
    }
   },
   {
    "@type": "Question",
-   "name": "Où va réellement mon courrier ?",
+   "name": "Klorn envoie-t-il ou supprime-t-il des e-mails tout seul ?",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "Jusqu'au classifieur et retour. Vos jetons OAuth sont chiffrés au repos et, comme l'ensemble est sous AGPLv3, vous pouvez lire le code qui y touche — ou l'exécuter vous-même."
+    "text": "Seulement si vous le lui demandez. Les files ne font que trier. Envois, suppressions définitives et transferts attendent votre accord ; une règle de réponse automatique que vous créez vous-même vaut accord. Avec l’automatisation activée, l’assistant peut exécuter seul des étapes à faible risque. Chaque envoi laisse une trace."
    }
   },
   {
    "@type": "Question",
-   "name": "Et s'il classe quelque chose au mauvais endroit ?",
+   "name": "Quels comptes fonctionnent aujourd’hui ?",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "Déplacez-le. Chaque message indique pourquoi il a atterri là, et c'est de la correction que le\n        classifieur apprend — c'est la différence entre un démarrage à froid et un classifieur qui connaît déjà vos expéditeurs."
+    "text": "Gmail et Google Agenda, ainsi que Naver Mail et iCloud Mail en bêta. C’est la liste complète aujourd’hui ; cette page change le jour où un autre compte peut être connecté."
    }
   },
   {
    "@type": "Question",
-   "name": "Quand arrive l'app Windows ?",
+   "name": "Où vont mes e-mails ?",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "Déjà livrée, en bêta non signée — SmartScreen avertit une fois tant que l'app n'est pas signée. L'app web\n        reste accessible dans n'importe quel navigateur, avec le même compte et les mêmes niveaux."
+    "text": "Vers le classifieur de Klorn, puis retour. Les jetons sont chiffrés au repos, et le code qui les manipule est public. Si vous préférez les garder vous-même, faites tourner Klorn sur votre propre serveur."
    }
   },
   {
    "@type": "Question",
-   "name": "L'IA peut-elle faire grimper la facture ?",
+   "name": "Que veut dire « votre propre clé d’IA » ?",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "Non. Klorn plafonne sa propre dépense quotidienne et s'arrête plutôt que de dépasser — une boucle\n        emballée ne vous coûte rien. C'est ce plafond qui permet au tri de rester gratuit."
+    "text": "Klorn peut utiliser votre propre clé d’un fournisseur de modèles, ou un modèle local, à la place de la nôtre. Cela fonctionne avec tous les plans."
    }
   },
   {
    "@type": "Question",
-   "name": "Pourquoi Google m'avertit-il à la connexion ?",
+   "name": "Existe-t-il une app Windows ?",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "Lire votre courrier exige les scopes restreints de Google, et ceux-ci imposent une revue de sécurité avant\n        qu'une app soit marquée comme vérifiée. Tant que ce n'est pas réglé, vous voyez une fois un écran d'app non vérifiée, et la\n        bêta est limitée aux 100 premiers comptes."
+    "text": "Oui, en bêta. Windows peut afficher un avertissement SmartScreen au premier lancement tant que l’app n’est pas signée. L’app web fonctionne dans tout navigateur récent avec le même compte."
    }
   }
  ]
-}</script>
-<link rel="alternate" hreflang="en" href="https://klorn.ai/">
-<link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/">
-<link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/">
-<link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/">
-<link rel="alternate" hreflang="es" href="https://klorn.ai/es/">
-<link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/">
-<link rel="alternate" hreflang="de" href="https://klorn.ai/de/">
-<link rel="alternate" hreflang="x-default" href="https://klorn.ai/">
-<link rel="canonical" href="https://klorn.ai/fr/">
+}
+</script>
 <script src="/site-nav.js" defer></script>
 </head>
 <body>
-<div class="grain"></div>
-<div class="field" aria-hidden="true"></div>
+<a class="skip" href="#main">Aller au contenu</a>
 
-<nav class="nav"><div class="nav-pill">
-  <a class="nav-brand" href="#top" data-top>Klorn</a>
+<nav class="nav" aria-label="Principale"><div class="nav-pill">
+  <a class="nav-brand" href="#top">Klorn</a>
   <button type="button" class="nav-menu-btn" data-menu-toggle aria-expanded="false" aria-controls="nav-menu" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
-  <span class="nav-links" id="nav-menu" role="group" aria-label="Sections"><a href="#cards">Produit</a><a href="#day">Fonctionnement</a><a href="#compare">Pourquoi Klorn</a><a href="#pricing">Tarifs</a><a href="#open">Open source</a><a href="/blog/">Blog</a></span>
+  <span class="nav-links" id="nav-menu" role="group" aria-label="Sections"><a href="#accounts">Comptes</a><a href="#lanes">Files</a><a href="#day">Votre journée</a><a href="#pricing">Tarifs</a><a href="/blog/">Blog</a></span>
   <span class="nav-lang">
     <button type="button" class="nav-lang-btn" data-lang-toggle
             aria-haspopup="true" aria-expanded="false" aria-controls="lang-menu">Français <i aria-hidden="true">▾</i></button>
@@ -939,392 +184,286 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
     </span>
   </span>
   <a class="nav-login" href="https://app.klorn.ai/login">Connexion</a>
-  <a class="nav-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
-     data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe" data-win-label="Download">Télécharger <i>↓</i></a>
+  <a class="nav-cta dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
+     data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe" data-win-label="Télécharger">Télécharger</a>
 </div></nav>
 
+<main id="main">
 <header class="hero" id="top">
-  <picture class="hero-sky">
+  <picture class="hero-sky" aria-hidden="true">
     <source type="image/webp" sizes="100vw"
             srcset="/media/sky/dusk-1280.webp 1280w, /media/sky/dusk-1920.webp 1920w, /media/sky/dusk-2560.webp 2560w">
-    <img src="/media/sky/dusk-1920.jpg" sizes="100vw"
-         srcset="/media/sky/dusk-1280.jpg 1280w, /media/sky/dusk-1920.jpg 1920w, /media/sky/dusk-2560.jpg 2560w"
-         alt="" aria-hidden="true" fetchpriority="high" decoding="async" width="2560" height="1709">
+    <img src="/media/sky/dusk-1920.jpg" alt="" decoding="async" width="2560" height="1709">
   </picture>
 
-  <div class="wrap">
-    <span class="eyebrow rv">Gmail, Naver et Google Agenda &mdash; <b>au même endroit</b></span>
-    <h1 class="rv">Moins d'interruptions.<br>Pas un courrier plus <span class="ser">rapide</span>.</h1>
-    <p class="lead rv"><b style="color:var(--ink);font-weight:650">Klorn range chaque message dans l'une des cinq files et y attache le motif.</b> Web, macOS et Windows. Déplacez une ligne et la correction reste : deux corrections identiques font de cet expéditeur une règle.
-      Rien n'est envoyé sans votre accord.</p>
-    <div class="actions rv">
-      <a class="btn btn-1" href="https://app.klorn.ai/login?mode=register">Commencer gratuitement <i>↗</i></a>
+  <div class="wrap hero-copy">
+    <h1>Tous vos e-mails et agendas. <span class="ser">Au même endroit, au calme.</span></h1>
+    <p class="lead">Klorn réunit <b>Gmail, Google Agenda, Naver Mail (bêta) et iCloud Mail (bêta)</b> dans une seule vue, trie chaque
+      message selon ce qu’il attend de vous, et vous dit pourquoi.</p>
+    <div class="actions">
+      <a class="btn btn-1 dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
+         data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe" data-win-label="Télécharger pour Windows">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.05 12.54c.02-2.3 1.87-3.4 1.95-3.45-1.06-1.56-2.71-1.77-3.3-1.8-1.4-.11-2.58.78-3.25.78-.68 0-1.72-.76-2.83-.74-1.46.02-2.8.85-3.55 2.15-1.51 2.63-.39 6.52 1.09 8.66.72 1.04 1.58 2.21 2.71 2.17 1.09-.04 1.5-.7 2.82-.7 1.31 0 1.68.7 2.83.68 1.17-.02 1.92-1.06 2.64-2.11.83-1.2 1.17-2.37 1.19-2.43-.03-.01-2.28-.88-2.3-3.48zM14.9 5.6c.6-.72 1-1.72.89-2.72-.86.04-1.9.57-2.52 1.29-.55.63-1.02 1.65-.89 2.63.96.07 1.92-.49 2.52-1.2z"/></svg>
+        Télécharger pour Mac</a>
+      <a class="btn btn-2" href="https://app.klorn.ai/login?mode=register">Ouvrir dans le navigateur</a>
     </div>
-    <div class="dl-row rv" id="dl-row">
-      <a class="dl" data-os="mac" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener">
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.05 12.54c.02-2.3 1.87-3.4 1.95-3.45-1.06-1.56-2.71-1.77-3.3-1.8-1.4-.11-2.58.78-3.25.78-.68 0-1.72-.76-2.83-.74-1.46.02-2.8.85-3.55 2.15-1.51 2.63-.39 6.52 1.09 8.66.72 1.04 1.58 2.21 2.71 2.17 1.09-.04 1.5-.7 2.82-.7 1.31 0 1.68.7 2.83.681.17-.02 1.92-1.06 2.64-2.11.83-1.2 1.17-2.37 1.19-2.43-.03-.01-2.28-.88-2.3-3.48zM14.9 5.6c.6-.72 1-1.72.89-2.72-.86.04-1.9.57-2.52 1.29-.55.63-1.02 1.65-.89 2.63.96.07 1.92-.49 2.52-1.2z"/></svg>
-        <span class="t"><b>Télécharger pour Mac</b><span>Universal · macOS 14+ · notarisé</span></span></a>
-      <a class="dl" data-os="win" href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe" rel="noreferrer noopener">
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.6l7.2-1v7.1H3V5.6zm0 12.8l7.2 1v-7H3v6zM11.2 4.4L21 3v8.7h-9.8V4.4zm0 15.2L21 21v-8.6h-9.8v7.2z"/></svg>
-        <span class="t"><b>Télécharger pour Windows</b><span>Windows 10+ · Bêta</span></span></a>
-    </div>
-    <!-- The download alone is a dead end without an account, so say what the
-         app expects next to the button rather than after the click. -->
-    <p class="actions-note rv">Gratuit, AGPLv3. L'app se connecte à votre compte Klorn —
-      créez-en un en une minute environ.
-      <a href="https://github.com/k08200/klorn/releases/latest" rel="noreferrer noopener">Note de premier lancement ↗</a></p>
-    <ul class="hero-proof rv">
-      <li><b>Le tri est gratuit</b> &mdash; sans carte pour commencer</li>
-      <li><b>Rien ne part</b> sans votre accord &mdash; chaque envoi a son reçu</li>
-      <li><b>Votre langue, et la leur</b> &mdash; interface en 7 langues, réponses dans la langue de l'expéditeur</li>
-    </ul>
+    <p class="meta"><span>29,99 $/mois</span><i aria-hidden="true">·</i><span>Plan gratuit</span><i aria-hidden="true">·</i><span>Votre propre clé d’IA</span></p>
   </div>
 
-
-  <div class="demo rv">
-    <div class="demo-in"><div class="demo-core">
-      <div class="demo-top">
-        <span class="lab">Tri de la boîte de réception de ce matin</span>
-        <span class="cnt"><b id="dm-done">0</b> sur 64 · <span id="dm-state">en cours</span></span>
-      </div>
-      <div class="demo-stage" id="dm-stage" aria-hidden="true"></div>
-      <div class="buckets" id="dm-buckets">
-        <div class="bk" data-t="push"><div class="top"><span class="dot"></span><span class="nm">PUSH</span></div>
-          <div class="v" data-v>0</div><p class="d">Vous interrompt maintenant</p></div>
-        <div class="bk" data-t="meeting"><div class="top"><span class="dot"></span><span class="nm">MEETING</span></div>
-          <div class="v" data-v>0</div><p class="d">Planification — vérifiée avec votre agenda</p></div>
-        <div class="bk" data-t="queue"><div class="top"><span class="dot"></span><span class="nm">QUEUE</span></div>
-          <div class="v" data-v>0</div><p class="d">À lire aujourd'hui</p></div>
-        <div class="bk" data-t="info"><div class="top"><span class="dot"></span><span class="nm">INFO</span></div>
-          <div class="v" data-v>0</div><p class="d">Reçus et confirmations — sans réponse</p></div>
-        <div class="bk" data-t="silent"><div class="top"><span class="dot"></span><span class="nm">SILENT</span></div>
-          <div class="v" data-v>0</div><p class="d">Classé, pas supprimé</p></div>
-      </div>
-      <p class="demo-foot">Une illustration des cinq files, pas un banc d'essai. Les chiffres mesurés, et les files qu'ils ne couvrent pas encore, sont plus bas.</p>
-    </div></div>
-  </div>
-
-  <div class="stage rv">
-    <p class="stage-cap"><b>En direct</b> Une réplique fonctionnelle — cliquez sur les niveaux, sur les lignes, répondez, reclassez.
-      Les captures plus bas viennent de l'app livrée elle-même.</p>
-    <div class="shell" data-tilt>
-      <div class="core">
-        <div class="play" id="play" role="application" aria-label="Démo interactive de Klorn">
-          <div class="pl-side">
-            <div class="pl-lab">Boîte de réception</div>
-            <div class="pl-tiers" id="pl-tiers"></div>
-          </div>
-          <div class="pl-list">
-            <div class="pl-h"><span class="dt" id="pl-hdot"></span><span id="pl-hname"></span>
-              <span class="cn" id="pl-hcount"></span></div>
-            <div id="pl-rows"></div>
-          </div>
-          <div class="pl-read" id="pl-read"></div>
-        </div>
-      </div>
+  <figure class="shot">
+    <div class="win">
+      <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+      <picture>
+      <source media="(max-width:640px)" sizes="94vw" width="1440" height="1240"
+              srcset="/media/app-2026-10/today-m-light-720.webp 720w, /media/app-2026-10/today-m-light-1440.webp 1440w">
+      <img src="/media/app-2026-10/today-light-2000.webp"
+           srcset="/media/app-2026-10/today-light-1200.webp 1200w, /media/app-2026-10/today-light-2000.webp 2000w, /media/app-2026-10/today-light-2560.webp 2560w"
+           sizes="(min-width:1240px) 1176px, 94vw" width="2560" height="1600" fetchpriority="high" decoding="async"
+           alt="L’écran Aujourd’hui de Klorn sur Mac : des e-mails de quatre comptes regroupés en Push, Meeting et Queue, chaque ligne marquée de son compte, à côté de l’agenda du jour et de l’assistant."></picture>
     </div>
-  </div>
-
+    <img class="pill" src="/media/app-2026-10/pill-light-396.webp"
+         srcset="/media/app-2026-10/pill-light-396.webp 396w, /media/app-2026-10/pill-light-792.webp 792w"
+         sizes="320px" width="792" height="98" decoding="async"
+         alt="La pilule Klorn sur le bureau du Mac, qui affiche 3 messages Push.">
+    <figcaption class="cap"><span class="demo-tag">Données de démo</span><b>Aujourd’hui</b>, sur Mac. Une seule liste pour tous les comptes connectés.</figcaption>
+  </figure>
 </header>
 
-<section class="sec" id="cards">
-  <div class="sec-head">
-    <div style="flex:1 1 420px">
-      <span class="tag rv">L'app réelle</span>
-      <h2 class="rv">D'assez près<br>pour tout lire.</h2>
+<!-- 2 · Every account, one view -->
+<section class="sec" id="accounts" aria-labelledby="accounts-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Tous vos comptes</span>
+      <h2 id="accounts-h">Tous vos comptes, <span class="ser">une seule vue.</span></h2>
+      <p class="sec-lead">Connectez chaque compte une fois. Les e-mails et les événements de tous arrivent dans une seule liste,
+        chacun marqué de sa provenance.</p>
     </div>
-    <p class="rv">Klorn tient en une seule ligne native en haut de votre écran. Déplié, voici ce qu'il vous
-      montre — et tout ce que vous avez le droit d'y changer.</p>
-  </div>
-
-  <div class="tour rv">
-    <div class="tour-nav" role="tablist" aria-label="Visite du produit">
-      <button class="tour-t" role="tab" aria-selected="true" aria-controls="tp-1" id="tt-1">
-        <b>Pourquoi celui-ci vous a interrompu</b><span>Les preuves derrière un push, et les trois réponses à une touche.</span></button>
-      <button class="tour-t" role="tab" aria-selected="false" aria-controls="tp-2" id="tt-2">
-        <b>La queue, avec les raisons</b><span>Chaque ligne indique ce qui l'y a mise — corrigez-la en un clic.</span></button>
-      <button class="tour-t" role="tab" aria-selected="false" aria-controls="tp-3" id="tt-3">
-        <b>Cinq files, expliquées</b><span>Silent n'est pas supprimer. Info n'attend jamais de réponse. L'app le dit.</span></button>
-      <button class="tour-t" role="tab" aria-selected="false" aria-controls="tp-4" id="tt-4">
-        <b>À vous de régler</b><span>Ce qu'il fait seul, et ce qui peut vous interrompre.</span></button>
-    </div>
-    <div class="tour-stage">
-      <div class="tour-panel" role="tabpanel" id="tp-1" aria-labelledby="tt-1">
-        <img src="/media/app/fr/reading.jpg" alt="Un message push avec ses preuves : pourquoi il a été classé ainsi, l'échéance, et les réponses à une touche" width="1040" height="660" loading="lazy" decoding="async"></div>
-      <div class="tour-panel" role="tabpanel" id="tp-2" aria-labelledby="tt-2" hidden>
-        <img src="/media/app/fr/rows.jpg" alt="Lignes de courrier montrant l'expéditeur, l'objet et la raison du niveau attribué" width="1040" height="660" loading="lazy" decoding="async"></div>
-      <div class="tour-panel" role="tabpanel" id="tp-3" aria-labelledby="tt-3" hidden>
-        <img src="/media/app/fr/tier-guide.jpg" alt="Le guide de premier lancement expliquant les cinq voies — Push, Meeting, Queue, Info et Silent" width="1040" height="1040" loading="lazy" decoding="async"></div>
-      <div class="tour-panel" role="tabpanel" id="tp-4" aria-labelledby="tt-4" hidden>
-        <img src="/media/app/fr/preferences.jpg" alt="Préférences : mode agent, ton des réponses, catégories d'alertes et heures silencieuses" width="1040" height="1800" loading="lazy" decoding="async"></div>
-    </div>
-  </div>
-  <p class="proof rv">Chaque capture est produite par <code>KlornMac --render-previews</code>, qui écrit les
-    vues SwiftUI livrées directement sur le disque. Si un écran change, l'image change avec lui —
-    aucun visuel marketing distinct ne peut devenir obsolète.
-    <a href="https://github.com/k08200/klorn/tree/main/apps/desktop-mac" rel="noreferrer noopener">Lire le code de l'app →</a></p>
-</section>
-
-
-
-
-<!-- ══ A DAY WITH IT ════════════════════════════════ -->
-<section class="sec band" id="day">
-  <div class="sec-head">
-    <div style="flex:1 1 420px">
-      <span class="tag rv">Une journée avec</span>
-      <h2 class="rv">Trois moments,<br>et un seul a besoin de vous.</h2>
-    </div>
-    <p class="rv">Klorn n'est pas une app que l'on ouvre. Il travaille sur votre boîte toute la journée et ne vous
-      sollicite qu'une seule fois — quand un message ne peut vraiment pas trouver de réponse sans vous.</p>
-  </div>
-  <div class="steps">
-    <article class="step rv"><span class="sn">Le matin</span>
-      <h3>Déjà trié</h3>
-      <p>Le courrier de la nuit est dans son niveau avant même que vous vous asseyiez, chacun avec la raison qui l'y a mis.
-        Soixante-quatre messages, trois qui vous revenaient.</p></article>
-    <article class="step rv"><span class="sn">Pendant que vous travaillez</span>
-      <h3>Une ligne, aucune bannière</h3>
-      <p>Klorn reste une seule ligne native en haut de l'écran. Queue, Info et Silent n'interrompent jamais. Seul Push le fait, et Meeting quand un horaire proposé attend une réponse — c'est vous qui fixez le seuil.</p></article>
-    <article class="step rv"><span class="sn">Quand vous répondez</span>
-      <h3>Trois brouillons, à vous de trancher</h3>
-      <p>Accepter, refuser ou demander — une touche chacun, dans votre ton et la langue de l'expéditeur. Rien ne
-        part tout seul ; chaque envoi génère un reçu.</p></article>
+    <ul class="acct-grid">
+      <li class="acct"><div class="acct-top"><b>Gmail</b><span class="st st-live">Disponible</span></div>
+        <p>Trié, résumé et consultable.</p></li>
+      <li class="acct"><div class="acct-top"><b>Google Agenda</b><span class="st st-live">Disponible</span></div>
+        <p>Vos événements à côté de vos e-mails. De nouveaux événements seulement quand vous le demandez.</p></li>
+      <li class="acct"><div class="acct-top"><b>Naver Mail</b><span class="st st-beta">Bêta</span></div>
+        <p>Lu et trié avec tout le reste.</p></li>
+      <li class="acct"><div class="acct-top"><b>iCloud Mail</b><span class="st st-beta">Bêta</span></div>
+        <p>Votre adresse Apple, dans la même liste.</p></li>
+    </ul>
+    <figure class="acct-shot">
+      <div class="win">
+        <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+        <picture>
+        <source media="(max-width:640px)" sizes="94vw" width="840" height="1000" srcset="/media/app-2026-10/mail-m-light-840.webp 840w">
+        <img src="/media/app-2026-10/mail-light-2000.webp"
+             srcset="/media/app-2026-10/mail-light-1200.webp 1200w, /media/app-2026-10/mail-light-2000.webp 2000w"
+             sizes="(min-width:1240px) 1116px, 94vw" width="2000" height="1250" loading="lazy" decoding="async"
+             alt="L’écran Mail de Klorn sur Mac : une liste qui mélange les messages de plusieurs comptes, chacun avec un petit badge de compte et une étiquette de file, avec le message ouvert à droite."></picture>
+      </div>
+      <figcaption class="cap"><span class="demo-tag">Données de démo</span>Certains comptes visibles ici ne peuvent pas encore être connectés.</figcaption>
+    </figure>
   </div>
 </section>
 
-<!-- ══ COMPARISON ═══════════════════════════════════ -->
-<section class="sec" id="compare">
-  <div class="sec-head">
-    <div style="flex:1 1 420px">
-      <span class="tag rv">Là où nous ne sommes pas d'accord</span>
-      <h2 class="rv">Quatre opinions que la plupart<br>des IA de courrier ne tiennent pas.</h2>
+<!-- 3 · Five lanes, with the reason. The lane list is the landing's lane
+     surface: .github/scripts/check-website-lanes.mjs holds data-lane to the
+     API's live TIERS (never AUTO or CALL) in every language. -->
+<section class="sec sec-alt" id="lanes" aria-labelledby="lanes-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Cinq files</span>
+      <h2 id="lanes-h">Cinq files. <span class="ser">Chacune avec son motif.</span></h2>
+      <p class="sec-lead">Chaque message arrive dans l’une des cinq files, avec une phrase qui dit pourquoi il est là.</p>
     </div>
-    <p class="rv">Ce sont des choix, pas des fonctionnalités, et chacun coûte quelque chose à Klorn. Nous les plaçons face aux quatre produits entre lesquels vous hésitez vraiment, nommément, avec la preuve de chaque affirmation sur sa propre page.</p>
-  </div>
-  <div class="vsgrid rv">
-    <div class="vshead">
-      <div class="vscol ours"><span class="mk">K</span><b>Klorn</b></div>
-      <div class="vscol them"><span class="mk">4</span><b>Fyxer &middot; Superhuman &middot; Inbox Zero &middot; SaneBox</b></div>
-    </div>
-
-    <div class="vsrow">
-      <div class="vscell ours" data-who="Klorn"><span class="k">01 &middot; Qui décide de ce qui vous parvient</span>
-        <p>Klorn — une classification par message, dans <b>cinq files</b>. Envoyer, supprimer et transférer vous attendent toujours, et chaque action émet un reçu.</p></div>
-      <div class="vscell them" data-who="Fyxer &middot; Superhuman"><span class="k">01 &middot; Qui décide de ce qui vous parvient</span>
-        <p><b>Fyxer</b> et <b>Superhuman</b> accélèrent le traitement du courrier que vous avez déjà ouvert. La décision de savoir ce qui méritait d'être ouvert reste la vôtre, message après message, toute la journée.</p></div>
-    </div>
-    <div class="vsrow">
-      <div class="vscell ours" data-who="Klorn"><span class="k">02 &middot; Pourquoi cette décision</span>
-        <p><b>Le motif figure sur chaque ligne.</b> Déplacez la ligne et la correction devient un signal d'apprentissage : deux corrections concordantes rendent cet expéditeur déterministe.</p></div>
-      <div class="vscell them" data-who="Fyxer &middot; SaneBox"><span class="k">02 &middot; Pourquoi cette décision</span>
-        <p><b>Fyxer</b> ne l'expose pas. <b>SaneBox</b> vous laisse le déduire du dossier où le courrier a atterri. Aucune des deux décisions n'est auditable après coup.</p></div>
-    </div>
-    <div class="vsrow">
-      <div class="vscell ours" data-who="Klorn"><span class="k">03 &middot; Ce qu'il affirme</span>
-        <p><b>Des chiffres qui se rejouent</b> &mdash; tous les jeux d'évaluation sont dans le dépôt (<b>pnpm eval:judge</b>, <b>pnpm eval:real</b>). Quand l'un a cessé de se reproduire, nous l'avons retiré de cette page.</p></div>
-      <div class="vscell them" data-who="Les quatre"><span class="k">03 &middot; Ce qu'il affirme</span>
-        <p>« Propulsé par l'IA ». Aucun jeu d'évaluation publié, aucune distinction froid/chaud, et rien que vous puissiez exécuter vous-même pour vérifier le chiffre.</p></div>
-    </div>
-    <div class="vsrow">
-      <div class="vscell ours" data-who="Klorn"><span class="k">04 &middot; Si vous voulez partir</span>
-        <p><b>AGPL-3.0 non modifiée.</b> Aucune clause ajoutée, aucune restriction d'usage commercial, aucune clause des 5 salariés. Auto-hébergez avec votre propre clé, ou forkez et partez.</p></div>
-      <div class="vscell them" data-who="Inbox Zero"><span class="k">04 &middot; Si vous voulez partir</span>
-        <p><b>Inbox Zero</b> ajoute des ADDITIONAL TERMS à la suite de son AGPL : monétisation commerciale restreinte, licence obligatoire pour les organisations de 5 personnes ou plus. GitHub résout ce fichier en <b>NOASSERTION</b>. Les trois autres sont fermés.</p></div>
-    </div>
-  </div>
-  <div class="vslinks rv">
-    <a class="vslink" href="/vs/fyxer/"><b>vs Fyxer</b><span>30 $ par utilisateur et par mois pour des brouillons dans votre style. Fermé, cloud uniquement, sans motif.</span></a>
-    <a class="vslink" href="/vs/superhuman/"><b>vs Superhuman</b><span>Diviser par deux le temps de chaque courriel, c'est multiplier un nombre que vous n'avez pas choisi.</span></a>
-    <a class="vslink" href="/vs/inbox-zero/"><b>vs Inbox Zero</b><span>Ouvrez les deux fichiers LICENSE dans deux onglets. L'un est l'AGPL, et il s'arrête là.</span></a>
-    <a class="vslink" href="/vs/sanebox/"><b>vs SaneBox</b><span>Il ne lit jamais le corps — la phrase de confidentialité la plus forte, et ce qu'elle coûte.</span></a>
-  </div>
-  <p class="vsnote rv">Prix et faits produits tels que publiés par chaque éditeur, vérifiés le 2026-08-23. Aucun test de précision en face-à-face n'a été mené contre l'un d'eux, et cette page ne prétend pas le contraire. Une erreur ici ? <a href="mailto:k0820086@gmail.com">Dites-le-nous, nous corrigerons.</a></p>
-</section>
-
-<!-- ══ MEASURED ═════════════════════════════════════ -->
-<section class="sec band" id="measured">
-  <picture class="sec-sky" aria-hidden="true">
-    <source type="image/webp" sizes="100vw"
-            srcset="/media/sky/dusk-1280.webp 1280w, /media/sky/dusk-1920.webp 1920w, /media/sky/dusk-2560.webp 2560w">
-    <img src="/media/sky/dusk-1920.jpg" sizes="100vw"
-         srcset="/media/sky/dusk-1280.jpg 1280w, /media/sky/dusk-1920.jpg 1920w, /media/sky/dusk-2560.jpg 2560w"
-         alt="" loading="lazy" decoding="async" width="2560" height="1709">
-  </picture>
-  <div class="sec-head">
-    <div style="flex:1 1 420px">
-      <span class="tag rv">Mesuré, pas promis</span>
-      <h2 class="rv">Des chiffres issus d'une vraie boîte.</h2>
-    </div>
-    <p class="rv">Chaque version est évaluée sur un jeu d'e-mails réels annotés à la main avant d'être livrée.
-      Voici les derniers chiffres, et le jeu d'évaluation est dans le dépôt ouvert.</p>
-  </div>
-  <div class="stats">
-    <div class="stat rv"><div class="sv">&ge;90%</div><div class="sl">Rappel des urgents, plancher CI</div>
-      <p>Un changement qui fait passer le rappel des urgents sous le plancher casse la build.</p></div>
-    <div class="stat rv"><div class="sv">95.5%</div><div class="sl">Précision de SILENT</div>
-      <p>Quand Klorn classe un courrier comme du bruit, il n'enterre presque jamais un vrai signal.</p></div>
-    <div class="stat rv"><div class="sv">0</div><div class="sl">Actions non approuvées</div>
-      <p>Chaque envoi, suppression et transfert vous attend et enregistre un reçu qui épingle une empreinte de ce qui est parti.</p></div>
-  </div>
-  <p class="foot rv">Le jeu de courrier réel étiqueté à la main est en cours de réétiquetage : il est antérieur aux voies Meeting et Info, il ne peut donc pas les noter, et nous n'en citons plus de chiffre de précision en vitrine. La précision Silent ci-dessus est mesurée sur ce jeu et n'est pas affectée. Le jeu synthétique versionné dans le dépôt tourne à chaque changement du classifieur, avec ses planchers imposés en CI.
-    <a href="https://github.com/k08200/klorn/tree/main/packages/api/eval" rel="noreferrer noopener">Méthodologie et jeu d'évaluation →</a></p>
-</section>
-
-<!-- ══ OPEN SOURCE ══════════════════════════════════ -->
-<section class="sec" id="open">
-  <div class="wrapl">
-    <div class="os rv">
-      <div class="os-in">
-        <div>
-          <span class="tag">Open source</span>
-          <h2 class="os-h">Lisez-le. Faites-le tourner vous-même.<br>Partez quand vous voulez.</h2>
-          <p class="os-p">Un agent e-mail voit tout ce que vous recevez : « faites-nous confiance » n'est donc pas une réponse.
-            Le classifieur, les prompts et le jeu d'évaluation sont tous dans le dépôt.</p>
-          <div class="os-cta">
-            <a class="btn btn-1" href="https://github.com/k08200/klorn" rel="noreferrer noopener">Voir le dépôt <i>↗</i></a>
-            <a class="btn btn-2" href="https://github.com/k08200/klorn/tree/main/packages/api/eval" rel="noreferrer noopener">Voir le jeu d'évaluation</a>
-          </div>
-          <div class="ship" id="ship" hidden>
-            <h3>Livré récemment</h3>
-            <ol></ol>
-            <a href="https://github.com/k08200/klorn/releases" rel="noreferrer noopener">Toutes les versions →</a>
-          </div>
+    <div class="lanes-grid">
+      <div>
+        <ul class="lane-list">
+          <li class="lane" data-lane="push"><span class="chip c-push">PUSH</span><p>Vous interrompt maintenant.<span>Les quelques messages qui ne peuvent pas attendre.</span></p></li>
+          <li class="lane" data-lane="meeting"><span class="chip c-meeting">MEETING</span><p>Planification, vérifiée avec votre agenda.<span>Créneaux proposés, conflits et plages libres.</span></p></li>
+          <li class="lane" data-lane="queue"><span class="chip c-queue">QUEUE</span><p>À lire aujourd’hui.<span>Pas de notification, juste une place dans la liste du jour.</span></p></li>
+          <li class="lane" data-lane="info"><span class="chip c-info">INFO</span><p>Reçus et avis, classés.<span>Aucune réponse attendue.</span></p></li>
+          <li class="lane" data-lane="silent"><span class="chip c-silent">SILENT</span><p>Conservé, hors de votre chemin.<span>Jamais supprimé.</span></p></li>
+        </ul>
+        <p class="rule">Les files ne font que trier. Elles n’agissent jamais.<span>Pas d’accord avec l’une d’elles ? Déplacez le message, et Klorn apprend de la correction.</span></p>
+      </div>
+      <figure>
+        <div class="card-shot">
+          <img src="/media/app-2026-10/reason-light-1278.webp"
+               srcset="/media/app-2026-10/reason-light-640.webp 640w, /media/app-2026-10/reason-light-1278.webp 1278w"
+               sizes="(min-width:980px) 620px, 92vw" width="1278" height="640" loading="lazy" decoding="async"
+               alt="Un message ouvert dans la file Queue. Sous l’en-tête, une ligne indique : Why Queue · A colleague, no deadline, suivie d’un résumé en une phrase.">
         </div>
+        <figcaption class="cap"><span class="demo-tag">Données de démo</span>Le motif figure au-dessus de chaque message.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- 4 · Your day, merged, plus assistant -->
+<section class="sec" id="day" aria-labelledby="day-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Votre journée</span>
+      <h2 id="day-h">Votre journée, réunie. <span class="ser">Un assistant qui la connaît.</span></h2>
+      <p class="sec-lead">Les agendas à côté de vos e-mails, un briefing du matin, et un assistant qui répond à partir de votre propre boîte et demande avant d’agir.</p>
+    </div>
+    <div class="day-grid">
+      <article class="tile">
+        <div><h3>Demandez, puis approuvez</h3>
+          <p>Demandez ce qui vous attend avant midi. Les brouillons et les nouveaux événements attendent dans Approbations jusqu’à votre accord.</p></div>
+        <div class="tile-media card-shot">
+          <picture>
+          <source media="(max-width:640px)" sizes="88vw" width="840" height="700" srcset="/media/app-2026-10/assistant-m-light-840.webp 840w">
+          <img src="/media/app-2026-10/assistant-light-2000.webp"
+               srcset="/media/app-2026-10/assistant-light-1200.webp 1200w, /media/app-2026-10/assistant-light-2000.webp 2000w"
+               sizes="(min-width:1240px) 700px, (min-width:900px) 60vw, 90vw" width="2000" height="1250" loading="lazy" decoding="async"
+               alt="L’écran Assistant sur Mac : deux approbations en attente, une réponse et un événement d’agenda, chacune avec Approuver et Refuser, à côté d’une conversation qui indique ce qui vous attend avant midi."></picture>
+        </div>
+      </article>
+      <div class="tile-col">
+        <article class="tile tile-day">
+          <div><h3>Tous vos agendas, une seule journée</h3>
+            <p>Les événements de chaque agenda connecté, à côté des e-mails dont ils viennent.</p></div>
+          <div class="tile-media card-shot">
+            <img src="/media/app-2026-10/day-light-640.webp"
+                 srcset="/media/app-2026-10/day-light-320.webp 320w, /media/app-2026-10/day-light-640.webp 640w"
+                 sizes="(min-width:900px) 380px, 88vw" width="640" height="370" loading="lazy" decoding="async"
+                 alt="La carte de l’agenda du jour avec quatre événements, et la carte de l’assistant qui résume la journée avec 2 approbations en attente.">
+          </div>
+        </article>
+        <article class="tile">
+          <div><h3>Un briefing avant de commencer</h3>
+            <p>L’allure de votre journée et les deux choses qui ne peuvent pas glisser.</p></div>
+          <div class="tile-media card-shot">
+            <img src="/media/app-2026-10/briefing-light-776.webp" width="776" height="274" loading="lazy" decoding="async"
+                 alt="Briefing du matin : une matinée chargée, puis libre après 16 h, avec une courbe de l’occupation de chaque moment de la journée et deux priorités.">
+          </div>
+        </article>
+      </div>
+    </div>
+    <p class="cap" style="text-align:left"><span class="demo-tag">Données de démo</span>Assistant et agenda sur Mac ; briefing sur le web.</p>
+  </div>
+</section>
+
+<!-- 5 · Proof and trust. Licence, Google verification and the comparisons
+     live here, not in the hero or the meta description (FD-6). -->
+<section class="sec sec-alt" id="trust" aria-labelledby="trust-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Confiance</span>
+      <h2 id="trust-h">Fait pour être <span class="ser">vérifié.</span></h2>
+      <p class="sec-lead">Ce qui lit vos e-mails doit montrer son travail. Voici ce que vous pouvez vérifier vous-même.</p>
+    </div>
+    <dl class="facts">
+      <div class="fact"><dt>Rien ne part sans votre accord</dt>
+        <dd>Envois, suppressions définitives et transferts attendent votre accord, ou une règle de réponse automatique que vous avez créée vous-même.</dd></div>
+      <div class="fact"><dt>Le jeu de test est public</dt>
+        <dd>Chaque modification du classifieur est testée sur un ensemble de messages étiquetés versé dans le dépôt. <a href="/methodology/">Le voir</a></dd></div>
+      <div class="fact"><dt>La facture d’IA a un plafond</dt>
+        <dd>Klorn plafonne lui-même sa dépense quotidienne en IA et s’arrête plutôt que de dépasser.</dd></div>
+      <div class="fact"><dt>Vérification OAuth de Google terminée</dt>
+        <dd>Le 2026-10-03. Évalué de façon indépendante selon CASA Tier 2. <a href="/security/#google-verification">Détails</a></dd></div>
+    </dl>
+    <div class="trust-grid">
+      <a class="trust" href="/open-source/"><h3>Open source</h3>
+        <p>Chaque ligne qui touche vos e-mails est publique, sous l’AGPL-3.0 non modifiée.</p><span class="go">Pourquoi l’open source →</span></a>
+      <a class="trust" href="/self-host/"><h3>Auto-hébergement</h3>
+        <p>Faites tourner l’ensemble sur votre propre serveur, avec votre propre clé de modèle ou un modèle local.</p><span class="go">Guide d’auto-hébergement →</span></a>
+      <a class="trust" href="/security/"><h3>Sécurité</h3>
+        <p>Les jetons de compte sont chiffrés au repos. Le traitement de vos données, en détail.</p><span class="go">Sécurité →</span></a>
+      <a class="trust" href="/pricing/"><h3>Votre propre clé d’IA</h3>
+        <p>Branchez Klorn sur votre propre clé de modèle, quel que soit le plan.</p><span class="go">Comment ça marche →</span></a>
+    </div>
+    <p class="vs-row">Vous comparez des outils ? Côte à côte :
+      <a href="/vs/fyxer/">vs Fyxer</a><a href="/vs/superhuman/">vs Superhuman</a>
+      <a href="/vs/sanebox/">vs SaneBox</a><a href="/vs/inbox-zero/">vs Inbox Zero</a></p>
+  </div>
+</section>
+
+<!-- 6 · Pricing, FAQ, final CTA -->
+<section class="sec" id="pricing" aria-labelledby="pricing-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Tarifs</span>
+      <h2 id="pricing-h">Le tri est gratuit. <span class="ser">29,99 $ pour aller plus loin.</span></h2>
+      <p class="sec-lead">Les files et les motifs sont gratuits, sans limite de durée. Pro ajoute ce qui a une vraie facture d’IA derrière.</p>
+    </div>
+    <div class="prices">
+      <article class="price">
+        <span class="plan">Free</span>
+        <div class="amt">0 $<small>/mois</small></div>
+        <p class="pnote">Sans carte, sans expiration.</p>
+        <ul>
+          <li>Cinq files, avec le motif sur chaque message</li>
+          <li>Briefing du matin et agenda</li>
+          <li>Assistant qui répond à partir de vos e-mails</li>
+          <li>Un budget d’IA quotidien plafonné</li>
+        </ul>
+        <a class="btn btn-2" href="https://app.klorn.ai/login?mode=register">Commencer gratuitement</a>
+      </article>
+      <article class="price feat">
+        <span class="plan">Pro</span>
+        <div class="amt">29,99 $<small>/mois</small></div>
+        <p class="pnote">Essai de 7 jours. Résiliable à tout moment, dans l’app.</p>
+        <ul>
+          <li>Tout le plan Free</li>
+          <li>Brouillons de réponse que vous approuvez et envoyez</li>
+          <li>Plusieurs boîtes Gmail</li>
+          <li>Un budget d’IA quotidien plus large</li>
+        </ul>
+        <a class="btn btn-1" href="https://app.klorn.ai/login?mode=register">Commencer l’essai Pro</a>
+      </article>
+    </div>
+    <p class="price-foot">Prix en USD. <a href="/pricing/">Détails complets des plans</a></p>
+
+    <div class="faq-wrap" id="faq">
+      <h2>Questions</h2>
+      <div class="faq">
+        <details><summary>Faut-il connecter chaque compte séparément ?</summary>
+          <p>Oui, une fois chacun. La connexion apporte votre premier compte Google ; ajoutez les autres depuis les Réglages,
+            et ensuite tous arrivent dans la même liste.</p></details>
+        <details><summary>Klorn envoie-t-il ou supprime-t-il des e-mails tout seul ?</summary>
+          <p>Seulement si vous le lui demandez. Les files ne font que trier. Envois, suppressions définitives et transferts attendent votre accord ; une règle de réponse automatique que vous créez vous-même vaut accord. Avec l’automatisation activée, l’assistant peut exécuter seul des étapes à faible risque. Chaque envoi laisse une trace.</p></details>
+        <details><summary>Quels comptes fonctionnent aujourd’hui ?</summary>
+          <p>Gmail et Google Agenda, ainsi que Naver Mail et iCloud Mail en bêta. C’est la liste complète aujourd’hui ;
+            cette page change le jour où un autre compte peut être connecté.</p></details>
+        <details><summary>Où vont mes e-mails ?</summary>
+          <p>Vers le classifieur de Klorn, puis retour. Les jetons sont chiffrés au repos, et le code qui les manipule est public.
+            Si vous préférez les garder vous-même, <a href="/self-host/">faites tourner Klorn sur votre propre serveur</a>.</p></details>
+        <details><summary>Que veut dire &laquo;&nbsp;votre propre clé d’IA&nbsp;&raquo; ?</summary>
+          <p>Klorn peut utiliser votre propre clé d’un fournisseur de modèles, ou un modèle local, à la place de la nôtre.
+            Cela fonctionne avec tous les plans.</p></details>
+        <details><summary>Existe-t-il une app Windows ?</summary>
+          <p>Oui, en bêta. Windows peut afficher un avertissement SmartScreen au premier lancement tant que l’app n’est pas signée.
+            L’app web fonctionne dans tout navigateur récent avec le même compte.</p></details>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ══ PRICING ══════════════════════════════════════ -->
-<section class="sec band" id="pricing">
-  <div class="sec-head">
-    <div style="flex:1 1 420px">
-      <span class="tag rv">Tarifs</span>
-      <h2 class="rv">29,99 $, comme Fyxer et Superhuman.<br>Sauf que vous l'hébergez.</h2>
-    </div>
-    <p class="rv">Le tri est gratuit pour toujours, et ici gratuit veut dire une formule, pas un essai : les files, le motif sur chaque ligne et la boucle de correction ne coûtent rien. Vous ne payez qu'à partir du moment où Klorn rédige et envoie avec votre accord — la partie qui a une facture par message derrière elle.</p>
-  </div>
-  <div class="prices">
-    <article class="price rv"><div class="price-in">
-      <span class="chip-s">Gratuit</span>
-      <h3>Le pare-feu</h3>
-      <div class="amt">$0<span>/mois</span></div>
-      <p class="note">Sans carte, sans expiration. Klorn plafonne lui-même sa dépense quotidienne et s'arrête plutôt que de dépasser : une boucle emballée ne vous coûte rien. C'est ce plafond qui permet au tri de rester gratuit au lieu de devenir un essai.</p>
-      <ul>
-        <li>Pare-feu de courrier à cinq voies — seuls les vrais signaux vous interrompent</li>
-        <li>File de décisions avec les preuves sur chaque carte</li>
-        <li>Briefing du matin et vue calendrier</li>
-        <li>Assistant qui répond à partir de votre propre courrier</li>
-      </ul>
-      <a class="btn btn-2 full" href="https://app.klorn.ai/login?mode=register">Commencer gratuitement</a>
-    </div></article>
-    <article class="price feat rv"><div class="price-in">
-      <span class="chip-s dark">Pro</span>
-      <h3>Klorn Pro</h3>
-      <div class="amt">29,99 $<span>/mois</span></div>
-      <p class="note">Essai Pro de 7 jours, puis 29,99 $ par mois. Résiliable à tout moment.</p>
-      <ul>
-        <li>Tout le plan Gratuit, avec un budget IA plus large</li>
-        <li>Brouillons de réponse que vous approuvez et envoyez depuis Klorn</li>
-        <li>Créer des événements de calendrier à la voix ou par chat</li>
-        <li>Plusieurs boîtes Gmail, bruit traité automatiquement</li>
-      </ul>
-      <a class="btn btn-1 full" href="https://app.klorn.ai/login?mode=register">Démarrer l'essai Pro de 7 jours <i>↗</i></a>
-    </div></article>
-  </div>
-  <p class="price-anchor rv">Le prix mensuel publié par chaque éditeur, vérifié le 2026-08-23 :
-    <b>Fyxer 30 $</b> · <b>Superhuman 30 $</b> · <b>Inbox Zero 20 $</b> · <b>SaneBox 3,49–16,99 $</b>.
-    Nous n'avons mené aucun test comparatif direct contre l'un d'eux et cette page ne prétend pas le contraire —
-    <a href="/vs/fyxer/">les comparaisons</a> précisent exactement ce qui est mesuré et ce qui ne l'est pas.</p>
-</section>
-
-<!-- ══ WORKS WITH ═══════════════════════════════════ -->
-<section class="sec" id="works">
-  <div class="sec-head">
-    <div style="flex:1 1 420px">
-      <span class="tag rv">Compatible avec</span>
-      <h2 class="rv">À vérifier avant<br>de télécharger.</h2>
-    </div>
-    <p class="rv">Klorn lit votre courrier : ce à quoi il se connecte est donc la première chose à savoir —
-      y compris ce à quoi il ne se connecte pas encore.</p>
-  </div>
-  <div class="works rv">
-    <div class="work"><b>Gmail</b><span>Connexion Google. Plusieurs boîtes avec Pro.</span></div>
-    <div class="work"><b>Naver Mail</b><span>Connecté en IMAP depuis les Réglages.</span></div>
-    <div class="work"><b>iCloud Mail</b><span>Connecté en IMAP depuis les Réglages.</span></div>
-    <div class="work"><b>Google Calendar</b><span>Lecture, et création d'événements sur votre accord.</span></div>
-    <div class="work"><b>macOS 14+</b><span>Universal — Apple Silicon et Intel.</span></div>
-    <div class="work"><b>Toutes les langues de courrier</b><span>Les réponses reviennent dans la langue du message reçu.</span></div>
-    <div class="work"><b>7 langues d'interface</b><span>English, 한국어, 日本語, 中文, Español, Français, Deutsch.</span></div>
-  </div>
-  <p class="works-note rv"><b>Non pris en charge :</b> les hébergeurs IMAP autres que Naver et iCloud. La connexion à Klorn passe
-    uniquement par Google, et il n'existe pas d'app mobile native — le mobile passe aujourd'hui par le navigateur.
-    Sous Windows, l'app de bureau est en bêta ;
-    sous Linux, Klorn fonctionne dans le navigateur. L'auto-hébergement fonctionne avec votre propre base de données et vos propres clés de modèle.</p>
-</section>
-
-<!-- ══ FAQ ══════════════════════════════════════════ -->
-<section class="sec band" id="faq">
-  <div class="sec-head">
-    <div style="flex:1 1 420px">
-      <span class="tag rv">Avant que vous demandiez</span>
-      <h2 class="rv">Celles qu'on nous<br>pose vraiment.</h2>
-    </div>
-  </div>
-  <div class="faq">
-    <details class="faq-i rv"><summary>Peut-il envoyer quelque chose sans moi ?</summary>
-      <p>Non. L'envoi, la suppression et le transfert attendent toujours une approbation explicite, et chacun écrit un reçu
-        qui épingle une empreinte de ce qui est parti, exactement.</p></details>
-    <details class="faq-i rv"><summary>Où va réellement mon courrier ?</summary>
-      <p>Au classifieur, puis retour. Vos jetons OAuth sont chiffrés au repos, et comme l'ensemble
-        est sous AGPLv3 vous pouvez lire le code qui les manipule —
-        <a href="https://github.com/k08200/klorn" rel="noreferrer noopener">ou l'héberger vous-même</a>.</p></details>
-    <details class="faq-i rv"><summary>Et s'il classe quelque chose au mauvais endroit ?</summary>
-      <p>Déplacez-le. Chaque message indique pourquoi il a atterri là, et c'est de la correction que le
-        classifieur apprend — c'est la différence entre un démarrage à froid et un classifieur qui connaît déjà vos expéditeurs.</p></details>
-    <details class="faq-i rv"><summary>Quand arrive l'app Windows ?</summary>
-      <p>Déjà livrée, en bêta non signée — SmartScreen avertit une fois tant que l'app n'est pas signée. L'app web
-        reste accessible dans n'importe quel navigateur, avec le même compte et les mêmes niveaux.</p></details>
-    <details class="faq-i rv"><summary>L'IA peut-elle faire grimper la facture ?</summary>
-      <p>Non. Klorn plafonne sa propre dépense quotidienne et s'arrête plutôt que de dépasser — une boucle
-        emballée ne vous coûte rien. C'est ce plafond qui permet au tri de rester gratuit.</p></details>
-    <details class="faq-i rv"><summary>Pourquoi Google m'avertit-il à la connexion ?</summary>
-      <p>Lire votre courrier exige les scopes restreints de Google, et ceux-ci imposent une revue de sécurité avant
-        qu'une app soit marquée comme vérifiée. Tant que ce n'est pas réglé, vous voyez une fois un écran d'app non vérifiée, et la
-        bêta est limitée aux 100 premiers comptes.</p></details>
-  </div>
-</section>
-
-<!-- ══ FINAL ════════════════════════════════════════ -->
-<section class="sec final">
-  <picture class="final-sky" aria-hidden="true">
+<section class="final" aria-labelledby="final-h">
+  <picture class="hero-sky" aria-hidden="true">
     <source type="image/webp" sizes="100vw"
             srcset="/media/sky/dusk-1280.webp 1280w, /media/sky/dusk-1920.webp 1920w, /media/sky/dusk-2560.webp 2560w">
-    <img src="/media/sky/dusk-1920.jpg" sizes="100vw"
-         srcset="/media/sky/dusk-1280.jpg 1280w, /media/sky/dusk-1920.jpg 1920w, /media/sky/dusk-2560.jpg 2560w"
-         alt="" loading="lazy" decoding="async" width="2560" height="1709">
+    <img src="/media/sky/dusk-1920.jpg" alt="" loading="lazy" decoding="async" width="2560" height="1709">
   </picture>
-  <div class="wrapl rv">
-    <h2 class="final-h">La prochaine boîte de réception est<br>une <span class="ser">file de décisions.</span></h2>
-    <p class="final-p">Le tri est gratuit et le restera. La connexion se fait par Google OAuth, directement — sans invitation ni liste d'attente. La seule limite : les 100 premiers comptes.</p>
+  <div class="wrap">
+    <h2 id="final-h">Réunissez tout <span class="ser">au même endroit.</span></h2>
     <div class="actions">
-      <a class="btn btn-1" href="https://app.klorn.ai/login?mode=register">Commencer gratuitement <i>↗</i></a>
-      <a class="btn btn-2 btn-dl" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
-         data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe" data-win-label="Download for Windows">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 11l5 5 5-5"/><path d="M5 21h14"/></svg>
-        Télécharger pour Mac</a>
+      <a class="btn btn-1 dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
+         data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe" data-win-label="Télécharger pour Windows">Télécharger pour Mac</a>
+      <a class="btn btn-2" href="https://app.klorn.ai/login?mode=register">Ouvrir dans le navigateur</a>
     </div>
-    <p class="actions-note">Déjà approuvé ? <a href="https://app.klorn.ai/login">Connexion</a> ·
-      macOS 14+ universal · Windows 10+ bêta · AGPLv3</p>
+    <!-- The Windows entry stays a visible link so a Windows visitor with
+         scripting off is not left with a page that only offers a .dmg. -->
+    <p class="meta"><span>macOS 14+</span><i aria-hidden="true">·</i><span><a href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe">Windows bêta</a></span><i aria-hidden="true">·</i><span>Tout navigateur récent</span><i aria-hidden="true">·</i><span><a href="/download/">Configuration requise</a></span></p>
   </div>
 </section>
+</main>
 
-<footer class="foot-nav">
-  <div class="wrapl foot-grid">
+<footer class="foot">
+  <div class="wrap foot-grid">
     <div>
-      <a class="foot-brand" href="#top" data-top>Klorn</a>
-      <p class="foot-note">Un pare-feu d'attention que vous pouvez lire, exécuter et quitter. AGPL-3.0, sans rien d'ajouté.</p>
+      <a class="brand" href="#top">Klorn</a>
+      <p class="foot-note">Vos e-mails et vos agendas, triés au même endroit. Open source.</p>
       <div class="socials">
         <a href="https://github.com/k08200/klorn" rel="noreferrer noopener" aria-label="GitHub"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a>
         <a href="https://x.com/klornai" rel="noreferrer noopener" aria-label="X"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
@@ -1332,108 +471,48 @@ html[lang=ko] .final-h .ser{font-family:'Apple SD Gothic Neo','Nanum Myeongjo','
       </div>
     </div>
     <nav aria-label="Produit"><h4>Produit</h4>
-      <a href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
-         data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe" data-win-label="Download for Windows">Télécharger pour Mac</a>
-      <a href="#compare">Pourquoi Klorn</a><a href="#works">Compatible avec</a><a href="#measured">Précision</a><a href="#pricing">Tarifs</a>
+      <a class="dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
+         data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe" data-win-label="Télécharger pour Windows">Télécharger pour Mac</a>
+      <a href="/download/">Tous les téléchargements</a>
+      <a href="/pricing/">Tarifs</a>
       <a href="https://app.klorn.ai/login">Connexion</a>
-      <a href="/status/">État</a></nav>
+      <a href="/status/">État du service</a><a href="/blog/">Blog</a></nav>
     <nav aria-label="Open source"><h4>Open source</h4>
       <a href="https://github.com/k08200/klorn" rel="noreferrer noopener">Dépôt GitHub</a>
-      <a href="https://github.com/k08200/klorn/tree/main/packages/api/eval" rel="noreferrer noopener">Jeu d'évaluation</a>
       <a href="https://github.com/k08200/klorn/releases/latest" rel="noreferrer noopener">Versions</a>
+      <a href="https://github.com/k08200/klorn/tree/main/packages/api/eval" rel="noreferrer noopener">Jeu d’évaluation</a>
+      <a href="/methodology/">Méthodologie</a>
       <a href="https://github.com/k08200/klorn/blob/main/LICENSE" rel="noreferrer noopener">Licence AGPLv3</a>
-      <a href="/open-source/">Pourquoi AGPL, sans rien de plus</a>
-      <a href="/self-host/">Auto-hébergement</a><a href="/blog/">Blog</a></nav>
+      <a href="/open-source/">Pourquoi l’AGPL, sans ajout</a>
+      <a href="/self-host/">Auto-hébergement</a></nav>
     <nav aria-label="Comparer"><h4>Comparer</h4>
       <a href="/vs/fyxer/">vs Fyxer</a><a href="/vs/superhuman/">vs Superhuman</a>
       <a href="/vs/sanebox/">vs SaneBox</a><a href="/vs/inbox-zero/">vs Inbox Zero</a></nav>
     <nav aria-label="Mentions légales"><h4>Mentions légales</h4>
       <a href="https://app.klorn.ai/privacy">Confidentialité</a><a href="https://app.klorn.ai/terms">Conditions</a>
       <a href="https://app.klorn.ai/refund">Remboursements</a>
-      <a href="/security/">Sécurité</a><a href="/gdpr/">RGPD</a><a href="/dpa/">DPA</a>
+      <a href="/security/">Sécurité</a><a href="/gdpr/">GDPR</a><a href="/dpa/">DPA</a>
       <a href="mailto:k0820086@gmail.com">Contact</a></nav>
   </div>
-  <div class="wrapl foot-base">
+  <div class="wrap foot-base">
     <span>© 2026 Klorn · AGPLv3</span>
     <span class="langsw">
-      <a href="/" data-lang-pick="en">EN</a><i>·</i><a href="/ko/" data-lang-pick="ko">KO</a><i>·</i><a href="/ja/" data-lang-pick="ja">JA</a><i>·</i><a href="/zh/" data-lang-pick="zh">ZH</a><i>·</i><a href="/es/" data-lang-pick="es">ES</a><i>·</i><a href="/fr/" data-lang-pick="fr" aria-current="true">FR</a><i>·</i><a href="/de/" data-lang-pick="de">DE</a>
+      <a href="/" lang="en" data-lang-pick="en">EN</a><i aria-hidden="true">·</i><a href="/ko/" lang="ko" data-lang-pick="ko">KO</a><i aria-hidden="true">·</i><a href="/ja/" lang="ja" data-lang-pick="ja">JA</a><i aria-hidden="true">·</i><a href="/zh/" lang="zh" data-lang-pick="zh">ZH</a><i aria-hidden="true">·</i><a href="/es/" lang="es" data-lang-pick="es">ES</a><i aria-hidden="true">·</i><a href="/fr/" lang="fr" data-lang-pick="fr" aria-current="true">FR</a><i aria-hidden="true">·</i><a href="/de/" lang="de" data-lang-pick="de">DE</a>
     </span>
   </div>
 </footer>
 
-
 <script>
-// A reload has to land on the hero. Browsers restore the old scroll position by
-// default, which on a page built around a first-screen demo drops the visitor
-// back into the middle of the pricing table with no idea what the site is.
-// Turning restoration off is not enough on its own — Safari still restores
-// after the load event, so the reset is repeated once the page has settled.
-if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
-if (!location.hash) {
-  window.scrollTo(0, 0);
-  addEventListener('load', function () { if (!location.hash) window.scrollTo(0, 0); });
-}
-
-// Reveal on enter. IntersectionObserver, never a scroll listener.
-document.documentElement.classList.add('js');
-const io = new IntersectionObserver((es) => {
-  es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
-}, { threshold: .12, rootMargin: '0px 0px -8% 0px' });
-document.querySelectorAll('.rv').forEach((el, i) => { el.style.transitionDelay = (i % 5) * 70 + 'ms'; io.observe(el); });
-
-// Pointer tilt on the app shell — small angles only; this is a product shot,
-// not a toy. Disabled for reduced motion and on coarse pointers.
-const shell = document.querySelector('[data-tilt]');
-const fine = matchMedia('(pointer:fine)').matches && !matchMedia('(prefers-reduced-motion:reduce)').matches;
-if (shell && fine) {
-  let raf = 0;
-  addEventListener('pointermove', (ev) => {
-    if (raf) return;
-    raf = requestAnimationFrame(() => {
-      raf = 0;
-      const r = shell.getBoundingClientRect();
-      const dx = (ev.clientX - (r.left + r.width / 2)) / r.width;
-      const dy = (ev.clientY - (r.top + r.height / 2)) / r.height;
-      shell.style.transform = `perspective(1600px) rotateY(${dx * 3.2}deg) rotateX(${-dy * 2.2}deg)`;
-    });
-  }, { passive: true });
-  shell.style.transition = 'transform .9s cubic-bezier(.32,.72,0,1)';
-}
-
-// Which platform is this? The download row renders both entries either way —
-// this only promotes the matching one and retargets the Mac-specific buttons, so
-// a Windows visitor with scripting off still sees a Windows entry rather than a
-// page that only offers a .dmg.
-//
-// navigator.platform is deprecated but still the most reliable macOS/Windows
-// signal across current browsers; userAgentData is preferred where present and
-// its synchronous `platform` field is enough — no need for the async hints.
+// Windows visitors get the installer: /site-nav.js swaps the href on every
+// .dl-cta, and this swaps the label to match. Only the text node changes, so
+// the icon survives.
 (function () {
   var uaData = navigator.userAgentData;
-  var raw = String((uaData && uaData.platform) || navigator.platform ||
-                   navigator.userAgent || '');
-  var os = /mac|iphone|ipad|ipod/i.test(raw) ? 'mac'
-         : /win/i.test(raw) ? 'win'
-         : null;
-  if (!os) return;                       // Linux and anything unknown: leave both neutral
-
-  var mine = document.querySelector('.dl[data-os=' + os + ']');
-  if (mine) {
-    mine.classList.add('is-yours');
-    // Put the visitor's platform first without touching source order for
-    // everyone else — a plain flex reorder, not a DOM move.
-    mine.style.order = '-1';
-  }
-
-  if (os !== 'win') return;
+  var raw = String((uaData && uaData.platform) || navigator.platform || navigator.userAgent || '');
+  if (!/win/i.test(raw) || /mac|iphone|ipad|ipod/i.test(raw)) return;
   document.querySelectorAll('[data-mac-dl]').forEach(function (a) {
-    var href = a.getAttribute('data-win-href');
     var label = a.getAttribute('data-win-label');
-    if (href) { a.setAttribute('href', href); a.removeAttribute('rel'); }
     if (!label) return;
-    // Replace only the text node, so the arrow/icon markup survives — and keep
-    // its surrounding whitespace, or "Download <i>↓</i>" relabels to the
-    // spaceless "Open Klorn↓".
     Array.prototype.forEach.call(a.childNodes, function (n) {
       if (n.nodeType !== 3 || !n.textContent.trim()) return;
       var pad = n.textContent.match(/^(\s*)[\s\S]*?(\s*)$/);
@@ -1442,443 +521,61 @@ if (shell && fine) {
   });
 })();
 
-// Product tour: one frame, four surfaces. Progressive enhancement — the panels
-// are all in the document, and this is what collapses them to one at a time, so
-// without JS the section is a readable stack rather than a single stuck tab.
-(function () {
-  var nav = document.querySelector('.tour-nav');
-  if (!nav) return;
-  var tabs = Array.prototype.slice.call(nav.querySelectorAll('[role=tab]'));
-  var panels = tabs.map(function (t) { return document.getElementById(t.getAttribute('aria-controls')); });
-
-  function select(i, focus) {
-    tabs.forEach(function (t, n) {
-      t.setAttribute('aria-selected', String(n === i));
-      t.tabIndex = n === i ? 0 : -1;
-      if (panels[n]) panels[n].hidden = n !== i;
-    });
-    if (focus) tabs[i].focus();
-  }
-  tabs.forEach(function (t, i) {
-    t.addEventListener('click', function () { select(i); });
-  });
-  // Arrow keys move between tabs — the pattern a tablist is expected to follow.
-  nav.addEventListener('keydown', function (ev) {
-    var i = tabs.indexOf(document.activeElement);
-    if (i < 0) return;
-    var next = ev.key === 'ArrowDown' || ev.key === 'ArrowRight' ? i + 1
-             : ev.key === 'ArrowUp' || ev.key === 'ArrowLeft' ? i - 1
-             : ev.key === 'Home' ? 0
-             : ev.key === 'End' ? tabs.length - 1 : null;
-    if (next === null) return;
-    ev.preventDefault();
-    select((next + tabs.length) % tabs.length, true);
-  });
-  select(0);
-})();
-
-// Recently shipped — populated from the public GitHub releases feed, because a
-// hand-maintained list would rot. The block stays hidden unless the fetch
-// succeeds, so offline/rate-limited visitors simply never see it.
-(function () {
-  var box = document.getElementById('ship');
-  if (!box || !window.fetch) return;
-  fetch('https://api.github.com/repos/k08200/klorn/releases?per_page=3')
-    .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
-    .then(function (rel) {
-      if (!rel || !rel.length) return;
-      var list = box.querySelector('ol');
-      var loc = document.documentElement.lang || 'en';
-      // Release tags are build ids (desktop-v0.4.80103): the trailing build
-      // number means nothing to a visitor, so show major.minor plus the
-      // platform when it is not the Mac app. The raw tag stays in the title.
-      var human = function (tag) {
-        var m = /^desktop-(win-)?v(\d+)\.(\d+)/.exec(tag || '');
-        if (!m) return tag;
-        return (m[1] ? 'Windows ' : '') + 'v' + m[2] + '.' + m[3];
-      };
-      rel.slice(0, 3).forEach(function (r) {
-        var li = document.createElement('li');
-        var a = document.createElement('a');
-        a.href = r.html_url; a.rel = 'noreferrer noopener';
-        a.textContent = human(r.tag_name); a.title = r.tag_name;
-        var s = document.createElement('span');
-        s.textContent = '· ' + new Date(r.published_at)
-          .toLocaleDateString(loc, { month: 'short', day: 'numeric' });
-        li.appendChild(a); li.appendChild(s); list.appendChild(li);
-      });
-      box.hidden = false;
-    })
-    .catch(function () { /* stays hidden — the footer Releases link covers it */ });
-})();
-
-// The measured numbers count up the first time they scroll into view. Motion
-// only — the markup already holds the final values, so no JS, reduced motion,
-// or a missed observer all land on the true numbers.
-(function () {
-  var els = document.querySelectorAll('#measured .sv');
-  if (!els.length || matchMedia('(prefers-reduced-motion:reduce)').matches) return;
-  var io = new IntersectionObserver(function (es) {
-    es.forEach(function (e) {
-      if (!e.isIntersecting) return;
-      io.unobserve(e.target);
-      var el = e.target, txt = el.textContent.trim();
-      var m = txt.match(/^([0-9.]+)(.*)$/);
-      if (!m) return;
-      var target = parseFloat(m[1]), suffix = m[2];
-      var dec = (m[1].split('.')[1] || '').length, t0 = null;
-      function step(ts) {
-        if (t0 === null) t0 = ts;
-        var p = Math.min(1, (ts - t0) / 800);
-        el.textContent = (target * (1 - Math.pow(1 - p, 3))).toFixed(dec) + suffix;
-        if (p < 1) requestAnimationFrame(step);
-        else el.textContent = txt;          // land on the exact original string
-      }
-      requestAnimationFrame(step);
-    });
-  }, { threshold: .6 });
-  els.forEach(function (el) { io.observe(el); });
-})();
-
-// The wordmark returns to the top. href="#top" is the no-JS fallback; with JS we
-// scroll instead of jumping and drop the hash again, so a later reload still
-// takes the "no hash" path above.
-document.querySelectorAll('[data-top]').forEach(function (a) {
-  a.addEventListener('click', function (ev) {
-    ev.preventDefault();
-    var smooth = !matchMedia('(prefers-reduced-motion:reduce)').matches;
-    window.scrollTo({ top: 0, behavior: smooth ? 'smooth' : 'auto' });
-    history.replaceState(null, '', location.pathname + location.search);
-  });
-});
-
-// The language menu. Click to open, click away or Escape to close — the same
-// contract every OS menu has, so nothing here needs explaining.
+// The language menu. Click to open, click away or Escape to close; Escape
+// returns focus to the trigger.
 (function () {
   var btn = document.querySelector('[data-lang-toggle]');
   var menu = document.getElementById('lang-menu');
   if (!btn || !menu) return;
-
-  function close() {
-    menu.removeAttribute('data-open');
-    btn.setAttribute('aria-expanded', 'false');
+  function setOpen(open) {
+    if (open) menu.setAttribute('data-open', '');
+    else menu.removeAttribute('data-open');
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
   }
-  function open() {
-    menu.setAttribute('data-open', '');
-    btn.setAttribute('aria-expanded', 'true');
-  }
-
   btn.addEventListener('click', function (e) {
     e.stopPropagation();
-    if (menu.hasAttribute('data-open')) close();
-    else open();
+    setOpen(!menu.hasAttribute('data-open'));
   });
-  // Clicking a choice navigates; closing first avoids a menu flashing over
-  // the new page during the load.
-  menu.addEventListener('click', function () { close(); });
+  menu.addEventListener('click', function () { setOpen(false); });
   document.addEventListener('click', function (e) {
     if (!menu.hasAttribute('data-open')) return;
     if (menu.contains(e.target) || btn.contains(e.target)) return;
-    close();
+    setOpen(false);
   });
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape' || !menu.hasAttribute('data-open')) return;
-    close();
-    btn.focus();          // Escape must return focus, not strand it
+    setOpen(false);
+    btn.focus();
   });
 })();
 
-// Language: follow the OS/browser preference on a first visit, and never again.
-// Rules that keep this from being hostile: an explicit EN/KO click is remembered
-// forever, the redirect fires at most once per browser, and it only ever runs on
-// the site root — deep links stay where they point.
+// Language: follow the browser preference on a first visit to the root, and
+// never again. An explicit pick is remembered, the redirect fires at most once
+// per browser session, and deep links stay where they point.
 (function () {
   var KEY = 'klorn.lang';
-  var picks = document.querySelectorAll('[data-lang-pick]');
-  picks.forEach(function (a) {
+  document.querySelectorAll('[data-lang-pick]').forEach(function (a) {
     a.addEventListener('click', function () {
       try { localStorage.setItem(KEY, a.getAttribute('data-lang-pick')); } catch (e) {}
     });
   });
-
   var stored = null;
   try { stored = localStorage.getItem(KEY); } catch (e) {}
-  if (stored) return;                                   // the user has decided
+  if (stored) return;
   try { if (sessionStorage.getItem(KEY + '.tried')) return; } catch (e) {}
-
-  // Only on the deployed site: a file:// or preview open has no /ko/ to reach,
-  // and a failed replace() would stop the rest of this script.
   if (location.protocol !== 'http:' && location.protocol !== 'https:') return;
   var path = location.pathname;
-  // Never from inside /ko/ — /ko/index.html would otherwise match the root test
-  // below and redirect the Korean page to itself.
-  if (path.indexOf('/ko/') === 0) return;
-  if (path !== '/' && !/\/index\.html$/.test(path)) return;
-
+  if (path !== '/' && path !== '/index.html') return;
   var prefers = (navigator.languages && navigator.languages[0]) || navigator.language || '';
-  if (!/^ko\b/i.test(prefers)) return;                  // English page is already right
-
+  if (!/^ko\b/i.test(prefers)) return;
   try { sessionStorage.setItem(KEY + '.tried', '1'); } catch (e) {}
   location.replace('/ko/');
 })();
-
-// The hero demonstration. A visitor who reads only the headline still sees the
-// product do its one job: sixty-four messages arrive, four of them are yours.
-(function () {
-  var stage = document.getElementById('dm-stage');
-  if (!stage) return;
-  var mails = [
-    ['Sarah Kim', 'Re: Contract review — needs your sign-off today', 'push'],
-    ['AWS Billing', 'Your July invoice is ready', 'silent'],
-    ['Alex Carter', 'Standup moved to 10:30 — does that work?', 'meeting'],
-    ['Product Hunt', 'Today in tech: 12 new launches', 'silent'],
-    ['Jordan Lee', 'Revised dashboard specs', 'queue'],
-    ['Calendar', 'Invitation accepted by 3 people', 'info'],
-    ['billing@vendor.io', 'Invoice #4821 is overdue', 'push'],
-    ['Morning Brew', 'The 5 things you need to know', 'silent'],
-    ['Casey Park', 'Onboarding flow ideas', 'queue'],
-    ['Stripe', 'Payment receipt', 'info']
-  ];
-  var totals = { push: 3, meeting: 2, queue: 12, info: 8, silent: 39 };
-  var cells = {};
-  document.querySelectorAll('#dm-buckets .bk').forEach(function (b) {
-    cells[b.dataset.t] = { box: b, num: b.querySelector('[data-v]'), n: 0 };
-  });
-  var doneEl = document.getElementById('dm-done');
-  var stateEl = document.getElementById('dm-state');
-  var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-  // Reduced motion gets the answer, not the animation.
-  if (reduce) {
-    Object.keys(totals).forEach(function (k) { cells[k].num.textContent = totals[k]; });
-    doneEl.textContent = '64';
-    stateEl.textContent = 'sorted';
-    return;
-  }
-
-  var i = 0, shown = 0;
-  function step() {
-    var m = mails[i % mails.length];
-    var el = document.createElement('div');
-    el.className = 'mail run';
-    el.innerHTML = '<span class="from"></span><span class="subj"></span>';
-    el.firstChild.textContent = m[0];
-    el.lastChild.textContent = m[1];
-    // One chip at a time: the slot is a single absolute position, so a
-    // second arrival before the first leaves lands on top of it.
-    stage.replaceChildren(el);
-    setTimeout(function () { el.remove(); }, 1050);
-
-    setTimeout(function () {
-      var c = cells[m[2]];
-      c.box.classList.add('hit');
-      setTimeout(function () { c.box.classList.remove('hit'); }, 480);
-      // Walk each tier toward its real total rather than counting one at a time,
-      // so the numbers land on the figures the eval actually produced.
-      var target = totals[m[2]];
-      var stepSize = Math.max(1, Math.round(target / 6));
-      c.n = Math.min(target, c.n + stepSize);
-      c.num.textContent = c.n;
-      shown = Object.keys(cells).reduce(function (a, k) { return a + cells[k].n; }, 0);
-      doneEl.textContent = shown;
-      if (shown >= 64) {
-        stateEl.textContent = 'sorted';
-        // Hold the finished board, then run the morning again. A demo that
-        // stops dead reads as broken to anyone who scrolls back to it.
-        setTimeout(function () {
-          Object.keys(cells).forEach(function (k) { cells[k].n = 0; cells[k].num.textContent = 0; });
-          shown = 0; doneEl.textContent = 0;
-          stateEl.textContent = 'running';
-          setTimeout(step, 700);
-        }, 2600);
-      }
-    }, 560);
-
-    i++;
-    if (shown < 64) setTimeout(step, 1120);
-  }
-  // Only run once the strip is actually on screen.
-  new IntersectionObserver(function (es, ob) {
-    if (es[0].isIntersecting) { ob.disconnect(); step(); }
-  }, { threshold: .4 }).observe(stage);
-})();
-
-// The playable replica. A screenshot proves the app exists; it does not let
-// anyone find out whether they'd like using it. Everything here responds:
-// switch tiers, open a message, read why it was ranked, draft a reply from the
-// three one-key options, send it, or move it to another tier and watch the
-// counts follow. No network, no data leaves the page.
-(function () {
-  var root = document.getElementById('play');
-  if (!root) return;
-
-  var TIERS = [
-    { id: 'push', name: 'Push', c: '#fb7185', blurb: 'Vous interrompt maintenant' },
-    { id: 'meeting', name: 'Meeting', c: '#818cf8', blurb: 'Planification — vérifiée avec votre agenda' },
-    { id: 'queue', name: 'Queue', c: '#fbbf24', blurb: 'À lire aujourd’hui' },
-    { id: 'info', name: 'Info', c: '#22d3ee', blurb: 'Reçus et confirmations — sans réponse' },
-    { id: 'silent', name: 'Silent', c: '#a8a29e', blurb: 'Classé, pas supprimé' }
-  ];
-  var mail = [
-    { id: 1, t: 'push', from: 'Sarah Kim', subj: 'Re : Relecture du contrat — votre signature est attendue aujourd\'hui',
-      why: 'Vous avez répondu 6 fois à cet expéditeur',
-      sum: 'Le juridique a renvoyé deux modifications sur la clause 4 et attend votre signature avant 17:00 pour que la contrepartie contresigne aujourd\'hui.',
-      body: 'Bonjour,\n\nLe juridique est revenu avec deux modifications sur la clause 4 — le plafond d\'indemnisation et le délai de préavis. Les deux sont mineures, mais votre signature est attendue avant 17:00 aujourd\'hui.\n\nLa version annotée est en pièce jointe.\n\nBien à vous,\nSarah', 
-      r: ['C\'est confirmé : les deux points me conviennent. Je signe avant 17:00.',
-          'Je n\'y arriverai pas avant 17:00 aujourd\'hui. Peut-on décaler la contresignature à demain matin ?',
-          'Avant de signer : le plafond d\'indemnisation est-il le montant convenu la semaine dernière, ou a-t-il bougé ?'] },
-    { id: 2, t: 'push', from: 'billing@vendor.io', subj: 'La facture n° 4821 est en retard',
-      why: 'Échéance aujourd\'hui',
-      sum: 'La facture n° 4821 était due le 26 juillet et accuse trois jours de retard.',
-      body: 'Votre facture n° 4821 de 2 400 $ était due le 26 juillet.\n\nMerci de procéder au règlement dès que possible.', 
-      r: ['Je règle aujourd\'hui — désolé pour le retard.',
-          'Celle-ci est contestée ; notre équipe reviendra vers vous séparément cette semaine.',
-          'Pouvez-vous renvoyer la facture avec le numéro de commande ?'] },
-    { id: 3, t: 'meeting', from: 'Alex Carter', subj: 'Le point quotidien passe à 10:30',
-      why: 'Conflit d\'agenda',
-      sum: 'Le point de demain passe à 10:30 et chevauche votre revue de 10:15.',
-      body: 'J\'ai décalé le point de demain à 10:30.\n\nCela vous convient toujours ?', 
-      r: ['10:30 me va.',
-          'J\'ai une revue à ce moment-là — peut-on faire 11:00 ?',
-          'Cela chevauche ma revue de 10:15. Pourrait-on commencer un quart d\'heure plus tôt ?'] },
-    { id: 4, t: 'queue', from: 'Jordan Lee', subj: 'Spécifications révisées du tableau de bord',
-      why: 'Aucune échéance mentionnée',
-      sum: 'Spécifications mises à jour du tableau de bord de reporting, envoyées pour relecture quand vous aurez le temps.',
-      body: 'Ci-joint les spécifications révisées — surtout des changements de mise en page sur la vue reporting.\n\nRien d\'urgent.', 
-      r: ['Bien reçu, je lis cette semaine.',
-          'Je le passe à la revue de design plutôt que de le lire moi-même.',
-          'Quelle section a le plus changé ? Je commence par là.'] },
-    { id: 5, t: 'queue', from: 'Casey Park', subj: 'Idées pour le parcours d\'accueil',
-      why: 'Fil en cours, aucune demande',
-      sum: 'Trois suggestions pour le premier lancement, aucune décision demandée pour l\'instant.',
-      body: 'Quelques idées après avoir observé les deux dernières sessions d\'accueil.\n\nJe peux en parler quand vous voulez.', 
-      r: ['Cela vaut le coup d\'essayer — parlons-en jeudi.',
-          'Je mets de côté jusqu\'après la bêta.',
-          'Laquelle des trois livreriez-vous en premier ?'] },
-    { id: 6, t: 'silent', from: 'Morning Brew', subj: 'Les 5 choses à savoir',
-      why: 'Newsletter, jamais de réponse',
-      sum: 'Newsletter quotidienne.',
-      body: 'Aujourd\'hui dans l\'économie...', r: null },
-    { id: 7, t: 'info', from: 'AWS Billing', subj: 'Votre facture de juillet est prête',
-      why: 'Reçu automatique',
-      sum: 'Facture mensuelle d\'infrastructure, aucune action requise.',
-      body: 'Votre facture est disponible dans la console de facturation.', r: null },
-    { id: 8, t: 'info', from: 'Calendar', subj: '3 personnes ont accepté l\'invitation',
-      why: 'Une trace — rien ici n\'attend de réponse',
-      sum: 'Trois participants ont accepté la revue de jeudi.',
-      body: 'Accepté : Jordan Lee, Casey Park, Sarah Kim.', r: null },
-    { id: 9, t: 'meeting', from: 'Priya Raman', subj: 'Peut-on faire jeudi 14:00 à la place ?',
-      why: 'Le créneau proposé chevauche la revue de design (14:00–15:00)',
-      sum: 'Priya souhaite décaler le point feuille de route à jeudi 14:00. Cette heure est déjà prise ; 15:00 est libre sur les deux agendas.',
-      body: 'Bonjour,\n\nJeudi 14:00 nous arrangerait mieux pour le point feuille de route — cela vous va ?\n\nPriya', 
-      r: ['Jeudi 14:00 est pris de mon côté. 15:00 est libre sur nos deux agendas — cela vous convient ?',
-          'Jeudi ne va pas cette semaine. Vendredi matin est libre si cela aide.',
-          'Avant de décaler — la partie tarifs reste-t-elle à l\'ordre du jour ?'] }
-  ];
-  var TONE = ['Accepter', 'Décliner', 'Demander'];
-
-  var cur = 'push', open = null, replying = false, draft = null, sent = false;
-  var elT = document.getElementById('pl-tiers');
-  var elR = document.getElementById('pl-rows');
-  var elRead = document.getElementById('pl-read');
-
-  function count(t) { return mail.filter(function (m) { return m.t === t; }).length; }
-  function tier(id) { return TIERS.filter(function (x) { return x.id === id; })[0]; }
-  function esc(v) { return String(v).replace(/[&<>"]/g, function (c) {
-    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
-
-  function renderTiers() {
-    elT.innerHTML = TIERS.map(function (t) {
-      return '<button class="pl-t" data-tier="' + t.id + '" aria-pressed="' + (t.id === cur) + '">' +
-        '<span class="dt" style="background:' + t.c + '"></span>' + t.name +
-        '<span class="cn">' + count(t.id) + '</span></button>';
-    }).join('');
-  }
-  function renderList() {
-    var t = tier(cur), rows = mail.filter(function (m) { return m.t === cur; });
-    document.getElementById('pl-hdot').style.background = t.c;
-    document.getElementById('pl-hname').textContent = t.name;
-    document.getElementById('pl-hcount').textContent = t.blurb;
-    elR.innerHTML = rows.length ? rows.map(function (m) {
-      return '<button class="pl-r" data-id="' + m.id + '" aria-current="' + (open === m.id) + '">' +
-        '<span class="fr">' + esc(m.from) + '</span>' +
-        '<span class="sj">' + esc(m.subj) + '</span>' +
-        '<span class="rs">' + esc(m.why) + '</span></button>';
-    }).join('') : '<p class="pl-empty">Nothing in ' + t.name + '. ' + t.blurb + '.</p>';
-  }
-  function renderRead() {
-    var m = mail.filter(function (x) { return x.id === open; })[0];
-    if (!m) {
-      elRead.innerHTML = '<p class="pl-empty">Choisissez un message à gauche.<br>Tout ici réagit.</p>';
-      return;
-    }
-    var opts = m.r && replying && draft === null
-      ? '<div class="pl-opts">' + m.r.map(function (txt, i) {
-          return '<button class="pl-opt" data-draft="' + i + '"><kbd>' + (i + 1) + '</kbd>' +
-            '<span><b>' + TONE[i] + '</b>' + esc(txt) + '</span></button>'; }).join('') + '</div>'
-      : (m.r && draft === null
-          ? '<p class="pl-hint">Appuyez sur <b>Répondre avec l’IA</b> — ou sur <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> — ' +
-            'pour trois brouillons dans votre ton.</p>'
-          : '');
-    var comp = draft !== null
-      ? '<div class="pl-comp"><textarea id="pl-ta" aria-label="Brouillon de réponse">' + esc(m.r[draft]) + '</textarea>' +
-        '<div class="row">' + (sent ? '<span class="pl-sent">Envoyé · reçu enregistré</span>' : '') +
-        '<button class="pl-b" data-cancel>Annuler</button>' +
-        '<button class="pl-b on" data-send>' + (sent ? 'Envoyé' : 'Envoyer') + '</button></div></div>'
-      : '';
-    var others = TIERS.filter(function (t) { return t.id !== m.t; });
-    elRead.innerHTML =
-      '<div class="pl-top"><div class="pl-sub">' + esc(m.subj) + '</div>' +
-      '<div class="pl-from">' + esc(m.from) + '</div>' +
-      '<div class="pl-acts">' +
-        (m.r ? '<button class="pl-b on" data-reply>Répondre avec l’IA</button>' : '') +
-        others.map(function (t) {
-          return '<button class="pl-b" data-move="' + t.id + '">Déplacer vers ' + t.name + '</button>'; }).join('') +
-      '</div></div>' +
-      // Drafts sit directly under the action row, not after the body — at the
-      // bottom they fall below the panel's fold and "Reply with AI" reads as a
-      // dead button on a short screen.
-      opts + comp +
-      '<div class="pl-why"><span class="w">Pourquoi ' + tier(m.t).name + ' · ' + esc(m.why) + '</span>' +
-      '<div class="sm">' + esc(m.sum) + '</div></div>' +
-      '<div class="pl-body">' + esc(m.body) + '</div>';
-  }
-  function draw() { renderTiers(); renderList(); renderRead(); }
-  function reset() { replying = false; draft = null; sent = false; }
-
-  root.addEventListener('click', function (ev) {
-    var b = ev.target.closest('button');
-    if (!b) return;
-    if (b.dataset.tier) { cur = b.dataset.tier; open = null; reset(); return draw(); }
-    if (b.dataset.id) { open = +b.dataset.id; reset(); return draw(); }
-    if (b.hasAttribute('data-reply')) { replying = true; draft = null; sent = false; return renderRead(); }
-    // dataset.draft is "0" for the first option — a truthiness check would make
-    // Accept the one unclickable draft.
-    if (b.dataset.draft !== undefined) { draft = +b.dataset.draft; sent = false; return renderRead(); }
-    if (b.hasAttribute('data-cancel')) { replying = false; draft = null; sent = false; return renderRead(); }
-    if (b.hasAttribute('data-send')) { sent = true; return renderRead(); }
-    if (b.dataset.move) {
-      var m = mail.filter(function (x) { return x.id === open; })[0];
-      if (m) { m.t = b.dataset.move; m.why = 'Vous l’avez déplacé — Klorn en tire une leçon'; }
-      open = null; reset(); return draw();
-    }
-  });
-  // 1/2/3 pick a draft, matching the app's key bindings.
-  root.addEventListener('keydown', function (ev) {
-    if (!open || draft !== null) return;
-    var i = ['1', '2', '3'].indexOf(ev.key);
-    var m = mail.filter(function (x) { return x.id === open; })[0];
-    if (i > -1 && m && m.r) { replying = true; draft = i; sent = false; renderRead(); }
-  });
-
-  open = 1;
-  draw();
-})();
 </script>
 <script>
-// Inflow attribution: pass utm_*/referrer/landing-path along to the app so
-// the signup can report which channel brought the person in. The selector
-// covers every app.klorn.ai link, so it keeps working wherever the CTAs point.
+// Inflow attribution: utm_campaign and friends, the referrer and this landing
+// path ride along on every app.klorn.ai link, so a signup can report which
+// channel brought the person in.
 (function () {
   try {
     var p = new URLSearchParams(location.search);

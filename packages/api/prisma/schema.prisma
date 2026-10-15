@@ -108,6 +108,8 @@ model User {
   contacts                  Contact[]
   calendarEvents            CalendarEvent[]
   driveFiles                DriveFile[]
+  driveFileSummaries        DriveFileSummary[]
+  driveSummaryUsage         DriveSummaryUsage[]
   automationConfig          AutomationConfig?
   agentLogs                 AgentLog[]
   notifications             Notification[]
@@ -748,9 +750,9 @@ enum DriveProvider {
 // drive/drive-read.ts). Row-level security is enabled in the migration, with the
 // two policies every per-user table has.
 model DriveFile {
-  id               String        @id @default(uuid())
+  id               String            @id @default(uuid())
   userId           String
-  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   provider         DriveProvider
   // Which source of that provider: 'klorn' for the user's Klorn drive, the
   // connector's account id for GOOGLE and ONEDRIVE (D5, D6). Part of the unique
@@ -764,7 +766,7 @@ model DriveFile {
   // it). Cleaned and capped at the writer; wrapped before any LLM sees it.
   name             String
   mimeType         String?
-  isFolder         Boolean       @default(false)
+  isFolder         Boolean           @default(false)
   // BigInt: a drive file passes 2 GiB. Never negative (the migration's CHECK).
   // Never returned raw (JSON.stringify throws on a BigInt); drive/drive-read.ts
   // maps it to a number.
@@ -791,9 +793,12 @@ model DriveFile {
   // a content fingerprint. D4, D5 and D6 compare it to see whether a file
   // changed. Never interpreted here, never on the wire.
   etag             String?
-  trashed          Boolean       @default(false)
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  trashed          Boolean           @default(false)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  // Back-relation only, no column: a file's summary state lives in its own
+  // table (D4), never on this row.
+  summary          DriveFileSummary?
 
   // Named, so the client's key is `driveFileIdentity` and not the generated
   // name CalendarEvent's unique already has (its guard test greps for that one).
@@ -808,6 +813,73 @@ model DriveFile {
   // folder walks (cycle check, recursive delete) by parent. For KLORN a NULL
   // parent is the root, because D3 only writes a parent that exists.
   @@index([userId, provider, parentExternalId, modifiedAt, id])
+}
+
+enum DriveSummaryStatus {
+  PENDING
+  DONE
+  FAILED
+  SKIPPED
+}
+
+// The summary of one drive file (step D4 of
+// docs/providers/unified-platform-plan.md), one row per file, kept apart from
+// DriveFile so the metadata index stays metadata only. Written by
+// drive/summary-store.ts only. `summary` is model output about attacker-supplied
+// text: capped (the migration's CHECK), shown as data, never fed back to a model
+// as instructions. The extracted text itself is never stored.
+//   - status: PENDING (queued, or deferred by a cap: `error` says which),
+//     DONE, FAILED (gave up; `error` is the code), SKIPPED (folder, unsupported
+//     type, too large, no text).
+//   - sourceEtag: the file's `etag` this row is for. A different etag on the
+//     file re-queues it.
+//   - costMicroCents: the estimated provider cost of the summary call, in
+//     0.0001 cent units like GlobalCostLedger.microCents.
+//   - error: a code only (the migration's CHECK), never a provider message.
+//   - attempts: counted at each claim, given back by a deferral, so only
+//     content errors and runs that never finish spend it; outageStreak: outages
+//     in a row (their backoff); nextAttemptAt: due time, or a live lease's end;
+//     runsDayKey / runsToday: model calls for this file on that UTC day.
+model DriveFileSummary {
+  id             String             @id @default(uuid())
+  driveFileId    String             @unique
+  driveFile      DriveFile          @relation(fields: [driveFileId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status         DriveSummaryStatus @default(PENDING)
+  summary        String?
+  sourceEtag     String?
+  model          String?
+  costMicroCents Int                @default(0)
+  error          String?
+  attempts       Int                @default(0)
+  outageStreak   Int                @default(0)
+  nextAttemptAt  DateTime           @default(now())
+  runsDayKey     String?
+  runsToday      Int                @default(0)
+  summarizedAt   DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  // The job: due PENDING rows, oldest due first.
+  @@index([status, nextAttemptAt])
+  // The summary search: one user's DONE rows, newest summary first.
+  @@index([userId, status, summarizedAt])
+}
+
+// Summary calls per user per UTC day (step D4): the per-user daily count cap.
+// A ledger of its own so deleting a file does not give its count back.
+model DriveSummaryUsage {
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dayKey    String // "YYYY-MM-DD" in UTC
+  count     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@id([userId, dayKey])
+  // The job's prune of past days.
+  @@index([dayKey])
 }
 
 // The objects of an account still to be deleted from object storage (step D3 of

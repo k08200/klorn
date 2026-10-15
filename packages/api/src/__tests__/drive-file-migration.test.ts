@@ -150,7 +150,10 @@ describe("DriveFile migration", () => {
       "trashed",
       "createdAt",
       "updatedAt",
+      // D4's back-relation: no column. The summary's state is its own table's.
+      "summary",
     ]);
+    expect(block("model DriveFile {")).toMatch(/\n\s+summary\s+DriveFileSummary\?\n/);
   });
 
   it("provider and sourceKey have no default, so the compiler makes every writer state them", () => {

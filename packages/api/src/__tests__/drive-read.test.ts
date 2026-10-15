@@ -489,6 +489,39 @@ describe("exportDriveFiles (the user's own data, on request)", () => {
     ]);
   });
 
+  it("carries each file's summary (D4), the user's own only, whatever the flags", async () => {
+    const [visible, , , klorn, theirs] = db.tables.driveFile;
+    db.tables.driveFileSummary = [
+      {
+        id: "s-1",
+        driveFileId: visible?.id,
+        userId: ME,
+        status: "DONE",
+        summary: "A budget.",
+        error: null,
+        summarizedAt: new Date(T0),
+      },
+      { id: "s-2", driveFileId: klorn?.id, userId: ME, status: "SKIPPED", error: "no-text" },
+      { id: "s-3", driveFileId: theirs?.id, userId: OTHER, status: "DONE", summary: "Theirs." },
+    ];
+    const rows = await exportDriveFiles(ME);
+    const byName = Object.fromEntries(rows.map((r) => [r.name, r.summary]));
+    expect(byName.visible).toEqual({
+      status: "DONE",
+      text: "A budget.",
+      error: null,
+      summarizedAt: new Date(T0).toISOString(),
+    });
+    expect(byName.klorn).toEqual({
+      status: "SKIPPED",
+      text: null,
+      error: "no-text",
+      summarizedAt: null,
+    });
+    expect(byName.trashed).toBeNull();
+    expect(JSON.stringify(rows)).not.toContain("Theirs.");
+  });
+
   it("never returns another user's row", async () => {
     expect((await exportDriveFiles(OTHER)).map((r) => r.name)).toEqual(["theirs"]);
     expect(await exportDriveFiles("nobody")).toEqual([]);

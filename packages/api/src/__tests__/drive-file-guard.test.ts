@@ -25,6 +25,8 @@ const ROWS_MODULE = "drive/drive-rows.ts";
 const READ_MODULE = "drive/drive-read.ts";
 const KLORN_READ_MODULE = "drive/klorn-drive-read.ts";
 const EXPORT_MODULE = "drive/drive-export.ts";
+const SUMMARY_SOURCE_MODULE = "drive/summary-source.ts";
+const SUMMARY_STORE_MODULE = "drive/summary-store.ts";
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -154,7 +156,12 @@ describe("every DriveFile read goes through the kill switch", () => {
   const EXEMPT_FROM_KILL_SWITCH = [EXPORT_MODULE];
 
   it("finds the known readers (so this guard cannot pass by scanning nothing)", () => {
-    expect(pathsWith(ROW_READ)).toEqual([EXPORT_MODULE, READ_MODULE, KLORN_READ_MODULE]);
+    expect(pathsWith(ROW_READ)).toEqual([
+      EXPORT_MODULE,
+      READ_MODULE,
+      KLORN_READ_MODULE,
+      SUMMARY_SOURCE_MODULE,
+    ]);
   });
 
   const scoped = pathsWith(ROW_READ).filter((path) => !EXEMPT_FROM_KILL_SWITCH.includes(path));
@@ -259,6 +266,84 @@ describe("no raw SQL touches the table: every query is built by Prisma, so every
   });
 });
 
+describe("the summary tables (D4): one writer, every query names its user", () => {
+  const SUMMARY_CALL =
+    /\b(driveFileSummary|driveSummaryUsage)\s*\.\s*(findMany|findFirst|findUnique|count|aggregate|groupBy|create|createMany|upsert|update|updateMany|delete|deleteMany)\s*\(/g;
+  const SUMMARY_WRITE =
+    /\b(driveFileSummary|driveSummaryUsage)\s*\.\s*(create|createMany|upsert|update|updateMany|delete|deleteMany)\s*\(/g;
+  // The user's purge deletes their rows; the store writes everything else.
+  const WRITERS = ["drive/summary-store.ts", "purge-user-data.ts"];
+  // The job's two queries over every user's rows, each marked `system:` in its doc.
+  const SYSTEM_QUERIES = ["dueSummaryUsers", "pruneSummaryUsage"];
+  // How a store query names its user: inline, or through a helper pinned below.
+  const NAMES_USER =
+    /where: (\{\s*(driveFileId, userId|userId_dayKey: \{ userId, dayKey\b|userId,|\.\.\.ref,|id: row\.id,\s*userId|id: lease\.row\.id,\s*userId: lease\.row\.userId)|leased\(lease\)|unchanged\b)/;
+
+  it("only the summary store writes the tables, besides the user purge", () => {
+    expect(pathsWith(SUMMARY_WRITE)).toEqual(WRITERS);
+    const purge = fileAt("purge-user-data.ts")?.text ?? "";
+    for (const window of callWindows(purge, SUMMARY_WRITE)) {
+      expect(window.slice(0, 60)).toMatch(/^\w+\.deleteMany\(scope\)/);
+    }
+  });
+
+  it("every other query names the user in its where", () => {
+    const callers = pathsWith(SUMMARY_CALL);
+    expect(callers).toEqual([EXPORT_MODULE, "drive/summary-store.ts", "purge-user-data.ts"].sort());
+    const store = fileAt(SUMMARY_STORE_MODULE)?.text ?? "";
+    let scoped = 0;
+    for (const match of store.matchAll(SUMMARY_CALL)) {
+      const before = store.slice(0, match.index ?? 0);
+      const name = [...before.matchAll(/function (\w+)\(/g)].at(-1)?.[1] ?? "";
+      if (SYSTEM_QUERIES.includes(name)) continue;
+      const window = store.slice(match.index ?? 0, (match.index ?? 0) + 220);
+      if (name === "upsertQueued") {
+        // The unique key only, so Postgres runs one INSERT ... ON CONFLICT; the
+        // caller then refuses another user's row before anything else.
+        expect(window).toMatch(/where: \{ driveFileId \},/);
+        continue;
+      }
+      expect(window, name).toMatch(NAMES_USER);
+      scoped += 1;
+    }
+    expect(scoped).toBeGreaterThanOrEqual(12);
+    expect(store).toContain(
+      'if (row.userId !== userId) throw new Error("drive summary: the file is another user\'s");',
+    );
+    expect(store).toMatch(
+      /function leased\([^)]*\)[^{]*\{\s*return \{\s*id: lease\.row\.id,\s*userId: lease\.row\.userId,/,
+    );
+    expect(store).toMatch(/const unchanged = \{\s*id: row\.id,\s*userId: row\.userId,/);
+    expect(store).toMatch(/const ref = \{ id: lease\.row\.id, userId: lease\.row\.userId \};/);
+    for (const name of SYSTEM_QUERIES) {
+      expect(store).toMatch(
+        new RegExp(`/\\*\\* system: [^*]*\\*/\\nexport async function ${name}\\(`),
+      );
+    }
+    expect(fileAt(EXPORT_MODULE)?.text).toMatch(
+      /driveFileSummary\.findMany\(\{\s*where: \{ userId \}/,
+    );
+  });
+
+  it("the summary search is the name search's escaped pattern, inside the same query", () => {
+    const read = fileAt(READ_MODULE)?.text ?? "";
+    expect(read).toContain(
+      'const like = { contains: escapeLikePattern(text), mode: "insensitive" } as const;',
+    );
+    expect(read).toContain('{ summary: { is: { status: "DONE", summary: like } } }');
+    expect(read.match(/\bcontains:/g)).toHaveLength(1);
+    expect(fileAt(SUMMARY_STORE_MODULE)?.text).not.toMatch(/\bcontains:/);
+  });
+
+  it("no response carries the extracted text or a storage key", () => {
+    for (const path of ["routes/drive.ts", SUMMARY_STORE_MODULE, EXPORT_MODULE]) {
+      expect(fileAt(path)?.text ?? "", path).not.toMatch(
+        /storageKey|contentText|extractSummaryText/,
+      );
+    }
+  });
+});
+
 describe("drive text reaches an LLM only wrapped", () => {
   // Every module that can hold a DriveFile row or a provider's file: it queries
   // the table, or imports a drive module.
@@ -272,9 +357,14 @@ describe("drive text reaches an LLM only wrapped", () => {
     .sort();
 
   // A module that puts a file's name (or any other drive text) in front of a
-  // model: its path and the pattern that shows the wrap. None exists in D2. D4
-  // (summaries) adds the first; the entry is its obligation.
-  const LLM_FACING: Array<[string, RegExp]> = [];
+  // model: its path and the pattern that shows the wrap. D4's summariser is the
+  // only one; drive-summary-llm.test.ts proves the wrap on what is sent.
+  const LLM_FACING: Array<[string, RegExp]> = [
+    [
+      "drive/summary-llm.ts",
+      /wrapUntrusted\(input\.name, "drive:name"\)[\s\S]*wrapUntrusted\(input\.mimeType \?\? "unknown", "drive:type"\)[\s\S]*wrapUntrusted\(input\.text, "drive:text"\)/,
+    ],
+  ];
   // Modules that hold drive rows and never touch an LLM, directly or by a
   // dynamic import.
   const NOT_LLM_FACING = [
@@ -294,6 +384,16 @@ describe("drive text reaches an LLM only wrapped", () => {
     "drive/providers/dispatch.ts",
     "drive/providers/types.ts",
     "drive/providers/unsupported.ts",
+    "drive/summary-bytes.ts",
+    "drive/summary-extract.ts",
+    "drive/summary-job.ts",
+    "drive/summary-policy.ts",
+    // Hands the name and text to summary-llm.ts, which wraps them.
+    "drive/summary-run.ts",
+    "drive/summary-source.ts",
+    "drive/summary-store.ts",
+    // Loads summary-run.ts on demand; imports nothing from the LLM itself.
+    "drive/summary-triggers.ts",
     "purge-user-data.ts",
     "routes/drive.ts",
     "routes/klorn-drive.ts",
@@ -348,13 +448,20 @@ describe("drive text reaches an LLM only wrapped", () => {
     expect(text.match(/\bdriveFiles\b/g)).toHaveLength(2);
   });
 
-  it("an LLM-facing module wraps the drive text it sends (none in D2)", () => {
+  it("an LLM-facing module wraps the drive text it sends", () => {
     for (const [path, pattern] of LLM_FACING) {
       const text = fileAt(path)?.text ?? "";
       expect(text).toMatch(pattern);
       expect(text).toContain("wrapUntrusted(");
     }
-    expect(LLM_FACING).toEqual([]);
+    expect(LLM_FACING.map(([path]) => path)).toEqual(["drive/summary-llm.ts"]);
+  });
+
+  it("only the summariser imports the LLM among the drive modules", () => {
+    const importers = files
+      .filter((f) => f.path.startsWith("drive/") && llmSpecifiers(f.text).length > 0)
+      .map((f) => f.path);
+    expect(importers).toEqual(["drive/summary-llm.ts"]);
   });
 
   it("the detector sees a static import, a dynamic import and a drive import (so the lists cannot go stale silently)", () => {

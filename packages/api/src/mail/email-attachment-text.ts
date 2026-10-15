@@ -9,7 +9,8 @@ import {
   stripTags,
 } from "./attachment-text-scan.js";
 
-const MAX_EXTRACTABLE_BYTES = 8_000_000;
+/** The most bytes a file may have for its text to be extracted (also the drive summary cap, D4). */
+export const MAX_EXTRACTABLE_BYTES = 8_000_000;
 // Aggregate caps across a whole archive. inflateRawCapped bounds ONE stream,
 // but a multi-entry archive (docx/xlsx/pptx/hwpx are ZIPs) can still declare
 // thousands of entries that each inflate near the per-stream cap — N × 8MB =

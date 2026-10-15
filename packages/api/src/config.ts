@@ -251,6 +251,19 @@ export function klornDriveEnabled(): boolean {
     (process.env.KLORN_DRIVE_ENABLED ?? "").trim().toLowerCase(),
   );
 }
+// Drive file summaries and summary search — step D4 of
+// docs/providers/unified-platform-plan.md. OFF by default (repo doctrine). It
+// acts only while DRIVE_ENABLED is on too, and only on files whose provider is
+// visible (for a Klorn file: KLORN_DRIVE_ENABLED and OBJECT_STORAGE_ENABLED).
+// While off: no upload enqueues a summary, the summary job claims nothing, POST
+// /api/drive/files/:id/summarize answers Fastify's default 404, the file
+// response carries no `summary` and the search matches names only. Read at
+// request and job time with the same lenient truthy parse.
+export function driveSummariesEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.DRIVE_SUMMARIES_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
 // IMAP flag actions (read, unread, star) for Naver and iCloud — step B1 of
 // docs/providers/unified-platform-plan.md. OFF by default (repo doctrine). While
 // OFF, mail/providers/dispatch.ts routes NAVER and ICLOUD to the unsupported

@@ -195,4 +195,28 @@
     <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/superhuman/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/superhuman/"/>
   </url>
+  <url>
+    <loc>https://klorn.ai/download/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/download/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/download/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/download/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/ko/download/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/download/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/download/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/download/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/methodology/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/methodology/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/ko/methodology/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/methodology/"/>
+  </url>
 </urlset>

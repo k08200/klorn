@@ -22,6 +22,12 @@ skeleton() {
     grep -o 'src="/media/[^"]*"' "$1" | sed -E 's|/media/app/[a-z]{2}/|/media/app/|' || true
     grep -o 'poster="/media/[^"]*"' "$1" || true
     grep -oE '^[[:space:]]*\.[a-z][a-zA-Z0-9., :()-]*\{' "$1" | sed 's/[[:space:]]//g' || true
+    # Styles now live in /landing.css, so the class definitions above no longer
+    # carry the page's shape. The classes the markup USES, the data-* hooks the
+    # scripts and guards read, and the stylesheet link do.
+    grep -oE 'class="[^"]*"' "$1" || true
+    grep -oE 'data-[a-z-]+(="(push|meeting|queue|info|silent)")?' "$1" || true
+    grep -oE '<link rel="stylesheet" href="[^"]*"' "$1" || true
   } | sort
 }
 
