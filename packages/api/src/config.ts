@@ -335,8 +335,10 @@ export function calendarCancellationSyncEnabled(): boolean {
 // on, a sync writes no row for it and removes the row an earlier sync wrote,
 // resolving its open attention items (the same removal as C2b's), so the briefing,
 // the reminders and the conflict checks stop showing meetings the user said no to.
-// Read at sync time with the same lenient truthy parse. Turning it off lets the next
-// sync write the rows again.
+// Rows only: a live Google read (listEvents callers) still returns them. Google
+// only: Outlook and CalDAV do not report the user's answer yet. Read at sync time
+// with the same lenient truthy parse. Turning it off lets the next sync write the
+// rows again.
 export function calendarHideDeclinedEnabled(): boolean {
   return ["true", "1", "yes", "on"].includes(
     (process.env.CALENDAR_HIDE_DECLINED_ENABLED ?? "").trim().toLowerCase(),

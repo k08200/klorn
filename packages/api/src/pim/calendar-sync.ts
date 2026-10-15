@@ -102,11 +102,21 @@ function splitDeclined(
   };
 }
 
+/** Accounts whose declined-row removal failure was reported; the oldest is forgotten past the cap. */
+const reportedDeclinedFailures = new Set<string>();
+const MAX_REPORTED_DECLINED_FAILURES = 5000;
+
+export function _resetDeclinedRemovalReportsForTests(): void {
+  reportedDeclinedFailures.clear();
+}
+
 /**
  * Remove the rows an earlier sync wrote for invitations the user has since declined,
  * through C2b's removal (this account's rows only, attention items resolved, one
  * transaction). Like the cancellation scan it never fails the sync: the live rows
- * are already written, and the next sync tries again.
+ * are already written, and the next sync tries again. A failure is logged and sent
+ * to Sentry once per account until a removal for it succeeds again, so a lasting
+ * failure is not one event per account per sync cycle.
  */
 async function removeDeclinedRows(
   userId: string,
@@ -115,6 +125,7 @@ async function removeDeclinedRows(
   now: Date,
 ): Promise<void> {
   if (ids.length === 0) return;
+  const account = `${userId}:${linkedAccountId ?? "primary"}`;
   try {
     const { removed, resolved } = await removeCancelledGoogleEventRows(
       userId,
@@ -122,14 +133,21 @@ async function removeDeclinedRows(
       { externalIds: [...ids], seriesIds: [] },
       now,
     );
+    reportedDeclinedFailures.delete(account);
     if (removed > 0) {
       console.log(
         `[CALENDAR] declined invitations removed ${userId}:${linkedAccountId ?? "primary"} rows=${removed} attentionResolved=${resolved}`,
       );
     }
   } catch (err) {
+    if (reportedDeclinedFailures.has(account)) return;
+    if (reportedDeclinedFailures.size >= MAX_REPORTED_DECLINED_FAILURES) {
+      const oldest = reportedDeclinedFailures.values().next().value;
+      if (oldest !== undefined) reportedDeclinedFailures.delete(oldest);
+    }
+    reportedDeclinedFailures.add(account);
     console.warn(
-      "[CALENDAR] declined-invitation removal failed:",
+      "[CALENDAR] declined-invitation removal failed (reported once per account until it succeeds):",
       err instanceof Error ? err.message : String(err),
     );
     captureError(err, {

@@ -36,7 +36,11 @@ vi.mock("../sentry.js", () => ({ captureError: h.captureError }));
 
 import { googleSessionFromClient } from "../pim/calendar-providers/google.js";
 import type { CalendarSession, ProviderCalendarEvent } from "../pim/calendar-providers/types.js";
-import { syncLinkedCalendarWindow, syncPrimaryCalendarWindow } from "../pim/calendar-sync.js";
+import {
+  _resetDeclinedRemovalReportsForTests,
+  syncLinkedCalendarWindow,
+  syncPrimaryCalendarWindow,
+} from "../pim/calendar-sync.js";
 
 const FLAG = "CALENDAR_HIDE_DECLINED_ENABLED";
 const NOW = new Date("2026-10-15T00:00:00.000Z");
@@ -110,6 +114,7 @@ const externalIds = () =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  _resetDeclinedRemovalReportsForTests();
   delete process.env[FLAG];
   vi.spyOn(console, "log").mockImplementation(() => {});
   vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -147,6 +152,12 @@ describe("the Google mapping says whether the user declined", () => {
       false,
     ],
     ["no attendee list (the user's own event)", undefined, false],
+    ["the user's own entry with no answer at all", [{ ...ME }], false],
+    [
+      "a large meeting whose list omits the user (attendeesOmitted)",
+      [{ email: "x@example.com", responseStatus: "declined" }],
+      false,
+    ],
   ])("%s", async (_name, attendees, declined) => {
     h.eventsList.mockResolvedValue({ data: { items: [googleItem("g1", attendees)] } });
     const s = googleSessionFromClient({} as never);
@@ -219,6 +230,80 @@ describe("syncPrimaryCalendarWindow and a declined invitation", () => {
     expect(h.captureError).toHaveBeenCalledTimes(1);
     expect(externalIds()).toEqual(["g-declined", "g-kept"]);
   });
+
+  it("reports a lasting failure once per account, and again after a success", async () => {
+    process.env[FLAG] = "true";
+    let failing = true;
+    seed([row("r-old", "g-declined")], [], {
+      beforeUpdateMany: (model) => {
+        if (failing && model === "attentionItem") throw new Error("db down");
+      },
+    });
+    const sync = () =>
+      syncPrimaryCalendarWindow(session([live("g-declined", true)]), "u1", ZONE, NOW);
+    await sync();
+    await sync();
+    expect(h.captureError).toHaveBeenCalledTimes(1);
+    failing = false;
+    await sync();
+    expect(externalIds()).toEqual([]);
+    failing = true;
+    tables().calendarEvent.push(row("r-again", "g-declined"));
+    await sync();
+    expect(h.captureError).toHaveBeenCalledTimes(2);
+  });
+
+  it("removes a row the previous release wrote without an externalId (matched by googleId)", async () => {
+    process.env[FLAG] = "true";
+    seed([{ ...row("r-legacy", "g-declined"), externalId: null }]);
+    await syncPrimaryCalendarWindow(session([live("g-declined", true)]), "u1", ZONE, NOW);
+    expect(tables().calendarEvent).toEqual([]);
+  });
+
+  it("a declined instance leaves the series' other instances", async () => {
+    process.env[FLAG] = "true";
+    seed([
+      row("r-mon", "standup_20261016T010000Z"),
+      row("r-tue", "standup_20261017T010000Z"),
+      row("r-series", "standup"),
+    ]);
+    await syncPrimaryCalendarWindow(
+      session([live("standup_20261016T010000Z", true), live("standup_20261017T010000Z", false)]),
+      "u1",
+      ZONE,
+      NOW,
+    );
+    expect(externalIds()).toEqual(["standup", "standup_20261017T010000Z"]);
+  });
+
+  it("never reaches another provider's row with the same id", async () => {
+    process.env[FLAG] = "true";
+    seed([{ ...row("r-outlook", "g-declined", "acct-o", "acct-o"), provider: "OUTLOOK" }]);
+    await syncPrimaryCalendarWindow(session([live("g-declined", true)]), "u1", ZONE, NOW);
+    expect(tables().calendarEvent.map((r) => r.id)).toEqual(["r-outlook"]);
+  });
+
+  it("an attention item the user already dismissed keeps its outcome", async () => {
+    process.env[FLAG] = "true";
+    seed([row("r-old", "g-declined")], [{ ...attention("a1", "r-old"), status: "DISMISSED" }]);
+    await syncPrimaryCalendarWindow(session([live("g-declined", true)]), "u1", ZONE, NOW);
+    expect(tables().attentionItem[0]?.status).toBe("DISMISSED");
+  });
+
+  it("an invitation accepted after a decline is written again on the next sync", async () => {
+    process.env[FLAG] = "true";
+    seed([row("r-old", "g-flip")]);
+    await syncPrimaryCalendarWindow(session([live("g-flip", true)]), "u1", ZONE, NOW);
+    expect(externalIds()).toEqual([]);
+    const written = await syncPrimaryCalendarWindow(
+      session([live("g-flip", false)]),
+      "u1",
+      ZONE,
+      NOW,
+    );
+    expect(written).toBe(1);
+    expect(externalIds()).toEqual(["g-flip"]);
+  });
 });
 
 describe("syncLinkedCalendarWindow and a declined invitation", () => {
@@ -247,5 +332,6 @@ describe("syncLinkedCalendarWindow and a declined invitation", () => {
       NOW,
     );
     expect(written).toBe(1);
+    expect(externalIds()).toEqual(["o-1"]);
   });
 });
