@@ -5,9 +5,11 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
+import LanePreview from "../../components/auth/lane-preview";
 import ProviderButtons from "../../components/auth/provider-buttons";
-import AuthScreen from "../../components/auth-screen";
+import AuthScreen, { BrandHeadline } from "../../components/auth-screen";
 import { useToast } from "../../components/toast";
+import Button from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { apiFetch } from "../../lib/api";
 import { captureFirstTouchAttribution } from "../../lib/attribution";
@@ -228,44 +230,11 @@ function LoginForm() {
   };
 
   return (
-    <AuthScreen
-      eyebrow={mode === "login" ? t("auth.welcomeBack") : t("auth.signUp")}
-      title={mode === "login" ? t("auth.titleLogin") : t("auth.titleRegister")}
-      description={mode === "login" ? t("auth.descLogin") : t("auth.descRegister")}
-      footer={
-        <div className="space-y-3">
-          {/* Doctrine / scope copy is context ABOUT the product, not part of
-              signing in — it sits under the card instead of inside it so the
-              panel stays one task. Desktop only: on a phone the card already
-              fills the viewport. */}
-          <div className="hidden space-y-2 leading-5 md:block">
-            <p>{t("auth.betaScope")}</p>
-            <p>{t("auth.noSilentActions")}</p>
-          </div>
-          <p>
-            <a
-              href="https://github.com/k08200/klorn/blob/main/docs/doctrine/deterministic-floor.md"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline decoration-line-strong underline-offset-2 transition duration-300 ease-fluid hover:text-accent-deep hover:decoration-accent-muted"
-            >
-              {t("auth.readDoctrine")}
-            </a>
-            <span className="ml-2">{t("auth.openSourceVersion")}</span>
-          </p>
-          <Link
-            href="/"
-            className="inline-block transition duration-300 ease-fluid hover:text-ink-soft"
-          >
-            {t("auth.backHome")}
-          </Link>
-        </div>
-      }
-    >
+    <AuthScreen title={<BrandHeadline />} description={t("auth.subline")} preview={<LanePreview />}>
       {nextPath !== "/inbox" && (
-        <div className="mb-4 rounded-lg border border-notice-border bg-notice-bg px-3.5 py-2.5 text-xs leading-5 text-notice-ink">
+        <p className="mb-6 rounded-card border border-notice-border bg-notice-bg px-3.5 py-2.5 text-label text-notice-ink">
           {t("auth.signInToContinue", { destination: returnDestinationLabel(nextPath, t) })}
-        </div>
+        </p>
       )}
 
       {/* Invite-only cohort: request access is the action almost every visitor
@@ -273,10 +242,10 @@ function LoginForm() {
           drops to a clearly-labelled secondary path. When the beta gate is
           off — the normal production state — the provider lane leads. */}
       {!signupOpen && (
-        <div className="mb-5 space-y-4">
+        <div className="mb-6 space-y-3">
           <div
             data-testid="access-notice"
-            className="rounded-lg border border-notice-border bg-notice-bg px-3.5 py-3 text-xs leading-5 text-notice-ink"
+            className="rounded-card border border-notice-border bg-notice-bg px-3.5 py-3 text-label text-notice-ink"
           >
             <span className="font-semibold text-notice-ink-strong">
               {t("auth.inviteOnlyTitle")}
@@ -286,14 +255,18 @@ function LoginForm() {
 
           <Link
             href="/early-access"
-            className="flex h-12 w-full items-center justify-center rounded-lg bg-accent-solid text-sm font-semibold text-accent-solid-ink shadow-sm transition duration-300 ease-fluid hover:bg-accent-solid-hover active:scale-[0.99] motion-reduce:transition-none motion-reduce:active:scale-100 focus-ring"
+            className="focus-ring flex h-11 w-full items-center justify-center rounded-control bg-accent-solid text-label text-accent-solid-ink transition-colors duration-120 ease-fluid hover:bg-accent-solid-hover"
           >
             {t("auth.requestEarlyAccess")}
           </Link>
 
-          <p className="text-center text-xs text-ink-mid">{t("auth.alreadyApproved")}</p>
+          <p className="text-center text-caption text-ink-mid">{t("auth.alreadyApproved")}</p>
         </div>
       )}
+
+      <h2 className="mb-4 text-head text-ink">
+        {mode === "login" ? t("auth.formTitleLogin") : t("auth.formTitleRegister")}
+      </h2>
 
       <section aria-label={t("auth.providerLaneLabel")}>
         <ProviderButtons
@@ -303,54 +276,22 @@ function LoginForm() {
         />
       </section>
 
-      <div className="my-5 flex items-center gap-3">
+      <div className="my-5 flex items-center gap-3" aria-hidden="true">
         <div className="h-px flex-1 bg-line" />
-        <span className="text-xs text-ink-mid">
+        <span className="text-caption text-ink-mid">
           {signupOpen ? t("auth.orContinueEmail") : t("auth.orSignInEmail")}
         </span>
         <div className="h-px flex-1 bg-line" />
       </div>
 
-      {signupOpen && (
-        <div
-          role="group"
-          aria-label={t("auth.formGroupLabel")}
-          className="mb-5 grid grid-cols-2 rounded-lg border border-line bg-surface-raised p-1"
-        >
-          <button
-            type="button"
-            aria-pressed={mode === "login"}
-            onClick={() => changeMode("login")}
-            className={`h-10 rounded-md px-3 text-sm font-medium transition duration-300 ease-fluid focus-ring ${
-              mode === "login"
-                ? "bg-surface-panel text-ink shadow-sm dark:bg-surface-hover"
-                : "text-ink-mid hover:text-ink"
-            }`}
-          >
-            {t("nav.logIn")}
-          </button>
-          <button
-            type="button"
-            aria-pressed={mode === "register"}
-            onClick={() => changeMode("register")}
-            className={`h-10 rounded-md px-3 text-sm font-medium transition duration-300 ease-fluid focus-ring ${
-              mode === "register"
-                ? "bg-surface-panel text-ink shadow-sm dark:bg-surface-hover"
-                : "text-ink-mid hover:text-ink"
-            }`}
-          >
-            {t("auth.signUpShort")}
-          </button>
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4" aria-label={t("auth.formGroupLabel")}>
         {mode === "register" && (
           <Input
             ref={nameRef}
             id="name"
             label={t("auth.name")}
             type="text"
+            autoComplete="name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder={t("auth.name")}
@@ -362,6 +303,7 @@ function LoginForm() {
           id="email"
           label={t("auth.email")}
           type="email"
+          autoComplete="email"
           value={email}
           onChange={(e) => {
             if (emailError) setEmailError(null);
@@ -380,7 +322,7 @@ function LoginForm() {
             {mode === "login" && (
               <Link
                 href="/reset-password"
-                className="inline-flex min-h-10 items-center text-xs text-ink-mid transition duration-300 ease-fluid hover:text-accent-deeper"
+                className="focus-ring -my-3 inline-flex min-h-11 items-center rounded-control text-caption text-ink-mid transition-colors duration-120 ease-fluid hover:text-accent-deep"
               >
                 {t("auth.resetPassword")}
               </Link>
@@ -389,6 +331,7 @@ function LoginForm() {
           <Input
             id="password"
             type="password"
+            autoComplete={mode === "register" ? "new-password" : "current-password"}
             value={password}
             onChange={(e) => {
               if (passwordError) setPasswordError(null);
@@ -401,54 +344,50 @@ function LoginForm() {
           />
         </div>
 
-        <button
+        <Button
           type="submit"
-          disabled={loading || !email || !password}
+          size="lg"
+          className="w-full"
+          loading={loading}
+          disabled={!email || !password}
           aria-busy={loading}
-          className="flex h-12 w-full items-center justify-center rounded-lg bg-accent-solid text-sm font-semibold text-accent-solid-ink shadow-sm transition duration-300 ease-fluid hover:bg-accent-solid-hover active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-surface-inset disabled:text-ink-mid disabled:shadow-none disabled:active:scale-100 motion-reduce:transition-none motion-reduce:active:scale-100 focus-ring"
         >
-          {loading ? (
-            <span className="flex items-center justify-center gap-2">
-              {/* currentColor, not a pinned slate — the ring inverts with the
-                  filled accent when the theme swaps. */}
-              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
-              {mode === "login" ? t("auth.signingIn") : t("auth.creatingAccount")}
-            </span>
-          ) : mode === "login" ? (
-            t("auth.openDecisionQueue")
-          ) : (
-            t("auth.signUp")
-          )}
-        </button>
+          {loading
+            ? mode === "login"
+              ? t("auth.signingIn")
+              : t("auth.creatingAccount")
+            : mode === "login"
+              ? t("auth.signIn")
+              : t("auth.signUp")}
+        </Button>
       </form>
 
-      <div className="mt-5 border-t border-line pt-4 text-center text-xs text-ink-mid">
+      <p className="mt-6 flex flex-wrap items-center justify-center gap-x-1 text-label text-ink-mid">
         {signupOpen ? (
           <>
-            {mode === "login" ? t("auth.needAccount") : t("auth.haveAccount")}{" "}
-            <button
-              type="button"
+            <span>{mode === "login" ? t("auth.needAccount") : t("auth.haveAccount")}</span>
+            <Button
+              variant="link"
               onClick={() => changeMode(mode === "login" ? "register" : "login")}
-              className="inline-flex min-h-10 items-center font-medium text-accent-deeper underline-offset-2 transition duration-300 ease-fluid hover:underline focus-ring"
             >
               {mode === "login" ? t("auth.switchToSignUp") : t("auth.switchToLogIn")}
-            </button>
+            </Button>
           </>
         ) : (
           // Invite request already leads above; here we only help invited users
           // who lost their password, so we point at reset rather than repeat the
           // access CTA a third time.
           <>
-            {t("auth.approvedCantSignIn")}{" "}
+            <span>{t("auth.approvedCantSignIn")}</span>
             <Link
               href="/reset-password"
-              className="inline-flex min-h-10 items-center font-medium text-accent-deeper underline-offset-2 transition duration-300 ease-fluid hover:underline"
+              className="focus-ring inline-flex min-h-11 items-center rounded-control px-1 text-accent-deep underline-offset-2 hover:underline"
             >
               {t("auth.resetYourPassword")}
             </Link>
           </>
         )}
-      </div>
+      </p>
     </AuthScreen>
   );
 }
@@ -492,7 +431,11 @@ function safeNextPath(value: string | null): string {
 
 function returnDestinationLabel(path: string, t: (key: string) => string): string {
   const cleanPath = path.split("?")[0] || path;
-  if (cleanPath === "/inbox") return t("nav.decisionQueue");
+  // "/inbox" is Approvals with UNIFIED_HOME on and the legacy page with it off;
+  // new copy names it Approvals either way (docs/product-vocabulary.md).
+  if (cleanPath === "/inbox") return t("nav.v2.approvals");
+  if (cleanPath === "/today") return t("nav.v2.today");
+  if (cleanPath === "/assistant" || cleanPath.startsWith("/assistant/")) return t("nav.assistant");
   if (cleanPath === "/email" || cleanPath.startsWith("/email/")) return t("nav.mail");
   if (cleanPath === "/calendar") return t("nav.calendar");
   if (cleanPath === "/briefing") return t("nav.briefing");

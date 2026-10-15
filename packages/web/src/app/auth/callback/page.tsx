@@ -2,12 +2,15 @@
 
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef } from "react";
+import AuthStatus from "../../../components/auth/auth-status";
 import { API_BASE } from "../../../lib/api";
 import { useAuth } from "../../../lib/auth";
+import { useT } from "../../../lib/i18n";
 
 function CallbackHandler() {
   const searchParams = useSearchParams();
   const { loginWithToken } = useAuth();
+  const { t } = useT();
   const handled = useRef(false);
 
   useEffect(() => {
@@ -35,11 +38,7 @@ function CallbackHandler() {
     }
   }, [searchParams, loginWithToken]);
 
-  return (
-    <div className="flex items-center justify-center h-screen">
-      <div className="w-5 h-5 border-2 border-accent-muted border-t-transparent rounded-full animate-spin" />
-    </div>
-  );
+  return <AuthStatus label={t("auth.signingIn")} />;
 }
 
 export default function AuthCallbackPage() {

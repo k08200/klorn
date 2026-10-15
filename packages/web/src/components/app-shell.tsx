@@ -3,10 +3,11 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useAuth } from "../lib/auth";
-import { ASSISTANT_CHAT, landingStep, TODAY_HOME, takeLegacyLanding } from "../lib/home";
+import { ASSISTANT_CHAT, homePath, landingStep, TODAY_HOME, takeLegacyLanding } from "../lib/home";
 import { useT } from "../lib/i18n";
 import AssistantDock from "./assistant-dock";
 import BottomTabs from "./bottom-tabs";
+import IosInstallHint from "./ios-install-hint";
 import Sidebar from "./sidebar";
 
 const NO_SIDEBAR_ROUTES = [
@@ -128,6 +129,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           tabIndex={-1}
           className="relative z-10 flex-1 overflow-y-auto pb-[calc(62px+env(safe-area-inset-bottom))] md:pb-safe focus:outline-none"
         >
+          {/* Inline, so it pushes content down rather than covering it; only on
+              the home screen and Settings, where installing is on-topic. */}
+          {(pathname === homePath(user) || pathname.startsWith("/settings")) && <IosInstallHint />}
           {children}
         </main>
         <BottomTabs />

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import AuthScreen from "../../components/auth-screen";
+import Button from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { apiFetch } from "../../lib/api";
 import { useT } from "../../lib/i18n";
@@ -60,21 +61,15 @@ function ForgotPasswordForm() {
   if (sent) {
     return (
       <AuthScreen
-        eyebrow={t("resetPassword.eyebrow")}
         title={t("resetPassword.checkEmail.title")}
         description={t("resetPassword.checkEmail.description")}
-        footer={
-          <Link href="/login" className="transition hover:text-ink">
-            {t("auth.backToLogin")}
-          </Link>
-        }
       >
-        <div className="border-y border-line py-5 text-sm leading-6 text-ink-mid">
+        <p className="rounded-card border border-line bg-surface-raised px-4 py-3 text-body text-ink-mid">
           {t("resetPassword.checkEmail.body")}
-        </div>
+        </p>
         <Link
           href="/login"
-          className="mt-5 flex h-11 w-full items-center justify-center rounded-md bg-accent-solid text-sm font-semibold text-accent-solid-ink transition hover:bg-accent-solid-hover focus-ring"
+          className="mt-6 focus-ring flex h-11 w-full items-center justify-center rounded-control bg-accent-solid text-label text-accent-solid-ink transition-colors duration-120 ease-fluid hover:bg-accent-solid-hover"
         >
           {t("resetPassword.openLogin")}
         </Link>
@@ -83,21 +78,13 @@ function ForgotPasswordForm() {
   }
 
   return (
-    <AuthScreen
-      eyebrow={t("resetPassword.eyebrow")}
-      title={t("auth.resetPassword")}
-      description={t("resetPassword.description")}
-      footer={
-        <Link href="/login" className="transition hover:text-ink">
-          {t("auth.backToLogin")}
-        </Link>
-      }
-    >
+    <AuthScreen title={t("auth.resetPassword")} description={t("resetPassword.description")}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <Input
           id="email"
           label={t("auth.email")}
           type="email"
+          autoComplete="email"
           value={email}
           onChange={(e) => {
             if (emailError) setEmailError(null);
@@ -108,14 +95,11 @@ function ForgotPasswordForm() {
           error={emailError ?? undefined}
         />
 
-        <button
-          type="submit"
-          disabled={loading || !email}
-          className="flex h-11 w-full items-center justify-center rounded-md bg-accent-solid text-sm font-semibold text-accent-solid-ink transition hover:bg-accent-solid-hover disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-ink-dim focus-ring"
-        >
+        <Button type="submit" size="lg" className="w-full" loading={loading} disabled={!email}>
           {loading ? t("resetPassword.sending") : t("resetPassword.sendLink")}
-        </button>
+        </Button>
       </form>
+      <BackToSignIn />
     </AuthScreen>
   );
 }
@@ -162,15 +146,14 @@ function NewPasswordForm({ token }: { token: string }) {
   if (done) {
     return (
       <AuthScreen
-        eyebrow={t("resetPassword.updated.eyebrow")}
         title={t("resetPassword.updated.title")}
         description={t("resetPassword.updated.description")}
       >
         <Link
           href="/login"
-          className="flex h-11 w-full items-center justify-center rounded-md bg-accent-solid text-sm font-semibold text-accent-solid-ink transition hover:bg-accent-solid-hover focus-ring"
+          className="focus-ring flex h-11 w-full items-center justify-center rounded-control bg-accent-solid text-label text-accent-solid-ink transition-colors duration-120 ease-fluid hover:bg-accent-solid-hover"
         >
-          {t("nav.logIn")}
+          {t("auth.signIn")}
         </Link>
       </AuthScreen>
     );
@@ -178,20 +161,15 @@ function NewPasswordForm({ token }: { token: string }) {
 
   return (
     <AuthScreen
-      eyebrow={t("resetPassword.newPassword.eyebrow")}
       title={t("resetPassword.newPassword.title")}
       description={t("resetPassword.newPassword.description")}
-      footer={
-        <Link href="/login" className="transition hover:text-ink">
-          {t("auth.backToLogin")}
-        </Link>
-      }
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <Input
           id="password"
           label={t("resetPassword.newPassword.label")}
           type="password"
+          autoComplete="new-password"
           value={password}
           onChange={(e) => {
             if (passwordError) setPasswordError(null);
@@ -207,6 +185,7 @@ function NewPasswordForm({ token }: { token: string }) {
           id="confirm"
           label={t("resetPassword.confirmPassword.label")}
           type="password"
+          autoComplete="new-password"
           value={confirm}
           onChange={(e) => {
             if (confirmError) setConfirmError(null);
@@ -218,14 +197,32 @@ function NewPasswordForm({ token }: { token: string }) {
           error={confirmError ?? undefined}
         />
 
-        <button
+        <Button
           type="submit"
-          disabled={loading || !password || !confirm}
-          className="flex h-11 w-full items-center justify-center rounded-md bg-accent-solid text-sm font-semibold text-accent-solid-ink transition hover:bg-accent-solid-hover disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-ink-dim focus-ring"
+          size="lg"
+          className="w-full"
+          loading={loading}
+          disabled={!password || !confirm}
         >
           {loading ? t("resetPassword.resetting") : t("auth.resetPassword")}
-        </button>
+        </Button>
       </form>
+      <BackToSignIn />
     </AuthScreen>
+  );
+}
+
+/** Quiet way back from either reset step; the form stays the only primary. */
+function BackToSignIn() {
+  const { t } = useT();
+  return (
+    <p className="mt-6 text-center">
+      <Link
+        href="/login"
+        className="focus-ring inline-flex min-h-11 items-center rounded-control px-1 text-label text-accent-deep underline-offset-2 hover:underline"
+      >
+        {t("auth.backToLogin")}
+      </Link>
+    </p>
   );
 }

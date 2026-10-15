@@ -9,7 +9,7 @@ test.describe("Onboarding wizard", () => {
   test("step 1 shows Connect Gmail button and Skip option", async ({ page }) => {
     // Land on login and switch to register mode
     await page.goto("/login");
-    await page.getByRole("button", { name: "Switch to sign-up" }).click();
+    await page.getByRole("button", { name: "Create an account" }).click();
 
     await page.locator('input[type="email"]').fill(`onboard-test-${Date.now()}@example.com`);
     await page.locator('input[type="password"]').fill("password123!");
@@ -26,7 +26,7 @@ test.describe("Onboarding wizard", () => {
 
   test("skip button navigates to inbox", async ({ page }) => {
     await page.goto("/login");
-    await page.getByRole("button", { name: "Switch to sign-up" }).click();
+    await page.getByRole("button", { name: "Create an account" }).click();
 
     await page.locator('input[type="email"]').fill(`skip-test-${Date.now()}@example.com`);
     await page.locator('input[type="password"]').fill("password123!");
@@ -39,7 +39,7 @@ test.describe("Onboarding wizard", () => {
 
   test("progress dots show 3 steps with first active", async ({ page }) => {
     await page.goto("/login");
-    await page.getByRole("button", { name: "Switch to sign-up" }).click();
+    await page.getByRole("button", { name: "Create an account" }).click();
 
     await page.locator('input[type="email"]').fill(`dots-test-${Date.now()}@example.com`);
     await page.locator('input[type="password"]').fill("password123!");
@@ -57,7 +57,7 @@ test.describe("Onboarding wizard", () => {
 
   test("feature icons are visible on step 1", async ({ page }) => {
     await page.goto("/login");
-    await page.getByRole("button", { name: "Switch to sign-up" }).click();
+    await page.getByRole("button", { name: "Create an account" }).click();
 
     await page.locator('input[type="email"]').fill(`icons-test-${Date.now()}@example.com`);
     await page.locator('input[type="password"]').fill("password123!");
@@ -72,7 +72,7 @@ test.describe("Onboarding wizard", () => {
 
   test("connect button sets onboarding localStorage flag", async ({ page }) => {
     await page.goto("/login");
-    await page.getByRole("button", { name: "Switch to sign-up" }).click();
+    await page.getByRole("button", { name: "Create an account" }).click();
 
     await page.locator('input[type="email"]').fill(`flag-test-${Date.now()}@example.com`);
     await page.locator('input[type="password"]').fill("password123!");

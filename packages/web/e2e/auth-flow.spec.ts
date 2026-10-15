@@ -13,14 +13,14 @@ test.describe("Authentication flow — error states and validation", () => {
   test("empty password keeps submit disabled", async ({ page }) => {
     await page.goto("/login");
     await page.locator('input[type="email"]').fill("test@example.com");
-    const submitBtn = page.getByRole("button", { name: "Open decision queue" });
+    const submitBtn = page.getByRole("button", { name: "Sign in", exact: true });
     await expect(submitBtn).toBeDisabled();
     await expect(page).toHaveURL(/\/login/);
   });
 
   test("register mode shows optional name field", async ({ page }) => {
     await page.goto("/login");
-    await page.getByRole("button", { name: "Switch to sign-up" }).click();
+    await page.getByRole("button", { name: "Create an account" }).click();
     const nameInput = page.locator('input[id="name"]');
     await expect(nameInput).toBeVisible();
     const required = await nameInput.getAttribute("required");
@@ -35,15 +35,15 @@ test.describe("Authentication flow — error states and validation", () => {
 
   test("toggle between sign in and sign up preserves layout", async ({ page }) => {
     await page.goto("/login");
-    const loginBtn = page.getByRole("button", { name: "Open decision queue" });
+    const loginBtn = page.getByRole("button", { name: "Sign in", exact: true });
     await expect(loginBtn).toBeVisible();
 
-    await page.getByRole("button", { name: "Switch to sign-up" }).click();
+    await page.getByRole("button", { name: "Create an account" }).click();
     const createBtn = page.locator('button:has-text("Create account")');
     await expect(createBtn).toBeVisible();
 
     // Toggle back
-    await page.getByRole("button", { name: "Switch to log-in" }).click();
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(loginBtn).toBeVisible();
   });
 });
