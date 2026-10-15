@@ -2297,6 +2297,16 @@ needs FA-9 and the admin guidance from F0.
     including the ones this sync just wrote. (c) Unchanged: only a complete listing
     removes. Tested: an empty 207 over 8 rows, a calendar missing from discovery, a
     single legitimate removal, the valve's edges, 150 occurrences still complete.
+    Follow-up 2026-10-15: under the valve's floor an empty 207 still removed up to 5
+    rows, and one calendar's empty 207 removed its rows whenever another calendar of
+    the account listed events. Now a vanished row of a calendar the listing read but
+    found no event in is removed only when the account's previous complete listing
+    showed the same such rows gone (a sha-256 of the sorted ids, in process memory,
+    bounded like the valve's reports); a vanished row of a calendar that lists
+    events goes at once, as before. A listing with no such rows, one that is not
+    complete, a failed removal and a restart all start the wait again. A calendar
+    really emptied loses its rows one sync later. The valve is checked first, so its
+    report is unchanged.
   - Free/busy. `busyBlocks` is a live listing of the window: timed occurrences not
     `TRANSP:TRANSPARENT`, label `calendar`, no title. `peopleFreeBusy` answers
     unknown for everyone (CalDAV shows no one else's calendar). Writes reject with
