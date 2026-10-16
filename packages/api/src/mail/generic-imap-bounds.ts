@@ -8,7 +8,9 @@
  *     `bodyParts` accepts `{ key, start, maxLength }` and sends it as
  *     `BODY.PEEK[TEXT]<0.N>` (imapflow lib/commands/fetch.js, the `bodyParts` branch;
  *     typed at lib/imap-flow.d.ts `FetchQueryObject.bodyParts`). The poll keeps at most
- *     50 000 characters of it, so 64 KiB is enough.
+ *     50 000 characters of the DECODED text (imap-body.ts). The slice is still encoded
+ *     MIME, so a base64 or HTML-heavy body yields less text than that; the decoder
+ *     handles the cut (no NUL, no raw fallback for a parsed message).
  *   - The poll stops consuming FETCH results at its window, so a server that keeps
  *     yielding messages cannot make one poll unbounded. imapflow drains and discards
  *     what is still in flight once the loop exits early (its `aborted` flag).

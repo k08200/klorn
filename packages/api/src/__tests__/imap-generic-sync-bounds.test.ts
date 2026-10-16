@@ -113,7 +113,7 @@ describe("the body is a bounded slice", () => {
     expect(GENERIC_TEXT_FETCH_BYTES).toBeLessThanOrEqual(256 * 1024);
   });
 
-  it("Naver: the whole TEXT, exactly as before", async () => {
+  it("Naver: the whole TEXT as before, plus the two MIME headers", async () => {
     yielding(1);
     await syncImapInbox(args(NAVER));
     const query = fake.fetchImpl.mock.calls[0][1];
@@ -236,7 +236,7 @@ describe("the undo re-ingest (syncImapMessage) fetches the same bounded slice as
     expect(fake.fetchImpl.mock.calls[0][2]).toEqual({ uid: true });
   });
 
-  it("Naver: the whole TEXT, exactly as before", async () => {
+  it("Naver: the whole TEXT as before, plus the two MIME headers", async () => {
     yielding(1);
     await syncImapMessage(messageArgs(NAVER));
     expect(fake.fetchImpl.mock.calls[0][1]).toEqual({

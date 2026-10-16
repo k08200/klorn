@@ -145,6 +145,18 @@ function textBodyOf(msg: ImapFetchMessage): Buffer | undefined {
   return msg.bodyParts?.get("text") ?? msg.bodyParts?.get("TEXT");
 }
 
+const MAX_STORED_BODY_CHARS = 50_000;
+
+/// The stored body, cut without splitting a surrogate pair: a lone high
+/// surrogate is stored as U+FFFD, so the row would differ from the next poll's
+/// text and be rewritten every cycle.
+function capBody(text: string): string {
+  if (text.length <= MAX_STORED_BODY_CHARS) return text;
+  const cut = text.slice(0, MAX_STORED_BODY_CHARS);
+  const last = cut.charCodeAt(cut.length - 1);
+  return last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut;
+}
+
 function formatAddress(addr: ImapEnvelopeAddress | undefined): string {
   if (!addr) return "";
   return formatMailbox(addr.name ?? "", addr.address ?? "");
@@ -211,7 +223,7 @@ function toPersistCall(args: SyncArgs, msg: ImapFetchMessage, bodyText: string):
       cc: cc ?? "",
       subject,
       snippet: snippet ?? "",
-      body: bodyText.slice(0, 50_000),
+      body: capBody(bodyText),
       htmlBody: "",
       labels,
       isRead,
@@ -227,8 +239,9 @@ function toPersistCall(args: SyncArgs, msg: ImapFetchMessage, bodyText: string):
       userEmail: args.email,
       // The poll re-touches its window every cycle, so rows stored as raw MIME
       // before decoding existed pick up the decoded text; unchanged bodies are
-      // not rewritten.
-      refreshBody: true,
+      // not rewritten. Only with the headers in hand: a FETCH that lost them
+      // yields raw text, which must not overwrite a decoded body.
+      refreshBody: Boolean(msg.headers && msg.headers.length > 0),
     },
   ];
 }

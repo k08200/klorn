@@ -13,20 +13,30 @@
  * result goes through a MIME parser (postal-mime, the imapflow author's), which
  * also decodes the part charsets (EUC-KR for Naver).
  *
- * Bounded: at most IMAP_DECODE_MAX_BYTES is parsed. Text parts come first in
- * practice, so a large attachment behind them is cut off, not decoded on the
- * API event loop. Never throws: anything unusable keeps the old raw text.
+ * Bounded: at most IMAP_DECODE_MAX_BYTES is parsed (the stored body keeps
+ * 50 000 characters anyway). Text parts come first in practice, so a large
+ * attachment behind them is cut off, not decoded on the API event loop.
+ *
+ * A cut can land mid-base64-group, which the parser decodes to NUL; Postgres
+ * rejects NUL in text, so every result is NUL-stripped (the row would otherwise
+ * fail to persist). A parsed message with neither a text nor an HTML part
+ * (attachments only) has no body, rather than its base64. Never throws:
+ * anything the parser cannot read keeps the old raw text.
  */
 
 import PostalMime from "postal-mime";
 import sanitizeHtml from "sanitize-html";
 
-export const IMAP_DECODE_MAX_BYTES = 1024 * 1024;
+export const IMAP_DECODE_MAX_BYTES = 256 * 1024;
 
 const CRLF = "\r\n";
 
+function stripNul(value: string): string {
+  return value.includes("\u0000") ? value.replaceAll("\u0000", "") : value;
+}
+
 function rawText(text: Buffer | undefined): string {
-  return text ? text.toString("utf8") : "";
+  return text ? stripNul(text.toString("utf8")) : "";
 }
 
 function htmlToText(html: string): string {
@@ -60,10 +70,9 @@ export async function decodeImapText(
   const message = Buffer.concat([Buffer.from(head + CRLF + CRLF, "latin1"), body]);
   try {
     const parsed = await PostalMime.parse(message);
-    const plain = parsed.text?.trim();
+    const plain = stripNul(parsed.text ?? "").trim();
     if (plain) return plain;
-    const fromHtml = parsed.html ? htmlToText(parsed.html) : "";
-    return fromHtml || rawText(text);
+    return parsed.html ? htmlToText(stripNul(parsed.html)) : "";
   } catch {
     return rawText(text);
   }

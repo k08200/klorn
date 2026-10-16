@@ -89,6 +89,56 @@ describe("decodeImapText", () => {
     expect(decoded).toContain("plain words");
   });
 
+  it("never returns a NUL when a base64 part is cut mid-group (Postgres rejects NUL in text)", async () => {
+    const encoded = b64("The quick brown fox jumps over the lazy dog. The end.");
+    for (let cut = encoded.length - 3; cut < encoded.length; cut++) {
+      const decoded = await decodeImapText(
+        headers("Content-Type: text/plain; charset=utf-8", "Content-Transfer-Encoding: base64"),
+        Buffer.from(encoded.slice(0, cut)),
+      );
+      expect(decoded).not.toContain("\u0000");
+      expect(decoded.startsWith("The quick brown fox")).toBe(true);
+    }
+  });
+
+  it("returns no body for a message that has only attachments, not their base64", async () => {
+    const text = [
+      "--b3",
+      "Content-Type: application/pdf; name=a.pdf",
+      "Content-Disposition: attachment; filename=a.pdf",
+      "Content-Transfer-Encoding: base64",
+      "",
+      b64("%PDF-1.4 fake"),
+      "--b3--",
+      "",
+    ].join(CRLF);
+
+    const decoded = await decodeImapText(
+      headers('Content-Type: multipart/mixed; boundary="b3"'),
+      Buffer.from(text),
+    );
+
+    expect(decoded).toBe("");
+  });
+
+  it("reads a folded Content-Type and an empty header block", async () => {
+    const folded = await decodeImapText(
+      Buffer.from(
+        'Content-Type: text/plain;\r\n charset="utf-8"\r\nContent-Transfer-Encoding: base64\r\n',
+      ),
+      Buffer.from(b64("접힌 헤더")),
+    );
+    expect(folded).toBe("접힌 헤더");
+
+    // No Content-Type at all (NIL fields): RFC 2045 default, text/plain.
+    const bare = await decodeImapText(Buffer.from("\r\n"), Buffer.from("plain body"));
+    expect(bare).toBe("plain body");
+  });
+
+  it("strips NUL from the raw fallback too", async () => {
+    expect(await decodeImapText(undefined, Buffer.from("a\u0000b"))).toBe("ab");
+  });
+
   it("parses at most IMAP_DECODE_MAX_BYTES, so a large attachment after the text is skipped", async () => {
     const big = "A".repeat(IMAP_DECODE_MAX_BYTES * 3);
     const text = [

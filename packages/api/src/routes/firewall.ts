@@ -236,8 +236,10 @@ export function _resetHashMismatchDedupeForTests(): void {
  * Stale-hash heal for an item whose lane must survive: one an MCP agent set
  * (step A2b) or a human overrode. A stale hash is almost always a read-state
  * flip (UNREAD is one of the four hashed fields), and of the hashed inputs only
- * the labels change after delivery — from, subject and snippet are never
- * rewritten on an existing row — so nothing here invalidates the decision.
+ * the labels change after delivery — from and subject are never rewritten on an
+ * existing row, and the snippet only by the IMAP raw-MIME heal (refreshBody in
+ * persistGmailEmail), whose rows were judged on undecoded text and are meant to
+ * be re-judged — so nothing here invalidates a decision a human or agent made.
  * Re-judging would replace the tier and reset the flag (a live bug for human
  * overrides); refreshing just the hash stops the mismatch and leaves the tier,
  * its reason, the flag and the stamp alone.
