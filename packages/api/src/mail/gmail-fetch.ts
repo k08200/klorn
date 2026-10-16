@@ -97,6 +97,7 @@ async function extractAttachmentsFromPayload(
 ): Promise<RawEmailAttachment[]> {
   const attachments: RawEmailAttachment[] = [];
   const parts = collectParts(payload).filter((part) => part.filename || part.body?.attachmentId);
+  const usedKeys = new Set<string>();
 
   for (let index = 0; index < parts.length; index++) {
     const part = parts[index];
@@ -116,6 +117,14 @@ async function extractAttachmentsFromPayload(
     if (!filename) continue;
 
     const gmailAttachmentId = part.body?.attachmentId || `${messageId}:${index}:${filename}`;
+    // Gmail re-mints attachmentId on every messages.get; partId is immutable
+    // per message, so it is the identity the upsert keys on. The root part's
+    // partId is "", and the walk order is fixed, so the position is stable too.
+    // A repeated partId (never seen, but the upsert would let the second part
+    // overwrite the first row) gets its position appended to stay distinct.
+    const baseKey = part.partId || `index:${index}`;
+    const partKey = usedKeys.has(baseKey) ? `${baseKey}#${index}` : baseKey;
+    usedKeys.add(partKey);
     const size = typeof part.body?.size === "number" ? part.body.size : null;
 
     let contentText: string | null = null;
@@ -145,6 +154,7 @@ async function extractAttachmentsFromPayload(
 
     attachments.push({
       gmailAttachmentId,
+      partKey,
       filename,
       mimeType,
       size,
