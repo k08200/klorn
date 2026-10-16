@@ -162,13 +162,18 @@ function formatAddress(addr: ImapEnvelopeAddress | undefined): string {
   return formatMailbox(addr.name ?? "", addr.address ?? "");
 }
 
+// The snippet keeps 200 characters; sanitize-html's cost grows faster than
+// linearly with tag nesting, and the raw fallback can be a whole fixed-host
+// TEXT part (no size cap), so only its head is sanitized.
+const SNIPPET_SOURCE_CHARS = 4_000;
+
 function snippetFromBody(bodyText: string, max = 200): string | null {
   if (!bodyText) return null;
   // Strip HTML through sanitize-html (proper parser) rather than regex —
   // CodeQL flags regex-based tag stripping as bad-tag-filter even when
   // the output is never rendered. The judge prompt only needs the first
   // sentence or two so we collapse whitespace and slice.
-  const stripped = sanitizeHtml(bodyText, {
+  const stripped = sanitizeHtml(bodyText.slice(0, SNIPPET_SOURCE_CHARS), {
     allowedTags: [],
     allowedAttributes: {},
     disallowedTagsMode: "discard",

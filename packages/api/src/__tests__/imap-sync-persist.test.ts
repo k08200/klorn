@@ -224,6 +224,28 @@ describe("syncImapInbox → shared persist path", () => {
     );
   });
 
+  it("sanitizes only the head of a huge undecodable body for the snippet", async () => {
+    // Fixed hosts fetch the whole TEXT; without headers the raw text is kept,
+    // and sanitize-html is super-linear in tag nesting (<b> x 166k: ~8 s).
+    const hostile = Buffer.from("<b>".repeat(400_000));
+    imap.fetch.mockImplementation(async function* () {
+      yield { ...fakeMessages()[0], bodyParts: new Map([["text", hostile]]) };
+    });
+    persistGmailEmail.mockResolvedValue({ emailId: "e1", isNew: true });
+
+    const start = performance.now();
+    await syncImapInbox({
+      provider: IMAP_PROVIDERS.NAVER,
+      userId: "u1",
+      email: "me@naver.com",
+      password: "app-pw",
+      host: "imap.naver.com:993",
+      linkedInboxAccountId: "acc-naver",
+    });
+
+    expect(performance.now() - start).toBeLessThan(500);
+  });
+
   it("never cuts a surrogate pair when it caps the stored body", async () => {
     const body = `${"a".repeat(49_999)}😀tail`;
     imap.fetch.mockImplementation(async function* () {
