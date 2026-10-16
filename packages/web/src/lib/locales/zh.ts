@@ -1732,7 +1732,8 @@ const zh: Record<string, string> = {
   "linkedAccounts.toast.unverified": "该 Google 账号的邮箱尚未验证，无法关联。",
   "linkedAccounts.toast.disconnectFailed": "无法断开连接，请重试。",
   "linkedInboxes.title": "已连接的收件箱",
-  "linkedInboxes.body": "一个收件箱就是一个已连接的邮件账号。添加第二个 Google 账号（例如工作账号），Klorn 就会对你的全部邮件（而不只是主账号）运行同样的 {count} 通道防火墙。",
+  "linkedInboxes.body":
+    "一个收件箱就是一个已连接的邮件账号。添加第二个 Google 账号（例如工作账号），Klorn 就会对你的全部邮件（而不只是主账号）运行同样的 {count} 通道防火墙。",
   "linkedInboxes.connect": "连接其他收件箱",
   "linkedInboxes.toast.connected": "收件箱已连接，Klorn 将开始为其邮件分类。",
   "linkedInboxes.toast.self": "这已经是你的主收件箱，无需关联。",
@@ -1740,7 +1741,8 @@ const zh: Record<string, string> = {
   "linkedInboxes.toast.disconnected": "收件箱已断开连接。",
   "linkedInboxes.toast.signInFailed": "无法启动 Google 登录，请重试。",
   "outlookInboxes.title": "Outlook 收件箱",
-  "outlookInboxes.body": "连接 Outlook 或 Microsoft 账号后，Klorn 也会对其邮件运行同样的 {count} 通道防火墙。你在 Microsoft 登录页面上授权访问，Klorn 永远看不到你的密码。",
+  "outlookInboxes.body":
+    "连接 Outlook 或 Microsoft 账号后，Klorn 也会对其邮件运行同样的 {count} 通道防火墙。你在 Microsoft 登录页面上授权访问，Klorn 永远看不到你的密码。",
   "outlookInboxes.connect": "连接 Outlook 收件箱",
   "outlookInboxes.toast.notConfigured": "Outlook 关联尚未配置，请稍后重试。",
   "outlookInboxes.toast.signInFailed": "无法启动 Outlook 登录，请重试。",
@@ -1756,17 +1758,20 @@ const zh: Record<string, string> = {
   "imap.confirmDisconnect.message": "已分类的邮件会保留。你可以随时重新连接该邮箱。",
   "imap.hostSince": "主机：{host} · 连接于",
   "imap.icloud.title": "iCloud 邮件",
-  "imap.icloud.body": "通过 IMAP 连接 iCloud 邮箱。Klorn 会用与 Gmail 相同的 {count} 通道防火墙为每封来信分类。",
+  "imap.icloud.body":
+    "通过 IMAP 连接 iCloud 邮箱。Klorn 会用与 Gmail 相同的 {count} 通道防火墙为每封来信分类。",
   "imap.icloud.error.status": "无法加载 iCloud 连接状态。",
   "imap.icloud.confirmDisconnect.title": "要断开 iCloud 邮件吗？",
   "imap.icloud.emailLabel": "iCloud 邮箱地址",
   "imap.icloud.passwordLabel": "App 专用密码",
   "imap.icloud.help.before": "这不是你的 Apple ID 密码。请在以下位置生成 App 专用密码：",
   "imap.icloud.help.link": "account.apple.com → 登录与安全",
-  "imap.icloud.help.after": "（需要为 Apple ID 开启双重认证）。我们加密存储（AES-GCM），从不存储明文。",
+  "imap.icloud.help.after":
+    "（需要为 Apple ID 开启双重认证）。我们加密存储（AES-GCM），从不存储明文。",
   "imap.icloud.connect": "连接 iCloud 邮件",
   "imap.naver.title": "Naver 邮件",
-  "imap.naver.body": "通过 IMAP 连接 Naver 邮箱。Klorn 会用与 Gmail 相同的 {count} 通道防火墙为每封来信分类。",
+  "imap.naver.body":
+    "通过 IMAP 连接 Naver 邮箱。Klorn 会用与 Gmail 相同的 {count} 通道防火墙为每封来信分类。",
   "imap.naver.error.status": "无法加载 Naver 连接状态。",
   "imap.naver.confirmDisconnect.title": "要断开 Naver 邮件吗？",
   "imap.naver.emailLabel": "Naver 邮箱地址",
@@ -1785,7 +1790,8 @@ const zh: Record<string, string> = {
   "telegram.toast.notLinked": "尚未关联 — 请先打开链接并点击“开始”。",
   "telegram.toast.disconnected": "Telegram 已断开。",
   "telegram.confirmDisconnect.title": "断开 Telegram",
-  "telegram.confirmDisconnect.message": "Klorn 将不再向你的 Telegram 聊天发送提醒。你可以随时重新关联。",
+  "telegram.confirmDisconnect.message":
+    "Klorn 将不再向你的 Telegram 聊天发送提醒。你可以随时重新关联。",
   "telegram.body.connected": "已连接 — PUSH 通道的提醒也会发送到你的 Telegram 聊天。",
   "telegram.body.idle": "在 Telegram 聊天中接收 PUSH 通道的提醒。",
   "telegram.connect": "连接 Telegram",
@@ -1800,16 +1806,20 @@ const zh: Record<string, string> = {
   "telegram.check": "检查连接",
   "telegram.newCode": "新代码",
   "byok.title": "使用你自己的 LLM 密钥",
-  "byok.body": "默认情况下，你的邮件使用 Klorn 的共享密钥进行分类。添加你自己的服务商密钥后，Klorn 会改用你的密钥和配额处理你的邮件——在共享预算紧张时很有用。密钥加密存储（AES-GCM），我们从不记录明文。",
+  "byok.body":
+    "默认情况下，你的邮件使用 Klorn 的共享密钥进行分类。添加你自己的服务商密钥后，Klorn 会改用你的密钥和配额处理你的邮件——在共享预算紧张时很有用。密钥加密存储（AES-GCM），我们从不记录明文。",
   "byok.activeModel": "当前模型：",
   "byok.usingYourKey": "正在使用你的密钥",
   "byok.stored": "•••••••• 已保存",
   "byok.openRouterLabel": "OpenRouter API 密钥",
-  "byok.openRouterHelp": "一个密钥即可覆盖 Klorn 使用的所有模型——OpenRouter 会统一路由。密钥在保存前会经服务商验证。获取地址：",
+  "byok.openRouterHelp":
+    "一个密钥即可覆盖 Klorn 使用的所有模型——OpenRouter 会统一路由。密钥在保存前会经服务商验证。获取地址：",
   "byok.legacy": "旧版",
-  "byok.geminiRetired": "Gemini 直连密钥已停用——免费层密钥在每日配额用尽后会悄无声息地中断分类。请移除它，改用一个 OpenRouter 密钥。",
+  "byok.geminiRetired":
+    "Gemini 直连密钥已停用——免费层密钥在每日配额用尽后会悄无声息地中断分类。请移除它，改用一个 OpenRouter 密钥。",
   "byok.assistantModel": "助手模型",
-  "byok.assistantModelHelp": "仅限前沿模型——这是 Klorn 助手对话所用的模型。它处理你的邮件、日历和任务，从不搜索网络。在你的每日 AI 配额内运行；在上方添加你自己的密钥即可改用自己的配额。邮件防火墙的分类器单独调校，不受影响。",
+  "byok.assistantModelHelp":
+    "仅限前沿模型——这是 Klorn 助手对话所用的模型。它处理你的邮件、日历和任务，从不搜索网络。在你的每日 AI 配额内运行；在上方添加你自己的密钥即可改用自己的配额。邮件防火墙的分类器单独调校，不受影响。",
   "byok.error.status": "无法加载你的 LLM 密钥状态。",
   "byok.error.update": "无法更新密钥。",
   "byok.error.model": "无法更改模型。",
@@ -1839,11 +1849,14 @@ const zh: Record<string, string> = {
   "paywall.valueProp.brief": "每天早上汇总需要你决定的事项",
   "paywall.valueProp.learns": "学习你的判断，越用越准",
   "oauthError.title": "未授予 Gmail 离线访问权限",
-  "oauthError.body": "Google 返回了一个短期令牌，缺少 Klorn 在后台持续同步所需的刷新权限。原因几乎总是以下两者之一：",
+  "oauthError.body":
+    "Google 返回了一个短期令牌，缺少 Klorn 在后台持续同步所需的刷新权限。原因几乎总是以下两者之一：",
   "oauthError.policy.title": "Workspace 政策",
-  "oauthError.policy.body": "— 你的 IT 管理员限制了第三方应用离线访问 Gmail。请他们允许 Klorn 的 OAuth 客户端 ID，然后在下方重新连接。",
+  "oauthError.policy.body":
+    "— 你的 IT 管理员限制了第三方应用离线访问 Gmail。请他们允许 Klorn 的 OAuth 客户端 ID，然后在下方重新连接。",
   "oauthError.scope.title": "授权时缺少权限",
-  "oauthError.scope.body": "— Google 授权页面未授予全部 Gmail 权限。请重新连接，并确保勾选所有复选框。",
+  "oauthError.scope.body":
+    "— Google 授权页面未授予全部 Gmail 权限。请重新连接，并确保勾选所有复选框。",
   "inAppBrowser.title": "请在浏览器中打开以登录",
   "inAppBrowser.body.before": "你正在使用 {app} 的内置浏览器，Google 会在其中阻止登录（错误",
   "inAppBrowser.body.middle": "）。点按菜单（⋮ 或 ···）并选择",
@@ -2051,13 +2064,16 @@ const zh: Record<string, string> = {
   "pushBanner.error.noKey": "服务器没有通知密钥。",
   "pushBanner.error.enable": "无法开启通知。",
   "paddle.blocked.title": "无法打开支付窗口。",
-  "paddle.blocked.body": "广告拦截器或隐私扩展很可能拦截了我们的支付服务商 Paddle。请为本网站允许 paddle.com（或在无痕窗口中重试），然后再次点击升级按钮。",
+  "paddle.blocked.body":
+    "广告拦截器或隐私扩展很可能拦截了我们的支付服务商 Paddle。请为本网站允许 paddle.com（或在无痕窗口中重试），然后再次点击升级按钮。",
   "authGuard.checking": "正在检查会话...",
   "authGuard.offline.eyebrow": "连接问题",
   "authGuard.offline.titleExhausted": "无法连接 API。",
   "authGuard.offline.titleWaking": "正在唤醒 API…",
-  "authGuard.offline.bodyExhausted": "Render 免费层可能已停机。你的会话仍然保存着——点按“重试”，或检查 Render。",
-  "authGuard.offline.bodyWaking": "空闲后的第一个请求会唤醒服务器（约 {seconds} 秒）。你的会话仍然保存着。",
+  "authGuard.offline.bodyExhausted":
+    "Render 免费层可能已停机。你的会话仍然保存着——点按“重试”，或检查 Render。",
+  "authGuard.offline.bodyWaking":
+    "空闲后的第一个请求会唤醒服务器（约 {seconds} 秒）。你的会话仍然保存着。",
   "authGuard.offline.attempt": "第 {attempt} / {total} 次尝试 · 已过 {seconds} 秒",
   "authGuard.offline.retry": "重试",
   "appShell.checkingSession": "正在检查会话",

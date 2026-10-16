@@ -1835,50 +1835,65 @@ const ja: Record<string, string> = {
   "common.open": "開く",
   "common.remove": "削除",
   "linkedAccounts.reconnectNeeded": "再接続が必要です — アクセスが取り消されました",
-  "linkedAccounts.toast.unverified": "その Google アカウントのメールアドレスが未確認のため、リンクできませんでした。",
+  "linkedAccounts.toast.unverified":
+    "その Google アカウントのメールアドレスが未確認のため、リンクできませんでした。",
   "linkedAccounts.toast.disconnectFailed": "接続を解除できませんでした。もう一度お試しください。",
   "linkedInboxes.title": "接続済みの受信トレイ",
-  "linkedInboxes.body": "受信トレイは接続済みのメールアカウント 1 つです。2 つ目の Google アカウント（例: 仕事用）を追加すると、Klorn はメインのアカウントだけでなくすべてのメールに同じ {count} レーンのファイアウォールを適用します。",
+  "linkedInboxes.body":
+    "受信トレイは接続済みのメールアカウント 1 つです。2 つ目の Google アカウント（例: 仕事用）を追加すると、Klorn はメインのアカウントだけでなくすべてのメールに同じ {count} レーンのファイアウォールを適用します。",
   "linkedInboxes.connect": "別の受信トレイを接続",
   "linkedInboxes.toast.connected": "受信トレイを接続しました。Klorn がメールの分類を開始します。",
   "linkedInboxes.toast.self": "それはすでにメインの受信トレイです。リンクする必要はありません。",
   "linkedInboxes.toast.connectFailed": "受信トレイを接続できませんでした。もう一度お試しください。",
   "linkedInboxes.toast.disconnected": "受信トレイの接続を解除しました。",
-  "linkedInboxes.toast.signInFailed": "Google ログインを開始できませんでした。もう一度お試しください。",
+  "linkedInboxes.toast.signInFailed":
+    "Google ログインを開始できませんでした。もう一度お試しください。",
   "outlookInboxes.title": "Outlook の受信トレイ",
-  "outlookInboxes.body": "Outlook または Microsoft アカウントを接続すると、Klorn はそのメールにも同じ {count} レーンのファイアウォールを適用します。アクセスは Microsoft のサインインページで承認するため、Klorn がパスワードを見ることはありません。",
+  "outlookInboxes.body":
+    "Outlook または Microsoft アカウントを接続すると、Klorn はそのメールにも同じ {count} レーンのファイアウォールを適用します。アクセスは Microsoft のサインインページで承認するため、Klorn がパスワードを見ることはありません。",
   "outlookInboxes.connect": "Outlook の受信トレイを接続",
-  "outlookInboxes.toast.notConfigured": "Outlook の連携はまだ設定されていません。後でもう一度お試しください。",
-  "outlookInboxes.toast.signInFailed": "Outlook のサインインを開始できませんでした。もう一度お試しください。",
+  "outlookInboxes.toast.notConfigured":
+    "Outlook の連携はまだ設定されていません。後でもう一度お試しください。",
+  "outlookInboxes.toast.signInFailed":
+    "Outlook のサインインを開始できませんでした。もう一度お試しください。",
   "linkedCalendars.title": "接続済みのカレンダー",
-  "linkedCalendars.body": "仕事用の Google アカウントを追加すると、別のアカウントにあるカレンダーも予定の重複チェックの対象になります。",
+  "linkedCalendars.body":
+    "仕事用の Google アカウントを追加すると、別のアカウントにあるカレンダーも予定の重複チェックの対象になります。",
   "linkedCalendars.connect": "仕事用カレンダーを接続",
   "linkedCalendars.toast.connected": "仕事用カレンダーを接続しました。",
-  "linkedCalendars.toast.connectFailed": "カレンダーを接続できませんでした。もう一度お試しください。",
+  "linkedCalendars.toast.connectFailed":
+    "カレンダーを接続できませんでした。もう一度お試しください。",
   "linkedCalendars.toast.disconnected": "カレンダーの接続を解除しました。",
-  "linkedCalendars.toast.needsPro": "別のカレンダーを接続するには Pro サブスクリプションが必要です。",
+  "linkedCalendars.toast.needsPro":
+    "別のカレンダーを接続するには Pro サブスクリプションが必要です。",
   "imap.error.connectFailed": "接続に失敗しました。",
   "imap.error.disconnectFailed": "接続の解除に失敗しました。",
-  "imap.confirmDisconnect.message": "分類済みのメールはそのまま残ります。メールボックスはいつでも再接続できます。",
+  "imap.confirmDisconnect.message":
+    "分類済みのメールはそのまま残ります。メールボックスはいつでも再接続できます。",
   "imap.hostSince": "ホスト: {host} · 接続日時",
   "imap.icloud.title": "iCloud メール",
-  "imap.icloud.body": "IMAP で iCloud のメールボックスを接続します。Klorn は受信するすべてのメールを Gmail と同じ {count} レーンのファイアウォールで分類します。",
+  "imap.icloud.body":
+    "IMAP で iCloud のメールボックスを接続します。Klorn は受信するすべてのメールを Gmail と同じ {count} レーンのファイアウォールで分類します。",
   "imap.icloud.error.status": "iCloud の接続状態を読み込めませんでした。",
   "imap.icloud.confirmDisconnect.title": "iCloud メールの接続を解除しますか？",
   "imap.icloud.emailLabel": "iCloud のメールアドレス",
   "imap.icloud.passwordLabel": "App 用パスワード",
-  "imap.icloud.help.before": "Apple ID のパスワードではありません。App 用パスワードは次の場所で生成してください:",
+  "imap.icloud.help.before":
+    "Apple ID のパスワードではありません。App 用パスワードは次の場所で生成してください:",
   "imap.icloud.help.link": "account.apple.com → サインインとセキュリティ",
-  "imap.icloud.help.after": "（Apple ID で 2 ファクタ認証が必要です）。パスワードは暗号化（AES-GCM）して保存し、平文では保存しません。",
+  "imap.icloud.help.after":
+    "（Apple ID で 2 ファクタ認証が必要です）。パスワードは暗号化（AES-GCM）して保存し、平文では保存しません。",
   "imap.icloud.connect": "iCloud メールを接続",
   "imap.naver.title": "Naver メール",
-  "imap.naver.body": "IMAP で Naver のメールボックスを接続します。Klorn は受信するすべてのメールを Gmail と同じ {count} レーンのファイアウォールで分類します。",
+  "imap.naver.body":
+    "IMAP で Naver のメールボックスを接続します。Klorn は受信するすべてのメールを Gmail と同じ {count} レーンのファイアウォールで分類します。",
   "imap.naver.error.status": "Naver の接続状態を読み込めませんでした。",
   "imap.naver.confirmDisconnect.title": "Naver メールの接続を解除しますか？",
   "imap.naver.emailLabel": "Naver のメールアドレス",
   "imap.naver.passwordLabel": "アプリパスワード（외부 메일 가져오기 비밀번호）",
   "imap.naver.passwordPlaceholder": "Naver のセキュリティ設定で生成",
-  "imap.naver.help.before": "Naver アカウントのパスワードではありません。次の場所で生成してください:",
+  "imap.naver.help.before":
+    "Naver アカウントのパスワードではありません。次の場所で生成してください:",
   "imap.naver.help.link": "Naver ヘルプ → 외부 메일 비밀번호",
   "imap.naver.help.after": "。パスワードは暗号化（AES-GCM）して保存し、平文では保存しません。",
   "imap.naver.advancedHost": "詳細設定: IMAP ホスト",
@@ -1888,10 +1903,12 @@ const ja: Record<string, string> = {
   "telegram.error.link": "Telegram の連携を開始できませんでした。",
   "telegram.error.disconnect": "Telegram の接続を解除できませんでした。",
   "telegram.toast.connected": "Telegram を接続しました。",
-  "telegram.toast.notLinked": "まだ連携されていません。先にリンクを開いて「開始」を押してください。",
+  "telegram.toast.notLinked":
+    "まだ連携されていません。先にリンクを開いて「開始」を押してください。",
   "telegram.toast.disconnected": "Telegram の接続を解除しました。",
   "telegram.confirmDisconnect.title": "Telegram の接続を解除",
-  "telegram.confirmDisconnect.message": "Klorn は Telegram のチャットへの通知を停止します。いつでも再連携できます。",
+  "telegram.confirmDisconnect.message":
+    "Klorn は Telegram のチャットへの通知を停止します。いつでも再連携できます。",
   "telegram.body.connected": "接続済み — PUSH レーンの通知が Telegram のチャットにも届きます。",
   "telegram.body.idle": "PUSH レーンの通知を Telegram のチャットで受け取ります。",
   "telegram.connect": "Telegram を接続",
@@ -1906,16 +1923,20 @@ const ja: Record<string, string> = {
   "telegram.check": "接続を確認",
   "telegram.newCode": "新しいコード",
   "byok.title": "自分の LLM キーを使う",
-  "byok.body": "既定では、メールは Klorn の共有キーで分類されます。自分のプロバイダーキーを追加すると、Klorn はあなたのメールをあなたのキーとクォータで処理します。共有の予算が混み合っているときに便利です。キーは暗号化（AES-GCM）して保存し、平文を記録することはありません。",
+  "byok.body":
+    "既定では、メールは Klorn の共有キーで分類されます。自分のプロバイダーキーを追加すると、Klorn はあなたのメールをあなたのキーとクォータで処理します。共有の予算が混み合っているときに便利です。キーは暗号化（AES-GCM）して保存し、平文を記録することはありません。",
   "byok.activeModel": "使用中のモデル:",
   "byok.usingYourKey": "自分のキーを使用中",
   "byok.stored": "•••••••• 保存済み",
   "byok.openRouterLabel": "OpenRouter API キー",
-  "byok.openRouterHelp": "1 つのキーで Klorn が使うすべてのモデルをカバーします。OpenRouter がすべてを中継します。キーは保存前にプロバイダーで検証されます。キーの取得先:",
+  "byok.openRouterHelp":
+    "1 つのキーで Klorn が使うすべてのモデルをカバーします。OpenRouter がすべてを中継します。キーは保存前にプロバイダーで検証されます。キーの取得先:",
   "byok.legacy": "レガシー",
-  "byok.geminiRetired": "Gemini の直接キーは廃止されました。無料枠のキーは 1 日のクォータを使い切ると分類が気づかないうちに止まります。削除して OpenRouter のキーを 1 つ使ってください。",
+  "byok.geminiRetired":
+    "Gemini の直接キーは廃止されました。無料枠のキーは 1 日のクォータを使い切ると分類が気づかないうちに止まります。削除して OpenRouter のキーを 1 つ使ってください。",
   "byok.assistantModel": "アシスタントのモデル",
-  "byok.assistantModelHelp": "最先端モデルのみ。Klorn アシスタントが会話に使うモデルです。メール、カレンダー、タスクを扱い、Web 検索は行いません。1 日の AI クォータの範囲で動作します。上で自分のキーを追加すると自分のクォータを使います。メールファイアウォールの分類器は別途調整されており、影響を受けません。",
+  "byok.assistantModelHelp":
+    "最先端モデルのみ。Klorn アシスタントが会話に使うモデルです。メール、カレンダー、タスクを扱い、Web 検索は行いません。1 日の AI クォータの範囲で動作します。上で自分のキーを追加すると自分のクォータを使います。メールファイアウォールの分類器は別途調整されており、影響を受けません。",
   "byok.error.status": "LLM キーの状態を読み込めませんでした。",
   "byok.error.update": "キーを更新できませんでした。",
   "byok.error.model": "モデルを変更できませんでした。",
@@ -1930,28 +1951,35 @@ const ja: Record<string, string> = {
   "subscription.valueProp.push": "本当に重要なメールだけをリアルタイムでプッシュ",
   "subscription.valueProp.noise": "不在の間にノイズを自動で処理",
   "subscription.valueProp.send": "送信、返信、連携",
-  "subscription.toast.checkoutFailed": "チェックアウトを開始できませんでした。もう一度お試しください。",
+  "subscription.toast.checkoutFailed":
+    "チェックアウトを開始できませんでした。もう一度お試しください。",
   "subscription.toast.unavailable": "現在サブスクリプションはご利用いただけません。",
   "subscription.toast.purchaseFailed": "購入を完了できませんでした。もう一度お試しください。",
   "subscription.toast.noPurchase": "以前の購入が見つかりません。",
   "paywall.foundingPrice": "創設メンバー価格",
   "paywall.title": "7 日間の無料トライアルを始める",
-  "paywall.body": "Klorn Pro は AI メールファイアウォールです。何をあなたに届けるかを判断し、残りを処理します。",
+  "paywall.body":
+    "Klorn Pro は AI メールファイアウォールです。何をあなたに届けるかを判断し、残りを処理します。",
   "paywall.startTrial": "無料トライアルを開始",
-  "paywall.trialTerms": "7 日間無料、その後は月額 {price}。初期メンバーはこの価格で固定されます。いつでも解約できます。",
+  "paywall.trialTerms":
+    "7 日間無料、その後は月額 {price}。初期メンバーはこの価格で固定されます。いつでも解約できます。",
   "paywall.refunds": "返金",
   "paywall.valueProp.interrupt": "本当に重要なメールにだけ邪魔される",
   "paywall.valueProp.noise": "不在の間に Klorn がノイズを自動で処理",
   "paywall.valueProp.brief": "判断が必要なことをまとめた朝のブリーフィング",
   "paywall.valueProp.learns": "あなたの判断を学習し、使うほど精度が上がる",
   "oauthError.title": "Gmail のオフラインアクセスが許可されませんでした",
-  "oauthError.body": "Google が、Klorn がバックグラウンドで同期を続けるために必要な更新権限のない短期トークンを返しました。原因はほぼ必ず次のいずれかです:",
+  "oauthError.body":
+    "Google が、Klorn がバックグラウンドで同期を続けるために必要な更新権限のない短期トークンを返しました。原因はほぼ必ず次のいずれかです:",
   "oauthError.policy.title": "Workspace のポリシー",
-  "oauthError.policy.body": "— IT 管理者がサードパーティ製アプリによる Gmail へのオフラインアクセスを制限しています。Klorn の OAuth クライアント ID を許可するよう依頼してから、下で再接続してください。",
+  "oauthError.policy.body":
+    "— IT 管理者がサードパーティ製アプリによる Gmail へのオフラインアクセスを制限しています。Klorn の OAuth クライアント ID を許可するよう依頼してから、下で再接続してください。",
   "oauthError.scope.title": "同意時の権限不足",
-  "oauthError.scope.body": "— Google の同意画面で Gmail の権限がすべて許可されませんでした。再接続し、すべてのチェックボックスを選択してください。",
+  "oauthError.scope.body":
+    "— Google の同意画面で Gmail の権限がすべて許可されませんでした。再接続し、すべてのチェックボックスを選択してください。",
   "inAppBrowser.title": "サインインするにはブラウザで開いてください",
-  "inAppBrowser.body.before": "{app} のアプリ内ブラウザでは Google がサインインをブロックします（エラー",
+  "inAppBrowser.body.before":
+    "{app} のアプリ内ブラウザでは Google がサインインをブロックします（エラー",
   "inAppBrowser.body.middle": "）。メニュー（⋮ または ···）をタップして次を選択:",
   "inAppBrowser.openInBrowser": "ブラウザで開く",
   "inAppBrowser.body.after": "（Chrome または Safari）。そのうえでサインインしてください。",
@@ -1991,9 +2019,11 @@ const ja: Record<string, string> = {
   "mail.queue.sales.description": "顧客からの返信、更新、価格、会議のフォローアップ",
   "mail.queue.support.title": "サポートの問題",
   "mail.queue.support.description": "バグ、インシデント、苦情、エスカレーション",
-  "mail.error.gmailNotConnected": "Gmail が接続されていません。設定 → 接続 から再接続してください。",
+  "mail.error.gmailNotConnected":
+    "Gmail が接続されていません。設定 → 接続 から再接続してください。",
   "mail.error.gmailSyncFailed": "Gmail の同期に失敗しました。設定 → 接続 で再接続してください。",
-  "mail.error.restoreFailed": "{count} 件のメールを復元できませんでした。Gmail を確認して、もう一度お試しください。",
+  "mail.error.restoreFailed":
+    "{count} 件のメールを復元できませんでした。Gmail を確認して、もう一度お試しください。",
   "mail.toast.gmailNotConnected": "Gmail が接続されていません。",
   "mail.toast.gmailSyncFailed": "Gmail の同期に失敗しました。",
   "mail.toast.syncedNew": "{synced} 件を同期 — 新着 {count} 件。",
@@ -2049,8 +2079,10 @@ const ja: Record<string, string> = {
   "mail.compose.demoTitle": "メールを送信するには Gmail を接続してください",
   "mail.error.load": "メールを読み込めませんでした。",
   "mail.error.bulk": "選択したメールを処理できませんでした。",
-  "mail.error.restoreOne": "メールを復元できませんでした。Gmail の接続を確認して、もう一度お試しください。",
-  "mail.error.restoreArchived": "アーカイブしたメールを復元できませんでした。Gmail の接続を確認して、もう一度お試しください。",
+  "mail.error.restoreOne":
+    "メールを復元できませんでした。Gmail の接続を確認して、もう一度お試しください。",
+  "mail.error.restoreArchived":
+    "アーカイブしたメールを復元できませんでした。Gmail の接続を確認して、もう一度お試しください。",
   "mail.error.reminder": "このメールのリマインダーを作成できませんでした。",
   "calendar.nextLabel": "次: {title}",
   "calendar.next": "次:",
@@ -2062,8 +2094,10 @@ const ja: Record<string, string> = {
   "calendar.gathering": "カレンダー情報を集めています...",
   "calendar.empty.notConnected": "Google カレンダーはまだ接続されていません。",
   "calendar.empty.noEvents": "今後 14 日間に予定はありません。",
-  "calendar.empty.notConnectedBody": "接続して同期すると、Klorn が実際のカレンダーをもとにブリーフィングします。",
-  "calendar.empty.noEventsBody": "Google は接続済みです。空のカレンダーはブリーフィングでも空のままです。",
+  "calendar.empty.notConnectedBody":
+    "接続して同期すると、Klorn が実際のカレンダーをもとにブリーフィングします。",
+  "calendar.empty.noEventsBody":
+    "Google は接続済みです。空のカレンダーはブリーフィングでも空のままです。",
   "calendar.error.load": "カレンダーの予定を読み込めませんでした。",
   "calendar.error.sync": "Google カレンダーを同期できませんでした。",
   "calendar.sync.imported": "Google カレンダーから {count} 件の予定を取り込みました。",
@@ -2116,9 +2150,12 @@ const ja: Record<string, string> = {
   "compose.toast.sent": "メールを送信しました",
   "compose.toast.sentWithFiles": "{count} 件の添付ファイル付きでメールを送信しました",
   "compose.error.sendFailed": "送信に失敗しました（{status}）。",
-  "compose.error.network": "サーバーに接続できませんでした。接続を確認して、もう一度お試しください。",
-  "notif.toast.approveFailed": "この操作を承認できませんでした。しばらくしてからもう一度お試しください。",
-  "notif.toast.rejectFailed": "この操作を却下できませんでした。しばらくしてからもう一度お試しください。",
+  "compose.error.network":
+    "サーバーに接続できませんでした。接続を確認して、もう一度お試しください。",
+  "notif.toast.approveFailed":
+    "この操作を承認できませんでした。しばらくしてからもう一度お試しください。",
+  "notif.toast.rejectFailed":
+    "この操作を却下できませんでした。しばらくしてからもう一度お試しください。",
   "notif.approve": "承認",
   "notif.reject": "却下",
   "notif.status.done": "完了",
@@ -2152,18 +2189,22 @@ const ja: Record<string, string> = {
   "pushBanner.body": "ブリーフィングと緊急メールを届いた瞬間に受け取れます。",
   "pushBanner.enable": "有効にする",
   "pushBanner.enabling": "有効化中...",
-  "pushBanner.error.blocked": "通知がブロックされています。ブラウザまたはデバイスの設定で Klorn の通知を許可してください。",
+  "pushBanner.error.blocked":
+    "通知がブロックされています。ブラウザまたはデバイスの設定で Klorn の通知を許可してください。",
   "pushBanner.error.required": "通知の許可が必要です。",
   "pushBanner.error.noKey": "サーバーに通知キーがありません。",
   "pushBanner.error.enable": "通知を有効にできませんでした。",
   "paddle.blocked.title": "支払いウィンドウを開けませんでした。",
-  "paddle.blocked.body": "広告ブロッカーやプライバシー拡張機能が、決済代行の Paddle をブロックしている可能性があります。このサイトで paddle.com を許可して（またはプライベートウィンドウで再試行して）から、もう一度アップグレードボタンをクリックしてください。",
+  "paddle.blocked.body":
+    "広告ブロッカーやプライバシー拡張機能が、決済代行の Paddle をブロックしている可能性があります。このサイトで paddle.com を許可して（またはプライベートウィンドウで再試行して）から、もう一度アップグレードボタンをクリックしてください。",
   "authGuard.checking": "セッションを確認中...",
   "authGuard.offline.eyebrow": "接続の問題",
   "authGuard.offline.titleExhausted": "API に接続できませんでした。",
   "authGuard.offline.titleWaking": "API を起動しています…",
-  "authGuard.offline.bodyExhausted": "Render の無料枠が停止している可能性があります。セッションは保存されたままです。再試行をタップするか、Render を確認してください。",
-  "authGuard.offline.bodyWaking": "アイドル後の最初のリクエストでサーバーが起動します（約 {seconds} 秒）。セッションは保存されたままです。",
+  "authGuard.offline.bodyExhausted":
+    "Render の無料枠が停止している可能性があります。セッションは保存されたままです。再試行をタップするか、Render を確認してください。",
+  "authGuard.offline.bodyWaking":
+    "アイドル後の最初のリクエストでサーバーが起動します（約 {seconds} 秒）。セッションは保存されたままです。",
   "authGuard.offline.attempt": "試行 {attempt} / {total} · {seconds} 秒経過",
   "authGuard.offline.retry": "再試行",
   "appShell.checkingSession": "セッションを確認中",
@@ -2181,7 +2222,8 @@ const ja: Record<string, string> = {
   "mailRow.unread": "未読、",
   "mailRow.hasAttachment": "、添付ファイルあり",
   "emailDetail.toolbar.working": "処理中",
-  "graph.empty": "まだつながりはありません。メールやカレンダーの活動が増えるとグラフが埋まっていきます。",
+  "graph.empty":
+    "まだつながりはありません。メールやカレンダーの活動が増えるとグラフが埋まっていきます。",
   "graph.ariaLabel": "連絡先のつながりグラフ",
   "graph.title": "つながりグラフ",
   // End of hard-coded string sweep.

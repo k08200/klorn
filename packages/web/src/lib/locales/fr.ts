@@ -1884,23 +1884,29 @@ const fr: Record<string, string> = {
   "common.open": "Ouvrir",
   "common.remove": "Retirer",
   "linkedAccounts.reconnectNeeded": "Reconnexion nécessaire — l'accès a été révoqué",
-  "linkedAccounts.toast.unverified": "L'adresse e-mail de ce compte Google n'est pas vérifiée — impossible de l'associer.",
+  "linkedAccounts.toast.unverified":
+    "L'adresse e-mail de ce compte Google n'est pas vérifiée — impossible de l'associer.",
   "linkedAccounts.toast.disconnectFailed": "Impossible de déconnecter. Réessayez.",
   "linkedInboxes.title": "Boîtes de réception connectées",
-  "linkedInboxes.body": "Une boîte de réception correspond à un compte de messagerie connecté. Ajoutez un second compte Google (par ex. professionnel) pour que Klorn applique le même pare-feu à {count} voies à tout votre courrier, pas seulement à votre compte principal.",
+  "linkedInboxes.body":
+    "Une boîte de réception correspond à un compte de messagerie connecté. Ajoutez un second compte Google (par ex. professionnel) pour que Klorn applique le même pare-feu à {count} voies à tout votre courrier, pas seulement à votre compte principal.",
   "linkedInboxes.connect": "Connecter une autre boîte",
-  "linkedInboxes.toast.connected": "Boîte de réception connectée. Klorn va commencer à trier son courrier.",
+  "linkedInboxes.toast.connected":
+    "Boîte de réception connectée. Klorn va commencer à trier son courrier.",
   "linkedInboxes.toast.self": "C'est déjà votre boîte principale — inutile de l'associer.",
   "linkedInboxes.toast.connectFailed": "Impossible de connecter cette boîte. Réessayez.",
   "linkedInboxes.toast.disconnected": "Boîte de réception déconnectée.",
   "linkedInboxes.toast.signInFailed": "Impossible de lancer la connexion Google. Réessayez.",
   "outlookInboxes.title": "Boîtes Outlook",
-  "outlookInboxes.body": "Connectez un compte Outlook ou Microsoft pour que Klorn applique aussi le même pare-feu à {count} voies à son courrier. Vous autorisez l'accès sur la page de connexion de Microsoft — Klorn ne voit jamais votre mot de passe.",
+  "outlookInboxes.body":
+    "Connectez un compte Outlook ou Microsoft pour que Klorn applique aussi le même pare-feu à {count} voies à son courrier. Vous autorisez l'accès sur la page de connexion de Microsoft — Klorn ne voit jamais votre mot de passe.",
   "outlookInboxes.connect": "Connecter une boîte Outlook",
-  "outlookInboxes.toast.notConfigured": "L'association Outlook n'est pas encore configurée. Réessayez plus tard.",
+  "outlookInboxes.toast.notConfigured":
+    "L'association Outlook n'est pas encore configurée. Réessayez plus tard.",
   "outlookInboxes.toast.signInFailed": "Impossible de lancer la connexion Outlook. Réessayez.",
   "linkedCalendars.title": "Agendas connectés",
-  "linkedCalendars.body": "Ajoutez un compte Google professionnel pour que la détection des conflits couvre un agenda situé sur un autre compte.",
+  "linkedCalendars.body":
+    "Ajoutez un compte Google professionnel pour que la détection des conflits couvre un agenda situé sur un autre compte.",
   "linkedCalendars.connect": "Connecter l'agenda professionnel",
   "linkedCalendars.toast.connected": "Agenda professionnel connecté.",
   "linkedCalendars.toast.connectFailed": "Impossible de connecter cet agenda. Réessayez.",
@@ -1908,20 +1914,25 @@ const fr: Record<string, string> = {
   "linkedCalendars.toast.needsPro": "Connecter un autre agenda nécessite un abonnement Pro.",
   "imap.error.connectFailed": "La connexion a échoué.",
   "imap.error.disconnectFailed": "La déconnexion a échoué.",
-  "imap.confirmDisconnect.message": "Les e-mails déjà classés sont conservés. Vous pouvez reconnecter la boîte à tout moment.",
+  "imap.confirmDisconnect.message":
+    "Les e-mails déjà classés sont conservés. Vous pouvez reconnecter la boîte à tout moment.",
   "imap.hostSince": "Hôte : {host} · depuis",
   "imap.icloud.title": "iCloud Mail",
-  "imap.icloud.body": "Connectez une boîte iCloud via IMAP. Klorn classe chaque message entrant avec le même pare-feu à {count} voies que Gmail.",
+  "imap.icloud.body":
+    "Connectez une boîte iCloud via IMAP. Klorn classe chaque message entrant avec le même pare-feu à {count} voies que Gmail.",
   "imap.icloud.error.status": "Impossible de charger l'état de la connexion iCloud.",
   "imap.icloud.confirmDisconnect.title": "Déconnecter iCloud Mail ?",
   "imap.icloud.emailLabel": "Adresse iCloud",
   "imap.icloud.passwordLabel": "Mot de passe pour app",
-  "imap.icloud.help.before": "Ce n'est PAS le mot de passe de votre identifiant Apple. Générez un mot de passe pour app sur",
+  "imap.icloud.help.before":
+    "Ce n'est PAS le mot de passe de votre identifiant Apple. Générez un mot de passe pour app sur",
   "imap.icloud.help.link": "account.apple.com → Connexion et sécurité",
-  "imap.icloud.help.after": "(nécessite l'identification à deux facteurs sur votre identifiant Apple). Nous le stockons chiffré (AES-GCM), jamais en clair.",
+  "imap.icloud.help.after":
+    "(nécessite l'identification à deux facteurs sur votre identifiant Apple). Nous le stockons chiffré (AES-GCM), jamais en clair.",
   "imap.icloud.connect": "Connecter iCloud Mail",
   "imap.naver.title": "Naver Mail",
-  "imap.naver.body": "Connectez une boîte Naver via IMAP. Klorn classe chaque message entrant avec le même pare-feu à {count} voies que Gmail.",
+  "imap.naver.body":
+    "Connectez une boîte Naver via IMAP. Klorn classe chaque message entrant avec le même pare-feu à {count} voies que Gmail.",
   "imap.naver.error.status": "Impossible de charger l'état de la connexion Naver.",
   "imap.naver.confirmDisconnect.title": "Déconnecter Naver Mail ?",
   "imap.naver.emailLabel": "Adresse Naver",
@@ -1940,8 +1951,10 @@ const fr: Record<string, string> = {
   "telegram.toast.notLinked": "Pas encore lié — ouvrez d'abord le lien et appuyez sur Démarrer.",
   "telegram.toast.disconnected": "Telegram déconnecté.",
   "telegram.confirmDisconnect.title": "Déconnecter Telegram",
-  "telegram.confirmDisconnect.message": "Klorn cesse d'envoyer des alertes dans votre conversation Telegram. Vous pouvez le relier à tout moment.",
-  "telegram.body.connected": "Connecté — les alertes de la voie PUSH arrivent aussi dans votre conversation Telegram.",
+  "telegram.confirmDisconnect.message":
+    "Klorn cesse d'envoyer des alertes dans votre conversation Telegram. Vous pouvez le relier à tout moment.",
+  "telegram.body.connected":
+    "Connecté — les alertes de la voie PUSH arrivent aussi dans votre conversation Telegram.",
   "telegram.body.idle": "Recevez les alertes de la voie PUSH dans une conversation Telegram.",
   "telegram.connect": "Connecter Telegram",
   "telegram.deepLink.before": "Ouvrez",
@@ -1955,16 +1968,20 @@ const fr: Record<string, string> = {
   "telegram.check": "Vérifier la connexion",
   "telegram.newCode": "Nouveau code",
   "byok.title": "Utilisez votre propre clé LLM",
-  "byok.body": "Par défaut, votre courrier est classé avec la clé partagée de Klorn. Ajoutez votre propre clé de fournisseur et Klorn utilisera votre clé et votre quota pour votre courrier — pratique si le budget partagé est saturé. Les clés sont stockées chiffrées (AES-GCM) ; nous ne journalisons jamais le texte en clair.",
+  "byok.body":
+    "Par défaut, votre courrier est classé avec la clé partagée de Klorn. Ajoutez votre propre clé de fournisseur et Klorn utilisera votre clé et votre quota pour votre courrier — pratique si le budget partagé est saturé. Les clés sont stockées chiffrées (AES-GCM) ; nous ne journalisons jamais le texte en clair.",
   "byok.activeModel": "Modèle actif :",
   "byok.usingYourKey": "Votre clé est utilisée",
   "byok.stored": "•••••••• enregistrée",
   "byok.openRouterLabel": "Clé API OpenRouter",
-  "byok.openRouterHelp": "Une seule clé couvre tous les modèles utilisés par Klorn — OpenRouter les achemine tous. La clé est vérifiée auprès du fournisseur avant d'être enregistrée. Obtenez-en une sur",
+  "byok.openRouterHelp":
+    "Une seule clé couvre tous les modèles utilisés par Klorn — OpenRouter les achemine tous. La clé est vérifiée auprès du fournisseur avant d'être enregistrée. Obtenez-en une sur",
   "byok.legacy": "ancienne",
-  "byok.geminiRetired": "Les clés Gemini directes ne sont plus prises en charge — une clé gratuite ici bloque discrètement le classement quand son quota quotidien est épuisé. Retirez-la et utilisez plutôt une clé OpenRouter.",
+  "byok.geminiRetired":
+    "Les clés Gemini directes ne sont plus prises en charge — une clé gratuite ici bloque discrètement le classement quand son quota quotidien est épuisé. Retirez-la et utilisez plutôt une clé OpenRouter.",
   "byok.assistantModel": "Modèle de l'assistant",
-  "byok.assistantModelHelp": "Modèles de pointe uniquement — c'est le modèle avec lequel votre assistant Klorn s'exprime. Il travaille sur votre courrier, votre agenda et vos tâches, et ne fait jamais de recherche sur le web. Il fonctionne dans votre quota IA quotidien ; ajoutez votre propre clé ci-dessus pour utiliser votre quota. Le classificateur du pare-feu de messagerie est réglé séparément et n'est pas affecté.",
+  "byok.assistantModelHelp":
+    "Modèles de pointe uniquement — c'est le modèle avec lequel votre assistant Klorn s'exprime. Il travaille sur votre courrier, votre agenda et vos tâches, et ne fait jamais de recherche sur le web. Il fonctionne dans votre quota IA quotidien ; ajoutez votre propre clé ci-dessus pour utiliser votre quota. Le classificateur du pare-feu de messagerie est réglé séparément et n'est pas affecté.",
   "byok.error.status": "Impossible de charger l'état de votre clé LLM.",
   "byok.error.update": "Impossible de mettre à jour la clé.",
   "byok.error.model": "Impossible de changer de modèle.",
@@ -1985,22 +2002,28 @@ const fr: Record<string, string> = {
   "subscription.toast.noPurchase": "Aucun achat précédent trouvé.",
   "paywall.foundingPrice": "Prix fondateur",
   "paywall.title": "Commencez votre essai gratuit de 7 jours",
-  "paywall.body": "Klorn Pro est votre pare-feu e-mail IA — il décide de ce qui vous parvient et s'occupe du reste.",
+  "paywall.body":
+    "Klorn Pro est votre pare-feu e-mail IA — il décide de ce qui vous parvient et s'occupe du reste.",
   "paywall.startTrial": "Commencer l'essai gratuit",
-  "paywall.trialTerms": "7 jours gratuits, puis {price}/mois — tarif garanti pour les premiers membres. Résiliable à tout moment.",
+  "paywall.trialTerms":
+    "7 jours gratuits, puis {price}/mois — tarif garanti pour les premiers membres. Résiliable à tout moment.",
   "paywall.refunds": "Remboursements",
   "paywall.valueProp.interrupt": "N'être interrompu que par le courrier qui compte vraiment",
   "paywall.valueProp.noise": "Klorn traite automatiquement le bruit pendant votre absence",
   "paywall.valueProp.brief": "Un point du matin sur ce qui demande une décision",
   "paywall.valueProp.learns": "Apprend de vos choix et s'affine avec le temps",
   "oauthError.title": "L'accès hors ligne à Gmail n'a pas été accordé",
-  "oauthError.body": "Google a renvoyé un jeton de courte durée sans l'autorisation d'actualisation dont Klorn a besoin pour synchroniser en arrière-plan. C'est presque toujours l'une de ces deux raisons :",
+  "oauthError.body":
+    "Google a renvoyé un jeton de courte durée sans l'autorisation d'actualisation dont Klorn a besoin pour synchroniser en arrière-plan. C'est presque toujours l'une de ces deux raisons :",
   "oauthError.policy.title": "Règle Workspace",
-  "oauthError.policy.body": "— votre administrateur informatique empêche les applications tierces d'accéder à Gmail hors ligne. Demandez-lui d'autoriser l'ID client OAuth de Klorn, puis reconnectez-vous ci-dessous.",
+  "oauthError.policy.body":
+    "— votre administrateur informatique empêche les applications tierces d'accéder à Gmail hors ligne. Demandez-lui d'autoriser l'ID client OAuth de Klorn, puis reconnectez-vous ci-dessous.",
   "oauthError.scope.title": "Autorisation manquante lors du consentement",
-  "oauthError.scope.body": "— l'écran de consentement Google n'a pas accordé toutes les autorisations Gmail. Reconnectez-vous en veillant à cocher toutes les cases.",
+  "oauthError.scope.body":
+    "— l'écran de consentement Google n'a pas accordé toutes les autorisations Gmail. Reconnectez-vous en veillant à cocher toutes les cases.",
   "inAppBrowser.title": "Ouvrez dans votre navigateur pour vous connecter",
-  "inAppBrowser.body.before": "Vous êtes dans le navigateur intégré de {app}, où Google bloque la connexion (erreur",
+  "inAppBrowser.body.before":
+    "Vous êtes dans le navigateur intégré de {app}, où Google bloque la connexion (erreur",
   "inAppBrowser.body.middle": "). Touchez le menu (⋮ ou ···) et choisissez",
   "inAppBrowser.openInBrowser": "Ouvrir dans le navigateur",
   "inAppBrowser.body.after": "— Chrome ou Safari — puis connectez-vous là-bas.",
@@ -2033,16 +2056,20 @@ const fr: Record<string, string> = {
   "mail.remind.today": "Aujourd'hui",
   "mail.remind.setting": "Réglage…",
   "mail.queue.finance.title": "Documents financiers",
-  "mail.queue.finance.description": "Facturation, factures, paiements échoués, montants de contrats",
+  "mail.queue.finance.description":
+    "Facturation, factures, paiements échoués, montants de contrats",
   "mail.queue.legal.title": "Revue juridique",
   "mail.queue.legal.description": "Contrats, conformité, signatures, risques",
   "mail.queue.sales.title": "Revenus et clients",
   "mail.queue.sales.description": "Réponses clients, renouvellements, tarifs, suivi de réunions",
   "mail.queue.support.title": "Problèmes de support",
   "mail.queue.support.description": "Bogues, incidents, réclamations, escalades",
-  "mail.error.gmailNotConnected": "Gmail n'est pas connecté. Reconnectez-le dans Paramètres → Connexions.",
-  "mail.error.gmailSyncFailed": "La synchronisation Gmail a échoué. Consultez Paramètres → Connexions pour vous reconnecter.",
-  "mail.error.restoreFailed": "{count} messages n'ont pas pu être restaurés. Vérifiez Gmail et réessayez.",
+  "mail.error.gmailNotConnected":
+    "Gmail n'est pas connecté. Reconnectez-le dans Paramètres → Connexions.",
+  "mail.error.gmailSyncFailed":
+    "La synchronisation Gmail a échoué. Consultez Paramètres → Connexions pour vous reconnecter.",
+  "mail.error.restoreFailed":
+    "{count} messages n'ont pas pu être restaurés. Vérifiez Gmail et réessayez.",
   "mail.toast.gmailNotConnected": "Gmail n'est pas connecté.",
   "mail.toast.gmailSyncFailed": "La synchronisation Gmail a échoué.",
   "mail.toast.syncedNew": "{synced} synchronisés — {count} nouveaux.",
@@ -2050,7 +2077,8 @@ const fr: Record<string, string> = {
   "mail.toast.archiveFailed": "Impossible d'archiver cet e-mail.",
   "mail.toast.readFailed": "Impossible de mettre à jour l'état de lecture.",
   "mail.header.noAccount": "Aucun compte connecté — connectez-en un dans les Paramètres",
-  "mail.header.noMailAccount": "Aucun compte de messagerie connecté — connectez-en un dans les Paramètres",
+  "mail.header.noMailAccount":
+    "Aucun compte de messagerie connecté — connectez-en un dans les Paramètres",
   "mail.header.needReply": "{count} attendent une réponse",
   "mail.header.needsReplyOne": "attend une réponse",
   "mail.header.needsReplyMany": "attendent une réponse",
@@ -2058,7 +2086,8 @@ const fr: Record<string, string> = {
   "mail.header.youreAllCaughtUp": "Vous êtes à jour",
   "mail.header.inView": "{count} affichés",
   "mail.live": "En direct",
-  "mail.live.title": "La synchronisation en temps réel est active — les nouveaux e-mails arrivent en quelques secondes",
+  "mail.live.title":
+    "La synchronisation en temps réel est active — les nouveaux e-mails arrivent en quelques secondes",
   "mail.reanalyze": "Réanalyser",
   "mail.reanalyzing": "Analyse…",
   "mail.clearSearch": "Effacer la recherche",
@@ -2098,8 +2127,10 @@ const fr: Record<string, string> = {
   "mail.compose.demoTitle": "Connectez Gmail pour envoyer des e-mails",
   "mail.error.load": "Impossible de charger le courrier.",
   "mail.error.bulk": "Impossible de traiter le courrier sélectionné.",
-  "mail.error.restoreOne": "Impossible de restaurer cet e-mail. Vérifiez la connexion Gmail et réessayez.",
-  "mail.error.restoreArchived": "Impossible de restaurer le courrier archivé. Vérifiez la connexion Gmail et réessayez.",
+  "mail.error.restoreOne":
+    "Impossible de restaurer cet e-mail. Vérifiez la connexion Gmail et réessayez.",
+  "mail.error.restoreArchived":
+    "Impossible de restaurer le courrier archivé. Vérifiez la connexion Gmail et réessayez.",
   "mail.error.reminder": "Impossible de créer un rappel pour cet e-mail.",
   "calendar.nextLabel": "Prochain : {title}",
   "calendar.next": "Prochain :",
@@ -2111,12 +2142,15 @@ const fr: Record<string, string> = {
   "calendar.gathering": "Collecte du contexte de l'agenda...",
   "calendar.empty.notConnected": "Google Agenda n'est pas encore connecté.",
   "calendar.empty.noEvents": "Aucun événement dans les 14 prochains jours.",
-  "calendar.empty.notConnectedBody": "Connectez et synchronisez pour que Klorn prépare ses points à partir de votre agenda réel.",
-  "calendar.empty.noEventsBody": "Google est connecté. Un agenda vide reste vide dans le point du jour.",
+  "calendar.empty.notConnectedBody":
+    "Connectez et synchronisez pour que Klorn prépare ses points à partir de votre agenda réel.",
+  "calendar.empty.noEventsBody":
+    "Google est connecté. Un agenda vide reste vide dans le point du jour.",
   "calendar.error.load": "Impossible de charger les événements de l'agenda.",
   "calendar.error.sync": "Impossible de synchroniser Google Agenda.",
   "calendar.sync.imported": "{count} événements importés depuis Google Agenda.",
-  "calendar.sync.empty": "Google Agenda est synchronisé. Aucun événement dans les 14 prochains jours.",
+  "calendar.sync.empty":
+    "Google Agenda est synchronisé. Aucun événement dans les 14 prochains jours.",
   "calendar.created": "« {title} » a été créé dans votre Google Agenda.",
   "calendar.nothingThisMonth": "Rien de prévu ce mois-ci.",
   "calendar.allDay": "Toute la journée",
@@ -2165,7 +2199,8 @@ const fr: Record<string, string> = {
   "compose.toast.sent": "E-mail envoyé",
   "compose.toast.sentWithFiles": "E-mail envoyé avec {count} pièce(s) jointe(s)",
   "compose.error.sendFailed": "Échec de l'envoi ({status}).",
-  "compose.error.network": "Impossible de joindre le serveur. Vérifiez votre connexion et réessayez.",
+  "compose.error.network":
+    "Impossible de joindre le serveur. Vérifiez votre connexion et réessayez.",
   "notif.toast.approveFailed": "Impossible d'approuver cette action. Réessayez dans un instant.",
   "notif.toast.rejectFailed": "Impossible de refuser cette action. Réessayez dans un instant.",
   "notif.approve": "Approuver",
@@ -2201,18 +2236,22 @@ const fr: Record<string, string> = {
   "pushBanner.body": "Recevez les points du jour et le courrier urgent dès leur arrivée.",
   "pushBanner.enable": "Activer",
   "pushBanner.enabling": "Activation...",
-  "pushBanner.error.blocked": "Les notifications sont bloquées. Autorisez-les pour Klorn dans les réglages du navigateur ou de l'appareil.",
+  "pushBanner.error.blocked":
+    "Les notifications sont bloquées. Autorisez-les pour Klorn dans les réglages du navigateur ou de l'appareil.",
   "pushBanner.error.required": "L'autorisation des notifications est requise.",
   "pushBanner.error.noKey": "Le serveur n'a pas de clé de notification.",
   "pushBanner.error.enable": "Impossible d'activer les notifications.",
   "paddle.blocked.title": "La fenêtre de paiement n'a pas pu s'ouvrir.",
-  "paddle.blocked.body": "Un bloqueur de publicités ou une extension de confidentialité bloque probablement Paddle, notre prestataire de paiement. Autorisez paddle.com pour ce site (ou réessayez dans une fenêtre privée), puis cliquez à nouveau sur le bouton de mise à niveau.",
+  "paddle.blocked.body":
+    "Un bloqueur de publicités ou une extension de confidentialité bloque probablement Paddle, notre prestataire de paiement. Autorisez paddle.com pour ce site (ou réessayez dans une fenêtre privée), puis cliquez à nouveau sur le bouton de mise à niveau.",
   "authGuard.checking": "Vérification de la session...",
   "authGuard.offline.eyebrow": "Problème de connexion",
   "authGuard.offline.titleExhausted": "Impossible de joindre l'API.",
   "authGuard.offline.titleWaking": "Réveil de l'API…",
-  "authGuard.offline.bodyExhausted": "L'offre gratuite de Render est peut-être indisponible. Votre session est toujours enregistrée — touchez Réessayer ou vérifiez Render.",
-  "authGuard.offline.bodyWaking": "La première requête après une période d'inactivité réveille le serveur (≈{seconds} s). Votre session est toujours enregistrée.",
+  "authGuard.offline.bodyExhausted":
+    "L'offre gratuite de Render est peut-être indisponible. Votre session est toujours enregistrée — touchez Réessayer ou vérifiez Render.",
+  "authGuard.offline.bodyWaking":
+    "La première requête après une période d'inactivité réveille le serveur (≈{seconds} s). Votre session est toujours enregistrée.",
   "authGuard.offline.attempt": "Tentative {attempt} / {total} · {seconds} s écoulées",
   "authGuard.offline.retry": "Réessayer",
   "appShell.checkingSession": "Vérification de la session",
@@ -2230,7 +2269,8 @@ const fr: Record<string, string> = {
   "mailRow.unread": "Non lu, ",
   "mailRow.hasAttachment": ", avec pièce jointe",
   "emailDetail.toolbar.working": "En cours",
-  "graph.empty": "Pas encore de relations — le graphe se remplit au fil de l'activité de courrier et d'agenda.",
+  "graph.empty":
+    "Pas encore de relations — le graphe se remplit au fil de l'activité de courrier et d'agenda.",
   "graph.ariaLabel": "Graphe des relations de vos contacts",
   "graph.title": "Graphe des relations",
   // End of hard-coded string sweep.
