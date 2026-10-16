@@ -63,10 +63,31 @@ export function htmlToPlainText(html: string): string {
     },
   });
 
-  return decodeEntities(text)
-    .replace(/[ \t]+\n/g, "\n")
+  return trimBlanksBeforeNewlines(decodeEntities(text))
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function isBlank(code: number): boolean {
+  return code === 0x20 || code === 0x09;
+}
+
+/**
+ * Drop the spaces and tabs that end each line — what `/[ \t]+\n/g` did, in one
+ * pass. The regex backtracked quadratically over a long run of blanks with no
+ * newline after it: 128k spaces in one HTML-only email took 10.3 s on the event
+ * loop (2026-10-16). Exported for the differential test.
+ */
+export function trimBlanksBeforeNewlines(text: string): string {
+  let out = "";
+  let lineStart = 0;
+  for (let nl = text.indexOf("\n"); nl !== -1; nl = text.indexOf("\n", lineStart)) {
+    let end = nl;
+    while (end > lineStart && isBlank(text.charCodeAt(end - 1))) end--;
+    out += `${text.slice(lineStart, end)}\n`;
+    lineStart = nl + 1;
+  }
+  return out + text.slice(lineStart);
 }
 
 /**
@@ -79,12 +100,86 @@ export function htmlToPlainText(html: string): string {
  * tags (e.g. a dev explaining `<div>` usage) must pass through untouched.
  * Only bodies with a real density of block/table/style markup are coerced.
  */
-const HTML_MARKUP_TOKEN = /<\/?(?:table|tbody|tr|td|div|p|span|h[1-6]|img|br|a\s)[^>]*>|style="/gi;
 const MIN_MARKUP_TOKENS = 5;
+// Tag-name prefixes that count, as in the regex this replaced:
+// <\/?(?:table|tbody|tr|td|div|p|span|h[1-6]|img|br|a\s)[^>]*>|style="  (/gi)
+const MARKUP_TAG_PREFIXES = ["table", "tbody", "tr", "td", "div", "p", "span", "img", "br"];
+const STYLE_ATTR = 'style="';
+const WHITESPACE = /\s/;
+
+function lowerAscii(code: number): number {
+  return code >= 0x41 && code <= 0x5a ? code + 0x20 : code;
+}
+
+/**
+ * ASCII-case-insensitive "does `word` start at `at`". ASCII-only is exact: the
+ * regex had /i without /u, and non-unicode /i never folds a non-ASCII character
+ * to ASCII (`/s/i` does not match "ſ", `/k/i` does not match Kelvin "K").
+ */
+function startsWithAt(text: string, at: number, word: string): boolean {
+  if (at + word.length > text.length) return false;
+  for (let k = 0; k < word.length; k++) {
+    if (lowerAscii(text.charCodeAt(at + k)) !== word.charCodeAt(k)) return false;
+  }
+  return true;
+}
+
+/** Index just past a counted tag name starting at `at`, or -1. */
+function markupNameEnd(text: string, at: number): number {
+  for (const prefix of MARKUP_TAG_PREFIXES) {
+    if (startsWithAt(text, at, prefix)) return at + prefix.length;
+  }
+  if (lowerAscii(text.charCodeAt(at)) === 0x68) {
+    const digit = text.charCodeAt(at + 1);
+    if (digit >= 0x31 && digit <= 0x36) return at + 2; // h1..h6
+  }
+  if (lowerAscii(text.charCodeAt(at)) === 0x61 && WHITESPACE.test(text.charAt(at + 1))) {
+    return at + 2; // "a" + whitespace
+  }
+  return -1;
+}
+
+/**
+ * Count raw-HTML markup tokens, up to `limit`, with exactly the regex's
+ * leftmost, non-overlapping semantics but in linear time. The regex's
+ * `[^>]*>` rescanned to the end of the text from every `<tag` with no `>`
+ * after it: "<div" × 32k (128 KB) took 1.9 s, and this runs on the plain body
+ * of every persisted email, which has no size cap (2026-10-16). Here the first
+ * `>` at or after a position is cached and only ever searched forward. Once no
+ * `>` is left (-1) it stays so: `i` only moves forward and no tag name contains
+ * `<` or `>`, so a later name never ends before the one that found none.
+ * Exported for the differential test.
+ */
+export function countMarkupTokens(text: string, limit: number): number {
+  let count = 0;
+  let nextGt = -2; // -2: not looked up yet; -1: no '>' after the last lookup
+  let i = 0;
+  while (i < text.length && count < limit) {
+    if (text.charCodeAt(i) === 0x3c) {
+      const nameAt = text.charCodeAt(i + 1) === 0x2f ? i + 2 : i + 1;
+      const nameEnd = markupNameEnd(text, nameAt);
+      if (nameEnd !== -1) {
+        if (nextGt === -2 || (nextGt !== -1 && nextGt < nameEnd)) {
+          nextGt = text.indexOf(">", nameEnd);
+        }
+        if (nextGt !== -1) {
+          count++;
+          i = nextGt + 1;
+          continue;
+        }
+      }
+    } else if (startsWithAt(text, i, STYLE_ATTR)) {
+      count++;
+      i += STYLE_ATTR.length;
+      continue;
+    }
+    i++;
+  }
+  return count;
+}
 
 function looksLikeRawHtml(text: string): boolean {
-  const matches = text.match(HTML_MARKUP_TOKEN);
-  return (matches?.length ?? 0) >= MIN_MARKUP_TOKENS;
+  return countMarkupTokens(text, MIN_MARKUP_TOKENS) >= MIN_MARKUP_TOKENS;
 }
 
 /**

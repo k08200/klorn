@@ -19,6 +19,7 @@ const m = vi.hoisted(() => ({
   isEntitled: vi.fn((_plan: string, _role?: string) => true),
   captureError: vi.fn(),
   runJudgeFallbackCheck: vi.fn(async () => {}),
+  runDbSizeCheck: vi.fn(async () => {}),
   overrides: new Map<string, (...args: unknown[]) => unknown>(),
   calls: [] as string[],
 }));
@@ -73,6 +74,10 @@ vi.mock("../learning/ontology-proposals-store.js", () => ({
 // file's prisma mock has no such method, so it is replaced by a spy.
 vi.mock("../judge/judge-fallback-check.js", () => ({
   runJudgeFallbackCheck: m.runJudgeFallbackCheck,
+}));
+// Same for the hourly database size alarm (pg_database_size via $queryRaw).
+vi.mock("../ops/db-size-check.js", () => ({
+  runDbSizeCheck: m.runDbSizeCheck,
 }));
 vi.mock("../judge/judge-health.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../judge/judge-health.js")>()),
@@ -317,6 +322,12 @@ describe("scheduler calendar step — primary calendar", () => {
     await runOneTick();
 
     expect(m.runJudgeFallbackCheck).not.toHaveBeenCalled();
+  });
+
+  it("the database size check waits for its boot delay instead of running on the first tick", async () => {
+    await runOneTick();
+
+    expect(m.runDbSizeCheck).not.toHaveBeenCalled();
   });
 
   it("upserts each event by (userId, googleId) with the mapped fields", async () => {

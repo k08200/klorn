@@ -201,6 +201,10 @@ const DEVICE_SOURCE_EXPIRY_INTERVAL_MS = 60 * 60 * 1000;
 const JUDGE_FALLBACK_CHECK_BOOT_DELAY_MS = 5 * 60 * 1000;
 let lastJudgeFallbackCheckAt =
   Date.now() - JUDGE_FALLBACK_CHECK_INTERVAL_MS + JUDGE_FALLBACK_CHECK_BOOT_DELAY_MS;
+// Database size alarm (ops/db-size-check.ts): hourly, same boot delay and the
+// same reason.
+const DB_SIZE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
+let lastDbSizeCheckAt = Date.now() - DB_SIZE_CHECK_INTERVAL_MS + JUDGE_FALLBACK_CHECK_BOOT_DELAY_MS;
 // Once-per-user-per-UTC-day Sentry alert for the "Gmail not connected"
 // per-tick skip: every tick warns to stdout only, which is how a dead
 // primary token ran silently for weeks (2026-08-10 diagnosis). One alert a
@@ -930,6 +934,19 @@ async function runAutomations() {
         .catch((err) => {
           console.warn("[AUTOMATION] Judge fallback check failed:", err);
           captureError(err, { tags: { scope: "automation.judge-fallback-check" } });
+        });
+    }
+
+    // --- Hourly: database size alarm ---
+    // One pg_database_size() read against DB_SIZE_LIMIT_MB; a deduped ops
+    // Notification from 80%, Sentry from 90% (the plan goes read-only at 100%).
+    if (Date.now() - lastDbSizeCheckAt >= DB_SIZE_CHECK_INTERVAL_MS) {
+      lastDbSizeCheckAt = Date.now();
+      import("./ops/db-size-check.js")
+        .then(({ runDbSizeCheck }) => runDbSizeCheck())
+        .catch((err) => {
+          console.warn("[AUTOMATION] Database size check failed:", err);
+          captureError(err, { tags: { scope: "automation.db-size-check" } });
         });
     }
 
