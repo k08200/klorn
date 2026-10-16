@@ -1,5 +1,7 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8">
+<html lang="en"><head>
+<!-- Mirrors PushBanner (apps/desktop-mac/Sources/KlornMac/Notifications.swift):
+     title = sender, body = subject; no snippet, no actions. Demo data. --><meta charset="utf-8">
 <style>
   html,body{margin:0;background:transparent}
   body{font-family:-apple-system,"SF Pro Text",BlinkMacSystemFont,"Helvetica Neue",sans-serif;
@@ -12,22 +14,22 @@
   .mat{position:absolute;inset:-40px;z-index:-2;background:url(SKY) center 30%/cover;filter:blur(28px) saturate(1.1)}
   .tint{position:absolute;inset:0;z-index:-1;background:rgba(246,246,248,.78);
     box-shadow:inset 0 0 0 .5px rgba(255,255,255,.55),inset 0 1px 0 rgba(255,255,255,.7)}
-  .row{display:flex;gap:10px;padding:11px 14px 12px 11px;align-items:flex-start}
-  .icon{width:38px;height:38px;flex:none;margin-top:1px}
+  .row{display:flex;gap:10px;padding:12px 14px 12px 11px;align-items:center}
+  .icon{width:38px;height:38px;flex:none;display:block}
   .txt{flex:1;min-width:0}
-  .head{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;line-height:15px;
-    color:rgba(0,0,0,.62);letter-spacing:-.005em}
-  .app{font-weight:500}
-  .title{font-size:13px;line-height:17px;font-weight:600;color:rgba(0,0,0,.88);margin-top:1px;letter-spacing:-.01em}
-  .body{font-size:13px;line-height:17px;font-weight:400;color:rgba(0,0,0,.82);letter-spacing:-.01em}
+  .head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .time{flex:none;font-size:12px;color:rgba(0,0,0,.6);letter-spacing:-.005em}
+  .title{font-size:13px;line-height:17px;font-weight:600;color:rgba(0,0,0,.88);letter-spacing:-.01em;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .body{font-size:13px;line-height:17px;font-weight:400;color:rgba(0,0,0,.82);letter-spacing:-.01em;
+    display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
 </style></head>
 <body><div class="stage"><div class="banner" id="b">
   <div class="mat"></div><div class="tint"></div>
   <div class="row">
     <img class="icon" src="ICON" alt="">
     <div class="txt">
-      <div class="head"><span class="app">Klorn</span><span>now</span></div>
-      <div class="title">Sarah Kim</div>
+      <div class="head"><div class="title">Sarah Kim</div><span class="time">now</span></div>
       <div class="body">Re: Contract review — needs your sign-off today</div>
     </div>
   </div>
