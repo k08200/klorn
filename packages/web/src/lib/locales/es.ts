@@ -1981,7 +1981,8 @@ const es: Record<string, string> = {
   "subscription.trialTerms": "7 días gratis y después {price}/mes. Cancela cuando quieras.",
   "subscription.starting": "Iniciando...",
   "subscription.valueProp.push": "Avisos en tiempo real del correo que de verdad importa",
-  "subscription.valueProp.noise": "Gestión automática del ruido mientras no estás",
+  "subscription.valueProp.noise":
+    "Clasifica el ruido mientras no estás, con el motivo en cada mensaje",
   "subscription.valueProp.send": "Enviar, responder e integraciones",
   "subscription.toast.checkoutFailed": "No se pudo iniciar el pago. Inténtalo de nuevo.",
   "subscription.toast.unavailable": "Las suscripciones no están disponibles en este momento.",
@@ -1990,13 +1991,14 @@ const es: Record<string, string> = {
   "paywall.foundingPrice": "Precio fundador",
   "paywall.title": "Empieza tu prueba gratuita de 7 días",
   "paywall.body":
-    "Klorn Pro es tu cortafuegos de correo con IA: decide qué te llega y se ocupa del resto.",
+    "Klorn Pro es tu cortafuegos de correo con IA: clasifica lo que te llega y nada sale sin tu visto bueno.",
   "paywall.startTrial": "Empezar prueba gratuita",
   "paywall.trialTerms":
     "7 días gratis y después {price}/mes, precio fijo para los primeros miembros. Cancela cuando quieras.",
   "paywall.refunds": "Reembolsos",
   "paywall.valueProp.interrupt": "Que solo te interrumpa el correo que de verdad importa",
-  "paywall.valueProp.noise": "Klorn gestiona el ruido automáticamente mientras no estás",
+  "paywall.valueProp.noise":
+    "Klorn clasifica el ruido mientras no estás, con el motivo en cada mensaje",
   "paywall.valueProp.brief": "Un resumen matutino de lo que requiere una decisión",
   "paywall.valueProp.learns": "Aprende de tus decisiones y afina con el tiempo",
   "oauthError.title": "No se concedió el acceso sin conexión a Gmail",
@@ -2206,7 +2208,7 @@ const es: Record<string, string> = {
   "rejectDialog.skipAndReject": "Omitir y rechazar",
   "palette.close": "Cerrar la paleta de comandos",
   "palette.label": "Paleta de comandos",
-  "palette.placeholder": "Buscar decisiones, páginas, ajustes...",
+  "palette.placeholder": "Buscar correo y comandos",
   "palette.search": "Buscar comandos",
   "palette.noMatches": "No hay comandos que coincidan",
   "palette.noMatchesSentence": "No hay comandos que coincidan.",
@@ -2235,7 +2237,7 @@ const es: Record<string, string> = {
   "authGuard.offline.titleExhausted": "No se pudo conectar con la API.",
   "authGuard.offline.titleWaking": "Activando la API…",
   "authGuard.offline.bodyExhausted":
-    "Es posible que el nivel gratuito de Render esté caído. Tu sesión sigue guardada: pulsa Reintentar o revisa Render.",
+    "Klorn no puede conectar con su servidor en este momento. Inténtalo de nuevo en un minuto.",
   "authGuard.offline.bodyWaking":
     "La primera solicitud tras la inactividad activa el servidor (≈{seconds} s). Tu sesión sigue guardada.",
   "authGuard.offline.attempt": "Intento {attempt} / {total} · {seconds} s transcurridos",

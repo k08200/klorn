@@ -1949,7 +1949,7 @@ const ja: Record<string, string> = {
   "subscription.trialTerms": "7 日間無料、その後は月額 {price}。いつでも解約できます。",
   "subscription.starting": "開始しています...",
   "subscription.valueProp.push": "本当に重要なメールだけをリアルタイムでプッシュ",
-  "subscription.valueProp.noise": "不在の間にノイズを自動で処理",
+  "subscription.valueProp.noise": "不在の間にノイズを分類し、各メールに理由を表示",
   "subscription.valueProp.send": "送信、返信、連携",
   "subscription.toast.checkoutFailed":
     "チェックアウトを開始できませんでした。もう一度お試しください。",
@@ -1959,13 +1959,13 @@ const ja: Record<string, string> = {
   "paywall.foundingPrice": "創設メンバー価格",
   "paywall.title": "7 日間の無料トライアルを始める",
   "paywall.body":
-    "Klorn Pro は AI メールファイアウォールです。何をあなたに届けるかを判断し、残りを処理します。",
+    "Klorn Pro は AI メールファイアウォールです。あなたに届くものを分類し、あなたの許可なしには何も送信されません。",
   "paywall.startTrial": "無料トライアルを開始",
   "paywall.trialTerms":
     "7 日間無料、その後は月額 {price}。初期メンバーはこの価格で固定されます。いつでも解約できます。",
   "paywall.refunds": "返金",
   "paywall.valueProp.interrupt": "本当に重要なメールにだけ邪魔される",
-  "paywall.valueProp.noise": "不在の間に Klorn がノイズを自動で処理",
+  "paywall.valueProp.noise": "不在の間に Klorn がノイズを分類し、各メールに理由を表示します",
   "paywall.valueProp.brief": "判断が必要なことをまとめた朝のブリーフィング",
   "paywall.valueProp.learns": "あなたの判断を学習し、使うほど精度が上がる",
   "oauthError.title": "Gmail のオフラインアクセスが許可されませんでした",
@@ -2173,7 +2173,7 @@ const ja: Record<string, string> = {
   "rejectDialog.skipAndReject": "スキップして却下",
   "palette.close": "コマンドパレットを閉じる",
   "palette.label": "コマンドパレット",
-  "palette.placeholder": "判断、ページ、設定を検索...",
+  "palette.placeholder": "メールとコマンドを検索",
   "palette.search": "コマンドを検索",
   "palette.noMatches": "一致するコマンドはありません",
   "palette.noMatchesSentence": "一致するコマンドはありません。",
@@ -2202,7 +2202,7 @@ const ja: Record<string, string> = {
   "authGuard.offline.titleExhausted": "API に接続できませんでした。",
   "authGuard.offline.titleWaking": "API を起動しています…",
   "authGuard.offline.bodyExhausted":
-    "Render の無料枠が停止している可能性があります。セッションは保存されたままです。再試行をタップするか、Render を確認してください。",
+    "現在 Klorn がサーバーに接続できません。少し待ってからもう一度お試しください。",
   "authGuard.offline.bodyWaking":
     "アイドル後の最初のリクエストでサーバーが起動します（約 {seconds} 秒）。セッションは保存されたままです。",
   "authGuard.offline.attempt": "試行 {attempt} / {total} · {seconds} 秒経過",

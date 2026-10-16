@@ -2017,7 +2017,8 @@ const de: Record<string, string> = {
   "subscription.trialTerms": "7 Tage kostenlos, danach {price}/Monat. Jederzeit kündbar.",
   "subscription.starting": "Wird gestartet...",
   "subscription.valueProp.push": "Echtzeit-Push für E-Mails, die wirklich zählen",
-  "subscription.valueProp.noise": "Rauschen automatisch erledigen, während Sie weg sind",
+  "subscription.valueProp.noise":
+    "Sortiert das Rauschen, während Sie weg sind – mit dem Grund an jeder Nachricht",
   "subscription.valueProp.send": "Senden, Antworten und Integrationen",
   "subscription.toast.checkoutFailed":
     "Bezahlvorgang konnte nicht gestartet werden. Bitte erneut versuchen.",
@@ -2028,13 +2029,14 @@ const de: Record<string, string> = {
   "paywall.foundingPrice": "Gründerpreis",
   "paywall.title": "Starten Sie Ihre 7-tägige kostenlose Testphase",
   "paywall.body":
-    "Klorn Pro ist Ihre KI-E-Mail-Firewall – sie entscheidet, was Sie erreicht, und kümmert sich um den Rest.",
+    "Klorn Pro ist Ihre KI-E-Mail-Firewall – sie sortiert, was Sie erreicht, und nichts geht ohne Ihre Zustimmung hinaus.",
   "paywall.startTrial": "Kostenlos testen",
   "paywall.trialTerms":
     "7 Tage kostenlos, danach {price}/Monat – für frühe Mitglieder fest. Jederzeit kündbar.",
   "paywall.refunds": "Erstattungen",
   "paywall.valueProp.interrupt": "Nur von E-Mails unterbrochen werden, die wirklich zählen",
-  "paywall.valueProp.noise": "Klorn erledigt das Rauschen automatisch, während Sie weg sind",
+  "paywall.valueProp.noise":
+    "Klorn sortiert das Rauschen, während Sie weg sind – mit dem Grund an jeder Nachricht",
   "paywall.valueProp.brief": "Ein Morgenbriefing zu allem, was eine Entscheidung braucht",
   "paywall.valueProp.learns": "Lernt Ihre Entscheidungen und wird mit der Zeit genauer",
   "oauthError.title": "Gmail-Offlinezugriff wurde nicht gewährt",
@@ -2247,7 +2249,7 @@ const de: Record<string, string> = {
   "rejectDialog.skipAndReject": "Überspringen und ablehnen",
   "palette.close": "Befehlspalette schließen",
   "palette.label": "Befehlspalette",
-  "palette.placeholder": "Entscheidungen, Seiten, Einstellungen suchen...",
+  "palette.placeholder": "E-Mails und Befehle suchen",
   "palette.search": "Befehle suchen",
   "palette.noMatches": "Keine passenden Befehle",
   "palette.noMatchesSentence": "Keine passenden Befehle.",
@@ -2276,7 +2278,7 @@ const de: Record<string, string> = {
   "authGuard.offline.titleExhausted": "Die API ist nicht erreichbar.",
   "authGuard.offline.titleWaking": "Die API wird gestartet…",
   "authGuard.offline.bodyExhausted":
-    "Die kostenlose Render-Stufe ist möglicherweise ausgefallen. Ihre Sitzung bleibt gespeichert – tippen Sie auf „Erneut versuchen“ oder prüfen Sie Render.",
+    "Klorn erreicht seinen Server gerade nicht. Versuchen Sie es in einer Minute erneut.",
   "authGuard.offline.bodyWaking":
     "Die erste Anfrage nach Leerlauf weckt den Server (≈{seconds} s). Ihre Sitzung bleibt gespeichert.",
   "authGuard.offline.attempt": "Versuch {attempt} / {total} · {seconds} s vergangen",

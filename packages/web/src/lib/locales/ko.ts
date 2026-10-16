@@ -1941,7 +1941,8 @@ const ko: Record<string, string> = {
   "subscription.trialTerms": "7일 무료, 이후 월 {price}. 언제든 해지할 수 있습니다.",
   "subscription.starting": "시작하는 중...",
   "subscription.valueProp.push": "정말 중요한 메일만 실시간 푸시",
-  "subscription.valueProp.noise": "자리를 비운 동안 소음 메일 자동 처리",
+  "subscription.valueProp.noise":
+    "자리를 비운 동안 소음 메일을 분류하고, 메일마다 이유를 함께 표시",
   "subscription.valueProp.send": "보내기, 답장, 연동",
   "subscription.toast.checkoutFailed": "결제를 시작하지 못했습니다. 다시 시도해 주세요.",
   "subscription.toast.unavailable": "지금은 구독을 이용할 수 없습니다.",
@@ -1950,13 +1951,14 @@ const ko: Record<string, string> = {
   "paywall.foundingPrice": "창립 멤버 가격",
   "paywall.title": "7일 무료 체험 시작하기",
   "paywall.body":
-    "Klorn Pro는 AI 이메일 방화벽입니다 — 무엇이 나에게 도달할지 판단하고 나머지를 처리합니다.",
+    "Klorn Pro는 AI 이메일 방화벽입니다 — 무엇이 나에게 도달할지 분류하며, 내 승인 없이는 아무것도 나가지 않습니다.",
   "paywall.startTrial": "무료 체험 시작",
   "paywall.trialTerms":
     "7일 무료, 이후 월 {price} — 초기 멤버는 이 가격이 유지됩니다. 언제든 해지할 수 있습니다.",
   "paywall.refunds": "환불",
   "paywall.valueProp.interrupt": "정말 중요한 메일에만 방해받기",
-  "paywall.valueProp.noise": "자리를 비운 동안 Klorn이 소음 메일을 자동 처리",
+  "paywall.valueProp.noise":
+    "자리를 비운 동안 Klorn이 소음 메일을 분류하고, 메일마다 이유를 함께 표시합니다",
   "paywall.valueProp.brief": "결정이 필요한 일을 정리한 아침 브리핑",
   "paywall.valueProp.learns": "내 판단을 학습해 점점 더 정확해짐",
   "oauthError.title": "Gmail 오프라인 접근 권한이 부여되지 않았습니다",
@@ -2161,7 +2163,7 @@ const ko: Record<string, string> = {
   "rejectDialog.skipAndReject": "건너뛰고 거절",
   "palette.close": "명령 팔레트 닫기",
   "palette.label": "명령 팔레트",
-  "palette.placeholder": "결정, 페이지, 설정 검색...",
+  "palette.placeholder": "메일과 명령 검색",
   "palette.search": "명령 검색",
   "palette.noMatches": "일치하는 명령이 없습니다",
   "palette.noMatchesSentence": "일치하는 명령이 없습니다.",
@@ -2190,7 +2192,7 @@ const ko: Record<string, string> = {
   "authGuard.offline.titleExhausted": "API에 연결하지 못했습니다.",
   "authGuard.offline.titleWaking": "API를 깨우는 중…",
   "authGuard.offline.bodyExhausted":
-    "Render 무료 등급이 중단되었을 수 있습니다. 세션은 그대로 저장되어 있습니다 — 다시 시도를 누르거나 Render 상태를 확인하세요.",
+    "지금은 Klorn이 서버에 연결할 수 없습니다. 잠시 후 다시 시도하세요.",
   "authGuard.offline.bodyWaking":
     "유휴 후 첫 요청은 서버를 깨웁니다(약 {seconds}초). 세션은 그대로 저장되어 있습니다.",
   "authGuard.offline.attempt": "시도 {attempt} / {total} · {seconds}초 경과",

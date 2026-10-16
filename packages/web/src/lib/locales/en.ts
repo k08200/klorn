@@ -1953,7 +1953,8 @@ const en: Record<string, string> = {
   "subscription.trialTerms": "7 days free, then {price}/month. Cancel anytime.",
   "subscription.starting": "Starting...",
   "subscription.valueProp.push": "Real-time push for mail that actually matters",
-  "subscription.valueProp.noise": "Auto-handle the noise while you're away",
+  "subscription.valueProp.noise":
+    "Sort the noise while you're away, with the reason on each message",
   "subscription.valueProp.send": "Send, reply, and integrations",
   "subscription.toast.checkoutFailed": "Could not start checkout. Please try again.",
   "subscription.toast.unavailable": "Subscriptions aren't available right now.",
@@ -1962,13 +1963,14 @@ const en: Record<string, string> = {
   "paywall.foundingPrice": "Founding price",
   "paywall.title": "Start your 7-day free trial",
   "paywall.body":
-    "Klorn Pro is your AI email firewall — it decides what reaches you and handles the rest.",
+    "Klorn Pro is your AI email firewall — it sorts what reaches you, and nothing goes out without your say-so.",
   "paywall.startTrial": "Start free trial",
   "paywall.trialTerms":
     "7 days free, then {price}/month — locked in for early members. Cancel anytime.",
   "paywall.refunds": "Refunds",
   "paywall.valueProp.interrupt": "Only get interrupted by mail that actually matters",
-  "paywall.valueProp.noise": "Klorn auto-handles the noise while you're away",
+  "paywall.valueProp.noise":
+    "Klorn sorts the noise while you're away, with the reason on each message",
   "paywall.valueProp.brief": "A morning brief of what needs a decision",
   "paywall.valueProp.learns": "Learns your calls and gets sharper over time",
   "oauthError.title": "Gmail offline access wasn't granted",
@@ -2169,7 +2171,7 @@ const en: Record<string, string> = {
   "rejectDialog.skipAndReject": "Skip & Reject",
   "palette.close": "Close command palette",
   "palette.label": "Command palette",
-  "palette.placeholder": "Search decisions, pages, settings...",
+  "palette.placeholder": "Search mail and commands",
   "palette.search": "Search commands",
   "palette.noMatches": "No matching commands",
   "palette.noMatchesSentence": "No matching commands.",
@@ -2198,7 +2200,7 @@ const en: Record<string, string> = {
   "authGuard.offline.titleExhausted": "Couldn't reach the API.",
   "authGuard.offline.titleWaking": "Waking the API up…",
   "authGuard.offline.bodyExhausted":
-    "Render free tier may be down. Your session is still saved — tap Retry to try again, or check Render.",
+    "Klorn can't reach its server right now. Try again in a minute.",
   "authGuard.offline.bodyWaking":
     "First request after idle wakes the server (≈{seconds}s). Your session is still saved.",
   "authGuard.offline.attempt": "Attempt {attempt} / {total} · {seconds}s elapsed",
