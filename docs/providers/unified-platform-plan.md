@@ -4169,6 +4169,9 @@ the scopes that sign-in, Gmail, Calendar and the inbox links request
       a per-file delete in the writer, by externalId; not D5b's account-wide
       `deleteLinkedAccountDriveRows`). A 429, a 403 rate-limit reason or a 5xx
       ends that account's pass.
+    - `lastRefreshedAt` is this job's alone: only a pass through every row
+      stamps it. D5b's token save stamped it too; D5d removed that, so a token
+      refreshed during a pass that a 429 then ends does not count as a refresh.
     - Drive's limits (prior knowledge, not re-verified: 12,000 queries a minute
       per project and per user) are far above this. `changes.list` is deferred.
   - Summaries.
@@ -4230,18 +4233,118 @@ the scopes that sign-in, Gmail, Calendar and the inbox links request
       `packages/web/scripts` that checks the CSP is unchanged without the switch
       (the web package has no unit-test runner).
     - Summaries before D5d: `DRIVE_SUMMARY_READABLE_PROVIDERS` (`summary-policy.ts`)
-      holds KLORN only, so a GOOGLE row's queued summary waits `source-unavailable`
+      held KLORN only, so a GOOGLE row's queued summary waited `source-unavailable`
       (PENDING, no attempt spent, never SKIPPED as a Google type) without
-      connecting; D5d adds GOOGLE there.
+      connecting; D5d added GOOGLE there.
     - Picking and its session need the plan (`requireEntitled`), like the link.
     - Prod impact: none.
-  - D5d, refresh and Google-format summaries.
-    - Files: the refresh module and its job, the writer's per-file delete
-      `deleteConnectedDriveRows` (pinned by the guard), the exports,
-      `summary-extract.ts`.
-    - Tests first: trashed, 404, revoked, rate limit, both etag forms, the exports
-      and their size error, the outage mapping, the job idling while off.
-    - Prod impact: none.
+  - D5d, refresh and Google-format summaries. Built 2026-10-15 (branch
+    `feat/drive-d5d-refresh`), flag OFF.
+    - Refresh: `drive/google-drive-refresh-job.ts` (the sweep and the scheduler,
+      `drive-google-refresh`, hourly, in `EXPECTED_SCHEDULERS`, started in
+      `index.ts` unless BACKGROUND_AGENTS_DISABLED) and
+      `drive/google-drive-refresh.ts` (one account's pass).
+      - Off (`DRIVE_ENABLED` or `GOOGLE_DRIVE_ENABLED`, read per sweep and per
+        account): no query, no client, no Google call; the heartbeat is still
+        recorded after each sweep (not while one is still running).
+      - The pick: `dueDriveRefreshAccounts` (`linked-drive-accounts.ts`, the
+        module's one `system:` query, pinned by the guard), GOOGLE, not
+        `needsReconnect`, `lastRefreshedAt` NULL or ≤ now − 6 h, NULLS FIRST then
+        the oldest, 20; it carries out (id, userId) only, and the pass loads
+        each account by (id, userId, provider). No index on `lastRefreshedAt`:
+        at most 5 accounts of a provider per user, scanned once an hour.
+      - The rows: `connectedAccountFiles` (`drive-read.ts`, scoped like every
+        read, trashed ones included), at most twice the 500 cap (the cap is soft
+        by a few concurrent picks).
+      - A file → `updateDriveFileRow` (update-only, so a row an unlink removed
+        meanwhile never comes back), `trashed` included; its summary is queued
+        again only when the etag moved and the file is not trashed (an unchanged
+        `md5:` or `v:` etag writes nothing to the summary table).
+      - 404 → `deleteConnectedDriveRows(userId, provider, sourceKey,
+        externalIds)` (`drive-rows.ts`; refuses KLORN); the refresh is its only
+        caller (guard).
+      - A 403 about the file (`appNotAuthorizedToFile`,
+        `insufficientFilePermissions`, the Picker's set, now shared in
+        `google-files.ts`) leaves the row. Any other refusal of one call (a
+        400, a 403 that is neither about the file, a rate limit nor the
+        project) leaves that row too, is logged and reported to Sentry once per
+        pass and label (status and reason only), and the pass goes on and
+        stamps: one bad row cannot hold its account back for good. A revoked
+        grant → `needsReconnect` (`handleDriveGrantFailure`), pass ended, the
+        sweep goes on.
+      - A 429, a 403 `userRateLimitExceeded`/`rateLimitExceeded`/
+        `dailyLimitExceeded`, a 5xx, no answer or a timeout ends the pass (no
+        further call starts, the ones in flight finish, no stamp) and the
+        WHOLE sweep, so a retry never fans out over 20 accounts. A 403
+        `accessNotConfigured` (the Drive API off for the project, prior
+        knowledge) ends the sweep too, and is reported at most once an hour per
+        process, not per account.
+      - Each `files.get` (the Picker's too) has googleapis' own `timeout`, 30 s
+        (`GOOGLE_METADATA_TIMEOUT_MS`); a timeout is an outage.
+    - Summaries: `fetchForSummary` (`providers/google.ts`) takes the row's type
+      (the seam's options gain `mimeType`; `drive-provider-dispatch.test.ts`
+      pins it). Docs and Slides → `files.export` text/plain, Sheets → text/csv
+      (first sheet only), anything else `files.get` `alt=media`; `responseType:
+      "stream"` into `readCappedBytes`; D4's 60 s deadline aborts the request
+      and releases the body. No field is requested, so no `webContentLink`,
+      `exportLinks` or `thumbnailLink`. 404 → null; `exportSizeLimitExceeded`
+      → `too-large`; a 429, a
+      rate-limit 403, a 5xx, no answer, the deadline, or a revoked grant (the
+      refresh flags the account later) → a retryable `StorageError`; anything
+      else a non-retryable one. A Google format with no text export (a form, a
+      drawing) is never fetched. `summary-extract.ts` reads the three Google
+      types as their export type under a neutral name (`export.txt`,
+      `export.csv`), so a Doc named `notes.docx` is plain text; any other
+      Google type is `unsupported-type`. `DRIVE_SUMMARY_READABLE_PROVIDERS` is
+      {KLORN, GOOGLE}.
+    - Reasons on the streamed path (review fix). A refused streamed request
+      carries its JSON body in the error's message only: gaxios 7 leaves
+      `errors` and `response.data` unset (reproduced against a local server in
+      `google-drive-stream-errors.test.ts`, through the real googleapis). So
+      `googleErrorReason` also parses the message (JSON.parse from its first
+      `{`, bounded to 64 KiB, in try/catch; a reason must be a plain name), and
+      a body still left as a stream is read, bounded and within D4's deadline,
+      then released. Without it `exportSizeLimitExceeded` was never
+      `too-large` and a rate-limit 403 was never retried.
+    - Known limit, as D4's no-backfill rule: an etag change the refresh writes
+      while summaries are off is not queued when they are turned on (the row
+      already holds the new etag, so the next refresh sees no change); that file
+      is summarised on demand (`POST /api/drive/files/:id/summarize`
+      re-queues it, its etag differing from the summary's).
+    - Read-only: `google-drive-readonly-guard.test.ts` now allows `files.get`,
+      `files.list` and `files.export`, `export` only in `google.ts`, once; both
+      new modules are scanned. No write method.
+    - Tests (each failed first): `google-drive-refresh.test.ts` (idle while
+      off; the pick: 6 h, 20, NULLS FIRST, `needsReconnect` and ONEDRIVE left
+      out; trashed; 404 deletes only that row; revoked; 429 / 403 rate limit /
+      5xx / network end the pass after the 4 in flight, unstamped, the next
+      account still runs; a file-level 403; an unexpected 403 reported without
+      the error; ≤ 4 in flight; both etag forms, moved and unchanged; trashed
+      not queued; busy; the heartbeat in the health report; a sweep that
+      throws; the review fix: a rate limit or outage ends the whole sweep, a
+      revoked account does not, a 400 or an unexpected 403 skips its row and
+      stamps, `accessNotConfigured` reported once an hour, the per-call
+      timeout), `google-drive-files.test.ts` (the exports per type, alt=media,
+      no field or link, the cap, the size error and the rate-limit 403s in
+      gaxios' real streamed shape, a refusal body left as a stream read
+      bounded, a body past the bound, a message that is not JSON, 404, the
+      retryable and non-retryable mappings, the deadline for the body and for
+      a refusal's body, no call for a form or a non-id),
+      `google-drive-stream-errors.test.ts` (a local HTTP server: the real
+      error shape, too-large, the rate-limit 403s, 404, a JSON request's
+      refusals), `drive-summary-pure.test.ts` (the Google types),
+      `drive-summary-run.test.ts` (a Doc summarised from its export, an outage
+      deferred with the attempt given back, too-large SKIPPED),
+      `linked-drive-accounts.test.ts` (the pick, the stamp, no stamp on a token
+      save), and the guards. Written after the code they pin:
+      `drive-rows.test.ts` (the per-file delete, already covered by the refresh
+      test's 404 case) and `fake-db.test.ts` (orderBy `{ sort, nulls }`, added to
+      the fake for the pick).
+    - Not done: googleapis-common turns googleapis' retry on by default
+      (`apirequest.js`), so gaxios may retry one `files.get` on a 429 or 5xx
+      (its defaults, prior knowledge) before the pass sees the error; the
+      refresh does not turn it off.
+    - Prod impact: none (no migration; the job idles while the flags are off).
 - Before the flip, in order:
   1. The current Google verification has passed (V2).
   2. FA-10 (new): (a) now, a separate Testing-mode Cloud project and OAuth client

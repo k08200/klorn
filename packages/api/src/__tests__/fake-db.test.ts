@@ -324,6 +324,32 @@ describe("create, update and ordering", () => {
     expect((await m.findFirst({ orderBy: { priority: "desc" } }))?.id).toBe("x");
   });
 
+  it("orderBy { sort, nulls } places NULL where it says, as Postgres NULLS FIRST / LAST", async () => {
+    const at = (iso: string) => new Date(iso);
+    const d = db([
+      item({ id: "late", sourceId: "late", agentTierSetAt: at("2026-10-02T00:00:00Z") }),
+      item({ id: "none", sourceId: "none", agentTierSetAt: null }),
+      item({ id: "early", sourceId: "early", agentTierSetAt: at("2026-10-01T00:00:00Z") }),
+    ]);
+    const m = d.model("attentionItem");
+    const ids = async (orderBy: unknown) => (await m.findMany({ orderBy })).map((r) => r.id);
+    expect(await ids({ agentTierSetAt: "asc" })).toEqual(["early", "late", "none"]);
+    expect(await ids({ agentTierSetAt: "desc" })).toEqual(["none", "late", "early"]);
+    expect(await ids({ agentTierSetAt: { sort: "asc", nulls: "first" } })).toEqual([
+      "none",
+      "early",
+      "late",
+    ]);
+    expect(await ids({ agentTierSetAt: { sort: "desc", nulls: "last" } })).toEqual([
+      "late",
+      "early",
+      "none",
+    ]);
+    await expect(m.findMany({ orderBy: { agentTierSetAt: { sort: "asc" } } })).rejects.toThrow(
+      /orderBy agentTierSetAt/,
+    );
+  });
+
   it("groupBy keeps NULL as null (it is not stringified) and counts per group", async () => {
     const d = db([
       item({ id: "n1", sourceId: "n1", tier: null }),

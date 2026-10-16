@@ -774,6 +774,19 @@ try {
       });
   }
 
+  // Google Drive metadata refresh (step D5d; hourly). While DRIVE_ENABLED or
+  // GOOGLE_DRIVE_ENABLED is off a sweep reads nothing and calls nothing.
+  if (!BG_DISABLED) {
+    import("./drive/google-drive-refresh-job.js")
+      .then(({ startDriveGoogleRefreshScheduler }) => {
+        startDriveGoogleRefreshScheduler();
+      })
+      .catch((err) => {
+        console.error("[STARTUP] drive-google-refresh job failed to start:", err);
+        captureError(err, { tags: { context: "startup:drive-google-refresh" } });
+      });
+  }
+
   // Self-ping to prevent Render free tier from sleeping after 15 min inactivity
   const RENDER_URL = process.env.RENDER_EXTERNAL_URL;
   if (RENDER_URL) {

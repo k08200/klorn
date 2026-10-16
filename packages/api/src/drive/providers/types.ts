@@ -93,10 +93,14 @@ export interface DriveProviderSession {
    * (summary-bytes.ts): past `maxBytes` the read stops and answers `too-large`,
    * whatever size the provider declared. Null when the source has no such file.
    * Only from the provider's own API hosts (the allowlist rule above).
+   * `mimeType` is the row's type, as the provider reported it: it picks how the
+   * bytes are read (D5d: a Google format is exported as text). A failure worth
+   * retrying (a rate limit, a 5xx, no answer, the deadline) throws a retryable
+   * StorageError (storage/errors.ts), which the run defers instead of failing.
    */
   fetchForSummary(
     externalId: string,
-    options: { readonly maxBytes: number },
+    options: { readonly maxBytes: number; readonly mimeType: string | null },
   ): Promise<CappedBytes | null>;
 }
 

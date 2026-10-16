@@ -273,6 +273,32 @@ function accountRowsOf(userId: string, account: ConnectedAccountRef): Prisma.Dri
   return [{ userId, provider: account.provider, sourceKey: account.sourceKey }];
 }
 
+/** One indexed file of a connected account, as the refresh needs it (D5d). */
+export interface ConnectedAccountFile {
+  readonly id: string;
+  readonly externalId: string;
+  readonly etag: string | null;
+}
+
+/**
+ * The rows of one connected account, trashed ones included (a file restored in
+ * the source comes back), oldest id first, at most `take` (D5d's refresh).
+ * Scoped like every read, so it answers nothing while the provider is hidden.
+ */
+export async function connectedAccountFiles(
+  userId: string,
+  account: ConnectedAccountRef,
+  options: { readonly take: number },
+  providerEnabled: DriveProviderEnabledMap = DRIVE_PROVIDER_ENABLED,
+): Promise<ConnectedAccountFile[]> {
+  return await prisma.driveFile.findMany({
+    where: { AND: [driveSourceScope(providerEnabled), ...accountRowsOf(userId, account)] },
+    select: { id: true, externalId: true, etag: true },
+    orderBy: { id: "asc" },
+    take: options.take,
+  });
+}
+
 /** What a write to one connected account must know of its rows first (D5c's cap). */
 export interface ConnectedAccountRows {
   /** How many rows the account holds, counted up to `countUpTo`. */

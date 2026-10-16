@@ -56,6 +56,7 @@ import {
   type SummaryLease,
   userDailyCountSpent,
 } from "../drive/summary-store.js";
+import { StorageError } from "../storage/errors.js";
 import { allowAnyContentType } from "../storage/limits.js";
 import { MemoryObjectStore } from "../storage/memory-store.js";
 import type { ObjectStore } from "../storage/object-store.js";
@@ -469,42 +470,91 @@ describe("one run", () => {
     });
   });
 
-  it("a GOOGLE file before D5d reads its bytes: it waits, never an attempt, never asks the connector", async () => {
-    // D5c indexes picked Google files and queues their summaries; the bytes
-    // arrive with D5d. Until then the run must not spend attempts (the
-    // connector's fetchForSummary refuses) nor SKIP a Google Doc as an
-    // unsupported type: both would outlive D5d.
-    const file = fileRow({
-      provider: "GOOGLE",
-      sourceKey: "acct-1",
-      storageKey: null,
-      mimeType: "application/vnd.google-apps.document",
-      sizeBytes: null,
+  describe("a Google file (D5d): read through the connector, as its export", () => {
+    const DOC = "application/vnd.google-apps.document";
+
+    function googleDoc(): Row {
+      const file = fileRow({
+        provider: "GOOGLE",
+        sourceKey: "acct-1",
+        storageKey: null,
+        name: "Design review",
+        mimeType: DOC,
+        sizeBytes: null,
+        etag: "v:17",
+      });
+      db.tables.driveFile.push(file);
+      return file;
+    }
+
+    function connectorReading(fetchForSummary: (...args: unknown[]) => Promise<unknown>) {
+      const session = { provider: "GOOGLE" as const, fetchForSummary };
+      return {
+        priority: "background" as const,
+        now: NOW,
+        providerEnabled: { GOOGLE: () => true },
+        implementations: {
+          GOOGLE: { provider: "GOOGLE" as const, connect: vi.fn(async () => session as never) },
+        },
+      };
+    }
+
+    it("a Google Doc is summarised from the text the connector exports", async () => {
+      const file = googleDoc();
+      await queued(file);
+      const fetchForSummary = vi.fn(async () => ({
+        ok: true,
+        bytes: Buffer.from("Ship D5 on Friday.", "utf8"),
+      }));
+      const options = connectorReading(fetchForSummary);
+      expect(await runClaimedSummary(await leaseOf(file), options)).toBe("done");
+      expect(options.implementations.GOOGLE.connect).toHaveBeenCalledWith({
+        userId: ME,
+        sourceKey: "acct-1",
+      });
+      expect(fetchForSummary).toHaveBeenCalledWith(file.externalId, {
+        maxBytes: DRIVE_SUMMARY_MAX_SOURCE_BYTES,
+        mimeType: DOC,
+      });
+      expect(llm.calls).toEqual([
+        expect.objectContaining({
+          name: "Design review",
+          mimeType: DOC,
+          text: "Ship D5 on Friday.",
+        }),
+      ]);
+      expect(summaryOf(file.id)).toMatchObject({ status: "DONE", sourceEtag: "v:17" });
     });
-    db.tables.driveFile.push(file);
-    await queued(file);
-    const connect = vi.fn(async () => {
-      throw new Error("the run must not connect before D5d");
-    });
-    const options = {
-      priority: "background" as const,
-      providerEnabled: { GOOGLE: () => true },
-      implementations: { GOOGLE: { provider: "GOOGLE" as const, connect } },
-    };
-    let at = NOW;
-    for (let run = 0; run <= DRIVE_SUMMARY_MAX_ATTEMPTS; run += 1) {
-      expect(await runClaimedSummary(await leaseOf(file, at), { ...options, now: at })).toBe(
-        "waiting",
+
+    it("an outage of Google (a retryable StorageError) defers it: PENDING, the attempt given back", async () => {
+      const file = googleDoc();
+      await queued(file);
+      const fetchForSummary = vi.fn(async () => {
+        throw new StorageError("upstream", "Google Drive answered 503", {
+          status: 503,
+          retryable: true,
+        });
+      });
+      expect(await runClaimedSummary(await leaseOf(file), connectorReading(fetchForSummary))).toBe(
+        "deferred",
       );
       expect(summaryOf(file.id)).toMatchObject({
         status: "PENDING",
-        error: "source-unavailable",
+        error: "storage-error",
         attempts: 0,
       });
-      at = summaryOf(file.id)?.nextAttemptAt as Date;
-    }
-    expect(connect).not.toHaveBeenCalled();
-    expect(llm.calls).toEqual([]);
+      expect(llm.calls).toEqual([]);
+    });
+
+    it("an export over Google's size limit is skipped as too-large", async () => {
+      const file = googleDoc();
+      await queued(file);
+      const fetchForSummary = vi.fn(async () => ({ ok: false, reason: "too-large" }));
+      expect(await runClaimedSummary(await leaseOf(file), connectorReading(fetchForSummary))).toBe(
+        "skipped",
+      );
+      expect(summaryOf(file.id)).toMatchObject({ status: "SKIPPED", error: "too-large" });
+    });
   });
 
   it("a provider rejection (a 4xx that is not 402/408/429) is a content error: it spends the budget", async () => {

@@ -57,6 +57,8 @@ describe("the Google Drive connector names no Drive write (V4)", () => {
       "drive/providers/google-auth.ts",
       "drive/providers/google-files.ts",
       "drive/google-drive-picker.ts",
+      "drive/google-drive-refresh.ts",
+      "drive/google-drive-refresh-job.ts",
       "routes/google-drive-link.ts",
       "web:lib/google-picker.ts",
     ]) {
@@ -72,18 +74,23 @@ describe("the Google Drive connector names no Drive write (V4)", () => {
     expect(namesAWrite(text)).toBe(false);
   });
 
-  it("beyond the named writes, the connector calls only files.get and files.list (an allowlist)", () => {
-    // modifyLabels, watch, generateIds, export are not writes Google lists as
-    // such, but none is a read the connector needs; a raw `.request(` would
-    // reach any endpoint; comments, replies and drives are other resources.
+  it("beyond the named writes, the connector calls only files.get, files.list and files.export (an allowlist)", () => {
+    // modifyLabels, watch and generateIds are not writes Google lists as such,
+    // but none is a read the connector needs; a raw `.request(` would reach any
+    // endpoint; comments, replies and drives are other resources. `export` is
+    // D5d's text export of a Google format for its summary, only in google.ts.
+    const READS = new Set(["get", "list", "export"]);
     for (const { path, text } of connector) {
       const methods = [...text.matchAll(/\bfiles\s*\.\s*(\w+)\s*\(/g)].map((m) => m[1]);
       expect(
-        methods.filter((m) => m !== "get" && m !== "list"),
+        methods.filter((m) => !READS.has(m ?? "")),
         path,
       ).toEqual([]);
+      if (path !== "drive/providers/google.ts") expect(methods, path).not.toContain("export");
       expect(text, path).not.toMatch(/\.request\s*\(|\b(comments|replies|drives)\s*\./);
     }
+    const google = connector.find((f) => f.path === "drive/providers/google.ts")?.text ?? "";
+    expect(google.match(/\bfiles\.export\(/g)).toHaveLength(1);
   });
 
   it("the detector sees each write, however it is spelt", () => {

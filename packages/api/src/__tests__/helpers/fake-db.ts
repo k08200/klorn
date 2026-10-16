@@ -412,22 +412,48 @@ function project(info: ModelInfo, row: Row, select: Select | undefined): Row {
   return out;
 }
 
+interface SortKey {
+  field: string;
+  sign: 1 | -1;
+  nullsFirst: boolean;
+}
+
+/**
+ * One orderBy entry: "asc" | "desc", or Prisma's `{ sort, nulls }`. Postgres sorts
+ * NULL as larger than any value (last ascending, first descending) unless `nulls`
+ * says otherwise.
+ */
+function sortKeyOf(field: string, dir: unknown): SortKey {
+  if (dir === "asc" || dir === "desc") {
+    return { field, sign: dir === "desc" ? -1 : 1, nullsFirst: dir === "desc" };
+  }
+  if (isPlain(dir)) {
+    const { sort, nulls, ...rest } = dir;
+    const sorted = sort === "asc" || sort === "desc";
+    if (sorted && (nulls === "first" || nulls === "last") && Object.keys(rest).length === 0) {
+      return { field, sign: sort === "desc" ? -1 : 1, nullsFirst: nulls === "first" };
+    }
+  }
+  throw new Error(`fake-db: orderBy ${field}: ${JSON.stringify(dir)}`);
+}
+
 function sortRows(info: ModelInfo, rows: Row[], orderBy: unknown): Row[] {
   if (orderBy === undefined) return rows;
   const specs = (Array.isArray(orderBy) ? orderBy : [orderBy]) as Array<Record<string, unknown>>;
   const keys = specs.flatMap((spec) => {
     return Object.entries(spec).map(([field, dir]) => {
       column(info, field, "orderBy");
-      if (dir !== "asc" && dir !== "desc") throw new Error(`fake-db: orderBy ${field}: ${dir}`);
-      return { field, sign: dir === "desc" ? -1 : 1 };
+      return sortKeyOf(field, dir);
     });
   });
-  // Postgres sorts NULL as larger than any value.
-  const rank = (v: unknown) => (v == null ? Number.POSITIVE_INFINITY : cmp(v));
   return [...rows].sort((a, b) => {
-    for (const { field, sign } of keys) {
-      const x = rank(a[field]) as number | string;
-      const y = rank(b[field]) as number | string;
+    for (const { field, sign, nullsFirst } of keys) {
+      const aNull = a[field] == null;
+      const bNull = b[field] == null;
+      if (aNull !== bNull) return aNull === nullsFirst ? -1 : 1;
+      if (aNull) continue;
+      const x = cmp(a[field]) as number | string;
+      const y = cmp(b[field]) as number | string;
       if (x !== y) return x < y ? -sign : sign;
     }
     return 0;
