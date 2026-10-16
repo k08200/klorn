@@ -46,7 +46,6 @@
 "source.account.a11y" = "%@ account";
 "source.generic" = "Mail";
 "mail.searchResult.a11y" = "Search result from %1$@: %2$@";
-"mail.noSubject" = "no subject";
 "mail.snooze" = "Snooze…";
 "mail.snooze.a11y" = "Snooze message from %@";
 "mail.dismiss" = "Dismiss";
@@ -413,7 +412,6 @@
 "compose.cancel" = "Cancel";
 "compose.missingFields" = "Recipient, subject, and message are all required.";
 "compose.needsPro" = "Sending mail needs the Pro plan.";
-"compose.close.a11y" = "Close composer";
 
 /* Assistant dock */
 "assistant.dock.toggle" = "Assistant (⌘J)";

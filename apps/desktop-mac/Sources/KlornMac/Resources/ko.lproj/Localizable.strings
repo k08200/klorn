@@ -46,7 +46,6 @@
 "source.account.a11y" = "%@ 계정";
 "source.generic" = "메일";
 "mail.searchResult.a11y" = "%1$@ 님의 검색 결과: %2$@";
-"mail.noSubject" = "제목 없음";
 "mail.snooze" = "미루기…";
 "mail.snooze.a11y" = "%@ 님의 메일 미루기";
 "mail.dismiss" = "지우기";
@@ -413,7 +412,6 @@
 "compose.cancel" = "취소";
 "compose.missingFields" = "받는 사람, 제목, 본문을 모두 입력해야 합니다.";
 "compose.needsPro" = "메일 발송은 Pro 플랜이 필요합니다.";
-"compose.close.a11y" = "작성 닫기";
 
 /* Assistant dock */
 "assistant.dock.toggle" = "어시스턴트 (⌘J)";

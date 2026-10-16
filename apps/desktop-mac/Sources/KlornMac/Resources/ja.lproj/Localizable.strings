@@ -46,7 +46,6 @@
 "source.account.a11y" = "%@アカウント";
 "source.generic" = "メール";
 "mail.searchResult.a11y" = "%1$@ からの検索結果: %2$@";
-"mail.noSubject" = "件名なし";
 "mail.snooze" = "スヌーズ…";
 "mail.snooze.a11y" = "%@ からのメールをスヌーズ";
 "mail.dismiss" = "閉じる";
@@ -413,7 +412,6 @@
 "compose.cancel" = "キャンセル";
 "compose.missingFields" = "宛先、件名、本文はすべて必須です。";
 "compose.needsPro" = "メール送信にはProプランが必要です。";
-"compose.close.a11y" = "作成画面を閉じる";
 
 /* Assistant dock */
 "assistant.dock.toggle" = "アシスタント（⌘J）";

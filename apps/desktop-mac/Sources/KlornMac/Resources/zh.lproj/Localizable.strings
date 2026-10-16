@@ -46,7 +46,6 @@
 "source.account.a11y" = "%@ 账户";
 "source.generic" = "邮件";
 "mail.searchResult.a11y" = "来自 %1$@ 的搜索结果：%2$@";
-"mail.noSubject" = "无主题";
 "mail.snooze" = "稍后提醒…";
 "mail.snooze.a11y" = "稍后提醒来自 %@ 的邮件";
 "mail.dismiss" = "忽略";
@@ -413,7 +412,6 @@
 "compose.cancel" = "取消";
 "compose.missingFields" = "收件人、主题和正文都是必填的。";
 "compose.needsPro" = "发送邮件需要 Pro 套餐。";
-"compose.close.a11y" = "关闭撰写窗口";
 
 /* Assistant dock */
 "assistant.dock.toggle" = "助理（⌘J）";

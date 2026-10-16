@@ -46,7 +46,6 @@
 "source.account.a11y" = "Compte %@";
 "source.generic" = "e-mail";
 "mail.searchResult.a11y" = "Résultat de %1$@ : %2$@";
-"mail.noSubject" = "sans objet";
 "mail.snooze" = "Reporter…";
 "mail.snooze.a11y" = "Reporter le message de %@";
 "mail.dismiss" = "Ignorer";
@@ -413,7 +412,6 @@
 "compose.cancel" = "Annuler";
 "compose.missingFields" = "Destinataire, objet et message sont tous obligatoires.";
 "compose.needsPro" = "L'envoi d'e-mails nécessite le forfait Pro.";
-"compose.close.a11y" = "Fermer la fenêtre de rédaction";
 
 /* Assistant dock */
 "assistant.dock.toggle" = "Assistant (⌘J)";
