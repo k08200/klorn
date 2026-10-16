@@ -314,6 +314,9 @@
 "account.reconnect" = "Reconectar la cuenta…";
 "account.reconnectPrimary" = "Reconectar la cuenta de Google…";
 "account.reconnect.failed" = "No se pudo iniciar la reconexión. Inténtalo de nuevo.";
+"account.link.mismatch" = "Esta vinculación se inició desde otra cuenta de Klorn, así que no se añadió nada. Vuelve a empezar desde esta cuenta.";
+"account.link.expired" = "La vinculación caducó antes de completarse. Inténtalo de nuevo.";
+"account.link.failed" = "No se pudo completar la vinculación. Inténtalo de nuevo.";
 "source.unknown" = "Klorn";
 "source.github" = "GitHub";
 

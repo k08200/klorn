@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useT } from "../lib/i18n";
 
 // Matches the API contract: PendingAction reject accepts an optional reason
 // of at most 500 characters (chat-pending-actions.ts rejectActionBodySchema).
@@ -20,6 +21,7 @@ interface RejectReasonDialogProps {
  * keeping back-compat with the existing endpoint behaviour.
  */
 export function RejectReasonDialog({ open, onCancel, onReject }: RejectReasonDialogProps) {
+  const { t } = useT();
   const [reason, setReason] = useState("");
   const dialogRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -80,10 +82,10 @@ export function RejectReasonDialog({ open, onCancel, onReject }: RejectReasonDia
           id="reject-reason-title"
           className="mb-2 text-base font-semibold tracking-[-0.01em] text-ink"
         >
-          Reject this suggestion?
+          {t("rejectDialog.title")}
         </h3>
         <label htmlFor="reject-reason" className="mb-2 block text-sm text-ink-mid">
-          Why? Helps Klorn avoid proposing this again — optional
+          {t("rejectDialog.reasonLabel")}
         </label>
         <textarea
           id="reject-reason"
@@ -92,7 +94,7 @@ export function RejectReasonDialog({ open, onCancel, onReject }: RejectReasonDia
           onChange={(e) => setReason(e.target.value.slice(0, MAX_REJECT_REASON_LENGTH))}
           maxLength={MAX_REJECT_REASON_LENGTH}
           rows={3}
-          placeholder="e.g. Wrong recipient, bad timing, not my task"
+          placeholder={t("rejectDialog.placeholder")}
           className="w-full resize-none rounded-lg border border-line bg-surface-panel/80 px-3 py-2 text-sm text-ink placeholder-ink-dim outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15"
         />
         <p className="mt-1 text-right text-[10px] tabular-nums text-ink-dim">
@@ -104,21 +106,21 @@ export function RejectReasonDialog({ open, onCancel, onReject }: RejectReasonDia
             onClick={onCancel}
             className="ease-strong inline-flex min-h-11 items-center rounded-lg px-3 py-2 text-sm text-ink-mid transition duration-150 hover:text-ink active:scale-[0.97]"
           >
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             type="button"
             onClick={() => onReject(null)}
             className="ease-strong inline-flex min-h-11 items-center rounded-lg border border-line bg-surface-panel/70 px-3 py-2 text-sm text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
           >
-            Skip &amp; Reject
+            {t("rejectDialog.skipAndReject")}
           </button>
           <button
             type="button"
             onClick={() => onReject(trimmed || null)}
             className="ease-strong inline-flex min-h-11 items-center rounded-lg bg-danger-solid px-4 py-2 text-sm font-medium text-danger-solid-ink shadow-[0_1px_2px_rgba(127,29,29,0.3),0_8px_18px_-8px_rgba(220,38,38,0.5)] transition duration-150 hover:from-red-500 hover:to-red-700 active:scale-[0.97]"
           >
-            Reject
+            {t("notif.reject")}
           </button>
         </div>
       </div>

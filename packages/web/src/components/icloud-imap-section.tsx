@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { TIER_COUNT } from "@/lib/tiers";
 import { apiFetch } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { useT } from "../lib/i18n";
 import { captureClientError } from "../lib/sentry";
 import { useConfirm } from "./confirm-dialog";
 import { FirstSyncNote } from "./imap-connect-notes";
@@ -47,6 +48,7 @@ interface ICloudImapSectionProps {
 export function ICloudImapSection({ embedded = false, onChanged }: ICloudImapSectionProps = {}) {
   const { user } = useAuth();
   const { confirm } = useConfirm();
+  const { t } = useT();
   // The first mail account is free whatever the provider; a second one is
   // Pro. The server answers `canConnect` on /status (always true while the
   // paywall is off); `entitled` is only the fallback for an older API. An
@@ -84,11 +86,11 @@ export function ICloudImapSection({ embedded = false, onChanged }: ICloudImapSec
         return;
       }
       captureClientError(err, { scope: "icloud-imap.status" });
-      setError("Could not load iCloud connection status.");
+      setError(t("imap.icloud.error.status"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     loadStatus();
@@ -108,7 +110,7 @@ export function ICloudImapSection({ embedded = false, onChanged }: ICloudImapSec
         }),
       });
       if (!data.ok) {
-        setError(data.message || "Connection failed.");
+        setError(data.message || t("imap.error.connectFailed"));
       } else {
         setEmailInput("");
         setPasswordInput("");
@@ -123,7 +125,7 @@ export function ICloudImapSection({ embedded = false, onChanged }: ICloudImapSec
         return;
       }
       captureClientError(err, { scope: "icloud-imap.connect" });
-      setError(msg || "Connection failed.");
+      setError(msg || t("imap.error.connectFailed"));
     } finally {
       setSubmitting(false);
     }
@@ -132,9 +134,9 @@ export function ICloudImapSection({ embedded = false, onChanged }: ICloudImapSec
   const handleDisconnect = async () => {
     if (submitting) return;
     const ok = await confirm({
-      title: "Disconnect iCloud Mail?",
-      message: "Existing classified emails stay. You can reconnect the mailbox any time.",
-      confirmLabel: "Disconnect",
+      title: t("imap.icloud.confirmDisconnect.title"),
+      message: t("imap.confirmDisconnect.message"),
+      confirmLabel: t("settings.disconnect"),
       danger: true,
     });
     if (!ok) return;
@@ -146,7 +148,7 @@ export function ICloudImapSection({ embedded = false, onChanged }: ICloudImapSec
       onChanged?.();
     } catch (err) {
       captureClientError(err, { scope: "icloud-imap.disconnect" });
-      setError("Disconnect failed.");
+      setError(t("imap.error.disconnectFailed"));
     } finally {
       setSubmitting(false);
     }
@@ -168,17 +170,16 @@ export function ICloudImapSection({ embedded = false, onChanged }: ICloudImapSec
     >
       <header className={embedded ? "hidden" : "mb-3 flex items-start justify-between gap-3"}>
         <div>
-          <h2 className="text-base font-semibold text-ink">iCloud Mail</h2>
+          <h2 className="text-base font-semibold text-ink">{t("imap.icloud.title")}</h2>
           <p className="mt-1 text-xs text-ink-mid">
-            Connect an iCloud mailbox via IMAP. Klorn classifies every incoming message into the
-            same {TIER_COUNT}-lane firewall as Gmail.
+            {t("imap.icloud.body", { count: String(TIER_COUNT) })}
           </p>
         </div>
         {status?.connected && <StatusChip status="connected" />}
       </header>
 
       {loading ? (
-        <div className="text-xs text-ink-dim">Loading…</div>
+        <div className="text-xs text-ink-dim">{t("common.loading")}</div>
       ) : status?.connected ? (
         <div className="space-y-3">
           <div className="rounded-xl border border-line-soft bg-surface-raised/70 p-3 text-sm text-ink">
@@ -186,7 +187,7 @@ export function ICloudImapSection({ embedded = false, onChanged }: ICloudImapSec
               <div>
                 <p className="font-medium">{status.email}</p>
                 <p className="text-[11px] text-ink-dim">
-                  Host: {status.host} · since{" "}
+                  {t("imap.hostSince", { host: status.host ?? "—" })}{" "}
                   {status.connectedAt ? new Date(status.connectedAt).toLocaleString("en-US") : "—"}
                 </p>
               </div>
@@ -197,7 +198,7 @@ export function ICloudImapSection({ embedded = false, onChanged }: ICloudImapSec
                 disabled={submitting}
                 className="shrink-0"
               >
-                Disconnect
+                {t("settings.disconnect")}
               </Button>
             </div>
           </div>
@@ -214,7 +215,7 @@ export function ICloudImapSection({ embedded = false, onChanged }: ICloudImapSec
         <form onSubmit={handleConnect} className="space-y-3">
           <Input
             id="icloud-email"
-            label="iCloud email"
+            label={t("imap.icloud.emailLabel")}
             type="email"
             value={emailInput}
             onChange={(e) => setEmailInput(e.target.value)}
@@ -225,7 +226,7 @@ export function ICloudImapSection({ embedded = false, onChanged }: ICloudImapSec
           <div>
             <Input
               id="icloud-password"
-              label="App-specific password"
+              label={t("imap.icloud.passwordLabel")}
               type="password"
               value={passwordInput}
               onChange={(e) => setPasswordInput(e.target.value)}
@@ -234,17 +235,16 @@ export function ICloudImapSection({ embedded = false, onChanged }: ICloudImapSec
               autoComplete="off"
             />
             <p className="mt-1 text-[11px] text-ink-mid">
-              This is NOT your Apple ID password. Generate an app-specific password at{" "}
+              {t("imap.icloud.help.before")}{" "}
               <a
                 href={APP_PASSWORD_HELP_URL}
                 target="_blank"
                 rel="noreferrer"
                 className="underline hover:text-ink-soft"
               >
-                account.apple.com → Sign-In and Security
+                {t("imap.icloud.help.link")}
               </a>{" "}
-              (requires two-factor authentication on your Apple ID). We store it encrypted
-              (AES-GCM), never the plaintext.
+              {t("imap.icloud.help.after")}
             </p>
           </div>
           {error && <ErrorAlert>{error}</ErrorAlert>}
@@ -254,7 +254,7 @@ export function ICloudImapSection({ embedded = false, onChanged }: ICloudImapSec
             disabled={submitting || !emailInput || !passwordInput}
             loading={submitting}
           >
-            Connect iCloud Mail
+            {t("imap.icloud.connect")}
           </Button>
         </form>
       )}

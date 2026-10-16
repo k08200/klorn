@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../lib/api";
+import { useT } from "../lib/i18n";
 import { captureClientError } from "../lib/sentry";
 import Button from "./ui/button";
 import ErrorAlert from "./ui/error-alert";
@@ -43,35 +44,36 @@ interface FeedbackPolicyResponse {
 
 const KIND_COPY: Record<
   FeedbackPolicyKind,
-  { label: string; tone: string; dot: string; summary: string }
+  { labelKey: string; tone: string; dot: string; summaryKey: string }
 > = {
   ALLOW_AFTER_SUGGESTION: {
-    label: "Repeated approvals",
+    labelKey: "feedbackPolicy.kind.allow.label",
     tone: "bg-accent/10 text-accent-deep ring-accent/20",
     dot: "bg-accent",
-    summary: "Suggest with more confidence",
+    summaryKey: "feedbackPolicy.kind.allow.summary",
   },
   REQUIRE_DRAFT_REVIEW: {
-    label: "Keep review",
+    labelKey: "feedbackPolicy.kind.review.label",
     tone: "bg-surface-hover text-ink-mid ring-line",
     dot: "bg-slate-400",
-    summary: "Review drafts before running",
+    summaryKey: "feedbackPolicy.kind.review.summary",
   },
   AVOID_SUGGESTION: {
-    label: "Repeated rejects",
+    labelKey: "feedbackPolicy.kind.avoid.label",
     tone: "bg-rose-500/10 text-rose-600 ring-rose-500/20",
     dot: "bg-rose-500",
-    summary: "Suggest less often",
+    summaryKey: "feedbackPolicy.kind.avoid.summary",
   },
   LOWER_PRIORITY: {
-    label: "Lower priority",
+    labelKey: "feedbackPolicy.kind.lower.label",
     tone: "bg-surface-hover text-ink-mid ring-line",
     dot: "bg-slate-400",
-    summary: "Watch quietly",
+    summaryKey: "feedbackPolicy.kind.lower.summary",
   },
 };
 
 export function FeedbackPolicyPanel() {
+  const { t } = useT();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [since, setSince] = useState<string | null>(null);
@@ -103,11 +105,11 @@ export function FeedbackPolicyPanel() {
     <div className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="font-medium">Learned operating signals</h3>
+          <h3 className="font-medium">{t("feedbackPolicy.title")}</h3>
           <p className="mt-0.5 text-xs text-ink-dim">
             {since
-              ? `Since ${new Date(since).toLocaleDateString("en-US")}`
-              : "Recent feedback patterns"}
+              ? t("feedbackPolicy.since", { date: new Date(since).toLocaleDateString("en-US") })
+              : t("feedbackPolicy.recent")}
           </p>
         </div>
         <Button
@@ -117,7 +119,7 @@ export function FeedbackPolicyPanel() {
           disabled={loading}
           loading={loading}
         >
-          Refresh
+          {t("pwa.update.refresh")}
         </Button>
       </div>
 
@@ -127,10 +129,10 @@ export function FeedbackPolicyPanel() {
           <div className="h-16 animate-pulse rounded-lg bg-surface-hover" />
         </div>
       ) : error ? (
-        <ErrorAlert className="mt-4">Could not load operating signals.</ErrorAlert>
+        <ErrorAlert className="mt-4">{t("feedbackPolicy.error")}</ErrorAlert>
       ) : candidates.length === 0 ? (
         <div className="mt-4 rounded-lg border border-line bg-surface-raised px-3 py-3 text-sm text-ink-dim">
-          No stable operating signals yet.
+          {t("feedbackPolicy.empty")}
         </div>
       ) : (
         <div className="mt-4 space-y-2">
@@ -154,26 +156,54 @@ export function FeedbackPolicyPanel() {
                         </span>
                       )}
                     </div>
-                    <p className="mt-1 text-xs text-ink-dim">{copy.summary}</p>
+                    <p className="mt-1 text-xs text-ink-dim">{t(copy.summaryKey)}</p>
                   </div>
                   <span
                     className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ring-1 ring-inset ${copy.tone}`}
                   >
-                    {copy.label}
+                    {t(copy.labelKey)}
                   </span>
                 </div>
                 <div className="mt-3 grid grid-cols-3 gap-2 text-[10px] text-ink-dim sm:grid-cols-6">
-                  <SignalCount label="Approved" value={candidate.support.approved} />
-                  <SignalCount label="Rejected" value={candidate.support.rejected} />
-                  <SignalCount label="Edited" value={candidate.support.edited} />
-                  <SignalCount label="Failed" value={candidate.support.failed} tone="critical" />
-                  <SignalCount label="Ignored" value={candidate.support.ignored} />
-                  <SignalCount label="Snoozed" value={candidate.support.snoozed} />
-                  <SignalCount label="Closed" value={candidate.support.dismissed} />
+                  <SignalCount
+                    label={t("feedbackPolicy.count.approved")}
+                    value={candidate.support.approved}
+                  />
+                  <SignalCount
+                    label={t("feedbackPolicy.count.rejected")}
+                    value={candidate.support.rejected}
+                  />
+                  <SignalCount
+                    label={t("feedbackPolicy.count.edited")}
+                    value={candidate.support.edited}
+                  />
+                  <SignalCount
+                    label={t("feedbackPolicy.count.failed")}
+                    value={candidate.support.failed}
+                    tone="critical"
+                  />
+                  <SignalCount
+                    label={t("feedbackPolicy.count.ignored")}
+                    value={candidate.support.ignored}
+                  />
+                  <SignalCount
+                    label={t("feedbackPolicy.count.snoozed")}
+                    value={candidate.support.snoozed}
+                  />
+                  <SignalCount
+                    label={t("feedbackPolicy.count.closed")}
+                    value={candidate.support.dismissed}
+                  />
                 </div>
                 <div className="mt-2 flex items-center justify-between text-[10px] tabular-nums text-ink-mid">
-                  <span>Confidence {Math.round(candidate.confidence * 100)}%</span>
-                  <span>{candidate.support.total} events</span>
+                  <span>
+                    {t("feedbackPolicy.confidence", {
+                      percent: String(Math.round(candidate.confidence * 100)),
+                    })}
+                  </span>
+                  <span>
+                    {t("feedbackPolicy.events", { count: String(candidate.support.total) })}
+                  </span>
                 </div>
               </div>
             );

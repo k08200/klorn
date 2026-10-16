@@ -97,7 +97,7 @@ export default function AssistantDock({ unified = false }: { unified?: boolean }
             </span>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold leading-none text-ink">{t("nav.assistant")}</p>
-              <p className="mt-1 truncate text-[11px] text-ink-dim">Mail · calendar · briefing</p>
+              <p className="mt-1 truncate text-[11px] text-ink-dim">{t("assistantDock.scope")}</p>
             </div>
             <button
               type="button"
@@ -110,7 +110,7 @@ export default function AssistantDock({ unified = false }: { unified?: boolean }
             <button
               type="button"
               onClick={() => setOpen(false)}
-              aria-label="Close assistant"
+              aria-label={t("assistantDock.close")}
               className="focus-ring ease-strong flex h-7 w-7 items-center justify-center rounded-md text-ink-dim transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97]"
             >
               <svg
@@ -201,7 +201,7 @@ export default function AssistantDock({ unified = false }: { unified?: boolean }
                 rows={1}
                 maxLength={4000}
                 placeholder={t("chat.inputPlaceholder")}
-                aria-label="Message the assistant"
+                aria-label={t("assistantDock.input")}
                 className={`max-h-24 flex-1 resize-none bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-dim${
                   unified ? " pointer-coarse:text-field" : ""
                 }`}

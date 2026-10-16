@@ -85,13 +85,13 @@ interface BulkUndoNotice {
 
 interface EmailReminderOption {
   key: EmailReminderKey;
-  label: string;
+  labelKey: string;
 }
 
 const EMAIL_REMINDER_OPTIONS: EmailReminderOption[] = [
-  { key: "later-today", label: "Today" },
-  { key: "tomorrow", label: "Tomorrow" },
-  { key: "next-week", label: "Next week" },
+  { key: "later-today", labelKey: "mail.remind.today" },
+  { key: "tomorrow", labelKey: "mailV2.list.remind.tomorrow" },
+  { key: "next-week", labelKey: "mailV2.list.remind.nextWeek" },
 ];
 
 function getReminderDate(option: EmailReminderKey): Date {
@@ -165,28 +165,28 @@ const FILTERS: { key: Filter; label: string; labelKey?: string; query: string }[
 // until then these are honest navigation tiles, not metrics.
 const WORK_QUEUES: Array<{
   key: Filter;
-  title: string;
-  description: string;
+  titleKey: string;
+  descriptionKey: string;
 }> = [
   {
     key: "finance",
-    title: "Finance docs",
-    description: "Billing, invoices, failed payments, contract amounts",
+    titleKey: "mail.queue.finance.title",
+    descriptionKey: "mail.queue.finance.description",
   },
   {
     key: "legal",
-    title: "Legal review",
-    description: "Contracts, compliance, signatures, risk",
+    titleKey: "mail.queue.legal.title",
+    descriptionKey: "mail.queue.legal.description",
   },
   {
     key: "sales",
-    title: "Revenue and customers",
-    description: "Customer replies, renewals, pricing, meeting follow-up",
+    titleKey: "mail.queue.sales.title",
+    descriptionKey: "mail.queue.sales.description",
   },
   {
     key: "support",
-    title: "Support issues",
-    description: "Bugs, incidents, complaints, escalations",
+    titleKey: "mail.queue.support.title",
+    descriptionKey: "mail.queue.support.description",
   },
 ];
 
@@ -273,7 +273,7 @@ function EmailView() {
   const resolveInboxLabel = (row: EmailRow): string | null => {
     if (!showInboxBadges) return null;
     if (row.linkedInboxAccountId)
-      return inboxLabelById.get(row.linkedInboxAccountId) ?? "Linked inbox";
+      return inboxLabelById.get(row.linkedInboxAccountId) ?? t("mail.inbox.linked");
     return primaryLabel;
   };
 
@@ -332,7 +332,7 @@ function EmailView() {
 
   useEffect(() => {
     if (listQuery.error) {
-      setError("Could not load mail.");
+      setError(t("mail.error.load"));
     }
   }, [listQuery.error]);
 
@@ -385,32 +385,36 @@ function EmailView() {
       if (result?.error) {
         const notConnected = result.error.toLowerCase().includes("not connected");
         setError(
-          notConnected
-            ? "Gmail isn't connected. Reconnect in Settings → Connections."
-            : "Gmail sync failed. Check Settings → Connections to reconnect.",
+          notConnected ? t("mail.error.gmailNotConnected") : t("mail.error.gmailSyncFailed"),
         );
-        toast(notConnected ? "Gmail isn't connected." : "Gmail sync failed.", "error");
+        toast(
+          notConnected ? t("mail.toast.gmailNotConnected") : t("mail.toast.gmailSyncFailed"),
+          "error",
+        );
         return;
       }
       await load(filter, appliedSearch);
       const newCount = typeof result?.newCount === "number" ? result.newCount : 0;
       const synced = typeof result?.synced === "number" ? result.synced : 0;
       if (newCount > 0) {
-        toast(`Synced ${synced} — ${newCount} new.`, "success");
+        toast(
+          t("mail.toast.syncedNew", { synced: String(synced), count: String(newCount) }),
+          "success",
+        );
       } else if (synced > 0) {
-        toast(`Synced ${synced} — nothing new.`, "success");
+        toast(t("mail.toast.syncedNothingNew", { synced: String(synced) }), "success");
       } else {
-        toast("Sync complete. Nothing new.", "success");
+        toast(t("mailV2.sync.nothingNew"), "success");
       }
     } catch (err) {
       captureClientError(err, { scope: "email.sync" });
       const message = err instanceof Error ? err.message : "";
       if (message.toLowerCase().includes("not connected")) {
-        setError("Gmail isn't connected. Reconnect in Settings → Connections.");
-        toast("Gmail isn't connected.", "error");
+        setError(t("mail.error.gmailNotConnected"));
+        toast(t("mail.toast.gmailNotConnected"), "error");
       } else {
-        setError("Gmail sync failed. Check Settings → Connections to reconnect.");
-        toast("Gmail sync failed.", "error");
+        setError(t("mail.error.gmailSyncFailed"));
+        toast(t("mail.toast.gmailSyncFailed"), "error");
       }
     } finally {
       setSyncing(false);
@@ -428,7 +432,7 @@ function EmailView() {
       await load(filter, appliedSearch);
     } catch (err) {
       captureClientError(err, { scope: "email.attachments.analyzeAll" });
-      setError("Could not rerun attachment analysis.");
+      setError(t("mailV2.reanalyze.failed"));
     } finally {
       setReanalyzing(false);
     }
@@ -512,7 +516,7 @@ function EmailView() {
       }
     } catch (err) {
       captureClientError(err, { scope: "email.bulk", action });
-      setError("Could not process the selected mail.");
+      setError(t("mail.error.bulk"));
     } finally {
       setBulkBusy(false);
     }
@@ -607,11 +611,11 @@ function EmailView() {
           body: JSON.stringify({ gmailId: undoNotice.gmailId }),
         },
       );
-      toast("Restored to inbox.", "success");
+      toast(t("emailDetail.toast.restored"), "success");
       router.replace(`/email/${data.emailId}?markRead=false`);
     } catch (err) {
       captureClientError(err, { scope: "email.list.undo", action: undoNotice.action });
-      setError("Could not restore that email. Check Gmail connection and try again.");
+      setError(t("mail.error.restoreOne"));
     } finally {
       setUndoBusy(false);
     }
@@ -635,15 +639,15 @@ function EmailView() {
       );
       const failedCount = results.filter((result) => result.status === "rejected").length;
       if (failedCount > 0) {
-        setError(`${failedCount} messages could not be restored. Check Gmail and try again.`);
+        setError(t("mail.error.restoreFailed", { count: String(failedCount) }));
       } else {
-        toast("Restored to inbox.", "success");
+        toast(t("emailDetail.toast.restored"), "success");
         setBulkUndoNotice(null);
       }
       await load(filter, appliedSearch);
     } catch (err) {
       captureClientError(err, { scope: "email.bulk.undo" });
-      setError("Could not restore the archived mail. Check Gmail connection and try again.");
+      setError(t("mail.error.restoreArchived"));
     } finally {
       setUndoBusy(false);
     }
@@ -664,14 +668,14 @@ function EmailView() {
           description: [`From: ${email.from}`, `Open: /email/${email.id}`].join("\n"),
         }),
       });
-      toast(`Reminder set for ${option.label.toLowerCase()}.`, "success");
+      toast(t("mailV2.list.remind.set", { when: t(option.labelKey) }), "success");
     } catch (err) {
       captureClientError(err, {
         scope: "email.list.reminder",
         emailId: email.id,
         option: option.key,
       });
-      setError("Could not create a reminder for that email.");
+      setError(t("mail.error.reminder"));
     } finally {
       setRowReminderBusy(null);
     }
@@ -708,7 +712,7 @@ function EmailView() {
         body: JSON.stringify({ ids: [email.id], action: "archive" }),
       });
       if (data.failed && data.failed.length > 0) {
-        toast("Could not archive that email.", "error");
+        toast(t("mail.toast.archiveFailed"), "error");
         return;
       }
       patchListPages([email.id], "archive");
@@ -718,7 +722,7 @@ function EmailView() {
       });
     } catch (err) {
       captureClientError(err, { scope: "email.row.quickArchive", emailId: email.id });
-      toast("Could not archive that email.", "error");
+      toast(t("mail.toast.archiveFailed"), "error");
     } finally {
       setRowQuickBusy(null);
     }
@@ -813,13 +817,13 @@ function EmailView() {
         body: JSON.stringify({ ids: [email.id], action }),
       });
       if (data.failed && data.failed.length > 0) {
-        toast("Could not update read state.", "error");
+        toast(t("mail.toast.readFailed"), "error");
         return;
       }
       patchListPages([email.id], action);
     } catch (err) {
       captureClientError(err, { scope: "email.row.quickToggleRead", emailId: email.id, action });
-      toast("Could not update read state.", "error");
+      toast(t("mail.toast.readFailed"), "error");
     } finally {
       setRowQuickBusy(null);
     }
@@ -842,19 +846,19 @@ function EmailView() {
             </h1>
             <p className="mt-1.5 text-sm text-ink-mid">
               {source === "demo"
-                ? "No account connected — connect one in Settings"
+                ? t("mail.header.noAccount")
                 : replyCount > 0
-                  ? `${replyCount} need a reply`
+                  ? t("mail.header.needReply", { count: String(replyCount) })
                   : unreadCount > 0
-                    ? `${unreadCount} unread`
-                    : "All caught up"}
+                    ? t("mailV2.list.tally.unread", { count: String(unreadCount) })
+                    : t("mail.header.allCaughtUp")}
             </p>
           </div>
           <button
             type="button"
             onClick={() => setComposeOpen(true)}
             disabled={source === "demo"}
-            aria-label="Compose"
+            aria-label={t("mail.compose")}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-solid text-accent-solid-ink transition active:bg-accent-solid-hover disabled:opacity-40"
           >
             <svg
@@ -891,7 +895,7 @@ function EmailView() {
               }}
               className="shrink-0 rounded-xl border border-line px-3 text-xs text-ink-mid transition active:bg-surface-hover"
             >
-              Clear
+              {t("common.clear")}
             </button>
           )}
         </form>
@@ -948,7 +952,7 @@ function EmailView() {
             disabled={listQuery.isFetchingNextPage}
             className="mt-4 flex min-h-11 w-full items-center justify-center rounded-xl border border-line text-sm text-ink-mid transition active:bg-surface-hover disabled:opacity-50"
           >
-            {listQuery.isFetchingNextPage ? "Loading..." : "Load more"}
+            {listQuery.isFetchingNextPage ? t("common.loading") : t("mailV2.loadMore")}
           </button>
         )}
       </div>
@@ -969,36 +973,37 @@ function EmailView() {
               </h1>
               {source === "gmail" && (
                 <span
-                  title="Real-time sync is on — new mail lands in seconds"
+                  title={t("mail.live.title")}
                   className="inline-flex items-center gap-1.5 rounded-full border border-state-ok-line bg-state-ok-bg px-2 py-0.5 text-[11px] font-medium text-state-ok-ink"
                 >
                   <span aria-hidden="true" className="relative flex h-1.5 w-1.5">
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60 motion-reduce:animate-none" />
                     <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
                   </span>
-                  Live
+                  {t("mail.live")}
                 </span>
               )}
             </div>
             <p className="mt-2 text-sm text-ink-mid">
               {source === "demo" ? (
-                <span className="text-accent-deep">
-                  No mail account connected — connect one in Settings
-                </span>
+                <span className="text-accent-deep">{t("mail.header.noMailAccount")}</span>
               ) : replyCount > 0 ? (
                 <>
-                  <span className="font-medium text-ink-soft">{replyCount}</span>
-                  {replyCount === 1 ? " needs a reply" : " need a reply"}
+                  <span className="font-medium text-ink-soft">{replyCount}</span>{" "}
+                  {replyCount === 1
+                    ? t("mail.header.needsReplyOne")
+                    : t("mail.header.needsReplyMany")}
                 </>
               ) : unreadCount > 0 ? (
-                `${unreadCount} unread`
+                t("mailV2.list.tally.unread", { count: String(unreadCount) })
               ) : (
-                "You're all caught up"
+                t("mail.header.youreAllCaughtUp")
               )}
               {totalAvailable > 0 && (
                 <span className="text-ink-dim">
                   {" "}
-                  <span className="mx-0.5 text-slate-300">·</span> {totalAvailable} in view
+                  <span className="mx-0.5 text-slate-300">·</span>{" "}
+                  {t("mail.header.inView", { count: String(totalAvailable) })}
                 </span>
               )}
             </p>
@@ -1008,7 +1013,7 @@ function EmailView() {
               type="button"
               onClick={() => setComposeOpen(true)}
               disabled={source === "demo"}
-              title={source === "demo" ? "Connect Gmail to send email" : "Compose a new email"}
+              title={source === "demo" ? t("mail.compose.demoTitle") : t("mail.compose.title")}
               className="glow-primary ease-strong inline-flex h-9 items-center gap-1.5 rounded-lg bg-accent-solid px-3.5 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
             >
               <svg
@@ -1055,10 +1060,10 @@ function EmailView() {
               type="button"
               onClick={reanalyzeAttachments}
               disabled={reanalyzing}
-              title="Re-run attachment analysis"
+              title={t("mailV2.more.reanalyze")}
               className="ease-strong hidden h-9 items-center rounded-lg border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50 lg:inline-flex"
             >
-              {reanalyzing ? "Analyzing…" : "Reanalyze"}
+              {reanalyzing ? t("mail.reanalyzing") : t("mail.reanalyze")}
             </button>
           </div>
         </header>
@@ -1075,14 +1080,18 @@ function EmailView() {
 
         {bulkUndoNotice && (
           <BulkUndoActionBanner
-            title={`${bulkUndoNotice.emails.length} ${
-              bulkUndoNotice.emails.length === 1 ? "email" : "emails"
-            } archived.`}
+            title={
+              bulkUndoNotice.emails.length === 1
+                ? t("mail.undo.bulkArchivedOne")
+                : t("mail.undo.bulkArchivedMany", {
+                    count: String(bulkUndoNotice.emails.length),
+                  })
+            }
             preview={bulkUndoNotice.emails
               .slice(0, 2)
               .map((email) => email.subject)
               .join(", ")}
-            undoLabel={keyboardTriage ? t("undo.action") : "Undo all"}
+            undoLabel={keyboardTriage ? t("undo.action") : t("mail.undo.all")}
             busy={undoBusy}
             countdown={bulkUndoCountdown}
             onDismiss={dismissBulkUndoNotice}
@@ -1145,7 +1154,7 @@ function EmailView() {
                   setSearch("");
                   setAppliedSearch("");
                 }}
-                aria-label="Clear search"
+                aria-label={t("mail.clearSearch")}
                 className="absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-ink-dim transition hover:bg-surface-hover hover:text-ink-muted"
               >
                 <svg
@@ -1172,7 +1181,7 @@ function EmailView() {
             aid triage without burying the list. */}
         <div className="mb-4 mt-1 flex flex-wrap items-center gap-1.5">
           <span className="mr-0.5 text-[11px] font-medium uppercase tracking-wider text-ink-dim">
-            Views
+            {t("mail.views")}
           </span>
           {WORK_QUEUES.map((queue) => {
             const active = filter === queue.key;
@@ -1181,7 +1190,7 @@ function EmailView() {
                 key={queue.key}
                 type="button"
                 onClick={() => setFilter(queue.key)}
-                title={queue.description}
+                title={t(queue.descriptionKey)}
                 className={`ease-strong inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition duration-150 active:scale-[0.97] ${
                   active
                     ? "bg-accent/10 text-accent-deeper ring-1 ring-inset ring-accent/30"
@@ -1191,7 +1200,7 @@ function EmailView() {
                 {active && (
                   <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-accent" />
                 )}
-                {queue.title}
+                {t(queue.titleKey)}
               </button>
             );
           })}
@@ -1223,13 +1232,15 @@ function EmailView() {
               </span>
               <span>
                 <span className="font-medium">
-                  {candidateCount} candidate {candidateCount === 1 ? "signal" : "signals"}
+                  {candidateCount === 1
+                    ? t("mail.candidates.countOne")
+                    : t("mail.candidates.countMany", { count: String(candidateCount) })}
                 </span>{" "}
-                waiting in the intake queue.
+                {t("mail.candidates.waiting")}
               </span>
             </span>
             <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-accent-deep">
-              Review
+              {t("assistantHub.mode.suggest")}
               <svg
                 aria-hidden="true"
                 width="13"
@@ -1324,7 +1335,7 @@ function EmailView() {
               {groupEmailsByDate(emails).map((group) => (
                 <Fragment key={`${group.label}-${group.emails[0]?.id}`}>
                   <li className="bg-surface-raised/60 px-4 py-1.5 text-[10.5px] font-bold uppercase tracking-wider text-ink-dim">
-                    {group.label} <span className="text-slate-300">· {group.emails.length}</span>
+                    {t(group.label)} <span className="text-slate-300">· {group.emails.length}</span>
                   </li>
                   {group.emails.map((e) => (
                     <EmailRowItem
@@ -1350,7 +1361,7 @@ function EmailView() {
 
         {!loading && filter === "threads" && threads.length === 0 && !error && (
           <div className="mt-4 rounded-lg border border-line bg-surface-raised p-6 text-center">
-            <p className="text-sm text-ink-mid">No threads match this filter.</p>
+            <p className="text-sm text-ink-mid">{t("mail.noThreads")}</p>
           </div>
         )}
 
@@ -1384,13 +1395,13 @@ const DAY_MS = 86_400_000;
 // calculation — no state, no re-sorting (the server already ordered the list).
 function dateGroupLabel(dateIso: string): string {
   const date = new Date(dateIso);
-  if (Number.isNaN(date.getTime())) return "Earlier";
+  if (Number.isNaN(date.getTime())) return "mail.group.earlier";
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
-  if (date.getTime() >= todayStart.getTime()) return "Today";
-  if (date.getTime() >= todayStart.getTime() - DAY_MS) return "Yesterday";
-  if (date.getTime() >= todayStart.getTime() - 6 * DAY_MS) return "This week";
-  return "Earlier";
+  if (date.getTime() >= todayStart.getTime()) return "mail.group.today";
+  if (date.getTime() >= todayStart.getTime() - DAY_MS) return "mail.group.yesterday";
+  if (date.getTime() >= todayStart.getTime() - 6 * DAY_MS) return "mail.group.thisWeek";
+  return "mail.group.earlier";
 }
 
 // Splits the loaded rows into consecutive label runs, preserving server order.
@@ -1441,11 +1452,12 @@ function UndoActionBanner({
   onDismiss: () => void;
   onUndo: () => void;
 }) {
-  const actionLabel = notice.action === "archive" ? "archived" : "moved to trash";
+  const { t } = useT();
+  const title = notice.action === "archive" ? t("mail.undo.archived") : t("mail.undo.trashed");
   return (
     <div className="mb-4 flex flex-col gap-3 rounded-lg border border-accent-light/30 bg-state-info-bg px-4 py-3 text-sm text-ink shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
-        <p className="font-medium">Email {actionLabel}.</p>
+        <p className="font-medium">{title}</p>
         {notice.subject && <p className="mt-0.5 truncate text-xs text-ink-mid">{notice.subject}</p>}
       </div>
       <div className="flex shrink-0 gap-2">
@@ -1455,7 +1467,7 @@ function UndoActionBanner({
           disabled={busy}
           className="min-h-10 rounded-md bg-accent-solid px-3 text-xs font-semibold text-accent-solid-ink transition hover:bg-accent-solid-hover disabled:opacity-50"
         >
-          {busy ? "Restoring..." : "Undo"}
+          {busy ? t("mail.undo.restoring") : t("mailV2.undo")}
         </button>
         <button
           type="button"
@@ -1463,7 +1475,7 @@ function UndoActionBanner({
           disabled={busy}
           className="min-h-10 rounded-md border border-line px-3 text-xs text-ink-mid transition hover:bg-surface-hover disabled:opacity-50"
         >
-          Dismiss {countdown > 0 && `(${countdown}s)`}
+          {t("common.dismiss")} {countdown > 0 && `(${countdown}s)`}
         </button>
       </div>
     </div>
@@ -1489,6 +1501,7 @@ function BulkUndoActionBanner({
   onDismiss: () => void;
   onUndo: () => void;
 }) {
+  const { t } = useT();
   return (
     <div
       role="status"
@@ -1505,7 +1518,7 @@ function BulkUndoActionBanner({
           disabled={busy}
           className="min-h-10 rounded-md bg-accent-solid px-3 text-xs font-semibold text-accent-solid-ink transition hover:bg-accent-solid-hover disabled:opacity-50"
         >
-          {busy ? "Restoring..." : undoLabel}
+          {busy ? t("mail.undo.restoring") : undoLabel}
         </button>
         <button
           type="button"
@@ -1513,7 +1526,7 @@ function BulkUndoActionBanner({
           disabled={busy}
           className="min-h-10 rounded-md border border-line px-3 text-xs text-ink-mid transition hover:bg-surface-hover disabled:opacity-50"
         >
-          Dismiss {countdown > 0 && `(${countdown}s)`}
+          {t("common.dismiss")} {countdown > 0 && `(${countdown}s)`}
         </button>
       </div>
     </div>
@@ -1539,6 +1552,7 @@ function BulkActionBar({
   onClear: () => void;
   onToggleAll: () => void;
 }) {
+  const { t } = useT();
   return (
     <div className="flex flex-col gap-2 border-b border-line-soft px-4 py-2.5 md:flex-row md:items-center md:justify-between">
       <button
@@ -1570,27 +1584,29 @@ function BulkActionBar({
             </svg>
           )}
         </span>
-        {selectedCount > 0 ? `${selectedCount} selected` : "Select page"}
+        {selectedCount > 0
+          ? t("mailV2.bulk.selected", { count: String(selectedCount) })
+          : t("mail.bulk.selectPage")}
       </button>
       {selectedCount > 0 ? (
         <div className="flex flex-wrap gap-1.5">
           <BulkButton disabled={busy} onClick={() => onApply("mark-read")}>
-            Mark read
+            {t("mailV2.row.markRead")}
           </BulkButton>
           <BulkButton disabled={busy} onClick={() => onApply("mark-unread")}>
-            Mark unread
+            {t("mailV2.row.markUnread")}
           </BulkButton>
           <BulkButton
             disabled={busy}
             onClick={() => onApply("set-priority", { priority: "URGENT" })}
           >
-            Urgent
+            {t("emailDetail.priority.urgent")}
           </BulkButton>
           <BulkButton disabled={busy} onClick={() => onApply("set-priority", { priority: "LOW" })}>
-            Low
+            {t("emailDetail.priority.low")}
           </BulkButton>
           <BulkButton disabled={busy} danger onClick={() => onApply("archive")}>
-            Archive
+            {t("mailV2.row.archive")}
           </BulkButton>
           <button
             type="button"
@@ -1598,13 +1614,14 @@ function BulkActionBar({
             disabled={busy}
             className="h-7 rounded-md px-2 text-xs text-ink-dim transition hover:bg-surface-hover disabled:opacity-50"
           >
-            Cancel
+            {t("common.cancel")}
           </button>
         </div>
       ) : (
         <span className="text-[11px] text-ink-dim">
-          {totalVisible}
-          {totalAvailable > totalVisible ? ` of ${totalAvailable}` : " on this page"}
+          {totalAvailable > totalVisible
+            ? t("mailV2.shown", { shown: String(totalVisible), total: String(totalAvailable) })
+            : t("mail.bulk.onThisPage", { count: String(totalVisible) })}
         </span>
       )}
     </div>
@@ -1650,6 +1667,7 @@ function InboxSelector({
   current: string;
   onChange: (value: string) => void;
 }) {
+  const { t } = useT();
   if (inboxes.length < 2) return null;
   // Non-Google mailboxes (in the selector since Phase 1) get a small provider
   // tag — the address alone doesn't identify the service on custom domains.
@@ -1660,10 +1678,15 @@ function InboxSelector({
     IMAP: "IMAP",
   };
   const options = [
-    { value: "all", label: "All inboxes", needsReconnect: false, tag: null as string | null },
+    {
+      value: "all",
+      label: t("mail.inbox.all"),
+      needsReconnect: false,
+      tag: null as string | null,
+    },
     ...inboxes.map((i) => ({
       value: i.id ?? "primary",
-      label: i.email ?? (i.kind === "primary" ? "Primary" : "Linked inbox"),
+      label: i.email ?? (i.kind === "primary" ? t("mail.inbox.primary") : t("mail.inbox.linked")),
       needsReconnect: i.needsReconnect,
       tag: providerTag[i.provider] ?? null,
     })),
@@ -1671,7 +1694,7 @@ function InboxSelector({
   return (
     <div
       role="group"
-      aria-label="Filter by inbox"
+      aria-label={t("mail.inbox.filter")}
       className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-2 pt-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {options.map((o) => {
@@ -1703,8 +1726,8 @@ function InboxSelector({
             {o.needsReconnect && (
               <span
                 role="img"
-                aria-label="Reconnect needed"
-                title="Reconnect needed"
+                aria-label={t("mailV2.accounts.needsReconnect")}
+                title={t("mailV2.accounts.needsReconnect")}
                 className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent"
               />
             )}
@@ -1734,7 +1757,7 @@ function FilterTabs({
   return (
     <div
       role="group"
-      aria-label="Filter mail"
+      aria-label={t("mail.filter.label")}
       className="flex gap-0.5 overflow-x-auto rounded-xl border border-line/70 bg-surface-panel/60 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)] backdrop-blur [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {FILTERS.filter((f) => !DOMAIN_FILTER_KEYS.includes(f.key)).map((f) => {
@@ -1783,6 +1806,7 @@ function LoadMoreBar({
   // 'Load more' button stays as a fallback for keyboard / a11y users and
   // for the rare case where IntersectionObserver is throttled by the
   // browser (e.g. background tab).
+  const { t } = useT();
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -1808,8 +1832,9 @@ function LoadMoreBar({
       className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-line/70 bg-surface-panel/60 px-4 py-2.5 text-[11px] text-ink-dim backdrop-blur"
     >
       <span>
-        Showing {loadedCount}
-        {totalAvailable > loadedCount ? ` of ${totalAvailable}` : ""}
+        {totalAvailable > loadedCount
+          ? t("mail.showingOf", { shown: String(loadedCount), total: String(totalAvailable) })
+          : t("mail.showing", { shown: String(loadedCount) })}
       </span>
       {hasNext ? (
         <button
@@ -1818,10 +1843,10 @@ function LoadMoreBar({
           disabled={isFetching}
           className="ease-strong rounded-md border border-line bg-surface-panel px-2.5 py-1 text-[11px] font-medium text-ink-mid shadow-sm transition duration-150 hover:text-accent-deep active:scale-[0.97] disabled:opacity-50"
         >
-          {isFetching ? "Loading…" : "Load more"}
+          {isFetching ? t("mailV2.loadingMore") : t("mailV2.loadMore")}
         </button>
       ) : (
-        <span className="text-ink-mid">All loaded.</span>
+        <span className="text-ink-mid">{t("mail.allLoaded")}</span>
       )}
     </div>
   );
@@ -1853,6 +1878,7 @@ function EmailRowItem({
   onQuickToggleRead: (email: EmailRow) => void;
   onToggleSelected: (id: string) => void;
 }) {
+  const { t } = useT();
   const unread = !email.isRead;
   const urgent = email.priority === "URGENT";
   const name = senderName(email.from);
@@ -1876,7 +1902,7 @@ function EmailRowItem({
         <button
           type="button"
           aria-pressed={selected}
-          aria-label={`Select ${email.subject || "No subject"}`}
+          aria-label={t("mailV2.list.select", { subject: email.subject || t("common.noSubject") })}
           onClick={() => onToggleSelected(email.id)}
           className={`mt-2.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition ${
             selected
@@ -1945,7 +1971,7 @@ function EmailRowItem({
                 unread ? "font-medium text-ink-strong" : "text-ink-muted"
               }`}
             >
-              {email.subject || "No subject"}
+              {email.subject || t("common.noSubject")}
             </span>
             {email.summary ? (
               <span
@@ -1980,8 +2006,8 @@ function EmailRowItem({
           type="button"
           aria-label={
             email.isRead
-              ? `Mark ${email.subject || "No subject"} as unread`
-              : `Mark ${email.subject || "No subject"} as read`
+              ? t("mail.row.markUnreadLabel", { subject: email.subject || t("common.noSubject") })
+              : t("mail.row.markReadLabel", { subject: email.subject || t("common.noSubject") })
           }
           onClick={() => onQuickToggleRead(email)}
           disabled={quickBusyId !== null}
@@ -2021,7 +2047,9 @@ function EmailRowItem({
         </button>
         <button
           type="button"
-          aria-label={`Archive ${email.subject || "No subject"}`}
+          aria-label={t("mail.row.archiveLabel", {
+            subject: email.subject || t("common.noSubject"),
+          })}
           onClick={() => onQuickArchive(email)}
           disabled={quickBusyId !== null}
           className="ease-strong flex h-7 w-7 items-center justify-center rounded-md border border-line bg-surface-panel text-ink-dim shadow-sm transition duration-150 hover:text-accent-deep active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45"
@@ -2061,13 +2089,14 @@ function EmailRowReminderActions({
   email: EmailRow;
   onCreateReminder: (email: EmailRow, option: EmailReminderOption) => void;
 }) {
+  const { t } = useT();
   // Quiet inline strip, indented to the content column (checkbox 16 + gap 12 +
   // avatar 36 + gap 14 = 78px). Text-only buttons keep the row calm while the
   // one-click reminder affordance stays permanently visible (no hover-hiding —
   // touch and keyboard users get the same surface).
   return (
     <div className="-mt-1.5 flex flex-wrap items-center gap-0.5 pb-2.5 pl-[78px] pr-4 text-[11px] text-ink-dim">
-      <span className="mr-1.5">Remind</span>
+      <span className="mr-1.5">{t("mail.remind.label")}</span>
       {EMAIL_REMINDER_OPTIONS.map((option) => {
         const key = `${email.id}:${option.key}`;
         return (
@@ -2078,7 +2107,7 @@ function EmailRowReminderActions({
             disabled={busyKey !== null}
             className="ease-strong rounded-md px-2 py-1 text-[11px] font-medium text-ink-dim transition duration-150 hover:bg-state-info-bg hover:text-accent-deeper active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45"
           >
-            {busyKey === key ? "Setting…" : option.label}
+            {busyKey === key ? t("mail.remind.setting") : t(option.labelKey)}
           </button>
         );
       })}
@@ -2143,6 +2172,7 @@ function EmailBadges({ email, unread }: { email: EmailRow; unread: boolean }) {
 }
 
 function ThreadRowItem({ thread }: { thread: ThreadRow }) {
+  const { t } = useT();
   const firstParticipant = thread.participants[0] ? senderName(thread.participants[0]) : "@";
   return (
     <li className="row-wash group relative">
@@ -2168,7 +2198,7 @@ function ThreadRowItem({ thread }: { thread: ThreadRow }) {
             </span>
             <PriorityBadge priority={thread.latestPriority} />
             <span className="shrink-0 rounded-md bg-surface-hover px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-ink-mid">
-              {thread.messageCount} msgs
+              {t("mail.thread.messages", { count: String(thread.messageCount) })}
             </span>
             <time className="ml-auto shrink-0 text-[11px] tabular-nums text-ink-dim">
               {formatRelative(thread.lastMessage.receivedAt)}
@@ -2177,7 +2207,7 @@ function ThreadRowItem({ thread }: { thread: ThreadRow }) {
           <span
             className={`mt-1 block truncate text-[13.5px] ${thread.hasUnread ? "font-medium text-ink-strong" : "text-ink-muted"}`}
           >
-            {thread.subject || "No subject"}
+            {thread.subject || t("common.noSubject")}
           </span>
           {thread.summary ? (
             <span className="mt-1 line-clamp-1 block text-xs leading-5 text-ink-dim">
@@ -2195,10 +2225,15 @@ function ThreadRowItem({ thread }: { thread: ThreadRow }) {
 }
 
 function CandidatePreview({ profile }: { profile: CandidateProfilePreview }) {
-  const title = [profile.name || "Name missing", profile.role].filter(Boolean).join(" · ");
+  const { t } = useT();
+  const title = [profile.name || t("mail.candidate.nameMissing"), profile.role]
+    .filter(Boolean)
+    .join(" · ");
   const missing =
     profile.missingFields.length > 0
-      ? `Needs: ${profile.missingFields.map(candidateMissingLabel).join(", ")}`
+      ? t("mail.candidate.needs", {
+          fields: profile.missingFields.map((f) => t(candidateMissingLabel(f))).join(", "),
+        })
       : null;
   return (
     <div className="mt-2 rounded-lg border border-accent/15 bg-accent/5 px-2.5 py-2">
@@ -2210,9 +2245,15 @@ function CandidatePreview({ profile }: { profile: CandidateProfilePreview }) {
       </div>
       <p className="mt-1 line-clamp-2 text-[11px] leading-5 text-ink-mid">{profile.summary}</p>
       <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[10px] text-ink-dim">
-        {profile.contact && <span className="truncate">Contact {profile.contact}</span>}
-        {profile.intakeStatus && <span>{candidateIntakeLabel(profile.intakeStatus)}</span>}
-        <span>Files {profile.evidenceCount}</span>
+        {profile.contact && (
+          <span className="truncate">
+            {t("emailDetail.candidateCard.fact.contact")} {profile.contact}
+          </span>
+        )}
+        {profile.intakeStatus && <span>{t(candidateIntakeLabel(profile.intakeStatus))}</span>}
+        <span>
+          {t("emailDetail.candidateCard.fact.files")} {profile.evidenceCount}
+        </span>
         {missing && <span className="text-accent-deep">{missing}</span>}
       </div>
     </div>
@@ -2221,39 +2262,41 @@ function CandidatePreview({ profile }: { profile: CandidateProfilePreview }) {
 
 function candidateIntakeLabel(status: string): string {
   const labels: Record<string, string> = {
-    NEEDS_ANALYSIS: "Needs analysis",
-    NEEDS_INFO: "Needs info",
-    READY_TO_REVIEW: "Ready to review",
-    REVIEWING: "Reviewing",
-    CONTACTED: "Contacted",
-    SHORTLISTED: "Shortlisted",
-    REJECTED: "Rejected",
-    ARCHIVED: "Archived",
+    NEEDS_ANALYSIS: "candidates.status.needsAnalysis",
+    NEEDS_INFO: "candidates.status.needsInfo",
+    READY_TO_REVIEW: "candidates.status.readyToReview",
+    REVIEWING: "candidates.status.reviewing",
+    CONTACTED: "candidates.status.contacted",
+    SHORTLISTED: "candidates.status.shortlisted",
+    REJECTED: "candidates.status.rejected",
+    ARCHIVED: "candidates.status.archived",
   };
   return labels[status] || status;
 }
 
 function candidateMissingLabel(field: string): string {
   const labels: Record<string, string> = {
-    name: "Name",
-    contact: "Contact",
-    role: "Role",
-    portfolio: "Portfolio",
+    name: "emailDetail.candidateCard.fact.name",
+    contact: "emailDetail.candidateCard.fact.contact",
+    role: "emailDetail.candidateCard.fact.role",
+    portfolio: "candidates.missingField.portfolio",
   };
   return labels[field] || field;
 }
 function ReplyNeededBadge() {
+  const { t } = useT();
   return (
     <span className="shrink-0 rounded-md bg-accent/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-accent-deeper ring-1 ring-inset ring-accent/20">
-      Needs reply
+      {t("mail.filterReplyNeeded")}
     </span>
   );
 }
 
 function CandidateBadge() {
+  const { t } = useT();
   return (
     <span className="shrink-0 rounded-md bg-accent/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-accent-deep ring-1 ring-inset ring-accent/20">
-      Candidate
+      {t("mail.badge.candidate")}
     </span>
   );
 }
@@ -2264,7 +2307,12 @@ function PriorityBadge({ priority }: { priority: EmailRow["priority"] }) {
     NORMAL: "bg-surface-hover text-ink-mid ring-line",
     LOW: "bg-surface-hover text-ink-mid ring-transparent",
   } as const;
-  const labels = { URGENT: "Urgent", NORMAL: "Normal", LOW: "Low" } as const;
+  const { t } = useT();
+  const labels = {
+    URGENT: t("emailDetail.priority.urgent"),
+    NORMAL: t("emailDetail.priority.normal"),
+    LOW: t("emailDetail.priority.low"),
+  } as const;
   if (priority === "NORMAL") return null;
   return (
     <span
@@ -2276,17 +2324,18 @@ function PriorityBadge({ priority }: { priority: EmailRow["priority"] }) {
 }
 
 function CategoryBadge({ category }: { category: string }) {
-  const labelMap: Record<string, string> = {
-    business: "Business",
-    engineering: "Engineering",
-    automated: "Automated",
-    newsletter: "Newsletter",
-    meeting: "Meeting",
-    billing: "Billing",
-    conversation: "Conversation",
-    other: "Other",
-  };
-  const label = labelMap[category] || category;
+  const { t } = useT();
+  const known = new Set([
+    "business",
+    "engineering",
+    "automated",
+    "newsletter",
+    "meeting",
+    "billing",
+    "conversation",
+    "other",
+  ]);
+  const label = known.has(category) ? t(`emailDetail.category.${category}`) : category;
   return (
     <span className="shrink-0 rounded-md bg-surface-hover px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-ink-mid">
       {label}
@@ -2350,6 +2399,7 @@ function MobileEmailRow({
   queue: Filter;
   inboxLabel?: string | null;
 }) {
+  const { t } = useT();
   const unread = !email.isRead;
   const params = new URLSearchParams({ markRead: "false", queue });
   const preview = email.summary || email.snippet;
@@ -2380,7 +2430,7 @@ function MobileEmailRow({
           <span
             className={`mt-0.5 block truncate text-[13px] ${unread ? "text-ink" : "text-ink-mid"}`}
           >
-            {email.subject || "No subject"}
+            {email.subject || t("common.noSubject")}
           </span>
           {preview && (
             <span className="mt-1 line-clamp-2 block text-[12px] leading-5 text-ink-dim">
@@ -2391,7 +2441,7 @@ function MobileEmailRow({
             <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
               {email.priority === "URGENT" && (
                 <span className="inline-flex items-center rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-state-danger-ink">
-                  Urgent
+                  {t("emailDetail.priority.urgent")}
                 </span>
               )}
               {inboxLabel && (

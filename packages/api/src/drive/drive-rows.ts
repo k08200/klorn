@@ -24,11 +24,25 @@
  * (OneDrive) write the rows of files that stay in their service, with a link and
  * no storage key. A connector must check that the `sourceKey` it writes is an
  * account of that user before it calls this.
+ *
+ * `sourceAccountId` (D5a) is derived here, never chosen by a caller: the account
+ * a connected row came from is its `sourceKey`, and a Klorn row has none. It is
+ * set on create only, never in the changes, so an update cannot move a row to
+ * another account. It is a foreign key to LinkedDriveAccount with ON DELETE
+ * CASCADE, and the migration's two CHECKs hold the same rule in the database. A
+ * create whose account was unlinked meanwhile fails the foreign key (Prisma
+ * P2003) instead of leaving an orphan row.
+ *
+ * Unlinking an account (D5b, drive/linked-drive-accounts.ts) deletes its rows
+ * here, by sourceKey, inside the unlink's own transaction, before the account.
+ * The refresh (D5d, drive/google-drive-refresh.ts) deletes one file's row here
+ * when Google answers 404 for it (`deleteConnectedDriveRows`).
  */
 
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../db.js";
-import { safeHttpsLink } from "../safe-https-link.js";
-import { type DriveProviderName, isKlornDriveProvider } from "./drive-providers.js";
+import { safeHttpsLink, safeHttpsLinkOnHosts } from "../safe-https-link.js";
+import { type DriveProviderName, driveLinkHosts, isKlornDriveProvider } from "./drive-providers.js";
 
 /** Every provider but the Klorn drive itself: its rows name the account they came from. */
 export type ConnectedDriveProvider = Exclude<DriveProviderName, "KLORN">;
@@ -111,6 +125,8 @@ export interface DriveRowData {
   readonly userId: string;
   readonly provider: DriveProviderName;
   readonly sourceKey: string;
+  /** The LinkedDriveAccount a connected row came from (its sourceKey); null for KLORN. */
+  readonly sourceAccountId: string | null;
   readonly externalId: string;
   readonly name: string;
   readonly modifiedAt: Date;
@@ -198,8 +214,25 @@ function sizeChange(input: DriveFileInput): { sizeBytes?: bigint | null } {
   return input.sizeBytes === undefined ? {} : { sizeBytes: cleanSizeBytes(input.sizeBytes) };
 }
 
+/**
+ * A file's link as stored: none for a file Klorn holds (it opens through
+ * Klorn's own routes); otherwise the rule every link Klorn hands on passes
+ * (safe-https-link.ts: absolute https, no credentials, bounded), and for a
+ * provider with pinned hosts (GOOGLE: docs.google.com, drive.google.com) one of
+ * those exactly, whichever path writes the row.
+ */
+function storedWebUrl(provider: DriveProviderName, value: unknown): string | null {
+  if (isKlornDriveProvider(provider)) return null;
+  const hosts = driveLinkHosts(provider);
+  return hosts === null ? safeHttpsLink(value) : safeHttpsLinkOnHosts(value, hosts);
+}
+
 /** The fields the input names, cleaned; a field it leaves out is absent here too. */
-function changesOf(input: DriveFileInput, name: string, klornHeld: boolean): DriveRowChanges {
+function changesOf(
+  input: DriveFileInput,
+  name: string,
+  provider: DriveProviderName,
+): DriveRowChanges {
   return {
     name,
     modifiedAt: input.modifiedAt,
@@ -207,9 +240,7 @@ function changesOf(input: DriveFileInput, name: string, klornHeld: boolean): Dri
     ...(input.isFolder !== undefined && { isFolder: input.isFolder === true }),
     ...sizeChange(input),
     ...(input.parentExternalId !== undefined && { parentExternalId: input.parentExternalId }),
-    // The rule every link Klorn hands on passes (safe-https-link.ts): absolute
-    // https, no credentials, bounded. A Klorn-held file has no link of its own.
-    ...(input.webUrl !== undefined && { webUrl: klornHeld ? null : safeHttpsLink(input.webUrl) }),
+    ...(input.webUrl !== undefined && { webUrl: storedWebUrl(provider, input.webUrl) }),
     ...(input.storageKey !== undefined && { storageKey: input.storageKey }),
     ...(input.etag !== undefined && { etag: cleanEtag(input.etag) }),
     ...(input.trashed !== undefined && { trashed: input.trashed === true }),
@@ -246,12 +277,13 @@ export function driveRowData(
     return { ok: false, reason: "storageKey" };
   }
 
-  const changes = changesOf(input, name, klornHeld);
+  const changes = changesOf(input, name, source.provider);
   const data: DriveRowData = {
     ...CREATE_DEFAULTS,
     userId,
     provider: source.provider,
     sourceKey: source.sourceKey,
+    sourceAccountId: klornHeld ? null : source.sourceKey,
     externalId: source.externalId,
     ...changes,
   };
@@ -322,6 +354,54 @@ export async function deleteKlornDriveRows(
       sourceKey: KLORN_DRIVE_SOURCE_KEY,
       externalId: { in: [...externalIds] },
     },
+  });
+  return deleted.count;
+}
+
+/** The client a delete runs on: the global one, or a transaction's. */
+export type DriveRowsClient = Pick<Prisma.TransactionClient, "driveFile">;
+
+/**
+ * Delete every row of one connected account of this user (D5b's unlink). Only
+ * that user's, only that provider's (never KLORN: the type has no such member),
+ * only that account's. Runs on the caller's transaction, which then deletes the
+ * account: the foreign key's cascade would take the rows too, but the writer
+ * deletes them itself so the unlink states what it removes. A summary goes with
+ * its file through its own cascading foreign key.
+ */
+export async function deleteLinkedAccountDriveRows(
+  client: DriveRowsClient,
+  userId: string,
+  provider: ConnectedDriveProvider,
+  sourceKey: string,
+): Promise<number> {
+  // The type already refuses it; a cast must not reach KLORN rows, whose objects
+  // are deleted before them (drive/klorn-remove.ts).
+  if (isKlornDriveProvider(provider)) throw new Error("drive rows: KLORN has no connected account");
+  const deleted = await client.driveFile.deleteMany({
+    where: { userId, provider, sourceKey },
+  });
+  return deleted.count;
+}
+
+/**
+ * Delete these files' rows of one connected account of this user (D5d: the
+ * refresh's 404, a file that is gone or no longer this grant's). Only that
+ * user's, only that provider's (never KLORN), only that account's, only these
+ * externalIds. A summary goes with its file through its own cascading foreign
+ * key. The caller has loaded the account by (id, userId, provider) first.
+ */
+export async function deleteConnectedDriveRows(
+  userId: string,
+  provider: ConnectedDriveProvider,
+  sourceKey: string,
+  externalIds: readonly string[],
+): Promise<number> {
+  // As above: a cast must not reach KLORN rows, whose objects go first.
+  if (isKlornDriveProvider(provider)) throw new Error("drive rows: KLORN has no connected account");
+  if (externalIds.length === 0) return 0;
+  const deleted = await prisma.driveFile.deleteMany({
+    where: { userId, provider, sourceKey, externalId: { in: [...externalIds] } },
   });
   return deleted.count;
 }

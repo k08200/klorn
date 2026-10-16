@@ -150,6 +150,15 @@ export async function startLinkInbox(): Promise<void> {
   await openOAuthUrl(url);
 }
 
+/**
+ * Start the consent to link a Google account for Google Drive (D5c, picked
+ * files only). The server answers 404 while Google Drive is off.
+ */
+export async function startLinkGoogleDrive(): Promise<void> {
+  const { url } = await apiFetch<{ url: string }>("/api/drive/google/link", { method: "POST" });
+  await openOAuthUrl(url);
+}
+
 export async function startLinkOutlookInbox(): Promise<void> {
   const { url } = await apiFetch<{ url: string }>("/api/auth/outlook/link-inbox", {
     method: "POST",

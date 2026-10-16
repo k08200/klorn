@@ -6,6 +6,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../../components/auth-guard";
 import { useConfirm } from "../../../components/confirm-dialog";
+import MailHtmlBody from "../../../components/mail-html-body";
 import { useToast } from "../../../components/toast";
 import { TrustBadgeChip } from "../../../components/trust-badge";
 import ErrorAlert from "../../../components/ui/error-alert";
@@ -202,6 +203,14 @@ const EMPTY_READER_SLOTS = {
   analysis: null,
   context: null,
 };
+
+function LegacyPlainBody({ body }: { body: string }) {
+  return (
+    <pre className="whitespace-pre-wrap break-words font-sans text-[15px] leading-7 text-ink-strong">
+      {linkifyText(body)}
+    </pre>
+  );
+}
 
 export default function EmailDetailPage() {
   return (
@@ -1064,14 +1073,21 @@ function EmailDetailView() {
               panel with a comfortable reading measure; Klorn's judgment sits
               beside it as supporting context. */}
           <div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr] lg:items-start">
-            {email.body ? (
+            {email.renderHtml || email.body ? (
               <section className="panel-elevated overflow-hidden rounded-2xl border border-line/70 bg-surface-panel p-5 md:p-6">
                 <h2 className="mb-4 text-[11px] font-semibold uppercase tracking-wider text-ink-dim">
                   {t("emailDetail.messageTitle")}
                 </h2>
-                <pre className="whitespace-pre-wrap break-words font-sans text-[15px] leading-7 text-ink-strong">
-                  {linkifyText(email.body)}
-                </pre>
+                {email.renderHtml ? (
+                  <MailHtmlBody
+                    key={email.id}
+                    emailId={email.id}
+                    html={email.renderHtml}
+                    plain={email.body ? <LegacyPlainBody body={email.body} /> : null}
+                  />
+                ) : (
+                  <LegacyPlainBody body={email.body ?? ""} />
+                )}
               </section>
             ) : email.snippet ? (
               <section className="panel-elevated overflow-hidden rounded-2xl border border-line/70 bg-surface-panel p-5 md:p-6">

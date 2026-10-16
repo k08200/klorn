@@ -10,16 +10,17 @@ import {
   hotkeyRegistry,
   matchLegacyHotkey,
 } from "../lib/hotkeys";
+import { useT } from "../lib/i18n";
 import { modalStack } from "../lib/modal-stack";
 import { useHotkeys, useKeyboardTriage } from "../lib/use-hotkeys";
 import { ShortcutSheet } from "./shortcut-sheet";
 import { useToast } from "./toast";
 
 const SHORTCUTS = [
-  { keys: ["Cmd", "K"], label: "Command palette" },
-  { keys: ["Cmd", "B"], label: "Open briefing" },
-  { keys: ["Cmd", "/"], label: "Show shortcuts" },
-  { keys: ["Esc"], label: "Close window" },
+  { keys: ["Cmd", "K"], labelKey: "keys.palette" },
+  { keys: ["Cmd", "B"], labelKey: "keys.briefing" },
+  { keys: ["Cmd", "/"], labelKey: "shortcuts.show" },
+  { keys: ["Esc"], labelKey: "shortcuts.closeWindow" },
 ];
 
 /**
@@ -125,6 +126,7 @@ function isModalOpen(): boolean {
 
 /** The pre-flag help dialog, kept as it was for the flag-off path. */
 function LegacyShortcutsDialog({ onClose }: { onClose: () => void }) {
+  const { t } = useT();
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
@@ -180,12 +182,12 @@ function LegacyShortcutsDialog({ onClose }: { onClose: () => void }) {
         aria-labelledby={titleId}
       >
         <h3 id={titleId} className="font-semibold mb-4">
-          Keyboard shortcuts
+          {t("keys.sheet.title")}
         </h3>
         <div className="space-y-3">
           {SHORTCUTS.map((s) => (
-            <div key={s.label} className="flex items-center justify-between">
-              <span className="text-sm text-ink-mid">{s.label}</span>
+            <div key={s.labelKey} className="flex items-center justify-between">
+              <span className="text-sm text-ink-mid">{t(s.labelKey)}</span>
               <div className="flex gap-1">
                 {s.keys.map((k) => (
                   <kbd
@@ -199,15 +201,13 @@ function LegacyShortcutsDialog({ onClose }: { onClose: () => void }) {
             </div>
           ))}
         </div>
-        <p className="text-xs text-ink-mid mt-4 text-center">
-          Press Esc or click outside to close.
-        </p>
+        <p className="text-xs text-ink-mid mt-4 text-center">{t("shortcuts.closeHint")}</p>
         <button
           type="button"
           onClick={onClose}
           className="mt-4 w-full min-h-11 rounded-lg border border-line text-sm text-ink-mid transition hover:border-accent/40 hover:text-accent-deep"
         >
-          Close
+          {t("common.close")}
         </button>
       </div>
     </div>

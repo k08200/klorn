@@ -25,6 +25,7 @@ import {
   DRIVE_NAME_MAX_CHARS,
   type DriveFileInput,
   type DriveFileSource,
+  deleteConnectedDriveRows,
   driveRowData,
   KLORN_DRIVE_SOURCE_KEY,
   klornDriveSource,
@@ -98,9 +99,25 @@ describe("driveRowData: the row's identity", () => {
 
   it("the changes never carry the identity: an update cannot rewrite it", () => {
     const changes = changesOf(GOOGLE, { mimeType: "application/pdf", trashed: true });
-    for (const key of ["userId", "provider", "sourceKey", "externalId"]) {
+    for (const key of ["userId", "provider", "sourceKey", "sourceAccountId", "externalId"]) {
       expect(changes).not.toHaveProperty(key);
     }
+  });
+
+  it("a connected row names the account it came from: its sourceKey, set on create only (D5a)", () => {
+    expect(dataOf(GOOGLE).sourceAccountId).toBe("acct-1");
+    expect(dataOf(ONEDRIVE).sourceAccountId).toBe("acct-2");
+    // The migration's CHECK: when set, it is the sourceKey.
+    for (const source of [GOOGLE, ONEDRIVE]) {
+      expect(dataOf(source).sourceAccountId).toBe(source.sourceKey);
+    }
+    expect(changesOf(GOOGLE, { trashed: true, etag: "v2" })).not.toHaveProperty("sourceAccountId");
+  });
+
+  it("a Klorn drive row has no account: the CHECK ties a NULL sourceAccountId to KLORN", () => {
+    expect(dataOf(KLORN).sourceAccountId).toBeNull();
+    expect(dataOf(KLORN).sourceKey).toBe(KLORN_DRIVE_SOURCE_KEY);
+    expect(changesOf(KLORN, { storageKey: "u/user-1/k-1" })).not.toHaveProperty("sourceAccountId");
   });
 
   it.each([
@@ -182,6 +199,33 @@ describe("driveRowData: the link", () => {
 
   it("stores no link for a file Klorn holds: it opens through Klorn's own routes", () => {
     expect(dataOf(KLORN, { webUrl: "https://example.com/x" }).webUrl).toBeNull();
+  });
+
+  it("keeps a Google Drive link on docs.google.com or drive.google.com", () => {
+    for (const link of [
+      "https://docs.google.com/document/d/abc/edit",
+      "https://drive.google.com/file/d/abc/view",
+    ]) {
+      expect(dataOf(GOOGLE, { webUrl: link }).webUrl).toBe(link);
+    }
+  });
+
+  it.each([
+    ["another host", "https://evil.example/file/d/abc"],
+    ["a look-alike suffix", "https://drive.google.com.evil.example/x"],
+    ["a sub-domain", "https://x.docs.google.com/document/d/abc"],
+    ["a port", "https://drive.google.com:8443/file/d/abc"],
+    ["credentials", "https://u:p@drive.google.com/file/d/abc"],
+    ["http", "http://docs.google.com/document/d/abc"],
+  ])("a GOOGLE row stores no link on %s, whoever writes it (D5d too)", (_label, webUrl) => {
+    expect(dataOf(GOOGLE, { webUrl }).webUrl).toBeNull();
+    expect(changesOf(GOOGLE, { webUrl })).toMatchObject({ webUrl: null });
+  });
+
+  it("another connected provider keeps any safe https link, as before", () => {
+    expect(dataOf(ONEDRIVE, { webUrl: "https://onedrive.live.com/?id=1" }).webUrl).toBe(
+      "https://onedrive.live.com/?id=1",
+    );
   });
 });
 
@@ -302,6 +346,7 @@ describe("driveRowData: the changes are only what the input names", () => {
       userId: "user-1",
       provider: "GOOGLE",
       sourceKey: "acct-1",
+      sourceAccountId: "acct-1",
       externalId: "file-1",
       name: "Q3 report.pdf",
       modifiedAt: MODIFIED,
@@ -327,6 +372,20 @@ describe("upsertDriveFileRow", () => {
 
   const rows = () => db.tables.driveFile ?? [];
 
+  it("a GOOGLE row written with another host's link stores none", async () => {
+    await upsertDriveFileRow("user-1", GOOGLE, input({ webUrl: "https://evil.example/x" }));
+    expect(rows()[0]?.webUrl).toBeNull();
+    await upsertDriveFileRow(
+      "user-1",
+      GOOGLE,
+      input({ webUrl: "https://drive.google.com/file/d/file-1/view" }),
+    );
+    expect(rows()[0]?.webUrl).toBe("https://drive.google.com/file/d/file-1/view");
+    await upsertDriveFileRow("user-1", GOOGLE, input({ webUrl: "https://drive.google.com:444/x" }));
+    expect(rows()).toHaveLength(1);
+    expect(rows()[0]?.webUrl).toBeNull();
+  });
+
   it("writes one row that states its provider and source", async () => {
     const result = await upsertDriveFileRow("user-1", GOOGLE, input({ sizeBytes: 42, etag: "v1" }));
     expect(result.ok).toBe(true);
@@ -335,6 +394,7 @@ describe("upsertDriveFileRow", () => {
       userId: "user-1",
       provider: "GOOGLE",
       sourceKey: "acct-1",
+      sourceAccountId: "acct-1",
       externalId: "file-1",
       name: "Q3 report.pdf",
       sizeBytes: 42n,
@@ -343,6 +403,16 @@ describe("upsertDriveFileRow", () => {
       storageKey: null,
     });
     expect(result.ok && result.id).toBe(rows()[0]?.id);
+  });
+
+  it("a Klorn drive row is written with no account", async () => {
+    const result = await upsertDriveFileRow("user-1", KLORN, input({ storageKey: "u/user-1/k-1" }));
+    expect(result.ok).toBe(true);
+    expect(rows()[0]).toMatchObject({
+      provider: "KLORN",
+      sourceKey: KLORN_DRIVE_SOURCE_KEY,
+      sourceAccountId: null,
+    });
   });
 
   it("the same file again updates its row; it never makes a second", async () => {
@@ -453,5 +523,38 @@ describe("upsertDriveFileRow", () => {
     expect(result).toEqual({ ok: false, reason: "storageKey" });
     expect(rows()).toHaveLength(0);
     expect(db.writes.driveFile ?? []).toEqual([]);
+  });
+});
+
+describe("deleteConnectedDriveRows (D5d: the refresh's 404)", () => {
+  let db: FakeDb;
+
+  beforeEach(async () => {
+    db = createFakeDb({ driveFile: [] });
+    dbHolder.current = db;
+    await upsertDriveFileRow("user-1", connectedDriveSource("GOOGLE", "acct-1", "gone"), input());
+    await upsertDriveFileRow("user-1", connectedDriveSource("GOOGLE", "acct-1", "kept"), input());
+    // The same upstream id in another account of the user, and in another user's.
+    await upsertDriveFileRow("user-1", connectedDriveSource("GOOGLE", "acct-2", "gone"), input());
+    await upsertDriveFileRow("user-2", connectedDriveSource("GOOGLE", "acct-1", "gone"), input());
+  });
+
+  const left = () =>
+    (db.tables.driveFile ?? []).map((r) => `${r.userId}/${r.sourceKey}/${r.externalId}`);
+
+  it("deletes only these files of this account of this user", async () => {
+    expect(await deleteConnectedDriveRows("user-1", "GOOGLE", "acct-1", ["gone"])).toBe(1);
+    expect(left()).toEqual(["user-1/acct-1/kept", "user-1/acct-2/gone", "user-2/acct-1/gone"]);
+  });
+
+  it("an empty list deletes nothing and issues no query", async () => {
+    expect(await deleteConnectedDriveRows("user-1", "GOOGLE", "acct-1", [])).toBe(0);
+    expect((db.writes.driveFile ?? []).filter((w) => w.op === "deleteMany")).toEqual([]);
+  });
+
+  it("refuses KLORN, whatever a cast says: its objects are deleted before its rows", async () => {
+    await expect(
+      deleteConnectedDriveRows("user-1", "KLORN" as never, KLORN_DRIVE_SOURCE_KEY, ["k-1"]),
+    ).rejects.toThrow(/KLORN/);
   });
 });

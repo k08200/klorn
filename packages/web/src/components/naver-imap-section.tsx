@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { TIER_COUNT } from "@/lib/tiers";
 import { apiFetch } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { useT } from "../lib/i18n";
 import { captureClientError } from "../lib/sentry";
 import { useConfirm } from "./confirm-dialog";
 import { FirstSyncNote } from "./imap-connect-notes";
@@ -49,6 +50,7 @@ interface NaverImapSectionProps {
 export function NaverImapSection({ embedded = false, onChanged }: NaverImapSectionProps = {}) {
   const { user } = useAuth();
   const { confirm } = useConfirm();
+  const { t } = useT();
   // The first mail account is free whatever the provider; a second one is
   // Pro. The server answers `canConnect` on /status (always true while the
   // paywall is off); `entitled` is only the fallback for an older API. An
@@ -78,11 +80,11 @@ export function NaverImapSection({ embedded = false, onChanged }: NaverImapSecti
       setStatus(data);
     } catch (err) {
       captureClientError(err, { scope: "naver-imap.status" });
-      setError("Could not load Naver connection status.");
+      setError(t("imap.naver.error.status"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     loadStatus();
@@ -103,7 +105,7 @@ export function NaverImapSection({ embedded = false, onChanged }: NaverImapSecti
         }),
       });
       if (!data.ok) {
-        setError(data.message || "Connection failed.");
+        setError(data.message || t("imap.error.connectFailed"));
       } else {
         setEmailInput("");
         setPasswordInput("");
@@ -118,7 +120,7 @@ export function NaverImapSection({ embedded = false, onChanged }: NaverImapSecti
         return;
       }
       captureClientError(err, { scope: "naver-imap.connect" });
-      setError(msg || "Connection failed.");
+      setError(msg || t("imap.error.connectFailed"));
     } finally {
       setSubmitting(false);
     }
@@ -127,9 +129,9 @@ export function NaverImapSection({ embedded = false, onChanged }: NaverImapSecti
   const handleDisconnect = async () => {
     if (submitting) return;
     const ok = await confirm({
-      title: "Disconnect Naver mail?",
-      message: "Existing classified emails stay. You can reconnect the mailbox any time.",
-      confirmLabel: "Disconnect",
+      title: t("imap.naver.confirmDisconnect.title"),
+      message: t("imap.confirmDisconnect.message"),
+      confirmLabel: t("settings.disconnect"),
       danger: true,
     });
     if (!ok) return;
@@ -141,7 +143,7 @@ export function NaverImapSection({ embedded = false, onChanged }: NaverImapSecti
       onChanged?.();
     } catch (err) {
       captureClientError(err, { scope: "naver-imap.disconnect" });
-      setError("Disconnect failed.");
+      setError(t("imap.error.disconnectFailed"));
     } finally {
       setSubmitting(false);
     }
@@ -157,17 +159,16 @@ export function NaverImapSection({ embedded = false, onChanged }: NaverImapSecti
     >
       <header className={embedded ? "hidden" : "mb-3 flex items-start justify-between gap-3"}>
         <div>
-          <h2 className="text-base font-semibold text-ink">Naver Mail</h2>
+          <h2 className="text-base font-semibold text-ink">{t("imap.naver.title")}</h2>
           <p className="mt-1 text-xs text-ink-mid">
-            Connect a Naver mailbox via IMAP. Klorn classifies every incoming message into the same
-            {TIER_COUNT}-lane firewall as Gmail.
+            {t("imap.naver.body", { count: String(TIER_COUNT) })}
           </p>
         </div>
         {status?.connected && <StatusChip status="connected" />}
       </header>
 
       {loading ? (
-        <div className="text-xs text-ink-dim">Loading…</div>
+        <div className="text-xs text-ink-dim">{t("common.loading")}</div>
       ) : status?.connected ? (
         <div className="space-y-3">
           <div className="rounded-xl border border-line-soft bg-surface-raised/70 p-3 text-sm text-ink">
@@ -175,7 +176,7 @@ export function NaverImapSection({ embedded = false, onChanged }: NaverImapSecti
               <div>
                 <p className="font-medium">{status.email}</p>
                 <p className="text-[11px] text-ink-dim">
-                  Host: {status.host} · since{" "}
+                  {t("imap.hostSince", { host: status.host ?? "—" })}{" "}
                   {status.connectedAt ? new Date(status.connectedAt).toLocaleString("en-US") : "—"}
                 </p>
               </div>
@@ -186,7 +187,7 @@ export function NaverImapSection({ embedded = false, onChanged }: NaverImapSecti
                 disabled={submitting}
                 className="shrink-0"
               >
-                Disconnect
+                {t("settings.disconnect")}
               </Button>
             </div>
           </div>
@@ -203,7 +204,7 @@ export function NaverImapSection({ embedded = false, onChanged }: NaverImapSecti
         <form onSubmit={handleConnect} className="space-y-3">
           <Input
             id="naver-email"
-            label="Naver email"
+            label={t("imap.naver.emailLabel")}
             type="email"
             value={emailInput}
             onChange={(e) => setEmailInput(e.target.value)}
@@ -214,32 +215,32 @@ export function NaverImapSection({ embedded = false, onChanged }: NaverImapSecti
           <div>
             <Input
               id="naver-password"
-              label="App password (외부 메일 가져오기 비밀번호)"
+              label={t("imap.naver.passwordLabel")}
               type="password"
               value={passwordInput}
               onChange={(e) => setPasswordInput(e.target.value)}
-              placeholder="generated in Naver security settings"
+              placeholder={t("imap.naver.passwordPlaceholder")}
               required
               autoComplete="off"
             />
             <p className="mt-1 text-[11px] text-ink-mid">
-              This is NOT your Naver account password. Generate one at{" "}
+              {t("imap.naver.help.before")}{" "}
               <a
                 href={PASSWORD_HELP_URL}
                 target="_blank"
                 rel="noreferrer"
                 className="underline hover:text-ink-soft"
               >
-                Naver Help → 외부 메일 비밀번호
+                {t("imap.naver.help.link")}
               </a>
-              . We store it encrypted (AES-GCM), never the plaintext.
+              {t("imap.naver.help.after")}
             </p>
           </div>
           <details className="text-xs text-ink-mid">
-            <summary className="cursor-pointer">Advanced: IMAP host</summary>
+            <summary className="cursor-pointer">{t("imap.naver.advancedHost")}</summary>
             <div className="mt-2">
               <Input
-                aria-label="IMAP host"
+                aria-label={t("imap.naver.hostLabel")}
                 type="text"
                 value={hostInput}
                 onChange={(e) => setHostInput(e.target.value)}
@@ -254,7 +255,7 @@ export function NaverImapSection({ embedded = false, onChanged }: NaverImapSecti
             disabled={submitting || !emailInput || !passwordInput}
             loading={submitting}
           >
-            Connect Naver Mail
+            {t("imap.naver.connect")}
           </Button>
         </form>
       )}

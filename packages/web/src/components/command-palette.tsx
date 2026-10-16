@@ -221,7 +221,7 @@ export default function CommandPalette() {
       <button
         type="button"
         className="absolute inset-0 bg-black/60"
-        aria-label="Close command palette"
+        aria-label={t("palette.close")}
         onClick={() => setOpen(false)}
       />
       <div
@@ -229,7 +229,7 @@ export default function CommandPalette() {
         className="relative w-full max-w-md rounded-xl border border-line bg-surface-panel shadow-2xl"
         role="dialog"
         aria-modal="true"
-        aria-label="Command palette"
+        aria-label={t("palette.label")}
         onKeyDown={handleKeyDown}
       >
         <div className="p-3 border-b border-line">
@@ -237,8 +237,8 @@ export default function CommandPalette() {
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search decisions, pages, settings..."
-            aria-label="Search commands"
+            placeholder={t("palette.placeholder")}
+            aria-label={t("palette.search")}
             className="w-full bg-transparent text-sm focus:outline-none placeholder-ink-dim"
             role="combobox"
             aria-expanded="true"
@@ -254,12 +254,14 @@ export default function CommandPalette() {
             and is not a live region. */}
         <div aria-live="polite" className="sr-only">
           {filtered.length === 0
-            ? "No matching commands"
-            : `${filtered.length} ${filtered.length === 1 ? "command" : "commands"} available`}
+            ? t("palette.noMatches")
+            : filtered.length === 1
+              ? t("palette.availableOne")
+              : t("palette.availableMany", { count: String(filtered.length) })}
         </div>
         <div id={listboxId} className="max-h-64 overflow-y-auto py-1" role="listbox">
           {filtered.length === 0 ? (
-            <p className="text-sm text-ink-dim px-4 py-3">No matching commands.</p>
+            <p className="text-sm text-ink-dim px-4 py-3">{t("palette.noMatchesSentence")}</p>
           ) : (
             filtered.map((cmd, i) => (
               <button
@@ -286,8 +288,8 @@ export default function CommandPalette() {
           )}
         </div>
         <div className="border-t border-line px-4 py-2 flex items-center justify-between text-[10px] text-ink-mid">
-          <span>Use arrows to move, Enter to open</span>
-          <span>Esc to close</span>
+          <span>{t("palette.hintMove")}</span>
+          <span>{t("palette.hintClose")}</span>
         </div>
       </div>
     </div>

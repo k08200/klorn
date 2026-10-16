@@ -25,3 +25,14 @@ export function safeHttpsLink(value: unknown): string | null {
     return null;
   }
 }
+
+/**
+ * `safeHttpsLink`, and on one of these hosts exactly (no sub-domain, no port):
+ * for a source whose links Klorn knows the hosts of (a Google Drive file's).
+ */
+export function safeHttpsLinkOnHosts(value: unknown, hosts: ReadonlySet<string>): string | null {
+  const safe = safeHttpsLink(value);
+  if (safe === null) return null;
+  const url = new URL(safe);
+  return url.port === "" && hosts.has(url.hostname) ? safe : null;
+}

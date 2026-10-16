@@ -14,10 +14,10 @@
  *      removing it early makes decryptToken fail-closed on every remaining v1
  *      row (by design), e.g. breaking Gmail sync for those users.
  *
- * Covers every encrypted column: UserToken (Google OAuth), the two linked
- * account tables (OAuth tokens plus the CalDAV/IMAP password ciphers), and the
- * User BYOK/app-secret columns (Naver IMAP password, GitHub PAT,
- * OpenRouter/Gemini keys).
+ * Covers every encrypted column: UserToken (Google OAuth), the three linked
+ * account tables (OAuth tokens plus the CalDAV/IMAP password ciphers; the drive
+ * accounts hold the token pair only), and the User BYOK/app-secret columns
+ * (Naver IMAP password, GitHub PAT, OpenRouter/Gemini keys).
  *
  * Usage:
  *   cd packages/api && pnpm tsx src/scripts/reencrypt-tokens.ts            # dry run
@@ -153,6 +153,18 @@ function buildSweeps(): FieldSweep[] {
         }),
       ["accessToken", "refreshToken", "imapPasswordCipher"],
       (id, data, guard) => prisma.linkedInboxAccount.updateMany({ where: { id, ...guard }, data }),
+    ),
+    tableSweep(
+      "LinkedDriveAccount",
+      // D5a: a linked Google Drive / OneDrive account's OAuth token pair. Covered
+      // from the day the table exists, so no rotation can strand a linked drive
+      // on the retired key.
+      () =>
+        prisma.linkedDriveAccount.findMany({
+          select: { id: true, accessToken: true, refreshToken: true },
+        }),
+      ["accessToken", "refreshToken"],
+      (id, data, guard) => prisma.linkedDriveAccount.updateMany({ where: { id, ...guard }, data }),
     ),
     tableSweep(
       "User(secrets)",

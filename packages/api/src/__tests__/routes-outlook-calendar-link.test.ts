@@ -3,6 +3,8 @@
  * OAuth flow. Same app registration, redirect URI and callback as the inbox link;
  * a distinct signed-state marker picks the calendar branch, which writes a
  * LinkedCalendarAccount (never a LinkedInboxAccount) with Calendars.Read only.
+ * The callback parks the code; the starting user's own session finishes the
+ * link through POST /api/auth/link/complete.
  * The whole calendar surface is dark unless OUTLOOK_CALENDAR_ENABLED and
  * OUTLOOK_INBOX_ENABLED are both on, answering Fastify's default 404 like an
  * unregistered route (darkRouteGate).
@@ -10,6 +12,7 @@
 
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { callbackThenComplete } from "./helpers/link-complete.js";
 
 const state = vi.hoisted(() => ({ plan: "PRO", role: "USER" }));
 
@@ -84,10 +87,12 @@ async function buildApp() {
   const { signToken, verifyToken } = await import("../auth.js");
   const { outlookAuthRoutes } = await import("../routes/outlook-auth.js");
   const { outlookInboxEnabled } = await import("../config.js");
+  const { linkCompleteRoutes } = await import("../routes/link-complete.js");
   const app = Fastify();
   await app.register(outlookAuthRoutes({ gate: outlookInboxEnabled }), {
     prefix: "/api/auth/outlook",
   });
+  await app.register(linkCompleteRoutes(), { prefix: "/api/auth" });
   await app.ready();
   const token = signToken({ userId: "user-1", email: "test@example.com" });
   return {
@@ -288,14 +293,14 @@ describe("POST /link-calendar", () => {
   });
 });
 
-describe("GET /callback with a calendar state", () => {
+describe("GET /callback → POST /link/complete with a calendar state", () => {
   it("exchanges the code for the calendar scope set and upserts an OUTLOOK LinkedCalendarAccount with encrypted tokens", async () => {
-    const { app, calendarState } = await buildApp();
+    const { app, headers, calendarState } = await buildApp();
 
-    const res = await app.inject({ method: "GET", url: callbackUrl("auth-code", calendarState) });
+    const res = await callbackThenComplete(app, callbackUrl("auth-code", calendarState), headers);
 
-    expect(res.statusCode).toBe(302);
-    expect(res.headers.location).toBe(`${WEB}/calendar?linked=success`);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().next).toBe("/calendar?linked=success");
     expect(oauth.exchangeOutlookCode).toHaveBeenCalledWith("auth-code", "calendar");
     expect(db.calendar.upsert).toHaveBeenCalledTimes(1);
     expect(db.calendar.upsert).toHaveBeenCalledWith({
@@ -322,11 +327,11 @@ describe("GET /callback with a calendar state", () => {
   });
 
   it("an INBOX state still writes only an inbox row, with the inbox scope set: a calendar link cannot be started from it", async () => {
-    const { app, inboxState } = await buildApp();
+    const { app, headers, inboxState } = await buildApp();
 
-    const res = await app.inject({ method: "GET", url: callbackUrl("auth-code", inboxState) });
+    const res = await callbackThenComplete(app, callbackUrl("auth-code", inboxState), headers);
 
-    expect(res.headers.location).toBe(`${WEB}/settings?inbox=success`);
+    expect(res.json().next).toBe("/settings?inbox=success");
     expect(oauth.exchangeOutlookCode).toHaveBeenCalledWith("auth-code");
     expect(db.inbox.upsert).toHaveBeenCalledTimes(1);
     expect(db.calendar.upsert).not.toHaveBeenCalled();
@@ -343,22 +348,22 @@ describe("GET /callback with a calendar state", () => {
 
   it("redirects ?linked=failed when the code exchange fails, without writing", async () => {
     oauth.exchangeOutlookCode.mockResolvedValueOnce({ error: "invalid_grant" } as never);
-    const { app, calendarState } = await buildApp();
+    const { app, headers, calendarState } = await buildApp();
 
-    const res = await app.inject({ method: "GET", url: callbackUrl("bad", calendarState) });
+    const res = await callbackThenComplete(app, callbackUrl("bad", calendarState), headers);
 
-    expect(res.headers.location).toBe(`${WEB}/calendar?linked=failed`);
+    expect(res.json().next).toBe("/calendar?linked=failed");
     expect(db.calendar.upsert).not.toHaveBeenCalled();
     await app.close();
   });
 
   it("redirects ?linked=failed when Graph /me yields no address, without writing", async () => {
     oauth.fetchOutlookAccountEmail.mockResolvedValueOnce(null);
-    const { app, calendarState } = await buildApp();
+    const { app, headers, calendarState } = await buildApp();
 
-    const res = await app.inject({ method: "GET", url: callbackUrl("c", calendarState) });
+    const res = await callbackThenComplete(app, callbackUrl("c", calendarState), headers);
 
-    expect(res.headers.location).toBe(`${WEB}/calendar?linked=failed`);
+    expect(res.json().next).toBe("/calendar?linked=failed");
     expect(db.calendar.upsert).not.toHaveBeenCalled();
     await app.close();
   });
@@ -367,9 +372,9 @@ describe("GET /callback with a calendar state", () => {
     state.plan = "FREE";
     process.env.PAYWALL_ENABLED = "true";
     try {
-      const { app, calendarState } = await buildApp();
-      const res = await app.inject({ method: "GET", url: callbackUrl("c", calendarState) });
-      expect(res.headers.location).toBe(`${WEB}/calendar?linked=failed`);
+      const { app, headers, calendarState } = await buildApp();
+      const res = await callbackThenComplete(app, callbackUrl("c", calendarState), headers);
+      expect(res.json().next).toBe("/calendar?linked=failed");
       expect(db.calendar.upsert).not.toHaveBeenCalled();
       await app.close();
     } finally {
@@ -379,29 +384,29 @@ describe("GET /callback with a calendar state", () => {
 
   it("caps NEW Outlook calendars at 10 but always allows a re-link", async () => {
     db.calendar.count.mockResolvedValue(10);
-    const { app, calendarState } = await buildApp();
+    const { app, headers, calendarState } = await buildApp();
 
-    const blocked = await app.inject({ method: "GET", url: callbackUrl("c", calendarState) });
-    expect(blocked.headers.location).toBe(`${WEB}/calendar?linked=limit`);
+    const blocked = await callbackThenComplete(app, callbackUrl("c", calendarState), headers);
+    expect(blocked.json().next).toBe("/calendar?linked=limit");
     expect(db.calendar.upsert).not.toHaveBeenCalled();
     expect(db.calendar.count).toHaveBeenCalledWith({
       where: { userId: "user-1", provider: "OUTLOOK" },
     });
 
     db.calendar.findUnique.mockResolvedValue({ id: "existing" } as never);
-    const relink = await app.inject({ method: "GET", url: callbackUrl("c", calendarState) });
-    expect(relink.headers.location).toBe(`${WEB}/calendar?linked=success`);
+    const relink = await callbackThenComplete(app, callbackUrl("c", calendarState), headers);
+    expect(relink.json().next).toBe("/calendar?linked=success");
     expect(db.calendar.upsert).toHaveBeenCalledTimes(1);
     await app.close();
   });
 
   it("an address already linked as another provider's calendar (the legacy unique) fails quietly, without Sentry", async () => {
     db.calendar.upsert.mockRejectedValueOnce(Object.assign(new Error("unique"), { code: "P2002" }));
-    const { app, calendarState } = await buildApp();
+    const { app, headers, calendarState } = await buildApp();
 
-    const res = await app.inject({ method: "GET", url: callbackUrl("c", calendarState) });
+    const res = await callbackThenComplete(app, callbackUrl("c", calendarState), headers);
 
-    expect(res.headers.location).toBe(`${WEB}/calendar?linked=failed`);
+    expect(res.json().next).toBe("/calendar?linked=failed");
     expect(db.captureError).not.toHaveBeenCalled();
     await app.close();
   });
@@ -417,12 +422,12 @@ describe("GET /callback with a calendar state", () => {
     ],
   ])("a refused redirect or any network failure in %s lands on ?linked=failed and is reported, not unhandled", async (_label, arrange) => {
     arrange();
-    const { app, calendarState } = await buildApp();
+    const { app, headers, calendarState } = await buildApp();
 
-    const res = await app.inject({ method: "GET", url: callbackUrl("c", calendarState) });
+    const res = await callbackThenComplete(app, callbackUrl("c", calendarState), headers);
 
-    expect(res.statusCode).toBe(302);
-    expect(res.headers.location).toBe(`${WEB}/calendar?linked=failed`);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().next).toBe("/calendar?linked=failed");
     expect(db.calendar.upsert).not.toHaveBeenCalled();
     expect(db.captureError).toHaveBeenCalledTimes(1);
     await app.close();
@@ -430,17 +435,17 @@ describe("GET /callback with a calendar state", () => {
 
   it("any other write failure redirects ?linked=failed and is reported", async () => {
     db.calendar.upsert.mockRejectedValueOnce(new Error("db down"));
-    const { app, calendarState } = await buildApp();
+    const { app, headers, calendarState } = await buildApp();
 
-    const res = await app.inject({ method: "GET", url: callbackUrl("c", calendarState) });
+    const res = await callbackThenComplete(app, callbackUrl("c", calendarState), headers);
 
-    expect(res.headers.location).toBe(`${WEB}/calendar?linked=failed`);
+    expect(res.json().next).toBe("/calendar?linked=failed");
     expect(db.captureError).toHaveBeenCalledTimes(1);
     await app.close();
   });
 
   it("a provider error (consent denied, or an org that blocks user consent) lands back on the calendar, never reflected", async () => {
-    const { app, calendarState } = await buildApp();
+    const { app, headers, calendarState } = await buildApp();
 
     const res = await app.inject({
       method: "GET",

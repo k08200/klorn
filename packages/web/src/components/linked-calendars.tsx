@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 import { apiFetch, startLinkCalendar } from "../lib/api";
+import { useT } from "../lib/i18n";
 import { queryKeys } from "../lib/query-keys";
 import { captureClientError } from "../lib/sentry";
 import { useToast } from "./toast";
@@ -25,6 +26,7 @@ interface LinkedAccount {
  */
 export function LinkedCalendars() {
   const { toast } = useToast();
+  const { t } = useT();
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -50,26 +52,26 @@ export function LinkedCalendars() {
     const linked = searchParams.get("linked");
     if (!linked) return;
     if (linked === "success") {
-      toast("Work calendar connected.", "success");
+      toast(t("linkedCalendars.toast.connected"), "success");
       void queryClient.invalidateQueries({ queryKey: queryKeys.calendar.linkedAccounts() });
     } else if (linked === "unverified") {
-      toast("That Google account's email isn't verified — couldn't link it.", "error");
+      toast(t("linkedAccounts.toast.unverified"), "error");
     } else {
-      toast("Couldn't connect that calendar. Try again.", "error");
+      toast(t("linkedCalendars.toast.connectFailed"), "error");
     }
     router.replace("/calendar");
-  }, [searchParams, toast, queryClient, router]);
+  }, [searchParams, toast, queryClient, router, t]);
 
   const disconnect = useMutation({
     mutationFn: (id: string) =>
       apiFetch(`/api/auth/google/linked-calendars/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.calendar.linkedAccounts() });
-      toast("Calendar disconnected.", "success");
+      toast(t("linkedCalendars.toast.disconnected"), "success");
     },
     onError: (err) => {
       captureClientError(err, { scope: "calendar.linked.disconnect" });
-      toast("Couldn't disconnect. Try again.", "error");
+      toast(t("linkedAccounts.toast.disconnectFailed"), "error");
     },
   });
 
@@ -79,17 +81,14 @@ export function LinkedCalendars() {
     mutationFn: () => startLinkCalendar(),
     onError: (err) => {
       captureClientError(err, { scope: "calendar.linked.connect" });
-      toast("Connecting another calendar needs a Pro subscription.", "error");
+      toast(t("linkedCalendars.toast.needsPro"), "error");
     },
   });
 
   return (
     <section className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-4 text-ink-muted">
-      <h3 className="text-sm font-medium text-ink">Connected calendars</h3>
-      <p className="mt-1 text-xs text-ink-mid">
-        Add a work Google account so conflict checks cover a calendar that lives on a different
-        account.
-      </p>
+      <h3 className="text-sm font-medium text-ink">{t("linkedCalendars.title")}</h3>
+      <p className="mt-1 text-xs text-ink-mid">{t("linkedCalendars.body")}</p>
 
       {accounts.length > 0 && (
         <ul className="mt-3 divide-y divide-line-soft rounded-xl border border-line-soft bg-surface-raised/70">
@@ -102,7 +101,7 @@ export function LinkedCalendars() {
                 <span className="block truncate text-ink">{account.email}</span>
                 {account.needsReconnect && (
                   <span className="block truncate text-[11px] text-state-warn-ink">
-                    Reconnect needed — access was revoked
+                    {t("linkedAccounts.reconnectNeeded")}
                   </span>
                 )}
               </div>
@@ -114,7 +113,7 @@ export function LinkedCalendars() {
                     disabled={connect.isPending}
                     className="ease-strong rounded-md border border-state-warn-line bg-state-warn-bg px-2 py-1 text-xs font-medium text-state-warn-ink transition duration-150 hover:bg-amber-100 active:scale-[0.97] disabled:opacity-50"
                   >
-                    Reconnect
+                    {t("common.reconnect")}
                   </button>
                 )}
                 <button
@@ -123,7 +122,7 @@ export function LinkedCalendars() {
                   disabled={disconnect.isPending}
                   className="ease-strong rounded-md border border-state-danger-line bg-state-danger-bg px-2 py-1 text-xs font-medium text-state-danger-ink transition duration-150 hover:bg-state-danger-bg active:scale-[0.97] disabled:opacity-50"
                 >
-                  Disconnect
+                  {t("settings.disconnect")}
                 </button>
               </div>
             </li>
@@ -137,7 +136,7 @@ export function LinkedCalendars() {
         disabled={connect.isPending}
         className="glow-primary ease-strong mt-3 inline-flex min-h-10 items-center rounded-lg bg-accent-solid px-4 py-2 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:opacity-50"
       >
-        Connect work calendar
+        {t("linkedCalendars.connect")}
       </button>
     </section>
   );

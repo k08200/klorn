@@ -3,6 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { startGoogleConnect } from "../lib/api";
+import { useT } from "../lib/i18n";
 import { MailAccountProGate } from "./mail-account-pro-gate";
 
 /**
@@ -18,6 +19,7 @@ export function OAuthErrorBanner() {
   const searchParams = useSearchParams();
   const status = searchParams.get("google");
   const [dismissed, setDismissed] = useState(false);
+  const { t } = useT();
 
   useEffect(() => {
     setDismissed(false);
@@ -39,23 +41,16 @@ export function OAuthErrorBanner() {
     <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/5 p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-semibold text-state-danger-ink">
-            Gmail offline access wasn't granted
-          </h3>
-          <p className="mt-1 text-[13px] leading-5 text-ink-mid">
-            Google returned a short-lived token without the refresh permission Klorn needs to keep
-            syncing in the background. This is almost always one of two things:
-          </p>
+          <h3 className="text-sm font-semibold text-state-danger-ink">{t("oauthError.title")}</h3>
+          <p className="mt-1 text-[13px] leading-5 text-ink-mid">{t("oauthError.body")}</p>
           <ul className="mt-2 space-y-1 text-[13px] leading-5 text-ink-mid">
             <li>
-              <span className="text-ink">Workspace policy</span> — your IT admin restricts
-              third-party apps from offline Gmail access. Ask them to allow Klorn's OAuth client ID,
-              then reconnect below.
+              <span className="text-ink">{t("oauthError.policy.title")}</span>{" "}
+              {t("oauthError.policy.body")}
             </li>
             <li>
-              <span className="text-ink">Missing scope on consent</span> — the Google consent screen
-              didn't grant all Gmail permissions. Reconnect and make sure every checkbox is
-              selected.
+              <span className="text-ink">{t("oauthError.scope.title")}</span>{" "}
+              {t("oauthError.scope.body")}
             </li>
           </ul>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -64,14 +59,14 @@ export function OAuthErrorBanner() {
               onClick={() => void startGoogleConnect()}
               className="rounded-lg bg-accent-solid px-3 py-1.5 text-[12px] font-medium text-accent-solid-ink transition hover:bg-accent-solid-hover"
             >
-              Reconnect Google
+              {t("reconnect.googleAction")}
             </button>
             <button
               type="button"
               onClick={() => setDismissed(true)}
               className="rounded-lg border border-line px-3 py-1.5 text-[12px] text-ink-mid transition hover:text-ink"
             >
-              Dismiss
+              {t("common.dismiss")}
             </button>
           </div>
         </div>

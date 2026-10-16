@@ -56,7 +56,7 @@ export interface ImapProviderConfig {
   logScope: string;
   /** Shown in the settings UI when the IMAP LOGIN itself is rejected. */
   authFailureHint: string;
-  /** Same ceiling rationale as routes/auth.ts MAX_LINKED_INBOXES: one user
+  /** Same ceiling rationale as routes/google-link-finish.ts MAX_LINKED_INBOXES: one user
    * must not turn the serial IMAP poll into a multi-minute tick. */
   maxAccounts: number;
   /**

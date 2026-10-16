@@ -1,15 +1,16 @@
 /**
  * Linked-inbox cap at link time.
  *
- * The Google OAuth callback's __link_inbox__ branch upserts a
- * linkedInboxAccount with no ceiling, so a user could attach unbounded
- * inboxes. A NEW link is rejected once the user is at MAX_LINKED_INBOXES;
+ * The Google __link_inbox__ completion (callback → POST /api/auth/link/complete)
+ * upserts a linkedInboxAccount with no ceiling, so a user could attach
+ * unbounded inboxes. A NEW link is rejected once the user is at MAX_LINKED_INBOXES;
  * re-linking an already-linked email (the update path) is always allowed.
  */
 
 import Fastify from "fastify";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { signToken } from "../auth.js";
+import { callbackThenComplete } from "./helpers/link-complete.js";
 
 vi.mock("../mail/gmail.js", () => ({
   getAuthUrl: vi.fn(() => "https://example.com/oauth"),
@@ -65,25 +66,33 @@ vi.mock("../db.js", () => {
       upsert: linkedUpsert,
     },
     user: { findUnique: userFindUnique },
+    // requireAuth on the completion looks the session's device up.
+    device: {
+      findUnique: vi.fn(async () => ({ id: "d1", lastActiveAt: new Date() })),
+      update: vi.fn(async () => ({})),
+    },
   };
   return { prisma, db: prisma };
 });
 
 import { authRoutes } from "../routes/auth.js";
+import { linkCompleteRoutes } from "../routes/link-complete.js";
 
 async function buildApp() {
   const app = Fastify();
   await app.register(authRoutes, { prefix: "/api/auth" });
+  await app.register(linkCompleteRoutes(), { prefix: "/api/auth" });
   return app;
 }
 
-/** Drive the __link_inbox__ callback for a logged-in user linking a 2nd inbox. */
+/** Drive the __link_inbox__ flow (callback → complete) for a logged-in user linking a 2nd inbox. */
 async function linkInbox(app: ReturnType<typeof Fastify>, userId = "u1") {
   const state = signToken({ userId, email: "__link_inbox__" });
-  return app.inject({
-    method: "GET",
-    url: `/api/auth/google/callback?code=abc&state=${encodeURIComponent(state)}`,
-  });
+  return callbackThenComplete(
+    app,
+    `/api/auth/google/callback?code=abc&state=${encodeURIComponent(state)}`,
+    { authorization: `Bearer ${signToken({ userId, email: `${userId}@x.com` })}` },
+  );
 }
 
 beforeEach(() => {
@@ -104,8 +113,8 @@ describe("__link_inbox__ cap", () => {
 
     const res = await linkInbox(app);
 
-    expect(res.statusCode).toBe(302);
-    expect(res.headers.location).toContain("inbox=success");
+    expect(res.statusCode).toBe(200);
+    expect(res.json().next).toBe("/settings?inbox=success");
     expect(linkedUpsert).toHaveBeenCalledTimes(1);
     await app.close();
   });
@@ -117,8 +126,8 @@ describe("__link_inbox__ cap", () => {
 
     const res = await linkInbox(app);
 
-    expect(res.statusCode).toBe(302);
-    expect(res.headers.location).toContain("inbox=limit");
+    expect(res.statusCode).toBe(200);
+    expect(res.json().next).toBe("/settings?inbox=limit");
     expect(linkedUpsert).not.toHaveBeenCalled();
     await app.close();
   });
@@ -130,8 +139,8 @@ describe("__link_inbox__ cap", () => {
 
     const res = await linkInbox(app);
 
-    expect(res.statusCode).toBe(302);
-    expect(res.headers.location).toContain("inbox=success");
+    expect(res.statusCode).toBe(200);
+    expect(res.json().next).toBe("/settings?inbox=success");
     expect(linkedUpsert).toHaveBeenCalledTimes(1);
     await app.close();
   });
@@ -146,8 +155,8 @@ describe("__link_inbox__ cap", () => {
 
     const res = await linkInbox(app);
 
-    expect(res.statusCode).toBe(302);
-    expect(res.headers.location).toContain("inbox=failed");
+    expect(res.statusCode).toBe(200);
+    expect(res.json().next).toBe("/settings?inbox=failed");
     expect(linkedUpsert).not.toHaveBeenCalled();
     await app.close();
   });

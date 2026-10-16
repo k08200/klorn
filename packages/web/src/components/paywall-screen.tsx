@@ -5,23 +5,25 @@ import { useState } from "react";
 import { apiFetch } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { isSafeBillingRedirect } from "../lib/billing-redirect";
+import { useT } from "../lib/i18n";
 import { isNativePlatform } from "../lib/native/capacitor";
 import { iapAvailable, restoreNativePurchases, startNativePurchase } from "../lib/native/iap";
 import { proPrice } from "../lib/pricing";
 import { useToast } from "./toast";
 
 const VALUE_PROPS = [
-  "Only get interrupted by mail that actually matters",
-  "Klorn auto-handles the noise while you're away",
-  "A morning brief of what needs a decision",
-  "Learns your calls and gets sharper over time",
-];
+  "paywall.valueProp.interrupt",
+  "paywall.valueProp.noise",
+  "paywall.valueProp.brief",
+  "paywall.valueProp.learns",
+] as const;
 
 // Shown by AuthGuard when the signed-in user is not entitled (trial expired /
 // never subscribed) and the paywall is on. Web starts a card-required Stripe
 // trial; the iOS app uses IAP (wired with RevenueCat at launch).
 export default function PaywallScreen() {
   const { toast } = useToast();
+  const { t } = useT();
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const native = isNativePlatform();
@@ -49,10 +51,10 @@ export default function PaywallScreen() {
         window.location.href = url;
         return;
       }
-      toast("Unsafe billing redirect URL.", "error");
+      toast(t("billing.error.unsafeRedirect"), "error");
       setLoading(false);
     } catch {
-      toast("Could not start checkout. Please try again.", "error");
+      toast(t("subscription.toast.checkoutFailed"), "error");
       setLoading(false);
     }
   };
@@ -88,8 +90,8 @@ export default function PaywallScreen() {
     }
     toast(
       outcome === "unavailable"
-        ? "Subscriptions aren't available right now."
-        : "Could not complete the purchase. Please try again.",
+        ? t("subscription.toast.unavailable")
+        : t("subscription.toast.purchaseFailed"),
       "error",
     );
     setLoading(false);
@@ -103,7 +105,7 @@ export default function PaywallScreen() {
       await reloadWhenEntitled();
       return;
     }
-    toast("No previous purchase found.", "info");
+    toast(t("subscription.toast.noPurchase"), "info");
     setLoading(false);
   };
 
@@ -112,14 +114,12 @@ export default function PaywallScreen() {
       <div className="mx-auto w-full max-w-sm">
         <img src="/brand/mark.svg?v=matte2" alt="" className="mb-6 h-12 w-12" />
         <span className="inline-flex items-center rounded-full bg-accent-light/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-accent-deep">
-          Founding price
+          {t("paywall.foundingPrice")}
         </span>
         <h1 className="mt-3 text-[28px] font-bold leading-tight tracking-tight text-ink">
-          Start your 7-day free trial
+          {t("paywall.title")}
         </h1>
-        <p className="mt-2 text-sm leading-6 text-ink-mid">
-          Klorn Pro is your AI email firewall — it decides what reaches you and handles the rest.
-        </p>
+        <p className="mt-2 text-sm leading-6 text-ink-mid">{t("paywall.body")}</p>
 
         <ul className="mt-6 space-y-3">
           {VALUE_PROPS.map((prop) => (
@@ -138,7 +138,7 @@ export default function PaywallScreen() {
               >
                 <polyline points="20 6 9 17 4 12" />
               </svg>
-              <span>{prop}</span>
+              <span>{t(prop)}</span>
             </li>
           ))}
         </ul>
@@ -153,7 +153,7 @@ export default function PaywallScreen() {
               disabled
               className="flex min-h-12 w-full items-center justify-center rounded-xl bg-surface-inset text-[15px] font-semibold text-ink-mid"
             >
-              Subscription coming soon
+              {t("billing.subscriptionComingSoon")}
             </button>
           ) : (
             <button
@@ -162,7 +162,7 @@ export default function PaywallScreen() {
               disabled={loading}
               className="flex min-h-12 w-full items-center justify-center rounded-xl bg-accent-solid text-[15px] font-semibold text-accent-solid-ink transition active:bg-accent-solid-hover disabled:opacity-50"
             >
-              {loading ? "Starting..." : "Start free trial"}
+              {loading ? t("subscription.starting") : t("paywall.startTrial")}
             </button>
           )}
           {native && iapReady && (
@@ -172,25 +172,25 @@ export default function PaywallScreen() {
               disabled={loading}
               className="mt-2 flex min-h-9 w-full items-center justify-center text-xs text-ink-mid transition active:text-ink disabled:opacity-50"
             >
-              Restore purchase
+              {t("subscription.restore")}
             </button>
           )}
           <p className="mt-3 text-center text-xs text-ink-dim">
-            7 days free, then {price}/month — locked in for early members. Cancel anytime.
+            {t("paywall.trialTerms", { price })}
           </p>
         </div>
 
         <div className="mt-6 flex items-center justify-center gap-4 text-xs text-ink-dim">
           <Link href="/settings" className="transition hover:text-ink-soft">
-            Settings
+            {t("settings.title")}
           </Link>
           <span aria-hidden="true">·</span>
           <Link href="/terms" className="transition hover:text-ink-soft">
-            Terms
+            {t("auth.terms")}
           </Link>
           <span aria-hidden="true">·</span>
           <Link href="/refund" className="transition hover:text-ink-soft">
-            Refunds
+            {t("paywall.refunds")}
           </Link>
         </div>
       </div>

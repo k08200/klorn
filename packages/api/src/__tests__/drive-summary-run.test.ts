@@ -56,6 +56,7 @@ import {
   type SummaryLease,
   userDailyCountSpent,
 } from "../drive/summary-store.js";
+import { StorageError } from "../storage/errors.js";
 import { allowAnyContentType } from "../storage/limits.js";
 import { MemoryObjectStore } from "../storage/memory-store.js";
 import type { ObjectStore } from "../storage/object-store.js";
@@ -466,6 +467,93 @@ describe("one run", () => {
       status: "PENDING",
       error: "source-unavailable",
       attempts: 0,
+    });
+  });
+
+  describe("a Google file (D5d): read through the connector, as its export", () => {
+    const DOC = "application/vnd.google-apps.document";
+
+    function googleDoc(): Row {
+      const file = fileRow({
+        provider: "GOOGLE",
+        sourceKey: "acct-1",
+        storageKey: null,
+        name: "Design review",
+        mimeType: DOC,
+        sizeBytes: null,
+        etag: "v:17",
+      });
+      db.tables.driveFile.push(file);
+      return file;
+    }
+
+    function connectorReading(fetchForSummary: (...args: unknown[]) => Promise<unknown>) {
+      const session = { provider: "GOOGLE" as const, fetchForSummary };
+      return {
+        priority: "background" as const,
+        now: NOW,
+        providerEnabled: { GOOGLE: () => true },
+        implementations: {
+          GOOGLE: { provider: "GOOGLE" as const, connect: vi.fn(async () => session as never) },
+        },
+      };
+    }
+
+    it("a Google Doc is summarised from the text the connector exports", async () => {
+      const file = googleDoc();
+      await queued(file);
+      const fetchForSummary = vi.fn(async () => ({
+        ok: true,
+        bytes: Buffer.from("Ship D5 on Friday.", "utf8"),
+      }));
+      const options = connectorReading(fetchForSummary);
+      expect(await runClaimedSummary(await leaseOf(file), options)).toBe("done");
+      expect(options.implementations.GOOGLE.connect).toHaveBeenCalledWith({
+        userId: ME,
+        sourceKey: "acct-1",
+      });
+      expect(fetchForSummary).toHaveBeenCalledWith(file.externalId, {
+        maxBytes: DRIVE_SUMMARY_MAX_SOURCE_BYTES,
+        mimeType: DOC,
+      });
+      expect(llm.calls).toEqual([
+        expect.objectContaining({
+          name: "Design review",
+          mimeType: DOC,
+          text: "Ship D5 on Friday.",
+        }),
+      ]);
+      expect(summaryOf(file.id)).toMatchObject({ status: "DONE", sourceEtag: "v:17" });
+    });
+
+    it("an outage of Google (a retryable StorageError) defers it: PENDING, the attempt given back", async () => {
+      const file = googleDoc();
+      await queued(file);
+      const fetchForSummary = vi.fn(async () => {
+        throw new StorageError("upstream", "Google Drive answered 503", {
+          status: 503,
+          retryable: true,
+        });
+      });
+      expect(await runClaimedSummary(await leaseOf(file), connectorReading(fetchForSummary))).toBe(
+        "deferred",
+      );
+      expect(summaryOf(file.id)).toMatchObject({
+        status: "PENDING",
+        error: "storage-error",
+        attempts: 0,
+      });
+      expect(llm.calls).toEqual([]);
+    });
+
+    it("an export over Google's size limit is skipped as too-large", async () => {
+      const file = googleDoc();
+      await queued(file);
+      const fetchForSummary = vi.fn(async () => ({ ok: false, reason: "too-large" }));
+      expect(await runClaimedSummary(await leaseOf(file), connectorReading(fetchForSummary))).toBe(
+        "skipped",
+      );
+      expect(summaryOf(file.id)).toMatchObject({ status: "SKIPPED", error: "too-large" });
     });
   });
 

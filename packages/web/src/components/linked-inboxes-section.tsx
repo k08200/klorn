@@ -87,16 +87,16 @@ export function LinkedInboxesSection() {
     // this section must not toast or route to Settings underneath it.
     if (pendingConnect()) return;
     if (linked === "success") {
-      toast("Inbox connected. Klorn will start classifying its mail.", "success");
+      toast(t("linkedInboxes.toast.connected"), "success");
       void queryClient.invalidateQueries({ queryKey: queryKeys.inbox.linkedAccounts() });
     } else if (linked === "unverified") {
-      toast("That Google account's email isn't verified — couldn't link it.", "error");
+      toast(t("linkedAccounts.toast.unverified"), "error");
     } else if (linked === "self") {
-      toast("That's already your primary inbox — no need to link it.", "error");
+      toast(t("linkedInboxes.toast.self"), "error");
     } else if (linked === "pro") {
       toast(t("mailAccount.proGate.title"), "error");
     } else {
-      toast("Couldn't connect that inbox. Try again.", "error");
+      toast(t("linkedInboxes.toast.connectFailed"), "error");
     }
     router.replace("/settings/accounts");
   }, [searchParams, toast, queryClient, router, t]);
@@ -106,11 +106,11 @@ export function LinkedInboxesSection() {
       apiFetch(`/api/auth/google/linked-inboxes/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.inbox.linkedAccounts() });
-      toast("Inbox disconnected.", "success");
+      toast(t("linkedInboxes.toast.disconnected"), "success");
     },
     onError: (err) => {
       captureClientError(err, { scope: "inbox.linked.disconnect" });
-      toast("Couldn't disconnect. Try again.", "error");
+      toast(t("linkedAccounts.toast.disconnectFailed"), "error");
     },
   });
 
@@ -125,17 +125,15 @@ export function LinkedInboxesSection() {
         return;
       }
       captureClientError(err, { scope: "inbox.linked.connect" });
-      toast("Couldn't start Google sign-in. Try again.", "error");
+      toast(t("linkedInboxes.toast.signInFailed"), "error");
     },
   });
 
   return (
     <section className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-5">
-      <h2 className="text-base font-semibold text-ink">Connected inboxes</h2>
+      <h2 className="text-base font-semibold text-ink">{t("linkedInboxes.title")}</h2>
       <p className="mt-1 text-xs text-ink-mid">
-        An inbox is one connected mail account. Add a second Google account (e.g. work) so Klorn
-        runs the same {TIER_COUNT}-lane firewall across all your mail, not just your primary
-        account.
+        {t("linkedInboxes.body", { count: String(TIER_COUNT) })}
       </p>
 
       {accounts.length > 0 && (
@@ -149,7 +147,7 @@ export function LinkedInboxesSection() {
                 <span className="block truncate text-ink">{account.email}</span>
                 {account.needsReconnect ? (
                   <span className="block truncate text-[11px] text-state-warn-ink">
-                    Reconnect needed — access was revoked
+                    {t("linkedAccounts.reconnectNeeded")}
                   </span>
                 ) : (
                   <span className="block truncate text-[11px] text-ink-dim">
@@ -165,7 +163,7 @@ export function LinkedInboxesSection() {
                     disabled={connect.isPending}
                     className="ease-strong rounded-md border border-state-warn-line bg-state-warn-bg px-2 py-1 text-xs font-medium text-state-warn-ink transition duration-150 hover:bg-amber-100 active:scale-[0.97] disabled:opacity-50"
                   >
-                    Reconnect
+                    {t("common.reconnect")}
                   </button>
                 )}
                 <button
@@ -174,7 +172,7 @@ export function LinkedInboxesSection() {
                   disabled={disconnect.isPending}
                   className="ease-strong rounded-md border border-state-danger-line bg-state-danger-bg px-2 py-1 text-xs font-medium text-state-danger-ink transition duration-150 hover:bg-state-danger-bg active:scale-[0.97] disabled:opacity-50"
                 >
-                  Disconnect
+                  {t("settings.disconnect")}
                 </button>
               </div>
             </li>
@@ -189,7 +187,7 @@ export function LinkedInboxesSection() {
           disabled={connect.isPending}
           className="glow-primary ease-strong mt-3 inline-flex min-h-10 items-center rounded-lg bg-accent-solid px-4 py-2 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:opacity-50"
         >
-          Connect another inbox
+          {t("linkedInboxes.connect")}
         </button>
       ) : (
         <div className="mt-3">

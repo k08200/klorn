@@ -92,7 +92,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   if (loading) {
-    return <SessionTransition label="Checking session" />;
+    return <SessionTransition label={t("appShell.checkingSession")} />;
   }
 
   if (!user) {
@@ -108,7 +108,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         href="#main"
         className="sr-only rounded-md bg-accent-solid px-4 py-2 text-sm font-semibold text-accent-solid-ink focus-visible:not-sr-only focus-visible:absolute focus-visible:left-4 focus-visible:top-4 focus-visible:z-50"
       >
-        Skip to content
+        {t("appShell.skipToContent")}
       </a>
       <Sidebar />
       <div className="relative flex-1 flex flex-col min-w-0 overflow-hidden">

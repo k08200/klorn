@@ -33,7 +33,7 @@ import { prisma } from "../db.js";
 import { escapeLikePattern } from "../db-like.js";
 import { safeHttpsLink } from "../safe-https-link.js";
 import { type DriveProviderName, isReadOnlyDriveProvider } from "./drive-providers.js";
-import { KLORN_DRIVE_SOURCE_KEY } from "./drive-rows.js";
+import { type ConnectedDriveProvider, KLORN_DRIVE_SOURCE_KEY } from "./drive-rows.js";
 import {
   DRIVE_PROVIDER_ENABLED,
   type DriveProviderEnabledMap,
@@ -260,4 +260,76 @@ export async function getFile(
   });
   if (row === null || row.trashed || !isDriveRowVisible(row, providerEnabled)) return null;
   return toDriveFileWire(row);
+}
+
+/** One connected account of the user: which provider, and its `sourceKey`. */
+export interface ConnectedAccountRef {
+  readonly provider: ConnectedDriveProvider;
+  readonly sourceKey: string;
+}
+
+/** The AND member that matches every row of one connected account of this user, trashed ones included. */
+function accountRowsOf(userId: string, account: ConnectedAccountRef): Prisma.DriveFileWhereInput[] {
+  return [{ userId, provider: account.provider, sourceKey: account.sourceKey }];
+}
+
+/** One indexed file of a connected account, as the refresh needs it (D5d). */
+export interface ConnectedAccountFile {
+  readonly id: string;
+  readonly externalId: string;
+  readonly etag: string | null;
+}
+
+/**
+ * The rows of one connected account, trashed ones included (a file restored in
+ * the source comes back), oldest id first, at most `take` (D5d's refresh).
+ * Scoped like every read, so it answers nothing while the provider is hidden.
+ */
+export async function connectedAccountFiles(
+  userId: string,
+  account: ConnectedAccountRef,
+  options: { readonly take: number },
+  providerEnabled: DriveProviderEnabledMap = DRIVE_PROVIDER_ENABLED,
+): Promise<ConnectedAccountFile[]> {
+  return await prisma.driveFile.findMany({
+    where: { AND: [driveSourceScope(providerEnabled), ...accountRowsOf(userId, account)] },
+    select: { id: true, externalId: true, etag: true },
+    orderBy: { id: "asc" },
+    take: options.take,
+  });
+}
+
+/** What a write to one connected account must know of its rows first (D5c's cap). */
+export interface ConnectedAccountRows {
+  /** How many rows the account holds, counted up to `countUpTo`. */
+  readonly count: number;
+  /** Which of the asked-for externalIds already have a row. */
+  readonly indexed: ReadonlySet<string>;
+}
+
+/**
+ * How full one connected account's index is, and which of these externalIds it
+ * already holds (D5c: 500 rows per account, and a file picked again refreshes
+ * its row instead of taking a new one). Trashed rows count: the cap bounds what
+ * is stored. Scoped like every read, so it answers nothing while the provider
+ * is hidden; its only caller runs behind the same gate.
+ */
+export async function connectedAccountRows(
+  userId: string,
+  account: ConnectedAccountRef,
+  options: { readonly externalIds: readonly string[]; readonly countUpTo: number },
+  providerEnabled: DriveProviderEnabledMap = DRIVE_PROVIDER_ENABLED,
+): Promise<ConnectedAccountRows> {
+  const held = await prisma.driveFile.findMany({
+    where: { AND: [driveSourceScope(providerEnabled), ...accountRowsOf(userId, account)] },
+    select: { id: true },
+    take: options.countUpTo,
+  });
+  if (options.externalIds.length === 0) return { count: held.length, indexed: new Set() };
+  const match: Prisma.DriveFileWhereInput = { externalId: { in: [...options.externalIds] } };
+  const matching = await prisma.driveFile.findMany({
+    where: { AND: [driveSourceScope(providerEnabled), ...accountRowsOf(userId, account), match] },
+    select: { externalId: true },
+  });
+  return { count: held.length, indexed: new Set(matching.map((row) => row.externalId)) };
 }

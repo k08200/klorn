@@ -64,17 +64,17 @@ interface PrepPack {
   openCommitments: PrepCommitment[];
 }
 
-const READINESS_META: Record<Readiness, { label: string; className: string }> = {
+const READINESS_META: Record<Readiness, { labelKey: string; className: string }> = {
   ready: {
-    label: "Ready",
+    labelKey: "calendar.prep.ready",
     className: "bg-emerald-500/10 text-state-ok-ink ring-1 ring-inset ring-emerald-500/20",
   },
   watch: {
-    label: "Watch items",
+    labelKey: "calendar.prep.watch",
     className: "bg-amber-500/10 text-state-warn-ink ring-1 ring-inset ring-amber-500/20",
   },
   needs_review: {
-    label: "Needs review",
+    labelKey: "calendar.prep.needsReview",
     className: "bg-rose-500/10 text-rose-600 ring-1 ring-inset ring-rose-500/20",
   },
 };
@@ -195,6 +195,7 @@ function ExternalLinkIcon() {
 /** The join link, only when it is an https URL (lib/meeting-link). The link is
  *  invite data anyone can set, so anything else stays inert text, never a link. */
 function MeetingLinkLine({ link }: { link: string }) {
+  const { t } = useT();
   const href = safeMeetingHref(link);
   if (!href) {
     return <p className="mt-2 break-all text-[12px] text-ink-dim">{link}</p>;
@@ -206,7 +207,7 @@ function MeetingLinkLine({ link }: { link: string }) {
       rel="noopener noreferrer"
       className="mt-2 inline-flex items-center gap-1 text-[12px] text-accent-deep hover:text-accent-deep"
     >
-      Join meeting
+      {t("calendar.joinMeeting")}
       <ExternalLinkIcon />
     </a>
   );
@@ -235,7 +236,7 @@ function CalendarEventDetail({ id }: { id: string }) {
       })
       .catch((err) => {
         captureClientError(err, { scope: "calendar-detail.load" });
-        setError("Event not found.");
+        setError(t("calendar.eventNotFound"));
       })
       .finally(() => setLoading(false));
   }, [id]);
@@ -268,12 +269,12 @@ function CalendarEventDetail({ id }: { id: string }) {
   if (error || !event) {
     return (
       <div className="mx-auto max-w-3xl px-6 py-12 text-center">
-        <p className="text-sm text-ink-mid">{error ?? "Event not found."}</p>
+        <p className="text-sm text-ink-mid">{error ?? t("calendar.eventNotFound")}</p>
         <Link
           href="/calendar"
           className="mt-3 inline-block text-[12px] text-accent-deep hover:underline"
         >
-          ← Back to calendar
+          {t("calendar.backToCalendar")}
         </Link>
       </div>
     );
@@ -301,7 +302,7 @@ function CalendarEventDetail({ id }: { id: string }) {
           >
             <polyline points="15 18 9 12 15 6" />
           </svg>
-          Calendar
+          {t("nav.calendar")}
         </Link>
 
         {/* Header */}
@@ -334,7 +335,7 @@ function CalendarEventDetail({ id }: { id: string }) {
                     onClick={() => setConfirmDelete(false)}
                     className="ease-strong rounded-md px-2 py-1 text-[11px] text-ink-dim transition duration-150 hover:text-ink-muted focus-ring min-h-9 min-w-9"
                   >
-                    Cancel
+                    {t("common.cancel")}
                   </button>
                   <button
                     type="button"
@@ -342,7 +343,7 @@ function CalendarEventDetail({ id }: { id: string }) {
                     disabled={deleting}
                     className="ease-strong rounded-md border border-state-danger-line bg-state-danger-bg px-2 py-1 text-[11px] font-medium text-state-danger-ink transition duration-150 hover:bg-state-danger-bg active:scale-[0.97] disabled:opacity-50 focus-ring min-h-9 min-w-9"
                   >
-                    {deleting ? "Deleting…" : "Delete"}
+                    {deleting ? t("calendar.deleting") : t("common.delete")}
                   </button>
                 </>
               ) : (
@@ -350,7 +351,7 @@ function CalendarEventDetail({ id }: { id: string }) {
                   type="button"
                   onClick={() => setConfirmDelete(true)}
                   className="ease-strong rounded-md p-1.5 text-slate-300 transition duration-150 hover:text-state-danger-ink focus-ring min-h-9 min-w-9"
-                  aria-label="Delete event"
+                  aria-label={t("calendar.deleteEvent")}
                 >
                   <svg
                     width="14"
@@ -384,18 +385,21 @@ function CalendarEventDetail({ id }: { id: string }) {
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-widest text-accent-deep">
-                  Prep pack
+                  {t("calendar.prep.title")}
                 </p>
                 <p className="mt-0.5 text-[11px] text-ink-mid">
-                  Mail {pack.relatedEmails.length} · Tasks {pack.openTasks.length} · Commitments{" "}
-                  {pack.openCommitments.length}
+                  {t("calendar.prep.counts", {
+                    mail: String(pack.relatedEmails.length),
+                    tasks: String(pack.openTasks.length),
+                    commitments: String(pack.openCommitments.length),
+                  })}
                 </p>
               </div>
               {readiness && (
                 <span
                   className={`rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ${readiness.className}`}
                 >
-                  {readiness.label}
+                  {t(readiness.labelKey)}
                 </span>
               )}
             </div>
@@ -413,7 +417,7 @@ function CalendarEventDetail({ id }: { id: string }) {
             {pack.relatedEmails.length > 0 && (
               <div className="mt-5">
                 <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-ink-dim">
-                  Related mail
+                  {t("calendar.prep.relatedMail")}
                 </p>
                 <ul className="divide-y divide-line-soft overflow-hidden rounded-xl border border-line-soft">
                   {pack.relatedEmails.map((m) => {
@@ -460,7 +464,7 @@ function CalendarEventDetail({ id }: { id: string }) {
             {pack.openTasks.length > 0 && (
               <div className="mt-5">
                 <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-ink-dim">
-                  Open tasks
+                  {t("calendar.prep.openTasks")}
                 </p>
                 <ul className="divide-y divide-line-soft overflow-hidden rounded-xl border border-line-soft">
                   {pack.openTasks.map((t) => (
@@ -475,7 +479,7 @@ function CalendarEventDetail({ id }: { id: string }) {
             {pack.openCommitments.length > 0 && (
               <div className="mt-5">
                 <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-ink-dim">
-                  Open commitments
+                  {t("calendar.prep.openCommitments")}
                 </p>
                 <ul className="divide-y divide-line-soft overflow-hidden rounded-xl border border-line-soft">
                   {pack.openCommitments.map((c) => (
@@ -488,9 +492,9 @@ function CalendarEventDetail({ id }: { id: string }) {
                         }`}
                       >
                         {c.owner === "USER"
-                          ? "I owe"
+                          ? t("calendar.prep.iOwe")
                           : c.owner === "COUNTERPARTY"
-                            ? "They owe"
+                            ? t("calendar.prep.theyOwe")
                             : "—"}
                       </span>
                       {c.title}

@@ -176,11 +176,48 @@ const COPY_GUARD_PREFIXES = [
   // Assistant hub (productization plan P7).
   "assistantHub.",
   "keys.approvals.",
+  // Strings moved out of JSX by the hard-coded string sweep (2026-10-16).
+  "linkedAccounts.",
+  "linkedInboxes.",
+  "outlookInboxes.",
+  "linkedCalendars.",
+  "imap.",
+  "telegram.",
+  "byok.",
+  "subscription.",
+  "paywall.",
+  "oauthError.",
+  "inAppBrowser.",
+  "feedbackPolicy.",
+  "rejectDialog.",
+  "palette.",
+  "shortcuts.",
+  "pushBanner.",
+  "paddle.",
+  "authGuard.",
+  "appShell.",
+  "assistantDock.",
+  "sidebar.",
+  "bottomTabs.",
+  "toast.",
+  "errorAlert.",
+  "mailRow.",
+  "graph.",
+  "newEvent.",
+  "compose.",
 ];
 
 /** Words that are genuinely the same in another language: key -> locales. Keep this tiny. */
 const SAME_AS_ENGLISH = {
   "settings.apiKeys.activity.outcome.error": ["es"],
+  // Product names Apple and Naver do not translate in these locales.
+  "imap.icloud.title": ["es", "fr", "de"],
+  "imap.naver.title": ["es", "fr", "de"],
+  "telegram.deepLink.after": ["ko", "es", "fr", "de"],
+  "telegram.codeLabel": ["de"],
+  "newEvent.date": ["fr"],
+  "newEvent.optional": ["de"],
+  "compose.message": ["fr"],
 };
 
 function escapeRegExp(text) {
@@ -239,16 +276,80 @@ if (copyProblems > 0) {
  * a string that never went through t(): it is not in any table. For the
  * directories below, every file is checked for (a) keys passed as literals
  * that en.ts does not have — a typo renders as the raw key — and (b) English
- * written straight into the markup: JSX text, or a literal aria-label / title
- * / placeholder / alt / label / description attribute. Heuristic by design: it
- * reads source text, not a syntax tree. To cover a later surface, add its
- * directory here.
+ * written straight into the markup: JSX text, a literal aria-label / title
+ * / placeholder / alt / label / description attribute, or a literal toast().
+ * Heuristic by design: it reads source text, not a syntax tree. To cover a
+ * later surface, add its directory here.
  */
-const PROSE_GUARD_DIRS = ["packages/web/src/app/assistant"];
+const PROSE_GUARD_DIRS = [
+  "packages/web/src/app/assistant",
+  // Current product surfaces (hard-coded string sweep, 2026-10-16). The legacy
+  // /inbox page is deliberately absent: UNIFIED_HOME replaces it.
+  "packages/web/src/app/billing",
+  "packages/web/src/app/calendar",
+  "packages/web/src/app/email",
+  "packages/web/src/app/files",
+  "packages/web/src/app/login",
+  "packages/web/src/app/onboarding",
+  "packages/web/src/app/settings",
+  "packages/web/src/app/today",
+  "packages/web/src/components",
+];
+/** Files inside a guarded directory that are not a translated surface, and why. */
+const PROSE_GUARD_SKIP = new Map([
+  // Rendered only by the legacy /inbox page (Decisions / Firewall board).
+  ["packages/web/src/components/briefing-card.tsx", "legacy /inbox only"],
+  ["packages/web/src/components/command-center-summary.tsx", "legacy /inbox only"],
+  ["packages/web/src/components/commitment-card.tsx", "legacy /inbox only"],
+  ["packages/web/src/components/firewall-board.tsx", "legacy /inbox only"],
+  ["packages/web/src/components/pmf-card.tsx", "legacy /inbox only"],
+  ["packages/web/src/components/screener-card.tsx", "legacy /inbox only"],
+  // Imported by nothing.
+  ["packages/web/src/components/beta-learning-card.tsx", "unused"],
+  ["packages/web/src/components/email-feedback-list.tsx", "unused"],
+  ["packages/web/src/components/feedback-policy-studio.tsx", "unused"],
+  ["packages/web/src/components/footer.tsx", "unused"],
+  ["packages/web/src/components/operating-loop-card.tsx", "unused"],
+  ["packages/web/src/components/playbook-recommendations.tsx", "unused"],
+  // Admin-only.
+  ["packages/web/src/components/retention-dashboard.tsx", "admin only"],
+  ["packages/web/src/app/settings/sms/page.tsx", "admin only"],
+  // Legal text: translating it needs a reviewed legal translation, not a sweep.
+  ["packages/web/src/components/refund-policy.tsx", "legal text"],
+]);
+/**
+ * Text that is correctly the same in every locale: product and brand names,
+ * language endonyms in a language picker, and literal codes the user types or
+ * sees from another system. Keep this to names and codes, never prose.
+ */
+const PROSE_ALLOWLIST = new Set([
+  "Klorn",
+  "Klorn Pro",
+  "Telegram",
+  "Google Gemini",
+  "English",
+  "Español",
+  "Français",
+  "Deutsch",
+  "/start",
+  "403: disallowed_useragent",
+  "xxxx-xxxx-xxxx-xxxx",
+  // A CSS selector for the Next.js dev-tools button (providers.tsx), not UI text.
+  "Open Next.js Dev Tools",
+]);
+const EMAIL_ADDRESS_RE = /^[\w.+-]+@[\w-]+(\.[\w-]+)+$/;
+const isAllowedProse = (text) => PROSE_ALLOWLIST.has(text.trim()) || EMAIL_ADDRESS_RE.test(text.trim());
 const KEY_LITERAL_RE =
   /["'`]((?:assistantHub|keys|nav|today|receipt|screener|briefing|chat|settings|mailV2|tool\.label)\.[\w.]+)["'`]/g;
+// Wider surfaces carry query keys and Sentry scopes that look like keys, so
+// there only a literal passed straight to t() is checked.
+const KEY_LITERAL_DIRS = new Set(["packages/web/src/app/assistant"]);
+const T_CALL_KEY_RE = /\bt\(\s*["'`]([\w.]+)["'`]/g;
+// A toast whose message is a string literal rather than t(...).
+const TOAST_LITERAL_RE = /\btoast\(\s*(["'`])((?:(?!\1).)*[A-Za-z]{2}(?:(?!\1).)*)\1/g;
 // Text that ends at a closing tag or an expression, after a tag or an expression.
-const JSX_TEXT_RE = />([^<>{}]+)(?:<\/|\{)|\}([^<>{}]+)<\//g;
+// `=>` is an arrow function, not a tag.
+const JSX_TEXT_RE = /(?<!=)>([^<>{}]+)(?:<\/|\{)|\}([^<>{}]+)<\//g;
 const PROSE_RE = /^[\s\w.,:!?'’·—–-]*[A-Za-z]{2}[\s\w.,:!?'’·—–-]*$/;
 const ATTRIBUTE_RE = /\b(aria-label|title|placeholder|alt|label|description)="([^"]*[A-Za-z][^"]*)"/g;
 
@@ -273,9 +374,11 @@ for (const dir of PROSE_GUARD_DIRS) {
     fail(`could not read ${dir} — did the guarded surface move?`);
   }
   for (const path of paths) {
+    if (PROSE_GUARD_SKIP.has(path)) continue;
     proseFiles++;
     const source = stripComments(readFileSync(path, "utf8"));
-    for (const [, key] of source.matchAll(KEY_LITERAL_RE)) {
+    const keyRe = KEY_LITERAL_DIRS.has(dir) ? KEY_LITERAL_RE : T_CALL_KEY_RE;
+    for (const [, key] of source.matchAll(keyRe)) {
       if (baseSet.has(key)) continue;
       console.error(`✗ ${path}: "${key}" is not a key in ${baseLocale}.ts`);
       proseProblems++;
@@ -283,14 +386,26 @@ for (const dir of PROSE_GUARD_DIRS) {
     if (!path.endsWith(".tsx")) continue;
     for (const [, afterTag, afterExpression] of source.matchAll(JSX_TEXT_RE)) {
       const text = afterTag ?? afterExpression;
-      if (!PROSE_RE.test(text)) continue;
+      if (!PROSE_RE.test(text) || isAllowedProse(text)) continue;
       console.error(`✗ ${path}: text written into the markup: "${text.trim().slice(0, 60)}"`);
       proseProblems++;
     }
     for (const [, attribute, text] of source.matchAll(ATTRIBUTE_RE)) {
+      if (isAllowedProse(text)) continue;
       console.error(`✗ ${path}: ${attribute}="${text.slice(0, 60)}" is not translated`);
       proseProblems++;
     }
+    for (const [, , text] of source.matchAll(TOAST_LITERAL_RE)) {
+      console.error(`✗ ${path}: toast("${text.slice(0, 60)}") is not translated`);
+      proseProblems++;
+    }
+  }
+}
+for (const path of PROSE_GUARD_SKIP.keys()) {
+  try {
+    readFileSync(path, "utf8");
+  } catch {
+    fail(`PROSE_GUARD_SKIP names ${path}, which no longer exists — drop the entry`);
   }
 }
 

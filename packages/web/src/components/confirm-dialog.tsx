@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { getFocusableElements, trapTab } from "../lib/focusable";
+import { useT } from "../lib/i18n";
 import { bodyScrollLock, isPlainEscape, modalStack } from "../lib/modal-stack";
 
 interface ConfirmOptions {
@@ -31,6 +32,7 @@ export function useConfirm() {
 }
 
 export function ConfirmProvider({ children }: { children: React.ReactNode }) {
+  const { t } = useT();
   const [options, setOptions] = useState<ConfirmOptions | null>(null);
   const resolveRef = useRef<((value: boolean) => void) | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -113,7 +115,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                 onClick={() => handleClose(false)}
                 className="min-h-11 px-4 py-2 rounded-lg text-sm text-ink-mid hover:text-ink transition"
               >
-                {options.dismissLabel || "Cancel"}
+                {options.dismissLabel || t("common.cancel")}
               </button>
               <button
                 type="button"
@@ -124,7 +126,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                     : "bg-accent-solid hover:bg-accent-solid-hover text-accent-solid-ink"
                 }`}
               >
-                {options.confirmLabel || "Confirm"}
+                {options.confirmLabel || t("common.confirm")}
               </button>
             </div>
           </div>

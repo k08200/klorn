@@ -161,6 +161,44 @@ describe("the text comes from the attachment pipeline's extractor", () => {
   });
 });
 
+describe("Google's own formats are read as their export (D5d)", () => {
+  const DOC = "application/vnd.google-apps.document";
+  const SLIDES = "application/vnd.google-apps.presentation";
+  const SHEET = "application/vnd.google-apps.spreadsheet";
+
+  it("a Doc, a Slides deck and a Sheet are worth fetching, with no size (Drive reports none)", () => {
+    for (const type of [DOC, SLIDES, SHEET]) {
+      expect(isSummarisableFile("Q3 plan", type, null), type).toBe(true);
+    }
+  });
+
+  it("whatever their name says: the export's type decides, not an extension", () => {
+    // Named like an image or an Office file, the export is still plain text or CSV.
+    expect(isSummarisableFile("diagram.png", DOC, null)).toBe(true);
+    const asDocx = extractSummaryText(Buffer.from("Minutes of the review."), "notes.docx", DOC);
+    expect(asDocx).toEqual({ ok: true, text: "Minutes of the review." });
+    const asXlsx = extractSummaryText(Buffer.from("region,total\nEU,12\n"), "budget.xlsx", SHEET);
+    expect(asXlsx).toEqual({ ok: true, text: "region,total\nEU,12" });
+    const deck = extractSummaryText(Buffer.from("Slide one\n\nSlide two"), "deck.pptx", SLIDES);
+    expect(deck).toEqual({ ok: true, text: "Slide one\n\nSlide two" });
+  });
+
+  it("any other Google format has no text export: never fetched, unsupported", () => {
+    for (const type of [
+      "application/vnd.google-apps.form",
+      "application/vnd.google-apps.drawing",
+      "application/vnd.google-apps.site",
+    ]) {
+      // A name that looks readable does not make it so.
+      expect(isSummarisableFile("survey.txt", type, null), type).toBe(false);
+      expect(extractSummaryText(Buffer.from("text"), "survey.txt", type)).toEqual({
+        ok: false,
+        code: "unsupported-type",
+      });
+    }
+  });
+});
+
 describe("day keys, caps' reset and backoff", () => {
   afterEach(() => {
     vi.unstubAllEnvs();

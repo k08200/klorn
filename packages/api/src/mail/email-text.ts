@@ -15,6 +15,7 @@
 import sanitizeHtml from "sanitize-html";
 
 const SAFE_HREF = /^(https?:|mailto:)/i;
+const SAFE_DATA_IMAGE = /^data:image\/(png|gif|jpe?g|webp|bmp|avif);/i;
 
 const ENTITIES: Record<string, string> = {
   "&amp;": "&",
@@ -179,6 +180,20 @@ export function renderableEmailHtml(html: string | null | undefined): string | n
     // GET /api/email/:id/inline/:cid since 2026-08-15); a genuinely src-less
     // <img> shell is still dropped so the pane never shows a bare broken icon.
     exclusiveFilter: (frame) => frame.tag === "img" && !(frame.attribs.src || "").trim(),
+    // data: survives the scheme allowlist whatever its media type. Only
+    // raster images are kept: svg+xml is a document format and text/html
+    // never belongs in an <img>. Dropping src lets the filter above remove
+    // the shell.
+    transformTags: {
+      img: (tagName, attribs) => {
+        const src = (attribs.src || "").trim();
+        if (/^data:/i.test(src) && !SAFE_DATA_IMAGE.test(src)) {
+          const { src: _dropped, ...rest } = attribs;
+          return { tagName, attribs: rest };
+        }
+        return { tagName, attribs };
+      },
+    },
   });
   return out.trim() ? out : null;
 }

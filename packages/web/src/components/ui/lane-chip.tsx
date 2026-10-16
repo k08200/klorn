@@ -21,6 +21,7 @@
  */
 
 import type { LiveTier, Tier } from "@klorn/contract";
+import { useT } from "../../lib/i18n";
 import { toLiveTier } from "../../lib/tiers";
 
 /** Tint strength in percent; must match the `/13` in every class below
@@ -44,13 +45,14 @@ export interface LaneChipProps {
 }
 
 export function LaneChip({ tier, className = "" }: LaneChipProps) {
+  const { t } = useT();
   const lane = toLiveTier(tier);
   return (
     <span
       data-lane={lane}
       className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-caption font-medium tracking-wide tabular-nums ${CHIP_CLASS[lane]} ${className}`}
     >
-      <span className="sr-only">Lane </span>
+      <span className="sr-only">{t("mailV2.lanes.label")} </span>
       {lane}
     </span>
   );

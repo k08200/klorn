@@ -12,10 +12,11 @@ type PurgeTx = typeof db;
  * A regression that drops one silently strands user data (this list has
  * regressed before: linked-account OAuth tokens and verbatim email excerpts
  * were surviving). `purge-user-data.test.ts` asserts the required set. Every
- * table below FKs to `User` (onDelete: Cascade). The one other foreign key among
- * them is CalendarEvent.sourceAccountId -> LinkedCalendarAccount (C2), which also
- * cascades: deleting an account removes its synced events, and deleting events
- * never touches an account, so delete order is still unconstrained.
+ * table below FKs to `User` (onDelete: Cascade). The other foreign keys among
+ * them are CalendarEvent.sourceAccountId -> LinkedCalendarAccount (C2) and
+ * DriveFile.sourceAccountId -> LinkedDriveAccount (D5a), which also cascade:
+ * deleting an account removes its synced events or indexed files, and deleting
+ * those never touches an account, so delete order is still unconstrained.
  */
 export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> {
   const scope = { where: { userId } };
@@ -25,6 +26,11 @@ export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> 
   // a deletion request (previously only removed by manual per-account unlink).
   await tx.linkedInboxAccount.deleteMany(scope);
   await tx.linkedCalendarAccount.deleteMany(scope);
+  // A linked Google Drive / OneDrive account (D5a): its OAuth token pair and
+  // address. Its cascade reaches only that account's GOOGLE/ONEDRIVE DriveFile
+  // rows (a KLORN row has no account), never a Klorn file whose object must go
+  // first.
+  await tx.linkedDriveAccount.deleteMany(scope);
   // SenderTrait.evidenceText holds verbatim quoted email content.
   await tx.senderTrait.deleteMany(scope);
   // SenderLabel: the user's own relationship corrections, keyed by address.

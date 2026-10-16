@@ -91,11 +91,11 @@ export function OutlookInboxesSection() {
       apiFetch(`/api/auth/outlook/linked-inboxes/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.inbox.outlookAccounts() });
-      toast("Inbox disconnected.", "success");
+      toast(t("linkedInboxes.toast.disconnected"), "success");
     },
     onError: (err) => {
       captureClientError(err, { scope: "inbox.outlook.disconnect" });
-      toast("Couldn't disconnect. Try again.", "error");
+      toast(t("linkedAccounts.toast.disconnectFailed"), "error");
     },
   });
 
@@ -112,8 +112,8 @@ export function OutlookInboxesSection() {
       captureClientError(err, { scope: "inbox.outlook.connect" });
       toast(
         msg.startsWith("API 503")
-          ? "Outlook linking isn't configured yet. Try again later."
-          : "Couldn't start Outlook sign-in. Try again.",
+          ? t("outlookInboxes.toast.notConfigured")
+          : t("outlookInboxes.toast.signInFailed"),
         "error",
       );
     },
@@ -124,11 +124,9 @@ export function OutlookInboxesSection() {
 
   return (
     <section className="panel-elevated mb-8 rounded-2xl border border-line/70 bg-surface-panel p-5">
-      <h2 className="text-base font-semibold text-ink">Outlook inboxes</h2>
+      <h2 className="text-base font-semibold text-ink">{t("outlookInboxes.title")}</h2>
       <p className="mt-1 text-xs text-ink-mid">
-        Connect an Outlook or Microsoft account so Klorn runs the same {TIER_COUNT}-lane firewall
-        across its mail too. You approve access on Microsoft's sign-in page — Klorn never sees your
-        password.
+        {t("outlookInboxes.body", { count: String(TIER_COUNT) })}
       </p>
 
       {accounts.length > 0 && (
@@ -142,7 +140,7 @@ export function OutlookInboxesSection() {
                 <span className="block truncate text-ink">{account.email}</span>
                 {account.needsReconnect ? (
                   <span className="block truncate text-[11px] text-state-warn-ink">
-                    Reconnect needed — access was revoked
+                    {t("linkedAccounts.reconnectNeeded")}
                   </span>
                 ) : (
                   <span className="block truncate text-[11px] text-ink-dim">
@@ -158,7 +156,7 @@ export function OutlookInboxesSection() {
                     disabled={connect.isPending}
                     className="ease-strong rounded-md border border-state-warn-line bg-state-warn-bg px-2 py-1 text-xs font-medium text-state-warn-ink transition duration-150 hover:bg-amber-100 active:scale-[0.97] disabled:opacity-50"
                   >
-                    Reconnect
+                    {t("common.reconnect")}
                   </button>
                 )}
                 <button
@@ -167,7 +165,7 @@ export function OutlookInboxesSection() {
                   disabled={disconnect.isPending}
                   className="ease-strong rounded-md border border-state-danger-line bg-state-danger-bg px-2 py-1 text-xs font-medium text-state-danger-ink transition duration-150 hover:bg-state-danger-bg active:scale-[0.97] disabled:opacity-50"
                 >
-                  Disconnect
+                  {t("settings.disconnect")}
                 </button>
               </div>
             </li>
@@ -182,7 +180,7 @@ export function OutlookInboxesSection() {
           disabled={connect.isPending}
           className="glow-primary ease-strong mt-3 inline-flex min-h-10 items-center rounded-lg bg-accent-solid px-4 py-2 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:opacity-50"
         >
-          Connect Outlook inbox
+          {t("outlookInboxes.connect")}
         </button>
       ) : (
         <div className="mt-3">

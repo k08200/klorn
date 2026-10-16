@@ -162,3 +162,48 @@ describe("renderableEmailHtml — cid: images", () => {
     expect(out).toContain('src="https://x.example/a.png"');
   });
 });
+
+// Web reader matrix (2026-10-16): the web renders renderHtml in a sandboxed
+// iframe; these pin the first wall against the classic payloads.
+describe("renderableEmailHtml — hostile markup matrix", () => {
+  it("drops svg (and its script/onload) entirely", async () => {
+    const { renderableEmailHtml } = await import("../mail/email-text.js");
+    const out = renderableEmailHtml(
+      '<p>a</p><svg onload="alert(1)"><script>alert(2)</script><a xlink:href="javascript:alert(3)">x</a></svg>',
+    );
+    expect(out).not.toMatch(/svg|onload|script|javascript:/i);
+  });
+
+  it("drops forms, inputs, object, embed, meta refresh, base, link and style blocks", async () => {
+    const { renderableEmailHtml } = await import("../mail/email-text.js");
+    const out = renderableEmailHtml(
+      '<meta http-equiv="refresh" content="0;url=https://evil.example"><base href="https://evil.example/">' +
+        '<link rel="stylesheet" href="https://evil.example/a.css"><style>body{background:url(https://t.example/p)}</style>' +
+        '<form action="https://evil.example"><input name="pw"><button>go</button></form>' +
+        '<object data="https://evil.example/x"></object><embed src="https://evil.example/y"><p>kept</p>',
+    );
+    expect(out).toContain("<p>kept</p>");
+    expect(out).not.toMatch(/<meta|<base|<link|<style|<form|<input|<button|<object|<embed/i);
+    expect(out).not.toContain("evil.example");
+  });
+
+  it("strips obfuscated javascript: hrefs and vbscript:", async () => {
+    const { renderableEmailHtml } = await import("../mail/email-text.js");
+    const out = renderableEmailHtml(
+      '<a href="  JaVaScRiPt:alert(1)">a</a><a href="java&#x09;script:alert(1)">b</a><a href="vbscript:x">c</a>',
+    );
+    expect(out).not.toMatch(/javascript|vbscript|href=/i);
+  });
+
+  it("keeps raster data: images but drops svg and non-image data: srcs", async () => {
+    const { renderableEmailHtml } = await import("../mail/email-text.js");
+    const out = renderableEmailHtml(
+      '<img src="data:image/gif;base64,R0lG" alt="g">' +
+        '<img src="data:image/svg+xml;base64,PHN2Zz4=" alt="s">' +
+        '<img src="data:text/html;base64,PHNjcmlwdD4=" alt="h">',
+    );
+    expect(out).toContain('src="data:image/gif;base64,R0lG"');
+    expect(out).not.toContain("svg+xml");
+    expect(out).not.toContain("text/html");
+  });
+});

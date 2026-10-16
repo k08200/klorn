@@ -228,3 +228,109 @@ export interface DriveDownloadResponse {
 export interface DriveDeleteResponse {
   deleted: { files: number; folders: number };
 }
+
+// ─── Google Drive accounts (D5b, D5c) ─────────────────────────────────────────
+// `/api/drive/google`: link and unlink a Google account for its picked files
+// (drive.file only), and index the files picked in the Google Picker. Every
+// route answers exactly like an unregistered one while the server's
+// DRIVE_ENABLED or GOOGLE_DRIVE_ENABLED flag is off. No token crosses the wire
+// except the Picker's own (`GoogleDrivePickerSessionResponse`), by design.
+
+/**
+ * `POST /api/drive/google/link` — the Google consent URL to send the browser
+ * to. The callback lands it back on `/files?drive=<GoogleDriveLinkOutcome>`.
+ */
+export interface GoogleDriveLinkResponse {
+  url: string;
+}
+
+/**
+ * The `drive` query value of `/files` after a link:
+ *   - `success`: linked (or re-linked in place);
+ *   - `scope-missing`: Google Drive access was unticked at consent; nothing stored;
+ *   - `unverified`: Google has not verified that address; nothing stored;
+ *   - `limit`: the user already has the most accounts (5); nothing stored;
+ *   - `failed`: anything else, the feature turned off meanwhile included.
+ */
+export type GoogleDriveLinkOutcome =
+  | "success"
+  | "failed"
+  | "unverified"
+  | "scope-missing"
+  | "limit";
+
+/** One linked Google Drive account. */
+export interface GoogleDriveAccountWire {
+  id: string;
+  email: string;
+  /** The grant stopped working (revoked, or unreadable): only a re-link fixes it. */
+  needsReconnect: boolean;
+  /** ISO 8601. */
+  createdAt: string;
+}
+
+/** `GET /api/drive/google/accounts` — the user's accounts, oldest first. */
+export interface GoogleDriveAccountsResponse {
+  accounts: GoogleDriveAccountWire[];
+}
+
+/**
+ * `DELETE /api/drive/google/accounts/:id` — the account and every file indexed
+ * from it are removed from Klorn. Klorn does not revoke the grant at Google (a
+ * grant shared with the primary's Gmail would go with it); the user can remove
+ * it in their Google account. 404 `{ error }` for an id that is not the user's.
+ */
+export interface GoogleDriveUnlinkResponse {
+  success: true;
+}
+
+/**
+ * `POST /api/drive/google/accounts/:id/picker-session` — what the browser's
+ * Google Picker needs, minted on click and sent `Cache-Control: no-store`. The
+ * ONE response that carries a token: the Picker runs in the browser and cannot
+ * work without it. It is a drive.file access token (about an hour), never
+ * stored or logged by Klorn. 503 `{ code: "picker-not-configured" }` while the
+ * server lacks the key or the project number; 409 `{ code: "needs-reconnect" }`
+ * when the grant stopped working; 404 for an account that is not the user's.
+ */
+export interface GoogleDrivePickerSessionResponse {
+  accessToken: string;
+  /** The browser API key (`setDeveloperKey`); public, restricted to the web origin. */
+  developerKey: string;
+  /** The Cloud project number (`setAppId`); public. */
+  appId: string;
+}
+
+/** `POST /api/drive/google/accounts/:id/picked` — the Picker's ids, and nothing else: 1 to 50. */
+export interface GoogleDrivePickedRequest {
+  ids: string[];
+}
+
+/**
+ * Why one picked id was not indexed:
+ *   - `not-accessible`: Google does not show it to this grant (or it is in the trash);
+ *   - `folder`, `shortcut`: only files can be picked;
+ *   - `cap`: the account already has the most files Klorn indexes from it (500);
+ *   - `invalid`: not a Drive file id, or metadata Klorn cannot store.
+ */
+export type GoogleDrivePickRefusalCode =
+  | "not-accessible"
+  | "folder"
+  | "shortcut"
+  | "cap"
+  | "invalid";
+
+export interface GoogleDrivePickRefusal {
+  id: string;
+  code: GoogleDrivePickRefusalCode;
+}
+
+/**
+ * The picked files Klorn indexed (a file picked again is refreshed, and counts),
+ * and the ones it refused. 409 `{ code: "needs-reconnect" }` and 502
+ * `{ code: "drive-unavailable" }` index nothing.
+ */
+export interface GoogleDrivePickedResponse {
+  added: number;
+  refused: GoogleDrivePickRefusal[];
+}

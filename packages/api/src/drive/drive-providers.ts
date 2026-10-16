@@ -31,3 +31,19 @@ export function isKlornDriveProvider(provider: DriveProviderName): boolean {
 export function isReadOnlyDriveProvider(provider: DriveProviderName): boolean {
   return !isKlornDriveProvider(provider);
 }
+
+/** A Google Drive file opens on Google's own two Drive hosts, and nowhere else (D5c). */
+const GOOGLE_DRIVE_LINK_HOSTS: ReadonlySet<string> = new Set([
+  "docs.google.com",
+  "drive.google.com",
+]);
+
+/**
+ * The only hosts a file link of this provider may point at, or null when any
+ * safe https link is allowed (a provider whose hosts are not pinned yet). The
+ * writer (drive-rows.ts) and the Google mapper (providers/google-files.ts) both
+ * hold a link to it, so no writer path can store another host.
+ */
+export function driveLinkHosts(provider: DriveProviderName): ReadonlySet<string> | null {
+  return provider === "GOOGLE" ? GOOGLE_DRIVE_LINK_HOSTS : null;
+}

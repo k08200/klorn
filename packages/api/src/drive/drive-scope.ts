@@ -13,7 +13,8 @@
  * providers it knows to be off; the drive shows only the providers known to be
  * on, because it has no legacy rows that must stay visible. A provider nobody
  * registered is hidden. The Klorn drive (D3) is registered, behind its own flag
- * and OBJECT_STORAGE_ENABLED (`klornDriveLive`).
+ * and OBJECT_STORAGE_ENABLED (`klornDriveLive`); Google Drive (D5b) behind
+ * GOOGLE_DRIVE_ENABLED (`googleDriveLive`).
  *
  * The fragment uses only the top-level key `provider`. A caller that filters on
  * a provider of its own must not spread one over the other: combine them with
@@ -21,7 +22,12 @@
  */
 
 import type { Prisma } from "@prisma/client";
-import { driveEnabled, klornDriveEnabled, objectStorageEnabled } from "../config.js";
+import {
+  driveEnabled,
+  googleDriveEnabled,
+  klornDriveEnabled,
+  objectStorageEnabled,
+} from "../config.js";
 import { DRIVE_PROVIDER_NAMES, type DriveProviderName } from "./drive-providers.js";
 
 /** A provider to "is its connector enabled?", read at request time. */
@@ -37,12 +43,25 @@ export function klornDriveLive(): boolean {
 }
 
 /**
- * The registered sources. D3 registers KLORN; D5 adds GOOGLE and D6 ONEDRIVE,
- * each with one entry naming its own flag. Every reader, the by-id check, the
+ * Google Drive (D5) holds nothing in Klorn but the metadata of picked files and
+ * the account's grant, so its own flag is all it needs (and, like every
+ * provider, DRIVE_ENABLED). A function of its own, not the config export
+ * itself, so the flag is read at call time, never when this module loads.
+ */
+export function googleDriveLive(): boolean {
+  return googleDriveEnabled();
+}
+
+/**
+ * The registered sources. D3 registers KLORN and D5b GOOGLE; D6 adds ONEDRIVE,
+ * with one entry naming its own flag. Every reader, the by-id check, the
  * dispatcher and the tests pick it up. Exported so a connector's own tests can
  * pass a map of their own.
  */
-export const DRIVE_PROVIDER_ENABLED: DriveProviderEnabledMap = { KLORN: klornDriveLive };
+export const DRIVE_PROVIDER_ENABLED: DriveProviderEnabledMap = {
+  KLORN: klornDriveLive,
+  GOOGLE: googleDriveLive,
+};
 
 /** The providers whose rows a reader may return right now, in the enum's order. */
 export function visibleDriveProviders(
@@ -81,4 +100,16 @@ export function klornDriveRoutesEnabled(
   providerEnabled: DriveProviderEnabledMap = DRIVE_PROVIDER_ENABLED,
 ): boolean {
   return visibleDriveProviders(providerEnabled).includes("KLORN");
+}
+
+/**
+ * The gate of the Google Drive link routes (routes/google-drive-link.ts) and of
+ * the link callback (drive/providers/google-auth.ts): open exactly while GOOGLE
+ * rows are visible, so an account can never be linked where its files could
+ * not be listed.
+ */
+export function googleDriveRoutesEnabled(
+  providerEnabled: DriveProviderEnabledMap = DRIVE_PROVIDER_ENABLED,
+): boolean {
+  return visibleDriveProviders(providerEnabled).includes("GOOGLE");
 }

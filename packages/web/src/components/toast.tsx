@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useT } from "../lib/i18n";
 
 interface Toast {
   id: string;
@@ -114,6 +115,7 @@ function ToastItem({
   onPause: () => void;
   onResume: () => void;
 }) {
+  const { t } = useT();
   const isError = toast.type === "error";
   return (
     <div
@@ -136,7 +138,7 @@ function ToastItem({
       <button
         type="button"
         onClick={onDismiss}
-        aria-label="Dismiss notification"
+        aria-label={t("toast.dismiss")}
         className="focus-ring -mr-1 -mt-0.5 shrink-0 rounded p-1 opacity-70 transition hover:opacity-100"
       >
         <svg
