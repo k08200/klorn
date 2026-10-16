@@ -98,15 +98,64 @@ describe("raw-HTML detection is linear and matches the old regex", () => {
     }
   });
 
+  it("matches the old regex on every short sequence of tricky atoms, at every limit", () => {
+    // Exhaustive, not sampled: Unicode whitespace after "a" (\s), single letters
+    // that let a name break mid-way, non-ASCII letters /i must NOT fold
+    // (ſ → s, Kelvin K → k), '</', '>' and the style=" attribute.
+    const atoms = [
+      "<",
+      "</",
+      ">",
+      "a",
+      "\u00a0",
+      "\u2028",
+      "\ufeff",
+      "s",
+      "t",
+      "ſ",
+      "K",
+      'style="',
+    ];
+    const check = (text: string) => {
+      const old = oldCount(text);
+      expect(countMarkupTokens(text, Number.POSITIVE_INFINITY), JSON.stringify(text)).toBe(old);
+      for (let limit = 1; limit <= 6; limit++) {
+        expect(countMarkupTokens(text, limit)).toBe(Math.min(old, limit));
+      }
+    };
+    const walk = (prefix: string, depth: number) => {
+      check(prefix);
+      if (depth === 0) return;
+      for (const atom of atoms) walk(prefix + atom, depth - 1);
+    };
+    walk("", 4);
+    for (const text of [
+      "<span>",
+      "<ſpan>",
+      "<a\u00a0>",
+      "<a\u2028>",
+      "<K>",
+      "<tr\ufeff>",
+      "<h0><h7><h1>",
+    ]) {
+      check(text);
+    }
+  });
+
   it("stops at the limit it is given", () => {
     expect(countMarkupTokens("<p>".repeat(100), 5)).toBe(5);
   });
 
-  it("decides a hostile plain body within budget", () => {
-    const hostile = "<div".repeat(250_000); // 1 MB, no '>' anywhere
-    const { value, ms } = timed(() => coercePlainBody(hostile, null));
-    expect(value).toBe(hostile);
-    expect(ms).toBeLessThan(BUDGET_MS);
+  it("decides hostile plain bodies within budget", () => {
+    // 1 MB each: no '>' anywhere; "<a " runs; one '>' only at the very end.
+    for (const hostile of [
+      "<div".repeat(250_000),
+      "<a ".repeat(330_000),
+      `${"<div ".repeat(200_000)}>`,
+    ]) {
+      const { ms } = timed(() => coercePlainBody(hostile, null));
+      expect(ms).toBeLessThan(BUDGET_MS);
+    }
   });
 });
 

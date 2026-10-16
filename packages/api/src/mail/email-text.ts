@@ -111,7 +111,11 @@ function lowerAscii(code: number): number {
   return code >= 0x41 && code <= 0x5a ? code + 0x20 : code;
 }
 
-/** ASCII-case-insensitive "does `word` start at `at`" (the regex's /i, ASCII only). */
+/**
+ * ASCII-case-insensitive "does `word` start at `at`". ASCII-only is exact: the
+ * regex had /i without /u, and non-unicode /i never folds a non-ASCII character
+ * to ASCII (`/s/i` does not match "ſ", `/k/i` does not match Kelvin "K").
+ */
 function startsWithAt(text: string, at: number, word: string): boolean {
   if (at + word.length > text.length) return false;
   for (let k = 0; k < word.length; k++) {
@@ -141,7 +145,9 @@ function markupNameEnd(text: string, at: number): number {
  * `[^>]*>` rescanned to the end of the text from every `<tag` with no `>`
  * after it: "<div" × 32k (128 KB) took 1.9 s, and this runs on the plain body
  * of every persisted email, which has no size cap (2026-10-16). Here the first
- * `>` at or after a position is cached and only ever searched forward.
+ * `>` at or after a position is cached and only ever searched forward. Once no
+ * `>` is left (-1) it stays so: `i` only moves forward and no tag name contains
+ * `<` or `>`, so a later name never ends before the one that found none.
  * Exported for the differential test.
  */
 export function countMarkupTokens(text: string, limit: number): number {
