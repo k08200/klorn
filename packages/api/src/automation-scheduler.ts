@@ -202,7 +202,7 @@ const JUDGE_FALLBACK_CHECK_BOOT_DELAY_MS = 5 * 60 * 1000;
 let lastJudgeFallbackCheckAt =
   Date.now() - JUDGE_FALLBACK_CHECK_INTERVAL_MS + JUDGE_FALLBACK_CHECK_BOOT_DELAY_MS;
 // Database size alarm (ops/db-size-check.ts): hourly, same boot delay and the
-// same reason. Own constant; mirrors DB_SIZE_CHECK_INTERVAL_MS there.
+// same reason.
 const DB_SIZE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 let lastDbSizeCheckAt = Date.now() - DB_SIZE_CHECK_INTERVAL_MS + JUDGE_FALLBACK_CHECK_BOOT_DELAY_MS;
 // Once-per-user-per-UTC-day Sentry alert for the "Gmail not connected"

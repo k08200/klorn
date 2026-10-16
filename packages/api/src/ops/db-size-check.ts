@@ -7,7 +7,9 @@
  * and 65% of that was duplicate attachment rows nobody had noticed for months.
  *
  * Hourly (automation scheduler): one pg_database_size() read, compared with
- * DB_SIZE_LIMIT_MB (MiB, as pg_size_pretty reports; default 500 = free plan).
+ * DB_SIZE_LIMIT_MB (default 500 = free plan). MB here is 10^6 bytes, the
+ * conservative reading of the plan's "500 MB": if the plan counts MiB the alarm
+ * is early, never late. pg_size_pretty prints MiB, so its "446 MB" is 468 here.
  * From 80% an ops Notification goes to every ADMIN; from 90% the same, plus
  * console.error and Sentry. One notification per level per UTC day, deduped
  * fleet-wide by its dedupeKey (ops/admin-ops-notification.ts). Loud output fires
@@ -33,9 +35,8 @@ import { type AdminOpsDelivery, createAdminOpsNotifications } from "./admin-ops-
 export const DB_SIZE_DEFAULT_LIMIT_MB = 500;
 export const DB_SIZE_WARN_RATIO = 0.8;
 export const DB_SIZE_CRITICAL_RATIO = 0.9;
-export const DB_SIZE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 
-const BYTES_PER_MB = 1024 * 1024;
+const BYTES_PER_MB = 1_000_000;
 const PERCENT = 100;
 const UTC_DAY_KEY_LENGTH = 10;
 const ALARM_TITLE = "Database nearly full";
@@ -52,12 +53,24 @@ export interface DbSizeStatus {
 
 // Dedupe keys this process already made loud without a created notification.
 const loudWithoutRecipient = new Set<string>();
+let warnedInvalidLimit = false;
 
-/** DB_SIZE_LIMIT_MB as bytes. Missing or invalid → the free plan's 500 MB. */
+/**
+ * DB_SIZE_LIMIT_MB as bytes. Missing or invalid → the free plan's 500 MB; a set
+ * but unusable value ("8GB") is reported once, since on a bigger plan it would
+ * otherwise page daily with no hint why.
+ */
 export function resolveDbSizeLimitBytes(env: NodeJS.ProcessEnv = process.env): number {
-  const mb = Number(env.DB_SIZE_LIMIT_MB);
-  const valid = Number.isFinite(mb) && mb > 0;
-  return (valid ? mb : DB_SIZE_DEFAULT_LIMIT_MB) * BYTES_PER_MB;
+  const raw = env.DB_SIZE_LIMIT_MB?.trim() ?? "";
+  const mb = Number(raw);
+  if (raw !== "" && Number.isFinite(mb) && mb > 0) return mb * BYTES_PER_MB;
+  if (raw !== "" && !warnedInvalidLimit) {
+    warnedInvalidLimit = true;
+    console.warn(
+      `[DB-SIZE] DB_SIZE_LIMIT_MB=${JSON.stringify(raw)} is not a positive number of megabytes; using ${DB_SIZE_DEFAULT_LIMIT_MB}.`,
+    );
+  }
+  return DB_SIZE_DEFAULT_LIMIT_MB * BYTES_PER_MB;
 }
 
 export function classifyDbSize(bytes: number, limitBytes: number): DbSizeLevel {
@@ -73,7 +86,11 @@ function formatMb(bytes: number): string {
 
 function formatAlarmMessage(status: DbSizeStatus): string {
   const pct = Math.floor(status.ratio * PERCENT);
-  return `Database at ${pct}% of its ${formatMb(status.limitBytes)} limit (${formatMb(status.bytes)} used). Above the limit the database goes read-only: sync, sign-in and every write fail.`;
+  const used = `${pct}%, ${formatMb(status.bytes)} used`;
+  if (status.ratio >= 1) {
+    return `Database is over its ${formatMb(status.limitBytes)} limit (${used}). It is likely read-only now: sync, sign-in and every write fail.`;
+  }
+  return `Database at ${pct}% of its ${formatMb(status.limitBytes)} limit (${formatMb(status.bytes)} used). At the limit it goes read-only: sync, sign-in and every write fail.`;
 }
 
 function shouldBeLoud(delivery: AdminOpsDelivery | null, dedupeKey: string): boolean {
@@ -121,7 +138,9 @@ export async function runDbSizeCheck(now: number = Date.now()): Promise<DbSizeSt
   const rows = await prisma.$queryRaw<Array<{ bytes: bigint }>>`
     SELECT pg_database_size(current_database()) AS bytes
   `;
-  const bytes = Number(rows[0]?.bytes ?? 0n);
+  const size = rows[0]?.bytes;
+  if (size === undefined || size === null) throw new Error("pg_database_size returned no size");
+  const bytes = Number(size);
   const limitBytes = resolveDbSizeLimitBytes();
   const status: DbSizeStatus = {
     bytes,
@@ -137,7 +156,8 @@ export async function runDbSizeCheck(now: number = Date.now()): Promise<DbSizeSt
   return status;
 }
 
-/** Test-only: forget the loud-key memory. */
+/** Test-only: forget the loud-key memory and the invalid-limit warning. */
 export function __resetDbSizeCheck(): void {
   loudWithoutRecipient.clear();
+  warnedInvalidLimit = false;
 }

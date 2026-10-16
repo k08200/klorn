@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // DB_SIZE_LIMIT_MB. Supabase's free plan goes read-only above 500 MB, and on
 // 2026-10-16 production was at 446 MB with nothing watching.
 
-const MIB = 1024 * 1024;
+// Decimal megabytes: the conservative reading of the plan's "500 MB".
+const MB = 1_000_000;
 
 const state = vi.hoisted(() => ({
   bytes: 0n as bigint,
@@ -68,11 +69,20 @@ describe("database size alarm", () => {
   });
 
   it("defaults the limit to the free plan's 500 MB and honours a valid override", () => {
-    expect(resolveDbSizeLimitBytes({})).toBe(500 * MIB);
-    expect(resolveDbSizeLimitBytes({ DB_SIZE_LIMIT_MB: "8192" })).toBe(8192 * MIB);
-    for (const bad of ["", "abc", "0", "-5", "Infinity"]) {
-      expect(resolveDbSizeLimitBytes({ DB_SIZE_LIMIT_MB: bad })).toBe(500 * MIB);
+    expect(resolveDbSizeLimitBytes({})).toBe(500 * MB);
+    expect(resolveDbSizeLimitBytes({ DB_SIZE_LIMIT_MB: "8192" })).toBe(8192 * MB);
+    expect(console.warn).not.toHaveBeenCalled();
+    for (const bad of ["", "abc", "0", "-5", "Infinity", "8GB"]) {
+      expect(resolveDbSizeLimitBytes({ DB_SIZE_LIMIT_MB: bad })).toBe(500 * MB);
     }
+  });
+
+  it("says once when DB_SIZE_LIMIT_MB is set but unusable", () => {
+    resolveDbSizeLimitBytes({ DB_SIZE_LIMIT_MB: "8GB" });
+    resolveDbSizeLimitBytes({ DB_SIZE_LIMIT_MB: "8GB" });
+
+    expect(console.warn).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(console.warn).mock.calls[0]?.[0]).toContain("DB_SIZE_LIMIT_MB");
   });
 
   it("warns from 80% and goes critical from 90%", () => {
@@ -85,11 +95,11 @@ describe("database size alarm", () => {
   });
 
   it("reads only the database size and stays quiet below 80%", async () => {
-    state.bytes = BigInt(300 * MIB);
+    state.bytes = BigInt(300 * MB);
 
     const status = await runDbSizeCheck(NOW);
 
-    expect(status).toMatchObject({ level: "ok", bytes: 300 * MIB, limitBytes: 500 * MIB });
+    expect(status).toMatchObject({ level: "ok", bytes: 300 * MB, limitBytes: 500 * MB });
     expect(state.queries).toEqual([
       expect.stringContaining("pg_database_size(current_database())"),
     ]);
@@ -97,8 +107,17 @@ describe("database size alarm", () => {
     expect(state.captured).toEqual([]);
   });
 
+  it("counts in decimal megabytes, so production's 446 MiB is already critical", async () => {
+    state.bytes = BigInt(446 * 1024 * 1024);
+
+    const status = await runDbSizeCheck(NOW);
+
+    expect(status.level).toBe("critical");
+    expect(state.notifications[0]?.message).toMatch(/93%.*500 MB.*468 MB/);
+  });
+
   it("sends one deduped ops notification at the warn level, without Sentry", async () => {
-    state.bytes = BigInt(446 * MIB);
+    state.bytes = BigInt(446 * MB);
 
     const status = await runDbSizeCheck(NOW);
 
@@ -114,7 +133,7 @@ describe("database size alarm", () => {
   });
 
   it("is loud at the critical level only when this call created the alert", async () => {
-    state.bytes = BigInt(470 * MIB);
+    state.bytes = BigInt(470 * MB);
 
     await runDbSizeCheck(NOW);
     expect(state.notifications[0]?.dedupeKey).toBe("db-size:critical:2026-10-16");
@@ -127,8 +146,38 @@ describe("database size alarm", () => {
     expect(state.captured).toHaveLength(1);
   });
 
+  it("alerts again on a new UTC day", async () => {
+    state.bytes = BigInt(470 * MB);
+
+    await runDbSizeCheck(NOW);
+    await runDbSizeCheck(NOW + 24 * 60 * 60 * 1000);
+
+    expect(state.notifications.map((n) => n.dedupeKey)).toEqual([
+      "db-size:critical:2026-10-16",
+      "db-size:critical:2026-10-17",
+    ]);
+    expect(state.captured).toHaveLength(2);
+  });
+
+  it("stays quiet at the warn level even when the notification write fails", async () => {
+    state.bytes = BigInt(446 * MB);
+    state.deliveryError = new Error("db write failed");
+
+    await expect(runDbSizeCheck(NOW)).resolves.toMatchObject({ level: "warn" });
+    expect(state.captured).toEqual([]);
+    expect(console.error).not.toHaveBeenCalled();
+  });
+
+  it("says the database is over its limit once it is", async () => {
+    state.bytes = BigInt(510 * MB);
+
+    await runDbSizeCheck(NOW);
+
+    expect(state.notifications[0]?.message).toMatch(/over its 500 MB limit/);
+  });
+
   it("is loud once per day when no admin can receive the alert", async () => {
-    state.bytes = BigInt(470 * MIB);
+    state.bytes = BigInt(470 * MB);
     state.delivery = { recipients: 0, created: 0 };
 
     await runDbSizeCheck(NOW);
@@ -140,7 +189,7 @@ describe("database size alarm", () => {
   });
 
   it("still pages at critical when the notification write fails", async () => {
-    state.bytes = BigInt(470 * MIB);
+    state.bytes = BigInt(470 * MB);
     state.deliveryError = new Error("db write failed");
 
     await expect(runDbSizeCheck(NOW)).resolves.toMatchObject({ level: "critical" });
@@ -149,12 +198,19 @@ describe("database size alarm", () => {
 
   it("uses DB_SIZE_LIMIT_MB from the environment", async () => {
     process.env.DB_SIZE_LIMIT_MB = "8192";
-    state.bytes = BigInt(446 * MIB);
+    state.bytes = BigInt(446 * MB);
 
     const status = await runDbSizeCheck(NOW);
 
-    expect(status).toMatchObject({ level: "ok", limitBytes: 8192 * MIB });
+    expect(status).toMatchObject({ level: "ok", limitBytes: 8192 * MB });
     expect(state.notifications).toEqual([]);
+  });
+
+  it("refuses an empty size result instead of reading it as zero", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([] as never);
+
+    await expect(runDbSizeCheck(NOW)).rejects.toThrow(/no size/);
   });
 
   it("lets a failed size read reach the caller", async () => {
