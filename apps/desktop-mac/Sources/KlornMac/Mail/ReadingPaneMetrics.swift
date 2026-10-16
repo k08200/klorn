@@ -1,9 +1,7 @@
 import SwiftUI
 
-/// The reading pane's type, status colors and insets, by shell. `.bar`
-/// holds the bar's values exactly as they were inline (system text styles,
-/// whose caption is 10pt); `.window` maps each to a role of the six-step
-/// scale, so nothing in the main window's reader is under 11pt.
+/// The reading pane's type, status colors and insets. Each maps to a role
+/// of the six-step scale, so nothing in the reader is under 11pt.
 struct ReadingPaneMetrics {
     let title3: Font
     let callout: Font
@@ -21,13 +19,6 @@ struct ReadingPaneMetrics {
     let inset: CGFloat
     let bandVertical: CGFloat
     let stripVertical: CGFloat
-
-    static let bar = ReadingPaneMetrics(
-        title3: .title3, callout: .callout, caption: .caption,
-        captionMedium: .caption.weight(.medium), caption2: .caption2,
-        caption2Semibold: .caption2.weight(.semibold), sender: .callout,
-        senderInk: Theme.textDim, warning: .orange, danger: .red, success: .green,
-        editorRadius: 12, cardRadius: 8, inset: 24, bandVertical: 14, stripVertical: 10)
 
     static let window = ReadingPaneMetrics(
         title3: Theme.Typo.head, callout: Theme.Typo.body, caption: Theme.Typo.caption,

@@ -234,9 +234,9 @@ the sending account, and more than one draft at a time.
 The main window wears the design system (M7): the six type roles, three
 radii (6 / 10 / 16), the 4pt spacing grid and `Theme` colors only. A
 self-check source guard holds the main window's own files at zero raw
-style literals. Views it shares with the bar (`FullList`, `ReadingPane`,
-`CalendarScreen`, `LaneChip`, `EmptyState`) take a style parameter that
-defaults to the bar's look, so the bar's previews are byte-identical.
+style literals. Every view has one style, the main window's: the bar,
+legacy and overlay variants went with the pill and the panel, and a
+self-check type scan fails if one comes back.
 
 - **One badge per row.** A mail row shows sender, subject, snippet and
   time, plus the lane chip on mixed-lane lists (All, a label, search). The
@@ -449,11 +449,11 @@ A full XCTest suite can be added when building under Xcode/CI.
 | `Notifications.swift` | PUSH banners: `PushLedger` (+ stores), `PushBanner`, `PushNotifying` / `SystemPushNotifier`, `PushAlerter`, tap identifiers |
 | `Shell/` | the main window shell: `ShellActions.swift`, `ListMode.swift` (`ListMode`), `OffscreenFriendlyScroll.swift`, `TeamsColumn.swift`, `MainNav.swift` (`NavSection`, `LaneFilter`, `NavRules`), `MainShell.swift`, `NavSidebar.swift` |
 | `Today/` | the main window's home (M4b): `TodayRules.swift` (pure composition), `TodayScreen.swift`, `TodayPanels.swift` (calendar and assistant panels) |
-| `Mail/` | `FullList.swift` (the list column, alone in its file), `MailRow.swift` (`FullRow`, `SearchHitRow`), `MailboxList.swift`, `WaitingOnList.swift`, `CommitmentsList.swift`, `ReadingPane.swift`, `Compose.swift` (`ComposePanel`), `MailSection.swift` (main window: lane bar + list + reader) |
+| `Mail/` | `FullList.swift` (the list column, alone in its file), `WindowMailRow.swift` (`WindowMailRow`, `WindowSearchHitRow`), `MailboxList.swift`, `WaitingOnList.swift`, `CommitmentsList.swift`, `ReadingPane.swift`, `Compose.swift` (`ComposePanel`), `MailSection.swift` (main window: lane bar + list + reader) |
 | `Calendar/` | `CalendarScreen.swift`, `EventRows.swift` (upcoming rows, week chips, event popover), `CalendarSection.swift` (main window) |
 | `Assistant/` | `AssistantDock.swift`, `AssistantThread.swift` (thread + `ChatBubble`), `AssistantSection.swift` (main window: panes + thread), `BriefingCard.swift` |
 | `Onboarding/` | first launch (M6): `OnboardingWindow.swift` (`OnboardingRules`, `OnboardingWindowController`), `OnboardingView.swift` (the window's content, `LaneExplainer`) |
-| `Shared/` | `SurfaceState.swift` (M6: `SurfaceState`, `SurfaceStateRules`, `SurfaceStateView`, `ConnectionBanner`, `SignInButtons`, `SolidButtonStyle`); views used by more than one feature: `Controls.swift`, `TierMenus.swift` (`SnoozeMenu`, `TierMenu`), `LaneChip.swift` (lane, signal, reply-state and label chips), `AccountRows.swift` (account rows, diagnostics, update row), `SegmentedBar.swift` (filter tabs, `SourceBadge`) |
+| `Shared/` | `SurfaceState.swift` (M6: `SurfaceState`, `SurfaceStateRules`, `SurfaceStateView`, `ConnectionBanner`, `SignInButtons`, `SolidButtonStyle`); views used by more than one feature: `Controls.swift`, `TierMenus.swift` (`SnoozeMenu`, `TierMenu`), `LaneChip.swift` (signal, reply-state and label chips; the lane chip is `Mail/WindowLaneChip.swift`), `AccountRows.swift` (account rows, diagnostics, update row), `SegmentedBar.swift` (filter tabs, `SourceBadge`) |
 | `SettingsWindow.swift` | `Settings` scene root (`TabView`), tab grouping, `SettingsOpener` |
 | `MainWindow.swift` | standard main window (M2): `MainWindowController` (a lazily created AppKit `NSWindow`, never a SwiftUI scene; also attaches the sheets, M5) and its rules |
 | `Mail/ComposeWindow.swift` | compose window (M5): `ComposeWindowRules`, `ComposeWindowController` (lazily created, driven by the model's `showCompose`) |

@@ -12,8 +12,8 @@ import SwiftUI
 /// the wrong instinct on a screen whose whole job is informed consent.
 struct ProposalsList: View {
     @Environment(AppModel.self) private var model
-    /// The main window calls this list "Approvals" (FD-1); the bar's full
-    /// view keeps its own title until it is retired (M8).
+    /// The Assistant section calls this list "Approvals" (FD-1); the list
+    /// mode switch in FullList keeps the default title.
     var title = L("proposals.title")
 
     var body: some View {

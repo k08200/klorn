@@ -5,7 +5,7 @@ import SwiftUI
 // Self-check for the compose window and the main window's sheets (M5), run
 // by `KlornMac --self-check`. Pure rules first, then the model wiring on an
 // in-memory model, then source pins. Since M8 the composer is always its
-// own window: the bar's overlays went with the bar's full state.
+// own window; no scrim overlay is left.
 
 /// Every M5 check, as (name, passed).
 @MainActor
@@ -186,10 +186,8 @@ func windowSelfChecks(sourceDir: URL) -> [(String, Bool)] {
     let controller = text("ComposeWindow.swift")
     check("M8: no overlay layer is mounted anywhere (the bar's full view is gone)",
           users(of: "FullView" + "Modals").isEmpty && users(of: "FullView" + "(actions:").isEmpty)
-    check("the composer is an overlay unless asked to be a window",
-          text("Compose.swift").contains("var style: ComposeStyle = .overlay")
-          && users(of: "ComposePanel(style: " + ".window")
-              == ["ComposeWindow.swift", "PreviewRenderWindows.swift"])
+    check("the composer draws only in its own window",
+          users(of: "ComposePanel(") == ["ComposeWindow.swift", "PreviewRenderWindows.swift"])
     check("only the main window presents sheets, and only the app delegate owns the compose window",
           users(of: "MainSheet" + "Root(model:") == ["MainWindow.swift"]
           && users(of: ".begin" + "Sheet(") == ["MainWindow.swift"]
@@ -203,7 +201,7 @@ func windowSelfChecks(sourceDir: URL) -> [(String, Bool)] {
                   + "            // The composer is its own window (M5) and needs no full view\n"
                   + "            // under it; ⌘N on an open composer brings it forward.\n"
                   + "            model.showCompose = true\n"))
-    check("send stays explicit: ⌘⏎ on the one Send button, in both styles",
+    check("send stays explicit: ⌘⏎ on the one Send button",
           text("Compose.swift").components(separatedBy: ".keyboardShortcut(.return, modifiers: .command)").count == 2)
     check("the window's Discard Draft goes through the confirming controller, Cancel as the default",
           text("Compose.swift").contains("Button(L(\"compose.discard\"), action: onDiscard)")
@@ -213,9 +211,9 @@ func windowSelfChecks(sourceDir: URL) -> [(String, Bool)] {
           text("MainWindow.swift").contains("func windowDidDeminiaturize(_ notification: Notification) {\n        syncSheet()")
           && text("MainWindow.swift").contains("model.mainWindowIsKey = true\n        // A sheet asked for"))
     check("in a window, Escape never discards the draft",
-          text("Compose.swift").components(separatedBy: ".keyboardShortcut(.cancelAction)").count == 2)
-    check("modal cards carry overlay chrome unless a sheet hosts them",
-          text("MainSheets.swift").contains("static let defaultValue = ModalPresentation.overlay")
+          !text("Compose.swift").contains(".keyboardShortcut(.cancelAction)"))
+    check("modal cards are sheet content only: no scrim chrome of their own",
+          !text("MainSheets.swift").contains(".shadow(")
           && text("TierGuide.swift").components(separatedBy: ".modalCard(width:").count == 3
           && text("CalendarEditor.swift").contains(".modalCard(width: 440)"))
     check("the compose window owns its frame and is reused",

@@ -89,8 +89,8 @@ enum Theme {
     ///
     /// Light deliberately uses the ink, not the 400 hue, for dots AND text:
     /// the 400 hues are 1.5–2.7:1 on the light canvas, below even the 3:1
-    /// non-text floor (WCAG 1.4.11), and `tint` already colors text (LaneChip,
-    /// inline error lines). One theme-aware token keeps every call site AA.
+    /// non-text floor (WCAG 1.4.11), and `tint` already colors text (inline
+    /// error lines). One theme-aware token keeps every call site AA.
     ///
     /// Measured text contrast (WCAG 2.2, 4.5:1 floor) — light on bg #FAFAFA /
     /// raised card; dark on bg / panel / raised card:
@@ -99,11 +99,9 @@ enum Theme {
     ///   QUEUE    #b45309 4.81 / 4.40   |  #fbbf24 11.86 / 11.11 / 10.56
     ///   INFO     #0e7490 5.13 / 4.70   |  #22d3ee 10.95 / 10.26 / 9.75
     ///   SILENT   #57534e 7.30 / 6.69   |  #a8a29e 7.85 / 7.35 / 6.99
-    /// The bar's LaneChip sets 10pt text on a 13% wash of the same tint;
-    /// light QUEUE measures 4.19:1 and INFO 4.46:1 there (dark: all ≥ 5.2).
-    /// The main window's chip uses `chipInk` instead (DesignTokens.swift),
-    /// which clears 4.5:1 on every surface; the bar's chip goes with the bar
-    /// in M8. The self-check pins the inks on `bg` in both appearances and
+    /// The lane chip does not use `tint` for its text: it uses `chipInk`
+    /// (DesignTokens.swift), which clears 4.5:1 on its 13% wash over every
+    /// surface. The self-check pins the inks on `bg` in both appearances and
     /// the pairwise distinctness.
     static func tint(_ tier: Tier) -> Color {
         dyn(light: laneComponents(tier, dark: false), dark: laneComponents(tier, dark: true))
@@ -248,7 +246,7 @@ enum Theme {
 
     // MARK: Radius (productization plan §2)
     // 6 controls, 10 rows/cards/popovers, 16 sheets/windows. Pills and
-    // LaneChip use the Capsule SHAPE, not a radius token. Call sites migrate
+    // the lane chip use the Capsule SHAPE, not a radius token. Call sites migrate
     // in M7 — new code picks a rung instead of a raw cornerRadius literal.
     enum Radius {
         /// Controls: buttons, fields, small toggles.
@@ -365,9 +363,10 @@ struct EmptyState: View {
     let icon: String
     let title: String
     var hint: String? = nil
-    /// `.window`: the type roles (13pt / 11pt) instead of the bar's system
-    /// styles, whose caption is the retired 10pt.
-    var style: ShellStyle = .bar
+    /// True: the type roles (13pt / 11pt). False: the system styles, whose
+    /// caption is the retired 10pt; the assistant thread, the folder lists
+    /// and the waiting-on list still draw these.
+    var typeRoles = false
 
     var body: some View {
         VStack(spacing: Theme.s3) {
@@ -376,10 +375,10 @@ struct EmptyState: View {
                 .foregroundStyle(Theme.textDim)
                 .opacity(0.7)
                 .accessibilityHidden(true)
-            Text(title).font(style == .window ? Theme.Typo.body : .callout)
+            Text(title).font(typeRoles ? Theme.Typo.body : .callout)
                 .foregroundStyle(Theme.textDim)
             if let hint {
-                Text(hint).font(style == .window ? Theme.Typo.caption : .caption)
+                Text(hint).font(typeRoles ? Theme.Typo.caption : .caption)
                     .foregroundStyle(Theme.textDim)
                     .multilineTextAlignment(.center)
             }

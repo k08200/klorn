@@ -1,29 +1,5 @@
 import SwiftUI
 
-/// The lane as a label (mail-first shell): tinted micro-pill. This is where
-/// the classification now lives on the default view — on the row, not in the
-/// navigation.
-struct LaneChip: View {
-    let tier: Tier
-    /// `.window`: the main window's chip (12pt, the AA chip ink). `.bar`
-    /// is the bar's chip, unchanged.
-    var style: ShellStyle = .bar
-
-    var body: some View {
-        switch style {
-        case .bar:
-            Text(tier.label)
-                .font(Theme.Typo.micro)
-                .foregroundStyle(Theme.tint(tier))
-                .padding(.horizontal, 6).padding(.vertical, 2)
-                .background(Theme.tint(tier).opacity(0.13), in: Capsule())
-                .accessibilityLabel(tier.label)
-        case .window:
-            WindowLaneChip(tier: tier)
-        }
-    }
-}
-
 /// The row's one relationship/category chip. Renders nothing for nil —
 /// a missing fact must never become a label.
 struct SignalChip: View {

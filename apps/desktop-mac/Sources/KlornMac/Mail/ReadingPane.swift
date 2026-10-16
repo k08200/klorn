@@ -12,10 +12,7 @@ struct ReadingPane: View {
     let actions: ShellActions
     /// The owning window's key zone; `.reader` draws the focus ring.
     var keyZone: MailKeyZone = .list
-    /// `.window` in the main window: the type roles, the reader meta line
-    /// and the flat primary button. The default is the bar's pane, unchanged.
-    var style: ShellStyle = .bar
-    private var m: ReadingPaneMetrics { style == .window ? .window : .bar }
+    private var m: ReadingPaneMetrics { .window }
     @State private var replying = false
     @State private var replyText = ""
     /// The composer was opened with the ahead-of-time draft (says so above
@@ -42,7 +39,7 @@ struct ReadingPane: View {
                 } else if let detail = model.mailboxDetail {
                     mailboxContent(picked, detail)
                 } else {
-                    centered { EmptyState(icon: "doc.text", title: L("reading.noPreview"), style: style) }
+                    centered { EmptyState(icon: "doc.text", title: L("reading.noPreview"), typeRoles: true) }
                 }
             } else if model.isLoadingEmail {
                 centered { ProgressView().controlSize(.small) }
@@ -52,7 +49,7 @@ struct ReadingPane: View {
                 content(email)
             } else if model.selectedItemId != nil {
                 centered {
-                    EmptyState(icon: "doc.text", title: L("reading.noPreview"), style: style)
+                    EmptyState(icon: "doc.text", title: L("reading.noPreview"), typeRoles: true)
                 }
             } else {
                 centered {
@@ -162,7 +159,7 @@ struct ReadingPane: View {
                 }
                 // The facts the row no longer carries (one-badge rule): the
                 // lane, then category / relationship / reply state as words.
-                if style == .window, let item {
+                if let item {
                     ReaderMetaLine(item: item)
                 }
                 if let item {
@@ -669,15 +666,10 @@ struct ReadingPane: View {
         }
     }
 
-    /// The pane's one primary action: the bar's glow capsule, or the main
-    /// window's flat fill (plan §2: no shadow, no lift).
-    @ViewBuilder
+    /// The pane's one primary action: the flat fill (plan §2: no shadow,
+    /// no lift).
     private func primaryButton(_ title: String, action: @escaping () -> Void) -> some View {
-        if style == .window {
-            Button(title, action: action).buttonStyle(SolidButtonStyle(compact: true))
-        } else {
-            Button(title, action: action).buttonStyle(PrimaryButtonStyle())
-        }
+        Button(title, action: action).buttonStyle(SolidButtonStyle(compact: true))
     }
 
     private func centered<Content: View>(@ViewBuilder _ c: () -> Content) -> some View {

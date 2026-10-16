@@ -40,41 +40,13 @@ enum MainSheetRules {
     }
 }
 
-/// How a modal card is being presented: over a scrim in the bar's full view,
-/// or inside a native sheet, which supplies its own surface and shadow.
-enum ModalPresentation { case overlay, sheet }
-
-private struct ModalPresentationKey: EnvironmentKey {
-    static let defaultValue = ModalPresentation.overlay
-}
-
-extension EnvironmentValues {
-    var modalPresentation: ModalPresentation {
-        get { self[ModalPresentationKey.self] }
-        set { self[ModalPresentationKey.self] = newValue }
-    }
-}
-
-/// The modal cards' shared chrome: padding and width always, the panel
-/// surface, hairline and shadow only as an overlay.
+/// The modal cards' shared chrome inside a native sheet, which supplies its
+/// own surface and shadow: the spacing grid's inset and the card's width.
 private struct ModalCard: ViewModifier {
-    @Environment(\.modalPresentation) private var presentation
     let width: CGFloat
-    /// The bar's overlay cards keep the inset they shipped with until the
-    /// overlays go with the bar (M8); a sheet uses the spacing grid.
-    private static let overlayInset: CGFloat = 22
 
     func body(content: Content) -> some View {
-        if presentation == .sheet {
-            content.padding(Theme.s6).frame(width: width)
-        } else {
-            content
-                .padding(Self.overlayInset)
-                .frame(width: width)
-                .background(Theme.panel, in: RoundedRectangle(cornerRadius: Theme.Radius.lg))
-                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.lg).strokeBorder(Theme.line))
-                .shadow(color: Theme.panelShadow, radius: 24, y: 8)
-        }
+        content.padding(Theme.s6).frame(width: width)
     }
 }
 
@@ -84,14 +56,13 @@ extension View {
     }
 }
 
-/// One sheet's content: the shipping card, minus the overlay chrome.
+/// One sheet's content: the card on the panel surface.
 struct MainSheetContent: View {
     @Environment(AppModel.self) private var model
     let sheet: MainSheet
 
     var body: some View {
         card
-            .environment(\.modalPresentation, .sheet)
             .background(Theme.panel)
     }
 

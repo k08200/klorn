@@ -30,20 +30,14 @@ struct CalendarScreen: View {
     /// The anchor date the visible range derives from (today at first).
     @State private var anchor = Date()
 
-    /// `.window` in the main window: the month grid fills the height it is
-    /// given and the month view wears the type roles. The default is the
-    /// bar's calendar, unchanged.
-    let style: ShellStyle
-    private var m: CalendarMetrics { style == .window ? .window : .bar }
+    /// The month grid fills the height it is given and the month view
+    /// wears the type roles.
+    private var m: CalendarMetrics { .window }
 
-    init(
-        actions: ShellActions, initialScope: Scope = .month, initialAnchor: Date = Date(),
-        style: ShellStyle = .bar
-    ) {
+    init(actions: ShellActions, initialScope: Scope = .month, initialAnchor: Date = Date()) {
         self.actions = actions
         self.initialScope = initialScope
         self.initialAnchor = initialAnchor
-        self.style = style
     }
 
     private var calendar: Calendar { Calendar.current }
@@ -283,16 +277,11 @@ struct CalendarScreen: View {
             }
             .padding(.vertical, 6)
             Divider().overlay(Theme.line)
-            if style == .window {
-                // The weeks share the height the window gives them, so a
-                // large window has no empty band under the last week.
-                GeometryReader { proxy in
-                    grid(CalendarMetrics.monthRowHeight(
-                        available: proxy.size.height, weeks: days.count / 7))
-                }
-            } else {
-                grid(CalendarMetrics.minMonthRow)
-                Spacer(minLength: 0)
+            // The weeks share the height the window gives them, so a
+            // large window has no empty band under the last week.
+            GeometryReader { proxy in
+                grid(CalendarMetrics.monthRowHeight(
+                    available: proxy.size.height, weeks: days.count / 7))
             }
         }
     }

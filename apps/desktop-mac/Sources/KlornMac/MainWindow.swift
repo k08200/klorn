@@ -48,8 +48,7 @@ struct MainWindowRoot: View {
         MainShell(actions: actions)
             .environment(model)
             .onChange(of: model.activeMainSheet, initial: true) { _, _ in onSheetChange() }
-            // L() is not observable; rebuild on a language change (same
-            // trick as the bar).
+            // L() is not observable; rebuild on a language change.
             .id(model.settings.languageRevision)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }

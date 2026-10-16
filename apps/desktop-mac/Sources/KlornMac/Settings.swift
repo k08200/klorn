@@ -33,7 +33,7 @@ final class AppSettings {
 
     /// Fired when the Preferences recorder starts/stops capturing, so the app
     /// can suspend the Carbon hotkey for the duration — otherwise pressing the
-    /// currently-bound chord is consumed by the hotkey (toggling the bar)
+    /// currently-bound chord is consumed by the hotkey (showing or hiding Klorn)
     /// before the recorder's local monitor ever sees it. Not persisted.
     var onShortcutRecordingChanged: ((Bool) -> Void)?
 

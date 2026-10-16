@@ -3,8 +3,7 @@ import SwiftUI
 
 // Self-check for the main window's navigation and Today (M4b), run by
 // `KlornMac --self-check`. Pure rules first, then the model wiring on an
-// in-memory model, then source pins that keep the bar's surfaces off the
-// main window's views.
+// in-memory model, then source pins on the main window's views.
 
 private let navCheckQueueJSON = """
 {"tiers":{
@@ -215,7 +214,7 @@ func navSelfChecks(sourceDir: URL) -> [(String, Bool)] {
               model.mainNav.section == .today && model.listMode == .inbox)
         model.go(to: .proposals)
         model.navigate(to: .today)
-        // The same list mode again (the pill's "N awaiting approval").
+        // The same list mode again (a deep link to approvals).
         model.listMode = .proposals
         check("model: a deep link to the mode already set still brings its section forward",
               model.mainNav.section == .assistant && model.mainNav.assistantPane == .approvals)

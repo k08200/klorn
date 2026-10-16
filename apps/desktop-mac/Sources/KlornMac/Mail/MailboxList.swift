@@ -77,7 +77,7 @@ struct InboxSelectorMenu: View {
             HStack {
                 // Text suffix, not the web's sky dot: the AppKit borderless
                 // menu drops SwiftUI shapes and renders symbols colorless
-                // (see the tier-dot note on FullRow) — words keep the
+                // (white dot in v0.4.4, no dot in v0.4.5) — words keep the
                 // reconnect signal perceivable, and color-independent.
                 Text(needsReconnect ? L("mail.needsReconnect", label) : label)
                 if value == model.selectedInbox { Image(systemName: "checkmark") }
