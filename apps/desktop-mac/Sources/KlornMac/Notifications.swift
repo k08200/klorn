@@ -216,15 +216,7 @@ final class SystemPushNotifier: PushNotifying {
 
     func permission() async -> NotificationPermission {
         guard isAvailable else { return .unavailable }
-        // Read the status inside the callback: UNNotificationSettings is not
-        // Sendable on the Xcode 16 SDK CI builds with, so it can't cross the
-        // await. UNAuthorizationStatus (a plain enum) can.
-        let status: UNAuthorizationStatus = await withCheckedContinuation { continuation in
-            UNUserNotificationCenter.current().getNotificationSettings { settings in
-                continuation.resume(returning: settings.authorizationStatus)
-            }
-        }
-        return PushNotifier.permission(for: status)
+        return PushNotifier.permission(for: await NotificationCenterCalls.authorizationStatus())
     }
 
     func post(_ banner: PushBanner) {
@@ -238,11 +230,7 @@ final class SystemPushNotifier: PushNotifying {
         content.sound = .default
         content.threadIdentifier = PushNotifier.threadIdentifier
         let request = UNNotificationRequest(identifier: banner.identifier, content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request) { error in
-            if let error {
-                Log.app.error("push banner not posted: \(String(describing: error), privacy: .private)")
-            }
-        }
+        NotificationCenterCalls.add(request)
     }
 
     /// Sign-out: take this account's banners out of Notification Center —
@@ -252,6 +240,36 @@ final class SystemPushNotifier: PushNotifying {
         let center = UNUserNotificationCenter.current()
         center.removeAllDeliveredNotifications()
         center.removeAllPendingNotificationRequests()
+    }
+}
+
+/// UNUserNotificationCenter's callback APIs, called from outside any actor.
+///
+/// Their completion handlers run on the notification center's own queue. A
+/// closure written inside a @MainActor type inherits main-actor isolation, and
+/// Swift 6 checks that isolation when the closure runs: 0.4.80106 crashed at
+/// every launch with EXC_BREAKPOINT in `closure #1 in
+/// SystemPushNotifier.permission()` on the
+/// `UNUserNotificationServiceConnection.call-out` thread. Closures created in
+/// these nonisolated functions carry no isolation, so nothing is asserted when
+/// the callback arrives. (The async `notificationSettings()` is no way out:
+/// UNNotificationSettings is not Sendable on the Xcode 16 SDK CI builds with,
+/// so it cannot cross the await. UNAuthorizationStatus, a plain enum, can.)
+enum NotificationCenterCalls {
+    nonisolated static func authorizationStatus() async -> UNAuthorizationStatus {
+        await withCheckedContinuation { continuation in
+            UNUserNotificationCenter.current().getNotificationSettings { settings in
+                continuation.resume(returning: settings.authorizationStatus)
+            }
+        }
+    }
+
+    nonisolated static func add(_ request: UNNotificationRequest) {
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error {
+                Log.app.error("push banner not posted: \(String(describing: error), privacy: .private)")
+            }
+        }
     }
 }
 
