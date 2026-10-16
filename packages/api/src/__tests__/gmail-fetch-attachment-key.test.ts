@@ -96,6 +96,29 @@ describe("Gmail attachment identity across re-fetches", () => {
     );
   });
 
+  it("never hands two parts of one message the same key", async () => {
+    // Defensive: if a partId ever repeats inside one message (e.g. a nested
+    // message/rfc822 tree), the second part must not overwrite the first row.
+    getMock.mockImplementation(async () =>
+      detail({
+        partId: "",
+        mimeType: "multipart/mixed",
+        parts: [
+          { partId: "1", mimeType: "application/pdf", filename: "a.pdf", body: { attachmentId: "x", size: 1 } },
+          { partId: "1", mimeType: "application/pdf", filename: "b.pdf", body: { attachmentId: "y", size: 2 } },
+        ],
+      }),
+    );
+    const { fetchGmailEmailById } = await import("../mail/gmail-fetch.js");
+
+    const email = await fetchGmailEmailById("user-1", "m1");
+
+    const keys = email?.attachments.map((a) => a.partKey) ?? [];
+    expect(keys).toHaveLength(2);
+    expect(new Set(keys).size).toBe(2);
+    expect(keys[0]).toBe("1");
+  });
+
   it("falls back to the part's position when Gmail sends no partId", async () => {
     getMock.mockImplementation(async () =>
       detail({

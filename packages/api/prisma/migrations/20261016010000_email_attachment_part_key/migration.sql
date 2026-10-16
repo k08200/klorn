@@ -13,9 +13,10 @@
 -- are deleted. NULL partKey rows (everything synced before this) never collide
 -- in a unique index, so the build needs no backfill.
 --
--- Locks and cost. ADD COLUMN without a default is catalog-only. The index build
--- holds a SHARE lock on "EmailAttachment" (writes wait, reads continue) while it
--- scans the table: about 124k rows in production on 2026-10-16, seconds.
+-- Locks and cost. ADD COLUMN without a default is catalog-only, but it takes an
+-- ACCESS EXCLUSIVE lock held until the migration commits, so while the index
+-- builds in the same transaction both reads and writes of "EmailAttachment" wait.
+-- The build scans the table: about 124k rows in production on 2026-10-16, seconds.
 -- lock_timeout makes a deploy blocked by a long transaction fail fast instead of
 -- queueing every attachment write behind it.
 --

@@ -176,6 +176,52 @@ describePg("upsertEmailAttachments: stable part identity (real Postgres)", () =>
     ]);
   });
 
+  it("maps two same-named parts onto two different pre-fix copies", async () => {
+    for (const [i, day] of ["11", "12", "13", "14"].entries()) {
+      await insertLegacy({ id: `old-${i + 1}`, createdAt: `2026-05-${day}T00:00:00Z` });
+    }
+
+    await upsertEmailAttachments({
+      userId,
+      emailId,
+      attachments: [part({ partKey: "1" }), part({ partKey: "2" })],
+    });
+
+    const stored = await rows();
+    expect(stored).toHaveLength(4);
+    const keyed = stored.filter((r) => r.partKey !== null).map((r) => [r.id, r.partKey]);
+    expect(keyed).toEqual([
+      ["old-1", "1"],
+      ["old-2", "2"],
+    ]);
+  });
+
+  it("recovers when a concurrent sync adopts a different copy first", async () => {
+    // The other sync's transaction keys old-2 and holds its commit; this sync's
+    // subquery picks old-1 (the oldest), waits on the unique index, then gets a
+    // unique violation once the other commits. It must swallow that and update
+    // the winner's row instead of failing the message.
+    await insertLegacy({ id: "old-1", createdAt: "2026-05-11T00:00:00Z" });
+    await insertLegacy({ id: "old-2", createdAt: "2026-05-12T00:00:00Z" });
+
+    let pending: Promise<void> | undefined;
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`UPDATE "EmailAttachment" SET "partKey" = '1' WHERE "id" = 'old-2'`;
+      pending = upsertEmailAttachments({
+        userId,
+        emailId,
+        attachments: [part({ gmailAttachmentId: "ANGj-late" })],
+      });
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+
+    await expect(pending).resolves.toBeUndefined();
+    const keyed = (await rows()).filter((r) => r.partKey !== null);
+    expect(keyed).toEqual([
+      expect.objectContaining({ id: "old-2", partKey: "1", gmailAttachmentId: "ANGj-late" }),
+    ]);
+  });
+
   it("stays at one keyed row when two syncs upsert the same part at once", async () => {
     await insertLegacy({ id: "old-1", createdAt: "2026-05-11T00:00:00Z" });
 
