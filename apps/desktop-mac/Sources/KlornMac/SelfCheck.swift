@@ -1527,6 +1527,8 @@ func runSelfChecks() async -> Bool {
     for (name, ok) in await noPillSelfChecks(sourceDir: sourceDir) { check(name, ok) }
     print("Files and team free-time (P12):")
     for (name, ok) in await filesSelfChecks(sourceDir: sourceDir) { check(name, ok) }
+    print("Account-link hand-off (link binding):")
+    for (name, ok) in await linkHandoffSelfChecks(sourceDir: sourceDir) { check(name, ok) }
 
     print("States and first launch (M6):")
     for (name, ok) in await stateSelfChecks(sourceDir: sourceDir) { check(name, ok) }

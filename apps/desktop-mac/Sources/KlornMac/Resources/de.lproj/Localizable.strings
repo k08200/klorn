@@ -314,6 +314,9 @@
 "account.reconnect" = "Account neu verbinden…";
 "account.reconnectPrimary" = "Google-Account neu verbinden…";
 "account.reconnect.failed" = "Die Neuverbindung konnte nicht gestartet werden. Bitte erneut versuchen.";
+"account.link.mismatch" = "Diese Verknüpfung wurde in einem anderen Klorn-Konto gestartet, daher wurde nichts hinzugefügt. Bitte in diesem Konto neu starten.";
+"account.link.expired" = "Die Verknüpfung ist abgelaufen, bevor sie abgeschlossen wurde. Bitte erneut versuchen.";
+"account.link.failed" = "Die Verknüpfung konnte nicht abgeschlossen werden. Bitte erneut versuchen.";
 "source.unknown" = "Klorn";
 "source.github" = "GitHub";
 
