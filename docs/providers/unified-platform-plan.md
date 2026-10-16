@@ -89,7 +89,7 @@ readable after one permission grant.
 | # | Decision | Value |
 |---|---|---|
 | V1 | Service order | finish mail, then calendar, then drive |
-| V2 | New Google Drive scope | only after the current Google verification passes |
+| V2 | New Google Drive scope | only after the current Google verification passes (2026-10-15, founder: lifted for D5's code behind a flag OFF; the flip still waits) |
 | V3 | Device bridge | in scope, required |
 | V4 | External drive connectors v1 | list, search, summarise. No upload or edit |
 | V5 | Klorn mailbox | auxiliary path, not the product |
@@ -4056,8 +4056,202 @@ both.
   `LlmUsageLog` and `DriveSummaryUsage` the first days.
 - Rollback: revert the PR. The tables and the enum can stay; nothing reads them.
   With the flag off nothing writes them.
-**D5 — Google Drive connector** (*outline*). Depends on: D2. Blocked by V2.
-Scope path per P5.
+**D5 — Google Drive connector.** Depends on: D2 (D4 for summaries). Scope path per P5.
+Founder decision 2026-10-15: built now, code only, flag OFF. This lifts V2 for the
+code, not for the flip: the flip still waits on the current Google verification and
+on `drive.file` being approved. D5 never changes the production consent screen or
+the scopes that sign-in, Gmail, Calendar and the inbox links request
+(`mail/gmail.ts:59-143`).
+- Flow. /files (`web/src/app/files/files-view.tsx`) offers "Connect Google Drive":
+  `POST /api/drive/google/link` → consent for `openid`, `userinfo.email` and
+  `drive.file` → `/files?drive=success`. "Add from Google Drive" opens the Google
+  Picker for that account. Only the picked ids reach the server, which reads their
+  metadata from Google and indexes them as GOOGLE rows. Klorn lists, searches and
+  summarises them, and never changes them (V4).
+- Flag `GOOGLE_DRIVE_ENABLED`, OFF, read per request. GOOGLE joins
+  `DRIVE_PROVIDER_ENABLED` (`drive/drive-scope.ts:45`) and the dispatcher
+  (`providers/dispatch.ts:35`), so its rows show only while `DRIVE_ENABLED` is on
+  too. /files opens through `user.files` (`routes/auth.ts:750`). The routes sit
+  behind `darkRouteGate`.
+- Decisions.
+  - Accounts: `LinkedDriveAccount`, as D2 deferred. Not `LinkedCalendarAccount`
+    (`schema.prisma:404`) and not `UserToken` (`:337`), so unlinking a drive
+    unlinks nothing else.
+    - Columns: `provider DriveProvider` (no default; CHECK not KLORN; D6 reuses
+      it), the verified and normalised `email`, encrypted `accessToken` and
+      `refreshToken`, `expiresAt`, `grantedScopes`, `needsReconnect`,
+      `lastRefreshedAt`. Unique (userId, provider, email).
+    - `DriveFile.sourceAccountId`: a nullable FK, ON DELETE CASCADE, indexed on
+      its own (C2's reason). CHECK `(provider = 'KLORN') = (sourceAccountId IS
+      NULL)`, and `sourceAccountId = sourceKey` when set. `driveRowData`
+      (`drive-rows.ts:224`) sets it on create only, never in `changes`.
+    - The FK proves the account exists, not who owns it, so every write first
+      loads the account by (id, userId, provider).
+  - Grant: separate and incremental.
+    - `getLinkDriveAuthUrl` asks for exactly those three scopes, with
+      `access_type=offline`, `prompt=consent` and the state `__link_drive__`
+      (10 min).
+    - No `include_granted_scopes`. With it, picking the primary's Google account
+      would return a token that also carries the Gmail and Calendar scopes.
+    - Same client and redirect URI, so the redirect needs no console change
+      (C4's precedent).
+    - `routes/auth.ts` gains one branch after the state check (`:1175`) and
+      before the code exchange (`:1182`). It calls `completeGoogleDriveLink`,
+      built like `outlook-calendar-link.ts:129`:
+      - flag off → `failed`, with no code exchange;
+      - `verified_email` is required;
+      - the returned `scope` must include `drive.file` (granular consent lets the
+        user untick it), else `scope-missing` and nothing is stored;
+      - no refresh token → `failed`;
+      - entitlement is checked again;
+      - at most 5 accounts.
+    - Plan gate: as link-calendar (`requireEntitled`). Whether it stays is a
+      founder question, recorded here before D5b merges.
+  - Tokens: `encryptToken` under the `TOKEN_ENCRYPTION_KEYS` ring.
+    - `buildLinkedDriveClient` copies `gmail.ts:502`. An undecryptable or empty
+      token sets `needsReconnect`. A refreshed token is saved through
+      `decideRefreshTokenWrite` (`:412`), scoped by (id, userId).
+    - A revoked grant (C2's `isRevokedGrantError`,
+      `pim/linked-calendar-failure.ts:70`) sets `needsReconnect`: refresh stops,
+      the rows stay.
+    - The key-rotation sweep (`scripts/reencrypt-tokens.ts:122`) and
+      `purgeUserData` (`purge-user-data.ts:27`) cover the table.
+  - Unlink: the rows (through the writer, by sourceKey), then the account, in one
+    transaction; the cascade covers a refresh still in flight. Klorn does not call
+    Google's revoke endpoint: Google revokes a combined grant whole (prior
+    knowledge), and for the primary's account that would cut Gmail.
+  - Picker: the browser needs a `drive.file` token, a developer key and the app id.
+    - `POST /api/drive/google/accounts/:id/picker-session` returns all three,
+      `no-store`. The token is minted on click. An unset variable answers 503
+      `picker-not-configured`.
+    - `GOOGLE_PICKER_API_KEY`: public by design, restricted in the console to the
+      web origin's referrers and the Picker API.
+    - `GOOGLE_CLOUD_PROJECT_NUMBER`: public, the `setAppId` value that ties picked
+      files to this project's grant.
+    - Both stay server-side, so a flag-off bundle holds neither.
+      `GOOGLE_CLIENT_ID` (public) and `GOOGLE_CLIENT_SECRET` (secret) are
+      unchanged.
+    - The web build switch `NEXT_PUBLIC_GOOGLE_DRIVE_PICKER=on` adds
+      `https://apis.google.com` to `script-src` and `https://docs.google.com` to
+      `frame-src` (`web/next.config.ts:18,35`) and compiles the Picker in. Unset,
+      the CSP and the bundle are unchanged.
+  - Metadata: picked files only.
+    - The client sends ids only, at most 50. The server calls `files.get` with
+      `fields=id,name,mimeType,size,md5Checksum,version,modifiedTime,webViewLink,parents,trashed`
+      and `supportsAllDrives`. A 404 means "not granted".
+    - Rows go through `upsertDriveFileRow` with
+      `connectedDriveSource("GOOGLE", account.id, id)` (`drive-rows.ts:65,265`),
+      then `enqueueSummaryOnWrite` (`summary-triggers.ts:29`).
+    - The parent is `parents[0]`, usually one that is not indexed (D2 foresaw
+      this). `webUrl` is kept only on docs.google.com or drive.google.com.
+    - The etag is `md5:<md5Checksum>` when Drive reports one (a rename keeps it),
+      else `v:<version>`.
+    - 500 rows per account. Folders and shortcuts cannot be picked.
+  - Refresh: an hourly job `drive-google-refresh` with a heartbeat; it reads
+    nothing while the flag is off.
+    - Each sweep takes up to 20 accounts not refreshed for 6 h: one `files.get`
+      per row, 4 in flight.
+    - Trashed → `trashed`. 404 → the row is deleted (`deleteConnectedDriveRows`,
+      in the writer). A 429, a 403 rate-limit reason or a 5xx ends that
+      account's pass.
+    - Drive's limits (prior knowledge, not re-verified: 12,000 queries a minute
+      per project and per user) are far above this. `changes.list` is deferred.
+  - Summaries.
+    - `fetchForSummary` exports Docs and Slides as `text/plain` and Sheets as
+      `text/csv`, and reads other files with `alt=media`. The bytes stream into
+      `readCappedBytes` within D4's deadline, through googleapis only.
+      `webContentLink`, `exportLinks` and `thumbnailLink` are never requested.
+    - `exportSizeLimitExceeded` → `too-large`. A 429, a 5xx or a network error
+      throws a retryable `StorageError`, which `summary-run.ts:239` defers
+      instead of failing.
+    - `summary-extract.ts:34,46` map the three Google types to their export
+      types; otherwise a Doc is SKIPPED.
+  - Read-only (V4): `drive.file` has no read-only variant, so the code enforces it.
+    - The seam has no write method (D2's test).
+    - A guard fails if the connector names
+      `files.create|update|delete|copy|emptyTrash`, `permissions.` or
+      `revisions.`.
+    - D3 answers 409 `read-only`.
+- Slices: one PR each, flag OFF, full gate.
+  - D5a, schema.
+    - Migration `20261015020000_linked_drive_account`, sorted after
+      `20261015010000_auto_unsubscribe_caps`: `lock_timeout`, the table, the FKs,
+      the index, the CHECKs and RLS in the `20260806033517_add_user_identity`
+      form. Also `drive-rows.ts`, the purge and the sweep.
+    - Tests first: the migration SQL, pinned; how sourceAccountId is derived;
+      `reencrypt-tokens-drive`; the purge; `drive-file-guard.test.ts:89,102`;
+      `rls-coverage-guard`, which must fail for each RLS statement removed.
+    - On a scratch Postgres: deploy, the drift check, each CHECK, the cascade
+      account → file → summary, the policies. Preflight: no non-KLORN DriveFile
+      row.
+    - Prod impact: an empty table and a NULL column that nothing reads.
+  - D5b, grant and unlink.
+    - Files: `config.ts`, `drive-scope.ts`, `dispatch.ts`;
+      `drive/linked-drive-accounts.ts` (the only module that touches the table);
+      `drive/providers/google-auth.ts`; `drive/providers/google.ts`, whose
+      `connect` returns a session only for an owned, unflagged account, else
+      null; `routes/google-drive-link.ts` (`POST /link`, `GET /accounts`,
+      `DELETE /accounts/:id`); `routes/auth.ts`, `index.ts`, the contract types.
+    - Tests first: a characterisation test pinning the four existing auth URLs
+      and the callback's existing branches to main; the new URL's exact scopes;
+      each callback case above; a dark 404 with either flag off; no token on the
+      wire; another user's sourceKey → null; the guard lists
+      (`drive-file-guard.test.ts:370`, `calendar-provider-writers-guard.test.ts:110`,
+      `drive-scope.test.ts:54`).
+    - Prod impact: dark routes. The new branch needs a state that only the dark
+      route signs.
+  - D5c, Picker and ingest.
+    - Files: `google.ts` (`getMetadata`, `list`, `search`, and `fetchForSummary`
+      for files with bytes); `picker-session` and `POST /accounts/:id/picked`,
+      answering `{ added, refused: [{ id, code }] }`; web
+      `app/files/google-drive-connect.tsx` and `lib/google-picker.ts` (the script
+      loads on click; `setMaxItems(50)`); `next.config.ts`; the 7 locale files;
+      a vocabulary row **Google Drive**.
+    - Tests first: the fields mask, the host allowlist, the write guard; client
+      metadata ignored; 404 → `not-accessible`; the cap; Playwright: hidden on the
+      dark 404, no script loaded before the click; a script in
+      `packages/web/scripts` that checks the CSP is unchanged without the switch
+      (the web package has no unit-test runner).
+    - Prod impact: none.
+  - D5d, refresh and Google-format summaries.
+    - Files: the refresh module and its job, the writer delete (pinned by the
+      guard), the exports, `summary-extract.ts`.
+    - Tests first: trashed, 404, revoked, rate limit, both etag forms, the exports
+      and their size error, the outage mapping, the job idling while off.
+    - Prod impact: none.
+- Before the flip, in order:
+  1. The current Google verification has passed (V2).
+  2. FA-10 (new): (a) now, a separate Testing-mode Cloud project and OAuth client
+     with test users, for development and the live checks; (b) at the flip, on
+     production: the Drive and Picker APIs enabled, the restricted key created,
+     and `drive.file` added to the consent screen and approved.
+  3. FA-5 covers Drive metadata and the file text sent for summaries.
+  4. Live checks on the Testing client, each recorded here with its date: the
+     scopes of a token for the primary's account; `drive.file` unticked at
+     consent; a picked file readable and an unpicked id 404; `parents`,
+     `md5Checksum` and `version` after a rename and an edit; the exports and their
+     size error; a revocation → `needsReconnect`; Gmail still working after an
+     unlink; no CSP violation; the numbers on the quota page.
+  5. Env set, the web built with the switch, then `GOOGLE_DRIVE_ENABLED` on,
+     founder account first (L23).
+- Risks and limits.
+  - The browser holds a `drive.file` token (which can read and write the picked
+    files) for up to an hour; an XSS could write to them. It is minted on click,
+    never stored or logged, and bounded by the CSP.
+  - Picked files only: no folder contents, and nothing added later. P5's fallback
+    is a restricted scope, which brings CASA back.
+  - A revocation in Google deletes nothing in Klorn until the user unlinks.
+  - Metadata can be up to 6 h old, and a transient 404 deletes a row.
+  - Renaming a Google-format file re-queues its summary (version etag), within
+    D4's per-file cap. Sheets export one sheet only (prior knowledge).
+  - Web desktop only. Workspace admins can block the app (F0).
+  - Facts marked "prior knowledge" were not re-verified against Google's docs for
+    this text; the live checks in step 4 cover each one.
+  - Shared-files table: add D5 to the `routes/auth.ts`, `contract/src/drive.ts`
+    and `summary-extract.ts` rows.
+  - Rollback: revert. If the flag was ever on: turn it off, delete the
+    `LinkedDriveAccount` rows (the cascade takes the files and summaries), then
+    revert.
 **D6 — OneDrive connector** (*outline*). Depends on: D2, FA-9 with file
 permissions.
 **D7 — device import.** Depends on: D3. Upload policy per P4. Landed 2026-10-14
@@ -4291,6 +4485,7 @@ time, whatever the graph says. The later step rebases, reruns
 | FA-7 | Create the object storage account: Cloudflare R2, one private bucket, an API token with object read and write on that bucket only, and the S3 endpoint. No CORS rule (details in D1) | D1 flip |
 | FA-8 | Run the Samsung calendar probe on a Galaxy device and record the result here | C5 |
 | FA-9 | Azure app registration (existing action B). That action lists `Mail.*` permissions only; calendar and file permissions must be added for C4 and D6. For C4: add delegated `Calendars.Read` (and `User.Read` if it is not already listed); the calendar link requests exactly `openid email offline_access User.Read Calendars.Read`, reuses the existing redirect URI, and asks for no `Mail.*`. Existing inbox links keep their consent unchanged | B5, C4, D6 |
+| FA-10 | Google Drive (D5). (a) Now: a separate Testing-mode Cloud project and OAuth client with test users, for development and D5's live checks. (b) At the flip, on production: enable the Drive and Picker APIs, create the Picker API key restricted to the web origin, and add `drive.file` to the consent screen for approval. Nothing changes on the production consent screen before (b) | D5 |
 
 ## Cross-cutting rules
 
