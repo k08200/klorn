@@ -230,6 +230,27 @@ func tokenSelfChecks(sourceDir: URL) -> [(String, Bool)] {
             && ReaderMetaRules.parts(signal: .replied(3), replyState: nil, draftReady: false)
                 == [L("chip.replied", 3)]
             && ReaderMetaRules.parts(signal: nil, replyState: "unknown", draftReady: false).isEmpty))
+    // Corrections become rules: the sender-label menu must stay reachable
+    // from the main window's reader, as its own control (not folded into
+    // the meta line's combined VoiceOver element).
+    let readerMeta = text("Mail/WindowLaneChip.swift")
+    let correctionHosts = swiftSources(under: sourceDir)
+        .filter { !$0.lastPathComponent.hasPrefix("SelfCheck") }
+        .filter { ((try? String(contentsOf: $0, encoding: .utf8)) ?? "").contains("SenderLabelMenuItems(") }
+        .map(\.lastPathComponent)
+    results.append((
+        "the sender-label correction menu has a main-window call site: the reader header",
+        correctionHosts == ["WindowLaneChip.swift"]
+            && readerMeta.contains("SenderLabelCorrectionMenu(\n                from: item.email?.from")
+            && readerMeta.contains("Menu {\n                    SenderLabelMenuItems(address: address, byUser: byUser)")
+            && readerMeta.contains(".accessibilityLabel(\n                    signalWord.map { L(\"label.correct.a11y\", $0) } ?? L(\"label.correct\"))")
+            && readerMeta.components(separatedBy: ".accessibilityElement(children: .combine)").count == 2
+            && text("Mail/ReadingPane.swift").contains("ReaderMetaLine(item: item)")))
+    results.append((
+        "the correction menu names the current label, or none",
+        ReaderMetaRules.signalWord(.category("customer")) == L("chip.customer")
+            && ReaderMetaRules.signalWord(.replied(2)) == L("chip.replied", 2)
+            && ReaderMetaRules.signalWord(nil) == nil))
     results.append((
         "the mail list draws the main window's rows and the reader its meta line",
         text("Mail/FullList.swift").components(separatedBy: "WindowMailRow(item: item").count == 3

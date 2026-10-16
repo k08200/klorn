@@ -163,24 +163,6 @@ enum Theme {
         }
     }
 
-    /// The chip color for a row's signal — same ramps as the sidebar rows via
-    /// labelTint, so a chip and its category row always match. Replied is the
-    /// relationship signal: a pink RAMP of its own (engage itself measures
-    /// ~4.3:1 and is documented never-for-text).
-    static func signalTint(_ signal: RowSignal) -> Color {
-        switch signal {
-        case .category(let name):
-            // One lookup for both families — LabelFilter's raw values ARE the
-            // wire's category strings, so a new category needs one enum case
-            // and its tint, nowhere else.
-            LabelFilter(rawValue: name).map { labelTint($0) } ?? textDim
-        case .replied:
-            dyn(light: (0.60, 0.14, 0.40, 1), dark: (0.96, 0.56, 0.76, 1))
-        case .first:
-            labelTint(.firstContact)
-        }
-    }
-
     /// Neutral panel shadow — one shadow color for every floating surface.
     /// (Was the web's navy-tinted shadow; a colored shadow is a hue cast.)
     static let panelShadow = dyn(light: (0, 0, 0, 0.18), dark: (0, 0, 0, 0.55))

@@ -511,7 +511,6 @@
 "label.correct.clear" = "この送信者の修正を解除";
 "label.correct.clearDomain" = "ドメインの修正を解除";
 "label.correct.a11y" = "%@ — ラベルを修正";
-"label.add" = "＋ ラベル";
 
 // Calendar editor (2026-09-11).
 "cal.new" = "新しい予定";

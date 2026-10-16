@@ -29,13 +29,7 @@ enum ReaderMetaRules {
     static func parts(
         signal: RowSignal?, replyState: String?, draftReady: Bool
     ) -> [String] {
-        var parts: [String] = []
-        switch signal {
-        case .category(let name): parts.append(L("chip.\(name)"))
-        case .replied(let count): parts.append(L("chip.replied", count))
-        case .first: parts.append(L("chip.first"))
-        case nil: break
-        }
+        var parts: [String] = signalWord(signal).map { [$0] } ?? []
         if let replyState,
            let kind = ReplyStateChip.kind(state: replyState, draftReady: draftReady)
         {
@@ -47,10 +41,22 @@ enum ReaderMetaRules {
         }
         return parts
     }
+
+    /// The sender's category or relationship as a word, nil when the row
+    /// has no evidence yet.
+    static func signalWord(_ signal: RowSignal?) -> String? {
+        switch signal {
+        case .category(let name): L("chip.\(name)")
+        case .replied(let count): L("chip.replied", count)
+        case .first: L("chip.first")
+        case nil: nil
+        }
+    }
 }
 
 /// The reader header's meta line: the lane chip, the account the mail is on
-/// (when there is more than one to tell apart), then the neutral facts.
+/// (when there is more than one to tell apart), the neutral facts, then the
+/// sender-label correction menu.
 struct ReaderMetaLine: View {
     @Environment(AppModel.self) private var model
     let item: FirewallItem
@@ -60,6 +66,16 @@ struct ReaderMetaLine: View {
             signal: item.email?.signal, replyState: item.email?.replyState,
             draftReady: item.email?.draftReady ?? false)
         let source = WindowRowRules.showsAccounts(model.inboxes) ? item.email?.source : nil
+        HStack(spacing: Theme.s2) {
+            facts(parts: parts, source: source)
+            SenderLabelCorrectionMenu(
+                from: item.email?.from, signalWord: ReaderMetaRules.signalWord(item.email?.signal),
+                byUser: item.email?.signalByUser ?? false)
+        }
+    }
+
+    /// Read as one element; the correction menu stays its own control.
+    private func facts(parts: [String], source: MailSource?) -> some View {
         HStack(spacing: Theme.s2) {
             WindowLaneChip(tier: item.tier)
             if let source {
@@ -80,5 +96,36 @@ struct ReaderMetaLine: View {
             }
         }
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// The reader's sender-label correction (corrections become rules): who
+/// this sender IS, for this address or the whole domain, and "clear" when
+/// the current label is the user's own. The menu items are the ones the
+/// row chips used to carry. Nothing when no address can be read from From.
+struct SenderLabelCorrectionMenu: View {
+    let from: String?
+    /// The current category or relationship word, for the spoken label.
+    let signalWord: String?
+    let byUser: Bool
+
+    var body: some View {
+        if let address = mailAddress(in: from) {
+            let title = Text(L("label.correct")) + Text(verbatim: " ")
+                + Text(Image(systemName: "chevron.down"))
+            if Theme.isRenderingOffscreen {
+                title.font(Theme.Typo.caption).foregroundStyle(Theme.textDim)
+            } else {
+                Menu {
+                    SenderLabelMenuItems(address: address, byUser: byUser)
+                } label: {
+                    title.font(Theme.Typo.caption).foregroundStyle(Theme.textDim)
+                }
+                .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                .help(L("label.correct"))
+                .accessibilityLabel(
+                    signalWord.map { L("label.correct.a11y", $0) } ?? L("label.correct"))
+            }
+        }
     }
 }

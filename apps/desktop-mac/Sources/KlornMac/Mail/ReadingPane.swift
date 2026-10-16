@@ -306,7 +306,9 @@ struct ReadingPane: View {
     /// reachable even before any summary exists (founder, 2026-08-20).
     @ViewBuilder
     private func klornBand(_ email: EmailDetail) -> some View {
-        let reason = item?.tierReason
+        // The generic QUEUE fallback restates the lane; the band then just
+        // says "Analysis" instead of an empty why.
+        let reason = rowTierReason(item?.tierReason)
         // COLLAPSED by default (founder 2026-09-01): the analysis was eating
         // the pane and the mail itself was barely visible. The one-line WHY
         // stays always; everything deeper sits behind the chevron, and the
