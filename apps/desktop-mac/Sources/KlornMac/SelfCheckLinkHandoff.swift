@@ -114,35 +114,46 @@ private func linkReplyChecks() -> [(String, Bool)] {
     return results
 }
 
+private let complete = "POST /api/auth/link/complete"
+private let inboxesKey = "GET /api/email/inboxes"
+private let success = SessionStubProtocol.Reply(body: #"{"next":"/settings?inbox=success"}"#)
+
+/// Outcomes of one hand-off under a live session.
 @MainActor
 private func linkCompleteModelChecks() async -> [(String, Bool)] {
     typealias Stub = SessionStubProtocol
     typealias S = SessionScenarios
     var results: [(String, Bool)] = []
     func check(_ name: String, _ passed: Bool) { results.append((name, passed)) }
-    let complete = "POST /api/auth/link/complete"
-    let inboxes = "GET /api/email/inboxes"
-    let success = Stub.Reply(body: #"{"next":"/settings?inbox=success"}"#)
 
     let linked = S.model([complete: success])
     await linked.completeLink(handle: sampleHandle)
     check("signed in: the hand-off completes under this app's own session, then the accounts refresh",
           Stub.calls(complete).map(\.bearer) == ["Bearer token-A"]
-          && !Stub.calls(inboxes).isEmpty && linked.linkAccountError == nil)
+          && Stub.calls(inboxesKey).count >= 2 && linked.linkAccountError == nil)
     await linked.completeLink(handle: sampleHandle)
     check("the same hand-off delivered twice is completed once (no false 'expired')",
           Stub.calls(complete).count == 1 && linked.linkAccountError == nil)
 
+    let inFlight = S.model([complete: success], hold: [complete])
+    let first = Task { await inFlight.completeLink(handle: sampleHandle) }
+    let parked = await S.waitUntil { Stub.parked(complete) == 1 }
+    await inFlight.completeLink(handle: sampleHandle)
+    Stub.release(complete)
+    await first.value
+    check("a repeat delivered while the first request is in flight is dropped",
+          parked && Stub.calls(complete).count == 1 && inFlight.linkAccountError == nil)
+
     let mismatch = S.model([complete: .init(status: 409, body: #"{"next":"/settings?inbox=mismatch"}"#)])
     await mismatch.completeLink(handle: sampleHandle)
-    check("409: another account started the link — the mismatch message, no refresh",
-          mismatch.linkAccountError == L("account.link.mismatch") && Stub.calls(inboxes).isEmpty
-          && mismatch.phase == .signedIn)
+    check("409: another account started the link — the mismatch message, no refresh after",
+          mismatch.linkAccountError == L("account.link.mismatch")
+          && Stub.calls(inboxesKey).count == 1 && mismatch.phase == .signedIn)
 
-    let expired = S.model([complete: .init(status: 404)])
-    await expired.completeLink(handle: sampleHandle)
-    check("404: the hand-off expired or was spent — the try-again message",
-          expired.linkAccountError == L("account.link.expired") && Stub.calls(inboxes).isEmpty)
+    let stray = S.model([complete: .init(status: 404)])
+    await stray.completeLink(handle: sampleHandle)
+    check("404 for a hand-off nobody here was waiting for: still sent, but silent",
+          Stub.calls(complete).count == 1 && stray.linkAccountError == nil)
 
     let capped = S.model([complete: .init(body: #"{"next":"/settings?inbox=limit"}"#)])
     await capped.completeLink(handle: sampleHandle)
@@ -152,15 +163,33 @@ private func linkCompleteModelChecks() async -> [(String, Bool)] {
           capped.linkAccountError == L("account.link.failed")
           && pro.linkAccountError == L("error.needsPro"))
 
-    let rejected = S.model([complete: .init(status: 401)])
-    await rejected.completeLink(handle: sampleHandle)
-    check("401: the session is rejected as everywhere else", rejected.phase == .signedOut)
+    let limited = S.model([complete: .init(status: 429)])
+    await limited.completeLink(handle: sampleHandle)
+    Stub.set(complete, success)
+    await limited.completeLink(handle: sampleHandle)
+    check("429: refused before the handle was read, so a redelivery retries it",
+          Stub.calls(complete).count == 2 && limited.linkAccountError == nil)
+
+    let broken = S.model([complete: .init(status: 500)])
+    await broken.completeLink(handle: sampleHandle)
+    await broken.completeLink(handle: sampleHandle)
+    check("5xx: the server may have spent it — the failure message, and no retry",
+          Stub.calls(complete).count == 1 && broken.linkAccountError == L("account.link.failed"))
 
     let refused = S.model([complete: success])
     await refused.completeLink(handle: sampleHandle.uppercased())
     check("the model refuses a malformed handle without a request", Stub.calls(complete).isEmpty)
+    return results + (await linkQueueModelChecks())
+}
 
-    // Cold launch while signed out: nothing to complete under yet.
+/// A hand-off with no session to finish it under waits for the next sign-in.
+@MainActor
+private func linkQueueModelChecks() async -> [(String, Bool)] {
+    typealias Stub = SessionStubProtocol
+    typealias S = SessionScenarios
+    var results: [(String, Bool)] = []
+    func check(_ name: String, _ passed: Bool) { results.append((name, passed)) }
+
     let cold = S.model([complete: success], token: nil)
     await cold.completeLink(handle: sampleHandle)
     let waited = Stub.calls(complete).isEmpty
@@ -168,6 +197,47 @@ private func linkCompleteModelChecks() async -> [(String, Bool)] {
     let posted = await S.waitUntil { Stub.calls(complete).count == 1 }
     check("no session yet: the hand-off waits, then completes once a sign-in lands",
           waited && posted && Stub.calls(complete).first?.bearer == "Bearer token-B")
+
+    let retried = S.model([complete: .init(status: 401)])
+    await retried.completeLink(handle: sampleHandle)
+    let rejected = retried.phase == .signedOut
+    Stub.set(complete, success)
+    retried.beginSessionForCheck(token: "token-B")
+    let again = await S.waitUntil { Stub.calls(complete).count == 2 }
+    check("401: the session is rejected, and the unspent handle is retried by the next sign-in",
+          rejected && again
+          && Stub.calls(complete).map(\.bearer) == ["Bearer token-A", "Bearer token-B"])
+
+    let stale = S.model([complete: success], token: nil)
+    let t0 = Date(timeIntervalSince1970: 1_000_000)
+    stale.linkClock = { t0 }
+    await stale.completeLink(handle: sampleHandle)
+    stale.linkClock = { t0.addingTimeInterval(AppModel.linkHandoffTTL + 1) }
+    stale.beginSessionForCheck(token: "token-B")
+    try? await Task.sleep(for: .milliseconds(150))
+    check("a queued hand-off older than the server's 5-minute TTL is dropped unsent",
+          Stub.calls(complete).isEmpty)
+
+    let queuedExpired = S.model([complete: .init(status: 404)], token: nil)
+    await queuedExpired.completeLink(handle: sampleHandle)
+    queuedExpired.beginSessionForCheck(token: "token-B")
+    let reported = await S.waitUntil { queuedExpired.linkAccountError != nil }
+    check("404 for a queued hand-off: the expired, try-again message",
+          reported && queuedExpired.linkAccountError == L("account.link.expired"))
+
+    let primary = #"{"id":null,"email":"me@a.example","kind":"primary","needsReconnect":false,"purpose":"work"}"#
+    let second = #"{"id":"L1","email":"two@a.example","kind":"linked","needsReconnect":false}"#
+    let asked = S.model(
+        [complete: success, inboxesKey: .init(body: #"{"inboxes":[\#(primary)]}"#)],
+        hold: [complete], token: nil)
+    await asked.completeLink(handle: sampleHandle)
+    asked.beginSessionForCheck(token: "token-B")
+    let held = await S.waitUntil { Stub.parked(complete) == 1 }
+    Stub.set(inboxesKey, .init(body: #"{"inboxes":[\#(primary),\#(second)]}"#))
+    Stub.release(complete)
+    let prompted = await S.waitUntil { asked.purposePromptTarget?.id == "L1" }
+    check("a queued link that lands asks the new mailbox's purpose, as the link watch does",
+          held && prompted && asked.showPurposePrompt)
     return results
 }
 

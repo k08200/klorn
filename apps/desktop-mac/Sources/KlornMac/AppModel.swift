@@ -212,14 +212,30 @@ final class AppModel {
     /// Bounded watcher that picks up the newly linked inbox after the browser
     /// handoff, without waiting for the 60 s poll tick.
     private var linkWatchTask: Task<Void, Never>?
-    /// A link hand-off that arrived with no session to finish it under (a
-    /// cold launch while signed out, or mid sign-in). The next sign-in
+    /// A link hand-off (`klorn://link-complete`) and when it arrived.
+    struct PendingLinkHandoff: Equatable {
+        let handle: String
+        let arrivedAt: Date
+    }
+    /// The server keeps a parked link 5 minutes; a queued hand-off older
+    /// than that could only answer 404, so it is dropped instead.
+    nonisolated static let linkHandoffTTL: TimeInterval = 5 * 60
+    /// A hand-off this soon after a link started here is ours to report. A
+    /// 404 outside it (a stray link, or one the web started) stays silent.
+    nonisolated static let linkExpectedWindow: TimeInterval = 10 * 60
+    /// A hand-off that arrived with no session to finish it under (a cold
+    /// launch while signed out, mid sign-in, or a 401). The next sign-in
     /// completes it; the server refuses it there unless that account started it.
-    @ObservationIgnored private var pendingLinkHandle: String?
+    @ObservationIgnored private var pendingLinkHandoff: PendingLinkHandoff?
     /// The last hand-off taken. The hand-off page opens the deep link twice
     /// (its refresh, then its "Open Klorn" button); the repeat would answer
-    /// 404 and paint a false "expired" over a link that landed.
+    /// 404 and paint a false "expired" over a link that landed. Cleared when
+    /// the server refused the request before reading the handle (401, 429).
     @ObservationIgnored private var lastLinkHandle: String?
+    /// When "Add account" or "Reconnect" last opened a consent from this app.
+    @ObservationIgnored private var linkStartedAt: Date?
+    /// The hand-off clock. A seam so the self-check can age a queued handle.
+    @ObservationIgnored var linkClock: @MainActor () -> Date = { Date() }
 
     private let api: APIClient
     /// Where the session token lives. Every token read and write in the model
@@ -639,6 +655,7 @@ final class AppModel {
         guard isCurrent(session) else { return }
         switch outcome {
         case .success:
+            linkStartedAt = linkClock()
             startLinkWatch()
         case .failure(.needsPro):
             linkAccountError = L("error.needsPro")
@@ -662,6 +679,7 @@ final class AppModel {
         guard isCurrent(session) else { return }
         switch outcome {
         case .success:
+            linkStartedAt = linkClock()
             startReconnectWatch()
         case .failure(.unauthorized):
             sessionRejected()
@@ -722,46 +740,87 @@ final class AppModel {
     /// this app's own session, so a consent another Klorn account started
     /// never lands on this one (the server answers 409 and stores nothing).
     func completeLink(handle: String) async {
-        guard AuthFlow.isLinkHandle(handle), handle != lastLinkHandle else { return }
+        await completeLink(PendingLinkHandoff(handle: handle, arrivedAt: linkClock()), fromQueue: false)
+    }
+
+    private func completeLink(_ handoff: PendingLinkHandoff, fromQueue: Bool) async {
+        guard AuthFlow.isLinkHandle(handoff.handle), handoff.handle != lastLinkHandle else { return }
         guard phase == .signedIn else {
-            pendingLinkHandle = handle
+            pendingLinkHandoff = handoff
             return
         }
-        lastLinkHandle = handle
+        lastLinkHandle = handoff.handle
         let session = sessionGeneration
-        linkAccountError = nil
-        let outcome: LinkCompletion
+        let startedHere = linkStartedAt.map {
+            linkClock().timeIntervalSince($0) < Self.linkExpectedWindow
+        } == true
+        // A link started here has its watch to spot (and ask about) the new
+        // mailbox. A cold or queued one notes what exists first instead.
+        let baseline = startedHere && !fromQueue ? nil : await linkBaseline(session: session)
+        guard isCurrent(session),
+              let outcome = await postLinkComplete(handoff, session: session),
+              isCurrent(session)
+        else { return }
+        // A 404 for a link nobody here was waiting for is not ours to report.
+        if outcome == .expired, !startedHere, !fromQueue { return }
+        await applyLinkCompletion(outcome, baseline: baseline, session: session)
+    }
+
+    /// The mailbox ids before a link lands; nil when the list can't be read
+    /// (then the new one can't be told apart, and nothing is asked).
+    private func linkBaseline(session: Int) async -> Set<String>? {
+        if inboxes.isEmpty { await refreshInboxes() }
+        guard isCurrent(session), !inboxes.isEmpty else { return nil }
+        return Set(inboxes.compactMap(\.id))
+    }
+
+    /// POST the hand-off with this session. nil: nothing left to do here (the
+    /// session ended, or it was rejected and the handle waits for the next).
+    private func postLinkComplete(_ handoff: PendingLinkHandoff, session: Int) async -> LinkCompletion? {
         do {
-            let body = try JSONEncoder().encode(["handle": handle])
+            let body = try JSONEncoder().encode(["handle": handoff.handle])
             let reply = try await api.data(
                 "/api/auth/link/complete", method: "POST", body: body,
                 contentType: "application/json")
-            outcome = AuthFlow.linkCompletion(reply: reply)
+            return AuthFlow.linkCompletion(reply: reply)
         } catch _ where !isCurrent(session) {
-            return
+            return nil
         } catch APIError.unauthorized {
             sessionRejected()
-            return
+            // Refused before the handle was read, so it is unspent. Queued
+            // after the sign-out (which clears the queue), it is retried by
+            // the next sign-in.
+            pendingLinkHandoff = handoff
+            lastLinkHandle = nil
+            return nil
         } catch let APIError.http(status, _) {
-            outcome = AuthFlow.linkCompletion(status: status)
+            // 429 is refused before the handle is read: a redelivery may retry.
+            if status == 429 { lastLinkHandle = nil }
+            return AuthFlow.linkCompletion(status: status)
         } catch {
-            outcome = .failed
+            // 5xx or no answer: the server may have spent it. Not retried.
+            return .failed
         }
-        guard isCurrent(session) else { return }
-        await applyLinkCompletion(outcome, session: session)
     }
 
-    /// A landed link refreshes the accounts now (a running link watch still
-    /// spots the new inbox against its own baseline and asks its purpose).
-    /// Anything else says why on the accounts pane and ends the watch: no
-    /// account is coming.
-    private func applyLinkCompletion(_ outcome: LinkCompletion, session: Int) async {
+    /// A landed link refreshes the accounts now. A link watch, if one runs,
+    /// spots the new inbox against its own baseline and asks its purpose;
+    /// with a `baseline` (cold or queued), this asks it. Anything else says
+    /// why on the accounts pane and ends the watch: no account is coming.
+    private func applyLinkCompletion(
+        _ outcome: LinkCompletion, baseline: Set<String>?, session: Int
+    ) async {
         let message: String
         switch outcome {
         case .linked:
+            linkAccountError = nil
             await refreshInboxes()
             guard isCurrent(session) else { return }
             await loadQueue()
+            guard isCurrent(session), let baseline,
+                  let linked = Self.newlyLinkedInbox(baseline: baseline, now: inboxes)
+            else { return }
+            presentPurposePrompt(forLinked: linked)
             return
         case .needsPro: message = L("error.needsPro")
         case .mismatch: message = L("account.link.mismatch")
@@ -775,9 +834,11 @@ final class AppModel {
 
     /// A sign-in landed: finish the hand-off that was waiting for a session.
     private func completePendingLink() {
-        guard let handle = pendingLinkHandle else { return }
-        pendingLinkHandle = nil
-        Task { await completeLink(handle: handle) }
+        guard let handoff = pendingLinkHandoff else { return }
+        pendingLinkHandoff = nil
+        // Past the server's TTL it could only answer 404: drop it unsent.
+        guard linkClock().timeIntervalSince(handoff.arrivedAt) < Self.linkHandoffTTL else { return }
+        Task { await completeLink(handoff, fromQueue: true) }
     }
 
     /// The linked inbox that appeared since the link flow started, if any.
@@ -2362,6 +2423,10 @@ final class AppModel {
             text("imapError", \.imapError),
             flag("isConnectingImap", \.isConnectingImap),
             flag("isLinkingAccount", \.isLinkingAccount),
+            field(
+                "pendingLinkHandoff", \.pendingLinkHandoff, nil,
+                dirty: PendingLinkHandoff(handle: "x", arrivedAt: Date(timeIntervalSince1970: 0))),
+            field("linkStartedAt", \.linkStartedAt, nil, dirty: Date(timeIntervalSince1970: 0)),
             field("companyDomains", \.companyDomains, [], dirty: ["x.example"]),
             text("companyDomainsError", \.companyDomainsError),
             text("triagePriorities", \.triagePriorities),
