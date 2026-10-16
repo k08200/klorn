@@ -137,6 +137,10 @@ describe("DriveFile migration", () => {
       "user",
       "provider",
       "sourceKey",
+      // D5a (20261015020000_linked_drive_account): the connected account a row
+      // came from, as a foreign key, and its relation. NULL for a KLORN row.
+      "sourceAccountId",
+      "sourceAccount",
       "externalId",
       "name",
       "mimeType",

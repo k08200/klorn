@@ -39,6 +39,8 @@ describe("purgeUserData", () => {
     const required = [
       "linkedInboxAccount",
       "linkedCalendarAccount",
+      // D5a: a linked Google Drive / OneDrive account's OAuth tokens and address.
+      "linkedDriveAccount",
       "senderTrait",
       "senderLabel",
       "sentMessage",

@@ -98,9 +98,25 @@ describe("driveRowData: the row's identity", () => {
 
   it("the changes never carry the identity: an update cannot rewrite it", () => {
     const changes = changesOf(GOOGLE, { mimeType: "application/pdf", trashed: true });
-    for (const key of ["userId", "provider", "sourceKey", "externalId"]) {
+    for (const key of ["userId", "provider", "sourceKey", "sourceAccountId", "externalId"]) {
       expect(changes).not.toHaveProperty(key);
     }
+  });
+
+  it("a connected row names the account it came from: its sourceKey, set on create only (D5a)", () => {
+    expect(dataOf(GOOGLE).sourceAccountId).toBe("acct-1");
+    expect(dataOf(ONEDRIVE).sourceAccountId).toBe("acct-2");
+    // The migration's CHECK: when set, it is the sourceKey.
+    for (const source of [GOOGLE, ONEDRIVE]) {
+      expect(dataOf(source).sourceAccountId).toBe(source.sourceKey);
+    }
+    expect(changesOf(GOOGLE, { trashed: true, etag: "v2" })).not.toHaveProperty("sourceAccountId");
+  });
+
+  it("a Klorn drive row has no account: the CHECK ties a NULL sourceAccountId to KLORN", () => {
+    expect(dataOf(KLORN).sourceAccountId).toBeNull();
+    expect(dataOf(KLORN).sourceKey).toBe(KLORN_DRIVE_SOURCE_KEY);
+    expect(changesOf(KLORN, { storageKey: "u/user-1/k-1" })).not.toHaveProperty("sourceAccountId");
   });
 
   it.each([
@@ -302,6 +318,7 @@ describe("driveRowData: the changes are only what the input names", () => {
       userId: "user-1",
       provider: "GOOGLE",
       sourceKey: "acct-1",
+      sourceAccountId: "acct-1",
       externalId: "file-1",
       name: "Q3 report.pdf",
       modifiedAt: MODIFIED,
@@ -335,6 +352,7 @@ describe("upsertDriveFileRow", () => {
       userId: "user-1",
       provider: "GOOGLE",
       sourceKey: "acct-1",
+      sourceAccountId: "acct-1",
       externalId: "file-1",
       name: "Q3 report.pdf",
       sizeBytes: 42n,
@@ -343,6 +361,16 @@ describe("upsertDriveFileRow", () => {
       storageKey: null,
     });
     expect(result.ok && result.id).toBe(rows()[0]?.id);
+  });
+
+  it("a Klorn drive row is written with no account", async () => {
+    const result = await upsertDriveFileRow("user-1", KLORN, input({ storageKey: "u/user-1/k-1" }));
+    expect(result.ok).toBe(true);
+    expect(rows()[0]).toMatchObject({
+      provider: "KLORN",
+      sourceKey: KLORN_DRIVE_SOURCE_KEY,
+      sourceAccountId: null,
+    });
   });
 
   it("the same file again updates its row; it never makes a second", async () => {

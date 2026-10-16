@@ -24,6 +24,14 @@
  * (OneDrive) write the rows of files that stay in their service, with a link and
  * no storage key. A connector must check that the `sourceKey` it writes is an
  * account of that user before it calls this.
+ *
+ * `sourceAccountId` (D5a) is derived here, never chosen by a caller: the account
+ * a connected row came from is its `sourceKey`, and a Klorn row has none. It is
+ * set on create only, never in the changes, so an update cannot move a row to
+ * another account. It is a foreign key to LinkedDriveAccount with ON DELETE
+ * CASCADE, and the migration's two CHECKs hold the same rule in the database. A
+ * create whose account was unlinked meanwhile fails the foreign key (Prisma
+ * P2003) instead of leaving an orphan row.
  */
 
 import { prisma } from "../db.js";
@@ -111,6 +119,8 @@ export interface DriveRowData {
   readonly userId: string;
   readonly provider: DriveProviderName;
   readonly sourceKey: string;
+  /** The LinkedDriveAccount a connected row came from (its sourceKey); null for KLORN. */
+  readonly sourceAccountId: string | null;
   readonly externalId: string;
   readonly name: string;
   readonly modifiedAt: Date;
@@ -252,6 +262,7 @@ export function driveRowData(
     userId,
     provider: source.provider,
     sourceKey: source.sourceKey,
+    sourceAccountId: klornHeld ? null : source.sourceKey,
     externalId: source.externalId,
     ...changes,
   };

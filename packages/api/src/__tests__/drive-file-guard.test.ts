@@ -91,6 +91,22 @@ describe("every DriveFile write states its source, in one place", () => {
     expect(text).toMatch(/\n\s+provider: source\.provider,\n\s+sourceKey: source\.sourceKey,\n/);
   });
 
+  it("the row it creates derives sourceAccountId from the source, in one place (D5a)", () => {
+    const text = fileAt(ROWS_MODULE)?.text ?? "";
+    // The account a connected row came from is its sourceKey; a Klorn row has
+    // none. The migration's two CHECKs hold the same rule in the database.
+    expect(text).toMatch(
+      /\n\s+sourceKey: source\.sourceKey,\n\s+sourceAccountId: klornHeld \? null : source\.sourceKey,\n/,
+    );
+    expect(text).toMatch(/\n\s+readonly sourceAccountId: string \| null;\n/);
+    // A caller cannot choose it: neither the source nor the input it passes has the field.
+    for (const name of ["DriveFileSource", "DriveFileInput"]) {
+      const from = text.slice(text.indexOf(`export interface ${name} {`));
+      expect(from.length, name).toBeLessThan(text.length);
+      expect(from.slice(0, from.indexOf("\n}")), name).not.toMatch(/\bsourceAccountId\b/);
+    }
+  });
+
   it("an update writes only the changes, which cannot name the identity", () => {
     const text = fileAt(ROWS_MODULE)?.text ?? "";
     const windows = callWindows(text, ROW_WRITE);
@@ -99,7 +115,7 @@ describe("every DriveFile write states its source, in one place", () => {
     const from = text.slice(text.indexOf("export interface DriveRowChanges {"));
     const changes = from.slice(0, from.indexOf("\n}"));
     expect(changes).toMatch(/readonly name: string;/);
-    expect(changes).not.toMatch(/\b(userId|provider|sourceKey|externalId)\b/);
+    expect(changes).not.toMatch(/\b(userId|provider|sourceKey|sourceAccountId|externalId)\b/);
   });
 
   it("every field of the changes but the two a create needs is optional: an update is partial", () => {
@@ -147,6 +163,27 @@ describe("every DriveFile write states its source, in one place", () => {
   it("no module outside the drive modules names the row's unique key", () => {
     const keyed = files.filter((f) => f.text.includes("driveFileIdentity")).map((f) => f.path);
     expect(keyed).toEqual([ROWS_MODULE]);
+  });
+});
+
+describe("the linked drive accounts (D5a): no reader or writer yet but the purge and the key sweep", () => {
+  const ACCOUNT_CALL =
+    /\blinkedDriveAccount\s*\.\s*(findMany|findFirst|findUnique|findFirstOrThrow|findUniqueOrThrow|count|aggregate|groupBy|create|createMany|createManyAndReturn|upsert|update|updateMany|delete|deleteMany)\s*\(/g;
+
+  it("only the user purge and the key-rotation sweep touch the table", () => {
+    // D5b adds drive/linked-drive-accounts.ts, the one module the connector uses.
+    expect(pathsWith(ACCOUNT_CALL)).toEqual(["purge-user-data.ts", "scripts/reencrypt-tokens.ts"]);
+    expect(fileAt("purge-user-data.ts")?.text).toContain(
+      "await tx.linkedDriveAccount.deleteMany(scope);",
+    );
+  });
+
+  it("no source file names the table in a raw statement", () => {
+    const raw = files
+      .filter((f) => /\$(queryRaw|executeRaw|queryRawUnsafe|executeRawUnsafe)\b/.test(f.text))
+      .filter((f) => /\bLinkedDriveAccount\b/.test(f.text))
+      .map((f) => f.path);
+    expect(raw).toEqual([]);
   });
 });
 
