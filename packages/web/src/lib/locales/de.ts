@@ -1067,6 +1067,13 @@ const de: Record<string, string> = {
   "emailDetail.loadingLabel": "Mail wird geladen",
   "emailDetail.messageTitle": "Nachricht",
   "emailDetail.previewTitle": "Vorschau",
+  "mailHtml.imagesBlocked":
+    "Externe Bilder sind ausgeblendet, damit Absender nicht verfolgen können, wann Sie diese Nachricht öffnen.",
+  "mailHtml.showImages": "Bilder anzeigen",
+  "mailHtml.showPlain": "Nur Text",
+  "mailHtml.showFormatted": "Formatiert",
+  "mailHtml.frameTitle": "Nachrichteninhalt",
+  "mailHtml.inlineMissing": "Einige eingebettete Bilder konnten nicht geladen werden.",
   "emailDetail.error.load": "Die Mail konnte nicht geladen werden.",
   "emailDetail.error.reanalyzeAttachments": "Die Anhänge konnten nicht neu analysiert werden.",
   "emailDetail.error.saveCandidateStatus": "Der Bewerberstatus konnte nicht gespeichert werden.",

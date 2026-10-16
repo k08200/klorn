@@ -1050,6 +1050,13 @@ const es: Record<string, string> = {
   "emailDetail.loadingLabel": "Cargando el correo",
   "emailDetail.messageTitle": "Mensaje",
   "emailDetail.previewTitle": "Vista previa",
+  "mailHtml.imagesBlocked":
+    "Las imágenes externas están ocultas para que el remitente no pueda saber cuándo abres este mensaje.",
+  "mailHtml.showImages": "Mostrar imágenes",
+  "mailHtml.showPlain": "Texto sin formato",
+  "mailHtml.showFormatted": "Con formato",
+  "mailHtml.frameTitle": "Contenido del mensaje",
+  "mailHtml.inlineMissing": "No se pudieron cargar algunas imágenes insertadas.",
   "emailDetail.error.load": "No se pudo cargar el correo.",
   "emailDetail.error.reanalyzeAttachments": "No se pudieron reanalizar los adjuntos.",
   "emailDetail.error.saveCandidateStatus": "No se pudo guardar el estado del candidato.",

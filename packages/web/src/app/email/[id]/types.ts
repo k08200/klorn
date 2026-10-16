@@ -92,6 +92,11 @@ export interface EmailDetail {
   cc: string | null;
   subject: string;
   body: string | null;
+  /**
+   * Server-sanitized HTML for rendering mail as designed; null for plain
+   * mail. Only ever shown inside MailHtmlBody's sandboxed iframe.
+   */
+  renderHtml?: string | null;
   snippet: string | null;
   date: string;
   priority: EmailPriority;

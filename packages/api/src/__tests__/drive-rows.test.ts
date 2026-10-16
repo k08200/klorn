@@ -25,6 +25,7 @@ import {
   DRIVE_NAME_MAX_CHARS,
   type DriveFileInput,
   type DriveFileSource,
+  deleteConnectedDriveRows,
   driveRowData,
   KLORN_DRIVE_SOURCE_KEY,
   klornDriveSource,
@@ -522,5 +523,38 @@ describe("upsertDriveFileRow", () => {
     expect(result).toEqual({ ok: false, reason: "storageKey" });
     expect(rows()).toHaveLength(0);
     expect(db.writes.driveFile ?? []).toEqual([]);
+  });
+});
+
+describe("deleteConnectedDriveRows (D5d: the refresh's 404)", () => {
+  let db: FakeDb;
+
+  beforeEach(async () => {
+    db = createFakeDb({ driveFile: [] });
+    dbHolder.current = db;
+    await upsertDriveFileRow("user-1", connectedDriveSource("GOOGLE", "acct-1", "gone"), input());
+    await upsertDriveFileRow("user-1", connectedDriveSource("GOOGLE", "acct-1", "kept"), input());
+    // The same upstream id in another account of the user, and in another user's.
+    await upsertDriveFileRow("user-1", connectedDriveSource("GOOGLE", "acct-2", "gone"), input());
+    await upsertDriveFileRow("user-2", connectedDriveSource("GOOGLE", "acct-1", "gone"), input());
+  });
+
+  const left = () =>
+    (db.tables.driveFile ?? []).map((r) => `${r.userId}/${r.sourceKey}/${r.externalId}`);
+
+  it("deletes only these files of this account of this user", async () => {
+    expect(await deleteConnectedDriveRows("user-1", "GOOGLE", "acct-1", ["gone"])).toBe(1);
+    expect(left()).toEqual(["user-1/acct-1/kept", "user-1/acct-2/gone", "user-2/acct-1/gone"]);
+  });
+
+  it("an empty list deletes nothing and issues no query", async () => {
+    expect(await deleteConnectedDriveRows("user-1", "GOOGLE", "acct-1", [])).toBe(0);
+    expect((db.writes.driveFile ?? []).filter((w) => w.op === "deleteMany")).toEqual([]);
+  });
+
+  it("refuses KLORN, whatever a cast says: its objects are deleted before its rows", async () => {
+    await expect(
+      deleteConnectedDriveRows("user-1", "KLORN" as never, KLORN_DRIVE_SOURCE_KEY, ["k-1"]),
+    ).rejects.toThrow(/KLORN/);
   });
 });

@@ -167,6 +167,7 @@ async function readSourceBytes(ctx: RunContext, source: SummarySource): Promise<
   }
   const fetched = await session.fetchForSummary(source.externalId, {
     maxBytes: DRIVE_SUMMARY_MAX_SOURCE_BYTES,
+    mimeType: source.mimeType,
   });
   return fetched ?? { ok: false, reason: "object-missing" };
 }
@@ -265,7 +266,7 @@ async function cheapRefusal(
 ): Promise<SummaryRunOutcome | null> {
   const { row } = ctx.lease;
   if (source === null) return await waitForSource(ctx);
-  // A provider whose bytes Klorn cannot read yet (GOOGLE until D5d): wait, first.
+  // A provider whose bytes Klorn cannot read yet (ONEDRIVE until D6): wait, first.
   if (!DRIVE_SUMMARY_READABLE_PROVIDERS.has(source.provider)) return await waitForSource(ctx);
   if (source.isFolder) return await skip(ctx, "folder", source.etag);
   if (!isSummarisableFile(source.name, source.mimeType, source.sizeBytes)) {

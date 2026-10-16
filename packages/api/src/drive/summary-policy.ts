@@ -32,16 +32,18 @@ export const DRIVE_SUMMARIES_PER_USER_PER_DAY = 50;
 /** Summary model calls for one file per UTC day (a retry or a re-summary counts). */
 export const DRIVE_SUMMARY_RUNS_PER_FILE_PER_DAY = 3;
 /**
- * The providers whose bytes a summary can read today: the Klorn drive (D4).
- * GOOGLE joins with D5d, whose `fetchForSummary` reads them; D5c already
- * indexes picked Google files and queues their summaries. A summary of any
- * other provider waits (`source-unavailable`: PENDING, not an attempt, the
+ * The providers whose bytes a summary can read today: the Klorn drive (D4) and
+ * Google Drive (D5d: `fetchForSummary` exports a Google format as text and
+ * reads any other file with alt=media). A summary of any other provider
+ * (ONEDRIVE until D6) waits (`source-unavailable`: PENDING, not an attempt, the
  * source backoff capped at a day) before any other check and without
  * connecting, so it neither spends its attempts on a refusal nor is SKIPPED as
- * an unsupported type (a Google Doc), and it runs within a day of its provider
- * joining here.
+ * an unsupported type, and it runs within a day of its provider joining here.
  */
-export const DRIVE_SUMMARY_READABLE_PROVIDERS: ReadonlySet<DriveProviderName> = new Set(["KLORN"]);
+export const DRIVE_SUMMARY_READABLE_PROVIDERS: ReadonlySet<DriveProviderName> = new Set([
+  "KLORN",
+  "GOOGLE",
+]);
 
 /**
  * Attempts before a summary is given up as FAILED. An attempt is counted when a

@@ -7,16 +7,21 @@
  *   - a 404 is "not granted": null, never an error;
  *   - the link is kept only on docs.google.com or drive.google.com, over https;
  *   - the etag is `md5:<md5Checksum>` when Drive reports one, else `v:<version>`;
- *   - the listing and the search quote what they put in Drive's query language.
- *
- * `fetchForSummary` is D5d: it still refuses, and calls nothing.
+ *   - the listing and the search quote what they put in Drive's query language;
+ *   - D5d's byte read for a summary: Docs and Slides exported as text/plain,
+ *     Sheets as text/csv, anything else read with alt=media, streamed into the
+ *     cap within D4's deadline; never a link Google hands over; Google's export
+ *     size error is `too-large`, a 429, a 5xx or a network error a retryable
+ *     StorageError.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Readable } from "node:stream";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
   get: vi.fn(),
   list: vi.fn(),
+  export: vi.fn(),
   drive: vi.fn(),
 }));
 
@@ -24,13 +29,13 @@ vi.mock("googleapis", () => ({
   google: {
     drive: (options: unknown) => {
       api.drive(options);
-      return { files: { get: api.get, list: api.list } };
+      return { files: { get: api.get, list: api.list, export: api.export } };
     },
   },
 }));
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
-import { googleDriveSession } from "../drive/providers/google.js";
+import { GOOGLE_METADATA_TIMEOUT_MS, googleDriveSession } from "../drive/providers/google.js";
 import {
   GOOGLE_DRIVE_FILE_FIELDS,
   GOOGLE_FOLDER_MIME,
@@ -38,6 +43,8 @@ import {
   googleWebUrl,
   toProviderDriveFile,
 } from "../drive/providers/google-files.js";
+import { DRIVE_SUMMARY_READ_TIMEOUT_MS } from "../drive/summary-policy.js";
+import { StorageError } from "../storage/errors.js";
 
 const PLAN_FIELDS =
   "id,name,mimeType,size,md5Checksum,version,modifiedTime,webViewLink,parents,trashed";
@@ -63,7 +70,12 @@ function resource(over: Record<string, unknown> = {}) {
 beforeEach(() => {
   api.get.mockReset();
   api.list.mockReset();
+  api.export.mockReset();
   api.drive.mockReset();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("the fields mask", () => {
@@ -78,7 +90,10 @@ describe("the fields mask", () => {
     expect(api.get).toHaveBeenCalledTimes(1);
     expect(api.get.mock.calls[0]).toEqual([
       { fileId: "1AbCdEfGhIjKlMnOpQrStUvWxYz012345", fields: PLAN_FIELDS, supportsAllDrives: true },
+      // A hung call cannot hold the Picker or a refresh sweep (googleapis' own timeout).
+      { timeout: GOOGLE_METADATA_TIMEOUT_MS },
     ]);
+    expect(GOOGLE_METADATA_TIMEOUT_MS).toBe(30_000);
     expect(api.drive).toHaveBeenCalledWith({ version: "v3", auth: linked.client });
   });
 });
@@ -240,12 +255,217 @@ describe("list and search: Drive's query language, quoted", () => {
   });
 });
 
-describe("fetchForSummary is D5d", () => {
-  it("refuses with a message naming D5d, and calls nothing", async () => {
-    await expect(
-      googleDriveSession(linked).fetchForSummary("1AbC", { maxBytes: 10 }),
-    ).rejects.toThrow(/D5d/);
+describe("fetchForSummary (D5d): the bytes a summary is made from", () => {
+  const ID = "1AbCdEfGhIjKlMnOpQrStUvWxYz012345";
+  const DOC = "application/vnd.google-apps.document";
+  const SLIDES = "application/vnd.google-apps.presentation";
+  const SHEET = "application/vnd.google-apps.spreadsheet";
+  const LINKS = /webContentLink|exportLinks|thumbnailLink/;
+
+  const streamOf = (text: string) => ({ data: Readable.from([Buffer.from(text, "utf8")]) });
+  const fetch = (mimeType: string | null, maxBytes = 1_000) =>
+    googleDriveSession(linked).fetchForSummary(ID, { maxBytes, mimeType });
+  const failure = (status: number | null, extra: Record<string, unknown> = {}) =>
+    Object.assign(new Error("Request failed"), {
+      ...(status === null ? { code: "ECONNRESET" } : { status, response: { status } }),
+      config: { headers: { Authorization: "Bearer ya29.SECRET" } },
+      ...extra,
+    });
+  const errorBody = (status: number, reason: string) =>
+    JSON.stringify({
+      error: { code: status, message: "Refused.", errors: [{ domain: "global", reason }] },
+    });
+  /**
+   * A refused streamed request as gaxios 7 throws it (google-drive-stream-errors.test.ts
+   * reproduces it against a local server): the JSON body is the message, and
+   * neither `errors` nor `response.data` is set.
+   */
+  const streamedFailure = (status: number, reason: string) =>
+    Object.assign(new Error(errorBody(status, reason)), {
+      status,
+      code: status,
+      response: { status, data: undefined },
+      config: { headers: { Authorization: "Bearer ya29.SECRET" } },
+    });
+
+  it.each([
+    ["a Doc", DOC, "text/plain"],
+    ["a Slides deck", SLIDES, "text/plain"],
+    ["a Sheet (its first sheet only)", SHEET, "text/csv"],
+  ])("%s (%s) is exported as %s, streamed, on the account's client", async (_label, type, exported) => {
+    api.export.mockResolvedValue(streamOf("Minutes of the review."));
+    expect(await fetch(type)).toEqual({ ok: true, bytes: Buffer.from("Minutes of the review.") });
+    expect(api.export).toHaveBeenCalledTimes(1);
+    const [params, options] = api.export.mock.calls[0] as [unknown, Record<string, unknown>];
+    expect(params).toEqual({ fileId: ID, mimeType: exported });
+    expect(options).toMatchObject({ responseType: "stream" });
+    expect(options.signal).toBeInstanceOf(AbortSignal);
     expect(api.get).not.toHaveBeenCalled();
-    expect(api.list).not.toHaveBeenCalled();
+    expect(api.drive).toHaveBeenCalledWith({ version: "v3", auth: linked.client });
+  });
+
+  it.each([
+    ["a PDF", "application/pdf"],
+    ["a text file", "text/plain"],
+    ["an unknown type", null],
+  ])("%s is read with alt=media", async (_label, type) => {
+    api.get.mockResolvedValue(streamOf("%PDF-1.4"));
+    expect(await fetch(type)).toEqual({ ok: true, bytes: Buffer.from("%PDF-1.4") });
+    const [params, options] = api.get.mock.calls[0] as [unknown, Record<string, unknown>];
+    expect(params).toEqual({ fileId: ID, alt: "media", supportsAllDrives: true });
+    expect(options).toMatchObject({ responseType: "stream" });
+    expect(api.export).not.toHaveBeenCalled();
+  });
+
+  it("asks for no field and no link: it never fetches a URL Google hands over", async () => {
+    api.export.mockResolvedValue(streamOf("a"));
+    api.get.mockResolvedValue(streamOf("b"));
+    await fetch(DOC);
+    await fetch("application/pdf");
+    for (const call of [...api.export.mock.calls, ...api.get.mock.calls]) {
+      expect(JSON.stringify(call[0])).not.toMatch(LINKS);
+      expect(call[0]).not.toHaveProperty("fields");
+    }
+  });
+
+  it("past the cap it stops reading and answers too-large, whatever was declared", async () => {
+    let pulled = 0;
+    const body = Readable.from(
+      (function* () {
+        for (let i = 0; i < 100; i += 1) {
+          pulled += 1;
+          yield Buffer.alloc(100, 0x61);
+        }
+      })(),
+    );
+    api.get.mockResolvedValue({ data: body });
+    expect(await fetch("text/plain", 250)).toEqual({ ok: false, reason: "too-large" });
+    expect(pulled).toBeLessThan(10);
+    expect(body.destroyed).toBe(true);
+  });
+
+  it("Google's export size error, as a streamed request carries it (the message), is too-large", async () => {
+    api.export.mockRejectedValue(streamedFailure(403, "exportSizeLimitExceeded"));
+    expect(await fetch(DOC)).toEqual({ ok: false, reason: "too-large" });
+  });
+
+  it("an error whose body is still a stream: read, bounded, for its reason", async () => {
+    const body = Readable.from([Buffer.from(errorBody(403, "exportSizeLimitExceeded"))]);
+    api.export.mockRejectedValue(
+      Object.assign(new Error("Request failed with status code 403"), {
+        status: 403,
+        response: { status: 403, data: body },
+      }),
+    );
+    expect(await fetch(DOC)).toEqual({ ok: false, reason: "too-large" });
+    expect(body.destroyed).toBe(true);
+  });
+
+  it("an error body past the bound is not read for a reason: the status alone decides", async () => {
+    let pulled = 0;
+    const body = Readable.from(
+      (function* () {
+        for (let i = 0; i < 1_000; i += 1) {
+          pulled += 1;
+          yield Buffer.alloc(1024, 0x20);
+        }
+      })(),
+    );
+    api.get.mockRejectedValue(
+      Object.assign(new Error("Request failed with status code 403"), {
+        status: 403,
+        response: { status: 403, data: body },
+      }),
+    );
+    const thrown = await fetch("application/pdf").catch((e: unknown) => e);
+    expect((thrown as StorageError).retryable).toBe(false);
+    expect((thrown as StorageError).message).toBe("Google Drive answered 403");
+    expect(pulled).toBeLessThan(100);
+  });
+
+  it("a message that is not a JSON body names no reason, and never throws", async () => {
+    api.get.mockRejectedValue(
+      Object.assign(new Error('{"error": {"errors": [{"reason": '), {
+        status: 403,
+        response: { status: 403 },
+      }),
+    );
+    const thrown = await fetch("application/pdf").catch((e: unknown) => e);
+    expect((thrown as StorageError).message).toBe("Google Drive answered 403");
+  });
+
+  it("a 404 is a file this grant no longer sees: null", async () => {
+    api.export.mockRejectedValue(failure(404));
+    expect(await fetch(DOC)).toBeNull();
+  });
+
+  it.each([
+    ["a 429", failure(429)],
+    ["a 403 userRateLimitExceeded", streamedFailure(403, "userRateLimitExceeded")],
+    ["a 403 rateLimitExceeded", streamedFailure(403, "rateLimitExceeded")],
+    ["a 500", failure(500)],
+    ["a 503", failure(503)],
+    ["a network error", failure(null)],
+    ["a revoked grant (the refresh job flags the account)", failure(401)],
+  ])("%s throws a retryable StorageError, naming no secret", async (_label, err) => {
+    api.get.mockRejectedValue(err);
+    const thrown = await fetch("application/pdf").catch((e: unknown) => e);
+    expect(thrown).toBeInstanceOf(StorageError);
+    expect((thrown as StorageError).retryable).toBe(true);
+    expect((thrown as StorageError).message).not.toMatch(/SECRET|Bearer/);
+    expect((thrown as StorageError).cause).toBeUndefined();
+  });
+
+  it("any other refusal is a StorageError that is not retried", async () => {
+    api.get.mockRejectedValue(streamedFailure(403, "fileNotDownloadable"));
+    const thrown = await fetch("application/pdf").catch((e: unknown) => e);
+    expect(thrown).toBeInstanceOf(StorageError);
+    expect((thrown as StorageError).retryable).toBe(false);
+    expect((thrown as StorageError).message).toBe("Google Drive answered 403 fileNotDownloadable");
+  });
+
+  it("an error body that never ends is given up at the same deadline", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const body = new Readable({ read() {} });
+    api.get.mockRejectedValue(
+      Object.assign(new Error("Request failed with status code 403"), {
+        status: 403,
+        response: { status: 403, data: body },
+      }),
+    );
+    const pending = fetch("application/pdf").catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(DRIVE_SUMMARY_READ_TIMEOUT_MS);
+    const thrown = await pending;
+    expect((thrown as StorageError).retryable).toBe(true);
+    expect(body.destroyed).toBe(true);
+  });
+
+  it("a body that never ends is given up at D4's deadline: retryable, aborted, released", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const body = new Readable({ read() {} });
+    let signal: AbortSignal | undefined;
+    api.get.mockImplementation(async (_params: unknown, options: { signal: AbortSignal }) => {
+      signal = options.signal;
+      return { data: body };
+    });
+    const pending = fetch("application/pdf").catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(DRIVE_SUMMARY_READ_TIMEOUT_MS);
+    const thrown = await pending;
+    expect(thrown).toBeInstanceOf(StorageError);
+    expect((thrown as StorageError).retryable).toBe(true);
+    expect(signal?.aborted).toBe(true);
+    expect(body.destroyed).toBe(true);
+  });
+
+  it("a Google format with no text export, or an id that is not a Drive id, calls nothing", async () => {
+    await expect(fetch("application/vnd.google-apps.form")).rejects.toThrow(/no text export/);
+    expect(
+      await googleDriveSession(linked).fetchForSummary("not an id", {
+        maxBytes: 10,
+        mimeType: "application/pdf",
+      }),
+    ).toBeNull();
+    expect(api.get).not.toHaveBeenCalled();
+    expect(api.export).not.toHaveBeenCalled();
   });
 });
