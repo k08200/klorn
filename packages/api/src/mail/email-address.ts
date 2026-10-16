@@ -143,9 +143,9 @@ export function displayNameOf(value: string): string | null {
 
 /**
  * Longer From values are never real (production's longest on 2026-10-16: 115
- * characters). Regexes that read a From value see at most this much, so a
- * sender-chosen run cannot make them backtrack for seconds (80k characters
- * took 5-7 s through several of them).
+ * characters). The From regexes found to backtrack on a long sender-chosen run
+ * (80k characters: 5-7 s each; see boundedFromValue's call sites) read at most
+ * this much. Prefer the linear parsers above for anything new.
  */
 export const MAX_FROM_REGEX_CHARS = 1000;
 

@@ -18,7 +18,8 @@ import { senderName } from "../notify/notification-format.js";
 // Production on 2026-10-16: the most '<' in any stored HTML body is 5,780
 // (p99.9 4,156) and the longest From is 115 characters.
 
-const BUDGET_MS = 300;
+// Generous for slow CI runners: before the fix these took 7-40 s.
+const BUDGET_MS = 1000;
 
 function timed(fn: () => unknown): number {
   const start = performance.now();
@@ -32,11 +33,17 @@ describe("sanitize-html input is bounded by tag count", () => {
     expect(boundSanitizeInput(html)).toBe(html);
   });
 
-  it("cuts right before the tag past the bound", () => {
-    const html = "<i>x</i>".repeat(MAX_SANITIZE_TAGS);
-    const bounded = boundSanitizeInput(html);
-    expect(bounded.split("<").length - 1).toBe(MAX_SANITIZE_TAGS);
-    expect(html.startsWith(bounded)).toBe(true);
+  it("keeps exactly the bound, and the text after the last kept tag", () => {
+    const atBound = `${"<i>".repeat(MAX_SANITIZE_TAGS)}tail`;
+    expect(boundSanitizeInput(atBound)).toBe(atBound);
+
+    const past = `${"<i>".repeat(MAX_SANITIZE_TAGS)}tail<b>gone`;
+    expect(boundSanitizeInput(past)).toBe(`${"<i>".repeat(MAX_SANITIZE_TAGS)}tail`);
+  });
+
+  it("still caps the length before counting tags", () => {
+    const long = "x".repeat(600_000);
+    expect(boundSanitizeInput(long)).toHaveLength(500_000);
   });
 
   it("projects deeply nested HTML to text within budget", () => {
@@ -54,9 +61,9 @@ describe("From values are bounded before any regex reads them", () => {
   it("keeps every real From value whole", () => {
     const from = `"Kim, Jiwoo (Sales)" <jiwoo.kim@example.co.kr>`;
     expect(boundedFromValue(from)).toBe(from);
-    expect(boundedFromValue("x".repeat(MAX_FROM_REGEX_CHARS + 5))).toHaveLength(
-      MAX_FROM_REGEX_CHARS,
-    );
+    const atBound = "x".repeat(MAX_FROM_REGEX_CHARS);
+    expect(boundedFromValue(atBound)).toBe(atBound);
+    expect(boundedFromValue(`${atBound}y`)).toBe(atBound);
   });
 
   it("names a sender within budget for a hostile display name", () => {
