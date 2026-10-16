@@ -1,6 +1,7 @@
 "use client";
 import Script from "next/script";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useT } from "../lib/i18n";
 
 declare global {
   interface Window {
@@ -29,6 +30,7 @@ const BLOCKED_CHECK_DELAY_MS = 6000;
  * produces no checkout event, we say so instead of staying blank.
  */
 export function PaddleLoader({ onCheckoutCompleted }: { onCheckoutCompleted?: () => void }) {
+  const { t } = useT();
   const token = process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN;
   const env = process.env.NEXT_PUBLIC_PADDLE_ENV;
 
@@ -86,18 +88,14 @@ export function PaddleLoader({ onCheckoutCompleted }: { onCheckoutCompleted?: ()
           role="alert"
           className="fixed inset-x-4 top-4 z-50 mx-auto max-w-xl rounded-xl border border-state-warn-line bg-state-warn-bg p-4 text-sm text-amber-900 shadow-lg"
         >
-          <p className="font-semibold">The payment window could not open.</p>
-          <p className="mt-1">
-            An ad blocker or privacy extension is likely blocking Paddle, our payment provider.
-            Allow paddle.com for this site (or retry in a private window), then click the upgrade
-            button again.
-          </p>
+          <p className="font-semibold">{t("paddle.blocked.title")}</p>
+          <p className="mt-1">{t("paddle.blocked.body")}</p>
           <button
             type="button"
             onClick={() => setBlocked(false)}
             className="mt-2 rounded-lg border border-state-warn-line px-3 py-1.5 font-medium hover:bg-amber-100"
           >
-            Dismiss
+            {t("common.dismiss")}
           </button>
         </div>
       )}

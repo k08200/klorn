@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../lib/api";
+import { useT } from "../lib/i18n";
 import { captureClientError } from "../lib/sentry";
 import { useConfirm } from "./confirm-dialog";
 import Button from "./ui/button";
@@ -40,6 +41,7 @@ const OPENROUTER = {
 
 export function ByokKeysSection() {
   const { confirm } = useConfirm();
+  const { t } = useT();
   const [status, setStatus] = useState<ModelStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -57,11 +59,11 @@ export function ByokKeysSection() {
       setStatus(await apiFetch<ModelStatus>("/api/billing/models"));
     } catch (err) {
       captureClientError(err, { scope: "byok.status" });
-      setError("Could not load your LLM key status.");
+      setError(t("byok.error.status"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     loadStatus();
@@ -79,12 +81,12 @@ export function ByokKeysSection() {
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         captureClientError(err, { scope: "byok.save" });
-        setError(msg || "Could not update the key.");
+        setError(msg || t("byok.error.update"));
       } finally {
         setBusy((s) => ({ ...s, [p]: false }));
       }
     },
-    [busy, loadStatus],
+    [busy, loadStatus, t],
   );
 
   // Errors are handled inside patchModels; void the promise so the click
@@ -97,9 +99,9 @@ export function ByokKeysSection() {
 
   const removeKey = async (p: Provider, label: string) => {
     const ok = await confirm({
-      title: `Remove your ${label} key?`,
-      message: "Klorn falls back to its shared key for your mail.",
-      confirmLabel: "Remove key",
+      title: t("byok.confirmRemove.title", { provider: label }),
+      message: t("byok.confirmRemove.message"),
+      confirmLabel: t("byok.confirmRemove.confirm"),
       danger: true,
     });
     if (!ok) return;
@@ -123,7 +125,7 @@ export function ByokKeysSection() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       captureClientError(err, { scope: "byok.model" });
-      setError(msg || "Could not change the model.");
+      setError(msg || t("byok.error.model"));
     } finally {
       setSavingModel(false);
     }
@@ -132,34 +134,29 @@ export function ByokKeysSection() {
   return (
     <section className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-5">
       <header className="mb-3">
-        <h2 className="text-base font-semibold text-ink">Bring your own LLM key</h2>
-        <p className="mt-1 text-xs text-ink-mid">
-          By default your mail is classified on Klorn&apos;s shared key. Add your own provider key
-          and Klorn routes <span className="text-ink-mid">your</span> mail to{" "}
-          <span className="text-ink-mid">your</span> key and quota instead — handy if the shared
-          budget is busy. Keys are stored encrypted (AES-GCM); we never log the plaintext.
-        </p>
+        <h2 className="text-base font-semibold text-ink">{t("byok.title")}</h2>
+        <p className="mt-1 text-xs text-ink-mid">{t("byok.body")}</p>
         {status?.activeModel && (
           <p className="mt-2 text-[11px] text-ink-dim">
-            Active model: <span className="text-ink-mid">{status.activeModel}</span>
+            {t("byok.activeModel")} <span className="text-ink-mid">{status.activeModel}</span>
           </p>
         )}
       </header>
 
       {loading ? (
-        <div className="text-xs text-ink-dim">Loading…</div>
+        <div className="text-xs text-ink-dim">{t("common.loading")}</div>
       ) : (
         <div className="space-y-4">
           <div className="rounded-xl border border-line-soft bg-surface-raised/70 p-3">
             <div className="mb-2 flex items-center justify-between gap-2">
               <span className="text-sm font-medium text-ink">{OPENROUTER.label}</span>
               {status?.hasOpenRouterApiKey && (
-                <StatusChip status="connected" label="Using your key" />
+                <StatusChip status="connected" label={t("byok.usingYourKey")} />
               )}
             </div>
             {status?.hasOpenRouterApiKey ? (
               <div className="flex items-center justify-between gap-3">
-                <span className="font-mono text-xs text-ink-mid">•••••••• stored</span>
+                <span className="font-mono text-xs text-ink-mid">{t("byok.stored")}</span>
                 <Button
                   variant="danger"
                   size="sm"
@@ -167,7 +164,7 @@ export function ByokKeysSection() {
                   disabled={busy.openRouter}
                   loading={busy.openRouter}
                 >
-                  Remove
+                  {t("common.remove")}
                 </Button>
               </div>
             ) : (
@@ -175,7 +172,7 @@ export function ByokKeysSection() {
                 <div className="flex-1">
                   <Input
                     id="byok-key-openRouter"
-                    label="OpenRouter API key"
+                    label={t("byok.openRouterLabel")}
                     type="password"
                     value={inputs.openRouter}
                     onChange={(e) => setInputs((s) => ({ ...s, openRouter: e.target.value }))}
@@ -191,13 +188,12 @@ export function ByokKeysSection() {
                   loading={busy.openRouter}
                   className="shrink-0"
                 >
-                  Save
+                  {t("common.save")}
                 </Button>
               </div>
             )}
             <p className="mt-1.5 text-[11px] text-ink-dim">
-              One key covers every model Klorn uses — OpenRouter routes them all. The key is
-              verified with the provider before it&apos;s stored. Get one at{" "}
+              {t("byok.openRouterHelp")}{" "}
               <a
                 href={OPENROUTER.helpUrl}
                 target="_blank"
@@ -214,15 +210,12 @@ export function ByokKeysSection() {
             <div className="rounded-xl border border-state-warn-line bg-state-warn-bg p-3">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <span className="text-sm font-medium text-ink">
-                  Google Gemini <span className="text-[11px] text-state-warn-ink">legacy</span>
+                  Google Gemini{" "}
+                  <span className="text-[11px] text-state-warn-ink">{t("byok.legacy")}</span>
                 </span>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span className="text-[11px] text-ink-mid">
-                  Direct Gemini keys are retired — a free-tier key here silently starves
-                  classification when its daily quota runs out. Remove it and use one OpenRouter key
-                  instead.
-                </span>
+                <span className="text-[11px] text-ink-mid">{t("byok.geminiRetired")}</span>
                 <Button
                   variant="danger"
                   size="sm"
@@ -230,7 +223,7 @@ export function ByokKeysSection() {
                   disabled={busy.gemini}
                   loading={busy.gemini}
                 >
-                  Remove
+                  {t("common.remove")}
                 </Button>
               </div>
             </div>
@@ -241,7 +234,7 @@ export function ByokKeysSection() {
               <div className="rounded-xl border border-line-soft bg-surface-raised/70 p-3">
                 <Select
                   id="byok-model"
-                  label="Assistant model"
+                  label={t("byok.assistantModel")}
                   disabled={savingModel}
                   value={status?.selectedModel ?? options[0]?.id ?? ""}
                   onChange={(e) => void saveModel(e.target.value)}
@@ -252,12 +245,7 @@ export function ByokKeysSection() {
                     </option>
                   ))}
                 </Select>
-                <p className="mt-1 text-[11px] text-ink-dim">
-                  Frontier models only — this is the model your Klorn assistant talks in. It works
-                  on your mail, calendar, and tasks and never searches the web. Runs under your
-                  daily AI quota; add your own key above to use your own quota instead. The mail
-                  firewall&apos;s classifier is tuned separately and is not affected.
-                </p>
+                <p className="mt-1 text-[11px] text-ink-dim">{t("byok.assistantModelHelp")}</p>
               </div>
             );
           })()}

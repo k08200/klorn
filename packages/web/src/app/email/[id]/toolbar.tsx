@@ -117,6 +117,7 @@ export function EmailActionToolbar({
       </div>
       <div className="flex flex-wrap gap-1.5">
         <EmailActionButton
+          busyLabel={t("emailDetail.toolbar.working")}
           busy={busyAction === "read"}
           disabled={actionDisabled}
           onClick={onToggleRead}
@@ -126,6 +127,7 @@ export function EmailActionToolbar({
             : t("emailDetail.status.read")}
         </EmailActionButton>
         <EmailActionButton
+          busyLabel={t("emailDetail.toolbar.working")}
           busy={busyAction === "star"}
           disabled={actionDisabled}
           onClick={onToggleStar}
@@ -135,6 +137,7 @@ export function EmailActionToolbar({
             : t("emailDetail.toolbar.action.star")}
         </EmailActionButton>
         <EmailActionButton
+          busyLabel={t("emailDetail.toolbar.working")}
           busy={busyAction === "archive"}
           disabled={actionDisabled}
           onClick={onArchive}
@@ -143,6 +146,7 @@ export function EmailActionToolbar({
         </EmailActionButton>
         {email.unsubscribe && (
           <EmailActionButton
+            busyLabel={t("emailDetail.toolbar.working")}
             busy={busyAction === "unsubscribe"}
             disabled={actionDisabled}
             onClick={onUnsubscribe}
@@ -151,6 +155,7 @@ export function EmailActionToolbar({
           </EmailActionButton>
         )}
         <EmailActionButton
+          busyLabel={t("emailDetail.toolbar.working")}
           busy={busyAction === "delete"}
           danger
           disabled={actionDisabled}
@@ -159,7 +164,12 @@ export function EmailActionToolbar({
           {t("common.delete")}
         </EmailActionButton>
         {nextEmail && (
-          <EmailActionButton busy={false} disabled={disabled} onClick={onOpenNext}>
+          <EmailActionButton
+            busy={false}
+            busyLabel={t("emailDetail.toolbar.working")}
+            disabled={disabled}
+            onClick={onOpenNext}
+          >
             {t("emailDetail.toolbar.action.next")}
           </EmailActionButton>
         )}

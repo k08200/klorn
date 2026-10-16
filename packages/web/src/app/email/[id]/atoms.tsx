@@ -32,12 +32,15 @@ export function DetailStat({ label, value }: { label: string; value: string }) {
 /** Compact action button used in the email toolbar (Archive / Delete / Read / Star / Next). */
 export function EmailActionButton({
   busy,
+  busyLabel,
   children,
   danger = false,
   disabled,
   onClick,
 }: {
   busy: boolean;
+  /** Localized "working" text shown while busy — atoms stay hook-free. */
+  busyLabel: string;
   children: string;
   danger?: boolean;
   disabled: boolean;
@@ -54,7 +57,7 @@ export function EmailActionButton({
           : "border-line bg-surface-panel text-ink-mid hover:border-line hover:bg-surface-hover"
       }`}
     >
-      {busy ? "Working" : children}
+      {busy ? busyLabel : children}
     </button>
   );
 }

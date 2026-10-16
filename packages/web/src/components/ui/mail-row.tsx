@@ -26,6 +26,7 @@
 import type { Tier } from "@klorn/contract";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { useT } from "../../lib/i18n";
 import { LaneChip } from "./lane-chip";
 import { SourceBadge, type SourceProvider } from "./source-badge";
 
@@ -95,6 +96,7 @@ function PaperclipGlyph() {
 }
 
 function RowContent(props: MailRowProps) {
+  const { t } = useT();
   const { sender, subject, snippet, time, timeIso, tier, source, unread, hasAttachment } = props;
   const { tierPending } = props;
   // The dot gives way to the leading control wherever that control is showing.
@@ -110,7 +112,7 @@ function RowContent(props: MailRowProps) {
           aria-hidden="true"
           className={`size-2 shrink-0 rounded-full ${unread ? "bg-accent-solid" : "bg-transparent"} ${dotYields}`}
         />
-        {unread && <span className="sr-only">Unread, </span>}
+        {unread && <span className="sr-only">{t("mailRow.unread")}</span>}
         <span
           className={`min-w-0 flex-1 truncate text-label ${unread ? "font-semibold text-ink" : "text-ink-soft"}`}
         >
@@ -119,7 +121,7 @@ function RowContent(props: MailRowProps) {
         {hasAttachment && (
           <>
             <PaperclipGlyph />
-            <span className="sr-only">, has attachment</span>
+            <span className="sr-only">{t("mailRow.hasAttachment")}</span>
           </>
         )}
         {source && <SourceBadge provider={source.provider} nickname={source.nickname} />}

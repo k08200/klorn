@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../lib/api";
+import { useT } from "../lib/i18n";
 import { captureClientError } from "../lib/sentry";
 import { useConfirm } from "./confirm-dialog";
 import { useToast } from "./toast";
@@ -35,6 +36,7 @@ export function TelegramSection() {
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
   const { confirm } = useConfirm();
+  const { t } = useT();
 
   const loadStatus = useCallback(async (): Promise<boolean> => {
     try {
@@ -44,12 +46,12 @@ export function TelegramSection() {
       return data.linked;
     } catch (err) {
       captureClientError(err, { scope: "telegram.status" });
-      setError("Could not load Telegram link status.");
+      setError(t("telegram.error.status"));
       return false;
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void loadStatus();
@@ -64,7 +66,7 @@ export function TelegramSection() {
       setLinkCode(data);
     } catch (err) {
       captureClientError(err, { scope: "telegram.link" });
-      setError(parseApiError(err, "Could not start Telegram linking."));
+      setError(parseApiError(err, t("telegram.error.link")));
     } finally {
       setSubmitting(false);
     }
@@ -76,18 +78,18 @@ export function TelegramSection() {
     setError(null);
     const nowLinked = await loadStatus();
     if (nowLinked) {
-      toast("Telegram connected.", "success");
+      toast(t("telegram.toast.connected"), "success");
     } else {
-      toast("Not linked yet — open the link and press Start first.", "info");
+      toast(t("telegram.toast.notLinked"), "info");
     }
     setSubmitting(false);
   };
 
   const disconnect = async () => {
     const ok = await confirm({
-      title: "Disconnect Telegram",
-      message: "Klorn stops sending interrupts to your Telegram chat. You can relink any time.",
-      confirmLabel: "Disconnect",
+      title: t("telegram.confirmDisconnect.title"),
+      message: t("telegram.confirmDisconnect.message"),
+      confirmLabel: t("settings.disconnect"),
       danger: true,
     });
     if (!ok) return;
@@ -97,10 +99,10 @@ export function TelegramSection() {
       await apiFetch("/api/telegram/link", { method: "DELETE" });
       setLinked(false);
       setLinkCode(null);
-      toast("Telegram disconnected.", "info");
+      toast(t("telegram.toast.disconnected"), "info");
     } catch (err) {
       captureClientError(err, { scope: "telegram.unlink" });
-      setError("Could not disconnect Telegram.");
+      setError(t("telegram.error.disconnect"));
     } finally {
       setSubmitting(false);
     }
@@ -112,13 +114,11 @@ export function TelegramSection() {
         <div>
           <h3 className="font-medium text-ink">Telegram</h3>
           <p className="text-sm text-ink-mid">
-            {linked
-              ? "Connected — PUSH-tier interrupts also arrive in your Telegram chat."
-              : "Receive PUSH-tier interrupts in a Telegram chat."}
+            {linked ? t("telegram.body.connected") : t("telegram.body.idle")}
           </p>
         </div>
         {loading ? (
-          <span className="text-sm text-ink-mid">Loading...</span>
+          <span className="text-sm text-ink-mid">{t("common.loading")}</span>
         ) : linked ? (
           <div className="flex shrink-0 items-center gap-3">
             <StatusChip status="connected" />
@@ -128,7 +128,7 @@ export function TelegramSection() {
               onClick={() => void disconnect()}
               disabled={submitting}
             >
-              Disconnect
+              {t("settings.disconnect")}
             </Button>
           </div>
         ) : (
@@ -140,7 +140,7 @@ export function TelegramSection() {
               loading={submitting}
               className="shrink-0"
             >
-              Connect Telegram
+              {t("telegram.connect")}
             </Button>
           )
         )}
@@ -150,7 +150,7 @@ export function TelegramSection() {
         <div className="mt-3 space-y-2 rounded-xl border border-line-soft bg-surface-raised/70 p-3">
           {linkCode.deepLink ? (
             <p className="text-sm text-ink-mid">
-              Open{" "}
+              {t("telegram.deepLink.before")}{" "}
               <a
                 href={linkCode.deepLink}
                 target="_blank"
@@ -159,17 +159,23 @@ export function TelegramSection() {
               >
                 {linkCode.deepLink}
               </a>{" "}
-              and press <span className="font-medium text-ink">Start</span>.
+              {t("telegram.deepLink.middle")}{" "}
+              <span className="font-medium text-ink">{t("telegram.startButton")}</span>
+              {t("telegram.deepLink.after")}
             </p>
           ) : (
             <p className="text-sm text-ink-mid">
-              Send <span className="font-mono text-ink">/start {linkCode.code}</span> to your Klorn
-              bot in Telegram.
+              {t("telegram.manual.before")}{" "}
+              <span className="font-mono text-ink">/start {linkCode.code}</span>{" "}
+              {t("telegram.manual.after")}
             </p>
           )}
           <p className="text-xs text-ink-dim">
-            Code: <span className="font-mono text-ink-mid">{linkCode.code}</span> · expires at{" "}
-            {new Date(linkCode.expiresAt).toLocaleTimeString("en-US")}.
+            {t("telegram.codeLabel")}{" "}
+            <span className="font-mono text-ink-mid">{linkCode.code}</span>{" "}
+            {t("telegram.expiresAt", {
+              time: new Date(linkCode.expiresAt).toLocaleTimeString("en-US"),
+            })}
           </p>
           <div className="flex items-center gap-2 pt-1">
             <Button
@@ -179,7 +185,7 @@ export function TelegramSection() {
               disabled={submitting}
               loading={submitting}
             >
-              Check connection
+              {t("telegram.check")}
             </Button>
             <Button
               variant="secondary"
@@ -187,7 +193,7 @@ export function TelegramSection() {
               onClick={() => void startLink()}
               disabled={submitting}
             >
-              New code
+              {t("telegram.newCode")}
             </Button>
           </div>
         </div>

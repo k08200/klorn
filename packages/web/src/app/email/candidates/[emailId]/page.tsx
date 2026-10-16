@@ -248,7 +248,8 @@ function CandidateDetailView() {
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-xs font-medium text-ink">{file.filename}</span>
                       <span className="text-[10px] text-ink-mid">
-                        {file.category || "document"} · {file.analysisStatus}
+                        {file.category || t("emailDetail.attachment.category.document")} ·{" "}
+                        {file.analysisStatus}
                       </span>
                       {file.needsManualReview && (
                         <span className="shrink-0 rounded-md bg-rose-500/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-rose-600 ring-1 ring-inset ring-rose-500/20">

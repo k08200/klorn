@@ -74,7 +74,7 @@ export default function BottomTabs() {
   return (
     <>
       <nav
-        aria-label="Primary navigation"
+        aria-label={t("bottomTabs.nav")}
         className="md:hidden fixed bottom-0 inset-x-0 z-30 border-t border-line bg-surface-panel/92 pb-safe shadow-[0_-16px_44px_rgba(0,0,0,0.35)] backdrop-blur-xl"
       >
         <ul
@@ -178,7 +178,7 @@ function AccountSheet({ onClose, initials }: { onClose: () => void; initials: st
       {/* Backdrop */}
       <button
         type="button"
-        aria-label="Close account menu"
+        aria-label={t("bottomTabs.closeAccount")}
         onClick={onClose}
         className="absolute inset-0 bg-black/60"
       />
@@ -187,7 +187,7 @@ function AccountSheet({ onClose, initials }: { onClose: () => void; initials: st
         ref={sheetRef}
         role="dialog"
         aria-modal="true"
-        aria-label="Account and settings"
+        aria-label={t("bottomTabs.account")}
         tabIndex={-1}
         className="absolute inset-x-0 bottom-0 animate-slide-up rounded-t-2xl border-t border-line bg-surface-panel pb-safe shadow-2xl shadow-slate-900/15 focus:outline-none"
       >

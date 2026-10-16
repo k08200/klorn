@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { useT } from "../lib/i18n";
 
 export interface GraphNode {
   id: string;
@@ -179,6 +180,7 @@ function computeLayout(nodes: GraphNode[], edges: GraphEdge[]): Map<string, Pt> 
 }
 
 export function RelationshipGraph({ nodes, edges }: { nodes: GraphNode[]; edges: GraphEdge[] }) {
+  const { t } = useT();
   const { pos, viewBox } = useMemo(() => {
     const p = computeLayout(nodes, edges);
     let minX = Number.POSITIVE_INFINITY;
@@ -204,7 +206,7 @@ export function RelationshipGraph({ nodes, edges }: { nodes: GraphNode[]; edges:
   if (nodes.length <= 1) {
     return (
       <p className="rounded-xl border border-line bg-surface-raised p-6 text-sm text-ink-mid">
-        No relationships yet — the graph fills in as mail and calendar activity accrues.
+        {t("graph.empty")}
       </p>
     );
   }
@@ -214,9 +216,9 @@ export function RelationshipGraph({ nodes, edges }: { nodes: GraphNode[]; edges:
       viewBox={viewBox}
       className="h-[70vh] w-full rounded-2xl border border-line bg-surface-raised"
       role="img"
-      aria-label="Relationship graph of your contacts"
+      aria-label={t("graph.ariaLabel")}
     >
-      <title>Relationship graph</title>
+      <title>{t("graph.title")}</title>
       {edges.map((e) => {
         const a = pos.get(e.source);
         const b = pos.get(e.target);

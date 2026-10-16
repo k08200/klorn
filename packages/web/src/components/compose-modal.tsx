@@ -2,6 +2,7 @@
 
 import { type ChangeEvent, useCallback, useEffect, useId, useRef, useState } from "react";
 import { API_BASE, getStoredAuthToken } from "../lib/api";
+import { useT } from "../lib/i18n";
 import { captureClientError } from "../lib/sentry";
 import { useConfirm } from "./confirm-dialog";
 import { useToast } from "./toast";
@@ -28,6 +29,7 @@ const fieldClass =
 
 export function ComposeModal({ open, onClose }: ComposeModalProps) {
   const { toast } = useToast();
+  const { t } = useT();
   const { confirm } = useConfirm();
   const [to, setTo] = useState("");
   const [subject, setSubject] = useState("");
@@ -178,7 +180,7 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
         const payload = (await res.json().catch(() => null)) as { error?: string } | null;
         const message =
           (payload && typeof payload.error === "string" && payload.error) ||
-          `Send failed (${res.status}).`;
+          t("compose.error.sendFailed", { status: String(res.status) });
         // Emit a client signal too — a server-side outage is invisible here
         // when the API's own Sentry DSN is unset (the local/dev default).
         captureClientError(new Error(`compose HTTP ${res.status}: ${message}`), {
@@ -189,11 +191,15 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
         return;
       }
 
-      toast(files.length > 0 ? `Email sent with ${files.length} attachment(s)` : "Email sent");
+      toast(
+        files.length > 0
+          ? t("compose.toast.sentWithFiles", { count: String(files.length) })
+          : t("compose.toast.sent"),
+      );
       close();
     } catch (err) {
       captureClientError(err, { context: "compose.send" });
-      setError("Could not reach the server. Check your connection and try again.");
+      setError(t("compose.error.network"));
       setSending(false);
     }
   };
@@ -214,13 +220,13 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
       >
         <div className="flex items-center justify-between border-b border-line-soft px-5 py-4">
           <h2 id={titleId} className="text-base font-semibold tracking-[-0.01em] text-ink">
-            New message
+            {t("compose.title")}
           </h2>
           <button
             type="button"
             onClick={close}
             disabled={sending}
-            aria-label="Close"
+            aria-label={t("common.close")}
             className="ease-strong flex h-9 w-9 items-center justify-center rounded-lg text-ink-dim transition duration-150 hover:bg-surface-hover hover:text-ink-soft active:scale-[0.97] disabled:opacity-50"
           >
             ✕
@@ -230,7 +236,7 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
         <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
           <div>
             <label htmlFor="compose-to" className="sr-only">
-              Recipient
+              {t("compose.recipient")}
             </label>
             <input
               id="compose-to"
@@ -240,34 +246,34 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
               autoComplete="email"
               value={to}
               onChange={(event) => setTo(event.target.value)}
-              placeholder="To"
+              placeholder={t("compose.to")}
               disabled={sending}
               className={fieldClass}
             />
           </div>
           <div>
             <label htmlFor="compose-subject" className="sr-only">
-              Subject
+              {t("emailDetail.replyDraft.subjectLabel")}
             </label>
             <input
               id="compose-subject"
               type="text"
               value={subject}
               onChange={(event) => setSubject(event.target.value)}
-              placeholder="Subject"
+              placeholder={t("emailDetail.replyDraft.subjectLabel")}
               disabled={sending}
               className={fieldClass}
             />
           </div>
           <div>
             <label htmlFor="compose-body" className="sr-only">
-              Message
+              {t("compose.message")}
             </label>
             <textarea
               id="compose-body"
               value={body}
               onChange={(event) => setBody(event.target.value)}
-              placeholder="Write your message…"
+              placeholder={t("compose.messagePlaceholder")}
               rows={8}
               disabled={sending}
               className={`${fieldClass} resize-y leading-6`}
@@ -289,7 +295,7 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
                     type="button"
                     onClick={() => removeFile(index)}
                     disabled={sending}
-                    aria-label={`Remove ${file.name}`}
+                    aria-label={t("compose.removeFile", { name: file.name })}
                     className="shrink-0 rounded px-1 text-ink-dim transition hover:text-state-danger-ink disabled:opacity-50"
                   >
                     ✕
@@ -301,13 +307,15 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
 
           {tooMany && (
             <p className="text-xs text-state-danger-ink">
-              You can attach at most {MAX_ATTACHMENTS} files.
+              {t("compose.tooMany", { count: String(MAX_ATTACHMENTS) })}
             </p>
           )}
           {overSize && (
             <p className="text-xs text-state-danger-ink">
-              Attachments are {formatBytes(totalBytes)} — the limit is{" "}
-              {formatBytes(MAX_TOTAL_BYTES)}.
+              {t("compose.overSize", {
+                size: formatBytes(totalBytes),
+                limit: formatBytes(MAX_TOTAL_BYTES),
+              })}
             </p>
           )}
           {error && <ErrorAlert>{error}</ErrorAlert>}
@@ -321,7 +329,7 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
             disabled={sending}
             className="ease-strong inline-flex min-h-11 items-center rounded-lg border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
           >
-            📎 Attach files
+            📎 {t("compose.attach")}
           </button>
           <div className="flex gap-2">
             <button
@@ -330,7 +338,7 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
               disabled={sending}
               className="ease-strong inline-flex min-h-11 items-center rounded-lg px-4 text-sm text-ink-mid transition duration-150 hover:text-ink active:scale-[0.97] disabled:opacity-50"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
             <button
               type="button"
@@ -338,7 +346,7 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
               disabled={!canSend}
               className="glow-primary ease-strong inline-flex min-h-11 items-center rounded-lg bg-accent-solid px-4 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {sending ? "Sending…" : "Send"}
+              {sending ? t("compose.sending") : t("chat.send")}
             </button>
           </div>
         </div>

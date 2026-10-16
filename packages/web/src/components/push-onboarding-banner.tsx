@@ -24,6 +24,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "../lib/auth";
+import { useT } from "../lib/i18n";
 import { isNativePlatform } from "../lib/native/capacitor";
 import {
   fetchVapidKey,
@@ -39,6 +40,7 @@ const DISMISS_TTL_MS = 24 * 60 * 60 * 1000;
 
 export default function PushOnboardingBanner() {
   const { token, loading } = useAuth();
+  const { t } = useT();
   const [show, setShow] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -74,16 +76,14 @@ export default function PushOnboardingBanner() {
       const permission = await Notification.requestPermission();
       if (permission !== "granted") {
         setError(
-          permission === "denied"
-            ? "Notifications are blocked. Allow them for Klorn in your browser or device settings."
-            : "Notification permission is required.",
+          permission === "denied" ? t("pushBanner.error.blocked") : t("pushBanner.error.required"),
         );
         setSubmitting(false);
         return;
       }
 
       const publicKey = await fetchVapidKey();
-      if (!publicKey) throw new Error("The server has no notification key.");
+      if (!publicKey) throw new Error(t("pushBanner.error.noKey"));
 
       const reg = await getSwRegistration();
       const sub = await getOrCreatePushSubscription(reg, publicKey);
@@ -92,7 +92,7 @@ export default function PushOnboardingBanner() {
       setShow(false);
     } catch (err) {
       console.error("[PUSH-BANNER] enable failed:", err);
-      setError(err instanceof Error ? err.message : "Could not enable notifications.");
+      setError(err instanceof Error ? err.message : t("pushBanner.error.enable"));
     } finally {
       setSubmitting(false);
     }
@@ -103,17 +103,15 @@ export default function PushOnboardingBanner() {
   return (
     <div
       role="dialog"
-      aria-label="Enable push notifications"
+      aria-label={t("pushBanner.label")}
       className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[90] w-[min(94vw,420px)] bg-surface-panel border border-line rounded-2xl shadow-2xl shadow-slate-900/15 px-4 py-3.5 flex items-start gap-3 animate-slide-up pb-safe"
     >
       <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent-light to-sky-600 flex items-center justify-center text-base shrink-0">
         <span aria-hidden="true">🔔</span>
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-ink">Enable Klorn notifications</p>
-        <p className="text-xs text-ink-mid mt-0.5">
-          Get briefings and urgent mail the moment they land.
-        </p>
+        <p className="text-sm font-medium text-ink">{t("pushBanner.title")}</p>
+        <p className="text-xs text-ink-mid mt-0.5">{t("pushBanner.body")}</p>
         {error && <p className="text-xs text-state-danger-ink mt-1.5">{error}</p>}
         <div className="flex gap-2 mt-2.5">
           <button
@@ -122,7 +120,7 @@ export default function PushOnboardingBanner() {
             disabled={submitting}
             className="px-3 py-1.5 text-xs font-medium bg-accent-solid hover:bg-accent-solid-hover disabled:bg-surface-hover disabled:text-ink-dim text-accent-solid-ink rounded-lg transition"
           >
-            {submitting ? "Enabling..." : "Enable"}
+            {submitting ? t("pushBanner.enabling") : t("pushBanner.enable")}
           </button>
           <button
             type="button"
@@ -130,7 +128,7 @@ export default function PushOnboardingBanner() {
             disabled={submitting}
             className="px-3 py-1.5 text-xs font-medium text-ink-mid hover:text-ink transition"
           >
-            Later
+            {t("pwa.update.later")}
           </button>
         </div>
       </div>
@@ -138,7 +136,7 @@ export default function PushOnboardingBanner() {
         type="button"
         onClick={dismiss}
         disabled={submitting}
-        aria-label="Close"
+        aria-label={t("common.close")}
         className="text-ink-dim hover:text-ink transition text-lg leading-none -mr-1 -mt-0.5"
       >
         ×

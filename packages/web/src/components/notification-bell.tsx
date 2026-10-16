@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { apiFetch } from "../lib/api";
+import { useT } from "../lib/i18n";
 import {
   getTypeLabel,
   groupNotifications,
@@ -75,6 +76,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
   const { toast } = useToast();
+  const { t } = useT();
   const { connected, on, connectedClients } = useWebSocket(userId);
 
   // Briefly animate the bell. Clears any in-flight timer first so overlapping
@@ -297,7 +299,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
     } catch (err) {
       console.error("[notification-bell] approve failed", err);
       // Let the user retry — don't silently swallow
-      toast("Could not approve this action. Try again shortly.", "error");
+      toast(t("notif.toast.approveFailed"), "error");
     } finally {
       setPendingActionLoading((prev) => ({ ...prev, [notif.id]: null }));
     }
@@ -327,7 +329,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
       apiFetch(`/api/notifications/${notif.id}/read`, { method: "PATCH" }).catch(() => {});
     } catch (err) {
       console.error("[notification-bell] reject failed", err);
-      toast("Could not reject this action. Try again shortly.", "error");
+      toast(t("notif.toast.rejectFailed"), "error");
     } finally {
       setPendingActionLoading((prev) => ({ ...prev, [notif.id]: null }));
     }
@@ -444,7 +446,9 @@ export default function NotificationBell({ userId }: { userId: string }) {
         <p className="text-[13px] md:text-xs text-ink-mid mt-1 line-clamp-2 ml-6">{n.message}</p>
         <div className="flex items-center gap-2 mt-1 ml-6">
           <span className="text-[10px] text-ink-mid">{formatRelative(n.createdAt)}</span>
-          {getNotificationTarget(n) && <span className="text-[10px] text-accent-deep">Open</span>}
+          {getNotificationTarget(n) && (
+            <span className="text-[10px] text-accent-deep">{t("common.open")}</span>
+          )}
         </div>
       </button>
       {n.pendingActionId && n.pendingActionStatus === "PENDING" && (
@@ -455,7 +459,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
             disabled={!!pendingActionLoading[n.id]}
             className="focus-ring text-sm md:text-[11px] px-4 py-2 md:px-2.5 md:py-1 rounded-md md:rounded bg-accent-solid hover:bg-accent-solid-hover disabled:bg-surface-inset disabled:text-ink-dim disabled:cursor-not-allowed text-accent-solid-ink font-medium transition min-w-[72px] md:min-w-0"
           >
-            {pendingActionLoading[n.id] === "approve" ? "..." : "Approve"}
+            {pendingActionLoading[n.id] === "approve" ? "..." : t("notif.approve")}
           </button>
           <button
             type="button"
@@ -463,7 +467,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
             disabled={!!pendingActionLoading[n.id]}
             className="focus-ring text-sm md:text-[11px] px-4 py-2 md:px-2.5 md:py-1 rounded-md md:rounded bg-surface-hover hover:bg-surface-inset disabled:opacity-40 disabled:cursor-not-allowed text-ink-soft font-medium transition min-w-[72px] md:min-w-0"
           >
-            {pendingActionLoading[n.id] === "reject" ? "..." : "Reject"}
+            {pendingActionLoading[n.id] === "reject" ? "..." : t("notif.reject")}
           </button>
         </div>
       )}
@@ -471,9 +475,9 @@ export default function NotificationBell({ userId }: { userId: string }) {
         <div className="px-4 pb-2 ml-6">
           <span className="text-[10px] text-ink-mid">
             {n.pendingActionStatus === "EXECUTED"
-              ? "Done"
+              ? t("notif.status.done")
               : n.pendingActionStatus === "REJECTED"
-                ? "Rejected"
+                ? t("notif.status.rejected")
                 : n.pendingActionStatus}
           </span>
         </div>
@@ -502,18 +506,18 @@ export default function NotificationBell({ userId }: { userId: string }) {
           </span>
           {group.unreadCount > 0 && (
             <span className="text-[10px] text-accent-deep bg-accent-light/10 px-1.5 py-0.5 rounded shrink-0">
-              New {group.unreadCount}
+              {t("notif.group.new", { count: String(group.unreadCount) })}
             </span>
           )}
           <span className="text-[10px] text-ink-dim ml-auto shrink-0">
-            {expanded ? "Collapse" : "Expand"}
+            {expanded ? t("notif.group.collapse") : t("notif.group.expand")}
           </span>
         </div>
         <p className="text-[13px] md:text-xs text-ink-mid mt-1 line-clamp-1 ml-6">
           {notificationTitle(group.latestItem.title)}
         </p>
         <p className="text-[10px] text-ink-mid mt-1 ml-6">
-          Latest {formatRelative(group.latestItem.createdAt)}
+          {t("notif.group.latest", { time: formatRelative(group.latestItem.createdAt) })}
         </p>
       </button>
     );
@@ -532,7 +536,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
         type="button"
         onClick={() => setOpen(!open)}
         className={`focus-ring relative rounded-md text-ink-mid hover:text-ink transition p-1 ${flash ? "animate-bounce" : ""}`}
-        aria-label="Notifications"
+        aria-label={t("notif.title")}
       >
         <svg
           width="18"
@@ -579,10 +583,10 @@ export default function NotificationBell({ userId }: { userId: string }) {
           >
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-line">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">Notifications</span>
+                <span className="text-sm font-medium">{t("notif.title")}</span>
                 {connected && (
                   <span className="text-[10px] text-green-400 bg-green-400/10 px-1.5 py-0.5 rounded">
-                    Live
+                    {t("mail.live")}
                   </span>
                 )}
                 {unreadCount > 0 && (
@@ -599,7 +603,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
                     disabled={actionLoading}
                     className="text-xs text-ink-dim hover:text-accent-deep transition disabled:opacity-40"
                   >
-                    {actionLoading ? "..." : "Mark all read"}
+                    {actionLoading ? "..." : t("notif.markAllRead")}
                   </button>
                 )}
                 {notifications.length > 0 && (
@@ -609,14 +613,14 @@ export default function NotificationBell({ userId }: { userId: string }) {
                     disabled={actionLoading}
                     className="text-xs text-ink-dim hover:text-state-danger-ink transition disabled:opacity-40"
                   >
-                    {actionLoading ? "..." : "Clear"}
+                    {actionLoading ? "..." : t("common.clear")}
                   </button>
                 )}
               </div>
             </div>
             <div className="flex-1 overflow-y-auto overscroll-contain">
               {notifications.length === 0 ? (
-                <p className="text-center text-ink-dim text-sm py-6">No new notifications</p>
+                <p className="text-center text-ink-dim text-sm py-6">{t("notif.empty")}</p>
               ) : (
                 groups.map((group) => {
                   if (group.items.length === 1) return renderItem(group.items[0]);
@@ -632,7 +636,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
             </div>
             {tabCount > 1 && (
               <div className="px-4 py-2 border-t border-line text-[10px] text-ink-dim">
-                {tabCount} tabs connected
+                {t("notif.tabsConnected", { count: String(tabCount) })}
               </div>
             )}
           </div>,

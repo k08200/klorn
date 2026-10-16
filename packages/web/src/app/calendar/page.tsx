@@ -137,7 +137,7 @@ function CalendarView() {
   useEffect(() => {
     if (eventsError) {
       captureClientError(eventsError, { scope: "calendar.load" });
-      setError("Could not load calendar events.");
+      setError(t("calendar.error.load"));
     }
   }, [eventsError]);
 
@@ -172,14 +172,14 @@ function CalendarView() {
       setGoogleConnected(true);
       setSyncMessage(
         synced > 0
-          ? `Imported ${synced} events from Google Calendar.`
-          : "Google Calendar is synced. No events in the next 14 days.",
+          ? t("calendar.sync.imported", { count: String(synced) })
+          : t("calendar.sync.empty"),
       );
       queryClient.invalidateQueries({ queryKey: queryKeys.calendar.all });
     },
     onError: (err) => {
       captureClientError(err, { scope: "calendar.sync" });
-      setError("Could not sync Google Calendar.");
+      setError(t("calendar.error.sync"));
     },
   });
 
@@ -225,7 +225,9 @@ function CalendarView() {
             {t("nav.calendar")}
           </h1>
           <p className="mt-1.5 truncate text-sm text-ink-mid">
-            {nextEvent ? `Next: ${nextEvent.title || "Untitled"}` : "Your next 14 days"}
+            {nextEvent
+              ? t("calendar.nextLabel", { title: nextEvent.title || t("common.untitled") })
+              : t("calendar.next14Days")}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -240,7 +242,7 @@ function CalendarView() {
               setVoiceInitial(null);
               setNewEventOpen(true);
             }}
-            aria-label="New event"
+            aria-label={t("calendar.newEvent")}
             className="flex h-10 w-10 items-center justify-center rounded-full bg-accent-solid text-accent-solid-ink transition active:bg-accent-solid-hover"
           >
             <svg
@@ -261,7 +263,7 @@ function CalendarView() {
             type="button"
             onClick={syncNow}
             disabled={syncing}
-            aria-label="Sync calendar"
+            aria-label={t("calendar.sync")}
             className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-raised text-ink-mid transition active:bg-surface-hover disabled:opacity-50"
           >
             <svg
@@ -294,18 +296,21 @@ function CalendarView() {
           <p className="mt-2 truncate text-sm text-ink-mid">
             {nextEvent ? (
               <>
-                Next:{" "}
-                <span className="font-medium text-ink-soft">{nextEvent.title || "Untitled"}</span>{" "}
+                {t("calendar.next")}{" "}
+                <span className="font-medium text-ink-soft">
+                  {nextEvent.title || t("common.untitled")}
+                </span>{" "}
                 <span className="mx-0.5 text-slate-300">·</span>{" "}
                 {formatTime(new Date(nextEvent.startTime), userTimezone)}
               </>
             ) : (
-              "Nothing coming up"
+              t("calendar.nothingComingUp")
             )}
             {events.length > 0 && (
               <span className="text-ink-dim">
                 {" "}
-                <span className="mx-0.5 text-slate-300">·</span> {events.length} this month
+                <span className="mx-0.5 text-slate-300">·</span>{" "}
+                {t("calendar.thisMonth", { count: String(events.length) })}
               </span>
             )}
           </p>
@@ -374,7 +379,7 @@ function CalendarView() {
 
       {loading && (
         <div className="rounded-lg border border-line bg-surface-panel px-4 py-5 text-center text-sm text-ink-dim">
-          Gathering calendar context...
+          {t("calendar.gathering")}
         </div>
       )}
 
@@ -390,13 +395,13 @@ function CalendarView() {
         <div className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-6 text-center">
           <p className="mb-1 text-sm text-ink-mid">
             {googleConnected === false
-              ? "Google Calendar is not connected yet."
-              : "No events in the next 14 days."}
+              ? t("calendar.empty.notConnected")
+              : t("calendar.empty.noEvents")}
           </p>
           <p className="mb-4 text-xs text-ink-dim">
             {googleConnected === false
-              ? "Connect and sync so Klorn can brief from your real calendar."
-              : "Google is connected. An empty calendar stays empty in the briefing."}
+              ? t("calendar.empty.notConnectedBody")
+              : t("calendar.empty.noEventsBody")}
           </p>
           {googleConnected === false ? (
             <button
@@ -406,7 +411,7 @@ function CalendarView() {
               }}
               className="ease-strong inline-flex min-h-11 items-center rounded-lg border border-line bg-surface-panel/70 px-4 py-2 text-sm font-medium text-ink-muted shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
             >
-              Connect Google
+              {t("mail.connectGoogle")}
             </button>
           ) : (
             <button
@@ -415,7 +420,7 @@ function CalendarView() {
               disabled={syncing}
               className="ease-strong min-h-11 rounded-lg border border-line bg-surface-panel/70 px-4 py-2 text-sm font-medium text-ink-muted shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
             >
-              {syncing ? "Syncing..." : "Sync again"}
+              {syncing ? t("common.syncing") : t("calendar.syncAgain")}
             </button>
           )}
         </div>
@@ -455,7 +460,7 @@ function CalendarView() {
           setVoiceInitial(null);
         }}
         onCreated={(title) => {
-          setSyncMessage(`"${title}" created in your Google Calendar.`);
+          setSyncMessage(t("calendar.created", { title }));
           void queryClient.invalidateQueries({ queryKey: queryKeys.calendar.all });
         }}
       />
@@ -496,7 +501,7 @@ function AgendaList({
   if (days.length === 0) {
     return (
       <div className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel px-4 py-6 text-center text-sm text-ink-dim">
-        Nothing coming up this month.
+        {t("calendar.nothingThisMonth")}
       </div>
     );
   }
@@ -516,7 +521,7 @@ function AgendaList({
             </h3>
             {key === todayKey && (
               <span className="rounded-md bg-accent/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-accent-deep ring-1 ring-inset ring-accent/20">
-                Today
+                {t("nav.v2.today")}
               </span>
             )}
           </div>
@@ -535,11 +540,13 @@ function AgendaList({
                     className="flex items-start gap-3 px-4 py-3 transition duration-150"
                   >
                     <span className="w-14 shrink-0 pt-0.5 text-right text-xs tabular-nums text-ink-mid">
-                      {ev.allDay ? "All day" : formatTime(new Date(ev.startTime), timeZone)}
+                      {ev.allDay
+                        ? t("calendar.allDay")
+                        : formatTime(new Date(ev.startTime), timeZone)}
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium text-ink">
-                        {ev.title || "Untitled"}
+                        {ev.title || t("common.untitled")}
                       </span>
                       {ev.location && (
                         <span className="mt-0.5 block truncate text-[11px] text-ink-dim">
@@ -586,6 +593,7 @@ function MonthGrid({
   todayKey: string;
   timeZone: string;
 }) {
+  const { t } = useT();
   const cells = buildMonthCells(viewMonth, timeZone);
   // Weekday header — Sun..Sat matches Google Calendar's default in Korea.
   // Locale "en-US" gives short names regardless of the user's browser locale.
@@ -599,7 +607,7 @@ function MonthGrid({
           <button
             type="button"
             onClick={onPrev}
-            aria-label="Previous month"
+            aria-label={t("calendar.prevMonth")}
             className="ease-strong flex h-8 w-8 items-center justify-center rounded-lg text-ink-mid transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97]"
           >
             ‹
@@ -607,7 +615,7 @@ function MonthGrid({
           <button
             type="button"
             onClick={onNext}
-            aria-label="Next month"
+            aria-label={t("calendar.nextMonth")}
             className="ease-strong flex h-8 w-8 items-center justify-center rounded-lg text-ink-mid transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97]"
           >
             ›
@@ -619,7 +627,7 @@ function MonthGrid({
           onClick={onToday}
           className="ease-strong rounded-lg border border-line bg-surface-panel/70 px-3 py-1 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
         >
-          Today
+          {t("nav.v2.today")}
         </button>
       </div>
       <div className="grid grid-cols-7 border-b border-line-soft bg-surface-panel">
@@ -666,6 +674,7 @@ function DayCell({
   isToday: boolean;
   timeZone: string;
 }) {
+  const { t } = useT();
   // Show up to 3 chips per cell; collapse the rest into a "+N more" link
   // that drops the user into the first hidden event's day (proxy until we
   // wire a day modal).
@@ -721,7 +730,7 @@ function DayCell({
             href={`/calendar/${events[MAX_VISIBLE].id}`}
             className="block truncate px-1 text-[10px] text-ink-dim hover:text-accent-deep"
           >
-            +{hidden} more
+            {t("calendar.more", { count: String(hidden) })}
           </Link>
         )}
       </div>
@@ -738,6 +747,7 @@ function EventChip({
   timeZone: string;
   dimmed: boolean;
 }) {
+  const { t } = useT();
   const start = new Date(event.startTime);
   const timeLabel = event.allDay ? "" : formatTime(start, timeZone);
   return (
@@ -755,7 +765,7 @@ function EventChip({
         className={`h-1.5 w-1.5 shrink-0 rounded-full ${dimmed ? "bg-slate-300" : "bg-accent-light"}`}
       />
       {timeLabel && <span className="shrink-0 tabular-nums text-ink-dim">{timeLabel}</span>}
-      <span className="truncate">{event.title || "Untitled"}</span>
+      <span className="truncate">{event.title || t("common.untitled")}</span>
     </Link>
   );
 }
