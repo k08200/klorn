@@ -212,6 +212,14 @@ final class AppModel {
     /// Bounded watcher that picks up the newly linked inbox after the browser
     /// handoff, without waiting for the 60 s poll tick.
     private var linkWatchTask: Task<Void, Never>?
+    /// A link hand-off that arrived with no session to finish it under (a
+    /// cold launch while signed out, or mid sign-in). The next sign-in
+    /// completes it; the server refuses it there unless that account started it.
+    @ObservationIgnored private var pendingLinkHandle: String?
+    /// The last hand-off taken. The hand-off page opens the deep link twice
+    /// (its refresh, then its "Open Klorn" button); the repeat would answer
+    /// 404 and paint a false "expired" over a link that landed.
+    @ObservationIgnored private var lastLinkHandle: String?
 
     private let api: APIClient
     /// Where the session token lives. Every token read and write in the model
@@ -709,6 +717,69 @@ final class AppModel {
         }
     }
 
+    /// Finish an account link the browser handed back (`klorn://link-complete`).
+    /// The OAuth callback only parked the consent; it is attached here with
+    /// this app's own session, so a consent another Klorn account started
+    /// never lands on this one (the server answers 409 and stores nothing).
+    func completeLink(handle: String) async {
+        guard AuthFlow.isLinkHandle(handle), handle != lastLinkHandle else { return }
+        guard phase == .signedIn else {
+            pendingLinkHandle = handle
+            return
+        }
+        lastLinkHandle = handle
+        let session = sessionGeneration
+        linkAccountError = nil
+        let outcome: LinkCompletion
+        do {
+            let body = try JSONEncoder().encode(["handle": handle])
+            let reply = try await api.data(
+                "/api/auth/link/complete", method: "POST", body: body,
+                contentType: "application/json")
+            outcome = AuthFlow.linkCompletion(reply: reply)
+        } catch _ where !isCurrent(session) {
+            return
+        } catch APIError.unauthorized {
+            sessionRejected()
+            return
+        } catch let APIError.http(status, _) {
+            outcome = AuthFlow.linkCompletion(status: status)
+        } catch {
+            outcome = .failed
+        }
+        guard isCurrent(session) else { return }
+        await applyLinkCompletion(outcome, session: session)
+    }
+
+    /// A landed link refreshes the accounts now (a running link watch still
+    /// spots the new inbox against its own baseline and asks its purpose).
+    /// Anything else says why on the accounts pane and ends the watch: no
+    /// account is coming.
+    private func applyLinkCompletion(_ outcome: LinkCompletion, session: Int) async {
+        let message: String
+        switch outcome {
+        case .linked:
+            await refreshInboxes()
+            guard isCurrent(session) else { return }
+            await loadQueue()
+            return
+        case .needsPro: message = L("error.needsPro")
+        case .mismatch: message = L("account.link.mismatch")
+        case .expired: message = L("account.link.expired")
+        case .failed: message = L("account.link.failed")
+        }
+        linkWatchTask?.cancel()
+        linkWatchTask = nil
+        linkAccountError = message
+    }
+
+    /// A sign-in landed: finish the hand-off that was waiting for a session.
+    private func completePendingLink() {
+        guard let handle = pendingLinkHandle else { return }
+        pendingLinkHandle = nil
+        Task { await completeLink(handle: handle) }
+    }
+
     /// The linked inbox that appeared since the link flow started, if any.
     /// Id-based (not a count): a concurrent unlink + link would leave the
     /// count equal and the new account unnoticed.
@@ -865,6 +936,7 @@ final class AppModel {
         // sign-in whose first load fails recovers by itself when the network
         // is back. The socket waits for `ensureActive()`.
         startPolling()
+        completePendingLink()
     }
 
     /// A request of the current session was answered 401. Only a live
