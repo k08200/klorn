@@ -314,6 +314,9 @@
 "account.reconnect" = "重新连接账户…";
 "account.reconnectPrimary" = "重新连接 Google 账户…";
 "account.reconnect.failed" = "无法开始重新连接。请重试。";
+"account.link.mismatch" = "此连接是从另一个 Klorn 账户发起的，因此未添加。请在此账户中重新开始。";
+"account.link.expired" = "连接在完成前已过期。请重试。";
+"account.link.failed" = "无法完成账户连接。请重试。";
 "source.unknown" = "Klorn";
 "source.github" = "GitHub";
 

@@ -1,5 +1,6 @@
 /**
- * C1 on routes/auth.ts: the link-calendar OAuth callback creates a GOOGLE
+ * C1 on routes/auth.ts: the link-calendar OAuth flow (callback → POST
+ * /api/auth/link/complete) creates a GOOGLE
  * LinkedCalendarAccount keyed by (userId, provider, email), and the login
  * init-sync upserts primary-calendar events with provider/externalId next to
  * googleId.
@@ -11,6 +12,7 @@ import { signToken } from "../auth.js";
 import { isGoogleAuthError, markGoogleTokenForReconnect } from "../mail/gmail.js";
 import { _resetCancelledScanStateForTests } from "../pim/calendar-cancellation.js";
 import { CANCELLED_SCAN_OPTIONS, cancelledScanRequest } from "./helpers/google-cancelled-scan.js";
+import { callbackThenComplete } from "./helpers/link-complete.js";
 
 const eventsList = vi.hoisted(() => vi.fn());
 const cancelledList = vi.hoisted(() => vi.fn());
@@ -93,10 +95,12 @@ vi.mock("../db.js", () => {
 });
 
 import { authRoutes } from "../routes/auth.js";
+import { linkCompleteRoutes } from "../routes/link-complete.js";
 
 async function buildApp() {
   const app = Fastify();
   await app.register(authRoutes, { prefix: "/api/auth" });
+  await app.register(linkCompleteRoutes(), { prefix: "/api/auth" });
   return app;
 }
 
@@ -104,16 +108,17 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe("GET /api/auth/google/callback — __link_calendar__", () => {
+describe("GET /api/auth/google/callback → POST /link/complete — __link_calendar__", () => {
   it("upserts a GOOGLE LinkedCalendarAccount keyed by (userId, provider, email)", async () => {
     const state = signToken({ userId: "u1", email: "__link_calendar__" });
     const app = await buildApp();
-    const res = await app.inject({
-      method: "GET",
-      url: `/api/auth/google/callback?code=abc&state=${encodeURIComponent(state)}`,
-    });
-    expect(res.statusCode).toBe(302);
-    expect(res.headers.location).toContain("linked=success");
+    const res = await callbackThenComplete(
+      app,
+      `/api/auth/google/callback?code=abc&state=${encodeURIComponent(state)}`,
+      { authorization: `Bearer ${signToken({ userId: "u1", email: "owner@example.com" })}` },
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.json().next).toBe("/calendar?linked=success");
 
     const arg = linkedUpsert.mock.calls[0]?.[0] as {
       where: unknown;

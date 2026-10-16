@@ -1785,6 +1785,16 @@ const ko: Record<string, string> = {
   "onboardingV2.finish.addAccount": "계정 하나 더 추가",
   "onboardingV2.finish.openToday": "오늘 열기",
   "onboardingV2.finish.openHome": "Klorn 열기",
+  // Account-link completion (/link/complete)
+  "linkComplete.working": "연결을 마무리하는 중...",
+  "linkComplete.signIn": "이 브라우저에서 Klorn에 로그인하거나, 앱에서 다시 시작하세요.",
+  "linkComplete.mismatch":
+    "이 연결은 여기에 로그인된 계정과 다른 Klorn 계정에서 시작되어 아무것도 연결되지 않았습니다. 연결하려는 계정에서 다시 시작하세요.",
+  "linkComplete.expired":
+    "이 연결 링크는 만료되었거나 이미 사용되었습니다. 설정에서 다시 시작하세요.",
+  "linkComplete.failed": "연결을 마무리하지 못했습니다. 다시 시도하세요.",
+  "linkComplete.signInToContinue": "로그인하고 계속하기",
+  "linkComplete.continue": "계속",
 };
 
 export default ko;

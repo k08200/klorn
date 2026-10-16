@@ -1817,6 +1817,17 @@ const es: Record<string, string> = {
   "onboardingV2.finish.addAccount": "Añadir otra cuenta",
   "onboardingV2.finish.openToday": "Abrir Hoy",
   "onboardingV2.finish.openHome": "Abrir Klorn",
+  // Account-link completion (/link/complete)
+  "linkComplete.working": "Finalizando la conexión...",
+  "linkComplete.signIn":
+    "Inicia sesión en Klorn en este navegador o vuelve a empezar desde la app.",
+  "linkComplete.mismatch":
+    "Esta conexión se inició desde una cuenta de Klorn distinta de la que tiene la sesión iniciada aquí, así que no se conectó nada. Vuelve a empezar desde la cuenta que quieres conectar.",
+  "linkComplete.expired":
+    "Este enlace de conexión caducó o ya se usó. Vuelve a empezar desde Ajustes.",
+  "linkComplete.failed": "No se pudo finalizar la conexión. Inténtalo de nuevo.",
+  "linkComplete.signInToContinue": "Inicia sesión para continuar",
+  "linkComplete.continue": "Continuar",
 };
 
 export default es;

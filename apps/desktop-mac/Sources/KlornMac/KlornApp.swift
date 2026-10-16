@@ -75,10 +75,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     /// back to us; the code goes to the RelayInbox where the sign-in loop
     /// exchanges it for the JWT. Structural defense against active login-CSRF
     /// (security audit 2026-07-20) — the JWT is never parked for polling.
+    ///
+    /// Account-link hand-off: `klorn://link-complete?h=…` carries a parked
+    /// consent that the model attaches with this app's own session (or the
+    /// next one, when none is restored yet). Never logged: the handle is a
+    /// one-time secret until spent.
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls {
             if let code = AuthFlow.relayCode(from: url) {
                 RelayInbox.deposit(code)
+            } else if let handle = AuthFlow.linkHandle(from: url) {
+                Task { await model.completeLink(handle: handle) }
             }
         }
     }

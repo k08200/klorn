@@ -7,8 +7,11 @@
  *
  *   POST   /link-inbox         — start OAuth (Pro-gated), returns { url }
  *   GET    /callback           — MS redirect target (public: the browser
- *                                arrives with no Authorization header;
- *                                identity rides the signed state JWT)
+ *                                arrives with no Authorization header).
+ *                                It parks the code and never exchanges it:
+ *                                POST /api/auth/link/complete finishes the
+ *                                link for the session that started it
+ *                                (routes/link-complete.ts)
  *   GET    /linked-inboxes     — list OUTLOOK rows (never tokens)
  *   DELETE /linked-inboxes/:id — unlink one (auth-only, so a downgraded
  *                                user can always disconnect)
@@ -43,9 +46,9 @@ import {
 } from "../mail/outlook-oauth.js";
 import { captureError } from "../sentry.js";
 import { darkRouteGate } from "./dark-route-gate.js";
+import { handOffAccountLink, linkStartScheme } from "./link-handoff.js";
 import {
   calendarLinkRedirect,
-  completeOutlookCalendarLink,
   OUTLOOK_CALENDAR_STATE_MARKER,
   outlookCalendarRoutes,
 } from "./outlook-calendar-link.js";
@@ -60,7 +63,7 @@ const MAX_OUTLOOK_INBOXES = 10;
 // State marker in the signed JWT's email field — the same scheme the Google
 // callback branches on (__link_inbox__ / __link_calendar__). This module has
 // its own callback, so the marker is verified for equality instead.
-const STATE_MARKER = "__link_outlook__";
+const STATE_MARKER = "__link_outlook__" as const;
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -85,6 +88,99 @@ function verifiedStateOf(state: string | undefined): { userId: string; email: st
     return verifyToken(state);
   } catch {
     return null;
+  }
+}
+
+/**
+ * The inbox branch of the Outlook callback, moved here unchanged except that it
+ * RETURNS the relative path the browser goes to instead of redirecting. Run by
+ * POST /api/auth/link/complete for the session of the user who started the
+ * flow; the callback itself only parks the code.
+ */
+export async function finishOutlookInboxLink(userId: string, code: string): Promise<string> {
+  try {
+    const tokens = await exchangeOutlookCode(code);
+    if ("error" in tokens) {
+      return "/settings?inbox=failed";
+    }
+    // A DIFFERENT Microsoft account is attached to the ALREADY-logged-in
+    // user (userId) as an additional mail source. We never
+    // resolve or switch the session user by this address — the linked
+    // token only feeds this user's own firewall.
+    const accountEmail = await fetchOutlookAccountEmail(tokens.accessToken);
+    if (!accountEmail) {
+      return "/settings?inbox=failed";
+    }
+    const linker = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+    if (!linker) {
+      return "/settings?inbox=failed";
+    }
+    const linkedEmail = normalizeEmail(accountEmail);
+    // Re-check at callback time, with the real address (TOCTOU): the
+    // first mailbox is free, a second one needs Pro — a user who got a
+    // mailbox or downgraded during the 10-min OAuth window cannot finish.
+    // Re-linking this same account is never refused. Inert while the
+    // paywall is off.
+    const account = { provider: "OUTLOOK" as const, email: linkedEmail };
+    if (!(await mayConnectMailAccount(userId, account))) {
+      return "/settings?inbox=pro";
+    }
+    // Cap NEW links only: a re-link (existing row → update path) must
+    // always be allowed so a user can never lock themselves out of
+    // reconnecting an inbox they already have.
+    // Case-insensitive: a legacy mixed-case row of this address is the
+    // same account, re-linked in place (its stored address kept).
+    const existingLink = await findOwnedLinkedAccount(userId, {
+      provider: "OUTLOOK",
+      email: linkedEmail,
+    });
+    if (!existingLink) {
+      const linkedCount = await prisma.linkedInboxAccount.count({
+        where: { userId: userId, provider: "OUTLOOK" },
+      });
+      if (linkedCount >= MAX_OUTLOOK_INBOXES) {
+        return "/settings?inbox=limit";
+      }
+    }
+    const saved = await prisma.linkedInboxAccount.upsert({
+      where: {
+        userId_provider_email: {
+          userId: userId,
+          provider: "OUTLOOK",
+          email: existingLink?.email ?? linkedEmail,
+        },
+      },
+      update: {
+        accessToken: encryptToken(tokens.accessToken),
+        refreshToken: encryptOptional(tokens.refreshToken),
+        expiresAt: tokens.expiresAt,
+        // Re-linking a previously-revoked inbox clears the reconnect prompt.
+        needsReconnect: false,
+      },
+      create: {
+        userId: userId,
+        // The schema default is GOOGLE — an Outlook row must say so.
+        provider: "OUTLOOK",
+        email: linkedEmail,
+        accessToken: encryptToken(tokens.accessToken),
+        refreshToken: encryptOptional(tokens.refreshToken),
+        expiresAt: tokens.expiresAt,
+      },
+    });
+    // Check-after-insert for a NEW row: a parallel first connect of
+    // another account may have committed meanwhile. Fails closed.
+    if (!existingLink && !(await keepIfOnlyMailSource(userId, { ...account, id: saved.id }))) {
+      return "/settings?inbox=pro";
+    }
+    return "/settings?inbox=success";
+  } catch (err) {
+    // console first — captureError is a no-op without a Sentry DSN.
+    console.error("[outlook-oauth] callback failed:", err);
+    captureError(err, { tags: { scope: "outlook-oauth.callback" } });
+    return "/settings?inbox=failed";
   }
 }
 
@@ -123,7 +219,10 @@ export function outlookAuthRoutes(opts: {
           // the user to a consent screen that will reject the client_id.
           return reply.code(503).send({ error: "Outlook linking is not configured" });
         }
-        const signedState = signToken({ userId, email: STATE_MARKER }, "10m");
+        const signedState = signToken(
+          { userId, email: STATE_MARKER, ...linkStartScheme(request) },
+          "10m",
+        );
         return reply.send({ url: getOutlookAuthUrl(signedState) });
       },
     );
@@ -162,7 +261,7 @@ export function outlookAuthRoutes(opts: {
         if (!state) {
           return reply.code(400).send({ error: "Missing state parameter" });
         }
-        let statePayload: { userId: string; email: string };
+        let statePayload: { userId: string; email: string; appScheme?: string };
         try {
           statePayload = verifyToken(state);
         } catch {
@@ -171,11 +270,15 @@ export function outlookAuthRoutes(opts: {
         // The calendar link (step C4) is finished by its own module: the marker
         // decides, and it is only ever in a state this server signed for that flow.
         if (statePayload.email === OUTLOOK_CALENDAR_STATE_MARKER) {
-          return completeOutlookCalendarLink(reply, {
-            code,
+          // The flag was turned off after this flow started (the state lives 10
+          // minutes): nothing is parked, exchanged or written.
+          if (!calendarGate()) return reply.redirect(calendarLinkRedirect(webUrl, "failed"));
+          return handOffAccountLink(reply, {
             userId: statePayload.userId,
+            marker: OUTLOOK_CALENDAR_STATE_MARKER,
+            code,
+            appScheme: statePayload.appScheme,
             webUrl,
-            enabled: calendarGate(),
           });
         }
         // A valid session JWT is NOT a valid link state: the marker must match,
@@ -184,93 +287,17 @@ export function outlookAuthRoutes(opts: {
           return reply.code(400).send({ error: "Invalid or expired OAuth state" });
         }
 
-        try {
-          const tokens = await exchangeOutlookCode(code);
-          if ("error" in tokens) {
-            return reply.redirect(`${webUrl}/settings?inbox=failed`);
-          }
-          // A DIFFERENT Microsoft account is attached to the ALREADY-logged-in
-          // user (statePayload.userId) as an additional mail source. We never
-          // resolve or switch the session user by this address — the linked
-          // token only feeds this user's own firewall.
-          const accountEmail = await fetchOutlookAccountEmail(tokens.accessToken);
-          if (!accountEmail) {
-            return reply.redirect(`${webUrl}/settings?inbox=failed`);
-          }
-          const linker = await prisma.user.findUnique({
-            where: { id: statePayload.userId },
-            select: { id: true },
-          });
-          if (!linker) {
-            return reply.redirect(`${webUrl}/settings?inbox=failed`);
-          }
-          const linkedEmail = normalizeEmail(accountEmail);
-          // Re-check at callback time, with the real address (TOCTOU): the
-          // first mailbox is free, a second one needs Pro — a user who got a
-          // mailbox or downgraded during the 10-min OAuth window cannot finish.
-          // Re-linking this same account is never refused. Inert while the
-          // paywall is off.
-          const account = { provider: "OUTLOOK" as const, email: linkedEmail };
-          if (!(await mayConnectMailAccount(statePayload.userId, account))) {
-            return reply.redirect(`${webUrl}/settings?inbox=pro`);
-          }
-          // Cap NEW links only: a re-link (existing row → update path) must
-          // always be allowed so a user can never lock themselves out of
-          // reconnecting an inbox they already have.
-          // Case-insensitive: a legacy mixed-case row of this address is the
-          // same account, re-linked in place (its stored address kept).
-          const existingLink = await findOwnedLinkedAccount(statePayload.userId, {
-            provider: "OUTLOOK",
-            email: linkedEmail,
-          });
-          if (!existingLink) {
-            const linkedCount = await prisma.linkedInboxAccount.count({
-              where: { userId: statePayload.userId, provider: "OUTLOOK" },
-            });
-            if (linkedCount >= MAX_OUTLOOK_INBOXES) {
-              return reply.redirect(`${webUrl}/settings?inbox=limit`);
-            }
-          }
-          const saved = await prisma.linkedInboxAccount.upsert({
-            where: {
-              userId_provider_email: {
-                userId: statePayload.userId,
-                provider: "OUTLOOK",
-                email: existingLink?.email ?? linkedEmail,
-              },
-            },
-            update: {
-              accessToken: encryptToken(tokens.accessToken),
-              refreshToken: encryptOptional(tokens.refreshToken),
-              expiresAt: tokens.expiresAt,
-              // Re-linking a previously-revoked inbox clears the reconnect prompt.
-              needsReconnect: false,
-            },
-            create: {
-              userId: statePayload.userId,
-              // The schema default is GOOGLE — an Outlook row must say so.
-              provider: "OUTLOOK",
-              email: linkedEmail,
-              accessToken: encryptToken(tokens.accessToken),
-              refreshToken: encryptOptional(tokens.refreshToken),
-              expiresAt: tokens.expiresAt,
-            },
-          });
-          // Check-after-insert for a NEW row: a parallel first connect of
-          // another account may have committed meanwhile. Fails closed.
-          if (
-            !existingLink &&
-            !(await keepIfOnlyMailSource(statePayload.userId, { ...account, id: saved.id }))
-          ) {
-            return reply.redirect(`${webUrl}/settings?inbox=pro`);
-          }
-          return reply.redirect(`${webUrl}/settings?inbox=success`);
-        } catch (err) {
-          // console first — captureError is a no-op without a Sentry DSN.
-          console.error("[outlook-oauth] callback failed:", err);
-          captureError(err, { tags: { scope: "outlook-oauth.callback" } });
-          return reply.redirect(`${webUrl}/settings?inbox=failed`);
-        }
+        // The state proves only which user STARTED the link, not that this
+        // browser is theirs. The code is parked for that user's own session,
+        // which finishes it through POST /api/auth/link/complete
+        // (finishOutlookInboxLink above); it is never exchanged here.
+        return handOffAccountLink(reply, {
+          userId: statePayload.userId,
+          marker: STATE_MARKER,
+          code,
+          appScheme: statePayload.appScheme,
+          webUrl,
+        });
       },
     );
 

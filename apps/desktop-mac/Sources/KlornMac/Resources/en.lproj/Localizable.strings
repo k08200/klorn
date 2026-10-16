@@ -314,6 +314,9 @@
 "account.reconnect" = "Reconnect account…";
 "account.reconnectPrimary" = "Reconnect Google account…";
 "account.reconnect.failed" = "Couldn't start the reconnect. Try again.";
+"account.link.mismatch" = "This link was started from a different Klorn account, so nothing was added. Start again from this account.";
+"account.link.expired" = "The link expired before it finished. Try again.";
+"account.link.failed" = "Couldn't finish linking the account. Try again.";
 "source.unknown" = "Klorn";
 "source.github" = "GitHub";
 

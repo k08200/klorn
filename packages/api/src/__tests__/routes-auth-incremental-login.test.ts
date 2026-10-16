@@ -5,8 +5,9 @@
  * there would be identity-only and would poison "connected" status and every
  * scheduler that treats a UserToken row as "has Gmail").
  *
- * The CONNECT callback (__oauth_state__, reached via POST /api/auth/google/start)
- * is now the only place the primary Google grant is stored — and it must also
+ * The CONNECT flow (__oauth_state__, reached via POST /api/auth/google/start and
+ * finished by POST /api/auth/link/complete) is now the only place the primary
+ * Google grant is stored — and it must also
  * register the Gmail Pub/Sub watch immediately, which previously only happened
  * on the login path (fresh connects otherwise wait for the hourly renewal
  * sweep before real-time push works).
@@ -15,6 +16,7 @@
 import Fastify from "fastify";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { signToken } from "../auth.js";
+import { callbackThenComplete } from "./helpers/link-complete.js";
 
 const registerGmailWatch = vi.hoisted(() => vi.fn(async () => ({})));
 
@@ -75,6 +77,9 @@ vi.mock("../db.js", () => {
     automationConfig: { upsert: automationConfigUpsert },
     device: {
       create: vi.fn(async () => ({ id: "d1" })),
+      // requireAuth on the link completion looks the session's device up.
+      findUnique: vi.fn(async () => ({ id: "d1", lastActiveAt: new Date() })),
+      update: vi.fn(async () => ({})),
       findMany: vi.fn(async () => []),
       deleteMany: vi.fn(async () => ({ count: 0 })),
     },
@@ -84,12 +89,16 @@ vi.mock("../db.js", () => {
 });
 
 import { authRoutes } from "../routes/auth.js";
+import { linkCompleteRoutes } from "../routes/link-complete.js";
 
 async function buildApp() {
   const app = Fastify();
   await app.register(authRoutes, { prefix: "/api/auth" });
+  await app.register(linkCompleteRoutes(), { prefix: "/api/auth" });
   return app;
 }
+
+const U1 = { authorization: `Bearer ${signToken({ userId: "u1", email: "login@example.com" })}` };
 
 const EXISTING_USER = {
   id: "u1",
@@ -136,18 +145,19 @@ describe("Google login callback (identity-only)", () => {
   });
 });
 
-describe("Google connect callback (__oauth_state__)", () => {
+describe("Google connect callback → complete (__oauth_state__)", () => {
   it("stores the grant and registers the Gmail watch immediately", async () => {
     const state = signToken({ userId: "u1", email: "__oauth_state__" });
     const app = await buildApp();
 
-    const res = await app.inject({
-      method: "GET",
-      url: `/api/auth/google/callback?code=abc&state=${encodeURIComponent(state)}`,
-    });
+    const res = await callbackThenComplete(
+      app,
+      `/api/auth/google/callback?code=abc&state=${encodeURIComponent(state)}`,
+      U1,
+    );
 
-    expect(res.statusCode).toBe(302);
-    expect(res.headers.location).toContain("/settings?google=connected");
+    expect(res.statusCode).toBe(200);
+    expect(res.json().next).toBe("/settings?google=connected");
     expect(userTokenUpsert).toHaveBeenCalledTimes(1);
     expect(registerGmailWatch).toHaveBeenCalledWith("u1");
     await app.close();
@@ -161,13 +171,14 @@ describe("Google connect callback (__oauth_state__)", () => {
       getToken: vi.fn(async () => ({ tokens: { access_token: "at" } })),
     } as unknown as ReturnType<typeof getOAuth2Client>);
 
-    const res = await app.inject({
-      method: "GET",
-      url: `/api/auth/google/callback?code=abc&state=${encodeURIComponent(state)}`,
-    });
+    const res = await callbackThenComplete(
+      app,
+      `/api/auth/google/callback?code=abc&state=${encodeURIComponent(state)}`,
+      U1,
+    );
 
-    expect(res.statusCode).toBe(302);
-    expect(res.headers.location).toContain("google=offline_access_denied");
+    expect(res.statusCode).toBe(200);
+    expect(res.json().next).toBe("/settings?google=offline_access_denied");
     expect(userTokenUpsert).not.toHaveBeenCalled();
     expect(registerGmailWatch).not.toHaveBeenCalled();
     await app.close();

@@ -1796,6 +1796,16 @@ const en: Record<string, string> = {
   "onboardingV2.finish.addAccount": "Add another account",
   "onboardingV2.finish.openToday": "Open Today",
   "onboardingV2.finish.openHome": "Open Klorn",
+  // Account-link completion (/link/complete)
+  "linkComplete.working": "Finishing the connection...",
+  "linkComplete.signIn": "Sign in to Klorn in this browser, or start again from the app.",
+  "linkComplete.mismatch":
+    "This connection was started from a different Klorn account than the one signed in here, so nothing was connected. Start again from the account you want to connect.",
+  "linkComplete.expired":
+    "This connection link has expired or was already used. Start again from Settings.",
+  "linkComplete.failed": "Couldn't finish the connection. Try again.",
+  "linkComplete.signInToContinue": "Sign in to continue",
+  "linkComplete.continue": "Continue",
 };
 
 export default en;

@@ -6,6 +6,7 @@
 
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { callbackThenComplete } from "./helpers/link-complete.js";
 import { type LinkedRowFixture, linkedRowsFindFirst } from "./helpers/linked-rows-find-first.js";
 
 vi.mock("../mail/gmail.js", () => ({
@@ -90,20 +91,24 @@ async function buildApp() {
   vi.resetModules();
   const { signToken } = await import("../auth.js");
   const { authRoutes } = await import("../routes/auth.js");
+  const { linkCompleteRoutes } = await import("../routes/link-complete.js");
   const app = Fastify();
   await app.register(authRoutes, { prefix: "/api/auth" });
+  await app.register(linkCompleteRoutes(), { prefix: "/api/auth" });
   const headers = { authorization: `Bearer ${signToken({ userId: "u1", email: "u1@x.com" })}` };
   const linkState = signToken({ userId: "u1", email: "__link_inbox__" });
   const connectState = signToken({ userId: "u1", email: "__oauth_state__" });
   return { app, headers, linkState, connectState };
 }
 
+/** The __link_inbox__ flow: callback parks the code, u1's session completes it. */
 async function callback() {
-  const { app, linkState } = await buildApp();
-  const res = await app.inject({
-    method: "GET",
-    url: `/api/auth/google/callback?code=abc&state=${encodeURIComponent(linkState)}`,
-  });
+  const { app, headers, linkState } = await buildApp();
+  const res = await callbackThenComplete(
+    app,
+    `/api/auth/google/callback?code=abc&state=${encodeURIComponent(linkState)}`,
+    headers,
+  );
   await app.close();
   return res;
 }
@@ -149,10 +154,10 @@ describe("POST /google/link-inbox (start)", () => {
   });
 });
 
-describe("GET /google/callback (__link_inbox__)", () => {
+describe("GET /google/callback → POST /link/complete (__link_inbox__)", () => {
   it("links a FREE user's first mailbox", async () => {
     const res = await callback();
-    expect(res.headers.location).toContain("inbox=success");
+    expect(res.json().next).toBe("/settings?inbox=success");
     expect(linked.upsert).toHaveBeenCalledTimes(1);
     expect(linked.deleteMany).not.toHaveBeenCalled();
   });
@@ -160,7 +165,7 @@ describe("GET /google/callback (__link_inbox__)", () => {
   it("refuses (inbox=pro) when the FREE user has another mailbox, without writing", async () => {
     rows.list = [{ id: "icloud-row", provider: "ICLOUD", email: "me@icloud.com" }];
     const res = await callback();
-    expect(res.headers.location).toContain("inbox=pro");
+    expect(res.json().next).toBe("/settings?inbox=pro");
     expect(linked.upsert).not.toHaveBeenCalled();
   });
 
@@ -172,7 +177,7 @@ describe("GET /google/callback (__link_inbox__)", () => {
     ];
     linked.findUnique.mockResolvedValue({ id: "existing" });
     const res = await callback();
-    expect(res.headers.location).toContain("inbox=success");
+    expect(res.json().next).toBe("/settings?inbox=success");
     expect(linked.deleteMany).not.toHaveBeenCalled();
   });
 
@@ -180,7 +185,7 @@ describe("GET /google/callback (__link_inbox__)", () => {
     tokenFindFirst.mockResolvedValue({ id: "google-token" });
     rows.list = [{ id: "legacy", provider: "GOOGLE", email: "Linked@Example.com" }];
     const res = await callback();
-    expect(res.headers.location).toContain("inbox=success");
+    expect(res.json().next).toBe("/settings?inbox=success");
     expect(linked.upsert.mock.calls[0]?.[0]).toMatchObject({
       where: {
         userId_provider_email: { userId: "u1", provider: "GOOGLE", email: "Linked@Example.com" },
@@ -198,7 +203,7 @@ describe("GET /google/callback (__link_inbox__)", () => {
       return { id: "new-row" };
     });
     const res = await callback();
-    expect(res.headers.location).toContain("inbox=pro");
+    expect(res.json().next).toBe("/settings?inbox=pro");
     expect(linked.deleteMany).toHaveBeenCalledWith({ where: { id: "new-row", userId: "u1" } });
   });
 });
@@ -217,13 +222,14 @@ describe("GET /google/linked-inboxes", () => {
   });
 });
 
-describe("primary Google slot: POST /google/start + __oauth_state__ callback", () => {
+describe("primary Google slot: POST /google/start + __oauth_state__ callback → complete", () => {
   async function connectCallback() {
-    const { app, connectState } = await buildApp();
-    const res = await app.inject({
-      method: "GET",
-      url: `/api/auth/google/callback?code=abc&state=${encodeURIComponent(connectState)}`,
-    });
+    const { app, headers, connectState } = await buildApp();
+    const res = await callbackThenComplete(
+      app,
+      `/api/auth/google/callback?code=abc&state=${encodeURIComponent(connectState)}`,
+      headers,
+    );
     await app.close();
     return res;
   }
@@ -249,13 +255,13 @@ describe("primary Google slot: POST /google/start + __oauth_state__ callback", (
   it("callback refuses (google=pro) without writing when a linked mailbox exists", async () => {
     rows.list = [{ id: "icloud-row", provider: "ICLOUD", email: "me@icloud.com" }];
     const res = await connectCallback();
-    expect(res.headers.location).toContain("google=pro");
+    expect(res.json().next).toBe("/settings?google=pro");
     expect(tokenUpsert).not.toHaveBeenCalled();
   });
 
   it("callback connects a FREE user's first mailbox", async () => {
     const res = await connectCallback();
-    expect(res.headers.location).toContain("google=connected");
+    expect(res.json().next).toBe("/settings?google=connected");
     expect(tokenUpsert).toHaveBeenCalledTimes(1);
     expect(tokenDeleteMany).not.toHaveBeenCalled();
   });
@@ -266,7 +272,7 @@ describe("primary Google slot: POST /google/start + __oauth_state__ callback", (
       return { id: "tok-new" };
     });
     const res = await connectCallback();
-    expect(res.headers.location).toContain("google=pro");
+    expect(res.json().next).toBe("/settings?google=pro");
     expect(tokenDeleteMany).toHaveBeenCalledWith({ where: { id: "tok-new", userId: "u1" } });
   });
 
@@ -277,7 +283,7 @@ describe("primary Google slot: POST /google/start + __oauth_state__ callback", (
       return { id: "tok" };
     });
     const res = await connectCallback();
-    expect(res.headers.location).toContain("google=connected");
+    expect(res.json().next).toBe("/settings?google=connected");
     expect(tokenDeleteMany).not.toHaveBeenCalled();
   });
 });
