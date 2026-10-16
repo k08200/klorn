@@ -158,13 +158,13 @@ describe("every DriveFile write states its source, in one place", () => {
     const text = fileAt(ROWS_MODULE)?.text ?? "";
     expect(text).toContain("await client.driveFile.deleteMany({");
     expect(text).toMatch(
-      /export async function deleteConnectedDriveRows\(\s*client: DriveRowsClient,\s*userId: string,\s*provider: ConnectedDriveProvider,\s*sourceKey: string,\s*\)/,
+      /export async function deleteLinkedAccountDriveRows\(\s*client: DriveRowsClient,\s*userId: string,\s*provider: ConnectedDriveProvider,\s*sourceKey: string,\s*\)/,
     );
   });
 
   it("only the account module's unlink deletes a connected account's rows", () => {
     const callers = files
-      .filter((f) => /\bdeleteConnectedDriveRows\(/.test(f.text))
+      .filter((f) => /\bdeleteLinkedAccountDriveRows\(/.test(f.text))
       .map((f) => f.path)
       .sort();
     expect(callers).toEqual([ROWS_MODULE, ACCOUNTS_MODULE]);
@@ -172,7 +172,9 @@ describe("every DriveFile write states its source, in one place", () => {
     const unlink = text.slice(text.indexOf("export async function unlinkDriveAccount("));
     // Inside one transaction: the ownership check, the rows, then the account.
     const owned = unlink.indexOf("await tx.linkedDriveAccount.findFirst(");
-    const rows = unlink.indexOf("await deleteConnectedDriveRows(tx, userId, provider, account.id)");
+    const rows = unlink.indexOf(
+      "await deleteLinkedAccountDriveRows(tx, userId, provider, account.id)",
+    );
     const gone = unlink.indexOf("await tx.linkedDriveAccount.deleteMany(");
     expect(unlink.indexOf("prisma.$transaction(")).toBeGreaterThan(-1);
     expect(owned).toBeGreaterThan(-1);

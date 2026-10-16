@@ -83,6 +83,10 @@ const db = vi.hoisted(() => ({
 vi.mock("../db.js", () => ({ prisma: db, db }));
 
 import { signToken } from "../auth.js";
+import {
+  keepIfOnlyMailSource,
+  mayConnectMailAccount,
+} from "../billing/mail-account-entitlement.js";
 import { authRoutes } from "../routes/auth.js";
 
 const WEB = "http://localhost:8001";
@@ -94,6 +98,17 @@ async function callback(query: string) {
   await app.close();
   return res;
 }
+
+/** A state carrying the login's optional fields (attr, appScheme), as the login start signs them. */
+const withLoginState = (marker: string, extra: { attr?: string; appScheme?: string }) =>
+  `code=abc&state=${encodeURIComponent(
+    signToken(
+      { userId: "nonce-1", email: marker, ...extra } as Parameters<typeof signToken>[0],
+      "10m",
+    ),
+  )}`;
+
+const NO_ACCESS_TOKEN = { tokens: { refresh_token: "rt" } };
 
 const withState = (marker: string, userId = "u1") =>
   `code=abc&state=${encodeURIComponent(signToken({ userId, email: marker }, "10m"))}`;
@@ -217,5 +232,154 @@ describe("each marker's branch", () => {
     const res = await callback(withState("__link_calendar__"));
     expect(res.statusCode).toBe(500);
     expect(writes()).toEqual({ userToken: 0, linkedCalendarAccount: 0, linkedInboxAccount: 0 });
+  });
+});
+
+describe("the calendar link's other outcomes", () => {
+  it("no access token: failed, nothing written", async () => {
+    google.getToken.mockResolvedValue(NO_ACCESS_TOKEN);
+    const res = await callback(withState("__link_calendar__"));
+    expect(res.headers.location).toBe(`${WEB}/calendar?linked=failed`);
+    expect(google.getGoogleUserInfo).not.toHaveBeenCalled();
+    expect(writes()).toEqual({ userToken: 0, linkedCalendarAccount: 0, linkedInboxAccount: 0 });
+  });
+
+  it("an unverified address: unverified, nothing written", async () => {
+    google.getGoogleUserInfo.mockResolvedValue({ email: "x@example.com", verified_email: false });
+    const res = await callback(withState("__link_calendar__"));
+    expect(res.headers.location).toBe(`${WEB}/calendar?linked=unverified`);
+    expect(writes()).toEqual({ userToken: 0, linkedCalendarAccount: 0, linkedInboxAccount: 0 });
+  });
+
+  it("a user who no longer exists: failed, nothing written", async () => {
+    db.user.findUnique.mockResolvedValue(null);
+    const res = await callback(withState("__link_calendar__"));
+    expect(res.headers.location).toBe(`${WEB}/calendar?linked=failed`);
+    expect(writes()).toEqual({ userToken: 0, linkedCalendarAccount: 0, linkedInboxAccount: 0 });
+  });
+
+  it("the user's own primary address: self, on settings, nothing written", async () => {
+    google.getGoogleUserInfo.mockResolvedValue({
+      email: " Owner@Example.com",
+      verified_email: true,
+    });
+    const res = await callback(withState("__link_calendar__"));
+    expect(res.headers.location).toBe(`${WEB}/settings?inbox=self`);
+    expect(writes()).toEqual({ userToken: 0, linkedCalendarAccount: 0, linkedInboxAccount: 0 });
+  });
+});
+
+describe("the inbox link's other outcomes", () => {
+  it("no access token: failed, nothing written", async () => {
+    google.getToken.mockResolvedValue(NO_ACCESS_TOKEN);
+    const res = await callback(withState("__link_inbox__"));
+    expect(res.headers.location).toBe(`${WEB}/settings?inbox=failed`);
+    expect(writes()).toEqual({ userToken: 0, linkedCalendarAccount: 0, linkedInboxAccount: 0 });
+  });
+
+  it("an unverified address: unverified, nothing written", async () => {
+    google.getGoogleUserInfo.mockResolvedValue({ email: "x@example.com", verified_email: false });
+    const res = await callback(withState("__link_inbox__"));
+    expect(res.headers.location).toBe(`${WEB}/settings?inbox=unverified`);
+    expect(writes()).toEqual({ userToken: 0, linkedCalendarAccount: 0, linkedInboxAccount: 0 });
+  });
+
+  it("a user who no longer exists: failed, nothing written", async () => {
+    db.user.findUnique.mockResolvedValue(null);
+    const res = await callback(withState("__link_inbox__"));
+    expect(res.headers.location).toBe(`${WEB}/settings?inbox=failed`);
+    expect(writes()).toEqual({ userToken: 0, linkedCalendarAccount: 0, linkedInboxAccount: 0 });
+  });
+
+  it("a second mailbox without the plan: pro, nothing written", async () => {
+    vi.mocked(mayConnectMailAccount).mockResolvedValueOnce(false);
+    const res = await callback(withState("__link_inbox__"));
+    expect(res.headers.location).toBe(`${WEB}/settings?inbox=pro`);
+    expect(writes()).toEqual({ userToken: 0, linkedCalendarAccount: 0, linkedInboxAccount: 0 });
+  });
+
+  it("a parallel first connect won meanwhile: pro, after the check-after-insert", async () => {
+    vi.mocked(keepIfOnlyMailSource).mockResolvedValueOnce(false);
+    const res = await callback(withState("__link_inbox__"));
+    expect(res.headers.location).toBe(`${WEB}/settings?inbox=pro`);
+    expect(writes()).toEqual({ userToken: 0, linkedCalendarAccount: 0, linkedInboxAccount: 1 });
+  });
+
+  it("the tenth Google inbox already linked: limit, nothing written", async () => {
+    db.linkedInboxAccount.count.mockResolvedValueOnce(10);
+    const res = await callback(withState("__link_inbox__"));
+    expect(res.headers.location).toBe(`${WEB}/settings?inbox=limit`);
+    expect(db.linkedInboxAccount.count).toHaveBeenCalledWith({
+      where: { userId: "u1", provider: "GOOGLE" },
+    });
+    expect(writes()).toEqual({ userToken: 0, linkedCalendarAccount: 0, linkedInboxAccount: 0 });
+  });
+
+  it("nine linked: the tenth is allowed", async () => {
+    db.linkedInboxAccount.count.mockResolvedValueOnce(9);
+    const res = await callback(withState("__link_inbox__"));
+    expect(res.headers.location).toBe(`${WEB}/settings?inbox=success`);
+  });
+});
+
+describe("the login's other branches", () => {
+  it("no access token: google_failed", async () => {
+    google.getToken.mockResolvedValue(NO_ACCESS_TOKEN);
+    const res = await callback(withState("__google_login__", "ignored"));
+    expect(res.headers.location).toBe(`${WEB}/login?error=google_failed`);
+  });
+
+  it("an unverified address: google_unverified, no user looked up", async () => {
+    google.getGoogleUserInfo.mockResolvedValue({ email: "x@example.com", verified_email: false });
+    const res = await callback(withState("__google_login__", "ignored"));
+    expect(res.headers.location).toBe(`${WEB}/login?error=google_unverified`);
+    expect(db.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("attr: a NEW user is created with the signed attribution", async () => {
+    db.user.findUnique.mockResolvedValue(null);
+    db.user.create.mockResolvedValue({ ...USER, id: "new-1", email: "linked@example.com" });
+    const res = await callback(withLoginState("__google_login__", { attr: "hn-launch" }));
+    expect(res.headers.location).toMatch(new RegExp(`^${WEB}/auth/callback\\?code=`));
+    expect(db.user.findUnique).toHaveBeenCalledWith({ where: { email: "linked@example.com" } });
+    expect(db.user.create).toHaveBeenCalledTimes(1);
+    expect(db.user.create.mock.calls[0]?.[0]).toMatchObject({
+      data: { email: "linked@example.com", emailVerified: true, attribution: "hn-launch" },
+    });
+  });
+
+  it("no attr: a new user is created without an attribution", async () => {
+    db.user.findUnique.mockResolvedValue(null);
+    db.user.create.mockResolvedValue({ ...USER, id: "new-1", email: "linked@example.com" });
+    await callback(withLoginState("__google_login__", {}));
+    const data = (db.user.create.mock.calls[0]?.[0] as { data: Record<string, unknown> }).data;
+    expect(data).not.toHaveProperty("attribution");
+  });
+
+  it("attr: an EXISTING user is never re-attributed", async () => {
+    db.user.findUnique.mockResolvedValue({ ...USER, email: "linked@example.com" });
+    await callback(withLoginState("__google_login__", { attr: "hn-launch" }));
+    expect(db.user.create).not.toHaveBeenCalled();
+    for (const call of db.user.update.mock.calls as unknown as Array<[{ data: object }]>) {
+      expect(call[0].data).not.toHaveProperty("attribution");
+    }
+  });
+
+  it("appScheme on the allowlist: the deep-link hand-off page, no-store, a one-time code", async () => {
+    const res = await callback(withLoginState("__google_login_desktop__", { appScheme: "klorn" }));
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["cache-control"]).toBe("no-store");
+    expect(res.headers["content-type"]).toContain("text/html");
+    expect(res.body).toMatch(/klorn:\/\/oauth-callback\?code=[0-9a-f]{40}/);
+    expect(res.body).toContain("Klorn Desktop is finishing sign-in.");
+    expect(res.body).not.toContain("Return to the Klorn desktop app.");
+  });
+
+  it("appScheme off the allowlist: the legacy page, no deep link", async () => {
+    const res = await callback(withLoginState("__google_login_desktop__", { appScheme: "evil" }));
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain("Return to the Klorn desktop app.");
+    expect(res.body).not.toContain("oauth-callback");
+    expect(res.headers["cache-control"]).toBeUndefined();
   });
 });

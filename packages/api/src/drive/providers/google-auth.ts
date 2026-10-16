@@ -48,6 +48,12 @@ export const DRIVE_LINK_SCOPES = [
   "https://www.googleapis.com/auth/userinfo.email",
   DRIVE_FILE_SCOPE,
 ] as const;
+/**
+ * The scopes a drive grant may carry: what the link asks for, and `email`, the
+ * short alias Google may report for `userinfo.email`. Anything else (a Gmail or
+ * Calendar scope) means the consent was combined with another grant.
+ */
+const EXPECTED_GRANT_SCOPES: ReadonlySet<string> = new Set([...DRIVE_LINK_SCOPES, "email"]);
 /** As the calendar and inbox links: an intercepted state URL must not be replayable for long. */
 const STATE_TTL = "10m";
 const FILES_PATH = "/files";
@@ -95,6 +101,26 @@ export function hasDriveFileScope(scope: string | null | undefined): boolean {
   return typeof scope === "string" && scope.split(/\s+/).includes(DRIVE_FILE_SCOPE);
 }
 
+/** The granted scopes beyond the expected set, as Google reported them; [] when none. */
+export function unexpectedGrantScopes(scope: string | null | undefined): string[] {
+  if (typeof scope !== "string") return [];
+  return scope.split(/\s+/).filter((name) => name.length > 0 && !EXPECTED_GRANT_SCOPES.has(name));
+}
+
+/**
+ * A grant that carries more than the link asked for is not refused (drive.file
+ * is what the connector needs), but it is not expected either: say so, scope
+ * names only, never a token.
+ */
+function reportUnexpectedScopes(userId: string, unexpected: readonly string[]): void {
+  if (unexpected.length === 0) return;
+  console.warn(`[GOOGLE-DRIVE] link granted scopes beyond the request: ${unexpected.join(" ")}`);
+  captureError(new Error("Google Drive link granted scopes beyond the request"), {
+    tags: { scope: "drive.google.extra_scopes" },
+    extra: { userId, unexpectedScopes: [...unexpected] },
+  });
+}
+
 /** requireEntitled's rule, again at callback time: the plan may lapse during the OAuth window. */
 async function isLinkerEntitled(userId: string): Promise<boolean> {
   const linker = await prisma.user.findUnique({
@@ -113,6 +139,7 @@ async function isOverCap(userId: string, email: string): Promise<boolean> {
 async function linkDriveAccount(code: string, userId: string): Promise<DriveLinkOutcome> {
   const { tokens } = await getOAuth2Client().getToken(code);
   if (!tokens.access_token) return "failed";
+  reportUnexpectedScopes(userId, unexpectedGrantScopes(tokens.scope));
   if (!hasDriveFileScope(tokens.scope)) return "scope-missing";
   // A drive is refreshed in the background (D5d): without offline access it
   // would die within the hour.
@@ -235,6 +262,10 @@ export function buildLinkedDriveClient(
         `[GOOGLE-DRIVE] Failed to persist a refreshed drive token for user ${userId}:`,
         err instanceof Error ? err.message : err,
       );
+      captureError(err, {
+        tags: { scope: "drive.google.refresh_persist" },
+        extra: { userId, accountId: account.id },
+      });
     }
   });
   return { client: oauth2, id: account.id, email: account.email };

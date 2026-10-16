@@ -257,6 +257,43 @@ describe("completeGoogleDriveLink", () => {
     expect(db.writes.linkedDriveAccount).toBeUndefined();
   });
 
+  it("a grant carrying more than asked (a Gmail scope) is stored, warned about and reported, scope names only", async () => {
+    const GMAIL = "https://www.googleapis.com/auth/gmail.readonly";
+    google.getToken.mockResolvedValue({
+      tokens: {
+        access_token: "ya29.access",
+        refresh_token: "1//refresh",
+        scope: `${GRANTED} ${GMAIL}`,
+      },
+    });
+    const { completeGoogleDriveLink } = await load();
+    expect(await completeGoogleDriveLink({ code: "abc", userId: "user-1" })).toBe("success");
+    expect(accounts()).toHaveLength(1);
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining(GMAIL));
+    expect(google.captureError).toHaveBeenCalledTimes(1);
+    const [, context] = google.captureError.mock.calls[0] as [unknown, Record<string, unknown>];
+    expect(context).toEqual({
+      tags: { scope: "drive.google.extra_scopes" },
+      extra: { userId: "user-1", unexpectedScopes: [GMAIL] },
+    });
+    expect(JSON.stringify(google.captureError.mock.calls)).not.toMatch(/ya29|1\/\/refresh/);
+  });
+
+  it("the expected scopes, `email` alias included, report nothing", async () => {
+    google.getToken.mockResolvedValue({
+      tokens: {
+        access_token: "ya29.access",
+        refresh_token: "1//r",
+        scope: `openid email ${DRIVE_FILE}`,
+      },
+    });
+    const { completeGoogleDriveLink, unexpectedGrantScopes } = await load();
+    expect(await completeGoogleDriveLink({ code: "abc", userId: "user-1" })).toBe("success");
+    expect(google.captureError).not.toHaveBeenCalled();
+    expect(unexpectedGrantScopes(GRANTED)).toEqual([]);
+    expect(unexpectedGrantScopes(undefined)).toEqual([]);
+  });
+
   it("lands the browser on /files with the outcome", async () => {
     const { driveLinkRedirect } = await load();
     expect(driveLinkRedirect("https://app.example.com", "scope-missing")).toBe(
@@ -330,6 +367,31 @@ describe("buildLinkedDriveClient", () => {
     buildLinkedDriveClient("user-1", row);
     await google.clients[0]?.listeners[0]?.({ access_token: "at-3", refresh_token: "rt-3" });
     expect(crypto.decryptToken(accounts()[0]?.refreshToken as string)).toBe("rt-3");
+  });
+
+  it("a refresh that cannot be saved is reported, with no token in it", async () => {
+    const { buildLinkedDriveClient, row } = await stored();
+    db = createFakeDb(
+      { linkedDriveAccount: [driveAccount({ ...row })] },
+      {
+        beforeUpdateMany: () => {
+          throw new Error("database unavailable");
+        },
+      },
+    );
+    dbHolder.current = db;
+    buildLinkedDriveClient("user-1", row);
+    await google.clients[0]?.listeners[0]?.({ access_token: "at-4", refresh_token: "rt-4" });
+    expect(google.captureError).toHaveBeenCalledTimes(1);
+    const [err, context] = google.captureError.mock.calls[0] as [Error, Record<string, unknown>];
+    expect(err.message).toBe("database unavailable");
+    expect(context).toEqual({
+      tags: { scope: "drive.google.refresh_persist" },
+      extra: { userId: "user-1", accountId: "acct-1" },
+    });
+    expect(JSON.stringify(google.captureError.mock.calls)).not.toMatch(
+      /at-4|rt-4|at-plain|rt-plain/,
+    );
   });
 });
 

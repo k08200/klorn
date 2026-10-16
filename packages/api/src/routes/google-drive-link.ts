@@ -5,7 +5,7 @@
  * the drive branch, the consent asks for drive.file and the identity scopes
  * only, and the result is a LinkedDriveAccount.
  *
- *   POST   /link           — start the consent (Pro-gated), returns { url }
+ *   POST   /link           — start the consent (requireEntitled), returns { url }
  *   GET    /accounts       — the user's Google Drive accounts (never a token)
  *   DELETE /accounts/:id   — unlink one, with every file indexed from it
  *   (the callback is routes/auth.ts's; it hands a drive state to
@@ -59,9 +59,10 @@ export function googleDriveLinkRoutes(opts: {
   return async function routes(app: FastifyInstance) {
     app.addHook("onRequest", darkRouteGate(opts.gate));
 
-    // POST /link — the Google consent for drive.file. Pro-gated like the
-    // calendar link (a founder question before D5b merges, recorded in the
-    // plan); the callback checks the plan again.
+    // POST /link — the Google consent for drive.file. Plan gate:
+    // requireEntitled, as link-calendar (default 2026-10-15; the founder may
+    // change it — open question, not yet answered). The callback checks the
+    // plan again.
     app.post(
       "/link",
       {
@@ -80,7 +81,7 @@ export function googleDriveLinkRoutes(opts: {
       },
     );
 
-    // GET /accounts — auth only, not Pro-gated: a downgraded user must still be
+    // GET /accounts — auth only, no requireEntitled: a downgraded user must still be
     // able to see an account in order to unlink it.
     app.get(
       "/accounts",

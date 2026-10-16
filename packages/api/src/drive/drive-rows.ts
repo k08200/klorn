@@ -352,7 +352,7 @@ export type DriveRowsClient = Pick<Prisma.TransactionClient, "driveFile">;
  * deletes them itself so the unlink states what it removes. A summary goes with
  * its file through its own cascading foreign key.
  */
-export async function deleteConnectedDriveRows(
+export async function deleteLinkedAccountDriveRows(
   client: DriveRowsClient,
   userId: string,
   provider: ConnectedDriveProvider,

@@ -20,7 +20,7 @@
 
 import { encryptToken } from "../crypto-tokens.js";
 import { INTERACTIVE_TX_OPTIONS, prisma } from "../db.js";
-import { type ConnectedDriveProvider, deleteConnectedDriveRows } from "./drive-rows.js";
+import { type ConnectedDriveProvider, deleteLinkedAccountDriveRows } from "./drive-rows.js";
 
 /** How many accounts of one provider one user may link (plan, D5 "Grant"). */
 export const MAX_DRIVE_ACCOUNTS_PER_PROVIDER = 5;
@@ -230,7 +230,7 @@ export async function unlinkDriveAccount(
       select: { id: true },
     });
     if (!account) return false;
-    await deleteConnectedDriveRows(tx, userId, provider, account.id);
+    await deleteLinkedAccountDriveRows(tx, userId, provider, account.id);
     // The count decides, not the lookup: a concurrent unlink that got here
     // second deleted nothing and answers "not found".
     const removed = await tx.linkedDriveAccount.deleteMany({

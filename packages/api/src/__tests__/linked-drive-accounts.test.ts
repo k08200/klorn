@@ -308,6 +308,30 @@ describe("unlinkDriveAccount", () => {
     expect(db.tables.driveFile).toHaveLength(5);
   });
 
+  it("is atomic: when the account delete fails, the account's rows come back", async () => {
+    // The fake client is built with rollbackOnError: a throwing interactive
+    // transaction restores every table to what it held when it began.
+    const accounts = db.model("linkedDriveAccount");
+    const failing = vi
+      .spyOn(accounts, "deleteMany")
+      .mockRejectedValueOnce(new Error("account delete failed"));
+    await expect(unlinkDriveAccount("user-1", "GOOGLE", "acct-1")).rejects.toThrow(
+      "account delete failed",
+    );
+    expect(failing).toHaveBeenCalledTimes(1);
+    // The rows were deleted inside the transaction, before the account...
+    expect(db.writes.driveFile).toEqual([
+      { op: "deleteMany", where: { userId: "user-1", provider: "GOOGLE", sourceKey: "acct-1" } },
+    ]);
+    // ...and the failure restored them, with the account.
+    expect(db.tables.driveFile?.map((r) => r.id)).toEqual(["f1", "f2", "f3", "f4", "k1"]);
+    expect(db.tables.linkedDriveAccount?.map((r) => r.id)).toEqual([
+      "acct-1",
+      "acct-2",
+      "acct-other",
+    ]);
+  });
+
   it("a second unlink of the same account answers false", async () => {
     expect(await unlinkDriveAccount("user-1", "GOOGLE", "acct-1")).toBe(true);
     expect(await unlinkDriveAccount("user-1", "GOOGLE", "acct-1")).toBe(false);
