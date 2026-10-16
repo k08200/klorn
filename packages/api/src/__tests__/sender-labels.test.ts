@@ -25,6 +25,7 @@ vi.mock("../db.js", () => ({
 }));
 
 import {
+  labelableDomain,
   normalizeSenderLabelKey,
   senderLabelsFor,
   USER_LABEL_CATEGORIES,
@@ -101,6 +102,22 @@ describe("senderLabelsFor", () => {
     expect(state.findManyCalls).toHaveLength(0);
     state.rows = [{ scope: "sender", value: "a@b.com", category: "vip-from-old-build" }];
     expect((await senderLabelsFor("user-1", ["a@b.com"])).size).toBe(0);
+  });
+});
+
+describe("labelableDomain", () => {
+  it("is the address's domain, by the rule PUT applies", () => {
+    expect(labelableDomain("Ada@Example.COM")).toBe("example.com");
+  });
+
+  it("is null for a public mail provider, which PUT refuses", () => {
+    expect(labelableDomain("ada@gmail.com")).toBeNull();
+    expect(labelableDomain("ada@naver.com")).toBeNull();
+  });
+
+  it("is null when there is no domain to read", () => {
+    expect(labelableDomain("ada")).toBeNull();
+    expect(labelableDomain("ada@")).toBeNull();
   });
 });
 

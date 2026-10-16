@@ -9,6 +9,7 @@ import type {
   EmailLaneCountsResponse,
   EmailReaderContextResponse,
   LiveTier,
+  ReaderSenderLabel,
 } from "@klorn/contract";
 import type { FastifyInstance } from "fastify";
 import { getUserId } from "../auth.js";
@@ -29,7 +30,7 @@ import { resolveTierReason } from "../judge/tier-reason-strings.js";
 import { toLiveTier } from "../judge/tiers.js";
 import { isInternalSender } from "../mail/company-domains.js";
 import { hasAnyMailSource } from "../mail/mail-source.js";
-import { senderLabelsFor } from "../mail/sender-labels.js";
+import { labelableDomain, senderLabelEntriesFor } from "../mail/sender-labels.js";
 import { senderEmail } from "../notify/notification-format.js";
 import { getUserNotificationLanguage } from "../notify/notification-strings.js";
 import { captureError } from "../sentry.js";
@@ -89,6 +90,7 @@ function demoReaderContext(
     linkedInboxAccountId: null,
     firstContact: false,
     repliedCount: null,
+    senderLabel: null,
     newerId: view[at - 1]?.id ?? null,
     olderId: view[at + 1]?.id ?? null,
   };
@@ -97,19 +99,25 @@ function demoReaderContext(
 interface SenderFacts {
   firstContact: boolean;
   repliedCount: number | null;
+  senderLabel: ReaderSenderLabel | null;
 }
 
 /**
  * The relationship facts the reader header states. Recorded facts only, and
  * fail-open like the row chips (firewall.ts): a failed lookup claims nothing —
  * a wrong "first contact" on a ten-year colleague is worse than no label.
+ * The sender label's targets (address, domain) need no lookup, so a failed
+ * lookup still lets the user correct the label; it only claims no current one.
  */
 async function senderFactsFor(
   userId: string,
   email: { from: string; category: string | null; labels: string[] },
 ): Promise<SenderFacts> {
-  const address = senderEmail(email.from);
-  if (!address) return { firstContact: false, repliedCount: null };
+  const address = senderEmail(email.from).toLowerCase();
+  if (!address) {
+    return { firstContact: false, repliedCount: null, senderLabel: null };
+  }
+  const target = { address, domain: labelableDomain(address) };
   try {
     const [engagement, owner, labels] = await Promise.all([
       prisma.contactEngagementScore.findFirst({
@@ -117,20 +125,33 @@ async function senderFactsFor(
         select: { outboundCount: true },
       }),
       prisma.user.findUnique({ where: { id: userId }, select: { companyDomains: true } }),
-      senderLabelsFor(userId, [address]),
+      senderLabelEntriesFor(userId, [address]),
     ]);
     const repliedCount = engagement?.outboundCount ?? 0;
+    const userLabel = labels.get(address) ?? null;
     const signal = rowSignalFor({
-      userLabel: labels.get(address) ?? null,
+      userLabel: userLabel?.category ?? null,
       internal: isInternalSender(email.from, owner?.companyDomains ?? []),
       judgeCategory: email.category,
       category: gmailCategoryOf(email.labels),
       repliedCount,
     });
-    return { firstContact: signal?.kind === "first", repliedCount };
+    return {
+      firstContact: signal?.kind === "first",
+      repliedCount,
+      senderLabel: {
+        ...target,
+        current: signal?.kind === "category" ? signal.category : null,
+        correction: userLabel?.scope ?? null,
+      },
+    };
   } catch (err) {
     captureError(err, { tags: { scope: "email.readerContext.senderFacts" }, extra: { userId } });
-    return { firstContact: false, repliedCount: null };
+    return {
+      firstContact: false,
+      repliedCount: null,
+      senderLabel: { ...target, current: null, correction: null },
+    };
   }
 }
 

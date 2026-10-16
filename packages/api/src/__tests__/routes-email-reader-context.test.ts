@@ -201,6 +201,74 @@ describe("GET /api/email/:id/reader-context — sender facts", () => {
   });
 });
 
+describe("GET /api/email/:id/reader-context — sender label correction target", () => {
+  it("names the address and domain a correction would target, decided by the server", async () => {
+    const body = (await get("/api/email/e5/reader-context")).json();
+    expect(body.senderLabel).toEqual({
+      address: "ada@example.com",
+      domain: "example.com",
+      current: null,
+      correction: null,
+    });
+  });
+
+  it("a public mail provider has no domain to correct — only the address", async () => {
+    emailFindFirst.mockResolvedValue({ ...MAIL, from: "Ada <ada@gmail.com>" });
+    const body = (await get("/api/email/e5/reader-context")).json();
+    expect(body.senderLabel).toMatchObject({ address: "ada@gmail.com", domain: null });
+  });
+
+  it("reports the user's own address correction, and its scope", async () => {
+    senderLabelFindMany.mockResolvedValue([
+      { scope: "sender", value: "ada@example.com", category: "customer" },
+      { scope: "domain", value: "example.com", category: "investor" },
+    ]);
+    const body = (await get("/api/email/e5/reader-context")).json();
+    expect(body.senderLabel).toMatchObject({ current: "customer", correction: "sender" });
+  });
+
+  it("a domain correction applies when the address has none", async () => {
+    senderLabelFindMany.mockResolvedValue([
+      { scope: "domain", value: "example.com", category: "investor" },
+    ]);
+    const body = (await get("/api/email/e5/reader-context")).json();
+    expect(body.senderLabel).toMatchObject({ current: "investor", correction: "domain" });
+  });
+
+  it("the lookup is scoped to the caller", async () => {
+    await get("/api/email/e5/reader-context");
+    expect(senderLabelFindMany.mock.calls[0]).toEqual([
+      expect.objectContaining({ where: expect.objectContaining({ userId: "user-1" }) }),
+    ]);
+  });
+
+  it("without a correction, the current label is the derived one the row shows", async () => {
+    emailFindFirst.mockResolvedValue({ ...MAIL, labels: ["INBOX", "CATEGORY_PROMOTIONS"] });
+    const body = (await get("/api/email/e5/reader-context")).json();
+    expect(body.senderLabel).toMatchObject({ current: "promotions", correction: null });
+  });
+
+  it("a From header with no address offers nothing to correct", async () => {
+    emailFindFirst.mockResolvedValue({ ...MAIL, from: "Mailer Daemon" });
+    expect((await get("/api/email/e5/reader-context")).json().senderLabel).toBeNull();
+  });
+
+  it("fails open: a failed lookup still names the target but claims no label", async () => {
+    senderLabelFindMany.mockRejectedValue(new Error("db down"));
+    const body = (await get("/api/email/e5/reader-context")).json();
+    expect(body.senderLabel).toEqual({
+      address: "ada@example.com",
+      domain: "example.com",
+      current: null,
+      correction: null,
+    });
+  });
+
+  it("demo mail offers no correction", async () => {
+    expect((await get("/api/email/demo-2/reader-context")).json().senderLabel).toBeNull();
+  });
+});
+
 describe("GET /api/email/:id/reader-context — previous / next in the list view", () => {
   it("returns the mail just above and just below, in the list's own order", async () => {
     neighbours("e4", "e6");

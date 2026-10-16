@@ -154,6 +154,37 @@ export interface EmailLaneCountsResponse {
   needsConnection?: true;
 }
 
+/** A category the user can pin on a sender (`PUT /api/email/sender-labels`). */
+export type SenderLabelCategory =
+  | "internal"
+  | "customer"
+  | "investor"
+  | "system"
+  | "billing"
+  | "promotions";
+
+/** What a sender label covers: one address, or everyone at a domain. */
+export type SenderLabelScope = "sender" | "domain";
+
+/** Every category a row's relationship label can show (RowSignalWire). */
+export type SenderLabelShown = SenderLabelCategory | "social" | "updates" | "forums";
+
+/**
+ * The reader's sender label: what a correction would target and what the
+ * row shows now. The server derives `address` and `domain` — a client never
+ * builds the domain itself.
+ */
+export interface ReaderSenderLabel {
+  /** The lowercase address a "this address" correction targets. */
+  address: string;
+  /** The domain a "whole domain" correction targets; null for a public mail provider. */
+  domain: string | null;
+  /** The relationship label the row shows; null when it shows none. */
+  current: SenderLabelShown | null;
+  /** Which of the user's own corrections set `current`; null = derived from evidence. */
+  correction: SenderLabelScope | null;
+}
+
 /**
  * `GET /api/email/:id/reader-context?tier=&inbox=&filter=&search=` — what the
  * Mail v2 reader header shows beyond the mail itself (MAIL_V2): the lane and
@@ -174,6 +205,8 @@ export interface EmailReaderContextResponse {
   firstContact: boolean;
   /** How many times the user has written to this sender; null when unknown. */
   repliedCount: number | null;
+  /** The sender label and its correction targets; null when the From has no address (or demo mail). */
+  senderLabel: ReaderSenderLabel | null;
   /** The mail just above this one in that view (newer); null at the top. */
   newerId: string | null;
   /** The mail just below this one in that view (older); null at the end. */

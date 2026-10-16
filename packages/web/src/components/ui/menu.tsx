@@ -65,6 +65,8 @@ interface MenuProps {
   side?: "bottom" | "top";
   /** Marks the chip as holding a non-default choice. */
   active?: boolean;
+  /** A long list: cap the popover's height and scroll inside it. */
+  scroll?: boolean;
   disabled?: boolean;
   className?: string;
 }
@@ -172,6 +174,7 @@ export function Menu({
   align = "start",
   side = "bottom",
   active = false,
+  scroll = false,
   disabled = false,
   className = "",
 }: MenuProps) {
@@ -290,7 +293,7 @@ export function Menu({
           onKeyDown={onMenuKeyDown}
           className={`absolute z-30 w-max min-w-56 max-w-[min(20rem,calc(100vw-2rem))] rounded-card border border-line bg-surface-elevated p-1 shadow-l2 ${
             side === "top" ? "bottom-full mb-1" : "top-full mt-1"
-          } ${ALIGN_CLASS[align]}`}
+          } ${scroll ? "max-h-[min(32rem,70dvh)] overflow-y-auto overscroll-contain" : ""} ${ALIGN_CLASS[align]}`}
         >
           {sections.map((section, index) => (
             // biome-ignore lint/a11y/useSemanticElements: a menu's groups are role="group" by the ARIA menu pattern; <fieldset> is for form controls

@@ -31,7 +31,9 @@ import { UNDO_NOTICE_SECONDS, type useLaneMove } from "../../use-lane-move";
 import type { EmailDetail, UndoNotice } from "../types";
 import { ReaderActionsRow, ReaderBottomBar } from "./reader-actions";
 import { type ReaderFacts, ReaderHeader } from "./reader-header";
+import { SenderLabelMenu } from "./sender-label-menu";
 import type { ReaderContext } from "./use-reader-context";
+import { useSenderLabelCorrection } from "./use-sender-label";
 
 const DEFAULT_TIME_ZONE = "Asia/Seoul";
 
@@ -193,6 +195,7 @@ export function ReaderV2(props: ReaderV2Props) {
   // it in the new mail's lane and neighbours.
   const current = email && (email.id === emailId || email.gmailId === emailId) ? email : null;
   const tier = reader.context?.tier ?? null;
+  const senderLabel = useSenderLabelCorrection(emailId, reader);
   const moveLane = (lane: LiveTier) => {
     if (current && tier) {
       laneMove.move({ id: current.id, subject: current.subject || null, tier }, lane);
@@ -255,6 +258,11 @@ export function ReaderV2(props: ReaderV2Props) {
             facts={props.facts}
             locale={locale}
             timeZone={user?.timezone || DEFAULT_TIME_ZONE}
+            senderLabel={
+              senderLabel.label && (
+                <SenderLabelMenu label={senderLabel.label} onCorrect={senderLabel.correct} />
+              )
+            }
           />
           <ReaderActionsRow {...actions} />
 

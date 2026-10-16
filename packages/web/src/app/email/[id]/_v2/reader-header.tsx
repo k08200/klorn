@@ -8,6 +8,7 @@
  */
 
 import type { EmailReaderContextResponse } from "@klorn/contract";
+import type { ReactNode } from "react";
 import { LaneChip } from "../../../../components/ui/lane-chip";
 import { Skeleton } from "../../../../components/ui/skeleton";
 import { SourceBadge } from "../../../../components/ui/source-badge";
@@ -32,6 +33,8 @@ interface ReaderHeaderProps {
   facts: ReaderFacts;
   locale: string;
   timeZone: string;
+  /** The sender label correction menu, beside the lane; absent when there is nothing to label. */
+  senderLabel?: ReactNode;
 }
 
 function formatWhen(iso: string, locale: string, timeZone: string): string {
@@ -67,7 +70,7 @@ function useFactLabels({ email, context, facts }: ReaderHeaderProps): string[] {
   ].filter((label): label is string => Boolean(label));
 }
 
-function LaneLine({ context, contextPending }: ReaderHeaderProps) {
+function LaneStatus({ context, contextPending }: ReaderHeaderProps) {
   const { t } = useT();
   if (!context) {
     // Still loading, or the context request failed: no lane is claimed.
@@ -84,7 +87,7 @@ function LaneLine({ context, contextPending }: ReaderHeaderProps) {
     );
   }
   return (
-    <div className="flex min-w-0 items-start gap-2">
+    <div className="flex min-w-0 flex-1 items-start gap-2">
       <LaneChip tier={context.tier} className="mt-0.5" />
       {context.tierReason && (
         // One line until opened: the summary is the reason itself.
@@ -95,6 +98,17 @@ function LaneLine({ context, contextPending }: ReaderHeaderProps) {
           </summary>
         </details>
       )}
+    </div>
+  );
+}
+
+/** The lane and why, with the sender label correction beside it. */
+function LaneLine(props: ReaderHeaderProps) {
+  if (!props.senderLabel) return <LaneStatus {...props} />;
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      <LaneStatus {...props} />
+      {props.senderLabel}
     </div>
   );
 }

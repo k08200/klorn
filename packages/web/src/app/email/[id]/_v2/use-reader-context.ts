@@ -9,7 +9,12 @@
  * therefore silent, while the flag is off.
  */
 
-import type { EmailReaderContextResponse, InboxesResponse, LiveTier } from "@klorn/contract";
+import type {
+  EmailReaderContextResponse,
+  InboxesResponse,
+  LiveTier,
+  ReaderSenderLabel,
+} from "@klorn/contract";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../../../../lib/api";
@@ -80,6 +85,18 @@ export function useReaderContext(emailId: string | undefined, enabled: boolean) 
     [queryClient, key, emailId],
   );
 
+  /** Optimistic sender label (correct, rollback) for the mail on screen. */
+  const setSenderLabel = useCallback(
+    (targetId: string, senderLabel: ReaderSenderLabel | null) => {
+      if (targetId !== emailId) return;
+      void queryClient.cancelQueries({ queryKey: key }, { revert: false });
+      queryClient.setQueryData<EmailReaderContextResponse>(key, (prev) =>
+        prev ? { ...prev, senderLabel } : prev,
+      );
+    },
+    [queryClient, key, emailId],
+  );
+
   const context = query.data ?? null;
   return {
     view,
@@ -88,6 +105,7 @@ export function useReaderContext(emailId: string | undefined, enabled: boolean) 
     pending: active && query.isPending,
     account: context ? rowAccount(context, accounts) : null,
     applyLane,
+    setSenderLabel,
   };
 }
 
