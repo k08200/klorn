@@ -16,7 +16,7 @@ extension PreviewRender {
                 "from":"Sarah Kim <sarah.kim@northwind-partners.com>","receivedAt":"2026-07-29T08:12:00Z"},"hashStale":false},
       {"id":"p2","source":"email","sourceId":"e2","type":"email","title":"Invoice overdue",
        "tier":"PUSH","tierReason":"Payment due today","priority":8,"surfacedAt":"2026-07-29T07:40:00Z",
-       "email":{"emailDbId":"d2","source":{"provider":"OUTLOOK","accountId":"li-2","label":"side-project@outlook.example"},
+       "email":{"emailDbId":"d2","source":{"provider":"GOOGLE","accountId":null,"label":"you@company.example"},
                 "unread":true,"hasAttachment":false,"subject":"Invoice #4821 is overdue",
                 "from":"billing@vendor.io","receivedAt":"2026-07-29T07:40:00Z"},"hashStale":false},
       {"id":"p3","source":"email","sourceId":"e3","type":"email","title":"Sign-off needed",
@@ -60,7 +60,7 @@ extension PreviewRender {
                 "receivedAt":"2026-07-29T05:12:00Z","signal":{"kind":"category","category":"internal"}},"hashStale":false},
       {"id":"q4","source":"email","sourceId":"e9","type":"email","title":"Customer question",
        "tier":"QUEUE","tierReason":"Customer question, not urgent","priority":3,"surfacedAt":"2026-07-29T04:44:00Z",
-       "email":{"emailDbId":"d9","source":{"provider":"OUTLOOK","accountId":"li-2","label":"side-project@outlook.example"},
+       "email":{"emailDbId":"d9","source":{"provider":"NAVER","accountId":"li-1","label":"you@naver.example"},
                 "unread":true,"hasAttachment":false,"subject":"Question about export limits on the team plan, and whether the cap resets with the billing month or the calendar month",
                 "from":"Lena Fischer <lena@brightlabs.example>","snippet":"We hit the cap twice last week.",
                 "receivedAt":"2026-07-29T04:44:00Z","signal":{"kind":"category","category":"customer"}},"hashStale":false},
@@ -123,14 +123,13 @@ extension PreviewRender {
        {"id":"t3","title":"Design review","startTime":"2026-07-29T10:00:00Z","endTime":"2026-07-29T11:00:00Z",
         "location":null,"meetingLink":null,"allDay":false},
        {"id":"t4","title":"Partner call","startTime":"2026-07-29T11:30:00Z","endTime":"2026-07-29T12:00:00Z",
-        "location":null,"meetingLink":null,"allDay":false,"readOnly":true,"sourceLabel":"you@naver.example"}],
+        "location":null,"meetingLink":null,"allDay":false}],
      "nextEvent":null}
     """
 
     private static let navInboxesJSON = """
     [{"id":null,"email":"you@company.example","kind":"primary","needsReconnect":false,"provider":"GOOGLE","purpose":"work"},
      {"id":"li-1","email":"you@naver.example","kind":"linked","needsReconnect":false,"provider":"NAVER","purpose":"personal"},
-     {"id":"li-2","email":"side-project@outlook.example","kind":"linked","needsReconnect":true,"provider":"MICROSOFT","purpose":"mixed"},
      {"id":"li-3","email":"you@icloud.example","kind":"linked","needsReconnect":false,"provider":"ICLOUD","purpose":"personal"}]
     """
 
