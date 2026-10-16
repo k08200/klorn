@@ -116,6 +116,10 @@ async function extractAttachmentsFromPayload(
     if (!filename) continue;
 
     const gmailAttachmentId = part.body?.attachmentId || `${messageId}:${index}:${filename}`;
+    // Gmail re-mints attachmentId on every messages.get; partId is immutable
+    // per message, so it is the identity the upsert keys on. The root part's
+    // partId is "", and the walk order is fixed, so the position is stable too.
+    const partKey = part.partId || `index:${index}`;
     const size = typeof part.body?.size === "number" ? part.body.size : null;
 
     let contentText: string | null = null;
@@ -145,6 +149,7 @@ async function extractAttachmentsFromPayload(
 
     attachments.push({
       gmailAttachmentId,
+      partKey,
       filename,
       mimeType,
       size,

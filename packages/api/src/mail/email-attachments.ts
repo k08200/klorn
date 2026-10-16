@@ -9,7 +9,12 @@ const MAX_STORED_TEXT = 24_000;
 const MAX_ANALYSIS_TEXT = 8_000;
 
 export interface RawEmailAttachment {
+  /// Fetch handle for attachments.get. Gmail mints a new one on every
+  /// messages.get, so it never identifies a part across syncs.
   gmailAttachmentId: string;
+  /// The part's identity within its message (Gmail's immutable MIME partId).
+  /// The upsert keys on (emailId, partKey).
+  partKey: string;
   filename: string;
   mimeType: string;
   size?: number | null;
@@ -261,6 +266,54 @@ export async function listCandidateProfilesByEmail(
   return out;
 }
 
+/// Postgres unique_violation, as Prisma surfaces it from a raw query (P2010
+/// wrapping SQLSTATE 23505) or from a model call (P2002).
+export function isUniqueViolation(err: unknown): boolean {
+  if (typeof err !== "object" || err === null) return false;
+  const { code, meta } = err as { code?: unknown; meta?: { code?: unknown } };
+  return code === "P2002" || (code === "P2010" && meta?.code === "23505");
+}
+
+/// Rows synced before 2026-10-16 carry no partKey, and a message re-synced
+/// under the old key can hold hundreds of copies of one file. Before inserting,
+/// hand the part's key to ONE of them: the copy holding this exact handle, else
+/// the summarised one, else the oldest. The rest stay for the one-off cleanup.
+/// A concurrent sync that adopted first makes this a no-op (outer partKey check)
+/// or, at worst, a unique violation, after which the insert below updates the
+/// row that sync adopted.
+async function adoptLegacyCopy(
+  userId: string,
+  emailId: string,
+  attachment: RawEmailAttachment,
+): Promise<void> {
+  const size = attachment.size ?? null;
+  const contentId = attachment.contentId ?? null;
+  try {
+    await prisma.$executeRaw`
+      UPDATE "EmailAttachment" SET "partKey" = ${attachment.partKey}
+      WHERE "partKey" IS NULL
+        AND "id" = (
+          SELECT "id" FROM "EmailAttachment"
+          WHERE "emailId" = ${emailId} AND "userId" = ${userId}
+            AND "partKey" IS NULL
+            AND "filename" = ${attachment.filename}
+            AND "mimeType" = ${attachment.mimeType}
+            AND "size" IS NOT DISTINCT FROM ${size}::integer
+            AND ("contentId" IS NULL OR "contentId" IS NOT DISTINCT FROM ${contentId}::text)
+          ORDER BY ("gmailAttachmentId" = ${attachment.gmailAttachmentId}) DESC,
+            ("summary" IS NOT NULL) DESC, "createdAt" ASC, "id" ASC
+          LIMIT 1
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM "EmailAttachment"
+          WHERE "emailId" = ${emailId} AND "partKey" = ${attachment.partKey}
+        )
+    `;
+  } catch (err) {
+    if (!isUniqueViolation(err)) throw err;
+  }
+}
+
 export async function upsertEmailAttachments(input: {
   userId: string;
   emailId: string;
@@ -268,21 +321,26 @@ export async function upsertEmailAttachments(input: {
 }): Promise<void> {
   if (typeof prisma.$executeRaw !== "function") return;
   for (const attachment of input.attachments) {
+    await adoptLegacyCopy(input.userId, input.emailId, attachment);
     const id = crypto.randomUUID();
     const contentText = attachment.contentText?.trim()
       ? attachment.contentText.slice(0, MAX_STORED_TEXT)
       : null;
+    // Keyed on the part, not the handle: a re-fetch updates the one row and
+    // refreshes the handle, since attachments.get is called with the latest.
     await prisma.$executeRaw`
       INSERT INTO "EmailAttachment" (
-        "id", "userId", "emailId", "gmailAttachmentId", "filename", "mimeType",
+        "id", "userId", "emailId", "gmailAttachmentId", "partKey", "filename", "mimeType",
         "size", "contentId", "contentText", "analysisStatus", "updatedAt"
       )
       VALUES (
         ${id}, ${input.userId}, ${input.emailId}, ${attachment.gmailAttachmentId},
-        ${attachment.filename}, ${attachment.mimeType}, ${attachment.size ?? null},
-        ${attachment.contentId ?? null}, ${contentText}, ${contentText ? "PENDING" : "UNSUPPORTED"}, NOW()
+        ${attachment.partKey}, ${attachment.filename}, ${attachment.mimeType},
+        ${attachment.size ?? null}, ${attachment.contentId ?? null}, ${contentText},
+        ${contentText ? "PENDING" : "UNSUPPORTED"}, NOW()
       )
-      ON CONFLICT ("emailId", "gmailAttachmentId") DO UPDATE SET
+      ON CONFLICT ("emailId", "partKey") DO UPDATE SET
+        "gmailAttachmentId" = EXCLUDED."gmailAttachmentId",
         "filename" = EXCLUDED."filename",
         "mimeType" = EXCLUDED."mimeType",
         "size" = EXCLUDED."size",

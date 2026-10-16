@@ -1503,7 +1503,13 @@ model EmailAttachment {
   user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   emailId           String
   email             EmailMessage @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  // The fetch handle passed to attachments.get. Gmail mints a fresh one on
+  // every messages.get, so it is NOT an identity (see partKey).
   gmailAttachmentId String
+  // The part's identity within its message: Gmail's MIME partId, immutable per
+  // message. Null only on rows synced before 2026-10-16; the next sync of that
+  // message adopts one of them (mail/email-attachments.ts).
+  partKey           String?
   filename          String
   mimeType          String
   // MIME Content-ID for inline (cid:) images, captured at sync so the
@@ -1523,7 +1529,10 @@ model EmailAttachment {
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @default(now()) @updatedAt
 
+  // Legacy key, kept so a rollback's ON CONFLICT still has its arbiter. Drop it
+  // once the pre-2026-10-16 duplicate copies are gone.
   @@unique([emailId, gmailAttachmentId])
+  @@unique([emailId, partKey])
   @@index([userId, createdAt])
   @@index([emailId])
   @@index([userId, category])
