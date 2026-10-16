@@ -12,7 +12,7 @@
  * follows the language of the mail it answers).
  */
 
-import { extractEmailAddress } from "../mail/email-address.js";
+import { boundedFromValue, extractEmailAddress } from "../mail/email-address.js";
 import { notificationCopy } from "./notification-strings.js";
 
 interface ToolArgs {
@@ -32,9 +32,10 @@ interface ToolArgs {
 /** Strip "Display Name <a@b.com>" → "Display Name", or just trim email. */
 export function senderName(raw: string | null | undefined, language?: string | null): string {
   if (!raw) return notificationCopy(language).unknownSender;
-  const match = raw.match(/^([^<]+?)\s*</);
+  const head = boundedFromValue(raw);
+  const match = head.match(/^([^<]+?)\s*</);
   if (match?.[1]) return match[1].trim().slice(0, 30);
-  return raw.replace(/[<>]/g, "").trim().slice(0, 30);
+  return head.replace(/[<>]/g, "").trim().slice(0, 30);
 }
 
 /**

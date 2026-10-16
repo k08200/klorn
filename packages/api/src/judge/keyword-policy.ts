@@ -13,7 +13,7 @@
  * editable, reviewable surface instead of literals scattered through the judge.
  */
 
-import { extractEmailAddress } from "../mail/email-address.js";
+import { boundedFromValue, extractEmailAddress } from "../mail/email-address.js";
 import type { ClassifiableEmail } from "./email-classifier.js";
 import type { TierFeatures } from "./tier-policy.js";
 
@@ -111,7 +111,7 @@ const TRANSACTIONAL_SENDER_RE =
 
 /** True for an automated shipping/order/delivery sender (see regex above). */
 export function isTransactionalSender(from: string): boolean {
-  return TRANSACTIONAL_SENDER_RE.test(from);
+  return TRANSACTIONAL_SENDER_RE.test(boundedFromValue(from));
 }
 
 /**

@@ -141,6 +141,19 @@ export function displayNameOf(value: string): string | null {
   return name || null;
 }
 
+/**
+ * Longer From values are never real (production's longest on 2026-10-16: 115
+ * characters). Regexes that read a From value see at most this much, so a
+ * sender-chosen run cannot make them backtrack for seconds (80k characters
+ * took 5-7 s through several of them).
+ */
+export const MAX_FROM_REGEX_CHARS = 1000;
+
+/** `value`, cut to MAX_FROM_REGEX_CHARS, for regexes that read a From value. */
+export function boundedFromValue(value: string): string {
+  return value.length > MAX_FROM_REGEX_CHARS ? value.slice(0, MAX_FROM_REGEX_CHARS) : value;
+}
+
 /** The mailbox of a header value, lowercased (see parseAddress). */
 export function extractEmailAddress(value: string): string {
   return parseAddress(value).toLowerCase();

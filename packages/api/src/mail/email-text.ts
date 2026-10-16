@@ -37,14 +37,34 @@ function decodeEntities(text: string): string {
 // a multi-MB spam HTML must not stall the server on every read. 500KB keeps
 // every legitimate email intact.
 const MAX_HTML_INPUT = 500_000;
+// sanitize-html's parser (htmlparser2) keeps open tags with Array#unshift, so
+// its cost grows with the square of the nesting depth: "<b>" x 166k, under
+// MAX_HTML_INPUT, took 8.3 s (2026-10-16). Bounding the tag count bounds the
+// depth. Production's most tag-heavy stored body had 5,780 '<' (p99.9 4,156).
+export const MAX_SANITIZE_TAGS = 20_000;
+
+/**
+ * The part of `html` sanitize-html may see: at most MAX_HTML_INPUT characters,
+ * cut right before the tag past MAX_SANITIZE_TAGS. Linear (indexOf only).
+ * Exported for the test.
+ */
+export function boundSanitizeInput(html: string): string {
+  const capped = html.length > MAX_HTML_INPUT ? html.slice(0, MAX_HTML_INPUT) : html;
+  let at = -1;
+  for (let tags = 0; tags < MAX_SANITIZE_TAGS; tags++) {
+    at = capped.indexOf("<", at + 1);
+    if (at === -1) return capped;
+  }
+  const next = capped.indexOf("<", at + 1);
+  return next === -1 ? capped : capped.slice(0, next);
+}
 
 export function htmlToPlainText(html: string): string {
   if (!html || !html.trim()) return "";
 
   // Insert line breaks after block-level closes and <br> so paragraphs don't
   // collapse into one blob. Tags themselves are stripped by sanitize-html.
-  const withBreaks = html
-    .slice(0, MAX_HTML_INPUT)
+  const withBreaks = boundSanitizeInput(html)
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/(p|div|li|tr|h[1-6]|blockquote)\s*>/gi, "$&\n");
 
@@ -203,7 +223,7 @@ export function coercePlainBody(body: string | null, htmlBody: string | null): s
  */
 export function renderableEmailHtml(html: string | null | undefined): string | null {
   if (!html || !html.trim()) return null;
-  const out = sanitizeHtml(html.slice(0, MAX_HTML_INPUT), {
+  const out = sanitizeHtml(boundSanitizeInput(html), {
     allowedTags: [
       "a",
       "b",
