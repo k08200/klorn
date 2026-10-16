@@ -90,7 +90,9 @@ describe("database size alarm", () => {
     const status = await runDbSizeCheck(NOW);
 
     expect(status).toMatchObject({ level: "ok", bytes: 300 * MIB, limitBytes: 500 * MIB });
-    expect(state.queries).toEqual([expect.stringContaining("pg_database_size(current_database())")]);
+    expect(state.queries).toEqual([
+      expect.stringContaining("pg_database_size(current_database())"),
+    ]);
     expect(state.notifications).toEqual([]);
     expect(state.captured).toEqual([]);
   });

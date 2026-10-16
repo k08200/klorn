@@ -204,8 +204,7 @@ let lastJudgeFallbackCheckAt =
 // Database size alarm (ops/db-size-check.ts): hourly, same boot delay and the
 // same reason. Own constant; mirrors DB_SIZE_CHECK_INTERVAL_MS there.
 const DB_SIZE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
-let lastDbSizeCheckAt =
-  Date.now() - DB_SIZE_CHECK_INTERVAL_MS + JUDGE_FALLBACK_CHECK_BOOT_DELAY_MS;
+let lastDbSizeCheckAt = Date.now() - DB_SIZE_CHECK_INTERVAL_MS + JUDGE_FALLBACK_CHECK_BOOT_DELAY_MS;
 // Once-per-user-per-UTC-day Sentry alert for the "Gmail not connected"
 // per-tick skip: every tick warns to stdout only, which is how a dead
 // primary token ran silently for weeks (2026-08-10 diagnosis). One alert a

@@ -27,11 +27,8 @@
  *    new limit so the alarm tracks it.
  */
 
-import {
-  type AdminOpsDelivery,
-  createAdminOpsNotifications,
-} from "./admin-ops-notification.js";
 import { captureError } from "../sentry.js";
+import { type AdminOpsDelivery, createAdminOpsNotifications } from "./admin-ops-notification.js";
 
 export const DB_SIZE_DEFAULT_LIMIT_MB = 500;
 export const DB_SIZE_WARN_RATIO = 0.8;
