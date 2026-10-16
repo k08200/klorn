@@ -4,11 +4,9 @@ import {
   isAllowedNativeScheme,
   LINK_HANDOFF_COPY,
 } from "../auth/native-handoff.js";
-import { type LinkMarker, parkPendingLink } from "../auth/pending-links.js";
+import { allowPark, parkClientKey } from "../auth/park-throttle.js";
+import { LINK_FLOW_PATHS, type LinkMarker, parkPendingLink } from "../auth/pending-links.js";
 import { captureError } from "../sentry.js";
-
-/** Answer to a park refused because the store is full: visible, never a silent drop. */
-const LINKS_BUSY = "Too many account connections are in progress. Please try again in a minute.";
 
 /**
  * The account-link leg of an OAuth callback. The authorization code is NOT
@@ -20,11 +18,19 @@ const LINKS_BUSY = "Too many account connections are in progress. Please try aga
  *   page deep-links `<scheme>://link-complete?h=<handle>` to the app.
  * - Web: a 302 to `${webUrl}/link/complete#h=<handle>`. The fragment keeps the
  *   handle out of server logs and the Referer header.
+ * - Refused (this client parked too often, or the store is full): a 302 to the
+ *   flow's own failure path, which the web already shows as "couldn't connect";
+ *   never a raw JSON page on the API origin.
  */
 export function handOffAccountLink(
   reply: FastifyReply,
   link: { userId: string; marker: LinkMarker; code: string; appScheme?: unknown; webUrl: string },
 ): FastifyReply {
+  const failed = `${link.webUrl}${LINK_FLOW_PATHS[link.marker].failed}`;
+  if (!allowPark(parkClientKey(reply.request))) {
+    console.warn(`[LINK] park throttle hit; refused a ${link.marker} park`);
+    return reply.redirect(failed);
+  }
   const appScheme = isAllowedNativeScheme(link.appScheme) ? link.appScheme : undefined;
   const handle = parkPendingLink({
     userId: link.userId,
@@ -38,7 +44,7 @@ export function handOffAccountLink(
       tags: { scope: "auth.link.park_full" },
       extra: { marker: link.marker },
     });
-    return reply.code(503).send({ error: LINKS_BUSY });
+    return reply.redirect(failed);
   }
   // Either answer carries a live handle: never cache it.
   reply.header("Cache-Control", "no-store");

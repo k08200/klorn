@@ -1790,7 +1790,7 @@ const ja: Record<string, string> = {
   "linkComplete.expired":
     "この接続リンクは期限切れか、すでに使用されています。設定からやり直してください。",
   "linkComplete.failed": "接続を完了できませんでした。もう一度お試しください。",
-  "linkComplete.signInAction": "サインイン",
+  "linkComplete.signInToContinue": "サインインして続ける",
   "linkComplete.continue": "続ける",
 };
 

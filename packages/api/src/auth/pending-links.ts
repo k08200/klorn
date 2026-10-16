@@ -20,6 +20,13 @@ import crypto from "node:crypto";
 /** How long a parked code waits for its session. Normal completion takes seconds. */
 export const PENDING_LINK_TTL_MS = 5 * 60 * 1000;
 
+/**
+ * How often the one sweep timer drops expired entries. A single interval, not
+ * a timer per park: a per-park timeout closure kept each code alive for the
+ * whole TTL after it was taken or evicted, on a callback anyone can hit.
+ */
+export const PENDING_LINK_SWEEP_MS = 60 * 1000;
+
 /** Store ceiling: past it a new park is refused, never an unbounded map. */
 export const MAX_PENDING_LINKS = 500;
 
@@ -46,6 +53,21 @@ export const LINK_MARKERS = [
 
 export type LinkMarker = (typeof LINK_MARKERS)[number];
 
+/**
+ * Where each flow's client lands: the flow's page, and that page with the
+ * failure marker its result handlers already treat as "couldn't connect".
+ * Fixed constants, never request input.
+ */
+export const LINK_FLOW_PATHS: Readonly<
+  Record<LinkMarker, { readonly base: string; readonly failed: string }>
+> = {
+  __oauth_state__: { base: "/settings", failed: "/settings?google=failed" },
+  __link_calendar__: { base: "/calendar", failed: "/calendar?linked=failed" },
+  __link_inbox__: { base: "/settings", failed: "/settings?inbox=failed" },
+  __link_outlook__: { base: "/settings", failed: "/settings?inbox=failed" },
+  __link_outlook_calendar__: { base: "/calendar", failed: "/calendar?linked=failed" },
+};
+
 export interface PendingLink {
   readonly userId: string;
   readonly marker: LinkMarker;
@@ -62,7 +84,32 @@ export interface PendingLink {
 export type LinkFinish = { next: string } | { status: number; error: string };
 
 // Keyed by SHA-256 of the handle, so the store never holds a redeemable value.
+// The map is the ONLY holder of a parked code: deleting the entry (take, evict,
+// sweep) drops the last reference.
 const pending = new Map<string, PendingLink>();
+
+// Running only while something is parked; unref'd so it never holds the process.
+let sweepTimer: ReturnType<typeof setInterval> | null = null;
+
+function stopSweepWhenEmpty(): void {
+  if (pending.size > 0 || !sweepTimer) return;
+  clearInterval(sweepTimer);
+  sweepTimer = null;
+}
+
+function sweepExpired(): void {
+  const now = Date.now();
+  for (const [key, entry] of pending) {
+    if (entry.expiresAt <= now) pending.delete(key);
+  }
+  stopSweepWhenEmpty();
+}
+
+function ensureSweep(): void {
+  if (sweepTimer) return;
+  sweepTimer = setInterval(sweepExpired, PENDING_LINK_SWEEP_MS);
+  sweepTimer.unref?.();
+}
 
 function keyOf(handle: string): string {
   return crypto.createHash("sha256").update(handle).digest("hex");
@@ -76,6 +123,7 @@ function evictOldestOf(userId: string): void {
   for (const [key] of mine.slice(0, Math.max(0, mine.length - MAX_PENDING_LINKS_PER_USER + 1))) {
     pending.delete(key);
   }
+  stopSweepWhenEmpty();
 }
 
 /**
@@ -89,10 +137,7 @@ export function parkPendingLink(link: Omit<PendingLink, "expiresAt">): string | 
   const key = keyOf(handle);
   const entry: PendingLink = { ...link, expiresAt: Date.now() + PENDING_LINK_TTL_MS };
   pending.set(key, entry);
-  const timer = setTimeout(() => {
-    if (pending.get(key) === entry) pending.delete(key);
-  }, PENDING_LINK_TTL_MS);
-  timer.unref?.();
+  ensureSweep();
   return handle;
 }
 
@@ -107,6 +152,7 @@ export function takePendingLink(handle: unknown): PendingLink | null {
   const entry = pending.get(key);
   if (!entry) return null;
   pending.delete(key);
+  stopSweepWhenEmpty();
   return entry.expiresAt > Date.now() ? entry : null;
 }
 
@@ -120,4 +166,5 @@ export function _pendingLinkKeysForTests(): string[] {
 
 export function _resetPendingLinksForTests(): void {
   pending.clear();
+  stopSweepWhenEmpty();
 }

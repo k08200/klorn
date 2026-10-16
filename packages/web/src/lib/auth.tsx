@@ -5,6 +5,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from "rea
 import { apiFetch, clearStoredAuthToken, getStoredAuthToken, setStoredAuthToken } from "./api";
 import { storedAttribution } from "./attribution";
 import { forgetHome, homePath, LEGACY_HOME, rememberHome, signInDestination } from "./home";
+import { browserSessionStorage, hasPendingHandle } from "./link-complete";
 import { clearSensitiveStorage, revokeServerSession } from "./logout-cleanup";
 import { trackAppOpenOnce } from "./track";
 
@@ -270,15 +271,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw err;
       }
 
+      // A social sign-in cannot carry /login's `?next=` through the provider
+      // round trip, so an account link that is waiting in this tab for a
+      // session (/link/complete kept its handle) is resumed here instead.
+      const resumeLink = hasPendingHandle(browserSessionStorage(), Date.now());
       // Login is identity-only (incremental auth): a fresh Google sign-in has
       // no Gmail/Calendar grant yet, so syncing would just 403. Send those
       // users straight to onboarding's Connect step instead of bouncing
       // /inbox → AuthGuard → /onboarding.
       if (connected) {
         runInitialSync(newToken);
-        window.location.href = home;
+        window.location.href = resumeLink ? "/link/complete" : home;
       } else {
-        window.location.href = "/onboarding";
+        window.location.href = resumeLink ? "/link/complete" : "/onboarding";
       }
     },
     [runInitialSync],

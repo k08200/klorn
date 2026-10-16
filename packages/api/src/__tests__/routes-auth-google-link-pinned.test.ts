@@ -14,6 +14,7 @@
 
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { _resetParkThrottleForTests } from "../auth/park-throttle.js";
 import { signToken } from "../auth.js";
 
 const WEB = "https://app.example.com";
@@ -167,6 +168,8 @@ const throwOnExchange = () => m.getToken.mockRejectedValueOnce(new Error("ENOTFO
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Every pin parks from the same inject address: keep the per-IP park cap out of it.
+  _resetParkThrottleForTests();
   process.env.WEB_URL = WEB;
   m.getToken.mockResolvedValue(tokens());
   m.profile.mockResolvedValue({ email: "Linked@Example.com", verified_email: true, name: "L" });

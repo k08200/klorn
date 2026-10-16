@@ -7,9 +7,15 @@ import AuthStatus from "../../../components/auth/auth-status";
 import { API_BASE, getStoredAuthToken } from "../../../lib/api";
 import { useT } from "../../../lib/i18n";
 import {
+  browserSessionStorage,
+  clearPendingHandle,
+  hasPendingHandle,
+  LINK_COMPLETE_SIGN_IN_HREF,
   type LinkCompleteOutcome,
   linkCompleteOutcome,
   readLinkHandle,
+  storePendingHandle,
+  takePendingHandle,
 } from "../../../lib/link-complete";
 
 /**
@@ -18,6 +24,11 @@ import {
  * single-use handle in the fragment (`#h=…`, never sent to a server). This page
  * redeems it with THIS browser's session: the API finishes the link only when
  * that session belongs to the user who started the flow.
+ *
+ * No session here (a native shell opened consent in the system browser): the
+ * handle waits in this tab's sessionStorage while the user signs in through the
+ * normal web sign-in, which returns here (`/login?next=/link/complete`, or the
+ * pending-link check after a social sign-in), and is then redeemed once.
  */
 
 type MessageKey =
@@ -33,7 +44,10 @@ interface Action {
 
 type View = { kind: "working" } | { kind: "message"; key: MessageKey; action: Action | null };
 
-const SIGN_IN: Action = { href: "/login", label: "linkComplete.signInAction" };
+const SIGN_IN: Action = {
+  href: LINK_COMPLETE_SIGN_IN_HREF,
+  label: "linkComplete.signInToContinue",
+};
 
 function message(key: MessageKey, action: Action | null): View {
   return { kind: "message", key, action };
@@ -76,6 +90,26 @@ async function completeLink(
   return { status: res.status, body };
 }
 
+/**
+ * The handle to redeem now: a fresh one in the fragment wins (and replaces any
+ * stored one), else the one kept while this tab signed in. Null when there is
+ * no session to redeem it with: the handle is then kept for after sign-in.
+ */
+function handleToRedeem(token: string | null): { handle: string | null; waiting: boolean } {
+  const storage = browserSessionStorage();
+  const now = Date.now();
+  const fromHash = takeHandleFromLocation();
+  if (!token) {
+    if (fromHash) storePendingHandle(storage, fromHash, now);
+    return { handle: null, waiting: hasPendingHandle(storage, now) };
+  }
+  if (fromHash) {
+    clearPendingHandle(storage);
+    return { handle: fromHash, waiting: false };
+  }
+  return { handle: takePendingHandle(storage, now), waiting: false };
+}
+
 export default function LinkCompletePage() {
   const router = useRouter();
   const { t } = useT();
@@ -86,22 +120,23 @@ export default function LinkCompletePage() {
     if (handled.current) return;
     handled.current = true;
 
-    const handle = takeHandleFromLocation();
-    if (!handle) {
-      setView(message("linkComplete.expired", null));
-      return;
-    }
     const token = getStoredAuthToken();
-    if (!token) {
-      setView(message("linkComplete.signIn", SIGN_IN));
+    const { handle, waiting } = handleToRedeem(token);
+    if (!handle || !token) {
+      setView(
+        waiting ? message("linkComplete.signIn", SIGN_IN) : message("linkComplete.expired", null),
+      );
       return;
     }
     completeLink(handle, token)
       .then(({ status, body }) => {
         const outcome = linkCompleteOutcome(status, body);
         // Only a relative path that passed safeNextPath ever gets here.
-        if (outcome.kind === "redirect") router.replace(outcome.path);
-        else setView(viewFor(outcome));
+        if (outcome.kind === "redirect") return router.replace(outcome.path);
+        // A rejected session never reached the handle: keep it for after sign-in.
+        if (outcome.kind === "signIn")
+          storePendingHandle(browserSessionStorage(), handle, Date.now());
+        setView(viewFor(outcome));
       })
       .catch(() => setView(message("linkComplete.failed", null)));
   }, [router]);

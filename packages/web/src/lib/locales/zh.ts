@@ -1689,7 +1689,7 @@ const zh: Record<string, string> = {
     "此连接是从另一个 Klorn 账户发起的，与此处登录的账户不同，因此未连接任何内容。请从你要连接的账户重新开始。",
   "linkComplete.expired": "此连接链接已过期或已被使用。请从设置中重新开始。",
   "linkComplete.failed": "无法完成连接，请重试。",
-  "linkComplete.signInAction": "登录",
+  "linkComplete.signInToContinue": "登录以继续",
   "linkComplete.continue": "继续",
 };
 

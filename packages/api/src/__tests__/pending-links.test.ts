@@ -11,6 +11,7 @@ import {
   _resetPendingLinksForTests,
   MAX_PENDING_LINKS,
   MAX_PENDING_LINKS_PER_USER,
+  PENDING_LINK_SWEEP_MS,
   PENDING_LINK_TTL_MS,
   parkPendingLink,
   pendingLinkCount,
@@ -92,14 +93,56 @@ describe("TTL", () => {
     expect(takePendingLink(late)).toBeNull();
   });
 
-  it("sweeps an abandoned entry on an unref'd timer", () => {
+  it("sweeps an abandoned entry on the sweep interval after its TTL, then stops the timer", () => {
     vi.useFakeTimers();
     parkPendingLink(LINK);
     expect(pendingLinkCount()).toBe(1);
 
-    vi.advanceTimersByTime(PENDING_LINK_TTL_MS);
+    vi.advanceTimersByTime(PENDING_LINK_TTL_MS + PENDING_LINK_SWEEP_MS);
 
     expect(pendingLinkCount()).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe("timers", () => {
+  it("uses ONE timer however many links are parked", () => {
+    vi.useFakeTimers();
+    for (let i = 0; i < 50; i += 1) parkPendingLink({ ...LINK, userId: `user-${i}` });
+    expect(vi.getTimerCount()).toBe(1);
+  });
+
+  it("leaves no timer behind once every parked link is taken", () => {
+    vi.useFakeTimers();
+    const handles = Array.from({ length: 20 }, (_, i) =>
+      parkPendingLink({ ...LINK, userId: `user-${i}` }),
+    );
+    for (const handle of handles) expect(takePendingLink(handle)).not.toBeNull();
+
+    expect(pendingLinkCount()).toBe(0);
+    expect(_pendingLinkKeysForTests()).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("leaves no timer behind once evictions empty a user's parks", () => {
+    vi.useFakeTimers();
+    for (let i = 0; i < 10; i += 1) parkPendingLink(LINK);
+    expect(pendingLinkCount()).toBe(MAX_PENDING_LINKS_PER_USER);
+    expect(vi.getTimerCount()).toBe(1);
+
+    for (const key of _pendingLinkKeysForTests()) expect(key).toMatch(/^[0-9a-f]{64}$/);
+    _resetPendingLinksForTests();
+
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("an evicted or expired entry is no longer reachable from any timer: only the map held it", () => {
+    vi.useFakeTimers();
+    const first = parkPendingLink(LINK) as string;
+    for (let i = 0; i < MAX_PENDING_LINKS_PER_USER; i += 1) parkPendingLink(LINK);
+
+    expect(takePendingLink(first)).toBeNull();
+    expect(vi.getTimerCount()).toBe(1);
   });
 });
 

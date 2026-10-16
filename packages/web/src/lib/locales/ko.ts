@@ -1793,7 +1793,7 @@ const ko: Record<string, string> = {
   "linkComplete.expired":
     "이 연결 링크는 만료되었거나 이미 사용되었습니다. 설정에서 다시 시작하세요.",
   "linkComplete.failed": "연결을 마무리하지 못했습니다. 다시 시도하세요.",
-  "linkComplete.signInAction": "로그인",
+  "linkComplete.signInToContinue": "로그인하고 계속하기",
   "linkComplete.continue": "계속",
 };
 

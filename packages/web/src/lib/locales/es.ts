@@ -1826,7 +1826,7 @@ const es: Record<string, string> = {
   "linkComplete.expired":
     "Este enlace de conexión caducó o ya se usó. Vuelve a empezar desde Ajustes.",
   "linkComplete.failed": "No se pudo finalizar la conexión. Inténtalo de nuevo.",
-  "linkComplete.signInAction": "Iniciar sesión",
+  "linkComplete.signInToContinue": "Inicia sesión para continuar",
   "linkComplete.continue": "Continuar",
 };
 

@@ -12,8 +12,20 @@
 import { readFileSync } from "node:fs";
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { _resetPendingLinksForTests, PENDING_LINK_TTL_MS } from "../auth/pending-links.js";
+import { _resetParkThrottleForTests, PARK_LIMIT_PER_IP } from "../auth/park-throttle.js";
+import {
+  _resetPendingLinksForTests,
+  MAX_PENDING_LINKS,
+  PENDING_LINK_TTL_MS,
+  parkPendingLink,
+} from "../auth/pending-links.js";
 import { signToken } from "../auth.js";
+import {
+  apiSourceFiles,
+  oauthCallbackViolations,
+  type SourceFile,
+  stateVerifyingHandlers,
+} from "./helpers/oauth-callback-guard.js";
 
 const WEB = "https://app.example.com";
 const HANDLE_REDIRECT = /^https:\/\/app\.example\.com\/link\/complete#h=([0-9a-f]{64})$/;
@@ -75,10 +87,18 @@ vi.mock("../billing/mail-account-entitlement.js", () => ({
   mayConnectPrimaryGoogle: vi.fn(async () => true),
   requireMailLinkStart: vi.fn(() => async () => {}),
 }));
+vi.mock("../notify/welcome-email.js", () => ({ maybeSendWelcomeEmail: vi.fn(async () => {}) }));
 vi.mock("../db.js", () => {
   const user = (id: string) => ({ id, email: `${id}@klorn.test`, plan: "PRO", role: "USER" });
+  // A Google LOGIN resolves its user by email; an existing, verified one.
+  const byEmail = (email: string) => ({ ...user("login-user"), email, emailVerified: true });
   const prisma = {
-    user: { findUnique: vi.fn(async ({ where }: { where: { id: string } }) => user(where.id)) },
+    user: {
+      findUnique: vi.fn(async ({ where }: { where: { id?: string; email?: string } }) =>
+        where.email ? byEmail(where.email) : user(where.id as string),
+      ),
+    },
+    automationConfig: { upsert: vi.fn(async () => ({})) },
     userToken: { findUnique: vi.fn(async () => null), upsert: m.tokenUpsert },
     linkedCalendarAccount: {
       findUnique: vi.fn(async () => null),
@@ -87,6 +107,8 @@ vi.mock("../db.js", () => {
     },
     linkedInboxAccount: { count: vi.fn(async () => 0), upsert: m.inboxUpsert },
     device: {
+      create: vi.fn(async () => ({ id: "d2" })),
+      findMany: vi.fn(async () => []),
       findUnique: vi.fn(async () => ({ id: "d1", lastActiveAt: new Date() })),
       update: vi.fn(async () => ({})),
     },
@@ -131,6 +153,7 @@ interface Flow {
   callback: string;
   success: string;
   mismatch: string;
+  failed: string;
   exchange: () => ReturnType<typeof vi.fn>;
   write: () => ReturnType<typeof vi.fn>;
 }
@@ -141,7 +164,8 @@ const FLOWS: Flow[] = [
     start: "/api/auth/google/start",
     callback: "/api/auth/google/callback",
     success: "/settings?google=connected",
-    mismatch: "/settings?google=mismatch",
+    mismatch: "/settings",
+    failed: "/settings?google=failed",
     exchange: () => m.getToken,
     write: () => m.tokenUpsert,
   },
@@ -150,7 +174,8 @@ const FLOWS: Flow[] = [
     start: "/api/auth/google/link-calendar",
     callback: "/api/auth/google/callback",
     success: "/calendar?linked=success",
-    mismatch: "/calendar?linked=mismatch",
+    mismatch: "/calendar",
+    failed: "/calendar?linked=failed",
     exchange: () => m.getToken,
     write: () => m.calendarUpsert,
   },
@@ -159,7 +184,8 @@ const FLOWS: Flow[] = [
     start: "/api/auth/google/link-inbox",
     callback: "/api/auth/google/callback",
     success: "/settings?inbox=success",
-    mismatch: "/settings?inbox=mismatch",
+    mismatch: "/settings",
+    failed: "/settings?inbox=failed",
     exchange: () => m.getToken,
     write: () => m.inboxUpsert,
   },
@@ -168,7 +194,8 @@ const FLOWS: Flow[] = [
     start: "/api/auth/outlook/link-inbox",
     callback: "/api/auth/outlook/callback",
     success: "/settings?inbox=success",
-    mismatch: "/settings?inbox=mismatch",
+    mismatch: "/settings",
+    failed: "/settings?inbox=failed",
     exchange: () => m.exchangeOutlookCode,
     write: () => m.inboxUpsert,
   },
@@ -177,7 +204,8 @@ const FLOWS: Flow[] = [
     start: "/api/auth/outlook/link-calendar",
     callback: "/api/auth/outlook/callback",
     success: "/calendar?linked=success",
-    mismatch: "/calendar?linked=mismatch",
+    mismatch: "/calendar",
+    failed: "/calendar?linked=failed",
     exchange: () => m.exchangeOutlookCode,
     write: () => m.calendarUpsert,
   },
@@ -225,6 +253,7 @@ function expectNothingExchangedOrWritten(flow: Flow) {
 beforeEach(() => {
   vi.clearAllMocks();
   _resetPendingLinksForTests();
+  _resetParkThrottleForTests();
   gates.inbox = true;
   gates.calendar = true;
   process.env.WEB_URL = WEB;
@@ -410,9 +439,118 @@ describe("POST /api/auth/link/complete input", () => {
     await app.close();
   });
 
-  it("404s on a well-formed handle that was never parked", async () => {
+  it("404s on a well-formed handle that was never parked, with the LINK_EXPIRED code", async () => {
     const app = await buildApp();
-    expect((await complete(app, "a".repeat(64), A)).statusCode).toBe(404);
+    const res = await complete(app, "a".repeat(64), A);
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe("LINK_EXPIRED");
+    await app.close();
+  });
+
+  it("a primary connect whose user is gone stays a distinct 404 (no LINK_EXPIRED code)", async () => {
+    const { prisma } = await import("../db.js");
+    const app = await buildApp();
+    const handle = await park(app, FLOWS[0] as Flow);
+    const findUser = vi.mocked(prisma.user.findUnique);
+    const original = findUser.getMockImplementation();
+    findUser.mockResolvedValue(null as never);
+    try {
+      const res = await complete(app, handle, A);
+
+      expect(res.statusCode).toBe(404);
+      expect(res.json()).toEqual({ error: "User not found" });
+    } finally {
+      if (original) findUser.mockImplementation(original);
+      await app.close();
+    }
+  });
+});
+
+describe("park throttle: a per-IP cap on the unauthenticated callback's park path", () => {
+  const inbox = FLOWS[2] as Flow;
+  const fromIp = (app: App, state: string, headers: Record<string, string> = {}) =>
+    app.inject({
+      method: "GET",
+      url: `${inbox.callback}?code=c&state=${encodeURIComponent(state)}`,
+      headers,
+    });
+
+  it(`parks ${PARK_LIMIT_PER_IP} per IP, then lands on the flow's failed path without parking`, async () => {
+    const app = await buildApp();
+    const state = await startFlow(app, inbox);
+    for (let i = 0; i < PARK_LIMIT_PER_IP; i += 1) {
+      expect((await fromIp(app, state)).headers.location).toMatch(HANDLE_REDIRECT);
+    }
+
+    const over = await fromIp(app, state);
+
+    expect(over.statusCode).toBe(302);
+    expect(over.headers.location).toBe(`${WEB}${inbox.failed}`);
+    expectNothingExchangedOrWritten(inbox);
+    await app.close();
+  });
+
+  it.each(FLOWS)("over the limit, $marker lands on $failed (never raw JSON)", async (flow) => {
+    const app = await buildApp();
+    const state = await startFlow(app, flow);
+    for (let i = 0; i < PARK_LIMIT_PER_IP; i += 1) await callback(app, flow, state);
+
+    const over = await callback(app, flow, state);
+
+    expect(over.statusCode).toBe(302);
+    expect(over.headers.location).toBe(`${WEB}${flow.failed}`);
+    await app.close();
+  });
+
+  it("keys on the Cloudflare-verified address, and a forged X-Forwarded-For does not reset it", async () => {
+    const app = await buildApp();
+    const state = await startFlow(app, inbox);
+    const blocked = { "cf-connecting-ip": "203.0.113.7" };
+    for (let i = 0; i < PARK_LIMIT_PER_IP; i += 1) await fromIp(app, state, blocked);
+
+    const forged = await fromIp(app, state, { ...blocked, "x-forwarded-for": "198.51.100.1" });
+    const otherClient = await fromIp(app, state, { "cf-connecting-ip": "203.0.113.8" });
+
+    expect(forged.headers.location).toBe(`${WEB}${inbox.failed}`);
+    expect(otherClient.headers.location).toMatch(HANDLE_REDIRECT);
+    await app.close();
+  });
+
+  it("leaves the login markers alone: a throttled IP still signs in through the callback", async () => {
+    const app = await buildApp();
+    const state = await startFlow(app, inbox);
+    for (let i = 0; i <= PARK_LIMIT_PER_IP; i += 1) await fromIp(app, state);
+    const loginState = signToken({ userId: "__login__", email: "__google_login__" }, "10m");
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/auth/google/callback?code=login-code&state=${encodeURIComponent(loginState)}`,
+    });
+
+    expect(m.getToken).toHaveBeenCalledWith("login-code");
+    expect(res.statusCode).toBe(302);
+    expect(res.headers.location).toMatch(
+      /^https:\/\/app\.example\.com\/auth\/callback\?code=[0-9a-f]{40}$/,
+    );
+    await app.close();
+  });
+});
+
+describe("a full store", () => {
+  it.each(FLOWS)("$marker lands on $failed, reported, never raw JSON", async (flow) => {
+    for (let i = 0; i < MAX_PENDING_LINKS; i += 1) {
+      parkPendingLink({ userId: `filler-${i}`, marker: "__link_inbox__", code: "x" });
+    }
+    const app = await buildApp();
+
+    const res = await callback(app, flow, await startFlow(app, flow));
+
+    expect(res.statusCode).toBe(302);
+    expect(res.headers.location).toBe(`${WEB}${flow.failed}`);
+    expect(m.captureError).toHaveBeenCalledWith(expect.any(Error), {
+      tags: { scope: "auth.link.park_full" },
+      extra: { marker: flow.marker },
+    });
     await app.close();
   });
 });
@@ -436,31 +574,77 @@ describe("Outlook flags are re-checked at completion", () => {
   });
 });
 
-describe("source guard: no credential write is reachable from a GET callback", () => {
-  const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), "utf8");
+describe("source guard: no state-verifying GET handler reaches a credential write", () => {
+  const files = apiSourceFiles();
 
-  /** The text of the route handler registered at `path`, up to the next route. */
-  function handlerText(source: string, path: string): string {
-    const start = source.indexOf(`"${path}"`);
-    expect(start).toBeGreaterThan(-1);
-    const rest = source.slice(start);
-    const next = rest.search(/\n\s+app\.(get|post|put|patch|delete)\(/);
-    return next === -1 ? rest : rest.slice(0, next);
-  }
+  it("scans every OAuth callback handler file, not a fixed list", () => {
+    const handlers = stateVerifyingHandlers(files);
+    expect(handlers).toEqual(
+      expect.arrayContaining([
+        "routes/auth.ts GET /google/callback",
+        "routes/outlook-auth.ts GET /callback",
+      ]),
+    );
+  });
 
-  it.each([
-    ["../routes/auth.ts", "/google/callback"],
-    ["../routes/outlook-auth.ts", "/callback"],
-  ])("%s %s writes no userToken / linkedInboxAccount / linkedCalendarAccount", (file, path) => {
-    const text = handlerText(read(file), path);
-    expect(text).not.toMatch(/userToken|linkedInboxAccount|linkedCalendarAccount/);
-    expect(text).not.toMatch(/finish[A-Z]\w*\(|exchangeOutlookCode\(/);
+  it("finds no violation anywhere in packages/api/src", () => {
+    expect(oauthCallbackViolations(files)).toEqual([]);
   });
 
   it("the Google callback parks the link markers before any code exchange", () => {
-    const text = handlerText(read("../routes/auth.ts"), "/google/callback");
-    const handOff = text.indexOf("handOffAccountLink(");
-    expect(handOff).toBeGreaterThan(-1);
-    expect(handOff).toBeLessThan(text.indexOf("getToken("));
+    const auth = readFileSync(new URL("../routes/auth.ts", import.meta.url), "utf8");
+    const start = auth.indexOf('"/google/callback"');
+    const handOff = auth.indexOf("handOffAccountLink(", start);
+    expect(handOff).toBeGreaterThan(start);
+    expect(handOff).toBeLessThan(auth.indexOf("getToken(", start));
+  });
+
+  describe("self-test: the guard catches a violating callback", () => {
+    const probe = (text: string): SourceFile[] => [...files, { path: "routes/probe.ts", text }];
+
+    it("a new callback that writes a Drive credential through a helper", () => {
+      const violating = `
+export function probeRoutes(app: FastifyInstance) {
+  app.get("/drive/callback", async (request, reply) => {
+    const payload = verifyToken((request.query as { state: string }).state);
+    return reply.redirect(await saveDrive(payload.userId, "code"));
+  });
+}
+async function saveDrive(userId: string, code: string): Promise<string> {
+  await prisma.linkedDriveAccount.upsert({ where: { id: userId }, create: {}, update: { code } });
+  return "/files";
+}
+`;
+      expect(oauthCallbackViolations(probe(violating))).toEqual([
+        "routes/probe.ts GET /drive/callback",
+      ]);
+    });
+
+    it("a callback that writes a credential inline", () => {
+      const violating = `
+export function probeRoutes(app: FastifyInstance) {
+  app.get("/x/callback", async (request, reply) => {
+    const statePayload = verifyToken(state);
+    await prisma.userToken.upsert({ where: {}, create: {}, update: {} });
+    return reply.redirect("/");
+  });
+}
+`;
+      expect(oauthCallbackViolations(probe(violating))).toEqual([
+        "routes/probe.ts GET /x/callback",
+      ]);
+    });
+
+    it("a callback that only parks passes", () => {
+      const parking = `
+export function probeRoutes(app: FastifyInstance) {
+  app.get("/drive/callback", async (request, reply) => {
+    const payload = verifyToken((request.query as { state: string }).state);
+    return handOffAccountLink(reply, { userId: payload.userId });
+  });
+}
+`;
+      expect(oauthCallbackViolations(probe(parking))).toEqual([]);
+    });
   });
 });

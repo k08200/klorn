@@ -1855,7 +1855,7 @@ const de: Record<string, string> = {
   "linkComplete.expired":
     "Dieser Verbindungslink ist abgelaufen oder wurde bereits verwendet. Starte in den Einstellungen erneut.",
   "linkComplete.failed": "Die Verbindung konnte nicht abgeschlossen werden. Versuche es erneut.",
-  "linkComplete.signInAction": "Anmelden",
+  "linkComplete.signInToContinue": "Anmelden und fortfahren",
   "linkComplete.continue": "Weiter",
 };
 

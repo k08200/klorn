@@ -1839,7 +1839,7 @@ const fr: Record<string, string> = {
   "linkComplete.expired":
     "Ce lien de connexion a expiré ou a déjà été utilisé. Recommencez depuis les Paramètres.",
   "linkComplete.failed": "Impossible de finaliser la connexion. Réessayez.",
-  "linkComplete.signInAction": "Se connecter",
+  "linkComplete.signInToContinue": "Se connecter pour continuer",
   "linkComplete.continue": "Continuer",
 };
 

@@ -1804,7 +1804,7 @@ const en: Record<string, string> = {
   "linkComplete.expired":
     "This connection link has expired or was already used. Start again from Settings.",
   "linkComplete.failed": "Couldn't finish the connection. Try again.",
-  "linkComplete.signInAction": "Sign in",
+  "linkComplete.signInToContinue": "Sign in to continue",
   "linkComplete.continue": "Continue",
 };
 
