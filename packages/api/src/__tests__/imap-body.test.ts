@@ -161,4 +161,74 @@ describe("decodeImapText", () => {
 
     expect(decoded).toBe("see attached");
   });
+
+  describe("hostile input stays within budget (single event loop)", () => {
+    const BUDGET_MS = 500;
+    const timed = (fn: () => unknown) => {
+      const start = performance.now();
+      fn();
+      return performance.now() - start;
+    };
+
+    it("a '<' flood in the HTML alternative", () => {
+      const text = [
+        "--b",
+        "Content-Type: text/plain",
+        "",
+        "hi",
+        "--b",
+        "Content-Type: text/html",
+        "",
+        "<".repeat(IMAP_DECODE_MAX_BYTES),
+        "--b--",
+      ].join(CRLF);
+      const head = headers('Content-Type: multipart/mixed; boundary="b"');
+      expect(timed(() => expect(decodeImapText(head, Buffer.from(text))).toBe("hi"))).toBeLessThan(
+        BUDGET_MS,
+      );
+    });
+
+    it("an HTML-only '<' flood and deep tag nesting", () => {
+      for (const html of ["<".repeat(IMAP_DECODE_MAX_BYTES), "<div>".repeat(50_000)]) {
+        const ms = timed(() =>
+          decodeImapText(headers("Content-Type: text/html"), Buffer.from(html)),
+        );
+        expect(ms).toBeLessThan(BUDGET_MS);
+      }
+    });
+
+    it("thousands of tiny parts", () => {
+      const part = `--p${CRLF}Content-Type: text/plain${CRLF}${CRLF}${CRLF}`;
+      const text = part.repeat(Math.floor(IMAP_DECODE_MAX_BYTES / part.length));
+      const head = headers('Content-Type: multipart/mixed; boundary="p"');
+      expect(timed(() => decodeImapText(head, Buffer.from(text)))).toBeLessThan(BUDGET_MS);
+    });
+
+    it("nested message/rfc822 and deeply nested multiparts", () => {
+      const rfc822 = `Content-Type: message/rfc822${CRLF}${CRLF}`.repeat(5000);
+      let nested = "deep text";
+      for (let depth = 0; depth < 2000; depth++) {
+        nested = `--n${depth}${CRLF}Content-Type: multipart/mixed; boundary="n${depth + 1}"${CRLF}${CRLF}${nested}`;
+      }
+      for (const [type, body] of [
+        ["message/rfc822", rfc822],
+        ['multipart/mixed; boundary="n0"', nested],
+      ]) {
+        const ms = timed(() => decodeImapText(headers(`Content-Type: ${type}`), Buffer.from(body)));
+        expect(ms).toBeLessThan(BUDGET_MS);
+      }
+    });
+
+    it("a huge folded header and an oversized boundary", () => {
+      const folded = Buffer.from(
+        `Content-Type: text/plain;${`\r\n x=${"y".repeat(60)}`.repeat(40_000)}\r\n`,
+      );
+      expect(timed(() => decodeImapText(folded, Buffer.from("body")))).toBeLessThan(BUDGET_MS);
+
+      const boundary = "a".repeat(8000);
+      const head = headers(`Content-Type: multipart/mixed; boundary="${boundary}"`);
+      const body = Buffer.from("a".repeat(IMAP_DECODE_MAX_BYTES));
+      expect(timed(() => expect(decodeImapText(head, body)).toBe(""))).toBeLessThan(BUDGET_MS);
+    });
+  });
 });

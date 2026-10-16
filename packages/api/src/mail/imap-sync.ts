@@ -186,7 +186,7 @@ type PersistCall = [
  * Turn one fetched message into the arguments of the shared persist call. Used by
  * the poll and by the targeted re-sync after an undo, so both write a row the same
  * way. Pure: the poll runs it outside its per-message error handling, as it always
- * has. `bodyText` is the decoded body (decodeImapText, which never throws).
+ * has. `bodyText` is the decoded body (decodeImapText: linear, never throws).
  */
 function toPersistCall(args: SyncArgs, msg: ImapFetchMessage, bodyText: string): PersistCall {
   const env = msg.envelope ?? {};
@@ -318,7 +318,7 @@ export async function syncImapInbox(args: SyncArgs): Promise<SyncResult> {
         // or another provider's UIDs — in the same EmailMessage table.
         const stableId = formatImapMessageId(args.provider.idPrefix, args.email, msg.uid);
 
-        const bodyText = await decodeImapText(msg.headers, textBodyOf(msg));
+        const bodyText = decodeImapText(msg.headers, textBodyOf(msg));
         const persistCall = toPersistCall(args, msg, bodyText);
 
         try {
@@ -430,7 +430,7 @@ export async function syncImapMessage(args: SyncMessageArgs): Promise<{ emailId:
         { uid: true },
       )) {
         const msg = raw as ImapFetchMessage;
-        const bodyText = await decodeImapText(msg.headers, textBodyOf(msg));
+        const bodyText = decodeImapText(msg.headers, textBodyOf(msg));
         const persistCall = toPersistCall(args, msg, bodyText);
         const persisted = await persistGmailEmail(args.userId, ...persistCall);
         return { emailId: persisted.emailId };
