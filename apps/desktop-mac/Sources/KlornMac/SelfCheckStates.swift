@@ -135,7 +135,7 @@ func stateSelfChecks(sourceDir: URL) -> [(String, Bool)] {
           cachedBefore && leaving.queueCacheIsEmpty && leaving.queue == nil)
     check("sign-out clears a pending action error", leaving.actionError == nil)
     model.showActionError("pin failed")
-    check("a failed action is its own notice: no banner, no pill chip, no offline state",
+    check("a failed action is its own notice: no banner, no offline state",
           model.actionError == "pin failed" && model.loadError == nil && !model.loadOffline
           && model.connectionNotice == nil)
     model.dismissActionError()
@@ -175,8 +175,8 @@ func stateSelfChecks(sourceDir: URL) -> [(String, Bool)] {
     check("load failures are recorded with their kind, in one place",
           text("AppModel.swift").components(separatedBy: "loadError = Self.describe(error)").count == 2
           && text("AppModel.swift").contains("loadOffline = kind == .offline"))
-    // Only a refresh may raise the "couldn't refresh" banner and the pill
-    // chip; pin, unpin, dismiss and snooze failures go to the action notice.
+    // Only a refresh may raise the "couldn't refresh" banner; pin, unpin,
+    // dismiss and snooze failures go to the action notice.
     check("only the queue refresh records a load failure; actions have their own channel",
           text("AppModel.swift").components(separatedBy: "            noteLoadFailure(error)\n").count == 2
           && text("AppModel.swift").components(separatedBy: "noteActionFailure(error)\n").count == 4)

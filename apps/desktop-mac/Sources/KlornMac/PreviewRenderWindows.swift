@@ -28,16 +28,16 @@ extension PreviewRender {
             model.composeBody = draft["body"] ?? ""
         }
         shot("compose-window", size: ComposeWindowRules.defaultSize, model) {
-            ComposePanel(style: .window)
+            ComposePanel()
         }
         // The floor the window can be dragged to: nothing may clip there.
         shot("compose-window-min", size: ComposeWindowRules.minSize, model) {
-            ComposePanel(style: .window)
+            ComposePanel()
         }
         let empty = AppModel(tokenStore: InMemoryTokenStore())
         empty.seedForPreview(firewallJSON: "", emailJSON: "", selectedItemId: nil)
         shot("compose-window-empty", size: ComposeWindowRules.defaultSize, empty) {
-            ComposePanel(style: .window)
+            ComposePanel()
         }
 
         // The sheets, at the size each card asks for.

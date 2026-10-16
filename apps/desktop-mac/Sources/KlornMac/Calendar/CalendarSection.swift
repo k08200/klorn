@@ -33,8 +33,7 @@ struct CalendarSection: View {
             switch pane {
             case .calendar:
                 CalendarScreen(
-                    actions: actions, initialScope: initialScope, initialAnchor: initialAnchor,
-                    style: .window)
+                    actions: actions, initialScope: initialScope, initialAnchor: initialAnchor)
             case .teams:
                 // Built for the list column; keep its measure readable.
                 TeamsColumn()

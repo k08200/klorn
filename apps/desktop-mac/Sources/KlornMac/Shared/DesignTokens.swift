@@ -1,16 +1,5 @@
 import SwiftUI
 
-/// Where a shared view is drawn. The bar's surfaces keep the look they
-/// shipped with; the main window wears the design system (productization
-/// plan §2). Every shared view defaults to `.bar`, so the bar never changes
-/// by accident. Since M8 deleted the bar's full view, the `.bar` variants of
-/// FullList, ReadingPane and CalendarScreen draw only in the offscreen
-/// preview shots; collapsing them is a separate cleanup.
-enum ShellStyle: Sendable {
-    case bar
-    case window
-}
-
 // Design tokens added for the main window (productization plan §2, M7).
 // Pure values first, so the self-check can do contrast math without AppKit.
 extension Theme {

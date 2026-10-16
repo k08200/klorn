@@ -9,9 +9,6 @@ struct FullList: View {
     /// count, so the list drops its own title row there; the inbox scope
     /// and compose move beside the search field. Search results keep theirs.
     var hidesLaneTitle = false
-    /// `.window` in the main window: the one-badge rows and the token
-    /// metrics. The default is the bar's list, unchanged.
-    var rowStyle: MailRowStyle = .legacy
     /// The user asked for the search field (⌘F, `/`): its focus is theirs,
     /// not the window's opening default.
     @State private var searchRequested = false
@@ -154,14 +151,6 @@ struct FullList: View {
                 await model.search(query)
             }
 
-            if rowStyle == .window {
-                // The rows carry their own inset hairlines; a full-width rule
-                // here would box the search field in.
-                Color.clear.frame(height: 0)
-            } else {
-                Divider().overlay(Theme.line)
-            }
-
             if searching {
                 searchResultsList
             } else if model.queue == nil {
@@ -172,11 +161,11 @@ struct FullList: View {
             } else if items.isEmpty {
                 Spacer()
                 if let filter = labelFilter {
-                    EmptyState(icon: filter.icon, title: L("label.empty", filter.label), style: rowStyle.shell)
+                    EmptyState(icon: filter.icon, title: L("label.empty", filter.label))
                 } else if inboxMode {
-                    EmptyState(icon: "tray", title: L("inbox.empty"), style: rowStyle.shell)
+                    EmptyState(icon: "tray", title: L("inbox.empty"))
                 } else {
-                    EmptyState(icon: tier.emptyIcon, title: tier.emptyTitle, hint: tier.blurb, style: rowStyle.shell)
+                    EmptyState(icon: tier.emptyIcon, title: tier.emptyTitle, hint: tier.blurb)
                 }
                 Spacer()
             } else if Theme.isRenderingOffscreen {
@@ -187,7 +176,7 @@ struct FullList: View {
                 // shots: lay the rows out directly when rendering offscreen.
                 VStack(spacing: 0) {
                     ForEach(items) { item in
-                        FullRow(item: item, actions: actions, showLaneChip: mixedLanes, style: rowStyle)
+                        WindowMailRow(item: item, actions: actions, showLaneChip: mixedLanes)
                         rowDivider
                     }
                     Spacer(minLength: 0)
@@ -199,7 +188,7 @@ struct FullList: View {
                     ScrollView {
                         LazyVStack(spacing: 0) {
                             ForEach(items) { item in
-                                FullRow(item: item, actions: actions, showLaneChip: mixedLanes, style: rowStyle)
+                                WindowMailRow(item: item, actions: actions, showLaneChip: mixedLanes)
                                     .id(item.id)
                                     .transition(rowTransition)
                                 rowDivider
@@ -238,18 +227,13 @@ struct FullList: View {
         .onDisappear { keyZone = .list }
     }
 
-    /// The hairline under a row: the bar's, or the main window's inset one.
-    @ViewBuilder
+    /// The hairline under a row, inset to the row's text.
     private var rowDivider: some View {
-        if rowStyle == .window {
-            Rectangle().fill(Theme.line).frame(height: Theme.hairline)
-                .padding(.horizontal, Theme.s4 + Theme.s1)
-        } else {
-            Divider().overlay(Theme.line).padding(.leading, 24)
-        }
+        Rectangle().fill(Theme.line).frame(height: Theme.hairline)
+            .padding(.horizontal, Theme.s4 + Theme.s1)
     }
 
-    private var metrics: MailListMetrics { rowStyle == .window ? .window : .bar }
+    private var metrics: MailListMetrics { .window }
 
     private var composeButton: some View {
         Button {
@@ -328,7 +312,7 @@ struct FullList: View {
             ScrollView {
                 LazyVStack(spacing: 0) {
                     ForEach(results) { hit in
-                        SearchHitRow(hit: hit, style: rowStyle)
+                        WindowSearchHitRow(hit: hit)
                         rowDivider
                     }
                 }
@@ -340,7 +324,7 @@ struct FullList: View {
                 title: {
                     let q = query.trimmingCharacters(in: .whitespaces)
                     return L("mail.noMatches", q, L10n.josaWaIfKorean(after: q))
-                }(), style: rowStyle.shell)
+                }())
             Spacer()
         }
     }

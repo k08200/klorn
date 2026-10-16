@@ -145,9 +145,8 @@ func tokenSelfChecks(sourceDir: URL) -> [(String, Bool)] {
             }))
     }
     results.append((
-        "the bar's chip is the old one; the main window's is the measured one",
-        text("Shared/LaneChip.swift").contains("var style: ShellStyle = .bar")
-            && text("Mail/WindowLaneChip.swift").contains("Theme.chipInk(tier)")
+        "the lane chip is the measured one",
+        text("Mail/WindowLaneChip.swift").contains("Theme.chipInk(tier)")
             && text("Mail/WindowLaneChip.swift").contains(".font(Theme.Typo.label)")))
 
     // The scale itself.
@@ -231,16 +230,32 @@ func tokenSelfChecks(sourceDir: URL) -> [(String, Bool)] {
             && ReaderMetaRules.parts(signal: .replied(3), replyState: nil, draftReady: false)
                 == [L("chip.replied", 3)]
             && ReaderMetaRules.parts(signal: nil, replyState: "unknown", draftReady: false).isEmpty))
+    // Corrections become rules: the sender-label menu must stay reachable
+    // from the main window's reader, as its own control (not folded into
+    // the meta line's combined VoiceOver element).
+    let readerMeta = text("Mail/WindowLaneChip.swift")
+    let correctionHosts = swiftSources(under: sourceDir)
+        .filter { !$0.lastPathComponent.hasPrefix("SelfCheck") }
+        .filter { ((try? String(contentsOf: $0, encoding: .utf8)) ?? "").contains("SenderLabelMenuItems(") }
+        .map(\.lastPathComponent)
     results.append((
-        "only the main window asks for the new look; every shared view defaults to the bar's",
-        text("Mail/MailSection.swift").contains("rowStyle: .window")
-            && text("Mail/MailSection.swift").contains("style: .window")
-            && text("Calendar/CalendarSection.swift").contains("style: .window")
-            && text("Mail/MailRow.swift").components(separatedBy: "var style: MailRowStyle = .legacy").count == 3
-            && text("Mail/FullList.swift").contains("var rowStyle: MailRowStyle = .legacy")
-            && text("Mail/ReadingPane.swift").contains("var style: ShellStyle = .bar")
-            && text("Calendar/CalendarScreen.swift").contains("style: ShellStyle = .bar")
-            && text("Theme.swift").contains("var style: ShellStyle = .bar")))
+        "the sender-label correction menu has a main-window call site: the reader header",
+        correctionHosts == ["WindowLaneChip.swift"]
+            && readerMeta.contains("SenderLabelCorrectionMenu(\n                from: item.email?.from")
+            && readerMeta.contains("Menu {\n                    SenderLabelMenuItems(address: address, byUser: byUser)")
+            && readerMeta.contains(".accessibilityLabel(\n                    signalWord.map { L(\"label.correct.a11y\", $0) } ?? L(\"label.correct\"))")
+            && readerMeta.components(separatedBy: ".accessibilityElement(children: .combine)").count == 2
+            && text("Mail/ReadingPane.swift").contains("ReaderMetaLine(item: item)")))
+    results.append((
+        "the correction menu names the current label, or none",
+        ReaderMetaRules.signalWord(.category("customer")) == L("chip.customer")
+            && ReaderMetaRules.signalWord(.replied(2)) == L("chip.replied", 2)
+            && ReaderMetaRules.signalWord(nil) == nil))
+    results.append((
+        "the mail list draws the main window's rows and the reader its meta line",
+        text("Mail/FullList.swift").components(separatedBy: "WindowMailRow(item: item").count == 3
+            && text("Mail/FullList.swift").contains("WindowSearchHitRow(hit: hit)")
+            && text("Mail/ReadingPane.swift").contains("ReaderMetaLine(item: item)")))
 
     // Calendar month grid.
     let tall = CalendarMetrics.monthRowHeight(available: 1000, weeks: 5)

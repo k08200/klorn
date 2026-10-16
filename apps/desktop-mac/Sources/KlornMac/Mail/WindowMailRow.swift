@@ -1,14 +1,5 @@
 import SwiftUI
 
-/// How a mail row is drawn. `.legacy` is the bar's row, unchanged; `.window`
-/// is the main window's row under the one-badge rule (productization plan §1).
-enum MailRowStyle: Sendable {
-    case legacy
-    case window
-
-    var shell: ShellStyle { self == .window ? .window : .bar }
-}
-
 /// What a main-window row may show, and nothing else: who, what, when, the
 /// lane (only where lanes are mixed), the account (only when the row knows
 /// it and there is more than one), the unread dot (only when the row knows

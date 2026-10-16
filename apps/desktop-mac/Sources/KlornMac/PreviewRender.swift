@@ -199,9 +199,6 @@ enum PreviewRender {
         shot("assistant-dock", size: CGSize(width: 440, height: 560), align: .bottomTrailing) {
             AssistantDockRenderProbe()
         }
-        shot("compose", size: CGSize(width: 600, height: 470), align: .top) {
-            ComposePanelRenderProbe()
-        }
         shot("briefing", size: CGSize(width: 380, height: 260), align: .top) {
             BriefingCardRenderProbe()
         }
@@ -222,8 +219,9 @@ enum PreviewRender {
         shot("rows", size: CGSize(width: tourW, height: 430), align: .top) {
             VStack(spacing: 0) {
                 ForEach(model.queue?.items(for: .push) ?? []) { item in
-                    FullRow(item: item, actions: actions)
-                    Divider().overlay(Theme.line).padding(.leading, 24)
+                    WindowMailRow(item: item, actions: actions)
+                    Rectangle().fill(Theme.line).frame(height: Theme.hairline)
+                        .padding(.horizontal, Theme.s4 + Theme.s1)
                 }
                 Spacer(minLength: 0)
             }
@@ -271,9 +269,6 @@ enum PreviewRender {
             .background(Theme.panel, in: RoundedRectangle(cornerRadius: 16))
             .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.line))
             .padding(14)
-        }
-        shot("tier-guide", size: CGSize(width: tourW, height: 520)) {
-            TierGuide {}
         }
         // The main window's sections (M4b), on their own model so the
         // shots above keep their state.

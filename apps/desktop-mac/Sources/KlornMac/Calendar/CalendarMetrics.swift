@@ -1,8 +1,7 @@
 import SwiftUI
 
-/// The calendar's month-view measures, by shell. `.bar` holds the bar's
-/// values exactly as they were inline; `.window` uses the type roles (no
-/// 10pt text) and the control radius.
+/// The calendar's month-view measures: the type roles (no 10pt text) and
+/// the control radius.
 struct CalendarMetrics {
     let title: Font
     let weekday: Font
@@ -11,10 +10,6 @@ struct CalendarMetrics {
     let scopeRadius: CGFloat
     let headerInset: CGFloat
     let headerVertical: CGFloat
-
-    static let bar = CalendarMetrics(
-        title: .title3.weight(.semibold), weekday: Theme.Typo.micro, chip: Theme.Typo.micro,
-        chipRadius: 3, scopeRadius: 8, headerInset: 24, headerVertical: 14)
 
     static let window = CalendarMetrics(
         title: Theme.Typo.title, weekday: Theme.Typo.caption.weight(.medium),

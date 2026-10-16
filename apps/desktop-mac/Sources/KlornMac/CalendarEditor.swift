@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Create / edit one calendar event (2026-09-11). A card over the full view
+/// Create / edit one calendar event (2026-09-11). A sheet on the main window
 /// like the other one-question surfaces: title, all-day, start, end,
 /// location. Save POSTs (new) or PATCHes (edit) through AppModel, which
 /// re-reads the visible range so the grid reflects the write; a Pro gate or

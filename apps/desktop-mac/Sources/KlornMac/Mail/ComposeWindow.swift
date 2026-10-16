@@ -49,7 +49,7 @@ struct ComposeWindowRoot: View {
     var onDiscard: () -> Void = {}
 
     var body: some View {
-        ComposePanel(style: .window, onDiscard: onDiscard)
+        ComposePanel(onDiscard: onDiscard)
             .environment(model)
             // L() is not observable; rebuild on a language change.
             .id(model.settings.languageRevision)

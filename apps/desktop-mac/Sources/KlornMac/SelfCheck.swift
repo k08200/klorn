@@ -399,7 +399,7 @@ func runSelfChecks() async -> Bool {
     check("notifications honor stored true", AppSettings.resolveNotifications(true))
     check("notifications ignore non-bool", AppSettings.resolveNotifications("nope"))
     print("Briefing:")
-    // The TODAY column shows a one-line preview of the day's briefing note:
+    // Today's assistant strip shows a one-line preview of the briefing note:
     // markdown bold stripped, whitespace collapsed, capped; nil when empty.
     check("briefing preview strips markdown + collapses",
           briefingPreview("**Top 3 Today**\n1. Handle the contract email\n2. Reply to Alex")
@@ -1131,7 +1131,7 @@ func runSelfChecks() async -> Bool {
           SnoozeOption.oneHour.resurface(from: noonJan1, calendar: cal) > noonJan1)
 
     print("Usage gauge:")
-    // /api/billing/models usage → ACCOUNT column gauge (reference HUD's meter).
+    // /api/billing/models usage → the AI usage meter in Settings ▸ Accounts.
     let usageJSON = #"{"usage":{"rpmUsed":3,"rpmCap":15,"dailyUsed":137,"dailyCap":500,"dailyResetAt":"2026-07-17T00:00:00.000Z"}}"#
     if let status = try? JSONDecoder().decode(BillingStatusWire.self, from: Data(usageJSON.utf8)) {
         check("usage wire decodes", status.usage.dailyUsed == 137 && status.usage.dailyCap == 500)
@@ -1471,9 +1471,8 @@ func runSelfChecks() async -> Bool {
     check("an empty title is treated as Latin", ColumnHeader.tracking(for: "") == 1.4)
 
     print("Korean josa:")
-    // "%@(으)로" is a workaround, not Korean — the collapsed pill already gets
-    // this right ("PUSH 3건"), so the app contradicted itself. Pick the
-    // particle from the final consonant of the preceding word.
+    // "%@(으)로" is a workaround, not Korean. Pick the particle from the
+    // final consonant of the preceding word.
     check("no final consonant takes 로", L10n.josaRo(after: "Queue") == "로")
     check("final consonant takes 으로", L10n.josaRo(after: "Push") == "으로")
     check("Hangul without a final consonant takes 로", L10n.josaRo(after: "메모") == "로")
@@ -1538,6 +1537,8 @@ func runSelfChecks() async -> Bool {
 
     // Design tokens and the one-badge row rule in the main window (M7).
     for (name, ok) in tokenSelfChecks(sourceDir: sourceDir) { check(name, ok) }
+    // One style per view: no bar, legacy or overlay variant (2026-10-15).
+    for (name, ok) in oneStyleSelfChecks(sourceDir: sourceDir) { check(name, ok) }
 
     print("Localization:")
     // A key present in one language and missing in another ships a raw key
@@ -1794,7 +1795,7 @@ func runSelfChecks() async -> Bool {
     // depends on the running machine's appearance. Two guards: the five lane
     // colors stay pairwise distinct per appearance (the old ramp shipped INFO
     // and SILENT as near-identical slates), and each one clears the 4.5:1
-    // text floor on the canvas, because `tint` colors text (LaneChip, errors).
+    // text floor on the canvas, because `tint` colors text (errors).
     func rawContrast(_ a: Theme.RGBA, _ b: Theme.RGBA) -> Double {
         let (x, y) = (luminance(a) + 0.05, luminance(b) + 0.05)
         return max(x, y) / min(x, y)

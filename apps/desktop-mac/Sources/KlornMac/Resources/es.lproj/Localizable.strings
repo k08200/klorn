@@ -46,7 +46,6 @@
 "source.account.a11y" = "Cuenta de %@";
 "source.generic" = "correo";
 "mail.searchResult.a11y" = "Resultado de %1$@: %2$@";
-"mail.noSubject" = "sin asunto";
 "mail.snooze" = "Posponer…";
 "mail.snooze.a11y" = "Posponer el mensaje de %@";
 "mail.dismiss" = "Descartar";
@@ -413,7 +412,6 @@
 "compose.cancel" = "Cancelar";
 "compose.missingFields" = "Destinatario, asunto y mensaje son obligatorios.";
 "compose.needsPro" = "Enviar correo requiere el plan Pro.";
-"compose.close.a11y" = "Cerrar el editor";
 
 /* Assistant dock */
 "assistant.dock.toggle" = "Asistente (⌘J)";
@@ -513,7 +511,6 @@
 "label.correct.clear" = "Quitar mi corrección para este remitente";
 "label.correct.clearDomain" = "Quitar mi corrección para el dominio";
 "label.correct.a11y" = "%@ — corregir la etiqueta";
-"label.add" = "＋ etiqueta";
 
 // Calendar editor (2026-09-11).
 "cal.new" = "Nuevo evento";
