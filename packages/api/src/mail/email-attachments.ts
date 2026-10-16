@@ -314,6 +314,24 @@ async function adoptLegacyCopy(
   }
 }
 
+/// A handle names one part of one message, so a pre-fix copy that still holds
+/// the incoming handle after adoption is a duplicate of this very part: its
+/// keyed row already exists, or adoption would have taken this copy. Drop it,
+/// so refreshing the keyed row's handle cannot trip the legacy
+/// (emailId, gmailAttachmentId) unique and fail this message on every sync.
+async function dropLeftoverHandleHolder(
+  userId: string,
+  emailId: string,
+  attachment: RawEmailAttachment,
+): Promise<void> {
+  await prisma.$executeRaw`
+    DELETE FROM "EmailAttachment"
+    WHERE "emailId" = ${emailId} AND "userId" = ${userId}
+      AND "partKey" IS NULL
+      AND "gmailAttachmentId" = ${attachment.gmailAttachmentId}
+  `;
+}
+
 export async function upsertEmailAttachments(input: {
   userId: string;
   emailId: string;
@@ -322,6 +340,7 @@ export async function upsertEmailAttachments(input: {
   if (typeof prisma.$executeRaw !== "function") return;
   for (const attachment of input.attachments) {
     await adoptLegacyCopy(input.userId, input.emailId, attachment);
+    await dropLeftoverHandleHolder(input.userId, input.emailId, attachment);
     const id = crypto.randomUUID();
     const contentText = attachment.contentText?.trim()
       ? attachment.contentText.slice(0, MAX_STORED_TEXT)

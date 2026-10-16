@@ -159,6 +159,23 @@ describePg("upsertEmailAttachments: stable part identity (real Postgres)", () =>
     expect(stored.filter((r) => r.partKey === "1")).toHaveLength(1);
   });
 
+  it("drops a leftover copy that holds the incoming handle instead of failing on it", async () => {
+    // The part is already keyed, and a not-adopted pre-fix copy of the same part
+    // still holds the handle this fetch returns. Refreshing the keyed row's handle
+    // must not trip the legacy (emailId, gmailAttachmentId) unique.
+    await upsertEmailAttachments({ userId, emailId, attachments: [part({ gmailAttachmentId: "ANGj-k" })] });
+    await prisma.$executeRaw`
+      INSERT INTO "EmailAttachment" (
+        "id", "userId", "emailId", "gmailAttachmentId", "filename", "mimeType", "size", "updatedAt"
+      ) VALUES ('old-same', ${userId}, ${emailId}, 'ANGj-same', 'contract.pdf', 'application/pdf', 1024, NOW())`;
+
+    await upsertEmailAttachments({ userId, emailId, attachments: [part({ gmailAttachmentId: "ANGj-same" })] });
+
+    expect(await rows()).toEqual([
+      expect.objectContaining({ partKey: "1", gmailAttachmentId: "ANGj-same" }),
+    ]);
+  });
+
   it("stays at one keyed row when two syncs upsert the same part at once", async () => {
     await insertLegacy({ id: "old-1", createdAt: "2026-05-11T00:00:00Z" });
 
