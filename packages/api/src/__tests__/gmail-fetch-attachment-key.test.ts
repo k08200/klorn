@@ -51,7 +51,11 @@ function multipart() {
     partId: "",
     mimeType: "multipart/mixed",
     parts: [
-      { partId: "0", mimeType: "text/plain", body: { data: Buffer.from("hi").toString("base64url") } },
+      {
+        partId: "0",
+        mimeType: "text/plain",
+        body: { data: Buffer.from("hi").toString("base64url") },
+      },
       {
         partId: "1",
         mimeType: "application/pdf",
@@ -104,8 +108,18 @@ describe("Gmail attachment identity across re-fetches", () => {
         partId: "",
         mimeType: "multipart/mixed",
         parts: [
-          { partId: "1", mimeType: "application/pdf", filename: "a.pdf", body: { attachmentId: "x", size: 1 } },
-          { partId: "1", mimeType: "application/pdf", filename: "b.pdf", body: { attachmentId: "y", size: 2 } },
+          {
+            partId: "1",
+            mimeType: "application/pdf",
+            filename: "a.pdf",
+            body: { attachmentId: "x", size: 1 },
+          },
+          {
+            partId: "1",
+            mimeType: "application/pdf",
+            filename: "b.pdf",
+            body: { attachmentId: "y", size: 2 },
+          },
         ],
       }),
     );

@@ -92,8 +92,16 @@ describePg("upsertEmailAttachments: stable part identity (real Postgres)", () =>
   });
 
   it("keeps one row when Gmail re-mints the attachmentId on a re-fetch", async () => {
-    await upsertEmailAttachments({ userId, emailId, attachments: [part({ gmailAttachmentId: "ANGj-a" })] });
-    await upsertEmailAttachments({ userId, emailId, attachments: [part({ gmailAttachmentId: "ANGj-b" })] });
+    await upsertEmailAttachments({
+      userId,
+      emailId,
+      attachments: [part({ gmailAttachmentId: "ANGj-a" })],
+    });
+    await upsertEmailAttachments({
+      userId,
+      emailId,
+      attachments: [part({ gmailAttachmentId: "ANGj-b" })],
+    });
 
     const stored = await rows();
     expect(stored).toHaveLength(1);
@@ -117,20 +125,33 @@ describePg("upsertEmailAttachments: stable part identity (real Postgres)", () =>
     await insertLegacy({ id: "old-2", summary: "S", createdAt: "2026-05-12T00:00:00Z" });
     await insertLegacy({ id: "old-3", createdAt: "2026-05-13T00:00:00Z" });
 
-    await upsertEmailAttachments({ userId, emailId, attachments: [part({ gmailAttachmentId: "ANGj-new" })] });
+    await upsertEmailAttachments({
+      userId,
+      emailId,
+      attachments: [part({ gmailAttachmentId: "ANGj-new" })],
+    });
 
     const stored = await rows();
     expect(stored).toHaveLength(3);
     const keyed = stored.filter((r) => r.partKey !== null);
     expect(keyed).toEqual([
-      expect.objectContaining({ id: "old-2", partKey: "1", gmailAttachmentId: "ANGj-new", summary: "S" }),
+      expect.objectContaining({
+        id: "old-2",
+        partKey: "1",
+        gmailAttachmentId: "ANGj-new",
+        summary: "S",
+      }),
     ]);
   });
 
   it("adopts a copy synced before Content-ID capture and fills the Content-ID", async () => {
     await insertLegacy({ id: "old-1", contentId: null, createdAt: "2026-05-11T00:00:00Z" });
 
-    await upsertEmailAttachments({ userId, emailId, attachments: [part({ contentId: "logo@mail" })] });
+    await upsertEmailAttachments({
+      userId,
+      emailId,
+      attachments: [part({ contentId: "logo@mail" })],
+    });
 
     expect(await rows()).toEqual([
       expect.objectContaining({ id: "old-1", partKey: "1", contentId: "logo@mail" }),
@@ -163,13 +184,21 @@ describePg("upsertEmailAttachments: stable part identity (real Postgres)", () =>
     // The part is already keyed, and a not-adopted pre-fix copy of the same part
     // still holds the handle this fetch returns. Refreshing the keyed row's handle
     // must not trip the legacy (emailId, gmailAttachmentId) unique.
-    await upsertEmailAttachments({ userId, emailId, attachments: [part({ gmailAttachmentId: "ANGj-k" })] });
+    await upsertEmailAttachments({
+      userId,
+      emailId,
+      attachments: [part({ gmailAttachmentId: "ANGj-k" })],
+    });
     await prisma.$executeRaw`
       INSERT INTO "EmailAttachment" (
         "id", "userId", "emailId", "gmailAttachmentId", "filename", "mimeType", "size", "updatedAt"
       ) VALUES ('old-same', ${userId}, ${emailId}, 'ANGj-same', 'contract.pdf', 'application/pdf', 1024, NOW())`;
 
-    await upsertEmailAttachments({ userId, emailId, attachments: [part({ gmailAttachmentId: "ANGj-same" })] });
+    await upsertEmailAttachments({
+      userId,
+      emailId,
+      attachments: [part({ gmailAttachmentId: "ANGj-same" })],
+    });
 
     expect(await rows()).toEqual([
       expect.objectContaining({ partKey: "1", gmailAttachmentId: "ANGj-same" }),
@@ -226,8 +255,16 @@ describePg("upsertEmailAttachments: stable part identity (real Postgres)", () =>
     await insertLegacy({ id: "old-1", createdAt: "2026-05-11T00:00:00Z" });
 
     await Promise.all([
-      upsertEmailAttachments({ userId, emailId, attachments: [part({ gmailAttachmentId: "ANGj-x" })] }),
-      upsertEmailAttachments({ userId, emailId, attachments: [part({ gmailAttachmentId: "ANGj-y" })] }),
+      upsertEmailAttachments({
+        userId,
+        emailId,
+        attachments: [part({ gmailAttachmentId: "ANGj-x" })],
+      }),
+      upsertEmailAttachments({
+        userId,
+        emailId,
+        attachments: [part({ gmailAttachmentId: "ANGj-y" })],
+      }),
     ]);
 
     const stored = await rows();
