@@ -2253,6 +2253,12 @@ func runSelfChecks() async -> Bool {
         swiftFiles.first { $0.lastPathComponent == name }
             .flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? ""
     }
+    // "Get update" must install in place; the release page is only
+    // SelfUpdate's fallback (0.4.80105 shipped a button that just opened it).
+    let prefsSource = source(named: "PreferencesView.swift")
+    check("Settings update button runs SelfUpdate",
+          prefsSource.contains("SelfUpdate.run(version: version)")
+          && !prefsSource.contains("UpdateCheck.openReleasePage()"))
     let mailSectionSource = source(named: "MailSection.swift")
     // FullList's own source: the struct is the only declaration in its file.
     let fullListFile = source(named: "FullList.swift")

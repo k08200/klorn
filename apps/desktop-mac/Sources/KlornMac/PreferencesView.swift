@@ -15,6 +15,7 @@ struct PreferencesView: View {
     @State private var loginItemError: String?
     @State private var updateChecking = false
     @State private var updateOutcome: UpdateCheck.Outcome?
+    @State private var selfUpdating = false
     @State private var recordingShortcut = false
 
     var body: some View {
@@ -179,8 +180,18 @@ struct PreferencesView: View {
             Spacer()
             switch updateOutcome {
             case .updateAvailable(let version):
-                Button(L("prefs.updates.get", version)) { UpdateCheck.openReleasePage() }
-                    .buttonStyle(PrimaryButtonStyle())
+                // Install in place (download → verify → swap → relaunch); the
+                // release page is only SelfUpdate's own fallback.
+                Button(selfUpdating ? L("update.updating") : L("prefs.updates.get", version)) {
+                    guard !selfUpdating else { return }
+                    selfUpdating = true
+                    Task {
+                        _ = await SelfUpdate.run(version: version)
+                        selfUpdating = false  // reached only on fallback
+                    }
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(selfUpdating)
             case .upToDate:
                 Text(L("prefs.updates.upToDate", AppInfo.version))
                     .font(.caption).foregroundStyle(Theme.textDim)

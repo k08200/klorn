@@ -233,7 +233,7 @@ jobs:
         run: |
           NOTES="$RUNNER_TEMP/notes.md"
           {
-            echo "Native macOS app — the always-on top-bar firewall (a slim pill at the top of your screen that expands with \`⌥⌘K\`)."
+            echo "Native macOS app — every connected mail account and calendar in one window, sorted into five lanes. Push mail and meetings about to start arrive as macOS notifications; \`⌥⌘K\` opens Klorn from anywhere."
             echo
             echo "## Install"
             echo "1. Download \`Klorn.dmg\` and open it."
