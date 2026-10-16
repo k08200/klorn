@@ -1055,6 +1055,13 @@ const fr: Record<string, string> = {
   "emailDetail.loadingLabel": "Chargement du courrier",
   "emailDetail.messageTitle": "Message",
   "emailDetail.previewTitle": "Aperçu",
+  "mailHtml.imagesBlocked":
+    "Les images externes sont masquées pour que l'expéditeur ne puisse pas savoir quand vous ouvrez ce message.",
+  "mailHtml.showImages": "Afficher les images",
+  "mailHtml.showPlain": "Texte brut",
+  "mailHtml.showFormatted": "Mise en forme",
+  "mailHtml.frameTitle": "Contenu du message",
+  "mailHtml.inlineMissing": "Certaines images intégrées n'ont pas pu être chargées.",
   "emailDetail.error.load": "Impossible de charger le courrier.",
   "emailDetail.error.reanalyzeAttachments": "Impossible de réanalyser les pièces jointes.",
   "emailDetail.error.saveCandidateStatus": "Impossible d'enregistrer le statut du candidat.",

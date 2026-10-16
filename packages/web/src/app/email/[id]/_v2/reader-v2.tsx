@@ -5,8 +5,9 @@
  * /email/[id] only when the API reports `user.mailV2`; the legacy reader is
  * untouched. Layout only: the page still owns the mail, its actions and the
  * reused pieces (reply composer, thread, attachments, analysis), which arrive
- * here as slots. The body is the existing plain-text renderer (linkifyText) —
- * no HTML from a sender is ever injected.
+ * here as slots. The body is the sender's HTML inside MailHtmlBody's sandboxed
+ * iframe when the API sends renderHtml, else the plain-text renderer
+ * (linkifyText) — no sender HTML is ever injected into this document.
  *
  * Order: a back bar that stays in reach, the header with everything that left
  * the list row, the actions, then the message first and Klorn's reading of it
@@ -16,6 +17,7 @@
 import type { LiveTier } from "@klorn/contract";
 import Link from "next/link";
 import { type ReactNode, useEffect } from "react";
+import MailHtmlBody from "../../../../components/mail-html-body";
 import Button from "../../../../components/ui/button";
 import EmptyState from "../../../../components/ui/empty-state";
 import { Skeleton, SkeletonGroup } from "../../../../components/ui/skeleton";
@@ -116,6 +118,14 @@ function TopBar({ reader, keyboardTriage, onOpen }: ReaderV2Props) {
         <ChevronDownIcon />
       </Button>
     </nav>
+  );
+}
+
+function PlainBody({ body }: { body: string }) {
+  return (
+    <pre className="whitespace-pre-wrap break-keep font-sans text-body leading-6 text-ink-strong [overflow-wrap:anywhere]">
+      {linkifyText(body)}
+    </pre>
   );
 }
 
@@ -250,11 +260,18 @@ export function ReaderV2(props: ReaderV2Props) {
 
           <div className="grid gap-6 border-t border-line-soft pt-5 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
             <div className="flex min-w-0 flex-col gap-5 *:m-0">
-              {current.body ? (
+              {current.renderHtml ? (
                 <section aria-label={t("emailDetail.messageTitle")}>
-                  <pre className="whitespace-pre-wrap break-keep font-sans text-body leading-6 text-ink-strong [overflow-wrap:anywhere]">
-                    {linkifyText(current.body)}
-                  </pre>
+                  <MailHtmlBody
+                    key={current.id}
+                    emailId={current.id}
+                    html={current.renderHtml}
+                    plain={current.body ? <PlainBody body={current.body} /> : null}
+                  />
+                </section>
+              ) : current.body ? (
+                <section aria-label={t("emailDetail.messageTitle")}>
+                  <PlainBody body={current.body} />
                 </section>
               ) : current.snippet ? (
                 <section aria-label={t("emailDetail.previewTitle")}>
