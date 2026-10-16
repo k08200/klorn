@@ -185,6 +185,40 @@ describe("the linked drive accounts (D5a): no reader or writer yet but the purge
       .map((f) => f.path);
     expect(raw).toEqual([]);
   });
+
+  // A row holds an OAuth token pair, so a relation read is as much a leak as a
+  // direct query: `include: { linkedDriveAccounts: true }` on a user, or
+  // `include: { sourceAccount: true }` / `select: { sourceAccount: ... }` on a
+  // drive file, returns the tokens. Code only: a comment may name the table.
+  const ACCOUNT_NAME = /\b(linkedDriveAccounts?|LinkedDriveAccount)\b/;
+  const FILE_TO_ACCOUNT = /\bsourceAccount\b/;
+  const codeOf = (text: string) =>
+    text.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/.*$/gm, "$1");
+
+  it("only the purge and the sweep name the account table or its relations in code, so no include or select reaches the tokens", () => {
+    const naming = files.filter((f) => ACCOUNT_NAME.test(codeOf(f.text))).map((f) => f.path);
+    expect(naming.sort()).toEqual(["purge-user-data.ts", "scripts/reencrypt-tokens.ts"]);
+    const relation = files.filter((f) => FILE_TO_ACCOUNT.test(codeOf(f.text))).map((f) => f.path);
+    expect(relation).toEqual([]);
+  });
+
+  it("the detector sees every relation read and ignores the column and comments (so the list cannot pass by scanning nothing)", () => {
+    const seen = (text: string) =>
+      ACCOUNT_NAME.test(codeOf(text)) || FILE_TO_ACCOUNT.test(codeOf(text));
+    expect(
+      seen("prisma.user.findUnique({ where: { id }, include: { linkedDriveAccounts: true } })"),
+    ).toBe(true);
+    expect(seen("select: { linkedDriveAccounts: { select: { accessToken: true } } }")).toBe(true);
+    expect(seen("prisma.driveFile.findMany({ include: { sourceAccount: true } })")).toBe(true);
+    expect(seen("select: { sourceAccount: { select: { refreshToken: true } } }")).toBe(true);
+    expect(seen('import type { LinkedDriveAccount } from "@prisma/client";')).toBe(true);
+    expect(seen("tx.linkedDriveAccount.findFirst({ where: { id } })")).toBe(true);
+    expect(seen("const a = { sourceAccountId: row.sourceKey };")).toBe(false);
+    expect(
+      seen("// the cascade from LinkedDriveAccount\n/** sourceAccount: see the schema */"),
+    ).toBe(false);
+    expect(seen('const url = "https://x.test"; tx.linkedDriveAccount.count()')).toBe(true);
+  });
 });
 
 describe("every DriveFile read goes through the kill switch", () => {

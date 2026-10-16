@@ -769,10 +769,13 @@ model DriveFile {
   // flight fails the foreign key instead of leaving an orphan). NULL exactly for
   // KLORN rows, and equal to sourceKey when set (the migration's two CHECKs).
   // drive-rows.ts derives it from the source on create and never updates it.
-  // The foreign key proves the account exists, not whose it is: a connector
-  // loads the account by (id, userId, provider) before it writes.
+  // The foreign key is composite, (sourceAccountId, userId, provider) to the
+  // account's (id, userId, provider): the database itself refuses a row that
+  // names another user's account or an account of another provider. MATCH
+  // SIMPLE, so a KLORN row (NULL sourceAccountId) is not checked. A connector
+  // still loads the account by (id, userId, provider) before it writes.
   sourceAccountId  String?
-  sourceAccount    LinkedDriveAccount? @relation(fields: [sourceAccountId], references: [id], onDelete: Cascade)
+  sourceAccount    LinkedDriveAccount? @relation(fields: [sourceAccountId, userId, provider], references: [id, userId, provider], onDelete: Cascade)
   // The id in the source (Drive file id, Graph item id, the id D3 mints for a
   // Klorn file). Required: every row is addressable, and parentExternalId always
   // has something to name.
@@ -830,7 +833,8 @@ model DriveFile {
   @@index([userId, provider, parentExternalId, modifiedAt, id])
   // The cascade from LinkedDriveAccount and the unlink both look one account's
   // rows up by it, with no userId to lead with (C2's reason for
-  // CalendarEvent.sourceAccountId).
+  // CalendarEvent.sourceAccountId). It also serves the composite foreign key's
+  // lookup: the account id is a UUID, so the leading column alone is selective.
   @@index([sourceAccountId])
 }
 
@@ -844,7 +848,8 @@ model DriveFile {
 //   - provider: no default, so every writer states it; never KLORN (the
 //     migration's CHECK: the Klorn drive has no account).
 //   - email: the account's address as the provider verified it, trimmed and
-//     lower-cased by the link flow; the label and, with provider, the dedup key.
+//     lower-cased by the link flow (the migration's CHECK: email =
+//     lower(btrim(email))); the label and, with provider, the dedup key.
 //   - accessToken / refreshToken: encryptToken ciphers under the
 //     TOKEN_ENCRYPTION_KEYS ring, never plain text; covered by the key-rotation
 //     sweep (scripts/reencrypt-tokens.ts). Both required: a grant without a
@@ -873,6 +878,9 @@ model LinkedDriveAccount {
   files           DriveFile[]
 
   @@unique([userId, provider, email])
+  // The target of DriveFile's composite foreign key, which proves a file's
+  // account is of the same user and provider. Redundant as a key (id is unique).
+  @@unique([id, userId, provider])
 }
 
 enum DriveSummaryStatus {

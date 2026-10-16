@@ -65,7 +65,8 @@ const TABLE = [
   `"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,`,
   `"updatedAt" TIMESTAMP(3) NOT NULL,`,
   `CONSTRAINT "LinkedDriveAccount_pkey" PRIMARY KEY ("id"),`,
-  `CONSTRAINT "LinkedDriveAccount_provider_not_klorn_check" CHECK ("provider" <> 'KLORN') )`,
+  `CONSTRAINT "LinkedDriveAccount_provider_not_klorn_check" CHECK ("provider" <> 'KLORN'),`,
+  `CONSTRAINT "LinkedDriveAccount_email_normalized_check" CHECK ("email" = lower(btrim("email"))) )`,
 ].join(" ");
 
 const RLS = [
@@ -74,6 +75,7 @@ const RLS = [
   `CREATE POLICY "LinkedDriveAccount_system_bypass" ON "LinkedDriveAccount" USING (current_setting('app.bypass_rls', true) = 'on')`,
 ];
 
+const COMPOSITE_FK = `ALTER TABLE "DriveFile" ADD CONSTRAINT "DriveFile_sourceAccountId_userId_provider_fkey" FOREIGN KEY ("sourceAccountId", "userId", "provider") REFERENCES "LinkedDriveAccount"("id", "userId", "provider") ON DELETE CASCADE ON UPDATE CASCADE`;
 const PROVIDER_CHECK = `ALTER TABLE "DriveFile" ADD CONSTRAINT "DriveFile_sourceAccountId_klorn_check" CHECK (("provider" = 'KLORN') = ("sourceAccountId" IS NULL))`;
 const SOURCE_KEY_CHECK = `ALTER TABLE "DriveFile" ADD CONSTRAINT "DriveFile_sourceAccountId_sourceKey_check" CHECK ("sourceAccountId" IS NULL OR "sourceAccountId" = "sourceKey")`;
 
@@ -82,15 +84,54 @@ describe("linked drive account migration", () => {
     expect(statements).toEqual([
       `SET LOCAL lock_timeout = '5s'`,
       TABLE,
-      `ALTER TABLE "DriveFile" ADD COLUMN "sourceAccountId" TEXT`,
       `CREATE UNIQUE INDEX "LinkedDriveAccount_userId_provider_email_key" ON "LinkedDriveAccount"("userId", "provider", "email")`,
-      `CREATE INDEX "DriveFile_sourceAccountId_idx" ON "DriveFile"("sourceAccountId")`,
+      `CREATE UNIQUE INDEX "LinkedDriveAccount_id_userId_provider_key" ON "LinkedDriveAccount"("id", "userId", "provider")`,
       `ALTER TABLE "LinkedDriveAccount" ADD CONSTRAINT "LinkedDriveAccount_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE`,
-      `ALTER TABLE "DriveFile" ADD CONSTRAINT "DriveFile_sourceAccountId_fkey" FOREIGN KEY ("sourceAccountId") REFERENCES "LinkedDriveAccount"("id") ON DELETE CASCADE ON UPDATE CASCADE`,
+      ...RLS,
+      `ALTER TABLE "DriveFile" ADD COLUMN "sourceAccountId" TEXT`,
+      `CREATE INDEX "DriveFile_sourceAccountId_idx" ON "DriveFile"("sourceAccountId")`,
+      COMPOSITE_FK,
       PROVIDER_CHECK,
       SOURCE_KEY_CHECK,
-      ...RLS,
     ]);
+  });
+
+  it("takes the locks in one order: every LinkedDriveAccount statement before the first DriveFile one", () => {
+    // ACCESS EXCLUSIVE on "DriveFile" is then never held while the "User"
+    // foreign key waits for its lock.
+    const onDriveFile = (s: string) => /^ALTER TABLE "DriveFile"|ON "DriveFile"\(/.test(s);
+    const firstDriveFile = statements.findIndex(onDriveFile);
+    const lastOther = statements
+      .map((s, i) => (onDriveFile(s) ? -1 : i))
+      .reduce((a, b) => Math.max(a, b));
+    expect(firstDriveFile).toBeGreaterThan(0);
+    expect(lastOther).toBeLessThan(firstDriveFile);
+    expect(statements.slice(firstDriveFile).every(onDriveFile)).toBe(true);
+    expect(statements.findIndex((s) => s.includes(`REFERENCES "User"`))).toBeLessThan(
+      firstDriveFile,
+    );
+  });
+
+  it("the foreign key is composite, so the database refuses another user's or another provider's account", () => {
+    const fks = statements.filter(
+      (s) => s.startsWith(`ALTER TABLE "DriveFile"`) && s.includes("FOREIGN KEY"),
+    );
+    expect(fks).toEqual([COMPOSITE_FK]);
+    // MATCH SIMPLE (the default): a KLORN row, whose sourceAccountId is NULL, is not checked.
+    expect(statements.join(" ")).not.toMatch(/MATCH (FULL|PARTIAL)/);
+    // The unique it references exists before it.
+    const target = statements.findIndex((s) =>
+      s.includes(`"LinkedDriveAccount_id_userId_provider_key"`),
+    );
+    expect(target).toBeGreaterThan(0);
+    expect(statements.indexOf(COMPOSITE_FK)).toBeGreaterThan(target);
+  });
+
+  it("stores the email normalised: the CHECK refuses a padded or upper-case address", () => {
+    const table = statements.find((s) => s.startsWith(`CREATE TABLE "LinkedDriveAccount"`));
+    expect(table).toContain(
+      `CONSTRAINT "LinkedDriveAccount_email_normalized_check" CHECK ("email" = lower(btrim("email")))`,
+    );
   });
 
   it("fails fast behind a held lock: lock_timeout is the first statement", () => {
@@ -99,7 +140,9 @@ describe("linked drive account migration", () => {
 
   it("creates the sourceAccountId index before the foreign key whose cascade uses it", () => {
     const index = statements.findIndex((s) => s.includes(`"DriveFile_sourceAccountId_idx"`));
-    const fk = statements.findIndex((s) => s.includes(`"DriveFile_sourceAccountId_fkey"`));
+    const fk = statements.findIndex((s) =>
+      s.includes(`"DriveFile_sourceAccountId_userId_provider_fkey"`),
+    );
     expect(index).toBeGreaterThan(0);
     expect(fk).toBeGreaterThan(index);
   });
@@ -149,7 +192,7 @@ describe("linked drive account migration", () => {
     const driveFileChanges = statements.filter((s) => s.startsWith(`ALTER TABLE "DriveFile"`));
     expect(driveFileChanges).toEqual([
       `ALTER TABLE "DriveFile" ADD COLUMN "sourceAccountId" TEXT`,
-      `ALTER TABLE "DriveFile" ADD CONSTRAINT "DriveFile_sourceAccountId_fkey" FOREIGN KEY ("sourceAccountId") REFERENCES "LinkedDriveAccount"("id") ON DELETE CASCADE ON UPDATE CASCADE`,
+      COMPOSITE_FK,
       PROVIDER_CHECK,
       SOURCE_KEY_CHECK,
     ]);
@@ -162,6 +205,8 @@ describe("linked drive account migration", () => {
     expect(header).toContain(`prisma migrate resolve --rolled-back ${MIGRATION}`);
     expect(header).toMatch(/ACCESS EXCLUSIVE on "DriveFile"/);
     expect(header).toMatch(/SHARE ROW EXCLUSIVE/);
+    expect(header).toMatch(/MATCH SIMPLE/);
+    expect(header).toMatch(/lower\(btrim\("email"\)\)/);
   });
 });
 
@@ -195,15 +240,16 @@ describe("linked drive account schema", () => {
     expect(model).toMatch(/\n\s+refreshToken\s+String\n/);
     expect(model).toMatch(/\n\s+needsReconnect\s+Boolean\s+@default\(false\)\n/);
     expect(model).toContain("@@unique([userId, provider, email])");
+    expect(model).toContain("@@unique([id, userId, provider])");
     expect(model).toMatch(/\n\s+files\s+DriveFile\[\]\n/);
     expect(block("model User {")).toMatch(/\n\s+linkedDriveAccounts\s+LinkedDriveAccount\[\]\n/);
   });
 
-  it("DriveFile.sourceAccountId is a nullable foreign key that cascades, with an index of its own", () => {
+  it("DriveFile.sourceAccountId is a nullable composite foreign key that cascades, with an index of its own", () => {
     const model = block("model DriveFile {");
     expect(model).toMatch(/\n\s+sourceAccountId\s+String\?\n/);
     expect(model).toMatch(
-      /\n\s+sourceAccount\s+LinkedDriveAccount\?\s+@relation\(fields: \[sourceAccountId\], references: \[id\], onDelete: Cascade\)\n/,
+      /\n\s+sourceAccount\s+LinkedDriveAccount\?\s+@relation\(fields: \[sourceAccountId, userId, provider\], references: \[id, userId, provider\], onDelete: Cascade\)\n/,
     );
     expect(model).toContain("@@index([sourceAccountId])");
   });
