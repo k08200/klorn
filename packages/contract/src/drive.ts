@@ -228,3 +228,57 @@ export interface DriveDownloadResponse {
 export interface DriveDeleteResponse {
   deleted: { files: number; folders: number };
 }
+
+// ─── Google Drive accounts (D5b) ──────────────────────────────────────────────
+// `/api/drive/google`: link and unlink a Google account for its picked files
+// (drive.file only). Every route answers exactly like an unregistered one while
+// the server's DRIVE_ENABLED or GOOGLE_DRIVE_ENABLED flag is off. No token ever
+// crosses the wire.
+
+/**
+ * `POST /api/drive/google/link` — the Google consent URL to send the browser
+ * to. The callback lands it back on `/files?drive=<GoogleDriveLinkOutcome>`.
+ */
+export interface GoogleDriveLinkResponse {
+  url: string;
+}
+
+/**
+ * The `drive` query value of `/files` after a link:
+ *   - `success`: linked (or re-linked in place);
+ *   - `scope-missing`: Google Drive access was unticked at consent; nothing stored;
+ *   - `unverified`: Google has not verified that address; nothing stored;
+ *   - `limit`: the user already has the most accounts (5); nothing stored;
+ *   - `failed`: anything else, the feature turned off meanwhile included.
+ */
+export type GoogleDriveLinkOutcome =
+  | "success"
+  | "failed"
+  | "unverified"
+  | "scope-missing"
+  | "limit";
+
+/** One linked Google Drive account. */
+export interface GoogleDriveAccountWire {
+  id: string;
+  email: string;
+  /** The grant stopped working (revoked, or unreadable): only a re-link fixes it. */
+  needsReconnect: boolean;
+  /** ISO 8601. */
+  createdAt: string;
+}
+
+/** `GET /api/drive/google/accounts` — the user's accounts, oldest first. */
+export interface GoogleDriveAccountsResponse {
+  accounts: GoogleDriveAccountWire[];
+}
+
+/**
+ * `DELETE /api/drive/google/accounts/:id` — the account and every file indexed
+ * from it are removed from Klorn. Klorn does not revoke the grant at Google (a
+ * grant shared with the primary's Gmail would go with it); the user can remove
+ * it in their Google account. 404 `{ error }` for an id that is not the user's.
+ */
+export interface GoogleDriveUnlinkResponse {
+  success: true;
+}

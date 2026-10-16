@@ -229,8 +229,8 @@ export function deviceCalendarEnabled(): boolean {
 // off: every /api/drive route answers Fastify's default 404 (darkRouteGate), and
 // every reader hides every DriveFile row (drive/drive-scope.ts), whatever a
 // connector's own flag says. On, a row is visible only while its provider's
-// connector flag is on too (DRIVE_PROVIDER_ENABLED); D2 ships no connector, so
-// the list is empty until D3, D5 or D6 registers one. Read at request time
+// connector flag is on too (DRIVE_PROVIDER_ENABLED): KLORN (D3) and GOOGLE (D5)
+// are registered, ONEDRIVE (D6) is not yet. Read at request time
 // with the same lenient truthy parse, so a flip needs no redeploy.
 export function driveEnabled(): boolean {
   return ["true", "1", "yes", "on"].includes(
@@ -249,6 +249,20 @@ export function driveEnabled(): boolean {
 export function klornDriveEnabled(): boolean {
   return ["true", "1", "yes", "on"].includes(
     (process.env.KLORN_DRIVE_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
+// The Google Drive connector — step D5 of docs/providers/unified-platform-plan.md
+// (D5b: link and unlink a Google account for its picked files, drive.file only).
+// OFF by default (repo doctrine), and flipping it waits on Google's verification
+// of drive.file (the plan's "Before the flip"). It is live only while
+// DRIVE_ENABLED is on too (drive/drive-scope.ts): until then the
+// /api/drive/google routes answer Fastify's default 404 (darkRouteGate), every
+// GOOGLE row is hidden from the drive, and a link callback still in flight
+// stores nothing and exchanges no code. Read at request time with the same
+// lenient truthy parse, so a flip needs no redeploy.
+export function googleDriveEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.GOOGLE_DRIVE_ENABLED ?? "").trim().toLowerCase(),
   );
 }
 // Drive file summaries and summary search — step D4 of

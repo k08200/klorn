@@ -40,6 +40,11 @@ import { encryptOptional, encryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
 import { withDbRetry } from "../db-retry.js";
 import { visibleDriveProviders } from "../drive/drive-scope.js";
+import {
+  completeGoogleDriveLink,
+  DRIVE_LINK_STATE_MARKER,
+  driveLinkRedirect,
+} from "../drive/providers/google-auth.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../mail/email.js";
 import { extractEmailAddress } from "../mail/email-address.js";
 import { syncLinkedInboxesForUser } from "../mail/email-sync.js";
@@ -1175,6 +1180,20 @@ export function authRoutes(app: FastifyInstance) {
         statePayload = verifyToken(state);
       } catch {
         return reply.code(400).send({ error: "Invalid or expired OAuth state" });
+      }
+
+      // --- Link a Google Drive account (D5b, state marker __link_drive__) ---
+      // Before the code exchange below, on purpose: a drive code is exchanged by
+      // the grant module after it re-reads GOOGLE_DRIVE_ENABLED, or by nobody.
+      // Only the dark POST /api/drive/google/link signs this marker. Never
+      // throws: every failure lands on /files?drive=failed.
+      if (statePayload.email === DRIVE_LINK_STATE_MARKER) {
+        return reply.redirect(
+          driveLinkRedirect(
+            webUrl,
+            await completeGoogleDriveLink({ code, userId: statePayload.userId }),
+          ),
+        );
       }
 
       try {

@@ -32,8 +32,12 @@
  * CASCADE, and the migration's two CHECKs hold the same rule in the database. A
  * create whose account was unlinked meanwhile fails the foreign key (Prisma
  * P2003) instead of leaving an orphan row.
+ *
+ * Unlinking an account (D5b, drive/linked-drive-accounts.ts) deletes its rows
+ * here, by sourceKey, inside the unlink's own transaction, before the account.
  */
 
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../db.js";
 import { safeHttpsLink } from "../safe-https-link.js";
 import { type DriveProviderName, isKlornDriveProvider } from "./drive-providers.js";
@@ -333,6 +337,32 @@ export async function deleteKlornDriveRows(
       sourceKey: KLORN_DRIVE_SOURCE_KEY,
       externalId: { in: [...externalIds] },
     },
+  });
+  return deleted.count;
+}
+
+/** The client a delete runs on: the global one, or a transaction's. */
+export type DriveRowsClient = Pick<Prisma.TransactionClient, "driveFile">;
+
+/**
+ * Delete every row of one connected account of this user (D5b's unlink). Only
+ * that user's, only that provider's (never KLORN: the type has no such member),
+ * only that account's. Runs on the caller's transaction, which then deletes the
+ * account: the foreign key's cascade would take the rows too, but the writer
+ * deletes them itself so the unlink states what it removes. A summary goes with
+ * its file through its own cascading foreign key.
+ */
+export async function deleteConnectedDriveRows(
+  client: DriveRowsClient,
+  userId: string,
+  provider: ConnectedDriveProvider,
+  sourceKey: string,
+): Promise<number> {
+  // The type already refuses it; a cast must not reach KLORN rows, whose objects
+  // are deleted before them (drive/klorn-remove.ts).
+  if (isKlornDriveProvider(provider)) throw new Error("drive rows: KLORN has no connected account");
+  const deleted = await client.driveFile.deleteMany({
+    where: { userId, provider, sourceKey },
   });
   return deleted.count;
 }

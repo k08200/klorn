@@ -54,6 +54,7 @@ import { emailRoutes } from "./routes/email.js";
 import { feedbackRoutes } from "./routes/feedback.js";
 import { firewallRoutes } from "./routes/firewall.js";
 import { gmailPushRoutes } from "./routes/gmail-push.js";
+import { googleDriveLinkRoutes, googleDriveRoutesEnabled } from "./routes/google-drive-link.js";
 import { imapConnectRoutes } from "./routes/imap-connect.js";
 import { inboxRoutes } from "./routes/inbox.js";
 import {
@@ -330,6 +331,11 @@ await app.register(driveRoutes({ gate: driveEnabled }), { prefix: "/api/drive" }
 // The Klorn drive (step D3): upload, folders, download, rename/move, delete —
 // dark until DRIVE_ENABLED, KLORN_DRIVE_ENABLED and OBJECT_STORAGE_ENABLED are on.
 await app.register(klornDriveRoutes({ gate: klornDriveRoutesEnabled }), { prefix: "/api/drive" });
+// Google Drive link and unlink (step D5b) — dark until DRIVE_ENABLED and
+// GOOGLE_DRIVE_ENABLED are both on. The consent's callback is routes/auth.ts's.
+await app.register(googleDriveLinkRoutes({ gate: googleDriveRoutesEnabled }), {
+  prefix: "/api/drive/google",
+});
 // Which account types this deployment can connect, for the first run's provider
 // grid (productization plan P8) — dark until ONBOARDING_V2 (the default 404 while off).
 await app.register(providersAvailableRoutes, { prefix: "/api/providers" });

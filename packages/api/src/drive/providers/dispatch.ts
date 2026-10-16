@@ -7,7 +7,7 @@
  * A connector is real only while DRIVE_ENABLED and its own flag are both on
  * (DRIVE_PROVIDER_ENABLED in drive/drive-scope.ts, read per call so a flip needs
  * no restart); otherwise, and for a provider nobody implemented, it is the
- * unsupported stub. D2 implements none.
+ * unsupported stub. D5b implements GOOGLE.
  *
  * A connector plugs in with two entries: its flag in DRIVE_PROVIDER_ENABLED and
  * its actions in IMPLEMENTATIONS below.
@@ -19,6 +19,7 @@ import {
   type DriveProviderEnabledMap,
   visibleDriveProviders,
 } from "../drive-scope.js";
+import { googleDriveActions } from "./google.js";
 import type { DriveProviderActions } from "./types.js";
 import { unsupportedDriveActions } from "./unsupported.js";
 
@@ -27,12 +28,12 @@ export type DriveImplementations = Readonly<
 >;
 
 /**
- * The connectors that exist. D5 adds GOOGLE, D6 ONEDRIVE. KLORN has none: the
- * Klorn drive's index IS its source (D3 writes the rows itself), so a session
- * that lists it would only read the same table back. KLORN stays the
+ * The connectors that exist. D5b adds GOOGLE; D6 adds ONEDRIVE. KLORN has none:
+ * the Klorn drive's index IS its source (D3 writes the rows itself), so a
+ * session that lists it would only read the same table back. KLORN stays the
  * unsupported stub here while its flag lives in DRIVE_PROVIDER_ENABLED.
  */
-const IMPLEMENTATIONS: DriveImplementations = {};
+const IMPLEMENTATIONS: DriveImplementations = { GOOGLE: googleDriveActions };
 
 export function driveActionsForProvider(
   provider: DriveProviderName,
