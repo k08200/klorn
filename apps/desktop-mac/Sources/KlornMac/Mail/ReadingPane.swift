@@ -39,7 +39,7 @@ struct ReadingPane: View {
                 } else if let detail = model.mailboxDetail {
                     mailboxContent(picked, detail)
                 } else {
-                    centered { EmptyState(icon: "doc.text", title: L("reading.noPreview"), typeRoles: true) }
+                    centered { EmptyState(icon: "doc.text", title: L("reading.noPreview")) }
                 }
             } else if model.isLoadingEmail {
                 centered { ProgressView().controlSize(.small) }
@@ -49,7 +49,7 @@ struct ReadingPane: View {
                 content(email)
             } else if model.selectedItemId != nil {
                 centered {
-                    EmptyState(icon: "doc.text", title: L("reading.noPreview"), typeRoles: true)
+                    EmptyState(icon: "doc.text", title: L("reading.noPreview"))
                 }
             } else {
                 centered {

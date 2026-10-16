@@ -161,11 +161,11 @@ struct FullList: View {
             } else if items.isEmpty {
                 Spacer()
                 if let filter = labelFilter {
-                    EmptyState(icon: filter.icon, title: L("label.empty", filter.label), typeRoles: true)
+                    EmptyState(icon: filter.icon, title: L("label.empty", filter.label))
                 } else if inboxMode {
-                    EmptyState(icon: "tray", title: L("inbox.empty"), typeRoles: true)
+                    EmptyState(icon: "tray", title: L("inbox.empty"))
                 } else {
-                    EmptyState(icon: tier.emptyIcon, title: tier.emptyTitle, hint: tier.blurb, typeRoles: true)
+                    EmptyState(icon: tier.emptyIcon, title: tier.emptyTitle, hint: tier.blurb)
                 }
                 Spacer()
             } else if Theme.isRenderingOffscreen {
@@ -324,7 +324,7 @@ struct FullList: View {
                 title: {
                     let q = query.trimmingCharacters(in: .whitespaces)
                     return L("mail.noMatches", q, L10n.josaWaIfKorean(after: q))
-                }(), typeRoles: true)
+                }())
             Spacer()
         }
     }

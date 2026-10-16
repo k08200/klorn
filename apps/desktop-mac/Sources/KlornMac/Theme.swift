@@ -363,10 +363,6 @@ struct EmptyState: View {
     let icon: String
     let title: String
     var hint: String? = nil
-    /// True: the type roles (13pt / 11pt). False: the system styles, whose
-    /// caption is the retired 10pt; the assistant thread, the folder lists
-    /// and the waiting-on list still draw these.
-    var typeRoles = false
 
     var body: some View {
         VStack(spacing: Theme.s3) {
@@ -375,10 +371,10 @@ struct EmptyState: View {
                 .foregroundStyle(Theme.textDim)
                 .opacity(0.7)
                 .accessibilityHidden(true)
-            Text(title).font(typeRoles ? Theme.Typo.body : .callout)
+            Text(title).font(Theme.Typo.body)
                 .foregroundStyle(Theme.textDim)
             if let hint {
-                Text(hint).font(typeRoles ? Theme.Typo.caption : .caption)
+                Text(hint).font(Theme.Typo.caption)
                     .foregroundStyle(Theme.textDim)
                     .multilineTextAlignment(.center)
             }

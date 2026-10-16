@@ -87,7 +87,7 @@ struct FilesSection: View {
                 FilesSkeleton()
             case .failed:
                 VStack(spacing: Theme.s3) {
-                    EmptyState(icon: "exclamationmark.triangle", title: L("files.error"), typeRoles: true)
+                    EmptyState(icon: "exclamationmark.triangle", title: L("files.error"))
                     Button(L("today.retry")) { Task { await store.reload() } }
                         .buttonStyle(SolidButtonStyle(prominent: false))
                 }
@@ -113,7 +113,7 @@ struct FilesSection: View {
             } else {
                 (L("files.empty.title"), L("files.empty.body"))
             }
-        return EmptyState(icon: "folder", title: title, hint: hint, typeRoles: true)
+        return EmptyState(icon: "folder", title: title, hint: hint)
     }
 
     private var rows: some View {
