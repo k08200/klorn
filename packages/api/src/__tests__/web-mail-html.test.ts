@@ -75,7 +75,8 @@ describe("neutralizeMailHtml — parser confusion", () => {
     const out = neutralizeMailHtml('<p>a</p><img src=x title="unclosed onerror=alert(1)><b>b</b>');
     expect(out).not.toMatch(/<img[^>]*onerror/i);
     expect(out).toContain("&lt;img");
-    expect(out).toContain("<b>b</b>");
+    // The browser would swallow the rest into the attribute; we keep it as text.
+    expect(out).toContain("&lt;b&gt;b&lt;/b&gt;");
   });
 
   it("survives out-of-range numeric entities instead of throwing", () => {
@@ -97,6 +98,50 @@ describe("neutralizeMailHtml — parser confusion", () => {
       '<a href="&#106;avascript:alert(1)">a</a><a href="java&#x0A;script:x">b</a>',
     );
     expect(out).not.toMatch(/href=/i);
+  });
+});
+
+describe("neutralizeMailHtml — CSS loads beyond url()", () => {
+  it.each([
+    ["image-set", 'background-image:image-set("https://t.example/a.png" 1x)'],
+    ["escaped url", "background:u\\72l(https://t.example/a.png)"],
+    [
+      "cross-fade",
+      "background:cross-fade(url(data:image/png;base64,AA), url(data:image/png;base64,AA), 50%)",
+    ],
+  ])("drops a style using %s even with images allowed", (_label, style) => {
+    const out = neutralizeMailHtml(`<div style='${style}'>x</div>`, { allowRemoteImages: true });
+    expect(out).toBe("<div>x</div>");
+  });
+
+  it("keeps CJK font-name escapes, which carry no call", () => {
+    const out = neutralizeMailHtml(`<p style='font-family:"\\5FAE\\8F6F"'>x</p>`);
+    expect(out).toContain("font-family");
+  });
+
+  it("neutralises a url() whose value hides a ')'", () => {
+    const out = neutralizeMailHtml(`<p style='background:url("https://t.example/a)b")'>x</p>`);
+    expect(out).not.toContain("url(");
+  });
+});
+
+describe("neutralizeMailHtml — linear on hostile input", () => {
+  const SIZE = 200_000;
+  const BUDGET_MS = 1500;
+  it.each([
+    ["unterminated <a", "<a "],
+    ["unterminated script attr", '<script a="'],
+    ["bare <!", "<!"],
+    ["open comments", "<!--"],
+    ["unclosed svg", "<b><svg>"],
+    ["url( without close", "<p style='url(url(url("],
+  ])("handles %s repeated to 200k chars quickly", (_label, unit) => {
+    const input = unit.repeat(Math.ceil(SIZE / unit.length));
+    const started = performance.now();
+    buildMailSrcdoc(input, { allowRemoteImages: false });
+    countRemoteImages(input);
+    estimateMailFrameHeight(input);
+    expect(performance.now() - started).toBeLessThan(BUDGET_MS);
   });
 });
 
@@ -217,6 +262,10 @@ describe("buildMailSrcdoc", () => {
 });
 
 describe("cidRefs", () => {
+  it("never yields dot segments that fetch would normalise into another path", () => {
+    expect(cidRefs('<img src="cid:.."><img src="cid:."><img src="cid:ok">')).toEqual(["ok"]);
+  });
+
   it("matches the scheme case-insensitively", () => {
     expect(cidRefs('<img src="CID:Logo@x">')).toEqual(["Logo@x"]);
   });

@@ -38,12 +38,22 @@ const REMOTE_URL = /^https?:\/\//i;
 const SAFE_HREF = /^(https?:|mailto:)/i;
 
 /** Removed together with everything inside them. */
-const DROP_WITH_CONTENT =
-  /<(script|style|title|textarea|noscript|template|xmp|svg|math|iframe|object|noembed|noframes|select|button|applet)\b(?:"[^"]*"|'[^']*'|[^'">])*>[\s\S]*?<\/\1\s*>/gi;
-const COMMENT_OR_DECL = /<!--[\s\S]*?-->|<![^>]*>|<\?[^>]*>/g;
-/** A start or end tag; quoted values may contain '>'. Branches are disjoint. */
-const TAG = /<(\/?)([a-zA-Z][\w:-]*)((?:"[^"]*"|'[^']*'|[^'">])*)>/g;
+const DROP_WITH_CONTENT = new Set(
+  (
+    "script style title textarea noscript template xmp svg math iframe object noembed noframes " +
+    "select button applet"
+  ).split(" "),
+);
+const TAG_NAME_START = /[a-z]/i;
+const TAG_NAME_CHAR = /[\w:-]/;
 const ATTR = /([^\s"'>/=]+)(?:\s*=\s*("[^"]*"|'[^']*'|[^\s"'=<>`]+))?/g;
+/**
+ * Style values dropped whole: legacy script hooks, CSS functions that load
+ * images without url(), and escapes in front of a call (u\72l(…) is url()).
+ * A lone backslash stays — CJK mail escapes font names ("\5FAE\8F6F…").
+ */
+const ACTIVE_CSS =
+  /expression\s*\(|javascript\s*:|vbscript\s*:|behavior\s*:|-moz-binding|image-set|cross-fade|element\s*\(|(?<![\w-])image\s*\(/i;
 
 const ALLOWED_TAGS = new Set(
   (
@@ -113,17 +123,27 @@ function parseAttrs(raw: string): Attr[] {
   return [...attrs.values()];
 }
 
-function cleanStyle(style: string, allowRemote: boolean): string {
-  const noActive = style.replace(
-    /expression\s*\(|javascript\s*:|vbscript\s*:|behavior\s*:|-moz-binding/gi,
-    "",
+/** The url inside each CSS url(…), quotes and controls stripped. Linear. */
+function cssUrlSegments(style: string): Array<{ url: string | null; rest: string; raw: string }> {
+  return style
+    .split(/url\s*\(/i)
+    .slice(1)
+    .map((raw) => {
+      const close = raw.indexOf(")");
+      if (close < 0) return { url: null, rest: "", raw };
+      const url = urlForCheck(raw.slice(0, close)).replace(/^['"]|['"]$/g, "");
+      return { url, rest: raw.slice(close + 1), raw };
+    });
+}
+
+function cleanStyle(style: string, allowRemote: boolean): string | null {
+  if (ACTIVE_CSS.test(style) || (style.includes("\\") && style.includes("("))) return null;
+  const head = style.split(/url\s*\(/i, 1)[0];
+  const keep = (url: string) => SAFE_DATA_IMAGE.test(url) || (allowRemote && REMOTE_URL.test(url));
+  const tail = cssUrlSegments(style).map((seg) =>
+    seg.url !== null && keep(seg.url) ? `url(${seg.raw}` : `none${seg.rest}`,
   );
-  return noActive.replace(/url\s*\(\s*(['"]?)([^)'"]*)\1\s*\)/gi, (whole, _q, inner: string) => {
-    const url = urlForCheck(inner);
-    if (SAFE_DATA_IMAGE.test(url)) return whole;
-    if (allowRemote && /^https?:\/\//i.test(url)) return whole;
-    return "none";
-  });
+  return head + tail.join("");
 }
 
 function imageSrc(value: string, opts: MailSrcdocOptions): string | null {
@@ -147,18 +167,18 @@ function cleanAttr(tag: string, attr: Attr, opts: MailSrcdocOptions): Attr | nul
     return src ? { name: "src", value: src } : null;
   }
   if (attr.name === "style") {
-    return { name: "style", value: cleanStyle(attr.value, opts.allowRemoteImages) };
+    const style = cleanStyle(attr.value, opts.allowRemoteImages);
+    return style === null ? null : { name: "style", value: style };
   }
   return attr;
 }
 
 function rewriteTag(
-  closing: string,
-  rawName: string,
+  closing: boolean,
+  name: string,
   rawAttrs: string,
   opts: MailSrcdocOptions,
 ): string {
-  const name = rawName.toLowerCase();
   if (!ALLOWED_TAGS.has(name)) return "";
   if (closing) return VOID_TAGS.has(name) ? "" : `</${name}>`;
   const kept = parseAttrs(rawAttrs)
@@ -169,51 +189,108 @@ function rewriteTag(
   return `<${name}${attrs}>`;
 }
 
-function dropActiveBlocks(html: string): string {
-  let prev = html;
-  for (;;) {
-    const next = prev.replace(COMMENT_OR_DECL, "").replace(DROP_WITH_CONTENT, "");
-    if (next === prev) return next;
-    prev = next;
+type Token =
+  | { kind: "text"; text: string }
+  | { kind: "tag"; closing: boolean; name: string; rawAttrs: string };
+
+/** Index of the '>' closing a tag, honouring quotes; -1 if the tag never ends. */
+function tagEnd(src: string, from: number): number {
+  let quote = "";
+  for (let i = from; i < src.length; i++) {
+    const c = src[i];
+    if (quote) {
+      if (c === quote) quote = "";
+    } else if (c === '"' || c === "'") {
+      quote = c;
+    } else if (c === ">") {
+      return i;
+    }
   }
+  return -1;
+}
+
+/** Past the end of `<!…>`, `<?…>` or a comment (all dropped); unterminated drops the rest. */
+function skipDeclaration(src: string, lt: number): number {
+  const isComment = src.startsWith("<!--", lt);
+  const end = isComment ? src.indexOf("-->", lt + 4) : src.indexOf(">", lt);
+  if (end < 0) return src.length;
+  return end + (isComment ? 3 : 1);
+}
+
+/** Reads the markup at `lt`, pushing at most one token; returns where to resume. */
+function scanMarkup(src: string, lower: string, lt: number, tokens: Token[]): number {
+  const next = src[lt + 1] ?? "";
+  if (next === "!" || next === "?") return skipDeclaration(src, lt);
+  const closing = next === "/";
+  const nameStart = lt + (closing ? 2 : 1);
+  if (!TAG_NAME_START.test(src[nameStart] ?? "")) {
+    tokens.push({ kind: "text", text: "<" });
+    return lt + 1;
+  }
+  let nameEnd = nameStart + 1;
+  while (nameEnd < src.length && TAG_NAME_CHAR.test(src[nameEnd])) nameEnd++;
+  const name = lower.slice(nameStart, nameEnd);
+  const end = tagEnd(src, nameEnd);
+  if (end < 0) {
+    tokens.push({ kind: "text", text: src.slice(lt) });
+    return src.length;
+  }
+  if (!closing && DROP_WITH_CONTENT.has(name)) {
+    const close = lower.indexOf(`</${name}`, end + 1);
+    const closeEnd = close < 0 ? -1 : src.indexOf(">", close);
+    return closeEnd < 0 ? src.length : closeEnd + 1;
+  }
+  tokens.push({ kind: "tag", closing, name, rawAttrs: src.slice(nameEnd, end) });
+  return end + 1;
+}
+
+/**
+ * One linear pass (no backtracking regex over the document — hostile input
+ * of unterminated '<' made the regex version quadratic). Whatever is not a
+ * well-terminated tag becomes text, and text is always escaped on output.
+ */
+function tokenize(src: string): Token[] {
+  const tokens: Token[] = [];
+  const lower = src.toLowerCase();
+  let i = 0;
+  while (i < src.length) {
+    const lt = src.indexOf("<", i);
+    if (lt < 0) {
+      tokens.push({ kind: "text", text: src.slice(i) });
+      break;
+    }
+    if (lt > i) tokens.push({ kind: "text", text: src.slice(i, lt) });
+    i = scanMarkup(src, lower, lt, tokens);
+  }
+  return tokens;
 }
 
 /**
  * Tag + attribute allowlist rewrite. Unknown tags are dropped (their text
  * stays, inert); script-like blocks go with their content; every attribute
- * is re-quoted, so the output is well-formed for the checks downstream.
+ * is re-quoted and all text escaped, so nothing the sender wrote is ever
+ * re-parsed as markup.
  */
 export function neutralizeMailHtml(
   html: string,
   opts: MailSrcdocOptions = { allowRemoteImages: false },
 ): string {
-  const source = dropActiveBlocks(html);
-  const parts: string[] = [];
-  let last = 0;
-  for (const m of source.matchAll(TAG)) {
-    parts.push(escapeText(source.slice(last, m.index)));
-    parts.push(rewriteTag(m[1], m[2], m[3], opts));
-    last = m.index + m[0].length;
-  }
-  parts.push(escapeText(source.slice(last)));
-  return parts.join("");
+  return tokenize(html)
+    .map((t) =>
+      t.kind === "text" ? escapeText(t.text) : rewriteTag(t.closing, t.name, t.rawAttrs, opts),
+    )
+    .join("");
 }
 
-/**
- * Text between recognised tags. A stray '<' (an unterminated or malformed
- * tag) must stay text — the browser would otherwise parse it as markup we
- * never vetted. Existing entities are left as they are.
- */
+/** Text between tags: '<' and '>' always escaped. Existing entities stay. */
 function escapeText(text: string): string {
   return text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 function eachTag(html: string): Array<{ name: string; attrs: Attr[] }> {
-  const out: Array<{ name: string; attrs: Attr[] }> = [];
-  for (const m of html.matchAll(TAG)) {
-    if (!m[1]) out.push({ name: m[2].toLowerCase(), attrs: parseAttrs(m[3]) });
-  }
-  return out;
+  return tokenize(html).flatMap((t) =>
+    t.kind === "tag" && !t.closing ? [{ name: t.name, attrs: parseAttrs(t.rawAttrs) }] : [],
+  );
 }
 
 /** Images (img src or CSS url()) that would load from the network. */
@@ -223,9 +300,9 @@ export function countRemoteImages(html: string): number {
     for (const a of tag.attrs) {
       if (tag.name === "img" && a.name === "src" && REMOTE_URL.test(urlForCheck(a.value))) count++;
       if (a.name === "style") {
-        for (const m of a.value.matchAll(/url\s*\(\s*['"]?([^)'"]*)/gi)) {
-          if (REMOTE_URL.test(urlForCheck(m[1]))) count++;
-        }
+        count += cssUrlSegments(a.value).filter(
+          (seg) => seg.url && REMOTE_URL.test(seg.url),
+        ).length;
       }
     }
   }
@@ -238,7 +315,9 @@ export function cidRefs(html: string): string[] {
   for (const tag of eachTag(html)) {
     if (tag.name !== "img") continue;
     const src = tag.attrs.find((a) => a.name === "src")?.value.trim() ?? "";
-    if (/^cid:/i.test(src)) seen.add(src.slice(4));
+    const cid = /^cid:/i.test(src) ? src.slice(4) : "";
+    // "." / ".." would be normalised by fetch into a different API path.
+    if (cid && cid !== "." && cid !== "..") seen.add(cid);
     if (seen.size >= MAX_INLINE_IMAGES) break;
   }
   return [...seen];
@@ -246,7 +325,11 @@ export function cidRefs(html: string): string[] {
 
 /** A height for the frame without measuring it (no same-origin, no scripts). */
 export function estimateMailFrameHeight(html: string): number {
-  const text = html.replace(TAG, " ").replace(/\s+/g, " ").trim();
+  const text = tokenize(html)
+    .map((t) => (t.kind === "text" ? t.text : " "))
+    .join("")
+    .replace(/\s+/g, " ")
+    .trim();
   const textPx = Math.ceil(text.length / CHARS_PER_LINE) * LINE_HEIGHT_PX;
   const tags = eachTag(html);
   const rowsPx =
