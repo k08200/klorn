@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isTransactionalSender } from "../judge/keyword-policy.js";
+import { isAutomatedSender, isTransactionalSender } from "../judge/keyword-policy.js";
 import { boundedFromValue, MAX_FROM_REGEX_CHARS } from "../mail/email-address.js";
 import {
   boundSanitizeInput,
@@ -71,5 +71,19 @@ describe("From values are bounded before any regex reads them", () => {
     // Unchanged meaning: it reads the address's local-part role.
     expect(isTransactionalSender("ship-confirm@shop.example")).toBe(true);
     expect(isTransactionalSender("shipley@example.com")).toBe(false);
+  });
+
+  it("decides an automated sender within budget (the production path)", () => {
+    // No angle-addr: the whole header is the extracted "address".
+    for (const hostile of [
+      ".ship".repeat(20_000),
+      "-order".repeat(16_000),
+      `x${".ship".repeat(20_000)}@`,
+    ]) {
+      expect(timed(() => isAutomatedSender(hostile))).toBeLessThan(BUDGET_MS);
+    }
+    expect(isAutomatedSender("Shop <ship-confirm@shop.example>")).toBe(true);
+    expect(isAutomatedSender("No Reply <no-reply@service.example>")).toBe(true);
+    expect(isAutomatedSender("Shipley <shipley@example.com>")).toBe(false);
   });
 });

@@ -40,8 +40,9 @@ const MAX_HTML_INPUT = 500_000;
 // sanitize-html's parser (htmlparser2) keeps open tags with Array#unshift, so
 // its cost grows with the square of the nesting depth: "<b>" x 166k, under
 // MAX_HTML_INPUT, took 8.3 s (2026-10-16). Bounding the tag count bounds the
-// depth. Production's most tag-heavy stored body had 5,780 '<' (p99.9 4,156).
-export const MAX_SANITIZE_TAGS = 20_000;
+// depth: 20k cost up to ~260 ms per render, 10k a quarter of that.
+// Production's most tag-heavy stored body had 5,780 '<' (p99.9 4,156).
+export const MAX_SANITIZE_TAGS = 10_000;
 
 /**
  * The part of `html` sanitize-html may see: at most MAX_HTML_INPUT characters,

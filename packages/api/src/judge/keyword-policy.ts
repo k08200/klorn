@@ -138,7 +138,10 @@ export function isAutomatedSender(from: string): boolean {
   // Normalize "Name <addr>" → bare addr-spec so the role-anchored transactional
   // regex (which expects the role at the start of the local-part) matches a
   // display-name header too; SYSTEM_NOTIFICATION_RE matches either form.
-  const addr = extractEmailAddress(from);
+  // Bounded AFTER extraction: with no angle-addr the whole header is the
+  // "address", and TRANSACTIONAL_SENDER_RE backtracks on a long run of role
+  // tokens ('.ship' x 20k: 2.3 s per call, several calls per email).
+  const addr = boundedFromValue(extractEmailAddress(from));
   return SYSTEM_NOTIFICATION_RE.test(addr) || TRANSACTIONAL_SENDER_RE.test(addr);
 }
 
