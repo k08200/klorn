@@ -49,6 +49,9 @@ export const LINK_MARKERS = [
   "__link_inbox__",
   "__link_outlook__",
   "__link_outlook_calendar__",
+  // Google Drive (D5b): parked only while DRIVE_ENABLED and GOOGLE_DRIVE_ENABLED
+  // are on (routes/auth.ts), and finished by drive/providers/google-auth.ts.
+  "__link_drive__",
 ] as const;
 
 export type LinkMarker = (typeof LINK_MARKERS)[number];
@@ -66,6 +69,7 @@ export const LINK_FLOW_PATHS: Readonly<
   __link_inbox__: { base: "/settings", failed: "/settings?inbox=failed" },
   __link_outlook__: { base: "/settings", failed: "/settings?inbox=failed" },
   __link_outlook_calendar__: { base: "/calendar", failed: "/calendar?linked=failed" },
+  __link_drive__: { base: "/files", failed: "/files?drive=failed" },
 };
 
 export interface PendingLink {

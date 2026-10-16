@@ -1,7 +1,7 @@
 /**
  * The Google Drive grant (step D5b of docs/providers/unified-platform-plan.md):
- * the consent URL of a link, the callback's completion, and the OAuth client of
- * a linked account.
+ * the consent URL of a link, the link's completion, and the OAuth client of a
+ * linked account.
  *
  * Separate and incremental (plan, D5 "Grant"). A link asks for exactly
  * `openid`, `userinfo.email` and `drive.file`, offline and with consent, under
@@ -12,6 +12,11 @@
  * is server-signed for 10 minutes with the `__link_drive__` marker, and only the
  * dark POST /api/drive/google/link signs one.
  *
+ * Bound to the session that started it (#1451): the Google callback does not
+ * exchange the code, it parks it (routes/link-handoff.ts; only while the drive
+ * is on), and POST /api/auth/link/complete calls `completeGoogleDriveLink` only
+ * when the caller's session is the user who started the flow.
+ *
  * The account rows are written and read through drive/linked-drive-accounts.ts
  * only. Nothing here calls Google beyond completing a link (the token exchange
  * and the userinfo read) and, from D5c, what the connector's session needs.
@@ -19,6 +24,7 @@
 
 import type { GoogleDriveLinkOutcome } from "@klorn/contract";
 import type { google } from "googleapis";
+import type { LinkMarker } from "../../auth/pending-links.js";
 import { signToken } from "../../auth.js";
 import { isEntitled } from "../../billing/stripe.js";
 import { decryptToken } from "../../crypto-tokens.js";
@@ -39,7 +45,7 @@ import {
 } from "../linked-drive-accounts.js";
 
 /** The signed state's marker: picks the drive branch of the Google callback. */
-export const DRIVE_LINK_STATE_MARKER = "__link_drive__";
+export const DRIVE_LINK_STATE_MARKER = "__link_drive__" satisfies LinkMarker;
 /** Picked files only: the one Drive scope Klorn asks for (P5). */
 export const DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 /** Exactly what a drive link asks for, in this order. */
@@ -77,9 +83,16 @@ interface GoogleTokens {
   readonly scope?: string | null;
 }
 
-/** The consent URL of a drive link for this user, with its signed 10-minute state. */
-export function getLinkDriveAuthUrl(userId: string): string {
-  const state = signToken({ userId, email: DRIVE_LINK_STATE_MARKER }, STATE_TTL);
+/**
+ * The consent URL of a drive link for this user, with its signed 10-minute
+ * state. `appScheme` is an allowlisted native scheme (routes/link-handoff.ts
+ * `linkStartScheme`), so the parked handle goes back to the app that started.
+ */
+export function getLinkDriveAuthUrl(
+  userId: string,
+  extra: { readonly appScheme?: string } = {},
+): string {
+  const state = signToken({ userId, email: DRIVE_LINK_STATE_MARKER, ...extra }, STATE_TTL);
   return getOAuth2Client().generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
@@ -88,9 +101,9 @@ export function getLinkDriveAuthUrl(userId: string): string {
   });
 }
 
-/** Where the browser lands after a link. */
-export function driveLinkRedirect(webUrl: string, outcome: DriveLinkOutcome): string {
-  return `${webUrl}${FILES_PATH}?drive=${outcome}`;
+/** Where the client lands after a link: a relative path, as every link completion answers. */
+export function driveLinkPath(outcome: DriveLinkOutcome): string {
+  return `${FILES_PATH}?drive=${outcome}`;
 }
 
 /**
@@ -162,11 +175,12 @@ async function linkDriveAccount(code: string, userId: string): Promise<DriveLink
 }
 
 /**
- * The drive branch of the Google callback (the state is already verified and
- * carries the drive marker). The flag is read again first: the state lives 10
- * minutes, and a link that started before the flag went off exchanges no code
- * and stores nothing. Never throws; a failure is logged and answers `failed`,
- * with no provider message on the wire.
+ * The drive flow of POST /api/auth/link/complete: the code was parked by the
+ * Google callback, and the caller's session is the user who started the link.
+ * The code is exchanged here and nowhere else. The flag is read again first: a
+ * link parked before the flag went off exchanges no code and stores nothing.
+ * Never throws; a failure is logged and answers `failed`, with no provider
+ * message on the wire.
  */
 export async function completeGoogleDriveLink(params: {
   readonly code: string;

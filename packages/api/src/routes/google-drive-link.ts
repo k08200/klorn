@@ -3,13 +3,15 @@
  * They ride the Google OAuth flow of routes/auth.ts (same client, same redirect
  * URI, same callback): a distinct signed-state marker (`__link_drive__`) picks
  * the drive branch, the consent asks for drive.file and the identity scopes
- * only, and the result is a LinkedDriveAccount.
+ * only, and the result is a LinkedDriveAccount. Like every account link
+ * (#1451), the callback only parks the code; POST /api/auth/link/complete
+ * finishes it for the session that started it (routes/link-complete.ts).
  *
  *   POST   /link           — start the consent (requireEntitled), returns { url }
  *   GET    /accounts       — the user's Google Drive accounts (never a token)
  *   DELETE /accounts/:id   — unlink one, with every file indexed from it
- *   (the callback is routes/auth.ts's; it hands a drive state to
- *   `completeGoogleDriveLink`)
+ *   (the callback is routes/auth.ts's: it parks a drive state's code, and
+ *   routes/link-complete.ts calls `completeGoogleDriveLink`)
  *
  * Unlinking does not call Google's revoke endpoint: Google revokes a combined
  * grant whole, so for the primary's own Google account it would cut Gmail and
@@ -34,6 +36,7 @@ import { googleDriveRoutesEnabled } from "../drive/drive-scope.js";
 import { listDriveAccounts, unlinkDriveAccount } from "../drive/linked-drive-accounts.js";
 import { getLinkDriveAuthUrl } from "../drive/providers/google-auth.js";
 import { darkRouteGate } from "./dark-route-gate.js";
+import { linkStartScheme } from "./link-handoff.js";
 
 // Same demo sentinel as routes/auth.ts and routes/outlook-calendar-link.ts.
 const DEMO_USER_ID = "demo-user";
@@ -76,7 +79,9 @@ export function googleDriveLinkRoutes(opts: {
             .code(HTTP_FORBIDDEN)
             .send({ error: "Authentication required to link Google Drive" });
         }
-        const body: GoogleDriveLinkResponse = { url: getLinkDriveAuthUrl(userId) };
+        const body: GoogleDriveLinkResponse = {
+          url: getLinkDriveAuthUrl(userId, linkStartScheme(request)),
+        };
         return reply.send(body);
       },
     );

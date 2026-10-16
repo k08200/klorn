@@ -4,7 +4,8 @@
  * have the callback store the VICTIM's grant on the ATTACKER's account.
  *
  * Now every account-link callback (Google primary connect, Google calendar and
- * inbox links, Outlook inbox and calendar links) parks the authorization code
+ * inbox links, Outlook inbox and calendar links, the Google Drive link of D5b)
+ * parks the authorization code
  * without exchanging it, and POST /api/auth/link/complete finishes the link only
  * for the session of the user who started the flow.
  */
@@ -18,6 +19,7 @@ import {
   MAX_PENDING_LINKS,
   PENDING_LINK_TTL_MS,
   parkPendingLink,
+  pendingLinkCount,
 } from "../auth/pending-links.js";
 import { signToken } from "../auth.js";
 import {
@@ -36,6 +38,7 @@ const m = vi.hoisted(() => ({
   tokenUpsert: vi.fn(),
   calendarUpsert: vi.fn(),
   inboxUpsert: vi.fn(),
+  driveUpsert: vi.fn(),
   captureError: vi.fn(),
 }));
 
@@ -54,7 +57,11 @@ vi.mock("../mail/gmail.js", () => ({
   markGoogleTokenForReconnect: vi.fn(async () => {}),
   registerGmailWatch: vi.fn(async () => ({})),
   getGoogleUserInfo: vi.fn(async () => ({ email: "victim@gmail.com", verified_email: true })),
-  getOAuth2Client: vi.fn(() => ({ getToken: m.getToken })),
+  getOAuth2Client: vi.fn(() => ({
+    getToken: m.getToken,
+    // The Drive link (D5b) builds its consent URL on the shared client.
+    generateAuthUrl: (options: { state: string }) => consentUrl(options.state),
+  })),
 }));
 vi.mock("../mail/outlook-oauth.js", () => ({
   exchangeOutlookCode: m.exchangeOutlookCode,
@@ -106,6 +113,11 @@ vi.mock("../db.js", () => {
       upsert: m.calendarUpsert,
     },
     linkedInboxAccount: { count: vi.fn(async () => 0), upsert: m.inboxUpsert },
+    linkedDriveAccount: {
+      findFirst: vi.fn(async () => null),
+      count: vi.fn(async () => 0),
+      upsert: m.driveUpsert,
+    },
     device: {
       create: vi.fn(async () => ({ id: "d2" })),
       findMany: vi.fn(async () => []),
@@ -117,6 +129,7 @@ vi.mock("../db.js", () => {
 });
 
 import { authRoutes } from "../routes/auth.js";
+import { googleDriveLinkRoutes, googleDriveRoutesEnabled } from "../routes/google-drive-link.js";
 import { linkCompleteRoutes } from "../routes/link-complete.js";
 import { outlookAuthRoutes } from "../routes/outlook-auth.js";
 
@@ -136,6 +149,9 @@ async function buildApp() {
     }),
     { prefix: "/api/auth" },
   );
+  await app.register(googleDriveLinkRoutes({ gate: googleDriveRoutesEnabled }), {
+    prefix: "/api/drive/google",
+  });
   await app.ready();
   return app;
 }
@@ -209,6 +225,17 @@ const FLOWS: Flow[] = [
     exchange: () => m.exchangeOutlookCode,
     write: () => m.calendarUpsert,
   },
+  {
+    // D5b, behind DRIVE_ENABLED and GOOGLE_DRIVE_ENABLED (both on below).
+    marker: "__link_drive__",
+    start: "/api/drive/google/link",
+    callback: "/api/auth/google/callback",
+    success: "/files?drive=success",
+    mismatch: "/files",
+    failed: "/files?drive=failed",
+    exchange: () => m.getToken,
+    write: () => m.driveUpsert,
+  },
 ];
 
 /** Start the flow as `who` through its real start route and return the signed state. */
@@ -248,6 +275,7 @@ function expectNothingExchangedOrWritten(flow: Flow) {
   expect(m.tokenUpsert).not.toHaveBeenCalled();
   expect(m.calendarUpsert).not.toHaveBeenCalled();
   expect(m.inboxUpsert).not.toHaveBeenCalled();
+  expect(m.driveUpsert).not.toHaveBeenCalled();
 }
 
 beforeEach(() => {
@@ -257,8 +285,17 @@ beforeEach(() => {
   gates.inbox = true;
   gates.calendar = true;
   process.env.WEB_URL = WEB;
+  vi.stubEnv("DRIVE_ENABLED", "true");
+  vi.stubEnv("GOOGLE_DRIVE_ENABLED", "true");
   m.getToken.mockResolvedValue({
-    tokens: { access_token: "at", refresh_token: "rt", expiry_date: Date.now() + 3600_000 },
+    tokens: {
+      access_token: "at",
+      refresh_token: "rt",
+      expiry_date: Date.now() + 3600_000,
+      // The Drive link requires drive.file; the other Google flows ignore scope.
+      scope:
+        "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/drive.file",
+    },
   });
   m.exchangeOutlookCode.mockResolvedValue({
     accessToken: "graph-at",
@@ -268,12 +305,14 @@ beforeEach(() => {
   m.tokenUpsert.mockResolvedValue({ id: "tok-1" });
   m.calendarUpsert.mockResolvedValue({ id: "cal-1" });
   m.inboxUpsert.mockResolvedValue({ id: "inbox-1" });
+  m.driveUpsert.mockResolvedValue({ id: "drive-1" });
   vi.spyOn(console, "warn").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllEnvs();
   delete process.env.WEB_URL;
 });
 
@@ -570,6 +609,44 @@ describe("Outlook flags are re-checked at completion", () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ next: path });
     expectNothingExchangedOrWritten(flow);
+    await app.close();
+  });
+});
+
+describe("the Drive flags (D5b)", () => {
+  const drive = FLOWS.find((f) => f.marker === "__link_drive__") as Flow;
+
+  it.each([
+    "DRIVE_ENABLED",
+    "GOOGLE_DRIVE_ENABLED",
+  ])("parked while on, completed after %s went off → /files?drive=failed, no exchange", async (flag) => {
+    const app = await buildApp();
+    const handle = await park(app, drive);
+    vi.stubEnv(flag, "false");
+
+    const res = await complete(app, handle, A);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ next: "/files?drive=failed" });
+    expectNothingExchangedOrWritten(drive);
+    await app.close();
+  });
+
+  it.each([
+    "DRIVE_ENABLED",
+    "GOOGLE_DRIVE_ENABLED",
+  ])("a state signed while on, called back after %s went off → not parked, /files?drive=failed", async (flag) => {
+    const app = await buildApp();
+    const state = await startFlow(app, drive);
+    vi.stubEnv(flag, "false");
+
+    const res = await callback(app, drive, state);
+
+    expect(res.statusCode).toBe(302);
+    expect(res.headers.location).toBe(`${WEB}/files?drive=failed`);
+    expect(pendingLinkCount()).toBe(0);
+    expect(res.headers["cache-control"]).toBeUndefined();
+    expectNothingExchangedOrWritten(drive);
     await app.close();
   });
 });

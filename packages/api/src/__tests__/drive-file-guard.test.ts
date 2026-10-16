@@ -556,6 +556,8 @@ describe("drive text reaches an LLM only wrapped", () => {
     "routes/drive.ts",
     "routes/google-drive-link.ts",
     "routes/klorn-drive.ts",
+    // Finishes a parked drive link for the session that started it (#1451).
+    "routes/link-complete.ts",
   ];
   // The server entry point imports the LLM for its own startup reporting, so its
   // imports say nothing. What it does with drive code is pinned instead: it
@@ -580,26 +582,30 @@ describe("drive text reaches an LLM only wrapped", () => {
   });
 
   // routes/auth.ts is exempt only because it reads whether a drive source is on
-  // (user.files, P12) and hands a drive link's callback over (D5b). A
+  // (user.files, P12) and parks a drive link's code (D5b, #1451). A
   // module-level exemption must not cover rows: it may not touch the table, and
-  // may import from the drive only the source switch and the link completion.
-  it("routes/auth.ts reads only the drive's source switch and hands the link over, never its rows", () => {
+  // may import from the drive only the source switch and the state marker.
+  it("routes/auth.ts reads only the drive's source switch and the link marker, never its rows", () => {
     const text = fileAt("routes/auth.ts")?.text ?? "";
     expect(text.length).toBeGreaterThan(0);
-    expect(text).not.toMatch(/\bdriveFile\b|prisma\.drive|DriveFile|linkedDriveAccount/);
+    expect(text).not.toMatch(
+      /\bdriveFile\b|prisma\.drive|DriveFile|linkedDriveAccount|completeGoogleDriveLink/,
+    );
     const driveImports = [...text.matchAll(/from\s*["']([^"']*\/drive\/[^"']+)["']/g)].map(
       (match) => match[1],
     );
     expect(driveImports).toEqual(["../drive/drive-scope.js", "../drive/providers/google-auth.js"]);
-    expect(text).toMatch(/import \{ visibleDriveProviders \} from "\.\.\/drive\/drive-scope\.js";/);
     expect(text).toMatch(
-      /import \{\s*completeGoogleDriveLink,\s*DRIVE_LINK_STATE_MARKER,\s*driveLinkRedirect,\s*\} from "\.\.\/drive\/providers\/google-auth\.js";/,
+      /import \{ googleDriveRoutesEnabled, visibleDriveProviders \} from "\.\.\/drive\/drive-scope\.js";/,
+    );
+    expect(text).toMatch(
+      /import \{ DRIVE_LINK_STATE_MARKER \} from "\.\.\/drive\/providers\/google-auth\.js";/,
     );
   });
 
-  // D5b: one branch, after the state check and before the callback's own code
-  // exchange, so a drive code is exchanged by the grant module or by nobody.
-  it("the callback's drive branch sits between the state check and the code exchange", () => {
+  // D5b on #1451: the callback parks a drive code (only while the drive is on)
+  // and never exchanges it; POST /api/auth/link/complete finishes it.
+  it("the callback's drive branch parks or refuses, before the callback's own exchange", () => {
     const text = fileAt("routes/auth.ts")?.text ?? "";
     const callback = text.slice(text.indexOf('"/google/callback",'));
     const stateChecked = callback.indexOf("statePayload = verifyToken(state);");
@@ -608,9 +614,21 @@ describe("drive text reaches an LLM only wrapped", () => {
     expect(stateChecked).toBeGreaterThan(-1);
     expect(branch).toBeGreaterThan(stateChecked);
     expect(exchange).toBeGreaterThan(branch);
-    expect(text.match(/DRIVE_LINK_STATE_MARKER/g)).toHaveLength(2);
-    expect(callback.slice(branch, exchange)).toMatch(
-      /return reply\.redirect\(\s*driveLinkRedirect\(\s*webUrl,\s*await completeGoogleDriveLink\(\{ code, userId: statePayload\.userId \}\),?\s*\),?\s*\);/,
+    const body = callback.slice(branch, callback.indexOf("\n      }\n", branch));
+    expect(body).toMatch(
+      /if \(!googleDriveRoutesEnabled\(\)\) \{\s*return reply\.redirect\(`\$\{webUrl\}\$\{LINK_FLOW_PATHS\[DRIVE_LINK_STATE_MARKER\]\.failed\}`\);\s*\}\s*return handOffAccountLink\(reply, \{/,
+    );
+    expect(body).not.toMatch(/getToken|completeGoogleDriveLink/);
+  });
+
+  it("only the authenticated link completion finishes a drive link", () => {
+    const callers = files
+      .filter((f) => /\bcompleteGoogleDriveLink\(/.test(f.text))
+      .map((f) => f.path)
+      .sort();
+    expect(callers).toEqual(["drive/providers/google-auth.ts", "routes/link-complete.ts"]);
+    expect(fileAt("routes/link-complete.ts")?.text).toMatch(
+      /__link_drive__: \{[\s\S]*?finish: async \(userId, code\) => \(\{\s*next: driveLinkPath\(await completeGoogleDriveLink\(\{ code, userId \}\)\),/,
     );
   });
 

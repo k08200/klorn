@@ -294,11 +294,9 @@ describe("completeGoogleDriveLink", () => {
     expect(unexpectedGrantScopes(undefined)).toEqual([]);
   });
 
-  it("lands the browser on /files with the outcome", async () => {
-    const { driveLinkRedirect } = await load();
-    expect(driveLinkRedirect("https://app.example.com", "scope-missing")).toBe(
-      "https://app.example.com/files?drive=scope-missing",
-    );
+  it("lands the client on /files with the outcome, as a relative path", async () => {
+    const { driveLinkPath } = await load();
+    expect(driveLinkPath("scope-missing")).toBe("/files?drive=scope-missing");
   });
 });
 

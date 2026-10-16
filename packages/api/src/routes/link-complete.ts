@@ -23,6 +23,7 @@ import {
 } from "../auth/pending-links.js";
 import { getUserId, requireAuth } from "../auth.js";
 import { outlookCalendarEnabled, outlookInboxEnabled } from "../config.js";
+import { completeGoogleDriveLink, driveLinkPath } from "../drive/providers/google-auth.js";
 import { captureError } from "../sentry.js";
 import { exchangeAndFinishGoogleLink } from "./google-link-finish.js";
 import { finishOutlookInboxLink } from "./outlook-auth.js";
@@ -79,6 +80,14 @@ export function linkCompleteRoutes(
     __link_outlook_calendar__: {
       finish: async (userId, code) => ({
         next: await finishOutlookCalendarLink({ code, userId, enabled: calendarGate() }),
+      }),
+    },
+    __link_drive__: {
+      // D5b. completeGoogleDriveLink re-reads DRIVE_ENABLED and
+      // GOOGLE_DRIVE_ENABLED first: a link parked before the flag went off
+      // answers /files?drive=failed and its code is never exchanged.
+      finish: async (userId, code) => ({
+        next: driveLinkPath(await completeGoogleDriveLink({ code, userId })),
       }),
     },
   };

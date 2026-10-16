@@ -4095,9 +4095,16 @@ the scopes that sign-in, Gmail, Calendar and the inbox links request
       would return a token that also carries the Gmail and Calendar scopes.
     - Same client and redirect URI, so the redirect needs no console change
       (C4's precedent).
-    - `routes/auth.ts` gains one branch after the state check (`:1175`) and
-      before the code exchange (`:1182`). It calls `completeGoogleDriveLink`,
-      built like `outlook-calendar-link.ts:129`:
+    - Bound to the session that started it, like every account link (#1451):
+      `routes/auth.ts` gains one branch after the state check and before the
+      code exchange that parks the code (`routes/link-handoff.ts`) and never
+      exchanges it; while `DRIVE_ENABLED` or `GOOGLE_DRIVE_ENABLED` is off it
+      parks nothing and lands on `/files?drive=failed`. `__link_drive__` is in
+      `LINK_MARKERS` (`auth/pending-links.ts`), and POST
+      `/api/auth/link/complete` (`routes/link-complete.ts`) calls
+      `completeGoogleDriveLink` only for the session of the user who started
+      the flow (another session: 409, nothing exchanged or written). The code
+      exchange happens there, built like `outlook-calendar-link.ts:129`:
       - flag off → `failed`, with no code exchange;
       - `verified_email` is required;
       - the returned `scope` must include `drive.file` (granular consent lets the
@@ -4209,7 +4216,7 @@ the scopes that sign-in, Gmail, Calendar and the inbox links request
       (`drive-file-guard.test.ts:370`, `calendar-provider-writers-guard.test.ts:110`,
       `drive-scope.test.ts:54`).
     - Prod impact: dark routes. The new branch needs a state that only the dark
-      route signs.
+      route signs, and parks nothing while the flags are off.
   - D5c, Picker and ingest.
     - Files: `google.ts` (`getMetadata`, `list`, `search`, and `fetchForSummary`
       for files with bytes); `picker-session` and `POST /accounts/:id/picked`,

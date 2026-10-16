@@ -1,14 +1,19 @@
 /**
- * D5b: the one branch the Google OAuth callback gains. A state signed with the
- * `__link_drive__` marker (only the dark POST /api/drive/google/link signs one)
- * is handed to `completeGoogleDriveLink` after the state check and BEFORE the
- * callback's own code exchange: the callback never exchanges a drive code
- * itself, and with the flag off nobody does. Every other branch is pinned by
- * routes-auth-google-callback-pinned.test.ts.
+ * D5b on the link binding of #1451: a state signed with the `__link_drive__`
+ * marker (only the dark POST /api/drive/google/link signs one) makes the Google
+ * callback PARK the code, never exchange it; POST /api/auth/link/complete hands
+ * it to `completeGoogleDriveLink` for the session that started the flow, and
+ * answers `{ next: "/files?drive=<outcome>" }`. While the drive is off the
+ * callback parks nothing and the completion exchanges nothing.
+ * routes-auth-link-csrf.test.ts holds the cross-session cases for this marker;
+ * routes-auth-google-link-pinned.test.ts pins the other link markers.
  */
 
 import Fastify from "fastify";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { _resetParkThrottleForTests } from "../auth/park-throttle.js";
+import { _resetPendingLinksForTests, pendingLinkCount } from "../auth/pending-links.js";
+import { callbackThenComplete, parkedHandle } from "./helpers/link-complete.js";
 
 const google = vi.hoisted(() => ({
   getToken: vi.fn(),
@@ -70,25 +75,47 @@ const db = vi.hoisted(() => ({
     count: vi.fn(async () => 0),
     upsert: vi.fn(async () => ({ id: "drv-1" })),
   },
+  device: {
+    findUnique: vi.fn(async () => ({ id: "d1", lastActiveAt: new Date() })),
+    update: vi.fn(async () => ({})),
+  },
 }));
 vi.mock("../db.js", () => ({ prisma: db, db }));
 
 import { signToken } from "../auth.js";
 import { completeGoogleDriveLink } from "../drive/providers/google-auth.js";
 import { authRoutes } from "../routes/auth.js";
+import { linkCompleteRoutes } from "../routes/link-complete.js";
 
 const WEB = "http://localhost:8001";
+const U1 = { authorization: `Bearer ${signToken({ userId: "u1", email: "u1@example.com" })}` };
 const GRANTED =
   "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/drive.file";
 
-async function callback(marker = "__link_drive__") {
-  const state = signToken({ userId: "u1", email: marker }, "10m");
+async function buildApp() {
   const app = Fastify();
   await app.register(authRoutes, { prefix: "/api/auth" });
-  const res = await app.inject({
-    method: "GET",
-    url: `/api/auth/google/callback?code=abc&state=${encodeURIComponent(state)}`,
-  });
+  await app.register(linkCompleteRoutes(), { prefix: "/api/auth" });
+  return app;
+}
+
+const callbackUrl = (marker = "__link_drive__") =>
+  `/api/auth/google/callback?code=abc&state=${encodeURIComponent(
+    signToken({ userId: "u1", email: marker }, "10m"),
+  )}`;
+
+/** The callback alone. */
+async function callback(marker = "__link_drive__") {
+  const app = await buildApp();
+  const res = await app.inject({ method: "GET", url: callbackUrl(marker) });
+  await app.close();
+  return res;
+}
+
+/** The callback, then u1's own completion. */
+async function linkAsU1(marker = "__link_drive__") {
+  const app = await buildApp();
+  const res = await callbackThenComplete(app, callbackUrl(marker), U1);
   await app.close();
   return res;
 }
@@ -96,6 +123,8 @@ async function callback(marker = "__link_drive__") {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.unstubAllEnvs();
+  _resetPendingLinksForTests();
+  _resetParkThrottleForTests();
   delete process.env.WEB_URL;
   drive.override = null;
   vi.stubEnv("DRIVE_ENABLED", "true");
@@ -109,39 +138,48 @@ beforeEach(() => {
   vi.spyOn(console, "warn").mockImplementation(() => {});
 });
 
-describe("the __link_drive__ branch", () => {
+describe("the __link_drive__ callback parks, the completion finishes", () => {
+  it("the callback parks the code without exchanging it or calling the drive completion", async () => {
+    const res = await callback();
+    parkedHandle(res);
+    expect(res.headers["cache-control"]).toBe("no-store");
+    expect(pendingLinkCount()).toBe(1);
+    expect(google.getToken).not.toHaveBeenCalled();
+    expect(vi.mocked(completeGoogleDriveLink)).not.toHaveBeenCalled();
+  });
+
   it.each([
     "success",
     "failed",
     "unverified",
     "scope-missing",
     "limit",
-  ])("hands the code and the signed user over, and lands on /files?drive=%s", async (outcome) => {
+  ])("u1's completion hands over the code and u1, and answers next=/files?drive=%s", async (outcome) => {
     drive.override = async () => outcome;
-    const res = await callback();
-    expect(res.statusCode).toBe(302);
-    expect(res.headers.location).toBe(`${WEB}/files?drive=${outcome}`);
+    const res = await linkAsU1();
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ next: `/files?drive=${outcome}` });
     expect(vi.mocked(completeGoogleDriveLink)).toHaveBeenCalledWith({ code: "abc", userId: "u1" });
-    // The callback's own exchange is after the branch: it never ran.
-    expect(google.getToken).not.toHaveBeenCalled();
   });
 
   it.each([
     "DRIVE_ENABLED",
     "GOOGLE_DRIVE_ENABLED",
-  ])("with %s off nobody exchanges the code and nothing is written", async (flag) => {
+  ])("with %s off the callback parks nothing and lands on /files?drive=failed", async (flag) => {
     vi.stubEnv(flag, "false");
     const res = await callback();
     expect(res.statusCode).toBe(302);
     expect(res.headers.location).toBe(`${WEB}/files?drive=failed`);
+    expect(pendingLinkCount()).toBe(0);
     expect(google.getToken).not.toHaveBeenCalled();
-    expect(db.linkedDriveAccount.upsert).not.toHaveBeenCalled();
+    expect(vi.mocked(completeGoogleDriveLink)).not.toHaveBeenCalled();
   });
 
   it("with both flags on the link is completed and only the drive table is written", async () => {
-    const res = await callback();
-    expect(res.headers.location).toBe(`${WEB}/files?drive=success`);
+    const res = await linkAsU1();
+    expect(res.json()).toEqual({ next: "/files?drive=success" });
     expect(google.getToken).toHaveBeenCalledTimes(1);
+    expect(google.getToken).toHaveBeenCalledWith("abc");
     expect(db.linkedDriveAccount.upsert).toHaveBeenCalledTimes(1);
     expect(db.userToken.upsert).not.toHaveBeenCalled();
     expect(db.linkedCalendarAccount.upsert).not.toHaveBeenCalled();
@@ -149,9 +187,10 @@ describe("the __link_drive__ branch", () => {
   });
 
   it("no other marker reaches the drive completion", async () => {
-    for (const marker of ["__link_calendar__", "__link_inbox__", "__oauth_state__", "__x__"]) {
-      await callback(marker);
+    for (const marker of ["__link_calendar__", "__link_inbox__", "__oauth_state__"]) {
+      await linkAsU1(marker);
     }
+    await callback("__x__");
     expect(vi.mocked(completeGoogleDriveLink)).not.toHaveBeenCalled();
   });
 });

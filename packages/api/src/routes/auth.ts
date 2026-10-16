@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { exchangeCodes } from "../auth/exchange-codes.js";
 import { desktopHandoffPage, isAllowedNativeScheme } from "../auth/native-handoff.js";
+import { LINK_FLOW_PATHS } from "../auth/pending-links.js";
 import {
   comparePassword,
   getUserId,
@@ -35,12 +36,8 @@ import {
 } from "../config.js";
 import { prisma } from "../db.js";
 import { withDbRetry } from "../db-retry.js";
-import { visibleDriveProviders } from "../drive/drive-scope.js";
-import {
-  completeGoogleDriveLink,
-  DRIVE_LINK_STATE_MARKER,
-  driveLinkRedirect,
-} from "../drive/providers/google-auth.js";
+import { googleDriveRoutesEnabled, visibleDriveProviders } from "../drive/drive-scope.js";
+import { DRIVE_LINK_STATE_MARKER } from "../drive/providers/google-auth.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../mail/email.js";
 import { extractEmailAddress } from "../mail/email-address.js";
 import { syncLinkedInboxesForUser } from "../mail/email-sync.js";
@@ -1125,18 +1122,22 @@ export function authRoutes(app: FastifyInstance) {
         return reply.code(400).send({ error: "Invalid or expired OAuth state" });
       }
 
-      // --- Link a Google Drive account (D5b, state marker __link_drive__) ---
-      // Before the code exchange below, on purpose: a drive code is exchanged by
-      // the grant module after it re-reads GOOGLE_DRIVE_ENABLED, or by nobody.
-      // Only the dark POST /api/drive/google/link signs this marker. Never
-      // throws: every failure lands on /files?drive=failed.
+      // --- Google Drive link (D5b, __link_drive__): parked like the flows below,
+      // and finished by POST /api/auth/link/complete for the session that
+      // started it (routes/link-complete.ts, then drive/providers/google-auth.ts).
+      // Only the dark POST /api/drive/google/link signs this marker. While the
+      // drive is off nothing is parked: the code is never held, never exchanged.
       if (statePayload.email === DRIVE_LINK_STATE_MARKER) {
-        return reply.redirect(
-          driveLinkRedirect(
-            webUrl,
-            await completeGoogleDriveLink({ code, userId: statePayload.userId }),
-          ),
-        );
+        if (!googleDriveRoutesEnabled()) {
+          return reply.redirect(`${webUrl}${LINK_FLOW_PATHS[DRIVE_LINK_STATE_MARKER].failed}`);
+        }
+        return handOffAccountLink(reply, {
+          userId: statePayload.userId,
+          marker: DRIVE_LINK_STATE_MARKER,
+          code,
+          appScheme: statePayload.appScheme,
+          webUrl,
+        });
       }
 
       // --- Account-link flows (__oauth_state__, __link_calendar__, __link_inbox__) ---

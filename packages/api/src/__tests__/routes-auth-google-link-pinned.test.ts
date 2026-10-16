@@ -347,6 +347,15 @@ describe("__link_inbox__ pins", () => {
     await app.close();
   });
 
+  it("nine Google inboxes linked: the tenth is allowed (the cap is 10)", async () => {
+    m.inboxCount.mockResolvedValueOnce(9);
+    const app = await buildApp();
+    await expectPinned(app, MARKER, { redirect: "/settings?inbox=success" });
+    expect(m.inboxCount).toHaveBeenCalledWith({ where: { userId: "u1", provider: "GOOGLE" } });
+    expect(m.inboxUpsert).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
+
   it("a re-link is never capped and keeps the stored address", async () => {
     m.findOwnedLinkedAccount.mockResolvedValueOnce({ id: "old", email: "Linked@Example.com" });
     m.inboxCount.mockResolvedValue(99);
