@@ -99,6 +99,9 @@ importers:
       openai:
         specifier: ^6.29.0
         version: 6.29.0(ws@8.21.3)(zod@4.4.3)
+      postal-mime:
+        specifier: 2.7.5
+        version: 2.7.5
       resend:
         specifier: ^6.20.0
         version: 6.20.0

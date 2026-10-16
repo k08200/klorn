@@ -51,10 +51,30 @@ function normalizedFromAddress(from: string): string | null {
   return extractEmailAddress(from) || null;
 }
 
+/// The body and snippet to write on re-sync: only when asked and only when they
+/// changed, so a poll that re-touches its window does not churn TOAST rows.
+function refreshedBodyFields(
+  existing: { body: string | null; snippet: string | null },
+  email: GmailRawEmail,
+  refresh: boolean,
+): { body?: string | null; snippet?: string } {
+  if (!refresh) return {};
+  const body = coercePlainBody(email.body || null, email.htmlBody || null);
+  const changed = body !== existing.body || email.snippet !== existing.snippet;
+  return changed ? { body, snippet: email.snippet } : {};
+}
+
 export async function persistGmailEmail(
   userId: string,
   email: GmailRawEmail,
-  options: { userEmail?: string | null; linkedInboxAccountId?: string | null } = {},
+  options: {
+    userEmail?: string | null;
+    linkedInboxAccountId?: string | null;
+    /// Re-sync rewrites body and snippet when they changed. The IMAP poll sets
+    /// it: rows stored as raw MIME before decoding pick up the decoded text.
+    /// Gmail never sets it, so its stored body is never touched on re-sync.
+    refreshBody?: boolean;
+  } = {},
 ): Promise<{ emailId: string; isNew: boolean }> {
   const existing = await prisma.emailMessage.findUnique({
     where: { userId_gmailId: { userId, gmailId: email.gmailId } },
@@ -70,6 +90,7 @@ export async function persistGmailEmail(
         // Backfill the normalized address on re-sync so already-persisted mail
         // gets an indexed fromAddress without a separate backfill pass.
         fromAddress: normalizedFromAddress(email.from),
+        ...refreshedBodyFields(existing, email, options.refreshBody === true),
         // Same backfill contract for the List-Unsubscribe targets: rows that
         // predate the columns pick them up on the next re-sync. Guarded on
         // "the producer parsed the header at all" so a non-Gmail path that

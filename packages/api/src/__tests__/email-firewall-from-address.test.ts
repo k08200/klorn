@@ -113,3 +113,49 @@ describe("persistGmailEmail — fromAddress population", () => {
     expect(update.mock.calls[0][0].data.fromAddress).toBe("jane@acme.com");
   });
 });
+
+describe("persistGmailEmail refreshBody (IMAP re-poll)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    update.mockResolvedValue({});
+  });
+
+  it("rewrites body and snippet of an existing row when the caller asks and they changed", async () => {
+    findUnique.mockResolvedValue({
+      id: "row-1",
+      body: "--b1\r\nContent-Type: text/plain",
+      snippet: "--b1",
+    });
+
+    await persistGmailEmail("u1", rawEmail({ body: "decoded text", snippet: "decoded" }) as never, {
+      refreshBody: true,
+    });
+
+    expect(update.mock.calls[0]?.[0]?.data).toMatchObject({
+      body: "decoded text",
+      snippet: "decoded",
+    });
+  });
+
+  it("does not rewrite an unchanged body (no dead tuples per poll)", async () => {
+    findUnique.mockResolvedValue({ id: "row-1", body: "decoded text", snippet: "decoded" });
+
+    await persistGmailEmail("u1", rawEmail({ body: "decoded text", snippet: "decoded" }) as never, {
+      refreshBody: true,
+    });
+
+    const data = update.mock.calls[0]?.[0]?.data ?? {};
+    expect(data).not.toHaveProperty("body");
+    expect(data).not.toHaveProperty("snippet");
+  });
+
+  it("never touches the body of an existing row without the option (Gmail path)", async () => {
+    findUnique.mockResolvedValue({ id: "row-1", body: "old", snippet: "old" });
+
+    await persistGmailEmail("u1", rawEmail({ body: "new", snippet: "new" }) as never);
+
+    const data = update.mock.calls[0]?.[0]?.data ?? {};
+    expect(data).not.toHaveProperty("body");
+    expect(data).not.toHaveProperty("snippet");
+  });
+});

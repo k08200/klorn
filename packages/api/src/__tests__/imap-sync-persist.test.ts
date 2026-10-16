@@ -158,6 +158,51 @@ describe("syncImapInbox → shared persist path", () => {
     expect(judgeEmail).not.toHaveBeenCalled();
   });
 
+  it("fetches the top-level MIME headers and persists the decoded body", async () => {
+    const mime = [
+      "--b1",
+      "Content-Type: text/plain; charset=utf-8",
+      "Content-Transfer-Encoding: base64",
+      "",
+      Buffer.from("내일 3시 회의 확인 부탁드립니다").toString("base64"),
+      "--b1--",
+      "",
+    ].join("\r\n");
+    imap.fetch.mockImplementation(async function* () {
+      yield {
+        ...fakeMessages()[0],
+        headers: Buffer.from('Content-Type: multipart/alternative; boundary="b1"\r\n'),
+        bodyParts: new Map([["text", Buffer.from(mime)]]),
+      };
+    });
+    persistGmailEmail.mockResolvedValue({ emailId: "e1", isNew: true });
+
+    await syncImapInbox({
+      provider: IMAP_PROVIDERS.ICLOUD,
+      userId: "u1",
+      email: "me@icloud.com",
+      password: "app-pw",
+      host: "imap.mail.me.com:993",
+      linkedInboxAccountId: "acc-icloud",
+    });
+
+    expect(imap.fetch).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ headers: ["content-type", "content-transfer-encoding"] }),
+      expect.anything(),
+    );
+    expect(persistGmailEmail).toHaveBeenCalledWith(
+      "u1",
+      expect.objectContaining({
+        body: "내일 3시 회의 확인 부탁드립니다",
+        snippet: "내일 3시 회의 확인 부탁드립니다",
+      }),
+      // A re-polled row whose body was stored raw before this fix picks up the
+      // decoded text: the IMAP path asks persist to refresh a changed body.
+      expect.objectContaining({ linkedInboxAccountId: "acc-icloud", refreshBody: true }),
+    );
+  });
+
   it("namespaces the dedup key with the provider idPrefix (icloud-imap: for ICLOUD)", async () => {
     persistGmailEmail.mockResolvedValue({ emailId: "e1", isNew: true });
 

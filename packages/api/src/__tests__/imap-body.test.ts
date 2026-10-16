@@ -1,0 +1,114 @@
+import { describe, expect, it } from "vitest";
+import { decodeImapText, IMAP_DECODE_MAX_BYTES } from "../mail/imap-body.js";
+
+// IMAP BODY[TEXT] arrives without the message's top-level headers, so a
+// multipart or transfer-encoded body was stored as raw MIME (prod 2026-10-16:
+// 50 of 50 iCloud rows). The poll now fetches Content-Type and
+// Content-Transfer-Encoding alongside and decodes through a MIME parser.
+
+const CRLF = "\r\n";
+
+function headers(...lines: string[]): Buffer {
+  return Buffer.from(lines.join(CRLF) + CRLF);
+}
+
+function b64(bytes: Buffer | string): string {
+  return Buffer.from(bytes).toString("base64");
+}
+
+describe("decodeImapText", () => {
+  it("decodes the text part of a multipart message with a base64 UTF-8 body", async () => {
+    const text = [
+      "--b1",
+      "Content-Type: text/plain; charset=utf-8",
+      "Content-Transfer-Encoding: base64",
+      "",
+      b64("회의는 내일 3시입니다."),
+      "--b1",
+      "Content-Type: text/html; charset=utf-8",
+      "",
+      "<p>회의는 내일 3시입니다.</p>",
+      "--b1--",
+      "",
+    ].join(CRLF);
+
+    const decoded = await decodeImapText(
+      headers('Content-Type: multipart/alternative; boundary="b1"'),
+      Buffer.from(text),
+    );
+
+    expect(decoded).toBe("회의는 내일 3시입니다.");
+    expect(decoded).not.toContain("--b1");
+  });
+
+  it("decodes an EUC-KR body (Naver)", async () => {
+    const eucKr = Buffer.from([0xc7, 0xd1, 0xb1, 0xdb, 0x20, 0xb8, 0xde, 0xc0, 0xcf]); // "한글 메일"
+    const decoded = await decodeImapText(
+      headers("Content-Type: text/plain; charset=euc-kr", "Content-Transfer-Encoding: base64"),
+      Buffer.from(b64(eucKr)),
+    );
+
+    expect(decoded).toBe("한글 메일");
+  });
+
+  it("decodes a quoted-printable single-part body", async () => {
+    const decoded = await decodeImapText(
+      headers(
+        "Content-Type: text/plain; charset=utf-8",
+        "Content-Transfer-Encoding: quoted-printable",
+      ),
+      Buffer.from("caf=C3=A9 au lait, soft=\r\nbreak"),
+    );
+
+    expect(decoded).toBe("café au lait, softbreak");
+  });
+
+  it("falls back to the HTML part's text when there is no plain part", async () => {
+    const decoded = await decodeImapText(
+      headers("Content-Type: text/html; charset=utf-8"),
+      Buffer.from("<html><body><p>Invoice <b>#42</b> is due</p><script>x()</script></body></html>"),
+    );
+
+    expect(decoded).toContain("Invoice #42 is due");
+    expect(decoded).not.toContain("<");
+    expect(decoded).not.toContain("x()");
+  });
+
+  it("keeps today's behaviour when the headers were not fetched", async () => {
+    expect(await decodeImapText(undefined, Buffer.from("Hello   world"))).toBe("Hello   world");
+    expect(await decodeImapText(undefined, undefined)).toBe("");
+  });
+
+  it("never throws on a malformed body and keeps the raw text", async () => {
+    const decoded = await decodeImapText(
+      headers('Content-Type: multipart/mixed; boundary="never-closed"'),
+      Buffer.from("--never-closed\r\nContent-Type: text/plain\r\n\r\nplain words"),
+    );
+
+    expect(typeof decoded).toBe("string");
+    expect(decoded).toContain("plain words");
+  });
+
+  it("parses at most IMAP_DECODE_MAX_BYTES, so a large attachment after the text is skipped", async () => {
+    const big = "A".repeat(IMAP_DECODE_MAX_BYTES * 3);
+    const text = [
+      "--b2",
+      "Content-Type: text/plain; charset=utf-8",
+      "",
+      "see attached",
+      "--b2",
+      "Content-Type: application/pdf",
+      "Content-Transfer-Encoding: base64",
+      "",
+      big,
+      "--b2--",
+    ].join(CRLF);
+
+    const decoded = await decodeImapText(
+      headers('Content-Type: multipart/mixed; boundary="b2"'),
+      Buffer.from(text),
+    );
+
+    expect(decoded).toBe("see attached");
+  });
+});

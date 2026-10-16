@@ -27,6 +27,7 @@ import { persistGmailEmail } from "../judge/email-firewall.js";
 import { captureError } from "../sentry.js";
 import { formatMailbox } from "./email-address.js";
 import { fetchCapReached, textBodyPart } from "./generic-imap-bounds.js";
+import { decodeImapText } from "./imap-body.js";
 import { createImapClient, endImapSession } from "./imap-connection.js";
 import { capStored, envelopeSubject, MAX_STORED_CC_LENGTH } from "./imap-envelope.js";
 import { formatImapMessageId } from "./imap-message-id.js";
@@ -131,7 +132,17 @@ interface ImapFetchMessage {
   envelope?: ImapEnvelope | null;
   flags?: Set<string> | string[];
   bodyParts?: Map<string, Buffer>;
+  /// The top-level MIME headers asked for in MIME_HEADERS (raw header lines).
+  headers?: Buffer;
   source?: Buffer;
+}
+
+/// BODY[TEXT] carries no top-level headers; these two are what a MIME parser
+/// needs to decode it (imap-body.ts).
+const MIME_HEADERS = ["content-type", "content-transfer-encoding"];
+
+function textBodyOf(msg: ImapFetchMessage): Buffer | undefined {
+  return msg.bodyParts?.get("text") ?? msg.bodyParts?.get("TEXT");
 }
 
 function formatAddress(addr: ImapEnvelopeAddress | undefined): string {
@@ -139,13 +150,13 @@ function formatAddress(addr: ImapEnvelopeAddress | undefined): string {
   return formatMailbox(addr.name ?? "", addr.address ?? "");
 }
 
-function snippetFromBody(buf: Buffer | undefined, max = 200): string | null {
-  if (!buf) return null;
+function snippetFromBody(bodyText: string, max = 200): string | null {
+  if (!bodyText) return null;
   // Strip HTML through sanitize-html (proper parser) rather than regex —
   // CodeQL flags regex-based tag stripping as bad-tag-filter even when
   // the output is never rendered. The judge prompt only needs the first
   // sentence or two so we collapse whitespace and slice.
-  const stripped = sanitizeHtml(buf.toString("utf8"), {
+  const stripped = sanitizeHtml(bodyText, {
     allowedTags: [],
     allowedAttributes: {},
     disallowedTagsMode: "discard",
@@ -163,9 +174,9 @@ type PersistCall = [
  * Turn one fetched message into the arguments of the shared persist call. Used by
  * the poll and by the targeted re-sync after an undo, so both write a row the same
  * way. Pure: the poll runs it outside its per-message error handling, as it always
- * has.
+ * has. `bodyText` is the decoded body (decodeImapText, which never throws).
  */
-function toPersistCall(args: SyncArgs, msg: ImapFetchMessage): PersistCall {
+function toPersistCall(args: SyncArgs, msg: ImapFetchMessage, bodyText: string): PersistCall {
   const env = msg.envelope ?? {};
   const from = formatAddress(env.from?.[0] ?? undefined);
   const to = formatAddress(env.to?.[0] ?? undefined);
@@ -174,8 +185,7 @@ function toPersistCall(args: SyncArgs, msg: ImapFetchMessage): PersistCall {
     null;
   const subject = envelopeSubject(env.subject);
   const receivedAt = env.date ?? new Date();
-  const bodyBuf = msg.bodyParts?.get("text") ?? msg.bodyParts?.get("TEXT");
-  const snippet = snippetFromBody(bodyBuf);
+  const snippet = snippetFromBody(bodyText);
   const stableId = formatImapMessageId(args.provider.idPrefix, args.email, msg.uid);
 
   // Flags → Gmail-ish labels so existing classifier paths work.
@@ -201,7 +211,7 @@ function toPersistCall(args: SyncArgs, msg: ImapFetchMessage): PersistCall {
       cc: cc ?? "",
       subject,
       snippet: snippet ?? "",
-      body: bodyBuf ? bodyBuf.toString("utf8").slice(0, 50_000) : "",
+      body: bodyText.slice(0, 50_000),
       htmlBody: "",
       labels,
       isRead,
@@ -215,6 +225,10 @@ function toPersistCall(args: SyncArgs, msg: ImapFetchMessage): PersistCall {
       // mailbox's address, not the primary Google account (same as email-sync's
       // linked fan-out passing linked.email).
       userEmail: args.email,
+      // The poll re-touches its window every cycle, so rows stored as raw MIME
+      // before decoding existed pick up the decoded text; unchanged bodies are
+      // not rewritten.
+      refreshBody: true,
     },
   ];
 }
@@ -280,6 +294,7 @@ export async function syncImapInbox(args: SyncArgs): Promise<SyncResult> {
           flags: true,
           // Whole TEXT for a fixed host; a bounded slice for a user-supplied one.
           bodyParts: [textBodyPart(args.provider)],
+          headers: MIME_HEADERS,
         },
         { uid: false },
       )) {
@@ -290,7 +305,8 @@ export async function syncImapInbox(args: SyncArgs): Promise<SyncResult> {
         // or another provider's UIDs — in the same EmailMessage table.
         const stableId = formatImapMessageId(args.provider.idPrefix, args.email, msg.uid);
 
-        const persistCall = toPersistCall(args, msg);
+        const bodyText = await decodeImapText(msg.headers, textBodyOf(msg));
+        const persistCall = toPersistCall(args, msg, bodyText);
 
         try {
           const persisted = await persistGmailEmail(args.userId, ...persistCall);
@@ -392,10 +408,17 @@ export async function syncImapMessage(args: SyncMessageArgs): Promise<{ emailId:
         String(args.uid),
         // The same slice as the poll (whole TEXT for a fixed host): an undo must be able to
         // restore a message larger than the literal cap too.
-        { envelope: true, flags: true, bodyParts: [textBodyPart(args.provider)] },
+        {
+          envelope: true,
+          flags: true,
+          bodyParts: [textBodyPart(args.provider)],
+          headers: MIME_HEADERS,
+        },
         { uid: true },
       )) {
-        const persistCall = toPersistCall(args, raw as ImapFetchMessage);
+        const msg = raw as ImapFetchMessage;
+        const bodyText = await decodeImapText(msg.headers, textBodyOf(msg));
+        const persistCall = toPersistCall(args, msg, bodyText);
         const persisted = await persistGmailEmail(args.userId, ...persistCall);
         return { emailId: persisted.emailId };
       }

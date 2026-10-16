@@ -117,7 +117,13 @@ describe("the body is a bounded slice", () => {
     yielding(1);
     await syncImapInbox(args(NAVER));
     const query = fake.fetchImpl.mock.calls[0][1];
-    expect(query).toEqual({ envelope: true, flags: true, bodyParts: ["TEXT"] });
+    // Plus the two top-level MIME headers the body decoder needs (imap-body.ts).
+    expect(query).toEqual({
+      envelope: true,
+      flags: true,
+      bodyParts: ["TEXT"],
+      headers: ["content-type", "content-transfer-encoding"],
+    });
   });
 
   it("generic keeps the rest of the query unchanged", async () => {
@@ -225,6 +231,7 @@ describe("the undo re-ingest (syncImapMessage) fetches the same bounded slice as
       envelope: true,
       flags: true,
       bodyParts: [{ key: "TEXT", start: 0, maxLength: GENERIC_TEXT_FETCH_BYTES }],
+      headers: ["content-type", "content-transfer-encoding"],
     });
     expect(fake.fetchImpl.mock.calls[0][2]).toEqual({ uid: true });
   });
@@ -236,6 +243,7 @@ describe("the undo re-ingest (syncImapMessage) fetches the same bounded slice as
       envelope: true,
       flags: true,
       bodyParts: ["TEXT"],
+      headers: ["content-type", "content-transfer-encoding"],
     });
   });
 
