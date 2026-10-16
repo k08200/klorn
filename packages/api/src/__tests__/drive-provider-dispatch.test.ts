@@ -172,9 +172,10 @@ describe("the seam only reads", () => {
     expect(types).not.toMatch(/\b(upload|create|update|delete|rename|move|write|trash)\w*\s*\(/i);
   });
 
-  it("the one byte read (D4) takes a cap and answers the streaming reader's result", () => {
+  it("the one byte read (D4) takes a cap and the row's type, and answers the streaming reader's result", () => {
+    // D5d: the type picks Google's text export for a Google format.
     expect(session).toMatch(
-      /fetchForSummary\(\s*externalId: string,\s*options: \{ readonly maxBytes: number \},\s*\): Promise<CappedBytes \| null>;/,
+      /fetchForSummary\(\s*externalId: string,\s*options: \{ readonly maxBytes: number; readonly mimeType: string \| null \},\s*\): Promise<CappedBytes \| null>;/,
     );
     expect(types).toContain('import type { CappedBytes } from "../summary-bytes.js";');
     // The dispatcher picks an implementation; it reads no bytes itself.

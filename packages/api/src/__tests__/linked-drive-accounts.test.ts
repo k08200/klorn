@@ -25,11 +25,13 @@ vi.mock("../db.js", async () => {
 import { decryptToken } from "../crypto-tokens.js";
 import {
   countDriveAccounts,
+  dueDriveRefreshAccounts,
   isDriveAccountLinked,
   listDriveAccounts,
   loadDriveAccountCredentials,
   MAX_DRIVE_ACCOUNTS_PER_PROVIDER,
   markDriveAccountForReconnect,
+  markDriveAccountRefreshed,
   normaliseDriveAccountEmail,
   saveLinkedDriveAccount,
   saveRefreshedDriveTokens,
@@ -198,7 +200,7 @@ describe("the reads are scoped to one user and one provider", () => {
 describe("saveRefreshedDriveTokens", () => {
   const LATER = new Date("2026-10-15T13:00:00.000Z");
 
-  it("a rotation writes both tokens encrypted, clears the flag and stamps the refresh", async () => {
+  it("a rotation writes both tokens encrypted and clears the flag; it is not a metadata refresh", async () => {
     seed({ linkedDriveAccount: [account({ needsReconnect: true, expiresAt: LATER })] });
     const wrote = await saveRefreshedDriveTokens("user-1", "acct-1", {
       accessToken: "new-at",
@@ -211,7 +213,10 @@ describe("saveRefreshedDriveTokens", () => {
     expect(decryptToken(row.accessToken as string)).toBe("new-at");
     expect(decryptToken(row.refreshToken as string)).toBe("new-rt");
     expect(row.needsReconnect).toBe(false);
-    expect(row.lastRefreshedAt).toBeInstanceOf(Date);
+    // lastRefreshedAt is D5d's refresh job's (google-drive-refresh.ts): a token
+    // refreshed during a pass that then hits a rate limit must not mark the
+    // account refreshed.
+    expect(row.lastRefreshedAt).toBeNull();
   });
 
   it("an optimistic write loses to a later stored expiry", async () => {
@@ -255,6 +260,39 @@ describe("saveRefreshedDriveTokens", () => {
     const row = db.tables.linkedDriveAccount?.[0] as Row;
     expect(row.accessToken).toBe("cipher-at");
     expect(decryptToken(row.refreshToken as string)).toBe("new-rt");
+  });
+});
+
+describe("the refresh job's two queries (D5d)", () => {
+  const NOW = new Date("2026-10-15T12:00:00.000Z");
+  const CUTOFF = new Date("2026-10-15T06:00:00.000Z");
+
+  it("system: the due accounts of a provider, as (id, userId) only, never a token", async () => {
+    seed({
+      linkedDriveAccount: [
+        account({ id: "a-due", lastRefreshedAt: new Date("2026-10-15T05:00:00.000Z") }),
+        account({ id: "a-cutoff", email: "c@x.com", lastRefreshedAt: CUTOFF }),
+        account({ id: "a-never", email: "n@x.com", userId: "user-2" }),
+        account({ id: "a-fresh", email: "f@x.com", lastRefreshedAt: NOW }),
+        account({ id: "a-flagged", email: "r@x.com", needsReconnect: true }),
+        account({ id: "a-onedrive", email: "o@x.com", provider: "ONEDRIVE" }),
+      ],
+    });
+    const due = await dueDriveRefreshAccounts("GOOGLE", CUTOFF, 10);
+    expect(due).toEqual([
+      { id: "a-never", userId: "user-2" },
+      { id: "a-due", userId: "user-1" },
+      { id: "a-cutoff", userId: "user-1" },
+    ]);
+    expect(await dueDriveRefreshAccounts("GOOGLE", CUTOFF, 2)).toHaveLength(2);
+  });
+
+  it("marks only this user's account refreshed", async () => {
+    seed({ linkedDriveAccount: [account()] });
+    expect(await markDriveAccountRefreshed("user-2", "acct-1", NOW)).toBe(false);
+    expect(db.tables.linkedDriveAccount?.[0]?.lastRefreshedAt).toBeNull();
+    expect(await markDriveAccountRefreshed("user-1", "acct-1", NOW)).toBe(true);
+    expect(db.tables.linkedDriveAccount?.[0]?.lastRefreshedAt).toEqual(NOW);
   });
 });
 

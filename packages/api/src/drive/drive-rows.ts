@@ -35,6 +35,8 @@
  *
  * Unlinking an account (D5b, drive/linked-drive-accounts.ts) deletes its rows
  * here, by sourceKey, inside the unlink's own transaction, before the account.
+ * The refresh (D5d, drive/google-drive-refresh.ts) deletes one file's row here
+ * when Google answers 404 for it (`deleteConnectedDriveRows`).
  */
 
 import type { Prisma } from "@prisma/client";
@@ -378,6 +380,28 @@ export async function deleteLinkedAccountDriveRows(
   if (isKlornDriveProvider(provider)) throw new Error("drive rows: KLORN has no connected account");
   const deleted = await client.driveFile.deleteMany({
     where: { userId, provider, sourceKey },
+  });
+  return deleted.count;
+}
+
+/**
+ * Delete these files' rows of one connected account of this user (D5d: the
+ * refresh's 404, a file that is gone or no longer this grant's). Only that
+ * user's, only that provider's (never KLORN), only that account's, only these
+ * externalIds. A summary goes with its file through its own cascading foreign
+ * key. The caller has loaded the account by (id, userId, provider) first.
+ */
+export async function deleteConnectedDriveRows(
+  userId: string,
+  provider: ConnectedDriveProvider,
+  sourceKey: string,
+  externalIds: readonly string[],
+): Promise<number> {
+  // As above: a cast must not reach KLORN rows, whose objects go first.
+  if (isKlornDriveProvider(provider)) throw new Error("drive rows: KLORN has no connected account");
+  if (externalIds.length === 0) return 0;
+  const deleted = await prisma.driveFile.deleteMany({
+    where: { userId, provider, sourceKey, externalId: { in: [...externalIds] } },
   });
   return deleted.count;
 }

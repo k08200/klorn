@@ -14,6 +14,10 @@
  *
  * Everything here is what Google said, uncleaned beyond these rules: the writer
  * (drive/drive-rows.ts) cleans the name, the type and the size again.
+ *
+ * D5d adds what a summary and the refresh need to know of Google: which of its
+ * own formats export as text (and as which type), and how to read a failure
+ * (a rate limit, an outage, the export's size limit) from a googleapis error.
  */
 
 import { safeHttpsLinkOnHosts } from "../../safe-https-link.js";
@@ -29,11 +33,52 @@ export const GOOGLE_DRIVE_LIST_FIELDS = `nextPageToken,files(${GOOGLE_DRIVE_FILE
 export const GOOGLE_FOLDER_MIME = "application/vnd.google-apps.folder";
 export const GOOGLE_SHORTCUT_MIME = "application/vnd.google-apps.shortcut";
 
+/** Google's own formats (Docs, Sheets, a form...): no bytes of their own to download. */
+const GOOGLE_APPS_PREFIX = "application/vnd.google-apps.";
+/**
+ * The Google formats a summary can read, and the type Drive exports each as
+ * (plan, D5 "Summaries"). A Sheet exports its first sheet only (prior
+ * knowledge, a live check before the flip). Any other Google format has no
+ * text export: it is never fetched.
+ */
+export const GOOGLE_TEXT_EXPORTS: ReadonlyMap<string, string> = new Map([
+  ["application/vnd.google-apps.document", "text/plain"],
+  ["application/vnd.google-apps.presentation", "text/plain"],
+  ["application/vnd.google-apps.spreadsheet", "text/csv"],
+]);
+/**
+ * The reasons of a 403 that is a rate limit, not a refusal (prior knowledge of
+ * Drive's error reference). A 429 is one whatever its reason.
+ */
+const GOOGLE_RATE_LIMIT_REASONS: ReadonlySet<string> = new Set([
+  "userRateLimitExceeded",
+  "rateLimitExceeded",
+  "dailyLimitExceeded",
+]);
+/**
+ * The reasons of a 403 that is about the file: it is there, but not this app's
+ * (picked under another app id) or not this user's to read. Every other 403 (a
+ * rate limit, the Drive API switched off, a missing scope, a key restriction)
+ * is a fault of the setup or the grant.
+ */
+const FILE_LEVEL_FORBIDDEN_REASONS: ReadonlySet<string> = new Set([
+  "appNotAuthorizedToFile",
+  "insufficientFilePermissions",
+]);
+/** The export's own limit: the Google file is too large to export (D5d: `too-large`). */
+const GOOGLE_EXPORT_TOO_LARGE_REASON = "exportSizeLimitExceeded";
+/** The most of an error body read for its reason; an error body is a few hundred bytes. */
+const ERROR_BODY_MAX_CHARS = 64 * 1024;
+const ERROR_BODY_REASON = /"reason"\s*:\s*"([A-Za-z]{1,64})"/;
+const HTTP_FORBIDDEN = 403;
+const HTTP_NOT_FOUND = 404;
+const HTTP_TOO_MANY_REQUESTS = 429;
+const HTTP_SERVER_ERROR_FLOOR = 500;
+
 /** A Drive id: base64url-like, as Google mints them (28 to 44 characters today). */
 const GOOGLE_DRIVE_ID = /^[A-Za-z0-9_-]{10,128}$/;
 /** A whole byte count as Drive sends it (an int64 as text). */
 const WHOLE_NUMBER = /^\d{1,16}$/;
-const HTTP_NOT_FOUND = 404;
 
 /** A Drive v3 file resource, limited to the fields above; any of them may be missing. */
 export interface GoogleDriveFileResource {
@@ -113,15 +158,69 @@ export function isGoogleNotFound(err: unknown): boolean {
   return googleErrorStatus(err) === HTTP_NOT_FOUND;
 }
 
-/** The first `reason` of a Drive error (`userRateLimitExceeded`, `appNotAuthorizedToFile`, ...). */
+/**
+ * The first `reason` of a Drive error (`userRateLimitExceeded`,
+ * `appNotAuthorizedToFile`, ...). A streamed request's error (D5d's byte read)
+ * carries the body as text, not parsed: its reason is read from that text.
+ */
 export function googleErrorReason(err: unknown): string | null {
   if (typeof err !== "object" || err === null) return null;
   const e = err as {
     errors?: Array<{ reason?: unknown }>;
-    response?: { data?: { error?: { errors?: Array<{ reason?: unknown }> } } };
+    response?: { data?: unknown };
   };
-  const reason = e.errors?.[0]?.reason ?? e.response?.data?.error?.errors?.[0]?.reason;
-  return typeof reason === "string" ? reason : null;
+  const data = e.response?.data as { error?: { errors?: Array<{ reason?: unknown }> } } | undefined;
+  const reason = e.errors?.[0]?.reason ?? data?.error?.errors?.[0]?.reason;
+  if (typeof reason === "string") return reason;
+  const body = e.response?.data;
+  if (typeof body !== "string" || body.length > ERROR_BODY_MAX_CHARS) return null;
+  return ERROR_BODY_REASON.exec(body)?.[1] ?? null;
+}
+
+/** A 429, or a 403 whose reason is a rate limit: Google asks Klorn to slow down. */
+export function isGoogleRateLimited(err: unknown): boolean {
+  const status = googleErrorStatus(err);
+  if (status === HTTP_TOO_MANY_REQUESTS) return true;
+  return status === HTTP_FORBIDDEN && GOOGLE_RATE_LIMIT_REASONS.has(googleErrorReason(err) ?? "");
+}
+
+/** A 403 about this one file (see FILE_LEVEL_FORBIDDEN_REASONS), not about the setup or the grant. */
+export function isGoogleFileForbidden(err: unknown): boolean {
+  return (
+    googleErrorStatus(err) === HTTP_FORBIDDEN &&
+    FILE_LEVEL_FORBIDDEN_REASONS.has(googleErrorReason(err) ?? "")
+  );
+}
+
+/** Google's "this file is too large to export": a 403 with the export's own reason. */
+export function isGoogleExportTooLarge(err: unknown): boolean {
+  return (
+    googleErrorStatus(err) === HTTP_FORBIDDEN &&
+    googleErrorReason(err) === GOOGLE_EXPORT_TOO_LARGE_REASON
+  );
+}
+
+/** Worth trying again later: a rate limit, a 5xx, or no answer at all (a network error). */
+export function isGoogleRetryable(err: unknown): boolean {
+  const status = googleErrorStatus(err);
+  return status === null || status >= HTTP_SERVER_ERROR_FLOOR || isGoogleRateLimited(err);
+}
+
+/** A failure as it may be logged: its status and reason, nothing else of the request. */
+export function googleFailureLabel(err: unknown): string {
+  const status = googleErrorStatus(err) ?? "no response";
+  const reason = googleErrorReason(err);
+  return reason === null ? String(status) : `${status} ${reason}`;
+}
+
+/** True for one of Google's own formats. */
+export function isGoogleAppsType(mimeType: string | null): boolean {
+  return typeof mimeType === "string" && mimeType.startsWith(GOOGLE_APPS_PREFIX);
+}
+
+/** The type Drive exports this Google format as for its text; null for any other type. */
+export function googleTextExportType(mimeType: string | null): string | null {
+  return mimeType === null ? null : (GOOGLE_TEXT_EXPORTS.get(mimeType) ?? null);
 }
 
 /** A value inside a single-quoted string of Drive's query language: `\` and `'` escaped. */

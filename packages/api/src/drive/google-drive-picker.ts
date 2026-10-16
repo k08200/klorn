@@ -12,9 +12,10 @@
  *      Every field of a row is what Google's files.get answers for that id on
  *      that account's grant (a 404 is "not granted"), written through the one
  *      writer (drive/drive-rows.ts) as a GOOGLE row of that account, then its
- *      summary queued (summary-triggers.ts; it waits until D5d,
- *      summary-policy.ts). Folders, shortcuts and trashed files are refused,
- *      and an account holds at most GOOGLE_DRIVE_ROWS_PER_ACCOUNT rows.
+ *      summary queued (summary-triggers.ts; D5d's connector reads the bytes).
+ *      Folders, shortcuts and trashed files are refused, and an account holds
+ *      at most GOOGLE_DRIVE_ROWS_PER_ACCOUNT rows. D5d's hourly refresh keeps
+ *      the rows up to date (google-drive-refresh.ts).
  *
  * The account is loaded by (id, userId, provider) first, every time: the
  * DriveFile foreign key proves an account exists, not who owns it.
@@ -56,9 +57,9 @@ import {
 import {
   GOOGLE_FOLDER_MIME,
   GOOGLE_SHORTCUT_MIME,
-  googleErrorReason,
   googleErrorStatus,
   isGoogleDriveId,
+  isGoogleFileForbidden,
 } from "./providers/google-files.js";
 import type { DriveProviderSession, ProviderDriveFile } from "./providers/types.js";
 import { enqueueSummaryOnWrite } from "./summary-triggers.js";
@@ -74,18 +75,6 @@ const METADATA_IN_FLIGHT = 4;
  * Picker, so a person browsing for a while is not cut off mid-pick.
  */
 const PICKER_TOKEN_MIN_LIFE_MS = 15 * 60 * 1000;
-const HTTP_FORBIDDEN = 403;
-/**
- * A 403 with one of these reasons is about the file: it is there, but not this
- * app's (picked under another app id) or not this user's to read. Every other
- * 403 (a rate limit, the Drive API switched off, a missing scope, a key
- * restriction) is a fault of the setup or the grant, and fails the pick loudly
- * instead of reading as "not shared".
- */
-const FILE_LEVEL_FORBIDDEN: ReadonlySet<string> = new Set([
-  "appNotAuthorizedToFile",
-  "insufficientFilePermissions",
-]);
 
 type AccountFailure = "not-found" | "needs-reconnect";
 type GoogleFailure = "needs-reconnect" | "unavailable";
@@ -207,10 +196,8 @@ async function readMetadata(session: DriveProviderSession, id: string): Promise<
     const file = await session.getMetadata(id);
     return file === null ? { kind: "refused", code: "not-accessible" } : { kind: "file", file };
   } catch (err) {
-    const forbidden = googleErrorStatus(err) === HTTP_FORBIDDEN;
-    if (forbidden && FILE_LEVEL_FORBIDDEN.has(googleErrorReason(err) ?? "")) {
-      return { kind: "refused", code: "not-accessible" };
-    }
+    // A 403 about the file reads as "not shared"; any other fails the pick loudly.
+    if (isGoogleFileForbidden(err)) return { kind: "refused", code: "not-accessible" };
     return { kind: "failed", err };
   }
 }

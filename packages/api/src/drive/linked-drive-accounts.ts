@@ -10,7 +10,10 @@
  * Rules every function here keeps:
  *   - every query names the user, and a single-account query also names the
  *     account id and, where it reads or deletes, the provider: the DriveFile
- *     foreign key proves an account exists, not who owns it;
+ *     foreign key proves an account exists, not who owns it. One exception,
+ *     marked `system:`: the refresh job's (D5d) pick of due accounts across
+ *     users, which carries out (id, userId) only; each account is then loaded
+ *     by (id, userId, provider) like any other;
  *   - a token is written only through `encryptToken`, and never empty:
  *     encryptToken("") answers "", which the NOT NULL columns would keep as if
  *     it were a token;
@@ -187,10 +190,12 @@ export async function markDriveAccountForReconnect(
 }
 
 /**
- * Save a refresh of this user's account: the tokens it brought (an empty one is
- * left as stored), healthy again, stamped. False when nothing was written: no
+ * Save a token refresh of this user's account: the tokens it brought (an empty
+ * one is left as stored), healthy again. False when nothing was written: no
  * token to write, not this user's account, or (onlyIfNewer) a later token is
- * already stored.
+ * already stored. It does not stamp `lastRefreshedAt`: that is the metadata
+ * refresh's (D5d, `markDriveAccountRefreshed`), and a token refreshed during a
+ * pass that a rate limit then ends must not count as one.
  */
 export async function saveRefreshedDriveTokens(
   userId: string,
@@ -209,8 +214,54 @@ export async function saveRefreshedDriveTokens(
       ...(tokens.refreshToken && { refreshToken: encryptToken(tokens.refreshToken) }),
       expiresAt: tokens.expiresAt,
       needsReconnect: false,
-      lastRefreshedAt: new Date(),
     },
+  });
+  return written.count > 0;
+}
+
+/** An account the refresh job is due to read: who and which, never a token. */
+export interface DueDriveAccount {
+  readonly id: string;
+  readonly userId: string;
+}
+
+// The refresh job's pick (D5d): at most `take` accounts of this provider not
+// flagged for reconnect and not refreshed since `cutoff`, never refreshed first,
+// then the oldest. Only (id, userId) leaves: the job loads each account through
+// `loadDriveAccountCredentials`, by (id, userId, provider). No index on
+// lastRefreshedAt: the table holds at most 5 accounts of a provider per user,
+// and this scans it once an hour.
+/** system: the accounts of a provider due for a metadata refresh, across users. */
+export async function dueDriveRefreshAccounts(
+  provider: ConnectedDriveProvider,
+  cutoff: Date,
+  take: number,
+): Promise<DueDriveAccount[]> {
+  return await prisma.linkedDriveAccount.findMany({
+    where: {
+      provider,
+      needsReconnect: false,
+      OR: [{ lastRefreshedAt: null }, { lastRefreshedAt: { lte: cutoff } }],
+    },
+    select: { id: true, userId: true },
+    orderBy: [{ lastRefreshedAt: { sort: "asc", nulls: "first" } }, { id: "asc" }],
+    take,
+  });
+}
+
+/**
+ * A metadata refresh of this user's account went through every row (D5d):
+ * stamp it, so the job leaves it for the next 6 hours. False when it is not
+ * this user's account.
+ */
+export async function markDriveAccountRefreshed(
+  userId: string,
+  accountId: string,
+  at: Date,
+): Promise<boolean> {
+  const written = await prisma.linkedDriveAccount.updateMany({
+    where: { id: accountId, userId },
+    data: { lastRefreshedAt: at },
   });
   return written.count > 0;
 }

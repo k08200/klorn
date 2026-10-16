@@ -7,16 +7,21 @@
  *   - a 404 is "not granted": null, never an error;
  *   - the link is kept only on docs.google.com or drive.google.com, over https;
  *   - the etag is `md5:<md5Checksum>` when Drive reports one, else `v:<version>`;
- *   - the listing and the search quote what they put in Drive's query language.
- *
- * `fetchForSummary` is D5d: it still refuses, and calls nothing.
+ *   - the listing and the search quote what they put in Drive's query language;
+ *   - D5d's byte read for a summary: Docs and Slides exported as text/plain,
+ *     Sheets as text/csv, anything else read with alt=media, streamed into the
+ *     cap within D4's deadline; never a link Google hands over; Google's export
+ *     size error is `too-large`, a 429, a 5xx or a network error a retryable
+ *     StorageError.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Readable } from "node:stream";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
   get: vi.fn(),
   list: vi.fn(),
+  export: vi.fn(),
   drive: vi.fn(),
 }));
 
@@ -24,7 +29,7 @@ vi.mock("googleapis", () => ({
   google: {
     drive: (options: unknown) => {
       api.drive(options);
-      return { files: { get: api.get, list: api.list } };
+      return { files: { get: api.get, list: api.list, export: api.export } };
     },
   },
 }));
@@ -38,6 +43,8 @@ import {
   googleWebUrl,
   toProviderDriveFile,
 } from "../drive/providers/google-files.js";
+import { DRIVE_SUMMARY_READ_TIMEOUT_MS } from "../drive/summary-policy.js";
+import { StorageError } from "../storage/errors.js";
 
 const PLAN_FIELDS =
   "id,name,mimeType,size,md5Checksum,version,modifiedTime,webViewLink,parents,trashed";
@@ -63,7 +70,12 @@ function resource(over: Record<string, unknown> = {}) {
 beforeEach(() => {
   api.get.mockReset();
   api.list.mockReset();
+  api.export.mockReset();
   api.drive.mockReset();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("the fields mask", () => {
@@ -240,12 +252,150 @@ describe("list and search: Drive's query language, quoted", () => {
   });
 });
 
-describe("fetchForSummary is D5d", () => {
-  it("refuses with a message naming D5d, and calls nothing", async () => {
-    await expect(
-      googleDriveSession(linked).fetchForSummary("1AbC", { maxBytes: 10 }),
-    ).rejects.toThrow(/D5d/);
+describe("fetchForSummary (D5d): the bytes a summary is made from", () => {
+  const ID = "1AbCdEfGhIjKlMnOpQrStUvWxYz012345";
+  const DOC = "application/vnd.google-apps.document";
+  const SLIDES = "application/vnd.google-apps.presentation";
+  const SHEET = "application/vnd.google-apps.spreadsheet";
+  const LINKS = /webContentLink|exportLinks|thumbnailLink/;
+
+  const streamOf = (text: string) => ({ data: Readable.from([Buffer.from(text, "utf8")]) });
+  const fetch = (mimeType: string | null, maxBytes = 1_000) =>
+    googleDriveSession(linked).fetchForSummary(ID, { maxBytes, mimeType });
+  const failure = (status: number | null, extra: Record<string, unknown> = {}) =>
+    Object.assign(new Error("Request failed"), {
+      ...(status === null ? { code: "ECONNRESET" } : { status, response: { status } }),
+      config: { headers: { Authorization: "Bearer ya29.SECRET" } },
+      ...extra,
+    });
+
+  it.each([
+    ["a Doc", DOC, "text/plain"],
+    ["a Slides deck", SLIDES, "text/plain"],
+    ["a Sheet (its first sheet only)", SHEET, "text/csv"],
+  ])("%s (%s) is exported as %s, streamed, on the account's client", async (_label, type, exported) => {
+    api.export.mockResolvedValue(streamOf("Minutes of the review."));
+    expect(await fetch(type)).toEqual({ ok: true, bytes: Buffer.from("Minutes of the review.") });
+    expect(api.export).toHaveBeenCalledTimes(1);
+    const [params, options] = api.export.mock.calls[0] as [unknown, Record<string, unknown>];
+    expect(params).toEqual({ fileId: ID, mimeType: exported });
+    expect(options).toMatchObject({ responseType: "stream" });
+    expect(options.signal).toBeInstanceOf(AbortSignal);
     expect(api.get).not.toHaveBeenCalled();
-    expect(api.list).not.toHaveBeenCalled();
+    expect(api.drive).toHaveBeenCalledWith({ version: "v3", auth: linked.client });
+  });
+
+  it.each([
+    ["a PDF", "application/pdf"],
+    ["a text file", "text/plain"],
+    ["an unknown type", null],
+  ])("%s is read with alt=media", async (_label, type) => {
+    api.get.mockResolvedValue(streamOf("%PDF-1.4"));
+    expect(await fetch(type)).toEqual({ ok: true, bytes: Buffer.from("%PDF-1.4") });
+    const [params, options] = api.get.mock.calls[0] as [unknown, Record<string, unknown>];
+    expect(params).toEqual({ fileId: ID, alt: "media", supportsAllDrives: true });
+    expect(options).toMatchObject({ responseType: "stream" });
+    expect(api.export).not.toHaveBeenCalled();
+  });
+
+  it("asks for no field and no link: it never fetches a URL Google hands over", async () => {
+    api.export.mockResolvedValue(streamOf("a"));
+    api.get.mockResolvedValue(streamOf("b"));
+    await fetch(DOC);
+    await fetch("application/pdf");
+    for (const call of [...api.export.mock.calls, ...api.get.mock.calls]) {
+      expect(JSON.stringify(call[0])).not.toMatch(LINKS);
+      expect(call[0]).not.toHaveProperty("fields");
+    }
+  });
+
+  it("past the cap it stops reading and answers too-large, whatever was declared", async () => {
+    let pulled = 0;
+    const body = Readable.from(
+      (function* () {
+        for (let i = 0; i < 100; i += 1) {
+          pulled += 1;
+          yield Buffer.alloc(100, 0x61);
+        }
+      })(),
+    );
+    api.get.mockResolvedValue({ data: body });
+    expect(await fetch("text/plain", 250)).toEqual({ ok: false, reason: "too-large" });
+    expect(pulled).toBeLessThan(10);
+    expect(body.destroyed).toBe(true);
+  });
+
+  it.each([
+    ["in the parsed error", failure(403, { errors: [{ reason: "exportSizeLimitExceeded" }] })],
+    [
+      "in a streamed request's text body",
+      failure(403, {
+        response: {
+          status: 403,
+          data: '{"error":{"code":403,"errors":[{"reason":"exportSizeLimitExceeded"}]}}',
+        },
+      }),
+    ],
+  ])("Google's export size error (%s) is too-large", async (_label, err) => {
+    api.export.mockRejectedValue(err);
+    expect(await fetch(DOC)).toEqual({ ok: false, reason: "too-large" });
+  });
+
+  it("a 404 is a file this grant no longer sees: null", async () => {
+    api.export.mockRejectedValue(failure(404));
+    expect(await fetch(DOC)).toBeNull();
+  });
+
+  it.each([
+    ["a 429", failure(429)],
+    ["a 403 rate limit", failure(403, { errors: [{ reason: "userRateLimitExceeded" }] })],
+    ["a 500", failure(500)],
+    ["a 503", failure(503)],
+    ["a network error", failure(null)],
+    ["a revoked grant (the refresh job flags the account)", failure(401)],
+  ])("%s throws a retryable StorageError, naming no secret", async (_label, err) => {
+    api.get.mockRejectedValue(err);
+    const thrown = await fetch("application/pdf").catch((e: unknown) => e);
+    expect(thrown).toBeInstanceOf(StorageError);
+    expect((thrown as StorageError).retryable).toBe(true);
+    expect((thrown as StorageError).message).not.toMatch(/SECRET|Bearer/);
+    expect((thrown as StorageError).cause).toBeUndefined();
+  });
+
+  it("any other refusal is a StorageError that is not retried", async () => {
+    api.get.mockRejectedValue(failure(403, { errors: [{ reason: "fileNotDownloadable" }] }));
+    const thrown = await fetch("application/pdf").catch((e: unknown) => e);
+    expect(thrown).toBeInstanceOf(StorageError);
+    expect((thrown as StorageError).retryable).toBe(false);
+    expect((thrown as StorageError).message).toBe("Google Drive answered 403 fileNotDownloadable");
+  });
+
+  it("a body that never ends is given up at D4's deadline: retryable, aborted, released", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const body = new Readable({ read() {} });
+    let signal: AbortSignal | undefined;
+    api.get.mockImplementation(async (_params: unknown, options: { signal: AbortSignal }) => {
+      signal = options.signal;
+      return { data: body };
+    });
+    const pending = fetch("application/pdf").catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(DRIVE_SUMMARY_READ_TIMEOUT_MS);
+    const thrown = await pending;
+    expect(thrown).toBeInstanceOf(StorageError);
+    expect((thrown as StorageError).retryable).toBe(true);
+    expect(signal?.aborted).toBe(true);
+    expect(body.destroyed).toBe(true);
+  });
+
+  it("a Google format with no text export, or an id that is not a Drive id, calls nothing", async () => {
+    await expect(fetch("application/vnd.google-apps.form")).rejects.toThrow(/no text export/);
+    expect(
+      await googleDriveSession(linked).fetchForSummary("not an id", {
+        maxBytes: 10,
+        mimeType: "application/pdf",
+      }),
+    ).toBeNull();
+    expect(api.get).not.toHaveBeenCalled();
+    expect(api.export).not.toHaveBeenCalled();
   });
 });

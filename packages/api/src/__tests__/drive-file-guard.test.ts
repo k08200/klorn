@@ -141,11 +141,11 @@ describe("every DriveFile write states its source, in one place", () => {
     expect(body).toMatch(/\n\s+sourceKey\s+String\n/);
   });
 
-  it("only the user purge and the writer's two deletes delete rows", () => {
+  it("only the user purge and the writer's three deletes delete rows", () => {
     expect(pathsWith(ROW_DELETE)).toEqual([ROWS_MODULE, "purge-user-data.ts"]);
     expect(fileAt("purge-user-data.ts")?.text).toContain("await tx.driveFile.deleteMany(scope);");
     const windows = callWindows(fileAt(ROWS_MODULE)?.text ?? "", ROW_DELETE);
-    expect(windows).toHaveLength(2);
+    expect(windows).toHaveLength(3);
     // D3: one user's KLORN rows, by the ids D3 minted. Nothing of another source.
     expect(windows[0]).toMatch(
       /driveFile\.deleteMany\(\{\s*where: \{\s*userId,\s*provider: "KLORN",\s*sourceKey: KLORN_DRIVE_SOURCE_KEY,\s*externalId: \{ in: \[\.\.\.externalIds\] \},\s*\},/,
@@ -155,10 +155,36 @@ describe("every DriveFile write states its source, in one place", () => {
     expect(windows[1]).toMatch(
       /^driveFile\.deleteMany\(\{\s*where: \{ userId, provider, sourceKey \},\s*\}\)/,
     );
+    // D5d: the rows of these files of one connected account of one user (the
+    // refresh's 404). Never KLORN, never another account's, never by id alone.
+    expect(windows[2]).toMatch(
+      /^driveFile\.deleteMany\(\{\s*where: \{ userId, provider, sourceKey, externalId: \{ in: \[\.\.\.externalIds\] \} \},\s*\}\)/,
+    );
     const text = fileAt(ROWS_MODULE)?.text ?? "";
     expect(text).toContain("await client.driveFile.deleteMany({");
     expect(text).toMatch(
       /export async function deleteLinkedAccountDriveRows\(\s*client: DriveRowsClient,\s*userId: string,\s*provider: ConnectedDriveProvider,\s*sourceKey: string,\s*\)/,
+    );
+    expect(text).toMatch(
+      /export async function deleteConnectedDriveRows\(\s*userId: string,\s*provider: ConnectedDriveProvider,\s*sourceKey: string,\s*externalIds: readonly string\[\],\s*\)/,
+    );
+    const perFile = text.slice(text.indexOf("export async function deleteConnectedDriveRows("));
+    expect(perFile.indexOf("if (isKlornDriveProvider(provider)) throw")).toBeGreaterThan(-1);
+    expect(perFile.indexOf("if (isKlornDriveProvider(provider)) throw")).toBeLessThan(
+      perFile.indexOf("prisma.driveFile.deleteMany("),
+    );
+  });
+
+  it("only the refresh deletes a connected file's row, and only on Google's 404", () => {
+    const callers = files
+      .filter((f) => /\bdeleteConnectedDriveRows\(/.test(f.text))
+      .map((f) => f.path)
+      .sort();
+    expect(callers).toEqual([ROWS_MODULE, "drive/google-drive-refresh.ts"]);
+    const refresh = fileAt("drive/google-drive-refresh.ts")?.text ?? "";
+    expect(refresh.match(/\bdeleteConnectedDriveRows\(/g)).toHaveLength(1);
+    expect(refresh).toMatch(
+      /if \(file === null\) \{\s*await deleteConnectedDriveRows\(ctx\.userId, "GOOGLE", ctx\.accountId, \[row\.externalId\]\);/,
     );
   });
 
@@ -213,15 +239,29 @@ describe("the linked drive accounts (D5a, D5b): one module, the purge and the ke
     );
   });
 
-  it("every query of the account module names the user", () => {
+  it("every query of the account module names the user, but the refresh job's one system query", () => {
     const text = fileAt(ACCOUNTS_MODULE)?.text ?? "";
-    const windows = callWindows(text, ACCOUNT_CALL);
-    expect(windows.length).toBeGreaterThanOrEqual(7);
-    for (const window of windows) {
-      expect(window.slice(0, 160)).toMatch(
+    let scoped = 0;
+    for (const match of text.matchAll(ACCOUNT_CALL)) {
+      const before = text.slice(0, match.index ?? 0);
+      const name = [...before.matchAll(/function (\w+)\(/g)].at(-1)?.[1] ?? "";
+      const window = text.slice(match.index ?? 0, (match.index ?? 0) + 500);
+      if (name === "dueDriveRefreshAccounts") {
+        // D5d: over every user, so it carries out the (id, userId) pair only;
+        // the pass then loads each account by (id, userId, provider).
+        expect(window).toMatch(/select: \{ id: true, userId: true \},/);
+        expect(window).not.toMatch(/accessToken|refreshToken|grantedScopes/);
+        continue;
+      }
+      expect(window.slice(0, 160), name).toMatch(
         /where: \{ (userId_provider_email: \{ userId, provider, email|id: accountId, userId|id, userId|userId,? )/,
       );
+      scoped += 1;
     }
+    expect(scoped).toBeGreaterThanOrEqual(8);
+    expect(text).toMatch(
+      /\/\*\* system: [^*]*\*\/\nexport async function dueDriveRefreshAccounts\(/,
+    );
   });
 
   it("the module encrypts every token it writes and refuses an empty one", () => {
@@ -538,6 +578,9 @@ describe("drive text reaches an LLM only wrapped", () => {
     "drive/klorn-upload.ts",
     // D5c: the Picker's session and the index of picked files.
     "drive/google-drive-picker.ts",
+    // D5d: the metadata refresh of picked files, and its hourly job.
+    "drive/google-drive-refresh-job.ts",
+    "drive/google-drive-refresh.ts",
     // D5b: the account table, the Google grant and the connector's connect.
     "drive/linked-drive-accounts.ts",
     "drive/providers/dispatch.ts",

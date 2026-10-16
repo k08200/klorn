@@ -480,14 +480,15 @@ describe("googleDriveActions.connect", () => {
     expect(await googleDriveActions.connect({ userId: "user-1", sourceKey: "acct-1" })).toBeNull();
   });
 
-  it("the session's summary read refuses until D5d, and calls no Google API", async () => {
-    // D5c's reads (getMetadata, list, search) are pinned in google-drive-files.test.ts.
+  it("the session's summary read of an id that is not a Drive id answers null and calls no Google API", async () => {
+    // The reads (getMetadata, list, search, fetchForSummary) are pinned in
+    // google-drive-files.test.ts, over a mocked googleapis.
     const { googleDriveActions } = await withAccount();
     const session = await googleDriveActions.connect({ userId: "user-1", sourceKey: "acct-1" });
     if (!session || "unsupported" in session) throw new Error("expected a session");
-    await expect(session.fetchForSummary("file-1", { maxBytes: 10 })).rejects.toThrow(
-      /not available yet \(D5d\)/,
-    );
+    expect(
+      await session.fetchForSummary("file-1", { maxBytes: 10, mimeType: "text/plain" }),
+    ).toBeNull();
     expect(google.getToken).not.toHaveBeenCalled();
   });
 });
