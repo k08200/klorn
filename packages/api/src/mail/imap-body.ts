@@ -36,10 +36,15 @@ function htmlToText(html: string): string {
     disallowedTagsMode: "discard",
     nonTextTags: ["style", "script", "textarea", "option", "noscript", "head", "title"],
   });
-  return stripped
-    .replace(/[ \t]+/g, " ")
-    .replace(/\n\s*\n\s*/g, "\n\n")
-    .trim();
+  // Line by line, no backtracking regex (this runs on sender-controlled text):
+  // collapse runs of spaces and tabs, keep at most one blank line in a row.
+  const lines: string[] = [];
+  for (const line of stripped.split("\n")) {
+    const tidy = line.replace(/[ \t\r]+/g, " ").trim();
+    if (tidy === "" && (lines.length === 0 || lines[lines.length - 1] === "")) continue;
+    lines.push(tidy);
+  }
+  return lines.join("\n").trim();
 }
 
 /** Decoded plain text of an IMAP message body; the raw text if it cannot be decoded. */
