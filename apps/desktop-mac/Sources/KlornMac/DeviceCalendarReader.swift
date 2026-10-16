@@ -23,7 +23,10 @@ actor DeviceCalendarReader: DeviceCalendarStore {
 
     func requestAccess() async -> Bool {
         await withCheckedContinuation { continuation in
-            store.requestFullAccessToEvents { granted, _ in continuation.resume(returning: granted) }
+            // @Sendable: the completion runs on EventKit's own queue. An
+            // actor-isolated closure would trap there (the 0.4.80106 launch
+            // crash was the same pattern in SystemPushNotifier).
+            store.requestFullAccessToEvents { @Sendable granted, _ in continuation.resume(returning: granted) }
         }
     }
 
