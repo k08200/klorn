@@ -108,6 +108,29 @@ jobs:
         # instead of shipping an app that dies on its first menu.
         run: ./Klorn.app/Contents/MacOS/KlornMac --self-check
 
+      - name: Launch the PACKAGED app and keep it alive
+        working-directory: apps/desktop-mac
+        # The self-check above never runs the real launch path: it uses a fake
+        # notification center and no bundle identity. 0.4.80106 passed it and
+        # still crashed at every launch (Swift 6 isolation trap in a
+        # UNUserNotificationCenter callback). So start the assembled app the
+        # way a user does, give it 20 s, and fail the release if it died —
+        # printing the crash report so the cause is in the log.
+        run: |
+          ./Klorn.app/Contents/MacOS/KlornMac > "$RUNNER_TEMP/launch.log" 2>&1 &
+          APP_PID=$!
+          sleep 20
+          if kill -0 "$APP_PID" 2>/dev/null; then
+            echo "app still running after 20 s — launch OK"
+            kill "$APP_PID" || true
+            exit 0
+          fi
+          wait "$APP_PID"; STATUS=$?
+          echo "::error::the packaged app exited within 20 s of launch (status $STATUS)"
+          tail -n 50 "$RUNNER_TEMP/launch.log" || true
+          ls -t ~/Library/Logs/DiagnosticReports/KlornMac* 2>/dev/null | head -1 | xargs -I{} head -c 6000 {} || true
+          exit 1
+
       - name: Import Developer ID certificate
         if: steps.signing.outputs.enabled == 'true'
         env:
