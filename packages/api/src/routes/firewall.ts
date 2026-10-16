@@ -60,6 +60,7 @@ import { describePolicy } from "../learning/ontology.js";
 import { getTrustScoresBulk } from "../learning/trust-score.js";
 import { ensureRecentMailSync } from "../mail/activity-sync.js";
 import { isInternalSender } from "../mail/company-domains.js";
+import { boundedFromValue } from "../mail/email-address.js";
 import {
   accountFactsOf,
   accountFactsSelect,
@@ -457,7 +458,7 @@ export async function firewallRoutes(app: FastifyInstance) {
     for (const { from } of recent) {
       const email = senderEmail(from).toLowerCase();
       if (!email || email === selfEmail) continue;
-      const m = from.match(/^\s*"?([^"<]+?)"?\s*</);
+      const m = boundedFromValue(from).match(/^\s*"?([^"<]+?)"?\s*</);
       const name = m ? m[1].trim() : null;
       const cur = senders.get(email) ?? { email, name, count: 0 };
       cur.count += 1;

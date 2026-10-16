@@ -39,7 +39,7 @@ import { withDbRetry } from "../db-retry.js";
 import { googleDriveRoutesEnabled, visibleDriveProviders } from "../drive/drive-scope.js";
 import { DRIVE_LINK_STATE_MARKER } from "../drive/providers/google-auth.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../mail/email.js";
-import { extractEmailAddress } from "../mail/email-address.js";
+import { boundedFromValue, extractEmailAddress } from "../mail/email-address.js";
 import { syncLinkedInboxesForUser } from "../mail/email-sync.js";
 import {
   getAuthedClient,
@@ -1785,7 +1785,7 @@ export function authRoutes(app: FastifyInstance) {
         if (/noreply|no-reply|newsletter|mailer-daemon|notifications?@/i.test(email)) continue;
 
         // Extract name
-        const namePart = fromHeader
+        const namePart = boundedFromValue(fromHeader)
           .replace(/<[^>]+>/, "")
           .replace(/"/g, "")
           .trim();
