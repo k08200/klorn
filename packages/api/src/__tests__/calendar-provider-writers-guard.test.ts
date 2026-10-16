@@ -131,8 +131,10 @@ describe("every CalendarEvent writer states its provider", () => {
 });
 
 describe("every LinkedCalendarAccount writer states its provider", () => {
-  it("routes/auth.ts link-calendar upsert names provider GOOGLE in both the key and the create", () => {
-    const auth = files.find((f) => f.path === "routes/auth.ts");
+  // The Google link-calendar upsert left the OAuth callback (routes/auth.ts) for
+  // the session-bound completion (routes/google-link-finish.ts).
+  it("routes/google-link-finish.ts link-calendar upsert names provider GOOGLE in both the key and the create", () => {
+    const auth = files.find((f) => f.path === "routes/google-link-finish.ts");
     const windows = callWindows(auth?.text ?? "", ACCOUNT_WRITE);
     expect(windows).toHaveLength(1);
     expect(windows[0]).toContain("userId_provider_email");
@@ -169,8 +171,8 @@ describe("every LinkedCalendarAccount writer states its provider", () => {
     const writers = files.filter((f) => callWindows(f.text, ACCOUNT_WRITE).length > 0);
     expect(writers.map((f) => f.path).sort()).toEqual([
       "pim/device-calendar/device-ingest.ts",
-      "routes/auth.ts",
       "routes/caldav-calendar.ts",
+      "routes/google-link-finish.ts",
       "routes/outlook-calendar-link.ts",
     ]);
   });

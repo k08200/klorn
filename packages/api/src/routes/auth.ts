@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { exchangeCodes } from "../auth/exchange-codes.js";
+import { desktopHandoffPage, isAllowedNativeScheme } from "../auth/native-handoff.js";
 import {
   comparePassword,
   getUserId,
@@ -17,10 +18,6 @@ import {
 import { requireEntitled } from "../billing/entitlement-guard.js";
 import {
   canConnectNewMailAccount,
-  findOwnedLinkedAccount,
-  keepIfOnlyMailSource,
-  keepPrimaryGoogleIfOnlyMailSource,
-  mayConnectMailAccount,
   mayConnectPrimaryGoogle,
   requireMailLinkStart,
   SECOND_MAIL_ACCOUNT_REFUSAL,
@@ -36,7 +33,6 @@ import {
   teamModeEnabled,
   unifiedHomeEnabled,
 } from "../config.js";
-import { encryptOptional, encryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
 import { withDbRetry } from "../db-retry.js";
 import { visibleDriveProviders } from "../drive/drive-scope.js";
@@ -54,7 +50,6 @@ import {
   getOAuth2Client,
   isGoogleAuthError,
   markGoogleTokenForReconnect,
-  registerGmailWatch,
 } from "../mail/gmail.js";
 import { maybeSendWelcomeEmail } from "../notify/welcome-email.js";
 import { hashOneTimeToken, mintOneTimeToken } from "../one-time-token.js";
@@ -69,49 +64,13 @@ import {
 import { captureError } from "../sentry.js";
 import { localMinuteOfDay, normalizeTimeZone } from "../time-zone.js";
 import { deleteUserAndAllData } from "../user-deletion.js";
+import { isGoogleLinkMarker } from "./google-link-finish.js";
+import { handOffAccountLink, linkStartScheme } from "./link-handoff.js";
 
-// Allowlisted native app URL schemes for the OAuth deep-link relay. The token is
-// delivered by redirecting the browser to `<scheme>://oauth-callback?code=…`,
-// which the OS routes to the app holding that scheme on the user's OWN device —
-// so an attacker who merely knows a login nonce cannot receive the token (it is
-// never parked in a pollable server slot). Only these fixed schemes are valid
-// targets, so an attacker cannot redirect the token to a scheme they control.
-// Configurable so a new build's scheme can be added without a code change.
-const NATIVE_OAUTH_SCHEMES = (process.env.NATIVE_OAUTH_SCHEMES ?? "ai.klorn.app,klorn")
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
+// Moved to auth/native-handoff.ts (shared with the account-link handoff);
+// re-exported so routes/social-auth.ts and the tests keep importing them here.
+export { desktopHandoffPage, isAllowedNativeScheme };
 
-export function isAllowedNativeScheme(scheme: unknown): scheme is string {
-  return typeof scheme === "string" && NATIVE_OAUTH_SCHEMES.includes(scheme);
-}
-
-// The desktop browser leg must END IN A DOCUMENT. A bare 302 whose Location is
-// a custom scheme hands the URL to the OS (the app does launch and sign-in DOES
-// succeed) but commits nothing, so the tab keeps rendering whatever was last
-// committed — Google's account chooser — and spins forever. Dogfood 2026-08-10:
-// "로그인 누르면 무한로딩, 탭을 직접 끄면 로그인이 되어 있다".
-//
-// Serving a page fixes both halves of that: the document commits (so the
-// spinner ends no matter what the OS does with the scheme), and the launch is
-// retried from that document.
-//
-// The automatic launch is a <meta http-equiv="refresh">, NOT a script: every
-// HTML response from this API is served under `default-src 'none'; style-src
-// 'unsafe-inline'` (see the onSend hook in index.ts), so script-src is 'none'
-// and an inline <script> would silently never run. A meta refresh is not
-// governed by CSP, so the handoff survives the policy instead of quietly
-// depending on relaxing it. The anchor is the second half: browsers that only
-// honor an external-protocol launch on a user gesture still get one click away.
-//
-// window.close() is deliberately absent — it is script (blocked) and would be a
-// no-op regardless, since a tab the desktop app opened was not opened by
-// script. The "you can close this tab" copy is the real guarantee.
-//
-// The deep link is escaped for the attribute even though it cannot currently
-// carry a metacharacter (its scheme passed isAllowedNativeScheme and its code
-// is hex from crypto.randomBytes): NATIVE_OAUTH_SCHEMES is env-configurable, so
-// a self-hoster's typo must not be able to become markup.
 /// Desktop sign-in nonce state, shared with routes/social-auth.ts so the
 /// Apple/Naver desktop legs park/relay into the same map the
 /// /desktop-token/:nonce poller reads. Module-level: single registration.
@@ -119,28 +78,6 @@ export const desktopLoginTokens = new Map<
   string,
   { jwt?: string; expiresAt: number; challenge?: string; relayed?: boolean }
 >();
-
-export function desktopHandoffPage(deepLink: string): string {
-  const href = deepLink
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-  return `<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><title>Klorn Login</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="refresh" content="0;url=${href}">
-<style>body{font-family:system-ui;background:#0a0a0a;color:#e5e7eb;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
-.box{text-align:center;padding:40px;max-width:420px}.ok{font-size:48px;margin-bottom:16px}
-.t{font-size:14px;color:#9ca3af;margin-top:12px;line-height:1.6}
-.btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;margin-top:24px;padding:0 20px;border-radius:8px;background:#e5e7eb;color:#0a0a0a;font-size:14px;font-weight:600;text-decoration:none}
-.btn:focus-visible{outline:3px solid #60a5fa;outline-offset:2px}</style>
-</head><body><div class="box"><div class="ok" aria-hidden="true">✓</div>
-<h2>Login Successful</h2>
-<p class="t">Klorn Desktop is finishing sign-in.<br>You can close this tab.</p>
-<a class="btn" href="${href}">Open Klorn</a>
-</div></body></html>`;
-}
 
 const authHeaderSchema = {
   type: "object",
@@ -155,9 +92,6 @@ const authHeaderSchema = {
  * getUserId() extracts from a verified JWT; this comparison is safe.
  */
 const DEMO_USER_ID = "demo-user";
-
-/** Ceiling on linked secondary inboxes per user (unbounded-growth guard). */
-const MAX_LINKED_INBOXES = 10;
 
 // Exported for the Apple/Naver social-login path (auth/social-login.ts),
 // which must mirror this guard exactly.
@@ -1083,7 +1017,10 @@ export function authRoutes(app: FastifyInstance) {
     // a credential-bearing Google token to this user's row, so an intercepted
     // state URL (access logs, Referer) must not be replayable for the default
     // 7-day token window.
-    const signedState = signToken({ userId, email: "__oauth_state__" }, "10m");
+    const signedState = signToken(
+      { userId, email: "__oauth_state__", ...linkStartScheme(request) },
+      "10m",
+    );
     const url = getAuthUrl(signedState);
     return reply.send({ url });
   });
@@ -1105,7 +1042,10 @@ export function authRoutes(app: FastifyInstance) {
       // Short-lived state (10 min): the link callback attaches a credential-
       // bearing row, so an intercepted state URL must not be replayable for the
       // default 7-day token window.
-      const signedState = signToken({ userId, email: "__link_calendar__" }, "10m");
+      const signedState = signToken(
+        { userId, email: "__link_calendar__", ...linkStartScheme(request) },
+        "10m",
+      );
       return reply.send({ url: getLinkCalendarAuthUrl(signedState) });
     },
   );
@@ -1131,7 +1071,10 @@ export function authRoutes(app: FastifyInstance) {
       if (isDemoUser(userId)) {
         return reply.code(403).send({ error: "Authentication required to link an inbox" });
       }
-      const signedState = signToken({ userId, email: "__link_inbox__" }, "10m");
+      const signedState = signToken(
+        { userId, email: "__link_inbox__", ...linkStartScheme(request) },
+        "10m",
+      );
       return reply.send({ url: getLinkInboxAuthUrl(signedState) });
     },
   );
@@ -1177,161 +1120,26 @@ export function authRoutes(app: FastifyInstance) {
         return reply.code(400).send({ error: "Invalid or expired OAuth state" });
       }
 
+      // --- Account-link flows (__oauth_state__, __link_calendar__, __link_inbox__) ---
+      // The state proves only which user STARTED the flow, not that this
+      // browser is theirs: a consent URL sent to someone else would otherwise
+      // store THEIR grant on the starter's account. So the code is not
+      // exchanged here. It is parked for the starter's own session, which
+      // finishes the link through POST /api/auth/link/complete
+      // (routes/google-link-finish.ts holds the branches that used to run here).
+      if (isGoogleLinkMarker(statePayload.email)) {
+        return handOffAccountLink(reply, {
+          userId: statePayload.userId,
+          marker: statePayload.email,
+          code,
+          appScheme: statePayload.appScheme,
+          webUrl,
+        });
+      }
+
       try {
         const oauth2 = getOAuth2Client();
         const { tokens } = await oauth2.getToken(code);
-
-        // --- Link secondary calendar flow (state marker __link_calendar__) ---
-        // A DIFFERENT Google account is being attached to the ALREADY-logged-in
-        // user (statePayload.userId) purely for calendar free/busy. We do NOT
-        // resolve or switch the user by this Google email — the linked token only
-        // ever feeds checkConflicts.
-        if (statePayload.email === "__link_calendar__") {
-          if (!tokens.access_token) {
-            return reply.redirect(`${webUrl}/calendar?linked=failed`);
-          }
-          const profile = await getGoogleUserInfo(tokens.access_token);
-          if (profile.verified_email !== true) {
-            return reply.redirect(`${webUrl}/calendar?linked=unverified`);
-          }
-          // Re-verify entitlement at callback time. The initiate endpoint gates on
-          // requireEntitled, but the user could downgrade during the 10-min OAuth
-          // window — without this the lapsed user still links a Pro-only secondary
-          // calendar (TOCTOU). Inert while PAYWALL is off (entitled always true),
-          // load-bearing the moment it flips.
-          const calLinker = await prisma.user.findUnique({
-            where: { id: statePayload.userId },
-            select: { plan: true, role: true },
-          });
-          if (!calLinker || !isEntitled(calLinker.plan, calLinker.role)) {
-            return reply.redirect(`${webUrl}/calendar?linked=failed`);
-          }
-          const linkedEmail = normalizeEmail(profile.email);
-          // Linking your own primary address duplicates the mailbox: the
-          // selector shows it twice and every sync runs double. Refuse it.
-          const linkOwner = await prisma.user.findUnique({
-            where: { id: statePayload.userId },
-            select: { email: true },
-          });
-          if (linkOwner?.email && normalizeEmail(linkOwner.email) === linkedEmail) {
-            return reply.redirect(`${webUrl}/settings?inbox=self`);
-          }
-          const expiresAt = tokens.expiry_date ? new Date(tokens.expiry_date) : null;
-          await prisma.linkedCalendarAccount.upsert({
-            where: {
-              userId_provider_email: {
-                userId: statePayload.userId,
-                provider: "GOOGLE",
-                email: linkedEmail,
-              },
-            },
-            update: {
-              accessToken: encryptToken(tokens.access_token),
-              refreshToken: encryptOptional(tokens.refresh_token),
-              expiresAt,
-              // Re-linking a previously-revoked calendar clears the reconnect prompt.
-              needsReconnect: false,
-            },
-            create: {
-              userId: statePayload.userId,
-              provider: "GOOGLE",
-              email: linkedEmail,
-              accessToken: encryptToken(tokens.access_token),
-              refreshToken: encryptOptional(tokens.refresh_token),
-              expiresAt,
-            },
-          });
-          return reply.redirect(`${webUrl}/calendar?linked=success`);
-        }
-
-        // --- Link secondary inbox flow (state marker __link_inbox__) ---
-        // A DIFFERENT Google account is attached to the ALREADY-logged-in user
-        // (statePayload.userId) as an additional mail source. We NEVER resolve or
-        // switch the session user by this Google email — the linked token only
-        // feeds this user's own firewall. verified_email is checked verbatim (as
-        // the calendar flow does) to block the confused-deputy vector of linking
-        // an unverified/spoofed address.
-        if (statePayload.email === "__link_inbox__") {
-          if (!tokens.access_token) {
-            return reply.redirect(`${webUrl}/settings?inbox=failed`);
-          }
-          const profile = await getGoogleUserInfo(tokens.access_token);
-          if (profile.verified_email !== true) {
-            return reply.redirect(`${webUrl}/settings?inbox=unverified`);
-          }
-          const inboxLinker = await prisma.user.findUnique({
-            where: { id: statePayload.userId },
-            select: { id: true },
-          });
-          if (!inboxLinker) {
-            return reply.redirect(`${webUrl}/settings?inbox=failed`);
-          }
-          const linkedEmail = normalizeEmail(profile.email);
-          // Re-check at callback time, with the real address (TOCTOU): the
-          // first mailbox is free, a second one needs Pro — a user who got a
-          // mailbox or downgraded during the 10-min OAuth window cannot finish.
-          // Re-linking this same account is never refused. Inert while the
-          // paywall is off.
-          const inboxAccount = { provider: "GOOGLE" as const, email: linkedEmail };
-          if (!(await mayConnectMailAccount(statePayload.userId, inboxAccount))) {
-            return reply.redirect(`${webUrl}/settings?inbox=pro`);
-          }
-          const expiresAt = tokens.expiry_date ? new Date(tokens.expiry_date) : null;
-          // Cap NEW links only: a re-link (existing row → update path) must always
-          // be allowed so a user can never lock themselves out of reconnecting an
-          // inbox they already have.
-          // Case-insensitive: a legacy mixed-case row of this address is the
-          // same account, re-linked in place (its stored address kept).
-          const existingLink = await findOwnedLinkedAccount(statePayload.userId, {
-            provider: "GOOGLE",
-            email: linkedEmail,
-          });
-          if (!existingLink) {
-            const linkedCount = await prisma.linkedInboxAccount.count({
-              // GOOGLE only: the cap governs Google links; Naver has its own
-              // cap on its own route (MAX_NAVER_ACCOUNTS).
-              where: { userId: statePayload.userId, provider: "GOOGLE" },
-            });
-            if (linkedCount >= MAX_LINKED_INBOXES) {
-              return reply.redirect(`${webUrl}/settings?inbox=limit`);
-            }
-          }
-          const savedInbox = await prisma.linkedInboxAccount.upsert({
-            where: {
-              userId_provider_email: {
-                userId: statePayload.userId,
-                provider: "GOOGLE",
-                email: existingLink?.email ?? linkedEmail,
-              },
-            },
-            update: {
-              accessToken: encryptToken(tokens.access_token),
-              refreshToken: encryptOptional(tokens.refresh_token),
-              expiresAt,
-              // Re-linking a previously-revoked inbox clears the reconnect prompt.
-              needsReconnect: false,
-            },
-            create: {
-              userId: statePayload.userId,
-              email: linkedEmail,
-              accessToken: encryptToken(tokens.access_token),
-              refreshToken: encryptOptional(tokens.refresh_token),
-              expiresAt,
-            },
-          });
-          // Check-after-insert for a NEW row: a parallel first connect of
-          // another account may have committed meanwhile. Fails closed.
-          if (
-            !existingLink &&
-            !(await keepIfOnlyMailSource(statePayload.userId, {
-              ...inboxAccount,
-              id: savedInbox.id,
-            }))
-          ) {
-            return reply.redirect(`${webUrl}/settings?inbox=pro`);
-          }
-          return reply.redirect(`${webUrl}/settings?inbox=success`);
-        }
 
         // --- Google Social Login flow (state signed with __google_login__ or __google_login_desktop__ marker) ---
         const isGoogleLogin =
@@ -1437,8 +1245,8 @@ export function authRoutes(app: FastifyInstance) {
 
           // Incremental auth: login requests identity scopes only, so there is
           // no Gmail/Calendar grant to persist here. The primary Google token is
-          // stored exclusively by the connect flow (__oauth_state__ branch
-          // below) — saving the identity-only token would make every
+          // stored exclusively by the connect flow (__oauth_state__, finished
+          // in routes/google-link-finish.ts) — saving the identity-only token would make every
           // "has a UserToken row ⇒ has Gmail" consumer (connection status,
           // watch renewal, sync schedulers) treat this user as connected and
           // 403 forever.
@@ -1531,92 +1339,9 @@ export function authRoutes(app: FastifyInstance) {
           return reply.redirect(`${webUrl}/auth/callback?code=${xcode}`);
         }
 
-        // --- Gmail/Calendar integration flow (state signed with __oauth_state__ marker) ---
-        if (statePayload.email !== "__oauth_state__") {
-          return reply.code(400).send({ error: "Invalid OAuth state" });
-        }
-        const userId = statePayload.userId;
-        const user = await withDbRetry(() => prisma.user.findUnique({ where: { id: userId } }), {
-          label: "oauth.integration.find_user",
-        });
-        if (!user) {
-          return reply.code(404).send({ error: "User not found" });
-        }
-
-        // Refuse partial token. See the matching guard in the Google login flow
-        // above for the full reasoning — G Suite + unverified-app sometimes
-        // strips refresh_token, and a 1-hour-then-fail loop is worse than a
-        // visible error.
-        const existingIntegrationToken = await withDbRetry(
-          () =>
-            prisma.userToken.findUnique({
-              where: { userId_provider: { userId: user.id, provider: "google" } },
-              select: { refreshToken: true },
-            }),
-          { label: "oauth.integration.find_existing_token" },
-        );
-        const integrationHasUsableRefreshToken =
-          !!tokens.refresh_token || !!existingIntegrationToken?.refreshToken;
-        if (!integrationHasUsableRefreshToken) {
-          console.warn(
-            `[GOOGLE] Refusing to save partial integration token for ${user.email} — refresh_token missing, no prior token to preserve`,
-          );
-          return reply.redirect(`${webUrl}/settings?google=offline_access_denied`);
-        }
-
-        // Re-check at callback time (TOCTOU): a Free user who connected a
-        // linked mailbox during the OAuth window cannot add Gmail as a second.
-        if (!(await mayConnectPrimaryGoogle(user.id))) {
-          return reply.redirect(`${webUrl}/settings?google=pro`);
-        }
-
-        const savedToken = await withDbRetry(
-          () =>
-            prisma.userToken.upsert({
-              where: { userId_provider: { userId: user.id, provider: "google" } },
-              create: {
-                userId: user.id,
-                provider: "google",
-                accessToken: encryptToken(tokens.access_token ?? ""),
-                refreshToken: encryptOptional(tokens.refresh_token),
-                expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
-              },
-              update: {
-                accessToken: encryptToken(tokens.access_token ?? ""),
-                // Only overwrite refreshToken if Google returned a new one — preserve existing otherwise
-                ...(tokens.refresh_token
-                  ? { refreshToken: encryptToken(tokens.refresh_token) }
-                  : {}),
-                expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
-              },
-            }),
-          { label: "oauth.integration.upsert_user_token" },
-        );
-        // Check-after-write for a NEW primary token: a parallel first connect
-        // of a linked mailbox may have committed meanwhile. Fails closed.
-        if (
-          !existingIntegrationToken &&
-          !(await keepPrimaryGoogleIfOnlyMailSource(user.id, savedToken.id))
-        ) {
-          return reply.redirect(`${webUrl}/settings?google=pro`);
-        }
-
-        // Register the Gmail Pub/Sub watch so new mail pushes in near-real-time
-        // from the moment the account is connected. This used to live only on
-        // the login path; now that connect is the sole place the primary grant
-        // is stored, a fresh connect would otherwise have NO watch until the
-        // hourly renewal sweep — the "why isn't mail instant?" gap. No-ops
-        // cleanly when GMAIL_PUBSUB_TOPIC is unset; fire-and-forget so it never
-        // delays the OAuth redirect.
-        void registerGmailWatch(user.id).catch((err) => {
-          // Connect is now the ONLY place a fresh watch is registered — a silent
-          // failure here leaves a brand-new connection push-less until the next
-          // renewal sweep, so alert like the sweep does instead of stdout-only.
-          console.warn(`[GMAIL-WATCH] register on connect failed for ${user.id}:`, err);
-          captureError(err, { tags: { scope: "auth.oauth.connect.watch" } });
-        });
-
-        return reply.redirect(`${webUrl}/settings?google=connected`);
+        // No other marker is a valid state here: the Gmail/Calendar connect
+        // (__oauth_state__) was parked above, before any exchange.
+        return reply.code(400).send({ error: "Invalid OAuth state" });
       } catch (err) {
         // Never reflect the raw provider/library error to the client — it can leak
         // internal infrastructure detail (hostnames, library internals, stack

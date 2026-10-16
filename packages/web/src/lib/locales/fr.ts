@@ -1830,6 +1830,17 @@ const fr: Record<string, string> = {
   "onboardingV2.finish.addAccount": "Ajouter un autre compte",
   "onboardingV2.finish.openToday": "Ouvrir Aujourd'hui",
   "onboardingV2.finish.openHome": "Ouvrir Klorn",
+  // Account-link completion (/link/complete)
+  "linkComplete.working": "Finalisation de la connexion...",
+  "linkComplete.signIn":
+    "Connectez-vous à Klorn dans ce navigateur, ou recommencez depuis l'application.",
+  "linkComplete.mismatch":
+    "Cette connexion a été lancée depuis un autre compte Klorn que celui connecté ici : rien n'a été connecté. Recommencez depuis le compte que vous voulez connecter.",
+  "linkComplete.expired":
+    "Ce lien de connexion a expiré ou a déjà été utilisé. Recommencez depuis les Paramètres.",
+  "linkComplete.failed": "Impossible de finaliser la connexion. Réessayez.",
+  "linkComplete.signInAction": "Se connecter",
+  "linkComplete.continue": "Continuer",
 };
 
 export default fr;

@@ -1847,6 +1847,16 @@ const de: Record<string, string> = {
   "onboardingV2.finish.addAccount": "Weiteres Konto hinzufügen",
   "onboardingV2.finish.openToday": "Heute öffnen",
   "onboardingV2.finish.openHome": "Klorn öffnen",
+  // Account-link completion (/link/complete)
+  "linkComplete.working": "Verbindung wird abgeschlossen...",
+  "linkComplete.signIn": "Melde dich in diesem Browser bei Klorn an oder starte in der App erneut.",
+  "linkComplete.mismatch":
+    "Diese Verbindung wurde von einem anderen Klorn-Konto gestartet als dem hier angemeldeten, daher wurde nichts verbunden. Starte erneut mit dem Konto, das du verbinden möchtest.",
+  "linkComplete.expired":
+    "Dieser Verbindungslink ist abgelaufen oder wurde bereits verwendet. Starte in den Einstellungen erneut.",
+  "linkComplete.failed": "Die Verbindung konnte nicht abgeschlossen werden. Versuche es erneut.",
+  "linkComplete.signInAction": "Anmelden",
+  "linkComplete.continue": "Weiter",
 };
 
 export default de;

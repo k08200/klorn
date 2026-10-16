@@ -61,6 +61,7 @@ import {
   klornDriveRoutesEnabled,
   warnIfKlornDriveQuotaMissing,
 } from "./routes/klorn-drive.js";
+import { linkCompleteRoutes } from "./routes/link-complete.js";
 import { mcpRoutes } from "./routes/mcp.js";
 import { memoryRoutes } from "./routes/memory.js";
 import { notificationRoutes } from "./routes/notifications.js";
@@ -276,6 +277,11 @@ await app.register(webhookRoutes, { prefix: "/api/webhook" });
 await app.register(chatRoutes, { prefix: "/api/chat" });
 await app.register(chatConversationRoutes, { prefix: "/api/chat" });
 await app.register(authRoutes, { prefix: "/api/auth" });
+// POST /api/auth/link/complete: finishes every account-link OAuth flow (Google
+// connect/calendar/inbox, Outlook inbox/calendar) for the session that started
+// it. Its Outlook flows re-check their flags at completion (defaults: the same
+// OUTLOOK_INBOX_ENABLED / OUTLOOK_CALENDAR_ENABLED gates as the routes below).
+await app.register(linkCompleteRoutes(), { prefix: "/api/auth" });
 await app.register(briefingRoutes, { prefix: "/api/briefing" });
 await app.register(notificationRoutes, { prefix: "/api/notifications" });
 await app.register(opsRoutes, { prefix: "/api/ops" });

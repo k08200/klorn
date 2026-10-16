@@ -1782,6 +1782,16 @@ const ja: Record<string, string> = {
   "onboardingV2.finish.addAccount": "アカウントをもう 1 つ追加",
   "onboardingV2.finish.openToday": "「今日」を開く",
   "onboardingV2.finish.openHome": "Klorn を開く",
+  // Account-link completion (/link/complete)
+  "linkComplete.working": "接続を完了しています...",
+  "linkComplete.signIn": "このブラウザで Klorn にサインインするか、アプリからやり直してください。",
+  "linkComplete.mismatch":
+    "この接続は、ここでサインインしているアカウントとは別の Klorn アカウントから開始されたため、何も接続されていません。接続したいアカウントからやり直してください。",
+  "linkComplete.expired":
+    "この接続リンクは期限切れか、すでに使用されています。設定からやり直してください。",
+  "linkComplete.failed": "接続を完了できませんでした。もう一度お試しください。",
+  "linkComplete.signInAction": "サインイン",
+  "linkComplete.continue": "続ける",
 };
 
 export default ja;

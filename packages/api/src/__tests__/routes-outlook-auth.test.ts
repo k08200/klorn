@@ -3,12 +3,15 @@
  * While OFF, every /api/auth/outlook route — authenticated or not — answers
  * Fastify's default 404 byte-for-byte (CASA surface freeze; same contract
  * as the iCloud surface). With the flag on, the flow mirrors the Google
- * link-inbox route: signed-state CSRF, TOCTOU entitlement re-check at the
- * callback, new-links-only cap, OUTLOOK-scoped rows, encrypted tokens.
+ * link-inbox route: signed-state CSRF, the code parked by the callback and
+ * finished by the starting user's own session (POST /api/auth/link/complete),
+ * TOCTOU entitlement re-check at completion, new-links-only cap, OUTLOOK-scoped
+ * rows, encrypted tokens.
  */
 
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { callbackThenComplete } from "./helpers/link-complete.js";
 import { type LinkedRowFixture, linkedRowsFindFirst } from "./helpers/linked-rows-find-first.js";
 
 const state = vi.hoisted(() => ({ plan: "PRO", role: "USER" }));
@@ -69,10 +72,12 @@ async function buildApp() {
   const { signToken } = await import("../auth.js");
   const { outlookAuthRoutes } = await import("../routes/outlook-auth.js");
   const { outlookInboxEnabled } = await import("../config.js");
+  const { linkCompleteRoutes } = await import("../routes/link-complete.js");
   const app = Fastify();
   await app.register(outlookAuthRoutes({ gate: outlookInboxEnabled }), {
     prefix: "/api/auth/outlook",
   });
+  await app.register(linkCompleteRoutes(), { prefix: "/api/auth" });
   await app.ready();
   const token = signToken({ userId: "user-1", email: "test@example.com" });
   const linkState = signToken({ userId: "user-1", email: "__link_outlook__" }, "10m");
@@ -203,19 +208,20 @@ describe("flag ON — link start", () => {
   });
 });
 
-describe("flag ON — callback", () => {
+describe("flag ON — callback → complete", () => {
   beforeEach(() => {
     process.env.OUTLOOK_INBOX_ENABLED = "true";
   });
 
   it("exchanges the code and upserts an OUTLOOK row with encrypted tokens", async () => {
-    const { app, linkState } = await buildApp();
-    const res = await app.inject({
-      method: "GET",
-      url: `/api/auth/outlook/callback?code=auth-code&state=${encodeURIComponent(linkState)}`,
-    });
-    expect(res.statusCode).toBe(302);
-    expect(res.headers.location).toBe("https://app.example.com/settings?inbox=success");
+    const { app, headers, linkState } = await buildApp();
+    const res = await callbackThenComplete(
+      app,
+      `/api/auth/outlook/callback?code=auth-code&state=${encodeURIComponent(linkState)}`,
+      headers,
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.json().next).toBe("/settings?inbox=success");
     expect(db.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
@@ -276,26 +282,28 @@ describe("flag ON — callback", () => {
 
   it("redirects ?inbox=failed when the code exchange fails, without writing", async () => {
     oauth.exchangeOutlookCode.mockResolvedValueOnce({ error: "invalid_grant" } as never);
-    const { app, linkState } = await buildApp();
-    const res = await app.inject({
-      method: "GET",
-      url: `/api/auth/outlook/callback?code=bad&state=${encodeURIComponent(linkState)}`,
-    });
-    expect(res.statusCode).toBe(302);
-    expect(res.headers.location).toBe("https://app.example.com/settings?inbox=failed");
+    const { app, headers, linkState } = await buildApp();
+    const res = await callbackThenComplete(
+      app,
+      `/api/auth/outlook/callback?code=bad&state=${encodeURIComponent(linkState)}`,
+      headers,
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.json().next).toBe("/settings?inbox=failed");
     expect(db.upsert).not.toHaveBeenCalled();
     await app.close();
   });
 
   it("redirects ?inbox=failed when Graph /me yields no address, without writing", async () => {
     oauth.fetchOutlookAccountEmail.mockResolvedValueOnce(null);
-    const { app, linkState } = await buildApp();
-    const res = await app.inject({
-      method: "GET",
-      url: `/api/auth/outlook/callback?code=c&state=${encodeURIComponent(linkState)}`,
-    });
-    expect(res.statusCode).toBe(302);
-    expect(res.headers.location).toBe("https://app.example.com/settings?inbox=failed");
+    const { app, headers, linkState } = await buildApp();
+    const res = await callbackThenComplete(
+      app,
+      `/api/auth/outlook/callback?code=c&state=${encodeURIComponent(linkState)}`,
+      headers,
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.json().next).toBe("/settings?inbox=failed");
     expect(db.upsert).not.toHaveBeenCalled();
     await app.close();
   });
@@ -312,25 +320,27 @@ describe("flag ON — callback", () => {
   ])("a refused redirect or any network failure in %s lands on ?inbox=failed, not an unhandled error", async (_label, arrange) => {
     arrange();
     vi.spyOn(console, "error").mockImplementation(() => {});
-    const { app, linkState } = await buildApp();
+    const { app, headers, linkState } = await buildApp();
 
-    const res = await app.inject({
-      method: "GET",
-      url: `/api/auth/outlook/callback?code=c&state=${encodeURIComponent(linkState)}`,
-    });
+    const res = await callbackThenComplete(
+      app,
+      `/api/auth/outlook/callback?code=c&state=${encodeURIComponent(linkState)}`,
+      headers,
+    );
 
-    expect(res.statusCode).toBe(302);
-    expect(res.headers.location).toBe("https://app.example.com/settings?inbox=failed");
+    expect(res.statusCode).toBe(200);
+    expect(res.json().next).toBe("/settings?inbox=failed");
     expect(db.upsert).not.toHaveBeenCalled();
     await app.close();
   });
 
   const runCallback = async () => {
-    const { app, linkState } = await buildApp();
-    const res = await app.inject({
-      method: "GET",
-      url: `/api/auth/outlook/callback?code=c&state=${encodeURIComponent(linkState)}`,
-    });
+    const { app, headers, linkState } = await buildApp();
+    const res = await callbackThenComplete(
+      app,
+      `/api/auth/outlook/callback?code=c&state=${encodeURIComponent(linkState)}`,
+      headers,
+    );
     await app.close();
     return res;
   };
@@ -341,8 +351,8 @@ describe("flag ON — callback", () => {
     process.env.PAYWALL_ENABLED = "true";
     try {
       const res = await runCallback();
-      expect(res.statusCode).toBe(302);
-      expect(res.headers.location).toBe("https://app.example.com/settings?inbox=pro");
+      expect(res.statusCode).toBe(200);
+      expect(res.json().next).toBe("/settings?inbox=pro");
       expect(db.upsert).not.toHaveBeenCalled();
     } finally {
       delete process.env.PAYWALL_ENABLED;
@@ -354,7 +364,7 @@ describe("flag ON — callback", () => {
     process.env.PAYWALL_ENABLED = "true";
     try {
       const res = await runCallback();
-      expect(res.headers.location).toBe("https://app.example.com/settings?inbox=success");
+      expect(res.json().next).toBe("/settings?inbox=success");
       expect(db.upsert).toHaveBeenCalledTimes(1);
       expect(db.deleteMany).not.toHaveBeenCalled();
     } finally {
@@ -369,7 +379,7 @@ describe("flag ON — callback", () => {
     process.env.PAYWALL_ENABLED = "true";
     try {
       const res = await runCallback();
-      expect(res.headers.location).toBe("https://app.example.com/settings?inbox=success");
+      expect(res.json().next).toBe("/settings?inbox=success");
       expect(db.upsert.mock.calls[0]?.[0]).toMatchObject({
         where: {
           userId_provider_email: { userId: "user-1", provider: "OUTLOOK", email: "ME@Outlook.com" },
@@ -393,7 +403,7 @@ describe("flag ON — callback", () => {
     process.env.PAYWALL_ENABLED = "true";
     try {
       const res = await runCallback();
-      expect(res.headers.location).toBe("https://app.example.com/settings?inbox=pro");
+      expect(res.json().next).toBe("/settings?inbox=pro");
       expect(db.deleteMany).toHaveBeenCalledWith({ where: { id: "row-1", userId: "user-1" } });
     } finally {
       delete process.env.PAYWALL_ENABLED;
@@ -402,21 +412,23 @@ describe("flag ON — callback", () => {
 
   it("caps NEW links at 10 but always allows a re-link", async () => {
     db.count.mockResolvedValue(10);
-    const { app, linkState } = await buildApp();
+    const { app, headers, linkState } = await buildApp();
     // New address at the cap → limit redirect, no write.
-    const blocked = await app.inject({
-      method: "GET",
-      url: `/api/auth/outlook/callback?code=c&state=${encodeURIComponent(linkState)}`,
-    });
-    expect(blocked.headers.location).toBe("https://app.example.com/settings?inbox=limit");
+    const blocked = await callbackThenComplete(
+      app,
+      `/api/auth/outlook/callback?code=c&state=${encodeURIComponent(linkState)}`,
+      headers,
+    );
+    expect(blocked.json().next).toBe("/settings?inbox=limit");
     expect(db.upsert).not.toHaveBeenCalled();
     // Existing row → update path is allowed even at the cap.
     db.findUnique.mockResolvedValue({ id: "existing-row" } as never);
-    const relink = await app.inject({
-      method: "GET",
-      url: `/api/auth/outlook/callback?code=c&state=${encodeURIComponent(linkState)}`,
-    });
-    expect(relink.headers.location).toBe("https://app.example.com/settings?inbox=success");
+    const relink = await callbackThenComplete(
+      app,
+      `/api/auth/outlook/callback?code=c&state=${encodeURIComponent(linkState)}`,
+      headers,
+    );
+    expect(relink.json().next).toBe("/settings?inbox=success");
     expect(db.upsert).toHaveBeenCalledTimes(1);
     await app.close();
   });
