@@ -23,6 +23,8 @@ const db = vi.hoisted(() => ({
   inbox: {
     findMany: vi.fn(async () => []),
     findUnique: vi.fn(async () => null),
+    // findOwnedLinkedAccount falls back to a case-insensitive findFirst (#1438).
+    findFirst: vi.fn(async () => null),
     count: vi.fn(async () => 0),
     upsert: vi.fn(async () => ({ id: "inbox-row-1" })),
     deleteMany: vi.fn(async () => ({ count: 0 })),
