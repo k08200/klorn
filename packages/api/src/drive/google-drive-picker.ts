@@ -29,7 +29,10 @@
  *
  * Only a drive.file grant's token goes to a browser: a grant that also carries
  * another scope (a Gmail or Calendar one; the link stores it and reports it,
- * google-auth.ts) or lacks drive.file gets no Picker session.
+ * google-auth.ts) or lacks drive.file gets no Picker session. Checked twice:
+ * on the stored grant before any token is minted, and on the minted token's own
+ * scopes (Google's tokeninfo) before it is returned. A token whose scopes could
+ * not be read is not returned either.
  */
 
 import type {
@@ -137,6 +140,33 @@ async function settleGoogleFailure(
   return "unavailable";
 }
 
+/**
+ * The minted token's own scopes, read back from Google: whether it may go to a
+ * browser, or "unavailable" when Google could not say. Logs a status only.
+ */
+async function verifyTokenScopes(
+  client: LinkedDriveClient["client"],
+  token: string,
+  accountId: string,
+): Promise<"ok" | "grant-too-broad" | "unavailable"> {
+  try {
+    const info = await client.getTokenInfo(token);
+    const scopes = Array.isArray(info.scopes) ? info.scopes.join(" ") : "";
+    return isDriveFileOnlyGrant(scopes) ? "ok" : "grant-too-broad";
+  } catch (err) {
+    const status = googleErrorStatus(err) ?? "no response";
+    console.warn(
+      `[GOOGLE-DRIVE] picker tokeninfo failed for drive account ${accountId}: ${status}`,
+    );
+    // A new Error, never `err`: its request carries the token.
+    captureError(new Error(`Google Drive picker tokeninfo failed: ${status}`), {
+      tags: { scope: "drive.google.picker-tokeninfo" },
+      extra: { accountId },
+    });
+    return "unavailable";
+  }
+}
+
 /** Step 1: the Picker's token, key and app id for one of the user's own accounts. */
 export async function openGooglePickerSession(
   userId: string,
@@ -158,6 +188,8 @@ export async function openGooglePickerSession(
     return { ok: false, reason: await settleGoogleFailure(userId, accountId, "picker-token", err) };
   }
   if (!token) return { ok: false, reason: "unavailable" };
+  const verified = await verifyTokenScopes(client, token, accountId);
+  if (verified !== "ok") return { ok: false, reason: verified };
   // The record that a token left for a browser: who and which account, never the token.
   console.info(
     `[GOOGLE-DRIVE] picker token issued for drive account ${accountId} (user ${userId})`,

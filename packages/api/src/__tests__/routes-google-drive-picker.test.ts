@@ -26,6 +26,7 @@ type TokensListener = (tokens: Record<string, unknown>) => Promise<void> | void;
 const google = vi.hoisted(() => ({
   clients: [] as Array<{ credentials: Record<string, unknown> | null }>,
   getAccessToken: vi.fn(),
+  getTokenInfo: vi.fn(),
   filesGet: vi.fn(),
   filesList: vi.fn(),
 }));
@@ -57,6 +58,7 @@ vi.mock("../mail/gmail.js", async (importOriginal) => {
         credentials: null as Record<string, unknown> | null,
         listeners: [] as TokensListener[],
         getAccessToken: google.getAccessToken,
+        getTokenInfo: google.getTokenInfo,
         setCredentials(credentials: Record<string, unknown>) {
           client.credentials = credentials;
         },
@@ -78,6 +80,7 @@ const PREFIX = "/api/drive/google";
 const STORED_ACCESS = "ya29.stored-SECRET";
 const STORED_REFRESH = "1//refresh-SECRET";
 const FRESH_ACCESS = "ya29.fresh-SECRET";
+const DRIVE_FILE = "https://www.googleapis.com/auth/drive.file";
 const ID_A = "1AaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA";
 const ID_B = "1BbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbB";
 const ID_C = "1CccccccccccccccccccccccccccccccC";
@@ -187,6 +190,11 @@ beforeEach(() => {
   google.clients.length = 0;
   google.getAccessToken.mockReset();
   google.getAccessToken.mockResolvedValue({ token: FRESH_ACCESS });
+  google.getTokenInfo.mockReset();
+  google.getTokenInfo.mockResolvedValue({
+    scopes: ["openid", "https://www.googleapis.com/auth/userinfo.email", DRIVE_FILE],
+    expiry_date: Date.parse("2026-10-15T13:00:00.000Z"),
+  });
   google.filesGet.mockReset();
   google.filesList.mockReset();
   googleHas({});
@@ -274,6 +282,8 @@ describe("POST /accounts/:id/picker-session", () => {
       access_token: STORED_ACCESS,
       refresh_token: STORED_REFRESH,
     });
+    // The token's own scopes are read back from Google before it leaves.
+    expect(google.getTokenInfo).toHaveBeenCalledWith(FRESH_ACCESS);
     // A token closer than 15 minutes to its expiry is refreshed before it goes out.
     expect(google.clients[0]).toMatchObject({ eagerRefreshThresholdMillis: 15 * 60 * 1000 });
     // The record of the issue names the account, never the token.
@@ -376,6 +386,38 @@ describe("POST /accounts/:id/picker-session", () => {
     expect(res.json()).toMatchObject({ code: "grant-too-broad" });
     expect(res.body).not.toMatch(SECRETS);
     expect(google.getAccessToken).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it.each([
+    ["a Gmail scope", ["openid", DRIVE_FILE, "https://www.googleapis.com/auth/gmail.readonly"]],
+    ["no drive.file", ["openid", "https://www.googleapis.com/auth/userinfo.email"]],
+    ["no scopes at all", []],
+  ])("a token whose own scopes (tokeninfo) show %s is refused 409, never returned", async (_label, scopes) => {
+    google.getTokenInfo.mockResolvedValue({ scopes });
+    const { app, me } = await build();
+    const res = await app.inject({ ...session(), headers: me });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ code: "grant-too-broad" });
+    expect(res.body).not.toMatch(SECRETS);
+    expect(logged.join("\n")).not.toMatch(SECRETS);
+    await app.close();
+  });
+
+  it("a tokeninfo failure is refused 502: a token not verified is never returned", async () => {
+    google.getTokenInfo.mockRejectedValue(
+      Object.assign(new Error("invalid_token"), {
+        response: { status: 400, data: { error: "invalid_token" } },
+        config: { headers: { Authorization: `Bearer ${FRESH_ACCESS}` } },
+      }),
+    );
+    const { app, me } = await build();
+    const res = await app.inject({ ...session(), headers: me });
+    expect(res.statusCode).toBe(502);
+    expect(res.json()).toMatchObject({ code: "drive-unavailable" });
+    expect(res.body).not.toMatch(SECRETS);
+    expect(logged.join("\n")).not.toMatch(SECRETS);
+    expect(db.tables.linkedDriveAccount?.[0]?.needsReconnect).toBeFalsy();
     await app.close();
   });
 

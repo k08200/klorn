@@ -199,6 +199,33 @@ describe("driveRowData: the link", () => {
   it("stores no link for a file Klorn holds: it opens through Klorn's own routes", () => {
     expect(dataOf(KLORN, { webUrl: "https://example.com/x" }).webUrl).toBeNull();
   });
+
+  it("keeps a Google Drive link on docs.google.com or drive.google.com", () => {
+    for (const link of [
+      "https://docs.google.com/document/d/abc/edit",
+      "https://drive.google.com/file/d/abc/view",
+    ]) {
+      expect(dataOf(GOOGLE, { webUrl: link }).webUrl).toBe(link);
+    }
+  });
+
+  it.each([
+    ["another host", "https://evil.example/file/d/abc"],
+    ["a look-alike suffix", "https://drive.google.com.evil.example/x"],
+    ["a sub-domain", "https://x.docs.google.com/document/d/abc"],
+    ["a port", "https://drive.google.com:8443/file/d/abc"],
+    ["credentials", "https://u:p@drive.google.com/file/d/abc"],
+    ["http", "http://docs.google.com/document/d/abc"],
+  ])("a GOOGLE row stores no link on %s, whoever writes it (D5d too)", (_label, webUrl) => {
+    expect(dataOf(GOOGLE, { webUrl }).webUrl).toBeNull();
+    expect(changesOf(GOOGLE, { webUrl })).toMatchObject({ webUrl: null });
+  });
+
+  it("another connected provider keeps any safe https link, as before", () => {
+    expect(dataOf(ONEDRIVE, { webUrl: "https://onedrive.live.com/?id=1" }).webUrl).toBe(
+      "https://onedrive.live.com/?id=1",
+    );
+  });
 });
 
 describe("driveRowData: type, size, version, flags", () => {
@@ -343,6 +370,20 @@ describe("upsertDriveFileRow", () => {
   });
 
   const rows = () => db.tables.driveFile ?? [];
+
+  it("a GOOGLE row written with another host's link stores none", async () => {
+    await upsertDriveFileRow("user-1", GOOGLE, input({ webUrl: "https://evil.example/x" }));
+    expect(rows()[0]?.webUrl).toBeNull();
+    await upsertDriveFileRow(
+      "user-1",
+      GOOGLE,
+      input({ webUrl: "https://drive.google.com/file/d/file-1/view" }),
+    );
+    expect(rows()[0]?.webUrl).toBe("https://drive.google.com/file/d/file-1/view");
+    await upsertDriveFileRow("user-1", GOOGLE, input({ webUrl: "https://drive.google.com:444/x" }));
+    expect(rows()).toHaveLength(1);
+    expect(rows()[0]?.webUrl).toBeNull();
+  });
 
   it("writes one row that states its provider and source", async () => {
     const result = await upsertDriveFileRow("user-1", GOOGLE, input({ sizeBytes: 42, etag: "v1" }));

@@ -39,8 +39,8 @@
 
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../db.js";
-import { safeHttpsLink } from "../safe-https-link.js";
-import { type DriveProviderName, isKlornDriveProvider } from "./drive-providers.js";
+import { safeHttpsLink, safeHttpsLinkOnHosts } from "../safe-https-link.js";
+import { type DriveProviderName, driveLinkHosts, isKlornDriveProvider } from "./drive-providers.js";
 
 /** Every provider but the Klorn drive itself: its rows name the account they came from. */
 export type ConnectedDriveProvider = Exclude<DriveProviderName, "KLORN">;
@@ -212,8 +212,25 @@ function sizeChange(input: DriveFileInput): { sizeBytes?: bigint | null } {
   return input.sizeBytes === undefined ? {} : { sizeBytes: cleanSizeBytes(input.sizeBytes) };
 }
 
+/**
+ * A file's link as stored: none for a file Klorn holds (it opens through
+ * Klorn's own routes); otherwise the rule every link Klorn hands on passes
+ * (safe-https-link.ts: absolute https, no credentials, bounded), and for a
+ * provider with pinned hosts (GOOGLE: docs.google.com, drive.google.com) one of
+ * those exactly, whichever path writes the row.
+ */
+function storedWebUrl(provider: DriveProviderName, value: unknown): string | null {
+  if (isKlornDriveProvider(provider)) return null;
+  const hosts = driveLinkHosts(provider);
+  return hosts === null ? safeHttpsLink(value) : safeHttpsLinkOnHosts(value, hosts);
+}
+
 /** The fields the input names, cleaned; a field it leaves out is absent here too. */
-function changesOf(input: DriveFileInput, name: string, klornHeld: boolean): DriveRowChanges {
+function changesOf(
+  input: DriveFileInput,
+  name: string,
+  provider: DriveProviderName,
+): DriveRowChanges {
   return {
     name,
     modifiedAt: input.modifiedAt,
@@ -221,9 +238,7 @@ function changesOf(input: DriveFileInput, name: string, klornHeld: boolean): Dri
     ...(input.isFolder !== undefined && { isFolder: input.isFolder === true }),
     ...sizeChange(input),
     ...(input.parentExternalId !== undefined && { parentExternalId: input.parentExternalId }),
-    // The rule every link Klorn hands on passes (safe-https-link.ts): absolute
-    // https, no credentials, bounded. A Klorn-held file has no link of its own.
-    ...(input.webUrl !== undefined && { webUrl: klornHeld ? null : safeHttpsLink(input.webUrl) }),
+    ...(input.webUrl !== undefined && { webUrl: storedWebUrl(provider, input.webUrl) }),
     ...(input.storageKey !== undefined && { storageKey: input.storageKey }),
     ...(input.etag !== undefined && { etag: cleanEtag(input.etag) }),
     ...(input.trashed !== undefined && { trashed: input.trashed === true }),
@@ -260,7 +275,7 @@ export function driveRowData(
     return { ok: false, reason: "storageKey" };
   }
 
-  const changes = changesOf(input, name, klornHeld);
+  const changes = changesOf(input, name, source.provider);
   const data: DriveRowData = {
     ...CREATE_DEFAULTS,
     userId,

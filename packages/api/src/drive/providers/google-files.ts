@@ -16,7 +16,8 @@
  * (drive/drive-rows.ts) cleans the name, the type and the size again.
  */
 
-import { safeHttpsLink } from "../../safe-https-link.js";
+import { safeHttpsLinkOnHosts } from "../../safe-https-link.js";
+import { driveLinkHosts } from "../drive-providers.js";
 import type { ProviderDriveFile } from "./types.js";
 
 /** `files.get`'s fields: exactly what a row needs (plan, D5 "Metadata"). */
@@ -28,8 +29,6 @@ export const GOOGLE_DRIVE_LIST_FIELDS = `nextPageToken,files(${GOOGLE_DRIVE_FILE
 export const GOOGLE_FOLDER_MIME = "application/vnd.google-apps.folder";
 export const GOOGLE_SHORTCUT_MIME = "application/vnd.google-apps.shortcut";
 
-/** The only hosts a Drive file's link may point at. */
-const GOOGLE_WEB_HOSTS: ReadonlySet<string> = new Set(["docs.google.com", "drive.google.com"]);
 /** A Drive id: base64url-like, as Google mints them (28 to 44 characters today). */
 const GOOGLE_DRIVE_ID = /^[A-Za-z0-9_-]{10,128}$/;
 /** A whole byte count as Drive sends it (an int64 as text). */
@@ -55,12 +54,12 @@ export function isGoogleDriveId(value: unknown): value is string {
   return typeof value === "string" && GOOGLE_DRIVE_ID.test(value);
 }
 
-/** The file's link when it is https on one of Google's two Drive hosts; else null. */
+/**
+ * The file's link when it is https on one of Google's two Drive hosts; else
+ * null. The writer holds the same rule for every GOOGLE row (drive-rows.ts).
+ */
 export function googleWebUrl(link: unknown): string | null {
-  const safe = safeHttpsLink(link);
-  if (safe === null) return null;
-  const url = new URL(safe);
-  return url.port === "" && GOOGLE_WEB_HOSTS.has(url.hostname) ? safe : null;
+  return safeHttpsLinkOnHosts(link, driveLinkHosts("GOOGLE") ?? new Set());
 }
 
 const nonEmpty = (value: unknown): value is string => typeof value === "string" && value !== "";

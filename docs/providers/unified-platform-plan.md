@@ -4246,8 +4246,10 @@ the scopes that sign-in, Gmail, Calendar and the inbox links request
   1. The current Google verification has passed (V2).
   2. FA-10 (new): (a) now, a separate Testing-mode Cloud project and OAuth client
      with test users, for development and the live checks; (b) at the flip, on
-     production: the Drive and Picker APIs enabled, the restricted key created,
-     and `drive.file` added to the consent screen and approved.
+     production: the Drive and Picker APIs enabled, the restricted key created
+     (restricted to the Picker API under "API restrictions", not only to the web
+     origin's referrers: a Referer header can be forged outside a browser), and
+     `drive.file` added to the consent screen and approved.
   3. FA-5 covers Drive metadata and the file text sent for summaries.
   4. Live checks on the Testing client, each recorded here with its date: the
      scopes of a token for the primary's account; `drive.file` unticked at
@@ -4255,6 +4257,11 @@ the scopes that sign-in, Gmail, Calendar and the inbox links request
      `md5Checksum` and `version` after a rename and an edit; the exports and their
      size error; a revocation → `needsReconnect`; Gmail still working after an
      unlink; no CSP violation; the numbers on the quota page.
+     - The Picker opens and picks in a production build (the switch on) under
+       the CSP, with only `https://apis.google.com` in `script-src` and
+       `https://docs.google.com` in `frame-src`. Any origin it turns out to need
+       is added at this check, in `next.config.ts` and in the pin of
+       `packages/web/scripts/check-csp.mjs`, before step 5.
   5. Env set, the web built with the switch, then `GOOGLE_DRIVE_ENABLED` on,
      founder account first (L23).
 - Risks and limits.
@@ -4508,7 +4515,7 @@ time, whatever the graph says. The later step rebases, reruns
 | FA-7 | Create the object storage account: Cloudflare R2, one private bucket, an API token with object read and write on that bucket only, and the S3 endpoint. No CORS rule (details in D1) | D1 flip |
 | FA-8 | Run the Samsung calendar probe on a Galaxy device and record the result here | C5 |
 | FA-9 | Azure app registration (existing action B). That action lists `Mail.*` permissions only; calendar and file permissions must be added for C4 and D6. For C4: add delegated `Calendars.Read` (and `User.Read` if it is not already listed); the calendar link requests exactly `openid email offline_access User.Read Calendars.Read`, reuses the existing redirect URI, and asks for no `Mail.*`. Existing inbox links keep their consent unchanged | B5, C4, D6 |
-| FA-10 | Google Drive (D5). (a) Now: a separate Testing-mode Cloud project and OAuth client with test users, for development and D5's live checks. (b) At the flip, on production: enable the Drive and Picker APIs, create the Picker API key restricted to the web origin, and add `drive.file` to the consent screen for approval. Nothing changes on the production consent screen before (b) | D5 |
+| FA-10 | Google Drive (D5). (a) Now: a separate Testing-mode Cloud project and OAuth client with test users, for development and D5's live checks. (b) At the flip, on production: enable the Drive and Picker APIs, create the Picker API key restricted to the web origin's referrers AND, under "API restrictions", to the Picker API only (a Referer header can be forged outside a browser), and add `drive.file` to the consent screen for approval. Nothing changes on the production consent screen before (b) | D5 |
 
 ## Cross-cutting rules
 
