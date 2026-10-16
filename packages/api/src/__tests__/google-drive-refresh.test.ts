@@ -60,6 +60,7 @@ import { encryptToken } from "../crypto-tokens.js";
 import {
   GOOGLE_REFRESH_IN_FLIGHT,
   refreshGoogleDriveAccount,
+  resetRefreshReportsForTests,
 } from "../drive/google-drive-refresh.js";
 import {
   driveGoogleRefreshTick,
@@ -70,6 +71,7 @@ import {
   startDriveGoogleRefreshScheduler,
   stopDriveGoogleRefreshScheduler,
 } from "../drive/google-drive-refresh-job.js";
+import { GOOGLE_METADATA_TIMEOUT_MS } from "../drive/providers/google.js";
 import { GOOGLE_DRIVE_FILE_FIELDS } from "../drive/providers/google-files.js";
 import {
   buildSchedulerHealthReport,
@@ -148,6 +150,23 @@ function googleError(status: number | null, extra: Record<string, unknown> = {})
   });
 }
 
+/**
+ * A refused files.get as gaxios 7 throws it for a JSON request
+ * (google-drive-stream-errors.test.ts reproduces it against a local server):
+ * the parsed body in `response.data`, no `errors` of its own.
+ */
+function refused(status: number, reason: string) {
+  const data = {
+    error: { code: status, message: "Refused.", errors: [{ domain: "global", reason }] },
+  };
+  return Object.assign(new Error("Refused."), {
+    status,
+    code: status,
+    response: { status, data },
+    config: { headers: { Authorization: "Bearer ya29.stored-SECRET" } },
+  });
+}
+
 /** Google's answer per id: a resource, an error, or (absent) a 404. */
 function googleAnswers(answers: Record<string, unknown>): void {
   google.filesGet.mockImplementation((params: { fileId: string }) => {
@@ -174,6 +193,7 @@ const fileRow = (externalId: string) =>
 
 beforeEach(() => {
   seq = 0;
+  resetRefreshReportsForTests();
   for (const flag of FLAGS) vi.stubEnv(flag, "true");
   vi.stubEnv("DRIVE_SUMMARIES_ENABLED", "");
   google.clients = 0;
@@ -278,12 +298,12 @@ describe("one account's pass", () => {
     seed({ linkedDriveAccount: [account({ id: "acct-1" })], driveFile: rows });
     googleAnswers(Object.fromEntries(rows.map((r) => [r.externalId as string, resource(r)])));
     expect(await refreshGoogleDriveAccount("user-1", "acct-1", NOW)).toBe("refreshed");
-    expect(google.filesGet.mock.calls.map((c) => c[0])).toEqual(
-      rows.map((r) => ({
-        fileId: r.externalId,
-        fields: GOOGLE_DRIVE_FILE_FIELDS,
-        supportsAllDrives: true,
-      })),
+    expect(google.filesGet.mock.calls).toEqual(
+      rows.map((r) => [
+        { fileId: r.externalId, fields: GOOGLE_DRIVE_FILE_FIELDS, supportsAllDrives: true },
+        // googleapis' own per-call timeout: a hung call cannot hold the sweep.
+        { timeout: GOOGLE_METADATA_TIMEOUT_MS },
+      ]),
     );
     expect(accountRow("acct-1")?.lastRefreshedAt).toEqual(NOW);
     expect(fileRow(fileId(1))?.modifiedAt).toEqual(new Date("2026-10-14T09:30:00.000Z"));
@@ -350,22 +370,24 @@ describe("one account's pass", () => {
     expect(db.tables.driveFile).toHaveLength(10);
   });
 
-  it.each([
+  const SLOW_DOWN = [
     ["a 429", googleError(429)],
-    [
-      "a 403 userRateLimitExceeded",
-      googleError(403, { errors: [{ reason: "userRateLimitExceeded" }] }),
-    ],
-    [
-      "a 403 rateLimitExceeded (in the body)",
-      googleError(403, {
-        response: { status: 403, data: { error: { errors: [{ reason: "rateLimitExceeded" }] } } },
-      }),
-    ],
+    ["a 403 userRateLimitExceeded", refused(403, "userRateLimitExceeded")],
+    ["a 403 rateLimitExceeded", refused(403, "rateLimitExceeded")],
     ["a 500", googleError(500)],
     ["a 503", googleError(503)],
     ["a network error", googleError(null)],
-  ])("%s ends that account's pass: no further call, not marked refreshed", async (_l, err) => {
+    [
+      "a timed-out call",
+      Object.assign(new Error("The operation was aborted due to timeout"), {
+        code: "TimeoutError",
+      }),
+    ],
+  ] as const;
+
+  it.each(
+    SLOW_DOWN,
+  )("%s ends that account's pass: no further call, not marked refreshed", async (_l, err) => {
     const rows = Array.from({ length: 10 }, (_, i) => driveRow(i + 1));
     seed({ linkedDriveAccount: [account({ id: "acct-1" })], driveFile: rows });
     const answers = Object.fromEntries(rows.map((r) => [r.externalId as string, resource(r)]));
@@ -377,28 +399,72 @@ describe("one account's pass", () => {
     expect(db.tables.driveFile).toHaveLength(10);
   });
 
-  it("a rate limit on one account does not stop the next account of the sweep", async () => {
-    const limited = driveRow(1);
-    const fine = driveRow(2, { sourceKey: "acct-2", sourceAccountId: "acct-2" });
+  /** Two due accounts of one row each: acct-1 (older, first) and acct-2. */
+  function twoAccounts() {
+    const first = driveRow(1);
+    const second = driveRow(2, { sourceKey: "acct-2", sourceAccountId: "acct-2" });
     seed({
       linkedDriveAccount: [
         account({ id: "acct-1", lastRefreshedAt: ago(30 * HOUR) }),
         account({ id: "acct-2", lastRefreshedAt: ago(20 * HOUR) }),
       ],
-      driveFile: [limited, fine],
+      driveFile: [first, second],
     });
-    googleAnswers({ [fileId(1)]: googleError(429), [fileId(2)]: resource(fine) });
+    return { first, second };
+  }
+
+  it.each(SLOW_DOWN)("%s ends the WHOLE sweep: the next account is not called", async (_l, err) => {
+    const { second } = twoAccounts();
+    googleAnswers({ [fileId(1)]: err, [fileId(2)]: resource(second) });
+    const result = await runGoogleDriveRefreshSweep(NOW);
+    expect(result).toMatchObject({ state: "ran", accounts: 1, refreshed: 0, stopped: 1 });
+    expect(google.filesGet.mock.calls.map((c) => (c[0] as { fileId: string }).fileId)).toEqual([
+      fileId(1),
+    ]);
+    expect(accountRow("acct-1")?.lastRefreshedAt).toEqual(ago(30 * HOUR));
+    expect(accountRow("acct-2")?.lastRefreshedAt).toEqual(ago(20 * HOUR));
+  });
+
+  it("a revoked grant on one account does not stop the next account of the sweep", async () => {
+    const { second } = twoAccounts();
+    googleAnswers({ [fileId(1)]: googleError(401), [fileId(2)]: resource(second) });
     const result = await runGoogleDriveRefreshSweep(NOW);
     expect(result).toMatchObject({ state: "ran", accounts: 2, refreshed: 1, stopped: 1 });
-    expect(accountRow("acct-1")?.lastRefreshedAt).toEqual(ago(30 * HOUR));
+    expect(accountRow("acct-1")).toMatchObject({ needsReconnect: true });
     expect(accountRow("acct-2")?.lastRefreshedAt).toEqual(NOW);
+  });
+
+  it("a project-wide 403 (the Drive API off) ends the whole sweep, unstamped, reported once an hour per process", async () => {
+    vi.useFakeTimers({ toFake: ["Date"], now: NOW });
+    const { second } = twoAccounts();
+    googleAnswers({
+      [fileId(1)]: refused(403, "accessNotConfigured"),
+      [fileId(2)]: resource(second),
+    });
+    const blocked = { state: "ran", accounts: 1, refreshed: 0, stopped: 1 };
+    expect(await runGoogleDriveRefreshSweep(NOW)).toMatchObject(blocked);
+    expect(accountRow("acct-1")?.lastRefreshedAt).toEqual(ago(30 * HOUR));
+    expect(accountRow("acct-2")?.lastRefreshedAt).toEqual(ago(20 * HOUR));
+    const reports = () =>
+      google.captureError.mock.calls.filter(
+        ([e]) => (e as Error).message === "Google Drive refresh blocked: 403 accessNotConfigured",
+      );
+    expect(reports()).toHaveLength(1);
+    // The next sweeps within the hour: still ended, not reported again.
+    vi.setSystemTime(NOW.getTime() + 59 * 60_000);
+    expect(await runGoogleDriveRefreshSweep(NOW)).toMatchObject(blocked);
+    expect(reports()).toHaveLength(1);
+    vi.setSystemTime(NOW.getTime() + 61 * 60_000);
+    await runGoogleDriveRefreshSweep(NOW);
+    expect(reports()).toHaveLength(2);
+    expect(JSON.stringify(google.captureError.mock.calls)).not.toContain("SECRET");
   });
 
   it("a file-level 403 (appNotAuthorizedToFile) leaves that row and goes on", async () => {
     const rows = [driveRow(1), driveRow(2)];
     seed({ linkedDriveAccount: [account({ id: "acct-1" })], driveFile: rows });
     googleAnswers({
-      [fileId(1)]: googleError(403, { errors: [{ reason: "appNotAuthorizedToFile" }] }),
+      [fileId(1)]: refused(403, "appNotAuthorizedToFile"),
       [fileId(2)]: resource(rows[1] as Row, { name: "renamed.pdf" }),
     });
     expect(await refreshGoogleDriveAccount("user-1", "acct-1", NOW)).toBe("refreshed");
@@ -406,17 +472,35 @@ describe("one account's pass", () => {
     expect(fileRow(fileId(2))?.name).toBe("renamed.pdf");
   });
 
-  it("any other failure ends the pass and is reported by status and reason only, never the error", async () => {
-    seed({ linkedDriveAccount: [account({ id: "acct-1" })], driveFile: [driveRow(1)] });
-    const err = googleError(403, { errors: [{ reason: "accessNotConfigured" }] });
-    googleAnswers({ [fileId(1)]: err });
-    expect(await refreshGoogleDriveAccount("user-1", "acct-1", NOW)).toBe("stopped");
-    expect(accountRow("acct-1")?.lastRefreshedAt).toBeNull();
+  it.each([
+    ["a 400", refused(400, "badRequest")],
+    [
+      "a 403 that is neither about the file, a rate limit nor the project",
+      refused(403, "forbidden"),
+    ],
+  ])("%s skips that row only, is logged and reported once, and the account is stamped", async (_l, err) => {
+    // One bad row must not hold its account back for good.
+    const rows = [driveRow(1), driveRow(2), driveRow(3)];
+    seed({ linkedDriveAccount: [account({ id: "acct-1" })], driveFile: rows });
+    googleAnswers({
+      [fileId(1)]: err,
+      [fileId(2)]: err,
+      [fileId(3)]: resource(rows[2] as Row, { name: "renamed.pdf" }),
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    expect(await refreshGoogleDriveAccount("user-1", "acct-1", NOW)).toBe("refreshed");
+    expect(accountRow("acct-1")?.lastRefreshedAt).toEqual(NOW);
+    expect(fileRow(fileId(1))?.name).toBe("file 1.pdf");
+    expect(fileRow(fileId(3))?.name).toBe("renamed.pdf");
+    expect(google.filesGet).toHaveBeenCalledTimes(3);
+    const label = `${err.status} ${(err.response.data.error.errors[0] as { reason: string }).reason}`;
+    expect(warn.mock.calls.filter(([line]) => String(line).includes(label))).toHaveLength(1);
     expect(google.captureError).toHaveBeenCalledTimes(1);
     const [reported] = google.captureError.mock.calls[0] as [Error];
     expect(reported).not.toBe(err);
-    expect(reported.message).toBe("Google Drive refresh failed: 403 accessNotConfigured");
+    expect(reported.message).toBe(`Google Drive refresh skipped a file: ${label}`);
     expect(JSON.stringify(google.captureError.mock.calls)).not.toContain("SECRET");
+    warn.mockRestore();
   });
 
   it("at most 4 files.get in flight, and every row is read", async () => {

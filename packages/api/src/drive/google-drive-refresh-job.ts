@@ -6,7 +6,9 @@
  * and then the oldest (linked-drive-accounts.ts `dueDriveRefreshAccounts`), and
  * refreshes their picked files' metadata one account after another
  * (google-drive-refresh.ts). An account whose pass ended (a rate limit, an
- * outage) is not stamped, so the next sweep takes it again first.
+ * outage) is not stamped, so the next sweep takes it again first. Such an end,
+ * or Google refusing the whole project, ends the sweep there: the accounts after
+ * it wait for the next hour instead of each meeting the same limit.
  *
  * Volume: at most 20 accounts of at most a few hundred rows an hour, one
  * files.get per row, 4 in flight: far under Drive's per-project and per-user
@@ -75,7 +77,10 @@ async function sweepDue(clock: () => Date): Promise<RefreshSweepResult> {
   for (const account of due) {
     // A flip off mid-sweep stops it at the next account.
     if (!googleDriveRoutesEnabled()) break;
-    outcomes.push(await refreshSafely(account, clock()));
+    const outcome = await refreshSafely(account, clock());
+    outcomes.push(outcome);
+    // Google asked to slow down, did not answer, or refuses the project: no fan-out.
+    if (outcome === "stopped" || outcome === "blocked") break;
   }
   return {
     state: "ran",

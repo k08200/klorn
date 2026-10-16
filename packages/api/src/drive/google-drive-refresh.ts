@@ -16,9 +16,16 @@
  *     Risks; a re-pick brings it back);
  *   - a 403 about the file (picked under another app, or no longer the user's to
  *     read): the row is left as it is;
+ *   - any other refusal of that one call (a 400, a 403 that is neither about the
+ *     file, a rate limit nor the project): the row is left as it is, logged and
+ *     reported once per pass by status and reason, and the pass goes on, so one
+ *     bad row cannot hold its account back for good;
  *   - a revoked grant: the account is flagged for reconnect (google-auth.ts), and
- *     the pass ends; its rows stay until the user unlinks;
- *   - a 429, a rate-limit 403, a 5xx, no answer, or anything else: the pass ends.
+ *     the pass ends; its rows stay until the user unlinks; the sweep goes on;
+ *   - a 429, a rate-limit 403, a 5xx, no answer or a timeout (`stopped`), or a
+ *     403 about the whole Cloud project, the Drive API off (`blocked`, reported
+ *     at most once an hour per process): the pass ends, and so does the sweep
+ *     (google-drive-refresh-job.ts), so a retry never fans out over 20 accounts.
  * A pass that ends starts no further call for that account, and does not stamp
  * it: only a pass through every row sets `lastRefreshedAt`.
  *
@@ -45,6 +52,7 @@ import { buildLinkedDriveClient, handleDriveGrantFailure } from "./providers/goo
 import {
   googleFailureLabel,
   isGoogleFileForbidden,
+  isGoogleProjectBlocked,
   isGoogleRetryable,
 } from "./providers/google-files.js";
 import type { DriveProviderSession, ProviderDriveFile } from "./providers/types.js";
@@ -58,22 +66,63 @@ export const GOOGLE_REFRESH_IN_FLIGHT = 4;
  * whatever happened, and reaches every row in practice.
  */
 const REFRESH_ROWS_PER_PASS = 2 * GOOGLE_DRIVE_ROWS_PER_ACCOUNT;
+/** A project-wide refusal is reported at most this often per process, not per account. */
+const BLOCKED_REPORT_EVERY_MS = 60 * 60_000;
 
 /**
- * `refreshed`: every row was read, the account is stamped. `stopped`: a rate
- * limit, an outage or an unexpected failure ended the pass. `needs-reconnect`:
- * the grant is revoked, the account is flagged. `skipped`: nothing was read (the
- * flags are off, the account is not this user's, flagged, or undecryptable).
+ * `refreshed`: every row was read (or skipped as unreadable), the account is
+ * stamped. `stopped`: a rate limit or an outage ended the pass, and ends the
+ * sweep. `blocked`: Google refuses the whole project; it ends the sweep too.
+ * `needs-reconnect`: the grant is revoked, the account is flagged. `skipped`:
+ * nothing was read (the flags are off, the account is not this user's, flagged,
+ * or undecryptable).
  */
-export type AccountRefreshOutcome = "refreshed" | "stopped" | "needs-reconnect" | "skipped";
+export type AccountRefreshOutcome =
+  | "refreshed"
+  | "stopped"
+  | "blocked"
+  | "needs-reconnect"
+  | "skipped";
 
-/** A row's verdict for the pass: go on, end it, or end it on a revoked grant. */
-type RowOutcome = "go" | "stop" | "revoked";
+/** A row's verdict for the pass: go on, or end it (and why). */
+type RowOutcome = "go" | "stop" | "blocked" | "revoked";
 
 interface PassContext {
   readonly userId: string;
   readonly accountId: string;
   readonly session: DriveProviderSession;
+  /** The labels of the refusals this pass already logged and reported. */
+  readonly reported: Set<string>;
+}
+
+let blockedReportedAt: number | null = null;
+
+/** Tests only: forget when the project-wide refusal was last reported. */
+export function resetRefreshReportsForTests(): void {
+  blockedReportedAt = null;
+}
+
+/** Google refuses the project: say so at most once an hour per process. */
+function reportBlocked(label: string): void {
+  const now = Date.now();
+  if (blockedReportedAt !== null && now - blockedReportedAt < BLOCKED_REPORT_EVERY_MS) return;
+  blockedReportedAt = now;
+  console.error(`[GOOGLE-DRIVE] refresh blocked for the whole project: ${label}`);
+  captureError(new Error(`Google Drive refresh blocked: ${label}`), {
+    tags: { scope: "drive.google.refresh.blocked" },
+  });
+}
+
+/** One row Google refused for itself: logged and reported once per pass and label. */
+function reportSkipped(ctx: PassContext, label: string): void {
+  if (ctx.reported.has(label)) return;
+  ctx.reported.add(label);
+  console.warn(`[GOOGLE-DRIVE] refresh of drive account ${ctx.accountId} skipped a file: ${label}`);
+  // A new Error, never the googleapis error: its request config holds the bearer token.
+  captureError(new Error(`Google Drive refresh skipped a file: ${label}`), {
+    tags: { scope: "drive.google.refresh" },
+    extra: { userId: ctx.userId, accountId: ctx.accountId },
+  });
 }
 
 /** The row's fields, all from Google's answer. The identity and isFolder are never touched. */
@@ -90,21 +139,22 @@ function rowInput(file: ProviderDriveFile): DriveFileInput {
   };
 }
 
-/** A failed files.get: a revoked grant flags the account; a 403 about the file goes on. */
+/** A failed files.get: the pass goes on past a refusal of this one file, or ends. */
 async function settleFailure(ctx: PassContext, err: unknown): Promise<RowOutcome> {
   if (await handleDriveGrantFailure(ctx.userId, ctx.accountId, err)) return "revoked";
   if (isGoogleFileForbidden(err)) return "go";
   const label = googleFailureLabel(err);
-  console.warn(`[GOOGLE-DRIVE] refresh of drive account ${ctx.accountId} ended: ${label}`);
-  // A rate limit or an outage is expected now and then; anything else is a fault to look at.
-  if (!isGoogleRetryable(err)) {
-    // A new Error, never `err`: its request config holds the bearer token.
-    captureError(new Error(`Google Drive refresh failed: ${label}`), {
-      tags: { scope: "drive.google.refresh" },
-      extra: { userId: ctx.userId, accountId: ctx.accountId },
-    });
+  // A rate limit or an outage is expected now and then: no report, the account is due again.
+  if (isGoogleRetryable(err)) {
+    console.warn(`[GOOGLE-DRIVE] refresh of drive account ${ctx.accountId} ended: ${label}`);
+    return "stop";
   }
-  return "stop";
+  if (isGoogleProjectBlocked(err)) {
+    reportBlocked(label);
+    return "blocked";
+  }
+  reportSkipped(ctx, label);
+  return "go";
 }
 
 /** Write what Google said of this row's file, and queue its summary when the etag moved. */
@@ -186,10 +236,16 @@ export async function refreshGoogleDriveAccount(
     { provider: "GOOGLE", sourceKey: account.id },
     { take: REFRESH_ROWS_PER_PASS },
   );
-  const ctx: PassContext = { userId, accountId: account.id, session: googleDriveSession(linked) };
+  const ctx: PassContext = {
+    userId,
+    accountId: account.id,
+    session: googleDriveSession(linked),
+    reported: new Set(),
+  };
   const ended = await eachInFlight(rows, GOOGLE_REFRESH_IN_FLIGHT, (row) => refreshRow(ctx, row));
   if (ended === "revoked") return "needs-reconnect";
   if (ended === "stop") return "stopped";
+  if (ended === "blocked") return "blocked";
   await markDriveAccountRefreshed(userId, account.id, now);
   return "refreshed";
 }

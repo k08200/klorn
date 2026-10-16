@@ -35,7 +35,7 @@ vi.mock("googleapis", () => ({
 }));
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
-import { googleDriveSession } from "../drive/providers/google.js";
+import { GOOGLE_METADATA_TIMEOUT_MS, googleDriveSession } from "../drive/providers/google.js";
 import {
   GOOGLE_DRIVE_FILE_FIELDS,
   GOOGLE_FOLDER_MIME,
@@ -90,7 +90,10 @@ describe("the fields mask", () => {
     expect(api.get).toHaveBeenCalledTimes(1);
     expect(api.get.mock.calls[0]).toEqual([
       { fileId: "1AbCdEfGhIjKlMnOpQrStUvWxYz012345", fields: PLAN_FIELDS, supportsAllDrives: true },
+      // A hung call cannot hold the Picker or a refresh sweep (googleapis' own timeout).
+      { timeout: GOOGLE_METADATA_TIMEOUT_MS },
     ]);
+    expect(GOOGLE_METADATA_TIMEOUT_MS).toBe(30_000);
     expect(api.drive).toHaveBeenCalledWith({ version: "v3", auth: linked.client });
   });
 });
@@ -268,6 +271,22 @@ describe("fetchForSummary (D5d): the bytes a summary is made from", () => {
       config: { headers: { Authorization: "Bearer ya29.SECRET" } },
       ...extra,
     });
+  const errorBody = (status: number, reason: string) =>
+    JSON.stringify({
+      error: { code: status, message: "Refused.", errors: [{ domain: "global", reason }] },
+    });
+  /**
+   * A refused streamed request as gaxios 7 throws it (google-drive-stream-errors.test.ts
+   * reproduces it against a local server): the JSON body is the message, and
+   * neither `errors` nor `response.data` is set.
+   */
+  const streamedFailure = (status: number, reason: string) =>
+    Object.assign(new Error(errorBody(status, reason)), {
+      status,
+      code: status,
+      response: { status, data: undefined },
+      config: { headers: { Authorization: "Bearer ya29.SECRET" } },
+    });
 
   it.each([
     ["a Doc", DOC, "text/plain"],
@@ -325,20 +344,54 @@ describe("fetchForSummary (D5d): the bytes a summary is made from", () => {
     expect(body.destroyed).toBe(true);
   });
 
-  it.each([
-    ["in the parsed error", failure(403, { errors: [{ reason: "exportSizeLimitExceeded" }] })],
-    [
-      "in a streamed request's text body",
-      failure(403, {
-        response: {
-          status: 403,
-          data: '{"error":{"code":403,"errors":[{"reason":"exportSizeLimitExceeded"}]}}',
-        },
-      }),
-    ],
-  ])("Google's export size error (%s) is too-large", async (_label, err) => {
-    api.export.mockRejectedValue(err);
+  it("Google's export size error, as a streamed request carries it (the message), is too-large", async () => {
+    api.export.mockRejectedValue(streamedFailure(403, "exportSizeLimitExceeded"));
     expect(await fetch(DOC)).toEqual({ ok: false, reason: "too-large" });
+  });
+
+  it("an error whose body is still a stream: read, bounded, for its reason", async () => {
+    const body = Readable.from([Buffer.from(errorBody(403, "exportSizeLimitExceeded"))]);
+    api.export.mockRejectedValue(
+      Object.assign(new Error("Request failed with status code 403"), {
+        status: 403,
+        response: { status: 403, data: body },
+      }),
+    );
+    expect(await fetch(DOC)).toEqual({ ok: false, reason: "too-large" });
+    expect(body.destroyed).toBe(true);
+  });
+
+  it("an error body past the bound is not read for a reason: the status alone decides", async () => {
+    let pulled = 0;
+    const body = Readable.from(
+      (function* () {
+        for (let i = 0; i < 1_000; i += 1) {
+          pulled += 1;
+          yield Buffer.alloc(1024, 0x20);
+        }
+      })(),
+    );
+    api.get.mockRejectedValue(
+      Object.assign(new Error("Request failed with status code 403"), {
+        status: 403,
+        response: { status: 403, data: body },
+      }),
+    );
+    const thrown = await fetch("application/pdf").catch((e: unknown) => e);
+    expect((thrown as StorageError).retryable).toBe(false);
+    expect((thrown as StorageError).message).toBe("Google Drive answered 403");
+    expect(pulled).toBeLessThan(100);
+  });
+
+  it("a message that is not a JSON body names no reason, and never throws", async () => {
+    api.get.mockRejectedValue(
+      Object.assign(new Error('{"error": {"errors": [{"reason": '), {
+        status: 403,
+        response: { status: 403 },
+      }),
+    );
+    const thrown = await fetch("application/pdf").catch((e: unknown) => e);
+    expect((thrown as StorageError).message).toBe("Google Drive answered 403");
   });
 
   it("a 404 is a file this grant no longer sees: null", async () => {
@@ -348,7 +401,8 @@ describe("fetchForSummary (D5d): the bytes a summary is made from", () => {
 
   it.each([
     ["a 429", failure(429)],
-    ["a 403 rate limit", failure(403, { errors: [{ reason: "userRateLimitExceeded" }] })],
+    ["a 403 userRateLimitExceeded", streamedFailure(403, "userRateLimitExceeded")],
+    ["a 403 rateLimitExceeded", streamedFailure(403, "rateLimitExceeded")],
     ["a 500", failure(500)],
     ["a 503", failure(503)],
     ["a network error", failure(null)],
@@ -363,11 +417,27 @@ describe("fetchForSummary (D5d): the bytes a summary is made from", () => {
   });
 
   it("any other refusal is a StorageError that is not retried", async () => {
-    api.get.mockRejectedValue(failure(403, { errors: [{ reason: "fileNotDownloadable" }] }));
+    api.get.mockRejectedValue(streamedFailure(403, "fileNotDownloadable"));
     const thrown = await fetch("application/pdf").catch((e: unknown) => e);
     expect(thrown).toBeInstanceOf(StorageError);
     expect((thrown as StorageError).retryable).toBe(false);
     expect((thrown as StorageError).message).toBe("Google Drive answered 403 fileNotDownloadable");
+  });
+
+  it("an error body that never ends is given up at the same deadline", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const body = new Readable({ read() {} });
+    api.get.mockRejectedValue(
+      Object.assign(new Error("Request failed with status code 403"), {
+        status: 403,
+        response: { status: 403, data: body },
+      }),
+    );
+    const pending = fetch("application/pdf").catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(DRIVE_SUMMARY_READ_TIMEOUT_MS);
+    const thrown = await pending;
+    expect((thrown as StorageError).retryable).toBe(true);
+    expect(body.destroyed).toBe(true);
   });
 
   it("a body that never ends is given up at D4's deadline: retryable, aborted, released", async () => {

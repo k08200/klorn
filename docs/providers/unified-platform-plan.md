@@ -4265,12 +4265,22 @@ the scopes that sign-in, Gmail, Calendar and the inbox links request
         caller (guard).
       - A 403 about the file (`appNotAuthorizedToFile`,
         `insufficientFilePermissions`, the Picker's set, now shared in
-        `google-files.ts`) leaves the row. A revoked grant → `needsReconnect`
-        (`handleDriveGrantFailure`), pass ended. A 429, a 403
-        `userRateLimitExceeded`/`rateLimitExceeded`/`dailyLimitExceeded`, a
-        5xx, no answer, or anything else ends the pass: no further call starts
-        (the ones in flight finish), no stamp. Anything that is not a rate
-        limit or an outage is reported to Sentry as status and reason only.
+        `google-files.ts`) leaves the row. Any other refusal of one call (a
+        400, a 403 that is neither about the file, a rate limit nor the
+        project) leaves that row too, is logged and reported to Sentry once per
+        pass and label (status and reason only), and the pass goes on and
+        stamps: one bad row cannot hold its account back for good. A revoked
+        grant → `needsReconnect` (`handleDriveGrantFailure`), pass ended, the
+        sweep goes on.
+      - A 429, a 403 `userRateLimitExceeded`/`rateLimitExceeded`/
+        `dailyLimitExceeded`, a 5xx, no answer or a timeout ends the pass (no
+        further call starts, the ones in flight finish, no stamp) and the
+        WHOLE sweep, so a retry never fans out over 20 accounts. A 403
+        `accessNotConfigured` (the Drive API off for the project, prior
+        knowledge) ends the sweep too, and is reported at most once an hour per
+        process, not per account.
+      - Each `files.get` (the Picker's too) has googleapis' own `timeout`, 30 s
+        (`GOOGLE_METADATA_TIMEOUT_MS`); a timeout is an outage.
     - Summaries: `fetchForSummary` (`providers/google.ts`) takes the row's type
       (the seam's options gain `mimeType`; `drive-provider-dispatch.test.ts`
       pins it). Docs and Slides → `files.export` text/plain, Sheets → text/csv
@@ -4278,7 +4288,7 @@ the scopes that sign-in, Gmail, Calendar and the inbox links request
       "stream"` into `readCappedBytes`; D4's 60 s deadline aborts the request
       and releases the body. No field is requested, so no `webContentLink`,
       `exportLinks` or `thumbnailLink`. 404 → null; `exportSizeLimitExceeded`
-      (read from the streamed error's text body too) → `too-large`; a 429, a
+      → `too-large`; a 429, a
       rate-limit 403, a 5xx, no answer, the deadline, or a revoked grant (the
       refresh flags the account later) → a retryable `StorageError`; anything
       else a non-retryable one. A Google format with no text export (a form, a
@@ -4287,6 +4297,20 @@ the scopes that sign-in, Gmail, Calendar and the inbox links request
       `export.csv`), so a Doc named `notes.docx` is plain text; any other
       Google type is `unsupported-type`. `DRIVE_SUMMARY_READABLE_PROVIDERS` is
       {KLORN, GOOGLE}.
+    - Reasons on the streamed path (review fix). A refused streamed request
+      carries its JSON body in the error's message only: gaxios 7 leaves
+      `errors` and `response.data` unset (reproduced against a local server in
+      `google-drive-stream-errors.test.ts`, through the real googleapis). So
+      `googleErrorReason` also parses the message (JSON.parse from its first
+      `{`, bounded to 64 KiB, in try/catch; a reason must be a plain name), and
+      a body still left as a stream is read, bounded and within D4's deadline,
+      then released. Without it `exportSizeLimitExceeded` was never
+      `too-large` and a rate-limit 403 was never retried.
+    - Known limit, as D4's no-backfill rule: an etag change the refresh writes
+      while summaries are off is not queued when they are turned on (the row
+      already holds the new etag, so the next refresh sees no change); that file
+      is summarised on demand (`POST /api/drive/files/:id/summarize`
+      re-queues it, its etag differing from the summary's).
     - Read-only: `google-drive-readonly-guard.test.ts` now allows `files.get`,
       `files.list` and `files.export`, `export` only in `google.ts`, once; both
       new modules are scanned. No write method.
@@ -4297,10 +4321,18 @@ the scopes that sign-in, Gmail, Calendar and the inbox links request
       account still runs; a file-level 403; an unexpected 403 reported without
       the error; ≤ 4 in flight; both etag forms, moved and unchanged; trashed
       not queued; busy; the heartbeat in the health report; a sweep that
-      throws), `google-drive-files.test.ts` (the exports per type, alt=media,
-      no field or link, the cap, the size error in both shapes, 404, the
-      retryable and non-retryable mappings, the deadline, no call for a form or
-      a non-id), `drive-summary-pure.test.ts` (the Google types),
+      throws; the review fix: a rate limit or outage ends the whole sweep, a
+      revoked account does not, a 400 or an unexpected 403 skips its row and
+      stamps, `accessNotConfigured` reported once an hour, the per-call
+      timeout), `google-drive-files.test.ts` (the exports per type, alt=media,
+      no field or link, the cap, the size error and the rate-limit 403s in
+      gaxios' real streamed shape, a refusal body left as a stream read
+      bounded, a body past the bound, a message that is not JSON, 404, the
+      retryable and non-retryable mappings, the deadline for the body and for
+      a refusal's body, no call for a form or a non-id),
+      `google-drive-stream-errors.test.ts` (a local HTTP server: the real
+      error shape, too-large, the rate-limit 403s, 404, a JSON request's
+      refusals), `drive-summary-pure.test.ts` (the Google types),
       `drive-summary-run.test.ts` (a Doc summarised from its export, an outage
       deferred with the attempt given back, too-large SKIPPED),
       `linked-drive-accounts.test.ts` (the pick, the stamp, no stamp on a token

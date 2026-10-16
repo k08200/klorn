@@ -65,11 +65,18 @@ const FILE_LEVEL_FORBIDDEN_REASONS: ReadonlySet<string> = new Set([
   "appNotAuthorizedToFile",
   "insufficientFilePermissions",
 ]);
+/**
+ * The reasons of a 403 that is about the whole Cloud project, not an account or
+ * a file: the Drive API is switched off for it (prior knowledge of Drive's
+ * error reference). Every account would get the same answer.
+ */
+const PROJECT_WIDE_FORBIDDEN_REASONS: ReadonlySet<string> = new Set(["accessNotConfigured"]);
 /** The export's own limit: the Google file is too large to export (D5d: `too-large`). */
 const GOOGLE_EXPORT_TOO_LARGE_REASON = "exportSizeLimitExceeded";
 /** The most of an error body read for its reason; an error body is a few hundred bytes. */
-const ERROR_BODY_MAX_CHARS = 64 * 1024;
-const ERROR_BODY_REASON = /"reason"\s*:\s*"([A-Za-z]{1,64})"/;
+export const GOOGLE_ERROR_BODY_MAX_BYTES = 64 * 1024;
+/** A reason as Google names them; anything else is not one, and is never logged. */
+const REASON_NAME = /^[A-Za-z]{1,64}$/;
 const HTTP_FORBIDDEN = 403;
 const HTTP_NOT_FOUND = 404;
 const HTTP_TOO_MANY_REQUESTS = 429;
@@ -158,23 +165,54 @@ export function isGoogleNotFound(err: unknown): boolean {
   return googleErrorStatus(err) === HTTP_NOT_FOUND;
 }
 
+interface GoogleErrorBody {
+  readonly error?: { readonly errors?: ReadonlyArray<{ readonly reason?: unknown }> };
+}
+
+const reasonName = (value: unknown): string | null =>
+  typeof value === "string" && REASON_NAME.test(value) ? value : null;
+
+/**
+ * The first `reason` of a Google error body given as text (`{"error": {"errors":
+ * [{"reason": ...}]}}`), or null. JSON.parse of the text from its first `{`,
+ * bounded in length; anything that does not parse names no reason.
+ */
+export function googleReasonFromBody(text: unknown): string | null {
+  if (typeof text !== "string" || text.length > GOOGLE_ERROR_BODY_MAX_BYTES) return null;
+  const start = text.indexOf("{");
+  if (start === -1) return null;
+  try {
+    const body = JSON.parse(text.slice(start)) as GoogleErrorBody | null;
+    return reasonName(body?.error?.errors?.[0]?.reason);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The first `reason` of a Drive error (`userRateLimitExceeded`,
- * `appNotAuthorizedToFile`, ...). A streamed request's error (D5d's byte read)
- * carries the body as text, not parsed: its reason is read from that text.
+ * `appNotAuthorizedToFile`, ...). A JSON request's refusal carries the parsed
+ * body in `response.data`. A STREAMED request's refusal (D5d's byte read) does
+ * not: gaxios 7 leaves `errors` and `response.data` unset and puts the JSON
+ * body in the message (google-drive-stream-errors.test.ts, against a local
+ * server), so the message is parsed too. A body still left as a stream is read
+ * by the byte read itself (providers/google.ts), bounded.
  */
 export function googleErrorReason(err: unknown): string | null {
   if (typeof err !== "object" || err === null) return null;
   const e = err as {
-    errors?: Array<{ reason?: unknown }>;
+    errors?: ReadonlyArray<{ reason?: unknown }>;
     response?: { data?: unknown };
+    message?: unknown;
   };
-  const data = e.response?.data as { error?: { errors?: Array<{ reason?: unknown }> } } | undefined;
-  const reason = e.errors?.[0]?.reason ?? data?.error?.errors?.[0]?.reason;
-  if (typeof reason === "string") return reason;
-  const body = e.response?.data;
-  if (typeof body !== "string" || body.length > ERROR_BODY_MAX_CHARS) return null;
-  return ERROR_BODY_REASON.exec(body)?.[1] ?? null;
+  const data = e.response?.data;
+  const parsed = typeof data === "object" && data !== null ? (data as GoogleErrorBody) : undefined;
+  return (
+    reasonName(e.errors?.[0]?.reason) ??
+    reasonName(parsed?.error?.errors?.[0]?.reason) ??
+    googleReasonFromBody(data) ??
+    googleReasonFromBody(e.message)
+  );
 }
 
 /** A 429, or a 403 whose reason is a rate limit: Google asks Klorn to slow down. */
@@ -189,6 +227,14 @@ export function isGoogleFileForbidden(err: unknown): boolean {
   return (
     googleErrorStatus(err) === HTTP_FORBIDDEN &&
     FILE_LEVEL_FORBIDDEN_REASONS.has(googleErrorReason(err) ?? "")
+  );
+}
+
+/** A 403 about the whole Cloud project (the Drive API off): every account gets the same. */
+export function isGoogleProjectBlocked(err: unknown): boolean {
+  return (
+    googleErrorStatus(err) === HTTP_FORBIDDEN &&
+    PROJECT_WIDE_FORBIDDEN_REASONS.has(googleErrorReason(err) ?? "")
   );
 }
 

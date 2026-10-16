@@ -24,7 +24,9 @@
  * and the request and all its bytes get D4's deadline (summary-policy.ts):
  * past it the request is aborted and the body released. What fails:
  *   - a 404: null (the file is gone, or no longer this grant's);
- *   - Google's export size limit: `too-large`;
+ *   - Google's export size limit: `too-large`. A streamed request's refusal
+ *     names its reason in the error's message (gaxios 7), or, if a gaxios
+ *     leaves it unread, in a body read here within the same deadline, bounded;
  *   - a 429, a rate-limit 403, a 5xx, no answer, the deadline, or a revoked
  *     grant (which the refresh job flags for reconnect): a retryable
  *     StorageError, which the run defers instead of failing;
@@ -43,9 +45,12 @@ import { buildLinkedDriveClient, type LinkedDriveClient } from "./google-auth.js
 import {
   GOOGLE_DRIVE_FILE_FIELDS,
   GOOGLE_DRIVE_LIST_FIELDS,
+  GOOGLE_ERROR_BODY_MAX_BYTES,
   type GoogleDriveFileResource,
+  googleErrorReason,
   googleErrorStatus,
   googleFailureLabel,
+  googleReasonFromBody,
   googleTextExportType,
   isGoogleAppsType,
   isGoogleDriveId,
@@ -66,6 +71,12 @@ import type {
 
 /** Drive allows 1000 a page; Klorn never needs more than its own page ceiling. */
 const GOOGLE_LIST_PAGE_MAX = 100;
+/**
+ * The longest one metadata read may take (googleapis' own `timeout`), so a hung
+ * call cannot hold a pick or a refresh sweep. A timeout answers no status: an
+ * outage to its caller.
+ */
+export const GOOGLE_METADATA_TIMEOUT_MS = 30_000;
 const EMPTY_PAGE: ProviderDrivePage = { files: [], nextPageToken: null };
 
 type DriveApi = ReturnType<typeof google.drive>;
@@ -73,11 +84,10 @@ type DriveApi = ReturnType<typeof google.drive>;
 /** One file's metadata; null when Google answers 404 (no such file, or not granted). */
 async function getMetadata(api: DriveApi, externalId: string) {
   try {
-    const res = await api.files.get({
-      fileId: externalId,
-      fields: GOOGLE_DRIVE_FILE_FIELDS,
-      supportsAllDrives: true,
-    });
+    const res = await api.files.get(
+      { fileId: externalId, fields: GOOGLE_DRIVE_FILE_FIELDS, supportsAllDrives: true },
+      { timeout: GOOGLE_METADATA_TIMEOUT_MS },
+    );
     return toProviderDriveFile(res.data as GoogleDriveFileResource);
   } catch (err) {
     if (isGoogleNotFound(err)) return null;
@@ -159,17 +169,46 @@ function release(body: unknown): void {
   if (typeof destroy === "function") destroy.call(body);
 }
 
+/**
+ * The reason of a refusal whose body is still a stream (a gaxios that leaves it
+ * unread): at most GOOGLE_ERROR_BODY_MAX_BYTES of it, then released. Null when
+ * there is no such body, it runs past the bound, or it names no reason.
+ */
+async function streamedBodyReason(err: unknown): Promise<string | null> {
+  const data = (err as { response?: { data?: unknown } } | null)?.response?.data;
+  if (typeof data !== "object" || data === null || !(Symbol.asyncIterator in data)) return null;
+  try {
+    const read = await readCappedBytes(
+      data as AsyncIterable<Uint8Array>,
+      GOOGLE_ERROR_BODY_MAX_BYTES,
+    );
+    return read.ok ? googleReasonFromBody(read.bytes.toString("utf8")) : null;
+  } catch {
+    return null;
+  } finally {
+    release(data);
+  }
+}
+
+/** The refusal as the classifiers read it: its own reason, or the one its streamed body names. */
+async function withReason(err: unknown): Promise<unknown> {
+  if (googleErrorReason(err) !== null) return err;
+  const reason = await streamedBodyReason(err);
+  return reason === null ? err : { status: googleErrorStatus(err), errors: [{ reason }] };
+}
+
 /** A failed byte read: null, `too-large`, or a StorageError naming the status and reason only. */
-function byteReadFailure(err: unknown): CappedBytes | null {
+async function byteReadFailure(err: unknown): Promise<CappedBytes | null> {
   if (isGoogleNotFound(err)) return null;
-  if (isGoogleExportTooLarge(err)) return { ok: false, reason: "too-large" };
+  const refusal = await withReason(err);
+  if (isGoogleExportTooLarge(refusal)) return { ok: false, reason: "too-large" };
   const status = googleErrorStatus(err);
   // A revoked grant: the refresh job flags the account; until then the summary waits.
-  const retryable = isGoogleRetryable(err) || isRevokedGrantError(err);
+  const retryable = isGoogleRetryable(refusal) || isRevokedGrantError(err);
   if (status === null) {
     throw new StorageError("unreachable", "Google Drive did not answer", { retryable });
   }
-  throw new StorageError("upstream", `Google Drive answered ${googleFailureLabel(err)}`, {
+  throw new StorageError("upstream", `Google Drive answered ${googleFailureLabel(refusal)}`, {
     status,
     retryable,
   });
@@ -197,16 +236,21 @@ async function fetchForSummary(
     );
     timer.unref?.();
   });
-  const read = (async () => {
-    const res = await requestBytes(api, externalId, options.mimeType, controller.signal);
-    body = res.data;
-    return await readCappedBytes(bodyOf(res.data), options.maxBytes);
+  // The refusal is read inside the deadline too: its body may be a stream.
+  const read = (async (): Promise<CappedBytes | null> => {
+    try {
+      const res = await requestBytes(api, externalId, options.mimeType, controller.signal);
+      body = res.data;
+      return await readCappedBytes(bodyOf(res.data), options.maxBytes);
+    } catch (err) {
+      if (err instanceof StorageError) throw err;
+      // A refusal's own body, if a stream, is released with the rest.
+      body = (err as { response?: { data?: unknown } } | null)?.response?.data ?? body;
+      return await byteReadFailure(err);
+    }
   })();
   try {
     return await Promise.race([read, deadline]);
-  } catch (err) {
-    if (err instanceof StorageError) throw err;
-    return byteReadFailure(err);
   } finally {
     clearTimeout(timer);
     // Released whatever the outcome: read whole, stopped at the cap, or abandoned.
