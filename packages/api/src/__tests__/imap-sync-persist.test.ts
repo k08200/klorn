@@ -246,6 +246,32 @@ describe("syncImapInbox → shared persist path", () => {
     expect(performance.now() - start).toBeLessThan(500);
   });
 
+  it("does not refresh a stored body when the TEXT part did not come back", async () => {
+    imap.fetch.mockImplementation(async function* () {
+      yield {
+        ...fakeMessages()[0],
+        headers: Buffer.from("Content-Type: text/plain; charset=utf-8\r\n"),
+        bodyParts: new Map(),
+      };
+    });
+    persistGmailEmail.mockResolvedValue({ emailId: "e1", isNew: false });
+
+    await syncImapInbox({
+      provider: IMAP_PROVIDERS.ICLOUD,
+      userId: "u1",
+      email: "me@icloud.com",
+      password: "app-pw",
+      host: "imap.mail.me.com:993",
+      linkedInboxAccountId: "acc-icloud",
+    });
+
+    expect(persistGmailEmail).toHaveBeenCalledWith(
+      "u1",
+      expect.anything(),
+      expect.objectContaining({ refreshBody: false }),
+    );
+  });
+
   it("never cuts a surrogate pair when it caps the stored body", async () => {
     const body = `${"a".repeat(49_999)}😀tail`;
     imap.fetch.mockImplementation(async function* () {

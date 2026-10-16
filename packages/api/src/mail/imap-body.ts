@@ -12,13 +12,13 @@
  * Content-Transfer-Encoding, and this reader walks the MIME tree from them to
  * the first text/plain part (else the first text/html), undoing the transfer
  * encoding and the charset (TextDecoder: EUC-KR for Naver, ISO-2022-JP, …).
+ * Attachments, parts named like files, and message/rfc822 are skipped.
  *
  * Why not a full MIME parser: sender-controlled input on the single API event
  * loop. postal-mime (measured 2026-10-16) is super-linear on a `<` flood in an
  * HTML part (64 KiB: 2.1 s), on many parts and on nested message/rfc822 (out of
  * heap at 256 KiB). Everything here is a forward scan, with hard caps: input
- * bytes, header bytes, nesting depth and part count. message/rfc822 and
- * attachments are skipped, not parsed.
+ * bytes, header bytes, nesting depth, parts per level and parts visited.
  *
  * Results are NUL-stripped (a cut can land mid-base64-group, and Postgres
  * rejects NUL in text). A message whose tree has no text part has no body
@@ -26,18 +26,34 @@
  */
 
 import { htmlToPlainText } from "./email-text.js";
+import { capStored } from "./imap-envelope.js";
 
 export const IMAP_DECODE_MAX_BYTES = 256 * 1024;
 const MAX_HEADER_BYTES = 8 * 1024;
-const MAX_MIME_DEPTH = 4;
+// Real trees nest deeper than four (mixed > signed > mixed > related >
+// alternative is five); each level rescans only its own part.
+const MAX_MIME_DEPTH = 8;
+// Parts VISITED across the whole tree; each multipart level also lists at most
+// this many children.
 const MAX_MIME_PARTS = 64;
 // RFC 2046 caps a boundary at 70 characters; a longer, sender-chosen one would
 // make each delimiter search cost its length times the body.
 const MAX_BOUNDARY_CHARS = 70;
 // htmlToPlainText runs sanitize-html, whose cost grows faster than linearly in
-// nesting; an HTML-only body is cut before it (the stored body keeps 50 000
-// characters, and markup outweighs text several times over).
-const MAX_HTML_TO_TEXT_CHARS = 64 * 1024;
+// nesting, and the poll decodes its whole 50-message window every cycle: an
+// HTML-only body is cut first (16K '<b>': 6 ms; 64K: up to ~110 ms). Long
+// HTML-only mail keeps the start of its text.
+const MAX_HTML_TO_TEXT_CHARS = 16 * 1024;
+// Labels mail clients send that TextDecoder (WHATWG) does not know; its
+// "euc-kr" is the windows-949 superset they all mean.
+const CHARSET_ALIASES: ReadonlyMap<string, string> = new Map([
+  ["cp949", "euc-kr"],
+  ["ms949", "euc-kr"],
+  ["x-windows-949", "euc-kr"],
+  ["ks_c_5601", "euc-kr"],
+  ["uhc", "euc-kr"],
+]);
+const HEADER_LINE = /^[!-9;-~]+:/; // a field name (printable, no colon), then ":"
 
 interface MimeHeaders {
   contentType: string;
@@ -56,7 +72,7 @@ function stripNul(value: string): string {
 }
 
 function rawText(text: Buffer): string {
-  return stripNul(text.toString("utf8"));
+  return stripNul(text.subarray(0, IMAP_DECODE_MAX_BYTES).toString("utf8"));
 }
 
 /** "name: value" lines, folded lines unfolded; lower-cased names, first one wins. */
@@ -102,22 +118,25 @@ function parseParams(value: string): { main: string; params: Map<string, string>
     if (eq <= 0) continue;
     const key = segment.slice(0, eq).trim().toLowerCase();
     const raw = segment.slice(eq + 1).trim();
-    params.set(
-      key,
-      raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"') ? raw.slice(1, -1) : raw,
-    );
+    const unquoted = raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"');
+    params.set(key, unquoted ? raw.slice(1, -1) : raw);
   }
   return { main: (segments[0] ?? "").trim().toLowerCase(), params };
 }
 
+/** A part named like a file is an attachment, whatever its disposition says. */
+function isNamedPart(params: Map<string, string>, disposition: Map<string, string>): boolean {
+  return params.has("name") || disposition.has("filename") || disposition.has("name");
+}
+
 function toMimeHeaders(fields: Map<string, string>): MimeHeaders {
   const { main, params } = parseParams(fields.get("content-type") ?? "text/plain");
-  const disposition = parseParams(fields.get("content-disposition") ?? "").main;
+  const disposition = parseParams(fields.get("content-disposition") ?? "");
   return {
     contentType: main || "text/plain",
     params,
     encoding: (fields.get("content-transfer-encoding") ?? "").trim().toLowerCase(),
-    attachment: disposition === "attachment",
+    attachment: disposition.main === "attachment" || isNamedPart(params, disposition.params),
   };
 }
 
@@ -138,12 +157,14 @@ function decodeQuotedPrintable(input: Buffer): Buffer {
       out[j++] = byte;
       continue;
     }
+    let k = i + 1;
+    while (input[k] === 0x20 || input[k] === 0x09) k++; // padding before a soft break
     const high = hexValue(input[i + 1]);
     const low = hexValue(input[i + 2]);
-    if (input[i + 1] === 0x0d && input[i + 2] === 0x0a) {
-      i += 2; // soft line break
-    } else if (input[i + 1] === 0x0a) {
-      i += 1;
+    if (input[k] === 0x0d && input[k + 1] === 0x0a) {
+      i = k + 1; // soft line break
+    } else if (input[k] === 0x0a) {
+      i = k;
     } else if (high !== -1 && low !== -1) {
       out[j++] = high * 16 + low;
       i += 2;
@@ -162,14 +183,19 @@ function decodeTransfer(body: Buffer, encoding: string): Buffer {
 }
 
 function decodeCharset(bytes: Buffer, charset: string | undefined): string {
+  const label = (charset ?? "").trim().toLowerCase();
   try {
-    return new TextDecoder(charset || "utf-8").decode(bytes);
+    return new TextDecoder(CHARSET_ALIASES.get(label) ?? (label || "utf-8")).decode(bytes);
   } catch {
     return bytes.toString("utf8"); // unknown label
   }
 }
 
-/** Split a part into its header block (capped) and its content. */
+/**
+ * Split a part into its header block (capped) and its content. A part with no
+ * blank line is content without headers, unless it starts like a header line:
+ * then the size cap cut it inside its headers and it has no content.
+ */
 function splitHeaders(part: Buffer): { fields: Map<string, string>; content: Buffer } {
   if (part[0] === 0x0a) return { fields: new Map(), content: part.subarray(1) };
   if (part[0] === 0x0d && part[1] === 0x0a) return { fields: new Map(), content: part.subarray(2) };
@@ -177,37 +203,52 @@ function splitHeaders(part: Buffer): { fields: Map<string, string>; content: Buf
   const lf = part.indexOf("\n\n");
   const useCrlf = crlf !== -1 && (lf === -1 || crlf <= lf);
   const end = useCrlf ? crlf : lf;
-  if (end === -1) return { fields: new Map(), content: part };
+  if (end === -1) {
+    const cutInHeaders = HEADER_LINE.test(part.subarray(0, 80).toString("latin1"));
+    return { fields: new Map(), content: cutInHeaders ? part.subarray(0, 0) : part };
+  }
   const block = part.subarray(0, Math.min(end, MAX_HEADER_BYTES)).toString("latin1");
   return { fields: parseHeaderLines(block), content: part.subarray(end + (useCrlf ? 4 : 2)) };
 }
 
-/** The parts between `--boundary` delimiter lines, at most `budget.parts` of them. */
-function splitMultipart(body: Buffer, boundary: string, budget: { parts: number }): Buffer[] {
+/** What may follow `--boundary` on a delimiter line: padding, the line end, or "--". */
+function endsDelimiter(body: Buffer, at: number): boolean {
+  const next = body[at];
+  return (
+    next === undefined ||
+    next === 0x0d ||
+    next === 0x0a ||
+    next === 0x20 ||
+    next === 0x09 ||
+    (next === 0x2d && body[at + 1] === 0x2d)
+  );
+}
+
+/** The parts between `--boundary` delimiter lines, at most MAX_MIME_PARTS of them. */
+function splitMultipart(body: Buffer, boundary: string): Buffer[] {
   const delimiter = Buffer.from(`--${boundary}`, "latin1");
   const parts: Buffer[] = [];
   let partStart = -1;
   let from = 0;
-  while (budget.parts > 0) {
+  while (parts.length < MAX_MIME_PARTS) {
     const at = body.indexOf(delimiter, from);
     if (at === -1) break;
     from = at + delimiter.length;
     if (at !== 0 && body[at - 1] !== 0x0a) continue; // not at a line start
+    if (!endsDelimiter(body, from)) continue; // a longer boundary that starts with this one
     if (partStart !== -1) {
       let end = at;
       if (body[end - 1] === 0x0a) end--;
       if (body[end - 1] === 0x0d) end--;
       parts.push(body.subarray(partStart, Math.max(partStart, end)));
-      budget.parts--;
     }
     if (body[from] === 0x2d && body[from + 1] === 0x2d) return parts; // close delimiter
     const lineEnd = body.indexOf(0x0a, from);
     if (lineEnd === -1) return parts;
     partStart = lineEnd + 1;
   }
-  if (partStart !== -1 && budget.parts > 0) {
+  if (partStart !== -1 && parts.length < MAX_MIME_PARTS) {
     parts.push(body.subarray(partStart)); // the input was cut off mid-part
-    budget.parts--;
   }
   return parts;
 }
@@ -221,17 +262,18 @@ function readEntity(
   if (headers.attachment) return {};
   const type = headers.contentType;
   if (type === "text/plain" || type === "text/html") {
-    const text = decodeCharset(
-      decodeTransfer(body, headers.encoding),
-      headers.params.get("charset"),
-    );
+    const bytes = decodeTransfer(body, headers.encoding);
+    // NUL-stripped before the caller's emptiness check: a NUL-only part is empty.
+    const text = stripNul(decodeCharset(bytes, headers.params.get("charset")));
     return type === "text/plain" ? { plain: text } : { html: text };
   }
   const boundary = headers.params.get("boundary");
   if (!type.startsWith("multipart/") || depth >= MAX_MIME_DEPTH) return {};
   if (!boundary || boundary.length > MAX_BOUNDARY_CHARS) return {};
   const found: FoundText = {};
-  for (const part of splitMultipart(body, boundary, budget)) {
+  for (const part of splitMultipart(body, boundary)) {
+    if (budget.parts <= 0) break;
+    budget.parts--; // counted when visited, so siblings cannot starve a nested text part
     const { fields, content } = splitHeaders(part);
     const inner = readEntity(toMimeHeaders(fields), content, depth + 1, budget);
     if (inner.plain?.trim()) return { plain: inner.plain };
@@ -248,13 +290,19 @@ export function decodeImapText(headers: Buffer | undefined, text: Buffer | undef
     const top = toMimeHeaders(
       parseHeaderLines(headers.subarray(0, MAX_HEADER_BYTES).toString("latin1")),
     );
-    const found = readEntity(top, text.subarray(0, IMAP_DECODE_MAX_BYTES), 0, {
-      parts: MAX_MIME_PARTS,
-    });
-    const plain = stripNul(found.plain ?? "").trim();
+    // The top level is the message itself, never an attachment.
+    const found = readEntity(
+      { ...top, attachment: false },
+      text.subarray(0, IMAP_DECODE_MAX_BYTES),
+      0,
+      {
+        parts: MAX_MIME_PARTS,
+      },
+    );
+    const plain = (found.plain ?? "").trim();
     if (plain) return plain;
     if (!found.html) return "";
-    return stripNul(htmlToPlainText(stripNul(found.html).slice(0, MAX_HTML_TO_TEXT_CHARS)));
+    return stripNul(htmlToPlainText(capStored(found.html, MAX_HTML_TO_TEXT_CHARS)));
   } catch {
     return rawText(text);
   }

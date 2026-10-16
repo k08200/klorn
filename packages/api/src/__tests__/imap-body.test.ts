@@ -79,7 +79,7 @@ describe("decodeImapText", () => {
     expect(await decodeImapText(undefined, undefined)).toBe("");
   });
 
-  it("never throws on a malformed body and keeps the raw text", async () => {
+  it("never throws on a malformed body (an unclosed multipart still yields its text)", async () => {
     const decoded = await decodeImapText(
       headers('Content-Type: multipart/mixed; boundary="never-closed"'),
       Buffer.from("--never-closed\r\nContent-Type: text/plain\r\n\r\nplain words"),
@@ -160,6 +160,106 @@ describe("decodeImapText", () => {
     );
 
     expect(decoded).toBe("see attached");
+  });
+
+  describe("real-world MIME shapes (code review 2)", () => {
+    const part = (head: string, body: string) => `${head}${CRLF}${CRLF}${body}`;
+    const multipart = (boundary: string, parts: string[]) =>
+      `${parts.map((p) => `--${boundary}${CRLF}${p}`).join(CRLF)}${CRLF}--${boundary}--${CRLF}`;
+
+    it("treats an inline text part with a filename as an attachment, not the body", () => {
+      const text = multipart("m", [
+        part("Content-Type: text/html; charset=utf-8", "<p>Invoice due</p>"),
+        part(
+          'Content-Type: text/plain; name="notes.txt"\r\nContent-Disposition: inline; filename="notes.txt"',
+          "attached notes",
+        ),
+      ]);
+      const decoded = decodeImapText(
+        headers('Content-Type: multipart/mixed; boundary="m"'),
+        Buffer.from(text),
+      );
+      expect(decoded).toBe("Invoice due");
+    });
+
+    it("does not take a longer boundary that starts with this one for a delimiter", () => {
+      const inner = multipart("b1", [part("Content-Type: text/plain", "inner text")]);
+      const text = multipart("b", [
+        part('Content-Type: multipart/alternative; boundary="b1"', inner),
+      ]);
+      const decoded = decodeImapText(
+        headers('Content-Type: multipart/mixed; boundary="b"'),
+        Buffer.from(text),
+      );
+      expect(decoded).toBe("inner text");
+    });
+
+    it("finds the text even behind many sibling attachments", () => {
+      const alternative = multipart("alt", [part("Content-Type: text/plain", "the body")]);
+      const attachments = Array.from({ length: 70 }, (_, i) =>
+        part(
+          `Content-Type: application/pdf; name="f${i}.pdf"\r\nContent-Disposition: attachment`,
+          "x",
+        ),
+      );
+      const text = multipart("mix", [
+        part('Content-Type: multipart/alternative; boundary="alt"', alternative),
+        ...attachments,
+      ]);
+      const decoded = decodeImapText(
+        headers('Content-Type: multipart/mixed; boundary="mix"'),
+        Buffer.from(text),
+      );
+      expect(decoded).toBe("the body");
+    });
+
+    it("reads a five-level tree (mixed > signed > mixed > related > alternative)", () => {
+      let tree = multipart("l5", [part("Content-Type: text/plain", "deep body")]);
+      for (const [boundary, type] of [
+        ["l4", 'multipart/alternative; boundary="l5"'],
+        ["l3", 'multipart/related; boundary="l4"'],
+        ["l2", 'multipart/mixed; boundary="l3"'],
+        ["l1", 'multipart/signed; boundary="l2"'],
+      ] as const) {
+        tree = multipart(boundary, [part(`Content-Type: ${type}`, tree)]);
+      }
+      const decoded = decodeImapText(
+        headers('Content-Type: multipart/mixed; boundary="l1"'),
+        Buffer.from(tree),
+      );
+      expect(decoded).toBe("deep body");
+    });
+
+    it("decodes the Korean charset aliases mail clients actually send", () => {
+      const eucKr = Buffer.from([0xc7, 0xd1, 0xb1, 0xdb]); // "한글"
+      for (const label of ["ks_c_5601-1987", "cp949", "ms949", "x-windows-949", "ks_c_5601"]) {
+        const decoded = decodeImapText(
+          headers(
+            `Content-Type: text/plain; charset=${label}`,
+            "Content-Transfer-Encoding: base64",
+          ),
+          Buffer.from(eucKr.toString("base64")),
+        );
+        expect(decoded, label).toBe("한글");
+      }
+    });
+
+    it("does not read the headers of a part cut off by the size cap as body text", () => {
+      const text = [
+        "--c",
+        "Content-Type: text/html",
+        "",
+        "<p>html body</p>",
+        "--c",
+        "Content-Type: image/png; name=x.png",
+        "Content-Transfer-Enc",
+      ].join(CRLF);
+      const decoded = decodeImapText(
+        headers('Content-Type: multipart/mixed; boundary="c"'),
+        Buffer.from(text),
+      );
+      expect(decoded).toBe("html body");
+    });
   });
 
   describe("hostile input stays within budget (single event loop)", () => {

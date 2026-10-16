@@ -58,10 +58,13 @@ function refreshedBodyFields(
   email: GmailRawEmail,
   refresh: boolean,
 ): { body?: string | null; snippet?: string } {
-  if (!refresh) return {};
+  // The snippet decides, as a cheap compare: a poll that re-touches its window
+  // never runs coercePlainBody on an unchanged row. Every raw-MIME row's
+  // snippet differs from its decoded one (a boundary, base64, or a QP soft
+  // break falls within the first 200 characters).
+  if (!refresh || email.snippet === existing.snippet) return {};
   const body = coercePlainBody(email.body || null, email.htmlBody || null);
-  const changed = body !== existing.body || email.snippet !== existing.snippet;
-  return changed ? { body, snippet: email.snippet } : {};
+  return { body, snippet: email.snippet };
 }
 
 export async function persistGmailEmail(

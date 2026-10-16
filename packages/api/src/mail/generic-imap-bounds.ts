@@ -18,7 +18,11 @@
 
 import type { ImapProviderConfig } from "./imap-providers.js";
 
-/** More than `toPersistCall` keeps of a body (50 000 characters), far less than a large mail. */
+/**
+ * The encoded slice a user-chosen host may send, far less than a large mail. It
+ * decodes to at most about 48 KB of base64 text, or less for HTML (imap-body.ts),
+ * so it no longer always covers the 50 000 characters `toPersistCall` keeps.
+ */
 export const GENERIC_TEXT_FETCH_BYTES = 64 * 1024;
 
 type TextBodyPart = string | { key: string; start: number; maxLength: number };
