@@ -265,6 +265,19 @@ export function googleDriveEnabled(): boolean {
     (process.env.GOOGLE_DRIVE_ENABLED ?? "").trim().toLowerCase(),
   );
 }
+
+// The Google Picker's two public values (D5c): the browser API key, restricted
+// in the Cloud console to the web origin's referrers and the Picker API, and the
+// Cloud project NUMBER (`setAppId`, which ties picked files to this project's
+// drive.file grant). Neither is a secret, but both stay server-side: POST
+// /api/drive/google/accounts/:id/picker-session hands them out, so a web bundle
+// built without the Picker holds neither. Either unset answers 503
+// `picker-not-configured`. Read at request time.
+export function googlePickerConfig(): { developerKey: string; appId: string } | null {
+  const developerKey = (process.env.GOOGLE_PICKER_API_KEY ?? "").trim();
+  const appId = (process.env.GOOGLE_CLOUD_PROJECT_NUMBER ?? "").trim();
+  return developerKey !== "" && appId !== "" ? { developerKey, appId } : null;
+}
 // Drive file summaries and summary search — step D4 of
 // docs/providers/unified-platform-plan.md. OFF by default (repo doctrine). It
 // acts only while DRIVE_ENABLED is on too, and only on files whose provider is

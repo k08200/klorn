@@ -77,6 +77,43 @@ const de: Record<string, string> = {
   "files.trail.all": "Alle Dateien",
   "files.folderEmpty.title": "Dieser Ordner ist leer",
   "files.folderEmpty.body": "Dateien, die du in diesen Ordner legst, erscheinen hier.",
+  "files.google.title": "Google Drive",
+  "files.google.body":
+    "Wähle Dateien aus Google Drive, um sie hier aufzulisten und zu durchsuchen. Klorn sieht nur die gewählten Dateien und ändert sie nie.",
+  "files.google.connect": "Google Drive verbinden",
+  "files.google.connect.error":
+    "Die Google-Anmeldung konnte nicht gestartet werden. Versuche es erneut.",
+  "files.google.needsReconnect":
+    "Der Zugriff funktioniert nicht mehr. Verbinde neu, um Dateien hinzuzufügen.",
+  "files.google.reconnect": "Neu verbinden",
+  "files.google.reconnect.label": "Neu verbinden ({email})",
+  "files.google.add": "Aus Google Drive hinzufügen",
+  "files.google.add.label": "Aus Google Drive hinzufügen ({email})",
+  "files.google.disconnect": "Trennen",
+  "files.google.disconnect.label": "Trennen: {email}",
+  "files.google.disconnect.title": "Google Drive trennen?",
+  "files.google.disconnect.message":
+    "Die aus {email} hinzugefügten Dateien werden aus Klorn entfernt. In deinem Google Drive ändert sich nichts. Den Zugriff von Klorn entfernst du in den Einstellungen deines Google-Kontos.",
+  "files.google.disconnect.confirm": "Trennen",
+  "files.google.disconnect.done": "Google Drive getrennt.",
+  "files.google.disconnect.error": "Trennen fehlgeschlagen. Versuche es erneut.",
+  "files.google.pick.added": "Aus Google Drive hinzugefügte Dateien: {count}.",
+  "files.google.pick.skipped":
+    "Nicht hinzugefügt: {count}. Ordner, Verknüpfungen und Dateien, die Google nicht mit Klorn teilt, können nicht hinzugefügt werden.",
+  "files.google.pick.cap":
+    "Nicht hinzugefügt: {count}. Pro Google-Konto lassen sich bis zu 500 Dateien hinzufügen.",
+  "files.google.pick.reconnect": "Verbinde dieses Google-Konto neu, um Dateien hinzuzufügen.",
+  "files.google.pick.notConfigured": "Das Hinzufügen aus Google Drive ist noch nicht eingerichtet.",
+  "files.google.pick.error":
+    "Dateien aus Google Drive konnten nicht hinzugefügt werden. Versuche es erneut.",
+  "files.google.link.success": "Google Drive verbunden.",
+  "files.google.link.failed": "Google Drive konnte nicht verbunden werden. Versuche es erneut.",
+  "files.google.link.unverified":
+    "Google hat diese E-Mail-Adresse nicht bestätigt, daher wurde sie nicht verbunden.",
+  "files.google.link.scopeMissing":
+    "Klorn braucht Zugriff auf die Dateien, die du wählst. Verbinde neu und lass dieses Kästchen angehakt.",
+  "files.google.link.limit":
+    "Du hast die maximale Anzahl an Google-Konten für Drive verbunden (5).",
   "today.files.title": "Neueste Dateien",
   "today.files.open": "Dateien öffnen",
   "today.files.none": "Noch keine Dateien.",

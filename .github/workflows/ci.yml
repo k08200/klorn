@@ -182,8 +182,23 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Generate Prisma types
         run: cd packages/api && pnpm exec prisma generate
+      # D5c: the Google Picker widens the web CSP only under the build switch
+      # NEXT_PUBLIC_GOOGLE_DRIVE_PICKER=on. Loads the real next.config.ts (Node
+      # 22 type stripping) and pins the policy with the switch unset and on.
+      - name: Web CSP pinned (Google Picker switch)
+        run: node packages/web/scripts/check-csp.mjs
       - name: Build all packages
         run: pnpm -r build
+      # D5c: built without the switch, the web bundle holds no Google Picker
+      # (google-drive-connect.tsx imports it behind the literal switch, which
+      # next.config.ts always defines, so the bundler drops the import).
+      - name: Web bundle holds no Google Picker without the switch
+        run: |
+          test -d packages/web/.next/static
+          if grep -rl "apis.google.com/js/api.js" packages/web/.next/static; then
+            echo "The Google Picker was compiled in without NEXT_PUBLIC_GOOGLE_DRIVE_PICKER=on"
+            exit 1
+          fi
 
   # Guards prod: prod deploys via `prisma migrate deploy` (start.sh), so a
   # schema.prisma change with no matching migration silently ships nothing and

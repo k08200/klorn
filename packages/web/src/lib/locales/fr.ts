@@ -76,6 +76,41 @@ const fr: Record<string, string> = {
   "files.trail.all": "Tous les fichiers",
   "files.folderEmpty.title": "Ce dossier est vide",
   "files.folderEmpty.body": "Les fichiers que vous placez dans ce dossier apparaissent ici.",
+  "files.google.title": "Google Drive",
+  "files.google.body":
+    "Choisissez des fichiers Google Drive pour les lister et les rechercher ici. Klorn ne voit que les fichiers choisis et ne les modifie jamais.",
+  "files.google.connect": "Connecter Google Drive",
+  "files.google.connect.error": "Impossible de lancer la connexion Google. Réessayez.",
+  "files.google.needsReconnect":
+    "L'accès ne fonctionne plus. Reconnectez-vous pour ajouter des fichiers.",
+  "files.google.reconnect": "Reconnecter",
+  "files.google.reconnect.label": "Reconnecter ({email})",
+  "files.google.add": "Ajouter depuis Google Drive",
+  "files.google.add.label": "Ajouter depuis Google Drive ({email})",
+  "files.google.disconnect": "Déconnecter",
+  "files.google.disconnect.label": "Déconnecter {email}",
+  "files.google.disconnect.title": "Déconnecter Google Drive ?",
+  "files.google.disconnect.message":
+    "Les fichiers ajoutés depuis {email} sont retirés de Klorn. Rien ne change dans votre Google Drive. Pour retirer l'accès de Klorn, passez par les paramètres de votre compte Google.",
+  "files.google.disconnect.confirm": "Déconnecter",
+  "files.google.disconnect.done": "Google Drive déconnecté.",
+  "files.google.disconnect.error": "Impossible de déconnecter. Réessayez.",
+  "files.google.pick.added": "Fichiers ajoutés depuis Google Drive : {count}.",
+  "files.google.pick.skipped":
+    "Non ajoutés : {count}. Les dossiers, les raccourcis et les fichiers que Google ne partage pas avec Klorn ne peuvent pas être ajoutés.",
+  "files.google.pick.cap":
+    "Non ajoutés : {count}. Un compte Google peut ajouter jusqu'à 500 fichiers.",
+  "files.google.pick.reconnect": "Reconnectez ce compte Google pour ajouter des fichiers.",
+  "files.google.pick.notConfigured": "L'ajout depuis Google Drive n'est pas encore configuré.",
+  "files.google.pick.error": "Impossible d'ajouter des fichiers depuis Google Drive. Réessayez.",
+  "files.google.link.success": "Google Drive connecté.",
+  "files.google.link.failed": "Impossible de connecter Google Drive. Réessayez.",
+  "files.google.link.unverified":
+    "Google n'a pas vérifié cette adresse e-mail, elle n'a donc pas été connectée.",
+  "files.google.link.scopeMissing":
+    "Klorn a besoin d'accéder aux fichiers que vous choisissez. Reconnectez-vous en laissant cette case cochée.",
+  "files.google.link.limit":
+    "Vous avez connecté le nombre maximal de comptes Google pour Drive (5).",
   "today.files.title": "Fichiers récents",
   "today.files.open": "Ouvrir Fichiers",
   "today.files.none": "Aucun fichier pour l’instant.",

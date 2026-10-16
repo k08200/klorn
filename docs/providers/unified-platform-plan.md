@@ -4229,6 +4229,11 @@ the scopes that sign-in, Gmail, Calendar and the inbox links request
       dark 404, no script loaded before the click; a script in
       `packages/web/scripts` that checks the CSP is unchanged without the switch
       (the web package has no unit-test runner).
+    - Summaries before D5d: `DRIVE_SUMMARY_READABLE_PROVIDERS` (`summary-policy.ts`)
+      holds KLORN only, so a GOOGLE row's queued summary waits `source-unavailable`
+      (PENDING, no attempt spent, never SKIPPED as a Google type) without
+      connecting; D5d adds GOOGLE there.
+    - Picking and its session need the plan (`requireEntitled`), like the link.
     - Prod impact: none.
   - D5d, refresh and Google-format summaries.
     - Files: the refresh module and its job, the writer's per-file delete

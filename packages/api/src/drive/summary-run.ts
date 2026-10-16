@@ -46,6 +46,7 @@ import {
   DRIVE_SUMMARY_MAX_ATTEMPTS,
   DRIVE_SUMMARY_MAX_SOURCE_BYTES,
   DRIVE_SUMMARY_RATE_LIMITED_DELAY_MS,
+  DRIVE_SUMMARY_READABLE_PROVIDERS,
   DRIVE_SUMMARY_RUNS_PER_FILE_PER_DAY,
   nextUtcDay,
   summaryOutageDelayMs,
@@ -264,6 +265,8 @@ async function cheapRefusal(
 ): Promise<SummaryRunOutcome | null> {
   const { row } = ctx.lease;
   if (source === null) return await waitForSource(ctx);
+  // A provider whose bytes Klorn cannot read yet (GOOGLE until D5d): wait, first.
+  if (!DRIVE_SUMMARY_READABLE_PROVIDERS.has(source.provider)) return await waitForSource(ctx);
   if (source.isFolder) return await skip(ctx, "folder", source.etag);
   if (!isSummarisableFile(source.name, source.mimeType, source.sizeBytes)) {
     const tooLarge = source.sizeBytes !== null && source.sizeBytes > DRIVE_SUMMARY_MAX_SOURCE_BYTES;

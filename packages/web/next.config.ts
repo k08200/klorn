@@ -5,6 +5,15 @@ const apiUrl =
   process.env.NEXT_PUBLIC_API_URL ||
   (process.env.NODE_ENV === "production" ? "https://klorn-api.onrender.com" : undefined);
 
+// The Google Picker (step D5c of docs/providers/unified-platform-plan.md) is
+// compiled in only when the web is built with NEXT_PUBLIC_GOOGLE_DRIVE_PICKER=on
+// (exactly "on"), and only then may the CSP load Google's loader script and the
+// Picker's frame. Unset, the policy is byte for byte what it was before D5c
+// (scripts/check-csp.mjs pins it) and the Picker module is not in the bundle.
+const googleDrivePicker = process.env.NEXT_PUBLIC_GOOGLE_DRIVE_PICKER === "on";
+const pickerScriptSrc = googleDrivePicker ? " https://apis.google.com" : "";
+const pickerFrameSrc = googleDrivePicker ? " https://docs.google.com" : "";
+
 // CSP only makes sense against the production API origin; in dev the API host
 // varies (localhost/127.0.2.x) and React Refresh needs eval, so we skip it there.
 const apiWsUrl = apiUrl?.replace("https://", "wss://").replace("http://", "ws://");
@@ -15,7 +24,7 @@ const contentSecurityPolicy = [
   // Paddle.js (hosted checkout overlay) is an allowed external script. The
   // wildcard covers the sandbox host too: sandbox serves from
   // sandbox-cdn.paddle.com, live from cdn.paddle.com.
-  "script-src 'self' 'unsafe-inline' https://*.paddle.com",
+  `script-src 'self' 'unsafe-inline' https://*.paddle.com${pickerScriptSrc}`,
   // Paddle's overlay pulls its own stylesheet. Without this the checkout
   // iframe mounts and the transaction is created, but the overlay renders
   // unstyled and invisible — the upgrade button looked like it reloaded the
@@ -32,7 +41,7 @@ const contentSecurityPolicy = [
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
-  "frame-src https://*.paddle.com https://*.paddle.io",
+  `frame-src https://*.paddle.com https://*.paddle.io${pickerFrameSrc}`,
   "frame-ancestors 'none'",
   "upgrade-insecure-requests",
 ]
@@ -108,7 +117,12 @@ const nextConfig: NextConfig = {
     "127.0.2.3",
     "127.0.2.3:8001",
   ],
-  env: apiUrl ? { NEXT_PUBLIC_API_URL: apiUrl } : {},
+  // The Picker switch is always defined ("" when off) so the bundler can drop
+  // the Picker's dynamic import, not just skip it at run time.
+  env: {
+    ...(apiUrl ? { NEXT_PUBLIC_API_URL: apiUrl } : {}),
+    NEXT_PUBLIC_GOOGLE_DRIVE_PICKER: googleDrivePicker ? "on" : "",
+  },
   images: {
     formats: ["image/avif", "image/webp"],
   },

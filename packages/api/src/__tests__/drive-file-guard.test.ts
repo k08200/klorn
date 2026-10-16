@@ -335,11 +335,15 @@ describe("every DriveFile read goes through the kill switch", () => {
       }
       for (const window of callWindows(text, LIST_READ)) {
         expect(window.slice(0, 200)).toMatch(
-          /\.\.\.filtersOf\(options\)|\.\.\.klornRowsOf\(userId\)|where: \{ userId \}/,
+          /\.\.\.filtersOf\(options\)|\.\.\.klornRowsOf\(userId\)|\.\.\.accountRowsOf\(userId, account\)|where: \{ userId \}/,
         );
       }
     }
     expect(fileAt(READ_MODULE)?.text).toContain("[{ userId: options.userId, trashed: false }]");
+    // D5c: one connected account's rows (its cap), trashed ones included.
+    expect(fileAt(READ_MODULE)?.text).toContain(
+      "return [{ userId, provider: account.provider, sourceKey: account.sourceKey }];",
+    );
     expect(fileAt(KLORN_READ_MODULE)?.text).toContain(
       'return [{ userId, provider: "KLORN", sourceKey: KLORN_DRIVE_SOURCE_KEY, trashed: false }];',
     );
@@ -532,10 +536,14 @@ describe("drive text reaches an LLM only wrapped", () => {
     "drive/klorn-remove.ts",
     "drive/klorn-tree.ts",
     "drive/klorn-upload.ts",
+    // D5c: the Picker's session and the index of picked files.
+    "drive/google-drive-picker.ts",
     // D5b: the account table, the Google grant and the connector's connect.
     "drive/linked-drive-accounts.ts",
     "drive/providers/dispatch.ts",
     "drive/providers/google-auth.ts",
+    // D5c: what is read of a Google file, and how it maps.
+    "drive/providers/google-files.ts",
     "drive/providers/google.ts",
     "drive/providers/types.ts",
     "drive/providers/unsupported.ts",

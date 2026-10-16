@@ -14,6 +14,7 @@ import { useAuth } from "../../lib/auth";
 import { useT } from "../../lib/i18n";
 import { BlockError } from "../today/block";
 import { FileGlyph, FileRow } from "./file-row";
+import { GoogleDriveConnect } from "./google-drive-connect";
 import { SEARCH_MAX_CHARS } from "./model";
 import type { FolderCrumb } from "./open";
 import { useDebounced, useFilesList } from "./use-files";
@@ -42,6 +43,8 @@ export function FilesView() {
         <h1 className="text-display text-ink">{t("nav.files")}</h1>
         <p className="text-body text-ink-muted">{t("files.subtitle")}</p>
       </header>
+      {/* D5c: renders nothing while Google Drive is off on the server. */}
+      <GoogleDriveConnect />
       {folders.trail.length > 0 && (
         <FolderTrail
           trail={folders.trail}

@@ -109,6 +109,8 @@ describe("every CalendarEvent writer states its provider", () => {
     const DRIVE_SOURCE_KEY_FILES = [
       "drive/drive-read.ts",
       "drive/drive-rows.ts",
+      // D5c: names the account whose rows it counts (connectedAccountRows).
+      "drive/google-drive-picker.ts",
       "drive/klorn-drive-read.ts",
       "drive/klorn-upload.ts",
       "drive/providers/types.ts",

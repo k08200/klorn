@@ -469,6 +469,44 @@ describe("one run", () => {
     });
   });
 
+  it("a GOOGLE file before D5d reads its bytes: it waits, never an attempt, never asks the connector", async () => {
+    // D5c indexes picked Google files and queues their summaries; the bytes
+    // arrive with D5d. Until then the run must not spend attempts (the
+    // connector's fetchForSummary refuses) nor SKIP a Google Doc as an
+    // unsupported type: both would outlive D5d.
+    const file = fileRow({
+      provider: "GOOGLE",
+      sourceKey: "acct-1",
+      storageKey: null,
+      mimeType: "application/vnd.google-apps.document",
+      sizeBytes: null,
+    });
+    db.tables.driveFile.push(file);
+    await queued(file);
+    const connect = vi.fn(async () => {
+      throw new Error("the run must not connect before D5d");
+    });
+    const options = {
+      priority: "background" as const,
+      providerEnabled: { GOOGLE: () => true },
+      implementations: { GOOGLE: { provider: "GOOGLE" as const, connect } },
+    };
+    let at = NOW;
+    for (let run = 0; run <= DRIVE_SUMMARY_MAX_ATTEMPTS; run += 1) {
+      expect(await runClaimedSummary(await leaseOf(file, at), { ...options, now: at })).toBe(
+        "waiting",
+      );
+      expect(summaryOf(file.id)).toMatchObject({
+        status: "PENDING",
+        error: "source-unavailable",
+        attempts: 0,
+      });
+      at = summaryOf(file.id)?.nextAttemptAt as Date;
+    }
+    expect(connect).not.toHaveBeenCalled();
+    expect(llm.calls).toEqual([]);
+  });
+
   it("a provider rejection (a 4xx that is not 402/408/429) is a content error: it spends the budget", async () => {
     llm.result = { ok: false, code: "llm-rejected" };
     const file = await storedFile("hello");

@@ -53,6 +53,8 @@ export interface DriveAccountCredentials {
   readonly refreshToken: string;
   readonly expiresAt: Date | null;
   readonly needsReconnect: boolean;
+  /** What Google granted at the link (space-delimited); the Picker refuses a broader grant. */
+  readonly grantedScopes: string;
 }
 
 /** A refresh's result, plain; empty tokens are not written. */
@@ -82,6 +84,7 @@ const DRIVE_ACCOUNT_CREDENTIALS_SELECT = {
   refreshToken: true,
   expiresAt: true,
   needsReconnect: true,
+  grantedScopes: true,
 } as const;
 
 /** The address as the table's CHECK requires it: email = lower(btrim(email)). */
