@@ -50,8 +50,8 @@
 "mail.snooze.a11y" = "%@ 님의 메일 미루기";
 "mail.dismiss" = "지우기";
 "mail.dismiss.a11y" = "%@ 님의 메일 지우기";
-"mail.changeTier" = "분류 옮기기… (Klorn이 학습합니다)";
-"mail.changeTier.a11y" = "%1$@ 님의 메일 분류 변경, 현재 %2$@";
+"mail.changeTier" = "레인 옮기기… (Klorn이 학습합니다)";
+"mail.changeTier.a11y" = "%1$@ 님의 메일 레인 변경, 현재 %2$@";
 "mail.moveTo" = "%1$@%2$@ 옮기기 ";
 "mail.snoozePrefix" = "미루기 ";
 "mail.summarize" = "AI 정리";
@@ -94,7 +94,7 @@
 
 /* Reading pane */
 "reading.empty.title" = "열린 메일 없음";
-"reading.empty.detail" = "왼쪽에서 메일을 고르세요 — Klorn을 벗어나지 않고\n읽고, 답장하고, 미루고, 분류를 바꿀 수 있습니다.";
+"reading.empty.detail" = "왼쪽에서 메일을 고르세요 — Klorn을 벗어나지 않고\n읽고, 답장하고, 미루고, 레인을 바꿀 수 있습니다.";
 "reading.replyWithAI" = "AI로 답장";
 "reading.openInWeb" = "웹에서 열기";
 "reading.replyTo" = "%@ 님에게 답장";
@@ -244,8 +244,8 @@
 "mail.reclassifying" = "다시 분류 중";
 
 /* Proposals — actions awaiting approval */
-"proposals.title" = "제안";
-"proposals.a11y" = "제안, 승인 대기 %d건";
+"proposals.title" = "승인";
+"proposals.a11y" = "승인, %d건 대기 중";
 "proposals.approve" = "승인";
 "proposals.decline" = "거절";
 "proposals.empty" = "기다리는 항목이 없습니다.";
@@ -253,7 +253,7 @@
 "proposals.row.a11y" = "%1$@. %2$@";
 
 /* Column headers and states the first pass missed */
-"section.inbox" = "수신함";
+"section.inbox" = "메일";
 "push.nothingNeedsYou" = "지금 처리할 것이 없습니다.";
 "auth.signInNaver" = "네이버로 계속하기";
 "auth.signInApple" = "Apple로 계속하기";
@@ -275,9 +275,9 @@
 
 /* First-run guide */
 "guide.title" = "Klorn이 메일을 나누는 방식";
-"guide.pipeline" = "Klorn이 연결된 모든 메일함을 읽고 각 메일을 아래 %d단계로 분류합니다. 이 수신함은 그 분류 결과이며, Gmail 받은편지함 원본이 아닙니다.";
-"guide.intro" = "모든 메일은 %d가지 중 하나로 들어갑니다. 지우지 않고, 사용자 없이 답장하지도 않습니다 — 얼마나 크게 알릴지만 정합니다.";
-"guide.correcting" = "잘못 분류됐으면 다른 곳으로 옮기세요. Klorn이 그 수정을 학습합니다. 각 메일에는 왜 그 분류가 됐는지도 표시됩니다.";
+"guide.pipeline" = "Klorn이 연결된 모든 메일함을 읽고 각 메일을 아래 %d개 레인으로 분류합니다. 이 메일 열은 그 분류 결과이며, Gmail 받은편지함 원본이 아닙니다.";
+"guide.intro" = "모든 메일은 %d개 레인 중 하나로 들어갑니다. 지우지 않고, 사용자 없이 답장하지도 않습니다 — 레인은 얼마나 크게 알릴지만 정합니다.";
+"guide.correcting" = "잘못 분류됐으면 다른 레인으로 옮기세요. Klorn이 그 수정을 학습합니다. 각 메일에는 왜 그 레인에 들어갔는지도 표시됩니다.";
 "guide.done" = "알겠습니다";
 "guide.reopen" = "분류 방식 보기";
 
@@ -637,6 +637,12 @@
 "onboarding.privacy" = "Klorn은 분류를 위해 메일을 읽습니다. 그 밖에 무엇을 해도 되는지는 사용자가 정합니다.";
 "error.unreachable" = "Klorn 서버에 연결할 수 없습니다.";
 "banner.dismiss.a11y" = "메시지 닫기";
+"assistant.starter.1" = "오늘 제일 중요한 메일 뭐야?";
+"assistant.starter.2" = "답장 안 한 것 중 급한 것만 알려줘";
+"assistant.starter.3" = "이번 주 미팅 준비할 것 정리해줘";
+"assistant.message.user.a11y" = "내가 보낸 말: %@";
+"assistant.message.failure.a11y" = "오류: %@";
+"assistant.message.reply.a11y" = "Klorn의 답: %@";
 
 /* Step D7: import picked files into the Klorn drive (Settings › Accounts, File menu). */
 "prefs.section.driveImport" = "Klorn 드라이브";

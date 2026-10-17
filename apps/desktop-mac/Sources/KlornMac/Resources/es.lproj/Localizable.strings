@@ -244,8 +244,8 @@
 "mail.reclassifying" = "reclasificando";
 
 /* Proposals — actions awaiting approval */
-"proposals.title" = "Propuestas";
-"proposals.a11y" = "Propuestas, %d esperando aprobación";
+"proposals.title" = "Aprobaciones";
+"proposals.a11y" = "Aprobaciones, %d en espera";
 "proposals.approve" = "Aprobar";
 "proposals.decline" = "Rechazar";
 "proposals.empty" = "Nada pendiente de ti.";
@@ -253,7 +253,7 @@
 "proposals.row.a11y" = "%1$@. %2$@";
 
 /* Column headers and states the first pass missed */
-"section.inbox" = "BANDEJA";
+"section.inbox" = "CORREO";
 "push.nothingNeedsYou" = "Ahora mismo nada requiere tu atención.";
 "auth.signInNaver" = "Continuar con Naver";
 "auth.signInApple" = "Continuar con Apple";
@@ -275,7 +275,7 @@
 
 /* First-run guide */
 "guide.title" = "Cómo clasifica Klorn tu correo";
-"guide.pipeline" = "Klorn lee cada buzón conectado y coloca cada mensaje en uno de los %d carriles de abajo. Esta columna BANDEJA es ese resultado clasificado, no tu bandeja de Gmail en bruto.";
+"guide.pipeline" = "Klorn lee cada buzón conectado y coloca cada mensaje en uno de los %d carriles de abajo. Esta columna CORREO es ese resultado clasificado, no tu bandeja de Gmail en bruto.";
 "guide.intro" = "Cada mensaje cae en uno de los %d carriles. Nada se borra y nada se responde sin ti: el carril solo decide con cuánta fuerza te llega.";
 "guide.correcting" = "¿Alguno mal clasificado? Muévelo a otro carril y Klorn aprende de la corrección. Cada mensaje muestra además por qué acabó donde acabó.";
 "guide.done" = "Entendido";
@@ -637,6 +637,12 @@
 "onboarding.privacy" = "Klorn lee tu correo para ordenarlo. Tú decides qué más puede hacer.";
 "error.unreachable" = "Klorn no puede conectar con el servidor.";
 "banner.dismiss.a11y" = "Cerrar mensaje";
+"assistant.starter.1" = "¿Cuál es el correo más importante de hoy?";
+"assistant.starter.2" = "¿Qué correos sin responder son urgentes?";
+"assistant.starter.3" = "¿Qué tengo que preparar para las reuniones de esta semana?";
+"assistant.message.user.a11y" = "Dijiste: %@";
+"assistant.message.failure.a11y" = "Error: %@";
+"assistant.message.reply.a11y" = "Klorn respondió: %@";
 
 /* Step D7: import picked files into the Klorn drive (Settings › Accounts, File menu). */
 "prefs.section.driveImport" = "KLORN DRIVE";

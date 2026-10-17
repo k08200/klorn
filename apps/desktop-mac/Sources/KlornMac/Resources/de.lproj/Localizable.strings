@@ -244,8 +244,8 @@
 "mail.reclassifying" = "wird neu eingestuft";
 
 /* Proposals — actions awaiting approval */
-"proposals.title" = "Vorschläge";
-"proposals.a11y" = "Vorschläge, %d warten auf Freigabe";
+"proposals.title" = "Freigaben";
+"proposals.a11y" = "Freigaben, %d warten";
 "proposals.approve" = "Freigeben";
 "proposals.decline" = "Ablehnen";
 "proposals.empty" = "Nichts wartet auf dich.";
@@ -253,7 +253,7 @@
 "proposals.row.a11y" = "%1$@. %2$@";
 
 /* Column headers and states the first pass missed */
-"section.inbox" = "POSTEINGANG";
+"section.inbox" = "MAIL";
 "push.nothingNeedsYou" = "Gerade braucht dich nichts.";
 "auth.signInNaver" = "Mit Naver fortfahren";
 "auth.signInApple" = "Mit Apple fortfahren";
@@ -275,7 +275,7 @@
 
 /* First-run guide */
 "guide.title" = "Wie Klorn deine Mail sortiert";
-"guide.pipeline" = "Klorn liest jedes verbundene Postfach und sortiert jede Nachricht in eine der %d Spuren unten. Diese POSTEINGANG-Spalte ist das sortierte Ergebnis — nicht dein roher Gmail-Posteingang.";
+"guide.pipeline" = "Klorn liest jedes verbundene Postfach und sortiert jede Nachricht in eine der %d Spuren unten. Diese MAIL-Spalte ist das sortierte Ergebnis — nicht dein roher Gmail-Posteingang.";
 "guide.intro" = "Jede Nachricht landet in einer von %d Spuren. Nichts wird gelöscht und nichts ohne dich beantwortet — die Spur entscheidet nur, wie laut sie dich erreicht.";
 "guide.correcting" = "Etwas falsch einsortiert? Verschiebe es in eine andere Spur, und Klorn lernt aus der Korrektur. Jede Nachricht zeigt außerdem, warum sie dort gelandet ist.";
 "guide.done" = "Verstanden";
@@ -637,6 +637,12 @@
 "onboarding.privacy" = "Klorn liest deine Mails, um sie zu sortieren. Was es darüber hinaus tun darf, entscheidest du.";
 "error.unreachable" = "Klorn erreicht den Server nicht.";
 "banner.dismiss.a11y" = "Meldung schließen";
+"assistant.starter.1" = "Was ist heute die wichtigste Mail?";
+"assistant.starter.2" = "Welche unbeantworteten Mails sind dringend?";
+"assistant.starter.3" = "Was muss ich für die Meetings dieser Woche vorbereiten?";
+"assistant.message.user.a11y" = "Du hast gesagt: %@";
+"assistant.message.failure.a11y" = "Fehler: %@";
+"assistant.message.reply.a11y" = "Klorn antwortete: %@";
 
 /* Step D7: import picked files into the Klorn drive (Settings › Accounts, File menu). */
 "prefs.section.driveImport" = "KLORN DRIVE";
