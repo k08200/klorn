@@ -55,6 +55,21 @@ function pinRuleShapeError(conditions: unknown, actionValue: unknown): string | 
   return "error" in validated ? validated.error : null;
 }
 
+/**
+ * An AUTO_REPLY rule sends with no per-message approval, so it must name its
+ * senders: a non-empty list of non-blank strings (addresses or domains,
+ * matched by mail/email-reply.ts ruleSenderMatches). Applied on create and to
+ * the merged row of an update that touches the rule's shape.
+ */
+function autoReplySenderError(conditions: unknown): string | null {
+  const from = (conditions as { from?: unknown } | null)?.from;
+  const valid =
+    Array.isArray(from) &&
+    from.length > 0 &&
+    from.every((entry) => typeof entry === "string" && entry.trim() !== "");
+  return valid ? null : "An auto-reply rule needs at least one sender address or domain.";
+}
+
 export async function registerEmailRulesRoutes(app: FastifyInstance) {
   // GET /api/email/rules/pins — declared before the generic routes so the
   // static segment never competes with /rules/:id.
@@ -169,9 +184,9 @@ export async function registerEmailRulesRoutes(app: FastifyInstance) {
       const shapeError = pinRuleShapeError(conditions, actionValue);
       if (shapeError) return { error: shapeError };
     }
-    // An auto-reply sends with no per-message approval: it must name its senders.
-    if ((actionType || "AUTO_REPLY") === "AUTO_REPLY" && !conditions.from?.length) {
-      return { error: "An auto-reply rule needs at least one sender address or domain." };
+    if ((actionType || "AUTO_REPLY") === "AUTO_REPLY") {
+      const senderError = autoReplySenderError(conditions);
+      if (senderError) return { error: senderError };
     }
 
     const rule = await prisma.emailRule.create({
@@ -216,6 +231,10 @@ export async function registerEmailRulesRoutes(app: FastifyInstance) {
       updates.actionType !== undefined ||
       updates.conditions !== undefined ||
       updates.actionValue !== undefined;
+    if (nextActionType === "AUTO_REPLY" && touchesPinShape) {
+      const senderError = autoReplySenderError(updates.conditions ?? rule.conditions);
+      if (senderError) return { error: senderError };
+    }
     if (nextActionType === "PIN_TIER" && touchesPinShape) {
       const shapeError = pinRuleShapeError(
         updates.conditions ?? rule.conditions,

@@ -45,7 +45,8 @@ export function isMachineOrListMail(email: GuardEmail): boolean {
   if (email.listUnsubscribeUrl || email.listUnsubscribeMailto) return true;
   if (isAutomatedSender(email.from)) return true;
   const address = extractEmailAddress(email.from);
-  const local = address.slice(0, Math.max(0, address.lastIndexOf("@")));
+  // A quoted local part ("no-reply"@x) is the same mailbox.
+  const local = address.slice(0, Math.max(0, address.lastIndexOf("@"))).replace(/^"|"$/g, "");
   return LOOP_PRONE_LOCAL_PART.test(local);
 }
 
@@ -86,7 +87,7 @@ async function noteDailyCap(userId: string, now: Date): Promise<void> {
         isRead: false,
         dedupeKey: `${CAP_NOTICE_PREFIX}${day}`,
         title: "Auto-replies paused for today",
-        message: `Klorn already sent ${MAX_UNATTENDED_REPLIES_PER_DAY} automatic replies today, the daily limit. Matching mail waits in your inbox until tomorrow (UTC).`,
+        message: `Klorn already sent ${MAX_UNATTENDED_REPLIES_PER_DAY} automatic replies today, the daily limit. Mail that matched after that was not answered automatically; it is in your inbox for you to reply to.`,
       },
     });
   } catch (err) {

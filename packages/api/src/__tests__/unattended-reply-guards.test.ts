@@ -70,6 +70,7 @@ describe("isMachineOrListMail", () => {
       "alerts@monitor.example",
       "notify@app.example",
       "No Reply <no-reply@service.example>",
+      '"no-reply"@service.example',
     ]) {
       expect(isMachineOrListMail({ from }), from).toBe(true);
     }
@@ -141,6 +142,8 @@ describe("unattendedReplyBlock", () => {
       dedupeKey: "auto-reply-cap:2026-10-16",
       isRead: false,
     });
+    // Matching mail is not revisited later, so the notice must not promise it.
+    expect(String(db.notices[0]?.message)).not.toMatch(/tomorrow/i);
     // The notice must never read as a ledger claim, or it would count itself.
     expect(String(db.notices[0]?.dedupeKey).startsWith("auto-reply:")).toBe(false);
   });

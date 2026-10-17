@@ -49,7 +49,6 @@ export function ruleSenderMatches(patterns: readonly string[], fromHeader: strin
   });
 }
 
-
 /**
  * Check if an email matches any active auto-reply rules. Reply-capable rules
  * ONLY: the matcher treats an absent condition key as "unrestricted", so a
