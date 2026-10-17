@@ -1,0 +1,17 @@
+-- EmailMessage lane-scan index (2026-10-17, recommended in #1483, founder-approved).
+--
+-- The lane reads (lane counts and the grouped mail page) take one user's rows
+-- newest-first, keyset-ordered by (receivedAt DESC, id DESC), and read
+-- linkedInboxAccountId / threadId / isRead from each row. This composite returns
+-- them in that order, and the INCLUDE columns let the planner answer those
+-- reads from the index without visiting the heap (index-only scan once the
+-- visibility map is current).
+--
+-- Plain CREATE INDEX, not CONCURRENTLY: Prisma runs each migration inside a
+-- transaction, where CONCURRENTLY is not allowed. At the measured size
+-- (~4,450 rows, 2026-10-17) the build and its SHARE lock on "EmailMessage"
+-- (blocks writes, not reads) last milliseconds; the index is well under 1 MB.
+--
+-- SQL-only: Prisma 6 cannot express INCLUDE columns, so this index is not in
+-- schema.prisma (see the comment beside EmailMessage's @@index lines).
+CREATE INDEX IF NOT EXISTS "EmailMessage_lane_scan_idx" ON "EmailMessage" ("userId", "receivedAt" DESC, "id" DESC) INCLUDE ("linkedInboxAccountId", "threadId", "isRead");
