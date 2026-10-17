@@ -150,8 +150,8 @@ Notes:
     $(docker compose --env-file .env.selfhost -f docker-compose.selfhost.yml ps -q)
   ```
   An api stuck at `unhealthy` with the container running is almost always
-  Postgres: `/api/health` reports `status: "degraded"` rather than failing, and
-  the probe reads that field.
+  Postgres: `/api/health` answers 503 with `status: "degraded"` while the
+  database is unreachable, and the probe reads that field.
 
 ## Fully local LLM (Ollama)
 

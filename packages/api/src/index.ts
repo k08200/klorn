@@ -363,6 +363,7 @@ await app.register(phoneRoutes, { prefix: "/api/phone" });
 // answer-ready the moment the listener binds.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { healthResponse } from "./ops/health-response.js";
 
 const PKG_VERSION: string | null = (() => {
   try {
@@ -375,26 +376,18 @@ const PKG_VERSION: string | null = (() => {
   }
 })();
 
-app.get("/api/health", async () => {
-  let dbOk = false;
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    dbOk = true;
-  } catch {
-    // DB unreachable
-  }
-  return {
-    status: dbOk ? "ok" : "degraded",
-    db: dbOk ? "connected" : "unreachable",
-    timestamp: new Date().toISOString(),
-    uptime: Math.floor(process.uptime()),
+app.get("/api/health", async (_request, reply) => {
+  const { statusCode, body } = await healthResponse(() => prisma.$queryRaw`SELECT 1`, {
     version: PKG_VERSION ?? null,
     commit:
       process.env.RENDER_GIT_COMMIT ||
       process.env.GIT_COMMIT_SHA ||
       process.env.VERCEL_GIT_COMMIT_SHA ||
       null,
-  };
+    now: new Date(),
+    uptimeSeconds: Math.floor(process.uptime()),
+  });
+  return reply.code(statusCode).send(body);
 });
 
 // Scheduler liveness for external monitors (UptimeRobot etc). 503 when any
