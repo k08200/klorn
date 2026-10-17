@@ -1,4 +1,4 @@
-// Shared site chrome behaviour for the landings and every compare.css page.
+// Shared site chrome behaviour for the landings and every subpage.
 // The site has no build step, so this is the one place the header logic lives;
 // pages load it with <script src="/site-nav.js" defer>.
 (function () {
