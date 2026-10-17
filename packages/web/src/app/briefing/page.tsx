@@ -8,6 +8,7 @@ import Link from "next/link";
 import AuthGuard from "../../components/auth-guard";
 import { HubHandoff } from "../../components/hub-handoff";
 import { Markdown } from "../../components/markdown";
+import { PAGE_SHELL } from "../../components/page-shell";
 import ErrorAlert from "../../components/ui/error-alert";
 import LoadingState from "../../components/ui/loading-state";
 import { useT } from "../../lib/i18n";
@@ -134,7 +135,7 @@ function BriefingView() {
     : null;
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-3 md:py-10">
+    <div className={PAGE_SHELL}>
       {/* MOBILE — native large-title header (desktop hero below, untouched) */}
       <header className="mb-5 flex items-end justify-between gap-3 md:hidden">
         <div className="min-w-0">

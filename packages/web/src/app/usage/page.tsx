@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
+import { PAGE_SHELL } from "../../components/page-shell";
 import EmptyState from "../../components/ui/empty-state";
 import ErrorAlert from "../../components/ui/error-alert";
 import LoadingState from "../../components/ui/loading-state";
@@ -193,7 +194,7 @@ function UsageView() {
   const periodTabs = PERIOD_TAB_KEYS.map((tab) => ({ id: tab.id, label: t(tab.labelKey) }));
 
   return (
-    <div className="mx-auto max-w-5xl px-4 pb-28 pt-6 sm:px-6 md:py-10">
+    <div className={PAGE_SHELL}>
       <header className="mb-6">
         <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-ink">
           {t("usage.title")}

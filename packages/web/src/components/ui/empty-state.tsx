@@ -4,6 +4,10 @@
  * and at most one primary action. Write the copy for day one: say what will
  * appear here and, when there is one, the single next step ("Connect an
  * account"), not that something is missing.
+ *
+ * Anchored, not centred (design detail pass W9): it starts 96px below the top
+ * of its region, the same anchor as the loading and error states, so a
+ * surface does not jump between them.
  */
 
 import type { ReactNode } from "react";
@@ -41,7 +45,7 @@ export default function EmptyState({
   const Heading = headingLevel;
   return (
     <div
-      className={`flex flex-col items-center justify-center px-4 py-12 text-center ${className}`}
+      className={`flex flex-col items-center justify-start px-4 pb-12 pt-24 text-center ${className}`}
     >
       {icon && (
         <div

@@ -5,7 +5,9 @@ import { useEffect, useRef, useState } from "react";
 import { API_BASE } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useT } from "../lib/i18n";
+import { PAGE_SHELL } from "./page-shell";
 import PaywallScreen from "./paywall-screen";
+import { MailRowSkeleton } from "./ui/skeleton";
 
 // Routes a non-entitled user can still reach: billing (to subscribe), settings
 // (manage/cancel), and the sign-in flow. Everything else shows the paywall.
@@ -65,17 +67,21 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <main
-        className="flex items-center justify-center min-h-[calc(100vh-3.5rem)]"
-        role="status"
-        aria-live="polite"
-      >
-        <div
-          className="w-6 h-6 border-2 border-accent-muted border-t-transparent rounded-full animate-spin"
-          aria-hidden="true"
-        />
+      // W9: the page's own frame as placeholders, anchored at the top + 96px
+      // like the empty and error states — no centred spinner.
+      <div role="status" aria-live="polite" className={`${PAGE_SHELL} flex flex-col gap-4`}>
         <span className="sr-only">{t("authGuard.checking")}</span>
-      </main>
+        <div aria-hidden="true" className="flex flex-col gap-2">
+          <div className="h-7 w-40 rounded-control bg-surface-inset motion-safe:animate-pulse" />
+          <div className="h-3 w-56 max-w-full rounded-control bg-surface-inset opacity-60 motion-safe:animate-pulse" />
+        </div>
+        <div
+          aria-hidden="true"
+          className="mt-10 overflow-hidden rounded-xl bg-surface-panel ring-1 ring-line"
+        >
+          <MailRowSkeleton />
+        </div>
+      </div>
     );
   }
 

@@ -16,6 +16,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ComposeModal } from "../../../components/compose-modal";
+import { PAGE_SHELL } from "../../../components/page-shell";
 import { useToast } from "../../../components/toast";
 import Button from "../../../components/ui/button";
 import { apiFetch } from "../../../lib/api";
@@ -49,6 +50,11 @@ import { useViewState } from "./use-view-state";
 
 const DEFAULT_TIME_ZONE = "Asia/Seoul";
 
+/** The element the list scrolls in: the split view's list column, else the page. */
+function listScroller(root: HTMLElement | null): HTMLElement | null {
+  return root?.closest<HTMLElement>("[data-mail-scroll]") ?? root?.closest("main") ?? null;
+}
+
 interface ReaderUndo {
   action: "archive" | "delete";
   gmailId: string;
@@ -63,13 +69,24 @@ function readerUndoFrom(params: ReturnType<typeof useSearchParams>): ReaderUndo 
   return { action, gmailId, subject: params?.get("undoSubject") || null };
 }
 
-export function MailV2() {
+interface MailPane {
+  /** The mail open in the reader beside the list; null when none is. */
+  selectedId: string | null;
+}
+
+/**
+ * `pane`: the list half of the ≥1280px split view (email/layout.tsx) — a 440px
+ * column with its own scroll, the open mail marked, and the list's hotkeys
+ * standing down while the reader beside it is open.
+ */
+export function MailV2({ pane }: { pane?: MailPane } = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { t, locale } = useT();
   const { toast } = useToast();
   const { user } = useAuth();
   const keyboardTriage = useKeyboardTriage();
+  const readerOpen = Boolean(pane?.selectedId);
   const searchRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   // The row a Shift-click extends the selection from.
@@ -106,7 +123,7 @@ export function MailV2() {
 
   // Remember where the list is scrolled, so the way back can land there.
   useEffect(() => {
-    const scroller = rootRef.current?.closest("main");
+    const scroller = listScroller(rootRef.current);
     if (!scroller) return;
     let frame = 0;
     const onScroll = () => {
@@ -188,7 +205,7 @@ export function MailV2() {
   // KEYBOARD_TRIAGE (P4): the same registry and hook as the legacy list, so the
   // `?` sheet and the palette describe this list without a second key table.
   const { cursorId, setCursor } = useListTriage({
-    active: keyboardTriage,
+    active: keyboardTriage && !readerOpen,
     emails,
     setSelectedIds: setPickedIds,
     open: openEmail,
@@ -208,7 +225,7 @@ export function MailV2() {
   const hasRows = !list.loading && emails.length > 0;
   useEffect(() => {
     if (!listReturn || !hasRows) return;
-    const scroller = rootRef.current?.closest("main");
+    const scroller = listScroller(rootRef.current);
     if (scroller) scroller.scrollTop = listReturn.scrollTop;
     const row = document.querySelector(`[${TRIAGE_ROW_ATTR}="${CSS.escape(listReturn.emailId)}"]`);
     if (row) {
@@ -250,9 +267,14 @@ export function MailV2() {
       <ComposeModal open={composeOpen} onClose={() => setComposeOpen(false)} />
       <div
         ref={rootRef}
-        className="mx-auto flex w-full max-w-5xl flex-col gap-3 px-4 pb-24 pt-4 md:px-8 md:pb-10 md:pt-8"
+        className={
+          pane
+            ? "flex flex-col gap-3 pb-6 pt-[18px] [&>*:not(section)]:mx-4"
+            : `${PAGE_SHELL} flex flex-col gap-3`
+        }
       >
         <MailHeader
+          compact={Boolean(pane)}
           view={view}
           onChange={changeView}
           searchDraft={searchDraft}
@@ -317,7 +339,8 @@ export function MailV2() {
                   view={view}
                   accounts={list.accounts}
                   time={time}
-                  cursorId={cursorId}
+                  cursorId={pane?.selectedId ?? cursorId}
+                  compact={Boolean(pane)}
                   pickedIds={pickedIds}
                   readOnly={isDemo}
                   busy={actions.busy !== null}

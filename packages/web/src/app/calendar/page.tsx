@@ -7,6 +7,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import { LinkedCalendars } from "../../components/linked-calendars";
 import { type NewEventInitial, NewEventModal } from "../../components/new-event-modal";
+import { PAGE_SHELL } from "../../components/page-shell";
 import ErrorAlert from "../../components/ui/error-alert";
 import VoiceButton from "../../components/voice-button";
 import { apiFetch, startGoogleConnect } from "../../lib/api";
@@ -217,7 +218,7 @@ function CalendarView() {
   const goToday = () => setViewMonth(firstOfMonth(new Date(), userTimezone));
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-3 md:py-10">
+    <div className={PAGE_SHELL}>
       {/* MOBILE — native large-title header (desktop hero below, untouched) */}
       <header className="mb-5 flex items-end justify-between gap-3 md:hidden">
         <div className="min-w-0">

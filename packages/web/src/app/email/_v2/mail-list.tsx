@@ -71,6 +71,8 @@ interface TimeContext {
 
 interface MailRowsProps {
   emails: readonly EmailListItem[];
+  /** The split view's 440px column: 14px subjects. */
+  compact?: boolean;
   view: ListView;
   accounts: readonly AccountOption[];
   time: TimeContext;
@@ -265,6 +267,7 @@ function MailRowItem(props: MailRowItemProps) {
           time={formatRowTime(email.date, time.now, time.locale, time.timeZone)}
           timeIso={email.date}
           tier={rowLane(view, email.tier)}
+          compact={props.compact}
           // No AttentionItem yet: the mail is listed, but no lane is claimed.
           tierPending={email.tier === null ? t("mailV2.row.sorting") : undefined}
           source={account ? { provider: account.provider, nickname: account.nickname } : null}

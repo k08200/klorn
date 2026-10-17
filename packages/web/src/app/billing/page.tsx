@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import { PaddleLoader } from "../../components/paddle-loader";
+import { PAGE_SHELL } from "../../components/page-shell";
 import { CardSkeleton } from "../../components/skeleton";
 import { SubscriptionManager, SubscriptionStatusLine } from "../../components/subscription-manager";
 import { useToast } from "../../components/toast";
@@ -238,7 +239,7 @@ function BillingContent() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 pb-28 pt-6 sm:px-6 md:py-10">
+    <div className={PAGE_SHELL}>
       <header className="mb-8">
         <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-ink">
           {t("billing.title")}
