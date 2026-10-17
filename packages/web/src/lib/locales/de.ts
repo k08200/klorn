@@ -1275,7 +1275,6 @@ const de: Record<string, string> = {
   "emailDetail.actionItems.createAll": "Alle Aufgaben anlegen",
   "emailDetail.actionItems.creating": "Wird angelegt…",
   "emailDetail.actionItems.addTask": "+ Aufgabe",
-  "emailDetail.actionItems.addTaskA11y": "Als Aufgabe hinzufügen: {item}",
   "emailDetail.actionItems.taskCreated": "Aufgabe angelegt.",
   "emailDetail.actionItems.taskCreateFailed": "Die Aufgabe konnte nicht angelegt werden.",
   "emailDetail.actionItems.taskCreatedOne": "{count} Aufgabe angelegt.",

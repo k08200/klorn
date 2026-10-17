@@ -1235,7 +1235,6 @@ const ko: Record<string, string> = {
   "emailDetail.actionItems.createAll": "전체 할 일 생성",
   "emailDetail.actionItems.creating": "생성 중…",
   "emailDetail.actionItems.addTask": "+ 할 일",
-  "emailDetail.actionItems.addTaskA11y": "할 일로 추가: {item}",
   "emailDetail.actionItems.taskCreated": "할 일을 생성했습니다.",
   "emailDetail.actionItems.taskCreateFailed": "할 일 생성에 실패했습니다.",
   "emailDetail.actionItems.taskCreatedOne": "할 일 {count}건을 생성했습니다.",

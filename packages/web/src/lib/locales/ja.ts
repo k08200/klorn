@@ -1230,7 +1230,6 @@ const ja: Record<string, string> = {
   "emailDetail.actionItems.createAll": "すべてタスクにする",
   "emailDetail.actionItems.creating": "作成中…",
   "emailDetail.actionItems.addTask": "+ タスク",
-  "emailDetail.actionItems.addTaskA11y": "タスクに追加: {item}",
   "emailDetail.actionItems.taskCreated": "タスクを作成しました。",
   "emailDetail.actionItems.taskCreateFailed": "タスクを作成できませんでした。",
   "emailDetail.actionItems.taskCreatedOne": "タスク{count}件を作成しました。",

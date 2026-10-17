@@ -1247,7 +1247,6 @@ const en: Record<string, string> = {
   "emailDetail.actionItems.createAll": "Create all tasks",
   "emailDetail.actionItems.creating": "Creating…",
   "emailDetail.actionItems.addTask": "+ task",
-  "emailDetail.actionItems.addTaskA11y": "Add as a task: {item}",
   "emailDetail.actionItems.taskCreated": "Task created.",
   "emailDetail.actionItems.taskCreateFailed": "Failed to create task.",
   "emailDetail.actionItems.taskCreatedOne": "{count} task created.",

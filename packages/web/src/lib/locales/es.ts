@@ -1255,7 +1255,6 @@ const es: Record<string, string> = {
   "emailDetail.actionItems.createAll": "Crear todas las tareas",
   "emailDetail.actionItems.creating": "Creando…",
   "emailDetail.actionItems.addTask": "+ tarea",
-  "emailDetail.actionItems.addTaskA11y": "Añadir como tarea: {item}",
   "emailDetail.actionItems.taskCreated": "Tarea creada.",
   "emailDetail.actionItems.taskCreateFailed": "No se pudo crear la tarea.",
   "emailDetail.actionItems.taskCreatedOne": "{count} tarea creada.",

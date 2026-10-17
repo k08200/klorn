@@ -1160,7 +1160,6 @@ const zh: Record<string, string> = {
   "emailDetail.actionItems.createAll": "全部创建为任务",
   "emailDetail.actionItems.creating": "创建中…",
   "emailDetail.actionItems.addTask": "+ 任务",
-  "emailDetail.actionItems.addTaskA11y": "添加为任务：{item}",
   "emailDetail.actionItems.taskCreated": "任务已创建。",
   "emailDetail.actionItems.taskCreateFailed": "创建任务失败。",
   "emailDetail.actionItems.taskCreatedOne": "已创建 {count} 项任务。",

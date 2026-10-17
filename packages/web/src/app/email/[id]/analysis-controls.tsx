@@ -16,7 +16,7 @@
  * 44px items, arrow keys, Escape back to the trigger.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useToast } from "../../../components/toast";
 import Button from "../../../components/ui/button";
 import { Menu, type MenuItem } from "../../../components/ui/menu";
@@ -92,6 +92,7 @@ export function ActionItemsPanel({
 }) {
   const { toast } = useToast();
   const { t } = useT();
+  const idPrefix = useId();
   const [creating, setCreating] = useState<"all" | number | null>(null);
   const [created, setCreated] = useState<Set<number>>(new Set());
 
@@ -144,7 +145,9 @@ export function ActionItemsPanel({
 
   return (
     <div className="mt-3">
-      <div className="mb-1 flex items-center justify-between gap-2">
+      {/* On touch each row is 44px tall, so the chips' padded 44px hit areas
+          never overlap the row above or below. */}
+      <div className="mb-1 flex items-center justify-between gap-2 pointer-coarse:min-h-11">
         <p className="text-caption text-ink-muted">{t("emailDetail.actionItems.title")}</p>
         {!allCreated && (
           <Button
@@ -163,11 +166,15 @@ export function ActionItemsPanel({
           return (
             // Items are positional (the create-tasks API takes indices).
             // biome-ignore lint/suspicious/noArrayIndexKey: the index is the item's identity here
-            <li key={i} className="flex min-h-8 items-center gap-2 text-body">
+            <li
+              key={i}
+              className="flex min-h-8 items-center gap-2 text-body pointer-coarse:min-h-11"
+            >
               <span aria-hidden="true" className={done ? "text-state-ok-ink" : "text-ink-muted"}>
                 {done ? "✓" : "□"}
               </span>
               <span
+                id={`${idPrefix}-${i}`}
                 className={`min-w-0 flex-1 ${done ? "text-ink-dim line-through" : "text-ink-mid"}`}
               >
                 {item}
@@ -175,7 +182,9 @@ export function ActionItemsPanel({
               {!done && (
                 <Button
                   variant="chip"
-                  aria-label={t("emailDetail.actionItems.addTaskA11y", { item })}
+                  // The visible "+ task" stays the name (label in name, WCAG
+                  // 2.5.3); the item it adds is its description.
+                  aria-describedby={`${idPrefix}-${i}`}
                   onClick={() => createTask(i)}
                   disabled={creating !== null}
                   loading={creating === i}
@@ -262,7 +271,8 @@ export function LabelFeedbackControl({
     <span className="inline-flex flex-wrap items-center gap-2">
       <Menu
         label={t("emailDetail.feedback.wrongLabel")}
-        disabled={submitting}
+        // Not disabled while saving: a disabled trigger would drop the focus the
+        // menu hands back to it. submit() ignores a second choice meanwhile.
         sections={[{ id: "priority", heading: t("emailDetail.feedback.actualPriority"), items }]}
       >
         {t("emailDetail.feedback.wrongLabel")}
@@ -359,7 +369,8 @@ export function ReplyNeededFeedbackControl({
             : t("emailDetail.replyNeeded.menu")
         }
         active={Boolean(currentLabel)}
-        disabled={submitting}
+        // Not disabled while saving: a disabled trigger would drop the focus the
+        // menu hands back to it. submit() ignores a second choice meanwhile.
         sections={[{ id: "reply-state", items }]}
       >
         {currentLabel ?? t("emailDetail.replyNeeded.menu")}

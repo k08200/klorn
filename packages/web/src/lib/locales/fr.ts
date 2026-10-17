@@ -1261,7 +1261,6 @@ const fr: Record<string, string> = {
   "emailDetail.actionItems.createAll": "Créer toutes les tâches",
   "emailDetail.actionItems.creating": "Création…",
   "emailDetail.actionItems.addTask": "+ tâche",
-  "emailDetail.actionItems.addTaskA11y": "Ajouter comme tâche : {item}",
   "emailDetail.actionItems.taskCreated": "Tâche créée.",
   "emailDetail.actionItems.taskCreateFailed": "Impossible de créer la tâche.",
   "emailDetail.actionItems.taskCreatedOne": "{count} tâche créée.",
