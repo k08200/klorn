@@ -79,7 +79,8 @@ describe("purgeUserData", () => {
     expect(revocations[0]?.arg.where).toEqual({ userId: "u-7", revokedAt: null });
     expect(revocations[0]?.arg.data.revokedAt).toBeInstanceOf(Date);
     // Only the api key table is revoked here; nothing else is updated.
-    expect(updates.map((u) => u.model)).toEqual(["apiKey"]);
+    // The only other update clears credentials on the kept account row.
+    expect(updates.map((u) => u.model)).toEqual(["apiKey", "user"]);
   });
 
   it("scopes every delete to the target user (directly or via conversation)", async () => {
@@ -93,5 +94,76 @@ describe("purgeUserData", () => {
         (where.conversation as { userId?: string } | undefined)?.userId === "u-42";
       expect(direct || viaConversation).toBe(true);
     }
+  });
+});
+
+describe("purgeUserData covers every user-scoped model (schema-driven guard)", () => {
+  // Rows that stay with the account on a data wipe, each for a reason. A new
+  // model with a userId must be purged or listed here, or this test fails.
+  const KEPT_WITH_ACCOUNT: Record<string, string> = {
+    userIdentity: "sign-in methods: deleting them locks the user out of the kept account",
+    storagePurge: "the durable queue that deletes the user's stored objects: must survive",
+    apiKey: "revoked (updateMany), never deleted, so audit rows keep their key",
+  };
+
+  it("deletes or deliberately keeps every model that has a userId", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { fileURLToPath } = await import("node:url");
+    const schema = readFileSync(
+      fileURLToPath(new URL("../../prisma/schema.prisma", import.meta.url)),
+      "utf8",
+    );
+    const userScoped = [...schema.matchAll(/^model (\w+) \{([\s\S]*?)^\}/gm)]
+      .filter(([, , body]) => /^\s+userId\s+String/m.test(body ?? ""))
+      .map(([, name]) => (name ?? "").charAt(0).toLowerCase() + (name ?? "").slice(1));
+
+    const { tx, called, updates } = makeTxSpy();
+    await purgeUserData(tx as never, "u1");
+    const revoked = new Set(updates.map((u) => u.model));
+
+    const uncovered = userScoped.filter(
+      (model) => !called.has(model) && !revoked.has(model) && !(model in KEPT_WITH_ACCOUNT),
+    );
+    expect(uncovered).toEqual([]);
+    expect(userScoped.length).toBeGreaterThan(50);
+  });
+});
+
+describe("purgeUserData — what the account row and the cost ledger keep", () => {
+  it("clears the credentials stored on the User row (dead Naver/GitHub, BYOK keys, Telegram link)", async () => {
+    const { tx, updates } = makeTxSpy();
+    await purgeUserData(tx as never, "u1");
+
+    const userUpdate = updates.find((u) => u.model === "user");
+    expect(userUpdate?.arg.where).toEqual({ id: "u1" });
+    expect(userUpdate?.arg.data).toMatchObject({
+      naverImapEmail: null,
+      naverImapPasswordCipher: null,
+      githubTokenCipher: null,
+      openRouterApiKey: null,
+      geminiApiKey: null,
+      telegramChatId: null,
+      telegramLinkCode: null,
+    });
+  });
+
+  it("keeps today's cost-ledger row, so a wipe cannot reset the daily spend cap", async () => {
+    const { tx, scopes } = makeTxSpy();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-17T03:00:00Z"));
+    try {
+      await purgeUserData(tx as never, "u1");
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(scopes).toContainEqual({ where: { userId: "u1", dayKey: { not: "2026-10-17" } } });
+  });
+
+  it("deletes the user's teams: third-party addresses the user typed, like contacts", async () => {
+    const { tx, called } = makeTxSpy();
+    await purgeUserData(tx as never, "u1");
+
+    expect(called.has("team")).toBe(true);
   });
 });

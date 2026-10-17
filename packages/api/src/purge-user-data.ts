@@ -8,7 +8,9 @@ type PurgeTx = typeof db;
  * Backs `DELETE /api/user/me/data`.
  *
  * Google / CASA require COMPLETE deletion of data obtained via Google APIs on
- * request, so this MUST stay exhaustive — every user-scoped model belongs here.
+ * request, so this MUST stay exhaustive — every user-scoped model belongs here,
+ * or in the test's KEPT_WITH_ACCOUNT list with its reason (a schema-driven
+ * guard fails on any model with a userId that is neither).
  * A regression that drops one silently strands user data (this list has
  * regressed before: linked-account OAuth tokens and verbatim email excerpts
  * were surviving). `purge-user-data.test.ts` asserts the required set. Every
@@ -18,6 +20,12 @@ type PurgeTx = typeof db;
  * deleting an account removes its synced events or indexed files, and deleting
  * those never touches an account, so delete order is still unconstrained.
  */
+const UTC_DAY_KEY_LENGTH = 10;
+
+function utcDayKey(): string {
+  return new Date().toISOString().slice(0, UTC_DAY_KEY_LENGTH);
+}
+
 export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> {
   const scope = { where: { userId } };
 
@@ -74,7 +82,9 @@ export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> 
   await tx.activatedPlaybook.deleteMany(scope);
   await tx.feedbackPolicyPreference.deleteMany(scope);
   await tx.workContextSnapshot.deleteMany(scope);
-  await tx.llmCostLedger.deleteMany(scope);
+  // Today's ledger row holds counts only (no content) and IS the daily spend
+  // cap: deleting it would let repeated wipes reset the cap.
+  await tx.llmCostLedger.deleteMany({ where: { userId, dayKey: { not: utcDayKey() } } });
   await tx.llmUsageLog.deleteMany(scope);
   await tx.pushSubscription.deleteMany(scope);
   await tx.notification.deleteMany(scope);
@@ -104,4 +114,36 @@ export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> 
   await tx.commitment.deleteMany(scope);
   await tx.feedbackEvent.deleteMany(scope);
   await tx.attentionItem.deleteMany(scope);
+  // Built from the user's mail (Gmail data): summaries of contacts and threads,
+  // and the screener's decisions about senders.
+  await tx.contactDossier.deleteMany(scope);
+  await tx.threadBrief.deleteMany(scope);
+  await tx.screenerDecision.deleteMany(scope);
+  // Agent actions awaiting approval can hold drafts and mail excerpts; most
+  // cascade from their conversation, these catch any that do not.
+  await tx.pendingAction.deleteMany(scope);
+  await tx.analyticsEvent.deleteMany(scope);
+  await tx.pmfResponse.deleteMany(scope);
+  // Third-party addresses the user typed (like contacts); owner-scoped, never shared.
+  await tx.team.deleteMany(scope);
+  // Credentials the user gave Klorn, kept on the account row: the retired Naver
+  // IMAP and GitHub tokens, the user's own (BYOK) LLM keys, the Telegram link.
+  // The account and its sign-in stay; these are re-entered after a wipe.
+  await tx.user.updateMany({
+    where: { id: userId },
+    data: {
+      naverImapEmail: null,
+      naverImapPasswordCipher: null,
+      naverImapHost: null,
+      naverImapConnectedAt: null,
+      githubTokenCipher: null,
+      githubConnectedAt: null,
+      githubLastPolledAt: null,
+      openRouterApiKey: null,
+      geminiApiKey: null,
+      telegramChatId: null,
+      telegramLinkCode: null,
+      telegramLinkCodeExpiresAt: null,
+    },
+  });
 }
