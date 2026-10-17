@@ -18,6 +18,7 @@ import {
   DAILY_COST_CAP_CENTS,
   FREE_DAILY_COST_CAP_CENTS,
   GLOBAL_DAILY_COST_CAP_CENTS,
+  JUDGE_BUDGET_RESERVE_CENTS,
   PAYWALL_ENABLED,
 } from "../config.js";
 import { prisma } from "../db.js";
@@ -77,11 +78,64 @@ async function resolveCapCents(
 }
 
 /**
+ * How much of the daily cap only the judge may spend.
+ *
+ * On 2026-10-15 a credit top-up brought the LLM back at 22:07; by 22:28 the
+ * account had spent 101¢ of a 100¢ cap, nearly all of it chat/agent traffic on
+ * a model 6.7x the judge's price. Every paid call was then blocked until UTC
+ * midnight and the judge fell back to keywords, which structurally cannot emit
+ * PUSH. The product's one promise went dark because a side surface spent the
+ * budget first.
+ *
+ * `priority: "background"` was already documented as stopping background work
+ * from starving chat, but it only feeds the concurrency pacer — this file
+ * never read it — so neither direction was actually protected.
+ *
+ * Sizing, from the ledger rather than from the prompt: every call pre-bills a
+ * nominal 2000 prompt + 500 completion tokens (llm-usage.ts), and the true-up
+ * only charges positive deltas, so that floor is never refunded. At
+ * gemini-2.5-flash rates ($0.30/$2.50 per M) that is ~0.185¢ a call, so the recommended 25¢
+ * buys roughly 135 classifications a day — not the ~1000 an earlier version of
+ * this comment claimed from the raw ~700-token prompt size. A mailbox taking
+ * more than ~135 new messages a day, or one whose low-confidence tail
+ * escalates through the judge dial, needs more than 25¢.
+ *
+ * Two things the name does not say. The reserve is headroom above the ordinary
+ * line, not a separate bucket: judge spend lands in the same daily total, so a
+ * heavy classification day still shrinks what chat has left. And on the free
+ * tier the clamp bites — a 25¢ reserve against a 10¢ cap leaves ordinary calls
+ * 5¢, halving them.
+ *
+ * 0 disables the reserve and restores the previous behaviour exactly.
+ */
+function effectiveCap(fullCap: number, reserved: boolean | undefined): number {
+  return reserved ? fullCap : fullCap - reserveCents(fullCap);
+}
+
+function reserveCents(capCents: number): number {
+  if (JUDGE_BUDGET_RESERVE_CENTS <= 0 || capCents <= 0) return 0;
+  // A reserve at or above the cap would leave every other surface nothing,
+  // which presents as "chat is broken" rather than "the reserve is too big".
+  // Never take more than half.
+  return Math.min(JUDGE_BUDGET_RESERVE_CENTS, Math.floor(capCents / 2));
+}
+
+/**
  * Check whether `userId` is allowed to make another paid LLM call today.
  * Reads but does not mutate. Cap = 0 disables the gate entirely.
+ *
+ * `reserved` marks a call that may draw on the judge's reserved slice. Only
+ * the firewall judge passes it: it is the one surface whose failure is
+ * invisible to the user, because mail keeps being sorted — just without the
+ * lane the product is sold on.
  */
-export async function checkCostGate(userId: string): Promise<CostGateResult> {
-  const { capCents: cap, freeCapApplied } = await resolveCapCents(userId);
+export async function checkCostGate(
+  userId: string,
+  options: { reserved?: boolean } = {},
+): Promise<CostGateResult> {
+  const { capCents: fullCap, freeCapApplied } = await resolveCapCents(userId);
+  // Ordinary calls stop early so the judge always has somewhere to spend.
+  const cap = effectiveCap(fullCap, options.reserved);
   if (cap <= 0) {
     return {
       allowed: true,
@@ -98,7 +152,16 @@ export async function checkCostGate(userId: string): Promise<CostGateResult> {
   const used = row?.cents ?? 0;
   if (used >= cap) {
     // Fire-and-forget visibility: once per user per UTC day (deduped inside).
-    void notifyCostCapTrip({ scope: "user", userId, usedCents: used, capCents: cap });
+    // Only the REAL ceiling is an incident. With a reserve active, an ordinary
+    // call stopping at (cap - reserve) is the feature working — the judge still
+    // has budget and nothing has degraded. Alerting there would spend the
+    // once-per-day dedupe and then swallow the full-cap alert, which is the one
+    // that means the judge has actually gone dark. The alert text says exactly
+    // that ("judge degrades to keyword fallback"), so firing it early would also
+    // be false.
+    if (cap === fullCap) {
+      void notifyCostCapTrip({ scope: "user", userId, usedCents: used, capCents: cap });
+    }
     return {
       allowed: false,
       remainingCents: 0,
@@ -134,6 +197,7 @@ export async function recordCostUsage(
   userId: string,
   cents: number,
   model: string | null,
+  options: { reserved?: boolean } = {},
 ): Promise<{ totalCents: number; overCap: boolean } | null> {
   const safeCents = Number.isFinite(cents) ? Math.max(0, cents) : 0;
   const dayKey = utcDayKey();
@@ -166,10 +230,14 @@ export async function recordCostUsage(
     // Commit the carry only after the DB write landed: on failure the whole
     // charge is dropped (existing best-effort contract), not half-absorbed.
     fractionalCarry.set(userId, { dayKey, frac: nextFrac });
-    const { capCents: cap } = await resolveCapCents(userId);
+    const { capCents: fullCap } = await resolveCapCents(userId);
+    const cap = effectiveCap(fullCap, options.reserved);
     const overCap = cap > 0 && row.cents > cap;
-    if (overCap) {
-      // The increment that crossed the cap — surface it (deduped per day).
+    if (overCap && cap === fullCap) {
+      // The increment that crossed the REAL ceiling — surface it (deduped per
+      // day). An ordinary call crossing (cap - reserve) is the reserve doing
+      // its job, not an incident, and alerting there would spend the
+      // once-a-day dedupe before the trip that actually darkens the judge.
       void notifyCostCapTrip({ scope: "user", userId, usedCents: row.cents, capCents: cap });
     }
     return { totalCents: row.cents, overCap };

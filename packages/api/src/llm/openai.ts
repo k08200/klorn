@@ -121,6 +121,16 @@ export interface CompletionOptions {
    */
   priority?: CallPriority;
   /**
+   * Draw on the judge's reserved slice of the daily cap
+   * (JUDGE_BUDGET_RESERVE_CENTS). Only the firewall judge sets this: it is the
+   * one surface whose failure is invisible, because mail keeps being sorted —
+   * just without the lane the product is sold on. Everything else is admitted
+   * only below (cap - reserve). Calls already in flight settle against the full
+   * cap, so concurrent ordinary calls can overshoot a few cents into the
+   * reserve: it is a floor under contention, not a wall.
+   */
+  reserved?: boolean;
+  /**
    * Conversational surfaces (agent conversations / chat) pass true so the
    * user's chosen frontier chat model (credentials.userModel) is applied.
    * Absent/false = pinned surfaces (judge/summarize/draft/vision) — the
@@ -177,6 +187,7 @@ async function enforceCostGates(
   userId?: string,
   playgroundOnly?: boolean,
   userKeyAvailable?: boolean,
+  reserved?: boolean,
 ): Promise<void> {
   // Playground calls run entirely on the visitor's own key (no server provider
   // in the chain), so they incur zero server cost. They must NOT be gated by
@@ -205,7 +216,7 @@ async function enforceCostGates(
   }
 
   if (userId) {
-    const gate = await checkCostGate(userId);
+    const gate = await checkCostGate(userId, { reserved });
     if (!gate.allowed) {
       throw new DailyCostCapExceededError(dailyCostCapMessageFor(gate.freeCapApplied === true));
     }
@@ -214,7 +225,7 @@ async function enforceCostGates(
       // re-check the post-increment total: concurrent calls that both passed
       // the read-side gate above can't both slip past the cap (closes the
       // check-then-act TOCTOU under concurrency / multi-dyno).
-      const usage = await recordCostUsage(userId, estCents, model);
+      const usage = await recordCostUsage(userId, estCents, model, { reserved });
       if (usage?.overCap) {
         throw new DailyCostCapExceededError(dailyCostCapMessageFor(gate.freeCapApplied === true));
       }
@@ -494,7 +505,13 @@ async function createCompletionWithFailover(
   // Daily-cost gate: enforce BEFORE the call so we don't burn budget twice
   // when a runaway loop has already crossed the cap. Covers the global
   // ceiling (always) and the per-user cap (when a userId is present).
-  await enforceCostGates(params.model, options.userId, playgroundOnly, userKeyAvailable);
+  await enforceCostGates(
+    params.model,
+    options.userId,
+    playgroundOnly,
+    userKeyAvailable,
+    options.reserved,
+  );
 
   // Ground-truth usage ledger context, frozen before the failover loop so
   // every retry records the same caller identity + the same pre-bill
@@ -754,6 +771,9 @@ async function createVisionCompletionWithFailover(
 
   // Daily-cost gate: vision/OCR calls bill the same ledgers as chat. Without
   // this, a runaway attachment-analysis batch can blow past the cap.
+  // Deliberately NOT passing options.reserved: the judge never goes through
+  // the vision path, and the reserve exists for exactly one surface. Honouring
+  // it here would widen who can reach the judge's budget for no caller.
   await enforceCostGates(params.model, options.userId, playgroundOnly, userKeyAvailable);
 
   // Vision prefers Gemini (best OCR), but a BYOK user's OWN key must keep
