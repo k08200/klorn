@@ -52,7 +52,6 @@
 "mail.dismiss.a11y" = "Dismiss message from %@";
 "mail.changeTier" = "Move to tier… (teaches Klorn)";
 "mail.changeTier.a11y" = "Change tier for message from %1$@, currently %2$@";
-"mail.moveTo" = "Move to %1$@%2$@";
 "mail.snoozePrefix" = "Snooze ";
 "mail.summarize" = "AI Summary";
 "mail.summarizing" = "Summarizing…";
@@ -718,3 +717,35 @@
 "today.freeTime.stale" = "These times may be out of date.";
 "today.freeTime.recheck" = "Check again";
 "files.opensBrowser" = "Opens in your browser";
+
+/* Design detail pass (2026-10-16) */
+"mail.moveToLane" = "Move to lane";
+"error.timeout" = "The server took too long to answer. Try again.";
+"auth.failed.nonce" = "Couldn't reach Klorn to start sign-in. Check your connection and try again.";
+"auth.failed.invalidNonce" = "The sign-in session wasn't recognized. Please try again.";
+"auth.failed.expired" = "Sign-in took too long and expired. Please try again.";
+"auth.failed.timeout" = "Timed out waiting for the browser. Finish sign-in there, then retry.";
+"auth.failed.cancelled" = "Sign-in was cancelled.";
+"proposals.approveSend" = "Approve and send";
+"proposals.sendsNow" = "Sends immediately. A sent mail can't be undone.";
+"proposals.runsNow" = "Runs as soon as you approve.";
+"tool.label.send_email" = "Send email";
+"tool.label.draft_reply" = "Draft reply";
+"tool.label.reply_to_email" = "Reply to email";
+"tool.label.archive_email" = "Archive email";
+"tool.label.delete_email" = "Delete email";
+"tool.label.mark_read" = "Mark as read";
+"tool.label.create_event" = "Create event";
+"tool.label.delete_event" = "Delete event";
+"tool.label.schedule_meeting" = "Schedule meeting";
+"tool.label.create_contact" = "Add contact";
+"tool.label.update_contact" = "Update contact";
+"tool.label.delete_contact" = "Delete contact";
+"tool.label.create_note" = "Create note";
+"tool.label.delete_note" = "Delete note";
+"tool.label.create_task" = "Create task";
+"tool.label.delete_task" = "Delete task";
+"tool.label.record_skill" = "Save skill";
+"tool.label.execute_skill" = "Run skill";
+"tool.label.classify_emails" = "Sort mail into lanes";
+"tool.label.unknown" = "Action";

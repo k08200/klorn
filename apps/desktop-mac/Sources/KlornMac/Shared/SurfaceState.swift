@@ -157,13 +157,21 @@ struct SignInButtons: View {
 
     var body: some View {
         VStack(spacing: Theme.s2) {
+            // Provider buttons follow the providers' own branding (M5).
             Button(L("auth.continueGoogle")) { Task { await model.signIn() } }
-                .buttonStyle(SolidButtonStyle(fullWidth: fullWidth))
+                .buttonStyle(GoogleProviderButtonStyle(fullWidth: fullWidth))
             ForEach(model.loginProviders.filter { $0 != "google" }, id: \.self) { provider in
-                Button(loginProviderLabel(provider)) {
-                    Task { await model.signIn(provider: provider) }
+                if provider == "apple" {
+                    Button(loginProviderLabel(provider)) {
+                        Task { await model.signIn(provider: provider) }
+                    }
+                    .buttonStyle(AppleProviderButtonStyle(fullWidth: fullWidth))
+                } else {
+                    Button(loginProviderLabel(provider)) {
+                        Task { await model.signIn(provider: provider) }
+                    }
+                    .buttonStyle(SolidButtonStyle(prominent: false, fullWidth: fullWidth))
                 }
-                .buttonStyle(SolidButtonStyle(prominent: false, fullWidth: fullWidth))
             }
             if let error = model.signInError {
                 // The PUSH lane red: 4.5:1 or better on the canvas in both
@@ -183,6 +191,9 @@ struct SignInButtons: View {
 struct SurfaceStateView: View {
     @Environment(AppModel.self) private var model
     let state: SurfaceState
+    /// The distance from the top of the surface to the glyph: one anchor
+    /// for every empty, error and loading state (top + 96).
+    var anchorInset: CGFloat = TodayLayout.stateAnchorTop
 
     var body: some View {
         switch state {
@@ -236,8 +247,9 @@ struct SurfaceStateView: View {
             action().padding(.top, Theme.s1)
         }
         .frame(maxWidth: 360, alignment: .center)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-        .padding(Theme.s6)
+        .padding(.top, anchorInset)
+        .padding(.horizontal, Theme.s6)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 }
 

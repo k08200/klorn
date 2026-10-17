@@ -109,11 +109,12 @@ struct SubtleTextButton: View {
 struct OffscreenMenuLabel: View {
     let title: String
     var body: some View {
-        (Text(title) + Text(Image(systemName: "chevron.down")))
-            .font(.caption2.weight(.semibold)).foregroundStyle(Theme.textDim)
-            .padding(.horizontal, 9).padding(.vertical, 4)
-            .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 6))
-            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.line))
+        // Matches a regular-size `.bordered` button (13pt text, ~22pt tall,
+        // the control radius) so the shots show the one button system.
+        (Text(title) + Text(verbatim: " ") + Text(Image(systemName: "chevron.down")))
+            .font(Theme.Typo.body).foregroundStyle(Theme.text)
+            .padding(.horizontal, 8).frame(height: 22)
+            .background(Theme.surfaceHover, in: RoundedRectangle(cornerRadius: Theme.Radius.sm))
     }
 }
 

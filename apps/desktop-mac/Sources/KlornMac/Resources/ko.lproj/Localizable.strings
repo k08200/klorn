@@ -52,7 +52,6 @@
 "mail.dismiss.a11y" = "%@ 님의 메일 지우기";
 "mail.changeTier" = "분류 옮기기… (Klorn이 학습합니다)";
 "mail.changeTier.a11y" = "%1$@ 님의 메일 분류 변경, 현재 %2$@";
-"mail.moveTo" = "%1$@%2$@ 옮기기 ";
 "mail.snoozePrefix" = "미루기 ";
 "mail.summarize" = "AI 정리";
 "mail.summarizing" = "정리 중…";
@@ -718,3 +717,35 @@
 "today.freeTime.stale" = "이 시간은 최신이 아닐 수 있습니다.";
 "today.freeTime.recheck" = "다시 확인";
 "files.opensBrowser" = "브라우저에서 열림";
+
+/* Design detail pass (2026-10-16) */
+"mail.moveToLane" = "레인 옮기기";
+"error.timeout" = "서버 응답이 너무 늦습니다. 다시 시도하세요.";
+"auth.failed.nonce" = "로그인을 시작하려 Klorn에 연결하지 못했습니다. 연결을 확인하고 다시 시도하세요.";
+"auth.failed.invalidNonce" = "로그인 세션을 확인하지 못했습니다. 다시 시도하세요.";
+"auth.failed.expired" = "로그인 시간이 지나 만료되었습니다. 다시 시도하세요.";
+"auth.failed.timeout" = "브라우저 응답을 기다리다 시간이 초과되었습니다. 브라우저에서 로그인을 마친 뒤 다시 시도하세요.";
+"auth.failed.cancelled" = "로그인이 취소되었습니다.";
+"proposals.approveSend" = "승인하고 보내기";
+"proposals.sendsNow" = "즉시 발송됩니다. 보낸 메일은 되돌릴 수 없습니다.";
+"proposals.runsNow" = "승인하는 즉시 실행됩니다.";
+"tool.label.send_email" = "메일 보내기";
+"tool.label.draft_reply" = "답장 초안";
+"tool.label.reply_to_email" = "메일에 답장";
+"tool.label.archive_email" = "메일 보관";
+"tool.label.delete_email" = "메일 삭제";
+"tool.label.mark_read" = "읽음으로 표시";
+"tool.label.create_event" = "일정 만들기";
+"tool.label.delete_event" = "일정 삭제";
+"tool.label.schedule_meeting" = "회의 잡기";
+"tool.label.create_contact" = "연락처 추가";
+"tool.label.update_contact" = "연락처 수정";
+"tool.label.delete_contact" = "연락처 삭제";
+"tool.label.create_note" = "노트 만들기";
+"tool.label.delete_note" = "노트 삭제";
+"tool.label.create_task" = "할 일 만들기";
+"tool.label.delete_task" = "할 일 삭제";
+"tool.label.record_skill" = "스킬 저장";
+"tool.label.execute_skill" = "스킬 실행";
+"tool.label.classify_emails" = "메일 레인 분류";
+"tool.label.unknown" = "작업";

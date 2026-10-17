@@ -632,13 +632,14 @@ struct PendingActionsResponse: Codable, Sendable {
         let reasoning: String?
         let createdAt: String?
 
-        /// "Send email" rather than "send_email" — the tool name is an internal
-        /// identifier and reads like one. Unknown tools degrade to a
-        /// de-underscored form instead of being hidden: an action the user
-        /// can't identify is still an action they must be able to decline.
-        var title: String {
-            toolName.split(separator: "_").map(\.capitalized).joined(separator: " ")
-        }
+        /// "메일 보내기" / "Send email" rather than "send_email" — the tool
+        /// name is an internal identifier. Localized from the web's own
+        /// `tool.label.*` map (`ToolLabels`).
+        var title: String { ToolLabels.title(for: toolName) }
+
+        /// Approving this sends mail, which can't be taken back (the web's
+        /// MAIL_SENDING_TOOLS).
+        var sendsMail: Bool { ToolLabels.mailSending.contains(toolName) }
     }
 
     let actions: [Action]
@@ -1760,4 +1761,43 @@ struct DesktopNonce: Codable, Sendable {
 struct DesktopTokenResponse: Codable, Sendable {
     let status: String
     let token: String?
+}
+
+/// Tool identifiers → the words the UI shows, in the UI language (audit M3:
+/// "Send Email" was English inside the Korean app). The keys and their
+/// translations are the web's `tool.label.*` set
+/// (packages/web/src/lib/locales), so both clients say the same thing.
+enum ToolLabels {
+    /// Tools with a `tool.label.<name>` string in every lproj.
+    static let known: Set<String> = [
+        "send_email", "draft_reply", "reply_to_email", "archive_email", "delete_email",
+        "mark_read", "create_event", "delete_event", "schedule_meeting", "create_contact",
+        "update_contact", "delete_contact", "create_note", "delete_note", "create_task",
+        "delete_task", "record_skill", "execute_skill", "classify_emails",
+    ]
+
+    /// Server spellings of the same action.
+    static let aliases: [String: String] = [
+        "create_calendar_event": "create_event",
+        "trash_email": "delete_email",
+        "create_draft": "draft_reply",
+        "draft_email": "draft_reply",
+    ]
+
+    /// Approving these sends mail now.
+    static let mailSending: Set<String> = ["send_email", "reply_to_email"]
+
+    static func key(for toolName: String) -> String? {
+        let name = aliases[toolName] ?? toolName
+        return known.contains(name) ? "tool.label.\(name)" : nil
+    }
+
+    /// Unknown tools degrade to a de-underscored form instead of being
+    /// hidden: an action the user can't identify is still an action they
+    /// must be able to decline.
+    static func title(for toolName: String) -> String {
+        if let key = key(for: toolName) { return L(key) }
+        let words = toolName.split(separator: "_").map(\.capitalized).joined(separator: " ")
+        return words.isEmpty ? L("tool.label.unknown") : words
+    }
 }

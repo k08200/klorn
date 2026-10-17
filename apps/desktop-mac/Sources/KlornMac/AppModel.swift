@@ -2877,13 +2877,14 @@ final class AppModel {
         pollTask = nil
     }
 
-    private static func message(_ reason: SignInFailure) -> String {
+    /// In the UI language (design detail pass: no English in the Korean UI).
+    static func message(_ reason: SignInFailure) -> String {
         switch reason {
-        case .nonceFailed: "Couldn't reach Klorn to start sign-in. Check the API and try again."
-        case .invalidNonce: "The sign-in session wasn't recognized. Please try again."
-        case .expired: "Sign-in took too long and expired. Please try again."
-        case .timeout: "Timed out waiting for the browser. Finish sign-in there, then retry."
-        case .cancelled: "Sign-in was cancelled."
+        case .nonceFailed: L("auth.failed.nonce")
+        case .invalidNonce: L("auth.failed.invalidNonce")
+        case .expired: L("auth.failed.expired")
+        case .timeout: L("auth.failed.timeout")
+        case .cancelled: L("auth.failed.cancelled")
         }
     }
 
@@ -2964,11 +2965,14 @@ final class AppModel {
         await loadQueue()
     }
 
-    private static func describe(_ error: Error) -> String {
+    static func describe(_ error: Error) -> String {
         Log.app.error("queue load failed: \(String(describing: error), privacy: .private)")
         switch error {
         case APIError.http(let code, let msg): return msg ?? L("error.server", code)
-        case APIError.transport:
+        case APIError.transport(_, let code):
+            // Never the URLSession's own sentence: it is in the SYSTEM
+            // language, not the app's, and reads like a log line.
+            if code == URLError.Code.timedOut.rawValue { return L("error.timeout") }
             return SurfaceStateRules.failureKind(error) == .offline
                 ? L("error.network") : L("error.unreachable")
         case APIError.decoding: return L("error.badResponse")
