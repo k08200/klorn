@@ -1497,7 +1497,12 @@ func runSelfChecks() async -> Bool {
     // "%@(으)로" is a workaround, not Korean. Pick the particle from the
     // final consonant of the preceding word.
     check("no final consonant takes 로", L10n.josaRo(after: "Queue") == "로")
-    check("final consonant takes 으로", L10n.josaRo(after: "Push") == "으로")
+    // Push is spoken 푸시 — no final consonant, so 로 (audit M1).
+    check("Push is spoken 푸시, so it takes 로", L10n.josaRo(after: "Push") == "로")
+    check("Meeting is spoken 미팅, so it takes 으로", L10n.josaRo(after: "Meeting") == "으로")
+    check("Info is spoken 인포, so it takes 로", L10n.josaRo(after: "Info") == "로")
+    check("Silent is spoken 사일런트, so it takes 로", L10n.josaRo(after: "Silent") == "로")
+    check("a final consonant takes 으로", L10n.josaRo(after: "Inbox 3") == "으로")
     check("Hangul without a final consonant takes 로", L10n.josaRo(after: "메모") == "로")
     check("Hangul with a final consonant takes 으로", L10n.josaRo(after: "받은편지함") == "으로")
     // ㄹ is the exception: 서울로, never 서울으로.
@@ -1507,7 +1512,10 @@ func runSelfChecks() async -> Bool {
     check("an empty string falls back to the plain particle", L10n.josaRo(after: "") == "로")
 
     check("no final consonant takes 와", L10n.josaWa(after: "Queue") == "와")
-    check("final consonant takes 과", L10n.josaWa(after: "Push") == "과")
+    check("Push takes 와 (푸시와)", L10n.josaWa(after: "Push") == "와")
+    check("Meeting takes 과 (미팅과)", L10n.josaWa(after: "Meeting") == "과")
+    check("Queue, Info and Silent take 와",
+          ["Queue", "Info", "Silent"].allSatisfy { L10n.josaWa(after: $0) == "와" })
     check("Hangul without a final consonant takes 와", L10n.josaWa(after: "메모") == "와")
     check("Hangul with a final consonant takes 과", L10n.josaWa(after: "받은편지함") == "과")
 
@@ -1562,6 +1570,8 @@ func runSelfChecks() async -> Bool {
     for (name, ok) in tokenSelfChecks(sourceDir: sourceDir) { check(name, ok) }
     // One style per view: no bar, legacy or overlay variant (2026-10-15).
     for (name, ok) in oneStyleSelfChecks(sourceDir: sourceDir) { check(name, ok) }
+    // The design detail pass (2026-10-16).
+    for (name, ok) in await detailPassSelfChecks(sourceDir: sourceDir) { check(name, ok) }
 
     print("Localization:")
     // A key present in one language and missing in another ships a raw key
@@ -1595,7 +1605,7 @@ func runSelfChecks() async -> Bool {
         L("calendar.proposed.a11y", "x"), L("mail.filterByInbox.a11y", "x"),
         L("mail.inbox.a11y", "x"), L("mail.searchResult.a11y", "x", "y"),
         L("mail.snooze.a11y", "x"), L("mail.dismiss.a11y", "x"),
-        L("mail.changeTier.a11y", "x", "y"), L("mail.moveTo", "x", "y"), L("mail.whyTier", "x", "y"),
+        L("mail.changeTier.a11y", "x", "y"), L("mail.whyTier", "x", "y"),
         L("reading.replyTo", "x"),
         L("prefs.updates.get", "x"), L("prefs.updates.upToDate", "x"),
         L("prefs.shortcut.change.a11y", "x"), L("prefs.infoRow.a11y", "x", "y"),
@@ -1700,7 +1710,7 @@ func runSelfChecks() async -> Bool {
         pattern: #""[A-Z][a-z]+(?: [A-Za-z,'’]+){1,}\.?""#)
     var proseOffenders: [String] = []
     // The preview harness files hold fixture DATA (demo mail), not UI copy.
-    let proseExempt: Set<String> = ["SelfCheck.swift"]
+    let proseExempt: Set<String> = ["SelfCheck.swift", "SelfCheckDetailPass.swift"]
     for url in swiftFiles
     where !proseExempt.contains(url.lastPathComponent)
         && !url.lastPathComponent.hasPrefix("PreviewRender")
@@ -1745,9 +1755,8 @@ func runSelfChecks() async -> Bool {
 
     // WCAG 2.2 AA contrast (the CLAUDE.md baseline). textDim carries
     // caption-sized text on the glass panel AND on surfaceRaised cards, so both
-    // stacks must clear the 4.5:1 text floor (1.4.3). The engage tone only
-    // colors non-text signal (chip icon + meter), so it gets the 3:1 graphics
-    // floor (1.4.11). Ratios are computed from the live Theme colors — a future
+    // stacks must clear the 4.5:1 text floor (1.4.3), and so must the accent,
+    // which colors links and text actions. Ratios are computed from the live Theme colors — a future
     // palette tweak that drops below the floor fails here, not in dogfood.
     func srgba(_ color: Color) -> (r: Double, g: Double, b: Double, a: Double) {
         // Fail loudly: a silent black fallback would make every fg-on-light
@@ -1793,8 +1802,11 @@ func runSelfChecks() async -> Bool {
               contrast(Theme.textDim, on: raisedOnCanvas) >= 4.5)
         check("text clears 4.5:1 on a raised card over the canvas",
               contrast(Theme.text, on: raisedOnCanvas) >= 4.5)
-        check("engage (non-text) clears 3:1 on a raised card over the canvas",
-              contrast(Theme.engage, on: raisedOnCanvas) >= 3.0)
+        // X2 (2026-10-16): the accent carries text, links and selection.
+        check("accent clears 4.5:1 as text on the canvas",
+              contrast(Theme.accent, on: canvas) >= 4.5)
+        check("accent clears 4.5:1 as text on a raised card",
+              contrast(Theme.accent, on: raisedOnCanvas) >= 4.5)
     }
 
     // Dark appearance (2026-08-15): the same floors, resolved under darkAqua —
@@ -1810,8 +1822,8 @@ func runSelfChecks() async -> Bool {
               contrast(Theme.textDim, on: darkRaised) >= 4.5)
         check("dark: text clears 4.5:1 on a raised card",
               contrast(Theme.text, on: darkRaised) >= 4.5)
-        check("dark: engage (non-text) clears 3:1 on a raised card",
-              contrast(Theme.engage, on: darkRaised) >= 3.0)
+        check("dark: accent clears 4.5:1 as text on a raised card",
+              contrast(Theme.accent, on: darkRaised) >= 4.5)
     }
     // Lane palette (FD-4, 2026-10-02): one palette with the web. Pure math on
     // Theme.laneComponents — no NSColor resolution — so the verdict never
@@ -1847,8 +1859,7 @@ func runSelfChecks() async -> Bool {
     // textDim IS the floor: any extra .opacity() on top drops caption text
     // back under 4.5:1, so both single-line shapes are banned — thinning the
     // color (`textDim.opacity(…)`) and thinning an inline chain
-    // (`…(Theme.textDim).opacity(…)`). engage may never color a Text at all
-    // (it is a non-text tone, ~3.7:1 on a raised card). Decorative
+    // (`…(Theme.textDim).opacity(…)`). Decorative
     // (accessibilityHidden) views that want a fainter look put `.opacity(…)`
     // on the view, on its own line. Line-level grep: a multi-line chain or a
     // container-inherited style still slips through — the render-preview pass
@@ -1867,10 +1878,11 @@ func runSelfChecks() async -> Bool {
     if !dimmedTextOffenders.isEmpty {
         print("      offenders: \(dimmedTextOffenders.joined(separator: ", "))")
     }
-    let engageTextOffenders = lineOffenders { $0.contains("Text(") && $0.contains("Theme.engage") }
-    check("engage never colors text", engageTextOffenders.isEmpty)
-    if !engageTextOffenders.isEmpty {
-        print("      offenders: \(engageTextOffenders.joined(separator: ", "))")
+    // X2: the pink importance tone is retired; nothing may bring it back.
+    let engageOffenders = lineOffenders { $0.contains("Theme.engage") }
+    check("the pink engage tone is retired", engageOffenders.isEmpty)
+    if !engageOffenders.isEmpty {
+        print("      offenders: \(engageOffenders.joined(separator: ", "))")
     }
 
     // Content-driven growth (a sidebar section handle making the SwiftUI tree

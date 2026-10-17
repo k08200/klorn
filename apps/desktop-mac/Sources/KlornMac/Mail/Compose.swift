@@ -59,8 +59,8 @@ struct ComposePanel: View {
                         .padding(.horizontal, 14).padding(.vertical, 6)
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.white)
-                .background(Theme.accent, in: Capsule())
+                .foregroundStyle(Theme.onAccentSolid)
+                .background(Theme.accentSolid, in: Capsule())
                 .opacity(model.composeSending ? 0.6 : 1)
                 .disabled(model.composeSending)
                 .keyboardShortcut(.return, modifiers: .command)

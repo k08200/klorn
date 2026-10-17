@@ -85,11 +85,12 @@ the target, IAP keys in the release build, Plans disclosures, Welcome copy,
 the calendar plugin, screenshot fixtures, `clearHidden()` on sign-out, Android
 backup, email sign-up.
 
-Not blockers, tracked in `README.md` → "Gaps": the server sets no
-`pendingActionId` at push time yet, so lock-screen pushes carry In 1 hour ·
-Done (not Send draft); Android gets notification messages without action
-buttons until the server opts devices into data-only messages; voice input is
-hidden on iOS (speech plugin not linked under SPM).
+Not blockers, tracked in `README.md` → "Gaps": only the agent's reply-draft
+proposal push carries a `pendingActionId` (Send draft); a firewall push
+precedes any draft and carries In 1 hour · Done. Android action buttons need
+`ANDROID_DATA_PUSH_ENABLED` on the server (OFF by default; the app's native
+service is ready for it); voice input is hidden on iOS (speech plugin not
+linked under SPM).
 
 ## [YOU] (order and click-paths: `submission-checklist.md` Phases 0, 2, 5–6 and `docs/launch/mobile-store-setup.md`)
 

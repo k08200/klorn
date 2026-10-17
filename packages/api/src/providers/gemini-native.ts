@@ -16,6 +16,7 @@
  */
 
 import type OpenAI from "openai";
+import { CLOUD_LLM_TIMEOUT_MS, llmRequestTimeoutMs } from "../llm/llm-timeout.js";
 
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
 
@@ -142,11 +143,24 @@ async function callGemini(
   if (params.temperature !== undefined) generationConfig.temperature = params.temperature;
   if (Object.keys(generationConfig).length > 0) body.generationConfig = generationConfig;
 
-  const res = await fetch(buildUrl(params.model, apiKey, streaming), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  // Bounded until the response starts (streaming bodies may run longer), like
+  // the OpenAI SDK's timeout; the message reads as a connection error.
+  const controller = new AbortController();
+  const timer = setTimeout(
+    () => controller.abort(new Error("Gemini request timed out")),
+    llmRequestTimeoutMs(CLOUD_LLM_TIMEOUT_MS),
+  );
+  let res: Response;
+  try {
+    res = await fetch(buildUrl(params.model, apiKey, streaming), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");

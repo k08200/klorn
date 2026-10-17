@@ -7,12 +7,9 @@ import SwiftUI
 // versions of the same states are shot in `renderMainWindow`.
 
 extension PreviewRender {
-    private static let stateErrorJSON = """
-    ["The server did not respond (timed out after 30 s).", "Sign-in timed out. Please try again."]
-    """
-
-    private static func stateStrings() -> [String] {
-        (try? JSONDecoder().decode([String].self, from: Data(stateErrorJSON.utf8))) ?? ["", ""]
+    /// A load that timed out, in the words the app really shows for it.
+    static var timeoutError: String {
+        AppModel.describe(APIError.transport("timed out", code: URLError.Code.timedOut.rawValue))
     }
 
     /// A model in one state, on the in-memory token store (see `run`).
@@ -38,7 +35,6 @@ extension PreviewRender {
         ) {
             ok = writeShot(name, size: size, align: align, model: model, dir: dir, dark: dark, content) && ok
         }
-        let strings = stateStrings()
         let everyProvider = ["google", "apple", "naver"]
 
         // First launch, no account.
@@ -54,7 +50,7 @@ extension PreviewRender {
             OnboardingView()
         }
         shot("onboarding-sign-in-failed", size: onboarding, align: .top,
-             stateModel(phase: .signedOut, loginProviders: everyProvider, signInError: strings[1])) {
+             stateModel(phase: .signedOut, loginProviders: everyProvider, signInError: AppModel.message(.timeout))) {
             OnboardingView()
         }
         return ok

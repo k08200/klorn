@@ -171,11 +171,37 @@ extension L10n {
 
     private enum FinalConsonant { case none, rieul, some }
 
+    /// Lane names and providers as spoken in Korean.
+    private nonisolated static let spokenEnding: [String: FinalConsonant] = [
+        "push": .none,  // 푸시
+        "meeting": .some,  // 미팅
+        "queue": .none,  // 큐
+        "info": .none,  // 인포
+        "silent": .none,  // 사일런트
+        "gmail": .rieul,  // 지메일
+        "outlook": .some,  // 아웃룩
+        "naver": .none,  // 네이버
+        "icloud": .none,  // 아이클라우드
+    ]
+
     /// Whether the last character ends in a consonant, judged the way the word
     /// is *spoken*: Hangul decomposes arithmetically, Latin letters and digits
     /// fall back to how their Korean reading ends (3 → 삼, so 으로; 2 → 이, so 로).
     private nonisolated static func finalConsonant(of word: String) -> FinalConsonant {
         guard let last = word.last else { return .none }
+
+        // Whole words Klorn puts in front of a particle, by how they are
+        // spoken in Korean. The lane names come first: Push is 푸시 (no
+        // final consonant, so 로 — "Push로", not "Push으로"), Meeting is
+        // 미팅 (ㅇ, so 으로).
+        if let spoken = spokenEnding[word.lowercased()] { return spoken }
+        // English words ending in -ng end on ㅇ (미팅, 링); -sh / -ch on a
+        // vowel (푸시, 서치).
+        let lowerWord = word.lowercased()
+        if lowerWord.count > 2 {
+            if lowerWord.hasSuffix("ng") { return .some }
+            if lowerWord.hasSuffix("sh") || lowerWord.hasSuffix("ch") { return .none }
+        }
 
         if let scalar = last.unicodeScalars.first,
            (0xAC00...0xD7A3).contains(scalar.value) {

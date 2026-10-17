@@ -553,6 +553,19 @@ export function manualSendReceiptsEnabled(): boolean {
     (process.env.MANUAL_SEND_RECEIPTS_ENABLED ?? "").trim().toLowerCase(),
   );
 }
+// Android data-only mail pushes — OFF by default (repo doctrine). While ON, a
+// MAIL push (one email: emailId set) to an Android device that registered with
+// `dataMessages: true` goes out as an FCM data-only message (title and body in
+// `data`, `sentAt`, no `notification` block), which the app's native service
+// posts with In 1 hour · Done · Review buttons in every app state
+// (apps/mobile push/KlornMessagingService.java). Every other push, every other
+// device, and every push while OFF stay notification messages exactly as before.
+// Needs the 20261017010000_device_push_data_messages migration. Read per send.
+export function androidDataPushEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.ANDROID_DATA_PUSH_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
 // Attention aging sweep (hourly): auto-resolve firewall items the user
 // already acted on elsewhere + age out SILENT/QUEUE email items. OFF by
 // default — what leaves the board is a product decision; flipping is

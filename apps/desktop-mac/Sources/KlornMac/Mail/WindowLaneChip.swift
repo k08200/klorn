@@ -1,24 +1,40 @@
 import SwiftUI
 
-/// The lane on a main-window row or reader header: the one colored badge
-/// (productization plan §1). 12pt on a 13% wash; the ink is `Theme.chipInk`,
-/// measured at 4.5:1 or better on every surface the chip sits on.
+/// The lane on a main-window row, a Today lane header or the reader header:
+/// the one colored badge, one spec on every surface (design detail pass
+/// 2026-10-16, audit X1 — the web chip's spec): title case, 12pt
+/// semibold, 22pt tall, 8pt side padding, radius 6, a 6pt lane dot, the
+/// chip ink on a 12% wash of itself. `Theme.chipInk` is measured at 4.5:1 or
+/// better on every surface the chip sits on.
 struct WindowLaneChip: View {
     let tier: Tier
 
     var body: some View {
-        Text(tier.label)
-            .font(Theme.Typo.label)
-            .foregroundStyle(Theme.chipInk(tier))
-            .lineLimit(1)
-            .fixedSize()
-            .padding(.horizontal, Theme.s2)
-            .frame(height: Self.height)
-            .background(Theme.chipInk(tier).opacity(Theme.chipWashOpacity), in: Capsule())
-            .accessibilityLabel(tier.label)
+        HStack(spacing: Self.gap) {
+            Circle().fill(Theme.tint(tier))
+                .frame(width: Self.dot, height: Self.dot)
+                .accessibilityHidden(true)
+            Text(tier.label)
+                .font(Theme.Typo.chip)
+                .foregroundStyle(Theme.chipInk(tier))
+                .lineLimit(1)
+                .fixedSize()
+        }
+        .padding(.horizontal, Self.horizontalPadding)
+        .frame(height: Self.height)
+        .background(
+            Theme.chipInk(tier).opacity(Theme.chipWashOpacity),
+            in: RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(tier.label)
     }
 
-    static let height: CGFloat = 18
+    nonisolated static let height: CGFloat = 22
+    nonisolated static let horizontalPadding: CGFloat = 8
+    nonisolated static let radius: CGFloat = Theme.Radius.sm
+    nonisolated static let dot: CGFloat = 6
+    nonisolated static let gap: CGFloat = 6
+    nonisolated static let fontSize: CGFloat = 12
 }
 
 /// What the reader header says about the open mail besides its lane: the

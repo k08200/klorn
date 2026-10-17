@@ -324,3 +324,78 @@ describe("PATCH on legacy malformed PIN_TIER rows", () => {
     await app.close();
   });
 });
+
+describe("AUTO_REPLY rules must name their senders", () => {
+  const post = async (conditions: unknown, actionType = "AUTO_REPLY") => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/rules",
+      headers: auth(),
+      payload: { name: "r", conditions, actionType, actionValue: "Thanks!" },
+    });
+    return res.json() as { error?: string; rule?: unknown };
+  };
+
+  it("refuses an auto-reply with no sender, a string sender, or a non-string one", async () => {
+    for (const conditions of [
+      {},
+      { subjectContains: ["x"] },
+      { from: "boss@co.example" },
+      { from: [123] },
+      { from: ["  "] },
+    ]) {
+      expect((await post(conditions)).error, JSON.stringify(conditions)).toMatch(/sender/i);
+    }
+    expect(ruleCreate).not.toHaveBeenCalled();
+  });
+
+  it("creates an auto-reply that names a sender, and a draft rule without one", async () => {
+    expect((await post({ from: ["boss@co.example"] })).error).toBeUndefined();
+    expect((await post({}, "DRAFT_REPLY")).error).toBeUndefined();
+    expect(ruleCreate).toHaveBeenCalledTimes(2);
+  });
+
+  it("refuses a PATCH that leaves an auto-reply without a sender, but still lets it be switched off", async () => {
+    ruleFindFirst.mockResolvedValue({
+      id: "r1",
+      userId: "user-1",
+      actionType: "DRAFT_REPLY",
+      actionValue: "x",
+      conditions: {},
+    });
+    const app = await buildApp();
+    const toAuto = await app.inject({
+      method: "PATCH",
+      url: "/rules/r1",
+      headers: auth(),
+      payload: { actionType: "AUTO_REPLY" },
+    });
+    expect((toAuto.json() as { error?: string }).error).toMatch(/sender/i);
+
+    ruleFindFirst.mockResolvedValue({
+      id: "r1",
+      userId: "user-1",
+      actionType: "AUTO_REPLY",
+      actionValue: "x",
+      conditions: { from: ["boss@co.example"] },
+    });
+    const strip = await app.inject({
+      method: "PATCH",
+      url: "/rules/r1",
+      headers: auth(),
+      payload: { conditions: {} },
+    });
+    expect((strip.json() as { error?: string }).error).toMatch(/sender/i);
+    expect(ruleUpdate).not.toHaveBeenCalled();
+
+    const off = await app.inject({
+      method: "PATCH",
+      url: "/rules/r1",
+      headers: auth(),
+      payload: { isActive: false },
+    });
+    expect((off.json() as { error?: string }).error).toBeUndefined();
+    expect(ruleUpdate).toHaveBeenCalledTimes(1);
+  });
+});
