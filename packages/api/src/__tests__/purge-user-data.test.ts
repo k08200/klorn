@@ -95,3 +95,36 @@ describe("purgeUserData", () => {
     }
   });
 });
+
+describe("purgeUserData covers every user-scoped model (schema-driven guard)", () => {
+  // Rows that stay with the account on a data wipe, each for a reason. A new
+  // model with a userId must be purged or listed here, or this test fails.
+  const KEPT_WITH_ACCOUNT: Record<string, string> = {
+    userIdentity: "sign-in methods: deleting them locks the user out of the kept account",
+    team: "account structure shared with other members, not data obtained from mail",
+    storagePurge: "the durable queue that deletes the user's stored objects: must survive",
+    apiKey: "revoked (updateMany), never deleted, so audit rows keep their key",
+  };
+
+  it("deletes or deliberately keeps every model that has a userId", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { fileURLToPath } = await import("node:url");
+    const schema = readFileSync(
+      fileURLToPath(new URL("../../prisma/schema.prisma", import.meta.url)),
+      "utf8",
+    );
+    const userScoped = [...schema.matchAll(/^model (\w+) \{([\s\S]*?)^\}/gm)]
+      .filter(([, , body]) => /^\s+userId\s+String/m.test(body ?? ""))
+      .map(([, name]) => (name ?? "").charAt(0).toLowerCase() + (name ?? "").slice(1));
+
+    const { tx, called, updates } = makeTxSpy();
+    await purgeUserData(tx as never, "u1");
+    const revoked = new Set(updates.map((u) => u.model));
+
+    const uncovered = userScoped.filter(
+      (model) => !called.has(model) && !revoked.has(model) && !(model in KEPT_WITH_ACCOUNT),
+    );
+    expect(uncovered).toEqual([]);
+    expect(userScoped.length).toBeGreaterThan(50);
+  });
+});

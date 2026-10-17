@@ -8,7 +8,9 @@ type PurgeTx = typeof db;
  * Backs `DELETE /api/user/me/data`.
  *
  * Google / CASA require COMPLETE deletion of data obtained via Google APIs on
- * request, so this MUST stay exhaustive — every user-scoped model belongs here.
+ * request, so this MUST stay exhaustive — every user-scoped model belongs here,
+ * or in the test's KEPT_WITH_ACCOUNT list with its reason (a schema-driven
+ * guard fails on any model with a userId that is neither).
  * A regression that drops one silently strands user data (this list has
  * regressed before: linked-account OAuth tokens and verbatim email excerpts
  * were surviving). `purge-user-data.test.ts` asserts the required set. Every
@@ -104,4 +106,14 @@ export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> 
   await tx.commitment.deleteMany(scope);
   await tx.feedbackEvent.deleteMany(scope);
   await tx.attentionItem.deleteMany(scope);
+  // Built from the user's mail (Gmail data): summaries of contacts and threads,
+  // and the screener's decisions about senders.
+  await tx.contactDossier.deleteMany(scope);
+  await tx.threadBrief.deleteMany(scope);
+  await tx.screenerDecision.deleteMany(scope);
+  // Agent actions awaiting approval can hold drafts and mail excerpts; most
+  // cascade from their conversation, these catch any that do not.
+  await tx.pendingAction.deleteMany(scope);
+  await tx.analyticsEvent.deleteMany(scope);
+  await tx.pmfResponse.deleteMany(scope);
 }
