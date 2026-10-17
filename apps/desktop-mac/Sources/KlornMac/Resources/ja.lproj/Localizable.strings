@@ -52,7 +52,6 @@
 "mail.dismiss.a11y" = "%@ からのメールを閉じる";
 "mail.changeTier" = "レーンを変更…（Klornが学習します）";
 "mail.changeTier.a11y" = "%1$@ からのメールのレーンを変更、現在 %2$@";
-"mail.moveTo" = "%1$@ に移動%2$@";
 "mail.snoozePrefix" = "スヌーズ ";
 "mail.summarize" = "AI要約";
 "mail.summarizing" = "要約中…";
@@ -244,8 +243,8 @@
 "mail.reclassifying" = "再分類中";
 
 /* Proposals — actions awaiting approval */
-"proposals.title" = "提案";
-"proposals.a11y" = "提案、承認待ち %d件";
+"proposals.title" = "承認";
+"proposals.a11y" = "承認、%d件待ち";
 "proposals.approve" = "承認";
 "proposals.decline" = "却下";
 "proposals.empty" = "あなたの対応待ちはありません。";
@@ -253,7 +252,7 @@
 "proposals.row.a11y" = "%1$@。%2$@";
 
 /* Column headers and states the first pass missed */
-"section.inbox" = "受信トレイ";
+"section.inbox" = "メール";
 "push.nothingNeedsYou" = "今すぐ対応が必要なものはありません。";
 "auth.signInNaver" = "Naverで続ける";
 "auth.signInApple" = "Appleで続ける";
@@ -275,7 +274,7 @@
 
 /* First-run guide */
 "guide.title" = "Klornのメール振り分け方";
-"guide.pipeline" = "Klornは接続されたすべてのメールボックスを読み、各メールを下の%dつのレーンに振り分けます。この受信トレイ列はその結果であり、Gmailの生の受信トレイではありません。";
+"guide.pipeline" = "Klornは接続されたすべてのメールボックスを読み、各メールを下の%dつのレーンに振り分けます。このメール列はその結果であり、Gmailの生の受信トレイではありません。";
 "guide.intro" = "すべてのメールは%dつのレーンのいずれかに入ります。削除も、あなた抜きの返信もしません — レーンはどれだけ大きく届くかだけを決めます。";
 "guide.correcting" = "判定が違ったら、別のレーンに移してください。Klornがその修正から学びます。各メールにはその場所に入った理由も表示されます。";
 "guide.done" = "わかりました";
@@ -637,6 +636,12 @@
 "onboarding.privacy" = "Klornは分類のためにメールを読みます。それ以上に何をしてよいかは、あなたが決めます。";
 "error.unreachable" = "Klornのサーバーに接続できません。";
 "banner.dismiss.a11y" = "メッセージを閉じる";
+"assistant.starter.1" = "今日いちばん大事なメールは？";
+"assistant.starter.2" = "未返信のうち急ぎのものだけ教えて";
+"assistant.starter.3" = "今週のミーティングの準備をまとめて";
+"assistant.message.user.a11y" = "あなた: %@";
+"assistant.message.failure.a11y" = "エラー: %@";
+"assistant.message.reply.a11y" = "Klornの返答: %@";
 
 /* Step D7: import picked files into the Klorn drive (Settings › Accounts, File menu). */
 "prefs.section.driveImport" = "Klorn ドライブ";
@@ -718,3 +723,35 @@
 "today.freeTime.stale" = "この時間は最新ではない可能性があります。";
 "today.freeTime.recheck" = "もう一度確認";
 "files.opensBrowser" = "ブラウザで開きます";
+
+/* Design detail pass (2026-10-16) */
+"mail.moveToLane" = "レーンを移動";
+"error.timeout" = "サーバーの応答に時間がかかりすぎています。もう一度お試しください。";
+"auth.failed.nonce" = "サインインを開始するために Klorn に接続できませんでした。接続を確認してもう一度お試しください。";
+"auth.failed.invalidNonce" = "サインインのセッションを確認できませんでした。もう一度お試しください。";
+"auth.failed.expired" = "サインインに時間がかかりすぎて期限切れになりました。もう一度お試しください。";
+"auth.failed.timeout" = "ブラウザの応答待ちでタイムアウトしました。ブラウザでサインインを済ませてから、もう一度お試しください。";
+"auth.failed.cancelled" = "サインインはキャンセルされました。";
+"proposals.approveSend" = "承認して送信";
+"proposals.sendsNow" = "すぐに送信されます。送信したメールは取り消せません。";
+"proposals.runsNow" = "承認するとすぐに実行されます。";
+"tool.label.send_email" = "メールを送信";
+"tool.label.draft_reply" = "返信の下書き";
+"tool.label.reply_to_email" = "メールに返信";
+"tool.label.archive_email" = "メールをアーカイブ";
+"tool.label.delete_email" = "メールを削除";
+"tool.label.mark_read" = "既読にする";
+"tool.label.create_event" = "予定を作成";
+"tool.label.delete_event" = "予定を削除";
+"tool.label.schedule_meeting" = "会議を設定";
+"tool.label.create_contact" = "連絡先を追加";
+"tool.label.update_contact" = "連絡先を更新";
+"tool.label.delete_contact" = "連絡先を削除";
+"tool.label.create_note" = "ノートを作成";
+"tool.label.delete_note" = "ノートを削除";
+"tool.label.create_task" = "タスクを作成";
+"tool.label.delete_task" = "タスクを削除";
+"tool.label.record_skill" = "スキルを保存";
+"tool.label.execute_skill" = "スキルを実行";
+"tool.label.classify_emails" = "メールをレーンに分類";
+"tool.label.unknown" = "アクション";

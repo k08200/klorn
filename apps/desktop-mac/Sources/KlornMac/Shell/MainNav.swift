@@ -198,6 +198,8 @@ func sourceMonogram(provider: String?) -> String {
     switch provider?.uppercased() {
     case "GOOGLE", "GMAIL": "G"
     case "MICROSOFT", "OUTLOOK": "M"
+    // A drive source: OneDrive is "O" (K / G / O on Files, audit M5).
+    case "ONEDRIVE": "O"
     case "NAVER": "N"
     case "ICLOUD", "APPLE": "iC"
     case "IMAP": "IMAP"
@@ -212,6 +214,7 @@ func sourceName(provider: String?) -> String {
     switch provider?.uppercased() {
     case "GOOGLE", "GMAIL": "Google"
     case "MICROSOFT", "OUTLOOK": "Microsoft"
+    case "ONEDRIVE": "OneDrive"
     case "NAVER": "Naver"
     case "ICLOUD", "APPLE": "iCloud"
     case "IMAP": "IMAP"

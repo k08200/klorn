@@ -70,8 +70,9 @@ function CommandCenterView() {
   // Action id awaiting the reject-with-reason dialog; null when closed.
   const [rejectTargetId, setRejectTargetId] = useState<string | null>(null);
   const { toast } = useToast();
+  const { t } = useT();
 
-  // Top-level surface toggle ("Decisions" ⇄ "Firewall board"). Read from
+  // Top-level surface toggle ("Decisions" ⇄ "Lanes"). Read from
   // `?view=` so it's shareable and works with the back button; changing it
   // rewrites the URL rather than holding local state.
   const router = useRouter();
@@ -143,7 +144,10 @@ function CommandCenterView() {
         // 200-with-{error} is the dead-token shape — surface it instead of
         // silently refreshing stale DB contents (2026-08-10 diagnosis).
         if (result?.error) {
-          toast("Gmail isn't connected — reconnect in Settings.", "error");
+          toast(
+            t("inboxLegacy.toast.notConnected", { section: t("settings.nav.accounts") }),
+            "error",
+          );
         }
       } catch (err) {
         // Sync is best-effort; still refetch below so the queue reflects the DB.
@@ -156,7 +160,7 @@ function CommandCenterView() {
         setSyncing(false);
       }
     },
-    [queryClient],
+    [queryClient, toast, t],
   );
 
   useEffect(() => {
@@ -167,11 +171,11 @@ function CommandCenterView() {
       captureClientError(commitmentsQuery.error, { scope: "inbox.load.commitments" });
     }
     if (actionsQuery.error || commitmentsQuery.error) {
-      setError("Could not load the decision queue.");
+      setError(t("inboxLegacy.loadFailed"));
     } else {
       setError(null);
     }
-  }, [actionsQuery.error, commitmentsQuery.error]);
+  }, [actionsQuery.error, commitmentsQuery.error, t]);
 
   useEffect(() => {
     // Filter change retriggers the keyed query automatically; no-op here
@@ -198,10 +202,10 @@ function CommandCenterView() {
             ? (prev ?? []).filter((a) => a.id !== actionId)
             : (prev ?? []).map((a) => (a.id === actionId ? { ...a, status: "EXECUTED" } : a)),
       );
-      toast("Action approved.", "success");
+      toast(t("inboxLegacy.toast.approved"), "success");
     } catch (err) {
       captureClientError(err, { scope: "inbox.approve", actionId });
-      toast("Could not approve this action. Please try again.", "error");
+      toast(t("inboxLegacy.toast.approveFailed"), "error");
     } finally {
       setActionLoading((prev) => ({ ...prev, [actionId]: null }));
     }
@@ -222,10 +226,10 @@ function CommandCenterView() {
             ? (prev ?? []).filter((a) => a.id !== actionId)
             : (prev ?? []).map((a) => (a.id === actionId ? { ...a, status: "REJECTED" } : a)),
       );
-      toast("Suggestion rejected.", "success");
+      toast(t("inboxLegacy.toast.rejected"), "success");
     } catch (err) {
       captureClientError(err, { scope: "inbox.reject", actionId });
-      toast("Could not reject this action. Please try again.", "error");
+      toast(t("inboxLegacy.toast.rejectFailed"), "error");
     } finally {
       setActionLoading((prev) => ({ ...prev, [actionId]: null }));
     }
@@ -247,10 +251,10 @@ function CommandCenterView() {
         [...queryKeys.inbox.pending(), filter] as unknown as readonly unknown[],
         (prev) => (prev ?? []).filter((a) => a.id !== actionId),
       );
-      toast(`Snoozed for ${hours}h — will resurface automatically.`, "success");
+      toast(t("inboxLegacy.toast.snoozed", { hours: String(hours) }), "success");
     } catch (err) {
       captureClientError(err, { scope: "inbox.snooze", actionId });
-      toast("Could not snooze this action. Please try again.", "error");
+      toast(t("inboxLegacy.toast.snoozeFailed"), "error");
     } finally {
       setActionLoading((prev) => ({ ...prev, [actionId]: null }));
     }
@@ -262,7 +266,9 @@ function CommandCenterView() {
   // the list change isn't silent (WCAG 4.1.3). Re-derives from query data
   // after each optimistic update.
   const queueAnnouncement =
-    pendingCount === 1 ? "1 decision waiting" : `${pendingCount} decisions waiting`;
+    pendingCount === 1
+      ? t("inboxLegacy.waiting.one")
+      : t("inboxLegacy.waiting.many", { count: String(pendingCount) });
 
   return (
     <>
@@ -323,20 +329,21 @@ function SegmentControl({
   view: SegmentView;
   onSelect: (next: SegmentView) => void;
 }) {
+  const { t } = useT();
   return (
     <div
       role="group"
-      aria-label="Inbox view"
+      aria-label={t("inboxLegacy.segment.label")}
       className="mb-4 inline-flex items-center gap-1 rounded-xl border border-line/70 bg-surface-panel/60 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)] backdrop-blur"
     >
       <FilterTab
         active={view === "decisions"}
-        label="Decisions"
+        label={t("inbox.decisions")}
         onClick={() => onSelect("decisions")}
       />
       <FilterTab
         active={view === "firewall"}
-        label="Firewall board"
+        label={t("inboxLegacy.segment.lanes")}
         onClick={() => onSelect("firewall")}
       />
     </div>
@@ -722,7 +729,7 @@ function HonestEmptyState({ commitmentCount }: { commitmentCount: number }) {
           href="/inbox/firewall"
           className="ease-strong inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-surface-panel/70 px-3.5 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
         >
-          Firewall board
+          {t("inboxLegacy.segment.lanes")}
         </Link>
         <Link
           href="/email"
@@ -943,6 +950,7 @@ function SignalStrip({
   countsLoading: boolean;
   onPendingClick: () => void;
 }) {
+  const { t } = useT();
   const replyQuery = useReplyNeeded();
   const eventsQuery = useTodayEventCount();
 
@@ -959,25 +967,25 @@ function SignalStrip({
 
   const cells: SignalCell[] = [
     {
-      label: "Pending decisions",
+      label: t("inboxLegacy.stat.pending"),
       value: pendingValue,
       dot: "bg-amber-500",
       onClick: onPendingClick,
     },
     {
-      label: "Open commitments",
+      label: t("inboxLegacy.stat.commitments"),
       value: commitmentValue,
       dot: "bg-accent",
       onClick: scrollToCommitments,
     },
     {
-      label: "Needs reply",
+      label: t("inboxLegacy.stat.needsReply"),
       value: replyQuery.data?.length ?? null,
       dot: "bg-violet-500",
       href: "/email",
     },
     {
-      label: "Today's events",
+      label: t("inboxLegacy.stat.events"),
       value: eventsQuery.data ?? null,
       dot: "bg-emerald-500",
       href: "/calendar",
@@ -1026,6 +1034,7 @@ function ReplyNeededPanel({ hero = false }: { hero?: boolean }) {
   // Shares one cache entry with the "Needs reply" stat tile (same queryKey),
   // so both surfaces read a single fetch. Errors resolve to an empty list —
   // the panel simply stays hidden, matching the previous behavior.
+  const { t } = useT();
   const { data, isLoading } = useReplyNeeded();
   const emails = data ?? [];
 
@@ -1101,7 +1110,7 @@ function ReplyNeededPanel({ hero = false }: { hero?: boolean }) {
                       <>
                         {" "}
                         <span className="text-slate-300">·</span>{" "}
-                        {humanizeReplyReason(email.needsReplyReason)}
+                        {humanizeReplyReason(email.needsReplyReason, t)}
                       </>
                     )}
                   </span>
@@ -1164,27 +1173,31 @@ function senderInitials(name: string): string {
 
 // The backend's needsReplyReason is a snake_case enum (e.g. "action_items_present").
 // Never show the raw code to the user — map known ones and humanize the rest.
-function humanizeReplyReason(reason: string): string {
-  const map: Record<string, string> = {
-    action_items_present: "Has action items",
-    question_asked: "Asks a question",
-    direct_request: "Direct request",
-    deadline_mentioned: "Mentions a deadline",
-    awaiting_response: "Awaiting your response",
-    meeting_request: "Meeting request",
-    follow_up_needed: "Needs follow-up",
-  };
-  return map[reason] ?? reason.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+const REPLY_REASON_KEYS: Record<string, string> = {
+  action_items_present: "inboxLegacy.reason.actionItems",
+  question_asked: "inboxLegacy.reason.question",
+  direct_request: "inboxLegacy.reason.directRequest",
+  deadline_mentioned: "inboxLegacy.reason.deadline",
+  awaiting_response: "inboxLegacy.reason.awaiting",
+  meeting_request: "inboxLegacy.reason.meeting",
+  follow_up_needed: "inboxLegacy.reason.followUp",
+};
+
+function humanizeReplyReason(reason: string, t: (key: string) => string): string {
+  const key = REPLY_REASON_KEYS[reason];
+  if (key) return t(key);
+  return reason.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 }
 
 // ─── Quick links panel ─────────────────────────────────────────────────────
 
 function QuickLinksPanel() {
+  const { t } = useT();
   // Trimmed to the two destinations Stadium-mode users actually reach for
   // from /inbox: today's receipt and the morning briefing. Agent timeline
   // and the chat root live one click away through the sidebar nav already.
   const links = [
-    { href: "/inbox/firewall", label: "Firewall board" },
+    { href: "/inbox/firewall", label: t("inboxLegacy.segment.lanes") },
     { href: "/inbox/receipt", label: "Today's receipt" },
     { href: "/briefing", label: "Full briefing" },
   ] as const;
@@ -1393,17 +1406,18 @@ function ActionCard({
 }
 
 function RiskBadge({ risk }: { risk: "low" | "medium" | "high" }) {
+  const { t } = useT();
   const map = {
     low: {
-      label: "Low risk",
+      label: t("inboxLegacy.risk.low"),
       className: "bg-emerald-500/10 text-state-ok-ink ring-1 ring-inset ring-emerald-500/20",
     },
     medium: {
-      label: "Needs approval",
+      label: t("inboxLegacy.risk.medium"),
       className: "bg-amber-500/10 text-state-warn-ink ring-1 ring-inset ring-amber-500/20",
     },
     high: {
-      label: "High risk",
+      label: t("inboxLegacy.risk.high"),
       className: "bg-rose-500/10 text-rose-600 ring-1 ring-inset ring-rose-500/20",
     },
   }[risk];

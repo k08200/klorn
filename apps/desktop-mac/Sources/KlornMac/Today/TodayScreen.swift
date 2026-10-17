@@ -29,11 +29,19 @@ struct TodayScreen: View {
             }
             Rectangle().fill(Theme.line).frame(height: 1)
             switch state {
-            case .signedOut, .signingIn, .offline, .failed:
+            case .signedOut, .signingIn:
                 SurfaceStateView(state: state)
+            case .offline, .failed:
+                // The error replaces the lanes, not the day: the calendar and
+                // the assistant still have something true to say.
+                columns {
+                    SurfaceStateView(state: state, anchorInset: TodayLayout.anchorInColumn)
+                        .frame(maxWidth: .infinity, alignment: .top)
+                }
             case .loading:
-                FirstSyncState()
-                Spacer(minLength: 0)
+                // The skeleton is the loaded Today's shape: lane headers and
+                // rows on the left, the rail on the right.
+                columns { TodaySkeleton() }
             case .ready:
                 if Theme.isRenderingOffscreen {
                     // ImageRenderer draws nothing inside a ScrollView; lay
@@ -48,21 +56,39 @@ struct TodayScreen: View {
     }
 
     private var ready: some View {
-        HStack(alignment: .top, spacing: Theme.s6) {
+        columns {
             VStack(alignment: .leading, spacing: Theme.s6) {
                 let lanes = model.queue.map(TodayRules.lanes) ?? []
                 if lanes.isEmpty {
                     EmptyState(
                         icon: "checkmark.circle", title: L("today.clear.title"),
                         hint: L("today.clear.detail"))
-                        .padding(.vertical, Theme.s12)
+                        .padding(.top, TodayLayout.anchorInColumn)
                 } else {
                     ForEach(lanes, id: \.tier) { lane in
                         TodayLaneGroup(lane: lane, now: now, open: open)
                     }
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+    }
+
+    /// The Today frame every state shares: the main column and the rail.
+    private func columns(@ViewBuilder _ main: () -> some View) -> some View {
+        HStack(alignment: .top, spacing: Theme.s6) {
+            main().frame(maxWidth: .infinity, alignment: .topLeading)
+            rail.frame(width: Self.sideColumnWidth)
+        }
+        .padding(Theme.s6)
+        .frame(maxWidth: 1080, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    @ViewBuilder
+    private var rail: some View {
+        if state == .loading {
+            TodayRailSkeleton()
+        } else {
             VStack(alignment: .leading, spacing: Theme.s4) {
                 TodayCalendarPanel()
                 // P12: each only with its server flag (and, for free time, a saved team).
@@ -72,11 +98,7 @@ struct TodayScreen: View {
                 if model.clientFlags.files { TodayRecentFilesPanel() }
                 TodayAssistantPanel()
             }
-            .frame(width: Self.sideColumnWidth)
         }
-        .padding(Theme.s6)
-        .frame(maxWidth: 1080, alignment: .topLeading)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     /// A row opens in Mail: the list on a facet that holds it, the reader
@@ -103,9 +125,8 @@ private struct TodayLaneGroup: View {
         VStack(alignment: .leading, spacing: Theme.s2) {
             Button(action: openLane) {
                 HStack(spacing: Theme.s2) {
-                    Circle().fill(Theme.tint(lane.tier)).frame(width: 8, height: 8)
-                        .accessibilityHidden(true)
-                    Text(lane.tier.label).font(Theme.Typo.head).foregroundStyle(Theme.text)
+                    // The one chip spec (X1) heads the group, as on the web.
+                    WindowLaneChip(tier: lane.tier)
                     Text("\(lane.count)")
                         .font(Theme.Typo.body.monospacedDigit()).foregroundStyle(Theme.textDim)
                     Spacer(minLength: Theme.s2)

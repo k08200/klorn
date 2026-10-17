@@ -357,6 +357,48 @@ describe("notification routes", () => {
     await app.close();
   });
 
+  it("stores dataMessages only for an Android build that sends it", async () => {
+    const { prisma } = await import("../db.js");
+    const upsert = prisma.devicePushToken.upsert as unknown as ReturnType<typeof vi.fn>;
+    const app = await buildApp();
+    const cases: Array<[Record<string, unknown>, boolean]> = [
+      [{ token: "fcm-token-abc123", platform: "android", dataMessages: true }, true],
+      [{ token: "fcm-token-abc123", platform: "android", dataMessages: false }, false],
+      [{ token: "fcm-token-abc123", platform: "android" }, false],
+      [{ token: "a".repeat(64), platform: "ios", dataMessages: true }, false],
+    ];
+    for (const [payload, stored] of cases) {
+      upsert.mockClear();
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/notifications/push/device-token/register",
+        headers: auth(),
+        payload,
+      });
+      expect(res.statusCode).toBe(201);
+      const call = upsert.mock.calls[0]?.[0] as {
+        create: { dataMessages: boolean };
+        update: { dataMessages: boolean };
+      };
+      expect(call.create.dataMessages).toBe(stored);
+      // Re-registration overwrites it: a downgraded build falls back on its next launch.
+      expect(call.update.dataMessages).toBe(stored);
+    }
+    await app.close();
+  });
+
+  it("rejects a non-boolean dataMessages", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/device-token/register",
+      headers: auth(),
+      payload: { token: "fcm-token-abc123", platform: "android", dataMessages: "yes" },
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
   it("rejects device token register with an invalid platform", async () => {
     const app = await buildApp();
     const res = await app.inject({

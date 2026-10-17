@@ -4,13 +4,13 @@ import SwiftUI
 // Pure values first, so the self-check can do contrast math without AppKit.
 extension Theme {
     // MARK: Lane chip
-    /// The lane wash under a chip's text.
-    static let chipWashOpacity = 0.13
+    /// The lane wash under a chip's text (12%, the web's wash).
+    static let chipWashOpacity = 0.12
 
     /// Chip text for a lane. One step deeper than `laneComponents` in light
     /// (Tailwind 800/900-level, the web's chip inks), one step lighter in
     /// dark where the 400 hue needed it, so the text clears 4.5:1 on its own
-    /// 13% wash over the canvas, the panel, a raised card, a hovered row and
+    /// 12% wash over the canvas, the panel, a raised card, a hovered row and
     /// a selected row. The self-check pins every pair.
     static func chipInkComponents(_ tier: Tier, dark: Bool) -> RGBA {
         switch (tier, dark) {
@@ -114,6 +114,8 @@ extension Theme {
 }
 
 extension Theme.Typo {
+    /// The lane chip's text: 12pt semibold (audit X1).
+    static let chip = Font.system(size: WindowLaneChip.fontSize, weight: .semibold)
     /// The glyph over an empty or failed state. An icon, not text.
     static let stateGlyph = Font.system(size: 28, weight: .light)
     /// SourceBadge monogram in its 20pt tile (G, M, N, iC). A glyph: the

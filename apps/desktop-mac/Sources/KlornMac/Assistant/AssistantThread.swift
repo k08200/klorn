@@ -63,6 +63,10 @@ struct AssistantThread: View {
             .padding(.horizontal, Theme.s4).padding(.vertical, Theme.s3)
         }
         .onAppear { composerFocused = true }
+        // Continue the last conversation after a relaunch (once per session).
+        .task {
+            if !Theme.isRenderingOffscreen { await model.restoreChatHistory() }
+        }
     }
 
     private var messages: some View {
@@ -79,9 +83,9 @@ struct AssistantThread: View {
                     if showsStarters {
                     VStack(spacing: Theme.s2) {
                         ForEach([
-                            "오늘 제일 중요한 메일 뭐야?",
-                            "답장 안 한 것 중 급한 것만 알려줘",
-                            "이번 주 미팅 준비할 것 정리해줘",
+                            L("assistant.starter.1"),
+                            L("assistant.starter.2"),
+                            L("assistant.starter.3"),
                         ], id: \.self) { suggestion in
                             Button {
                                 Task { await model.sendChat(suggestion) }
@@ -146,9 +150,9 @@ private struct ChatBubble: View {
                 if message.role != .user { Spacer(minLength: 40) }
             }
             .accessibilityLabel(
-                message.role == .user ? "You said: \(message.text)"
-                    : message.role == .failure ? "Error: \(message.text)"
-                    : "Klorn replied: \(message.text)")
+                message.role == .user ? L("assistant.message.user.a11y", message.text)
+                    : message.role == .failure ? L("assistant.message.failure.a11y", message.text)
+                    : L("assistant.message.reply.a11y", message.text))
 
             // Agent-drafted event: nothing is written until the user clicks.
             if let draft = message.eventDraft {

@@ -50,9 +50,8 @@
 "mail.snooze.a11y" = "Snooze message from %@";
 "mail.dismiss" = "Dismiss";
 "mail.dismiss.a11y" = "Dismiss message from %@";
-"mail.changeTier" = "Move to tier… (teaches Klorn)";
-"mail.changeTier.a11y" = "Change tier for message from %1$@, currently %2$@";
-"mail.moveTo" = "Move to %1$@%2$@";
+"mail.changeTier" = "Move to lane… (teaches Klorn)";
+"mail.changeTier.a11y" = "Change lane for message from %1$@, currently %2$@";
 "mail.snoozePrefix" = "Snooze ";
 "mail.summarize" = "AI Summary";
 "mail.summarizing" = "Summarizing…";
@@ -94,7 +93,7 @@
 
 /* Reading pane */
 "reading.empty.title" = "Nothing open";
-"reading.empty.detail" = "Pick a message on the left — read, reply,\nsnooze, and re-tier without leaving Klorn.";
+"reading.empty.detail" = "Pick a message on the left — read, reply,\nsnooze, and change its lane without leaving Klorn.";
 "reading.replyWithAI" = "Reply with AI";
 "reading.openInWeb" = "Open in web";
 "reading.replyTo" = "Reply to %@";
@@ -188,7 +187,7 @@
 "auto.preset.detail" = "Essentials only: mail that needs an answer, plus anything on your calendar. Everything else stays in the bar without a banner.";
 
 "auto.notify.emailUrgent" = "Urgent email";
-"auto.notify.emailUrgent.detail" = "Mail Klorn tiers as PUSH — someone is waiting on you.";
+"auto.notify.emailUrgent.detail" = "Mail Klorn sorts into PUSH — someone is waiting on you.";
 "auto.notify.meeting" = "Meetings";
 "auto.notify.meeting.detail" = "Calendar events about to start.";
 "auto.notify.taskDue" = "Tasks due";
@@ -244,8 +243,8 @@
 "mail.reclassifying" = "re-classifying";
 
 /* Proposals — actions awaiting approval */
-"proposals.title" = "Proposals";
-"proposals.a11y" = "Proposals, %d awaiting approval";
+"proposals.title" = "Approvals";
+"proposals.a11y" = "Approvals, %d waiting";
 "proposals.approve" = "Approve";
 "proposals.decline" = "Decline";
 "proposals.empty" = "Nothing waiting on you.";
@@ -253,7 +252,7 @@
 "proposals.row.a11y" = "%1$@. %2$@";
 
 /* Column headers and states the first pass missed */
-"section.inbox" = "INBOX";
+"section.inbox" = "MAIL";
 "push.nothingNeedsYou" = "Nothing needs you right now.";
 "auth.signInNaver" = "Continue with Naver";
 "auth.signInApple" = "Continue with Apple";
@@ -275,9 +274,9 @@
 
 /* First-run guide */
 "guide.title" = "How Klorn sorts your mail";
-"guide.pipeline" = "Klorn reads every connected mailbox and sorts each message into the %d tiers below. This INBOX column is that sorted result — not your raw Gmail inbox.";
-"guide.intro" = "Every message lands in one of %d tiers. Nothing is deleted and nothing is answered without you — the tier only decides how loudly it reaches you.";
-"guide.correcting" = "Got one wrong? Move it to another tier and Klorn learns from the correction. Each message also shows why it landed where it did.";
+"guide.pipeline" = "Klorn reads every connected mailbox and sorts each message into the %d lanes below. This MAIL column is that sorted result — not your raw Gmail inbox.";
+"guide.intro" = "Every message lands in one of %d lanes. Nothing is deleted and nothing is answered without you — the lane only decides how loudly it reaches you.";
+"guide.correcting" = "Got one wrong? Move it to another lane and Klorn learns from the correction. Each message also shows why it landed where it did.";
 "guide.done" = "Got it";
 "guide.reopen" = "How sorting works";
 
@@ -637,6 +636,12 @@
 "onboarding.privacy" = "Klorn reads your mail to sort it. You decide what it may do beyond that.";
 "error.unreachable" = "Klorn can't reach its server.";
 "banner.dismiss.a11y" = "Dismiss message";
+"assistant.starter.1" = "What's the most important mail today?";
+"assistant.starter.2" = "Which unanswered mail is urgent?";
+"assistant.starter.3" = "What do I need to prepare for this week's meetings?";
+"assistant.message.user.a11y" = "You said: %@";
+"assistant.message.failure.a11y" = "Error: %@";
+"assistant.message.reply.a11y" = "Klorn replied: %@";
 
 /* Step D7: import picked files into the Klorn drive (Settings › Accounts, File menu). */
 "prefs.section.driveImport" = "KLORN DRIVE";
@@ -718,3 +723,35 @@
 "today.freeTime.stale" = "These times may be out of date.";
 "today.freeTime.recheck" = "Check again";
 "files.opensBrowser" = "Opens in your browser";
+
+/* Design detail pass (2026-10-16) */
+"mail.moveToLane" = "Move to lane";
+"error.timeout" = "The server took too long to answer. Try again.";
+"auth.failed.nonce" = "Couldn't reach Klorn to start sign-in. Check your connection and try again.";
+"auth.failed.invalidNonce" = "The sign-in session wasn't recognized. Please try again.";
+"auth.failed.expired" = "Sign-in took too long and expired. Please try again.";
+"auth.failed.timeout" = "Timed out waiting for the browser. Finish sign-in there, then retry.";
+"auth.failed.cancelled" = "Sign-in was cancelled.";
+"proposals.approveSend" = "Approve and send";
+"proposals.sendsNow" = "Sends immediately. A sent mail can't be undone.";
+"proposals.runsNow" = "Runs as soon as you approve.";
+"tool.label.send_email" = "Send email";
+"tool.label.draft_reply" = "Draft reply";
+"tool.label.reply_to_email" = "Reply to email";
+"tool.label.archive_email" = "Archive email";
+"tool.label.delete_email" = "Delete email";
+"tool.label.mark_read" = "Mark as read";
+"tool.label.create_event" = "Create event";
+"tool.label.delete_event" = "Delete event";
+"tool.label.schedule_meeting" = "Schedule meeting";
+"tool.label.create_contact" = "Add contact";
+"tool.label.update_contact" = "Update contact";
+"tool.label.delete_contact" = "Delete contact";
+"tool.label.create_note" = "Create note";
+"tool.label.delete_note" = "Delete note";
+"tool.label.create_task" = "Create task";
+"tool.label.delete_task" = "Delete task";
+"tool.label.record_skill" = "Save skill";
+"tool.label.execute_skill" = "Run skill";
+"tool.label.classify_emails" = "Sort mail into lanes";
+"tool.label.unknown" = "Action";

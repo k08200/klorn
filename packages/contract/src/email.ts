@@ -322,6 +322,53 @@ export interface WaitingOnResponse {
   minDays: number;
 }
 
+/** How an unsubscribe is carried out, most automatic first. */
+export type EmailUnsubscribeMethod = "one-click" | "mailto" | "link";
+
+/**
+ * `POST /api/email/:id/unsubscribe` — success payload. `done` is true when
+ * Klorn unsubscribed on the user's behalf (RFC 8058 one-click POST, or a mailto
+ * sent from the user's own account); `link` means nothing automatic worked and
+ * `url` is the list's own page for the user to open.
+ */
+export type EmailUnsubscribeResponse =
+  | { method: "one-click" | "mailto"; done: true }
+  | { method: "link"; done: false; url: string };
+
+/** One sender that mails the user through a list, in ONE connected account. */
+export interface EmailSubscriptionWire {
+  /** Normalized sender address (lowercased, display name stripped). */
+  sender: string;
+  /** Display name from the sender's From header, or null. */
+  displayName: string | null;
+  /** Linked inbox id; null = the primary account. Never merged across accounts. */
+  linkedInboxAccountId: string | null;
+  /** The account's address, when known. */
+  accountLabel: string | null;
+  /** Mail from this sender in this account, within the window. */
+  count: number;
+  unreadCount: number;
+  /** ISO — newest mail from this sender in this account. */
+  lastReceivedAt: string;
+  /** The most automatic method any of this sender's mail offers. */
+  method: EmailUnsubscribeMethod;
+}
+
+/** `GET /api/email/subscriptions` — senders by mail count, most first. */
+export interface EmailSubscriptionsResponse {
+  subscriptions: EmailSubscriptionWire[];
+  /** The look-back window applied, in days. */
+  windowDays: number;
+}
+
+/** `POST /api/email/subscriptions/unsubscribe` — success payload. */
+export type EmailSubscriptionUnsubscribeResponse = EmailUnsubscribeResponse & {
+  /** Messages archived (0 unless `archive` was requested). */
+  archived: number;
+  /** Messages whose archive failed. */
+  archiveFailed: number;
+};
+
 /**
  * `POST /api/email/send` body — a brand-new message (not a reply).
  * `linkedInboxAccountId` picks the account it leaves from: absent / null /

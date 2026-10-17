@@ -148,3 +148,45 @@ describe("FCM message", () => {
     for (const value of Object.values(message.data ?? {})) expect(typeof value).toBe("string");
   });
 });
+
+describe("FCM data-only message (dataMessages device, ANDROID_DATA_PUSH_ENABLED)", () => {
+  const MAIL = { ...BASE, notificationId: "n-1", emailId: "email-1", pendingActionId: "pa-1" };
+
+  it("a mail push moves title and body into data, adds sentAt, and drops the notification block", () => {
+    const message = buildFcmMessage("tok", MAIL, "email_urgent", { dataOnly: true, now: 1_700 });
+    expect(message).toEqual({
+      token: "tok",
+      data: {
+        url: "/inbox/firewall",
+        notificationId: "n-1",
+        category: "email_urgent",
+        emailId: "email-1",
+        pendingActionId: "pa-1",
+        route: "/mail/email-1",
+        title: "Klorn — Alice",
+        body: "Q3 budget",
+        sentAt: "1700",
+      },
+      android: { priority: "high" },
+    });
+    expect("notification" in message).toBe(false);
+    for (const value of Object.values(message.data ?? {})) expect(typeof value).toBe("string");
+  });
+
+  it("a push that is not about one mail stays a notification message", () => {
+    const payload = { ...BASE, attentionItemId: "item-1" };
+    expect(buildFcmMessage("tok", payload, "system", { dataOnly: true })).toEqual(
+      legacyFcmMessage("tok", payload, "system"),
+    );
+  });
+
+  it("without dataOnly a mail push is the notification message it always was", () => {
+    expect(buildFcmMessage("tok", MAIL, "email_urgent", { dataOnly: false })).toEqual(
+      buildFcmMessage("tok", MAIL, "email_urgent"),
+    );
+    expect(buildFcmMessage("tok", MAIL, "email_urgent").notification).toEqual({
+      title: "Klorn — Alice",
+      body: "Q3 budget",
+    });
+  });
+});

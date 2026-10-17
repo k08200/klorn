@@ -167,11 +167,14 @@ func stateSelfChecks(sourceDir: URL) -> [(String, Bool)] {
     let blockingGuard = "SurfaceStateRules.isBlocking(model.surfaceState)"
     check("every surface that draws the skeleton for a missing queue checks the state first",
           text("MailSection.swift").contains(blockingGuard)
-          && text("TodayScreen.swift").contains("case .signedOut, .signingIn, .offline, .failed:"))
+          && text("TodayScreen.swift").contains("case .signedOut, .signingIn:")
+          && text("TodayScreen.swift").contains("case .offline, .failed:"))
     check("the skeleton has only its known call sites",
           users(of: "FirstSync" + "State()") == [
-              "FullList.swift", "MailboxList.swift", "TodayScreen.swift",
-          ])
+              "FullList.swift", "MailboxList.swift",
+          ]
+          // Today draws its own skeleton, shaped like the loaded day.
+          && users(of: "TodaySkel" + "eton()") == ["TodayScreen.swift"])
     check("load failures are recorded with their kind, in one place",
           text("AppModel.swift").components(separatedBy: "loadError = Self.describe(error)").count == 2
           && text("AppModel.swift").contains("loadOffline = kind == .offline"))

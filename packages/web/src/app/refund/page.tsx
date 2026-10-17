@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description: "Klorn Pro cancellation and refund policy.",
 };
 
-const updatedAt = "May 4, 2026";
+const updatedAt = "October 17, 2026";
 
 export default function RefundPage() {
   return (
