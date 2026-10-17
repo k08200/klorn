@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
+import { PAGE_SHELL } from "../../../components/page-shell";
 import { apiFetch } from "../../../lib/api";
 import { captureClientError } from "../../../lib/sentry";
 import { legacyAnchorSection, settingsSectionHref } from "../sections";
@@ -56,7 +57,7 @@ export function SettingsShell({ children }: { children: ReactNode }) {
 
   return (
     <TeamAvailabilityContext.Provider value={teamAvailable}>
-      <div className="mx-auto max-w-6xl px-4 pb-28 pt-3 sm:px-6 md:flex md:gap-8 md:py-10">
+      <div className={`${PAGE_SHELL} md:flex md:gap-8`}>
         <SettingsNav pathname={pathname} showTeam={teamAvailable === true} />
         <div className="min-w-0 flex-1">{children}</div>
       </div>

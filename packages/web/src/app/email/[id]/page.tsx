@@ -812,6 +812,11 @@ function EmailDetailView() {
         undo={{ notice: undoNotice, onUndo: undoLastAction, onDismiss: dismissUndoNotice }}
         onOpen={openInReader}
         onReply={focusReplyEntry}
+        onDraft={() => {
+          focusReplyEntry();
+          void generateReplyDraft();
+        }}
+        drafting={drafting}
         onArchive={archiveEmailNow}
         onDelete={deleteEmailNow}
         onToggleRead={toggleRead}

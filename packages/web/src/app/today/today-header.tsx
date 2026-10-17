@@ -8,15 +8,18 @@
  * accounts are managed.
  */
 
+import type { LiveTier } from "@klorn/contract";
 import Link from "next/link";
 import Button from "../../components/ui/button";
+import { LANE_DOT_CLASS, useLaneName } from "../../components/ui/lane-chip";
 import { Skeleton, SkeletonGroup } from "../../components/ui/skeleton";
 import { SourceBadge } from "../../components/ui/source-badge";
 import type { AccountHealth, ConnectedAccount } from "../../lib/connected-accounts";
 import { useT } from "../../lib/i18n";
 import { sourceGlyph } from "../../lib/source-provider";
 import type { ConnectedAccountsState } from "../../lib/use-connected-accounts";
-import type { TimeContext } from "./mail-column";
+import { laneThreads, type TimeContext } from "./mail-column";
+import { useLaneCounts } from "./use-today-data";
 
 export const ACCOUNTS_HREF = "/settings/accounts";
 
@@ -58,14 +61,49 @@ export function TodayHeader({ time, accounts, showAccounts }: TodayHeaderProps) 
   const { t } = useT();
   return (
     <header className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-baseline gap-x-3">
-        <h1 className="text-display text-ink">{t("nav.v2.today")}</h1>
-        <p className="text-body text-ink-muted">
-          <time dateTime={time.now.toISOString().slice(0, 10)}>{longDate(time)}</time>
-        </p>
+      <div className="flex flex-col gap-0.5">
+        <div className="flex flex-wrap items-baseline gap-x-3">
+          <h1 className="text-display text-ink">{t("nav.v2.today")}</h1>
+          <p className="text-body text-ink-muted">
+            <time dateTime={time.now.toISOString().slice(0, 10)}>{longDate(time)}</time>
+          </p>
+        </div>
+        {showAccounts && <DayStrip />}
       </div>
       {showAccounts && <AccountsStrip accounts={accounts} />}
     </header>
+  );
+}
+
+const STRIP_LANES: readonly LiveTier[] = ["PUSH", "MEETING", "QUEUE", "INFO"]; // lane-subset: SILENT is the "quietly filed" figure after them
+
+/**
+ * The day in one line (TodayScreen.dc): threads per lane, then how many went
+ * to Silent. Real counts from the lane-counts read Today already shares with
+ * Mail; nothing shows until they arrive, and a failed read shows nothing.
+ */
+function DayStrip() {
+  const { t } = useT();
+  const laneName = useLaneName();
+  const { counts } = useLaneCounts(true);
+  if (!counts) return null;
+  const quiet = laneThreads(counts, "SILENT") ?? 0;
+  return (
+    <ul
+      aria-label={t("today.strip.label")}
+      className="flex flex-wrap items-center gap-x-3.5 gap-y-1 text-caption tabular-nums text-ink-muted"
+    >
+      {STRIP_LANES.map((lane) => (
+        <li key={lane} className="flex items-center gap-1.5">
+          <span aria-hidden="true" className={`size-1.5 rounded-full ${LANE_DOT_CLASS[lane]}`} />
+          {t("today.strip.lane", {
+            count: String(laneThreads(counts, lane) ?? 0),
+            lane: laneName(lane),
+          })}
+        </li>
+      ))}
+      {quiet > 0 && <li>· {t("today.strip.quiet", { count: String(quiet) })}</li>}
+    </ul>
   );
 }
 

@@ -81,11 +81,11 @@ export const MOCK_INBOXES: InboxesResponse = {
 
 export const MOCK_LANE_COUNTS: EmailLaneCountsResponse = {
   counts: {
-    PUSH: { total: 2, unread: 2 },
-    MEETING: { total: 3, unread: 1 },
-    QUEUE: { total: 14, unread: 6 },
-    INFO: { total: 21, unread: 4 },
-    SILENT: { total: 48, unread: 30 },
+    PUSH: { total: 2, unread: 2, threads: 2 },
+    MEETING: { total: 3, unread: 1, threads: 2 },
+    QUEUE: { total: 14, unread: 6, threads: 11 },
+    INFO: { total: 21, unread: 4, threads: 19 },
+    SILENT: { total: 48, unread: 30, threads: 44 },
   },
   source: "gmail",
 };

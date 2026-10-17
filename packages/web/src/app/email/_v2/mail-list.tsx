@@ -55,7 +55,6 @@ const SKELETON_ROWS = ["a", "b", "c", "d", "e", "f", "g", "h"];
 const PRELOAD_MARGIN = "400px";
 
 /** The cursor row carries an accent bar as well as the tint: tint alone is not a 3:1 indicator. */
-const CURSOR_CLASS = "shadow-[inset_2px_0_0_var(--accent-solid)]";
 const PICKED_CLASS = "bg-state-info-bg";
 /**
  * The last rows open their menus upward: the lane menu is ~260px, more than
@@ -72,6 +71,8 @@ interface TimeContext {
 
 interface MailRowsProps {
   emails: readonly EmailListItem[];
+  /** The split view's 440px column: 14px subjects. */
+  compact?: boolean;
   view: ListView;
   accounts: readonly AccountOption[];
   time: TimeContext;
@@ -160,16 +161,16 @@ function RowActions({ email, plan, busy, archiveBlocked, menuSide, ...on }: RowA
   const readKey = email.isRead ? "mailV2.row.markUnread" : "mailV2.row.markRead";
   return (
     <>
-      <Menu
-        label={t("mailV2.reader.moveTo")}
-        variant="icon"
-        align="end"
-        side={menuSide}
-        disabled={busy}
-        sections={[laneMenuSection(email, plan, t, on.onMoveLane)]}
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={t("mailV2.row.archive")}
+        title={archiveBlocked ?? t("mailV2.row.archive")}
+        disabled={busy || archiveBlocked !== null}
+        onClick={on.onArchive}
       >
-        <LanesIcon />
-      </Menu>
+        <ArchiveIcon />
+      </Button>
       <Menu
         label={t("mailV2.list.remind")}
         variant="icon"
@@ -190,6 +191,16 @@ function RowActions({ email, plan, busy, archiveBlocked, menuSide, ...on }: RowA
       >
         <ClockIcon />
       </Menu>
+      <Menu
+        label={t("mailV2.reader.moveTo")}
+        variant="icon"
+        align="end"
+        side={menuSide}
+        disabled={busy}
+        sections={[laneMenuSection(email, plan, t, on.onMoveLane)]}
+      >
+        <LanesIcon />
+      </Menu>
       <Button
         variant="ghost"
         size="icon"
@@ -199,16 +210,6 @@ function RowActions({ email, plan, busy, archiveBlocked, menuSide, ...on }: RowA
         onClick={() => on.onSetRead(!email.isRead)}
       >
         {email.isRead ? <UnreadIcon /> : <ReadIcon />}
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        aria-label={t("mailV2.row.archive")}
-        title={archiveBlocked ?? t("mailV2.row.archive")}
-        disabled={busy || archiveBlocked !== null}
-        onClick={on.onArchive}
-      >
-        <ArchiveIcon />
       </Button>
     </>
   );
@@ -260,9 +261,13 @@ function MailRowItem(props: MailRowItemProps) {
           sender={senderName(email.from)}
           subject={subject}
           snippet={email.snippet ?? undefined}
+          reason={email.tierReason ?? null}
+          threadCount={email.threadCount}
+          lane={email.tier}
           time={formatRowTime(email.date, time.now, time.locale, time.timeZone)}
           timeIso={email.date}
           tier={rowLane(view, email.tier)}
+          compact={props.compact}
           // No AttentionItem yet: the mail is listed, but no lane is claimed.
           tierPending={email.tier === null ? t("mailV2.row.sorting") : undefined}
           source={account ? { provider: account.provider, nickname: account.nickname } : null}
@@ -270,7 +275,7 @@ function MailRowItem(props: MailRowItemProps) {
           hasAttachment={email.attachmentCount > 0}
           selected={cursor}
           href={`/email/${email.id}?markRead=false&queue=${readerQueue(view.filter)}`}
-          className={cursor ? CURSOR_CLASS : picked ? PICKED_CLASS : ""}
+          className={!cursor && picked ? PICKED_CLASS : ""}
           leading={
             props.readOnly ? undefined : (
               <RowPick
@@ -281,8 +286,6 @@ function MailRowItem(props: MailRowItemProps) {
             )
           }
           leadingPinned={selecting}
-          // Four 44px actions: the badges and the time slide clear of them.
-          actionsReserve="group-hover:pr-52 group-focus-within:pr-52"
           actions={
             props.readOnly ? undefined : (
               <RowActions
@@ -311,7 +314,7 @@ export function MailRows(props: MailRowsProps) {
   const selecting = pickedIds.size > 0;
   return (
     <>
-      <ul className="flex flex-col">
+      <ul className="flex flex-col divide-y divide-line-soft">
         {emails.map((email, index) => (
           <MailRowItem
             key={email.id}
@@ -350,13 +353,14 @@ export function ThreadRows({
 }) {
   const { t } = useT();
   return (
-    <ul className="flex flex-col">
+    <ul className="flex flex-col divide-y divide-line-soft">
       {threads.map((thread) => {
         const names = thread.participants.map(senderName).join(", ");
         return (
           <li key={thread.threadId}>
             <MailRow
-              sender={thread.messageCount > 1 ? `${names} (${thread.messageCount})` : names}
+              sender={names}
+              threadCount={thread.messageCount}
               subject={thread.subject || t("mailV2.noSubject")}
               snippet={thread.summary ?? thread.lastMessage.snippet ?? undefined}
               time={formatRowTime(
@@ -379,7 +383,7 @@ export function ThreadRows({
 export function MailListLoading() {
   const { t } = useT();
   return (
-    <SkeletonGroup label={t("mailV2.loading")}>
+    <SkeletonGroup label={t("mailV2.loading")} className="divide-y divide-line-soft">
       {SKELETON_ROWS.map((row) => (
         <MailRowSkeleton key={row} />
       ))}

@@ -15,7 +15,7 @@ import { useLaneName } from "../../../../components/ui/lane-chip";
 import { Menu, type MenuSection } from "../../../../components/ui/menu";
 import { useT } from "../../../../lib/i18n";
 import { CORE_TIERS } from "../../../../lib/tiers";
-import { ArchiveIcon, ClockIcon, MoreIcon, ReplyIcon } from "../../_v2/icons";
+import { ArchiveIcon, MoreIcon, ReplyIcon } from "../../_v2/icons";
 import { LANE_DOT } from "../../_v2/mail-header";
 import { REMINDER_KEYS, REMINDER_LABEL_KEYS, type ReminderKey } from "../../_v2/reminders";
 import type { EmailDetail } from "../types";
@@ -32,6 +32,8 @@ export interface ReaderActionsProps {
   /** Name the keys in the tooltips (KEYBOARD_TRIAGE). */
   keyboardTriage: boolean;
   onReply: () => void;
+  onDraft: () => void;
+  drafting: boolean;
   onArchive: () => void;
   onDelete: () => void;
   onToggleRead: () => void;
@@ -124,10 +126,42 @@ function useReaderMenus(props: ReaderActionsProps) {
 
 const ARCHIVE_REASON_ID = "reader-archive-reason";
 
-/** From 768px: the actions in a row under the header. */
+/**
+ * The lane control for the header's lane line (Reader.dc): a chip that opens
+ * the five lanes. "Move to lane" never names the current lane on the chip;
+ * the menu marks it.
+ */
+export function ReaderLaneMenu(props: ReaderActionsProps) {
+  const { t } = useT();
+  const { lanes } = useReaderMenus(props);
+  return (
+    <Menu label={t("mailV2.reader.moveTo")} align="end-from-md" sections={[lanes]}>
+      {t("mailV2.reader.moveTo")}
+    </Menu>
+  );
+}
+
+function KeyHint({ k, onAccent = false }: { k: string; onAccent?: boolean }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`rounded-[4px] border px-1 font-sans text-caption leading-4 ${
+        onAccent ? "border-accent-solid-ink/40" : "border-line-strong text-ink-muted"
+      }`}
+    >
+      {k}
+    </span>
+  );
+}
+
+/**
+ * From 768px: the actions in a row under the header (Reader.dc): Reply as the
+ * one primary, then Draft with Klorn, Later and Done as secondary, then the
+ * overflow. Done is the archive; Later sets a reminder.
+ */
 export function ReaderActionsRow(props: ReaderActionsProps) {
   const { t } = useT();
-  const { lanes, remind, more, archiveBlocked, idle, hint } = useReaderMenus(props);
+  const { remind, more, archiveBlocked, idle, hint } = useReaderMenus(props);
   return (
     // biome-ignore lint/a11y/useSemanticElements: a toolbar groups actions; <menu>/<fieldset> are not that
     <div
@@ -135,40 +169,38 @@ export function ReaderActionsRow(props: ReaderActionsProps) {
       aria-label={t("mailV2.reader.actions")}
       className="flex flex-wrap items-center gap-2 max-md:hidden"
     >
-      <Button
-        variant="primary"
-        size="sm"
-        icon={<ReplyIcon />}
-        title={hint(t("keys.reply"), "R")}
-        onClick={props.onReply}
-      >
+      <Button variant="primary" title={hint(t("keys.reply"), "R")} onClick={props.onReply}>
         {t("keys.reply")}
+        {props.keyboardTriage && <KeyHint k="R" onAccent />}
       </Button>
       <Button
         variant="secondary"
-        size="sm"
-        icon={<ArchiveIcon />}
+        disabled={props.isDemo}
+        loading={props.drafting}
+        onClick={props.onDraft}
+      >
+        {t("mailV2.reader.draftWithKlorn")}
+      </Button>
+      <Menu label={t("mailV2.list.remind")} variant="secondary" sections={[remind]}>
+        {t("mailV2.reader.later")}
+      </Menu>
+      <Button
+        variant="secondary"
         title={archiveBlocked ?? hint(t("mailV2.row.archive"), "E")}
         aria-describedby={archiveBlocked ? ARCHIVE_REASON_ID : undefined}
         disabled={archiveBlocked !== null || !idle}
         loading={props.busy === "archive"}
         onClick={props.onArchive}
       >
-        {t("mailV2.row.archive")}
+        {t("mailV2.reader.done")}
+        {props.keyboardTriage && <KeyHint k="E" />}
       </Button>
       {archiveBlocked && (
         <span id={ARCHIVE_REASON_ID} className="sr-only">
           {archiveBlocked}
         </span>
       )}
-      <Menu label={t("mailV2.reader.moveTo")} sections={[lanes]}>
-        {t("mailV2.reader.moveTo")}
-      </Menu>
-      <Menu label={t("mailV2.list.remind")} sections={[remind]}>
-        <ClockIcon />
-        {t("mailV2.list.remind")}
-      </Menu>
-      <Menu label={t("mailV2.more.label")} variant="icon" sections={[more]}>
+      <Menu label={t("mailV2.more.label")} variant="secondaryIcon" align="end" sections={[more]}>
         <MoreIcon />
       </Menu>
     </div>
