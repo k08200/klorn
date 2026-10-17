@@ -15,6 +15,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { PAGE_SHELL } from "../../components/page-shell";
 import EmptyState from "../../components/ui/empty-state";
 import { useAuth } from "../../lib/auth";
 import { filesEnabled } from "../../lib/home";
@@ -53,7 +54,7 @@ export function TodayView() {
   useRefreshOnNewMail();
 
   return (
-    <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-6 px-4 py-6 md:px-8 md:py-8">
+    <div className={`${PAGE_SHELL} flex flex-col gap-6`}>
       <TodayHeader time={time} accounts={accounts} showAccounts={!noSource} />
       {noSource ? (
         <EmptyState
@@ -65,7 +66,7 @@ export function TodayView() {
             label: t("today.connect.action"),
             onClick: () => router.push(ACCOUNTS_HREF),
           }}
-          className="rounded-card border border-line bg-surface-panel md:py-20"
+          className="rounded-xl bg-surface-panel ring-1 ring-line"
         />
       ) : (
         <div className="@container">

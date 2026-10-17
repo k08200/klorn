@@ -8,6 +8,7 @@ import { useT } from "../lib/i18n";
 import { queryKeys } from "../lib/query-keys";
 import { captureClientError } from "../lib/sentry";
 import { useToast } from "./toast";
+import Button from "./ui/button";
 
 interface LinkedAccount {
   id: string;
@@ -130,14 +131,15 @@ export function LinkedCalendars() {
         </ul>
       )}
 
-      <button
-        type="button"
+      {/* Outlined (W8): "New event" is the page's one filled primary. */}
+      <Button
+        variant="secondary"
         onClick={() => connect.mutate()}
-        disabled={connect.isPending}
-        className="glow-primary ease-strong mt-3 inline-flex min-h-10 items-center rounded-lg bg-accent-solid px-4 py-2 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:opacity-50"
+        loading={connect.isPending}
+        className="mt-3"
       >
         {t("linkedCalendars.connect")}
-      </button>
+      </Button>
     </section>
   );
 }

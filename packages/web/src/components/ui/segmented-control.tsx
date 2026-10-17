@@ -7,9 +7,11 @@
  * Semantics: a radiogroup. One tab stop (the checked segment, or the first one
  * when none is checked); Left/Right/Up/Down move and select, Home/End jump to
  * the ends. Handled arrow keys are `preventDefault`ed so the app hotkeys never
- * see them. Each segment's hit area is 44px tall (WCAG 2.5.8) around a 32px
- * visual capsule. On a narrow viewport the row scrolls horizontally inside
- * itself — the page never does — and the checked segment is kept in view.
+ * see them. Drawn as one segmented track (design detail pass X3, Reader.dc):
+ * 30px segments on a 36px well, the checked one lifted onto the panel; 44px
+ * tall on a coarse pointer (WCAG 2.5.8). On a narrow viewport the row scrolls
+ * horizontally inside itself — the page never does — and the checked segment
+ * is kept in view.
  */
 
 import { type KeyboardEvent, type ReactNode, useEffect, useRef } from "react";
@@ -25,6 +27,8 @@ export interface Segment<Id extends string> {
   ariaLabel?: string;
   /** Hover text saying what the count is ("3 unread in PUSH"). */
   title?: string;
+  /** Text colour while checked (a lane's chip ink); ink when absent. */
+  checkedClass?: string;
 }
 
 interface SegmentedControlProps<Id extends string> {
@@ -83,7 +87,7 @@ export function SegmentedControl<Id extends string>({
       aria-label={ariaLabel}
       aria-disabled={disabled || undefined}
       onKeyDown={onKeyDown}
-      className={`flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${className}`}
+      className={`flex min-w-0 items-center gap-0.5 overflow-x-auto rounded-[10px] bg-surface-hover p-[3px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${className}`}
     >
       {segments.map((segment, index) => {
         const checked = index === checkedIndex;
@@ -99,23 +103,17 @@ export function SegmentedControl<Id extends string>({
             tabIndex={index === tabStop ? 0 : -1}
             disabled={disabled}
             onClick={() => onChange(segment.id)}
-            className="group/segment focus-ring flex h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center rounded-full disabled:cursor-not-allowed disabled:opacity-50"
+            className={`group/segment focus-ring flex h-[30px] min-w-fit flex-1 shrink-0 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-caption transition-colors duration-120 ease-fluid disabled:cursor-not-allowed disabled:opacity-50 pointer-coarse:h-11 ${
+              checked
+                ? `bg-surface-panel font-semibold shadow-[0_1px_2px_rgb(10_14_20/0.06)] ring-1 ring-line ${segment.checkedClass ?? "text-ink"}`
+                : "font-medium text-ink-soft hover:text-ink"
+            }`}
           >
-            <span
-              className={`flex h-8 items-center gap-1.5 rounded-full border px-3 text-label transition-colors duration-120 ease-fluid ${
-                checked
-                  ? "border-line-strong bg-surface-panel text-ink"
-                  : "border-transparent text-ink-mid group-hover/segment:bg-surface-hover group-hover/segment:text-ink"
-              }`}
-            >
+            <span className="contents">
               {segment.leading}
               {segment.label}
               {segment.count !== undefined && segment.count > 0 && (
-                <span
-                  className={`text-caption tabular-nums ${checked ? "text-ink-soft" : "text-ink-muted"}`}
-                >
-                  {segment.count}
-                </span>
+                <span className="tabular-nums">{segment.count}</span>
               )}
             </span>
           </button>

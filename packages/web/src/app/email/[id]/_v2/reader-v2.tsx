@@ -64,6 +64,9 @@ export interface ReaderV2Props {
   undo: { notice: UndoNotice | null; onUndo: () => void; onDismiss: () => void };
   onOpen: (emailId: string) => void;
   onReply: () => void;
+  /** Ask Klorn for a reply draft (the reply box's own Draft action). */
+  onDraft: () => void;
+  drafting: boolean;
   onArchive: () => void;
   onDelete: () => void;
   onToggleRead: () => void;
@@ -210,6 +213,8 @@ export function ReaderV2(props: ReaderV2Props) {
     accountNeedsReconnect: reader.account?.needsReconnect === true,
     keyboardTriage: props.keyboardTriage,
     onReply: props.onReply,
+    onDraft: props.onDraft,
+    drafting: props.drafting,
     onArchive: props.onArchive,
     onDelete: props.onDelete,
     onToggleRead: props.onToggleRead,
@@ -220,7 +225,7 @@ export function ReaderV2(props: ReaderV2Props) {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col px-4 pb-40 md:px-8 md:pb-10">
+    <div className="@container flex w-full max-w-[calc(1120px+4rem)] flex-col px-4 pb-40 md:px-8 md:pb-10">
       <TopBar {...props} />
 
       {props.error && current && (
@@ -251,6 +256,7 @@ export function ReaderV2(props: ReaderV2Props) {
       {current && actions && (
         <article className="flex flex-col gap-5 pt-2">
           <ReaderHeader
+            lanes={actions}
             email={current}
             context={reader.context}
             contextPending={reader.pending}
@@ -266,7 +272,7 @@ export function ReaderV2(props: ReaderV2Props) {
           />
           <ReaderActionsRow {...actions} />
 
-          <div className="grid gap-6 border-t border-line-soft pt-5 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
+          <div className="grid gap-6 border-t border-line-soft pt-5 @min-[880px]:grid-cols-[minmax(0,1fr)_20rem] @min-[880px]:items-start">
             <div className="flex min-w-0 flex-col gap-5 *:m-0">
               {current.renderHtml ? (
                 <section aria-label={t("emailDetail.messageTitle")}>
