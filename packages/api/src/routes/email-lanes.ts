@@ -32,7 +32,7 @@ import { isInternalSender } from "../mail/company-domains.js";
 import { hasAnyMailSource } from "../mail/mail-source.js";
 import { labelableDomain, senderLabelEntriesFor } from "../mail/sender-labels.js";
 import { senderEmail } from "../notify/notification-format.js";
-import { getUserNotificationLanguage } from "../notify/notification-strings.js";
+import { LANG_QUERY_PROPERTY, readerLanguageFor } from "../notify/request-language.js";
 import { captureError } from "../sentry.js";
 import { darkRouteGate } from "./dark-route-gate.js";
 
@@ -60,6 +60,8 @@ const readerContextQuerySchema = {
     inbox: { type: "string", maxLength: 500 },
     filter: { type: "string", maxLength: 500 },
     search: { type: "string", maxLength: 500 },
+    // The client's UI language for the reason (request-language.ts).
+    lang: LANG_QUERY_PROPERTY,
   },
 } as const;
 
@@ -233,7 +235,7 @@ export function registerEmailLaneRoutes(
           where: { userId: uid, source: "EMAIL", sourceId: email.id },
           select: { tier: true, tierReason: true },
         }),
-        getUserNotificationLanguage(uid),
+        readerLanguageFor(request, reply, uid),
         senderFactsFor(uid, email),
         // A linked id is checked against its owner; one that is not the
         // caller's has no neighbours.

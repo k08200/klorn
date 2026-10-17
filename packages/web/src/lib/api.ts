@@ -2,6 +2,7 @@
 // Capacitor-only test answers "no" inside the Tauri wrapper. capacitor.ts is
 // deliberately NOT imported here so that mistake cannot be made in this file.
 import { isNativeShell, openExternal } from "./native/shell";
+import { activeUiLocale } from "./ui-locale";
 
 // Keep SSR and client in sync: both must resolve to the same string so React
 // hydration does not mismatch (e.g. an <a href> rendered on the server must
@@ -67,6 +68,9 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   const token = getStoredAuthToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    // Server-composed reasons render in the language the screen is in, not
+    // the stored notification language (api: notify/request-language.ts).
+    "Accept-Language": activeUiLocale(),
     ...(init?.headers as Record<string, string>),
   };
   if (token && !headers.Authorization) {
