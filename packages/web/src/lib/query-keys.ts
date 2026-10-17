@@ -76,6 +76,7 @@ export const queryKeys = {
       inbox?: string;
     }) => ["email", "list", params ?? {}] as const,
     inboxes: () => ["email", "inboxes"] as const,
+    subscriptions: () => ["email", "subscriptions"] as const,
     detail: (id: string) => ["email", "detail", id] as const,
     candidates: (filters?: { status?: string; attention?: string }) =>
       ["email", "candidates", filters ?? {}] as const,

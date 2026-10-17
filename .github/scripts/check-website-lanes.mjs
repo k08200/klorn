@@ -97,21 +97,26 @@ function arrayAfter(src, needle) {
 
 /**
  * The six-section landing: one `<li class="lane" data-lane="…">` per lane, each
- * with a `.chip c-<lane>` whose label is the lane name. The set must be exactly
- * the live lanes — none missing, none retired, none twice — and the chip must
- * agree with its row, or a copy edit could show "MEETING" over the Push row.
+ * with a `.chip c-<lane>` whose label is the lane name in title case ("Push",
+ * the app's LaneChip spec — X1 of the 2026-10-16 design pass). The set must be
+ * exactly the live lanes — none missing, none retired, none twice — and the
+ * chip must agree with its row, or a copy edit could show "Meeting" over the
+ * Push row. Any other chip on the page (the phone lane list in the hero) is
+ * held to the same rule: a live lane, labelled exactly as its class says.
  */
+const titleCase = (lane) => lane.charAt(0).toUpperCase() + lane.slice(1);
+
 function checkLaneList(file, src, lanes) {
   const where = (what) => `${file}: ${what}`;
   const rows = [...src.matchAll(
-    /<li class="lane" data-lane="([a-z]+)"><span class="chip c-([a-z]+)">([A-Z]+)<\/span>/g,
+    /<li class="lane" data-lane="([a-z]+)"><span class="chip c-([a-z]+)">([A-Za-z]+)<\/span>/g,
   )];
   const listed = [...src.matchAll(/data-lane="([a-z]+)"/g)].map((m) => m[1]);
   if (rows.length !== listed.length) {
     problems.push(where(`${listed.length} data-lane rows but only ${rows.length} in the expected chip shape`));
   }
   for (const [, lane, cls, label] of rows) {
-    if (cls !== lane || label.toLowerCase() !== lane) {
+    if (cls !== lane || label !== titleCase(lane)) {
       problems.push(where(`lane row ${lane} renders chip c-${cls} "${label}"`));
     }
   }
@@ -126,6 +131,11 @@ function checkLaneList(file, src, lanes) {
   // A retired lane as a chip anywhere on the page, not just inside the list.
   const strayChips = [...src.matchAll(/class="chip c-(auto|call)"/g)].map((m) => m[1]);
   if (strayChips.length) problems.push(where(`page renders a RETIRED lane chip: ${strayChips.join(", ")}`));
+  // Every chip anywhere on the page: a live lane, labelled as its class says.
+  for (const [, cls, label] of src.matchAll(/class="chip c-([a-z]+)">([^<]*)</g)) {
+    if (!lanes.includes(cls) && !RETIRED.has(cls)) problems.push(where(`chip c-${cls} is not a lane the API has`));
+    else if (label !== titleCase(cls)) problems.push(where(`chip c-${cls} is labelled "${label}", expected "${titleCase(cls)}"`));
+  }
 }
 
 function check(file, lanes) {

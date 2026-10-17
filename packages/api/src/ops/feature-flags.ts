@@ -70,6 +70,9 @@ export function collectFeatureFlags(env: NodeJS.ProcessEnv = process.env): Flags
       // Read at classification time by mail/list-unsubscribe.ts
       // autoUnsubscribeEnabled(); one-click auto-unsubscribe of SILENT promo.
       AUTO_UNSUBSCRIBE_ENABLED: dynamicFlag(env, "AUTO_UNSUBSCRIBE_ENABLED"),
+      // Read per request by config.ts bulkUnsubscribeEnabled(); the
+      // user-initiated Subscriptions page (dark-routed while off).
+      BULK_UNSUBSCRIBE_ENABLED: dynamicFlag(env, "BULK_UNSUBSCRIBE_ENABLED"),
       // Read per message by agentcore/telegram-chat.ts telegramChatEnabled().
       TELEGRAM_CHAT_ENABLED: dynamicFlag(env, "TELEGRAM_CHAT_ENABLED"),
       // Read per call by config.ts objectStorageEnabled() (plan step D1). While

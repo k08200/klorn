@@ -1494,6 +1494,34 @@ final class AppModel {
     private(set) var chatMessages: [ChatMessage] = []
     private(set) var isChatting = false
     private var chatConversationId: String?
+    /// Set once the latest conversation has been asked for this session, so
+    /// opening the Assistant again never re-fetches or duplicates the thread.
+    private var didRestoreChat = false
+
+    /// Continue the latest conversation once per session, the way the web
+    /// assistant resumes it — so the thread survives a relaunch and is the same
+    /// one on the web and the Mac. Best-effort: any failure leaves the empty
+    /// thread, as before.
+    func restoreChatHistory() async {
+        guard phase == .signedIn, !didRestoreChat, chatMessages.isEmpty,
+              chatConversationId == nil
+        else { return }
+        didRestoreChat = true
+        let session = sessionGeneration
+        do {
+            let list: ChatConversationList = try await api.get(
+                "/api/chat/conversations", as: ChatConversationList.self)
+            guard isCurrent(session), let id = list.conversations.first?.id else { return }
+            let history: ChatHistory = try await api.get(
+                "/api/chat/conversations/\(id)/messages", as: ChatHistory.self)
+            // A send that started while this was in flight owns the thread now.
+            guard isCurrent(session), chatMessages.isEmpty, chatConversationId == nil else { return }
+            chatConversationId = id
+            chatMessages = history.messages.compactMap(\.bubble)
+        } catch {
+            Log.app.debug("chat history restore failed: \(String(describing: error), privacy: .private)")
+        }
+    }
 
     /// One synchronous agent turn: optimistic user bubble → POST → assistant
     /// bubble. A failed turn becomes a visible failure bubble — never silent.
@@ -2377,6 +2405,7 @@ final class AppModel {
             flag("isChatting", \.isChatting),
             field("chatMessages", \.chatMessages, [], dirty: [ChatMessage(role: .user, text: "x")]),
             text("chatConversationId", \.chatConversationId),
+            flag("didRestoreChat", \.didRestoreChat),
             field("commitments", \.commitments, nil, isClean: { $0 == nil }, dirty: .some([])),
             flag("commitmentsFailed", \.commitmentsFailed),
             field("pendingActions", \.pendingActions, [], isClean: { $0.isEmpty }),

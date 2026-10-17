@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { apiFetch } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import {
@@ -137,6 +137,8 @@ export default function Sidebar() {
   const { user, logout, loading: authLoading, googleConnected } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const userMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const userMenuId = useId();
   const navCounts = useNavCounts(!!user);
   const unified = user?.unifiedHome === true;
   const navItems = unified
@@ -154,6 +156,18 @@ export default function Sidebar() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  // Escape closes the user menu and hands focus back to the button that opened it.
+  useEffect(() => {
+    if (!showUserMenu) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setShowUserMenu(false);
+      userMenuButtonRef.current?.focus();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [showUserMenu]);
+
   const initials = user
     ? (user.name || user.email)
         .split(/[\s@]/)
@@ -170,7 +184,7 @@ export default function Sidebar() {
         <div className="relative flex items-center justify-between px-3 py-4">
           <Link
             href={unified ? TODAY_HOME : "/inbox"}
-            aria-label={unified ? t("nav.v2.openToday") : "Open decision queue"}
+            aria-label={unified ? t("nav.v2.openToday") : t("nav.v2.openApprovals")}
             className="flex items-center gap-2.5 rounded-lg px-1 py-1 text-sm font-semibold text-ink transition hover:text-ink"
           >
             <img src="/brand/mark.svg?v=matte2" alt="" className="h-8 w-8" />
@@ -302,7 +316,11 @@ export default function Sidebar() {
           ) : user ? (
             <div className="relative">
               <button
+                ref={userMenuButtonRef}
                 type="button"
+                aria-haspopup="menu"
+                aria-expanded={showUserMenu}
+                aria-controls={showUserMenu ? userMenuId : undefined}
                 onClick={() => setShowUserMenu((p) => !p)}
                 className="w-full flex items-center gap-2.5 rounded-lg px-2 py-2 hover:bg-surface-hover/70 transition text-left"
               >
@@ -330,7 +348,10 @@ export default function Sidebar() {
               </button>
 
               {showUserMenu && (
-                <div className="absolute bottom-full left-0 right-0 mb-1 bg-surface-panel border border-line rounded-xl shadow-xl shadow-slate-900/10 z-50 py-1 animate-slide-up">
+                <div
+                  id={userMenuId}
+                  className="absolute bottom-full left-0 right-0 mb-1 bg-surface-panel border border-line rounded-xl shadow-xl shadow-slate-900/10 z-50 py-1 animate-slide-up"
+                >
                   <Link
                     href="/billing"
                     onClick={() => setShowUserMenu(false)}
@@ -352,6 +373,15 @@ export default function Sidebar() {
                   >
                     {t("settings.title")}
                   </Link>
+                  <a
+                    href="https://klorn.ai/blog/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => setShowUserMenu(false)}
+                    className="block px-3 py-2 text-sm text-ink-mid hover:bg-surface-hover rounded-md mx-1 transition"
+                  >
+                    {t("nav.blog")}
+                  </a>
                   <div className="border-t border-line my-1" />
                   <button
                     type="button"

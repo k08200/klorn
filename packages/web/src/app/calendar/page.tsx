@@ -608,7 +608,7 @@ function MonthGrid({
             type="button"
             onClick={onPrev}
             aria-label={t("calendar.prevMonth")}
-            className="ease-strong flex h-8 w-8 items-center justify-center rounded-lg text-ink-mid transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97]"
+            className="ease-strong flex h-11 w-11 items-center justify-center rounded-lg text-ink-mid transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97]"
           >
             ‹
           </button>
@@ -616,7 +616,7 @@ function MonthGrid({
             type="button"
             onClick={onNext}
             aria-label={t("calendar.nextMonth")}
-            className="ease-strong flex h-8 w-8 items-center justify-center rounded-lg text-ink-mid transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97]"
+            className="ease-strong flex h-11 w-11 items-center justify-center rounded-lg text-ink-mid transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97]"
           >
             ›
           </button>

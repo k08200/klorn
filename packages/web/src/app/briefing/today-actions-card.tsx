@@ -9,6 +9,7 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { apiFetch } from "../../lib/api";
+import { useT } from "../../lib/i18n";
 import { queryKeys } from "../../lib/query-keys";
 
 interface TodayActionsResponse {
@@ -27,6 +28,7 @@ interface TodayActionsResponse {
 }
 
 export function TodayActionsCard() {
+  const { t } = useT();
   const query = useQuery({
     queryKey: queryKeys.briefing.todayActions(),
     queryFn: () => apiFetch<TodayActionsResponse>("/api/automations/today-actions"),
@@ -36,7 +38,7 @@ export function TodayActionsCard() {
   if (query.isLoading) {
     return (
       <section className="panel-elevated mb-4 rounded-2xl border border-line/70 bg-surface-panel p-4">
-        <p className="text-xs text-ink-dim">Loading today's activity…</p>
+        <p className="text-xs text-ink-dim">{t("todayActions.loading")}</p>
       </section>
     );
   }
@@ -54,13 +56,10 @@ export function TodayActionsCard() {
     return (
       <section className="panel-elevated mb-4 rounded-2xl border border-line/70 bg-surface-panel p-4">
         <header className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-ink">What Klorn did today</h2>
-          <span className="text-[11px] text-ink-dim">Since UTC midnight</span>
+          <h2 className="text-sm font-semibold text-ink">{t("todayActions.title")}</h2>
+          <span className="text-[11px] text-ink-dim">{t("todayActions.since")}</span>
         </header>
-        <p className="text-xs text-ink-dim">
-          Nothing to decide and nothing to run yet today. When a mail sync or decision card lands, a
-          summary appears here.
-        </p>
+        <p className="text-xs text-ink-dim">{t("todayActions.idle")}</p>
       </section>
     );
   }
@@ -68,24 +67,28 @@ export function TodayActionsCard() {
   return (
     <section className="panel-elevated mb-4 rounded-2xl border border-line/70 bg-surface-panel p-4">
       <header className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-ink">What Klorn did today</h2>
-        <span className="text-[11px] text-ink-dim">Since UTC midnight</span>
+        <h2 className="text-sm font-semibold text-ink">{t("todayActions.title")}</h2>
+        <span className="text-[11px] text-ink-dim">{t("todayActions.since")}</span>
       </header>
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <TodayStat
-          label="Auto-executed"
+          label={t("todayActions.stat.executed")}
           value={data.totals.executed}
           tone={data.totals.executed > 0 ? "good" : "idle"}
         />
         <TodayStat
-          label="Pending"
+          label={t("todayActions.stat.pending")}
           value={data.totals.pending}
           tone={data.totals.pending > 0 ? "warn" : "idle"}
         />
-        <TodayStat label="Declined" value={data.totals.rejected} tone="idle" />
         <TodayStat
-          label="Urgent mail"
+          label={t("todayActions.stat.declined")}
+          value={data.totals.rejected}
+          tone="idle"
+        />
+        <TodayStat
+          label={t("todayActions.stat.urgent")}
           value={data.totals.urgent}
           tone={data.totals.urgent > 0 ? "hot" : "idle"}
         />
@@ -96,21 +99,29 @@ export function TodayActionsCard() {
           <TodayRow
             key={item.id}
             tone="executed"
+            label={t("todayActions.row.executed")}
             tool={item.toolName}
-            text={item.summary || "No summary"}
+            text={item.summary || t("todayActions.noSummary")}
           />
         ))}
         {data.pending.slice(0, 2).map((item) => (
           <TodayRow
             key={item.id}
             tone="pending"
+            label={t("todayActions.row.pending")}
             tool={item.toolName}
-            text={item.summary || "No summary"}
+            text={item.summary || t("todayActions.noSummary")}
             href="/inbox"
           />
         ))}
         {data.urgent.slice(0, 1).map((item) => (
-          <TodayRow key={item.id} tone="urgent" text={item.message} href={item.link ?? undefined} />
+          <TodayRow
+            key={item.id}
+            tone="urgent"
+            label={t("todayActions.row.urgent")}
+            text={item.message}
+            href={item.link ?? undefined}
+          />
         ))}
       </div>
 
@@ -120,7 +131,7 @@ export function TodayActionsCard() {
             href="/inbox"
             className="text-[11px] text-amber-300 transition hover:text-state-warn-ink"
           >
-            See all {data.totals.pending} pending decision{data.totals.pending === 1 ? "" : "s"} →
+            {t("todayActions.seeAll", { count: String(data.totals.pending) })} →
           </Link>
         </div>
       )}
@@ -153,11 +164,13 @@ function TodayStat({
 
 function TodayRow({
   tone,
+  label,
   tool,
   text,
   href,
 }: {
   tone: "executed" | "pending" | "urgent";
+  label: string;
   tool?: string;
   text: string;
   href?: string;
@@ -166,11 +179,6 @@ function TodayRow({
     executed: "bg-emerald-400",
     pending: "bg-amber-300",
     urgent: "bg-rose-400",
-  }[tone];
-  const label = {
-    executed: "Executed",
-    pending: "Pending",
-    urgent: "Urgent",
   }[tone];
   const inner = (
     <div className="flex items-start gap-2 rounded-lg border border-line bg-surface-raised px-3 py-2">

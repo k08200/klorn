@@ -26,9 +26,6 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://klorn.ai/brand/og-image.png?v=k2">
 <link rel="preload" as="font" type="font/woff2" href="/fonts/geist-var.woff2" crossorigin>
-<link rel="preload" as="image" type="image/webp" media="(max-width:640px)"
-      imagesrcset="/media/app-2026-10/today-m-light-720.webp 720w, /media/app-2026-10/today-m-light-1440.webp 1440w"
-      imagesizes="94vw" fetchpriority="high">
 <link rel="preload" as="image" type="image/webp" media="(min-width:641px)"
       imagesrcset="/media/app-2026-10/today-light-1200.webp 1200w, /media/app-2026-10/today-light-2000.webp 2000w, /media/app-2026-10/today-light-2560.webp 2560w"
       imagesizes="(min-width:1240px) 1176px, 94vw" fetchpriority="high">
@@ -169,7 +166,7 @@
 <nav class="nav" aria-label="Principal"><div class="nav-pill">
   <a class="nav-brand" href="#top">Klorn</a>
   <button type="button" class="nav-menu-btn" data-menu-toggle aria-expanded="false" aria-controls="nav-menu" aria-label="Menú"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
-  <span class="nav-links" id="nav-menu" role="group" aria-label="Secciones"><a href="#accounts">Cuentas</a><a href="#lanes">Carriles</a><a href="#day">Tu día</a><a href="#pricing">Precios</a><a href="/blog/">Blog</a></span>
+  <span class="nav-links" id="nav-menu" role="group" aria-label="Secciones" data-site-nav><a href="#accounts">Cuentas</a><a href="#lanes">Carriles</a><a href="#pricing">Precios</a><a href="/security/">Seguridad</a><a href="/blog/">Blog</a></span>
   <span class="nav-lang">
     <button type="button" class="nav-lang-btn" data-lang-toggle
             aria-haspopup="true" aria-expanded="false" aria-controls="lang-menu">Español <i aria-hidden="true">▾</i></button>
@@ -214,12 +211,21 @@
     <div class="win">
       <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
       <picture>
-      <source media="(max-width:640px)" sizes="94vw" width="1440" height="1240"
-              srcset="/media/app-2026-10/today-m-light-720.webp 720w, /media/app-2026-10/today-m-light-1440.webp 1440w">
+      <source media="(max-width:640px)" srcset="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==">
       <img src="/media/app-2026-10/today-light-2000.webp"
            srcset="/media/app-2026-10/today-light-1200.webp 1200w, /media/app-2026-10/today-light-2000.webp 2000w, /media/app-2026-10/today-light-2560.webp 2560w"
            sizes="(min-width:1240px) 1176px, 94vw" width="2560" height="1600" fetchpriority="high" decoding="async"
            alt="La pantalla Hoy de Klorn en Mac: correo de tres cuentas agrupado en Push, Meeting y Queue, cada fila marcada con su cuenta, junto al calendario de hoy y el asistente."></picture>
+    </div>
+    <div class="mlist">
+      <p class="mlist-label">Datos de demostración · Hoy</p>
+      <div class="mlist-card">
+        <p class="mlist-head"><span class="chip c-push">Push</span><span class="mlist-n">2</span></p>
+        <ul><li class="mrow mrow-push"><span class="mrow-top"><span>Sarah Kim · G</span><time>17:12</time></span><b>Re: Revisión del contrato — firma necesaria hoy</b><span class="mrow-why">Solicitud de firma que vence hoy</span></li>
+          <li class="mrow mrow-push"><span class="mrow-top"><span>billing@vendor.io · G</span><time>16:40</time></span><b>Factura #4821 vencida</b><span class="mrow-why">Un pago a proveedor está vencido</span></li></ul>
+        <p class="mlist-head"><span class="chip c-meeting">Meeting</span><span class="mlist-n">1</span></p>
+        <ul><li class="mrow mrow-meeting"><span class="mrow-top"><span>Priya Patel · iC</span><time>14:31</time></span><b>Invitación: preparación del consejo del T3, jueves 14:00</b><span class="mrow-why">Invitación de calendario, requiere respuesta</span></li></ul>
+      </div>
     </div>
     <img class="banner" src="/media/app-2026-10/notification-light-396.webp"
          srcset="/media/app-2026-10/notification-light-396.webp 396w, /media/app-2026-10/notification-light-792.webp 792w"
@@ -234,7 +240,7 @@
   <div class="wrap">
     <div class="sec-head">
       <span class="eyebrow">Todas tus cuentas</span>
-      <h2 id="accounts-h">Todas tus cuentas, <span class="ser">una sola vista.</span></h2>
+      <h2 id="accounts-h">Todas tus cuentas, una sola vista.</h2>
       <p class="sec-lead">Conecta cada cuenta una vez. El correo y los eventos de todas llegan a una única lista,
         cada uno marcado con su origen.</p>
     </div>
@@ -270,22 +276,23 @@
   <div class="wrap">
     <div class="sec-head">
       <span class="eyebrow">Cinco carriles</span>
-      <h2 id="lanes-h">Cinco carriles. <span class="ser">Cada uno con su motivo.</span></h2>
+      <h2 id="lanes-h">Cinco carriles. Cada uno con su motivo.</h2>
       <p class="sec-lead">Cada mensaje cae en uno de cinco carriles, con una frase que explica por qué está ahí.</p>
     </div>
     <div class="lanes-grid">
       <div>
         <ul class="lane-list">
-          <li class="lane" data-lane="push"><span class="chip c-push">PUSH</span><p>Te interrumpe ahora.<span>Los pocos mensajes que no pueden esperar.</span></p></li>
-          <li class="lane" data-lane="meeting"><span class="chip c-meeting">MEETING</span><p>Agenda, contrastada con tu calendario.<span>Horarios propuestos, conflictos y huecos libres.</span></p></li>
-          <li class="lane" data-lane="queue"><span class="chip c-queue">QUEUE</span><p>Vale la pena leerlo hoy.<span>Sin notificación, solo un sitio en la lista de hoy.</span></p></li>
-          <li class="lane" data-lane="info"><span class="chip c-info">INFO</span><p>Recibos y avisos, archivados.<span>No esperan respuesta.</span></p></li>
-          <li class="lane" data-lane="silent"><span class="chip c-silent">SILENT</span><p>Guardado, fuera de tu camino.<span>Nunca se borra.</span></p></li>
+          <li class="lane" data-lane="push"><span class="chip c-push">Push</span><p>Te interrumpe ahora.<span>Los pocos mensajes que no pueden esperar.</span></p></li>
+          <li class="lane" data-lane="meeting"><span class="chip c-meeting">Meeting</span><p>Agenda, contrastada con tu calendario.<span>Horarios propuestos, conflictos y huecos libres.</span></p></li>
+          <li class="lane" data-lane="queue"><span class="chip c-queue">Queue</span><p>Vale la pena leerlo hoy.<span>Sin notificación, solo un sitio en la lista de hoy.</span></p></li>
+          <li class="lane" data-lane="info"><span class="chip c-info">Info</span><p>Recibos y avisos, archivados.<span>No esperan respuesta.</span></p></li>
+          <li class="lane" data-lane="silent"><span class="chip c-silent">Silent</span><p>Guardado, fuera de tu camino.<span>Nunca se borra.</span></p></li>
         </ul>
         <p class="rule">Los carriles solo clasifican. Nunca actúan.<span>¿No estás de acuerdo con uno? Mueve el mensaje y Klorn aprende de la corrección.</span></p>
       </div>
       <figure>
         <div class="card-shot">
+          <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
           <img src="/media/app-2026-10/reason-light-1278.webp"
                srcset="/media/app-2026-10/reason-light-640.webp 640w, /media/app-2026-10/reason-light-1278.webp 1278w"
                sizes="(min-width:980px) 620px, 92vw" width="1278" height="640" loading="lazy" decoding="async"
@@ -302,7 +309,7 @@
   <div class="wrap">
     <div class="sec-head">
       <span class="eyebrow">Tu día</span>
-      <h2 id="day-h">Tu día, en un solo sitio. <span class="ser">Un asistente que lo conoce.</span></h2>
+      <h2 id="day-h">Tu día, en un solo sitio. Un asistente que lo conoce.</h2>
       <p class="sec-lead">Calendarios junto a tu correo, un resumen matinal y un asistente que responde a partir de tu propia bandeja y pregunta antes de actuar.</p>
     </div>
     <div class="day-grid">
@@ -310,6 +317,7 @@
         <div><h3>Pregunta y luego aprueba</h3>
           <p>Pregunta qué te necesita antes del mediodía. Los borradores y los eventos nuevos esperan en Aprobaciones hasta que digas que sí.</p></div>
         <div class="tile-media card-shot">
+          <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
           <picture>
           <source media="(max-width:640px)" sizes="88vw" width="840" height="700" srcset="/media/app-2026-10/assistant-m-light-840.webp 840w">
           <img src="/media/app-2026-10/assistant-light-2000.webp"
@@ -323,6 +331,7 @@
           <div><h3>Todos tus calendarios, un solo día</h3>
             <p>Los eventos de cada calendario conectado, junto al correo del que salieron.</p></div>
           <div class="tile-media card-shot">
+          <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
             <img src="/media/app-2026-10/day-light-640.webp"
                  srcset="/media/app-2026-10/day-light-320.webp 320w, /media/app-2026-10/day-light-640.webp 640w"
                  sizes="(min-width:900px) 380px, 88vw" width="640" height="370" loading="lazy" decoding="async"
@@ -333,6 +342,7 @@
           <div><h3>Un resumen antes de empezar</h3>
             <p>La forma de tu día y las dos cosas que no pueden fallar.</p></div>
           <div class="tile-media card-shot">
+          <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
             <img src="/media/app-2026-10/briefing-light-776.webp" width="776" height="274" loading="lazy" decoding="async"
                  alt="Resumen matinal: una mañana cargada y libre después de las 4, con una línea que muestra lo ocupada que está cada parte del día y dos prioridades.">
           </div>
@@ -349,35 +359,25 @@
   <div class="wrap">
     <div class="sec-head">
       <span class="eyebrow">Confianza</span>
-      <h2 id="trust-h">Hecho para <span class="ser">comprobarse.</span></h2>
+      <h2 id="trust-h">Hecho para comprobarse.</h2>
       <p class="sec-lead">Algo que lee tu correo debería mostrar cómo trabaja. Esto es lo que puedes verificar tú mismo.</p>
     </div>
-    <dl class="facts">
-      <div class="fact"><dt>Nada sale sin tu permiso</dt>
-        <dd>Envíos, borrados definitivos y reenvíos esperan tu aprobación, o una regla de respuesta automática que creaste tú.</dd></div>
-      <div class="fact"><dt>El conjunto de prueba es público</dt>
-        <dd>Cada cambio en el clasificador se prueba contra un conjunto de mensajes etiquetados incluido en el repositorio. <a href="/methodology/">Verlo</a></dd></div>
-      <div class="fact"><dt>La factura de IA tiene un techo</dt>
-        <dd>Klorn limita su propio gasto diario en IA y se detiene antes que excederse.</dd></div>
-      <div class="fact"><dt>Verificación OAuth de Google completada</dt>
-        <dd>El 2026-10-03. Evaluado de forma independiente según CASA Tier 2. <a href="/security/#google-verification">Detalles</a></dd></div>
-    </dl>
     <div class="trust-grid">
-      <a class="trust" href="/open-source/"><h3>Código abierto</h3>
-        <p>Cada línea que toca tu correo es pública, bajo la AGPL-3.0 sin modificar.</p><span class="go">Por qué código abierto →</span></a>
-      <a class="trust" href="/self-host/"><h3>Autoalojamiento</h3>
-        <p>Ejecuta todo en tu propio servidor, con tu propia clave de modelo o un modelo local.</p><span class="go">Guía de autoalojamiento →</span></a>
-      <a class="trust" href="/security/"><h3>Seguridad</h3>
-        <p>Los tokens de cuenta se cifran en reposo. Cómo se tratan tus datos, en detalle.</p><span class="go">Seguridad →</span></a>
-      <a class="trust" href="/pricing/"><h3>Tu propia clave de IA</h3>
-        <p>Conecta Klorn a tu propia clave de modelo, en cualquier plan.</p><span class="go">Cómo funciona →</span></a>
+      <article class="trust"><h3>Nada sale sin tu permiso</h3>
+        <p>Envíos, borrados definitivos y reenvíos esperan tu aprobación, o una regla de respuesta automática que creaste tú.</p><a class="go" href="/security/#approvals">Cómo funcionan las aprobaciones →</a></article>
+      <article class="trust"><h3>El conjunto de prueba es público</h3>
+        <p>Cada cambio en el clasificador se prueba contra un conjunto de mensajes etiquetados incluido en el repositorio.</p><a class="go" href="/methodology/">Metodología →</a></article>
+      <article class="trust"><h3>Código abierto y autoalojable</h3>
+        <p>Cada línea que toca tu correo es pública bajo la AGPL-3.0. Ejecútalo en tu propio servidor.</p><a class="go" href="/self-host/">Guía de autoalojamiento →</a></article>
+      <article class="trust"><h3>Verificación OAuth de Google completada</h3>
+        <p>El 2026-10-03. Evaluado de forma independiente según CASA Tier 2.</p><a class="go" href="/security/#google-verification">Seguridad →</a></article>
     </div>
     <p class="vs-row">¿Comparando herramientas? Lado a lado:
       <a href="/vs/fyxer/">vs Fyxer</a><a href="/vs/superhuman/">vs Superhuman</a>
       <a href="/vs/sanebox/">vs SaneBox</a><a href="/vs/inbox-zero/">vs Inbox Zero</a></p>
     <figure class="note">
+      <figcaption class="note-by"><span class="note-label">Del fundador</span><span>La persona que creó Klorn</span></figcaption>
       <blockquote class="note-q"><p class="ser">«Con Klorn, encontrar mis correos es muchísimo más fácil. Veo incluso los que se me escapaban, y tener todas mis cuentas dispersas en una sola pantalla es su mayor ventaja.»</p></blockquote>
-      <figcaption class="note-by">— la persona que creó Klorn</figcaption>
     </figure>
   </div>
 </section>
@@ -387,12 +387,12 @@
   <div class="wrap">
     <div class="sec-head">
       <span class="eyebrow">Precios</span>
-      <h2 id="pricing-h">Clasificar es gratis. <span class="ser">$29.99 para hacer más.</span></h2>
+      <h2 id="pricing-h">Clasificar es gratis. $29.99 para hacer más.</h2>
       <p class="sec-lead">Los carriles y los motivos son gratis, sin límite de tiempo. Pro añade las partes que tienen detrás una factura real de IA.</p>
     </div>
     <div class="prices">
       <article class="price">
-        <span class="plan">Free</span>
+        <div class="phead"><span class="plan">Free</span><span class="psub">Para una cuenta de correo</span></div>
         <div class="amt">$0<small>/mes</small></div>
         <p class="pnote">Sin tarjeta y sin caducidad.</p>
         <ul>
@@ -404,7 +404,7 @@
         <a class="btn btn-2" href="https://app.klorn.ai/login?mode=register">Empieza gratis</a>
       </article>
       <article class="price feat">
-        <span class="plan">Pro</span>
+        <div class="phead"><span class="plan">Pro</span><span class="psub">Para todas tus cuentas</span></div>
         <div class="amt">$29.99<small>/mes</small></div>
         <p class="pnote">Prueba de 7 días. Cancela cuando quieras, desde la app.</p>
         <ul>
@@ -416,8 +416,8 @@
         <a class="btn btn-1" href="https://app.klorn.ai/login?mode=register">Empieza la prueba de Pro</a>
       </article>
       <article class="price org">
-        <span class="plan">Para empresas</span>
-        <div class="amt amt-ask">Precio a consultar</div>
+        <div class="phead"><span class="plan">Para empresas</span><span class="psub">Precio fijado con nuestros primeros equipos</span></div>
+        <div class="amt amt-ask">Hablemos</div>
         <p class="pnote">Estamos fijando el precio con nuestras primeras empresas clientes: cuéntanos sobre tu equipo.</p>
         <ul>
           <li>Todo lo de Pro, para cada persona</li>
@@ -464,7 +464,9 @@
     <h2 id="final-h">Reúnelo todo <span class="ser">en un solo lugar.</span></h2>
     <div class="actions">
       <a class="btn btn-1 dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
-         data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe" data-win-label="Descargar para Windows">Descargar para Mac</a>
+         data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe" data-win-label="Descargar para Windows">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.05 12.54c.02-2.3 1.87-3.4 1.95-3.45-1.06-1.56-2.71-1.77-3.3-1.8-1.4-.11-2.58.78-3.25.78-.68 0-1.72-.76-2.83-.74-1.46.02-2.8.85-3.55 2.15-1.51 2.63-.39 6.52 1.09 8.66.72 1.04 1.58 2.21 2.71 2.17 1.09-.04 1.5-.7 2.82-.7 1.31 0 1.68.7 2.83.68 1.17-.02 1.92-1.06 2.64-2.11.83-1.2 1.17-2.37 1.19-2.43-.03-.01-2.28-.88-2.3-3.48zM14.9 5.6c.6-.72 1-1.72.89-2.72-.86.04-1.9.57-2.52 1.29-.55.63-1.02 1.65-.89 2.63.96.07 1.92-.49 2.52-1.2z"/></svg>
+        Descargar para Mac</a>
       <a class="btn btn-2" href="https://app.klorn.ai/login?mode=register">Abrir en el navegador</a>
     </div>
     <!-- The Windows entry stays a visible link so a Windows visitor with

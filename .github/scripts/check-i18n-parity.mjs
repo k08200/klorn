@@ -205,6 +205,14 @@ const COPY_GUARD_PREFIXES = [
   "graph.",
   "newEvent.",
   "compose.",
+  // Mail → Subscriptions (bulk unsubscribe).
+  "mailSubscriptions.",
+  // Legacy chrome, command palette, Mail v1 and briefing copy (UI audit 2026-10-15).
+  "commandPalette.",
+  "mailV1.",
+  "inboxLegacy.",
+  "briefingPage.",
+  "todayActions.",
 ];
 
 /** Words that are genuinely the same in another language: key -> locales. Keep this tiny. */
@@ -218,6 +226,9 @@ const SAME_AS_ENGLISH = {
   "newEvent.date": ["fr"],
   "newEvent.optional": ["de"],
   "compose.message": ["fr"],
+  // German UI already calls lanes "Lanes" (keys.group.lane); French "Urgent" is the word.
+  "inboxLegacy.segment.lanes": ["de"],
+  "todayActions.row.urgent": ["fr"],
 };
 
 function escapeRegExp(text) {
@@ -304,13 +315,6 @@ const PROSE_GUARD_SKIP = new Map([
   ["packages/web/src/components/firewall-board.tsx", "legacy /inbox only"],
   ["packages/web/src/components/pmf-card.tsx", "legacy /inbox only"],
   ["packages/web/src/components/screener-card.tsx", "legacy /inbox only"],
-  // Imported by nothing.
-  ["packages/web/src/components/beta-learning-card.tsx", "unused"],
-  ["packages/web/src/components/email-feedback-list.tsx", "unused"],
-  ["packages/web/src/components/feedback-policy-studio.tsx", "unused"],
-  ["packages/web/src/components/footer.tsx", "unused"],
-  ["packages/web/src/components/operating-loop-card.tsx", "unused"],
-  ["packages/web/src/components/playbook-recommendations.tsx", "unused"],
   // Admin-only.
   ["packages/web/src/components/retention-dashboard.tsx", "admin only"],
   ["packages/web/src/app/settings/sms/page.tsx", "admin only"],
