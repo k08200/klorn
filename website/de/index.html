@@ -26,9 +26,6 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://klorn.ai/brand/og-image.png?v=k2">
 <link rel="preload" as="font" type="font/woff2" href="/fonts/geist-var.woff2" crossorigin>
-<link rel="preload" as="image" type="image/webp" media="(max-width:640px)"
-      imagesrcset="/media/app-2026-10/today-m-light-720.webp 720w, /media/app-2026-10/today-m-light-1440.webp 1440w"
-      imagesizes="94vw" fetchpriority="high">
 <link rel="preload" as="image" type="image/webp" media="(min-width:641px)"
       imagesrcset="/media/app-2026-10/today-light-1200.webp 1200w, /media/app-2026-10/today-light-2000.webp 2000w, /media/app-2026-10/today-light-2560.webp 2560w"
       imagesizes="(min-width:1240px) 1176px, 94vw" fetchpriority="high">
@@ -214,12 +211,21 @@
     <div class="win">
       <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
       <picture>
-      <source media="(max-width:640px)" sizes="94vw" width="1440" height="1240"
-              srcset="/media/app-2026-10/today-m-light-720.webp 720w, /media/app-2026-10/today-m-light-1440.webp 1440w">
+      <source media="(max-width:640px)" srcset="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==">
       <img src="/media/app-2026-10/today-light-2000.webp"
            srcset="/media/app-2026-10/today-light-1200.webp 1200w, /media/app-2026-10/today-light-2000.webp 2000w, /media/app-2026-10/today-light-2560.webp 2560w"
            sizes="(min-width:1240px) 1176px, 94vw" width="2560" height="1600" fetchpriority="high" decoding="async"
            alt="Klorns Heute-Ansicht auf dem Mac: Mails aus drei Konten, gruppiert in Push, Meeting und Queue, jede Zeile mit ihrem Konto markiert, neben dem heutigen Kalender und dem Assistenten."></picture>
+    </div>
+    <div class="mlist">
+      <p class="mlist-label">Demodaten · Heute</p>
+      <div class="mlist-card">
+        <p class="mlist-head"><span class="chip c-push">Push</span><span class="mlist-n">2</span></p>
+        <ul><li class="mrow mrow-push"><span class="mrow-top"><span>Sarah Kim · G</span><time>17:12</time></span><b>AW: Vertragsprüfung — Unterschrift heute nötig</b><span class="mrow-why">Unterschrift, die heute fällig ist</span></li>
+          <li class="mrow mrow-push"><span class="mrow-top"><span>billing@vendor.io · G</span><time>16:40</time></span><b>Rechnung #4821 überfällig</b><span class="mrow-why">Eine Lieferantenzahlung ist überfällig</span></li></ul>
+        <p class="mlist-head"><span class="chip c-meeting">Meeting</span><span class="mlist-n">1</span></p>
+        <ul><li class="mrow mrow-meeting"><span class="mrow-top"><span>Priya Patel · iC</span><time>14:31</time></span><b>Einladung: Vorbereitung Q3-Board, Donnerstag 14:00</b><span class="mrow-why">Kalendereinladung, Antwort nötig</span></li></ul>
+      </div>
     </div>
     <img class="banner" src="/media/app-2026-10/notification-light-396.webp"
          srcset="/media/app-2026-10/notification-light-396.webp 396w, /media/app-2026-10/notification-light-792.webp 792w"
@@ -234,7 +240,7 @@
   <div class="wrap">
     <div class="sec-head">
       <span class="eyebrow">Alle Konten</span>
-      <h2 id="accounts-h">Alle Konten, <span class="ser">eine Ansicht.</span></h2>
+      <h2 id="accounts-h">Alle Konten, eine Ansicht.</h2>
       <p class="sec-lead">Verbinde jedes Konto einmal. Mails und Termine aus allen landen in einer einzigen Liste,
         jeweils mit ihrer Herkunft markiert.</p>
     </div>
@@ -270,22 +276,23 @@
   <div class="wrap">
     <div class="sec-head">
       <span class="eyebrow">Fünf Spuren</span>
-      <h2 id="lanes-h">Fünf Spuren. <span class="ser">Jede mit ihrem Grund.</span></h2>
+      <h2 id="lanes-h">Fünf Spuren. Jede mit ihrem Grund.</h2>
       <p class="sec-lead">Jede Nachricht landet in einer von fünf Spuren, mit einem Satz, der sagt, warum sie dort ist.</p>
     </div>
     <div class="lanes-grid">
       <div>
         <ul class="lane-list">
-          <li class="lane" data-lane="push"><span class="chip c-push">PUSH</span><p>Unterbricht dich sofort.<span>Die wenigen Nachrichten, die nicht warten können.</span></p></li>
-          <li class="lane" data-lane="meeting"><span class="chip c-meeting">MEETING</span><p>Terminplanung, gegen deinen Kalender geprüft.<span>Vorgeschlagene Zeiten, Konflikte und freie Slots.</span></p></li>
-          <li class="lane" data-lane="queue"><span class="chip c-queue">QUEUE</span><p>Heute lesenswert.<span>Keine Benachrichtigung, nur ein Platz in der heutigen Liste.</span></p></li>
-          <li class="lane" data-lane="info"><span class="chip c-info">INFO</span><p>Quittungen und Hinweise, abgelegt.<span>Keine Antwort nötig.</span></p></li>
-          <li class="lane" data-lane="silent"><span class="chip c-silent">SILENT</span><p>Aufbewahrt, aus dem Weg.<span>Nie gelöscht.</span></p></li>
+          <li class="lane" data-lane="push"><span class="chip c-push">Push</span><p>Unterbricht dich sofort.<span>Die wenigen Nachrichten, die nicht warten können.</span></p></li>
+          <li class="lane" data-lane="meeting"><span class="chip c-meeting">Meeting</span><p>Terminplanung, gegen deinen Kalender geprüft.<span>Vorgeschlagene Zeiten, Konflikte und freie Slots.</span></p></li>
+          <li class="lane" data-lane="queue"><span class="chip c-queue">Queue</span><p>Heute lesenswert.<span>Keine Benachrichtigung, nur ein Platz in der heutigen Liste.</span></p></li>
+          <li class="lane" data-lane="info"><span class="chip c-info">Info</span><p>Quittungen und Hinweise, abgelegt.<span>Keine Antwort nötig.</span></p></li>
+          <li class="lane" data-lane="silent"><span class="chip c-silent">Silent</span><p>Aufbewahrt, aus dem Weg.<span>Nie gelöscht.</span></p></li>
         </ul>
         <p class="rule">Spuren sortieren nur. Sie handeln nie.<span>Anderer Meinung? Verschieb die Nachricht, und Klorn lernt aus der Korrektur.</span></p>
       </div>
       <figure>
         <div class="card-shot">
+          <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
           <img src="/media/app-2026-10/reason-light-1278.webp"
                srcset="/media/app-2026-10/reason-light-640.webp 640w, /media/app-2026-10/reason-light-1278.webp 1278w"
                sizes="(min-width:980px) 620px, 92vw" width="1278" height="640" loading="lazy" decoding="async"
@@ -302,7 +309,7 @@
   <div class="wrap">
     <div class="sec-head">
       <span class="eyebrow">Dein Tag</span>
-      <h2 id="day-h">Dein Tag, zusammengeführt. <span class="ser">Ein Assistent, der ihn kennt.</span></h2>
+      <h2 id="day-h">Dein Tag, zusammengeführt. Ein Assistent, der ihn kennt.</h2>
       <p class="sec-lead">Kalender neben deinen Mails, ein Morgen-Briefing und ein Assistent, der aus deinem eigenen Postfach antwortet und fragt, bevor er handelt.</p>
     </div>
     <div class="day-grid">
@@ -310,6 +317,7 @@
         <div><h3>Fragen, dann freigeben</h3>
           <p>Frag, was dich vor Mittag braucht. Entwürfe und neue Termine warten unter Freigaben, bis du Ja sagst.</p></div>
         <div class="tile-media card-shot">
+          <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
           <picture>
           <source media="(max-width:640px)" sizes="88vw" width="840" height="700" srcset="/media/app-2026-10/assistant-m-light-840.webp 840w">
           <img src="/media/app-2026-10/assistant-light-2000.webp"
@@ -323,6 +331,7 @@
           <div><h3>Alle Kalender, ein Tag</h3>
             <p>Termine aus jedem verbundenen Kalender, neben den Mails, aus denen sie stammen.</p></div>
           <div class="tile-media card-shot">
+          <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
             <img src="/media/app-2026-10/day-light-640.webp"
                  srcset="/media/app-2026-10/day-light-320.webp 320w, /media/app-2026-10/day-light-640.webp 640w"
                  sizes="(min-width:900px) 380px, 88vw" width="640" height="370" loading="lazy" decoding="async"
@@ -333,6 +342,7 @@
           <div><h3>Ein Briefing, bevor du anfängst</h3>
             <p>Wie dein Tag aussieht, und die zwei Dinge, die nicht liegen bleiben dürfen.</p></div>
           <div class="tile-media card-shot">
+          <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
             <img src="/media/app-2026-10/briefing-light-776.webp" width="776" height="274" loading="lazy" decoding="async"
                  alt="Morgen-Briefing: ein voller Vormittag, ab 16 Uhr frei, mit einer Linie, die zeigt, wie ausgelastet jeder Teil des Tages ist, und zwei Prioritäten.">
           </div>
@@ -349,35 +359,25 @@
   <div class="wrap">
     <div class="sec-head">
       <span class="eyebrow">Vertrauen</span>
-      <h2 id="trust-h">Gebaut, um <span class="ser">geprüft zu werden.</span></h2>
+      <h2 id="trust-h">Gebaut, um geprüft zu werden.</h2>
       <p class="sec-lead">Was deine Mails liest, sollte seine Arbeit offenlegen. Das hier kannst du selbst nachprüfen.</p>
     </div>
-    <dl class="facts">
-      <div class="fact"><dt>Nichts geht ohne dein Okay raus</dt>
-        <dd>Senden, endgültiges Löschen und Weiterleiten warten auf deine Freigabe, oder auf eine Auto-Antwort-Regel, die du selbst angelegt hast.</dd></div>
-      <div class="fact"><dt>Das Testset ist öffentlich</dt>
-        <dd>Jede Änderung am Klassifikator läuft gegen ein eingechecktes Set gelabelter Nachrichten. <a href="/methodology/">Ansehen</a></dd></div>
-      <div class="fact"><dt>Die KI-Rechnung hat eine Obergrenze</dt>
-        <dd>Klorn deckelt seine eigenen täglichen KI-Ausgaben und stoppt lieber, als zu überziehen.</dd></div>
-      <div class="fact"><dt>Google-OAuth-Prüfung abgeschlossen</dt>
-        <dd>Am 2026-10-03. Unabhängig nach CASA Tier 2 bewertet. <a href="/security/#google-verification">Details</a></dd></div>
-    </dl>
     <div class="trust-grid">
-      <a class="trust" href="/open-source/"><h3>Open Source</h3>
-        <p>Jede Zeile, die deine Mails berührt, ist öffentlich, unter der unveränderten AGPL-3.0.</p><span class="go">Warum Open Source →</span></a>
-      <a class="trust" href="/self-host/"><h3>Selbst hosten</h3>
-        <p>Betreib das Ganze auf deinem eigenen Server, mit deinem eigenen Modellschlüssel oder einem lokalen Modell.</p><span class="go">Anleitung zum Selbsthosten →</span></a>
-      <a class="trust" href="/security/"><h3>Sicherheit</h3>
-        <p>Konto-Tokens werden verschlüsselt gespeichert. Wie deine Daten behandelt werden, im Detail.</p><span class="go">Sicherheit →</span></a>
-      <a class="trust" href="/pricing/"><h3>Dein eigener KI-Schlüssel</h3>
-        <p>Verbinde Klorn mit deinem eigenen Modellschlüssel, in jedem Plan.</p><span class="go">So funktioniert es →</span></a>
+      <article class="trust"><h3>Nichts geht ohne dein Okay raus</h3>
+        <p>Senden, endgültiges Löschen und Weiterleiten warten auf deine Freigabe, oder auf eine Auto-Antwort-Regel, die du selbst angelegt hast.</p><a class="go" href="/security/#approvals">So funktioniert die Freigabe →</a></article>
+      <article class="trust"><h3>Das Testset ist öffentlich</h3>
+        <p>Jede Änderung am Klassifikator läuft gegen ein eingechecktes Set gelabelter Nachrichten.</p><a class="go" href="/methodology/">Methodik →</a></article>
+      <article class="trust"><h3>Open Source, selbst hostbar</h3>
+        <p>Jede Zeile, die deine Mails berührt, ist unter AGPL-3.0 öffentlich. Betreib es auf deinem eigenen Server.</p><a class="go" href="/self-host/">Anleitung zum Selbsthosten →</a></article>
+      <article class="trust"><h3>Google-OAuth-Prüfung abgeschlossen</h3>
+        <p>Am 2026-10-03. Unabhängig nach CASA Tier 2 bewertet.</p><a class="go" href="/security/#google-verification">Sicherheit →</a></article>
     </div>
     <p class="vs-row">Du vergleichst Tools? Direkt nebeneinander:
       <a href="/vs/fyxer/">vs Fyxer</a><a href="/vs/superhuman/">vs Superhuman</a>
       <a href="/vs/sanebox/">vs SaneBox</a><a href="/vs/inbox-zero/">vs Inbox Zero</a></p>
     <figure class="note">
+      <figcaption class="note-by"><span class="note-label">Vom Gründer</span><span>Die Person, die Klorn gebaut hat</span></figcaption>
       <blockquote class="note-q"><p class="ser">„Mit Klorn finde ich meine Mails wirklich viel leichter. Ich sehe sogar die, die mir vorher entgangen sind – und alle meine verstreuten Konten auf einem Bildschirm zu haben, ist der größte Vorteil.“</p></blockquote>
-      <figcaption class="note-by">— die Person, die Klorn gebaut hat</figcaption>
     </figure>
   </div>
 </section>
@@ -387,12 +387,12 @@
   <div class="wrap">
     <div class="sec-head">
       <span class="eyebrow">Preise</span>
-      <h2 id="pricing-h">Sortieren ist kostenlos. <span class="ser">29,99 $ für mehr.</span></h2>
+      <h2 id="pricing-h">Sortieren ist kostenlos. 29,99 $ für mehr.</h2>
       <p class="sec-lead">Spuren und Gründe sind kostenlos, ohne Zeitlimit. Pro bringt die Teile, hinter denen eine echte KI-Rechnung steht.</p>
     </div>
     <div class="prices">
       <article class="price">
-        <span class="plan">Free</span>
+        <div class="phead"><span class="plan">Free</span><span class="psub">Für ein Mailkonto</span></div>
         <div class="amt">0 $<small>/Monat</small></div>
         <p class="pnote">Keine Karte, kein Ablaufdatum.</p>
         <ul>
@@ -404,7 +404,7 @@
         <a class="btn btn-2" href="https://app.klorn.ai/login?mode=register">Kostenlos starten</a>
       </article>
       <article class="price feat">
-        <span class="plan">Pro</span>
+        <div class="phead"><span class="plan">Pro</span><span class="psub">Für alle deine Konten</span></div>
         <div class="amt">29,99 $<small>/Monat</small></div>
         <p class="pnote">7 Tage testen. Jederzeit in der App kündbar.</p>
         <ul>
@@ -416,8 +416,8 @@
         <a class="btn btn-1" href="https://app.klorn.ai/login?mode=register">Pro-Test starten</a>
       </article>
       <article class="price org">
-        <span class="plan">Für Unternehmen</span>
-        <div class="amt amt-ask">Preis auf Anfrage</div>
+        <div class="phead"><span class="plan">Für Unternehmen</span><span class="psub">Preis mit unseren ersten Teams festgelegt</span></div>
+        <div class="amt amt-ask">Auf Anfrage</div>
         <p class="pnote">Den Preis legen wir mit unseren ersten Firmenkunden fest – erzähl uns von deinem Team.</p>
         <ul>
           <li>Alles aus Pro, für jede Person</li>
@@ -464,7 +464,9 @@
     <h2 id="final-h">Bring alles <span class="ser">an einen ruhigen Ort.</span></h2>
     <div class="actions">
       <a class="btn btn-1 dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
-         data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe" data-win-label="Für Windows herunterladen">Für Mac herunterladen</a>
+         data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe" data-win-label="Für Windows herunterladen">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.05 12.54c.02-2.3 1.87-3.4 1.95-3.45-1.06-1.56-2.71-1.77-3.3-1.8-1.4-.11-2.58.78-3.25.78-.68 0-1.72-.76-2.83-.74-1.46.02-2.8.85-3.55 2.15-1.51 2.63-.39 6.52 1.09 8.66.72 1.04 1.58 2.21 2.71 2.17 1.09-.04 1.5-.7 2.82-.7 1.31 0 1.68.7 2.83.68 1.17-.02 1.92-1.06 2.64-2.11.83-1.2 1.17-2.37 1.19-2.43-.03-.01-2.28-.88-2.3-3.48zM14.9 5.6c.6-.72 1-1.72.89-2.72-.86.04-1.9.57-2.52 1.29-.55.63-1.02 1.65-.89 2.63.96.07 1.92-.49 2.52-1.2z"/></svg>
+        Für Mac herunterladen</a>
       <a class="btn btn-2" href="https://app.klorn.ai/login?mode=register">Im Browser öffnen</a>
     </div>
     <!-- The Windows entry stays a visible link so a Windows visitor with
