@@ -146,3 +146,17 @@ describe("Android data-only pushes", () => {
     });
   });
 });
+
+describe("parity with the native service (KlornPushPayload.java)", () => {
+  // The same vectors are asserted in android/app/src/test/.../KlornPushPayloadTest.java,
+  // so a repeat posted natively replaces one posted from here, and vice versa.
+  it.each([
+    ["item-1", 1470695920],
+    ["email-1", 1646888158],
+    ["pa-1", 1482157022],
+    ["Klorn — Alice\nQ3 budget", 384908386],
+    ["처리 완료", 1992001445],
+  ])("notificationIdOf(%j) = %i", (key, id) => {
+    expect(notificationIdOf(key)).toBe(id);
+  });
+});

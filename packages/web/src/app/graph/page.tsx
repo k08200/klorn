@@ -65,12 +65,12 @@ const SWATCH_CLASS: Record<SwatchShape, string> = {
 const COPY: Record<Mode, { eyebrow: string; title: string; body: string }> = {
   relationships: {
     eyebrow: "Relationships",
-    title: "Who matters to your inbox",
-    body: "A force-directed view of the relationship graph the firewall already reasons over — your ranked contacts (size = interaction score, colour = current signal) clustered by company domain. The people you actually reply to grow larger and turn pink: Klorn learns who matters from your own actions and feeds that back into how it triages.",
+    title: "Who matters in your mail",
+    body: "A force-directed view of the relationship graph Klorn already reasons over when it sorts mail into lanes — your ranked contacts (size = interaction score, colour = current signal) clustered by company domain. The people you actually reply to grow larger and turn pink: Klorn learns who matters from your own actions and feeds that back into how it triages.",
   },
   decisions: {
     eyebrow: "Decision brain",
-    title: "How the firewall decides",
+    title: "How Klorn picks a lane",
     body: `The classifier's deterministic core: the 4 scored features gating the ${TIER_COUNT} lanes (the tierFromFeatures rule), with your override signal overlaid on each lane. This is the policy structure itself, so it renders even before you've corrected anything.`,
   },
 };

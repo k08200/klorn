@@ -33,6 +33,10 @@ function makeDeps(overrides: Partial<AutoModeSweepDeps> = {}) {
       calls.push("isSingleRecipient");
       return !to.includes(",");
     },
+    replyBlocked: async () => {
+      calls.push("replyBlocked");
+      return null;
+    },
     draftReply: async () => {
       calls.push("draftReply");
       return "a fine reply";
@@ -80,6 +84,7 @@ describe("runAutoModeSweep ordering contracts (security review 2026-08-16)", () 
       "findEmail",
       "alreadyReplied",
       "isSingleRecipient",
+      "replyBlocked",
       "draftReply",
       "emailStillExists",
       "writeLedger",
@@ -190,5 +195,23 @@ describe("runAutoModeSweep ordering contracts (security review 2026-08-16)", () 
     expect(calls).toContain("findEmail:row-bad");
     expect(calls).toContain("findEmail:row-good");
     expect(calls).toContain("send");
+  });
+});
+
+describe("runAutoModeSweep — shared unattended-reply guards", () => {
+  it("skips a blocked mail before any LLM spend or ledger write", async () => {
+    const { deps, calls } = makeDeps({
+      replyBlocked: async () => {
+        calls.push("replyBlocked");
+        return "daily-cap";
+      },
+    });
+
+    await runAutoModeSweep("u1", "be brief", deps);
+
+    expect(calls).toContain("replyBlocked");
+    expect(calls).not.toContain("draftReply");
+    expect(calls).not.toContain("writeLedger");
+    expect(calls).not.toContain("send");
   });
 });

@@ -22,6 +22,7 @@
 import type { NativePushMailFields } from "@klorn/contract";
 import { type App, cert, getApps, initializeApp } from "firebase-admin/app";
 import { type BatchResponse, getMessaging, type Message } from "firebase-admin/messaging";
+import { androidDataPushEnabled } from "../config.js";
 import { prisma } from "../db.js";
 import { captureError } from "../sentry.js";
 import type { NotifCategory } from "./notification-prefs.js";
@@ -130,13 +131,35 @@ function buildDataPayload(payload: DevicePushPayload): Record<string, string> {
 /**
  * One FCM message. The keys a push always carried come first and unchanged;
  * a mail push then appends its deep link (all strings, as FCM requires).
+ *
+ * `dataOnly` (a device that registered `dataMessages: true`, while
+ * ANDROID_DATA_PUSH_ENABLED is on): a MAIL push goes out with no
+ * `notification` block — title and body move into `data`, plus `sentAt` (epoch
+ * ms; the app drops a replay older than 15 min) — so the app's native service
+ * posts it with action buttons (apps/mobile push/KlornMessagingService.java,
+ * contract/src/push.ts). A push that is not about one mail never goes data-only.
  */
 export function buildFcmMessage(
   token: string,
   payload: DevicePushPayload,
   category: NotifCategory,
+  opts: { dataOnly?: boolean; now?: number } = {},
 ): Message {
   const mail = mailPushTarget(payload);
+  if (opts.dataOnly && mail) {
+    return {
+      token,
+      data: {
+        ...buildDataPayload(payload),
+        category,
+        ...mail,
+        title: payload.title,
+        body: payload.body,
+        sentAt: String(opts.now ?? Date.now()),
+      },
+      android: { priority: "high" },
+    };
+  }
   return {
     token,
     notification: { title: payload.title, body: payload.body },
@@ -171,13 +194,18 @@ export async function sendDevicePush(
 
   const rows = await prisma.devicePushToken.findMany({
     where: { userId, platform: "android" },
-    select: { token: true },
+    select: { token: true, dataMessages: true },
   });
   if (rows.length === 0) {
     return skipped("no_device_tokens");
   }
 
-  const messages: Message[] = rows.map((row) => buildFcmMessage(row.token, payload, category));
+  const dataPush = androidDataPushEnabled();
+  const messages: Message[] = rows.map((row) =>
+    buildFcmMessage(row.token, payload, category, {
+      dataOnly: dataPush && row.dataMessages === true,
+    }),
+  );
 
   // sendEach throws only on a TOTAL failure (network down, bad service-account
   // key, FCM quota). Treat that as best-effort: log + capture and return a skip

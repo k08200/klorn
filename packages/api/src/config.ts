@@ -224,6 +224,18 @@ export function deviceCalendarEnabled(): boolean {
     (process.env.DEVICE_CALENDAR_ENABLED ?? "").trim().toLowerCase(),
   );
 }
+// Subscriptions: the per-sender, per-account bulk unsubscriber (Mail →
+// Subscriptions). OFF by default (repo doctrine). While off, GET
+// /api/email/subscriptions and POST /api/email/subscriptions/unsubscribe answer
+// Fastify's default 404 (darkRouteGate), and the web hides its entry point.
+// User-initiated only: nothing runs on a schedule, and it never touches the
+// separate AUTO_UNSUBSCRIBE_ENABLED classification-time path. Read at request
+// time with the same lenient truthy parse, so a flip needs no redeploy.
+export function bulkUnsubscribeEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.BULK_UNSUBSCRIBE_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
 // The drive: a metadata index of files across sources — step D2 of
 // docs/providers/unified-platform-plan.md. OFF by default (repo doctrine). While
 // off: every /api/drive route answers Fastify's default 404 (darkRouteGate), and
@@ -539,6 +551,19 @@ export function naverLoginEnabled(): boolean {
 export function manualSendReceiptsEnabled(): boolean {
   return ["true", "1", "yes", "on"].includes(
     (process.env.MANUAL_SEND_RECEIPTS_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
+// Android data-only mail pushes — OFF by default (repo doctrine). While ON, a
+// MAIL push (one email: emailId set) to an Android device that registered with
+// `dataMessages: true` goes out as an FCM data-only message (title and body in
+// `data`, `sentAt`, no `notification` block), which the app's native service
+// posts with In 1 hour · Done · Review buttons in every app state
+// (apps/mobile push/KlornMessagingService.java). Every other push, every other
+// device, and every push while OFF stay notification messages exactly as before.
+// Needs the 20261017010000_device_push_data_messages migration. Read per send.
+export function androidDataPushEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.ANDROID_DATA_PUSH_ENABLED ?? "").trim().toLowerCase(),
   );
 }
 // Attention aging sweep (hourly): auto-resolve firewall items the user

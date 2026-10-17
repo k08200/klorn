@@ -37,6 +37,7 @@ function makeDeps() {
     }),
     alreadyReplied: async () => false,
     isSingleRecipient,
+    replyBlocked: async () => null,
     draftReply: async () => "a fine reply",
     emailStillExists: async () => true,
     writeLedger: async () => {

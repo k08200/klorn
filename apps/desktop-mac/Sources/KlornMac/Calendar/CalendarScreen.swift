@@ -230,7 +230,7 @@ struct CalendarScreen: View {
                 Text(symbol).font(Theme.Typo.micro).foregroundStyle(Theme.textDim)
                 Text("\(calendar.component(.day, from: day))")
                     .font(Theme.Typo.caption.monospacedDigit().weight(isToday ? .bold : .regular))
-                    .foregroundStyle(isToday ? Color.white : Theme.text)
+                    .foregroundStyle(isToday ? Theme.onAccentSolid : Theme.text)
                     .frame(width: 22, height: 22)
                     .background(isToday ? Theme.accent : .clear, in: Circle())
             }
@@ -300,7 +300,7 @@ struct CalendarScreen: View {
                 Text("\(calendar.component(.day, from: day))")
                     .font(Theme.Typo.caption.monospacedDigit()
                         .weight(isToday ? .bold : .regular))
-                    .foregroundStyle(isToday ? Color.white : inMonth ? Theme.text : Theme.textDim)
+                    .foregroundStyle(isToday ? Theme.onAccentSolid : inMonth ? Theme.text : Theme.textDim)
                     .frame(width: 22, height: 22)
                     .background(isToday ? Theme.accent : .clear, in: Circle())
                 ForEach(events.prefix(2)) { event in

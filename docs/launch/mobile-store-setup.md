@@ -107,6 +107,15 @@ Firebase console → project → add Android app `ai.klorn.app` → download
 (base64 of the file). Firebase → Project settings → Service accounts →
 Generate key → Render env `FIREBASE_SERVICE_ACCOUNT` (whole JSON).
 
+Optional, later: Android notification buttons (In 1 hour · Done · Review).
+The app posts them itself from FCM data-only messages, which the server sends
+only while Render env `ANDROID_DATA_PUSH_ENABLED=true` (OFF by default; needs
+the `20261017010000_device_push_data_messages` migration, which `start.sh`
+applies). Only devices on a build that registered `dataMessages: true` are
+switched; everyone else keeps today's notification messages. Turn it on after
+checking on one real Android phone that a mail push shows the three buttons
+with the app closed.
+
 ---
 
 ## In-app purchase keys (both platforms) → 2 GitHub secrets

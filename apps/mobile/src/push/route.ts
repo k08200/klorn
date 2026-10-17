@@ -76,6 +76,23 @@ export const PUSH_ACTIONS = {
 } as const;
 
 /**
+ * The button behind a tap. A notification the app's native Android service
+ * posted (android/.../push/KlornMessagingService.java) comes back through the
+ * push plugin as a plain "tap" whose data names the button in `klornAction`;
+ * only Later / Done / Review are honoured from it (there is no Send on Android).
+ * Every other action id passes through unchanged.
+ */
+export function actionFromTap(actionId: string, data: PushData | null | undefined): string {
+  if (actionId !== "tap") return actionId;
+  const named = data?.klornAction;
+  return named === PUSH_ACTIONS.later ||
+    named === PUSH_ACTIONS.done ||
+    named === PUSH_ACTIONS.review
+    ? named
+    : actionId;
+}
+
+/**
  * What Later / Done act on: the mail (by email id — POST
  * /api/inbox/firewall/email/:emailId/{snooze,dismiss}, which works for any of
  * the user's mail), else the attention item when only its id came.

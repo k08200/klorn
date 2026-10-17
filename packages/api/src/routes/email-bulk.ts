@@ -187,10 +187,22 @@ async function archiveAll(
   return results;
 }
 
+/**
+ * Archive these (already userId-scoped) messages at their providers, drop the
+ * archived rows and close their attention items. Exported so the Subscriptions
+ * page's "Unsubscribe and archive" goes through this exact path.
+ */
+export async function archiveEmailMessages(
+  userId: string,
+  emails: EmailMessage[],
+): Promise<EmailBulkActionResponse> {
+  return (await applyBulkArchiveAction(userId, emails)).payload;
+}
+
 async function applyBulkArchiveAction(
   userId: string,
   emails: EmailMessage[],
-): Promise<BulkEmailActionResult> {
+): Promise<BulkEmailActionResult & { payload: EmailBulkActionResponse }> {
   const results = await archiveAll(userId, emails);
   const failed: Array<{ id: string; error: string }> = [];
   const archivedIds: string[] = [];
