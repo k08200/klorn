@@ -58,7 +58,8 @@ export function useLaneMail(lane: LiveTier, enabled: boolean) {
     queryFn: async () => {
       const view = { lane, account: ALL_ACCOUNTS, filter: "none" as const, search: "" };
       try {
-        return await apiFetch<EmailListResponse>(listRequestPath(view, 1));
+        // One row per thread (W2): `total` then counts threads, like the lane counts.
+        return await apiFetch<EmailListResponse>(`${listRequestPath(view, 1)}&threads=1`);
       } catch (err) {
         captureClientError(err, { scope: "today.lane", lane });
         throw err;

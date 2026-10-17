@@ -18,7 +18,7 @@ import { ApiKeyActivityPanel, ApiKeyActivityToggle } from "./api-key-activity";
 const NAME_CELL = "min-w-0 flex-1 truncate text-sm text-ink";
 const NAME_CELL_WRAPPING = "min-w-32 flex-1 truncate text-sm text-ink";
 const REVOKED_CHIP =
-  "rounded-full bg-surface-raised px-2 py-0.5 text-[10px] font-medium text-ink-dim";
+  "rounded-full bg-surface-raised px-2 py-0.5 text-caption font-medium text-ink-dim";
 
 interface Props {
   apiKey: ApiKeyWire;

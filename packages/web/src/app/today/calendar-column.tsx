@@ -11,7 +11,7 @@
 import Link from "next/link";
 import { SourceBadge } from "../../components/ui/source-badge";
 import { useT } from "../../lib/i18n";
-import { BlockError, BlockLink, BlockNote, LinesSkeleton, TodayBlock } from "./block";
+import { BlockError, BlockNote, LinesSkeleton, RailOpenLink, TodayBlock } from "./block";
 import type { TimeContext } from "./mail-column";
 import {
   type CalendarEventWire,
@@ -58,8 +58,8 @@ export function CalendarColumn({
           ? t("today.calendar.overlaps", { count: String(conflicts.size) })
           : undefined
       }
-      count={loaded ? ordered.length : null}
-      countLabel={loaded ? t("today.calendar.count", { count: String(ordered.length) }) : undefined}
+      layout="card"
+      action={<RailOpenLink href={CALENDAR_HREF} />}
       className={className}
     >
       {calendar.loading && <LinesSkeleton lines={4} label={t("today.calendar.loading")} />}
@@ -68,7 +68,10 @@ export function CalendarColumn({
       )}
       {loaded && ordered.length === 0 && <BlockNote>{t("today.calendar.empty")}</BlockNote>}
       {loaded && ordered.length > 0 && (
-        <ol className="flex flex-col pt-1">
+        <ol
+          aria-label={t("today.calendar.count", { count: String(ordered.length) })}
+          className="flex flex-col"
+        >
           {ordered.map((event, index) => (
             <li key={event.id}>
               {marker === index && <NowMarker time={time} />}
@@ -82,7 +85,6 @@ export function CalendarColumn({
           )}
         </ol>
       )}
-      <BlockLink href={CALENDAR_HREF}>{t("today.calendar.open")}</BlockLink>
     </TodayBlock>
   );
 }
@@ -90,12 +92,12 @@ export function CalendarColumn({
 function NowMarker({ time }: { time: TimeContext }) {
   const { t } = useT();
   return (
-    <p className="flex items-center gap-2 py-1 text-caption font-medium text-accent-deep">
-      <span className="w-16 shrink-0 text-right">
+    <p className="flex items-center gap-2 py-1 text-caption font-semibold tracking-[0.06em] text-tier-push-ink">
+      <span className="shrink-0 uppercase">
         {t("today.calendar.now")}
         <span className="sr-only"> {clock(time.now.toISOString(), time)}</span>
       </span>
-      <span aria-hidden="true" className="h-px flex-1 bg-accent-solid" />
+      <span aria-hidden="true" className="h-px flex-1 bg-tier-push-ink/60" />
     </p>
   );
 }
@@ -116,10 +118,10 @@ function EventRow({ event, time, conflict }: EventRowProps) {
   return (
     <Link
       href={`${CALENDAR_HREF}/${event.id}`}
-      className="focus-ring -mx-3 flex min-h-13 items-stretch gap-3 rounded-card px-3 py-2 transition-colors duration-120 ease-fluid hover:bg-surface-hover max-md:min-h-16"
+      className="focus-ring -mx-2 flex min-h-12 items-stretch gap-3 rounded-lg px-2 py-1.5 transition-colors duration-120 ease-fluid hover:bg-surface-raised pointer-coarse:min-h-14"
     >
       <span
-        className={`flex w-16 shrink-0 flex-col items-end text-caption tabular-nums ${past ? "text-ink-muted" : "text-ink-soft"}`}
+        className={`flex w-16 shrink-0 flex-col whitespace-nowrap pt-0.5 text-caption tabular-nums ${past ? "text-ink-muted" : "text-ink-soft"}`}
       >
         {event.allDay ? (
           <span>{t("today.calendar.allDay")}</span>
@@ -141,7 +143,9 @@ function EventRow({ event, time, conflict }: EventRowProps) {
       />
       <span className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
         <span className="flex min-w-0 items-center gap-2">
-          <span className={`min-w-0 truncate text-label ${past ? "text-ink-muted" : "text-ink"}`}>
+          <span
+            className={`min-w-0 truncate text-label font-semibold ${past ? "text-ink-muted" : "text-ink"}`}
+          >
             {event.title || t("today.calendar.untitled")}
           </span>
         </span>

@@ -64,6 +64,9 @@ export interface ReaderV2Props {
   undo: { notice: UndoNotice | null; onUndo: () => void; onDismiss: () => void };
   onOpen: (emailId: string) => void;
   onReply: () => void;
+  /** Ask Klorn for a reply draft (the reply box's own Draft action). */
+  onDraft: () => void;
+  drafting: boolean;
   onArchive: () => void;
   onDelete: () => void;
   onToggleRead: () => void;
@@ -210,6 +213,8 @@ export function ReaderV2(props: ReaderV2Props) {
     accountNeedsReconnect: reader.account?.needsReconnect === true,
     keyboardTriage: props.keyboardTriage,
     onReply: props.onReply,
+    onDraft: props.onDraft,
+    drafting: props.drafting,
     onArchive: props.onArchive,
     onDelete: props.onDelete,
     onToggleRead: props.onToggleRead,
@@ -220,7 +225,7 @@ export function ReaderV2(props: ReaderV2Props) {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col px-4 pb-40 md:px-8 md:pb-10">
+    <div className="flex w-full max-w-[calc(1120px+4rem)] flex-col px-4 pb-40 md:px-8 md:pb-10">
       <TopBar {...props} />
 
       {props.error && current && (
@@ -251,6 +256,7 @@ export function ReaderV2(props: ReaderV2Props) {
       {current && actions && (
         <article className="flex flex-col gap-5 pt-2">
           <ReaderHeader
+            lanes={actions}
             email={current}
             context={reader.context}
             contextPending={reader.pending}
@@ -266,38 +272,43 @@ export function ReaderV2(props: ReaderV2Props) {
           />
           <ReaderActionsRow {...actions} />
 
-          <div className="grid gap-6 border-t border-line-soft pt-5 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
-            <div className="flex min-w-0 flex-col gap-5 *:m-0">
-              {current.renderHtml ? (
-                <section aria-label={t("emailDetail.messageTitle")}>
-                  <MailHtmlBody
-                    key={current.id}
-                    emailId={current.id}
-                    html={current.renderHtml}
-                    plain={current.body ? <PlainBody body={current.body} /> : null}
-                  />
-                </section>
-              ) : current.body ? (
-                <section aria-label={t("emailDetail.messageTitle")}>
-                  <PlainBody body={current.body} />
-                </section>
-              ) : current.snippet ? (
-                <section aria-label={t("emailDetail.previewTitle")}>
-                  <p className="text-caption text-ink-muted">{t("emailDetail.previewTitle")}</p>
-                  <p className="mt-1 text-body leading-6 text-ink-mid">
-                    {linkifyText(current.snippet)}
-                  </p>
-                </section>
-              ) : null}
-              {slots.attachments}
-              {slots.candidate}
-              {slots.reply}
+          {/* Columns by the reader's own width (the split view makes it narrower
+              than the viewport). Only this grid is a container: containment on
+              an ancestor of the fixed bottom bar / undo bar would pin them to it. */}
+          <div className="@container">
+            <div className="grid gap-6 border-t border-line-soft pt-5 @min-[880px]:grid-cols-[minmax(0,1fr)_20rem] @min-[880px]:items-start">
+              <div className="flex min-w-0 flex-col gap-5 *:m-0">
+                {current.renderHtml ? (
+                  <section aria-label={t("emailDetail.messageTitle")}>
+                    <MailHtmlBody
+                      key={current.id}
+                      emailId={current.id}
+                      html={current.renderHtml}
+                      plain={current.body ? <PlainBody body={current.body} /> : null}
+                    />
+                  </section>
+                ) : current.body ? (
+                  <section aria-label={t("emailDetail.messageTitle")}>
+                    <PlainBody body={current.body} />
+                  </section>
+                ) : current.snippet ? (
+                  <section aria-label={t("emailDetail.previewTitle")}>
+                    <p className="text-caption text-ink-muted">{t("emailDetail.previewTitle")}</p>
+                    <p className="mt-1 text-body leading-6 text-ink-mid">
+                      {linkifyText(current.snippet)}
+                    </p>
+                  </section>
+                ) : null}
+                {slots.attachments}
+                {slots.candidate}
+                {slots.reply}
+              </div>
+              <aside className="flex min-w-0 flex-col gap-4 *:m-0">
+                {slots.analysis}
+                {slots.thread}
+                {slots.context}
+              </aside>
             </div>
-            <aside className="flex min-w-0 flex-col gap-4 *:m-0">
-              {slots.analysis}
-              {slots.thread}
-              {slots.context}
-            </aside>
           </div>
           <ReaderBottomBar {...actions} />
         </article>

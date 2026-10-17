@@ -174,7 +174,7 @@ export function createMockTransport(options: MockOptions = {}): Transport {
         return json(200, mockFirewall(now, empty));
       case "/api/email/lane-counts":
         if (scenario === "noAccounts" || scenario === "empty") {
-          const zero = { total: 0, unread: 0 };
+          const zero = { total: 0, unread: 0, threads: 0 };
           return json(200, {
             counts: { PUSH: zero, MEETING: zero, QUEUE: zero, INFO: zero, SILENT: zero },
             source: scenario === "noAccounts" ? "demo" : "gmail",

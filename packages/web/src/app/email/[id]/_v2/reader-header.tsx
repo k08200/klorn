@@ -16,6 +16,7 @@ import { useT } from "../../../../lib/i18n";
 import { sourceGlyph } from "../../../../lib/source-provider";
 import { type AccountOption, senderName } from "../../_v2/model";
 import type { EmailDetail } from "../types";
+import { type ReaderActionsProps, ReaderLaneMenu } from "./reader-actions";
 
 export interface ReaderFacts {
   /** Localized priority, only when it is not the ordinary one. */
@@ -35,6 +36,8 @@ interface ReaderHeaderProps {
   timeZone: string;
   /** The sender label correction menu, beside the lane; absent when there is nothing to label. */
   senderLabel?: ReactNode;
+  /** What the "Move to lane" chip needs; absent while the mail loads. */
+  lanes?: ReaderActionsProps | null;
 }
 
 function formatWhen(iso: string, locale: string, timeZone: string): string {
@@ -92,9 +95,8 @@ function LaneStatus({ context, contextPending }: ReaderHeaderProps) {
       {context.tierReason && (
         // One line until opened: the summary is the reason itself.
         <details className="group min-w-0 flex-1">
-          <summary className="focus-ring cursor-pointer list-none truncate rounded-control py-0.5 text-body text-ink-mid group-open:whitespace-normal pointer-coarse:py-3 [&::-webkit-details-marker]:hidden">
-            <span className="sr-only">{t("mailV2.reader.whyLane")} </span>
-            {context.tierReason}
+          <summary className="focus-ring cursor-pointer list-none truncate rounded-control py-0.5 text-label font-normal text-ink-soft group-open:whitespace-normal pointer-coarse:py-3 [&::-webkit-details-marker]:hidden">
+            {t("mailV2.reader.why", { reason: context.tierReason })}
           </summary>
         </details>
       )}
@@ -102,15 +104,26 @@ function LaneStatus({ context, contextPending }: ReaderHeaderProps) {
   );
 }
 
-/** The lane and why, with the sender label correction beside it. */
+/** The lane and why, then the sender label and "Move to lane" chips (Reader.dc). */
 function LaneLine(props: ReaderHeaderProps) {
-  if (!props.senderLabel) return <LaneStatus {...props} />;
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
       <LaneStatus {...props} />
-      {props.senderLabel}
+      {(props.senderLabel || props.lanes) && (
+        <div className="ml-auto flex items-center gap-2">
+          {props.senderLabel}
+          {props.lanes && <ReaderLaneMenu {...props.lanes} />}
+        </div>
+      )}
     </div>
   );
+}
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const letters =
+    parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}` : name.slice(0, 2);
+  return letters.toUpperCase();
 }
 
 export function ReaderHeader(props: ReaderHeaderProps) {
@@ -126,26 +139,29 @@ export function ReaderHeader(props: ReaderHeaderProps) {
     .filter(Boolean)
     .join(" · ");
 
+  const name = senderName(email.from);
   return (
-    <header className="flex flex-col gap-3">
-      <h1 className="break-keep text-display text-ink [overflow-wrap:anywhere]">
+    <header className="flex flex-col gap-3.5">
+      <h1 className="line-clamp-2 max-w-[640px] break-keep text-title text-ink [overflow-wrap:anywhere]">
         {email.subject || t("mailV2.noSubject")}
       </h1>
 
       <div className="flex flex-col gap-1">
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-          <p className="min-w-0 max-w-full truncate text-head text-ink">
-            {senderName(email.from)}
-            {address && <span className="ml-2 text-body text-ink-muted">{address}</span>}
-          </p>
-          <time
-            dateTime={email.date}
-            className="ml-auto shrink-0 text-caption tabular-nums text-ink-muted"
+        <div className="flex min-w-0 items-center gap-2.5 text-label font-normal text-ink-soft">
+          <span
+            aria-hidden="true"
+            className="flex size-7 shrink-0 items-center justify-center rounded-full bg-surface-hover text-caption font-semibold text-ink-soft"
           >
-            {formatWhen(email.date, locale, timeZone)}
-          </time>
-        </div>
-        <div className="flex min-w-0 items-center gap-2">
+            {initials(name)}
+          </span>
+          <span className="min-w-0 truncate">
+            <span className="font-semibold text-ink">{name}</span>
+            {(address || accountName) && (
+              <span className="ml-2 text-ink-muted">
+                {[address, accountName].filter(Boolean).join(" → ")}
+              </span>
+            )}
+          </span>
           {account && accountName && (
             <span title={t("mailV2.reader.account", { account: accountName })} className="shrink-0">
               <SourceBadge provider={account.provider} nickname={account.nickname} />
@@ -154,12 +170,15 @@ export function ReaderHeader(props: ReaderHeaderProps) {
               </span>
             </span>
           )}
-          {recipients && (
-            <p title={recipients} className="min-w-0 truncate text-caption text-ink-muted">
-              {recipients}
-            </p>
-          )}
+          <time dateTime={email.date} className="ml-auto shrink-0 tabular-nums text-ink-muted">
+            {formatWhen(email.date, locale, timeZone)}
+          </time>
         </div>
+        {recipients && (
+          <p title={recipients} className="min-w-0 truncate pl-[38px] text-caption text-ink-muted">
+            {recipients}
+          </p>
+        )}
       </div>
 
       <LaneLine {...props} />

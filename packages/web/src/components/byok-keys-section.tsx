@@ -137,7 +137,7 @@ export function ByokKeysSection() {
         <h2 className="text-base font-semibold text-ink">{t("byok.title")}</h2>
         <p className="mt-1 text-xs text-ink-mid">{t("byok.body")}</p>
         {status?.activeModel && (
-          <p className="mt-2 text-[11px] text-ink-dim">
+          <p className="mt-2 text-caption text-ink-dim">
             {t("byok.activeModel")} <span className="text-ink-mid">{status.activeModel}</span>
           </p>
         )}
@@ -192,7 +192,7 @@ export function ByokKeysSection() {
                 </Button>
               </div>
             )}
-            <p className="mt-1.5 text-[11px] text-ink-dim">
+            <p className="mt-1.5 text-caption text-ink-dim">
               {t("byok.openRouterHelp")}{" "}
               <a
                 href={OPENROUTER.helpUrl}
@@ -211,11 +211,11 @@ export function ByokKeysSection() {
               <div className="mb-2 flex items-center justify-between gap-2">
                 <span className="text-sm font-medium text-ink">
                   Google Gemini{" "}
-                  <span className="text-[11px] text-state-warn-ink">{t("byok.legacy")}</span>
+                  <span className="text-caption text-state-warn-ink">{t("byok.legacy")}</span>
                 </span>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span className="text-[11px] text-ink-mid">{t("byok.geminiRetired")}</span>
+                <span className="text-caption text-ink-mid">{t("byok.geminiRetired")}</span>
                 <Button
                   variant="danger"
                   size="sm"
@@ -245,7 +245,7 @@ export function ByokKeysSection() {
                     </option>
                   ))}
                 </Select>
-                <p className="mt-1 text-[11px] text-ink-dim">{t("byok.assistantModelHelp")}</p>
+                <p className="mt-1 text-caption text-ink-dim">{t("byok.assistantModelHelp")}</p>
               </div>
             );
           })()}

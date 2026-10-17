@@ -9,6 +9,7 @@
 import type { EmailLaneCounts, LiveTier } from "@klorn/contract";
 import type { FormEvent, KeyboardEvent, RefObject } from "react";
 import Button from "../../../components/ui/button";
+import { LANE_INK_CLASS, useLaneName } from "../../../components/ui/lane-chip";
 import { Menu, type MenuSection } from "../../../components/ui/menu";
 import { type Segment, SegmentedControl } from "../../../components/ui/segmented-control";
 import { SourceBadge } from "../../../components/ui/source-badge";
@@ -61,28 +62,39 @@ interface MailHeaderProps {
   onCompose: () => void;
   onSync: () => void;
   onReanalyze: () => void;
+  /** The 440px list column of the split view: smaller title, stacked controls. */
+  compact?: boolean;
 }
 
 export function MailHeader(props: MailHeaderProps) {
   const { view, onChange, counts, accounts, isDemo } = props;
+  const compact = props.compact === true;
   const { t, locale } = useT();
+  const laneName = useLaneName();
   const threads = view.filter === "threads";
   const subscriptionsAvailable = useMailSubscriptionsAvailable();
   const number = new Intl.NumberFormat(locale);
 
   const segments = laneSegments(view.lane).map((lane): Segment<LaneView> => {
     if (lane === "ALL") return { id: lane, label: t("mailV2.lane.all") };
+    const name = laneName(lane);
+    const total = counts?.[lane].total ?? 0;
     const unread = counts?.[lane].unread ?? 0;
+    const spoken = t("mailV2.list.laneCount", { lane: name, count: String(total) });
+    const withUnread =
+      unread > 0
+        ? `${spoken}, ${t("mailV2.list.laneUnread", { lane: name, count: String(unread) })}`
+        : spoken;
     return {
       id: lane,
-      label: lane,
-      leading: <span aria-hidden="true" className={`size-2 rounded-full ${LANE_DOT[lane]}`} />,
-      // The badge is the unread count, and says so to a pointer and to a
-      // screen reader; the lane's total is in the line under the control.
-      count: unread,
-      ariaLabel:
-        unread > 0 ? t("mailV2.list.laneUnread", { lane, count: String(unread) }) : undefined,
-      title: unread > 0 ? t("mailV2.list.laneUnread", { lane, count: String(unread) }) : undefined,
+      label: name,
+      leading: <span aria-hidden="true" className={`size-1.5 rounded-full ${LANE_DOT[lane]}`} />,
+      // Same meaning as the tally under the control and the list itself: the
+      // mail in the lane. Unread rides along in the spoken name and the title.
+      count: total,
+      checkedClass: LANE_INK_CLASS[lane],
+      ariaLabel: withUnread,
+      title: withUnread,
     };
   });
 
@@ -183,12 +195,14 @@ export function MailHeader(props: MailHeaderProps) {
   return (
     <header className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-3">
-        <h1 className="mr-auto text-display text-ink">{t("nav.mail")}</h1>
+        <h1 className={`mr-auto text-ink ${compact ? "text-title" : "text-display"}`}>
+          {t("nav.mail")}
+        </h1>
         {/* biome-ignore lint/a11y/useSemanticElements: <search> is not yet in the JSX types this repo targets; role="search" names the same landmark */}
         <form
           role="search"
           onSubmit={submitSearch}
-          className="relative max-md:order-last max-md:basis-full md:w-72"
+          className={`relative max-md:order-last max-md:basis-full ${compact ? "order-last basis-full" : "md:w-72"}`}
         >
           <SearchIcon className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" />
           <input
@@ -202,26 +216,28 @@ export function MailHeader(props: MailHeaderProps) {
             onKeyDown={onSearchKeyDown}
             placeholder={t("mail.searchMail")}
             aria-label={t("mail.searchMail")}
-            className="focus-ring h-11 w-full rounded-control border border-line bg-surface-panel pl-9 pr-3 text-body text-ink placeholder:text-ink-muted pointer-coarse:text-field"
+            className="focus-ring h-9 w-full rounded-lg border border-line-strong bg-surface-panel pl-9 pr-3 text-label font-normal text-ink placeholder:text-ink-muted pointer-coarse:h-11 pointer-coarse:text-field"
           />
         </form>
-        <Button
-          variant="primary"
-          size="sm"
-          icon={<ComposeIcon />}
-          onClick={props.onCompose}
-          disabled={isDemo}
-          className="max-md:hidden"
-        >
-          {t("mail.compose")}
-        </Button>
+        {!compact && (
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<ComposeIcon />}
+            onClick={props.onCompose}
+            disabled={isDemo}
+            className="max-md:hidden"
+          >
+            {t("mail.compose")}
+          </Button>
+        )}
         <Button
           variant="primary"
           size="icon"
           aria-label={t("mail.compose")}
           onClick={props.onCompose}
           disabled={isDemo}
-          className="md:hidden"
+          className={compact ? "" : "md:hidden"}
         >
           <ComposeIcon />
         </Button>
@@ -240,7 +256,9 @@ export function MailHeader(props: MailHeaderProps) {
         </Menu>
       </div>
 
-      <div className="flex items-center gap-2 max-md:flex-col max-md:items-stretch max-md:gap-0">
+      <div
+        className={`flex items-center gap-2 max-md:flex-col max-md:items-stretch max-md:gap-0 ${compact ? "flex-col items-stretch" : ""}`}
+      >
         <SegmentedControl
           ariaLabel={t("mailV2.lanes.label")}
           segments={segments}
@@ -250,7 +268,7 @@ export function MailHeader(props: MailHeaderProps) {
           disabled={threads}
           className="flex-1 max-md:-mx-4 max-md:px-4"
         />
-        <div className="flex items-center gap-2">
+        <div className={`flex items-center gap-2 ${compact ? "justify-end" : ""}`}>
           {accounts.length > 1 && (
             <Menu
               label={t("mailV2.accounts.label")}
@@ -276,7 +294,7 @@ export function MailHeader(props: MailHeaderProps) {
       {!threads && props.tally && (
         <p className="px-1 text-caption tabular-nums text-ink-muted">
           <span className="font-medium text-ink-soft">
-            {view.lane === "ALL" ? t("mailV2.lane.all") : view.lane}
+            {view.lane === "ALL" ? t("mailV2.lane.all") : laneName(view.lane)}
           </span>
           {" · "}
           {props.tally.total === 1

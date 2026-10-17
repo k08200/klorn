@@ -113,7 +113,7 @@ export function DataSection() {
 
       {/* Workspace Reset */}
       <section className="mb-8">
-        <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-state-danger-ink">
+        <h2 className="mb-3 text-caption font-semibold uppercase tracking-wider text-state-danger-ink">
           {t("settings.dangerZone")}
         </h2>
         <div className="panel-elevated rounded-2xl border border-state-danger-line bg-surface-panel divide-y divide-state-danger-line">

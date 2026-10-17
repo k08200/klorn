@@ -54,8 +54,11 @@ interface MenuProps {
   /** What the trigger shows. Defaults to `label`. */
   children?: ReactNode;
   sections: ReadonlyArray<MenuSection>;
-  /** `chip`: a bordered capsule with a caret. `icon`: a square 44px button. */
-  variant?: "chip" | "icon";
+  /**
+   * `chip` (default): 28px neutral chip with a caret. `secondary`: 36px
+   * outlined. `icon` / `secondaryIcon`: a 36px square, plain or outlined.
+   */
+  variant?: MenuVariant;
   /**
    * Which trigger edge the popover lines up with. `end-from-md` is for a
    * trigger that sits at the right on desktop and at the left on a phone.
@@ -166,6 +169,16 @@ function MenuRow({ item, onDone }: { item: MenuItem; onDone: () => void }) {
   );
 }
 
+type MenuVariant = "chip" | "secondary" | "icon" | "secondaryIcon";
+
+const TRIGGER_CLASS: Record<MenuVariant, string> = {
+  chip: "h-8 rounded-control pointer-coarse:h-11",
+  secondary: "h-9 rounded-lg pointer-coarse:h-11",
+  icon: "size-9 justify-center rounded-lg text-ink-mid hover:bg-surface-hover hover:text-ink pointer-coarse:size-11",
+  secondaryIcon:
+    "size-9 justify-center rounded-lg border border-line-strong bg-surface-panel text-ink-mid hover:bg-surface-hover hover:text-ink pointer-coarse:size-11",
+};
+
 export function Menu({
   label,
   children,
@@ -248,10 +261,11 @@ export function Menu({
     setOpen(true);
   };
 
-  const triggerClass =
-    variant === "icon"
-      ? "h-11 w-11 justify-center rounded-control text-ink-mid hover:bg-surface-hover hover:text-ink"
-      : "h-11";
+  // Trigger roles follow ui/button (design detail pass W3): `chip` draws 28px
+  // in a 32px hit area, `secondary` and the icon variants are 36px; all grow
+  // to 44px on a coarse pointer.
+  const triggerClass = TRIGGER_CLASS[variant];
+  const faceOpen = active || open;
 
   return (
     <div ref={rootRef} className={`relative shrink-0 ${className}`}>
@@ -265,18 +279,22 @@ export function Menu({
         disabled={disabled}
         onClick={() => setOpen((prev) => !prev)}
         onKeyDown={onTriggerKeyDown}
-        className={`group/trigger focus-ring flex cursor-pointer items-center transition-colors duration-120 ease-fluid disabled:cursor-not-allowed disabled:opacity-50 ${
-          variant === "icon" ? "" : "rounded-full"
-        } ${triggerClass}`}
+        className={`group/trigger focus-ring flex cursor-pointer items-center transition-colors duration-120 ease-fluid disabled:cursor-not-allowed disabled:opacity-50 ${triggerClass}`}
       >
-        {variant === "icon" ? (
+        {variant === "icon" || variant === "secondaryIcon" ? (
           children
         ) : (
           <span
-            className={`flex h-8 max-w-56 items-center gap-1.5 rounded-full border px-3 text-label transition-colors duration-120 ease-fluid group-hover/trigger:bg-surface-hover ${
-              active || open
-                ? "border-line-strong bg-surface-panel text-ink"
-                : "border-line text-ink-soft"
+            className={`flex max-w-56 items-center gap-1.5 transition-colors duration-120 ease-fluid ${
+              variant === "secondary"
+                ? `h-9 rounded-lg border px-3 text-label group-hover/trigger:bg-surface-hover ${
+                    faceOpen
+                      ? "border-ink-dim bg-surface-hover text-ink"
+                      : "border-line-strong bg-surface-panel text-ink"
+                  }`
+                : `h-7 rounded-control px-2.5 text-caption font-medium group-hover/trigger:bg-surface-inset ${
+                    faceOpen ? "bg-surface-inset text-ink" : "bg-surface-hover text-ink-strong"
+                  }`
             }`}
           >
             <span className="flex min-w-0 items-center gap-1.5 truncate">{children ?? label}</span>

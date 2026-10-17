@@ -7,6 +7,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import { LinkedCalendars } from "../../components/linked-calendars";
 import { type NewEventInitial, NewEventModal } from "../../components/new-event-modal";
+import { PAGE_SHELL } from "../../components/page-shell";
 import ErrorAlert from "../../components/ui/error-alert";
 import VoiceButton from "../../components/voice-button";
 import { apiFetch, startGoogleConnect } from "../../lib/api";
@@ -217,7 +218,7 @@ function CalendarView() {
   const goToday = () => setViewMonth(firstOfMonth(new Date(), userTimezone));
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-3 md:py-10">
+    <div className={PAGE_SHELL}>
       {/* MOBILE — native large-title header (desktop hero below, untouched) */}
       <header className="mb-5 flex items-end justify-between gap-3 md:hidden">
         <div className="min-w-0">
@@ -520,7 +521,7 @@ function AgendaList({
               })}
             </h3>
             {key === todayKey && (
-              <span className="rounded-md bg-accent/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-accent-deep ring-1 ring-inset ring-accent/20">
+              <span className="rounded-md bg-accent/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-accent-deep ring-1 ring-inset ring-accent/20">
                 {t("nav.v2.today")}
               </span>
             )}
@@ -549,13 +550,13 @@ function AgendaList({
                         {ev.title || t("common.untitled")}
                       </span>
                       {ev.location && (
-                        <span className="mt-0.5 block truncate text-[11px] text-ink-dim">
+                        <span className="mt-0.5 block truncate text-caption text-ink-dim">
                           {ev.location}
                         </span>
                       )}
                       {ev.readOnly && (
                         <span
-                          className="mt-0.5 block truncate text-[11px] text-ink-dim"
+                          className="mt-0.5 block truncate text-caption text-ink-dim"
                           title={t("calendar.readOnlyHint")}
                         >
                           {ev.sourceLabel?.trim() || t("calendar.linkedSource")} ·{" "}
@@ -634,7 +635,7 @@ function MonthGrid({
         {weekdayLabels.map((d) => (
           <div
             key={d}
-            className="px-2 py-1.5 text-center text-[11px] font-medium uppercase tracking-[0.12em] text-ink-dim"
+            className="px-2 py-1.5 text-center text-caption font-medium uppercase tracking-[0.12em] text-ink-dim"
           >
             {d}
           </div>
@@ -697,7 +698,7 @@ function DayCell({
   const openDay = () => {
     if (events.length > 0) router.push(`/calendar/${events[0].id}`);
   };
-  const dayNumberClass = `inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-[11px] font-medium tabular-nums transition ${
+  const dayNumberClass = `inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-caption font-medium tabular-nums transition ${
     isToday ? "bg-accent-solid text-accent-solid-ink" : inMonth ? "text-ink-muted" : "text-ink-dim"
   }`;
 
@@ -728,7 +729,7 @@ function DayCell({
         {hidden > 0 && (
           <Link
             href={`/calendar/${events[MAX_VISIBLE].id}`}
-            className="block truncate px-1 text-[10px] text-ink-dim hover:text-accent-deep"
+            className="block truncate px-1 text-caption text-ink-dim hover:text-accent-deep"
           >
             {t("calendar.more", { count: String(hidden) })}
           </Link>
@@ -754,7 +755,7 @@ function EventChip({
     <Link
       href={`/calendar/${event.id}`}
       title={`${timeLabel ? `${timeLabel} · ` : ""}${event.title || "Untitled"}`}
-      className={`flex items-center gap-1 truncate rounded-md px-1 py-0.5 text-[11px] transition duration-150 ${
+      className={`flex items-center gap-1 truncate rounded-md px-1 py-0.5 text-caption transition duration-150 ${
         dimmed
           ? "text-ink-dim hover:bg-surface-hover hover:text-ink-mid"
           : "text-ink hover:bg-accent/10 hover:text-accent-deeper"

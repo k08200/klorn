@@ -16,7 +16,7 @@ import { Skeleton, SkeletonGroup } from "../../components/ui/skeleton";
 import { askAssistant } from "../../lib/assistant-ask";
 import { ASSISTANT_BRIEFING, assistantHref } from "../../lib/home";
 import { useT } from "../../lib/i18n";
-import { BlockError, BlockLink, Chevron, LinesSkeleton, TodayBlock } from "./block";
+import { BlockError, BlockLink, Chevron, LinesSkeleton, RailOpenLink, TodayBlock } from "./block";
 import { FreeTimeRow } from "./free-time";
 import { useBriefing, usePendingApprovals } from "./use-today-data";
 
@@ -26,7 +26,13 @@ const ASK_MAX_LENGTH = 4000;
 export function AssistantColumn({ className = "" }: { className?: string }) {
   const { t } = useT();
   return (
-    <TodayBlock headingId="today-assistant" title={t("nav.assistant")} className={className}>
+    <TodayBlock
+      headingId="today-assistant"
+      title={t("nav.assistant")}
+      layout="card"
+      action={<RailOpenLink href={assistantHref()} />}
+      className={className}
+    >
       <BriefingSummary />
       <ApprovalsRow />
       <FreeTimeRow />
@@ -52,7 +58,7 @@ function BriefingSummary() {
   const preview = briefing.status?.note?.preview?.trim();
   const scheduled = briefing.status?.automation.enabled === true;
   return (
-    <div className="border-b border-line-soft py-3">
+    <div className="flex flex-col">
       <h3 className="text-caption font-medium text-ink-muted">{t("today.briefing.title")}</h3>
       {briefing.loading && <LinesSkeleton lines={3} label={t("today.briefing.loading")} />}
       {briefing.failed && (
@@ -81,7 +87,7 @@ function ApprovalsRow() {
   const approvals = usePendingApprovals(true);
   if (approvals.failed) {
     return (
-      <div className="border-b border-line-soft">
+      <div>
         <BlockError message={t("today.approvals.error")} onRetry={approvals.retry} />
       </div>
     );
@@ -90,7 +96,7 @@ function ApprovalsRow() {
   return (
     <Link
       href={assistantHref()}
-      className="focus-ring -mx-3 flex min-h-13 items-center gap-2 rounded-card px-3 text-label text-ink transition-colors duration-120 ease-fluid hover:bg-surface-hover"
+      className="focus-ring flex min-h-10 items-center gap-2 rounded-lg bg-surface-hover px-3 text-label text-ink transition-colors duration-120 ease-fluid hover:bg-surface-inset pointer-coarse:min-h-11"
     >
       {approvals.loading ? (
         <SkeletonGroup label={t("today.approvals.loading")} className="flex-1">
@@ -130,7 +136,7 @@ function AskBox() {
     setText("");
   };
   return (
-    <form onSubmit={submit} className="flex items-center gap-2 border-t border-line-soft pt-3">
+    <form onSubmit={submit} className="flex items-center gap-2">
       <label htmlFor="today-ask" className="sr-only">
         {t("today.ask.label")}
       </label>
@@ -142,7 +148,7 @@ function AskBox() {
         maxLength={ASK_MAX_LENGTH}
         placeholder={t("today.ask.placeholder")}
         autoComplete="off"
-        className="focus-ring h-11 min-w-0 flex-1 rounded-control border border-line bg-surface-panel px-3 text-body text-ink placeholder:text-ink-muted pointer-coarse:text-field"
+        className="focus-ring h-10 min-w-0 flex-1 rounded-lg border border-line-strong bg-surface-app px-3 text-label font-normal text-ink placeholder:text-ink-muted pointer-coarse:h-11 pointer-coarse:text-field"
       />
       <Button type="submit" variant="secondary" disabled={!text.trim()}>
         {t("today.ask.submit")}

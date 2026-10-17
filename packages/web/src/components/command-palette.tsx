@@ -315,7 +315,7 @@ export default function CommandPalette() {
             ))
           )}
         </div>
-        <div className="border-t border-line px-4 py-2 flex items-center justify-between text-[10px] text-ink-mid">
+        <div className="border-t border-line px-4 py-2 flex items-center justify-between text-caption text-ink-mid">
           <span>{t("palette.hintMove")}</span>
           <span>{t("palette.hintClose")}</span>
         </div>

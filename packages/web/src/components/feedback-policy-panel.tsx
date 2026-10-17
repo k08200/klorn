@@ -159,12 +159,12 @@ export function FeedbackPolicyPanel() {
                     <p className="mt-1 text-xs text-ink-dim">{t(copy.summaryKey)}</p>
                   </div>
                   <span
-                    className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ring-1 ring-inset ${copy.tone}`}
+                    className={`shrink-0 rounded-md px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ring-1 ring-inset ${copy.tone}`}
                   >
                     {t(copy.labelKey)}
                   </span>
                 </div>
-                <div className="mt-3 grid grid-cols-3 gap-2 text-[10px] text-ink-dim sm:grid-cols-6">
+                <div className="mt-3 grid grid-cols-3 gap-2 text-caption text-ink-dim sm:grid-cols-6">
                   <SignalCount
                     label={t("feedbackPolicy.count.approved")}
                     value={candidate.support.approved}
@@ -195,7 +195,7 @@ export function FeedbackPolicyPanel() {
                     value={candidate.support.dismissed}
                   />
                 </div>
-                <div className="mt-2 flex items-center justify-between text-[10px] tabular-nums text-ink-mid">
+                <div className="mt-2 flex items-center justify-between text-caption tabular-nums text-ink-mid">
                   <span>
                     {t("feedbackPolicy.confidence", {
                       percent: String(Math.round(candidate.confidence * 100)),

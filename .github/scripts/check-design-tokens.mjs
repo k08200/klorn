@@ -20,6 +20,10 @@
  *   raw-button           a raw `<button` in app/** pages — use ui/button.
  *   retired-auto-lane    `tier-auto` — the retired v1 AUTO lane's tokens stay
  *                        only for legacy Record<Tier, …> visuals.
+ *   retired-text-size    `text-[9px]` … `text-[13px]` — the sizes the type roles
+ *                        replaced (caption 12, label 13). Zero allowance: this
+ *                        rule takes no baseline, so a retired size can never
+ *                        come back, even in a file that once had one.
  *
  * Baseline: .github/scripts/design-tokens-baseline.json holds the per-file
  * count of each rule at the time it was taken. A file may never exceed its
@@ -70,6 +74,13 @@ const RULES = [
     re: /<button(?=[\s>])/g,
     applies: (file) => file.startsWith(`${WEB}/app/`),
     hint: "use the Button primitive from @/components/ui/button",
+  },
+  {
+    id: "retired-text-size",
+    re: /(?<![\w-])text-\[(?:[0-9]|1[0-3])(?:\.\d+)?px\]/g,
+    applies: () => true,
+    zeroAllowance: true,
+    hint: "retired size — text-caption (12) or text-label (13)",
   },
   {
     id: "retired-auto-lane",
@@ -139,7 +150,7 @@ for (const rule of RULES) {
   const files = new Set([...Object.keys(counts[rule.id]), ...Object.keys(baseline[rule.id])]);
   for (const file of [...files].sort()) {
     const now = counts[rule.id][file] ?? 0;
-    const allowed = baseline[rule.id][file] ?? 0;
+    const allowed = rule.zeroAllowance ? 0 : (baseline[rule.id][file] ?? 0);
     if (now > allowed) {
       const hit = firstHit[`${rule.id}:${file}`];
       regressions.push(
@@ -158,7 +169,7 @@ if (updating) {
     process.exit(1);
   }
   const sorted = Object.fromEntries(
-    RULES.map((r) => [
+    RULES.filter((r) => !r.zeroAllowance).map((r) => [
       r.id,
       Object.fromEntries(Object.entries(counts[r.id]).sort(([a], [b]) => a.localeCompare(b))),
     ]),

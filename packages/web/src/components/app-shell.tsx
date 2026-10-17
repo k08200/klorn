@@ -3,11 +3,12 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useAuth } from "../lib/auth";
-import { ASSISTANT_CHAT, homePath, landingStep, TODAY_HOME, takeLegacyLanding } from "../lib/home";
+import { homePath, landingStep, TODAY_HOME, takeLegacyLanding } from "../lib/home";
 import { useT } from "../lib/i18n";
 import AssistantDock from "./assistant-dock";
 import BottomTabs from "./bottom-tabs";
 import IosInstallHint from "./ios-install-hint";
+import ShellSkeleton from "./shell-skeleton";
 import Sidebar from "./sidebar";
 
 const NO_SIDEBAR_ROUTES = [
@@ -38,7 +39,7 @@ const APP_SHELL_ROUTES = [
   "/usage",
 ];
 
-const CHAT_PAGES = ["/chat", ASSISTANT_CHAT];
+const DOCKLESS_ROUTES = ["/chat", "/assistant"];
 
 function isAppShellRoute(pathname: string): boolean {
   return APP_SHELL_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
@@ -92,7 +93,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   if (loading) {
-    return <SessionTransition label={t("appShell.checkingSession")} />;
+    return <ShellSkeleton label={t("appShell.checkingSession")} />;
   }
 
   if (!user) {
@@ -129,7 +130,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <main
           id="main"
           tabIndex={-1}
-          className="relative z-10 flex-1 overflow-y-auto pb-[calc(62px+env(safe-area-inset-bottom))] md:pb-safe focus:outline-none"
+          // Phone: clear the 62px tab bar AND the assistant button above it
+          // (W7: 72px + the home-indicator inset), so the last row is never
+          // under the button.
+          className="relative z-10 flex-1 overflow-y-auto pb-[calc(62px+72px+env(safe-area-inset-bottom))] md:pb-[env(safe-area-inset-bottom)] focus:outline-none"
         >
           {/* Inline, so it pushes content down rather than covering it; only on
               the home screen and Settings, where installing is on-topic. */}
@@ -138,29 +142,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </main>
         <BottomTabs />
       </div>
-      {/* Global assistant — bottom-right on every app surface. The full chat
-          pages (/chat, and /assistant/chat in the hub) keep their own composer,
-          so the dock stays out of the way there. */}
-      {!CHAT_PAGES.some((route) => pathname.startsWith(route)) && (
+      {/* Global assistant — bottom-right on every app surface. The chat page
+          and the whole assistant hub (W7) are the assistant already, so the
+          dock stays out of the way there. */}
+      {!DOCKLESS_ROUTES.some((route) => pathname.startsWith(route)) && (
         <AssistantDock unified={unifiedHome} />
       )}
     </div>
-  );
-}
-
-function SessionTransition({ label }: { label: string }) {
-  return (
-    <main
-      id="main"
-      className="flex min-h-dvh items-center justify-center bg-surface-panel px-6 text-ink"
-      role="status"
-      aria-live="polite"
-    >
-      <div className="flex flex-col items-center gap-4 text-center">
-        <img src="/brand/mark.svg?v=matte2" alt="" className="h-10 w-10" />
-        <div className="h-5 w-5 animate-spin rounded-full border-2 border-accent-muted border-t-transparent" />
-        <p className="text-sm text-ink-mid">{label}...</p>
-      </div>
-    </main>
   );
 }

@@ -919,7 +919,7 @@ function EmailView() {
             <p className="text-base font-medium text-ink">
               {filter === "reply-needed" ? t("mail.emptyReplyTitle") : t("mail.emptyTitle")}
             </p>
-            <p className="mx-auto mt-1.5 max-w-xs text-[13px] leading-relaxed text-ink-dim">
+            <p className="mx-auto mt-1.5 max-w-xs text-label font-normal leading-relaxed text-ink-dim">
               {source === "demo" ? t("mail.emptyDemoBody") : t("mail.emptyBody")}
             </p>
             <button
@@ -975,7 +975,7 @@ function EmailView() {
               {source === "gmail" && (
                 <span
                   title={t("mail.live.title")}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-state-ok-line bg-state-ok-bg px-2 py-0.5 text-[11px] font-medium text-state-ok-ink"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-state-ok-line bg-state-ok-bg px-2 py-0.5 text-caption font-medium text-state-ok-ink"
                 >
                   <span aria-hidden="true" className="relative flex h-1.5 w-1.5">
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60 motion-reduce:animate-none" />
@@ -1144,7 +1144,7 @@ function EmailView() {
             {!appliedSearch && (
               <span
                 aria-hidden="true"
-                className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-md border border-line bg-surface-raised px-1.5 py-0.5 font-mono text-[10px] font-medium text-ink-dim"
+                className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-md border border-line bg-surface-raised px-1.5 py-0.5 font-mono text-caption font-medium text-ink-dim"
               >
                 ⌘K
               </span>
@@ -1182,7 +1182,7 @@ function EmailView() {
         {/* Domain views — quiet chips instead of four competing cards, so they
             aid triage without burying the list. */}
         <div className="mb-4 mt-1 flex flex-wrap items-center gap-1.5">
-          <span className="mr-0.5 text-[11px] font-medium uppercase tracking-wider text-ink-dim">
+          <span className="mr-0.5 text-caption font-medium uppercase tracking-wider text-ink-dim">
             {t("mail.views")}
           </span>
           {WORK_QUEUES.map((queue) => {
@@ -1336,7 +1336,7 @@ function EmailView() {
             <ul className="divide-y divide-line-soft">
               {groupEmailsByDate(emails).map((group) => (
                 <Fragment key={`${group.label}-${group.emails[0]?.id}`}>
-                  <li className="bg-surface-raised/60 px-4 py-1.5 text-[10.5px] font-bold uppercase tracking-wider text-ink-dim">
+                  <li className="bg-surface-raised/60 px-4 py-1.5 text-caption font-bold uppercase tracking-wider text-ink-dim">
                     {t(group.label)} <span className="text-slate-300">· {group.emails.length}</span>
                   </li>
                   {group.emails.map((e) => (
@@ -1620,7 +1620,7 @@ function BulkActionBar({
           </button>
         </div>
       ) : (
-        <span className="text-[11px] text-ink-dim">
+        <span className="text-caption text-ink-dim">
           {totalAvailable > totalVisible
             ? t("mailV2.shown", { shown: String(totalVisible), total: String(totalAvailable) })
             : t("mail.bulk.onThisPage", { count: String(totalVisible) })}
@@ -1716,7 +1716,7 @@ function InboxSelector({
             <span className="max-w-[168px] truncate">{o.label}</span>
             {o.tag && (
               <span
-                className={`shrink-0 rounded px-1 text-[10px] font-medium leading-4 ${
+                className={`shrink-0 rounded px-1 text-caption font-medium leading-4 ${
                   // AA on both states: sky-700 on near-white ≈ 6:1; slate-600
                   // on slate-200 ≈ 6.1:1 (white-on-white/20-over-accent was 2.2:1).
                   active ? "bg-surface-panel text-accent-deeper" : "bg-surface-inset text-ink-muted"
@@ -1778,7 +1778,7 @@ function FilterTabs({
           >
             {f.labelKey ? t(f.labelKey) : f.label}
             {active && typeof activeCount === "number" && activeCount > 0 && (
-              <span className="rounded bg-accent-dim px-1 text-[10px] font-bold text-accent-deeper">
+              <span className="rounded bg-accent-dim px-1 text-caption font-bold text-accent-deeper">
                 {activeCount}
               </span>
             )}
@@ -1831,7 +1831,7 @@ function LoadMoreBar({
   return (
     <div
       ref={sentinelRef}
-      className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-line/70 bg-surface-panel/60 px-4 py-2.5 text-[11px] text-ink-dim backdrop-blur"
+      className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-line/70 bg-surface-panel/60 px-4 py-2.5 text-caption text-ink-dim backdrop-blur"
     >
       <span>
         {totalAvailable > loadedCount
@@ -1843,7 +1843,7 @@ function LoadMoreBar({
           type="button"
           onClick={onLoadMore}
           disabled={isFetching}
-          className="ease-strong rounded-md border border-line bg-surface-panel px-2.5 py-1 text-[11px] font-medium text-ink-mid shadow-sm transition duration-150 hover:text-accent-deep active:scale-[0.97] disabled:opacity-50"
+          className="ease-strong rounded-md border border-line bg-surface-panel px-2.5 py-1 text-caption font-medium text-ink-mid shadow-sm transition duration-150 hover:text-accent-deep active:scale-[0.97] disabled:opacity-50"
         >
           {isFetching ? t("mailV2.loadingMore") : t("mailV2.loadMore")}
         </button>
@@ -1934,7 +1934,7 @@ function EmailRowItem({
         >
           <span
             aria-hidden="true"
-            className={`avatar-ring mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-[13px] font-semibold text-white ${avatarGradient(name)}`}
+            className={`avatar-ring mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-label font-semibold text-white ${avatarGradient(name)}`}
           >
             {senderInitials(name)}
           </span>
@@ -1950,7 +1950,7 @@ function EmailRowItem({
               </span>
               {email.tier && <LaneChip tier={email.tier} />}
               {inboxLabel && (
-                <span className="inline-flex max-w-[30%] shrink-0 items-center gap-1 truncate rounded-full bg-surface-hover px-2 py-0.5 text-[10px] font-medium text-ink-mid">
+                <span className="inline-flex max-w-[30%] shrink-0 items-center gap-1 truncate rounded-full bg-surface-hover px-2 py-0.5 text-caption font-medium text-ink-mid">
                   <span
                     aria-hidden="true"
                     className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent/70"
@@ -1963,14 +1963,14 @@ function EmailRowItem({
                 {unread && (
                   <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-accent" />
                 )}
-                <time className="text-[11px] tabular-nums text-ink-dim">
+                <time className="text-caption tabular-nums text-ink-dim">
                   {formatRelative(email.date)}
                 </time>
               </span>
             </span>
             <span
-              className={`mt-1 block truncate text-[13.5px] ${
-                unread ? "font-medium text-ink-strong" : "text-ink-muted"
+              className={`mt-1 block truncate text-label ${
+                unread ? "font-medium text-ink-strong" : "font-normal text-ink-muted"
               }`}
             >
               {email.subject || t("common.noSubject")}
@@ -2097,7 +2097,7 @@ function EmailRowReminderActions({
   // one-click reminder affordance stays permanently visible (no hover-hiding —
   // touch and keyboard users get the same surface).
   return (
-    <div className="-mt-1.5 flex flex-wrap items-center gap-0.5 pb-2.5 pl-[78px] pr-4 text-[11px] text-ink-dim">
+    <div className="-mt-1.5 flex flex-wrap items-center gap-0.5 pb-2.5 pl-[78px] pr-4 text-caption text-ink-dim">
       <span className="mr-1.5">{t("mail.remind.label")}</span>
       {EMAIL_REMINDER_OPTIONS.map((option) => {
         const key = `${email.id}:${option.key}`;
@@ -2107,7 +2107,7 @@ function EmailRowReminderActions({
             type="button"
             onClick={() => onCreateReminder(email, option)}
             disabled={busyKey !== null}
-            className="ease-strong rounded-md px-2 py-1 text-[11px] font-medium text-ink-dim transition duration-150 hover:bg-state-info-bg hover:text-accent-deeper active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45"
+            className="ease-strong rounded-md px-2 py-1 text-caption font-medium text-ink-dim transition duration-150 hover:bg-state-info-bg hover:text-accent-deeper active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45"
           >
             {busyKey === key ? t("mail.remind.setting") : t(option.labelKey)}
           </button>
@@ -2133,7 +2133,7 @@ function EmailBadges({ email, unread }: { email: EmailRow; unread: boolean }) {
     badges.push(
       <span
         key="files"
-        className="inline-flex shrink-0 items-center gap-1 rounded-md bg-surface-hover px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-ink-mid"
+        className="inline-flex shrink-0 items-center gap-1 rounded-md bg-surface-hover px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-ink-mid"
       >
         <svg
           aria-hidden="true"
@@ -2164,7 +2164,7 @@ function EmailBadges({ email, unread }: { email: EmailRow; unread: boolean }) {
     <div className="flex flex-wrap items-center gap-1.5">
       {visible}
       {overflow > 0 && (
-        <span className="shrink-0 rounded border border-line bg-surface-raised px-1.5 py-0.5 text-[10px] font-medium text-ink-mid">
+        <span className="shrink-0 rounded border border-line bg-surface-raised px-1.5 py-0.5 text-caption font-medium text-ink-mid">
           +{overflow}
         </span>
       )}
@@ -2187,7 +2187,7 @@ function ThreadRowItem({ thread }: { thread: ThreadRow }) {
       >
         <span
           aria-hidden="true"
-          className={`avatar-ring mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-[13px] font-semibold text-white ${avatarGradient(firstParticipant)}`}
+          className={`avatar-ring mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-label font-semibold text-white ${avatarGradient(firstParticipant)}`}
         >
           {senderInitials(firstParticipant)}
         </span>
@@ -2199,15 +2199,15 @@ function ThreadRowItem({ thread }: { thread: ThreadRow }) {
               {thread.participants.map(senderName).join(", ")}
             </span>
             <PriorityBadge priority={thread.latestPriority} />
-            <span className="shrink-0 rounded-md bg-surface-hover px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-ink-mid">
+            <span className="shrink-0 rounded-md bg-surface-hover px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-ink-mid">
               {t("mail.thread.messages", { count: String(thread.messageCount) })}
             </span>
-            <time className="ml-auto shrink-0 text-[11px] tabular-nums text-ink-dim">
+            <time className="ml-auto shrink-0 text-caption tabular-nums text-ink-dim">
               {formatRelative(thread.lastMessage.receivedAt)}
             </time>
           </span>
           <span
-            className={`mt-1 block truncate text-[13.5px] ${thread.hasUnread ? "font-medium text-ink-strong" : "text-ink-muted"}`}
+            className={`mt-1 block truncate text-label ${thread.hasUnread ? "font-medium text-ink-strong" : "font-normal text-ink-muted"}`}
           >
             {thread.subject || t("common.noSubject")}
           </span>
@@ -2240,13 +2240,13 @@ function CandidatePreview({ profile }: { profile: CandidateProfilePreview }) {
   return (
     <div className="mt-2 rounded-lg border border-accent/15 bg-accent/5 px-2.5 py-2">
       <div className="flex items-center justify-between gap-2">
-        <p className="truncate text-[11px] font-medium text-accent-deep">{title}</p>
-        <span className="shrink-0 text-[10px] tabular-nums text-accent-deep">
+        <p className="truncate text-caption font-medium text-accent-deep">{title}</p>
+        <span className="shrink-0 text-caption tabular-nums text-accent-deep">
           {Math.round(profile.confidence * 100)}%
         </span>
       </div>
-      <p className="mt-1 line-clamp-2 text-[11px] leading-5 text-ink-mid">{profile.summary}</p>
-      <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[10px] text-ink-dim">
+      <p className="mt-1 line-clamp-2 text-caption leading-5 text-ink-mid">{profile.summary}</p>
+      <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-caption text-ink-dim">
         {profile.contact && (
           <span className="truncate">
             {t("emailDetail.candidateCard.fact.contact")} {profile.contact}
@@ -2288,7 +2288,7 @@ function candidateMissingLabel(field: string): string {
 function ReplyNeededBadge() {
   const { t } = useT();
   return (
-    <span className="shrink-0 rounded-md bg-accent/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-accent-deeper ring-1 ring-inset ring-accent/20">
+    <span className="shrink-0 rounded-md bg-accent/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-accent-deeper ring-1 ring-inset ring-accent/20">
       {t("mail.filterReplyNeeded")}
     </span>
   );
@@ -2297,7 +2297,7 @@ function ReplyNeededBadge() {
 function CandidateBadge() {
   const { t } = useT();
   return (
-    <span className="shrink-0 rounded-md bg-accent/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-accent-deep ring-1 ring-inset ring-accent/20">
+    <span className="shrink-0 rounded-md bg-accent/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-accent-deep ring-1 ring-inset ring-accent/20">
       {t("mail.badge.candidate")}
     </span>
   );
@@ -2318,7 +2318,7 @@ function PriorityBadge({ priority }: { priority: EmailRow["priority"] }) {
   if (priority === "NORMAL") return null;
   return (
     <span
-      className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ring-1 ring-inset ${styles[priority]}`}
+      className={`shrink-0 rounded-md px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ring-1 ring-inset ${styles[priority]}`}
     >
       {labels[priority]}
     </span>
@@ -2339,7 +2339,7 @@ function CategoryBadge({ category }: { category: string }) {
   ]);
   const label = known.has(category) ? t(`emailDetail.category.${category}`) : category;
   return (
-    <span className="shrink-0 rounded-md bg-surface-hover px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-ink-mid">
+    <span className="shrink-0 rounded-md bg-surface-hover px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-ink-mid">
       {label}
     </span>
   );
@@ -2425,29 +2425,29 @@ function MobileEmailRow({
               </span>
               {email.tier && <LaneChip tier={email.tier} />}
             </span>
-            <time className="shrink-0 text-[11px] tabular-nums text-ink-dim">
+            <time className="shrink-0 text-caption tabular-nums text-ink-dim">
               {formatRelative(email.date)}
             </time>
           </span>
           <span
-            className={`mt-0.5 block truncate text-[13px] ${unread ? "text-ink" : "text-ink-mid"}`}
+            className={`mt-0.5 block truncate text-label font-normal ${unread ? "text-ink" : "text-ink-mid"}`}
           >
             {email.subject || t("common.noSubject")}
           </span>
           {preview && (
-            <span className="mt-1 line-clamp-2 block text-[12px] leading-5 text-ink-dim">
+            <span className="mt-1 line-clamp-2 block text-caption leading-5 text-ink-dim">
               {preview}
             </span>
           )}
           {(email.priority === "URGENT" || inboxLabel) && (
             <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
               {email.priority === "URGENT" && (
-                <span className="inline-flex items-center rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-state-danger-ink">
+                <span className="inline-flex items-center rounded-full bg-red-500/15 px-2 py-0.5 text-caption font-semibold text-state-danger-ink">
                   {t("emailDetail.priority.urgent")}
                 </span>
               )}
               {inboxLabel && (
-                <span className="inline-flex max-w-[60%] items-center gap-1 truncate rounded-full bg-surface-hover px-2 py-0.5 text-[10px] font-medium text-ink-mid">
+                <span className="inline-flex max-w-[60%] items-center gap-1 truncate rounded-full bg-surface-hover px-2 py-0.5 text-caption font-medium text-ink-mid">
                   <span
                     aria-hidden="true"
                     className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent/70"

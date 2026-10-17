@@ -33,7 +33,7 @@ function Stat({
     >
       <div className="text-2xl font-semibold tracking-tight text-ink tabular-nums">{value}</div>
       <div className="mt-1 text-xs font-medium text-ink-muted">{label}</div>
-      {hint ? <div className="mt-0.5 text-[11px] text-ink-dim">{hint}</div> : null}
+      {hint ? <div className="mt-0.5 text-caption text-ink-dim">{hint}</div> : null}
     </div>
   );
 }
@@ -52,7 +52,7 @@ export default function RetentionDashboard() {
     <section className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-4">
       <div className="mb-3 flex items-baseline justify-between">
         <h2 className="text-sm font-medium text-ink">Retention (Phase 1)</h2>
-        <span className="text-[11px] text-ink-dim">
+        <span className="text-caption text-ink-dim">
           {data ? `as of ${new Date(data.generatedAt).toLocaleString()}` : ""}
         </span>
       </div>
@@ -103,7 +103,7 @@ export default function RetentionDashboard() {
             />
           </div>
 
-          <p className="mt-3 text-[11px] text-ink-dim">
+          <p className="mt-3 text-caption text-ink-dim">
             Gate: don&apos;t public-launch until D7 ≥ 40% on real users. First-party events (own
             Postgres), no third-party tracker.
           </p>
