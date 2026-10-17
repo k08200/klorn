@@ -7,6 +7,7 @@ import { prisma } from "../db.js";
 import { buildReplyToneHint } from "../learning/reply-tone.js";
 import { createCompletion, DRAFT_MODEL, openai } from "../llm/openai.js";
 import { wrapUntrusted } from "../untrusted.js";
+import { extractEmailAddress } from "./email-address.js";
 
 // ─── Auto-Reply Engine ────────────────────────────────────────────────────
 
@@ -15,6 +16,30 @@ interface MatchedRule {
   ruleName: string;
   actionType: string;
   actionValue: string;
+}
+
+/**
+ * Does a rule's `from` condition match this sender? Patterns are compared with
+ * the parsed ADDRESS only, never the display name, which the sender writes
+ * freely: an AUTO_REPLY rule replies to the address with no per-message
+ * approval, so a display-name match let `"boss@company.com" <attacker@evil>`
+ * trigger a reply to the attacker. An address pattern must equal the address,
+ * "@domain" must equal its domain, and a bare domain matches itself and its
+ * subdomains (never a lookalike such as evilcompany.com). A From that does not
+ * read as one mailbox matches nothing.
+ */
+export function ruleSenderMatches(patterns: readonly string[], fromHeader: string): boolean {
+  const address = extractEmailAddress(fromHeader);
+  const at = address.lastIndexOf("@");
+  if (at <= 0) return false;
+  const domain = address.slice(at + 1);
+  return patterns.some((raw) => {
+    const pattern = raw.trim().toLowerCase();
+    if (!pattern) return false;
+    if (pattern.startsWith("@")) return domain === pattern.slice(1);
+    if (pattern.includes("@")) return address === pattern;
+    return domain === pattern || domain.endsWith(`.${pattern}`);
+  });
 }
 
 /**
@@ -44,12 +69,9 @@ export async function checkAutoReplyRules(
 
     let matches = true;
 
-    // Check from
-    if (conditions.from?.length) {
-      const fromLower = email.from.toLowerCase();
-      if (!conditions.from.some((f) => fromLower.includes(f.toLowerCase()))) {
-        matches = false;
-      }
+    // Check from: the sender's address, never its display name.
+    if (conditions.from?.length && !ruleSenderMatches(conditions.from, email.from)) {
+      matches = false;
     }
 
     // Check subject keywords

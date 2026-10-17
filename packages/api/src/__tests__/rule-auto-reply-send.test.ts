@@ -60,8 +60,12 @@ function matches(row: Record<string, unknown>, where: Where): boolean {
         contains?: string;
         startsWith?: string;
         not?: unknown;
+        gte?: Date;
       };
       if (c.in) return c.in.includes(row[key]);
+      if (c.gte instanceof Date) {
+        return row[key] instanceof Date && (row[key] as Date).getTime() >= c.gte.getTime();
+      }
       if (c.contains !== undefined) {
         return typeof row[key] === "string" && (row[key] as string).includes(c.contains);
       }
@@ -105,6 +109,10 @@ vi.mock("../db.js", () => ({
       findMany: vi.fn(async ({ where }: { where: Where }) =>
         store.rows.filter((r) => matches(r, where)),
       ),
+      count: vi.fn(async ({ where }: { where: Where }) => {
+        store.log.push("notification.count");
+        return store.rows.filter((r) => matches(r, where)).length;
+      }),
       deleteMany: vi.fn(async ({ where }: { where: Where }) => {
         const doomed = store.rows.filter((r) => matches(r, where));
         store.rows = store.rows.filter((r) => !doomed.includes(r));
@@ -138,6 +146,7 @@ import {
   deliverRuleAutoReply,
   ensureAutoModeReplyNotification,
   hasAutoReplyClaim,
+  MAX_RULE_AUTO_REPLIES_PER_DAY,
   markAutoModeLedgerFailed,
   runRuleAutoReply,
 } from "../automation-scheduler.js";
@@ -606,7 +615,9 @@ describe("clearNotifications keeps reply claims (they are at-most-once locks, no
 
 describe("runRuleAutoReply — validate before any LLM spend", () => {
   const rule = { ruleName: "vip rule", actionValue: "be brief" };
-  const setup = (over: { from?: string; exists?: boolean } = {}) => {
+  const setup = (
+    over: { from?: string; exists?: boolean; listUnsubscribeUrl?: string | null } = {},
+  ) => {
     const draftReply = vi.fn(async () => {
       store.log.push("draft");
       return "thanks!";
@@ -616,10 +627,15 @@ describe("runRuleAutoReply — validate before any LLM spend", () => {
       return over.exists ?? true;
     });
     const run = () =>
-      runRuleAutoReply(USER, { ...email, from: over.from ?? email.from }, rule, {
-        draftReply,
-        emailStillExists,
-      });
+      runRuleAutoReply(
+        USER,
+        { ...email, from: over.from ?? email.from, listUnsubscribeUrl: over.listUnsubscribeUrl },
+        rule,
+        {
+          draftReply,
+          emailStillExists,
+        },
+      );
     return { draftReply, emailStillExists, run };
   };
 
@@ -636,12 +652,60 @@ describe("runRuleAutoReply — validate before any LLM spend", () => {
     warn.mockRestore();
   });
 
+  it("never auto-replies to an automated sender (no LLM spend, no claim)", async () => {
+    const { draftReply, run } = setup({ from: "Service <no-reply@service.example>" });
+
+    await run();
+
+    expect(draftReply).not.toHaveBeenCalled();
+    expect(store.rows).toHaveLength(0);
+    expect(executeToolCall).not.toHaveBeenCalled();
+  });
+
+  it("never auto-replies to list mail (List-Unsubscribe present)", async () => {
+    const { draftReply, run } = setup({ listUnsubscribeUrl: "https://list.example/unsub" });
+
+    await run();
+
+    expect(draftReply).not.toHaveBeenCalled();
+    expect(executeToolCall).not.toHaveBeenCalled();
+  });
+
+  it("stops at MAX_RULE_AUTO_REPLIES_PER_DAY unattended replies a UTC day", async () => {
+    const today = new Date();
+    const yesterday = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    for (let i = 0; i < MAX_RULE_AUTO_REPLIES_PER_DAY; i++) {
+      store.rows.push({
+        id: `old-${i}`,
+        userId: USER,
+        type: "email",
+        dedupeKey: `auto-reply:g-earlier-${i}`,
+        createdAt: i === 0 ? yesterday : today,
+      });
+    }
+    // One of them is from an earlier day: still under the cap.
+    const first = setup();
+    await first.run();
+    expect(first.draftReply).toHaveBeenCalledTimes(1);
+
+    // Now at the cap for today: the next one is skipped before the LLM.
+    const second = setup();
+    store.log.length = 0;
+    await runRuleAutoReply(USER, { ...email, id: "row-2", gmailId: "g-2" }, rule, {
+      draftReply: second.draftReply,
+      emailStillExists: second.emailStillExists,
+    });
+    expect(second.draftReply).not.toHaveBeenCalled();
+    expect(store.rows.some((r) => r.dedupeKey === "auto-reply:g-2")).toBe(false);
+  });
+
   it("runs draft -> source-still-exists -> claim -> send, in that order", async () => {
     const { run } = setup();
 
     await run();
 
     expect(store.log).toEqual([
+      "notification.count",
       "draft",
       "exists",
       "notification.create",

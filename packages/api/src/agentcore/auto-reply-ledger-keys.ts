@@ -11,7 +11,9 @@
  * as claims.
  */
 
-const CLAIM_PREFIX = "auto-reply:";
+/** Every claim written today starts with this (rule and auto-mode alike). */
+export const REPLY_LEDGER_PREFIX = "auto-reply:";
+const CLAIM_PREFIX = REPLY_LEDGER_PREFIX;
 const LEGACY_AUTO_MODE_PREFIX = "auto-mode-reply:";
 
 /** The key new claims are written under (both paths). */
