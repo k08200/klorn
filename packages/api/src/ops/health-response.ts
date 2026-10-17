@@ -2,10 +2,14 @@
  * The /api/health answer. It probes the database and used to answer 200 either
  * way, so nothing that reads the status code (the keepalive and prod-lag
  * workflows call it with `curl -f`) noticed a database outage. A failed probe
- * now answers 503 with the same JSON fields, so tools that read the commit
- * still can. Render has no healthCheckPath configured, so this never restarts
- * the service.
+ * now answers 503 with the same JSON fields, so tools that read the body
+ * without `-f` still get the commit. render.yaml sets no healthCheckPath (check
+ * the Render dashboard matches before relying on that). The probe is bounded: a
+ * stuck pool or query reads as unreachable after HEALTH_DB_PROBE_TIMEOUT_MS
+ * instead of holding the request open.
  */
+
+export const HEALTH_DB_PROBE_TIMEOUT_MS = 5_000;
 
 export interface HealthMeta {
   version: string | null;
@@ -28,11 +32,17 @@ export async function healthResponse(
   meta: HealthMeta,
 ): Promise<{ statusCode: 200 | 503; body: HealthBody }> {
   let dbOk = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error("db probe timed out")), HEALTH_DB_PROBE_TIMEOUT_MS);
+  });
   try {
-    await probeDb();
+    await Promise.race([probeDb(), timedOut]);
     dbOk = true;
   } catch {
-    // Unreachable: the body says so, never the error text.
+    // Unreachable or too slow: the body says so, never the error text.
+  } finally {
+    clearTimeout(timer);
   }
   return {
     statusCode: dbOk ? 200 : 503,

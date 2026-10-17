@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { healthResponse } from "../ops/health-response.js";
 
 // /api/health checked the database but answered 200 either way, so nothing
@@ -36,5 +36,20 @@ describe("healthResponse", () => {
     expect(statusCode).toBe(503);
     expect(body).toMatchObject({ status: "degraded", db: "unreachable", commit: "abc123" });
     expect(JSON.stringify(body)).not.toContain("reach database");
+  });
+});
+
+describe("healthResponse probe timeout", () => {
+  it("answers 503 when the probe hangs, instead of waiting on a stuck pool", async () => {
+    vi.useFakeTimers();
+    try {
+      const pending = healthResponse(() => new Promise(() => {}), meta);
+      await vi.advanceTimersByTimeAsync(5_000);
+      const { statusCode, body } = await pending;
+      expect(statusCode).toBe(503);
+      expect(body.db).toBe("unreachable");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
