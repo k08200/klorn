@@ -16,7 +16,7 @@
  * 44px items, arrow keys, Escape back to the trigger.
  */
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useToast } from "../../../components/toast";
 import Button from "../../../components/ui/button";
 import { Menu, type MenuItem } from "../../../components/ui/menu";
@@ -289,18 +289,24 @@ export function LabelFeedbackControl({
 /**
  * The reply-needed judgment as one "Reply state ⌄" chip menu. `omit` drops
  * choices another surface already offers (the v2 header's Later and Done).
+ * `onStateChange` hears the stored state once loaded and each saved choice, so
+ * the v2 header's Done knows whether the user already answered here.
  */
 export function ReplyNeededFeedbackControl({
   emailId,
   omit,
+  onStateChange,
 }: {
   emailId: string;
   omit?: ReadonlySet<ReplyNeededChoice>;
+  onStateChange?: (emailId: string, choice: ReplyNeededChoice | null) => void;
 }) {
   const { t } = useT();
   const [feedback, setFeedback] = useState<ReplyNeededFeedback | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const onStateChangeRef = useRef(onStateChange);
+  onStateChangeRef.current = onStateChange;
 
   useEffect(() => {
     let cancelled = false;
@@ -308,7 +314,9 @@ export function ReplyNeededFeedbackControl({
       `/api/email/${emailId}/reply-needed/feedback`,
     )
       .then((data) => {
-        if (!cancelled) setFeedback(data.feedback);
+        if (cancelled) return;
+        setFeedback(data.feedback);
+        onStateChangeRef.current?.(emailId, data.feedback?.choice ?? null);
       })
       .catch((err) =>
         captureClientError(err, { scope: "email.reply-needed-feedback.load", emailId }),
@@ -336,6 +344,7 @@ export function ReplyNeededFeedbackControl({
         evidence: null,
         createdAt: new Date().toISOString(),
       });
+      onStateChangeRef.current?.(emailId, data.feedback.choice);
     } catch (err) {
       captureClientError(err, { scope: "email.reply-needed-feedback.submit", emailId, choice });
       setError(serverErrorMessage(err, t("emailDetail.error.saveFeedback")));

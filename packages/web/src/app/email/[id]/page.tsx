@@ -24,6 +24,7 @@ import { REMINDER_LABEL_KEYS } from "../_v2/reminders";
 import { useLaneMove } from "../use-lane-move";
 import { readerLeaveHref } from "./_v2/reader-model";
 import { ReaderV2 } from "./_v2/reader-v2";
+import { useDoneFeedback } from "./_v2/use-done-feedback";
 import { useReaderContext } from "./_v2/use-reader-context";
 import { useReaderTriage } from "./_v2/use-reader-triage";
 import {
@@ -215,6 +216,7 @@ function EmailDetailView() {
   // explicit `true` keeps the legacy reader below exactly as it was.
   const mailV2 = useAuth().user?.mailV2 === true;
   const reader = useReaderContext(id, mailV2);
+  const doneFeedback = useDoneFeedback();
   const [email, setEmail] = useState<EmailDetail | null>(null);
   const [nextEmail, setNextEmail] = useState<NextEmailSummary | null>(null);
   const [thread, setThread] = useState<ThreadDetail | null>(null);
@@ -641,8 +643,9 @@ function EmailDetailView() {
     }
   };
 
-  const archiveEmailNow = async () => {
-    if (!id || actionBusy) return;
+  /** Resolves true once the mail is archived. */
+  const archiveEmailNow = async (): Promise<boolean> => {
+    if (!id || actionBusy) return false;
     setActionBusy("archive");
     setError(null);
     try {
@@ -652,11 +655,22 @@ function EmailDetailView() {
         t("emailDetail.toast.archivedQueueComplete"),
         "archive",
       );
+      return true;
     } catch (err) {
       captureClientError(err, { scope: "email.detail.archive", id });
       setError(serverErrorMessage(err, t("emailDetail.error.archive")));
       setActionBusy(null);
+      return false;
     }
+  };
+
+  // MAIL_V2: the header's Done is the archive plus the reply-needed DISMISSED
+  // signal the "Reply state" menu's Done used to send (#1483 moved Done to the
+  // header). The archive goes first; the feedback never blocks or fails it.
+  const doneFromV2Reader = async () => {
+    const archived = email;
+    if (!(await archiveEmailNow()) || !archived) return;
+    doneFeedback.sendAfterDone({ id: archived.id, needsReply: archived.needsReply === true });
   };
 
   const unsubscribeNow = async () => {
@@ -757,7 +771,7 @@ function EmailDetailView() {
     newerId: reader.context?.newerId ?? null,
     open: openInReader,
     back: () => router.push("/email"),
-    archive: () => void archiveEmailNow(),
+    archive: () => void doneFromV2Reader(),
     laneMove,
     undoLastAction: undoNotice ? () => void undoLastAction() : null,
   });
@@ -795,7 +809,7 @@ function EmailDetailView() {
           void generateReplyDraft();
         }}
         drafting={drafting}
-        onArchive={archiveEmailNow}
+        onArchive={() => void doneFromV2Reader()}
         onDelete={deleteEmailNow}
         onToggleRead={toggleRead}
         onToggleStar={toggleStar}
@@ -855,6 +869,7 @@ function EmailDetailView() {
                   <KlornAnalysis
                     quiet
                     email={email}
+                    onReplyStateChange={doneFeedback.onReplyStateChange}
                     onPriorityChange={(priority) =>
                       setEmail((prev) => (prev ? { ...prev, priority } : prev))
                     }
@@ -1893,8 +1908,11 @@ function KlornAnalysis({
   onSummarize,
   summarizing,
   quiet = false,
+  onReplyStateChange,
 }: {
   email: EmailDetail;
+  /** v2 only: hears the reply-state menu so the header's Done does not double-send. */
+  onReplyStateChange?: (emailId: string, choice: string | null) => void;
   onPriorityChange: (priority: EmailPriority) => void;
   onSummarize?: () => void;
   summarizing?: boolean;
@@ -1940,7 +1958,11 @@ function KlornAnalysis({
           <ActionItemsPanel emailId={email.id} actionItems={email.actionItems} />
         )}
         {email.needsReply && (
-          <ReplyNeededFeedbackControl emailId={email.id} omit={HEADER_OWNED_REPLY_CHOICES} />
+          <ReplyNeededFeedbackControl
+            emailId={email.id}
+            omit={HEADER_OWNED_REPLY_CHOICES}
+            onStateChange={onReplyStateChange}
+          />
         )}
       </section>
     );
