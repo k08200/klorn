@@ -5,7 +5,7 @@ import { parseLlmJson } from "../llm/llm-json.js";
 import { createCompletion, JUDGE_MODEL } from "../llm/openai.js";
 import type { ProviderCredentials } from "../providers/index.js";
 import { captureError } from "../sentry.js";
-import { wrapUntrusted } from "../untrusted.js";
+import { stripUntrusted, wrapUntrusted } from "../untrusted.js";
 import type { CandidateTrait } from "./sender-trait-policy.js";
 import { TRAIT_KINDS, validateTraitValue } from "./sender-trait-policy.js";
 import type { TraitSourceEmail } from "./sender-trait-signature.js";
@@ -81,7 +81,8 @@ export async function extractTraitsFromEmails(
       const value = validateTraitValue(kind, entry.value);
       // Cap at 200 chars: evidence is a short verbatim quote, the DB column is
       // VARCHAR(300), and an unbounded model quote would otherwise overflow it.
-      const evidenceText = asString(entry.evidence).slice(0, 200);
+      // The model sees each email wrapped; a quote must not carry the tags.
+      const evidenceText = stripUntrusted(asString(entry.evidence)).slice(0, 200);
       if (value === null || evidenceText === "") continue;
       out.push({
         factKind: kind,

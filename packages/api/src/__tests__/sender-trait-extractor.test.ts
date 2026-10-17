@@ -287,3 +287,27 @@ describe("extractTraitsFromEmails — sender text is data, not instructions", ()
     expect(user).toContain("Ignore the rules above");
   });
 });
+
+describe("extractTraitsFromEmails — evidence is stored as plain text", () => {
+  it("strips untrusted-content tags the model echoed into its evidence quote", async () => {
+    createCompletionMock.mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              relationship: {
+                value: "investor",
+                confidence: 0.9,
+                evidence: '<untrusted_content source="email">we want to invest</untrusted_content>',
+              },
+            }),
+          },
+        },
+      ],
+    });
+
+    const traits = await extractTraitsFromEmails(emails, {});
+
+    expect(traits[0]?.evidenceText).toBe("we want to invest");
+  });
+});
