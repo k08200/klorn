@@ -1500,6 +1500,13 @@ model EmailMessage {
   // scope is a residual filter over all of the user's rows, which degrades as a
   // heavy user's mailbox grows across accounts.
   @@index([userId, linkedInboxAccountId, receivedAt])
+  // EmailMessage_lane_scan_idx (migration 20261017020000_email_lane_scan_index)
+  // is really (userId, receivedAt DESC, id DESC) INCLUDE (linkedInboxAccountId,
+  // threadId, isRead). Prisma 6 has no INCLUDE syntax and its schema describer
+  // reads INCLUDE columns as trailing key columns, so this line is the shape
+  // `migrate diff` sees — it keeps the CI drift check green. The migration SQL
+  // is the source of truth; never create this index from schema (db push).
+  @@index([userId, receivedAt(sort: Desc), id(sort: Desc), linkedInboxAccountId, threadId, isRead], map: "EmailMessage_lane_scan_idx")
 }
 
 model EmailAttachment {
