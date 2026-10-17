@@ -33,17 +33,25 @@ export default function EmailLayout({ children }: { children: ReactNode }) {
   const wide = useMediaQuery(SPLIT_QUERY);
   const selectedId = openEmailId(pathname);
   const splitRoute = pathname === "/email" || selectedId !== null;
-  if (!wide || user?.mailV2 !== true || !splitRoute) return <>{children}</>;
+  const split = wide && user?.mailV2 === true && splitRoute;
+  // `children` keeps the same place in the tree whether or not the split is
+  // on (the wrappers turn into display: contents), so the media query
+  // resolving after the first paint does not remount the reader.
   return (
-    <div className="flex h-full min-h-0">
-      <section
-        data-mail-scroll
-        className="h-full w-[440px] shrink-0 overflow-y-auto border-r border-line bg-surface-panel"
+    <div className={split ? "flex h-full min-h-0" : "contents"}>
+      {split && (
+        <section
+          data-mail-scroll
+          className="h-full w-[440px] shrink-0 overflow-y-auto border-r border-line bg-surface-panel"
+        >
+          <MailV2 pane={{ selectedId }} />
+        </section>
+      )}
+      <div
+        data-reader-scroll={split || undefined}
+        className={split ? "h-full min-w-0 flex-1 overflow-y-auto bg-surface-app" : "contents"}
       >
-        <MailV2 pane={{ selectedId }} />
-      </section>
-      <div data-reader-scroll className="h-full min-w-0 flex-1 overflow-y-auto bg-surface-app">
-        {selectedId ? children : <SplitEmpty />}
+        {split && !selectedId ? <SplitEmpty /> : children}
       </div>
     </div>
   );

@@ -340,6 +340,7 @@ export function MailV2({ pane }: { pane?: MailPane } = {}) {
                   accounts={list.accounts}
                   time={time}
                   cursorId={pane?.selectedId ?? cursorId}
+                  compact={Boolean(pane)}
                   pickedIds={pickedIds}
                   readOnly={isDemo}
                   busy={actions.busy !== null}
