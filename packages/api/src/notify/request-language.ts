@@ -39,7 +39,7 @@ function qualityOf(params: string[]): number {
   const q = params.find((p) => p.trim().toLowerCase().startsWith("q="));
   if (!q) return 1;
   const value = Number.parseFloat(q.trim().slice(2));
-  return Number.isFinite(value) ? value : 1;
+  return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 1;
 }
 
 /** The highest-q supported language in an Accept-Language header (ties keep header order). */
