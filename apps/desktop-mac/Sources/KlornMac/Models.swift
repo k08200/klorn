@@ -652,6 +652,33 @@ struct ChatConversation: Codable, Sendable {
     let id: String
 }
 
+/// `GET /api/chat/conversations`, newest first.
+struct ChatConversationList: Decodable, Sendable {
+    let conversations: [ChatConversation]
+}
+
+/// `GET /api/chat/conversations/:id/messages`, oldest first. Only the user's
+/// and the assistant's text turns become bubbles; tool and system rows, and
+/// empty contents, are not part of the visible thread.
+struct ChatHistory: Decodable, Sendable {
+    struct Item: Decodable, Sendable {
+        let role: String
+        let content: String?
+
+        var bubble: ChatMessage? {
+            guard let text = content?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !text.isEmpty else { return nil }
+            // The server's enum is USER / ASSISTANT / SYSTEM.
+            switch role.uppercased() {
+            case "USER": return ChatMessage(role: .user, text: text)
+            case "ASSISTANT": return ChatMessage(role: .assistant, text: text)
+            default: return nil
+            }
+        }
+    }
+    let messages: [Item]
+}
+
 /// A calendar event the agent drafted from the conversation — the user
 /// confirms before anything is written (deterministic-floor thinking: the
 /// desktop never creates an event the user didn't click).

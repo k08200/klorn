@@ -50,8 +50,8 @@
 "mail.snooze.a11y" = "稍后提醒来自 %@ 的邮件";
 "mail.dismiss" = "忽略";
 "mail.dismiss.a11y" = "忽略来自 %@ 的邮件";
-"mail.changeTier" = "移到其他分类…（Klorn 会学习）";
-"mail.changeTier.a11y" = "更改来自 %1$@ 的邮件分类，当前为 %2$@";
+"mail.changeTier" = "移到其他通道…（Klorn 会学习）";
+"mail.changeTier.a11y" = "更改来自 %1$@ 的邮件通道，当前为 %2$@";
 "mail.snoozePrefix" = "稍后提醒 ";
 "mail.summarize" = "AI 摘要";
 "mail.summarizing" = "正在摘要…";
@@ -93,7 +93,7 @@
 
 /* Reading pane */
 "reading.empty.title" = "没有打开的内容";
-"reading.empty.detail" = "从左侧选一封邮件 — 阅读、回复、\n稍后提醒、改分类，都不用离开 Klorn。";
+"reading.empty.detail" = "从左侧选一封邮件 — 阅读、回复、\n稍后提醒、换通道，都不用离开 Klorn。";
 "reading.replyWithAI" = "用 AI 回复";
 "reading.openInWeb" = "在网页打开";
 "reading.replyTo" = "回复 %@";
@@ -243,8 +243,8 @@
 "mail.reclassifying" = "重新分类中";
 
 /* Proposals — actions awaiting approval */
-"proposals.title" = "提议";
-"proposals.a11y" = "提议，%d 项待批准";
+"proposals.title" = "审批";
+"proposals.a11y" = "审批，%d 项等待中";
 "proposals.approve" = "批准";
 "proposals.decline" = "拒绝";
 "proposals.empty" = "没有需要你处理的事。";
@@ -252,7 +252,7 @@
 "proposals.row.a11y" = "%1$@。%2$@";
 
 /* Column headers and states the first pass missed */
-"section.inbox" = "收件箱";
+"section.inbox" = "邮件";
 "push.nothingNeedsYou" = "目前没有需要你处理的事。";
 "auth.signInNaver" = "使用 Naver 继续";
 "auth.signInApple" = "使用 Apple 继续";
@@ -274,9 +274,9 @@
 
 /* First-run guide */
 "guide.title" = "Klorn 如何为你分拣邮件";
-"guide.pipeline" = "Klorn 会读取每个已连接的邮箱，把每封邮件分到下面 %d 个分类中。这个收件箱栏是分拣结果，不是你原始的 Gmail 收件箱。";
-"guide.intro" = "每封邮件都会落入 %d 个分类之一。不会删除任何东西，也不会背着你回复 — 分类只决定它以多大的声音到达你。";
-"guide.correcting" = "分错了？把它移到别的分类，Klorn 会从这次更正中学习。每封邮件也会显示它为什么落在那里。";
+"guide.pipeline" = "Klorn 会读取每个已连接的邮箱，把每封邮件分到下面 %d 个通道中。这个邮件栏是分拣结果，不是你原始的 Gmail 收件箱。";
+"guide.intro" = "每封邮件都会落入 %d 个通道之一。不会删除任何东西，也不会背着你回复 — 通道只决定它以多大的声音到达你。";
+"guide.correcting" = "分错了？把它移到别的通道，Klorn 会从这次更正中学习。每封邮件也会显示它为什么落在那里。";
 "guide.done" = "知道了";
 "guide.reopen" = "分拣是怎么运作的";
 
@@ -636,6 +636,12 @@
 "onboarding.privacy" = "Klorn 读取你的邮件以进行分类。除此之外它可以做什么，由你决定。";
 "error.unreachable" = "Klorn 无法连接服务器。";
 "banner.dismiss.a11y" = "关闭消息";
+"assistant.starter.1" = "今天最重要的邮件是哪封？";
+"assistant.starter.2" = "未回复的邮件里哪些紧急？";
+"assistant.starter.3" = "整理一下本周会议要准备什么";
+"assistant.message.user.a11y" = "你说：%@";
+"assistant.message.failure.a11y" = "错误：%@";
+"assistant.message.reply.a11y" = "Klorn 回复：%@";
 
 /* Step D7: import picked files into the Klorn drive (Settings › Accounts, File menu). */
 "prefs.section.driveImport" = "Klorn 云盘";

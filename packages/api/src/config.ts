@@ -224,6 +224,18 @@ export function deviceCalendarEnabled(): boolean {
     (process.env.DEVICE_CALENDAR_ENABLED ?? "").trim().toLowerCase(),
   );
 }
+// Subscriptions: the per-sender, per-account bulk unsubscriber (Mail →
+// Subscriptions). OFF by default (repo doctrine). While off, GET
+// /api/email/subscriptions and POST /api/email/subscriptions/unsubscribe answer
+// Fastify's default 404 (darkRouteGate), and the web hides its entry point.
+// User-initiated only: nothing runs on a schedule, and it never touches the
+// separate AUTO_UNSUBSCRIBE_ENABLED classification-time path. Read at request
+// time with the same lenient truthy parse, so a flip needs no redeploy.
+export function bulkUnsubscribeEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.BULK_UNSUBSCRIBE_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
 // The drive: a metadata index of files across sources — step D2 of
 // docs/providers/unified-platform-plan.md. OFF by default (repo doctrine). While
 // off: every /api/drive route answers Fastify's default 404 (darkRouteGate), and

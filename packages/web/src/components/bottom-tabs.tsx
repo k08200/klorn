@@ -77,11 +77,9 @@ export default function BottomTabs() {
         aria-label={t("bottomTabs.nav")}
         className="md:hidden fixed bottom-0 inset-x-0 z-30 border-t border-line bg-surface-panel/92 pb-safe shadow-[0_-16px_44px_rgba(0,0,0,0.35)] backdrop-blur-xl"
       >
-        <ul
-          className={
-            unified && tabs.length === UNIFIED_TABS.length ? "grid grid-cols-5" : "grid grid-cols-6"
-          }
-        >
+        {/* One column per tab plus the account button: the legacy bar and the
+            unified bar without Files hold 5 items, the unified bar with Files 6. */}
+        <ul className={tabs.length > 4 ? "grid grid-cols-6" : "grid grid-cols-5"}>
           {tabs.map((tab) => {
             const active = (tab.routes ?? [tab.href]).some((route) => isActive(pathname, route));
             return (

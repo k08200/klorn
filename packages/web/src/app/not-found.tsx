@@ -11,22 +11,22 @@ export default function NotFound() {
         This workspace view is unavailable.
       </h1>
       <p className="mt-4 max-w-md text-sm leading-6 text-ink-mid">
-        The link may be old, renamed, or outside your current workspace. Start from the decision
-        queue or return to the public overview.
+        The link may be old, renamed, or outside your current workspace. Open Klorn to pick up where
+        you left off.
       </p>
       <div className="mt-8 flex flex-col gap-3 sm:flex-row">
         <Link
-          href="/inbox"
+          href="/"
           className="inline-flex min-h-11 items-center justify-center rounded-md bg-accent-solid px-5 text-sm font-semibold text-accent-solid-ink transition hover:bg-accent-solid-hover"
         >
-          Open decision queue
+          Open Klorn
         </Link>
-        <Link
-          href="/"
+        <a
+          href="https://klorn.ai"
           className="inline-flex min-h-11 items-center justify-center rounded-md border border-line px-5 text-sm font-medium text-ink-mid transition hover:bg-surface-hover hover:text-ink"
         >
-          Back to home
-        </Link>
+          About Klorn
+        </a>
       </div>
     </main>
   );

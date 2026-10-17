@@ -77,13 +77,28 @@ function authSurfaceEntries(table: Record<string, string>): Array<[string, strin
   );
 }
 
+/**
+ * Each locale's own word for the retired "Decision queue" surface. Pinned here
+ * rather than read from `nav.decisionQueue`: that key now labels the legacy
+ * /inbox page "Approvals", so its value is no longer the retired name.
+ */
+const RETIRED_DECISION_QUEUE: Record<keyof typeof LOCALES, string> = {
+  en: "Decision queue",
+  ko: "결정 큐",
+  ja: "判断キュー",
+  zh: "决策队列",
+  de: "Entscheidungsliste",
+  fr: "File de décisions",
+  es: "Cola de decisiones",
+};
+
 describe("sign-in surface vocabulary", () => {
   it.each(
     Object.entries(LOCALES),
-  )("%s: no auth-flow string uses the retired 'decision queue' name", (_code, table) => {
+  )("%s: no auth-flow string uses the retired 'decision queue' name", (code, table) => {
     // Each locale's own word for the retired surface, so the check holds in
     // every language rather than only in English.
-    const retired = table["nav.decisionQueue"].toLowerCase();
+    const retired = RETIRED_DECISION_QUEUE[code as keyof typeof LOCALES].toLowerCase();
     const offenders = authSurfaceEntries(table)
       .filter(([, value]) => value.toLowerCase().includes(retired))
       .map(([key]) => key);

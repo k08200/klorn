@@ -243,8 +243,8 @@
 "mail.reclassifying" = "再分類中";
 
 /* Proposals — actions awaiting approval */
-"proposals.title" = "提案";
-"proposals.a11y" = "提案、承認待ち %d件";
+"proposals.title" = "承認";
+"proposals.a11y" = "承認、%d件待ち";
 "proposals.approve" = "承認";
 "proposals.decline" = "却下";
 "proposals.empty" = "あなたの対応待ちはありません。";
@@ -252,7 +252,7 @@
 "proposals.row.a11y" = "%1$@。%2$@";
 
 /* Column headers and states the first pass missed */
-"section.inbox" = "受信トレイ";
+"section.inbox" = "メール";
 "push.nothingNeedsYou" = "今すぐ対応が必要なものはありません。";
 "auth.signInNaver" = "Naverで続ける";
 "auth.signInApple" = "Appleで続ける";
@@ -274,7 +274,7 @@
 
 /* First-run guide */
 "guide.title" = "Klornのメール振り分け方";
-"guide.pipeline" = "Klornは接続されたすべてのメールボックスを読み、各メールを下の%dつのレーンに振り分けます。この受信トレイ列はその結果であり、Gmailの生の受信トレイではありません。";
+"guide.pipeline" = "Klornは接続されたすべてのメールボックスを読み、各メールを下の%dつのレーンに振り分けます。このメール列はその結果であり、Gmailの生の受信トレイではありません。";
 "guide.intro" = "すべてのメールは%dつのレーンのいずれかに入ります。削除も、あなた抜きの返信もしません — レーンはどれだけ大きく届くかだけを決めます。";
 "guide.correcting" = "判定が違ったら、別のレーンに移してください。Klornがその修正から学びます。各メールにはその場所に入った理由も表示されます。";
 "guide.done" = "わかりました";
@@ -636,6 +636,12 @@
 "onboarding.privacy" = "Klornは分類のためにメールを読みます。それ以上に何をしてよいかは、あなたが決めます。";
 "error.unreachable" = "Klornのサーバーに接続できません。";
 "banner.dismiss.a11y" = "メッセージを閉じる";
+"assistant.starter.1" = "今日いちばん大事なメールは？";
+"assistant.starter.2" = "未返信のうち急ぎのものだけ教えて";
+"assistant.starter.3" = "今週のミーティングの準備をまとめて";
+"assistant.message.user.a11y" = "あなた: %@";
+"assistant.message.failure.a11y" = "エラー: %@";
+"assistant.message.reply.a11y" = "Klornの返答: %@";
 
 /* Step D7: import picked files into the Klorn drive (Settings › Accounts, File menu). */
 "prefs.section.driveImport" = "Klorn ドライブ";
