@@ -1500,6 +1500,11 @@ const ko: Record<string, string> = {
   "settings.team.unavailable": "이 계정에서는 팀 기능을 사용할 수 없습니다.",
   // Mail v2 list (productization plan P5, MAIL_V2).
   "mailV2.lanes.label": "레인",
+  "lane.name.PUSH": "Push",
+  "lane.name.MEETING": "Meeting",
+  "lane.name.QUEUE": "Queue",
+  "lane.name.INFO": "Info",
+  "lane.name.SILENT": "Silent",
   "mailV2.lane.all": "전체",
   "mailV2.lane.unread": "{lane}, 안 읽음 {count}개",
   "mailV2.accounts.label": "계정",

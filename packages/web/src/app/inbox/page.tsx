@@ -512,7 +512,7 @@ function DecisionsBody({
                   <div className="flex items-center gap-2">
                     <h2 className="text-sm font-semibold text-ink">Decisions</h2>
                     {pendingCount > 0 && (
-                      <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-state-warn-ink ring-1 ring-inset ring-amber-500/20">
+                      <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-state-warn-ink ring-1 ring-inset ring-amber-500/20">
                         {pendingCount} pending
                       </span>
                     )}
@@ -627,13 +627,13 @@ function CommitmentsPanel({ commitments }: { commitments: CommitmentItem[] }) {
       <div className="border-b border-line-soft px-4 py-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-ink">Commitments</h2>
-          <span className="rounded-md bg-accent-dim px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-accent-deeper">
+          <span className="rounded-md bg-accent-dim px-1.5 py-0.5 text-caption font-bold tabular-nums text-accent-deeper">
             {visible.length}
           </span>
         </div>
         {/* Plain-language legend — without it the extracted sentences read as
             unexplained AI output ("뭔지 모르겠고", founder 2026-07-22). */}
-        <p className="mt-1 text-[11px] leading-4 text-ink-dim">
+        <p className="mt-1 text-caption leading-4 text-ink-dim">
           Promises Klorn spotted in your mail — <span className="text-accent-deep">Waiting on</span>{" "}
           = they promised you, <span className="text-state-warn-ink">I owe</span> = you promised
           them.
@@ -652,7 +652,7 @@ function CommitmentsPanel({ commitments }: { commitments: CommitmentItem[] }) {
               )}
               <div className="flex items-start gap-2.5 px-4 py-2.5 pl-5">
                 <span
-                  className={`mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ring-1 ring-inset ${
+                  className={`mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ring-1 ring-inset ${
                     iOwe
                       ? "bg-amber-500/10 text-state-warn-ink ring-amber-500/20"
                       : "bg-accent/10 text-accent-deeper ring-accent/20"
@@ -661,13 +661,11 @@ function CommitmentsPanel({ commitments }: { commitments: CommitmentItem[] }) {
                   {iOwe ? "I owe" : "Waiting on"}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="line-clamp-1 text-[13px] font-medium text-ink-strong">
-                    “{c.title}”
-                  </p>
+                  <p className="line-clamp-1 text-label font-medium text-ink-strong">“{c.title}”</p>
                   {c.description && (
-                    <p className="mt-0.5 line-clamp-1 text-[11px] text-ink-mid">{c.description}</p>
+                    <p className="mt-0.5 line-clamp-1 text-caption text-ink-mid">{c.description}</p>
                   )}
-                  <p className="mt-0.5 text-[11px] text-ink-dim">
+                  <p className="mt-0.5 text-caption text-ink-dim">
                     {COMMITMENT_KIND_LABEL[c.kind]}
                     {c.dueText ? ` · due ${c.dueText}` : ""}
                     <span className="text-slate-300"> · </span>
@@ -781,7 +779,7 @@ function OnboardingHint() {
   return (
     <>
       {/* DESKTOP — one-line compact strip; the tour never outweighs the queue. */}
-      <div className="mb-4 hidden items-center gap-3 rounded-lg border border-line/60 bg-surface-panel/50 px-3 py-1.5 text-[12.5px] md:flex">
+      <div className="mb-4 hidden items-center gap-3 rounded-lg border border-line/60 bg-surface-panel/50 px-3 py-1.5 text-caption md:flex">
         <p className="min-w-0 flex-1 truncate text-xs text-ink-mid">
           <span className="font-semibold text-accent-deeper">{t("inbox.tourTitle")}</span>
           <span className="mx-1.5 text-slate-300">·</span>
@@ -827,9 +825,9 @@ function OnboardingHint() {
       <div className="mb-3 text-sm md:hidden">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 space-y-1.5">
-            <p className="text-[11px] font-medium text-ink-dim">{t("inbox.tourTitle")}</p>
+            <p className="text-caption font-medium text-ink-dim">{t("inbox.tourTitle")}</p>
             <ol
-              className={`${expanded ? "block" : "hidden"} list-inside list-decimal space-y-1 text-[13px] leading-5 text-ink-mid`}
+              className={`${expanded ? "block" : "hidden"} list-inside list-decimal space-y-1 text-label font-normal leading-5 text-ink-mid`}
             >
               <li>
                 <span className="text-ink">{t("inbox.tour.queueLabel")}</span> —{" "}
@@ -864,14 +862,14 @@ function OnboardingHint() {
             <button
               type="button"
               onClick={() => setExpanded((v) => !v)}
-              className="rounded-md border border-line px-2.5 py-1 text-[11px] text-ink-mid transition hover:border-line-strong hover:text-ink"
+              className="rounded-md border border-line px-2.5 py-1 text-caption text-ink-mid transition hover:border-line-strong hover:text-ink"
             >
               {expanded ? t("inbox.tour.hide") : t("inbox.tour.show")}
             </button>
             <button
               type="button"
               onClick={dismiss}
-              className="rounded-md border border-line px-2.5 py-1 text-[11px] text-ink-mid transition hover:border-line-strong hover:text-ink"
+              className="rounded-md border border-line px-2.5 py-1 text-caption text-ink-mid transition hover:border-line-strong hover:text-ink"
             >
               {t("inbox.tour.dismiss")}
             </button>
@@ -994,7 +992,7 @@ function SignalStrip({
           <>
             <span className="flex items-center gap-1.5">
               <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${cell.dot}`} />
-              <span className="truncate text-[10.5px] font-semibold uppercase tracking-wider text-ink-dim transition group-hover:text-ink-mid">
+              <span className="truncate text-caption font-semibold uppercase tracking-wider text-ink-dim transition group-hover:text-ink-mid">
                 {cell.label}
               </span>
             </span>
@@ -1051,7 +1049,7 @@ function ReplyNeededPanel({ hero = false }: { hero?: boolean }) {
       <div className="flex items-center justify-between border-b border-line-soft px-4 py-3">
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-semibold text-ink">Reply Needed</h2>
-          <span className="rounded-md bg-accent/10 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-accent-deeper ring-1 ring-inset ring-accent/20">
+          <span className="rounded-md bg-accent/10 px-1.5 py-0.5 text-caption font-semibold tabular-nums text-accent-deeper ring-1 ring-inset ring-accent/20">
             {emails.length}
           </span>
         </div>
@@ -1068,7 +1066,7 @@ function ReplyNeededPanel({ hero = false }: { hero?: boolean }) {
                 <span
                   aria-hidden="true"
                   className={`avatar-ring mt-0.5 flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br font-semibold text-white ${
-                    hero ? "h-9 w-9 text-[13px]" : "h-8 w-8 text-[11px]"
+                    hero ? "h-9 w-9 text-label" : "h-8 w-8 text-caption"
                   } ${avatarGradient(fromName)}`}
                 >
                   {senderInitials(fromName)}
@@ -1080,12 +1078,12 @@ function ReplyNeededPanel({ hero = false }: { hero?: boolean }) {
                 <span className="min-w-0 flex-1">
                   <span className="flex items-baseline gap-2">
                     <span
-                      className={`min-w-0 flex-1 truncate font-medium text-ink ${hero ? "text-[13.5px]" : "text-xs"}`}
+                      className={`min-w-0 flex-1 truncate font-medium text-ink ${hero ? "text-label" : "text-xs"}`}
                     >
                       {email.subject || "(no subject)"}
                     </span>
                     {hero && (
-                      <time className="shrink-0 text-[11px] tabular-nums text-ink-dim">
+                      <time className="shrink-0 text-caption tabular-nums text-ink-dim">
                         {formatRelative(email.receivedAt)}
                       </time>
                     )}
@@ -1095,7 +1093,7 @@ function ReplyNeededPanel({ hero = false }: { hero?: boolean }) {
                       {email.snippet}
                     </span>
                   )}
-                  <span className="mt-0.5 block truncate text-[11px] text-ink-dim">
+                  <span className="mt-0.5 block truncate text-caption text-ink-dim">
                     {fromName}
                     {email.needsReplyReason && (
                       <>
@@ -1195,7 +1193,7 @@ function QuickLinksPanel() {
         <Link
           key={link.href}
           href={link.href}
-          className="ease-strong inline-flex items-center gap-1 rounded-lg border border-line bg-surface-panel/70 px-2.5 py-1.5 text-[11px] font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
+          className="ease-strong inline-flex items-center gap-1 rounded-lg border border-line bg-surface-panel/70 px-2.5 py-1.5 text-caption font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
         >
           {link.label}
           <span className="text-ink-mid">→</span>
@@ -1294,7 +1292,7 @@ function ActionCard({
           <RiskBadge risk={risk} />
           {!isPending && <StatusBadge status={action.status} />}
         </div>
-        <span className="text-[11px] tabular-nums text-ink-dim">
+        <span className="text-caption tabular-nums text-ink-dim">
           {formatRelative(action.createdAt)}
         </span>
       </div>
@@ -1305,7 +1303,7 @@ function ActionCard({
           {heroSubject}
         </h3>
         {showThreadHint && (
-          <p className="mt-1.5 truncate text-[11px] text-ink-mid">
+          <p className="mt-1.5 truncate text-caption text-ink-mid">
             Thread: {action.conversationTitle}
           </p>
         )}
@@ -1324,7 +1322,7 @@ function ActionCard({
       {emailPreview && (
         <div className="mx-5 mb-4 rounded-lg border border-line bg-surface-raised">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b border-line px-3 py-2">
-            <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-accent-deep">
+            <span className="font-mono text-caption uppercase tracking-[0.14em] text-accent-deep">
               Email to send
             </span>
             <span className="text-xs text-ink-dim">To: {emailPreview.to}</span>
@@ -1385,7 +1383,7 @@ function ActionCard({
 
       {!isPending && action.result && (
         <div className="border-t border-line-soft bg-surface-raised/60 px-5 py-3">
-          <p className="truncate text-[11px] text-ink-dim">{action.result}</p>
+          <p className="truncate text-caption text-ink-dim">{action.result}</p>
         </div>
       )}
     </article>
@@ -1410,7 +1408,7 @@ function RiskBadge({ risk }: { risk: "low" | "medium" | "high" }) {
 
   return (
     <span
-      className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ${map.className}`}
+      className={`shrink-0 rounded-md px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ${map.className}`}
     >
       {map.label}
     </span>
@@ -1477,7 +1475,7 @@ function StatusBadge({ status }: { status: PendingActionItem["status"] }) {
   const entry = map[status];
   return (
     <span
-      className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ${entry.className}`}
+      className={`shrink-0 rounded-md px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ${entry.className}`}
     >
       {entry.label}
     </span>
@@ -1703,7 +1701,7 @@ function MobileSeg({
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      className={`flex-1 rounded-lg py-2 text-[13px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+      className={`flex-1 rounded-lg py-2 text-label font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
         active ? "bg-surface-panel text-ink shadow-sm" : "text-ink-mid active:text-ink"
       }`}
     >
@@ -1733,7 +1731,7 @@ function MobileEmpty({ commitmentCount }: { commitmentCount: number }) {
         </svg>
       </div>
       <p className="text-base font-medium text-ink">{t("inbox.nothingToDecide")}</p>
-      <p className="mx-auto mt-1.5 max-w-xs text-[13px] leading-relaxed text-ink-dim">
+      <p className="mx-auto mt-1.5 max-w-xs text-label font-normal leading-relaxed text-ink-dim">
         {commitmentCount > 0
           ? `Klorn is watching your mail and calendar. ${commitmentCount} tracked in the background.`
           : t("inbox.emptyBodyMobile")}
@@ -1773,22 +1771,24 @@ function MobileActionCard({
     <article className="overflow-hidden rounded-2xl bg-surface-raised">
       <div className="flex items-center justify-between gap-2 px-4 pt-3.5">
         <RiskBadge risk={risk} />
-        <span className="text-[11px] text-ink-dim">{formatRelative(action.createdAt)}</span>
+        <span className="text-caption text-ink-dim">{formatRelative(action.createdAt)}</span>
       </div>
       <div className="px-4 pt-2.5">
         <h3 className="break-words text-[17px] font-semibold leading-snug tracking-tight text-ink">
           {heroSubject}
         </h3>
         {context && (
-          <p className="mt-1.5 line-clamp-3 text-[13px] leading-relaxed text-ink-mid">{context}</p>
+          <p className="mt-1.5 line-clamp-3 text-label font-normal leading-relaxed text-ink-mid">
+            {context}
+          </p>
         )}
         {/* Outbound body inline so a send_email can't be approved unseen. */}
         {emailPreview && (
           <div className="mt-3 rounded-xl border border-line bg-surface-panel p-3">
-            <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-accent-deep">
+            <p className="font-mono text-caption uppercase tracking-[0.14em] text-accent-deep">
               Email to send
             </p>
-            <p className="mt-1 break-words text-[11px] text-ink-dim">To: {emailPreview.to}</p>
+            <p className="mt-1 break-words text-caption text-ink-dim">To: {emailPreview.to}</p>
             <p className="mt-1 break-words text-xs text-ink-mid">Subject: {emailPreview.subject}</p>
             {emailPreview.body && (
               <p className="mt-1.5 whitespace-pre-wrap text-xs leading-relaxed text-ink-mid">
@@ -1842,7 +1842,7 @@ function MobileActionCard({
       ) : (
         action.result && (
           <div className="mt-2 px-4 pb-4">
-            <p className="truncate text-[11px] text-ink-dim">{action.result}</p>
+            <p className="truncate text-caption text-ink-dim">{action.result}</p>
           </div>
         )
       )}

@@ -63,7 +63,9 @@ export default function ScreenerCard() {
           {t("screener.count", { count: String(pending.length) })}
         </span>
       </header>
-      <p className="mt-1.5 text-[13px] leading-5 text-ink-mid">{t("screener.subtitle")}</p>
+      <p className="mt-1.5 text-label font-normal leading-5 text-ink-mid">
+        {t("screener.subtitle")}
+      </p>
 
       <ul className="mt-4 space-y-1.5">
         {rows.map((row) => {
@@ -77,7 +79,7 @@ export default function ScreenerCard() {
                 <p className="truncate text-sm font-medium text-ink" title={row.sender}>
                   {row.sender}
                 </p>
-                <p className="mt-0.5 text-[11px] text-ink-dim">
+                <p className="mt-0.5 text-caption text-ink-dim">
                   {row.lastReceivedAt
                     ? t("screener.meta", {
                         count: String(row.messageCount),
@@ -119,7 +121,7 @@ export default function ScreenerCard() {
         </button>
       )}
 
-      <p className="mt-3 text-[11px] leading-4 text-ink-dim">{t("screener.noHold")}</p>
+      <p className="mt-3 text-caption leading-4 text-ink-dim">{t("screener.noHold")}</p>
     </section>
   );
 }

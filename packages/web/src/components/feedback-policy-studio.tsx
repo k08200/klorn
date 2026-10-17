@@ -89,7 +89,7 @@ export default function FeedbackPolicyStudio() {
     <section className="panel-elevated mb-6 rounded-2xl border border-line/70 bg-surface-panel p-4 md:p-5">
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent-deep">
+          <p className="text-caption font-semibold uppercase tracking-[0.18em] text-accent-deep">
             Policy Studio
           </p>
           <h2 className="mt-2 text-lg font-semibold text-ink">
@@ -136,16 +136,16 @@ export default function FeedbackPolicyStudio() {
                   <div className="flex flex-wrap items-center gap-2">
                     <PolicyBadge kind={candidate.kind} />
                     {candidate.active && (
-                      <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-state-ok-ink ring-1 ring-inset ring-emerald-500/20">
+                      <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-state-ok-ink ring-1 ring-inset ring-emerald-500/20">
                         Active
                       </span>
                     )}
                     {candidate.ignored && (
-                      <span className="rounded-md bg-surface-hover px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-ink-mid ring-1 ring-inset ring-line">
+                      <span className="rounded-md bg-surface-hover px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-ink-mid ring-1 ring-inset ring-line">
                         Hidden
                       </span>
                     )}
-                    <span className="text-[11px] tabular-nums text-ink-dim">
+                    <span className="text-caption tabular-nums text-ink-dim">
                       {Math.round(candidate.confidence * 100)}%
                     </span>
                   </div>
@@ -156,7 +156,7 @@ export default function FeedbackPolicyStudio() {
                   <p className="mt-1 line-clamp-2 text-xs leading-5 text-ink-dim">
                     {candidate.rationale}
                   </p>
-                  <p className="mt-2 text-[11px] tabular-nums text-ink-mid">
+                  <p className="mt-2 text-caption tabular-nums text-ink-mid">
                     Approved {candidate.support.approved} · Rejected {candidate.support.rejected} ·
                     Edited {candidate.support.edited} · Failed {candidate.support.failed} · Total{" "}
                     {candidate.support.total}
@@ -198,7 +198,7 @@ function PolicyBadge({ kind }: { kind: PolicyKind }) {
   }[kind];
   return (
     <span
-      className={`rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ring-1 ring-inset ${meta[1]}`}
+      className={`rounded-md px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ring-1 ring-inset ${meta[1]}`}
     >
       {meta[0]}
     </span>

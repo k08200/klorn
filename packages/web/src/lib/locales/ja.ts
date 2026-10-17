@@ -1495,6 +1495,11 @@ const ja: Record<string, string> = {
   "settings.team.unavailable": "このアカウントではチーム機能を利用できません。",
   // Mail v2 list (productization plan P5, MAIL_V2).
   "mailV2.lanes.label": "レーン",
+  "lane.name.PUSH": "Push",
+  "lane.name.MEETING": "Meeting",
+  "lane.name.QUEUE": "Queue",
+  "lane.name.INFO": "Info",
+  "lane.name.SILENT": "Silent",
   "mailV2.lane.all": "すべて",
   "mailV2.lane.unread": "{lane}、未読 {count} 件",
   "mailV2.accounts.label": "アカウント",

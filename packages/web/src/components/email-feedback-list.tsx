@@ -43,7 +43,7 @@ function PriorityPill({ priority }: { priority: EmailPriority }) {
 
   return (
     <span
-      className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ring-1 ring-inset ${PRIORITY_STYLES[priority]}`}
+      className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ring-1 ring-inset ${PRIORITY_STYLES[priority]}`}
     >
       {label}
     </span>
@@ -149,7 +149,7 @@ export function EmailFeedbackList() {
                   <span className="text-xs text-ink-mid">-&gt;</span>
                   <PriorityPill priority={fixture.expectedSyncPriority} />
                   {fixture.capturedHeuristic.reason && (
-                    <span className="rounded-full border border-line bg-surface-raised px-2 py-0.5 text-[10px] text-ink-dim">
+                    <span className="rounded-full border border-line bg-surface-raised px-2 py-0.5 text-caption text-ink-dim">
                       {fixture.capturedHeuristic.reason}
                     </span>
                   )}
@@ -160,7 +160,7 @@ export function EmailFeedbackList() {
                     {fixture.capturedHeuristic.signals.slice(0, 6).map((signal) => (
                       <span
                         key={signal}
-                        className="max-w-full truncate rounded-md border border-line bg-surface-raised px-2 py-1 text-[11px] text-ink-dim"
+                        className="max-w-full truncate rounded-md border border-line bg-surface-raised px-2 py-1 text-caption text-ink-dim"
                       >
                         {signal}
                       </span>

@@ -128,7 +128,7 @@ export default function BetaLearningCard() {
               <span className={`h-2 w-2 rounded-full ${dotClass(step.state)}`} />
               <p className="text-xs font-medium text-ink">{step.label}</p>
             </div>
-            <p className="mt-1 text-[11px] leading-5 text-ink-dim">{step.detail}</p>
+            <p className="mt-1 text-caption leading-5 text-ink-dim">{step.detail}</p>
           </div>
         ))}
       </div>

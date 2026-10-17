@@ -170,7 +170,7 @@ function ApiOfflineScreen() {
       role="status"
       aria-live="polite"
     >
-      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-deep">
+      <p className="text-caption font-semibold uppercase tracking-[0.16em] text-accent-deep">
         {t("authGuard.offline.eyebrow")}
       </p>
       <h1 className="mt-3 text-2xl font-semibold text-ink">

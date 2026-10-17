@@ -311,7 +311,7 @@ export default function PlaygroundPage() {
 
       <div className="mx-auto max-w-5xl px-6 pb-24">
         <header className="mb-8">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-dim">
+          <p className="text-caption font-semibold uppercase tracking-[0.14em] text-ink-dim">
             Playground
           </p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
@@ -426,7 +426,7 @@ export default function PlaygroundPage() {
                 )}
               </div>
             </div>
-            <p className="mb-4 text-[11px] text-ink-dim">{PROVIDER_META[provider].hint}</p>
+            <p className="mb-4 text-caption text-ink-dim">{PROVIDER_META[provider].hint}</p>
 
             <div className="mb-1.5 flex items-center justify-between">
               <label className="block text-xs font-medium text-ink-mid" htmlFor="pg-key">
@@ -435,7 +435,7 @@ export default function PlaygroundPage() {
               <button
                 type="button"
                 onClick={() => setShowKey((v) => !v)}
-                className="text-[11px] text-ink-mid transition hover:text-accent-deep"
+                className="text-caption text-ink-mid transition hover:text-accent-deep"
               >
                 {showKey ? "Hide" : "Show"}
               </button>
@@ -452,7 +452,7 @@ export default function PlaygroundPage() {
               className="mb-1.5 w-full rounded-md border border-line bg-surface-raised px-4 py-3 font-mono text-sm text-ink outline-none transition placeholder:text-ink-dim focus-visible:border-accent-muted focus-visible:ring-1 focus-visible:ring-accent-muted/25"
               placeholder={PROVIDER_META[provider].keyPlaceholder}
             />
-            <p className="mb-4 text-[11px] text-ink-dim">
+            <p className="mb-4 text-caption text-ink-dim">
               Stored only in this browser (localStorage), per provider. Sent once per classify,
               never saved on our servers.
             </p>
@@ -491,7 +491,7 @@ export default function PlaygroundPage() {
                     >
                       {visual(result.tier).label}
                     </span>
-                    <span className="text-[11px] uppercase tracking-wide text-ink-dim">
+                    <span className="text-caption uppercase tracking-wide text-ink-dim">
                       via {result.source}
                     </span>
                   </div>

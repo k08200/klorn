@@ -85,7 +85,7 @@ export default function EventDraftCard({ draft }: { draft: EventDraft }) {
 
   return (
     <div className="mt-2 rounded-xl border border-line/70 bg-surface-panel p-3 text-sm shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-      <span className="inline-flex rounded-md bg-accent/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-accent-deep ring-1 ring-inset ring-accent/20">
+      <span className="inline-flex rounded-md bg-accent/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-accent-deep ring-1 ring-inset ring-accent/20">
         {t("draft.title")}
       </span>
       <p className="mt-1.5 font-medium text-ink">{draft.title}</p>

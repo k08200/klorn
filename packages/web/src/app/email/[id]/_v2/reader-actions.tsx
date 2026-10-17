@@ -11,6 +11,7 @@
 
 import type { LiveTier } from "@klorn/contract";
 import Button from "../../../../components/ui/button";
+import { useLaneName } from "../../../../components/ui/lane-chip";
 import { Menu, type MenuSection } from "../../../../components/ui/menu";
 import { useT } from "../../../../lib/i18n";
 import { CORE_TIERS } from "../../../../lib/tiers";
@@ -43,6 +44,7 @@ export interface ReaderActionsProps {
 function useReaderMenus(props: ReaderActionsProps) {
   const { email, tier, isDemo } = props;
   const { t } = useT();
+  const laneName = useLaneName();
   const idle = props.busy === null;
   const laneBlocked = isDemo ? t("keys.reason.demo") : tier ? null : t("keys.reason.notClassified");
 
@@ -52,7 +54,7 @@ function useReaderMenus(props: ReaderActionsProps) {
     heading: laneBlocked ?? t("mailV2.reader.moveTo"),
     items: CORE_TIERS.map((lane) => ({
       id: lane,
-      label: lane,
+      label: laneName(lane),
       leading: <span aria-hidden="true" className={`size-2 rounded-full ${LANE_DOT[lane]}`} />,
       kind: "radio" as const,
       checked: tier === lane,

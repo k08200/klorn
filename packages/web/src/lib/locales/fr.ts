@@ -1533,6 +1533,11 @@ const fr: Record<string, string> = {
   "settings.team.unavailable": "Les fonctions d'équipe ne sont pas disponibles sur ce compte.",
   // Mail v2 list (productization plan P5, MAIL_V2).
   "mailV2.lanes.label": "Voie",
+  "lane.name.PUSH": "Push",
+  "lane.name.MEETING": "Meeting",
+  "lane.name.QUEUE": "Queue",
+  "lane.name.INFO": "Info",
+  "lane.name.SILENT": "Silent",
   "mailV2.lane.all": "Tout",
   "mailV2.lane.unread": "{lane}, {count} non lus",
   "mailV2.accounts.label": "Compte",

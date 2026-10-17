@@ -100,7 +100,7 @@ export function LinkedCalendars() {
               <div className="min-w-0">
                 <span className="block truncate text-ink">{account.email}</span>
                 {account.needsReconnect && (
-                  <span className="block truncate text-[11px] text-state-warn-ink">
+                  <span className="block truncate text-caption text-state-warn-ink">
                     {t("linkedAccounts.reconnectNeeded")}
                   </span>
                 )}

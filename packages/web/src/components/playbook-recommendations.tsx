@@ -75,7 +75,7 @@ export default function PlaybookRecommendations() {
     <section className="mb-6" aria-label="Klorn recommended playbooks">
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-ink">Recommended Playbooks</h2>
-        <span className="text-[11px] text-ink-dim">{data.recommendations.length}</span>
+        <span className="text-caption text-ink-dim">{data.recommendations.length}</span>
       </div>
       <div className="space-y-2">
         {data.recommendations.map((recommendation) => (
@@ -112,15 +112,15 @@ function PlaybookCard({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span
-              className={`rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ring-1 ring-inset ${domain.className}`}
+              className={`rounded-md px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ring-1 ring-inset ${domain.className}`}
             >
               {domain.label}
             </span>
-            <span className="text-[11px] tabular-nums text-ink-dim">
+            <span className="text-caption tabular-nums text-ink-dim">
               {Math.round(recommendation.confidence * 100)}%
             </span>
             {active && (
-              <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-state-ok-ink ring-1 ring-inset ring-emerald-500/20">
+              <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-state-ok-ink ring-1 ring-inset ring-emerald-500/20">
                 Active
               </span>
             )}
@@ -132,7 +132,7 @@ function PlaybookCard({
             {displayText(recommendation.reasons[0] || recommendation.playbook.bestFor)}
           </p>
         </div>
-        <span className="shrink-0 rounded-md border border-line bg-surface-raised px-2 py-1 text-[11px] tabular-nums text-ink-mid">
+        <span className="shrink-0 rounded-md border border-line bg-surface-raised px-2 py-1 text-caption tabular-nums text-ink-mid">
           {recommendation.score}
         </span>
       </div>
@@ -143,7 +143,7 @@ function PlaybookCard({
         {recommendation.suggestedFirstActions.slice(0, 2).map((step) => (
           <span
             key={step.id}
-            className="rounded border border-line px-1.5 py-0.5 text-[11px] text-ink-mid"
+            className="rounded border border-line px-1.5 py-0.5 text-caption text-ink-mid"
           >
             {displayText(step.title)}
           </span>
@@ -172,7 +172,7 @@ function ContextLink({ context }: { context: PlaybookContextHit }) {
         <RiskDot risk={context.risk} />
         <p className="min-w-0 truncate text-xs text-ink-mid">{context.title}</p>
       </div>
-      <p className="mt-1 line-clamp-1 text-[11px] text-ink-dim">
+      <p className="mt-1 line-clamp-1 text-caption text-ink-dim">
         {context.matchedKeywords.slice(0, 3).map(displayText).join(" · ")}
       </p>
     </div>

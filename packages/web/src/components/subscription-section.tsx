@@ -101,7 +101,7 @@ export function SubscriptionSection() {
 
   return (
     <section className="mb-8">
-      <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-ink-dim">
+      <h2 className="mb-3 text-caption font-semibold uppercase tracking-wider text-ink-dim">
         {t("subscription.title")}
       </h2>
       <div className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-5">

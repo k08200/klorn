@@ -128,7 +128,7 @@ export function ChatView({ hub = false }: { hub?: boolean }) {
               <div role="status" className="flex items-center gap-2.5">
                 <span
                   aria-hidden="true"
-                  className="avatar-ring flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent-solid to-accent-solid-hover text-[11px] font-semibold text-accent-solid-ink"
+                  className="avatar-ring flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent-solid to-accent-solid-hover text-caption font-semibold text-accent-solid-ink"
                 >
                   K
                 </span>
@@ -206,7 +206,7 @@ function MessageBubble({ message, hub }: { message: ChatMessage; hub: boolean })
     <div className="flex justify-start gap-2.5 transition duration-150 ease-strong starting:translate-y-1 starting:opacity-0 motion-reduce:transition-none">
       <span
         aria-hidden="true"
-        className="avatar-ring mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent-solid to-accent-solid-hover text-[11px] font-semibold text-accent-solid-ink"
+        className="avatar-ring mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent-solid to-accent-solid-hover text-caption font-semibold text-accent-solid-ink"
       >
         K
       </span>

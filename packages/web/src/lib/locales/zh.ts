@@ -1417,6 +1417,11 @@ const zh: Record<string, string> = {
   "settings.team.unavailable": "此账户暂不支持团队功能。",
   // Mail v2 list (productization plan P5, MAIL_V2).
   "mailV2.lanes.label": "分类",
+  "lane.name.PUSH": "Push",
+  "lane.name.MEETING": "Meeting",
+  "lane.name.QUEUE": "Queue",
+  "lane.name.INFO": "Info",
+  "lane.name.SILENT": "Silent",
   "mailV2.lane.all": "全部",
   "mailV2.lane.unread": "{lane}，{count} 封未读",
   "mailV2.accounts.label": "账户",

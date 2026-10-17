@@ -173,18 +173,18 @@ export function AttachmentAnalysis({
   return (
     <section className="mt-5 rounded-xl border border-line bg-surface-raised p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-dim">
+        <h2 className="text-caption font-semibold uppercase tracking-wider text-ink-dim">
           {t("emailDetail.attachment.title")}
         </h2>
         <div className="flex items-center gap-2">
-          <span className="text-[11px] text-ink-dim">
+          <span className="text-caption text-ink-dim">
             {t("emailDetail.attachment.fileCount", { count: String(attachments.length) })}
           </span>
           <button
             type="button"
             onClick={downloadBrief}
             disabled={downloading === "brief"}
-            className="rounded border border-accent/25 bg-accent/10 px-2 py-1 text-[11px] text-accent-deep transition hover:bg-accent/15 disabled:opacity-50 focus-ring"
+            className="rounded border border-accent/25 bg-accent/10 px-2 py-1 text-caption text-accent-deep transition hover:bg-accent/15 disabled:opacity-50 focus-ring"
           >
             {downloading === "brief"
               ? t("emailDetail.attachment.creatingBrief")
@@ -194,7 +194,7 @@ export function AttachmentAnalysis({
             type="button"
             onClick={onReanalyze}
             disabled={reanalyzing}
-            className="rounded border border-line bg-surface-hover px-2 py-1 text-[11px] text-ink-mid transition hover:bg-surface-inset disabled:opacity-50 focus-ring"
+            className="rounded border border-line bg-surface-hover px-2 py-1 text-caption text-ink-mid transition hover:bg-surface-inset disabled:opacity-50 focus-ring"
           >
             {reanalyzing
               ? t("emailDetail.attachment.analyzing")
@@ -204,7 +204,7 @@ export function AttachmentAnalysis({
             type="button"
             onClick={onOcr}
             disabled={ocring}
-            className="rounded border border-accent/25 bg-accent/10 px-2 py-1 text-[11px] text-accent-deep transition hover:bg-accent/15 disabled:opacity-50 focus-ring"
+            className="rounded border border-accent/25 bg-accent/10 px-2 py-1 text-caption text-accent-deep transition hover:bg-accent/15 disabled:opacity-50 focus-ring"
           >
             {ocring
               ? t("emailDetail.attachment.runningOcr")
@@ -223,16 +223,16 @@ export function AttachmentAnalysis({
                 {attachment.filename}
               </span>
               {attachment.category && (
-                <span className="rounded border border-line bg-surface-hover px-1.5 py-0.5 text-[10px] text-ink-mid">
+                <span className="rounded border border-line bg-surface-hover px-1.5 py-0.5 text-caption text-ink-mid">
                   {attachmentCategoryLabel(t, attachment.category)}
                 </span>
               )}
-              <span className="text-[11px] text-ink-mid">
+              <span className="text-caption text-ink-mid">
                 {formatBytes(attachment.size)} ·{" "}
                 {attachmentStatusLabel(t, attachment.analysisStatus)}
               </span>
               {attachmentNeedsManualReview(t, attachment) && (
-                <span className="rounded border border-rose-400/25 bg-rose-400/10 px-1.5 py-0.5 text-[10px] text-rose-200">
+                <span className="rounded border border-rose-400/25 bg-rose-400/10 px-1.5 py-0.5 text-caption text-rose-200">
                   {t("emailDetail.attachment.sourceReview")}
                 </span>
               )}
@@ -240,7 +240,7 @@ export function AttachmentAnalysis({
                 type="button"
                 onClick={() => downloadAttachment(attachment)}
                 disabled={downloading === attachment.id}
-                className="rounded border border-line bg-surface-panel px-2 py-0.5 text-[10px] text-ink-mid transition hover:border-line-strong hover:text-ink-mid disabled:opacity-50 focus-ring"
+                className="rounded border border-line bg-surface-panel px-2 py-0.5 text-caption text-ink-mid transition hover:border-line-strong hover:text-ink-mid disabled:opacity-50 focus-ring"
               >
                 {downloading === attachment.id
                   ? t("emailDetail.attachment.downloading")
@@ -255,7 +255,7 @@ export function AttachmentAnalysis({
                       [attachment.id]: event.target.value as AttachmentConversionTarget,
                     }))
                   }
-                  className="max-w-20 bg-transparent px-1 py-0.5 text-[10px] text-ink-mid outline-none"
+                  className="max-w-20 bg-transparent px-1 py-0.5 text-caption text-ink-mid outline-none"
                   aria-label={t("emailDetail.attachment.conversionFormatAria", {
                     filename: attachment.filename,
                   })}
@@ -273,7 +273,7 @@ export function AttachmentAnalysis({
                     converting ===
                     `${attachment.id}:${conversionTargets[attachment.id] ?? defaultConversionTarget(attachment)}`
                   }
-                  className="rounded bg-slate-600 px-2 py-0.5 text-[10px] font-medium text-white transition hover:bg-slate-700 disabled:opacity-50 focus-ring"
+                  className="rounded bg-slate-600 px-2 py-0.5 text-caption font-medium text-white transition hover:bg-slate-700 disabled:opacity-50 focus-ring"
                 >
                   {converting?.startsWith(`${attachment.id}:`)
                     ? t("emailDetail.attachment.converting")
@@ -285,7 +285,7 @@ export function AttachmentAnalysis({
               <p className="mt-2 text-xs leading-relaxed text-ink-mid">{attachment.summary}</p>
             )}
             {attachmentNeedsManualReview(t, attachment) && (
-              <p className="mt-2 text-[11px] leading-relaxed text-rose-200/80">
+              <p className="mt-2 text-caption leading-relaxed text-rose-200/80">
                 {attachmentManualReviewReason(t, attachment)}
               </p>
             )}
@@ -308,7 +308,7 @@ export function AttachmentAnalysis({
                   value === null || value === "" ? null : (
                     <span
                       key={key}
-                      className="rounded border border-line bg-surface-panel px-2 py-1 text-[11px] text-ink-mid"
+                      className="rounded border border-line bg-surface-panel px-2 py-1 text-caption text-ink-mid"
                     >
                       {fieldLabel(t, key)}: {String(value)}
                     </span>
@@ -318,16 +318,16 @@ export function AttachmentAnalysis({
             )}
             {attachment.textPreview && (
               <details className="mt-2 rounded-lg border border-line bg-surface-raised px-3 py-2">
-                <summary className="cursor-pointer text-[11px] font-medium text-ink-dim">
+                <summary className="cursor-pointer text-caption font-medium text-ink-dim">
                   {t("emailDetail.attachment.textPreview")}
                 </summary>
-                <pre className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap break-words font-sans text-[11px] leading-relaxed text-ink-dim">
+                <pre className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap break-words font-sans text-caption leading-relaxed text-ink-dim">
                   {attachment.textPreview}
                 </pre>
               </details>
             )}
             {attachment.analysisError && (
-              <p className="mt-2 text-[11px] leading-relaxed text-accent-deep">
+              <p className="mt-2 text-caption leading-relaxed text-accent-deep">
                 {t("emailDetail.attachment.fallbackPrefix", { reason: attachment.analysisError })}
               </p>
             )}
@@ -335,7 +335,7 @@ export function AttachmentAnalysis({
               <button
                 type="button"
                 onClick={() => setEditingId(editingId === attachment.id ? null : attachment.id)}
-                className="rounded border border-line bg-surface-panel px-2 py-1 text-[10px] text-ink-mid transition hover:border-accent/30 hover:text-accent-deep focus-ring"
+                className="rounded border border-line bg-surface-panel px-2 py-1 text-caption text-ink-mid transition hover:border-accent/30 hover:text-accent-deep focus-ring"
               >
                 {editingId === attachment.id
                   ? t("emailDetail.attachment.closeEdit")
@@ -451,7 +451,7 @@ function AttachmentCorrectionForm({
     <div className="mt-3 rounded-lg border border-accent/15 bg-accent/5 p-3">
       <div className="grid gap-2 sm:grid-cols-[1fr_160px]">
         <label className="block">
-          <span className="mb-1 block text-[10px] uppercase tracking-wider text-ink-mid">
+          <span className="mb-1 block text-caption uppercase tracking-wider text-ink-mid">
             {t("emailDetail.attachment.form.summaryLabel")}
           </span>
           <input
@@ -461,7 +461,7 @@ function AttachmentCorrectionForm({
           />
         </label>
         <label className="block">
-          <span className="mb-1 block text-[10px] uppercase tracking-wider text-ink-mid">
+          <span className="mb-1 block text-caption uppercase tracking-wider text-ink-mid">
             {t("emailDetail.attachment.form.categoryLabel")}
           </span>
           <select
@@ -491,20 +491,20 @@ function AttachmentCorrectionForm({
       </div>
       <div className="mt-2">
         <div className="mb-1 flex items-center justify-between gap-2">
-          <span className="block text-[10px] uppercase tracking-wider text-ink-mid">
+          <span className="block text-caption uppercase tracking-wider text-ink-mid">
             {t("emailDetail.attachment.form.extractedFieldsLabel")}
           </span>
           <button
             type="button"
             onClick={() => setFields((prev) => [...prev, { key: "", value: "" }])}
-            className="text-[11px] text-ink-dim transition hover:text-ink-mid focus-ring"
+            className="text-caption text-ink-dim transition hover:text-ink-mid focus-ring"
           >
             {t("emailDetail.attachment.form.addField")}
           </button>
         </div>
         <div className="space-y-1.5">
           {fields.length === 0 && (
-            <p className="rounded border border-line bg-surface-raised px-2 py-2 text-[11px] text-ink-dim">
+            <p className="rounded border border-line bg-surface-raised px-2 py-2 text-caption text-ink-dim">
               {t("emailDetail.attachment.form.noFields")}
             </p>
           )}
@@ -542,7 +542,7 @@ function AttachmentCorrectionForm({
                 onClick={() =>
                   setFields((prev) => prev.filter((_, itemIndex) => itemIndex !== index))
                 }
-                className="rounded border border-line px-2 py-1.5 text-[11px] text-ink-dim transition hover:border-rose-400/30 hover:text-rose-200 focus-ring"
+                className="rounded border border-line px-2 py-1.5 text-caption text-ink-dim transition hover:border-rose-400/30 hover:text-rose-200 focus-ring"
               >
                 {t("common.delete")}
               </button>
@@ -550,7 +550,7 @@ function AttachmentCorrectionForm({
           ))}
         </div>
       </div>
-      {error && <p className="mt-1 text-[11px] text-rose-300">{error}</p>}
+      {error && <p className="mt-1 text-caption text-rose-300">{error}</p>}
       <div className="mt-2 flex justify-end">
         <button
           type="button"

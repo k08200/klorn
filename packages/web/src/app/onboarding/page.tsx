@@ -85,7 +85,7 @@ function OnboardingFlow() {
     <div className="flex min-h-[calc(100vh-3.5rem)] flex-col items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">
         {/* Brand mark */}
-        <p className="mb-10 text-[11px] font-semibold uppercase tracking-[0.22em] text-accent-deep">
+        <p className="mb-10 text-caption font-semibold uppercase tracking-[0.22em] text-accent-deep">
           Klorn
         </p>
 
@@ -184,13 +184,13 @@ function WelcomeStep({
             className="panel-elevated rounded-xl border border-line/70 bg-surface-panel p-3 text-center"
           >
             <p className="text-lg text-ink-mid">{item.icon}</p>
-            <p className="mt-1 text-[11px] leading-4 text-ink-dim">{item.label}</p>
+            <p className="mt-1 text-caption leading-4 text-ink-dim">{item.label}</p>
           </div>
         ))}
       </div>
 
       {/* Permissions disclosure — Klorn never sends without explicit approval. */}
-      <p className="mt-6 text-center text-[11px] leading-5 text-ink-dim">
+      <p className="mt-6 text-center text-caption leading-5 text-ink-dim">
         {t("onboarding.welcome.permissions.pre")}{" "}
         <span className="text-ink-mid">{t("onboarding.welcome.permissions.emphasis1")}</span>{" "}
         {t("onboarding.welcome.permissions.mid")}{" "}
@@ -296,7 +296,7 @@ function SyncRow({
     <div className="flex items-center gap-3 px-4 py-3">
       <span className="shrink-0 text-base text-ink-mid">{icon}</span>
       <p className="flex-1 text-sm text-ink-mid">{label}</p>
-      {done && <span className="shrink-0 text-[11px] font-semibold text-state-ok-ink">✓</span>}
+      {done && <span className="shrink-0 text-caption font-semibold text-state-ok-ink">✓</span>}
       {loading && (
         <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-line border-t-accent" />
       )}
@@ -348,7 +348,7 @@ function StatCard({ value, label }: { value: number; label: string }) {
   return (
     <div className="panel-elevated rounded-xl border border-line/70 bg-surface-panel p-3 text-center">
       <p className="text-2xl font-semibold tabular-nums text-ink">{value > 0 ? value : "—"}</p>
-      <p className="mt-1 text-[11px] text-ink-dim">{label}</p>
+      <p className="mt-1 text-caption text-ink-dim">{label}</p>
     </div>
   );
 }

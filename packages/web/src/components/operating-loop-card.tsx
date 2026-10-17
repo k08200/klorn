@@ -127,7 +127,7 @@ export default function OperatingLoopCard() {
       <div className="border-b border-line-soft bg-gradient-to-br from-white via-white to-sky-50 p-4 md:p-5">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent-deep">
+            <p className="text-caption font-semibold uppercase tracking-[0.18em] text-accent-deep">
               Operating loop
             </p>
             <h2 className="mt-2 text-xl font-semibold tracking-tight text-ink">
@@ -144,7 +144,7 @@ export default function OperatingLoopCard() {
           </div>
         </div>
         <div className="mt-4 rounded-xl border border-line bg-surface-raised px-3 py-2.5">
-          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-ink-dim">
+          <p className="text-caption font-medium uppercase tracking-[0.14em] text-ink-dim">
             First move
           </p>
           <p className="mt-1 text-sm font-medium text-accent-deeper">
@@ -157,7 +157,7 @@ export default function OperatingLoopCard() {
         <section>
           <div className="mb-2 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-ink">Next moves</h3>
-            <span className="text-[11px] text-ink-mid">{plan.nextMoves.length}</span>
+            <span className="text-caption text-ink-mid">{plan.nextMoves.length}</span>
           </div>
           <ul className="space-y-2">
             {plan.nextMoves.map((move) => (
@@ -172,7 +172,7 @@ export default function OperatingLoopCard() {
           {plan.decisionPulse.latest.length > 0 && <DecisionPulseCard pulse={plan.decisionPulse} />}
           {plan.playbookNudge && (
             <div className="rounded-xl border border-line bg-surface-raised p-3">
-              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-accent-deep">
+              <p className="text-caption font-medium uppercase tracking-[0.14em] text-accent-deep">
                 Playbook
               </p>
               <p className="mt-2 text-sm font-medium text-ink">{plan.playbookNudge.name}</p>
@@ -185,7 +185,7 @@ export default function OperatingLoopCard() {
           )}
           {plan.watchlist.length > 0 && (
             <div className="rounded-xl border border-line bg-surface-raised p-3">
-              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-ink-dim">
+              <p className="text-caption font-medium uppercase tracking-[0.14em] text-ink-dim">
                 Watchlist
               </p>
               <ul className="mt-2 space-y-2">
@@ -206,12 +206,12 @@ function DecisionPulseCard({ pulse }: { pulse: OperatingPlanDecisionPulse }) {
     <div className="rounded-xl border border-line bg-surface-raised p-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-state-ok-ink">
+          <p className="text-caption font-medium uppercase tracking-[0.14em] text-state-ok-ink">
             Recent decisions
           </p>
           <p className="mt-1 text-xs text-ink-dim">Last {pulse.windowHours}h results</p>
         </div>
-        <div className="shrink-0 text-right text-[11px] leading-5 text-ink-dim">
+        <div className="shrink-0 text-right text-caption leading-5 text-ink-dim">
           <p>
             Done <span className="font-semibold text-state-ok-ink">{pulse.executed}</span>
           </p>
@@ -241,11 +241,11 @@ function DecisionOutcomeRow({ outcome }: { outcome: OperatingPlanOutcome }) {
           <p className="min-w-0 truncate text-xs font-medium text-ink-soft">
             {displayText(outcome.title)}
           </p>
-          <span className={`shrink-0 text-[10px] ${outcomeStatusClass(outcome.status)}`}>
+          <span className={`shrink-0 text-caption ${outcomeStatusClass(outcome.status)}`}>
             {outcomeStatusLabel(outcome.status)}
           </span>
         </div>
-        <p className="mt-1 truncate text-[11px] text-ink-mid">
+        <p className="mt-1 truncate text-caption text-ink-mid">
           {outcome.toolName && outcome.toolName !== "decision" ? (
             <ToolName toolName={outcome.toolName} />
           ) : (
@@ -264,7 +264,7 @@ function MoveRow({ move }: { move: OperatingPlanMove }) {
     <article className="rounded-xl border border-line bg-surface-raised p-3 transition hover:border-accent-light/25 hover:bg-surface-hover">
       <div className="flex flex-wrap items-center gap-2">
         <ToneBadge tone={move.tone} label={displayText(move.label)} />
-        <span className="text-[11px] text-ink-mid">{sourceLabel(move.source)}</span>
+        <span className="text-caption text-ink-mid">{sourceLabel(move.source)}</span>
       </div>
       {move.href ? (
         <Link href={move.href} className="mt-2 block break-words text-sm font-medium text-ink">
@@ -302,9 +302,9 @@ function WatchRow({ context }: { context: OperatingPlanWatchContext }) {
         <p className="min-w-0 truncate text-xs font-medium text-ink-soft">
           {displayText(context.title)}
         </p>
-        <span className="shrink-0 text-[10px] text-ink-mid">{riskLabel(context.risk)}</span>
+        <span className="shrink-0 text-caption text-ink-mid">{riskLabel(context.risk)}</span>
       </div>
-      <p className="mt-1 line-clamp-1 text-[11px] text-ink-mid">{displayText(context.reason)}</p>
+      <p className="mt-1 line-clamp-1 text-caption text-ink-mid">{displayText(context.reason)}</p>
     </div>
   );
   return context.href ? (
@@ -324,7 +324,7 @@ function LoopMetric({ metric }: { metric: OperatingPlanMetric }) {
       <p className={`text-lg font-semibold tabular-nums ${metricColor(metric.tone)}`}>
         {metric.value}
       </p>
-      <p className="mt-0.5 truncate text-[10px] text-ink-mid">{displayText(metric.label)}</p>
+      <p className="mt-0.5 truncate text-caption text-ink-mid">{displayText(metric.label)}</p>
     </div>
   );
 }
@@ -336,7 +336,7 @@ function displayText(value: string | null | undefined): string {
 function ToneBadge({ tone, label }: { tone: OperatingPlanTone; label: string }) {
   return (
     <span
-      className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ${toneClass(tone)}`}
+      className={`shrink-0 rounded-md px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ${toneClass(tone)}`}
     >
       {label}
     </span>

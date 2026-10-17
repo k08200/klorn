@@ -1514,6 +1514,11 @@ const en: Record<string, string> = {
   "settings.team.unavailable": "Team features aren't available on this account.",
   // Mail v2 list (productization plan P5, MAIL_V2).
   "mailV2.lanes.label": "Lane",
+  "lane.name.PUSH": "Push",
+  "lane.name.MEETING": "Meeting",
+  "lane.name.QUEUE": "Queue",
+  "lane.name.INFO": "Info",
+  "lane.name.SILENT": "Silent",
   "mailV2.lane.all": "All",
   "mailV2.lane.unread": "{lane}, {count} unread",
   "mailV2.accounts.label": "Account",

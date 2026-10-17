@@ -77,7 +77,7 @@
   --tier-meeting-ink: #4f46e5; /* 5.74:1 worst-surface */
   --tier-info-ink: #0e7490; /* 4.89:1 worst-surface */
   --tier-silent-ink: #57534e; /* 6.96:1 worst-surface */
-  /* LaneChip text (P2). The chip paints a 13% tint of the lane ink under its
+  /* LaneChip text (P2). The chip paints a 12% tint of the lane ink under its
      label, which pulls the plain ink below 4.5:1 for queue (3.86) and info
      (4.10) on the hover surface. These are the label values, measured against
      the COMPOSITED chip (13% lane ink over each of #ffffff / #fafafa / #f8fafc
@@ -100,7 +100,7 @@
   --state-info-line: #bfdbfe;
   --state-info-ink: #0369a1; /* 5.5:1 on its own surface */
 
-  /* FILLED-control accent. --color-accent (#0ea5e9) is a surface/tint value:
+  /* FILLED-control accent. The old --color-accent (#0ea5e9) was a tint value:
      white text on it measures 2.77:1, well under the 4.5:1 AA floor (verified
      on production 2026-08-22). Filled buttons use this pair instead, and it
      swaps per theme so the CTA stays loud in both: light = white on sky-700
@@ -126,37 +126,31 @@
   --motion-exit: 160ms; /* the same leaving — exits are quicker */
 }
 
-/* Dark: deep navy-slate, never pure black. Text steps keep AA against
-   their surfaces (verified in the dark QA pass). */
+/* Dark: a neutral, hue-free ramp (design detail pass X2) — the same #0a0a0b
+   canvas as Theme.swift `bg` dark, so web and Mac share one night palette.
+   It replaces the navy-slate set (canvas rgb(11,17,32)) as ONE set, with
+   every text pair re-measured against the lightest surface it sits on
+   (--surface-hover #222226), worst case shown. */
 .dark {
-  /* Canvas stays navy in P1 ON PURPOSE. Every dark panel/raised/line value
-     below is navy, and the app shell paints bg-surface-panel over the canvas;
-     a hue-free #0a0a0b canvas (Theme.swift `bg` dark) next to navy panels —
-     e.g. /graph, which paints bg-surface-app inside the shell — is a visible
-     half-state. The dark ramp moves to neutral as ONE set in P2, together
-     with re-measuring its text pairs. */
-  --surface-app: #0b1120;
-  --surface-canvas: #0f172a;
-  --surface-elevated: #16213a;
-  --surface-panel: #111a2e;
-  --surface-translucent: rgba(15, 23, 42, 0.85);
-  --surface-raised: #16213a;
-  --surface-hover: #1e293b;
-  --ink: #f1f5f9;
-  --ink-strong: #e2e8f0;
-  --ink-soft: #cbd5e1;
-  --ink-mid: #94a3b8;
-  /* NOT the mirror of light's slate-400: that lands at 3.6:1 on these
-     surfaces. 7d8ba1 clears the 4.5:1 AA text floor on panel AND raised
-     (5.0 / 4.6) while staying visibly quieter than ink-mid. */
-  --ink-dim: #7d8ba1;
-  --line: #293a56;
-  --line-soft: #1c2a40;
-  --line-strong: #3b4d6b;
-  --surface-inset: #243350;
-  /* 6.5:1 on panel — the slate-600 mirror would fail the AA text floor. */
-  --ink-muted: #8fa0b8;
-  /* Links brighten in the dark instead of darkening: 8.1:1 on panel. */
+  --surface-app: #0a0a0b;
+  --surface-canvas: #141416;
+  --surface-elevated: #1b1b1e;
+  --surface-panel: #141416;
+  --surface-translucent: rgba(20, 20, 22, 0.85);
+  --surface-raised: #1b1b1e;
+  --surface-hover: #222226;
+  --ink: #f4f4f6; /* 14.4:1 */
+  --ink-strong: #e4e4e8; /* 12.5:1 */
+  --ink-soft: #c9c9d1; /* 9.6:1 */
+  --ink-mid: #9d9da8; /* 5.9:1 */
+  /* Quieter than ink-mid and still over the 4.5:1 AA text floor on hover. */
+  --ink-dim: #8e8e9a; /* 4.9:1 */
+  --line: #2e2e33;
+  --line-soft: #1f1f23;
+  --line-strong: #45454d;
+  --surface-inset: #2a2a2f;
+  --ink-muted: #a8a8b3; /* 6.7:1 */
+  /* Links brighten in the dark instead of darkening: 7.4:1 on hover. */
   --accent-deep: #38bdf8;
   --accent-deeper: #7dd3fc;
 
@@ -179,14 +173,13 @@
   --tier-meeting-ink: #818cf8; /* 4.9:1 worst-surface */
   --tier-info-ink: #22d3ee; /* 8.09:1 worst-surface */
   --tier-silent-ink: #a8a29e; /* 5.8:1 worst-surface */
-  /* LaneChip text, dark: composited 13% tint over #0b1120 / #0f172a / #111a2e
-     / #16213a / #1e293b, worst case shown. Meeting's plain ink drops to 4.00
-     on the tinted hover row, push to 4.52 — both move one step lighter. */
-  --tier-push-chip-ink: #fda4af; /* 6.43:1 worst-surface */
-  --tier-meeting-chip-ink: #a5b4fc; /* 5.99:1 */
-  --tier-queue-chip-ink: #fbbf24; /* 6.58:1 */
-  --tier-info-chip-ink: #22d3ee; /* 6.14:1 */
-  --tier-silent-chip-ink: #a8a29e; /* 4.61:1 — muted on purpose, a silenced lane must not glow */
+  /* LaneChip text, dark (TodayScreen.dc dark values): composited 12% tint over
+     every neutral surface #0a0a0b … #222226, worst case shown. */
+  --tier-push-chip-ink: #fda4af; /* 7.0:1 worst-surface */
+  --tier-meeting-chip-ink: #c7d2fe; /* 8.9:1 */
+  --tier-queue-chip-ink: #fcd34d; /* 8.4:1 */
+  --tier-info-chip-ink: #a5f3fc; /* 10.0:1 */
+  --tier-silent-chip-ink: #a8a29e; /* 5.1:1 — muted on purpose, a silenced lane must not glow */
   --tier-auto-ink: #34d399; /* 7.61:1 worst-surface — retired v1 lane */
   --danger-solid: #dc2626; /* white 4.8:1 */
   --danger-solid-hover: #b91c1c; /* hover goes DARKER, 6.5:1 */
@@ -197,7 +190,7 @@
   /* Filled CTA inverts in the dark: bright fill, dark ink — 8.3:1. */
   --accent-solid: #38bdf8;
   --accent-solid-hover: #7dd3fc;
-  --accent-solid-ink: #0b1120;
+  --accent-solid-ink: #0a0a0b; /* 9.2:1 on #38bdf8 */
   /* Sky tint over the panel, light sky ink — 11.9:1. */
   --notice-bg: #14243c;
   --notice-border: #2b5578;
@@ -254,6 +247,10 @@
   --color-state-info-line: var(--state-info-line);
   --color-state-info-ink: var(--state-info-ink);
   --color-accent-solid: var(--accent-solid);
+  /* One blue (design detail pass X2): the bare `accent` utilities (dots,
+     rings, 10% washes) ride the same theme-aware solid as filled controls —
+     #0369a1 light / #38bdf8 dark — so the retired Mac #0ea5e9 never paints. */
+  --color-accent: var(--accent-solid);
   --color-accent-solid-hover: var(--accent-solid-hover);
   --color-accent-solid-ink: var(--accent-solid-ink);
   --color-notice-bg: var(--notice-bg);
@@ -274,20 +271,14 @@
     var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  /* Unified app accent (2026-06-16): was coral #ff6b4a, now the same gold
-     the rest of the app already used (inbox, firewall, login = Tailwind
-     amber). Only the mail surface referenced these tokens, so re-pointing
-     here converges the whole app on one primary accent in one place.
-     `brand-gold` below stays separate — it's the muted marketing gold. */
-  --color-accent: #0ea5e9;
+  /* Accent tints. The base `accent` lives in the theme-following block above
+     (= --accent-solid); these lighter steps stay for washes and gradients. */
   --color-accent-light: #38bdf8;
   --color-accent-muted: #7dd3fc;
   --color-accent-dim: #e0f2fe;
 
   /* Text / brand tokens — gold accent and cream foreground used on the
      marketing surface. Same logic: rename here, not 30 className strings. */
-  --color-brand-gold: #0ea5e9;
-  --color-brand-gold-bright: #38bdf8;
   --color-brand-cream: #f8f4ec;
   --color-brand-cream-soft: #f2eadc;
   --color-brand-ink: #11100d;
@@ -402,7 +393,7 @@ body {
    and shadows that hardcode light-world values. Same composition, night
    palette: glows dim, shadows deepen, inset highlights go faint. */
 .dark .sky-bg {
-  background-color: #0c1322;
+  background-color: #0a0a0b;
   background-image:
     radial-gradient(62% 40% at 88% -4%, rgba(240, 203, 158, 0.08), transparent 68%),
     radial-gradient(58% 44% at 2% 16%, rgba(240, 222, 226, 0.06), transparent 70%),
@@ -424,7 +415,7 @@ body {
 .dark .glow-primary {
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.55),
-    0 10px 22px -8px rgba(14, 165, 233, 0.4);
+    0 10px 22px -8px rgba(56, 189, 248, 0.3);
 }
 
 .dark .seg-active {
@@ -458,7 +449,7 @@ body {
 /* Row hover: a directional sky wash (left→right fade) instead of a flat gray
    fill — keeps the hover subtle while pointing at the accent color. */
 .row-wash:hover {
-  background: linear-gradient(90deg, rgba(14, 165, 233, 0.05), rgba(14, 165, 233, 0.015));
+  background: linear-gradient(90deg, rgba(3, 105, 161, 0.05), rgba(3, 105, 161, 0.015));
 }
 
 /* Primary-action glow (Compose): contact shadow + colored bloom so exactly one
@@ -466,7 +457,7 @@ body {
 .glow-primary {
   box-shadow:
     0 1px 2px rgba(2, 60, 110, 0.25),
-    0 10px 22px -8px rgba(14, 165, 233, 0.55);
+    0 10px 22px -8px rgba(3, 105, 161, 0.4);
 }
 
 /* Active segment in a segmented control: lifted white pill. */
