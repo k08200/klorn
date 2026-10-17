@@ -1,8 +1,9 @@
-/* The subpage template: /download/, /methodology/ and their /ko/ pairs.
-   Loaded after /landing.css, which supplies the tokens, type, nav pill,
-   buttons, account cards and footer. This file adds only what a reading page
-   needs and the landing does not: a quiet header, prose, checklists and
-   numbered figures. Light only, like the rest of the site. */
+/* The subpage template: every page that is not a landing. /download/,
+   /methodology/, /pricing/ and /security/ use the sectioned layout below;
+   blog posts, the comparison pages and the legal/ops pages use .article at the
+   end of the file. Loaded after /landing.css, which supplies the tokens, type,
+   nav pill, buttons, footer and the dark palette. This file adds only what a
+   reading page needs and the landing does not. */
 
 .sub-hero{padding:clamp(124px,15vw,176px) 0 clamp(48px,6vw,72px);background:var(--wash);
   border-bottom:1px solid var(--line)}
@@ -44,7 +45,7 @@ html[lang=ko] .sub-hero h1{max-width:16ch}
 .prose p,.prose li{font-size:var(--fs-16);color:var(--ink-2);line-height:1.65}
 .prose p{margin:0 0 16px}
 .prose a,.not a,.figs a{color:var(--accent);font-weight:600;text-underline-offset:3px}
-.prose code,.figs code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;
+.prose code,.figs code,.article code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;
   background:var(--wash);border:1px solid var(--line);border-radius:6px;padding:1px 6px;overflow-wrap:anywhere}
 .steps{margin:0 0 20px;padding-left:22px}
 .steps li{margin:0 0 10px;padding-left:4px}
@@ -88,3 +89,66 @@ html[lang=ko] .sub-hero h1{max-width:16ch}
 .not p{margin:0 0 10px}.not p:last-child{margin:0}
 .caveat a{color:var(--accent);font-weight:600;text-underline-offset:3px}
 .actions-left{justify-content:flex-start;margin-top:clamp(32px,4vw,48px)}
+
+/* ── Article ─────────────────────────────────────────
+   One readable column for long-form pages: blog posts and the blog index,
+   /vs/* (EN + KO), /open-source/, /self-host/, /status/, /gdpr/ and /dpa/.
+   Text holds a ~68ch measure at 17.5px (halfway between --fs-16 and --fs-19);
+   tables and code blocks take the full column and scroll inside their own box,
+   never the page. Colours are tokens only, so dark mode comes from landing.css. */
+.article{max-width:760px;margin:0 auto;padding:clamp(124px,15vw,168px) 0 clamp(64px,8vw,104px);
+  font-size:calc((var(--fs-16) + var(--fs-19)) / 2);line-height:1.7;color:var(--ink-2)}
+html[lang=ko] .article{word-break:keep-all;line-height:1.75}
+.article article{display:block}
+.article :is(p,ul,ol,h2,h3){max-width:68ch}
+.sub .article h1{margin:0;color:var(--ink);max-width:20ch;text-align:left;font-size:clamp(var(--fs-32),4vw,var(--fs-56));
+  line-height:1.08;letter-spacing:-.035em;text-wrap:balance}
+.article h1 em{font-family:'Instrument Serif','Iowan Old Style',Georgia,serif;font-style:italic;font-weight:400;
+  color:var(--accent);letter-spacing:-.01em}
+html[lang=ko] .article h1 em{font-family:inherit;font-style:normal;font-weight:700;letter-spacing:inherit}
+.sub .article h2{margin:2.4em 0 0;font-size:var(--fs-24);line-height:1.25;letter-spacing:-.02em;font-weight:650;
+  color:var(--ink);text-wrap:balance}
+.article h3{margin:1.8em 0 0;font-size:var(--fs-19);line-height:1.35;letter-spacing:-.01em;font-weight:650;color:var(--ink)}
+.article p{margin:1em 0 0}
+.article .thesis{margin:24px 0 0;font-size:var(--fs-19);line-height:1.55;color:var(--ink)}
+.article .meta{margin:16px 0 0;font-size:var(--fs-14);line-height:1.55;color:var(--ink-3);letter-spacing:0;text-wrap:wrap}
+.article strong{color:var(--ink);font-weight:650}
+.article :is(ul,ol){margin:1em 0 0;padding-left:1.4em}
+.article li{margin:.5em 0 0;padding-left:.2em}
+.article li::marker{color:var(--ink-3)}
+.article a:not(.btn){color:var(--accent);text-decoration:underline;text-decoration-thickness:1px;
+  text-underline-offset:.22em}
+.article a:not(.btn):hover{text-decoration-thickness:2px}
+.article pre{margin:1.4em 0 0;padding:16px 18px;overflow-x:auto;-webkit-overflow-scrolling:touch;background:var(--wash);
+  border:1px solid var(--line);border-radius:var(--r-12);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:var(--fs-14);line-height:1.6;color:var(--ink)}
+.article pre code{background:none;border:0;padding:0;font-size:inherit;overflow-wrap:normal}
+.article .scroll{margin:28px 0 0;overflow-x:auto;-webkit-overflow-scrolling:touch;background:var(--card);
+  border:1px solid var(--line-2);border-radius:var(--r-12)}
+.article table{width:100%;min-width:560px;border-collapse:collapse;font-size:var(--fs-14);line-height:1.5}
+/* Two-column question/answer tables (/gdpr/, /dpa/, /self-host/) fit a phone
+   as they are; only three columns and up need the scroll box. */
+.article table:not(:has(tr > :nth-child(3))){min-width:0}
+.article th,.article td{text-align:left;vertical-align:top;padding:12px 14px;border-bottom:1px solid var(--line)}
+.article tr:last-child > *{border-bottom:0}
+.article thead th{font-size:var(--fs-12);font-weight:650;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);
+  background:var(--wash);border-bottom:1px solid var(--line-2)}
+html[lang=ko] .article thead th{letter-spacing:.02em}
+.article tbody th{width:27%;font-weight:600;color:var(--ink)}
+.article td{color:var(--ink-2)}
+.article td.us{color:var(--ink);background:color-mix(in srgb,var(--accent-fill) 7%,transparent)}
+.article .not{margin:40px 0 0;max-width:none}
+.article .not p{margin:0 0 10px}
+.article .not p:last-child{margin:0}
+.article .checked{margin:clamp(40px,5vw,56px) 0 0;padding-top:20px;border-top:1px solid var(--line);
+  font-size:var(--fs-14);line-height:1.6;color:var(--ink-3)}
+.article .checked a:not(.btn){color:inherit}
+/* The blog index: one row per post. The title is the target, so it gets a
+   full 44px row of its own. */
+.article .postlist{list-style:none;margin:40px 0 0;padding:0;max-width:none;border-top:1px solid var(--line-2)}
+.article .postlist li{max-width:none;margin:0;padding:14px 0 20px;border-bottom:1px solid var(--line-2)}
+.article .postlist a.pt{display:flex;align-items:center;min-height:44px;padding:6px 0 2px;font-size:var(--fs-19);line-height:1.35;font-weight:650;
+  letter-spacing:-.01em;color:var(--ink);text-decoration:none}
+.article .postlist a.pt:hover{color:var(--accent)}
+.article .postlist .meta{display:block;margin:0}
+.article .postlist p{margin:8px 0 0;font-size:var(--fs-16);line-height:1.6}

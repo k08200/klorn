@@ -19,19 +19,10 @@
 <meta name="twitter:image" content="https://klorn.ai/brand/og-image.png?v=k2">
 <link rel="canonical" href="https://klorn.ai/blog/notion-mail-shutting-down/">
 <link rel="preload" as="font" type="font/woff2" href="/fonts/geist-var.woff2" crossorigin>
-<link rel="stylesheet" href="/compare.css">
+<link rel="stylesheet" href="/landing.css">
+<link rel="stylesheet" href="/subpage.css">
 <link rel="icon" href="/brand/favicon.svg?v=matte2" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png?v=matte2">
-<style>
-.meta { margin: 14px 0 0; font-size: 13.5px; color: var(--ink-3); }
-article h2 { margin-top: 40px; }
-ol, ul { margin: 12px 0 0; padding-left: 22px; }
-li { margin-top: 6px; }
-table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 14.5px; }
-th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
-th { color: var(--ink-3); font-weight: 600; }
-.tablewrap { overflow-x: auto; }
-</style>
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -46,18 +37,21 @@ th { color: var(--ink-3); font-weight: 600; }
 </script>
 <script src="/site-nav.js" defer></script>
 </head>
-<body>
-<div class="wrap">
-  <header class="top">
-    <a class="home" href="/">Klorn</a>
-    <button type="button" class="menu-btn" data-menu-toggle aria-expanded="false" aria-controls="site-menu" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
-    <nav class="menu" id="site-menu" aria-label="Site">
-      <a href="/pricing/">Pricing</a><a href="/blog/" aria-current="page">Blog</a><a href="/security/">Security</a><a href="/self-host/">Self-host</a>
-      <a href="https://app.klorn.ai/login">Log in</a>
-    </nav>
-    <a class="dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener" data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe">Download</a>
-  </header>
+<body class="sub">
+<a class="skip" href="#main">Skip to content</a>
 
+<nav class="nav" aria-label="Main"><div class="nav-pill">
+  <a class="nav-brand" href="/">Klorn</a>
+  <button type="button" class="nav-menu-btn" data-menu-toggle aria-expanded="false" aria-controls="nav-menu" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <span class="nav-links" id="nav-menu" role="group" aria-label="Sections" data-site-nav><a href="/#accounts">Accounts</a><a href="/#lanes">Lanes</a><a href="/pricing/">Pricing</a><a href="/security/">Security</a><a href="/blog/">Blog</a></span>
+  <a class="nav-login" href="https://app.klorn.ai/login">Log in</a>
+  <a class="nav-cta dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
+     data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe" data-win-label="Download">Download</a>
+</div></nav>
+
+<main id="main">
+<div class="wrap">
+<div class="article">
   <article>
   <h1>Notion Mail is gone. The <em>reason</em> they gave is the interesting part.</h1>
   <p class="meta">2026-09-24 · migration notes · written two days after the shutdown</p>
@@ -69,7 +63,7 @@ th { color: var(--ink-3); font-weight: 600; }
 
   <h2>What you still have, and what is actually gone</h2>
   <p>The good news is bigger than the bad news, and it is worth reading before you panic about your archive.</p>
-  <div class="tablewrap">
+  <div class="scroll">
   <table>
     <tr><th>Thing</th><th>Status</th></tr>
     <tr><td>Your email — every message sent and received</td><td><strong>Safe, in Gmail.</strong> Notion Mail always synced two ways, so the mail itself never only lived there.</td></tr>
@@ -87,7 +81,7 @@ th { color: var(--ink-3); font-weight: 600; }
 
   <h2>Where to go now — honestly</h2>
   <p>No benchmark was run across these products; I have not measured anyone's classifier but my own, and I am not going to pretend otherwise. Prices below were read from each vendor's own pricing page on 14 September 2026.</p>
-  <div class="tablewrap">
+  <div class="scroll">
   <table>
     <tr><th>Option</th><th>Best at</th><th>The catch</th></tr>
     <tr>
@@ -142,15 +136,75 @@ docker compose --env-file .env.selfhost -f docker-compose.selfhost.yml up -d</co
   </ol>
 
   <p>For our part, that number is published and gated in CI: on a committed 56-email set, a change to the judge does not merge unless it holds at least 90% recall on urgent mail and at least 90% precision on the silent lane. The last full sweep ran ten models three times each; across the 23 clean runs, the count of urgent emails sent to the hide-forever lane was zero. Details, including the models that failed the gate, are in <a href="/blog/which-llm-is-best-for-email-classification/">the bake-off writeup</a>. Every number re-runs from the repository with one command.</p>
-  <a class="cta" href="https://app.klorn.ai/login?mode=register">Try Klorn free</a>
+  <div class="actions actions-left"><a class="btn btn-1" href="https://app.klorn.ai/login?mode=register">Try Klorn free</a></div>
   </article>
 
-  <footer>
-    <p>Klorn is <a href="https://github.com/k08200/klorn" rel="noreferrer noopener">AGPL-3.0</a> — every claim in
+  <p class="checked">Klorn is <a href="https://github.com/k08200/klorn" rel="noreferrer noopener">AGPL-3.0</a> — every claim in
       this post is checkable against the source. More notes at <a href="/blog/">/blog</a>.</p>
-    <nav class="foot-links" aria-label="More from Klorn"><a href="/pricing/">Pricing</a><a href="/blog/">Blog</a><a href="/security/">Security</a><a href="/self-host/">Self-host</a><a href="/open-source/">Open source</a><a href="/status/">Status</a><a href="/gdpr/">GDPR</a><a href="/dpa/">DPA</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a><a href="https://github.com/k08200/klorn" rel="noreferrer noopener">GitHub</a></nav>
-  </footer>
 </div>
+</div>
+</main>
+<footer class="foot">
+  <div class="wrap foot-grid">
+    <div>
+      <a class="brand" href="/">Klorn</a>
+      <p class="foot-note">Your mail and calendars, sorted in one place. Open source.</p>
+      <div class="socials">
+        <a href="https://github.com/k08200/klorn" rel="noreferrer noopener" aria-label="GitHub"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a>
+        <a href="https://x.com/klornai" rel="noreferrer noopener" aria-label="X"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+        <a href="https://join.slack.com/t/klorn/shared_invite/zt-3zkj8lqxg-L4LK8dNPkzgupHEdmXgbIg" rel="noreferrer noopener" aria-label="Slack"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52zm1.271 0a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52zm0 1.271a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522zm-1.268 0a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522zm0-1.268a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523z"/></svg></a>
+      </div>
+    </div>
+    <nav aria-label="Product"><h4>Product</h4>
+      <a href="/download/">All downloads</a>
+      <a href="/pricing/">Pricing</a>
+      <a href="https://app.klorn.ai/login">Log in</a>
+      <a href="/status/">Status</a>
+      <a href="/blog/">Blog</a></nav>
+    <nav aria-label="Open source"><h4>Open source</h4>
+      <a href="https://github.com/k08200/klorn" rel="noreferrer noopener">GitHub repository</a>
+      <a href="https://github.com/k08200/klorn/releases/latest" rel="noreferrer noopener">Releases</a>
+      <a href="https://github.com/k08200/klorn/tree/main/packages/api/eval" rel="noreferrer noopener">Eval set</a>
+      <a href="/methodology/">Methodology</a>
+      <a href="https://github.com/k08200/klorn/blob/main/LICENSE" rel="noreferrer noopener">AGPLv3 licence</a>
+      <a href="/open-source/">Why AGPL, with nothing added</a>
+      <a href="/self-host/">Self-host</a></nav>
+    <nav aria-label="Compare"><h4>Compare</h4>
+      <a href="/vs/fyxer/">vs Fyxer</a>
+      <a href="/vs/superhuman/">vs Superhuman</a>
+      <a href="/vs/sanebox/">vs SaneBox</a>
+      <a href="/vs/inbox-zero/">vs Inbox Zero</a></nav>
+    <nav aria-label="Legal"><h4>Legal</h4>
+      <a href="https://app.klorn.ai/privacy">Privacy</a>
+      <a href="https://app.klorn.ai/terms">Terms</a>
+      <a href="https://app.klorn.ai/refund">Refunds</a>
+      <a href="/security/">Security</a>
+      <a href="/gdpr/">GDPR</a>
+      <a href="/dpa/">DPA</a>
+      <a href="mailto:k0820086@gmail.com">Contact</a></nav>
+  </div>
+  <div class="wrap foot-base">
+    <span>© 2026 Klorn · AGPLv3</span>
+  </div>
+</footer>
+<script>
+// Windows visitors get the installer: /site-nav.js swaps the href on every
+// .dl-cta, and this swaps the label to match. Same block as the landings.
+(function () {
+  var uaData = navigator.userAgentData;
+  var raw = String((uaData && uaData.platform) || navigator.platform || navigator.userAgent || '');
+  if (!/win/i.test(raw) || /mac|iphone|ipad|ipod/i.test(raw)) return;
+  document.querySelectorAll('[data-mac-dl]').forEach(function (a) {
+    var label = a.getAttribute('data-win-label');
+    if (!label) return;
+    Array.prototype.forEach.call(a.childNodes, function (n) {
+      if (n.nodeType !== 3 || !n.textContent.trim()) return;
+      var pad = n.textContent.match(/^(\s*)[\s\S]*?(\s*)$/);
+      n.textContent = pad[1] + label + pad[2];
+    });
+  });
+})();
+</script>
 <script>
 // Same block as every other page: carry the campaign through to the app so a
 // signup can be credited to the page that earned it.
