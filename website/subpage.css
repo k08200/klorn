@@ -6,7 +6,7 @@
 
 .sub-hero{padding:clamp(124px,15vw,176px) 0 clamp(48px,6vw,72px);background:var(--wash);
   border-bottom:1px solid var(--line)}
-.sub-hero h1{margin:0 0 20px;font-size:clamp(36px,5.4vw,66px);max-width:17ch;text-align:left}
+.sub-hero h1{margin:0 0 20px;font-size:clamp(var(--fs-32),5.4vw,var(--fs-56));max-width:17ch;text-align:left}
 .sub-hero h1 .ser{display:inline;font-size:1em}
 html[lang=ko] .sub-hero h1{max-width:16ch}
 .sub-hero .lead{margin:0 0 30px;max-width:640px;text-align:left}
@@ -15,7 +15,7 @@ html[lang=ko] .sub-hero h1{max-width:16ch}
 @media (max-width:480px){.sub-hero .meta span{margin:0 18px 0 0}}
 
 .sub .sec{padding:clamp(64px,8vw,104px) 0}
-.sub .sec h2{font-size:clamp(28px,3.4vw,42px);max-width:22ch}
+.sub .sec h2{font-size:clamp(var(--fs-24),3.4vw,var(--fs-32));max-width:22ch}
 .sub .sec-head{margin-bottom:clamp(28px,4vw,44px)}
 
 /* Download options: one card per way in. */
@@ -23,25 +23,25 @@ html[lang=ko] .sub-hero h1{max-width:16ch}
 @media (min-width:760px){.opts{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .opt{display:flex;flex-direction:column;gap:8px;background:var(--card);border:1px solid var(--line);
   border-radius:var(--radius);padding:24px}
-.opt p{margin:0;font-size:15px;color:var(--ink-2);line-height:1.5}
+.opt p{margin:0;font-size:var(--fs-14);color:var(--ink-2);line-height:1.5}
 .opt .go{margin-top:auto;padding-top:8px;display:inline-flex;align-items:center;min-height:44px;
-  font-size:15px;font-weight:650;color:var(--accent);text-underline-offset:3px}
+  font-size:var(--fs-14);font-weight:650;color:var(--accent);text-underline-offset:3px}
 
 /* A checklist: what works, stated plainly. */
 .checks{list-style:none;margin:0;padding:0;border-top:1px solid var(--line-2);max-width:820px}
 .checks li{position:relative;padding:16px 0 16px 34px;border-bottom:1px solid var(--line-2);
-  font-size:16.5px;line-height:1.45}
+  font-size:var(--fs-16);line-height:1.45}
 .checks li::before{content:"";position:absolute;left:4px;top:1.45em;width:12px;height:7px;
   border-left:2px solid var(--accent-fill);border-bottom:2px solid var(--accent-fill);transform:translateY(-60%) rotate(-45deg)}
-.checks li span{display:block;font-size:14.5px;color:var(--ink-2);margin-top:2px}
+.checks li span{display:block;font-size:var(--fs-14);color:var(--ink-2);margin-top:2px}
 
-.not{margin:28px 0 0;max-width:820px;padding:18px 20px;border-radius:14px;background:var(--card);
-  border:1px solid var(--line-2);font-size:15.5px;color:var(--ink-2);line-height:1.55}
+.not{margin:28px 0 0;max-width:820px;padding:18px 20px;border-radius:var(--r-12);background:var(--card);
+  border:1px solid var(--line-2);font-size:var(--fs-16);color:var(--ink-2);line-height:1.55}
 .not b{color:var(--ink)}
 
 /* Prose and numbered steps. */
 .prose{max-width:720px}
-.prose p,.prose li{font-size:16.5px;color:var(--ink-2);line-height:1.65}
+.prose p,.prose li{font-size:var(--fs-16);color:var(--ink-2);line-height:1.65}
 .prose p{margin:0 0 16px}
 .prose a,.not a,.figs a{color:var(--accent);font-weight:600;text-underline-offset:3px}
 .prose code,.figs code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;
@@ -55,11 +55,36 @@ html[lang=ko] .sub-hero h1{max-width:16ch}
 @media (min-width:860px){.figs{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .fig{display:flex;flex-direction:column;gap:6px;background:var(--card);border:1px solid var(--line);
   border-radius:var(--radius);padding:24px}
-.fig .sv{font-size:clamp(40px,4.4vw,56px);font-weight:700;letter-spacing:-.05em;line-height:1}
-.fig .sl{font-size:15px;font-weight:650;letter-spacing:-.01em;margin-top:6px}
-.fig p{margin:0;font-size:15px;color:var(--ink-2);line-height:1.5}
-.fig .src{margin-top:auto;padding-top:10px;font-size:13px;color:var(--ink-3)}
-.caveat{margin:24px 0 0;max-width:820px;font-size:15.5px;color:var(--ink-2);line-height:1.6}
+.fig .sv{font-size:clamp(var(--fs-32),4.4vw,var(--fs-56));font-weight:700;letter-spacing:-.05em;line-height:1}
+.fig .sl{font-size:var(--fs-14);font-weight:650;letter-spacing:-.01em;margin-top:6px}
+.fig p{margin:0;font-size:var(--fs-14);color:var(--ink-2);line-height:1.5}
+.fig .src{margin-top:auto;padding-top:10px;font-size:var(--fs-14);color:var(--ink-3)}
+.caveat{margin:24px 0 0;max-width:820px;font-size:var(--fs-16);color:var(--ink-2);line-height:1.6}
 .caveat b{color:var(--ink)}
-.checked{margin:clamp(40px,5vw,56px) 0 0;font-size:13.5px;color:var(--ink-3)}
+.checked{margin:clamp(40px,5vw,56px) 0 0;font-size:var(--fs-14);color:var(--ink-3)}
 .checked a{color:inherit;text-underline-offset:3px}
+
+/* Spec tables (/pricing/ plan by plan, /security/ guarantees). A table keeps
+   its columns on phones and scrolls inside its own box, never the page. */
+.table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border-top:1px solid var(--line-2)}
+.spec{width:100%;min-width:600px;border-collapse:collapse;font-size:var(--fs-14);line-height:1.5}
+.spec th,.spec td{text-align:left;vertical-align:top;padding:14px 16px 14px 0;border-bottom:1px solid var(--line-2)}
+.spec thead th{font-size:var(--fs-12);font-weight:650;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.spec tbody th{font-weight:600;color:var(--ink);width:28%}
+.spec td{color:var(--ink-2)}
+.spec td strong{color:var(--ink)}
+.spec a{color:var(--accent);font-weight:600;text-underline-offset:3px}
+.spec code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em}
+
+/* Key/value lists (/security/ assessment facts and scopes). */
+.kv{margin:24px 0 32px;max-width:820px;border-top:1px solid var(--line-2)}
+.kv > div{display:grid;grid-template-columns:minmax(0,27%) minmax(0,1fr);gap:4px 16px;padding:14px 0;
+  border-bottom:1px solid var(--line-2);font-size:var(--fs-16);line-height:1.5}
+.kv dt{color:var(--ink-3);font-weight:500}
+.kv dd{margin:0;color:var(--ink)}
+.kv-code dt{color:var(--ink)}
+.kv code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;overflow-wrap:anywhere}
+@media (max-width:600px){.kv > div{grid-template-columns:minmax(0,1fr)}}
+.not p{margin:0 0 10px}.not p:last-child{margin:0}
+.caveat a{color:var(--accent);font-weight:600;text-underline-offset:3px}
+.actions-left{justify-content:flex-start;margin-top:clamp(32px,4vw,48px)}
