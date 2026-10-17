@@ -31,7 +31,7 @@ const PURGE_TX_TIMEOUT_MS = 60_000;
  * drift apart (Google restricted-scope review requires users to be able to
  * request full deletion of their data, incl. all Google-derived data).
  *
- * Completeness: 42 of the 43 user-scoped relations declare `onDelete: Cascade`,
+ * Completeness: every user-scoped relation but one declares `onDelete: Cascade`,
  * so deleting the `User` row removes them automatically (emails, attention
  * items, attachments, sender traits, linked accounts, devices, etc.). The one
  * exception is `LlmUsageLog`, whose `userId` is `onDelete: SetNull` (it

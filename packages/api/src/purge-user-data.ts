@@ -20,6 +20,12 @@ type PurgeTx = typeof db;
  * deleting an account removes its synced events or indexed files, and deleting
  * those never touches an account, so delete order is still unconstrained.
  */
+const UTC_DAY_KEY_LENGTH = 10;
+
+function utcDayKey(): string {
+  return new Date().toISOString().slice(0, UTC_DAY_KEY_LENGTH);
+}
+
 export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> {
   const scope = { where: { userId } };
 
@@ -76,7 +82,9 @@ export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> 
   await tx.activatedPlaybook.deleteMany(scope);
   await tx.feedbackPolicyPreference.deleteMany(scope);
   await tx.workContextSnapshot.deleteMany(scope);
-  await tx.llmCostLedger.deleteMany(scope);
+  // Today's ledger row holds counts only (no content) and IS the daily spend
+  // cap: deleting it would let repeated wipes reset the cap.
+  await tx.llmCostLedger.deleteMany({ where: { userId, dayKey: { not: utcDayKey() } } });
   await tx.llmUsageLog.deleteMany(scope);
   await tx.pushSubscription.deleteMany(scope);
   await tx.notification.deleteMany(scope);
@@ -116,4 +124,26 @@ export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> 
   await tx.pendingAction.deleteMany(scope);
   await tx.analyticsEvent.deleteMany(scope);
   await tx.pmfResponse.deleteMany(scope);
+  // Third-party addresses the user typed (like contacts); owner-scoped, never shared.
+  await tx.team.deleteMany(scope);
+  // Credentials the user gave Klorn, kept on the account row: the retired Naver
+  // IMAP and GitHub tokens, the user's own (BYOK) LLM keys, the Telegram link.
+  // The account and its sign-in stay; these are re-entered after a wipe.
+  await tx.user.updateMany({
+    where: { id: userId },
+    data: {
+      naverImapEmail: null,
+      naverImapPasswordCipher: null,
+      naverImapHost: null,
+      naverImapConnectedAt: null,
+      githubTokenCipher: null,
+      githubConnectedAt: null,
+      githubLastPolledAt: null,
+      openRouterApiKey: null,
+      geminiApiKey: null,
+      telegramChatId: null,
+      telegramLinkCode: null,
+      telegramLinkCodeExpiresAt: null,
+    },
+  });
 }
