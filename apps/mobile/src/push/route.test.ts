@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { intentOf, PUSH_ACTIONS, routeFromPush, routeFromWebPath } from "./route";
+import { actionFromTap, intentOf, PUSH_ACTIONS, routeFromPush, routeFromWebPath } from "./route";
 
 describe("push routing", () => {
   it("maps the server's web paths to app routes", () => {
@@ -74,5 +74,34 @@ describe("push routing", () => {
       route: { name: "assistant", section: "briefing" },
     });
     expect(intentOf("tap", { url: "/chat" }).kind).toBe("open");
+  });
+});
+
+describe("actionFromTap (Android native notifications)", () => {
+  it("reads the button from klornAction on a plain tap", () => {
+    expect(actionFromTap("tap", { klornAction: "KLORN_LATER" })).toBe(PUSH_ACTIONS.later);
+    expect(actionFromTap("tap", { klornAction: "KLORN_DONE" })).toBe(PUSH_ACTIONS.done);
+    expect(actionFromTap("tap", { klornAction: "KLORN_REVIEW" })).toBe(PUSH_ACTIONS.review);
+  });
+
+  it("a tap without a button, or with an unknown one, stays a tap", () => {
+    expect(actionFromTap("tap", {})).toBe("tap");
+    expect(actionFromTap("tap", null)).toBe("tap");
+    expect(actionFromTap("tap", { klornAction: "DELETE_ALL" })).toBe("tap");
+    // There is no Send on Android: the native service never names it.
+    expect(actionFromTap("tap", { klornAction: PUSH_ACTIONS.send })).toBe("tap");
+  });
+
+  it("an iOS or local-notification action id passes through unchanged", () => {
+    expect(actionFromTap(PUSH_ACTIONS.send, { klornAction: "KLORN_DONE" })).toBe(PUSH_ACTIONS.send);
+    expect(actionFromTap(PUSH_ACTIONS.later, {})).toBe(PUSH_ACTIONS.later);
+  });
+
+  it("Done from the native notification dismisses by email", () => {
+    const data = { emailId: "e1", klornAction: "KLORN_DONE", klornNotificationId: "123" };
+    expect(intentOf(actionFromTap("tap", data), data)).toMatchObject({
+      kind: "done",
+      target: { emailId: "e1" },
+    });
   });
 });

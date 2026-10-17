@@ -539,11 +539,16 @@ export function endpoints(api: ApiClient) {
       deleteAccount: () => api.del<null>("/api/auth/account"),
     },
     push: {
-      /** routes/notifications.ts POST /push/device-token/register — FCM (Android) / APNs (iOS). */
+      /**
+       * routes/notifications.ts POST /push/device-token/register — FCM (Android) / APNs (iOS).
+       * `dataMessages`: this Android build posts data-only mail pushes itself, with
+       * buttons (android/.../push/KlornMessagingService.java), so the server may send them.
+       */
       register: (token: string, platform: "ios" | "android") =>
         api.post<{ success: true }>("/api/notifications/push/device-token/register", {
           token,
           platform,
+          ...(platform === "android" ? { dataMessages: true } : {}),
         }),
       /** routes/notifications.ts DELETE /push/device-token — on sign-out. */
       unregister: (token: string) =>

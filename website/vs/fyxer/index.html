@@ -41,7 +41,7 @@
   </header>
 
   <h1>Fyxer writes for you.<br>Klorn decides what <em>reaches</em> you.</h1>
-  <p class="thesis">Both sit on top of Gmail and Outlook. They are answering different questions: Fyxer asks <strong>how do I get through this faster</strong>, Klorn asks <strong>should this have interrupted me at all</strong>.</p>
+  <p class="thesis">Both work on top of the mail account you already have. They are answering different questions: Fyxer asks <strong>how do I get through this faster</strong>, Klorn asks <strong>should this have interrupted me at all</strong>.</p>
 
   <div class="scroll">
   <table>
@@ -67,7 +67,7 @@
 
   <div class="note">
     <p><strong>What we are not claiming.</strong> We have not benchmarked Fyxer's drafting quality against Klorn's, and this page does not pretend otherwise. Everything above is each product's own public description.</p>
-    <p>Klorn's accuracy numbers live in committed, PII-scrubbed evaluation sets in the repository and are re-runnable with <code>pnpm eval:real</code> — measured on one inbox's labelled mail so far, which is stated in the repo alongside the number.</p>
+    <p>Klorn's accuracy floors are enforced in CI on a synthetic 56-email set committed to the repository, and are re-runnable with <code>pnpm eval:judge</code>. The hand-labelled real-mail set is being re-labelled, so this page quotes no figure from it.</p>
   </div>
 
   <a class="cta" href="https://app.klorn.ai/login?mode=register">Try Klorn free</a>

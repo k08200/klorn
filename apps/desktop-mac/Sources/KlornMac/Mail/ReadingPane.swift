@@ -150,7 +150,9 @@ struct ReadingPane: View {
             VStack(alignment: .leading, spacing: Theme.s2) {
                 Text(decodeHTMLEntities(email.subject ?? L("mail.noSubjectParen")))
                     .font(Theme.Typo.display)
-                    .foregroundStyle(Theme.text).lineLimit(2)
+                    .foregroundStyle(Theme.text)
+                    .lineLimit(ReaderActionRules.subjectLines)
+                    .fixedSize(horizontal: false, vertical: true)
                 HStack {
                     Text(senderDisplayName(email.from.map(decodeHTMLEntities)))
                         .font(m.sender).foregroundStyle(m.senderInk).lineLimit(1)
@@ -163,45 +165,43 @@ struct ReadingPane: View {
                     ReaderMetaLine(item: item)
                 }
                 if let item {
-                    HStack(spacing: 10) {
+                    // One button system (audit M1): the primary is
+                    // .borderedProminent in accentSolid, every other action
+                    // .bordered, all at the same control size.
+                    HStack(spacing: Theme.s2) {
                         primaryButton(
                             email.preparedDraft == nil ? L("reading.replyWithAI") : L("reading.openDraft")
                         ) { startReply(item) }
-                        // menuIndicator(.hidden) kills the system-blue pull-down
-                        // segment (the one off-palette element on this row —
-                        // design audit 2026-07-20); a dim chevron in the label
-                        // keeps the "this opens a menu" affordance.
-                        // Chevron lives INSIDE one Text (concatenation) — a
-                        // separate Image in the label gets reordered to the
-                        // leading edge by the menu button's label styling
-                        // (screen-verified 0.4.80007: "∨ Snooze").
+                        // menuIndicator(.hidden) + a chevron inside ONE Text: a
+                        // separate Image gets reordered to the leading edge by
+                        // the menu button's label styling (0.4.80007).
                         if Theme.isRenderingOffscreen {
-                            OffscreenMenuLabel(title: L("mail.snoozePrefix"))
-                            OffscreenMenuLabel(
-                                    title: L("mail.moveTo", item.tier.label,
-                                             L10n.josaRoIfKorean(after: item.tier.label)))
+                            OffscreenMenuLabel(title: L("mail.snoozePrefix").trimmingCharacters(in: .whitespaces))
+                            OffscreenMenuLabel(title: ReaderActionRules.moveLabel)
                         } else {
                             SnoozeMenu(item: item, onSnooze: actions.onSnooze) {
-                                Text(L("mail.snoozePrefix"))
-                                    + Text(Image(systemName: "chevron.down"))
-                                    .font(m.caption2Semibold).foregroundStyle(Theme.textDim)
+                                // The catalogue string carries its own trailing space.
+                                Text(L("mail.snoozePrefix")) + Text(Image(systemName: "chevron.down"))
                             }
-                            .menuStyle(.button).buttonStyle(.bordered).controlSize(.small)
+                            .menuStyle(.button).buttonStyle(.bordered)
+                            .controlSize(ReaderActionRules.controlSize)
                             .menuIndicator(.hidden).fixedSize()
                             TierMenu(
-                            item: item, onSetTier: actions.onSetTier,
-                            onPinSender: actions.onPinSender, onUnpinSender: actions.onUnpinSender
-                        ) {
-                                Text(L("mail.moveTo", item.tier.label,
-                                       L10n.josaRoIfKorean(after: item.tier.label)))
+                                item: item, onSetTier: actions.onSetTier,
+                                onPinSender: actions.onPinSender, onUnpinSender: actions.onUnpinSender
+                            ) {
+                                // Never names the current lane: the menu moves
+                                // AWAY from it ("Move to Push" on a Push mail
+                                // read as a no-op).
+                                Text(ReaderActionRules.moveLabel) + Text(verbatim: " ")
                                     + Text(Image(systemName: "chevron.down"))
-                                    .font(m.caption2Semibold).foregroundStyle(Theme.textDim)
                             }
-                            .menuStyle(.button).buttonStyle(.bordered).controlSize(.small)
+                            .menuStyle(.button).buttonStyle(.bordered)
+                            .controlSize(ReaderActionRules.controlSize)
                             .menuIndicator(.hidden).fixedSize()
                         }
                         Button(L("mail.dismiss")) { actions.onDismiss(item) }
-                            .buttonStyle(.bordered).controlSize(.small)
+                            .buttonStyle(.bordered).controlSize(ReaderActionRules.controlSize)
                     }
                     .padding(.top, 2)
                 }
@@ -359,7 +359,11 @@ struct ReadingPane: View {
                         .font(m.caption).foregroundStyle(Theme.textDim)
                 }
                 if let summary = email.summary, !summary.isEmpty {
+                    // Wraps to three lines (audit M2) instead of cutting
+                    // mid-token on one ("before 17:0…").
                     Text(summary).font(m.callout).foregroundStyle(Theme.text.opacity(0.9))
+                        .lineLimit(ReaderActionRules.summaryLines)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 if let points = email.keyPoints, !points.isEmpty {
                     VStack(alignment: .leading, spacing: 3) {
@@ -388,7 +392,7 @@ struct ReadingPane: View {
                 }
                 // Signal lines carry their hue on the ICON (and meter) only; the
                 // text itself stays dim. Stacked colored text lines (accent blue +
-                // engage pink under a red tier dot) made this one band the loudest
+                // a second hue under a red tier dot) made this one band the loudest
                 // surface in the app — the hue is the signal, the sentence is not.
                 if email.needsReply == true {
                     HStack(spacing: 5) {
@@ -454,13 +458,13 @@ struct ReadingPane: View {
                     meetingContextRows(context, proposed)
                 }
                 if let engagement = email.engagement, engagement.outboundCount > 0 {
-                    // Warm tint mirrors the web graph's "you engage" pink — the
-                    // signal Klorn learned from the user's own replies. Pink lives
-                    // on the icon and the meter; see the signal-line rule above.
+                    // The signal Klorn learned from the user's own replies. The
+                    // icon is neutral and the meter speaks in the accent (audit
+                    // X2 retired the pink: it out-shouted the PUSH dot).
                     VStack(alignment: .leading, spacing: 5) {
                         HStack(spacing: 5) {
                             Image(systemName: "arrow.turn.up.left").font(m.caption2)
-                                .foregroundStyle(Theme.engage)
+                                .foregroundStyle(Theme.textDim)
                             Text(engagement.replyCountLabel).font(m.caption)
                                 .foregroundStyle(Theme.textDim)
                         }
@@ -556,8 +560,8 @@ struct ReadingPane: View {
         let trackWidth: CGFloat = 64
         HStack(spacing: 7) {
             ZStack(alignment: .leading) {
-                Capsule().fill(Theme.engage.opacity(0.22)).frame(width: trackWidth, height: 5)
-                Capsule().fill(Theme.engage)
+                Capsule().fill(Theme.surfaceHover).frame(width: trackWidth, height: 5)
+                Capsule().fill(Theme.accentSolid)
                     .frame(width: max(4, trackWidth * engagement.importanceFill), height: 5)
             }
             Text(engagement.importanceLabel).font(m.caption2).foregroundStyle(Theme.textDim)
@@ -668,10 +672,15 @@ struct ReadingPane: View {
         }
     }
 
-    /// The pane's one primary action: the flat fill (plan §2: no shadow,
-    /// no lift).
+    /// The pane's one primary action: .borderedProminent in accentSolid.
     private func primaryButton(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(title, action: action).buttonStyle(SolidButtonStyle(compact: true))
+        Button(action: action) {
+            // The system draws a prominent label white: 2:1 on the dark
+            // #38BDF8. The accent's own ink is 9.2:1.
+            Text(title).fontWeight(.semibold).foregroundStyle(Theme.onAccentSolid)
+        }
+        .buttonStyle(.borderedProminent).tint(Theme.accentSolid)
+        .controlSize(ReaderActionRules.controlSize)
     }
 
     private func centered<Content: View>(@ViewBuilder _ c: () -> Content) -> some View {
@@ -691,4 +700,17 @@ struct ReadingPane: View {
         out.dateFormat = "MMM d · h:mm a"
         return out.string(from: date)
     }
+}
+
+/// The reader's action row, as pure values the self-check pins.
+enum ReaderActionRules {
+    /// "Move to lane ⌄" / "레인 옮기기 ⌄" — the same words on every mail,
+    /// so the label never names the lane the mail is already in.
+    static var moveLabel: String { L("mail.moveToLane") }
+    /// The label for a mail in `tier` (kept as a function so the self-check
+    /// can prove it never depends on the current lane).
+    static func moveLabel(current tier: Tier) -> String { moveLabel }
+    static let controlSize: ControlSize = .regular
+    static let subjectLines = 2
+    static let summaryLines = 3
 }

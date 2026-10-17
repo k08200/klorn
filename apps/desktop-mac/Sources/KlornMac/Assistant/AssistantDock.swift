@@ -63,9 +63,9 @@ struct AssistantDock: View {
             } label: {
                 Image(systemName: model.showAssistantDock ? "xmark" : "sparkles")
                     .font(.title3.weight(.medium))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Theme.onAccentSolid)
                     .frame(width: 48, height: 48)
-                    .background(Theme.accent, in: Circle())
+                    .background(Theme.accentSolid, in: Circle())
                     .shadow(color: Theme.accent.opacity(0.35), radius: 12, y: 4)
             }
             .buttonStyle(.plain)

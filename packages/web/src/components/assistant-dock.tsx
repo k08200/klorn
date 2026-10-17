@@ -103,7 +103,7 @@ export default function AssistantDock({ unified = false }: { unified?: boolean }
               type="button"
               onClick={chat.newChat}
               disabled={!chat.activeId || chat.sending}
-              className="focus-ring ease-strong h-7 rounded-md px-2 text-caption font-medium text-ink-dim transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97] disabled:opacity-40"
+              className="focus-ring ease-strong h-7 rounded-md px-2 text-caption pointer-coarse:h-11 pointer-coarse:px-3 font-medium text-ink-dim transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97] disabled:opacity-40"
             >
               {t("chat.newChat")}
             </button>
@@ -111,7 +111,7 @@ export default function AssistantDock({ unified = false }: { unified?: boolean }
               type="button"
               onClick={() => setOpen(false)}
               aria-label={t("assistantDock.close")}
-              className="focus-ring ease-strong flex h-7 w-7 items-center justify-center rounded-md text-ink-dim transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97]"
+              className="focus-ring ease-strong flex h-7 w-7 pointer-coarse:h-11 pointer-coarse:w-11 items-center justify-center rounded-md text-ink-dim transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97]"
             >
               <svg
                 aria-hidden="true"
@@ -215,7 +215,7 @@ export default function AssistantDock({ unified = false }: { unified?: boolean }
                 type="submit"
                 disabled={!chat.input.trim() || chat.sending}
                 aria-label={t("chat.send")}
-                className="glow-primary ease-strong flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-solid text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
+                className="glow-primary ease-strong flex h-8 w-8 pointer-coarse:h-11 pointer-coarse:w-11 shrink-0 items-center justify-center rounded-lg bg-accent-solid text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <svg
                   aria-hidden="true"
@@ -242,7 +242,7 @@ export default function AssistantDock({ unified = false }: { unified?: boolean }
         type="button"
         onClick={() => setOpen((p) => !p)}
         aria-expanded={open}
-        aria-label={open ? "Close assistant" : "Open assistant"}
+        aria-label={open ? t("assistantDock.close") : t("assistantDock.open")}
         className={`glow-primary ease-strong fixed ${unified ? LIFTED_BOTTOM : "bottom-24"} right-4 z-[81] flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-accent-solid to-accent-solid-hover text-accent-solid-ink transition duration-150 hover:opacity-90 active:scale-[0.94] md:bottom-5 md:right-5`}
       >
         {open ? (

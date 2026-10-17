@@ -28,7 +28,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Klorn — The clear signal worth acting on",
   description:
-    "Klorn filters mail, calendar, and AI signals into one clear decision queue — with approval before any action.",
+    "All your mail and calendars in one calm place. Klorn sorts every message into one of five lanes, says why, and asks before it acts.",
   manifest: "/manifest.json",
   metadataBase: new URL("https://app.klorn.ai"),
   openGraph: {
@@ -44,7 +44,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Klorn — The clear signal worth acting on",
     description:
-      "The approval layer for AI agents. Mail, calendar, and signals filtered into one clear decision queue.",
+      "All your mail and calendars in one calm place — every message sorted, with the reason shown.",
     images: ["/brand/og-image.png?v=k2"],
   },
   appleWebApp: {

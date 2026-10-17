@@ -133,14 +133,14 @@ test.describe("Navigation", () => {
     await expect(page.locator('input[type="email"]')).toBeVisible();
   });
 
-  test("authenticated brand link returns to the decision queue", async ({ page }) => {
+  test("authenticated brand link returns to Approvals", async ({ page }) => {
     await mockSignedIn(page);
     await page.goto("/chat");
 
     await expect(page.getByRole("link", { name: "Threads" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Files" })).toBeVisible();
 
-    await page.getByRole("link", { name: "Open decision queue" }).click();
+    await page.getByRole("link", { name: "Open Approvals" }).click();
     await expect(page).toHaveURL(/\/inbox/);
     await expect(page.getByRole("heading", { name: /scattered signals/ })).toBeVisible();
   });

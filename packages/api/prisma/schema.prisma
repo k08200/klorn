@@ -1147,13 +1147,17 @@ model PushSubscription {
 // an FCM token (Android) or APNs token (iOS) from the device. Register upserts
 // by the unique token and prunes the stale one when a device re-registers.
 model DevicePushToken {
-  id        String   @id @default(uuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  token     String   @unique
-  platform  String // "android" | "ios"
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token        String   @unique
+  platform     String // "android" | "ios"
+  // Android only: this build posts Klorn's DATA-ONLY FCM messages itself, with
+  // action buttons (apps/mobile push/KlornMessagingService.java). Sent by the
+  // app at registration; false = notification messages, as before.
+  dataMessages Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([userId])
 }

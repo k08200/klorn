@@ -31,6 +31,7 @@ import {
 import AuthGuard from "../../components/auth-guard";
 import { ComposeModal } from "../../components/compose-modal";
 import { LaneChip } from "../../components/lane-chip";
+import MailSubscriptionsEntry from "../../components/mail-subscriptions-entry";
 import { ListSkeleton } from "../../components/skeleton";
 import { useToast } from "../../components/toast";
 import { TrustDot, type TrustScoreData } from "../../components/trust-badge";
@@ -512,7 +513,7 @@ function EmailView() {
         setBulkUndoNotice(null);
       }
       if (data.failed && data.failed.length > 0) {
-        setError(`${data.failed.length} messages could not be processed. Please try again.`);
+        setError(t("mailV1.bulk.partialFailed", { count: String(data.failed.length) }));
       }
     } catch (err) {
       captureClientError(err, { scope: "email.bulk", action });
@@ -1065,6 +1066,7 @@ function EmailView() {
             >
               {reanalyzing ? t("mail.reanalyzing") : t("mail.reanalyze")}
             </button>
+            <MailSubscriptionsEntry />
           </div>
         </header>
 

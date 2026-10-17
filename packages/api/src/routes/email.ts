@@ -23,6 +23,7 @@ import { getUserId, requireAuth } from "../auth.js";
 import { requireAppAccess, requireEntitled } from "../billing/entitlement-guard.js";
 import { planHasFeature } from "../billing/stripe.js";
 import {
+  bulkUnsubscribeEnabled,
   laneReadsEnabled,
   MULTI_INBOX_SYNC_ENABLED,
   providerInboxSelectorEnabled,
@@ -72,10 +73,8 @@ import {
 } from "../mail/email-sync.js";
 import { coercePlainBody, htmlToPlainText, renderableEmailHtmlFor } from "../mail/email-text.js";
 import { getLinkedInboxClients, resolveMailClient } from "../mail/gmail.js";
-import { executeOneClickUnsubscribe, parseMailtoTarget } from "../mail/list-unsubscribe.js";
 import { hasAnyMailSource } from "../mail/mail-source.js";
 import { getMeetingContext } from "../mail/meeting-context.js";
-import { mailActionsFor } from "../mail/providers/dispatch.js";
 import { isPublicMailboxDomain } from "../mail/public-mailbox-domains.js";
 import { offeredDraftFor } from "../mail/reply-state.js";
 import { getSenderDossier } from "../mail/sender-dossier.js";
@@ -84,6 +83,7 @@ import {
   invalidateTriagePriorities,
   normalizeTriagePriorities,
 } from "../mail/triage-priorities.js";
+import { unsubscribeFromEmail } from "../mail/unsubscribe-action.js";
 import { senderEmail } from "../notify/notification-format.js";
 import { getUserNotificationLanguage } from "../notify/notification-strings.js";
 import { createTask } from "../pim/tasks.js";
@@ -98,6 +98,7 @@ import { registerEmailMutationsRoutes } from "./email-mutations.js";
 import { registerEmailRepliesRoutes } from "./email-replies.js";
 import { registerEmailRulesRoutes } from "./email-rules.js";
 import { registerEmailSenderLabelRoutes } from "./email-sender-labels.js";
+import { emailSubscriptionsRoutes } from "./email-subscriptions.js";
 import { registerEmailWaitingRoutes } from "./email-waiting.js";
 
 const MAX_PAGE = 10_000; // guardrail: paging past ~500k rows is a client bug, not a real request
@@ -704,6 +705,9 @@ export async function emailRoutes(app: FastifyInstance) {
   registerEmailWaitingRoutes(app);
   await registerEmailBulkRoutes(app);
   registerEmailLaneRoutes(app, { demoRows: () => DEMO_EMAILS });
+  // A child plugin (not a register* call) so its dark-route gate wraps only
+  // these routes; it inherits the auth + app-access hooks above.
+  await app.register(emailSubscriptionsRoutes({ gate: bulkUnsubscribeEnabled }));
 
   // ─── Sync & List Emails ───────────────────────────────────────────────
   // GET /api/email?filter=unread|urgent|reply-needed|attachments|candidates&search=keyword&category=billing&page=1
@@ -1689,7 +1693,8 @@ export async function emailRoutes(app: FastifyInstance) {
   // SSRF-guarded in mail/list-unsubscribe), else a mailto send from the
   // user's own account, else the browser link handed back to the client.
   // User-initiated only — the flag-gated automatic path rides the promo
-  // auto-read hook in judge/email-firewall.
+  // auto-read hook in judge/email-firewall. The steps live in
+  // mail/unsubscribe-action (shared with the Subscriptions page).
   app.post(
     "/:id/unsubscribe",
     { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
@@ -1707,34 +1712,9 @@ export async function emailRoutes(app: FastifyInstance) {
         },
       });
       if (!dbEmail) return reply.code(404).send({ error: "Email not found" });
-      const url = dbEmail.listUnsubscribeUrl;
-      const mailto = dbEmail.listUnsubscribeMailto;
-      if (!url && !mailto) {
-        return reply.code(400).send({ error: "This email has no unsubscribe information." });
-      }
-
-      if (dbEmail.listUnsubscribeOneClick && url) {
-        const result = await executeOneClickUnsubscribe(url);
-        if (result.ok) return { method: "one-click", done: true };
-        // Fall through: the list's POST endpoint being down must not strand
-        // the user when a mailto or link target also exists.
-      }
-
-      if (mailto) {
-        const target = parseMailtoTarget(mailto);
-        if (target) {
-          const actions = await mailActionsFor(uid, dbEmail.linkedInboxAccountId);
-          const result = await actions.sendEmail(uid, target.to, target.subject, target.body, [], {
-            linkedInboxAccountId: dbEmail.linkedInboxAccountId,
-          });
-          if (!("unsupported" in result) && !("error" in result)) {
-            return { method: "mailto", done: true };
-          }
-        }
-      }
-
-      if (url) return { method: "link", done: false, url };
-      return reply.code(502).send({ error: "Could not unsubscribe automatically." });
+      const outcome = await unsubscribeFromEmail(uid, dbEmail);
+      if (!outcome.ok) return reply.code(outcome.statusCode).send({ error: outcome.error });
+      return outcome.body;
     },
   );
 

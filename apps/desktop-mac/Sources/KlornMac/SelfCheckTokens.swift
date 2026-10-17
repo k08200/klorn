@@ -147,7 +147,20 @@ func tokenSelfChecks(sourceDir: URL) -> [(String, Bool)] {
     results.append((
         "the lane chip is the measured one",
         text("Mail/WindowLaneChip.swift").contains("Theme.chipInk(tier)")
-            && text("Mail/WindowLaneChip.swift").contains(".font(Theme.Typo.label)")))
+            && text("Mail/WindowLaneChip.swift").contains(".font(Theme.Typo.chip)")))
+    // X1 (2026-10-16): one chip spec on web and Mac.
+    results.append((
+        "the lane chip is 22 tall, 8 padded, radius 6, a 6pt dot, 12pt, a 12% wash",
+        WindowLaneChip.height == 22 && WindowLaneChip.horizontalPadding == 8
+            && WindowLaneChip.radius == 6 && WindowLaneChip.dot == 6
+            && WindowLaneChip.fontSize == 12 && Theme.chipWashOpacity == 0.12
+            && !text("Mail/WindowLaneChip.swift").contains("Capsule()")))
+    results.append((
+        "lane chip labels are title case",
+        Tier.allCases.allSatisfy { tier in
+            let label = tier.label
+            return label.first?.isUppercase == true && label.dropFirst() == label.dropFirst().lowercased()
+        }))
 
     // The scale itself.
     results.append((

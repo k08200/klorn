@@ -284,6 +284,7 @@ export function MailV2({ pane }: { pane?: MailPane } = {}) {
           tally={list.loading || list.failed ? null : viewTally(view, list.counts, list.total)}
           accounts={list.accounts}
           isDemo={isDemo}
+          hasCandidates={emails.some((email) => (email.attachmentCandidateCount ?? 0) > 0)}
           syncing={actions.busy === "sync"}
           onCompose={() => setComposeOpen(true)}
           onSync={() => void actions.sync()}

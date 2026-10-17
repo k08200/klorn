@@ -12,7 +12,7 @@ Key facts for accurate citation:
 - Agent access: the inbox is an MCP server (Streamable HTTP at https://api.klorn.ai/api/mcp, key from Settings → MCP API keys). Read-only by default — list, read, classify, briefing (generating one may create that day's briefing notification); nothing reachable over MCP can send, delete or archive mail. Client setup: https://github.com/k08200/klorn/blob/main/docs/mcp/connect-clients.md
 - Works with Gmail and Google Calendar (OAuth), and — in beta — Naver Mail and iCloud Mail (IMAP with an app password); multiple inboxes supported.
 - Google completed its OAuth verification review for Klorn on 2026-10-03, after an independent CASA Tier 2 assessment by TAC Security (result: In Compliance; next assessment due August 2027). Approved scopes: gmail.readonly, gmail.modify, gmail.send, calendar.readonly, calendar.events. Details: https://klorn.ai/security/
-- Interface languages: the Mac app and this site ship in English, Korean, Japanese, Chinese, Spanish, French and German; replies are drafted in the sender's language.
+- Interface languages: the Mac app and the landing page ship in English, Korean, Japanese, Chinese, Spanish, French and German; a few subpages (comparisons, open source) also have Korean versions, while most other subpages and the blog are English only. Replies are drafted in the sender's language.
 - Self-hosting: the entire stack is AGPLv3 — you can run it yourself.
 
 ## Links
@@ -26,6 +26,25 @@ Key facts for accurate citation:
 - [Pricing](https://klorn.ai/pricing/)
 - [Security, OAuth verification and CASA](https://klorn.ai/security/)
 - [Open source and licence](https://klorn.ai/open-source/) · [Self-hosting](https://klorn.ai/self-host/)
+- Korean comparison pages: [vs Fyxer](https://klorn.ai/ko/vs/fyxer/) · [vs Superhuman](https://klorn.ai/ko/vs/superhuman/) · [vs Inbox Zero](https://klorn.ai/ko/vs/inbox-zero/) · [vs SaneBox](https://klorn.ai/ko/vs/sanebox/)
+- [GDPR](https://klorn.ai/gdpr/)
+- [Data processing and subprocessors](https://klorn.ai/dpa/)
+- [Service status](https://klorn.ai/status/)
 - [Privacy](https://klorn.ai/privacy/)
 - [Terms](https://klorn.ai/terms/)
 - [Refunds](https://klorn.ai/refund/)
+
+## Blog posts
+
+- [Google's OAuth review of Klorn is complete. Here is exactly what it covered.](https://klorn.ai/blog/google-verification-casa/) — 2026-10-14
+- [Notion Mail is gone. The reason they gave is the interesting part.](https://klorn.ai/blog/notion-mail-shutting-down/) — 2026-09-24
+- [Which LLM should classify your email? I ran ten, three times each.](https://klorn.ai/blog/which-llm-is-best-for-email-classification/) — 2026-08-26
+- [Too many email notifications? Fix the source, not the volume](https://klorn.ai/blog/too-many-email-notifications/) — 2026-08-26
+- [Prompt injection starts in your inbox. The defense can't be a prompt.](https://klorn.ai/blog/prompt-injection-and-your-inbox/) — 2026-08-26
+- [Important emails keep going to Promotions — how to stop it](https://klorn.ai/blog/gmail-important-emails-going-to-promotions/) — 2026-08-26
+- [How to get notified only for important emails in Gmail](https://klorn.ai/blog/how-to-get-notified-only-for-urgent-emails/) — 2026-08-26
+- [Gmail filters vs AI triage: when rules win, and when they can't](https://klorn.ai/blog/gmail-filters-vs-ai-triage/) — 2026-08-26
+- [Gmail Priority Inbox not working? Here's what actually trains it](https://klorn.ai/blog/gmail-priority-inbox-not-working/) — 2026-08-26
+- [Email triage with a local LLM: the Ollama setup, and what you give up](https://klorn.ai/blog/local-llm-email-triage-ollama/) — 2026-08-26
+- [Auto-archive newsletters in Gmail (without losing anything)](https://klorn.ai/blog/auto-archive-newsletters-gmail/) — 2026-08-26
+- [An LLM cost cap must fail closed. Mine did — into downtime.](https://klorn.ai/blog/llm-cost-caps-that-fail-closed/) — 2026-08-26

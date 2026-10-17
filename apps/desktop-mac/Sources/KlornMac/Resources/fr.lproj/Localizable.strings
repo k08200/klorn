@@ -52,7 +52,6 @@
 "mail.dismiss.a11y" = "Ignorer le message de %@";
 "mail.changeTier" = "Changer de file… (Klorn apprend)";
 "mail.changeTier.a11y" = "Changer la file du message de %1$@, actuellement %2$@";
-"mail.moveTo" = "Déplacer vers %1$@%2$@";
 "mail.snoozePrefix" = "Reporter ";
 "mail.summarize" = "Résumé IA";
 "mail.summarizing" = "Résumé en cours…";
@@ -244,8 +243,8 @@
 "mail.reclassifying" = "reclassement";
 
 /* Proposals — actions awaiting approval */
-"proposals.title" = "Propositions";
-"proposals.a11y" = "Propositions, %d en attente d'accord";
+"proposals.title" = "Approbations";
+"proposals.a11y" = "Approbations, %d en attente";
 "proposals.approve" = "Approuver";
 "proposals.decline" = "Refuser";
 "proposals.empty" = "Rien qui vous attende.";
@@ -253,7 +252,7 @@
 "proposals.row.a11y" = "%1$@. %2$@";
 
 /* Column headers and states the first pass missed */
-"section.inbox" = "BOÎTE";
+"section.inbox" = "COURRIER";
 "push.nothingNeedsYou" = "Rien ne requiert votre attention pour l'instant.";
 "auth.signInNaver" = "Continuer avec Naver";
 "auth.signInApple" = "Continuer avec Apple";
@@ -275,7 +274,7 @@
 
 /* First-run guide */
 "guide.title" = "Comment Klorn trie votre courrier";
-"guide.pipeline" = "Klorn lit chaque boîte connectée et range chaque message dans l'une des %d files ci-dessous. Cette colonne BOÎTE est ce résultat trié — pas votre boîte Gmail brute.";
+"guide.pipeline" = "Klorn lit chaque boîte connectée et range chaque message dans l'une des %d files ci-dessous. Cette colonne COURRIER est ce résultat trié — pas votre boîte Gmail brute.";
 "guide.intro" = "Chaque message tombe dans l'une des %d files. Rien n'est supprimé et rien n'est répondu sans vous — la file décide seulement de la force avec laquelle il vous atteint.";
 "guide.correcting" = "Une erreur de tri ? Déplacez le message vers une autre file et Klorn apprend de la correction. Chaque message indique aussi pourquoi il a atterri là.";
 "guide.done" = "Compris";
@@ -637,6 +636,12 @@
 "onboarding.privacy" = "Klorn lit votre courrier pour le trier. C'est vous qui décidez de ce qu'il peut faire de plus.";
 "error.unreachable" = "Klorn ne parvient pas à joindre le serveur.";
 "banner.dismiss.a11y" = "Fermer le message";
+"assistant.starter.1" = "Quel est le courrier le plus important aujourd'hui ?";
+"assistant.starter.2" = "Quels messages sans réponse sont urgents ?";
+"assistant.starter.3" = "Que dois-je préparer pour les réunions de cette semaine ?";
+"assistant.message.user.a11y" = "Vous avez dit : %@";
+"assistant.message.failure.a11y" = "Erreur : %@";
+"assistant.message.reply.a11y" = "Klorn a répondu : %@";
 
 /* Step D7: import picked files into the Klorn drive (Settings › Accounts, File menu). */
 "prefs.section.driveImport" = "KLORN DRIVE";
@@ -718,3 +723,35 @@
 "today.freeTime.stale" = "Ces créneaux ne sont peut-être plus à jour.";
 "today.freeTime.recheck" = "Vérifier à nouveau";
 "files.opensBrowser" = "S’ouvre dans le navigateur";
+
+/* Design detail pass (2026-10-16) */
+"mail.moveToLane" = "Changer de voie";
+"error.timeout" = "Le serveur a mis trop de temps à répondre. Réessayez.";
+"auth.failed.nonce" = "Impossible de joindre Klorn pour lancer la connexion. Vérifiez votre connexion et réessayez.";
+"auth.failed.invalidNonce" = "La session de connexion n'a pas été reconnue. Réessayez.";
+"auth.failed.expired" = "La connexion a pris trop de temps et a expiré. Réessayez.";
+"auth.failed.timeout" = "Délai dépassé en attendant le navigateur. Terminez la connexion là-bas, puis réessayez.";
+"auth.failed.cancelled" = "La connexion a été annulée.";
+"proposals.approveSend" = "Approuver et envoyer";
+"proposals.sendsNow" = "L'envoi est immédiat. Un e-mail envoyé ne peut pas être annulé.";
+"proposals.runsNow" = "S'exécute dès que vous approuvez.";
+"tool.label.send_email" = "Envoyer un e-mail";
+"tool.label.draft_reply" = "Brouillon de réponse";
+"tool.label.reply_to_email" = "Répondre à l'e-mail";
+"tool.label.archive_email" = "Archiver l'e-mail";
+"tool.label.delete_email" = "Supprimer l'e-mail";
+"tool.label.mark_read" = "Marquer comme lu";
+"tool.label.create_event" = "Créer un événement";
+"tool.label.delete_event" = "Supprimer l'événement";
+"tool.label.schedule_meeting" = "Planifier une réunion";
+"tool.label.create_contact" = "Ajouter un contact";
+"tool.label.update_contact" = "Modifier le contact";
+"tool.label.delete_contact" = "Supprimer le contact";
+"tool.label.create_note" = "Créer une note";
+"tool.label.delete_note" = "Supprimer la note";
+"tool.label.create_task" = "Créer une tâche";
+"tool.label.delete_task" = "Supprimer la tâche";
+"tool.label.record_skill" = "Enregistrer la compétence";
+"tool.label.execute_skill" = "Exécuter la compétence";
+"tool.label.classify_emails" = "Classer les e-mails par voie";
+"tool.label.unknown" = "Action";

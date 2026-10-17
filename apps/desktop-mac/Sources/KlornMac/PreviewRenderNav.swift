@@ -204,7 +204,7 @@ extension PreviewRender {
         // The states that are not "ready": each must say what it is.
         shot("today-empty", navModel(firewallJSON: navEmptyFirewallJSON))
         shot("today-loading", navModel(firewallJSON: ""))
-        shot("today-error", navModel(firewallJSON: "", loadError: "The server did not respond (timed out after 30 s)."))
+        shot("today-error", navModel(firewallJSON: "", loadError: PreviewRender.timeoutError))
         shot("today-signed-out", AppModel(tokenStore: InMemoryTokenStore()))
         // The rest of the not-ready states (M6).
         shot("today-signing-in", stateModel(phase: .signingIn))
@@ -221,7 +221,7 @@ extension PreviewRender {
         }
         shot("today-stale", navModel(
             firewallJSON: navFirewallJSON,
-            loadError: "The server did not respond (timed out after 30 s)."))
+            loadError: PreviewRender.timeoutError))
         // P12: Files and Teams free-time on the same fixtures.
         ok = renderFiles(
             dir: dir, dark: dark, base: { navModel(firewallJSON: navFirewallJSON) }, actions: actions) && ok
