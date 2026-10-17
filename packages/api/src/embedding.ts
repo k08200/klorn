@@ -18,7 +18,7 @@
  */
 
 import OpenAI from "openai";
-import { LOCAL_LLM_TIMEOUT_MS, llmRequestTimeoutMs } from "./llm/llm-timeout.js";
+import { EMBEDDING_TIMEOUT_MS, llmRequestTimeoutMs } from "./llm/llm-timeout.js";
 
 // Enable by setting EMBEDDING_MODEL (e.g. "nomic-embed-text" for local Ollama).
 const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || "";
@@ -42,8 +42,7 @@ function getClient(): OpenAI | null {
     client = new OpenAI({
       baseURL: EMBEDDING_BASE_URL,
       apiKey: EMBEDDING_API_KEY,
-      // The default base URL is a local server (Ollama), hence the local bound.
-      timeout: llmRequestTimeoutMs(LOCAL_LLM_TIMEOUT_MS),
+      timeout: llmRequestTimeoutMs(EMBEDDING_TIMEOUT_MS),
     });
   }
   return client;
