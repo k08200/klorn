@@ -39,21 +39,20 @@ export function Skeleton({ variant = "line", width, height, className = "" }: Sk
 
 /** Placeholder matching MailRow's geometry (dot, sender, meta, subject line). */
 export function MailRowSkeleton() {
+  // Mirrors MailRow's three lines (sender · subject · reason) and padding.
   return (
-    <div
-      aria-hidden="true"
-      className="flex h-13 flex-col justify-center gap-2 px-3 max-md:h-16 pointer-coarse:h-16"
-    >
-      <div className="flex items-center gap-2">
-        <span className="size-2 shrink-0" />
-        <div className={`${SHAPE} h-3 w-32 rounded-control`} />
+    <div aria-hidden="true" className="flex flex-col gap-[3px] py-3 pl-4 pr-[18px]">
+      <div className="flex h-[18px] items-center gap-2">
+        <div className={`${SHAPE} h-3 w-28 rounded-control`} />
+        <div className={`${SHAPE} h-3.5 w-4 rounded-control opacity-60`} />
         <div className="flex-1" />
-        <div className={`${SHAPE} h-4 w-14 rounded-full`} />
         <div className={`${SHAPE} h-3 w-10 rounded-control`} />
       </div>
-      <div className="flex items-center gap-2 pl-4">
-        <div className={`${SHAPE} h-3.5 w-1/3 rounded-control`} />
-        <div className={`${SHAPE} h-3.5 flex-1 rounded-control opacity-60`} />
+      <div className="flex h-[22px] items-center">
+        <div className={`${SHAPE} h-4 w-2/3 rounded-control`} />
+      </div>
+      <div className="flex h-4 items-center">
+        <div className={`${SHAPE} h-3 w-2/5 rounded-control opacity-60`} />
       </div>
     </div>
   );
