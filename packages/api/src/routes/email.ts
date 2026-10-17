@@ -75,6 +75,7 @@ import { coercePlainBody, htmlToPlainText, renderableEmailHtmlFor } from "../mai
 import { getLinkedInboxClients, resolveMailClient } from "../mail/gmail.js";
 import { hasAnyMailSource } from "../mail/mail-source.js";
 import { getMeetingContext } from "../mail/meeting-context.js";
+import { needsReplyReasonText } from "../mail/needs-reply-reason-strings.js";
 import { isPublicMailboxDomain } from "../mail/public-mailbox-domains.js";
 import { offeredDraftFor } from "../mail/reply-state.js";
 import { getSenderDossier } from "../mail/sender-dossier.js";
@@ -85,7 +86,7 @@ import {
 } from "../mail/triage-priorities.js";
 import { unsubscribeFromEmail } from "../mail/unsubscribe-action.js";
 import { senderEmail } from "../notify/notification-format.js";
-import { getUserNotificationLanguage } from "../notify/notification-strings.js";
+import { LANG_QUERY_PROPERTY, readerLanguageFor } from "../notify/request-language.js";
 import { createTask } from "../pim/tasks.js";
 import { captureError } from "../sentry.js";
 import { registerEmailAttachmentsRoutes } from "./email-attachments.js";
@@ -672,7 +673,10 @@ const emailNextQuerySchema = {
 const emailDetailQuerySchema = {
   type: "object",
   additionalProperties: false,
-  properties: {},
+  properties: {
+    // The client's UI language for template lines (request-language.ts).
+    lang: LANG_QUERY_PROPERTY,
+  },
 } as const;
 
 export async function emailRoutes(app: FastifyInstance) {
@@ -918,7 +922,7 @@ export async function emailRoutes(app: FastifyInstance) {
       const laneInfo = await listLaneInfoByEmail(uid, emailIds);
       // One language read per request, and only when some row has a reason.
       const reasonLanguage = Array.from(laneInfo.values()).some((info) => info.reason)
-        ? await getUserNotificationLanguage(uid)
+        ? await readerLanguageFor(request, reply, uid)
         : null;
       const attachmentSummaries = await summarizeEmailAttachmentsByEmail(emailIds, uid);
       const candidateProfiles = await listCandidateProfilesByEmail(emailIds, uid);
@@ -1254,7 +1258,7 @@ export async function emailRoutes(app: FastifyInstance) {
 
   // ─── Single Email Detail ──────────────────────────────────────────────
   // GET /api/email/:id
-  app.get("/:id", { schema: { querystring: emailDetailQuerySchema } }, async (request) => {
+  app.get("/:id", { schema: { querystring: emailDetailQuerySchema } }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const uid = getUserId(request);
 
@@ -1278,6 +1282,7 @@ export async function emailRoutes(app: FastifyInstance) {
       // Learned engagement for the reading-pane "you engage with this sender"
       // chip. Cache-only (fails soft to null, never rebuilds on a request).
       const engagementNode = addr ? await getCachedInteractionNode(uid, addr) : null;
+      const readerLanguage = await readerLanguageFor(request, reply, uid);
       return {
         id: dbEmail.id,
         gmailId: dbEmail.gmailId,
@@ -1336,7 +1341,12 @@ export async function emailRoutes(app: FastifyInstance) {
         keyPoints: parseJsonArray(dbEmail.keyPoints),
         actionItems,
         sentiment: dbEmail.sentiment,
+        // The stored value is a classifier code; the Text field is its reader
+        // line in the client's UI language (null when the code has none).
+        // summary / keyPoints / actionItems above are LLM-written in the
+        // language active when they were generated and are never re-rendered.
         needsReplyReason: dbEmail.needsReplyReason,
+        needsReplyReasonText: needsReplyReasonText(dbEmail.needsReplyReason, readerLanguage),
         // A reply written ahead of time (proactive drafts) — the client
         // offers it in the composer; null once answered or when none exists.
         proactiveDraft: offeredDraftFor(dbEmail),

@@ -23,6 +23,7 @@ import {
   sendAutoReplyViaFloor,
 } from "./agentcore/auto-reply-send.js";
 import { runProactiveActions } from "./agentcore/proactive-actions.js";
+import { unattendedReplyBlock } from "./agentcore/unattended-reply-guards.js";
 import { syncsEveryLinkedInbox } from "./billing/mail-sync-scope.js";
 import { isEntitled, planHasFeature } from "./billing/stripe.js";
 import {
@@ -719,8 +720,10 @@ export async function deliverRuleAutoReply(
 
 /**
  * One AUTO_REPLY rule match, in the order that spends nothing until it must:
- * recipient check (no LLM spend on a crafted From) → draft → source-row
- * re-check → claim + send (deliverRuleAutoReply).
+ * recipient check (no LLM spend on a crafted From) → the shared unattended
+ * guards (machine/list mail, own address, daily cap:
+ * agentcore/unattended-reply-guards.ts) → draft → source-row re-check →
+ * claim + send (deliverRuleAutoReply).
  *
  * The draft took real seconds, so the source row is re-checked before sending.
  * A row deleted mid-window (user trashed it, reconcile pruned it) would make
@@ -730,7 +733,14 @@ export async function deliverRuleAutoReply(
  */
 export async function runRuleAutoReply(
   userId: string,
-  email: { id: string; gmailId: string; from: string; subject: string },
+  email: {
+    id: string;
+    gmailId: string;
+    from: string;
+    subject: string;
+    listUnsubscribeUrl?: string | null;
+    listUnsubscribeMailto?: string | null;
+  },
   rule: { ruleName: string },
   deps: {
     draftReply: () => Promise<string>;
@@ -741,6 +751,11 @@ export async function runRuleAutoReply(
     console.warn(
       `[AUTOMATION] auto-reply skipped — non-single recipient on ${email.gmailId} (user ${userId})`,
     );
+    return;
+  }
+  const blocked = await unattendedReplyBlock(userId, email);
+  if (blocked) {
+    console.log(`[AUTOMATION] auto-reply skipped (${blocked}) — ${email.gmailId} (user ${userId})`);
     return;
   }
   const replyBody = await deps.draftReply();
@@ -1645,10 +1660,19 @@ async function runUserCycle(
             findEmail: (userId, emailRowId) =>
               prisma.emailMessage.findFirst({
                 where: { id: emailRowId, userId },
-                select: { id: true, gmailId: true, from: true, subject: true, body: true },
+                select: {
+                  id: true,
+                  gmailId: true,
+                  from: true,
+                  subject: true,
+                  body: true,
+                  listUnsubscribeUrl: true,
+                  listUnsubscribeMailto: true,
+                },
               }),
             alreadyReplied: hasAutoReplyClaim,
             isSingleRecipient,
+            replyBlocked: unattendedReplyBlock,
             draftReply: generateGuidelineReply,
             emailStillExists: async (emailRowId) =>
               (await prisma.emailMessage.findFirst({

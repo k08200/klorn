@@ -1041,12 +1041,35 @@ func runSelfChecks() async -> Bool {
               == "/api/email?search=deal&inbox=primary")
     check("search path omits all-inboxes scope",
           emailSearchPath(query: "deal", selectedInbox: "all") == "/api/email?search=deal")
-    check("firewall path — all unscoped",
-          firewallPath(selected: "all") == "/api/inbox/firewall")
-    check("firewall path — primary scoped",
-          firewallPath(selected: "primary") == "/api/inbox/firewall?inbox=primary")
-    check("firewall path — linked id scoped (hyphen encoded)",
-          firewallPath(selected: "li-1") == "/api/inbox/firewall?inbox=li%2D1")
+    check("firewall path — all unscoped, carries lang",
+          firewallPath(selected: "all", lang: "ko") == "/api/inbox/firewall?lang=ko")
+    check("firewall path — primary scoped, carries lang",
+          firewallPath(selected: "primary", lang: "ko")
+              == "/api/inbox/firewall?inbox=primary&lang=ko")
+    check("firewall path — linked id scoped (hyphen encoded), carries lang",
+          firewallPath(selected: "li-1", lang: "ja") == "/api/inbox/firewall?inbox=li%2D1&lang=ja")
+    // Reader language: server-composed reasons follow the app UI language
+    // (AppLanguage / -klorn.appLanguage), not the stored notification language.
+    check("email detail path carries lang",
+          emailDetailPath(id: "e1", lang: "ko") == "/api/email/e1?lang=ko")
+    check("lang for every AppLanguage is its UI code",
+          AppLanguage.allCases.filter { $0 != .system }.allSatisfy {
+              firewallPath(selected: "all", lang: L10n.resolvedCode(override: $0))
+                  == "/api/inbox/firewall?lang=\($0.rawValue)"
+          })
+    check("lang for system language resolves to a shipped code",
+          L10n.resolvedCode(override: .system, preferred: ["ko-KR"], available: ["en", "ko"]) == "ko")
+    check("lang value is encoded, never raw",
+          langQueryItem("a&b") == "lang=a%26b")
+    let replyReasonJSON = Data(#"{"id":"e1","needsReply":true,"needsReplyReason":"action_items_present","needsReplyReasonText":"처리할 요청이 들어 있음"}"#.utf8)
+    let replyReasonDetail = try? JSONDecoder().decode(EmailDetail.self, from: replyReasonJSON)
+    check("email detail decodes the reader-language reply reason, keeps the code apart",
+          replyReasonDetail?.needsReplyReasonText == "처리할 요청이 들어 있음"
+              && replyReasonDetail?.needsReplyReason == "action_items_present")
+    let olderServerJSON = Data(#"{"id":"e1","needsReplyReason":"action_items_present"}"#.utf8)
+    check("email detail from an older server decodes with no reply-reason text",
+          (try? JSONDecoder().decode(EmailDetail.self, from: olderServerJSON))
+              .map { $0.needsReplyReasonText == nil } == true)
     // Folders: "all" is EXPLICIT (the server's folder default is the primary),
     // and the page token rides along verbatim.
     check("mailbox path — all is explicit",

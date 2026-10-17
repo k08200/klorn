@@ -1028,7 +1028,7 @@ final class AppModel {
         defer { if isCurrent(session) { isLoadingEmail = false } }
         do {
             let detail = try await api.get(
-                "/api/email/\(emailDbId)", as: EmailDetail.self)
+                emailDetailPath(id: emailDbId, lang: L10n.resolvedCode(override: L10n.override)), as: EmailDetail.self)
             guard isCurrent(session) else { return }
             openedEmail = detail
             markOpened(emailDbId)
@@ -1211,7 +1211,7 @@ final class AppModel {
         // report "summarize failed" — the pane just keeps the old band until
         // the next open re-fetches it.
         guard isCurrent(session) else { return }
-        if let updated = try? await api.get("/api/email/\(email.id)", as: EmailDetail.self),
+        if let updated = try? await api.get(emailDetailPath(id: email.id, lang: L10n.resolvedCode(override: L10n.override)), as: EmailDetail.self),
            isCurrent(session), openedEmail?.id == email.id {
             openedEmail = updated
         }
@@ -2169,7 +2169,7 @@ final class AppModel {
         defer { if isCurrent(session) { isLoadingEmail = false } }
         do {
             let detail = try await api.get(
-                "/api/email/\(hit.id)", as: EmailDetail.self)
+                emailDetailPath(id: hit.id, lang: L10n.resolvedCode(override: L10n.override)), as: EmailDetail.self)
             guard isCurrent(session) else { return }
             openedEmail = detail
             // Same contract as openItem: explicit PATCH write, never a GET
@@ -2753,7 +2753,7 @@ final class AppModel {
         do {
             let selectionAtFetch = selectedInbox
             let fetched = try await api.get(
-                firewallPath(selected: selectionAtFetch), as: FirewallResponse.self)
+                firewallPath(selected: selectionAtFetch, lang: L10n.resolvedCode(override: L10n.override)), as: FirewallResponse.self)
             // A response that outlived its session is the previous account's
             // mail: it reaches neither the cache nor the screen.
             guard isCurrent(session) else { return }
@@ -2810,7 +2810,7 @@ final class AppModel {
             return fetched.removingIDs(dismissed).items(for: .push)
         }
         do {
-            let all = try await api.get(firewallPath(selected: "all"), as: FirewallResponse.self)
+            let all = try await api.get(firewallPath(selected: "all", lang: L10n.resolvedCode(override: L10n.override)), as: FirewallResponse.self)
             guard isCurrent(session) else { return nil }
             queueCache["all"] = all
             return all.removingIDs(dismissed).items(for: .push)

@@ -8,13 +8,14 @@ import fr from "./locales/fr";
 import ja from "./locales/ja";
 import ko from "./locales/ko";
 import zh from "./locales/zh";
+import { activeUiLocale, LEGACY_PROFILE_KEY, PROFILE_KEY, type UiLocale } from "./ui-locale";
 
 /**
  * Shipped UI locales. Mirrors the server's NOTIFICATION_LANGUAGES so the app
  * a user reads and the notifications they receive can speak the same language
  * (packages/api/src/notify/notification-strings.ts).
  */
-export type Locale = "en" | "ko" | "ja" | "zh" | "es" | "fr" | "de";
+export type Locale = UiLocale;
 
 // English is the source of truth for keys; every other locale is a full
 // mirror, enforced in CI by .github/scripts/check-i18n-parity.mjs. Tables
@@ -58,46 +59,12 @@ interface I18nContextType {
 }
 
 const I18nContext = createContext<I18nContextType | null>(null);
-const PROFILE_KEY = "klorn-profile";
-const LEGACY_KEY_PREFIX = "ev" + "e";
-const LEGACY_PROFILE_KEY = `${LEGACY_KEY_PREFIX}-profile`;
-
-function getStoredProfile(): string | null {
-  const stored = localStorage.getItem(PROFILE_KEY);
-  if (stored) return stored;
-  const legacyStored = localStorage.getItem(LEGACY_PROFILE_KEY);
-  if (legacyStored) {
-    localStorage.setItem(PROFILE_KEY, legacyStored);
-    localStorage.removeItem(LEGACY_PROFILE_KEY);
-  }
-  return legacyStored;
-}
-
-/** Every locale that has a table — derived, so adding a file is enough. */
-const LOCALES = Object.keys(translations) as Locale[];
-
-function isLocale(value: unknown): value is Locale {
-  return typeof value === "string" && (LOCALES as string[]).includes(value);
-}
 
 function detectLocale(): Locale {
-  // English is the default and every other locale is opt-in — a Japanese
-  // browser still lands in English unless the user picks 日本語 in
-  // Settings → Language. We intentionally do NOT follow navigator.language.
-  //
-  // The check is against the locale LIST, not a hardcoded code: this used to
-  // read `language === "ko"`, which silently ignored every language added
-  // after Korean.
-  try {
-    const stored = getStoredProfile();
-    if (stored) {
-      const { language } = JSON.parse(stored);
-      if (isLocale(language)) return language;
-    }
-  } catch {
-    // ignore a malformed profile
-  }
-  return "en";
+  // The check is against the locale LIST (ui-locale.ts), not a hardcoded
+  // code: this used to read `language === "ko"`, which silently ignored every
+  // language added after Korean.
+  return activeUiLocale();
 }
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {

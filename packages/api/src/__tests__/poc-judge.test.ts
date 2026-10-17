@@ -106,7 +106,9 @@ describe("buildSenderTraitsBlock", () => {
     const block = buildSenderTraitsBlock([investorTrait]);
     expect(block.startsWith("\n\n")).toBe(true);
     expect(block).toContain("a prior, not a verdict");
-    expect(block).toContain('- Relationship: investor — "We\'d like to invest in your round."');
+    expect(block).toContain(
+      '- Relationship: investor — <untrusted_content source="sender-trait-evidence">We\'d like to invest in your round.</untrusted_content>',
+    );
   });
 
   it("neutralizes newline injection in untrusted trait text (stays one line)", () => {
@@ -147,7 +149,9 @@ describe("buildSenderTraitsBlock", () => {
         evidenceText: "This week in AI…",
       },
     ]);
-    expect(block).toContain('- Recurring intent: weekly newsletter — "This week in AI…"');
+    expect(block).toContain(
+      '- Recurring intent: weekly newsletter — <untrusted_content source="sender-trait-evidence">This week in AI…</untrusted_content>',
+    );
   });
 
   it("renders one line per trait, in input order, under a single header", () => {

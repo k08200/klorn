@@ -388,6 +388,8 @@ export function isBudgetError(error: unknown): boolean {
  */
 export function isConnectionError(error: unknown): boolean {
   if (error == null) return false;
+  // The OpenAI SDK's timeout carries no code or cause, only this name.
+  if (error instanceof Error && error.name === "APIConnectionTimeoutError") return true;
   const code =
     typeof error === "object" && "code" in error ? String((error as { code: unknown }).code) : "";
   if (/^(ECONNREFUSED|ECONNRESET|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|EHOSTUNREACH|UND_ERR)/.test(code)) {
@@ -396,7 +398,7 @@ export function isConnectionError(error: unknown): boolean {
   const message = error instanceof Error ? error.message.toLowerCase() : "";
   if (!message) return false;
   if (
-    /econnrefused|econnreset|enotfound|etimedout|ehostunreach|fetch failed|connection error|socket hang up/.test(
+    /econnrefused|econnreset|enotfound|etimedout|ehostunreach|fetch failed|connection error|socket hang up|request timed out/.test(
       message,
     )
   ) {
