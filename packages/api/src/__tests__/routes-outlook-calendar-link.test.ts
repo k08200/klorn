@@ -26,11 +26,17 @@ const db = vi.hoisted(() => ({
   inbox: {
     findMany: vi.fn(async () => []),
     findUnique: vi.fn(async () => null),
-    // findOwnedLinkedAccount falls back to a case-insensitive findFirst (#1438).
+    // hasAnyMailSource() reads this to decide whether the user already owns a
+    // mailbox. Default null = none yet, so the first-mailbox rule admits the
+    // connect (mail-account-entitlement.ts, #1438).
     findFirst: vi.fn(async () => null),
     count: vi.fn(async () => 0),
     upsert: vi.fn(async () => ({ id: "inbox-row-1" })),
     deleteMany: vi.fn(async () => ({ count: 0 })),
+  },
+  // The other half of hasAnyMailSource(): the primary Google token.
+  token: {
+    findFirst: vi.fn(async () => null),
   },
   unlinkCalendarAccount: vi.fn(async () => true),
   captureError: vi.fn(),
@@ -58,6 +64,7 @@ vi.mock("../db.js", () => {
     },
     linkedCalendarAccount: db.calendar,
     linkedInboxAccount: db.inbox,
+    userToken: db.token,
     device: {
       findUnique: vi.fn(async () => ({ id: "device-1" })),
       findMany: vi.fn(async () => []),
