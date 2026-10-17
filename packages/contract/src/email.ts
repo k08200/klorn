@@ -90,6 +90,18 @@ export interface EmailListItem {
    * not judged yet; clients render no chip, never a guessed lane.
    */
   tier: LiveTier | null;
+  /**
+   * Why the message sits in its lane, resolved in the user's notification
+   * language (a static reason key is localized; free text passes through).
+   * Display-only, never a trust signal. null = no stored reason.
+   */
+  tierReason?: string | null;
+  /**
+   * Messages of this row's thread inside the requested view. Set only on a
+   * thread-grouped page (`threads=1` with a lane), where the row is the
+   * thread's newest message in the view; absent otherwise.
+   */
+  threadCount?: number;
   to: string;
   subject: string;
   snippet: string | null;
@@ -120,6 +132,11 @@ export interface EmailListItem {
  * SNOOZED with a wake-up time still ahead (Later); `total` then counts the
  * same rows. Absent, the list is unchanged. `filter=candidates` cannot be
  * combined with it (400).
+ *
+ * With the opt-in `threads=1` (or `true`) together with a lane (`tier`, ALL
+ * included, while lane reads are on) the page holds one row per thread — the
+ * thread's newest message in the view, carrying `threadCount` — and `total`
+ * counts threads. Without a lane `threads` is ignored.
  */
 export interface EmailListResponse {
   emails: EmailListItem[];
@@ -140,6 +157,8 @@ export interface EmailListResponse {
 export interface EmailLaneCount {
   total: number;
   unread: number;
+  /** Distinct threads in the lane (a thread's messages may span several stored tiers; counted once per folded lane). */
+  threads: number;
 }
 
 /** One entry per live lane — retired values are folded server-side. */

@@ -426,6 +426,20 @@ describe("GET /api/email?tier= — lane page", () => {
   });
 });
 
+/** The bound values of the stored-tier → live-lane CASE, in order. */
+const LANE_CASE_VALUES = [
+  "PUSH",
+  "CALL",
+  "PUSH",
+  "MEETING",
+  "MEETING",
+  "INFO",
+  "INFO",
+  "SILENT",
+  "SILENT",
+  "QUEUE",
+];
+
 describe("GET /api/email/lane-counts", () => {
   it("folds stored values into the five live lanes; unjudged mail counts as QUEUE", async () => {
     userTokenFindFirst.mockResolvedValue(GOOGLE_TOKEN);
@@ -444,11 +458,11 @@ describe("GET /api/email/lane-counts", () => {
     expect(res.json()).toEqual({
       source: "gmail",
       counts: {
-        PUSH: { total: 4, unread: 3 },
-        MEETING: { total: 0, unread: 0 },
-        QUEUE: { total: 16, unread: 6 },
-        INFO: { total: 0, unread: 0 },
-        SILENT: { total: 7, unread: 7 },
+        PUSH: { total: 4, unread: 3, threads: 0 },
+        MEETING: { total: 0, unread: 0, threads: 0 },
+        QUEUE: { total: 16, unread: 6, threads: 0 },
+        INFO: { total: 0, unread: 0, threads: 0 },
+        SILENT: { total: 7, unread: 7, threads: 0 },
       },
     });
     expect(queryRaw).toHaveBeenCalledTimes(1);
@@ -463,7 +477,7 @@ describe("GET /api/email/lane-counts", () => {
     expect(body.source).toBe("demo");
     expect(body.needsConnection).toBe(true);
     for (const lane of Object.keys(body.counts)) {
-      expect(body.counts[lane]).toEqual({ total: 0, unread: 0 });
+      expect(body.counts[lane]).toEqual({ total: 0, unread: 0, threads: 0 });
     }
     expect(queryRaw).not.toHaveBeenCalled();
     await app.close();
@@ -477,7 +491,7 @@ describe("GET /api/email/lane-counts", () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().source).toBe("gmail");
     expect(res.json().needsConnection).toBeUndefined();
-    expect(res.json().counts.PUSH).toEqual({ total: 2, unread: 1 });
+    expect(res.json().counts.PUSH).toEqual({ total: 2, unread: 1, threads: 0 });
     expect(linkedInboxFindFirst).toHaveBeenCalledWith({
       where: { userId: "user-1" },
       select: { id: true },
@@ -492,8 +506,9 @@ describe("GET /api/email/lane-counts", () => {
     const [call] = rawCalls();
     expect(call.text).toContain(`FROM "EmailMessage" e LEFT JOIN "AttentionItem" a`);
     expect(call.text).toContain(`a."sourceId" = e."id" AND a."userId" = e."userId"`);
-    expect(call.text).toContain(`GROUP BY a."tier"`);
-    expect(call.values).toEqual(["user-1"]);
+    // Grouped by the folded lane, so a thread's distinct count is per live lane.
+    expect(call.text).toContain(`GROUP BY lane`);
+    expect(call.values).toEqual([...LANE_CASE_VALUES, "user-1"]);
     expect(call.text).not.toContain("user-1");
     await app.close();
   });
@@ -508,7 +523,7 @@ describe("GET /api/email/lane-counts", () => {
       headers: auth(),
     });
     const [call] = rawCalls();
-    expect(call.values).toEqual(["user-1", "linked-1"]);
+    expect(call.values).toEqual([...LANE_CASE_VALUES, "user-1", "linked-1"]);
     expect(call.text).not.toContain("linked-1");
     await app.close();
   });
@@ -527,7 +542,8 @@ describe("GET /api/email/lane-counts", () => {
       expect.objectContaining({ where: { id: "someone-elses-inbox", userId: "user-1" } }),
     );
     const { counts } = res.json();
-    for (const lane of Object.keys(counts)) expect(counts[lane]).toEqual({ total: 0, unread: 0 });
+    for (const lane of Object.keys(counts))
+      expect(counts[lane]).toEqual({ total: 0, unread: 0, threads: 0 });
     expect(queryRaw).not.toHaveBeenCalled();
     await app.close();
   });

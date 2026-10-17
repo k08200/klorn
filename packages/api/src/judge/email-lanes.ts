@@ -41,6 +41,40 @@ export async function listLaneTiersByEmail(
   }
 }
 
+/** A list row's lane and its stored (unresolved) reason. */
+export interface LaneInfo {
+  tier: LiveTier;
+  /** AttentionItem.tierReason as stored: a static key or free text. Display-only. */
+  reason: string | null;
+}
+
+/**
+ * The chip lookup plus each row's stored lane reason, in the same single
+ * batched query. Same fail-soft contract as listLaneTiersByEmail: a failure
+ * yields an empty map (no chip, no reason), never a 500.
+ */
+export async function listLaneInfoByEmail(
+  userId: string,
+  emailIds: string[],
+): Promise<Map<string, LaneInfo>> {
+  if (emailIds.length === 0) return new Map();
+  try {
+    const rows = (await prisma.attentionItem.findMany({
+      where: { userId, source: "EMAIL", sourceId: { in: emailIds } },
+      select: { sourceId: true, tier: true, tierReason: true },
+    })) as Array<{ sourceId: string; tier: string | null; tierReason?: string | null }>;
+    return new Map(
+      rows.map((row) => [
+        row.sourceId,
+        { tier: toLiveTier(row.tier), reason: row.tierReason ?? null },
+      ]),
+    );
+  } catch (err) {
+    captureError(err, { tags: { scope: "email.lane_lookup" }, extra: { userId } });
+    return new Map();
+  }
+}
+
 /** What Mail's lane control can ask for: one live lane, or every lane. */
 export const LANE_FILTERS = ["PUSH", "MEETING", "QUEUE", "INFO", "SILENT", "ALL"] as const;
 export type LaneFilter = (typeof LANE_FILTERS)[number];
@@ -210,6 +244,51 @@ export async function pageEmailIdsInLane(
   return { ids: rows.map((row) => row.id), total: Number(totals[0]?.total ?? 0) };
 }
 
+/**
+ * A message's thread, unique per account: the provider thread id is only
+ * unique inside one mailbox, so the account is part of the key, and a message
+ * without a thread id is its own thread.
+ */
+const THREAD_KEY = Prisma.sql`(COALESCE(e."linkedInboxAccountId", '') || ':' || COALESCE(e."threadId", e."id"))`;
+
+/**
+ * One page of a view grouped by thread (`GET /api/email?threads=1` with a
+ * lane): per thread, its newest message in the view (receivedAt, then id) and
+ * how many of its messages the view holds. Threads are ordered newest first
+ * by that representative row; `total` is the number of threads in the view.
+ * Same FROM / WHERE as pageEmailIdsInLane, so every lane, account, filter,
+ * category, search and hideHandled narrowing applies before grouping. The
+ * window count runs before DISTINCT ON picks the representative. Every value
+ * is a bound parameter; a failure throws, like the ungrouped page.
+ */
+export async function pageThreadsInLane(
+  query: LanePageQuery,
+): Promise<{ rows: Array<{ id: string; threadCount: number }>; total: number }> {
+  if (query.scope.kind === "unknown") return { rows: [], total: 0 };
+  const from = laneFromSql(query);
+  const [rows, totals] = await Promise.all([
+    prisma.$queryRaw<Array<{ id: string; threadCount: number }>>(Prisma.sql`
+      WITH grouped AS (
+        SELECT DISTINCT ON (${THREAD_KEY})
+               e."id" AS id,
+               e."receivedAt" AS "receivedAt",
+               (COUNT(*) OVER (PARTITION BY ${THREAD_KEY}))::int AS "threadCount"
+        ${from}
+        ORDER BY ${THREAD_KEY}, e."receivedAt" DESC, e."id" DESC
+      )
+      SELECT id, "threadCount" FROM grouped
+      ORDER BY "receivedAt" DESC, id DESC
+      LIMIT ${query.take} OFFSET ${query.skip}`),
+    prisma.$queryRaw<Array<{ total: number }>>(Prisma.sql`
+      SELECT COUNT(DISTINCT ${THREAD_KEY})::int AS total
+      ${from}`),
+  ]);
+  return {
+    rows: rows.map((row) => ({ id: row.id, threadCount: Number(row.threadCount) })),
+    total: Number(totals[0]?.total ?? 0),
+  };
+}
+
 /** What a list view is made of: the FROM / WHERE both the page and the reader's neighbours read. */
 type LaneViewQuery = Pick<
   LanePageQuery,
@@ -271,17 +350,22 @@ export async function neighbourEmailIdsInLane(
 
 export function emptyLaneCounts(): EmailLaneCounts {
   return {
-    PUSH: { total: 0, unread: 0 },
-    MEETING: { total: 0, unread: 0 },
-    QUEUE: { total: 0, unread: 0 },
-    INFO: { total: 0, unread: 0 },
-    SILENT: { total: 0, unread: 0 },
+    PUSH: { total: 0, unread: 0, threads: 0 },
+    MEETING: { total: 0, unread: 0, threads: 0 },
+    QUEUE: { total: 0, unread: 0, threads: 0 },
+    INFO: { total: 0, unread: 0, threads: 0 },
+    SILENT: { total: 0, unread: 0, threads: 0 },
   };
 }
 
-/** Fold per-stored-value rows into the five live lanes. */
+/**
+ * Fold count rows into the five live lanes. `total` / `unread` add up across
+ * rows; `threads` is a distinct count, so it only adds up correctly when each
+ * row is already one folded lane (as countEmailsByLane's query returns) — a
+ * thread spread over two stored tiers of one lane would otherwise count twice.
+ */
 export function foldLaneCounts(
-  rows: ReadonlyArray<{ tier: string | null; total: number; unread: number }>,
+  rows: ReadonlyArray<{ tier: string | null; total: number; unread: number; threads?: number }>,
 ): EmailLaneCounts {
   const counts = emptyLaneCounts();
   for (const row of rows) {
@@ -289,17 +373,34 @@ export function foldLaneCounts(
     counts[lane] = {
       total: counts[lane].total + Number(row.total),
       unread: counts[lane].unread + Number(row.unread),
+      threads: counts[lane].threads + Number(row.threads ?? 0),
     };
   }
   return counts;
 }
 
 /**
+ * a."tier" as its live lane in SQL, exactly as toLiveTier / laneSql read it:
+ * the STORED_TIERS lists name the non-QUEUE lanes, and everything else — null
+ * (no AttentionItem, or no tier), the retired AUTO, QUEUE, an unknown string —
+ * falls to QUEUE. Grouping by this (not by the stored value) lets a distinct
+ * thread count be taken per folded lane.
+ */
+const LIVE_LANE_SQL = Prisma.sql`CASE ${Prisma.join(
+  Object.entries(STORED_TIERS).map(
+    ([lane, stored]) => Prisma.sql`WHEN a."tier" IN (${Prisma.join([...stored])}) THEN ${lane}`,
+  ),
+  " ",
+)} ELSE ${"QUEUE"} END`;
+
+/**
  * Mail per lane (total and unread) in one grouped query, scoped to the caller
  * and, optionally, to one of their accounts. It starts from the mail and joins
  * the lane on, so every mail is counted exactly once: one the judge has not
- * reached groups under a null tier, which folds to QUEUE — the lanes therefore
- * sum to All, and each lane's total is its list's total. Every value is a
+ * reached reads as QUEUE — the lanes therefore sum to All, and each lane's
+ * total is its list's total. Rows are grouped by the folded lane (LIVE_LANE_SQL)
+ * so `threads` counts each thread once per lane even when its messages carry
+ * different stored tiers of that lane (null + AUTO + QUEUE). Every value is a
  * bound parameter; the user id on both sides of the join is the ownership guard.
  */
 export async function countEmailsByLane(
@@ -308,16 +409,20 @@ export async function countEmailsByLane(
 ): Promise<EmailLaneCounts> {
   if (scope.kind === "unknown") return emptyLaneCounts();
   const rows = await prisma.$queryRaw<
-    Array<{ tier: string | null; total: number; unread: number }>
+    Array<{ tier: string | null; total: number; unread: number; threads: number }>
   >(Prisma.sql`
-    SELECT a."tier" AS tier,
+    SELECT lane AS tier,
            COUNT(*)::int AS total,
-           (COUNT(*) FILTER (WHERE e."isRead" = false))::int AS unread
-    FROM "EmailMessage" e
-    LEFT JOIN "AttentionItem" a ON ${LANE_JOIN_ON}
-    WHERE e."userId" = ${userId}
-      ${inboxSql(scope)}
-    GROUP BY a."tier"
+           (COUNT(*) FILTER (WHERE "isRead" = false))::int AS unread,
+           COUNT(DISTINCT thread_key)::int AS threads
+    FROM (
+      SELECT ${LIVE_LANE_SQL} AS lane, e."isRead" AS "isRead", ${THREAD_KEY} AS thread_key
+      FROM "EmailMessage" e
+      LEFT JOIN "AttentionItem" a ON ${LANE_JOIN_ON}
+      WHERE e."userId" = ${userId}
+        ${inboxSql(scope)}
+    ) folded
+    GROUP BY lane
   `);
   return foldLaneCounts(rows);
 }
