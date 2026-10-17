@@ -394,7 +394,7 @@ struct ReadingPane: View {
                     HStack(spacing: 5) {
                         Image(systemName: "arrowshape.turn.up.left").font(m.caption2)
                             .foregroundStyle(Theme.accent).accessibilityHidden(true)
-                        Text((email.needsReplyReason?.isEmpty == false) ? email.needsReplyReason! : L("reading.needsReply"))
+                        Text((email.needsReplyReasonText?.isEmpty == false) ? email.needsReplyReasonText! : L("reading.needsReply"))
                             .font(m.caption).foregroundStyle(Theme.textDim)
                     }
                 }

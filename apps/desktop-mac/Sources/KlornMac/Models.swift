@@ -454,7 +454,11 @@ struct EmailDetail: Codable, Sendable, Identifiable {
     let keyPoints: [String]?
     let actionItems: [String]?
     let needsReply: Bool?
+    /// Classifier code (e.g. "action_items_present") — never shown as text.
     let needsReplyReason: String?
+    /// The reason as a sentence in the UI language (`lang=` on the request).
+    /// Absent on older servers; null when the code has no reader line.
+    let needsReplyReasonText: String?
     /// A reply Klorn drafted ahead of time for this mail (proactive drafts).
     /// Absent on older servers, null when none exists or the mail was answered.
     let proactiveDraft: String?
@@ -963,15 +967,30 @@ func emailSearchPath(query: String, selectedInbox: String) -> String {
 }
 
 /// Firewall queue path with the optional per-inbox scope: "all" (or blank)
-/// sends nothing — the server treats an absent `inbox=` as every inbox
+/// sends no `inbox=` — the server treats an absent `inbox=` as every inbox
 /// (routes/firewall.ts mirrors routes/email.ts's param). Encoded like
-/// emailSearchPath so hyphenated linked ids survive the round trip. Pure.
-func firewallPath(selected: String) -> String {
-    let base = "/api/inbox/firewall"
-    guard let inbox = inboxQueryParam(selected: selected),
-          let enc = inbox.addingPercentEncoding(withAllowedCharacters: .alphanumerics)
-    else { return base }
-    return base + "?inbox=\(enc)"
+/// emailSearchPath so hyphenated linked ids survive the round trip.
+/// `lang` is the app UI language: the server renders template tier reasons in
+/// it instead of the stored notification language. Pure.
+func firewallPath(selected: String, lang: String) -> String {
+    var query = [langQueryItem(lang)]
+    if let inbox = inboxQueryParam(selected: selected),
+       let enc = inbox.addingPercentEncoding(withAllowedCharacters: .alphanumerics) {
+        query.insert("inbox=\(enc)", at: 0)
+    }
+    return "/api/inbox/firewall?" + query.joined(separator: "&")
+}
+
+/// Email detail path. `lang` is the app UI language, so server-composed lines
+/// (the needs-reply reason) match the screen. Pure.
+func emailDetailPath(id: String, lang: String) -> String {
+    "/api/email/\(id)?" + langQueryItem(lang)
+}
+
+/// `lang=<code>` for the reader routes; the code is one of AppLanguage's raw
+/// values, encoded anyway so a malformed one can never break the query.
+func langQueryItem(_ lang: String) -> String {
+    "lang=" + (lang.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "en")
 }
 
 /// Folder listing path with the per-inbox scope. Unlike firewallPath, "all"
