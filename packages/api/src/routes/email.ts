@@ -101,6 +101,7 @@ import { registerEmailRulesRoutes } from "./email-rules.js";
 import { registerEmailSenderLabelRoutes } from "./email-sender-labels.js";
 import { emailSubscriptionsRoutes } from "./email-subscriptions.js";
 import { registerEmailWaitingRoutes } from "./email-waiting.js";
+import { laneThreadsUserLimit, replyIfQueryTimedOut } from "./lane-read-guards.js";
 
 const MAX_PAGE = 10_000; // guardrail: paging past ~500k rows is a client bug, not a real request
 
@@ -717,7 +718,12 @@ export async function emailRoutes(app: FastifyInstance) {
   // GET /api/email?filter=unread|urgent|reply-needed|attachments|candidates&search=keyword&category=billing&page=1
   app.get(
     "/",
-    { schema: { querystring: listEmailsQuerySchema } },
+    {
+      schema: { querystring: listEmailsQuerySchema },
+      // Per-user ceiling on the thread-grouped lane page (a full-view scan);
+      // every other list request is unchanged.
+      preHandler: laneThreadsUserLimit(app),
+    },
     async (request, reply): Promise<EmailListResponse> => {
       const { filter, search, category, page, inbox, tier, hideHandled, threads } =
         request.query as {
@@ -903,16 +909,25 @@ export async function emailRoutes(app: FastifyInstance) {
         const byId = new Map(rows.map((row) => [row.id, row]));
         return [page.rows.flatMap((row) => byId.get(row.id) ?? []), page.total];
       };
-      const [[emails, total], unreadCount] = await Promise.all([
-        groupByThread && lane
-          ? threadPage(lane)
-          : laneOnly
-            ? lanePage(laneOnly)
-            : hideHandledRows
-              ? lanePage("ALL")
-              : listPage(),
-        prisma.emailMessage.count({ where: { userId: uid, isRead: false } }),
-      ]);
+      let pageResult: [[EmailMessage[], number], number];
+      try {
+        pageResult = await Promise.all([
+          groupByThread && lane
+            ? threadPage(lane)
+            : laneOnly
+              ? lanePage(laneOnly)
+              : hideHandledRows
+                ? lanePage("ALL")
+                : listPage(),
+          prisma.emailMessage.count({ where: { userId: uid, isRead: false } }),
+        ]);
+      } catch (err) {
+        // The grouped page runs under a statement timeout: a slow scan is a
+        // retryable 503, not a 500.
+        if (replyIfQueryTimedOut(err, reply)) return reply as never;
+        throw err;
+      }
+      const [[emails, total], unreadCount] = pageResult;
 
       // Map to API format
       const emailIds = emails.map((email) => email.id);

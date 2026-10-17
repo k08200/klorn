@@ -79,7 +79,7 @@
     "packages/web/src/app/chat/chat-view.tsx": 3,
     "packages/web/src/app/email/[id]/atoms.tsx": 1,
     "packages/web/src/app/email/[id]/attachment-analysis.tsx": 9,
-    "packages/web/src/app/email/[id]/page.tsx": 8,
+    "packages/web/src/app/email/[id]/page.tsx": 6,
     "packages/web/src/app/email/candidates/[emailId]/page.tsx": 2,
     "packages/web/src/app/email/candidates/page.tsx": 8,
     "packages/web/src/app/email/page.tsx": 26,

@@ -161,13 +161,33 @@ export function isStaticTierReasonKey(value: string): value is StaticTierReasonK
 /**
  * Render a stored reason for display. Keys become copy in the reader's
  * language; anything else (LLM prose, rows written before this change) is
- * returned exactly as stored.
+ * returned as stored, capped at TIER_REASON_MAX_CHARS.
  */
 export function resolveTierReason(
   stored: string | null | undefined,
   language?: string | null,
 ): string | null {
   if (!stored) return null;
-  if (!isStaticTierReasonKey(stored)) return stored;
+  if (!isStaticTierReasonKey(stored)) return capTierReason(stored);
   return STATIC_TIER_REASONS[stored][resolveNotificationLanguage(language)];
+}
+
+/**
+ * The longest reason text sent to a client. Free-text reasons are written by
+ * the judge and passed through as stored, so the server bounds them rather
+ * than trusting every writer (or a client's layout) to.
+ */
+export const TIER_REASON_MAX_CHARS = 280;
+const ELLIPSIS = "…";
+
+/** Cut to TIER_REASON_MAX_CHARS code points (never inside a surrogate pair), ellipsis included. */
+function capTierReason(text: string): string {
+  // Cheap exit: UTF-16 length is an upper bound on the code-point count.
+  if (text.length <= TIER_REASON_MAX_CHARS) return text;
+  const points = Array.from(text);
+  if (points.length <= TIER_REASON_MAX_CHARS) return text;
+  return `${points
+    .slice(0, TIER_REASON_MAX_CHARS - 1)
+    .join("")
+    .trimEnd()}${ELLIPSIS}`;
 }

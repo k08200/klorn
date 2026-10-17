@@ -22,7 +22,7 @@ const queryRaw = vi.hoisted(() => vi.fn(async (_sql: unknown) => [] as unknown[]
 const linkedInboxFindFirst = vi.hoisted(() => vi.fn(async () => null as unknown));
 
 vi.mock("../db.js", () => {
-  const prisma = {
+  const prisma: Record<string, unknown> = {
     userToken: { findFirst: userTokenFindFirst },
     emailMessage: { findMany: emailFindMany, count: emailCount },
     attentionItem: { findMany: attentionFindMany },
@@ -34,7 +34,10 @@ vi.mock("../db.js", () => {
       count: vi.fn(async () => 1),
       update: vi.fn(async () => ({})),
     },
+    $executeRaw: vi.fn(async () => 0),
   };
+  // The lane reads run inside withStatementTimeout's interactive transaction.
+  prisma.$transaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma));
   return { prisma, db: prisma };
 });
 vi.mock("../mail/email-attachments.js", () => ({
@@ -585,6 +588,50 @@ describe("GET /api/email/lane-counts", () => {
     const res = await app.inject({ method: "GET", url: "/api/email/lane-counts", headers: auth() });
     expect(res.statusCode).toBe(404);
     expect(queryRaw).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+describe("GET /api/email/lane-counts — query hardening", () => {
+  it("answers a statement timeout with a retryable 503", async () => {
+    const { Prisma } = await import("@prisma/client");
+    userTokenFindFirst.mockResolvedValue(GOOGLE_TOKEN);
+    queryRaw.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError("canceling statement due to statement timeout", {
+        code: "P2010",
+        clientVersion: "test",
+        meta: { code: "57014" },
+      }),
+    );
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/email/lane-counts", headers: auth() });
+    expect(res.statusCode).toBe(503);
+    expect(res.headers["retry-after"]).toBe("5");
+    expect(res.json()).toMatchObject({ code: "query-timeout", retryable: true });
+    await app.close();
+  });
+
+  it("limits the counts per user (120/min)", async () => {
+    const rateLimit = (await import("@fastify/rate-limit")).default;
+    const { emailRoutes } = await import("../routes/email.js");
+    const app = Fastify();
+    await app.register(rateLimit, { max: 10_000, timeWindow: "1 minute" });
+    await app.register(emailRoutes, { prefix: "/api/email" });
+    userTokenFindFirst.mockResolvedValue(GOOGLE_TOKEN);
+    queryRaw.mockResolvedValue([]);
+    // The per-address route limit is also 120; give each request its own address
+    // so only the per-user limit can answer 429.
+    const counts = (i: number) =>
+      app.inject({
+        method: "GET",
+        url: "/api/email/lane-counts",
+        headers: auth(),
+        remoteAddress: `10.0.${Math.floor(i / 250)}.${i % 250}`,
+      });
+    for (let i = 0; i < 120; i += 1) expect((await counts(i)).statusCode).toBe(200);
+    const limited = await counts(999);
+    expect(limited.statusCode).toBe(429);
+    expect(limited.json()).toMatchObject({ code: "rate-limited", retryable: true });
     await app.close();
   });
 });

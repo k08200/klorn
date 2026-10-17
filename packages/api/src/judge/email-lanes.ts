@@ -10,6 +10,7 @@ import type { EmailLaneCounts, LiveTier } from "@klorn/contract";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db.js";
 import { likeContainsPattern } from "../db-like.js";
+import { withStatementTimeout } from "../db-statement-timeout.js";
 import { captureError } from "../sentry.js";
 import { toLiveTier } from "./tiers.js";
 
@@ -258,16 +259,24 @@ const THREAD_KEY = Prisma.sql`(COALESCE(e."linkedInboxAccountId", '') || ':' || 
  * by that representative row; `total` is the number of threads in the view.
  * Same FROM / WHERE as pageEmailIdsInLane, so every lane, account, filter,
  * category, search and hideHandled narrowing applies before grouping. The
- * window count runs before DISTINCT ON picks the representative. Every value
- * is a bound parameter; a failure throws, like the ungrouped page.
+ * window count runs before DISTINCT ON picks the representative.
+ *
+ * `total` rides the page itself as `COUNT(*) OVER ()` over the grouped rows
+ * (window functions run before LIMIT), so the common case is one scan, not a
+ * second COUNT(DISTINCT). Only a page past the end — no row to carry the
+ * total — falls back to the distinct count, and only when it is not the first
+ * page (an empty first page is a total of 0). Both statements run under
+ * withStatementTimeout: a slow scan throws QueryTimeoutError. Every value is a
+ * bound parameter; any other failure throws, like the ungrouped page.
  */
 export async function pageThreadsInLane(
   query: LanePageQuery,
 ): Promise<{ rows: Array<{ id: string; threadCount: number }>; total: number }> {
   if (query.scope.kind === "unknown") return { rows: [], total: 0 };
   const from = laneFromSql(query);
-  const [rows, totals] = await Promise.all([
-    prisma.$queryRaw<Array<{ id: string; threadCount: number }>>(Prisma.sql`
+  return withStatementTimeout(async (tx) => {
+    const rows = await tx.$queryRaw<Array<{ id: string; threadCount: number; total: number }>>(
+      Prisma.sql`
       WITH grouped AS (
         SELECT DISTINCT ON (${THREAD_KEY})
                e."id" AS id,
@@ -276,17 +285,18 @@ export async function pageThreadsInLane(
         ${from}
         ORDER BY ${THREAD_KEY}, e."receivedAt" DESC, e."id" DESC
       )
-      SELECT id, "threadCount" FROM grouped
+      SELECT id, "threadCount", (COUNT(*) OVER ())::int AS total FROM grouped
       ORDER BY "receivedAt" DESC, id DESC
-      LIMIT ${query.take} OFFSET ${query.skip}`),
-    prisma.$queryRaw<Array<{ total: number }>>(Prisma.sql`
+      LIMIT ${query.take} OFFSET ${query.skip}`,
+    );
+    const page = rows.map((row) => ({ id: row.id, threadCount: Number(row.threadCount) }));
+    if (rows.length > 0) return { rows: page, total: Number(rows[0].total) };
+    if (query.skip === 0) return { rows: page, total: 0 };
+    const totals = await tx.$queryRaw<Array<{ total: number }>>(Prisma.sql`
       SELECT COUNT(DISTINCT ${THREAD_KEY})::int AS total
-      ${from}`),
-  ]);
-  return {
-    rows: rows.map((row) => ({ id: row.id, threadCount: Number(row.threadCount) })),
-    total: Number(totals[0]?.total ?? 0),
-  };
+      ${from}`);
+    return { rows: page, total: Number(totals[0]?.total ?? 0) };
+  });
 }
 
 /** What a list view is made of: the FROM / WHERE both the page and the reader's neighbours read. */
@@ -402,15 +412,17 @@ const LIVE_LANE_SQL = Prisma.sql`CASE ${Prisma.join(
  * so `threads` counts each thread once per lane even when its messages carry
  * different stored tiers of that lane (null + AUTO + QUEUE). Every value is a
  * bound parameter; the user id on both sides of the join is the ownership guard.
+ * The scan runs under withStatementTimeout: a slow one throws QueryTimeoutError.
  */
 export async function countEmailsByLane(
   userId: string,
   scope: InboxScope,
 ): Promise<EmailLaneCounts> {
   if (scope.kind === "unknown") return emptyLaneCounts();
-  const rows = await prisma.$queryRaw<
-    Array<{ tier: string | null; total: number; unread: number; threads: number }>
-  >(Prisma.sql`
+  const rows = await withStatementTimeout((tx) =>
+    tx.$queryRaw<
+      Array<{ tier: string | null; total: number; unread: number; threads: number }>
+    >(Prisma.sql`
     SELECT lane AS tier,
            COUNT(*)::int AS total,
            (COUNT(*) FILTER (WHERE "isRead" = false))::int AS unread,
@@ -423,6 +435,7 @@ export async function countEmailsByLane(
         ${inboxSql(scope)}
     ) folded
     GROUP BY lane
-  `);
+  `),
+  );
   return foldLaneCounts(rows);
 }

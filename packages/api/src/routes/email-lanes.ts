@@ -35,6 +35,7 @@ import { senderEmail } from "../notify/notification-format.js";
 import { LANG_QUERY_PROPERTY, readerLanguageFor } from "../notify/request-language.js";
 import { captureError } from "../sentry.js";
 import { darkRouteGate } from "./dark-route-gate.js";
+import { laneCountsUserLimit, replyIfQueryTimedOut } from "./lane-read-guards.js";
 
 const laneCountsQuerySchema = {
   type: "object",
@@ -167,10 +168,12 @@ export function registerEmailLaneRoutes(
     "/lane-counts",
     {
       onRequest: darkRouteGate(laneReadsEnabled),
+      // Per user after authentication, on top of the per-address limit below.
+      preHandler: laneCountsUserLimit(app),
       schema: { querystring: laneCountsQuerySchema },
       config: { rateLimit: LANE_COUNTS_RATE_LIMIT },
     },
-    async (request): Promise<EmailLaneCountsResponse> => {
+    async (request, reply): Promise<EmailLaneCountsResponse> => {
       const uid = getUserId(request);
       const { inbox } = request.query as { inbox?: string };
       // Same source rule as the list (hasAnyMailSource), so the control and the
@@ -181,7 +184,13 @@ export function registerEmailLaneRoutes(
       // A linked id is checked against its owner; one that is not the caller's
       // counts nothing.
       const scope = await resolveInboxScope(uid, inbox);
-      return { counts: await countEmailsByLane(uid, scope), source: "gmail" };
+      try {
+        return { counts: await countEmailsByLane(uid, scope), source: "gmail" };
+      } catch (err) {
+        // The count runs under a statement timeout: a slow scan is a retryable 503.
+        if (replyIfQueryTimedOut(err, reply)) return reply as never;
+        throw err;
+      }
     },
   );
 

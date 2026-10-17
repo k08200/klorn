@@ -10,9 +10,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const findMany = vi.hoisted(() => vi.fn(async () => [] as unknown[]));
 const captureError = vi.hoisted(() => vi.fn());
 const queryRaw = vi.hoisted(() => vi.fn(async (_sql: unknown) => [] as unknown[]));
+const executeRaw = vi.hoisted(() => vi.fn(async (_sql: unknown) => 0));
 
 vi.mock("../db.js", () => {
-  const prisma = { attentionItem: { findMany }, $queryRaw: queryRaw };
+  const prisma: Record<string, unknown> = {
+    attentionItem: { findMany },
+    $queryRaw: queryRaw,
+    $executeRaw: executeRaw,
+  };
+  // The lane reads run inside withStatementTimeout's interactive transaction.
+  prisma.$transaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma));
   return { prisma, db: prisma };
 });
 vi.mock("../sentry.js", () => ({ captureError }));
@@ -30,6 +37,7 @@ beforeEach(() => {
   findMany.mockResolvedValue([]);
   queryRaw.mockReset();
   queryRaw.mockResolvedValue([]);
+  executeRaw.mockClear();
   captureError.mockClear();
 });
 
@@ -128,15 +136,10 @@ describe("listLaneInfoByEmail", () => {
 
 describe("pageThreadsInLane", () => {
   it("groups the lane view by thread with DISTINCT ON + a window count, all values bound", async () => {
-    queryRaw.mockImplementation(async (sql: unknown) => {
-      const text = (sql as { strings: string[] }).strings.join("?");
-      return text.includes("COUNT(DISTINCT")
-        ? [{ total: 2 }]
-        : [
-            { id: "e9", threadCount: 3 },
-            { id: "e4", threadCount: 1 },
-          ];
-    });
+    queryRaw.mockResolvedValue([
+      { id: "e9", threadCount: 3, total: 57 },
+      { id: "e4", threadCount: 1, total: 57 },
+    ]);
     const page = await pageThreadsInLane({
       userId: "u1",
       lane: "QUEUE",
@@ -151,13 +154,19 @@ describe("pageThreadsInLane", () => {
         { id: "e9", threadCount: 3 },
         { id: "e4", threadCount: 1 },
       ],
-      total: 2,
+      total: 57,
     });
-    const [rows, total] = rawCalls();
+    // One statement: the thread total rides the page as a window over the groups.
+    const calls = rawCalls();
+    expect(calls).toHaveLength(1);
+    const [rows] = calls;
     expect(rows.text).toContain(`SELECT DISTINCT ON (${THREAD_KEY_SQL})`);
     expect(rows.text).toContain(`COUNT(*) OVER (PARTITION BY ${THREAD_KEY_SQL})`);
     expect(rows.text).toContain(`ORDER BY ${THREAD_KEY_SQL}, e."receivedAt" DESC, e."id" DESC`);
-    expect(rows.text).toContain(`ORDER BY "receivedAt" DESC, id DESC LIMIT ? OFFSET ?`);
+    expect(rows.text).toContain(
+      `SELECT id, "threadCount", (COUNT(*) OVER ())::int AS total FROM grouped ORDER BY "receivedAt" DESC, id DESC LIMIT ? OFFSET ?`,
+    );
+    expect(rows.text).not.toContain("COUNT(DISTINCT");
     // The same view as the ungrouped page: lane join with the owner on both sides,
     // the account scope, search and the handled exclusion all apply before grouping.
     expect(rows.text).toContain(`a."sourceId" = e."id" AND a."userId" = e."userId"`);
@@ -165,8 +174,68 @@ describe("pageThreadsInLane", () => {
     expect(rows.text).toContain(`h."status" = 'DISMISSED'`);
     expect(rows.values).toEqual(expect.arrayContaining(["u1", "li-1", 50]));
     expect(rows.text).not.toContain("u1");
+  });
+
+  it("runs under a 3s statement timeout set before the page query", async () => {
+    await pageThreadsInLane({
+      userId: "u1",
+      lane: "QUEUE",
+      scope: { kind: "all" },
+      skip: 0,
+      take: 50,
+    });
+    expect(executeRaw).toHaveBeenCalledTimes(1);
+    const set = executeRaw.mock.calls[0]?.[0] as { strings: string[] };
+    expect(set.strings.join("?")).toContain("SET LOCAL statement_timeout = 3000");
+    expect(executeRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      queryRaw.mock.invocationCallOrder[0] ?? 0,
+    );
+  });
+
+  it("an empty first page is a total of 0 without a second scan", async () => {
+    queryRaw.mockResolvedValue([]);
+    const page = await pageThreadsInLane({
+      userId: "u1",
+      lane: "PUSH",
+      scope: { kind: "all" },
+      skip: 0,
+      take: 50,
+    });
+    expect(page).toEqual({ rows: [], total: 0 });
+    expect(queryRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it("a page past the end still reports the real thread total (distinct-count fallback)", async () => {
+    queryRaw.mockImplementation(async (sql: unknown) => {
+      const text = (sql as { strings: string[] }).strings.join("?");
+      return text.includes("COUNT(DISTINCT") ? [{ total: 12 }] : [];
+    });
+    const page = await pageThreadsInLane({
+      userId: "u1",
+      lane: "QUEUE",
+      scope: { kind: "linked", id: "li-1" },
+      skip: 100,
+      take: 50,
+    });
+    expect(page).toEqual({ rows: [], total: 12 });
+    const [, total] = rawCalls();
     expect(total.text).toContain(`SELECT COUNT(DISTINCT ${THREAD_KEY_SQL})::int AS total`);
     expect(total.values).toEqual(expect.arrayContaining(["u1", "li-1"]));
+  });
+
+  it("a cancelled statement surfaces as QueryTimeoutError", async () => {
+    const { Prisma } = await import("@prisma/client");
+    const { QueryTimeoutError } = await import("../db-statement-timeout.js");
+    queryRaw.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError("canceling statement due to statement timeout", {
+        code: "P2010",
+        clientVersion: "test",
+        meta: { code: "57014" },
+      }),
+    );
+    await expect(
+      pageThreadsInLane({ userId: "u1", lane: "QUEUE", scope: { kind: "all" }, skip: 0, take: 50 }),
+    ).rejects.toBeInstanceOf(QueryTimeoutError);
   });
 
   it("ALL is the view with no lane join", async () => {

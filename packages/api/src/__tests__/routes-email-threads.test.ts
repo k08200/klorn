@@ -21,7 +21,7 @@ const linkedInboxFindFirst = vi.hoisted(() => vi.fn(async () => null as unknown)
 const automationConfigFindUnique = vi.hoisted(() => vi.fn(async () => null as unknown));
 
 vi.mock("../db.js", () => {
-  const prisma = {
+  const prisma: Record<string, unknown> = {
     userToken: { findFirst: userTokenFindFirst },
     emailMessage: { findMany: emailFindMany, count: emailCount },
     attentionItem: { findMany: attentionFindMany },
@@ -34,7 +34,10 @@ vi.mock("../db.js", () => {
       count: vi.fn(async () => 1),
       update: vi.fn(async () => ({})),
     },
+    $executeRaw: vi.fn(async () => 0),
   };
+  // The lane reads run inside withStatementTimeout's interactive transaction.
+  prisma.$transaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma));
   return { prisma, db: prisma };
 });
 vi.mock("../mail/email-attachments.js", () => ({
@@ -98,11 +101,14 @@ function rawCalls(): RawCall[] {
   });
 }
 
-/** Answer the grouped page's two queries: the thread page, then the thread total. */
+/**
+ * Answer the grouped page: the page carries the thread total on every row
+ * (COUNT(*) OVER ()); the distinct count only answers a page past the end.
+ */
 function threadPage(rows: Array<{ id: string; threadCount: number }>, total = rows.length) {
   queryRaw.mockImplementation(async (sql: unknown) => {
     const text = (sql as { strings: string[] }).strings.join("?");
-    return text.includes("COUNT(DISTINCT") ? [{ total }] : rows;
+    return text.includes("COUNT(DISTINCT") ? [{ total }] : rows.map((row) => ({ ...row, total }));
   });
 }
 
@@ -154,8 +160,12 @@ describe("GET /api/email?threads=1", () => {
     ]);
     expect(body.total).toBe(41);
 
-    const [page, total] = rawCalls();
+    // One statement: the total rides the page, no second COUNT(DISTINCT) scan.
+    const calls = rawCalls();
+    expect(calls).toHaveLength(1);
+    const [page] = calls;
     expect(page.text).toContain("SELECT DISTINCT ON (");
+    expect(page.text).toContain("(COUNT(*) OVER ())::int AS total");
     expect(page.text).toContain(
       `PARTITION BY (COALESCE(e."linkedInboxAccountId", '') || ':' || COALESCE(e."threadId", e."id"))`,
     );
@@ -164,7 +174,7 @@ describe("GET /api/email?threads=1", () => {
     );
     expect(page.values).toEqual(expect.arrayContaining(["user-1", 50, 0]));
     expect(page.text).not.toContain("user-1");
-    expect(total.text).toContain("COUNT(DISTINCT");
+    expect(page.text).not.toContain("COUNT(DISTINCT");
     // Rows are re-read by id, owner-scoped.
     expect(emailFindMany).toHaveBeenCalledWith({
       where: { userId: "user-1", id: { in: ["e9", "e4"] } },
@@ -348,6 +358,92 @@ describe("GET /api/email — tierReason on every row", () => {
       tierReason: "Deadline today",
       threadCount: 2,
     });
+    await app.close();
+  });
+});
+
+describe("GET /api/email?threads=1 — query hardening", () => {
+  it("a page past the end still reports the thread total", async () => {
+    threadPage([], 12);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/email?tier=QUEUE&threads=1&page=9",
+      headers: auth(),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().emails).toEqual([]);
+    expect(res.json().total).toBe(12);
+    await app.close();
+  });
+
+  it("runs under SET LOCAL statement_timeout and answers a timeout with a retryable 503", async () => {
+    const { Prisma } = await import("@prisma/client");
+    const { prisma } = (await import("../db.js")) as unknown as {
+      prisma: { $executeRaw: ReturnType<typeof vi.fn> };
+    };
+    prisma.$executeRaw.mockClear();
+    queryRaw.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError("canceling statement due to statement timeout", {
+        code: "P2010",
+        clientVersion: "test",
+        meta: { code: "57014" },
+      }),
+    );
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/email?tier=QUEUE&threads=1",
+      headers: auth(),
+    });
+    expect(res.statusCode).toBe(503);
+    expect(res.headers["retry-after"]).toBe("5");
+    expect(res.json()).toEqual({
+      error: expect.any(String),
+      code: "query-timeout",
+      retryable: true,
+    });
+    const set = prisma.$executeRaw.mock.calls[0]?.[0] as { strings: string[] };
+    expect(set.strings.join("?")).toContain("SET LOCAL statement_timeout = 3000");
+    await app.close();
+  });
+
+  it("any other failure is not dressed up as a timeout", async () => {
+    queryRaw.mockRejectedValue(new Error("connection refused"));
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/email?tier=QUEUE&threads=1",
+      headers: auth(),
+    });
+    expect(res.statusCode).toBe(500);
+    await app.close();
+  });
+
+  it("limits grouped requests per user (60/min) and leaves ungrouped ones to the route limit", async () => {
+    const rateLimit = (await import("@fastify/rate-limit")).default;
+    const { emailRoutes } = await import("../routes/email.js");
+    const app = Fastify();
+    await app.register(rateLimit, { max: 10_000, timeWindow: "1 minute" });
+    await app.register(emailRoutes, { prefix: "/api/email" });
+    threadPage([]);
+    const grouped = () =>
+      app.inject({ method: "GET", url: "/api/email?tier=QUEUE&threads=1", headers: auth() });
+    for (let i = 0; i < 60; i += 1) expect((await grouped()).statusCode).toBe(200);
+    const limited = await grouped();
+    expect(limited.statusCode).toBe(429);
+    expect(limited.json()).toMatchObject({ code: "rate-limited", retryable: true });
+    // The ungrouped list does not spend (or hit) the grouped allowance.
+    const plain = await app.inject({ method: "GET", url: "/api/email", headers: auth() });
+    expect(plain.statusCode).toBe(200);
+    // Another user has an allowance of their own.
+    const other = signToken({ userId: "user-2", email: "u2@e.com" });
+    const otherRes = await app.inject({
+      method: "GET",
+      url: "/api/email?tier=QUEUE&threads=1",
+      headers: { authorization: `Bearer ${other}` },
+    });
+    expect(otherRes.statusCode).toBe(200);
     await app.close();
   });
 });
