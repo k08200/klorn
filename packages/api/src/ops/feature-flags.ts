@@ -78,6 +78,8 @@ export function collectFeatureFlags(env: NodeJS.ProcessEnv = process.env): Flags
       // Read per call by config.ts objectStorageEnabled() (plan step D1). While
       // on, deleting an account deletes its stored objects first.
       OBJECT_STORAGE_ENABLED: dynamicFlag(env, "OBJECT_STORAGE_ENABLED"),
+      // Read per send by config.ts androidDataPushEnabled() (notify/push-device.ts).
+      ANDROID_DATA_PUSH_ENABLED: dynamicFlag(env, "ANDROID_DATA_PUSH_ENABLED"),
     },
     configured: {
       GMAIL_PUBSUB_TOPIC: Boolean(env.GMAIL_PUBSUB_TOPIC),

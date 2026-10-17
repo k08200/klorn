@@ -52,7 +52,6 @@
 "mail.dismiss.a11y" = "Descartar el mensaje de %@";
 "mail.changeTier" = "Mover de carril… (Klorn aprende)";
 "mail.changeTier.a11y" = "Cambiar el carril del mensaje de %1$@, actualmente %2$@";
-"mail.moveTo" = "Mover a %1$@%2$@";
 "mail.snoozePrefix" = "Posponer ";
 "mail.summarize" = "Resumen IA";
 "mail.summarizing" = "Resumiendo…";
@@ -724,3 +723,35 @@
 "today.freeTime.stale" = "Es posible que estas horas ya no estén actualizadas.";
 "today.freeTime.recheck" = "Volver a comprobar";
 "files.opensBrowser" = "Se abre en el navegador";
+
+/* Design detail pass (2026-10-16) */
+"mail.moveToLane" = "Mover de carril";
+"error.timeout" = "El servidor tardó demasiado en responder. Inténtalo de nuevo.";
+"auth.failed.nonce" = "No se pudo contactar con Klorn para iniciar sesión. Revisa tu conexión e inténtalo de nuevo.";
+"auth.failed.invalidNonce" = "No se reconoció la sesión de inicio. Inténtalo de nuevo.";
+"auth.failed.expired" = "El inicio de sesión tardó demasiado y caducó. Inténtalo de nuevo.";
+"auth.failed.timeout" = "Se agotó el tiempo esperando al navegador. Termina el inicio allí y vuelve a intentarlo.";
+"auth.failed.cancelled" = "Se canceló el inicio de sesión.";
+"proposals.approveSend" = "Aprobar y enviar";
+"proposals.sendsNow" = "Se envía de inmediato. Un correo enviado no se puede deshacer.";
+"proposals.runsNow" = "Se ejecuta en cuanto lo apruebas.";
+"tool.label.send_email" = "Enviar correo";
+"tool.label.draft_reply" = "Borrador de respuesta";
+"tool.label.reply_to_email" = "Responder correo";
+"tool.label.archive_email" = "Archivar correo";
+"tool.label.delete_email" = "Eliminar correo";
+"tool.label.mark_read" = "Marcar como leído";
+"tool.label.create_event" = "Crear evento";
+"tool.label.delete_event" = "Eliminar evento";
+"tool.label.schedule_meeting" = "Programar reunión";
+"tool.label.create_contact" = "Añadir contacto";
+"tool.label.update_contact" = "Actualizar contacto";
+"tool.label.delete_contact" = "Eliminar contacto";
+"tool.label.create_note" = "Crear nota";
+"tool.label.delete_note" = "Eliminar nota";
+"tool.label.create_task" = "Crear tarea";
+"tool.label.delete_task" = "Eliminar tarea";
+"tool.label.record_skill" = "Guardar habilidad";
+"tool.label.execute_skill" = "Ejecutar habilidad";
+"tool.label.classify_emails" = "Clasificar el correo en carriles";
+"tool.label.unknown" = "Acción";

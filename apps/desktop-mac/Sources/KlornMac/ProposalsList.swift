@@ -7,9 +7,10 @@ import SwiftUI
 /// only place to act on them was the web inbox.
 ///
 /// Deliberately plain — an approval screen is not somewhere to be clever. Each
-/// row states the action, what it targets, and why Klorn proposed it, and the
-/// two buttons are equally weighted: nudging someone toward Approve is exactly
-/// the wrong instinct on a screen whose whole job is informed consent.
+/// row states the action, what it targets, and why Klorn proposed it. Approve
+/// is the primary button, Decline the secondary, and a 12pt line under them
+/// says what Approve does (sends now / runs now), matching the web
+/// (audit M4): the weight follows the decision, the consequence is in words.
 struct ProposalsList: View {
     @Environment(AppModel.self) private var model
     /// The Assistant section calls this list "Approvals" (FD-1); the list
@@ -81,16 +82,21 @@ private struct ProposalRow: View {
             }
 
             HStack(spacing: Theme.s2) {
-                // Same visual weight both ways: this screen exists so the user
-                // decides, not so Klorn gets a yes.
-                Button(L("proposals.approve"), action: onApprove)
-                    .buttonStyle(.bordered).controlSize(.regular)
+                Button(action: onApprove) {
+                    Text(ProposalRules.approveTitle(action)).fontWeight(.semibold)
+                        .foregroundStyle(Theme.onAccentSolid)
+                }
+                .buttonStyle(.borderedProminent).tint(Theme.accentSolid).controlSize(.regular)
                 Button(L("proposals.decline"), action: onDecline)
                     .buttonStyle(.bordered).controlSize(.regular)
                 Spacer()
             }
             .disabled(busy)
             .padding(.top, 2)
+            Text(ProposalRules.consequence(action))
+                .font(.system(size: ProposalRules.captionSize))
+                .foregroundStyle(Theme.textDim)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(Theme.s3)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -99,5 +105,18 @@ private struct ProposalRow: View {
         .opacity(busy ? 0.6 : 1)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(L("proposals.row.a11y", action.title, action.targetLabel ?? ""))
+    }
+}
+
+/// The approval row's words, pure for the self-check.
+enum ProposalRules {
+    static let captionSize: CGFloat = 12
+
+    static func approveTitle(_ action: PendingActionsResponse.Action) -> String {
+        action.sendsMail ? L("proposals.approveSend") : L("proposals.approve")
+    }
+
+    static func consequence(_ action: PendingActionsResponse.Action) -> String {
+        action.sendsMail ? L("proposals.sendsNow") : L("proposals.runsNow")
     }
 }

@@ -52,7 +52,6 @@
 "mail.dismiss.a11y" = "忽略来自 %@ 的邮件";
 "mail.changeTier" = "移到其他通道…（Klorn 会学习）";
 "mail.changeTier.a11y" = "更改来自 %1$@ 的邮件通道，当前为 %2$@";
-"mail.moveTo" = "移到 %1$@%2$@";
 "mail.snoozePrefix" = "稍后提醒 ";
 "mail.summarize" = "AI 摘要";
 "mail.summarizing" = "正在摘要…";
@@ -724,3 +723,35 @@
 "today.freeTime.stale" = "这些时间可能已过时。";
 "today.freeTime.recheck" = "重新查看";
 "files.opensBrowser" = "在浏览器中打开";
+
+/* Design detail pass (2026-10-16) */
+"mail.moveToLane" = "移到其他通道";
+"error.timeout" = "服务器响应超时。请重试。";
+"auth.failed.nonce" = "无法连接 Klorn 开始登录。请检查网络后重试。";
+"auth.failed.invalidNonce" = "无法识别此登录会话。请重试。";
+"auth.failed.expired" = "登录耗时过长，已过期。请重试。";
+"auth.failed.timeout" = "等待浏览器超时。请在浏览器中完成登录后重试。";
+"auth.failed.cancelled" = "登录已取消。";
+"proposals.approveSend" = "批准并发送";
+"proposals.sendsNow" = "会立即发送。已发送的邮件无法撤回。";
+"proposals.runsNow" = "批准后立即执行。";
+"tool.label.send_email" = "发送邮件";
+"tool.label.draft_reply" = "起草回复";
+"tool.label.reply_to_email" = "回复邮件";
+"tool.label.archive_email" = "归档邮件";
+"tool.label.delete_email" = "删除邮件";
+"tool.label.mark_read" = "标为已读";
+"tool.label.create_event" = "创建日程";
+"tool.label.delete_event" = "删除日程";
+"tool.label.schedule_meeting" = "安排会议";
+"tool.label.create_contact" = "添加联系人";
+"tool.label.update_contact" = "更新联系人";
+"tool.label.delete_contact" = "删除联系人";
+"tool.label.create_note" = "创建笔记";
+"tool.label.delete_note" = "删除笔记";
+"tool.label.create_task" = "创建任务";
+"tool.label.delete_task" = "删除任务";
+"tool.label.record_skill" = "保存技能";
+"tool.label.execute_skill" = "运行技能";
+"tool.label.classify_emails" = "将邮件分类到通道";
+"tool.label.unknown" = "操作";

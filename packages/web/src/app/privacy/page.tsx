@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description: "How Klorn handles Gmail, Calendar, and account data during beta.",
 };
 
-const updatedAt = "August 26, 2026";
+const updatedAt = "October 17, 2026";
 
 /** Stable, URL-safe anchor id so the TOC links line up with each section. */
 function slug(title: string): string {
@@ -24,6 +24,7 @@ const SECTIONS = [
   "Google User Data",
   "Your Rights (GDPR / CCPA)",
   "AI Processing",
+  "Mobile App",
   "Retention and Deletion",
   "Security",
   "Contact",
@@ -135,6 +136,11 @@ export default function PrivacyPage() {
                 &ldquo;외부 메일 가져오기&rdquo; app password, plus the same categories of mail data
                 as above for that mailbox. That app password is not your Naver account password, and
                 it is encrypted at rest (AES-256-GCM) — never stored in plaintext.
+              </li>
+              <li>
+                If you use the Klorn mobile app: the push token your device issues when you allow
+                notifications, the device platform (iOS or Android), and, if you subscribe in the
+                app, the store&apos;s record of that subscription.
               </li>
               <li>
                 Usage, token, error, and delivery logs needed to operate and improve the beta.
@@ -271,6 +277,54 @@ export default function PrivacyPage() {
             </p>
           </Section>
 
+          <Section title="Mobile App">
+            <p>
+              The Klorn apps for iPhone, iPad and Android phones and tablets use the same account
+              and the same data as the web app. On top of that:
+            </p>
+            <ul className="list-disc space-y-2 pl-5">
+              <li>
+                <strong className="text-ink">Sign-in.</strong> Your session token is kept in the
+                device&apos;s secure storage (the iOS Keychain or the Android Keystore) and is
+                removed when you sign out.
+              </li>
+              <li>
+                <strong className="text-ink">On-device cache.</strong> So the app opens instantly
+                and works offline, the most recent screens you loaded — which can include mail
+                senders, subjects, previews and calendar events — are cached in the app&apos;s
+                private storage on the device for up to 24 hours. Signing out deletes this cache,
+                and so does uninstalling the app. On Android the app opts out of device backups; on
+                iOS the cache is treated like other app data under your device&apos;s backup
+                settings.
+              </li>
+              <li>
+                <strong className="text-ink">Notifications.</strong> If you allow notifications,
+                your device&apos;s push token is stored with your account. Notifications are
+                delivered through Google Firebase Cloud Messaging and Apple Push Notification
+                service, which receive the notification&apos;s title and text (this can include a
+                sender&apos;s name and a subject line) and the ids the app needs to open the right
+                message. They never receive your mailbox. You can turn notifications off in Klorn or
+                in your device settings at any time.
+              </li>
+              <li>
+                <strong className="text-ink">Subscriptions bought in the app.</strong> Purchases
+                made in the app are processed by the App Store or Google Play under their own terms;
+                Klorn never sees your card. RevenueCat, our subscription-management provider,
+                receives the store&apos;s purchase record and your Klorn account id so your plan is
+                applied to your account — never mail content. Manage or cancel the subscription in
+                your App Store or Google Play account settings.
+              </li>
+              <li>
+                <strong className="text-ink">Voice input.</strong> If you dictate to the assistant,
+                your device&apos;s own speech recognizer (Apple or Google) handles the audio; Klorn
+                receives only the resulting text.
+              </li>
+              <li>
+                The app contains no advertising and no third-party analytics or tracking SDKs.
+              </li>
+            </ul>
+          </Section>
+
           <Section title="Retention and Deletion">
             <p>
               We retain account and workspace data while your account is active. You can export your
@@ -321,8 +375,10 @@ export default function PrivacyPage() {
               Klorn. Paddle acts as merchant of record for paid subscriptions and receives only
               billing details — never mail content. Resend delivers Klorn&apos;s own transactional
               email (address verification, password reset, invitations) and therefore receives your
-              address and the contents of those messages — never your mailbox. Apple (APNs) delivers
-              push notifications to devices you register.
+              address and the contents of those messages — never your mailbox. Apple (APNs) and
+              Google (Firebase Cloud Messaging) deliver push notifications to devices you register.
+              RevenueCat manages subscriptions bought in the mobile app and receives only purchase
+              records and your Klorn account id.
             </p>
             <p>
               Because Klorn is a beta product, avoid connecting accounts that contain information

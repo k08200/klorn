@@ -27,17 +27,22 @@ enum Theme {
     /// contrast math without resolving an NSColor (see `laneComponents`).
     static let bgLight: RGBA = (0.980, 0.980, 0.980, 1)
     static let bgDark: RGBA = (0.039, 0.039, 0.045, 1)
-    /// The one interaction accent — CTAs, focus, selection, gauge. Everything
-    /// "choose me / chosen" speaks in this; the brand marks themselves are B&W.
-    /// Web v2 sky-500 `#0ea5e9`.
-    static let accent = Color(red: 0.055, green: 0.647, blue: 0.914)
+    /// The one interaction accent — CTAs, focus, selection, links, the
+    /// floating button. Everything "choose me / chosen" speaks in this; the
+    /// brand marks themselves are B&W. Since the design detail pass
+    /// (2026-10-16, audit X2) this IS `accentSolid` — #0369A1 light /
+    /// #38BDF8 dark, the web's one blue. The old sky-500 #0EA5E9 is retired:
+    /// it was 2.8:1 as text on the light canvas.
+    static var accent: Color { accentSolid }
     /// Deep end of the accent gradient (gauge fill etc.) — sky-600 `#0284c7`
     /// in light; brightens to sky-400 in the dark like the web's accent-deep.
     static let accentDeep = dyn(light: (0.008, 0.518, 0.780, 1), dark: (0.220, 0.741, 0.973, 1))
     /// The accent as a solid fill that carries text (productization plan §2:
     /// sky `#0369a1` light / `#38bdf8` dark), with the ink that sits on it.
     /// White on the light fill is 5.9:1, the dark ink on the dark fill 9.2:1.
-    static let accentSolid = dyn(light: (0.012, 0.412, 0.631, 1), dark: (0.220, 0.741, 0.973, 1))
+    static let accentSolid = dyn(light: accentSolidLight, dark: accentSolidDark)
+    static let accentSolidLight: RGBA = hex(0x0369A1)
+    static let accentSolidDark: RGBA = hex(0x38BDF8)
     static let onAccentSolid = dyn(light: (1, 1, 1, 1), dark: (0.039, 0.039, 0.045, 1))
     /// slate-200-grade hairline on the glass panel; faint white line in dark.
     static let line = dyn(light: (0, 0, 0, 0.08), dark: (1, 1, 1, 0.10))
@@ -70,15 +75,6 @@ enum Theme {
     /// dividers but fails WCAG 1.4.11 (≥3:1) for a control boundary; 0.35 ≈ 3:1
     /// on the white panel. Use only where a control edge must be perceivable.
     static let field = dyn(light: (0, 0, 0, 0.35), dark: (1, 1, 1, 0.45))
-
-    /// The web engagement graph's "you engage with this sender" pink — reused by
-    /// the reading pane's learned-engagement chip so desktop matches the web signal.
-    /// Muted from the web graph's hot pink: at full saturation it outshouts the
-    /// PUSH dot, and a learned-affinity hint must never look more urgent than
-    /// urgency itself. ~4.3:1 on the panel — below the 4.5:1 text floor, fine
-    /// for its actual use (chip icon + meter = non-text, 1.4.11 needs ≥3:1).
-    /// Don't set text in this color.
-    static let engage = Color(red: 0.776, green: 0.302, blue: 0.549)
 
     /// Per-lane palette — ONE palette on web and mac (FD-4,
     /// docs/design/productization-plan.md §2). Values are the web's
@@ -138,8 +134,7 @@ enum Theme {
     // hues, one per meaning, distinct from every lane hue so the two chip
     // families never read as one system. Light/dark pairs are tuned so the
     // chip TEXT (tint on a 13% tint wash over the panel) clears the 4.5:1
-    // small-text floor in both modes — engage stays banned for text
-    // (Theme.engage doc), which is why replied gets its own pink ramp.
+    // small-text floor in both modes.
     static func labelTint(_ filter: LabelFilter) -> Color {
         switch filter {
         // "No category label" is the honest meaning — it stays neutral.
@@ -181,7 +176,8 @@ enum Theme {
     static let surfaceRaisedDark: RGBA = (1, 1, 1, 0.06)
     static let surfaceHoverLight: RGBA = (0, 0, 0, 0.07)
     static let surfaceHoverDark: RGBA = (1, 1, 1, 0.10)
-    static let accentComponents: RGBA = (0.055, 0.647, 0.914, 1)
+    /// The accent as raw components (light), for the selected-row contrast math.
+    static let accentComponents: RGBA = accentSolidLight
     static let surfaceSelectedOpacity = 0.12
 
     /// Status signals (diagnostics dots). AppKit's system colors, so they
@@ -269,25 +265,19 @@ extension View {
     func hoverDim() -> some View { modifier(HoverDim()) }
 }
 
-/// The one primary-CTA treatment — web `glow-primary` equivalent: sky
-/// accent→accentDeep vertical gradient, white text, soft accent shadow.
-/// Every "the one thing to do here" button wears this; secondary actions
-/// stay `.bordered`/plain.
+/// The one primary-CTA treatment: a flat accentSolid fill with its own ink
+/// (no gradient, no glow — plan §2). Every "the one thing to do here"
+/// button wears this; secondary actions stay `.bordered`/plain.
 struct PrimaryButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(.white)
+            .foregroundStyle(Theme.onAccentSolid)
             .padding(.horizontal, 14)
             .padding(.vertical, 6)
-            .background(
-                LinearGradient(
-                    colors: [Theme.accent, Theme.accentDeep],
-                    startPoint: .top, endPoint: .bottom),
-                in: Capsule())
-            .shadow(color: Theme.accent.opacity(isEnabled ? 0.35 : 0), radius: 6, y: 2)
+            .background(Theme.accentSolid, in: Capsule())
             .opacity(isEnabled ? (configuration.isPressed ? 0.82 : 1.0) : 0.45)
             .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
     }

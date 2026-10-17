@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- No backups (store-pack/privacy-labels.md §5): the offline mail cache and
          the session are device-only and cleared on sign-out. allowBackup="false"
@@ -74,11 +75,30 @@
 
         <!-- FCM notification messages (no channel of their own) land on the PUSH
              channel the app creates at launch (src/platform/local-notify.ts,
-             importance high). Data-only messages are posted by the app itself,
-             with action buttons (src/push/android.ts). -->
+             importance high). Data-only messages are posted with action buttons
+             by the native service below — in every app state, a killed app
+             included — or, with the app on screen, shown as its in-app banner. -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="klorn_push" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_klorn" />
+
+        <!-- One FCM service per app: the plugin's own MessagingService is
+             replaced by KlornMessagingService, which extends it (token rotation
+             and every message that is not a Klorn data push reach the plugin
+             unchanged) and posts Klorn's data pushes natively. -->
+        <service
+            android:name="com.capacitorjs.plugins.pushnotifications.MessagingService"
+            tools:node="remove" />
+        <service
+            android:name=".push.KlornMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
 
         <provider
             android:name="androidx.core.content.FileProvider"

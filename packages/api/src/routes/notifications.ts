@@ -337,7 +337,11 @@ export async function notificationRoutes(app: FastifyInstance) {
   // row to the current user instead of duplicating it.
   app.post("/push/device-token/register", async (request, reply) => {
     const userId = getUserId(request);
-    const { token, platform } = request.body as { token?: string; platform?: string };
+    const { token, platform, dataMessages } = request.body as {
+      token?: string;
+      platform?: string;
+      dataMessages?: unknown;
+    };
 
     if (platform !== "android" && platform !== "ios") {
       return reply.code(400).send({ error: "platform must be 'android' or 'ios'" });
@@ -353,6 +357,13 @@ export async function notificationRoutes(app: FastifyInstance) {
     if (!token || !tokenOk) {
       return reply.code(400).send({ error: "Invalid device push token" });
     }
+    if (dataMessages !== undefined && typeof dataMessages !== "boolean") {
+      return reply.code(400).send({ error: "dataMessages must be a boolean" });
+    }
+    // Android builds that post data-only pushes themselves say so; anything else
+    // (iOS, an older Android build that omits the field) keeps notification messages.
+    // Re-registration overwrites it, so a downgraded build falls back on its next launch.
+    const posts = platform === "android" && dataMessages === true;
 
     // A token is a stable device identifier. If it currently belongs to another
     // user (shared/MDM device, or a client sending a stale token), the upsert
@@ -370,8 +381,8 @@ export async function notificationRoutes(app: FastifyInstance) {
 
     await prisma.devicePushToken.upsert({
       where: { token },
-      create: { userId, token, platform },
-      update: { userId, platform },
+      create: { userId, token, platform, dataMessages: posts },
+      update: { userId, platform, dataMessages: posts },
     });
     console.log(`[PUSH-DEVICE] Registered ${platform} token for user ${userId}`);
     return reply.code(201).send({ success: true });

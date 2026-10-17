@@ -127,6 +127,7 @@ struct FilesSection: View {
             }
             pager.padding(.vertical, Theme.s3)
         }
+        .padding(.trailing, FilesRules.trailingInset)
         // A stale list (a new search on its way) is shown, dimmed.
         .opacity(store.stale ? 0.6 : 1)
         .accessibilityElement(children: .contain)
