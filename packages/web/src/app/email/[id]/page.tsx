@@ -26,6 +26,13 @@ import { readerLeaveHref } from "./_v2/reader-model";
 import { ReaderV2 } from "./_v2/reader-v2";
 import { useReaderContext } from "./_v2/use-reader-context";
 import { useReaderTriage } from "./_v2/use-reader-triage";
+import {
+  ActionItemsPanel,
+  HEADER_OWNED_REPLY_CHOICES,
+  LabelFeedbackControl,
+  priorityLabel,
+  ReplyNeededFeedbackControl,
+} from "./analysis-controls";
 import { formatBytes, ProfileFact, senderName } from "./atoms";
 import { AttachmentAnalysis } from "./attachment-analysis";
 import { EmailActionToolbar, EmailReminderQuickActions, UndoActionBanner } from "./toolbar";
@@ -118,35 +125,6 @@ function getReminderDate(option: EmailReminderKey): Date {
   date.setDate(date.getDate() + 7);
   date.setHours(9, 0, 0, 0);
   return date;
-}
-
-interface LabelFeedback {
-  id: string;
-  emailId: string;
-  originalPriority: EmailPriority;
-  correctedPriority: EmailPriority;
-  reason: string | null;
-  signals: string[];
-  note: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-type ReplyNeededChoice =
-  | "needed"
-  | "today"
-  | "waiting_on_me"
-  | "waiting_on_them"
-  | "not_needed"
-  | "later"
-  | "done";
-
-interface ReplyNeededFeedback {
-  id: string;
-  choice: ReplyNeededChoice;
-  signal: string;
-  evidence: string | null;
-  createdAt: string;
 }
 
 interface ThreadDetail {
@@ -1936,11 +1914,8 @@ function KlornAnalysis({
       <section className="rounded-card border border-line bg-surface-panel p-4">
         <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
           <h2 className="text-label text-ink-mid">{t("emailDetail.analysis.title")}</h2>
-          <LabelFeedbackControl
-            emailId={email.id}
-            currentPriority={email.priority}
-            onPriorityChange={onPriorityChange}
-          />
+          {/* No "Wrong label" here: the header's label menu and "Move to lane"
+              correct the mail in v2. */}
           <SummarizeButton onSummarize={onSummarize} summarizing={summarizing} />
         </div>
         {email.summary && <p className="text-body text-ink">{email.summary}</p>}
@@ -1964,7 +1939,9 @@ function KlornAnalysis({
         {email.actionItems.length > 0 && (
           <ActionItemsPanel emailId={email.id} actionItems={email.actionItems} />
         )}
-        {email.needsReply && <ReplyNeededFeedbackControl emailId={email.id} />}
+        {email.needsReply && (
+          <ReplyNeededFeedbackControl emailId={email.id} omit={HEADER_OWNED_REPLY_CHOICES} />
+        )}
       </section>
     );
   }
@@ -2029,296 +2006,12 @@ function KlornAnalysis({
   );
 }
 
-function ActionItemsPanel({ emailId, actionItems }: { emailId: string; actionItems: string[] }) {
-  const { toast } = useToast();
-  const { t } = useT();
-  const [creating, setCreating] = useState<"all" | number | null>(null);
-  const [created, setCreated] = useState<Set<number>>(new Set());
-
-  async function createTask(index: number) {
-    if (created.has(index) || creating !== null) return;
-    setCreating(index);
-    try {
-      await apiFetch(`/api/email/${emailId}/create-tasks`, {
-        method: "POST",
-        body: JSON.stringify({ indices: [index] }),
-      });
-      setCreated((prev) => new Set([...prev, index]));
-      toast(t("emailDetail.actionItems.taskCreated"), "success");
-    } catch {
-      toast(t("emailDetail.actionItems.taskCreateFailed"), "error");
-    } finally {
-      setCreating(null);
-    }
-  }
-
-  async function createAll() {
-    if (creating !== null) return;
-    setCreating("all");
-    try {
-      const uncreatedIndices = actionItems.map((_, i) => i).filter((i) => !created.has(i));
-      await apiFetch(`/api/email/${emailId}/create-tasks`, {
-        method: "POST",
-        body: JSON.stringify({ indices: uncreatedIndices }),
-      });
-      setCreated(new Set(actionItems.map((_, i) => i)));
-      toast(
-        t(
-          uncreatedIndices.length > 1
-            ? "emailDetail.actionItems.taskCreatedMany"
-            : "emailDetail.actionItems.taskCreatedOne",
-          { count: String(uncreatedIndices.length) },
-        ),
-        "success",
-      );
-    } catch {
-      toast(t("emailDetail.actionItems.tasksCreateFailed"), "error");
-    } finally {
-      setCreating(null);
-    }
-  }
-
-  const allCreated = created.size >= actionItems.length;
-
-  return (
-    <div className="mt-3">
-      <div className="flex items-center justify-between mb-1.5">
-        <p className="text-caption font-medium uppercase tracking-wider text-ink-dim">
-          {t("emailDetail.actionItems.title")}
-        </p>
-        {!allCreated && (
-          <Button variant="chip" onClick={createAll} disabled={creating !== null}>
-            {creating === "all"
-              ? t("emailDetail.actionItems.creating")
-              : t("emailDetail.actionItems.createAll")}
-          </Button>
-        )}
-      </div>
-      <ul className="space-y-1">
-        {actionItems.map((a, i) => (
-          <li key={i} className="flex items-center gap-2 text-xs">
-            <span className={created.has(i) ? "text-state-ok-ink" : "text-accent-deep"}>
-              {created.has(i) ? "✓" : "□"}
-            </span>
-            <span
-              className={`flex-1 ${created.has(i) ? "text-ink-dim line-through" : "text-ink-muted"}`}
-            >
-              {a}
-            </span>
-            {!created.has(i) && (
-              <Button variant="chip" onClick={() => createTask(i)} disabled={creating !== null}>
-                {creating === i ? "…" : t("emailDetail.actionItems.addTask")}
-              </Button>
-            )}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
 function ReplyNeededPill() {
   const { t } = useT();
   return (
     <span className="shrink-0 rounded-md bg-accent/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-accent-deeper ring-1 ring-inset ring-accent/20">
       {t("mail.filterReplyNeeded")}
     </span>
-  );
-}
-
-/** `t` is passed in rather than called via useT() here — this is a plain
- * helper, not a component, so it cannot use hooks itself. */
-function priorityLabel(t: (key: string) => string, priority: EmailPriority): string {
-  const labels: Record<EmailPriority, string> = {
-    URGENT: t("emailDetail.priority.urgent"),
-    NORMAL: t("emailDetail.priority.normal"),
-    LOW: t("emailDetail.priority.low"),
-  };
-  return labels[priority];
-}
-
-function LabelFeedbackControl({
-  emailId,
-  currentPriority,
-  onPriorityChange,
-}: {
-  emailId: string;
-  currentPriority: EmailPriority;
-  onPriorityChange: (priority: EmailPriority) => void;
-}) {
-  const { t } = useT();
-  const [feedback, setFeedback] = useState<LabelFeedback | null>(null);
-  const [open, setOpen] = useState(false);
-  const [submitting, setSubmitting] = useState<EmailPriority | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    apiFetch<{ feedback: LabelFeedback | null }>(`/api/email/${emailId}/feedback`)
-      .then((data) => {
-        if (!cancelled) setFeedback(data.feedback);
-      })
-      .catch((err) => captureClientError(err, { scope: "email.feedback.load", emailId }));
-    return () => {
-      cancelled = true;
-    };
-  }, [emailId]);
-
-  const submit = async (correctedPriority: EmailPriority) => {
-    if (submitting) return;
-    setSubmitting(correctedPriority);
-    setError(null);
-    try {
-      const data = await apiFetch<{ feedback: LabelFeedback }>(`/api/email/${emailId}/feedback`, {
-        method: "POST",
-        body: JSON.stringify({ correctedPriority }),
-      });
-      setFeedback(data.feedback);
-      onPriorityChange(correctedPriority);
-      setOpen(false);
-    } catch (err) {
-      captureClientError(err, { scope: "email.feedback.submit", emailId, correctedPriority });
-      setError(serverErrorMessage(err, t("emailDetail.error.reportLabel")));
-    } finally {
-      setSubmitting(null);
-    }
-  };
-
-  if (feedback) {
-    return (
-      <span className="inline-flex items-center gap-1 text-caption text-accent-deeper">
-        <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-        {t("emailDetail.feedback.reported", {
-          original: priorityLabel(t, feedback.originalPriority),
-          corrected: priorityLabel(t, feedback.correctedPriority),
-        })}
-      </span>
-    );
-  }
-
-  if (!open) {
-    return (
-      <Button variant="chip" onClick={() => setOpen(true)}>
-        {t("emailDetail.feedback.wrongLabel")}
-      </Button>
-    );
-  }
-
-  const options: EmailPriority[] = (["URGENT", "NORMAL", "LOW"] as const).filter(
-    (p) => p !== currentPriority,
-  );
-
-  return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <span className="text-caption text-ink-dim">{t("emailDetail.feedback.actualPriority")}</span>
-      {options.map((p) => (
-        <button
-          key={p}
-          type="button"
-          onClick={() => submit(p)}
-          disabled={!!submitting}
-          className="ease-strong rounded-md border border-line bg-surface-panel/70 px-1.5 py-0.5 text-caption font-medium text-ink-soft transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50 focus-ring"
-        >
-          {submitting === p ? "..." : priorityLabel(t, p)}
-        </button>
-      ))}
-      <button
-        type="button"
-        onClick={() => {
-          setOpen(false);
-          setError(null);
-        }}
-        disabled={!!submitting}
-        className="text-caption text-ink-dim hover:text-ink-mid focus-ring"
-      >
-        {t("common.cancel")}
-      </button>
-      {error && <span className="text-caption text-state-danger-ink">{error}</span>}
-    </div>
-  );
-}
-
-function ReplyNeededFeedbackControl({ emailId }: { emailId: string }) {
-  const { t } = useT();
-  const [feedback, setFeedback] = useState<ReplyNeededFeedback | null>(null);
-  const [submitting, setSubmitting] = useState<ReplyNeededChoice | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    apiFetch<{ feedback: ReplyNeededFeedback | null }>(
-      `/api/email/${emailId}/reply-needed/feedback`,
-    )
-      .then((data) => {
-        if (!cancelled) setFeedback(data.feedback);
-      })
-      .catch((err) =>
-        captureClientError(err, { scope: "email.reply-needed-feedback.load", emailId }),
-      );
-    return () => {
-      cancelled = true;
-    };
-  }, [emailId]);
-
-  const submit = async (choice: ReplyNeededChoice) => {
-    if (submitting) return;
-    setSubmitting(choice);
-    setError(null);
-    try {
-      const data = await apiFetch<{
-        feedback: { emailId: string; choice: ReplyNeededChoice; signal: string };
-      }>(`/api/email/${emailId}/reply-needed/feedback`, {
-        method: "POST",
-        body: JSON.stringify({ choice }),
-      });
-      setFeedback({
-        id: `${emailId}-${data.feedback.choice}`,
-        choice: data.feedback.choice,
-        signal: data.feedback.signal,
-        evidence: null,
-        createdAt: new Date().toISOString(),
-      });
-    } catch (err) {
-      captureClientError(err, { scope: "email.reply-needed-feedback.submit", emailId, choice });
-      setError(serverErrorMessage(err, t("emailDetail.error.saveFeedback")));
-    } finally {
-      setSubmitting(null);
-    }
-  };
-
-  const options: Array<{ choice: ReplyNeededChoice; label: string }> = [
-    { choice: "today", label: t("emailDetail.replyNeeded.today") },
-    { choice: "waiting_on_me", label: t("emailDetail.replyNeeded.onMe") },
-    { choice: "waiting_on_them", label: t("emailDetail.replyNeeded.waitingOnThem") },
-    { choice: "needed", label: t("emailDetail.replyNeeded.needed") },
-    { choice: "not_needed", label: t("emailDetail.replyNeeded.notNeeded") },
-    { choice: "later", label: t("emailDetail.replyNeeded.later") },
-    { choice: "done", label: t("emailDetail.replyNeeded.done") },
-  ];
-
-  return (
-    <div className="mt-4 border-t border-line-soft pt-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-caption text-ink-dim">
-          {t("emailDetail.replyNeeded.judgmentLabel")}
-        </span>
-        {options.map((option) => {
-          const selected = feedback?.choice === option.choice;
-          return (
-            <Button
-              key={option.choice}
-              variant="chip"
-              onClick={() => submit(option.choice)}
-              aria-pressed={selected}
-              disabled={!!submitting}
-            >
-              {submitting === option.choice ? "..." : option.label}
-            </Button>
-          );
-        })}
-        {error && <span className="text-caption text-state-danger-ink">{error}</span>}
-      </div>
-    </div>
   );
 }
 

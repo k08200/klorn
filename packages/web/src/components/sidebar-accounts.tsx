@@ -5,7 +5,8 @@
  * every connected source with a health dot. It is a status list, not a
  * switcher (FD-2) — each row opens Settings → Accounts, where a source is
  * reconnected or added. Health is stated in words for assistive tech and
- * spelled out visibly whenever an account needs attention.
+ * spelled out visibly whenever an account needs attention. On a wide screen
+ * this is the only place account health is shown (Today's header defers to it).
  */
 
 import Link from "next/link";
@@ -13,6 +14,7 @@ import type { AccountHealth } from "../lib/connected-accounts";
 import { useT } from "../lib/i18n";
 import { sourceGlyph } from "../lib/source-provider";
 import { useConnectedAccounts } from "../lib/use-connected-accounts";
+import Button from "./ui/button";
 
 const ACCOUNTS_HREF = "/settings/accounts";
 
@@ -30,10 +32,26 @@ const HEALTH_DOT: Record<AccountHealth, string> = {
 
 export default function SidebarAccounts() {
   const { t } = useT();
-  const { accounts, loading, failed } = useConnectedAccounts();
-  // Nothing to state while loading or after a failed read: Today's own strip
-  // carries the retry, and the rail never shows a guess.
-  if (loading || failed) return null;
+  const { accounts, loading, failed, retry } = useConnectedAccounts();
+  // Nothing to state while loading: the rail never shows a guess.
+  if (loading) return null;
+  // This group is where account health lives on a wide screen (Today's header
+  // no longer repeats it), so a failed read says so and offers the retry.
+  if (failed) {
+    return (
+      <section aria-labelledby="sidebar-accounts" className="px-2 pt-6">
+        <h2 id="sidebar-accounts" className="px-3 pb-1 text-caption font-medium text-ink-muted">
+          {t("nav.v2.accounts")}
+        </h2>
+        <div role="alert" className="flex flex-col items-start gap-1 px-3">
+          <p className="text-caption text-state-danger-ink">{t("today.accounts.error")}</p>
+          <Button variant="chip" onClick={retry}>
+            {t("today.retry")}
+          </Button>
+        </div>
+      </section>
+    );
+  }
   return (
     <section aria-labelledby="sidebar-accounts" className="px-2 pt-6">
       <h2 id="sidebar-accounts" className="px-3 pb-1 text-caption font-medium text-ink-muted">
