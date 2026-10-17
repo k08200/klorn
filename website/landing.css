@@ -419,3 +419,42 @@ html[lang=ko] h2,html[lang=ja] h2,html[lang=zh] h2{max-width:22ch}
 /* X4: Korean headings track at -0.02em, not the Latin -0.04/-0.05em. Last in
    the file so it wins over the shared CJK heading rules above. */
 html[lang=ko] :is(h1,h2,h3,.rule,.ser){letter-spacing:-.02em}
+
+/* Text over the sky: the mobile crop and the flipped final sky are darker
+   than the hero's top, so secondary text there uses a deeper grey (AA). */
+.final .meta{color:#2a313a}
+@media (max-width:640px){.hero .lead{color:#2a313a}}
+
+/* ── Dark (L2) ───────────────────────────────────── */
+/* Follows the system setting. Neutral #0A0A0B canvas, not navy; the accent
+   moves to #38BDF8 for text. App captures stay light, in the same frame
+   with a deeper shadow, so they read as windows on a dark desk. */
+@media (prefers-color-scheme:dark){
+  :root{color-scheme:dark;
+    --ink:#f4f4f6; --ink-2:#a2a2ad; --ink-3:#8b8b96;
+    --paper:#0a0a0b; --card:#141416; --wash:#141416;
+    --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.14);
+    --accent:#38bdf8; --accent-fill:#38bdf8;
+    --frame:0 0 0 1px rgba(255,255,255,.10),0 1px 2px rgba(0,0,0,.4),0 12px 32px -8px rgba(0,0,0,.6);
+    --frame-hero:0 40px 80px -24px rgba(0,0,0,.7);
+    --push:#fb7185; --push-ink:#fda4af; --meeting:#818cf8; --meeting-ink:#a5b4fc;
+    --queue:#f59e0b; --queue-ink:#fcd34d; --info:#22d3ee; --info-ink:#67e8f9;
+    --silent:#a8a29e; --silent-ink:#d6d3d1}
+  :focus-visible{box-shadow:0 0 0 6px rgba(10,10,11,.85)}
+  .skip{color:#0a0a0b}
+  .hero-sky::after{content:"";position:absolute;inset:0;
+    background:linear-gradient(180deg,rgba(10,10,11,.55) 0%,rgba(10,10,11,.85) 100%)}
+  /* Over the dimmed sky the secondary grey drops below AA; lift it. */
+  .hero .lead,.hero .meta,.final .meta{color:#e4e4e9}
+  .nav-cta{color:#0a0a0b}
+  .btn-1{color:#0a0a0b;box-shadow:0 18px 40px -20px rgba(0,0,0,.9)}
+  .btn-1:hover{box-shadow:0 24px 48px -20px rgba(0,0,0,.9)}
+  .btn-2{background:rgba(255,255,255,.06);color:var(--ink)}
+  .btn-2:hover{background:rgba(255,255,255,.12)}
+  .st-live{background:rgba(34,197,94,.14);color:#86efac;border-color:rgba(34,197,94,.3)}
+  .st-beta{background:rgba(234,179,8,.14);color:#fde68a;border-color:rgba(234,179,8,.3)}
+  .price.feat{background:#1c1c20;color:var(--ink);box-shadow:0 0 0 1px rgba(56,189,248,.45),0 24px 48px -20px rgba(0,0,0,.8)}
+  .price.feat .btn-1{background:#f4f4f6;color:#0a0a0b}
+  .mlist-card{background:var(--card)}
+  .mlist ul + .mlist-head,.mrow{border-top-color:rgba(255,255,255,.08)}
+}
