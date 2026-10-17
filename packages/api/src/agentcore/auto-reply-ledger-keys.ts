@@ -13,12 +13,11 @@
 
 /** Every claim written today starts with this (rule and auto-mode alike). */
 export const REPLY_LEDGER_PREFIX = "auto-reply:";
-const CLAIM_PREFIX = REPLY_LEDGER_PREFIX;
 const LEGACY_AUTO_MODE_PREFIX = "auto-mode-reply:";
 
 /** The key new claims are written under (both paths). */
 export function replyLedgerKey(gmailId: string): string {
-  return `${CLAIM_PREFIX}${gmailId}`;
+  return `${REPLY_LEDGER_PREFIX}${gmailId}`;
 }
 
 /** Every key that reads as "an unattended reply already claimed this mail". */
@@ -36,7 +35,7 @@ export const HIDDEN_CLAIM_TYPE = "claim";
 /** Prisma filter matching claim rows in any state (sent, failed, hidden). */
 export const REPLY_CLAIM_ROWS = {
   OR: [
-    { dedupeKey: { startsWith: CLAIM_PREFIX } },
+    { dedupeKey: { startsWith: REPLY_LEDGER_PREFIX } },
     { dedupeKey: { startsWith: LEGACY_AUTO_MODE_PREFIX } },
   ],
 };

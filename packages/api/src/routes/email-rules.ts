@@ -169,6 +169,10 @@ export async function registerEmailRulesRoutes(app: FastifyInstance) {
       const shapeError = pinRuleShapeError(conditions, actionValue);
       if (shapeError) return { error: shapeError };
     }
+    // An auto-reply sends with no per-message approval: it must name its senders.
+    if ((actionType || "AUTO_REPLY") === "AUTO_REPLY" && !conditions.from?.length) {
+      return { error: "An auto-reply rule needs at least one sender address or domain." };
+    }
 
     const rule = await prisma.emailRule.create({
       data: {

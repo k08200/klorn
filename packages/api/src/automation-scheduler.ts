@@ -14,7 +14,6 @@ import { findAutoModeCandidates } from "./agentcore/auto-mode-candidates.js";
 import { recipientFromHeader, runAutoModeSweep } from "./agentcore/auto-mode-sweep.js";
 import {
   HIDDEN_CLAIM_TYPE,
-  REPLY_LEDGER_PREFIX,
   replyLedgerKey,
   replyLedgerKeys,
 } from "./agentcore/auto-reply-ledger-keys.js";
@@ -24,6 +23,7 @@ import {
   sendAutoReplyViaFloor,
 } from "./agentcore/auto-reply-send.js";
 import { runProactiveActions } from "./agentcore/proactive-actions.js";
+import { unattendedReplyBlock } from "./agentcore/unattended-reply-guards.js";
 import { syncsEveryLinkedInbox } from "./billing/mail-sync-scope.js";
 import { isEntitled, planHasFeature } from "./billing/stripe.js";
 import {
@@ -48,7 +48,6 @@ import {
   sweepOverrideUndoSnapshots,
 } from "./judge/attention-override.js";
 import { sweepFallbackRejudge } from "./judge/fallback-rejudge.js";
-import { isAutomatedSender } from "./judge/keyword-policy.js";
 import {
   effectiveAutoReplyGuideline,
   normalizeAttentionMode,
@@ -720,40 +719,11 @@ export async function deliverRuleAutoReply(
 }
 
 /**
- * Unattended replies a user's rules may send per UTC day. A rule sends with no
- * per-message approval, so a burst of matching mail (or two auto-responders
- * answering each other) must not turn into an unbounded stream of sends.
- * Counts rule and auto-mode claims alike: both write the same ledger key.
- */
-export const MAX_RULE_AUTO_REPLIES_PER_DAY = 20;
-
-async function unattendedRepliesToday(userId: string): Promise<number> {
-  const now = new Date();
-  const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  return prisma.notification.count({
-    where: { userId, dedupeKey: { startsWith: REPLY_LEDGER_PREFIX }, createdAt: { gte: dayStart } },
-  });
-}
-
-/**
- * RFC 3834: no automatic reply to machine-generated or list mail. Replying to a
- * no-reply or notification sender is useless at best and an auto-responder
- * loop at worst; replying to a list mails everyone on it.
- */
-function isMachineOrListMail(email: {
-  from: string;
-  listUnsubscribeUrl?: string | null;
-  listUnsubscribeMailto?: string | null;
-}): boolean {
-  if (email.listUnsubscribeUrl || email.listUnsubscribeMailto) return true;
-  return isAutomatedSender(email.from);
-}
-
-/**
  * One AUTO_REPLY rule match, in the order that spends nothing until it must:
- * recipient check (no LLM spend on a crafted From) → no machine or list mail →
- * the daily cap → draft → source-row re-check → claim + send
- * (deliverRuleAutoReply).
+ * recipient check (no LLM spend on a crafted From) → the shared unattended
+ * guards (machine/list mail, own address, daily cap:
+ * agentcore/unattended-reply-guards.ts) → draft → source-row re-check →
+ * claim + send (deliverRuleAutoReply).
  *
  * The draft took real seconds, so the source row is re-checked before sending.
  * A row deleted mid-window (user trashed it, reconcile pruned it) would make
@@ -783,14 +753,9 @@ export async function runRuleAutoReply(
     );
     return;
   }
-  if (isMachineOrListMail(email)) {
-    console.log(`[AUTOMATION] auto-reply skipped — machine or list mail ${email.gmailId}`);
-    return;
-  }
-  if ((await unattendedRepliesToday(userId)) >= MAX_RULE_AUTO_REPLIES_PER_DAY) {
-    console.warn(
-      `[AUTOMATION] auto-reply skipped — daily cap of ${MAX_RULE_AUTO_REPLIES_PER_DAY} reached (user ${userId})`,
-    );
+  const blocked = await unattendedReplyBlock(userId, email);
+  if (blocked) {
+    console.log(`[AUTOMATION] auto-reply skipped (${blocked}) — ${email.gmailId} (user ${userId})`);
     return;
   }
   const replyBody = await deps.draftReply();
@@ -1695,10 +1660,19 @@ async function runUserCycle(
             findEmail: (userId, emailRowId) =>
               prisma.emailMessage.findFirst({
                 where: { id: emailRowId, userId },
-                select: { id: true, gmailId: true, from: true, subject: true, body: true },
+                select: {
+                  id: true,
+                  gmailId: true,
+                  from: true,
+                  subject: true,
+                  body: true,
+                  listUnsubscribeUrl: true,
+                  listUnsubscribeMailto: true,
+                },
               }),
             alreadyReplied: hasAutoReplyClaim,
             isSingleRecipient,
+            replyBlocked: unattendedReplyBlock,
             draftReply: generateGuidelineReply,
             emailStillExists: async (emailRowId) =>
               (await prisma.emailMessage.findFirst({

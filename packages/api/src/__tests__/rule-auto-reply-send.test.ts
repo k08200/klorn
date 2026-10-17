@@ -126,6 +126,8 @@ vi.mock("../db.js", () => ({
         },
       ),
     },
+    user: { findUnique: vi.fn(async () => ({ email: "owner@klorn.example" })) },
+    linkedInboxAccount: { findMany: vi.fn(async () => []) },
     attentionItem: {
       deleteMany: vi.fn(async () => ({ count: 0 })),
       updateMany: vi.fn(async () => ({ count: 0 })),
@@ -141,12 +143,12 @@ vi.mock("../sentry.js", async (importOriginal) => ({
 
 import { runAutoModeSweep } from "../agentcore/auto-mode-sweep.js";
 import { AutoReplyNotSentError } from "../agentcore/auto-reply-send.js";
+import { MAX_UNATTENDED_REPLIES_PER_DAY } from "../agentcore/unattended-reply-guards.js";
 import {
   claimAutoReplyLedger,
   deliverRuleAutoReply,
   ensureAutoModeReplyNotification,
   hasAutoReplyClaim,
-  MAX_RULE_AUTO_REPLIES_PER_DAY,
   markAutoModeLedgerFailed,
   runRuleAutoReply,
 } from "../automation-scheduler.js";
@@ -477,6 +479,7 @@ describe("one lock for both paths: auto-mode and the rule sweep claim the SAME k
       findEmail: async () => ({ ...email, body: "hi" }),
       alreadyReplied: hasAutoReplyClaim, // production wiring
       isSingleRecipient: () => true,
+      replyBlocked: async () => null,
       draftReply: async () => "a fine reply",
       emailStillExists: async () => true,
       writeLedger: ensureAutoModeReplyNotification, // production wiring
@@ -671,10 +674,10 @@ describe("runRuleAutoReply — validate before any LLM spend", () => {
     expect(executeToolCall).not.toHaveBeenCalled();
   });
 
-  it("stops at MAX_RULE_AUTO_REPLIES_PER_DAY unattended replies a UTC day", async () => {
+  it("stops at MAX_UNATTENDED_REPLIES_PER_DAY unattended replies a UTC day", async () => {
     const today = new Date();
     const yesterday = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
-    for (let i = 0; i < MAX_RULE_AUTO_REPLIES_PER_DAY; i++) {
+    for (let i = 0; i < MAX_UNATTENDED_REPLIES_PER_DAY; i++) {
       store.rows.push({
         id: `old-${i}`,
         userId: USER,

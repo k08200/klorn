@@ -49,3 +49,23 @@ describe("ruleSenderMatches", () => {
     expect(ruleSenderMatches(["other.org", " Company.com "], "x@company.com")).toBe(true);
   });
 });
+
+describe("ruleSenderMatches — review hardening", () => {
+  it('does not treat a dotless word as a domain ("com" is not every .com sender)', () => {
+    expect(ruleSenderMatches(["com"], "x@company.com")).toBe(false);
+  });
+
+  it("only matches a plain single address", () => {
+    expect(ruleSenderMatches(["company.com"], "attacker@evil.com, x@company.com")).toBe(false);
+    expect(ruleSenderMatches(["company.com"], '"a b"@company.com')).toBe(false);
+  });
+
+  it("refuses a non-ASCII address that lowercases into the pattern", () => {
+    // Kelvin sign: lowercases to "k", but the reply would go to the unfolded form.
+    expect(ruleSenderMatches(["koss@company.com"], "Koss@company.com")).toBe(false);
+  });
+
+  it("does not let a sub-address stand in for the exact address", () => {
+    expect(ruleSenderMatches(["boss@company.com"], "boss+x@company.com")).toBe(false);
+  });
+});
