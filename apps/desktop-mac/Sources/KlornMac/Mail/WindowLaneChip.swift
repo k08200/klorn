@@ -29,11 +29,11 @@ struct WindowLaneChip: View {
         .accessibilityLabel(tier.label)
     }
 
-    static let height: CGFloat = 22
-    static let horizontalPadding: CGFloat = 8
-    static let radius: CGFloat = Theme.Radius.sm
-    static let dot: CGFloat = 6
-    static let gap: CGFloat = 6
+    nonisolated static let height: CGFloat = 22
+    nonisolated static let horizontalPadding: CGFloat = 8
+    nonisolated static let radius: CGFloat = Theme.Radius.sm
+    nonisolated static let dot: CGFloat = 6
+    nonisolated static let gap: CGFloat = 6
     nonisolated static let fontSize: CGFloat = 12
 }
 
