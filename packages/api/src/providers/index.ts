@@ -26,6 +26,11 @@ import type {
   ChatCompletionCreateParamsStreaming,
 } from "openai/resources/chat/completions";
 import {
+  CLOUD_LLM_TIMEOUT_MS,
+  LOCAL_LLM_TIMEOUT_MS,
+  llmRequestTimeoutMs,
+} from "../llm/llm-timeout.js";
+import {
   createCompletionNonStreaming as geminiNonStreaming,
   createCompletionStreaming as geminiStreaming,
 } from "./gemini-native.js";
@@ -93,6 +98,7 @@ function buildOpenRouter(
   const client = new OpenAISDK({
     apiKey,
     baseURL: "https://openrouter.ai/api/v1",
+    timeout: llmRequestTimeoutMs(CLOUD_LLM_TIMEOUT_MS),
     ...(maxRetries !== undefined ? { maxRetries } : {}),
   });
   return {
@@ -122,6 +128,7 @@ function buildOpenAI(apiKey: string, scope: string, maxRetries?: number): Provid
   const client = new OpenAISDK({
     apiKey,
     baseURL: "https://api.openai.com/v1",
+    timeout: llmRequestTimeoutMs(CLOUD_LLM_TIMEOUT_MS),
     ...(maxRetries !== undefined ? { maxRetries } : {}),
   });
   return {
@@ -159,7 +166,11 @@ function buildOpenAICompat(): Provider | null {
   // a non-empty key string.
   const apiKey = process.env.OPENAI_COMPAT_API_KEY || "local";
   const defaultModel = process.env.OPENAI_COMPAT_MODEL || "qwen3:8b";
-  const client = new OpenAISDK({ apiKey, baseURL: baseUrl });
+  const client = new OpenAISDK({
+    apiKey,
+    baseURL: baseUrl,
+    timeout: llmRequestTimeoutMs(LOCAL_LLM_TIMEOUT_MS),
+  });
   return {
     name: "openai-compat",
     quotaKey: "openai-compat:env",
