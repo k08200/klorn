@@ -1,7 +1,9 @@
 // Renders the landing's macOS notification banner (demo data) to
-// website/media/app-2026-10/notification-light-{396,792}.webp.
-// A drawn HTML/CSS banner, not a screenshot: no app is launched.
-// Usage (after `pnpm install`): node scripts/site-banner/render.mjs
+// website/media/app-2026-10/notification-{light,dark,ko-light,ko-dark}-{396,792}.webp.
+// A drawn HTML/CSS banner, not a screenshot: no app is launched. The ko copy
+// is the Korean preview fixture's push mail (PreviewRenderNavKo.swift), the
+// English copy the English one (PreviewRenderNav.swift).
+// Usage (after `pnpm install`): node scripts/site-banner/render.mjs [variant ...]
 import { createRequire } from 'node:module';
 import { readdirSync, readFileSync, writeFileSync, statSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -23,6 +25,36 @@ const sharp = createRequire(import.meta.url)(join(pnpm, sharpDir, 'node_modules/
 const ICON_PT = 38; // icon slot in the banner, CSS px
 const MARK_SHARE = 1; // mark.png already carries the K's margin within its 1024px box
 const SUPERELLIPSE_N = 5; // continuous-corner tile, ~22% corner radius
+
+const COPY = {
+  en: { title: 'Sarah Kim', time: 'now', body: 'Re: Contract review — needs your sign-off today' },
+  ko: { title: '김서연', time: '지금', body: '계약서 검토 — 오늘 중 서명 부탁드립니다' },
+};
+const VARIANTS = {
+  light: { lang: 'en', look: 'light' },
+  dark: { lang: 'en', look: 'dark' },
+  'ko-light': { lang: 'ko', look: 'light' },
+  'ko-dark': { lang: 'ko', look: 'dark' },
+};
+const requested = process.argv.slice(2);
+for (const v of requested) {
+  if (!VARIANTS[v]) throw new Error(`unknown variant: ${v} (${Object.keys(VARIANTS).join('|')})`);
+}
+const variants = requested.length ? requested : Object.keys(VARIANTS);
+
+const escapeHtml = (text) => text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+
+function pageFor(variant, icon) {
+  const { lang, look } = VARIANTS[variant];
+  const copy = COPY[lang];
+  return template
+    .replaceAll('{{LANG}}', lang)
+    .replaceAll('{{LOOK}}', `${look} ${lang}`)
+    .replaceAll('{{TITLE}}', escapeHtml(copy.title))
+    .replaceAll('{{TIME}}', escapeHtml(copy.time))
+    .replaceAll('{{BODY}}', escapeHtml(copy.body))
+    .replace('ICON', icon);
+}
 
 // macOS-style continuous-corner squircle path in an n x n box.
 function squircle(n, inset = 0) {
@@ -68,14 +100,17 @@ const browser = await chromium.launch();
 try {
   for (const scale of SCALES) {
     const page = await browser.newPage({ viewport: { width: CSS_WIDTH, height: 300 }, deviceScaleFactor: scale });
-    writeFileSync(tmp, template.replace('ICON', await iconDataUrl(scale)));
-    await page.goto(pathToFileURL(tmp).href);
-    await page.evaluate(() => document.fonts.ready);
-    const png = await (await page.$('.stage')).screenshot({ omitBackground: true });
-    const file = join(outDir, `notification-light-${CSS_WIDTH * scale}.webp`);
-    await sharp(png).webp({ quality: 88, alphaQuality: 90, effort: 6 }).toFile(file);
-    const { width, height } = await sharp(file).metadata();
-    console.log(`${file} ${width}x${height} ${statSync(file).size} bytes`);
+    const icon = await iconDataUrl(scale);
+    for (const variant of variants) {
+      writeFileSync(tmp, pageFor(variant, icon));
+      await page.goto(pathToFileURL(tmp).href);
+      await page.evaluate(() => document.fonts.ready);
+      const png = await (await page.$('.stage')).screenshot({ omitBackground: true });
+      const file = join(outDir, `notification-${variant}-${CSS_WIDTH * scale}.webp`);
+      await sharp(png).webp({ quality: 88, alphaQuality: 90, effort: 6 }).toFile(file);
+      const { width, height } = await sharp(file).metadata();
+      console.log(`${file} ${width}x${height} ${statSync(file).size} bytes`);
+    }
     await page.close();
   }
 } finally {
