@@ -12,6 +12,7 @@
  * verification links usually live in the href, not the visible text.
  */
 
+import postcss from "postcss";
 import sanitizeHtml from "sanitize-html";
 
 const SAFE_HREF = /^(https?:|mailto:)/i;
@@ -226,26 +227,37 @@ export function coercePlainBody(body: string | null, htmlBody: string | null): s
 // fake UI over the reader (position:fixed) or stack over it (z-index).
 const POSITIONING_PROPERTIES = new Set(["position", "z-index"]);
 // A property name as real mail writes it: an identifier, or a custom property.
-// Anything else (CSS escapes such as \70 osition, comments such as
-// position/**/) could spell a blocked property without the word, so it goes.
+// Anything else (CSS escapes such as \70 osition) could spell a blocked
+// property without the word, so it goes.
 const PLAIN_CSS_PROPERTY = /^(?:-?[a-z][a-z0-9-]*|--[a-z0-9-]+)$/;
 
 /**
- * A style attribute without its positioning declarations; every other
- * declaration is kept as written. One split on ";": a fragment with no colon
- * (the "base64,…)" tail of a data URL) is kept as it is. Linear. Exported for
- * the test.
+ * A style attribute without its positioning declarations. Parsed with postcss,
+ * the parser sanitize-html re-reads styles with (parseStyleAttributes): a
+ * naive ";" split read `position/*;a:*\/:fixed` or `"x;a:"position:fixed`
+ * differently from postcss, which re-emitted them as position:fixed. Only
+ * plain declarations are re-emitted (prop:value[ !important]); nested rules and
+ * anything after a stray "}" are dropped, and an unparseable style is dropped
+ * whole. Exported for the test.
  */
 export function stripPositioningStyles(style: string): string {
-  return style
-    .split(";")
-    .filter((declaration) => {
-      const colon = declaration.indexOf(":");
-      if (colon === -1) return true;
-      const property = declaration.slice(0, colon).trim().toLowerCase();
-      return PLAIN_CSS_PROPERTY.test(property) && !POSITIONING_PROPERTIES.has(property);
-    })
-    .join(";");
+  let root: postcss.Root;
+  try {
+    root = postcss.parse(`a{${style}}`);
+  } catch {
+    return "";
+  }
+  const rule = root.first;
+  if (!rule || rule.type !== "rule") return "";
+  const kept: string[] = [];
+  rule.each((node) => {
+    if (node.type !== "decl") return;
+    const property = node.prop.trim().toLowerCase();
+    if (!PLAIN_CSS_PROPERTY.test(property) || POSITIONING_PROPERTIES.has(property)) return;
+    if (node.value.trim() === "") return;
+    kept.push(`${property}:${node.value}${node.important ? " !important" : ""}`);
+  });
+  return kept.join(";");
 }
 
 export function renderableEmailHtml(html: string | null | undefined): string | null {

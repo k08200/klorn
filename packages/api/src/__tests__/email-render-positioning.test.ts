@@ -9,7 +9,7 @@ import { renderableEmailHtml, stripPositioningStyles } from "../mail/email-text.
 describe("stripPositioningStyles", () => {
   it("drops position and z-index and keeps the rest", () => {
     expect(stripPositioningStyles("position:fixed;top:0;color:red")).toBe("top:0;color:red");
-    expect(stripPositioningStyles(" POSITION : Fixed ; z-index: 9999; margin:0")).toBe(" margin:0");
+    expect(stripPositioningStyles(" POSITION : Fixed ; z-index: 9999; margin:0")).toBe("margin:0");
   });
 
   it("drops a declaration whose property name is not a plain CSS identifier", () => {
@@ -29,6 +29,29 @@ describe("stripPositioningStyles", () => {
     const start = performance.now();
     stripPositioningStyles(hostile);
     expect(performance.now() - start).toBeLessThan(500);
+  });
+});
+
+describe("stripPositioningStyles reads CSS the way the sanitizer re-emits it", () => {
+  // The first filter split on a bare ";", while sanitize-html re-parses the
+  // style with postcss (comments, strings and parens respected): these all came
+  // back out as position:fixed / z-index (security review, 2026-10-17).
+  it.each([
+    "position/*;a:*/:fixed",
+    '"x;a:"position:fixed',
+    "'x;a:'position:fixed",
+    "(x;a:)position:fixed",
+    "z-index/*;a:*/:9999",
+    "\\70 osition/*;a:*/:fixed",
+    '"\\70 osition);a:"\\70 osition :fixed',
+    "color:red;position/*;a:*/:fixed;top:0;left:0;width:100%;height:100%;background:#fff",
+  ])("%s keeps no positioning through the renderer", (style) => {
+    const out = renderableEmailHtml(`<div style='${style.replaceAll("'", "&#39;")}'>x</div>`) ?? "";
+    expect(out.toLowerCase()).not.toMatch(/position|z-index|\\70/);
+  });
+
+  it("drops a style the CSS parser cannot read", () => {
+    expect(stripPositioningStyles("color:red; } b { position:fixed")).not.toMatch(/position/);
   });
 });
 
