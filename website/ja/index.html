@@ -231,10 +231,13 @@
         <ul><li class="mrow mrow-meeting"><span class="mrow-top"><span>Priya Patel · iC</span><time>14:31</time></span><b>招待: 第3四半期取締役会の準備、木曜 14:00</b><span class="mrow-why">カレンダーの招待、返信が必要</span></li></ul>
       </div>
     </div>
-    <img class="banner" src="/media/app-2026-10/notification-light-396.webp"
-         srcset="/media/app-2026-10/notification-light-396.webp 396w, /media/app-2026-10/notification-light-792.webp 792w"
-         sizes="(min-width:1240px) 396px, 33vw" width="792" height="254" decoding="async"
-         alt="Mac上のKlornの通知：Sarah Kim — Re: Contract review — needs your sign-off today。">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" sizes="(min-width:1240px) 396px, 33vw" width="792" height="254"
+              srcset="/media/app-2026-10/notification-dark-396.webp 396w, /media/app-2026-10/notification-dark-792.webp 792w">
+      <img class="banner" src="/media/app-2026-10/notification-light-396.webp"
+           srcset="/media/app-2026-10/notification-light-396.webp 396w, /media/app-2026-10/notification-light-792.webp 792w"
+           sizes="(min-width:1240px) 396px, 33vw" width="792" height="254" decoding="async"
+           alt="Mac上のKlornの通知：Sarah Kim — Re: Contract review — needs your sign-off today。"></picture>
     <figcaption class="cap"><span class="demo-tag">デモデータ</span>Macの<b>今日</b>画面。接続したすべてのアカウントがひとつのリストに。Pushのメールは Mac の通知で届きます。</figcaption>
   </figure>
 </header>
@@ -352,8 +355,20 @@
             <p>今日1日の流れと、落とせない2つのこと。</p></div>
           <div class="tile-media card-shot">
           <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
-            <img src="/media/app-2026-10/briefing-light-776.webp" width="776" height="274" loading="lazy" decoding="async"
-                 alt="朝のブリーフィング：忙しい午前、4時以降は空き。時間帯ごとの忙しさを示す線と、2つの優先事項。">
+            <div class="brief">
+              <p class="brief-date">今日</p>
+              <p class="brief-head">午前は予定なし、17:00から会議が4件。</p>
+              <svg class="brief-curve" viewBox="-3 0 706 36" aria-hidden="true" focusable="false"><path d="M0,33 L63.6,33 L127.3,33 L190.9,33 L254.5,33 L318.2,33 L381.8,33 L445.5,33 L509.1,33 L572.7,18 L636.4,3 L700,18"/><circle cx="572.7" cy="18" r="3"/><circle cx="636.4" cy="3" r="3"/><circle cx="700" cy="18" r="3"/></svg>
+              <ul class="brief-segs">
+                <li><b>12:00まで</b><span>予定なし</span></li>
+                <li><b>12:00〜17:00</b><span>5時間の空き</span></li>
+                <li class="busy"><b>17:00以降</b><span>会議4件</span></li>
+              </ul>
+              <ol class="brief-list">
+                <li><span>17:00までにSarah Kimさんの契約書に署名 <i>— 先方が今日中に署名します</i></span></li>
+                <li><span>Alexさんの文言変更を承認 <i>— リリースが承認を待っています</i></span></li>
+              </ol>
+            </div>
           </div>
         </article>
       </div>

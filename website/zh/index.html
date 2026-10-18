@@ -231,10 +231,13 @@
         <ul><li class="mrow mrow-meeting"><span class="mrow-top"><span>Priya Patel · iC</span><time>14:31</time></span><b>邀请：第三季度董事会准备，周四 14:00</b><span class="mrow-why">日历邀请，需要回复</span></li></ul>
       </div>
     </div>
-    <img class="banner" src="/media/app-2026-10/notification-light-396.webp"
-         srcset="/media/app-2026-10/notification-light-396.webp 396w, /media/app-2026-10/notification-light-792.webp 792w"
-         sizes="(min-width:1240px) 396px, 33vw" width="792" height="254" decoding="async"
-         alt="Mac 上的 Klorn 通知：Sarah Kim — Re: Contract review — needs your sign-off today。">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" sizes="(min-width:1240px) 396px, 33vw" width="792" height="254"
+              srcset="/media/app-2026-10/notification-dark-396.webp 396w, /media/app-2026-10/notification-dark-792.webp 792w">
+      <img class="banner" src="/media/app-2026-10/notification-light-396.webp"
+           srcset="/media/app-2026-10/notification-light-396.webp 396w, /media/app-2026-10/notification-light-792.webp 792w"
+           sizes="(min-width:1240px) 396px, 33vw" width="792" height="254" decoding="async"
+           alt="Mac 上的 Klorn 通知：Sarah Kim — Re: Contract review — needs your sign-off today。"></picture>
     <figcaption class="cap"><span class="demo-tag">演示数据</span>Mac 上的<b>今天</b>界面。所有已连接账户汇成一个列表。Push 邮件以 Mac 通知的形式送达。</figcaption>
   </figure>
 </header>
@@ -352,8 +355,20 @@
             <p>今天的整体节奏，以及不能耽误的两件事。</p></div>
           <div class="tile-media card-shot">
           <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
-            <img src="/media/app-2026-10/briefing-light-776.webp" width="776" height="274" loading="lazy" decoding="async"
-                 alt="晨间简报：上午很满，4 点后空闲，一条曲线显示一天各时段的忙碌程度，以及两项优先事项。">
+            <div class="brief">
+              <p class="brief-date">今天</p>
+              <p class="brief-head">上午没有安排，17:00 起有 4 个会议。</p>
+              <svg class="brief-curve" viewBox="-3 0 706 36" aria-hidden="true" focusable="false"><path d="M0,33 L63.6,33 L127.3,33 L190.9,33 L254.5,33 L318.2,33 L381.8,33 L445.5,33 L509.1,33 L572.7,18 L636.4,3 L700,18"/><circle cx="572.7" cy="18" r="3"/><circle cx="636.4" cy="3" r="3"/><circle cx="700" cy="18" r="3"/></svg>
+              <ul class="brief-segs">
+                <li><b>12:00 前</b><span>没有安排</span></li>
+                <li><b>12:00–17:00</b><span>空闲 5 小时</span></li>
+                <li class="busy"><b>17:00 后</b><span>4 个会议</span></li>
+              </ul>
+              <ol class="brief-list">
+                <li><span>17:00 前签署 Sarah Kim 的合同 <i>— 对方今天会签</i></span></li>
+                <li><span>批准 Alex 的文案修改 <i>— 发布正在等你批准</i></span></li>
+              </ol>
+            </div>
           </div>
         </article>
       </div>

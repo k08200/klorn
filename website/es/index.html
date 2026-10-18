@@ -231,10 +231,13 @@
         <ul><li class="mrow mrow-meeting"><span class="mrow-top"><span>Priya Patel · iC</span><time>14:31</time></span><b>Invitación: preparación del consejo del T3, jueves 14:00</b><span class="mrow-why">Invitación de calendario, requiere respuesta</span></li></ul>
       </div>
     </div>
-    <img class="banner" src="/media/app-2026-10/notification-light-396.webp"
-         srcset="/media/app-2026-10/notification-light-396.webp 396w, /media/app-2026-10/notification-light-792.webp 792w"
-         sizes="(min-width:1240px) 396px, 33vw" width="792" height="254" decoding="async"
-         alt="Una notificación de Klorn en Mac: Sarah Kim — Re: Contract review — needs your sign-off today.">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" sizes="(min-width:1240px) 396px, 33vw" width="792" height="254"
+              srcset="/media/app-2026-10/notification-dark-396.webp 396w, /media/app-2026-10/notification-dark-792.webp 792w">
+      <img class="banner" src="/media/app-2026-10/notification-light-396.webp"
+           srcset="/media/app-2026-10/notification-light-396.webp 396w, /media/app-2026-10/notification-light-792.webp 792w"
+           sizes="(min-width:1240px) 396px, 33vw" width="792" height="254" decoding="async"
+           alt="Una notificación de Klorn en Mac: Sarah Kim — Re: Contract review — needs your sign-off today."></picture>
     <figcaption class="cap"><span class="demo-tag">Datos de demostración</span><b>Hoy</b>, en Mac. Una sola lista con todas las cuentas conectadas. El correo Push llega como notificación de Mac.</figcaption>
   </figure>
 </header>
@@ -353,8 +356,20 @@
             <p>La forma de tu día y las dos cosas que no pueden fallar.</p></div>
           <div class="tile-media card-shot">
           <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
-            <img src="/media/app-2026-10/briefing-light-776.webp" width="776" height="274" loading="lazy" decoding="async"
-                 alt="Resumen matinal: una mañana cargada y libre después de las 4, con una línea que muestra lo ocupada que está cada parte del día y dos prioridades.">
+            <div class="brief">
+              <p class="brief-date">Hoy</p>
+              <p class="brief-head">Mañana despejada y cuatro reuniones a partir de las 17:00.</p>
+              <svg class="brief-curve" viewBox="-3 0 706 36" aria-hidden="true" focusable="false"><path d="M0,33 L63.6,33 L127.3,33 L190.9,33 L254.5,33 L318.2,33 L381.8,33 L445.5,33 L509.1,33 L572.7,18 L636.4,3 L700,18"/><circle cx="572.7" cy="18" r="3"/><circle cx="636.4" cy="3" r="3"/><circle cx="700" cy="18" r="3"/></svg>
+              <ul class="brief-segs">
+                <li><b>Antes de las 12:00</b><span>Nada programado</span></li>
+                <li><b>De 12:00 a 17:00</b><span>5 horas libres</span></li>
+                <li class="busy"><b>Después de las 17:00</b><span>4 reuniones</span></li>
+              </ul>
+              <ol class="brief-list">
+                <li><span>Firmar el contrato de Sarah Kim antes de las 17:00 <i>— la otra parte firma hoy</i></span></li>
+                <li><span>Aprobar el cambio de texto de Alex <i>— el lanzamiento espera tu aprobación</i></span></li>
+              </ol>
+            </div>
           </div>
         </article>
       </div>

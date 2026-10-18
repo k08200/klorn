@@ -5,8 +5,9 @@
 // same slots. They were re-checked against the Korean fixture set
 // (2026-10-17): Korean subjects and reasons are shorter than the English
 // ones, so every box still frames the same panel in all four variants.
-// briefing-light-776 and notification-light-* come from elsewhere and are
-// not produced here. Normally run through make.sh, which renders each variant
+// The notification banners come from scripts/site-banner/render.mjs; the
+// briefing tile is markup in the landings (.brief in website/landing.css),
+// not a capture. Normally run through make.sh, which renders each variant
 // first.
 //
 //   SHARP=<path to sharp> node make.mjs <renders dir> <out dir> [variant] [--no-mobile]

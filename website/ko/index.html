@@ -231,10 +231,13 @@
         <ul><li class="mrow mrow-meeting"><span class="mrow-top"><span>Priya Patel · iC</span><time>14:31</time></span><b>초대: 3분기 이사회 준비, 목요일 14:00</b><span class="mrow-why">캘린더 초대, 응답 필요</span></li></ul>
       </div>
     </div>
-    <img class="banner" src="/media/app-2026-10/notification-light-396.webp"
-         srcset="/media/app-2026-10/notification-light-396.webp 396w, /media/app-2026-10/notification-light-792.webp 792w"
-         sizes="(min-width:1240px) 396px, 33vw" width="792" height="254" decoding="async"
-         alt="Mac의 Klorn 알림: Sarah Kim — Re: Contract review — needs your sign-off today.">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" sizes="(min-width:1240px) 396px, 33vw" width="792" height="228"
+              srcset="/media/app-2026-10/notification-ko-dark-396.webp 396w, /media/app-2026-10/notification-ko-dark-792.webp 792w">
+      <img class="banner" src="/media/app-2026-10/notification-ko-light-396.webp"
+           srcset="/media/app-2026-10/notification-ko-light-396.webp 396w, /media/app-2026-10/notification-ko-light-792.webp 792w"
+           sizes="(min-width:1240px) 396px, 33vw" width="792" height="228" decoding="async"
+           alt="Mac의 Klorn 알림: 김서연 — 계약서 검토 — 오늘 중 서명 부탁드립니다."></picture>
     <figcaption class="cap"><span class="demo-tag">데모 데이터</span>Mac의 <b>오늘</b> 화면. 연결한 모든 계정이 한 목록에. Push 메일은 Mac 알림으로 옵니다.</figcaption>
   </figure>
 </header>
@@ -352,8 +355,20 @@
             <p>오늘 하루의 흐름과, 놓치면 안 되는 두 가지.</p></div>
           <div class="tile-media card-shot">
           <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
-            <img src="/media/app-2026-10/briefing-light-776.webp" width="776" height="274" loading="lazy" decoding="async"
-                 alt="아침 브리핑: 바쁜 오전, 4시 이후 한가함. 시간대별 바쁜 정도를 보여주는 선과 우선순위 두 가지.">
+            <div class="brief">
+              <p class="brief-date">오늘</p>
+              <p class="brief-head">오전은 비어 있고, 17:00부터 회의가 4건 있습니다.</p>
+              <svg class="brief-curve" viewBox="-3 0 706 36" aria-hidden="true" focusable="false"><path d="M0,33 L63.6,33 L127.3,33 L190.9,33 L254.5,33 L318.2,33 L381.8,33 L445.5,33 L509.1,33 L572.7,18 L636.4,3 L700,18"/><circle cx="572.7" cy="18" r="3"/><circle cx="636.4" cy="3" r="3"/><circle cx="700" cy="18" r="3"/></svg>
+              <ul class="brief-segs">
+                <li><b>12:00 이전</b><span>일정 없음</span></li>
+                <li><b>12:00 ~ 17:00</b><span>5시간 비어 있음</span></li>
+                <li class="busy"><b>17:00 이후</b><span>회의 4건</span></li>
+              </ul>
+              <ol class="brief-list">
+                <li><span>17:00 전에 김서연 님 계약서 서명 <i>— 상대방이 오늘 날인합니다</i></span></li>
+                <li><span>박준호 님 문구 변경 승인 <i>— 출시가 승인을 기다리고 있습니다</i></span></li>
+              </ol>
+            </div>
           </div>
         </article>
       </div>
