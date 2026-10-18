@@ -74,7 +74,94 @@ func previewFixtureSelfChecks(sourceDir: URL) -> [(String, Bool)] {
         .flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? ""
     check("the Today screen gates its undated header on the offscreen renderer only",
           screen.contains("renderingOffscreen: Theme.isRenderingOffscreen"))
+    results += previewMailClockSelfChecks(sourceDir: sourceDir)
     return results
+}
+
+/// Mail rows and the reader in a preview render tell time by the fixture
+/// clock: today's fixture mail as a time, the past week as "Yesterday" or a
+/// weekday — never the absolute "Jul 29" a wall clock made of fixture dates.
+/// The shipping grains stay pinned by the mail-time checks in SelfCheck.swift.
+@MainActor
+private func previewMailClockSelfChecks(sourceDir: URL) -> [(String, Bool)] {
+    var results: [(String, Bool)] = []
+    func check(_ name: String, _ ok: Bool) { results.append((name, ok)) }
+    var utc = Calendar(identifier: .gregorian)
+    utc.timeZone = TimeZone(identifier: "UTC") ?? .current
+    var seoul = Calendar(identifier: .gregorian)
+    seoul.timeZone = TimeZone(identifier: "Asia/Seoul") ?? .current
+    let now = MailClock.fixtureNow
+    let en = Locale(identifier: "en_US"), ko = Locale(identifier: "ko_KR")
+
+    check("mail clock: a preview render reads the fixture clock, shipping the wall clock",
+          MailClock.now(renderingOffscreen: true) == now
+          && abs(MailClock.now(renderingOffscreen: false).timeIntervalSinceNow) < 60)
+    let stamps = (fixtureTimestamps(PreviewRender.navFirewallJSONEn)
+        + fixtureTimestamps(PreviewRender.navFirewallJSONKo))
+    check("mail clock: every fixture mail is today in both UTC and Seoul",
+          !stamps.isEmpty && stamps.allSatisfy { stamp in
+              [utc, seoul].allSatisfy { cal in
+                  mailTimeLabel(iso: stamp, now: now, calendar: cal, locale: ko, relativeDays: true)
+                      .allSatisfy { $0.isNumber || $0 == ":" }
+              }
+          })
+    check("mail clock: preview rows show today's mail as a time",
+          mailTimeLabel(iso: "2026-07-29T06:20:00Z", now: now, calendar: utc, locale: en, relativeDays: true)
+          == "06:20")
+    check("mail clock: preview rows say Yesterday / 어제 for the day before",
+          mailTimeLabel(iso: "2026-07-28T06:20:00Z", now: now, calendar: utc, locale: en, relativeDays: true)
+          == "Yesterday"
+          && mailTimeLabel(iso: "2026-07-28T06:20:00Z", now: now, calendar: utc, locale: ko, relativeDays: true)
+          == "어제")
+    check("mail clock: preview rows name the weekday within the week",
+          mailTimeLabel(iso: "2026-07-24T02:10:00Z", now: now, calendar: utc, locale: en, relativeDays: true)
+          == "Friday"
+          && mailTimeLabel(iso: "2026-07-24T02:10:00Z", now: now, calendar: utc, locale: ko, relativeDays: true)
+          == "금요일")
+    check("mail clock: preview rows keep month + day past a week",
+          mailTimeLabel(iso: "2026-07-20T02:10:00Z", now: now, calendar: utc, locale: en, relativeDays: true)
+          == "Jul 20")
+    check("mail clock: shipping rows keep the absolute day (no relative words)",
+          mailTimeLabel(iso: "2026-07-28T06:20:00Z", now: now, calendar: utc, locale: en) == "Jul 28"
+          && mailTimeLabel(iso: "2026-07-24T02:10:00Z", now: now, calendar: utc, locale: en) == "Jul 24")
+
+    check("reader date: shipping keeps month, day and time",
+          readerDateLabel(iso: "2026-07-29T06:20:00Z", locale: en, calendar: utc) == "Jul 29 · 6:20 AM")
+    check("reader date: preview shows today's mail as the time alone",
+          spaced(readerDateLabel(iso: "2026-07-29T06:20:00Z", locale: en, calendar: utc, relativeTo: now))
+              == "6:20 AM"
+          && spaced(readerDateLabel(iso: "2026-07-29T06:20:00Z", locale: ko, calendar: seoul, relativeTo: now))
+              == "오후 3:20")
+    check("reader date: preview says Yesterday / weekday before today",
+          spaced(readerDateLabel(iso: "2026-07-28T06:20:00.000Z", locale: en, calendar: utc, relativeTo: now))
+              == "Yesterday · 6:20 AM"
+          && spaced(readerDateLabel(iso: "2026-07-24T06:20:00Z", locale: ko, calendar: utc, relativeTo: now))
+              == "금요일 · 오전 6:20")
+    check("reader date: malformed ISO degrades to empty",
+          readerDateLabel(iso: "nope", locale: en, relativeTo: now) == ""
+          && readerDateLabel(iso: nil, locale: en) == "")
+
+    let mailSources = swiftSources(under: sourceDir)
+        .filter { ["WindowMailRow.swift", "MailboxList.swift", "WaitingOnList.swift", "ReadingPane.swift"]
+            .contains($0.lastPathComponent) }
+        .compactMap { try? String(contentsOf: $0, encoding: .utf8) }
+    check("mail rows and reader gate the fixture clock on the offscreen renderer only",
+          mailSources.count == 4
+          && mailSources.allSatisfy { !$0.contains("now: Date()") && $0.contains("Theme.isRenderingOffscreen") })
+    return results
+}
+
+/// ICU puts a narrow no-break space before "AM"; compare on plain spaces.
+private func spaced(_ text: String) -> String {
+    text.replacingOccurrences(of: "\u{202F}", with: " ").replacingOccurrences(of: "\u{00A0}", with: " ")
+}
+
+/// Every mail timestamp a fixture shows on a row.
+private func fixtureTimestamps(_ json: String) -> [String] {
+    let pattern = try? NSRegularExpression(pattern: #""(?:receivedAt|surfacedAt)":"([^"]+)""#)
+    let range = NSRange(json.startIndex..., in: json)
+    return (pattern?.matches(in: json, range: range) ?? [])
+        .compactMap { Range($0.range(at: 1), in: json).map { String(json[$0]) } }
 }
 
 private func decodeFirewall(_ json: String) -> FirewallResponse? {

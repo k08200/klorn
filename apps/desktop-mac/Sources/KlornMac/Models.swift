@@ -1470,11 +1470,14 @@ func eventTimeLabel(
 /// today → clock time, this year → month + day, older → adds the year.
 /// Malformed ISO degrades to an empty string (row shows no time), never a
 /// crash. Calendar + locale injectable so the harness pins the math in UTC.
+/// `relativeDays` (offscreen preview renders only, see `MailClock`) swaps the
+/// past week's month + day for "Yesterday" or the weekday.
 func mailTimeLabel(
     iso: String?,
     now: Date,
     calendar: Calendar = .current,
-    locale: Locale = L10n.activeLocale
+    locale: Locale = L10n.activeLocale,
+    relativeDays: Bool = false
 ) -> String {
     guard let iso else { return "" }
     let withMillis = ISO8601DateFormatter()
@@ -1488,6 +1491,9 @@ func mailTimeLabel(
     formatter.locale = locale
     if calendar.isDate(date, inSameDayAs: now) {
         formatter.setLocalizedDateFormatFromTemplate("HHmm")
+    } else if relativeDays,
+              let day = relativeDayLabel(date, now: now, calendar: calendar, locale: locale) {
+        return day
     } else if calendar.component(.year, from: date) == calendar.component(.year, from: now) {
         formatter.setLocalizedDateFormatFromTemplate("MMMd")
     } else {

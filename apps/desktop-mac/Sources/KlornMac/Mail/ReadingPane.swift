@@ -688,18 +688,16 @@ struct ReadingPane: View {
     }
 
     private static func formatDate(_ iso: String?) -> String {
-        guard let iso else { return "" }
-        let iso1 = ISO8601DateFormatter(); iso1.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let iso2 = ISO8601DateFormatter(); iso2.formatOptions = [.withInternetDateTime]
-        guard let date = iso1.date(from: iso) ?? iso2.date(from: iso) else { return "" }
-        let out = DateFormatter()
-        // Without this the formatter follows the SYSTEM locale, so a user who set
-        // the app to English on a Korean Mac still read "7월 29 · 5:12 오후".
-        // Follow the app's own resolved language instead.
-        out.locale = Locale(identifier: L10n.resolvedCode(override: L10n.override))
-        out.dateFormat = "MMM d · h:mm a"
-        return out.string(from: date)
+        // Without the app's own resolved language the formatter follows the
+        // SYSTEM locale, so a user who set the app to English on a Korean Mac
+        // still read "7월 29 · 5:12 오후". A preview render tells time by the
+        // fixture clock (`MailClock`), so its fixture mail never reads as a
+        // stale date on the landing captures.
+        readerDateLabel(
+            iso: iso, locale: Locale(identifier: L10n.resolvedCode(override: L10n.override)),
+            relativeTo: Theme.isRenderingOffscreen ? MailClock.fixtureNow : nil)
     }
+
 }
 
 /// The reader's action row, as pure values the self-check pins.
