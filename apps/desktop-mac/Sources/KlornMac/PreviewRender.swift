@@ -99,13 +99,13 @@ enum PreviewRender {
       "sentAt":"2026-07-26T09:00:00.000Z","daysWaiting":3,"inbox":"primary"}]
     """
 
-    private static let emailJSON = """
+    static let emailJSON = """
     {"id":"d1","from":"Sarah Kim <sarah.kim@northwind-partners.com>",
      "subject":"Re: Contract review — needs your sign-off today",
      "date":"2026-07-29T08:12:00Z",
-     "summary":"Legal returned two changes to clause 4 and needs your sign-off before 17:00 so the counterparty can countersign today.",
+     "summary":"Legal returned two changes to clause 4 and needs your sign-off before 18:00 so the counterparty can countersign today.",
      "needsReply":true,"needsReplyReason":"action_items_present","needsReplyReasonText":"Sign-off requested with a deadline",
-     "text":"Hi,\\n\\nLegal came back with two changes on clause 4 — the indemnity cap and the notice period. Both are minor but they need your sign-off before 17:00 today so the counterparty can countersign.\\n\\nI've attached the redline. Happy to walk through it if easier.\\n\\nBest,\\nSarah",
+     "text":"Hi,\\n\\nLegal came back with two changes on clause 4 — the indemnity cap and the notice period. Both are minor but they need your sign-off before 18:00 today so the counterparty can countersign.\\n\\nI've attached the redline. Happy to walk through it if easier.\\n\\nBest,\\nSarah",
      "engagement":{"outboundCount":6,"learnedImportance":0.92}}
     """
 

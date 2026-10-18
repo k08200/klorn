@@ -76,6 +76,7 @@ func previewFixtureSelfChecks(sourceDir: URL) -> [(String, Bool)] {
           screen.contains("renderingOffscreen: Theme.isRenderingOffscreen"))
     results += previewMailClockSelfChecks(sourceDir: sourceDir)
     results += previewBriefingPairSelfChecks()
+    results += previewDeadlineSelfChecks()
     return results
 }
 

@@ -110,7 +110,7 @@ extension PreviewRender {
        {"label":"After 17:00","summary":"4 meetings","kind":"busy"}],
      "curve":[0,0,0,0,0,0,0,0,0,1,2,1],
      "dayStartHour":8,
-     "attention":[{"rank":1,"action":"Sign off on Sarah Kim's contract before 17:00","reason":"The counterparty countersigns today"},
+     "attention":[{"rank":1,"action":"Sign off on Sarah Kim's contract before 18:00","reason":"The counterparty countersigns today"},
                   {"rank":2,"action":"Approve Alex's copy change","reason":"The release is waiting on it"}]}
     """
 
@@ -149,8 +149,8 @@ extension PreviewRender {
     """
 
     static let navChatJSONEn = """
-    ["What needs me before noon?",
-     "**Two things.** The contract sign-off for Sarah Kim is due by 17:00, and a reply is already drafted. Alex is holding the release for your approval on the copy change. Everything else can wait until after the design review."]
+    ["What still needs me today?",
+     "**Two things.** The contract sign-off for Sarah Kim is due by 18:00, and a reply is already drafted. Alex is holding the release for your approval on the copy change. Everything else can wait until after the design review."]
     """
 
     /// The fixture set for the language the render resolves to: Korean mail
