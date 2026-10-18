@@ -222,6 +222,32 @@ export function coercePlainBody(body: string | null, htmlBody: string | null): s
  * Clients render this in a JS-disabled webview; this sanitizer is the
  * second wall, not the only one.
  */
+// Declarations that move content out of the flow: with them a sender can pin a
+// fake UI over the reader (position:fixed) or stack over it (z-index).
+const POSITIONING_PROPERTIES = new Set(["position", "z-index"]);
+// A property name as real mail writes it: an identifier, or a custom property.
+// Anything else (CSS escapes such as \70 osition, comments such as
+// position/**/) could spell a blocked property without the word, so it goes.
+const PLAIN_CSS_PROPERTY = /^(?:-?[a-z][a-z0-9-]*|--[a-z0-9-]+)$/;
+
+/**
+ * A style attribute without its positioning declarations; every other
+ * declaration is kept as written. One split on ";": a fragment with no colon
+ * (the "base64,…)" tail of a data URL) is kept as it is. Linear. Exported for
+ * the test.
+ */
+export function stripPositioningStyles(style: string): string {
+  return style
+    .split(";")
+    .filter((declaration) => {
+      const colon = declaration.indexOf(":");
+      if (colon === -1) return true;
+      const property = declaration.slice(0, colon).trim().toLowerCase();
+      return PLAIN_CSS_PROPERTY.test(property) && !POSITIONING_PROPERTIES.has(property);
+    })
+    .join(";");
+}
+
 export function renderableEmailHtml(html: string | null | undefined): string | null {
   if (!html || !html.trim()) return null;
   const out = sanitizeHtml(boundSanitizeInput(html), {
@@ -301,6 +327,11 @@ export function renderableEmailHtml(html: string | null | undefined): string | n
     // never belongs in an <img>. Dropping src lets the filter above remove
     // the shell.
     transformTags: {
+      // Runs after the tag-specific transform, on every tag.
+      "*": (tagName, attribs) =>
+        attribs.style
+          ? { tagName, attribs: { ...attribs, style: stripPositioningStyles(attribs.style) } }
+          : { tagName, attribs },
       img: (tagName, attribs) => {
         const src = (attribs.src || "").trim();
         if (/^data:/i.test(src) && !SAFE_DATA_IMAGE.test(src)) {
