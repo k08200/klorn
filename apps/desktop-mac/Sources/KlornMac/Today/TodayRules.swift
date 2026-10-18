@@ -67,6 +67,17 @@ enum TodayRules {
         return first.flatMap { $0.isEmpty ? nil : $0 }
     }
 
+    /// The detail beside the Today title: the weekday and date, except in
+    /// an offscreen preview render, where a fixed fixture date would read as
+    /// stale on the landing captures. The title alone ("Today") stays.
+    static func headerDetail(now: Date, renderingOffscreen: Bool, locale: Locale) -> String? {
+        guard !renderingOffscreen else { return nil }
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.setLocalizedDateFormatFromTemplate("EEEEMMMMd")
+        return formatter.string(from: now)
+    }
+
     /// Today's events in reading order: the one happening now, then the rest.
     static func events(_ today: TodaySummary?) -> [(event: CalendarEventWire, isNow: Bool)] {
         guard let today else { return [] }

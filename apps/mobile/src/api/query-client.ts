@@ -3,16 +3,20 @@
  * (Preferences on native, localStorage in the browser) for 24 h, so a cold
  * start without network still shows the last Today and Mail it saw — with the
  * offline banner — instead of a blank screen. The cache is keyed to the
- * signed-in user (`buster`) and wiped on sign-out.
+ * signed-in user (`buster`), encrypted at rest with a device-only key
+ * (platform/cache-crypto.ts), and wiped — key included — on sign-out.
  */
 import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
 import { QueryClient } from "@tanstack/react-query";
 import type { PersistQueryClientOptions } from "@tanstack/react-query-persist-client";
 import { APP_VERSION } from "../config";
-import { kv } from "../platform/kv";
+import { cacheKey, forgetCacheKey, openCache, sealCache } from "../platform/cache-crypto";
+import { type KeyValueStore, kv } from "../platform/kv";
 import { isApiError } from "./client";
 
-export const CACHE_KEY = "klorn-query-cache-v1";
+export const CACHE_KEY = "klorn-query-cache-v2";
+/** The plaintext cache builds before encryption wrote; dropped on first read. */
+export const LEGACY_CACHE_KEY = "klorn-query-cache-v1";
 export const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 export function createQueryClient(): QueryClient {
@@ -36,8 +40,34 @@ export function createQueryClient(): QueryClient {
   });
 }
 
+/**
+ * The persister's storage: sealed on write, opened on read. A value that does
+ * not open (an old plaintext cache, a key lost to a backup restore or a
+ * sign-out, tampering) is removed and reads as "no cache". Without a key
+ * nothing is written at all.
+ */
+export const encryptedCacheStore: KeyValueStore = {
+  async getItem(key) {
+    // The persister reads once, at launch: the place to drop a pre-encryption cache.
+    await kv.removeItem(LEGACY_CACHE_KEY);
+    const stored = await kv.getItem(key);
+    if (!stored) return null;
+    const secret = await cacheKey();
+    if (!secret) return null;
+    const plain = await openCache(stored, secret);
+    if (plain === null) await kv.removeItem(key);
+    return plain;
+  },
+  async setItem(key, value) {
+    const secret = await cacheKey();
+    if (!secret) return;
+    await kv.setItem(key, await sealCache(value, secret));
+  },
+  removeItem: (key) => kv.removeItem(key),
+};
+
 export const persister = createAsyncStoragePersister({
-  storage: kv,
+  storage: encryptedCacheStore,
   key: CACHE_KEY,
   throttleTime: 1000,
 });
@@ -56,4 +86,6 @@ export function persistOptions(userKey: string): Omit<PersistQueryClientOptions,
 
 export async function clearPersistedCache(): Promise<void> {
   await kv.removeItem(CACHE_KEY);
+  await kv.removeItem(LEGACY_CACHE_KEY);
+  await forgetCacheKey();
 }

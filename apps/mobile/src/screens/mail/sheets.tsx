@@ -14,12 +14,15 @@ import { Sheet } from "../../ui/Sheet";
 import { SourceBadge } from "../../ui/SourceBadge";
 import { Switch } from "../../ui/Switch";
 import type { MailTarget } from "./controller";
+import { loadLaneMoves, senderKey } from "./lane-history";
 import {
   canSubmit,
   initialLane,
+  type LaneMove,
   type LaneSheetOrigin,
   SHEET_LANES,
   senderLabel,
+  suggestsPin,
 } from "./lane-sheet-model";
 import { splitSender } from "./model";
 import { type SnoozePreset, snoozeOptions } from "./snooze";
@@ -66,6 +69,12 @@ export function LaneSheet({
   const current = lanes.size === 1 ? (targets[0]?.tier ?? null) : null;
   const [selected, setSelected] = useState<LiveTier>("SILENT");
   const [pin, setPin] = useState(false);
+  // Once the user flips the toggle, the second-move suggestion stops steering it.
+  const [pinTouched, setPinTouched] = useState(false);
+  const [moves, setMoves] = useState<{ sender: string | null; history: LaneMove[] }>({
+    sender: null,
+    history: [],
+  });
   const [busy, setBusy] = useState(false);
   const key = request ? `${request.origin}:${targets.map((m) => m.id).join(",")}` : "";
 
@@ -73,9 +82,28 @@ export function LaneSheet({
     if (!request) return;
     setSelected(initialLane(request.origin, current));
     setPin(false);
+    setPinTouched(false);
+    setMoves({ sender: null, history: [] });
     setBusy(false);
+    // The suggestion is for ONE sender; a mixed selection never pre-pins.
+    const addresses = new Set(targets.map((m) => m.from.trim().toLowerCase()));
+    const only = addresses.size === 1 ? targets[0] : undefined;
+    let alive = true;
+    if (only) {
+      void Promise.all([senderKey(only.from), loadLaneMoves()]).then(([sender, history]) => {
+        if (alive) setMoves({ sender, history });
+      });
+    }
+    return () => {
+      alive = false;
+    };
     // A new request (a different row, a different origin) starts fresh.
   }, [key]);
+
+  useEffect(() => {
+    if (!request || pinTouched) return;
+    setPin(suggestsPin(moves.history, moves.sender, selected, Date.now()));
+  }, [moves, selected, pinTouched, request]);
 
   const senders = new Set(targets.map((m) => senderLabel(m.from)));
   const senderName = senders.size === 1 ? splitSender([...senders][0] ?? "").name : null;
@@ -163,7 +191,14 @@ export function LaneSheet({
           </span>
           <span className="pin-toggle__hint">{t("lane.pin.hint")}</span>
         </span>
-        <Switch id={pinId} checked={pin} onChange={setPin} />
+        <Switch
+          id={pinId}
+          checked={pin}
+          onChange={(next) => {
+            setPinTouched(true);
+            setPin(next);
+          }}
+        />
       </label>
     </Sheet>
   );

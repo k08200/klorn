@@ -74,6 +74,36 @@ test("'keep this sender here' pins the sender to the chosen lane", async ({ page
     .toEqual([{ emailId: "email-att-info-1", tier: "SILENT" }]);
 });
 
+test("moving the same sender to the same lane again opens with the pin on", async ({ page }) => {
+  await phone(page, "/mail");
+  const sheet = page.getByRole("dialog", { name: "레인 옮기기" });
+  const pin = sheet.getByRole("switch", { name: /한끼배달 메일은 앞으로도 여기로/ });
+  // First move: the toggle starts off.
+  await swipe(page, row(page, /한끼배달/), -160);
+  await expect(pin).not.toBeChecked();
+  await sheet.getByRole("radio", { name: /QUEUE/ }).check();
+  await sheet.getByRole("button", { name: "QUEUE로 옮기기" }).click();
+  await expect(sheet).toHaveCount(0);
+  expect((await mockState(page)).pins).toEqual([]);
+  // Second time: the swipe preselects SILENT (a different lane), so still off …
+  await swipe(page, row(page, /한끼배달/), -160);
+  await expect(sheet.getByRole("radio", { name: /SILENT/ })).toBeChecked();
+  await expect(pin).not.toBeChecked();
+  // … and choosing the same lane as last time turns it on by itself.
+  await sheet.getByRole("radio", { name: /QUEUE/ }).check();
+  await expect(pin).toBeChecked();
+  // The user can still say no, and then the suggestion stops steering it.
+  await pin.uncheck();
+  await sheet.getByRole("radio", { name: /INFO/ }).check();
+  await sheet.getByRole("radio", { name: /QUEUE/ }).check();
+  await expect(pin).not.toBeChecked();
+  await pin.check();
+  await sheet.getByRole("button", { name: "이 발신자 고정하기" }).click();
+  await expect
+    .poll(async () => (await mockState(page)).pins)
+    .toEqual([{ emailId: "email-att-info-1", tier: "QUEUE" }]);
+});
+
 test("with KEYBOARD_TRIAGE dark the move falls back to the older route, without undo", async ({
   page,
 }) => {

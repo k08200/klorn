@@ -46,6 +46,7 @@ import {
   settleHidden,
   unhideMail,
 } from "./hidden-store";
+import { recordLaneMoves } from "./lane-history";
 import { attentionByEmail, senderLabel } from "./model";
 import { UndoQueue, type UndoSnapshot } from "./undo-queue";
 
@@ -263,6 +264,12 @@ export function MailProvider({ children }: { children: ReactNode }) {
         return false;
       }
       hapticSuccess();
+      // The second move of the same sender opens the sheet with the pin on.
+      if (moving.length > 0)
+        void recordLaneMoves(
+          moving.map((m) => m.from),
+          tier,
+        );
       const message =
         moving.length === 0
           ? t("lane.pinned", { lane: tier })

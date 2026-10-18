@@ -123,7 +123,7 @@ Purchases (both):
 - [ ] RevenueCat: import both products, one entitlement, a **current
       offering** whose first package is what "Subscribe" buys
       (`src/platform/iap.ts` takes `offerings.current.availablePackages[0]`).
-- [ ] RevenueCat webhook → `https://klorn-api.onrender.com/api/webhook/revenuecat`
+- [ ] RevenueCat webhook → `https://api.klorn.ai/api/webhook/revenuecat`
       with an Authorization value; the same value as Render
       `REVENUECAT_WEBHOOK_AUTH`.
 - [ ] RevenueCat public SDK keys → GitHub secrets (or variables)

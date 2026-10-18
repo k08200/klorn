@@ -3,7 +3,7 @@
  * via @aparajita/capacitor-secure-storage, never localStorage or Preferences.
  * Browser (dev and tests only) → localStorage, which is what the web app does.
  */
-import { SecureStorage } from "@aparajita/capacitor-secure-storage";
+import { KeychainAccess, SecureStorage } from "@aparajita/capacitor-secure-storage";
 import { isNative } from "./native";
 
 const TOKEN_KEY = "klorn-token";
@@ -55,4 +55,43 @@ export async function clearToken(): Promise<void> {
   }
   await ensurePrefix();
   await SecureStorage.removeItem(TOKEN_KEY).catch(() => {});
+}
+
+/**
+ * Other device-only secrets (the offline cache key, platform/cache-crypto.ts).
+ * iOS: `afterFirstUnlockThisDeviceOnly` — never in an iCloud or iTunes backup,
+ * never moved to a new phone, readable once the device has been unlocked after
+ * boot. Android: the Keystore, which is not backed up either. Browser (dev and
+ * tests only): localStorage.
+ *
+ * `readSecret` resolves null only when the item does not exist; an unreadable
+ * keychain REJECTS, so a caller can tell "no key yet" from "can't read it now".
+ */
+export async function readSecret(key: string): Promise<string | null> {
+  if (!isNative()) return window.localStorage.getItem(key);
+  await ensurePrefix();
+  const value = await SecureStorage.get(key, false);
+  return typeof value === "string" && value ? value : null;
+}
+
+export async function writeSecret(key: string, value: string): Promise<void> {
+  if (!isNative()) {
+    window.localStorage.setItem(key, value);
+    return;
+  }
+  await ensurePrefix();
+  await SecureStorage.set(key, value, false, false, KeychainAccess.afterFirstUnlockThisDeviceOnly);
+}
+
+export async function removeSecret(key: string): Promise<void> {
+  if (!isNative()) {
+    try {
+      window.localStorage.removeItem(key);
+    } catch {
+      // ignore
+    }
+    return;
+  }
+  await ensurePrefix();
+  await SecureStorage.remove(key).catch(() => false);
 }
