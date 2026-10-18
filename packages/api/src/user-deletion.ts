@@ -40,8 +40,16 @@ const PURGE_TX_TIMEOUT_MS = 60_000;
  */
 export async function deleteUserAndAllData(userId: string): Promise<void> {
   await purgeUserObjects(userId);
+  const email = (await prisma.user.findUnique({ where: { id: userId }, select: { email: true } }))
+    ?.email;
   await prisma.$transaction([
     prisma.llmUsageLog.deleteMany({ where: { userId } }),
+    // The waitlist is keyed by address, not by user, so no cascade reaches it.
+    // Exact matches only: an insensitive filter is ILIKE, where "_" in an
+    // address is a wildcard that could match someone else's entry.
+    ...(email
+      ? [prisma.waitlist.deleteMany({ where: { email: { in: [email, email.toLowerCase()] } } })]
+      : []),
     prisma.user.delete({ where: { id: userId } }),
   ]);
 }
