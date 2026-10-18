@@ -14,11 +14,11 @@ struct TodayScreen: View {
 
     private var state: SurfaceState { model.surfaceState }
 
-    private var dateLabel: String {
-        let formatter = DateFormatter()
-        formatter.locale = L10n.activeLocale
-        formatter.setLocalizedDateFormatFromTemplate("EEEEMMMMd")
-        return formatter.string(from: now)
+    /// No date in a preview render (`TodayRules.headerDetail`); the shipping
+    /// app always shows today's date.
+    private var dateLabel: String? {
+        TodayRules.headerDetail(
+            now: now, renderingOffscreen: Theme.isRenderingOffscreen, locale: L10n.activeLocale)
     }
 
     var body: some View {

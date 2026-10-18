@@ -6,7 +6,7 @@ import SwiftUI
 // views are the shipping ones (`MainShell`), on their own in-memory model.
 
 extension PreviewRender {
-    private static let navFirewallJSON = """
+    static let navFirewallJSONEn = """
     {"tiers":{"PUSH":[
       {"id":"p1","source":"email","sourceId":"e1","type":"email","title":"Contract review",
        "tier":"PUSH","tierReason":"You replied to this sender 6 times","priority":9,
@@ -91,7 +91,7 @@ extension PreviewRender {
      "summary":{"PUSH":0,"MEETING":0,"QUEUE":0,"INFO":0,"SILENT":12,"AUTO":0,"total":12}}
     """
 
-    private static let navEmailJSON = """
+    static let navEmailJSONEn = """
     {"id":"d6","from":"Jamie Ortiz <jamie@team.co>",
      "subject":"Notes from the onboarding design review",
      "date":"2026-07-29T06:20:00Z",
@@ -101,8 +101,8 @@ extension PreviewRender {
      "engagement":{"outboundCount":3,"learnedImportance":0.61}}
     """
 
-    private static let navBriefingJSON = """
-    {"dateLabel":"Wednesday, July 29",
+    static let navBriefingJSONEn = """
+    {"dateLabel":"Today",
      "headline":"A clear morning, then four meetings from 17:00. The contract sign-off is the one thing with a deadline today.",
      "segments":[
        {"label":"Before 12:00","summary":"3 meetings","kind":"busy"},
@@ -113,7 +113,7 @@ extension PreviewRender {
      "attention":[{"rank":1,"action":"Sign off on the contract before 17:00","reason":"Counterparty countersigns today"}]}
     """
 
-    private static let navTodayJSON = """
+    static let navTodayJSONEn = """
     {"total":4,
      "current":{"id":"t1","title":"Weekly planning","startTime":"2026-07-29T08:00:00Z",
                 "endTime":"2026-07-29T09:00:00Z","location":null,"meetingLink":"https://meet.example/plan","allDay":false},
@@ -133,24 +133,37 @@ extension PreviewRender {
      {"id":"li-3","email":"you@icloud.example","kind":"linked","needsReconnect":false,"provider":"ICLOUD","purpose":"personal"}]
     """
 
-    private static let navActionsJSON = """
+    static let navActionsJSONEn = """
     [{"id":"a1","toolName":"send_email","targetLabel":"Reply to Sarah Kim: signed contract attached",
       "reasoning":"You approved the same clause last week and the deadline is today.","createdAt":"2026-07-29T08:20:00Z"},
      {"id":"a2","toolName":"create_calendar_event","targetLabel":"Q3 board prep, Thursday 14:00 to 15:00",
       "reasoning":"The invitation fits your calendar after moving one focus block.","createdAt":"2026-07-29T05:40:00Z"}]
     """
 
-    private static let navCommitmentsJSON = """
+    static let navCommitmentsJSONEn = """
     [{"id":"k1","title":"Send the revised quote","owner":"ME","counterpartyName":"Dana Whitfield",
       "counterpartyEmail":null,"dueText":"Friday","status":"OPEN"},
      {"id":"k2","title":"Q3 numbers for the board deck","owner":"COUNTERPARTY","counterpartyName":"Priya Patel",
       "counterpartyEmail":null,"dueText":null,"status":"OPEN"}]
     """
 
-    private static let navChatJSON = """
+    static let navChatJSONEn = """
     ["What needs me before noon?",
      "**Two things.** The contract sign-off for Sarah Kim is due by 17:00, and a reply is already drafted. Alex is holding the release for your approval on the copy change. Everything else can wait until after the design review."]
     """
+
+    /// The fixture set for the language the render resolves to: Korean mail
+    /// for a `ko` render, English for everything else.
+    private static func fixture(_ en: String, _ ko: String) -> String {
+        PreviewFixtureLocale.current == .korean ? ko : en
+    }
+    static var navFirewallJSON: String { fixture(navFirewallJSONEn, navFirewallJSONKo) }
+    static var navEmailJSON: String { fixture(navEmailJSONEn, navEmailJSONKo) }
+    static var navBriefingJSON: String { fixture(navBriefingJSONEn, navBriefingJSONKo) }
+    static var navTodayJSON: String { fixture(navTodayJSONEn, navTodayJSONKo) }
+    static var navActionsJSON: String { fixture(navActionsJSONEn, navActionsJSONKo) }
+    static var navCommitmentsJSON: String { fixture(navCommitmentsJSONEn, navCommitmentsJSONKo) }
+    static var navChatJSON: String { fixture(navChatJSONEn, navChatJSONKo) }
 
     private static func decoded<T: Decodable>(_ type: T.Type, _ json: String) -> T? {
         try? JSONDecoder().decode(type, from: Data(json.utf8))
