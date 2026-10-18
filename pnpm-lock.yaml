@@ -100,8 +100,8 @@ importers:
         specifier: ^6.29.0
         version: 6.29.0(ws@8.21.3)(zod@4.4.3)
       postcss:
-        specifier: 8.5.26
-        version: 8.5.26
+        specifier: '>=8.5.23'
+        version: 8.5.28
       resend:
         specifier: ^6.20.0
         version: 6.20.0
