@@ -2,13 +2,15 @@
  * The parts of the app config that are pure and environment-free, so the Vite
  * config (Node) can share them with the app. See config.ts for the rest.
  *
- * Prod is the Render origin every shipped client already uses (packages/web
- * next.config.ts, apps/desktop-mac make-app.sh, render.yaml
- * RENDER_EXTERNAL_URL). `api.klorn.ai` is a CNAME to the same service
- * (docs/casa/evidence-map.md) and can replace it once the founder decides
- * which host clients should pin.
+ * Prod is `api.klorn.ai`, Klorn's own name for the API (a CNAME to the same
+ * Render service the web and Mac apps reach as klorn-api.onrender.com; live and
+ * TLS-audited in docs/casa/evidence-map.md). A store binary cannot be hot-fixed,
+ * so it pins the domain Klorn controls: the API can move hosts without an app
+ * update. Nothing in the app depends on the host name — OAuth state is a signed
+ * token in the URL, not a cookie (routes/auth.ts), and the CSP's connect-src is
+ * built from this value (vite.config.ts).
  */
-export const PROD_API_BASE = "https://klorn-api.onrender.com";
+export const PROD_API_BASE = "https://api.klorn.ai";
 export const DEV_API_BASE = "http://localhost:3001";
 
 /** The custom scheme the API relays OAuth results to (NATIVE_OAUTH_SCHEMES). */

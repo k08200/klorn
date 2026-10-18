@@ -42,9 +42,9 @@ npm run open:android # / open:ios — then Run in Android Studio / Xcode
 
 API base: `VITE_KLORN_API_URL` at build time (https only, or http to
 localhost / `10.0.2.2` for the Android emulator); unset → dev
-`http://localhost:3001`, production build `https://klorn-api.onrender.com` (the
-origin the web app and the Mac app ship with; `api.klorn.ai` is a CNAME to the
-same Render service).
+`http://localhost:3001`, production build `https://api.klorn.ai` (Klorn's own
+domain, a CNAME to the same Render service the web and Mac apps reach as
+`klorn-api.onrender.com`; pinned so the API can move without an app update).
 
 Screenshots: `KLORN_SHOTS_DIR=/some/dir npm run e2e` (default
 `test-results/shots`). Specs cover 390×844, 412×915, 360×400 (Flip cover),
@@ -78,7 +78,7 @@ src/
   api/client.ts                fetch transport (CapacitorHttp on native), Bearer, timeouts, typed errors
   api/endpoints.ts             every route the app calls, typed from @klorn/contract (+ api/wire.ts)
   api/queries.ts               TanStack Query hooks + keys
-  api/query-client.ts          offline-first cache persisted 24 h (Preferences / localStorage)
+  api/query-client.ts          offline-first cache persisted 24 h, AES-GCM sealed (platform/cache-crypto.ts)
   api/mock/                    fetch shim + fixtures (`--mode mock`; never in `npm run build`)
   auth/                        session (Keychain/Keystore), OAuth relay/poll, PKCE
   i18n/                        en ko ja zh es fr de; device locale default; plural forms;

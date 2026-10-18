@@ -19,6 +19,7 @@ import { getServices, onUnauthorized, setSessionToken } from "../app/services";
 import { MOCK_API } from "../config";
 import { clearToken, readToken, writeToken } from "../platform/secure-store";
 import { clearHidden } from "../screens/mail/hidden-store";
+import { clearLaneMoves } from "../screens/mail/lane-history";
 
 export type SessionStatus = "loading" | "signedOut" | "signedIn";
 
@@ -66,6 +67,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     await clearPersistedCache();
     // This device's Done / Later rows belong to the account that made them.
     clearHidden();
+    await clearLaneMoves();
   }, [queryClient]);
 
   useEffect(

@@ -22,7 +22,8 @@ vi.mock("../db.js", () => ({
   prisma: {
     $transaction: vi.fn(async () => []),
     llmUsageLog: { deleteMany: vi.fn() },
-    user: { delete: vi.fn() },
+    user: { delete: vi.fn(), findUnique: vi.fn(async () => ({ email: "user@example.com" })) },
+    waitlist: { deleteMany: vi.fn() },
   },
   db: {},
   INTERACTIVE_TX_OPTIONS: { maxWait: 10_000, timeout: 15_000 },

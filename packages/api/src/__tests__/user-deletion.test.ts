@@ -13,7 +13,11 @@ const calls = vi.hoisted(() => ({ order: [] as string[] }));
 const prisma = vi.hoisted(() => ({
   $transaction: vi.fn(),
   llmUsageLog: { deleteMany: vi.fn((arg: unknown) => ({ op: "llmUsageLog.deleteMany", arg })) },
-  user: { delete: vi.fn((arg: unknown) => ({ op: "user.delete", arg })) },
+  user: {
+    delete: vi.fn((arg: unknown) => ({ op: "user.delete", arg })),
+    findUnique: vi.fn(async () => ({ email: "Ann@Example.com" })),
+  },
+  waitlist: { deleteMany: vi.fn((arg: unknown) => ({ op: "waitlist.deleteMany", arg })) },
 }));
 vi.mock("../db.js", () => ({
   prisma,
@@ -55,6 +59,18 @@ describe("deleteUserAndAllData (account deletion)", () => {
     expect(purgeUserObjects).toHaveBeenCalledWith("user-1");
     expect(prisma.user.delete).toHaveBeenCalledWith({ where: { id: "user-1" } });
     expect(prisma.llmUsageLog.deleteMany).toHaveBeenCalledWith({ where: { userId: "user-1" } });
+  });
+
+  it("removes the waitlist entry for the account's address in the same transaction", async () => {
+    await deleteUserAndAllData("user-1");
+
+    // Exact matches only: an insensitive filter is ILIKE, where "_" in an
+    // address is a wildcard that could match someone else's entry.
+    expect(prisma.waitlist.deleteMany).toHaveBeenCalledWith({
+      where: { email: { in: ["Ann@Example.com", "ann@example.com"] } },
+    });
+    const ops = (prisma.$transaction.mock.calls[0]?.[0] as Array<{ op: string }>).map((o) => o.op);
+    expect(ops).toEqual(["llmUsageLog.deleteMany", "waitlist.deleteMany", "user.delete"]);
   });
 
   it("keeps the account when the objects could not be deleted", async () => {

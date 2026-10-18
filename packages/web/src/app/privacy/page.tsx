@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description: "How Klorn handles Gmail, Calendar, and account data during beta.",
 };
 
-const updatedAt = "October 17, 2026";
+const updatedAt = "October 18, 2026";
 
 /** Stable, URL-safe anchor id so the TOC links line up with each section. */
 function slug(title: string): string {
@@ -292,10 +292,10 @@ export default function PrivacyPage() {
                 <strong className="text-ink">On-device cache.</strong> So the app opens instantly
                 and works offline, the most recent screens you loaded — which can include mail
                 senders, subjects, previews and calendar events — are cached in the app&apos;s
-                private storage on the device for up to 24 hours. Signing out deletes this cache,
-                and so does uninstalling the app. On Android the app opts out of device backups; on
-                iOS the cache is treated like other app data under your device&apos;s backup
-                settings.
+                private storage on the device for up to 24 hours, encrypted (AES-256) with a key
+                that stays in this device&apos;s Keychain or Keystore and is never included in a
+                backup or moved to a new phone — so a backup or a copied file cannot be read.
+                Signing out deletes the cache and its key; uninstalling the app deletes the cache.
               </li>
               <li>
                 <strong className="text-ink">Notifications.</strong> If you allow notifications,
