@@ -253,8 +253,21 @@ async function persistSummaryResult(
 }
 
 /**
+ * How far back the batch summarizer reaches. Every sync tick asks for at least
+ * ten summaries so a quiet tick still drains the backlog (#725), and the
+ * backlog used to have no date bound: after the 2026-10 judge outages it held
+ * 1,172 mails for one user and reached back to March for another. Draining
+ * that spent the whole per-user daily LLM budget within hours of each 00:00 UTC
+ * reset, and every email after that was judged by keywords alone. Older mail
+ * is summarized when it is opened (POST /api/email/:id/summarize).
+ */
+export const SUMMARY_BACKLOG_MAX_AGE_DAYS = 7;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
  * Summarize a batch of emails using LLM.
- * Processes unsummarized emails for a user.
+ * Processes unsummarized emails for a user, received in the last
+ * SUMMARY_BACKLOG_MAX_AGE_DAYS days.
  */
 export async function summarizeUnsummarizedEmails(userId: string, limit = 10): Promise<number> {
   // BYOK: resolve once for the whole batch so each summary bills the user's own
@@ -271,6 +284,7 @@ export async function summarizeUnsummarizedEmails(userId: string, limit = 10): P
     where: {
       userId,
       summary: null,
+      receivedAt: { gte: new Date(Date.now() - SUMMARY_BACKLOG_MAX_AGE_DAYS * DAY_MS) },
       OR: [{ body: { not: null } }, { htmlBody: { not: null } }, { snippet: { not: null } }],
     },
     orderBy: { receivedAt: "desc" },

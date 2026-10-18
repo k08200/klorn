@@ -427,8 +427,8 @@ html[lang=ko] :is(h1,h2,h3,.rule,.ser){letter-spacing:-.02em}
 
 /* ── Dark (L2) ───────────────────────────────────── */
 /* Follows the system setting. Neutral #0A0A0B canvas, not navy; the accent
-   moves to #38BDF8 for text. App captures stay light, in the same frame
-   with a deeper shadow, so they read as windows on a dark desk. */
+   moves to #38BDF8 for text. App captures swap to their dark renders via
+   <picture> sources, so the window chrome goes dark with them. */
 @media (prefers-color-scheme:dark){
   :root{color-scheme:dark;
     --ink:#f4f4f6; --ink-2:#a2a2ad; --ink-3:#8b8b96;
@@ -437,6 +437,7 @@ html[lang=ko] :is(h1,h2,h3,.rule,.ser){letter-spacing:-.02em}
     --accent:#38bdf8; --accent-fill:#38bdf8;
     --frame:0 0 0 1px rgba(255,255,255,.10),0 1px 2px rgba(0,0,0,.4),0 12px 32px -8px rgba(0,0,0,.6);
     --frame-hero:0 40px 80px -24px rgba(0,0,0,.7);
+    --frame-bar:#1c1c1f; --frame-dot:#3a3a40; --frame-bg:#141416;
     --push:#fb7185; --push-ink:#fda4af; --meeting:#818cf8; --meeting-ink:#a5b4fc;
     --queue:#f59e0b; --queue-ink:#fcd34d; --info:#22d3ee; --info-ink:#67e8f9;
     --silent:#a8a29e; --silent-ink:#d6d3d1}
@@ -455,6 +456,7 @@ html[lang=ko] :is(h1,h2,h3,.rule,.ser){letter-spacing:-.02em}
   .st-beta{background:rgba(234,179,8,.14);color:#fde68a;border-color:rgba(234,179,8,.3)}
   .price.feat{background:#1c1c20;color:var(--ink);box-shadow:0 0 0 1px rgba(56,189,248,.45),0 24px 48px -20px rgba(0,0,0,.8)}
   .price.feat .btn-1{background:#f4f4f6;color:#0a0a0b}
+  .win-bar{border-bottom-color:rgba(255,255,255,.06)}
   .mlist-card{background:var(--card)}
   .mlist ul + .mlist-head,.mrow{border-top-color:rgba(255,255,255,.08)}
 }
