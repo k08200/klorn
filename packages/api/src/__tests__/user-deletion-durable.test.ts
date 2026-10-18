@@ -28,7 +28,9 @@ vi.mock("../db.js", async () => {
         state.userRows.delete(where.id);
         return { id: where.id };
       }),
+      findUnique: vi.fn(async () => ({ email: "user@example.com" })),
     },
+    waitlist: { deleteMany: vi.fn(async () => ({ count: 0 })) },
     $transaction: vi.fn(async (work: unknown) => {
       state.order.push("rows");
       return Array.isArray(work) ? Promise.all(work) : (work as (tx: unknown) => unknown)(prisma);
