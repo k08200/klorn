@@ -19,7 +19,11 @@ skeleton() {
     # Localized app screenshots (/media/app/<code>/…) are the one sanctioned
     # per-language asset divergence — normalize the prefix so each language may
     # point at its own set while the FILENAMES still must match the EN page.
-    grep -o 'src="/media/[^"]*"' "$1" | sed -E 's|/media/app/[a-z]{2}/|/media/app/|' || true
+    # The desktop captures in /media/app-2026-10/ may also carry a language tag
+    # (today-ko-light-2000.webp vs today-light-2000.webp); strip it the same way.
+    grep -o 'src="/media/[^"]*"' "$1" \
+      | sed -E -e 's|/media/app/[a-z]{2}/|/media/app/|' \
+               -e 's|(/media/app-2026-10/[a-z]+)-[a-z]{2}-(light\|dark)-|\1-\2-|' || true
     grep -o 'poster="/media/[^"]*"' "$1" || true
     grep -oE '^[[:space:]]*\.[a-z][a-zA-Z0-9., :()-]*\{' "$1" | sed 's/[[:space:]]//g' || true
     # Styles now live in /landing.css, so the class definitions above no longer

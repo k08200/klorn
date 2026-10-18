@@ -1428,7 +1428,9 @@ async function runUserCycle(
 
         // AI summarize new emails — floor 10 so a zero-new tick still drains
         // the backlog (same #725 floor the interactive routes already have;
-        // this background path was the one left gated on newCount > 0).
+        // this background path was the one left gated on newCount > 0). The
+        // backlog is the last SUMMARY_BACKLOG_MAX_AGE_DAYS only; older mail is
+        // summarized when opened.
         await summarizeUnsummarizedEmails(config.userId, Math.max(syncResult.newCount, 10));
         await syncRecentCandidateIntakes(config.userId, Math.max(syncResult.newCount, 10));
         await notifyCandidateEmails(config.userId);
