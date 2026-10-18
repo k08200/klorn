@@ -30,7 +30,7 @@ extension PreviewRender {
        "tier":"MEETING","tierReason":"Reschedule, no conflict on your calendar","priority":5,
        "surfacedAt":"2026-07-29T06:50:00Z",
        "email":{"emailDbId":"d4","source":{"provider":"GOOGLE","accountId":null,"label":"you@company.example"},
-                "unread":false,"hasAttachment":false,"subject":"Standup moved to 10:30",
+                "unread":false,"hasAttachment":false,"subject":"Standup moved to 18:30",
                 "from":"Alex Carter <alex@team.co>","receivedAt":"2026-07-29T06:50:00Z"},"hashStale":false},
       {"id":"m2","source":"email","sourceId":"e5","type":"email","title":"Board prep",
        "tier":"MEETING","tierReason":"Invitation for Thursday, one conflict","priority":5,
@@ -105,12 +105,13 @@ extension PreviewRender {
     {"dateLabel":"Today",
      "headline":"A clear morning, then four meetings from 17:00. The contract sign-off is the one thing with a deadline today.",
      "segments":[
-       {"label":"Before 12:00","summary":"3 meetings","kind":"busy"},
+       {"label":"Before 12:00","summary":"Nothing scheduled","kind":"free"},
        {"label":"12:00 to 17:00","summary":"5 hours free","kind":"free"},
-       {"label":"After 17:00","summary":"1 call","kind":"busy"}],
-     "curve":[1,2,1,0,0,0,0,0,0,1,0,0],
+       {"label":"After 17:00","summary":"4 meetings","kind":"busy"}],
+     "curve":[0,0,0,0,0,0,0,0,0,1,2,1],
      "dayStartHour":8,
-     "attention":[{"rank":1,"action":"Sign off on the contract before 17:00","reason":"Counterparty countersigns today"}]}
+     "attention":[{"rank":1,"action":"Sign off on Sarah Kim's contract before 17:00","reason":"The counterparty countersigns today"},
+                  {"rank":2,"action":"Approve Alex's copy change","reason":"The release is waiting on it"}]}
     """
 
     static let navTodayJSONEn = """
@@ -213,6 +214,8 @@ extension PreviewRender {
         shot("mail-all", navModel(firewallJSON: navFirewallJSON)) { $0.listMode = .inbox }
         shot("calendar-full", model) { $0.listMode = .calendar }
         shot("assistant", model) { $0.showAssistantPane(.approvals) }
+        // The demo day's briefing, the source of the landing's `.brief` card.
+        shot("assistant-briefing", model) { $0.showAssistantPane(.briefing) }
 
         // The states that are not "ready": each must say what it is.
         shot("today-empty", navModel(firewallJSON: navEmptyFirewallJSON))

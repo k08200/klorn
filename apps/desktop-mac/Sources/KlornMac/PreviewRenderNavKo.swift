@@ -46,7 +46,7 @@ extension PreviewRender {
        "tier":"MEETING","tierReason":"일정 변경 — 캘린더 충돌 없음","priority":5,
        "surfacedAt":"2026-07-29T06:50:00Z",
        "email":{"emailDbId":"d4","source":{"provider":"GOOGLE","accountId":null,"label":"you@company.example"},
-                "unread":false,"hasAttachment":false,"subject":"스탠드업 10:30으로 변경",
+                "unread":false,"hasAttachment":false,"subject":"스탠드업 18:30으로 변경",
                 "from":"박준호 <junho.park@team.example>","receivedAt":"2026-07-29T06:50:00Z"},"hashStale":false},
       {"id":"m2","source":"email","sourceId":"e5","type":"email","title":"이사회 준비",
        "tier":"MEETING","tierReason":"목요일 초대 — 일정 1건 겹침","priority":5,
@@ -121,7 +121,8 @@ extension PreviewRender {
        {"label":"17:00 이후","summary":"회의 4건","kind":"busy"}],
      "curve":[0,0,0,0,0,0,0,0,0,1,2,1],
      "dayStartHour":8,
-     "attention":[{"rank":1,"action":"17:00 전에 계약서 서명","reason":"상대방이 오늘 날인합니다"}]}
+     "attention":[{"rank":1,"action":"17:00 전에 김서연 님 계약서 서명","reason":"상대방이 오늘 날인합니다"},
+                  {"rank":2,"action":"박준호 님 문구 변경 승인","reason":"출시가 승인을 기다리고 있습니다"}]}
     """
 
     static let navTodayJSONKo = """

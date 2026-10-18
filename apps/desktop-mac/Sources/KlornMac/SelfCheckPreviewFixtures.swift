@@ -75,6 +75,7 @@ func previewFixtureSelfChecks(sourceDir: URL) -> [(String, Bool)] {
     check("the Today screen gates its undated header on the offscreen renderer only",
           screen.contains("renderingOffscreen: Theme.isRenderingOffscreen"))
     results += previewMailClockSelfChecks(sourceDir: sourceDir)
+    results += previewBriefingPairSelfChecks()
     return results
 }
 
