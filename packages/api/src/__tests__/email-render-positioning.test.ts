@@ -1,3 +1,4 @@
+import postcss from "postcss";
 import { describe, expect, it } from "vitest";
 import { renderableEmailHtml, stripPositioningStyles } from "../mail/email-text.js";
 
@@ -5,6 +6,25 @@ import { renderableEmailHtml, stripPositioningStyles } from "../mail/email-text.
 // sender could pin a fake UI over the reader with position:fixed (the client
 // webviews run without JS, but layout CSS still applies). Positioning is
 // stripped; every other declaration is kept as the sender wrote it.
+
+/**
+ * The properties a style really declares. With no line break left in it,
+ * postcss and a browser tokenize a style alike, so this is a faithful oracle;
+ * a string value that merely contains the word "position" declares nothing.
+ */
+function declaredProperties(style: string): string[] {
+  expect(style).not.toMatch(/[\r\n\f]/);
+  const props: string[] = [];
+  postcss.parse(`a{${style}}`).walkDecls((decl) => {
+    props.push(decl.prop.toLowerCase());
+  });
+  return props;
+}
+
+function styleOf(html: string): string {
+  const raw = /style="([^"]*)"/.exec(html)?.[1] ?? "";
+  return raw.replaceAll("&quot;", '"').replaceAll("&#39;", "'").replaceAll("&amp;", "&");
+}
 
 describe("stripPositioningStyles", () => {
   it("drops position and z-index and keeps the rest", () => {
@@ -48,6 +68,40 @@ describe("stripPositioningStyles reads CSS the way the sanitizer re-emits it", (
   ])("%s keeps no positioning through the renderer", (style) => {
     const out = renderableEmailHtml(`<div style='${style.replaceAll("'", "&#39;")}'>x</div>`) ?? "";
     expect(out.toLowerCase()).not.toMatch(/position|z-index|\\70/);
+  });
+
+  it.each([
+    'a:"x\n;position:fixed;y"',
+    "a:'x\n;position:fixed;y'",
+    'a:"x\r;position:fixed;y"',
+    'a:"x\f;position:fixed;y"',
+    'a:"x\r\n;z-index:9999;y"',
+    'font-family:"Arial\n;position:fixed;top:0;left:0;width:100%;height:100%;background:#fff;"',
+  ])("a line break inside a string cannot smuggle a declaration: %j", (style) => {
+    // postcss lets a string span lines; a browser ends it at the line break and
+    // reads the rest as declarations (re-review, 2026-10-17).
+    const props = declaredProperties(stripPositioningStyles(style));
+    expect(props).not.toContain("position");
+    expect(props).not.toContain("z-index");
+  });
+
+  it("does the same for an entity-encoded line break through the renderer", () => {
+    const out =
+      renderableEmailHtml('<div style="a:&quot;x&#10;;position:fixed;y&quot;">x</div>') ?? "";
+    expect(declaredProperties(styleOf(out))).not.toContain("position");
+  });
+
+  it("drops an oversized style before parsing it (postcss is quadratic on one giant declaration)", () => {
+    const hostile = "a/*;*/:".repeat(60_000);
+    const start = performance.now();
+    expect(stripPositioningStyles(hostile)).toBe("");
+    expect(performance.now() - start).toBeLessThan(200);
+  });
+
+  it("keeps a custom property's case, which var() references depend on", () => {
+    expect(stripPositioningStyles("--Brand:#0af;color:var(--Brand)")).toBe(
+      "--Brand:#0af;color:var(--Brand)",
+    );
   });
 
   it("drops a style the CSS parser cannot read", () => {
