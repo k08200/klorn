@@ -10,6 +10,8 @@ import {
   revokeDemoAccessIfDisabled,
 } from "./auth.js";
 import { startBackgroundAgent } from "./background.js";
+import { ADVERTISED_PRO_PRICE_WEB } from "./billing/advertised-price.js";
+import { checkPaddlePriceMatchesAdvertised } from "./billing/paddle-price-check.js";
 import {
   caldavCalendarEnabled,
   deviceCalendarEnabled,
@@ -575,6 +577,19 @@ app.addHook("onClose", async () => {
 reportJudgeModelResolution(JUDGE_MODEL_RESOLUTION);
 // The count-based JUDGE_HEALTH_WINDOW knob is retired (#1319): say so once.
 warnRetiredJudgeHealthEnv();
+
+// What Paddle actually bills lives outside this repo, on a price object any
+// dashboard user can edit. Twice now it has silently stopped matching the
+// pages: 2026-08-12 ($7.99 advertised, $8.99 charged) and 2026-10-15 (pages
+// at $8.99, Paddle edited to $29.99 — customers billed ABOVE the quoted
+// price, found out from a passing remark). Nothing announced either one.
+//
+// Deliberately not awaited: this is an outbound call to a third party and it
+// must not sit in front of the server accepting connections. It warns and
+// returns; it never throws and never blocks startup.
+void checkPaddlePriceMatchesAdvertised({ advertised: ADVERTISED_PRO_PRICE_WEB }).catch((err) => {
+  console.warn(`[PADDLE] price check failed unexpectedly: ${(err as Error).message}`);
+});
 
 // Startup DB calls are wrapped in withDbRetry so a Neon cold-start (suspended
 // compute waking up) does not kill the container. If retries are exhausted we

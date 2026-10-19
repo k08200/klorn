@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import type Stripe from "stripe";
+import { ADVERTISED_PRO_PRICE_WEB } from "../billing/advertised-price.js";
 import { verifyPaddleSignature } from "../billing/paddle.js";
+import { checkPaddlePriceEvent } from "../billing/paddle-price-check.js";
 import { PLANS, stripe } from "../billing/stripe.js";
 import { prisma } from "../db.js";
 import { sendPushNotification } from "../notify/push.js";
@@ -339,8 +341,25 @@ export async function webhookRoutes(app: FastifyInstance) {
             "/settings/account-billing",
           );
         }
+      } else {
+        // A price edited in the Paddle dashboard emits price.updated, and the
+        // event carries the price object inline — no API call, no key
+        // permission, no deploy needed. This is the path that matters: both
+        // pricing incidents (2026-08-12, 2026-10-15) were dashboard edits with
+        // no deploy, so a boot-time check would not have fired for either
+        // until some unrelated restart. Never throws; a reporting problem must
+        // not turn a webhook into a 500 and make Paddle retry it.
+        try {
+          checkPaddlePriceEvent({
+            eventType: body.event_type,
+            data: body.data,
+            advertised: ADVERTISED_PRO_PRICE_WEB,
+          });
+        } catch (err) {
+          captureError(err, { tags: { scope: "paddle.webhook.price_check" } });
+        }
       }
-      // Other event types (product/price/etc) are acknowledged and ignored.
+      // Other event types are acknowledged and ignored.
 
       await prisma.webhookEvent.create({ data: { id: body.event_id } }).catch((err) => {
         if ((err as { code?: string })?.code !== "P2002") {
