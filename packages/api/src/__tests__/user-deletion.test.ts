@@ -82,16 +82,26 @@ describe("deleteUserAndAllData (account deletion)", () => {
 });
 
 describe("purgeAllUserData (data wipe that keeps the account)", () => {
-  it("deletes the user's objects first, then every row", async () => {
+  it("deletes the user's objects first, then every row, then sweeps once more", async () => {
     await purgeAllUserData("user-1");
-    expect(calls.order).toEqual(["storage", "database", "rows"]);
+    // The second pass runs after the first transaction committed: a sync that
+    // still saw the user's tokens can have inserted rows after their
+    // deleteMany ran inside the first one.
+    expect(calls.order).toEqual(["storage", "database", "rows", "database", "rows"]);
     expect(purgeUserObjects).toHaveBeenCalledWith("user-1");
     expect(purgeUserData).toHaveBeenCalledWith(TX, "user-1");
   });
 
-  it("keeps the 60 second transaction budget of the purge", async () => {
+  it("keeps the 60 second transaction budget of the purge, for both passes", async () => {
     await purgeAllUserData("user-1");
     expect(prisma.$transaction.mock.calls[0]?.[1]).toEqual({ maxWait: 10_000, timeout: 60_000 });
+    expect(prisma.$transaction.mock.calls[1]?.[1]).toEqual({ maxWait: 10_000, timeout: 60_000 });
+  });
+
+  it("does not sweep again when the first pass failed", async () => {
+    prisma.$transaction.mockRejectedValueOnce(new Error("timed out"));
+    await expect(purgeAllUserData("user-1")).rejects.toThrow("timed out");
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
   });
 
   it("keeps every row when the objects could not be deleted", async () => {

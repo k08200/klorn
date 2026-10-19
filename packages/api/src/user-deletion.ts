@@ -61,8 +61,15 @@ export async function deleteUserAndAllData(userId: string): Promise<void> {
  */
 export async function purgeAllUserData(userId: string): Promise<void> {
   await purgeUserObjects(userId);
-  await prisma.$transaction((tx) => purgeUserData(tx as unknown as typeof db, userId), {
-    ...INTERACTIVE_TX_OPTIONS,
-    timeout: PURGE_TX_TIMEOUT_MS,
-  });
+  const purge = () =>
+    prisma.$transaction((tx) => purgeUserData(tx as unknown as typeof db, userId), {
+      ...INTERACTIVE_TX_OPTIONS,
+      timeout: PURGE_TX_TIMEOUT_MS,
+    });
+  await purge();
+  // Until the first pass commits, a sync or job still sees the user's tokens,
+  // and the rows it inserts after their deleteMany ran inside that transaction
+  // survive it. The tokens are gone now, so nothing new starts: one more
+  // (idempotent, usually empty) pass removes those stragglers.
+  await purge();
 }
