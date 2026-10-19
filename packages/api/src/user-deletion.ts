@@ -17,6 +17,11 @@
  * OBJECT_STORAGE_ENABLED is off the object step is a no-op.
  */
 
+import {
+  collectGoogleGrants,
+  type HeldGoogleGrant,
+  revokeGoogleGrants,
+} from "./auth/google-grant-revoke.js";
 import { type db, INTERACTIVE_TX_OPTIONS, prisma } from "./db.js";
 import { DATA_WIPE_FENCE_MS, rememberDataWipe } from "./privacy/data-wipe-fence.js";
 import { purgeUserData, revokeUserAccess } from "./purge-user-data.js";
@@ -44,6 +49,7 @@ const PURGE_TX_TIMEOUT_MS = 60_000;
  */
 export async function deleteUserAndAllData(userId: string): Promise<void> {
   await purgeUserObjects(userId);
+  const grants = await googleGrantsBeforeRemoval(userId);
   const email = (await prisma.user.findUnique({ where: { id: userId }, select: { email: true } }))
     ?.email;
   await prisma.$transaction([
@@ -56,6 +62,23 @@ export async function deleteUserAndAllData(userId: string): Promise<void> {
       : []),
     prisma.user.delete({ where: { id: userId } }),
   ]);
+  // The account is gone: revoke its Google grants at Google (best effort).
+  await revokeGoogleGrants(userId, grants);
+}
+
+/**
+ * The user's Google grants, read before their rows go, so they can be revoked
+ * at Google afterwards (auth/google-grant-revoke.ts). A failed read costs the
+ * revoke, never the deletion.
+ */
+async function googleGrantsBeforeRemoval(userId: string): Promise<HeldGoogleGrant[]> {
+  try {
+    return await collectGoogleGrants(userId);
+  } catch (err) {
+    console.error(`[USER-DELETION] Could not read ${userId}'s Google grants to revoke:`, err);
+    captureError(err, { tags: { scope: "user-deletion.google-grants", userId } });
+    return [];
+  }
 }
 
 // A function, not a constant: tests that mock db.js without the options still
@@ -116,7 +139,8 @@ async function recordWipeAndRevoke(userId: string): Promise<void> {
  * (privacy/data-wipe-fence.ts):
  *   1. One short transaction holds the account row FOR UPDATE, records the
  *      wipe as pending and cuts off access (grants, automation config, API
- *      keys, credentials). From its commit on, the database rejects any insert
+ *      keys, credentials); the Google grants are then revoked at Google
+ *      (auth/google-grant-revoke.ts). From its commit on, the database rejects any insert
  *      into the account's data tables; an insert already in flight committed
  *      before it and is purged with the rest.
  *   2. The stored objects go (steps D1/D3), then the purge runs once and
@@ -126,8 +150,11 @@ async function recordWipeAndRevoke(userId: string): Promise<void> {
  * an error. Only a failure before step 1 committed throws.
  */
 export async function purgeAllUserData(userId: string): Promise<DataWipeOutcome> {
+  const grants = await googleGrantsBeforeRemoval(userId);
   await recordWipeAndRevoke(userId);
   rememberDataWipe(userId, { purgedAt: null, fenceUntil: null });
+  // Access is cut off in Klorn; revoke the grants at Google too (best effort).
+  await revokeGoogleGrants(userId, grants);
   try {
     await finishDataWipe(userId);
     return "purged";

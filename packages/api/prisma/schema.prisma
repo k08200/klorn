@@ -351,10 +351,18 @@ model UserToken {
   // Last-synced Gmail historyId watermark for incremental (History API) sync.
   // Null = never baselined; the next sync snapshots then records the current id.
   historyId           String?
+  // The Google account this grant belongs to, lowercased (Gmail's profile
+  // address). Google revokes a grant for the whole account, so a revoke must
+  // first know whether another Klorn account holds a grant for the same one
+  // (auth/google-grant-revoke.ts). Null until read: set at connect, or the
+  // first time a revoke needs it.
+  googleEmail         String?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
   @@unique([userId, provider])
+  // The revoke's shared-grant check looks other users' grants up by address.
+  @@index([googleEmail])
   // renewExpiringGmailWatches scans all tokens by expiry (no userId) every tick;
   // without this it seq-scans the whole table as the user base grows.
   @@index([gmailWatchExpiresAt])

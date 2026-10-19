@@ -246,6 +246,13 @@ describe("the linked drive accounts (D5a, D5b): one module, the purge and the ke
       const before = text.slice(0, match.index ?? 0);
       const name = [...before.matchAll(/function (\w+)\(/g)].at(-1)?.[1] ?? "";
       const window = text.slice(match.index ?? 0, (match.index ?? 0) + 500);
+      if (name === "countGoogleDriveGrantsFor") {
+        // The Google revoke's shared-grant check: over every user, a count of
+        // grants for one address, so no row, and no token, leaves the module.
+        expect(window).toMatch(/linkedDriveAccount\.count\(/);
+        expect(window).not.toMatch(/select|accessToken|refreshToken|grantedScopes/);
+        continue;
+      }
       if (name === "dueDriveRefreshAccounts") {
         // D5d: over every user, so it carries out the (id, userId) pair only;
         // the pass then loads each account by (id, userId, provider).

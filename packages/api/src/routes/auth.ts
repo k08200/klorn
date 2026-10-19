@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { exchangeCodes } from "../auth/exchange-codes.js";
+import { removeAndRevokeGoogle } from "../auth/google-grant-revoke.js";
 import { desktopHandoffPage, isAllowedNativeScheme } from "../auth/native-handoff.js";
 import { LINK_FLOW_PATHS } from "../auth/pending-links.js";
 import {
@@ -1391,9 +1392,13 @@ export function authRoutes(app: FastifyInstance) {
   // DELETE /api/auth/google — Disconnect Google account
   app.delete("/google", { preHandler: requireAuth }, async (request, reply) => {
     const userId = getUserId(request);
-    await prisma.userToken.deleteMany({
-      where: { userId, provider: "google" },
-    });
+    // Revoked at Google too, unless another row holds the same Google account.
+    await removeAndRevokeGoogle(
+      userId,
+      { primary: true },
+      () => prisma.userToken.deleteMany({ where: { userId, provider: "google" } }),
+      (removed) => removed.count > 0,
+    );
     return reply.code(204).send();
   });
 
@@ -1478,11 +1483,18 @@ export function authRoutes(app: FastifyInstance) {
   app.delete("/google/linked-inboxes/:id", { preHandler: requireAuth }, async (request, reply) => {
     const userId = getUserId(request);
     const { id } = request.params as { id: string };
-    const result = await prisma.linkedInboxAccount.deleteMany({
-      // provider-scoped so this Google-surface endpoint can never remove a
-      // NAVER row by id — Naver disconnects live on /api/naver-imap.
-      where: { id, userId, provider: "GOOGLE" },
-    });
+    // Revoked at Google too, unless another row holds the same Google account.
+    const result = await removeAndRevokeGoogle(
+      userId,
+      { inboxIds: [id] },
+      () =>
+        prisma.linkedInboxAccount.deleteMany({
+          // provider-scoped so this Google-surface endpoint can never remove a
+          // NAVER row by id — Naver disconnects live on /api/naver-imap.
+          where: { id, userId, provider: "GOOGLE" },
+        }),
+      (removed) => removed.count > 0,
+    );
     if (result.count === 0) {
       return reply.code(404).send({ error: "Linked inbox not found" });
     }

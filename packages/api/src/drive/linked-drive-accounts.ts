@@ -293,3 +293,32 @@ export async function unlinkDriveAccount(
     return removed.count > 0;
   }, INTERACTIVE_TX_OPTIONS);
 }
+
+/**
+ * This user's Google Drive grants, as stored (ciphers), for a revoke at Google
+ * (auth/google-grant-revoke.ts). `accountIds` narrows it to the accounts being
+ * removed; omitted, every Google account of the user.
+ */
+export async function googleDriveGrantsOf(
+  userId: string,
+  accountIds?: readonly string[],
+): Promise<DriveAccountCredentials[]> {
+  return prisma.linkedDriveAccount.findMany({
+    where: { userId, provider: "GOOGLE", ...(accountIds ? { id: { in: [...accountIds] } } : {}) },
+    select: DRIVE_ACCOUNT_CREDENTIALS_SELECT,
+  });
+}
+
+/** system: how many Google Drive grants for this address remain, over every user, leaving out `exceptIds`. */
+export async function countGoogleDriveGrantsFor(
+  email: string,
+  exceptIds: readonly string[],
+): Promise<number> {
+  return prisma.linkedDriveAccount.count({
+    where: {
+      provider: "GOOGLE",
+      email: normaliseDriveAccountEmail(email),
+      ...(exceptIds.length > 0 ? { id: { notIn: [...exceptIds] } } : {}),
+    },
+  });
+}

@@ -339,6 +339,12 @@ export default function PrivacyPage() {
                 operation.
               </li>
               <li>
+                <strong className="text-ink">Access at Google.</strong> Deleting your data or
+                account, or disconnecting a Google account in Klorn, also asks Google to revoke
+                Klorn&apos;s access to that Google account, unless another Klorn account still uses
+                the same Google account.
+              </li>
+              <li>
                 <strong className="text-ink">Export and workspace reset.</strong> Settings also
                 offers a full data export and a workspace reset that deletes all synced and derived
                 data while keeping your account.

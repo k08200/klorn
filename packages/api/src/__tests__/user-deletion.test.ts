@@ -36,6 +36,13 @@ vi.mock("../purge-user-data.js", () => ({ purgeUserData, revokeUserAccess }));
 const captureError = vi.hoisted(() => vi.fn());
 vi.mock("../sentry.js", () => ({ captureError }));
 
+const GRANTS = [
+  { source: "primary", rowId: "t1", email: "a@x.com", refreshToken: "r", accessToken: "a" },
+];
+const collectGoogleGrants = vi.hoisted(() => vi.fn());
+const revokeGoogleGrants = vi.hoisted(() => vi.fn());
+vi.mock("../auth/google-grant-revoke.js", () => ({ collectGoogleGrants, revokeGoogleGrants }));
+
 import { deleteUserAndAllData, finishDataWipe, purgeAllUserData } from "../user-deletion.js";
 
 const STAMPED = {
@@ -80,12 +87,22 @@ beforeEach(() => {
     calls.order.push("access");
     return Promise.resolve();
   });
+  collectGoogleGrants.mockReset().mockImplementation(async () => {
+    calls.order.push("collect");
+    return GRANTS;
+  });
+  revokeGoogleGrants.mockReset().mockImplementation(async () => {
+    calls.order.push("revoke");
+    return [];
+  });
 });
 
 describe("deleteUserAndAllData (account deletion)", () => {
   it("deletes the user's objects first, then the account", async () => {
     await deleteUserAndAllData("user-1");
-    expect(calls.order).toEqual(["storage", "database"]);
+    // Grants are read before the rows go and revoked at Google after.
+    expect(calls.order).toEqual(["storage", "collect", "database", "revoke"]);
+    expect(revokeGoogleGrants).toHaveBeenCalledWith("user-1", GRANTS);
     expect(purgeUserObjects).toHaveBeenCalledWith("user-1");
     expect(prisma.user.delete).toHaveBeenCalledWith({ where: { id: "user-1" } });
     expect(prisma.llmUsageLog.deleteMany).toHaveBeenCalledWith({ where: { userId: "user-1" } });
@@ -119,10 +136,12 @@ describe("purgeAllUserData (data wipe that keeps the account)", () => {
     // are rejected by the fence's trigger. So one purge is enough. Objects go
     // after the fence is up, so no upload lands in between.
     expect(calls.order).toEqual([
+      "collect",
       "database",
       "lock",
       "record",
       "access",
+      "revoke",
       "storage",
       "database",
       "pending",
@@ -224,6 +243,28 @@ describe("purgeAllUserData (data wipe that keeps the account)", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     await expect(purgeAllUserData("user-1")).resolves.toBe("pending");
     expect(purgeUserData).not.toHaveBeenCalled();
+  });
+});
+
+describe("Google grants on the deletion paths", () => {
+  it("does not revoke anything when the wipe could not be recorded", async () => {
+    prisma.$transaction.mockRejectedValueOnce(new Error("pool exhausted"));
+    await expect(purgeAllUserData("user-1")).rejects.toThrow("pool exhausted");
+    expect(revokeGoogleGrants).not.toHaveBeenCalled();
+  });
+
+  it("does not revoke anything when the account deletion failed", async () => {
+    prisma.$transaction.mockRejectedValueOnce(new Error("deadlock"));
+    await expect(deleteUserAndAllData("user-1")).rejects.toThrow("deadlock");
+    expect(revokeGoogleGrants).not.toHaveBeenCalled();
+  });
+
+  it("still deletes when the grants could not be read, revoking nothing", async () => {
+    collectGoogleGrants.mockRejectedValueOnce(new Error("bad cipher"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(deleteUserAndAllData("user-1")).resolves.toBeUndefined();
+    expect(prisma.user.delete).toHaveBeenCalled();
+    expect(revokeGoogleGrants).toHaveBeenCalledWith("user-1", []);
   });
 });
 

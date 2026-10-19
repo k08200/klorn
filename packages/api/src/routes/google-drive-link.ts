@@ -43,6 +43,7 @@ import type {
   GoogleDriveUnlinkResponse,
 } from "@klorn/contract";
 import type { FastifyInstance, FastifyReply } from "fastify";
+import { removeAndRevokeGoogle } from "../auth/google-grant-revoke.js";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireEntitled } from "../billing/entitlement-guard.js";
 import { DRIVE_ID_MAX_CHARS } from "../drive/drive-rows.js";
@@ -192,7 +193,13 @@ export function googleDriveLinkRoutes(opts: {
       async (request, reply) => {
         const userId = getUserId(request);
         const { id } = request.params as { id: string };
-        if (!(await unlinkDriveAccount(userId, "GOOGLE", id))) {
+        const unlinked = await removeAndRevokeGoogle(
+          userId,
+          { driveIds: [id] },
+          () => unlinkDriveAccount(userId, "GOOGLE", id),
+          (removed) => removed,
+        );
+        if (!unlinked) {
           return reply.code(HTTP_NOT_FOUND).send({ error: "Drive account not found" });
         }
         const body: GoogleDriveUnlinkResponse = { success: true };

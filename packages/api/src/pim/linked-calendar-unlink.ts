@@ -5,6 +5,7 @@
  * disconnected work calendar keeps showing up.
  */
 
+import { removeAndRevokeGoogle } from "../auth/google-grant-revoke.js";
 import { INTERACTIVE_TX_OPTIONS, prisma } from "../db.js";
 import type { CalendarProviderName } from "./calendar-rows.js";
 
@@ -27,6 +28,24 @@ export async function unlinkCalendarAccount(
   userId: string,
   linkedAccountId: string,
   accountProvider: CalendarProviderName = "GOOGLE",
+): Promise<boolean> {
+  // A Google account's grant is revoked at Google once the row is gone, unless
+  // another row still holds that Google account (auth/google-grant-revoke.ts).
+  if (accountProvider === "GOOGLE") {
+    return removeAndRevokeGoogle(
+      userId,
+      { calendarIds: [linkedAccountId] },
+      () => deleteCalendarAccount(userId, linkedAccountId, accountProvider),
+      (removed) => removed,
+    );
+  }
+  return deleteCalendarAccount(userId, linkedAccountId, accountProvider);
+}
+
+function deleteCalendarAccount(
+  userId: string,
+  linkedAccountId: string,
+  accountProvider: CalendarProviderName,
 ): Promise<boolean> {
   // Interactive because the AttentionItem delete needs the event ids; the
   // pool-sized options are the repo's rule for interactive transactions (#845).
