@@ -37,7 +37,16 @@ export function DataSection() {
       }
       localStorage.removeItem(PROFILE_KEY);
       localStorage.removeItem(PINNED_CHATS_KEY);
-      toast(t("settings.toast.workspaceDeleted"), "info");
+      // 202: access is already gone and the server finishes the purge itself
+      // (the data-wipe sweep), so say "started", not "deleted".
+      toast(
+        t(
+          res.status === 202
+            ? "settings.toast.workspaceDeletionPending"
+            : "settings.toast.workspaceDeleted",
+        ),
+        "info",
+      );
     } catch {
       toast(t("settings.toast.deleteWorkspaceFailed"), "error");
     }

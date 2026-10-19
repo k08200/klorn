@@ -19,6 +19,11 @@
 -- search_path is empty and every name is schema-qualified (Supabase's
 -- function_search_path_mutable advisor).
 
+-- Fail fast instead of queueing behind a long lock: each CREATE TRIGGER takes
+-- SHARE ROW EXCLUSIVE on its table until the migration commits (same guard as
+-- 20261009010000).
+SET LOCAL lock_timeout = '5s';
+
 CREATE TABLE "DataWipe" (
     "userId" TEXT NOT NULL,
     "requestedAt" TIMESTAMP(3) NOT NULL,

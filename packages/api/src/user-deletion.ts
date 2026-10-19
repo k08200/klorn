@@ -56,7 +56,9 @@ export async function deleteUserAndAllData(userId: string): Promise<void> {
   ]);
 }
 
-const PURGE_TX = { ...INTERACTIVE_TX_OPTIONS, timeout: PURGE_TX_TIMEOUT_MS } as const;
+// A function, not a constant: tests that mock db.js without the options still
+// import this module (through routes/auth.ts).
+const purgeTx = () => ({ ...INTERACTIVE_TX_OPTIONS, timeout: PURGE_TX_TIMEOUT_MS });
 const FENCE_SECONDS = DATA_WIPE_FENCE_MS / 1000;
 
 /** "purged" when the rows are gone; "pending" when the sweep must finish the purge. */
@@ -82,14 +84,18 @@ export async function purgeAllUserData(userId: string): Promise<DataWipeOutcome>
   await purgeUserObjects(userId);
   const requestedAt = new Date();
   await prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT 1 FROM "User" WHERE "id" = ${userId} FOR UPDATE`;
+    const locked = await tx.$queryRaw<
+      unknown[]
+    >`SELECT 1 FROM "User" WHERE "id" = ${userId} FOR UPDATE`;
+    // Zero rows would mean no lock, and so no serialization with the trigger.
+    if (locked.length !== 1) throw new Error("data wipe: the account row could not be locked");
     await tx.dataWipe.upsert({
       where: { userId },
       create: { userId, requestedAt },
       update: { requestedAt, purgedAt: null, fenceUntil: null, attempts: 0 },
     });
     await revokeUserAccess(tx as unknown as typeof db, userId);
-  }, PURGE_TX);
+  }, purgeTx());
   rememberDataWipe(userId, { purgedAt: null, fenceUntil: null });
   try {
     await finishDataWipe(userId);
@@ -119,7 +125,7 @@ export async function finishDataWipe(userId: string): Promise<void> {
           "updatedAt" = (now() AT TIME ZONE 'UTC')
       WHERE "userId" = ${userId}
       RETURNING "purgedAt", "fenceUntil"`;
-  }, PURGE_TX);
+  }, purgeTx());
   const row = stamped[0];
   if (row) rememberDataWipe(userId, row);
 }

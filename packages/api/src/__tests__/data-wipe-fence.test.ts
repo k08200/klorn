@@ -92,15 +92,46 @@ describe("assertWorkMayWrite", () => {
   });
 });
 
+// Prisma's own error classes, matched by name as the module does.
+class PrismaClientUnknownRequestError extends Error {}
+class PrismaClientKnownRequestError extends Error {
+  constructor(
+    message: string,
+    readonly meta: { code: string },
+  ) {
+    super(message);
+  }
+}
+class PrismaClientValidationError extends Error {}
+
 describe("isDataWipeFenceError", () => {
-  it("recognizes the app error and the trigger's message inside any wrapper", () => {
+  it("recognizes the app error and both shapes Prisma gives the trigger's error", () => {
     expect(isDataWipeFenceError(new DataWipeFenceError())).toBe(true);
+    // A model query: an unknown request error that carries the SQLSTATE.
     expect(
       isDataWipeFenceError(
-        new Error(`Invalid prisma.note.create() invocation: ERROR: ${DATA_WIPE_FENCE_MARKER}: ...`),
+        new PrismaClientUnknownRequestError(
+          `Error occurred during query execution: ConnectorError(... code: "KW001", message: "${DATA_WIPE_FENCE_MARKER}: insert into Note rejected" ...)`,
+        ),
       ),
     ).toBe(true);
+    // Raw SQL: a known request error with meta.code.
+    expect(
+      isDataWipeFenceError(
+        new PrismaClientKnownRequestError("Raw query failed.", { code: "KW001" }),
+      ),
+    ).toBe(true);
+  });
+
+  it("ignores other errors, even one whose text quotes the marker", () => {
     expect(isDataWipeFenceError(new Error("unique constraint failed"))).toBe(false);
+    expect(isDataWipeFenceError(new Error(`${DATA_WIPE_FENCE_MARKER} KW001`))).toBe(false);
+    // A validation error echoes the caller's input.
+    expect(
+      isDataWipeFenceError(
+        new PrismaClientValidationError(`Unknown arg: "${DATA_WIPE_FENCE_MARKER} KW001"`),
+      ),
+    ).toBe(false);
   });
 });
 

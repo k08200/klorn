@@ -161,6 +161,13 @@ describe("purgeAllUserData (data wipe that keeps the account)", () => {
     }
   });
 
+  it("records nothing when the account row was not there to lock", async () => {
+    TX.$queryRaw.mockImplementationOnce(async () => []);
+    await expect(purgeAllUserData("user-1")).rejects.toThrow("could not be locked");
+    expect(TX.dataWipe.upsert).not.toHaveBeenCalled();
+    expect(purgeUserData).not.toHaveBeenCalled();
+  });
+
   it("deletes no row when the wipe could not be recorded", async () => {
     prisma.$transaction.mockRejectedValueOnce(new Error("pool exhausted"));
     await expect(purgeAllUserData("user-1")).rejects.toThrow("pool exhausted");

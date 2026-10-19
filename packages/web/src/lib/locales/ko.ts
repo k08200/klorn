@@ -610,6 +610,8 @@ const ko: Record<string, string> = {
     "계정, Google 액세스, 모든 데이터를 영구히 삭제합니다. 되돌릴 수 없습니다.",
   "settings.toast.deleteWorkspaceFailed": "워크스페이스 데이터를 삭제하지 못했습니다.",
   "settings.toast.workspaceDeleted": "워크스페이스 데이터가 삭제되었습니다.",
+  "settings.toast.workspaceDeletionPending":
+    "삭제를 시작했습니다. Klorn의 접근은 이미 끊겼고, 나머지는 백그라운드에서 마무리 중입니다.",
   "settings.toast.deleteAccountFailed": "계정을 삭제하지 못했습니다.",
   "settings.about.tagline": "Decision OS",
   "settings.about.desc": "흩어진 탭을 줄이고 다음 결정을 더 명확하게 만들기 위해 만들었습니다.",

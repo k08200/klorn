@@ -642,6 +642,8 @@ const de: Record<string, string> = {
   "settings.toast.deleteWorkspaceFailed":
     "Die Daten des Arbeitsbereichs konnten nicht gelöscht werden.",
   "settings.toast.workspaceDeleted": "Daten des Arbeitsbereichs gelöscht.",
+  "settings.toast.workspaceDeletionPending":
+    "Löschung gestartet. Klorns Zugriff ist bereits entzogen, der Rest wird im Hintergrund abgeschlossen.",
   "settings.toast.deleteAccountFailed": "Dein Konto konnte nicht gelöscht werden.",
   "settings.about.tagline": "Decision OS",
   "settings.about.desc":

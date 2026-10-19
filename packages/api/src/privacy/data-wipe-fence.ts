@@ -129,11 +129,29 @@ export class DataWipeFenceError extends Error {
   }
 }
 
-/** True for the app check's error and for the trigger's (any Prisma wrapper). */
+/** The trigger's SQLSTATE (migration 20261019010000_data_wipe_fence). */
+export const DATA_WIPE_FENCE_SQLSTATE = "KW001";
+
+const PRISMA_REQUEST_ERRORS = new Set([
+  "PrismaClientKnownRequestError",
+  "PrismaClientUnknownRequestError",
+]);
+
+/**
+ * True for the app check's error and for the trigger's. Prisma reports the
+ * trigger as a known request error with `meta.code` KW001 for raw SQL, and as
+ * an unknown request error whose message carries the code for a model query.
+ * Only those classes count: a validation error echoes the caller's input, which
+ * could contain the marker.
+ */
 export function isDataWipeFenceError(err: unknown): boolean {
   if (err instanceof DataWipeFenceError) return true;
-  const message = err instanceof Error ? err.message : typeof err === "string" ? err : "";
-  return message.includes(DATA_WIPE_FENCE_MARKER);
+  if (!(err instanceof Error) || !PRISMA_REQUEST_ERRORS.has(err.constructor.name)) return false;
+  const meta = (err as { meta?: { code?: unknown } }).meta;
+  if (meta?.code === DATA_WIPE_FENCE_SQLSTATE) return true;
+  return (
+    err.message.includes(DATA_WIPE_FENCE_MARKER) && err.message.includes(DATA_WIPE_FENCE_SQLSTATE)
+  );
 }
 
 export interface DataWipeState {

@@ -617,6 +617,8 @@ const en: Record<string, string> = {
     "Permanently delete your account, Google access, and all data. This cannot be undone.",
   "settings.toast.deleteWorkspaceFailed": "Could not delete workspace data.",
   "settings.toast.workspaceDeleted": "Workspace data deleted.",
+  "settings.toast.workspaceDeletionPending":
+    "Deletion started. Klorn's access is already removed, and the rest is finishing in the background.",
   "settings.toast.deleteAccountFailed": "Could not delete your account.",
   "settings.about.tagline": "Decision OS",
   "settings.about.desc": "Built to reduce scattered tabs and make the next decision clearer.",

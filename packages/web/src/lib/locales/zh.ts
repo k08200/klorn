@@ -580,6 +580,8 @@ const zh: Record<string, string> = {
   "settings.deleteAccount.desc": "永久删除你的账户、Google 授权和全部数据。此操作不可撤销。",
   "settings.toast.deleteWorkspaceFailed": "无法删除工作区数据。",
   "settings.toast.workspaceDeleted": "工作区数据已删除。",
+  "settings.toast.workspaceDeletionPending":
+    "已开始删除。Klorn 的访问权限已被移除，其余部分正在后台完成。",
   "settings.toast.deleteAccountFailed": "无法删除你的账户。",
   "settings.about.tagline": "Decision OS",
   "settings.about.desc": "为减少散乱的标签页、让下一个决定更清晰而生。",

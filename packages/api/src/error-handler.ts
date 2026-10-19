@@ -22,6 +22,7 @@ export function handleError(error: FastifyError, request: FastifyRequest, reply:
   // trigger): the account's data wipe is finishing or the request began before
   // it. A plain 409 the user can act on, never the trigger's text.
   if (isDataWipeFenceError(error)) {
+    request.log.warn({ code: "DATA_WIPE_IN_PROGRESS" }, "write rejected by the data-wipe fence");
     const fence = new DataWipeFenceError();
     return reply.code(fence.statusCode).send({
       error: "Your data was just wiped. Try again in a few minutes.",

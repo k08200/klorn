@@ -617,6 +617,8 @@ const ja: Record<string, string> = {
     "アカウント、Googleアクセス、すべてのデータを完全に削除します。取り消せません。",
   "settings.toast.deleteWorkspaceFailed": "ワークスペースのデータを削除できませんでした。",
   "settings.toast.workspaceDeleted": "ワークスペースのデータを削除しました。",
+  "settings.toast.workspaceDeletionPending":
+    "削除を開始しました。Klorn のアクセスはすでに取り消され、残りはバックグラウンドで完了処理中です。",
   "settings.toast.deleteAccountFailed": "アカウントを削除できませんでした。",
   "settings.about.tagline": "Decision OS",
   "settings.about.desc": "散らばったタブを減らし、次の判断を明確にするために作られました。",

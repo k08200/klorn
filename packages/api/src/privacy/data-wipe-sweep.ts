@@ -16,21 +16,24 @@ import { newWork } from "../work-context.js";
 
 export const DATA_WIPE_SWEEP_INTERVAL_MS = 10 * 60_000;
 const PENDING_GRACE_MS = 2 * 60_000;
+/** A wipe pending this long is reported as stuck on every sweep until it ends. */
+const STUCK_AFTER_MS = 30 * 60_000;
 const FIRST_SWEEP_DELAY_MS = 60_000;
 const SWEEP_BATCH = 20;
 
 export async function runDataWipeSweep(
   now = new Date(),
 ): Promise<{ finished: number; failed: number }> {
+  // Fewest attempts first, so a wipe that keeps failing cannot starve the rest.
   const pending = await prisma.dataWipe.findMany({
     where: { purgedAt: null, requestedAt: { lt: new Date(now.getTime() - PENDING_GRACE_MS) } },
-    select: { userId: true },
-    orderBy: { requestedAt: "asc" },
+    select: { userId: true, requestedAt: true },
+    orderBy: [{ attempts: "asc" }, { requestedAt: "asc" }],
     take: SWEEP_BATCH,
   });
   let finished = 0;
   let failed = 0;
-  for (const { userId } of pending) {
+  for (const { userId, requestedAt } of pending) {
     try {
       await finishDataWipe(userId);
       finished++;
@@ -38,6 +41,18 @@ export async function runDataWipeSweep(
       failed++;
       console.error(`[DATA-WIPE] Sweep could not finish the wipe of ${userId}:`, err);
       captureError(err, { tags: { scope: "data-wipe.sweep", userId } });
+      await prisma.dataWipe
+        .update({ where: { userId }, data: { attempts: { increment: 1 } } })
+        .catch((countErr: unknown) => {
+          console.error(`[DATA-WIPE] Could not count the failed attempt for ${userId}:`, countErr);
+        });
+      if (now.getTime() - requestedAt.getTime() > STUCK_AFTER_MS) {
+        const stuck = new Error("data wipe pending for over 30 minutes");
+        console.error(
+          `[DATA-WIPE] Wipe of ${userId} is stuck (pending since ${requestedAt.toISOString()}).`,
+        );
+        captureError(stuck, { tags: { scope: "data-wipe.stuck", userId } });
+      }
     }
   }
   return { finished, failed };

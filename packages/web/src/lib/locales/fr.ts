@@ -630,6 +630,8 @@ const fr: Record<string, string> = {
     "Supprime définitivement votre compte, l'accès Google et toutes les données. Irréversible.",
   "settings.toast.deleteWorkspaceFailed": "Impossible de supprimer les données de l'espace.",
   "settings.toast.workspaceDeleted": "Données de l'espace supprimées.",
+  "settings.toast.workspaceDeletionPending":
+    "Suppression lancée. L'accès de Klorn est déjà retiré, le reste se termine en arrière-plan.",
   "settings.toast.deleteAccountFailed": "Impossible de supprimer votre compte.",
   "settings.about.tagline": "Decision OS",
   "settings.about.desc":

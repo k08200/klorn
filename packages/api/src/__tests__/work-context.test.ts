@@ -67,6 +67,7 @@ describe("lazy thenables", () => {
     let seenAt: Date | undefined;
     // A Prisma query does nothing until `.then` is called.
     const lazy = {
+      // biome-ignore lint/suspicious/noThenProperty: a hand-made thenable is what this test is about.
       then(resolve: (value: Date) => void) {
         seenAt = workStartedAt();
         resolve(seenAt);

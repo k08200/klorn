@@ -4,6 +4,9 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
 const { handleError } = await import("../error-handler.js");
+const { DataWipeFenceError, DATA_WIPE_FENCE_MARKER } = await import(
+  "../privacy/data-wipe-fence.js"
+);
 
 async function buildApp() {
   const app = Fastify();
@@ -58,10 +61,6 @@ describe("handleError — global Fastify error handler", () => {
 });
 
 describe("handleError — the data-wipe fence", () => {
-  const { DataWipeFenceError, DATA_WIPE_FENCE_MARKER } = await import(
-    "../privacy/data-wipe-fence.js"
-  );
-
   async function appThrowing(err: unknown) {
     const app = Fastify();
     app.setErrorHandler(handleError);
@@ -80,9 +79,10 @@ describe("handleError — the data-wipe fence", () => {
   });
 
   it("answers the same for the trigger's rejection, never echoing its text", async () => {
+    class PrismaClientUnknownRequestError extends Error {}
     const app = await appThrowing(
-      new Error(
-        `Invalid prisma.note.create(): ERROR: ${DATA_WIPE_FENCE_MARKER}: insert into Note rejected`,
+      new PrismaClientUnknownRequestError(
+        `Invalid prisma.note.create(): code: "KW001", message: "${DATA_WIPE_FENCE_MARKER}: insert into Note rejected"`,
       ),
     );
     const res = await app.inject({ method: "GET", url: "/write" });

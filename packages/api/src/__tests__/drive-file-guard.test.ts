@@ -307,6 +307,9 @@ describe("the linked drive accounts (D5a, D5b): one module, the purge and the ke
     const naming = files.filter((f) => ACCOUNT_NAME.test(codeOf(f.text))).map((f) => f.path);
     expect(naming.sort()).toEqual([
       ACCOUNTS_MODULE,
+      // The data-wipe fence lists the model's name among the tables its
+      // trigger guards; it never queries the table.
+      "privacy/data-wipe-fence.ts",
       "purge-user-data.ts",
       "scripts/reencrypt-tokens.ts",
     ]);
