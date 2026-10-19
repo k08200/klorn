@@ -1028,7 +1028,7 @@ final class AppModel {
         defer { if isCurrent(session) { isLoadingEmail = false } }
         do {
             let detail = try await api.get(
-                "/api/email/\(emailDbId)", as: EmailDetail.self)
+                emailDetailPath(id: emailDbId, lang: L10n.resolvedCode(override: L10n.override)), as: EmailDetail.self)
             guard isCurrent(session) else { return }
             openedEmail = detail
             markOpened(emailDbId)
@@ -1211,7 +1211,7 @@ final class AppModel {
         // report "summarize failed" — the pane just keeps the old band until
         // the next open re-fetches it.
         guard isCurrent(session) else { return }
-        if let updated = try? await api.get("/api/email/\(email.id)", as: EmailDetail.self),
+        if let updated = try? await api.get(emailDetailPath(id: email.id, lang: L10n.resolvedCode(override: L10n.override)), as: EmailDetail.self),
            isCurrent(session), openedEmail?.id == email.id {
             openedEmail = updated
         }
@@ -2169,7 +2169,7 @@ final class AppModel {
         defer { if isCurrent(session) { isLoadingEmail = false } }
         do {
             let detail = try await api.get(
-                "/api/email/\(hit.id)", as: EmailDetail.self)
+                emailDetailPath(id: hit.id, lang: L10n.resolvedCode(override: L10n.override)), as: EmailDetail.self)
             guard isCurrent(session) else { return }
             openedEmail = detail
             // Same contract as openItem: explicit PATCH write, never a GET
@@ -2753,7 +2753,7 @@ final class AppModel {
         do {
             let selectionAtFetch = selectedInbox
             let fetched = try await api.get(
-                firewallPath(selected: selectionAtFetch), as: FirewallResponse.self)
+                firewallPath(selected: selectionAtFetch, lang: L10n.resolvedCode(override: L10n.override)), as: FirewallResponse.self)
             // A response that outlived its session is the previous account's
             // mail: it reaches neither the cache nor the screen.
             guard isCurrent(session) else { return }
@@ -2810,7 +2810,7 @@ final class AppModel {
             return fetched.removingIDs(dismissed).items(for: .push)
         }
         do {
-            let all = try await api.get(firewallPath(selected: "all"), as: FirewallResponse.self)
+            let all = try await api.get(firewallPath(selected: "all", lang: L10n.resolvedCode(override: L10n.override)), as: FirewallResponse.self)
             guard isCurrent(session) else { return nil }
             queueCache["all"] = all
             return all.removingIDs(dismissed).items(for: .push)
@@ -2906,13 +2906,14 @@ final class AppModel {
         pollTask = nil
     }
 
-    private static func message(_ reason: SignInFailure) -> String {
+    /// In the UI language (design detail pass: no English in the Korean UI).
+    static func message(_ reason: SignInFailure) -> String {
         switch reason {
-        case .nonceFailed: "Couldn't reach Klorn to start sign-in. Check the API and try again."
-        case .invalidNonce: "The sign-in session wasn't recognized. Please try again."
-        case .expired: "Sign-in took too long and expired. Please try again."
-        case .timeout: "Timed out waiting for the browser. Finish sign-in there, then retry."
-        case .cancelled: "Sign-in was cancelled."
+        case .nonceFailed: L("auth.failed.nonce")
+        case .invalidNonce: L("auth.failed.invalidNonce")
+        case .expired: L("auth.failed.expired")
+        case .timeout: L("auth.failed.timeout")
+        case .cancelled: L("auth.failed.cancelled")
         }
     }
 
@@ -2993,11 +2994,14 @@ final class AppModel {
         await loadQueue()
     }
 
-    private static func describe(_ error: Error) -> String {
+    static func describe(_ error: Error) -> String {
         Log.app.error("queue load failed: \(String(describing: error), privacy: .private)")
         switch error {
         case APIError.http(let code, let msg): return msg ?? L("error.server", code)
-        case APIError.transport:
+        case APIError.transport(_, let code):
+            // Never the URLSession's own sentence: it is in the SYSTEM
+            // language, not the app's, and reads like a log line.
+            if code == URLError.Code.timedOut.rawValue { return L("error.timeout") }
             return SurfaceStateRules.failureKind(error) == .offline
                 ? L("error.network") : L("error.unreachable")
         case APIError.decoding: return L("error.badResponse")

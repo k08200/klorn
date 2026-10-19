@@ -93,7 +93,9 @@ struct WaitingOnRow: View {
                         .foregroundStyle(Theme.labelTint(.needsReply))
                         .padding(.horizontal, 6).padding(.vertical, 2)
                         .background(Theme.labelTint(.needsReply).opacity(0.13), in: Capsule())
-                    let time = mailTimeLabel(iso: item.sentAt, now: Date())
+                    let time = mailTimeLabel(
+                    iso: item.sentAt, now: MailClock.now(renderingOffscreen: Theme.isRenderingOffscreen),
+                    relativeDays: Theme.isRenderingOffscreen)
                     if !time.isEmpty {
                         Text(time).font(Theme.Typo.caption.monospacedDigit())
                             .foregroundStyle(Theme.textDim)

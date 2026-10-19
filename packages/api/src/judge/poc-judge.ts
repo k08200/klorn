@@ -147,15 +147,39 @@ interface LlmFeatureResponse {
 const MAX_FEW_SHOT_EXAMPLES = SENDER_PRIOR_POLICY.maxFewShot;
 
 /**
+ * Sender-written text that has to sit in the prompt outside an untrusted
+ * wrapper, made one clean line: whitespace collapsed first (word boundaries
+ * kept), THEN control / bidi / zero-width characters stripped, then capped. A
+ * sender must not be able to smuggle newline- or RTLO-delimited fake
+ * instructions into a position of implicit trust.
+ */
+function oneCleanLine(s: string, max: number): string {
+  return (
+    s
+      .replace(/\s+/g, " ")
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: deliberately stripping C0/C1 control + bidi/zero-width chars from sender text before it enters the prompt
+      .replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g, "")
+      .trim()
+      .slice(0, max)
+  );
+}
+
+/**
  * Render past manual corrections as a ground-truth block. The model scores
  * features (not tiers), so the block spells out the feature→tier rule it
  * should aim for when an example matches the incoming email's pattern.
  */
 function buildCorrectionsBlock(corrections: CorrectionExample[]): string {
   if (corrections.length === 0) return "";
+  // from and subject are the original sender's text sitting OUTSIDE any
+  // wrapper (the block is ground truth by design), so each is flattened to one
+  // clean line: no newline-delimited fake instruction can follow the example.
   const lines = corrections
     .slice(0, MAX_FEW_SHOT_EXAMPLES)
-    .map((c) => `- from: ${c.from.slice(0, 120)} | subject: ${c.subject.slice(0, 80)} → ${c.tier}`);
+    .map(
+      (c) =>
+        `- from: ${oneCleanLine(c.from, 120)} | subject: ${oneCleanLine(c.subject, 80)} → ${c.tier}`,
+    );
   return `
 
 The user manually corrected these past classifications (ground truth for how THIS user tiers similar mail — PUSH = interrupt now, QUEUE = review later, SILENT = clear marketing, AUTO = safe to auto-handle). When the email matches one of these patterns, score your features so the rule lands on the corrected tier:
@@ -277,21 +301,11 @@ export function buildSenderTraitsBlock(traits?: SenderTraitFact[] | null): strin
     recurring_intent: "Recurring intent",
   };
   // evidenceText is a verbatim quote from UNTRUSTED email content (factValue is
-  // enum-validated, lower risk). This block sits OUTSIDE the <untrusted_content>
-  // wrapper, so collapse whitespace first (preserving word boundaries), THEN
-  // strip control / bidi / zero-width characters, and cap length — a sender must
-  // not be able to smuggle newline- or RTLO-delimited fake instructions into a
-  // position of implicit trust.
-  const clean = (s: string, max: number) =>
-    s
-      .replace(/\s+/g, " ")
-      // biome-ignore lint/suspicious/noControlCharactersInRegex: deliberately stripping C0/C1 control + bidi/zero-width chars from untrusted trait text before it enters the prompt
-      .replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g, "")
-      .trim()
-      .slice(0, max);
+  // enum-validated, lower risk): flattened to one clean line AND wrapped as
+  // untrusted, so a sender cannot smuggle a fake instruction into this block.
   const lines = traits.map(
     (t) =>
-      `- ${label[t.factKind] ?? t.factKind}: ${clean(t.factValue, 80)} — "${clean(t.evidenceText, 200)}"`,
+      `- ${label[t.factKind] ?? t.factKind}: ${oneCleanLine(t.factValue, 80)} — ${wrapUntrusted(oneCleanLine(t.evidenceText, 200), "sender-trait-evidence")}`,
   );
   return `
 

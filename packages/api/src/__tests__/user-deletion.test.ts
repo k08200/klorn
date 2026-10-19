@@ -13,7 +13,11 @@ const calls = vi.hoisted(() => ({ order: [] as string[] }));
 const prisma = vi.hoisted(() => ({
   $transaction: vi.fn(),
   llmUsageLog: { deleteMany: vi.fn((arg: unknown) => ({ op: "llmUsageLog.deleteMany", arg })) },
-  user: { delete: vi.fn((arg: unknown) => ({ op: "user.delete", arg })) },
+  user: {
+    delete: vi.fn((arg: unknown) => ({ op: "user.delete", arg })),
+    findUnique: vi.fn(async () => ({ email: "Ann@Example.com" })),
+  },
+  waitlist: { deleteMany: vi.fn((arg: unknown) => ({ op: "waitlist.deleteMany", arg })) },
 }));
 vi.mock("../db.js", () => ({
   prisma,
@@ -25,7 +29,11 @@ const purgeUserObjects = vi.hoisted(() => vi.fn());
 vi.mock("../storage/runtime.js", () => ({ purgeUserObjects }));
 
 const purgeUserData = vi.hoisted(() => vi.fn());
-vi.mock("../purge-user-data.js", () => ({ purgeUserData }));
+const revokeUserAccess = vi.hoisted(() => vi.fn());
+vi.mock("../purge-user-data.js", () => ({ purgeUserData, revokeUserAccess }));
+
+const captureError = vi.hoisted(() => vi.fn());
+vi.mock("../sentry.js", () => ({ captureError }));
 
 import { deleteUserAndAllData, purgeAllUserData } from "../user-deletion.js";
 
@@ -46,6 +54,10 @@ beforeEach(() => {
     calls.order.push("rows");
     return Promise.resolve();
   });
+  revokeUserAccess.mockReset().mockImplementation(() => {
+    calls.order.push("access");
+    return Promise.resolve();
+  });
 });
 
 describe("deleteUserAndAllData (account deletion)", () => {
@@ -57,6 +69,18 @@ describe("deleteUserAndAllData (account deletion)", () => {
     expect(prisma.llmUsageLog.deleteMany).toHaveBeenCalledWith({ where: { userId: "user-1" } });
   });
 
+  it("removes the waitlist entry for the account's address in the same transaction", async () => {
+    await deleteUserAndAllData("user-1");
+
+    // Exact matches only: an insensitive filter is ILIKE, where "_" in an
+    // address is a wildcard that could match someone else's entry.
+    expect(prisma.waitlist.deleteMany).toHaveBeenCalledWith({
+      where: { email: { in: ["Ann@Example.com", "ann@example.com"] } },
+    });
+    const ops = (prisma.$transaction.mock.calls[0]?.[0] as Array<{ op: string }>).map((o) => o.op);
+    expect(ops).toEqual(["llmUsageLog.deleteMany", "waitlist.deleteMany", "user.delete"]);
+  });
+
   it("keeps the account when the objects could not be deleted", async () => {
     purgeUserObjects.mockRejectedValue(new Error("bucket is down"));
     await expect(deleteUserAndAllData("user-1")).rejects.toThrow("bucket is down");
@@ -66,16 +90,62 @@ describe("deleteUserAndAllData (account deletion)", () => {
 });
 
 describe("purgeAllUserData (data wipe that keeps the account)", () => {
-  it("deletes the user's objects first, then every row", async () => {
+  it("deletes the objects, cuts off access, deletes every row, then sweeps once more", async () => {
     await purgeAllUserData("user-1");
-    expect(calls.order).toEqual(["storage", "database", "rows"]);
+    // Access goes in its own short transaction, so no new sync or job starts
+    // for the user while the long one runs; the final sweep takes what a job
+    // already running inserted after the rows' deleteMany.
+    expect(calls.order).toEqual([
+      "storage",
+      "database",
+      "access",
+      "database",
+      "rows",
+      "database",
+      "rows",
+    ]);
     expect(purgeUserObjects).toHaveBeenCalledWith("user-1");
+    expect(revokeUserAccess).toHaveBeenCalledWith(TX, "user-1");
     expect(purgeUserData).toHaveBeenCalledWith(TX, "user-1");
   });
 
-  it("keeps the 60 second transaction budget of the purge", async () => {
+  it("keeps the 60 second transaction budget of the purge, for every transaction", async () => {
     await purgeAllUserData("user-1");
-    expect(prisma.$transaction.mock.calls[0]?.[1]).toEqual({ maxWait: 10_000, timeout: 60_000 });
+    expect(prisma.$transaction).toHaveBeenCalledTimes(3);
+    for (const call of prisma.$transaction.mock.calls) {
+      expect(call[1]).toEqual({ maxWait: 10_000, timeout: 60_000 });
+    }
+  });
+
+  it("deletes no row when access could not be cut off", async () => {
+    prisma.$transaction.mockRejectedValueOnce(new Error("pool exhausted"));
+    await expect(purgeAllUserData("user-1")).rejects.toThrow("pool exhausted");
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(purgeUserData).not.toHaveBeenCalled();
+  });
+
+  it("does not sweep again when the full purge failed", async () => {
+    prisma.$transaction
+      .mockImplementationOnce(async (work: unknown) => (work as (tx: unknown) => unknown)(TX))
+      .mockRejectedValueOnce(new Error("timed out"));
+    await expect(purgeAllUserData("user-1")).rejects.toThrow("timed out");
+    expect(prisma.$transaction).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports a failed final sweep without failing a wipe that already committed", async () => {
+    const sweepError = new Error("connection reset");
+    prisma.$transaction
+      .mockImplementationOnce(async (work: unknown) => (work as (tx: unknown) => unknown)(TX))
+      .mockImplementationOnce(async (work: unknown) => (work as (tx: unknown) => unknown)(TX))
+      .mockRejectedValueOnce(sweepError);
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(purgeAllUserData("user-1")).resolves.toBeUndefined();
+    // Logged as well: captureError is a no-op on a deployment without Sentry.
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining("user-1"), sweepError);
+    expect(captureError).toHaveBeenCalledWith(sweepError, {
+      tags: { scope: "user-deletion.final-sweep", userId: "user-1" },
+    });
+    logged.mockRestore();
   });
 
   it("keeps every row when the objects could not be deleted", async () => {

@@ -16,6 +16,7 @@ import {
   androidActionTypes,
   type DataPush,
 } from "../push/android";
+import { kv } from "./kv";
 import { platformName } from "./native";
 import type { IncomingPush } from "./push";
 
@@ -33,6 +34,14 @@ export interface ChannelLabels extends ActionLabels {
   pushChannelBody: string;
   otherChannel: string;
 }
+
+/**
+ * Where the native service (android/.../push/KlornMessagingService.java) reads
+ * its button and channel names, so a notification it posts while the app is
+ * closed speaks the app language, not only the device's. Same key, same
+ * Capacitor Preferences file ("CapacitorStorage") on both sides.
+ */
+export const NATIVE_LABELS_KEY = "klorn-android-push-labels";
 
 /**
  * Channels (PUSH = importance high) and the action sets, in the app language.
@@ -60,6 +69,20 @@ export async function setupAndroidNotifications(labels: ChannelLabels): Promise<
     await ln.registerActionTypes({ types: androidActionTypes(labels) });
   } catch {
     // Plugin not linked (an old build) — FCM notification messages still show, without actions.
+  }
+  try {
+    await kv.setItem(
+      NATIVE_LABELS_KEY,
+      JSON.stringify({
+        later: labels.later,
+        done: labels.done,
+        review: labels.review,
+        pushChannel: labels.pushChannel,
+        otherChannel: labels.otherChannel,
+      }),
+    );
+  } catch {
+    // The native side falls back to the device language.
   }
 }
 

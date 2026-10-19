@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description: "Klorn beta terms of service.",
 };
 
-const updatedAt = "May 4, 2026";
+const updatedAt = "October 17, 2026";
 
 /** Stable, URL-safe anchor id so the TOC links line up with each section. */
 function slug(title: string): string {

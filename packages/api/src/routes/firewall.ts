@@ -75,7 +75,7 @@ import { ensureFreshGmailWatch } from "../mail/gmail.js";
 import { draftReadyFor, replyStateOf } from "../mail/reply-state.js";
 import { senderLabelsFor, type UserLabelCategory } from "../mail/sender-labels.js";
 import { senderEmail } from "../notify/notification-format.js";
-import { getUserNotificationLanguage } from "../notify/notification-strings.js";
+import { LANG_QUERY_PROPERTY, readerLanguageFor } from "../notify/request-language.js";
 import { captureError } from "../sentry.js";
 import { darkRouteGate } from "./dark-route-gate.js";
 
@@ -351,6 +351,8 @@ const firewallListQuerySchema = {
   additionalProperties: false,
   properties: {
     inbox: { type: "string", maxLength: 500 },
+    // The client's UI language for the reasons (request-language.ts).
+    lang: LANG_QUERY_PROPERTY,
   },
 } as const;
 
@@ -539,13 +541,14 @@ export async function firewallRoutes(app: FastifyInstance) {
   app.get(
     "/",
     { schema: { querystring: firewallListQuerySchema } },
-    async (request): Promise<FirewallResponse> => {
+    async (request, reply): Promise<FirewallResponse> => {
       const userId = getUserId(request);
       // Deterministic reasons are stored as keys (tier-reason-strings.ts) and
       // rendered here, so switching language re-reads existing rows instead of
       // leaving them frozen in the language they were written in. Resolved once
-      // per request, not per row.
-      const reasonLanguage = await getUserNotificationLanguage(userId);
+      // per request, not per row, in the client's UI language when it names one
+      // (lang → Accept-Language → stored notification language → en).
+      const reasonLanguage = await readerLanguageFor(request, reply, userId);
       // Per-inbox scope (mirrors routes/email.ts's `inbox=` param): absent/"all"
       // → every inbox (100% backward compatible); "primary" → primary-account
       // mail plus items with no email at all (GitHub etc. — the primary is the

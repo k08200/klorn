@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
 /** The fixture clock: Thursday 2026-10-16 10:28 KST (Main artboard: "11:00 · 32분 후"). */
 export const FIXTURE_NOW = new Date("2026-10-16T10:28:00+09:00");
@@ -127,18 +127,35 @@ export async function untilSkeleton(page: Page): Promise<void> {
  * "firewall" — before the network goes away.
  */
 export async function untilPersisted(page: Page, needle: string): Promise<void> {
-  await page.waitForFunction(
-    (fragment) => {
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i) ?? "";
-        if (!key.includes("klorn-query-cache")) continue;
-        if ((localStorage.getItem(key) ?? "").includes(fragment)) return true;
+  // The cache is sealed (platform/cache-crypto.ts): open it in the page with
+  // the browser-mode key, exactly as the app does. The stored bytes themselves
+  // must never contain the fragment in the clear. (Polled with evaluate, not
+  // waitForFunction: an async predicate's Promise would count as truthy there.)
+  const holds = () =>
+    page.evaluate(async (fragment) => {
+      const stored = localStorage.getItem("klorn-query-cache-v2");
+      const rawKey = localStorage.getItem("klorn-cache-key");
+      if (!stored || !rawKey) return "empty";
+      if (stored.includes(fragment)) return "plaintext";
+      const bytes = (b64: string) =>
+        Uint8Array.from(atob(b64.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
+      const [format, iv, body] = stored.split(".");
+      if (format !== "kc1" || !iv || !body) return "format";
+      try {
+        const key = await crypto.subtle.importKey("raw", bytes(rawKey), "AES-GCM", false, [
+          "decrypt",
+        ]);
+        const plain = await crypto.subtle.decrypt(
+          { name: "AES-GCM", iv: bytes(iv) },
+          key,
+          bytes(body),
+        );
+        return new TextDecoder().decode(plain).includes(fragment) ? "ok" : "missing";
+      } catch {
+        return "unreadable";
       }
-      return false;
-    },
-    needle,
-    { timeout: 15_000 },
-  );
+    }, needle);
+  await expect.poll(holds, { timeout: 15_000, intervals: [100, 250, 500] }).toBe("ok");
 }
 
 /**

@@ -44,7 +44,7 @@ export function HubGate({ children }: { children: ReactNode }) {
   if (!enabled) return null;
   if (pathname === ASSISTANT_HUB) return <>{children}</>;
   return (
-    <div className="mx-auto flex w-full max-w-[1120px] flex-col px-4 md:px-8">
+    <div className="flex w-full max-w-[calc(1120px+4rem)] flex-col px-4 md:px-8">
       <HubTabs pathname={pathname} />
       {children}
     </div>

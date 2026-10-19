@@ -454,7 +454,11 @@ struct EmailDetail: Codable, Sendable, Identifiable {
     let keyPoints: [String]?
     let actionItems: [String]?
     let needsReply: Bool?
+    /// Classifier code (e.g. "action_items_present") — never shown as text.
     let needsReplyReason: String?
+    /// The reason as a sentence in the UI language (`lang=` on the request).
+    /// Absent on older servers; null when the code has no reader line.
+    let needsReplyReasonText: String?
     /// A reply Klorn drafted ahead of time for this mail (proactive drafts).
     /// Absent on older servers, null when none exists or the mail was answered.
     let proactiveDraft: String?
@@ -632,13 +636,14 @@ struct PendingActionsResponse: Codable, Sendable {
         let reasoning: String?
         let createdAt: String?
 
-        /// "Send email" rather than "send_email" — the tool name is an internal
-        /// identifier and reads like one. Unknown tools degrade to a
-        /// de-underscored form instead of being hidden: an action the user
-        /// can't identify is still an action they must be able to decline.
-        var title: String {
-            toolName.split(separator: "_").map(\.capitalized).joined(separator: " ")
-        }
+        /// "메일 보내기" / "Send email" rather than "send_email" — the tool
+        /// name is an internal identifier. Localized from the web's own
+        /// `tool.label.*` map (`ToolLabels`).
+        var title: String { ToolLabels.title(for: toolName) }
+
+        /// Approving this sends mail, which can't be taken back (the web's
+        /// MAIL_SENDING_TOOLS).
+        var sendsMail: Bool { ToolLabels.mailSending.contains(toolName) }
     }
 
     let actions: [Action]
@@ -963,15 +968,30 @@ func emailSearchPath(query: String, selectedInbox: String) -> String {
 }
 
 /// Firewall queue path with the optional per-inbox scope: "all" (or blank)
-/// sends nothing — the server treats an absent `inbox=` as every inbox
+/// sends no `inbox=` — the server treats an absent `inbox=` as every inbox
 /// (routes/firewall.ts mirrors routes/email.ts's param). Encoded like
-/// emailSearchPath so hyphenated linked ids survive the round trip. Pure.
-func firewallPath(selected: String) -> String {
-    let base = "/api/inbox/firewall"
-    guard let inbox = inboxQueryParam(selected: selected),
-          let enc = inbox.addingPercentEncoding(withAllowedCharacters: .alphanumerics)
-    else { return base }
-    return base + "?inbox=\(enc)"
+/// emailSearchPath so hyphenated linked ids survive the round trip.
+/// `lang` is the app UI language: the server renders template tier reasons in
+/// it instead of the stored notification language. Pure.
+func firewallPath(selected: String, lang: String) -> String {
+    var query = [langQueryItem(lang)]
+    if let inbox = inboxQueryParam(selected: selected),
+       let enc = inbox.addingPercentEncoding(withAllowedCharacters: .alphanumerics) {
+        query.insert("inbox=\(enc)", at: 0)
+    }
+    return "/api/inbox/firewall?" + query.joined(separator: "&")
+}
+
+/// Email detail path. `lang` is the app UI language, so server-composed lines
+/// (the needs-reply reason) match the screen. Pure.
+func emailDetailPath(id: String, lang: String) -> String {
+    "/api/email/\(id)?" + langQueryItem(lang)
+}
+
+/// `lang=<code>` for the reader routes; the code is one of AppLanguage's raw
+/// values, encoded anyway so a malformed one can never break the query.
+func langQueryItem(_ lang: String) -> String {
+    "lang=" + (lang.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "en")
 }
 
 /// Folder listing path with the per-inbox scope. Unlike firewallPath, "all"
@@ -1450,11 +1470,14 @@ func eventTimeLabel(
 /// today → clock time, this year → month + day, older → adds the year.
 /// Malformed ISO degrades to an empty string (row shows no time), never a
 /// crash. Calendar + locale injectable so the harness pins the math in UTC.
+/// `relativeDays` (offscreen preview renders only, see `MailClock`) swaps the
+/// past week's month + day for "Yesterday" or the weekday.
 func mailTimeLabel(
     iso: String?,
     now: Date,
     calendar: Calendar = .current,
-    locale: Locale = L10n.activeLocale
+    locale: Locale = L10n.activeLocale,
+    relativeDays: Bool = false
 ) -> String {
     guard let iso else { return "" }
     let withMillis = ISO8601DateFormatter()
@@ -1468,6 +1491,9 @@ func mailTimeLabel(
     formatter.locale = locale
     if calendar.isDate(date, inSameDayAs: now) {
         formatter.setLocalizedDateFormatFromTemplate("HHmm")
+    } else if relativeDays,
+              let day = relativeDayLabel(date, now: now, calendar: calendar, locale: locale) {
+        return day
     } else if calendar.component(.year, from: date) == calendar.component(.year, from: now) {
         formatter.setLocalizedDateFormatFromTemplate("MMMd")
     } else {
@@ -1787,4 +1813,43 @@ struct DesktopNonce: Codable, Sendable {
 struct DesktopTokenResponse: Codable, Sendable {
     let status: String
     let token: String?
+}
+
+/// Tool identifiers → the words the UI shows, in the UI language (audit M3:
+/// "Send Email" was English inside the Korean app). The keys and their
+/// translations are the web's `tool.label.*` set
+/// (packages/web/src/lib/locales), so both clients say the same thing.
+enum ToolLabels {
+    /// Tools with a `tool.label.<name>` string in every lproj.
+    static let known: Set<String> = [
+        "send_email", "draft_reply", "reply_to_email", "archive_email", "delete_email",
+        "mark_read", "create_event", "delete_event", "schedule_meeting", "create_contact",
+        "update_contact", "delete_contact", "create_note", "delete_note", "create_task",
+        "delete_task", "record_skill", "execute_skill", "classify_emails",
+    ]
+
+    /// Server spellings of the same action.
+    static let aliases: [String: String] = [
+        "create_calendar_event": "create_event",
+        "trash_email": "delete_email",
+        "create_draft": "draft_reply",
+        "draft_email": "draft_reply",
+    ]
+
+    /// Approving these sends mail now.
+    static let mailSending: Set<String> = ["send_email", "reply_to_email"]
+
+    static func key(for toolName: String) -> String? {
+        let name = aliases[toolName] ?? toolName
+        return known.contains(name) ? "tool.label.\(name)" : nil
+    }
+
+    /// Unknown tools degrade to a de-underscored form instead of being
+    /// hidden: an action the user can't identify is still an action they
+    /// must be able to decline.
+    static func title(for toolName: String) -> String {
+        if let key = key(for: toolName) { return L(key) }
+        let words = toolName.split(separator: "_").map(\.capitalized).joined(separator: " ")
+        return words.isEmpty ? L("tool.label.unknown") : words
+    }
 }

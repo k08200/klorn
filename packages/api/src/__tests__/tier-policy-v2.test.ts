@@ -101,6 +101,126 @@ describe("tierFromFeaturesV2", () => {
   });
 });
 
+describe("scheduling intent — bulk and automated 'invite' wording (prod 2026-10-05..18)", () => {
+  // 28 of 30 MEETING items in prod over 14 days were these shapes, and MEETING
+  // notifies. "invit" alone is not scheduling intent when the mail is bulk or
+  // sent by a system account.
+  it("ignores a LinkedIn connection invitation (social, bulk)", () => {
+    expect(
+      detectSchedulingIntent({
+        from: "LinkedIn <invitations@linkedin.com>",
+        subject: "You have an invitation ✉️",
+        snippet: "Anna is waiting for your response",
+        labels: ["UNREAD", "CATEGORY_SOCIAL", "INBOX"],
+        hasListUnsubscribe: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("ignores a referral promo filed under Updates when it carries List-Unsubscribe", () => {
+    expect(
+      detectSchedulingIntent({
+        from: "Uber <uber@uber.com>",
+        subject: "Ria, want 50% off your next 2 trips?",
+        snippet: "Invite friends and family—claim savings.",
+        labels: ["CATEGORY_UPDATES", "INBOX"],
+        hasListUnsubscribe: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("ignores promotions-category invites without a List-Unsubscribe header", () => {
+    expect(
+      detectSchedulingIntent({
+        from: "anar@pitchhut.com",
+        subject: "Your project Klorn is invited to join PitchHut",
+        labels: ["CATEGORY_PROMOTIONS"],
+      }),
+    ).toBe(false);
+  });
+
+  it("ignores system-account invites (repo, workspace)", () => {
+    expect(
+      detectSchedulingIntent({
+        from: "GitHub <noreply@github.com>",
+        subject: "softmarshmallow invited you to gridaco/spock",
+      }),
+    ).toBe(false);
+    expect(
+      detectSchedulingIntent({
+        from: "Notion <notify@mail.notion.so>",
+        subject: "권오영 invited you to Consilience",
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps a calendar invite even from an automated sender", () => {
+    expect(
+      detectSchedulingIntent({
+        from: "Google Calendar <calendar-notification@google.com>",
+        subject: "Invitation: Board sync @ Tue Oct 27, 2026 2pm - 3pm (KST)",
+        hasListUnsubscribe: false,
+      }),
+    ).toBe(true);
+    expect(
+      detectSchedulingIntent({
+        from: "calendar-notification@google.com",
+        subject: "Updated invitation: Board sync @ Wed Oct 28, 2026",
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps a person asking to reschedule", () => {
+    expect(
+      detectSchedulingIntent({
+        from: "Dana Kim <dana@acme.io>",
+        subject: "Can we reschedule Thursday?",
+        labels: ["CATEGORY_PERSONAL", "INBOX"],
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps reschedule notices from scheduling tools (not the noise source)", () => {
+    expect(
+      detectSchedulingIntent({
+        from: "Calendly <notifications@calendly.com>",
+        subject: "Event rescheduled: Intro call with Dana",
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps a forwarded calendar invite", () => {
+    expect(
+      detectSchedulingIntent({
+        from: "calendar-notification@google.com",
+        subject: "Fwd: Invitation: Board sync @ Tue Oct 27, 2026",
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps a person's invite when labels and headers are unknown (IMAP)", () => {
+    expect(
+      detectSchedulingIntent({ from: "dana@acme.io", subject: "Invite: design review next week" }),
+    ).toBe(true);
+  });
+
+  it("treats invitations@ as a system sender", () => {
+    expect(
+      detectSchedulingIntent({ from: "invitations@example.com", subject: "You're invited" }),
+    ).toBe(false);
+  });
+
+  it("still lets a join link through from a person", () => {
+    expect(
+      detectSchedulingIntent({
+        from: "dana@acme.io",
+        subject: "Quick chat",
+        body: "Join: https://zoom.us/j/123",
+      }),
+    ).toBe(true);
+  });
+});
+
 describe("scheduling / transactional detectors", () => {
   it("detects meeting invites by subject and meet links", () => {
     expect(

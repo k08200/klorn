@@ -5,6 +5,7 @@
  * priming screen (push/PushPriming.tsx), never on launch. On the web (dev,
  * Playwright) push is "unsupported" and nothing here runs.
  */
+import { actionFromTap } from "../push/route";
 import { kv } from "./kv";
 import { isNative, platformName } from "./native";
 
@@ -97,10 +98,12 @@ export function installPushListeners(handlers: {
     .then(async (push) => {
       const action = await push.addListener("pushNotificationActionPerformed", (event) => {
         const n = event.notification;
-        handlers.onAction(event.actionId, {
+        const data = (n.data ?? {}) as Record<string, unknown>;
+        // Android: a button on a notification the native service posted arrives as a "tap".
+        handlers.onAction(actionFromTap(event.actionId, data), {
           title: n.title ?? "",
           body: n.body ?? "",
-          data: (n.data ?? {}) as Record<string, unknown>,
+          data,
         });
       });
       // Android: fires for notification messages in the foreground and for

@@ -49,6 +49,48 @@ export function submitPlan(state: LaneSheetState, current: LiveTier | null): Lan
   return { move: state.selected !== current, pin: state.pin, tier: state.selected };
 }
 
+/**
+ * "Turns on by itself when you move the same sender twice" (lane.pin.hint).
+ * The toggle starts OFF — a pin is a standing rule for every future mail, so
+ * it is never set silently — except when this device already moved the same
+ * sender to the same lane within the window: the second move then opens with
+ * the toggle on, and the user can still turn it off. Senders are kept as
+ * hashes (lane-history.ts), never as addresses.
+ */
+export interface LaneMove {
+  sender: string;
+  lane: LiveTier;
+  at: number;
+}
+
+export const PIN_SUGGEST_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+export const LANE_HISTORY_MAX = 200;
+
+/** History after moving `senders` to `lane` at `now`: newest first, one entry per sender, capped. */
+export function rememberMoves(
+  history: readonly LaneMove[],
+  senders: readonly string[],
+  lane: LiveTier,
+  now: number,
+): LaneMove[] {
+  const fresh = [...new Set(senders)].map((sender) => ({ sender, lane, at: now }));
+  const moved = new Set(fresh.map((m) => m.sender));
+  const kept = history.filter((m) => !moved.has(m.sender) && now - m.at <= PIN_SUGGEST_WINDOW_MS);
+  return [...fresh, ...kept].slice(0, LANE_HISTORY_MAX);
+}
+
+/** Whether the toggle should start on: this sender was already moved to this lane recently. */
+export function suggestsPin(
+  history: readonly LaneMove[],
+  sender: string | null,
+  lane: LiveTier,
+  now: number,
+): boolean {
+  if (!sender) return false;
+  const last = history.find((m) => m.sender === sender);
+  return !!last && last.lane === lane && now - last.at <= PIN_SUGGEST_WINDOW_MS;
+}
+
 /** "박서연 <seoyeon@x>" → "박서연"; a bare address stays itself. */
 export function senderLabel(from: string): string {
   const trimmed = from.trim();

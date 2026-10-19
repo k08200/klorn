@@ -272,7 +272,7 @@ function Proposals({
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2 text-sm">
                   <span className="font-mono text-ink">{p.knob}</span>
-                  <span className="rounded-md bg-accent/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-accent-deep ring-1 ring-inset ring-accent/20">
+                  <span className="rounded-md bg-accent/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-accent-deep ring-1 ring-inset ring-accent/20">
                     {p.direction}
                   </span>
                   <span className="tabular-nums text-ink">

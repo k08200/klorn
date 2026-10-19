@@ -13,4 +13,7 @@ ext {
     androidxJunitVersion = '1.3.0'
     androidxEspressoCoreVersion = '3.7.0'
     cordovaAndroidVersion = '14.0.1'
+    // The version @capacitor/push-notifications builds with (its default); the app
+    // compiles against it too, for push/KlornMessagingService.java.
+    firebaseMessagingVersion = '25.0.1'
 }

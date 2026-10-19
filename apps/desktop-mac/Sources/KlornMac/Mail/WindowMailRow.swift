@@ -52,14 +52,15 @@ enum WindowRowRules {
 
     static func content(
         for item: FirewallItem, mixedLanes: Bool, inboxes: [InboxOption],
-        opened: Set<String> = [], now: Date
+        opened: Set<String> = [], now: Date, relativeDays: Bool = false
     ) -> WindowRowContent {
         let subject = decodeHTMLEntities(item.email?.subject ?? item.title)
         let source = showsAccounts(inboxes) ? item.email?.source : nil
         return WindowRowContent(
             sender: a11ySenderLabel(item), subject: subject,
             snippet: snippet(item.email?.snippet, subject: subject),
-            time: mailTimeLabel(iso: item.email?.receivedAt ?? item.surfacedAt, now: now),
+            time: mailTimeLabel(
+                iso: item.email?.receivedAt ?? item.surfacedAt, now: now, relativeDays: relativeDays),
             unread: unread(item.email, opened: opened),
             lane: lane(for: item, mixedLanes: mixedLanes),
             provider: source?.provider, showsAccount: source != nil,
@@ -67,11 +68,12 @@ enum WindowRowRules {
     }
 
     static func content(
-        for hit: EmailSearchItem, inboxes: [InboxOption], opened: Set<String> = [], now: Date
+        for hit: EmailSearchItem, inboxes: [InboxOption], opened: Set<String> = [], now: Date,
+        relativeDays: Bool = false
     ) -> WindowRowContent {
         let name = senderDisplayName(hit.from.map(decodeHTMLEntities))
         let subject = decodeHTMLEntities(hit.subject ?? L("mail.noSubjectParen"))
-        let time = mailTimeLabel(iso: hit.date, now: now)
+        let time = mailTimeLabel(iso: hit.date, now: now, relativeDays: relativeDays)
         let account = showsAccounts(inboxes)
             ? inboxes.first { $0.id == hit.linkedInboxAccountId } : nil
         return WindowRowContent(
@@ -202,7 +204,9 @@ struct WindowMailRow: View {
     var body: some View {
         let content = WindowRowRules.content(
             for: item, mixedLanes: showLaneChip, inboxes: model.inboxes,
-            opened: model.openedEmailIds, now: Date())
+            opened: model.openedEmailIds,
+            now: MailClock.now(renderingOffscreen: Theme.isRenderingOffscreen),
+            relativeDays: Theme.isRenderingOffscreen)
         // A real Button (role, keyboard, focus), as in the bar's row.
         Button { actions.onSelect(item) } label: {
             WindowRowBody(content: content)
@@ -273,7 +277,9 @@ struct WindowSearchHitRow: View {
 
     var body: some View {
         let content = WindowRowRules.content(
-            for: hit, inboxes: model.inboxes, opened: model.openedEmailIds, now: Date())
+            for: hit, inboxes: model.inboxes, opened: model.openedEmailIds,
+            now: MailClock.now(renderingOffscreen: Theme.isRenderingOffscreen),
+            relativeDays: Theme.isRenderingOffscreen)
         Button { Task { await model.selectSearchResult(hit) } } label: {
             WindowRowBody(content: content)
                 .frame(maxWidth: .infinity, alignment: .leading)

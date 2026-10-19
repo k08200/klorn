@@ -8,6 +8,7 @@ import Link from "next/link";
 import AuthGuard from "../../components/auth-guard";
 import { HubHandoff } from "../../components/hub-handoff";
 import { Markdown } from "../../components/markdown";
+import { PAGE_SHELL } from "../../components/page-shell";
 import ErrorAlert from "../../components/ui/error-alert";
 import LoadingState from "../../components/ui/loading-state";
 import { useT } from "../../lib/i18n";
@@ -134,7 +135,7 @@ function BriefingView() {
     : null;
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-3 md:py-10">
+    <div className={PAGE_SHELL}>
       {/* MOBILE — native large-title header (desktop hero below, untouched) */}
       <header className="mb-5 flex items-end justify-between gap-3 md:hidden">
         <div className="min-w-0">
@@ -367,7 +368,7 @@ function BriefingDeliveryStatus({ status }: { status: BriefingStatus }) {
         <DeliveryFact label="Push" value={push.label} tone={push.tone} />
       </div>
       {guidance && (
-        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-state-warn-line bg-state-warn-bg px-3 py-2 text-[11px] leading-5 text-state-warn-ink">
+        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-state-warn-line bg-state-warn-bg px-3 py-2 text-caption leading-5 text-state-warn-ink">
           <span>{guidance.message}</span>
           {guidance.action && (
             <Link
@@ -465,7 +466,7 @@ function DeliveryFact({
   }[tone];
   return (
     <div className={`rounded-lg border px-3 py-2 ${toneClass}`}>
-      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] opacity-60">{label}</p>
+      <p className="text-caption font-semibold uppercase tracking-[0.12em] opacity-60">{label}</p>
       <p className="mt-1 truncate text-xs font-medium">{value}</p>
     </div>
   );

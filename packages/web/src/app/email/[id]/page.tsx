@@ -9,6 +9,7 @@ import { useConfirm } from "../../../components/confirm-dialog";
 import MailHtmlBody from "../../../components/mail-html-body";
 import { useToast } from "../../../components/toast";
 import { TrustBadgeChip } from "../../../components/trust-badge";
+import Button from "../../../components/ui/button";
 import ErrorAlert from "../../../components/ui/error-alert";
 import LoadingState from "../../../components/ui/loading-state";
 import { API_BASE, apiFetch, authHeaders } from "../../../lib/api";
@@ -23,8 +24,16 @@ import { REMINDER_LABEL_KEYS } from "../_v2/reminders";
 import { useLaneMove } from "../use-lane-move";
 import { readerLeaveHref } from "./_v2/reader-model";
 import { ReaderV2 } from "./_v2/reader-v2";
+import { useDoneFeedback } from "./_v2/use-done-feedback";
 import { useReaderContext } from "./_v2/use-reader-context";
 import { useReaderTriage } from "./_v2/use-reader-triage";
+import {
+  ActionItemsPanel,
+  HEADER_OWNED_REPLY_CHOICES,
+  LabelFeedbackControl,
+  priorityLabel,
+  ReplyNeededFeedbackControl,
+} from "./analysis-controls";
 import { formatBytes, ProfileFact, senderName } from "./atoms";
 import { AttachmentAnalysis } from "./attachment-analysis";
 import { EmailActionToolbar, EmailReminderQuickActions, UndoActionBanner } from "./toolbar";
@@ -119,35 +128,6 @@ function getReminderDate(option: EmailReminderKey): Date {
   return date;
 }
 
-interface LabelFeedback {
-  id: string;
-  emailId: string;
-  originalPriority: EmailPriority;
-  correctedPriority: EmailPriority;
-  reason: string | null;
-  signals: string[];
-  note: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-type ReplyNeededChoice =
-  | "needed"
-  | "today"
-  | "waiting_on_me"
-  | "waiting_on_them"
-  | "not_needed"
-  | "later"
-  | "done";
-
-interface ReplyNeededFeedback {
-  id: string;
-  choice: ReplyNeededChoice;
-  signal: string;
-  evidence: string | null;
-  createdAt: string;
-}
-
 interface ThreadDetail {
   threadId: string;
   subject: string;
@@ -236,6 +216,7 @@ function EmailDetailView() {
   // explicit `true` keeps the legacy reader below exactly as it was.
   const mailV2 = useAuth().user?.mailV2 === true;
   const reader = useReaderContext(id, mailV2);
+  const doneFeedback = useDoneFeedback();
   const [email, setEmail] = useState<EmailDetail | null>(null);
   const [nextEmail, setNextEmail] = useState<NextEmailSummary | null>(null);
   const [thread, setThread] = useState<ThreadDetail | null>(null);
@@ -662,8 +643,9 @@ function EmailDetailView() {
     }
   };
 
-  const archiveEmailNow = async () => {
-    if (!id || actionBusy) return;
+  /** Resolves true once the mail is archived. */
+  const archiveEmailNow = async (): Promise<boolean> => {
+    if (!id || actionBusy) return false;
     setActionBusy("archive");
     setError(null);
     try {
@@ -673,11 +655,22 @@ function EmailDetailView() {
         t("emailDetail.toast.archivedQueueComplete"),
         "archive",
       );
+      return true;
     } catch (err) {
       captureClientError(err, { scope: "email.detail.archive", id });
       setError(serverErrorMessage(err, t("emailDetail.error.archive")));
       setActionBusy(null);
+      return false;
     }
+  };
+
+  // MAIL_V2: the header's Done is the archive plus the reply-needed DISMISSED
+  // signal the "Reply state" menu's Done used to send (#1483 moved Done to the
+  // header). The archive goes first; the feedback never blocks or fails it.
+  const doneFromV2Reader = async () => {
+    const archived = email;
+    if (!(await archiveEmailNow()) || !archived) return;
+    doneFeedback.sendAfterDone({ id: archived.id, needsReply: archived.needsReply === true });
   };
 
   const unsubscribeNow = async () => {
@@ -778,7 +771,7 @@ function EmailDetailView() {
     newerId: reader.context?.newerId ?? null,
     open: openInReader,
     back: () => router.push("/email"),
-    archive: () => void archiveEmailNow(),
+    archive: () => void doneFromV2Reader(),
     laneMove,
     undoLastAction: undoNotice ? () => void undoLastAction() : null,
   });
@@ -811,7 +804,12 @@ function EmailDetailView() {
         undo={{ notice: undoNotice, onUndo: undoLastAction, onDismiss: dismissUndoNotice }}
         onOpen={openInReader}
         onReply={focusReplyEntry}
-        onArchive={archiveEmailNow}
+        onDraft={() => {
+          focusReplyEntry();
+          void generateReplyDraft();
+        }}
+        drafting={drafting}
+        onArchive={() => void doneFromV2Reader()}
         onDelete={deleteEmailNow}
         onToggleRead={toggleRead}
         onToggleStar={toggleStar}
@@ -871,6 +869,7 @@ function EmailDetailView() {
                   <KlornAnalysis
                     quiet
                     email={email}
+                    onReplyStateChange={doneFeedback.onReplyStateChange}
                     onPriorityChange={(priority) =>
                       setEmail((prev) => (prev ? { ...prev, priority } : prev))
                     }
@@ -982,7 +981,7 @@ function EmailDetailView() {
                 </div>
                 <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                   <span
-                    className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ring-1 ring-inset ${
+                    className={`shrink-0 rounded-md px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ring-1 ring-inset ${
                       email.priority === "URGENT"
                         ? "bg-rose-500/10 text-rose-600 ring-rose-500/20"
                         : "bg-surface-hover text-ink-mid ring-transparent"
@@ -991,12 +990,12 @@ function EmailDetailView() {
                     {priorityLabel(t, email.priority)}
                   </span>
                   {email.needsReply && (
-                    <span className="shrink-0 rounded-md bg-accent/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-accent-deeper ring-1 ring-inset ring-accent/20">
+                    <span className="shrink-0 rounded-md bg-accent/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-accent-deeper ring-1 ring-inset ring-accent/20">
                       {t("mail.filterReplyNeeded")}
                     </span>
                   )}
                   {email.category && (
-                    <span className="shrink-0 rounded-md bg-surface-hover px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-ink-mid">
+                    <span className="shrink-0 rounded-md bg-surface-hover px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-ink-mid">
                       {categoryLabel(t, email.category)}
                     </span>
                   )}
@@ -1075,7 +1074,7 @@ function EmailDetailView() {
           <div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr] lg:items-start">
             {email.renderHtml || email.body ? (
               <section className="panel-elevated overflow-hidden rounded-2xl border border-line/70 bg-surface-panel p-5 md:p-6">
-                <h2 className="mb-4 text-[11px] font-semibold uppercase tracking-wider text-ink-dim">
+                <h2 className="mb-4 text-caption font-semibold uppercase tracking-wider text-ink-dim">
                   {t("emailDetail.messageTitle")}
                 </h2>
                 {email.renderHtml ? (
@@ -1091,7 +1090,7 @@ function EmailDetailView() {
               </section>
             ) : email.snippet ? (
               <section className="panel-elevated overflow-hidden rounded-2xl border border-line/70 bg-surface-panel p-5 md:p-6">
-                <h2 className="mb-4 text-[11px] font-semibold uppercase tracking-wider text-ink-dim">
+                <h2 className="mb-4 text-caption font-semibold uppercase tracking-wider text-ink-dim">
                   {t("emailDetail.previewTitle")}
                 </h2>
                 <p className="text-[15px] leading-7 text-ink-muted">{linkifyText(email.snippet)}</p>
@@ -1136,21 +1135,21 @@ function CandidateProfileCard({
         className="absolute left-0 top-0 h-full w-[3px] bg-gradient-to-b from-accent-muted to-accent"
       />
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-accent-deep">
+        <h2 className="text-caption font-semibold uppercase tracking-wider text-accent-deep">
           {t("emailDetail.candidateCard.title")}
         </h2>
-        <span className="text-[11px] tabular-nums text-ink-dim">
+        <span className="text-caption tabular-nums text-ink-dim">
           {t("candidates.confidence", { percent: String(Math.round(profile.confidence * 100)) })}
         </span>
       </div>
       <div className="mb-3 rounded-lg border border-line-soft bg-surface-raised/70 px-3 py-2">
-        <p className="text-[10px] font-medium uppercase tracking-wider text-ink-dim">
+        <p className="text-caption font-medium uppercase tracking-wider text-ink-dim">
           {t("emailDetail.candidateCard.pipeline")}
         </p>
         <p className="mt-1 text-xs font-semibold text-accent-deeper">
           {candidatePipelineLabel(t, profile.pipelineStatus)}
         </p>
-        <p className="mt-1 text-[11px] leading-5 text-ink-mid">{profile.nextAction}</p>
+        <p className="mt-1 text-caption leading-5 text-ink-mid">{profile.nextAction}</p>
       </div>
       <div className="mb-3 flex flex-wrap gap-1.5">
         {candidateStatusOptions.map((option) => (
@@ -1159,7 +1158,7 @@ function CandidateProfileCard({
             type="button"
             onClick={() => onUpdate({ status: option.status })}
             disabled={updating || status === option.status}
-            className={`ease-strong rounded-lg border px-2 py-1 text-[11px] font-medium transition duration-150 active:scale-[0.97] disabled:cursor-default focus-ring ${
+            className={`ease-strong rounded-lg border px-2 py-1 text-caption font-medium transition duration-150 active:scale-[0.97] disabled:cursor-default focus-ring ${
               status === option.status
                 ? "border-accent-muted bg-accent/10 text-accent-deeper"
                 : "border-line bg-surface-panel/70 text-ink-mid hover:bg-surface-panel hover:text-ink"
@@ -1186,7 +1185,7 @@ function CandidateProfileCard({
           {profile.skills.map((skill) => (
             <span
               key={skill}
-              className="rounded-full border border-line bg-surface-panel/70 px-2 py-1 text-[11px] text-ink-muted"
+              className="rounded-full border border-line bg-surface-panel/70 px-2 py-1 text-caption text-ink-muted"
             >
               {skill}
             </span>
@@ -1196,14 +1195,14 @@ function CandidateProfileCard({
       {profile.links.length > 0 && (
         <div className="mt-3 space-y-1">
           {profile.links.map((link) => (
-            <p key={link} className="break-all text-[11px] text-accent-deep">
+            <p key={link} className="break-all text-caption text-accent-deep">
               {link}
             </p>
           ))}
         </div>
       )}
       {profile.missingFields.length > 0 && (
-        <p className="mt-3 text-[11px] text-accent-deeper">
+        <p className="mt-3 text-caption text-accent-deeper">
           {t("emailDetail.candidateCard.needsFollowUp", {
             fields: profile.missingFields
               .map((field) => candidateMissingLabel(t, field))
@@ -1213,12 +1212,12 @@ function CandidateProfileCard({
       )}
       {profile.manualReviewFiles.length > 0 && (
         <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2">
-          <p className="text-[11px] font-semibold text-rose-700">
+          <p className="text-caption font-semibold text-rose-700">
             {t("emailDetail.candidateCard.sourceReviewNeeded")}
           </p>
           <ul className="mt-1 space-y-1">
             {profile.manualReviewFiles.map((file) => (
-              <li key={`${file.filename}-${file.reason}`} className="text-[11px] text-rose-600/90">
+              <li key={`${file.filename}-${file.reason}`} className="text-caption text-rose-600/90">
                 {file.filename}: {file.reason}
               </li>
             ))}
@@ -1226,7 +1225,7 @@ function CandidateProfileCard({
         </div>
       )}
       <label className="mt-3 block">
-        <span className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-ink-mid">
+        <span className="mb-1 block text-caption font-medium uppercase tracking-wider text-ink-mid">
           {t("emailDetail.candidateCard.reviewNoteLabel")}
         </span>
         <textarea
@@ -1300,18 +1299,18 @@ function ThreadContextPanel({
                 <p className="min-w-0 truncate text-xs font-medium text-ink">
                   {senderName(message.from)}
                 </p>
-                <time className="shrink-0 text-[10px] tabular-nums text-ink-dim">
+                <time className="shrink-0 text-caption tabular-nums text-ink-dim">
                   {formatFull(message.date)}
                 </time>
               </div>
-              <p className="mt-1 truncate text-[11px] text-ink-mid">
+              <p className="mt-1 truncate text-caption text-ink-mid">
                 {message.summary ||
                   message.snippet ||
                   message.subject ||
                   t("emailDetail.thread.noSummary")}
               </p>
               {message.actionItems.length > 0 && (
-                <p className="mt-1 text-[10px] font-medium text-accent-deep">
+                <p className="mt-1 text-caption font-medium text-accent-deep">
                   {t("emailDetail.thread.taskCount", { count: String(message.actionItems.length) })}
                 </p>
               )}
@@ -1569,7 +1568,7 @@ function ReplyDraftBox({
             key={option.value}
             type="button"
             onClick={() => setMode(option.value)}
-            className={`ease-strong inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[11px] font-medium transition duration-150 active:scale-[0.97] focus-ring ${
+            className={`ease-strong inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-caption font-medium transition duration-150 active:scale-[0.97] focus-ring ${
               mode === option.value
                 ? "bg-accent/10 text-accent-deeper ring-1 ring-inset ring-accent/30"
                 : "text-ink-mid hover:bg-surface-raised hover:text-ink"
@@ -1589,7 +1588,7 @@ function ReplyDraftBox({
               key={item.label}
               type="button"
               onClick={() => onIntentChange(item.intent)}
-              className="ease-strong rounded-full border border-line bg-surface-panel/70 px-3 py-1.5 text-[11px] text-ink-mid transition duration-150 hover:bg-state-info-bg hover:text-accent-deeper active:scale-[0.97] focus-ring"
+              className="ease-strong rounded-full border border-line bg-surface-panel/70 px-3 py-1.5 text-caption text-ink-mid transition duration-150 hover:bg-state-info-bg hover:text-accent-deeper active:scale-[0.97] focus-ring"
             >
               {item.label}
             </button>
@@ -1603,23 +1602,18 @@ function ReplyDraftBox({
     <section className="panel-elevated mt-5 overflow-hidden rounded-2xl border border-line/70 bg-surface-panel p-4 md:p-5">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-mid">
+          <h2 className="text-caption font-semibold uppercase tracking-wider text-ink-mid">
             {t("emailDetail.replyDraft.title")}
           </h2>
           <p className="mt-1 text-xs text-ink-dim">{t("emailDetail.replyDraft.subtitle")}</p>
         </div>
-        <button
-          type="button"
-          onClick={onGenerate}
-          disabled={drafting}
-          className="ease-strong inline-flex h-9 shrink-0 items-center rounded-lg border border-state-info-line bg-state-info-bg px-3 text-xs font-medium text-accent-deeper transition duration-150 hover:bg-state-info-bg hover:text-state-info-ink active:scale-[0.97] disabled:opacity-50 focus-ring"
-        >
+        <Button variant="secondary" size="sm" onClick={onGenerate} disabled={drafting}>
           {drafting
             ? t("emailDetail.replyDraft.drafting")
             : draft
               ? t("emailDetail.replyDraft.regenerate")
               : t("emailDetail.replyDraft.draftButton")}
-        </button>
+        </Button>
       </div>
       <input
         id={REPLY_INTENT_INPUT_ID}
@@ -1658,7 +1652,7 @@ function ReplyDraftBox({
         <div className="space-y-2">
           <div className="grid gap-2 text-xs sm:grid-cols-2">
             <label className="block">
-              <span className="mb-1 block text-[10px] uppercase tracking-wider text-ink-mid">
+              <span className="mb-1 block text-caption uppercase tracking-wider text-ink-mid">
                 {t("emailDetail.replyDraft.toLabel")}
               </span>
               <input
@@ -1668,7 +1662,7 @@ function ReplyDraftBox({
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-[10px] uppercase tracking-wider text-ink-mid">
+              <span className="mb-1 block text-caption uppercase tracking-wider text-ink-mid">
                 {t("emailDetail.replyDraft.subjectLabel")}
               </span>
               <input
@@ -1694,16 +1688,16 @@ function ReplyDraftBox({
                   className="mt-0.5 h-3.5 w-3.5 rounded border-line-strong bg-surface-panel text-accent-deep focus:ring-accent focus:ring-offset-white"
                 />
                 <span>
-                  <span className="block text-[11px] font-medium text-accent-deeper">
+                  <span className="block text-caption font-medium text-accent-deeper">
                     {t("emailDetail.replyDraft.attachBriefLabel")}
                   </span>
-                  <span className="mt-0.5 block text-[10px] leading-4 text-ink-dim">
+                  <span className="mt-0.5 block text-caption leading-4 text-ink-dim">
                     {t("emailDetail.replyDraft.attachBriefDescription")}
                   </span>
                 </span>
               </label>
               <div className="mb-2 flex items-center justify-between gap-3">
-                <span className="text-[10px] font-medium uppercase tracking-wider text-ink-mid">
+                <span className="text-caption font-medium uppercase tracking-wider text-ink-mid">
                   {t("emailDetail.replyDraft.saveOriginalAttachments")}
                 </span>
                 <button
@@ -1715,7 +1709,7 @@ function ReplyDraftBox({
                         : attachments.map((attachment) => attachment.id),
                     )
                   }
-                  className="text-[11px] font-medium text-ink-dim transition duration-150 hover:text-accent-deeper focus-ring"
+                  className="text-caption font-medium text-ink-dim transition duration-150 hover:text-accent-deeper focus-ring"
                 >
                   {selectedCount === attachments.length
                     ? t("emailDetail.replyDraft.clearAll")
@@ -1734,10 +1728,10 @@ function ReplyDraftBox({
                       onChange={() => toggleAttachment(attachment.id)}
                       className="h-3.5 w-3.5 rounded border-line-strong bg-surface-panel text-accent-deep focus:ring-accent focus:ring-offset-white"
                     />
-                    <span className="min-w-0 flex-1 truncate text-[11px] text-ink-muted">
+                    <span className="min-w-0 flex-1 truncate text-caption text-ink-muted">
                       {attachment.filename}
                     </span>
-                    <span className="shrink-0 text-[10px] text-ink-dim">
+                    <span className="shrink-0 text-caption text-ink-dim">
                       {formatBytes(attachment.size)}
                     </span>
                   </label>
@@ -1799,14 +1793,9 @@ function SummarizeButton({
   const { t } = useT();
   if (!onSummarize) return null;
   return (
-    <button
-      type="button"
-      onClick={onSummarize}
-      disabled={summarizing}
-      className="ml-auto text-xs font-medium text-accent-deep transition hover:text-accent-deep disabled:opacity-50"
-    >
+    <Button variant="chip" onClick={onSummarize} disabled={summarizing} className="ml-auto">
       {summarizing ? t("emailDetail.analysis.summarizing") : t("emailDetail.analysis.summarize")}
-    </button>
+    </Button>
   );
 }
 
@@ -1844,7 +1833,7 @@ function ThreadBriefCard({ emailId }: { emailId: string }) {
   if (!brief) return null;
   return (
     <section className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-4">
-      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-ink-dim">
+      <p className="mb-2 text-caption font-semibold uppercase tracking-wider text-ink-dim">
         {t("emailDetail.threadBrief.title")}
       </p>
       <p className="text-sm leading-relaxed text-ink">{brief.whyNow}</p>
@@ -1895,7 +1884,7 @@ function SenderContextCard({ emailId }: { emailId: string }) {
   if (!dossier) return null;
   return (
     <section className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-4">
-      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-ink-dim">
+      <p className="mb-2 text-caption font-semibold uppercase tracking-wider text-ink-dim">
         {t("emailDetail.senderContext.title")}
       </p>
       <p className="text-sm leading-relaxed text-ink">{dossier.summary}</p>
@@ -1919,8 +1908,11 @@ function KlornAnalysis({
   onSummarize,
   summarizing,
   quiet = false,
+  onReplyStateChange,
 }: {
   email: EmailDetail;
+  /** v2 only: hears the reply-state menu so the header's Done does not double-send. */
+  onReplyStateChange?: (emailId: string, choice: string | null) => void;
   onPriorityChange: (priority: EmailPriority) => void;
   onSummarize?: () => void;
   summarizing?: boolean;
@@ -1940,11 +1932,8 @@ function KlornAnalysis({
       <section className="rounded-card border border-line bg-surface-panel p-4">
         <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
           <h2 className="text-label text-ink-mid">{t("emailDetail.analysis.title")}</h2>
-          <LabelFeedbackControl
-            emailId={email.id}
-            currentPriority={email.priority}
-            onPriorityChange={onPriorityChange}
-          />
+          {/* No "Wrong label" here: the header's label menu and "Move to lane"
+              correct the mail in v2. */}
           <SummarizeButton onSummarize={onSummarize} summarizing={summarizing} />
         </div>
         {email.summary && <p className="text-body text-ink">{email.summary}</p>}
@@ -1968,7 +1957,13 @@ function KlornAnalysis({
         {email.actionItems.length > 0 && (
           <ActionItemsPanel emailId={email.id} actionItems={email.actionItems} />
         )}
-        {email.needsReply && <ReplyNeededFeedbackControl emailId={email.id} />}
+        {email.needsReply && (
+          <ReplyNeededFeedbackControl
+            emailId={email.id}
+            omit={HEADER_OWNED_REPLY_CHOICES}
+            onStateChange={onReplyStateChange}
+          />
+        )}
       </section>
     );
   }
@@ -1989,7 +1984,7 @@ function KlornAnalysis({
       <div className="absolute bottom-0 left-0 top-0 w-[3px] bg-gradient-to-b from-accent-muted to-accent" />
       <div className="pl-2">
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-accent-deep">
+          <span className="text-caption font-semibold uppercase tracking-wider text-accent-deep">
             {t("emailDetail.analysis.title")}
           </span>
           <div className="flex items-center gap-1.5">
@@ -2009,7 +2004,7 @@ function KlornAnalysis({
 
         {email.keyPoints.length > 0 && (
           <div className="mt-3">
-            <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-ink-dim">
+            <p className="mb-1.5 text-caption font-medium uppercase tracking-wider text-ink-dim">
               {t("emailDetail.analysis.keyPoints")}
             </p>
             <ul className="space-y-1">
@@ -2033,315 +2028,12 @@ function KlornAnalysis({
   );
 }
 
-function ActionItemsPanel({ emailId, actionItems }: { emailId: string; actionItems: string[] }) {
-  const { toast } = useToast();
-  const { t } = useT();
-  const [creating, setCreating] = useState<"all" | number | null>(null);
-  const [created, setCreated] = useState<Set<number>>(new Set());
-
-  async function createTask(index: number) {
-    if (created.has(index) || creating !== null) return;
-    setCreating(index);
-    try {
-      await apiFetch(`/api/email/${emailId}/create-tasks`, {
-        method: "POST",
-        body: JSON.stringify({ indices: [index] }),
-      });
-      setCreated((prev) => new Set([...prev, index]));
-      toast(t("emailDetail.actionItems.taskCreated"), "success");
-    } catch {
-      toast(t("emailDetail.actionItems.taskCreateFailed"), "error");
-    } finally {
-      setCreating(null);
-    }
-  }
-
-  async function createAll() {
-    if (creating !== null) return;
-    setCreating("all");
-    try {
-      const uncreatedIndices = actionItems.map((_, i) => i).filter((i) => !created.has(i));
-      await apiFetch(`/api/email/${emailId}/create-tasks`, {
-        method: "POST",
-        body: JSON.stringify({ indices: uncreatedIndices }),
-      });
-      setCreated(new Set(actionItems.map((_, i) => i)));
-      toast(
-        t(
-          uncreatedIndices.length > 1
-            ? "emailDetail.actionItems.taskCreatedMany"
-            : "emailDetail.actionItems.taskCreatedOne",
-          { count: String(uncreatedIndices.length) },
-        ),
-        "success",
-      );
-    } catch {
-      toast(t("emailDetail.actionItems.tasksCreateFailed"), "error");
-    } finally {
-      setCreating(null);
-    }
-  }
-
-  const allCreated = created.size >= actionItems.length;
-
-  return (
-    <div className="mt-3">
-      <div className="flex items-center justify-between mb-1.5">
-        <p className="text-[10px] font-medium uppercase tracking-wider text-ink-dim">
-          {t("emailDetail.actionItems.title")}
-        </p>
-        {!allCreated && (
-          <button
-            type="button"
-            onClick={createAll}
-            disabled={creating !== null}
-            className="ease-strong rounded-md border border-teal-200 bg-teal-50 px-2 py-0.5 text-[10px] font-medium text-teal-700 transition duration-150 hover:bg-teal-100 active:scale-[0.97] disabled:opacity-40 focus-ring"
-          >
-            {creating === "all"
-              ? t("emailDetail.actionItems.creating")
-              : t("emailDetail.actionItems.createAll")}
-          </button>
-        )}
-      </div>
-      <ul className="space-y-1">
-        {actionItems.map((a, i) => (
-          <li key={i} className="flex items-center gap-2 text-xs">
-            <span className={created.has(i) ? "text-teal-600" : "text-accent-deep"}>
-              {created.has(i) ? "✓" : "□"}
-            </span>
-            <span
-              className={`flex-1 ${created.has(i) ? "text-ink-dim line-through" : "text-ink-muted"}`}
-            >
-              {a}
-            </span>
-            {!created.has(i) && (
-              <button
-                type="button"
-                onClick={() => createTask(i)}
-                disabled={creating !== null}
-                className="ease-strong shrink-0 rounded-md border border-line bg-surface-panel/70 px-1.5 py-0.5 text-[10px] font-medium text-ink-dim transition duration-150 hover:bg-state-info-bg hover:text-accent-deeper active:scale-[0.97] disabled:opacity-40 focus-ring"
-              >
-                {creating === i ? "…" : t("emailDetail.actionItems.addTask")}
-              </button>
-            )}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
 function ReplyNeededPill() {
   const { t } = useT();
   return (
-    <span className="shrink-0 rounded-md bg-accent/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-accent-deeper ring-1 ring-inset ring-accent/20">
+    <span className="shrink-0 rounded-md bg-accent/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-accent-deeper ring-1 ring-inset ring-accent/20">
       {t("mail.filterReplyNeeded")}
     </span>
-  );
-}
-
-/** `t` is passed in rather than called via useT() here — this is a plain
- * helper, not a component, so it cannot use hooks itself. */
-function priorityLabel(t: (key: string) => string, priority: EmailPriority): string {
-  const labels: Record<EmailPriority, string> = {
-    URGENT: t("emailDetail.priority.urgent"),
-    NORMAL: t("emailDetail.priority.normal"),
-    LOW: t("emailDetail.priority.low"),
-  };
-  return labels[priority];
-}
-
-function LabelFeedbackControl({
-  emailId,
-  currentPriority,
-  onPriorityChange,
-}: {
-  emailId: string;
-  currentPriority: EmailPriority;
-  onPriorityChange: (priority: EmailPriority) => void;
-}) {
-  const { t } = useT();
-  const [feedback, setFeedback] = useState<LabelFeedback | null>(null);
-  const [open, setOpen] = useState(false);
-  const [submitting, setSubmitting] = useState<EmailPriority | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    apiFetch<{ feedback: LabelFeedback | null }>(`/api/email/${emailId}/feedback`)
-      .then((data) => {
-        if (!cancelled) setFeedback(data.feedback);
-      })
-      .catch((err) => captureClientError(err, { scope: "email.feedback.load", emailId }));
-    return () => {
-      cancelled = true;
-    };
-  }, [emailId]);
-
-  const submit = async (correctedPriority: EmailPriority) => {
-    if (submitting) return;
-    setSubmitting(correctedPriority);
-    setError(null);
-    try {
-      const data = await apiFetch<{ feedback: LabelFeedback }>(`/api/email/${emailId}/feedback`, {
-        method: "POST",
-        body: JSON.stringify({ correctedPriority }),
-      });
-      setFeedback(data.feedback);
-      onPriorityChange(correctedPriority);
-      setOpen(false);
-    } catch (err) {
-      captureClientError(err, { scope: "email.feedback.submit", emailId, correctedPriority });
-      setError(serverErrorMessage(err, t("emailDetail.error.reportLabel")));
-    } finally {
-      setSubmitting(null);
-    }
-  };
-
-  if (feedback) {
-    return (
-      <span className="inline-flex items-center gap-1 text-[11px] text-accent-deeper">
-        <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-        {t("emailDetail.feedback.reported", {
-          original: priorityLabel(t, feedback.originalPriority),
-          corrected: priorityLabel(t, feedback.correctedPriority),
-        })}
-      </span>
-    );
-  }
-
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="text-[11px] text-ink-dim underline-offset-2 hover:text-ink-mid hover:underline focus-ring"
-      >
-        {t("emailDetail.feedback.wrongLabel")}
-      </button>
-    );
-  }
-
-  const options: EmailPriority[] = (["URGENT", "NORMAL", "LOW"] as const).filter(
-    (p) => p !== currentPriority,
-  );
-
-  return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <span className="text-[11px] text-ink-dim">{t("emailDetail.feedback.actualPriority")}</span>
-      {options.map((p) => (
-        <button
-          key={p}
-          type="button"
-          onClick={() => submit(p)}
-          disabled={!!submitting}
-          className="ease-strong rounded-md border border-line bg-surface-panel/70 px-1.5 py-0.5 text-[11px] font-medium text-ink-soft transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50 focus-ring"
-        >
-          {submitting === p ? "..." : priorityLabel(t, p)}
-        </button>
-      ))}
-      <button
-        type="button"
-        onClick={() => {
-          setOpen(false);
-          setError(null);
-        }}
-        disabled={!!submitting}
-        className="text-[11px] text-ink-dim hover:text-ink-mid focus-ring"
-      >
-        {t("common.cancel")}
-      </button>
-      {error && <span className="text-[11px] text-state-danger-ink">{error}</span>}
-    </div>
-  );
-}
-
-function ReplyNeededFeedbackControl({ emailId }: { emailId: string }) {
-  const { t } = useT();
-  const [feedback, setFeedback] = useState<ReplyNeededFeedback | null>(null);
-  const [submitting, setSubmitting] = useState<ReplyNeededChoice | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    apiFetch<{ feedback: ReplyNeededFeedback | null }>(
-      `/api/email/${emailId}/reply-needed/feedback`,
-    )
-      .then((data) => {
-        if (!cancelled) setFeedback(data.feedback);
-      })
-      .catch((err) =>
-        captureClientError(err, { scope: "email.reply-needed-feedback.load", emailId }),
-      );
-    return () => {
-      cancelled = true;
-    };
-  }, [emailId]);
-
-  const submit = async (choice: ReplyNeededChoice) => {
-    if (submitting) return;
-    setSubmitting(choice);
-    setError(null);
-    try {
-      const data = await apiFetch<{
-        feedback: { emailId: string; choice: ReplyNeededChoice; signal: string };
-      }>(`/api/email/${emailId}/reply-needed/feedback`, {
-        method: "POST",
-        body: JSON.stringify({ choice }),
-      });
-      setFeedback({
-        id: `${emailId}-${data.feedback.choice}`,
-        choice: data.feedback.choice,
-        signal: data.feedback.signal,
-        evidence: null,
-        createdAt: new Date().toISOString(),
-      });
-    } catch (err) {
-      captureClientError(err, { scope: "email.reply-needed-feedback.submit", emailId, choice });
-      setError(serverErrorMessage(err, t("emailDetail.error.saveFeedback")));
-    } finally {
-      setSubmitting(null);
-    }
-  };
-
-  const options: Array<{ choice: ReplyNeededChoice; label: string }> = [
-    { choice: "today", label: t("emailDetail.replyNeeded.today") },
-    { choice: "waiting_on_me", label: t("emailDetail.replyNeeded.onMe") },
-    { choice: "waiting_on_them", label: t("emailDetail.replyNeeded.waitingOnThem") },
-    { choice: "needed", label: t("emailDetail.replyNeeded.needed") },
-    { choice: "not_needed", label: t("emailDetail.replyNeeded.notNeeded") },
-    { choice: "later", label: t("emailDetail.replyNeeded.later") },
-    { choice: "done", label: t("emailDetail.replyNeeded.done") },
-  ];
-
-  return (
-    <div className="mt-4 border-t border-line-soft pt-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[11px] text-ink-dim">
-          {t("emailDetail.replyNeeded.judgmentLabel")}
-        </span>
-        {options.map((option) => {
-          const selected = feedback?.choice === option.choice;
-          return (
-            <button
-              key={option.choice}
-              type="button"
-              onClick={() => submit(option.choice)}
-              aria-pressed={selected}
-              disabled={!!submitting}
-              className={`h-7 rounded-lg border px-2 text-[11px] transition disabled:opacity-50 focus-ring ${
-                selected
-                  ? "border-accent-muted bg-accent/10 text-accent-deeper"
-                  : "border-line bg-surface-panel/70 text-ink-mid hover:bg-surface-panel hover:text-ink"
-              }`}
-            >
-              {submitting === option.choice ? "..." : option.label}
-            </button>
-          );
-        })}
-        {error && <span className="text-[11px] text-state-danger-ink">{error}</span>}
-      </div>
-    </div>
   );
 }
 
@@ -2354,7 +2046,7 @@ function PriorityPill({ priority }: { priority: EmailDetail["priority"] }) {
   };
   return (
     <span
-      className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ring-1 ring-inset ${styles[priority as "URGENT" | "LOW"]}`}
+      className={`shrink-0 rounded-md px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ring-1 ring-inset ${styles[priority as "URGENT" | "LOW"]}`}
     >
       {priorityLabel(t, priority as "URGENT" | "LOW")}
     </span>
@@ -2365,7 +2057,7 @@ function CategoryPill({ category }: { category: string }) {
   const { t } = useT();
   const label = categoryLabel(t, category);
   return (
-    <span className="shrink-0 rounded-md bg-surface-hover px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-ink-mid">
+    <span className="shrink-0 rounded-md bg-surface-hover px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-ink-mid">
       {label}
     </span>
   );

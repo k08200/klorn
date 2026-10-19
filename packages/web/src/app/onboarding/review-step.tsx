@@ -72,7 +72,7 @@ export function ReviewStep({ onContinue }: { onContinue: () => void }) {
               <span className={`text-xs font-semibold ${TIER_VISUAL[group.tier].accent}`}>
                 {TIER_VISUAL[group.tier].label}
               </span>
-              <span className="text-[11px] text-ink-dim">
+              <span className="text-caption text-ink-dim">
                 {TIER_VISUAL[group.tier].description}
               </span>
             </div>
@@ -102,7 +102,7 @@ export function ReviewStep({ onContinue }: { onContinue: () => void }) {
           : t("onboarding.review.continueDefault")}
         <span aria-hidden>→</span>
       </button>
-      <p className="mt-3 text-center text-[11px] leading-5 text-ink-dim">
+      <p className="mt-3 text-center text-caption leading-5 text-ink-dim">
         {t("onboarding.review.footerNote")}
       </p>
     </div>
@@ -149,7 +149,7 @@ function ReviewCard({
           >
             {t("onboarding.review.card.looksRight")}
           </button>
-          <span className="text-[11px] text-ink-dim">{t("onboarding.review.card.orMoveTo")}</span>
+          <span className="text-caption text-ink-dim">{t("onboarding.review.card.orMoveTo")}</span>
           {/* Tier codes (PUSH/QUEUE/SILENT) are product vocabulary, not
               translated — see docs/product-vocabulary.md. */}
           {MOVE_TARGETS.filter((target) => target !== item.tier).map((target) => (

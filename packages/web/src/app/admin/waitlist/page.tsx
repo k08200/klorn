@@ -173,7 +173,7 @@ function WaitlistPageInner() {
           <p className="font-semibold text-amber-800">
             ⚠️ Do this BEFORE clicking Approve — every time.
           </p>
-          <ol className="mt-2 list-decimal space-y-1 pl-6 text-[13px] text-state-warn-ink">
+          <ol className="mt-2 list-decimal space-y-1 pl-6 text-label font-normal text-state-warn-ink">
             <li>Copy the email from the row below (click the address to copy).</li>
             <li>
               Open{" "}
@@ -257,7 +257,7 @@ function WaitlistPageInner() {
                     <div className="flex min-w-0 items-start gap-3">
                       <span
                         aria-hidden="true"
-                        className={`avatar-ring mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-[13px] font-semibold text-white ${avatarGradient(entry.name || entry.email)}`}
+                        className={`avatar-ring mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-label font-semibold text-white ${avatarGradient(entry.name || entry.email)}`}
                       >
                         {senderInitials(entry.name || entry.email)}
                       </span>
@@ -361,7 +361,7 @@ function StatusBadge({ status }: { status: WaitlistEntry["status"] }) {
   const s = map[status];
   return (
     <span
-      className={`rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ring-1 ring-inset ${s.cls}`}
+      className={`rounded-md px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ring-1 ring-inset ${s.cls}`}
     >
       {s.label}
     </span>

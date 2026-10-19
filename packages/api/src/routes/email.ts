@@ -33,11 +33,13 @@ import { escapeLikePattern } from "../db-like.js";
 import {
   isLanePageFilter,
   LANE_FILTERS,
-  listLaneTiersByEmail,
+  listLaneInfoByEmail,
   pageEmailIdsInLane,
+  pageThreadsInLane,
   parseLaneFilter,
   resolveInboxScope,
 } from "../judge/email-lanes.js";
+import { resolveTierReason } from "../judge/tier-reason-strings.js";
 import { isTier } from "../judge/tiers.js";
 import { getCachedInteractionNode } from "../learning/interaction-graph.js";
 import {
@@ -73,6 +75,7 @@ import { coercePlainBody, htmlToPlainText, renderableEmailHtmlFor } from "../mai
 import { getLinkedInboxClients, resolveMailClient } from "../mail/gmail.js";
 import { hasAnyMailSource } from "../mail/mail-source.js";
 import { getMeetingContext } from "../mail/meeting-context.js";
+import { needsReplyReasonText } from "../mail/needs-reply-reason-strings.js";
 import { isPublicMailboxDomain } from "../mail/public-mailbox-domains.js";
 import { offeredDraftFor } from "../mail/reply-state.js";
 import { getSenderDossier } from "../mail/sender-dossier.js";
@@ -83,6 +86,7 @@ import {
 } from "../mail/triage-priorities.js";
 import { unsubscribeFromEmail } from "../mail/unsubscribe-action.js";
 import { senderEmail } from "../notify/notification-format.js";
+import { LANG_QUERY_PROPERTY, readerLanguageFor } from "../notify/request-language.js";
 import { createTask } from "../pim/tasks.js";
 import { captureError } from "../sentry.js";
 import { registerEmailAttachmentsRoutes } from "./email-attachments.js";
@@ -97,6 +101,7 @@ import { registerEmailRulesRoutes } from "./email-rules.js";
 import { registerEmailSenderLabelRoutes } from "./email-sender-labels.js";
 import { emailSubscriptionsRoutes } from "./email-subscriptions.js";
 import { registerEmailWaitingRoutes } from "./email-waiting.js";
+import { laneThreadsUserLimit, replyIfQueryTimedOut } from "./lane-read-guards.js";
 
 const MAX_PAGE = 10_000; // guardrail: paging past ~500k rows is a client bug, not a real request
 
@@ -637,6 +642,9 @@ const listEmailsQuerySchema = {
     // Opt-in: leave out mail the user handled (Done / a Later still pending).
     // Absent = the list as it always was.
     hideHandled: { type: "string", enum: ["0", "1", "false", "true"] },
+    // Opt-in: one row per thread (its newest message in the view). Honoured
+    // only together with a lane (`tier`, ALL included); ignored otherwise.
+    threads: { type: "string", enum: ["0", "1", "false", "true"] },
   },
 } as const;
 
@@ -666,7 +674,10 @@ const emailNextQuerySchema = {
 const emailDetailQuerySchema = {
   type: "object",
   additionalProperties: false,
-  properties: {},
+  properties: {
+    // The client's UI language for template lines (request-language.ts).
+    lang: LANG_QUERY_PROPERTY,
+  },
 } as const;
 
 export async function emailRoutes(app: FastifyInstance) {
@@ -707,26 +718,36 @@ export async function emailRoutes(app: FastifyInstance) {
   // GET /api/email?filter=unread|urgent|reply-needed|attachments|candidates&search=keyword&category=billing&page=1
   app.get(
     "/",
-    { schema: { querystring: listEmailsQuerySchema } },
+    {
+      schema: { querystring: listEmailsQuerySchema },
+      // Per-user ceiling on the thread-grouped lane page (a full-view scan);
+      // every other list request is unchanged.
+      preHandler: laneThreadsUserLimit(app),
+    },
     async (request, reply): Promise<EmailListResponse> => {
-      const { filter, search, category, page, inbox, tier, hideHandled } = request.query as {
-        filter?: string;
-        search?: string;
-        category?: string;
-        page?: string;
-        // Multi-account: "all"/absent = every inbox, "primary" = the user's own
-        // Google inbox, or a specific LinkedInboxAccount id. Always userId-scoped
-        // below, so a foreign/garbage id yields zero rows — never a cross-user leak.
-        inbox?: string;
-        // One of the five live lanes, or ALL. Honoured only while a lane
-        // reader is on: MAIL_V2 (Mail v2) or UNIFIED_HOME (Today).
-        tier?: string;
-        // OPT-IN ("1" / "true"): leave out mail whose attention item is DISMISSED
-        // (Done) or SNOOZED with a wake-up time still ahead (Later), so a Done on
-        // one device is gone on the others. Absent / "0" / "false" = the list
-        // exactly as before; the web and Mac clients never send it.
-        hideHandled?: string;
-      };
+      const { filter, search, category, page, inbox, tier, hideHandled, threads } =
+        request.query as {
+          filter?: string;
+          search?: string;
+          category?: string;
+          page?: string;
+          // Multi-account: "all"/absent = every inbox, "primary" = the user's own
+          // Google inbox, or a specific LinkedInboxAccount id. Always userId-scoped
+          // below, so a foreign/garbage id yields zero rows — never a cross-user leak.
+          inbox?: string;
+          // One of the five live lanes, or ALL. Honoured only while a lane
+          // reader is on: MAIL_V2 (Mail v2) or UNIFIED_HOME (Today).
+          tier?: string;
+          // OPT-IN ("1" / "true"): leave out mail whose attention item is DISMISSED
+          // (Done) or SNOOZED with a wake-up time still ahead (Later), so a Done on
+          // one device is gone on the others. Absent / "0" / "false" = the list
+          // exactly as before; the web and Mac clients never send it.
+          hideHandled?: string;
+          // OPT-IN ("1" / "true"), lane views only: one row per thread — the
+          // thread's newest message in the view, with `threadCount` — and `total`
+          // counts threads. Without a lane it is ignored (the list as before).
+          threads?: string;
+        };
       const uid = getUserId(request);
       const hideHandledRows = hideHandled === "1" || hideHandled === "true";
       const pageNum = parsePageNum(page);
@@ -737,6 +758,14 @@ export async function emailRoutes(app: FastifyInstance) {
           .send({ error: `tier must be one of ${LANE_FILTERS.join(", ")}.` } as never);
       }
       const laneOnly = lane && lane !== "ALL" ? lane : null;
+      const groupByThread = Boolean(lane) && (threads === "1" || threads === "true");
+      // Grouping pages through the SQL lane view (ALL included), so it takes the
+      // filters that view can apply — candidates is refused, not silently dropped.
+      if (groupByThread && !isLanePageFilter(filter)) {
+        return reply
+          .code(400)
+          .send({ error: `filter=${filter} cannot be combined with threads.` } as never);
+      }
       if (laneOnly && !isLanePageFilter(filter)) {
         return reply
           .code(400)
@@ -857,16 +886,59 @@ export async function emailRoutes(app: FastifyInstance) {
         const byId = new Map(rows.map((row) => [row.id, row]));
         return [page.ids.flatMap((id) => byId.get(id) ?? []), page.total];
       };
-      const [[emails, total], unreadCount] = await Promise.all([
-        laneOnly ? lanePage(laneOnly) : hideHandledRows ? lanePage("ALL") : listPage(),
-        prisma.emailMessage.count({ where: { userId: uid, isRead: false } }),
-      ]);
+      // Thread-grouped lane page (`threads=1` with a lane): one row per thread,
+      // its newest message in the view; `total` counts threads. A failure throws.
+      const threadCounts = new Map<string, number>();
+      const threadPage = async (laneView: LiveTier | "ALL"): Promise<[EmailMessage[], number]> => {
+        const page = await pageThreadsInLane({
+          userId: uid,
+          lane: laneView,
+          scope: await resolveInboxScope(uid, inbox),
+          filter,
+          category,
+          search,
+          hideHandled: hideHandledRows,
+          skip: (pageNum - 1) * pageSize,
+          take: pageSize,
+        });
+        if (page.rows.length === 0) return [[], page.total];
+        for (const row of page.rows) threadCounts.set(row.id, row.threadCount);
+        const rows = await prisma.emailMessage.findMany({
+          where: { userId: uid, id: { in: page.rows.map((row) => row.id) } },
+        });
+        const byId = new Map(rows.map((row) => [row.id, row]));
+        return [page.rows.flatMap((row) => byId.get(row.id) ?? []), page.total];
+      };
+      let pageResult: [[EmailMessage[], number], number];
+      try {
+        pageResult = await Promise.all([
+          groupByThread && lane
+            ? threadPage(lane)
+            : laneOnly
+              ? lanePage(laneOnly)
+              : hideHandledRows
+                ? lanePage("ALL")
+                : listPage(),
+          prisma.emailMessage.count({ where: { userId: uid, isRead: false } }),
+        ]);
+      } catch (err) {
+        // The grouped page runs under a statement timeout: a slow scan is a
+        // retryable 503, not a 500.
+        if (replyIfQueryTimedOut(err, reply)) return reply as never;
+        throw err;
+      }
+      const [[emails, total], unreadCount] = pageResult;
 
       // Map to API format
       const emailIds = emails.map((email) => email.id);
-      // Lane chips ride each row (next to the sender); batched like the other
-      // enrichments below so a 50-row page costs one AttentionItem query.
-      const laneTiers = await listLaneTiersByEmail(uid, emailIds);
+      // Lane chips and their reasons ride each row (next to the sender); batched
+      // like the other enrichments below so a 50-row page costs one
+      // AttentionItem query. A failed lookup is no chip and no reason, never a 500.
+      const laneInfo = await listLaneInfoByEmail(uid, emailIds);
+      // One language read per request, and only when some row has a reason.
+      const reasonLanguage = Array.from(laneInfo.values()).some((info) => info.reason)
+        ? await readerLanguageFor(request, reply, uid)
+        : null;
       const attachmentSummaries = await summarizeEmailAttachmentsByEmail(emailIds, uid);
       const candidateProfiles = await listCandidateProfilesByEmail(emailIds, uid);
       const candidateIntakes = await listCandidateIntakesByEmail(emailIds, uid);
@@ -905,7 +977,9 @@ export async function emailRoutes(app: FastifyInstance) {
           from: e.from,
           senderEmail: addr || null,
           trust: trustToWire(addr ? trustMap.get(addr) : null),
-          tier: laneTiers.get(e.id) ?? null,
+          tier: laneInfo.get(e.id)?.tier ?? null,
+          tierReason: resolveTierReason(laneInfo.get(e.id)?.reason, reasonLanguage),
+          ...(groupByThread ? { threadCount: threadCounts.get(e.id) ?? 1 } : {}),
           to: e.to,
           subject: e.subject,
           snippet: e.snippet,
@@ -1199,7 +1273,7 @@ export async function emailRoutes(app: FastifyInstance) {
 
   // ─── Single Email Detail ──────────────────────────────────────────────
   // GET /api/email/:id
-  app.get("/:id", { schema: { querystring: emailDetailQuerySchema } }, async (request) => {
+  app.get("/:id", { schema: { querystring: emailDetailQuerySchema } }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const uid = getUserId(request);
 
@@ -1223,6 +1297,7 @@ export async function emailRoutes(app: FastifyInstance) {
       // Learned engagement for the reading-pane "you engage with this sender"
       // chip. Cache-only (fails soft to null, never rebuilds on a request).
       const engagementNode = addr ? await getCachedInteractionNode(uid, addr) : null;
+      const readerLanguage = await readerLanguageFor(request, reply, uid);
       return {
         id: dbEmail.id,
         gmailId: dbEmail.gmailId,
@@ -1281,7 +1356,12 @@ export async function emailRoutes(app: FastifyInstance) {
         keyPoints: parseJsonArray(dbEmail.keyPoints),
         actionItems,
         sentiment: dbEmail.sentiment,
+        // The stored value is a classifier code; the Text field is its reader
+        // line in the client's UI language (null when the code has none).
+        // summary / keyPoints / actionItems above are LLM-written in the
+        // language active when they were generated and are never re-rendered.
         needsReplyReason: dbEmail.needsReplyReason,
+        needsReplyReasonText: needsReplyReasonText(dbEmail.needsReplyReason, readerLanguage),
         // A reply written ahead of time (proactive drafts) — the client
         // offers it in the composer; null once answered or when none exists.
         proactiveDraft: offeredDraftFor(dbEmail),

@@ -65,6 +65,7 @@ import {
   LEGACY_AGENT_NOTIFICATION_PREFIX,
   safeJson,
 } from "./agent-proposal-dedup.js";
+import { proposalPushMailFields } from "./proposal-push-target.js";
 import { ALL_TOOLS, executeToolCall, isToolAllowedForPlan } from "./tool-executor.js";
 
 const MAX_TOOL_CALLS = AGENT_MAX_TOOLS_PER_LOOP;
@@ -784,13 +785,21 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                   link: proposalLink,
                 });
 
-                // Always send push notification for proposed actions (phone/browser)
+                // Always send push notification for proposed actions (phone/browser).
+                // A reply draft to one mail also deep-links the native apps to it.
+                const proposalMail = await proposalPushMailFields(
+                  userId,
+                  proposedToolName,
+                  args.toolArgs,
+                  (pendingAction as { id: string }).id,
+                );
                 sendPushNotification(
                   userId,
                   {
                     title: `${AGENT_NOTIFICATION_PREFIX} Review needed`,
                     body: args.message.slice(0, 100),
                     url: proposalLink,
+                    ...proposalMail,
                   },
                   "agent_proposal",
                 ).catch((err) => console.warn("[AGENT] proposal push failed", err));
@@ -1080,12 +1089,19 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                 conversationId: agentConvo.id,
                 link: riskLink,
               });
+              const riskMail = await proposalPushMailFields(
+                userId,
+                fnName,
+                args,
+                (pendingAction as { id: string }).id,
+              );
               sendPushNotification(
                 userId,
                 {
                   title: notifTitle,
                   body: proposalMessage.slice(0, 100),
                   url: riskLink,
+                  ...riskMail,
                 },
                 "agent_proposal",
               ).catch((err) => console.warn("[AGENT] risk push failed", err));

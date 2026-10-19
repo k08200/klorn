@@ -454,13 +454,38 @@ final class DriveImportStubProtocol: URLProtocol, @unchecked Sendable {
         let body: String
         var headers: [String: String] = [:]
         var delayMs = 0
+        /// Held until `open(gate)`: the scenario decides which answer lands first.
+        var gate: String?
+    }
+    struct Script: Sendable {
+        /// Replies per "METHOD path", used in order; the last one repeats.
+        var replies: [String: [Reply]] = [:]
+        /// Replies per uploaded file name, ahead of `replies`: concurrent uploads reach
+        /// the stub in any order, so a reply meant for one file is matched by its name.
+        var byFileName: [String: Reply] = [:]
+        var calls: [Call] = []
+        var opened: Set<String> = []
+        var held: [String: [@Sendable () -> Void]] = [:]
     }
 
-    /// Replies per "METHOD path", used in order; the last one repeats.
-    static let state = OSAllocatedUnfairLock(initialState: (replies: [String: [Reply]](), calls: [Call]()))
+    static let state = OSAllocatedUnfairLock(initialState: Script())
 
-    static func reset(_ replies: [String: [Reply]]) { state.withLock { $0 = (replies, []) } }
+    static func reset(_ replies: [String: [Reply]], byFileName: [String: Reply] = [:]) {
+        state.withLock { $0 = Script(replies: replies, byFileName: byFileName) }
+    }
     static var calls: [Call] { state.withLock { $0.calls } }
+
+    /// Lets every reply held behind `gate` go, and any later one through at once.
+    static func open(_ gate: String) {
+        let released = state.withLock { state -> [@Sendable () -> Void] in
+            state.opened.insert(gate)
+            return state.held.removeValue(forKey: gate) ?? []
+        }
+        released.forEach { $0() }
+    }
+
+    /// Set once the session cancels the request: a held reply then answers nothing.
+    private let stopped = OSAllocatedUnfairLock(initialState: false)
 
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
@@ -473,6 +498,10 @@ final class DriveImportStubProtocol: URLProtocol, @unchecked Sendable {
             contentType: request.value(forHTTPHeaderField: "Content-Type"), body: Self.body(of: request))
         let reply: Reply = Self.state.withLock { state in
             state.calls.append(call)
+            let named = state.byFileName.first { name, _ in
+                call.body.range(of: Data("filename=\"\(name)\"".utf8)) != nil
+            }
+            if let named { return named.value }
             let key = "\(method) \(url.path)"
             guard var queue = state.replies[key], let first = queue.first else {
                 // Fastify's default 404, as the dark gate sends it.
@@ -483,6 +512,15 @@ final class DriveImportStubProtocol: URLProtocol, @unchecked Sendable {
                 state.replies[key] = queue
             }
             return first
+        }
+        if let gate = reply.gate {
+            let release: @Sendable () -> Void = { [self] in answer(reply, url: url) }
+            let isOpen = Self.state.withLock { state in
+                if state.opened.contains(gate) { return true }
+                state.held[gate, default: []].append(release)
+                return false
+            }
+            guard isOpen else { return }
         }
         guard reply.delayMs > 0 else { return answer(reply, url: url) }
         DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(reply.delayMs)) { [self] in
@@ -506,6 +544,7 @@ final class DriveImportStubProtocol: URLProtocol, @unchecked Sendable {
     }
 
     private func answer(_ reply: Reply, url: URL) {
+        guard !stopped.withLock({ $0 }) else { return }
         var headers = reply.headers
         headers["Content-Type"] = "application/json"
         let response = HTTPURLResponse(url: url, statusCode: reply.status, httpVersion: "HTTP/1.1", headerFields: headers)
@@ -514,7 +553,7 @@ final class DriveImportStubProtocol: URLProtocol, @unchecked Sendable {
         client?.urlProtocolDidFinishLoading(self)
     }
 
-    override func stopLoading() {}
+    override func stopLoading() { stopped.withLock { $0 = true } }
 }
 
 /// Records each wait instead of waiting.
@@ -765,17 +804,7 @@ enum DriveImportScenarios {
               && full.report?.notUploaded.allSatisfy { $0.reason == .quotaExceeded } == true
               && fullSends <= DriveImportLimits.uploadConcurrency)
 
-        // Purging and a malformed body.
-        DriveImportStubProtocol.reset([
-            limitsPath: [limits()], filesPath: [refused(400, "multipart-malformed"), refused(409, "account-purging")],
-        ])
-        let mixed = importer(sleeps, bodies: bodies)
-        await mixed.refreshAvailability()
-        await mixed.importItems([file("loose.txt"), file("Docs/a.txt"), file("Docs/Sub/b.txt")])
-        let reasons = Set(mixed.report?.notUploaded.map(\.reason) ?? [])
-        check("a malformed upload is per file; a pending purge stops the import",
-              reasons.contains(.malformed) && mixed.report?.stoppedBy == .accountPurging
-              && reasons.isSubset(of: [.malformed, .accountPurging]))
+        results += await purgeAndMalformed(sleeps: sleeps, bodies: bodies, file: file)
 
         // The server goes dark mid-import: the feature hides.
         DriveImportStubProtocol.reset([limitsPath: [limits()]])
@@ -810,6 +839,69 @@ enum DriveImportScenarios {
               leaving.report == nil && leaving.limits == nil && leaving.availability == .unknown
               && leaving.phase == .idle)
         return results
+    }
+
+    /// A malformed body and a pending purge, both answer orders pinned by a gate: two
+    /// uploads run at once, so which answer the importer sees first is otherwise a race.
+    static func purgeAndMalformed(
+        sleeps: DriveImportSleepLog, bodies: URL, file: (String) -> URL
+    ) async -> [(String, Bool)] {
+        typealias Line = DriveImportPlan.Skipped
+        let picked = [file("loose.txt"), file("Docs/a.txt"), file("Docs/Sub/b.txt")]
+        func sends() -> Int { DriveImportStubProtocol.calls.filter { $0.path == "/api/drive/files" }.count }
+
+        // 400 first: loose.txt is refused alone, b.txt still goes, then the held purge stops it.
+        var purge = refused(409, "account-purging")
+        purge.gate = "purge"
+        DriveImportStubProtocol.reset([limitsPath: [limits()]], byFileName: [
+            "loose.txt": refused(400, "multipart-malformed"), "a.txt": purge, "b.txt": created("b"),
+        ])
+        let malformedFirst = importer(sleeps, bodies: bodies)
+        await malformedFirst.refreshAvailability()
+        let running = Task { await malformedFirst.importItems(picked) }
+        let bothDone = await waitUntil { malformedFirst.progress.doneFiles == 2 }
+        DriveImportStubProtocol.open("purge")
+        await running.value
+        let first = malformedFirst.report
+        let malformedOk = bothDone && first?.stoppedBy == .accountPurging && first?.uploaded == 1
+            && first?.notUploaded == [Line(name: "loose.txt", reason: .malformed),
+                                      Line(name: "a.txt", reason: .accountPurging)]
+            && sends() == 3
+
+        // 409 first: the purge stops the import while loose.txt's answer is still held;
+        // that upload is cancelled and reported under the purge, b.txt is never sent.
+        var held = refused(400, "multipart-malformed")
+        held.gate = "malformed"
+        DriveImportStubProtocol.reset([limitsPath: [limits()]], byFileName: [
+            "loose.txt": held, "a.txt": refused(409, "account-purging"), "b.txt": created("b"),
+        ])
+        let purgeFirst = importer(sleeps, bodies: bodies)
+        await purgeFirst.refreshAvailability()
+        let stopping = Task { await purgeFirst.importItems(picked) }
+        let ended = await waitUntil { purgeFirst.phase == .finished }
+        DriveImportStubProtocol.open("malformed")
+        await stopping.value
+        let second = purgeFirst.report
+        let purgeOk = ended && second?.stoppedBy == .accountPurging && second?.uploaded == 0
+            && second?.notUploaded == [Line(name: "a.txt", reason: .accountPurging),
+                                       Line(name: "loose.txt", reason: .accountPurging),
+                                       Line(name: "b.txt", reason: .accountPurging)]
+            && sends() <= DriveImportLimits.uploadConcurrency
+        return [
+            ("a malformed upload is per file: the rest go on until a purge stops the import (400 first)",
+             malformedOk),
+            ("a pending purge stops the import: the upload in flight is reported under it (409 first)", purgeOk),
+        ]
+    }
+
+    /// Polls `condition` on the main actor; false when it is still unmet after `seconds`.
+    static func waitUntil(seconds: Double = 10, _ condition: () -> Bool) async -> Bool {
+        let deadline = ContinuousClock.now + .seconds(seconds)
+        while !condition() {
+            guard ContinuousClock.now < deadline else { return false }
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        return true
     }
 
     static func permissions(_ url: URL) -> Int? {

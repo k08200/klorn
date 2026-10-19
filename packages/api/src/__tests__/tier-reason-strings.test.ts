@@ -14,6 +14,7 @@ import {
   isStaticTierReasonKey,
   resolveTierReason,
   STATIC_TIER_REASONS,
+  TIER_REASON_MAX_CHARS,
 } from "../judge/tier-reason-strings.js";
 
 describe("static tier reasons", () => {
@@ -45,6 +46,24 @@ describe("static tier reasons", () => {
     // rather than being blanked by a failed lookup.
     const legacy = "Meeting starts in minutes — interrupt now";
     expect(resolveTierReason(legacy, "ko")).toBe(legacy);
+  });
+
+  it("caps passthrough free text at 280 characters, ellipsis included", () => {
+    const long = "x".repeat(1000);
+    const capped = resolveTierReason(long, "en");
+    expect(capped).toHaveLength(TIER_REASON_MAX_CHARS);
+    expect(TIER_REASON_MAX_CHARS).toBe(280);
+    expect(capped?.endsWith("…")).toBe(true);
+    // At the limit nothing is cut.
+    const exact = "y".repeat(280);
+    expect(resolveTierReason(exact, "en")).toBe(exact);
+  });
+
+  it("never splits a surrogate pair when capping", () => {
+    const emoji = "😀".repeat(400); // 2 UTF-16 units each
+    const capped = resolveTierReason(emoji, "en") ?? "";
+    expect(Array.from(capped)).toHaveLength(TIER_REASON_MAX_CHARS);
+    expect(capped).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
   });
 
   it("treats null/empty as no reason rather than throwing", () => {

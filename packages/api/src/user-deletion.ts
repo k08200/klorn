@@ -16,7 +16,8 @@
  */
 
 import { type db, INTERACTIVE_TX_OPTIONS, prisma } from "./db.js";
-import { purgeUserData } from "./purge-user-data.js";
+import { purgeUserData, revokeUserAccess } from "./purge-user-data.js";
+import { captureError } from "./sentry.js";
 import { purgeUserObjects } from "./storage/runtime.js";
 
 /**
@@ -31,7 +32,7 @@ const PURGE_TX_TIMEOUT_MS = 60_000;
  * drift apart (Google restricted-scope review requires users to be able to
  * request full deletion of their data, incl. all Google-derived data).
  *
- * Completeness: 42 of the 43 user-scoped relations declare `onDelete: Cascade`,
+ * Completeness: every user-scoped relation but one declares `onDelete: Cascade`,
  * so deleting the `User` row removes them automatically (emails, attention
  * items, attachments, sender traits, linked accounts, devices, etc.). The one
  * exception is `LlmUsageLog`, whose `userId` is `onDelete: SetNull` (it
@@ -40,8 +41,16 @@ const PURGE_TX_TIMEOUT_MS = 60_000;
  */
 export async function deleteUserAndAllData(userId: string): Promise<void> {
   await purgeUserObjects(userId);
+  const email = (await prisma.user.findUnique({ where: { id: userId }, select: { email: true } }))
+    ?.email;
   await prisma.$transaction([
     prisma.llmUsageLog.deleteMany({ where: { userId } }),
+    // The waitlist is keyed by address, not by user, so no cascade reaches it.
+    // Exact matches only: an insensitive filter is ILIKE, where "_" in an
+    // address is a wildcard that could match someone else's entry.
+    ...(email
+      ? [prisma.waitlist.deleteMany({ where: { email: { in: [email, email.toLowerCase()] } } })]
+      : []),
     prisma.user.delete({ where: { id: userId } }),
   ]);
 }
@@ -53,8 +62,28 @@ export async function deleteUserAndAllData(userId: string): Promise<void> {
  */
 export async function purgeAllUserData(userId: string): Promise<void> {
   await purgeUserObjects(userId);
-  await prisma.$transaction((tx) => purgeUserData(tx as unknown as typeof db, userId), {
-    ...INTERACTIVE_TX_OPTIONS,
-    timeout: PURGE_TX_TIMEOUT_MS,
-  });
+  const inTransaction = (work: (tx: typeof db) => Promise<void>) =>
+    prisma.$transaction((tx) => work(tx as unknown as typeof db), {
+      ...INTERACTIVE_TX_OPTIONS,
+      timeout: PURGE_TX_TIMEOUT_MS,
+    });
+  // Grants, automation config and keys go first, in a short transaction of
+  // their own: once it commits no new sync starts for the user, while the long
+  // purge below still runs. If that purge fails, the user sees an error with
+  // access already gone and the data still there; every step is idempotent, so
+  // a retry finishes the wipe.
+  await inTransaction((tx) => revokeUserAccess(tx, userId));
+  await inTransaction((tx) => purgeUserData(tx, userId));
+  // A sync or job that was already running still holds what it loaded, and
+  // rows it inserted after their deleteMany ran inside the purge survive it.
+  // One more (idempotent, usually empty) pass takes those. It narrows the
+  // window, it does not close it: a job that writes after this pass leaves
+  // rows behind. Closing it needs a marker every writer checks.
+  // The wipe has committed by now, so a failed sweep is reported, not thrown.
+  try {
+    await inTransaction((tx) => purgeUserData(tx, userId));
+  } catch (err) {
+    console.error(`[USER-DELETION] Final sweep of the data wipe failed for ${userId}:`, err);
+    captureError(err, { tags: { scope: "user-deletion.final-sweep", userId } });
+  }
 }

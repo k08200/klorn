@@ -99,6 +99,9 @@ importers:
       openai:
         specifier: ^6.29.0
         version: 6.29.0(ws@8.21.3)(zod@4.4.3)
+      postcss:
+        specifier: '>=8.5.23'
+        version: 8.5.28
       resend:
         specifier: ^6.20.0
         version: 6.20.0
@@ -5306,7 +5309,7 @@ snapshots:
       '@alloc/quick-lru': 5.2.0
       '@tailwindcss/node': 4.3.3
       '@tailwindcss/oxide': 4.3.3
-      postcss: 8.5.26
+      postcss: 8.5.28
       tailwindcss: 4.3.3
 
   '@tanstack/query-core@5.101.4': {}
@@ -8098,7 +8101,7 @@ snapshots:
       is-plain-object: 5.0.0
       launder: 1.7.1
       parse-srcset: 1.0.2
-      postcss: 8.5.26
+      postcss: 8.5.28
 
   scheduler@0.27.0: {}
 

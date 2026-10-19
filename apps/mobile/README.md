@@ -42,9 +42,9 @@ npm run open:android # / open:ios — then Run in Android Studio / Xcode
 
 API base: `VITE_KLORN_API_URL` at build time (https only, or http to
 localhost / `10.0.2.2` for the Android emulator); unset → dev
-`http://localhost:3001`, production build `https://klorn-api.onrender.com` (the
-origin the web app and the Mac app ship with; `api.klorn.ai` is a CNAME to the
-same Render service).
+`http://localhost:3001`, production build `https://api.klorn.ai` (Klorn's own
+domain, a CNAME to the same Render service the web and Mac apps reach as
+`klorn-api.onrender.com`; pinned so the API can move without an app update).
 
 Screenshots: `KLORN_SHOTS_DIR=/some/dir npm run e2e` (default
 `test-results/shots`). Specs cover 390×844, 412×915, 360×400 (Flip cover),
@@ -78,7 +78,7 @@ src/
   api/client.ts                fetch transport (CapacitorHttp on native), Bearer, timeouts, typed errors
   api/endpoints.ts             every route the app calls, typed from @klorn/contract (+ api/wire.ts)
   api/queries.ts               TanStack Query hooks + keys
-  api/query-client.ts          offline-first cache persisted 24 h (Preferences / localStorage)
+  api/query-client.ts          offline-first cache persisted 24 h, AES-GCM sealed (platform/cache-crypto.ts)
   api/mock/                    fetch shim + fixtures (`--mode mock`; never in `npm run build`)
   auth/                        session (Keychain/Keystore), OAuth relay/poll, PKCE
   i18n/                        en ko ja zh es fr de; device locale default; plural forms;
@@ -258,7 +258,8 @@ Built by `packages/api` `notify/push-apns.ts` (`buildApnsBody`) and
 `NotifCategory`, e.g. `email_urgent`). A **mail** push (the firewall's PUSH /
 MEETING, an urgent sweep about one mail) also carries `emailId`, `route`
 (`/mail/<emailId>`) and, when they exist, `attentionItemId` /
-`pendingActionId` (none at send time today). The app routes `route`, then the
+`pendingActionId` (the agent's reply-draft proposal; a firewall push has
+none). The app routes `route`, then the
 approval, then the mail, then the web `url` (`/email/:id`, `/inbox/firewall`,
 `/briefing`, `/chat`, `/inbox`; `src/push/route.ts`). Every field is validated
 on the device; anything unknown lands on Today.
@@ -286,67 +287,79 @@ Done) and `KLORN_PUSH_MAIL` (In 1 hour · Done). "Send draft" is
 Done call `POST /api/inbox/firewall/email/:emailId/{snooze,dismiss}` (by
 `attentionItemId` only when no `emailId` came).
 
-**Android (FCM)** — the server sends a **notification** message today: the OS
-shows it (no buttons), a tap routes by `data`, and in the foreground the app
-shows its own banner.
+**Android (FCM)** — two message shapes, chosen per device by the server
+(`notify/push-device.ts` `buildFcmMessage`):
+
+- **Notification message** (the default; every iOS-style or older Android
+  build, every non-mail push, and every push while `ANDROID_DATA_PUSH_ENABLED`
+  is off): the OS shows it (no buttons), a tap routes by `data`, and in the
+  foreground the app shows its own banner.
+- **Data-only message**: a MAIL push to a device that registered with
+  `dataMessages: true` (this build sends it — `src/api/endpoints.ts`), while
+  `ANDROID_DATA_PUSH_ENABLED` is on. No `notification` block; title and body
+  move into `data`, plus `sentAt`:
 
 ```jsonc
-{
-  "token": "<FCM token>",
+// notification message
+{ "token": "<FCM token>",
   "notification": { "title": "…", "body": "…" },
   "data": { "url": "/inbox/firewall", "category": "email_urgent",
             "emailId": "…", "route": "/mail/<emailId>", "attentionItemId": "…" },
-  "android": { "priority": "high" }
-}
+  "android": { "priority": "high" } }
+
+// data-only message (same data, plus):
+{ "token": "<FCM token>",
+  "data": { …, "title": "…", "body": "…", "sentAt": "<epoch ms>" },
+  "android": { "priority": "high" } }
 ```
 
-FCM notification messages cannot carry action buttons through
-`@capacitor/push-notifications`. For buttons the server would send the same
-`data` as a **data-only** message (no `notification` key, every value a
-string) and the app posts it itself with `@capacitor/local-notifications`
-(`src/push/android.ts`, `src/platform/local-notify.ts`). What that needs, on
-top of today's keys:
+A data-only message is posted by the app's own native service,
+`android/app/src/main/java/ai/klorn/app/push/KlornMessagingService.java`. It
+replaces the plugin's `MessagingService` in the manifest and extends it, so
+token rotation and every other message reach the plugin exactly as before. Its
+rules (`push/KlornPushPayload.java`, unit-tested in
+`android/app/src/test/…/KlornPushPayloadTest.java`) are the twin of
+`src/push/android.ts` `parseDataPush`, down to the notification-id hash (both
+test files pin the same vectors):
 
-- `data.title` and `data.body` — **required** (a data-only message has no
-  `notification` block; ≤120 / ≤600 chars shown);
-- `android.priority: "high"` — required, so the data message wakes the app;
-- `data.sentAt` (epoch ms) — optional but recommended: older than 15 min = a
-  replay of the plugin's last message on launch, not shown.
+- title ≤120 / body ≤600 chars; `sentAt` older than 15 min = a replay, dropped;
+- the action set follows the ids, as the server picks the APNs category:
+  `pendingActionId` → the draft set, else `emailId` (or only
+  `attentionItemId`) → the plain set, else no buttons; `category` is never read
+  as an action set;
+- `category: "email_urgent"` (PUSH-lane mail) posts on `klorn_push`
+  (IMPORTANCE_HIGH), everything else on `klorn_other`. Both channels are
+  created at launch (`src/platform/local-notify.ts`); the native service only
+  creates one that is missing. The manifest makes `klorn_push` FCM's default
+  channel and `ic_stat_klorn` its default status-bar icon, so notification
+  messages ring and look the same way.
 
-The action set is derived from the ids, as the server picks the APNs
-category: `pendingActionId` → the draft set, else `emailId` (or only
-`attentionItemId`) → the plain set, else no buttons; `category` is never read
-as an action set. `category: "email_urgent"` (PUSH-lane mail) posts on
-`klorn_push`, everything else on `klorn_other`. The notification shows
-**1시간 뒤에 · 처리 완료 · 검토하기** (In 1 hour · Done · Review, in the app
-language). Review opens the approval card (or the mail) — nothing is ever sent
-from a notification, on Android either. Later / Done call the same by-email
-routes as iOS. Channels, created at launch: `klorn_push` (PUSH mail,
-IMPORTANCE_HIGH) and `klorn_other` (default); the manifest makes `klorn_push`
-FCM's default channel, so notification messages ring the same way. With the
-app on screen a data-only message shows the in-app banner instead, as on iOS.
+The notification shows **1시간 뒤에 · 처리 완료 · 검토하기** (In 1 hour · Done ·
+Review) in the app language: the app saves the labels under
+`klorn-android-push-labels` in Capacitor Preferences, and the native service
+falls back to the device language. Every button is an activity intent: it
+**opens the app** (unlocking first on a secure lock screen), where iOS runs
+Later / Done in the background. The intent carries the plugin's own tap
+contract (`google.message_id`), so it arrives in JS as
+`pushNotificationActionPerformed` ("tap") on a cold start too, with
+`klornAction` naming the button (`src/push/route.ts` `actionFromTap`).
+`MainActivity` cancels the notification on arrival. Review opens the approval
+card (or the mail); Later / Done call the same by-email routes as iOS. Nothing
+is ever sent from a notification, on Android either.
 
 **What works when (Android, precisely):**
 
-| App state | Data-only message | Notification message (today) |
+| App state | Data-only message (opted-in device, flag on) | Notification message |
 |---|---|---|
-| Foreground | in-app banner (tap routes) | in-app banner |
-| Background, process alive | local notification **with** the three buttons | system notification, no buttons; tap routes |
-| Process killed / swiped away / after reboot | **nothing is shown** | system notification, no buttons; tap routes |
+| Foreground | in-app banner (handed to the plugin → `PushLayer`) | in-app banner |
+| Background, process alive | native notification **with** the three buttons | system notification, no buttons; tap routes |
+| Process killed / swiped away / after reboot | native notification **with** the three buttons | system notification, no buttons; tap routes |
+| App force-stopped in Settings | nothing (Android delivers no FCM to a stopped app) | nothing |
 
-The killed row is the plugin's limit, not ours: Capacitor's
-`MessagingService.onMessageReceived` hands a data message to the JS bridge, and
-with no bridge (no activity, no WebView) it only keeps it in memory
-(`PushNotificationsPlugin.lastMessage`) and re-fires it on the next launch —
-which the app ignores once `sentAt` is older than 15 minutes, or shows as the
-in-app banner. Also, the plugin's action buttons are activity intents: on
-Android, In 1 hour / Done / Review **open the app** (unlocking first on a secure
-lock screen) and the action runs there, where iOS runs Later / Done in the
-background. Until a native `FirebaseMessagingService` subclass posts the
-notification when no bridge is alive (and a `BroadcastReceiver` runs Later /
-Done without opening the app), the server should send data-only messages only
-when it accepts that a killed app shows nothing — e.g. keep notification
-messages as the default and switch per device once the native service ships.
+A data push the service posts is **not** handed to the plugin, so neither the
+WebView path (`showDataPush`, which stays for a build without the service) nor
+the plugin's launch-time replay of `lastMessage` can post it twice. If posting
+natively throws, the message falls back to the plugin path.
 
 ### Gaps (server)
 
@@ -366,11 +379,13 @@ Calendar · Assistant · Files · push:
 - Chat returns one `eventDraft`, not structured slots, so the artboard's slot
   picker appears in Calendar's "Team free time" (from `/api/teams/:id/availability`)
   rather than in the thread.
-- Push: `pendingActionId` is never set at send time today (the reply draft is
-  proposed after the judge), so lock-screen pushes get the plain set (In 1
-  hour · Done); Android sends notification messages (no buttons) until the
-  server opts a device into data-only messages (and, for a killed app, the
-  native follow-up described above).
+- Push: a firewall push precedes any reply draft, so it carries no
+  `pendingActionId` and gets the plain set (In 1 hour · Done). The agent's
+  proposal push for a reply (`send_email` with `in_reply_to_email_id`) carries
+  the mail's `emailId` and the approval's `pendingActionId`, so it gets the
+  draft set (`agentcore/proposal-push-target.ts`). Android buttons need
+  `ANDROID_DATA_PUSH_ENABLED` on the server (OFF by default); until then
+  Android gets notification messages without buttons.
 - `GET /api/teams` needs a saved team; teams are created on the web only.
 
 ## Native configuration

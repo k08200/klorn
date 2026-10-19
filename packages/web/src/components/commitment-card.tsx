@@ -154,8 +154,10 @@ export function CommitmentCard({
               commitment.trustBadge !== "unknown" && (
                 <TrustBadge badge={commitment.trustBadge} label={commitment.trustLabel ?? null} />
               )}
-            <span className="text-[11px] text-ink-dim">{commitmentKindLabel(commitment.kind)}</span>
-            <span className="text-[11px] text-ink-mid">{commitmentDueLabel(commitment)}</span>
+            <span className="text-caption text-ink-dim">
+              {commitmentKindLabel(commitment.kind)}
+            </span>
+            <span className="text-caption text-ink-mid">{commitmentDueLabel(commitment)}</span>
           </div>
           <p className="mt-2 text-sm font-medium text-ink break-words">{commitment.title}</p>
           {commitment.description && (
@@ -230,7 +232,7 @@ function CommitmentOwnerBadge({ owner }: { owner: CommitmentItem["owner"] }) {
   const entry = commitmentOwnerEntry(owner);
   return (
     <span
-      className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ${entry.className}`}
+      className={`shrink-0 rounded-md px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ${entry.className}`}
     >
       {entry.label}
     </span>
@@ -262,7 +264,7 @@ function TrustBadge({
   if (!entry) return null;
   return (
     <span
-      className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ${entry.className}`}
+      className={`shrink-0 rounded-md px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ${entry.className}`}
       title={label ?? undefined}
     >
       {entry.shortLabel}
@@ -400,7 +402,7 @@ function CommitmentPathPanel({
                 isMaterialized ? "border-accent/20 bg-accent/5" : "border-line bg-surface-raised"
               }`}
             >
-              <span className="mt-0.5 w-4 shrink-0 text-center font-mono text-[10px] text-ink-dim">
+              <span className="mt-0.5 w-4 shrink-0 text-center font-mono text-caption text-ink-dim">
                 {actionIcon(step.action)}
               </span>
               <div className="min-w-0 flex-1">
@@ -411,18 +413,18 @@ function CommitmentPathPanel({
                 >
                   {step.step}
                 </p>
-                <p className="mt-0.5 text-[11px] text-ink-mid">
+                <p className="mt-0.5 text-caption text-ink-mid">
                   {dueLabel} · ~{step.estimatedMinutes}m
                 </p>
               </div>
               {isMaterialized ? (
-                <span className="shrink-0 text-[11px] font-medium text-accent-deep">task ✓</span>
+                <span className="shrink-0 text-caption font-medium text-accent-deep">task ✓</span>
               ) : (
                 <button
                   type="button"
                   onClick={() => onMaterializeStep(i)}
                   disabled={materializingStep !== null}
-                  className="ease-strong shrink-0 rounded-md border border-line bg-surface-panel/70 px-2 py-0.5 text-[11px] font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
+                  className="ease-strong shrink-0 rounded-md border border-line bg-surface-panel/70 px-2 py-0.5 text-caption font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
                 >
                   {materializingStep === i ? "..." : "+ task"}
                 </button>
@@ -432,7 +434,7 @@ function CommitmentPathPanel({
         })}
       </ol>
 
-      <p className="mt-2 text-[10px] text-ink-mid">
+      <p className="mt-2 text-caption text-ink-mid">
         {pathData.model ?? "AI"} · {new Date(pathData.builtAt).toLocaleDateString("en-US")}
       </p>
     </div>

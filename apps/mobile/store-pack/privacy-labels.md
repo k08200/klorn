@@ -37,8 +37,11 @@ store, but it is described here because reviewers and the privacy policy ask.
   mail lists, **opened mail bodies**, calendar, approvals, accounts — are
   persisted with Capacitor Preferences (iOS `UserDefaults`, Android
   `SharedPreferences`) for at most **24 h** (`CACHE_MAX_AGE_MS`), keyed to the
-  signed-in user. Wiped on sign-out, when the server answers 401, and after
-  account deletion (`src/auth/session.tsx` `wipe()`). Searches, provider lists,
+  signed-in user, **encrypted** with AES-256-GCM under a random key kept only
+  in the Keychain / Keystore as a device-only item (`src/platform/cache-crypto.ts`;
+  iOS `afterFirstUnlockThisDeviceOnly`, so an iCloud / iTunes backup holds
+  ciphertext without its key). Wiped — key included — on sign-out, when the
+  server answers 401, and after account deletion (`src/auth/session.tsx` `wipe()`). Searches, provider lists,
   team slots and drive limits are never persisted (`meta.persist: false`).
 - **Session token**: Keychain / Android Keystore via
   `@aparajita/capacitor-secure-storage`, not iCloud-synced; removed on
@@ -148,18 +151,11 @@ Web browsing, App info and performance (no crash SDK), In-app search history
 ## 4. Privacy policy — gaps to fix before submitting
 
 The live policy (`packages/web/src/app/privacy/page.tsx`, reached through
-`https://klorn.ai/privacy/`) is web-era. Play checks the policy against the
-Data safety form, so add (founder or a web PR — outside this folder):
-
-1. **The mobile app's on-device cache**: what is cached (recent lists and
-   opened mail), 24 h maximum, cleared on sign-out.
-2. **Push providers**: it names Apple APNs; add **Google Firebase Cloud
-   Messaging** for Android.
-3. **Purchases in the app**: App Store / Google Play billing and
-   **RevenueCat** (receives the account id and purchase history, never mail).
-   Today it names only Paddle as merchant of record.
-4. Korean: the policy is English only. Not a store requirement, but the KO
-   listing links to it.
+`https://klorn.ai/privacy/`) has a **Mobile App** section since 2026-10-17
+(k08200/klorn#1473): the encrypted 24 h on-device cache, Google Firebase Cloud
+Messaging next to APNs, App Store / Google Play billing with RevenueCat, voice
+input, no ads or tracking SDKs. Still open: the policy is English only — not a
+store requirement, but the KO listing links to it.
 
 ## 5. Code-side privacy items (done 2026-10-16)
 

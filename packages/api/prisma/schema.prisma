@@ -1147,13 +1147,17 @@ model PushSubscription {
 // an FCM token (Android) or APNs token (iOS) from the device. Register upserts
 // by the unique token and prunes the stale one when a device re-registers.
 model DevicePushToken {
-  id        String   @id @default(uuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  token     String   @unique
-  platform  String // "android" | "ios"
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token        String   @unique
+  platform     String // "android" | "ios"
+  // Android only: this build posts Klorn's DATA-ONLY FCM messages itself, with
+  // action buttons (apps/mobile push/KlornMessagingService.java). Sent by the
+  // app at registration; false = notification messages, as before.
+  dataMessages Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([userId])
 }
@@ -1496,6 +1500,13 @@ model EmailMessage {
   // scope is a residual filter over all of the user's rows, which degrades as a
   // heavy user's mailbox grows across accounts.
   @@index([userId, linkedInboxAccountId, receivedAt])
+  // EmailMessage_lane_scan_idx (migration 20261017020000_email_lane_scan_index)
+  // is really (userId, receivedAt DESC, id DESC) INCLUDE (linkedInboxAccountId,
+  // threadId, isRead). Prisma 6 has no INCLUDE syntax and its schema describer
+  // reads INCLUDE columns as trailing key columns, so this line is the shape
+  // `migrate diff` sees — it keeps the CI drift check green. The migration SQL
+  // is the source of truth; never create this index from schema (db push).
+  @@index([userId, receivedAt(sort: Desc), id(sort: Desc), linkedInboxAccountId, threadId, isRead], map: "EmailMessage_lane_scan_idx")
 }
 
 model EmailAttachment {

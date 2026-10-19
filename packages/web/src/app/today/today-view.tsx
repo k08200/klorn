@@ -2,9 +2,12 @@
 
 /**
  * Today — the home (productization plan §1, P6, UNIFIED_HOME): every connected
- * account's mail by lane, the day's merged calendar and the assistant strip,
- * at a glance. Three columns from 1280px, two from 768px, and one scroll on a
- * phone in the order PUSH, MEETING, calendar, QUEUE, INFO, assistant.
+ * account's mail by lane, the day's merged calendar and the assistant, at a
+ * glance. Design detail pass W1: the lanes column `minmax(560px, 1fr)` beside
+ * one 320px rail (Calendar, Files, Assistant as cards) once the page itself is
+ * at least 912px wide (a container query, so the sidebar's width is already
+ * accounted for); below that one scroll in the order PUSH, MEETING, calendar,
+ * QUEUE, INFO, files, assistant.
  *
  * This file owns the layout and the page-level states; each block loads, fails
  * and retries on its own (see use-today-data).
@@ -12,6 +15,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { PAGE_SHELL } from "../../components/page-shell";
 import EmptyState from "../../components/ui/empty-state";
 import { useAuth } from "../../lib/auth";
 import { filesEnabled } from "../../lib/home";
@@ -50,7 +54,7 @@ export function TodayView() {
   useRefreshOnNewMail();
 
   return (
-    <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-6 px-4 py-6 md:px-8 md:py-8">
+    <div className={`${PAGE_SHELL} flex flex-col gap-6`}>
       <TodayHeader time={time} accounts={accounts} showAccounts={!noSource} />
       {noSource ? (
         <EmptyState
@@ -62,20 +66,23 @@ export function TodayView() {
             label: t("today.connect.action"),
             onClick: () => router.push(ACCOUNTS_HREF),
           }}
-          className="rounded-card border border-line bg-surface-panel md:py-20"
+          className="rounded-xl bg-surface-panel ring-1 ring-line"
         />
       ) : (
-        <div className="flex flex-col gap-8 md:grid md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] md:items-start md:gap-x-10 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,0.9fr)]">
-          <MailColumn
-            accounts={accounts.accounts}
-            time={time}
-            className="md:col-start-1 md:row-span-2 md:row-start-1 xl:row-span-1"
-          />
-          <div className="order-3 flex min-w-0 flex-col gap-8 md:col-start-2 md:row-start-1">
-            <CalendarColumn time={time} />
-            {filesEnabled(user) && <RecentFilesBlock timeZone={time.timeZone} />}
+        <div className="@container">
+          <div className="flex flex-col gap-7 @min-[912px]:grid @min-[912px]:grid-cols-[minmax(560px,1fr)_320px] @min-[912px]:items-start @min-[912px]:gap-8">
+            <MailColumn accounts={accounts.accounts} time={time} />
+            <aside
+              aria-label={t("today.rail.label")}
+              className="contents @min-[912px]:flex @min-[912px]:flex-col @min-[912px]:gap-5"
+            >
+              <CalendarColumn time={time} className="order-3" />
+              {filesEnabled(user) && (
+                <RecentFilesBlock timeZone={time.timeZone} className="order-6" />
+              )}
+              <AssistantColumn className="order-7" />
+            </aside>
           </div>
-          <AssistantColumn className="order-6 md:col-start-2 md:row-start-2 xl:col-start-3 xl:row-start-1" />
         </div>
       )}
     </div>

@@ -52,7 +52,6 @@
 "mail.dismiss.a11y" = "Nachricht von %@ ausblenden";
 "mail.changeTier" = "In andere Spur verschieben… (Klorn lernt daraus)";
 "mail.changeTier.a11y" = "Spur der Nachricht von %1$@ ändern, aktuell %2$@";
-"mail.moveTo" = "Verschieben nach %1$@%2$@";
 "mail.snoozePrefix" = "Zurückstellen ";
 "mail.summarize" = "KI-Zusammenfassung";
 "mail.summarizing" = "Wird zusammengefasst…";
@@ -724,3 +723,35 @@
 "today.freeTime.stale" = "Diese Zeiten sind eventuell nicht mehr aktuell.";
 "today.freeTime.recheck" = "Erneut prüfen";
 "files.opensBrowser" = "Öffnet sich im Browser";
+
+/* Design detail pass (2026-10-16) */
+"mail.moveToLane" = "Spur wechseln";
+"error.timeout" = "Der Server hat zu lange gebraucht. Versuche es erneut.";
+"auth.failed.nonce" = "Klorn war für die Anmeldung nicht erreichbar. Prüfe deine Verbindung und versuche es erneut.";
+"auth.failed.invalidNonce" = "Die Anmeldesitzung wurde nicht erkannt. Bitte versuche es erneut.";
+"auth.failed.expired" = "Die Anmeldung hat zu lange gedauert und ist abgelaufen. Bitte versuche es erneut.";
+"auth.failed.timeout" = "Zeitüberschreitung beim Warten auf den Browser. Schließe die Anmeldung dort ab und versuche es erneut.";
+"auth.failed.cancelled" = "Die Anmeldung wurde abgebrochen.";
+"proposals.approveSend" = "Freigeben und senden";
+"proposals.sendsNow" = "Wird sofort gesendet. Eine gesendete E-Mail lässt sich nicht zurückholen.";
+"proposals.runsNow" = "Wird ausgeführt, sobald Sie freigeben.";
+"tool.label.send_email" = "E-Mail senden";
+"tool.label.draft_reply" = "Antwortentwurf";
+"tool.label.reply_to_email" = "Auf E-Mail antworten";
+"tool.label.archive_email" = "E-Mail archivieren";
+"tool.label.delete_email" = "E-Mail löschen";
+"tool.label.mark_read" = "Als gelesen markieren";
+"tool.label.create_event" = "Termin erstellen";
+"tool.label.delete_event" = "Termin löschen";
+"tool.label.schedule_meeting" = "Meeting planen";
+"tool.label.create_contact" = "Kontakt hinzufügen";
+"tool.label.update_contact" = "Kontakt aktualisieren";
+"tool.label.delete_contact" = "Kontakt löschen";
+"tool.label.create_note" = "Notiz erstellen";
+"tool.label.delete_note" = "Notiz löschen";
+"tool.label.create_task" = "Aufgabe erstellen";
+"tool.label.delete_task" = "Aufgabe löschen";
+"tool.label.record_skill" = "Skill speichern";
+"tool.label.execute_skill" = "Skill ausführen";
+"tool.label.classify_emails" = "E-Mails in Spuren einordnen";
+"tool.label.unknown" = "Aktion";

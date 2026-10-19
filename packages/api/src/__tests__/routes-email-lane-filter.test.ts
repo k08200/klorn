@@ -22,7 +22,7 @@ const queryRaw = vi.hoisted(() => vi.fn(async (_sql: unknown) => [] as unknown[]
 const linkedInboxFindFirst = vi.hoisted(() => vi.fn(async () => null as unknown));
 
 vi.mock("../db.js", () => {
-  const prisma = {
+  const prisma: Record<string, unknown> = {
     userToken: { findFirst: userTokenFindFirst },
     emailMessage: { findMany: emailFindMany, count: emailCount },
     attentionItem: { findMany: attentionFindMany },
@@ -34,7 +34,10 @@ vi.mock("../db.js", () => {
       count: vi.fn(async () => 1),
       update: vi.fn(async () => ({})),
     },
+    $executeRaw: vi.fn(async () => 0),
   };
+  // The lane reads run inside withStatementTimeout's interactive transaction.
+  prisma.$transaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma));
   return { prisma, db: prisma };
 });
 vi.mock("../mail/email-attachments.js", () => ({
@@ -426,6 +429,20 @@ describe("GET /api/email?tier= — lane page", () => {
   });
 });
 
+/** The bound values of the stored-tier → live-lane CASE, in order. */
+const LANE_CASE_VALUES = [
+  "PUSH",
+  "CALL",
+  "PUSH",
+  "MEETING",
+  "MEETING",
+  "INFO",
+  "INFO",
+  "SILENT",
+  "SILENT",
+  "QUEUE",
+];
+
 describe("GET /api/email/lane-counts", () => {
   it("folds stored values into the five live lanes; unjudged mail counts as QUEUE", async () => {
     userTokenFindFirst.mockResolvedValue(GOOGLE_TOKEN);
@@ -444,11 +461,11 @@ describe("GET /api/email/lane-counts", () => {
     expect(res.json()).toEqual({
       source: "gmail",
       counts: {
-        PUSH: { total: 4, unread: 3 },
-        MEETING: { total: 0, unread: 0 },
-        QUEUE: { total: 16, unread: 6 },
-        INFO: { total: 0, unread: 0 },
-        SILENT: { total: 7, unread: 7 },
+        PUSH: { total: 4, unread: 3, threads: 0 },
+        MEETING: { total: 0, unread: 0, threads: 0 },
+        QUEUE: { total: 16, unread: 6, threads: 0 },
+        INFO: { total: 0, unread: 0, threads: 0 },
+        SILENT: { total: 7, unread: 7, threads: 0 },
       },
     });
     expect(queryRaw).toHaveBeenCalledTimes(1);
@@ -463,7 +480,7 @@ describe("GET /api/email/lane-counts", () => {
     expect(body.source).toBe("demo");
     expect(body.needsConnection).toBe(true);
     for (const lane of Object.keys(body.counts)) {
-      expect(body.counts[lane]).toEqual({ total: 0, unread: 0 });
+      expect(body.counts[lane]).toEqual({ total: 0, unread: 0, threads: 0 });
     }
     expect(queryRaw).not.toHaveBeenCalled();
     await app.close();
@@ -477,7 +494,7 @@ describe("GET /api/email/lane-counts", () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().source).toBe("gmail");
     expect(res.json().needsConnection).toBeUndefined();
-    expect(res.json().counts.PUSH).toEqual({ total: 2, unread: 1 });
+    expect(res.json().counts.PUSH).toEqual({ total: 2, unread: 1, threads: 0 });
     expect(linkedInboxFindFirst).toHaveBeenCalledWith({
       where: { userId: "user-1" },
       select: { id: true },
@@ -492,8 +509,9 @@ describe("GET /api/email/lane-counts", () => {
     const [call] = rawCalls();
     expect(call.text).toContain(`FROM "EmailMessage" e LEFT JOIN "AttentionItem" a`);
     expect(call.text).toContain(`a."sourceId" = e."id" AND a."userId" = e."userId"`);
-    expect(call.text).toContain(`GROUP BY a."tier"`);
-    expect(call.values).toEqual(["user-1"]);
+    // Grouped by the folded lane, so a thread's distinct count is per live lane.
+    expect(call.text).toContain(`GROUP BY lane`);
+    expect(call.values).toEqual([...LANE_CASE_VALUES, "user-1"]);
     expect(call.text).not.toContain("user-1");
     await app.close();
   });
@@ -508,7 +526,7 @@ describe("GET /api/email/lane-counts", () => {
       headers: auth(),
     });
     const [call] = rawCalls();
-    expect(call.values).toEqual(["user-1", "linked-1"]);
+    expect(call.values).toEqual([...LANE_CASE_VALUES, "user-1", "linked-1"]);
     expect(call.text).not.toContain("linked-1");
     await app.close();
   });
@@ -527,7 +545,8 @@ describe("GET /api/email/lane-counts", () => {
       expect.objectContaining({ where: { id: "someone-elses-inbox", userId: "user-1" } }),
     );
     const { counts } = res.json();
-    for (const lane of Object.keys(counts)) expect(counts[lane]).toEqual({ total: 0, unread: 0 });
+    for (const lane of Object.keys(counts))
+      expect(counts[lane]).toEqual({ total: 0, unread: 0, threads: 0 });
     expect(queryRaw).not.toHaveBeenCalled();
     await app.close();
   });
@@ -569,6 +588,50 @@ describe("GET /api/email/lane-counts", () => {
     const res = await app.inject({ method: "GET", url: "/api/email/lane-counts", headers: auth() });
     expect(res.statusCode).toBe(404);
     expect(queryRaw).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+describe("GET /api/email/lane-counts — query hardening", () => {
+  it("answers a statement timeout with a retryable 503", async () => {
+    const { Prisma } = await import("@prisma/client");
+    userTokenFindFirst.mockResolvedValue(GOOGLE_TOKEN);
+    queryRaw.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError("canceling statement due to statement timeout", {
+        code: "P2010",
+        clientVersion: "test",
+        meta: { code: "57014" },
+      }),
+    );
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/email/lane-counts", headers: auth() });
+    expect(res.statusCode).toBe(503);
+    expect(res.headers["retry-after"]).toBe("5");
+    expect(res.json()).toMatchObject({ code: "query-timeout", retryable: true });
+    await app.close();
+  });
+
+  it("limits the counts per user (120/min)", async () => {
+    const rateLimit = (await import("@fastify/rate-limit")).default;
+    const { emailRoutes } = await import("../routes/email.js");
+    const app = Fastify();
+    await app.register(rateLimit, { max: 10_000, timeWindow: "1 minute" });
+    await app.register(emailRoutes, { prefix: "/api/email" });
+    userTokenFindFirst.mockResolvedValue(GOOGLE_TOKEN);
+    queryRaw.mockResolvedValue([]);
+    // The per-address route limit is also 120; give each request its own address
+    // so only the per-user limit can answer 429.
+    const counts = (i: number) =>
+      app.inject({
+        method: "GET",
+        url: "/api/email/lane-counts",
+        headers: auth(),
+        remoteAddress: `10.0.${Math.floor(i / 250)}.${i % 250}`,
+      });
+    for (let i = 0; i < 120; i += 1) expect((await counts(i)).statusCode).toBe(200);
+    const limited = await counts(999);
+    expect(limited.statusCode).toBe(429);
+    expect(limited.json()).toMatchObject({ code: "rate-limited", retryable: true });
     await app.close();
   });
 });

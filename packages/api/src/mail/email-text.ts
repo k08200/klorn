@@ -12,6 +12,7 @@
  * verification links usually live in the href, not the visible text.
  */
 
+import postcss from "postcss";
 import sanitizeHtml from "sanitize-html";
 
 const SAFE_HREF = /^(https?:|mailto:)/i;
@@ -222,6 +223,53 @@ export function coercePlainBody(body: string | null, htmlBody: string | null): s
  * Clients render this in a JS-disabled webview; this sanitizer is the
  * second wall, not the only one.
  */
+// Declarations that move content out of the flow: with them a sender can pin a
+// fake UI over the reader (position:fixed) or stack over it (z-index).
+const POSITIONING_PROPERTIES = new Set(["position", "z-index"]);
+// A property name as real mail writes it: an identifier, or a custom property.
+// Anything else (CSS escapes such as \70 osition) could spell a blocked
+// property without the word, so it goes.
+const PLAIN_CSS_PROPERTY = /^(?:-?[a-z][a-z0-9-]*|--[a-z0-9-]+)$/;
+// postcss is quadratic on one giant declaration (400k chars: ~2.8 s), and the
+// sanitizer's own style parse is the same; no real inline style comes close.
+const MAX_STYLE_ATTRIBUTE_CHARS = 32_768;
+// postcss lets a quoted string span lines; a browser ends it at the line break
+// and reads what follows as declarations. Without line breaks they agree.
+const CSS_LINE_BREAKS = /[\r\n\f]/g;
+
+/**
+ * A style attribute without its positioning declarations. Parsed with postcss,
+ * the parser sanitize-html re-reads styles with (parseStyleAttributes): a
+ * naive ";" split read `position/*;a:*\/:fixed` or `"x;a:"position:fixed`
+ * differently from postcss, which re-emitted them as position:fixed. Only
+ * plain declarations are re-emitted (prop:value[ !important]); nested rules and
+ * anything after a stray "}" are dropped, and an unparseable style is dropped
+ * whole. Exported for the test.
+ */
+export function stripPositioningStyles(style: string): string {
+  if (style.length > MAX_STYLE_ATTRIBUTE_CHARS) return "";
+  let root: postcss.Root;
+  try {
+    root = postcss.parse(`a{${style.replace(CSS_LINE_BREAKS, " ")}}`);
+  } catch {
+    return "";
+  }
+  const rule = root.first;
+  if (!rule || rule.type !== "rule") return "";
+  const kept: string[] = [];
+  rule.each((node) => {
+    if (node.type !== "decl") return;
+    // Checked lowercase, emitted as written: var() references a custom
+    // property by its exact, case-sensitive name.
+    const written = node.prop.trim();
+    const property = written.toLowerCase();
+    if (!PLAIN_CSS_PROPERTY.test(property) || POSITIONING_PROPERTIES.has(property)) return;
+    if (node.value.trim() === "") return;
+    kept.push(`${written}:${node.value}${node.important ? " !important" : ""}`);
+  });
+  return kept.join(";");
+}
+
 export function renderableEmailHtml(html: string | null | undefined): string | null {
   if (!html || !html.trim()) return null;
   const out = sanitizeHtml(boundSanitizeInput(html), {
@@ -301,6 +349,11 @@ export function renderableEmailHtml(html: string | null | undefined): string | n
     // never belongs in an <img>. Dropping src lets the filter above remove
     // the shell.
     transformTags: {
+      // Runs after the tag-specific transform, on every tag.
+      "*": (tagName, attribs) =>
+        attribs.style
+          ? { tagName, attribs: { ...attribs, style: stripPositioningStyles(attribs.style) } }
+          : { tagName, attribs },
       img: (tagName, attribs) => {
         const src = (attribs.src || "").trim();
         if (/^data:/i.test(src) && !SAFE_DATA_IMAGE.test(src)) {

@@ -238,7 +238,9 @@ export function keywordFeatures(email: ClassifiableEmail): TierFeatures {
 /// NOTES ("summary of decisions from the meeting") and asks that merely
 /// mention one ("partner meeting moved up — send the deck") are not
 /// schedulable; the noun counts only next to MEETING_CONTEXT_RE below.
-const SCHEDULING_RE = /invit|reschedul|일정 (조율|변경|조정|협의)/;
+const SCHEDULING_RE = /reschedul|일정 (조율|변경|조정|협의)/;
+/// "invit" alone: a real ask only from a person — see isNonPersonalInvite.
+const INVITE_RE = /invit/;
 const MEETING_NOUN_RE = /meeting|미팅|회의/;
 /// Forward-looking coordination wording that turns a meeting mention into
 /// scheduling intent: proposing/confirming a time, asking availability.
@@ -247,15 +249,46 @@ const MEETING_CONTEXT_RE =
 /// A join link in the body is scheduling intent even with a chatty subject.
 const MEET_LINK_RE = /meet\.google\.com\/|zoom\.us\/j\/|teams\.microsoft\.com\/l\/meetup-join/;
 
-/** v2 MEETING signal: invite/reschedule wording, a meeting noun in a
- *  time-coordination context, or an embedded meeting link. */
+/// A calendar system's invite subject: "Invitation: Board sync @ Tue Oct 27…",
+/// "Updated invitation: …". Counts even from an automated sender.
+const CALENDAR_INVITE_SUBJECT_RE =
+  /^(?:(?:re|fwd?):\s*)?(?:updated |new )?invitation:[^@]{1,200}@/i;
+/// Gmail tabs that never hold a meeting someone is asking you to attend.
+const BULK_CATEGORY_LABELS = new Set(["CATEGORY_SOCIAL", "CATEGORY_PROMOTIONS"]);
+/// System accounts that send "X invited you to <workspace>" — broader than
+/// isAutomatedSender, which also drives the PUSH floor and stays as is.
+const INVITE_SYSTEM_SENDER_RE = /(?:^|[<\s])(?:notify|invitations?)@/i;
+
+/** True when invite wording is most likely not a meeting ask:
+ *  bulk mail, a social/promotions tab, or a system account. In prod
+ *  (2026-10-05..18) 28 of 30 MEETING items were LinkedIn connection
+ *  invitations and referral promos, and MEETING notifies. */
+function isNonPersonalInvite(email: {
+  from?: string | null;
+  labels?: string[] | null;
+  hasListUnsubscribe?: boolean | null;
+}): boolean {
+  if (email.hasListUnsubscribe) return true;
+  if (email.labels?.some((l) => BULK_CATEGORY_LABELS.has(l))) return true;
+  const from = email.from || "";
+  return isAutomatedSender(from) || INVITE_SYSTEM_SENDER_RE.test(boundedFromValue(from));
+}
+
+/** v2 MEETING signal: invite/reschedule wording from a person (or a calendar
+ *  invite subject), a meeting noun in a time-coordination context, or an
+ *  embedded meeting link. */
 export function detectSchedulingIntent(email: {
+  from?: string | null;
   subject?: string | null;
   snippet?: string | null;
   body?: string | null;
+  labels?: string[] | null;
+  hasListUnsubscribe?: boolean | null;
 }): boolean {
+  if (CALENDAR_INVITE_SUBJECT_RE.test((email.subject || "").trim())) return true;
   const head = `${email.subject || ""} ${email.snippet || ""}`.toLowerCase();
   if (SCHEDULING_RE.test(head)) return true;
+  if (INVITE_RE.test(head) && !isNonPersonalInvite(email)) return true;
   if (MEETING_NOUN_RE.test(head) && MEETING_CONTEXT_RE.test(head)) return true;
   return MEET_LINK_RE.test((email.body || "").slice(0, 4000).toLowerCase());
 }

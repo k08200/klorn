@@ -226,7 +226,9 @@ struct MailboxRow: View {
                     }
                 }
                 Spacer(minLength: 8)
-                let time = mailTimeLabel(iso: item.receivedAt, now: Date())
+                let time = mailTimeLabel(
+                    iso: item.receivedAt, now: MailClock.now(renderingOffscreen: Theme.isRenderingOffscreen),
+                    relativeDays: Theme.isRenderingOffscreen)
                 if !time.isEmpty {
                     Text(time)
                         .font(Theme.Typo.caption.monospacedDigit())

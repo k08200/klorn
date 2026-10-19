@@ -7,6 +7,7 @@
  */
 
 import { useRef, useState } from "react";
+import { PAGE_SHELL } from "../../components/page-shell";
 import Button from "../../components/ui/button";
 import EmptyState from "../../components/ui/empty-state";
 import { Skeleton, SkeletonGroup } from "../../components/ui/skeleton";
@@ -38,7 +39,7 @@ export function FilesView() {
   const searching = q.trim().length > 0;
 
   return (
-    <div className="mx-auto flex w-full max-w-[960px] flex-col gap-6 px-4 py-6 md:px-8 md:py-8">
+    <div className={`${PAGE_SHELL} flex flex-col gap-6`}>
       <header className="flex flex-col gap-1">
         <h1 className="text-display text-ink">{t("nav.files")}</h1>
         <p className="text-body text-ink-muted">{t("files.subtitle")}</p>

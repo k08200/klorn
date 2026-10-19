@@ -249,8 +249,27 @@ enum FilesRules {
         return fractional.date(from: iso)
     }
 
-    /// The row glyph: a folder, or a document.
+    /// The list's trailing inset (audit M5: the badge and chevron sat on
+    /// the window edge).
+    static let trailingInset: CGFloat = 20
+
+    /// The row glyph by kind (audit M5: one generic page for every file).
     static func icon(for file: DriveFileWire) -> String {
-        file.isFolder ? "folder" : "doc"
+        if file.isFolder { return "folder" }
+        let mime = (file.mimeType ?? "").lowercased()
+        let ext = (file.name as NSString).pathExtension.lowercased()
+        if mime == "application/pdf" || ext == "pdf" { return "doc.richtext" }
+        if mime.hasPrefix("image/") || imageExtensions.contains(ext) { return "photo" }
+        if mime.contains("spreadsheet") || mime.contains("excel") || mime == "text/csv"
+            || sheetExtensions.contains(ext)
+        {
+            return "tablecells"
+        }
+        return "doc"
     }
+
+    private static let imageExtensions: Set<String> = [
+        "png", "jpg", "jpeg", "gif", "heic", "heif", "webp", "tiff", "bmp", "svg",
+    ]
+    private static let sheetExtensions: Set<String> = ["xlsx", "xls", "csv", "numbers", "ods"]
 }

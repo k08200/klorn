@@ -6,7 +6,7 @@ import SwiftUI
 // views are the shipping ones (`MainShell`), on their own in-memory model.
 
 extension PreviewRender {
-    private static let navFirewallJSON = """
+    static let navFirewallJSONEn = """
     {"tiers":{"PUSH":[
       {"id":"p1","source":"email","sourceId":"e1","type":"email","title":"Contract review",
        "tier":"PUSH","tierReason":"You replied to this sender 6 times","priority":9,
@@ -30,7 +30,7 @@ extension PreviewRender {
        "tier":"MEETING","tierReason":"Reschedule, no conflict on your calendar","priority":5,
        "surfacedAt":"2026-07-29T06:50:00Z",
        "email":{"emailDbId":"d4","source":{"provider":"GOOGLE","accountId":null,"label":"you@company.example"},
-                "unread":false,"hasAttachment":false,"subject":"Standup moved to 10:30",
+                "unread":false,"hasAttachment":false,"subject":"Standup moved to 18:30",
                 "from":"Alex Carter <alex@team.co>","receivedAt":"2026-07-29T06:50:00Z"},"hashStale":false},
       {"id":"m2","source":"email","sourceId":"e5","type":"email","title":"Board prep",
        "tier":"MEETING","tierReason":"Invitation for Thursday, one conflict","priority":5,
@@ -91,7 +91,7 @@ extension PreviewRender {
      "summary":{"PUSH":0,"MEETING":0,"QUEUE":0,"INFO":0,"SILENT":12,"AUTO":0,"total":12}}
     """
 
-    private static let navEmailJSON = """
+    static let navEmailJSONEn = """
     {"id":"d6","from":"Jamie Ortiz <jamie@team.co>",
      "subject":"Notes from the onboarding design review",
      "date":"2026-07-29T06:20:00Z",
@@ -101,19 +101,20 @@ extension PreviewRender {
      "engagement":{"outboundCount":3,"learnedImportance":0.61}}
     """
 
-    private static let navBriefingJSON = """
-    {"dateLabel":"Wednesday, July 29",
+    static let navBriefingJSONEn = """
+    {"dateLabel":"Today",
      "headline":"A clear morning, then four meetings from 17:00. The contract sign-off is the one thing with a deadline today.",
      "segments":[
-       {"label":"Before 12:00","summary":"3 meetings","kind":"busy"},
+       {"label":"Before 12:00","summary":"Nothing scheduled","kind":"free"},
        {"label":"12:00 to 17:00","summary":"5 hours free","kind":"free"},
-       {"label":"After 17:00","summary":"1 call","kind":"busy"}],
-     "curve":[1,2,1,0,0,0,0,0,0,1,0,0],
+       {"label":"After 17:00","summary":"4 meetings","kind":"busy"}],
+     "curve":[0,0,0,0,0,0,0,0,0,1,2,1],
      "dayStartHour":8,
-     "attention":[{"rank":1,"action":"Sign off on the contract before 17:00","reason":"Counterparty countersigns today"}]}
+     "attention":[{"rank":1,"action":"Sign off on Sarah Kim's contract before 18:00","reason":"The counterparty countersigns today"},
+                  {"rank":2,"action":"Approve Alex's copy change","reason":"The release is waiting on it"}]}
     """
 
-    private static let navTodayJSON = """
+    static let navTodayJSONEn = """
     {"total":4,
      "current":{"id":"t1","title":"Weekly planning","startTime":"2026-07-29T08:00:00Z",
                 "endTime":"2026-07-29T09:00:00Z","location":null,"meetingLink":"https://meet.example/plan","allDay":false},
@@ -133,24 +134,37 @@ extension PreviewRender {
      {"id":"li-3","email":"you@icloud.example","kind":"linked","needsReconnect":false,"provider":"ICLOUD","purpose":"personal"}]
     """
 
-    private static let navActionsJSON = """
+    static let navActionsJSONEn = """
     [{"id":"a1","toolName":"send_email","targetLabel":"Reply to Sarah Kim: signed contract attached",
       "reasoning":"You approved the same clause last week and the deadline is today.","createdAt":"2026-07-29T08:20:00Z"},
      {"id":"a2","toolName":"create_calendar_event","targetLabel":"Q3 board prep, Thursday 14:00 to 15:00",
       "reasoning":"The invitation fits your calendar after moving one focus block.","createdAt":"2026-07-29T05:40:00Z"}]
     """
 
-    private static let navCommitmentsJSON = """
+    static let navCommitmentsJSONEn = """
     [{"id":"k1","title":"Send the revised quote","owner":"ME","counterpartyName":"Dana Whitfield",
       "counterpartyEmail":null,"dueText":"Friday","status":"OPEN"},
      {"id":"k2","title":"Q3 numbers for the board deck","owner":"COUNTERPARTY","counterpartyName":"Priya Patel",
       "counterpartyEmail":null,"dueText":null,"status":"OPEN"}]
     """
 
-    private static let navChatJSON = """
-    ["What needs me before noon?",
-     "**Two things.** The contract sign-off for Sarah Kim is due by 17:00, and a reply is already drafted. Alex is holding the release for your approval on the copy change. Everything else can wait until after the design review."]
+    static let navChatJSONEn = """
+    ["What still needs me today?",
+     "**Two things.** The contract sign-off for Sarah Kim is due by 18:00, and a reply is already drafted. Alex is holding the release for your approval on the copy change. Everything else can wait until after the design review."]
     """
+
+    /// The fixture set for the language the render resolves to: Korean mail
+    /// for a `ko` render, English for everything else.
+    private static func fixture(_ en: String, _ ko: String) -> String {
+        PreviewFixtureLocale.current == .korean ? ko : en
+    }
+    static var navFirewallJSON: String { fixture(navFirewallJSONEn, navFirewallJSONKo) }
+    static var navEmailJSON: String { fixture(navEmailJSONEn, navEmailJSONKo) }
+    static var navBriefingJSON: String { fixture(navBriefingJSONEn, navBriefingJSONKo) }
+    static var navTodayJSON: String { fixture(navTodayJSONEn, navTodayJSONKo) }
+    static var navActionsJSON: String { fixture(navActionsJSONEn, navActionsJSONKo) }
+    static var navCommitmentsJSON: String { fixture(navCommitmentsJSONEn, navCommitmentsJSONKo) }
+    static var navChatJSON: String { fixture(navChatJSONEn, navChatJSONKo) }
 
     private static func decoded<T: Decodable>(_ type: T.Type, _ json: String) -> T? {
         try? JSONDecoder().decode(type, from: Data(json.utf8))
@@ -200,11 +214,13 @@ extension PreviewRender {
         shot("mail-all", navModel(firewallJSON: navFirewallJSON)) { $0.listMode = .inbox }
         shot("calendar-full", model) { $0.listMode = .calendar }
         shot("assistant", model) { $0.showAssistantPane(.approvals) }
+        // The demo day's briefing, the source of the landing's `.brief` card.
+        shot("assistant-briefing", model) { $0.showAssistantPane(.briefing) }
 
         // The states that are not "ready": each must say what it is.
         shot("today-empty", navModel(firewallJSON: navEmptyFirewallJSON))
         shot("today-loading", navModel(firewallJSON: ""))
-        shot("today-error", navModel(firewallJSON: "", loadError: "The server did not respond (timed out after 30 s)."))
+        shot("today-error", navModel(firewallJSON: "", loadError: PreviewRender.timeoutError))
         shot("today-signed-out", AppModel(tokenStore: InMemoryTokenStore()))
         // The rest of the not-ready states (M6).
         shot("today-signing-in", stateModel(phase: .signingIn))
@@ -221,7 +237,7 @@ extension PreviewRender {
         }
         shot("today-stale", navModel(
             firewallJSON: navFirewallJSON,
-            loadError: "The server did not respond (timed out after 30 s)."))
+            loadError: PreviewRender.timeoutError))
         // P12: Files and Teams free-time on the same fixtures.
         ok = renderFiles(
             dir: dir, dark: dark, base: { navModel(firewallJSON: navFirewallJSON) }, actions: actions) && ok

@@ -9,6 +9,7 @@
  * Each is a controlled component: parent owns busy state and callbacks.
  */
 
+import Button from "../../../components/ui/button";
 import { useT } from "../../../lib/i18n";
 import { EmailActionButton, senderName } from "./atoms";
 import {
@@ -47,24 +48,14 @@ export function UndoActionBanner({
         {subject && <p className="mt-0.5 truncate text-xs text-ink-mid">{subject}</p>}
       </div>
       <div className="flex shrink-0 gap-2">
-        <button
-          type="button"
-          onClick={onUndo}
-          disabled={busy}
-          className="min-h-10 rounded-md bg-accent-solid px-3 text-xs font-semibold text-accent-solid-ink transition hover:bg-accent-solid-hover disabled:opacity-50 focus-ring"
-        >
+        <Button variant="primary" size="sm" onClick={onUndo} disabled={busy}>
           {busy
             ? t("emailDetail.toolbar.undo.restoring")
             : (undoLabel ?? t("emailDetail.toolbar.undo.undo"))}
-        </button>
-        <button
-          type="button"
-          onClick={onDismiss}
-          disabled={busy}
-          className="min-h-10 rounded-md border border-line px-3 text-xs text-ink-mid transition hover:bg-surface-hover disabled:opacity-50 focus-ring"
-        >
+        </Button>
+        <Button variant="secondary" size="sm" onClick={onDismiss} disabled={busy}>
           {t("emailDetail.toolbar.undo.dismiss")}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -193,15 +184,14 @@ export function EmailReminderQuickActions({
       <span className="font-medium text-ink-mid">{t("emailDetail.toolbar.remindMe")}</span>
       <div className="flex flex-wrap gap-1.5">
         {EMAIL_REMINDER_OPTIONS.map((option) => (
-          <button
+          <Button
             key={option.key}
-            type="button"
+            variant="chip"
             onClick={() => onCreate(option)}
             disabled={disabled || busyKey !== null}
-            className="min-h-9 rounded-md border border-line bg-surface-raised px-3 text-xs text-ink-mid transition hover:border-line-strong hover:text-ink disabled:cursor-not-allowed disabled:opacity-45 focus-ring"
           >
             {busyKey === option.key ? t("emailDetail.toolbar.settingReminder") : option.label}
-          </button>
+          </Button>
         ))}
       </div>
     </div>

@@ -1041,12 +1041,35 @@ func runSelfChecks() async -> Bool {
               == "/api/email?search=deal&inbox=primary")
     check("search path omits all-inboxes scope",
           emailSearchPath(query: "deal", selectedInbox: "all") == "/api/email?search=deal")
-    check("firewall path — all unscoped",
-          firewallPath(selected: "all") == "/api/inbox/firewall")
-    check("firewall path — primary scoped",
-          firewallPath(selected: "primary") == "/api/inbox/firewall?inbox=primary")
-    check("firewall path — linked id scoped (hyphen encoded)",
-          firewallPath(selected: "li-1") == "/api/inbox/firewall?inbox=li%2D1")
+    check("firewall path — all unscoped, carries lang",
+          firewallPath(selected: "all", lang: "ko") == "/api/inbox/firewall?lang=ko")
+    check("firewall path — primary scoped, carries lang",
+          firewallPath(selected: "primary", lang: "ko")
+              == "/api/inbox/firewall?inbox=primary&lang=ko")
+    check("firewall path — linked id scoped (hyphen encoded), carries lang",
+          firewallPath(selected: "li-1", lang: "ja") == "/api/inbox/firewall?inbox=li%2D1&lang=ja")
+    // Reader language: server-composed reasons follow the app UI language
+    // (AppLanguage / -klorn.appLanguage), not the stored notification language.
+    check("email detail path carries lang",
+          emailDetailPath(id: "e1", lang: "ko") == "/api/email/e1?lang=ko")
+    check("lang for every AppLanguage is its UI code",
+          AppLanguage.allCases.filter { $0 != .system }.allSatisfy {
+              firewallPath(selected: "all", lang: L10n.resolvedCode(override: $0))
+                  == "/api/inbox/firewall?lang=\($0.rawValue)"
+          })
+    check("lang for system language resolves to a shipped code",
+          L10n.resolvedCode(override: .system, preferred: ["ko-KR"], available: ["en", "ko"]) == "ko")
+    check("lang value is encoded, never raw",
+          langQueryItem("a&b") == "lang=a%26b")
+    let replyReasonJSON = Data(#"{"id":"e1","needsReply":true,"needsReplyReason":"action_items_present","needsReplyReasonText":"처리할 요청이 들어 있음"}"#.utf8)
+    let replyReasonDetail = try? JSONDecoder().decode(EmailDetail.self, from: replyReasonJSON)
+    check("email detail decodes the reader-language reply reason, keeps the code apart",
+          replyReasonDetail?.needsReplyReasonText == "처리할 요청이 들어 있음"
+              && replyReasonDetail?.needsReplyReason == "action_items_present")
+    let olderServerJSON = Data(#"{"id":"e1","needsReplyReason":"action_items_present"}"#.utf8)
+    check("email detail from an older server decodes with no reply-reason text",
+          (try? JSONDecoder().decode(EmailDetail.self, from: olderServerJSON))
+              .map { $0.needsReplyReasonText == nil } == true)
     // Folders: "all" is EXPLICIT (the server's folder default is the primary),
     // and the page token rides along verbatim.
     check("mailbox path — all is explicit",
@@ -1474,7 +1497,12 @@ func runSelfChecks() async -> Bool {
     // "%@(으)로" is a workaround, not Korean. Pick the particle from the
     // final consonant of the preceding word.
     check("no final consonant takes 로", L10n.josaRo(after: "Queue") == "로")
-    check("final consonant takes 으로", L10n.josaRo(after: "Push") == "으로")
+    // Push is spoken 푸시 — no final consonant, so 로 (audit M1).
+    check("Push is spoken 푸시, so it takes 로", L10n.josaRo(after: "Push") == "로")
+    check("Meeting is spoken 미팅, so it takes 으로", L10n.josaRo(after: "Meeting") == "으로")
+    check("Info is spoken 인포, so it takes 로", L10n.josaRo(after: "Info") == "로")
+    check("Silent is spoken 사일런트, so it takes 로", L10n.josaRo(after: "Silent") == "로")
+    check("a final consonant takes 으로", L10n.josaRo(after: "Inbox 3") == "으로")
     check("Hangul without a final consonant takes 로", L10n.josaRo(after: "메모") == "로")
     check("Hangul with a final consonant takes 으로", L10n.josaRo(after: "받은편지함") == "으로")
     // ㄹ is the exception: 서울로, never 서울으로.
@@ -1484,7 +1512,10 @@ func runSelfChecks() async -> Bool {
     check("an empty string falls back to the plain particle", L10n.josaRo(after: "") == "로")
 
     check("no final consonant takes 와", L10n.josaWa(after: "Queue") == "와")
-    check("final consonant takes 과", L10n.josaWa(after: "Push") == "과")
+    check("Push takes 와 (푸시와)", L10n.josaWa(after: "Push") == "와")
+    check("Meeting takes 과 (미팅과)", L10n.josaWa(after: "Meeting") == "과")
+    check("Queue, Info and Silent take 와",
+          ["Queue", "Info", "Silent"].allSatisfy { L10n.josaWa(after: $0) == "와" })
     check("Hangul without a final consonant takes 와", L10n.josaWa(after: "메모") == "와")
     check("Hangul with a final consonant takes 과", L10n.josaWa(after: "받은편지함") == "과")
 
@@ -1526,6 +1557,8 @@ func runSelfChecks() async -> Bool {
     for (name, ok) in await noPillSelfChecks(sourceDir: sourceDir) { check(name, ok) }
     print("Files and team free-time (P12):")
     for (name, ok) in await filesSelfChecks(sourceDir: sourceDir) { check(name, ok) }
+    print("Locale-native preview fixtures (landing captures):")
+    for (name, ok) in await previewFixtureSelfChecks(sourceDir: sourceDir) { check(name, ok) }
     print("Account-link hand-off (link binding):")
     for (name, ok) in await linkHandoffSelfChecks(sourceDir: sourceDir) { check(name, ok) }
 
@@ -1539,6 +1572,8 @@ func runSelfChecks() async -> Bool {
     for (name, ok) in tokenSelfChecks(sourceDir: sourceDir) { check(name, ok) }
     // One style per view: no bar, legacy or overlay variant (2026-10-15).
     for (name, ok) in oneStyleSelfChecks(sourceDir: sourceDir) { check(name, ok) }
+    // The design detail pass (2026-10-16).
+    for (name, ok) in await detailPassSelfChecks(sourceDir: sourceDir) { check(name, ok) }
 
     print("Localization:")
     // A key present in one language and missing in another ships a raw key
@@ -1572,7 +1607,7 @@ func runSelfChecks() async -> Bool {
         L("calendar.proposed.a11y", "x"), L("mail.filterByInbox.a11y", "x"),
         L("mail.inbox.a11y", "x"), L("mail.searchResult.a11y", "x", "y"),
         L("mail.snooze.a11y", "x"), L("mail.dismiss.a11y", "x"),
-        L("mail.changeTier.a11y", "x", "y"), L("mail.moveTo", "x", "y"), L("mail.whyTier", "x", "y"),
+        L("mail.changeTier.a11y", "x", "y"), L("mail.whyTier", "x", "y"),
         L("reading.replyTo", "x"),
         L("prefs.updates.get", "x"), L("prefs.updates.upToDate", "x"),
         L("prefs.shortcut.change.a11y", "x"), L("prefs.infoRow.a11y", "x", "y"),
@@ -1677,7 +1712,7 @@ func runSelfChecks() async -> Bool {
         pattern: #""[A-Z][a-z]+(?: [A-Za-z,'’]+){1,}\.?""#)
     var proseOffenders: [String] = []
     // The preview harness files hold fixture DATA (demo mail), not UI copy.
-    let proseExempt: Set<String> = ["SelfCheck.swift"]
+    let proseExempt: Set<String> = ["SelfCheck.swift", "SelfCheckDetailPass.swift"]
     for url in swiftFiles
     where !proseExempt.contains(url.lastPathComponent)
         && !url.lastPathComponent.hasPrefix("PreviewRender")
@@ -1722,9 +1757,8 @@ func runSelfChecks() async -> Bool {
 
     // WCAG 2.2 AA contrast (the CLAUDE.md baseline). textDim carries
     // caption-sized text on the glass panel AND on surfaceRaised cards, so both
-    // stacks must clear the 4.5:1 text floor (1.4.3). The engage tone only
-    // colors non-text signal (chip icon + meter), so it gets the 3:1 graphics
-    // floor (1.4.11). Ratios are computed from the live Theme colors — a future
+    // stacks must clear the 4.5:1 text floor (1.4.3), and so must the accent,
+    // which colors links and text actions. Ratios are computed from the live Theme colors — a future
     // palette tweak that drops below the floor fails here, not in dogfood.
     func srgba(_ color: Color) -> (r: Double, g: Double, b: Double, a: Double) {
         // Fail loudly: a silent black fallback would make every fg-on-light
@@ -1770,8 +1804,11 @@ func runSelfChecks() async -> Bool {
               contrast(Theme.textDim, on: raisedOnCanvas) >= 4.5)
         check("text clears 4.5:1 on a raised card over the canvas",
               contrast(Theme.text, on: raisedOnCanvas) >= 4.5)
-        check("engage (non-text) clears 3:1 on a raised card over the canvas",
-              contrast(Theme.engage, on: raisedOnCanvas) >= 3.0)
+        // X2 (2026-10-16): the accent carries text, links and selection.
+        check("accent clears 4.5:1 as text on the canvas",
+              contrast(Theme.accent, on: canvas) >= 4.5)
+        check("accent clears 4.5:1 as text on a raised card",
+              contrast(Theme.accent, on: raisedOnCanvas) >= 4.5)
     }
 
     // Dark appearance (2026-08-15): the same floors, resolved under darkAqua —
@@ -1787,8 +1824,8 @@ func runSelfChecks() async -> Bool {
               contrast(Theme.textDim, on: darkRaised) >= 4.5)
         check("dark: text clears 4.5:1 on a raised card",
               contrast(Theme.text, on: darkRaised) >= 4.5)
-        check("dark: engage (non-text) clears 3:1 on a raised card",
-              contrast(Theme.engage, on: darkRaised) >= 3.0)
+        check("dark: accent clears 4.5:1 as text on a raised card",
+              contrast(Theme.accent, on: darkRaised) >= 4.5)
     }
     // Lane palette (FD-4, 2026-10-02): one palette with the web. Pure math on
     // Theme.laneComponents — no NSColor resolution — so the verdict never
@@ -1824,8 +1861,7 @@ func runSelfChecks() async -> Bool {
     // textDim IS the floor: any extra .opacity() on top drops caption text
     // back under 4.5:1, so both single-line shapes are banned — thinning the
     // color (`textDim.opacity(…)`) and thinning an inline chain
-    // (`…(Theme.textDim).opacity(…)`). engage may never color a Text at all
-    // (it is a non-text tone, ~3.7:1 on a raised card). Decorative
+    // (`…(Theme.textDim).opacity(…)`). Decorative
     // (accessibilityHidden) views that want a fainter look put `.opacity(…)`
     // on the view, on its own line. Line-level grep: a multi-line chain or a
     // container-inherited style still slips through — the render-preview pass
@@ -1844,10 +1880,11 @@ func runSelfChecks() async -> Bool {
     if !dimmedTextOffenders.isEmpty {
         print("      offenders: \(dimmedTextOffenders.joined(separator: ", "))")
     }
-    let engageTextOffenders = lineOffenders { $0.contains("Text(") && $0.contains("Theme.engage") }
-    check("engage never colors text", engageTextOffenders.isEmpty)
-    if !engageTextOffenders.isEmpty {
-        print("      offenders: \(engageTextOffenders.joined(separator: ", "))")
+    // X2: the pink importance tone is retired; nothing may bring it back.
+    let engageOffenders = lineOffenders { $0.contains("Theme.engage") }
+    check("the pink engage tone is retired", engageOffenders.isEmpty)
+    if !engageOffenders.isEmpty {
+        print("      offenders: \(engageOffenders.joined(separator: ", "))")
     }
 
     // Content-driven growth (a sidebar section handle making the SwiftUI tree

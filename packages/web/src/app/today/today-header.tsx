@@ -2,21 +2,24 @@
 
 /**
  * Today's header (productization plan §1, P6): the title, the date in the
- * user's zone, and the accounts strip — every connected source as a
- * SourceBadge with its address and its health in words. There is no account
- * switcher (FD-2): the strip states what is connected and links to where
- * accounts are managed.
+ * user's zone and the day strip. The connected accounts and their health live
+ * in the sidebar's Accounts group (SidebarAccounts) — the header no longer
+ * repeats them. The sidebar is desktop-only, so on a phone the header keeps
+ * one line for the accounts that need attention (reconnect / syncing) and the
+ * retry when the list could not be read; a healthy phone shows nothing extra.
  */
 
+import type { LiveTier } from "@klorn/contract";
 import Link from "next/link";
 import Button from "../../components/ui/button";
-import { Skeleton, SkeletonGroup } from "../../components/ui/skeleton";
+import { LANE_DOT_CLASS, useLaneName } from "../../components/ui/lane-chip";
 import { SourceBadge } from "../../components/ui/source-badge";
 import type { AccountHealth, ConnectedAccount } from "../../lib/connected-accounts";
 import { useT } from "../../lib/i18n";
 import { sourceGlyph } from "../../lib/source-provider";
 import type { ConnectedAccountsState } from "../../lib/use-connected-accounts";
-import type { TimeContext } from "./mail-column";
+import { laneThreads, type TimeContext } from "./mail-column";
+import { useLaneCounts } from "./use-today-data";
 
 export const ACCOUNTS_HREF = "/settings/accounts";
 
@@ -58,60 +61,83 @@ export function TodayHeader({ time, accounts, showAccounts }: TodayHeaderProps) 
   const { t } = useT();
   return (
     <header className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-baseline gap-x-3">
-        <h1 className="text-display text-ink">{t("nav.v2.today")}</h1>
-        <p className="text-body text-ink-muted">
-          <time dateTime={time.now.toISOString().slice(0, 10)}>{longDate(time)}</time>
-        </p>
+      <div className="flex flex-col gap-0.5">
+        <div className="flex flex-wrap items-baseline gap-x-3">
+          <h1 className="text-display text-ink">{t("nav.v2.today")}</h1>
+          <p className="text-body text-ink-muted">
+            <time dateTime={time.now.toISOString().slice(0, 10)}>{longDate(time)}</time>
+          </p>
+        </div>
+        {showAccounts && <DayStrip />}
       </div>
-      {showAccounts && <AccountsStrip accounts={accounts} />}
+      {showAccounts && <AccountAttention accounts={accounts} />}
     </header>
   );
 }
 
-function AccountsStrip({ accounts }: { accounts: ConnectedAccountsState }) {
+const STRIP_LANES: readonly LiveTier[] = ["PUSH", "MEETING", "QUEUE", "INFO"]; // lane-subset: SILENT is the "quietly filed" figure after them
+
+/**
+ * The day in one line (TodayScreen.dc): threads per lane, then how many went
+ * to Silent. Real counts from the lane-counts read Today already shares with
+ * Mail; nothing shows until they arrive, and a failed read shows nothing.
+ */
+function DayStrip() {
   const { t } = useT();
+  const laneName = useLaneName();
+  const { counts } = useLaneCounts(true);
+  if (!counts) return null;
+  const quiet = laneThreads(counts, "SILENT") ?? 0;
+  return (
+    <ul
+      aria-label={t("today.strip.label")}
+      className="flex flex-wrap items-center gap-x-3.5 gap-y-1 text-caption tabular-nums text-ink-muted"
+    >
+      {STRIP_LANES.map((lane) => (
+        <li key={lane} className="flex items-center gap-1.5">
+          <span aria-hidden="true" className={`size-1.5 rounded-full ${LANE_DOT_CLASS[lane]}`} />
+          {t("today.strip.lane", {
+            count: String(laneThreads(counts, lane) ?? 0),
+            lane: laneName(lane),
+          })}
+        </li>
+      ))}
+      {quiet > 0 && <li>· {t("today.strip.quiet", { count: String(quiet) })}</li>}
+    </ul>
+  );
+}
+
+/**
+ * Phone only (the sidebar is hidden below md): the accounts that need
+ * attention, or the retry when the list failed. Nothing while loading or when
+ * every account is synced — the sidebar states health on wider screens.
+ */
+function AccountAttention({ accounts }: { accounts: ConnectedAccountsState }) {
+  const { t } = useT();
+  if (accounts.failed) {
+    return (
+      <div role="alert" className="flex items-center gap-2 md:hidden">
+        <p className="text-label font-normal text-state-danger-ink">{t("today.accounts.error")}</p>
+        <Button variant="secondary" size="sm" onClick={accounts.retry}>
+          {t("today.retry")}
+        </Button>
+      </div>
+    );
+  }
+  const attention = accounts.loading ? [] : accounts.accounts.filter((a) => a.health !== "synced");
+  if (attention.length === 0) return null;
   return (
     <nav
       aria-label={t("today.accounts.label")}
-      // One row that scrolls sideways on a phone; it never widens the page.
-      // `relative` keeps the visually hidden health labels (absolutely
-      // positioned) inside this scroller instead of widening the page.
-      className="relative -mx-4 flex items-center gap-2 overflow-x-auto px-2 md:mx-0 md:overflow-visible md:px-0"
+      className="relative -mx-4 flex items-center overflow-x-auto px-2 md:hidden"
     >
-      {accounts.loading && (
-        <SkeletonGroup label={t("today.accounts.loading")} className="flex gap-2">
-          <Skeleton variant="block" width="w-40" height="h-8" />
-          <Skeleton variant="block" width="w-40" height="h-8" />
-        </SkeletonGroup>
-      )}
-      {accounts.failed && (
-        <div role="alert" className="flex items-center gap-2">
-          <p className="text-label font-normal text-state-danger-ink">
-            {t("today.accounts.error")}
-          </p>
-          <Button variant="secondary" size="sm" onClick={accounts.retry}>
-            {t("today.retry")}
-          </Button>
-        </div>
-      )}
-      {!accounts.loading && !accounts.failed && (
-        <ul className="flex items-center gap-1 md:-mx-2 md:flex-wrap">
-          {accounts.accounts.map((account) => (
-            <li key={account.scope} className="shrink-0">
-              <AccountChip account={account} />
-            </li>
-          ))}
-          <li className="shrink-0">
-            <Link
-              href={ACCOUNTS_HREF}
-              className="focus-ring inline-flex min-h-11 items-center rounded-control px-2 text-label text-accent-deep hover:underline"
-            >
-              {t("today.accounts.add")}
-            </Link>
+      <ul className="flex items-center gap-1">
+        {attention.map((account) => (
+          <li key={account.scope} className="shrink-0">
+            <AccountChip account={account} />
           </li>
-        </ul>
-      )}
+        ))}
+      </ul>
     </nav>
   );
 }
