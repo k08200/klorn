@@ -8,8 +8,10 @@
  *
  *   npx playwright test --config store-pack/capture/playwright.store.config.ts
  *
- * Output: test-results/store-shots/<target>/<ko|en>/<NN-screen>.png
- * (or $KLORN_STORE_SHOTS_DIR). Not part of CI.
+ * Output: test-results/store-shots/<target>/<ko|en>/<NN-screen>.png, plus
+ * play/feature-graphic-{en,ko}.jpg and play/icon-512.png (play-graphics.spec.ts)
+ * (or $KLORN_STORE_SHOTS_DIR). CI: the "Store assets" job in mobile.yml
+ * (run by hand) uploads the same set as the `klorn-store-assets` artifact.
  */
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "@playwright/test";
@@ -19,7 +21,7 @@ const APP_DIR = fileURLToPath(new URL("../..", import.meta.url));
 
 export default defineConfig({
   testDir: ".",
-  testMatch: "store-shots.spec.ts",
+  testMatch: ["store-shots.spec.ts", "play-graphics.spec.ts"],
   timeout: 60_000,
   fullyParallel: true,
   reporter: [["list"]],

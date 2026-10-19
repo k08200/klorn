@@ -85,8 +85,8 @@ Done on 2026-10-16 (paths under `apps/mobile/` unless noted):
 - [ ] Android App Links: add the Play **app signing** SHA-256 to
       `website/.well-known/assetlinks.json` after the first Play upload
       (Phase 3).
-- [ ] The privacy-policy additions in `privacy-labels.md` §4 are a web PR
-      (`packages/web/src/app/privacy/page.tsx`).
+- [x] The privacy-policy additions in `privacy-labels.md` §4: the live policy
+      has a Mobile App section since 2026-10-17 (k08200/klorn#1473, #1489).
 
 ## Phase 2 — Signing, secrets and server env (≈1 h; `docs/launch/mobile-store-setup.md`)
 
@@ -177,8 +177,11 @@ The full list lives in `apps/mobile/README.md` → "Verify on device / CI".
 ## Phase 5 — Listings (≈2 h; can start any time after Phase 0)
 
 - [ ] Demo account per `review-notes.md` §1 (demo Gmail seeded and linked).
-- [ ] Screenshots: `npx playwright test --config store-pack/capture/playwright.store.config.ts`
-      (`screenshots-plan.md`); Play feature graphic 1024×500 and 512×512 icon.
+- [x] Screenshots (KO + EN at every upload size), the Play feature graphic
+      (1024×500, KO + EN) and the 512×512 icon: GitHub → Actions → **Mobile
+      Store Assets** → Run workflow → artifact `klorn-store-assets`
+      (`store-pack/capture/`; locally `npx playwright test --config
+      store-pack/capture/playwright.store.config.ts`). Upload them.
 - [ ] App Store Connect: name, subtitle, promo text, description, keywords,
       URLs, category, age rating from `metadata.md` (EN + KO); App Privacy from
       `privacy-labels.md` §2; App Review Information from `review-notes.md` §2;
@@ -189,8 +192,7 @@ The full list lives in `apps/mobile/README.md` → "Verify on device / CI".
       (`review-notes.md` §3), Ads: none, Content rating, Target audience 18+,
       Data safety (`privacy-labels.md` §3); countries; free app with
       subscriptions.
-- [ ] Privacy policy updated per `privacy-labels.md` §4 before submitting the
-      Data safety form.
+- [x] Privacy policy updated per `privacy-labels.md` §4 (done 2026-10-17).
 
 ## Phase 6 — Submit
 
