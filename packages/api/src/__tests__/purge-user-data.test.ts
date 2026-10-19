@@ -134,7 +134,8 @@ describe("revokeUserAccess (what lets a sync, a job or an agent act for the user
     const full = makeTxSpy();
     await purgeUserData(full.tx as never, "u1");
 
-    for (const model of access.called) expect(full.called.has(model)).toBe(true);
+    // First, so access is gone before the long run of data deletes.
+    expect([...full.called].slice(0, access.called.size)).toEqual([...access.called]);
     expect(full.updates.map((u) => u.model)).toEqual(["apiKey", "user"]);
   });
 });

@@ -465,7 +465,7 @@ app.get("/api/user/me/export", { preHandler: requireAuth }, async (request) => {
   };
 });
 
-// A wipe is heavy (one long transaction) and never needs repeating quickly.
+// A wipe is heavy (long transactions) and never needs repeating quickly.
 const WIPE_DATA_ROUTE = {
   preHandler: requireAuth,
   config: { rateLimit: { max: 3, timeWindow: "1 hour" } },
@@ -474,7 +474,7 @@ const WIPE_DATA_ROUTE = {
 app.delete("/api/user/me/data", WIPE_DATA_ROUTE, async (request, reply) => {
   const userId = getUserId(request);
   // Exhaustive user-data wipe (keeps the account row): stored objects first,
-  // then every row in one transaction. See user-deletion.ts.
+  // then access, then every row, then a final sweep. See user-deletion.ts.
   await purgeAllUserData(userId);
   return reply.code(204).send();
 });

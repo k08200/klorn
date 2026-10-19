@@ -138,10 +138,14 @@ describe("purgeAllUserData (data wipe that keeps the account)", () => {
       .mockImplementationOnce(async (work: unknown) => (work as (tx: unknown) => unknown)(TX))
       .mockImplementationOnce(async (work: unknown) => (work as (tx: unknown) => unknown)(TX))
       .mockRejectedValueOnce(sweepError);
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     await expect(purgeAllUserData("user-1")).resolves.toBeUndefined();
+    // Logged as well: captureError is a no-op on a deployment without Sentry.
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining("user-1"), sweepError);
     expect(captureError).toHaveBeenCalledWith(sweepError, {
-      tags: { scope: "user-deletion.final-sweep" },
+      tags: { scope: "user-deletion.final-sweep", userId: "user-1" },
     });
+    logged.mockRestore();
   });
 
   it("keeps every row when the objects could not be deleted", async () => {

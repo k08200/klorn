@@ -68,19 +68,22 @@ export async function purgeAllUserData(userId: string): Promise<void> {
       timeout: PURGE_TX_TIMEOUT_MS,
     });
   // Grants, automation config and keys go first, in a short transaction of
-  // their own: once it commits no new sync or job starts for the user, while
-  // the long purge below still runs.
+  // their own: once it commits no new sync starts for the user, while the long
+  // purge below still runs. If that purge fails, the user sees an error with
+  // access already gone and the data still there; every step is idempotent, so
+  // a retry finishes the wipe.
   await inTransaction((tx) => revokeUserAccess(tx, userId));
   await inTransaction((tx) => purgeUserData(tx, userId));
-  // A sync or job that was already running still holds the user's token in
-  // memory, and rows it inserted after their deleteMany ran inside the purge
-  // survive it. One more (idempotent, usually empty) pass takes those. It
-  // narrows the window, it does not close it: a job that writes after this
-  // pass leaves rows behind. Closing it needs a marker every writer checks.
+  // A sync or job that was already running still holds what it loaded, and
+  // rows it inserted after their deleteMany ran inside the purge survive it.
+  // One more (idempotent, usually empty) pass takes those. It narrows the
+  // window, it does not close it: a job that writes after this pass leaves
+  // rows behind. Closing it needs a marker every writer checks.
   // The wipe has committed by now, so a failed sweep is reported, not thrown.
   try {
     await inTransaction((tx) => purgeUserData(tx, userId));
   } catch (err) {
-    captureError(err, { tags: { scope: "user-deletion.final-sweep" } });
+    console.error(`[USER-DELETION] Final sweep of the data wipe failed for ${userId}:`, err);
+    captureError(err, { tags: { scope: "user-deletion.final-sweep", userId } });
   }
 }

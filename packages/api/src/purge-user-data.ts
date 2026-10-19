@@ -27,12 +27,16 @@ function utcDayKey(): string {
 }
 
 /**
- * Remove everything that lets a sync, a scheduled job or an agent act for the
- * user: the primary and linked grants, the automation config, the API keys
- * (revoked) and the credentials kept on the account row. No background path
- * re-creates these rows (token refreshes are updates), so once this commits no
- * new sync or job starts for the user. Part of `purgeUserData`; the data wipe
- * also runs it alone first, in its own short transaction.
+ * Remove what lets a sync, a scheduled job or an agent act for the user: the
+ * primary and linked grants, the automation config, the API keys (revoked) and
+ * the credentials kept on the account row. No background path re-creates a
+ * grant (token refreshes are updates; only a consent flow the user starts
+ * upserts one), so once this commits no new mail, calendar or drive sync starts
+ * for the user. Not every writer depends on these rows: the login-briefing
+ * timer (routes/auth.ts) upserts the automation config, and the all-user jobs
+ * (sender traits, digests) work from stored rows until those are gone. Part of
+ * `purgeUserData`; the data wipe also runs it alone first, in its own short
+ * transaction.
  */
 export async function revokeUserAccess(tx: PurgeTx, userId: string): Promise<void> {
   const scope = { where: { userId } };
