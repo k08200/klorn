@@ -29,10 +29,12 @@ vi.mock("../sentry.js", () => ({ captureError }));
 
 import { readFileSync } from "node:fs";
 import {
+  backfillPrimaryGoogleAddresses,
   collectGoogleGrants,
   GOOGLE_REVOKE_URL,
   type HeldGoogleGrant,
   MAX_UNKNOWN_ADDRESSES,
+  rememberPrimaryGoogleAddress,
   removeAndRevokeGoogle,
   revokeGoogleGrants,
 } from "../auth/google-grant-revoke.js";
@@ -98,8 +100,14 @@ describe("revokeGoogleGrants", () => {
       { source: "drive", outcome: "shared" },
     ]);
     expect(drive.countGoogleDriveGrantsFor).toHaveBeenCalledWith("a@x.com", ["drive-1"]);
+    // Case-insensitive: older linked rows were not always lowercased, and a
+    // wider match only ever means not revoking.
     expect(prisma.linkedInboxAccount.count).toHaveBeenCalledWith({
-      where: { provider: "GOOGLE", email: "a@x.com", id: { notIn: [] } },
+      where: {
+        provider: "GOOGLE",
+        email: { equals: "a@x.com", mode: "insensitive" },
+        id: { notIn: [] },
+      },
     });
   });
 
@@ -111,8 +119,9 @@ describe("revokeGoogleGrants", () => {
     await expect(revokeGoogleGrants("u1", [grant({})])).resolves.toEqual([
       { source: "inbox", outcome: "shared" },
     ]);
+    // Only onto the tokens it was read with.
     expect(prisma.userToken.updateMany).toHaveBeenCalledWith({
-      where: { id: "tok-9", googleEmail: null },
+      where: { id: "tok-9", googleEmail: null, accessToken: "enc:a9" },
       data: { googleEmail: "a@x.com" },
     });
     expect(fetchMock).not.toHaveBeenCalled();
@@ -159,7 +168,11 @@ describe("revokeGoogleGrants", () => {
     getProfile.mockResolvedValue({ data: { emailAddress: "me@x.com" } });
     await revokeGoogleGrants("u1", [grant({ source: "primary", email: null })]);
     expect(prisma.userToken.count).toHaveBeenCalledWith({
-      where: { provider: "google", googleEmail: "me@x.com", id: { notIn: ["row-1"] } },
+      where: {
+        provider: "google",
+        googleEmail: { equals: "me@x.com", mode: "insensitive" },
+        id: { notIn: ["row-1"] },
+      },
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -190,6 +203,41 @@ describe("revokeGoogleGrants", () => {
       tags: { scope: "google.revoke", userId: "u1" },
       extra: { summary: "calendar:failed" },
     });
+  });
+
+  it("treats another live row whose cipher will not decrypt as unknown, not dead", async () => {
+    prisma.userToken.findMany.mockResolvedValue([
+      { id: "tok-9", accessToken: "corrupt", refreshToken: "corrupt" },
+    ]);
+    await expect(revokeGoogleGrants("u1", [grant({})])).resolves.toEqual([
+      { source: "inbox", outcome: "unknown-account" },
+    ]);
+    expect(getProfile).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("treats a Workspace re-authentication demand as unknown, not dead", async () => {
+    prisma.userToken.findMany.mockResolvedValue([
+      { id: "tok-9", accessToken: "enc:a9", refreshToken: "enc:r9" },
+    ]);
+    getProfile.mockRejectedValue(new Error("invalid_grant: invalid_rapt"));
+    await expect(revokeGoogleGrants("u1", [grant({})])).resolves.toEqual([
+      { source: "inbox", outcome: "unknown-account" },
+    ]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("checks an address once and revokes each of its tokens", async () => {
+    const results = await revokeGoogleGrants("u1", [
+      grant({ source: "primary", rowId: "p1", refreshToken: "refresh-p" }),
+      grant({ source: "calendar", rowId: "c1", refreshToken: "refresh-c" }),
+    ]);
+    expect(results.map((r) => r.outcome)).toEqual(["revoked", "revoked"]);
+    expect(prisma.linkedInboxAccount.count).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls.map(([, init]) => String((init as RequestInit).body))).toEqual([
+      "token=refresh-p",
+      "token=refresh-c",
+    ]);
   });
 
   it("never throws, even when the database does", async () => {
@@ -252,7 +300,7 @@ describe("removeAndRevokeGoogle", () => {
       (r) => r.count > 0,
     );
     expect(result).toEqual({ count: 1 });
-    expect(order).toEqual(["collect", "remove", "revoke"]);
+    await vi.waitFor(() => expect(order).toEqual(["collect", "remove", "revoke"]));
   });
 
   it("revokes nothing when nothing was removed", async () => {
@@ -289,5 +337,59 @@ describe("every Google disconnect revokes at Google", () => {
       /if \(accountProvider === "GOOGLE"\) \{\s*return removeAndRevokeGoogle\(/,
     );
     expect(source("../routes/google-drive-link.ts")).toContain("removeAndRevokeGoogle(");
+  });
+
+  it("forgets the primary grant's address when a reconnect replaces its tokens", () => {
+    // A reconnect may bring a different Google account; a stale address would
+    // let another user's revoke miss this grant and cut it.
+    const finish = source("../routes/google-link-finish.ts");
+    const upsert = finish.slice(finish.indexOf("prisma.userToken.upsert({"));
+    const update = upsert.slice(upsert.indexOf("update: {"), upsert.indexOf("update: {") + 700);
+    expect(update).toContain("googleEmail: null,");
+    expect(finish).toMatch(
+      /void rememberPrimaryGoogleAddress\(user\.id, tokens, savedToken\.accessToken\);/,
+    );
+  });
+});
+
+describe("the address of a primary grant", () => {
+  it("is stored at connect onto that grant's tokens only", async () => {
+    getProfile.mockResolvedValue({ data: { emailAddress: "Me@X.com" } });
+    await rememberPrimaryGoogleAddress(
+      "u1",
+      { refresh_token: "r", access_token: "a" },
+      "enc:cipher",
+    );
+    expect(prisma.userToken.updateMany).toHaveBeenCalledWith({
+      where: { userId: "u1", provider: "google", googleEmail: null, accessToken: "enc:cipher" },
+      data: { googleEmail: "me@x.com" },
+    });
+  });
+
+  it("is filled in for older grants by the backfill, skipping rows it cannot read", async () => {
+    prisma.userToken.findMany.mockResolvedValue([
+      { id: "t1", accessToken: "enc:a1", refreshToken: "enc:r1" },
+      { id: "t2", accessToken: "corrupt", refreshToken: null },
+    ]);
+    getProfile.mockResolvedValue({ data: { emailAddress: "one@x.com" } });
+    await expect(backfillPrimaryGoogleAddresses()).resolves.toEqual({ filled: 1 });
+    expect(prisma.userToken.updateMany).toHaveBeenCalledTimes(1);
+    expect(getProfile).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("removeAndRevokeGoogle does not hold the caller", () => {
+  it("returns once the removal is done, while the revoke is still waiting on Google", async () => {
+    prisma.linkedInboxAccount.findMany.mockResolvedValue([
+      { id: "in-1", email: "a@x.com", accessToken: "enc:a", refreshToken: "enc:r" },
+    ]);
+    fetchMock.mockImplementation(() => new Promise(() => {}));
+    const result = await removeAndRevokeGoogle(
+      "u1",
+      { inboxIds: ["in-1"] },
+      async () => ({ count: 1 }),
+      (r) => r.count > 0,
+    );
+    expect(result).toEqual({ count: 1 });
   });
 });

@@ -807,6 +807,19 @@ try {
       captureError(err, { tags: { context: "startup:data-wipe-refresh" } });
     });
 
+  // Primary grants' Google addresses, for the revoke's shared-grant check
+  // (every 6 hours); see auth/google-address-backfill.ts.
+  if (!BG_DISABLED) {
+    import("./auth/google-address-backfill.js")
+      .then(({ startGoogleAddressBackfill }) => {
+        startGoogleAddressBackfill();
+      })
+      .catch((err) => {
+        console.error("[STARTUP] Google address backfill failed to start:", err);
+        captureError(err, { tags: { context: "startup:google-address-backfill" } });
+      });
+  }
+
   // Data wipes whose purge did not commit (every 10 minutes); see
   // privacy/data-wipe-sweep.ts.
   if (!BG_DISABLED) {

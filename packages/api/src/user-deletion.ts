@@ -62,8 +62,9 @@ export async function deleteUserAndAllData(userId: string): Promise<void> {
       : []),
     prisma.user.delete({ where: { id: userId } }),
   ]);
-  // The account is gone: revoke its Google grants at Google (best effort).
-  await revokeGoogleGrants(userId, grants);
+  // The account is gone: revoke its Google grants at Google (best effort, not
+  // awaited, so Google's latency never holds the request).
+  void revokeGoogleGrants(userId, grants);
 }
 
 /**
@@ -153,8 +154,9 @@ export async function purgeAllUserData(userId: string): Promise<DataWipeOutcome>
   const grants = await googleGrantsBeforeRemoval(userId);
   await recordWipeAndRevoke(userId);
   rememberDataWipe(userId, { purgedAt: null, fenceUntil: null });
-  // Access is cut off in Klorn; revoke the grants at Google too (best effort).
-  await revokeGoogleGrants(userId, grants);
+  // Access is cut off in Klorn; revoke the grants at Google too (best effort,
+  // not awaited: the purge must not wait on Google).
+  void revokeGoogleGrants(userId, grants);
   try {
     await finishDataWipe(userId);
     return "purged";

@@ -198,6 +198,9 @@ describe("Google-only LinkedCalendarAccount readers filter on provider", () => {
   it("finds the known readers (so this guard cannot pass by scanning nothing)", () => {
     const readers = files.filter((f) => callWindows(f.text, READ).length > 0);
     expect(readers.map((f) => f.path).sort()).toEqual([
+      // Reads GOOGLE rows' tokens to revoke them at Google, and counts GOOGLE
+      // rows of an address for the shared-grant check.
+      "auth/google-grant-revoke.ts",
       "pim/calendar-providers/dispatch.ts",
       "pim/calendar-providers/outlook-token.ts", // re-reads one OUTLOOK row after a refresh race
       "pim/calendar-source-label.ts",

@@ -17,7 +17,11 @@
  * read, or more unknown addresses than MAX_UNKNOWN_ADDRESSES to check.
  *
  * Best effort and never throws: the deletion or disconnect has already been
- * committed, and a failed revoke is logged and reported, not raised.
+ * committed, and a failed revoke is logged and reported, not raised. The
+ * disconnect routes and the deletions do not wait for it (removeAndRevokeGoogle
+ * and the callers start it after the commit), so Google's latency never holds
+ * a user's request. Not durable: a process stopping mid-revoke loses it, and a
+ * grant linked again for the same address while the revoke runs can be cut.
  * Microsoft grants are not revoked: Graph offers no per-app refresh-token
  * revocation, only revokeSignInSessions, which signs the user out everywhere.
  */
@@ -31,6 +35,8 @@ import { captureError } from "../sentry.js";
 
 export const GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke";
 const GOOGLE_CALL_TIMEOUT_MS = 10_000;
+/** One address lookup, its token refresh included (the refresh has no timeout of its own). */
+const ADDRESS_LOOKUP_DEADLINE_MS = 15_000;
 /** Other users' primary grants of unknown address one revoke may look up. */
 export const MAX_UNKNOWN_ADDRESSES = 25;
 
@@ -73,6 +79,19 @@ function tryDecrypt(value: string | null | undefined): string | null {
   } catch {
     return null;
   }
+}
+
+/** True when a stored cipher is present but cannot be decrypted (a key change, a bad row). */
+function undecryptable(...values: Array<string | null | undefined>): boolean {
+  return values.some((value) => value != null && value !== "" && tryDecrypt(value) === null);
+}
+
+function withDeadline<T>(work: Promise<T>, ms: number, onTimeout: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<T>((resolve) => {
+    timer = setTimeout(() => resolve(onTimeout), ms);
+  });
+  return Promise.race([work, timeout]).finally(() => clearTimeout(timer));
 }
 
 /** Read this user's Google grants, before their rows are deleted. */
@@ -151,11 +170,20 @@ export async function collectGoogleGrants(
 }
 
 /** The Google account a token belongs to, read from its Gmail profile. */
-async function addressOfTokens(
+function addressOfTokens(
   refreshToken: string | null,
   accessToken: string | null,
 ): Promise<AddressLookup> {
-  if (!refreshToken && !accessToken) return { dead: true };
+  if (!refreshToken && !accessToken) return Promise.resolve({ dead: true });
+  return withDeadline(readProfileAddress(refreshToken, accessToken), ADDRESS_LOOKUP_DEADLINE_MS, {
+    unknown: true,
+  });
+}
+
+async function readProfileAddress(
+  refreshToken: string | null,
+  accessToken: string | null,
+): Promise<AddressLookup> {
   try {
     const auth = getOAuth2Client();
     auth.setCredentials({
@@ -169,22 +197,38 @@ async function addressOfTokens(
   } catch (err) {
     const status = (err as { response?: { status?: number } })?.response?.status;
     const message = err instanceof Error ? err.message : String(err);
-    // A grant Google already refuses cannot be harmed by a revoke.
+    // A grant Google already refuses cannot be harmed by a revoke. A Workspace
+    // re-authentication demand (invalid_rapt) is not that: the user can still
+    // recover the grant, so its address stays unknown.
+    if (/invalid_rapt|rapt_required/.test(message)) return { unknown: true };
     if (status === 401 || /invalid_grant|unauthorized_client/.test(message)) return { dead: true };
     return { unknown: true };
   }
 }
 
-/** Store a primary grant's address once read, so the next check needs no call. */
-async function rememberAddress(tokenId: string, email: string): Promise<void> {
+/**
+ * Store a primary grant's address once read, so the next check needs no call.
+ * Only onto the same tokens it was read with: a reconnect in between (perhaps
+ * of another Google account) cleared the address and must not get this one.
+ */
+async function rememberAddress(
+  tokenId: string,
+  accessCipher: string,
+  email: string,
+): Promise<void> {
   await prisma.userToken
-    .updateMany({ where: { id: tokenId, googleEmail: null }, data: { googleEmail: email } })
+    .updateMany({
+      where: { id: tokenId, googleEmail: null, accessToken: accessCipher },
+      data: { googleEmail: email },
+    })
     .catch(() => {});
 }
 
 /**
  * Does any grant row other than those being removed hold this address?
- * "unknown" when that cannot be settled.
+ * "unknown" when that cannot be settled. The linked tables are matched
+ * case-insensitively: older rows were not always lowercased, and a wider match
+ * only ever means not revoking.
  */
 async function heldElsewhere(
   email: string,
@@ -192,16 +236,17 @@ async function heldElsewhere(
 ): Promise<"yes" | "no" | "unknown"> {
   const idsOf = (source: GrantSource) =>
     removed.filter((g) => g.source === source).map((g) => g.rowId);
+  const sameAddress = { equals: email, mode: "insensitive" as const };
   const [inbox, calendar, drive, primary] = await Promise.all([
     prisma.linkedInboxAccount.count({
-      where: { provider: "GOOGLE", email, id: { notIn: idsOf("inbox") } },
+      where: { provider: "GOOGLE", email: sameAddress, id: { notIn: idsOf("inbox") } },
     }),
     prisma.linkedCalendarAccount.count({
-      where: { provider: "GOOGLE", email, id: { notIn: idsOf("calendar") } },
+      where: { provider: "GOOGLE", email: sameAddress, id: { notIn: idsOf("calendar") } },
     }),
     countGoogleDriveGrantsFor(email, idsOf("drive")),
     prisma.userToken.count({
-      where: { provider: "google", googleEmail: email, id: { notIn: idsOf("primary") } },
+      where: { provider: "google", googleEmail: sameAddress, id: { notIn: idsOf("primary") } },
     }),
   ]);
   if (inbox + calendar + drive + primary > 0) return "yes";
@@ -210,14 +255,20 @@ async function heldElsewhere(
   const unknown = await prisma.userToken.findMany({
     where: { provider: "google", googleEmail: null, id: { notIn: idsOf("primary") } },
     select: { id: true, accessToken: true, refreshToken: true },
+    orderBy: { createdAt: "asc" },
     take: MAX_UNKNOWN_ADDRESSES + 1,
   });
   if (unknown.length > MAX_UNKNOWN_ADDRESSES) return "unknown";
   let unsure = false;
   for (const row of unknown) {
+    // A cipher that will not decrypt is a live grant we cannot read, not a dead one.
+    if (undecryptable(row.accessToken, row.refreshToken)) {
+      unsure = true;
+      continue;
+    }
     const lookup = await addressOfTokens(tryDecrypt(row.refreshToken), tryDecrypt(row.accessToken));
     if ("email" in lookup) {
-      await rememberAddress(row.id, lookup.email);
+      await rememberAddress(row.id, row.accessToken, lookup.email);
       if (lookup.email === email) return "yes";
     } else if ("unknown" in lookup) {
       unsure = true;
@@ -308,8 +359,8 @@ export async function revokeGoogleGrants(
 
 /**
  * Collect the selected grants, run `remove` (the delete that ends them in
- * Klorn), and revoke them at Google when `removed` says the delete went
- * through. A failed collect or revoke is logged and never fails `remove`.
+ * Klorn), and start revoking them at Google when `removed` says the delete
+ * went through. A failed collect or revoke is logged and never fails `remove`.
  */
 export async function removeAndRevokeGoogle<T>(
   userId: string,
@@ -323,20 +374,52 @@ export async function removeAndRevokeGoogle<T>(
     return [] as HeldGoogleGrant[];
   });
   const result = await remove();
-  if (grants.length > 0 && removed(result)) await revokeGoogleGrants(userId, grants);
+  // Not awaited: Google's latency must not hold the user's request.
+  if (grants.length > 0 && removed(result)) void revokeGoogleGrants(userId, grants);
   return result;
 }
 
-/** Store the Google address of a freshly connected primary grant (best effort). */
+/**
+ * Store the Google address of a freshly connected primary grant (best effort),
+ * onto that grant only: `accessCipher` is the access token as the connect
+ * stored it, so a later reconnect or refresh is never given this address.
+ */
 export async function rememberPrimaryGoogleAddress(
   userId: string,
   tokens: { refresh_token?: string | null; access_token?: string | null },
+  accessCipher: string,
 ): Promise<void> {
   const lookup = await addressOfTokens(tokens.refresh_token ?? null, tokens.access_token ?? null);
   if (!("email" in lookup)) return;
   await prisma.userToken
-    .updateMany({ where: { userId, provider: "google" }, data: { googleEmail: lookup.email } })
+    .updateMany({
+      where: { userId, provider: "google", googleEmail: null, accessToken: accessCipher },
+      data: { googleEmail: lookup.email },
+    })
     .catch((err: unknown) => {
       console.warn(`[GOOGLE-REVOKE] Could not store ${userId}'s Google address:`, err);
     });
+}
+
+/**
+ * Fill in the addresses of primary grants that have none (connected before the
+ * column existed, or whose read at connect failed). Bounded per run.
+ */
+export async function backfillPrimaryGoogleAddresses(limit = 50): Promise<{ filled: number }> {
+  const rows = await prisma.userToken.findMany({
+    where: { provider: "google", googleEmail: null },
+    select: { id: true, accessToken: true, refreshToken: true },
+    orderBy: { createdAt: "asc" },
+    take: limit,
+  });
+  let filled = 0;
+  for (const row of rows) {
+    if (undecryptable(row.accessToken, row.refreshToken)) continue;
+    const lookup = await addressOfTokens(tryDecrypt(row.refreshToken), tryDecrypt(row.accessToken));
+    if ("email" in lookup) {
+      await rememberAddress(row.id, row.accessToken, lookup.email);
+      filled++;
+    }
+  }
+  return { filled };
 }

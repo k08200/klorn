@@ -611,6 +611,9 @@ describe("drive text reaches an LLM only wrapped", () => {
     // Loads summary-run.ts on demand; imports nothing from the LLM itself.
     "drive/summary-triggers.ts",
     "purge-user-data.ts",
+    // Reads a Google Drive grant's ciphers (through the account module) only to
+    // revoke it at Google; no file rows, no LLM.
+    "auth/google-grant-revoke.ts",
     // Reads only whether any drive source is on (user.files on /me, P12), and
     // hands a drive link's callback to the grant module (D5b); no rows.
     "routes/auth.ts",
