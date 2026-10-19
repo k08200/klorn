@@ -38,7 +38,10 @@ vi.mock("../db.js", async () => {
   };
   return { prisma, db: prisma, INTERACTIVE_TX_OPTIONS: { maxWait: 10_000, timeout: 15_000 } };
 });
-vi.mock("../purge-user-data.js", () => ({ purgeUserData: vi.fn(async () => {}) }));
+vi.mock("../purge-user-data.js", () => ({
+  purgeUserData: vi.fn(async () => {}),
+  revokeUserAccess: vi.fn(async () => {}),
+}));
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
 import { StorageError } from "../storage/errors.js";
@@ -79,9 +82,9 @@ describe.each([
   ["deleteUserAndAllData", deleteUserAndAllData],
   ["purgeAllUserData", purgeAllUserData],
 ])("%s with object storage on", (name, remove) => {
-  // The data wipe sweeps twice (stragglers from a sync that started before the
-  // first commit); account deletion is one transaction.
-  const passes = name === "purgeAllUserData" ? ["rows", "rows"] : ["rows"];
+  // The data wipe cuts off access, purges, then sweeps once more; account
+  // deletion is one transaction.
+  const passes = name === "purgeAllUserData" ? ["rows", "rows", "rows"] : ["rows"];
   it("a failing store leaves a pending purge, and the rows are gone anyway", async () => {
     vi.spyOn(store, "deleteByPrefix").mockRejectedValue(
       new StorageError("unreachable", "object storage did not answer (TimeoutError)"),

@@ -26,9 +26,19 @@ function utcDayKey(): string {
   return new Date().toISOString().slice(0, UTC_DAY_KEY_LENGTH);
 }
 
-export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> {
+/**
+ * Remove everything that lets a sync, a scheduled job or an agent act for the
+ * user: the primary and linked grants, the automation config, the API keys
+ * (revoked) and the credentials kept on the account row. No background path
+ * re-creates these rows (token refreshes are updates), so once this commits no
+ * new sync or job starts for the user. Part of `purgeUserData`; the data wipe
+ * also runs it alone first, in its own short transaction.
+ */
+export async function revokeUserAccess(tx: PurgeTx, userId: string): Promise<void> {
   const scope = { where: { userId } };
 
+  // The primary Google grant. Its existence is the app-wide "has Gmail" check.
+  await tx.userToken.deleteMany(scope);
   // Secondary linked Google accounts hold live, decryptable OAuth access/refresh
   // tokens + the linked account's email — Google API data that must not survive
   // a deletion request (previously only removed by manual per-account unlink).
@@ -39,6 +49,42 @@ export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> 
   // rows (a KLORN row has no account), never a Klorn file whose object must go
   // first.
   await tx.linkedDriveAccount.deleteMany(scope);
+  // What the scheduler runs for the user (auto-mode, auto-reply, briefings).
+  await tx.automationConfig.deleteMany(scope);
+  // API keys are REVOKED, not deleted: a purged account that re-links Google
+  // must not be readable (or, with write tools on, writable) through a key
+  // minted before the purge. The revoked row is inert — authenticateApiKey
+  // rejects it — and stays so the audit history still names its key.
+  await tx.apiKey.updateMany({
+    where: { userId, revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
+  // Credentials the user gave Klorn, kept on the account row: the retired Naver
+  // IMAP and GitHub tokens, the user's own (BYOK) LLM keys, the Telegram link.
+  // The account and its sign-in stay; these are re-entered after a wipe.
+  await tx.user.updateMany({
+    where: { id: userId },
+    data: {
+      naverImapEmail: null,
+      naverImapPasswordCipher: null,
+      naverImapHost: null,
+      naverImapConnectedAt: null,
+      githubTokenCipher: null,
+      githubConnectedAt: null,
+      githubLastPolledAt: null,
+      openRouterApiKey: null,
+      geminiApiKey: null,
+      telegramChatId: null,
+      telegramLinkCode: null,
+      telegramLinkCodeExpiresAt: null,
+    },
+  });
+}
+
+export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> {
+  const scope = { where: { userId } };
+
+  await revokeUserAccess(tx, userId);
   // SenderTrait.evidenceText holds verbatim quoted email content.
   await tx.senderTrait.deleteMany(scope);
   // SenderLabel: the user's own relationship corrections, keyed by address.
@@ -54,14 +100,6 @@ export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> 
   // McpWriteAudit: what an agent changed through the user's API keys — opaque
   // message ids and argument hashes, no content, but still the user's history.
   await tx.mcpWriteAudit.deleteMany(scope);
-  // API keys are REVOKED, not deleted: a purged account that re-links Google
-  // must not be readable (or, with write tools on, writable) through a key
-  // minted before the purge. The revoked row is inert — authenticateApiKey
-  // rejects it — and stays so the audit history still names its key.
-  await tx.apiKey.updateMany({
-    where: { userId, revokedAt: null },
-    data: { revokedAt: new Date() },
-  });
 
   await tx.emailAttachment.deleteMany(scope);
   await tx.candidateIntake.deleteMany(scope);
@@ -89,7 +127,6 @@ export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> 
   await tx.pushSubscription.deleteMany(scope);
   await tx.notification.deleteMany(scope);
   await tx.agentLog.deleteMany(scope);
-  await tx.automationConfig.deleteMany(scope);
   await tx.calendarEvent.deleteMany(scope);
   // DriveFileSummary: model summaries of the user's files (D4); DriveSummaryUsage:
   // their daily count. Both cascade with DriveFile and User; deleted by name so
@@ -99,7 +136,6 @@ export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> 
   // DriveFile: the metadata index of the user's files (names, sizes, links). D2
   // writes no bytes; D3 must delete a Klorn file's object before its row goes.
   await tx.driveFile.deleteMany(scope);
-  await tx.userToken.deleteMany(scope);
   await tx.tokenUsage.deleteMany(scope);
   await tx.memory.deleteMany(scope);
   await tx.conversationSummary.deleteMany({ where: { conversation: { userId } } });
@@ -126,24 +162,4 @@ export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> 
   await tx.pmfResponse.deleteMany(scope);
   // Third-party addresses the user typed (like contacts); owner-scoped, never shared.
   await tx.team.deleteMany(scope);
-  // Credentials the user gave Klorn, kept on the account row: the retired Naver
-  // IMAP and GitHub tokens, the user's own (BYOK) LLM keys, the Telegram link.
-  // The account and its sign-in stay; these are re-entered after a wipe.
-  await tx.user.updateMany({
-    where: { id: userId },
-    data: {
-      naverImapEmail: null,
-      naverImapPasswordCipher: null,
-      naverImapHost: null,
-      naverImapConnectedAt: null,
-      githubTokenCipher: null,
-      githubConnectedAt: null,
-      githubLastPolledAt: null,
-      openRouterApiKey: null,
-      geminiApiKey: null,
-      telegramChatId: null,
-      telegramLinkCode: null,
-      telegramLinkCodeExpiresAt: null,
-    },
-  });
 }

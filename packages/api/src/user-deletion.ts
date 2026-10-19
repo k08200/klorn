@@ -16,7 +16,8 @@
  */
 
 import { type db, INTERACTIVE_TX_OPTIONS, prisma } from "./db.js";
-import { purgeUserData } from "./purge-user-data.js";
+import { purgeUserData, revokeUserAccess } from "./purge-user-data.js";
+import { captureError } from "./sentry.js";
 import { purgeUserObjects } from "./storage/runtime.js";
 
 /**
@@ -61,15 +62,25 @@ export async function deleteUserAndAllData(userId: string): Promise<void> {
  */
 export async function purgeAllUserData(userId: string): Promise<void> {
   await purgeUserObjects(userId);
-  const purge = () =>
-    prisma.$transaction((tx) => purgeUserData(tx as unknown as typeof db, userId), {
+  const inTransaction = (work: (tx: typeof db) => Promise<void>) =>
+    prisma.$transaction((tx) => work(tx as unknown as typeof db), {
       ...INTERACTIVE_TX_OPTIONS,
       timeout: PURGE_TX_TIMEOUT_MS,
     });
-  await purge();
-  // Until the first pass commits, a sync or job still sees the user's tokens,
-  // and the rows it inserts after their deleteMany ran inside that transaction
-  // survive it. The tokens are gone now, so nothing new starts: one more
-  // (idempotent, usually empty) pass removes those stragglers.
-  await purge();
+  // Grants, automation config and keys go first, in a short transaction of
+  // their own: once it commits no new sync or job starts for the user, while
+  // the long purge below still runs.
+  await inTransaction((tx) => revokeUserAccess(tx, userId));
+  await inTransaction((tx) => purgeUserData(tx, userId));
+  // A sync or job that was already running still holds the user's token in
+  // memory, and rows it inserted after their deleteMany ran inside the purge
+  // survive it. One more (idempotent, usually empty) pass takes those. It
+  // narrows the window, it does not close it: a job that writes after this
+  // pass leaves rows behind. Closing it needs a marker every writer checks.
+  // The wipe has committed by now, so a failed sweep is reported, not thrown.
+  try {
+    await inTransaction((tx) => purgeUserData(tx, userId));
+  } catch (err) {
+    captureError(err, { tags: { scope: "user-deletion.final-sweep" } });
+  }
 }

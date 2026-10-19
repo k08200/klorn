@@ -29,7 +29,11 @@ const purgeUserObjects = vi.hoisted(() => vi.fn());
 vi.mock("../storage/runtime.js", () => ({ purgeUserObjects }));
 
 const purgeUserData = vi.hoisted(() => vi.fn());
-vi.mock("../purge-user-data.js", () => ({ purgeUserData }));
+const revokeUserAccess = vi.hoisted(() => vi.fn());
+vi.mock("../purge-user-data.js", () => ({ purgeUserData, revokeUserAccess }));
+
+const captureError = vi.hoisted(() => vi.fn());
+vi.mock("../sentry.js", () => ({ captureError }));
 
 import { deleteUserAndAllData, purgeAllUserData } from "../user-deletion.js";
 
@@ -48,6 +52,10 @@ beforeEach(() => {
   });
   purgeUserData.mockReset().mockImplementation(() => {
     calls.order.push("rows");
+    return Promise.resolve();
+  });
+  revokeUserAccess.mockReset().mockImplementation(() => {
+    calls.order.push("access");
     return Promise.resolve();
   });
 });
@@ -82,26 +90,58 @@ describe("deleteUserAndAllData (account deletion)", () => {
 });
 
 describe("purgeAllUserData (data wipe that keeps the account)", () => {
-  it("deletes the user's objects first, then every row, then sweeps once more", async () => {
+  it("deletes the objects, cuts off access, deletes every row, then sweeps once more", async () => {
     await purgeAllUserData("user-1");
-    // The second pass runs after the first transaction committed: a sync that
-    // still saw the user's tokens can have inserted rows after their
-    // deleteMany ran inside the first one.
-    expect(calls.order).toEqual(["storage", "database", "rows", "database", "rows"]);
+    // Access goes in its own short transaction, so no new sync or job starts
+    // for the user while the long one runs; the final sweep takes what a job
+    // already running inserted after the rows' deleteMany.
+    expect(calls.order).toEqual([
+      "storage",
+      "database",
+      "access",
+      "database",
+      "rows",
+      "database",
+      "rows",
+    ]);
     expect(purgeUserObjects).toHaveBeenCalledWith("user-1");
+    expect(revokeUserAccess).toHaveBeenCalledWith(TX, "user-1");
     expect(purgeUserData).toHaveBeenCalledWith(TX, "user-1");
   });
 
-  it("keeps the 60 second transaction budget of the purge, for both passes", async () => {
+  it("keeps the 60 second transaction budget of the purge, for every transaction", async () => {
     await purgeAllUserData("user-1");
-    expect(prisma.$transaction.mock.calls[0]?.[1]).toEqual({ maxWait: 10_000, timeout: 60_000 });
-    expect(prisma.$transaction.mock.calls[1]?.[1]).toEqual({ maxWait: 10_000, timeout: 60_000 });
+    expect(prisma.$transaction).toHaveBeenCalledTimes(3);
+    for (const call of prisma.$transaction.mock.calls) {
+      expect(call[1]).toEqual({ maxWait: 10_000, timeout: 60_000 });
+    }
   });
 
-  it("does not sweep again when the first pass failed", async () => {
-    prisma.$transaction.mockRejectedValueOnce(new Error("timed out"));
-    await expect(purgeAllUserData("user-1")).rejects.toThrow("timed out");
+  it("deletes no row when access could not be cut off", async () => {
+    prisma.$transaction.mockRejectedValueOnce(new Error("pool exhausted"));
+    await expect(purgeAllUserData("user-1")).rejects.toThrow("pool exhausted");
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(purgeUserData).not.toHaveBeenCalled();
+  });
+
+  it("does not sweep again when the full purge failed", async () => {
+    prisma.$transaction
+      .mockImplementationOnce(async (work: unknown) => (work as (tx: unknown) => unknown)(TX))
+      .mockRejectedValueOnce(new Error("timed out"));
+    await expect(purgeAllUserData("user-1")).rejects.toThrow("timed out");
+    expect(prisma.$transaction).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports a failed final sweep without failing a wipe that already committed", async () => {
+    const sweepError = new Error("connection reset");
+    prisma.$transaction
+      .mockImplementationOnce(async (work: unknown) => (work as (tx: unknown) => unknown)(TX))
+      .mockImplementationOnce(async (work: unknown) => (work as (tx: unknown) => unknown)(TX))
+      .mockRejectedValueOnce(sweepError);
+    await expect(purgeAllUserData("user-1")).resolves.toBeUndefined();
+    expect(captureError).toHaveBeenCalledWith(sweepError, {
+      tags: { scope: "user-deletion.final-sweep" },
+    });
   });
 
   it("keeps every row when the objects could not be deleted", async () => {
