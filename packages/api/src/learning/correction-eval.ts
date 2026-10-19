@@ -171,6 +171,12 @@ export async function runCorrectionEval(
       { from: email.from, subject: email.subject, snippet: email.snippet, labels: email.labels },
       userId,
       context,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      // Eval loop over labelled history: never spend the judge's reserve.
+      { backlog: true },
     );
     pairs.push({ expected: override.tier, predicted: judgement.tier, source: judgement.source });
 

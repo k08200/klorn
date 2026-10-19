@@ -138,6 +138,11 @@ async function rejudgeOne(
     run.userId,
     ctx,
     run.credentials,
+    undefined,
+    undefined,
+    undefined,
+    // Re-judging stored rows, not new mail: never spend the judge's reserve.
+    { backlog: true },
   );
 
   if (run.confirm) {
