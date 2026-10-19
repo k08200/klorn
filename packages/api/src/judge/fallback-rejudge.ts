@@ -138,6 +138,17 @@ export async function rejudgeFallbackItems(
         },
         userId,
         context,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        // Backlog repair, not new mail. Without this the sweep spends the
+        // judge's reserved slice: on 2026-10-16 it drained both users' whole
+        // daily cap before 05:00 UTC re-judging 40 days of fallback rows, and
+        // every message that arrived afterwards was classified by keywords —
+        // the outage the reserve exists to prevent, caused by the repair for
+        // that same outage.
+        { backlog: true },
       );
 
       if (judgement.source === "keyword-fallback") {

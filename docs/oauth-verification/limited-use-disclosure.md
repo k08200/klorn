@@ -160,6 +160,10 @@ Add to the "Security" section:
 > Google user data is stored only in Klorn's own database — it is not
 > shared with analytics or advertising services.
 
+_2026-10-19: the live page now reads "stored only in Klorn's own database and
+its encrypted backups", and names GitHub as the store of the nightly encrypted
+backups (expiring after 14 days). See .github/workflows/db-backup.yml._
+
 <!--
 CODE EVIDENCE (strip before submission)
 - Privacy page reviewed: packages/web/src/app/privacy/page.tsx (line refs inline above;

@@ -56,6 +56,7 @@
       <tr><th>Google</th><td class="us">Gmail and Calendar APIs, and sign-in</td><td>The source of the data — your mailbox and calendar, under the scopes you granted</td></tr>
       <tr><th>Render</th><td class="us">API hosting, Singapore region</td><td>Everything the API processes, in transit and in memory</td></tr>
       <tr><th>Supabase</th><td class="us">Managed Postgres, Seoul (ap-northeast-2)</td><td>All stored account, mail and classification data</td></tr>
+      <tr><th>GitHub</th><td class="us">Storage of the nightly database backups (Actions artifacts, expiring after 14 days)</td><td>Encrypted files only. The database is copied to a temporary GitHub runner, encrypted there, and only the ciphertext is stored; the key to read it is never stored on GitHub</td></tr>
       <tr><th>Vercel</th><td class="us">Web app hosting</td><td>Requests and responses in transit</td></tr>
       <tr><th>Google (Gemini API)</th><td class="us">Model calls</td><td>The message text sent for classification or drafting, under API terms that exclude training on submitted data</td></tr>
       <tr><th>OpenRouter</th><td class="us">Model routing</td><td>The same, for models reached through it. Bring your own key and this row becomes your chosen provider instead</td></tr>

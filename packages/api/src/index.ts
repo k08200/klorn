@@ -10,6 +10,8 @@ import {
   revokeDemoAccessIfDisabled,
 } from "./auth.js";
 import { startBackgroundAgent } from "./background.js";
+import { ADVERTISED_PRO_PRICE_WEB } from "./billing/advertised-price.js";
+import { checkPaddlePriceMatchesAdvertised } from "./billing/paddle-price-check.js";
 import {
   caldavCalendarEnabled,
   deviceCalendarEnabled,
@@ -367,6 +369,7 @@ await app.register(phoneRoutes, { prefix: "/api/phone" });
 // answer-ready the moment the listener binds.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { healthResponse } from "./ops/health-response.js";
 import { newWork } from "./work-context.js";
 
 const PKG_VERSION: string | null = (() => {
@@ -380,26 +383,30 @@ const PKG_VERSION: string | null = (() => {
   }
 })();
 
-app.get("/api/health", async () => {
-  let dbOk = false;
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    dbOk = true;
-  } catch {
-    // DB unreachable
-  }
-  return {
-    status: dbOk ? "ok" : "degraded",
-    db: dbOk ? "connected" : "unreachable",
-    timestamp: new Date().toISOString(),
-    uptime: Math.floor(process.uptime()),
+function probeHealth() {
+  return healthResponse(() => prisma.$queryRaw`SELECT 1`, {
     version: PKG_VERSION ?? null,
     commit:
       process.env.RENDER_GIT_COMMIT ||
       process.env.GIT_COMMIT_SHA ||
       process.env.VERCEL_GIT_COMMIT_SHA ||
       null,
-  };
+    now: new Date(),
+    uptimeSeconds: Math.floor(process.uptime()),
+  });
+}
+
+// Liveness: 200 while the process serves requests; `db` in the body says
+// whether the database answered. See ops/health-response.ts.
+app.get("/api/health", async (_request, reply) => {
+  const { body } = await probeHealth();
+  return reply.code(200).send(body);
+});
+
+// Readiness: 503 while the database probe fails, for status-code monitors.
+app.get("/api/health/ready", async (_request, reply) => {
+  const { ready, body } = await probeHealth();
+  return reply.code(ready ? 200 : 503).send(body);
 });
 
 // Scheduler liveness for external monitors (UptimeRobot etc). 503 when any
@@ -578,6 +585,19 @@ app.addHook("onClose", async () => {
 reportJudgeModelResolution(JUDGE_MODEL_RESOLUTION);
 // The count-based JUDGE_HEALTH_WINDOW knob is retired (#1319): say so once.
 warnRetiredJudgeHealthEnv();
+
+// What Paddle actually bills lives outside this repo, on a price object any
+// dashboard user can edit. Twice now it has silently stopped matching the
+// pages: 2026-08-12 ($7.99 advertised, $8.99 charged) and 2026-10-15 (pages
+// at $8.99, Paddle edited to $29.99 — customers billed ABOVE the quoted
+// price, found out from a passing remark). Nothing announced either one.
+//
+// Deliberately not awaited: this is an outbound call to a third party and it
+// must not sit in front of the server accepting connections. It warns and
+// returns; it never throws and never blocks startup.
+void checkPaddlePriceMatchesAdvertised({ advertised: ADVERTISED_PRO_PRICE_WEB }).catch((err) => {
+  console.warn(`[PADDLE] price check failed unexpectedly: ${(err as Error).message}`);
+});
 
 // Startup DB calls are wrapped in withDbRetry so a Neon cold-start (suspended
 // compute waking up) does not kill the container. If retries are exhausted we

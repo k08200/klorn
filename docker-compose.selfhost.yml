@@ -99,9 +99,10 @@ services:
       JUDGE_MODEL: ${JUDGE_MODEL:-}
       CHAT_MODEL: ${CHAT_MODEL:-}
       AGENT_MODEL: ${AGENT_MODEL:-}
-    # /api/health always answers 200 — it reports {status: "ok" | "degraded"}
-    # rather than failing, so a status-code probe would call the API healthy
-    # while Postgres is unreachable. Parse the body instead.
+    # /api/health is liveness: it answers 200 and reports
+    # {status: "ok" | "degraded"} in the body, so a status-code probe would call
+    # the API healthy while Postgres is unreachable. Parse the body instead
+    # (/api/health/ready answers 503 then, for status-code monitors).
     # node:22-slim ships neither curl nor wget; node's global fetch is the one
     # thing guaranteed to be in this image.
     healthcheck:

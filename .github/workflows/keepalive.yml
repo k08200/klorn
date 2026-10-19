@@ -23,6 +23,19 @@ jobs:
       - name: Ping API health
         if: vars.KEEPALIVE_URL != ''
         run: curl -fsS --max-time 60 --retry 2 "${{ vars.KEEPALIVE_URL }}" > /dev/null && echo "alive"
+      # The ping above is liveness (200 while the process is up, even with the
+      # database down). Readiness answers 503 while the database is
+      # unreachable, so a database outage fails this job and GitHub emails the
+      # failure. Derived from KEEPALIVE_URL when it names /api/health.
+      - name: Check API readiness (database)
+        if: vars.KEEPALIVE_URL != ''
+        env:
+          KEEPALIVE_URL: ${{ vars.KEEPALIVE_URL }}
+        run: |
+          case "$KEEPALIVE_URL" in
+            */api/health) curl -fsS --max-time 30 --retry 2 "$KEEPALIVE_URL/ready" > /dev/null && echo "ready" ;;
+            *) echo "::notice::KEEPALIVE_URL does not end in /api/health; readiness not checked." ;;
+          esac
       - name: Not configured
         if: vars.KEEPALIVE_URL == ''
         run: echo "::notice::Set repository variable KEEPALIVE_URL to enable keepalive pings."

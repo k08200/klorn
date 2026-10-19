@@ -621,6 +621,22 @@ export const DAILY_COST_CAP_CENTS = intEnv("DAILY_COST_CAP_CENTS", 100);
 // the wall. Entitled users (paid/trial/admin) keep DAILY_COST_CAP_CENTS.
 export const FREE_DAILY_COST_CAP_CENTS = intEnv("FREE_DAILY_COST_CAP_CENTS", 10);
 
+// Slice of the per-user daily cap that ONLY the firewall judge may spend.
+// Chat, agent, briefing and summarize stop at (cap - reserve); the judge may
+// use the whole cap. 0 disables the reserve.
+//
+// 2026-10-15: chat/agent on claude-sonnet-5 spent 101¢ of a 100¢ cap in 21
+// minutes, the gate blocked every paid call until UTC midnight, and the judge
+// degraded to the keyword fallback — which cannot emit PUSH at all. Mail kept
+// being sorted, so nothing looked broken. Each call pre-bills a nominal
+// 2000+500 tokens (llm-usage.ts) and the floor is never refunded, so at
+// gemini-2.5-flash rates a classification costs ~0.185¢ — 25¢ buys ~135 a day.
+// Size it against the mailbox: 25 suits a light inbox, a heavy one needs more.
+// Default 0 = OFF. Turning it on narrows what chat/agent may spend, so it is
+// a deliberate flip per deploy rather than a behaviour change that arrives
+// with an upgrade. Recommended first value: 25.
+export const JUDGE_BUDGET_RESERVE_CENTS = intEnv("JUDGE_BUDGET_RESERVE_CENTS", 0);
+
 // Global hard cap across ALL users + system-initiated calls per UTC day, in
 // cents (USD). The per-user gate can't see calls made without a userId
 // (background reconcilers, system briefings), so a runaway system loop is

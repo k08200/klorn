@@ -45,9 +45,76 @@ Following this order means the breaker never arms.)
 
 ## Backup
 
-Supabase's free tier has no automated backups, so this is manual until the
-plan changes. Every detail below cost a failed attempt during the first
-drill (2026-08-04) — the obvious-looking version of each one does not work:
+Supabase's free tier has no automated backups. The **DB backup** workflow
+(`.github/workflows/db-backup.yml`) takes one every night at 03:17 KST:
+
+1. `pg_dump` of the public schema through the session pooler.
+2. A restore into a throwaway Postgres 17 that stops on any error.
+3. age encryption, then an artifact kept 14 days.
+
+The repository is public, so only ciphertext is uploaded and the log prints
+verdicts, never data or counts. A failed night fails the job, and GitHub
+emails the failure.
+
+**Setup (once):**
+
+- **Secret `BACKUP_DATABASE_URL`.** The session pooler URL: port 5432, the
+  same host Render uses, `?sslmode=require`. Not the direct host, which is
+  IPv6 only, and not the transaction pooler on 6543.
+- **Variable `BACKUP_AGE_RECIPIENT`.** The age public key (`age1...`).
+- **Private key.** It lives only with the operator, never in GitHub or in the
+  repo. If it is lost, the backups cannot be read: keep a copy in a password
+  manager. With the secret or the variable missing, the job fails rather than
+  skipping.
+
+**Restore from a nightly backup:**
+
+```bash
+gh run list --repo k08200/klorn --workflow "DB backup" --status success --limit 1
+```
+
+```bash
+gh run download <run-id> --repo k08200/klorn --dir ./klorn-backup
+```
+
+```bash
+age --decrypt --identity /path/to/klorn-db-backup.agekey --output klorn.dump ./klorn-backup/*/*.dump.age
+```
+
+The dump holds the public schema only, and it re-creates `public`, which
+every database already has. Leave that one entry out of the restore list:
+
+```bash
+pg_restore --list klorn.dump | grep -v -E '^[0-9]+; [0-9]+ [0-9]+ SCHEMA - public ' > restore.toc
+```
+
+```bash
+pg_restore --no-owner --no-privileges --exit-on-error --use-list=restore.toc --dbname="<target url>" klorn.dump
+```
+
+The decrypted dump is real user data: mail bodies, encrypted tokens and
+addresses. Keep it out of the repo directory and delete it once you are done.
+
+**Keep the key honest:**
+
+- **Decrypt drill.** Once a quarter, run the restore above into a throwaway
+  database. A success email from the workflow only proves the dump was
+  encrypted to *some* key; the drill proves you hold the matching one.
+- **Rotation.** The ciphertext sits in a public repository's artifacts, so
+  anyone signed in can keep a copy. If the private key ever leaks, every copy
+  someone saved is readable. Generate a new pair with `age-keygen`, set the
+  new public key as `BACKUP_AGE_RECIPIENT`, and treat backups older than the
+  rotation as exposed.
+- **Narrower role (optional).** The job only reads. A dedicated role with
+  `SELECT` on the public schema and `BYPASSRLS` would replace the
+  full-privilege URL. Every table has RLS enabled (docs/rls-rollout.md), so
+  without `BYPASSRLS` the dump comes back empty.
+
+### Manual dump (fallback)
+
+Use this when the workflow cannot run. Every detail below cost a failed
+attempt during the first drill (2026-08-04); the obvious-looking version of
+each one does not work:
 
 - **Use the pooler, not the direct host.** `db.<ref>.supabase.co` resolves
   over IPv6 only, so it fails inside Docker with "could not translate host
@@ -59,8 +126,8 @@ drill (2026-08-04) — the obvious-looking version of each one does not work:
   with the postgres image's entrypoint; `--entrypoint pg_dump` plus a shell
   redirect avoids both problems.
 - **Paste these one block at a time, without the comments.** zsh does not
-  enable `interactivecomments`, so a pasted `# 1) …` line is a parse error —
-  and a multi-line paste that fails halfway silently continues to the next
+  enable `interactivecomments`, so a pasted `# 1) …` line is a parse error.
+  A multi-line paste that fails halfway silently continues to the next
   command, which is how the first drill skipped a step and then reported a
   missing database.
 
@@ -75,7 +142,7 @@ ls -lh klorn-backup.dump
 A zero-byte file means it failed; read the error rather than continuing. The
 2026-08-04 dump of a 383 MB database was 82 MB.
 
-The dump is real user data — mail bodies, encrypted tokens, addresses.
+The dump is real user data: mail bodies, encrypted tokens and addresses.
 `*.dump` is gitignored, but keep it out of the repo directory anyway and
 delete it once the drill is done.
 
