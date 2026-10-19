@@ -1988,7 +1988,7 @@ export function startAutomationScheduler() {
   registerScheduler("automation", CHECK_INTERVAL_MS);
 
   // Run once on start
-  runAutomations();
+  newWork(runAutomations)();
 
   // Then check every minute
   intervalId = setInterval(newWork(runAutomations), CHECK_INTERVAL_MS);

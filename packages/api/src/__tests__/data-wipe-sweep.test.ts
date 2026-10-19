@@ -36,7 +36,7 @@ describe("runDataWipeSweep", () => {
       { userId: "u1", requestedAt: minutesAgo(5) },
       { userId: "u2", requestedAt: minutesAgo(5) },
     ]);
-    finishDataWipe.mockRejectedValueOnce(new Error("timed out")).mockResolvedValueOnce(undefined);
+    finishDataWipe.mockRejectedValueOnce(new Error("timed out")).mockResolvedValueOnce("purged");
 
     await expect(runDataWipeSweep(NOW)).resolves.toEqual({ finished: 1, failed: 1 });
     expect(finishDataWipe).toHaveBeenCalledTimes(2);

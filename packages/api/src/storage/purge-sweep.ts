@@ -162,12 +162,15 @@ function tick(): void {
 export function startStoragePurgeScheduler(): void {
   if (intervalId || firstRunTimer) return;
   registerScheduler("storage-purge", PURGE_SWEEP_INTERVAL_MS);
-  firstRunTimer = setTimeout(() => {
-    firstRunTimer = null;
-    tick();
-    intervalId = setInterval(newWork(tick), PURGE_SWEEP_INTERVAL_MS);
-    intervalId.unref?.();
-  }, FIRST_SWEEP_DELAY_MS);
+  firstRunTimer = setTimeout(
+    newWork(() => {
+      firstRunTimer = null;
+      tick();
+      intervalId = setInterval(newWork(tick), PURGE_SWEEP_INTERVAL_MS);
+      intervalId.unref?.();
+    }),
+    FIRST_SWEEP_DELAY_MS,
+  );
   firstRunTimer.unref?.();
 }
 

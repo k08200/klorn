@@ -26,6 +26,7 @@ import { encryptOptional, encryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
 import { withDbRetry } from "../db-retry.js";
 import { getGoogleUserInfo, getOAuth2Client, registerGmailWatch } from "../mail/gmail.js";
+import { isDataWipeFenceError } from "../privacy/data-wipe-fence.js";
 import { captureError } from "../sentry.js";
 
 /** The Google markers whose callback parks the code instead of exchanging it. */
@@ -323,6 +324,9 @@ export async function exchangeAndFinishGoogleLink(
     const { tokens } = await oauth2.getToken(code);
     return await FINISHERS[marker](userId, tokens);
   } catch (err) {
+    // The account's data was wiped minutes ago: the fence refuses new grants
+    // until it lifts. Say so instead of a generic failure.
+    if (isDataWipeFenceError(err)) return { next: "/settings?google=wipe_in_progress" };
     console.error("[OAUTH] callback failed:", err instanceof Error ? err.message : String(err));
     captureError(err, { tags: { scope: "auth.oauth.callback" } });
     return { status: 500, error: GOOGLE_LINK_FAILED };

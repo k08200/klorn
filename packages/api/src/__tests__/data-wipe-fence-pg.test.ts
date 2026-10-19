@@ -17,8 +17,13 @@ const url = vi.hoisted(() => {
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
 import { prisma } from "../db.js";
-import { DataWipeFenceError, isDataWipeFenceError } from "../privacy/data-wipe-fence.js";
-import { purgeAllUserData } from "../user-deletion.js";
+import {
+  DataWipeFenceError,
+  isDataWipeFenceError,
+  refreshDataWipes,
+} from "../privacy/data-wipe-fence.js";
+import { runDataWipeSweep } from "../privacy/data-wipe-sweep.js";
+import { finishDataWipe, purgeAllUserData } from "../user-deletion.js";
 import { runAsNewWork } from "../work-context.js";
 
 const describePg = url ? describe : describe.skip;
@@ -176,6 +181,7 @@ describePg("the app check, after the trigger's window", () => {
         INSERT INTO "DataWipe" ("userId", "requestedAt", "purgedAt", "fenceUntil", "updatedAt")
         VALUES (${userId}, now() AT TIME ZONE 'UTC', now() AT TIME ZONE 'UTC',
                 (now() AT TIME ZONE 'UTC') + interval '200 milliseconds', now() AT TIME ZONE 'UTC')`;
+      await refreshDataWipes();
       await new Promise((resolve) => setTimeout(resolve, 400));
       await rawNote(userId, "trigger allows it now");
 
@@ -194,6 +200,7 @@ describePg("the app check, after the trigger's window", () => {
   it("lets work that began after fenceUntil write", async () => {
     const userId = await newUser();
     await setWipe(userId, "past", -1);
+    await refreshDataWipes();
     await runAsNewWork(() => prisma.note.create({ data: { userId, title: "fresh", content: "" } }));
     expect(await notes(userId)).toBe(1);
   });
@@ -210,5 +217,83 @@ describePg("purgeAllUserData against the real schema", () => {
     expect(record?.fenceUntil?.getTime()).toBeGreaterThan(Date.now());
     expect(await notes(userId)).toBe(0);
     expect(isDataWipeFenceError(await rawNote(userId).catch((err: unknown) => err))).toBe(true);
+  });
+});
+
+describePg("rows without a userId", () => {
+  it("rejects a message into a wiped account's conversation, found through the parent", async () => {
+    const userId = await newUser();
+    const conversation = await prisma.conversation.create({ data: { userId, title: "c" } });
+    await setWipe(userId, "null", null);
+    const error = await prisma.$executeRaw`
+      INSERT INTO "Message" ("id", "conversationId", "role", "content", "createdAt")
+      VALUES (${randomUUID()}, ${conversation.id}, 'ASSISTANT', 'old mail', now())`.catch(
+      (err: unknown) => err,
+    );
+    expect(isDataWipeFenceError(error)).toBe(true);
+    // The same insert for an account without a wipe goes through.
+    const other = await newUser();
+    const open = await prisma.conversation.create({ data: { userId: other, title: "c" } });
+    await prisma.$executeRaw`
+      INSERT INTO "Message" ("id", "conversationId", "role", "content", "createdAt")
+      VALUES (${randomUUID()}, ${open.id}, 'ASSISTANT', 'fine', now())`;
+    expect(await prisma.message.count({ where: { conversationId: open.id } })).toBe(1);
+  });
+});
+
+describePg("purgeAllUserData under a concurrent writer", () => {
+  it("waits for a write in flight, then purges it with the rest", async () => {
+    const userId = await newUser();
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let inserted: () => void = () => {};
+    const insertedSignal = new Promise<void>((resolve) => {
+      inserted = resolve;
+    });
+    const writer = prisma.$transaction(
+      async (tx) => {
+        await tx.$executeRaw`
+          INSERT INTO "Note" ("id", "userId", "title", "content", "createdAt", "updatedAt")
+          VALUES (${randomUUID()}, ${userId}, 'stale sync', '', now(), now())`;
+        inserted();
+        await held;
+      },
+      { maxWait: 10_000, timeout: 20_000 },
+    );
+    await insertedSignal;
+    const wipe = purgeAllUserData(userId);
+
+    expect(await settledWithin(wipe, 500)).toBe(false);
+    release();
+    await writer;
+    await expect(wipe).resolves.toBe("purged");
+    expect(await notes(userId)).toBe(0);
+  });
+
+  it("leaves a wipe that already finished alone, so data created since survives", async () => {
+    const userId = await newUser();
+    await expect(purgeAllUserData(userId)).resolves.toBe("purged");
+    // The fence ended; the user created a note with new work.
+    await prisma.$executeRaw`UPDATE "DataWipe" SET "fenceUntil" = (now() AT TIME ZONE 'UTC') - interval '1 second' WHERE "userId" = ${userId}`;
+    await rawNote(userId, "after the wipe");
+    await expect(finishDataWipe(userId)).resolves.toBe("not-pending");
+    expect(await notes(userId)).toBe(1);
+  });
+});
+
+describePg("the data-wipe sweep against the real schema", () => {
+  it("finishes a pending wipe whose request never purged", async () => {
+    const userId = await newUser();
+    await rawNote(userId, "before the wipe");
+    await prisma.$executeRaw`
+      INSERT INTO "DataWipe" ("userId", "requestedAt", "updatedAt")
+      VALUES (${userId}, (now() AT TIME ZONE 'UTC') - interval '10 minutes', now() AT TIME ZONE 'UTC')`;
+    const result = await runDataWipeSweep();
+    expect(result.finished).toBeGreaterThanOrEqual(1);
+    expect(await notes(userId)).toBe(0);
+    const record = await prisma.dataWipe.findUnique({ where: { userId } });
+    expect(record?.purgedAt).toBeInstanceOf(Date);
   });
 });

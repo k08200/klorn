@@ -270,7 +270,7 @@ export function startBackgroundAgent() {
   registerScheduler("background-agent", 60_000);
 
   // Run immediately once
-  checkUpcomingMeetings();
+  newWork(checkUpcomingMeetings)();
 
   // Then every 60 seconds — only meeting checks (task checks moved to autonomous-agent.ts)
   intervalId = setInterval(

@@ -1899,6 +1899,8 @@ const zh: Record<string, string> = {
   "paywall.valueProp.noise": "你不在时，Klorn 会为杂讯邮件分类，并在每封邮件上注明理由",
   "paywall.valueProp.brief": "每天早上汇总需要你决定的事项",
   "paywall.valueProp.learns": "学习你的判断，越用越准",
+  "oauthError.wipeInProgress.title": "您刚刚清除了数据",
+  "oauthError.wipeInProgress.body": "Klorn 正在完成清除。请几分钟后重新连接您的 Google 账号。",
   "oauthError.title": "未授予 Gmail 离线访问权限",
   "oauthError.body":
     "Google 返回了一个短期令牌，缺少 Klorn 在后台持续同步所需的刷新权限。原因几乎总是以下两者之一：",

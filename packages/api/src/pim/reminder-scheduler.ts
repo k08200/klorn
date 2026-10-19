@@ -165,7 +165,7 @@ export function startReminderScheduler() {
   registerScheduler("reminder", CHECK_INTERVAL_MS);
 
   // Run immediately on start
-  checkDueReminders();
+  newWork(checkDueReminders)();
 
   // Then check periodically
   intervalId = setInterval(newWork(checkDueReminders), CHECK_INTERVAL_MS);

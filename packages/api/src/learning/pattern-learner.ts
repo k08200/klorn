@@ -538,10 +538,10 @@ export function startPatternLearner() {
   // so stop() can cancel it during the boot window — otherwise a deferred
   // analysis fires after shutdown.
   patternFirstRunTimer = setTimeout(
-    async () => {
+    newWork(async () => {
       patternFirstRunTimer = null;
       await runPatternAnalysisForAllUsers();
-    },
+    }),
     5 * 60 * 1000,
   );
   patternFirstRunTimer.unref?.();

@@ -130,12 +130,15 @@ function tick(): void {
 export function startDriveGoogleRefreshScheduler(): void {
   if (intervalId || firstRunTimer) return;
   registerScheduler(SCHEDULER_NAME, GOOGLE_DRIVE_REFRESH_INTERVAL_MS);
-  firstRunTimer = setTimeout(() => {
-    firstRunTimer = null;
-    tick();
-    intervalId = setInterval(newWork(tick), GOOGLE_DRIVE_REFRESH_INTERVAL_MS);
-    intervalId.unref?.();
-  }, FIRST_SWEEP_DELAY_MS);
+  firstRunTimer = setTimeout(
+    newWork(() => {
+      firstRunTimer = null;
+      tick();
+      intervalId = setInterval(newWork(tick), GOOGLE_DRIVE_REFRESH_INTERVAL_MS);
+      intervalId.unref?.();
+    }),
+    FIRST_SWEEP_DELAY_MS,
+  );
   firstRunTimer.unref?.();
 }
 

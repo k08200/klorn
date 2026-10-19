@@ -35,8 +35,7 @@ export async function runDataWipeSweep(
   let failed = 0;
   for (const { userId, requestedAt } of pending) {
     try {
-      await finishDataWipe(userId);
-      finished++;
+      if ((await finishDataWipe(userId)) === "purged") finished++;
     } catch (err) {
       failed++;
       console.error(`[DATA-WIPE] Sweep could not finish the wipe of ${userId}:`, err);

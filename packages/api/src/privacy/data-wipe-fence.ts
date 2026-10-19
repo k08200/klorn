@@ -21,25 +21,36 @@
  *      then sees the record.
  *   2. In the app, after `fenceUntil`, a Prisma query hook (db.ts) rejects a
  *      write from any work that began before `fenceUntil` (work-context.ts),
- *      however late it arrives. The window in (1) only needs to cover the gap
- *      between this check and its insert, plus another instance's cached
- *      state (FENCE_CACHE_MS).
+ *      however late it arrives. The hook reads an in-memory snapshot of the
+ *      recent wipes, refreshed in the background (FENCE_REFRESH_MS), never the
+ *      database: a read on the write path would need a second pool connection
+ *      while the caller may hold the only one in an interactive transaction.
+ *      The window in (1) only needs to cover the gap between this check and
+ *      its insert plus the snapshot's age.
+ *
+ * Rows of Message, ConversationSummary and CommitmentPath carry no userId; the
+ * owner is their parent's (PARENT_SCOPED_MODELS), for the trigger and the hook
+ * alike. Raw INSERTs (email-attachments.ts, email-candidate-intake.ts) bypass
+ * the hook; the trigger covers them during the window, and their foreign key
+ * to EmailMessage, whose inserts are fenced, after it.
  *
  * New work that begins after `fenceUntil` writes normally. Account deletion
  * needs none of this: deleting the account row is atomic against inserts that
  * reference it.
  */
 
-import { workStartedAt } from "../work-context.js";
+import { newWork, workStartedAt } from "../work-context.js";
 
-/** Fence window after the purge commits; far above FENCE_CACHE_MS plus a pool wait. */
+/** Fence window after the purge commits; far above the snapshot's refresh plus a pool wait. */
 export const DATA_WIPE_FENCE_MS = 5 * 60_000;
 
 /** In the trigger's exception text, so a rejected insert is recognizable. */
 export const DATA_WIPE_FENCE_MARKER = "klorn_data_wipe_fence";
 
-const FENCE_CACHE_MS = 30_000;
-const FENCE_CACHE_MAX_ENTRIES = 10_000;
+/** Background refresh of the snapshot of recent wipes. */
+export const FENCE_REFRESH_MS = 30_000;
+/** A snapshot older than this is refreshed on the write path, as a fallback. */
+const FENCE_STALE_MS = 4 * 60_000;
 
 /** Tables whose inserts the fence rejects: the account's data, and its grants. */
 export const FENCED_MODELS = [
@@ -110,13 +121,20 @@ export const UNFENCED_MODELS: Record<string, string> = {
   DevicePushToken: "device registration at sign-in, no mail data",
   PushSubscription: "browser push registration, no mail data",
   ApiKey: "revoked by the wipe; a key created afterwards is an account action",
-  TokenUsage: "cost accounting, which the daily cap must keep counting",
+  TokenUsage: "usage counts, no content; the wipe deletes them, new usage must still be recorded",
   LlmCostLedger: "the daily spend cap itself",
-  LlmUsageLog: "cost accounting, which the daily cap must keep counting",
+  LlmUsageLog: "usage counts, no content; the wipe deletes them, new usage must still be recorded",
   AnalyticsEvent: "product analytics written inline by requests, no mail content",
   PmfResponse: "a survey answer the user typed, not derived from mail",
   StoragePurge: "the stored-object purge queue, written by the wipe itself",
   DataWipe: "the fence's own record",
+};
+
+/** Fenced tables without a userId: the owner is the parent row's. */
+export const PARENT_SCOPED_MODELS: Record<string, { parent: string; key: string }> = {
+  Message: { parent: "Conversation", key: "conversationId" },
+  ConversationSummary: { parent: "Conversation", key: "conversationId" },
+  CommitmentPath: { parent: "Commitment", key: "commitmentId" },
 };
 
 export class DataWipeFenceError extends Error {
@@ -159,39 +177,85 @@ export interface DataWipeState {
   fenceUntil: Date | null;
 }
 
-type FenceReader = (userId: string) => Promise<DataWipeState | null>;
+type FenceLoader = () => Promise<Array<DataWipeState & { userId: string }>>;
+type ParentOwnerResolver = (parent: string, id: string) => Promise<string | null>;
 
-let readFenceRow: FenceReader | null = null;
-const cache = new Map<string, { state: DataWipeState | null; fetchedAt: number }>();
+let loadFences: FenceLoader | null = null;
+let resolveParentOwner: ParentOwnerResolver | null = null;
+let snapshot = new Map<string, DataWipeState>();
+let loadedAt = 0;
+let loading: Promise<void> | null = null;
 
-/** db.ts wires the reader to the unextended client, so the check never recurses. */
-export function setDataWipeReader(reader: FenceReader | null): void {
-  readFenceRow = reader;
-  cache.clear();
+/** db.ts wires these to the unextended client, so the check never recurses. */
+export function setDataWipeSources(sources: {
+  load: FenceLoader | null;
+  parentOwner: ParentOwnerResolver | null;
+}): void {
+  loadFences = sources.load;
+  resolveParentOwner = sources.parentOwner;
+  snapshot = new Map();
+  loadedAt = 0;
+  loading = null;
 }
 
-/** The wipe records its own state here at once, ahead of the cache's expiry. */
+/** Reload the snapshot of recent wipes now; single-flight. */
+export function refreshDataWipes(): Promise<void> {
+  if (!loadFences) return Promise.resolve();
+  const load = loadFences;
+  loading ??= load()
+    .then((rows) => {
+      snapshot = new Map(
+        rows.map((row) => [row.userId, { purgedAt: row.purgedAt, fenceUntil: row.fenceUntil }]),
+      );
+      loadedAt = Date.now();
+    })
+    .finally(() => {
+      loading = null;
+    });
+  return loading;
+}
+
+let refreshTimer: ReturnType<typeof setInterval> | null = null;
+
+/** Keep the snapshot fresh in the background (index.ts starts it at boot). */
+export function startDataWipeRefresh(): void {
+  if (refreshTimer) return;
+  const refresh = () =>
+    refreshDataWipes().catch((err: unknown) => {
+      console.error("[DATA-WIPE] Could not refresh the wipe snapshot:", err);
+    });
+  void refresh();
+  refreshTimer = setInterval(newWork(refresh), FENCE_REFRESH_MS);
+  refreshTimer.unref?.();
+}
+
+export function stopDataWipeRefresh(): void {
+  if (refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = null;
+}
+
+/** The wipe records its own state here at once, ahead of the next refresh. */
 export function rememberDataWipe(userId: string, state: DataWipeState): void {
-  if (cache.size >= FENCE_CACHE_MAX_ENTRIES) cache.clear();
-  cache.set(userId, { state, fetchedAt: Date.now() });
+  snapshot = new Map(snapshot).set(userId, state);
 }
 
-async function fenceOf(userId: string): Promise<DataWipeState | null> {
-  const hit = cache.get(userId);
-  if (hit && Date.now() - hit.fetchedAt < FENCE_CACHE_MS) return hit.state;
-  if (!readFenceRow) return null;
-  const state = await readFenceRow(userId);
-  if (cache.size >= FENCE_CACHE_MAX_ENTRIES) cache.clear();
-  cache.set(userId, { state, fetchedAt: Date.now() });
-  return state;
+function blocks(state: DataWipeState, startedAt: Date): boolean {
+  if (state.purgedAt === null) return true;
+  return state.fenceUntil !== null && startedAt < state.fenceUntil;
 }
 
 /** Throws DataWipeFenceError when the current work may not write for `userId`. */
 export async function assertWorkMayWrite(userId: string): Promise<void> {
-  const state = await fenceOf(userId);
-  if (!state) return;
-  if (state.purgedAt === null) throw new DataWipeFenceError();
-  if (state.fenceUntil && workStartedAt() < state.fenceUntil) throw new DataWipeFenceError();
+  if (loadFences && Date.now() - loadedAt > FENCE_STALE_MS) await refreshDataWipes();
+  const state = snapshot.get(userId);
+  if (state && blocks(state, workStartedAt())) throw new DataWipeFenceError();
+}
+
+/** True when some recorded wipe could reject a write from the current work. */
+function anyWipeBlocksThisWork(): boolean {
+  const startedAt = workStartedAt();
+  for (const state of snapshot.values()) if (blocks(state, startedAt)) return true;
+  return false;
 }
 
 const FENCED_OPERATIONS = new Set(["create", "createMany", "createManyAndReturn", "upsert"]);
@@ -205,6 +269,12 @@ function ownerOf(data: unknown): string | null {
   return typeof connected === "string" ? connected : null;
 }
 
+function rowsOf(operation: string, args: unknown): unknown[] {
+  const input = (args ?? {}) as { data?: unknown; create?: unknown };
+  if (operation === "upsert") return [input.create];
+  return Array.isArray(input.data) ? input.data : [input.data];
+}
+
 /**
  * The accounts a top-level insert writes for, when its model is fenced. A
  * nested create (through another model's relation) is not seen here; the
@@ -212,13 +282,37 @@ function ownerOf(data: unknown): string | null {
  */
 export function fencedWriteOwners(model: string, operation: string, args: unknown): string[] {
   if (!FENCED.has(model) || !FENCED_OPERATIONS.has(operation)) return [];
-  const input = (args ?? {}) as { data?: unknown; create?: unknown };
-  const rows =
-    operation === "upsert" ? [input.create] : Array.isArray(input.data) ? input.data : [input.data];
   const owners = new Set<string>();
-  for (const row of rows) {
+  for (const row of rowsOf(operation, args)) {
     const owner = ownerOf(row);
     if (owner) owners.add(owner);
   }
   return [...owners];
+}
+
+/**
+ * The write check the query hook runs. Cheap when no recorded wipe could
+ * reject this work, which is nearly always: then no owner is resolved at all.
+ */
+export async function assertFencedWriteAllowed(
+  model: string,
+  operation: string,
+  args: unknown,
+): Promise<void> {
+  if (!FENCED_OPERATIONS.has(operation)) return;
+  const scoped = PARENT_SCOPED_MODELS[model];
+  if (!FENCED.has(model) && !scoped) return;
+  if (loadFences && Date.now() - loadedAt > FENCE_STALE_MS) await refreshDataWipes();
+  if (!anyWipeBlocksThisWork()) return;
+  if (!scoped) {
+    for (const owner of fencedWriteOwners(model, operation, args)) await assertWorkMayWrite(owner);
+    return;
+  }
+  for (const row of rowsOf(operation, args)) {
+    const parentId =
+      row && typeof row === "object" ? (row as Record<string, unknown>)[scoped.key] : null;
+    if (typeof parentId !== "string" || !resolveParentOwner) continue;
+    const owner = await resolveParentOwner(scoped.parent, parentId);
+    if (owner) await assertWorkMayWrite(owner);
+  }
 }

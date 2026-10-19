@@ -2066,6 +2066,9 @@ const fr: Record<string, string> = {
     "Klorn trie le bruit pendant votre absence, avec la raison sur chaque message",
   "paywall.valueProp.brief": "Un point du matin sur ce qui demande une décision",
   "paywall.valueProp.learns": "Apprend de vos choix et s'affine avec le temps",
+  "oauthError.wipeInProgress.title": "Vos données viennent d'être effacées",
+  "oauthError.wipeInProgress.body":
+    "Klorn termine l'effacement. Reconnectez votre compte Google dans quelques minutes.",
   "oauthError.title": "L'accès hors ligne à Gmail n'a pas été accordé",
   "oauthError.body":
     "Google a renvoyé un jeton de courte durée sans l'autorisation d'actualisation dont Klorn a besoin pour synchroniser en arrière-plan. C'est presque toujours l'une de ces deux raisons :",

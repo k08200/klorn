@@ -512,6 +512,21 @@ including the account needed to diagnose it.
      (same migration).
    - `WebhookEvent` — system-only (same migration).
 
+### Before the role switch: the data-wipe fence (2026-10-19)
+
+The data-wipe fence (`src/privacy/data-wipe-fence.ts`, migration
+`20261019010000_data_wipe_fence`) must keep reading every account's wipe
+record whatever role the app runs as:
+
+- Its trigger functions are `SECURITY DEFINER` with an empty `search_path`,
+  so they read `"User"`, `"DataWipe"` and the parent tables as the migration
+  role and are unaffected by the switch.
+- The app's snapshot of recent wipes (`setDataWipeSources` in `src/db.ts`)
+  and its parent-owner lookups use the plain client with no tenant setting.
+  Under a role that RLS restricts they would read nothing, and the app-side
+  check would silently pass every write. Move them to `withSystem` (or a
+  bypass role) in the same PR as the switch.
+
 ## Rollback
 
 Nothing here is destructive. `ALTER TABLE t DISABLE ROW LEVEL SECURITY;` drops

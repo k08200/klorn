@@ -17,7 +17,13 @@
 -- Timestamps are compared in UTC whatever the session time zone: the columns
 -- are timestamp without time zone, written in UTC (db-url.ts pins the session).
 -- search_path is empty and every name is schema-qualified (Supabase's
--- function_search_path_mutable advisor).
+-- function_search_path_mutable advisor). SECURITY DEFINER: the functions read
+-- "User", "DataWipe" and the parent tables under the migration role, so the
+-- fence keeps working if the app ever runs as a role that RLS restricts
+-- (docs/rls-rollout.md); they read and raise, nothing else.
+--
+-- Message, ConversationSummary and CommitmentPath have no "userId": their
+-- trigger finds the owner through the parent row named by its arguments.
 
 -- Fail fast instead of queueing behind a long lock: each CREATE TRIGGER takes
 -- SHARE ROW EXCLUSIVE on its table until the migration commits (same guard as
@@ -45,20 +51,51 @@ ALTER TABLE "DataWipe" ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "DataWipe_tenant_isolation" ON "DataWipe" USING ("userId" = current_setting('app.current_user_id', true));
 CREATE POLICY "DataWipe_system_bypass" ON "DataWipe" USING (current_setting('app.bypass_rls', true) = 'on');
 
+CREATE FUNCTION public.klorn_data_wipe_check(owner text, target text) RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $check$
+BEGIN
+  IF owner IS NULL THEN
+    RETURN;
+  END IF;
+  PERFORM 1 FROM public."User" WHERE "id" = owner FOR KEY SHARE;
+  IF EXISTS (
+    SELECT 1 FROM public."DataWipe" w
+    WHERE w."userId" = owner
+      AND (w."purgedAt" IS NULL OR w."fenceUntil" > (now() AT TIME ZONE 'UTC'))
+  ) THEN
+    RAISE EXCEPTION 'klorn_data_wipe_fence: insert into % rejected, the account''s data wipe has not finished', target
+      USING ERRCODE = 'KW001';
+  END IF;
+END;
+$check$;
+
 CREATE FUNCTION public.klorn_data_wipe_fence() RETURNS trigger
 LANGUAGE plpgsql
+SECURITY DEFINER
 SET search_path = ''
 AS $fence$
 BEGIN
-  PERFORM 1 FROM public."User" WHERE "id" = NEW."userId" FOR KEY SHARE;
-  IF EXISTS (
-    SELECT 1 FROM public."DataWipe" w
-    WHERE w."userId" = NEW."userId"
-      AND (w."purgedAt" IS NULL OR w."fenceUntil" > (now() AT TIME ZONE 'UTC'))
-  ) THEN
-    RAISE EXCEPTION 'klorn_data_wipe_fence: insert into % rejected, the account''s data wipe has not finished', TG_TABLE_NAME
-      USING ERRCODE = 'KW001';
-  END IF;
+  PERFORM public.klorn_data_wipe_check(NEW."userId", TG_TABLE_NAME);
+  RETURN NEW;
+END;
+$fence$;
+
+-- TG_ARGV[0]: the parent table; TG_ARGV[1]: this table's column naming it.
+CREATE FUNCTION public.klorn_data_wipe_fence_via_parent() RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $fence$
+DECLARE
+  owner text;
+BEGIN
+  EXECUTE format('SELECT "userId" FROM public.%I WHERE "id" = $1', TG_ARGV[0])
+    INTO owner
+    USING to_jsonb(NEW) ->> TG_ARGV[1];
+  PERFORM public.klorn_data_wipe_check(owner, TG_TABLE_NAME);
   RETURN NEW;
 END;
 $fence$;
@@ -113,3 +150,8 @@ CREATE TRIGGER "Notification_data_wipe_fence" BEFORE INSERT ON "Notification" FO
 CREATE TRIGGER "PushDeliveryLog_data_wipe_fence" BEFORE INSERT ON "PushDeliveryLog" FOR EACH ROW EXECUTE FUNCTION public.klorn_data_wipe_fence();
 CREATE TRIGGER "PushRingEvent_data_wipe_fence" BEFORE INSERT ON "PushRingEvent" FOR EACH ROW EXECUTE FUNCTION public.klorn_data_wipe_fence();
 CREATE TRIGGER "PhoneEscalation_data_wipe_fence" BEFORE INSERT ON "PhoneEscalation" FOR EACH ROW EXECUTE FUNCTION public.klorn_data_wipe_fence();
+
+-- One per table in PARENT_SCOPED_MODELS.
+CREATE TRIGGER "Message_data_wipe_fence" BEFORE INSERT ON "Message" FOR EACH ROW EXECUTE FUNCTION public.klorn_data_wipe_fence_via_parent('Conversation', 'conversationId');
+CREATE TRIGGER "ConversationSummary_data_wipe_fence" BEFORE INSERT ON "ConversationSummary" FOR EACH ROW EXECUTE FUNCTION public.klorn_data_wipe_fence_via_parent('Conversation', 'conversationId');
+CREATE TRIGGER "CommitmentPath_data_wipe_fence" BEFORE INSERT ON "CommitmentPath" FOR EACH ROW EXECUTE FUNCTION public.klorn_data_wipe_fence_via_parent('Commitment', 'commitmentId');

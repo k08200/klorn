@@ -1,10 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { withUtcSessionTimeZone } from "./db-url.js";
-import {
-  assertWorkMayWrite,
-  fencedWriteOwners,
-  setDataWipeReader,
-} from "./privacy/data-wipe-fence.js";
+import { assertFencedWriteAllowed, setDataWipeSources } from "./privacy/data-wipe-fence.js";
+import { PROCESS_STARTED_AT } from "./work-context.js";
 
 // Pin the DB session to UTC so timezone-naive timestamp columns never drift
 // under a non-UTC session (see db-url.ts).
@@ -14,14 +11,26 @@ const baseClient = databaseUrl
   ? new PrismaClient({ datasources: { db: { url: databaseUrl } } })
   : new PrismaClient();
 
-// The data-wipe fence reads its record through the plain client, so the check
-// never runs its own hook.
-setDataWipeReader((userId) =>
-  baseClient.dataWipe.findUnique({
-    where: { userId },
-    select: { purgedAt: true, fenceUntil: true },
-  }),
-);
+// The data-wipe fence reads through the plain client, so its reads never run
+// its own hook. Only wipes this process's work can be older than matter: one
+// still pending, or one whose fence ends after the process started (work
+// that began before the process did cannot be running in it).
+setDataWipeSources({
+  load: () =>
+    baseClient.dataWipe.findMany({
+      where: { OR: [{ purgedAt: null }, { fenceUntil: { gt: PROCESS_STARTED_AT } }] },
+      select: { userId: true, purgedAt: true, fenceUntil: true },
+    }),
+  parentOwner: async (parent, id) => {
+    const row =
+      parent === "Conversation"
+        ? await baseClient.conversation.findUnique({ where: { id }, select: { userId: true } })
+        : parent === "Commitment"
+          ? await baseClient.commitment.findUnique({ where: { id }, select: { userId: true } })
+          : null;
+    return row?.userId ?? null;
+  },
+});
 
 /**
  * The app's client: the base client plus the data-wipe fence's write check
@@ -35,9 +44,7 @@ export const prisma = baseClient.$extends({
   query: {
     $allModels: {
       async $allOperations({ model, operation, args, query }) {
-        for (const userId of fencedWriteOwners(model, operation, args)) {
-          await assertWorkMayWrite(userId);
-        }
+        await assertFencedWriteAllowed(model, operation, args);
         return query(args);
       },
     },

@@ -44,7 +44,10 @@ const STAMPED = {
 const TX = {
   marker: "tx",
   $queryRaw: vi.fn(async (strings: TemplateStringsArray, ..._values: unknown[]) => {
-    calls.order.push(strings.join("?").includes("FOR UPDATE") ? "lock" : "stamp");
+    const sql = strings.join("?");
+    calls.order.push(
+      sql.includes('FROM "User"') ? "lock" : sql.includes('FROM "DataWipe"') ? "pending" : "stamp",
+    );
     return [STAMPED];
   }),
   dataWipe: {
@@ -108,23 +111,26 @@ describe("deleteUserAndAllData (account deletion)", () => {
 });
 
 describe("purgeAllUserData (data wipe that keeps the account)", () => {
-  it("records the wipe and cuts off access under the account lock, then purges once", async () => {
+  it("records the wipe and cuts off access under the account lock, then deletes objects and rows", async () => {
     await expect(purgeAllUserData("user-1")).resolves.toBe("purged");
-    // The first transaction holds the account row FOR UPDATE: inserts in flight
-    // commit before it and are purged; later ones see the record and are
-    // rejected by the fence's trigger. So one purge is enough.
+    // The first transaction holds the account row FOR UPDATE: inserts in
+    // flight commit before it and are purged; later ones see the record and
+    // are rejected by the fence's trigger. So one purge is enough. Objects go
+    // after the fence is up, so no upload lands in between.
     expect(calls.order).toEqual([
-      "storage",
       "database",
       "lock",
       "record",
       "access",
+      "storage",
       "database",
+      "pending",
       "rows",
       "stamp",
     ]);
     expect(revokeUserAccess).toHaveBeenCalledWith(TX, "user-1");
     expect(purgeUserData).toHaveBeenCalledWith(TX, "user-1");
+    expect(purgeUserObjects).toHaveBeenCalledWith("user-1");
   });
 
   it("locks the account row and records a pending wipe, clearing an older one", async () => {
@@ -144,12 +150,21 @@ describe("purgeAllUserData (data wipe that keeps the account)", () => {
     expect(upsert.update).toMatchObject({ purgedAt: null, fenceUntil: null, attempts: 0 });
   });
 
-  it("stamps the wipe purged with the fence window, inside the purge transaction", async () => {
+  it("purges only a wipe that is still pending, under its record's lock", async () => {
     await purgeAllUserData("user-1");
-    const [stampSql, ...values] = TX.$queryRaw.mock.calls[1] ?? [];
+    const [pendingSql, pendingId] = TX.$queryRaw.mock.calls[1] ?? [];
+    expect((pendingSql as TemplateStringsArray).join("?")).toContain(
+      'FROM "DataWipe" WHERE "userId" = ? AND "purgedAt" IS NULL FOR UPDATE',
+    );
+    expect(pendingId).toBe("user-1");
+  });
+
+  it("stamps the wipe purged with the fence window, timed from the end of the purge", async () => {
+    await purgeAllUserData("user-1");
+    const [stampSql, ...values] = TX.$queryRaw.mock.calls[2] ?? [];
     const sql = (stampSql as TemplateStringsArray).join("?");
     expect(sql).toContain('UPDATE "DataWipe"');
-    expect(sql).toContain("\"purgedAt\" = (now() AT TIME ZONE 'UTC')");
+    expect(sql).toContain("\"purgedAt\" = (clock_timestamp() AT TIME ZONE 'UTC')");
     expect(values).toEqual([300, "user-1"]);
   });
 
@@ -168,11 +183,22 @@ describe("purgeAllUserData (data wipe that keeps the account)", () => {
     expect(purgeUserData).not.toHaveBeenCalled();
   });
 
+  it("retries the record when Postgres aborted it to break a deadlock", async () => {
+    prisma.$transaction.mockRejectedValueOnce(
+      Object.assign(new Error("Transaction failed due to a write conflict or a deadlock"), {
+        code: "P2034",
+      }),
+    );
+    await expect(purgeAllUserData("user-1")).resolves.toBe("purged");
+    expect(prisma.$transaction).toHaveBeenCalledTimes(3);
+  });
+
   it("deletes no row when the wipe could not be recorded", async () => {
     prisma.$transaction.mockRejectedValueOnce(new Error("pool exhausted"));
     await expect(purgeAllUserData("user-1")).rejects.toThrow("pool exhausted");
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     expect(purgeUserData).not.toHaveBeenCalled();
+    expect(purgeUserObjects).not.toHaveBeenCalled();
   });
 
   it("answers pending, not an error, when the purge fails after access was cut off", async () => {
@@ -192,18 +218,24 @@ describe("purgeAllUserData (data wipe that keeps the account)", () => {
     logged.mockRestore();
   });
 
-  it("keeps every row when the objects could not be deleted", async () => {
+  it("answers pending when the stored objects could not be recorded, and purges no row", async () => {
     purgeUserObjects.mockRejectedValue(new Error("bucket is down"));
-    await expect(purgeAllUserData("user-1")).rejects.toThrow("bucket is down");
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(purgeAllUserData("user-1")).resolves.toBe("pending");
     expect(purgeUserData).not.toHaveBeenCalled();
   });
 });
 
 describe("finishDataWipe (the sweep's retry)", () => {
-  it("purges and stamps in one transaction, without touching the record's lock", async () => {
-    await finishDataWipe("user-1");
-    expect(calls.order).toEqual(["database", "rows", "stamp"]);
+  it("deletes the objects, then purges and stamps under the pending record's lock", async () => {
+    await expect(finishDataWipe("user-1")).resolves.toBe("purged");
+    expect(calls.order).toEqual(["storage", "database", "pending", "rows", "stamp"]);
+  });
+
+  it("leaves a wipe that is no longer pending alone, so later data survives", async () => {
+    TX.$queryRaw.mockImplementationOnce(async () => []);
+    await expect(finishDataWipe("user-1")).resolves.toBe("not-pending");
+    expect(purgeUserData).not.toHaveBeenCalled();
   });
 });
 

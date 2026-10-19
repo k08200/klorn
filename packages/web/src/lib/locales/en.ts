@@ -2023,6 +2023,9 @@ const en: Record<string, string> = {
     "Klorn sorts the noise while you're away, with the reason on each message",
   "paywall.valueProp.brief": "A morning brief of what needs a decision",
   "paywall.valueProp.learns": "Learns your calls and gets sharper over time",
+  "oauthError.wipeInProgress.title": "Your data was just wiped",
+  "oauthError.wipeInProgress.body":
+    "Klorn is finishing the wipe. Connect your Google account again in a few minutes.",
   "oauthError.title": "Gmail offline access wasn't granted",
   "oauthError.body":
     "Google returned a short-lived token without the refresh permission Klorn needs to keep syncing in the background. This is almost always one of two things:",

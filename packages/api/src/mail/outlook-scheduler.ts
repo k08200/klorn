@@ -57,20 +57,25 @@ export function startOutlookScheduler(): void {
   // Double-start guard covers the boot window too (see imap-scheduler).
   if (intervalId || firstTickTimer) return;
   registerScheduler("outlook", POLL_INTERVAL_MS);
-  firstTickTimer = setTimeout(() => {
-    firstTickTimer = null;
-    recordSchedulerTick("outlook");
-    tickOnce().catch((err) =>
-      captureError(err, { tags: { scope: "outlook-scheduler.first-tick" } }),
-    );
-    intervalId = setInterval(
-      newWork(() => {
-        recordSchedulerTick("outlook");
-        tickOnce().catch((err) => captureError(err, { tags: { scope: "outlook-scheduler.tick" } }));
-      }),
-      POLL_INTERVAL_MS,
-    );
-  }, 30_000);
+  firstTickTimer = setTimeout(
+    newWork(() => {
+      firstTickTimer = null;
+      recordSchedulerTick("outlook");
+      tickOnce().catch((err) =>
+        captureError(err, { tags: { scope: "outlook-scheduler.first-tick" } }),
+      );
+      intervalId = setInterval(
+        newWork(() => {
+          recordSchedulerTick("outlook");
+          tickOnce().catch((err) =>
+            captureError(err, { tags: { scope: "outlook-scheduler.tick" } }),
+          );
+        }),
+        POLL_INTERVAL_MS,
+      );
+    }),
+    30_000,
+  );
   console.log(
     `[outlook-scheduler] started — first tick in 30s, then every ${POLL_INTERVAL_MS / 1000}s`,
   );

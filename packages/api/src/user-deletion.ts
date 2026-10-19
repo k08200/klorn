@@ -5,8 +5,10 @@
  *   - `purgeAllUserData`: the data goes, the account row stays
  *     (`DELETE /api/user/me/data`).
  *
- * Both start with the user's stored objects (`purgeUserObjects`, steps D1 and
- * D3 of docs/providers/unified-platform-plan.md), before any row goes. The user
+ * Both delete the user's stored objects (`purgeUserObjects`, steps D1 and D3 of
+ * docs/providers/unified-platform-plan.md) before any data row goes; the data
+ * wipe does it right after it records the wipe and cuts off access, so no
+ * upload can land in between. The user
  * id is the only handle on those objects, so with OBJECT_STORAGE_ENABLED on that
  * call first records a pending purge (StoragePurge, which outlives the rows),
  * then tries the bucket once. A bucket that fails no longer stops the deletion:
@@ -64,6 +66,48 @@ const FENCE_SECONDS = DATA_WIPE_FENCE_MS / 1000;
 /** "purged" when the rows are gone; "pending" when the sweep must finish the purge. */
 export type DataWipeOutcome = "purged" | "pending";
 
+/** What finishing a recorded wipe did. */
+export type FinishOutcome = "purged" | "not-pending";
+
+const RECORD_ATTEMPTS = 3;
+
+/** A deadlock (40P01) or write conflict Postgres resolved by aborting this side. */
+function isRetryableConflict(err: unknown): boolean {
+  const code = (err as { code?: unknown })?.code;
+  const message = err instanceof Error ? err.message : "";
+  return code === "P2034" || /deadlock detected|40P01/.test(message);
+}
+
+/**
+ * Lock the account row, record the wipe as pending and cut off access, in one
+ * short transaction. A writer that holds one of the grant rows and then
+ * inserts a fenced row can deadlock with it; Postgres aborts one side, so a
+ * conflict is retried.
+ */
+async function recordWipeAndRevoke(userId: string): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const requestedAt = new Date();
+      await prisma.$transaction(async (tx) => {
+        const locked = await tx.$queryRaw<
+          unknown[]
+        >`SELECT 1 FROM "User" WHERE "id" = ${userId} FOR UPDATE`;
+        // Zero rows would mean no lock, and so no serialization with the trigger.
+        if (locked.length !== 1) throw new Error("data wipe: the account row could not be locked");
+        await tx.dataWipe.upsert({
+          where: { userId },
+          create: { userId, requestedAt },
+          update: { requestedAt, purgedAt: null, fenceUntil: null, attempts: 0 },
+        });
+        await revokeUserAccess(tx as unknown as typeof db, userId);
+      }, purgeTx());
+      return;
+    } catch (err) {
+      if (attempt >= RECORD_ATTEMPTS || !isRetryableConflict(err)) throw err;
+    }
+  }
+}
+
 /**
  * Exhaustive user-data wipe that keeps the account row. See purge-user-data.ts:
  * the row list is CASA/Google "delete my data" critical and regression-tested.
@@ -75,27 +119,14 @@ export type DataWipeOutcome = "purged" | "pending";
  *      keys, credentials). From its commit on, the database rejects any insert
  *      into the account's data tables; an insert already in flight committed
  *      before it and is purged with the rest.
- *   2. The purge runs once and stamps the record purged, with the fence window.
- * If the purge fails, access is already gone and the fence holds until the
- * sweep (privacy/data-wipe-sweep.ts) finishes it, so the outcome is "pending",
- * not an error. Only a failure before step 1 committed throws.
+ *   2. The stored objects go (steps D1/D3), then the purge runs once and
+ *      stamps the record purged, with the fence window.
+ * If step 2 fails, access is already gone and the fence holds until the sweep
+ * (privacy/data-wipe-sweep.ts) finishes it, so the outcome is "pending", not
+ * an error. Only a failure before step 1 committed throws.
  */
 export async function purgeAllUserData(userId: string): Promise<DataWipeOutcome> {
-  await purgeUserObjects(userId);
-  const requestedAt = new Date();
-  await prisma.$transaction(async (tx) => {
-    const locked = await tx.$queryRaw<
-      unknown[]
-    >`SELECT 1 FROM "User" WHERE "id" = ${userId} FOR UPDATE`;
-    // Zero rows would mean no lock, and so no serialization with the trigger.
-    if (locked.length !== 1) throw new Error("data wipe: the account row could not be locked");
-    await tx.dataWipe.upsert({
-      where: { userId },
-      create: { userId, requestedAt },
-      update: { requestedAt, purgedAt: null, fenceUntil: null, attempts: 0 },
-    });
-    await revokeUserAccess(tx as unknown as typeof db, userId);
-  }, purgeTx());
+  await recordWipeAndRevoke(userId);
   rememberDataWipe(userId, { purgedAt: null, fenceUntil: null });
   try {
     await finishDataWipe(userId);
@@ -111,21 +142,33 @@ export async function purgeAllUserData(userId: string): Promise<DataWipeOutcome>
 }
 
 /**
- * Purge every data row of a recorded wipe and stamp it purged, in one
- * transaction. Idempotent; the wipe and the sweep both call it.
+ * Finish a recorded wipe: delete the stored objects, then purge every data row
+ * and stamp the record purged, in one transaction that holds the record FOR
+ * UPDATE. A wipe that is no longer pending (finished by its request, by
+ * another sweep, or already followed by new data) is left alone: purging it
+ * again would delete what the user created since. The wipe and the sweep both
+ * call it.
  */
-export async function finishDataWipe(userId: string): Promise<void> {
+export async function finishDataWipe(userId: string): Promise<FinishOutcome> {
+  await purgeUserObjects(userId);
   const stamped = await prisma.$transaction(async (tx) => {
+    const pending = await tx.$queryRaw<unknown[]>`
+      SELECT 1 FROM "DataWipe" WHERE "userId" = ${userId} AND "purgedAt" IS NULL FOR UPDATE`;
+    if (pending.length === 0) return null;
     await purgeUserData(tx as unknown as typeof db, userId);
-    return tx.$queryRaw<{ purgedAt: Date; fenceUntil: Date }[]>`
+    // clock_timestamp, not now(): the window starts when the purge is done,
+    // not when its transaction began.
+    const [row] = await tx.$queryRaw<{ purgedAt: Date; fenceUntil: Date }[]>`
       UPDATE "DataWipe"
-      SET "purgedAt" = (now() AT TIME ZONE 'UTC'),
-          "fenceUntil" = (now() AT TIME ZONE 'UTC') + make_interval(secs => ${FENCE_SECONDS}::double precision),
+      SET "purgedAt" = (clock_timestamp() AT TIME ZONE 'UTC'),
+          "fenceUntil" = (clock_timestamp() AT TIME ZONE 'UTC') + make_interval(secs => ${FENCE_SECONDS}::double precision),
           "attempts" = "attempts" + 1,
-          "updatedAt" = (now() AT TIME ZONE 'UTC')
+          "updatedAt" = (clock_timestamp() AT TIME ZONE 'UTC')
       WHERE "userId" = ${userId}
       RETURNING "purgedAt", "fenceUntil"`;
+    return row ?? null;
   }, purgeTx());
-  const row = stamped[0];
-  if (row) rememberDataWipe(userId, row);
+  if (!stamped) return "not-pending";
+  rememberDataWipe(userId, stamped);
+  return "purged";
 }

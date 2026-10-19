@@ -35,6 +35,18 @@ export function OAuthErrorBanner() {
       </div>
     );
   }
+  if (status === "wipe_in_progress") {
+    // The data wipe's fence refused the new Google grant; it lifts minutes
+    // after the wipe finishes.
+    return (
+      <div className="mb-4 rounded-xl border border-line-soft bg-surface-raised p-4" role="status">
+        <h3 className="text-sm font-semibold text-ink">{t("oauthError.wipeInProgress.title")}</h3>
+        <p className="mt-1 text-label font-normal leading-5 text-ink-mid">
+          {t("oauthError.wipeInProgress.body")}
+        </p>
+      </div>
+    );
+  }
   if (status !== "offline_access_denied") return null;
 
   return (

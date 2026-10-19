@@ -13,6 +13,7 @@
  */
 
 import * as Sentry from "@sentry/node";
+import { isDataWipeFenceError } from "./privacy/data-wipe-fence.js";
 
 const DSN = process.env.SENTRY_DSN || "";
 const ENV = process.env.NODE_ENV || "development";
@@ -70,6 +71,10 @@ export function captureError(
   context?: { tags?: Record<string, string>; extra?: Record<string, unknown> },
 ): void {
   if (!initialized) return;
+  // A write the data-wipe fence rejected is the fence working, not a fault:
+  // stale work for a wiped account fails every write it tries. The callers
+  // still log it.
+  if (isDataWipeFenceError(error)) return;
 
   const err = error instanceof Error ? error : new Error(String(error));
 

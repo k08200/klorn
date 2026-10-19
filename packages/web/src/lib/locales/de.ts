@@ -2090,6 +2090,9 @@ const de: Record<string, string> = {
     "Klorn sortiert das Rauschen, während Sie weg sind – mit dem Grund an jeder Nachricht",
   "paywall.valueProp.brief": "Ein Morgenbriefing zu allem, was eine Entscheidung braucht",
   "paywall.valueProp.learns": "Lernt Ihre Entscheidungen und wird mit der Zeit genauer",
+  "oauthError.wipeInProgress.title": "Ihre Daten wurden gerade gelöscht",
+  "oauthError.wipeInProgress.body":
+    "Klorn schließt die Löschung ab. Verbinden Sie Ihr Google-Konto in ein paar Minuten erneut.",
   "oauthError.title": "Gmail-Offlinezugriff wurde nicht gewährt",
   "oauthError.body":
     "Google hat ein kurzlebiges Token ohne die Aktualisierungsberechtigung zurückgegeben, die Klorn für die Hintergrundsynchronisierung braucht. Fast immer liegt es an einem von zwei Dingen:",

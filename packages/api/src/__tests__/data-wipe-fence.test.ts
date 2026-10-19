@@ -1,34 +1,41 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  assertFencedWriteAllowed,
   assertWorkMayWrite,
   DATA_WIPE_FENCE_MARKER,
   DataWipeFenceError,
   type DataWipeState,
   fencedWriteOwners,
   isDataWipeFenceError,
+  refreshDataWipes,
   rememberDataWipe,
-  setDataWipeReader,
+  setDataWipeSources,
 } from "../privacy/data-wipe-fence.js";
 import { runAsNewWork } from "../work-context.js";
 
 const at = (iso: string) => new Date(iso);
 
 let rows: Map<string, DataWipeState>;
-let reads: number;
+let loads: number;
+const parents = new Map<string, string>();
 
 beforeEach(() => {
   rows = new Map();
-  reads = 0;
-  setDataWipeReader(async (userId) => {
-    reads++;
-    return rows.get(userId) ?? null;
+  loads = 0;
+  parents.clear();
+  setDataWipeSources({
+    load: async () => {
+      loads++;
+      return [...rows].map(([userId, state]) => ({ userId, ...state }));
+    },
+    parentOwner: async (_parent, id) => parents.get(id) ?? null,
   });
   vi.useFakeTimers();
   vi.setSystemTime(at("2026-10-19T03:00:00Z"));
 });
 
 afterEach(() => {
-  setDataWipeReader(null);
+  setDataWipeSources({ load: null, parentOwner: null });
   vi.useRealTimers();
 });
 
@@ -51,6 +58,7 @@ describe("assertWorkMayWrite", () => {
         purgedAt: at("2026-10-19T03:05:00Z"),
         fenceUntil: at("2026-10-19T03:10:00Z"),
       });
+      await refreshDataWipes();
       vi.setSystemTime(at("2026-10-19T09:00:00Z"));
       return assertWorkMayWrite("u1");
     });
@@ -74,21 +82,65 @@ describe("assertWorkMayWrite", () => {
     await expect(assertWorkMayWrite("u1")).rejects.toBeInstanceOf(DataWipeFenceError);
   });
 
-  it("reads each account's state at most once per cache window", async () => {
+  it("reads the database only to refresh a stale snapshot, never per write", async () => {
     await runAsNewWork(() => assertWorkMayWrite("u1"));
+    await runAsNewWork(() => assertWorkMayWrite("u2"));
+    await runAsNewWork(() => assertWorkMayWrite("u3"));
+    expect(loads).toBe(1);
+    vi.setSystemTime(at("2026-10-19T03:04:01Z"));
     await runAsNewWork(() => assertWorkMayWrite("u1"));
-    expect(reads).toBe(1);
-    vi.setSystemTime(at("2026-10-19T03:00:31Z"));
-    await runAsNewWork(() => assertWorkMayWrite("u1"));
-    expect(reads).toBe(2);
+    expect(loads).toBe(2);
   });
 
-  it("sees a wipe this process recorded at once, before the cache expires", async () => {
+  it("sees a wipe this process recorded at once, before the next refresh", async () => {
     await runAsNewWork(() => assertWorkMayWrite("u1"));
     rememberDataWipe("u1", { purgedAt: null, fenceUntil: null });
     await expect(runAsNewWork(() => assertWorkMayWrite("u1"))).rejects.toBeInstanceOf(
       DataWipeFenceError,
     );
+  });
+});
+
+describe("assertFencedWriteAllowed", () => {
+  it("resolves no owner at all while no recorded wipe could reject this work", async () => {
+    const resolve = vi.fn(async () => "u1");
+    setDataWipeSources({ load: async () => [], parentOwner: resolve });
+    await runAsNewWork(() =>
+      assertFencedWriteAllowed("Message", "create", { data: { conversationId: "c1" } }),
+    );
+    expect(resolve).not.toHaveBeenCalled();
+  });
+
+  it("finds a child row's owner through its parent and rejects stale work", async () => {
+    rows.set("u1", { purgedAt: null, fenceUntil: null });
+    parents.set("c1", "u1");
+    await expect(
+      runAsNewWork(() =>
+        assertFencedWriteAllowed("Message", "create", {
+          data: { conversationId: "c1", role: "assistant", content: "old mail" },
+        }),
+      ),
+    ).rejects.toBeInstanceOf(DataWipeFenceError);
+  });
+
+  it("lets a child row through for another account", async () => {
+    rows.set("u1", { purgedAt: null, fenceUntil: null });
+    parents.set("c2", "u2");
+    await expect(
+      runAsNewWork(() =>
+        assertFencedWriteAllowed("Message", "create", { data: { conversationId: "c2" } }),
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  it("checks a direct row's owner from its arguments", async () => {
+    rows.set("u1", { purgedAt: null, fenceUntil: null });
+    await expect(
+      runAsNewWork(() => assertFencedWriteAllowed("Note", "create", { data: { userId: "u1" } })),
+    ).rejects.toBeInstanceOf(DataWipeFenceError);
+    await expect(
+      runAsNewWork(() => assertFencedWriteAllowed("Note", "create", { data: { userId: "u2" } })),
+    ).resolves.toBeUndefined();
   });
 });
 

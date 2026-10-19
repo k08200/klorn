@@ -32,7 +32,8 @@ vi.mock("../db.js", async () => {
     },
     waitlist: { deleteMany: vi.fn(async () => ({ count: 0 })) },
     dataWipe: { upsert: vi.fn(async () => ({})) },
-    $queryRaw: vi.fn(async () => []),
+    // The account-row lock, the pending-record lock and the stamp each return one row.
+    $queryRaw: vi.fn(async () => [{ purgedAt: new Date(), fenceUntil: new Date() }]),
     $transaction: vi.fn(async (work: unknown) => {
       state.order.push("rows");
       return Array.isArray(work) ? Promise.all(work) : (work as (tx: unknown) => unknown)(prisma);
@@ -107,15 +108,23 @@ describe.each([
     expect(state.order).toEqual(passes);
   });
 
-  it("stops before any row when the pending purge cannot be recorded", async () => {
+  it("deletes no data row when the pending purge cannot be recorded", async () => {
     state.db = {
       ...db,
       model: () => {
         throw new Error("database is down");
       },
     };
-    await expect(remove("user-1")).rejects.toThrow("database is down");
-    expect(state.order).toEqual([]);
+    if (name === "purgeAllUserData") {
+      // The wipe cut off access first; the rows wait for the sweep, which
+      // records the objects' purge before it deletes a row.
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      await expect(remove("user-1")).resolves.toBe("pending");
+      expect(state.order).toEqual(["rows"]);
+    } else {
+      await expect(remove("user-1")).rejects.toThrow("database is down");
+      expect(state.order).toEqual([]);
+    }
     expect(store.keys()).toHaveLength(3);
   });
 });

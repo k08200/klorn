@@ -284,10 +284,13 @@ export function startAutonomousAgent() {
 
   // First run after 30 seconds. Track the handle so stop() can cancel it
   // during the boot window (otherwise a deferred tick fires after shutdown).
-  firstRunTimer = setTimeout(() => {
-    firstRunTimer = null;
-    runAutonomousAgent();
-  }, 30_000);
+  firstRunTimer = setTimeout(
+    newWork(() => {
+      firstRunTimer = null;
+      runAutonomousAgent();
+    }),
+    30_000,
+  );
   firstRunTimer.unref?.();
 
   // Check every minute, respects per-user intervals

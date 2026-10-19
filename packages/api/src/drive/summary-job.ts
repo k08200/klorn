@@ -140,12 +140,15 @@ function tick(): void {
 export function startDriveSummaryScheduler(): void {
   if (intervalId || firstRunTimer) return;
   registerScheduler("drive-summary", DRIVE_SUMMARY_INTERVAL_MS);
-  firstRunTimer = setTimeout(() => {
-    firstRunTimer = null;
-    tick();
-    intervalId = setInterval(newWork(tick), DRIVE_SUMMARY_INTERVAL_MS);
-    intervalId.unref?.();
-  }, FIRST_SWEEP_DELAY_MS);
+  firstRunTimer = setTimeout(
+    newWork(() => {
+      firstRunTimer = null;
+      tick();
+      intervalId = setInterval(newWork(tick), DRIVE_SUMMARY_INTERVAL_MS);
+      intervalId.unref?.();
+    }),
+    FIRST_SWEEP_DELAY_MS,
+  );
   firstRunTimer.unref?.();
 }
 

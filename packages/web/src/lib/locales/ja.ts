@@ -2018,6 +2018,9 @@ const ja: Record<string, string> = {
   "paywall.valueProp.noise": "不在の間に Klorn がノイズを分類し、各メールに理由を表示します",
   "paywall.valueProp.brief": "判断が必要なことをまとめた朝のブリーフィング",
   "paywall.valueProp.learns": "あなたの判断を学習し、使うほど精度が上がる",
+  "oauthError.wipeInProgress.title": "データを初期化したばかりです",
+  "oauthError.wipeInProgress.body":
+    "Klorn が初期化を完了処理しています。数分後に Google アカウントをもう一度接続してください。",
   "oauthError.title": "Gmail のオフラインアクセスが許可されませんでした",
   "oauthError.body":
     "Google が、Klorn がバックグラウンドで同期を続けるために必要な更新権限のない短期トークンを返しました。原因はほぼ必ず次のいずれかです:",

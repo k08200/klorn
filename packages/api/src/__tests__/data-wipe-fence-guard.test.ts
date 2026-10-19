@@ -11,7 +11,11 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { FENCED_MODELS, UNFENCED_MODELS } from "../privacy/data-wipe-fence.js";
+import {
+  FENCED_MODELS,
+  PARENT_SCOPED_MODELS,
+  UNFENCED_MODELS,
+} from "../privacy/data-wipe-fence.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const srcDir = join(here, "..");
@@ -74,6 +78,35 @@ describe("the migrations fence exactly the fenced tables", () => {
     }
     expect([...triggered].sort()).toEqual([...FENCED_MODELS].sort());
   });
+
+  it("routes every parent-scoped table's trigger through the parent it names", () => {
+    const sql = readFileSync(
+      join(prismaDir, "migrations", "20261019010000_data_wipe_fence", "migration.sql"),
+      "utf8",
+    );
+    const routed = Object.fromEntries(
+      [
+        ...sql.matchAll(
+          /CREATE TRIGGER "\w+_data_wipe_fence" BEFORE INSERT ON "(\w+)" FOR EACH ROW EXECUTE FUNCTION public\.klorn_data_wipe_fence_via_parent\('(\w+)', '(\w+)'\);/g,
+        ),
+      ].map(([, table, parent, key]) => [table, { parent, key }]),
+    );
+    expect(routed).toEqual(PARENT_SCOPED_MODELS);
+  });
+
+  it("covers every model without a userId whose parent is a fenced table", () => {
+    const schema = readFileSync(join(prismaDir, "schema.prisma"), "utf8");
+    const fenced = new Set<string>(FENCED_MODELS);
+    const children = [...schema.matchAll(/^model (\w+) \{([\s\S]*?)^\}/gm)]
+      .filter(([, , body]) => !/^\s+userId\s+String/m.test(body ?? ""))
+      .filter(([, , body]) =>
+        [...(body ?? "").matchAll(/^\s+\w+\s+(\w+)\??\s+@relation\(fields:/gm)].some(([, target]) =>
+          fenced.has(target ?? ""),
+        ),
+      )
+      .map(([, name]) => name);
+    expect(children.sort()).toEqual(Object.keys(PARENT_SCOPED_MODELS).sort());
+  });
 });
 
 describe("scheduler intervals start a new work per tick", () => {
@@ -87,17 +120,26 @@ describe("scheduler intervals start a new work per tick", () => {
     expect(unwrapped).toEqual([]);
   });
 
-  it("starts works only where schedulers start, never inside a unit of work", () => {
+  it("wraps every scheduler's first run, which would otherwise carry the process start", () => {
+    const unwrapped = sourceFiles(srcDir).flatMap((file) => {
+      const text = readFileSync(file, "utf8");
+      return [...text.matchAll(/\b\w*[Ff]irst\w*Timer\s*=\s*setTimeout\((?!\s*newWork\()/g)].map(
+        (m) => `${relative(srcDir, file)}@${m.index}`,
+      );
+    });
+    expect(unwrapped).toEqual([]);
+  });
+
+  it("starts works only in files that schedule, never inside a unit of work", () => {
     // A runAsNewWork inside work would give that work a later start and let
-    // its writes past the fence. Ticks are wrapped where they are scheduled.
-    const allowed = new Set(["work-context.ts"]);
+    // its writes past the fence. Works start where ticks are scheduled.
     const offenders = sourceFiles(srcDir).flatMap((file) => {
       const name = relative(srcDir, file);
-      if (allowed.has(name)) return [];
+      if (name === "work-context.ts") return [];
       const text = readFileSync(file, "utf8");
-      const calls = [...text.matchAll(/\b(newWork|runAsNewWork)\(/g)];
-      const scheduled = [...text.matchAll(/set(?:Interval|Timeout)\(\s*newWork\(/g)];
-      return calls.length > scheduled.length ? [name] : [];
+      const starts = /\b(newWork|runAsNewWork)\(/.test(text);
+      const schedules = /setInterval\(\s*newWork\(/.test(text);
+      return starts && !schedules ? [name] : [];
     });
     expect(offenders).toEqual([]);
   });
