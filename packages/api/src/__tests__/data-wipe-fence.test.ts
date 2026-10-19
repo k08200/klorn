@@ -46,6 +46,7 @@ describe("assertWorkMayWrite", () => {
 
   it("rejects every write while the wipe is pending, whatever the work's start", async () => {
     rows.set("u1", { purgedAt: null, fenceUntil: null });
+    await refreshDataWipes();
     await expect(runAsNewWork(() => assertWorkMayWrite("u1"))).rejects.toBeInstanceOf(
       DataWipeFenceError,
     );
@@ -70,6 +71,7 @@ describe("assertWorkMayWrite", () => {
       purgedAt: at("2026-10-19T03:05:00Z"),
       fenceUntil: at("2026-10-19T03:10:00Z"),
     });
+    await refreshDataWipes();
     vi.setSystemTime(at("2026-10-19T03:11:00Z"));
     await expect(runAsNewWork(() => assertWorkMayWrite("u1"))).resolves.toBeUndefined();
   });
@@ -79,7 +81,19 @@ describe("assertWorkMayWrite", () => {
       purgedAt: at("2026-10-19T03:05:00Z"),
       fenceUntil: at("2099-01-01T00:00:00Z"),
     });
+    await refreshDataWipes();
     await expect(assertWorkMayWrite("u1")).rejects.toBeInstanceOf(DataWipeFenceError);
+  });
+
+  it("never waits on the database: a stale snapshot is refreshed in the background", async () => {
+    rows.set("u1", { purgedAt: null, fenceUntil: null });
+    // The first write finds no snapshot yet: it passes (the trigger covers a
+    // recent wipe) and starts a refresh instead of awaiting one.
+    await expect(runAsNewWork(() => assertWorkMayWrite("u1"))).resolves.toBeUndefined();
+    await vi.waitFor(() => expect(loads).toBe(1));
+    await expect(runAsNewWork(() => assertWorkMayWrite("u1"))).rejects.toBeInstanceOf(
+      DataWipeFenceError,
+    );
   });
 
   it("reads the database only to refresh a stale snapshot, never per write", async () => {
@@ -114,6 +128,7 @@ describe("assertFencedWriteAllowed", () => {
   it("finds a child row's owner through its parent and rejects stale work", async () => {
     rows.set("u1", { purgedAt: null, fenceUntil: null });
     parents.set("c1", "u1");
+    await refreshDataWipes();
     await expect(
       runAsNewWork(() =>
         assertFencedWriteAllowed("Message", "create", {
@@ -126,6 +141,7 @@ describe("assertFencedWriteAllowed", () => {
   it("lets a child row through for another account", async () => {
     rows.set("u1", { purgedAt: null, fenceUntil: null });
     parents.set("c2", "u2");
+    await refreshDataWipes();
     await expect(
       runAsNewWork(() =>
         assertFencedWriteAllowed("Message", "create", { data: { conversationId: "c2" } }),
@@ -135,6 +151,7 @@ describe("assertFencedWriteAllowed", () => {
 
   it("checks a direct row's owner from its arguments", async () => {
     rows.set("u1", { purgedAt: null, fenceUntil: null });
+    await refreshDataWipes();
     await expect(
       runAsNewWork(() => assertFencedWriteAllowed("Note", "create", { data: { userId: "u1" } })),
     ).rejects.toBeInstanceOf(DataWipeFenceError);

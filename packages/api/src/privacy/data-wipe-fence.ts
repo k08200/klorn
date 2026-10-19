@@ -49,7 +49,7 @@ export const DATA_WIPE_FENCE_MARKER = "klorn_data_wipe_fence";
 
 /** Background refresh of the snapshot of recent wipes. */
 export const FENCE_REFRESH_MS = 30_000;
-/** A snapshot older than this is refreshed on the write path, as a fallback. */
+/** A snapshot older than this is refreshed from the write path (not awaited), as a fallback. */
 const FENCE_STALE_MS = 4 * 60_000;
 
 /** Tables whose inserts the fence rejects: the account's data, and its grants. */
@@ -244,9 +244,22 @@ function blocks(state: DataWipeState, startedAt: Date): boolean {
   return state.fenceUntil !== null && startedAt < state.fenceUntil;
 }
 
+/**
+ * A stale snapshot is refreshed, but never awaited here: awaiting would put a
+ * database read on the write path (the starvation in the header). Until the
+ * refresh lands, the trigger covers any wipe from the last FENCE window.
+ */
+function refreshIfStale(): void {
+  if (loadFences && Date.now() - loadedAt > FENCE_STALE_MS) {
+    refreshDataWipes().catch((err: unknown) => {
+      console.error("[DATA-WIPE] Could not refresh the wipe snapshot:", err);
+    });
+  }
+}
+
 /** Throws DataWipeFenceError when the current work may not write for `userId`. */
 export async function assertWorkMayWrite(userId: string): Promise<void> {
-  if (loadFences && Date.now() - loadedAt > FENCE_STALE_MS) await refreshDataWipes();
+  refreshIfStale();
   const state = snapshot.get(userId);
   if (state && blocks(state, workStartedAt())) throw new DataWipeFenceError();
 }
@@ -302,7 +315,7 @@ export async function assertFencedWriteAllowed(
   if (!FENCED_OPERATIONS.has(operation)) return;
   const scoped = PARENT_SCOPED_MODELS[model];
   if (!FENCED.has(model) && !scoped) return;
-  if (loadFences && Date.now() - loadedAt > FENCE_STALE_MS) await refreshDataWipes();
+  refreshIfStale();
   if (!anyWipeBlocksThisWork()) return;
   if (!scoped) {
     for (const owner of fencedWriteOwners(model, operation, args)) await assertWorkMayWrite(owner);

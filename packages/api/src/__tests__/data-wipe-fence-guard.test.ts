@@ -109,6 +109,17 @@ describe("the migrations fence exactly the fenced tables", () => {
   });
 });
 
+describe("the app keeps the fence's snapshot fresh", () => {
+  it("starts the background refresh at boot, outside the background-agents switch", () => {
+    const index = readFileSync(join(srcDir, "index.ts"), "utf8");
+    const start = index.indexOf("startDataWipeRefresh();");
+    expect(start).toBeGreaterThan(0);
+    // Not inside an `if (!BG_DISABLED)` block: the write check needs it always.
+    const before = index.slice(Math.max(0, index.lastIndexOf("\n\n", start)), start);
+    expect(before).not.toContain("BG_DISABLED");
+  });
+});
+
 describe("scheduler intervals start a new work per tick", () => {
   it("wraps the callback of every setInterval in newWork", () => {
     const unwrapped = sourceFiles(srcDir).flatMap((file) => {

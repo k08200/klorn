@@ -775,6 +775,18 @@ try {
       });
   }
 
+  // The data-wipe fence's snapshot of recent wipes (every 30 s), which the
+  // write check reads instead of the database. Always on: the check runs on
+  // every fenced write, background agents or not.
+  import("./privacy/data-wipe-fence.js")
+    .then(({ startDataWipeRefresh }) => {
+      startDataWipeRefresh();
+    })
+    .catch((err) => {
+      console.error("[STARTUP] data-wipe snapshot refresh failed to start:", err);
+      captureError(err, { tags: { context: "startup:data-wipe-refresh" } });
+    });
+
   // Data wipes whose purge did not commit (every 10 minutes); see
   // privacy/data-wipe-sweep.ts.
   if (!BG_DISABLED) {

@@ -31,7 +31,10 @@ vi.mock("../db.js", async () => {
       findUnique: vi.fn(async () => ({ email: "user@example.com" })),
     },
     waitlist: { deleteMany: vi.fn(async () => ({ count: 0 })) },
-    dataWipe: { upsert: vi.fn(async () => ({})) },
+    dataWipe: {
+      upsert: vi.fn(async () => ({})),
+      findUnique: vi.fn(async () => ({ purgedAt: null })),
+    },
     // The account-row lock, the pending-record lock and the stamp each return one row.
     $queryRaw: vi.fn(async () => [{ purgedAt: new Date(), fenceUntil: new Date() }]),
     $transaction: vi.fn(async (work: unknown) => {

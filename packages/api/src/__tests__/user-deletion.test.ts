@@ -18,6 +18,7 @@ const prisma = vi.hoisted(() => ({
     findUnique: vi.fn(async () => ({ email: "Ann@Example.com" })),
   },
   waitlist: { deleteMany: vi.fn((arg: unknown) => ({ op: "waitlist.deleteMany", arg })) },
+  dataWipe: { findUnique: vi.fn(async () => ({ purgedAt: null as Date | null })) },
 }));
 vi.mock("../db.js", () => ({
   prisma,
@@ -230,6 +231,13 @@ describe("finishDataWipe (the sweep's retry)", () => {
   it("deletes the objects, then purges and stamps under the pending record's lock", async () => {
     await expect(finishDataWipe("user-1")).resolves.toBe("purged");
     expect(calls.order).toEqual(["storage", "database", "pending", "rows", "stamp"]);
+  });
+
+  it("does not touch the stored objects of a wipe that already finished", async () => {
+    prisma.dataWipe.findUnique.mockResolvedValueOnce({ purgedAt: new Date() });
+    await expect(finishDataWipe("user-1")).resolves.toBe("not-pending");
+    expect(purgeUserObjects).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it("leaves a wipe that is no longer pending alone, so later data survives", async () => {

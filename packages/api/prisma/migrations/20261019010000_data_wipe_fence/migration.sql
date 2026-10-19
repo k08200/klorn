@@ -100,6 +100,29 @@ BEGIN
 END;
 $fence$;
 
+-- The functions run only as triggers. SECURITY DEFINER makes them callable by
+-- anyone with EXECUTE, and PUBLIC holds EXECUTE by default; on Supabase that
+-- would publish klorn_data_wipe_check as an anon RPC (a wipe-state oracle that
+-- takes locks). Firing a trigger checks no EXECUTE privilege, and the
+-- functions call the check as its owner, so revoking breaks nothing
+-- (20261010020000 left pg_trgm's as the only callable functions in public).
+REVOKE EXECUTE ON FUNCTION public.klorn_data_wipe_check(text, text) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.klorn_data_wipe_fence() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.klorn_data_wipe_fence_via_parent() FROM PUBLIC;
+DO $revoke$
+DECLARE
+  data_api_role text;
+BEGIN
+  FOREACH data_api_role IN ARRAY ARRAY['anon', 'authenticated'] LOOP
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = data_api_role) THEN
+      EXECUTE format('REVOKE EXECUTE ON FUNCTION public.klorn_data_wipe_check(text, text) FROM %I', data_api_role);
+      EXECUTE format('REVOKE EXECUTE ON FUNCTION public.klorn_data_wipe_fence() FROM %I', data_api_role);
+      EXECUTE format('REVOKE EXECUTE ON FUNCTION public.klorn_data_wipe_fence_via_parent() FROM %I', data_api_role);
+    END IF;
+  END LOOP;
+END;
+$revoke$;
+
 -- One per table in FENCED_MODELS (a guard test keeps the two lists equal).
 CREATE TRIGGER "UserToken_data_wipe_fence" BEFORE INSERT ON "UserToken" FOR EACH ROW EXECUTE FUNCTION public.klorn_data_wipe_fence();
 CREATE TRIGGER "LinkedInboxAccount_data_wipe_fence" BEFORE INSERT ON "LinkedInboxAccount" FOR EACH ROW EXECUTE FUNCTION public.klorn_data_wipe_fence();

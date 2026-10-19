@@ -150,6 +150,13 @@ export async function purgeAllUserData(userId: string): Promise<DataWipeOutcome>
  * call it.
  */
 export async function finishDataWipe(userId: string): Promise<FinishOutcome> {
+  // Checked before the bucket too: purging a finished wipe's objects would
+  // delete what the user stored since. Checked again under the lock below.
+  const record = await prisma.dataWipe.findUnique({
+    where: { userId },
+    select: { purgedAt: true },
+  });
+  if (!record || record.purgedAt !== null) return "not-pending";
   await purgeUserObjects(userId);
   const stamped = await prisma.$transaction(async (tx) => {
     const pending = await tx.$queryRaw<unknown[]>`
