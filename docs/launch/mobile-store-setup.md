@@ -6,7 +6,14 @@ Do it in this order; each step says what to paste where. When a step is done,
 the `Mobile Release` workflow picks it up on the next `mobile-v*` tag.
 
 Where secrets go: GitHub → k08200/klorn → Settings → Secrets and variables →
-Actions → **New repository secret**. Names must match exactly.
+Actions → **New repository secret**. Names must match exactly. Server
+settings go to Render → `klorn-api` → Environment.
+
+Before you start (some take days): App Store Connect → **Agreements, Tax, and
+Banking** → sign the **Paid Apps** agreement and fill in banking and tax
+(subscriptions cannot be sold or tested without it). A personal Google Play
+account must run a closed test with 12 testers for 14 days before production —
+start that as soon as the first build is on a track.
 
 ---
 
@@ -46,15 +53,22 @@ developer.apple.com → Keys → `+` → enable **Apple Push Notifications servi
 `APNS_KEY_P8` (file contents), `APNS_KEY_ID`, `APNS_TEAM_ID`,
 `APNS_BUNDLE_ID=ai.klorn.app`, `APNS_PRODUCTION=true`.
 
-### 4. Store listing (~1 h, can wait until the first TestFlight build works)
+### 4. Sign in with Apple on the server (~15 min, required for review)
+
+Apple Guideline 4.8: an app that offers Google sign-in must offer Sign in with
+Apple. Follow `docs/launch/social-login-activation.md` (Services ID, key,
+Return URL), then on Render set `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`,
+`APPLE_KEY_ID`, `APPLE_PRIVATE_KEY`, `APPLE_REDIRECT_URI` and
+`APPLE_LOGIN_ENABLED=true`. The app shows the Apple button by itself.
+
+### 5. Store listing (~1 h, can wait until the first TestFlight build works)
 
 App Store Connect → the app → fill from `apps/mobile/store-pack/metadata.md`,
-privacy answers from `apps/mobile/store-pack/privacy-labels.md`, store-size
-screenshots rendered by `npx playwright test --config
-store-pack/capture/playwright.store.config.ts` in `apps/mobile` (sizes and
-captions in `store-pack/screenshots-plan.md`; the CI `mobile-screenshots`
-artifact is device-scale review shots, not upload sizes), demo account per `apps/mobile/store-pack/review-notes.md`. Then **Add for
-Review** → **Submit**.
+privacy answers from `apps/mobile/store-pack/privacy-labels.md`, demo account
+per `apps/mobile/store-pack/review-notes.md` §1. Screenshots: GitHub → Actions →
+**Mobile Store Assets** → Run workflow → download `klorn-store-assets`
+(`ios-6.9/`, `ipad-13/`, each in `ko/` and `en/`). Then **Add for Review** →
+**Submit**.
 
 ---
 
@@ -100,6 +114,13 @@ run (or run `./gradlew bundleRelease` locally with the keystore) and upload the
 `.aab` once in Play Console → Testing → Internal testing → Create release.
 Every later release is uploaded by the workflow.
 
+Then Play Console → Setup → **App integrity** → copy the **App signing key
+certificate SHA-256** and hand it over (or add it to
+`website/.well-known/assetlinks.json`), so verified App Links work in the
+release build. Store listing graphics are in the same `klorn-store-assets`
+artifact: `play-phone/`, `play-tablet-7/`, `play-tablet-10/` (`ko/`, `en/`),
+`play/feature-graphic-{ko,en}.jpg`, `play/icon-512.png`.
+
 ### 5. Push (FCM) for Android
 
 Firebase console → project → add Android app `ai.klorn.app` → download
@@ -117,6 +138,17 @@ checking on one real Android phone that a mail push shows the three buttons
 with the app closed.
 
 ---
+
+## Subscriptions (both platforms)
+
+1. App Store Connect → the app → Subscriptions → a group with the Pro
+   product(s). Play Console → Monetize → Subscriptions → the matching
+   subscription and base plan.
+2. RevenueCat → import both products, one entitlement, and a **current
+   offering** whose first package is what "Subscribe" buys.
+3. RevenueCat → Integrations → Webhooks → URL
+   `https://api.klorn.ai/api/webhook/revenuecat`, Authorization header = a long
+   random value; the same value on Render as `REVENUECAT_WEBHOOK_AUTH`.
 
 ## In-app purchase keys (both platforms) → 2 GitHub secrets
 
@@ -137,6 +169,13 @@ the App Privacy / Data safety answers for that build
 (`apps/mobile/store-pack/privacy-labels.md`).
 
 ---
+
+## Server switches (Render → `klorn-api` → Environment)
+
+| Variable | When |
+|---|---|
+| `MANUAL_SEND_RECEIPTS_ENABLED=true` | Now. Mail sent from the apps and the web leaves a SendReceipt (payload hash); the table and its migration are already in production. |
+| `ANDROID_DATA_PUSH_ENABLED=true` | After one real Android phone shows the three notification buttons with the app closed (Android §5). |
 
 ## Releasing
 
