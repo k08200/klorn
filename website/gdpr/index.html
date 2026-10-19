@@ -50,7 +50,7 @@
       <tr><th>Who is the controller?</th><td class="us">For an individual account, Klorn. If your employer deployed Klorn for you, they are the controller and Klorn is the processor</td></tr>
       <tr><th>What is processed</th><td class="us">Account details, Google OAuth tokens, Gmail metadata and content, calendar events, and the classifications and summaries derived from them</td></tr>
       <tr><th>Why</th><td class="us">To perform the service you asked for — sorting mail, showing the reason, and preparing actions you approve</td></tr>
-      <tr><th>Where it is stored</th><td class="us">Database in <strong>Seoul</strong> (Supabase, ap-northeast-2); API in <strong>Singapore</strong> (Render); web app on Vercel's edge</td></tr>
+      <tr><th>Where it is stored</th><td class="us">Database in <strong>Seoul</strong> (Supabase, ap-northeast-2); API in <strong>Singapore</strong> (Render); web app on Vercel's edge; encrypted nightly backups on GitHub, expiring after 14 days</td></tr>
       <tr><th>Automated decision-making</th><td class="us">Classification into lanes is automated. It has <strong>no legal or similarly significant effect</strong>: it changes how loudly a message reaches you, and you can move any message to another lane</td></tr>
       <tr><th>Training on your mail</th><td class="us"><strong>No.</strong> Your mail is not used to train models. Corrections tune your own account's behaviour</td></tr>
       <tr><th>Retention</th><td class="us">Operational logs are swept on a fixed schedule — 30, 90 or 180 days depending on the table. Account deletion removes the account data</td></tr>

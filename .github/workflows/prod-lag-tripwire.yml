@@ -35,6 +35,8 @@ on:
 
 permissions:
   contents: read
+  # backup-freshness reads the DB backup workflow's runs.
+  actions: read
 
 concurrency:
   group: prod-lag-tripwire
@@ -101,3 +103,29 @@ jobs:
             exit 1
           fi
           echo "OK: within threshold (${LAG_HOURS}h) — a deploy is likely in flight."
+
+  # A scheduled run that GitHub drops or delays sends no failure email, so the
+  # nightly backup (db-backup.yml) can stop without anyone hearing. Until the
+  # first backup succeeds, that job's own nightly failures are the alarm.
+  backup-freshness:
+    name: Last successful DB backup is recent
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      MAX_AGE_HOURS: 36
+    steps:
+      - name: Check the last successful backup
+        run: |
+          set -euo pipefail
+          last=$(gh run list --repo "${{ github.repository }}" --workflow db-backup.yml \
+            --status success --limit 1 --json createdAt --jq '.[0].createdAt // empty')
+          if [ -z "$last" ]; then
+            echo "::notice::No successful DB backup yet; db-backup.yml reports its own failures."
+            exit 0
+          fi
+          age_hours=$(( ( $(date -u +%s) - $(date -u -d "$last" +%s) ) / 3600 ))
+          if [ "$age_hours" -gt "$MAX_AGE_HOURS" ]; then
+            echo "::error::The last successful DB backup is ${age_hours}h old (limit ${MAX_AGE_HOURS}h)."
+            exit 1
+          fi
+          echo "Last successful DB backup: ${age_hours}h ago."

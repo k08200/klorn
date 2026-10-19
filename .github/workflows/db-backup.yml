@@ -11,12 +11,15 @@ name: DB backup
 #      and an artifact kept BACKUP_RETENTION_DAYS days.
 #
 # The repository is public: any signed-in GitHub user can download its
-# artifacts and read its logs. Only the ciphertext is uploaded, and nothing
-# from the data (no row, no count) is printed. The private key never touches
-# GitHub. Restore runbook: docs/launch/db-credential-runbook.md ("Backup").
+# artifacts and read its logs. Only the ciphertext is uploaded. The database
+# tools' stderr goes to files that are never printed, because a server error's
+# DETAIL or CONTEXT line can quote row data and a libpq error can quote part of
+# a malformed URL; a failed step prints a fixed message instead. The private
+# key never touches GitHub. Restore runbook: docs/launch/db-credential-runbook.md.
 #
 # Until the BACKUP_DATABASE_URL secret and the BACKUP_AGE_RECIPIENT variable are
-# set, the job fails, so a night without a backup is never silent.
+# set, the job fails. A run GitHub drops or delays sends no email, so the prod
+# lag tripwire also fails when the last successful backup is too old.
 
 on:
   schedule:
@@ -25,6 +28,11 @@ on:
 
 permissions:
   contents: read
+
+defaults:
+  run:
+    # Explicit bash: GitHub then runs it with -eo pipefail.
+    shell: bash
 
 concurrency:
   group: db-backup
@@ -35,6 +43,8 @@ env:
 
 jobs:
   backup:
+    # Production credentials: only the default branch's copy of this file runs.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     services:
@@ -51,11 +61,12 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
       AGE_RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT }}
       RESTORE_URL: postgresql://postgres:restore@localhost:5432/restore
     steps:
       - name: Require the backup secret and key
+        env:
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
         run: |
           if [ -z "$DATABASE_URL" ] || [ -z "$AGE_RECIPIENT" ]; then
             echo "::error::No backup taken: set the BACKUP_DATABASE_URL secret (session pooler URL, port 5432) and the BACKUP_AGE_RECIPIENT variable (age public key)."
@@ -75,25 +86,35 @@ jobs:
           echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
 
       - name: Dump the public schema
+        env:
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
         run: |
           pg_dump --version
           pg_dump "$DATABASE_URL" --schema=public --extension=pg_trgm \
-            --no-owner --no-privileges --format=custom --file=klorn.dump
-          test -s klorn.dump
+            --no-owner --no-privileges --format=custom --file=klorn.dump 2> dump.err \
+            || { echo "::error::pg_dump failed (its output is withheld from this public log)."; exit 1; }
+          test -s klorn.dump || { echo "::error::pg_dump wrote an empty file."; exit 1; }
 
       - name: Restore into a throwaway Postgres 17
+        env:
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
         run: |
           # A schema-only dump re-creates "public", which every database already
           # has; leave that one entry out and stop on any other error.
-          pg_restore --list klorn.dump | grep -v -E '^[0-9]+; [0-9]+ [0-9]+ SCHEMA - public ' > restore.toc
+          pg_restore --list klorn.dump 2> restore.err | grep -v -E '^[0-9]+; [0-9]+ [0-9]+ SCHEMA - public ' > restore.toc \
+            || { echo "::error::Could not read the dump's table of contents."; exit 1; }
           pg_restore --no-owner --no-privileges --exit-on-error --use-list=restore.toc \
-            --dbname="$RESTORE_URL" klorn.dump
+            --dbname="$RESTORE_URL" klorn.dump 2>> restore.err \
+            || { echo "::error::The dump did not restore (pg_restore output withheld from this public log)."; exit 1; }
           # Shape checks only: the log is public, so print verdicts, never counts.
-          live_tables=$(psql "$DATABASE_URL" -Atc "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'")
-          restored_tables=$(psql "$RESTORE_URL" -Atc "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'")
-          live_migrations=$(psql "$DATABASE_URL" -Atc 'SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NOT NULL')
-          restored_migrations=$(psql "$RESTORE_URL" -Atc 'SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NOT NULL')
-          has_users=$(psql "$RESTORE_URL" -Atc 'SELECT EXISTS (SELECT 1 FROM "User")')
+          # Runs inside $(...): the message goes to stderr (the log), and the
+          # failed substitution fails the assignment, which ends the step.
+          q() { psql "$1" -Atc "$2" 2>> restore.err || { echo "::error::A restore check query failed." >&2; return 1; }; }
+          live_tables=$(q "$DATABASE_URL" "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'")
+          restored_tables=$(q "$RESTORE_URL" "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'")
+          live_migrations=$(q "$DATABASE_URL" 'SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NOT NULL')
+          restored_migrations=$(q "$RESTORE_URL" 'SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NOT NULL')
+          has_users=$(q "$RESTORE_URL" 'SELECT EXISTS (SELECT 1 FROM "User")')
           [ "$live_tables" = "$restored_tables" ] || { echo "::error::Restored table set differs from production."; exit 1; }
           [ "$live_migrations" = "$restored_migrations" ] || { echo "::error::Restored migration history differs from production."; exit 1; }
           [ "$has_users" = "t" ] || { echo "::error::Restored database has no account rows."; exit 1; }
@@ -102,13 +123,14 @@ jobs:
       - name: Encrypt
         run: |
           name="klorn-db-$(date -u +%Y-%m-%dT%H%MZ).dump.age"
-          age --encrypt --recipient "$AGE_RECIPIENT" --output "$name" klorn.dump
-          rm -f klorn.dump restore.toc
+          age --encrypt --recipient "$AGE_RECIPIENT" --output "$name" klorn.dump 2> age.err \
+            || { echo "::error::age could not encrypt the dump."; exit 1; }
+          rm -f klorn.dump restore.toc dump.err restore.err age.err
           test -s "$name"
           echo "BACKUP_FILE=$name" >> "$GITHUB_ENV"
 
       - name: Upload the encrypted backup
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ env.BACKUP_FILE }}
           path: ${{ env.BACKUP_FILE }}

@@ -95,6 +95,21 @@ pg_restore --no-owner --no-privileges --exit-on-error --use-list=restore.toc --d
 The decrypted dump is real user data: mail bodies, encrypted tokens and
 addresses. Keep it out of the repo directory and delete it once you are done.
 
+**Keep the key honest:**
+
+- **Decrypt drill.** Once a quarter, run the restore above into a throwaway
+  database. A success email from the workflow only proves the dump was
+  encrypted to *some* key; the drill proves you hold the matching one.
+- **Rotation.** The ciphertext sits in a public repository's artifacts, so
+  anyone signed in can keep a copy. If the private key ever leaks, every copy
+  someone saved is readable. Generate a new pair with `age-keygen`, set the
+  new public key as `BACKUP_AGE_RECIPIENT`, and treat backups older than the
+  rotation as exposed.
+- **Narrower role (optional).** The job only reads. A dedicated role with
+  `SELECT` on the public schema and `BYPASSRLS` would replace the
+  full-privilege URL. Every table has RLS enabled (docs/rls-rollout.md), so
+  without `BYPASSRLS` the dump comes back empty.
+
 ### Manual dump (fallback)
 
 Use this when the workflow cannot run. Every detail below cost a failed

@@ -378,15 +378,16 @@ export default function PrivacyPage() {
               with analytics or advertising services. Klorn&apos;s infrastructure sub-processors are
               Render (API hosting), Vercel (web application hosting), Supabase (managed Postgres
               database, hosted in Seoul, ap-northeast-2), and GitHub (storage of the nightly
-              database backups, which are encrypted before they leave the backup job; the key to
-              read them is never stored on GitHub); they store and transmit data solely to operate
-              Klorn. Paddle acts as merchant of record for paid subscriptions and receives only
-              billing details — never mail content. Resend delivers Klorn&apos;s own transactional
-              email (address verification, password reset, invitations) and therefore receives your
-              address and the contents of those messages — never your mailbox. Apple (APNs) and
-              Google (Firebase Cloud Messaging) deliver push notifications to devices you register.
-              RevenueCat manages subscriptions bought in the mobile app and receives only purchase
-              records and your Klorn account id.
+              database backups: the database is copied to a temporary GitHub runner, encrypted
+              there, and only the encrypted file is kept; the key to read it is never stored on
+              GitHub); they store and transmit data solely to operate Klorn. Paddle acts as merchant
+              of record for paid subscriptions and receives only billing details — never mail
+              content. Resend delivers Klorn&apos;s own transactional email (address verification,
+              password reset, invitations) and therefore receives your address and the contents of
+              those messages — never your mailbox. Apple (APNs) and Google (Firebase Cloud
+              Messaging) deliver push notifications to devices you register. RevenueCat manages
+              subscriptions bought in the mobile app and receives only purchase records and your
+              Klorn account id.
             </p>
             <p>
               Because Klorn is a beta product, avoid connecting accounts that contain information
