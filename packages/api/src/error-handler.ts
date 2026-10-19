@@ -1,4 +1,5 @@
 import type { FastifyError, FastifyReply, FastifyRequest } from "fastify";
+import { DataWipeFenceError, isDataWipeFenceError } from "./privacy/data-wipe-fence.js";
 import { captureError } from "./sentry.js";
 
 /**
@@ -12,9 +13,22 @@ import { captureError } from "./sentry.js";
  *     rate-limit, and explicit `reply.code(4xx)` carry safe, intentional
  *     messages the caller needs;
  *   - logs SERVER (5xx) errors in full (+ Sentry) but replaces the response
- *     body with a generic message.
+ *     body with a generic message;
+ *   - answers a write the data-wipe fence rejected with 409
+ *     DATA_WIPE_IN_PROGRESS.
  */
 export function handleError(error: FastifyError, request: FastifyRequest, reply: FastifyReply) {
+  // The data-wipe fence rejected a write (the app check or the database
+  // trigger): the account's data wipe is finishing or the request began before
+  // it. A plain 409 the user can act on, never the trigger's text.
+  if (isDataWipeFenceError(error)) {
+    const fence = new DataWipeFenceError();
+    return reply.code(fence.statusCode).send({
+      error: "Your data was just wiped. Try again in a few minutes.",
+      code: fence.code,
+    });
+  }
+
   const status = error.statusCode ?? 500;
 
   if (status < 500) {

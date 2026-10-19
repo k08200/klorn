@@ -20,6 +20,7 @@ import {
   registerScheduler,
 } from "../scheduler-heartbeat.js";
 import { captureError } from "../sentry.js";
+import { newWork } from "../work-context.js";
 import { isUserIdleForAgent } from "./agent-idle.js";
 import { type AgentMode, normalizeAgentMode } from "./agent-mode.js";
 import { runAgentForUser } from "./autonomous-agent.js";
@@ -290,7 +291,7 @@ export function startAutonomousAgent() {
   firstRunTimer.unref?.();
 
   // Check every minute, respects per-user intervals
-  intervalId = setInterval(runAutonomousAgent, CHECK_INTERVAL_MS);
+  intervalId = setInterval(newWork(runAutonomousAgent), CHECK_INTERVAL_MS);
 }
 
 /** Stop the autonomous agent */

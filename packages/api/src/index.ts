@@ -90,6 +90,7 @@ import { checkStoragePurgesAtStartup } from "./storage/purge-sweep.js";
 import { checkObjectStorageAtStartup } from "./storage/runtime.js";
 import { purgeAllUserData } from "./user-deletion.js";
 import { getClientCount, initWebSocket } from "./websocket.js";
+import { registerWorkContextHook } from "./work-context.js";
 
 // Initialize Sentry FIRST so every captureError() across the app actually
 // reports. Without this call `initialized` stays false and every captureError
@@ -120,6 +121,9 @@ attachPerfMonitor(app);
 // Global error handler: never reflect a 5xx's raw message to the client
 // (Fastify's default does). 4xx pass through; 5xx are logged + generic.
 app.setErrorHandler(handleError);
+// Every request is a unit of work with its own start time; the data-wipe fence
+// rejects writes from work that began before the account's wipe finished.
+registerWorkContextHook(app);
 
 // Security response headers (X-Content-Type-Options: nosniff, HSTS,
 // Referrer-Policy, frameguard, etc.). CSP is disabled: this is a JSON API plus
@@ -363,6 +367,7 @@ await app.register(phoneRoutes, { prefix: "/api/phone" });
 // answer-ready the moment the listener binds.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { newWork } from "./work-context.js";
 
 const PKG_VERSION: string | null = (() => {
   try {
@@ -473,10 +478,13 @@ const WIPE_DATA_ROUTE = {
 
 app.delete("/api/user/me/data", WIPE_DATA_ROUTE, async (request, reply) => {
   const userId = getUserId(request);
-  // Exhaustive user-data wipe (keeps the account row): stored objects first,
-  // then access, then every row, then a final sweep. See user-deletion.ts.
-  await purgeAllUserData(userId);
-  return reply.code(204).send();
+  // Exhaustive user-data wipe (keeps the account row), fenced against work
+  // already running for the user. See user-deletion.ts. 202: access is gone and
+  // the purge did not commit yet; the data-wipe sweep finishes it.
+  const outcome = await purgeAllUserData(userId);
+  return outcome === "purged"
+    ? reply.code(204).send()
+    : reply.code(202).send({ status: "pending" });
 });
 
 app.get("/api/notion/status", async () => ({
@@ -767,6 +775,19 @@ try {
       });
   }
 
+  // Data wipes whose purge did not commit (every 10 minutes); see
+  // privacy/data-wipe-sweep.ts.
+  if (!BG_DISABLED) {
+    import("./privacy/data-wipe-sweep.js")
+      .then(({ startDataWipeSweep }) => {
+        startDataWipeSweep();
+      })
+      .catch((err) => {
+        console.error("[STARTUP] data-wipe sweep failed to start:", err);
+        captureError(err, { tags: { context: "startup:data-wipe" } });
+      });
+  }
+
   // Drive file summaries (step D4; every 5 minutes). While DRIVE_SUMMARIES_ENABLED
   // or DRIVE_ENABLED is off a sweep reads nothing and runs nothing.
   if (!BG_DISABLED) {
@@ -797,9 +818,12 @@ try {
   const RENDER_URL = process.env.RENDER_EXTERNAL_URL;
   if (RENDER_URL) {
     const KEEP_ALIVE_MS = 10 * 60 * 1000; // every 10 minutes
-    setInterval(() => {
-      fetch(`${RENDER_URL}/api/health`).catch(() => {});
-    }, KEEP_ALIVE_MS);
+    setInterval(
+      newWork(() => {
+        fetch(`${RENDER_URL}/api/health`).catch(() => {});
+      }),
+      KEEP_ALIVE_MS,
+    );
   }
 } catch (err) {
   // Say WHY before dying. This block used to swallow the error and exit

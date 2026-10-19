@@ -31,6 +31,8 @@ vi.mock("../db.js", async () => {
       findUnique: vi.fn(async () => ({ email: "user@example.com" })),
     },
     waitlist: { deleteMany: vi.fn(async () => ({ count: 0 })) },
+    dataWipe: { upsert: vi.fn(async () => ({})) },
+    $queryRaw: vi.fn(async () => []),
     $transaction: vi.fn(async (work: unknown) => {
       state.order.push("rows");
       return Array.isArray(work) ? Promise.all(work) : (work as (tx: unknown) => unknown)(prisma);
@@ -82,14 +84,16 @@ describe.each([
   ["deleteUserAndAllData", deleteUserAndAllData],
   ["purgeAllUserData", purgeAllUserData],
 ])("%s with object storage on", (name, remove) => {
-  // The data wipe cuts off access, purges, then sweeps once more; account
+  // The data wipe records the wipe and cuts off access, then purges; account
   // deletion is one transaction.
-  const passes = name === "purgeAllUserData" ? ["rows", "rows", "rows"] : ["rows"];
+  const passes = name === "purgeAllUserData" ? ["rows", "rows"] : ["rows"];
   it("a failing store leaves a pending purge, and the rows are gone anyway", async () => {
     vi.spyOn(store, "deleteByPrefix").mockRejectedValue(
       new StorageError("unreachable", "object storage did not answer (TimeoutError)"),
     );
-    await expect(remove("user-1")).resolves.toBeUndefined();
+    await expect(remove("user-1")).resolves.toBe(
+      name === "purgeAllUserData" ? "purged" : undefined,
+    );
     expect(state.order).toEqual(passes);
     expect(pending()).toEqual(["user-1"]);
     expect(db.tables.storagePurge?.[0]).toMatchObject({ attempts: 1, lastError: "unreachable" });

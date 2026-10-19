@@ -147,6 +147,7 @@ describe("purgeUserData covers every user-scoped model (schema-driven guard)", (
     userIdentity: "sign-in methods: deleting them locks the user out of the kept account",
     storagePurge: "the durable queue that deletes the user's stored objects: must survive",
     apiKey: "revoked (updateMany), never deleted, so audit rows keep their key",
+    dataWipe: "the data-wipe fence's record: it must outlive the purge it describes",
   };
 
   it("deletes or deliberately keeps every model that has a userId", async () => {

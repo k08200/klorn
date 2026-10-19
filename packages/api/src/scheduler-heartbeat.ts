@@ -36,6 +36,7 @@ export const EXPECTED_SCHEDULERS = [
   "storage-purge",
   "drive-summary",
   "drive-google-refresh",
+  "data-wipe",
 ] as const;
 
 export type SchedulerName = (typeof EXPECTED_SCHEDULERS)[number];

@@ -117,6 +117,7 @@ model User {
   driveFileSummaries        DriveFileSummary[]
   driveSummaryUsage         DriveSummaryUsage[]
   automationConfig          AutomationConfig?
+  dataWipe                  DataWipe?
   agentLogs                 AgentLog[]
   notifications             Notification[]
   pushSubscriptions         PushSubscription[]
@@ -949,6 +950,28 @@ model DriveSummaryUsage {
   @@id([userId, dayKey])
   // The job's prune of past days.
   @@index([dayKey])
+}
+
+// The data wipe of an account that keeps the account (DELETE /api/user/me/data;
+// privacy/data-wipe-fence.ts). While `purgedAt` is null the wipe is pending;
+// after it, inserts into the account's data tables stay rejected until
+// `fenceUntil`, and the app rejects writes from any work that began before
+// `fenceUntil`. The row stays with the account (one per user, rewritten by the
+// next wipe) and goes with it when the account is deleted.
+model DataWipe {
+  userId      String    @id
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requestedAt DateTime
+  // Null while the purge has not committed; the sweep finishes such a wipe.
+  purgedAt    DateTime?
+  // Set when the purge commits: purgedAt plus the fence window.
+  fenceUntil  DateTime?
+  attempts    Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // The sweep's pending query.
+  @@index([purgedAt])
 }
 
 // The objects of an account still to be deleted from object storage (step D3 of

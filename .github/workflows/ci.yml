@@ -152,6 +152,22 @@ jobs:
     runs-on: ubuntu-latest
     needs: scope
     if: needs.scope.outputs.code == 'true'
+    # A real Postgres (production's major version) for the *-pg.test.ts suites:
+    # the data-wipe fence's lock ordering and the attachment upserts cannot be
+    # proven against a mock.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: klorn_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -165,6 +181,14 @@ jobs:
         run: cd packages/api && pnpm exec prisma generate
       - name: Run tests
         run: cd packages/api && pnpm exec vitest run
+      - name: Run Postgres integration tests (every migration applied)
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/klorn_test
+          KLORN_TEST_PG_URL: postgresql://postgres:postgres@localhost:5432/klorn_test
+        run: |
+          cd packages/api
+          pnpm exec prisma migrate deploy
+          pnpm exec vitest run pg.test.ts
 
   build:
     name: Build

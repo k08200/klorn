@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { newWork } from "../work-context.js";
 
 /**
  * Parked OAuth authorization codes of account-link flows.
@@ -111,7 +112,7 @@ function sweepExpired(): void {
 
 function ensureSweep(): void {
   if (sweepTimer) return;
-  sweepTimer = setInterval(sweepExpired, PENDING_LINK_SWEEP_MS);
+  sweepTimer = setInterval(newWork(sweepExpired), PENDING_LINK_SWEEP_MS);
   sweepTimer.unref?.();
 }
 

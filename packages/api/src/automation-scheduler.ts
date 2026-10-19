@@ -102,6 +102,7 @@ import {
 } from "./time-zone.js";
 import { pushNotification } from "./websocket.js";
 import { withTimeout } from "./with-timeout.js";
+import { newWork } from "./work-context.js";
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
 // Self-overlap guard: true while a tick is mid-flight. The pg advisory lock is
@@ -1990,7 +1991,7 @@ export function startAutomationScheduler() {
   runAutomations();
 
   // Then check every minute
-  intervalId = setInterval(runAutomations, CHECK_INTERVAL_MS);
+  intervalId = setInterval(newWork(runAutomations), CHECK_INTERVAL_MS);
 }
 
 /** Stop the automation scheduler */

@@ -56,3 +56,40 @@ describe("handleError — global Fastify error handler", () => {
     await app.close();
   });
 });
+
+describe("handleError — the data-wipe fence", () => {
+  const { DataWipeFenceError, DATA_WIPE_FENCE_MARKER } = await import(
+    "../privacy/data-wipe-fence.js"
+  );
+
+  async function appThrowing(err: unknown) {
+    const app = Fastify();
+    app.setErrorHandler(handleError);
+    app.get("/write", async () => {
+      throw err;
+    });
+    return app;
+  }
+
+  it("answers 409 DATA_WIPE_IN_PROGRESS for the app check's rejection", async () => {
+    const app = await appThrowing(new DataWipeFenceError());
+    const res = await app.inject({ method: "GET", url: "/write" });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ code: "DATA_WIPE_IN_PROGRESS" });
+    await app.close();
+  });
+
+  it("answers the same for the trigger's rejection, never echoing its text", async () => {
+    const app = await appThrowing(
+      new Error(
+        `Invalid prisma.note.create(): ERROR: ${DATA_WIPE_FENCE_MARKER}: insert into Note rejected`,
+      ),
+    );
+    const res = await app.inject({ method: "GET", url: "/write" });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("DATA_WIPE_IN_PROGRESS");
+    expect(res.body).not.toContain(DATA_WIPE_FENCE_MARKER);
+    expect(res.body).not.toContain("Note");
+    await app.close();
+  });
+});
