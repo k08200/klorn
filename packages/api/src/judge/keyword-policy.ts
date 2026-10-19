@@ -251,7 +251,8 @@ const MEET_LINK_RE = /meet\.google\.com\/|zoom\.us\/j\/|teams\.microsoft\.com\/l
 
 /// A calendar system's invite subject: "Invitation: Board sync @ Tue Oct 27…",
 /// "Updated invitation: …". Counts even from an automated sender.
-const CALENDAR_INVITE_SUBJECT_RE = /^(?:(?:re|fwd?):\s*)?(?:updated |new )?invitation:[^@]{1,200}@/i;
+const CALENDAR_INVITE_SUBJECT_RE =
+  /^(?:(?:re|fwd?):\s*)?(?:updated |new )?invitation:[^@]{1,200}@/i;
 /// Gmail tabs that never hold a meeting someone is asking you to attend.
 const BULK_CATEGORY_LABELS = new Set(["CATEGORY_SOCIAL", "CATEGORY_PROMOTIONS"]);
 /// System accounts that send "X invited you to <workspace>" — broader than
