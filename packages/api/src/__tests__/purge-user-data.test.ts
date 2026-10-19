@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { purgeUserData } from "../purge-user-data.js";
+import { purgeUserData, revokeUserAccess } from "../purge-user-data.js";
 
 function makeTxSpy() {
   const called = new Set<string>();
@@ -94,6 +94,49 @@ describe("purgeUserData", () => {
         (where.conversation as { userId?: string } | undefined)?.userId === "u-42";
       expect(direct || viaConversation).toBe(true);
     }
+  });
+});
+
+describe("revokeUserAccess (what lets a sync, a job or an agent act for the user)", () => {
+  it("deletes the grants and the automation config, and nothing else", async () => {
+    const { tx, called, scopes } = makeTxSpy();
+    await revokeUserAccess(tx as never, "u-9");
+
+    expect([...called].sort()).toEqual([
+      "automationConfig",
+      "linkedCalendarAccount",
+      "linkedDriveAccount",
+      "linkedInboxAccount",
+      "userToken",
+    ]);
+    for (const scope of scopes) expect(scope).toEqual({ where: { userId: "u-9" } });
+  });
+
+  it("revokes the API keys and clears the credentials on the account row", async () => {
+    const { tx, updates } = makeTxSpy();
+    await revokeUserAccess(tx as never, "u-9");
+
+    expect(updates.map((u) => u.model)).toEqual(["apiKey", "user"]);
+    expect(updates[0]?.arg.where).toEqual({ userId: "u-9", revokedAt: null });
+    expect(updates[1]?.arg.where).toEqual({ id: "u-9" });
+    expect(updates[1]?.arg.data).toMatchObject({
+      naverImapPasswordCipher: null,
+      githubTokenCipher: null,
+      openRouterApiKey: null,
+      geminiApiKey: null,
+      telegramChatId: null,
+    });
+  });
+
+  it("is part of the full purge, so one purgeUserData call still covers it all", async () => {
+    const access = makeTxSpy();
+    await revokeUserAccess(access.tx as never, "u1");
+    const full = makeTxSpy();
+    await purgeUserData(full.tx as never, "u1");
+
+    // First, so access is gone before the long run of data deletes.
+    expect([...full.called].slice(0, access.called.size)).toEqual([...access.called]);
+    expect(full.updates.map((u) => u.model)).toEqual(["apiKey", "user"]);
   });
 });
 
