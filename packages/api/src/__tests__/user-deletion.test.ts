@@ -259,6 +259,12 @@ describe("Google grants on the deletion paths", () => {
     expect(revokeGoogleGrants).not.toHaveBeenCalled();
   });
 
+  it("does not wait on Google: the wipe and the deletion finish while a revoke hangs", async () => {
+    revokeGoogleGrants.mockImplementation(() => new Promise(() => {}));
+    await expect(purgeAllUserData("user-1")).resolves.toBe("purged");
+    await expect(deleteUserAndAllData("user-2")).resolves.toBeUndefined();
+  });
+
   it("still deletes when the grants could not be read, revoking nothing", async () => {
     collectGoogleGrants.mockRejectedValueOnce(new Error("bad cipher"));
     vi.spyOn(console, "error").mockImplementation(() => {});

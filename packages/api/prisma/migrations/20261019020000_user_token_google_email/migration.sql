@@ -9,11 +9,15 @@
 -- Linked accounts already store it; the primary grant did not.
 --
 -- Nullable, no default, no backfill here: the address is read from Gmail at
--- connect, or the first time a revoke needs it. Adding a nullable column is a
--- catalog-only change.
+-- connect, by a revoke that needs it, or by the 6-hourly backfill
+-- (auth/google-address-backfill.ts). An empty string marks a grant Google
+-- already refuses; "googleEmailCheckedAt" orders the lookups, least recent
+-- first, so unreadable rows cannot keep newer ones waiting. Adding nullable
+-- columns is a catalog-only change.
 -- Fail fast instead of queueing behind a long lock (same guard as 20261009010000).
 SET LOCAL lock_timeout = '5s';
 
-ALTER TABLE "UserToken" ADD COLUMN "googleEmail" TEXT;
+ALTER TABLE "UserToken" ADD COLUMN "googleEmail" TEXT,
+ADD COLUMN "googleEmailCheckedAt" TIMESTAMP(3);
 
 CREATE INDEX "UserToken_googleEmail_idx" ON "UserToken"("googleEmail");

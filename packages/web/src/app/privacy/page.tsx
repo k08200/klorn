@@ -343,8 +343,8 @@ export default function PrivacyPage() {
                 account, or disconnecting a Google account in Klorn, also asks Google to revoke
                 Klorn&apos;s access to that Google account, unless it is still connected elsewhere
                 in Klorn (to your account or another one) or Klorn cannot confirm that it is not.
-                The request is best effort: if Google does not answer, access stays until you remove
-                Klorn in your Google account settings.
+                The request is best effort: if it fails, or Google does not answer, access stays
+                until you remove Klorn in your Google account settings.
               </li>
               <li>
                 <strong className="text-ink">Export and workspace reset.</strong> Settings also

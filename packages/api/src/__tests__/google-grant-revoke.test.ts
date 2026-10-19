@@ -122,7 +122,7 @@ describe("revokeGoogleGrants", () => {
     // Only onto the tokens it was read with.
     expect(prisma.userToken.updateMany).toHaveBeenCalledWith({
       where: { id: "tok-9", googleEmail: null, accessToken: "enc:a9" },
-      data: { googleEmail: "a@x.com" },
+      data: { googleEmail: "a@x.com", googleEmailCheckedAt: expect.any(Date) },
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -148,6 +148,38 @@ describe("revokeGoogleGrants", () => {
     await expect(revokeGoogleGrants("u1", [grant({})])).resolves.toEqual([
       { source: "inbox", outcome: "revoked" },
     ]);
+    // Marked, so no later check looks it up again.
+    expect(prisma.userToken.updateMany).toHaveBeenCalledWith({
+      where: { id: "tok-9", googleEmail: null, accessToken: "enc:a9" },
+      data: { googleEmail: "", googleEmailCheckedAt: expect.any(Date) },
+    });
+  });
+
+  it("gives up on a lookup that hangs, token refresh included, after 15 s", async () => {
+    vi.useFakeTimers();
+    try {
+      prisma.userToken.findMany.mockResolvedValue([
+        { id: "tok-9", accessToken: "enc:a9", refreshToken: "enc:r9" },
+      ]);
+      getProfile.mockImplementation(() => new Promise(() => {}));
+      const pending = revokeGoogleGrants("u1", [grant({})]);
+      await vi.advanceTimersByTimeAsync(15_000);
+      await expect(pending).resolves.toEqual([{ source: "inbox", outcome: "unknown-account" }]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("counts again after the lookups, so a grant linked meanwhile is still seen", async () => {
+    prisma.linkedInboxAccount.count.mockResolvedValueOnce(0).mockResolvedValueOnce(1);
+    prisma.userToken.findMany.mockResolvedValue([
+      { id: "tok-9", accessToken: "enc:a9", refreshToken: "enc:r9" },
+    ]);
+    getProfile.mockResolvedValue({ data: { emailAddress: "someone@else.com" } });
+    await expect(revokeGoogleGrants("u1", [grant({})])).resolves.toEqual([
+      { source: "inbox", outcome: "shared" },
+    ]);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("does not revoke when there are more unknown addresses than it may check", async () => {
@@ -233,7 +265,8 @@ describe("revokeGoogleGrants", () => {
       grant({ source: "calendar", rowId: "c1", refreshToken: "refresh-c" }),
     ]);
     expect(results.map((r) => r.outcome)).toEqual(["revoked", "revoked"]);
-    expect(prisma.linkedInboxAccount.count).toHaveBeenCalledTimes(1);
+    // One address: counted before the lookups and once more after them.
+    expect(prisma.linkedInboxAccount.count).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls.map(([, init]) => String((init as RequestInit).body))).toEqual([
       "token=refresh-p",
       "token=refresh-c",
@@ -373,8 +406,17 @@ describe("the address of a primary grant", () => {
     ]);
     getProfile.mockResolvedValue({ data: { emailAddress: "one@x.com" } });
     await expect(backfillPrimaryGoogleAddresses()).resolves.toEqual({ filled: 1 });
-    expect(prisma.userToken.updateMany).toHaveBeenCalledTimes(1);
     expect(getProfile).toHaveBeenCalledTimes(1);
+    // The unreadable row is stamped checked, so it moves to the back of the order.
+    expect(prisma.userToken.updateMany).toHaveBeenCalledWith({
+      where: { id: "t2", googleEmail: null, accessToken: "corrupt" },
+      data: { googleEmailCheckedAt: expect.any(Date) },
+    });
+    expect(prisma.userToken.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderBy: [{ googleEmailCheckedAt: { sort: "asc", nulls: "first" } }, { createdAt: "asc" }],
+      }),
+    );
   });
 });
 

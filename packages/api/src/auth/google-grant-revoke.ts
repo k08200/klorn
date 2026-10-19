@@ -39,6 +39,12 @@ const GOOGLE_CALL_TIMEOUT_MS = 10_000;
 const ADDRESS_LOOKUP_DEADLINE_MS = 15_000;
 /** Other users' primary grants of unknown address one revoke may look up. */
 export const MAX_UNKNOWN_ADDRESSES = 25;
+/**
+ * UserToken.googleEmail of a grant Google already refuses (invalid_grant): it
+ * has no address to read and cannot be harmed by a revoke, so the shared-grant
+ * check and the backfill stop looking it up. A reconnect clears it (null).
+ */
+export const DEAD_GRANT_ADDRESS = "";
 
 export type GrantSource = "primary" | "inbox" | "calendar" | "drive";
 
@@ -207,37 +213,45 @@ async function readProfileAddress(
 }
 
 /**
- * Store a primary grant's address once read, so the next check needs no call.
- * Only onto the same tokens it was read with: a reconnect in between (perhaps
- * of another Google account) cleared the address and must not get this one.
+ * Record what a lookup of a primary grant found: its address, or the dead
+ * marker, and when it was checked (the check order). Only onto the same tokens
+ * it was read with: a reconnect in between (perhaps of another Google account)
+ * cleared the address and must not get this one.
  */
-async function rememberAddress(
+async function rememberLookup(
   tokenId: string,
   accessCipher: string,
-  email: string,
+  lookup: AddressLookup,
 ): Promise<void> {
+  const address =
+    "email" in lookup ? lookup.email : "dead" in lookup ? DEAD_GRANT_ADDRESS : undefined;
   await prisma.userToken
     .updateMany({
       where: { id: tokenId, googleEmail: null, accessToken: accessCipher },
-      data: { googleEmail: email },
+      data: {
+        googleEmailCheckedAt: new Date(),
+        ...(address !== undefined ? { googleEmail: address } : {}),
+      },
     })
     .catch(() => {});
 }
 
-/**
- * Does any grant row other than those being removed hold this address?
- * "unknown" when that cannot be settled. The linked tables are matched
- * case-insensitively: older rows were not always lowercased, and a wider match
- * only ever means not revoking.
- */
-async function heldElsewhere(
-  email: string,
-  removed: readonly HeldGoogleGrant[],
-): Promise<"yes" | "no" | "unknown"> {
+/** Primary grants of unknown address, least recently checked first. */
+function unknownPrimaryGrants(exceptIds: readonly string[], take: number) {
+  return prisma.userToken.findMany({
+    where: { provider: "google", googleEmail: null, id: { notIn: [...exceptIds] } },
+    select: { id: true, accessToken: true, refreshToken: true },
+    orderBy: [{ googleEmailCheckedAt: { sort: "asc", nulls: "first" } }, { createdAt: "asc" }],
+    take,
+  });
+}
+
+/** Grant rows other than those being removed that hold this address. */
+async function countHolders(email: string, removed: readonly HeldGoogleGrant[]): Promise<number> {
   const idsOf = (source: GrantSource) =>
     removed.filter((g) => g.source === source).map((g) => g.rowId);
   const sameAddress = { equals: email, mode: "insensitive" as const };
-  const [inbox, calendar, drive, primary] = await Promise.all([
+  const counts = await Promise.all([
     prisma.linkedInboxAccount.count({
       where: { provider: "GOOGLE", email: sameAddress, id: { notIn: idsOf("inbox") } },
     }),
@@ -249,15 +263,25 @@ async function heldElsewhere(
       where: { provider: "google", googleEmail: sameAddress, id: { notIn: idsOf("primary") } },
     }),
   ]);
-  if (inbox + calendar + drive + primary > 0) return "yes";
+  return counts.reduce((sum, n) => sum + n, 0);
+}
+
+/**
+ * Does any grant row other than those being removed hold this address?
+ * "unknown" when that cannot be settled. The linked tables are matched
+ * case-insensitively: older rows were not always lowercased, and a wider match
+ * only ever means not revoking. The rows are counted again after the slow
+ * lookups, so a grant linked for this address meanwhile is still seen.
+ */
+async function heldElsewhere(
+  email: string,
+  removed: readonly HeldGoogleGrant[],
+): Promise<"yes" | "no" | "unknown"> {
+  if ((await countHolders(email, removed)) > 0) return "yes";
 
   // Primary grants whose address was never read: read them now, bounded.
-  const unknown = await prisma.userToken.findMany({
-    where: { provider: "google", googleEmail: null, id: { notIn: idsOf("primary") } },
-    select: { id: true, accessToken: true, refreshToken: true },
-    orderBy: { createdAt: "asc" },
-    take: MAX_UNKNOWN_ADDRESSES + 1,
-  });
+  const removedPrimary = removed.filter((g) => g.source === "primary").map((g) => g.rowId);
+  const unknown = await unknownPrimaryGrants(removedPrimary, MAX_UNKNOWN_ADDRESSES + 1);
   if (unknown.length > MAX_UNKNOWN_ADDRESSES) return "unknown";
   let unsure = false;
   for (const row of unknown) {
@@ -267,14 +291,12 @@ async function heldElsewhere(
       continue;
     }
     const lookup = await addressOfTokens(tryDecrypt(row.refreshToken), tryDecrypt(row.accessToken));
-    if ("email" in lookup) {
-      await rememberAddress(row.id, row.accessToken, lookup.email);
-      if (lookup.email === email) return "yes";
-    } else if ("unknown" in lookup) {
-      unsure = true;
-    }
+    await rememberLookup(row.id, row.accessToken, lookup);
+    if ("email" in lookup && lookup.email === email) return "yes";
+    if ("unknown" in lookup) unsure = true;
   }
-  return unsure ? "unknown" : "no";
+  if (unsure) return "unknown";
+  return (await countHolders(email, removed)) > 0 ? "yes" : "no";
 }
 
 /** POST one token to Google's revoke endpoint. */
@@ -338,11 +360,15 @@ export async function revokeGoogleGrants(
         });
       }
     }
+    reportUnrevoked(userId, results);
   } catch (err) {
     console.error(`[GOOGLE-REVOKE] Revoking ${userId}'s grants failed:`, err);
     captureError(err, { tags: { scope: "google.revoke", userId } });
-    return results;
   }
+  return results;
+}
+
+function reportUnrevoked(userId: string, results: readonly RevokeResult[]): void {
   const failed = results.filter((r) => r.outcome === "failed" || r.outcome === "unknown-account");
   if (failed.length > 0) {
     const summary = failed.map((r) => `${r.source}:${r.outcome}`).join(", ");
@@ -354,7 +380,6 @@ export async function revokeGoogleGrants(
       });
     }
   }
-  return results;
 }
 
 /**
@@ -406,20 +431,17 @@ export async function rememberPrimaryGoogleAddress(
  * column existed, or whose read at connect failed). Bounded per run.
  */
 export async function backfillPrimaryGoogleAddresses(limit = 50): Promise<{ filled: number }> {
-  const rows = await prisma.userToken.findMany({
-    where: { provider: "google", googleEmail: null },
-    select: { id: true, accessToken: true, refreshToken: true },
-    orderBy: { createdAt: "asc" },
-    take: limit,
-  });
+  const rows = await unknownPrimaryGrants([], limit);
   let filled = 0;
   for (const row of rows) {
-    if (undecryptable(row.accessToken, row.refreshToken)) continue;
-    const lookup = await addressOfTokens(tryDecrypt(row.refreshToken), tryDecrypt(row.accessToken));
-    if ("email" in lookup) {
-      await rememberAddress(row.id, row.accessToken, lookup.email);
-      filled++;
+    if (undecryptable(row.accessToken, row.refreshToken)) {
+      // Still checked: it goes to the back of the order instead of the front.
+      await rememberLookup(row.id, row.accessToken, { unknown: true });
+      continue;
     }
+    const lookup = await addressOfTokens(tryDecrypt(row.refreshToken), tryDecrypt(row.accessToken));
+    await rememberLookup(row.id, row.accessToken, lookup);
+    if ("email" in lookup) filled++;
   }
   return { filled };
 }
