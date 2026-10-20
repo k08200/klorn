@@ -49,7 +49,7 @@
     "openai": "^6.29.0",
     "postcss": "8.5.26",
     "resend": "^6.20.0",
-    "sanitize-html": "^2.17.7",
+    "sanitize-html": "^2.18.0",
     "stripe": "^18.1.0",
     "twilio": "^6.1.0",
     "web-push": "^3.6.7",
