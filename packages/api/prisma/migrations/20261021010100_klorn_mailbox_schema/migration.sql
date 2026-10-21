@@ -22,6 +22,12 @@
 -- EmailMessage.authentication: the receiving server's SPF, DKIM and DMARC
 -- verdicts for mail Klorn receives itself; null for every other provider.
 
+-- Fail fast instead of queueing behind a long lock (same guard as 20261009010000):
+-- the column takes EmailMessage's ACCESS EXCLUSIVE lock (catalog-only, no
+-- rewrite), the foreign key a lock on "User", the partial index one on
+-- "LinkedInboxAccount" (a few rows).
+SET LOCAL lock_timeout = '5s';
+
 -- AlterTable
 ALTER TABLE "EmailMessage" ADD COLUMN "authentication" JSONB;
 
@@ -82,3 +88,18 @@ $$;
 CREATE TRIGGER "KlornAddress_permanent"
   BEFORE UPDATE OR DELETE ON "KlornAddress"
   FOR EACH ROW EXECUTE FUNCTION public.klorn_address_permanent();
+
+-- Firing a trigger checks no EXECUTE privilege, so revoking it keeps the
+-- function off the data API without breaking the trigger (as 20261019010000).
+REVOKE EXECUTE ON FUNCTION public.klorn_address_permanent() FROM PUBLIC;
+DO $revoke$
+DECLARE
+  data_api_role text;
+BEGIN
+  FOREACH data_api_role IN ARRAY ARRAY['anon', 'authenticated'] LOOP
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = data_api_role) THEN
+      EXECUTE format('REVOKE EXECUTE ON FUNCTION public.klorn_address_permanent() FROM %I', data_api_role);
+    END IF;
+  END LOOP;
+END
+$revoke$;

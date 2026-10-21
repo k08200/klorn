@@ -45,13 +45,21 @@ describe("the inbox provider list", () => {
 });
 
 describe("a Klorn mailbox's provider actions", () => {
-  it("are unsupported until E2", async () => {
+  it("are all unsupported until E2, and reply headers stay best effort", async () => {
     const actions = mailActionsForProvider("KLORN");
     expect(actions.provider).toBe("KLORN");
-    await expect(
-      actions.sendEmail({ to: "a@b.c", subject: "s", body: "b" } as never),
-    ).resolves.toMatchObject({ unsupported: true });
-    await expect(actions.archive("m1" as never)).resolves.toMatchObject({ unsupported: true });
+    const refusing = Object.entries(actions).filter(
+      ([name, value]) => typeof value === "function" && name !== "getReplyHeaders",
+    );
+    expect(refusing.length).toBeGreaterThanOrEqual(9);
+    for (const [, action] of refusing) {
+      // The stub ignores its arguments, whatever the action's own shape.
+      const call = action as (...args: unknown[]) => Promise<unknown>;
+      await expect(call("user-1", "message-1")).resolves.toMatchObject({ unsupported: true });
+    }
+    await expect(actions.getReplyHeaders("user-1" as never, "message-1" as never)).resolves.toEqual(
+      {},
+    );
   });
 });
 

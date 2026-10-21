@@ -333,6 +333,17 @@ describe("the Klorn address (step E1a): part of the account, not a mail source",
     expect(await m.mayConnectPrimaryGoogle("user-1")).toBe(true);
   });
 
+  it("never rolls back a free user's first real mailbox because of the Klorn address", async () => {
+    const m = await load(true);
+    state.rows = [KLORN_ROW, { id: "new-row", provider: "ICLOUD", email: "me@icloud.com" }];
+    expect(await m.keepIfOnlyMailSource("user-1", { id: "new-row", ...ICLOUD })).toBe(true);
+    expect(linkedDeleteMany).not.toHaveBeenCalled();
+    state.rows = [KLORN_ROW];
+    state.primary = true;
+    expect(await m.keepPrimaryGoogleIfOnlyMailSource("user-1", "t1")).toBe(true);
+    expect(tokenDeleteMany).not.toHaveBeenCalled();
+  });
+
   it("leaves every other mailbox counted as before", async () => {
     const m = await load(true);
     state.rows = [KLORN_ROW, { id: "icloud-row", provider: "ICLOUD", email: "me@icloud.com" }];
