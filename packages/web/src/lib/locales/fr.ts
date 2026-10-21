@@ -2303,7 +2303,6 @@ const fr: Record<string, string> = {
   "paddle.blocked.title": "La fenêtre de paiement n'a pas pu s'ouvrir.",
   "paddle.blocked.body":
     "Un bloqueur de publicités ou une extension de confidentialité bloque probablement Paddle, notre prestataire de paiement. Autorisez paddle.com pour ce site (ou réessayez dans une fenêtre privée), puis cliquez à nouveau sur le bouton de mise à niveau.",
-  "authGuard.checking": "Vérification de la session...",
   "authGuard.offline.eyebrow": "Problème de connexion",
   "authGuard.offline.titleExhausted": "Impossible de joindre l'API.",
   "authGuard.offline.titleWaking": "Réveil de l'API…",
@@ -2440,6 +2439,25 @@ const fr: Record<string, string> = {
   "todayActions.row.urgent": "Urgent",
   "todayActions.noSummary": "Aucun résumé",
   "todayActions.seeAll": "Ouvrir les approbations ({count} en attente)",
+  // App-wide loading / error / not-found states (design detail pass W9).
+  "statePage.error.eyebrow": "Écran en pause",
+  "statePage.error.title": "Un problème est survenu sur cet écran.",
+  "statePage.error.body": "Rechargez le contexte le plus récent et reprenez à partir de là.",
+  "statePage.error.reference": "Référence {digest}",
+  "statePage.notFound.eyebrow": "Page introuvable",
+  "statePage.notFound.title": "Cette vue n'est pas disponible.",
+  "statePage.notFound.body":
+    "Le lien est peut-être ancien, renommé ou hors de votre espace de travail actuel. Ouvrez Klorn pour reprendre là où vous en étiez.",
+  "statePage.notFound.open": "Ouvrir Klorn",
+  "statePage.notFound.about": "À propos de Klorn",
+  "statePage.graphLoading": "Chargement du graphe",
+  "statePage.graphLoadError": "Impossible de charger le graphe.",
+  "statePage.briefingLoading": "Chargement du briefing",
+  "statePage.briefingLoadError": "Impossible de charger le briefing du jour.",
+  "statePage.briefingGenerateError": "Impossible de générer le briefing. Réessayez.",
+  "statePage.briefingFeedbackError": "Impossible d'enregistrer votre avis. Réessayez.",
+  "statePage.briefingStatusError":
+    "L'état de l'envoi est indisponible. Le briefing peut tout de même se charger.",
 };
 
 export default fr;

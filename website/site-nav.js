@@ -86,3 +86,30 @@
     a.removeAttribute('rel');
   });
 })();
+
+// Hero motion (Sig 2), landings only: the inline <head> gate adds
+// html.hero-motion when motion is allowed. Give each hero row its stagger
+// index, then reveal once the lane list is actually on screen (on phones it
+// can sit below the fold). This script owns the reveal from here, so it
+// cancels the gate's failsafe. Desktop hides the list, so nothing moves there.
+(function () {
+  var root = document.documentElement;
+  if (!root.classList.contains('hero-motion')) return;
+  var list = document.querySelector('.hero .mlist');
+  function reveal() { root.classList.add('hero-in'); }
+  if (!list || !list.getClientRects().length) return;
+  clearTimeout(window.klornHeroFailsafe);
+  try {
+    list.querySelectorAll('.mrow').forEach(function (row, i) {
+      row.style.setProperty('--i', String(i));
+    });
+    var io = new IntersectionObserver(function (entries) {
+      if (!entries.some(function (e) { return e.isIntersecting; })) return;
+      io.disconnect();
+      requestAnimationFrame(reveal);
+    }, { threshold: 0.2 });
+    io.observe(list);
+  } catch (e) {
+    reveal();
+  }
+})();

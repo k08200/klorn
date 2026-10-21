@@ -1,5 +1,13 @@
 "use client";
 
+import { useT } from "../lib/i18n";
+
+/**
+ * Route error boundary (design detail pass W9): anchored 96px from the top
+ * like the loading and empty states, in the UI language. The thrown message
+ * is developer text (often English, sometimes internal), so it is never shown;
+ * the digest is the reference that matches the server log.
+ */
 function ErrorPage({
   error,
   reset,
@@ -7,26 +15,27 @@ function ErrorPage({
   error: globalThis.Error & { digest?: string };
   reset: () => void;
 }) {
+  const { t } = useT();
   return (
-    <main className="flex flex-col items-center justify-center min-h-[60vh] px-6">
-      <p className="mb-4 rounded-full border border-state-danger-line bg-state-danger-bg px-3 py-1 text-xs font-semibold text-state-danger-ink">
-        Screen paused
+    <main className="flex flex-col items-center px-6 pb-12 pt-24 text-center">
+      <p className="mb-4 rounded-full border border-state-danger-line bg-state-danger-bg px-3 py-1 text-caption font-semibold text-state-danger-ink">
+        {t("statePage.error.eyebrow")}
       </p>
-      <h1 className="text-xl font-semibold mb-2">Something went wrong on this screen.</h1>
-      <p className="text-ink-mid text-sm mb-2 text-center max-w-md">
-        Reload the latest context and continue from there.
+      <h1 className="text-title text-ink [word-break:keep-all]">{t("statePage.error.title")}</h1>
+      <p className="mt-1 max-w-md text-body text-ink-mid [word-break:keep-all]">
+        {t("statePage.error.body")}
       </p>
-      {error.message && (
-        <p className="text-xs text-ink-mid mb-6 font-mono bg-surface-raised border border-line rounded px-3 py-1.5 max-w-md truncate">
-          {error.message}
+      {error.digest && (
+        <p className="mt-3 font-mono text-caption text-ink-mid">
+          {t("statePage.error.reference", { digest: error.digest })}
         </p>
       )}
       <button
         type="button"
         onClick={reset}
-        className="bg-accent-solid hover:bg-accent-solid-hover text-accent-solid-ink px-5 py-2.5 rounded-lg text-sm font-medium transition focus-ring"
+        className="mt-6 inline-flex min-h-11 items-center rounded-lg bg-accent-solid px-5 text-sm font-medium text-accent-solid-ink transition hover:bg-accent-solid-hover focus-ring"
       >
-        Try again
+        {t("common.tryAgain")}
       </button>
     </main>
   );

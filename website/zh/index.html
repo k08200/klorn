@@ -161,6 +161,18 @@
  ]
 }
 </script>
+<script>
+// Hero motion gate (Sig 2): set before first paint so the rows never flash.
+// Skipped for reduced motion; the failsafe reveals the rows if /site-nav.js never runs.
+(function () {
+  try {
+    if (!('IntersectionObserver' in window) || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var d = document.documentElement;
+    d.classList.add('hero-motion');
+    window.klornHeroFailsafe = setTimeout(function () { d.classList.add('hero-in'); }, 3000);
+  } catch (e) {}
+})();
+</script>
 <script src="/site-nav.js" defer></script>
 </head>
 <body>
@@ -198,7 +210,7 @@
 
   <div class="wrap hero-copy">
     <h1>所有邮件<wbr>和日历， <span class="ser">集中在<wbr>一个安静的<wbr>地方。</span></h1>
-    <p class="lead">Klorn 把 <b>Gmail、Google 日历、Naver 邮箱（测试版）和 iCloud 邮箱（测试版）</b>集中到一个视图，
+    <p class="lead">Klorn 把 <b>Gmail、Google 日历、Naver&nbsp;邮箱（测试版）和 iCloud&nbsp;邮箱（测试版）</b>集中到一个视图，
       按每封邮件需要你做什么来分拣，并告诉你理由。</p>
     <div class="actions">
       <a class="btn btn-1 dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"

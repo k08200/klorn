@@ -161,6 +161,18 @@
  ]
 }
 </script>
+<script>
+// Hero motion gate (Sig 2): set before first paint so the rows never flash.
+// Skipped for reduced motion; the failsafe reveals the rows if /site-nav.js never runs.
+(function () {
+  try {
+    if (!('IntersectionObserver' in window) || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var d = document.documentElement;
+    d.classList.add('hero-motion');
+    window.klornHeroFailsafe = setTimeout(function () { d.classList.add('hero-in'); }, 3000);
+  } catch (e) {}
+})();
+</script>
 <script src="/site-nav.js" defer></script>
 </head>
 <body>
@@ -197,9 +209,9 @@
   </picture>
 
   <div class="wrap hero-copy">
-    <h1>Todo tu correo y tus calendarios. <span class="ser">En un solo lugar, en calma.</span></h1>
-    <p class="lead">Klorn reúne <b>Gmail, Google Calendar, Naver Mail (beta) e iCloud Mail (beta)</b> en una sola vista, clasifica cada
-      mensaje según lo que necesita de ti y te dice por qué.</p>
+    <h1>Todo tu correo y tus calendarios. <span class="ser">En un solo lugar, en&nbsp;calma.</span></h1>
+    <p class="lead">Klorn reúne <b>Gmail, Google Calendar, Naver Mail&nbsp;(beta) e iCloud Mail&nbsp;(beta)</b> en una sola vista, clasifica cada
+      mensaje según lo que necesita de ti y te dice por&nbsp;qué.</p>
     <div class="actions">
       <a class="btn btn-1 dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
          data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe" data-win-label="Descargar para Windows">
@@ -284,7 +296,7 @@
   <div class="wrap">
     <div class="sec-head">
       <span class="eyebrow">Cinco carriles</span>
-      <h2 id="lanes-h">Cinco carriles. Cada uno con su motivo.</h2>
+      <h2 id="lanes-h">Cinco carriles. Cada uno con su&nbsp;motivo.</h2>
       <p class="sec-lead">Cada mensaje cae en uno de cinco carriles, con una frase que explica por qué está ahí.</p>
     </div>
     <div class="lanes-grid">
@@ -319,7 +331,7 @@
   <div class="wrap">
     <div class="sec-head">
       <span class="eyebrow">Tu día</span>
-      <h2 id="day-h">Tu día, en un solo sitio. Un asistente que lo conoce.</h2>
+      <h2 id="day-h">Tu día, en un solo sitio. Un asistente que lo&nbsp;conoce.</h2>
       <p class="sec-lead">Calendarios junto a tu correo, un resumen matinal y un asistente que responde a partir de tu propia bandeja y pregunta antes de actuar.</p>
     </div>
     <div class="day-grid">
@@ -486,7 +498,7 @@
     <img src="/media/sky/dusk-1920.jpg" alt="" loading="lazy" decoding="async" width="2560" height="1709">
   </picture>
   <div class="wrap">
-    <h2 id="final-h">Reúnelo todo <span class="ser">en un solo lugar.</span></h2>
+    <h2 id="final-h">Reúnelo todo <span class="ser">en un solo&nbsp;lugar.</span></h2>
     <div class="actions">
       <a class="btn btn-1 dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
          data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.1.0/Klorn-windows-setup.exe" data-win-label="Descargar para Windows">

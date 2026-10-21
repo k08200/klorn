@@ -90,6 +90,12 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  // <html lang> follows the UI language (WCAG 3.1.1), so screen readers pick
+  // the right voice and :lang(ko) typography applies (globals.css).
+  useEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
+
   const setLocale = useCallback((l: Locale) => {
     setLocaleState(l);
   }, []);

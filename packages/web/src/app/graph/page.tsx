@@ -8,6 +8,7 @@ import type { GraphEdge, GraphNode } from "../../components/relationship-graph";
 import { useToast } from "../../components/toast";
 import LoadingState from "../../components/ui/loading-state";
 import { apiFetch } from "../../lib/api";
+import { useT } from "../../lib/i18n";
 import { captureClientError } from "../../lib/sentry";
 
 // 3d-force-graph touches WebGL/window — load it client-only.
@@ -15,7 +16,7 @@ const ForceGraph3DView = dynamic(
   () => import("../../components/force-graph-3d").then((m) => m.ForceGraph3DView),
   {
     ssr: false,
-    loading: () => <LoadingState rows={1} rowHeight="h-96" label="Loading 3D graph" />,
+    loading: () => <LoadingState rows={1} rowHeight="h-96" />,
   },
 );
 
@@ -85,6 +86,7 @@ export default function GraphPage() {
 
 function GraphPageInner() {
   const { toast } = useToast();
+  const { t } = useT();
   const [mode, setMode] = useState<Mode>("relationships");
   const [data, setData] = useState<GraphData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -97,11 +99,11 @@ function GraphPageInner() {
       // Don't surface the raw apiFetch error to the user — log the detail, show
       // a fixed message.
       captureClientError(err, { scope: "graph.load" });
-      toast("Could not load the graph.", "error");
+      toast(t("statePage.graphLoadError"), "error");
     } finally {
       setLoading(false);
     }
-  }, [toast, mode]);
+  }, [toast, mode, t]);
 
   useEffect(() => {
     load();
@@ -186,7 +188,7 @@ function GraphPageInner() {
         </div>
 
         {loading ? (
-          <LoadingState rows={1} rowHeight="h-96" label="Loading graph" />
+          <LoadingState rows={1} rowHeight="h-96" label={t("statePage.graphLoading")} />
         ) : !data ? (
           <p className="rounded-xl border border-line bg-surface-raised p-6 text-sm text-ink-mid">
             No graph data.

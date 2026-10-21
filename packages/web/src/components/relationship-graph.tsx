@@ -55,7 +55,9 @@ export const TIER_COLORS: Record<string, string> = {
 };
 
 // Relationship-signal colours (not part of the lane system).
-const SELF_COLOR = "#0ea5e9"; // you (== --color-accent)
+// You: the accent-solid token (#0369A1 light / #38BDF8 dark), applied through
+// `style` so the var() resolves the same way in every engine.
+const SELF_COLOR = "var(--accent-solid)";
 const FEATURE_COLOR = "#a78bfa"; // a scored input feature (violet)
 // A tier node whose tag is not in TIER_COLORS. Deliberately neutral: falling
 // back to a colour that means something else is worse than admitting we do
@@ -242,7 +244,7 @@ export function RelationshipGraph({ nodes, edges }: { nodes: GraphNode[]; edges:
         const r = radiusFor(n);
         return (
           <g key={n.id}>
-            <circle cx={p.x} cy={p.y} r={r} fill={colorFor(n)} fillOpacity={0.9} />
+            <circle cx={p.x} cy={p.y} r={r} style={{ fill: colorFor(n) }} fillOpacity={0.9} />
             <text
               x={p.x}
               y={p.y - r - 3}
