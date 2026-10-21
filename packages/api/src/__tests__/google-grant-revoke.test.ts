@@ -390,6 +390,88 @@ describe("revokeGoogleGrantsInBackground (retries)", () => {
     expect(captureError).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["a 429", { response: { status: 429 } }],
+    [
+      "a 403 that is a rate limit",
+      { response: { status: 403, data: { error: { errors: [{ reason: "rateLimitExceeded" }] } } } },
+    ],
+  ])("retries another account's address read that got %s", async (_name, shape) => {
+    prisma.userToken.findMany.mockResolvedValue([
+      { id: "tok-9", accessToken: "enc:a9", refreshToken: "enc:r9" },
+    ]);
+    getProfile
+      .mockRejectedValueOnce(Object.assign(new Error("slow down"), shape))
+      .mockResolvedValue({ data: { emailAddress: "someone@else.com" } });
+    revokeGoogleGrantsInBackground("u1", [grant({})], DELAYS);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(revokeCalls()).toBe(0);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(revokeCalls()).toBe(1);
+  });
+
+  it("retries another account's address read that ran out of time", async () => {
+    prisma.userToken.findMany.mockResolvedValue([
+      { id: "tok-9", accessToken: "enc:a9", refreshToken: "enc:r9" },
+    ]);
+    getProfile
+      .mockImplementationOnce(() => new Promise(() => {}))
+      .mockResolvedValue({ data: { emailAddress: "someone@else.com" } });
+    revokeGoogleGrantsInBackground("u1", [grant({})], DELAYS);
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(revokeCalls()).toBe(0);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(revokeCalls()).toBe(1);
+  });
+
+  it("does not retry when another account's row will not decrypt", async () => {
+    prisma.userToken.findMany.mockResolvedValue([
+      { id: "tok-9", accessToken: "corrupt", refreshToken: "corrupt" },
+    ]);
+    revokeGoogleGrantsInBackground("u1", [grant({})], DELAYS);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(prisma.userToken.findMany).toHaveBeenCalledTimes(1);
+    expect(revokeCalls()).toBe(0);
+  });
+
+  it("does not retry a grant whose own address stays unreadable", async () => {
+    getProfile.mockRejectedValue(
+      Object.assign(new Error("Gmail API has not been used"), { response: { status: 403 } }),
+    );
+    revokeGoogleGrantsInBackground("u1", [grant({ source: "primary", email: null })], DELAYS);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(getProfile).toHaveBeenCalledTimes(1);
+    expect(revokeCalls()).toBe(0);
+  });
+
+  it("carries a grant left in place across every retry to the final report", async () => {
+    getProfile.mockRejectedValue(
+      Object.assign(new Error("Gmail API has not been used"), { response: { status: 403 } }),
+    );
+    fetchMock
+      .mockResolvedValueOnce(new Response("oops", { status: 503 }))
+      .mockResolvedValueOnce(new Response("oops", { status: 503 }))
+      .mockResolvedValue(new Response(null, { status: 200 }));
+    revokeGoogleGrantsInBackground(
+      "u1",
+      [
+        grant({ source: "primary", rowId: "p1", email: null }),
+        grant({ source: "calendar", rowId: "c1", email: "b@x.com", refreshToken: "refresh-b" }),
+      ],
+      DELAYS,
+    );
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(revokeCalls()).toBe(3);
+    expect(captureError).toHaveBeenCalledTimes(1);
+    expect(captureError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "google grant revoke unsettled" }),
+      {
+        tags: { scope: "google.revoke", userId: "u1" },
+        extra: { summary: "primary:unknown-account" },
+      },
+    );
+  });
+
   it("still reports a grant left in place without a retry when another one settles on its retry", async () => {
     getProfile.mockRejectedValue(
       Object.assign(new Error("Gmail API has not been used"), { response: { status: 403 } }),

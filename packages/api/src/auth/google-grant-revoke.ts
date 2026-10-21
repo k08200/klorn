@@ -198,6 +198,32 @@ export async function collectGoogleGrants(
   return grants;
 }
 
+/**
+ * The reasons of a Gmail 403 that is a per-minute rate limit, not a refusal
+ * (the same names Drive uses, drive/providers/google-files.ts). A 429 is one
+ * whatever its reason. A daily limit is left out: it does not pass within the
+ * retries.
+ */
+const GMAIL_RATE_LIMIT_REASONS: ReadonlySet<string> = new Set([
+  "rateLimitExceeded",
+  "userRateLimitExceeded",
+]);
+
+/** The reason of a Google API error, from its body as googleapis surfaces it. */
+function googleErrorReason(err: unknown): string | undefined {
+  type Reasons = Array<{ reason?: unknown }> | undefined;
+  const e = err as { errors?: Reasons; response?: { data?: { error?: { errors?: Reasons } } } };
+  const reason = e?.response?.data?.error?.errors?.[0]?.reason ?? e?.errors?.[0]?.reason;
+  return typeof reason === "string" ? reason : undefined;
+}
+
+/** A read that failed for a reason that passes: no answer, a 5xx, a rate limit. */
+function isPassingFailure(err: unknown, status: number | undefined): boolean {
+  if (status === undefined || status === 429 || status >= 500) return true;
+  const reason = googleErrorReason(err);
+  return status === 403 && reason !== undefined && GMAIL_RATE_LIMIT_REASONS.has(reason);
+}
+
 /** The Google account a token belongs to, read from its Gmail profile. */
 function addressOfTokens(
   refreshToken: string | null,
@@ -232,8 +258,7 @@ async function readProfileAddress(
     // recover the grant, so its address stays unknown.
     if (/invalid_rapt|rapt_required/.test(message)) return { unknown: true, transient: false };
     if (status === 401 || /invalid_grant|unauthorized_client/.test(message)) return { dead: true };
-    const transient = status === undefined || status === 429 || status >= 500;
-    return { unknown: true, transient };
+    return { unknown: true, transient: isPassingFailure(err, status) };
   }
 }
 
