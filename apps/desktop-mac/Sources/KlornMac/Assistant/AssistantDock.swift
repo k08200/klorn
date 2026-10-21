@@ -77,6 +77,13 @@ struct AssistantDock: View {
     }
 }
 
+extension AssistantDock {
+    /// Extra bottom space for scroll content that already ends on a 24pt
+    /// margin: 24 + 56 = 80pt clears the floating button (48pt + 20pt inset)
+    /// with a gap, so it never covers the last row.
+    static let contentClearance: CGFloat = 56
+}
+
 /// Offscreen render harness for the dock (ImageRenderer draws ScrollView
 /// content empty, so the dock gets its own shot like the other overlays).
 struct AssistantDockRenderProbe: View {

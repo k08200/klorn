@@ -329,7 +329,7 @@
 "diag.status.error" = "오류";
 "update.updating" = "업데이트 중…";
 "update.installVersion" = "v%@ 업데이트";
-"update.a11y.updating" = "버전 %@(으)로 업데이트 중";
+"update.a11y.updating" = "%@ 버전으로 업데이트 중";
 "update.a11y.available" = "업데이트 가능: 버전 %@. 설치 후 재시작됩니다.";
 "calendar.addedConfirm" = "✓ 캘린더에 추가됨: %@";
 
@@ -388,7 +388,7 @@
 "mode.section" = "모드";
 "mode.basic" = "기본";
 "mode.basic.detail" = "중요한 메일과 미팅만 알리고, 답장은 직접 고릅니다. 나머지는 조용히.";
-"mode.auto" = "Auto";
+"mode.auto" = "자동";
 "mode.auto.detail" = "안전한 일상 메일은 아래 지침에 따라 Klorn이 답장까지 대신합니다. 알림은 미팅과 꼭 답해야 할 메일만.";
 "mode.guideline" = "답장 지침";
 "mode.guideline.detail" = "무인 답장이 항상 따르는 지침입니다. 기본값을 수정하거나 추가하세요.";
@@ -700,8 +700,8 @@
 "files.openFolder" = "%@ 폴더 열기";
 "files.download.label" = "%@ 다운로드";
 "files.download.preparing" = "다운로드 준비 중…";
-"files.download.error" = "%@을(를) 다운로드하지 못했습니다. 다시 시도하세요.";
-"files.download.gone" = "%@이(가) 더 이상 드라이브에 없습니다.";
+"files.download.error" = "'%@' 파일을 다운로드하지 못했습니다. 다시 시도하세요.";
+"files.download.gone" = "'%@' 파일이 더 이상 드라이브에 없습니다.";
 "files.download.busy" = "다운로드 요청이 너무 많습니다. 1분 뒤 다시 시도하세요.";
 "files.trail.label" = "폴더 경로";
 "files.trail.all" = "모든 파일";

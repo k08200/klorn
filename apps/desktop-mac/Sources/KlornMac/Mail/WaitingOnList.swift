@@ -46,7 +46,7 @@ struct WaitingOnList: View {
                 VStack(spacing: 0) {
                     ForEach(model.waitingOn.prefix(8)) { item in
                         WaitingOnRow(item: item)
-                        Divider().overlay(Theme.line).padding(.leading, 20)
+                        Divider().overlay(Theme.line).padding(.horizontal, 24)
                     }
                 }
                 Spacer(minLength: 0)
@@ -55,7 +55,7 @@ struct WaitingOnList: View {
                     LazyVStack(spacing: 0) {
                         ForEach(model.waitingOn) { item in
                             WaitingOnRow(item: item)
-                            Divider().overlay(Theme.line).padding(.leading, 20)
+                            Divider().overlay(Theme.line).padding(.horizontal, 24)
                         }
                     }
                 }
@@ -105,7 +105,7 @@ struct WaitingOnRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, 20).padding(.vertical, 10)
+        .padding(.horizontal, 24).padding(.vertical, 12)
         .background(selected ? Theme.surfaceSelected : hovering ? Theme.surfaceHover : .clear)
         .onHover { hovering = $0 }
         .accessibilityLabel(L("waiting.row.a11y", counterparty, item.subject, item.daysWaiting))

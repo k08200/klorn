@@ -21,7 +21,8 @@ struct ComposePanel: View {
             Group {
                 if Theme.isRenderingOffscreen {
                     Text(model.composeBody.isEmpty ? L("compose.bodyPlaceholder") : model.composeBody)
-                        .font(.callout).foregroundStyle(Theme.textDim)
+                        .font(.callout)
+                        .foregroundStyle(model.composeBody.isEmpty ? Theme.textDim : Theme.text)
                         .frame(
                             maxWidth: .infinity, minHeight: 170, maxHeight: .infinity,
                             alignment: .topLeading)
@@ -82,7 +83,8 @@ struct ComposePanel: View {
             Text(label).font(.caption.weight(.semibold)).foregroundStyle(Theme.textDim)
                 .frame(width: 56, alignment: .leading)
             if Theme.isRenderingOffscreen {
-                Text(text.wrappedValue.isEmpty ? "…" : text.wrappedValue)
+                // An empty field renders empty, as the live TextField does.
+                Text(text.wrappedValue)
                     .font(.callout).foregroundStyle(Theme.text)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
