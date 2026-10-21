@@ -620,12 +620,17 @@ async function pushForFirewallEmail(userId: string, email: JudgeableEmailRow): P
     },
   });
 
-  const [{ pushNotification }, { sendPushNotification }, { findOpenEmailAttentionItemId }] =
-    await Promise.all([
-      import("../websocket.js"),
-      import("../notify/push.js"),
-      import("./attention-override.js"),
-    ]);
+  const [
+    { pushNotification },
+    { sendPushNotification },
+    { findOpenEmailAttentionItemId },
+    { desktopAlertTag },
+  ] = await Promise.all([
+    import("../websocket.js"),
+    import("../notify/push.js"),
+    import("./attention-override.js"),
+    import("../notify/desktop-alert.js"),
+  ]);
 
   pushNotification(userId, {
     id: notification.id,
@@ -633,6 +638,8 @@ async function pushForFirewallEmail(userId: string, email: JudgeableEmailRow): P
     title: FIREWALL_PUSH_TITLE,
     message: body,
     createdAt: notification.createdAt.toISOString(),
+    // PUSH lane → OS banner in the desktop shell, under the Web Push gate.
+    ...(await desktopAlertTag(userId, "push")),
   });
 
   const attentionItemId = await findOpenEmailAttentionItemId(userId, email.id);

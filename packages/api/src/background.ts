@@ -12,9 +12,11 @@
  * Notifications are persisted to PostgreSQL (Notification model).
  */
 
+import type { DesktopAlertKind } from "@klorn/contract";
 import { HIDDEN_CLAIM_TYPE, REPLY_CLAIM_ROWS } from "./agentcore/auto-reply-ledger-keys.js";
 import { prisma } from "./db.js";
 import { escapeLikePattern } from "./db-like.js";
+import { desktopAlertTag } from "./notify/desktop-alert.js";
 import { getUpcomingMeetings } from "./pim/meeting.js";
 import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
 import { captureError } from "./sentry.js";
@@ -34,7 +36,13 @@ let meetingCheckInFlight = false;
 
 async function addNotification(
   userId: string,
-  notif: { type: string; title: string; message: string; link?: string },
+  notif: {
+    type: string;
+    title: string;
+    message: string;
+    link?: string;
+    alert?: DesktopAlertKind;
+  },
 ) {
   // Persist to DB
   const data: Record<string, unknown> = {
@@ -59,6 +67,7 @@ async function addNotification(
     message: notif.message,
     link: notif.link,
     createdAt: entry.createdAt.toISOString(),
+    ...(notif.alert ? { alert: notif.alert } : {}),
   });
 }
 
@@ -215,6 +224,9 @@ async function checkUpcomingMeetings() {
               title: `Meeting in ${Math.ceil(minutesUntil)} min: ${meeting.summary}`,
               message: msg,
               link: meeting.meetingLink || "/briefing",
+              // Meeting starting soon → OS banner in the desktop shell, under
+              // the same "meeting" gate as the web push below.
+              ...(await desktopAlertTag(userId, "meeting")),
             });
 
             // Also send browser push with meeting link. AWAIT it: the call is

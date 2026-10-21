@@ -32,3 +32,13 @@ export interface NativePushMailFields {
 
 /** APNs `aps.category` of a mail push: lock-screen action sets the app registers. */
 export type ApnsMailCategory = "KLORN_PUSH_MAIL" | "KLORN_PUSH_MAIL_DRAFT";
+
+/**
+ * The `alert` tag on a real-time websocket `notification` frame. Set by
+ * packages/api notify/desktop-alert.ts only for PUSH-lane mail ("push") and a
+ * meeting starting soon ("meeting"), and only when the user's notification
+ * preferences and quiet hours allow that category. The Windows desktop shell
+ * turns tagged frames — and nothing else — into OS banners
+ * (packages/web lib/native/desktop-alerts.ts).
+ */
+export type DesktopAlertKind = "push" | "meeting";

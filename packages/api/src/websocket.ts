@@ -9,6 +9,7 @@
  */
 
 import type { Server } from "node:http";
+import type { DesktopAlertKind } from "@klorn/contract";
 import { WebSocket, WebSocketServer } from "ws";
 import {
   isDemoAccessEnabled,
@@ -267,6 +268,8 @@ export function pushNotification(
     createdAt?: string;
     conversationId?: string;
     link?: string;
+    /** OS-banner tag for the desktop shell — see notify/desktop-alert.ts. */
+    alert?: DesktopAlertKind;
   },
 ) {
   broadcastToUser(userId, {

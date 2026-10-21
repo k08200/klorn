@@ -5,6 +5,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { apiFetch } from "../lib/api";
 import { useT } from "../lib/i18n";
+import { shellKind } from "../lib/native/shell";
+import { deliverDesktopAlert } from "../lib/native/tauri-notify";
 import {
   getTypeLabel,
   groupNotifications,
@@ -172,6 +174,12 @@ export default function NotificationBell({ userId }: { userId: string }) {
       }
 
       if (notif.id) {
+        // Windows desktop shell: banner server-tagged PUSH / meeting frames
+        // (lib/native/desktop-alerts.ts — its own once-per-id dedupe). Runs
+        // before the seen check below: a list refetch can record this id
+        // before the frame arrives, and that must not swallow the banner.
+        if (shellKind() === "tauri") void deliverDesktopAlert(payload);
+
         // Track seen notification IDs to prevent duplicate desktop notifications
         if (seenIdsRef.current.has(notif.id)) return;
         seenIdsRef.current.add(notif.id);
@@ -183,7 +191,11 @@ export default function NotificationBell({ userId }: { userId: string }) {
 
         triggerFlash();
 
+        // Not inside the Tauri shell: its notification plugin replaces
+        // window.Notification, so this generic path would toast EVERY frame
+        // (agent notes, briefings, QUEUE) there. The shell banners above.
         if (
+          shellKind() !== "tauri" &&
           typeof window !== "undefined" &&
           "Notification" in window &&
           window.Notification.permission === "granted"
