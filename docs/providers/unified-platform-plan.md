@@ -1742,8 +1742,8 @@ needs FA-9 and the admin guidance from F0.
   - make the Microsoft disconnect and the deletion confirm say where to remove
     Klorn: account.live.com/consent/Manage (personal) or
     myapps.microsoft.com (work or school).
-  As of 2026-10-21 prod holds no Microsoft grant (every linked inbox,
-  calendar and drive row is Google or iCloud).
+  As of 2026-10-21 prod holds no Microsoft grant: linked inboxes are 3
+  Google and 1 iCloud, linked calendars 1 Google, linked drives none.
 
 ### Workstream C — calendar
 
@@ -4145,8 +4145,10 @@ the scopes that sign-in, Gmail, Calendar and the inbox links request
     refresh still in flight. Since #1502 the unlink also revokes the grant at
     Google (`auth/google-grant-revoke.ts`), unless another grant row holds the
     same Google account: Google revokes a combined grant whole, so a revoke
-    of the primary's account would cut Gmail. A revoke Google did not answer
-    is retried in memory for about 71 minutes (`REVOKE_RETRY_DELAYS_MS`).
+    of the primary's account would cut Gmail. A revoke Google refused or did
+    not answer, one whose account a Gmail read failing for a passing reason
+    kept unsettled, and one a database error left undecided are retried in
+    memory for about 71 minutes (`REVOKE_RETRY_DELAYS_MS`).
   - Picker: the browser needs a `drive.file` token, a developer key and the app id.
     - `POST /api/drive/google/accounts/:id/picker-session` returns all three,
       `no-store`. The token is minted on click. An unset variable answers 503
