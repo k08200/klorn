@@ -31,7 +31,7 @@
   --frame-bar:#f6f6f5; --frame-dot:#d6d5d1; --frame-bg:#fff;
   /* X1: lane colours, the app's values (globals.css / Theme.swift). Dot is
      the lane colour, ink is the chip text, wash is the 12% fill. */
-  --push:#be123c; --push-ink:#9f1239; --meeting:#4f46e5; --meeting-ink:#4338ca;
+  --push:#be123c; --push-ink:#9f1239; --meeting:#4f46e5; --meeting-ink:#4f46e5;
   --queue:#b45309; --queue-ink:#92400e; --info:#0e7490; --info-ink:#155e75;
   --silent:#57534e; --silent-ink:#57534e;
 }
