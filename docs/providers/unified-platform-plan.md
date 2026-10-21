@@ -1635,7 +1635,7 @@ OFF. Not flippable until the security review below signs off.
   drips bytes is cut by the session deadline; unit tests for the budget shared by
   DNS and the socket (fake timers), the window cap, the bounded TEXT query, the
   scheduler guard, the host-change refusal, the cooldown and the Sentry dedupe.
-- Landed 2026-09-30 (branch `feat/generic-imap`, PR not yet opened), flag OFF:
+- Landed 2026-09-30 (branch `feat/generic-imap`, #1353, merged 2026-10-01), flag OFF:
   - `GENERIC_IMAP_ENABLED` (`genericImapEnabled()` in `config.ts`, lenient parse,
     read at request time). Off: `/api/generic-imap/*` answers the cloaked 404
     (`darkRouteGate`), the poll never selects IMAP rows
@@ -1758,7 +1758,7 @@ needs FA-9 and the admin guidance from F0.
 - Verify: `prisma migrate diff`, the CI Migrations job, and a backfill test
   for both kinds of row.
 - Landed 2026-09-30 (expand phase only; branch `feat/calendar-provider-schema`,
-  PR not yet opened). Migration `20261001010000_calendar_provider`:
+  #1335, merged 2026-09-30). Migration `20261001010000_calendar_provider`:
   - New enum `CalendarProvider`: GOOGLE, OUTLOOK, ICLOUD, NAVER, DEVICE, LOCAL,
     only the sources C2-C6 name. LOCAL appears only on `CalendarEvent`.
   - `LinkedCalendarAccount`: `provider` (default GOOGLE), nullable `caldavUrl`
@@ -1832,7 +1832,7 @@ needs FA-9 and the admin guidance from F0.
   `mail/providers/`; linked Google calendars synced into rows; both C1 database
   review gates settled before the first linked row is written.
 - Landed 2026-09-30, review follow-up 2026-10-01 (branch
-  `feat/calendar-provider-seam`, PR not yet opened). Migration
+  `feat/calendar-provider-seam`, #1342, merged 2026-09-30). Migration
   `20261002010000_calendar_linked_source_key`:
   - Seam. `types.ts` (`CalendarProviderActions`, `CalendarSession`, neutral event
     and free/busy shapes), `google.ts` (every googleapis calendar call the app
@@ -2090,7 +2090,7 @@ needs FA-9 and the admin guidance from F0.
   password; an ICLOUD and NAVER implementation of the C2 provider seam; the C2
   linked-sync loop syncs it into rows; rows of events deleted upstream removed;
   unlink.
-- Landed 2026-10-01 (branch `feat/caldav-calendar`, PR not yet opened). No
+- Landed 2026-10-01 (branch `feat/caldav-calendar`, #1359, merged 2026-10-03). No
   migration: `CalendarProvider.ICLOUD` and `NAVER` and
   `LinkedCalendarAccount.caldavPasswordCipher` came with C1, the per-source row key
   with C2. One new dependency, `ical.js` (below).
@@ -2434,7 +2434,7 @@ needs FA-9 and the admin guidance from F0.
 - Tasks: link an Outlook account for its calendar over the existing Outlook OAuth
   app; an OUTLOOK implementation of the C2 provider seam (events, free/busy);
   the C2 linked-sync loop syncs it into rows; unlink.
-- Landed 2026-09-30 (branch `feat/graph-calendar`, PR not yet opened). No
+- Landed 2026-09-30 (branch `feat/graph-calendar`, #1352, merged 2026-10-01). No
   migration: `CalendarProvider.OUTLOOK` and the per-source row key came with C1
   and C2.
   - Flag `OUTLOOK_CALENDAR_ENABLED` (OFF, lenient parse, read per call). It
@@ -2669,7 +2669,7 @@ P4. Uploads through C6's `/api/device-calendar` API (below), unchanged: a mobile
 client sends the same per-calendar snapshot with its own device-scoped key.
 **C6 — desktop device bridge.** Depends on: C2. EventKit in KlornMac. Upload
 policy per P4.
-- Landed 2026-10-02 (branch `feat/device-calendar-mac`, PR not yet opened).
+- Landed 2026-10-02 (branch `feat/device-calendar-mac`, #1372, merged 2026-10-03).
   Migration `20261007010000_linked_calendar_display_name` (the latest, after main's
   `20261006010000_proactive_draft`): two nullable columns on `LinkedCalendarAccount`,
   `displayName` TEXT and `deviceSnapshotAt` TIMESTAMP(3), no backfill
@@ -2904,7 +2904,7 @@ policy per P4.
 **C7 — one calendar read path.** Depends on: C2. `list_events`, briefing and
 conflict checks read rows across providers. Each connector joins as it lands; C7
 does not wait for them.
-- Landed 2026-09-30 (branch `feat/unified-calendar-read`, PR not yet opened). No
+- Landed 2026-09-30 (branch `feat/unified-calendar-read`, #1346, merged 2026-10-01). No
   migration, no new dependency, no schema change. One new flag.
   - Flag `UNIFIED_CALENDAR_READ_ENABLED` (OFF, lenient parse, read per request).
     Off: every behaviour is the one on main. `list_events` (chat and MCP, both go
@@ -3076,7 +3076,7 @@ does not wait for them.
 ### Workstream D — drive
 
 **D1 — object storage foundation.** Depends on: FA-7 for the flip, not for the
-merge. Landed 2026-10-03 (branch `feat/object-storage`, PR not yet opened), flag
+merge. Landed 2026-10-03 (branch `feat/object-storage`, #1379, merged 2026-10-03), flag
 OFF. Two independent reviews (code and security) came back the same day; their
 findings are folded into this entry. It started early because E4 needs it before
 workstream D's turn comes.
@@ -3298,7 +3298,7 @@ workstream D's turn comes.
 **D2 — drive model and provider seam.** Depends on: nothing. A metadata index
 of files across sources: one table, one writer, one read path, a provider seam
 with no connector behind it yet, and two read-only routes.
-- Landed 2026-10-03, flag OFF (branch `feat/drive-model`, PR not yet opened).
+- Landed 2026-10-03, flag OFF (branch `feat/drive-model`, #1378, merged 2026-10-03).
   Flag: `DRIVE_ENABLED`, default OFF, read at request time. While off, both
   routes answer Fastify's default 404 before authentication (`darkRouteGate`)
   and every reader hides every row. Nothing writes a row in D2, so with the flag
@@ -3499,7 +3499,7 @@ with no connector behind it yet, and two read-only routes.
 **D3 — Klorn drive.** Depends on: D1, D2. Upload, list, download, rename/move
 and delete of the user's own files. Upload is inherent here; V4 restricts
 external connectors, not Klorn-owned storage. Landed 2026-10-14 (branch
-`feat/klorn-drive`, PR not yet opened), flag OFF. Server and API only: **the web
+`feat/klorn-drive`, #1403, merged 2026-10-14), flag OFF. Server and API only: **the web
 and Mac UI follow in a later step coordinated with the product design work**,
 which also adds the vocabulary row (`../product-vocabulary.md`) and the copy.
 D3 ships no user-facing copy beyond API error strings, which clients replace by
@@ -3815,7 +3815,7 @@ D3 ships no user-facing copy beyond API error strings, which clients replace by
 files). A summary of each drive file's text, made through the attachment
 analysis pipeline and the shared LLM layer, kept in a table of its own; the name
 search also matches summary text. Landed 2026-10-14 (branch
-`feat/drive-summaries`, PR not yet opened), flag OFF. Server and API only, like
+`feat/drive-summaries`, #1416, merged 2026-10-15), flag OFF. Server and API only, like
 D3: no UI and no user-facing copy, so no vocabulary row yet; the UI step adds
 both.
 - Flag: `DRIVE_SUMMARIES_ENABLED`, default off, read at request and job time. It
@@ -4254,7 +4254,7 @@ the scopes that sign-in, Gmail, Calendar and the inbox links request
     - Picking and its session need the plan (`requireEntitled`), like the link.
     - Prod impact: none.
   - D5d, refresh and Google-format summaries. Built 2026-10-15 (branch
-    `feat/drive-d5d-refresh`), flag OFF.
+    `feat/drive-d5d-refresh`, #1454, merged 2026-10-16), flag OFF.
     - Refresh: `drive/google-drive-refresh-job.ts` (the sweep and the scheduler,
       `drive-google-refresh`, hourly, in `EXPECTED_SCHEDULERS`, started in
       `index.ts` unless BACKGROUND_AGENTS_DISABLED) and
@@ -4403,7 +4403,7 @@ the scopes that sign-in, Gmail, Calendar and the inbox links request
 **D6 — OneDrive connector** (*outline*). Depends on: D2, FA-9 with file
 permissions.
 **D7 — device import.** Depends on: D3. Upload policy per P4. Landed 2026-10-14
-(branch `feat/mac-drive-import`, PR not yet opened). **Mac app only**: it reaches
+(branch `feat/mac-drive-import`, #1423, merged 2026-10-15). **Mac app only**: it reaches
 users only with a desktop release, and only while D3's flags are on. No flag of
 its own: D3's gate decides, and the app hides the feature while it is dark.
 - What shipped:
