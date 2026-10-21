@@ -71,6 +71,17 @@ export async function openExternal(url: string): Promise<void> {
   window.open(url, "_blank", "noopener");
 }
 
+/** Call a Tauri command through the IPC global the desktop wrapper injects.
+ *  The web bundle cannot import @tauri-apps/* (see openExternal), so plugin
+ *  commands go through here. Rejects outside the Tauri shell. What a command
+ *  may do is bounded by the wrapper's capability file
+ *  (apps/desktop-win/src-tauri/capabilities/default.json), not by this call. */
+export async function tauriInvoke(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
+  const invoke = globalsBag()?.__TAURI_INTERNALS__?.invoke;
+  if (shellKind() !== "tauri" || !invoke) throw new Error("not inside the Tauri shell");
+  return invoke(cmd, args);
+}
+
 /** Close the in-app browser sheet where one exists. Capacitor's Browser.open
  *  presents a sheet that must be dismissed after auth; Tauri's opener hands
  *  off to the real default browser, which is not ours to close. */

@@ -71,6 +71,7 @@ import { findReingestedHistoryFailClosed } from "./mail/imap-history.js";
 import { runProactiveDrafts } from "./mail/proactive-drafts.js";
 import { syncSentMessages } from "./mail/sent-messages.js";
 import { notifyConversationsUpdated } from "./notify/conversations-updated.js";
+import { desktopAlertTag } from "./notify/desktop-alert.js";
 import { formatUrgentEmailBody, senderName } from "./notify/notification-format.js";
 import { escalateUnackedPush } from "./notify/phone-escalation.js";
 import { sendPushNotification } from "./notify/push.js";
@@ -841,6 +842,9 @@ export async function ensureUrgentEmailNotification(
     title: "Urgent email",
     message: userBody,
     createdAt: notification.createdAt.toISOString(),
+    // Same interrupt as the firewall PUSH bell row (shared title + dedupe) →
+    // OS banner in the desktop shell, under the Web Push gate.
+    ...(await desktopAlertTag(userId, "push")),
   });
   return notification;
 }

@@ -1,6 +1,6 @@
 [package]
 name = "klorn-desktop-win"
-version = "0.1.0"
+version = "0.2.0"
 description = "Klorn for Windows — a thin shell around the hosted web app"
 edition = "2021"
 license = "AGPL-3.0-only"
@@ -9,7 +9,8 @@ license = "AGPL-3.0-only"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+# tray-icon: close-to-tray (src/tray.rs).
+tauri = { version = "2", features = ["tray-icon"] }
 # One running copy. A second launch focuses the existing window instead of
 # opening a second inbox that fights the first over notifications.
 tauri-plugin-single-instance = "2"
@@ -17,3 +18,9 @@ tauri-plugin-single-instance = "2"
 # embedded webviews). The web app calls this through the injected IPC global —
 # see packages/web/src/lib/native/shell.ts.
 tauri-plugin-opener = "2"
+# OS banners for PUSH mail / meetings starting soon, posted from Rust by the
+# shell's show_banner command (src/banner.rs). None of the plugin's commands
+# are granted to the remote origin — see capabilities/default.json.
+tauri-plugin-notification = "2"
+# Tray menu language (en/ko) without pulling the web app's i18n into Rust.
+sys-locale = "0.3"
