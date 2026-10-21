@@ -89,7 +89,7 @@ struct FilesSection: View {
                 VStack(spacing: Theme.s3) {
                     EmptyState(icon: "exclamationmark.triangle", title: L("files.error"))
                     Button(L("today.retry")) { Task { await store.reload() } }
-                        .buttonStyle(SolidButtonStyle(prominent: false))
+                        .buttonStyle(SolidButtonStyle())
                 }
                 .padding(.vertical, Theme.s12)
             case .loaded:
