@@ -31,7 +31,7 @@
   --frame-bar:#f6f6f5; --frame-dot:#d6d5d1; --frame-bg:#fff;
   /* X1: lane colours, the app's values (globals.css / Theme.swift). Dot is
      the lane colour, ink is the chip text, wash is the 12% fill. */
-  --push:#be123c; --push-ink:#9f1239; --meeting:#4f46e5; --meeting-ink:#4f46e5;
+  --push:#be123c; --push-ink:#9f1239; --meeting:#4f46e5; --meeting-ink:#4338ca;
   --queue:#b45309; --queue-ink:#92400e; --info:#0e7490; --info-ink:#155e75;
   --silent:#57534e; --silent-ink:#57534e;
 }
@@ -42,8 +42,11 @@ html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--paper);color:var(--ink);overflow-x:hidden;
   font-family:'Geist',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
   font-size:var(--fs-16);line-height:1.6;-webkit-font-smoothing:antialiased}
+/* Korean sets in Pretendard (self-hosted dynamic subset, /fonts/pretendard/,
+   linked from the /ko/ pages only); everything after it is the fallback while
+   a chunk is still in flight or if the stylesheet is absent. */
 html[lang=ko] body{word-break:keep-all;overflow-wrap:break-word;
-  font-family:'Geist',-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Pretendard','Noto Sans KR',system-ui,sans-serif}
+  font-family:'Pretendard Variable','Pretendard',-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR',system-ui,sans-serif}
 img{display:block;max-width:100%;height:auto}
 a{color:inherit}
 :focus-visible{outline:2px solid var(--accent-fill);outline-offset:3px;border-radius:var(--r-8);
@@ -71,7 +74,7 @@ html[lang=zh] body{line-break:strict;overflow-wrap:anywhere;
   border:1px solid rgba(255,255,255,.13);box-shadow:0 18px 44px -20px rgba(4,12,26,.7),inset 0 1px 0 rgba(255,255,255,.1)}
 .nav :focus-visible{outline-color:#fff;box-shadow:0 0 0 6px rgba(4,12,26,.6)}
 .nav a{text-decoration:none;display:inline-flex;align-items:center;min-height:44px;white-space:nowrap}
-.nav-brand{color:#fff;font-weight:700;letter-spacing:-.015em;font-size:var(--fs-14);margin-right:10px;padding:0 4px}
+.nav-brand{color:#fff;font-weight:700;letter-spacing:-.015em;font-size:var(--fs-14);margin-right:10px;padding:0 4px;min-width:44px;justify-content:center}
 .nav-links{display:flex}
 .nav-links a{color:rgba(255,255,255,.76);font-size:var(--fs-14);padding:0 13px;border-radius:var(--r-pill);
   transition:color .4s var(--ease),background .4s var(--ease)}
@@ -99,7 +102,7 @@ html[lang=zh] body{line-break:strict;overflow-wrap:anywhere;
 .nav .nav-lang-menu a[aria-current]{color:#fff;background:rgba(255,255,255,.14)}
 /* Below the breakpoint the section links fold behind a button and reopen as a
    panel under the pill (behaviour in /site-nav.js). */
-.nav-menu-btn{display:none;align-items:center;justify-content:center;width:44px;height:44px;margin-right:2px;
+.nav-menu-btn{display:none;align-items:center;justify-content:center;width:44px;height:44px;flex:none;margin-right:2px;
   padding:0;border-radius:var(--r-pill);border:1px solid rgba(255,255,255,.22);background:transparent;color:#fff;cursor:pointer}
 .nav-menu-btn:hover{background:rgba(255,255,255,.1)}
 .nav-menu-btn svg{width:17px;height:17px}
@@ -117,6 +120,8 @@ html[lang=zh] body{line-break:strict;overflow-wrap:anywhere;
 @media (max-width:520px){.nav-lang{display:none}}
 @media (max-width:420px){.nav-pill{padding-left:12px}
   .nav-brand{margin-right:2px}.nav-login{padding:0 10px}.nav-cta{padding:0 13px}}
+/* 320: the French/German labels need the last few px for the 44px menu button. */
+@media (max-width:360px){.nav-pill{padding-left:8px}.nav-login{padding:0 8px}.nav-cta{padding:0 10px}}
 
 /* ── Buttons ─────────────────────────────────────── */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:52px;
@@ -149,6 +154,9 @@ html[lang=es] h1,html[lang=fr] h1,html[lang=de] h1{max-width:16ch}
    rather than overflowing; elsewhere Chrome's phrase-aware breaking helps. */
 html[lang=ja] h1,html[lang=zh] h1{word-break:keep-all;overflow-wrap:anywhere}
 html[lang=ja] h2,html[lang=ja] h3,html[lang=ja] .rule{word-break:auto-phrase}
+/* Chinese has no phrase segmenter in browsers; headings break only at the
+   <wbr> phrase points and punctuation the markup gives them. */
+html[lang=zh] :is(h1,h2){word-break:keep-all}
 .lead{font-size:clamp(var(--fs-16),1.7vw,var(--fs-19));color:var(--ink-2);max-width:620px;margin:0 auto 34px;text-wrap:pretty}
 .lead b{color:var(--ink);font-weight:600}
 .actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
@@ -278,6 +286,10 @@ h3{font-size:var(--fs-19);letter-spacing:-.015em;line-height:1.3;margin:0 0 6px;
 .tile-col{display:grid;gap:16px}
 @media (min-width:600px) and (max-width:899px){.tile-col{grid-template-columns:1fr 1fr}}
 .tile-day .tile-media{max-width:420px;margin-left:auto;margin-right:auto;width:100%}
+/* The Approvals crop: capped so its app type (~16 CSS px) sits nearer the
+   calendar tile's than full-bleed would (~20), centred in the space the
+   taller right column leaves. */
+.day-grid > .tile > .tile-media{max-width:520px;width:100%;margin:auto}
 /* The web briefing card (DayShapeCard in packages/web/src/app/briefing/page.tsx)
    as markup, not a capture, so it reads in every landing language and follows
    the theme. Demo data: the desktop preview fixtures' day (a clear morning,
@@ -318,7 +330,7 @@ h3{font-size:var(--fs-19);letter-spacing:-.015em;line-height:1.3;margin:0 0 6px;
 .trust + .trust{border-top:1px solid var(--line-2)}
 .trust h3{margin:0;font-size:var(--fs-16);font-weight:650;line-height:1.3;min-height:2lh;letter-spacing:-.01em}
 .trust p{margin:0;font-size:var(--fs-14);line-height:1.55;color:var(--ink-2)}
-.trust .go{margin-top:auto;display:inline-flex;align-items:center;min-height:44px;align-self:flex-start;
+.trust .go{margin-top:auto;display:inline-flex;align-items:center;min-height:44px;min-width:44px;align-self:flex-start;
   font-size:var(--fs-14);font-weight:600;color:var(--accent);text-decoration:none}
 .trust .go:hover{text-decoration:underline;text-underline-offset:3px}
 @media (min-width:600px) and (max-width:1099px){
@@ -350,7 +362,6 @@ html[lang=ko] .note-label,html[lang=ja] .note-label,html[lang=zh] .note-label{le
   letter-spacing:-.01em;text-wrap:pretty}
 html[lang=ko] .note-q p,html[lang=ja] .note-q p,html[lang=zh] .note-q p{font-weight:600;letter-spacing:-.02em;
   font-size:clamp(var(--fs-19),2.4vw,var(--fs-32));line-height:1.5}
-html[lang=ko] .note-q p{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR',system-ui,sans-serif}
 
 /* ── Pricing ─────────────────────────────────────── */
 /* L11 (Landing.dc.html): three cards whose rows line up — head, a 56px price
@@ -419,7 +430,7 @@ html[lang=ko] .note-q p{font-family:'Pretendard',-apple-system,BlinkMacSystemFon
 .foot-grid{display:grid;grid-template-columns:1fr;gap:28px}
 @media (min-width:640px){.foot-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (min-width:1000px){.foot-grid{grid-template-columns:minmax(0,1.6fr) repeat(4,minmax(0,1fr))}}
-.foot .brand{display:inline-flex;align-items:center;min-height:44px;font-weight:700;color:var(--ink);text-decoration:none;font-size:var(--fs-16);letter-spacing:-.015em}
+.foot .brand{display:inline-flex;align-items:center;min-height:44px;min-width:44px;font-weight:700;color:var(--ink);text-decoration:none;font-size:var(--fs-16);letter-spacing:-.015em}
 .foot-note{margin:10px 0 0;max-width:30ch;line-height:1.5}
 .socials{display:flex;gap:4px;margin-top:12px}
 .socials a{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:var(--r-8);color:var(--ink-2)}
@@ -427,18 +438,18 @@ html[lang=ko] .note-q p{font-family:'Pretendard',-apple-system,BlinkMacSystemFon
 .socials svg{width:18px;height:18px}
 .foot nav{display:flex;flex-direction:column;align-items:flex-start}
 .foot h4{margin:0 0 6px;font-size:var(--fs-12);font-weight:650;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
-.foot nav a{text-decoration:none;display:inline-flex;align-items:center;min-height:44px;color:var(--ink-2)}
+.foot nav a{text-decoration:none;display:inline-flex;align-items:center;min-height:44px;min-width:44px;color:var(--ink-2)}
 .foot nav a:hover,.langsw a:hover{color:var(--ink)}
 .foot-base{display:flex;flex-wrap:wrap;gap:8px 24px;align-items:center;justify-content:space-between;
   margin-top:36px;padding-top:20px;border-top:1px solid var(--line);font-size:var(--fs-12);color:var(--ink-3)}
 .langsw{display:flex;flex-wrap:wrap;align-items:center}
-.langsw a{display:inline-flex;align-items:center;min-height:44px;padding:0 7px;text-decoration:none;color:var(--ink-2);font-weight:600}
+.langsw a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;min-width:44px;padding:0 7px;text-decoration:none;color:var(--ink-2);font-weight:600}
 .langsw a[aria-current]{color:var(--ink);text-decoration:underline;text-underline-offset:4px}
 .langsw i{font-style:normal;color:var(--ink-3)}
 
 /* ── Compare links (trust band) ──────────────────── */
-.vs-row{margin:28px 0 0;font-size:var(--fs-14);color:var(--ink-2);display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px}
-.vs-row a{color:var(--accent);font-weight:600;display:inline-flex;align-items:center;min-height:44px;padding:0 6px;
+.vs-row{margin:28px 0 0;font-size:var(--fs-14);color:var(--ink-2);display:flex;flex-wrap:wrap;align-items:center;gap:0 18px}
+.vs-row a{color:var(--accent);font-weight:600;display:inline-flex;align-items:center;min-height:44px;
   text-underline-offset:3px}
 .meta a{color:inherit;text-underline-offset:3px}
 .meta a:hover{color:var(--ink)}
@@ -452,6 +463,10 @@ html[lang=ko] .eyebrow,html[lang=ja] .eyebrow,html[lang=zh] .eyebrow{letter-spac
 figure{margin:0}
 /* L10: no orphans in running text; on phones the hero reads left-aligned. */
 p{text-wrap:pretty}
+h3{text-wrap:balance}
+li,summary,figcaption{text-wrap:pretty}
+html[lang=ja] :is(.lead,.sec-lead,.tile p,.note-q p,summary,.price li){word-break:auto-phrase}
+.langsw a:first-child{justify-content:flex-start;padding-left:0}
 @media (max-width:640px){
   .hero{text-align:left}
   .hero h1,.hero .lead{margin-left:0;margin-right:0}

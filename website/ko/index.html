@@ -25,7 +25,7 @@
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://klorn.ai/brand/og-image.png?v=k2">
-<link rel="preload" as="font" type="font/woff2" href="/fonts/geist-var.woff2" crossorigin>
+<link rel="stylesheet" href="/fonts/pretendard/pretendard.css">
 <link rel="preload" as="image" type="image/webp" media="(min-width:641px) and (prefers-color-scheme: light)"
       imagesrcset="/media/app-2026-10/today-ko-light-1200.webp 1200w, /media/app-2026-10/today-ko-light-2000.webp 2000w, /media/app-2026-10/today-ko-light-2560.webp 2560w"
       imagesizes="(min-width:1240px) 1176px, 94vw" fetchpriority="high">
@@ -276,6 +276,7 @@
       <div class="win">
         <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
         <picture>
+        <source media="(max-width:640px) and (prefers-color-scheme: dark)" sizes="94vw" width="656" height="781" srcset="/media/app-2026-10/mail-m-dark-656.webp 656w">
         <source media="(max-width:640px)" sizes="94vw" width="840" height="1000" srcset="/media/app-2026-10/mail-m-light-840.webp 840w">
         <source media="(prefers-color-scheme: dark)" sizes="(min-width:1240px) 1116px, 94vw" srcset="/media/app-2026-10/mail-ko-dark-1200.webp 1200w, /media/app-2026-10/mail-ko-dark-2000.webp 2000w">
         <img src="/media/app-2026-10/mail-ko-light-2000.webp"
@@ -331,21 +332,20 @@
     <div class="sec-head">
       <span class="eyebrow">나의 하루</span>
       <h2 id="day-h">하루가 한&nbsp;화면에. 그&nbsp;하루를 아는&nbsp;어시스턴트.</h2>
-      <p class="sec-lead">메일 옆의 캘린더, 아침 브리핑, 그리고 내 메일함을 근거로 답하고 행동 전에는 꼭 묻는 어시스턴트.</p>
+      <p class="sec-lead">메일 옆의 캘린더, 아침 브리핑, 그리고 내 메일함을 근거로 답하는 어시스턴트.</p>
     </div>
     <div class="day-grid">
       <article class="tile">
         <div><h3>묻고, 승인하고</h3>
-          <p>오늘 아직 남은 일이 뭔지 물어보세요. 답장 초안과 새 일정은 승인할 때까지 &lsquo;승인 대기&rsquo;에서 기다립니다.</p></div>
+          <p>오늘 아직 남은 일이 뭔지 물어보세요. 답장 초안과 새 일정은 승인할 때까지 &lsquo;승인 대기&rsquo;&#8288;에서 기다립니다.</p></div>
         <div class="tile-media card-shot">
           <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
           <picture>
-          <source media="(max-width:640px)" sizes="88vw" width="840" height="700" srcset="/media/app-2026-10/assistant-m-light-840.webp 840w">
-          <source media="(prefers-color-scheme: dark)" sizes="(min-width:1240px) 700px, (min-width:900px) 60vw, 90vw" srcset="/media/app-2026-10/assistant-ko-dark-1200.webp 1200w, /media/app-2026-10/assistant-ko-dark-2000.webp 2000w">
-          <img src="/media/app-2026-10/assistant-ko-light-2000.webp"
-               srcset="/media/app-2026-10/assistant-ko-light-1200.webp 1200w, /media/app-2026-10/assistant-ko-light-2000.webp 2000w"
-               sizes="(min-width:1240px) 700px, (min-width:900px) 60vw, 90vw" width="2000" height="1250" loading="lazy" decoding="async"
-               alt="Mac의 어시스턴트 화면: 답장과 일정 생성 두 건이 승인과 거절 버튼과 함께 대기 중이고, 옆 대화창에서 오늘 아직 남은 일을 답합니다."></picture>
+          <source media="(prefers-color-scheme: dark)" sizes="(min-width:1240px) 700px, (min-width:900px) 60vw, 90vw" srcset="/media/app-2026-10/approvals-ko-dark-400.webp 400w, /media/app-2026-10/approvals-ko-dark-656.webp 656w">
+          <img src="/media/app-2026-10/approvals-ko-light-656.webp"
+               srcset="/media/app-2026-10/approvals-ko-light-400.webp 400w, /media/app-2026-10/approvals-ko-light-656.webp 656w"
+               sizes="(min-width:1240px) 700px, (min-width:900px) 60vw, 90vw" width="656" height="609" loading="lazy" decoding="async"
+               alt="Mac 어시스턴트의 승인 패널: 답장과 일정 생성 두 건이 승인과 거절 버튼과 함께 대기 중입니다."></picture>
         </div>
       </article>
       <div class="tile-col">
@@ -406,7 +406,7 @@
       <article class="trust"><h3>오픈소스, 직접 설치 가능</h3>
         <p>메일을 다루는 모든 코드가 AGPL-3.0으로 공개되어 있습니다. 내 서버에서 직접 돌릴 수 있습니다.</p><a class="go" href="/self-host/">설치 가이드 →</a></article>
       <article class="trust"><h3>Google OAuth 검증 완료</h3>
-        <p>2026-10-03 완료. CASA Tier 2 기준으로 독립 평가를 받았습니다.</p><a class="go" href="/security/#google-verification">보안 →</a></article>
+        <p>2026-10-03 완료. CASA Tier&nbsp;2 기준으로 독립 평가를 받았습니다.</p><a class="go" href="/security/#google-verification">보안 →</a></article>
     </div>
     <p class="vs-row">다른 도구와 비교 중이라면:
       <a href="/ko/vs/fyxer/">Fyxer와 비교</a><a href="/ko/vs/superhuman/">Superhuman과 비교</a>
