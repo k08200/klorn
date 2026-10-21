@@ -13,6 +13,8 @@
  * fresh tab. Read once, then gone.
  */
 
+import { sha256 } from "./sha256";
+
 const STORAGE_KEY = "klorn-login-binding";
 const MAX_AGE_MS = 15 * 60_000;
 
@@ -30,8 +32,13 @@ export async function beginLoginBinding(): Promise<string> {
   } catch {
     // Storage blocked: the exchange will refuse this sign-in, as it should.
   }
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(nonce));
-  return toBase64Url(new Uint8Array(digest));
+  const bytes = new TextEncoder().encode(nonce);
+  // crypto.subtle exists only in secure contexts; a self-hosted instance on
+  // plain http (a LAN address) has none, so fall back to the plain-JS digest.
+  const digest = crypto.subtle
+    ? new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))
+    : sha256(bytes);
+  return toBase64Url(digest);
 }
 
 /** The nonce of the sign-in this browser started, once; null when none or too old. */
@@ -64,7 +71,9 @@ export function followBoundLoginLink(
 ): void {
   if (event.defaultPrevented) return;
   event.preventDefault();
-  void beginLoginBinding().then((binding) => {
-    window.location.assign(withLoginBinding(href, binding));
-  });
+  beginLoginBinding()
+    .then((binding) => window.location.assign(withLoginBinding(href, binding)))
+    // Never a dead click: without a binding the API answers with the login
+    // page's session_expired message, which at least says what happened.
+    .catch(() => window.location.assign(href));
 }

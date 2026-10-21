@@ -559,7 +559,14 @@ describe("park throttle: a per-IP cap on the unauthenticated callback's park pat
     const app = await buildApp();
     const state = await startFlow(app, inbox);
     for (let i = 0; i <= PARK_LIMIT_PER_IP; i += 1) await fromIp(app, state);
-    const loginState = signToken({ userId: "__login__", email: "__google_login__" }, "10m");
+    const loginState = signToken(
+      {
+        userId: "__login__",
+        email: "__google_login__",
+        lb: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      },
+      "10m",
+    );
 
     const res = await app.inject({
       method: "GET",
