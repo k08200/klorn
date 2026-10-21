@@ -980,34 +980,36 @@ export function authRoutes(app: FastifyInstance) {
     },
   );
 
-  // The confirm form of the desktop poll sign-in (auth/desktop-confirm.ts) is
-  // a plain urlencoded POST; the parser is scoped to these routes.
-  app.register(formbody);
-
   // POST /api/auth/desktop-confirm — the browser that completed a desktop poll
-  // sign-in confirms it; only now is the session parked for the app's poller.
-  app.post(
-    "/desktop-confirm",
-    { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
-    async (request, reply) => {
-      const { confirm } = (request.body ?? {}) as { confirm?: unknown };
-      const pending = takeDesktopConfirmation(confirm);
-      const entry = pending ? desktopLoginTokens.get(pending.nonce) : undefined;
-      reply.header("Cache-Control", "no-store");
-      reply.type("text/html");
-      if (
-        !pending ||
-        !entry ||
-        entry.expiresAt < Date.now() ||
-        entry.jwt !== undefined ||
-        entry.relayed
-      ) {
-        return reply.code(400).send(desktopConfirmExpiredPage());
-      }
-      desktopLoginTokens.set(pending.nonce, { ...entry, jwt: pending.jwt });
-      return reply.send(DESKTOP_LOGIN_DONE_PAGE);
-    },
-  );
+  // sign-in confirms it; only now is the session parked for the app's poller
+  // (auth/desktop-confirm.ts). The confirm form is a plain urlencoded POST, so
+  // the parser lives in this route's own scope: every other auth route stays
+  // JSON-only, which a cross-site HTML form cannot send.
+  app.register(async (scope) => {
+    await scope.register(formbody);
+    scope.post(
+      "/desktop-confirm",
+      { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
+      async (request, reply) => {
+        const { confirm } = (request.body ?? {}) as { confirm?: unknown };
+        const pending = takeDesktopConfirmation(confirm);
+        const entry = pending ? desktopLoginTokens.get(pending.nonce) : undefined;
+        reply.header("Cache-Control", "no-store");
+        reply.type("text/html");
+        if (
+          !pending ||
+          !entry ||
+          entry.expiresAt < Date.now() ||
+          entry.jwt !== undefined ||
+          entry.relayed
+        ) {
+          return reply.code(400).send(desktopConfirmExpiredPage());
+        }
+        desktopLoginTokens.set(pending.nonce, { ...entry, jwt: pending.jwt });
+        return reply.send(DESKTOP_LOGIN_DONE_PAGE);
+      },
+    );
+  });
 
   // GET /api/auth/desktop-token/:nonce — Desktop app polls this after login.
   // Returns 404 for nonces that were not issued by /desktop-nonce so attackers

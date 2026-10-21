@@ -279,3 +279,16 @@ describe("desktop login — the poll flow asks the browser first", () => {
     expect((await confirm("f".repeat(40))).statusCode).toBe(400);
   });
 });
+
+describe("the confirm form's parser stays with the confirm route", () => {
+  it("leaves every other auth route JSON-only, so a cross-site form cannot post to it", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/auth/exchange-code",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      payload: "code=abc",
+    });
+    expect(res.statusCode).toBe(415);
+  });
+});
