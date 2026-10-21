@@ -15,7 +15,8 @@
  * crash the sync tick.
  */
 
-export type InboxProviderName = "GOOGLE" | "NAVER" | "ICLOUD" | "OUTLOOK" | "IMAP";
+// KLORN: the Klorn address (step E1a), mail Klorn receives itself: no credentials.
+export type InboxProviderName = "GOOGLE" | "NAVER" | "ICLOUD" | "OUTLOOK" | "IMAP" | "KLORN";
 
 export type InboxAuthKind = "oauth" | "imap" | "broken";
 

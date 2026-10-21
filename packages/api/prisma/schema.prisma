@@ -118,6 +118,7 @@ model User {
   driveSummaryUsage         DriveSummaryUsage[]
   automationConfig          AutomationConfig?
   dataWipe                  DataWipe?
+  klornAddress              KlornAddress?
   agentLogs                 AgentLog[]
   notifications             Notification[]
   pushSubscriptions         PushSubscription[]
@@ -468,13 +469,17 @@ model LinkedCalendarAccount {
 // Which mail service a LinkedInboxAccount row belongs to. GOOGLE/OUTLOOK are
 // OAuth providers (token cipher in accessToken); NAVER/ICLOUD/IMAP are IMAP
 // providers (imapHost + imapPasswordCipher). inbox-credentials.ts is the one
-// place that maps provider → required credential shape.
+// place that maps provider → required credential shape. KLORN is the Klorn
+// address (step E1a): mail Klorn receives itself, so no credentials at all; its
+// row's email is `<KlornAddress.handle>@<domain>`. The list is pinned to the
+// API's InboxProviderName and the contract's InboxProvider by a guard test.
 enum InboxProvider {
   GOOGLE
   NAVER
   ICLOUD
   OUTLOOK
   IMAP
+  KLORN
 }
 
 // A SECONDARY mail account linked for FULL INBOX access so the firewall runs
@@ -969,6 +974,19 @@ model DriveSummaryUsage {
 // `fenceUntil`, and the app rejects writes from any work that began before
 // `fenceUntil`. The row stays with the account (one per user, rewritten by the
 // next wipe) and goes with it when the account is deleted.
+// The handle of a Klorn address (step E1a of docs/providers/unified-platform-plan.md):
+// `<handle>@<domain>`, user-chosen, immutable, one per account. A row whose userId
+// is null is a tombstone: its account was deleted (the FK nulls it, never
+// cascades) and the handle is never issued again (L5). A data wipe keeps the row:
+// the address belongs to the account, like its sign-in address. The handle rules
+// and the reserved list are mail/klorn-handle.ts; the migration stores lowercase only.
+model KlornAddress {
+  handle    String   @id
+  userId    String?  @unique
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+}
+
 model DataWipe {
   userId      String    @id
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1496,6 +1514,10 @@ model EmailMessage {
   // has not summarized the email yet.
   keyPoints               Json?
   actionItems             Json?
+  // The receiving server's SPF, DKIM and DMARC verdicts, `{ spf, dkim, dmarc }`
+  // (step E1a). Set only for mail Klorn receives itself (KLORN); null for every
+  // other provider. Shown and acted on in E4 (L13).
+  authentication          Json?
   needsReply              Boolean           @default(false)
   needsReplyReason        String?
   needsReplyConfidence    Float             @default(0.0)

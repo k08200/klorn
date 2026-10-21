@@ -33,6 +33,9 @@ const ACTIONS_BY_PROVIDER: Readonly<Record<InboxProviderName, MailProviderAction
   // which can only exist once OUTLOOK_INBOX_ENABLED let a user link one.
   OUTLOOK: outlookMailActions,
   IMAP: unsupportedMailActions("IMAP"),
+  // The Klorn address (step E1a): the database is the source of truth, and its
+  // actions arrive with E2. Until then every action answers unsupported.
+  KLORN: unsupportedMailActions("KLORN"),
 };
 
 // The three opt-in action sets, each behind its own OFF flag and independent of the

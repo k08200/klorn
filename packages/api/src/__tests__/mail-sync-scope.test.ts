@@ -65,6 +65,15 @@ describe("firstLinkedMailSourceId", () => {
     });
   });
 
+  it("leaves the Klorn address out: it is part of the account, not the first mailbox (E1a)", async () => {
+    const m = await load(true);
+    linkedFindFirst.mockResolvedValue({ id: "oldest" });
+    await m.firstLinkedMailSourceId("user-1");
+    expect(linkedFindFirst.mock.calls[0]?.[0]).toMatchObject({
+      where: { userId: "user-1", provider: { not: "KLORN" } },
+    });
+  });
+
   it("is null when the primary Google token is the first mailbox", async () => {
     const m = await load(true);
     tokenFindFirst.mockResolvedValue({ id: "t1" });

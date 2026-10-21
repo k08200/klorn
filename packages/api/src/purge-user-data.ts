@@ -1,4 +1,5 @@
 import type { db } from "./db.js";
+import { NOT_KLORN_ADDRESS } from "./mail/klorn-mailbox.js";
 
 /** The Prisma client (or a $transaction client cast to it) — exposes every model. */
 type PurgeTx = typeof db;
@@ -46,7 +47,11 @@ export async function revokeUserAccess(tx: PurgeTx, userId: string): Promise<voi
   // Secondary linked Google accounts hold live, decryptable OAuth access/refresh
   // tokens + the linked account's email — Google API data that must not survive
   // a deletion request (previously only removed by manual per-account unlink).
-  await tx.linkedInboxAccount.deleteMany(scope);
+  // The Klorn address's mailbox (KLORN, step E1a) is no grant: it holds no
+  // credentials and belongs to the account like its address (KlornAddress, kept),
+  // so mail to the address still arrives after a wipe. Its mail goes with
+  // purgeUserData; account deletion's cascade takes the row.
+  await tx.linkedInboxAccount.deleteMany({ where: { userId, ...NOT_KLORN_ADDRESS } });
   await tx.linkedCalendarAccount.deleteMany(scope);
   // A linked Google Drive / OneDrive account (D5a): its OAuth token pair and
   // address. Its cascade reaches only that account's GOOGLE/ONEDRIVE DriveFile

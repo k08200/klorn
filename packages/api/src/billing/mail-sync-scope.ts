@@ -15,6 +15,7 @@
 
 import { PAYWALL_ENABLED } from "../config.js";
 import { prisma } from "../db.js";
+import { NOT_KLORN_ADDRESS } from "../mail/klorn-mailbox.js";
 import { planHasFeature } from "./stripe.js";
 
 /** True when every linked inbox may sync (paywall off, or multi_account). */
@@ -33,7 +34,7 @@ export async function firstLinkedMailSourceId(userId: string): Promise<string | 
       select: { id: true },
     }),
     prisma.linkedInboxAccount.findFirst({
-      where: { userId },
+      where: { userId, ...NOT_KLORN_ADDRESS },
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       select: { id: true },
     }),

@@ -34,6 +34,9 @@ function matches(row: { provider: string; email: string }, where: Where): boolea
   if (provider && typeof provider === "object" && "not" in provider) {
     if (row.provider === (provider as { not: string }).not) return false;
   }
+  if (provider && typeof provider === "object" && "notIn" in provider) {
+    if ((provider as { notIn: string[] }).notIn.includes(row.provider)) return false;
+  }
   const email = where.email as { equals?: string; mode?: string } | undefined;
   if (email?.equals !== undefined && row.email.toLowerCase() !== email.equals.toLowerCase()) {
     return false;
@@ -315,5 +318,26 @@ describe("primary Google slot (/google/start + integration callback)", () => {
     expect(await m.keepPrimaryGoogleIfOnlyMailSource("user-1", "tok-new")).toBe(false);
     expect(tokenDeleteMany).toHaveBeenCalledWith({ where: { id: "tok-new", userId: "user-1" } });
     expect(captureError).toHaveBeenCalled();
+  });
+});
+
+describe("the Klorn address (step E1a): part of the account, not a mail source", () => {
+  const KLORN_ROW = { id: "klorn-row", provider: "KLORN", email: "me@klorn.ai" };
+
+  it("does not take the free account slot", async () => {
+    const m = await load(true);
+    state.rows = [KLORN_ROW];
+    expect(await m.canConnectNewMailAccount("user-1")).toBe(true);
+    expect(await m.mayConnectMailAccount("user-1", ICLOUD)).toBe(true);
+    expect(await m.mayStartMailLink("user-1", "OUTLOOK")).toBe(true);
+    expect(await m.mayConnectPrimaryGoogle("user-1")).toBe(true);
+  });
+
+  it("leaves every other mailbox counted as before", async () => {
+    const m = await load(true);
+    state.rows = [KLORN_ROW, { id: "icloud-row", provider: "ICLOUD", email: "me@icloud.com" }];
+    expect(await m.canConnectNewMailAccount("user-1")).toBe(false);
+    expect(await m.mayConnectPrimaryGoogle("user-1")).toBe(false);
+    expect(await m.mayStartMailLink("user-1", "OUTLOOK")).toBe(false);
   });
 });
