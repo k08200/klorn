@@ -1733,6 +1733,17 @@ OFF. Not flippable until the security review below signs off.
 
 **B5 — flips** (*outline*). After the Letter of Assessment. Microsoft also
 needs FA-9 and the admin guidance from F0.
+- Microsoft access cannot be revoked by Klorn. Graph has no per-app
+  refresh-token revocation; `revokeSignInSessions` signs the user out of every
+  app. A disconnect or deletion deletes Klorn's tokens, and the grant stays on
+  the Microsoft account. Before the first Microsoft flip:
+  - add an "Access at Microsoft" line to the privacy page's retention list,
+    next to "Access at Google";
+  - make the Microsoft disconnect and the deletion confirm say where to remove
+    Klorn: account.live.com/consent/Manage (personal) or
+    myapps.microsoft.com (work or school).
+  As of 2026-10-21 prod holds no Microsoft grant (every linked inbox,
+  calendar and drive row is Google or iCloud).
 
 ### Workstream C — calendar
 
@@ -4131,9 +4142,11 @@ the scopes that sign-in, Gmail, Calendar and the inbox links request
       `purgeUserData` (`purge-user-data.ts:27`) cover the table.
   - Unlink: the rows (through the writer's `deleteLinkedAccountDriveRows`, by
     sourceKey), then the account, in one transaction; the cascade covers a
-    refresh still in flight. Klorn does not call
-    Google's revoke endpoint: Google revokes a combined grant whole (prior
-    knowledge), and for the primary's account that would cut Gmail.
+    refresh still in flight. Since #1502 the unlink also revokes the grant at
+    Google (`auth/google-grant-revoke.ts`), unless another grant row holds the
+    same Google account: Google revokes a combined grant whole, so a revoke
+    of the primary's account would cut Gmail. A revoke Google did not answer
+    is retried in memory for about 71 minutes (`REVOKE_RETRY_DELAYS_MS`).
   - Picker: the browser needs a `drive.file` token, a developer key and the app id.
     - `POST /api/drive/google/accounts/:id/picker-session` returns all three,
       `no-store`. The token is minted on click. An unset variable answers 503

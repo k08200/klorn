@@ -34,10 +34,13 @@ import {
   GOOGLE_REVOKE_URL,
   type HeldGoogleGrant,
   MAX_UNKNOWN_ADDRESSES,
+  REVOKE_RETRY_DELAYS_MS,
   rememberPrimaryGoogleAddress,
   removeAndRevokeGoogle,
   revokeGoogleGrants,
+  revokeGoogleGrantsInBackground,
 } from "../auth/google-grant-revoke.js";
+import { runAsNewWork, workStartedAt } from "../work-context.js";
 
 const fetchMock = vi.fn();
 
@@ -277,6 +280,114 @@ describe("revokeGoogleGrants", () => {
     prisma.linkedInboxAccount.count.mockRejectedValue(new Error("pool exhausted"));
     await expect(revokeGoogleGrants("u1", [grant({})])).resolves.toEqual([]);
     expect(captureError).toHaveBeenCalled();
+  });
+});
+
+describe("revokeGoogleGrantsInBackground (retries)", () => {
+  const DELAYS = [1_000, 2_000] as const;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const revokeCalls = () => fetchMock.mock.calls.length;
+
+  it("retries a revoke Google failed, and stops once it went through", async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response("oops", { status: 503 }))
+      .mockResolvedValue(new Response(null, { status: 200 }));
+    revokeGoogleGrantsInBackground("u1", [grant({})], DELAYS);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(revokeCalls()).toBe(1);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(revokeCalls()).toBe(2);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(revokeCalls()).toBe(2);
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("checks the holders again before a retry: a grant linked meanwhile is left alone", async () => {
+    fetchMock.mockResolvedValue(new Response("oops", { status: 503 }));
+    revokeGoogleGrantsInBackground("u1", [grant({})], DELAYS);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(revokeCalls()).toBe(1);
+    // The same Google account is linked again before the retry.
+    prisma.linkedInboxAccount.count.mockResolvedValue(1);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(revokeCalls()).toBe(1);
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("gives up after the last delay and reports what is still unrevoked, once", async () => {
+    fetchMock.mockResolvedValue(new Response("oops", { status: 503 }));
+    revokeGoogleGrantsInBackground("u1", [grant({})], DELAYS);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(revokeCalls()).toBe(DELAYS.length + 1);
+    expect(captureError).toHaveBeenCalledTimes(1);
+    expect(captureError).toHaveBeenCalledWith(expect.any(Error), {
+      tags: { scope: "google.revoke", userId: "u1" },
+      extra: { summary: "inbox:failed" },
+    });
+  });
+
+  it("retries a grant whose account could not be settled", async () => {
+    prisma.userToken.findMany.mockResolvedValue([
+      { id: "tok-9", accessToken: "enc:a9", refreshToken: "enc:r9" },
+    ]);
+    getProfile
+      .mockRejectedValueOnce(new Error("socket hang up"))
+      .mockResolvedValue({ data: { emailAddress: "someone@else.com" } });
+    revokeGoogleGrantsInBackground("u1", [grant({})], DELAYS);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(revokeCalls()).toBe(0);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(revokeCalls()).toBe(1);
+  });
+
+  it("retries the grants a pass never reached because the database failed", async () => {
+    prisma.linkedInboxAccount.count.mockRejectedValueOnce(new Error("pool exhausted"));
+    revokeGoogleGrantsInBackground("u1", [grant({})], DELAYS);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(revokeCalls()).toBe(0);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(revokeCalls()).toBe(1);
+  });
+
+  it("does not retry a grant that is settled: revoked, already invalid or shared", async () => {
+    fetchMock.mockResolvedValueOnce(Response.json({ error: "invalid_token" }, { status: 400 }));
+    revokeGoogleGrantsInBackground("u1", [grant({})], DELAYS);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(revokeCalls()).toBe(1);
+  });
+
+  it("runs a retry as new work, not as part of the request that started it", async () => {
+    const startedAt: number[] = [];
+    fetchMock.mockImplementation(async () => {
+      startedAt.push(workStartedAt().getTime());
+      return new Response("oops", { status: 503 });
+    });
+    runAsNewWork(() => revokeGoogleGrantsInBackground("u1", [grant({})], [1_000]));
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(startedAt).toHaveLength(2);
+    expect((startedAt[1] ?? 0) - (startedAt[0] ?? 0)).toBe(1_000);
+  });
+
+  it("does nothing for no grants", async () => {
+    revokeGoogleGrantsInBackground("u1", [], DELAYS);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(revokeCalls()).toBe(0);
+    expect(prisma.linkedInboxAccount.count).not.toHaveBeenCalled();
+  });
+
+  it("retries for about an hour by default", () => {
+    const total = REVOKE_RETRY_DELAYS_MS.reduce((sum, ms) => sum + ms, 0);
+    expect(REVOKE_RETRY_DELAYS_MS.length).toBeGreaterThanOrEqual(3);
+    expect(total).toBeGreaterThanOrEqual(60 * 60_000);
+    expect(total).toBeLessThanOrEqual(2 * 60 * 60_000);
   });
 });
 

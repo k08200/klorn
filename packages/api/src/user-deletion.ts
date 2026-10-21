@@ -20,7 +20,7 @@
 import {
   collectGoogleGrants,
   type HeldGoogleGrant,
-  revokeGoogleGrants,
+  revokeGoogleGrantsInBackground,
 } from "./auth/google-grant-revoke.js";
 import { type db, INTERACTIVE_TX_OPTIONS, prisma } from "./db.js";
 import { DATA_WIPE_FENCE_MS, rememberDataWipe } from "./privacy/data-wipe-fence.js";
@@ -62,9 +62,9 @@ export async function deleteUserAndAllData(userId: string): Promise<void> {
       : []),
     prisma.user.delete({ where: { id: userId } }),
   ]);
-  // The account is gone: revoke its Google grants at Google (best effort, not
-  // awaited, so Google's latency never holds the request).
-  void revokeGoogleGrants(userId, grants);
+  // The account is gone: revoke its Google grants at Google (best effort, with
+  // retries, not awaited, so Google's latency never holds the request).
+  revokeGoogleGrantsInBackground(userId, grants);
 }
 
 /**
@@ -155,8 +155,8 @@ export async function purgeAllUserData(userId: string): Promise<DataWipeOutcome>
   await recordWipeAndRevoke(userId);
   rememberDataWipe(userId, { purgedAt: null, fenceUntil: null });
   // Access is cut off in Klorn; revoke the grants at Google too (best effort,
-  // not awaited: the purge must not wait on Google).
-  void revokeGoogleGrants(userId, grants);
+  // with retries, not awaited: the purge must not wait on Google).
+  revokeGoogleGrantsInBackground(userId, grants);
   try {
     await finishDataWipe(userId);
     return "purged";
