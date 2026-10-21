@@ -84,6 +84,7 @@ const db = vi.hoisted(() => ({
 vi.mock("../db.js", () => ({ prisma: db, db }));
 
 import { createHash } from "node:crypto";
+import { mintExchangeCode } from "../auth/exchange-codes.js";
 import { signToken, verifyToken } from "../auth.js";
 import { authRoutes } from "../routes/auth.js";
 
@@ -315,6 +316,33 @@ describe("login CSRF: a web sign-in completes only in the browser that started i
       });
       expect(res.statusCode).toBe(200);
       expect(typeof res.json().token).toBe("string");
+    });
+  });
+
+  it("refuses a native relay code redeemed through the web callback", async () => {
+    // The desktop flow's deep-link code is unbound: an attacker could run that
+    // flow for their own account and hand the victim /auth/callback?code=….
+    const relay = mintExchangeCode("attacker-jwt");
+    await withApp(async (app) => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/auth/exchange-code",
+        payload: { code: relay, web: true },
+      });
+      expect(res.statusCode).toBe(403);
+    });
+  });
+
+  it("still redeems a native relay code for the native app, which sends no `web`", async () => {
+    const relay = mintExchangeCode("app-jwt");
+    await withApp(async (app) => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/auth/exchange-code",
+        payload: { code: relay },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ token: "app-jwt" });
     });
   });
 

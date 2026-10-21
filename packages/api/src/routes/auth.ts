@@ -1001,7 +1001,11 @@ export function authRoutes(app: FastifyInstance) {
     "/exchange-code",
     { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
     async (request, reply) => {
-      const { code, nonce } = (request.body ?? {}) as { code?: string; nonce?: unknown };
+      const { code, nonce, web } = (request.body ?? {}) as {
+        code?: string;
+        nonce?: unknown;
+        web?: unknown;
+      };
       if (!code || typeof code !== "string") {
         return reply.code(400).send({ error: "Missing code" });
       }
@@ -1015,6 +1019,14 @@ export function authRoutes(app: FastifyInstance) {
       // A web sign-in's code redeems only in the browser that started it
       // (login CSRF). Deleted either way: a wrong browser never gets a retry.
       if (entry.binding && !loginBindingMatches(entry.binding, nonce)) {
+        return reply.code(403).send({ error: "This sign-in was started in another browser" });
+      }
+      // An unbound code is a native app's deep-link relay. The web callback
+      // page says it is the web (body.web): without this, an attacker could
+      // run the desktop flow for their own account and hand the victim
+      // /auth/callback?code=<relay code>, the same login CSRF by another door.
+      // Native apps send no `web`, so their relay works unchanged.
+      if (!entry.binding && web === true) {
         return reply.code(403).send({ error: "This sign-in was started in another browser" });
       }
       return { token: entry.jwt };
@@ -1351,9 +1363,8 @@ export function authRoutes(app: FastifyInstance) {
             // that completed OAuth, not whoever polls the nonce. No scheme → the
             // legacy poll flow (kept for clients that haven't adopted the relay).
             if (isAllowedNativeScheme(statePayload.appScheme)) {
-              const relayCode = crypto.randomBytes(20).toString("hex");
-              exchangeCodes.set(relayCode, { jwt: token, expiresAt: Date.now() + 60_000 });
-              setTimeout(() => exchangeCodes.delete(relayCode), 60_000);
+              // Unbound: redeemable only outside the web callback (see /exchange-code).
+              const relayCode = mintExchangeCode(token);
               // Keep the entry, still WITHOUT a jwt — deleting it made the app's
               // poll answer "nonce not recognized" (404) the moment the browser
               // blocked the scheme launch, turning a recoverable state into a

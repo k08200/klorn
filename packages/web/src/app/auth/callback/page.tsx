@@ -30,7 +30,9 @@ function CallbackHandler() {
       fetch(`${API_BASE}/api/auth/exchange-code`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(nonce ? { code, nonce } : { code }),
+        // `web`: this is the browser callback, so a native app's unbound
+        // relay code is refused here (api routes/auth.ts /exchange-code).
+        body: JSON.stringify(nonce ? { code, nonce, web: true } : { code, web: true }),
       })
         .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
         .then((data: { token: string }) => loginWithToken(data.token))
