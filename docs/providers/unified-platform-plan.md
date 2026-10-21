@@ -4565,9 +4565,173 @@ that service later is not changed in Klorn.
 
 **E0 — founder actions and address inventory.** FA-1 to FA-4, plus the
 inventory of published `@klorn.ai` addresses (note on L17).
-**E1 — schema and inbound webhook** (*outline*). New provider value, handle
-table with tombstones (L5) and reserved words, signed webhook, shared
-persistence path.
+**E1 — schema and inbound webhook.** Detailed design 2026-10-21. Built against
+fixtures before E0; nothing is reachable until E0 is done and the flag is on.
+- Resend Inbound, as documented on 2026-10-21 (resend.com/docs; FA-1 still asks
+  the undocumented points in writing):
+  - `email.received` webhook: metadata only. Fields: `email_id`, bare `from`,
+    `to[]`, `cc[]`, `bcc[]`, `received_for[]` (from the `Received: for`
+    clauses, so a Bcc'd address shows here), `message_id`, `subject`, and
+    attachment metadata. Svix-signed (`svix-id`, `svix-timestamp`,
+    `svix-signature`) over the raw body.
+  - Content: `GET /emails/receiving/{id}` returns `html`, `text`, `headers`
+    (the From display name is only here), `reply_to`, `authentication`
+    (`spf`, `dkim`, `dmarc`), `raw` (an expiring signed URL of the original)
+    and attachment metadata with `size`. Attachments:
+    `GET /emails/receiving/{id}/attachments`, each with an expiring
+    `download_url`.
+  - Delivery retries: immediately, then 5 s, 5 min, 30 min, 2 h, 5 h, 10 h and
+    10 h (about 28 h in all). An endpoint that keeps failing is disabled
+    automatically, with an email to the team. Failed and succeeded messages can
+    be replayed by hand.
+  - Not documented: the inbound size limit, retention, spam filtering, the
+    delivery timeout, and which statuses count as success.
+  - SDK: the lockfile pins `resend` 6.20.0, and 6.10.0 already has
+    `webhooks.verify`, `emails.receiving.get`, `.attachments.list` and
+    `.forward`. `svix` is only transitive: verify through the SDK.
+- Schema (E1a):
+  - `InboxProvider` gains `KLORN`: the Prisma enum (`ADD VALUE`, precedent
+    `20260821130000_pin_tier_action`), `InboxProviderName`
+    (`mail/inbox-credentials.ts:18`) and the contract's `InboxProvider`
+    (`packages/contract/src/email.ts:247`). The three move together, and a new
+    guard test ties them (nothing does today).
+  - The mailbox is a `LinkedInboxAccount` row: provider `KLORN`, email
+    `<handle>@<domain>`, no credentials (every token column is nullable). Every
+    sync loop already filters by provider: Gmail, Outlook, IMAP, Gmail push and
+    the grant revoke never select it. It is created by the claim (E3); E1 only
+    reads it.
+  - `KlornAddress`: `handle` (primary key, lowercase), `userId` (nullable,
+    unique, FK to `User` with `onDelete: SetNull`), `createdAt`.
+    - A row with a null `userId` is a tombstone: the handle of a deleted
+      account, never issued again (L5). Account deletion needs no extra
+      statement: the cascade nulls it.
+    - The address belongs to the account, like its sign-in address, so a data
+      wipe keeps it.
+    - Guards: RLS `tenant_isolation` and `system_bypass`; the data-wipe fence
+      lists it in `UNFENCED_MODELS` (account identity, written by the claim,
+      not by mail work); the purge lists it in `KEPT_WITH_ACCOUNT`.
+    - The privacy text (FA-5) says that a deleted account's address is kept,
+      tied to no account, so that it is never given to someone else.
+  - `EmailMessage.authentication Json?`: Resend's `{spf, dkim, dmarc}`, null
+    for every other provider. Showing it and acting on a failure (L13) is E4.
+  - Handle rules, a pure module (`mail/klorn-handle.ts`):
+    - 3 to 30 characters: `a-z` and `0-9`, with single `.`, `-` or `_`
+      between them, starting and ending with a letter or digit; lowercased on
+      input.
+    - No plus tags (L2: no aliases), so `name+tag@` is an unknown address.
+    - Reserved:
+      - mail roles: `postmaster`, `abuse`, `hostmaster`, `webmaster`,
+        `mailer-daemon`, `noreply`, `no-reply`, `root`, `admin`, `security`;
+      - Klorn's own: `support`, `help`, `info`, `billing`, `privacy`, `legal`,
+        `klorn`, `team`;
+      - published: `hello`, `founders`, `sales`, and `demo` (the seeded demo
+        user, `auth.ts:330`).
+      - E0's inventory adds the rest.
+  - Billing: a `KLORN` row is part of the account, not a linked mail source.
+    The entitlement counts (`billing/mail-account-entitlement.ts:91-93`,
+    `:125-128`, `:156-159`, `:214-217`) and the first-mailbox sync scope
+    (`billing/mail-sync-scope.ts:29-41`) leave it out. Without that, a free
+    user's address would take the free account slot. V5 makes the mailbox
+    auxiliary, and L7 gates sending, not receiving, on a subscription.
+  - `ACTIONS_BY_PROVIDER.KLORN = unsupportedMailActions("KLORN")`
+    (`mail/providers/dispatch.ts:28-37`) until E2.
+- Inbound (E1b):
+  - Route: `POST /api/mailbox/inbound/resend`, in its own plugin.
+    - `darkRouteGate(klornMailboxEnabled)`, flag `KLORN_MAILBOX_ENABLED`, OFF.
+      The existing webhook plugin is not reused: a gate there would also gate
+      Stripe and Paddle.
+    - Env: `RESEND_INBOUND_WEBHOOK_SECRET`, and `KLORN_MAILBOX_DOMAIN` with no
+      default (L19: the domain is operational).
+    - The flag on with either missing answers 503 and logs an error, so Resend
+      retries.
+  - Verification: `resend.webhooks.verify` on `req.rawBody` (kept by the global
+    JSON parser, `index.ts:271-279`) and the three Svix headers.
+    - A bad signature answers 401.
+    - Only `email.received` is handled; any other type answers 204.
+    - The route sets its own rate limit (600 a minute): Svix delivers from a
+      few addresses, and the global 100 a minute per IP would 429 a burst.
+  - Synchronous, with Resend's retries as the queue. The handler answers 2xx
+    only once every Klorn recipient's copy is stored or deliberately dropped.
+    Any other failure answers 5xx, and Resend retries for about 28 h.
+    - No queue table: it would hold what Resend already holds, and its rows
+      would be mail metadata for the purge to track.
+  - Routing reads the signed event, persistence reads the API:
+    - Recipients are `to`, `cc`, `bcc` and `received_for`, deduplicated:
+      addresses at `KLORN_MAILBOX_DOMAIN`, case-insensitive, local part
+      lowercased.
+    - Lookup with `withSystem` (`db-tenant.ts:191`): a `KlornAddress` with a
+      live `userId`, and that user's `KLORN` row.
+    - System addresses (`postmaster`, `abuse`) are forwarded to the support
+      inbox through `emails.receiving.forward` (L18).
+    - Anything else (unknown, tombstoned, reserved) is dropped (L17), with a
+      count in the log and no address.
+    - With no live recipient, the content is never fetched.
+    - The content is fetched with Klorn's own key and is never taken from the
+      webhook body, so a replayed event cannot inject any.
+  - Per recipient: `persistGmailEmail(userId, raw, {userEmail: address,
+    linkedInboxAccountId})` (`judge/email-firewall.ts:70`), the same path as
+    Gmail, IMAP and Outlook.
+    - The judge, the attention item, commitments and push all follow from
+      that path.
+    - `raw` comes from a pure mapper, `resendToRawEmail`:
+      - `gmailId` is `klorn:<address>:<email_id>` (the IMAP and Outlook
+        namespace pattern). A retry or replay updates the same row (unique
+        `(userId, gmailId)`), and a concurrent duplicate (P2002) counts as
+        stored.
+      - `from` is `headers.from`, else the bare `from`; `to` and `cc` are the
+        headers, else the joined arrays, capped as IMAP caps them.
+      - `receivedAt` is the event's `created_at`: Resend's receive time, not
+        the sender's `Date`.
+      - `body` is `text`, else `htmlToPlainText(html)` (`mail/email-text.ts:64`),
+        capped at IMAP's 50 000 characters. `htmlBody` is empty, like IMAP:
+        rendering this source's HTML is reviewed in E4.
+      - Labels `INBOX` and `UNREAD`, `threadId` null, no attachments (bytes
+        are E4), and List-Unsubscribe from the headers.
+      - `authentication` goes to the new column.
+    - No raw MIME is ever parsed: only Resend's parsed fields are used
+      (#1466/#1467: a parser on the event loop is a denial of service).
+    - A recipient whose data wipe is running makes the store throw
+      `DATA_WIPE_IN_PROGRESS`. Its copy is not stored, the answer is 503, and
+      Resend retries after the fence window: mail that arrives after a wipe is
+      new data.
+  - Logs carry the `email_id` and counts, never an address or a subject.
+- Not in E1: the claim and the forwarding wizard (E3); send and reply (E2);
+  attachments, the 25 MB cap (L14), and acting on spam and failed
+  authentication (L13) (E4).
+- Before the E flip, not in E1: the stranded-row safety net.
+  `backfillEmailAttentionItems` and the summarize drain run only for
+  Google-connected users (`automation-scheduler.ts:1287-1292`, `:1411-1414`).
+  A Klorn-only user (or an IMAP-only one) whose judge call failed would never be
+  judged again. Prod on 2026-10-21: the one iCloud mailbox belongs to a user
+  with Google, and every one of its messages from the last 7 days was judged.
+  The backfill must run for every user with a non-Google mailbox before the
+  flip.
+- Founder actions added for the flip, after E0:
+  - a Resend API key that can read received mail (unverified whether the
+    current key can: a Resend key can be limited to sending);
+  - the receiving webhook created in Resend, pointing at
+    `/api/mailbox/inbound/resend`, with its signing secret in
+    `RESEND_INBOUND_WEBHOOK_SECRET`;
+  - `KLORN_MAILBOX_DOMAIN=klorn.ai`.
+  - FA-3 (Render free sleeps) costs latency, not mail: a delivery to a sleeping
+    instance fails and is retried.
+- Verify:
+  - Fixture events signed with a test secret by the Svix scheme (HMAC-SHA256
+    of `id.timestamp.body`) and passed through the real `webhooks.verify`.
+  - The route answers 404 while the flag is off.
+  - An unknown, tombstoned or reserved recipient is dropped.
+  - Two Klorn recipients give two copies.
+  - A replay is idempotent, and a P2002 race counts as stored.
+  - A running wipe answers 503; a missing secret or domain answers 503.
+  - Another event type answers 204.
+  - A system address is forwarded.
+  - Guards: RLS, fence, purge, enum parity.
+- Slices: E1a (schema, handle rules, billing exclusions), then E1b (the route).
+  One PR each, flag OFF, full gate; E1b gets the security review too.
+- Rollback:
+  - E1b: flag off, revert.
+  - E1a: Postgres cannot drop an enum value, so `KLORN` stays unused;
+    `KlornAddress` is dropped once it has no rows.
 **E2 — provider actions and send** (*outline*). Depends on: B0. The database
 is the source of truth, so every action in `MailProviderActions` is
 implementable.
@@ -4606,12 +4770,12 @@ time, whatever the graph says. The later step rebases, reruns
 
 | File | Steps |
 |---|---|
-| `packages/api/prisma/schema.prisma` | A1, A2a, A2b, B2, C1, D2, D5, D6, E1, F |
+| `packages/api/prisma/schema.prisma` | A1, A2a, A2b, B2, C1, D2, D5, D6, E1a, F |
 | `drive/drive-scope.ts`, `drive/drive-rows.ts`, `drive/providers/dispatch.ts`, `routes/drive.ts` | D3, D5, D6, D7 |
 | `routes/klorn-drive.ts`, `drive/klorn-quota.ts` | D3, D7 |
 | `packages/contract/src/drive.ts` | D3, D4, D7 |
 | `packages/api/src/mcp/tool-gate.ts`, `mcp/write-call.ts`, `mcp/server.ts` | A2a, A2b, A4 |
-| `mail/providers/types.ts`, `dispatch.ts` | A4, B0, B0b, B1, B2, B3, E2 |
+| `mail/providers/types.ts`, `dispatch.ts` | A4, B0, B0b, B1, B2, B3, E1a, E2 |
 | `mail/imap-connection.ts`, `mail/imap-sync.ts`, `mail/providers/imap.ts` | B1, B2, B3 |
 | `mail/providers/outlook.ts`, `routes/email-replies.ts` | B0b, the `gmail-draft` follow-up under B0 |
 | `mail/reply-headers.ts` | B0, B3 |
