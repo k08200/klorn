@@ -23,15 +23,17 @@
  * a user's request.
  *
  * Retried, in memory only (revokeGoogleGrantsInBackground): a grant Google did
- * not revoke (an error or no answer), whose account could not be settled, or
+ * not revoke (an error or no answer), whose own address could not be read, or
  * that a failed database read never reached is tried again after each of
- * REVOKE_RETRY_DELAYS_MS, then reported once. Every retry checks the holders
- * again, so a grant linked meanwhile for the same address is left alone; the
- * rows being removed are already gone by then. Not durable on purpose: a
- * queue in the database would keep the token there after the deletion, and the
- * privacy policy says OAuth tokens leave the database in the same operation. A
- * process stopping before the retries are done loses them; the token then
- * lives on only in the backups, until they expire.
+ * REVOKE_RETRY_DELAYS_MS, then reported once. Another account's address that
+ * could not be read is reported, not retried. Every retry checks the holders
+ * again and leaves no row out, so a grant linked meanwhile for the same
+ * address is left alone; the rows being removed are already gone by then. Not
+ * durable on purpose: a queue in the database would keep the token there after
+ * the deletion, and the privacy policy says OAuth tokens leave the database in
+ * the same operation. A process stopping before the retries are done loses
+ * them (reportPendingGoogleRevokes reports them at shutdown); the grant then
+ * stays at Google, and its token in the backups until they expire.
  *
  * Microsoft grants are not revoked: Graph offers no per-app refresh-token
  * revocation, only revokeSignInSessions, which signs the user out everywhere.
@@ -284,20 +286,20 @@ async function countHolders(email: string, removed: readonly HeldGoogleGrant[]):
 }
 
 /**
- * Does any grant row other than those being removed hold this address?
- * "unknown" when that cannot be settled. The linked tables are matched
+ * Does any grant row outside `exclude` (the rows being removed) hold this
+ * address? "unknown" when that cannot be settled. The linked tables are matched
  * case-insensitively: older rows were not always lowercased, and a wider match
  * only ever means not revoking. The rows are counted again after the slow
  * lookups, so a grant linked for this address meanwhile is still seen.
  */
 async function heldElsewhere(
   email: string,
-  removed: readonly HeldGoogleGrant[],
+  exclude: readonly HeldGoogleGrant[],
 ): Promise<"yes" | "no" | "unknown"> {
-  if ((await countHolders(email, removed)) > 0) return "yes";
+  if ((await countHolders(email, exclude)) > 0) return "yes";
 
   // Primary grants whose address was never read: read them now, bounded.
-  const removedPrimary = removed.filter((g) => g.source === "primary").map((g) => g.rowId);
+  const removedPrimary = exclude.filter((g) => g.source === "primary").map((g) => g.rowId);
   const unknown = await unknownPrimaryGrants(removedPrimary, MAX_UNKNOWN_ADDRESSES + 1);
   if (unknown.length > MAX_UNKNOWN_ADDRESSES) return "unknown";
   let unsure = false;
@@ -313,7 +315,7 @@ async function heldElsewhere(
     if ("unknown" in lookup) unsure = true;
   }
   if (unsure) return "unknown";
-  return (await countHolders(email, removed)) > 0 ? "yes" : "no";
+  return (await countHolders(email, exclude)) > 0 ? "yes" : "no";
 }
 
 /** POST one token to Google's revoke endpoint. */
@@ -336,6 +338,8 @@ async function revokeToken(token: string): Promise<"revoked" | "already-invalid"
 interface DecidedGrant {
   grant: HeldGoogleGrant;
   outcome: RevokeOutcome;
+  /** A later pass may settle it: Google did not revoke it, or its own address was not read. */
+  retry: boolean;
 }
 
 /** One pass over some grants: what it decided, and what a thrown error left undecided. */
@@ -345,18 +349,23 @@ interface RevokePass {
   error?: unknown;
 }
 
-/** Outcomes a later pass may still change: Google did not revoke, or the account was not settled. */
-const RETRYABLE_OUTCOMES: ReadonlySet<RevokeOutcome> = new Set(["failed", "unknown-account"]);
-
 /**
- * Revoke each grant at Google unless another grant row holds the same Google
- * account. Never throws: an error ends the pass, and the grants it had not
- * decided yet come back as undecided.
+ * Revoke each grant at Google unless a grant row outside `exclude` holds the
+ * same Google account. Never throws: an error ends the pass, and the grants it
+ * had not decided yet come back as undecided.
+ *
+ * Retried are only a revoke Google did not do and a grant whose own address
+ * could not be read. Another account's address that could not be read is not:
+ * such a row usually stays unreadable (a key change, Gmail off for a Workspace
+ * user), and retrying would only hold the tokens and repeat the lookups.
  */
-async function revokePass(grants: readonly HeldGoogleGrant[]): Promise<RevokePass> {
+async function revokePass(
+  grants: readonly HeldGoogleGrant[],
+  exclude: readonly HeldGoogleGrant[],
+): Promise<RevokePass> {
   const decided: DecidedGrant[] = [];
-  const decide = (grant: HeldGoogleGrant, outcome: RevokeOutcome) =>
-    decided.push({ grant, outcome });
+  const decide = (grant: HeldGoogleGrant, outcome: RevokeOutcome, retry = false) =>
+    decided.push({ grant, outcome, retry });
   const byAddress = new Map<string, HeldGoogleGrant[]>();
   try {
     for (const grant of grants) {
@@ -368,7 +377,7 @@ async function revokePass(grants: readonly HeldGoogleGrant[]): Promise<RevokePas
           continue;
         }
         if ("unknown" in lookup) {
-          decide(grant, "unknown-account");
+          decide(grant, "unknown-account", true);
           continue;
         }
         email = lookup.email;
@@ -376,7 +385,7 @@ async function revokePass(grants: readonly HeldGoogleGrant[]): Promise<RevokePas
       byAddress.set(email, [...(byAddress.get(email) ?? []), grant]);
     }
     for (const [email, held] of byAddress) {
-      const elsewhere = await heldElsewhere(email, grants);
+      const elsewhere = await heldElsewhere(email, exclude);
       if (elsewhere !== "no") {
         const outcome = elsewhere === "yes" ? "shared" : "unknown-account";
         for (const grant of held) decide(grant, outcome);
@@ -386,7 +395,8 @@ async function revokePass(grants: readonly HeldGoogleGrant[]): Promise<RevokePas
       // token the first revoke already killed answers invalid_token.
       for (const grant of held) {
         const token = grant.refreshToken ?? grant.accessToken;
-        decide(grant, token ? await revokeToken(token) : "already-invalid");
+        const outcome = token ? await revokeToken(token) : "already-invalid";
+        decide(grant, outcome, outcome === "failed");
       }
     }
     return { decided, undecided: [] };
@@ -413,7 +423,7 @@ export async function revokeGoogleGrants(
   userId: string,
   grants: readonly HeldGoogleGrant[],
 ): Promise<RevokeResult[]> {
-  const pass = await revokePass(grants);
+  const pass = await revokePass(grants, grants);
   if (pass.error !== undefined) {
     reportPassError(userId, pass.error);
     return resultsOf(pass);
@@ -422,6 +432,9 @@ export async function revokeGoogleGrants(
   reportUnrevoked(userId, results);
   return results;
 }
+
+/** Retries waiting on their timer, with the user each is for (reported at shutdown). */
+const pendingRetries = new Map<ReturnType<typeof setTimeout>, string>();
 
 /**
  * Revoke the given grants (already removed from Klorn) at Google without the
@@ -435,7 +448,23 @@ export function revokeGoogleGrantsInBackground(
   delays: readonly number[] = REVOKE_RETRY_DELAYS_MS,
 ): void {
   if (grants.length === 0) return;
-  void attemptRevoke(userId, grants, delays, 0);
+  runAttempt(userId, grants, delays, 0);
+}
+
+function runAttempt(
+  userId: string,
+  grants: readonly HeldGoogleGrant[],
+  delays: readonly number[],
+  attempt: number,
+): void {
+  attemptRevoke(userId, grants, delays, attempt).catch((err: unknown) => {
+    console.error(`[GOOGLE-REVOKE] The revoke of ${userId}'s grants stopped:`, err);
+  });
+}
+
+/** Only what a retry needs: an access token is dead within the hour, so a refresh token replaces it. */
+function retainedForRetry(grant: HeldGoogleGrant): HeldGoogleGrant {
+  return grant.refreshToken ? { ...grant, accessToken: null } : grant;
 }
 
 async function attemptRevoke(
@@ -444,40 +473,78 @@ async function attemptRevoke(
   delays: readonly number[],
   attempt: number,
 ): Promise<void> {
-  const pass = await revokePass(grants);
-  if (pass.error !== undefined) reportPassError(userId, pass.error);
-  const unsettled = [
-    ...pass.decided.filter((d) => RETRYABLE_OUTCOMES.has(d.outcome)).map((d) => d.grant),
-    ...pass.undecided,
-  ];
+  // The first pass leaves out the rows being removed, as the single pass does.
+  // A retry leaves out nothing: every caller deleted those rows before the
+  // revoke started, so one still there means its removal did not happen.
+  const pass = await revokePass(grants, attempt === 0 ? grants : []);
+  const unsettled = [...pass.decided.filter((d) => d.retry).map((d) => d.grant), ...pass.undecided];
   const delay = delays[attempt];
   if (unsettled.length === 0 || delay === undefined) {
+    if (pass.error !== undefined) reportPassError(userId, pass.error);
     reportUnrevoked(userId, resultsOf(pass));
     return;
   }
+  const code = (pass.error as { code?: unknown } | undefined)?.code;
   console.warn(
-    `[GOOGLE-REVOKE] ${unsettled.length} of ${userId}'s grants not revoked yet; ` +
-      `retry ${attempt + 1} of ${delays.length} in ${Math.round(delay / 1000)} s.`,
+    `[GOOGLE-REVOKE] ${unsettled.length} of ${userId}'s grants not revoked yet` +
+      (pass.error !== undefined
+        ? ` (database error${typeof code === "string" ? ` ${code}` : ""})`
+        : "") +
+      `; retry ${attempt + 1} of ${delays.length} in ${Math.round(delay / 1000)} s.`,
   );
+  const retained = unsettled.map(retainedForRetry);
   const timer = setTimeout(
-    newWork(() => void attemptRevoke(userId, unsettled, delays, attempt + 1)),
+    newWork(() => {
+      pendingRetries.delete(timer);
+      runAttempt(userId, retained, delays, attempt + 1);
+    }),
     delay,
   );
   timer.unref?.();
+  pendingRetries.set(timer, userId);
 }
 
+/** How many revoke retries are waiting on their timer. */
+export function pendingGoogleRevokeRetries(): number {
+  return pendingRetries.size;
+}
+
+/**
+ * At shutdown: the retries still waiting die with the process, so report them
+ * once (a count and the user ids: no token, no address). Answers the count.
+ */
+export function reportPendingGoogleRevokes(): number {
+  const pending = pendingRetries.size;
+  if (pending === 0) return 0;
+  const userIds = [...new Set(pendingRetries.values())];
+  console.warn(
+    `[GOOGLE-REVOKE] ${pending} revoke retries were still waiting at shutdown; ` +
+      `those grants stay at Google (users: ${userIds.join(", ")}).`,
+  );
+  captureError(new Error("google grant revokes were pending at shutdown"), {
+    tags: { scope: "google.revoke.shutdown" },
+    extra: { pending, userIds },
+  });
+  return pending;
+}
+
+/**
+ * What a revoke left in place is reported: a failure Google gave, or an
+ * account Klorn could not settle (fail closed: not revoked). The second, if it
+ * repeats for every user, means an unreadable grant row blocks every revoke.
+ */
 function reportUnrevoked(userId: string, results: readonly RevokeResult[]): void {
-  const failed = results.filter((r) => r.outcome === "failed" || r.outcome === "unknown-account");
-  if (failed.length > 0) {
-    const summary = failed.map((r) => `${r.source}:${r.outcome}`).join(", ");
-    console.warn(`[GOOGLE-REVOKE] Not every grant of ${userId} was revoked (${summary}).`);
-    if (failed.some((r) => r.outcome === "failed")) {
-      captureError(new Error("google grant revoke failed"), {
-        tags: { scope: "google.revoke", userId },
-        extra: { summary },
-      });
-    }
-  }
+  const unrevoked = results.filter(
+    (r) => r.outcome === "failed" || r.outcome === "unknown-account",
+  );
+  if (unrevoked.length === 0) return;
+  const summary = unrevoked.map((r) => `${r.source}:${r.outcome}`).join(", ");
+  console.warn(`[GOOGLE-REVOKE] Not every grant of ${userId} was revoked (${summary}).`);
+  const failed = unrevoked.some((r) => r.outcome === "failed");
+  captureError(new Error(failed ? "google grant revoke failed" : "google grant revoke unsettled"), {
+    tags: { scope: "google.revoke", userId },
+    extra: { summary },
+  });
 }
 
 /**

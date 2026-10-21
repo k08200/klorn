@@ -2,6 +2,7 @@ import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import Fastify from "fastify";
+import { reportPendingGoogleRevokes } from "./auth/google-grant-revoke.js";
 import {
   ensureDemoUser,
   getUserId,
@@ -900,8 +901,12 @@ for (const signal of ["SIGTERM", "SIGINT"] as const) {
     console.log(`[SHUTDOWN] ${signal} received — draining connections`);
     const hardExit = setTimeout(() => process.exit(1), 10_000);
     hardExit.unref();
+    // Google revoke retries live only in memory (auth/google-grant-revoke.ts):
+    // say which ones this exit cuts off, and give Sentry a moment to ship it.
+    const pendingRevokes = reportPendingGoogleRevokes();
     app
       .close()
+      .then(() => (pendingRevokes > 0 ? flushSentry(2_000) : undefined))
       .then(() => process.exit(0))
       .catch(() => process.exit(1));
   });

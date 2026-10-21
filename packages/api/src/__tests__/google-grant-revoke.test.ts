@@ -21,8 +21,9 @@ const getProfile = vi.hoisted(() => vi.fn());
 vi.mock("googleapis", () => ({
   google: { gmail: () => ({ users: { getProfile } }) },
 }));
+const setCredentials = vi.hoisted(() => vi.fn());
 vi.mock("../mail/gmail.js", () => ({
-  getOAuth2Client: () => ({ setCredentials: vi.fn() }),
+  getOAuth2Client: () => ({ setCredentials }),
 }));
 const captureError = vi.hoisted(() => vi.fn());
 vi.mock("../sentry.js", () => ({ captureError }));
@@ -34,9 +35,11 @@ import {
   GOOGLE_REVOKE_URL,
   type HeldGoogleGrant,
   MAX_UNKNOWN_ADDRESSES,
+  pendingGoogleRevokeRetries,
   REVOKE_RETRY_DELAYS_MS,
   rememberPrimaryGoogleAddress,
   removeAndRevokeGoogle,
+  reportPendingGoogleRevokes,
   revokeGoogleGrants,
   revokeGoogleGrantsInBackground,
 } from "../auth/google-grant-revoke.js";
@@ -290,7 +293,9 @@ describe("revokeGoogleGrantsInBackground (retries)", () => {
     vi.useFakeTimers();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    // Finish every chain a test started, so none leaks into the next.
+    await vi.runAllTimersAsync();
     vi.useRealTimers();
   });
 
@@ -334,18 +339,36 @@ describe("revokeGoogleGrantsInBackground (retries)", () => {
     });
   });
 
-  it("retries a grant whose account could not be settled", async () => {
-    prisma.userToken.findMany.mockResolvedValue([
-      { id: "tok-9", accessToken: "enc:a9", refreshToken: "enc:r9" },
-    ]);
+  it("retries a grant whose own Google address could not be read", async () => {
     getProfile
       .mockRejectedValueOnce(new Error("socket hang up"))
-      .mockResolvedValue({ data: { emailAddress: "someone@else.com" } });
-    revokeGoogleGrantsInBackground("u1", [grant({})], DELAYS);
+      .mockResolvedValue({ data: { emailAddress: "me@x.com" } });
+    revokeGoogleGrantsInBackground("u1", [grant({ source: "primary", email: null })], DELAYS);
     await vi.advanceTimersByTimeAsync(0);
     expect(revokeCalls()).toBe(0);
     await vi.advanceTimersByTimeAsync(1_000);
     expect(revokeCalls()).toBe(1);
+  });
+
+  it("does not retry when it is another account's address that could not be read, and reports it", async () => {
+    // Such a row stays unreadable (a key change, a Workspace with Gmail off):
+    // retrying would only hold the tokens and repeat the lookups for an hour.
+    prisma.userToken.findMany.mockResolvedValue([
+      { id: "tok-9", accessToken: "enc:a9", refreshToken: "enc:r9" },
+    ]);
+    getProfile.mockRejectedValue(new Error("socket hang up"));
+    revokeGoogleGrantsInBackground("u1", [grant({})], DELAYS);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(getProfile).toHaveBeenCalledTimes(1);
+    expect(revokeCalls()).toBe(0);
+    expect(captureError).toHaveBeenCalledTimes(1);
+    expect(captureError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "google grant revoke unsettled" }),
+      {
+        tags: { scope: "google.revoke", userId: "u1" },
+        extra: { summary: "inbox:unknown-account" },
+      },
+    );
   });
 
   it("retries the grants a pass never reached because the database failed", async () => {
@@ -355,6 +378,105 @@ describe("revokeGoogleGrantsInBackground (retries)", () => {
     expect(revokeCalls()).toBe(0);
     await vi.advanceTimersByTimeAsync(1_000);
     expect(revokeCalls()).toBe(1);
+    // The error of a pass that is retried is not reported: only a final one is.
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("reports a database error once, on the last attempt", async () => {
+    const down = new Error("pool exhausted");
+    prisma.linkedInboxAccount.count.mockRejectedValue(down);
+    revokeGoogleGrantsInBackground("u1", [grant({})], DELAYS);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(prisma.linkedInboxAccount.count).toHaveBeenCalledTimes(DELAYS.length + 1);
+    expect(captureError).toHaveBeenCalledTimes(1);
+    expect(captureError).toHaveBeenCalledWith(down, {
+      tags: { scope: "google.revoke", userId: "u1" },
+    });
+  });
+
+  it("counts every row on a retry: a removed row still there holds the account", async () => {
+    fetchMock.mockResolvedValue(new Response("oops", { status: 503 }));
+    revokeGoogleGrantsInBackground("u1", [grant({ rowId: "in-1" })], [1_000]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(prisma.linkedInboxAccount.count).toHaveBeenLastCalledWith({
+      where: expect.objectContaining({ id: { notIn: ["in-1"] } }),
+    });
+    await vi.advanceTimersByTimeAsync(1_000);
+    // Every caller deletes the rows before the revoke starts, so a retry
+    // leaves none out: one still there means the removal did not happen.
+    expect(prisma.linkedInboxAccount.count).toHaveBeenLastCalledWith({
+      where: expect.objectContaining({ id: { notIn: [] } }),
+    });
+  });
+
+  it("keeps only the refresh token of a grant it will retry", async () => {
+    getProfile
+      .mockRejectedValueOnce(new Error("socket hang up"))
+      .mockResolvedValue({ data: { emailAddress: "me@x.com" } });
+    revokeGoogleGrantsInBackground(
+      "u1",
+      [
+        grant({
+          source: "primary",
+          email: null,
+          refreshToken: "refresh-1",
+          accessToken: "access-1",
+        }),
+      ],
+      DELAYS,
+    );
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(setCredentials.mock.calls).toEqual([
+      [{ refresh_token: "refresh-1", access_token: "access-1" }],
+      [{ refresh_token: "refresh-1" }],
+    ]);
+  });
+
+  it("never lets the chain reject, even when reporting throws", async () => {
+    fetchMock.mockResolvedValue(new Response("oops", { status: 503 }));
+    captureError.mockImplementation(() => {
+      throw new Error("sentry down");
+    });
+    try {
+      revokeGoogleGrantsInBackground("u1", [grant({})], [1_000]);
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(console.error).toHaveBeenCalledWith(
+        "[GOOGLE-REVOKE] The revoke of u1's grants stopped:",
+        expect.any(Error),
+      );
+    } finally {
+      captureError.mockReset();
+    }
+  });
+
+  it("counts the chains still waiting, and reports them at shutdown", async () => {
+    fetchMock.mockResolvedValue(new Response("oops", { status: 503 }));
+    const before = pendingGoogleRevokeRetries();
+    revokeGoogleGrantsInBackground("u1", [grant({})], [1_000]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(pendingGoogleRevokeRetries()).toBe(before + 1);
+    expect(reportPendingGoogleRevokes()).toBe(before + 1);
+    expect(captureError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "google grant revokes were pending at shutdown" }),
+      {
+        tags: { scope: "google.revoke.shutdown" },
+        extra: { pending: before + 1, userIds: expect.arrayContaining(["u1"]) },
+      },
+    );
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(pendingGoogleRevokeRetries()).toBe(before);
+  });
+
+  it("reports nothing at shutdown when no retry waits", () => {
+    expect(pendingGoogleRevokeRetries()).toBe(0);
+    expect(reportPendingGoogleRevokes()).toBe(0);
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("is reported by the shutdown handler", () => {
+    const index = readFileSync(new URL("../index.ts", import.meta.url), "utf8");
+    const shutdown = index.slice(index.indexOf('for (const signal of ["SIGTERM", "SIGINT"]'));
+    expect(shutdown).toContain("reportPendingGoogleRevokes()");
   });
 
   it("does not retry a grant that is settled: revoked, already invalid or shared", async () => {

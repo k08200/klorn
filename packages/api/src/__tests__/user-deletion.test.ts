@@ -41,7 +41,10 @@ const GRANTS = [
 ];
 const collectGoogleGrants = vi.hoisted(() => vi.fn());
 const revokeGoogleGrantsInBackground = vi.hoisted(() => vi.fn());
-vi.mock("../auth/google-grant-revoke.js", () => ({ collectGoogleGrants, revokeGoogleGrantsInBackground }));
+vi.mock("../auth/google-grant-revoke.js", () => ({
+  collectGoogleGrants,
+  revokeGoogleGrantsInBackground,
+}));
 
 import { deleteUserAndAllData, finishDataWipe, purgeAllUserData } from "../user-deletion.js";
 
