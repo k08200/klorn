@@ -12,13 +12,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const google = vi.hoisted(() => ({
   getToken: vi.fn(),
+  getLoginAuthUrl: vi.fn((_state: string) => "https://example.com/oauth-login"),
   getGoogleUserInfo: vi.fn(),
   registerGmailWatch: vi.fn(async () => ({})),
 }));
 
 vi.mock("../mail/gmail.js", () => ({
   getAuthUrl: vi.fn(() => "https://example.com/oauth"),
-  getLoginAuthUrl: vi.fn(() => "https://example.com/oauth-login"),
+  getLoginAuthUrl: google.getLoginAuthUrl,
   getLinkInboxAuthUrl: vi.fn(() => "https://example.com/oauth-link-inbox"),
   getLinkCalendarAuthUrl: vi.fn(() => "https://example.com/oauth-link-calendar"),
   getAuthedClient: vi.fn(),
@@ -82,7 +83,8 @@ const db = vi.hoisted(() => ({
 
 vi.mock("../db.js", () => ({ prisma: db, db }));
 
-import { signToken } from "../auth.js";
+import { createHash } from "node:crypto";
+import { signToken, verifyToken } from "../auth.js";
 import { authRoutes } from "../routes/auth.js";
 
 const WEB = "http://localhost:8001";
@@ -99,13 +101,19 @@ async function callback(query: string) {
 const withLoginState = (marker: string, extra: { attr?: string; appScheme?: string }) =>
   `code=abc&state=${encodeURIComponent(
     signToken(
-      { userId: "nonce-1", email: marker, ...extra } as Parameters<typeof signToken>[0],
+      // A web sign-in's state carries its browser's login binding.
+      {
+        userId: "nonce-1",
+        email: marker,
+        lb: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        ...extra,
+      } as Parameters<typeof signToken>[0],
       "10m",
     ),
   )}`;
 
 const withState = (marker: string, userId = "u1") =>
-  `code=abc&state=${encodeURIComponent(signToken({ userId, email: marker }, "10m"))}`;
+  `code=abc&state=${encodeURIComponent(signToken({ userId, email: marker, lb: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" }, "10m"))}`;
 
 /** Every table write the callback can issue, by model, so a case can say "nothing else". */
 function writes(): Record<string, number> {
@@ -220,5 +228,109 @@ describe("the login's attr and appScheme sub-branches", () => {
     expect(res.body).toContain("Return to the Klorn desktop app.");
     expect(res.body).not.toContain("oauth-callback");
     expect(res.headers["cache-control"]).toBeUndefined();
+  });
+});
+
+describe("login CSRF: a web sign-in completes only in the browser that started it", () => {
+  // The browser keeps a nonce to itself and sends only its SHA-256 (the
+  // binding) through the sign-in; the exchange code redeems with the nonce.
+  const nonce = "browser-nonce-0123456789-abcdefghijklmnop";
+  const binding = createHash("sha256").update(nonce).digest("base64url");
+  const boundState = (lb?: string) =>
+    `code=abc&state=${encodeURIComponent(
+      signToken({ userId: "__login__", email: "__google_login__", ...(lb ? { lb } : {}) }, "10m"),
+    )}`;
+
+  async function withApp<T>(run: (app: ReturnType<typeof Fastify>) => Promise<T>): Promise<T> {
+    const app = Fastify();
+    await app.register(authRoutes, { prefix: "/api/auth" });
+    try {
+      return await run(app);
+    } finally {
+      await app.close();
+    }
+  }
+
+  it("refuses to start a web sign-in that names no browser", async () => {
+    const res = await withApp((app) =>
+      app.inject({ method: "GET", url: "/api/auth/google/login" }),
+    );
+    expect(res.headers.location).toBe(`${WEB}/login?error=session_expired`);
+  });
+
+  it("carries the browser's binding to Google in the signed state", async () => {
+    const res = await withApp((app) =>
+      app.inject({ method: "GET", url: `/api/auth/google/login?lb=${binding}` }),
+    );
+    expect(res.statusCode).toBe(302);
+    expect(google.getLoginAuthUrl).toHaveBeenCalledTimes(1);
+    const state = (google.getLoginAuthUrl.mock.calls[0] as [string])[0];
+    expect(verifyToken(state)).toMatchObject({ email: "__google_login__", lb: binding });
+  });
+
+  it("refuses a callback whose state names no browser, before Google's code is spent", async () => {
+    const res = await callback(boundState());
+    expect(res.headers.location).toBe(`${WEB}/login?error=session_expired`);
+    expect(google.getToken).not.toHaveBeenCalled();
+    expect(db.user.create).not.toHaveBeenCalled();
+  });
+
+  it("redeems the exchange code only with the browser's nonce", async () => {
+    await withApp(async (app) => {
+      const cb = await app.inject({
+        method: "GET",
+        url: `/api/auth/google/callback?${boundState(binding)}`,
+      });
+      const code = new URL(cb.headers.location as string).searchParams.get("code");
+      expect(code).toBeTruthy();
+
+      // Another browser (the victim's, handed the attacker's code): refused,
+      // and the code is gone, so it cannot be retried with a guess.
+      const stolen = await app.inject({
+        method: "POST",
+        url: "/api/auth/exchange-code",
+        payload: { code, nonce: "someone-elses-nonce" },
+      });
+      expect(stolen.statusCode).toBe(403);
+      const again = await app.inject({
+        method: "POST",
+        url: "/api/auth/exchange-code",
+        payload: { code, nonce },
+      });
+      expect(again.statusCode).toBe(404);
+    });
+  });
+
+  it("hands the session to the browser that started the sign-in", async () => {
+    await withApp(async (app) => {
+      const cb = await app.inject({
+        method: "GET",
+        url: `/api/auth/google/callback?${boundState(binding)}`,
+      });
+      const code = new URL(cb.headers.location as string).searchParams.get("code");
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/auth/exchange-code",
+        payload: { code, nonce },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(typeof res.json().token).toBe("string");
+    });
+  });
+
+  it("refuses a bound code redeemed with no nonce at all", async () => {
+    await withApp(async (app) => {
+      const cb = await app.inject({
+        method: "GET",
+        url: `/api/auth/google/callback?${boundState(binding)}`,
+      });
+      const code = new URL(cb.headers.location as string).searchParams.get("code");
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/auth/exchange-code",
+        payload: { code },
+      });
+      expect(res.statusCode).toBe(403);
+    });
   });
 });

@@ -68,6 +68,8 @@ export interface JwtPayload {
   sessionId?: string;
   /** Native deep-link relay target — set only on desktop/native login-state tokens. */
   appScheme?: string;
+  /** Login binding (auth/exchange-codes.ts) — set only on web login-state tokens. */
+  lb?: string;
 }
 
 export function signToken(

@@ -6,6 +6,7 @@ import AuthStatus from "../../../components/auth/auth-status";
 import { API_BASE } from "../../../lib/api";
 import { useAuth } from "../../../lib/auth";
 import { useT } from "../../../lib/i18n";
+import { takeLoginBinding } from "../../../lib/login-binding";
 
 function CallbackHandler() {
   const searchParams = useSearchParams();
@@ -23,15 +24,20 @@ function CallbackHandler() {
     const code = searchParams.get("code");
 
     if (code) {
+      // The nonce this browser kept when it started the sign-in: the code
+      // redeems only with it (lib/login-binding.ts, login CSRF).
+      const nonce = takeLoginBinding();
       fetch(`${API_BASE}/api/auth/exchange-code`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify(nonce ? { code, nonce } : { code }),
       })
         .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
         .then((data: { token: string }) => loginWithToken(data.token))
-        .catch(() => {
-          window.location.href = "/login?error=google_failed";
+        .catch((status: unknown) => {
+          // 403: started in another browser, or before this page could bind it.
+          window.location.href =
+            status === 403 ? "/login?error=session_expired" : "/login?error=google_failed";
         });
     } else {
       window.location.href = "/login?error=google_failed";

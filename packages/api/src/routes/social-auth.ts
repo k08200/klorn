@@ -1,7 +1,7 @@
 import formbody from "@fastify/formbody";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { buildAppleAuthUrl, exchangeAppleCode, verifyAppleIdToken } from "../auth/apple.js";
-import { mintExchangeCode } from "../auth/exchange-codes.js";
+import { isLoginBinding, mintExchangeCode } from "../auth/exchange-codes.js";
 import {
   buildNaverAuthUrl,
   exchangeNaverCode,
@@ -138,18 +138,26 @@ export function socialAuthRoutes(
               source: { type: "string", maxLength: 20 },
               nonce: { type: "string", maxLength: 128 },
               appScheme: { type: "string", maxLength: 64 },
+              // Web sign-in only: the browser's login binding (auth/exchange-codes.ts).
+              lb: { type: "string", maxLength: 64 },
             },
           },
         },
         config: { rateLimit: { max: 20, timeWindow: "15 minutes" } },
       },
       async (request, reply) => {
-        const { source, nonce, appScheme } = request.query as {
+        const { source, nonce, appScheme, lb } = request.query as {
           source?: string;
           nonce?: string;
           appScheme?: string;
+          lb?: string;
         };
         const isDesktop = source === "desktop" && !!nonce;
+        // Same rule as the Google flow: a web sign-in names its browser.
+        if (!isDesktop && !isLoginBinding(lb)) {
+          const webUrl = process.env.WEB_URL || "http://localhost:8001";
+          return reply.redirect(`${webUrl}/login?error=session_expired`);
+        }
         if (isDesktop) {
           const entry = desktopLoginTokens.get(nonce as string);
           if (!entry || entry.jwt !== undefined || entry.relayed || entry.expiresAt < Date.now()) {
@@ -163,6 +171,7 @@ export function socialAuthRoutes(
             userId: isDesktop ? (nonce as string) : "__login__",
             email: isDesktop ? `__${provider.id}_login_desktop__` : `__${provider.id}_login__`,
             ...(isDesktop && isAllowedNativeScheme(appScheme) ? { appScheme } : {}),
+            ...(!isDesktop ? { lb } : {}),
           },
           "10m",
         );
@@ -182,7 +191,7 @@ export function socialAuthRoutes(
       if (!params?.code || !params.state || params.error) {
         return reply.redirect(`${webUrl}/login?error=${provider.id}_denied`);
       }
-      let statePayload: { userId: string; email: string; appScheme?: string };
+      let statePayload: { userId: string; email: string; appScheme?: string; lb?: string };
       try {
         statePayload = verifyToken(params.state);
       } catch {
@@ -211,6 +220,10 @@ export function socialAuthRoutes(
         statePayload.userId !== "__login__"
       ) {
         return reply.redirect(`${webUrl}/login?error=${provider.id}_failed`);
+      } else if (!isLoginBinding(statePayload.lb)) {
+        // A web sign-in without a login binding (login CSRF), refused before
+        // the provider's code is spent or any account touched.
+        return reply.redirect(`${webUrl}/login?error=session_expired`);
       }
 
       const ip =
@@ -233,7 +246,11 @@ export function socialAuthRoutes(
           return reply.redirect(`${webUrl}/login?error=${provider.id}_${resolved.reason}`);
         }
         const identity = resolved.identity;
-        const { redirect, token } = await completeSocialLogin(identity, { ip, userAgent });
+        const { redirect, token } = await completeSocialLogin(identity, {
+          ip,
+          userAgent,
+          ...(isDesktopLogin ? {} : { binding: statePayload.lb }),
+        });
         if (isDesktopLogin) {
           if (!token) {
             // completeSocialLogin only omits the token on its error redirects;

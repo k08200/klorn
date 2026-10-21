@@ -16,6 +16,8 @@ import { resolveSocialLoginAction, type SocialIdentity } from "./social-identity
 export interface SocialLoginContext {
   ip: string;
   userAgent: string;
+  /** A web sign-in's login binding, bound to its exchange code (auth/exchange-codes.ts). */
+  binding?: string;
 }
 
 /**
@@ -199,7 +201,8 @@ export async function completeSocialLogin(
   });
   triggerDueLoginBriefing(user.id, 10_000);
 
-  const code = mintExchangeCode(token);
+  // Bound to the browser that started a web sign-in (auth/exchange-codes.ts).
+  const code = mintExchangeCode(token, ctx.binding);
   // token: for the DESKTOP callback branch (routes/social-auth.ts), which
   // relays/parks the JWT instead of redirecting a browser. Web callers use
   // only `redirect` — the token never lands in a URL there.

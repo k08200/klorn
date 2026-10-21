@@ -125,7 +125,11 @@ beforeEach(() => {
 
 describe("Google login callback (identity-only)", () => {
   it("signs the user in without persisting Google tokens or registering a watch", async () => {
-    const state = signToken({ userId: "ignored", email: "__google_login__" });
+    const state = signToken({
+      userId: "ignored",
+      email: "__google_login__",
+      lb: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    });
     const app = await buildApp();
 
     const res = await app.inject({

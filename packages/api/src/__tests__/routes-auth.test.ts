@@ -252,7 +252,11 @@ describe("GET /api/auth/google/callback — error handling", () => {
 
   it("redirects social login with a generic error, never the raw provider error", async () => {
     makeTokenExchangeThrow();
-    const state = signToken({ userId: "n1", email: "__google_login__" });
+    const state = signToken({
+      userId: "n1",
+      email: "__google_login__",
+      lb: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    });
     const app = await buildApp();
     const res = await app.inject({
       method: "GET",

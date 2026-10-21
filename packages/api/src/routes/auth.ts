@@ -1,6 +1,11 @@
 import crypto from "node:crypto";
 import type { FastifyInstance } from "fastify";
-import { exchangeCodes } from "../auth/exchange-codes.js";
+import {
+  exchangeCodes,
+  isLoginBinding,
+  loginBindingMatches,
+  mintExchangeCode,
+} from "../auth/exchange-codes.js";
 import { removeAndRevokeGoogle } from "../auth/google-grant-revoke.js";
 import { desktopHandoffPage, isAllowedNativeScheme } from "../auth/native-handoff.js";
 import { LINK_FLOW_PATHS } from "../auth/pending-links.js";
@@ -182,6 +187,8 @@ const googleLoginQuerySchema = {
     // Rides the signed state to the callback — Google is the path most people
     // take, so attribution that skipped it would report almost nothing.
     attr: { type: "string", maxLength: 300 },
+    // Web sign-in only: the browser's login binding (auth/exchange-codes.ts).
+    lb: { type: "string", maxLength: 64 },
   },
 } as const;
 
@@ -912,13 +919,22 @@ export function authRoutes(app: FastifyInstance) {
     "/google/login",
     { schema: { querystring: googleLoginQuerySchema } },
     async (request, reply) => {
-      const { source, nonce, appScheme, attr } = request.query as {
+      const { source, nonce, appScheme, attr, lb } = request.query as {
         source?: string;
         nonce?: string;
         appScheme?: string;
         attr?: string;
+        lb?: string;
       };
       const isDesktop = source === "desktop" && nonce;
+      // A web sign-in must say which browser started it, or its session could
+      // be completed in another (login CSRF; auth/exchange-codes.ts). A page
+      // loaded before this shipped sends none: back to /login, which loads
+      // the current page, and the next attempt works.
+      if (!isDesktop && !isLoginBinding(lb)) {
+        const webUrl = process.env.WEB_URL || "http://localhost:8001";
+        return reply.redirect(`${webUrl}/login?error=session_expired`);
+      }
       if (isDesktop) {
         const entry = desktopLoginTokens.get(nonce as string);
         if (!entry || entry.jwt !== undefined || entry.relayed || entry.expiresAt < Date.now()) {
@@ -934,6 +950,7 @@ export function authRoutes(app: FastifyInstance) {
           // Carry an allowlisted native scheme so the callback can deep-link the
           // token back to the user's own app instead of parking it for polling.
           ...(isDesktop && isAllowedNativeScheme(appScheme) ? { appScheme } : {}),
+          ...(!isDesktop ? { lb } : {}),
           ...(attr ? { attr } : {}),
         },
         // Same short replay window as every other OAuth-initiating route — an
@@ -984,7 +1001,7 @@ export function authRoutes(app: FastifyInstance) {
     "/exchange-code",
     { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
     async (request, reply) => {
-      const { code } = (request.body ?? {}) as { code?: string };
+      const { code, nonce } = (request.body ?? {}) as { code?: string; nonce?: unknown };
       if (!code || typeof code !== "string") {
         return reply.code(400).send({ error: "Missing code" });
       }
@@ -995,6 +1012,11 @@ export function authRoutes(app: FastifyInstance) {
         return reply.code(410).send({ error: "Code expired" });
       }
       exchangeCodes.delete(code);
+      // A web sign-in's code redeems only in the browser that started it
+      // (login CSRF). Deleted either way: a wrong browser never gets a retry.
+      if (entry.binding && !loginBindingMatches(entry.binding, nonce)) {
+        return reply.code(403).send({ error: "This sign-in was started in another browser" });
+      }
       return { token: entry.jwt };
     },
   );
@@ -1116,7 +1138,13 @@ export function authRoutes(app: FastifyInstance) {
       if (!state) {
         return reply.code(400).send({ error: "Missing state parameter" });
       }
-      let statePayload: { userId: string; email: string; appScheme?: string; attr?: string };
+      let statePayload: {
+        userId: string;
+        email: string;
+        appScheme?: string;
+        attr?: string;
+        lb?: string;
+      };
       try {
         statePayload = verifyToken(state);
       } catch {
@@ -1156,6 +1184,12 @@ export function authRoutes(app: FastifyInstance) {
           appScheme: statePayload.appScheme,
           webUrl,
         });
+      }
+
+      // A web sign-in without a login binding is refused before Google's code
+      // is spent or any account touched (login CSRF; auth/exchange-codes.ts).
+      if (statePayload.email === "__google_login__" && !isLoginBinding(statePayload.lb)) {
+        return reply.redirect(`${webUrl}/login?error=session_expired`);
       }
 
       try {
@@ -1354,9 +1388,8 @@ export function authRoutes(app: FastifyInstance) {
           // The frontend exchanges it via POST /api/auth/exchange-code (60 s window).
           // No integration flag: login is identity-only now, so it has nothing
           // truthful to say about the Gmail/Calendar connection state.
-          const xcode = crypto.randomBytes(20).toString("hex");
-          exchangeCodes.set(xcode, { jwt: token, expiresAt: Date.now() + 60_000 });
-          setTimeout(() => exchangeCodes.delete(xcode), 60_000);
+          // Bound to the browser that started the sign-in (checked above).
+          const xcode = mintExchangeCode(token, statePayload.lb);
           return reply.redirect(`${webUrl}/auth/callback?code=${xcode}`);
         }
 

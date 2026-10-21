@@ -5,6 +5,7 @@ import { type MouseEvent, useEffect, useState } from "react";
 import { API_BASE } from "../../lib/api";
 import { captureFirstTouchAttribution, storedAttribution } from "../../lib/attribution";
 import { useT } from "../../lib/i18n";
+import { followBoundLoginLink } from "../../lib/login-binding";
 import { AppleMark, GoogleMark, NaverMark } from "./provider-marks";
 
 /**
@@ -73,7 +74,16 @@ export default function ProviderButtons({
 
   return (
     <div>
-      <a href={googleHref} onClick={onGoogleClick} className={ROW_CLASS}>
+      <a
+        href={googleHref}
+        onClick={(event) => {
+          // The native shell takes the click over; otherwise the sign-in is
+          // bound to this browser (lib/login-binding.ts).
+          onGoogleClick(event);
+          followBoundLoginLink(event, googleHref);
+        }}
+        className={ROW_CLASS}
+      >
         <GoogleMark />
         {googleLabel ?? t("auth.continueWithGoogle")}
       </a>
@@ -91,7 +101,12 @@ export default function ProviderButtons({
         <div className="-mx-1 overflow-hidden">
           <div className="space-y-2 px-1 pb-1 pt-2">
             {extras.map((id) => (
-              <a key={id} href={`${API_BASE}/api/auth/${id}/login`} className={ROW_CLASS}>
+              <a
+                key={id}
+                href={`${API_BASE}/api/auth/${id}/login`}
+                onClick={(event) => followBoundLoginLink(event, `${API_BASE}/api/auth/${id}/login`)}
+                className={ROW_CLASS}
+              >
                 {id === "apple" ? <AppleMark /> : <NaverMark />}
                 {id === "apple" ? t("auth.continueWithApple") : t("auth.continueWithNaver")}
               </a>
