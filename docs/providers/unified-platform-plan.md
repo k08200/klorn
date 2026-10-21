@@ -4606,7 +4606,9 @@ fixtures before E0; nothing is reachable until E0 is done and the flag is on.
       account, never issued again (L5). Account deletion needs no extra
       statement: the cascade nulls it.
     - The address belongs to the account, like its sign-in address, so a data
-      wipe keeps it.
+      wipe keeps it, and keeps its `KLORN` mailbox row too: `revokeUserAccess`
+      leaves that row, which holds no credentials, so mail to the address still
+      arrives after a wipe. The wipe still deletes the mail.
     - Guards: RLS `tenant_isolation` and `system_bypass`; the data-wipe fence
       lists it in `UNFENCED_MODELS` (account identity, written by the claim,
       not by mail work); the purge lists it in `KEPT_WITH_ACCOUNT`.
