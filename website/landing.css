@@ -519,3 +519,10 @@ html[lang=ko] :is(h1,h2,h3,.rule,.ser){letter-spacing:-.02em}
   .mlist-card{background:var(--card)}
   .mlist ul + .mlist-head,.mrow{border-top-color:rgba(255,255,255,.08)}
 }
+/* #day lead tile: the Approvals capture sits on a quiet stage that fills the
+   height the taller right column gives the tile, instead of floating in
+   empty card space. */
+.tile-stage{flex:1;display:grid;place-items:center;margin:0 -8px -8px;padding:clamp(20px,3vw,40px);
+  border-radius:var(--r-12);background:var(--stage,rgba(10,14,20,.035))}
+.tile-stage > .tile-media{max-width:520px;width:100%;margin:0}
+@media (prefers-color-scheme:dark){:root{--stage:rgba(255,255,255,.035)}}
