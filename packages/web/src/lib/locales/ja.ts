@@ -2252,7 +2252,6 @@ const ja: Record<string, string> = {
   "paddle.blocked.title": "支払いウィンドウを開けませんでした。",
   "paddle.blocked.body":
     "広告ブロッカーやプライバシー拡張機能が、決済代行の Paddle をブロックしている可能性があります。このサイトで paddle.com を許可して（またはプライベートウィンドウで再試行して）から、もう一度アップグレードボタンをクリックしてください。",
-  "authGuard.checking": "セッションを確認中...",
   "authGuard.offline.eyebrow": "接続の問題",
   "authGuard.offline.titleExhausted": "API に接続できませんでした。",
   "authGuard.offline.titleWaking": "API を起動しています…",
@@ -2390,6 +2389,27 @@ const ja: Record<string, string> = {
   "todayActions.row.urgent": "緊急",
   "todayActions.noSummary": "概要なし",
   "todayActions.seeAll": "承認を開く ({count} 件待ち)",
+  // App-wide loading / error / not-found states (design detail pass W9).
+  "statePage.error.eyebrow": "画面を一時停止しました",
+  "statePage.error.title": "この画面で問題が発生しました。",
+  "statePage.error.body": "最新の状態を再読み込みして、そこから続けてください。",
+  "statePage.error.reference": "参照コード {digest}",
+  "statePage.notFound.eyebrow": "ページが見つかりません",
+  "statePage.notFound.title": "この画面は表示できません。",
+  "statePage.notFound.body":
+    "リンクが古いか、名前が変わったか、現在のワークスペースの外にある可能性があります。Klorn を開いて続きから再開してください。",
+  "statePage.notFound.open": "Klorn を開く",
+  "statePage.notFound.about": "Klorn について",
+  "statePage.graphLoading": "グラフを読み込み中",
+  "statePage.graphLoadError": "グラフを読み込めませんでした。",
+  "statePage.briefingLoading": "ブリーフィングを読み込み中",
+  "statePage.briefingLoadError": "今日のブリーフィングを読み込めませんでした。",
+  "statePage.briefingGenerateError":
+    "ブリーフィングを生成できませんでした。もう一度お試しください。",
+  "statePage.briefingFeedbackError":
+    "フィードバックを保存できませんでした。もう一度お試しください。",
+  "statePage.briefingStatusError":
+    "配信状況を取得できません。ブリーフィングは引き続き読み込めます。",
 };
 
 export default ja;

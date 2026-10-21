@@ -2120,7 +2120,6 @@ const zh: Record<string, string> = {
   "paddle.blocked.title": "无法打开支付窗口。",
   "paddle.blocked.body":
     "广告拦截器或隐私扩展很可能拦截了我们的支付服务商 Paddle。请为本网站允许 paddle.com（或在无痕窗口中重试），然后再次点击升级按钮。",
-  "authGuard.checking": "正在检查会话...",
   "authGuard.offline.eyebrow": "连接问题",
   "authGuard.offline.titleExhausted": "无法连接 API。",
   "authGuard.offline.titleWaking": "正在唤醒 API…",
@@ -2250,6 +2249,24 @@ const zh: Record<string, string> = {
   "todayActions.row.urgent": "紧急",
   "todayActions.noSummary": "无摘要",
   "todayActions.seeAll": "打开审批 ({count} 项待处理)",
+  // App-wide loading / error / not-found states (design detail pass W9).
+  "statePage.error.eyebrow": "页面已暂停",
+  "statePage.error.title": "此页面出现了问题。",
+  "statePage.error.body": "重新加载最新内容后继续。",
+  "statePage.error.reference": "参考代码 {digest}",
+  "statePage.notFound.eyebrow": "找不到页面",
+  "statePage.notFound.title": "无法打开此页面。",
+  "statePage.notFound.body":
+    "链接可能已过期、已更名，或不在你当前的工作区内。打开 Klorn，从上次离开的地方继续。",
+  "statePage.notFound.open": "打开 Klorn",
+  "statePage.notFound.about": "关于 Klorn",
+  "statePage.graphLoading": "正在加载图谱",
+  "statePage.graphLoadError": "无法加载图谱。",
+  "statePage.briefingLoading": "正在加载简报",
+  "statePage.briefingLoadError": "无法加载今天的简报。",
+  "statePage.briefingGenerateError": "无法生成简报，请重试。",
+  "statePage.briefingFeedbackError": "无法保存反馈，请重试。",
+  "statePage.briefingStatusError": "无法获取推送状态，简报仍可正常加载。",
 };
 
 export default zh;

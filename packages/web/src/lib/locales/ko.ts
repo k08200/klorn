@@ -2241,7 +2241,6 @@ const ko: Record<string, string> = {
   "paddle.blocked.title": "결제 창을 열지 못했습니다.",
   "paddle.blocked.body":
     "광고 차단기나 개인정보 보호 확장 프로그램이 결제 대행사 Paddle을 막고 있을 가능성이 큽니다. 이 사이트에서 paddle.com을 허용하거나(또는 시크릿 창에서 다시 시도) 업그레이드 버튼을 다시 누르세요.",
-  "authGuard.checking": "세션 확인 중...",
   "authGuard.offline.eyebrow": "연결 문제",
   "authGuard.offline.titleExhausted": "API에 연결하지 못했습니다.",
   "authGuard.offline.titleWaking": "API를 깨우는 중…",
@@ -2376,6 +2375,25 @@ const ko: Record<string, string> = {
   "todayActions.row.urgent": "긴급",
   "todayActions.noSummary": "요약 없음",
   "todayActions.seeAll": "승인 열기 ({count}건 대기)",
+  // App-wide loading / error / not-found states (design detail pass W9).
+  "statePage.error.eyebrow": "화면 일시 중지",
+  "statePage.error.title": "이 화면에서 문제가 생겼습니다.",
+  "statePage.error.body": "최신 상태를 다시 불러와 이어서 진행하세요.",
+  "statePage.error.reference": "참조 코드 {digest}",
+  "statePage.notFound.eyebrow": "페이지를 찾을 수 없음",
+  "statePage.notFound.title": "이 화면을 열 수 없습니다.",
+  "statePage.notFound.body":
+    "링크가 오래되었거나 이름이 바뀌었거나 현재 워크스페이스 밖에 있을 수 있습니다. Klorn을 열어 하던 일을 이어가세요.",
+  "statePage.notFound.open": "Klorn 열기",
+  "statePage.notFound.about": "Klorn 소개",
+  "statePage.graphLoading": "그래프 불러오는 중",
+  "statePage.graphLoadError": "그래프를 불러오지 못했습니다.",
+  "statePage.briefingLoading": "브리핑 불러오는 중",
+  "statePage.briefingLoadError": "오늘 브리핑을 불러오지 못했습니다.",
+  "statePage.briefingGenerateError": "브리핑을 생성하지 못했습니다. 다시 시도해 주세요.",
+  "statePage.briefingFeedbackError": "피드백을 저장하지 못했습니다. 다시 시도해 주세요.",
+  "statePage.briefingStatusError":
+    "전달 상태를 확인할 수 없습니다. 브리핑은 그대로 불러올 수 있습니다.",
 };
 
 export default ko;

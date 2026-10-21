@@ -2289,7 +2289,6 @@ const es: Record<string, string> = {
   "paddle.blocked.title": "No se pudo abrir la ventana de pago.",
   "paddle.blocked.body":
     "Es probable que un bloqueador de anuncios o una extensión de privacidad esté bloqueando Paddle, nuestro proveedor de pagos. Permite paddle.com en este sitio (o reinténtalo en una ventana privada) y vuelve a pulsar el botón de mejora.",
-  "authGuard.checking": "Comprobando la sesión...",
   "authGuard.offline.eyebrow": "Problema de conexión",
   "authGuard.offline.titleExhausted": "No se pudo conectar con la API.",
   "authGuard.offline.titleWaking": "Activando la API…",
@@ -2425,6 +2424,25 @@ const es: Record<string, string> = {
   "todayActions.row.urgent": "Urgente",
   "todayActions.noSummary": "Sin resumen",
   "todayActions.seeAll": "Abrir aprobaciones ({count} pendientes)",
+  // App-wide loading / error / not-found states (design detail pass W9).
+  "statePage.error.eyebrow": "Pantalla en pausa",
+  "statePage.error.title": "Algo salió mal en esta pantalla.",
+  "statePage.error.body": "Vuelve a cargar el contexto más reciente y continúa desde ahí.",
+  "statePage.error.reference": "Referencia {digest}",
+  "statePage.notFound.eyebrow": "Página no encontrada",
+  "statePage.notFound.title": "Esta vista no está disponible.",
+  "statePage.notFound.body":
+    "Puede que el enlace sea antiguo, haya cambiado de nombre o esté fuera de tu espacio de trabajo actual. Abre Klorn para continuar donde lo dejaste.",
+  "statePage.notFound.open": "Abrir Klorn",
+  "statePage.notFound.about": "Acerca de Klorn",
+  "statePage.graphLoading": "Cargando el gráfico",
+  "statePage.graphLoadError": "No se pudo cargar el gráfico.",
+  "statePage.briefingLoading": "Cargando el resumen",
+  "statePage.briefingLoadError": "No se pudo cargar el resumen de hoy.",
+  "statePage.briefingGenerateError": "No se pudo generar el resumen. Inténtalo de nuevo.",
+  "statePage.briefingFeedbackError": "No se pudieron guardar los comentarios. Inténtalo de nuevo.",
+  "statePage.briefingStatusError":
+    "El estado de entrega no está disponible. El resumen puede cargarse igualmente.",
 };
 
 export default es;

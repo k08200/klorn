@@ -2329,7 +2329,6 @@ const de: Record<string, string> = {
   "paddle.blocked.title": "Das Zahlungsfenster konnte nicht geöffnet werden.",
   "paddle.blocked.body":
     "Wahrscheinlich blockiert ein Werbeblocker oder eine Datenschutzerweiterung Paddle, unseren Zahlungsanbieter. Erlauben Sie paddle.com für diese Seite (oder versuchen Sie es in einem privaten Fenster) und klicken Sie dann erneut auf die Upgrade-Schaltfläche.",
-  "authGuard.checking": "Sitzung wird geprüft...",
   "authGuard.offline.eyebrow": "Verbindungsproblem",
   "authGuard.offline.titleExhausted": "Die API ist nicht erreichbar.",
   "authGuard.offline.titleWaking": "Die API wird gestartet…",
@@ -2471,6 +2470,27 @@ const de: Record<string, string> = {
   "todayActions.row.urgent": "Dringend",
   "todayActions.noSummary": "Keine Zusammenfassung",
   "todayActions.seeAll": "Freigaben öffnen ({count} warten)",
+  // App-wide loading / error / not-found states (design detail pass W9).
+  "statePage.error.eyebrow": "Ansicht pausiert",
+  "statePage.error.title": "Auf dieser Seite ist etwas schiefgelaufen.",
+  "statePage.error.body": "Laden Sie den aktuellen Stand neu und machen Sie dort weiter.",
+  "statePage.error.reference": "Referenz {digest}",
+  "statePage.notFound.eyebrow": "Seite nicht gefunden",
+  "statePage.notFound.title": "Diese Ansicht ist nicht verfügbar.",
+  "statePage.notFound.body":
+    "Der Link ist möglicherweise veraltet, umbenannt oder liegt außerhalb Ihres aktuellen Arbeitsbereichs. Öffnen Sie Klorn, um dort weiterzumachen, wo Sie aufgehört haben.",
+  "statePage.notFound.open": "Klorn öffnen",
+  "statePage.notFound.about": "Über Klorn",
+  "statePage.graphLoading": "Graph wird geladen",
+  "statePage.graphLoadError": "Der Graph konnte nicht geladen werden.",
+  "statePage.briefingLoading": "Briefing wird geladen",
+  "statePage.briefingLoadError": "Das heutige Briefing konnte nicht geladen werden.",
+  "statePage.briefingGenerateError":
+    "Das Briefing konnte nicht erstellt werden. Bitte versuchen Sie es erneut.",
+  "statePage.briefingFeedbackError":
+    "Das Feedback konnte nicht gespeichert werden. Bitte versuchen Sie es erneut.",
+  "statePage.briefingStatusError":
+    "Der Zustellstatus ist nicht verfügbar. Das Briefing kann trotzdem geladen werden.",
 };
 
 export default de;
