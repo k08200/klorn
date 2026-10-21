@@ -221,6 +221,8 @@ const es: Record<string, string> = {
   "auth.signInToContinue": "Inicia sesión para continuar a {destination}.",
   "auth.googleSignInError":
     "No se pudo completar el inicio de sesión con Google. Inténtalo de nuevo.",
+  "auth.desktopPairingCode":
+    "Tu navegador te pedirá que confirmes. Continúa solo si muestra {code}.",
   "auth.googleDenied": "Se canceló la conexión con Google: vuelve a intentarlo cuando quieras.",
   "auth.googleUnverified":
     "Google indica que el correo de esta cuenta no está verificado, así que no puede usarse para iniciar sesión. Verifica la dirección con Google o usa otra cuenta.",

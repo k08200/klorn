@@ -222,6 +222,8 @@ const fr: Record<string, string> = {
   "auth.resetYourPassword": "Réinitialisez votre mot de passe",
   "auth.signInToContinue": "Connectez-vous pour continuer vers {destination}.",
   "auth.googleSignInError": "La connexion Google n'a pas pu aboutir. Réessayez.",
+  "auth.desktopPairingCode":
+    "Votre navigateur vous demandera de confirmer. Ne continuez que s'il affiche {code}.",
   "auth.googleDenied": "La connexion Google a été annulée — réessayez quand vous voulez.",
   "auth.googleUnverified":
     "Google indique que l'adresse de ce compte n'est pas vérifiée : elle ne peut donc pas servir à se connecter. Vérifiez l'adresse auprès de Google ou utilisez un autre compte.",

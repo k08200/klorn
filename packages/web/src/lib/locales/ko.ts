@@ -218,6 +218,7 @@ const ko: Record<string, string> = {
   // Auth — 토스트, 딥링크 배너, 로그인 화면 문구
   "auth.signInToContinue": "{destination}(으)로 이어가려면 로그인하세요.",
   "auth.googleSignInError": "Google 로그인을 완료하지 못했습니다. 다시 시도해 주세요.",
+  "auth.desktopPairingCode": "브라우저에서 확인을 요청합니다. {code}가 표시될 때만 계속하세요.",
   "auth.googleDenied": "Google 연결이 취소되었어요 — 준비되면 다시 시도하면 됩니다.",
   "auth.googleUnverified":
     "Google에서 이 계정의 이메일 주소가 미확인 상태로 보고되어 로그인에 사용할 수 없습니다. Google에서 주소를 인증하시거나 다른 계정을 사용해 주세요.",

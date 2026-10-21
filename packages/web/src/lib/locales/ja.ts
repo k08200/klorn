@@ -220,6 +220,8 @@ const ja: Record<string, string> = {
   "auth.resetYourPassword": "パスワードをリセット",
   "auth.signInToContinue": "{destination} に進むにはサインインしてください。",
   "auth.googleSignInError": "Googleサインインを完了できませんでした。もう一度お試しください。",
+  "auth.desktopPairingCode":
+    "ブラウザで確認を求められます。{code} が表示された場合のみ続行してください。",
   "auth.googleDenied": "Google接続がキャンセルされました — 準備ができたらいつでもやり直せます。",
   "auth.googleUnverified":
     "このアカウントのメールアドレスはGoogleで未確認と報告されているため、サインインに使えません。Googleでアドレスを確認するか、別のアカウントをお使いください。",

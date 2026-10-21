@@ -225,6 +225,8 @@ const de: Record<string, string> = {
   "auth.signInToContinue": "Melde dich an, um zu {destination} weiterzugehen.",
   "auth.googleSignInError":
     "Die Anmeldung mit Google konnte nicht abgeschlossen werden. Bitte erneut versuchen.",
+  "auth.desktopPairingCode":
+    "Ihr Browser bittet Sie um eine Bestätigung. Fahren Sie dort nur fort, wenn {code} angezeigt wird.",
   "auth.googleDenied":
     "Die Google-Verbindung wurde abgebrochen — versuch es einfach wieder, wenn du so weit bist.",
   "auth.googleUnverified":

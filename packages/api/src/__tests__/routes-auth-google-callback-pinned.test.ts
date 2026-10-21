@@ -223,12 +223,13 @@ describe("the login's attr and appScheme sub-branches", () => {
     expect(res.body).not.toContain("Return to the Klorn desktop app.");
   });
 
-  it("appScheme off the allowlist: the legacy page, no deep link", async () => {
+  it("appScheme off the allowlist: the poll flow's confirmation page, no deep link", async () => {
     const res = await callback(withLoginState("__google_login_desktop__", { appScheme: "evil" }));
     expect(res.statusCode).toBe(200);
-    expect(res.body).toContain("Return to the Klorn desktop app.");
+    // Parked only once this browser confirms (auth/desktop-confirm.ts).
+    expect(res.body).toContain("Sign in to the Klorn app?");
     expect(res.body).not.toContain("oauth-callback");
-    expect(res.headers["cache-control"]).toBeUndefined();
+    expect(res.headers["cache-control"]).toBe("no-store");
   });
 });
 

@@ -21,6 +21,7 @@
 
 import { API_BASE, setStoredAuthToken } from "../api";
 import { landingHome } from "../home";
+import { pairingCodeOf } from "../pairing-code";
 import { closeExternal, openExternal, shellKind } from "./shell";
 
 const POLL_INTERVAL_MS = 1500;
@@ -32,7 +33,14 @@ const NATIVE_OAUTH_SCHEME = process.env.NEXT_PUBLIC_NATIVE_OAUTH_SCHEME;
 // path, register two appUrlOpen listeners racing for the same code).
 let loginInFlight = false;
 
-export async function startNativeGoogleLogin(): Promise<void> {
+/**
+ * `onPairingCode` gets the poll flow's pairing code: the browser asks the
+ * person to confirm the sign-in against it (api auth/desktop-confirm.ts), so
+ * the app must show it. The relay flow has none.
+ */
+export async function startNativeGoogleLogin(
+  onPairingCode?: (code: string) => void,
+): Promise<void> {
   if (loginInFlight) return;
   loginInFlight = true;
   try {
@@ -41,7 +49,7 @@ export async function startNativeGoogleLogin(): Promise<void> {
     if (NATIVE_OAUTH_SCHEME && shellKind() === "capacitor") {
       await startRelayLogin(NATIVE_OAUTH_SCHEME);
     } else {
-      await startPollLogin();
+      await startPollLogin(onPairingCode);
     }
   } finally {
     loginInFlight = false;
@@ -116,7 +124,7 @@ async function exchangeCode(code: string): Promise<string> {
 
 // ─── POLL (PKCE fallback) ────────────────────────────────────────────────────
 
-async function startPollLogin(): Promise<void> {
+async function startPollLogin(onPairingCode?: (code: string) => void): Promise<void> {
   // PKCE: the verifier stays on-device and is presented (as a header) only when
   // polling for the token. The nonce leaks into the system browser's URL/history,
   // but without the verifier an observer of the nonce cannot retrieve the JWT.
@@ -124,6 +132,7 @@ async function startPollLogin(): Promise<void> {
   const challenge = await sha256Base64Url(verifier);
   const nonce = await fetchNonce(challenge);
   const loginUrl = `${API_BASE}/api/auth/google/login?source=desktop&nonce=${encodeURIComponent(nonce)}`;
+  onPairingCode?.(pairingCodeOf(nonce));
   await openExternal(loginUrl);
 
   try {

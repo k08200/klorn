@@ -211,6 +211,7 @@ const zh: Record<string, string> = {
   "auth.resetYourPassword": "重置你的密码",
   "auth.signInToContinue": "登录后继续前往 {destination}。",
   "auth.googleSignInError": "Google 登录未能完成。请重试。",
+  "auth.desktopPairingCode": "浏览器会请您确认。仅当它显示 {code} 时才继续。",
   "auth.googleDenied": "Google 连接已取消 — 准备好了随时再试。",
   "auth.googleUnverified":
     "Google 报告该账户的邮箱未验证，因此无法用于登录。请在 Google 完成验证，或换一个账户。",

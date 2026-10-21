@@ -77,13 +77,18 @@ function LoginForm() {
   // In the native shell, Google blocks OAuth inside the WebView, so intercept
   // the link and run the system-browser flow instead. On the web the <a href>
   // navigates normally (no-op here).
+  // The desktop poll sign-in's pairing code, shown while the browser asks the
+  // person to confirm against it (api auth/desktop-confirm.ts).
+  const [pairingCode, setPairingCode] = useState<string | null>(null);
   const handleGoogleClick = (e: React.MouseEvent) => {
     if (!isNativeShell()) return;
     e.preventDefault();
-    startNativeGoogleLogin().catch((err) => {
-      console.error("[AUTH] Native Google login failed:", err);
-      toast(t("auth.googleSignInError"), "error");
-    });
+    startNativeGoogleLogin(setPairingCode)
+      .catch((err) => {
+        console.error("[AUTH] Native Google login failed:", err);
+        toast(t("auth.googleSignInError"), "error");
+      })
+      .finally(() => setPairingCode(null));
   };
 
   // Server controls whether sign-up is open. When BETA_GATE_ENABLED is on,
@@ -276,6 +281,11 @@ function LoginForm() {
           resolved={providersResolved}
           onGoogleClick={handleGoogleClick}
         />
+        {pairingCode && (
+          <p role="status" className="mt-3 text-label text-ink-mid">
+            {t("auth.desktopPairingCode", { code: pairingCode })}
+          </p>
+        )}
       </section>
 
       <div className="my-5 flex items-center gap-3" aria-hidden="true">

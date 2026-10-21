@@ -90,6 +90,7 @@ vi.mock("../db.js", () => {
   return { prisma, db: prisma };
 });
 
+import { pairingCode } from "../auth/desktop-confirm.js";
 import { authRoutes } from "../routes/auth.js";
 
 const VERIFIER = "desktop-handoff-verifier";
@@ -213,5 +214,68 @@ describe("desktop login — browser handoff page", () => {
     const res = await pollToken(app, nonce);
     expect(res.json().token).toBeUndefined();
     expect(res.json().status).not.toBe("ok");
+  });
+});
+
+describe("desktop login — the poll flow asks the browser first", () => {
+  // No app scheme: the session would be parked for the poller. Whoever minted
+  // the nonce holds its verifier, so a victim lured into the login link must
+  // confirm in the browser, against the pairing code, before anything parks.
+  let app: Awaited<ReturnType<typeof buildApp>>;
+
+  beforeEach(async () => {
+    app = await buildApp();
+  });
+
+  function completePollOAuth(nonce: string) {
+    const state = signToken({ userId: nonce, email: "__google_login_desktop__" });
+    return app.inject({
+      method: "GET",
+      url: `/api/auth/google/callback?code=abc&state=${encodeURIComponent(state)}`,
+    });
+  }
+
+  function confirmIdOf(html: string): string {
+    return /name="confirm" value="([a-f0-9]{40})"/.exec(html)?.[1] ?? "";
+  }
+
+  function confirm(id: string) {
+    return app.inject({
+      method: "POST",
+      url: "/api/auth/desktop-confirm",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      payload: `confirm=${encodeURIComponent(id)}`,
+    });
+  }
+
+  it("shows the pairing code and parks nothing until the browser confirms", async () => {
+    const nonce = await mintNonce(app);
+    const res = await completePollOAuth(nonce);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain(pairingCode(nonce));
+    expect(res.body).toContain('action="/api/auth/desktop-confirm"');
+    expect(res.headers["cache-control"]).toBe("no-store");
+
+    const polled = await pollToken(app, nonce);
+    expect(polled.json().token).toBeUndefined();
+  });
+
+  it("hands the session to the app's poller once the browser confirms", async () => {
+    const nonce = await mintNonce(app);
+    const id = confirmIdOf((await completePollOAuth(nonce)).body);
+    const confirmed = await confirm(id);
+    expect(confirmed.statusCode).toBe(200);
+    expect(confirmed.body).toContain("Return to the Klorn desktop app.");
+
+    const polled = await pollToken(app, nonce);
+    expect(typeof polled.json().token).toBe("string");
+  });
+
+  it("confirms once: a second submit, or an unknown id, gets the expired page", async () => {
+    const nonce = await mintNonce(app);
+    const id = confirmIdOf((await completePollOAuth(nonce)).body);
+    expect((await confirm(id)).statusCode).toBe(200);
+    expect((await confirm(id)).statusCode).toBe(400);
+    expect((await confirm("f".repeat(40))).statusCode).toBe(400);
   });
 });

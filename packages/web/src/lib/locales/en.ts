@@ -220,6 +220,8 @@ const en: Record<string, string> = {
   // Auth — toasts, deep-link banner, sign-in shell copy
   "auth.signInToContinue": "Sign in to continue to {destination}.",
   "auth.googleSignInError": "Google sign-in could not be completed. Please try again.",
+  "auth.desktopPairingCode":
+    "Your browser will ask you to confirm. Continue there only if it shows {code}.",
   "auth.googleDenied": "Google connection was canceled — just try again whenever you're ready.",
   "auth.googleUnverified":
     "Google reports this account's email address as unverified, so it can't be used to sign in. Verify the address with Google, or use a different account.",
