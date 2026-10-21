@@ -4697,9 +4697,66 @@ fixtures before E0; nothing is reachable until E0 is done and the flag is on.
       Resend retries after the fence window: mail that arrives after a wipe is
       new data.
   - Logs carry the `email_id` and counts, never an address or a subject.
+  - From the E1a security review (2026-10-21):
+    - Recipients match exactly: ASCII only and compared before any case
+      folding, so `normalizeHandle` (which lowercases U+212A to `k`) is for
+      claims only.
+    - `withSystem` covers the single handle lookup, which selects `userId`
+      only. The store runs under the recipient's tenant. The mailbox is that
+      user's `KLORN` row, checked to have email `<handle>@<domain>`, and is
+      never found by `LinkedInboxAccount.email` alone: generic IMAP lets a
+      user name a row `victim@klorn.ai`.
+    - An event whose `created_at` precedes the recipient's
+      `DataWipe.purgedAt` is dropped with a 2xx. Resend retries for about
+      28 h, while the fence window is 5 min.
+    - Only a transient failure answers 5xx. A deterministic one (a value
+      Postgres refuses) is dropped and counted with a 2xx, so one hostile
+      message cannot make Resend disable the endpoint.
+    - `authentication` values are whitelisted per field before they are
+      stored.
 - Not in E1: the claim and the forwarding wizard (E3); send and reply (E2);
   attachments, the 25 MB cap (L14), and acting on spam and failed
   authentication (L13) (E4).
+- Carried to E2 and E3 by the E1a security review (2026-10-21):
+  - E3, sign-in addresses.
+    - The claim refuses a handle whose `<handle>@<domain>` is any other
+      account's `User.email` or `UserIdentity` email.
+    - Registration, forgot-password and verification refuse an address at
+      the domain unless it is that account's own Klorn address. Otherwise
+      whoever holds the handle receives that account's reset link, and one
+      address can verify new accounts.
+    - Prod on 2026-10-21: one `User` at `@klorn.ai`, the reserved `demo`.
+  - E3, the claim.
+    - The claim creates the `KlornAddress` row and the `KLORN` row in one
+      transaction: the address is unfenced and the mailbox row is fenced.
+    - It is rate-limited.
+    - It answers one "unavailable" for reserved, taken and retired names, so
+      it is no oracle for retired names.
+    - It warns that the address is permanent and stays reserved after the
+      account is deleted, so a full name is a poor choice.
+  - E3, the wipe.
+    - The confirm says that mail received at the Klorn address is deleted and
+      cannot be restored, and that the address stays active.
+    - A pause for inbound mail, and a mail export: Klorn holds the only copy
+      of this mail.
+  - E2: the From is the sender's own address, and a display name may not
+    read as Klorn (`handleSkeleton` contains `klorn`). Otherwise a DKIM-valid
+    "Klorn Support <jane@klorn.ai>" passes whatever the reserved list holds.
+  - FA-5 text:
+    - a deleted account's handle and its creation date are kept with no
+      link to any account, indefinitely, so that it is never given to anyone
+      else, the same person included;
+    - the link survives only in the encrypted backups, up to 14 days;
+    - how to ask about a handle that holds personal data;
+    - Resend processes mail received at Klorn addresses, its retention, and
+      what a wipe or deletion can and cannot remove there (FA-1);
+    - every "all your data" in the deletion copy (7 locales) qualified.
+  - Operations: a restore from a backup older than a claim loses that
+    handle's row, so the restore runbook replays newer tombstones and claims
+    first. A CAA record limits certificate issuance for the domain to the CAs
+    Vercel and Render use, checked before it is set, since a wrong CAA breaks
+    renewals: `administrator@` and the like are reserved, but CAA closes the
+    domain-validation route whatever a mailbox holds.
 - Before the E flip, not in E1: the stranded-row safety net.
   `backfillEmailAttentionItems` and the summarize drain run only for
   Google-connected users (`automation-scheduler.ts:1287-1292`, `:1411-1414`).

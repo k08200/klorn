@@ -6,6 +6,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  handleSkeleton,
   isReservedHandle,
   KLORN_HANDLE_MAX_LENGTH,
   KLORN_HANDLE_MIN_LENGTH,
@@ -73,6 +74,43 @@ describe("validateHandle", () => {
   });
 });
 
+describe("handleSkeleton (what a reader would take for the same handle)", () => {
+  it("drops the separators and folds the usual look-alikes", () => {
+    expect(handleSkeleton("Post.Master")).toBe(handleSkeleton("postmaster"));
+    expect(handleSkeleton("adm1n")).toBe(handleSkeleton("admin"));
+    expect(handleSkeleton("kl0rn")).toBe(handleSkeleton("klorn"));
+    expect(handleSkeleton("klom")).toBe(handleSkeleton("klorn"));
+    expect(handleSkeleton("jane")).not.toBe(handleSkeleton("june"));
+  });
+});
+
+describe("look-alikes of reserved names and of Klorn", () => {
+  it.each([
+    "post.master",
+    "no_reply",
+    "no.reply",
+    "sup-port",
+    "adm1n",
+    "admln",
+    "security.",
+  ])("refuses %s as reserved (or malformed)", (handle) => {
+    expect(validateHandle(handle).ok).toBe(false);
+  });
+
+  it.each(["klorn-support", "klornteam", "k1orn", "kl0rn.help", "myklorn", "the_klorn_team"])(
+    "refuses %s: it reads as Klorn",
+    (handle) => {
+      expect(validateHandle(handle)).toEqual({ ok: false, reason: "reserved" });
+    },
+  );
+
+  it("still accepts ordinary names", () => {
+    for (const handle of ["jane.doe", "lorna", "kim", "carmen", "ian.wells"]) {
+      expect(validateHandle(handle)).toEqual({ ok: true, handle });
+    }
+  });
+});
+
 describe("the reserved list", () => {
   it("holds the mail roles, Klorn's own and the published addresses", () => {
     for (const handle of [
@@ -98,6 +136,31 @@ describe("the reserved list", () => {
       "founders",
       "sales",
       "demo",
+      // CA/Browser Forum domain-validation local parts: a claim of one of these
+      // could receive a certificate approval for the domain.
+      "administrator",
+      // RFC 2142.
+      "noc",
+      "marketing",
+      "www",
+      "ftp",
+      "news",
+      "usenet",
+      "uucp",
+      "listmaster",
+      // Names a reader trusts.
+      "official",
+      "staff",
+      "system",
+      "contact",
+      "verify",
+      "account",
+      "payments",
+      "unsubscribe",
+      "google",
+      "stripe",
+      "paddle",
+      "resend",
     ]) {
       expect(isReservedHandle(handle)).toBe(true);
     }

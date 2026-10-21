@@ -968,18 +968,15 @@ model DriveSummaryUsage {
   @@index([dayKey])
 }
 
-// The data wipe of an account that keeps the account (DELETE /api/user/me/data;
-// privacy/data-wipe-fence.ts). While `purgedAt` is null the wipe is pending;
-// after it, inserts into the account's data tables stay rejected until
-// `fenceUntil`, and the app rejects writes from any work that began before
-// `fenceUntil`. The row stays with the account (one per user, rewritten by the
-// next wipe) and goes with it when the account is deleted.
 // The handle of a Klorn address (step E1a of docs/providers/unified-platform-plan.md):
 // `<handle>@<domain>`, user-chosen, immutable, one per account. A row whose userId
 // is null is a tombstone: its account was deleted (the FK nulls it, never
 // cascades) and the handle is never issued again (L5). A data wipe keeps the row:
-// the address belongs to the account, like its sign-in address. The handle rules
-// and the reserved list are mail/klorn-handle.ts; the migration stores lowercase only.
+// the address belongs to the account, like its sign-in address. The product rules
+// (length, the reserved list) are mail/klorn-handle.ts. The database adds what no
+// writer can skip (migration 20261021010100_klorn_mailbox_schema): the shape,
+// lowercase only, no two handles differing only in separators, and a trigger that
+// refuses any rename, delete or reassignment.
 model KlornAddress {
   handle    String   @id
   userId    String?  @unique
@@ -987,6 +984,12 @@ model KlornAddress {
   createdAt DateTime @default(now())
 }
 
+// The data wipe of an account that keeps the account (DELETE /api/user/me/data;
+// privacy/data-wipe-fence.ts). While `purgedAt` is null the wipe is pending;
+// after it, inserts into the account's data tables stay rejected until
+// `fenceUntil`, and the app rejects writes from any work that began before
+// `fenceUntil`. The row stays with the account (one per user, rewritten by the
+// next wipe) and goes with it when the account is deleted.
 model DataWipe {
   userId      String    @id
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)

@@ -57,10 +57,22 @@ describe("a Klorn mailbox's provider actions", () => {
 
 describe("the KlornAddress migration", () => {
   const migrationDir = new URL("../../prisma/migrations/", import.meta.url);
-  const sql = (() => {
-    const dir = readdirSync(migrationDir).find((d) => d.endsWith("_klorn_mailbox_schema"));
-    return dir ? readFileSync(new URL(`${dir}/migration.sql`, migrationDir), "utf8") : "";
-  })();
+  // Two migrations: the enum value, then everything that may use it.
+  const sql = readdirSync(migrationDir)
+    .filter((d) => d.endsWith("_klorn_inbox_provider") || d.endsWith("_klorn_mailbox_schema"))
+    .sort()
+    .map((d) => readFileSync(new URL(`${d}/migration.sql`, migrationDir), "utf8"))
+    .join("\n");
+
+  it("adds the enum value in its own migration, before anything uses it", () => {
+    const dirs = readdirSync(migrationDir).filter((d) =>
+      /_klorn_(inbox_provider|mailbox_schema)$/.test(d),
+    );
+    expect(dirs.sort()).toEqual([
+      "20261021010000_klorn_inbox_provider",
+      "20261021010100_klorn_mailbox_schema",
+    ]);
+  });
 
   it("adds KLORN to the enum and the address table with a tombstone-keeping foreign key", () => {
     expect(sql).toMatch(/ALTER TYPE "InboxProvider" ADD VALUE IF NOT EXISTS 'KLORN'/);
@@ -79,6 +91,19 @@ describe("the KlornAddress migration", () => {
 
   it("stores only a lowercase handle", () => {
     expect(sql).toMatch(/CHECK \("handle" = lower\("handle"\)\)/);
+  });
+
+  it("makes a handle permanent in the database: no rename, no delete, no reassignment", () => {
+    expect(sql).toMatch(/CREATE TRIGGER "KlornAddress_permanent"\s+BEFORE UPDATE OR DELETE ON "KlornAddress"/);
+  });
+
+  it("refuses a look-alike of a held or retired handle, and a malformed one", () => {
+    expect(sql).toMatch(/CREATE UNIQUE INDEX "KlornAddress_handle_skeleton_key" ON "KlornAddress" \(\(translate\("handle", '._-', ''\)\)\)/);
+    expect(sql).toMatch(/CONSTRAINT "KlornAddress_handle_shape" CHECK/);
+  });
+
+  it("gives an account one Klorn mailbox row", () => {
+    expect(sql).toMatch(/CREATE UNIQUE INDEX "LinkedInboxAccount_one_klorn_per_user" ON "LinkedInboxAccount" \("userId"\) WHERE "provider" = 'KLORN'/);
   });
 
   it("adds the authentication results column to EmailMessage", () => {

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, describe, expect, it, vi } from "vitest";
 
 // Real-Postgres proof of the KlornAddress table (step E1a, migration
-// 20261021010000_klorn_mailbox_schema). A mock cannot show the parts that make a
+// 20261021010100_klorn_mailbox_schema). A mock cannot show the parts that make a
 // handle permanent: that deleting the account leaves the row behind with no owner
 // (SET NULL, the tombstone of L5), that only lowercase is stored, and that an
 // account holds one address. Skipped unless KLORN_TEST_PG_URL points at a
@@ -36,7 +36,7 @@ function newHandle(): string {
 
 afterAll(async () => {
   if (!url) return;
-  await prisma.klornAddress.deleteMany({ where: { handle: { in: createdHandles } } });
+  // The handles stay behind as tombstones: a Klorn address is never deleted.
   await prisma.user.deleteMany({ where: { id: { in: createdUsers } } });
   await prisma.$disconnect();
 });
@@ -101,6 +101,61 @@ describePg("KlornAddress (real Postgres)", () => {
     const left = await prisma.linkedInboxAccount.findMany({ where: { userId } });
     expect(left.map((r) => r.provider)).toEqual(["KLORN"]);
     expect(await prisma.emailMessage.count({ where: { userId } })).toBe(0);
+  });
+
+  it("never renames, deletes or reassigns a handle", async () => {
+    const userId = await newUser();
+    const handle = newHandle();
+    await prisma.klornAddress.create({ data: { handle, userId } });
+    await expect(
+      prisma.klornAddress.update({ where: { handle }, data: { handle: newHandle() } }),
+    ).rejects.toThrow(/never changes/);
+    await expect(prisma.klornAddress.delete({ where: { handle } })).rejects.toThrow(/never deleted/);
+    const other = await newUser();
+    await expect(
+      prisma.klornAddress.update({ where: { handle }, data: { userId: other } }),
+    ).rejects.toThrow(/never changes/);
+    // A tombstone stays one.
+    await deleteUserAndAllData(userId);
+    await expect(
+      prisma.klornAddress.update({ where: { handle }, data: { userId: other } }),
+    ).rejects.toThrow(/never changes/);
+  });
+
+  it("refuses a look-alike of a held or retired handle", async () => {
+    const userId = await newUser();
+    const base = newHandle();
+    const dotted = `${base.slice(0, 5)}.${base.slice(5)}`;
+    await prisma.klornAddress.create({ data: { handle: dotted, userId } });
+    const other = await newUser();
+    await expect(
+      prisma.klornAddress.create({ data: { handle: base, userId: other } }),
+    ).rejects.toMatchObject({ code: "P2002" });
+    await deleteUserAndAllData(userId);
+    await expect(
+      prisma.klornAddress.create({ data: { handle: base.replace(/^(.{5})/, "$1_"), userId: other } }),
+    ).rejects.toMatchObject({ code: "P2002" });
+  });
+
+  it("refuses a malformed handle whatever the writer", async () => {
+    const userId = await newUser();
+    for (const bad of [" jane", "jane+x", "", "jane.", "ja ne"]) {
+      await expect(
+        prisma.$executeRaw`INSERT INTO "KlornAddress" ("handle", "userId") VALUES (${bad}, ${userId})`,
+      ).rejects.toThrow(/KlornAddress_handle_shape|KlornAddress_handle_lowercase/);
+    }
+  });
+
+  it("gives an account one Klorn mailbox row", async () => {
+    const userId = await newUser();
+    await prisma.linkedInboxAccount.create({
+      data: { userId, provider: "KLORN", email: `${newHandle()}@klorn.test` },
+    });
+    await expect(
+      prisma.linkedInboxAccount.create({
+        data: { userId, provider: "KLORN", email: `${newHandle()}@klorn.test` },
+      }),
+    ).rejects.toMatchObject({ code: "P2002" });
   });
 
   it("stores only a lowercase handle", async () => {
