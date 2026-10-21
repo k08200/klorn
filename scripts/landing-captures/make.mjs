@@ -41,8 +41,10 @@ const JOBS = [
   ["mail-all", FULL, [["mail-light-2000", 2000, 1250], ["mail-light-1200", 1200, 750]]],
   ["mail-all", { left: 442, top: 0, width: 840, height: 1000 }, [["mail-m-light-840", 840, 1000]]],
   ["mail-all", { left: 1282, top: 0, width: 1278, height: 640 }, [["reason-light-1278", 1278, 640], ["reason-light-640", 640, 321]]],
-  ["assistant", FULL, [["assistant-light-2000", 2000, 1250], ["assistant-light-1200", 1200, 750]]],
-  ["assistant", { left: 442, top: 0, width: 840, height: 700 }, [["assistant-m-light-840", 840, 700]]],
+  // The #day bento tile shows only the Approvals pane: the full window at
+  // tile width set the app text near 8 CSS px. Same box at every width, so
+  // there is no phone-only (-m-) crop and dark/ko variants all get one.
+  ["assistant", { left: 442, top: 0, width: 840, height: 780 }, [["approvals-light-656", 656, 609], ["approvals-light-400", 400, 371]]],
 ];
 
 mkdirSync(outDir, { recursive: true });

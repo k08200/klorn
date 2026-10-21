@@ -129,7 +129,7 @@ struct MailboxList: View {
                 VStack(spacing: 0) {
                     ForEach(items.prefix(8)) { item in
                         MailboxRow(box: box, item: item)
-                        Divider().overlay(Theme.line).padding(.leading, 20)
+                        Divider().overlay(Theme.line).padding(.horizontal, 24)
                     }
                 }
                 Spacer(minLength: 0)
@@ -138,7 +138,7 @@ struct MailboxList: View {
                     LazyVStack(spacing: 0) {
                         ForEach(items) { item in
                             MailboxRow(box: box, item: item)
-                            Divider().overlay(Theme.line).padding(.leading, 20)
+                            Divider().overlay(Theme.line).padding(.horizontal, 24)
                         }
                         if model.mailboxNextToken[box] != nil {
                             Button {
@@ -241,7 +241,7 @@ struct MailboxRow: View {
         .focused($focused)
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityLabel("\(counterparty). \(item.subject)")
-        .padding(.horizontal, 20).padding(.vertical, 11)
+        .padding(.horizontal, 24).padding(.vertical, 12)
         .background(alignment: .leading) {
             if selected { Rectangle().fill(Theme.accent).frame(width: 3) }
         }
