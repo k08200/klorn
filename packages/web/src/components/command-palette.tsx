@@ -12,6 +12,7 @@ import {
 } from "../lib/home";
 import { hotkeyCaps, hotkeyRegistry, liveHotkeys } from "../lib/hotkeys";
 import { useT } from "../lib/i18n";
+import { isApplePlatform } from "../lib/platform";
 import { useHotkeys, useKeyboardTriage } from "../lib/use-hotkeys";
 import { useMailSubscriptionsAvailable } from "../lib/use-mail-subscriptions";
 import { useToast } from "./toast";
@@ -62,7 +63,7 @@ export default function CommandPalette() {
   // hotkey table, so the palette and the keys can never disagree. Read while
   // open because handlers mount and unmount with pages. Each runs after the
   // palette has closed and handed focus back.
-  const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+  const isMac = isApplePlatform();
   const actionCommands: Command[] =
     triage && open
       ? liveHotkeys({ triage, scopes: hotkeyRegistry.activeScopes(), unifiedHome })

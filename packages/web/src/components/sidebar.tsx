@@ -219,7 +219,7 @@ export default function Sidebar() {
                   aria-current={active && !item.children ? "page" : undefined}
                   className={`focus-ring relative flex min-h-10 items-center gap-3 rounded-lg px-3 py-2 text-label transition ${
                     active
-                      ? "bg-state-info-bg font-medium text-accent-deeper shadow-[0_1px_2px_rgba(2,60,110,0.06)] ring-1 ring-inset ring-accent-dim"
+                      ? "bg-state-info-bg font-medium text-accent-deeper shadow-[0_1px_2px_rgba(2,60,110,0.06)] ring-1 ring-inset ring-accent-dim dark:ring-state-info-line"
                       : "text-ink-mid hover:bg-surface-hover/70 hover:text-ink"
                   }`}
                 >
@@ -265,7 +265,7 @@ export default function Sidebar() {
                 aria-current={pathname.startsWith("/admin") ? "page" : undefined}
                 className={`focus-ring relative flex min-h-10 items-center gap-3 rounded-lg px-3 py-2 text-label transition ${
                   pathname.startsWith("/admin")
-                    ? "bg-state-info-bg font-medium text-accent-deeper shadow-[0_1px_2px_rgba(2,60,110,0.06)] ring-1 ring-inset ring-accent-dim"
+                    ? "bg-state-info-bg font-medium text-accent-deeper shadow-[0_1px_2px_rgba(2,60,110,0.06)] ring-1 ring-inset ring-accent-dim dark:ring-state-info-line"
                     : "text-ink-mid hover:bg-surface-hover/70 hover:text-ink"
                 }`}
               >

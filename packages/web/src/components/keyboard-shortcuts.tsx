@@ -12,14 +12,16 @@ import {
 } from "../lib/hotkeys";
 import { useT } from "../lib/i18n";
 import { modalStack } from "../lib/modal-stack";
+import { isApplePlatform, modKeyLabel } from "../lib/platform";
 import { useHotkeys, useKeyboardTriage } from "../lib/use-hotkeys";
 import { ShortcutSheet } from "./shortcut-sheet";
 import { useToast } from "./toast";
 
+// "mod" renders as ⌘ on Apple platforms and Ctrl on Windows/Linux.
 const SHORTCUTS = [
-  { keys: ["Cmd", "K"], labelKey: "keys.palette" },
-  { keys: ["Cmd", "B"], labelKey: "keys.briefing" },
-  { keys: ["Cmd", "/"], labelKey: "shortcuts.show" },
+  { keys: ["mod", "K"], labelKey: "keys.palette" },
+  { keys: ["mod", "B"], labelKey: "keys.briefing" },
+  { keys: ["mod", "/"], labelKey: "shortcuts.show" },
   { keys: ["Esc"], labelKey: "shortcuts.closeWindow" },
 ];
 
@@ -194,7 +196,7 @@ function LegacyShortcutsDialog({ onClose }: { onClose: () => void }) {
                     key={k}
                     className="bg-surface-raised border border-line rounded px-2 py-0.5 text-xs text-ink-soft font-mono"
                   >
-                    {k}
+                    {k === "mod" ? modKeyLabel(isApplePlatform()) : k}
                   </kbd>
                 ))}
               </div>

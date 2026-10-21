@@ -214,6 +214,8 @@ const COPY_GUARD_PREFIXES = [
   "briefingPage.",
   "todayActions.",
   "statePage.",
+  // Web app design pass (2026-10-21): English that reached localized screens.
+  "statusChip.",
 ];
 
 /** Words that are genuinely the same in another language: key -> locales. Keep this tiny. */
@@ -230,6 +232,10 @@ const SAME_AS_ENGLISH = {
   // German UI already calls lanes "Lanes" (keys.group.lane); French "Urgent" is the word.
   "inboxLegacy.segment.lanes": ["de"],
   "todayActions.row.urgent": ["fr"],
+  // "Contact" is the French word too.
+  "graph.legend.contact": ["fr"],
+  "imap.beta": ["es", "de"],
+  "graph.stats.contacts": ["fr"],
 };
 
 function escapeRegExp(text) {
@@ -295,6 +301,9 @@ if (copyProblems > 0) {
  */
 const PROSE_GUARD_DIRS = [
   "packages/web/src/app/assistant",
+  // /graph and /briefing body copy (web app design pass, 2026-10-21).
+  "packages/web/src/app/briefing",
+  "packages/web/src/app/graph",
   // Current product surfaces (hard-coded string sweep, 2026-10-16). The legacy
   // /inbox page is deliberately absent: UNIFIED_HOME replaces it.
   "packages/web/src/app/billing",

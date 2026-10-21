@@ -638,7 +638,6 @@ const fr: Record<string, string> = {
   "settings.about.tagline": "Decision OS",
   "settings.about.desc":
     "Conçu pour réduire les onglets éparpillés et rendre la prochaine décision plus claire.",
-  "settings.about.version": "v0.2.0 — MVP",
   "settings.about.support": "Une question ou un problème ?",
   "onboarding.welcome.titleLine1": "Klorn ne fait remonter que",
   "onboarding.welcome.titleLine2": "les décisions qui méritent d'agir.",
@@ -2458,6 +2457,89 @@ const fr: Record<string, string> = {
   "statePage.briefingFeedbackError": "Impossible d'enregistrer votre avis. Réessayez.",
   "statePage.briefingStatusError":
     "L'état de l'envoi est indisponible. Le briefing peut tout de même se charger.",
+  // /graph and /briefing body copy (web app design pass, 2026-10-21).
+  "graph.view.aria": "Vue du graphe",
+  "graph.mode.relationships": "Relations",
+  "graph.mode.decisions": "Logique de décision",
+  "graph.relationships.title": "Qui compte dans vos e-mails",
+  "graph.relationships.body":
+    "Une vue du graphe de relations que Klorn utilise déjà pour trier les e-mails par voie : vos contacts classés (taille = score d'interaction, couleur = signal actuel), regroupés par domaine d'entreprise. Les personnes à qui vous répondez vraiment grossissent et passent au rose. Klorn apprend qui compte à partir de vos propres actions et en tient compte dans le tri.",
+  "graph.decisions.title": "Comment Klorn choisit une voie",
+  "graph.decisions.body":
+    "Le cœur déterministe du classifieur : les 4 critères notés qui départagent les {count} voies, avec votre signal de correction superposé à chaque voie. C'est la structure même de la règle : elle s'affiche avant même que vous ayez corrigé quoi que ce soit.",
+  "graph.stats.contacts": "{count} contacts",
+  "graph.stats.built": "Généré le {time}",
+  "graph.stats.overrideRate": "Taux de correction {rate}",
+  "graph.stats.liveOverrides": "Corrections actives : {list}",
+  "graph.noData": "Aucune donnée de graphe.",
+  "graph.legend.you": "Vous",
+  "graph.legend.waiting": "En attente de réponse",
+  "graph.legend.meetingSoon": "Réunion prochaine",
+  "graph.legend.engaged": "Vous échangez (appris)",
+  "graph.legend.orgEngaged": "Organisation avec qui vous échangez (déduit)",
+  "graph.legend.frequent": "Contact fréquent",
+  "graph.legend.contact": "Contact",
+  "graph.legend.feature": "Critère (entrée notée)",
+  "graph.top.contacts": "Contacts principaux",
+  "graph.top.decisions": "Principaux signaux de décision",
+  "graph.top.bodyContacts":
+    "Une vue texte du graphe pour le clavier et les lecteurs d'écran : les mêmes contacts que ci-dessus, du score d'interaction le plus élevé au plus bas.",
+  "graph.top.bodyDecisions":
+    "Une vue texte du graphe pour le clavier et les lecteurs d'écran : les mêmes signaux que ci-dessus, du poids le plus élevé au plus bas.",
+  "briefingPage.today": "Aujourd'hui",
+  "briefingPage.todayAt": "Aujourd'hui · {time}",
+  "briefingPage.surfaced.one": "{count} action mise en avant",
+  "briefingPage.surfaced.other": "{count} actions mises en avant",
+  "briefingPage.empty.title": "Pas encore de briefing pour aujourd'hui.",
+  "briefingPage.empty.timeHint": "Modifiez l'heure du briefing automatique dans {link}.",
+  "briefingPage.feedback.useful": "Utile",
+  "briefingPage.feedback.wrong": "Erroné",
+  "briefingPage.feedback.later": "Plus tard",
+  "briefingPage.feedback.done": "Fait",
+  "briefingPage.delivery.automation": "Automatisation",
+  "briefingPage.delivery.next": "Prochain",
+  "briefingPage.delivery.inApp": "Dans l'app",
+  "briefingPage.delivery.push": "Notification push",
+  "briefingPage.delivery.notSetUp": "Non configuré",
+  "briefingPage.delivery.off": "Désactivé",
+  "briefingPage.delivery.none": "Aucune",
+  "briefingPage.delivery.localTime": "Heure locale",
+  "briefingPage.delivery.nextToday": "Aujourd'hui {time}",
+  "briefingPage.delivery.nextTomorrow": "Demain {time}",
+  "briefingPage.push.received": "Reçue",
+  "briefingPage.push.accepted": "Envoyée",
+  "briefingPage.push.pending": "En attente",
+  "briefingPage.push.failed": "Échec",
+  "briefingPage.push.skipped": "Ignorée",
+  "briefingPage.push.notSent": "Non envoyée",
+  "briefingPage.push.noSubscription": "Aucun abonnement du navigateur",
+  "briefingPage.guidance.noConfig":
+    "Aucune heure de briefing n'est définie. Choisissez quand recevoir le briefing du matin.",
+  "briefingPage.guidance.noConfigAction": "Définir l'heure",
+  "briefingPage.guidance.disabled":
+    "L'automatisation du briefing quotidien est désactivée. Activez-la pour recevoir un briefing chaque matin.",
+  "briefingPage.guidance.disabledAction": "Activer",
+  "briefingPage.guidance.noSubscription":
+    "Les notifications push ne sont pas configurées sur cet appareil. Installez Klorn comme application pour recevoir la notification du matin.",
+  "briefingPage.guidance.noSubscriptionAction": "Instructions d'installation",
+  "briefingPage.guidance.permissionDenied":
+    "Les notifications du navigateur sont bloquées. Autorisez-les pour recevoir la notification du matin.",
+  "briefingPage.guidance.vapidMissing":
+    "Les clés push ne sont pas configurées pour ce déploiement. Contactez l'opérateur.",
+  "briefingPage.guidance.failed":
+    "La dernière notification du briefing n'a pas été distribuée. Le prochain briefing programmé réessaiera automatiquement.",
+  "briefingPage.guidance.quietHours":
+    "La notification a été ignorée car les heures calmes étaient actives à l'envoi du briefing.",
+  "briefingPage.guidance.quietHoursAction": "Ajuster les heures calmes",
+  // web app design pass, 2026-10-21: English that reached localized screens.
+  "byok.modelNote.recommended": "{provider} — recommandé",
+  "byok.modelNote.fastest": "{provider} — le plus rapide",
+  "byok.modelNote.mostCapable": "{provider} — le plus performant, plus cher",
+  "statusChip.connected": "Connecté",
+  "statusChip.failed": "Échec",
+  "statusChip.pending": "En attente",
+  // web app design pass, 2026-10-21: English that reached localized screens.
+  "imap.beta": "Bêta",
 };
 
 export default fr;

@@ -128,6 +128,12 @@ function MetaLine(props: MailRowProps) {
     : props.leadingPinned
       ? "opacity-0"
       : "group-focus-within:opacity-0 group-hover:opacity-0";
+  // The hover/focus action overlay sits on the right edge, over the time; the
+  // time steps aside instead of showing half-covered behind it. Touch screens
+  // never show the overlay, so the time stays there.
+  const timeYields = props.actions
+    ? "transition-opacity duration-120 ease-fluid group-focus-within:opacity-0 group-hover:opacity-0 [@media(hover:none)]:opacity-100"
+    : "";
   return (
     <span className="flex min-w-0 items-center gap-2">
       <span
@@ -151,7 +157,10 @@ function MetaLine(props: MailRowProps) {
         </>
       )}
       <span className="flex-1" />
-      <time dateTime={timeIso} className="shrink-0 text-caption tabular-nums text-ink-muted">
+      <time
+        dateTime={timeIso}
+        className={`shrink-0 text-caption tabular-nums text-ink-muted ${timeYields}`}
+      >
         {time}
       </time>
     </span>

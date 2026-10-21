@@ -1,5 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+// Pretendard (OFL 1.1, public/licenses/pretendard-OFL.txt) for Hangul. The
+// dynamic-subset build is ~90 small woff2 files, each behind a unicode-range,
+// so a page downloads only the slices it renders; Latin stays on Geist, which
+// sits ahead of it in --font-sans. Bundled by Next and served from
+// /_next/static/media, so the strict CSP (font-src 'self') is unchanged.
+import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import AppShell from "../components/app-shell";
 import CommandPalette from "../components/command-palette";
 import GoogleReconnectBanner from "../components/google-reconnect-banner";
@@ -8,12 +14,14 @@ import Providers from "../components/providers";
 import PushOnboardingBanner from "../components/push-onboarding-banner";
 import PushRegister from "../components/push-register";
 import PwaPrompts from "../components/pwa-prompts";
+import SkipLink from "../components/skip-link";
 import ServiceWorkerRegister from "../components/sw-register";
 import "./globals.css";
 
 // Self-hosted at build time by next/font (no runtime request to Google —
-// the strict CSP stays intact). Korean text falls through to the system
-// stack (Apple SD Gothic Neo / Noto Sans KR), the standard pairing.
+// the strict CSP stays intact). Korean text falls through to Pretendard
+// (imported above): Windows has no Apple SD Gothic Neo, and its Malgun Gothic
+// fallback sets Hangul noticeably heavier and wider than Geist.
 const geistSans = Geist({
   subsets: ["latin"],
   variable: "--font-geist-sans",
@@ -83,13 +91,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="font-sans bg-surface-app text-ink antialiased">
-        <a
-          href="#main"
-          className="sr-only focus:not-sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:left-4 focus-visible:top-4 focus-visible:z-[200] focus-visible:rounded-md focus-visible:bg-surface-elevated focus-visible:px-4 focus-visible:py-2 focus-visible:text-sm focus-visible:font-medium focus-visible:text-accent-deep focus-visible:ring-2 focus-visible:ring-accent"
-        >
-          Skip to main content
-        </a>
         <Providers>
+          <SkipLink />
           <KeyboardShortcuts />
           <CommandPalette />
           <AppShell>{children}</AppShell>

@@ -616,7 +616,6 @@ const ko: Record<string, string> = {
   "settings.toast.deleteAccountFailed": "계정을 삭제하지 못했습니다.",
   "settings.about.tagline": "Decision OS",
   "settings.about.desc": "흩어진 탭을 줄이고 다음 결정을 더 명확하게 만들기 위해 만들었습니다.",
-  "settings.about.version": "v0.2.0 — MVP",
   "settings.about.support": "문의하거나 문제가 있나요?",
   // Onboarding
   "onboarding.welcome.titleLine1": "Klorn은 행동이 필요한",
@@ -2394,6 +2393,88 @@ const ko: Record<string, string> = {
   "statePage.briefingFeedbackError": "피드백을 저장하지 못했습니다. 다시 시도해 주세요.",
   "statePage.briefingStatusError":
     "전달 상태를 확인할 수 없습니다. 브리핑은 그대로 불러올 수 있습니다.",
+  // /graph and /briefing body copy (web app design pass, 2026-10-21).
+  "graph.view.aria": "그래프 보기",
+  "graph.mode.relationships": "관계",
+  "graph.mode.decisions": "판단 구조",
+  "graph.relationships.title": "내 메일에서 중요한 사람",
+  "graph.relationships.body":
+    "Klorn이 메일을 레인으로 분류할 때 이미 사용하는 관계 그래프를 시각화한 것입니다. 순위가 매겨진 연락처(크기 = 상호작용 점수, 색 = 현재 신호)가 회사 도메인별로 묶여 있습니다. 실제로 답장하는 사람일수록 커지고 분홍색이 됩니다. Klorn은 내 행동에서 누가 중요한지 배우고, 그 결과를 분류에 다시 반영합니다.",
+  "graph.decisions.title": "Klorn이 레인을 고르는 방식",
+  "graph.decisions.body":
+    "분류기의 결정적 핵심입니다. 점수가 매겨지는 4개 특징이 {count}개 레인을 가르고, 각 레인 위에 내 수정 신호가 겹쳐 표시됩니다. 정책 구조 자체이므로 아직 아무것도 수정하지 않았어도 표시됩니다.",
+  "graph.stats.contacts": "연락처 {count}명",
+  "graph.stats.built": "{time} 생성",
+  "graph.stats.overrideRate": "수정 비율 {rate}",
+  "graph.stats.liveOverrides": "적용 중인 수정: {list}",
+  "graph.noData": "그래프 데이터가 없습니다.",
+  "graph.legend.you": "나",
+  "graph.legend.waiting": "답장 대기",
+  "graph.legend.meetingSoon": "곧 미팅",
+  "graph.legend.engaged": "자주 응답함(학습)",
+  "graph.legend.orgEngaged": "자주 응답하는 조직(추정)",
+  "graph.legend.frequent": "자주 연락",
+  "graph.legend.contact": "연락처",
+  "graph.legend.feature": "특징(점수 입력)",
+  "graph.top.contacts": "주요 연락처",
+  "graph.top.decisions": "주요 판단 신호",
+  "graph.top.bodyContacts":
+    "키보드·스크린리더 사용자를 위한 그래프의 텍스트 보기입니다. 위에 표시된 연락처를 상호작용 점수가 높은 순으로 나열합니다.",
+  "graph.top.bodyDecisions":
+    "키보드·스크린리더 사용자를 위한 그래프의 텍스트 보기입니다. 위에 표시된 신호를 가중치가 높은 순으로 나열합니다.",
+  "briefingPage.today": "오늘",
+  "briefingPage.todayAt": "오늘 · {time}",
+  "briefingPage.surfaced.one": "할 일 {count}개",
+  "briefingPage.surfaced.other": "할 일 {count}개",
+  "briefingPage.empty.title": "오늘 브리핑이 아직 없습니다.",
+  "briefingPage.empty.timeHint": "자동 브리핑 시간은 {link}에서 바꿀 수 있습니다.",
+  "briefingPage.feedback.useful": "유용함",
+  "briefingPage.feedback.wrong": "틀림",
+  "briefingPage.feedback.later": "나중에",
+  "briefingPage.feedback.done": "완료",
+  "briefingPage.delivery.automation": "자동화",
+  "briefingPage.delivery.next": "다음",
+  "briefingPage.delivery.inApp": "앱 내",
+  "briefingPage.delivery.push": "푸시",
+  "briefingPage.delivery.notSetUp": "설정 안 됨",
+  "briefingPage.delivery.off": "꺼짐",
+  "briefingPage.delivery.none": "없음",
+  "briefingPage.delivery.localTime": "현지 시간",
+  "briefingPage.delivery.nextToday": "오늘 {time}",
+  "briefingPage.delivery.nextTomorrow": "내일 {time}",
+  "briefingPage.push.received": "수신됨",
+  "briefingPage.push.accepted": "보냄",
+  "briefingPage.push.pending": "대기 중",
+  "briefingPage.push.failed": "실패",
+  "briefingPage.push.skipped": "건너뜀",
+  "briefingPage.push.notSent": "보내지 않음",
+  "briefingPage.push.noSubscription": "브라우저 구독 없음",
+  "briefingPage.guidance.noConfig":
+    "브리핑 시간이 설정되지 않았습니다. 아침 브리핑을 받을 시간을 정하세요.",
+  "briefingPage.guidance.noConfigAction": "브리핑 시간 설정",
+  "briefingPage.guidance.disabled":
+    "매일 브리핑 자동화가 꺼져 있습니다. 켜면 매일 아침 브리핑을 받습니다.",
+  "briefingPage.guidance.disabledAction": "켜기",
+  "briefingPage.guidance.noSubscription":
+    "이 기기에는 푸시가 설정되어 있지 않습니다. 아침 푸시를 받으려면 Klorn을 앱으로 설치하세요.",
+  "briefingPage.guidance.noSubscriptionAction": "설치 방법",
+  "briefingPage.guidance.permissionDenied":
+    "브라우저 알림이 차단되어 있습니다. 아침 푸시를 받으려면 알림을 허용하세요.",
+  "briefingPage.guidance.vapidMissing":
+    "이 배포에는 푸시 키가 설정되어 있지 않습니다. 운영자에게 문의하세요.",
+  "briefingPage.guidance.failed":
+    "지난 브리핑 푸시가 전달되지 않았습니다. 다음 예약 브리핑에서 자동으로 다시 시도합니다.",
+  "briefingPage.guidance.quietHours": "브리핑 발송 시 방해 금지 시간이어서 푸시를 건너뛰었습니다.",
+  "briefingPage.guidance.quietHoursAction": "방해 금지 시간 조정",
+  // web app design pass, 2026-10-21: English that reached localized screens.
+  "byok.modelNote.recommended": "{provider} — 추천",
+  "byok.modelNote.fastest": "{provider} — 가장 빠름",
+  "byok.modelNote.mostCapable": "{provider} — 가장 강력, 비용 높음",
+  "statusChip.connected": "연결됨",
+  "statusChip.failed": "실패",
+  "statusChip.pending": "대기 중",
+  // web app design pass, 2026-10-21: English that reached localized screens.
+  "imap.beta": "베타",
 };
 
 export default ko;

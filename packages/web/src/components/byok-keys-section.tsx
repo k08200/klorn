@@ -33,11 +33,33 @@ type Provider = "openRouter" | "gemini";
 
 const OPENROUTER = {
   id: "openRouter" as const,
-  label: "LLM key (OpenRouter)",
+  labelKey: "byok.openRouterLabel",
   placeholder: "sk-or-v1-…",
   helpUrl: "https://openrouter.ai/keys",
   helpLabel: "openrouter.ai/keys",
 };
+
+/** Qualifier keys for the curated catalog (packages/api/src/llm/model-catalog.ts). */
+const MODEL_NOTE_KEY: Record<string, string> = {
+  "anthropic/claude-sonnet-5": "byok.modelNote.recommended",
+  "google/gemini-3.5-flash": "byok.modelNote.fastest",
+  "anthropic/claude-opus-4.8": "byok.modelNote.mostCapable",
+};
+
+/**
+ * The server's note is English ("Anthropic — recommended"). The provider half
+ * is a name and stays; the qualifier comes from the UI language. An id the web
+ * does not know keeps the server note as is.
+ */
+function modelNote(
+  model: { id: string; note: string },
+  t: (key: string, vars?: Record<string, string>) => string,
+): string {
+  const key = MODEL_NOTE_KEY[model.id];
+  if (!key) return model.note;
+  const provider = model.note.split(" — ")[0] ?? model.note;
+  return t(key, { provider });
+}
 
 export function ByokKeysSection() {
   const { confirm } = useConfirm();
@@ -149,7 +171,7 @@ export function ByokKeysSection() {
         <div className="space-y-4">
           <div className="rounded-xl border border-line-soft bg-surface-raised/70 p-3">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <span className="text-sm font-medium text-ink">{OPENROUTER.label}</span>
+              <span className="text-sm font-medium text-ink">{t(OPENROUTER.labelKey)}</span>
               {status?.hasOpenRouterApiKey && (
                 <StatusChip status="connected" label={t("byok.usingYourKey")} />
               )}
@@ -241,7 +263,7 @@ export function ByokKeysSection() {
                 >
                   {options.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.label} — {m.note}
+                      {m.label} — {modelNote(m, t)}
                     </option>
                   ))}
                 </Select>

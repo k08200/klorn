@@ -139,7 +139,7 @@ function ToastItem({
         type="button"
         onClick={onDismiss}
         aria-label={t("toast.dismiss")}
-        className="focus-ring -mr-1 -mt-0.5 shrink-0 rounded p-1 opacity-70 transition hover:opacity-100"
+        className="focus-ring -my-1.5 -mr-2 flex size-8 shrink-0 items-center justify-center rounded-control opacity-70 transition hover:opacity-100"
       >
         <svg
           aria-hidden="true"
