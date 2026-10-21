@@ -97,12 +97,16 @@ describe("look-alikes of reserved names and of Klorn", () => {
     expect(validateHandle(handle).ok).toBe(false);
   });
 
-  it.each(["klorn-support", "klornteam", "k1orn", "kl0rn.help", "myklorn", "the_klorn_team"])(
-    "refuses %s: it reads as Klorn",
-    (handle) => {
-      expect(validateHandle(handle)).toEqual({ ok: false, reason: "reserved" });
-    },
-  );
+  it.each([
+    "klorn-support",
+    "klornteam",
+    "k1orn",
+    "kl0rn.help",
+    "myklorn",
+    "the_klorn_team",
+  ])("refuses %s: it reads as Klorn", (handle) => {
+    expect(validateHandle(handle)).toEqual({ ok: false, reason: "reserved" });
+  });
 
   it("still accepts ordinary names", () => {
     for (const handle of ["jane.doe", "lorna", "kim", "carmen", "ian.wells"]) {

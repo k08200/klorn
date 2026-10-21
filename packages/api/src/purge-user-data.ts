@@ -33,7 +33,10 @@ function utcDayKey(): string {
  * the credentials kept on the account row. No background path re-creates a
  * grant (token refreshes are updates; only a consent flow the user starts
  * upserts one), so once this commits no new mail, calendar or drive sync starts
- * for the user. Not every writer depends on these rows: the login-briefing
+ * for the user. The one exception is pushed, not synced: the Klorn address's
+ * mailbox (KLORN, step E1a) is kept, so mail sent to the address keeps arriving
+ * after a wipe (the inbound webhook, E1b; it drops what predates the wipe). Not
+ * every writer depends on these rows: the login-briefing
  * timer (routes/auth.ts) upserts the automation config, and the all-user jobs
  * (sender traits, digests) work from stored rows until those are gone. Part of
  * `purgeUserData`; the data wipe also runs it alone first, in its own short

@@ -110,7 +110,9 @@ describePg("KlornAddress (real Postgres)", () => {
     await expect(
       prisma.klornAddress.update({ where: { handle }, data: { handle: newHandle() } }),
     ).rejects.toThrow(/never changes/);
-    await expect(prisma.klornAddress.delete({ where: { handle } })).rejects.toThrow(/never deleted/);
+    await expect(prisma.klornAddress.delete({ where: { handle } })).rejects.toThrow(
+      /never deleted/,
+    );
     const other = await newUser();
     await expect(
       prisma.klornAddress.update({ where: { handle }, data: { userId: other } }),
@@ -133,7 +135,9 @@ describePg("KlornAddress (real Postgres)", () => {
     ).rejects.toMatchObject({ code: "P2002" });
     await deleteUserAndAllData(userId);
     await expect(
-      prisma.klornAddress.create({ data: { handle: base.replace(/^(.{5})/, "$1_"), userId: other } }),
+      prisma.klornAddress.create({
+        data: { handle: base.replace(/^(.{5})/, "$1_"), userId: other },
+      }),
     ).rejects.toMatchObject({ code: "P2002" });
   });
 

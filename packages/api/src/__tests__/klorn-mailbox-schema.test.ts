@@ -94,16 +94,22 @@ describe("the KlornAddress migration", () => {
   });
 
   it("makes a handle permanent in the database: no rename, no delete, no reassignment", () => {
-    expect(sql).toMatch(/CREATE TRIGGER "KlornAddress_permanent"\s+BEFORE UPDATE OR DELETE ON "KlornAddress"/);
+    expect(sql).toMatch(
+      /CREATE TRIGGER "KlornAddress_permanent"\s+BEFORE UPDATE OR DELETE ON "KlornAddress"/,
+    );
   });
 
   it("refuses a look-alike of a held or retired handle, and a malformed one", () => {
-    expect(sql).toMatch(/CREATE UNIQUE INDEX "KlornAddress_handle_skeleton_key" ON "KlornAddress" \(\(translate\("handle", '._-', ''\)\)\)/);
+    expect(sql).toMatch(
+      /CREATE UNIQUE INDEX "KlornAddress_handle_skeleton_key" ON "KlornAddress" \(\(translate\("handle", '._-', ''\)\)\)/,
+    );
     expect(sql).toMatch(/CONSTRAINT "KlornAddress_handle_shape" CHECK/);
   });
 
   it("gives an account one Klorn mailbox row", () => {
-    expect(sql).toMatch(/CREATE UNIQUE INDEX "LinkedInboxAccount_one_klorn_per_user" ON "LinkedInboxAccount" \("userId"\) WHERE "provider" = 'KLORN'/);
+    expect(sql).toMatch(
+      /CREATE UNIQUE INDEX "LinkedInboxAccount_one_klorn_per_user" ON "LinkedInboxAccount" \("userId"\) WHERE "provider" = 'KLORN'/,
+    );
   });
 
   it("adds the authentication results column to EmailMessage", () => {
