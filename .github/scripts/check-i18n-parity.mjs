@@ -213,6 +213,7 @@ const COPY_GUARD_PREFIXES = [
   "inboxLegacy.",
   "briefingPage.",
   "todayActions.",
+  "statePage.",
 ];
 
 /** Words that are genuinely the same in another language: key -> locales. Keep this tiny. */

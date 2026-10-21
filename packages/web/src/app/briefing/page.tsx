@@ -118,14 +118,12 @@ function BriefingView() {
   const { generating, regenerate, submitFeedback, topActions } = briefing;
   const error =
     briefing.actionError === "generate"
-      ? "Could not generate the briefing. Please try again."
+      ? t("statePage.briefingGenerateError")
       : briefing.actionError === "feedback"
-        ? "Could not save feedback. Please try again."
+        ? t("statePage.briefingFeedbackError")
         : null;
-  const statusError = briefing.statusFailed
-    ? "Delivery status is unavailable. The briefing can still load."
-    : null;
-  const briefingLoadError = briefing.loadFailed ? "Could not load today's briefing." : null;
+  const statusError = briefing.statusFailed ? t("statePage.briefingStatusError") : null;
+  const briefingLoadError = briefing.loadFailed ? t("statePage.briefingLoadError") : null;
 
   const formattedTime = createdAt
     ? new Date(createdAt).toLocaleTimeString("en-US", {
@@ -235,7 +233,7 @@ function BriefingView() {
         </div>
       )}
 
-      {loading && <LoadingState rows={3} label="Loading briefing" />}
+      {loading && <LoadingState rows={3} label={t("statePage.briefingLoading")} />}
 
       {(error || briefingLoadError) && <ErrorAlert>{error ?? briefingLoadError}</ErrorAlert>}
 

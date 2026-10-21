@@ -363,6 +363,15 @@ body {
   overflow-wrap: break-word;
 }
 
+/* Korean headings (design detail pass X4): Hangul glyphs are full-width, so
+   the Latin display tracking (-0.025em and tighter) packs them into each
+   other. One value for every KO heading. Deliberately unlayered: it outranks
+   any tracking utility on the heading itself. <html lang> follows the UI
+   locale (I18nProvider). */
+:is(h1, h2, h3, h4):lang(ko) {
+  letter-spacing: -0.02em;
+}
+
 /* Rich sky background: layered sky-blue glows + a faint dot grid, all in one
    fixed background stack so marketing / auth surfaces have atmospheric depth
    instead of flat white. Content sits above it normally (no z-index needed). */

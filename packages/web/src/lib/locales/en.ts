@@ -2250,7 +2250,6 @@ const en: Record<string, string> = {
   "paddle.blocked.title": "The payment window could not open.",
   "paddle.blocked.body":
     "An ad blocker or privacy extension is likely blocking Paddle, our payment provider. Allow paddle.com for this site (or retry in a private window), then click the upgrade button again.",
-  "authGuard.checking": "Checking session...",
   "authGuard.offline.eyebrow": "Connection issue",
   "authGuard.offline.titleExhausted": "Couldn't reach the API.",
   "authGuard.offline.titleWaking": "Waking the API up…",
@@ -2384,6 +2383,24 @@ const en: Record<string, string> = {
   "todayActions.row.urgent": "Urgent",
   "todayActions.noSummary": "No summary",
   "todayActions.seeAll": "Open Approvals ({count} waiting)",
+  // App-wide loading / error / not-found states (design detail pass W9).
+  "statePage.error.eyebrow": "Screen paused",
+  "statePage.error.title": "Something went wrong on this screen.",
+  "statePage.error.body": "Reload the latest context and continue from there.",
+  "statePage.error.reference": "Reference {digest}",
+  "statePage.notFound.eyebrow": "Page not found",
+  "statePage.notFound.title": "This workspace view is unavailable.",
+  "statePage.notFound.body":
+    "The link may be old, renamed, or outside your current workspace. Open Klorn to pick up where you left off.",
+  "statePage.notFound.open": "Open Klorn",
+  "statePage.notFound.about": "About Klorn",
+  "statePage.graphLoading": "Loading the graph",
+  "statePage.graphLoadError": "Could not load the graph.",
+  "statePage.briefingLoading": "Loading the briefing",
+  "statePage.briefingLoadError": "Could not load today's briefing.",
+  "statePage.briefingGenerateError": "Could not generate the briefing. Please try again.",
+  "statePage.briefingFeedbackError": "Could not save feedback. Please try again.",
+  "statePage.briefingStatusError": "Delivery status is unavailable. The briefing can still load.",
 };
 
 export default en;

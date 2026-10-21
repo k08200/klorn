@@ -70,7 +70,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
       // W9: the page's own frame as placeholders, anchored at the top + 96px
       // like the empty and error states — no centred spinner.
       <div role="status" aria-live="polite" className={`${PAGE_SHELL} flex flex-col gap-4`}>
-        <span className="sr-only">{t("authGuard.checking")}</span>
+        <span className="sr-only">{t("appShell.checkingSession")}</span>
         <div aria-hidden="true" className="flex flex-col gap-2">
           <div className="h-7 w-40 rounded-control bg-surface-inset motion-safe:animate-pulse" />
           <div className="h-3 w-56 max-w-full rounded-control bg-surface-inset opacity-60 motion-safe:animate-pulse" />
@@ -171,8 +171,9 @@ function ApiOfflineScreen() {
   };
 
   return (
+    // W9: anchored 96px from the top like the loading and empty states.
     <main
-      className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center px-6 text-center"
+      className="mx-auto flex max-w-md flex-col items-center px-6 pb-12 pt-24 text-center"
       role="status"
       aria-live="polite"
     >

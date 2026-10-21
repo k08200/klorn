@@ -31,7 +31,7 @@
   --frame-bar:#f6f6f5; --frame-dot:#d6d5d1; --frame-bg:#fff;
   /* X1: lane colours, the app's values (globals.css / Theme.swift). Dot is
      the lane colour, ink is the chip text, wash is the 12% fill. */
-  --push:#be123c; --push-ink:#9f1239; --meeting:#4f46e5; --meeting-ink:#4338ca;
+  --push:#be123c; --push-ink:#9f1239; --meeting:#4f46e5; --meeting-ink:#4f46e5;
   --queue:#b45309; --queue-ink:#92400e; --info:#0e7490; --info-ink:#155e75;
   --silent:#57534e; --silent-ink:#57534e;
 }
@@ -200,6 +200,19 @@ html[lang=ja] h2,html[lang=ja] h3,html[lang=ja] .rule{word-break:auto-phrase}
 .mrow-top time{font-size:var(--fs-12);font-weight:400;color:var(--ink-3);font-variant-numeric:tabular-nums}
 .mrow b{font-size:var(--fs-16);font-weight:600;line-height:1.35;color:var(--ink)}
 .mrow-why{font-size:var(--fs-12);font-weight:500;color:var(--lane-ink)}
+
+/* Sig 2: the landing's one motion. On first view the hero lane rows slide into
+   their lanes (40ms stagger) and each reason fades in once its row has landed.
+   Transform and opacity only, so no layout shift. The hidden start state exists
+   only under html.hero-motion, which the inline <head> gate sets when motion is
+   allowed; no JS or reduced motion means the final frame from first paint.
+   /site-nav.js sets --i per row and adds html.hero-in when the list is seen;
+   the gate's 3s failsafe adds it too, so a failed script never hides content. */
+.hero-motion .mrow{opacity:0;transform:translateX(-12px);
+  transition:opacity 320ms var(--ease),transform 320ms var(--ease);transition-delay:calc(var(--i,0) * 40ms)}
+.hero-motion .mrow-why{opacity:0;transition:opacity 280ms var(--ease);transition-delay:calc(var(--i,0) * 40ms + 320ms)}
+.hero-in .mrow,.hero-in .mrow-why{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){.hero-motion .mrow,.hero-motion .mrow-why{opacity:1;transform:none}}
 
 /* ── Sections ────────────────────────────────────── */
 .sec{padding:var(--sec-pad) 0;position:relative}

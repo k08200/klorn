@@ -135,7 +135,7 @@ function MetaLine(props: MailRowProps) {
         className={`-ml-2.5 size-1.5 shrink-0 rounded-full ${unread ? "bg-accent-solid" : "bg-transparent"} ${dotYields}`}
       />
       {unread && <span className="sr-only">{t("mailRow.unread")}</span>}
-      <span className="min-w-0 truncate text-label text-ink-soft">{sender}</span>
+      <span className="min-w-0 truncate text-label text-ink-mid">{sender}</span>
       {(props.threadCount ?? 0) > 1 && <ThreadCount count={props.threadCount ?? 0} />}
       {source && <SourceBadge provider={source.provider} nickname={source.nickname} />}
       {tier && <LaneChip tier={tier} />}
