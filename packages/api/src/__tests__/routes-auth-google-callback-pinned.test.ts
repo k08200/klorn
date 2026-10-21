@@ -86,7 +86,7 @@ vi.mock("../db.js", () => ({ prisma: db, db }));
 import { createHash } from "node:crypto";
 import { mintExchangeCode } from "../auth/exchange-codes.js";
 import { signToken, verifyToken } from "../auth.js";
-import { authRoutes } from "../routes/auth.js";
+import { authRoutes, desktopLoginTokens } from "../routes/auth.js";
 
 const WEB = "http://localhost:8001";
 
@@ -175,6 +175,8 @@ describe("before the state is read", () => {
 
 describe("the desktop login", () => {
   it("__google_login_desktop__ answers the desktop hand-off page", async () => {
+    // A live nonce, as /desktop-nonce minted it.
+    desktopLoginTokens.set("ignored", { expiresAt: Date.now() + 60_000 });
     const res = await callback(withState("__google_login_desktop__", "ignored"));
     expect(res.statusCode).toBe(200);
     expect(res.headers["content-type"]).toContain("text/html");
@@ -224,12 +226,21 @@ describe("the login's attr and appScheme sub-branches", () => {
   });
 
   it("appScheme off the allowlist: the poll flow's confirmation page, no deep link", async () => {
+    desktopLoginTokens.set("nonce-1", { expiresAt: Date.now() + 60_000 });
     const res = await callback(withLoginState("__google_login_desktop__", { appScheme: "evil" }));
     expect(res.statusCode).toBe(200);
     // Parked only once this browser confirms (auth/desktop-confirm.ts).
     expect(res.body).toContain("Sign in to the Klorn app?");
     expect(res.body).not.toContain("oauth-callback");
     expect(res.headers["cache-control"]).toBe("no-store");
+  });
+
+  it("a nonce that expired meanwhile: the expired page at once, nothing held", async () => {
+    desktopLoginTokens.set("nonce-1", { expiresAt: Date.now() - 1 });
+    const res = await callback(withLoginState("__google_login_desktop__", {}));
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain("This sign-in expired");
+    expect(res.body).not.toContain('name="confirm"');
   });
 });
 

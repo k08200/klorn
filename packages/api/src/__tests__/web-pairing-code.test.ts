@@ -1,9 +1,9 @@
 import crypto from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { pairingCode } from "../auth/desktop-confirm.js";
 // The web's pairing code (shown in the app while the browser asks for
 // confirmation) must equal the one the API's confirmation page shows.
 import { pairingCodeOf } from "../../../web/src/lib/pairing-code.js";
+import { pairingCode } from "../auth/desktop-confirm.js";
 
 describe("the app's pairing code and the browser's", () => {
   it("agree for any nonce", () => {

@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { buildAppleAuthUrl, exchangeAppleCode, verifyAppleIdToken } from "../auth/apple.js";
 import {
   beginDesktopConfirmation,
+  desktopConfirmExpiredPage,
   desktopConfirmPage,
   pairingCode,
 } from "../auth/desktop-confirm.js";
@@ -279,6 +280,14 @@ export function socialAuthRoutes(
           }
           // Same confirmation step as the Google poll path
           // (auth/desktop-confirm.ts): parked only once this browser confirms.
+          // A nonce that expired or was used meanwhile gets the expired page now,
+          // not after the person clicks confirm.
+          const live = desktopLoginTokens.get(nonce);
+          if (!live || live.expiresAt < Date.now() || live.jwt !== undefined || live.relayed) {
+            reply.header("Cache-Control", "no-store");
+            reply.type("text/html");
+            return reply.code(400).send(desktopConfirmExpiredPage());
+          }
           const confirmId = beginDesktopConfirmation(nonce, token);
           reply.header("Cache-Control", "no-store");
           reply.type("text/html");

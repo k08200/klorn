@@ -1432,6 +1432,14 @@ export function authRoutes(app: FastifyInstance) {
             // Poll flow: parked only once this browser confirms, against the
             // pairing code the app shows (auth/desktop-confirm.ts). Parking at
             // once let whoever minted the nonce poll a lured victim's session.
+            // A nonce that expired or was used meanwhile gets the expired page now,
+            // not after the person clicks confirm.
+            const live = desktopLoginTokens.get(nonce);
+            if (!live || live.expiresAt < Date.now() || live.jwt !== undefined || live.relayed) {
+              reply.header("Cache-Control", "no-store");
+              reply.type("text/html");
+              return reply.code(400).send(desktopConfirmExpiredPage());
+            }
             const confirmId = beginDesktopConfirmation(nonce, token);
             reply.header("Cache-Control", "no-store");
             reply.type("text/html");
