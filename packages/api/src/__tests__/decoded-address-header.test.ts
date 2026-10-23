@@ -8,7 +8,33 @@
  * (security re-verification N1).
  */
 
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+/**
+ * What decoded-address-header.ts asks of the shared parser: its direct
+ * parseAddress calls, and the entries it pulls from addressListEntries. Pass-
+ * through spies; the module's own internal calls (extractEmailAddress,
+ * splitAddressList) are not counted.
+ */
+const work = vi.hoisted(() => ({ parseAddress: 0, listScans: 0, listYields: 0 }));
+vi.mock("../mail/email-address.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../mail/email-address.js")>();
+  return {
+    ...actual,
+    parseAddress: (value: string) => {
+      work.parseAddress += 1;
+      return actual.parseAddress(value);
+    },
+    addressListEntries: function* (value: string) {
+      work.listScans += 1;
+      for (const entry of actual.addressListEntries(value)) {
+        work.listYields += 1;
+        yield entry;
+      }
+    },
+  };
+});
+
 import {
   decodedAddressList,
   decodedMailbox,
@@ -239,47 +265,89 @@ describe("property: the stored mailbox is the raw one, or nothing", () => {
 });
 
 describe("bounded work on hostile header sizes", () => {
+  // Structural first: what the parser and the list scan are asked to do. A
+  // wall-clock bound only backs that up, generously, on inputs (20 MB) that the
+  // unbounded code took well over a second on, so a loaded runner cannot flake it.
+  const BACKSTOP_MS = 1_500;
+  const TWENTY_MB = 20 * 1024 * 1024;
   const elapsed = (run: () => unknown) => {
     const started = performance.now();
     run();
     return performance.now() - started;
   };
 
-  it("has no sender for a From over the 256 KiB ceiling, and does not parse it", () => {
+  beforeEach(() => {
+    work.parseAddress = 0;
+    work.listScans = 0;
+    work.listYields = 0;
+  });
+
+  it("does not parse a From over the 256 KiB ceiling, and has no sender", () => {
     expect(MAX_HEADER_CHARS).toBe(256 * 1024);
-    const over = `${"x".repeat(MAX_HEADER_CHARS)} <attacker@evil.com>`;
-    expect(decodedMailbox(over)).toBe("");
-    const huge = `"${"n".repeat(10_000_000)}" <attacker@evil.com>`;
-    expect(elapsed(() => expect(decodedMailbox(huge)).toBe(""))).toBeLessThan(50);
+    const over = decodedMailbox(`${"x".repeat(MAX_HEADER_CHARS)} <attacker@evil.com>`);
+    expect(work.parseAddress).toBe(0);
+    expect(over).toBe("");
+
+    const huge = `"${"n".repeat(TWENTY_MB)}" <attacker@evil.com>`;
+    let stored: string | null = null;
+    const took = elapsed(() => (stored = decodedMailbox(huge)));
+    expect(work.parseAddress).toBe(0);
+    expect(stored).toBe("");
+    expect(took).toBeLessThan(BACKSTOP_MS);
   });
 
-  it("stores no list over the ceiling, and does not parse it", () => {
-    expect(decodedAddressList(`a@example.com, ${"b".repeat(MAX_HEADER_CHARS)}`)).toBe("");
-    // 1M empty entries, 5 MB of `x,`: refused before any split.
-    expect(elapsed(() => expect(decodedAddressList(",".repeat(1_000_000))).toBe(""))).toBeLessThan(
-      50,
-    );
-    expect(elapsed(() => expect(decodedAddressList("x,".repeat(2_500_000))).toBe(""))).toBeLessThan(
-      50,
-    );
+  it("parses a From at the ceiling once", () => {
+    decodedMailbox(`${"x".repeat(MAX_HEADER_CHARS - 30)} <attacker@evil.com>`);
+    expect(work.parseAddress).toBe(1);
   });
 
-  it("stops a list after its entry limit", () => {
+  it("does not scan a list over the ceiling, and stores nothing", () => {
+    const results = [
+      decodedAddressList(`a@example.com, ${"b".repeat(MAX_HEADER_CHARS)}`),
+      decodedAddressList(",".repeat(1_000_000)),
+    ];
+    const twentyMbOfCommas = "x,".repeat(TWENTY_MB / 2);
+    const took = elapsed(() => results.push(decodedAddressList(twentyMbOfCommas)));
+    expect(work.listScans).toBe(0);
+    expect(work.parseAddress).toBe(0);
+    expect(results).toEqual(["", "", ""]);
+    expect(took).toBeLessThan(BACKSTOP_MS);
+  });
+
+  it("pulls no more than its entry limit from the scan", () => {
     const raw = Array.from({ length: MAX_LIST_ENTRIES + 100 }, (_, i) => `p${i}@x.co`).join(", ");
     const stored = splitAddressList(decodedAddressList(raw));
+    expect(work.listScans).toBe(1);
+    expect(work.listYields).toBe(MAX_LIST_ENTRIES);
     expect(stored).toHaveLength(MAX_LIST_ENTRIES);
     expect(stored[MAX_LIST_ENTRIES - 1]).toBe(`p${MAX_LIST_ENTRIES - 1}@x.co`);
   });
 
-  it("scans lazily under the ceiling: many entries, empty or tiny, return quickly", () => {
+  it("stops the scan at the stored budget", () => {
+    const entry = (i: number) => `Person ${i} <person${i}@example.com>`;
+    const raw = Array.from({ length: 400 }, (_, i) => entry(i)).join(", ");
+    const kept = splitAddressList(decodedAddressList(raw));
+    expect(kept.length).toBeGreaterThan(90);
+    // The kept entries, and the one that did not fit: nothing after it is read.
+    expect(work.listYields).toBe(kept.length + 1);
+  });
+
+  it("scans lazily under the ceiling: empty entries are never yielded, tiny ones stop at the limit", () => {
     const empties = `${",".repeat(250_000)}a@b.co`;
     expect(empties.length).toBeLessThan(MAX_HEADER_CHARS);
-    expect(elapsed(() => expect(decodedAddressList(empties)).toBe("a@b.co"))).toBeLessThan(100);
+    expect(elapsed(() => expect(decodedAddressList(empties)).toBe("a@b.co"))).toBeLessThan(
+      BACKSTOP_MS,
+    );
+    expect(work.listYields).toBe(1);
 
-    const tiny = Array.from({ length: 35_000 }, () => "a@b.co").join(",");
-    expect(tiny.length).toBeLessThan(MAX_HEADER_CHARS);
+    work.listYields = 0;
+    // 30,000 entries, short enough that the entry limit, not the budget, stops the scan.
+    const tinyEntries = Array.from({ length: 30_000 }, (_, i) => `${i}@b`).join(",");
+    expect(tinyEntries.length).toBeLessThan(MAX_HEADER_CHARS);
     let stored = "";
-    expect(elapsed(() => (stored = decodedAddressList(tiny)))).toBeLessThan(100);
+    const took = elapsed(() => (stored = decodedAddressList(tinyEntries)));
+    expect(work.listYields).toBe(MAX_LIST_ENTRIES);
     expect(splitAddressList(stored)).toHaveLength(MAX_LIST_ENTRIES);
+    expect(took).toBeLessThan(BACKSTOP_MS);
   });
 });

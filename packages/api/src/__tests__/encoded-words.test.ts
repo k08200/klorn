@@ -4,7 +4,7 @@
  * is often encoded. Linear, never throws, an unknown charset left as it came.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { decodeEncodedWords, MAX_DECODED_WORDS } from "../mail/encoded-words.js";
 
 const b64 = (text: string, encoding: BufferEncoding = "utf8") =>
@@ -76,24 +76,52 @@ describe("decodeEncodedWords", () => {
     expect(decoded.endsWith(word)).toBe(true);
   });
 
-  it("is cheap on thousands of words with an unknown or a known charset", () => {
+  it("constructs no decoder for an unknown charset, and one per known charset", () => {
+    // Counted structurally (a wall clock flakes on a loaded runner): before the
+    // allowlist and the cache, each word constructed (or failed to construct) one.
+    const Real = globalThis.TextDecoder;
+    let constructed = 0;
+    vi.stubGlobal(
+      "TextDecoder",
+      class extends Real {
+        constructor(...args: ConstructorParameters<typeof TextDecoder>) {
+          super(...args);
+          constructed += 1;
+        }
+      },
+    );
+    try {
+      const unknown = Array.from({ length: 2_000 }, () => "=?z?B??=").join(" ");
+      expect(decodeEncodedWords(unknown)).toBe(unknown);
+      expect(constructed).toBe(0);
+
+      // A charset no other test here uses, so its decoder is not cached yet.
+      const known = Array.from({ length: 2_000 }, () => "=?windows-1251?B?7/Do4uXy?=").join(" ");
+      decodeEncodedWords(known);
+      decodeEncodedWords(known);
+      expect(constructed).toBe(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("stays well within a generous time backstop on thousands of words", () => {
     const unknown = Array.from({ length: 2_000 }, () => "=?z?B??=").join(" ");
     const known = Array.from({ length: 2_000 }, () => `=?UTF-8?B?${b64("가")}?=`).join(" ");
-    decodeEncodedWords(known); // warm the decoder cache
     const started = performance.now();
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 20; i++) {
       decodeEncodedWords(unknown);
       decodeEncodedWords(known);
     }
-    // ~120 ms per header before the allowlist and the cache; well under 1 ms each now.
-    expect((performance.now() - started) / 20).toBeLessThan(10);
+    // ~120 ms per header before the allowlist and the cache: 40 headers took ~5 s.
+    expect(performance.now() - started).toBeLessThan(1_500);
   });
 
-  it("is linear on hostile input", () => {
+  it("is linear on hostile input (a generous backstop)", () => {
     const hostile = `${"=?".repeat(50_000)}${"?=".repeat(50_000)}`;
     const started = performance.now();
     decodeEncodedWords(hostile);
     decodeEncodedWords(`=?UTF-8?Q?${"=".repeat(100_000)}?=`);
-    expect(performance.now() - started).toBeLessThan(1_000);
+    expect(performance.now() - started).toBeLessThan(1_500);
   });
 });

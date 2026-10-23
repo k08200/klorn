@@ -104,16 +104,18 @@ export function decodedAddressList(raw: string, max = MAX_STORED_CC_LENGTH): str
   if (raw.length > MAX_HEADER_CHARS) return "";
   let stored = "";
   let examined = 0;
-  // Lazy: the scan stops at the budget or the entry limit, whatever follows.
+  // Lazy: the scan stops at the budget or the entry limit, and the entry after
+  // the limit is never pulled from it.
   for (const entry of addressListEntries(raw)) {
-    examined += 1;
-    if (examined > MAX_LIST_ENTRIES) break;
     const mailbox = decodedMailbox(entry);
     const readBack = splitAddressList(mailbox);
-    if (readBack.length !== 1 || readBack[0] !== mailbox) continue;
-    const next = stored ? `${stored}, ${mailbox}` : mailbox;
-    if (next.length > max) break;
-    stored = next;
+    if (readBack.length === 1 && readBack[0] === mailbox) {
+      const next = stored ? `${stored}, ${mailbox}` : mailbox;
+      if (next.length > max) break;
+      stored = next;
+    }
+    examined += 1;
+    if (examined >= MAX_LIST_ENTRIES) break;
   }
   return stored;
 }
