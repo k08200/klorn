@@ -107,6 +107,7 @@ export function DriveToolbar(props: DriveToolbarProps) {
       <input ref={inputRef} type="file" multiple hidden onChange={onPicked} />
       <UploadPanel
         batch={uploads.batch}
+        destination={uploads.destination}
         limit={limit}
         onRetry={() => {
           uploads.retry();
@@ -145,16 +146,20 @@ function summaryText(batch: UploadBatch | null, t: Translate): string {
  */
 function UploadPanel({
   batch,
+  destination,
   limit,
   onRetry,
   onClear,
 }: {
   batch: UploadBatch | null;
+  /** Fixed when the batch started: the open folder may have changed since. */
+  destination: FolderCrumb | null;
   limit: string;
   onRetry: () => void;
   onClear: () => void;
 }) {
   const { t, locale } = useT();
+  const destinationId = useId();
   const finished = batch !== null && batchSummary(batch).finished;
   const retryable = batch === null ? 0 : retryableIndices(batch).length;
   const tooLarge = batch === null ? [] : precheckFailures(batch);
@@ -167,7 +172,7 @@ function UploadPanel({
         {finished && (
           <div className="-mr-3 flex flex-wrap gap-1">
             {retryable > 0 && (
-              <Button variant="ghost" size="sm" onClick={onRetry}>
+              <Button variant="ghost" size="sm" aria-describedby={destinationId} onClick={onRetry}>
                 {t("files.drive.upload.retry", { count: String(retryable) })}
               </Button>
             )}
@@ -177,6 +182,16 @@ function UploadPanel({
           </div>
         )}
       </div>
+      {batch && (
+        <p
+          id={destinationId}
+          className="text-caption text-ink-muted [overflow-wrap:anywhere] [word-break:keep-all]"
+        >
+          {destination
+            ? t("files.drive.upload.destination.folder", { folder: destination.name })
+            : t("files.drive.upload.destination.root")}
+        </p>
+      )}
       {tooLarge.length > 0 && (
         <p role="alert" className="text-caption text-state-danger-ink [word-break:keep-all]">
           {t("files.drive.upload.tooLargeSummary", {

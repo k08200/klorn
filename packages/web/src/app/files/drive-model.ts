@@ -58,6 +58,8 @@ export function nameErrorKey(raw: string): NameErrorKey | null {
 
 /** What a row's menu does (dialog-state.ts names the sheets after these). */
 export type DriveChange = "rename" | "move" | "delete";
+/** Every write a sheet sends: a row's change, or "New folder". */
+export type DriveWrite = DriveChange | "create";
 
 /**
  * Whether the change takes the row out of the list on screen: a delete always;
@@ -69,21 +71,28 @@ export function removesFromList(change: DriveChange, inFolder: boolean): boolean
   return change === "move" && inFolder;
 }
 
-/** The row focus goes to when one leaves the list: the next, else the previous. */
-export function neighborId(ids: readonly string[], id: string): string | null {
-  const at = ids.indexOf(id);
-  if (at === -1) return null;
-  return ids[at + 1] ?? ids[at - 1] ?? null;
+/**
+ * Where focus may go when a row leaves the list, in order: the rows after
+ * it, nearest first, then the rows before it, nearest first. The caller takes
+ * the first one still on screen once the fresh list has rendered.
+ */
+export function focusCandidates(ids: readonly string[], changedId: string): string[] {
+  const at = ids.indexOf(changedId);
+  if (at === -1) return [];
+  return [...ids.slice(at + 1), ...ids.slice(0, at).reverse()];
 }
 
 /**
  * A refusal that says the list on screen is out of date: the row is gone
- * (`not-found`), or a folder delete that storage cut short (503, retryable)
- * already took some of its rows with it.
+ * (`not-found`); the folder a move or a new folder aimed at is gone
+ * (`parent-not-found`: the picker's level, or the open folder, is stale); a folder delete that storage cut short (503,
+ * retryable) already took some of its rows with it; or the request timed out
+ * and may have happened anyway.
  */
-export function refreshesAfterFailure(change: DriveChange, key: DriveMessageKey): boolean {
-  if (key === "files.drive.error.notFound") return true;
-  return change === "delete" && key === "files.drive.error.storage";
+export function refreshesAfterFailure(write: DriveWrite, key: DriveMessageKey): boolean {
+  if (key === "files.drive.error.notFound" || key === "files.drive.error.timeout") return true;
+  if (write === "move" || write === "create") return key === "files.drive.error.parentNotFound";
+  return write === "delete" && key === "files.drive.error.storage";
 }
 
 /** "X of Y used": both sizes formatted; no quota while the server has none. */

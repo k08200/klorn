@@ -195,6 +195,10 @@ const ja: Record<string, string> = {
     "上限の{limit}を超えたためアップロードしませんでした（{count}件）：{names}",
   "files.drive.drop.busy": "すでにアップロード中です。完了してからもう一度ドロップしてください。",
   "files.drive.drop.folders": "ここではフォルダはアップロードできません。ファイルのみです。",
+  "files.drive.error.timeout":
+    "時間がかかりすぎたため中止しました。接続を確認して、もう一度お試しください。",
+  "files.drive.upload.destination.folder": "保存先：「{folder}」",
+  "files.drive.upload.destination.root": "保存先：Klorn ドライブの最上位",
   "today.files.title": "最近のファイル",
   "today.files.open": "ファイルを開く",
   "today.files.none": "ファイルはまだありません。",

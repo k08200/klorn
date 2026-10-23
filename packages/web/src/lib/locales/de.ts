@@ -201,6 +201,10 @@ const de: Record<string, string> = {
   "files.drive.drop.busy":
     "Es läuft bereits ein Upload. Lege die Dateien erneut ab, wenn er fertig ist.",
   "files.drive.drop.folders": "Ordner können hier nicht hochgeladen werden, nur Dateien.",
+  "files.drive.error.timeout":
+    "Das hat zu lange gedauert. Prüfe deine Verbindung und versuche es erneut.",
+  "files.drive.upload.destination.folder": "Ziel: {folder}",
+  "files.drive.upload.destination.root": "Ziel: oberste Ebene von Klorn Drive",
   "today.files.title": "Neueste Dateien",
   "today.files.open": "Dateien öffnen",
   "today.files.none": "Noch keine Dateien.",

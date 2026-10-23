@@ -9,14 +9,24 @@
  */
 
 import type { DriveFileWire } from "@klorn/contract";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { closeDialog, openDialog, type RowAction } from "../../../web/src/app/files/dialog-state";
-import { type DriveMessageKey, driveErrorKey } from "../../../web/src/app/files/drive-errors";
 import {
-  neighborId,
+  type DriveMessageKey,
+  driveErrorKey,
+  isUnexpectedDriveError,
+} from "../../../web/src/app/files/drive-errors";
+import {
+  focusCandidates,
   refreshesAfterFailure,
   removesFromList,
 } from "../../../web/src/app/files/drive-model";
+import {
+  DELETE_TIMEOUT_MS,
+  DriveTimeoutError,
+  EDIT_TIMEOUT_MS,
+  withTimeout,
+} from "../../../web/src/app/files/drive-timeout";
 import {
   pendingIndices,
   resetForRetry,
@@ -202,11 +212,11 @@ describe("the sheets: one open at a time, closed only by their own answer", () =
 });
 
 describe("after a change: where focus goes, and when the list is read again", () => {
-  it("goes to the next row, else the previous one, else nowhere", () => {
-    expect(neighborId(["a", "b", "c"], "b")).toBe("c");
-    expect(neighborId(["a", "b", "c"], "c")).toBe("b");
-    expect(neighborId(["a"], "a")).toBeNull();
-    expect(neighborId(["a", "b"], "gone")).toBeNull();
+  it("tries the rows after the changed one, then the rows before it, nearest first", () => {
+    expect(focusCandidates(["a", "b", "c", "d"], "b")).toEqual(["c", "d", "a"]);
+    expect(focusCandidates(["a", "b", "c"], "c")).toEqual(["b", "a"]);
+    expect(focusCandidates(["a"], "a")).toEqual([]);
+    expect(focusCandidates(["a", "b"], "gone")).toEqual([]);
   });
 
   it("knows which changes take the row out of the list on screen", () => {
@@ -227,5 +237,82 @@ describe("after a change: where focus goes, and when the list is read again", ()
     expect(refreshesAfterFailure("delete", "files.drive.error.storage")).toBe(true);
     expect(refreshesAfterFailure("move", "files.drive.error.storage")).toBe(false);
     expect(refreshesAfterFailure("delete", "files.drive.error.generic")).toBe(false);
+    // The folder picked in Move is gone: the picker's level is out of date.
+    expect(refreshesAfterFailure("move", "files.drive.error.parentNotFound")).toBe(true);
+    // A request that timed out may have happened anyway.
+    for (const change of ["create", "rename", "move", "delete"] as const) {
+      expect(refreshesAfterFailure(change, "files.drive.error.timeout"), change).toBe(true);
+    }
+    // "New folder" into a folder that is gone: the list on screen is stale.
+    expect(refreshesAfterFailure("create", "files.drive.error.parentNotFound")).toBe(true);
+    expect(refreshesAfterFailure("create", "files.drive.error.invalidName")).toBe(false);
+  });
+});
+
+describe("withTimeout: a sheet's request cannot hold the sheet forever", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("bounds edits at 30 s and deletes at 60 s", () => {
+    expect(EDIT_TIMEOUT_MS).toBe(30_000);
+    expect(DELETE_TIMEOUT_MS).toBe(60_000);
+  });
+
+  it("answers what the request answers when it is in time", async () => {
+    await expect(withTimeout(1_000, () => Promise.resolve("done"))).resolves.toBe("done");
+  });
+
+  it("aborts the request at the deadline and fails with its own error", async () => {
+    vi.useFakeTimers();
+    let seen: AbortSignal | null = null;
+    const stalled = withTimeout(30_000, (signal) => {
+      seen = signal;
+      // A fetch rejects once its signal aborts; this stands in for one that never answers.
+      return new Promise((_, reject) => {
+        signal.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+      });
+    });
+    const outcome = expect(stalled).rejects.toBeInstanceOf(DriveTimeoutError);
+    await vi.advanceTimersByTimeAsync(30_000);
+    await outcome;
+    expect((seen as AbortSignal | null)?.aborted).toBe(true);
+  });
+
+  it("reads as its own message, never reported as a fault", () => {
+    const key = driveErrorKey(new DriveTimeoutError());
+    expect(key).toBe("files.drive.error.timeout");
+    expect(isUnexpectedDriveError(key)).toBe(false);
+  });
+
+  it("passes any other failure through unchanged", async () => {
+    const refused = new Error("API 409: {}");
+    await expect(withTimeout(1_000, () => Promise.reject(refused))).rejects.toBe(refused);
+  });
+});
+
+describe("runUploads when the page goes away", () => {
+  it("stops at once, and reports nothing about the aborted file", async () => {
+    const picked = files("a.txt", "b.txt", "c.txt");
+    const controller = new AbortController();
+    const run = harness(picked, {});
+    run.upload.mockImplementation((file: File) => {
+      if (file.name === "b.txt") {
+        controller.abort();
+        return Promise.reject(new DOMException("aborted", "AbortError"));
+      }
+      return Promise.resolve({ id: file.name });
+    });
+    await runUploads(
+      picked,
+      pendingIndices(run.batch),
+      null,
+      run.deps,
+      run.step,
+      controller.signal,
+    );
+    expect(sentNames(run.upload)).toEqual(["a.txt", "b.txt"]);
+    expect(run.report).not.toHaveBeenCalled();
+    expect(run.upload.mock.calls[1]?.[2]).toBe(controller.signal);
   });
 });

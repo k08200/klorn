@@ -24,3 +24,44 @@ export function rowFocusTarget(
     row.querySelector<HTMLElement>("a[href], button")
   );
 }
+
+/** The first of `ids` whose row is still on screen, as rowFocusTarget finds it. */
+export function firstRowTarget(
+  container: HTMLElement | null,
+  ids: readonly string[],
+): HTMLElement | null {
+  for (const id of ids) {
+    const target = rowFocusTarget(container, id);
+    if (target !== null) return target;
+  }
+  return null;
+}
+
+/**
+ * Resolves once a fresh list read has reached the screen. TanStack Query tells
+ * its observers on a setTimeout(0) after the fetch settles, and React renders
+ * that update right after; two timer turns are past both. Timers, not
+ * requestAnimationFrame, which never fires in a background tab.
+ */
+export function afterRender(): Promise<void> {
+  return new Promise((resolve) => setTimeout(() => setTimeout(resolve, 0), 0));
+}
+
+const FOCUSABLE = "a[href], button:not([disabled])";
+
+/** Focuses the first control in the items from `index` on; false when there is none. */
+export function focusItemFrom(
+  container: HTMLElement | null,
+  itemSelector: string,
+  index: number,
+): boolean {
+  const items = Array.from(container?.querySelectorAll<HTMLElement>(itemSelector) ?? []);
+  for (const item of items.slice(index)) {
+    const control = item.querySelector<HTMLElement>(FOCUSABLE);
+    if (control !== null) {
+      control.focus();
+      return true;
+    }
+  }
+  return false;
+}

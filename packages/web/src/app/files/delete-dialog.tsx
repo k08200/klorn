@@ -23,9 +23,17 @@ interface DeleteDialogProps {
   /** Deletes it; throws to keep the sheet open with the failure shown. */
   onDelete: (item: DriveFileWire) => Promise<void>;
   returnFocusRef?: RefObject<HTMLElement | null>;
+  fallbackFocusRef?: RefObject<HTMLElement | null>;
 }
 
-export function DeleteDialog({ open, item, onClose, onDelete, returnFocusRef }: DeleteDialogProps) {
+export function DeleteDialog({
+  open,
+  item,
+  onClose,
+  onDelete,
+  returnFocusRef,
+  fallbackFocusRef,
+}: DeleteDialogProps) {
   const { t } = useT();
   const action = useDialogAction("files.drive.delete");
   const folder = item?.isFolder === true;
@@ -44,6 +52,8 @@ export function DeleteDialog({ open, item, onClose, onDelete, returnFocusRef }: 
       description={t(folder ? "files.drive.delete.folderBody" : "files.drive.delete.fileBody")}
       closeLabel={t("common.close")}
       returnFocusRef={returnFocusRef}
+      fallbackFocusRef={fallbackFocusRef}
+      closeUnavailable={action.pending}
       footer={
         <>
           <PendingButton variant="ghost" unavailable={action.pending} onClick={dismiss}>

@@ -81,21 +81,30 @@ export function reportDriveError(err: unknown, scope: string) {
   return key;
 }
 
+// Each request takes the signal that aborts it: the page going away for an
+// upload, the sheet's deadline for the others (drive-timeout.ts).
+
 export async function uploadDriveFile(
   file: File,
   parentExternalId: string | null,
+  signal?: AbortSignal,
 ): Promise<DriveFileWire> {
   const answer = await apiFetch<DriveUploadResponse>(DRIVE_UPLOAD_PATH, {
     method: "POST",
     body: uploadForm(file, parentExternalId),
+    signal,
   });
   return answer.file;
 }
 
-export async function createDriveFolder(request: DriveCreateFolderRequest): Promise<DriveFileWire> {
+export async function createDriveFolder(
+  request: DriveCreateFolderRequest,
+  signal?: AbortSignal,
+): Promise<DriveFileWire> {
   const answer = await apiFetch<DriveUploadResponse>(DRIVE_FOLDERS_PATH, {
     method: "POST",
     body: JSON.stringify(request),
+    signal,
   });
   return answer.file;
 }
@@ -103,15 +112,23 @@ export async function createDriveFolder(request: DriveCreateFolderRequest): Prom
 export async function updateDriveItem(
   id: string,
   change: DriveUpdateFileRequest,
+  signal?: AbortSignal,
 ): Promise<DriveFileWire> {
   const answer = await apiFetch<DriveUploadResponse>(driveItemPath(id), {
     method: "PATCH",
     body: JSON.stringify(change),
+    signal,
   });
   return answer.file;
 }
 
-export async function deleteDriveItem(id: string): Promise<DriveDeleteResponse["deleted"]> {
-  const answer = await apiFetch<DriveDeleteResponse>(driveItemPath(id), { method: "DELETE" });
+export async function deleteDriveItem(
+  id: string,
+  signal?: AbortSignal,
+): Promise<DriveDeleteResponse["deleted"]> {
+  const answer = await apiFetch<DriveDeleteResponse>(driveItemPath(id), {
+    method: "DELETE",
+    signal,
+  });
   return answer.deleted;
 }

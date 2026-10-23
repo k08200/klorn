@@ -149,6 +149,8 @@ describe("driveErrorKey: a failed drive request as a localized message key", () 
       "NetworkError when attempting to fetch resource.",
       "Load failed",
       "Network request failed",
+      "The network connection was lost.",
+      "The Internet connection appears to be offline.",
     ]) {
       expect(driveErrorKey(new TypeError(message)), message).toBe("files.drive.error.offline");
     }

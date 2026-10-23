@@ -31,8 +31,11 @@ import type { FolderCrumb } from "./open";
 import { PendingButton } from "./pending-button";
 import { useDialogAction } from "./use-dialog-action";
 import { type FilesListState, useFolderLevel } from "./use-files";
+import { useLoadMoreFocus } from "./use-load-more-focus";
 
 const SKELETON_KEYS = ["a", "b", "c"];
+/** One level's folders, in order (useLoadMoreFocus). */
+const LEVEL_ITEMS = ":scope > ul > li";
 
 interface MoveDialogProps {
   open: boolean;
@@ -42,9 +45,17 @@ interface MoveDialogProps {
   /** Moves it; throws to keep the sheet open with the failure shown. */
   onMove: (item: DriveFileWire, target: string | null) => Promise<void>;
   returnFocusRef?: RefObject<HTMLElement | null>;
+  fallbackFocusRef?: RefObject<HTMLElement | null>;
 }
 
-export function MoveDialog({ open, item, onClose, onMove, returnFocusRef }: MoveDialogProps) {
+export function MoveDialog({
+  open,
+  item,
+  onClose,
+  onMove,
+  returnFocusRef,
+  fallbackFocusRef,
+}: MoveDialogProps) {
   const { t } = useT();
   const placeId = useId();
   const alreadyId = useId();
@@ -87,6 +98,8 @@ export function MoveDialog({ open, item, onClose, onMove, returnFocusRef }: Move
       description={item ? t("files.drive.move.item", { name: item.name }) : undefined}
       closeLabel={t("common.close")}
       returnFocusRef={returnFocusRef}
+      fallbackFocusRef={fallbackFocusRef}
+      closeUnavailable={action.pending}
       footer={
         <>
           <PendingButton variant="ghost" unavailable={action.pending} onClick={dismiss}>
@@ -163,6 +176,8 @@ function FolderLevel({
   onEnter: (folder: DriveFileWire) => void;
 }) {
   const { t } = useT();
+  const listRef = useRef<HTMLDivElement>(null);
+  const withLoadMoreFocus = useLoadMoreFocus(choices.length, level.hasMore, listRef, LEVEL_ITEMS);
   if (loading) {
     return (
       <SkeletonGroup label={t("files.loading")} className="flex flex-col gap-2">
@@ -174,7 +189,7 @@ function FolderLevel({
   }
   if (level.failed) return <BlockError message={t("files.error")} onRetry={level.retry} />;
   return (
-    <>
+    <div ref={listRef} className="flex flex-col gap-3">
       {choices.length === 0 && !level.hasMore && (
         <p className="text-body text-ink-muted">{t("files.drive.move.noFolders")}</p>
       )}
@@ -188,11 +203,15 @@ function FolderLevel({
         </ul>
       )}
       {level.hasMore && (
-        <PendingButton variant="secondary" pending={level.loadingMore} onClick={level.loadMore}>
+        <PendingButton
+          variant="secondary"
+          pending={level.loadingMore}
+          onClick={withLoadMoreFocus(level.loadMore)}
+        >
           {level.loadingMore ? t("files.loadingMore") : t("files.loadMore")}
         </PendingButton>
       )}
-    </>
+    </div>
   );
 }
 

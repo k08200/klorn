@@ -197,6 +197,9 @@ const es: Record<string, string> = {
   "files.drive.drop.busy":
     "Ya hay una subida en curso. Suelta los archivos de nuevo cuando termine.",
   "files.drive.drop.folders": "Aquí no se pueden subir carpetas, solo archivos.",
+  "files.drive.error.timeout": "Tardó demasiado. Comprueba tu conexión e inténtalo de nuevo.",
+  "files.drive.upload.destination.folder": "Destino: {folder}",
+  "files.drive.upload.destination.root": "Destino: nivel superior de Klorn Drive",
   "today.files.title": "Archivos recientes",
   "today.files.open": "Abrir Archivos",
   "today.files.none": "Aún no hay archivos.",

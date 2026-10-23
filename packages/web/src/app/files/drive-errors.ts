@@ -7,6 +7,7 @@
  */
 
 import type { DriveErrorCode } from "@klorn/contract";
+import { DriveTimeoutError } from "./drive-timeout";
 
 const CODE_KEYS = {
   "invalid-upload": "files.drive.error.invalidUpload",
@@ -29,12 +30,14 @@ const CODE_KEYS = {
 
 /**
  * Answers that carry no drive code: the route is dark, the session is over
- * (requireAuth's 401, with or without its own `code`), offline, or anything else.
+ * (requireAuth's 401, with or without its own `code`), offline, a sheet's
+ * request past its deadline (drive-timeout.ts), or anything else.
  */
 const FALLBACK_KEYS = {
   unavailable: "files.drive.error.unavailable",
   signedOut: "files.drive.error.signedOut",
   offline: "files.drive.error.offline",
+  timeout: "files.drive.error.timeout",
   generic: "files.drive.error.generic",
 } as const;
 
@@ -94,13 +97,15 @@ function driveFailure(err: unknown): DriveFailure {
 
 /**
  * What fetch rejects with when the request got no answer, in each engine's
- * words (Chromium, Firefox, WebKit, the React Native and Node fetches). Any
- * other TypeError is a bug in the page, not the network.
+ * words (Chromium, Firefox, WebKit and Safari on iOS, the React Native and
+ * Node fetches). Any other TypeError is a bug in the page, not the network.
  */
 const NETWORK_FAILURE_MESSAGES: ReadonlySet<string> = new Set([
   "Failed to fetch",
   "NetworkError when attempting to fetch resource.",
   "Load failed",
+  "The network connection was lost.",
+  "The Internet connection appears to be offline.",
   "Network request failed",
   "fetch failed",
 ]);
@@ -113,6 +118,7 @@ function isNetworkFailure(err: unknown): boolean {
 
 /** The message key for a failed drive request. */
 export function driveErrorKey(err: unknown): DriveMessageKey {
+  if (err instanceof DriveTimeoutError) return FALLBACK_KEYS.timeout;
   if (isNetworkFailure(err)) return FALLBACK_KEYS.offline;
   const { status, code } = driveFailure(err);
   if (code !== null) return CODE_KEYS[code];

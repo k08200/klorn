@@ -28,7 +28,7 @@ const SLOT_CLASS = "flex size-9 shrink-0 items-center pointer-coarse:size-11";
 
 export function ManagedRow({ file, editable, onAction, children }: ManagedRowProps) {
   return (
-    // gap-4 clears the row's own bleed (at most -mx-3.5, file-row.tsx), so its
+    // gap-4 clears the row's own 12px bleed (-mx-3, file-row.tsx), so its
     // hover fill and focus ring end before the menu button starts.
     <div className="flex items-center gap-4">
       <div className="min-w-0 flex-1">{children}</div>

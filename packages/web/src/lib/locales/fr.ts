@@ -198,6 +198,10 @@ const fr: Record<string, string> = {
     "Un envoi est déjà en cours. Déposez à nouveau les fichiers quand il sera terminé.",
   "files.drive.drop.folders":
     "Les dossiers ne peuvent pas être envoyés ici, seulement des fichiers.",
+  "files.drive.error.timeout":
+    "Cela a pris trop de temps. Vérifiez votre connexion, puis réessayez.",
+  "files.drive.upload.destination.folder": "Destination : {folder}",
+  "files.drive.upload.destination.root": "Destination : premier niveau de Klorn Drive",
   "today.files.title": "Fichiers récents",
   "today.files.open": "Ouvrir Fichiers",
   "today.files.none": "Aucun fichier pour l’instant.",

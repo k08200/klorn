@@ -59,7 +59,7 @@ interface Recorded {
   lists: string[];
 }
 
-async function mockApi(page: Page, opts: { live: boolean }): Promise<Recorded> {
+async function mockApi(page: Page, opts: { live: boolean; paged?: boolean }): Promise<Recorded> {
   const recorded: Recorded = { uploads: [], patches: [], deletes: [], lists: [] };
   let rows = [KLORN_ROW, GOOGLE_ROW, FOLDER_ROW];
   await page.addInitScript(() => {
@@ -125,6 +125,12 @@ async function mockApi(page: Page, opts: { live: boolean }): Promise<Recorded> {
     const shown = rows.filter(
       (row) => inFolder(row) && (query.get("foldersOnly") !== "true" || row.isFolder),
     );
+    // paged: the unfiltered list in two pages, the folder on the second.
+    if (opts.paged && folder === null) {
+      const second = query.get("cursor") === "page-2";
+      const page = shown.filter((row) => row.isFolder === second);
+      return route.fulfill({ json: { files: page, nextCursor: second ? null : "page-2" } });
+    }
     return route.fulfill({ json: { files: shown, nextCursor: null } });
   });
   return recorded;
@@ -262,4 +268,31 @@ test("move: the picker asks for folders only, and Move here sends the folder", a
   });
   // The unfiltered list still shows the row: focus is back on its menu button.
   await expect(page.getByRole("button", { name: actionsFor(KLORN_ROW.name) })).toBeFocused();
+});
+
+test("cancel after a delete: focus goes back to the opener, not to the last neighbour", async ({
+  page,
+}) => {
+  await mockApi(page, { live: true });
+  await openFiles(page);
+  await page.getByRole("button", { name: actionsFor(KLORN_ROW.name) }).click();
+  await page.getByRole("menuitem", { name: en["files.drive.delete"] }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: en["files.drive.delete.confirm"], exact: true })
+    .click();
+  await expect(page.locator(`[data-file-id="${GOOGLE_ROW.id}"] a`)).toBeFocused();
+  const folderMenu = page.getByRole("button", { name: actionsFor(FOLDER_ROW.name) });
+  await folderMenu.click();
+  await page.getByRole("menuitem", { name: en["files.drive.delete"] }).click();
+  await page.getByRole("dialog").getByRole("button", { name: en["common.cancel"] }).click();
+  await expect(folderMenu).toBeFocused();
+});
+
+test("load more: when the last page arrives, focus moves to its first row", async ({ page }) => {
+  await mockApi(page, { live: true, paged: true });
+  await openFiles(page);
+  await page.getByRole("button", { name: en["files.loadMore"] }).click();
+  await expect(page.getByRole("button", { name: en["files.loadMore"] })).toHaveCount(0);
+  await expect(page.locator(`[data-file-id="${FOLDER_ROW.id}"] button`).first()).toBeFocused();
 });

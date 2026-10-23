@@ -5,27 +5,30 @@
  * and per row "Rename", "Move" and "Delete". One is open at a time and each
  * opening mounts a fresh sheet (dialog-state.ts tokens): nothing carries over
  * from the last one, and an answer closes only the sheet that asked for it.
- * Each success reads the lists and the usage again, closes the sheet, and a
- * toast (role="status") says what happened. A row that left the list takes
- * its menu button with it, so focus goes to the next row (else the previous,
- * else the Klorn Drive heading). A refusal that says the list is out of date
- * (the row is gone, a delete cut short) reads it again too.
+ * Each request has a deadline (drive-timeout.ts: 30 s, a delete 60 s), so a
+ * stalled one cannot hold its sheet. Each success reads the lists and the
+ * usage again, closes the sheet, and a toast (role="status") says what
+ * happened. A row that left the list takes its menu button with it, so focus
+ * goes to the nearest row still there (else the opener, else the Klorn Drive
+ * heading). A refusal that says the list is out of date (the row or the
+ * folder is gone, a delete cut short, a timeout) reads it again too.
  */
 
 import type { DriveFileWire } from "@klorn/contract";
-import { type RefObject, useRef, useState } from "react";
+import { type RefObject, useEffect, useRef, useState } from "react";
 import { useToast } from "../../components/toast";
 import { useT } from "../../lib/i18n";
 import { DeleteDialog } from "./delete-dialog";
 import { closeDialog, type DialogState, openDialog, type RowAction } from "./dialog-state";
 import { driveErrorKey } from "./drive-errors";
 import {
-  type DriveChange,
-  neighborId,
+  type DriveWrite,
+  focusCandidates,
   refreshesAfterFailure,
   removesFromList,
 } from "./drive-model";
-import { rowFocusTarget } from "./focus";
+import { DELETE_TIMEOUT_MS, EDIT_TIMEOUT_MS, withTimeout } from "./drive-timeout";
+import { afterRender, firstRowTarget } from "./focus";
 import { MoveDialog } from "./move-dialog";
 import { NameDialog } from "./name-dialog";
 import type { FolderCrumb } from "./open";
@@ -58,46 +61,66 @@ interface ManageDialogsProps {
   fallbackFocusRef: RefObject<HTMLElement | null>;
 }
 
+const TIMEOUT_MS: Readonly<Record<DriveWrite, number>> = {
+  create: EDIT_TIMEOUT_MS,
+  rename: EDIT_TIMEOUT_MS,
+  move: EDIT_TIMEOUT_MS,
+  delete: DELETE_TIMEOUT_MS,
+};
+
 export function ManageDialogs(props: ManageDialogsProps) {
   const { t } = useT();
   const { toast } = useToast();
   const refresh = useDriveRefresh();
+  // Where focus goes when the open sheet closes; null: its opener (Sheet).
   const returnTo = useRef<HTMLElement | null>(null);
   const { state, close } = props.dialogs;
+  const token = state?.token ?? 0;
+  // Each opening starts from its own opener: a target an earlier sheet chose
+  // (a deleted row's neighbour) never carries over to a sheet that is cancelled.
+  useEffect(() => {
+    if (token > 0) returnTo.current = null;
+  }, [token]);
   if (state === null) return null;
-  const { token, file } = state;
+  const { file } = state;
 
-  /** The request, then a fresh read; a refusal that dates the list reads it too. */
-  const send = async (change: DriveChange | "folder", request: () => Promise<void>) => {
+  /** The request within its deadline, then a fresh read; a refusal that dates the list reads it too. */
+  const send = async <T,>(write: DriveWrite, request: (signal: AbortSignal) => Promise<T>) => {
+    let answer: T;
     try {
-      await request();
+      answer = await withTimeout(TIMEOUT_MS[write], request);
     } catch (err) {
-      if (change !== "folder" && refreshesAfterFailure(change, driveErrorKey(err))) {
-        void refresh();
-      }
+      if (refreshesAfterFailure(write, driveErrorKey(err))) void refresh();
       throw err;
     }
     await refresh();
+    return answer;
   };
 
-  /** Where focus goes once the sheet closes: null keeps the sheet's own (the opener). */
-  const settle = (change: DriveChange | "folder", row: DriveFileWire | null) => {
-    returnTo.current = null;
-    if (row === null || change === "folder" || !removesFromList(change, props.folder !== null)) {
-      return;
+  /**
+   * Closes the sheet. A row that left the list hands focus to the nearest row
+   * still on screen once the fresh list has rendered (rows the change took
+   * with it, such as a deleted folder's files, are gone by then), else the
+   * Sheet falls back to the opener, then the Klorn Drive heading.
+   */
+  const finish = async (write: DriveWrite, row: DriveFileWire | null, message: string) => {
+    if (row !== null && write !== "create" && removesFromList(write, props.folder !== null)) {
+      await afterRender();
+      returnTo.current = firstRowTarget(
+        props.listRef.current,
+        focusCandidates(props.rowIds, row.id),
+      );
     }
-    const next = neighborId(props.rowIds, row.id);
-    returnTo.current =
-      rowFocusTarget(props.listRef.current, next) ?? props.fallbackFocusRef.current;
-  };
-
-  const finish = (change: DriveChange | "folder", row: DriveFileWire | null, message: string) => {
-    settle(change, row);
     close(token);
     toast(message, "success");
   };
 
-  const common = { open: state.open, onClose: () => close(token) };
+  const common = {
+    open: state.open,
+    onClose: () => close(token),
+    returnFocusRef: returnTo,
+    fallbackFocusRef: props.fallbackFocusRef,
+  };
   switch (state.kind) {
     case "folder":
       return (
@@ -110,12 +133,11 @@ export function ManageDialogs(props: ManageDialogsProps) {
           initialName=""
           scope="files.drive.folder"
           onSubmit={async (name) => {
-            let created = name;
-            await send("folder", async () => {
-              const parentExternalId = props.folder?.externalId ?? null;
-              created = (await createDriveFolder({ name, parentExternalId })).name;
-            });
-            finish("folder", null, t("files.drive.folder.done", { name: created }));
+            const parentExternalId = props.folder?.externalId ?? null;
+            const created = await send("create", (signal) =>
+              createDriveFolder({ name, parentExternalId }, signal),
+            );
+            await finish("create", null, t("files.drive.folder.done", { name: created.name }));
           }}
         />
       );
@@ -131,11 +153,10 @@ export function ManageDialogs(props: ManageDialogsProps) {
           scope="files.drive.rename"
           onSubmit={async (name) => {
             if (file === null) return;
-            let renamed = name;
-            await send("rename", async () => {
-              renamed = (await updateDriveItem(file.id, { name })).name;
-            });
-            finish("rename", file, t("files.drive.rename.done", { name: renamed }));
+            const renamed = await send("rename", (signal) =>
+              updateDriveItem(file.id, { name }, signal),
+            );
+            await finish("rename", file, t("files.drive.rename.done", { name: renamed.name }));
           }}
         />
       );
@@ -145,12 +166,11 @@ export function ManageDialogs(props: ManageDialogsProps) {
           key={token}
           {...common}
           item={file}
-          returnFocusRef={returnTo}
           onMove={async (item, target) => {
-            await send("move", async () => {
-              await updateDriveItem(item.id, { parentExternalId: target });
-            });
-            finish("move", item, t("files.drive.move.done", { name: item.name }));
+            await send("move", (signal) =>
+              updateDriveItem(item.id, { parentExternalId: target }, signal),
+            );
+            await finish("move", item, t("files.drive.move.done", { name: item.name }));
           }}
         />
       );
@@ -160,12 +180,9 @@ export function ManageDialogs(props: ManageDialogsProps) {
           key={token}
           {...common}
           item={file}
-          returnFocusRef={returnTo}
           onDelete={async (item) => {
-            await send("delete", async () => {
-              await deleteDriveItem(item.id);
-            });
-            finish("delete", item, t("files.drive.delete.done", { name: item.name }));
+            await send("delete", (signal) => deleteDriveItem(item.id, signal));
+            await finish("delete", item, t("files.drive.delete.done", { name: item.name }));
           }}
         />
       );

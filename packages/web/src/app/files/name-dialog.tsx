@@ -10,7 +10,7 @@
  * on success, and mounts a fresh one for each opening (no state carried over).
  */
 
-import { type FormEvent, useId, useRef, useState } from "react";
+import { type FormEvent, type RefObject, useId, useRef, useState } from "react";
 import { Input } from "../../components/ui/input";
 import { Sheet } from "../../components/ui/sheet";
 import { useT } from "../../lib/i18n";
@@ -29,6 +29,8 @@ interface NameDialogProps {
   onClose: () => void;
   /** Sends the name; throws to keep the sheet open with the failure shown. */
   onSubmit: (name: string) => Promise<void>;
+  returnFocusRef?: RefObject<HTMLElement | null>;
+  fallbackFocusRef?: RefObject<HTMLElement | null>;
 }
 
 export function NameDialog({
@@ -40,6 +42,8 @@ export function NameDialog({
   scope,
   onClose,
   onSubmit,
+  returnFocusRef,
+  fallbackFocusRef,
 }: NameDialogProps) {
   const { t } = useT();
   const formId = useId();
@@ -72,6 +76,9 @@ export function NameDialog({
       title={title}
       closeLabel={t("common.close")}
       initialFocusRef={inputRef}
+      returnFocusRef={returnFocusRef}
+      fallbackFocusRef={fallbackFocusRef}
+      closeUnavailable={action.pending}
       footer={
         <>
           <PendingButton variant="ghost" unavailable={action.pending} onClick={dismiss}>

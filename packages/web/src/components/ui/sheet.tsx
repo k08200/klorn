@@ -12,8 +12,8 @@
  * open (or `initialFocusRef`), Tab / Shift+Tab are trapped inside (shared
  * lib/focusable trap), Escape and a scrim click close it, and focus returns
  * to the element that opened it (or to `returnFocusRef`, when the sheet's
- * action removed that element). Escape that ends an IME composition is
- * ignored.
+ * action removed that element), whichever is still on the page, else to
+ * `fallbackFocusRef`. Escape that ends an IME composition is ignored.
  *
  * Stacking: the sheet registers in the shared lib/modal-stack and only the
  * TOP overlay handles Escape / Tab, so a confirm or a second sheet opened over
@@ -49,6 +49,13 @@ export interface SheetProps {
    * Read when the sheet closes.
    */
   returnFocusRef?: RefObject<HTMLElement | null>;
+  /** Focused on close when neither the return target nor the opener is on the page any more. */
+  fallbackFocusRef?: RefObject<HTMLElement | null>;
+  /**
+   * The close button shows as unavailable (aria-disabled) while the sheet
+   * cannot be dismissed; `onClose` still decides what a press does.
+   */
+  closeUnavailable?: boolean;
   /** Label for the close button. */
   closeLabel?: string;
 }
@@ -78,6 +85,8 @@ export function Sheet({
   footer,
   initialFocusRef,
   returnFocusRef,
+  fallbackFocusRef,
+  closeUnavailable = false,
   closeLabel = "Close",
 }: SheetProps) {
   const [phase, setPhase] = useState<Phase>("closed");
@@ -87,6 +96,7 @@ export function Sheet({
   const openerRef = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
   const returnFocusPropRef = useRef(returnFocusRef);
+  const fallbackFocusPropRef = useRef(fallbackFocusRef);
   const wasOpenRef = useRef(false);
   const titleId = useId();
   const descriptionId = useId();
@@ -100,7 +110,8 @@ export function Sheet({
   // before the close below reads it.
   useEffect(() => {
     returnFocusPropRef.current = returnFocusRef;
-  }, [returnFocusRef]);
+    fallbackFocusPropRef.current = fallbackFocusRef;
+  }, [returnFocusRef, fallbackFocusRef]);
 
   // open → enter (offscreen) → open; close → exit → closed after EXIT_MS.
   useEffect(() => {
@@ -115,8 +126,16 @@ export function Sheet({
     const timer = window.setTimeout(() => setPhase("closed"), EXIT_MS);
     const opener = openerRef.current;
     openerRef.current = null;
-    // Only a sheet that was open hands focus back (not one mounted closed).
-    if (wasOpenRef.current) (returnFocusPropRef.current?.current ?? opener)?.focus();
+    // Only a sheet that was open hands focus back (not one mounted closed), and
+    // only to an element still on the page: the target, the opener, the fallback.
+    if (wasOpenRef.current) {
+      const candidates = [
+        returnFocusPropRef.current?.current,
+        opener,
+        fallbackFocusPropRef.current?.current,
+      ];
+      candidates.find((element) => element?.isConnected)?.focus();
+    }
     wasOpenRef.current = false;
     return () => window.clearTimeout(timer);
   }, [open]);
@@ -203,7 +222,14 @@ export function Sheet({
               </p>
             )}
           </div>
-          <Button variant="ghost" size="icon" aria-label={closeLabel} onClick={onClose}>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={closeLabel}
+            aria-disabled={closeUnavailable || undefined}
+            className="aria-disabled:cursor-not-allowed aria-disabled:opacity-60"
+            onClick={onClose}
+          >
             <CloseGlyph />
           </Button>
         </div>

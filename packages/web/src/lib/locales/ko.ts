@@ -167,7 +167,7 @@ const ko: Record<string, string> = {
   "files.drive.error.readOnly": "다른 서비스의 파일이라 Klorn에서 바꿀 수 없습니다.",
   "files.drive.error.isFolder": "폴더는 다운로드할 수 없습니다.",
   "files.drive.error.cycle": "폴더를 자기 자신이나 그 안의 폴더로 이동할 수 없습니다.",
-  "files.drive.error.tooDeep": "이보다 깊이 중첩할 수 없습니다.",
+  "files.drive.error.tooDeep": "폴더는 이보다 깊이 중첩할 수 없습니다.",
   "files.drive.error.folderTooLarge":
     "폴더 안에 항목이 너무 많아 한 번에 삭제할 수 없습니다. 안에 있는 항목 일부를 먼저 삭제하세요.",
   "files.drive.error.purging": "Klorn 데이터를 삭제하는 중입니다. 나중에 다시 시도하세요.",
@@ -185,10 +185,13 @@ const ko: Record<string, string> = {
   "files.drive.upload.retry": "실패한 {count}개 다시 시도",
   "files.drive.upload.itemFailed": "{name}: {reason}",
   "files.drive.upload.skipped": "건너뜀: {reason}",
-  "files.drive.upload.tooLargeSummary":
-    "크기 한도({limit}) 초과로 업로드하지 않음 {count}개: {names}",
+  "files.drive.upload.tooLargeSummary": "{limit}를 넘어 올리지 않은 파일 {count}개: {names}",
   "files.drive.drop.busy": "이미 업로드 중입니다. 끝난 뒤 다시 끌어다 놓으세요.",
   "files.drive.drop.folders": "여기서는 폴더를 업로드할 수 없습니다. 파일만 올릴 수 있습니다.",
+  "files.drive.error.timeout":
+    "응답이 너무 오래 걸려 중단했습니다. 연결 상태를 확인하고 다시 시도하세요.",
+  "files.drive.upload.destination.folder": "저장 위치: ‘{folder}’ 폴더",
+  "files.drive.upload.destination.root": "저장 위치: Klorn 드라이브 최상위",
   "today.files.title": "최근 파일",
   "today.files.open": "파일 열기",
   "today.files.none": "아직 파일이 없습니다.",

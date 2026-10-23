@@ -18,7 +18,7 @@ import {
 } from "./upload-model";
 
 export interface UploadDeps {
-  upload: (file: File, parentExternalId: string | null) => Promise<unknown>;
+  upload: (file: File, parentExternalId: string | null, signal?: AbortSignal) => Promise<unknown>;
   classify: (err: unknown) => DriveMessageKey;
   /** Sees every failure with its key; decides itself what is worth reporting. */
   report: (err: unknown, key: DriveMessageKey) => void;
@@ -26,22 +26,29 @@ export interface UploadDeps {
 
 export type BatchStep = (update: (batch: UploadBatch) => UploadBatch) => void;
 
-/** Sends `files[index]` for each index, in order, into `parentExternalId`. */
+/**
+ * Sends `files[index]` for each index, in order, into `parentExternalId`.
+ * `signal` aborts the file in flight when the page goes away: the run then
+ * stops at once, and the abort is nobody's news (nothing is reported).
+ */
 export async function runUploads(
   files: readonly File[],
   indices: readonly number[],
   parentExternalId: string | null,
   deps: UploadDeps,
   step: BatchStep,
+  signal?: AbortSignal,
 ): Promise<void> {
   for (const index of indices) {
     const file = files[index];
     if (file === undefined) continue;
+    if (signal?.aborted) return;
     step((batch) => markUploading(batch, index));
     try {
-      await deps.upload(file, parentExternalId);
+      await deps.upload(file, parentExternalId, signal);
       step((batch) => markDone(batch, index));
     } catch (err) {
+      if (signal?.aborted) return;
       const key = deps.classify(err);
       deps.report(err, key);
       step((batch) => markFailed(batch, index, key));

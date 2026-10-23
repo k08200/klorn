@@ -21,14 +21,16 @@ import { useFileDownload } from "./use-download";
 
 const ROW_CLASS = "-mx-3 flex min-h-13 items-center gap-3 rounded-card px-3 py-2";
 const LINK_ROW_CLASS = `focus-ring ${ROW_CLASS} transition-colors duration-120 ease-fluid hover:bg-surface-hover`;
-// The Button primitive's own px-3.5 padding (size md): the bleed matches, so
-// the content and the badge line up with the link and plain rows (-mx-3 px-3).
-// align-top: the Button is inline-flex, and on the baseline its line box would
-// add a pixel or two below it.
-const BUTTON_ROW_CLASS = "-mx-3.5 w-[calc(100%+1.75rem)] rounded-card align-top";
-// The link rows' height and padding, on the body: the Button's own min-height
-// is its frame's, so setting one on the button itself would race it.
-const BUTTON_ROW_BODY = "flex min-h-13 w-full min-w-0 items-center gap-3 py-2 text-left";
+// The same 12px bleed as the link and plain rows (-mx-3 px-3), so every
+// row's hover fill and focus ring reach equally far. The Button primitive
+// pads 14px (size md, px-3.5); the body takes the 2px back on each side, so
+// the content and the badge line up with the other rows. align-top: the
+// Button is inline-flex, and on the baseline its line box would add a pixel
+// or two below it. The link rows' height and padding go on the body: the
+// Button's own min-height is its frame's, so setting one on it would race it.
+const BUTTON_ROW_CLASS = "-mx-3 w-[calc(100%+1.5rem)] rounded-card align-top";
+const BUTTON_ROW_BODY =
+  "-mx-0.5 flex min-h-13 w-[calc(100%+0.25rem)] min-w-0 items-center gap-3 py-2 text-left";
 
 function modifiedLabel(iso: string, locale: string, timeZone: string): string {
   const date = new Date(iso);

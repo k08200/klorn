@@ -35,9 +35,12 @@ import { useFileDrop } from "./use-file-drop";
 import { useDebounced, useFilesList } from "./use-files";
 import { useFolderTrail } from "./use-folder-trail";
 import { useDriveRefresh, useKlornDrive } from "./use-klorn-drive";
+import { useLoadMoreFocus } from "./use-load-more-focus";
 import { type StartResult, useUploads } from "./use-uploads";
 
 const SKELETON_KEYS = ["a", "b", "c", "d", "e", "f"];
+/** The rows of the list, in order (useLoadMoreFocus). */
+const LIST_ITEMS = ":scope > ul > li";
 
 export function FilesView() {
   const { t } = useT();
@@ -54,6 +57,7 @@ export function FilesView() {
   const { drive, canUpload, dialogs, uploads, drop } = useDriveManager(folder);
   const listRef = useRef<HTMLElement>(null);
   const driveHeadingRef = useRef<HTMLHeadingElement>(null);
+  const withLoadMoreFocus = useLoadMoreFocus(list.files.length, list.hasMore, listRef, LIST_ITEMS);
 
   return (
     <div className={`${PAGE_SHELL} flex flex-col gap-6`}>
@@ -136,7 +140,11 @@ export function FilesView() {
         {list.hasMore && (
           <div className="flex justify-center pt-4">
             {/* Not `disabled` while loading: focus stays on it. */}
-            <PendingButton variant="secondary" pending={list.loadingMore} onClick={list.loadMore}>
+            <PendingButton
+              variant="secondary"
+              pending={list.loadingMore}
+              onClick={withLoadMoreFocus(list.loadMore)}
+            >
               {list.loadingMore ? t("files.loadingMore") : t("files.loadMore")}
             </PendingButton>
           </div>
@@ -169,7 +177,7 @@ function useDriveManager(folder: FolderCrumb | null) {
   const refreshDrive = useDriveRefresh();
   const dialogs = useManageDialogs();
   const uploads = useUploads({
-    parentExternalId: folder?.externalId ?? null,
+    folder,
     maxFileBytes: drive.limits?.maxFileBytes ?? 0,
     onFinished: refreshDrive,
   });
