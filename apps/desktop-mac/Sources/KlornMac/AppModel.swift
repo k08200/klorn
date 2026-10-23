@@ -372,6 +372,7 @@ final class AppModel {
             let me = try await api.get("/api/auth/me", as: MeFlagsResponse.self)
             guard isCurrent(session) else { return }
             applyClientFlags(me.user)
+            applyDisplayZone(me.zone)
         } catch _ where !isCurrent(session) {
             return
         } catch {
@@ -381,6 +382,19 @@ final class AppModel {
     }
 
     static let clientFlagsInterval: TimeInterval = 10 * 60
+
+    /// The IANA zone the web pinned (MANUAL), nil = this Mac's zone. Setting
+    /// it re-pins `DisplayTimeZone`, so a reset (sign-out) un-pins too; the
+    /// shell keys its content on it so every time redraws in the new zone.
+    private(set) var displayTimeZoneID: String? {
+        didSet { DisplayTimeZone.pin(identifier: displayTimeZoneID) }
+    }
+
+    /// Takes the /me zone preference; a no-op when nothing changed.
+    func applyDisplayZone(_ preference: DisplayZonePreference) {
+        let next = preference.pinnedIdentifier
+        if next != displayTimeZoneID { displayTimeZoneID = next }
+    }
 
     /// Takes new flags. Files switched off leaves the Files section; team
     /// mode switched on reads the saved teams (sign-in never did).
@@ -984,6 +998,7 @@ final class AppModel {
         sessionGeneration += 1
         resetFilesState()
         clientFlags = ClientFlags()
+        displayTimeZoneID = nil
         // The poll loop and the socket belong to the session that started
         // them. A socket opened under the PREVIOUS token would also 4001-loop
         // forever (RealtimeClient captures its token once). Both stop here.
@@ -2289,7 +2304,7 @@ final class AppModel {
 
     /// Default snooze target: 9am local tomorrow. Pure for testing. Delegates to
     /// `SnoozeOption` so the resurface math lives in one place.
-    nonisolated static func tomorrow9am(from now: Date = Date(), calendar: Calendar = .current) -> Date {
+    nonisolated static func tomorrow9am(from now: Date = Date(), calendar: Calendar = DisplayTimeZone.calendar) -> Date {
         SnoozeOption.tomorrow.resurface(from: now, calendar: calendar)
     }
 
@@ -2445,6 +2460,7 @@ final class AppModel {
             field(
                 "clientFlags", \.clientFlags, ClientFlags(),
                 dirty: ClientFlags(files: true, teamMode: true)),
+            text("displayTimeZoneID", \.displayTimeZoneID),
             field("teamAvailability", \.teamAvailability, nil, isClean: { $0 == nil }),
             text("checkingTeamId", \.checkingTeamId),
             text("teamBookingResult", \.teamBookingResult),

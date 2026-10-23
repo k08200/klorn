@@ -82,6 +82,11 @@ extension AssistantDock {
     /// margin: 24 + 56 = 80pt clears the floating button (48pt + 20pt inset)
     /// with a gap, so it never covers the last row.
     static let contentClearance: CGFloat = 56
+
+    /// The band an edge-to-edge surface (the calendar's month grid, which
+    /// has no margin of its own) keeps free at the bottom: the button's
+    /// 48pt + 20pt inset + a 12pt gap. Same 80pt the scroll lists end on.
+    static let edgeClearance: CGFloat = contentClearance + 24
 }
 
 /// Offscreen render harness for the dock (ImageRenderer draws ScrollView

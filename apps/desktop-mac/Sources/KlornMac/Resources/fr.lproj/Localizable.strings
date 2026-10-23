@@ -168,8 +168,8 @@
 "auto.mode.shadow.detail" = "Klorn trie et prépare en arrière-plan. Il ne vous interrompt jamais et n'agit jamais.";
 "auto.mode.suggest" = "Demander d'abord";
 "auto.mode.suggest.detail" = "Klorn rédige la réponse et demande avant tout envoi. Vous approuvez chaque action.";
-"auto.mode.auto" = "Automatique";
-"auto.mode.auto.detail" = "Klorn gère lui-même les actions sûres. Vous êtes toujours prévenu de ce qui est urgent ou daté.";
+"auto.mode.auto" = "Exécuter les actions sûres";
+"auto.mode.auto.detail" = "Klorn effectue lui-même les actions à faible risque et vous prévient ensuite ; tout ce qui est plus risqué attend votre accord. Les réponses suivent le mode de réponse, réglé séparément.";
 
 "auto.tone" = "Ton";
 "auto.tone.a11y" = "Ton des réponses";
@@ -377,6 +377,7 @@
 "account.disconnect" = "Déconnecter";
 "account.disconnect.confirm" = "Déconnecter %@ ? Klorn cessera de la lire. Le courrier déjà synchronisé reste.";
 "account.naver.connect" = "Connecter une boîte Naver…";
+"common.beta" = "Bêta";
 "account.naver.email" = "Adresse Naver";
 "account.naver.password" = "Mot de passe d'application";
 "account.naver.password.hint" = "Naver Mail > Réglages > IMAP/SMTP : activez-le et utilisez le mot de passe d'application indiqué là, pas votre mot de passe de connexion.";
@@ -386,10 +387,10 @@
 "account.imap.disconnectFailed" = "Impossible de déconnecter cette boîte.";
 
 /* Attention mode (기본/auto) */
-"mode.section" = "MODE";
+"mode.section" = "MODE DE RÉPONSE";
 "mode.basic" = "Simple";
 "mode.basic.detail" = "Ne prévient que pour le courrier important et les réunions — vous choisissez et vous répondez. Le reste reste silencieux.";
-"mode.auto" = "Automatique";
+"mode.auto" = "Réponse automatique";
 "mode.auto.detail" = "Klorn répond aussi à votre place au courrier courant et sans risque, en suivant la consigne ci-dessous. Les alertes restent limitées aux réunions et au courrier qui exige une réponse.";
 "mode.guideline" = "Consigne de réponse";
 "mode.guideline.detail" = "Toute réponse envoyée sans vous suit cette consigne. Modifiez la valeur par défaut ou complétez-la.";

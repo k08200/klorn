@@ -757,7 +757,7 @@ struct ChatMessage: Identifiable, Hashable, Sendable {
 
 /// "Title · 15:00–16:00 · Location" — one-line confirm-card label. Time falls
 /// away on malformed ISO (never a crash); location only when present. Pure.
-func eventDraftLabel(_ draft: EventDraft, calendar: Calendar = .current) -> String {
+func eventDraftLabel(_ draft: EventDraft, calendar: Calendar = DisplayTimeZone.calendar) -> String {
     var parts = [draft.title]
     let time = eventTimeLabel(
         startISO: draft.startTime, endISO: draft.endTime, allDay: false, calendar: calendar)
@@ -1257,7 +1257,7 @@ struct CalendarListResponse: Codable, Sendable {
 /// at 26일 01:00 KST is a 26일 event to the user even though its UTC instant
 /// is the 25th — bucketing by ISO prefix put events on the wrong day once
 /// already (weekly-report dayKey trap, 2026-08-22).
-func localDayKey(_ date: Date, calendar: Calendar = .current) -> String {
+func localDayKey(_ date: Date, calendar: Calendar = DisplayTimeZone.calendar) -> String {
     let c = calendar.dateComponents([.year, .month, .day], from: date)
     return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
 }
@@ -1267,7 +1267,7 @@ func localDayKey(_ date: Date, calendar: Calendar = .current) -> String {
 /// firstWeekday (Sunday-first in ko/en_US, Monday-first in de/fr). Count is
 /// always a multiple of 7; dates outside the month are included (drawn dim).
 /// Pure for the harness.
-func monthGridDays(year: Int, month: Int, calendar: Calendar = .current) -> [Date] {
+func monthGridDays(year: Int, month: Int, calendar: Calendar = DisplayTimeZone.calendar) -> [Date] {
     var comps = DateComponents()
     comps.year = year
     comps.month = month
@@ -1301,7 +1301,7 @@ func monthGridDays(year: Int, month: Int, calendar: Calendar = .current) -> [Dat
 
 /// The seven dates of the week containing `date`, from the calendar's own
 /// firstWeekday (Sunday-first ko/en_US, Monday-first de/fr). Pure.
-func weekDays(containing date: Date, calendar: Calendar = .current) -> [Date] {
+func weekDays(containing date: Date, calendar: Calendar = DisplayTimeZone.calendar) -> [Date] {
     let weekday = calendar.component(.weekday, from: date)
     let offset = (weekday - calendar.firstWeekday + 7) % 7
     guard let start = calendar.date(
@@ -1321,7 +1321,7 @@ let maxSpannedDays = 60
 /// dates, so a KST reader never gets a phantom extra day from the 09:00
 /// local instant. Malformed start → no days (the event is dropped, never a
 /// crash); malformed end → the start day alone.
-func eventDayKeys(_ event: CalendarEventWire, calendar: Calendar = .current) -> [String] {
+func eventDayKeys(_ event: CalendarEventWire, calendar: Calendar = DisplayTimeZone.calendar) -> [String] {
     let withMillis = ISO8601DateFormatter()
     withMillis.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
     let plain = ISO8601DateFormatter()
@@ -1344,7 +1344,7 @@ func eventDayKeys(_ event: CalendarEventWire, calendar: Calendar = .current) -> 
 
 /// The day an event starts on — what a chip on a later day is "continued"
 /// against. nil when the start is malformed.
-func eventStartDayKey(_ event: CalendarEventWire, calendar: Calendar = .current) -> String? {
+func eventStartDayKey(_ event: CalendarEventWire, calendar: Calendar = DisplayTimeZone.calendar) -> String? {
     eventDayKeys(event, calendar: calendar).first
 }
 
@@ -1357,7 +1357,7 @@ func sortedForDay(_ events: [CalendarEventWire]) -> [CalendarEventWire] {
 /// Events bucketed by day — a spanning event appears under EVERY day it
 /// covers (see eventDayKeys). A malformed startTime drops that event.
 func eventsByDay(
-    _ events: [CalendarEventWire], calendar: Calendar = .current
+    _ events: [CalendarEventWire], calendar: Calendar = DisplayTimeZone.calendar
 ) -> [String: [CalendarEventWire]] {
     var out: [String: [CalendarEventWire]] = [:]
     for event in events {
@@ -1395,7 +1395,7 @@ struct CalendarEventPayload: Encodable, Equatable, Sendable {
 /// all-day times as dates off the string): a one-day event on the 24th is
 /// 24T00:00Z … 25T00:00Z. Pure.
 func calendarEventPayload(
-    _ draft: CalendarEventDraft, calendar: Calendar = .current
+    _ draft: CalendarEventDraft, calendar: Calendar = DisplayTimeZone.calendar
 ) -> CalendarEventPayload {
     let title = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
     let location = draft.location.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1417,7 +1417,7 @@ func calendarEventPayload(
 
 /// Saveable: a title, and a timed end after the start (all-day: the last
 /// day is not before the first). Pure.
-func calendarDraftIsValid(_ draft: CalendarEventDraft, calendar: Calendar = .current) -> Bool {
+func calendarDraftIsValid(_ draft: CalendarEventDraft, calendar: Calendar = DisplayTimeZone.calendar) -> Bool {
     guard !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
     if draft.allDay {
         return calendar.startOfDay(for: draft.end) >= calendar.startOfDay(for: draft.start)
@@ -1428,7 +1428,7 @@ func calendarDraftIsValid(_ draft: CalendarEventDraft, calendar: Calendar = .cur
 /// A draft from an existing event, for editing. All-day: the wire's UTC
 /// dates become local days, and the exclusive end becomes the inclusive
 /// last day the editor shows. nil when a time is malformed. Pure.
-func calendarDraft(from event: CalendarEventWire, calendar: Calendar = .current) -> CalendarEventDraft? {
+func calendarDraft(from event: CalendarEventWire, calendar: Calendar = DisplayTimeZone.calendar) -> CalendarEventDraft? {
     let withMillis = ISO8601DateFormatter()
     withMillis.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
     let plain = ISO8601DateFormatter()
@@ -1450,7 +1450,7 @@ func calendarDraft(from event: CalendarEventWire, calendar: Calendar = .current)
 
 /// A fresh draft on a day: the next full hour today, 09:00 on any other
 /// day, one hour long. Pure.
-func newCalendarDraft(on day: Date, now: Date = Date(), calendar: Calendar = .current) -> CalendarEventDraft {
+func newCalendarDraft(on day: Date, now: Date = Date(), calendar: Calendar = DisplayTimeZone.calendar) -> CalendarEventDraft {
     var comps = calendar.dateComponents([.year, .month, .day], from: day)
     comps.hour = calendar.isDate(day, inSameDayAs: now)
         ? min(calendar.component(.hour, from: now) + 1, 23) : 9
@@ -1475,7 +1475,7 @@ func eventTimeLabel(
     startISO: String,
     endISO: String,
     allDay: Bool,
-    calendar: Calendar = .current
+    calendar: Calendar = DisplayTimeZone.calendar
 ) -> String {
     if allDay { return L("calendar.allDay") }
     // Both ISO shapes: the API's toISOString() carries millis, hand-written
@@ -1504,7 +1504,7 @@ func eventTimeLabel(
 func mailTimeLabel(
     iso: String?,
     now: Date,
-    calendar: Calendar = .current,
+    calendar: Calendar = DisplayTimeZone.calendar,
     locale: Locale = L10n.activeLocale,
     relativeDays: Bool = false
 ) -> String {
@@ -1810,7 +1810,7 @@ enum SnoozeOption: String, CaseIterable, Identifiable, Sendable {
 
     /// The concrete resurface time — always strictly in the future. An option whose
     /// natural time has already passed today rolls to its next sensible occurrence.
-    func resurface(from now: Date = Date(), calendar: Calendar = .current) -> Date {
+    func resurface(from now: Date = Date(), calendar: Calendar = DisplayTimeZone.calendar) -> Date {
         switch self {
         case .oneHour:
             return calendar.date(byAdding: .hour, value: 1, to: now) ?? now

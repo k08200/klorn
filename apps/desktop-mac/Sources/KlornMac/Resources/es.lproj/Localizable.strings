@@ -168,8 +168,8 @@
 "auto.mode.shadow.detail" = "Klorn ordena y prepara en segundo plano. Nunca te interrumpe y nunca actúa.";
 "auto.mode.suggest" = "Preguntar primero";
 "auto.mode.suggest.detail" = "Klorn redacta la respuesta y pregunta antes de enviar nada. Tú apruebas cada acción.";
-"auto.mode.auto" = "Automático";
-"auto.mode.auto.detail" = "Klorn se encarga por sí mismo de las acciones seguras. Sigues enterándote de lo urgente o con fecha límite.";
+"auto.mode.auto" = "Ejecutar acciones seguras";
+"auto.mode.auto.detail" = "Klorn realiza por sí mismo las acciones de bajo riesgo y te avisa después; todo lo más arriesgado espera tu aprobación. Las respuestas siguen el modo de respuesta, que se configura aparte.";
 
 "auto.tone" = "Tono";
 "auto.tone.a11y" = "Tono de las respuestas";
@@ -377,6 +377,7 @@
 "account.disconnect" = "Desconectar";
 "account.disconnect.confirm" = "¿Desconectar %@? Klorn dejará de leerlo. El correo ya sincronizado se queda.";
 "account.naver.connect" = "Conectar buzón de Naver…";
+"common.beta" = "Beta";
 "account.naver.email" = "Dirección de Naver";
 "account.naver.password" = "Contraseña de aplicación";
 "account.naver.password.hint" = "Naver Mail > Ajustes > IMAP/SMTP: actívalo y usa la contraseña de aplicación de ahí, no la de inicio de sesión.";
@@ -386,10 +387,10 @@
 "account.imap.disconnectFailed" = "No se pudo desconectar ese buzón.";
 
 /* Attention mode (기본/auto) */
-"mode.section" = "MODO";
+"mode.section" = "MODO DE RESPUESTA";
 "mode.basic" = "Básico";
 "mode.basic.detail" = "Avisa solo del correo importante y las reuniones: tú eliges y tú respondes. El resto se queda en silencio.";
-"mode.auto" = "Automático";
+"mode.auto" = "Respuesta automática";
 "mode.auto.detail" = "Klorn además responde por ti el correo rutinario y seguro, siguiendo la pauta de abajo. Los avisos siguen limitados a reuniones y correo que exige respuesta.";
 "mode.guideline" = "Pauta de respuesta";
 "mode.guideline.detail" = "Toda respuesta sin supervisión sigue esto. Edita la pauta por defecto o añade a ella.";

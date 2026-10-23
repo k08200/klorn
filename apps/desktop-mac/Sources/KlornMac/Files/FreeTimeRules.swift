@@ -76,7 +76,7 @@ enum FreeTimeRules {
 
     /// The result's zone (the one the server cut the slots in), else this Mac's.
     static func timeZone(for result: TeamAvailabilityWire?) -> TimeZone {
-        result.flatMap { TimeZone(identifier: $0.timeZone) } ?? .current
+        result.flatMap { TimeZone(identifier: $0.timeZone) } ?? DisplayTimeZone.current
     }
 
     /// "Thu, Oct 15 10:00–10:30" in `timeZone`; empty for an unreadable slot.

@@ -168,8 +168,8 @@
 "auto.mode.shadow.detail" = "Klorn sorts and prepares in the background. It never interrupts you and never acts.";
 "auto.mode.suggest" = "Ask first";
 "auto.mode.suggest.detail" = "Klorn drafts the reply and asks before anything is sent. You approve every action.";
-"auto.mode.auto" = "Auto";
-"auto.mode.auto.detail" = "Klorn handles safe actions itself. You still hear about anything urgent or time-bound.";
+"auto.mode.auto" = "Run safe actions";
+"auto.mode.auto.detail" = "Klorn carries out low-risk actions itself and tells you afterwards; anything riskier waits for your approval. Replies follow Reply mode, set separately.";
 
 "auto.tone" = "Tone";
 "auto.tone.a11y" = "Reply tone";
@@ -377,6 +377,7 @@
 "account.disconnect" = "Disconnect";
 "account.disconnect.confirm" = "Disconnect %@? Klorn stops reading it. Mail already synced stays.";
 "account.naver.connect" = "Connect Naver mailbox…";
+"common.beta" = "Beta";
 "account.naver.email" = "Naver address";
 "account.naver.password" = "App password";
 "account.naver.password.hint" = "Naver Mail > Settings > IMAP/SMTP: turn it on and use the app password there, not your login password.";
@@ -386,10 +387,10 @@
 "account.imap.disconnectFailed" = "Could not disconnect that mailbox.";
 
 /* Attention mode (기본/auto) */
-"mode.section" = "MODE";
+"mode.section" = "REPLY MODE";
 "mode.basic" = "Basic";
 "mode.basic.detail" = "Notify only important mail and meetings — you pick and reply. Everything else stays quiet.";
-"mode.auto" = "Auto";
+"mode.auto" = "Auto-reply";
 "mode.auto.detail" = "Klorn also answers safe, routine mail for you, following the guideline below. Alerts stay limited to meetings and must-answer mail.";
 "mode.guideline" = "Reply guideline";
 "mode.guideline.detail" = "Every unattended reply follows this. Edit or add to the default.";

@@ -76,6 +76,9 @@ struct CalendarEventEditor: View {
             )
             .labelsHidden()
             .datePickerStyle(.compact)
+            // The picker reads the display zone the draft is saved in.
+            .environment(\.timeZone, DisplayTimeZone.current)
+            .environment(\.calendar, DisplayTimeZone.calendar)
             .accessibilityLabel(label)
         }
     }

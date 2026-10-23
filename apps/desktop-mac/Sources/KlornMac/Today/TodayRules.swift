@@ -97,6 +97,7 @@ enum TodayRules {
         guard !renderingOffscreen else { return nil }
         let formatter = DateFormatter()
         formatter.locale = locale
+        formatter.timeZone = DisplayTimeZone.current
         formatter.setLocalizedDateFormatFromTemplate("EEEEMMMMd")
         return formatter.string(from: now)
     }

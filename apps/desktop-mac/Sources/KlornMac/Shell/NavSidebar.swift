@@ -186,10 +186,15 @@ private struct AccountRows: View {
                 Button(action: actions.onOpenPreferences) { row(inbox) }
                     .buttonStyle(.plain)
                     .help(status(inbox))
-                    .accessibilityLabel(
-                        "\(inboxDisplayLabel(email: inbox.email, kind: inbox.kind)). \(status(inbox))")
+                    .accessibilityLabel(a11yLabel(inbox))
             }
         }
+    }
+
+    private func a11yLabel(_ inbox: InboxOption) -> String {
+        let name = inboxDisplayLabel(email: inbox.email, kind: inbox.kind)
+        let beta = MailSourceCatalog.isBeta(inbox.provider) ? ", \(L("common.beta"))" : ""
+        return "\(name)\(beta). \(status(inbox))"
     }
 
     private func status(_ inbox: InboxOption) -> String {
@@ -200,9 +205,12 @@ private struct AccountRows: View {
         HStack(spacing: Theme.s2) {
             SourceBadge(provider: inbox.provider)
             VStack(alignment: .leading, spacing: 1) {
-                Text(inboxDisplayLabel(email: inbox.email, kind: inbox.kind))
-                    .font(Theme.Typo.label).foregroundStyle(Theme.text)
-                    .lineLimit(1).truncationMode(.middle)
+                HStack(spacing: Theme.s1) {
+                    Text(inboxDisplayLabel(email: inbox.email, kind: inbox.kind))
+                        .font(Theme.Typo.label).foregroundStyle(Theme.text)
+                        .lineLimit(1).truncationMode(.middle)
+                    if MailSourceCatalog.isBeta(inbox.provider) { BetaChip() }
+                }
                 if inbox.needsReconnect {
                     Text(L("nav.accounts.needsReconnect"))
                         .font(Theme.Typo.caption).foregroundStyle(Theme.textDim)

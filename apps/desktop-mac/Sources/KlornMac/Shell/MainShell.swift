@@ -34,6 +34,8 @@ struct MainShell: View {
                     if let notice = model.connectionNotice { ConnectionBanner(notice: notice) }
                     if let message = model.actionError { ActionErrorBanner(message: message) }
                     content.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        // A zone the web pins (or un-pins) redraws every time.
+                        .id(model.displayTimeZoneID ?? "")
                 }
             }
             // Keyboard focus must not wander behind a modal.

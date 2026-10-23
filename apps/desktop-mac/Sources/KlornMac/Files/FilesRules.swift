@@ -29,9 +29,19 @@ struct ClientFlags: Equatable, Sendable, Decodable {
     private enum CodingKeys: String, CodingKey { case files, teamMode }
 }
 
-/// `GET /api/auth/me`: only the flags; the rest of the user is not read here.
+/// `GET /api/auth/me`: the flags and the display-zone preference; the rest
+/// of the user is not read here. Both halves decode tolerantly.
 struct MeFlagsResponse: Decodable, Sendable {
     let user: ClientFlags
+    let zone: DisplayZonePreference
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        user = try c.decode(ClientFlags.self, forKey: .user)
+        zone = (try? c.decode(DisplayZonePreference.self, forKey: .user)) ?? DisplayZonePreference()
+    }
+
+    private enum CodingKeys: String, CodingKey { case user }
 }
 
 /// One row of `GET /api/drive/files` (DriveFileWire in packages/contract/src/drive.ts).
@@ -224,7 +234,7 @@ enum FilesRules {
     }
 
     /// "Oct 15" in the user's zone; empty for an unreadable time.
-    static func modifiedLabel(_ iso: String, locale: Locale, timeZone: TimeZone = .current) -> String {
+    static func modifiedLabel(_ iso: String, locale: Locale, timeZone: TimeZone = DisplayTimeZone.current) -> String {
         guard let date = parseInstant(iso) else { return "" }
         let formatter = DateFormatter()
         formatter.locale = locale
@@ -234,7 +244,7 @@ enum FilesRules {
     }
 
     /// "Oct 15 · 1.5 KB" (or "· Folder").
-    static func meta(for file: DriveFileWire, locale: Locale, timeZone: TimeZone = .current) -> String {
+    static func meta(for file: DriveFileWire, locale: Locale, timeZone: TimeZone = DisplayTimeZone.current) -> String {
         let size = file.isFolder ? L("files.folder") : formatSize(file.sizeBytes, locale: locale)
         return [modifiedLabel(file.modifiedAt, locale: locale, timeZone: timeZone), size]
             .filter { !$0.isEmpty }.joined(separator: " · ")

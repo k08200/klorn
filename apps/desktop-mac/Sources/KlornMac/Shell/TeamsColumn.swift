@@ -8,8 +8,10 @@ private func slotRangeLabel(_ startIso: String, _ endIso: String) -> String {
         return startIso
     }
     let day = DateFormatter()
+    day.timeZone = DisplayTimeZone.current
     day.setLocalizedDateFormatFromTemplate("EdMMM")
     let time = DateFormatter()
+    time.timeZone = DisplayTimeZone.current
     time.setLocalizedDateFormatFromTemplate("HHmm")
     return "\(day.string(from: start)) · \(time.string(from: start))–\(time.string(from: end))"
 }

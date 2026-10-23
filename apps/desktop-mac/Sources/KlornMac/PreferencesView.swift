@@ -386,7 +386,7 @@ private struct ShortcutRecorder: View {
 /// IMAP ones the desktop can manage directly — a way to add or remove them.
 /// Google inboxes are OAuth-linked in the browser (see the Account section),
 /// so they are listed read-only here.
-private struct InboxAccountsSection: View {
+struct InboxAccountsSection: View {
     let model: AppModel
     @State private var naverEmail = ""
     @State private var naverPassword = ""
@@ -399,6 +399,7 @@ private struct InboxAccountsSection: View {
                 accountRow(
                     email: inbox.email ?? L("inbox.unknownAddress"),
                     provider: providerLabel(inbox.provider),
+                    beta: MailSourceCatalog.isBeta(inbox.provider),
                     needsReconnect: inbox.needsReconnect,
                     detail: nil,
                     onDisconnect: nil)
@@ -407,6 +408,7 @@ private struct InboxAccountsSection: View {
                 accountRow(
                     email: account.email,
                     provider: providerLabel("NAVER"),
+                    beta: MailSourceCatalog.isBeta("NAVER"),
                     needsReconnect: account.needsReconnect,
                     detail: account.host,
                     onDisconnect: { pendingDisconnect = account })
@@ -420,8 +422,11 @@ private struct InboxAccountsSection: View {
             if showConnectForm {
                 connectForm
             } else {
-                Button(L("account.naver.connect")) { showConnectForm = true }
-                    .buttonStyle(.bordered).controlSize(.small)
+                HStack(spacing: 6) {
+                    Button(L("account.naver.connect")) { showConnectForm = true }
+                        .buttonStyle(.bordered).controlSize(.small)
+                    BetaChip()
+                }
             }
             if let error = model.imapError {
                 Text(error).font(.caption).foregroundStyle(Theme.textDim)
@@ -480,15 +485,18 @@ private struct InboxAccountsSection: View {
     }
 
     private func accountRow(
-        email: String, provider: String, needsReconnect: Bool, detail: String?,
+        email: String, provider: String, beta: Bool, needsReconnect: Bool, detail: String?,
         onDisconnect: (() -> Void)?
     ) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(email).font(.body).foregroundStyle(Theme.text)
                     .lineLimit(1).truncationMode(.middle)
-                Text(detail.map { "\(provider) · \($0)" } ?? provider)
-                    .font(.caption).foregroundStyle(Theme.textDim)
+                HStack(spacing: 6) {
+                    Text(detail.map { "\(provider) · \($0)" } ?? provider)
+                        .font(.caption).foregroundStyle(Theme.textDim)
+                    if beta { BetaChip() }
+                }
             }
             Spacer()
             if needsReconnect {

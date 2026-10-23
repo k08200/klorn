@@ -146,9 +146,16 @@ struct PushBanner: Equatable, Sendable {
 /// a short line with the minutes left. No description, attendees or mail
 /// content. Pure (`now` and the time formatter are inputs).
 enum MeetingBanner {
+    /// "3:20 PM" in the display zone (`Date.formatted` reads this Mac's).
+    static func shortTime(_ date: Date) -> String {
+        var style = Date.FormatStyle(date: .omitted, time: .shortened)
+        style.timeZone = DisplayTimeZone.current
+        return date.formatted(style)
+    }
+
     static func make(
         for event: CalendarEventWire, now: Date,
-        time: (Date) -> String = { $0.formatted(date: .omitted, time: .shortened) }
+        time: (Date) -> String = { MeetingBanner.shortTime($0) }
     ) -> PushBanner {
         let start = meetingStart(event.startTime)
         let title = event.title.isEmpty ? "Klorn" : event.title

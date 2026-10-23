@@ -40,7 +40,7 @@ struct CalendarScreen: View {
         self.initialAnchor = initialAnchor
     }
 
-    private var calendar: Calendar { Calendar.current }
+    private var calendar: Calendar { DisplayTimeZone.calendar }
     private var buckets: [String: [CalendarEventWire]] {
         eventsByDay(model.calendarRangeEvents, calendar: calendar)
     }
@@ -74,12 +74,14 @@ struct CalendarScreen: View {
             guard let first = days.first, let last = days.last else { return "" }
             let interval = DateIntervalFormatter()
             interval.calendar = calendar
+            interval.timeZone = calendar.timeZone
             interval.locale = L10n.activeLocale
             interval.dateTemplate = "yMMMd"
             return interval.string(from: first, to: last)
         }
         let formatter = DateFormatter()
         formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
         formatter.locale = L10n.activeLocale
         switch scope {
         case .day: formatter.setLocalizedDateFormatFromTemplate("yMMMMdEEE")
@@ -200,6 +202,7 @@ struct CalendarScreen: View {
                 }
                 Spacer(minLength: 0)
             }
+            .padding(.bottom, AssistantDock.edgeClearance)
         }
     }
 
@@ -218,6 +221,7 @@ struct CalendarScreen: View {
                 }
             }
             .background(Theme.line)
+            .padding(.bottom, AssistantDock.edgeClearance)
         }
     }
 
@@ -283,6 +287,9 @@ struct CalendarScreen: View {
                 grid(CalendarMetrics.monthRowHeight(
                     available: proxy.size.height, weeks: days.count / 7))
             }
+            // The assistant button floats over the bottom-right corner; the
+            // last week ends above it instead of sitting under it.
+            .padding(.bottom, AssistantDock.edgeClearance)
         }
     }
 
@@ -350,6 +357,7 @@ struct CalendarScreen: View {
                 }
             }
             .padding(20)
+            .padding(.bottom, AssistantDock.contentClearance)
         }
     }
 
@@ -363,6 +371,7 @@ struct CalendarScreen: View {
         let first = calendar.date(from: comps) ?? Date()
         let formatter = DateFormatter()
         formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
         formatter.locale = L10n.activeLocale
         formatter.setLocalizedDateFormatFromTemplate("MMMM")
         return Button {
@@ -399,6 +408,7 @@ struct CalendarScreen: View {
     private var orderedWeekdaySymbols: [String] {
         let formatter = DateFormatter()
         formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
         formatter.locale = L10n.activeLocale
         let base = formatter.shortWeekdaySymbols ?? []
         guard base.count == 7 else { return base }

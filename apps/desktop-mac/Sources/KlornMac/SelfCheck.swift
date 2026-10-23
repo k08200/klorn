@@ -1559,6 +1559,8 @@ func runSelfChecks() async -> Bool {
     for (name, ok) in await filesSelfChecks(sourceDir: sourceDir) { check(name, ok) }
     print("Locale-native preview fixtures (landing captures):")
     for (name, ok) in await previewFixtureSelfChecks(sourceDir: sourceDir) { check(name, ok) }
+    print("Polish pass (2026-10-23): dock clearance, beta sources, Auto labels, display zone:")
+    for (name, ok) in await polishOct23SelfChecks(sourceDir: sourceDir) { check(name, ok) }
     print("Account-link hand-off (link binding):")
     for (name, ok) in await linkHandoffSelfChecks(sourceDir: sourceDir) { check(name, ok) }
 

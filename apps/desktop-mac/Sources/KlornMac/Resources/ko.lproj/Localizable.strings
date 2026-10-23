@@ -168,8 +168,8 @@
 "auto.mode.shadow.detail" = "Klorn이 백그라운드에서 분류하고 준비만 합니다. 방해하지 않고, 대신 실행하지도 않습니다.";
 "auto.mode.suggest" = "먼저 물어보기";
 "auto.mode.suggest.detail" = "Klorn이 답장 초안을 쓰고, 보내기 전에 물어봅니다. 모든 실행을 직접 승인합니다.";
-"auto.mode.auto" = "자동";
-"auto.mode.auto.detail" = "안전한 작업은 Klorn이 알아서 처리합니다. 급하거나 시간이 걸린 일은 그대로 알려줍니다.";
+"auto.mode.auto" = "안전한 작업 실행";
+"auto.mode.auto.detail" = "위험이 낮은 작업은 Klorn이 직접 실행하고 나중에 알려줍니다. 그 외에는 승인을 기다립니다. 답장은 별도로 설정하는 답장 모드를 따릅니다.";
 
 "auto.tone" = "어투";
 "auto.tone.a11y" = "답장 어투";
@@ -377,6 +377,7 @@
 "account.disconnect" = "연결 해제";
 "account.disconnect.confirm" = "%@ 연결을 해제할까요? Klorn이 더 이상 읽지 않습니다. 이미 가져온 메일은 남습니다.";
 "account.naver.connect" = "네이버 메일함 연결…";
+"common.beta" = "베타";
 "account.naver.email" = "네이버 주소";
 "account.naver.password" = "앱 비밀번호";
 "account.naver.password.hint" = "네이버 메일 > 환경설정 > IMAP/SMTP에서 사용함으로 바꾸고, 로그인 비밀번호가 아니라 그곳의 앱 비밀번호를 입력하세요.";
@@ -386,10 +387,10 @@
 "account.imap.disconnectFailed" = "메일함 연결을 해제하지 못했습니다.";
 
 /* Attention mode (기본/auto) */
-"mode.section" = "모드";
+"mode.section" = "답장 모드";
 "mode.basic" = "기본";
 "mode.basic.detail" = "중요한 메일과 미팅만 알리고, 답장은 직접 고릅니다. 나머지는 조용히.";
-"mode.auto" = "자동";
+"mode.auto" = "자동 답장";
 "mode.auto.detail" = "안전한 일상 메일은 아래 지침에 따라 Klorn이 답장까지 대신합니다. 알림은 미팅과 꼭 답해야 할 메일만.";
 "mode.guideline" = "답장 지침";
 "mode.guideline.detail" = "무인 답장이 항상 따르는 지침입니다. 기본값을 수정하거나 추가하세요.";

@@ -168,8 +168,8 @@
 "auto.mode.shadow.detail" = "Klorn 在后台整理和准备。不打扰你，也不替你行动。";
 "auto.mode.suggest" = "先问我";
 "auto.mode.suggest.detail" = "Klorn 起草回复，发送前一定征求你的同意。每个动作都由你批准。";
-"auto.mode.auto" = "自动";
-"auto.mode.auto.detail" = "安全的操作 Klorn 自己完成。紧急或有时限的事仍会告诉你。";
+"auto.mode.auto" = "执行安全操作";
+"auto.mode.auto.detail" = "低风险的操作由 Klorn 自己执行，事后告诉你；风险更高的会等待你的批准。回复遵循单独设置的回复模式。";
 
 "auto.tone" = "语气";
 "auto.tone.a11y" = "回复语气";
@@ -377,6 +377,7 @@
 "account.disconnect" = "断开连接";
 "account.disconnect.confirm" = "要断开 %@ 吗？Klorn 将停止读取它。已同步的邮件会保留。";
 "account.naver.connect" = "连接 Naver 邮箱…";
+"common.beta" = "测试版";
 "account.naver.email" = "Naver 地址";
 "account.naver.password" = "应用专用密码";
 "account.naver.password.hint" = "Naver 邮件 > 设置 > IMAP/SMTP：打开它，并使用那里的应用专用密码，而不是登录密码。";
@@ -386,10 +387,10 @@
 "account.imap.disconnectFailed" = "无法断开该邮箱。";
 
 /* Attention mode (기본/auto) */
-"mode.section" = "模式";
+"mode.section" = "回复模式";
 "mode.basic" = "基础";
 "mode.basic.detail" = "只通知重要邮件和会议 — 由你挑选、由你回复。其余保持安静。";
-"mode.auto" = "自动";
+"mode.auto" = "自动回复";
 "mode.auto.detail" = "Klorn 还会按下面的方针替你回复安全的日常邮件。提醒仍限于会议和必须回复的邮件。";
 "mode.guideline" = "回复方针";
 "mode.guideline.detail" = "每一封无人值守的回复都遵循这条方针。可编辑或在默认内容上补充。";

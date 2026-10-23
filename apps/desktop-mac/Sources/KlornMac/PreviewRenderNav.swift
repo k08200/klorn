@@ -217,6 +217,18 @@ extension PreviewRender {
         // Mixed lanes (M7): the one place a row carries its lane chip.
         shot("mail-all", navModel(firewallJSON: navFirewallJSON)) { $0.listMode = .inbox }
         shot("calendar-full", model) { $0.listMode = .calendar }
+        // Settings ▸ Accounts: the connected inboxes, beta sources tagged.
+        ok = writeShot(
+            "settings-accounts", size: CGSize(width: 560, height: 300), align: .top,
+            model: model, dir: dir, dark: dark
+        ) {
+            InboxAccountsSection(model: model)
+                .padding(22)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Theme.panel, in: RoundedRectangle(cornerRadius: 16))
+                .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.line))
+                .padding(14)
+        } && ok
         shot("assistant", model) { $0.showAssistantPane(.approvals) }
         // The demo day's briefing, the source of the landing's `.brief` card.
         shot("assistant-briefing", model) { $0.showAssistantPane(.briefing) }

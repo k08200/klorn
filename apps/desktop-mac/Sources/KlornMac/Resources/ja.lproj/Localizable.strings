@@ -168,8 +168,8 @@
 "auto.mode.shadow.detail" = "Klornは裏で整理と準備をします。通知もせず、勝手に動きもしません。";
 "auto.mode.suggest" = "確認してから";
 "auto.mode.suggest.detail" = "Klornが返信を下書きし、送信前に必ず確認します。すべてあなたが承認します。";
-"auto.mode.auto" = "自動";
-"auto.mode.auto.detail" = "安全な操作はKlornが自分で行います。急ぎや期限のあるものは引き続き通知します。";
+"auto.mode.auto" = "安全な操作を実行";
+"auto.mode.auto.detail" = "リスクの低い操作はKlornが自分で実行し、後でお知らせします。それ以外はあなたの承認を待ちます。返信は別に設定する返信モードに従います。";
 
 "auto.tone" = "トーン";
 "auto.tone.a11y" = "返信のトーン";
@@ -377,6 +377,7 @@
 "account.disconnect" = "接続を解除";
 "account.disconnect.confirm" = "%@ の接続を解除しますか? Klornは読み取りを停止します。同期済みのメールは残ります。";
 "account.naver.connect" = "Naverメールを接続…";
+"common.beta" = "ベータ";
 "account.naver.email" = "Naverアドレス";
 "account.naver.password" = "アプリパスワード";
 "account.naver.password.hint" = "Naverメール > 設定 > IMAP/SMTP でオンにし、そこのアプリパスワードを使ってください（ログインパスワードではありません）。";
@@ -386,10 +387,10 @@
 "account.imap.disconnectFailed" = "そのメールボックスの接続を解除できませんでした。";
 
 /* Attention mode (기본/auto) */
-"mode.section" = "モード";
+"mode.section" = "返信モード";
 "mode.basic" = "ベーシック";
 "mode.basic.detail" = "重要なメールと会議だけ通知します — 選ぶのも返信するのもあなたです。それ以外は静かなままです。";
-"mode.auto" = "自動";
+"mode.auto" = "自動返信";
 "mode.auto.detail" = "下の方針に従って、安全で定型的なメールにKlornが代わりに返信します。通知は会議と要返信のメールに限られます。";
 "mode.guideline" = "返信の方針";
 "mode.guideline.detail" = "あなたが見ていない返信はすべてこれに従います。既定を編集または追記してください。";

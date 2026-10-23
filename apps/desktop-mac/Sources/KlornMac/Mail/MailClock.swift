@@ -53,7 +53,7 @@ func relativeDayLabel(_ date: Date, now: Date, calendar: Calendar, locale: Local
 /// the time alone, the past week shows "Yesterday · 3:20 PM" or the weekday,
 /// older mail keeps the shipping form. Malformed ISO degrades to "".
 func readerDateLabel(
-    iso: String?, locale: Locale, calendar: Calendar = .current, relativeTo now: Date? = nil
+    iso: String?, locale: Locale, calendar: Calendar = DisplayTimeZone.calendar, relativeTo now: Date? = nil
 ) -> String {
     guard let iso else { return "" }
     let iso1 = ISO8601DateFormatter(); iso1.formatOptions = [.withInternetDateTime, .withFractionalSeconds]

@@ -168,8 +168,8 @@
 "auto.mode.shadow.detail" = "Klorn sortiert und bereitet im Hintergrund vor. Es unterbricht dich nie und handelt nie.";
 "auto.mode.suggest" = "Erst fragen";
 "auto.mode.suggest.detail" = "Klorn entwirft die Antwort und fragt, bevor etwas rausgeht. Du gibst jede Aktion frei.";
-"auto.mode.auto" = "Automatisch";
-"auto.mode.auto.detail" = "Sichere Aktionen erledigt Klorn selbst. Von Dringendem und Fristgebundenem erfährst du weiterhin.";
+"auto.mode.auto" = "Sichere Aktionen ausführen";
+"auto.mode.auto.detail" = "Aktionen mit geringem Risiko führt Klorn selbst aus und sagt dir danach Bescheid; alles Riskantere wartet auf deine Freigabe. Antworten folgen dem Antwortmodus, der separat eingestellt wird.";
 
 "auto.tone" = "Ton";
 "auto.tone.a11y" = "Ton der Antworten";
@@ -377,6 +377,7 @@
 "account.disconnect" = "Trennen";
 "account.disconnect.confirm" = "%@ trennen? Klorn liest es dann nicht mehr. Bereits synchronisierte Mail bleibt.";
 "account.naver.connect" = "Naver-Postfach verbinden…";
+"common.beta" = "Beta";
 "account.naver.email" = "Naver-Adresse";
 "account.naver.password" = "App-Passwort";
 "account.naver.password.hint" = "Naver Mail > Einstellungen > IMAP/SMTP: einschalten und das dortige App-Passwort verwenden, nicht dein Anmeldepasswort.";
@@ -386,10 +387,10 @@
 "account.imap.disconnectFailed" = "Dieses Postfach konnte nicht getrennt werden.";
 
 /* Attention mode (기본/auto) */
-"mode.section" = "MODUS";
+"mode.section" = "ANTWORTMODUS";
 "mode.basic" = "Basis";
 "mode.basic.detail" = "Meldet nur wichtige Mail und Meetings — du wählst aus und antwortest. Alles andere bleibt still.";
-"mode.auto" = "Automatisch";
+"mode.auto" = "Auto-Antwort";
 "mode.auto.detail" = "Klorn beantwortet zusätzlich sichere Routine-Mail für dich, nach der Vorgabe unten. Hinweise bleiben auf Meetings und antwortpflichtige Mail beschränkt.";
 "mode.guideline" = "Antwort-Vorgabe";
 "mode.guideline.detail" = "Jede unbeaufsichtigte Antwort folgt dieser Vorgabe. Bearbeite den Standard oder ergänze ihn.";
