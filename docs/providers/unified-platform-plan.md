@@ -4842,9 +4842,12 @@ fixtures before E0; nothing is reachable until E0 is done and the flag is on.
       key per message and handle. A message estimated over 2 MB (text, HTML
       and attachment sizes) gets a notice with a fixed subject via
       `emails.send` instead, carrying no sender-controlled text.
-    - The self-sent comparison gets the Klorn address only when DKIM and
-      DMARC both pass; otherwise null, which the store resolves to the
-      account's sign-in address.
+    - The self-sent comparison (`userEmail`) gets the Klorn address only when
+      DKIM and DMARC both pass; otherwise `""`, which matches no sender and
+      which the store keeps as is (null would make it compare with the
+      account's sign-in address). So an unauthenticated From of the Klorn
+      address or of the sign-in address is never self-sent at ingest: no
+      `self_sent` needs-reply verdict, no commitment the user owes.
     - Content is fetched with `html_format: cid`; RFC 2047 encoded-words in
       From/To/Cc are decoded (linear, TextDecoder charsets); NUL is removed
       from stored text and the List-Unsubscribe targets.
@@ -4875,6 +4878,11 @@ fixtures before E0; nothing is reachable until E0 is done and the flag is on.
       the store's update path touches the new row. Accepted; create-only later.
     - The SDK's forward downloads the raw message with no abort signal, so a
       forward past its budget answers retry while that download may still run.
+    - The later summarize pass (`mail/email-summarize.ts:175`, `:296`)
+      re-classifies needs-reply against `resolveUserEmail` (the sign-in
+      address) for every source, so there an unauthenticated From of the
+      sign-in address can still read as `self_sent` (not reply-needed). It
+      mines no commitments. Gate it on `EmailMessage.authentication` in E4.
 **E2 — provider actions and send** (*outline*). Depends on: B0. The database
 is the source of truth, so every action in `MailProviderActions` is
 implementable.

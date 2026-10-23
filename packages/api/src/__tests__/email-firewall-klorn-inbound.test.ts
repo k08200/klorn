@@ -46,7 +46,14 @@ vi.mock("../resolve-user-email.js", () => ({
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
 import { persistGmailEmail } from "../judge/email-firewall.js";
-import { type ResendReceivedContent, resendToRawEmail } from "../mail/klorn-inbound-map.js";
+import { classifyNeedsReplyFromSignals } from "../mail/email-priority.js";
+import {
+  type ResendReceivedContent,
+  resendToRawEmail,
+  selfSentAddress,
+} from "../mail/klorn-inbound-map.js";
+import { extractAndUpsertCommitmentsFromText } from "../pim/commitment-ingestion.js";
+import { resolveUserEmail } from "../resolve-user-email.js";
 
 const EMAIL_ID = "4ef9a417-02e9-4d39-ad75-9611e0fcc33c";
 
@@ -130,5 +137,53 @@ describe("a Klorn mailbox message in the shared store", () => {
       listUnsubscribeOneClick: true,
       authentication: { spf: "pass", dkim: "pass", dmarc: "fail" },
     });
+  });
+});
+
+describe("the self-sent comparison of a Klorn mailbox message", () => {
+  const KLORN_ADDRESS = "jane@klorn.ai";
+  // resolveUserEmail's mock answers this: the account's sign-in address.
+  const SIGN_IN_ADDRESS = "me@example.com";
+  const forged = { spf: "pass", dkim: "fail", dmarc: "fail" };
+
+  async function store(from: string, authentication: unknown) {
+    const raw = resendToRawEmail(
+      { ...content, headers: { From: from }, authentication } as ResendReceivedContent,
+      event,
+    );
+    await persistGmailEmail("u-jane", raw, {
+      userEmail: selfSentAddress(raw.authentication, KLORN_ADDRESS),
+      linkedInboxAccountId: "lia-jane",
+    });
+  }
+
+  function comparedWith() {
+    return {
+      needsReply: vi.mocked(classifyNeedsReplyFromSignals).mock.calls[0][0].userEmail,
+      senderIsUser: vi.mocked(extractAndUpsertCommitmentsFromText).mock.calls[0][0].senderIsUser,
+    };
+  }
+
+  it.each([
+    ["the account's sign-in address", `Me <${SIGN_IN_ADDRESS}>`],
+    ["the Klorn address itself", `Jane <${KLORN_ADDRESS}>`],
+  ])("never treats an unauthenticated From of %s as the user", async (_label, from) => {
+    await store(from, forged);
+
+    // "" is passed through: the store does not substitute the sign-in address.
+    expect(resolveUserEmail).not.toHaveBeenCalled();
+    expect(comparedWith()).toEqual({ needsReply: "", senderIsUser: false });
+  });
+
+  it("does the same when Resend sent no verdicts", async () => {
+    await store(`Jane <${KLORN_ADDRESS}>`, undefined);
+    expect(resolveUserEmail).not.toHaveBeenCalled();
+    expect(comparedWith()).toEqual({ needsReply: "", senderIsUser: false });
+  });
+
+  it("treats an authenticated From of the Klorn address as the user", async () => {
+    await store(`Jane <${KLORN_ADDRESS}>`, { spf: "pass", dkim: "pass", dmarc: "pass" });
+    expect(resolveUserEmail).not.toHaveBeenCalled();
+    expect(comparedWith()).toEqual({ needsReply: KLORN_ADDRESS, senderIsUser: true });
   });
 });

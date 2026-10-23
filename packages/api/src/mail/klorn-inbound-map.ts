@@ -76,6 +76,20 @@ export function isAuthenticatedSender(authentication: MailAuthentication | null)
 }
 
 /**
+ * The store's `userEmail` (its self-sent comparison) for a copy delivered to
+ * `address`: the address only when DKIM and DMARC pass. Otherwise "", which
+ * matches no sender and which persistGmailEmail keeps as is (`??` replaces
+ * only null), where null would make it compare with the account's sign-in
+ * address. So an unauthenticated From of either address is never the user's.
+ */
+export function selfSentAddress(
+  authentication: MailAuthentication | null,
+  address: string,
+): string {
+  return isAuthenticatedSender(authentication) ? address : "";
+}
+
+/**
  * `klorn:<email_id>`: unique per user through (userId, gmailId), since an account
  * has one Klorn address. No address in it, so the shared store's logs and Sentry
  * `extra` (which carry gmailId) never carry one.

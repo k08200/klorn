@@ -427,15 +427,16 @@ describe("the self-sent comparison", () => {
     ["DKIM fails", { spf: "pass", dkim: "fail", dmarc: "pass" }],
     ["DMARC fails", { spf: "pass", dkim: "pass", dmarc: "none" }],
     ["no verdicts", undefined],
-  ])("gets no user address when %s, so a forged own From is not the user", async (_l, auth) => {
+  ])("gets an address that never matches when %s, so a forged own From is not the user", async (_l, auth) => {
     addUser("jane", "u-jane");
     resendSpies.get.mockResolvedValue(
       ok(content({ authentication: auth, headers: { from: "jane@klorn.ai" } })),
     );
     const app = await buildApp();
     await deliver(app, receivedEvent());
+    // "" and not null: the store resolves null to the account's sign-in address.
     expect(persistGmailEmail.mock.calls[0][2]).toEqual({
-      userEmail: null,
+      userEmail: "",
       linkedInboxAccountId: "lia-jane",
     });
   });

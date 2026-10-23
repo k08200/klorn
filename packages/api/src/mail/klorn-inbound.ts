@@ -21,8 +21,9 @@
  * - A replay finds its row and is answered without fetching or rewriting it:
  *   Klorn holds this mailbox's state, so a re-sync would mark read mail unread.
  * - The self-sent comparison gets the Klorn address only for mail whose DKIM
- *   and DMARC pass, so a forged `From:` of the user's own address cannot plant
- *   commitments the user owes.
+ *   and DMARC pass, and otherwise "" (never the sign-in address the store
+ *   would substitute for null), so a forged `From:` of either of the user's
+ *   addresses cannot plant commitments the user owes.
  * - Bounded: a semaphore around fetch and store, a per-call budget and the
  *   request's deadline; an event older than GIVE_UP_AGE_MS that would answer
  *   retry is dropped and reported instead (Resend stops at about 28 h anyway).
@@ -35,10 +36,10 @@ import { persistGmailEmail } from "../judge/email-firewall.js";
 import { isDataWipeFenceError } from "../privacy/data-wipe-fence.js";
 import { forwardSystemMail } from "./klorn-inbound-forward.js";
 import {
-  isAuthenticatedSender,
   klornMessageId,
   type ResendReceivedContent,
   resendToRawEmail,
+  selfSentAddress,
 } from "./klorn-inbound-map.js";
 import {
   callBudget,
@@ -225,7 +226,7 @@ type RawEmail = ReturnType<typeof resendToRawEmail>;
 async function storeCopy(target: Target, raw: RawEmail, ctx: InboundContext, emailId: string) {
   try {
     await persistGmailEmail(target.userId, raw, {
-      userEmail: isAuthenticatedSender(raw.authentication) ? target.address : null,
+      userEmail: selfSentAddress(raw.authentication, target.address),
       linkedInboxAccountId: target.linkedInboxAccountId,
     });
     return count("stored");
