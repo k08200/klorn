@@ -1024,6 +1024,10 @@ model AutomationConfig {
   focusWindowEnabled     Boolean  @default(false)
   briefingTime           String   @default("06:00")
   timezone               String   @default("Asia/Seoul")
+  /// null = Automatic (no saved choice): the client follows the device zone and
+  /// keeps `timezone` synced to it. "MANUAL" = the user pinned `timezone` in
+  /// Settings. `timezone` always holds the zone server-side features use.
+  timezoneMode           String?
   downloadAutoOrganize   Boolean  @default(false)
   // OFF by default: a new install is a pure classifying firewall (lanes only),
   // matching the README doctrine ("not a suggestion engine"). The proactive

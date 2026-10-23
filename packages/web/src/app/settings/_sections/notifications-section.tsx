@@ -7,15 +7,15 @@ import Switch from "../../../components/ui/switch";
 import { apiFetch } from "../../../lib/api";
 import { useT } from "../../../lib/i18n";
 import { track } from "../../../lib/track";
+import { useDisplayTimeZone } from "../../../lib/use-time-zone";
 import { NotificationLanguageRow } from "./notification-language-row";
 import { PANEL, SECTION_TITLE } from "./shared";
 import { useAutomationConfig } from "./use-automation-config";
-import { useProfile } from "./use-profile";
 import { usePush } from "./use-push";
 
 export function NotificationsSection() {
   const config = useAutomationConfig();
-  const { profile } = useProfile(config);
+  const displayZone = useDisplayTimeZone();
   const { pushStatus, enablePush, disablePush } = usePush();
   const [dailyBriefingEnabled, setDailyBriefingEnabled] = useState(true);
   const [briefingTime, setBriefingTime] = useState("06:00");
@@ -140,7 +140,7 @@ export function NotificationsSection() {
     try {
       await apiFetch("/api/automations", {
         method: "PATCH",
-        body: JSON.stringify({ briefingTime: value, timezone: profile.timezone }),
+        body: JSON.stringify({ briefingTime: value }),
       });
       toast(t("settings.toast.briefingTimeSaved"), "success");
     } catch {
@@ -158,7 +158,7 @@ export function NotificationsSection() {
               <h3 className="font-medium">{t("settings.morningBriefing.title")}</h3>
               <p className="text-sm text-ink-mid">{t("settings.morningBriefing.desc")}</p>
               <p className="mt-1 text-xs text-ink-dim">
-                {t("settings.morningBriefing.timezoneNote", { timezone: profile.timezone })}
+                {t("settings.morningBriefing.timezoneNote", { timezone: displayZone })}
               </p>
             </div>
             <Switch

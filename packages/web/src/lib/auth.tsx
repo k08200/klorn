@@ -7,6 +7,8 @@ import { storedAttribution } from "./attribution";
 import { forgetHome, homePath, LEGACY_HOME, rememberHome, signInDestination } from "./home";
 import { browserSessionStorage, hasPendingHandle } from "./link-complete";
 import { clearSensitiveStorage, revokeServerSession } from "./logout-cleanup";
+import type { TimeZoneMode } from "./time-zone";
+import { useTimeZoneAutoSync } from "./time-zone-sync";
 import { trackAppOpenOnce } from "./track";
 
 interface User {
@@ -28,11 +30,13 @@ interface User {
   // disable their subscribe button instead of firing a checkout that 400s
   // (e.g. a native-IAP-only launch). Undefined (older API) = assume available.
   webCheckoutAvailable?: boolean;
-  // IANA timezone (e.g., "Asia/Seoul"). Always present — defaults server-side
-  // to "Asia/Seoul" when the column is null. Used for date/time rendering so
-  // the UI doesn't silently fall back to the browser timezone, which on iOS
-  // PWA can disagree with the user's actual locale (e.g., shows UTC).
+  // The account's stored IANA zone (AutomationConfig.timezone) — the zone
+  // server-side features schedule in. Never render with it directly: use
+  // useDisplayTimeZone() (lib/use-time-zone.ts), which honours timezoneMode.
   timezone: string;
+  // "MANUAL" = pinned in Settings; "AUTO" = no saved choice, render in the
+  // device zone and sync it to `timezone`. Undefined (older API) = AUTO.
+  timezoneMode?: TimeZoneMode;
   // Server-driven client flag: the API's KEYBOARD_TRIAGE (productization plan
   // P4). True turns on the hotkey registry beyond Cmd+K / B / /, the `?` sheet
   // and optimistic lane moves with undo. Undefined (older API) = off.
@@ -78,6 +82,8 @@ interface AuthContextType {
   register: (email: string, password: string, name?: string, redirectTo?: string) => Promise<void>;
   loginWithToken: (token: string) => Promise<void>;
   logout: () => void;
+  /** Mirror a saved time zone preference into the signed-in user. */
+  applyTimeZone: (zone: string, mode: TimeZoneMode) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -310,6 +316,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.push("/login");
   }, [router]);
 
+  const applyTimeZone = useCallback((zone: string, mode: TimeZoneMode) => {
+    setUser((current) => (current ? { ...current, timezone: zone, timezoneMode: mode } : current));
+  }, []);
+  useTimeZoneAutoSync(user, applyTimeZone);
+
   return (
     <AuthContext.Provider
       value={{
@@ -326,6 +337,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         register,
         loginWithToken,
         logout,
+        applyTimeZone,
       }}
     >
       {children}

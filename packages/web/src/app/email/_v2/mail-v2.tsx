@@ -20,10 +20,10 @@ import { PAGE_SHELL } from "../../../components/page-shell";
 import { useToast } from "../../../components/toast";
 import Button from "../../../components/ui/button";
 import { apiFetch } from "../../../lib/api";
-import { useAuth } from "../../../lib/auth";
 import { useT } from "../../../lib/i18n";
 import { captureClientError } from "../../../lib/sentry";
 import { useKeyboardTriage } from "../../../lib/use-hotkeys";
+import { useDisplayTimeZone } from "../../../lib/use-time-zone";
 import { UNDO_NOTICE_SECONDS } from "../use-lane-move";
 import { TRIAGE_ROW_ATTR, useListTriage } from "../use-list-triage";
 import { MailHeader } from "./mail-header";
@@ -47,8 +47,6 @@ import {
 import { useMailActions } from "./use-mail-actions";
 import { useMailList } from "./use-mail-list";
 import { useViewState } from "./use-view-state";
-
-const DEFAULT_TIME_ZONE = "Asia/Seoul";
 
 /** The element the list scrolls in: the split view's list column, else the page. */
 function listScroller(root: HTMLElement | null): HTMLElement | null {
@@ -84,7 +82,7 @@ export function MailV2({ pane }: { pane?: MailPane } = {}) {
   const searchParams = useSearchParams();
   const { t, locale } = useT();
   const { toast } = useToast();
-  const { user } = useAuth();
+  const timeZone = useDisplayTimeZone();
   const keyboardTriage = useKeyboardTriage();
   const readerOpen = Boolean(pane?.selectedId);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -258,7 +256,7 @@ export function MailV2({ pane }: { pane?: MailPane } = {}) {
   const time = {
     now: new Date(),
     locale,
-    timeZone: user?.timezone || DEFAULT_TIME_ZONE,
+    timeZone,
   };
   const rowCount = emails.length + threads.length;
 

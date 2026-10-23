@@ -18,6 +18,7 @@ import { useAuth } from "../../lib/auth";
 import { useT } from "../../lib/i18n";
 import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
+import { useDisplayTimeZone } from "../../lib/use-time-zone";
 import { BlockError, BlockNote } from "./block";
 import {
   availabilityPath,
@@ -30,7 +31,6 @@ import {
 } from "./free-time-model";
 
 const TEAMS_STALE_MS = 5 * 60_000;
-const DEFAULT_TIME_ZONE = "Asia/Seoul";
 /** How often a shown result re-checks the clock, so past slots drop off. */
 const CLOCK_TICK_MS = 60_000;
 
@@ -65,7 +65,7 @@ export function FreeTimeRow() {
 
 function FreeTimeFinder({ teams }: { teams: TeamsListResponse["teams"] }) {
   const { t, locale } = useT();
-  const { user } = useAuth();
+  const displayZone = useDisplayTimeZone();
   const [teamId, setTeamId] = useState(teams[0]?.id ?? "");
   const selected = teams.some((team) => team.id === teamId) ? teamId : (teams[0]?.id ?? "");
   // The last answer stays on screen while "Check again" runs: a new mutate()
@@ -88,7 +88,7 @@ function FreeTimeFinder({ teams }: { teams: TeamsListResponse["teams"] }) {
   const run = () => {
     if (selected) find.mutate(selected);
   };
-  const timeZone = shown?.result.timeZone ?? user?.timezone ?? DEFAULT_TIME_ZONE;
+  const timeZone = shown?.result.timeZone ?? displayZone;
   const now = useNow(shown !== null);
 
   return (
