@@ -65,7 +65,7 @@ function isoToInitial(event: {
 }
 
 function CalendarView() {
-  const { t } = useT();
+  const { t, locale } = useT();
   const queryClient = useQueryClient();
   const { user } = useAuth();
   // Always have a deterministic IANA zone in hand — never rely on browser
@@ -208,7 +208,7 @@ function CalendarView() {
     list.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
   }
 
-  const monthLabel = viewMonth.toLocaleDateString("en-US", {
+  const monthLabel = viewMonth.toLocaleDateString(locale, {
     month: "long",
     year: "numeric",
     timeZone: userTimezone,
@@ -483,7 +483,7 @@ function AgendaList({
   todayKey: string;
   timeZone: string;
 }) {
-  const { t } = useT();
+  const { t, locale } = useT();
   // Group upcoming events (today onward) by local day, ascending. Past days are
   // dropped — an agenda is forward-looking, unlike the month grid.
   const byDay = new Map<string, CalendarEvent[]>();
@@ -513,7 +513,7 @@ function AgendaList({
         <div key={key}>
           <div className="mb-1.5 flex items-center gap-2 px-0.5">
             <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-mid">
-              {new Date(list[0].startTime).toLocaleDateString("en-US", {
+              {new Date(list[0].startTime).toLocaleDateString(locale, {
                 weekday: "short",
                 month: "short",
                 day: "numeric",
@@ -594,11 +594,11 @@ function MonthGrid({
   todayKey: string;
   timeZone: string;
 }) {
-  const { t } = useT();
+  const { t, locale } = useT();
   const cells = buildMonthCells(viewMonth, timeZone);
   // Weekday header — Sun..Sat matches Google Calendar's default in Korea.
-  // Locale "en-US" gives short names regardless of the user's browser locale.
-  const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  // Named in the UI language (was a fixed English list, so ko showed Sun..Sat).
+  const weekdayLabels = weekdayNames(locale);
   const viewMonthIdx = monthIndexInZone(viewMonth, timeZone);
 
   return (
@@ -675,7 +675,7 @@ function DayCell({
   isToday: boolean;
   timeZone: string;
 }) {
-  const { t } = useT();
+  const { t, locale } = useT();
   // Show up to 3 chips per cell; collapse the rest into a "+N more" link
   // that drops the user into the first hidden event's day (proxy until we
   // wire a day modal).
@@ -689,7 +689,7 @@ function DayCell({
   // event chips were previously the ONLY interactive targets in a cell.
   // cell.key is YYYY-MM-DD; anchor at noon UTC so the label doesn't slip a day
   // across timezone offsets (matches the noon-UTC convention used elsewhere).
-  const dayLabel = new Date(`${cell.key}T12:00:00Z`).toLocaleDateString("en-US", {
+  const dayLabel = new Date(`${cell.key}T12:00:00Z`).toLocaleDateString(locale, {
     weekday: "long",
     month: "long",
     day: "numeric",
@@ -769,6 +769,12 @@ function EventChip({
       <span className="truncate">{event.title || t("common.untitled")}</span>
     </Link>
   );
+}
+
+/** Short weekday names Sun..Sat in `locale`. 2026-01-04 (UTC noon) is a Sunday. */
+function weekdayNames(locale: string): string[] {
+  const format = new Intl.DateTimeFormat(locale, { weekday: "short", timeZone: "UTC" });
+  return Array.from({ length: 7 }, (_, i) => format.format(new Date(Date.UTC(2026, 0, 4 + i, 12))));
 }
 
 // 24-hour format keeps "13:00" unambiguous (the AM/PM split has been a

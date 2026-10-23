@@ -25,7 +25,7 @@
     "packages/web/src/app/admin/page.tsx": 25,
     "packages/web/src/app/admin/waitlist/page.tsx": 21,
     "packages/web/src/app/billing/page.tsx": 3,
-    "packages/web/src/app/briefing/page.tsx": 3,
+    "packages/web/src/app/briefing/page.tsx": 1,
     "packages/web/src/app/briefing/today-actions-card.tsx": 11,
     "packages/web/src/app/calendar/[id]/page.tsx": 21,
     "packages/web/src/app/calendar/page.tsx": 3,
@@ -65,7 +65,7 @@
     "packages/web/src/components/sidebar.tsx": 4,
     "packages/web/src/components/toast.tsx": 1,
     "packages/web/src/components/trust-badge.tsx": 12,
-    "packages/web/src/components/ui/status-chip.tsx": 9,
+    "packages/web/src/components/ui/status-chip.tsx": 1,
     "packages/web/src/components/ui/switch.tsx": 3
   },
   "raw-button": {

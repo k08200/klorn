@@ -635,7 +635,6 @@ const es: Record<string, string> = {
   "settings.about.tagline": "Decision OS",
   "settings.about.desc":
     "Hecho para reducir pestañas dispersas y dejar más clara la siguiente decisión.",
-  "settings.about.version": "v0.2.0 — MVP",
   "settings.about.support": "¿Alguna pregunta o algo no funciona?",
   "onboarding.welcome.titleLine1": "Klorn saca a la superficie solo",
   "onboarding.welcome.titleLine2": "las decisiones que merecen acción.",
@@ -2443,6 +2442,89 @@ const es: Record<string, string> = {
   "statePage.briefingFeedbackError": "No se pudieron guardar los comentarios. Inténtalo de nuevo.",
   "statePage.briefingStatusError":
     "El estado de entrega no está disponible. El resumen puede cargarse igualmente.",
+  // /graph and /briefing body copy (web app design pass, 2026-10-21).
+  "graph.view.aria": "Vista del grafo",
+  "graph.mode.relationships": "Relaciones",
+  "graph.mode.decisions": "Lógica de decisión",
+  "graph.relationships.title": "Quién importa en tu correo",
+  "graph.relationships.body":
+    "Una vista del grafo de relaciones que Klorn ya usa al clasificar el correo en carriles: tus contactos ordenados (tamaño = puntuación de interacción, color = señal actual), agrupados por dominio de empresa. Las personas a las que realmente respondes crecen y se vuelven rosas. Klorn aprende quién importa a partir de tus acciones y lo aplica a la clasificación.",
+  "graph.decisions.title": "Cómo elige Klorn un carril",
+  "graph.decisions.body":
+    "El núcleo determinista del clasificador: las 4 características puntuadas que deciden entre los {count} carriles, con tu señal de corrección superpuesta en cada carril. Es la propia estructura de la política, así que se muestra aunque todavía no hayas corregido nada.",
+  "graph.stats.contacts": "{count} contactos",
+  "graph.stats.built": "Generado {time}",
+  "graph.stats.overrideRate": "Tasa de corrección {rate}",
+  "graph.stats.liveOverrides": "Correcciones activas: {list}",
+  "graph.noData": "No hay datos del grafo.",
+  "graph.legend.you": "Tú",
+  "graph.legend.waiting": "Esperando respuesta",
+  "graph.legend.meetingSoon": "Reunión próxima",
+  "graph.legend.engaged": "Interactúas (aprendido)",
+  "graph.legend.orgEngaged": "Organización con la que interactúas (inferido)",
+  "graph.legend.frequent": "Contacto frecuente",
+  "graph.legend.contact": "Contacto",
+  "graph.legend.feature": "Característica (entrada puntuada)",
+  "graph.top.contacts": "Contactos principales",
+  "graph.top.decisions": "Señales de decisión principales",
+  "graph.top.bodyContacts":
+    "Una vista en texto del grafo para teclado y lectores de pantalla: los mismos contactos de arriba, de mayor a menor puntuación de interacción.",
+  "graph.top.bodyDecisions":
+    "Una vista en texto del grafo para teclado y lectores de pantalla: las mismas señales de arriba, de mayor a menor peso.",
+  "briefingPage.today": "Hoy",
+  "briefingPage.todayAt": "Hoy · {time}",
+  "briefingPage.surfaced.one": "{count} acción destacada",
+  "briefingPage.surfaced.other": "{count} acciones destacadas",
+  "briefingPage.empty.title": "Todavía no hay resumen para hoy.",
+  "briefingPage.empty.timeHint": "Cambia la hora del resumen automático en {link}.",
+  "briefingPage.feedback.useful": "Útil",
+  "briefingPage.feedback.wrong": "Incorrecto",
+  "briefingPage.feedback.later": "Más tarde",
+  "briefingPage.feedback.done": "Hecho",
+  "briefingPage.delivery.automation": "Automatización",
+  "briefingPage.delivery.next": "Próximo",
+  "briefingPage.delivery.inApp": "En la app",
+  "briefingPage.delivery.push": "Notificación push",
+  "briefingPage.delivery.notSetUp": "Sin configurar",
+  "briefingPage.delivery.off": "Desactivado",
+  "briefingPage.delivery.none": "Ninguna",
+  "briefingPage.delivery.localTime": "Hora local",
+  "briefingPage.delivery.nextToday": "Hoy {time}",
+  "briefingPage.delivery.nextTomorrow": "Mañana {time}",
+  "briefingPage.push.received": "Recibida",
+  "briefingPage.push.accepted": "Enviada",
+  "briefingPage.push.pending": "Pendiente",
+  "briefingPage.push.failed": "Fallida",
+  "briefingPage.push.skipped": "Omitida",
+  "briefingPage.push.notSent": "No enviada",
+  "briefingPage.push.noSubscription": "Sin suscripción en el navegador",
+  "briefingPage.guidance.noConfig":
+    "No hay hora de resumen. Elige cuándo quieres recibir el resumen de la mañana.",
+  "briefingPage.guidance.noConfigAction": "Elegir hora",
+  "briefingPage.guidance.disabled":
+    "La automatización del resumen diario está desactivada. Actívala para recibir un resumen cada mañana.",
+  "briefingPage.guidance.disabledAction": "Activar",
+  "briefingPage.guidance.noSubscription":
+    "Las notificaciones push no están configuradas en este dispositivo. Instala Klorn como app para recibir el aviso de la mañana.",
+  "briefingPage.guidance.noSubscriptionAction": "Cómo instalar",
+  "briefingPage.guidance.permissionDenied":
+    "Las notificaciones del navegador están bloqueadas. Permítelas para recibir el aviso de la mañana.",
+  "briefingPage.guidance.vapidMissing":
+    "Las claves push no están configuradas en esta instalación. Consulta al operador.",
+  "briefingPage.guidance.failed":
+    "La última notificación del resumen no se entregó. El próximo resumen programado lo intentará de nuevo automáticamente.",
+  "briefingPage.guidance.quietHours":
+    "Se omitió la notificación porque el horario de silencio estaba activo cuando se envió el resumen.",
+  "briefingPage.guidance.quietHoursAction": "Ajustar horario de silencio",
+  // web app design pass, 2026-10-21: English that reached localized screens.
+  "byok.modelNote.recommended": "{provider} — recomendado",
+  "byok.modelNote.fastest": "{provider} — el más rápido",
+  "byok.modelNote.mostCapable": "{provider} — el más capaz, más caro",
+  "statusChip.connected": "Conectado",
+  "statusChip.failed": "Error",
+  "statusChip.pending": "Pendiente",
+  // web app design pass, 2026-10-21: English that reached localized screens.
+  "imap.beta": "Beta",
 };
 
 export default es;

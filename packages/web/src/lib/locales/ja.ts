@@ -624,7 +624,6 @@ const ja: Record<string, string> = {
   "settings.toast.deleteAccountFailed": "アカウントを削除できませんでした。",
   "settings.about.tagline": "Decision OS",
   "settings.about.desc": "散らばったタブを減らし、次の判断を明確にするために作られました。",
-  "settings.about.version": "v0.2.0 — MVP",
   "settings.about.support": "ご質問や不具合のご報告はこちらへ",
   "onboarding.welcome.titleLine1": "Klornが差し出すのは",
   "onboarding.welcome.titleLine2": "動く価値のある判断だけ。",
@@ -2410,6 +2409,89 @@ const ja: Record<string, string> = {
     "フィードバックを保存できませんでした。もう一度お試しください。",
   "statePage.briefingStatusError":
     "配信状況を取得できません。ブリーフィングは引き続き読み込めます。",
+  // /graph and /briefing body copy (web app design pass, 2026-10-21).
+  "graph.view.aria": "グラフ表示",
+  "graph.mode.relationships": "関係",
+  "graph.mode.decisions": "判断の仕組み",
+  "graph.relationships.title": "メールで重要な人",
+  "graph.relationships.body":
+    "Klorn がメールをレーンに振り分ける際にすでに使っている関係グラフの可視化です。ランク付けされた連絡先（大きさ = やり取りのスコア、色 = 現在のシグナル）が会社のドメインごとにまとまっています。実際に返信する相手ほど大きくなり、ピンク色になります。Klorn はあなたの行動から誰が重要かを学び、それを振り分けに反映します。",
+  "graph.decisions.title": "Klorn がレーンを選ぶ仕組み",
+  "graph.decisions.body":
+    "分類器の決定的な中核です。スコア化された 4 つの特徴が {count} つのレーンを分け、各レーンにあなたの修正シグナルが重ねて表示されます。ポリシーの構造そのものなので、まだ何も修正していなくても表示されます。",
+  "graph.stats.contacts": "連絡先 {count} 件",
+  "graph.stats.built": "{time} 作成",
+  "graph.stats.overrideRate": "修正率 {rate}",
+  "graph.stats.liveOverrides": "適用中の修正: {list}",
+  "graph.noData": "グラフのデータがありません。",
+  "graph.legend.you": "自分",
+  "graph.legend.waiting": "返信待ち",
+  "graph.legend.meetingSoon": "まもなく会議",
+  "graph.legend.engaged": "よくやり取り（学習）",
+  "graph.legend.orgEngaged": "よくやり取りする組織（推定）",
+  "graph.legend.frequent": "頻繁な連絡先",
+  "graph.legend.contact": "連絡先",
+  "graph.legend.feature": "特徴（スコア入力）",
+  "graph.top.contacts": "上位の連絡先",
+  "graph.top.decisions": "上位の判断シグナル",
+  "graph.top.bodyContacts":
+    "キーボードやスクリーンリーダーの利用者向けのテキスト表示です。上に表示された連絡先を、やり取りのスコアが高い順に並べています。",
+  "graph.top.bodyDecisions":
+    "キーボードやスクリーンリーダーの利用者向けのテキスト表示です。上に表示されたシグナルを、重みが大きい順に並べています。",
+  "briefingPage.today": "今日",
+  "briefingPage.todayAt": "今日 · {time}",
+  "briefingPage.surfaced.one": "対応事項 {count} 件",
+  "briefingPage.surfaced.other": "対応事項 {count} 件",
+  "briefingPage.empty.title": "今日のブリーフィングはまだありません。",
+  "briefingPage.empty.timeHint": "自動ブリーフィングの時刻は{link}で変更できます。",
+  "briefingPage.feedback.useful": "役立った",
+  "briefingPage.feedback.wrong": "間違い",
+  "briefingPage.feedback.later": "後で",
+  "briefingPage.feedback.done": "完了",
+  "briefingPage.delivery.automation": "自動化",
+  "briefingPage.delivery.next": "次回",
+  "briefingPage.delivery.inApp": "アプリ内",
+  "briefingPage.delivery.push": "プッシュ",
+  "briefingPage.delivery.notSetUp": "未設定",
+  "briefingPage.delivery.off": "オフ",
+  "briefingPage.delivery.none": "なし",
+  "briefingPage.delivery.localTime": "現地時間",
+  "briefingPage.delivery.nextToday": "今日 {time}",
+  "briefingPage.delivery.nextTomorrow": "明日 {time}",
+  "briefingPage.push.received": "受信済み",
+  "briefingPage.push.accepted": "送信済み",
+  "briefingPage.push.pending": "保留中",
+  "briefingPage.push.failed": "失敗",
+  "briefingPage.push.skipped": "スキップ",
+  "briefingPage.push.notSent": "未送信",
+  "briefingPage.push.noSubscription": "ブラウザの登録なし",
+  "briefingPage.guidance.noConfig":
+    "ブリーフィングの時刻が設定されていません。朝のブリーフィングを受け取る時刻を選んでください。",
+  "briefingPage.guidance.noConfigAction": "時刻を設定",
+  "briefingPage.guidance.disabled":
+    "毎日のブリーフィング自動化がオフです。オンにすると毎朝ブリーフィングが届きます。",
+  "briefingPage.guidance.disabledAction": "オンにする",
+  "briefingPage.guidance.noSubscription":
+    "このデバイスではプッシュが設定されていません。朝のプッシュを受け取るには Klorn をアプリとしてインストールしてください。",
+  "briefingPage.guidance.noSubscriptionAction": "インストール方法",
+  "briefingPage.guidance.permissionDenied":
+    "ブラウザの通知がブロックされています。朝のプッシュを受け取るには通知を許可してください。",
+  "briefingPage.guidance.vapidMissing":
+    "このデプロイではプッシュキーが設定されていません。運用者に問い合わせてください。",
+  "briefingPage.guidance.failed":
+    "前回のブリーフィングのプッシュは届きませんでした。次回の予定ブリーフィングで自動的に再試行します。",
+  "briefingPage.guidance.quietHours":
+    "ブリーフィング送信時に通知停止時間中だったため、プッシュをスキップしました。",
+  "briefingPage.guidance.quietHoursAction": "通知停止時間を調整",
+  // web app design pass, 2026-10-21: English that reached localized screens.
+  "byok.modelNote.recommended": "{provider} — おすすめ",
+  "byok.modelNote.fastest": "{provider} — 最速",
+  "byok.modelNote.mostCapable": "{provider} — 最も高性能・高価格",
+  "statusChip.connected": "接続済み",
+  "statusChip.failed": "失敗",
+  "statusChip.pending": "保留中",
+  // web app design pass, 2026-10-21: English that reached localized screens.
+  "imap.beta": "ベータ",
 };
 
 export default ja;

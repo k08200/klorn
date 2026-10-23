@@ -38,7 +38,7 @@ export function AccountsSection() {
   const [gmailPushLoading, setGmailPushLoading] = useState(false);
   const { toast } = useToast();
   const { confirm } = useConfirm();
-  const { t } = useT();
+  const { t, locale } = useT();
 
   const disconnectGoogle = async () => {
     const ok = await confirm({
@@ -146,13 +146,19 @@ export function AccountsSection() {
       connectUrl: "google-oauth-start",
       statusUrl: `${API_BASE}/api/auth/google/status`,
     },
-    {
-      name: "Notion",
-      description: t("settings.integration.notion.desc"),
-      connected: notionConnected,
-      connectUrl: notionConnected ? undefined : "notion-coming-soon",
-      statusUrl: `${API_BASE}/api/notion/status`,
-    },
+    // Notion has no user-facing connect flow yet: the row appears only on a
+    // deployment where the server already has it configured, never as a
+    // "Coming soon" placeholder among the live mail sources.
+    ...(notionConnected
+      ? [
+          {
+            name: "Notion",
+            description: t("settings.integration.notion.desc"),
+            connected: true,
+            statusUrl: `${API_BASE}/api/notion/status`,
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -245,7 +251,7 @@ export function AccountsSection() {
                   ? gmailPushEnabled
                     ? gmailPushExpiresAt
                       ? t("settings.realtimeSync.activeUntil", {
-                          date: new Date(gmailPushExpiresAt).toLocaleString("en-US"),
+                          date: new Date(gmailPushExpiresAt).toLocaleString(locale),
                         })
                       : t("settings.realtimeSync.active")
                     : t("settings.realtimeSync.subscribe")

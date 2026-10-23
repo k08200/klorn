@@ -8,6 +8,7 @@
  */
 
 import Link from "next/link";
+import { BetaChip } from "../../../components/ui/beta-chip";
 import Button from "../../../components/ui/button";
 import type { AccountHealth } from "../../../lib/connected-accounts";
 import { useT } from "../../../lib/i18n";
@@ -42,6 +43,9 @@ interface ProviderTileProps {
   onAction: (tile: ProviderTile) => void;
 }
 
+/** Live sources that are newer than Gmail / Google Calendar. */
+const BETA_PROVIDERS = new Set<string>(["NAVER", "ICLOUD"]);
+
 export function ProviderTileCard({ tile, busy, disabled, onAction }: ProviderTileProps) {
   const { t } = useT();
   const { glyph, name } = sourceGlyph(tile.provider);
@@ -57,8 +61,9 @@ export function ProviderTileCard({ tile, busy, disabled, onAction }: ProviderTil
           {glyph}
         </span>
         <div className="min-w-0 flex-1">
-          <h2 id={headingId} className="text-head text-ink">
+          <h2 id={headingId} className="flex items-center gap-2 text-head text-ink">
             {name}
+            {BETA_PROVIDERS.has(tile.provider) && <BetaChip />}
           </h2>
           <p className="text-body text-ink-mid">{t(tile.scopeKey)}</p>
           {tile.noteKeys.map((key) => (

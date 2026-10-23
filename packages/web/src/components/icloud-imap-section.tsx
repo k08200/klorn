@@ -9,6 +9,7 @@ import { captureClientError } from "../lib/sentry";
 import { useConfirm } from "./confirm-dialog";
 import { FirstSyncNote } from "./imap-connect-notes";
 import { isEntitlementRefusal, MailAccountProGate } from "./mail-account-pro-gate";
+import { BetaChip } from "./ui/beta-chip";
 import Button from "./ui/button";
 import ErrorAlert from "./ui/error-alert";
 import { Input } from "./ui/input";
@@ -48,7 +49,7 @@ interface ICloudImapSectionProps {
 export function ICloudImapSection({ embedded = false, onChanged }: ICloudImapSectionProps = {}) {
   const { user } = useAuth();
   const { confirm } = useConfirm();
-  const { t } = useT();
+  const { t, locale } = useT();
   // The first mail account is free whatever the provider; a second one is
   // Pro. The server answers `canConnect` on /status (always true while the
   // paywall is off); `entitled` is only the fallback for an older API. An
@@ -170,7 +171,10 @@ export function ICloudImapSection({ embedded = false, onChanged }: ICloudImapSec
     >
       <header className={embedded ? "hidden" : "mb-3 flex items-start justify-between gap-3"}>
         <div>
-          <h2 className="text-base font-semibold text-ink">{t("imap.icloud.title")}</h2>
+          <h2 className="flex items-center gap-2 text-base font-semibold text-ink">
+            {t("imap.icloud.title")}
+            <BetaChip />
+          </h2>
           <p className="mt-1 text-xs text-ink-mid">
             {t("imap.icloud.body", { count: String(TIER_COUNT) })}
           </p>
@@ -188,7 +192,7 @@ export function ICloudImapSection({ embedded = false, onChanged }: ICloudImapSec
                 <p className="font-medium">{status.email}</p>
                 <p className="text-caption text-ink-dim">
                   {t("imap.hostSince", { host: status.host ?? "—" })}{" "}
-                  {status.connectedAt ? new Date(status.connectedAt).toLocaleString("en-US") : "—"}
+                  {status.connectedAt ? new Date(status.connectedAt).toLocaleString(locale) : "—"}
                 </p>
               </div>
               <Button

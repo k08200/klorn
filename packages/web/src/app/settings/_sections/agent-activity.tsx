@@ -21,7 +21,7 @@ export function AgentActivity() {
   >([]);
   const [patternsLoading, setPatternsLoading] = useState(false);
   const [patternsLoaded, setPatternsLoaded] = useState(false);
-  const { t } = useT();
+  const { t, locale } = useT();
 
   const loadAgentLogs = async () => {
     setAgentLogsLoading(true);
@@ -99,7 +99,7 @@ export function AgentActivity() {
                   />
                   <span className="text-ink-mid flex-1 truncate">{log.summary}</span>
                   <span className="text-ink-mid text-xs shrink-0">
-                    {new Date(log.createdAt).toLocaleString("en-US", {
+                    {new Date(log.createdAt).toLocaleString(locale, {
                       month: "short",
                       day: "numeric",
                       hour: "2-digit",

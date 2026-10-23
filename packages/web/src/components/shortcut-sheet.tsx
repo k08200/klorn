@@ -16,6 +16,7 @@ import {
   liveHotkeys,
 } from "../lib/hotkeys";
 import { useT } from "../lib/i18n";
+import { isApplePlatform } from "../lib/platform";
 import { Sheet } from "./ui/sheet";
 
 const GROUP_ORDER: readonly HotkeyGroup[] = [
@@ -26,10 +27,6 @@ const GROUP_ORDER: readonly HotkeyGroup[] = [
   "go",
   "general",
 ];
-
-function isMacPlatform(): boolean {
-  return typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
-}
 
 /** One row per action: legacy and flag-gated entries that share a label merge. */
 function rowsOf(live: readonly LiveHotkey[], group: HotkeyGroup) {
@@ -56,7 +53,7 @@ export function ShortcutSheet({ open, onClose, unifiedHome = false }: ShortcutSh
       open ? liveHotkeys({ triage: true, scopes: hotkeyRegistry.activeScopes(), unifiedHome }) : [],
     [open, unifiedHome],
   );
-  const mac = isMacPlatform();
+  const mac = isApplePlatform();
 
   return (
     <Sheet

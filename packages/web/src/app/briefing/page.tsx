@@ -20,11 +20,13 @@ import {
 } from "./use-briefing";
 
 const FEEDBACK_OPTIONS: Array<{ choice: BriefingFeedbackChoice; label: string }> = [
-  { choice: "useful", label: "Useful" },
-  { choice: "wrong", label: "Wrong" },
-  { choice: "later", label: "Later" },
-  { choice: "done", label: "Done" },
+  { choice: "useful", label: "briefingPage.feedback.useful" },
+  { choice: "wrong", label: "briefingPage.feedback.wrong" },
+  { choice: "later", label: "briefingPage.feedback.later" },
+  { choice: "done", label: "briefingPage.feedback.done" },
 ];
+
+type Translate = (key: string, vars?: Record<string, string>) => string;
 
 export default function BriefingPage() {
   return (
@@ -111,7 +113,7 @@ function DayShapeCard({ structure }: { structure: BriefingStructure }) {
 }
 
 function BriefingView() {
-  const { t } = useT();
+  const { t, locale } = useT();
   const briefing = useBriefingPage();
   const { noteId, structured, content, createdAt, status, loading, feedback, savingRank } =
     briefing;
@@ -126,11 +128,18 @@ function BriefingView() {
   const briefingLoadError = briefing.loadFailed ? t("statePage.briefingLoadError") : null;
 
   const formattedTime = createdAt
-    ? new Date(createdAt).toLocaleTimeString("en-US", {
+    ? new Date(createdAt).toLocaleTimeString(locale, {
         hour: "2-digit",
         minute: "2-digit",
       })
     : null;
+  const todayLabel = formattedTime
+    ? t("briefingPage.todayAt", { time: formattedTime })
+    : t("briefingPage.today");
+  const surfacedLabel = t(
+    topActions.length === 1 ? "briefingPage.surfaced.one" : "briefingPage.surfaced.other",
+    { count: String(topActions.length) },
+  );
 
   return (
     <div className={PAGE_SHELL}>
@@ -141,16 +150,14 @@ function BriefingView() {
             {t("nav.briefing")}
           </h1>
           <p className="mt-1.5 text-sm text-ink-mid">
-            {content
-              ? `Today${formattedTime ? ` · ${formattedTime}` : ""}`
-              : t("briefing.notGenerated")}
+            {content ? todayLabel : t("briefing.notGenerated")}
           </p>
         </div>
         <button
           type="button"
           onClick={regenerate}
           disabled={generating}
-          aria-label={content ? "Regenerate briefing" : "Generate briefing"}
+          aria-label={content ? t("briefing.regenerate") : t("briefing.generateNow")}
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-raised text-ink-mid transition active:bg-surface-hover disabled:opacity-50 focus-ring min-h-11"
         >
           <svg
@@ -181,12 +188,14 @@ function BriefingView() {
           <p className="mt-2 text-sm text-ink-mid">
             {content ? (
               <>
-                Today{formattedTime ? ` · ${formattedTime}` : ""}
+                {todayLabel}
                 {topActions.length > 0 && (
                   <span className="text-ink-dim">
                     {" "}
-                    <span className="mx-0.5 text-slate-300">·</span> {topActions.length}{" "}
-                    {topActions.length === 1 ? "action" : "actions"} surfaced
+                    <span aria-hidden="true" className="mx-0.5 text-line-strong">
+                      ·
+                    </span>{" "}
+                    {surfacedLabel}
                   </span>
                 )}
               </>
@@ -239,24 +248,18 @@ function BriefingView() {
 
       {!loading && !error && !briefingLoadError && !content && (
         <div className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-6 text-center">
-          <p className="mb-3 text-sm text-ink-mid">No briefing for today yet.</p>
+          <p className="mb-3 text-sm text-ink-mid">{t("briefingPage.empty.title")}</p>
           <p className="mx-auto mb-4 max-w-md text-xs leading-5 text-ink-mid">
             {t("briefing.learningMode")}
           </p>
-          <p className="mb-4 text-xs text-ink-dim">
-            Change the automatic briefing time in{" "}
-            <Link href="/settings/notifications" className="text-accent-deep hover:underline">
-              Settings
-            </Link>
-            .
-          </p>
+          <TimeHint t={t} />
           <button
             type="button"
             onClick={regenerate}
             disabled={generating}
             className="glow-primary ease-strong inline-flex h-9 items-center rounded-lg bg-accent-solid px-3.5 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 focus-ring min-h-11"
           >
-            {generating ? "Generating..." : "Generate now"}
+            {generating ? t("briefing.generating") : t("briefing.generateNow")}
           </button>
         </div>
       )}
@@ -304,7 +307,7 @@ function BriefingView() {
                           >
                             {savingRank === action.rank && !selected
                               ? t("briefingPage.feedback.saving")
-                              : option.label}
+                              : t(option.label)}
                           </button>
                         );
                       })}
@@ -321,22 +324,24 @@ function BriefingView() {
 }
 
 function BriefingDeliveryStatus({ status }: { status: BriefingStatus }) {
-  const { t } = useT();
+  const { t, locale } = useT();
   const push = pushStateCopy(status.push.state, status.push.reason);
   const timezone =
-    status.automation.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "Local time";
+    status.automation.timezone ||
+    Intl.DateTimeFormat().resolvedOptions().timeZone ||
+    t("briefingPage.delivery.localTime");
   const auto = status.automation.enabled
     ? `${status.automation.briefingTime ?? "06:00"} · ${timezone}`
     : status.automation.reason === "no_config"
-      ? "Not set up"
-      : "Off";
-  const nextLabel = nextBriefingLabel(status.automation);
+      ? t("briefingPage.delivery.notSetUp")
+      : t("briefingPage.delivery.off");
+  const nextLabel = nextBriefingLabel(status.automation, t);
   const notification = status.notification
-    ? new Date(status.notification.createdAt).toLocaleTimeString("en-US", {
+    ? new Date(status.notification.createdAt).toLocaleTimeString(locale, {
         hour: "2-digit",
         minute: "2-digit",
       })
-    : "None";
+    : t("briefingPage.delivery.none");
   const guidance = deliveryGuidance(status);
 
   return (
@@ -349,31 +354,35 @@ function BriefingDeliveryStatus({ status }: { status: BriefingStatus }) {
       </div>
       <div className="grid gap-2 text-xs sm:grid-cols-4">
         <DeliveryFact
-          label="Automation"
+          label={t("briefingPage.delivery.automation")}
           value={auto}
           tone={status.automation.enabled ? "ok" : "warn"}
         />
         <DeliveryFact
-          label="Next"
+          label={t("briefingPage.delivery.next")}
           value={nextLabel}
           tone={status.automation.enabled ? "ok" : "muted"}
         />
         <DeliveryFact
-          label="In-app"
+          label={t("briefingPage.delivery.inApp")}
           value={notification}
           tone={status.notification ? "ok" : "muted"}
         />
-        <DeliveryFact label="Push" value={push.label} tone={push.tone} />
+        <DeliveryFact
+          label={t("briefingPage.delivery.push")}
+          value={t(push.label)}
+          tone={push.tone}
+        />
       </div>
       {guidance && (
         <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-state-warn-line bg-state-warn-bg px-3 py-2 text-caption leading-5 text-state-warn-ink">
-          <span>{guidance.message}</span>
+          <span>{t(guidance.message)}</span>
           {guidance.action && (
             <Link
               href={guidance.action.href}
-              className="rounded-md border border-state-warn-line px-2 py-0.5 font-medium text-state-warn-ink transition hover:bg-amber-100 focus-ring"
+              className="rounded-md border border-state-warn-line px-2 py-0.5 font-medium text-state-warn-ink transition hover:bg-surface-hover focus-ring"
             >
-              {guidance.action.label}
+              {t(guidance.action.label)}
             </Link>
           )}
         </div>
@@ -382,7 +391,7 @@ function BriefingDeliveryStatus({ status }: { status: BriefingStatus }) {
   );
 }
 
-function nextBriefingLabel(automation: BriefingStatus["automation"]): string {
+function nextBriefingLabel(automation: BriefingStatus["automation"], t: Translate): string {
   if (!automation.enabled) return "—";
   const time = automation.briefingTime ?? "06:00";
   const match = /^(\d{2}):(\d{2})$/.exec(time);
@@ -393,10 +402,26 @@ function nextBriefingLabel(automation: BriefingStatus["automation"]): string {
   const target = new Date(now);
   target.setHours(targetHour, targetMinute, 0, 0);
   const isToday = target.getTime() > now.getTime();
-  const dayLabel = isToday ? "today" : "tomorrow";
-  return `${dayLabel} ${time}`;
+  return t(isToday ? "briefingPage.delivery.nextToday" : "briefingPage.delivery.nextTomorrow", {
+    time,
+  });
 }
 
+/** "Change the automatic briefing time in {link}." with {link} as the Settings link. */
+function TimeHint({ t }: { t: Translate }) {
+  const [before, after = ""] = t("briefingPage.empty.timeHint").split("{link}");
+  return (
+    <p className="mb-4 text-xs text-ink-dim">
+      {before}
+      <Link href="/settings/notifications" className="text-accent-deep hover:underline">
+        {t("briefingPage.delivery.settings")}
+      </Link>
+      {after}
+    </p>
+  );
+}
+
+/** Message and action label are i18n keys; the caller translates them. */
 interface DeliveryGuidance {
   message: string;
   action?: { label: string; href: string };
@@ -405,44 +430,44 @@ interface DeliveryGuidance {
 function deliveryGuidance(status: BriefingStatus): DeliveryGuidance | null {
   if (!status.automation.configured || status.automation.reason === "no_config") {
     return {
-      message: "No briefing time is set. Choose when you want the morning brief to arrive.",
-      action: { label: "Set briefing time", href: "/settings/notifications" },
+      message: "briefingPage.guidance.noConfig",
+      action: { label: "briefingPage.guidance.noConfigAction", href: "/settings/notifications" },
     };
   }
   if (status.automation.reason === "disabled") {
     return {
-      message: "Daily briefing automation is off. Turn it on to receive a brief every morning.",
-      action: { label: "Turn on", href: "/settings/notifications" },
+      message: "briefingPage.guidance.disabled",
+      action: { label: "briefingPage.guidance.disabledAction", href: "/settings/notifications" },
     };
   }
   if (status.push.state === "no_subscription") {
     return {
-      message:
-        "Push isn't set up on this device — install Klorn as an app to receive the morning push.",
-      action: { label: "Install instructions", href: "/settings/notifications" },
+      message: "briefingPage.guidance.noSubscription",
+      action: {
+        label: "briefingPage.guidance.noSubscriptionAction",
+        href: "/settings/notifications",
+      },
     };
   }
   if (status.push.reason === "permission_denied") {
     return {
-      message:
-        "Browser notifications are blocked. Allow notifications to receive the morning push.",
+      message: "briefingPage.guidance.permissionDenied",
     };
   }
   if (status.push.reason === "vapid_missing") {
     return {
-      message: "Push keys are not configured for this deployment — ask the operator.",
+      message: "briefingPage.guidance.vapidMissing",
     };
   }
   if (status.push.state === "failed") {
     return {
-      message:
-        "Last briefing push failed to deliver. The next scheduled briefing will try again automatically.",
+      message: "briefingPage.guidance.failed",
     };
   }
   if (status.push.state === "skipped" && status.push.reason === "quiet_hours") {
     return {
-      message: "Push was skipped because quiet hours were active when the briefing fired.",
-      action: { label: "Adjust quiet hours", href: "/settings/notifications" },
+      message: "briefingPage.guidance.quietHours",
+      action: { label: "briefingPage.guidance.quietHoursAction", href: "/settings/notifications" },
     };
   }
   return null;
@@ -476,32 +501,22 @@ function pushStateCopy(
 ): { label: string; tone: "ok" | "warn" | "muted"; reason: string | null } {
   switch (state) {
     case "received":
-      return { label: "Received", tone: "ok", reason };
+      return { label: "briefingPage.push.received", tone: "ok", reason };
     case "accepted":
-      return { label: "Sent", tone: "ok", reason };
+      return { label: "briefingPage.push.accepted", tone: "ok", reason };
     case "pending":
-      return { label: "Pending", tone: "warn", reason };
+      return { label: "briefingPage.push.pending", tone: "warn", reason };
     case "failed":
-      return { label: "Failed", tone: "warn", reason };
+      return { label: "briefingPage.push.failed", tone: "warn", reason };
     case "skipped":
-      return { label: "Skipped", tone: "warn", reason };
+      return { label: "briefingPage.push.skipped", tone: "warn", reason };
     case "not_sent":
-      return { label: "Not sent", tone: "muted", reason };
+      return { label: "briefingPage.push.notSent", tone: "muted", reason };
     case "no_subscription":
       return {
-        label: "No browser subscription",
+        label: "briefingPage.push.noSubscription",
         tone: "warn",
         reason: reason ?? "no_subscriptions",
       };
   }
-}
-
-function pushReasonLabel(reason: string): string {
-  const labels: Record<string, string> = {
-    no_subscriptions: "No browser push subscription",
-    permission_denied: "Browser notifications are blocked",
-    quiet_hours: "Quiet hours are active",
-    vapid_missing: "Push keys need configuration",
-  };
-  return labels[reason] || reason;
 }

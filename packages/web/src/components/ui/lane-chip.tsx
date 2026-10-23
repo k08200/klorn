@@ -68,7 +68,7 @@ export function LaneChip({ tier, className = "" }: LaneChipProps) {
   return (
     <span
       data-lane={lane}
-      className={`inline-flex h-5.5 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-control px-2 text-caption font-semibold ${CHIP_CLASS[lane]} ${className}`}
+      className={`lane-chip inline-flex h-5.5 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-control px-2 text-caption font-semibold ${CHIP_CLASS[lane]} ${className}`}
     >
       <span
         aria-hidden="true"

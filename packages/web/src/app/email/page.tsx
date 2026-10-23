@@ -39,6 +39,7 @@ import ErrorAlert from "../../components/ui/error-alert";
 import { apiFetch } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import { useT } from "../../lib/i18n";
+import { modKeyLabel, useIsApplePlatform } from "../../lib/platform";
 import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
 import { serverErrorMessage } from "../../lib/server-error";
@@ -213,6 +214,7 @@ function EmailView() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { t } = useT();
+  const isApple = useIsApplePlatform();
   const { toast } = useToast();
   const undoNotice = useMemo(() => parseUndoNotice(searchParams), [searchParams]);
   const queryClient = useQueryClient();
@@ -1146,7 +1148,7 @@ function EmailView() {
                 aria-hidden="true"
                 className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-md border border-line bg-surface-raised px-1.5 py-0.5 font-mono text-caption font-medium text-ink-dim"
               >
-                ⌘K
+                {modKeyLabel(isApple)}K
               </span>
             )}
             {appliedSearch && (

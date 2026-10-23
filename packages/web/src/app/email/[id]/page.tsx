@@ -969,7 +969,7 @@ function EmailDetailView() {
                   <span aria-hidden="true" className="text-slate-300">
                     ·
                   </span>
-                  <time className="shrink-0 tabular-nums">{formatFull(email.date)}</time>
+                  <time className="shrink-0 tabular-nums">{formatFull(email.date, locale)}</time>
                   <span aria-hidden="true" className="text-slate-300">
                     ·
                   </span>
@@ -1272,7 +1272,7 @@ function ThreadContextPanel({
   thread: ThreadDetail;
   currentEmailId: string;
 }) {
-  const { t } = useT();
+  const { t, locale } = useT();
   return (
     <section className="panel-elevated mb-5 overflow-hidden rounded-2xl border border-line/70 bg-surface-panel">
       <div className="border-b border-line-soft px-4 py-3">
@@ -1300,7 +1300,7 @@ function ThreadContextPanel({
                   {senderName(message.from)}
                 </p>
                 <time className="shrink-0 text-caption tabular-nums text-ink-dim">
-                  {formatFull(message.date)}
+                  {formatFull(message.date, locale)}
                 </time>
               </div>
               <p className="mt-1 truncate text-caption text-ink-mid">
@@ -2134,8 +2134,8 @@ function senderInitials(name: string): string {
     .toUpperCase();
 }
 
-function formatFull(iso: string): string {
-  return new Date(iso).toLocaleString("en-US", {
+function formatFull(iso: string, locale: string): string {
+  return new Date(iso).toLocaleString(locale, {
     month: "short",
     day: "numeric",
     hour: "2-digit",

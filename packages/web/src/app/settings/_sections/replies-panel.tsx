@@ -7,6 +7,15 @@ import { useT } from "../../../lib/i18n";
 import { PANEL, SECTION_TITLE } from "./shared";
 import type { AutomationConfig } from "./use-automation-config";
 
+const REPLY_TONE_IDS = ["MATCH_ME", "FORMAL", "FRIENDLY", "CASUAL"] as const;
+/** Server tone id → i18n key segment (settings.replyTone.<key>.label/desc). */
+const REPLY_TONE_KEY: Record<string, string> = {
+  MATCH_ME: "matchMe",
+  FORMAL: "formal",
+  FRIENDLY: "friendly",
+  CASUAL: "casual",
+};
+
 export function RepliesPanel({ config }: { config: AutomationConfig | null }) {
   // Reply tone and notification language were backend-supported and exposed in
   // the desktop app, but had no web UI — the same account showed different
@@ -132,33 +141,26 @@ export function RepliesPanel({ config }: { config: AutomationConfig | null }) {
           >
             {(replyTones.length > 0
               ? replyTones
-              : [
-                  {
-                    tone: "MATCH_ME",
-                    label: t("settings.replyTone.matchMe.label"),
-                    description: t("settings.replyTone.matchMe.desc"),
-                  },
-                  {
-                    tone: "FORMAL",
-                    label: t("settings.replyTone.formal.label"),
-                    description: t("settings.replyTone.formal.desc"),
-                  },
-                  {
-                    tone: "FRIENDLY",
-                    label: t("settings.replyTone.friendly.label"),
-                    description: t("settings.replyTone.friendly.desc"),
-                  },
-                  {
-                    tone: "CASUAL",
-                    label: t("settings.replyTone.casual.label"),
-                    description: t("settings.replyTone.casual.desc"),
-                  },
-                ]
-            ).map((option) => (
-              <option key={option.tone} value={option.tone}>
-                {option.label} — {option.description}
-              </option>
-            ))}
+              : REPLY_TONE_IDS.map((tone) => ({ tone, label: "", description: "" }))
+            )
+              // The server's list decides WHICH tones exist; their names come
+              // from the UI language (the server copy is English-only, which
+              // showed English options on a Korean screen).
+              .map((option) => {
+                const key = REPLY_TONE_KEY[option.tone];
+                return key
+                  ? {
+                      tone: option.tone,
+                      label: t(`settings.replyTone.${key}.label`),
+                      description: t(`settings.replyTone.${key}.desc`),
+                    }
+                  : option;
+              })
+              .map((option) => (
+                <option key={option.tone} value={option.tone}>
+                  {option.label} — {option.description}
+                </option>
+              ))}
           </select>
         </div>
         <div className="p-5 space-y-3">

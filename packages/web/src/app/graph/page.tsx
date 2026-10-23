@@ -34,25 +34,26 @@ interface GraphData {
 // the lanes are still distinguishable without relying on hue alone.
 type SwatchShape = "circle" | "diamond" | "square" | "ring" | "triangle";
 
+// Labels are i18n keys; lane rows reuse the canonical lane names.
 const REL_LEGEND: Array<{ color: string; label: string; shape: SwatchShape }> = [
-  { color: "#fbbf24", label: "You", shape: "diamond" },
-  { color: "#fb7185", label: "Waiting on a reply", shape: "triangle" },
-  { color: "#f59e0b", label: "Meeting soon", shape: "square" },
-  { color: "#f472b6", label: "You engage (learned)", shape: "diamond" },
-  { color: "#c084fc", label: "Org you engage (inferred)", shape: "diamond" },
-  { color: "#34d399", label: "Frequent contact", shape: "ring" },
-  { color: "#60a5fa", label: "Contact", shape: "circle" },
+  { color: "#fbbf24", label: "graph.legend.you", shape: "diamond" },
+  { color: "#fb7185", label: "graph.legend.waiting", shape: "triangle" },
+  { color: "#f59e0b", label: "graph.legend.meetingSoon", shape: "square" },
+  { color: "#f472b6", label: "graph.legend.engaged", shape: "diamond" },
+  { color: "#c084fc", label: "graph.legend.orgEngaged", shape: "diamond" },
+  { color: "#34d399", label: "graph.legend.frequent", shape: "ring" },
+  { color: "#60a5fa", label: "graph.legend.contact", shape: "circle" },
 ];
 
 // Tier colours mirror --color-tier-* (globals.css) so the decision-brain view
 // reads identically to the firewall board.
 const DEC_LEGEND: Array<{ color: string; label: string; shape: SwatchShape }> = [
-  { color: "#a78bfa", label: "Feature (scored input)", shape: "square" },
-  { color: "#fb7185", label: "PUSH", shape: "diamond" },
-  { color: "#818cf8", label: "MEETING", shape: "circle" },
-  { color: "#fbbf24", label: "QUEUE", shape: "square" },
-  { color: "#22d3ee", label: "INFO", shape: "ring" },
-  { color: "#a8a29e", label: "SILENT", shape: "ring" },
+  { color: "#a78bfa", label: "graph.legend.feature", shape: "square" },
+  { color: "#fb7185", label: "lane.name.PUSH", shape: "diamond" },
+  { color: "#818cf8", label: "lane.name.MEETING", shape: "circle" },
+  { color: "#fbbf24", label: "lane.name.QUEUE", shape: "square" },
+  { color: "#22d3ee", label: "lane.name.INFO", shape: "ring" },
+  { color: "#a8a29e", label: "lane.name.SILENT", shape: "ring" },
 ];
 
 const SWATCH_CLASS: Record<SwatchShape, string> = {
@@ -63,16 +64,16 @@ const SWATCH_CLASS: Record<SwatchShape, string> = {
   triangle: "[clip-path:polygon(50%_0%,100%_100%,0%_100%)]",
 };
 
-const COPY: Record<Mode, { eyebrow: string; title: string; body: string }> = {
+const COPY_KEYS: Record<Mode, { eyebrow: string; title: string; body: string }> = {
   relationships: {
-    eyebrow: "Relationships",
-    title: "Who matters in your mail",
-    body: "A force-directed view of the relationship graph Klorn already reasons over when it sorts mail into lanes — your ranked contacts (size = interaction score, colour = current signal) clustered by company domain. The people you actually reply to grow larger and turn pink: Klorn learns who matters from your own actions and feeds that back into how it triages.",
+    eyebrow: "graph.mode.relationships",
+    title: "graph.relationships.title",
+    body: "graph.relationships.body",
   },
   decisions: {
-    eyebrow: "Decision brain",
-    title: "How Klorn picks a lane",
-    body: `The classifier's deterministic core: the 4 scored features gating the ${TIER_COUNT} lanes (the tierFromFeatures rule), with your override signal overlaid on each lane. This is the policy structure itself, so it renders even before you've corrected anything.`,
+    eyebrow: "graph.mode.decisions",
+    title: "graph.decisions.title",
+    body: "graph.decisions.body",
   },
 };
 
@@ -86,7 +87,7 @@ export default function GraphPage() {
 
 function GraphPageInner() {
   const { toast } = useToast();
-  const { t } = useT();
+  const { t, locale } = useT();
   const [mode, setMode] = useState<Mode>("relationships");
   const [data, setData] = useState<GraphData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -109,7 +110,7 @@ function GraphPageInner() {
     load();
   }, [load]);
 
-  const copy = COPY[mode];
+  const copy = COPY_KEYS[mode];
   const legend = mode === "decisions" ? DEC_LEGEND : REL_LEGEND;
   const contactCount = data ? data.nodes.filter((n) => n.kind === "contact").length : 0;
   // Top nodes by score — a keyboard/AT-reachable text fallback for the WebGL
@@ -126,7 +127,7 @@ function GraphPageInner() {
       <div className="mx-auto max-w-5xl">
         <div
           role="group"
-          aria-label="Graph view"
+          aria-label={t("graph.view.aria")}
           className="mb-4 inline-flex rounded-xl border border-line bg-surface-raised p-1"
         >
           {(["relationships", "decisions"] as Mode[]).map((mKey) => (
@@ -141,33 +142,44 @@ function GraphPageInner() {
                   : "text-ink-mid hover:text-ink"
               }`}
             >
-              {mKey === "relationships" ? "Relationships" : "Decision brain"}
+              {t(`graph.mode.${mKey}`)}
             </button>
           ))}
         </div>
 
         <header className="mb-6 rounded-2xl border border-line bg-surface-panel p-5 shadow-sm shadow-black/20">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-accent-deep">
-            {copy.eyebrow}
+            {t(copy.eyebrow)}
           </p>
-          <h1 className="mt-3 text-2xl font-semibold tracking-tight text-ink">{copy.title}</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-ink-mid">{copy.body}</p>
+          <h1 className="mt-3 text-2xl font-semibold tracking-tight text-ink">{t(copy.title)}</h1>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-ink-mid">
+            {t(copy.body, { count: String(TIER_COUNT) })}
+          </p>
           <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-ink-dim">
             {mode === "relationships" ? (
               <>
-                <span>{contactCount} contacts</span>
+                <span>{t("graph.stats.contacts", { count: String(contactCount) })}</span>
                 {data?.builtAt && (
-                  <span>· built {new Date(data.builtAt).toLocaleString("en-US")}</span>
+                  <span>
+                    ·{" "}
+                    {t("graph.stats.built", {
+                      time: new Date(data.builtAt).toLocaleString(locale),
+                    })}
+                  </span>
                 )}
               </>
             ) : (
               <>
                 <span>
-                  override rate{" "}
-                  {data?.overrideRate != null ? `${(data.overrideRate * 100).toFixed(0)}%` : "—"}
+                  {t("graph.stats.overrideRate", {
+                    rate:
+                      data?.overrideRate != null ? `${(data.overrideRate * 100).toFixed(0)}%` : "—",
+                  })}
                 </span>
                 {data?.overriddenKnobs && data.overriddenKnobs.length > 0 && (
-                  <span>· live overrides: {data.overriddenKnobs.join(", ")}</span>
+                  <span>
+                    · {t("graph.stats.liveOverrides", { list: data.overriddenKnobs.join(", ") })}
+                  </span>
                 )}
               </>
             )}
@@ -182,7 +194,7 @@ function GraphPageInner() {
                 className={`inline-block h-2.5 w-2.5 shrink-0 ${SWATCH_CLASS[l.shape]}`}
                 style={l.shape === "ring" ? { borderColor: l.color } : { backgroundColor: l.color }}
               />
-              {l.label}
+              {t(l.label)}
             </span>
           ))}
         </div>
@@ -191,7 +203,7 @@ function GraphPageInner() {
           <LoadingState rows={1} rowHeight="h-96" label={t("statePage.graphLoading")} />
         ) : !data ? (
           <p className="rounded-xl border border-line bg-surface-raised p-6 text-sm text-ink-mid">
-            No graph data.
+            {t("graph.noData")}
           </p>
         ) : (
           <>
@@ -207,16 +219,15 @@ function GraphPageInner() {
 // Keyboard + screen-reader alternative to the pointer-only WebGL graph
 // (WCAG 1.1.1 / 2.1.1): the highest-scoring nodes as a plain readable list.
 function TopNodesFallback({ nodes, mode }: { nodes: GraphNode[]; mode: Mode }) {
+  const { t } = useT();
   if (nodes.length === 0) return null;
-  const scoreLabel = mode === "decisions" ? "weight" : "interaction score";
   return (
     <section className="mt-6 rounded-2xl border border-line bg-surface-panel p-5">
       <h2 className="text-sm font-semibold text-ink">
-        {mode === "decisions" ? "Top decision signals" : "Top contacts"}
+        {t(mode === "decisions" ? "graph.top.decisions" : "graph.top.contacts")}
       </h2>
       <p className="mt-1 text-xs text-ink-dim">
-        A text view of the graph for keyboard and screen-reader users — the same ranked nodes shown
-        visually above ({scoreLabel}, highest first).
+        {t(mode === "decisions" ? "graph.top.bodyDecisions" : "graph.top.bodyContacts")}
       </p>
       <ol className="mt-3 space-y-1.5">
         {nodes.map((n) => (

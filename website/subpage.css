@@ -67,7 +67,15 @@ html[lang=ko] .sub-hero h1{max-width:16ch}
 
 /* Spec tables (/pricing/ plan by plan, /security/ guarantees). A table keeps
    its columns on phones and scrolls inside its own box, never the page. */
-.table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border-top:1px solid var(--line-2)}
+.table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border-top:1px solid var(--line-2);
+  /* Scroll shadows: the edge darkens only on the side that has more table, so
+     a clipped column reads as "scrolls", not as cut off. */
+  background:linear-gradient(90deg,var(--sc-bg,var(--paper)) 30%,transparent) left/40px 100% no-repeat local,
+    linear-gradient(270deg,var(--sc-bg,var(--paper)) 30%,transparent) right/40px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%,var(--line-2),transparent) left/14px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%,var(--line-2),transparent) right/14px 100% no-repeat scroll}
+.sec-alt .table-scroll{--sc-bg:var(--wash)}
+.spec td:last-child code{white-space:nowrap}
 .spec{width:100%;min-width:600px;border-collapse:collapse;font-size:var(--fs-14);line-height:1.5}
 .spec th,.spec td{text-align:left;vertical-align:top;padding:14px 16px 14px 0;border-bottom:1px solid var(--line-2)}
 .spec thead th{font-size:var(--fs-12);font-weight:650;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}

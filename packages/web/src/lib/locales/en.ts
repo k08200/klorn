@@ -624,7 +624,6 @@ const en: Record<string, string> = {
   "settings.toast.deleteAccountFailed": "Could not delete your account.",
   "settings.about.tagline": "Decision OS",
   "settings.about.desc": "Built to reduce scattered tabs and make the next decision clearer.",
-  "settings.about.version": "v0.2.0 — MVP",
   "settings.about.support": "Questions, or something broken?",
   // Onboarding
   "onboarding.welcome.titleLine1": "Klorn surfaces only the",
@@ -2401,6 +2400,89 @@ const en: Record<string, string> = {
   "statePage.briefingGenerateError": "Could not generate the briefing. Please try again.",
   "statePage.briefingFeedbackError": "Could not save feedback. Please try again.",
   "statePage.briefingStatusError": "Delivery status is unavailable. The briefing can still load.",
+  // /graph and /briefing body copy (web app design pass, 2026-10-21).
+  "graph.view.aria": "Graph view",
+  "graph.mode.relationships": "Relationships",
+  "graph.mode.decisions": "Decision brain",
+  "graph.relationships.title": "Who matters in your mail",
+  "graph.relationships.body":
+    "A force-directed view of the relationship graph Klorn already uses when it sorts mail into lanes: your ranked contacts (size = interaction score, colour = current signal), clustered by company domain. The people you actually reply to grow larger and turn pink. Klorn learns who matters from your own actions and feeds that back into how it sorts.",
+  "graph.decisions.title": "How Klorn picks a lane",
+  "graph.decisions.body":
+    "The classifier's deterministic core: the 4 scored features that gate the {count} lanes, with your override signal overlaid on each lane. This is the policy structure itself, so it shows even before you have corrected anything.",
+  "graph.stats.contacts": "{count} contacts",
+  "graph.stats.built": "Built {time}",
+  "graph.stats.overrideRate": "Override rate {rate}",
+  "graph.stats.liveOverrides": "Live overrides: {list}",
+  "graph.noData": "No graph data.",
+  "graph.legend.you": "You",
+  "graph.legend.waiting": "Waiting on a reply",
+  "graph.legend.meetingSoon": "Meeting soon",
+  "graph.legend.engaged": "You engage (learned)",
+  "graph.legend.orgEngaged": "Org you engage (inferred)",
+  "graph.legend.frequent": "Frequent contact",
+  "graph.legend.contact": "Contact",
+  "graph.legend.feature": "Feature (scored input)",
+  "graph.top.contacts": "Top contacts",
+  "graph.top.decisions": "Top decision signals",
+  "graph.top.bodyContacts":
+    "A text view of the graph for keyboard and screen-reader users: the same ranked contacts shown above, highest interaction score first.",
+  "graph.top.bodyDecisions":
+    "A text view of the graph for keyboard and screen-reader users: the same ranked signals shown above, highest weight first.",
+  "briefingPage.today": "Today",
+  "briefingPage.todayAt": "Today · {time}",
+  "briefingPage.surfaced.one": "{count} action surfaced",
+  "briefingPage.surfaced.other": "{count} actions surfaced",
+  "briefingPage.empty.title": "No briefing for today yet.",
+  "briefingPage.empty.timeHint": "Change the automatic briefing time in {link}.",
+  "briefingPage.feedback.useful": "Useful",
+  "briefingPage.feedback.wrong": "Wrong",
+  "briefingPage.feedback.later": "Later",
+  "briefingPage.feedback.done": "Done",
+  "briefingPage.delivery.automation": "Automation",
+  "briefingPage.delivery.next": "Next",
+  "briefingPage.delivery.inApp": "In-app",
+  "briefingPage.delivery.push": "Push",
+  "briefingPage.delivery.notSetUp": "Not set up",
+  "briefingPage.delivery.off": "Off",
+  "briefingPage.delivery.none": "None",
+  "briefingPage.delivery.localTime": "Local time",
+  "briefingPage.delivery.nextToday": "Today {time}",
+  "briefingPage.delivery.nextTomorrow": "Tomorrow {time}",
+  "briefingPage.push.received": "Received",
+  "briefingPage.push.accepted": "Sent",
+  "briefingPage.push.pending": "Pending",
+  "briefingPage.push.failed": "Failed",
+  "briefingPage.push.skipped": "Skipped",
+  "briefingPage.push.notSent": "Not sent",
+  "briefingPage.push.noSubscription": "No browser subscription",
+  "briefingPage.guidance.noConfig":
+    "No briefing time is set. Choose when you want the morning brief to arrive.",
+  "briefingPage.guidance.noConfigAction": "Set briefing time",
+  "briefingPage.guidance.disabled":
+    "Daily briefing automation is off. Turn it on to receive a brief every morning.",
+  "briefingPage.guidance.disabledAction": "Turn on",
+  "briefingPage.guidance.noSubscription":
+    "Push isn't set up on this device. Install Klorn as an app to receive the morning push.",
+  "briefingPage.guidance.noSubscriptionAction": "Install instructions",
+  "briefingPage.guidance.permissionDenied":
+    "Browser notifications are blocked. Allow notifications to receive the morning push.",
+  "briefingPage.guidance.vapidMissing":
+    "Push keys are not configured for this deployment. Ask the operator.",
+  "briefingPage.guidance.failed":
+    "The last briefing push was not delivered. The next scheduled briefing will try again automatically.",
+  "briefingPage.guidance.quietHours":
+    "Push was skipped because quiet hours were active when the briefing was sent.",
+  "briefingPage.guidance.quietHoursAction": "Adjust quiet hours",
+  // web app design pass, 2026-10-21: English that reached localized screens.
+  "byok.modelNote.recommended": "{provider} — recommended",
+  "byok.modelNote.fastest": "{provider} — fastest",
+  "byok.modelNote.mostCapable": "{provider} — most capable, pricier",
+  "statusChip.connected": "Connected",
+  "statusChip.failed": "Failed",
+  "statusChip.pending": "Pending",
+  // web app design pass, 2026-10-21: English that reached localized screens.
+  "imap.beta": "Beta",
 };
 
 export default en;

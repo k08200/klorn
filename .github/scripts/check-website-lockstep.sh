@@ -31,7 +31,9 @@ skeleton() {
     # scripts and guards read, and the stylesheet link do.
     grep -oE 'class="[^"]*"' "$1" || true
     grep -oE 'data-[a-z-]+(="(push|meeting|queue|info|silent)")?' "$1" || true
-    grep -oE '<link rel="stylesheet" href="[^"]*"' "$1" || true
+    # Webfont stylesheets under /fonts/ are per-script, not structure: only the
+    # Korean pages load Pretendard (/fonts/pretendard/pretendard.css).
+    grep -oE '<link rel="stylesheet" href="[^"]*"' "$1" | grep -v 'href="/fonts/' || true
   } | sort
 }
 

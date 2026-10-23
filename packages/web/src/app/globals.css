@@ -265,10 +265,13 @@
 
 @theme {
   /* Typography (2026-08-13): Geist, self-hosted via next/font (the CSS vars
-     are stamped on <html> by layout.tsx). Korean glyphs fall through to the
-     system stack. Geist Mono backs `font-mono` for figures and code. */
+     are stamped on <html> by layout.tsx). Hangul falls through to Pretendard,
+     self-hosted from the `pretendard` package (layout.tsx) so Windows, which
+     has no Apple SD Gothic Neo, does not drop to Malgun Gothic (2026-10-21).
+     Geist Mono backs `font-mono` for figures and code. */
   --font-sans:
-    var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    var(--font-geist-sans), "Pretendard Variable", Pretendard, ui-sans-serif, system-ui,
+    -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* Accent tints. The base `accent` lives in the theme-following block above
@@ -727,10 +730,34 @@ body {
   }
 }
 
+/* Pretendard carries some Hanja, so for Japanese and Chinese UI the platform's
+   own CJK face goes ahead of it — otherwise one line of kanji/hanzi would mix
+   Korean-style glyphs with the system font's. html[lang] is set by i18n.tsx. */
+:root:lang(ja) {
+  --font-sans:
+    var(--font-geist-sans), "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI",
+    "Yu Gothic", Meiryo, "Pretendard Variable", ui-sans-serif, system-ui, sans-serif;
+}
+:root:lang(zh) {
+  --font-sans:
+    var(--font-geist-sans), "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC",
+    "Pretendard Variable", ui-sans-serif, system-ui, sans-serif;
+}
+
 /* ── Scrollbar ──────────────────────────────────── */
+/* Windows keeps classic scrollbars always visible (no macOS overlay bars), so
+   they have to read as part of the UI in both themes. The standard properties
+   win over ::-webkit-scrollbar in Chromium 121+ (WebView2, Edge, Chrome) and
+   are the only ones Firefox reads; the webkit rules remain for Safari. Colors
+   come from the theme tokens so the dark canvas does not get a light bar. */
+:root {
+  scrollbar-color: var(--line-strong) transparent;
+  scrollbar-width: thin;
+}
+
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -738,12 +765,42 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: var(--line-strong);
   border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background-color: var(--ink-dim);
+}
+
+/* Reserve the scrollbar's width on the panes whose content length changes
+   (mail list, reader, settings) so an always-visible Windows scrollbar
+   appearing does not shift the layout sideways. */
+.scroll-stable {
+  scrollbar-gutter: stable;
+}
+
+/* ── Forced colors (Windows High Contrast / Contrast themes) ────────────
+   Backgrounds and box-shadows are dropped in forced-colors mode, so chips,
+   selected rows and the focus ring would vanish. Keep a system-colored
+   outline/border so they stay visible. */
+@media (forced-colors: active) {
+  .focus-ring:focus-visible,
+  :focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+  [aria-pressed="true"],
+  [aria-selected="true"],
+  [aria-current="page"] {
+    outline: 1px solid Highlight;
+    outline-offset: -1px;
+  }
+  .lane-chip {
+    border: 1px solid CanvasText;
+  }
 }
 
 /* ── Focus ring utility ─────────────────────────── */
