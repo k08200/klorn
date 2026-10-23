@@ -442,3 +442,83 @@ describe("GET /api/automations replyTone", () => {
     await app.close();
   });
 });
+
+describe("PATCH /api/automations timezone validation", () => {
+  beforeEach(() => {
+    upsertSpy.mockReset();
+    upsertSpy.mockImplementation(async (args: { update: Record<string, unknown> }) => ({
+      userId: "test-user-id",
+      briefingTime: "06:00",
+      timezone: (args.update.timezone as string) ?? "Asia/Seoul",
+      timezoneMode: (args.update.timezoneMode as string | null) ?? null,
+      agentMode: "SUGGEST",
+      alwaysAllowedTools: [],
+    }));
+  });
+
+  it("stores a valid IANA zone with an explicit manual mode", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/automations",
+      payload: { timezone: "America/New_York", timezoneMode: "MANUAL" },
+    });
+    expect(res.statusCode).toBe(200);
+    const call = upsertSpy.mock.calls[0][0];
+    expect(call.update.timezone).toBe("America/New_York");
+    expect(call.update.timezoneMode).toBe("MANUAL");
+    expect(res.json().timezone).toBe("America/New_York");
+    expect(res.json().timezoneMode).toBe("MANUAL");
+    await app.close();
+  });
+
+  it("rejects an invalid zone with 400 instead of silently storing a default", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/automations",
+      payload: { timezone: "Mars/Olympus_Mons" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(upsertSpy).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("rejects the client 'auto' sentinel sent as a zone", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/automations",
+      payload: { timezone: "auto" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(upsertSpy).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("rejects an unknown timezoneMode with 400", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/automations",
+      payload: { timezoneMode: "SOMETIMES" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(upsertSpy).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("stores AUTO as null (no saved choice) and reports AUTO back", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/automations",
+      payload: { timezone: "Asia/Seoul", timezoneMode: "AUTO" },
+    });
+    expect(res.statusCode).toBe(200);
+    const call = upsertSpy.mock.calls[0][0];
+    expect(call.update.timezoneMode).toBeNull();
+    expect(res.json().timezoneMode).toBe("AUTO");
+    await app.close();
+  });
+});

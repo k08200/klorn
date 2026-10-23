@@ -92,18 +92,3 @@ export function agentModeClasses(mode: AgentMode, active: boolean): string {
   if (mode === "AUTO") return "bg-emerald-500/15 border-emerald-400/45 text-state-ok-ink";
   return "bg-amber-300/20 border-state-warn-line text-amber-100";
 }
-
-export const TIMEZONES = [
-  "Asia/Seoul",
-  "Asia/Tokyo",
-  "America/New_York",
-  "America/Los_Angeles",
-  "America/Chicago",
-  "Europe/London",
-  "Europe/Berlin",
-  "Europe/Paris",
-  "Asia/Shanghai",
-  "Asia/Singapore",
-  "Australia/Sydney",
-  "Pacific/Auckland",
-];

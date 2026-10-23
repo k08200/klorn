@@ -78,7 +78,7 @@ import {
   recordLoginAttempt,
 } from "../security/login-throttle.js";
 import { captureError } from "../sentry.js";
-import { localMinuteOfDay, normalizeTimeZone } from "../time-zone.js";
+import { localMinuteOfDay, normalizeTimeZone, normalizeTimeZoneMode } from "../time-zone.js";
 import { deleteUserAndAllData } from "../user-deletion.js";
 import { isGoogleLinkMarker } from "./google-link-finish.js";
 import { handOffAccountLink, linkStartScheme } from "./link-handoff.js";
@@ -621,7 +621,7 @@ export function authRoutes(app: FastifyInstance) {
       const user = await prisma.user.findUnique({
         where: { id: payload.userId },
         // The user's timezone lives on AutomationConfig (User has no such column).
-        include: { automationConfig: { select: { timezone: true } } },
+        include: { automationConfig: { select: { timezone: true, timezoneMode: true } } },
       });
       if (!user) return reply.code(404).send({ error: "User not found" });
 
@@ -681,6 +681,9 @@ export function authRoutes(app: FastifyInstance) {
           // the user's intended zone instead of the browser default (which can
           // disagree — e.g., iOS PWA falling back to UTC).
           timezone: normalizeTimeZone(user.automationConfig?.timezone),
+          // "AUTO" (no saved choice) tells the client to render in the device
+          // zone and sync it here; "MANUAL" pins `timezone` above.
+          timezoneMode: normalizeTimeZoneMode(user.automationConfig?.timezoneMode),
           googleConnected: googleStatus.connected,
           googleNeedsReconnect: googleStatus.needsReconnect,
           // Whether ANY mail source is attached — the primary Google grant or

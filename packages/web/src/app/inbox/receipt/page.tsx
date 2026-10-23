@@ -10,8 +10,8 @@ import { HubHandoff } from "../../../components/hub-handoff";
 import { useToast } from "../../../components/toast";
 import ErrorAlert from "../../../components/ui/error-alert";
 import LoadingState from "../../../components/ui/loading-state";
-import { useAuth } from "../../../lib/auth";
 import { useT } from "../../../lib/i18n";
+import { useDisplayTimeZone } from "../../../lib/use-time-zone";
 import { useReceipt } from "./use-receipt";
 
 export default function ReceiptPage() {
@@ -198,8 +198,8 @@ function ReceiptSection({
   renderActions?: (item: ReceiptItem) => React.ReactNode;
   renderExtra?: (item: ReceiptItem) => React.ReactNode;
 }) {
-  // The user's stored zone, so times sit on the same day as the receipt's date.
-  const timeZone = useAuth().user?.timezone;
+  // The display zone (pinned, else device), matching the receipt's day.
+  const timeZone = useDisplayTimeZone();
   return (
     <section aria-label={title}>
       <div className="mb-2 flex items-center justify-between">
