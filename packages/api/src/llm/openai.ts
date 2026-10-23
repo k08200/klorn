@@ -188,12 +188,12 @@ async function enforceCostGates(
   playgroundOnly?: boolean,
   userKeyAvailable?: boolean,
   reserved?: boolean,
-): Promise<void> {
+): Promise<{ userKeyOnly: boolean }> {
   // Playground calls run entirely on the visitor's own key (no server provider
   // in the chain), so they incur zero server cost. They must NOT be gated by
   // or recorded against the shared global ceiling — otherwise unauthenticated
   // traffic could trip the cap and lock out real users.
-  if (playgroundOnly) return;
+  if (playgroundOnly) return { userKeyOnly: false };
 
   const { checkCostGate, recordCostUsage, checkGlobalCostGate, recordGlobalCostUsage } =
     await import("../billing/cost-guard.js");
@@ -204,10 +204,11 @@ async function enforceCostGates(
   // BYOK: a signed-in user with their OWN provider key spends their credit, not
   // Klorn's, so the shared global ceiling neither gates nor bills them — that
   // is the whole point of BYOK as an escape hatch when the shared budget is
-  // exhausted. We still CHECK their per-user cap (a broken key that forces an
-  // env fallthrough must not dodge the cap forever) but do NOT pre-bill it: the
-  // post-call true-up charges $0 when their key served and the real cost only
-  // on a genuine env fallthrough (where servedByUserKey is false).
+  // exhausted. We still CHECK their per-user cap — past it the call runs on
+  // their own key alone, so a broken key can never fall through to env money
+  // there — but do NOT pre-bill it: the post-call true-up charges $0 when their
+  // key served and the real cost only on a genuine env fallthrough below the
+  // cap (where servedByUserKey is false).
   if (!userKeyAvailable) {
     const globalGate = await checkGlobalCostGate();
     if (!globalGate.allowed) {
@@ -218,6 +219,12 @@ async function enforceCostGates(
   if (userId) {
     const gate = await checkCostGate(userId, { reserved });
     if (!gate.allowed) {
+      // BYOK past the cap (founder decision 2026-10-15): the user's own key
+      // pays, so the call goes ahead — on that key ALONE. The caller drops the
+      // env providers from the chain, so a broken key cannot fall through to
+      // Klorn's money once the cap is reached. Nothing is pre-billed: the
+      // per-user and global pre-bills below are skipped for userKeyAvailable.
+      if (userKeyAvailable) return { userKeyOnly: true };
       throw new DailyCostCapExceededError(dailyCostCapMessageFor(gate.freeCapApplied === true));
     }
     if (!userKeyAvailable) {
@@ -241,6 +248,7 @@ async function enforceCostGates(
       throw new DailyCostCapExceededError(DAILY_COST_CAP_MESSAGE);
     }
   }
+  return { userKeyOnly: false };
 }
 
 /**
@@ -470,8 +478,8 @@ async function createCompletionWithFailover(
     );
   }
 
-  const chain = getProviderChain(options.credentials);
-  if (chain.length === 0) {
+  const fullChain = getProviderChain(options.credentials);
+  if (fullChain.length === 0) {
     throw new Error(
       "No LLM providers configured — set OPENROUTER_API_KEY, GEMINI_API_KEY, or OPENAI_COMPAT_BASE_URL (local Ollama/LM Studio/vLLM)",
     );
@@ -481,7 +489,7 @@ async function createCompletionWithFailover(
   // BYOK: when the chain leads with the user's own key, the cost ledgers skip
   // the pre-bill (true-up settles $0 on a user-key hit, real cost on env
   // fallthrough) — see enforceCostGates / trueUpCostLedgers.
-  const userKeyAvailable = hasUserOwnedProvider(chain, playgroundOnly);
+  const userKeyAvailable = hasUserOwnedProvider(fullChain, playgroundOnly);
 
   // The user's chosen chat model (curated frontier only — resolved in
   // llm-credentials) applies ONLY to conversational surfaces that opt in via
@@ -499,19 +507,26 @@ async function createCompletionWithFailover(
   // for a slot (bounded) instead of failing — instant failure demoted every
   // email past the cap in a sync burst to the permanent keyword fallback.
   if (options.userId) {
-    await awaitUserCallSlot(options.userId, { priority: options.priority ?? "foreground" });
+    await awaitUserCallSlot(options.userId, {
+      priority: options.priority ?? "foreground",
+      reserved: options.reserved,
+    });
   }
 
   // Daily-cost gate: enforce BEFORE the call so we don't burn budget twice
   // when a runaway loop has already crossed the cap. Covers the global
   // ceiling (always) and the per-user cap (when a userId is present).
-  await enforceCostGates(
+  const costGate = await enforceCostGates(
     params.model,
     options.userId,
     playgroundOnly,
     userKeyAvailable,
     options.reserved,
   );
+  // Past the per-user cap a BYOK call runs on the user's own key alone.
+  const chain = costGate.userKeyOnly
+    ? fullChain.filter((provider) => provider.ownedByUser === true)
+    : fullChain;
 
   // Ground-truth usage ledger context, frozen before the failover loop so
   // every retry records the same caller identity + the same pre-bill
@@ -774,7 +789,12 @@ async function createVisionCompletionWithFailover(
   // Deliberately NOT passing options.reserved: the judge never goes through
   // the vision path, and the reserve exists for exactly one surface. Honouring
   // it here would widen who can reach the judge's budget for no caller.
-  await enforceCostGates(params.model, options.userId, playgroundOnly, userKeyAvailable);
+  const costGate = await enforceCostGates(
+    params.model,
+    options.userId,
+    playgroundOnly,
+    userKeyAvailable,
+  );
 
   // Vision prefers Gemini (best OCR), but a BYOK user's OWN key must keep
   // priority — otherwise env Gemini gets hoisted ahead of the user's
@@ -782,7 +802,8 @@ async function createVisionCompletionWithFailover(
   // defeating BYOK on this path. So: user-owned providers first, then
   // gemini-first only AMONG the env providers (keyless users are unchanged).
   const userOwned = chain.filter((p) => p.ownedByUser);
-  const envProviders = chain.filter((p) => !p.ownedByUser);
+  // Past the per-user cap a BYOK call runs on the user's own key alone.
+  const envProviders = costGate.userKeyOnly ? [] : chain.filter((p) => !p.ownedByUser);
   const ordered = [
     ...userOwned,
     ...envProviders.filter((provider) => provider.name === "gemini"),

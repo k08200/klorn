@@ -1458,6 +1458,8 @@ export async function emailRoutes(app: FastifyInstance) {
         // as "not analyzed" forever — pressing Sync with 0 new mail summarized 0.
         summarizeUnsummarizedEmails(uid, Math.max(result.newCount, 10)).catch((err) => {
           console.warn(`[EMAIL-SYNC] background summarize failed for user ${uid}`, err);
+          // The daily budget line is expected back-pressure, not a fault.
+          if (err instanceof Error && err.name === "DailyCostCapExceededError") return;
           captureError(err, { tags: { scope: "email.sync.summarize" }, extra: { userId: uid } });
         });
         analyzePendingEmailAttachments(uid, Math.max(10, result.newCount * 3))

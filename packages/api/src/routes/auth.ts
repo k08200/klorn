@@ -1939,6 +1939,8 @@ export function authRoutes(app: FastifyInstance) {
       // an earlier login that never got summarized must not be stranded forever.
       summarizeUnsummarizedEmails(userId, Math.max(emailResult.newCount, 10)).catch((err) => {
         console.warn("[AUTH] init-sync background summarize failed:", err);
+        // The daily budget line is expected back-pressure, not a fault.
+        if (err instanceof Error && err.name === "DailyCostCapExceededError") return;
         captureError(err, { tags: { scope: "auth.init-sync.summarize" }, extra: { userId } });
       });
     } catch (err) {

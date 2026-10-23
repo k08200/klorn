@@ -440,6 +440,26 @@ function startOfUtcDay(): Date {
 }
 
 /**
+ * Run each step in order; a DailyCostCapExceededError ends only that step.
+ * Any other error propagates exactly as before. Returns whether the budget
+ * stopped a step, so the caller can log and nudge once.
+ */
+export async function runBudgetedExtras(
+  steps: ReadonlyArray<() => Promise<unknown>>,
+): Promise<boolean> {
+  let capped = false;
+  for (const step of steps) {
+    try {
+      await step();
+    } catch (err) {
+      if (!(err instanceof Error && err.name === "DailyCostCapExceededError")) throw err;
+      capped = true;
+    }
+  }
+  return capped;
+}
+
+/**
  * When a FREE user's classify cycle is stopped by the daily cost cap, drop one
  * in-app nudge per UTC day pointing at the upgrade path. No-op for entitled
  * users (paid/trial/admin) and — because isEntitled is always true then — a
@@ -1436,9 +1456,26 @@ async function runUserCycle(
         // this background path was the one left gated on newCount > 0). The
         // backlog is the last SUMMARY_BACKLOG_MAX_AGE_DAYS only; older mail is
         // summarized when opened.
-        await summarizeUnsummarizedEmails(config.userId, Math.max(syncResult.newCount, 10));
-        await syncRecentCandidateIntakes(config.userId, Math.max(syncResult.newCount, 10));
-        await notifyCandidateEmails(config.userId);
+        // A budget refusal here ends only these extras, not the cycle: the
+        // linked inboxes, the judge backfill and auto-reply below still run.
+        // Ending the cycle used to stop linked-inbox sync for the rest of the
+        // day once the cap was reached with unsummarized mail left.
+        const extrasCapped = await runBudgetedExtras([
+          () => summarizeUnsummarizedEmails(config.userId, Math.max(syncResult.newCount, 10)),
+          () => syncRecentCandidateIntakes(config.userId, Math.max(syncResult.newCount, 10)),
+          () => notifyCandidateEmails(config.userId),
+        ]);
+        if (extrasCapped) {
+          console.log(`[AUTOMATION] Summaries paused for ${config.userId} — daily cost cap`);
+          await maybeNudgeFreeDailyLimit(config.userId, configUserPlan, configUserRole).catch(
+            (nudgeErr) => {
+              console.warn(
+                `[AUTOMATION] free-limit nudge threw unexpectedly for ${config.userId}:`,
+                nudgeErr,
+              );
+            },
+          );
+        }
 
         // Multi-account (Pro): also sync each LINKED secondary inbox via
         // its own OAuth client so the firewall classifies its mail too.
@@ -1488,8 +1525,12 @@ async function runUserCycle(
               // push, that mail would be stranded outside the sweep forever.
               syncedLinkedInboxIds.push(inbox.id);
               linkedNewCount += linkedResult.newCount;
+              // A budget refusal ends only the summaries: this inbox still gets
+              // its lastSyncedAt and the next inboxes still sync.
               if (linkedResult.newCount > 0) {
-                await summarizeUnsummarizedEmails(config.userId, linkedResult.newCount);
+                await runBudgetedExtras([
+                  () => summarizeUnsummarizedEmails(config.userId, linkedResult.newCount),
+                ]);
               }
               // Stamp the last successful sync so the UI's "Synced Xm ago" is real
               // (the column had a reader but no writer — it showed "Not yet synced"
