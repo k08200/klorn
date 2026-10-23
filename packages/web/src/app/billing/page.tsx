@@ -409,7 +409,7 @@ function BillingContent() {
                 </div>
               ) : plan.key === "ENTERPRISE" ? (
                 <a
-                  href="mailto:sales@klorn.ai"
+                  href="mailto:k0820086@gmail.com"
                   className="ease-strong block rounded-lg border border-line bg-surface-panel/70 py-2.5 text-center text-sm font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring min-h-11"
                 >
                   {t("billing.contactSales")}

@@ -117,6 +117,8 @@ export const FENCED_MODELS = [
 export const UNFENCED_MODELS: Record<string, string> = {
   Device: "the sign-in session",
   UserIdentity: "sign-in methods, kept by the wipe",
+  KlornAddress:
+    "the account's Klorn address, kept by the wipe; the claim writes it, never mail work",
   AutomationConfig: "account settings; sign-in upserts them, with defaults and no mail data",
   DevicePushToken: "device registration at sign-in, no mail data",
   PushSubscription: "browser push registration, no mail data",

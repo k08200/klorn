@@ -109,7 +109,14 @@ describe("revokeUserAccess (what lets a sync, a job or an agent act for the user
       "linkedInboxAccount",
       "userToken",
     ]);
-    for (const scope of scopes) expect(scope).toEqual({ where: { userId: "u-9" } });
+    // The Klorn address's mailbox (KLORN, step E1a) is no grant: it holds no
+    // credentials and belongs to the account, like its address. Its mail still
+    // goes with the purge.
+    const keepsKlorn = { where: { userId: "u-9", provider: { not: "KLORN" } } };
+    expect(scopes.filter((s) => JSON.stringify(s) === JSON.stringify(keepsKlorn))).toHaveLength(1);
+    for (const scope of scopes.filter((s) => JSON.stringify(s) !== JSON.stringify(keepsKlorn))) {
+      expect(scope).toEqual({ where: { userId: "u-9" } });
+    }
   });
 
   it("revokes the API keys and clears the credentials on the account row", async () => {
@@ -148,6 +155,8 @@ describe("purgeUserData covers every user-scoped model (schema-driven guard)", (
     storagePurge: "the durable queue that deletes the user's stored objects: must survive",
     apiKey: "revoked (updateMany), never deleted, so audit rows keep their key",
     dataWipe: "the data-wipe fence's record: it must outlive the purge it describes",
+    klornAddress:
+      "the account's Klorn address: deleting it would let the handle be issued again (L5)",
   };
 
   it("deletes or deliberately keeps every model that has a userId", async () => {

@@ -675,9 +675,11 @@ describe("email routes (demo mode)", () => {
           provider: "NAVER",
         },
       ]);
-      // Flag on → no provider filter: every connected mailbox joins the selector.
+      // Flag on → every connected mailbox joins the selector, except the Klorn
+      // address (E1a): no client handles it yet (unlink, From, titles), so it
+      // stays out until E3 adds that.
       expect(prisma.linkedInboxAccount.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { userId: "user-1" } }),
+        expect.objectContaining({ where: { userId: "user-1", provider: { not: "KLORN" } } }),
       );
       await app.close();
     } finally {

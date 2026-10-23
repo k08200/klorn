@@ -34,7 +34,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { getUserId } from "../auth.js";
 import { PAYWALL_ENABLED } from "../config.js";
 import { prisma } from "../db.js";
-import { hasAnyMailSource } from "../mail/mail-source.js";
+import { KLORN_PROVIDER, NOT_KLORN_ADDRESS } from "../mail/klorn-mailbox.js";
 import { captureError } from "../sentry.js";
 import { planHasFeature } from "./stripe.js";
 
@@ -84,8 +84,8 @@ type Excluding = { account: MailAccountKey } | { provider: InboxProvider };
 async function hasOtherMailSource(userId: string, excluding: Excluding): Promise<boolean> {
   const notExcluded =
     "account" in excluding
-      ? { NOT: accountWhere(excluding.account) }
-      : { provider: { not: excluding.provider } };
+      ? { NOT: accountWhere(excluding.account), ...NOT_KLORN_ADDRESS }
+      : { provider: { notIn: [excluding.provider, KLORN_PROVIDER] } };
   const [primary, otherLinked] = await Promise.all([
     hasPrimaryGoogleToken(userId),
     prisma.linkedInboxAccount.findFirst({
@@ -212,7 +212,7 @@ export async function keepIfOnlyMailSource(
 async function mayAddPrimaryGoogle(userId: string): Promise<boolean> {
   if (await hasMultiAccount(userId)) return true;
   const linked = await prisma.linkedInboxAccount.findFirst({
-    where: { userId },
+    where: { userId, ...NOT_KLORN_ADDRESS },
     select: { id: true },
   });
   return linked === null;
@@ -251,7 +251,23 @@ export async function keepPrimaryGoogleIfOnlyMailSource(
 export async function canConnectNewMailAccount(userId: string): Promise<boolean> {
   if (!PAYWALL_ENABLED) return true;
   if (await hasMultiAccount(userId)) return true;
-  return !(await hasAnyMailSource(userId));
+  return !(await hasConnectedMailSource(userId));
+}
+
+/**
+ * A primary Google inbox or a linked mailbox. Unlike "has any mail"
+ * (mail/mail-source.ts), the Klorn address does not count: it is part of the
+ * account, not a connected source (mail/klorn-mailbox.ts).
+ */
+async function hasConnectedMailSource(userId: string): Promise<boolean> {
+  const [primary, linked] = await Promise.all([
+    hasPrimaryGoogleToken(userId),
+    prisma.linkedInboxAccount.findFirst({
+      where: { userId, ...NOT_KLORN_ADDRESS },
+      select: { id: true },
+    }),
+  ]);
+  return primary || linked !== null;
 }
 
 /**

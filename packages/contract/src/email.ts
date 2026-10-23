@@ -244,7 +244,8 @@ export interface EmailReaderContextResponse {
  * unknown values as "a provider without a full action surface" — new
  * providers may appear before every client updates.
  */
-export type InboxProvider = "GOOGLE" | "NAVER" | "ICLOUD" | "OUTLOOK" | "IMAP";
+// KLORN: the Klorn address (step E1a of the unified platform plan).
+export type InboxProvider = "GOOGLE" | "NAVER" | "ICLOUD" | "OUTLOOK" | "IMAP" | "KLORN";
 
 /**
  * A mailbox the user can scope the list to. `id === null` is the primary

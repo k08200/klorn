@@ -79,7 +79,7 @@ those users the source under AGPL §13. That's the line.
 Commercial license available for organizations that need to host a
 modified Klorn behind a non-AGPL contract — typically: managed Gmail
 verification, vendor-supported deployments, or proprietary team
-features. Contact: founders@klorn.ai.
+features. Contact: k0820086@gmail.com.
 
 ## What's NOT on the boundary
 

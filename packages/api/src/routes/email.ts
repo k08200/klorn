@@ -73,6 +73,7 @@ import {
 } from "../mail/email-sync.js";
 import { coercePlainBody, htmlToPlainText, renderableEmailHtmlFor } from "../mail/email-text.js";
 import { getLinkedInboxClients, resolveMailClient } from "../mail/gmail.js";
+import { NOT_KLORN_ADDRESS } from "../mail/klorn-mailbox.js";
 import { hasAnyMailSource } from "../mail/mail-source.js";
 import { getMeetingContext } from "../mail/meeting-context.js";
 import { needsReplyReasonText } from "../mail/needs-reply-reason-strings.js";
@@ -1521,8 +1522,12 @@ export async function emailRoutes(app: FastifyInstance) {
       // Flag OFF keeps the historical GOOGLE-only selector. Flag ON (Phase 1:
       // the contract carries `provider` and actions dispatch by provider, with
       // unsupported ones refusing loudly as 501) surfaces every connected
-      // mailbox — NAVER rows have been in this table since Phase 0b.
-      where: providerInboxSelectorEnabled() ? { userId: uid } : { userId: uid, provider: "GOOGLE" },
+      // mailbox — NAVER rows have been in this table since Phase 0b — except
+      // the Klorn address (E1a): no client handles it yet (unlink, From,
+      // titles), so it stays out until E3 adds that.
+      where: providerInboxSelectorEnabled()
+        ? { userId: uid, ...NOT_KLORN_ADDRESS }
+        : { userId: uid, provider: "GOOGLE" },
       select: { id: true, email: true, needsReconnect: true, provider: true, purpose: true },
       orderBy: { email: "asc" },
     });
@@ -1550,7 +1555,7 @@ export async function emailRoutes(app: FastifyInstance) {
           needsReconnect: l.needsReconnect,
           purpose: asPurpose(l.purpose),
           // No cast on purpose: the Prisma enum and the contract union are the
-          // same five values today, and this assignment is what fails the
+          // same six values today, and this assignment is what fails the
           // build the day a migration adds a provider the contract lacks.
           provider: l.provider,
         })),
