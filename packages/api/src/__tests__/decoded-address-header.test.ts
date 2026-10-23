@@ -14,6 +14,8 @@ import {
   decodedMailbox,
   MAX_ADDRESS_CHARS,
   MAX_DISPLAY_NAME_CHARS,
+  MAX_HEADER_CHARS,
+  MAX_LIST_ENTRIES,
   MAX_RAW_HEADER_CHARS,
   stripControls,
 } from "../mail/decoded-address-header.js";
@@ -233,5 +235,51 @@ describe("property: the stored mailbox is the raw one, or nothing", () => {
         }
       }
     }
+  });
+});
+
+describe("bounded work on hostile header sizes", () => {
+  const elapsed = (run: () => unknown) => {
+    const started = performance.now();
+    run();
+    return performance.now() - started;
+  };
+
+  it("has no sender for a From over the 256 KiB ceiling, and does not parse it", () => {
+    expect(MAX_HEADER_CHARS).toBe(256 * 1024);
+    const over = `${"x".repeat(MAX_HEADER_CHARS)} <attacker@evil.com>`;
+    expect(decodedMailbox(over)).toBe("");
+    const huge = `"${"n".repeat(10_000_000)}" <attacker@evil.com>`;
+    expect(elapsed(() => expect(decodedMailbox(huge)).toBe(""))).toBeLessThan(50);
+  });
+
+  it("stores no list over the ceiling, and does not parse it", () => {
+    expect(decodedAddressList(`a@example.com, ${"b".repeat(MAX_HEADER_CHARS)}`)).toBe("");
+    // 1M empty entries, 5 MB of `x,`: refused before any split.
+    expect(elapsed(() => expect(decodedAddressList(",".repeat(1_000_000))).toBe(""))).toBeLessThan(
+      50,
+    );
+    expect(elapsed(() => expect(decodedAddressList("x,".repeat(2_500_000))).toBe(""))).toBeLessThan(
+      50,
+    );
+  });
+
+  it("stops a list after its entry limit", () => {
+    const raw = Array.from({ length: MAX_LIST_ENTRIES + 100 }, (_, i) => `p${i}@x.co`).join(", ");
+    const stored = splitAddressList(decodedAddressList(raw));
+    expect(stored).toHaveLength(MAX_LIST_ENTRIES);
+    expect(stored[MAX_LIST_ENTRIES - 1]).toBe(`p${MAX_LIST_ENTRIES - 1}@x.co`);
+  });
+
+  it("scans lazily under the ceiling: many entries, empty or tiny, return quickly", () => {
+    const empties = `${",".repeat(250_000)}a@b.co`;
+    expect(empties.length).toBeLessThan(MAX_HEADER_CHARS);
+    expect(elapsed(() => expect(decodedAddressList(empties)).toBe("a@b.co"))).toBeLessThan(100);
+
+    const tiny = Array.from({ length: 35_000 }, () => "a@b.co").join(",");
+    expect(tiny.length).toBeLessThan(MAX_HEADER_CHARS);
+    let stored = "";
+    expect(elapsed(() => (stored = decodedAddressList(tiny)))).toBeLessThan(100);
+    expect(splitAddressList(stored)).toHaveLength(MAX_LIST_ENTRIES);
   });
 });

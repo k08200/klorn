@@ -40,6 +40,7 @@ import { persistGmailEmail } from "../judge/email-firewall.js";
 import { isDataWipeFenceError } from "../privacy/data-wipe-fence.js";
 import {
   klornMessageId,
+  oversizedHeaders,
   type ResendReceivedContent,
   resendToRawEmail,
   selfSentAddress,
@@ -255,6 +256,11 @@ async function storeCopies(
 ): Promise<InboundOutcome> {
   let raw: RawEmail;
   try {
+    // Not parsed (no sender, no list): the message is still stored, and seen.
+    const oversized = oversizedHeaders(content);
+    if (oversized.length > 0) {
+      ctx.reporter.report("header-oversize", { emailId: event.emailId, kind: oversized.join(",") });
+    }
     raw = resendToRawEmail(
       content,
       { email_id: event.emailId, created_at: event.receivedAt.toISOString() },

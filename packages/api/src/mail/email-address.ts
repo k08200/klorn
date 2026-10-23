@@ -127,7 +127,14 @@ export function formatMailbox(name: string, address: string): string {
  * unterminated quote or comment keeps the rest as one part. Linear: one pass.
  */
 export function splitAddressList(value: string): string[] {
-  const parts: string[] = [];
+  return [...addressListEntries(value)];
+}
+
+/**
+ * splitAddressList's entries, one at a time: a caller that stops early never
+ * scans, or holds, the rest of the value.
+ */
+export function* addressListEntries(value: string): Generator<string> {
   let start = 0;
   let inAngle = false;
   let i = 0;
@@ -140,13 +147,14 @@ export function splitAddressList(value: string): string[] {
     if (ch === "<") inAngle = true;
     else if (ch === ">") inAngle = false;
     else if (ch === "," && !inAngle) {
-      parts.push(value.slice(start, i));
+      const part = value.slice(start, i).trim();
+      if (part !== "") yield part;
       start = i + 1;
     }
     i++;
   }
-  parts.push(value.slice(start));
-  return parts.map((part) => part.trim()).filter((part) => part !== "");
+  const last = value.slice(start).trim();
+  if (last !== "") yield last;
 }
 
 /** The index just past the quoted-string or (nested) comment opening at `open`, or the end. */

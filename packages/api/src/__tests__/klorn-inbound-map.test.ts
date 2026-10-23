@@ -10,6 +10,7 @@ import { extractEmailAddress } from "../mail/email-address.js";
 import { MAX_STORED_CC_LENGTH, MAX_STORED_SUBJECT_LENGTH } from "../mail/imap-envelope.js";
 import {
   klornMessageId,
+  oversizedHeaders,
   type ResendReceivedContent,
   resendToRawEmail,
   whitelistAuthentication,
@@ -392,6 +393,27 @@ describe("resendToRawEmail: header encodings and hostile values", () => {
     expect(raw.from).toBe("김철수 <kim@example.com>");
     expect(raw.to).toBe("Jane Döe <jane@klorn.ai>");
     expect(raw.cc).toBe("한글 <han@example.com>");
+  });
+
+  it("reads no List-Unsubscribe from a header over the ceiling", () => {
+    const raw = resendToRawEmail(
+      content({ headers: { "list-unsubscribe": `<https://example.com/u>${" ".repeat(300_000)}` } }),
+      eventData(),
+    );
+    expect(raw.hasListUnsubscribe).toBe(false);
+    expect(raw.listUnsubscribeUrl).toBeNull();
+  });
+
+  it("names the address headers over the ceiling, from the headers or the arrays", () => {
+    expect(oversizedHeaders(content())).toEqual([]);
+    expect(
+      oversizedHeaders(
+        content({
+          headers: { from: "x".repeat(300_000), "list-unsubscribe": "y".repeat(300_000) },
+          to: Array.from({ length: 100_000 }, () => "a@b.co"),
+        }),
+      ),
+    ).toEqual(["from", "to", "list-unsubscribe"]);
   });
 
   it("strips NUL from the List-Unsubscribe targets", () => {

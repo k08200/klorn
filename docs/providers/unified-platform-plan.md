@@ -4831,7 +4831,11 @@ fixtures before E0; nothing is reachable until E0 is done and the flag is on.
     whole raw message with no abort. A notice carries no sender-controlled
     field, and carries `Auto-Submitted: auto-generated`,
     `X-Auto-Response-Suppress: All` and `Precedence: bulk` so the support
-    inbox's auto-replies cannot loop back. At most 20 an hour, keyed per
+    inbox's auto-replies cannot loop back (the installed SDK, 6.20.0, says only
+    "Custom headers to add to the email" and links to Resend's docs; no list
+    of reserved headers was available offline, so E0 checks that Resend
+    accepts these three; a refusal is a 4xx, reported as `resend-refused`).
+    At most 20 an hour, keyed per
     message and handle so Resend's retries reuse a token (past it: dropped,
     counted, reported); one at a time; no token is taken once the request's
     deadline has passed.
@@ -4845,7 +4849,9 @@ fixtures before E0; nothing is reachable until E0 is done and the flag is on.
     `mailbox-missing` (a live address without its `KLORN` row), `store-bug`
     (Prisma validation, P2011/P2012/P2019: retried), `store-refused` (SQLSTATE
     22xxx, 54000 and similar: dropped), `store-unknown`, `notice-limit`,
-    `unexpected` (the client threw), `lookup`, `give-up`.
+    `header-oversize` (an address or List-Unsubscribe header over 256 KiB:
+    not parsed, the message stored without it), `unexpected` (the client
+    threw), `lookup`, `give-up`.
   - Bounds: 256 KiB body; 10 s per Resend call and 12 s per request (then
     503); lookups, fetch and store in 4 slots with at most 32 waiting (a full
     queue answers 503 at once; queued work past the deadline never starts);
@@ -4884,6 +4890,11 @@ fixtures before E0; nothing is reachable until E0 is done and the flag is on.
       then to nothing), and To/Cc keep whole entries only within the column.
       A seeded property test holds that the stored mailbox is the raw one or
       none.
+    - The work is bounded as well (the GET response has no size bound): a
+      From, To, Cc or List-Unsubscribe header over 256 KiB is not parsed at
+      all (no sender, no list, reported as `header-oversize`), and a list is
+      scanned lazily, stopping at the 4,000-character budget or after 200
+      entries.
     - Content is fetched with `html_format: cid`; NUL is removed from stored
       text and the List-Unsubscribe targets.
     - Recipients are matched by the handle's shape and the database row, not

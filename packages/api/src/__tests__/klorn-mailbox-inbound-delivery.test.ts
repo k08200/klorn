@@ -17,6 +17,7 @@ import {
   agoIso,
   buildInboundApp,
   captureError,
+  content,
   createResend,
   db,
   deliver,
@@ -322,6 +323,32 @@ describe("Resend failures", () => {
     expect(reportsFor("give-up")[0][1].extra).toEqual({
       emailId: EMAIL_ID,
       kind: "resend-get-500",
+    });
+  });
+});
+
+describe("oversized address headers", () => {
+  it("store the message with no sender and no list, and report once an hour", async () => {
+    addUser("jane", "u-jane");
+    resendSpies.get.mockResolvedValue(
+      ok(
+        content({
+          headers: { from: `${"x".repeat(300_000)} <jane@klorn.ai>`, to: "y,".repeat(200_000) },
+        }),
+      ),
+    );
+    const app = await buildApp();
+    const res = await deliver(app, receivedEvent());
+    await deliver(app, receivedEvent({ email_id: "id-2" }));
+
+    expect(res.json()).toMatchObject({ stored: 1 });
+    const raw = persistGmailEmail.mock.calls[0][1];
+    expect(raw.from).toBe("");
+    expect(raw.to).toBe("");
+    expect(reportsFor("header-oversize")).toHaveLength(1);
+    expect(reportsFor("header-oversize")[0][1].extra).toEqual({
+      emailId: EMAIL_ID,
+      kind: "from,to",
     });
   });
 });

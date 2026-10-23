@@ -16,7 +16,7 @@
  */
 
 import type { EmailReceivedEvent, GetReceivingEmailResponseSuccess } from "resend";
-import { decodedAddressList, decodedMailbox } from "./decoded-address-header.js";
+import { decodedAddressList, decodedMailbox, MAX_HEADER_CHARS } from "./decoded-address-header.js";
 import { htmlToPlainText } from "./email-text.js";
 import type { GmailRawEmail } from "./gmail-fetch.js";
 import { capStored, envelopeSubject, MAX_STORED_SUBJECT_LENGTH } from "./imap-envelope.js";
@@ -114,8 +114,48 @@ function header(headers: unknown, name: string): string | null {
   return null;
 }
 
+/**
+ * An array of addresses joined with ", ", built only until it passes the header
+ * ceiling (a longer result is refused whole by the caller anyway).
+ */
 function joined(list: unknown): string {
-  return Array.isArray(list) ? list.filter((v) => typeof v === "string").join(", ") : "";
+  if (!Array.isArray(list)) return "";
+  let value = "";
+  for (const item of list) {
+    if (typeof item !== "string") continue;
+    value = value ? `${value}, ${item}` : item;
+    if (value.length > MAX_HEADER_CHARS) break;
+  }
+  return value;
+}
+
+/** A header's raw value, unless it is over the ceiling (then null: never parsed). */
+function bounded(value: string | null): string | null {
+  return value !== null && value.length > MAX_HEADER_CHARS ? null : value;
+}
+
+function rawFrom(content: ResendReceivedContent): string {
+  return header(content.headers, "from") ?? (typeof content.from === "string" ? content.from : "");
+}
+
+function rawList(content: ResendReceivedContent, name: "to" | "cc"): string {
+  return header(content.headers, name) ?? joined(content[name]);
+}
+
+/**
+ * The address headers this content holds over MAX_HEADER_CHARS, which the
+ * mapper does not parse: the caller reports them (`header-oversize`).
+ */
+export function oversizedHeaders(content: ResendReceivedContent): string[] {
+  const values: Array<[string, string | null]> = [
+    ["from", rawFrom(content)],
+    ["to", rawList(content, "to")],
+    ["cc", rawList(content, "cc")],
+    ["list-unsubscribe", header(content.headers, "list-unsubscribe")],
+  ];
+  return values
+    .filter(([, value]) => value !== null && value.length > MAX_HEADER_CHARS)
+    .map(([name]) => name);
 }
 
 /** `text`, else the HTML as plain text, capped at IMAP's limit. */
@@ -138,20 +178,17 @@ export function resendToRawEmail(
 ): GmailRawEmail & { authentication: MailAuthentication | null } {
   const headers = content.headers;
   const body = bodyOf(content);
-  const listUnsubscribeHeader = header(headers, "list-unsubscribe");
+  const listUnsubscribeHeader = bounded(header(headers, "list-unsubscribe"));
   const listUnsubscribe = parseListUnsubscribe(
     listUnsubscribeHeader,
-    header(headers, "list-unsubscribe-post"),
+    bounded(header(headers, "list-unsubscribe-post")),
   );
   return {
     gmailId: klornMessageId(event.email_id),
     threadId: null,
-    from: addressHeader(
-      header(headers, "from") ?? (typeof content.from === "string" ? content.from : ""),
-      "mailbox",
-    ).trim(),
-    to: addressHeader(header(headers, "to") ?? joined(content.to), "list"),
-    cc: addressHeader(header(headers, "cc") ?? joined(content.cc), "list"),
+    from: addressHeader(rawFrom(content), "mailbox").trim(),
+    to: addressHeader(rawList(content, "to"), "list"),
+    cc: addressHeader(rawList(content, "cc"), "list"),
     // Capped at the subject limit before envelopeSubject trims it.
     subject: envelopeSubject(storedText(content.subject, MAX_STORED_SUBJECT_LENGTH)),
     snippet: snippetFromBody(body) ?? "",
