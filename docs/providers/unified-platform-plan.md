@@ -3779,8 +3779,13 @@ D3 ships no user-facing copy beyond API error strings, which clients replace by
   3. The quota number (P3) in `KLORN_DRIVE_QUOTA_BYTES`. Required: without it
      every upload is refused (503 `quota-not-configured`).
   4. The UI step (web and Mac), coordinated with the design work, with its
-     vocabulary row.
+     vocabulary row. Done: web #1527 (upload, new folder, rename, move,
+     delete, usage on /files; merged 2026-10-23), Mac #1423 (D7 import;
+     reaches users with a desktop release, a founder action).
   5. `DRIVE_ENABLED` and `KLORN_DRIVE_ENABLED` on, founder account first (L23).
+     The mechanism is the rollout cohort (#1526): set
+     `ROLLOUT_COHORT_USER_IDS=<founder user id>` and both flags to `cohort`,
+     check the drive with that account, then set both to `true`.
 - Runbook: purges pending but not running (`scope: storage.purge.stalled`, tag
   `reason`, the count in `extra.pending`; or the `[STORAGE] N account purges
   are pending but cannot run` line). Reported once per process: at boot when
@@ -4064,7 +4069,8 @@ both.
   the LLM working in production (#1319: credits on the OpenRouter key, or the
   founder's decision to rely on BYOK only); FA-5 covering that file contents are
   sent to the model provider for summaries; the UI step with its vocabulary
-  row; then `DRIVE_SUMMARIES_ENABLED` on, founder account first (L23). Watch
+  row; then `DRIVE_SUMMARIES_ENABLED` on, founder account first (L23: `cohort`
+  with `ROLLOUT_COHORT_USER_IDS`, #1526, then `true`). Watch
   `LlmUsageLog` and `DriveSummaryUsage` the first days.
 - Rollback: revert the PR. The tables and the enum can stay; nothing reads them.
   With the flag off nothing writes them.
@@ -4382,7 +4388,8 @@ the scopes that sign-in, Gmail, Calendar and the inbox links request
        is added at this check, in `next.config.ts` and in the pin of
        `packages/web/scripts/check-csp.mjs`, before step 5.
   5. Env set, the web built with the switch, then `GOOGLE_DRIVE_ENABLED` on,
-     founder account first (L23).
+     founder account first (L23): `cohort` with `ROLLOUT_COHORT_USER_IDS`
+     (#1526), then `true`.
 - Risks and limits.
   - The browser holds a `drive.file` token (which can read and write the picked
     files) for up to an hour; an XSS could write to them. It is minted on click,
