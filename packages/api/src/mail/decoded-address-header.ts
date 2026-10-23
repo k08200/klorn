@@ -54,7 +54,6 @@ export const MAX_LIST_ENTRIES = 200;
 /** What would change how a mailbox or a list reads, unquoted: RFC 5322 specials but ".". */
 const LIST_SPECIALS = /["\\()<>,;:@[\]]/;
 /** CRLF (or LF) before whitespace: header folding. */
-// biome-ignore lint/suspicious/noControlCharactersInRegex: unfolding CRLF is the point
 const FOLDING = /\r?\n(?=[ \t])/g;
 // biome-ignore lint/suspicious/noControlCharactersInRegex: deliberate control-character filter
 const CONTROLS = /[\u0000-\u001f\u007f]+/g;
