@@ -607,6 +607,7 @@
 "today.clear.detail" = "El correo nuevo aparece aquí cuando Klorn lo clasifica.";
 "today.lane.a11y" = "%1$@, %2$d abiertos";
 "today.lane.more" = "%d más en Correo";
+"today.lane.push.older" = "Ver correo %@ anterior";
 "today.row.a11y" = "%1$@: %2$@";
 "today.open" = "Abrir";
 "today.calendar.empty" = "No hay nada en el calendario hoy.";

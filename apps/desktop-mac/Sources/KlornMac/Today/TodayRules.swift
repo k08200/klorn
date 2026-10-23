@@ -11,9 +11,12 @@ struct TodayLane: Equatable, Sendable {
 
     let tier: Tier
     let style: Style
-    /// The lane's open count from the server summary.
+    /// The lane's open count from the server summary; for PUSH inside
+    /// Today's window, the windowed rows' count (what the lane lists).
     let count: Int
     let rows: [FirewallItem]
+    /// PUSH only: open cards older than Today's window, left to Mail's lane.
+    var older: Int = 0
 
     /// Open items the lane holds beyond the rows listed here.
     var remaining: Int { max(count - rows.count, 0) }
@@ -48,6 +51,9 @@ enum TodayRules {
             (.info, .collapsed, 0),
         ]
         return plan.compactMap { tier, style, limit in
+            if tier == .push, let window = queue.todayPush {
+                return windowedPush(queue, window: window, limit: limit)
+            }
             let items = queue.items(for: tier)
             // The summary is the lane's true size; the fetched window can be
             // shorter, never trust it to be longer than what is listed.
@@ -55,6 +61,23 @@ enum TodayRules {
             guard count > 0 else { return nil }
             return TodayLane(tier: tier, style: style, count: count, rows: Array(items.prefix(limit)))
         }
+    }
+
+    /// PUSH inside Today's window (founder decision 2026-10-23): only the
+    /// cards the server named, and the count is those rows, so the lane header
+    /// and its rows agree. Older PUSH stays in Mail; the lane stays (calm, with
+    /// a link) while any older card exists, and leaves when there is none.
+    private static func windowedPush(
+        _ queue: FirewallResponse, window: TodayPushWindow, limit: Int
+    ) -> TodayLane? {
+        let items = queue.items(for: .push)
+        let inWindow = Set(window.ids)
+        let rows = items.filter { inWindow.contains($0.id) }
+        let laneTotal = max(queue.summary.count(for: .push), items.count)
+        let older = max(laneTotal - rows.count, 0)
+        guard !rows.isEmpty || older > 0 else { return nil }
+        return TodayLane(
+            tier: .push, style: .rows, count: rows.count, rows: Array(rows.prefix(limit)), older: older)
     }
 
     /// The assistant strip's one line: the structured headline, else the

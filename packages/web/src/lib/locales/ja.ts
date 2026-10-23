@@ -234,6 +234,7 @@ const ja: Record<string, string> = {
   "today.connect.action": "アカウントを接続",
   "today.lane.push.hint": "今すぐ確認",
   "today.lane.push.empty": "今すぐ確認が必要なメールはありません。",
+  "today.lane.push.older": "以前の{lane}メールを見る",
   "today.lane.meeting.hint": "日程調整",
   "today.lane.meeting.empty": "日程調整のメールはありません。",
   "today.lane.queue.hint": "今日読んでおきたいメール",

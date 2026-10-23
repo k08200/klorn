@@ -17,7 +17,10 @@ import {
   findConflicts,
   laneBlock,
   nowMarkerIndex,
+  olderOutsideWindow,
   orderEvents,
+  todayLaneCount,
+  todayLaneQuery,
 } from "../../../web/src/app/today/model";
 import { connectedAccounts } from "../../../web/src/lib/connected-accounts";
 import {
@@ -407,5 +410,35 @@ describe("the home hint and the landing mark", () => {
     expect(() => forgetHome()).not.toThrow();
     expect(landingHome()).toBe(LEGACY_HOME);
     expect(takeLegacyLanding()).toBe(false);
+  });
+});
+
+describe("Today PUSH window (founder decision 2026-10-23)", () => {
+  it("only the PUSH block asks for Today's window; every other lane reads as Mail does", () => {
+    expect(todayLaneQuery("PUSH")).toBe("&threads=1&window=today");
+    expect(todayLaneQuery("MEETING")).toBe("&threads=1");
+    expect(todayLaneQuery("QUEUE")).toBe("&threads=1");
+  });
+
+  it("the header's Push count is the block's windowed thread total, not the whole lane", () => {
+    // 80 open PUSH threads in the lane, 2 received in the window.
+    expect(todayLaneCount("PUSH", 80, 2)).toBe(2);
+    expect(todayLaneCount("PUSH", 80, 0)).toBe(0);
+    // Unknown until the windowed read lands — never the whole-lane figure.
+    expect(todayLaneCount("PUSH", 80, null)).toBeNull();
+  });
+
+  it("other lanes keep the lane-counts figure, falling back to the list total", () => {
+    expect(todayLaneCount("MEETING", 7, 3)).toBe(7);
+    expect(todayLaneCount("QUEUE", null, 41)).toBe(41);
+    expect(todayLaneCount("INFO", null, null)).toBeNull();
+  });
+
+  it("counts the older PUSH threads left for Mail", () => {
+    expect(olderOutsideWindow(80, 2)).toBe(78);
+    expect(olderOutsideWindow(2, 2)).toBe(0);
+    expect(olderOutsideWindow(null, 2)).toBe(0);
+    expect(olderOutsideWindow(80, null)).toBe(0);
+    expect(olderOutsideWindow(1, 3)).toBe(0);
   });
 });

@@ -213,6 +213,12 @@ export interface LanePageQuery {
   search?: string;
   /** Opt-in (`GET /api/email?hideHandled=1`): leave out DISMISSED / still-SNOOZED mail. */
   hideHandled?: boolean;
+  /**
+   * Opt-in (`GET /api/email?window=today`, Today's PUSH block only): mail
+   * received at or after this time. EmailMessage.receivedAt is required, so
+   * no fallback is needed here. Absent = no time bound (every Mail lane view).
+   */
+  receivedSince?: Date;
   skip: number;
   take: number;
 }
@@ -302,7 +308,7 @@ export async function pageThreadsInLane(
 /** What a list view is made of: the FROM / WHERE both the page and the reader's neighbours read. */
 type LaneViewQuery = Pick<
   LanePageQuery,
-  "userId" | "scope" | "filter" | "category" | "search" | "hideHandled"
+  "userId" | "scope" | "filter" | "category" | "search" | "hideHandled" | "receivedSince"
 > & {
   /** One live lane, or ALL for every lane (no join at all). */
   lane: LaneFilter;
@@ -319,7 +325,8 @@ function laneFromSql(query: LaneViewQuery): Prisma.Sql {
       ${(query.filter && LANE_PAGE_FILTERS.get(query.filter)) || Prisma.empty}
       ${query.category ? Prisma.sql`AND e."category" = ${query.category}` : Prisma.empty}
       ${searchSql(query.search)}
-      ${query.hideHandled ? HANDLED_EXCLUSION : Prisma.empty}`;
+      ${query.hideHandled ? HANDLED_EXCLUSION : Prisma.empty}
+      ${query.receivedSince ? Prisma.sql`AND e."receivedAt" >= ${query.receivedSince}` : Prisma.empty}`;
 }
 
 export interface LaneNeighbourQuery extends LaneViewQuery {

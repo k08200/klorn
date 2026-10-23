@@ -240,6 +240,7 @@ const de: Record<string, string> = {
   "today.connect.action": "Konto verbinden",
   "today.lane.push.hint": "Braucht dich jetzt",
   "today.lane.push.empty": "Gerade braucht dich nichts.",
+  "today.lane.push.older": "Ältere {lane}-Mails ansehen",
   "today.lane.meeting.hint": "Terminabstimmung",
   "today.lane.meeting.empty": "Keine Mails zur Terminabstimmung.",
   "today.lane.queue.hint": "Heute lesenswert",

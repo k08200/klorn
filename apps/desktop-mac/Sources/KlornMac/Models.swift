@@ -309,9 +309,25 @@ struct FirewallSummary: Codable, Sendable, Hashable {
 }
 
 /// GET /api/inbox/firewall — open AttentionItems grouped by tier.
+/// Today's "Needs you now" window (founder decision, LOCKED 2026-10-23):
+/// which PUSH cards Today lists — mail received in the last `windowHours`,
+/// decided on the server (packages/api/src/judge/today-push-window.ts). Mail's
+/// lanes are not narrowed by it. Absent from older servers.
+struct TodayPushWindow: Codable, Sendable, Equatable {
+    let windowHours: Int
+    /// ISO cutoff: the earliest received time inside the window.
+    let since: String
+    let ids: [String]
+
+    func removing(_ removed: Set<String>) -> TodayPushWindow {
+        TodayPushWindow(windowHours: windowHours, since: since, ids: ids.filter { !removed.contains($0) })
+    }
+}
+
 struct FirewallResponse: Codable, Sendable {
     let tiers: [String: [FirewallItem]]
     let summary: FirewallSummary
+    var todayPush: TodayPushWindow? = nil
 
     func items(for tier: Tier) -> [FirewallItem] {
         tiers[tier.rawValue] ?? []
@@ -368,7 +384,10 @@ struct FirewallResponse: Codable, Sendable {
             meeting: shifted(.meeting, self.summary.meeting ?? 0),
             info: shifted(.info, self.summary.info ?? 0),
             total: self.summary.total)
-        return FirewallResponse(tiers: newTiers, summary: summary)
+        // A card moved out of PUSH leaves Today's window; one moved in waits
+        // for the next poll, where the server decides whether it belongs.
+        return FirewallResponse(
+            tiers: newTiers, summary: summary, todayPush: todayPush?.removing([id]))
     }
 
     /// A copy with the given item ids removed from every tier and the summary
@@ -398,12 +417,13 @@ struct FirewallResponse: Codable, Sendable {
             silent: newSilent, queue: newQueue, push: newPush,
             meeting: newMeeting, info: newInfo,
             total: max(0, self.summary.total - removedTotal))
-        return FirewallResponse(tiers: newTiers, summary: summary)
+        return FirewallResponse(
+            tiers: newTiers, summary: summary, todayPush: todayPush?.removing(ids))
     }
 }
 
 extension FirewallResponse {
-    private enum Keys: String, CodingKey { case tiers, summary }
+    private enum Keys: String, CodingKey { case tiers, summary, todayPush }
     private struct LegacyAutoCount: Decodable {
         let count: Int?
         enum CodingKeys: String, CodingKey { case count = "AUTO" }
@@ -421,15 +441,18 @@ extension FirewallResponse {
         let c = try decoder.container(keyedBy: Keys.self)
         var tiers = try c.decode([String: [FirewallItem]].self, forKey: .tiers)
         let summary = try c.decode(FirewallSummary.self, forKey: .summary)
+        // A malformed window is no window (every PUSH card shows), never a failed queue.
+        let todayPush = try? c.decodeIfPresent(TodayPushWindow.self, forKey: .todayPush)
         guard let legacy = tiers.removeValue(forKey: "AUTO"), !legacy.isEmpty else {
-            self.init(tiers: tiers, summary: summary)
+            self.init(tiers: tiers, summary: summary, todayPush: todayPush)
             return
         }
         tiers[Tier.queue.rawValue] = (tiers[Tier.queue.rawValue] ?? []) + legacy
         let legacyCount = try c.decode(LegacyAutoCount.self, forKey: .summary).count ?? legacy.count
         self.init(tiers: tiers, summary: FirewallSummary(
             silent: summary.silent, queue: summary.queue + legacyCount, push: summary.push,
-            meeting: summary.meeting, info: summary.info, total: summary.total))
+            meeting: summary.meeting, info: summary.info, total: summary.total),
+            todayPush: todayPush)
     }
 }
 

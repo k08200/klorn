@@ -607,6 +607,7 @@
 "today.clear.detail" = "新邮件经 Klorn 分类后会显示在这里。";
 "today.lane.a11y" = "%1$@，%2$d 封未处理";
 "today.lane.more" = "在邮件中再看 %d 封";
+"today.lane.push.older" = "查看更早的%@邮件";
 "today.row.a11y" = "%1$@: %2$@";
 "today.open" = "打开";
 "today.calendar.empty" = "今天没有日程。";

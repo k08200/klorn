@@ -3,7 +3,8 @@
 /**
  * Today, the lanes column — mail by lane across every connected account
  * (productization plan §1, P6; design detail pass W1/W2). PUSH and MEETING are
- * expanded, QUEUE is a count plus its top rows, INFO is one collapsed count
+ * expanded (PUSH only inside Today's window — older PUSH is a link to Mail),
+ * QUEUE is a count plus its top rows, INFO is one collapsed count
  * row, and SILENT is never shown. One row per thread: the newest message of
  * each thread, a count chip when the thread holds more, and lane counts that
  * count threads. Inside a lane card a row carries no LaneChip (the card is the
@@ -29,7 +30,13 @@ import {
   TodayBlock,
 } from "./block";
 import { MAIL_HREF, preselectMailLane } from "./mail-link";
-import { EXPANDED_LANE_ROWS, laneBlock, QUEUE_LANE_ROWS } from "./model";
+import {
+  EXPANDED_LANE_ROWS,
+  laneBlock,
+  olderOutsideWindow,
+  QUEUE_LANE_ROWS,
+  todayLaneCount,
+} from "./model";
 import { useLaneCounts, useLaneMail } from "./use-today-data";
 
 export interface TimeContext {
@@ -94,7 +101,13 @@ function LaneBlock({ lane, accounts, time }: LaneBlockProps) {
   // The list's total is threads (the page is grouped by thread).
   const { shown, more } = laneBlock(mail.emails, mail.total, LANE_ROWS[lane]);
   const loaded = !mail.loading && !mail.failed;
-  const threads = laneThreads(counts.counts, lane) ?? (loaded ? mail.total : null);
+  const laneTotal = laneThreads(counts.counts, lane);
+  // PUSH counts its windowed threads, the same figure the header strip shows.
+  const threads = todayLaneCount(lane, laneTotal, loaded ? mail.total : null);
+  // PUSH older than Today's window stays in Mail; offer it once the window's
+  // own rows (and their "N more") are exhausted.
+  const older =
+    lane === "PUSH" && loaded && more === 0 ? olderOutsideWindow(laneTotal, mail.total) : 0;
   return (
     <TodayBlock
       headingId={`today-lane-${lane}`}
@@ -126,6 +139,11 @@ function LaneBlock({ lane, accounts, time }: LaneBlockProps) {
       {loaded && more > 0 && (
         <LaneMoreLink href={MAIL_HREF} onClick={() => preselectMailLane(lane)}>
           {t("today.mail.moreInLane", { count: String(more), lane: laneName(lane) })}
+        </LaneMoreLink>
+      )}
+      {older > 0 && (
+        <LaneMoreLink href={MAIL_HREF} onClick={() => preselectMailLane(lane)}>
+          {t("today.lane.push.older", { lane: laneName(lane) })}
         </LaneMoreLink>
       )}
     </TodayBlock>

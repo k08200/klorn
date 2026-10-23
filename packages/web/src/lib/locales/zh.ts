@@ -216,6 +216,7 @@ const zh: Record<string, string> = {
   "today.connect.action": "连接账户",
   "today.lane.push.hint": "现在需要你处理",
   "today.lane.push.empty": "现在没有需要你处理的邮件。",
+  "today.lane.push.older": "查看更早的{lane}邮件",
   "today.lane.meeting.hint": "日程安排",
   "today.lane.meeting.empty": "没有日程安排邮件。",
   "today.lane.queue.hint": "今天值得一读",

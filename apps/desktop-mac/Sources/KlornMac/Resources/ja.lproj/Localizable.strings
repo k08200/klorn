@@ -607,6 +607,7 @@
 "today.clear.detail" = "新しいメールは Klorn が仕分け次第ここに表示されます。";
 "today.lane.a11y" = "%1$@、未処理 %2$d件";
 "today.lane.more" = "メールであと %d件";
+"today.lane.push.older" = "以前の%@メールを見る";
 "today.row.a11y" = "%1$@: %2$@";
 "today.open" = "開く";
 "today.calendar.empty" = "今日の予定はありません。";

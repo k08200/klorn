@@ -19,7 +19,8 @@ import { useT } from "../../lib/i18n";
 import { sourceGlyph } from "../../lib/source-provider";
 import type { ConnectedAccountsState } from "../../lib/use-connected-accounts";
 import { laneThreads, type TimeContext } from "./mail-column";
-import { useLaneCounts } from "./use-today-data";
+import { todayLaneCount } from "./model";
+import { useLaneCounts, useLaneMail } from "./use-today-data";
 
 export const ACCOUNTS_HREF = "/settings/accounts";
 
@@ -79,27 +80,37 @@ const STRIP_LANES: readonly LiveTier[] = ["PUSH", "MEETING", "QUEUE", "INFO"]; /
 
 /**
  * The day in one line (TodayScreen.dc): threads per lane, then how many went
- * to Silent. Real counts from the lane-counts read Today already shares with
+ * to Silent. Push is the PUSH block's windowed count (Today's window), left
+ * out while that read is pending or failed rather than showing the whole lane. Real counts from the lane-counts read Today already shares with
  * Mail; nothing shows until they arrive, and a failed read shows nothing.
  */
 function DayStrip() {
   const { t } = useT();
   const laneName = useLaneName();
   const { counts } = useLaneCounts(true);
+  // The PUSH block's own windowed read (same cache entry), so the strip's
+  // Push figure is exactly what the block lists.
+  const push = useLaneMail("PUSH", true);
   if (!counts) return null;
+  const pushTotal = push.loading || push.failed ? null : push.total;
   const quiet = laneThreads(counts, "SILENT") ?? 0;
+  const shown = STRIP_LANES.flatMap((lane) => {
+    const count = todayLaneCount(
+      lane,
+      laneThreads(counts, lane),
+      lane === "PUSH" ? pushTotal : null,
+    );
+    return count === null ? [] : [{ lane, count }];
+  });
   return (
     <ul
       aria-label={t("today.strip.label")}
       className="flex flex-wrap items-center gap-x-3.5 gap-y-1 text-caption tabular-nums text-ink-muted"
     >
-      {STRIP_LANES.map((lane) => (
+      {shown.map(({ lane, count }) => (
         <li key={lane} className="flex items-center gap-1.5">
           <span aria-hidden="true" className={`size-1.5 rounded-full ${LANE_DOT_CLASS[lane]}`} />
-          {t("today.strip.lane", {
-            count: String(laneThreads(counts, lane) ?? 0),
-            lane: laneName(lane),
-          })}
+          {t("today.strip.lane", { count: String(count), lane: laneName(lane) })}
         </li>
       ))}
       {quiet > 0 && <li>· {t("today.strip.quiet", { count: String(quiet) })}</li>}

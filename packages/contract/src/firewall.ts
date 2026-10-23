@@ -154,9 +154,24 @@ export interface FirewallItem {
   agentSet?: true;
 }
 
+/**
+ * Today's "Needs you now" window (founder decision, 2026-10-23): the PUSH
+ * cards Today lists — mail received in the last `windowHours`, an item with no
+ * mail by its creation time. Mail's lanes are not narrowed by it.
+ */
+export interface TodayPushWindow {
+  windowHours: number;
+  /** ISO cutoff: the earliest received time inside the window. */
+  since: string;
+  /** Ids of the PUSH cards in `tiers.PUSH` inside the window, in lane order. */
+  ids: string[];
+}
+
 export interface FirewallResponse {
   tiers: Record<Tier, FirewallItem[]>;
   summary: Record<Tier, number> & { total: number };
+  /** Absent from servers older than the window. */
+  todayPush?: TodayPushWindow;
 }
 
 /**

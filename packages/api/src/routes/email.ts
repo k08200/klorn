@@ -41,6 +41,7 @@ import {
 } from "../judge/email-lanes.js";
 import { resolveTierReason } from "../judge/tier-reason-strings.js";
 import { isTier } from "../judge/tiers.js";
+import { TODAY_WINDOW, todayPushCutoff } from "../judge/today-push-window.js";
 import { getCachedInteractionNode } from "../learning/interaction-graph.js";
 import {
   getTrustScore,
@@ -646,6 +647,9 @@ const listEmailsQuerySchema = {
     // Opt-in: one row per thread (its newest message in the view). Honoured
     // only together with a lane (`tier`, ALL included); ignored otherwise.
     threads: { type: "string", enum: ["0", "1", "false", "true"] },
+    // Opt-in, lane views only: Today's PUSH block window (today-push-window.ts).
+    // Only Today sends it; Mail's lane lists never do.
+    window: { type: "string", enum: [TODAY_WINDOW] },
   },
 } as const;
 
@@ -726,7 +730,7 @@ export async function emailRoutes(app: FastifyInstance) {
       preHandler: laneThreadsUserLimit(app),
     },
     async (request, reply): Promise<EmailListResponse> => {
-      const { filter, search, category, page, inbox, tier, hideHandled, threads } =
+      const { filter, search, category, page, inbox, tier, hideHandled, threads, window } =
         request.query as {
           filter?: string;
           search?: string;
@@ -748,6 +752,10 @@ export async function emailRoutes(app: FastifyInstance) {
           // thread's newest message in the view, with `threadCount` — and `total`
           // counts threads. Without a lane it is ignored (the list as before).
           threads?: string;
+          // OPT-IN ("today"), lane views only: mail received inside Today's
+          // PUSH window. Narrows rows and `total` alike, so Today's header
+          // count and block agree. Absent = every lane view as before.
+          window?: string;
         };
       const uid = getUserId(request);
       const hideHandledRows = hideHandled === "1" || hideHandled === "true";
@@ -758,6 +766,14 @@ export async function emailRoutes(app: FastifyInstance) {
           .code(400)
           .send({ error: `tier must be one of ${LANE_FILTERS.join(", ")}.` } as never);
       }
+      // The window narrows a lane page and nothing else: refused without one,
+      // never silently dropped onto the plain list.
+      if (window !== undefined && !lane) {
+        return reply
+          .code(400)
+          .send({ error: "window can only narrow a lane (tier) view." } as never);
+      }
+      const receivedSince = window === TODAY_WINDOW ? todayPushCutoff(new Date()) : undefined;
       const laneOnly = lane && lane !== "ALL" ? lane : null;
       const groupByThread = Boolean(lane) && (threads === "1" || threads === "true");
       // Grouping pages through the SQL lane view (ALL included), so it takes the
@@ -877,6 +893,7 @@ export async function emailRoutes(app: FastifyInstance) {
           category,
           search,
           hideHandled: hideHandledRows,
+          receivedSince,
           skip: (pageNum - 1) * pageSize,
           take: pageSize,
         });
@@ -899,6 +916,7 @@ export async function emailRoutes(app: FastifyInstance) {
           category,
           search,
           hideHandled: hideHandledRows,
+          receivedSince,
           skip: (pageNum - 1) * pageSize,
           take: pageSize,
         });

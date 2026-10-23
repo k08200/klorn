@@ -5,7 +5,8 @@
  * through its own query, so one failing block never blanks the page, and all
  * of them start together on mount — there is no waterfall.
  *
- * Requests on load: one list per lane block (PUSH, MEETING, QUEUE), one
+ * Requests on load: one list per lane block (PUSH — inside Today's window —
+ * MEETING, QUEUE), one
  * grouped count for the INFO row, one calendar range, one briefing status and
  * one pending-approvals read. The connected accounts and the approvals count
  * share their cache entries with Mail and the sidebar, so they are not asked
@@ -24,7 +25,7 @@ import { apiFetch } from "../../lib/api";
 import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
 import { ALL_ACCOUNTS, listRequestPath } from "../email/_v2/model";
-import { type CalendarEventWire, dayRangeInZone } from "./model";
+import { type CalendarEventWire, dayRangeInZone, todayLaneQuery } from "./model";
 
 const MAIL_STALE_MS = 30_000;
 /** Safety net behind the WebSocket: refetch while the tab is visible. */
@@ -58,8 +59,11 @@ export function useLaneMail(lane: LiveTier, enabled: boolean) {
     queryFn: async () => {
       const view = { lane, account: ALL_ACCOUNTS, filter: "none" as const, search: "" };
       try {
-        // One row per thread (W2): `total` then counts threads, like the lane counts.
-        return await apiFetch<EmailListResponse>(`${listRequestPath(view, 1)}&threads=1`);
+        // One row per thread (W2): `total` then counts threads, like the lane
+        // counts. PUSH also asks for Today's window (model.ts todayLaneQuery).
+        return await apiFetch<EmailListResponse>(
+          `${listRequestPath(view, 1)}${todayLaneQuery(lane)}`,
+        );
       } catch (err) {
         captureClientError(err, { scope: "today.lane", lane });
         throw err;

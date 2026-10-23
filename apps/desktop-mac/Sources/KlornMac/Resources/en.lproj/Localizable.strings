@@ -607,6 +607,7 @@
 "today.clear.detail" = "New mail shows up here as Klorn sorts it.";
 "today.lane.a11y" = "%1$@, %2$d open";
 "today.lane.more" = "%d more in Mail";
+"today.lane.push.older" = "See older %@ mail";
 "today.row.a11y" = "%1$@: %2$@";
 "today.open" = "Open";
 "today.calendar.empty" = "Nothing on the calendar today.";

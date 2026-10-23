@@ -228,6 +228,7 @@ const en: Record<string, string> = {
   "today.connect.action": "Connect an account",
   "today.lane.push.hint": "Needs you now",
   "today.lane.push.empty": "Nothing needs you right now.",
+  "today.lane.push.older": "See older {lane} mail",
   "today.lane.meeting.hint": "Scheduling",
   "today.lane.meeting.empty": "No scheduling mail.",
   "today.lane.queue.hint": "Worth reading today",

@@ -237,6 +237,7 @@ const fr: Record<string, string> = {
   "today.connect.action": "Connecter un compte",
   "today.lane.push.hint": "À traiter maintenant",
   "today.lane.push.empty": "Rien ne demande votre attention pour le moment.",
+  "today.lane.push.older": "Voir les anciens courriers {lane}",
   "today.lane.meeting.hint": "Planification",
   "today.lane.meeting.empty": "Aucun courrier de planification.",
   "today.lane.queue.hint": "À lire aujourd'hui",
