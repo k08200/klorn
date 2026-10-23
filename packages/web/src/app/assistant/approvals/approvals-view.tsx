@@ -13,9 +13,9 @@ import { useMemo } from "react";
 import Button from "../../../components/ui/button";
 import EmptyState from "../../../components/ui/empty-state";
 import { Skeleton, SkeletonGroup } from "../../../components/ui/skeleton";
-import { useAuth } from "../../../lib/auth";
 import { useT } from "../../../lib/i18n";
 import { useScreener } from "../../../lib/use-screener";
+import { useDisplayTimeZone } from "../../../lib/use-time-zone";
 import { UndoBar } from "../../email/_v2/undo-bar";
 import { BlockError } from "../../today/block";
 import { HubHeader, RefreshGlyph } from "../hub-frame";
@@ -27,7 +27,6 @@ import { CommitmentsSection, ScreenerSection } from "./side-sections";
 import { useApprovalDecisions } from "./use-approval-decisions";
 import { useApprovals, useOpenCommitments } from "./use-approvals";
 
-const DEFAULT_TIME_ZONE = "Asia/Seoul";
 const MAIL_HREF = "/email";
 
 export function ApprovalsView() {
@@ -120,7 +119,7 @@ interface ApprovalListProps {
 function ApprovalList({ models, approving, decisions }: ApprovalListProps) {
   const { t } = useT();
   const router = useRouter();
-  const timeZone = useAuth().user?.timezone ?? DEFAULT_TIME_ZONE;
+  const timeZone = useDisplayTimeZone();
   if (models.length === 0) {
     return (
       <EmptyState

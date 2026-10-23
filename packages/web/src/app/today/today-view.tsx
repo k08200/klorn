@@ -21,6 +21,7 @@ import { useAuth } from "../../lib/auth";
 import { filesEnabled } from "../../lib/home";
 import { useT } from "../../lib/i18n";
 import { useConnectedAccounts } from "../../lib/use-connected-accounts";
+import { useDisplayTimeZone } from "../../lib/use-time-zone";
 import { AssistantColumn } from "./assistant-column";
 import { CalendarColumn } from "./calendar-column";
 import { RecentFilesBlock } from "./files-block";
@@ -28,7 +29,6 @@ import { MailColumn, type TimeContext } from "./mail-column";
 import { ACCOUNTS_HREF, TodayHeader } from "./today-header";
 import { useRefreshOnNewMail } from "./use-today-data";
 
-const DEFAULT_TIME_ZONE = "Asia/Seoul";
 /** How often the clock moves: the "now" marker and the row times follow it. */
 const CLOCK_TICK_MS = 60_000;
 
@@ -46,7 +46,8 @@ export function TodayView() {
   const { user, hasMailSource } = useAuth();
   const router = useRouter();
   const now = useNow();
-  const time: TimeContext = { now, locale, timeZone: user?.timezone ?? DEFAULT_TIME_ZONE };
+  const timeZone = useDisplayTimeZone();
+  const time: TimeContext = { now, locale, timeZone };
   // Server truth, not the length of a list: a source the account list does not
   // show yet is still a source.
   const noSource = hasMailSource === false;

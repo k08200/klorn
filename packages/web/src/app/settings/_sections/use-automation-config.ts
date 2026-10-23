@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../../../lib/api";
 import { captureClientError } from "../../../lib/sentry";
+import type { TimeZoneMode } from "../../../lib/time-zone";
 import type { ApiAgentModeOption } from "../agent-mode-helpers";
 
 export interface AutomationConfig {
@@ -26,6 +27,8 @@ export interface AutomationConfig {
   notifyDailyBriefing?: boolean;
   notifyEmailCandidate?: boolean;
   timezone?: string;
+  /** "MANUAL" = pinned in Settings; "AUTO" (or absent) = follow the device. */
+  timezoneMode?: TimeZoneMode;
   quietHoursStart?: string | null;
   quietHoursEnd?: string | null;
   proactiveActions?: boolean;

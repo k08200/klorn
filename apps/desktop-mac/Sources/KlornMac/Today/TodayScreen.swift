@@ -174,8 +174,9 @@ private struct TodayLaneGroup: View {
     }
 }
 
-/// A Today mail row under the one-badge rule: who, what, when. The lane is
-/// the group it sits in; the reply state and the reason are in the reader.
+/// A Today mail row under the one-badge rule: who, what, when, and why (the
+/// lane reason, or the snippet). The lane is the group it sits in; the reply
+/// state is in the reader.
 private struct TodayMailRow: View {
     @Environment(AppModel.self) private var model
     let item: FirewallItem
@@ -191,7 +192,7 @@ private struct TodayMailRow: View {
         Button(action: open) {
             WindowRowBody(content: content)
                 .padding(.horizontal, Theme.s3).padding(.vertical, Theme.s2)
-                .frame(maxWidth: .infinity, minHeight: Theme.rowHeight, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: Theme.mailRowHeight, alignment: .leading)
                 .background(hovering ? Theme.surfaceHover : .clear)
                 .contentShape(Rectangle())
         }

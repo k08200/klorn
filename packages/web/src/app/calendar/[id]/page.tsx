@@ -5,10 +5,10 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../../components/auth-guard";
 import { apiFetch } from "../../../lib/api";
-import { useAuth } from "../../../lib/auth";
 import { useT } from "../../../lib/i18n";
 import { safeMeetingHref } from "../../../lib/meeting-link";
 import { captureClientError } from "../../../lib/sentry";
+import { useDisplayTimeZone } from "../../../lib/use-time-zone";
 
 type Readiness = "ready" | "watch" | "needs_review";
 
@@ -216,8 +216,7 @@ function MeetingLinkLine({ link }: { link: string }) {
 function CalendarEventDetail({ id }: { id: string }) {
   const router = useRouter();
   const { t } = useT();
-  const { user } = useAuth();
-  const userTimezone = user?.timezone ?? "Asia/Seoul";
+  const userTimezone = useDisplayTimeZone();
   const [event, setEvent] = useState<CalendarEvent | null>(null);
   const [pack, setPack] = useState<PrepPack | null>(null);
   const [loading, setLoading] = useState(true);

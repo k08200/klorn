@@ -21,9 +21,9 @@ import MailHtmlBody from "../../../../components/mail-html-body";
 import Button from "../../../../components/ui/button";
 import EmptyState from "../../../../components/ui/empty-state";
 import { Skeleton, SkeletonGroup } from "../../../../components/ui/skeleton";
-import { useAuth } from "../../../../lib/auth";
 import { useT } from "../../../../lib/i18n";
 import { linkifyText } from "../../../../lib/linkify";
+import { useDisplayTimeZone } from "../../../../lib/use-time-zone";
 import { BackIcon, ChevronDownIcon, ChevronUpIcon } from "../../_v2/icons";
 import type { ReminderKey } from "../../_v2/reminders";
 import { UndoBar } from "../../_v2/undo-bar";
@@ -34,8 +34,6 @@ import { type ReaderFacts, ReaderHeader } from "./reader-header";
 import { SenderLabelMenu } from "./sender-label-menu";
 import type { ReaderContext } from "./use-reader-context";
 import { useSenderLabelCorrection } from "./use-sender-label";
-
-const DEFAULT_TIME_ZONE = "Asia/Seoul";
 
 export interface ReaderSlots {
   reply: ReactNode;
@@ -193,7 +191,7 @@ function Notices({ laneMove, undo, busy, keyboardTriage }: ReaderV2Props) {
 export function ReaderV2(props: ReaderV2Props) {
   const { emailId, email, reader, slots, laneMove } = props;
   const { t, locale } = useT();
-  const { user } = useAuth();
+  const timeZone = useDisplayTimeZone();
   // While the next mail loads, `email` is still the previous one: never dress
   // it in the new mail's lane and neighbours.
   const current = email && (email.id === emailId || email.gmailId === emailId) ? email : null;
@@ -263,7 +261,7 @@ export function ReaderV2(props: ReaderV2Props) {
             account={reader.account}
             facts={props.facts}
             locale={locale}
-            timeZone={user?.timezone || DEFAULT_TIME_ZONE}
+            timeZone={timeZone}
             senderLabel={
               senderLabel.label && (
                 <SenderLabelMenu label={senderLabel.label} onCorrect={senderLabel.correct} />

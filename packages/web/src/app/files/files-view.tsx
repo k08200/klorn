@@ -11,8 +11,8 @@ import { PAGE_SHELL } from "../../components/page-shell";
 import Button from "../../components/ui/button";
 import EmptyState from "../../components/ui/empty-state";
 import { Skeleton, SkeletonGroup } from "../../components/ui/skeleton";
-import { useAuth } from "../../lib/auth";
 import { useT } from "../../lib/i18n";
+import { useDisplayTimeZone } from "../../lib/use-time-zone";
 import { BlockError } from "../today/block";
 import { FileGlyph, FileRow } from "./file-row";
 import { GoogleDriveConnect } from "./google-drive-connect";
@@ -21,12 +21,10 @@ import type { FolderCrumb } from "./open";
 import { useDebounced, useFilesList } from "./use-files";
 import { useFolderTrail } from "./use-folder-trail";
 
-const DEFAULT_TIME_ZONE = "Asia/Seoul";
 const SKELETON_KEYS = ["a", "b", "c", "d", "e", "f"];
 
 export function FilesView() {
   const { t } = useT();
-  const { user } = useAuth();
   const folders = useFolderTrail();
   // The row or crumb that moved the list is gone; focus lands on the list's name.
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -35,7 +33,7 @@ export function FilesView() {
   const [search, setSearch] = useState("");
   const q = useDebounced(search);
   const list = useFilesList(q, folder?.externalId ?? null, folders.ready);
-  const timeZone = user?.timezone ?? DEFAULT_TIME_ZONE;
+  const timeZone = useDisplayTimeZone();
   const searching = q.trim().length > 0;
 
   return (
