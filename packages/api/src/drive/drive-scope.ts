@@ -104,7 +104,9 @@ export function visibleDriveProviders(
 
 /** A Prisma where-fragment that matches only the rows of the visible providers. */
 export function driveSourceScope(
-  providerEnabled: DriveProviderEnabledMap = DRIVE_PROVIDER_ENABLED,
+  // Required: a reader passes the user's own map (driveProvidersFor), so a
+  // cohort-only source (L23) never falls back to the global switch.
+  providerEnabled: DriveProviderEnabledMap,
 ): Prisma.DriveFileWhereInput {
   return { provider: { in: visibleDriveProviders(providerEnabled) } };
 }
@@ -112,7 +114,8 @@ export function driveSourceScope(
 /** False for a row the scope above hides, for a row fetched by id. */
 export function isDriveRowVisible(
   row: { provider: string },
-  providerEnabled: DriveProviderEnabledMap = DRIVE_PROVIDER_ENABLED,
+  // Required, as for driveSourceScope.
+  providerEnabled: DriveProviderEnabledMap,
 ): boolean {
   return (visibleDriveProviders(providerEnabled) as string[]).includes(row.provider);
 }

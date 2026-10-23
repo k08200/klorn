@@ -237,7 +237,8 @@ export async function dueDriveRefreshAccounts(
   provider: ConnectedDriveProvider,
   cutoff: Date,
   take: number,
-  restriction: CohortRestriction = { kind: "all" },
+  // Required: every caller says which users it may reach (config.ts).
+  restriction: CohortRestriction,
 ): Promise<DueDriveAccount[]> {
   // A cohort (L23) narrows the query itself: accounts outside it are never
   // picked, so their tokens stay unused and they take no place in a sweep.

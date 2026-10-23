@@ -24,8 +24,8 @@ beforeEach(() => {
 });
 
 describe("the summary sweep's pick", () => {
-  it("is every user by default", async () => {
-    await dueSummaryUsers(NOW, 10);
+  it("is every user when the feature reaches everyone", async () => {
+    await dueSummaryUsers(NOW, 10, { kind: "all" });
     const where = (prisma.driveFileSummary.groupBy.mock.calls[0]?.[0] as { where: object }).where;
     expect(where).not.toHaveProperty("userId");
   });
