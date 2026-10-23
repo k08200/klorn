@@ -297,6 +297,21 @@ describe("Resend failures", () => {
     expect(resendSpies.get).not.toHaveBeenCalled();
   });
 
+  it("frees delivery slots held by hung lookups once the deadline passes", async () => {
+    addUser("jane", "u-jane");
+    db.hangLookups = true;
+    const app = await buildApp({ deadlineMs: 50 });
+    const hung = await Promise.all(
+      ["id-1", "id-2", "id-3", "id-4"].map((id) => deliver(app, receivedEvent({ email_id: id }))),
+    );
+    expect(hung.map((res) => res.statusCode)).toEqual([503, 503, 503, 503]);
+
+    db.hangLookups = false;
+    const res = await deliver(app, receivedEvent({ email_id: "id-5" }));
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ stored: 1 });
+  });
+
   it("gives up on an event older than 26 h instead of answering 503, and reports it", async () => {
     addUser("jane", "u-jane");
     resendSpies.get.mockResolvedValue(resendError(500));
@@ -350,6 +365,12 @@ describe("system addresses", () => {
     to: FORWARD_TO,
     subject: `Mail to ${handle}@klorn.ai — Resend email ${emailId}`,
     text: expect.stringContaining("Receiving"),
+    // No auto-reply or vacation answer may come back to the system address.
+    headers: {
+      "Auto-Submitted": "auto-generated",
+      "X-Auto-Response-Suppress": "All",
+      Precedence: "bulk",
+    },
   });
 
   it("sends postmaster@ a fixed notice, never the content, and fetches nothing", async () => {

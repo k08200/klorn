@@ -6,6 +6,7 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { extractEmailAddress } from "../mail/email-address.js";
 import { MAX_STORED_CC_LENGTH, MAX_STORED_SUBJECT_LENGTH } from "../mail/imap-envelope.js";
 import {
   klornMessageId,
@@ -250,10 +251,30 @@ describe("resendToRawEmail", () => {
     expect(fromArrays.cc).toBe("c@example.com");
     expect(resendToRawEmail(content({ headers: {}, cc: null }), eventData()).cc).toBe("");
 
+    // Never cut: an entry that cannot be stored whole is left out.
     const long = "x".repeat(MAX_STORED_CC_LENGTH + 100);
     const capped = resendToRawEmail(content({ headers: { to: long, cc: long } }), eventData());
-    expect(capped.to).toHaveLength(MAX_STORED_CC_LENGTH);
-    expect(capped.cc).toHaveLength(MAX_STORED_CC_LENGTH);
+    expect(capped.to).toBe("");
+    expect(capped.cc).toBe("");
+    const many = Array.from({ length: 400 }, (_, i) => `p${i}@example.com`).join(", ");
+    const whole = resendToRawEmail(content({ headers: { to: many } }), eventData());
+    expect(whole.to.length).toBeLessThanOrEqual(MAX_STORED_CC_LENGTH);
+    expect(whole.to.endsWith("@example.com")).toBe(true);
+  });
+
+  it.each([
+    [
+      "a long quoted display name",
+      `"${"x".repeat(10)} <jane@klorn.ai> ${"y".repeat(3_990)}" <attacker@evil.com>`,
+    ],
+    [
+      "an atom phrase with one encoded word",
+      `=?utf-8?Q?=3Cjane=40klorn.ai=3E?= ${"a".repeat(4_000)} <attacker@evil.com>`,
+    ],
+  ])("stores the real From and To mailbox behind %s", (_label, raw) => {
+    const mapped = resendToRawEmail(content({ headers: { from: raw, to: raw } }), eventData());
+    expect(extractEmailAddress(mapped.from)).toBe("attacker@evil.com");
+    expect(extractEmailAddress(mapped.to)).toBe("attacker@evil.com");
   });
 
   it("caps the subject and stores a placeholder for an empty one", () => {

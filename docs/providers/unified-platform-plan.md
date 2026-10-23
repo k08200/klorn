@@ -4829,9 +4829,12 @@ fixtures before E0; nothing is reachable until E0 is done and the flag is on.
     sender's subject and content DKIM-signed from Klorn's own domain (a
     phishing channel to the operator), and the SDK's forward downloads the
     whole raw message with no abort. A notice carries no sender-controlled
-    field. At most 20 an hour, keyed per message and handle so Resend's
-    retries reuse a token (past it: dropped, counted, reported); one at a
-    time; no token is taken once the request's deadline has passed.
+    field, and carries `Auto-Submitted: auto-generated`,
+    `X-Auto-Response-Suppress: All` and `Precedence: bulk` so the support
+    inbox's auto-replies cannot loop back. At most 20 an hour, keyed per
+    message and handle so Resend's retries reuse a token (past it: dropped,
+    counted, reported); one at a time; no token is taken once the request's
+    deadline has passed.
   - No silent drop of a systemic fault: each such drop is a Sentry event,
     `klorn-mailbox.<scope>`, at most one per scope per hour (re-armed after
     it, carrying the count held back as `suppressed`), with the email id, a
@@ -4871,11 +4874,21 @@ fixtures before E0; nothing is reachable until E0 is done and the flag is on.
       comment spell the mailbox the parser then read). The decoder takes only
       allowlisted charsets, caches one decoder per charset and decodes at
       most 50 words per header (N2).
+    - Nothing is cut after a value is composed (security verification A: a
+      4,000-character cap cut inside a long quoted name, and the cut value
+      parsed as the `<jane@klorn.ai>` inside it): the display name is capped
+      at 200 characters first, a mailbox over 254 characters is not stored, a
+      raw value over 16,000 characters is parsed whole and keeps only its bare
+      mailbox (nothing when that is ambiguous), every stored value is
+      re-checked against the raw mailbox (falling back to the bare mailbox,
+      then to nothing), and To/Cc keep whole entries only within the column.
+      A seeded property test holds that the stored mailbox is the raw one or
+      none.
     - Content is fetched with `html_format: cid`; NUL is removed from stored
       text and the List-Unsubscribe targets.
     - Recipients are matched by the handle's shape and the database row, not
       the reserved list, so a later addition to the list cannot stop delivery
-      to an existing owner; a frozen denylist of the CA/Browser Forum
+      to an existing owner; a fixed denylist (read-only by type) of the CA/Browser Forum
       validation names (`admin`, `administrator`, `webmaster`, `hostmaster`)
       is never delivered, whatever the database holds.
     - The SDK's type for `GET /emails/receiving/{id}` (6.20.0) does not
@@ -4905,8 +4918,20 @@ fixtures before E0; nothing is reachable until E0 is done and the flag is on.
       address) for every source, so there an unauthenticated From of the
       sign-in address can still read as `self_sent` (not reply-needed). It
       mines no commitments. Gate it on `EmailMessage.authentication` in E4.
-    - The 12 s deadline answers 503 but does not cancel a database call in
-      flight; that work finishes in the background (a retry is idempotent).
+    - The 12 s deadline answers 503 and frees the delivery slot (the slot
+      races its work against the deadline), but does not cancel a database
+      call in flight; that work finishes in the background (a retry is
+      idempotent), and a failure it reports later is reported as `lookup`.
+      No statement timeout on this path: `withStatementTimeout`
+      (`db-statement-timeout.ts`) opens its own transaction, while the lookups
+      run in `withSystem`/`withTenant` and the store on the global client
+      (`persistGmailEmail` takes no `tx`), so it cannot wrap them without
+      changing shared code. Add one when the store is routed through a tenant
+      transaction.
+    - A Bcc'd recipient that no header and no `received_for` names gives an
+      event with nothing at the domain: dropped and reported as
+      `domain-mismatch`. Whether Resend always fills `received_for` for Bcc
+      needs an E0 fixture.
 **E2 — provider actions and send** (*outline*). Depends on: B0. The database
 is the source of truth, so every action in `MailProviderActions` is
 implementable.

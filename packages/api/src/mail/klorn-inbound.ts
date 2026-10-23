@@ -302,6 +302,10 @@ async function deliverToUsers(
   const slot = await ctx.runtime.deliverySlots.run(
     () => resolveAndStore(event, handles, ctx),
     () => pastDeadline(ctx),
+    () => ctx.deadlineAt - ctx.now(),
+    // Past the deadline the slot is free and the answer is 503; a lookup that
+    // fails later still reaches the operator.
+    (err) => ctx.reporter.report("lookup", { emailId: event.emailId, kind: errorKind(err) }),
   );
   return slot.ran ? slot.value : slotRetry(slot.reason, handles.length);
 }

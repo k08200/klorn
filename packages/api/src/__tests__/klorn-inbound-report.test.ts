@@ -144,6 +144,44 @@ describe("BoundedSlots", () => {
   });
 });
 
+describe("BoundedSlots under a deadline", () => {
+  it("frees the slot at the deadline when the work hangs, and reports a late failure", async () => {
+    const slots = new BoundedSlots(1, 4);
+    let fail: (err: Error) => void = () => {};
+    const late = vi.fn();
+    const hung = slots.run(
+      () => new Promise<string>((_resolve, reject) => (fail = reject)),
+      () => false,
+      () => 20,
+      late,
+    );
+    expect(await hung).toEqual({ ran: false, reason: "expired" });
+    expect(
+      await slots.run(
+        async () => "next",
+        () => false,
+      ),
+    ).toEqual({ ran: true, value: "next" });
+    fail(new Error("db"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(late).toHaveBeenCalledWith(expect.any(Error));
+  });
+
+  it("returns the work's own failure when it fails in time", async () => {
+    const slots = new BoundedSlots(1, 4);
+    const late = vi.fn();
+    await expect(
+      slots.run(
+        async () => Promise.reject(new Error("boom")),
+        () => false,
+        () => 1_000,
+        late,
+      ),
+    ).rejects.toThrow("boom");
+    expect(late).not.toHaveBeenCalled();
+  });
+});
+
 describe("sendNotices", () => {
   it("takes no token and sends nothing once the request's deadline has passed", async () => {
     const take = vi.fn(() => true);

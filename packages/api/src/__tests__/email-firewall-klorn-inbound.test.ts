@@ -191,6 +191,16 @@ describe("the self-sent comparison of a Klorn mailbox message", () => {
     expect(comparedWith().senderIsUser).toBe(false);
   });
 
+  it("never reads a Klorn address out of a long quoted name a length cap could cut", async () => {
+    await store(`"${"x".repeat(10)} <jane@klorn.ai> ${"y".repeat(3_990)}" <attacker@evil.com>`, {
+      spf: "pass",
+      dkim: "pass",
+      dmarc: "pass",
+    });
+    expect(create.mock.calls[0][0].data.fromAddress).toBe("attacker@evil.com");
+    expect(comparedWith().senderIsUser).toBe(false);
+  });
+
   it("treats an authenticated From of the Klorn address as the user", async () => {
     await store(`Jane <${KLORN_ADDRESS}>`, { spf: "pass", dkim: "pass", dmarc: "pass" });
     expect(resolveUserEmail).not.toHaveBeenCalled();

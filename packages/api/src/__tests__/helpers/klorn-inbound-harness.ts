@@ -28,6 +28,8 @@ export const db = {
   existing: new Set<string>(),
   systemCalls: [] as unknown[],
   tenantCalls: [] as string[],
+  /** The handle lookup never answers (a hung database call). */
+  hangLookups: false,
 };
 
 export function resetDb(): void {
@@ -37,6 +39,7 @@ export function resetDb(): void {
   db.existing.clear();
   db.systemCalls = [];
   db.tenantCalls = [];
+  db.hangLookups = false;
 }
 
 export const DOMAIN = "klorn.ai";
@@ -93,6 +96,7 @@ export function dbTenantModule() {
           findMany: vi.fn(
             async (args: { where: { handle: { in: string[] } }; select: Record<string, true> }) => {
               db.systemCalls = [...db.systemCalls, args];
+              if (db.hangLookups) await new Promise(() => {});
               return args.where.handle.in
                 .filter((handle) => db.addresses.has(handle))
                 .map((handle) => ({ handle, userId: db.addresses.get(handle) ?? null }));

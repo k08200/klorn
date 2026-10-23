@@ -19,12 +19,7 @@ import type { EmailReceivedEvent, GetReceivingEmailResponseSuccess } from "resen
 import { decodedAddressList, decodedMailbox } from "./decoded-address-header.js";
 import { htmlToPlainText } from "./email-text.js";
 import type { GmailRawEmail } from "./gmail-fetch.js";
-import {
-  capStored,
-  envelopeSubject,
-  MAX_STORED_CC_LENGTH,
-  MAX_STORED_SUBJECT_LENGTH,
-} from "./imap-envelope.js";
+import { capStored, envelopeSubject, MAX_STORED_SUBJECT_LENGTH } from "./imap-envelope.js";
 import { parseListUnsubscribe } from "./list-unsubscribe.js";
 import { MAX_STORED_BODY_CHARS, snippetFromBody } from "./stored-mail-text.js";
 import { stripNul } from "./text-normalize.js";
@@ -54,8 +49,6 @@ export const UNKNOWN_VERDICT = "unknown";
 export type MailAuthentication = { spf: string; dkim: string; dmarc: string };
 
 const AUTH_FIELDS = ["spf", "dkim", "dmarc"] as const;
-/** A raw address header is decoded from at most this much; the result is capped as IMAP's. */
-const MAX_HEADER_DECODE_CHARS = 4 * MAX_STORED_CC_LENGTH;
 
 function verdict(value: unknown): string {
   if (typeof value !== "string") return UNKNOWN_VERDICT;
@@ -105,13 +98,11 @@ function storedText(value: unknown, max: number): string {
 }
 
 /**
- * An address header from a bounded input: display names decoded after the raw
- * value was parsed (decoded-address-header.ts), then capped like IMAP.
+ * An address header as stored (decoded-address-header.ts): display names decoded
+ * after the raw value was parsed, bounded so that no cut can change a mailbox.
  */
 function addressHeader(value: string, kind: "mailbox" | "list"): string {
-  const bounded = capStored(value, MAX_HEADER_DECODE_CHARS);
-  const decoded = kind === "mailbox" ? decodedMailbox(bounded) : decodedAddressList(bounded);
-  return storedText(decoded, MAX_STORED_CC_LENGTH);
+  return kind === "mailbox" ? decodedMailbox(value) : decodedAddressList(value);
 }
 
 /** A header value by case-insensitive name; only a string counts. */
@@ -156,7 +147,7 @@ export function resendToRawEmail(
     gmailId: klornMessageId(event.email_id),
     threadId: null,
     from: addressHeader(
-      header(headers, "from") ?? storedText(content.from, MAX_HEADER_DECODE_CHARS),
+      header(headers, "from") ?? (typeof content.from === "string" ? content.from : ""),
       "mailbox",
     ).trim(),
     to: addressHeader(header(headers, "to") ?? joined(content.to), "list"),

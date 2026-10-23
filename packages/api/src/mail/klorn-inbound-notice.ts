@@ -31,6 +31,15 @@ import {
 import { callResend } from "./klorn-inbound-resend.js";
 
 export const NOTICES_PER_HOUR = 20;
+/**
+ * RFC 3834 and the de facto equivalents: the support inbox's auto-replies and
+ * vacation answers must not come back to postmaster@ or abuse@ and start a loop.
+ */
+const LOOP_PREVENTION_HEADERS: Readonly<Record<string, string>> = {
+  "Auto-Submitted": "auto-generated",
+  "X-Auto-Response-Suppress": "All",
+  Precedence: "bulk",
+};
 const HOUR_MS = 60 * 60_000;
 const NOTICE_TEXT = [
   "Klorn received mail for a system address.",
@@ -93,6 +102,7 @@ async function sendNotice(
           to: noticeTo,
           subject: `Mail to ${from} — Resend email ${event.emailId}`,
           text: NOTICE_TEXT,
+          headers: LOOP_PREVENTION_HEADERS,
         },
         { idempotencyKey: `klorn-notice:${event.emailId}:${handle}` },
       ),
@@ -115,6 +125,7 @@ async function noticeOne(
   const sent = await ctx.runtime.noticeSlots.run(
     () => sendNotice(handle, noticeTo, event, ctx),
     () => pastDeadline(ctx),
+    () => ctx.deadlineAt - ctx.now(),
   );
   return sent.ran ? sent.value : slotRetry(sent.reason, 1);
 }

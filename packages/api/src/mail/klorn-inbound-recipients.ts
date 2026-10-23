@@ -29,13 +29,17 @@ export const KLORN_SYSTEM_HANDLES: ReadonlySet<string> = new Set(["postmaster", 
 
 /**
  * Never delivered, whatever the database holds: the CA/Browser Forum's
- * domain-validation local parts (postmaster is a system handle above). Frozen
+ * domain-validation local parts (postmaster is a system handle above). Fixed
  * here, apart from the claim's reserved list, as defence in depth: if a row ever
  * existed for one, its owner could approve a certificate for the whole domain.
+ * Read-only by type (ReadonlySet); a Set cannot be frozen at runtime.
  */
-export const INBOUND_DENYLIST: ReadonlySet<string> = Object.freeze(
-  new Set(["admin", "administrator", "webmaster", "hostmaster"]),
-);
+export const INBOUND_DENYLIST: ReadonlySet<string> = new Set([
+  "admin",
+  "administrator",
+  "webmaster",
+  "hostmaster",
+]);
 
 /**
  * The most handles one event is looked up for. Recipient lists come from the
