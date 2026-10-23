@@ -11,10 +11,10 @@ import { PAGE_SHELL } from "../../components/page-shell";
 import ErrorAlert from "../../components/ui/error-alert";
 import VoiceButton from "../../components/voice-button";
 import { apiFetch, startGoogleConnect } from "../../lib/api";
-import { useAuth } from "../../lib/auth";
 import { useT } from "../../lib/i18n";
 import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
+import { useDisplayTimeZone } from "../../lib/use-time-zone";
 
 interface CalendarEvent {
   id: string;
@@ -67,10 +67,9 @@ function isoToInitial(event: {
 function CalendarView() {
   const { t, locale } = useT();
   const queryClient = useQueryClient();
-  const { user } = useAuth();
-  // Always have a deterministic IANA zone in hand — never rely on browser
-  // default (iOS PWA has been observed to fall back to UTC).
-  const userTimezone = user?.timezone ?? "Asia/Seoul";
+  // Pinned zone > device zone (Automatic) > account zone > UTC; see
+  // lib/time-zone.ts. Never the bare browser default inside formatters.
+  const userTimezone = useDisplayTimeZone();
   const [error, setError] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [newEventOpen, setNewEventOpen] = useState(false);
@@ -111,7 +110,7 @@ function CalendarView() {
   // Month being viewed. Stored as a Date pinned to day 1 in user TZ so
   // prev/next navigation never falls into adjacent-month corners when
   // we add or subtract a month at the end of the calendar.
-  const [viewMonth, setViewMonth] = useState<Date>(() => firstOfMonth(new Date(), "Asia/Seoul"));
+  const [viewMonth, setViewMonth] = useState<Date>(() => firstOfMonth(new Date(), userTimezone));
 
   // Range fetched = the visible 6×7 grid, which can spill into adjacent
   // months. Use the grid's anchor cells so events in the prev/next month

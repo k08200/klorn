@@ -15,7 +15,7 @@ import {
   resolveNotificationLanguage,
 } from "../notify/notification-strings.js";
 import { captureError } from "../sentry.js";
-import { normalizeTimeZone } from "../time-zone.js";
+import { normalizeTimeZone, normalizeTimeZoneMode, parseTimeZoneInput } from "../time-zone.js";
 
 // MEDIUM-risk tools that users may pre-approve for AUTO mode.
 // Email sending is intentionally excluded for dogfood safety: a bad auto-reply
@@ -68,6 +68,7 @@ export async function automationRoutes(app: FastifyInstance) {
       dailyBriefing: config.dailyBriefing,
       briefingTime: config.briefingTime,
       timezone: normalizeTimeZone(configAny.timezone),
+      timezoneMode: normalizeTimeZoneMode(configAny.timezoneMode),
       downloadAutoOrganize: config.downloadAutoOrganize,
       autonomousAgent: configAny.autonomousAgent ?? false,
       agentMode: normalizeAgentMode(configAny.agentMode),
@@ -102,7 +103,7 @@ export async function automationRoutes(app: FastifyInstance) {
   });
 
   // PATCH /api/automations — Update automation config
-  app.patch("/", async (request) => {
+  app.patch("/", async (request, reply) => {
     const userId = getUserId(request);
     const body = request.body as Record<string, unknown>;
 
@@ -115,6 +116,7 @@ export async function automationRoutes(app: FastifyInstance) {
       "dailyBriefing",
       "briefingTime",
       "timezone",
+      "timezoneMode",
       "downloadAutoOrganize",
       "autonomousAgent",
       "agentMode",
@@ -170,8 +172,21 @@ export async function automationRoutes(app: FastifyInstance) {
       );
     }
 
+    // Client-supplied zone: reject anything Intl does not know (400) rather
+    // than silently storing the product default over the user's real zone.
     if ("timezone" in data) {
-      data.timezone = normalizeTimeZone(data.timezone);
+      const timezone = parseTimeZoneInput(data.timezone);
+      if (!timezone) return reply.code(400).send({ error: "Invalid timezone" });
+      data.timezone = timezone;
+    }
+    // "AUTO" is stored as null (no saved choice): the client follows the device
+    // zone and keeps `timezone` synced to it. "MANUAL" pins `timezone`.
+    if ("timezoneMode" in data) {
+      const mode = data.timezoneMode;
+      if (mode !== "AUTO" && mode !== "MANUAL" && mode !== null) {
+        return reply.code(400).send({ error: "Invalid timezoneMode" });
+      }
+      data.timezoneMode = mode === "MANUAL" ? "MANUAL" : null;
     }
 
     // Validate alwaysAllowedTools — only MEDIUM-risk tools from the whitelist
@@ -195,6 +210,7 @@ export async function automationRoutes(app: FastifyInstance) {
       dailyBriefing: config.dailyBriefing,
       briefingTime: config.briefingTime,
       timezone: normalizeTimeZone(configAny.timezone),
+      timezoneMode: normalizeTimeZoneMode(configAny.timezoneMode),
       downloadAutoOrganize: config.downloadAutoOrganize,
       autonomousAgent: configAny.autonomousAgent ?? false,
       agentMode: normalizeAgentMode(configAny.agentMode),

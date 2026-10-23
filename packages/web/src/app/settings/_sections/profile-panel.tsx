@@ -1,9 +1,9 @@
 "use client";
 
 import { useT } from "../../../lib/i18n";
-import { TIMEZONES } from "../agent-mode-helpers";
 import type { ProfileFields, UserProfile } from "./profile-save-plan";
 import { PANEL, PRIMARY_BTN, SECTION_TITLE } from "./shared";
+import { TimeZonePicker } from "./time-zone-picker";
 import { useAutomationConfig } from "./use-automation-config";
 import { useProfile } from "./use-profile";
 
@@ -66,23 +66,10 @@ export function ProfilePanel({ fields }: { fields: ProfileFields }) {
                 <option value="de">Deutsch</option>
               </select>
             </div>
-            <div>
-              <label htmlFor="profile-tz" className="block text-sm text-ink-mid mb-1">
-                {t("settings.timezone")}
-              </label>
-              <select
-                id="profile-tz"
-                value={profile.timezone}
-                onChange={(e) => setProfile((p) => ({ ...p, timezone: e.target.value }))}
-                className="w-full bg-surface-raised border border-line rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-accent-muted transition"
-              >
-                {TIMEZONES.map((tz) => (
-                  <option key={tz} value={tz}>
-                    {tz.replace(/_/g, " ")}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <TimeZonePicker
+              value={profile.timezone}
+              onChange={(timezone) => setProfile((p) => ({ ...p, timezone }))}
+            />
           </div>
         )}
         <div className="flex justify-end">
