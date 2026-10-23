@@ -190,10 +190,13 @@ struct EmailContext: Codable, Sendable, Hashable {
     let unread: Bool?
     /// The mail carries an attached file; nil = no claim.
     let hasAttachment: Bool?
+    /// Messages in the mail's thread; the row's chip shows from 2. nil = no
+    /// claim (the server does not send it yet, or an older server).
+    let threadCount: Int?
 
     enum CodingKeys: String, CodingKey {
         case emailDbId, subject, from, snippet, receivedAt, signal, replyState, draftReady
-        case source, unread, hasAttachment
+        case source, unread, hasAttachment, threadCount
     }
 
     init(from decoder: Decoder) throws {
@@ -209,6 +212,7 @@ struct EmailContext: Codable, Sendable, Hashable {
         source = try? c.decodeIfPresent(MailSource.self, forKey: .source)
         unread = try? c.decodeIfPresent(Bool.self, forKey: .unread)
         hasAttachment = try? c.decodeIfPresent(Bool.self, forKey: .hasAttachment)
+        threadCount = try? c.decodeIfPresent(Int.self, forKey: .threadCount)
         if let nested = try? c.nestedContainer(
             keyedBy: RowSignal.CodingKeysImpl.self, forKey: .signal)
         {
@@ -235,7 +239,8 @@ struct EmailContext: Codable, Sendable, Hashable {
         emailDbId: String, subject: String?, from: String?, snippet: String?,
         receivedAt: String?, signal: RowSignal? = nil, signalByUser: Bool = false,
         replyState: String? = nil, draftReady: Bool = false,
-        source: MailSource? = nil, unread: Bool? = nil, hasAttachment: Bool? = nil
+        source: MailSource? = nil, unread: Bool? = nil, hasAttachment: Bool? = nil,
+        threadCount: Int? = nil
     ) {
         self.emailDbId = emailDbId
         self.subject = subject
@@ -249,6 +254,7 @@ struct EmailContext: Codable, Sendable, Hashable {
         self.source = source
         self.unread = unread
         self.hasAttachment = hasAttachment
+        self.threadCount = threadCount
     }
 }
 

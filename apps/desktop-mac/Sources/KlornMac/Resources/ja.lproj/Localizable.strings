@@ -43,6 +43,7 @@
 "mail.inbox.a11y" = "受信トレイ %@";
 "mail.unread" = "未読";
 "mail.hasAttachment" = "添付ファイルあり";
+"mail.threadCount" = "このスレッドのメッセージ %d 件";
 "source.account.a11y" = "%@アカウント";
 "source.generic" = "メール";
 "mail.searchResult.a11y" = "%1$@ からの検索結果: %2$@";

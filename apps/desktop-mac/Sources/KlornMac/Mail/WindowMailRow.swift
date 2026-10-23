@@ -1,14 +1,21 @@
 import SwiftUI
 
-/// What a main-window row may show, and nothing else: who, what, when, the
-/// lane (only where lanes are mixed), the account (only when the row knows
-/// it and there is more than one), the unread dot (only when the row knows
-/// that) and the attachment glyph. Category, the relationship, the reply
-/// state and why-this-lane are in the reader header.
+/// What a main-window row may show, and nothing else: who, what, when, why
+/// it is in its lane (or the snippet when no reason was recorded), the lane
+/// chip (only where lanes are mixed), the thread count (from 2), the account
+/// (only when the row knows it and there is more than one), the unread dot
+/// (only when the row knows that) and the attachment glyph. Category, the
+/// relationship and the reply state are in the reader header.
 struct WindowRowContent: Equatable {
     var sender: String
     var subject: String
     var snippet: String?
+    /// Why the mail is in its lane (the recorded tierReason): line 3, in
+    /// `reasonLane`'s ink. nil = no reason recorded; line 3 is the snippet.
+    var reason: String? = nil
+    var reasonLane: Tier? = nil
+    /// Messages in the thread; the chip shows from 2. nil = no claim.
+    var threadCount: Int? = nil
     var time: String
     /// nil = the row's data does not say (an older server sends no read state).
     var unread: Bool?
@@ -50,15 +57,29 @@ enum WindowRowRules {
         return unread && !opened.contains(email.emailDbId)
     }
 
+    /// The thread chip's count: shown from 2 messages, never for one.
+    static func threadCount(_ raw: Int?) -> Int? {
+        guard let raw, raw > 1 else { return nil }
+        return raw
+    }
+
+    /// Line 3: the lane reason when one was recorded, else the snippet.
+    static func detail(_ content: WindowRowContent) -> String? {
+        content.reason ?? content.snippet
+    }
+
     static func content(
         for item: FirewallItem, mixedLanes: Bool, inboxes: [InboxOption],
         opened: Set<String> = [], now: Date, relativeDays: Bool = false
     ) -> WindowRowContent {
         let subject = decodeHTMLEntities(item.email?.subject ?? item.title)
         let source = showsAccounts(inboxes) ? item.email?.source : nil
+        let reason = rowTierReason(item.tierReason)
         return WindowRowContent(
             sender: a11ySenderLabel(item), subject: subject,
             snippet: snippet(item.email?.snippet, subject: subject),
+            reason: reason, reasonLane: reason == nil ? nil : item.tier,
+            threadCount: threadCount(item.email?.threadCount),
             time: mailTimeLabel(
                 iso: item.email?.receivedAt ?? item.surfacedAt, now: now, relativeDays: relativeDays),
             unread: unread(item.email, opened: opened),
@@ -92,6 +113,7 @@ enum WindowRowRules {
         var parts: [String] = []
         if content.unread == true { parts.append(L("mail.unread")) }
         parts.append(lead)
+        if let count = content.threadCount { parts.append(L("mail.threadCount", count)) }
         if let lane = content.lane { parts.append(lane.label) }
         if content.showsAccount {
             parts.append(sourceA11yLabel(provider: content.provider, label: content.accountLabel))
@@ -101,61 +123,102 @@ enum WindowRowRules {
         return parts.joined(separator: ", ")
     }
 
-    /// A mail-list row's lead: sender, subject, and the snippet when shown.
+    /// A mail-list row's lead: sender, subject, and line 3 when shown.
     static func listLead(_ content: WindowRowContent) -> String {
-        ([content.sender, content.subject] + (content.snippet.map { [$0] } ?? []))
+        ([content.sender, content.subject] + (detail(content).map { [$0] } ?? []))
             .joined(separator: ", ")
     }
 }
 
-/// The two lines of a main-window row.
+/// The three lines of a main-window row, after the web's MailRow: who and
+/// when, the subject, then why it is in its lane (in the lane's ink) or the
+/// snippet when no reason was recorded. One line each, truncated.
 struct WindowRowBody: View {
     let content: WindowRowContent
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.s1) {
-            HStack(alignment: .center, spacing: Theme.s2) {
-                if let unread = content.unread {
-                    Circle().fill(unread ? Theme.accentSolid : .clear)
-                        .frame(width: Self.unreadDot, height: Self.unreadDot)
-                        .accessibilityHidden(true)
-                }
-                Text(content.sender)
-                    .font(Theme.Typo.body.weight(.semibold))
-                    .foregroundStyle(Theme.text).lineLimit(1)
-                if content.showsAccount {
-                    SourceBadge(provider: content.provider, compact: true)
-                }
-                Spacer(minLength: Theme.s2)
-                if content.hasAttachment {
-                    Image(systemName: "paperclip")
-                        .font(Theme.Typo.icon).foregroundStyle(Theme.textDim)
-                        .accessibilityHidden(true)
-                }
-                if let lane = content.lane {
-                    WindowLaneChip(tier: lane)
-                }
-                if !content.time.isEmpty {
-                    Text(content.time)
-                        .font(Theme.Typo.caption.monospacedDigit())
-                        .foregroundStyle(Theme.textDim).lineLimit(1).fixedSize()
-                }
+            metaLine
+            Group {
+                Text(content.subject)
+                    .font(Theme.Typo.head).foregroundStyle(Theme.text)
+                    .lineLimit(1)
+                detailLine
             }
-            .frame(height: WindowLaneChip.height)
-            subjectLine
-                .font(Theme.Typo.label.weight(.regular))
-                .lineLimit(1)
-                .padding(.leading, content.unread == nil ? 0 : Self.unreadDot + Theme.s2)
+            .padding(.leading, content.unread == nil ? 0 : Self.unreadDot + Theme.s2)
         }
     }
 
-    private var subjectLine: Text {
-        let subject = Text(content.subject).foregroundStyle(Theme.text)
-        guard let snippet = content.snippet else { return subject }
-        return subject + Text("  " + snippet).foregroundStyle(Theme.textDim)
+    private var metaLine: some View {
+        HStack(alignment: .center, spacing: Theme.s2) {
+            if let unread = content.unread {
+                Circle().fill(unread ? Theme.accentSolid : .clear)
+                    .frame(width: Self.unreadDot, height: Self.unreadDot)
+                    .accessibilityHidden(true)
+            }
+            Text(content.sender)
+                .font(Theme.Typo.body.weight(.medium))
+                .foregroundStyle(Theme.textDim).lineLimit(1)
+            if let count = content.threadCount {
+                ThreadCountChip(count: count)
+            }
+            if content.showsAccount {
+                SourceBadge(provider: content.provider, compact: true)
+            }
+            Spacer(minLength: Theme.s2)
+            if content.hasAttachment {
+                Image(systemName: "paperclip")
+                    .font(Theme.Typo.icon).foregroundStyle(Theme.textDim)
+                    .accessibilityHidden(true)
+            }
+            if let lane = content.lane {
+                WindowLaneChip(tier: lane)
+            }
+            if !content.time.isEmpty {
+                Text(content.time)
+                    .font(Theme.Typo.caption.monospacedDigit())
+                    .foregroundStyle(Theme.textDim).lineLimit(1).fixedSize()
+            }
+        }
+        .frame(height: WindowLaneChip.height)
+    }
+
+    /// Line 3. Always drawn (empty when there is nothing to say) so every
+    /// row keeps one height and the list never jumps.
+    @ViewBuilder private var detailLine: some View {
+        if let reason = content.reason, let lane = content.reasonLane {
+            HStack(spacing: WindowLaneChip.gap) {
+                Circle().fill(Theme.tint(lane))
+                    .frame(width: WindowLaneChip.dot, height: WindowLaneChip.dot)
+                    .accessibilityHidden(true)
+                Text(reason)
+                    .font(Theme.Typo.label)
+                    .foregroundStyle(Theme.chipInk(lane)).lineLimit(1)
+            }
+        } else {
+            Text(content.snippet ?? " ")
+                .font(Theme.Typo.label.weight(.regular))
+                .foregroundStyle(Theme.textDim).lineLimit(1)
+        }
     }
 
     static let unreadDot: CGFloat = 6
+}
+
+/// Messages in the thread, from 2: a quiet count beside the sender. The
+/// number is drawn; VoiceOver hears it from the row's label.
+private struct ThreadCountChip: View {
+    let count: Int
+
+    var body: some View {
+        Text(String(count))
+            .font(Theme.Typo.caption.weight(.semibold).monospacedDigit())
+            .foregroundStyle(Theme.textDim)
+            .padding(.horizontal, Theme.s1)
+            .background(Theme.surfaceHover, in: RoundedRectangle(cornerRadius: Theme.Radius.sm))
+            .fixedSize()
+            .accessibilityHidden(true)
+    }
 }
 
 /// The row's surface: a rounded fill for hover and selection, the accent bar
@@ -168,7 +231,7 @@ private struct WindowRowChrome: ViewModifier {
     func body(content: Content) -> some View {
         content
             .padding(.horizontal, Theme.s3).padding(.vertical, Theme.s2)
-            .frame(maxWidth: .infinity, minHeight: Theme.rowHeight, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: Theme.mailRowHeight, alignment: .leading)
             .background(alignment: .leading) {
                 if selected {
                     Capsule().fill(Theme.accent).frame(width: 3).padding(.vertical, Theme.s3)
