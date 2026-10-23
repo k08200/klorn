@@ -14,6 +14,9 @@
  *   - Do NOT add anything secret here; secrets stay in their own modules.
  */
 
+import { isPlainAddress } from "./mail/email-address.js";
+import { asciiLower } from "./mail/text-normalize.js";
+
 function intEnv(name: string, fallback: number): number {
   const raw = process.env[name];
   if (raw === undefined || raw === "") return fallback;
@@ -334,34 +337,66 @@ export type KlornInboundConfig =
       domain: string;
       /** Where postmaster@ and abuse@ go (L18); null drops them. */
       forwardTo: string | null;
+      /** Set but unusable values the route logs (names only, never values). */
+      warnings: string[];
     }
   | { ok: false; missing: string[] };
 
 const MAILBOX_DOMAIN_SHAPE = /^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/;
+const WEBHOOK_SECRET_PREFIX = "whsec_";
+const STRICT_BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+/** The HMAC key under the prefix; Resend's are longer. `whsec_` alone verified forged signatures. */
+const MIN_WEBHOOK_KEY_BYTES = 16;
+
+function isStrongWebhookSecret(secret: string): boolean {
+  if (!secret.startsWith(WEBHOOK_SECRET_PREFIX)) return false;
+  const key = secret.slice(WEBHOOK_SECRET_PREFIX.length);
+  return STRICT_BASE64.test(key) && Buffer.from(key, "base64").length >= MIN_WEBHOOK_KEY_BYTES;
+}
+
+/** One plain address, not at the mailbox domain (mail forwarded there would loop back). */
+function usableForwardTarget(value: string, domain: string): boolean {
+  if (!isPlainAddress(value)) return false;
+  return asciiLower(value.slice(value.lastIndexOf("@") + 1)) !== domain;
+}
 
 // The inbound webhook's settings, read per request (a flip or a rotated secret
 // needs no redeploy):
-// - RESEND_INBOUND_WEBHOOK_SECRET: the receiving webhook's signing secret.
+// - RESEND_INBOUND_WEBHOOK_SECRET: the receiving webhook's signing secret, `whsec_`
+//   and a base64 key of at least 16 bytes.
 // - RESEND_INBOUND_API_KEY: a full-access key that can read received mail.
 //   Separate from RESEND_API_KEY on purpose, so the transactional key can stay
-//   sending-only.
+//   sending-only (and best in a separate Resend team: .env.example).
 // - KLORN_MAILBOX_DOMAIN: no default (L19: the domain is operational).
-// - KLORN_MAILBOX_FORWARD_TO: optional; unset, system mail is dropped and counted.
-// Any of the first three unset (or a domain that is not one) is `missing`.
+// - KLORN_MAILBOX_FORWARD_TO: optional; one plain address outside the domain.
+//   Unset or unusable, system mail is dropped and counted (unusable also warns).
+// Any of the first three unset or unusable is `missing`.
 export function klornInboundConfig(): KlornInboundConfig {
   const webhookSecret = (process.env.RESEND_INBOUND_WEBHOOK_SECRET ?? "").trim();
   const apiKey = (process.env.RESEND_INBOUND_API_KEY ?? "").trim();
-  const domain = (process.env.KLORN_MAILBOX_DOMAIN ?? "")
-    .trim()
-    .replace(/[A-Z]/g, (c) => c.toLowerCase());
+  const domain = asciiLower((process.env.KLORN_MAILBOX_DOMAIN ?? "").trim());
   const missing = [
-    webhookSecret ? null : "RESEND_INBOUND_WEBHOOK_SECRET",
+    isStrongWebhookSecret(webhookSecret) ? null : "RESEND_INBOUND_WEBHOOK_SECRET",
     apiKey ? null : "RESEND_INBOUND_API_KEY",
     MAILBOX_DOMAIN_SHAPE.test(domain) ? null : "KLORN_MAILBOX_DOMAIN",
   ].filter((name): name is string => name !== null);
   if (missing.length > 0) return { ok: false, missing };
-  const forwardTo = (process.env.KLORN_MAILBOX_FORWARD_TO ?? "").trim() || null;
-  return { ok: true, webhookSecret, apiKey, domain, forwardTo };
+  const rawForwardTo = (process.env.KLORN_MAILBOX_FORWARD_TO ?? "").trim();
+  const usable = rawForwardTo !== "" && usableForwardTarget(rawForwardTo, domain);
+  const warnings =
+    rawForwardTo !== "" && !usable
+      ? [
+          "KLORN_MAILBOX_FORWARD_TO is not one plain address outside KLORN_MAILBOX_DOMAIN; system mail is dropped",
+        ]
+      : [];
+  return {
+    ok: true,
+    webhookSecret,
+    apiKey,
+    domain,
+    forwardTo: usable ? rawForwardTo : null,
+    warnings,
+  };
 }
 // The Google Drive connector — step D5 of docs/providers/unified-platform-plan.md
 // (D5b: link and unlink a Google account for its picked files, drive.file only).

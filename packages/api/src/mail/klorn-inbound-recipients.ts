@@ -8,16 +8,18 @@
  * - Exact match, per the E1a security review: the whole address must be ASCII,
  *   and only A-Z is case-folded. No Unicode folding anywhere, so U+212A (KELVIN
  *   SIGN) never becomes `k`; `normalizeHandle` is for claims only.
- * - The local part must be a well-formed handle (klorn-handle.ts). No plus tags
- *   (L2): `name+tag@` is an unknown address.
+ * - The local part must have a handle's shape (klorn-handle.ts). No plus tags
+ *   (L2): `name+tag@` is an unknown address. The reserved list plays no part:
+ *   the database row decides, so a later addition to the list never stops
+ *   delivery to an existing owner, and a name reserved all along has no row.
  * - `postmaster` and `abuse` are system addresses (L18): forwarded, not stored.
- *   Any other reserved name is dropped (L17).
  *
  * `dropped` counts the addresses at the domain that will never be delivered;
  * an address at another domain is not a Klorn recipient, so it is not counted.
  */
 
-import { validateHandle } from "./klorn-handle.js";
+import { isWellFormedHandle } from "./klorn-handle.js";
+import { asciiLower } from "./text-normalize.js";
 
 /** Forwarded to the support inbox (L18); never a user's mailbox. */
 export const KLORN_SYSTEM_HANDLES: ReadonlySet<string> = new Set(["postmaster", "abuse"]);
@@ -36,17 +38,12 @@ const ASCII_ADDRESS = /^[\x21-\x7e]+$/;
 const ANGLE_ADDRESS = /<([^<>]*)>\s*$/;
 
 export interface InboundRecipients {
-  /** Well-formed, non-reserved handles, in first-seen order. */
+  /** Handle-shaped local parts to look up, in first-seen order. */
   handles: string[];
   /** System handles (postmaster, abuse) to forward. */
   system: string[];
   /** Addresses at the domain that are dropped. */
   dropped: number;
-}
-
-/** Lowercase A-Z only: the one case folding an exact match allows. */
-export function asciiLower(value: string): string {
-  return value.replace(/[A-Z]/g, (c) => c.toLowerCase());
 }
 
 function bareAddress(entry: string): string {
@@ -75,28 +72,22 @@ export function inboundRecipients(
   data: Record<string, unknown>,
   domain: string,
 ): InboundRecipients {
-  const seen = new Set<string>();
-  const result: InboundRecipients = { handles: [], system: [], dropped: 0 };
-  for (const entry of entriesOf(data)) {
-    const local = localPartAt(entry, domain);
-    if (local === null) continue;
-    if (!ASCII_ADDRESS.test(local)) {
-      // Not deduplicated: there is no exact form to compare it by.
-      result.dropped += 1;
-      continue;
-    }
-    const handle = asciiLower(local);
-    if (seen.has(handle)) continue;
-    seen.add(handle);
-    if (KLORN_SYSTEM_HANDLES.has(handle)) result.system.push(handle);
-    else if (validateHandle(handle).ok) result.handles.push(handle);
-    else result.dropped += 1;
-  }
-  const overflow = result.handles.length - MAX_INBOUND_RECIPIENTS;
-  if (overflow <= 0) return result;
+  const locals = entriesOf(data)
+    .map((entry) => localPartAt(entry, domain))
+    .filter((local): local is string => local !== null);
+  const ascii = locals.filter((local) => ASCII_ADDRESS.test(local));
+  // A non-ASCII local part is never deduplicated: it has no exact form to compare by.
+  const nonAscii = locals.length - ascii.length;
+  const unique = [...new Set(ascii.map(asciiLower))];
+  const system = unique.filter((handle) => KLORN_SYSTEM_HANDLES.has(handle));
+  const shaped = unique.filter(
+    (handle) => !KLORN_SYSTEM_HANDLES.has(handle) && isWellFormedHandle(handle),
+  );
+  const malformed = unique.length - system.length - shaped.length;
+  const overflow = Math.max(0, shaped.length - MAX_INBOUND_RECIPIENTS);
   return {
-    ...result,
-    handles: result.handles.slice(0, MAX_INBOUND_RECIPIENTS),
-    dropped: result.dropped + overflow,
+    handles: shaped.slice(0, MAX_INBOUND_RECIPIENTS),
+    system,
+    dropped: nonAscii + malformed + overflow,
   };
 }

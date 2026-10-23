@@ -27,6 +27,7 @@
 
 import { htmlToPlainText } from "./email-text.js";
 import { capStored } from "./imap-envelope.js";
+import { stripNul } from "./text-normalize.js";
 
 export const IMAP_DECODE_MAX_BYTES = 256 * 1024;
 const MAX_HEADER_BYTES = 8 * 1024;
@@ -65,10 +66,6 @@ interface MimeHeaders {
 interface FoundText {
   plain?: string;
   html?: string;
-}
-
-function stripNul(value: string): string {
-  return value.includes("\u0000") ? value.replaceAll("\u0000", "") : value;
 }
 
 function rawText(text: Buffer): string {

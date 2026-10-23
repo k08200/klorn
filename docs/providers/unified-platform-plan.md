@@ -4684,10 +4684,10 @@ fixtures before E0; nothing is reachable until E0 is done and the flag is on.
     - The judge, the attention item, commitments and push all follow from
       that path.
     - `raw` comes from a pure mapper, `resendToRawEmail`:
-      - `gmailId` is `klorn:<address>:<email_id>` (the IMAP and Outlook
-        namespace pattern). A retry or replay updates the same row (unique
-        `(userId, gmailId)`), and a concurrent duplicate (P2002) counts as
-        stored.
+      - `gmailId` is `klorn:<email_id>`: unique per user through
+        `(userId, gmailId)`, since an account has one Klorn address, and no
+        address in it, so the shared store's logs and Sentry `extra` never
+        carry one. A concurrent duplicate (P2002) counts as stored.
       - `from` is `headers.from`, else the bare `from`; `to` and `cc` are the
         headers, else the joined arrays, capped as IMAP caps them.
       - `receivedAt` is the event's `created_at`: Resend's receive time, not
@@ -4800,42 +4800,81 @@ fixtures before E0; nothing is reachable until E0 is done and the flag is on.
   - E1a: Postgres cannot drop an enum value, so `KLORN` stays unused;
     `KlornAddress` is dropped once it has no rows.
 - E1b landed (branch `feat/klorn-mailbox-inbound`), flag OFF:
-  `routes/klorn-mailbox-inbound.ts`, `mail/klorn-inbound.ts` (delivery),
-  `mail/klorn-inbound-recipients.ts` and `mail/klorn-inbound-map.ts` (pure).
-  - Env: `KLORN_MAILBOX_ENABLED`, `RESEND_INBOUND_WEBHOOK_SECRET`,
-    `RESEND_INBOUND_API_KEY` (a full-access key, kept apart from
-    `RESEND_API_KEY` so that one stays sending-only), `KLORN_MAILBOX_DOMAIN`
-    and `KLORN_MAILBOX_FORWARD_TO` (optional: unset, system mail is dropped and
-    counted). The first three missing answer 503. `KLORN_MAILBOX_ENABLED` is
+  `routes/klorn-mailbox-inbound.ts`; `mail/klorn-inbound.ts` (delivery),
+  `-forward.ts` (system mail), `-resend.ts` (Resend calls), `-report.ts`
+  (operator reports), `-outcome.ts`; pure: `-recipients.ts`, `-map.ts`,
+  `mail/encoded-words.ts`.
+  - Env: `KLORN_MAILBOX_ENABLED`, `RESEND_INBOUND_WEBHOOK_SECRET` (`whsec_`
+    and a base64 key of at least 16 bytes: a bare `whsec_` verified forged
+    signatures), `RESEND_INBOUND_API_KEY` (full access, kept apart from
+    `RESEND_API_KEY`; founder action: create it in a separate Resend
+    team/account that receives the domain, so a leaked inbound key cannot send
+    as the transactional domain), `KLORN_MAILBOX_DOMAIN` and
+    `KLORN_MAILBOX_FORWARD_TO` (one plain address outside the domain; unset or
+    unusable, system mail is dropped and counted, unusable also logs an error).
+    The first three missing or unusable answer 503. `KLORN_MAILBOX_ENABLED` is
     read with `flagMode`: `cohort` counts as live here, since the route is not
     per user; the claim (E3) honours the cohort.
+  - No silent drop of a systemic fault: each such drop is a Sentry event,
+    `klorn-mailbox.<scope>`, at most one per scope per hour (re-armed after
+    it), with the email id, a status or an error class only. Scopes:
+    `resend-auth` and `resend-account` (key refused; quota or sender refused:
+    retried), `resend-missing` (404 after 10 min; retried before),
+    `resend-refused` (another 4xx except 408/409/429), `event-schema`,
+    `mailbox-missing` (a live address without its `KLORN` row), `store-bug`
+    (Prisma validation, P2011/P2012/P2019: retried), `store-refused` (SQLSTATE
+    22xxx, 54000 and similar: dropped), `store-unknown`, `forward-limit`,
+    `unexpected` (the client threw), `lookup`, `give-up`.
+  - Bounds: 256 KiB body; 10 s per Resend call and 12 s per request (then
+    503); at most 4 fetch-and-store at once; an event older than 26 h that
+    would answer 503 is dropped and reported (`give-up`). A rejected
+    signature's reason (`missing-headers`, `bad-signature`,
+    `stale-timestamp`) is logged at most once an hour; the client holding the
+    full-access key is built only after the signature verifies.
   - Differs from the design:
     - A replay of a stored copy is answered from the existing row, without
       fetching or rewriting it: Klorn holds this mailbox's state, and the
       store's re-sync path would set read mail back to unread.
-    - System mail is forwarded in the SDK's wrapped mode (`passthrough:
-      false`, the original attached as `.eml`), with an idempotency key per
-      message and handle. The SDK's default passthrough mode runs postal-mime
-      on the raw message (resend 6.20.0 `dist/index.mjs:785`), which E1 forbids.
-    - The SDK's type for `GET /emails/receiving/{id}` (6.20.0) does not declare
-      `authentication`; it is read as untyped input. A field that is not one
-      of the seven verdict strings is stored as `unknown`, so if Resend sends
-      objects per field, every verdict is `unknown` until a real fixture
-      (FA-1) says otherwise.
-    - Additions: at most 100 handles are looked up per event (the rest are
-      dropped and counted); NUL is removed from stored text; an empty `text`
-      falls back to the HTML; an `email_id` that is not an id drops the event
-      without a Resend call. `receivedAt` and the wipe comparison use the
-      event's `data.created_at`.
-    - Resend answers: 404, 400 and 422 drop the copy; no status, 401/403, 429,
-      5xx or no answer within 10 s answer 503. A 401/403 (a key that cannot
-      read received mail) is also reported to Sentry once per process (scope
-      `klorn-mailbox.resend-auth`, the status only).
-    - The store keeps running on the global client, as for every other
-      source (`persistGmailEmail` takes no `tx`); the mailbox, wipe and replay
-      checks run under the recipient's `withTenant`.
+    - System mail (L18) is bounded: 20 forwards an hour process-wide (past
+      it: dropped, counted, reported), one at a time, in the SDK's wrapped
+      mode (`passthrough: false`; its passthrough mode runs postal-mime on the
+      raw message, resend 6.20.0 `dist/index.mjs:785`), with an idempotency
+      key per message and handle. A message estimated over 2 MB (text, HTML
+      and attachment sizes) gets a notice with a fixed subject via
+      `emails.send` instead, carrying no sender-controlled text.
+    - The self-sent comparison gets the Klorn address only when DKIM and
+      DMARC both pass; otherwise null, which the store resolves to the
+      account's sign-in address.
+    - Content is fetched with `html_format: cid`; RFC 2047 encoded-words in
+      From/To/Cc are decoded (linear, TextDecoder charsets); NUL is removed
+      from stored text and the List-Unsubscribe targets.
+    - Recipients are matched by the handle's shape and the database row,
+      never the reserved list, so a later addition to the list cannot stop
+      delivery to an existing owner.
+    - The SDK's type for `GET /emails/receiving/{id}` (6.20.0) does not
+      declare `authentication`; it is read as untyped input. A field that is
+      not one of the seven verdict strings is stored as `unknown`, so if
+      Resend sends objects per field, every verdict is `unknown` until a real
+      fixture (FA-1) says otherwise.
+    - At most 100 handles are looked up per event; a signed event with an
+      `email_id` that is not an id is dropped and reported; one whose
+      `created_at` does not parse falls back to the envelope's, then now.
   - E3 must create the `KLORN` row with email exactly
     `<handle>@<KLORN_MAILBOX_DOMAIN in lowercase>`: delivery compares it as is.
+  - Residuals, not fixed in E1b:
+    - A replay (Resend's retry or a manual one, within about 28 h) re-creates
+      a copy the user deleted in between. Needs a per-user `email_id` dedupe
+      marker kept at least 28 h once delete exists (E2/E4).
+    - The store runs on the global client (`persistGmailEmail` takes no
+      `tx`); wrap it in `withTenant` before RLS is armed.
+    - The rate limit keys on CF-Connecting-IP: if the origin is reachable
+      without Cloudflare, a spoofed header can starve Svix's bucket (infra:
+      only Cloudflare should reach the origin).
+    - Two concurrent deliveries of one event can both pass the replay check;
+      the loser's create is a P2002 (counted stored), or, in a narrower race,
+      the store's update path touches the new row. Accepted; create-only later.
+    - The SDK's forward downloads the raw message with no abort signal, so a
+      forward past its budget answers retry while that download may still run.
 **E2 — provider actions and send** (*outline*). Depends on: B0. The database
 is the source of truth, so every action in `MailProviderActions` is
 implementable.

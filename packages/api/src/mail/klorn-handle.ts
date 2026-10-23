@@ -147,6 +147,19 @@ export function isReservedHandle(handle: string): boolean {
   return RESERVED_SKELETONS.has(skeleton) || skeleton.includes(BRAND_SKELETON);
 }
 
+/**
+ * The shape alone (length and characters), for an already-lowercased handle.
+ * Inbound mail is matched by this and the database row, never by the reserved
+ * list, so a later addition to the list cannot stop delivery to an existing owner.
+ */
+export function isWellFormedHandle(handle: string): boolean {
+  return (
+    handle.length >= KLORN_HANDLE_MIN_LENGTH &&
+    handle.length <= KLORN_HANDLE_MAX_LENGTH &&
+    HANDLE_SHAPE.test(handle)
+  );
+}
+
 /** Whether this value may be claimed as a handle, and its stored form. */
 export function validateHandle(raw: unknown): HandleCheck {
   if (typeof raw !== "string") return { ok: false, reason: "length" };

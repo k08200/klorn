@@ -5,10 +5,13 @@
  * Synchronous, with Resend's retries (about 28 h) as the queue: the outcome has
  * `retry` set only for a transient failure, and the route then answers 5xx.
  * Every copy is otherwise stored or deliberately dropped (2xx), so one hostile
- * message cannot make Resend disable the endpoint.
+ * message cannot make Resend disable the endpoint; and a drop that could hide a
+ * systemic fault is reported (klorn-inbound-report.ts), so one bug or a wrong
+ * setting cannot black-hole every message while Resend counts them delivered.
  *
  * - Routing reads the signed event; the content comes from Resend's API with
- *   Klorn's own key, never from the webhook body, so a replay cannot inject any.
+ *   Klorn's own key (`html_format: cid`), never from the webhook body, so a
+ *   replay cannot inject any. It is fetched and mapped once per event.
  * - One `withSystem` lookup of the handles (handle and userId only). Per live
  *   recipient, under that user's tenant: the user's own KLORN row with exactly
  *   `<handle>@<domain>` (never found by email alone: generic IMAP lets a user
@@ -17,185 +20,84 @@
  *   for far longer than the fence window.
  * - A replay finds its row and is answered without fetching or rewriting it:
  *   Klorn holds this mailbox's state, so a re-sync would mark read mail unread.
- * - postmaster@ and abuse@ are forwarded (L18) in the SDK's wrapped mode, which
- *   attaches the original as .eml; its passthrough mode would run postal-mime
- *   on the raw message on the event loop.
+ * - The self-sent comparison gets the Klorn address only for mail whose DKIM
+ *   and DMARC pass, so a forged `From:` of the user's own address cannot plant
+ *   commitments the user owes.
+ * - Bounded: a semaphore around fetch and store, a per-call budget and the
+ *   request's deadline; an event older than GIVE_UP_AGE_MS that would answer
+ *   retry is dropped and reported instead (Resend stops at about 28 h anyway).
  * - Nothing logged or reported here carries an address, subject or body.
  */
 
 import { Prisma } from "@prisma/client";
-import type {
-  ErrorResponse,
-  ForwardReceivingEmailOptions,
-  ForwardReceivingEmailRequestOptions,
-  ForwardReceivingEmailResponse,
-  GetReceivingEmailResponse,
-} from "resend";
 import { withSystem, withTenant } from "../db-tenant.js";
 import { persistGmailEmail } from "../judge/email-firewall.js";
 import { isDataWipeFenceError } from "../privacy/data-wipe-fence.js";
-import { captureError } from "../sentry.js";
+import { forwardSystemMail } from "./klorn-inbound-forward.js";
 import {
+  isAuthenticatedSender,
   klornMessageId,
   type ResendReceivedContent,
-  type ResendReceivedEventData,
   resendToRawEmail,
 } from "./klorn-inbound-map.js";
+import {
+  callBudget,
+  combine,
+  count,
+  type InboundContext,
+  type InboundOutcome,
+  type ParsedEvent,
+  pastDeadline,
+  reportResendFailure,
+  retryFor,
+  SETTLED,
+} from "./klorn-inbound-outcome.js";
 import { inboundRecipients } from "./klorn-inbound-recipients.js";
+import { callResend, errorClass } from "./klorn-inbound-resend.js";
 import { KLORN_PROVIDER } from "./klorn-mailbox.js";
 
-/** The two calls made to Resend: `resend.emails.receiving`. */
-export interface InboundReceivingApi {
-  get(id: string): Promise<GetReceivingEmailResponse>;
-  forward(
-    options: ForwardReceivingEmailOptions,
-    requestOptions?: ForwardReceivingEmailRequestOptions,
-  ): Promise<ForwardReceivingEmailResponse>;
-}
-
-export interface InboundSettings {
-  /** ASCII lowercase. */
-  domain: string;
-  forwardTo: string | null;
-  timeoutMs: number;
-}
-
-export interface InboundOutcome {
-  stored: number;
-  dropped: number;
-  forwarded: number;
-  /** Why Resend should retry (a code, no mail data); null when every copy is settled. */
-  retry: string | null;
-}
+export type { InboundContext, InboundOutcome } from "./klorn-inbound-outcome.js";
 
 /** Resend ids are UUIDs; the id goes into a URL path and the logs, so nothing else passes. */
 const RESEND_EMAIL_ID = /^[A-Za-z0-9_-]{1,128}$/;
-const HTTP_BAD_REQUEST = 400;
-const HTTP_NOT_FOUND = 404;
-const HTTP_UNPROCESSABLE = 422;
-const FORWARD_NOTE =
-  "Received by Klorn for a system address. The original message is attached unchanged.";
-
-const SETTLED: InboundOutcome = { stored: 0, dropped: 0, forwarded: 0, retry: null };
+/** Resend's retries end at about 28 h: past this, a retry answer is a drop the operator sees. */
+export const GIVE_UP_AGE_MS = 26 * 60 * 60_000;
 
 export function isResendEmailId(value: unknown): value is string {
   return typeof value === "string" && RESEND_EMAIL_ID.test(value);
 }
 
-function combine(a: InboundOutcome, b: InboundOutcome): InboundOutcome {
+function parseDate(value: unknown): Date | null {
+  if (typeof value !== "string") return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/**
+ * The verified event's id and receive time. A shape Resend did not document
+ * is schema drift: reported, and the time falls back to the envelope's, then now.
+ */
+function parseEvent(event: unknown, ctx: InboundContext): ParsedEvent | null {
+  const envelope = (event ?? {}) as { created_at?: unknown; data?: unknown };
+  const data = envelope.data;
+  if (typeof data !== "object" || data === null) {
+    ctx.reporter.report("event-schema", { kind: "data" });
+    return null;
+  }
+  const fields = data as Record<string, unknown>;
+  if (!isResendEmailId(fields.email_id)) {
+    ctx.reporter.report("event-schema", { kind: "email_id" });
+    return null;
+  }
+  const emailId = fields.email_id;
+  const receivedAt = parseDate(fields.created_at);
+  if (receivedAt) return { emailId, receivedAt, data: fields };
+  ctx.reporter.report("event-schema", { emailId, kind: "created_at" });
   return {
-    stored: a.stored + b.stored,
-    dropped: a.dropped + b.dropped,
-    forwarded: a.forwarded + b.forwarded,
-    retry: a.retry ?? b.retry,
+    emailId,
+    receivedAt: parseDate(envelope.created_at) ?? new Date(ctx.now()),
+    data: fields,
   };
-}
-
-const count = (field: "stored" | "dropped" | "forwarded", n = 1): InboundOutcome => ({
-  ...SETTLED,
-  [field]: n,
-});
-const retryFor = (reason: string): InboundOutcome => ({ ...SETTLED, retry: reason });
-
-function parseEventData(data: unknown): ResendReceivedEventData | null {
-  if (typeof data !== "object" || data === null) return null;
-  const event = data as ResendReceivedEventData;
-  if (!isResendEmailId(event.email_id)) return null;
-  if (typeof event.created_at !== "string") return null;
-  return Number.isNaN(new Date(event.created_at).getTime()) ? null : event;
-}
-
-async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  let timer: NodeJS.Timeout | undefined;
-  const timeout = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => reject(new Error("Resend did not answer in time")), ms);
-  });
-  try {
-    return await Promise.race([promise, timeout]);
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-/**
- * 404: Resend no longer has the message. 400/422: Resend refuses this request
- * for good. Anything else (no status, 401/403 for a key that cannot read
- * received mail, 429, 5xx) is worth a retry.
- */
-function isPermanentResendError(error: ErrorResponse | null): boolean {
-  const status = error?.statusCode;
-  return status === HTTP_NOT_FOUND || status === HTTP_BAD_REQUEST || status === HTTP_UNPROCESSABLE;
-}
-
-/** Sentry scope of the one report that the inbound key cannot read received mail. */
-export const RESEND_AUTH_SCOPE = "klorn-mailbox.resend-auth";
-const RESEND_AUTH_STATUSES: ReadonlySet<number> = new Set([401, 403]);
-/**
- * Once per process: Resend retries every delivery for about 28 h, so a report
- * per request would bury the signal. The warn log and the 503 stay per request.
- */
-let resendAuthReported = false;
-
-function reportResendAuthOnce(status: number | null | undefined): void {
-  if (resendAuthReported || typeof status !== "number" || !RESEND_AUTH_STATUSES.has(status)) {
-    return;
-  }
-  resendAuthReported = true;
-  // The status only: never the key, an address or the message.
-  captureError(
-    new Error(`Resend refused RESEND_INBOUND_API_KEY with ${status}: it cannot read received mail`),
-    { tags: { scope: RESEND_AUTH_SCOPE }, extra: { status } },
-  );
-}
-
-/** The retry reason (a code, no mail data); a refused key reaches an operator once. */
-function resendRetryReason(call: string, error: ErrorResponse | null): string {
-  reportResendAuthOnce(error?.statusCode);
-  return `resend-${call}-${error?.statusCode ?? "network"}`;
-}
-
-async function forwardOne(
-  emailId: string,
-  handle: string,
-  settings: InboundSettings & { forwardTo: string },
-  api: InboundReceivingApi,
-): Promise<InboundOutcome> {
-  try {
-    const response = await withTimeout(
-      api.forward(
-        {
-          emailId,
-          to: settings.forwardTo,
-          from: `${handle}@${settings.domain}`,
-          passthrough: false,
-          text: FORWARD_NOTE,
-        },
-        { idempotencyKey: `klorn-forward:${emailId}:${handle}` },
-      ),
-      settings.timeoutMs,
-    );
-    if (!response.error) return count("forwarded");
-    if (isPermanentResendError(response.error)) return count("dropped");
-    return retryFor(resendRetryReason("forward", response.error));
-  } catch {
-    return retryFor("resend-forward-network");
-  }
-}
-
-async function forwardSystemMail(
-  emailId: string,
-  system: string[],
-  settings: InboundSettings,
-  api: InboundReceivingApi,
-): Promise<InboundOutcome> {
-  const { forwardTo } = settings;
-  if (system.length === 0) return SETTLED;
-  if (!forwardTo) return count("dropped", system.length);
-  let outcome = SETTLED;
-  for (const handle of system) {
-    outcome = combine(outcome, await forwardOne(emailId, handle, { ...settings, forwardTo }, api));
-  }
-  return outcome;
 }
 
 /** Live handles → their user. A tombstone (null user) or unknown handle is absent. */
@@ -217,24 +119,27 @@ interface Target {
   linkedInboxAccountId: string;
 }
 
-type MailboxDecision = { kind: "drop" } | { kind: "exists" } | { kind: "deliver"; id: string };
+type MailboxDecision =
+  | { kind: "no-mailbox" }
+  | { kind: "pre-wipe" }
+  | { kind: "exists" }
+  | { kind: "deliver"; id: string };
 
 function mailboxDecision(
   userId: string,
   address: string,
-  emailId: string,
-  receivedAt: Date,
+  event: ParsedEvent,
 ): Promise<MailboxDecision> {
   return withTenant(userId, async (tx): Promise<MailboxDecision> => {
     const mailbox = await tx.linkedInboxAccount.findFirst({
       where: { userId, provider: KLORN_PROVIDER, email: address },
       select: { id: true },
     });
-    if (!mailbox) return { kind: "drop" };
+    if (!mailbox) return { kind: "no-mailbox" };
     const wipe = await tx.dataWipe.findUnique({ where: { userId }, select: { purgedAt: true } });
-    if (wipe?.purgedAt && receivedAt < wipe.purgedAt) return { kind: "drop" };
+    if (wipe?.purgedAt && event.receivedAt < wipe.purgedAt) return { kind: "pre-wipe" };
     const existing = await tx.emailMessage.findUnique({
-      where: { userId_gmailId: { userId, gmailId: klornMessageId(address, emailId) } },
+      where: { userId_gmailId: { userId, gmailId: klornMessageId(event.emailId) } },
       select: { id: true },
     });
     return existing ? { kind: "exists" } : { kind: "deliver", id: mailbox.id };
@@ -242,80 +147,69 @@ function mailboxDecision(
 }
 
 async function resolveTargets(
-  event: ResendReceivedEventData,
+  event: ParsedEvent,
   handles: string[],
-  domain: string,
+  ctx: InboundContext,
 ): Promise<{ outcome: InboundOutcome; targets: Target[] }> {
   if (handles.length === 0) return { outcome: SETTLED, targets: [] };
   const owners = await lookupOwners(handles);
-  const receivedAt = new Date(event.created_at);
   let outcome = count("dropped", handles.length - owners.size);
-  const targets: Target[] = [];
+  let targets: Target[] = [];
   for (const [handle, userId] of owners) {
-    const address = `${handle}@${domain}`;
-    const decision = await mailboxDecision(userId, address, event.email_id, receivedAt);
+    const address = `${handle}@${ctx.domain}`;
+    const decision = await mailboxDecision(userId, address, event);
     if (decision.kind === "deliver") {
-      targets.push({ userId, address, linkedInboxAccountId: decision.id });
-    } else {
-      outcome = combine(outcome, count(decision.kind === "exists" ? "stored" : "dropped"));
+      targets = [...targets, { userId, address, linkedInboxAccountId: decision.id }];
+      continue;
     }
+    // A live address without its mailbox row is a data inconsistency (the claim
+    // writes both in one transaction): dropped, but never silently.
+    if (decision.kind === "no-mailbox") {
+      ctx.reporter.report("mailbox-missing", { emailId: event.emailId });
+    }
+    outcome = combine(outcome, count(decision.kind === "exists" ? "stored" : "dropped"));
   }
   return { outcome, targets };
 }
 
-type ContentResult =
-  | { kind: "ok"; content: ResendReceivedContent }
-  | { kind: "gone" }
-  | { kind: "retry"; reason: string };
-
-async function fetchContent(
-  api: InboundReceivingApi,
-  emailId: string,
-  timeoutMs: number,
-): Promise<ContentResult> {
-  try {
-    const response = await withTimeout(api.get(emailId), timeoutMs);
-    if (response.data) return { kind: "ok", content: response.data as ResendReceivedContent };
-    if (isPermanentResendError(response.error)) return { kind: "gone" };
-    return { kind: "retry", reason: resendRetryReason("get", response.error) };
-  } catch {
-    return { kind: "retry", reason: "resend-get-network" };
-  }
-}
-
 /** Postgres refuses this value for good: a retry would fail the same way. */
-const DETERMINISTIC_PRISMA_CODES = new Set([
+const REFUSED_PRISMA_CODES = new Set([
   "P2000", // value too long for the column
   "P2005", // invalid stored value
   "P2006", // invalid value
   "P2007", // data validation error
-  "P2011", // null constraint
-  "P2012", // missing required value
-  "P2019", // input error
   "P2020", // value out of range
   "P2023", // inconsistent column data
   "P2033", // number does not fit
 ]);
+/** Klorn built a query Prisma or the schema rejects: a bug to fix, so the mail waits. */
+const BUG_PRISMA_CODES = new Set([
+  "P2011", // null constraint
+  "P2012", // missing required value
+  "P2019", // input error
+]);
 const PRISMA_RAW_QUERY_FAILED = "P2010";
-/** SQLSTATE class 22, data exception (22021: invalid byte sequence, 22P05: untranslatable). */
-const PG_DATA_EXCEPTION_CLASS = "22";
-const PG_DATA_EXCEPTION_IN_MESSAGE = /\bcode: "22[0-9A-Z]{3}"/;
+/** SQLSTATE class 22 (data exception: 22021 invalid byte sequence) and 54000 (index row too large). */
+const REFUSED_SQLSTATE = /^(?:22[0-9A-Z]{3}|54000)$/;
+const REFUSED_SQLSTATE_IN_MESSAGE = /\bcode: "(?:22[0-9A-Z]{3}|54000)"/;
 
-export type StoreErrorKind = "fenced" | "stored" | "rejected" | "unknown";
+export type StoreErrorKind = "fenced" | "stored" | "refused" | "bug" | "unknown";
+
+function classifyKnownRequestError(err: Prisma.PrismaClientKnownRequestError): StoreErrorKind {
+  if (err.code === "P2002") return "stored";
+  if (REFUSED_PRISMA_CODES.has(err.code)) return "refused";
+  if (BUG_PRISMA_CODES.has(err.code)) return "bug";
+  const sqlState = (err.meta as { code?: unknown } | undefined)?.code;
+  const refused = typeof sqlState === "string" && REFUSED_SQLSTATE.test(sqlState);
+  return err.code === PRISMA_RAW_QUERY_FAILED && refused ? "refused" : "unknown";
+}
 
 export function classifyStoreError(err: unknown): StoreErrorKind {
   if (isDataWipeFenceError(err)) return "fenced";
-  if (err instanceof Prisma.PrismaClientKnownRequestError) {
-    if (err.code === "P2002") return "stored";
-    if (DETERMINISTIC_PRISMA_CODES.has(err.code)) return "rejected";
-    const sqlState = (err.meta as { code?: unknown } | undefined)?.code;
-    const dataException =
-      typeof sqlState === "string" && sqlState.startsWith(PG_DATA_EXCEPTION_CLASS);
-    return err.code === PRISMA_RAW_QUERY_FAILED && dataException ? "rejected" : "unknown";
-  }
-  if (err instanceof Prisma.PrismaClientValidationError) return "rejected";
+  if (err instanceof Prisma.PrismaClientKnownRequestError) return classifyKnownRequestError(err);
+  if (err instanceof Prisma.PrismaClientValidationError) return "bug";
   if (err instanceof Prisma.PrismaClientUnknownRequestError) {
-    return PG_DATA_EXCEPTION_IN_MESSAGE.test(err.message) ? "rejected" : "unknown";
+    return REFUSED_SQLSTATE_IN_MESSAGE.test(err.message) ? "refused" : "unknown";
   }
   return "unknown";
 }
@@ -323,66 +217,95 @@ export function classifyStoreError(err: unknown): StoreErrorKind {
 /** The class of an error and its Prisma code: what may be reported, never its message. */
 export function errorKind(err: unknown): string {
   if (err instanceof Prisma.PrismaClientKnownRequestError) return `${err.name} ${err.code}`;
-  return err instanceof Error ? err.name : typeof err;
+  return errorClass(err);
 }
 
-async function storeCopy(
-  target: Target,
-  content: ResendReceivedContent,
-  event: ResendReceivedEventData,
-): Promise<InboundOutcome> {
-  const raw = resendToRawEmail(content, event, target.address);
+type RawEmail = ReturnType<typeof resendToRawEmail>;
+
+async function storeCopy(target: Target, raw: RawEmail, ctx: InboundContext, emailId: string) {
   try {
     await persistGmailEmail(target.userId, raw, {
-      userEmail: target.address,
+      userEmail: isAuthenticatedSender(raw.authentication) ? target.address : null,
       linkedInboxAccountId: target.linkedInboxAccountId,
     });
     return count("stored");
   } catch (err) {
     const kind = classifyStoreError(err);
     if (kind === "stored") return count("stored");
-    if (kind === "rejected") return count("dropped");
     if (kind === "fenced") return retryFor("data-wipe");
-    captureError(new Error(`Klorn inbound store failed: ${errorKind(err)}`), {
-      tags: { scope: "klorn-inbound.store" },
-      extra: { emailId: event.email_id },
-    });
-    return retryFor("store");
+    ctx.reporter.report(`store-${kind}`, { emailId, kind: errorKind(err) });
+    return kind === "refused" ? count("dropped") : retryFor(`store-${kind}`);
   }
 }
 
-async function deliverToUsers(
-  event: ResendReceivedEventData,
-  handles: string[],
-  settings: InboundSettings,
-  api: InboundReceivingApi,
+async function storeCopies(
+  targets: Target[],
+  content: ResendReceivedContent,
+  event: ParsedEvent,
+  ctx: InboundContext,
 ): Promise<InboundOutcome> {
-  const { outcome, targets } = await resolveTargets(event, handles, settings.domain);
-  // With no live recipient, the content is never fetched.
-  if (targets.length === 0) return outcome;
-  const fetched = await fetchContent(api, event.email_id, settings.timeoutMs);
-  if (fetched.kind === "retry") return combine(outcome, retryFor(fetched.reason));
-  if (fetched.kind === "gone") return combine(outcome, count("dropped", targets.length));
-  let delivered = outcome;
-  for (const target of targets) {
-    delivered = combine(delivered, await storeCopy(target, fetched.content, event));
+  let raw: RawEmail;
+  try {
+    raw = resendToRawEmail(
+      content,
+      { email_id: event.emailId, created_at: event.receivedAt.toISOString() },
+      event.receivedAt,
+    );
+  } catch (err) {
+    ctx.reporter.report("unexpected", { emailId: event.emailId, kind: errorClass(err) });
+    return retryFor("map", targets.length);
   }
-  return delivered;
+  let outcome = SETTLED;
+  for (const [index, target] of targets.entries()) {
+    if (pastDeadline(ctx)) return combine(outcome, retryFor("deadline", targets.length - index));
+    outcome = combine(outcome, await storeCopy(target, raw, ctx, event.emailId));
+  }
+  return outcome;
 }
 
-/** `data` is the verified event's `data`; a malformed one is dropped (counted once). */
+/** Fetch once, store every user's copy, then forward system mail with the same content. */
+async function deliverContent(
+  event: ParsedEvent,
+  targets: Target[],
+  system: string[],
+  ctx: InboundContext,
+): Promise<InboundOutcome> {
+  const copies = targets.length + system.length;
+  const fetched = await ctx.runtime.deliverySlots.run(async () => {
+    const result = await callResend(
+      () => ctx.api.get(event.emailId, { html_format: "cid" }),
+      callBudget(ctx),
+    );
+    if (!result.ok) return { outcome: reportResendFailure("get", result, copies, event, ctx) };
+    const content = result.data as ResendReceivedContent;
+    return { outcome: await storeCopies(targets, content, event, ctx), content };
+  });
+  if (!("content" in fetched)) return fetched.outcome;
+  return combine(fetched.outcome, await forwardSystemMail(system, fetched.content, event, ctx));
+}
+
+function giveUpIfStale(outcome: InboundOutcome, event: ParsedEvent, ctx: InboundContext) {
+  if (!outcome.retry || ctx.now() - event.receivedAt.getTime() <= GIVE_UP_AGE_MS) return outcome;
+  ctx.reporter.report("give-up", { emailId: event.emailId, kind: outcome.retry });
+  return { ...outcome, dropped: outcome.dropped + outcome.pending, pending: 0, retry: null };
+}
+
+/** `event` is the verified webhook payload; a malformed one is dropped (counted once). */
 export async function deliverInboundEmail(
-  data: unknown,
-  settings: InboundSettings,
-  api: InboundReceivingApi,
+  event: unknown,
+  ctx: InboundContext,
 ): Promise<InboundOutcome> {
-  const event = parseEventData(data);
-  if (!event) return count("dropped");
-  const recipients = inboundRecipients(
-    event as unknown as Record<string, unknown>,
-    settings.domain,
+  const parsed = parseEvent(event, ctx);
+  if (!parsed) return count("dropped");
+  const recipients = inboundRecipients(parsed.data, ctx.domain);
+  const { outcome: resolved, targets } = await resolveTargets(parsed, recipients.handles, ctx);
+  const system = ctx.forwardTo ? recipients.system : [];
+  const settled = combine(
+    count("dropped", recipients.dropped + recipients.system.length - system.length),
+    resolved,
   );
-  const forwarded = await forwardSystemMail(event.email_id, recipients.system, settings, api);
-  const delivered = await deliverToUsers(event, recipients.handles, settings, api);
-  return combine(count("dropped", recipients.dropped), combine(forwarded, delivered));
+  // With no live recipient and nothing to forward, the content is never fetched.
+  if (targets.length === 0 && system.length === 0) return settled;
+  const delivered = await deliverContent(parsed, targets, system, ctx);
+  return giveUpIfStale(combine(settled, delivered), parsed, ctx);
 }

@@ -1,22 +1,32 @@
 /**
  * Resend's parsed content of a received message → the row the shared store
- * writes (step E1b of docs/providers/unified-platform-plan.md). Pure.
+ * writes (step E1b of docs/providers/unified-platform-plan.md). Pure, and the
+ * same for every recipient of the event, so it runs once per event.
  *
  * - Only Resend's parsed fields are read; no raw MIME is ever parsed here
- *   (#1466/#1467: a parser on the event loop is a denial of service).
+ *   (#1466/#1467: a parser on the event loop is a denial of service). RFC 2047
+ *   encoded-words in From/To/Cc are decoded by a linear decoder.
  * - Every field is sender-controlled input that reached Resend, so each is
  *   type-checked and capped as IMAP caps it, and NUL is removed (Postgres text
  *   cannot hold it, and a refused row would drop the message).
  * - `htmlBody` is empty, like IMAP: rendering this source's HTML is reviewed in
- *   E4. Attachments are E4 too.
+ *   E4. Attachments are E4 too. The content is fetched with `html_format: cid`,
+ *   so inline images do not crowd the text out of the HTML fallback.
  */
 
 import type { EmailReceivedEvent, GetReceivingEmailResponseSuccess } from "resend";
 import { htmlToPlainText } from "./email-text.js";
+import { decodeEncodedWords } from "./encoded-words.js";
 import type { GmailRawEmail } from "./gmail-fetch.js";
-import { capStored, envelopeSubject, MAX_STORED_CC_LENGTH } from "./imap-envelope.js";
+import {
+  capStored,
+  envelopeSubject,
+  MAX_STORED_CC_LENGTH,
+  MAX_STORED_SUBJECT_LENGTH,
+} from "./imap-envelope.js";
 import { parseListUnsubscribe } from "./list-unsubscribe.js";
 import { MAX_STORED_BODY_CHARS, snippetFromBody } from "./stored-mail-text.js";
+import { stripNul } from "./text-normalize.js";
 
 /**
  * GET /emails/receiving/{id}. Resend documents `authentication` ({spf, dkim,
@@ -43,6 +53,8 @@ export const UNKNOWN_VERDICT = "unknown";
 export type MailAuthentication = { spf: string; dkim: string; dmarc: string };
 
 const AUTH_FIELDS = ["spf", "dkim", "dmarc"] as const;
+/** A raw address header is decoded from at most this much; the result is capped as IMAP's. */
+const MAX_HEADER_DECODE_CHARS = 4 * MAX_STORED_CC_LENGTH;
 
 function verdict(value: unknown): string {
   if (typeof value !== "string") return UNKNOWN_VERDICT;
@@ -58,18 +70,31 @@ export function whitelistAuthentication(raw: unknown): MailAuthentication | null
   return { spf, dkim, dmarc };
 }
 
-/** `klorn:<address>:<email_id>`, the IMAP and Outlook namespace pattern. */
-export function klornMessageId(address: string, emailId: string): string {
-  return `klorn:${address}:${emailId}`;
+/** Whether the sender's domain is authenticated: DKIM and DMARC both pass. */
+export function isAuthenticatedSender(authentication: MailAuthentication | null): boolean {
+  return authentication?.dkim === "pass" && authentication.dmarc === "pass";
 }
 
-function stripNul(value: string): string {
-  return value.includes("\u0000") ? value.replaceAll("\u0000", "") : value;
+/**
+ * `klorn:<email_id>`: unique per user through (userId, gmailId), since an account
+ * has one Klorn address. No address in it, so the shared store's logs and Sentry
+ * `extra` (which carry gmailId) never carry one.
+ */
+export function klornMessageId(emailId: string): string {
+  return `klorn:${emailId}`;
 }
 
 /** A sender-controlled string, capped first (bounded work), then NUL-free. */
 function storedText(value: unknown, max: number): string {
   return typeof value === "string" ? stripNul(capStored(value, max)) : "";
+}
+
+/** An address header: encoded-words decoded from a bounded input, then capped like IMAP. */
+function addressHeader(value: string): string {
+  return storedText(
+    decodeEncodedWords(capStored(value, MAX_HEADER_DECODE_CHARS)),
+    MAX_STORED_CC_LENGTH,
+  );
 }
 
 /** A header value by case-insensitive name; only a string counts. */
@@ -93,15 +118,15 @@ function bodyOf(content: ResendReceivedContent): string {
   return "";
 }
 
-function receivedAtOf(event: ResendReceivedEventData): Date {
-  const date = new Date(event.created_at);
-  return Number.isNaN(date.getTime()) ? new Date() : date;
+function nulFree(value: string | null): string | null {
+  return value === null ? null : stripNul(value);
 }
 
+/** `receivedAt` is the caller's: the event's receive time, already validated. */
 export function resendToRawEmail(
   content: ResendReceivedContent,
-  event: ResendReceivedEventData,
-  recipientAddress: string,
+  event: Pick<ResendReceivedEventData, "email_id" | "created_at">,
+  receivedAt: Date = new Date(event.created_at),
 ): GmailRawEmail & { authentication: MailAuthentication | null } {
   const headers = content.headers;
   const body = bodyOf(content);
@@ -111,24 +136,26 @@ export function resendToRawEmail(
     header(headers, "list-unsubscribe-post"),
   );
   return {
-    gmailId: klornMessageId(recipientAddress, event.email_id),
+    gmailId: klornMessageId(event.email_id),
     threadId: null,
-    from: storedText(header(headers, "from") ?? content.from, MAX_STORED_CC_LENGTH).trim(),
-    to: storedText(header(headers, "to") ?? joined(content.to), MAX_STORED_CC_LENGTH),
-    cc: storedText(header(headers, "cc") ?? joined(content.cc), MAX_STORED_CC_LENGTH),
-    // Bounded before envelopeSubject trims it and caps it at IMAP's limit.
-    subject: envelopeSubject(storedText(content.subject, MAX_STORED_BODY_CHARS)),
+    from: addressHeader(
+      header(headers, "from") ?? storedText(content.from, MAX_HEADER_DECODE_CHARS),
+    ).trim(),
+    to: addressHeader(header(headers, "to") ?? joined(content.to)),
+    cc: addressHeader(header(headers, "cc") ?? joined(content.cc)),
+    // Capped at the subject limit before envelopeSubject trims it.
+    subject: envelopeSubject(storedText(content.subject, MAX_STORED_SUBJECT_LENGTH)),
     snippet: snippetFromBody(body) ?? "",
     body,
     htmlBody: "",
     labels: ["INBOX", "UNREAD"],
     isRead: false,
     isStarred: false,
-    receivedAt: receivedAtOf(event),
+    receivedAt: Number.isNaN(receivedAt.getTime()) ? new Date() : receivedAt,
     attachments: [],
     hasListUnsubscribe: Boolean(listUnsubscribeHeader),
-    listUnsubscribeMailto: listUnsubscribe.mailto,
-    listUnsubscribeUrl: listUnsubscribe.url,
+    listUnsubscribeMailto: nulFree(listUnsubscribe.mailto),
+    listUnsubscribeUrl: nulFree(listUnsubscribe.url),
     listUnsubscribeOneClick: listUnsubscribe.oneClick,
     authentication: whitelistAuthentication(content.authentication),
   };

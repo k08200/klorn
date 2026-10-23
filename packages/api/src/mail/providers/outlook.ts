@@ -39,6 +39,7 @@
 
 import { markLinkedInboxForReconnect } from "../gmail.js";
 import { resolveOutlookBearer } from "../outlook-token.js";
+import { asciiLower } from "../text-normalize.js";
 import { SendOutcomeUnknownError } from "./send-outcome-unknown.js";
 import type {
   CreateDraftResult,
@@ -234,10 +235,6 @@ interface ReplyDraft {
 }
 
 const asAddress = (address: string) => ({ emailAddress: { address } });
-
-/** ASCII-only lower-casing: a look-alike letter must not fold into the approved address. */
-const asciiLower = (text: string): string =>
-  text.replace(/[A-Z]/g, (letter) => String.fromCharCode(letter.charCodeAt(0) + 32));
 
 /** Text bodies come back with CRLF line ends; the approved text has LF. */
 const withLf = (text: string): string => text.replace(/\r\n/g, "\n");

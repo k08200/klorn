@@ -91,17 +91,28 @@ describe("inboundRecipients", () => {
     expect(result.dropped).toBe(0);
   });
 
-  it("drops plus tags, malformed handles and reserved names, and counts each once", () => {
+  it("drops plus tags and malformed handles, and counts each once", () => {
     const result = inboundRecipients(
       eventData({
-        to: ["jane+news@klorn.ai", "a..b@klorn.ai", "support@klorn.ai", "post.master@klorn.ai"],
-        cc: ["SUPPORT@klorn.ai"],
+        to: ["jane+news@klorn.ai", "a..b@klorn.ai", "ab@klorn.ai"],
+        cc: ["A..B@klorn.ai"],
       }),
       DOMAIN,
     );
     expect(result.handles).toEqual([]);
     expect(result.system).toEqual([]);
-    expect(result.dropped).toBe(4);
+    expect(result.dropped).toBe(3);
+  });
+
+  it("looks reserved names up like any handle: the shape decides, not the reserved list", () => {
+    // A later addition to the list must never stop delivery to an existing owner;
+    // a name that was reserved all along simply has no row.
+    const result = inboundRecipients(
+      eventData({ to: ["support@klorn.ai", "post.master@klorn.ai"], cc: ["SUPPORT@klorn.ai"] }),
+      DOMAIN,
+    );
+    expect(result.handles).toEqual(["support", "post.master"]);
+    expect(result.dropped).toBe(0);
   });
 
   it("puts postmaster and abuse on the system list, exactly", () => {
@@ -164,17 +175,13 @@ describe("whitelistAuthentication", () => {
 });
 
 describe("resendToRawEmail", () => {
-  it("names the row klorn:<address>:<email_id>, per recipient", () => {
-    expect(klornMessageId(ADDRESS, EMAIL_ID)).toBe(`klorn:${ADDRESS}:${EMAIL_ID}`);
-    const raw = resendToRawEmail(content(), eventData(), ADDRESS);
-    expect(raw.gmailId).toBe(`klorn:${ADDRESS}:${EMAIL_ID}`);
-    expect(resendToRawEmail(content(), eventData(), "sam@klorn.ai").gmailId).toBe(
-      `klorn:sam@klorn.ai:${EMAIL_ID}`,
-    );
+  it("names the row klorn:<email_id>: no address, so no shared log or report carries one", () => {
+    expect(klornMessageId(EMAIL_ID)).toBe(`klorn:${EMAIL_ID}`);
+    expect(resendToRawEmail(content(), eventData()).gmailId).toBe(`klorn:${EMAIL_ID}`);
   });
 
   it("maps the fixed fields like IMAP: inbox, unread, no thread, no attachments, no HTML", () => {
-    const raw = resendToRawEmail(content(), eventData(), ADDRESS);
+    const raw = resendToRawEmail(content(), eventData());
     expect(raw).toMatchObject({
       threadId: null,
       labels: ["INBOX", "UNREAD"],
@@ -187,19 +194,14 @@ describe("resendToRawEmail", () => {
   });
 
   it("takes From from the headers (the display name), else the bare from", () => {
-    expect(resendToRawEmail(content(), eventData(), ADDRESS).from).toBe(
-      "Sam Sender <sender@example.com>",
-    );
-    expect(resendToRawEmail(content({ headers: null }), eventData(), ADDRESS).from).toBe(
+    expect(resendToRawEmail(content(), eventData()).from).toBe("Sam Sender <sender@example.com>");
+    expect(resendToRawEmail(content({ headers: null }), eventData()).from).toBe(
       "sender@example.com",
     );
     // Header names are case-insensitive.
     expect(
-      resendToRawEmail(
-        content({ headers: { From: "Sam <sender@example.com>" } }),
-        eventData(),
-        ADDRESS,
-      ).from,
+      resendToRawEmail(content({ headers: { From: "Sam <sender@example.com>" } }), eventData())
+        .from,
     ).toBe("Sam <sender@example.com>");
   });
 
@@ -207,7 +209,6 @@ describe("resendToRawEmail", () => {
     const fromHeaders = resendToRawEmail(
       content({ headers: { to: "Jane <jane@klorn.ai>", cc: "a@example.com, b@example.com" } }),
       eventData(),
-      ADDRESS,
     );
     expect(fromHeaders.to).toBe("Jane <jane@klorn.ai>");
     expect(fromHeaders.cc).toBe("a@example.com, b@example.com");
@@ -215,50 +216,37 @@ describe("resendToRawEmail", () => {
     const fromArrays = resendToRawEmail(
       content({ headers: {}, to: ["jane@klorn.ai", "sam@klorn.ai"], cc: ["c@example.com"] }),
       eventData(),
-      ADDRESS,
     );
     expect(fromArrays.to).toBe("jane@klorn.ai, sam@klorn.ai");
     expect(fromArrays.cc).toBe("c@example.com");
-    expect(resendToRawEmail(content({ headers: {}, cc: null }), eventData(), ADDRESS).cc).toBe("");
+    expect(resendToRawEmail(content({ headers: {}, cc: null }), eventData()).cc).toBe("");
 
     const long = "x".repeat(MAX_STORED_CC_LENGTH + 100);
-    const capped = resendToRawEmail(
-      content({ headers: { to: long, cc: long } }),
-      eventData(),
-      ADDRESS,
-    );
+    const capped = resendToRawEmail(content({ headers: { to: long, cc: long } }), eventData());
     expect(capped.to).toHaveLength(MAX_STORED_CC_LENGTH);
     expect(capped.cc).toHaveLength(MAX_STORED_CC_LENGTH);
   });
 
   it("caps the subject and stores a placeholder for an empty one", () => {
     expect(
-      resendToRawEmail(
-        content({ subject: "y".repeat(MAX_STORED_SUBJECT_LENGTH + 5) }),
-        eventData(),
-        ADDRESS,
-      ).subject,
+      resendToRawEmail(content({ subject: "y".repeat(MAX_STORED_SUBJECT_LENGTH + 5) }), eventData())
+        .subject,
     ).toHaveLength(MAX_STORED_SUBJECT_LENGTH);
-    expect(resendToRawEmail(content({ subject: "   " }), eventData(), ADDRESS).subject).toBe(
-      "(no subject)",
-    );
+    expect(resendToRawEmail(content({ subject: "   " }), eventData()).subject).toBe("(no subject)");
   });
 
   it("uses text for the body, else the HTML as plain text, capped at IMAP's limit", () => {
-    expect(resendToRawEmail(content(), eventData(), ADDRESS).body).toBe(
+    expect(resendToRawEmail(content(), eventData()).body).toBe(
       "Hello Jane, the numbers are attached.",
     );
-    const htmlOnly = resendToRawEmail(content({ text: null }), eventData(), ADDRESS);
+    const htmlOnly = resendToRawEmail(content({ text: null }), eventData());
     expect(htmlOnly.body).toBe("Hello Jane");
     expect(htmlOnly.htmlBody).toBe("");
-    expect(resendToRawEmail(content({ text: null, html: null }), eventData(), ADDRESS).body).toBe(
-      "",
-    );
+    expect(resendToRawEmail(content({ text: null, html: null }), eventData()).body).toBe("");
 
     const huge = resendToRawEmail(
       content({ text: "z".repeat(MAX_STORED_BODY_CHARS + 1_000) }),
       eventData(),
-      ADDRESS,
     );
     expect(huge.body).toHaveLength(MAX_STORED_BODY_CHARS);
   });
@@ -267,7 +255,6 @@ describe("resendToRawEmail", () => {
     const raw = resendToRawEmail(
       content({ text: "a\u0000b", subject: "s\u0000t", headers: { from: "x\u0000@example.com" } }),
       eventData(),
-      ADDRESS,
     );
     expect(raw.body).toBe("ab");
     expect(raw.subject).toBe("st");
@@ -275,23 +262,16 @@ describe("resendToRawEmail", () => {
   });
 
   it("derives the snippet from the body, at most 200 characters", () => {
-    const raw = resendToRawEmail(
-      content({ text: `  ${"word ".repeat(100)}` }),
-      eventData(),
-      ADDRESS,
-    );
+    const raw = resendToRawEmail(content({ text: `  ${"word ".repeat(100)}` }), eventData());
     expect(raw.snippet.length).toBeLessThanOrEqual(200);
     expect(raw.snippet.startsWith("word word")).toBe(true);
-    expect(
-      resendToRawEmail(content({ text: null, html: null }), eventData(), ADDRESS).snippet,
-    ).toBe("");
+    expect(resendToRawEmail(content({ text: null, html: null }), eventData()).snippet).toBe("");
   });
 
   it("dates the row at Resend's receive time, not the sender's Date header", () => {
     const raw = resendToRawEmail(
       content({ headers: { date: "Mon, 1 Jan 1990 00:00:00 +0000" } }),
       eventData({ created_at: "2026-10-22T10:00:00.000Z" }),
-      ADDRESS,
     );
     expect(raw.receivedAt.toISOString()).toBe("2026-10-22T10:00:00.000Z");
   });
@@ -305,14 +285,13 @@ describe("resendToRawEmail", () => {
         },
       }),
       eventData(),
-      ADDRESS,
     );
     expect(raw.hasListUnsubscribe).toBe(true);
     expect(raw.listUnsubscribeMailto).toBe("mailto:u@example.com");
     expect(raw.listUnsubscribeUrl).toBe("https://example.com/u?id=1");
     expect(raw.listUnsubscribeOneClick).toBe(true);
 
-    const none = resendToRawEmail(content({ headers: {} }), eventData(), ADDRESS);
+    const none = resendToRawEmail(content({ headers: {} }), eventData());
     expect(none.hasListUnsubscribe).toBe(false);
     expect(none.listUnsubscribeUrl).toBeNull();
   });
@@ -321,10 +300,9 @@ describe("resendToRawEmail", () => {
     const raw = resendToRawEmail(
       content({ authentication: { spf: "pass", dkim: "evil", dmarc: "FAIL" } }),
       eventData(),
-      ADDRESS,
     );
     expect(raw.authentication).toEqual({ spf: "pass", dkim: "unknown", dmarc: "fail" });
-    expect(resendToRawEmail(content(), eventData(), ADDRESS).authentication).toBeNull();
+    expect(resendToRawEmail(content(), eventData()).authentication).toBeNull();
   });
 
   it("survives content fields of the wrong type", () => {
@@ -338,11 +316,63 @@ describe("resendToRawEmail", () => {
         to: "jane@klorn.ai" as never,
       }),
       eventData(),
-      ADDRESS,
     );
     expect(raw.body).toBe("");
     expect(raw.subject).toBe("(no subject)");
     expect(raw.from).toBe("");
     expect(raw.to).toBe("");
+  });
+});
+
+describe("resendToRawEmail: header encodings and hostile values", () => {
+  it("decodes RFC 2047 encoded-words in From, To and Cc (a Korean sender name)", () => {
+    const korean = Buffer.from("김철수", "utf8").toString("base64");
+    const raw = resendToRawEmail(
+      content({
+        headers: {
+          from: `=?UTF-8?B?${korean}?= <kim@example.com>`,
+          to: "=?utf-8?Q?Jane_D=C3=B6e?= <jane@klorn.ai>",
+          cc: "=?EUC-KR?B?x9Gx2w==?= <han@example.com>",
+        },
+      }),
+      eventData(),
+    );
+    expect(raw.from).toBe("김철수 <kim@example.com>");
+    expect(raw.to).toBe("Jane Döe <jane@klorn.ai>");
+    expect(raw.cc).toBe("한글 <han@example.com>");
+  });
+
+  it("strips NUL from the List-Unsubscribe targets", () => {
+    const raw = resendToRawEmail(
+      content({
+        headers: {
+          "list-unsubscribe": "<mailto:u\u0000@example.com>, <https://example.com/u\u0000?id=1>",
+        },
+      }),
+      eventData(),
+    );
+    expect(raw.listUnsubscribeMailto).toBe("mailto:u@example.com");
+    expect(raw.listUnsubscribeUrl).toBe("https://example.com/u?id=1");
+  });
+
+  it("keeps the text of an HTML-only message whose images are cid: references", () => {
+    const raw = resendToRawEmail(
+      content({
+        text: null,
+        html: `<p><img src="cid:ii_123" alt="">Quarterly numbers inside</p>`,
+      }),
+      eventData(),
+    );
+    expect(raw.body).toBe("Quarterly numbers inside");
+    expect(raw.snippet).toBe("Quarterly numbers inside");
+  });
+
+  it("caps an over-long subject at the subject limit before any other work", () => {
+    const raw = resendToRawEmail(
+      content({ subject: `${"s".repeat(MAX_STORED_SUBJECT_LENGTH)}TAIL` }),
+      eventData(),
+    );
+    expect(raw.subject).toHaveLength(MAX_STORED_SUBJECT_LENGTH);
+    expect(raw.subject.endsWith("TAIL")).toBe(false);
   });
 });
