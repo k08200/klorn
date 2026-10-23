@@ -7,7 +7,13 @@
  */
 
 import type { DriveFilesListResponse } from "@klorn/contract";
-import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import {
+  type InfiniteData,
+  keepPreviousData,
+  type UseInfiniteQueryResult,
+  useInfiniteQuery,
+  useQuery,
+} from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { apiFetch } from "../../lib/api";
 import { queryKeys } from "../../lib/query-keys";
@@ -36,6 +42,26 @@ async function readFiles(path: string, scope: string): Promise<DriveFilesListRes
   }
 }
 
+type FilesQuery = UseInfiniteQueryResult<InfiniteData<DriveFilesListResponse>>;
+
+/** What a paged list shows, the same for /files and for the Move picker's levels. */
+function listState(query: FilesQuery, enabled: boolean) {
+  return {
+    files: query.data?.pages.flatMap((page) => page.files) ?? [],
+    loading: !enabled || query.isLoading,
+    failed: query.isError && !query.data,
+    // keepPreviousData: the last search's list is on screen while a new one
+    // loads. It is not this search's answer, so it pages nothing and counts nothing.
+    stale: query.isPlaceholderData,
+    hasMore: query.hasNextPage && !query.isPlaceholderData,
+    loadingMore: query.isFetchingNextPage,
+    loadMore: () => void query.fetchNextPage(),
+    retry: () => void query.refetch(),
+  };
+}
+
+export type FilesListState = ReturnType<typeof listState>;
+
 /** The list, or one Klorn drive folder of it (`folder`: its externalId). */
 export function useFilesList(q: string, folder: string | null = null, enabled = true) {
   const text = q.trim();
@@ -52,18 +78,25 @@ export function useFilesList(q: string, folder: string | null = null, enabled = 
     staleTime: FILES_STALE_MS,
     enabled,
   });
-  return {
-    files: query.data?.pages.flatMap((page) => page.files) ?? [],
-    loading: !enabled || query.isLoading,
-    failed: query.isError && !query.data,
-    // keepPreviousData: the last search's list is on screen while a new one
-    // loads. It is not this search's answer, so it pages nothing and counts nothing.
-    stale: query.isPlaceholderData,
-    hasMore: query.hasNextPage && !query.isPlaceholderData,
-    loadingMore: query.isFetchingNextPage,
-    loadMore: () => void query.fetchNextPage(),
-    retry: () => void query.refetch(),
-  };
+  return listState(query, enabled);
+}
+
+/**
+ * One level of the Move picker: a Klorn drive folder's folders (`root`: the top
+ * level), paged among folders only (`foldersOnly=true`), so a page never fills
+ * with files and leaves only "Load more".
+ */
+export function useFolderLevel(folder: string, enabled: boolean) {
+  const query = useInfiniteQuery({
+    queryKey: queryKeys.drive.folders(folder),
+    queryFn: ({ pageParam }) =>
+      readFiles(filesListPath({ cursor: pageParam, folder, foldersOnly: true }), "files.move"),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
+    staleTime: FILES_STALE_MS,
+    enabled,
+  });
+  return listState(query, enabled);
 }
 
 export function useRecentFiles(enabled: boolean) {

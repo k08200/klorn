@@ -3,7 +3,8 @@
  * view of the metadata index of the user's files across sources.
  *
  *   GET /files       — list, newest first; `q` searches names; `folder` lists
- *                      one Klorn drive folder (D3); paged
+ *                      one Klorn drive folder (D3); `foldersOnly=true` leaves
+ *                      the files out (the web's Move picker); paged
  *   GET /files/:id   — one file's metadata (and its summary, D4)
  *   POST /files/:id/summarize — summarise one file now (D4)
  *
@@ -87,6 +88,8 @@ const listQuerySchema = {
     cursor: { type: "string", minLength: 1, maxLength: DRIVE_CURSOR_MAX_CHARS },
     // One folder of the Klorn drive (D3): a folder's externalId, or "root".
     folder: { type: "string", minLength: 1, maxLength: DRIVE_ID_MAX_CHARS },
+    // Folders only, files left out (the web's Move picker): "true" or "false".
+    foldersOnly: { type: "boolean" },
   },
 } as const;
 
@@ -100,6 +103,7 @@ interface ListQuery {
   limit?: number;
   cursor?: string;
   folder?: string;
+  foldersOnly?: boolean;
 }
 
 interface IdParams {
@@ -145,10 +149,19 @@ export function driveRoutes(opts: {
     reply: FastifyReply,
   ): Promise<DriveFilesListResponse | FastifyReply> {
     const { q, provider, sourceKey, limit, cursor: rawCursor, folder: rawFolder } = request.query;
+    const foldersOnly = request.query.foldersOnly === true;
     const cursor = rawCursor === undefined ? undefined : decodeDriveCursor(rawCursor);
     if (cursor === null) return reply.code(HTTP_BAD_REQUEST).send(INVALID_CURSOR);
     const folder = rawFolder === DRIVE_ROOT_FOLDER ? null : rawFolder;
-    const options = { userId: getUserId(request), limit, cursor, provider, sourceKey, folder };
+    const options = {
+      userId: getUserId(request),
+      limit,
+      cursor,
+      provider,
+      sourceKey,
+      folder,
+      foldersOnly,
+    };
     const text = normaliseDriveSearchText(q);
     if (text === null) return await listFiles(options, providerEnabled);
     if (!summariesOpen(options.userId))

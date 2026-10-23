@@ -29,6 +29,7 @@ import {
   pickerTarget,
   pickerUp,
 } from "../../../web/src/app/files/drive-model";
+import { filesListPath } from "../../../web/src/app/files/model";
 import {
   batchSummary,
   failRemaining,
@@ -404,6 +405,25 @@ describe("Move: the folder picker, one level at a time from the top", () => {
     expect(canMoveHere(folderB, "ext-a")).toBe(false);
     expect(canMoveHere(folderB, null)).toBe(true);
     expect(canMoveHere(folderA, "ext-a")).toBe(false);
+  });
+});
+
+describe("Move's folder levels: folders only, from the server", () => {
+  it("asks for one level's folders, the top level as `root`", () => {
+    const root = new URL(filesListPath({ folder: "root", foldersOnly: true }), "https://x");
+    expect(root.searchParams.get("folder")).toBe("root");
+    expect(root.searchParams.get("foldersOnly")).toBe("true");
+    const inner = new URL(
+      filesListPath({ folder: "ext-a", foldersOnly: true, cursor: "c1" }),
+      "https://x",
+    );
+    expect(inner.searchParams.get("folder")).toBe("ext-a");
+    expect(inner.searchParams.get("cursor")).toBe("c1");
+  });
+
+  it("leaves the parameter out of every other list", () => {
+    expect(filesListPath({ folder: "root" })).not.toContain("foldersOnly");
+    expect(filesListPath({ q: "q4", foldersOnly: false })).not.toContain("foldersOnly");
   });
 });
 

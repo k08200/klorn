@@ -2,8 +2,8 @@
 
 /**
  * "Move" for one Klorn drive row: a folder picker in a Sheet, one level at a
- * time from the drive's top level (GET /api/drive/files?folder=root|<id>, the
- * same list /files reads). Only folders are listed; the folder being moved is
+ * time from the drive's top level (GET /api/drive/files?folder=root|<id>
+ * &foldersOnly=true, so a page holds folders only). The folder being moved is
  * shown but never opens, so nothing inside it can be picked, and the server
  * refuses any cycle anyway (409 `cycle`, shown like every other refusal).
  * "Move here" is off where the item already is.
@@ -30,7 +30,7 @@ import { FOCUSED_HEADING } from "./focus";
 import type { FolderCrumb } from "./open";
 import { PendingButton } from "./pending-button";
 import { useDialogAction } from "./use-dialog-action";
-import { useFilesList } from "./use-files";
+import { type FilesListState, useFolderLevel } from "./use-files";
 
 const SKELETON_KEYS = ["a", "b", "c"];
 
@@ -52,7 +52,7 @@ export function MoveDialog({ open, item, onClose, onMove, returnFocusRef }: Move
   const placeRef = useRef<HTMLHeadingElement>(null);
   const navigated = useRef(false);
   const action = useDialogAction("files.drive.move");
-  const level = useFilesList("", pickerListFolder(trail), open);
+  const level = useFolderLevel(pickerListFolder(trail), open);
   const target = pickerTarget(trail);
   const allowed = item !== null && canMoveHere(item, target);
   const dismiss = () => {
@@ -157,7 +157,7 @@ function FolderLevel({
   choices,
   onEnter,
 }: {
-  level: ReturnType<typeof useFilesList>;
+  level: FilesListState;
   loading: boolean;
   choices: MoveChoice[];
   onEnter: (folder: DriveFileWire) => void;

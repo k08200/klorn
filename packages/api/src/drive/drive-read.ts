@@ -92,6 +92,8 @@ export interface DriveListOptions {
    * only parents that exist (unlike an external source, see D2).
    */
   readonly folder?: string | null;
+  /** Folders only, files left out: the web's Move picker lists one level's folders. */
+  readonly foldersOnly?: boolean;
 }
 
 export interface DriveSearchOptions extends DriveListOptions {
@@ -186,6 +188,7 @@ function filtersOf(options: DriveListOptions): Prisma.DriveFileWhereInput[] {
       { parentExternalId: options.folder },
     );
   }
+  if (options.foldersOnly === true) filters.push({ isFolder: true });
   const cursor = options.cursor;
   if (cursor !== undefined) {
     filters.push({

@@ -156,6 +156,63 @@ describe("folders", () => {
   });
 });
 
+describe("foldersOnly: the list's folders without the files (the Move picker)", () => {
+  const listed = (res: { json: () => { files: Array<{ name: string }> } }) =>
+    res.json().files.map((file) => file.name);
+
+  beforeEach(async () => {
+    // Newest first: the files are newer than the folders, so without the
+    // filter they would fill a small page before any folder.
+    t = await buildKlornDriveApp({
+      seed: [
+        folder({ externalId: "A", name: "A" }),
+        folder({ externalId: "B", name: "B" }),
+        folder({ externalId: "A1", name: "A1", parentExternalId: "A" }),
+        klornRow({ name: "inside.txt", parentExternalId: "A" }),
+        klornRow({ name: "one.txt" }),
+        klornRow({ name: "two.txt" }),
+        klornRow({ name: "three.txt" }),
+      ],
+    });
+  });
+
+  it("lists only folders, at the root and inside a folder", async () => {
+    const root = await call("GET", "/files?folder=root&foldersOnly=true", t.me);
+    expect(root.statusCode).toBe(200);
+    expect(listed(root)).toEqual(["B", "A"]);
+    const inA = await call("GET", "/files?folder=A&foldersOnly=true", t.me);
+    expect(listed(inA)).toEqual(["A1"]);
+  });
+
+  it("pages among folders only: files never take a folder's place on the page", async () => {
+    const page = await call("GET", "/files?folder=root&foldersOnly=true&limit=2", t.me);
+    expect(listed(page)).toEqual(["B", "A"]);
+    expect(page.json().nextCursor).toBeNull();
+    const mixed = await call("GET", "/files?folder=root&limit=2", t.me);
+    expect(listed(mixed)).toEqual(["three.txt", "two.txt"]);
+  });
+
+  it("changes nothing when false or absent, and refuses anything but a boolean", async () => {
+    const off = await call("GET", "/files?folder=root&foldersOnly=false", t.me);
+    expect(listed(off)).toEqual(["three.txt", "two.txt", "one.txt", "B", "A"]);
+    const absent = await call("GET", "/files?folder=root", t.me);
+    expect(listed(absent)).toEqual(listed(off));
+    const bad = await call("GET", "/files?folder=root&foldersOnly=maybe", t.me);
+    expect(bad.statusCode).toBe(400);
+  });
+
+  it("keeps to the user's own rows", async () => {
+    t = await buildKlornDriveApp({
+      seed: [
+        folder({ externalId: "mine", name: "mine" }),
+        folder({ userId: "user-2", name: "theirs" }),
+      ],
+    });
+    const res = await call("GET", "/files?folder=root&foldersOnly=true", t.me);
+    expect(listed(res)).toEqual(["mine"]);
+  });
+});
+
 describe("download", () => {
   it("answers a short-lived signed link that downloads as an attachment, never cached", async () => {
     const file = await storedFile({ name: "Q3 report.pdf" });

@@ -40,17 +40,28 @@ const GOOGLE_ROW = {
   webUrl: "https://docs.google.com/document/d/g-1",
   readOnly: true,
 };
+const FOLDER_ROW = {
+  ...KLORN_ROW,
+  id: "row-p",
+  externalId: "ext-p",
+  name: "Projects",
+  mimeType: null,
+  isFolder: true,
+  sizeBytes: null,
+  modifiedAt: "2026-10-01T00:00:00.000Z",
+};
 const SMALL_CAP_BYTES = 10;
 
 interface Recorded {
   uploads: string[];
   patches: string[];
   deletes: string[];
+  lists: string[];
 }
 
 async function mockApi(page: Page, opts: { live: boolean }): Promise<Recorded> {
-  const recorded: Recorded = { uploads: [], patches: [], deletes: [] };
-  let rows = [KLORN_ROW, GOOGLE_ROW];
+  const recorded: Recorded = { uploads: [], patches: [], deletes: [], lists: [] };
+  let rows = [KLORN_ROW, GOOGLE_ROW, FOLDER_ROW];
   await page.addInitScript(() => {
     localStorage.setItem("klorn-token", "e2e-test-token");
   });
@@ -105,7 +116,16 @@ async function mockApi(page: Page, opts: { live: boolean }): Promise<Recorded> {
       rows = rows.filter((row) => row.id !== id);
       return route.fulfill({ json: { deleted: { files: 1, folders: 0 } } });
     }
-    return route.fulfill({ json: { files: rows, nextCursor: null } });
+    const query = new URL(request.url()).searchParams;
+    recorded.lists.push(query.toString());
+    const folder = query.get("folder");
+    const inFolder = (row: (typeof rows)[number]) =>
+      folder === null ||
+      (row.provider === "KLORN" && row.parentExternalId === (folder === "root" ? null : folder));
+    const shown = rows.filter(
+      (row) => inFolder(row) && (query.get("foldersOnly") !== "true" || row.isFolder),
+    );
+    return route.fulfill({ json: { files: shown, nextCursor: null } });
   });
   return recorded;
 }
@@ -217,4 +237,29 @@ test("the trailing slot: every row keeps one, so badges line up and heights matc
   expect(google.rowRight).toBe(klorn.rowRight);
   expect(google.badgeRight).toBe(klorn.badgeRight);
   expect(google.height).toBe(klorn.height);
+});
+
+test("move: the picker asks for folders only, and Move here sends the folder", async ({ page }) => {
+  const recorded = await mockApi(page, { live: true });
+  await openFiles(page);
+  await page.getByRole("button", { name: actionsFor(KLORN_ROW.name) }).click();
+  await page.getByRole("menuitem", { name: en["files.drive.move"] }).click();
+  const dialog = page.getByRole("dialog", { name: en["files.drive.move.title"] });
+  await expect(dialog).toBeVisible();
+  const here = dialog.getByRole("button", { name: en["files.drive.move.here"] });
+  // At the top level, where the file already is: off, and saying why.
+  await expect(here).toHaveAttribute("aria-disabled", "true");
+  await expect(dialog.getByText(en["files.drive.move.already"], { exact: true })).toBeVisible();
+  expect(recorded.lists).toContain("limit=50&folder=root&foldersOnly=true");
+  await dialog
+    .getByRole("button", { name: en["files.openFolder"].replace("{name}", FOLDER_ROW.name) })
+    .click();
+  await expect(dialog.getByRole("heading", { name: FOLDER_ROW.name })).toBeFocused();
+  await here.click();
+  await expect.poll(() => recorded.patches).toHaveLength(1);
+  expect(JSON.parse(recorded.patches[0] ?? "")).toEqual({
+    parentExternalId: FOLDER_ROW.externalId,
+  });
+  // The unfiltered list still shows the row: focus is back on its menu button.
+  await expect(page.getByRole("button", { name: actionsFor(KLORN_ROW.name) })).toBeFocused();
 });

@@ -48,8 +48,9 @@ export interface DriveFileWire {
 /**
  * `GET /api/drive/files` — newest first. Query: `q` (name search; the first 100
  * characters are used, and a blank `q` lists), `provider`, `sourceKey`, `limit`
- * (default 50; a larger value than 100 is served 100) and `cursor` (the previous
- * page's `nextCursor`). A malformed `cursor` answers 400 `{ error }`.
+ * (default 50; a larger value than 100 is served 100), `cursor` (the previous
+ * page's `nextCursor`), and from D3 `folder` and `foldersOnly` (see the Klorn
+ * drive section below). A malformed `cursor` answers 400 `{ error }`.
  */
 export interface DriveFilesListResponse {
   files: DriveFileWire[];
@@ -137,7 +138,9 @@ export interface DriveSummarizeResponse {
 // external source (`readOnly: true`) answers 409 `read-only` on each of them.
 //
 // `GET /api/drive/files` also takes `folder`: a Klorn folder's `externalId`, or
-// `root`, to list that folder's children (KLORN only).
+// `root`, to list that folder's children (KLORN only), and `foldersOnly`
+// (`true` or `false`): `true` lists folders only, so a page holds folders and
+// no file takes a folder's place (the web's Move picker). Anything else is 400.
 
 /** Why a drive request failed. Branch on this, never on `error`. */
 export type DriveErrorCode =

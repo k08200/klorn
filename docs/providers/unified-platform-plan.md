@@ -3532,6 +3532,7 @@ D3 ships no user-facing copy beyond API error strings, which clients replace by
   | `PATCH /api/drive/files/:id` `{ name?, parentExternalId? }` (null: the root) | `{ file }` |
   | `DELETE /api/drive/files/:id` | `{ deleted: { files, folders } }` |
   | `GET /api/drive/files?folder=<externalId>\|root` (D2's list, new filter) | one Klorn folder's children |
+  | `GET /api/drive/files?…&foldersOnly=true` (added by the web UI step, 2026-10-23) | the same list, folders only (the web's Move picker); `false` or absent changes nothing, anything else 400 |
   | `GET /api/drive/limits` (added by D7) | `{ maxFileBytes, quotaBytes, usedBytes }`, `Cache-Control: no-store` |
 
   Errors are `{ error, code, retryable }` with a fixed status per code

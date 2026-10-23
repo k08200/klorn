@@ -21,6 +21,8 @@ export interface FilesListRequest {
   limit?: number;
   /** One Klorn drive folder's `externalId`; absent or null lists every source. */
   folder?: string | null;
+  /** Folders only (the Move picker): the server leaves the files out. */
+  foldersOnly?: boolean;
 }
 
 /** GET /api/drive/files with the search, page, size and folder, URL-encoded. */
@@ -29,12 +31,14 @@ export function filesListPath({
   cursor,
   limit = FILES_PAGE_SIZE,
   folder,
+  foldersOnly = false,
 }: FilesListRequest): string {
   const params = new URLSearchParams({ limit: String(limit) });
   const text = q?.trim().slice(0, SEARCH_MAX_CHARS);
   if (text) params.set("q", text);
   if (cursor) params.set("cursor", cursor);
   if (folder) params.set("folder", folder);
+  if (foldersOnly) params.set("foldersOnly", "true");
   return `${DRIVE_FILES_PATH}?${params.toString()}`;
 }
 
