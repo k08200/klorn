@@ -13,7 +13,12 @@
  *     cap, the global ceiling and BYOK apply as to any other call.
  */
 
-import { driveEnabled, driveSummariesEnabled } from "../config.js";
+import {
+  DRIVE_SUMMARY_FLAGS,
+  driveEnabled,
+  driveSummariesEnabled,
+  featureOpenTo,
+} from "../config.js";
 import { MAX_EXTRACTABLE_BYTES } from "../mail/email-attachment-text.js";
 import type { DriveProviderName } from "./drive-providers.js";
 
@@ -77,6 +82,15 @@ const DAY_MS = 24 * 60 * 60_000;
 /** Summaries act only while their own flag and the drive's are both on. Read per call. */
 export function driveSummariesLive(): boolean {
   return driveSummariesEnabled() && driveEnabled();
+}
+
+/**
+ * Summaries for this user: live, and the user in the cohort when either flag is
+ * `cohort` (L23). What queues a file, serves a summary or searches summary text
+ * asks this, never the global switch alone.
+ */
+export function driveSummariesOpenTo(userId: string): boolean {
+  return driveSummariesLive() && featureOpenTo(userId, DRIVE_SUMMARY_FLAGS);
 }
 
 /** The UTC day of `now`, as "YYYY-MM-DD". */

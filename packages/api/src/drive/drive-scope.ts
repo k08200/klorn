@@ -23,8 +23,12 @@
 
 import type { Prisma } from "@prisma/client";
 import {
+  DRIVE_LIST_FLAGS,
   driveEnabled,
+  featureOpenTo,
+  GOOGLE_DRIVE_FLAGS,
   googleDriveEnabled,
+  KLORN_DRIVE_FLAGS,
   klornDriveEnabled,
   objectStorageEnabled,
 } from "../config.js";
@@ -63,6 +67,28 @@ export const DRIVE_PROVIDER_ENABLED: DriveProviderEnabledMap = {
   GOOGLE: googleDriveLive,
 };
 
+/**
+ * The registered sources as they stand for one user: each source's flags, and,
+ * for a flag in `cohort` mode (L23), that user's place in the cohort. Every
+ * reader that takes a user defaults to this map, so a user outside the cohort
+ * sees none of a cohort-only source's rows, whatever rows they hold. Same keys
+ * as DRIVE_PROVIDER_ENABLED (a guard test checks).
+ */
+export function driveProvidersFor(userId: string): DriveProviderEnabledMap {
+  return {
+    KLORN: () => klornDriveLive() && featureOpenTo(userId, KLORN_DRIVE_FLAGS),
+    GOOGLE: () => googleDriveLive() && featureOpenTo(userId, GOOGLE_DRIVE_FLAGS),
+  };
+}
+
+/** The Files tab and Today's recent files show for this user (`/api/auth/me`). */
+export function filesVisibleFor(userId: string): boolean {
+  return (
+    featureOpenTo(userId, DRIVE_LIST_FLAGS) &&
+    visibleDriveProviders(driveProvidersFor(userId)).length > 0
+  );
+}
+
 /** The providers whose rows a reader may return right now, in the enum's order. */
 export function visibleDriveProviders(
   providerEnabled: DriveProviderEnabledMap = DRIVE_PROVIDER_ENABLED,
@@ -78,7 +104,9 @@ export function visibleDriveProviders(
 
 /** A Prisma where-fragment that matches only the rows of the visible providers. */
 export function driveSourceScope(
-  providerEnabled: DriveProviderEnabledMap = DRIVE_PROVIDER_ENABLED,
+  // Required: a reader passes the user's own map (driveProvidersFor), so a
+  // cohort-only source (L23) never falls back to the global switch.
+  providerEnabled: DriveProviderEnabledMap,
 ): Prisma.DriveFileWhereInput {
   return { provider: { in: visibleDriveProviders(providerEnabled) } };
 }
@@ -86,7 +114,8 @@ export function driveSourceScope(
 /** False for a row the scope above hides, for a row fetched by id. */
 export function isDriveRowVisible(
   row: { provider: string },
-  providerEnabled: DriveProviderEnabledMap = DRIVE_PROVIDER_ENABLED,
+  // Required, as for driveSourceScope.
+  providerEnabled: DriveProviderEnabledMap,
 ): boolean {
   return (visibleDriveProviders(providerEnabled) as string[]).includes(row.provider);
 }

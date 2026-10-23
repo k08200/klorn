@@ -47,6 +47,7 @@ import { caldavCalendarRoutes } from "./routes/caldav-calendar.js";
 import { calendarRoutes } from "./routes/calendar.js";
 import { chatConversationRoutes } from "./routes/chat-conversations.js";
 import { chatRoutes } from "./routes/chat-pending-actions.js";
+import { reportRolloutCohort } from "./routes/cohort-gate.js";
 import { commitmentRoutes } from "./routes/commitments.js";
 import { cronRoutes } from "./routes/cron.js";
 import { deviceCalendarRoutes } from "./routes/device-calendar.js";
@@ -685,6 +686,12 @@ try {
   void checkStoragePurgesAtStartup({ backgroundDisabled: BG_DISABLED });
   // The Klorn drive refuses every upload without KLORN_DRIVE_QUOTA_BYTES (P3).
   warnIfKlornDriveQuotaMissing();
+  reportRolloutCohort([
+    "DRIVE_ENABLED",
+    "KLORN_DRIVE_ENABLED",
+    "GOOGLE_DRIVE_ENABLED",
+    "DRIVE_SUMMARIES_ENABLED",
+  ]);
 
   // Start autonomous background agent
   if (!BG_DISABLED) startBackgroundAgent();

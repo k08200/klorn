@@ -32,7 +32,7 @@ import { prisma } from "../../db.js";
 import { decideRefreshTokenWrite, getGoogleUserInfo, getOAuth2Client } from "../../mail/gmail.js";
 import { isRevokedGrantError } from "../../pim/linked-calendar-failure.js";
 import { captureError } from "../../sentry.js";
-import { googleDriveRoutesEnabled } from "../drive-scope.js";
+import { driveProvidersFor, googleDriveRoutesEnabled } from "../drive-scope.js";
 import {
   countDriveAccounts,
   type DriveAccountCredentials,
@@ -186,7 +186,7 @@ export async function completeGoogleDriveLink(params: {
   readonly code: string;
   readonly userId: string;
 }): Promise<DriveLinkOutcome> {
-  if (!googleDriveRoutesEnabled()) return "failed";
+  if (!googleDriveRoutesEnabled(driveProvidersFor(params.userId))) return "failed";
   try {
     return await linkDriveAccount(params.code, params.userId);
   } catch (err) {

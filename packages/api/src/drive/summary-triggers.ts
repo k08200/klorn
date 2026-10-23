@@ -8,15 +8,16 @@
  *   - a user asking (`POST /api/drive/files/:id/summarize`): `requestDriveSummary`
  *     queues it, runs it now when it is due, and answers its state.
  *
- * Both do nothing while summaries are off (`driveSummariesLive`, read per call);
+ * Both do nothing while summaries are off for the user (`driveSummariesOpenTo`:
+ * the flags, and the cohort when one is `cohort`, read per call);
  * the route is dark then anyway. The run (and with it the LLM layer) is loaded
  * only when a request runs one, so the upload path that queues does not load it.
  */
 
 import type { DriveFileSummaryWire } from "@klorn/contract";
 import { captureError } from "../sentry.js";
-import { DRIVE_PROVIDER_ENABLED, type DriveProviderEnabledMap } from "./drive-scope.js";
-import { driveSummariesLive } from "./summary-policy.js";
+import { type DriveProviderEnabledMap, driveProvidersFor } from "./drive-scope.js";
+import { driveSummariesOpenTo } from "./summary-policy.js";
 import { findSummarySource } from "./summary-source.js";
 import {
   claimSummary,
@@ -31,7 +32,7 @@ export async function enqueueSummaryOnWrite(
   driveFileId: string,
   etag: string | null,
 ): Promise<void> {
-  if (!driveSummariesLive()) return;
+  if (!driveSummariesOpenTo(userId)) return;
   try {
     await enqueueDriveFileSummary(userId, driveFileId, etag);
   } catch (err) {
@@ -61,7 +62,8 @@ export async function requestDriveSummary(
   id: string,
   options: { readonly now?: Date; readonly providerEnabled?: DriveProviderEnabledMap } = {},
 ): Promise<DriveFileSummaryWire | null> {
-  const providerEnabled = options.providerEnabled ?? DRIVE_PROVIDER_ENABLED;
+  if (!driveSummariesOpenTo(userId)) return null;
+  const providerEnabled = options.providerEnabled ?? driveProvidersFor(userId);
   const source = await findSummarySource(userId, id, providerEnabled);
   if (source === null) return null;
   const now = options.now ?? new Date();

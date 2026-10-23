@@ -21,8 +21,8 @@ import { prisma } from "../db.js";
 import { isDriveFileId } from "./drive-read.js";
 import { KLORN_DRIVE_SOURCE_KEY } from "./drive-rows.js";
 import {
-  DRIVE_PROVIDER_ENABLED,
   type DriveProviderEnabledMap,
+  driveProvidersFor,
   driveSourceScope,
   isDriveRowVisible,
 } from "./drive-scope.js";
@@ -81,7 +81,7 @@ function klornRowsOf(userId: string): Prisma.DriveFileWhereInput[] {
 export async function findOwnDriveRow(
   userId: string,
   id: string,
-  providerEnabled: DriveProviderEnabledMap = DRIVE_PROVIDER_ENABLED,
+  providerEnabled: DriveProviderEnabledMap = driveProvidersFor(userId),
 ): Promise<OwnDriveRow | null> {
   if (!isDriveFileId(id)) return null;
   const row = await prisma.driveFile.findUnique({
@@ -98,7 +98,7 @@ export async function findOwnDriveRow(
 export async function findKlornFolder(
   userId: string,
   externalId: string,
-  providerEnabled: DriveProviderEnabledMap = DRIVE_PROVIDER_ENABLED,
+  providerEnabled: DriveProviderEnabledMap = driveProvidersFor(userId),
 ): Promise<{ externalId: string; parentExternalId: string | null } | null> {
   const match = { externalId, isFolder: true };
   return await prisma.driveFile.findFirst({
@@ -115,7 +115,7 @@ export async function listKlornChildren(
   userId: string,
   parentExternalIds: readonly string[],
   options: { foldersOnly: boolean; take: number },
-  providerEnabled: DriveProviderEnabledMap = DRIVE_PROVIDER_ENABLED,
+  providerEnabled: DriveProviderEnabledMap = driveProvidersFor(userId),
 ): Promise<KlornChild[]> {
   if (parentExternalIds.length === 0) return [];
   const match: Prisma.DriveFileWhereInput[] = [
@@ -133,7 +133,7 @@ export async function listKlornChildren(
 /** The bytes the user's Klorn files hold, from their recorded sizes (P3's usage). */
 export async function klornUsageBytes(
   userId: string,
-  providerEnabled: DriveProviderEnabledMap = DRIVE_PROVIDER_ENABLED,
+  providerEnabled: DriveProviderEnabledMap = driveProvidersFor(userId),
 ): Promise<number> {
   const result = await prisma.driveFile.aggregate({
     where: { AND: [driveSourceScope(providerEnabled), ...klornRowsOf(userId)] },

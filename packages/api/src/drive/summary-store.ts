@@ -24,6 +24,7 @@
 
 import type { DriveFileSummaryWire, DriveSummaryErrorCode } from "@klorn/contract";
 import type { DriveSummaryStatus, Prisma } from "@prisma/client";
+import type { CohortRestriction } from "../config.js";
 import { prisma } from "../db.js";
 import {
   DRIVE_SUMMARIES_PER_USER_PER_DAY,
@@ -243,10 +244,22 @@ export async function findSummaryRow(
 }
 
 /** system: the users with due rows, by their oldest due row, at most `take` (the job). */
-export async function dueSummaryUsers(now: Date, take: number): Promise<string[]> {
+export async function dueSummaryUsers(
+  now: Date,
+  take: number,
+  // Required: every caller says which users it may reach (config.ts).
+  restriction: CohortRestriction,
+): Promise<string[]> {
+  // A cohort (L23) narrows the query itself: users outside it are never picked,
+  // so their due rows wait without taking the sweep's places.
+  if (restriction.kind === "none") return [];
   const groups = await prisma.driveFileSummary.groupBy({
     by: ["userId"],
-    where: { status: "PENDING", nextAttemptAt: { lte: now } },
+    where: {
+      status: "PENDING",
+      nextAttemptAt: { lte: now },
+      ...(restriction.kind === "only" ? { userId: { in: restriction.userIds } } : {}),
+    },
     _min: { nextAttemptAt: true },
     orderBy: { _min: { nextAttemptAt: "asc" } },
     take,

@@ -13,8 +13,8 @@ import { prisma } from "../db.js";
 import type { DriveProviderName } from "./drive-providers.js";
 import { isDriveFileId } from "./drive-read.js";
 import {
-  DRIVE_PROVIDER_ENABLED,
   type DriveProviderEnabledMap,
+  driveProvidersFor,
   isDriveRowVisible,
 } from "./drive-scope.js";
 
@@ -49,7 +49,7 @@ const SOURCE_SELECT = {
 export async function findSummarySource(
   userId: string,
   id: string,
-  providerEnabled: DriveProviderEnabledMap = DRIVE_PROVIDER_ENABLED,
+  providerEnabled: DriveProviderEnabledMap = driveProvidersFor(userId),
 ): Promise<SummarySource | null> {
   if (!isDriveFileId(id)) return null;
   const row = await prisma.driveFile.findUnique({

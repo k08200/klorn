@@ -21,6 +21,7 @@
  *   - nothing returned for display carries a token or the granted scopes.
  */
 
+import type { CohortRestriction } from "../config.js";
 import { encryptToken } from "../crypto-tokens.js";
 import { INTERACTIVE_TX_OPTIONS, prisma } from "../db.js";
 import { type ConnectedDriveProvider, deleteLinkedAccountDriveRows } from "./drive-rows.js";
@@ -236,12 +237,18 @@ export async function dueDriveRefreshAccounts(
   provider: ConnectedDriveProvider,
   cutoff: Date,
   take: number,
+  // Required: every caller says which users it may reach (config.ts).
+  restriction: CohortRestriction,
 ): Promise<DueDriveAccount[]> {
+  // A cohort (L23) narrows the query itself: accounts outside it are never
+  // picked, so their tokens stay unused and they take no place in a sweep.
+  if (restriction.kind === "none") return [];
   return await prisma.linkedDriveAccount.findMany({
     where: {
       provider,
       needsReconnect: false,
       OR: [{ lastRefreshedAt: null }, { lastRefreshedAt: { lte: cutoff } }],
+      ...(restriction.kind === "only" ? { userId: { in: restriction.userIds } } : {}),
     },
     select: { id: true, userId: true },
     orderBy: [{ lastRefreshedAt: { sort: "asc", nulls: "first" } }, { id: "asc" }],

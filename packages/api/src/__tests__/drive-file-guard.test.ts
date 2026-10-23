@@ -659,8 +659,9 @@ describe("drive text reaches an LLM only wrapped", () => {
       (match) => match[1],
     );
     expect(driveImports).toEqual(["../drive/drive-scope.js", "../drive/providers/google-auth.js"]);
+    // The switches only, per user since the rollout cohort (L23).
     expect(text).toMatch(
-      /import \{ googleDriveRoutesEnabled, visibleDriveProviders \} from "\.\.\/drive\/drive-scope\.js";/,
+      /import \{\s*driveProvidersFor,\s*filesVisibleFor,\s*googleDriveRoutesEnabled,\s*\} from "\.\.\/drive\/drive-scope\.js";/,
     );
     expect(text).toMatch(
       /import \{ DRIVE_LINK_STATE_MARKER \} from "\.\.\/drive\/providers\/google-auth\.js";/,
@@ -680,7 +681,7 @@ describe("drive text reaches an LLM only wrapped", () => {
     expect(exchange).toBeGreaterThan(branch);
     const body = callback.slice(branch, callback.indexOf("\n      }\n", branch));
     expect(body).toMatch(
-      /if \(!googleDriveRoutesEnabled\(\)\) \{\s*return reply\.redirect\(`\$\{webUrl\}\$\{LINK_FLOW_PATHS\[DRIVE_LINK_STATE_MARKER\]\.failed\}`\);\s*\}\s*return handOffAccountLink\(reply, \{/,
+      /if \(!googleDriveRoutesEnabled\(driveProvidersFor\(statePayload\.userId\)\)\) \{\s*return reply\.redirect\(`\$\{webUrl\}\$\{LINK_FLOW_PATHS\[DRIVE_LINK_STATE_MARKER\]\.failed\}`\);\s*\}\s*return handOffAccountLink\(reply, \{/,
     );
     expect(body).not.toMatch(/getToken|completeGoogleDriveLink/);
   });

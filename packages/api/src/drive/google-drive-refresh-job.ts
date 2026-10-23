@@ -26,6 +26,7 @@
  * does nothing, and records no heartbeat, so a sweep that hangs shows as stale.
  */
 
+import { cohortRestriction, GOOGLE_DRIVE_FLAGS } from "../config.js";
 import { recordSchedulerTick, registerScheduler } from "../scheduler-heartbeat.js";
 import { captureError } from "../sentry.js";
 import { newWork } from "../work-context.js";
@@ -73,7 +74,12 @@ async function refreshSafely(
 
 async function sweepDue(clock: () => Date): Promise<RefreshSweepResult> {
   const cutoff = new Date(clock().getTime() - GOOGLE_REFRESH_STALE_MS);
-  const due = await dueDriveRefreshAccounts("GOOGLE", cutoff, GOOGLE_REFRESH_ACCOUNTS_PER_SWEEP);
+  const due = await dueDriveRefreshAccounts(
+    "GOOGLE",
+    cutoff,
+    GOOGLE_REFRESH_ACCOUNTS_PER_SWEEP,
+    cohortRestriction(GOOGLE_DRIVE_FLAGS),
+  );
   const outcomes: Array<AccountRefreshOutcome | "failed"> = [];
   for (const account of due) {
     // A flip off mid-sweep stops it at the next account.

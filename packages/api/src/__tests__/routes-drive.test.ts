@@ -145,6 +145,21 @@ describe("while DRIVE_ENABLED is off", () => {
     expect((await get(app, "/files", me)).statusCode).toBe(404);
     await app.close();
   });
+
+  it("in cohort mode (L23), only the cohort gets the drive; anyone else gets the dark 404", async () => {
+    vi.stubEnv("DRIVE_ENABLED", "cohort");
+    vi.stubEnv("ROLLOUT_COHORT_USER_IDS", "user-1");
+    const { app, me, other } = await buildApp();
+    expect((await get(app, "/files", me)).statusCode).toBe(200);
+    const outside = await get(app, "/files", other);
+    expect(outside.statusCode).toBe(404);
+    expect(outside.json()).toEqual({
+      message: `Route GET:${PREFIX}/files not found`,
+      error: "Not Found",
+      statusCode: 404,
+    });
+    await app.close();
+  });
 });
 
 describe("authentication", () => {

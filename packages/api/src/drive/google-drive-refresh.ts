@@ -44,7 +44,7 @@ import {
   deleteConnectedDriveRows,
   updateDriveFileRow,
 } from "./drive-rows.js";
-import { googleDriveRoutesEnabled } from "./drive-scope.js";
+import { driveProvidersFor, googleDriveRoutesEnabled } from "./drive-scope.js";
 import { GOOGLE_DRIVE_ROWS_PER_ACCOUNT } from "./google-drive-picker.js";
 import { loadDriveAccountCredentials, markDriveAccountRefreshed } from "./linked-drive-accounts.js";
 import { googleDriveSession } from "./providers/google.js";
@@ -224,7 +224,7 @@ export async function refreshGoogleDriveAccount(
   accountId: string,
   now: Date,
 ): Promise<AccountRefreshOutcome> {
-  if (!googleDriveRoutesEnabled()) return "skipped";
+  if (!googleDriveRoutesEnabled(driveProvidersFor(userId))) return "skipped";
   const account = await loadDriveAccountCredentials(userId, "GOOGLE", accountId);
   // A flagged account stays flagged until a re-link: its grant is not decrypted.
   if (account === null || account.needsReconnect) return "skipped";

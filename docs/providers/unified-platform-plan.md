@@ -120,7 +120,7 @@ readable after one permission grant.
 | L20 | Name and copy | "Klorn address". Never framed as a Gmail replacement |
 | L21 | Default onboarding path | Klorn address first until the Letter of Assessment is issued |
 | L22 | Platform order | web first |
-| L23 | Flip order | founder account, then cohort, then everyone |
+| L23 | Flip order | founder account, then cohort, then everyone. Mechanism (2026-10-23): a taking-part flag set to `cohort` opens its feature to `ROLLOUT_COHORT_USER_IDS` only (`config.ts` `flagMode`, `routes/cohort-gate.ts`); the drive flags take part |
 
 **Agent connectivity (workstream A)**
 

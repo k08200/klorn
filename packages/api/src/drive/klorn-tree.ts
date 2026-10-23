@@ -29,7 +29,7 @@ import {
   updateDriveFileRow,
   upsertDriveFileRow,
 } from "./drive-rows.js";
-import { DRIVE_PROVIDER_ENABLED, type DriveProviderEnabledMap } from "./drive-scope.js";
+import { type DriveProviderEnabledMap, driveProvidersFor } from "./drive-scope.js";
 import {
   findKlornFolder,
   findOwnDriveRow,
@@ -112,7 +112,7 @@ export async function resolveKlornParent(
 export async function createKlornFolder(
   userId: string,
   request: { name: unknown; parentExternalId?: unknown },
-  providerEnabled: DriveProviderEnabledMap = DRIVE_PROVIDER_ENABLED,
+  providerEnabled: DriveProviderEnabledMap = driveProvidersFor(userId),
 ): Promise<DriveFileWire> {
   const name = cleanKlornFileName(request.name);
   if (name === null) throw new KlornDriveError("invalid-name");
@@ -167,7 +167,7 @@ export async function updateKlornItem(
   userId: string,
   id: string,
   request: { name?: unknown; parentExternalId?: unknown },
-  providerEnabled: DriveProviderEnabledMap = DRIVE_PROVIDER_ENABLED,
+  providerEnabled: DriveProviderEnabledMap = driveProvidersFor(userId),
 ): Promise<DriveFileWire> {
   const item = await ownKlornItem(userId, id, providerEnabled);
   const name = request.name === undefined ? item.name : cleanKlornFileName(request.name);

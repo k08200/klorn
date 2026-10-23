@@ -76,6 +76,26 @@ describe("GET /api/drive/limits", () => {
     expect((await limits({})).statusCode).toBe(401);
   });
 
+  it("in cohort mode (L23), answers only the cohort; anyone else gets the dark 404", async () => {
+    vi.stubEnv("DRIVE_ENABLED", "cohort");
+    vi.stubEnv("KLORN_DRIVE_ENABLED", "cohort");
+    vi.stubEnv("ROLLOUT_COHORT_USER_IDS", "user-1");
+    expect((await limits(t.me)).statusCode).toBe(200);
+    const bare = Fastify();
+    await bare.ready();
+    const missing = await bare.inject({ method: "GET", url: `${PREFIX}/limits` });
+    const outside = await limits(t.other);
+    expect(outside.statusCode).toBe(404);
+    expect(outside.body).toBe(missing.body);
+    await bare.close();
+  });
+
+  it("has no cohort for object storage: it is infrastructure, on or off", async () => {
+    vi.stubEnv("OBJECT_STORAGE_ENABLED", "cohort");
+    vi.stubEnv("ROLLOUT_COHORT_USER_IDS", "user-1");
+    expect((await limits(t.me)).statusCode).toBe(404);
+  });
+
   it("answers the file cap, the quota and only this user's Klorn usage", async () => {
     await t.app.close();
     t = await buildKlornDriveApp({

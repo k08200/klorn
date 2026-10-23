@@ -278,13 +278,13 @@ describe("the refresh job's two queries (D5d)", () => {
         account({ id: "a-onedrive", email: "o@x.com", provider: "ONEDRIVE" }),
       ],
     });
-    const due = await dueDriveRefreshAccounts("GOOGLE", CUTOFF, 10);
+    const due = await dueDriveRefreshAccounts("GOOGLE", CUTOFF, 10, { kind: "all" });
     expect(due).toEqual([
       { id: "a-never", userId: "user-2" },
       { id: "a-due", userId: "user-1" },
       { id: "a-cutoff", userId: "user-1" },
     ]);
-    expect(await dueDriveRefreshAccounts("GOOGLE", CUTOFF, 2)).toHaveLength(2);
+    expect(await dueDriveRefreshAccounts("GOOGLE", CUTOFF, 2, { kind: "all" })).toHaveLength(2);
   });
 
   it("marks only this user's account refreshed", async () => {

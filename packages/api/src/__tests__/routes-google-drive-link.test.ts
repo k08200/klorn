@@ -155,6 +155,43 @@ describe("authentication", () => {
 });
 
 describe("POST /link", () => {
+  it("in cohort mode (L23), only the cohort can see or link a Google Drive", async () => {
+    vi.stubEnv("GOOGLE_DRIVE_ENABLED", "cohort");
+    vi.stubEnv("ROLLOUT_COHORT_USER_IDS", "user-1");
+    seed({ linkedDriveAccount: [account()] });
+    const { app, me, other } = await buildApp();
+    expect(
+      (await app.inject({ method: "GET", url: `${PREFIX}/accounts`, headers: me })).statusCode,
+    ).toBe(200);
+    for (const [method, path] of [
+      ["GET", "/accounts"],
+      ["POST", "/link"],
+    ] as const) {
+      const res = await app.inject({ method, url: `${PREFIX}${path}`, headers: other });
+      expect(res.statusCode).toBe(404);
+      expect(res.json()).toEqual({
+        message: `Route ${method}:${PREFIX}${path} not found`,
+        error: "Not Found",
+        statusCode: 404,
+      });
+    }
+    await app.close();
+  });
+
+  it("in cohort mode, a user outside the cohort can still unlink their own account", async () => {
+    vi.stubEnv("GOOGLE_DRIVE_ENABLED", "cohort");
+    vi.stubEnv("ROLLOUT_COHORT_USER_IDS", "user-1");
+    seed({ linkedDriveAccount: [account({ id: "acct-2", userId: "user-2" })] });
+    const { app, other } = await buildApp();
+    const res = await app.inject({
+      method: "DELETE",
+      url: `${PREFIX}/accounts/acct-2`,
+      headers: other,
+    });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
   it("answers the consent URL with a state signed for this user", async () => {
     const { app, me, verifyToken } = await buildApp();
     const res = await app.inject({ method: "POST", url: `${PREFIX}/link`, headers: me });

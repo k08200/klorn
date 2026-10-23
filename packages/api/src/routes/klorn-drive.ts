@@ -40,12 +40,9 @@ import type {
 } from "@klorn/contract";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
+import { KLORN_DRIVE_FLAGS } from "../config.js";
 import { DRIVE_ID_MAX_CHARS } from "../drive/drive-rows.js";
-import {
-  DRIVE_PROVIDER_ENABLED,
-  type DriveProviderEnabledMap,
-  klornDriveRoutesEnabled,
-} from "../drive/drive-scope.js";
+import { type DriveProviderEnabledMap, klornDriveRoutesEnabled } from "../drive/drive-scope.js";
 import { klornUsageBytes } from "../drive/klorn-drive-read.js";
 import { KLORN_DRIVE_ERROR_STATUS, KlornDriveError } from "../drive/klorn-errors.js";
 import { klornDriveQuotaOrNull } from "../drive/klorn-quota.js";
@@ -58,6 +55,7 @@ import {
   type StoredKlornUpload,
   storeKlornUpload,
 } from "../drive/klorn-upload.js";
+import { cohortGate } from "./cohort-gate.js";
 import { darkRouteGate } from "./dark-route-gate.js";
 import { type RouteRateLimit, rateLimitHook } from "./rate-limit-hook.js";
 
@@ -173,7 +171,7 @@ async function storeFilePart(
   part: UploadPart,
   userId: string,
   fields: ReadonlyMap<string, string>,
-  providerEnabled: DriveProviderEnabledMap,
+  providerEnabled: DriveProviderEnabledMap | undefined,
 ): Promise<StoredKlornUpload> {
   const stored = await storeKlornUpload(
     {
@@ -223,7 +221,7 @@ function readFailure(err: unknown, context: ReadContext): unknown {
 /** Read the request: the fields, then the one file, which is stored on the way. */
 async function readUpload(
   request: FastifyRequest,
-  providerEnabled: DriveProviderEnabledMap,
+  providerEnabled: DriveProviderEnabledMap | undefined,
 ): Promise<StoredKlornUpload> {
   const userId = getUserId(request);
   const fields = new Map<string, string>();
@@ -271,7 +269,9 @@ export function klornDriveRoutes(opts: {
   /** The provider flags the operations honour; tests pass their own. */
   providerEnabled?: DriveProviderEnabledMap;
 }): (app: FastifyInstance) => Promise<void> {
-  const providerEnabled = opts.providerEnabled ?? DRIVE_PROVIDER_ENABLED;
+  // Tests pass a map; otherwise each call reads the user's own (drive-scope.ts
+  // `driveProvidersFor`), so a cohort-only source (L23) stays the cohort's.
+  const providerEnabled = opts.providerEnabled;
 
   async function uploadHandler(
     request: FastifyRequest,
@@ -368,7 +368,7 @@ export function klornDriveRoutes(opts: {
         RATE_LIMITED,
       );
     const guarded = (name: string, limit: RouteRateLimit) => ({
-      preHandler: [requireAuth, perUser(name, limit)],
+      preHandler: [requireAuth, cohortGate(KLORN_DRIVE_FLAGS), perUser(name, limit)],
       config: { rateLimit: limit },
     });
 
