@@ -80,9 +80,10 @@ const STRIP_LANES: readonly LiveTier[] = ["PUSH", "MEETING", "QUEUE", "INFO"]; /
 
 /**
  * The day in one line (TodayScreen.dc): threads per lane, then how many went
- * to Silent. Push is the PUSH block's windowed count (Today's window), left
- * out while that read is pending or failed rather than showing the whole lane. Real counts from the lane-counts read Today already shares with
+ * to Silent. Real counts from the lane-counts read Today already shares with
  * Mail; nothing shows until they arrive, and a failed read shows nothing.
+ * Push is the PUSH block's windowed count (Today's window), left out while
+ * that read is pending or failed rather than showing the whole lane.
  */
 function DayStrip() {
   const { t } = useT();

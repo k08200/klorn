@@ -41,18 +41,22 @@ const attentionRows = [
   // No mail behind it: its createdAt decides.
   item("att-nomail-in", "GITHUB", "gh-1", "PUSH", ago(71, 59)),
   item("att-nomail-out", "GITHUB", "gh-2", "PUSH", ago(72, 1)),
+  // One thread, two PUSH messages: the kept card (newest surfaced) was
+  // received long ago, its sibling inside the window — the thread is in.
+  { ...item("att-thread-old", "EMAIL", "em-thread-old", "PUSH", ago(300)), surfacedAt: ago(0, 30) },
+  item("att-thread-new", "EMAIL", "em-thread-new", "PUSH", ago(300)),
   // Not PUSH: never part of the window.
   item("att-queue", "EMAIL", "em-queue", "QUEUE", ago(1)),
 ];
 
-const mail = (id: string, receivedAt: Date) => ({
+const mail = (id: string, receivedAt: Date, threadId = `t-${id}`) => ({
   id,
   gmailId: `g-${id}`,
   subject: id,
   from: "alice@example.com",
   snippet: "hi",
   labels: ["INBOX"],
-  threadId: `t-${id}`,
+  threadId,
   linkedInboxAccountId: null,
   receivedAt,
 });
@@ -61,6 +65,8 @@ const emailRows = [
   mail("em-in", ago(71, 59)),
   mail("em-out", ago(72, 1)),
   mail("em-queue", ago(1)),
+  mail("em-thread-old", ago(200), "t-shared"),
+  mail("em-thread-new", ago(5), "t-shared"),
 ];
 
 vi.mock("../db.js", () => ({
@@ -133,16 +139,16 @@ describe("GET /api/inbox/firewall — todayPush window", () => {
     expect(body.todayPush).toEqual({
       windowHours: 72,
       since: "2026-10-20T12:00:00.000Z",
-      ids: ["att-in", "att-nomail-in"],
+      ids: ["att-thread-old", "att-in", "att-nomail-in"],
     });
   });
 
   it("leaves the lanes and the summary whole: Mail still lists every open PUSH card", async () => {
     const body = await read();
     expect(body.tiers.PUSH.map((row) => row.id).sort()).toEqual(
-      ["att-in", "att-nomail-in", "att-nomail-out", "att-out"].sort(),
+      ["att-in", "att-nomail-in", "att-nomail-out", "att-out", "att-thread-old"].sort(),
     );
-    expect(body.summary.PUSH).toBe(4);
+    expect(body.summary.PUSH).toBe(5);
     expect(body.tiers.QUEUE.map((row) => row.id)).toEqual(["att-queue"]);
   });
 });
