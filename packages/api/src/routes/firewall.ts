@@ -55,7 +55,11 @@ import {
 } from "../judge/attention-override.js";
 import { snoozeAttentionItem } from "../judge/attention-snooze.js";
 import { getDecisionMetrics } from "../judge/decision-metrics.js";
-import { collapseEmailThreads } from "../judge/firewall-thread-collapse.js";
+import {
+  collapseEmailThreads,
+  countEmailThreads,
+  emailThreadKey,
+} from "../judge/firewall-thread-collapse.js";
 import { gmailCategoryOf, rowSignalFor } from "../judge/row-signals.js";
 import { resolveTierReason } from "../judge/tier-reason-strings.js";
 import { manualOverrideReason, type Tier, toLiveTier } from "../judge/tiers.js";
@@ -847,10 +851,13 @@ export async function firewallRoutes(app: FastifyInstance) {
       // highest-priority (newest on ties) message. Without this, a reschedule
       // thread or a repeated "Deployment failed" shows once per message, each with
       // a different judge-authored tierReason (the duplicate seen in dogfooding).
-      const dedupedItems = collapseEmailThreads(
-        scopedItems,
-        (row) => emailById.get(row.sourceId)?.threadId ?? null,
-      );
+      // The thread key is account-scoped, like the web's `threads=1` grouping,
+      // so the card's threadCount (messages of the thread in this scoped list)
+      // matches what the web shows for the same thread.
+      const threadKeyOf = (row: (typeof items)[number]) =>
+        emailThreadKey(emailById.get(row.sourceId));
+      const dedupedItems = collapseEmailThreads(scopedItems, threadKeyOf);
+      const threadCounts = countEmailThreads(scopedItems, threadKeyOf);
 
       for (const row of dedupedItems) {
         // toLiveTier maps legacy CALL rows → PUSH (not QUEUE), the retired
@@ -967,6 +974,7 @@ export async function firewallRoutes(app: FastifyInstance) {
               replyState: replyStateOf(email),
               draftReady: draftReadyFor(email),
               ...accountFactsOf(email, accountContext),
+              threadCount: threadCounts.get(emailThreadKey(email) ?? "") ?? 1,
               signal: rowSignalFor({
                 userLabel: addr ? (userLabels.get(addr) ?? null) : null,
                 internal: isInternalSender(email.from, companyDomains),

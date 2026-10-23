@@ -95,6 +95,11 @@ export interface FirewallEmailContext {
    *  `GET /api/email?filter=attachments`, which matches any attachment row;
    *  aligning the two is a follow-up. Null / absent = no claim. */
   hasAttachment?: boolean | null;
+  /** Messages of this mail's thread in the returned list (the card the
+   *  thread collapsed to). Same thread definition as `GET /api/email?threads=1`
+   *  (account-scoped thread id; no thread id = its own thread). Set on EMAIL
+   *  items, 1 for a single message; absent on PENDING_ACTION previews. */
+  threadCount?: number;
 }
 
 export type RowSignalWire =
