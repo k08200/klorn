@@ -43,6 +43,7 @@
 "mail.inbox.a11y" = "Postfach %@";
 "mail.unread" = "Ungelesen";
 "mail.hasAttachment" = "Mit Anhang";
+"mail.threadCount" = "%d Nachrichten in diesem Verlauf";
 "source.account.a11y" = "%@-Konto";
 "source.generic" = "E-Mail";
 "mail.searchResult.a11y" = "Suchtreffer von %1$@: %2$@";

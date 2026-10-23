@@ -111,6 +111,11 @@ extension Theme {
     static let hairline: CGFloat = 1
     /// The main window's list row floor (plan §2: 52 on desktop).
     static let rowHeight: CGFloat = 52
+    /// The mail-list row floor: three lines (sender 22 chip-high, subject
+    /// 15pt ≈ 18, reason/snippet 12pt ≈ 15), two 4pt gaps and 8pt top and
+    /// bottom padding = 79, rounded up to the 8pt grid. Today's mail rows
+    /// share it; other rows keep `rowHeight`.
+    static let mailRowHeight: CGFloat = 80
 }
 
 extension Theme.Typo {

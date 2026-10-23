@@ -7,6 +7,12 @@ import { useAuth } from "../../../lib/auth";
 import { useT } from "../../../lib/i18n";
 import { captureClientError } from "../../../lib/sentry";
 import {
+  AUTO_TIME_ZONE,
+  deviceTimeZone,
+  LAST_RESORT_TIME_ZONE,
+  timeZonePreferenceBody,
+} from "../../../lib/time-zone";
+import {
   mergeStoredProfile,
   PROFILE_KEY,
   type ProfileFields,
@@ -19,13 +25,14 @@ const LEGACY_KEY_PREFIX = "ev" + "e";
 const LEGACY_PROFILE_KEY = `${LEGACY_KEY_PREFIX}-profile`;
 
 export function useProfile(config: AutomationConfig | null) {
-  const { user } = useAuth();
+  const { user, applyTimeZone } = useAuth();
   const { toast } = useToast();
   const { t } = useT();
   const [profile, setProfile] = useState<UserProfile>({
     name: "",
     language: "en",
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    // Automatic until the server says the user pinned a zone.
+    timezone: AUTO_TIME_ZONE,
   });
   const [profileSaved, setProfileSaved] = useState(false);
 
@@ -40,21 +47,20 @@ export function useProfile(config: AutomationConfig | null) {
         localStorage.setItem(PROFILE_KEY, stored);
         localStorage.removeItem(LEGACY_PROFILE_KEY);
         const parsed = JSON.parse(stored);
-        setProfile((p) => ({
-          ...p,
-          language: parsed.language || p.language,
-          timezone: parsed.timezone || p.timezone,
-        }));
+        // Timezone is server-owned (mode + zone); only language is read back.
+        setProfile((p) => ({ ...p, language: parsed.language || p.language }));
       }
     } catch {
       // ignore
     }
   }, [user]);
 
-  // The server-held timezone wins over the local copy once it arrives.
+  // The server holds the choice: a pinned zone, or Automatic (device).
   useEffect(() => {
-    const timezone = config?.timezone;
-    if (timezone) setProfile((p) => ({ ...p, timezone }));
+    if (!config) return;
+    const timezone =
+      config.timezoneMode === "MANUAL" && config.timezone ? config.timezone : AUTO_TIME_ZONE;
+    setProfile((p) => ({ ...p, timezone }));
   }, [config]);
 
   // Each form saves only the fields it shows (see profile-save-plan.ts): the
@@ -92,16 +98,18 @@ export function useProfile(config: AutomationConfig | null) {
     }
 
     if (plan.locale) {
+      const body = timeZonePreferenceBody(plan.locale.timezone, deviceTimeZone());
       try {
-        await apiFetch("/api/automations", {
-          method: "PATCH",
-          body: JSON.stringify({ timezone: plan.locale.timezone }),
-        });
+        if (!body) throw new Error(`invalid time zone selection: ${plan.locale.timezone}`);
+        await apiFetch("/api/automations", { method: "PATCH", body: JSON.stringify(body) });
+        // Mirror into the signed-in user so every rendered time switches now.
+        applyTimeZone(body.timezone ?? user?.timezone ?? LAST_RESORT_TIME_ZONE, body.timezoneMode);
       } catch (err) {
-        // Non-fatal: timezone is persisted locally and retried on the next save,
-        // so we don't block the success toast — but log a signal rather than
-        // swallow it (project rule; captureClientError consoles when Sentry off).
+        // The zone drives every rendered time and the server's schedules, so a
+        // failed save is surfaced instead of toasting success.
         captureClientError(err, { scope: "settings.save-profile-timezone" });
+        toast(t("settings.toast.timezoneSaveFailed"), "error");
+        return;
       }
     }
     setProfileSaved(true);

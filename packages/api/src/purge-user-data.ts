@@ -1,4 +1,5 @@
 import type { db } from "./db.js";
+import { NOT_KLORN_ADDRESS } from "./mail/klorn-mailbox.js";
 
 /** The Prisma client (or a $transaction client cast to it) — exposes every model. */
 type PurgeTx = typeof db;
@@ -32,7 +33,10 @@ function utcDayKey(): string {
  * the credentials kept on the account row. No background path re-creates a
  * grant (token refreshes are updates; only a consent flow the user starts
  * upserts one), so once this commits no new mail, calendar or drive sync starts
- * for the user. Not every writer depends on these rows: the login-briefing
+ * for the user. The one exception is pushed, not synced: the Klorn address's
+ * mailbox (KLORN, step E1a) is kept, so mail sent to the address keeps arriving
+ * after a wipe (the inbound webhook, E1b; it drops what predates the wipe). Not
+ * every writer depends on these rows: the login-briefing
  * timer (routes/auth.ts) upserts the automation config, and the all-user jobs
  * (sender traits, digests) work from stored rows until those are gone. Part of
  * `purgeUserData`; the data wipe also runs it alone first, in its own short
@@ -46,7 +50,11 @@ export async function revokeUserAccess(tx: PurgeTx, userId: string): Promise<voi
   // Secondary linked Google accounts hold live, decryptable OAuth access/refresh
   // tokens + the linked account's email — Google API data that must not survive
   // a deletion request (previously only removed by manual per-account unlink).
-  await tx.linkedInboxAccount.deleteMany(scope);
+  // The Klorn address's mailbox (KLORN, step E1a) is no grant: it holds no
+  // credentials and belongs to the account like its address (KlornAddress, kept),
+  // so mail to the address still arrives after a wipe. Its mail goes with
+  // purgeUserData; account deletion's cascade takes the row.
+  await tx.linkedInboxAccount.deleteMany({ where: { userId, ...NOT_KLORN_ADDRESS } });
   await tx.linkedCalendarAccount.deleteMany(scope);
   // A linked Google Drive / OneDrive account (D5a): its OAuth token pair and
   // address. Its cascade reaches only that account's GOOGLE/ONEDRIVE DriveFile

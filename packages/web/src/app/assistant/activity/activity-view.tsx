@@ -14,9 +14,9 @@ import Button from "../../../components/ui/button";
 import EmptyState from "../../../components/ui/empty-state";
 import { type Segment, SegmentedControl } from "../../../components/ui/segmented-control";
 import { Skeleton, SkeletonGroup } from "../../../components/ui/skeleton";
-import { useAuth } from "../../../lib/auth";
 import { ASSISTANT_APPROVALS } from "../../../lib/home";
 import { useT } from "../../../lib/i18n";
+import { useDisplayTimeZone } from "../../../lib/use-time-zone";
 import { useReceipt } from "../../inbox/receipt/use-receipt";
 import { BlockError } from "../../today/block";
 import { HubHeader, RefreshGlyph } from "../hub-frame";
@@ -31,8 +31,6 @@ import {
   type DayPart,
   groupByDayPart,
 } from "./model";
-
-const DEFAULT_TIME_ZONE = "Asia/Seoul";
 
 type Filter = "all" | ActivityKind;
 
@@ -53,7 +51,7 @@ const PART_KEYS: ReadonlyMap<DayPart, string> = new Map([
 export function ActivityView() {
   const { t, locale } = useT();
   const { toast } = useToast();
-  const timeZone = useAuth().user?.timezone ?? DEFAULT_TIME_ZONE;
+  const timeZone = useDisplayTimeZone();
   const [filter, setFilter] = useState<Filter>("all");
   const { receiptQuery, isUndoing, requestUndo } = useReceipt({
     onUndoAnswer: (result) =>

@@ -13,8 +13,8 @@ import { Markdown } from "../../../components/markdown";
 import Button from "../../../components/ui/button";
 import EmptyState from "../../../components/ui/empty-state";
 import { Skeleton, SkeletonGroup } from "../../../components/ui/skeleton";
-import { useAuth } from "../../../lib/auth";
 import { useT } from "../../../lib/i18n";
+import { useDisplayTimeZone } from "../../../lib/use-time-zone";
 import {
   type BriefingFeedbackChoice,
   type TopAction,
@@ -25,7 +25,6 @@ import { HubHeader } from "../hub-frame";
 import { DayShape } from "./day-shape";
 
 const SETTINGS_HREF = "/settings/notifications";
-const DEFAULT_TIME_ZONE = "Asia/Seoul";
 const LINK_CLASS =
   "focus-ring inline-flex min-h-11 items-center rounded-control text-label text-accent-deep hover:underline";
 
@@ -58,7 +57,7 @@ function deliveryNote(status: BriefingStatus | null, t: Translate): string | nul
 
 export function BriefingView() {
   const { t, locale } = useT();
-  const timeZone = useAuth().user?.timezone ?? DEFAULT_TIME_ZONE;
+  const timeZone = useDisplayTimeZone();
   const briefing = useBriefingPage();
   const { content, status, loading, generating } = briefing;
   const time = briefing.createdAt ? formatTime(briefing.createdAt, locale, timeZone) : null;
