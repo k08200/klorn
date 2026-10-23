@@ -1,6 +1,8 @@
 # Build the Windows shell and publish its NSIS installer as a GitHub Release.
 #
-# Trigger: push a tag like `desktop-win-v0.1.0` (or run manually).
+# Trigger: push a tag like `desktop-win-v0.1.0`. A manual run
+# (workflow_dispatch) on a branch builds and smoke-tests the installer but does
+# NOT publish — publishing only happens when the run's ref is a tag.
 #
 # The installer is renamed to the stable name `Klorn-windows-setup.exe` so the
 # landing can link `releases/download/<tag>/Klorn-windows-setup.exe` (and later
@@ -20,8 +22,8 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to create (e.g. desktop-win-v0.1.0)"
-        required: true
+        description: "Release tag (only used when run on a tag ref; branch runs build + smoke only)"
+        required: false
 
 permissions:
   contents: write
@@ -60,7 +62,124 @@ jobs:
           [ -f "$exe" ] || { echo "::error::no NSIS installer produced"; exit 1; }
           cp "$exe" "$RUNNER_TEMP/Klorn-windows-setup.exe"
 
+      - name: Install the PACKAGED app, launch it, and keep it alive
+        shell: pwsh
+        # Nobody on the team has a Windows PC, so this is the only place the
+        # shipped installer is ever run before users get it. Mirrors the Mac
+        # release's "Launch the PACKAGED app" gate: install the exact NSIS
+        # build silently, start it the way a user does, and fail the release
+        # (nothing is published) unless, after 25 s, it is still running with
+        # a visible main window — and a window close (WM_CLOSE, what the X
+        # button sends) hides it to the tray instead of quitting.
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Add-Type -TypeDefinition @"
+          using System;
+          using System.Collections.Generic;
+          using System.Runtime.InteropServices;
+          using System.Text;
+          public static class KlornWin {
+            public delegate bool EnumProc(IntPtr hWnd, IntPtr lParam);
+            [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc cb, IntPtr lParam);
+            [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
+            [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+            [DllImport("user32.dll")] public static extern IntPtr GetWindow(IntPtr hWnd, uint cmd);
+            [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowText(IntPtr hWnd, StringBuilder s, int n);
+            [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr w, IntPtr l);
+            public static string Title(IntPtr h) { var sb = new StringBuilder(512); GetWindowText(h, sb, 512); return sb.ToString(); }
+            // Visible, unowned top-level windows of a process (GW_OWNER = 4).
+            public static List<IntPtr> VisibleTopLevel(uint pid) {
+              var found = new List<IntPtr>();
+              EnumWindows((h, l) => {
+                uint p; GetWindowThreadProcessId(h, out p);
+                if (p == pid && IsWindowVisible(h) && GetWindow(h, 4) == IntPtr.Zero) found.Add(h);
+                return true;
+              }, IntPtr.Zero);
+              return found;
+            }
+          }
+          "@
+
+          $installer = Join-Path $env:RUNNER_TEMP 'Klorn-windows-setup.exe'
+          Write-Host "Installing $installer silently"
+          $inst = Start-Process -FilePath $installer -ArgumentList '/S' -Wait -PassThru
+          if ($inst.ExitCode -ne 0) { throw "installer exited with code $($inst.ExitCode)" }
+
+          # Tauri's NSIS default is a per-user install under %LOCALAPPDATA%.
+          # The main exe is named after productName or the cargo package
+          # depending on Tauri config, so take whichever non-uninstaller exe
+          # the installer laid down.
+          $candidates = @(
+            (Join-Path $env:LOCALAPPDATA 'Klorn'),
+            (Join-Path $env:LOCALAPPDATA 'Programs\Klorn'),
+            (Join-Path $env:ProgramFiles 'Klorn')
+          )
+          $exeItem = $candidates | Where-Object { Test-Path $_ } |
+            ForEach-Object { Get-ChildItem $_ -Filter '*.exe' } |
+            Where-Object { $_.Name -ne 'uninstall.exe' } | Select-Object -First 1
+          if (-not $exeItem) {
+            Write-Host "::error::no app exe found after install. Looked in: $($candidates -join ', ')"
+            Get-ChildItem $env:LOCALAPPDATA -Recurse -Filter '*.exe' -ErrorAction SilentlyContinue |
+              Where-Object { $_.FullName -match 'Klorn' } | ForEach-Object { Write-Host $_.FullName }
+            exit 1
+          }
+          $exe = $exeItem.FullName
+          $installDir = $exeItem.DirectoryName
+          Write-Host "Installed $exe"
+
+          $failed = $null
+          $app = Start-Process -FilePath $exe -PassThru
+          try {
+            Start-Sleep -Seconds 25
+            $app.Refresh()
+            if ($app.HasExited) { throw "the app exited within 25 s of launch (exit code $($app.ExitCode))" }
+            Write-Host "process $($app.Id) still running after 25 s"
+
+            $windows = [KlornWin]::VisibleTopLevel([uint32]$app.Id)
+            foreach ($h in $windows) { Write-Host ("visible window 0x{0:X} title='{1}'" -f $h.ToInt64(), [KlornWin]::Title($h)) }
+            if ($windows.Count -eq 0) { throw "the app is running but owns no visible top-level window" }
+            $main = $windows | Where-Object { [KlornWin]::Title($_) -eq 'Klorn' } | Select-Object -First 1
+            if (-not $main) { $main = $windows[0] }
+
+            # Evidence for humans: what the runner's screen shows right now.
+            try {
+              Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+              $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+              $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+              $g = [System.Drawing.Graphics]::FromImage($bmp)
+              $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+              $bmp.Save((Join-Path $env:RUNNER_TEMP 'klorn-launch.png'))
+              $g.Dispose(); $bmp.Dispose()
+            } catch { Write-Host "::warning::screenshot failed: $_" }
+
+            # WM_CLOSE (0x0010) = the title bar X. Close-to-tray must hide the
+            # window and keep the process alive for banners.
+            [void][KlornWin]::PostMessage($main, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)
+            Start-Sleep -Seconds 5
+            $app.Refresh()
+            if ($app.HasExited) { throw "the app QUIT on window close (exit code $($app.ExitCode)) — close-to-tray is broken" }
+            if ([KlornWin]::IsWindowVisible($main)) { throw "main window is still visible 5 s after WM_CLOSE — the close was not handled" }
+            Write-Host "window close hid the window and the process stayed alive — close-to-tray OK"
+          } catch {
+            $failed = "$_"
+          } finally {
+            Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
+            $uninstaller = Join-Path $installDir 'uninstall.exe'
+            if (Test-Path $uninstaller) { Start-Process -FilePath $uninstaller -ArgumentList '/S' -Wait | Out-Null }
+          }
+          if ($failed) { Write-Host "::error::$failed"; exit 1 }
+          Write-Host "smoke OK"
+
+      - name: Upload launch screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: klorn-windows-launch-screenshot
+          path: ${{ runner.temp }}/klorn-launch.png
+          if-no-files-found: ignore
+
       - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.meta.outputs.tag }}
