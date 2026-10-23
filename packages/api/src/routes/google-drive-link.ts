@@ -46,6 +46,7 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import { removeAndRevokeGoogle } from "../auth/google-grant-revoke.js";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireEntitled } from "../billing/entitlement-guard.js";
+import { GOOGLE_DRIVE_FLAGS } from "../config.js";
 import { DRIVE_ID_MAX_CHARS } from "../drive/drive-rows.js";
 import { googleDriveRoutesEnabled } from "../drive/drive-scope.js";
 import {
@@ -57,6 +58,7 @@ import {
 } from "../drive/google-drive-picker.js";
 import { listDriveAccounts, unlinkDriveAccount } from "../drive/linked-drive-accounts.js";
 import { getLinkDriveAuthUrl } from "../drive/providers/google-auth.js";
+import { cohortGate } from "./cohort-gate.js";
 import { darkRouteGate } from "./dark-route-gate.js";
 import { linkStartScheme } from "./link-handoff.js";
 
@@ -145,7 +147,7 @@ export function googleDriveLinkRoutes(opts: {
     app.post(
       "/link",
       {
-        preHandler: [requireAuth, requireEntitled],
+        preHandler: [requireAuth, cohortGate(GOOGLE_DRIVE_FLAGS), requireEntitled],
         config: { rateLimit: LINK_RATE_LIMIT },
       },
       async (request, reply) => {
@@ -166,7 +168,10 @@ export function googleDriveLinkRoutes(opts: {
     // able to see an account in order to unlink it.
     app.get(
       "/accounts",
-      { preHandler: requireAuth, config: { rateLimit: ACCOUNTS_RATE_LIMIT } },
+      {
+        preHandler: [requireAuth, cohortGate(GOOGLE_DRIVE_FLAGS)],
+        config: { rateLimit: ACCOUNTS_RATE_LIMIT },
+      },
       async (request): Promise<GoogleDriveAccountsResponse> => {
         const userId = getUserId(request);
         const accounts = await listDriveAccounts(userId, "GOOGLE");
@@ -186,7 +191,7 @@ export function googleDriveLinkRoutes(opts: {
     app.delete(
       "/accounts/:id",
       {
-        preHandler: requireAuth,
+        preHandler: [requireAuth, cohortGate(GOOGLE_DRIVE_FLAGS)],
         schema: { params: idParamsSchema },
         config: { rateLimit: UNLINK_RATE_LIMIT },
       },
@@ -213,7 +218,7 @@ export function googleDriveLinkRoutes(opts: {
     app.post(
       "/accounts/:id/picker-session",
       {
-        preHandler: [requireAuth, requireEntitled],
+        preHandler: [requireAuth, cohortGate(GOOGLE_DRIVE_FLAGS), requireEntitled],
         schema: { params: idParamsSchema },
         config: { rateLimit: PICKER_SESSION_RATE_LIMIT },
       },
@@ -233,7 +238,7 @@ export function googleDriveLinkRoutes(opts: {
     app.post(
       "/accounts/:id/picked",
       {
-        preHandler: [requireAuth, requireEntitled],
+        preHandler: [requireAuth, cohortGate(GOOGLE_DRIVE_FLAGS), requireEntitled],
         schema: { params: idParamsSchema, body: pickedBodySchema },
         config: { rateLimit: PICKED_RATE_LIMIT },
       },

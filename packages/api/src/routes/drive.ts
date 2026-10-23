@@ -32,6 +32,7 @@ import type {
 } from "@klorn/contract";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
+import { DRIVE_LIST_FLAGS, DRIVE_SUMMARY_FLAGS } from "../config.js";
 import { DRIVE_PROVIDER_NAMES, type DriveProviderName } from "../drive/drive-providers.js";
 import {
   DRIVE_CURSOR_MAX_CHARS,
@@ -46,6 +47,7 @@ import { DRIVE_PROVIDER_ENABLED, type DriveProviderEnabledMap } from "../drive/d
 import { driveSummariesLive } from "../drive/summary-policy.js";
 import { requestDriveSummary, summaryForFile } from "../drive/summary-triggers.js";
 import { captureError } from "../sentry.js";
+import { cohortGate } from "./cohort-gate.js";
 import { darkRouteGate } from "./dark-route-gate.js";
 import { rateLimitHook } from "./rate-limit-hook.js";
 
@@ -201,7 +203,11 @@ export function driveRoutes(opts: {
     app.get<{ Querystring: ListQuery }>(
       "/files",
       {
-        preHandler: [requireAuth, perUser("list", DRIVE_LIST_RATE_LIMIT)],
+        preHandler: [
+          requireAuth,
+          cohortGate(DRIVE_LIST_FLAGS),
+          perUser("list", DRIVE_LIST_RATE_LIMIT),
+        ],
         config: { rateLimit: DRIVE_LIST_RATE_LIMIT },
         schema: { querystring: listQuerySchema },
       },
@@ -210,7 +216,11 @@ export function driveRoutes(opts: {
     app.get<{ Params: IdParams }>(
       "/files/:id",
       {
-        preHandler: [requireAuth, perUser("file", DRIVE_FILE_RATE_LIMIT)],
+        preHandler: [
+          requireAuth,
+          cohortGate(DRIVE_LIST_FLAGS),
+          perUser("file", DRIVE_FILE_RATE_LIMIT),
+        ],
         config: { rateLimit: DRIVE_FILE_RATE_LIMIT },
       },
       fileHandler,
@@ -220,7 +230,11 @@ export function driveRoutes(opts: {
       {
         // After the drive's own gate: dark unless summaries are on too.
         onRequest: darkRouteGate(summariesGate),
-        preHandler: [requireAuth, perUser("summarize", DRIVE_SUMMARIZE_RATE_LIMIT)],
+        preHandler: [
+          requireAuth,
+          cohortGate(DRIVE_SUMMARY_FLAGS),
+          perUser("summarize", DRIVE_SUMMARIZE_RATE_LIMIT),
+        ],
         config: { rateLimit: DRIVE_SUMMARIZE_RATE_LIMIT },
       },
       summarizeHandler,

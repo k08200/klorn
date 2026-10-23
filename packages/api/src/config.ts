@@ -119,6 +119,46 @@ export const FALLBACK_REJUDGE_LOOKBACK_DAYS =
 // admins can comp any account's plan from /admin.
 export const PAYWALL_ENABLED = process.env.PAYWALL_ENABLED === "true";
 
+// ── Rollout cohort ────────────────────────────────────────────────────
+// Rollout cohort (decision L23 of docs/providers/unified-platform-plan.md: flip
+// order founder account, then cohort, then everyone). A feature flag that takes
+// part reads `cohort` as well as on and off: the feature is live, and its routes
+// then let in only the users listed in ROLLOUT_COHORT_USER_IDS (comma or
+// whitespace separated user ids); everyone else gets exactly the answer of the
+// flag off (routes/cohort-gate.ts). An empty cohort lets no one in. Read per
+// call, so a flip needs no redeploy. Infrastructure flags (OBJECT_STORAGE_ENABLED)
+// take no part: they are on or off for everyone.
+export type FlagMode = "off" | "cohort" | "on";
+
+export function flagMode(envName: string): FlagMode {
+  const raw = (process.env[envName] ?? "").trim().toLowerCase();
+  if (["true", "1", "yes", "on"].includes(raw)) return "on";
+  return raw === "cohort" ? "cohort" : "off";
+}
+
+export function rolloutCohortUserIds(): ReadonlySet<string> {
+  return new Set(
+    (process.env.ROLLOUT_COHORT_USER_IDS ?? "").split(/[\s,]+/).filter((id) => id !== ""),
+  );
+}
+
+/**
+ * Whether a feature made of these flags is open to this user: every flag on, or
+ * none off and the user in the cohort when any is `cohort`.
+ */
+export function featureOpenTo(userId: string, envNames: readonly string[]): boolean {
+  const modes = envNames.map(flagMode);
+  if (modes.includes("off")) return false;
+  if (!modes.includes("cohort")) return true;
+  return rolloutCohortUserIds().has(userId);
+}
+
+/** The flags of each drive surface, as featureOpenTo takes them. */
+export const DRIVE_LIST_FLAGS = ["DRIVE_ENABLED"] as const;
+export const KLORN_DRIVE_FLAGS = ["DRIVE_ENABLED", "KLORN_DRIVE_ENABLED"] as const;
+export const GOOGLE_DRIVE_FLAGS = ["DRIVE_ENABLED", "GOOGLE_DRIVE_ENABLED"] as const;
+export const DRIVE_SUMMARY_FLAGS = ["DRIVE_ENABLED", "DRIVE_SUMMARIES_ENABLED"] as const;
+
 // Multi-account: fan the classify sync out over a user's LINKED secondary
 // inboxes (Pro), not just the primary Google account. Default OFF — the linked
 // sync path is built but stays dark until real-account testing flips it, so a
@@ -245,9 +285,7 @@ export function bulkUnsubscribeEnabled(): boolean {
 // are registered, ONEDRIVE (D6) is not yet. Read at request time
 // with the same lenient truthy parse, so a flip needs no redeploy.
 export function driveEnabled(): boolean {
-  return ["true", "1", "yes", "on"].includes(
-    (process.env.DRIVE_ENABLED ?? "").trim().toLowerCase(),
-  );
+  return flagMode("DRIVE_ENABLED") !== "off";
 }
 // The Klorn drive: files a user uploads, stored in object storage — step D3 of
 // docs/providers/unified-platform-plan.md. OFF by default (repo doctrine). It is
@@ -259,9 +297,7 @@ export function driveEnabled(): boolean {
 // purge does that, flag or not, while OBJECT_STORAGE_ENABLED is on). Read at
 // request time with the same lenient truthy parse, so a flip needs no redeploy.
 export function klornDriveEnabled(): boolean {
-  return ["true", "1", "yes", "on"].includes(
-    (process.env.KLORN_DRIVE_ENABLED ?? "").trim().toLowerCase(),
-  );
+  return flagMode("KLORN_DRIVE_ENABLED") !== "off";
 }
 // The Google Drive connector — step D5 of docs/providers/unified-platform-plan.md
 // (D5b: link and unlink a Google account for its picked files, drive.file only).
@@ -273,9 +309,7 @@ export function klornDriveEnabled(): boolean {
 // stores nothing and exchanges no code. Read at request time with the same
 // lenient truthy parse, so a flip needs no redeploy.
 export function googleDriveEnabled(): boolean {
-  return ["true", "1", "yes", "on"].includes(
-    (process.env.GOOGLE_DRIVE_ENABLED ?? "").trim().toLowerCase(),
-  );
+  return flagMode("GOOGLE_DRIVE_ENABLED") !== "off";
 }
 
 // The Google Picker's two public values (D5c): the browser API key, restricted
@@ -299,9 +333,7 @@ export function googlePickerConfig(): { developerKey: string; appId: string } | 
 // response carries no `summary` and the search matches names only. Read at
 // request and job time with the same lenient truthy parse.
 export function driveSummariesEnabled(): boolean {
-  return ["true", "1", "yes", "on"].includes(
-    (process.env.DRIVE_SUMMARIES_ENABLED ?? "").trim().toLowerCase(),
-  );
+  return flagMode("DRIVE_SUMMARIES_ENABLED") !== "off";
 }
 // IMAP flag actions (read, unread, star) for Naver and iCloud — step B1 of
 // docs/providers/unified-platform-plan.md. OFF by default (repo doctrine). While

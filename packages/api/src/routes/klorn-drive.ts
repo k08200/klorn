@@ -40,6 +40,7 @@ import type {
 } from "@klorn/contract";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
+import { KLORN_DRIVE_FLAGS } from "../config.js";
 import { DRIVE_ID_MAX_CHARS } from "../drive/drive-rows.js";
 import {
   DRIVE_PROVIDER_ENABLED,
@@ -58,6 +59,7 @@ import {
   type StoredKlornUpload,
   storeKlornUpload,
 } from "../drive/klorn-upload.js";
+import { cohortGate } from "./cohort-gate.js";
 import { darkRouteGate } from "./dark-route-gate.js";
 import { type RouteRateLimit, rateLimitHook } from "./rate-limit-hook.js";
 
@@ -368,7 +370,7 @@ export function klornDriveRoutes(opts: {
         RATE_LIMITED,
       );
     const guarded = (name: string, limit: RouteRateLimit) => ({
-      preHandler: [requireAuth, perUser(name, limit)],
+      preHandler: [requireAuth, cohortGate(KLORN_DRIVE_FLAGS), perUser(name, limit)],
       config: { rateLimit: limit },
     });
 
