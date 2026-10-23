@@ -1,8 +1,9 @@
 /**
  * Files (productization plan P12) — the pure rules behind /files and Today's
  * recent files: how the drive list is asked for, how a size reads, and which
- * links a row may open. The list itself is read-only (decision V4: list,
- * search, summarise; no upload or edit from here).
+ * links a row may open. The list itself only reads. Changing the Klorn drive
+ * (D3) is drive-model.ts and upload-model.ts; decision V4 keeps every
+ * external source read-only (list, search, summarise).
  */
 
 /** One page of /files. The server serves at most 100. */

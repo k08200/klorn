@@ -11,7 +11,8 @@
  * described by `description` when given. Focus moves into the sheet body on
  * open (or `initialFocusRef`), Tab / Shift+Tab are trapped inside (shared
  * lib/focusable trap), Escape and a scrim click close it, and focus returns
- * to the element that opened it. Escape that ends an IME composition is
+ * to the element that opened it (or to `returnFocusRef`, when the sheet's
+ * action removed that element). Escape that ends an IME composition is
  * ignored.
  *
  * Stacking: the sheet registers in the shared lib/modal-stack and only the
@@ -42,6 +43,12 @@ export interface SheetProps {
   footer?: ReactNode;
   /** Element to focus on open; defaults to the first focusable control. */
   initialFocusRef?: RefObject<HTMLElement | null>;
+  /**
+   * Element to focus on close instead of the one that opened the sheet: for a
+   * sheet whose action removed its opener (a deleted row's menu button).
+   * Read when the sheet closes.
+   */
+  returnFocusRef?: RefObject<HTMLElement | null>;
   /** Label for the close button. */
   closeLabel?: string;
 }
@@ -70,6 +77,7 @@ export function Sheet({
   children,
   footer,
   initialFocusRef,
+  returnFocusRef,
   closeLabel = "Close",
 }: SheetProps) {
   const [phase, setPhase] = useState<Phase>("closed");
@@ -78,6 +86,8 @@ export function Sheet({
   const tokenRef = useRef<symbol>(Symbol("sheet"));
   const openerRef = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
+  const returnFocusPropRef = useRef(returnFocusRef);
+  const wasOpenRef = useRef(false);
   const titleId = useId();
   const descriptionId = useId();
 
@@ -85,11 +95,16 @@ export function Sheet({
     onCloseRef.current = onClose;
   }, [onClose]);
 
+  useEffect(() => {
+    returnFocusPropRef.current = returnFocusRef;
+  }, [returnFocusRef]);
+
   // open → enter (offscreen) → open; close → exit → closed after EXIT_MS.
   useEffect(() => {
     if (open) {
       openerRef.current =
         document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      wasOpenRef.current = true;
       setPhase("enter");
       return;
     }
@@ -97,7 +112,9 @@ export function Sheet({
     const timer = window.setTimeout(() => setPhase("closed"), EXIT_MS);
     const opener = openerRef.current;
     openerRef.current = null;
-    opener?.focus();
+    // Only a sheet that was open hands focus back (not one mounted closed).
+    if (wasOpenRef.current) (returnFocusPropRef.current?.current ?? opener)?.focus();
+    wasOpenRef.current = false;
     return () => window.clearTimeout(timer);
   }, [open]);
 

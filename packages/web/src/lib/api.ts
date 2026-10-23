@@ -66,8 +66,11 @@ function handleSessionExpired(): void {
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getStoredAuthToken();
+  // A multipart body (a Klorn drive upload) needs the browser's own
+  // Content-Type, which carries the boundary; a JSON one would break it.
+  const isForm = typeof FormData !== "undefined" && init?.body instanceof FormData;
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
+    ...(isForm ? {} : { "Content-Type": "application/json" }),
     // Server-composed reasons render in the language the screen is in, not
     // the stored notification language (api: notify/request-language.ts).
     "Accept-Language": activeUiLocale(),

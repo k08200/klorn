@@ -2,10 +2,16 @@
 
 /**
  * Files (productization plan P12): the user's indexed files across every
- * drive source that is on, newest first, with a name search. Read-only in v1
- * (decision V4: list, search, summarise; no upload or edit from this page).
+ * drive source that is on, newest first, with a name search. Decision V4 keeps
+ * every external source read-only here (list, search, summarise). The Klorn
+ * drive, the person's own storage (D3), is editable while it is on for them
+ * (GET /api/drive/limits answers): upload and "New folder" into the open
+ * folder (drive-toolbar.tsx), and rename, move and delete on its own rows
+ * (row-actions.tsx, manage-dialogs.tsx). While it is off the page is the
+ * read-only list, exactly as before.
  */
 
+import type { DriveFileWire } from "@klorn/contract";
 import { useRef, useState } from "react";
 import { PAGE_SHELL } from "../../components/page-shell";
 import Button from "../../components/ui/button";
@@ -14,12 +20,19 @@ import { Skeleton, SkeletonGroup } from "../../components/ui/skeleton";
 import { useT } from "../../lib/i18n";
 import { useDisplayTimeZone } from "../../lib/use-time-zone";
 import { BlockError } from "../today/block";
+import { isKlornEditable } from "./drive-model";
+import { DriveToolbar } from "./drive-toolbar";
 import { FileGlyph, FileRow } from "./file-row";
 import { GoogleDriveConnect } from "./google-drive-connect";
+import { ManageDialogs, type RowAction, useManageDialogs } from "./manage-dialogs";
 import { SEARCH_MAX_CHARS } from "./model";
 import type { FolderCrumb } from "./open";
+import { ManagedRow } from "./row-actions";
+import { useFileDrop } from "./use-file-drop";
 import { useDebounced, useFilesList } from "./use-files";
 import { useFolderTrail } from "./use-folder-trail";
+import { useDriveRefresh, useKlornDrive } from "./use-klorn-drive";
+import { useUploads } from "./use-uploads";
 
 const SKELETON_KEYS = ["a", "b", "c", "d", "e", "f"];
 
@@ -35,15 +48,21 @@ export function FilesView() {
   const list = useFilesList(q, folder?.externalId ?? null, folders.ready);
   const timeZone = useDisplayTimeZone();
   const searching = q.trim().length > 0;
+  const { drive, dialogs, uploads, drop } = useDriveManager(folder);
 
   return (
     <div className={`${PAGE_SHELL} flex flex-col gap-6`}>
-      <header className="flex flex-col gap-1">
-        <h1 className="text-display text-ink">{t("nav.files")}</h1>
-        <p className="text-body text-ink-muted">{t("files.subtitle")}</p>
-      </header>
+      <FilesHeader driveLive={drive.live} />
       {/* D5c: renders nothing while Google Drive is off on the server. */}
       <GoogleDriveConnect />
+      {drive.limits && (
+        <DriveToolbar
+          limits={drive.limits}
+          folder={folder}
+          uploads={uploads}
+          onNewFolder={dialogs.openFolder}
+        />
+      )}
       {folders.trail.length > 0 && (
         <FolderTrail
           trail={folders.trail}
@@ -69,7 +88,12 @@ export function FilesView() {
           className="focus-ring h-11 w-full rounded-control border border-line bg-surface-panel px-3 text-body text-ink placeholder:text-ink-muted pointer-coarse:text-field"
         />
       </div>
-      <section aria-labelledby="files-list-heading" aria-busy={list.loading || list.stale}>
+      <section
+        aria-labelledby="files-list-heading"
+        aria-busy={list.loading || list.stale}
+        {...drop.handlers}
+        className={drop.over ? DROP_TARGET_CLASS : undefined}
+      >
         <h2 id="files-list-heading" ref={headingRef} tabIndex={-1} className="sr-only">
           {searching ? t("files.results") : listTitle(folder, t("files.recent"))}
         </h2>
@@ -82,7 +106,7 @@ export function FilesView() {
         )}
         {list.failed && <BlockError message={t("files.error")} onRetry={list.retry} />}
         {!list.loading && !list.failed && list.files.length === 0 && (
-          <FilesEmpty searching={searching} inFolder={folder !== null} />
+          <FilesEmpty searching={searching} inFolder={folder !== null} driveLive={drive.live} />
         )}
         <p aria-live="polite" className="sr-only">
           {list.loading || list.failed || list.stale
@@ -90,20 +114,16 @@ export function FilesView() {
             : t("files.count", { count: String(list.files.length) })}
         </p>
         {list.files.length > 0 && (
-          <ul className="flex flex-col divide-y divide-line-soft">
-            {list.files.map((file) => (
-              <li key={file.id}>
-                <FileRow
-                  file={file}
-                  timeZone={timeZone}
-                  onOpenFolder={(file) => {
-                    folders.open(file);
-                    focusList();
-                  }}
-                />
-              </li>
-            ))}
-          </ul>
+          <FilesRows
+            files={list.files}
+            timeZone={timeZone}
+            manageable={drive.live}
+            onOpenFolder={(file) => {
+              folders.open(file);
+              focusList();
+            }}
+            onAction={dialogs.openRow}
+          />
         )}
         {list.hasMore && (
           <div className="flex justify-center pt-4">
@@ -113,7 +133,75 @@ export function FilesView() {
           </div>
         )}
       </section>
+      {drive.live && (
+        <ManageDialogs dialogs={dialogs} folder={folder} listHeadingRef={headingRef} />
+      )}
     </div>
+  );
+}
+
+/** The list while files are dragged over it: the drive's accent, dashed, outside the rows. */
+const DROP_TARGET_CLASS = "rounded-card outline-2 outline-offset-4 outline-dashed outline-accent";
+
+/**
+ * D3: the Klorn drive's state on /files. Nothing it offers changes anything
+ * unless the drive answered its limits; uploads go into the open folder.
+ */
+function useDriveManager(folder: FolderCrumb | null) {
+  const drive = useKlornDrive();
+  const refreshDrive = useDriveRefresh();
+  const dialogs = useManageDialogs();
+  const uploads = useUploads({
+    parentExternalId: folder?.externalId ?? null,
+    maxFileBytes: drive.limits?.maxFileBytes ?? 0,
+    onFinished: refreshDrive,
+  });
+  // Dropping files is a shortcut for "Upload files", offered exactly when it is.
+  const canUpload = drive.limits !== null && drive.limits.quotaBytes !== null;
+  const drop = useFileDrop(uploads.start, canUpload);
+  return { drive, dialogs, uploads, drop };
+}
+
+interface FilesRowsProps {
+  files: DriveFileWire[];
+  timeZone: string;
+  /** The Klorn drive is on: its own rows get their "More actions" menu. */
+  manageable: boolean;
+  onOpenFolder: (file: DriveFileWire) => void;
+  onAction: (action: RowAction, file: DriveFileWire) => void;
+}
+
+function FilesRows({ files, timeZone, manageable, onOpenFolder, onAction }: FilesRowsProps) {
+  return (
+    <ul className="flex flex-col divide-y divide-line-soft">
+      {files.map((file) => {
+        const row = <FileRow file={file} timeZone={timeZone} onOpenFolder={onOpenFolder} />;
+        return (
+          <li key={file.id}>
+            {manageable && isKlornEditable(file) ? (
+              <ManagedRow file={file} onAction={onAction}>
+                {row}
+              </ManagedRow>
+            ) : (
+              row
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** "Read-only here" is true only while the Klorn drive is off for this person. */
+function FilesHeader({ driveLive }: { driveLive: boolean }) {
+  const { t } = useT();
+  return (
+    <header className="flex flex-col gap-1">
+      <h1 className="text-display text-ink">{t("nav.files")}</h1>
+      <p className="text-body text-ink-muted [word-break:keep-all]">
+        {t(driveLive ? "files.subtitle.live" : "files.subtitle")}
+      </p>
+    </header>
   );
 }
 
@@ -156,6 +244,7 @@ const EMPTY_COPY = {
   noMatch: { title: "files.noMatch.title", body: "files.noMatch.body" },
   folderEmpty: { title: "files.folderEmpty.title", body: "files.folderEmpty.body" },
   empty: { title: "files.empty.title", body: "files.empty.body" },
+  emptyLive: { title: "files.empty.title", body: "files.empty.bodyLive" },
 } as const;
 
 /** The unsearched list's name: the open folder's, or "Recent files". */
@@ -163,10 +252,24 @@ function listTitle(folder: FolderCrumb | null, recent: string): string {
   return folder?.name ?? recent;
 }
 
-/** No rows: no match for the search, an empty folder, or nothing indexed yet. */
-function FilesEmpty({ searching, inFolder }: { searching: boolean; inFolder: boolean }) {
+function emptyKind(searching: boolean, inFolder: boolean, driveLive: boolean) {
+  if (searching) return "noMatch";
+  if (inFolder) return "folderEmpty";
+  return driveLive ? "emptyLive" : "empty";
+}
+
+/** No rows: no match for the search, an empty folder, or nothing indexed or uploaded yet. */
+function FilesEmpty({
+  searching,
+  inFolder,
+  driveLive,
+}: {
+  searching: boolean;
+  inFolder: boolean;
+  driveLive: boolean;
+}) {
   const { t } = useT();
-  const kind: keyof typeof EMPTY_COPY = searching ? "noMatch" : inFolder ? "folderEmpty" : "empty";
+  const kind = emptyKind(searching, inFolder, driveLive);
   return (
     <EmptyState
       headingLevel="h3"
