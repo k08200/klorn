@@ -8,6 +8,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  cohortRestriction,
   driveEnabled,
   driveSummariesEnabled,
   featureOpenTo,
@@ -84,6 +85,31 @@ describe("featureOpenTo", () => {
     vi.stubEnv("FLAG_B", "cohort");
     vi.stubEnv("ROLLOUT_COHORT_USER_IDS", "");
     expect(featureOpenTo("founder", FLAGS)).toBe(false);
+  });
+});
+
+describe("featureOpenTo with no flags", () => {
+  it("is closed: a feature made of nothing is never on", () => {
+    expect(featureOpenTo("anyone", [])).toBe(false);
+  });
+});
+
+describe("cohortRestriction (what a job may touch)", () => {
+  const FLAGS = ["FLAG_A", "FLAG_B"] as const;
+
+  it("is every user when every flag is on, no one when any is off", () => {
+    vi.stubEnv("FLAG_A", "true");
+    vi.stubEnv("FLAG_B", "true");
+    expect(cohortRestriction(FLAGS)).toEqual({ kind: "all" });
+    vi.stubEnv("FLAG_B", "false");
+    expect(cohortRestriction(FLAGS)).toEqual({ kind: "none" });
+  });
+
+  it("is the cohort's ids when any flag is cohort", () => {
+    vi.stubEnv("FLAG_A", "true");
+    vi.stubEnv("FLAG_B", "cohort");
+    vi.stubEnv("ROLLOUT_COHORT_USER_IDS", "u1 u2");
+    expect(cohortRestriction(FLAGS)).toEqual({ kind: "only", userIds: ["u1", "u2"] });
   });
 });
 

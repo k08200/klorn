@@ -37,7 +37,7 @@ import {
   klornDriveSource,
   upsertDriveFileRow,
 } from "./drive-rows.js";
-import { DRIVE_PROVIDER_ENABLED, type DriveProviderEnabledMap } from "./drive-scope.js";
+import { type DriveProviderEnabledMap, driveProvidersFor } from "./drive-scope.js";
 import { klornStoredTypePolicy, SNIFF_BYTES, sniffContentType } from "./klorn-content-type.js";
 import { KlornDriveError } from "./klorn-errors.js";
 import { cleanKlornFileName } from "./klorn-file-name.js";
@@ -226,7 +226,7 @@ async function putBody(
 /** Phase one: every check, the sniff, and the object. No row is written. */
 export async function storeKlornUpload(
   input: KlornUploadInput,
-  providerEnabled: DriveProviderEnabledMap = DRIVE_PROVIDER_ENABLED,
+  providerEnabled: DriveProviderEnabledMap = driveProvidersFor(input.userId),
 ): Promise<StoredKlornUpload> {
   const { userId } = input;
   const checked = await checkKlornUpload(input, providerEnabled);

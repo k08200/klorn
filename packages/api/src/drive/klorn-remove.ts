@@ -26,7 +26,7 @@ import { StorageError } from "../storage/errors.js";
 import { getUserStorage } from "../storage/runtime.js";
 import type { UserStorage } from "../storage/user-storage.js";
 import { deleteKlornDriveRows } from "./drive-rows.js";
-import { DRIVE_PROVIDER_ENABLED, type DriveProviderEnabledMap } from "./drive-scope.js";
+import { type DriveProviderEnabledMap, driveProvidersFor } from "./drive-scope.js";
 import { type KlornChild, listKlornChildren } from "./klorn-drive-read.js";
 import { KlornDriveError } from "./klorn-errors.js";
 import { DRIVE_FOLDER_WALK_MAX_ITEMS, DRIVE_MAX_FOLDER_DEPTH, ownKlornItem } from "./klorn-tree.js";
@@ -61,7 +61,7 @@ function storageFailure(err: unknown): unknown {
 export async function klornDownloadLink(
   userId: string,
   id: string,
-  providerEnabled: DriveProviderEnabledMap = DRIVE_PROVIDER_ENABLED,
+  providerEnabled: DriveProviderEnabledMap = driveProvidersFor(userId),
 ): Promise<{ url: string; expiresInSeconds: number }> {
   const item = await ownKlornItem(userId, id, providerEnabled);
   if (item.isFolder) throw new KlornDriveError("is-folder");
@@ -149,7 +149,7 @@ async function deleteRowsOfGoneFiles(userId: string, gone: readonly string[]): P
 export async function deleteKlornItem(
   userId: string,
   id: string,
-  providerEnabled: DriveProviderEnabledMap = DRIVE_PROVIDER_ENABLED,
+  providerEnabled: DriveProviderEnabledMap = driveProvidersFor(userId),
 ): Promise<KlornDeleteResult> {
   const item = await ownKlornItem(userId, id, providerEnabled);
   const storage = await storageOrUnavailable();

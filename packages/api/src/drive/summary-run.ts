@@ -37,6 +37,7 @@ import type { CallPriority } from "../billing/quota-limiter.js";
 import { captureError } from "../sentry.js";
 import { StorageError } from "../storage/errors.js";
 import type { DriveProviderEnabledMap } from "./drive-scope.js";
+import { driveProvidersFor } from "./drive-scope.js";
 import { type DriveImplementations, driveActionsForProvider } from "./providers/dispatch.js";
 import { isDriveUnsupported } from "./providers/types.js";
 import { type CappedBytes, readKlornBytesForSummary } from "./summary-bytes.js";
@@ -158,7 +159,7 @@ async function readSourceBytes(ctx: RunContext, source: SummarySource): Promise<
   }
   const actions = driveActionsForProvider(
     source.provider,
-    ctx.options.providerEnabled,
+    ctx.options.providerEnabled ?? driveProvidersFor(userId),
     ctx.options.implementations,
   );
   const session = await actions.connect({ userId, sourceKey: source.sourceKey });

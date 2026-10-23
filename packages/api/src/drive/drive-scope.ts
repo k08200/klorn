@@ -23,8 +23,12 @@
 
 import type { Prisma } from "@prisma/client";
 import {
+  DRIVE_LIST_FLAGS,
   driveEnabled,
+  featureOpenTo,
+  GOOGLE_DRIVE_FLAGS,
   googleDriveEnabled,
+  KLORN_DRIVE_FLAGS,
   klornDriveEnabled,
   objectStorageEnabled,
 } from "../config.js";
@@ -62,6 +66,28 @@ export const DRIVE_PROVIDER_ENABLED: DriveProviderEnabledMap = {
   KLORN: klornDriveLive,
   GOOGLE: googleDriveLive,
 };
+
+/**
+ * The registered sources as they stand for one user: each source's flags, and,
+ * for a flag in `cohort` mode (L23), that user's place in the cohort. Every
+ * reader that takes a user defaults to this map, so a user outside the cohort
+ * sees none of a cohort-only source's rows, whatever rows they hold. Same keys
+ * as DRIVE_PROVIDER_ENABLED (a guard test checks).
+ */
+export function driveProvidersFor(userId: string): DriveProviderEnabledMap {
+  return {
+    KLORN: () => klornDriveLive() && featureOpenTo(userId, KLORN_DRIVE_FLAGS),
+    GOOGLE: () => googleDriveLive() && featureOpenTo(userId, GOOGLE_DRIVE_FLAGS),
+  };
+}
+
+/** The Files tab and Today's recent files show for this user (`/api/auth/me`). */
+export function filesVisibleFor(userId: string): boolean {
+  return (
+    featureOpenTo(userId, DRIVE_LIST_FLAGS) &&
+    visibleDriveProviders(driveProvidersFor(userId)).length > 0
+  );
+}
 
 /** The providers whose rows a reader may return right now, in the enum's order. */
 export function visibleDriveProviders(

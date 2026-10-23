@@ -59,8 +59,8 @@ const summarize = (id: string, headers: Record<string, string> = t.me) =>
   t.app.inject({ method: "POST", url: `${PREFIX}/files/${id}/summarize`, headers });
 const getFile = (id: string, headers: Record<string, string> = t.me) =>
   t.app.inject({ method: "GET", url: `${PREFIX}/files/${id}`, headers });
-const search = (q: string) =>
-  t.app.inject({ method: "GET", url: `${PREFIX}/files?q=${encodeURIComponent(q)}`, headers: t.me });
+const search = (q: string, headers: Record<string, string> = t.me) =>
+  t.app.inject({ method: "GET", url: `${PREFIX}/files?q=${encodeURIComponent(q)}`, headers });
 
 beforeEach(async () => {
   flagsOn();
@@ -113,6 +113,33 @@ describe("while DRIVE_SUMMARIES_ENABLED is off", () => {
     const res = await summarize("00000000-0000-4000-8000-000000000001");
     expect(res.statusCode).toBe(404);
     expect(res.json().error).toBe("Not Found");
+  });
+});
+
+describe("while DRIVE_SUMMARIES_ENABLED is cohort (L23), the drive itself on for everyone", () => {
+  beforeEach(async () => {
+    vi.stubEnv("DRIVE_SUMMARIES_ENABLED", "cohort");
+    vi.stubEnv("ROLLOUT_COHORT_USER_IDS", "user-1");
+    t = await buildKlornDriveApp();
+  });
+
+  it("queues only the cohort's uploads: no one else's file goes to the model", async () => {
+    const mine = await uploadText("mine.txt");
+    await uploadText("theirs.txt", TEXT, t.other);
+    const queued = holder.db?.tables.driveFileSummary ?? [];
+    expect(queued.map((row) => [row.userId, row.driveFileId])).toEqual([["user-1", mine.id]]);
+  });
+
+  it("gives anyone outside it no summary, no summary search and no summarize route", async () => {
+    const theirs = await uploadText("theirs.txt", TEXT, t.other);
+    holder.db?.reads.splice(0);
+    const res = await getFile(theirs.id, t.other);
+    expect(res.statusCode).toBe(200);
+    expect(Object.keys(res.json())).toEqual(["file"]);
+    expect((await search("hiring", t.other)).json().files).toEqual([]);
+    expect(holder.db?.reads).not.toContain("driveFileSummary");
+    expect((await summarize(theirs.id, t.other)).statusCode).toBe(404);
+    expect(llm.calls).toEqual([]);
   });
 });
 

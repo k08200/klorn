@@ -43,8 +43,8 @@ import {
   searchFiles,
 } from "../drive/drive-read.js";
 import { DRIVE_ID_MAX_CHARS } from "../drive/drive-rows.js";
-import { DRIVE_PROVIDER_ENABLED, type DriveProviderEnabledMap } from "../drive/drive-scope.js";
-import { driveSummariesLive } from "../drive/summary-policy.js";
+import type { DriveProviderEnabledMap } from "../drive/drive-scope.js";
+import { driveSummariesLive, driveSummariesOpenTo } from "../drive/summary-policy.js";
 import { requestDriveSummary, summaryForFile } from "../drive/summary-triggers.js";
 import { captureError } from "../sentry.js";
 import { cohortGate } from "./cohort-gate.js";
@@ -132,8 +132,13 @@ export function driveRoutes(opts: {
   /** Whether summaries are on (D4); read per request. */
   summariesGate?: () => boolean;
 }): (app: FastifyInstance) => Promise<void> {
-  const providerEnabled = opts.providerEnabled ?? DRIVE_PROVIDER_ENABLED;
+  // Tests pass a map; otherwise each reader takes the user's own (drive-scope.ts
+  // `driveProvidersFor`), so a cohort-only source (L23) stays the cohort's.
+  const providerEnabled = opts.providerEnabled;
+  // The route's own gate is global; whether this user gets summaries is per user.
   const summariesGate = opts.summariesGate ?? driveSummariesLive;
+  const summariesOpen = (userId: string): boolean =>
+    opts.summariesGate ? opts.summariesGate() : driveSummariesOpenTo(userId);
 
   async function listHandler(
     request: FastifyRequest<{ Querystring: ListQuery }>,
@@ -146,7 +151,8 @@ export function driveRoutes(opts: {
     const options = { userId: getUserId(request), limit, cursor, provider, sourceKey, folder };
     const text = normaliseDriveSearchText(q);
     if (text === null) return await listFiles(options, providerEnabled);
-    if (!summariesGate()) return await searchFiles({ ...options, text }, providerEnabled);
+    if (!summariesOpen(options.userId))
+      return await searchFiles({ ...options, text }, providerEnabled);
     try {
       return await searchFiles({ ...options, text, matchSummaries: true }, providerEnabled);
     } catch (err) {
@@ -162,7 +168,7 @@ export function driveRoutes(opts: {
     const userId = getUserId(request);
     const file = await getFile(userId, request.params.id, providerEnabled);
     if (file === null) return reply.code(HTTP_NOT_FOUND).send(FILE_NOT_FOUND);
-    if (!summariesGate()) return { file };
+    if (!summariesOpen(userId)) return { file };
     try {
       return { file, summary: await summaryForFile(userId, file.id) };
     } catch (err) {

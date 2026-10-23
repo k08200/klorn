@@ -147,10 +147,26 @@ export function rolloutCohortUserIds(): ReadonlySet<string> {
  * none off and the user in the cohort when any is `cohort`.
  */
 export function featureOpenTo(userId: string, envNames: readonly string[]): boolean {
+  const restriction = cohortRestriction(envNames);
+  if (restriction.kind === "all") return true;
+  return restriction.kind === "only" && restriction.userIds.includes(userId);
+}
+
+/** Which users a feature reaches: everyone, no one, or only these (the cohort). */
+export type CohortRestriction =
+  | { kind: "all" }
+  | { kind: "none" }
+  | { kind: "only"; userIds: string[] };
+
+/**
+ * The users a feature made of these flags reaches, for a job that works across
+ * users and must filter its query (a feature made of no flags reaches no one).
+ */
+export function cohortRestriction(envNames: readonly string[]): CohortRestriction {
   const modes = envNames.map(flagMode);
-  if (modes.includes("off")) return false;
-  if (!modes.includes("cohort")) return true;
-  return rolloutCohortUserIds().has(userId);
+  if (modes.length === 0 || modes.includes("off")) return { kind: "none" };
+  if (!modes.includes("cohort")) return { kind: "all" };
+  return { kind: "only", userIds: [...rolloutCohortUserIds()] };
 }
 
 /** The flags of each drive surface, as featureOpenTo takes them. */

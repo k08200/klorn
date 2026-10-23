@@ -19,6 +19,7 @@
  * does nothing. Across processes the claim keeps two from running the same row.
  */
 
+import { cohortRestriction, DRIVE_SUMMARY_FLAGS } from "../config.js";
 import { recordSchedulerTick, registerScheduler } from "../scheduler-heartbeat.js";
 import { captureError } from "../sentry.js";
 import { newWork } from "../work-context.js";
@@ -68,7 +69,11 @@ async function runSafely(lease: SummaryLease, now: Date): Promise<SummaryRunOutc
 
 /** The sweep's candidates: the users oldest-due first, their rows round-robin. */
 async function pickDue(now: Date): Promise<SummaryRow[]> {
-  const users = await dueSummaryUsers(now, DRIVE_SUMMARY_BATCH);
+  const users = await dueSummaryUsers(
+    now,
+    DRIVE_SUMMARY_BATCH,
+    cohortRestriction(DRIVE_SUMMARY_FLAGS),
+  );
   const rowsByUser: SummaryRow[][] = [];
   for (const userId of users) {
     rowsByUser.push(await dueSummariesOf(userId, now, DRIVE_SUMMARY_PER_USER_PER_SWEEP));

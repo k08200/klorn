@@ -166,7 +166,6 @@ describe("POST /link", () => {
     for (const [method, path] of [
       ["GET", "/accounts"],
       ["POST", "/link"],
-      ["DELETE", "/accounts/acct-1"],
     ] as const) {
       const res = await app.inject({ method, url: `${PREFIX}${path}`, headers: other });
       expect(res.statusCode).toBe(404);
@@ -176,6 +175,20 @@ describe("POST /link", () => {
         statusCode: 404,
       });
     }
+    await app.close();
+  });
+
+  it("in cohort mode, a user outside the cohort can still unlink their own account", async () => {
+    vi.stubEnv("GOOGLE_DRIVE_ENABLED", "cohort");
+    vi.stubEnv("ROLLOUT_COHORT_USER_IDS", "user-1");
+    seed({ linkedDriveAccount: [account({ id: "acct-2", userId: "user-2" })] });
+    const { app, other } = await buildApp();
+    const res = await app.inject({
+      method: "DELETE",
+      url: `${PREFIX}/accounts/acct-2`,
+      headers: other,
+    });
+    expect(res.statusCode).toBe(200);
     await app.close();
   });
 

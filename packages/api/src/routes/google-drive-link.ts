@@ -191,7 +191,7 @@ export function googleDriveLinkRoutes(opts: {
     app.delete(
       "/accounts/:id",
       {
-        preHandler: [requireAuth, cohortGate(GOOGLE_DRIVE_FLAGS)],
+        preHandler: requireAuth,
         schema: { params: idParamsSchema },
         config: { rateLimit: UNLINK_RATE_LIMIT },
       },
