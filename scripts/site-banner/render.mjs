@@ -1,5 +1,5 @@
 // Renders the landing's macOS notification banner (demo data) to
-// website/media/app-2026-10/notification-{light,dark,ko-light,ko-dark}-{396,792}.webp.
+// website/media/app-2026-10/notification-{light,ko-light}-{396,792}.webp (the site is light-only).
 // A drawn HTML/CSS banner, not a screenshot: no app is launched. The ko copy
 // is the Korean preview fixture's push mail (PreviewRenderNavKo.swift), the
 // English copy the English one (PreviewRenderNav.swift).
@@ -32,9 +32,7 @@ const COPY = {
 };
 const VARIANTS = {
   light: { lang: 'en', look: 'light' },
-  dark: { lang: 'en', look: 'dark' },
   'ko-light': { lang: 'ko', look: 'light' },
-  'ko-dark': { lang: 'ko', look: 'dark' },
 };
 const requested = process.argv.slice(2);
 for (const v of requested) {
