@@ -1,18 +1,19 @@
 /**
  * The outcome of delivering one Resend `email.received` event, and the context
  * delivery runs in (step E1b of docs/providers/unified-platform-plan.md). Shared
- * by mail/klorn-inbound.ts (users' copies) and mail/klorn-inbound-forward.ts
+ * by mail/klorn-inbound.ts (users' copies) and mail/klorn-inbound-notice.ts
  * (system mail).
  */
 
-import type { Semaphore } from "../semaphore.js";
 import type { InboundReporter } from "./klorn-inbound-report.js";
 import type { InboundResendApi, ResendResult } from "./klorn-inbound-resend.js";
+import type { BoundedSlots } from "./klorn-inbound-slots.js";
 
 export interface InboundOutcome {
   stored: number;
   dropped: number;
-  forwarded: number;
+  /** System mail (postmaster@, abuse@) an operator was told of. */
+  notified: number;
   /** Copies waiting for Resend's retry. */
   pending: number;
   /** Why Resend should retry (a code, no mail data); null when every copy is settled. */
@@ -21,12 +22,15 @@ export interface InboundOutcome {
 
 /** State shared by every delivery of one registered route: process-wide in production. */
 export interface InboundRuntime {
-  /** Forwards of system mail allowed per hour (an unauthenticated sender's amplifier). */
-  forwardBucket: { take(): boolean };
-  /** One forward at a time: each makes Resend download and re-send the raw message. */
-  forwardSlots: Semaphore;
-  /** Concurrent content fetches and stores. */
-  deliverySlots: Semaphore;
+  /**
+   * Notices of system mail allowed per hour (anyone can send to these
+   * addresses), keyed per `emailId:handle` so Resend's retries reuse a token.
+   */
+  noticeBucket: { take(key: string): boolean };
+  /** One notice at a time. */
+  noticeSlots: BoundedSlots;
+  /** Concurrent lookups, content fetches and stores, with a bounded queue. */
+  deliverySlots: BoundedSlots;
 }
 
 export interface InboundContext {
@@ -55,7 +59,7 @@ export const YOUNG_EVENT_MS = 10 * 60_000;
 export const SETTLED: InboundOutcome = {
   stored: 0,
   dropped: 0,
-  forwarded: 0,
+  notified: 0,
   pending: 0,
   retry: null,
 };
@@ -64,13 +68,13 @@ export function combine(a: InboundOutcome, b: InboundOutcome): InboundOutcome {
   return {
     stored: a.stored + b.stored,
     dropped: a.dropped + b.dropped,
-    forwarded: a.forwarded + b.forwarded,
+    notified: a.notified + b.notified,
     pending: a.pending + b.pending,
     retry: a.retry ?? b.retry,
   };
 }
 
-export function count(field: "stored" | "dropped" | "forwarded", n = 1): InboundOutcome {
+export function count(field: "stored" | "dropped" | "notified", n = 1): InboundOutcome {
   return { ...SETTLED, [field]: n };
 }
 
@@ -87,13 +91,18 @@ export function pastDeadline(ctx: InboundContext): boolean {
   return ctx.now() >= ctx.deadlineAt;
 }
 
+/** A refused or expired slot: every copy it covered waits for Resend's retry. */
+export function slotRetry(reason: "busy" | "expired", copies: number): InboundOutcome {
+  return retryFor(reason === "busy" ? "busy" : "deadline", copies);
+}
+
 /**
  * The outcome of a failed Resend call for `copies` copies, and its report. The
  * report is the side effect this names: see klorn-inbound-resend.ts for what
  * each failure means.
  */
 export function reportResendFailure(
-  call: "get" | "forward" | "send",
+  call: "get" | "send",
   result: Extract<ResendResult<unknown>, { ok: false }>,
   copies: number,
   event: ParsedEvent,

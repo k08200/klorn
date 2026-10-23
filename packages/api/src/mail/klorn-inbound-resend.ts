@@ -22,21 +22,18 @@ import type {
   CreateEmailRequestOptions,
   CreateEmailResponse,
   ErrorResponse,
-  ForwardReceivingEmailOptions,
-  ForwardReceivingEmailRequestOptions,
-  ForwardReceivingEmailResponse,
   GetReceivingEmailOptions,
   GetReceivingEmailResponse,
   Resend,
 } from "resend";
 
-/** The three Resend calls the mailbox makes. */
+/**
+ * The two Resend calls the mailbox makes. There is no forward: the SDK's forward
+ * re-sends the sender's subject (and content) from Klorn's own domain, and
+ * downloads the raw message with no abort; system mail gets a notice instead.
+ */
 export interface InboundResendApi {
   get(id: string, options?: GetReceivingEmailOptions): Promise<GetReceivingEmailResponse>;
-  forward(
-    options: ForwardReceivingEmailOptions,
-    requestOptions?: ForwardReceivingEmailRequestOptions,
-  ): Promise<ForwardReceivingEmailResponse>;
   send(
     payload: CreateEmailOptions,
     options?: CreateEmailRequestOptions,
@@ -46,7 +43,6 @@ export interface InboundResendApi {
 export function inboundResendApi(resend: Resend): InboundResendApi {
   return {
     get: (id, options) => resend.emails.receiving.get(id, options),
-    forward: (options, requestOptions) => resend.emails.receiving.forward(options, requestOptions),
     send: (payload, options) => resend.emails.send(payload, options),
   };
 }

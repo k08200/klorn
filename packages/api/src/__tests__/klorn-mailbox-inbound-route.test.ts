@@ -1,12 +1,12 @@
 /**
  * POST /api/mailbox/inbound/resend — the gate, configuration, verification and
  * routing of the Klorn mailbox's inbound webhook (step E1b of
- * docs/providers/unified-platform-plan.md). Delivery failures, forwarding and
+ * docs/providers/unified-platform-plan.md). Delivery failures, system notices and
  * the logs are in klorn-mailbox-inbound-delivery.test.ts.
  *
  * Fixture events are signed with a test secret by the Svix scheme and pass
  * through the REAL `resend.webhooks.verify`. Only the network is mocked (the
- * client's receiving.get/.forward and emails.send; `fetch` throws), plus the
+ * client's receiving.get and emails.send; `fetch` throws), plus the
  * tenant helpers and the shared store.
  */
 
@@ -170,14 +170,14 @@ describe("configuration", () => {
     expect(res.statusCode).toBe(503);
   });
 
-  it("drops system mail and logs an error when the forward target is not a usable address", async () => {
+  it("drops system mail and logs an error when the notice target is not a usable address", async () => {
     process.env.KLORN_MAILBOX_FORWARD_TO = "ops@klorn.ai";
     const app = await buildApp();
     const res = await deliver(app, receivedEvent({ to: ["postmaster@klorn.ai"] }));
 
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ forwarded: 0, dropped: 1 });
-    expect(resendSpies.forward).not.toHaveBeenCalled();
+    expect(res.json()).toMatchObject({ notified: 0, dropped: 1 });
+    expect(resendSpies.send).not.toHaveBeenCalled();
     expect(logged.some((line) => line.includes("KLORN_MAILBOX_FORWARD_TO"))).toBe(true);
   });
 
@@ -293,7 +293,7 @@ describe("routing", () => {
     const res = await deliver(app, receivedEvent());
 
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ stored: 1, dropped: 0, forwarded: 0 });
+    expect(res.json()).toMatchObject({ stored: 1, dropped: 0, notified: 0 });
     expect(resendSpies.created).toHaveBeenCalledWith("re_test_inbound_full_access");
     expect(resendSpies.get).toHaveBeenCalledTimes(1);
     // Inline images as cid: references, not data: URIs that crowd out the text.
@@ -369,12 +369,29 @@ describe("routing", () => {
     );
 
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ stored: 0, dropped: 5, forwarded: 0 });
+    expect(res.json()).toMatchObject({ stored: 0, dropped: 5, notified: 0 });
     expect(resendSpies.get).not.toHaveBeenCalled();
     // The shape decides who is looked up, not the reserved list.
     expect(db.systemCalls[0]).toMatchObject({
       where: { handle: { in: ["nobody", "gone", "support"] } },
     });
+  });
+
+  it("never delivers to a CA/Browser Forum validation name, even if a row exists for it", async () => {
+    for (const handle of ["admin", "administrator", "webmaster", "hostmaster"]) {
+      addUser(handle, `u-${handle}`);
+    }
+    const app = await buildApp();
+    const res = await deliver(
+      app,
+      receivedEvent({
+        to: ["ADMIN@klorn.ai", "administrator@klorn.ai", "webmaster@klorn.ai"],
+        cc: ["hostmaster@klorn.ai"],
+      }),
+    );
+    expect(res.json()).toMatchObject({ stored: 0, dropped: 4 });
+    expect(db.systemCalls).toHaveLength(0);
+    expect(persistGmailEmail).not.toHaveBeenCalled();
   });
 
   it("still delivers to an existing owner whose handle a later reserved list names", async () => {

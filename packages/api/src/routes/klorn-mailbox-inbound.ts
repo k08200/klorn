@@ -30,21 +30,23 @@ import {
   type InboundOutcome,
   isResendEmailId,
 } from "../mail/klorn-inbound.js";
-import { FORWARDS_PER_HOUR, forwardBucket } from "../mail/klorn-inbound-forward.js";
+import { NOTICES_PER_HOUR, noticeBucket } from "../mail/klorn-inbound-notice.js";
 import type { InboundRuntime } from "../mail/klorn-inbound-outcome.js";
 import { createInboundReporter, type InboundReporter } from "../mail/klorn-inbound-report.js";
 import { inboundResendApi } from "../mail/klorn-inbound-resend.js";
-import { Semaphore } from "../semaphore.js";
+import { BoundedSlots } from "../mail/klorn-inbound-slots.js";
 import { darkRouteGate } from "./dark-route-gate.js";
 
 export const KLORN_INBOUND_RATE_LIMIT = { max: 600, timeWindow: "1 minute" } as const;
 export const KLORN_INBOUND_BODY_LIMIT = 256 * 1024;
-/** One Resend call (content, forward or notice); past it the delivery is retried. */
+/** One Resend call (content or notice); past it the delivery is retried. */
 export const RESEND_TIMEOUT_MS = 10_000;
 /** The whole request; past it the answer is 503 and no new work starts. */
 export const INBOUND_DEADLINE_MS = 12_000;
 /** Concurrent content fetches and stores, process-wide. */
 const DELIVERY_CONCURRENCY = 4;
+/** Deliveries waiting for a slot; past it the answer is 503 at once (Resend retries). */
+const MAX_QUEUED_DELIVERIES = 32;
 /** The deadline's own timer waits this much longer, so the per-call budgets answer first. */
 const DEADLINE_GRACE_MS = 500;
 
@@ -92,7 +94,7 @@ function verifyEvent(request: FastifyRequest, webhookSecret: string): Verificati
 }
 
 function logOutcome(emailId: string, outcome: InboundOutcome): void {
-  const line = `${LOG_PREFIX} email_id=${emailId} stored=${outcome.stored} dropped=${outcome.dropped} forwarded=${outcome.forwarded}`;
+  const line = `${LOG_PREFIX} email_id=${emailId} stored=${outcome.stored} dropped=${outcome.dropped} notified=${outcome.notified}`;
   if (outcome.retry) console.warn(`${line} retry=${outcome.retry}`);
   else console.info(line);
 }
@@ -100,7 +102,7 @@ function logOutcome(emailId: string, outcome: InboundOutcome): void {
 const DEADLINE_OUTCOME: InboundOutcome = {
   stored: 0,
   dropped: 0,
-  forwarded: 0,
+  notified: 0,
   pending: 1,
   retry: "deadline",
 };
@@ -142,7 +144,7 @@ export function klornMailboxInboundRoutes(opts: {
   createResend?: (apiKey: string) => Resend;
   resendTimeoutMs?: number;
   deadlineMs?: number;
-  forwardsPerHour?: number;
+  noticesPerHour?: number;
   now?: () => number;
 }): (app: FastifyInstance) => Promise<void> {
   const createResend = opts.createResend ?? ((apiKey: string) => new Resend(apiKey));
@@ -152,9 +154,9 @@ export function klornMailboxInboundRoutes(opts: {
   // One per registered route: process-wide in production (index.ts registers it once).
   const reporter = createInboundReporter(now);
   const runtime: InboundRuntime = {
-    forwardBucket: forwardBucket(opts.forwardsPerHour ?? FORWARDS_PER_HOUR, now),
-    forwardSlots: new Semaphore(1),
-    deliverySlots: new Semaphore(DELIVERY_CONCURRENCY),
+    noticeBucket: noticeBucket(opts.noticesPerHour ?? NOTICES_PER_HOUR, now),
+    noticeSlots: new BoundedSlots(1, MAX_QUEUED_DELIVERIES),
+    deliverySlots: new BoundedSlots(DELIVERY_CONCURRENCY, MAX_QUEUED_DELIVERIES),
   };
 
   async function inboundHandler(request: FastifyRequest, reply: FastifyReply) {
@@ -198,7 +200,7 @@ export function klornMailboxInboundRoutes(opts: {
     const counts = {
       stored: outcome.stored,
       dropped: outcome.dropped,
-      forwarded: outcome.forwarded,
+      notified: outcome.notified,
     };
     if (outcome.retry) {
       return reply

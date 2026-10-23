@@ -115,6 +115,35 @@ describe("inboundRecipients", () => {
     expect(result.dropped).toBe(0);
   });
 
+  it("drops the CA/Browser Forum validation names, whatever the database holds", () => {
+    const result = inboundRecipients(
+      eventData({
+        to: [
+          "admin@klorn.ai",
+          "ADMINISTRATOR@klorn.ai",
+          "webmaster@klorn.ai",
+          "hostmaster@klorn.ai",
+        ],
+      }),
+      DOMAIN,
+    );
+    expect(result.handles).toEqual([]);
+    expect(result.system).toEqual([]);
+    expect(result.dropped).toBe(4);
+  });
+
+  it("counts how many addresses were at the domain at all", () => {
+    expect(
+      inboundRecipients(eventData({ to: ["a@example.com"], cc: ["b@other.ai"] }), DOMAIN).matched,
+    ).toBe(0);
+    expect(
+      inboundRecipients(
+        eventData({ to: ["jane@klorn.ai", "x@example.com"], cc: ["JANE@klorn.ai"] }),
+        DOMAIN,
+      ).matched,
+    ).toBe(2);
+  });
+
   it("puts postmaster and abuse on the system list, exactly", () => {
     const result = inboundRecipients(
       eventData({ to: ["POSTMASTER@klorn.ai", "abuse@klorn.ai", "postmaster@klorn.ai"] }),
@@ -258,7 +287,9 @@ describe("resendToRawEmail", () => {
     );
     expect(raw.body).toBe("ab");
     expect(raw.subject).toBe("st");
-    expect(raw.from).toBe("x@example.com");
+    // In an address header a control becomes a space, so it can never join two
+    // halves into another mailbox (`jane\u0000@klorn.ai` is not jane@klorn.ai).
+    expect(raw.from).toBe("x @example.com");
   });
 
   it("derives the snippet from the body, at most 200 characters", () => {

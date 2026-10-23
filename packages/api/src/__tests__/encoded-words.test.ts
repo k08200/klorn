@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { decodeEncodedWords } from "../mail/encoded-words.js";
+import { decodeEncodedWords, MAX_DECODED_WORDS } from "../mail/encoded-words.js";
 
 const b64 = (text: string, encoding: BufferEncoding = "utf8") =>
   Buffer.from(text, encoding).toString("base64");
@@ -56,6 +56,37 @@ describe("decodeEncodedWords", () => {
     expect(decodeEncodedWords("=?x-klingon?B?SGk=?=")).toBe("=?x-klingon?B?SGk=?=");
     expect(decodeEncodedWords("=?UTF-8?B?not*base64?=")).toBe("=?UTF-8?B?not*base64?=");
     expect(decodeEncodedWords("=?UTF-8?X?abc?=")).toBe("=?UTF-8?X?abc?=");
+  });
+
+  it("decodes only allowlisted charsets, aliases included", () => {
+    expect(decodeEncodedWords(`=?utf8?B?${b64("é")}?=`)).toBe("é");
+    expect(decodeEncodedWords("=?latin1?Q?Andr=E9?=")).toBe("André");
+    expect(decodeEncodedWords("=?cp949?B?x9Gx2w==?=")).toBe("한글");
+    expect(decodeEncodedWords("=?koi8-r?B?8NLJ18XU?=")).toBe("Привет");
+    // Known to TextDecoder but not allowlisted: left as it came.
+    expect(decodeEncodedWords("=?utf-16le?B?SABpAA==?=")).toBe("=?utf-16le?B?SABpAA==?=");
+    expect(decodeEncodedWords("=?z?B??=")).toBe("=?z?B??=");
+  });
+
+  it(`decodes at most ${MAX_DECODED_WORDS} words per header and leaves the rest raw`, () => {
+    const word = `=?UTF-8?B?${b64("가")}?=`;
+    const header = Array.from({ length: MAX_DECODED_WORDS + 3 }, () => word).join(" x ");
+    const decoded = decodeEncodedWords(header);
+    expect(decoded.split("가")).toHaveLength(MAX_DECODED_WORDS + 1);
+    expect(decoded.endsWith(word)).toBe(true);
+  });
+
+  it("is cheap on thousands of words with an unknown or a known charset", () => {
+    const unknown = Array.from({ length: 2_000 }, () => "=?z?B??=").join(" ");
+    const known = Array.from({ length: 2_000 }, () => `=?UTF-8?B?${b64("가")}?=`).join(" ");
+    decodeEncodedWords(known); // warm the decoder cache
+    const started = performance.now();
+    for (let i = 0; i < 10; i++) {
+      decodeEncodedWords(unknown);
+      decodeEncodedWords(known);
+    }
+    // ~120 ms per header before the allowlist and the cache; well under 1 ms each now.
+    expect((performance.now() - started) / 20).toBeLessThan(10);
   });
 
   it("is linear on hostile input", () => {

@@ -121,6 +121,48 @@ export function formatMailbox(name: string, address: string): string {
   return `${shown} <${a}>`;
 }
 
+/**
+ * The mailboxes of an address-list header value (To, Cc), split on commas outside
+ * quoted-strings, comments and angle-addrs, trimmed, empty parts dropped. An
+ * unterminated quote or comment keeps the rest as one part. Linear: one pass.
+ */
+export function splitAddressList(value: string): string[] {
+  const parts: string[] = [];
+  let start = 0;
+  let inAngle = false;
+  let i = 0;
+  while (i < value.length) {
+    const ch = value[i];
+    if (ch === '"' || ch === "(") {
+      i = pastQuotedOrComment(value, i);
+      continue;
+    }
+    if (ch === "<") inAngle = true;
+    else if (ch === ">") inAngle = false;
+    else if (ch === "," && !inAngle) {
+      parts.push(value.slice(start, i));
+      start = i + 1;
+    }
+    i++;
+  }
+  parts.push(value.slice(start));
+  return parts.map((part) => part.trim()).filter((part) => part !== "");
+}
+
+/** The index just past the quoted-string or (nested) comment opening at `open`, or the end. */
+function pastQuotedOrComment(value: string, open: number): number {
+  const quoted = value[open] === '"';
+  let depth = 1;
+  for (let i = open + 1; i < value.length; i++) {
+    const ch = value[i];
+    if (ch === "\\") i++;
+    else if (quoted && ch === '"') return i + 1;
+    else if (!quoted && ch === "(") depth++;
+    else if (!quoted && ch === ")" && --depth === 0) return i + 1;
+  }
+  return value.length;
+}
+
 /** True for an address with one "@" and nothing that ends, splits or quotes a mailbox. */
 export function isPlainAddress(address: string): boolean {
   return PLAIN_ADDRESS.test(address);

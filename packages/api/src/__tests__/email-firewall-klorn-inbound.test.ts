@@ -181,6 +181,16 @@ describe("the self-sent comparison of a Klorn mailbox message", () => {
     expect(comparedWith()).toEqual({ needsReply: "", senderIsUser: false });
   });
 
+  it("never reads a Klorn address out of an encoded comment, even with DKIM and DMARC passing", async () => {
+    // evil.com signs its own mail; the comment spells "<jane@klorn.ai>" once decoded.
+    await store(
+      "=?utf-8?Q?=22?= <attacker@evil.com> (=?utf-8?Q?=22_=3Cjane=40klorn.ai=3E_=22=22?=)",
+      { spf: "pass", dkim: "pass", dmarc: "pass" },
+    );
+    expect(create.mock.calls[0][0].data.fromAddress).toBe("attacker@evil.com");
+    expect(comparedWith().senderIsUser).toBe(false);
+  });
+
   it("treats an authenticated From of the Klorn address as the user", async () => {
     await store(`Jane <${KLORN_ADDRESS}>`, { spf: "pass", dkim: "pass", dmarc: "pass" });
     expect(resolveUserEmail).not.toHaveBeenCalled();

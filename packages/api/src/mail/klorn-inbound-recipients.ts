@@ -12,17 +12,30 @@
  *   (L2): `name+tag@` is an unknown address. The reserved list plays no part:
  *   the database row decides, so a later addition to the list never stops
  *   delivery to an existing owner, and a name reserved all along has no row.
- * - `postmaster` and `abuse` are system addresses (L18): forwarded, not stored.
+ * - `postmaster` and `abuse` are system addresses (L18): an operator is told,
+ *   nothing is stored. The CA/Browser Forum validation names are never
+ *   delivered (INBOUND_DENYLIST), independent of the reserved list.
  *
  * `dropped` counts the addresses at the domain that will never be delivered;
  * an address at another domain is not a Klorn recipient, so it is not counted.
  */
 
+import { parseAddress } from "./email-address.js";
 import { isWellFormedHandle } from "./klorn-handle.js";
 import { asciiLower } from "./text-normalize.js";
 
-/** Forwarded to the support inbox (L18); never a user's mailbox. */
+/** Noticed to the support inbox (L18); never a user's mailbox. */
 export const KLORN_SYSTEM_HANDLES: ReadonlySet<string> = new Set(["postmaster", "abuse"]);
+
+/**
+ * Never delivered, whatever the database holds: the CA/Browser Forum's
+ * domain-validation local parts (postmaster is a system handle above). Frozen
+ * here, apart from the claim's reserved list, as defence in depth: if a row ever
+ * existed for one, its owner could approve a certificate for the whole domain.
+ */
+export const INBOUND_DENYLIST: ReadonlySet<string> = Object.freeze(
+  new Set(["admin", "administrator", "webmaster", "hostmaster"]),
+);
 
 /**
  * The most handles one event is looked up for. Recipient lists come from the
@@ -34,8 +47,6 @@ export const MAX_INBOUND_RECIPIENTS = 100;
 const RECIPIENT_FIELDS = ["to", "cc", "bcc", "received_for"] as const;
 /** Printable ASCII without the space: what an exact address is made of. */
 const ASCII_ADDRESS = /^[\x21-\x7e]+$/;
-/** The address inside `Name <address>`; the last one, as a mail reader shows it. */
-const ANGLE_ADDRESS = /<([^<>]*)>\s*$/;
 
 export interface InboundRecipients {
   /** Handle-shaped local parts to look up, in first-seen order. */
@@ -44,16 +55,16 @@ export interface InboundRecipients {
   system: string[];
   /** Addresses at the domain that are dropped. */
   dropped: number;
+  /** Addresses at the domain at all; 0 means the event names nothing Klorn receives. */
+  matched: number;
 }
 
-function bareAddress(entry: string): string {
-  const angle = ANGLE_ADDRESS.exec(entry);
-  return (angle ? angle[1] : entry).trim();
-}
-
-/** The raw local part when `entry` is at `domain`, else null. */
+/**
+ * The raw local part when `entry` is at `domain`, else null. The mailbox is the
+ * shared parser's (quote- and comment-aware; "" for an ambiguous entry).
+ */
 function localPartAt(entry: string, domain: string): string | null {
-  const address = bareAddress(entry);
+  const address = parseAddress(entry);
   const at = address.lastIndexOf("@");
   if (at <= 0) return null;
   if (asciiLower(address.slice(at + 1)) !== domain) return null;
@@ -81,13 +92,17 @@ export function inboundRecipients(
   const unique = [...new Set(ascii.map(asciiLower))];
   const system = unique.filter((handle) => KLORN_SYSTEM_HANDLES.has(handle));
   const shaped = unique.filter(
-    (handle) => !KLORN_SYSTEM_HANDLES.has(handle) && isWellFormedHandle(handle),
+    (handle) =>
+      !KLORN_SYSTEM_HANDLES.has(handle) &&
+      !INBOUND_DENYLIST.has(handle) &&
+      isWellFormedHandle(handle),
   );
-  const malformed = unique.length - system.length - shaped.length;
+  const refused = unique.length - system.length - shaped.length;
   const overflow = Math.max(0, shaped.length - MAX_INBOUND_RECIPIENTS);
   return {
     handles: shaped.slice(0, MAX_INBOUND_RECIPIENTS),
     system,
-    dropped: nonAscii + malformed + overflow,
+    dropped: nonAscii + refused + overflow,
+    matched: locals.length,
   };
 }

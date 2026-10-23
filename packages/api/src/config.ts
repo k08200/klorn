@@ -368,7 +368,8 @@ function usableForwardTarget(value: string, domain: string): boolean {
 //   Separate from RESEND_API_KEY on purpose, so the transactional key can stay
 //   sending-only (and best in a separate Resend team: .env.example).
 // - KLORN_MAILBOX_DOMAIN: no default (L19: the domain is operational).
-// - KLORN_MAILBOX_FORWARD_TO: optional; one plain address outside the domain.
+// - KLORN_MAILBOX_FORWARD_TO: optional; the support inbox told of postmaster@ and
+//   abuse@ mail (a notice, never the mail), one plain address outside the domain.
 //   Unset or unusable, system mail is dropped and counted (unusable also warns).
 // Any of the first three unset or unusable is `missing`.
 export function klornInboundConfig(): KlornInboundConfig {

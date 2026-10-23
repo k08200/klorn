@@ -1,6 +1,6 @@
 /**
  * POST /api/mailbox/inbound/resend — what delivery does when something fails,
- * how system mail is forwarded, and what reaches an operator (step E1b of
+ * how system mail is noticed, and what reaches an operator (step E1b of
  * docs/providers/unified-platform-plan.md).
  *
  * The rule under test: a 2xx means every copy is stored or deliberately dropped,
@@ -17,7 +17,6 @@ import {
   agoIso,
   buildInboundApp,
   captureError,
-  content,
   createResend,
   db,
   deliver,
@@ -51,7 +50,7 @@ import { DataWipeFenceError } from "../privacy/data-wipe-fence.js";
 import { klornMailboxInboundRoutes } from "../routes/klorn-mailbox-inbound.js";
 
 function buildApp(
-  options: { timeoutMs?: number; deadlineMs?: number; forwardsPerHour?: number } = {},
+  options: { timeoutMs?: number; deadlineMs?: number; noticesPerHour?: number } = {},
 ) {
   return buildInboundApp(
     klornMailboxInboundRoutes({
@@ -59,7 +58,7 @@ function buildApp(
       createResend,
       resendTimeoutMs: options.timeoutMs ?? 2_000,
       deadlineMs: options.deadlineMs,
-      forwardsPerHour: options.forwardsPerHour,
+      noticesPerHour: options.noticesPerHour,
     }),
   );
 }
@@ -159,7 +158,7 @@ describe("store failures", () => {
     expect(context.extra).toEqual({ emailId: EMAIL_ID, kind: "Error" });
   });
 
-  it("stores the others when one recipient fails, and forwards system mail once per key", async () => {
+  it("stores the others when one recipient fails, and notices system mail once per key", async () => {
     addUser("jane", "u-jane");
     addUser("sam", "u-sam");
     persistGmailEmail.mockImplementation(async (userId: string) => {
@@ -170,23 +169,23 @@ describe("store failures", () => {
     const event = receivedEvent({ to: ["jane@klorn.ai", "sam@klorn.ai", "postmaster@klorn.ai"] });
     const first = await deliver(app, event);
     expect(first.statusCode).toBe(503);
-    expect(first.json()).toMatchObject({ stored: 1, forwarded: 1 });
+    expect(first.json()).toMatchObject({ stored: 1, notified: 1 });
 
     // Resend retries: jane's copy exists now, sam's wipe is over.
     db.existing.add(`u-jane|klorn:${EMAIL_ID}`);
     persistGmailEmail.mockResolvedValue({ emailId: "row", isNew: true });
     const second = await deliver(app, event);
     expect(second.statusCode).toBe(200);
-    expect(second.json()).toMatchObject({ stored: 2, forwarded: 1 });
+    expect(second.json()).toMatchObject({ stored: 2, notified: 1 });
     expect(persistGmailEmail.mock.calls.map((call) => call[0])).toEqual([
       "u-jane",
       "u-sam",
       "u-sam",
     ]);
-    const keys = resendSpies.forward.mock.calls.map((call) => call[1].idempotencyKey);
+    const keys = resendSpies.send.mock.calls.map((call) => call[1].idempotencyKey);
     expect(keys).toEqual([
-      `klorn-forward:${EMAIL_ID}:postmaster`,
-      `klorn-forward:${EMAIL_ID}:postmaster`,
+      `klorn-notice:${EMAIL_ID}:postmaster`,
+      `klorn-notice:${EMAIL_ID}:postmaster`,
     ]);
   });
 });
@@ -289,6 +288,15 @@ describe("Resend failures", () => {
     expect(Date.now() - started).toBeLessThan(5_000);
   });
 
+  it("starts no lookup once the request's deadline has passed", async () => {
+    addUser("jane", "u-jane");
+    const app = await buildApp({ deadlineMs: 0 });
+    const res = await deliver(app, receivedEvent());
+    expect(res.statusCode).toBe(503);
+    expect(db.systemCalls).toHaveLength(0);
+    expect(resendSpies.get).not.toHaveBeenCalled();
+  });
+
   it("gives up on an event older than 26 h instead of answering 503, and reports it", async () => {
     addUser("jane", "u-jane");
     resendSpies.get.mockResolvedValue(resendError(500));
@@ -337,112 +345,136 @@ describe("a signed event of an unexpected shape", () => {
 });
 
 describe("system addresses", () => {
-  it("forwards postmaster@ in the wrapped mode, sized from the fetched content", async () => {
-    const app = await buildApp();
-    const res = await deliver(app, receivedEvent({ to: ["POSTMASTER@klorn.ai"] }));
-
-    expect(res.json()).toMatchObject({ stored: 0, dropped: 0, forwarded: 1 });
-    expect(resendSpies.get).toHaveBeenCalledWith(EMAIL_ID, { html_format: "cid" });
-    const [options, requestOptions] = resendSpies.forward.mock.calls[0];
-    expect(options).toMatchObject({
-      emailId: EMAIL_ID,
-      to: FORWARD_TO,
-      from: "postmaster@klorn.ai",
-      passthrough: false,
-    });
-    expect(options.text).toMatch(/may be re-encoded/);
-    expect(requestOptions).toEqual({ idempotencyKey: `klorn-forward:${EMAIL_ID}:postmaster` });
-    expect(db.systemCalls).toHaveLength(0);
+  const notice = (handle: string, emailId = EMAIL_ID) => ({
+    from: `${handle}@klorn.ai`,
+    to: FORWARD_TO,
+    subject: `Mail to ${handle}@klorn.ai — Resend email ${emailId}`,
+    text: expect.stringContaining("Receiving"),
   });
 
-  it.each([
-    ["a long text", content({ text: "x".repeat(2 * 1024 * 1024 + 1) })],
-    ["large attachments", content({ attachments: [{ id: "a1", size: 3_000_000 }] })],
-  ])("sends a fixed notice instead of forwarding %s", async (_label, big) => {
-    resendSpies.get.mockResolvedValue(ok(big));
+  it("sends postmaster@ a fixed notice, never the content, and fetches nothing", async () => {
     const app = await buildApp();
     const res = await deliver(
       app,
-      receivedEvent({ to: ["abuse@klorn.ai"], subject: "attacker <b>chosen</b>" }),
+      receivedEvent({ to: ["POSTMASTER@klorn.ai"], from: "Ops <ops@evil.example>" }),
     );
 
-    expect(res.json()).toMatchObject({ forwarded: 1 });
-    expect(resendSpies.forward).not.toHaveBeenCalled();
+    expect(res.json()).toMatchObject({ stored: 0, dropped: 0, notified: 1 });
+    expect(resendSpies.send).toHaveBeenCalledTimes(1);
     const [payload, requestOptions] = resendSpies.send.mock.calls[0];
-    expect(payload).toEqual({
-      from: "abuse@klorn.ai",
-      to: FORWARD_TO,
-      subject: `Mail to abuse@klorn.ai too large to forward — Resend email ${EMAIL_ID}`,
-      text: expect.any(String),
-    });
-    expect(JSON.stringify(payload)).not.toContain("attacker");
-    expect(requestOptions).toEqual({ idempotencyKey: `klorn-forward-notice:${EMAIL_ID}:abuse` });
+    expect(payload).toEqual(notice("postmaster"));
+    expect(requestOptions).toEqual({ idempotencyKey: `klorn-notice:${EMAIL_ID}:postmaster` });
+    // No sender-controlled field reaches the operator.
+    const sent = JSON.stringify(payload);
+    expect(sent).not.toContain("Secret merger plans");
+    expect(sent).not.toContain("evil.example");
+    expect(resendSpies.get).not.toHaveBeenCalled();
+    expect(resendSpies.forward).not.toHaveBeenCalled();
+    expect(db.systemCalls).toHaveLength(0);
   });
 
-  it("forwards at most the hourly budget, then drops, counts and reports", async () => {
-    const app = await buildApp({ forwardsPerHour: 2 });
-    const statuses = [];
-    for (let i = 0; i < 3; i++) {
-      const res = await deliver(app, receivedEvent({ to: ["postmaster@klorn.ai"] }));
-      statuses.push(res.json());
+  it("notices abuse@ alongside a user's copy, fetching the content once for the user", async () => {
+    addUser("jane", "u-jane");
+    const app = await buildApp();
+    const res = await deliver(app, receivedEvent({ to: ["abuse@klorn.ai", "jane@klorn.ai"] }));
+    expect(res.json()).toMatchObject({ stored: 1, notified: 1 });
+    expect(resendSpies.get).toHaveBeenCalledTimes(1);
+    expect(resendSpies.send.mock.calls[0][0]).toEqual(notice("abuse"));
+    expect(resendSpies.forward).not.toHaveBeenCalled();
+  });
+
+  it("sends at most the hourly budget of notices, then drops, counts and reports", async () => {
+    const app = await buildApp({ noticesPerHour: 2 });
+    const bodies = [];
+    for (const id of ["id-1", "id-2", "id-3"]) {
+      const res = await deliver(app, receivedEvent({ email_id: id, to: ["postmaster@klorn.ai"] }));
+      bodies.push(res.json());
     }
-    expect(resendSpies.forward).toHaveBeenCalledTimes(2);
-    expect(statuses[2]).toMatchObject({ forwarded: 0, dropped: 1 });
-    expect(reportsFor("forward-limit")).toHaveLength(1);
+    expect(resendSpies.send).toHaveBeenCalledTimes(2);
+    expect(bodies[2]).toMatchObject({ notified: 0, dropped: 1 });
+    expect(reportsFor("notice-limit")).toHaveLength(1);
   });
 
-  it("forwards one message at a time across concurrent deliveries", async () => {
+  it("lets Resend's retry of one event reuse its token instead of draining the budget", async () => {
+    resendSpies.send.mockResolvedValueOnce(resendError(502));
+    const app = await buildApp({ noticesPerHour: 1 });
+    const event = receivedEvent({ to: ["postmaster@klorn.ai"] });
+    expect((await deliver(app, event)).statusCode).toBe(503);
+    expect((await deliver(app, event)).json()).toMatchObject({ notified: 1 });
+    const other = await deliver(
+      app,
+      receivedEvent({ email_id: "id-2", to: ["postmaster@klorn.ai"] }),
+    );
+    expect(other.json()).toMatchObject({ notified: 0, dropped: 1 });
+    expect(resendSpies.send).toHaveBeenCalledTimes(2);
+  });
+
+  it("sends one notice at a time across concurrent deliveries", async () => {
     let active = 0;
     let peak = 0;
-    resendSpies.forward.mockImplementation(async () => {
+    resendSpies.send.mockImplementation(async () => {
       active += 1;
       peak = Math.max(peak, active);
       await new Promise((resolve) => setTimeout(resolve, 20));
       active -= 1;
-      return ok({ id: "fwd" });
+      return ok({ id: "send" });
     });
     const app = await buildApp();
     await Promise.all(
-      [0, 1, 2].map(() => deliver(app, receivedEvent({ to: ["postmaster@klorn.ai"] }))),
+      ["id-1", "id-2", "id-3"].map((id) =>
+        deliver(app, receivedEvent({ email_id: id, to: ["postmaster@klorn.ai"] })),
+      ),
     );
-    expect(resendSpies.forward).toHaveBeenCalledTimes(3);
+    expect(resendSpies.send).toHaveBeenCalledTimes(3);
     expect(peak).toBe(1);
   });
 
-  it("answers 503 when the forward fails transiently", async () => {
-    resendSpies.forward.mockResolvedValue(resendError(502));
+  it("answers 503 when the notice fails transiently", async () => {
+    resendSpies.send.mockResolvedValue(resendError(502));
     const app = await buildApp();
     const res = await deliver(app, receivedEvent({ to: ["postmaster@klorn.ai"] }));
     expect(res.statusCode).toBe(503);
   });
 
-  it.each([400, 422])("drops and reports a forward Resend refuses (%i)", async (status) => {
-    resendSpies.forward.mockResolvedValue(resendError(status, "validation_error"));
+  it.each([400, 422])("drops and reports a notice Resend refuses (%i)", async (status) => {
+    resendSpies.send.mockResolvedValue(resendError(status, "validation_error"));
     const app = await buildApp();
     const res = await deliver(app, receivedEvent({ to: ["abuse@klorn.ai"] }));
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ forwarded: 0, dropped: 1 });
+    expect(res.json()).toMatchObject({ notified: 0, dropped: 1 });
     expect(reportsFor("resend-refused")).toHaveLength(1);
   });
 
   it.each([
     ["daily_quota_exceeded", 429],
     ["invalid_from_address", 422],
-  ])("answers 503 and reports a forward refused for %s", async (name, status) => {
-    resendSpies.forward.mockResolvedValue(resendError(status, name));
+  ])("answers 503 and reports a notice refused for %s", async (name, status) => {
+    resendSpies.send.mockResolvedValue(resendError(status, name));
     const app = await buildApp();
     const res = await deliver(app, receivedEvent({ to: ["abuse@klorn.ai"] }));
     expect(res.statusCode).toBe(503);
     expect(reportsFor("resend-account")).toHaveLength(1);
   });
 
-  it("drops a system address and counts it when no forward target is set", async () => {
+  it("drops a system address and counts it when no notice target is set", async () => {
     delete process.env.KLORN_MAILBOX_FORWARD_TO;
     const app = await buildApp();
     const res = await deliver(app, receivedEvent({ to: ["postmaster@klorn.ai"] }));
-    expect(res.json()).toMatchObject({ forwarded: 0, dropped: 1 });
+    expect(res.json()).toMatchObject({ notified: 0, dropped: 1 });
     expect(resendSpies.get).not.toHaveBeenCalled();
-    expect(resendSpies.forward).not.toHaveBeenCalled();
+    expect(resendSpies.send).not.toHaveBeenCalled();
+  });
+});
+
+describe("events that name nothing at the domain", () => {
+  it("are dropped and reported as a domain mismatch, at most once an hour", async () => {
+    const app = await buildApp();
+    const res = await deliver(app, receivedEvent({ to: ["jane@klorn.example"], cc: [] }));
+    await deliver(app, receivedEvent({ to: ["sam@other.example"] }));
+    expect(res.json()).toMatchObject({ stored: 0, dropped: 1 });
+    expect(reportsFor("domain-mismatch")).toHaveLength(1);
+    expect(reportsFor("domain-mismatch")[0][1].extra).toEqual({ emailId: EMAIL_ID });
+    expect(db.systemCalls).toHaveLength(0);
   });
 });
 

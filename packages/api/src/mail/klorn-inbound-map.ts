@@ -5,7 +5,8 @@
  *
  * - Only Resend's parsed fields are read; no raw MIME is ever parsed here
  *   (#1466/#1467: a parser on the event loop is a denial of service). RFC 2047
- *   encoded-words in From/To/Cc are decoded by a linear decoder.
+ *   encoded-words in From/To/Cc display names are decoded by a linear decoder,
+ *   after the raw value was parsed (decoded-address-header.ts).
  * - Every field is sender-controlled input that reached Resend, so each is
  *   type-checked and capped as IMAP caps it, and NUL is removed (Postgres text
  *   cannot hold it, and a refused row would drop the message).
@@ -15,8 +16,8 @@
  */
 
 import type { EmailReceivedEvent, GetReceivingEmailResponseSuccess } from "resend";
+import { decodedAddressList, decodedMailbox } from "./decoded-address-header.js";
 import { htmlToPlainText } from "./email-text.js";
-import { decodeEncodedWords } from "./encoded-words.js";
 import type { GmailRawEmail } from "./gmail-fetch.js";
 import {
   capStored,
@@ -103,12 +104,14 @@ function storedText(value: unknown, max: number): string {
   return typeof value === "string" ? stripNul(capStored(value, max)) : "";
 }
 
-/** An address header: encoded-words decoded from a bounded input, then capped like IMAP. */
-function addressHeader(value: string): string {
-  return storedText(
-    decodeEncodedWords(capStored(value, MAX_HEADER_DECODE_CHARS)),
-    MAX_STORED_CC_LENGTH,
-  );
+/**
+ * An address header from a bounded input: display names decoded after the raw
+ * value was parsed (decoded-address-header.ts), then capped like IMAP.
+ */
+function addressHeader(value: string, kind: "mailbox" | "list"): string {
+  const bounded = capStored(value, MAX_HEADER_DECODE_CHARS);
+  const decoded = kind === "mailbox" ? decodedMailbox(bounded) : decodedAddressList(bounded);
+  return storedText(decoded, MAX_STORED_CC_LENGTH);
 }
 
 /** A header value by case-insensitive name; only a string counts. */
@@ -154,9 +157,10 @@ export function resendToRawEmail(
     threadId: null,
     from: addressHeader(
       header(headers, "from") ?? storedText(content.from, MAX_HEADER_DECODE_CHARS),
+      "mailbox",
     ).trim(),
-    to: addressHeader(header(headers, "to") ?? joined(content.to)),
-    cc: addressHeader(header(headers, "cc") ?? joined(content.cc)),
+    to: addressHeader(header(headers, "to") ?? joined(content.to), "list"),
+    cc: addressHeader(header(headers, "cc") ?? joined(content.cc), "list"),
     // Capped at the subject limit before envelopeSubject trims it.
     subject: envelopeSubject(storedText(content.subject, MAX_STORED_SUBJECT_LENGTH)),
     snippet: snippetFromBody(body) ?? "",

@@ -29,28 +29,42 @@ export interface InboundReporter {
   log(level: "warn" | "error", key: string, line: string): void;
 }
 
-/** One reporter per registered route, so its windows are process-wide. */
+/**
+ * One reporter per registered route, so its windows are process-wide. A report
+ * held back inside a window is counted, and the next one sent for that scope
+ * carries the count as `suppressed`.
+ */
 export function createInboundReporter(now: () => number = Date.now): InboundReporter {
   const lastAt = new Map<string, number>();
-  const due = (key: string): boolean => {
+  const heldBack = new Map<string, number>();
+  /** The count held back since the last send, or null while the window is open. */
+  const due = (key: string): number | null => {
     const previous = lastAt.get(key);
-    if (previous !== undefined && now() - previous < REPORT_WINDOW_MS) return false;
+    if (previous !== undefined && now() - previous < REPORT_WINDOW_MS) {
+      heldBack.set(key, (heldBack.get(key) ?? 0) + 1);
+      return null;
+    }
     lastAt.set(key, now());
-    return true;
+    const suppressed = heldBack.get(key) ?? 0;
+    heldBack.delete(key);
+    return suppressed;
   };
   return {
     report(scope, extra) {
-      if (!due(`report:${scope}`)) return;
+      const suppressed = due(`report:${scope}`);
+      if (suppressed === null) return;
       const suffix = extra.kind ? `: ${extra.kind}` : "";
       captureError(new Error(`[${SCOPE_PREFIX}] ${scope}${suffix}`), {
         tags: { scope: `${SCOPE_PREFIX}.${scope}` },
-        extra: { ...extra },
+        extra: suppressed > 0 ? { ...extra, suppressed } : { ...extra },
       });
     },
     log(level, key, line) {
-      if (!due(`log:${key}`)) return;
-      if (level === "error") console.error(line);
-      else console.warn(line);
+      const suppressed = due(`log:${key}`);
+      if (suppressed === null) return;
+      const message = suppressed > 0 ? `${line} (suppressed=${suppressed})` : line;
+      if (level === "error") console.error(message);
+      else console.warn(message);
     },
   };
 }

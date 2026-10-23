@@ -4671,8 +4671,9 @@ fixtures before E0; nothing is reachable until E0 is done and the flag is on.
       lowercased.
     - Lookup with `withSystem` (`db-tenant.ts:191`): a `KlornAddress` with a
       live `userId`, and that user's `KLORN` row.
-    - System addresses (`postmaster`, `abuse`) are forwarded to the support
-      inbox through `emails.receiving.forward` (L18).
+    - System addresses (`postmaster`, `abuse`) reach the support inbox (L18)
+      as a notice that names the message; the message itself stays readable
+      in Resend, and is never forwarded (see "E1b landed" below for why).
     - Anything else (unknown, tombstoned, reserved) is dropped (L17), with a
       count in the log and no address.
     - With no live recipient, the content is never fetched.
@@ -4791,7 +4792,7 @@ fixtures before E0; nothing is reachable until E0 is done and the flag is on.
   - A replay is idempotent, and a P2002 race counts as stored.
   - A running wipe answers 503; a missing secret or domain answers 503.
   - Another event type answers 204.
-  - A system address is forwarded.
+  - A system address sends the support inbox a notice.
   - Guards: RLS, fence, purge, enum parity.
 - Slices: E1a (schema, handle rules, billing exclusions), then E1b (the route).
   One PR each, flag OFF, full gate; E1b gets the security review too.
@@ -4801,59 +4802,82 @@ fixtures before E0; nothing is reachable until E0 is done and the flag is on.
     `KlornAddress` is dropped once it has no rows.
 - E1b landed (branch `feat/klorn-mailbox-inbound`), flag OFF:
   `routes/klorn-mailbox-inbound.ts`; `mail/klorn-inbound.ts` (delivery),
-  `-forward.ts` (system mail), `-resend.ts` (Resend calls), `-report.ts`
-  (operator reports), `-outcome.ts`; pure: `-recipients.ts`, `-map.ts`,
+  `-notice.ts` (system mail), `-resend.ts` (Resend calls), `-report.ts`
+  (operator reports), `-slots.ts` (bounded queue), `-outcome.ts`; pure:
+  `-recipients.ts`, `-map.ts`, `mail/decoded-address-header.ts`,
   `mail/encoded-words.ts`.
   - Env: `KLORN_MAILBOX_ENABLED`, `RESEND_INBOUND_WEBHOOK_SECRET` (`whsec_`
     and a base64 key of at least 16 bytes: a bare `whsec_` verified forged
     signatures), `RESEND_INBOUND_API_KEY` (full access, kept apart from
-    `RESEND_API_KEY`; founder action: create it in a separate Resend
-    team/account that receives the domain, so a leaked inbound key cannot send
-    as the transactional domain), `KLORN_MAILBOX_DOMAIN` and
-    `KLORN_MAILBOX_FORWARD_TO` (one plain address outside the domain; unset or
-    unusable, system mail is dropped and counted, unusable also logs an error).
-    The first three missing or unusable answer 503. `KLORN_MAILBOX_ENABLED` is
-    read with `flagMode`: `cohort` counts as live here, since the route is not
-    per user; the claim (E3) honours the cohort.
+    `RESEND_API_KEY`), `KLORN_MAILBOX_DOMAIN` and `KLORN_MAILBOX_FORWARD_TO`
+    (the support inbox the notices go to: one plain address outside the
+    domain; unset or unusable, system mail is dropped and counted, unusable
+    also logs an error; the name is kept from the design). The first three
+    missing or unusable answer 503. `KLORN_MAILBOX_ENABLED` is read with
+    `flagMode`: `cohort` counts as live here, since the route is not per
+    user; the claim (E3) honours the cohort.
+  - Founder action: create the inbound key in a separate Resend team/account
+    that receives the domain, so a leaked full-access key cannot send as the
+    transactional domain. That team must also verify the domain for sending:
+    the notices go out from `postmaster@<domain>` / `abuse@<domain>`.
+  - L18 as built: the support inbox gets a notice ("Mail to
+    {handle}@{domain} — Resend email {id}", a constant text pointing to the
+    Resend dashboard's Receiving tab), never the mail. Forwarding was built
+    and removed (security re-verification N3, 2026-10-23; the L18 row keeps
+    its wording until the founder confirms): anyone can send to these
+    addresses, a forward re-sends the
+    sender's subject and content DKIM-signed from Klorn's own domain (a
+    phishing channel to the operator), and the SDK's forward downloads the
+    whole raw message with no abort. A notice carries no sender-controlled
+    field. At most 20 an hour, keyed per message and handle so Resend's
+    retries reuse a token (past it: dropped, counted, reported); one at a
+    time; no token is taken once the request's deadline has passed.
   - No silent drop of a systemic fault: each such drop is a Sentry event,
     `klorn-mailbox.<scope>`, at most one per scope per hour (re-armed after
-    it), with the email id, a status or an error class only. Scopes:
-    `resend-auth` and `resend-account` (key refused; quota or sender refused:
-    retried), `resend-missing` (404 after 10 min; retried before),
-    `resend-refused` (another 4xx except 408/409/429), `event-schema`,
+    it, carrying the count held back as `suppressed`), with the email id, a
+    status or an error class only. Scopes: `resend-auth` and `resend-account`
+    (key refused; quota or sender refused: retried), `resend-missing` (404
+    after 10 min; retried before), `resend-refused` (another 4xx except
+    408/409/429), `event-schema`, `domain-mismatch` (nothing at the domain),
     `mailbox-missing` (a live address without its `KLORN` row), `store-bug`
     (Prisma validation, P2011/P2012/P2019: retried), `store-refused` (SQLSTATE
-    22xxx, 54000 and similar: dropped), `store-unknown`, `forward-limit`,
+    22xxx, 54000 and similar: dropped), `store-unknown`, `notice-limit`,
     `unexpected` (the client threw), `lookup`, `give-up`.
   - Bounds: 256 KiB body; 10 s per Resend call and 12 s per request (then
-    503); at most 4 fetch-and-store at once; an event older than 26 h that
-    would answer 503 is dropped and reported (`give-up`). A rejected
-    signature's reason (`missing-headers`, `bad-signature`,
-    `stale-timestamp`) is logged at most once an hour; the client holding the
-    full-access key is built only after the signature verifies.
+    503); lookups, fetch and store in 4 slots with at most 32 waiting (a full
+    queue answers 503 at once; queued work past the deadline never starts);
+    an event older than 26 h that would answer 503 is dropped and reported
+    (`give-up`). A rejected signature's reason (`missing-headers`,
+    `bad-signature`, `stale-timestamp`) is logged at most once an hour; the
+    client holding the full-access key is built only after the signature
+    verifies.
   - Differs from the design:
     - A replay of a stored copy is answered from the existing row, without
       fetching or rewriting it: Klorn holds this mailbox's state, and the
       store's re-sync path would set read mail back to unread.
-    - System mail (L18) is bounded: 20 forwards an hour process-wide (past
-      it: dropped, counted, reported), one at a time, in the SDK's wrapped
-      mode (`passthrough: false`; its passthrough mode runs postal-mime on the
-      raw message, resend 6.20.0 `dist/index.mjs:785`), with an idempotency
-      key per message and handle. A message estimated over 2 MB (text, HTML
-      and attachment sizes) gets a notice with a fixed subject via
-      `emails.send` instead, carrying no sender-controlled text.
+    - System mail: a notice, not a forward (above).
     - The self-sent comparison (`userEmail`) gets the Klorn address only when
       DKIM and DMARC both pass; otherwise `""`, which matches no sender and
       which the store keeps as is (null would make it compare with the
       account's sign-in address). So an unauthenticated From of the Klorn
       address or of the sign-in address is never self-sent at ingest: no
       `self_sent` needs-reply verdict, no commitment the user owes.
-    - Content is fetched with `html_format: cid`; RFC 2047 encoded-words in
-      From/To/Cc are decoded (linear, TextDecoder charsets); NUL is removed
-      from stored text and the List-Unsubscribe targets.
-    - Recipients are matched by the handle's shape and the database row,
-      never the reserved list, so a later addition to the list cannot stop
-      delivery to an existing owner.
+    - From/To/Cc: the raw value is parsed first (quote- and comment-aware,
+      `parseAddress`; lists split by `splitAddressList`), and only the display
+      name is decoded (RFC 2047), then the mailbox is rebuilt with the name
+      quoted where needed; a rebuilt value whose mailbox differs from the raw
+      one is not used, and control characters are removed (security
+      re-verification N1: decoding the whole value first let an encoded
+      comment spell the mailbox the parser then read). The decoder takes only
+      allowlisted charsets, caches one decoder per charset and decodes at
+      most 50 words per header (N2).
+    - Content is fetched with `html_format: cid`; NUL is removed from stored
+      text and the List-Unsubscribe targets.
+    - Recipients are matched by the handle's shape and the database row, not
+      the reserved list, so a later addition to the list cannot stop delivery
+      to an existing owner; a frozen denylist of the CA/Browser Forum
+      validation names (`admin`, `administrator`, `webmaster`, `hostmaster`)
+      is never delivered, whatever the database holds.
     - The SDK's type for `GET /emails/receiving/{id}` (6.20.0) does not
       declare `authentication`; it is read as untyped input. A field that is
       not one of the seven verdict strings is stored as `unknown`, so if
@@ -4876,13 +4900,13 @@ fixtures before E0; nothing is reachable until E0 is done and the flag is on.
     - Two concurrent deliveries of one event can both pass the replay check;
       the loser's create is a P2002 (counted stored), or, in a narrower race,
       the store's update path touches the new row. Accepted; create-only later.
-    - The SDK's forward downloads the raw message with no abort signal, so a
-      forward past its budget answers retry while that download may still run.
     - The later summarize pass (`mail/email-summarize.ts:175`, `:296`)
       re-classifies needs-reply against `resolveUserEmail` (the sign-in
       address) for every source, so there an unauthenticated From of the
       sign-in address can still read as `self_sent` (not reply-needed). It
       mines no commitments. Gate it on `EmailMessage.authentication` in E4.
+    - The 12 s deadline answers 503 but does not cancel a database call in
+      flight; that work finishes in the background (a retry is idempotent).
 **E2 — provider actions and send** (*outline*). Depends on: B0. The database
 is the source of truth, so every action in `MailProviderActions` is
 implementable.

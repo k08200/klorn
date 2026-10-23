@@ -24,9 +24,13 @@
  *   and DMARC pass, and otherwise "" (never the sign-in address the store
  *   would substitute for null), so a forged `From:` of either of the user's
  *   addresses cannot plant commitments the user owes.
- * - Bounded: a semaphore around fetch and store, a per-call budget and the
- *   request's deadline; an event older than GIVE_UP_AGE_MS that would answer
- *   retry is dropped and reported instead (Resend stops at about 28 h anyway).
+ * - Bounded: lookups, fetch and store in bounded slots (a full queue answers
+ *   retry at once), a per-call budget and the request's deadline; an event older
+ *   than GIVE_UP_AGE_MS that would answer retry is dropped and reported instead
+ *   (Resend stops at about 28 h anyway).
+ * - postmaster@ and abuse@ get a notice to the support inbox, never the mail
+ *   (klorn-inbound-notice.ts); an event naming nothing at the domain is
+ *   reported (`domain-mismatch`).
  * - Nothing logged or reported here carries an address, subject or body.
  */
 
@@ -34,13 +38,13 @@ import { Prisma } from "@prisma/client";
 import { withSystem, withTenant } from "../db-tenant.js";
 import { persistGmailEmail } from "../judge/email-firewall.js";
 import { isDataWipeFenceError } from "../privacy/data-wipe-fence.js";
-import { forwardSystemMail } from "./klorn-inbound-forward.js";
 import {
   klornMessageId,
   type ResendReceivedContent,
   resendToRawEmail,
   selfSentAddress,
 } from "./klorn-inbound-map.js";
+import { sendNotices } from "./klorn-inbound-notice.js";
 import {
   callBudget,
   combine,
@@ -52,6 +56,7 @@ import {
   reportResendFailure,
   retryFor,
   SETTLED,
+  slotRetry,
 } from "./klorn-inbound-outcome.js";
 import { inboundRecipients } from "./klorn-inbound-recipients.js";
 import { callResend, errorClass } from "./klorn-inbound-resend.js";
@@ -156,7 +161,10 @@ async function resolveTargets(
   const owners = await lookupOwners(handles);
   let outcome = count("dropped", handles.length - owners.size);
   let targets: Target[] = [];
-  for (const [handle, userId] of owners) {
+  for (const [index, [handle, userId]] of [...owners].entries()) {
+    if (pastDeadline(ctx)) {
+      return { outcome: combine(outcome, retryFor("deadline", owners.size - index)), targets: [] };
+    }
     const address = `${handle}@${ctx.domain}`;
     const decision = await mailboxDecision(userId, address, event);
     if (decision.kind === "deliver") {
@@ -264,25 +272,38 @@ async function storeCopies(
   return outcome;
 }
 
-/** Fetch once, store every user's copy, then forward system mail with the same content. */
-async function deliverContent(
+/** Look the handles up, then fetch the content once and store every live user's copy. */
+async function resolveAndStore(
   event: ParsedEvent,
-  targets: Target[],
-  system: string[],
+  handles: string[],
   ctx: InboundContext,
 ): Promise<InboundOutcome> {
-  const copies = targets.length + system.length;
-  const fetched = await ctx.runtime.deliverySlots.run(async () => {
-    const result = await callResend(
-      () => ctx.api.get(event.emailId, { html_format: "cid" }),
-      callBudget(ctx),
-    );
-    if (!result.ok) return { outcome: reportResendFailure("get", result, copies, event, ctx) };
-    const content = result.data as ResendReceivedContent;
-    return { outcome: await storeCopies(targets, content, event, ctx), content };
-  });
-  if (!("content" in fetched)) return fetched.outcome;
-  return combine(fetched.outcome, await forwardSystemMail(system, fetched.content, event, ctx));
+  const { outcome, targets } = await resolveTargets(event, handles, ctx);
+  // With no live recipient, the content is never fetched.
+  if (targets.length === 0) return outcome;
+  const fetched = await callResend(
+    () => ctx.api.get(event.emailId, { html_format: "cid" }),
+    callBudget(ctx),
+  );
+  if (!fetched.ok) {
+    return combine(outcome, reportResendFailure("get", fetched, targets.length, event, ctx));
+  }
+  const content = fetched.data as ResendReceivedContent;
+  return combine(outcome, await storeCopies(targets, content, event, ctx));
+}
+
+/** The users' copies, under the bounded delivery slots and the request's deadline. */
+async function deliverToUsers(
+  event: ParsedEvent,
+  handles: string[],
+  ctx: InboundContext,
+): Promise<InboundOutcome> {
+  if (handles.length === 0) return SETTLED;
+  const slot = await ctx.runtime.deliverySlots.run(
+    () => resolveAndStore(event, handles, ctx),
+    () => pastDeadline(ctx),
+  );
+  return slot.ran ? slot.value : slotRetry(slot.reason, handles.length);
 }
 
 function giveUpIfStale(outcome: InboundOutcome, event: ParsedEvent, ctx: InboundContext) {
@@ -299,14 +320,14 @@ export async function deliverInboundEmail(
   const parsed = parseEvent(event, ctx);
   if (!parsed) return count("dropped");
   const recipients = inboundRecipients(parsed.data, ctx.domain);
-  const { outcome: resolved, targets } = await resolveTargets(parsed, recipients.handles, ctx);
-  const system = ctx.forwardTo ? recipients.system : [];
-  const settled = combine(
-    count("dropped", recipients.dropped + recipients.system.length - system.length),
-    resolved,
-  );
-  // With no live recipient and nothing to forward, the content is never fetched.
-  if (targets.length === 0 && system.length === 0) return settled;
-  const delivered = await deliverContent(parsed, targets, system, ctx);
-  return giveUpIfStale(combine(settled, delivered), parsed, ctx);
+  if (recipients.matched === 0) {
+    // Resend delivered mail that names nothing at this domain: a wrong
+    // KLORN_MAILBOX_DOMAIN or receiving setup would drop everything this way.
+    ctx.reporter.report("domain-mismatch", { emailId: parsed.emailId });
+    return count("dropped");
+  }
+  const users = await deliverToUsers(parsed, recipients.handles, ctx);
+  const notices = await sendNotices(recipients.system, parsed, ctx);
+  const outcome = combine(count("dropped", recipients.dropped), combine(users, notices));
+  return giveUpIfStale(outcome, parsed, ctx);
 }
