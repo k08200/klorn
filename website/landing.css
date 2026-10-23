@@ -419,16 +419,25 @@ html[lang=ko] .note-q p,html[lang=ja] .note-q p,html[lang=zh] .note-q p{font-wei
 /* ── Final CTA ───────────────────────────────────── */
 .final{position:relative;text-align:center;overflow:hidden;padding:clamp(110px,14vw,180px) 0}
 .final .hero-sky{inset:0;height:100%;transform:scaleY(-1);
-  -webkit-mask-image:linear-gradient(180deg,#000 0%,#000 50%,transparent 100%);
-          mask-image:linear-gradient(180deg,#000 0%,#000 50%,transparent 100%)}
+  /* The sky is flipped, so the first stop is the section's BOTTOM edge: it
+     fades back to paper there too, instead of a hard cut against the footer
+     rule. */
+  -webkit-mask-image:linear-gradient(180deg,transparent 0%,#000 24%,#000 50%,transparent 100%);
+          mask-image:linear-gradient(180deg,transparent 0%,#000 24%,#000 50%,transparent 100%)}
 .final .wrap{position:relative;z-index:2}
 .final h2{margin-left:auto;margin-right:auto;font-size:clamp(var(--fs-32),5.2vw,var(--fs-56));max-width:15ch}
 .final .meta{margin-top:22px}
+/* Phone: the two CTAs stack at one shared width rather than two pills of
+   different lengths centred under each other. */
+@media (max-width:640px){.final .actions{flex-direction:column;align-items:stretch;max-width:360px;margin:0 auto}}
 
 /* ── Footer ──────────────────────────────────────── */
 .foot{border-top:1px solid var(--line);padding:56px 0 40px;font-size:var(--fs-14);color:var(--ink-2)}
-.foot-grid{display:grid;grid-template-columns:1fr;gap:28px}
-@media (min-width:640px){.foot-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.foot-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px 24px}
+/* Below the 5-column desktop row the brand block takes its own full row and
+   the four link groups pair up two by two (a phone no longer scrolls one
+   long column). */
+@media (max-width:999px){.foot-grid > :first-child{grid-column:1 / -1}}
 @media (min-width:1000px){.foot-grid{grid-template-columns:minmax(0,1.6fr) repeat(4,minmax(0,1fr))}}
 .foot .brand{display:inline-flex;align-items:center;min-height:44px;min-width:44px;font-weight:700;color:var(--ink);text-decoration:none;font-size:var(--fs-16);letter-spacing:-.015em}
 .foot-note{margin:10px 0 0;max-width:30ch;line-height:1.5}

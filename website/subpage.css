@@ -160,3 +160,10 @@ html[lang=ko] .article thead th{letter-spacing:.02em}
 .article .postlist a.pt:hover{color:var(--accent)}
 .article .postlist .meta{display:block;margin:0}
 .article .postlist p{margin:8px 0 0;font-size:var(--fs-16);line-height:1.6}
+/* Blog index: the hero is the shared .sub-hero band and the list starts on
+   the same left edge as the nav, the footer and every other subpage, instead
+   of a centred post-width column. */
+.article.article-index{margin:0;max-width:820px;padding-top:clamp(48px,6vw,72px)}
+.article-index .postlist{margin-top:0;border-top:0}
+.article-index .postlist li:first-child{padding-top:0}
+.article-index .checked{max-width:none}
