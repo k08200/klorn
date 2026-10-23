@@ -181,6 +181,9 @@ export async function persistGmailEmail(
       listUnsubscribeMailto: email.listUnsubscribeMailto ?? null,
       listUnsubscribeUrl: email.listUnsubscribeUrl ?? null,
       listUnsubscribeOneClick: email.listUnsubscribeOneClick ?? false,
+      // Only the Klorn mailbox has verdicts (step E1b); every other producer
+      // leaves the column out, so it stays null.
+      ...(email.authentication ? { authentication: email.authentication } : {}),
     },
   });
   if (email.attachments.length > 0) {

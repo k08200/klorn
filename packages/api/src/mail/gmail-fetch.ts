@@ -52,6 +52,10 @@ export interface GmailRawEmail {
   listUnsubscribeMailto?: string | null;
   listUnsubscribeUrl?: string | null;
   listUnsubscribeOneClick?: boolean;
+  // The receiving server's SPF, DKIM and DMARC verdicts, already whitelisted
+  // (mail/klorn-inbound-map.ts). Only the Klorn mailbox has them; written on
+  // create only, into EmailMessage.authentication.
+  authentication?: { spf: string; dkim: string; dmarc: string } | null;
 }
 
 function decodeBase64Url(data: string): Buffer {

@@ -315,6 +315,56 @@ export function driveEnabled(): boolean {
 export function klornDriveEnabled(): boolean {
   return flagMode("KLORN_DRIVE_ENABLED") !== "off";
 }
+// The Klorn mailbox's inbound webhook — step E1b of
+// docs/providers/unified-platform-plan.md (L6). OFF by default (repo doctrine).
+// While off, POST /api/mailbox/inbound/resend answers Fastify's default 404
+// (darkRouteGate). The route serves every recipient at once, so there is no
+// per-user mode here; who may hold an address is the claim's decision (E3). Read
+// at request time with the same lenient truthy parse, so a flip needs no redeploy.
+export function klornMailboxEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.KLORN_MAILBOX_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
+
+export type KlornInboundConfig =
+  | {
+      ok: true;
+      webhookSecret: string;
+      apiKey: string;
+      /** ASCII lowercase. */
+      domain: string;
+      /** Where postmaster@ and abuse@ go (L18); null drops them. */
+      forwardTo: string | null;
+    }
+  | { ok: false; missing: string[] };
+
+const MAILBOX_DOMAIN_SHAPE = /^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/;
+
+// The inbound webhook's settings, read per request (a flip or a rotated secret
+// needs no redeploy):
+// - RESEND_INBOUND_WEBHOOK_SECRET: the receiving webhook's signing secret.
+// - RESEND_INBOUND_API_KEY: a full-access key that can read received mail.
+//   Separate from RESEND_API_KEY on purpose, so the transactional key can stay
+//   sending-only.
+// - KLORN_MAILBOX_DOMAIN: no default (L19: the domain is operational).
+// - KLORN_MAILBOX_FORWARD_TO: optional; unset, system mail is dropped and counted.
+// Any of the first three unset (or a domain that is not one) is `missing`.
+export function klornInboundConfig(): KlornInboundConfig {
+  const webhookSecret = (process.env.RESEND_INBOUND_WEBHOOK_SECRET ?? "").trim();
+  const apiKey = (process.env.RESEND_INBOUND_API_KEY ?? "").trim();
+  const domain = (process.env.KLORN_MAILBOX_DOMAIN ?? "")
+    .trim()
+    .replace(/[A-Z]/g, (c) => c.toLowerCase());
+  const missing = [
+    webhookSecret ? null : "RESEND_INBOUND_WEBHOOK_SECRET",
+    apiKey ? null : "RESEND_INBOUND_API_KEY",
+    MAILBOX_DOMAIN_SHAPE.test(domain) ? null : "KLORN_MAILBOX_DOMAIN",
+  ].filter((name): name is string => name !== null);
+  if (missing.length > 0) return { ok: false, missing };
+  const forwardTo = (process.env.KLORN_MAILBOX_FORWARD_TO ?? "").trim() || null;
+  return { ok: true, webhookSecret, apiKey, domain, forwardTo };
+}
 // The Google Drive connector — step D5 of docs/providers/unified-platform-plan.md
 // (D5b: link and unlink a Google account for its picked files, drive.file only).
 // OFF by default (repo doctrine), and flipping it waits on Google's verification

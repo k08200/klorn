@@ -4799,6 +4799,39 @@ fixtures before E0; nothing is reachable until E0 is done and the flag is on.
   - E1b: flag off, revert.
   - E1a: Postgres cannot drop an enum value, so `KLORN` stays unused;
     `KlornAddress` is dropped once it has no rows.
+- E1b landed (branch `feat/klorn-mailbox-inbound`), flag OFF:
+  `routes/klorn-mailbox-inbound.ts`, `mail/klorn-inbound.ts` (delivery),
+  `mail/klorn-inbound-recipients.ts` and `mail/klorn-inbound-map.ts` (pure).
+  - Env: `KLORN_MAILBOX_ENABLED`, `RESEND_INBOUND_WEBHOOK_SECRET`,
+    `RESEND_INBOUND_API_KEY` (a full-access key, kept apart from
+    `RESEND_API_KEY` so that one stays sending-only), `KLORN_MAILBOX_DOMAIN`
+    and `KLORN_MAILBOX_FORWARD_TO` (optional: unset, system mail is dropped and
+    counted). The first three missing answer 503.
+  - Differs from the design:
+    - A replay of a stored copy is answered from the existing row, without
+      fetching or rewriting it: Klorn holds this mailbox's state, and the
+      store's re-sync path would set read mail back to unread.
+    - System mail is forwarded in the SDK's wrapped mode (`passthrough:
+      false`, the original attached as `.eml`), with an idempotency key per
+      message and handle. The SDK's default passthrough mode runs postal-mime
+      on the raw message (resend 6.20.0 `dist/index.mjs:785`), which E1 forbids.
+    - The SDK's type for `GET /emails/receiving/{id}` (6.20.0) does not declare
+      `authentication`; it is read as untyped input. A field that is not one
+      of the seven verdict strings is stored as `unknown`, so if Resend sends
+      objects per field, every verdict is `unknown` until a real fixture
+      (FA-1) says otherwise.
+    - Additions: at most 100 handles are looked up per event (the rest are
+      dropped and counted); NUL is removed from stored text; an empty `text`
+      falls back to the HTML; an `email_id` that is not an id drops the event
+      without a Resend call. `receivedAt` and the wipe comparison use the
+      event's `data.created_at`.
+    - Resend answers: 404, 400 and 422 drop the copy; no status, 401/403, 429,
+      5xx or no answer within 10 s answer 503.
+    - The store keeps running on the global client, as for every other
+      source (`persistGmailEmail` takes no `tx`); the mailbox, wipe and replay
+      checks run under the recipient's `withTenant`.
+  - E3 must create the `KLORN` row with email exactly
+    `<handle>@<KLORN_MAILBOX_DOMAIN in lowercase>`: delivery compares it as is.
 **E2 — provider actions and send** (*outline*). Depends on: B0. The database
 is the source of truth, so every action in `MailProviderActions` is
 implementable.

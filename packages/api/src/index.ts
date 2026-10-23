@@ -19,6 +19,7 @@ import {
   driveEnabled,
   genericImapEnabled,
   icloudInboxEnabled,
+  klornMailboxEnabled,
   outlookInboxEnabled,
 } from "./config.js";
 import { makeCorsOriginCallback } from "./cors-origin.js";
@@ -66,6 +67,7 @@ import {
   klornDriveRoutesEnabled,
   warnIfKlornDriveQuotaMissing,
 } from "./routes/klorn-drive.js";
+import { klornMailboxInboundRoutes } from "./routes/klorn-mailbox-inbound.js";
 import { linkCompleteRoutes } from "./routes/link-complete.js";
 import { mcpRoutes } from "./routes/mcp.js";
 import { memoryRoutes } from "./routes/memory.js";
@@ -349,6 +351,12 @@ await app.register(klornDriveRoutes({ gate: klornDriveRoutesEnabled }), { prefix
 // GOOGLE_DRIVE_ENABLED are both on. The consent's callback is routes/auth.ts's.
 await app.register(googleDriveLinkRoutes({ gate: googleDriveRoutesEnabled }), {
   prefix: "/api/drive/google",
+});
+// The Klorn mailbox's inbound webhook (step E1b): Resend Inbound's email.received,
+// dark until KLORN_MAILBOX_ENABLED. Its own plugin, so the gate cannot reach the
+// Stripe and Paddle webhooks.
+await app.register(klornMailboxInboundRoutes({ gate: klornMailboxEnabled }), {
+  prefix: "/api/mailbox",
 });
 // Which account types this deployment can connect, for the first run's provider
 // grid (productization plan P8) — dark until ONBOARDING_V2 (the default 404 while off).

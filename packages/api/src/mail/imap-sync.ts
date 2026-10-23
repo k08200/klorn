@@ -22,7 +22,6 @@
  * badly with the cron-based scheduler. Each sync opens, fetches, closes.
  */
 
-import sanitizeHtml from "sanitize-html";
 import { persistGmailEmail } from "../judge/email-firewall.js";
 import { captureError } from "../sentry.js";
 import { formatMailbox } from "./email-address.js";
@@ -35,6 +34,7 @@ import { reconcileInboxValidity, removeRecentlyMovedRows } from "./imap-poll-gua
 import type { ImapProviderConfig } from "./imap-providers.js";
 import { liveUidValidity } from "./imap-uidvalidity.js";
 import { sanitizeLogText } from "./log-text.js";
+import { MAX_STORED_BODY_CHARS, snippetFromBody } from "./stored-mail-text.js";
 
 interface VerifyArgs {
   provider: ImapProviderConfig;
@@ -145,34 +145,9 @@ function textBodyOf(msg: ImapFetchMessage): Buffer | undefined {
   return msg.bodyParts?.get("text") ?? msg.bodyParts?.get("TEXT");
 }
 
-// Cut with capStored, never splitting a surrogate pair: a lone surrogate is
-// stored as U+FFFD, so the row would differ from the next poll's text and be
-// rewritten every cycle.
-const MAX_STORED_BODY_CHARS = 50_000;
-
 function formatAddress(addr: ImapEnvelopeAddress | undefined): string {
   if (!addr) return "";
   return formatMailbox(addr.name ?? "", addr.address ?? "");
-}
-
-// The snippet keeps 200 characters; sanitize-html's cost grows faster than
-// linearly with tag nesting, and the raw fallback can be a whole fixed-host
-// TEXT part (no size cap), so only its head is sanitized.
-const SNIPPET_SOURCE_CHARS = 4_000;
-
-function snippetFromBody(bodyText: string, max = 200): string | null {
-  if (!bodyText) return null;
-  // Strip HTML through sanitize-html (proper parser) rather than regex —
-  // CodeQL flags regex-based tag stripping as bad-tag-filter even when
-  // the output is never rendered. The judge prompt only needs the first
-  // sentence or two so we collapse whitespace and slice.
-  const stripped = sanitizeHtml(capStored(bodyText, SNIPPET_SOURCE_CHARS), {
-    allowedTags: [],
-    allowedAttributes: {},
-    disallowedTagsMode: "discard",
-  });
-  const text = stripped.replace(/\s+/g, " ").trim();
-  return capStored(text, max) || null;
 }
 
 type PersistCall = [
