@@ -318,13 +318,11 @@ export function klornDriveEnabled(): boolean {
 // The Klorn mailbox's inbound webhook — step E1b of
 // docs/providers/unified-platform-plan.md (L6). OFF by default (repo doctrine).
 // While off, POST /api/mailbox/inbound/resend answers Fastify's default 404
-// (darkRouteGate). The route serves every recipient at once, so there is no
-// per-user mode here; who may hold an address is the claim's decision (E3). Read
-// at request time with the same lenient truthy parse, so a flip needs no redeploy.
+// (darkRouteGate). The route serves every recipient at once, so it is not per
+// user: `cohort` (L23) counts as live here, and the claim (E3) is what honours
+// the cohort. Read at request time, so a flip needs no redeploy.
 export function klornMailboxEnabled(): boolean {
-  return ["true", "1", "yes", "on"].includes(
-    (process.env.KLORN_MAILBOX_ENABLED ?? "").trim().toLowerCase(),
-  );
+  return flagMode("KLORN_MAILBOX_ENABLED") !== "off";
 }
 
 export type KlornInboundConfig =

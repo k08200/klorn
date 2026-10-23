@@ -4806,7 +4806,9 @@ fixtures before E0; nothing is reachable until E0 is done and the flag is on.
     `RESEND_INBOUND_API_KEY` (a full-access key, kept apart from
     `RESEND_API_KEY` so that one stays sending-only), `KLORN_MAILBOX_DOMAIN`
     and `KLORN_MAILBOX_FORWARD_TO` (optional: unset, system mail is dropped and
-    counted). The first three missing answer 503.
+    counted). The first three missing answer 503. `KLORN_MAILBOX_ENABLED` is
+    read with `flagMode`: `cohort` counts as live here, since the route is not
+    per user; the claim (E3) honours the cohort.
   - Differs from the design:
     - A replay of a stored copy is answered from the existing row, without
       fetching or rewriting it: Klorn holds this mailbox's state, and the
@@ -4826,7 +4828,9 @@ fixtures before E0; nothing is reachable until E0 is done and the flag is on.
       without a Resend call. `receivedAt` and the wipe comparison use the
       event's `data.created_at`.
     - Resend answers: 404, 400 and 422 drop the copy; no status, 401/403, 429,
-      5xx or no answer within 10 s answer 503.
+      5xx or no answer within 10 s answer 503. A 401/403 (a key that cannot
+      read received mail) is also reported to Sentry once per process (scope
+      `klorn-mailbox.resend-auth`, the status only).
     - The store keeps running on the global client, as for every other
       source (`persistGmailEmail` takes no `tx`); the mailbox, wipe and replay
       checks run under the recipient's `withTenant`.

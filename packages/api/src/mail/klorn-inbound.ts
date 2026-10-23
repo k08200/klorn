@@ -127,8 +127,32 @@ function isPermanentResendError(error: ErrorResponse | null): boolean {
   return status === HTTP_NOT_FOUND || status === HTTP_BAD_REQUEST || status === HTTP_UNPROCESSABLE;
 }
 
-const resendRetryReason = (call: string, error: ErrorResponse | null) =>
-  `resend-${call}-${error?.statusCode ?? "network"}`;
+/** Sentry scope of the one report that the inbound key cannot read received mail. */
+export const RESEND_AUTH_SCOPE = "klorn-mailbox.resend-auth";
+const RESEND_AUTH_STATUSES: ReadonlySet<number> = new Set([401, 403]);
+/**
+ * Once per process: Resend retries every delivery for about 28 h, so a report
+ * per request would bury the signal. The warn log and the 503 stay per request.
+ */
+let resendAuthReported = false;
+
+function reportResendAuthOnce(status: number | null | undefined): void {
+  if (resendAuthReported || typeof status !== "number" || !RESEND_AUTH_STATUSES.has(status)) {
+    return;
+  }
+  resendAuthReported = true;
+  // The status only: never the key, an address or the message.
+  captureError(
+    new Error(`Resend refused RESEND_INBOUND_API_KEY with ${status}: it cannot read received mail`),
+    { tags: { scope: RESEND_AUTH_SCOPE }, extra: { status } },
+  );
+}
+
+/** The retry reason (a code, no mail data); a refused key reaches an operator once. */
+function resendRetryReason(call: string, error: ErrorResponse | null): string {
+  reportResendAuthOnce(error?.statusCode);
+  return `resend-${call}-${error?.statusCode ?? "network"}`;
+}
 
 async function forwardOne(
   emailId: string,

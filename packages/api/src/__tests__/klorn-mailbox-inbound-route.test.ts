@@ -243,6 +243,7 @@ const ENV_KEYS = [
   "RESEND_INBOUND_API_KEY",
   "KLORN_MAILBOX_DOMAIN",
   "KLORN_MAILBOX_FORWARD_TO",
+  "ROLLOUT_COHORT_USER_IDS",
 ] as const;
 const savedEnv: Record<string, string | undefined> = {};
 
@@ -340,9 +341,28 @@ describe("the dark route", () => {
     expect(klornMailboxEnabled()).toBe(false);
   });
 
-  it.each(["true", "1", "yes", "on", " TRUE "])("is live for KLORN_MAILBOX_ENABLED=%j", (value) => {
+  it.each([
+    "true",
+    "1",
+    "yes",
+    "on",
+    " TRUE ",
+    "cohort",
+    " Cohort ",
+  ])("is live for KLORN_MAILBOX_ENABLED=%j", (value) => {
     process.env.KLORN_MAILBOX_ENABLED = value;
     expect(klornMailboxEnabled()).toBe(true);
+  });
+
+  it("serves every recipient under `cohort`: the route is not per user (the claim, E3, is)", async () => {
+    process.env.KLORN_MAILBOX_ENABLED = "cohort";
+    process.env.ROLLOUT_COHORT_USER_IDS = "";
+    addUser("jane", "u-jane");
+    const app = await buildApp();
+    const res = await deliver(app, receivedEvent());
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ stored: 1 });
   });
 });
 
