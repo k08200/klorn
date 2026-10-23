@@ -169,6 +169,14 @@ func tokenSelfChecks(sourceDir: URL) -> [(String, Bool)] {
             && [Theme.s1, Theme.s2, Theme.s3, Theme.s4, Theme.s6, Theme.s8, Theme.s12]
                 == [4, 8, 12, 16, 24, 32, 48]
             && Theme.rowHeight == 52))
+    // The mail row is three lines (sender / subject / reason, after the web's
+    // MailRow): 22 + 4 + ~18 + 4 + ~15 + 8 + 8 = 79, so 80 on the 8pt grid.
+    // Other rows (files, Today's non-mail rows) keep the 52 floor.
+    results.append((
+        "the three-line mail row floor is 80 (79 of content, on the 8pt grid)",
+        Theme.mailRowHeight == 80
+            && Theme.mailRowHeight.truncatingRemainder(dividingBy: Theme.s2) == 0
+            && Theme.mailRowHeight >= WindowLaneChip.height + 2 * Theme.s1 + 18 + 15 + 2 * Theme.s2))
     results.append((
         "elevation and motion carry the plan's numbers",
         Theme.Elevation.l2.opacity == 0.12 && Theme.Elevation.l2.y == 8
@@ -202,9 +210,11 @@ func tokenSelfChecks(sourceDir: URL) -> [(String, Bool)] {
     // One-badge rule.
     let row = text("Mail/WindowMailRow.swift")
     let today = text("Today/TodayScreen.swift")
-    let banned = ["SignalChip(", "ReplyStateChip(", "AddLabelChip(", "rowTierReason("]
+    // The lane reason is line 3 by design (three-line row, 2026-10-23); the
+    // category, relationship and reply state stay in the reader.
+    let banned = ["SignalChip(", "ReplyStateChip(", "AddLabelChip("]
     results.append((
-        "a main-window row carries no category, relationship, reply-state or reason",
+        "a main-window row carries no category, relationship or reply-state",
         !row.isEmpty && !today.isEmpty
             && banned.allSatisfy { !row.contains($0) && !today.contains($0) }))
     results.append((
@@ -224,6 +234,7 @@ func tokenSelfChecks(sourceDir: URL) -> [(String, Bool)] {
                 && content.snippet == "quote is attached"
         } ?? false))
     results.append(contentsOf: sourceBadgeChecks(inboxes: inboxes))
+    results.append(contentsOf: threeLineRowChecks(inboxes: inboxes))
     let hit = EmailSearchItem(
         id: "s1", from: "Dana <dana@vendor.example>", subject: "Renewal", snippet: "Renewal",
         date: nil, isRead: false, linkedInboxAccountId: "linked-1")
@@ -384,7 +395,7 @@ private func sourceBadgeChecks(inboxes: [InboxOption]) -> [(String, Bool)] {
             mixed.time = "14:05"
             return WindowRowRules.a11yLabel(mixed, lead: WindowRowRules.listLead(mixed))
                 == [
-                    L("mail.unread"), "dana@vendor.example", "renewal", "quote is attached",
+                    L("mail.unread"), "dana@vendor.example", "renewal", "vendor",
                     Tier.queue.label, account, L("mail.hasAttachment"), "14:05",
                 ].joined(separator: ", ")
         } == true
@@ -424,4 +435,47 @@ private func tokenFixtureInboxes() -> [InboxOption] {
           "provider":"NAVER"}]
         """
     return (try? JSONDecoder().decode([InboxOption].self, from: Data(json.utf8))) ?? []
+}
+
+/// Line 3 and the thread chip of the three-line mail row.
+private func threeLineRowChecks(inboxes: [InboxOption]) -> [(String, Bool)] {
+    let now = Date()
+    func content(_ item: FirewallItem?) -> WindowRowContent? {
+        item.map { WindowRowRules.content(for: $0, mixedLanes: false, inboxes: inboxes, now: now) }
+    }
+    func item(reason: String?) -> FirewallItem? {
+        let base = tokenFixtureItem()
+        return base.map {
+            FirewallItem(
+                id: $0.id, source: $0.source, sourceId: $0.sourceId, type: $0.type,
+                title: $0.title, tier: .push, tierReason: reason, priority: $0.priority,
+                surfacedAt: $0.surfacedAt, email: $0.email, href: $0.href, hashStale: $0.hashStale)
+        }
+    }
+    let withReason = content(item(reason: "due"))
+    let noReason = content(item(reason: nil))
+    // The wire-only reason maps to nil in rowTierReason (pinned in SelfCheck).
+    let empty = content(item(reason: ""))
+    let threaded = content(tokenFixtureItem(#","threadCount":3"#))
+    let single = content(tokenFixtureItem(#","threadCount":1"#))
+    return [
+        ("line 3 is the lane reason in the row's own lane, even where no chip shows",
+         withReason.map {
+             $0.reason == "due" && $0.reasonLane == .push && $0.lane == nil
+                 && WindowRowRules.detail($0) == "due"
+         } ?? false),
+        ("line 3 falls back to the snippet when no reason was recorded (or an empty one)",
+         [noReason, empty].allSatisfy {
+             $0.map {
+                 $0.reason == nil && $0.reasonLane == nil
+                     && WindowRowRules.detail($0) == "quote is attached"
+             } ?? false
+         }),
+        ("the thread chip shows from 2 messages and is spoken; an older server claims none",
+         threaded?.threadCount == 3 && single?.threadCount == nil
+             && content(tokenFixtureItem())?.threadCount == nil
+             && threaded.map {
+                 WindowRowRules.a11yLabel($0, lead: "x").contains(L("mail.threadCount", 3))
+             } ?? false),
+    ]
 }
