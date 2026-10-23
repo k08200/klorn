@@ -29,8 +29,10 @@ func polishOct23SelfChecks(sourceDir: URL) async -> [(String, Bool)] {
     check("gmail, Outlook and unknown sources carry no beta tag",
           !MailSourceCatalog.isBeta("GOOGLE") && !MailSourceCatalog.isBeta("OUTLOOK")
               && !MailSourceCatalog.isBeta(nil))
-    check("the sidebar account rows show the beta tag",
-          text("NavSidebar.swift").contains("MailSourceCatalog.isBeta(inbox.provider) { BetaChip() }"))
+    let sidebar = text("NavSidebar.swift")
+    check("the sidebar rows say beta to VoiceOver without a visible chip",
+          sidebar.contains("MailSourceCatalog.isBeta(inbox.provider) ? \", \\(L(\"common.beta\"))\"")
+              && !sidebar.contains("BetaChip()"))
     let prefs = text("PreferencesView.swift")
     check("settings ▸ Accounts tags beta rows and the Naver connect button",
           prefs.contains("beta: MailSourceCatalog.isBeta(inbox.provider)")

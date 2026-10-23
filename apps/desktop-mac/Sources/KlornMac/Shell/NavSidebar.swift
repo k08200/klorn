@@ -205,12 +205,12 @@ private struct AccountRows: View {
         HStack(spacing: Theme.s2) {
             SourceBadge(provider: inbox.provider)
             VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: Theme.s1) {
-                    Text(inboxDisplayLabel(email: inbox.email, kind: inbox.kind))
-                        .font(Theme.Typo.label).foregroundStyle(Theme.text)
-                        .lineLimit(1).truncationMode(.middle)
-                    if MailSourceCatalog.isBeta(inbox.provider) { BetaChip() }
-                }
+                // No visible beta chip here: it truncated the address and
+                // the N / iC badge already names the source. VoiceOver still
+                // says "beta" (`a11yLabel`); Settings ▸ Accounts shows it.
+                Text(inboxDisplayLabel(email: inbox.email, kind: inbox.kind))
+                    .font(Theme.Typo.label).foregroundStyle(Theme.text)
+                    .lineLimit(1).truncationMode(.middle)
                 if inbox.needsReconnect {
                     Text(L("nav.accounts.needsReconnect"))
                         .font(Theme.Typo.caption).foregroundStyle(Theme.textDim)
