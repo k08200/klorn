@@ -61,12 +61,16 @@ extension PreviewRender {
             try? JSONDecoder().decode(TeamAvailabilityWire.self, from: Data(json.utf8))
         }
         var ok = !files.isEmpty
+        // Built once here, in the function's own (main-actor) scope: a closure
+        // created inside the nested `shot` would capture the non-Sendable
+        // `actions` from the outer scope, which Swift 6.3's region analysis
+        // rejects in release builds (#SendingRisksDataRace).
+        let shell = { MainShell(actions: actions, renderDate: date) }
         func shot(_ name: String, teamMode: Bool = true, _ prepare: (AppModel) -> Void) {
             let model = p12Model(base(), teamMode: teamMode)
             prepare(model)
-            ok = writeShot(name, size: size, align: .top, model: model, dir: dir, dark: dark) {
-                MainShell(actions: actions, renderDate: date)
-            } && ok
+            ok = writeShot(
+                name, size: size, align: .top, model: model, dir: dir, dark: dark, shell) && ok
         }
 
         shot("files") {

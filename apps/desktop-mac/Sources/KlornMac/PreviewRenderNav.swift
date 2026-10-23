@@ -197,11 +197,15 @@ extension PreviewRender {
         let size = CGSize(width: 1280, height: 800)
         let date = ISO8601DateFormatter().date(from: "2026-07-29T08:30:00Z") ?? Date()
         var ok = true
+        // Built once here, in the function's own (main-actor) scope: a closure
+        // created inside the nested `shot` would capture the non-Sendable
+        // `actions` from the outer scope, which Swift 6.3's region analysis
+        // rejects in release builds (#SendingRisksDataRace).
+        let shell = { MainShell(actions: actions, renderDate: date) }
         func shot(_ name: String, _ model: AppModel, _ prepare: (AppModel) -> Void = { _ in }) {
             prepare(model)
-            ok = writeShot(name, size: size, align: .top, model: model, dir: dir, dark: dark) {
-                MainShell(actions: actions, renderDate: date)
-            } && ok
+            ok = writeShot(
+                name, size: size, align: .top, model: model, dir: dir, dark: dark, shell) && ok
         }
 
         let model = navModel(firewallJSON: navFirewallJSON)
