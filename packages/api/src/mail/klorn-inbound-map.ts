@@ -105,13 +105,57 @@ function addressHeader(value: string, kind: "mailbox" | "list"): string {
   return kind === "mailbox" ? decodedMailbox(value) : decodedAddressList(value);
 }
 
-/** A header value by case-insensitive name; only a string counts. */
-function header(headers: unknown, name: string): string | null {
-  if (typeof headers !== "object" || headers === null) return null;
-  for (const [key, value] of Object.entries(headers)) {
-    if (key.toLowerCase() === name && typeof value === "string") return value;
+/** The header names the mapper reads; nothing else in `headers` is looked at. */
+const NEEDED_HEADERS = ["from", "to", "cc", "list-unsubscribe", "list-unsubscribe-post"] as const;
+type NeededHeader = (typeof NEEDED_HEADERS)[number];
+const NEEDED: ReadonlySet<string> = new Set(NEEDED_HEADERS);
+const LONGEST_NEEDED = Math.max(...NEEDED_HEADERS.map((name) => name.length));
+
+/**
+ * At most this many header keys are examined. A real message has a few dozen;
+ * a needed header past the cap is not read, and the content's own `from`, `to`
+ * and `cc` fields cover the addresses.
+ */
+export const MAX_HEADER_KEYS = 2_000;
+
+export interface HeaderIndex {
+  values: Readonly<Partial<Record<NeededHeader, string>>>;
+  /** Keys looked at (the structural bound tests read it). */
+  examined: number;
+}
+
+/**
+ * The needed headers by lowercase name, in one pass over at most MAX_HEADER_KEYS
+ * own keys: the first string value of a name wins (as a reader of the first
+ * matching header would). Before, every lookup walked and lowercased every key,
+ * nine times per event: 1M keys took 16 s.
+ */
+export function indexHeaders(headers: unknown): HeaderIndex {
+  if (typeof headers !== "object" || headers === null) return { values: {}, examined: 0 };
+  const fields = headers as Record<string, unknown>;
+  const values: Partial<Record<NeededHeader, string>> = {};
+  let examined = 0;
+  for (const key of Object.keys(fields)) {
+    if (examined >= MAX_HEADER_KEYS) break;
+    examined += 1;
+    if (key.length > LONGEST_NEEDED) continue;
+    const name = key.toLowerCase();
+    if (!NEEDED.has(name) || name in values) continue;
+    const value = fields[key];
+    if (typeof value === "string") values[name as NeededHeader] = value;
   }
-  return null;
+  return { values, examined };
+}
+
+/** One index per fetched content: oversizedHeaders and resendToRawEmail share it. */
+const indexes = new WeakMap<object, HeaderIndex["values"]>();
+
+function headersOf(content: ResendReceivedContent): HeaderIndex["values"] {
+  const cached = indexes.get(content);
+  if (cached) return cached;
+  const { values } = indexHeaders(content.headers);
+  indexes.set(content, values);
+  return values;
 }
 
 /**
@@ -135,11 +179,11 @@ function bounded(value: string | null): string | null {
 }
 
 function rawFrom(content: ResendReceivedContent): string {
-  return header(content.headers, "from") ?? (typeof content.from === "string" ? content.from : "");
+  return headersOf(content).from ?? (typeof content.from === "string" ? content.from : "");
 }
 
 function rawList(content: ResendReceivedContent, name: "to" | "cc"): string {
-  return header(content.headers, name) ?? joined(content[name]);
+  return headersOf(content)[name] ?? joined(content[name]);
 }
 
 /**
@@ -151,7 +195,7 @@ export function oversizedHeaders(content: ResendReceivedContent): string[] {
     ["from", rawFrom(content)],
     ["to", rawList(content, "to")],
     ["cc", rawList(content, "cc")],
-    ["list-unsubscribe", header(content.headers, "list-unsubscribe")],
+    ["list-unsubscribe", headersOf(content)["list-unsubscribe"] ?? null],
   ];
   return values
     .filter(([, value]) => value !== null && value.length > MAX_HEADER_CHARS)
@@ -176,12 +220,12 @@ export function resendToRawEmail(
   event: Pick<ResendReceivedEventData, "email_id" | "created_at">,
   receivedAt: Date = new Date(event.created_at),
 ): GmailRawEmail & { authentication: MailAuthentication | null } {
-  const headers = content.headers;
+  const headers = headersOf(content);
   const body = bodyOf(content);
-  const listUnsubscribeHeader = bounded(header(headers, "list-unsubscribe"));
+  const listUnsubscribeHeader = bounded(headers["list-unsubscribe"] ?? null);
   const listUnsubscribe = parseListUnsubscribe(
     listUnsubscribeHeader,
-    bounded(header(headers, "list-unsubscribe-post")),
+    bounded(headers["list-unsubscribe-post"] ?? null),
   );
   return {
     gmailId: klornMessageId(event.email_id),

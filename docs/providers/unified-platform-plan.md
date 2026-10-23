@@ -4894,7 +4894,11 @@ fixtures before E0; nothing is reachable until E0 is done and the flag is on.
       From, To, Cc or List-Unsubscribe header over 256 KiB is not parsed at
       all (no sender, no list, reported as `header-oversize`), and a list is
       scanned lazily, stopping at the 4,000-character budget or after 200
-      entries.
+      entries. The headers object is read once per event: one pass over at
+      most 2,000 keys indexes the five names the mapper needs (first value
+      wins); a needed header past that is not read, and the content's own
+      `from`, `to` and `cc` fields cover the addresses (before, nine lookups
+      each walked every key: 1M keys took about 16 s).
     - Content is fetched with `html_format: cid`; NUL is removed from stored
       text and the List-Unsubscribe targets.
     - Recipients are matched by the handle's shape and the database row, not

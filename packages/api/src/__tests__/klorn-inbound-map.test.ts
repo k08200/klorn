@@ -9,7 +9,9 @@ import { describe, expect, it } from "vitest";
 import { extractEmailAddress } from "../mail/email-address.js";
 import { MAX_STORED_CC_LENGTH, MAX_STORED_SUBJECT_LENGTH } from "../mail/imap-envelope.js";
 import {
+  indexHeaders,
   klornMessageId,
+  MAX_HEADER_KEYS,
   oversizedHeaders,
   type ResendReceivedContent,
   resendToRawEmail,
@@ -448,5 +450,69 @@ describe("resendToRawEmail: header encodings and hostile values", () => {
     );
     expect(raw.subject).toHaveLength(MAX_STORED_SUBJECT_LENGTH);
     expect(raw.subject.endsWith("TAIL")).toBe(false);
+  });
+});
+
+describe("indexHeaders: one bounded pass over the header keys", () => {
+  function manyKeys(count: number, extra: Record<string, unknown> = {}) {
+    const headers: Record<string, unknown> = {};
+    for (let i = 0; i < count; i++) headers[`x-filler-${i}`] = "v";
+    return Object.assign(headers, extra);
+  }
+
+  it("indexes the needed names case-insensitively, first string value winning", () => {
+    const { values, examined } = indexHeaders({
+      From: 5,
+      FROM: "First <first@example.com>",
+      from: "Second <second@example.com>",
+      To: "to@example.com",
+      "LIST-UNSUBSCRIBE": "<https://example.com/u>",
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+      "X-Other": "ignored",
+    });
+    expect(values).toEqual({
+      from: "First <first@example.com>",
+      to: "to@example.com",
+      "list-unsubscribe": "<https://example.com/u>",
+      "list-unsubscribe-post": "List-Unsubscribe=One-Click",
+    });
+    expect(examined).toBe(7);
+    expect(indexHeaders(null)).toEqual({ values: {}, examined: 0 });
+    expect(indexHeaders("from: x")).toEqual({ values: {}, examined: 0 });
+  });
+
+  it(`examines at most ${MAX_HEADER_KEYS} keys of a 1M-key headers object`, () => {
+    const headers = manyKeys(1_000_000, { from: "late@example.com" });
+    const started = performance.now();
+    const { values, examined } = indexHeaders(headers);
+    expect(examined).toBe(MAX_HEADER_KEYS);
+    // A needed header past the cap is not read: the content's own fields cover it.
+    expect(values).toEqual({});
+    expect(performance.now() - started).toBeLessThan(1_500);
+  });
+
+  it("maps a message with 1M header keys from the content's own fields, within a backstop", () => {
+    const headers = manyKeys(1_000_000, {
+      from: "Late <late@example.com>",
+      to: "late@example.com",
+    });
+    const started = performance.now();
+    const message = content({ headers, from: "sender@example.com", to: ["jane@klorn.ai"] });
+    const oversized = oversizedHeaders(message);
+    const raw = resendToRawEmail(message, eventData());
+    expect(oversized).toEqual([]);
+    expect(raw.from).toBe("sender@example.com");
+    expect(raw.to).toBe("jane@klorn.ai");
+    expect(performance.now() - started).toBeLessThan(1_500);
+  });
+
+  it("finds a needed header among ordinary ones, as before", () => {
+    const headers = manyKeys(50, {
+      "List-Unsubscribe": "<https://example.com/u>",
+      From: "A <a@x.com>",
+    });
+    const raw = resendToRawEmail(content({ headers }), eventData());
+    expect(raw.from).toBe("A <a@x.com>");
+    expect(raw.listUnsubscribeUrl).toBe("https://example.com/u");
   });
 });
