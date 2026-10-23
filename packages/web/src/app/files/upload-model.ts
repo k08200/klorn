@@ -143,6 +143,21 @@ export function resetForRetry(batch: UploadBatch, indices: readonly number[]): U
   };
 }
 
+/**
+ * "Cancel": the file in flight and every one still waiting become skipped,
+ * as cancelled, so "Retry failed" can send them. Files already answered keep
+ * their outcome.
+ */
+export function cancelBatch(batch: UploadBatch): UploadBatch {
+  return {
+    items: batch.items.map((item) =>
+      item.status === "waiting" || item.status === "uploading"
+        ? { ...item, status: "failed", errorKey: "files.drive.error.cancelled", cause: "skipped" }
+        : item,
+    ),
+  };
+}
+
 export interface BatchSummary {
   total: number;
   /** 1-based position of the file being sent; null when none is. */
@@ -185,4 +200,24 @@ const STOPS_BATCH: ReadonlySet<DriveMessageKey> = new Set<DriveMessageKey>([
 
 export function stopsBatch(key: DriveMessageKey): boolean {
   return STOPS_BATCH.has(key);
+}
+
+/**
+ * The toast for a batch that ended after the person left /files (an in-app
+ * navigation does not stop it). The batch's list does not survive the page,
+ * so the message says where to upload what did not go.
+ */
+export function backgroundResult(batch: UploadBatch): {
+  key: "files.drive.upload.backgroundAll" | "files.drive.upload.backgroundSome";
+  vars: Record<string, string>;
+  failed: boolean;
+} {
+  const { done, failed } = batchSummary(batch);
+  return failed === 0
+    ? { key: "files.drive.upload.backgroundAll", vars: { done: String(done) }, failed: false }
+    : {
+        key: "files.drive.upload.backgroundSome",
+        vars: { done: String(done), failed: String(failed) },
+        failed: true,
+      };
 }

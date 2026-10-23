@@ -14,7 +14,7 @@ import { type FormEvent, type RefObject, useId, useRef, useState } from "react";
 import { Input } from "../../components/ui/input";
 import { Sheet } from "../../components/ui/sheet";
 import { useT } from "../../lib/i18n";
-import { NAME_MAX_CHARS, nameErrorKey } from "./drive-model";
+import { NAME_MAX_CHARS, type NameErrorKey, nameErrorKey } from "./drive-model";
 import { PendingButton } from "./pending-button";
 import { useDialogAction } from "./use-dialog-action";
 
@@ -31,6 +31,8 @@ interface NameDialogProps {
   onSubmit: (name: string) => Promise<void>;
   returnFocusRef?: RefObject<HTMLElement | null>;
   fallbackFocusRef?: RefObject<HTMLElement | null>;
+  /** Rewords a failure for this sheet (useDialogAction). */
+  failureKey?: (key: NameErrorKey) => NameErrorKey;
 }
 
 export function NameDialog({
@@ -44,13 +46,14 @@ export function NameDialog({
   onSubmit,
   returnFocusRef,
   fallbackFocusRef,
+  failureKey,
 }: NameDialogProps) {
   const { t } = useT();
   const formId = useId();
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(initialName);
-  const action = useDialogAction(scope);
+  const action = useDialogAction(scope, failureKey);
   const dismiss = () => {
     if (!action.blocked()) onClose();
   };

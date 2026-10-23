@@ -21,7 +21,14 @@ export interface DialogFailure {
   attempt: number;
 }
 
-export function useDialogAction(scope: string) {
+/**
+ * `failureKey` rewords a failure for this sheet (createFailureKey: a "New
+ * folder" timeout says to check the list before trying again).
+ */
+export function useDialogAction(
+  scope: string,
+  failureKey: (key: NameErrorKey) => NameErrorKey = (key) => key,
+) {
   const { t } = useT();
   const { toast } = useToast();
   const [pending, setPending] = useState(false);
@@ -48,7 +55,7 @@ export function useDialogAction(scope: string) {
       await request();
       return true;
     } catch (err) {
-      const key = reportDriveError(err, scope);
+      const key = failureKey(reportDriveError(err, scope));
       if (mounted.current) fail(key);
       else toast(t(key), "error");
       return false;

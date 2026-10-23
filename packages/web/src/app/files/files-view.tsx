@@ -12,7 +12,7 @@
  */
 
 import type { DriveFileWire } from "@klorn/contract";
-import { useRef, useState } from "react";
+import { type RefObject, useRef, useState } from "react";
 import { PAGE_SHELL } from "../../components/page-shell";
 import { useToast } from "../../components/toast";
 import Button from "../../components/ui/button";
@@ -57,7 +57,7 @@ export function FilesView() {
   const { drive, canUpload, dialogs, uploads, drop } = useDriveManager(folder);
   const listRef = useRef<HTMLElement>(null);
   const driveHeadingRef = useRef<HTMLHeadingElement>(null);
-  const withLoadMoreFocus = useLoadMoreFocus(list.files.length, list.hasMore, listRef, LIST_ITEMS);
+  const withLoadMoreFocus = useListLoadMoreFocus(list, folder, q, listRef);
 
   return (
     <div className={`${PAGE_SHELL} flex flex-col gap-6`}>
@@ -161,6 +161,24 @@ export function FilesView() {
       )}
     </div>
   );
+}
+
+/** "Load more" on the list: focus to the first new row once the last page is in. */
+function useListLoadMoreFocus(
+  list: ReturnType<typeof useFilesList>,
+  folder: FolderCrumb | null,
+  q: string,
+  listRef: RefObject<HTMLElement | null>,
+) {
+  return useLoadMoreFocus({
+    count: list.files.length,
+    hasMore: list.hasMore,
+    loading: list.loadingMore,
+    // Another folder or search is another list: its own marker.
+    listKey: `${folder?.externalId ?? ""}|${q}`,
+    containerRef: listRef,
+    itemSelector: LIST_ITEMS,
+  });
 }
 
 /** The list while files are dragged over it: the drive's accent, dashed, outside the rows. */

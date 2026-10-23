@@ -193,6 +193,13 @@ const en: Record<string, string> = {
   "files.drive.error.timeout": "It took too long. Check your connection and try again.",
   "files.drive.upload.destination.folder": "Destination: {folder}",
   "files.drive.upload.destination.root": "Destination: the top level of Klorn Drive",
+  "files.drive.error.cancelled": "You cancelled the upload.",
+  "files.drive.error.timeoutCreate":
+    "It took too long. The folder may have been made anyway: check the list before you try again.",
+  "files.drive.upload.cancel": "Cancel",
+  "files.drive.upload.backgroundAll": "Klorn Drive: {done} uploaded.",
+  "files.drive.upload.backgroundSome":
+    "Klorn Drive: {done} uploaded, {failed} not uploaded. Upload those again from Files.",
   "today.files.title": "Recent files",
   "today.files.open": "Open Files",
   "today.files.none": "No files yet.",

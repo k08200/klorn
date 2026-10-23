@@ -199,6 +199,13 @@ const ja: Record<string, string> = {
     "時間がかかりすぎたため中止しました。接続を確認して、もう一度お試しください。",
   "files.drive.upload.destination.folder": "保存先：「{folder}」",
   "files.drive.upload.destination.root": "保存先：Klorn ドライブの最上位",
+  "files.drive.error.cancelled": "アップロードをキャンセルしました。",
+  "files.drive.error.timeoutCreate":
+    "時間がかかりすぎたため中止しました。フォルダが作成されている可能性があるため、もう一度試す前に一覧を確認してください。",
+  "files.drive.upload.cancel": "キャンセル",
+  "files.drive.upload.backgroundAll": "Klorn ドライブ：{done}件をアップロードしました",
+  "files.drive.upload.backgroundSome":
+    "Klorn ドライブ：{done}件をアップロード、{failed}件は未アップロード。「ファイル」からもう一度アップロードしてください。",
   "today.files.title": "最近のファイル",
   "today.files.open": "ファイルを開く",
   "today.files.none": "ファイルはまだありません。",

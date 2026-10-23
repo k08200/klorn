@@ -59,7 +59,36 @@ interface Recorded {
   lists: string[];
 }
 
-async function mockApi(page: Page, opts: { live: boolean; paged?: boolean }): Promise<Recorded> {
+type MockRow = typeof KLORN_ROW | typeof GOOGLE_ROW | typeof FOLDER_ROW;
+
+/** The list as the server would answer it: one folder's rows, folders only, or two pages. */
+function listAnswer(rows: MockRow[], query: URLSearchParams, paged: boolean) {
+  const folder = query.get("folder");
+  const parent = folder === "root" ? null : folder;
+  const inFolder = (row: MockRow) =>
+    folder === null || (row.provider === "KLORN" && row.parentExternalId === parent);
+  const foldersOnly = query.get("foldersOnly") === "true";
+  const shown = rows.filter((row) => inFolder(row) && (!foldersOnly || row.isFolder));
+  // paged: the unfiltered list in two pages, the folder on the second.
+  if (paged && folder === null) {
+    const second = query.get("cursor") === "page-2";
+    const files = shown.filter((row) => row.isFolder === second);
+    return { files, nextCursor: second ? null : "page-2" };
+  }
+  return { files: shown, nextCursor: null };
+}
+
+async function mockApi(
+  page: Page,
+  opts: {
+    live: boolean;
+    paged?: boolean;
+    /** While true, an upload is never answered (the page must cancel it). */
+    hangUploads?: () => boolean;
+    /** An upload is answered once this settles. */
+    holdUploads?: Promise<void>;
+  },
+): Promise<Recorded> {
   const recorded: Recorded = { uploads: [], patches: [], deletes: [], lists: [] };
   let rows = [KLORN_ROW, GOOGLE_ROW, FOLDER_ROW];
   await page.addInitScript(() => {
@@ -104,7 +133,10 @@ async function mockApi(page: Page, opts: { live: boolean; paged?: boolean }): Pr
     const request = route.request();
     if (request.method() === "POST") {
       recorded.uploads.push(request.postDataBuffer()?.toString("latin1") ?? "");
-      return route.fulfill({ status: 201, json: { file: { ...KLORN_ROW, id: "row-new" } } });
+      if (opts.hangUploads?.()) return;
+      const answer = () =>
+        route.fulfill({ status: 201, json: { file: { ...KLORN_ROW, id: "row-new" } } });
+      return opts.holdUploads ? opts.holdUploads.then(answer) : answer();
     }
     if (request.method() === "PATCH") {
       recorded.patches.push(request.postData() ?? "");
@@ -118,20 +150,7 @@ async function mockApi(page: Page, opts: { live: boolean; paged?: boolean }): Pr
     }
     const query = new URL(request.url()).searchParams;
     recorded.lists.push(query.toString());
-    const folder = query.get("folder");
-    const inFolder = (row: (typeof rows)[number]) =>
-      folder === null ||
-      (row.provider === "KLORN" && row.parentExternalId === (folder === "root" ? null : folder));
-    const shown = rows.filter(
-      (row) => inFolder(row) && (query.get("foldersOnly") !== "true" || row.isFolder),
-    );
-    // paged: the unfiltered list in two pages, the folder on the second.
-    if (opts.paged && folder === null) {
-      const second = query.get("cursor") === "page-2";
-      const page = shown.filter((row) => row.isFolder === second);
-      return route.fulfill({ json: { files: page, nextCursor: second ? null : "page-2" } });
-    }
-    return route.fulfill({ json: { files: shown, nextCursor: null } });
+    return route.fulfill({ json: listAnswer(rows, query, opts.paged === true) });
   });
   return recorded;
 }
@@ -295,4 +314,61 @@ test("load more: when the last page arrives, focus moves to its first row", asyn
   await page.getByRole("button", { name: en["files.loadMore"] }).click();
   await expect(page.getByRole("button", { name: en["files.loadMore"] })).toHaveCount(0);
   await expect(page.locator(`[data-file-id="${FOLDER_ROW.id}"] button`).first()).toBeFocused();
+});
+
+const textFile = (name: string) => ({ name, mimeType: "text/plain", buffer: Buffer.from("hello") });
+const fill = (key: string, vars: Record<string, string>) =>
+  Object.entries(vars).reduce(
+    (text, [name, value]) => text.replace(`{${name}}`, value),
+    en[key] ?? key,
+  );
+
+test("cancel: a hung upload can be stopped, then retried", async ({ page }) => {
+  let hang = true;
+  const recorded = await mockApi(page, { live: true, hangUploads: () => hang });
+  await openFiles(page);
+  await page.locator('input[type="file"]').setInputFiles([textFile("a.txt"), textFile("b.txt")]);
+  await expect(
+    page.getByText(fill("files.drive.upload.progress", { current: "1", total: "2" }), {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: en["files.drive.upload.cancel"], exact: true }).click();
+  await expect(
+    page.getByText(fill("files.drive.upload.summary", { done: "0", failed: "2" }), { exact: true }),
+  ).toBeVisible();
+  hang = false;
+  await page
+    .getByRole("button", { name: fill("files.drive.upload.retry", { count: "2" }) })
+    .click();
+  await expect(
+    page.getByText(fill("files.drive.upload.summaryAll", { done: "2" }), { exact: true }),
+  ).toBeVisible();
+  // The hung one, then both again.
+  expect(recorded.uploads).toHaveLength(3);
+});
+
+test("an in-app navigation does not stop the batch; a toast says how it went", async ({ page }) => {
+  test.setTimeout(150_000);
+  let release = () => {};
+  const holdUploads = new Promise<void>((done) => {
+    release = done;
+  });
+  const recorded = await mockApi(page, { live: true, holdUploads });
+  await openFiles(page);
+  await page.locator('input[type="file"]').setInputFiles([textFile("a.txt")]);
+  await expect(
+    page.getByText(fill("files.drive.upload.progress", { current: "1", total: "1" }), {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: en["nav.calendar"], exact: true }).click();
+  // A first visit compiles the route in `next dev`: give it time.
+  await expect(page).toHaveURL(/\/calendar/, { timeout: 90_000 });
+  await expect(page.getByRole("heading", { name: en["nav.files"], level: 1 })).toHaveCount(0);
+  release();
+  await expect(
+    page.getByText(fill("files.drive.upload.backgroundAll", { done: "1" }), { exact: true }),
+  ).toBeVisible({ timeout: 15_000 });
+  expect(recorded.uploads).toHaveLength(1);
 });

@@ -40,7 +40,17 @@ export type NameErrorKey =
   | "files.drive.name.required"
   | "files.drive.name.reserved"
   | "files.drive.name.tooLong"
+  | "files.drive.error.timeoutCreate"
   | DriveMessageKey;
+
+/**
+ * "New folder" past its deadline may have created the folder anyway, and the
+ * server allows two folders with one name: the message says to look at the
+ * list before trying again, instead of just "try again".
+ */
+export function createFailureKey(key: NameErrorKey): NameErrorKey {
+  return key === "files.drive.error.timeout" ? "files.drive.error.timeoutCreate" : key;
+}
 
 /**
  * Why a name cannot be sent, or null. The server cleans it further (control

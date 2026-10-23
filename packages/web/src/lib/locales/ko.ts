@@ -192,6 +192,13 @@ const ko: Record<string, string> = {
     "응답이 너무 오래 걸려 중단했습니다. 연결 상태를 확인하고 다시 시도하세요.",
   "files.drive.upload.destination.folder": "저장 위치: ‘{folder}’ 폴더",
   "files.drive.upload.destination.root": "저장 위치: Klorn 드라이브 최상위",
+  "files.drive.error.cancelled": "업로드를 취소했습니다.",
+  "files.drive.error.timeoutCreate":
+    "응답이 너무 오래 걸려 중단했습니다. 폴더가 이미 만들어졌을 수 있으니 다시 시도하기 전에 목록을 확인하세요.",
+  "files.drive.upload.cancel": "업로드 취소",
+  "files.drive.upload.backgroundAll": "Klorn 드라이브: {done}개 업로드됨",
+  "files.drive.upload.backgroundSome":
+    "Klorn 드라이브: {done}개 업로드됨, {failed}개 실패. ‘파일’에서 다시 업로드하세요.",
   "today.files.title": "최근 파일",
   "today.files.open": "파일 열기",
   "today.files.none": "아직 파일이 없습니다.",

@@ -200,6 +200,13 @@ const es: Record<string, string> = {
   "files.drive.error.timeout": "Tardó demasiado. Comprueba tu conexión e inténtalo de nuevo.",
   "files.drive.upload.destination.folder": "Destino: {folder}",
   "files.drive.upload.destination.root": "Destino: nivel superior de Klorn Drive",
+  "files.drive.error.cancelled": "Cancelaste la subida.",
+  "files.drive.error.timeoutCreate":
+    "Tardó demasiado. Puede que la carpeta se haya creado igualmente: revisa la lista antes de volver a intentarlo.",
+  "files.drive.upload.cancel": "Cancelar",
+  "files.drive.upload.backgroundAll": "Klorn Drive: {done} subidos.",
+  "files.drive.upload.backgroundSome":
+    "Klorn Drive: {done} subidos, {failed} sin subir. Vuelve a subirlos desde Archivos.",
   "today.files.title": "Archivos recientes",
   "today.files.open": "Abrir Archivos",
   "today.files.none": "Aún no hay archivos.",

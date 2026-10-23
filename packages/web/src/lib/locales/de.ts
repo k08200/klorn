@@ -205,6 +205,13 @@ const de: Record<string, string> = {
     "Das hat zu lange gedauert. Prüfe deine Verbindung und versuche es erneut.",
   "files.drive.upload.destination.folder": "Ziel: {folder}",
   "files.drive.upload.destination.root": "Ziel: oberste Ebene von Klorn Drive",
+  "files.drive.error.cancelled": "Du hast den Upload abgebrochen.",
+  "files.drive.error.timeoutCreate":
+    "Das hat zu lange gedauert. Der Ordner wurde vielleicht trotzdem erstellt: Sieh in der Liste nach, bevor du es erneut versuchst.",
+  "files.drive.upload.cancel": "Abbrechen",
+  "files.drive.upload.backgroundAll": "Klorn Drive: {done} hochgeladen.",
+  "files.drive.upload.backgroundSome":
+    "Klorn Drive: {done} hochgeladen, {failed} nicht hochgeladen. Lade sie unter „Dateien“ erneut hoch.",
   "today.files.title": "Neueste Dateien",
   "today.files.open": "Dateien öffnen",
   "today.files.none": "Noch keine Dateien.",

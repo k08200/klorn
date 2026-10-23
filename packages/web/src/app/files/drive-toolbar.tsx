@@ -5,9 +5,9 @@
  * (`useKlornDrive().live`): where new files go, "Upload files" (a button that
  * opens the system file picker, several files at once), "New folder", the
  * storage line, and the running or finished upload batch with each file's
- * outcome and "Retry failed". Progress and the summary are a polite status
- * region that is on the page before its first message, so "Uploading 1 of
- * N" is read. A file the server refused is an alert naming it; files over
+ * outcome, "Cancel" while it runs, and "Retry failed". Progress and the
+ * summary are a polite status region that is on the page before its first
+ * message, so "Uploading 1 of N" is read. A file the server refused is an alert naming it; files over
  * the cap are one alert for all of them; skipped files are not announced
  * one by one (the summary counts them).
  */
@@ -113,6 +113,11 @@ export function DriveToolbar(props: DriveToolbarProps) {
           uploads.retry();
           headingRef.current?.focus();
         }}
+        onCancel={() => {
+          // The button goes as the batch ends: focus stays in the panel's section.
+          uploads.cancel();
+          headingRef.current?.focus();
+        }}
         onClear={() => {
           uploads.clear();
           headingRef.current?.focus();
@@ -149,6 +154,7 @@ function UploadPanel({
   destination,
   limit,
   onRetry,
+  onCancel,
   onClear,
 }: {
   batch: UploadBatch | null;
@@ -156,6 +162,7 @@ function UploadPanel({
   destination: FolderCrumb | null;
   limit: string;
   onRetry: () => void;
+  onCancel: () => void;
   onClear: () => void;
 }) {
   const { t, locale } = useT();
@@ -169,6 +176,11 @@ function UploadPanel({
         <p role="status" className="text-body text-ink">
           {summaryText(batch, t)}
         </p>
+        {batch && !finished && (
+          <Button variant="ghost" size="sm" className="-mr-3" onClick={onCancel}>
+            {t("files.drive.upload.cancel")}
+          </Button>
+        )}
         {finished && (
           <div className="-mr-3 flex flex-wrap gap-1">
             {retryable > 0 && (

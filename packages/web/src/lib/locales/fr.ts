@@ -202,6 +202,13 @@ const fr: Record<string, string> = {
     "Cela a pris trop de temps. Vérifiez votre connexion, puis réessayez.",
   "files.drive.upload.destination.folder": "Destination : {folder}",
   "files.drive.upload.destination.root": "Destination : premier niveau de Klorn Drive",
+  "files.drive.error.cancelled": "Vous avez annulé l’envoi.",
+  "files.drive.error.timeoutCreate":
+    "Cela a pris trop de temps. Le dossier a peut-être été créé quand même : vérifiez la liste avant de réessayer.",
+  "files.drive.upload.cancel": "Annuler",
+  "files.drive.upload.backgroundAll": "Klorn Drive : {done} envoyés.",
+  "files.drive.upload.backgroundSome":
+    "Klorn Drive : {done} envoyés, {failed} non envoyés. Envoyez-les à nouveau depuis Fichiers.",
   "today.files.title": "Fichiers récents",
   "today.files.open": "Ouvrir Fichiers",
   "today.files.none": "Aucun fichier pour l’instant.",

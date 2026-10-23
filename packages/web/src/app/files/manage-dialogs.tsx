@@ -22,6 +22,7 @@ import { DeleteDialog } from "./delete-dialog";
 import { closeDialog, type DialogState, openDialog, type RowAction } from "./dialog-state";
 import { driveErrorKey } from "./drive-errors";
 import {
+  createFailureKey,
   type DriveWrite,
   focusCandidates,
   refreshesAfterFailure,
@@ -132,6 +133,7 @@ export function ManageDialogs(props: ManageDialogsProps) {
           submitLabel={t("files.drive.folder.create")}
           initialName=""
           scope="files.drive.folder"
+          failureKey={createFailureKey}
           onSubmit={async (name) => {
             const parentExternalId = props.folder?.externalId ?? null;
             const created = await send("create", (signal) =>

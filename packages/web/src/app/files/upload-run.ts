@@ -7,7 +7,7 @@
  * reporting are passed in, so the run itself has no React and no network.
  */
 
-import type { DriveMessageKey } from "./drive-errors";
+import { type DriveMessageKey, SessionChangedError } from "./drive-errors";
 import {
   failRemaining,
   markDone,
@@ -58,4 +58,28 @@ export async function runUploads(
       }
     }
   }
+}
+
+/**
+ * The upload, refused before it starts once the stored session is no longer
+ * the one the batch began with (signed out, or another person signed in).
+ */
+export function boundToSession(
+  owner: string | null,
+  readToken: () => string | null,
+  upload: UploadDeps["upload"],
+): UploadDeps["upload"] {
+  return (file, parentExternalId, signal) =>
+    readToken() === owner && owner !== null
+      ? upload(file, parentExternalId, signal)
+      : Promise.reject(new SessionChangedError());
+}
+
+/**
+ * Whether leaving the site mid-batch asks first. Not on the signed-out path:
+ * apiFetch clears the token and then sends the person to /login, and a
+ * "Leave site?" prompt there would only be in the way.
+ */
+export function warnsOnLeave(token: string | null): boolean {
+  return token !== null;
 }

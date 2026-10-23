@@ -144,6 +144,7 @@ export function MoveDialog({
         )}
         <FolderLevel
           level={level}
+          levelKey={pickerListFolder(trail)}
           // Closing turns the list off; the last level stays on screen as the sheet leaves.
           loading={open && level.loading}
           choices={item ? moveChoices(level.files, item) : []}
@@ -166,18 +167,28 @@ export function MoveDialog({
 /** One level's folders: each opens, except the folder being moved. */
 function FolderLevel({
   level,
+  levelKey,
   loading,
   choices,
   onEnter,
 }: {
   level: FilesListState;
+  /** Which level this is: a new one drops "Load more"'s focus marker. */
+  levelKey: string;
   loading: boolean;
   choices: MoveChoice[];
   onEnter: (folder: DriveFileWire) => void;
 }) {
   const { t } = useT();
   const listRef = useRef<HTMLDivElement>(null);
-  const withLoadMoreFocus = useLoadMoreFocus(choices.length, level.hasMore, listRef, LEVEL_ITEMS);
+  const withLoadMoreFocus = useLoadMoreFocus({
+    count: choices.length,
+    hasMore: level.hasMore,
+    loading: level.loadingMore,
+    listKey: levelKey,
+    containerRef: listRef,
+    itemSelector: LEVEL_ITEMS,
+  });
   if (loading) {
     return (
       <SkeletonGroup label={t("files.loading")} className="flex flex-col gap-2">

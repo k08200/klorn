@@ -38,6 +38,8 @@ const FALLBACK_KEYS = {
   signedOut: "files.drive.error.signedOut",
   offline: "files.drive.error.offline",
   timeout: "files.drive.error.timeout",
+  // Not an answer: the person stopped the upload batch ("Cancel").
+  cancelled: "files.drive.error.cancelled",
   generic: "files.drive.error.generic",
 } as const;
 
@@ -116,9 +118,23 @@ function isNetworkFailure(err: unknown): boolean {
   return typeof navigator !== "undefined" && navigator.onLine === false;
 }
 
+/**
+ * An upload batch outlives the page it started on, so it checks before each
+ * file that the session that started it is still the one signed in: after a
+ * sign-out (and maybe someone else's sign-in in the same tab) the rest of the
+ * batch is never sent, under anyone's name.
+ */
+export class SessionChangedError extends Error {
+  constructor() {
+    super("the session that started the upload batch has ended");
+    this.name = "SessionChangedError";
+  }
+}
+
 /** The message key for a failed drive request. */
 export function driveErrorKey(err: unknown): DriveMessageKey {
   if (err instanceof DriveTimeoutError) return FALLBACK_KEYS.timeout;
+  if (err instanceof SessionChangedError) return FALLBACK_KEYS.signedOut;
   if (isNetworkFailure(err)) return FALLBACK_KEYS.offline;
   const { status, code } = driveFailure(err);
   if (code !== null) return CODE_KEYS[code];

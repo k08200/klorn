@@ -184,6 +184,12 @@ const zh: Record<string, string> = {
   "files.drive.error.timeout": "请求超时。请检查网络连接后重试。",
   "files.drive.upload.destination.folder": "保存到：“{folder}”",
   "files.drive.upload.destination.root": "保存到：Klorn 云盘顶层",
+  "files.drive.error.cancelled": "你已取消上传。",
+  "files.drive.error.timeoutCreate": "请求超时。文件夹可能已经创建，请先查看列表再重试。",
+  "files.drive.upload.cancel": "取消",
+  "files.drive.upload.backgroundAll": "Klorn 云盘：已上传 {done} 个。",
+  "files.drive.upload.backgroundSome":
+    "Klorn 云盘：已上传 {done} 个，{failed} 个未上传。请在“文件”中重新上传。",
   "today.files.title": "最近的文件",
   "today.files.open": "打开文件",
   "today.files.none": "还没有文件。",
