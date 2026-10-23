@@ -27,36 +27,49 @@ export function uploadForm(file: File, parentExternalId: string | null): FormDat
 
 export type UploadStatus = "waiting" | "uploading" | "done" | "failed";
 
+/**
+ * Why a file failed: `precheck`, over the cap and never sent; `sent`, the
+ * server refused it; `skipped`, never sent because the batch stopped at an
+ * earlier file (its reason is that file's).
+ */
+export type UploadCause = "precheck" | "sent" | "skipped";
+
 export interface UploadItem {
   /** Stable within the batch: two files may share a name. */
   key: string;
   name: string;
   status: UploadStatus;
   errorKey: DriveMessageKey | null;
-  /** Failed without being sent: the batch stopped at an earlier file. */
-  skipped: boolean;
+  cause: UploadCause | null;
 }
 
 export interface UploadBatch {
   items: readonly UploadItem[];
 }
 
-export function startBatch(names: readonly string[]): UploadBatch {
+/** The picked files, each over the cap already failed (no request for it). */
+export function startBatch(
+  files: readonly { name: string; size: number }[],
+  maxFileBytes: number,
+): UploadBatch {
   return {
-    items: names.map((name, index) => ({
-      key: `${index}:${name}`,
-      name,
-      status: "waiting",
-      errorKey: null,
-      skipped: false,
-    })),
+    items: files.map(({ name, size }, index) => {
+      const tooLarge = uploadSizeErrorKey(size, maxFileBytes);
+      return {
+        key: `${index}:${name}`,
+        name,
+        status: tooLarge ? "failed" : "waiting",
+        errorKey: tooLarge,
+        cause: tooLarge ? "precheck" : null,
+      };
+    }),
   };
 }
 
 function withItem(
   batch: UploadBatch,
   index: number,
-  change: Pick<UploadItem, "status" | "errorKey">,
+  change: Pick<UploadItem, "status" | "errorKey" | "cause">,
 ): UploadBatch {
   return {
     items: batch.items.map((item, at) => (at === index ? { ...item, ...change } : item)),
@@ -64,24 +77,68 @@ function withItem(
 }
 
 export function markUploading(batch: UploadBatch, index: number): UploadBatch {
-  return withItem(batch, index, { status: "uploading", errorKey: null });
+  return withItem(batch, index, { status: "uploading", errorKey: null, cause: null });
 }
 
 export function markDone(batch: UploadBatch, index: number): UploadBatch {
-  return withItem(batch, index, { status: "done", errorKey: null });
+  return withItem(batch, index, { status: "done", errorKey: null, cause: null });
 }
 
 export function markFailed(batch: UploadBatch, index: number, key: DriveMessageKey): UploadBatch {
-  return withItem(batch, index, { status: "failed", errorKey: key });
+  return withItem(batch, index, { status: "failed", errorKey: key, cause: "sent" });
 }
 
-/** Every file from `from` on that has not been sent, failed with the batch's reason. */
+/** Every file from `from` on that has not been sent: skipped, with the batch's reason. */
 export function failRemaining(batch: UploadBatch, from: number, key: DriveMessageKey): UploadBatch {
   return {
     items: batch.items.map((item, at) =>
       at >= from && item.status === "waiting"
-        ? { ...item, status: "failed", errorKey: key, skipped: true }
+        ? { ...item, status: "failed", errorKey: key, cause: "skipped" }
         : item,
+    ),
+  };
+}
+
+const indicesWhere = (batch: UploadBatch, keep: (item: UploadItem) => boolean): number[] =>
+  batch.items.flatMap((item, index) => (keep(item) ? [index] : []));
+
+/** The files still to send, in order. */
+export function pendingIndices(batch: UploadBatch): number[] {
+  return indicesWhere(batch, (item) => item.status === "waiting");
+}
+
+/** The names the size check refused, announced together once. */
+export function precheckFailures(batch: UploadBatch): string[] {
+  return batch.items.filter((item) => item.cause === "precheck").map((item) => item.name);
+}
+
+/** Refusals that may pass on a second try: a limit, the network, the server's side. */
+const RETRYABLE: ReadonlySet<DriveMessageKey> = new Set<DriveMessageKey>([
+  "files.drive.error.rateLimited",
+  "files.drive.error.offline",
+  "files.drive.error.storage",
+  "files.drive.error.generic",
+  "files.drive.error.malformed",
+  "files.drive.error.invalidUpload",
+]);
+
+/** "Retry failed": every skipped file, and every refusal that may pass now. */
+export function retryableIndices(batch: UploadBatch): number[] {
+  return indicesWhere(
+    batch,
+    (item) =>
+      item.status === "failed" &&
+      (item.cause === "skipped" ||
+        (item.cause === "sent" && item.errorKey !== null && RETRYABLE.has(item.errorKey))),
+  );
+}
+
+/** Those files waiting again, nothing else changed. */
+export function resetForRetry(batch: UploadBatch, indices: readonly number[]): UploadBatch {
+  const again = new Set(indices);
+  return {
+    items: batch.items.map((item, at) =>
+      again.has(at) ? { ...item, status: "waiting", errorKey: null, cause: null } : item,
     ),
   };
 }
@@ -110,8 +167,9 @@ export function batchSummary(batch: UploadBatch): BatchSummary {
 
 /**
  * Refusals every later file of the batch would get too: the batch stops and
- * the rest fail with the same reason instead of each costing a request (and,
- * for the rate limit, making the wait longer).
+ * the rest are skipped with the same reason instead of each costing a
+ * request (and, for the rate limit, making the wait longer). A 401 is among
+ * them: apiFetch has ended the session, so nothing more may be sent.
  */
 const STOPS_BATCH: ReadonlySet<DriveMessageKey> = new Set<DriveMessageKey>([
   "files.drive.error.rateLimited",
@@ -122,6 +180,7 @@ const STOPS_BATCH: ReadonlySet<DriveMessageKey> = new Set<DriveMessageKey>([
   "files.drive.error.storage",
   "files.drive.error.unavailable",
   "files.drive.error.offline",
+  "files.drive.error.signedOut",
 ]);
 
 export function stopsBatch(key: DriveMessageKey): boolean {

@@ -45,10 +45,12 @@ const SMALL_CAP_BYTES = 10;
 interface Recorded {
   uploads: string[];
   patches: string[];
+  deletes: string[];
 }
 
 async function mockApi(page: Page, opts: { live: boolean }): Promise<Recorded> {
-  const recorded: Recorded = { uploads: [], patches: [] };
+  const recorded: Recorded = { uploads: [], patches: [], deletes: [] };
+  let rows = [KLORN_ROW, GOOGLE_ROW];
   await page.addInitScript(() => {
     localStorage.setItem("klorn-token", "e2e-test-token");
   });
@@ -97,7 +99,13 @@ async function mockApi(page: Page, opts: { live: boolean }): Promise<Recorded> {
       recorded.patches.push(request.postData() ?? "");
       return route.fulfill({ json: { file: { ...KLORN_ROW, name: "renamed.pdf" } } });
     }
-    return route.fulfill({ json: { files: [KLORN_ROW, GOOGLE_ROW], nextCursor: null } });
+    if (request.method() === "DELETE") {
+      const id = new URL(request.url()).pathname.split("/").at(-1) ?? "";
+      recorded.deletes.push(id);
+      rows = rows.filter((row) => row.id !== id);
+      return route.fulfill({ json: { deleted: { files: 1, folders: 0 } } });
+    }
+    return route.fulfill({ json: { files: rows, nextCursor: null } });
   });
   return recorded;
 }
@@ -171,4 +179,42 @@ test("rename: PATCH with the new name from the row's menu", async ({ page }) => 
   await page.getByRole("button", { name: en["files.drive.rename.save"] }).click();
   await expect.poll(() => recorded.patches.length).toBe(1);
   expect(JSON.parse(recorded.patches[0] ?? "")).toEqual({ name: "renamed.pdf" });
+});
+
+test("delete: the dialog names the row, and focus moves to the next row", async ({ page }) => {
+  const recorded = await mockApi(page, { live: true });
+  await openFiles(page);
+  await page.getByRole("button", { name: actionsFor(KLORN_ROW.name) }).click();
+  await page.getByRole("menuitem", { name: en["files.drive.delete"] }).click();
+  const dialog = page.getByRole("dialog", {
+    name: en["files.drive.delete.fileTitle"].replace("{name}", KLORN_ROW.name),
+  });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: en["files.drive.delete.confirm"], exact: true }).click();
+  await expect.poll(() => recorded.deletes).toEqual([KLORN_ROW.id]);
+  await expect(page.getByText(KLORN_ROW.name, { exact: true })).toHaveCount(0);
+  // The Google row has no menu: its own link takes focus.
+  await expect(page.locator(`[data-file-id="${GOOGLE_ROW.id}"] a`)).toBeFocused();
+});
+
+test("the trailing slot: every row keeps one, so badges line up and heights match", async ({
+  page,
+}) => {
+  await mockApi(page, { live: true });
+  await openFiles(page);
+  const box = (id: string) =>
+    page.locator(`[data-file-id="${id}"]`).evaluate((li) => {
+      const badge = li.querySelector("span.rounded-full") ?? li;
+      return {
+        rowRight: li.firstElementChild?.firstElementChild?.getBoundingClientRect().right ?? 0,
+        // The row, not the item: the list's divider is a border on all but the last item.
+        height: li.firstElementChild?.getBoundingClientRect().height ?? 0,
+        badgeRight: badge.getBoundingClientRect().right,
+      };
+    });
+  const klorn = await box(KLORN_ROW.id);
+  const google = await box(GOOGLE_ROW.id);
+  expect(google.rowRight).toBe(klorn.rowRight);
+  expect(google.badgeRight).toBe(klorn.badgeRight);
+  expect(google.height).toBe(klorn.height);
 });

@@ -153,8 +153,8 @@ const es: Record<string, string> = {
   "files.drive.move.noFolders": "Aquí no hay carpetas.",
   "files.drive.move.done": "{name} movido.",
   "files.drive.delete": "Eliminar",
-  "files.drive.delete.fileTitle": "¿Eliminar este archivo?",
-  "files.drive.delete.folderTitle": "¿Eliminar esta carpeta?",
+  "files.drive.delete.fileTitle": "¿Eliminar {name}?",
+  "files.drive.delete.folderTitle": "¿Eliminar la carpeta {name}?",
   "files.drive.delete.fileBody": "Se elimina de Klorn Drive para siempre. No hay papelera.",
   "files.drive.delete.folderBody":
     "La carpeta y todo su contenido se eliminan de Klorn Drive para siempre. No hay papelera.",
@@ -173,7 +173,7 @@ const es: Record<string, string> = {
     "Una carpeta no se puede mover dentro de sí misma ni dentro de una de sus carpetas.",
   "files.drive.error.tooDeep": "Las carpetas no se pueden anidar a tanta profundidad.",
   "files.drive.error.folderTooLarge":
-    "Esta carpeta tiene demasiados elementos para eliminarla de una vez. Elimina primero algunas de sus carpetas.",
+    "Esta carpeta tiene demasiados elementos para eliminarla de una vez. Elimina primero algunos de sus elementos.",
   "files.drive.error.purging": "Se están eliminando tus datos de Klorn. Inténtalo más tarde.",
   "files.drive.error.tooLarge": "Supera el límite de {limit}.",
   "files.drive.error.full": "Tu Klorn Drive está lleno.",
@@ -186,6 +186,17 @@ const es: Record<string, string> = {
   "files.drive.error.offline":
     "No se pudo conectar con Klorn. Comprueba tu conexión e inténtalo de nuevo.",
   "files.drive.error.generic": "Algo salió mal. Inténtalo de nuevo.",
+  "files.drive.error.signedOut": "Se cerró tu sesión. Vuelve a iniciar sesión para continuar.",
+  "files.drive.name.reserved": "«.» y «..» no se pueden usar como nombre.",
+  "files.drive.name.tooLong": "Usa {max} caracteres o menos.",
+  "files.drive.upload.retry": "Reintentar fallidos ({count})",
+  "files.drive.upload.itemFailed": "{name}: {reason}",
+  "files.drive.upload.skipped": "Omitido: {reason}",
+  "files.drive.upload.tooLargeSummary":
+    "Sin subir, superan el límite de {limit} ({count}): {names}",
+  "files.drive.drop.busy":
+    "Ya hay una subida en curso. Suelta los archivos de nuevo cuando termine.",
+  "files.drive.drop.folders": "Aquí no se pueden subir carpetas, solo archivos.",
   "today.files.title": "Archivos recientes",
   "today.files.open": "Abrir Archivos",
   "today.files.none": "Aún no hay archivos.",

@@ -10,13 +10,12 @@
  */
 
 import type { DriveFileWire } from "@klorn/contract";
-import { type RefObject, useEffect, useRef, useState } from "react";
+import { type RefObject, useEffect, useId, useRef, useState } from "react";
 import Button from "../../components/ui/button";
 import { Sheet } from "../../components/ui/sheet";
 import { Skeleton, SkeletonGroup } from "../../components/ui/skeleton";
 import { useT } from "../../lib/i18n";
 import { BlockError } from "../today/block";
-import type { DriveMessageKey } from "./drive-errors";
 import {
   canMoveHere,
   type MoveChoice,
@@ -27,9 +26,11 @@ import {
   pickerUp,
 } from "./drive-model";
 import { FileGlyph } from "./file-row";
+import { FOCUSED_HEADING } from "./focus";
 import type { FolderCrumb } from "./open";
+import { PendingButton } from "./pending-button";
+import { useDialogAction } from "./use-dialog-action";
 import { useFilesList } from "./use-files";
-import { reportDriveError } from "./use-klorn-drive";
 
 const SKELETON_KEYS = ["a", "b", "c"];
 
@@ -45,66 +46,64 @@ interface MoveDialogProps {
 
 export function MoveDialog({ open, item, onClose, onMove, returnFocusRef }: MoveDialogProps) {
   const { t } = useT();
+  const placeId = useId();
+  const alreadyId = useId();
   const [trail, setTrail] = useState<FolderCrumb[]>([]);
-  const [errorKey, setErrorKey] = useState<DriveMessageKey | null>(null);
-  const [pending, setPending] = useState(false);
   const placeRef = useRef<HTMLHeadingElement>(null);
+  const navigated = useRef(false);
+  const action = useDialogAction("files.drive.move");
   const level = useFilesList("", pickerListFolder(trail), open);
   const target = pickerTarget(trail);
   const allowed = item !== null && canMoveHere(item, target);
-
-  // Each opening starts at the top level, with no error left over.
-  useEffect(() => {
-    if (!open) return;
-    setTrail([]);
-    setErrorKey(null);
-    setPending(false);
-  }, [open]);
-
-  // The button pressed is gone with its level: focus lands on the level's name.
-  const go = (next: FolderCrumb[]) => {
-    setTrail(next);
-    setErrorKey(null);
-    placeRef.current?.focus();
+  const dismiss = () => {
+    if (!action.blocked()) onClose();
   };
 
-  const submit = async () => {
-    if (item === null || !allowed || pending) return;
-    setPending(true);
-    setErrorKey(null);
-    try {
-      await onMove(item, target);
-    } catch (err) {
-      setErrorKey(reportDriveError(err, "files.drive.move"));
-    } finally {
-      setPending(false);
-    }
+  // The button pressed is gone with its level: once the new level is on
+  // screen, focus lands on its name. Not on the first render: the sheet
+  // places focus when it opens.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: it must run after each change of level
+  useEffect(() => {
+    if (!navigated.current) return;
+    navigated.current = false;
+    placeRef.current?.focus();
+  }, [trail]);
+
+  const go = (next: FolderCrumb[]) => {
+    navigated.current = true;
+    setTrail(next);
+  };
+
+  const submit = () => {
+    if (item === null || !allowed) return;
+    void action.run(() => onMove(item, target));
   };
 
   return (
     <Sheet
       open={open}
-      onClose={onClose}
+      onClose={dismiss}
       title={t("files.drive.move.title")}
+      description={item ? t("files.drive.move.item", { name: item.name }) : undefined}
       closeLabel={t("common.close")}
       returnFocusRef={returnFocusRef}
       footer={
         <>
-          <Button variant="ghost" onClick={onClose}>
+          <PendingButton variant="ghost" unavailable={action.pending} onClick={dismiss}>
             {t("common.cancel")}
-          </Button>
-          <Button onClick={() => void submit()} loading={pending} disabled={!allowed}>
+          </PendingButton>
+          <PendingButton
+            pending={action.pending}
+            unavailable={!allowed}
+            aria-describedby={allowed ? placeId : `${placeId} ${alreadyId}`}
+            onClick={submit}
+          >
             {t("files.drive.move.here")}
-          </Button>
+          </PendingButton>
         </>
       }
     >
       <div className="flex flex-col gap-3">
-        {item && (
-          <p className="text-caption text-ink-muted [overflow-wrap:anywhere]">
-            {t("files.drive.move.item", { name: item.name })}
-          </p>
-        )}
         <div className="flex min-h-11 items-center gap-2">
           {trail.length > 0 && (
             <Button
@@ -117,26 +116,33 @@ export function MoveDialog({ open, item, onClose, onMove, returnFocusRef }: Move
             </Button>
           )}
           <h3
+            id={placeId}
             ref={placeRef}
             tabIndex={-1}
-            className="min-w-0 truncate text-body font-semibold text-ink focus:outline-none"
+            className={`min-w-0 truncate text-body font-semibold text-ink ${FOCUSED_HEADING}`}
           >
             {trail.at(-1)?.name ?? t("files.drive.title")}
           </h3>
         </div>
         {item && !allowed && (
-          <p className="text-caption text-ink-muted [word-break:keep-all]">
+          <p id={alreadyId} className="text-caption text-ink-muted [word-break:keep-all]">
             {t("files.drive.move.already")}
           </p>
         )}
         <FolderLevel
           level={level}
+          // Closing turns the list off; the last level stays on screen as the sheet leaves.
+          loading={open && level.loading}
           choices={item ? moveChoices(level.files, item) : []}
           onEnter={(folder) => go(pickerEnter(trail, folder))}
         />
-        {errorKey && (
-          <p role="alert" className="text-body text-state-danger-ink [word-break:keep-all]">
-            {t(errorKey)}
+        {action.failure && (
+          <p
+            key={action.failure.attempt}
+            role="alert"
+            className="text-body text-state-danger-ink [word-break:keep-all]"
+          >
+            {t(action.failure.key)}
           </p>
         )}
       </div>
@@ -147,15 +153,17 @@ export function MoveDialog({ open, item, onClose, onMove, returnFocusRef }: Move
 /** One level's folders: each opens, except the folder being moved. */
 function FolderLevel({
   level,
+  loading,
   choices,
   onEnter,
 }: {
   level: ReturnType<typeof useFilesList>;
+  loading: boolean;
   choices: MoveChoice[];
   onEnter: (folder: DriveFileWire) => void;
 }) {
   const { t } = useT();
-  if (level.loading) {
+  if (loading) {
     return (
       <SkeletonGroup label={t("files.loading")} className="flex flex-col gap-2">
         {SKELETON_KEYS.map((key) => (
@@ -180,9 +188,9 @@ function FolderLevel({
         </ul>
       )}
       {level.hasMore && (
-        <Button variant="secondary" onClick={level.loadMore} disabled={level.loadingMore}>
+        <PendingButton variant="secondary" pending={level.loadingMore} onClick={level.loadMore}>
           {level.loadingMore ? t("files.loadingMore") : t("files.loadMore")}
-        </Button>
+        </PendingButton>
       )}
     </>
   );

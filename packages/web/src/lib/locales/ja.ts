@@ -153,8 +153,8 @@ const ja: Record<string, string> = {
   "files.drive.move.noFolders": "ここにはフォルダがありません。",
   "files.drive.move.done": "「{name}」を移動しました。",
   "files.drive.delete": "削除",
-  "files.drive.delete.fileTitle": "このファイルを削除しますか？",
-  "files.drive.delete.folderTitle": "このフォルダを削除しますか？",
+  "files.drive.delete.fileTitle": "「{name}」を削除しますか？",
+  "files.drive.delete.folderTitle": "フォルダ「{name}」を削除しますか？",
   "files.drive.delete.fileBody": "Klorn ドライブから完全に削除されます。ゴミ箱はありません。",
   "files.drive.delete.folderBody":
     "フォルダとその中のすべての項目が Klorn ドライブから完全に削除されます。ゴミ箱はありません。",
@@ -171,7 +171,7 @@ const ja: Record<string, string> = {
   "files.drive.error.cycle": "フォルダを、それ自体やその中のフォルダに移動することはできません。",
   "files.drive.error.tooDeep": "これ以上深くフォルダを入れ子にすることはできません。",
   "files.drive.error.folderTooLarge":
-    "このフォルダは項目が多すぎて一度に削除できません。先に中のフォルダをいくつか削除してください。",
+    "このフォルダは項目が多すぎて一度に削除できません。先に中の項目をいくつか削除してください。",
   "files.drive.error.purging":
     "Klorn のデータを削除しています。しばらくしてからもう一度お試しください。",
   "files.drive.error.tooLarge": "上限の{limit}を超えています。",
@@ -184,6 +184,17 @@ const ja: Record<string, string> = {
   "files.drive.error.offline":
     "Klorn に接続できませんでした。接続を確認して、もう一度お試しください。",
   "files.drive.error.generic": "問題が発生しました。もう一度お試しください。",
+  "files.drive.error.signedOut":
+    "サインアウトされました。続けるにはもう一度サインインしてください。",
+  "files.drive.name.reserved": "「.」と「..」は名前に使えません。",
+  "files.drive.name.tooLong": "{max}文字以内で入力してください。",
+  "files.drive.upload.retry": "失敗した項目を再試行（{count}）",
+  "files.drive.upload.itemFailed": "{name}：{reason}",
+  "files.drive.upload.skipped": "スキップ：{reason}",
+  "files.drive.upload.tooLargeSummary":
+    "上限の{limit}を超えたためアップロードしませんでした（{count}件）：{names}",
+  "files.drive.drop.busy": "すでにアップロード中です。完了してからもう一度ドロップしてください。",
+  "files.drive.drop.folders": "ここではフォルダはアップロードできません。ファイルのみです。",
   "today.files.title": "最近のファイル",
   "today.files.open": "ファイルを開く",
   "today.files.none": "ファイルはまだありません。",

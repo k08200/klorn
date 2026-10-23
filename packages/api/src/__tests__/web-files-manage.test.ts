@@ -13,6 +13,7 @@ import {
   type DriveMessageKey,
   driveErrorKey,
   isDriveOff,
+  isUnexpectedDriveError,
 } from "../../../web/src/app/files/drive-errors";
 import {
   canMoveHere,
@@ -34,6 +35,9 @@ import {
   markDone,
   markFailed,
   markUploading,
+  pendingIndices,
+  precheckFailures,
+  resetForRetry,
   startBatch,
   stopsBatch,
   uploadForm,
@@ -138,11 +142,43 @@ describe("driveErrorKey: a failed drive request as a localized message key", () 
     expect(driveErrorKey(apiError(409, { code: "__proto__" }))).toBe("files.drive.error.generic");
   });
 
-  it("reads a network failure (fetch's TypeError) as offline, anything else as generic", () => {
-    expect(driveErrorKey(new TypeError("Failed to fetch"))).toBe("files.drive.error.offline");
+  it("reads fetch's own network failure as offline, in each browser's words", () => {
+    for (const message of [
+      "Failed to fetch",
+      "NetworkError when attempting to fetch resource.",
+      "Load failed",
+      "Network request failed",
+    ]) {
+      expect(driveErrorKey(new TypeError(message)), message).toBe("files.drive.error.offline");
+    }
+  });
+
+  it("does not take any other TypeError for offline: that is a bug, reported", () => {
+    const bug = new TypeError("Cannot read properties of undefined (reading 'file')");
+    expect(driveErrorKey(bug)).toBe("files.drive.error.generic");
+    expect(isUnexpectedDriveError(driveErrorKey(bug))).toBe(true);
     expect(driveErrorKey(new SyntaxError("Unexpected token"))).toBe("files.drive.error.generic");
     expect(driveErrorKey("boom")).toBe("files.drive.error.generic");
     expect(driveErrorKey(null)).toBe("files.drive.error.generic");
+  });
+
+  it("is offline for a TypeError while the browser says it has no network", () => {
+    vi.stubGlobal("navigator", { onLine: false });
+    try {
+      expect(driveErrorKey(new TypeError("Anything at all"))).toBe("files.drive.error.offline");
+      // An answer the server did send is still that answer.
+      expect(driveErrorKey(driveError("cycle"))).toBe("files.drive.error.cycle");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("reads a 401 (session over or device signed out) as signed out, never as a fault", () => {
+    const plain = apiError(401, { error: "Unauthorized" });
+    const kicked = apiError(401, { error: "This device was signed out.", code: "DEVICE_KICKED" });
+    expect(driveErrorKey(plain)).toBe("files.drive.error.signedOut");
+    expect(driveErrorKey(kicked)).toBe("files.drive.error.signedOut");
+    expect(isUnexpectedDriveError("files.drive.error.signedOut")).toBe(false);
   });
 
   it("every message key exists, non-empty, in all seven locales", () => {
@@ -199,16 +235,21 @@ describe("upload: the size check and the request body", () => {
 });
 
 describe("upload batch: one file after another, with each file's outcome", () => {
-  const names = ["a.pdf", "b.png", "c.txt"];
+  const picked = [
+    { name: "a.pdf", size: 10 },
+    { name: "b.png", size: 20 },
+    { name: "c.txt", size: 30 },
+  ];
 
   it("starts with every file waiting and nothing uploading", () => {
-    const batch = startBatch(names);
+    const batch = startBatch(picked, MAX_FILE_BYTES);
     expect(batch.items.map((item) => [item.name, item.status])).toEqual([
       ["a.pdf", "waiting"],
       ["b.png", "waiting"],
       ["c.txt", "waiting"],
     ]);
     expect(new Set(batch.items.map((item) => item.key)).size).toBe(3);
+    expect(pendingIndices(batch)).toEqual([0, 1, 2]);
     expect(batchSummary(batch)).toEqual({
       total: 3,
       current: null,
@@ -218,16 +259,28 @@ describe("upload batch: one file after another, with each file's outcome", () =>
     });
   });
 
+  it("refuses a file over the cap up front, without a request, and names it once", () => {
+    const batch = startBatch([...picked, { name: "huge.mov", size: 99 }], 50);
+    expect(batch.items[3]).toMatchObject({
+      status: "failed",
+      errorKey: "files.drive.error.tooLarge",
+      cause: "precheck",
+    });
+    expect(pendingIndices(batch)).toEqual([0, 1, 2]);
+    expect(precheckFailures(batch)).toEqual(["huge.mov"]);
+  });
+
   it("reports which file of how many is uploading, then the outcome", () => {
-    const first = markUploading(startBatch(names), 0);
+    const first = markUploading(startBatch(picked, MAX_FILE_BYTES), 0);
     expect(batchSummary(first).current).toBe(1);
     const second = markUploading(markDone(first, 0), 1);
     expect(batchSummary(second)).toMatchObject({ current: 2, done: 1, finished: false });
-    const third = markUploading(markFailed(second, 1, "files.drive.error.tooLarge"), 2);
+    const third = markUploading(markFailed(second, 1, "files.drive.error.invalidName"), 2);
     const last = markDone(third, 2);
     expect(last.items[1]).toMatchObject({
       status: "failed",
-      errorKey: "files.drive.error.tooLarge",
+      errorKey: "files.drive.error.invalidName",
+      cause: "sent",
     });
     expect(batchSummary(last)).toEqual({
       total: 3,
@@ -239,25 +292,29 @@ describe("upload batch: one file after another, with each file's outcome", () =>
   });
 
   it("never changes the batch it was given", () => {
-    const batch = startBatch(names);
+    const batch = startBatch(picked, MAX_FILE_BYTES);
     const snapshot = JSON.stringify(batch);
     markUploading(batch, 0);
     markDone(batch, 1);
     markFailed(batch, 2, "files.drive.error.generic");
     failRemaining(batch, 0, "files.drive.error.rateLimited");
+    resetForRetry(batch, [0, 1]);
     expect(JSON.stringify(batch)).toBe(snapshot);
   });
 
-  it("fails the files not yet sent with the reason the batch stopped", () => {
+  it("fails the files not yet sent as skipped, with the reason the batch stopped", () => {
     const stopped = failRemaining(
-      markFailed(markDone(startBatch(names), 0), 1, "files.drive.error.full"),
+      markFailed(markDone(startBatch(picked, MAX_FILE_BYTES), 0), 1, "files.drive.error.full"),
       2,
       "files.drive.error.full",
     );
     expect(stopped.items.map((item) => item.status)).toEqual(["done", "failed", "failed"]);
-    expect(stopped.items[2]?.errorKey).toBe("files.drive.error.full");
-    // Only the file that was refused is announced; the rest were never sent.
-    expect(stopped.items.map((item) => item.skipped)).toEqual([false, false, true]);
+    expect(stopped.items[2]).toMatchObject({
+      errorKey: "files.drive.error.full",
+      cause: "skipped",
+    });
+    // The refused file has its own reason; the one after it was never sent.
+    expect(stopped.items.map((item) => item.cause)).toEqual([null, "sent", "skipped"]);
     expect(batchSummary(stopped)).toMatchObject({ done: 1, failed: 2, finished: true });
   });
 
@@ -271,6 +328,7 @@ describe("upload batch: one file after another, with each file's outcome", () =>
       "files.drive.error.storage",
       "files.drive.error.unavailable",
       "files.drive.error.offline",
+      "files.drive.error.signedOut",
     ];
     for (const key of stopping) expect(stopsBatch(key), key).toBe(true);
     const perFile: DriveMessageKey[] = [
@@ -355,11 +413,11 @@ describe("names: the client's check before the server's", () => {
     expect(nameErrorKey("   ")).toBe("files.drive.name.required");
   });
 
-  it("refuses what the server refuses: . and .., and more than 255 characters", () => {
-    expect(nameErrorKey(".")).toBe("files.drive.error.invalidName");
-    expect(nameErrorKey(" .. ")).toBe("files.drive.error.invalidName");
+  it("says why: . and .. are reserved, and a name past 255 characters is too long", () => {
+    expect(nameErrorKey(".")).toBe("files.drive.name.reserved");
+    expect(nameErrorKey(" .. ")).toBe("files.drive.name.reserved");
     expect(nameErrorKey("a".repeat(NAME_MAX_CHARS))).toBeNull();
-    expect(nameErrorKey("a".repeat(NAME_MAX_CHARS + 1))).toBe("files.drive.error.invalidName");
+    expect(nameErrorKey("a".repeat(NAME_MAX_CHARS + 1))).toBe("files.drive.name.tooLong");
     // Characters, not UTF-16 units: 255 emoji are a valid name.
     expect(nameErrorKey("😀".repeat(NAME_MAX_CHARS))).toBeNull();
   });
@@ -367,6 +425,19 @@ describe("names: the client's check before the server's", () => {
   it("accepts an ordinary name", () => {
     expect(nameErrorKey("Q4 reports")).toBeNull();
     expect(nameErrorKey("보고서")).toBeNull();
+  });
+
+  it("has every name message in all seven locales", () => {
+    const locales = { de, en, es, fr, ja, ko, zh };
+    for (const key of [
+      "files.drive.name.required",
+      "files.drive.name.reserved",
+      "files.drive.name.tooLong",
+    ]) {
+      for (const [name, table] of Object.entries(locales)) {
+        expect(table[key], `${name}: ${key}`).toBeTruthy();
+      }
+    }
   });
 });
 

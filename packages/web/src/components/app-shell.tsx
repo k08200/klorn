@@ -55,6 +55,13 @@ const DOCK_CLEARANCE =
 const DOCKLESS_CLEARANCE =
   "pb-[calc(62px+env(safe-area-inset-bottom))] md:pb-[env(safe-area-inset-bottom)]";
 
+/**
+ * Below 768px the bottom tab bar (fixed, 62px plus the home-indicator inset)
+ * sits over the end of <main>. Scrolling a focused control into view keeps it
+ * clear of the bar (WCAG 2.4.11): a menu item, a button near the bottom.
+ */
+const TAB_BAR_SCROLL_PADDING = "max-md:scroll-pb-[calc(62px+env(safe-area-inset-bottom))]";
+
 function isAppShellRoute(pathname: string): boolean {
   return APP_SHELL_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 }
@@ -138,7 +145,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <main
           id="main"
           tabIndex={-1}
-          className={`scroll-stable relative z-10 flex-1 overflow-y-auto ${showDock ? DOCK_CLEARANCE : DOCKLESS_CLEARANCE} focus:outline-none`}
+          className={`scroll-stable relative z-10 flex-1 overflow-y-auto ${showDock ? DOCK_CLEARANCE : DOCKLESS_CLEARANCE} ${TAB_BAR_SCROLL_PADDING} focus:outline-none`}
         >
           {/* Inline, so it pushes content down rather than covering it; only on
               the home screen and Settings, where installing is on-topic. */}

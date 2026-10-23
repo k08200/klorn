@@ -153,8 +153,8 @@ const fr: Record<string, string> = {
   "files.drive.move.noFolders": "Aucun dossier ici.",
   "files.drive.move.done": "{name} déplacé.",
   "files.drive.delete": "Supprimer",
-  "files.drive.delete.fileTitle": "Supprimer ce fichier ?",
-  "files.drive.delete.folderTitle": "Supprimer ce dossier ?",
+  "files.drive.delete.fileTitle": "Supprimer {name} ?",
+  "files.drive.delete.folderTitle": "Supprimer le dossier {name} ?",
   "files.drive.delete.fileBody":
     "Il est supprimé définitivement de Klorn Drive. Il n’y a pas de corbeille.",
   "files.drive.delete.folderBody":
@@ -174,7 +174,7 @@ const fr: Record<string, string> = {
     "Un dossier ne peut pas être déplacé dans lui-même ni dans l’un de ses dossiers.",
   "files.drive.error.tooDeep": "Les dossiers ne peuvent pas être imbriqués aussi profondément.",
   "files.drive.error.folderTooLarge":
-    "Ce dossier contient trop d’éléments pour être supprimé en une fois. Supprimez d’abord certains de ses dossiers.",
+    "Ce dossier contient trop d’éléments pour être supprimé en une fois. Supprimez d’abord certains de ses éléments.",
   "files.drive.error.purging":
     "Vos données Klorn sont en cours de suppression. Réessayez plus tard.",
   "files.drive.error.tooLarge": "Dépasse la limite de {limit}.",
@@ -186,6 +186,18 @@ const fr: Record<string, string> = {
   "files.drive.error.offline":
     "Impossible de joindre Klorn. Vérifiez votre connexion, puis réessayez.",
   "files.drive.error.generic": "Une erreur s’est produite. Réessayez.",
+  "files.drive.error.signedOut": "Vous avez été déconnecté. Reconnectez-vous pour continuer.",
+  "files.drive.name.reserved": "« . » et « .. » ne peuvent pas servir de nom.",
+  "files.drive.name.tooLong": "Utilisez {max} caractères au maximum.",
+  "files.drive.upload.retry": "Réessayer les échecs ({count})",
+  "files.drive.upload.itemFailed": "{name} : {reason}",
+  "files.drive.upload.skipped": "Ignoré : {reason}",
+  "files.drive.upload.tooLargeSummary":
+    "Non envoyés, au-delà de la limite de {limit} ({count}) : {names}",
+  "files.drive.drop.busy":
+    "Un envoi est déjà en cours. Déposez à nouveau les fichiers quand il sera terminé.",
+  "files.drive.drop.folders":
+    "Les dossiers ne peuvent pas être envoyés ici, seulement des fichiers.",
   "today.files.title": "Fichiers récents",
   "today.files.open": "Ouvrir Fichiers",
   "today.files.none": "Aucun fichier pour l’instant.",

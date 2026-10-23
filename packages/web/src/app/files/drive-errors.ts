@@ -27,9 +27,13 @@ const CODE_KEYS = {
   "storage-unavailable": "files.drive.error.storage",
 } as const satisfies Record<DriveErrorCode, string>;
 
-/** Answers that carry no drive code: the route is dark, offline, or anything else. */
+/**
+ * Answers that carry no drive code: the route is dark, the session is over
+ * (requireAuth's 401, with or without its own `code`), offline, or anything else.
+ */
 const FALLBACK_KEYS = {
   unavailable: "files.drive.error.unavailable",
+  signedOut: "files.drive.error.signedOut",
   offline: "files.drive.error.offline",
   generic: "files.drive.error.generic",
 } as const;
@@ -44,6 +48,7 @@ export const DRIVE_MESSAGE_KEYS: readonly DriveMessageKey[] = [
   ...Object.values(FALLBACK_KEYS),
 ];
 
+const HTTP_UNAUTHORIZED = 401;
 const HTTP_NOT_FOUND = 404;
 const HTTP_TOO_LARGE = 413;
 const HTTP_TOO_MANY = 429;
@@ -51,6 +56,7 @@ const HTTP_UNAVAILABLE = 503;
 
 /** A status the body did not explain, read the way the server would have coded it. */
 const STATUS_KEYS: Readonly<Record<number, DriveMessageKey>> = {
+  [HTTP_UNAUTHORIZED]: FALLBACK_KEYS.signedOut,
   [HTTP_NOT_FOUND]: FALLBACK_KEYS.unavailable,
   [HTTP_TOO_LARGE]: CODE_KEYS["too-large"],
   [HTTP_TOO_MANY]: CODE_KEYS["rate-limited"],
@@ -86,10 +92,28 @@ function driveFailure(err: unknown): DriveFailure {
   return { status: Number(match[1]), code: bodyCode(match[2] ?? "") };
 }
 
+/**
+ * What fetch rejects with when the request got no answer, in each engine's
+ * words (Chromium, Firefox, WebKit, the React Native and Node fetches). Any
+ * other TypeError is a bug in the page, not the network.
+ */
+const NETWORK_FAILURE_MESSAGES: ReadonlySet<string> = new Set([
+  "Failed to fetch",
+  "NetworkError when attempting to fetch resource.",
+  "Load failed",
+  "Network request failed",
+  "fetch failed",
+]);
+
+function isNetworkFailure(err: unknown): boolean {
+  if (!(err instanceof TypeError)) return false;
+  if (NETWORK_FAILURE_MESSAGES.has(err.message)) return true;
+  return typeof navigator !== "undefined" && navigator.onLine === false;
+}
+
 /** The message key for a failed drive request. */
 export function driveErrorKey(err: unknown): DriveMessageKey {
-  // fetch rejects with a TypeError when the request never got an answer.
-  if (err instanceof TypeError) return FALLBACK_KEYS.offline;
+  if (isNetworkFailure(err)) return FALLBACK_KEYS.offline;
   const { status, code } = driveFailure(err);
   if (code !== null) return CODE_KEYS[code];
   if (status === null) return FALLBACK_KEYS.generic;

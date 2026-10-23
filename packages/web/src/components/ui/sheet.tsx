@@ -95,6 +95,9 @@ export function Sheet({
     onCloseRef.current = onClose;
   }, [onClose]);
 
+  // Must stay above the open/close effect: effects run in order, so in the
+  // commit that closes the sheet this one has stored that render's target
+  // before the close below reads it.
   useEffect(() => {
     returnFocusPropRef.current = returnFocusRef;
   }, [returnFocusRef]);
@@ -185,11 +188,17 @@ export function Sheet({
       >
         <div className="flex shrink-0 items-start gap-3 border-b border-line-soft py-3 pr-2 pl-5">
           <div className="min-w-0 flex-1 pt-2.5">
-            <h2 id={titleId} className="text-title text-ink [word-break:keep-all]">
+            <h2
+              id={titleId}
+              className="text-title text-ink [overflow-wrap:anywhere] [word-break:keep-all]"
+            >
               {title}
             </h2>
             {description && (
-              <p id={descriptionId} className="mt-1 text-body text-ink-muted [word-break:keep-all]">
+              <p
+                id={descriptionId}
+                className="mt-1 text-body text-ink-muted [overflow-wrap:anywhere] [word-break:keep-all]"
+              >
                 {description}
               </p>
             )}

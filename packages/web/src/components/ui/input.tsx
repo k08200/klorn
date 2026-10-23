@@ -20,10 +20,15 @@ function useControlId(id: string | undefined, label: string | undefined): string
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
+  /**
+   * Changes with each failed attempt, so the same message is announced again
+   * (a role="alert" whose text does not change is not re-read).
+   */
+  errorAttempt?: number;
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ label, error, className = "", id, ...props }, ref) => {
+  ({ label, error, errorAttempt, className = "", id, ...props }, ref) => {
     const inputId = useControlId(id, label);
     return (
       <div>
@@ -41,7 +46,12 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           {...props}
         />
         {error && (
-          <p id={`${inputId}-error`} className="text-xs text-state-danger-ink mt-1" role="alert">
+          <p
+            key={errorAttempt}
+            id={`${inputId}-error`}
+            className="text-xs text-state-danger-ink mt-1"
+            role="alert"
+          >
             {error}
           </p>
         )}

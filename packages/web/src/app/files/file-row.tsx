@@ -21,10 +21,14 @@ import { useFileDownload } from "./use-download";
 
 const ROW_CLASS = "-mx-3 flex min-h-13 items-center gap-3 rounded-card px-3 py-2";
 const LINK_ROW_CLASS = `focus-ring ${ROW_CLASS} transition-colors duration-120 ease-fluid hover:bg-surface-hover`;
-// The Button primitive's own px-4 padding: the bleed matches, so the content
-// lines up with the link and plain rows (-mx-3 px-3).
-const BUTTON_ROW_CLASS = "-mx-4 w-[calc(100%+2rem)] rounded-card";
-const BUTTON_ROW_BODY = "flex w-full min-w-0 items-center gap-3 text-left";
+// The Button primitive's own px-3.5 padding (size md): the bleed matches, so
+// the content and the badge line up with the link and plain rows (-mx-3 px-3).
+// align-top: the Button is inline-flex, and on the baseline its line box would
+// add a pixel or two below it.
+const BUTTON_ROW_CLASS = "-mx-3.5 w-[calc(100%+1.75rem)] rounded-card align-top";
+// The link rows' height and padding, on the body: the Button's own min-height
+// is its frame's, so setting one on the button itself would race it.
+const BUTTON_ROW_BODY = "flex min-h-13 w-full min-w-0 items-center gap-3 py-2 text-left";
 
 function modifiedLabel(iso: string, locale: string, timeZone: string): string {
   const date = new Date(iso);

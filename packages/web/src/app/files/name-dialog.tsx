@@ -5,16 +5,18 @@
  * trapped, and returns to the opener): "New folder" and "Rename" in the Klorn
  * drive. The name is checked here first (drive-model `nameErrorKey`), then
  * sent; a refusal keeps the sheet open with the reason on the field
- * (role="alert") and focus back in it. The caller closes the sheet on success.
+ * (role="alert", announced again on every attempt) and focus back in it.
+ * While the request runs the sheet cannot be dismissed. The caller closes it
+ * on success, and mounts a fresh one for each opening (no state carried over).
  */
 
-import { type FormEvent, useEffect, useId, useRef, useState } from "react";
-import Button from "../../components/ui/button";
+import { type FormEvent, useId, useRef, useState } from "react";
 import { Input } from "../../components/ui/input";
 import { Sheet } from "../../components/ui/sheet";
 import { useT } from "../../lib/i18n";
-import { NAME_MAX_CHARS, type NameErrorKey, nameErrorKey } from "./drive-model";
-import { reportDriveError } from "./use-klorn-drive";
+import { NAME_MAX_CHARS, nameErrorKey } from "./drive-model";
+import { PendingButton } from "./pending-button";
+import { useDialogAction } from "./use-dialog-action";
 
 interface NameDialogProps {
   open: boolean;
@@ -44,71 +46,55 @@ export function NameDialog({
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(initialName);
-  const [errorKey, setErrorKey] = useState<NameErrorKey | null>(null);
-  const [pending, setPending] = useState(false);
-
-  // Each opening starts from the given name, with no error left over.
-  useEffect(() => {
-    if (!open) return;
-    setName(initialName);
-    setErrorKey(null);
-    setPending(false);
-  }, [open, initialName]);
-
-  const fail = (key: NameErrorKey) => {
-    setErrorKey(key);
-    inputRef.current?.focus();
+  const action = useDialogAction(scope);
+  const dismiss = () => {
+    if (!action.blocked()) onClose();
   };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (pending) return;
+    if (action.blocked()) return;
     const invalid = nameErrorKey(name);
     if (invalid !== null) {
-      fail(invalid);
+      action.fail(invalid);
+      inputRef.current?.focus();
       return;
     }
-    setPending(true);
-    setErrorKey(null);
-    try {
-      await onSubmit(name.trim());
-    } catch (err) {
-      fail(reportDriveError(err, scope));
-    } finally {
-      setPending(false);
-    }
+    const sent = await action.run(() => onSubmit(name.trim()));
+    if (!sent) inputRef.current?.focus();
   };
 
+  const failure = action.failure;
   return (
     <Sheet
       open={open}
-      onClose={onClose}
+      onClose={dismiss}
       title={title}
       closeLabel={t("common.close")}
       initialFocusRef={inputRef}
       footer={
         <>
-          <Button variant="ghost" onClick={onClose}>
+          <PendingButton variant="ghost" unavailable={action.pending} onClick={dismiss}>
             {t("common.cancel")}
-          </Button>
-          <Button type="submit" form={formId} loading={pending}>
+          </PendingButton>
+          <PendingButton type="submit" form={formId} pending={action.pending}>
             {submitLabel}
-          </Button>
+          </PendingButton>
         </>
       }
     >
       <form id={formId} onSubmit={(event) => void submit(event)} noValidate>
+        {/* No maxLength: a longer paste is shown and refused, never cut short. */}
         <Input
           ref={inputRef}
           id={inputId}
           label={label}
           value={name}
           onChange={(event) => setName(event.target.value)}
-          // maxLength counts UTF-16 units; the check counts characters, as the server does.
-          maxLength={NAME_MAX_CHARS * 2}
           autoComplete="off"
           spellCheck={false}
-          error={errorKey ? t(errorKey) : undefined}
+          error={failure ? t(failure.key, { max: String(NAME_MAX_CHARS) }) : undefined}
+          errorAttempt={failure?.attempt}
           className="min-h-11 pointer-coarse:text-field"
         />
       </form>

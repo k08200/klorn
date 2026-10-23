@@ -14,25 +14,28 @@
 import type { DriveFileWire } from "@klorn/contract";
 import { useRef, useState } from "react";
 import { PAGE_SHELL } from "../../components/page-shell";
+import { useToast } from "../../components/toast";
 import Button from "../../components/ui/button";
 import EmptyState from "../../components/ui/empty-state";
 import { Skeleton, SkeletonGroup } from "../../components/ui/skeleton";
 import { useT } from "../../lib/i18n";
 import { useDisplayTimeZone } from "../../lib/use-time-zone";
 import { BlockError } from "../today/block";
+import type { RowAction } from "./dialog-state";
 import { isKlornEditable } from "./drive-model";
 import { DriveToolbar } from "./drive-toolbar";
 import { FileGlyph, FileRow } from "./file-row";
 import { GoogleDriveConnect } from "./google-drive-connect";
-import { ManageDialogs, type RowAction, useManageDialogs } from "./manage-dialogs";
+import { ManageDialogs, useManageDialogs } from "./manage-dialogs";
 import { SEARCH_MAX_CHARS } from "./model";
 import type { FolderCrumb } from "./open";
+import { PendingButton } from "./pending-button";
 import { ManagedRow } from "./row-actions";
 import { useFileDrop } from "./use-file-drop";
 import { useDebounced, useFilesList } from "./use-files";
 import { useFolderTrail } from "./use-folder-trail";
 import { useDriveRefresh, useKlornDrive } from "./use-klorn-drive";
-import { useUploads } from "./use-uploads";
+import { type StartResult, useUploads } from "./use-uploads";
 
 const SKELETON_KEYS = ["a", "b", "c", "d", "e", "f"];
 
@@ -48,7 +51,9 @@ export function FilesView() {
   const list = useFilesList(q, folder?.externalId ?? null, folders.ready);
   const timeZone = useDisplayTimeZone();
   const searching = q.trim().length > 0;
-  const { drive, dialogs, uploads, drop } = useDriveManager(folder);
+  const { drive, canUpload, dialogs, uploads, drop } = useDriveManager(folder);
+  const listRef = useRef<HTMLElement>(null);
+  const driveHeadingRef = useRef<HTMLHeadingElement>(null);
 
   return (
     <div className={`${PAGE_SHELL} flex flex-col gap-6`}>
@@ -58,8 +63,10 @@ export function FilesView() {
       {drive.limits && (
         <DriveToolbar
           limits={drive.limits}
+          canUpload={canUpload}
           folder={folder}
           uploads={uploads}
+          headingRef={driveHeadingRef}
           onNewFolder={dialogs.openFolder}
         />
       )}
@@ -89,6 +96,7 @@ export function FilesView() {
         />
       </div>
       <section
+        ref={listRef}
         aria-labelledby="files-list-heading"
         aria-busy={list.loading || list.stale}
         {...drop.handlers}
@@ -127,14 +135,21 @@ export function FilesView() {
         )}
         {list.hasMore && (
           <div className="flex justify-center pt-4">
-            <Button variant="secondary" onClick={list.loadMore} disabled={list.loadingMore}>
+            {/* Not `disabled` while loading: focus stays on it. */}
+            <PendingButton variant="secondary" pending={list.loadingMore} onClick={list.loadMore}>
               {list.loadingMore ? t("files.loadingMore") : t("files.loadMore")}
-            </Button>
+            </PendingButton>
           </div>
         )}
       </section>
       {drive.live && (
-        <ManageDialogs dialogs={dialogs} folder={folder} listHeadingRef={headingRef} />
+        <ManageDialogs
+          dialogs={dialogs}
+          folder={folder}
+          rowIds={list.files.map((file) => file.id)}
+          listRef={listRef}
+          fallbackFocusRef={driveHeadingRef}
+        />
       )}
     </div>
   );
@@ -148,6 +163,8 @@ const DROP_TARGET_CLASS = "rounded-card outline-2 outline-offset-4 outline-dashe
  * unless the drive answered its limits; uploads go into the open folder.
  */
 function useDriveManager(folder: FolderCrumb | null) {
+  const { t } = useT();
+  const { toast } = useToast();
   const drive = useKlornDrive();
   const refreshDrive = useDriveRefresh();
   const dialogs = useManageDialogs();
@@ -156,10 +173,21 @@ function useDriveManager(folder: FolderCrumb | null) {
     maxFileBytes: drive.limits?.maxFileBytes ?? 0,
     onFinished: refreshDrive,
   });
-  // Dropping files is a shortcut for "Upload files", offered exactly when it is.
+  // No quota on the server: every upload would be refused, so none is offered
+  // (neither the button nor a drop).
   const canUpload = drive.limits !== null && drive.limits.quotaBytes !== null;
-  const drop = useFileDrop(uploads.start, canUpload);
-  return { drive, dialogs, uploads, drop };
+  const busyToast = () => toast(t("files.drive.drop.busy"), "info");
+  const drop = useFileDrop({
+    enabled: canUpload,
+    busy: uploads.running,
+    onFiles: (files) => {
+      const result: StartResult = uploads.start(files);
+      if (result === "busy") busyToast();
+    },
+    onRefused: (reason) =>
+      reason === "busy" ? busyToast() : toast(t("files.drive.drop.folders"), "info"),
+  });
+  return { drive, canUpload, dialogs, uploads, drop };
 }
 
 interface FilesRowsProps {
@@ -176,10 +204,13 @@ function FilesRows({ files, timeZone, manageable, onOpenFolder, onAction }: File
     <ul className="flex flex-col divide-y divide-line-soft">
       {files.map((file) => {
         const row = <FileRow file={file} timeZone={timeZone} onOpenFolder={onOpenFolder} />;
+        // While the drive is on every row has the same trailing slot (a menu
+        // or an empty one), so badges line up and rows are equally tall.
         return (
-          <li key={file.id}>
-            {manageable && isKlornEditable(file) ? (
-              <ManagedRow file={file} onAction={onAction}>
+          // data-file-id: focus.ts finds the row again after a change.
+          <li key={file.id} data-file-id={file.id}>
+            {manageable ? (
+              <ManagedRow file={file} editable={isKlornEditable(file)} onAction={onAction}>
                 {row}
               </ManagedRow>
             ) : (

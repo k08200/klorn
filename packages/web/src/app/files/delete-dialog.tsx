@@ -2,19 +2,18 @@
 
 /**
  * Deleting one Klorn drive row, confirmed first (D3: a hard delete, no trash;
- * a folder goes with everything in it). The sheet stays open while the
- * request runs and on a refusal, which it shows (role="alert"); sending again
- * continues a delete that storage cut short (503, retryable).
+ * a folder goes with everything in it). The title names the row, so the
+ * dialog's own name says what goes. The sheet stays open, and cannot be
+ * dismissed, while the request runs; a refusal is shown in it (role="alert").
+ * Sending again continues a delete that storage cut short (503, retryable).
  */
 
 import type { DriveFileWire } from "@klorn/contract";
-import { type RefObject, useEffect, useState } from "react";
-import Button from "../../components/ui/button";
+import type { RefObject } from "react";
 import { Sheet } from "../../components/ui/sheet";
 import { useT } from "../../lib/i18n";
-import type { DriveMessageKey } from "./drive-errors";
-import { FileGlyph } from "./file-row";
-import { reportDriveError } from "./use-klorn-drive";
+import { PendingButton } from "./pending-button";
+import { useDialogAction } from "./use-dialog-action";
 
 interface DeleteDialogProps {
   open: boolean;
@@ -28,63 +27,49 @@ interface DeleteDialogProps {
 
 export function DeleteDialog({ open, item, onClose, onDelete, returnFocusRef }: DeleteDialogProps) {
   const { t } = useT();
-  const [errorKey, setErrorKey] = useState<DriveMessageKey | null>(null);
-  const [pending, setPending] = useState(false);
+  const action = useDialogAction("files.drive.delete");
   const folder = item?.isFolder === true;
-
-  useEffect(() => {
-    if (!open) return;
-    setErrorKey(null);
-    setPending(false);
-  }, [open]);
-
-  const submit = async () => {
-    if (item === null || pending) return;
-    setPending(true);
-    setErrorKey(null);
-    try {
-      await onDelete(item);
-    } catch (err) {
-      setErrorKey(reportDriveError(err, "files.drive.delete"));
-    } finally {
-      setPending(false);
-    }
+  const name = item?.name ?? "";
+  const dismiss = () => {
+    if (!action.blocked()) onClose();
   };
 
   return (
     <Sheet
       open={open}
-      onClose={onClose}
-      title={t(folder ? "files.drive.delete.folderTitle" : "files.drive.delete.fileTitle")}
+      onClose={dismiss}
+      title={t(folder ? "files.drive.delete.folderTitle" : "files.drive.delete.fileTitle", {
+        name,
+      })}
       description={t(folder ? "files.drive.delete.folderBody" : "files.drive.delete.fileBody")}
       closeLabel={t("common.close")}
       returnFocusRef={returnFocusRef}
       footer={
         <>
-          <Button variant="ghost" onClick={onClose}>
+          <PendingButton variant="ghost" unavailable={action.pending} onClick={dismiss}>
             {t("common.cancel")}
-          </Button>
-          <Button variant="danger" onClick={() => void submit()} loading={pending}>
+          </PendingButton>
+          <PendingButton
+            variant="danger"
+            pending={action.pending}
+            onClick={() => {
+              if (item !== null) void action.run(() => onDelete(item));
+            }}
+          >
             {t("files.drive.delete.confirm")}
-          </Button>
+          </PendingButton>
         </>
       }
     >
-      <div className="flex flex-col gap-3">
-        {item && (
-          <p className="flex items-start gap-3 text-body text-ink">
-            <span className="pt-px text-ink-muted">
-              <FileGlyph folder={folder} />
-            </span>
-            <span className="min-w-0 [overflow-wrap:anywhere]">{item.name}</span>
-          </p>
-        )}
-        {errorKey && (
-          <p role="alert" className="text-body text-state-danger-ink [word-break:keep-all]">
-            {t(errorKey)}
-          </p>
-        )}
-      </div>
+      {action.failure && (
+        <p
+          key={action.failure.attempt}
+          role="alert"
+          className="text-body text-state-danger-ink [word-break:keep-all]"
+        >
+          {t(action.failure.key)}
+        </p>
+      )}
     </Sheet>
   );
 }

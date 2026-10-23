@@ -17,7 +17,11 @@ export const DRIVE_FOLDERS_PATH = "/api/drive/folders";
 
 /** The list's `folder` value for the Klorn drive's top level (api routes/drive.ts). */
 const ROOT_FOLDER = "root";
-/** The longest name the server keeps, in characters (api drive/klorn-file-name.ts). */
+/**
+ * The longest name the server keeps, in characters (api drive/klorn-file-name.ts).
+ * The server accepts up to 1,000 characters of input and cuts a longer name to
+ * this length; the page refuses it instead, so a name is never cut silently.
+ */
 export const NAME_MAX_CHARS = 255;
 const RESERVED_NAMES = new Set([".", ".."]);
 const KLORN_PROVIDER = "KLORN";
@@ -32,20 +36,54 @@ export function driveItemPath(id: string): string {
   return `/api/drive/files/${encodeURIComponent(id)}`;
 }
 
-export type NameErrorKey = "files.drive.name.required" | DriveMessageKey;
+export type NameErrorKey =
+  | "files.drive.name.required"
+  | "files.drive.name.reserved"
+  | "files.drive.name.tooLong"
+  | DriveMessageKey;
 
 /**
  * Why a name cannot be sent, or null. The server cleans it further (control
- * characters, NFC) and has the last word; this only spares a request that
- * would certainly fail. Length counts characters, as the server does.
+ * characters, NFC) and has the last word. Here: no name, "." or "..", which
+ * the server refuses, and a name longer than it keeps (counted in
+ * characters, as the server counts), which it would cut short.
  */
 export function nameErrorKey(raw: string): NameErrorKey | null {
   const name = raw.trim();
   if (name.length === 0) return "files.drive.name.required";
-  if (RESERVED_NAMES.has(name) || [...name].length > NAME_MAX_CHARS) {
-    return "files.drive.error.invalidName";
-  }
+  if (RESERVED_NAMES.has(name)) return "files.drive.name.reserved";
+  if ([...name].length > NAME_MAX_CHARS) return "files.drive.name.tooLong";
   return null;
+}
+
+/** What a row's menu does (dialog-state.ts names the sheets after these). */
+export type DriveChange = "rename" | "move" | "delete";
+
+/**
+ * Whether the change takes the row out of the list on screen: a delete always;
+ * a move only when the list is one folder's (the unfiltered list shows every
+ * row wherever it lives); a rename never.
+ */
+export function removesFromList(change: DriveChange, inFolder: boolean): boolean {
+  if (change === "delete") return true;
+  return change === "move" && inFolder;
+}
+
+/** The row focus goes to when one leaves the list: the next, else the previous. */
+export function neighborId(ids: readonly string[], id: string): string | null {
+  const at = ids.indexOf(id);
+  if (at === -1) return null;
+  return ids[at + 1] ?? ids[at - 1] ?? null;
+}
+
+/**
+ * A refusal that says the list on screen is out of date: the row is gone
+ * (`not-found`), or a folder delete that storage cut short (503, retryable)
+ * already took some of its rows with it.
+ */
+export function refreshesAfterFailure(change: DriveChange, key: DriveMessageKey): boolean {
+  if (key === "files.drive.error.notFound") return true;
+  return change === "delete" && key === "files.drive.error.storage";
 }
 
 /** "X of Y used": both sizes formatted; no quota while the server has none. */

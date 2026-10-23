@@ -156,8 +156,8 @@ const de: Record<string, string> = {
   "files.drive.move.noFolders": "Hier gibt es keine Ordner.",
   "files.drive.move.done": "{name} verschoben.",
   "files.drive.delete": "Löschen",
-  "files.drive.delete.fileTitle": "Diese Datei löschen?",
-  "files.drive.delete.folderTitle": "Diesen Ordner löschen?",
+  "files.drive.delete.fileTitle": "{name} löschen?",
+  "files.drive.delete.folderTitle": "Ordner {name} löschen?",
   "files.drive.delete.fileBody":
     "Sie wird endgültig aus Klorn Drive gelöscht. Es gibt keinen Papierkorb.",
   "files.drive.delete.folderBody":
@@ -177,7 +177,7 @@ const de: Record<string, string> = {
     "Ein Ordner kann nicht in sich selbst oder in einen seiner Unterordner verschoben werden.",
   "files.drive.error.tooDeep": "So tief lassen sich Ordner nicht verschachteln.",
   "files.drive.error.folderTooLarge":
-    "Dieser Ordner enthält zu viele Elemente, um ihn auf einmal zu löschen. Lösche zuerst einige Ordner darin.",
+    "Dieser Ordner enthält zu viele Elemente, um ihn auf einmal zu löschen. Lösche zuerst einige Elemente darin.",
   "files.drive.error.purging":
     "Deine Klorn-Daten werden gerade gelöscht. Versuche es später erneut.",
   "files.drive.error.tooLarge": "Größer als das Limit von {limit}.",
@@ -190,6 +190,17 @@ const de: Record<string, string> = {
   "files.drive.error.offline":
     "Klorn ist nicht erreichbar. Prüfe deine Verbindung und versuche es erneut.",
   "files.drive.error.generic": "Etwas ist schiefgelaufen. Versuche es erneut.",
+  "files.drive.error.signedOut": "Du wurdest abgemeldet. Melde dich erneut an, um fortzufahren.",
+  "files.drive.name.reserved": "„.“ und „..“ können nicht als Namen verwendet werden.",
+  "files.drive.name.tooLong": "Verwende höchstens {max} Zeichen.",
+  "files.drive.upload.retry": "Fehlgeschlagene erneut versuchen ({count})",
+  "files.drive.upload.itemFailed": "{name}: {reason}",
+  "files.drive.upload.skipped": "Übersprungen: {reason}",
+  "files.drive.upload.tooLargeSummary":
+    "Nicht hochgeladen, größer als das Limit von {limit} ({count}): {names}",
+  "files.drive.drop.busy":
+    "Es läuft bereits ein Upload. Lege die Dateien erneut ab, wenn er fertig ist.",
+  "files.drive.drop.folders": "Ordner können hier nicht hochgeladen werden, nur Dateien.",
   "today.files.title": "Neueste Dateien",
   "today.files.open": "Dateien öffnen",
   "today.files.none": "Noch keine Dateien.",

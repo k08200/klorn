@@ -5,36 +5,49 @@
  * (`useKlornDrive().live`): where new files go, "Upload files" (a button that
  * opens the system file picker, several files at once), "New folder", the
  * storage line, and the running or finished upload batch with each file's
- * outcome. Progress and the summary are a polite status; a file's failure is
- * an alert, announced as it happens.
+ * outcome and "Retry failed". Progress and the summary are a polite status
+ * region that is on the page before its first message, so "Uploading 1 of
+ * N" is read. A file the server refused is an alert naming it; files over
+ * the cap are one alert for all of them; skipped files are not announced
+ * one by one (the summary counts them).
  */
 
 import type { DriveLimitsResponse } from "@klorn/contract";
-import { type ChangeEvent, useId, useRef } from "react";
+import { type ChangeEvent, type RefObject, useId, useRef } from "react";
 import Button from "../../components/ui/button";
 import { useT } from "../../lib/i18n";
 import { driveUsage } from "./drive-model";
+import { FOCUSED_HEADING } from "./focus";
 import { formatFileSize } from "./model";
 import type { FolderCrumb } from "./open";
-import { batchSummary, type UploadBatch, type UploadStatus } from "./upload-model";
+import {
+  batchSummary,
+  precheckFailures,
+  retryableIndices,
+  type UploadBatch,
+  type UploadItem,
+} from "./upload-model";
 import type { useUploads } from "./use-uploads";
+
+type Translate = (key: string, vars?: Record<string, string>) => string;
 
 interface DriveToolbarProps {
   limits: DriveLimitsResponse;
+  /** The server has a quota: uploads are offered (useDriveManager decides). */
+  canUpload: boolean;
   folder: FolderCrumb | null;
   uploads: ReturnType<typeof useUploads>;
+  headingRef: RefObject<HTMLHeadingElement | null>;
   onNewFolder: () => void;
 }
 
-export function DriveToolbar({ limits, folder, uploads, onNewFolder }: DriveToolbarProps) {
+export function DriveToolbar(props: DriveToolbarProps) {
+  const { limits, canUpload, folder, uploads, headingRef } = props;
   const { t, locale } = useT();
   const inputRef = useRef<HTMLInputElement>(null);
-  const headingRef = useRef<HTMLHeadingElement>(null);
   const destinationId = useId();
   const usage = driveUsage(limits, locale);
   const limit = formatFileSize(limits.maxFileBytes, locale);
-  // No quota on the server: every upload would be refused, so none is offered.
-  const canUpload = usage.quota !== null;
 
   const onPicked = (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
@@ -53,7 +66,7 @@ export function DriveToolbar({ limits, folder, uploads, onNewFolder }: DriveTool
           id="files-drive-heading"
           ref={headingRef}
           tabIndex={-1}
-          className="text-body font-semibold text-ink focus:outline-none"
+          className={`text-body font-semibold text-ink ${FOCUSED_HEADING}`}
         >
           {t("files.drive.title")}
         </h2>
@@ -86,36 +99,30 @@ export function DriveToolbar({ limits, folder, uploads, onNewFolder }: DriveTool
             {t("files.drive.upload")}
           </Button>
         )}
-        <Button variant="secondary" aria-describedby={destinationId} onClick={onNewFolder}>
+        <Button variant="secondary" aria-describedby={destinationId} onClick={props.onNewFolder}>
           {t("files.drive.newFolder")}
         </Button>
       </div>
       {/* `hidden`: out of the tab order and the accessibility tree; the button opens it. */}
       <input ref={inputRef} type="file" multiple hidden onChange={onPicked} />
-      {uploads.batch && (
-        <UploadList
-          batch={uploads.batch}
-          limit={limit}
-          onClear={() => {
-            uploads.clear();
-            headingRef.current?.focus();
-          }}
-        />
-      )}
+      <UploadPanel
+        batch={uploads.batch}
+        limit={limit}
+        onRetry={() => {
+          uploads.retry();
+          headingRef.current?.focus();
+        }}
+        onClear={() => {
+          uploads.clear();
+          headingRef.current?.focus();
+        }}
+      />
     </section>
   );
 }
 
-const STATUS_KEYS: Readonly<Record<Exclude<UploadStatus, "failed">, string>> = {
-  waiting: "files.drive.upload.waiting",
-  uploading: "files.drive.upload.uploading",
-  done: "files.drive.upload.done",
-};
-
-function summaryText(
-  batch: UploadBatch,
-  t: (key: string, vars?: Record<string, string>) => string,
-) {
+function summaryText(batch: UploadBatch | null, t: Translate): string {
+  if (batch === null) return "";
   const summary = batchSummary(batch);
   if (!summary.finished) {
     // Between two files nothing is "uploading" for a moment: count the next one.
@@ -131,50 +138,97 @@ function summaryText(
     : t("files.drive.upload.summary", { done, failed: String(summary.failed) });
 }
 
-function UploadList({
+/**
+ * Always on the page: with no batch it is an empty, visually hidden status
+ * region (taking no room), so the first progress message lands in a region
+ * screen readers already watch.
+ */
+function UploadPanel({
   batch,
   limit,
+  onRetry,
   onClear,
 }: {
-  batch: UploadBatch;
+  batch: UploadBatch | null;
   limit: string;
+  onRetry: () => void;
   onClear: () => void;
 }) {
-  const { t } = useT();
-  const finished = batchSummary(batch).finished;
+  const { t, locale } = useT();
+  const finished = batch !== null && batchSummary(batch).finished;
+  const retryable = batch === null ? 0 : retryableIndices(batch).length;
+  const tooLarge = batch === null ? [] : precheckFailures(batch);
   return (
-    <div className="flex flex-col gap-1 border-t border-line-soft pt-3">
+    <div className={batch ? "flex flex-col gap-1 border-t border-line-soft pt-3" : "sr-only"}>
       <div className="flex min-h-9 flex-wrap items-center justify-between gap-2">
         <p role="status" className="text-body text-ink">
           {summaryText(batch, t)}
         </p>
         {finished && (
-          <Button variant="ghost" size="sm" className="-mr-3" onClick={onClear}>
-            {t("files.drive.upload.clear")}
-          </Button>
+          <div className="-mr-3 flex flex-wrap gap-1">
+            {retryable > 0 && (
+              <Button variant="ghost" size="sm" onClick={onRetry}>
+                {t("files.drive.upload.retry", { count: String(retryable) })}
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" onClick={onClear}>
+              {t("files.drive.upload.clear")}
+            </Button>
+          </div>
         )}
       </div>
-      <ul
-        aria-label={t("files.drive.upload.list")}
-        className="flex flex-col divide-y divide-line-soft"
-      >
-        {batch.items.map((item) => (
-          <li key={item.key} className="flex flex-col py-2">
-            <span className="truncate text-body text-ink">{item.name}</span>
-            {item.status === "failed" ? (
-              // Announced for the file that was refused, not for each one skipped after it.
-              <p
-                role={item.skipped ? undefined : "alert"}
-                className="text-caption text-state-danger-ink [word-break:keep-all]"
-              >
-                {t(item.errorKey ?? "files.drive.error.generic", { limit })}
-              </p>
-            ) : (
-              <span className="text-caption text-ink-muted">{t(STATUS_KEYS[item.status])}</span>
-            )}
-          </li>
-        ))}
-      </ul>
+      {tooLarge.length > 0 && (
+        <p role="alert" className="text-caption text-state-danger-ink [word-break:keep-all]">
+          {t("files.drive.upload.tooLargeSummary", {
+            count: String(tooLarge.length),
+            limit,
+            names: new Intl.ListFormat(locale, { type: "conjunction" }).format(tooLarge),
+          })}
+        </p>
+      )}
+      {batch && (
+        <ul
+          aria-label={t("files.drive.upload.list")}
+          className="flex flex-col divide-y divide-line-soft"
+        >
+          {batch.items.map((item) => (
+            <li key={item.key} className="flex flex-col py-2">
+              <span className="truncate text-body text-ink">{item.name}</span>
+              <ItemStatus item={item} limit={limit} />
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
+  );
+}
+
+const STATUS_KEYS = {
+  waiting: "files.drive.upload.waiting",
+  uploading: "files.drive.upload.uploading",
+  done: "files.drive.upload.done",
+} as const;
+
+/** A file's state; a refusal the server gave is an alert that names the file. */
+function ItemStatus({ item, limit }: { item: UploadItem; limit: string }) {
+  const { t } = useT();
+  if (item.status !== "failed") {
+    return <span className="text-caption text-ink-muted">{t(STATUS_KEYS[item.status])}</span>;
+  }
+  const reason = t(item.errorKey ?? "files.drive.error.generic", { limit });
+  const shown = item.cause === "skipped" ? t("files.drive.upload.skipped", { reason }) : reason;
+  return (
+    <p className="text-caption text-state-danger-ink [word-break:keep-all]">
+      {item.cause === "sent" ? (
+        <>
+          <span aria-hidden="true">{shown}</span>
+          <span role="alert" className="sr-only">
+            {t("files.drive.upload.itemFailed", { name: item.name, reason })}
+          </span>
+        </>
+      ) : (
+        shown
+      )}
+    </p>
   );
 }
