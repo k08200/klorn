@@ -34,6 +34,11 @@ Updated 2026-10-14: added **Klorn Drive**, the noun of the Mac app's import
 Updated 2026-10-15: added **Subscriptions** (Mail → Subscriptions, the
 per-sender bulk unsubscriber) behind `BULK_UNSUBSCRIBE_ENABLED` (default OFF).
 
+Updated 2026-10-23: **Klorn Drive** now also appears on the web, on /files
+(D3's web UI step: upload, new folder, rename, move, delete), only while the
+drive answers for the person. Localized as on the Mac: "Klorn 드라이브" (ko),
+"Klorn ドライブ" (ja), "Klorn 云盘" (zh); "Klorn Drive" in en, de, es and fr.
+
 ## The nouns
 
 | Term | Means | Where it appears | Never means |
@@ -43,7 +48,7 @@ per-sender bulk unsubscriber) behind `BULK_UNSUBSCRIBE_ENABLED` (default OFF).
 | **Assistant** | The nav section holding chat, **Approvals**, Briefing and Receipt (shown as **Activity**). Lives at `/assistant/*` behind `UNIFIED_HOME` (default OFF, P7). | Sidebar nav; a tab row on phones | A lane or an agent mode. |
 | **Approvals** | The list of things waiting for the user's approval. Formerly the **Decision queue**. | Under Assistant | A mail list. Nothing lands here unless it needs a decision. With `UNIFIED_HOME` on it is `/assistant/approvals` (P7) and `/inbox` hands over to it; the screener's new senders and open commitments sit on the same page as secondary lists. With the flag off `/inbox` is still the legacy page (formerly the "Decision queue"), and its sidebar, tab and palette labels already read "Approvals". New copy uses "Approvals". |
 | **Files** | Documents from connected drive sources. | Sidebar nav, only when a drive source is enabled | Mail attachments. |
-| **Klorn Drive** | The person's own file storage in Klorn (D3). It holds only what the person uploads or imports; an import (D7) copies the files they pick, once. | Mac: File › "Import to Klorn Drive…" and Settings › Accounts, only while the drive is on | A view of iCloud Drive, MYBOX or any other service, or a sync: nothing appears there that the person did not put there, and a later change in that service is not reflected. |
+| **Klorn Drive** | The person's own file storage in Klorn (D3). It holds only what the person uploads or imports; an import (D7) copies the files they pick, once. Its files and folders are the only ones Klorn lets the person rename, move or delete; a delete is permanent (no trash). | Mac: File › "Import to Klorn Drive…" and Settings › Accounts; web: /files ("Upload files", "New folder", a row's "More actions", the "X of Y used" line). Only while the drive is on | A view of iCloud Drive, MYBOX or any other service, or a sync: nothing appears there that the person did not put there, and a later change in that service is not reflected. Never Google Drive or another connected source, whose files stay read-only (V4). |
 | **Google Drive** | A Google account linked for its Drive files (D5), picked files only: the person picks files in the Google Picker, and Klorn lists and searches them (and summarises them, from D5d). Klorn never changes them, sees no folder contents, and adds nothing the person did not pick. | /files: "Connect Google Drive" and "Add from Google Drive", only while Google Drive is on | **Klorn Drive**, a sync of the whole Google Drive, or the Gmail / Calendar connection: linking or disconnecting Google Drive changes neither. |
 | **SourceBadge** (source) | The small monochrome glyph showing which connected account a row or event came from. | Every mail row and calendar event | A lane or a category. |
 | **Firewall board** | Internal-docs term for the lane classification view. The separate screen is **retired as a user-facing term**: lanes are Mail's primary filter (PUSH / MEETING / QUEUE / INFO / SILENT). `/inbox/firewall` and the desktop tier columns persist in code until migration. | Internal docs only | A place to read mail, and never user-facing copy. |
