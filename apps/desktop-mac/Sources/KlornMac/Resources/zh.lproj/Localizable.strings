@@ -606,7 +606,6 @@
 "today.retry" = "重试";
 "today.clear.title" = "没有等待你处理的邮件";
 "today.clear.detail" = "新邮件经 Klorn 分类后会显示在这里。";
-"today.lane.a11y" = "%1$@，%2$d 封未处理";
 "today.lane.more" = "在邮件中再看 %d 封";
 "today.header.lane" = "%2$@ %1$d";
 "today.waiting.one" = "邮件中有 1 封待处理";

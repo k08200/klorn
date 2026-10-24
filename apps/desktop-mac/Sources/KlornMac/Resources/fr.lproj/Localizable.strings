@@ -606,7 +606,6 @@
 "today.retry" = "Réessayer";
 "today.clear.title" = "Rien ne vous attend";
 "today.clear.detail" = "Le nouveau courrier apparaît ici dès que Klorn l'a trié.";
-"today.lane.a11y" = "%1$@, %2$d ouverts";
 "today.lane.more" = "%d de plus dans Courrier";
 "today.header.lane" = "%1$d %2$@";
 "today.waiting.one" = "1 en attente dans Courrier";

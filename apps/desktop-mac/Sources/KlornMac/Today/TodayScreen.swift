@@ -165,9 +165,9 @@ private struct TodayLaneGroup: View {
             Button(action: openLane) {
                 HStack(spacing: Theme.s2) {
                     // The one chip spec (X1) heads the group, as on the web.
+                    // No count (founder decision 2026-10-24): the Today
+                    // header already counts Push and Meeting and the wait.
                     WindowLaneChip(tier: lane.tier)
-                    Text("\(lane.count)")
-                        .font(Theme.Typo.body.monospacedDigit()).foregroundStyle(Theme.textDim)
                     Spacer(minLength: Theme.s2)
                     if lane.style == .collapsed {
                         Image(systemName: "chevron.right").font(Theme.Typo.caption)
@@ -180,7 +180,7 @@ private struct TodayLaneGroup: View {
             }
             .buttonStyle(.plain)
             .help(lane.tier.blurb)
-            .accessibilityLabel(L("today.lane.a11y", lane.tier.label, lane.count))
+            .accessibilityLabel(lane.tier.label)
 
             if lane.style == .rows, !lane.rows.isEmpty {
                 VStack(spacing: 0) {
@@ -213,11 +213,11 @@ private struct TodayLaneGroup: View {
         }
     }
 
-    /// A quiet link row that opens this lane in Mail.
+    /// A quiet link row that opens this lane in Mail, in caption ink.
     private func laneLink(_ title: String) -> some View {
         Button(action: openLane) {
             Text(title)
-                .font(Theme.Typo.label).foregroundStyle(Theme.textDim)
+                .font(Theme.Typo.caption).foregroundStyle(Theme.textDim)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, Theme.s3)
                 .frame(height: 32)

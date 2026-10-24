@@ -4,10 +4,11 @@
  * Today, the lanes column — mail by lane across every connected account
  * (productization plan §1, P6; design detail pass W1/W2). PUSH and MEETING are
  * expanded (PUSH only inside Today's window — older PUSH is a link to Mail),
- * QUEUE is a count plus its top rows, INFO is one collapsed count
- * row, and SILENT is never shown. One row per thread: the newest message of
- * each thread, a count chip when the thread holds more, and lane counts that
- * count threads. Inside a lane card a row carries no LaneChip (the card is the
+ * QUEUE is its top rows, INFO is one collapsed row, and SILENT is never shown.
+ * A block header carries no count: Today's header already counts Push and
+ * Meeting and the wait in Mail (founder decision 2026-10-24); only the quiet
+ * "N more in …" link at a block's foot has a figure. One row per thread: the
+ * newest message of each thread, with a count chip when it holds more. Inside a lane card a row carries no LaneChip (the card is the
  * lane) but a lane rail and the reason in the lane's ink; a mail the judge has
  * not reached sits in QUEUE marked "Sorting…".
  */
@@ -16,7 +17,6 @@ import type { EmailLaneCounts, EmailListItem, LiveTier } from "@klorn/contract";
 import Link from "next/link";
 import { LaneChip, useLaneName } from "../../components/ui/lane-chip";
 import { MailRow } from "../../components/ui/mail-row";
-import { Skeleton, SkeletonGroup } from "../../components/ui/skeleton";
 import type { ConnectedAccount } from "../../lib/connected-accounts";
 import { useT } from "../../lib/i18n";
 import { formatRowTime, rowAccount, senderName } from "../email/_v2/model";
@@ -30,13 +30,7 @@ import {
   TodayBlock,
 } from "./block";
 import { MAIL_HREF, preselectMailLane } from "./mail-link";
-import {
-  EXPANDED_LANE_ROWS,
-  laneBlock,
-  olderOutsideWindow,
-  QUEUE_LANE_ROWS,
-  todayLaneCount,
-} from "./model";
+import { EXPANDED_LANE_ROWS, laneBlock, olderOutsideWindow, QUEUE_LANE_ROWS } from "./model";
 import { useLaneCounts, useLaneMail } from "./use-today-data";
 
 export interface TimeContext {
@@ -102,8 +96,6 @@ function LaneBlock({ lane, accounts, time }: LaneBlockProps) {
   const { shown, more } = laneBlock(mail.emails, mail.total, LANE_ROWS[lane]);
   const loaded = !mail.loading && !mail.failed;
   const laneTotal = laneThreads(counts.counts, lane);
-  // PUSH counts its windowed threads, the same figure the header strip shows.
-  const threads = todayLaneCount(lane, laneTotal, loaded ? mail.total : null);
   // PUSH older than Today's window stays in Mail; offer it once the window's
   // own rows (and their "N more") are exhausted.
   const older =
@@ -113,10 +105,6 @@ function LaneBlock({ lane, accounts, time }: LaneBlockProps) {
       headingId={`today-lane-${lane}`}
       title={<LaneChip tier={lane} />}
       hint={t(copy.hint)}
-      count={threads}
-      countLabel={
-        threads === null ? undefined : t("today.mail.threads", { count: String(threads) })
-      }
       className={copy.order}
     >
       {mail.loading && <MailRowsSkeleton rows={3} label={t("today.mail.loading")} />}
@@ -186,7 +174,7 @@ function LaneRow({
   );
 }
 
-/** INFO, collapsed: one row with the count, opening Mail on that lane. */
+/** INFO, collapsed: one row, opening Mail on that lane. */
 function InfoRow() {
   const { t } = useT();
   const counts = useLaneCounts(true);
@@ -203,7 +191,6 @@ function InfoRow() {
       </TodayBlock>
     );
   }
-  const total = laneThreads(counts.counts, "INFO") ?? 0;
   return (
     <section aria-labelledby={headingId} className={`order-5 min-w-0 ${CARD_CLASS}`}>
       <Link
@@ -218,15 +205,6 @@ function InfoRow() {
           {t("today.lane.info.hint")}
         </span>
         <span className="flex-1" />
-        {counts.loading ? (
-          <SkeletonGroup label={t("today.mail.loading")}>
-            <Skeleton width="w-6" />
-          </SkeletonGroup>
-        ) : (
-          <span className="text-caption tabular-nums text-ink-muted">
-            {t("today.mail.threads", { count: String(total) })}
-          </span>
-        )}
         <span className="text-ink-muted">
           <Chevron />
         </span>

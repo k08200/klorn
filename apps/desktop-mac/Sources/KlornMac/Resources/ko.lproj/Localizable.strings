@@ -606,7 +606,6 @@
 "today.retry" = "다시 시도";
 "today.clear.title" = "기다리는 메일이 없습니다";
 "today.clear.detail" = "새 메일은 Klorn이 분류하는 대로 여기에 나타납니다.";
-"today.lane.a11y" = "%1$@, 열린 메일 %2$d건";
 "today.lane.more" = "메일에서 %d건 더 보기";
 "today.header.lane" = "%2$@ %1$d";
 "today.waiting.one" = "메일에서 1건 대기";

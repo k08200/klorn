@@ -246,7 +246,6 @@ const es: Record<string, string> = {
   "today.mail.error": "No se pudo cargar este carril.",
   "today.mail.sample": "Este es correo de ejemplo, no el tuyo.",
   "today.mail.more": "{count} más en Correo",
-  "today.mail.threads": "{count} hilos",
   "today.mail.moreInLane": "{count} más en {lane}",
   "today.strip.label": "Hoy por carril",
   "today.strip.lane": "{count} {lane}",

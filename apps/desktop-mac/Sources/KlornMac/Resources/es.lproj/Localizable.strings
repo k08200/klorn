@@ -606,7 +606,6 @@
 "today.retry" = "Reintentar";
 "today.clear.title" = "Nada te está esperando";
 "today.clear.detail" = "El correo nuevo aparece aquí cuando Klorn lo clasifica.";
-"today.lane.a11y" = "%1$@, %2$d abiertos";
 "today.lane.more" = "%d más en Correo";
 "today.header.lane" = "%1$d %2$@";
 "today.waiting.one" = "1 en espera en Correo";

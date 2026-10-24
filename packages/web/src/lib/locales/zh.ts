@@ -227,7 +227,6 @@ const zh: Record<string, string> = {
   "today.mail.error": "无法加载此通道。",
   "today.mail.sample": "这是示例邮件，不是你的邮件。",
   "today.mail.more": "在邮件中查看其余 {count} 封",
-  "today.mail.threads": "{count} 个会话",
   "today.mail.moreInLane": "{lane} 中还有 {count} 个",
   "today.strip.label": "今日分类概览",
   "today.strip.lane": "{lane} {count}",

@@ -248,7 +248,6 @@ const fr: Record<string, string> = {
   "today.mail.error": "Impossible de charger cette voie.",
   "today.mail.sample": "Ceci est un courrier d'exemple, pas le vôtre.",
   "today.mail.more": "{count} de plus dans Courrier",
-  "today.mail.threads": "{count} fils",
   "today.mail.moreInLane": "{count} de plus dans {lane}",
   "today.strip.label": "Aujourd’hui par voie",
   "today.strip.lane": "{count} {lane}",
