@@ -34,6 +34,7 @@ import { reconcileInboxValidity, removeRecentlyMovedRows } from "./imap-poll-gua
 import type { ImapProviderConfig } from "./imap-providers.js";
 import { liveUidValidity } from "./imap-uidvalidity.js";
 import { sanitizeLogText } from "./log-text.js";
+import { isImapAuthFailure } from "./providers/imap-session.js";
 import { MAX_STORED_BODY_CHARS, snippetFromBody } from "./stored-mail-text.js";
 
 interface VerifyArgs {
@@ -43,9 +44,16 @@ interface VerifyArgs {
   host: string; // "imap.naver.com:993"
 }
 
+/**
+ * Machine-readable reason a verify failed, for clients that localize the message
+ * (the macOS connect sheet). Absent for a failure we cannot classify.
+ */
+export type VerifyFailureCode = "IMAP_AUTH_FAILED" | "IMAP_UNREACHABLE";
+
 interface VerifyResult {
   ok: boolean;
   message?: string;
+  code?: VerifyFailureCode;
 }
 
 export async function verifyImapCredentials(args: VerifyArgs): Promise<VerifyResult> {
@@ -71,11 +79,17 @@ export async function verifyImapCredentials(args: VerifyArgs): Promise<VerifyRes
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     // Map common IMAP error shapes to user-readable hints.
-    if (/authentication failed/i.test(msg) || /AUTH=/i.test(msg)) {
-      return { ok: false, message: args.provider.authFailureHint };
+    // imapflow reports a rejected LOGIN as Error("Command failed") with
+    // `authenticationFailed` set, so the flag — not the text — is the real signal.
+    if (isImapAuthFailure(err) || /authentication failed/i.test(msg) || /AUTH=/i.test(msg)) {
+      return { ok: false, message: args.provider.authFailureHint, code: "IMAP_AUTH_FAILED" };
     }
     if (/timeout|ECONN|ENOTFOUND/i.test(msg)) {
-      return { ok: false, message: `Could not reach ${args.host}: ${msg}` };
+      return {
+        ok: false,
+        message: `Could not reach ${args.host}: ${msg}`,
+        code: "IMAP_UNREACHABLE",
+      };
     }
     return { ok: false, message: msg };
   }

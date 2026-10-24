@@ -385,6 +385,26 @@
 "account.imap.failed" = "Dieses Postfach konnte nicht verbunden werden.";
 "account.imap.rateLimited" = "Zu viele Versuche. Bitte in ein paar Minuten erneut versuchen.";
 "account.imap.disconnectFailed" = "Dieses Postfach konnte nicht getrennt werden.";
+"account.icloud.connect" = "iCloud Mail verbinden…";
+"account.icloud.title" = "iCloud Mail verbinden";
+"account.naver.title" = "Naver Mail verbinden";
+"account.icloud.body" = "iCloud Mail (beta) wird per IMAP verbunden. Klorn sortiert jede neue Nachricht in dieselben Spuren wie Gmail.";
+"account.icloud.email" = "Apple-ID-E-Mail";
+"account.icloud.password" = "App-spezifisches Passwort";
+"account.icloud.password.hint" = "Verwende ein app-spezifisches Passwort, nicht dein Apple-ID-Passwort. Erstelle es unter appleid.apple.com ▸ Anmelden und Sicherheit ▸ App-spezifische Passwörter. Die Zwei-Faktor-Authentifizierung muss aktiv sein.";
+"account.icloud.help.link" = "appleid.apple.com öffnen";
+"account.icloud.error.authFailed" = "iCloud hat die Anmeldung abgelehnt. Verwende ein app-spezifisches Passwort von appleid.apple.com, nicht dein Apple-ID-Passwort. Die Zwei-Faktor-Authentifizierung muss aktiv sein.";
+"account.naver.error.authFailed" = "Naver hat die Anmeldung abgelehnt. Schalte IMAP in den Naver-Mail-Einstellungen ein und verwende das dortige App-Passwort, nicht dein Anmeldepasswort.";
+"account.imap.connecting" = "Verbinde…";
+"account.imap.error.unreachable" = "Der Mailserver war nicht erreichbar. Versuche es gleich noch einmal.";
+"account.imap.error.tooMany" = "Du hast die maximale Anzahl an Postfächern für diesen Anbieter verbunden.";
+"account.imap.error.invalidEmail" = "Gib eine gültige E-Mail-Adresse ein.";
+"account.imap.error.needsPro" = "Für ein zweites Mailkonto brauchst du Klorn Pro.";
+"account.imap.error.offline" = "Dieser Mac ist offline. Verbinde dich mit dem Internet und versuche es erneut.";
+"account.icloud.error.unavailable" = "iCloud Mail ist auf diesem Server noch nicht verfügbar.";
+"account.naver.error.unavailable" = "Naver Mail ist auf diesem Server noch nicht verfügbar.";
+"account.imap.error.insecure" = "Klorn sendet ein App-Passwort nur über eine sichere (HTTPS-)Verbindung.";
+"account.imap.submit" = "Verbinden";
 
 /* Attention mode (기본/auto) */
 "mode.section" = "ANTWORTMODUS";

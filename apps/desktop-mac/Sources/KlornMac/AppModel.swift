@@ -520,9 +520,13 @@ final class AppModel {
         await refreshTeams()
     }
 
-    /// Naver IMAP mailboxes, fetched from the ungated status endpoint so the
-    /// account list is complete even while the provider selector flag is off.
-    private(set) var imapAccounts: [ImapAccount] = []
+    /// IMAP mailboxes per provider, fetched from each provider's status
+    /// endpoint so the account list is complete even while the provider
+    /// selector flag is off.
+    private(set) var imapAccounts: [ImapMailProvider: [ImapAccount]] = [:]
+    /// Providers whose routes answered: Naver's are never gated; iCloud's 404
+    /// while ICLOUD_INBOX_ENABLED is off, and its entry point stays hidden.
+    private(set) var availableImapProviders: Set<ImapMailProvider> = [.naver]
     private(set) var imapError: String?
     private(set) var isConnectingImap = false
 
@@ -589,64 +593,68 @@ final class AppModel {
         }
     }
 
-    /// Reload the Naver IMAP mailbox list. Silent on failure — the section
-    /// simply shows nothing rather than an error the user can't act on.
+    /// Reload every IMAP provider's mailbox list. Silent on failure — the
+    /// section simply keeps what it had rather than an error the user can't
+    /// act on. A 404 means the provider is off on this server: hide it.
     func refreshImapAccounts() async {
+        for provider in ImapMailProvider.allCases { await refreshImapAccounts(provider) }
+    }
+
+    private func refreshImapAccounts(_ provider: ImapMailProvider) async {
         let session = sessionGeneration
         do {
-            let status = try await api.fetchNaverStatus()
+            let status = try await api.fetchImapStatus(provider)
             guard isCurrent(session) else { return }
-            imapAccounts = status.resolvedAccounts(fallbackEmail: nil)
+            imapAccounts = imapAccounts.merging(
+                [provider: status.resolvedAccounts(fallbackEmail: nil)]) { $1 }
+            availableImapProviders = availableImapProviders.union([provider])
+        } catch APIError.http(404, _) {
+            guard isCurrent(session), provider != .naver else { return }
+            imapAccounts = imapAccounts.filter { $0.key != provider }
+            availableImapProviders = availableImapProviders.subtracting([provider])
         } catch {
             Log.app.debug("imap status fetch failed: \(String(describing: error), privacy: .private)")
         }
     }
 
-    /// Connect a Naver mailbox. The app password travels straight to the
-    /// server (live IMAP verify + enciphered storage) and is never written to
-    /// disk here. Returns true when the mailbox was accepted, so the form can
-    /// clear its fields on success only.
-    func connectNaverInbox(email: String, password: String) async -> Bool {
-        guard !isConnectingImap else { return false }
+    /// Connect an IMAP mailbox. The app password travels straight to the
+    /// server (live IMAP verify + enciphered storage) in this one request and
+    /// is never written to disk, defaults or the Keychain here. The sheet
+    /// clears its fields on `.connected` and when it closes.
+    func connectImapInbox(
+        _ provider: ImapMailProvider, email: String, secret: String
+    ) async -> ImapConnectOutcome {
+        guard !isConnectingImap else { return .ignored }
         let session = sessionGeneration
         isConnectingImap = true
         defer { if isCurrent(session) { isConnectingImap = false } }
         imapError = nil
         do {
-            try await api.connectNaver(email: email, password: password)
-            guard isCurrent(session) else { return false }
-            await refreshImapAccounts()
+            try await api.connectImap(provider, email: email, password: secret)
+            guard isCurrent(session) else { return .ignored }
+            await refreshImapAccounts(provider)
             await refreshInboxes()
             await loadQueue()
-            return isCurrent(session)
+            return isCurrent(session) ? .connected : .ignored
         } catch _ where !isCurrent(session) {
-            return false
+            return .ignored
         } catch APIError.unauthorized {
             sessionRejected()
-            return false
-        } catch APIError.forbidden {
-            // Entitlement, not a dead session — never sign the user out here.
-            imapError = L("error.needsPro")
-            return false
-        } catch let APIError.http(status, message) {
-            // 400 carries the server's real reason (bad app password, host
-            // mismatch); 429 is the 5-per-15-minutes connect limit.
-            imapError = status == 429 ? L("account.imap.rateLimited") : (message ?? L("account.imap.failed"))
-            return false
+            return .ignored
         } catch {
-            imapError = L("account.imap.failed")
-            return false
+            // 403 is the entitlement (never a dead session — no sign-out here).
+            return .failed(ImapConnectFailure.classify(error))
         }
     }
 
-    /// Disconnect ONE Naver mailbox (never the bodyless all-accounts form).
-    func disconnectNaverInbox(email: String) async {
+    /// Disconnect ONE IMAP mailbox (never the bodyless all-accounts form).
+    func disconnectImapInbox(_ provider: ImapMailProvider, email: String) async {
         let session = sessionGeneration
         imapError = nil
         do {
-            try await api.disconnectNaver(email: email)
+            try await api.disconnectImap(provider, email: email)
             guard isCurrent(session) else { return }
-            await refreshImapAccounts()
+            await refreshImapAccounts(provider)
             await refreshInboxes()
         } catch _ where !isCurrent(session) {
             return
@@ -1989,6 +1997,14 @@ final class AppModel {
         waitingOn = items
     }
 
+    /// Render-probe seam: the IMAP accounts and which providers the server has.
+    func seedImapForRender(
+        accounts: [ImapMailProvider: [ImapAccount]], available: Set<ImapMailProvider>
+    ) {
+        imapAccounts = accounts
+        availableImapProviders = available
+    }
+
     /// Render-probe seam: the offscreen calendar shots need events without a
     /// network. Internal, used only by PreviewRender.
     func seedCalendarForRender(_ events: [CalendarEventWire]) {
@@ -2464,7 +2480,8 @@ final class AppModel {
             field("teamAvailability", \.teamAvailability, nil, isClean: { $0 == nil }),
             text("checkingTeamId", \.checkingTeamId),
             text("teamBookingResult", \.teamBookingResult),
-            field("imapAccounts", \.imapAccounts, [], isClean: { $0.isEmpty }),
+            field("imapAccounts", \.imapAccounts, [:], dirty: [.icloud: []]),
+            field("availableImapProviders", \.availableImapProviders, [.naver], dirty: [.naver, .icloud]),
             text("imapError", \.imapError),
             flag("isConnectingImap", \.isConnectingImap),
             flag("isLinkingAccount", \.isLinkingAccount),

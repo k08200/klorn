@@ -925,18 +925,26 @@ func providerLabel(_ provider: String?) -> String {
 }
 
 /// Whether an IMAP connect form may be submitted: an address that looks like
-/// one, and a non-empty app password. Deliberately permissive on the address
-/// (the server verifies with a real LOGIN) but it must not be blank or carry
-/// a second recipient. Pure for the harness.
+/// one, and an app password within the server's 4…200 characters. Permissive
+/// on the address (the server verifies with a real LOGIN) but it must not be
+/// blank, carry a second recipient, or hold what the server's format refuses
+/// (':' and '\\' never reach a row id; 200 characters at most). Pure.
 func canSubmitImapConnect(email: String, password: String) -> Bool {
     let mail = email.trimmingCharacters(in: .whitespacesAndNewlines)
     let pass = password.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !pass.isEmpty, pass.count >= 4 else { return false }
-    guard !mail.contains(","), !mail.contains(" ") else { return false }
-    let parts = mail.split(separator: "@")
-    guard parts.count == 2, !parts[0].isEmpty, parts[1].contains(".") else { return false }
-    return true
+    guard pass.count >= imapPasswordMin, password.count <= imapFieldMax else { return false }
+    guard mail.count <= imapFieldMax else { return false }
+    let refused: Set<Character> = [",", " ", ":", "\\", "\t", "\n"]
+    guard !mail.contains(where: { refused.contains($0) }) else { return false }
+    let parts = mail.split(separator: "@", omittingEmptySubsequences: false)
+    guard parts.count == 2, !parts[0].isEmpty else { return false }
+    let domain = parts[1]
+    return domain.contains(".") && !domain.hasPrefix(".") && !domain.hasSuffix(".")
 }
+
+/// The server's connect schema bounds (routes/imap-connect.ts connectBodySchema).
+private let imapPasswordMin = 4
+private let imapFieldMax = 200
 
 /// GET /api/email/inboxes response envelope.
 struct InboxesResponse: Codable, Sendable {

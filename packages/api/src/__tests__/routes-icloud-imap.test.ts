@@ -42,9 +42,14 @@ vi.mock("../db.js", () => {
 vi.mock("../crypto-tokens.js", () => ({ encryptToken: vi.fn(() => "cipher") }));
 const startFirstImapSync = vi.hoisted(() => vi.fn((..._args: unknown[]) => true));
 vi.mock("../mail/imap-first-sync.js", () => ({ startFirstImapSync }));
-vi.mock("../mail/imap-sync.js", () => ({
-  verifyImapCredentials: vi.fn(async () => ({ ok: true })),
-}));
+const verifyImapCredentials = vi.hoisted(() =>
+  vi.fn(
+    async (..._args: unknown[]): Promise<{ ok: boolean; message?: string; code?: string }> => ({
+      ok: true,
+    }),
+  ),
+);
+vi.mock("../mail/imap-sync.js", () => ({ verifyImapCredentials }));
 
 const ORIGINAL_FLAG = process.env.ICLOUD_INBOX_ENABLED;
 
@@ -185,6 +190,43 @@ describe("flag ON — generalized connect route, provider ICLOUD", () => {
         }),
       }),
     );
+    await app.close();
+  });
+
+  it("POST /connect passes the verify failure's machine code through (400)", async () => {
+    verifyImapCredentials.mockResolvedValueOnce({
+      ok: false,
+      message: "iCloud IMAP login failed.",
+      code: "IMAP_AUTH_FAILED",
+    });
+    const { app, headers } = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/icloud-imap/connect",
+      headers,
+      payload: { email: "you@icloud.example", password: "abcd-efgh-ijkl-mnop" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({
+      ok: false,
+      message: "iCloud IMAP login failed.",
+      code: "IMAP_AUTH_FAILED",
+    });
+    expect(db.upsert).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("POST /connect answers a code-less verify failure without a code field", async () => {
+    verifyImapCredentials.mockResolvedValueOnce({ ok: false, message: "odd failure" });
+    const { app, headers } = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/icloud-imap/connect",
+      headers,
+      payload: { email: "you@icloud.example", password: "abcd-efgh-ijkl-mnop" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ ok: false, message: "odd failure" });
     await app.close();
   });
 

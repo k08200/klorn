@@ -130,6 +130,57 @@ describe("verifyImapCredentials", () => {
     expect(result.message).toMatch(/app-specific password/);
   });
 
+  it("maps imapflow's real LOGIN rejection (authenticationFailed) to the hint + IMAP_AUTH_FAILED", async () => {
+    // imapflow 1.3.3 commands/login.js: a NO to LOGIN throws Error("Command failed")
+    // with authenticationFailed = true — the message alone never says "authentication".
+    connectFn.mockRejectedValueOnce(
+      Object.assign(new Error("Command failed"), {
+        authenticationFailed: true,
+        serverResponseCode: "AUTHENTICATIONFAILED",
+      }),
+    );
+
+    const result = await verifyImapCredentials({
+      provider: IMAP_PROVIDERS.ICLOUD,
+      email: "you@icloud.example",
+      password: "abcd-efgh-ijkl-mnop",
+      host: "imap.mail.me.com:993",
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      message: IMAP_PROVIDERS.ICLOUD.authFailureHint,
+      code: "IMAP_AUTH_FAILED",
+    });
+  });
+
+  it("tags an unreachable host IMAP_UNREACHABLE", async () => {
+    connectFn.mockRejectedValueOnce(new Error("Socket timeout"));
+
+    const result = await verifyImapCredentials({
+      provider: IMAP_PROVIDERS.ICLOUD,
+      email: "you@icloud.example",
+      password: "abcd-efgh-ijkl-mnop",
+      host: "imap.mail.me.com:993",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.code).toBe("IMAP_UNREACHABLE");
+  });
+
+  it("leaves an unknown failure without a code", async () => {
+    connectFn.mockRejectedValueOnce(new Error("some unexpected IMAP error"));
+
+    const result = await verifyImapCredentials({
+      provider: IMAP_PROVIDERS.ICLOUD,
+      email: "you@icloud.example",
+      password: "abcd-efgh-ijkl-mnop",
+      host: "imap.mail.me.com:993",
+    });
+
+    expect(result.code).toBeUndefined();
+  });
+
   it("connects with the 12 s verify timeout and the parsed host and port", async () => {
     connectFn.mockResolvedValueOnce(undefined);
     getLockFn.mockResolvedValueOnce({ release: () => {} });

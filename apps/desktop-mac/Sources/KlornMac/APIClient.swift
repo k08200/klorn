@@ -51,30 +51,54 @@ struct APIClient: Sendable {
         try await get("/api/email/inboxes")
     }
 
-    /// GET /api/naver-imap/status — connected Naver mailboxes. Not gated by
-    /// the provider-selector flag, so it is the reliable source for the
-    /// account list even when /api/email/inboxes hides non-Google rows.
-    func fetchNaverStatus() async throws -> ImapStatusResponse {
-        try await get("/api/naver-imap/status")
+    /// GET /api/<provider>-imap/status — that provider's connected mailboxes.
+    /// Naver's is never gated; iCloud's answers 404 while its flag is off.
+    /// Either way it is the reliable account list, even when
+    /// /api/email/inboxes hides non-Google rows.
+    func fetchImapStatus(_ provider: ImapMailProvider) async throws -> ImapStatusResponse {
+        try await get(provider.statusPath)
     }
 
-    /// POST /api/naver-imap/connect. The app password is passed straight
-    /// through to the server (which verifies it with a live IMAP login and
-    /// stores it enciphered) and is never persisted on this machine.
-    func connectNaver(email: String, password: String) async throws {
-        let body = try JSONEncoder().encode(["email": email, "password": password])
-        _ = try await data(
-            "/api/naver-imap/connect", method: "POST", body: body,
-            contentType: "application/json")
+    /// POST /api/<provider>-imap/connect with exactly `{ email, password }`.
+    /// The app password is passed straight through to the server (which
+    /// verifies it with a live IMAP login and stores it enciphered) and is
+    /// never persisted or logged on this machine. Its own request, like
+    /// `putDeviceCalendarSnapshot`: a refusal's machine `code` matters, so a
+    /// non-2xx answer throws `ImapConnectRejection` rather than `APIError.http`.
+    func connectImap(_ provider: ImapMailProvider, email: String, password: String) async throws {
+        guard ImapConnectRequest.isSecureBase(base) else { throw ImapConnectRequest.InsecureTransport() }
+        var req = URLRequest(url: try url(provider.connectPath))
+        req.httpMethod = "POST"
+        req.httpBody = try ImapConnectRequest.body(email: email, password: password)
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let t = token() { req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization") }
+        let bytes: Data
+        let resp: URLResponse
+        do {
+            (bytes, resp) = try await session.data(for: req)
+        } catch {
+            throw APIError.transport(
+                error.localizedDescription, code: (error as? URLError)?.code.rawValue)
+        }
+        guard let http = resp as? HTTPURLResponse else { throw APIError.transport("non-HTTP response") }
+        switch http.statusCode {
+        case 200...299: return
+        case 401: throw APIError.unauthorized
+        default:
+            struct Reply: Decodable { let message: String?; let error: String?; let code: String? }
+            let reply = try? JSONDecoder().decode(Reply.self, from: bytes)
+            throw ImapConnectRejection(
+                status: http.statusCode, code: reply?.code, message: reply?.message ?? reply?.error)
+        }
     }
 
-    /// POST /api/naver-imap/disconnect — ALWAYS with an email: the bodyless
-    /// form removes every mailbox for the provider, which no desktop control
-    /// should be able to trigger by accident.
-    func disconnectNaver(email: String) async throws {
+    /// POST /api/<provider>-imap/disconnect — ALWAYS with an email: the
+    /// bodyless form removes every mailbox for the provider, which no desktop
+    /// control should be able to trigger by accident.
+    func disconnectImap(_ provider: ImapMailProvider, email: String) async throws {
         let body = try JSONEncoder().encode(["email": email])
         _ = try await data(
-            "/api/naver-imap/disconnect", method: "POST", body: body,
+            provider.disconnectPath, method: "POST", body: body,
             contentType: "application/json")
     }
 

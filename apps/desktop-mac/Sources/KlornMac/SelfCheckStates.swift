@@ -190,7 +190,7 @@ func stateSelfChecks(sourceDir: URL) -> [(String, Bool)] {
           users(of: "await model.restart" + "SignIn()") == ["OnboardingView.swift", "SurfaceState.swift"]
           && text("AppModel.swift").contains("signInProvider = provider\n        signInTask?.cancel()"))
     check("the API client carries the URLError code on every transport failure",
-          text("APIClient.swift").components(separatedBy: "code: (error as? URLError)?.code.rawValue").count == 4)
+          text("APIClient.swift").components(separatedBy: "code: (error as? URLError)?.code.rawValue").count == 5)
     check("the sign-in error is not system orange",
           !text("SurfaceState.swift").contains(".orange") && !text("OnboardingView.swift").contains(".orange"))
     let onboardingFiles = ["OnboardingWindow.swift", "OnboardingView.swift", "SurfaceState.swift"]

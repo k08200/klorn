@@ -385,6 +385,26 @@
 "account.imap.failed" = "Impossible de connecter cette boîte.";
 "account.imap.rateLimited" = "Trop de tentatives. Réessayez dans quelques minutes.";
 "account.imap.disconnectFailed" = "Impossible de déconnecter cette boîte.";
+"account.icloud.connect" = "Connecter iCloud Mail…";
+"account.icloud.title" = "Connecter iCloud Mail";
+"account.naver.title" = "Connecter Naver Mail";
+"account.icloud.body" = "iCloud Mail (beta) se connecte en IMAP. Klorn classe chaque nouveau message dans les mêmes voies que Gmail.";
+"account.icloud.email" = "E-mail de l’identifiant Apple";
+"account.icloud.password" = "Mot de passe pour app";
+"account.icloud.password.hint" = "Utilisez un mot de passe pour app, pas celui de votre identifiant Apple. Créez-le sur appleid.apple.com ▸ Connexion et sécurité ▸ Mots de passe pour app. L’identification à deux facteurs doit être activée.";
+"account.icloud.help.link" = "Ouvrir appleid.apple.com";
+"account.icloud.error.authFailed" = "iCloud a refusé la connexion. Utilisez un mot de passe pour app créé sur appleid.apple.com, pas celui de votre identifiant Apple. L’identification à deux facteurs doit être activée.";
+"account.naver.error.authFailed" = "Naver a refusé la connexion. Activez IMAP dans les réglages de Naver Mail et utilisez le mot de passe d’app indiqué, pas votre mot de passe de connexion.";
+"account.imap.connecting" = "Connexion…";
+"account.imap.error.unreachable" = "Impossible de joindre le serveur de messagerie. Réessayez dans un instant.";
+"account.imap.error.tooMany" = "Vous avez connecté le nombre maximal de boîtes pour ce fournisseur.";
+"account.imap.error.invalidEmail" = "Saisissez une adresse e-mail valide.";
+"account.imap.error.needsPro" = "Connecter un deuxième compte de messagerie nécessite Klorn Pro.";
+"account.imap.error.offline" = "Ce Mac est hors ligne. Connectez-vous à Internet et réessayez.";
+"account.icloud.error.unavailable" = "iCloud Mail n’est pas encore disponible sur ce serveur.";
+"account.naver.error.unavailable" = "Naver Mail n’est pas encore disponible sur ce serveur.";
+"account.imap.error.insecure" = "Klorn n’envoie un mot de passe d’app que par une connexion sécurisée (HTTPS).";
+"account.imap.submit" = "Connecter";
 
 /* Attention mode (기본/auto) */
 "mode.section" = "MODE DE RÉPONSE";

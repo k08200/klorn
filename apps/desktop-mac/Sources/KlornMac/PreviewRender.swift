@@ -275,6 +275,8 @@ enum PreviewRender {
         ok = renderMainWindow(dir: dir, dark: renderDark, actions: actions) && ok
         // The compose window and the sheets (M5).
         ok = renderWindows(dir: dir, dark: renderDark) && ok
+        // Settings ▸ Accounts' IMAP connect form (Naver + iCloud Mail).
+        ok = renderImapConnect(dir: dir, dark: renderDark) && ok
         // Signed out, offline, failed and first launch (M6).
         return renderStates(
             dir: dir, dark: renderDark, actions: actions, firewallJSON: firewallJSON) && ok

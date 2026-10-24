@@ -337,7 +337,7 @@ func sessionSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
     check("the fields checked without being set first are the known few",
           fields.filter { $0.dirty == nil }.map(\.name).sorted() == [
               "agentToday", "automation", "calendarRangeEvents", "diagnostics", "editingEvent",
-              "imapAccounts", "mailboxDetail", "pendingActions", "purposePromptTarget",
+              "mailboxDetail", "pendingActions", "purposePromptTarget",
               "selectedMailboxItem", "teamAvailability", "teams", "waitingOn",
           ])
 

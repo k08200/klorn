@@ -71,7 +71,11 @@ describe("verifyGenericImapCredentials", () => {
   it("keeps the provider's own hint for a rejected login", async () => {
     fake.connect.mockRejectedValue(new Error("Authentication failed (AUTH=PLAIN)"));
     const result = await verifyGenericImapCredentials(args);
-    expect(result).toEqual({ ok: false, message: GENERIC.authFailureHint });
+    expect(result).toEqual({
+      ok: false,
+      message: GENERIC.authFailureHint,
+      code: "IMAP_AUTH_FAILED",
+    });
     expect(result.message).not.toBe(GENERIC_CONNECT_FAILURE);
   });
 

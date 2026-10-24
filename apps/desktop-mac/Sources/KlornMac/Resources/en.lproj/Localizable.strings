@@ -385,6 +385,26 @@
 "account.imap.failed" = "Could not connect that mailbox.";
 "account.imap.rateLimited" = "Too many attempts. Try again in a few minutes.";
 "account.imap.disconnectFailed" = "Could not disconnect that mailbox.";
+"account.icloud.connect" = "Connect iCloud Mail…";
+"account.icloud.title" = "Connect iCloud Mail";
+"account.naver.title" = "Connect Naver Mail";
+"account.icloud.body" = "iCloud Mail (beta) connects over IMAP. Klorn sorts every new message into the same lanes as Gmail.";
+"account.icloud.email" = "Apple ID email";
+"account.icloud.password" = "App-specific password";
+"account.icloud.password.hint" = "Use an app-specific password, not your Apple ID password. Create one at appleid.apple.com ▸ Sign-In and Security ▸ App-Specific Passwords. Two-factor authentication must be on.";
+"account.icloud.help.link" = "Open appleid.apple.com";
+"account.icloud.error.authFailed" = "iCloud refused the sign-in. Use an app-specific password from appleid.apple.com, not your Apple ID password. Two-factor authentication must be on.";
+"account.naver.error.authFailed" = "Naver refused the sign-in. Turn on IMAP in Naver Mail settings and use the app password from there, not your login password.";
+"account.imap.connecting" = "Connecting…";
+"account.imap.error.unreachable" = "Couldn't reach the mail server. Try again in a moment.";
+"account.imap.error.tooMany" = "You've connected the most mailboxes allowed for this provider.";
+"account.imap.error.invalidEmail" = "Enter a valid email address.";
+"account.imap.error.needsPro" = "Connecting a second mail account needs Klorn Pro.";
+"account.imap.error.offline" = "This Mac is offline. Connect to the internet and try again.";
+"account.icloud.error.unavailable" = "iCloud Mail isn't available on this server yet.";
+"account.naver.error.unavailable" = "Naver Mail isn't available on this server yet.";
+"account.imap.error.insecure" = "Klorn only sends an app password over a secure (HTTPS) connection.";
+"account.imap.submit" = "Connect";
 
 /* Attention mode (기본/auto) */
 "mode.section" = "REPLY MODE";

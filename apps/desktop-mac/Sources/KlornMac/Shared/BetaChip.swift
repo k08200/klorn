@@ -19,9 +19,9 @@ struct BetaChip: View {
 }
 
 /// Which mail sources are still in beta. Connectable on this build: Gmail /
-/// Google Calendar (Google sign-in) and Naver Mail (IMAP, beta); iCloud Mail
-/// (beta) is connected on the web and listed here. Outlook is decoded for
-/// display if a server sends it, but never offered. Pure for the harness.
+/// Google Calendar (Google sign-in), Naver Mail and iCloud Mail (IMAP, beta —
+/// iCloud only while the server has it). Outlook is decoded for display if a
+/// server sends it, but never offered. Pure for the harness.
 enum MailSourceCatalog {
     /// Whether a mailbox's provider carries the Beta tag.
     static func isBeta(_ provider: String?) -> Bool {

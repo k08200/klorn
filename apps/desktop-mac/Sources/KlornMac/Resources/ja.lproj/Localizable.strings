@@ -385,6 +385,26 @@
 "account.imap.failed" = "そのメールボックスに接続できませんでした。";
 "account.imap.rateLimited" = "試行回数が多すぎます。数分後にもう一度お試しください。";
 "account.imap.disconnectFailed" = "そのメールボックスの接続を解除できませんでした。";
+"account.icloud.connect" = "iCloudメールを接続…";
+"account.icloud.title" = "iCloudメールを接続";
+"account.naver.title" = "Naverメールを接続";
+"account.icloud.body" = "iCloud Mail (beta) はIMAPで接続します。新着メールはGmailと同じレーンに振り分けられます。";
+"account.icloud.email" = "Apple IDのメールアドレス";
+"account.icloud.password" = "App用パスワード";
+"account.icloud.password.hint" = "Apple IDのパスワードではなく、App用パスワードを使ってください。appleid.apple.com ▸ サインインとセキュリティ ▸ App用パスワードで作成できます。2ファクタ認証がオンである必要があります。";
+"account.icloud.help.link" = "appleid.apple.comを開く";
+"account.icloud.error.authFailed" = "iCloudがサインインを拒否しました。Apple IDのパスワードではなく、appleid.apple.comで作成したApp用パスワードを使ってください。2ファクタ認証がオンである必要があります。";
+"account.naver.error.authFailed" = "Naverがサインインを拒否しました。Naverメールの設定でIMAPをオンにし、ログインパスワードではなくそこのアプリパスワードを使ってください。";
+"account.imap.connecting" = "接続中…";
+"account.imap.error.unreachable" = "メールサーバーに接続できませんでした。少し待ってからもう一度お試しください。";
+"account.imap.error.tooMany" = "このサービスで接続できるメールボックスの上限に達しています。";
+"account.imap.error.invalidEmail" = "有効なメールアドレスを入力してください。";
+"account.imap.error.needsPro" = "2つ目のメールアカウントを接続するにはKlorn Proが必要です。";
+"account.imap.error.offline" = "このMacはオフラインです。インターネットに接続してもう一度お試しください。";
+"account.icloud.error.unavailable" = "このサーバーではiCloudメールはまだ利用できません。";
+"account.naver.error.unavailable" = "このサーバーではNaverメールはまだ利用できません。";
+"account.imap.error.insecure" = "KlornはApp用パスワードを安全な（HTTPS）接続でのみ送信します。";
+"account.imap.submit" = "接続";
 
 /* Attention mode (기본/auto) */
 "mode.section" = "返信モード";

@@ -388,14 +388,18 @@ private struct ShortcutRecorder: View {
 /// so they are listed read-only here.
 struct InboxAccountsSection: View {
     let model: AppModel
-    @State private var naverEmail = ""
-    @State private var naverPassword = ""
-    @State private var showConnectForm = false
-    @State private var pendingDisconnect: ImapAccount?
+    @State private var connectingProvider: ImapMailProvider?
+    @State private var pendingDisconnect: PendingImapDisconnect?
+
+    /// The IMAP mailbox a disconnect confirmation is about.
+    struct PendingImapDisconnect: Equatable {
+        let provider: ImapMailProvider
+        let email: String
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            ForEach(model.inboxes) { inbox in
+            ForEach(inboxesNotListedAsImap(model.inboxes, imap: model.imapAccounts)) { inbox in
                 accountRow(
                     email: inbox.email ?? L("inbox.unknownAddress"),
                     provider: providerLabel(inbox.provider),
@@ -404,28 +408,32 @@ struct InboxAccountsSection: View {
                     detail: nil,
                     onDisconnect: nil)
             }
-            ForEach(model.imapAccounts) { account in
-                accountRow(
-                    email: account.email,
-                    provider: providerLabel("NAVER"),
-                    beta: MailSourceCatalog.isBeta("NAVER"),
-                    needsReconnect: account.needsReconnect,
-                    detail: account.host,
-                    onDisconnect: { pendingDisconnect = account })
+            ForEach(ImapMailProvider.allCases) { provider in
+                ForEach(model.imapAccounts[provider] ?? []) { account in
+                    accountRow(
+                        email: account.email,
+                        provider: providerLabel(provider.rawValue),
+                        beta: MailSourceCatalog.isBeta(provider.rawValue),
+                        needsReconnect: account.needsReconnect,
+                        detail: account.host,
+                        onDisconnect: {
+                            pendingDisconnect = PendingImapDisconnect(provider: provider, email: account.email)
+                        })
+                }
             }
-            if model.inboxes.isEmpty && model.imapAccounts.isEmpty {
+            if model.inboxes.isEmpty && model.imapAccounts.values.allSatisfy(\.isEmpty) {
                 Text(L("prefs.inboxes.empty"))
                     .font(.caption).foregroundStyle(Theme.textDim)
                     .fixedSize(horizontal: false, vertical: true)
             }
-
-            if showConnectForm {
-                connectForm
+            if let provider = connectingProvider {
+                ImapConnectForm(provider: provider, model: model) { connectingProvider = nil }
+                    .id(provider)
             } else {
-                HStack(spacing: 6) {
-                    Button(L("account.naver.connect")) { showConnectForm = true }
-                        .buttonStyle(.bordered).controlSize(.small)
-                    BetaChip()
+                connectButton(.naver, title: L("account.naver.connect"))
+                // Drawn only while the server has iCloud Mail (its status 404s while off).
+                if model.availableImapProviders.contains(.icloud) {
+                    connectButton(.icloud, title: L("account.icloud.connect"))
                 }
             }
             if let error = model.imapError {
@@ -441,46 +449,19 @@ struct InboxAccountsSection: View {
                 set: { if !$0 { pendingDisconnect = nil } })
         ) {
             Button(L("account.disconnect"), role: .destructive) {
-                guard let account = pendingDisconnect else { return }
+                guard let target = pendingDisconnect else { return }
                 pendingDisconnect = nil
-                Task { await model.disconnectNaverInbox(email: account.email) }
+                Task { await model.disconnectImapInbox(target.provider, email: target.email) }
             }
             Button(L("common.cancel"), role: .cancel) { pendingDisconnect = nil }
         }
     }
 
-    private var connectForm: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(L("account.naver.password.hint"))
-                .font(.caption).foregroundStyle(Theme.textDim)
-                .fixedSize(horizontal: false, vertical: true)
-            textInput($naverEmail, label: L("account.naver.email"), secure: false)
-            textInput($naverPassword, label: L("account.naver.password"), secure: true)
-            HStack(spacing: 8) {
-                Button(L("account.naver.submit")) {
-                    Task {
-                        let ok = await model.connectNaverInbox(
-                            email: naverEmail.trimmingCharacters(in: .whitespacesAndNewlines),
-                            password: naverPassword)
-                        if ok {
-                            // Clear the credential from memory the moment the
-                            // server has verified it; keep nothing around.
-                            naverPassword = ""
-                            naverEmail = ""
-                            showConnectForm = false
-                        }
-                    }
-                }
-                .buttonStyle(.borderedProminent).controlSize(.small)
-                .disabled(
-                    model.isConnectingImap
-                        || !canSubmitImapConnect(email: naverEmail, password: naverPassword))
-                Button(L("common.cancel")) {
-                    naverPassword = ""
-                    showConnectForm = false
-                }
+    private func connectButton(_ provider: ImapMailProvider, title: String) -> some View {
+        HStack(spacing: 6) {
+            Button(title) { connectingProvider = provider }
                 .buttonStyle(.bordered).controlSize(.small)
-            }
+            BetaChip()
         }
     }
 
@@ -511,29 +492,6 @@ struct InboxAccountsSection: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// AppKit-backed fields paint as placeholder glyphs in the offscreen
-    /// design renderer, so mirror the box with plain text there (same shape
-    /// as the quiet-hours field).
-    @ViewBuilder
-    private func textInput(_ text: Binding<String>, label: String, secure: Bool) -> some View {
-        if Theme.isRenderingOffscreen {
-            Text(secure ? "••••••••" : (text.wrappedValue.isEmpty ? label : text.wrappedValue))
-                .font(.callout).foregroundStyle(Theme.textDim)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .frame(height: 22)
-                .padding(.horizontal, 6)
-                .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 6))
-                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.field))
-        } else if secure {
-            SecureField(label, text: text)
-                .textFieldStyle(.roundedBorder)
-                .accessibilityLabel(label)
-        } else {
-            TextField(label, text: text)
-                .textFieldStyle(.roundedBorder)
-                .accessibilityLabel(label)
-        }
-    }
 }
 
 /// Settings ▸ Notifications' one-line hint when macOS has denied Klorn

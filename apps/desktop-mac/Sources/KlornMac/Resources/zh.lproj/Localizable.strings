@@ -385,6 +385,26 @@
 "account.imap.failed" = "无法连接该邮箱。";
 "account.imap.rateLimited" = "尝试次数过多。请几分钟后再试。";
 "account.imap.disconnectFailed" = "无法断开该邮箱。";
+"account.icloud.connect" = "连接 iCloud 邮件…";
+"account.icloud.title" = "连接 iCloud 邮件";
+"account.naver.title" = "连接 Naver 邮件";
+"account.icloud.body" = "iCloud Mail (beta) 通过 IMAP 连接。新邮件会分到与 Gmail 相同的通道。";
+"account.icloud.email" = "Apple ID 电子邮件";
+"account.icloud.password" = "App 专用密码";
+"account.icloud.password.hint" = "请使用 App 专用密码，而不是 Apple ID 密码。可在 appleid.apple.com ▸ 登录与安全 ▸ App 专用密码中创建，且必须已开启双重认证。";
+"account.icloud.help.link" = "打开 appleid.apple.com";
+"account.icloud.error.authFailed" = "iCloud 拒绝了登录。请使用在 appleid.apple.com 创建的 App 专用密码，而不是 Apple ID 密码。必须已开启双重认证。";
+"account.naver.error.authFailed" = "Naver 拒绝了登录。请在 Naver 邮件设置中开启 IMAP，并使用那里的应用密码，而不是登录密码。";
+"account.imap.connecting" = "正在连接…";
+"account.imap.error.unreachable" = "无法连接邮件服务器，请稍后再试。";
+"account.imap.error.tooMany" = "此服务可连接的邮箱数量已达上限。";
+"account.imap.error.invalidEmail" = "请输入有效的电子邮件地址。";
+"account.imap.error.needsPro" = "连接第二个邮件账户需要 Klorn Pro。";
+"account.imap.error.offline" = "这台 Mac 已离线。请连接互联网后重试。";
+"account.icloud.error.unavailable" = "此服务器尚未提供 iCloud 邮件。";
+"account.naver.error.unavailable" = "此服务器尚未提供 Naver 邮件。";
+"account.imap.error.insecure" = "Klorn 只通过安全 (HTTPS) 连接发送应用密码。";
+"account.imap.submit" = "连接";
 
 /* Attention mode (기본/auto) */
 "mode.section" = "回复模式";

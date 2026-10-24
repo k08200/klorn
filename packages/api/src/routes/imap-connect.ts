@@ -276,6 +276,17 @@ function retryAfterMsFor(cfg: ImapProviderConfig, userId: string): number | null
   return attempt.allowed ? null : attempt.retryAfterMs;
 }
 
+/**
+ * The 400 body for a failed verify. `code` lets a client localize the reason
+ * (IMAP_AUTH_FAILED = not an app password); the English `message` stays for
+ * older clients, and a failure without a code carries no `code` key.
+ */
+function verifyRefusalBody(verify: { message?: string; code?: string }) {
+  return verify.code
+    ? { ok: false, message: verify.message, code: verify.code }
+    : { ok: false, message: verify.message };
+}
+
 /** A user-supplied host gets the verify whose failures all read the same. */
 const verifierFor = (cfg: ImapProviderConfig) =>
   cfg.hostPolicy === "user-supplied" ? verifyGenericImapCredentials : verifyImapCredentials;
@@ -387,7 +398,7 @@ export function imapConnectRoutes(
         });
         if (!verify.ok) {
           reply.code(400);
-          return { ok: false, message: verify.message };
+          return verifyRefusalBody(verify);
         }
 
         // An existing row keeps its stored address as the key.

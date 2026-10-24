@@ -385,6 +385,26 @@
 "account.imap.failed" = "메일함을 연결하지 못했습니다.";
 "account.imap.rateLimited" = "시도가 너무 잦습니다. 몇 분 후 다시 시도하세요.";
 "account.imap.disconnectFailed" = "메일함 연결을 해제하지 못했습니다.";
+"account.icloud.connect" = "iCloud 메일 연결…";
+"account.icloud.title" = "iCloud 메일 연결";
+"account.naver.title" = "네이버 메일 연결";
+"account.icloud.body" = "iCloud Mail (beta)은 IMAP으로 연결됩니다. 새 메일은 Gmail과 같은 레인으로 분류됩니다.";
+"account.icloud.email" = "Apple ID 이메일";
+"account.icloud.password" = "앱 암호";
+"account.icloud.password.hint" = "Apple ID 암호가 아니라 앱 암호를 입력하세요. appleid.apple.com ▸ 로그인 및 보안 ▸ 앱 암호에서 만들 수 있으며, 이중 인증이 켜져 있어야 합니다.";
+"account.icloud.help.link" = "appleid.apple.com 열기";
+"account.icloud.error.authFailed" = "iCloud가 로그인을 거부했습니다. Apple ID 암호가 아니라 appleid.apple.com에서 만든 앱 암호를 입력하세요. 이중 인증이 켜져 있어야 합니다.";
+"account.naver.error.authFailed" = "네이버가 로그인을 거부했습니다. 네이버 메일 환경설정에서 IMAP을 켜고, 로그인 비밀번호가 아니라 그곳의 앱 비밀번호를 입력하세요.";
+"account.imap.connecting" = "연결 중…";
+"account.imap.error.unreachable" = "메일 서버에 연결하지 못했습니다. 잠시 후 다시 시도하세요.";
+"account.imap.error.tooMany" = "이 서비스로 연결할 수 있는 메일함 수를 모두 사용했습니다.";
+"account.imap.error.invalidEmail" = "올바른 이메일 주소를 입력하세요.";
+"account.imap.error.needsPro" = "두 번째 메일 계정을 연결하려면 Klorn Pro가 필요합니다.";
+"account.imap.error.offline" = "이 Mac이 오프라인입니다. 인터넷에 연결한 뒤 다시 시도하세요.";
+"account.icloud.error.unavailable" = "이 서버에서는 아직 iCloud 메일을 사용할 수 없습니다.";
+"account.naver.error.unavailable" = "이 서버에서는 아직 네이버 메일을 사용할 수 없습니다.";
+"account.imap.error.insecure" = "Klorn은 앱 암호를 보안(HTTPS) 연결로만 보냅니다.";
+"account.imap.submit" = "연결";
 
 /* Attention mode (기본/auto) */
 "mode.section" = "답장 모드";
