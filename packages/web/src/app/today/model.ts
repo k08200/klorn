@@ -57,6 +57,48 @@ export function olderOutsideWindow(laneThreads: number | null, windowed: number 
   return Math.max(laneThreads - windowed, 0);
 }
 
+/**
+ * Today's header (founder decision 2026-10-24): counts only for the lanes that
+ * need the user — PUSH (Today's windowed figure) and MEETING — and one quiet
+ * "N waiting in Mail" for QUEUE + INFO. SILENT is never counted on Today.
+ * `null` means that figure has not arrived (or its read failed).
+ */
+export interface TodayHeaderCounts {
+  push: number | null;
+  meeting: number | null;
+  queue: number | null;
+  info: number | null;
+}
+
+export interface TodayHeaderSummary {
+  /** PUSH then MEETING, each only when it holds something. */
+  needs: { lane: LiveTier; count: number }[];
+  /** Both PUSH and MEETING are known to be empty: "Nothing needs you right now". */
+  calm: boolean;
+  /** QUEUE + INFO threads; 0 shows nothing. */
+  waiting: number;
+}
+
+export function todayHeaderSummary(counts: TodayHeaderCounts): TodayHeaderSummary {
+  const lanes: [LiveTier, number | null][] = [
+    ["PUSH", counts.push],
+    ["MEETING", counts.meeting],
+  ];
+  const needs = lanes.flatMap(([lane, count]) =>
+    count !== null && count > 0 ? [{ lane, count }] : [],
+  );
+  return {
+    needs,
+    calm: counts.push === 0 && counts.meeting === 0,
+    waiting: (counts.queue ?? 0) + (counts.info ?? 0),
+  };
+}
+
+/** The waiting phrase's key, singular for exactly one (the `.one` / `.many` pattern). */
+export function todayWaitingKey(count: number): string {
+  return count === 1 ? "today.strip.waiting.one" : "today.strip.waiting.many";
+}
+
 // ── Calendar ────────────────────────────────────────────────────────────────
 
 /** The fields of GET /api/calendar's rows that Today reads. */

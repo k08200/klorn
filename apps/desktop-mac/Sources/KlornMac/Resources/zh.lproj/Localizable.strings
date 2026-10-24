@@ -608,6 +608,9 @@
 "today.clear.detail" = "新邮件经 Klorn 分类后会显示在这里。";
 "today.lane.a11y" = "%1$@，%2$d 封未处理";
 "today.lane.more" = "在邮件中再看 %d 封";
+"today.header.lane" = "%2$@ %1$d";
+"today.waiting.one" = "邮件中有 1 封待处理";
+"today.waiting.many" = "邮件中有 %d 封待处理";
 "today.lane.push.older" = "查看更早的%@邮件";
 "today.row.a11y" = "%1$@: %2$@";
 "today.open" = "打开";

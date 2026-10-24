@@ -67,6 +67,7 @@ struct TodayScreen: View {
                         hint: L("today.clear.detail"))
                         .padding(.top, TodayLayout.anchorInColumn)
                 } else {
+                    TodayHeaderLine(summary: TodayRules.headerSummary(lanes))
                     ForEach(lanes, id: \.tier) { lane in
                         TodayLaneGroup(lane: lane, now: now, open: open)
                     }
@@ -108,6 +109,42 @@ struct TodayScreen: View {
     private func open(_ item: FirewallItem) {
         model.revealInMail(item)
         actions.onSelect(item)
+    }
+}
+
+/// The day in one calm line (founder decision 2026-10-24): counts for Push
+/// and Meeting only, else "Nothing needs you right now", then one quiet
+/// "N waiting in Mail" for Queue + Info that opens Mail. Silent never shows.
+private struct TodayHeaderLine: View {
+    @Environment(AppModel.self) private var model
+    let summary: TodayHeaderSummary
+
+    var body: some View {
+        HStack(spacing: Theme.s4) {
+            ForEach(summary.needs, id: \.tier) { need in
+                HStack(spacing: Theme.s1) {
+                    Circle().fill(Theme.tint(need.tier)).frame(width: 6, height: 6)
+                        .accessibilityHidden(true)
+                    Text(L("today.header.lane", need.count, need.tier.label))
+                        .foregroundStyle(Theme.text)
+                }
+            }
+            if summary.calm {
+                Text(L("tier.push.empty")).foregroundStyle(Theme.textDim)
+            }
+            if summary.waiting > 0 {
+                Button { model.go(to: .tier(.queue)) } label: {
+                    Text(TodayRules.waitingLine(summary.waiting))
+                        .foregroundStyle(Theme.textDim)
+                        .frame(minHeight: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain).hoverDim()
+            }
+        }
+        .font(Theme.Typo.caption.monospacedDigit())
+        .lineLimit(1)
+        .padding(.horizontal, Theme.s1)
     }
 }
 

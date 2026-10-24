@@ -180,6 +180,32 @@ func navSelfChecks(sourceDir: URL) -> [(String, Bool)] {
           && TodayRules.state(phase: .signedIn, hasQueue: false, loadError: nil) == .loading)
     check("today: a loaded queue stays on screen through a failed refresh",
           TodayRules.state(phase: .signedIn, hasQueue: true, loadError: "x") == .ready)
+    do {
+        // The calm header (founder decision 2026-10-24): counts for Push and
+        // Meeting only, Queue + Info as one waiting figure, Silent never.
+        func lane(_ tier: Tier, _ count: Int) -> TodayLane {
+            TodayLane(tier: tier, style: .rows, count: count, rows: [])
+        }
+        let busy = TodayRules.headerSummary(
+            [lane(.push, 3), lane(.meeting, 2), lane(.queue, 856), lane(.info, 64)])
+        check("today header: counts only Push and Meeting, Queue + Info fold into waiting",
+              busy.needs.map(\.tier) == [.push, .meeting] && busy.needs.map(\.count) == [3, 2]
+              && !busy.calm && busy.waiting == 920)
+        let calm = TodayRules.headerSummary([lane(.push, 0), lane(.queue, 5), lane(.info, 1)])
+        check("today header: calm when Push and Meeting are both zero, still naming the wait",
+              calm.needs.isEmpty && calm.calm && calm.waiting == 6)
+        let meetingOnly = TodayRules.headerSummary([lane(.meeting, 4)])
+        check("today header: a zero lane is left out and nothing waiting shows nothing",
+              meetingOnly.needs.map(\.tier) == [.meeting] && !meetingOnly.calm
+              && meetingOnly.waiting == 0)
+        check("today header: never carries Silent, large waits stay as is",
+              TodayRules.headerSummary([lane(.silent, 866), lane(.queue, 12_345)]).waiting == 12_345
+              && TodayRules.headerSummary([lane(.silent, 866)]).needs.isEmpty)
+        check("today header: the waiting phrase is singular only for one",
+              TodayRules.waitingLine(1) == L("today.waiting.one")
+              && TodayRules.waitingLine(920) == L("today.waiting.many", 920)
+              && TodayRules.waitingLine(920).contains("920"))
+    }
     check("today: the briefing line is the headline, else the first plain line",
           TodayRules.briefingLine(structure: nil, briefing: "first\nsecond") == "first"
           && TodayRules.briefingLine(structure: nil, briefing: nil) == nil
