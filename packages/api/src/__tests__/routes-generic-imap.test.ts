@@ -26,7 +26,7 @@ const db = vi.hoisted(() => ({
 
 const imapSync = vi.hoisted(() => ({
   verifyImapCredentials: vi.fn(
-    async (): Promise<{ ok: boolean; message?: string }> => ({
+    async (): Promise<{ ok: boolean; message?: string; code?: string }> => ({
       ok: true,
     }),
   ),
@@ -261,10 +261,15 @@ describe("flag ON: connect with a user-supplied host", () => {
     imapSync.verifyImapCredentials.mockResolvedValueOnce({
       ok: false,
       message: IMAP_PROVIDERS.IMAP.authFailureHint,
+      code: "IMAP_AUTH_FAILED",
     });
     const res = await connect(app, headers, GOOD);
     expect(res.statusCode).toBe(400);
-    expect(res.json().message).toBe(IMAP_PROVIDERS.IMAP.authFailureHint);
+    expect(res.json()).toEqual({
+      ok: false,
+      message: IMAP_PROVIDERS.IMAP.authFailureHint,
+      code: "IMAP_AUTH_FAILED",
+    });
     expectNothingStored();
     await app.close();
   });

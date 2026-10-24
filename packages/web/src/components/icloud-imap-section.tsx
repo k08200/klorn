@@ -7,6 +7,7 @@ import { useAuth } from "../lib/auth";
 import { useT } from "../lib/i18n";
 import { captureClientError } from "../lib/sentry";
 import { useConfirm } from "./confirm-dialog";
+import { isGenericImapVerifyFailure } from "./imap-connect-error";
 import { FirstSyncNote } from "./imap-connect-notes";
 import { isEntitlementRefusal, MailAccountProGate } from "./mail-account-pro-gate";
 import { BetaChip } from "./ui/beta-chip";
@@ -123,6 +124,10 @@ export function ICloudImapSection({ embedded = false, onChanged }: ICloudImapSec
       const msg = err instanceof Error ? err.message : String(err);
       if (isEntitlementRefusal(msg)) {
         setProGated(true);
+        return;
+      }
+      if (isGenericImapVerifyFailure(msg)) {
+        setError(t("imap.error.connectFailed"));
         return;
       }
       captureClientError(err, { scope: "icloud-imap.connect" });

@@ -216,6 +216,28 @@ describe("flag ON — generalized connect route, provider ICLOUD", () => {
     await app.close();
   });
 
+  it.each([
+    [
+      "IMAP_UNREACHABLE",
+      "Could not reach imap.mail.me.com:993. Check your connection and try again.",
+    ],
+    ["IMAP_VERIFY_FAILED", "Could not verify this mailbox. Try again later."],
+  ])("POST /connect passes %s and its static message through (400)", async (code, message) => {
+    verifyImapCredentials.mockResolvedValueOnce({ ok: false, message, code });
+    const { app, headers } = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/icloud-imap/connect",
+      headers,
+      payload: { email: "you@icloud.example", password: "abcd-efgh-ijkl-mnop" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ ok: false, message, code });
+    expect(res.body).not.toContain("abcd-efgh-ijkl-mnop");
+    expect(db.upsert).not.toHaveBeenCalled();
+    await app.close();
+  });
+
   it("POST /connect answers a code-less verify failure without a code field", async () => {
     verifyImapCredentials.mockResolvedValueOnce({ ok: false, message: "odd failure" });
     const { app, headers } = await buildApp();

@@ -33,8 +33,8 @@ import { formatImapMessageId } from "./imap-message-id.js";
 import { reconcileInboxValidity, removeRecentlyMovedRows } from "./imap-poll-guards.js";
 import type { ImapProviderConfig } from "./imap-providers.js";
 import { liveUidValidity } from "./imap-uidvalidity.js";
+import { classifyVerifyFailure, type VerifyFailure } from "./imap-verify-failure.js";
 import { sanitizeLogText } from "./log-text.js";
-import { isImapAuthFailure } from "./providers/imap-session.js";
 import { MAX_STORED_BODY_CHARS, snippetFromBody } from "./stored-mail-text.js";
 
 interface VerifyArgs {
@@ -44,17 +44,13 @@ interface VerifyArgs {
   host: string; // "imap.naver.com:993"
 }
 
-/**
- * Machine-readable reason a verify failed, for clients that localize the message
- * (the macOS connect sheet). Absent for a failure we cannot classify.
- */
-export type VerifyFailureCode = "IMAP_AUTH_FAILED" | "IMAP_UNREACHABLE";
+export {
+  IMAP_UNREACHABLE_MESSAGE,
+  IMAP_VERIFY_FAILED_MESSAGE,
+  type VerifyFailureCode,
+} from "./imap-verify-failure.js";
 
-interface VerifyResult {
-  ok: boolean;
-  message?: string;
-  code?: VerifyFailureCode;
-}
+type VerifyResult = { ok: true } | VerifyFailure;
 
 export async function verifyImapCredentials(args: VerifyArgs): Promise<VerifyResult> {
   try {
@@ -77,21 +73,7 @@ export async function verifyImapCredentials(args: VerifyArgs): Promise<VerifyRes
       await endImapSession(client);
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    // Map common IMAP error shapes to user-readable hints.
-    // imapflow reports a rejected LOGIN as Error("Command failed") with
-    // `authenticationFailed` set, so the flag — not the text — is the real signal.
-    if (isImapAuthFailure(err) || /authentication failed/i.test(msg) || /AUTH=/i.test(msg)) {
-      return { ok: false, message: args.provider.authFailureHint, code: "IMAP_AUTH_FAILED" };
-    }
-    if (/timeout|ECONN|ENOTFOUND/i.test(msg)) {
-      return {
-        ok: false,
-        message: `Could not reach ${args.host}: ${msg}`,
-        code: "IMAP_UNREACHABLE",
-      };
-    }
-    return { ok: false, message: msg };
+    return classifyVerifyFailure(err, args);
   }
 }
 

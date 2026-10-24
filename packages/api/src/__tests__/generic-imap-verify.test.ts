@@ -126,6 +126,23 @@ describe("verifyGenericImapCredentials", () => {
       "name resolves to public and private addresses",
       () => fake.resolve.mockResolvedValue(["93.184.216.34", "192.168.1.9"]),
     ],
+    ...["ETIMEDOUT", "ECONNREFUSED", "ENOTFOUND", "EAI_AGAIN", "ECONNRESET", "EHOSTUNREACH"].map(
+      (code) =>
+        [
+          `errno ${code}`,
+          () =>
+            fake.connect.mockRejectedValue(
+              Object.assign(new Error(`connect ${code} 93.184.216.34:993`), { code }),
+            ),
+        ] as const,
+    ),
+    [
+      "imapflow socket timeout",
+      () =>
+        fake.connect.mockRejectedValue(
+          Object.assign(new Error("Socket timeout"), { code: "ETIMEOUT" }),
+        ),
+    ],
     [
       "INBOX cannot be opened",
       () => fake.getMailboxLock.mockRejectedValue(new Error("Mailbox doesn't exist: INBOX")),
@@ -137,7 +154,11 @@ describe("verifyGenericImapCredentials", () => {
   )("%s answers the one generic message, with nothing from the failure in it", async (_label, arrange) => {
     arrange();
     const result = await verifyGenericImapCredentials(args);
-    expect(result).toEqual({ ok: false, message: GENERIC_CONNECT_FAILURE });
+    expect(result).toEqual({
+      ok: false,
+      message: GENERIC_CONNECT_FAILURE,
+      code: "IMAP_VERIFY_FAILED",
+    });
   });
 
   it("the generic message says nothing about why, the address or the port", () => {
@@ -151,12 +172,17 @@ describe("verifyGenericImapCredentials", () => {
     await expect(verifyGenericImapCredentials(args)).resolves.toEqual({
       ok: false,
       message: GENERIC_CONNECT_FAILURE,
+      code: "IMAP_VERIFY_FAILED",
     });
   });
 
   it("a host the grammar refuses is the same message and opens no connection", async () => {
     const result = await verifyGenericImapCredentials({ ...args, host: "127.0.0.1:993" });
-    expect(result).toEqual({ ok: false, message: GENERIC_CONNECT_FAILURE });
+    expect(result).toEqual({
+      ok: false,
+      message: GENERIC_CONNECT_FAILURE,
+      code: "IMAP_VERIFY_FAILED",
+    });
     expect(fake.connect).not.toHaveBeenCalled();
     expect(fake.resolve).not.toHaveBeenCalled();
   });

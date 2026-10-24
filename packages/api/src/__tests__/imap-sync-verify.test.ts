@@ -53,7 +53,8 @@ vi.mock("../judge/poc-judge.js", () => ({
   }),
 }));
 
-const { verifyImapCredentials } = await import("../mail/imap-sync.js");
+const { IMAP_UNREACHABLE_MESSAGE, IMAP_VERIFY_FAILED_MESSAGE, verifyImapCredentials } =
+  await import("../mail/imap-sync.js");
 const { IMAP_PROVIDERS } = await import("../mail/imap-providers.js");
 
 describe("verifyImapCredentials", () => {
@@ -86,10 +87,10 @@ describe("verifyImapCredentials", () => {
     expect(result.message).toMatch(/외부 메일 비밀번호/);
   });
 
-  it("maps network errors to a host-prefixed message", async () => {
+  it("maps network errors to the static host-prefixed message, without the library text", async () => {
     // The host must be an allowlisted one now: createImapClient itself refuses
     // anything else, so "unreachable host" is modelled with the real host.
-    connectFn.mockRejectedValueOnce(new Error("ENOTFOUND imap.naver.com"));
+    connectFn.mockRejectedValueOnce(new Error("getaddrinfo ENOTFOUND imap.naver.com"));
 
     const result = await verifyImapCredentials({
       provider: IMAP_PROVIDERS.NAVER,
@@ -98,12 +99,16 @@ describe("verifyImapCredentials", () => {
       host: "imap.naver.com:993",
     });
 
-    expect(result.ok).toBe(false);
-    expect(result.message).toContain("imap.naver.com:993");
+    expect(result).toEqual({
+      ok: false,
+      message: IMAP_UNREACHABLE_MESSAGE("imap.naver.com:993"),
+      code: "IMAP_UNREACHABLE",
+    });
+    expect(result.message).not.toMatch(/ENOTFOUND|getaddrinfo/);
   });
 
-  it("falls back to the raw error message for unknown errors", async () => {
-    connectFn.mockRejectedValueOnce(new Error("some unexpected IMAP error"));
+  it("answers an unknown failure with a static generic message and IMAP_VERIFY_FAILED", async () => {
+    connectFn.mockRejectedValueOnce(new Error("some unexpected IMAP error 10.0.0.9"));
 
     const result = await verifyImapCredentials({
       provider: IMAP_PROVIDERS.NAVER,
@@ -112,8 +117,12 @@ describe("verifyImapCredentials", () => {
       host: "imap.naver.com:993",
     });
 
-    expect(result.ok).toBe(false);
-    expect(result.message).toBe("some unexpected IMAP error");
+    expect(result).toEqual({
+      ok: false,
+      message: IMAP_VERIFY_FAILED_MESSAGE,
+      code: "IMAP_VERIFY_FAILED",
+    });
+    expect(result.message).not.toMatch(/unexpected|10\.0\.0\.9/);
   });
 
   it("uses the provider's auth-failure hint (Apple app-specific password for ICLOUD)", async () => {
@@ -166,19 +175,6 @@ describe("verifyImapCredentials", () => {
 
     expect(result.ok).toBe(false);
     expect(result.code).toBe("IMAP_UNREACHABLE");
-  });
-
-  it("leaves an unknown failure without a code", async () => {
-    connectFn.mockRejectedValueOnce(new Error("some unexpected IMAP error"));
-
-    const result = await verifyImapCredentials({
-      provider: IMAP_PROVIDERS.ICLOUD,
-      email: "you@icloud.example",
-      password: "abcd-efgh-ijkl-mnop",
-      host: "imap.mail.me.com:993",
-    });
-
-    expect(result.code).toBeUndefined();
   });
 
   it("connects with the 12 s verify timeout and the parsed host and port", async () => {
@@ -246,5 +242,135 @@ describe("verifyImapCredentials", () => {
 
     expect(result.ok).toBe(false);
     expect(ctorOpts).toHaveLength(0);
+  });
+});
+
+const ICLOUD_ARGS = {
+  provider: IMAP_PROVIDERS.ICLOUD,
+  email: "you@icloud.example",
+  password: "abcd-efgh-ijkl-mnop",
+  host: "imap.mail.me.com:993",
+};
+
+/** A Node socket / imapflow error: the errno lives on `code`, the text may not repeat it. */
+function codedError(code: string, message = "connection failed"): Error {
+  return Object.assign(new Error(message), { code });
+}
+
+describe("verifyImapCredentials: network-level failures", () => {
+  const NETWORK_CODES = [
+    "ETIMEDOUT",
+    "ECONNREFUSED",
+    "ENOTFOUND",
+    "EAI_AGAIN",
+    "ECONNRESET",
+    "EHOSTUNREACH",
+    "ENETUNREACH",
+    "EPIPE",
+    // imapflow's own socket-level codes.
+    "ETIMEOUT",
+    "GREETING_TIMEOUT",
+    "UPGRADE_TIMEOUT",
+    "NoConnection",
+    "EConnectionClosed",
+  ];
+
+  it.each(NETWORK_CODES)("classifies err.code %s as IMAP_UNREACHABLE", async (code) => {
+    connectFn.mockRejectedValueOnce(codedError(code));
+    const result = await verifyImapCredentials(ICLOUD_ARGS);
+    expect(result).toEqual({
+      ok: false,
+      message: IMAP_UNREACHABLE_MESSAGE("imap.mail.me.com:993"),
+      code: "IMAP_UNREACHABLE",
+    });
+  });
+
+  it.each([
+    "connect ETIMEDOUT 17.42.251.41:993",
+    "connect ECONNREFUSED 17.42.251.41:993",
+    "getaddrinfo EAI_AGAIN imap.mail.me.com",
+    "read ECONNRESET",
+    "connect EHOSTUNREACH 17.42.251.41:993",
+    "Socket timeout",
+    "Failed to receive greeting from server in required time",
+  ])("classifies the code-less message %j as IMAP_UNREACHABLE", async (text) => {
+    connectFn.mockRejectedValueOnce(new Error(text));
+    const result = await verifyImapCredentials(ICLOUD_ARGS);
+    expect(result.code).toBe("IMAP_UNREACHABLE");
+    expect(result.message).toBe(IMAP_UNREACHABLE_MESSAGE("imap.mail.me.com:993"));
+  });
+
+  it("the unreachable message carries nothing from the failure", () => {
+    expect(IMAP_UNREACHABLE_MESSAGE("imap.mail.me.com:993")).toBe(
+      "Could not reach imap.mail.me.com:993. Check your connection and try again.",
+    );
+  });
+});
+
+describe("verifyImapCredentials: no raw library text reaches the client", () => {
+  const RAW_FAILURES: ReadonlyArray<readonly [string, unknown]> = [
+    ["TLS failure", new Error("self-signed certificate in certificate chain")],
+    ["protocol error", new Error("wrong version number")],
+    ["server text", new Error("NO [ALERT] internal relay 10.0.0.9 refused")],
+    ["not an Error", "boom 10.0.0.9"],
+    ["coded but not network", codedError("ERR_SSL_WRONG_VERSION_NUMBER", "ssl 10.0.0.9")],
+  ];
+
+  it.each(RAW_FAILURES)("%s → the static generic message", async (_label, err) => {
+    connectFn.mockRejectedValueOnce(err);
+    const result = await verifyImapCredentials(ICLOUD_ARGS);
+    expect(result).toEqual({
+      ok: false,
+      message: IMAP_VERIFY_FAILED_MESSAGE,
+      code: "IMAP_VERIFY_FAILED",
+    });
+  });
+
+  it("the generic message is static and says nothing about the cause", () => {
+    expect(IMAP_VERIFY_FAILED_MESSAGE).toBe("Could not verify this mailbox. Try again later.");
+  });
+});
+
+describe("verifyImapCredentials: what is logged", () => {
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  const logged = () => warn.mock.calls.map((call) => call.map(String).join(" ")).join("\n");
+
+  it("logs the raw failure on the server, as one capped line", async () => {
+    warn.mockClear();
+    connectFn.mockRejectedValueOnce(
+      codedError("ERR_X", `weird\r\n[icloud-imap] FORGED ${"A".repeat(50_000)}`),
+    );
+    await verifyImapCredentials(ICLOUD_ARGS);
+    expect(warn).toHaveBeenCalled();
+    for (const [line] of warn.mock.calls) {
+      expect(String(line)).not.toMatch(/[\r\n]/);
+      expect(String(line).length).toBeLessThan(800);
+    }
+    expect(logged()).toContain("ERR_X");
+    expect(logged()).toContain("FORGED");
+  });
+
+  it("never logs the password, even if the library echoes it", async () => {
+    warn.mockClear();
+    const err = Object.assign(
+      new Error(`A1 LOGIN you@icloud.example ${ICLOUD_ARGS.password} failed`),
+      {
+        code: "ERR_X",
+        response: `A1 LOGIN you@icloud.example ${ICLOUD_ARGS.password}`,
+        command: { password: ICLOUD_ARGS.password },
+      },
+    );
+    connectFn.mockRejectedValueOnce(err);
+    const result = await verifyImapCredentials(ICLOUD_ARGS);
+    expect(result.message).not.toContain(ICLOUD_ARGS.password);
+    expect(warn).toHaveBeenCalled();
+    expect(logged()).not.toContain(ICLOUD_ARGS.password);
+  });
+
+  it("does not log a rejected login (the user's own typo, nothing to debug)", async () => {
+    warn.mockClear();
+    connectFn.mockRejectedValueOnce(new Error("Authentication failed (AUTH=PLAIN)"));
+    await verifyImapCredentials(ICLOUD_ARGS);
+    expect(warn).not.toHaveBeenCalled();
   });
 });
