@@ -3,8 +3,10 @@
 /**
  * The frames every Today block shares (design detail pass W1, TodayScreen.dc):
  *
- *   lane  the header (LaneChip, what the lane holds, the thread count) sits on
- *         the canvas and the rows sit in a card under it.
+ *   lane  the header (LaneChip, what the lane holds) sits on the canvas and
+ *         the rows sit in a card under it. No count: Today's header already
+ *         counts Push and Meeting and the wait in Mail (founder decision
+ *         2026-10-24).
  *   card  a rail card (Calendar, Assistant, Files): the heading and its
  *         trailing "Open" link inside the card.
  *
@@ -28,10 +30,6 @@ interface TodayBlockProps {
   title: ReactNode;
   /** One muted phrase after the title, e.g. what a lane holds. */
   hint?: string;
-  /** Right-aligned figure, e.g. how many threads the lane holds. */
-  count?: number | null;
-  /** Visible form of the count ("2 threads"); the bare figure when absent. */
-  countLabel?: string;
   /** Trailing link or control. */
   action?: ReactNode;
   /** `lane`: header on the canvas, body in a card. `card`: all of it in one card. */
@@ -40,13 +38,8 @@ interface TodayBlockProps {
   className?: string;
 }
 
-function CountLabel({ count, countLabel }: Pick<TodayBlockProps, "count" | "countLabel">) {
-  if (typeof count !== "number") return null;
-  return <p className="shrink-0 text-caption tabular-nums text-ink-muted">{countLabel ?? count}</p>;
-}
-
 export function TodayBlock(props: TodayBlockProps) {
-  const { headingId, title, hint, count, countLabel, action, children, className = "" } = props;
+  const { headingId, title, hint, action, children, className = "" } = props;
   if (props.layout === "card") {
     return (
       <section
@@ -62,7 +55,6 @@ export function TodayBlock(props: TodayBlockProps) {
           </h2>
           {hint && <p className="min-w-0 truncate text-caption text-ink-muted">{hint}</p>}
           <span className="flex-1" />
-          <CountLabel count={count} countLabel={countLabel} />
           {action}
         </div>
         {children}
@@ -77,7 +69,6 @@ export function TodayBlock(props: TodayBlockProps) {
         </h2>
         {hint && <p className="min-w-0 truncate text-label font-normal text-ink-muted">{hint}</p>}
         <span className="flex-1" />
-        <CountLabel count={count} countLabel={countLabel} />
         {action}
       </div>
       <div className={CARD_CLASS}>{children}</div>
@@ -98,7 +89,8 @@ export function RailOpenLink({ href, label }: { href: string; label?: string }) 
   );
 }
 
-/** The last row of a lane card: "11 more in Queue →", opening Mail. */
+/** The last row of a lane card: "11 more in Queue →", opening Mail. Quiet
+ * caption ink: it is navigation, not the lane's count. */
 export function LaneMoreLink({
   href,
   onClick,
@@ -112,7 +104,7 @@ export function LaneMoreLink({
     <Link
       href={href}
       onClick={onClick}
-      className="focus-ring flex h-10 items-center justify-between border-t border-line-soft px-[18px] text-label text-ink-soft transition-colors duration-120 ease-fluid hover:bg-surface-raised focus-visible:-outline-offset-2 pointer-coarse:h-11"
+      className="focus-ring flex h-10 items-center justify-between border-t border-line-soft px-[18px] text-caption text-ink-muted transition-colors duration-120 ease-fluid hover:bg-surface-raised focus-visible:-outline-offset-2 pointer-coarse:h-11"
     >
       {children}
       <span aria-hidden="true" className="text-ink-muted">

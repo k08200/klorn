@@ -245,7 +245,6 @@ const ja: Record<string, string> = {
   "today.mail.error": "このレーンを読み込めませんでした。",
   "today.mail.sample": "これはサンプルメールで、あなたのメールではありません。",
   "today.mail.more": "メールであと{count}件",
-  "today.mail.threads": "{count} スレッド",
   "today.mail.moreInLane": "{lane} にあと {count} 件",
   "today.strip.label": "今日のレーン別",
   "today.strip.lane": "{lane} {count}",

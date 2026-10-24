@@ -236,7 +236,6 @@ const ko: Record<string, string> = {
   "today.mail.error": "이 레인을 불러오지 못했습니다.",
   "today.mail.sample": "샘플 메일입니다. 내 메일이 아닙니다.",
   "today.mail.more": "메일에서 {count}개 더 보기",
-  "today.mail.threads": "스레드 {count}개",
   "today.mail.moreInLane": "{lane}에서 {count}개 더 보기",
   "today.strip.label": "오늘의 레인별 현황",
   "today.strip.lane": "{lane} {count}",

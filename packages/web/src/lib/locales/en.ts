@@ -239,7 +239,6 @@ const en: Record<string, string> = {
   "today.mail.error": "Could not load this lane.",
   "today.mail.sample": "This is sample mail, not your own.",
   "today.mail.more": "{count} more in Mail",
-  "today.mail.threads": "{count} threads",
   "today.mail.moreInLane": "{count} more in {lane}",
   "today.strip.label": "Today by lane",
   "today.strip.lane": "{count} {lane}",

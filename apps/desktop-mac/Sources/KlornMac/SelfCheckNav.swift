@@ -358,8 +358,7 @@ func navSelfChecks(sourceDir: URL) -> [(String, Bool)] {
     }
 
     check("new integer formats render",
-          [L("today.lane.more", 4), L("today.approvals.waiting", 4), L("today.lane.a11y", "x", 4),
-           L("a11y.position", 4, 5)]
+          [L("today.lane.more", 4), L("today.approvals.waiting", 4), L("a11y.position", 4, 5)]
               .allSatisfy { $0.contains("4") && !$0.contains("%") })
     check("new string formats render",
           L("today.row.a11y", "x", "y").contains("x") && !L("today.row.a11y", "x", "y").contains("%")
@@ -389,6 +388,23 @@ func navSelfChecks(sourceDir: URL) -> [(String, Bool)] {
     check("flag off: shared views default to their pre-M4b behaviour",
           text("ProposalsList.swift").contains("var title = L(\"proposals.title\")")
           && text("AssistantThread.swift").contains("var inlineWhenOffscreen = false"))
+    do {
+        // Lane groups carry no count (founder decision 2026-10-24): the
+        // header already counts Push and Meeting and the wait in Mail. The
+        // "N more in Mail" link stays, in caption ink.
+        let today = text("TodayScreen.swift")
+        let laneLink = today.components(separatedBy: "private func laneLink(").last ?? ""
+        check("today: a lane group header prints no count",
+              !today.isEmpty && !today.contains("Text(\"\\(lane.count)\")")
+              && !today.contains("today.lane.a11y")
+              && today.contains(".accessibilityLabel(lane.tier.label)"))
+        check("today: the overflow link stays, in caption ink",
+              today.contains("L(\"today.lane.more\", lane.remaining)")
+              && laneLink.contains(".font(Theme.Typo.caption).foregroundStyle(Theme.textDim)"))
+        check("today: the lane-count a11y string is gone from every locale",
+              ["en", "ko", "ja", "zh", "de", "fr", "es"]
+                  .allSatisfy { !L10n.keys(forLanguage: $0).contains("today.lane.a11y") })
+    }
     check("opening an item in-app reveals it in Mail",
           text("WindowRouter.swift").contains("model.revealInMail(item)"))
     // A deep link that writes the list mode (Approvals sets .proposals)

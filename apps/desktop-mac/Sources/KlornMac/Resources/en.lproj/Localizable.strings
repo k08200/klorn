@@ -626,7 +626,6 @@
 "today.retry" = "Try again";
 "today.clear.title" = "Nothing is waiting on you";
 "today.clear.detail" = "New mail shows up here as Klorn sorts it.";
-"today.lane.a11y" = "%1$@, %2$d open";
 "today.lane.more" = "%d more in Mail";
 "today.header.lane" = "%1$d %2$@";
 "today.waiting.one" = "1 waiting in Mail";

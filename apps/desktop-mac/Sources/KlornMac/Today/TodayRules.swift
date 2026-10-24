@@ -5,7 +5,7 @@ struct TodayLane: Equatable, Sendable {
     enum Style: Equatable, Sendable {
         /// Rows are listed (PUSH, MEETING, and QUEUE's top rows).
         case rows
-        /// A count only; the rows are one click away in Mail (INFO).
+        /// The lane chip only; the rows are one click away in Mail (INFO).
         case collapsed
     }
 
@@ -44,7 +44,7 @@ typealias TodayState = SurfaceState
 /// Pure composition rules for Today (productization plan §1), pinned by the
 /// self-check.
 enum TodayRules {
-    /// QUEUE shows its count and this many rows.
+    /// QUEUE shows this many rows; the rest is a link to Mail.
     static let queueRowLimit = 5
     /// PUSH and MEETING are expanded. The cap only stops a runaway lane
     /// from pushing the rest of the day off screen; the remainder is a link.
@@ -80,8 +80,8 @@ enum TodayRules {
     }
 
     /// PUSH inside Today's window (founder decision 2026-10-23): only the
-    /// cards the server named, and the count is those rows, so the lane header
-    /// and its rows agree. Older PUSH stays in Mail; the lane stays (calm, with
+    /// cards the server named, and the count is those rows, so the Today
+    /// header and the PUSH group agree. Older PUSH stays in Mail; the lane stays (calm, with
     /// a link) while any older card exists, and leaves when there is none.
     private static func windowedPush(
         _ queue: FirewallResponse, window: TodayPushWindow, limit: Int
