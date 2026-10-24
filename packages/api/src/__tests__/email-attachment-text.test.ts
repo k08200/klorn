@@ -6,7 +6,7 @@ import {
   inflateRawCapped,
   isReadableEmailAttachment,
 } from "../mail/email-attachment-text.js";
-import { expectLinear, fastestMs, repeatTo } from "./helpers/linear-timing.js";
+import { expectLinear, fastestCpuMs, repeatTo } from "./helpers/linear-timing.js";
 
 describe("inflateRawCapped — decompression-bomb guard", () => {
   it("inflates a normal stream back to the original", () => {
@@ -215,7 +215,9 @@ describe("email attachment extraction stays linear on crafted attachments", () =
     const stream = deflateRawSync(Buffer.alloc(7_900_000, 0x41), { level: 9 });
     const unit = Buffer.concat([stream, Buffer.alloc((64 - (stream.length % 64)) % 64, 0xfe)]);
     const file = Buffer.concat(Array.from({ length: 20 }, () => unit));
-    expect(fastestMs(() => extract(file, "x.hwp", "application/haansofthwp")())).toBeLessThan(1000);
+    expect(fastestCpuMs(() => extract(file, "x.hwp", "application/haansofthwp")())).toBeLessThan(
+      1000,
+    );
   });
 
   it("legacy hwp: a flood of tiny streams that each inflate to kilobytes of zeros", () => {

@@ -6,9 +6,9 @@ import { expect } from "vitest";
  * check. Runs are timed in CPU time, not wall time: on a loaded machine (CI
  * running test files in parallel, a busy laptop) wall time also counts the time
  * this process waited for a core, which pushed a linear 2 MB hwpx scan past the
- * ratio check (CI run 40062512847: 251 ms against the 250 ms floor). Small and
- * large runs alternate, each timed as the fastest of five, so both see the same
- * machine state.
+ * ratio check in CI (251 ms against the 250 ms floor). Small and large runs
+ * alternate, each timed as the fastest of five, so both see similar machine
+ * state.
  */
 export const MB = 1_000_000;
 /** Generous for CI: the old regexes needed seconds at 40 KB and minutes at 1 MB. */
@@ -20,23 +20,21 @@ const ATTEMPTS = 5;
 const MICROS_PER_MS = 1000;
 
 /**
- * CPU time (user + system) this process spent in `run`. process.cpuUsage
- * counts every thread of the process, which is only this test file under
- * vitest's default forks pool; a threads pool would bill other files here.
+ * CPU time (user + system) this process spent in `run`. process.cpuUsage counts
+ * all threads of the process, GC and JIT helpers included (the run's own cost).
+ * vitest.config.ts pins the forks pool so each test file has its own process; a
+ * threads pool would bill other files' work here.
  */
-export function cpuMs(run: () => unknown): number {
+function cpuMs(run: () => unknown): number {
   const start = process.cpuUsage();
   run();
   const used = process.cpuUsage(start);
   return (used.user + used.system) / MICROS_PER_MS;
 }
 
-/** The fastest CPU time of each run, taking turns so no run gets a quieter stretch. */
-export function fastestCpuMs(runs: ReadonlyArray<() => unknown>, attempts = ATTEMPTS): number[] {
-  let best = runs.map(() => Number.POSITIVE_INFINITY);
-  for (let i = 0; i < attempts; i++) {
-    best = best.map((ms, j) => Math.min(ms, cpuMs(runs[j])));
-  }
+export function fastestCpuMs(run: () => unknown, attempts = ATTEMPTS): number {
+  let best = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < attempts; i++) best = Math.min(best, cpuMs(run));
   return best;
 }
 
@@ -51,7 +49,15 @@ export function expectLinear(
 ): void {
   const small = build(MB);
   const large = build(2 * MB);
-  const [smallMs, largeMs] = fastestCpuMs([() => run(small), () => run(large)]);
+  const runSmall = () => run(small);
+  const runLarge = () => run(large);
+  let smallMs = Number.POSITIVE_INFINITY;
+  let largeMs = Number.POSITIVE_INFINITY;
+  // Taking turns, so neither size gets a quieter stretch of the machine.
+  for (let i = 0; i < ATTEMPTS; i++) {
+    smallMs = Math.min(smallMs, cpuMs(runSmall));
+    largeMs = Math.min(largeMs, cpuMs(runLarge));
+  }
   expect(smallMs).toBeLessThan(BUDGET_MS);
   expect(largeMs).toBeLessThan(Math.max(smallMs * MAX_DOUBLING_RATIO, RATIO_FLOOR_MS));
 }
