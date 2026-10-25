@@ -256,6 +256,10 @@ one file on an idle machine, say so in the PR; don't loosen the budget.
 - Pure functions get unit tests; see `packages/api/src/__tests__/` for the
   house style (descriptive `it(...)` names that state the behavior under test,
   Arrange / Act / Assert).
+- `packages/web` has no unit-test runner (Playwright e2e only). Pure web
+  helpers in `packages/web/src/lib/` are tested from the API suite as
+  `packages/api/src/__tests__/web-<name>.test.ts`, importing
+  `../../../web/src/lib/<name>`; see `web-meeting-link.test.ts`.
 - New behavior without a test will be asked to add one.
 - Never put real email addresses, message content, tokens or production
   numbers in fixtures. Use `example.com` addresses and invented content.
