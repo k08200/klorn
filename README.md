@@ -408,7 +408,13 @@ When touching core UX, verify at least:
 
 ## Contributing
 
-Issues and pull requests are welcome. For anything non-trivial, open an issue first to discuss the approach. Run `pnpm -r test` and `biome check packages/` before submitting. This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md).
+Issues and pull requests are welcome. Start with **[CONTRIBUTING.md](CONTRIBUTING.md)**: it covers local setup without a Google account, the checks CI runs, and the PR format.
+
+- Newcomer-sized work: [`good first issue`](https://github.com/k08200/klorn/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22)
+- Bigger pieces: [`help wanted`](https://github.com/k08200/klorn/issues?q=is%3Aopen+is%3Aissue+label%3A%22help+wanted%22)
+- Questions: [Discussions → Q&A](https://github.com/k08200/klorn/discussions/categories/q-a)
+
+For anything non-trivial, open an issue first to discuss the approach. This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Security
 

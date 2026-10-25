@@ -1,0 +1,59 @@
+name: Feature request
+description: Propose a change to how Klorn works.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Klorn is an attention firewall with a doctrine: every message lands in exactly one of five lanes (PUSH / MEETING / QUEUE / INFO / SILENT), and nothing irreversible happens without an approval receipt. Requests that fit that shape move fastest. Read [docs/doctrine/deterministic-floor.md](https://github.com/k08200/klorn/blob/main/docs/doctrine/deterministic-floor.md) if you haven't.
+
+        Want to add a mail provider? Use the **Mail provider request** template instead.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the situation and what goes wrong today, not the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of Klorn?
+      options:
+        - Web app
+        - macOS app
+        - Windows app
+        - Mobile app
+        - API / classification
+        - Self-hosting
+        - Docs
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: doctrine
+    attributes:
+      label: Fit check
+      options:
+        - label: This doesn't add a sixth lane or revive AUTO / CALL as a lane.
+          required: true
+        - label: This doesn't let Klorn send, forward or permanently delete anything without an approval receipt.
+          required: true
+  - type: dropdown
+    id: contribute
+    attributes:
+      label: Would you work on it?
+      options:
+        - Yes, I'd like to open a PR
+        - Maybe, with some guidance
+        - No
