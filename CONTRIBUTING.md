@@ -140,8 +140,10 @@ curl http://localhost:8000/api/health    # → {"status":"ok","db":"connected",.
 NEXT_PUBLIC_API_URL=http://localhost:8000 pnpm --filter @klorn/web dev
 ```
 
-Open <http://localhost:8001/login> and sign in with **`demo@klorn.ai`** /
-**`demo`**. A fresh account lands on onboarding; mail views stay empty until a
+Open <http://localhost:8001/login> and sign in with the seeded demo account.
+Its email and password are set in `ensureDemoUser` in
+[`packages/api/src/auth.ts`](packages/api/src/auth.ts) (the password is
+`demo`). A fresh account lands on onboarding; mail views stay empty until a
 mailbox is connected.
 
 Each page compiles on first visit in dev (5–20 s). If the login button seems to
