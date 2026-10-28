@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import Fastify from "fastify";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from "vitest";
 import { signToken, verifyToken } from "../auth.js";
 import { getLoginAuthUrl, getOAuth2Client } from "../mail/gmail.js";
 import { isAllowedNativeScheme } from "../routes/auth.js";
@@ -811,10 +811,30 @@ describe("POST /api/auth/login", () => {
 // The per-IP rate limit cannot see a botnet rotating source addresses
 // against one account; this window is keyed on the normalized email.
 describe("POST /api/auth/login — per-account lockout", () => {
+  // The throttle is under test here, not bcrypt. Up to 32 real cost-12 compares
+  // per test (bcryptjs is pure JS, ~250 ms each) took ~9 s idle and passed the
+  // 60 s timeout at load average ~30. The stand-in still holds each request on
+  // a timer, as the real compare holds it for its rounds: resolved at once, the
+  // wave's requests ran one after another and a check-then-record gap after
+  // the compare went unseen. Every account here registers with
+  // REGISTERED_PASSWORD.
+  const REGISTERED_PASSWORD = "correcthorsebattery";
+  const COMPARE_HOLD_MS = 10;
+  let compareSpy: MockInstance | undefined;
+
   beforeEach(async () => {
     resetStores();
     const { _resetLoginThrottleForTests } = await import("../security/login-throttle.js");
     _resetLoginThrottleForTests();
+    const bcrypt = (await import("bcryptjs")).default;
+    compareSpy = vi.spyOn(bcrypt, "compare").mockImplementation(async (password: string) => {
+      await new Promise((resolve) => setTimeout(resolve, COMPARE_HOLD_MS));
+      return password === REGISTERED_PASSWORD;
+    });
+  });
+
+  afterEach(() => {
+    compareSpy?.mockRestore();
   });
 
   async function failLogin(app: Awaited<ReturnType<typeof buildApp>>, email: string) {
@@ -949,6 +969,7 @@ describe("POST /api/auth/login — per-account lockout", () => {
     // so exactly MAX guesses reach verification — never more.
     expect(unauthorized).toBe(LOGIN_THROTTLE_MAX_FAILURES);
     expect(throttled).toBe(WAVE_OVERSHOOT);
+    expect(compareSpy).toHaveBeenCalledTimes(LOGIN_THROTTLE_MAX_FAILURES);
     await app.close();
   });
 });
