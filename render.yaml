@@ -120,10 +120,6 @@ services:
         value: "https://klorn.ai,https://www.klorn.ai,https://app.klorn.ai"
       - key: RENDER_EXTERNAL_URL
         value: "https://klorn-api.onrender.com"
-      - key: BETA_AUTO_PRO_ENABLED
-        sync: false
-      - key: BETA_AUTO_PRO_LIMIT
-        sync: false
       # iCloud Mail connect + sync (Phase 2, multi-provider plan). OFF until
       # the CASA Letter of Assessment is issued — while unset/false, every
       # /api/icloud-imap route 404s and the poll never selects ICLOUD rows.

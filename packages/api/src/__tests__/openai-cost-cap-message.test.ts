@@ -14,9 +14,12 @@ describe("dailyCostCapMessageFor", () => {
     expect(dailyCostCapMessageFor(false)).toBe(DAILY_COST_CAP_MESSAGE);
   });
 
-  it("upgrade message actually sells the upgrade, and keeps BYOK as the fallback", () => {
+  it("upgrade message sells the upgrade and does not offer BYOK", () => {
+    // Only a FREE user with the paywall on sees this message, and BYOK is
+    // Pro-only then (routes/billing.ts refuses to store their key, and
+    // llm-credentials.ts ignores one) — so "add your own API key" is a dead end.
     expect(DAILY_COST_CAP_UPGRADE_MESSAGE).toMatch(/upgrade/i);
-    expect(DAILY_COST_CAP_UPGRADE_MESSAGE).toMatch(/api key/i);
+    expect(DAILY_COST_CAP_UPGRADE_MESSAGE).not.toMatch(/api key/i);
   });
 
   it("BYOK message does not mention upgrading (paid users must not be upsold)", () => {
