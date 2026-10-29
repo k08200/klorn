@@ -110,3 +110,65 @@ describe("resolveEnvProviderOrder", () => {
     expect(unknownEnvProviderNames("anthropic, opnerouter,,gemini")).toEqual(["opnerouter"]);
   });
 });
+
+describe("Anthropic provider end-to-end through the lazy adapter", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.unstubAllEnvs();
+    vi.stubEnv("OPENAI_COMPAT_BASE_URL", "");
+    vi.stubEnv("OPENROUTER_API_KEY", "");
+    vi.stubEnv("GEMINI_API_KEY", "");
+    vi.stubEnv("ANTHROPIC_API_KEY", "an-key");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  function stubAnthropicFetch(seen: Array<{ url: string; headers: Headers }>) {
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      seen.push({ url: String(url), headers: new Headers(init?.headers) });
+      return new Response(
+        JSON.stringify({
+          id: "msg_1",
+          type: "message",
+          role: "assistant",
+          model: "claude-haiku-5-5",
+          content: [{ type: "text", text: "ok", citations: null }],
+          stop_reason: "end_turn",
+          stop_sequence: null,
+          usage: { input_tokens: 1, output_tokens: 1 },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+  }
+
+  it("sends anthropic-workspace-id when ANTHROPIC_WORKSPACE_ID is set (unscoped personal / service-account keys need it)", async () => {
+    vi.stubEnv("ANTHROPIC_WORKSPACE_ID", "wrkspc_01TEST");
+    const seen: Array<{ url: string; headers: Headers }> = [];
+    stubAnthropicFetch(seen);
+    const provider = (await import("../providers/index.js")).getProvider("anthropic");
+    const res = (await provider?.call(
+      { model: "claude-haiku-5-5", messages: [{ role: "user", content: "hi" }] } as never,
+      "claude-haiku-5-5",
+    )) as { choices: Array<{ message: { content: string } }> };
+    expect(res.choices[0].message.content).toBe("ok");
+    expect(seen[0].url).toBe("https://api.anthropic.com/v1/messages");
+    expect(seen[0].headers.get("anthropic-workspace-id")).toBe("wrkspc_01TEST");
+    expect(seen[0].headers.get("x-api-key")).toBe("an-key");
+  });
+
+  it("sends no workspace header when ANTHROPIC_WORKSPACE_ID is unset (workspace-scoped keys)", async () => {
+    vi.stubEnv("ANTHROPIC_WORKSPACE_ID", "");
+    const seen: Array<{ url: string; headers: Headers }> = [];
+    stubAnthropicFetch(seen);
+    const provider = (await import("../providers/index.js")).getProvider("anthropic");
+    await provider?.call(
+      { model: "claude-haiku-5-5", messages: [{ role: "user", content: "hi" }] } as never,
+      "claude-haiku-5-5",
+    );
+    expect(seen[0].headers.has("anthropic-workspace-id")).toBe(false);
+  });
+});

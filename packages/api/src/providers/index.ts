@@ -290,7 +290,11 @@ function buildAnthropic(apiKey = process.env.ANTHROPIC_API_KEY): Provider | null
   const connect = (): Promise<AnthropicSession> => {
     session ??= import("./anthropic-native.js").then((adapter) => ({
       adapter,
-      client: adapter.createAnthropicClient(apiKey, llmRequestTimeoutMs(CLOUD_LLM_TIMEOUT_MS)),
+      client: adapter.createAnthropicClient(
+        apiKey,
+        llmRequestTimeoutMs(CLOUD_LLM_TIMEOUT_MS),
+        process.env.ANTHROPIC_WORKSPACE_ID?.trim() || null,
+      ),
     }));
     return session;
   };

@@ -525,12 +525,20 @@ function isForcedToolRejection(err: unknown): boolean {
  * SDK's env pickup: a stray ANTHROPIC_BASE_URL would send both mail and key
  * elsewhere, and ANTHROPIC_LOG=debug logs request bodies — which are mail.
  */
-export function createAnthropicClient(apiKey: string, timeoutMs: number): Anthropic {
+export function createAnthropicClient(
+  apiKey: string,
+  timeoutMs: number,
+  workspaceId: string | null = null,
+): Anthropic {
   return new Anthropic({
     apiKey,
     timeout: timeoutMs,
     baseURL: "https://api.anthropic.com",
     logLevel: "warn",
+    // Personal and service-account keys that aren't scoped to one workspace
+    // must name it on every request (platform.claude.com/docs/en/manage-claude/
+    // authentication#select-a-workspace); workspace-scoped keys don't need it.
+    ...(workspaceId ? { defaultHeaders: { "anthropic-workspace-id": workspaceId } } : {}),
   });
 }
 

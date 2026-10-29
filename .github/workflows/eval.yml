@@ -132,6 +132,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      # Optional: only for a key not scoped to a workspace.
+      ANTHROPIC_WORKSPACE_ID: ${{ secrets.ANTHROPIC_WORKSPACE_ID }}
       LLM_PROVIDER_ORDER: anthropic
       JUDGE_MODEL: claude-haiku-5-5
       DATABASE_URL: "postgresql://eval:eval@localhost:5432/eval"
