@@ -4,7 +4,7 @@
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Self-hosted](https://img.shields.io/badge/deploy-self--hosted-success.svg)](docs/self-hosting.md)
-[![Latest release](https://img.shields.io/github/v/release/k08200/klorn?label=release&color=blue)](https://github.com/k08200/klorn/releases)
+[![Version](https://img.shields.io/badge/version-v0.4.0-blue.svg)](CHANGELOG.md)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 
 Every other AI inbox tool *adds* a surface — a suggestion card next to each email, a badge that says "AI thinks you should reply," a draft waiting for review. The inbox gets louder, not quieter.
