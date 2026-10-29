@@ -15,7 +15,8 @@
  *   MS_REDIRECT_URI — defaults to the localhost dev callback
  *   MS_TENANT — "common" (default) = personal + work/school accounts
  *
- * Scopes are delegated Mail.Read / Mail.ReadWrite / Mail.Send. Klorn only
+ * Scopes are delegated User.Read (to name the account) and Mail.Read /
+ * Mail.ReadWrite / Mail.Send. Klorn only
  * marks read, flags, and moves messages — the 2026-12-31 change requiring
  * Mail-Advanced.ReadWrite covers subject/body/recipient edits on delivered
  * mail, which Klorn never does (re-verified 2026-08-06). Note: some org
@@ -37,6 +38,12 @@ const INBOX_SCOPES = [
   "openid",
   "email",
   "offline_access",
+  // Finishing the link names the account with Graph GET /me
+  // (fetchOutlookAccountEmail), and /me's least privileged delegated permission
+  // is User.Read for work/school and personal accounts alike
+  // (https://learn.microsoft.com/graph/api/user-get). The Mail.* scopes do not
+  // cover it: without this, every inbox link ended in "failed" (2026-10-29).
+  "https://graph.microsoft.com/User.Read",
   "https://graph.microsoft.com/Mail.Read",
   "https://graph.microsoft.com/Mail.ReadWrite",
   "https://graph.microsoft.com/Mail.Send",

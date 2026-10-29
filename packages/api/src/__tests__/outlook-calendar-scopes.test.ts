@@ -12,11 +12,14 @@ const ENV_KEYS = ["MS_CLIENT_ID", "MS_CLIENT_SECRET", "MS_REDIRECT_URI", "MS_TEN
 const saved: Record<string, string | undefined> = {};
 const fetchMock = vi.fn();
 
-// The inbox scope set exactly as it was before C4 (mail/outlook-oauth.ts).
+// The inbox scope set (mail/outlook-oauth.ts). User.Read was added 2026-10-29:
+// finishing an inbox link names the account with Graph GET /me, whose least
+// privileged delegated permission is User.Read — without it every link failed.
 const INBOX_SCOPES = [
   "openid",
   "email",
   "offline_access",
+  "https://graph.microsoft.com/User.Read",
   "https://graph.microsoft.com/Mail.Read",
   "https://graph.microsoft.com/Mail.ReadWrite",
   "https://graph.microsoft.com/Mail.Send",
