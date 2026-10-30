@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import { apiFetch } from "../lib/api";
 import { isEntitlementRefusal } from "../lib/entitlement";
 import { useT } from "../lib/i18n";
-import { shellKind } from "../lib/native/shell";
+import { openExternal, shellKind } from "../lib/native/shell";
 import { deliverDesktopAlert } from "../lib/native/tauri-notify";
 import {
   getTypeLabel,
@@ -393,8 +393,16 @@ export default function NotificationBell({ userId }: { userId: string }) {
     // Navigate first, then close dropdown
     const target = getNotificationTarget(n);
     if (target.kind === "external") {
-      // Never the app tab: an https link (e.g. a meeting) opens on its own.
-      window.open(target.url, "_blank", "noopener,noreferrer");
+      // Never the app tab: an https link (e.g. a meeting) opens on its own —
+      // in the system browser inside the desktop/mobile wrappers, where a
+      // plain window.open may stay in the WebView or do nothing.
+      if (shellKind() !== null) {
+        openExternal(target.url).catch((err) =>
+          console.error("[notifications] could not open external link:", err),
+        );
+      } else {
+        window.open(target.url, "_blank", "noopener,noreferrer");
+      }
     } else {
       router.push(target.path);
     }
