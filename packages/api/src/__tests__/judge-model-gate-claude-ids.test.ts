@@ -83,8 +83,8 @@ describe("reportJudgeServing (every provider in the chain)", () => {
 
   it("warns when the LEADING provider swaps the pin for a model the eval never measured", () => {
     const { warn, error } = spies();
-    reportJudgeServing("google/gemini-2.5-flash", [anthropic("claude-haiku-5-5")]);
-    expect(warn.mock.calls.join(" ")).toMatch(/anthropic.*claude-haiku-5-5.*not measured/);
+    reportJudgeServing("google/gemini-2.5-flash", [anthropic("claude-haiku-9-9")]);
+    expect(warn.mock.calls.join(" ")).toMatch(/anthropic.*claude-haiku-9-9.*not measured/);
     expect(error).not.toHaveBeenCalled();
   });
 
@@ -96,8 +96,8 @@ describe("reportJudgeServing (every provider in the chain)", () => {
 
   it("only notes an unmeasured swap on a failover lane", () => {
     const { log, warn, error } = spies();
-    reportJudgeServing("google/gemini-2.5-flash", [openrouter, anthropic("claude-haiku-5-5")]);
-    expect(log.mock.calls.join(" ")).toMatch(/failover.*claude-haiku-5-5/);
+    reportJudgeServing("google/gemini-2.5-flash", [openrouter, anthropic("claude-haiku-9-9")]);
+    expect(log.mock.calls.join(" ")).toMatch(/failover.*claude-haiku-9-9/);
     expect(warn).not.toHaveBeenCalled();
     expect(error).not.toHaveBeenCalled();
   });
@@ -122,5 +122,28 @@ describe("reportJudgeServing (every provider in the chain)", () => {
         },
       ]),
     ).not.toThrow();
+  });
+});
+
+describe("Claude Haiku 5.5 is a measured, gate-passing judge (eval/README.md, 2026-10-30)", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("passes the gate under either spelling", () => {
+    expect(judgeModelVerdict("claude-haiku-5-5").status).toBe("passed-gate");
+    expect(judgeModelVerdict("anthropic/claude-haiku-5.5").status).toBe("passed-gate");
+  });
+
+  it("does not warn when Anthropic leads and serves the gemini pin with Haiku 5.5", () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    reportJudgeServing("google/gemini-2.5-flash", [
+      { name: "anthropic", resolveModel: () => "claude-haiku-5-5" },
+    ]);
+    expect(log.mock.calls.join(" ")).toMatch(/claude-haiku-5-5/);
+    expect(warn).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
   });
 });

@@ -64,6 +64,21 @@ export const GATE_FAILING_JUDGE_MODELS: Readonly<Record<string, GateResult>> = {
 };
 
 /**
+ * Models measured as PASSING the gate on every run, beyond the recommended pin.
+ * Same rule as the failing list: an empirical claim, re-measure before
+ * changing it, and update `eval/README.md` in the same change.
+ */
+export const GATE_PASSING_JUDGE_MODELS: Readonly<Record<string, GateResult>> = {
+  "anthropic/claude-haiku-5.5": {
+    accuracy: "96.4–98.2%",
+    urgentRecall: "13, 12 and 13 of 13",
+    gate: "3/3",
+    mechanism:
+      "passes through the native Anthropic provider with the forced JSON tool (2026-10-30)",
+  },
+};
+
+/**
  * The pin to recommend when the configured one fails. Measured 54/56 on all
  * three runs with 13/13 urgent recall at $0.30/M — the cheapest model in the
  * bake-off that passed every run.
@@ -120,7 +135,7 @@ export function judgeModelVerdict(model: string): JudgeModelVerdict {
   const id = normalizeModelId(model);
   const failure = GATE_FAILING_JUDGE_MODELS[id];
   if (failure) return { status: "failed-gate", model: id, result: failure };
-  if (id === normalizeModelId(RECOMMENDED_JUDGE_MODEL)) {
+  if (id === normalizeModelId(RECOMMENDED_JUDGE_MODEL) || GATE_PASSING_JUDGE_MODELS[id]) {
     return { status: "passed-gate", model: id };
   }
   return { status: "not-measured", model: id };
