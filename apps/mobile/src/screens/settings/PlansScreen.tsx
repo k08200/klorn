@@ -30,7 +30,7 @@ import { Icon } from "../../ui/Icon";
 import { ProblemState, SkeletonRows } from "../../ui/StateView";
 import { notify } from "../../ui/StatusNote";
 import { PRIVACY_URL, SettingsBack, TERMS_URL } from "./parts";
-import { lengthText, pricePerText } from "./plans-model";
+import { lengthText, planLabel, pricePerText } from "./plans-model";
 
 const PRO_PLANS = new Set(["PRO", "TEAM", "BUSINESS", "ENTERPRISE"]);
 
@@ -154,7 +154,7 @@ export function PlansScreen() {
         <section className="plan-card card" aria-labelledby="plan-h">
           <span className="plan-card__label">{t("plans.current")}</span>
           <h2 id="plan-h" className="plan-card__name">
-            {data.planName}
+            {planLabel(t, data.planName)}
           </h2>
           {data.cancelAt ? (
             <p className="plan-card__line">{t("plans.endsOn", { date: date(data.cancelAt) })}</p>
@@ -169,7 +169,7 @@ export function PlansScreen() {
           {t("plans.pro.title")}
         </h2>
         <ul>
-          {(["accounts", "calendar", "assistant", "files"] as const).map((k) => (
+          {(["send", "accounts", "calendar", "assistant", "files"] as const).map((k) => (
             <li key={k}>
               <Icon name="check" size={18} strokeWidth={2.2} />
               {t(`plans.pro.${k}`)}
