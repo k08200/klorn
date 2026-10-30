@@ -41,7 +41,10 @@ interface MeetingSummary {
 
 // A Zoom or Meet link written into the description or location. Each runs to the
 // next whitespace, so trailing punctuation stays part of the link (unchanged).
-const ZOOM_LINK_IN_TEXT = /https:\/\/[^\s]*zoom\.us\/[^\s]*/;
+// The Zoom host must be zoom.us or a subdomain of it: an invite's text is
+// attacker-controlled, and an unanchored match turned any https page that merely
+// mentions "zoom.us/" into the meeting link a notification opens.
+const ZOOM_LINK_IN_TEXT = /https:\/\/(?:[a-z0-9-]+\.)*zoom\.us\/[^\s]*/i;
 const MEET_LINK_IN_TEXT = /https:\/\/meet\.google\.com\/[^\s]*/;
 
 /**
