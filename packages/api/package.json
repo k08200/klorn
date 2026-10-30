@@ -46,7 +46,7 @@
     "imapflow": "^1.7.0",
     "jose": "^6.2.8",
     "jsonwebtoken": "^9.0.3",
-    "nodemailer": "^10.0.13",
+    "nodemailer": "^10.1.4",
     "openai": "^6.29.0",
     "postcss": "8.5.26",
     "resend": "^6.20.0",
