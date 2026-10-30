@@ -117,7 +117,7 @@ export async function sendBetaInviteEmail(to: string, name?: string | null): Pro
             You're approved. Sign in with this address: <strong style="color: #111827;">${escapeHtml(to)}</strong>.
           </p>
           <p style="color: #374151; font-size: 16px; line-height: 1.6;">
-            Open the login page below and click <strong>Continue with Google</strong> using this exact address. Klorn will start connecting your Gmail and Calendar into a single decision queue — every send, permanent delete, or external forward stops at an approval step with a verifiable receipt.
+            Open the login page below and click <strong>Continue with Google</strong> using this exact address. Klorn will connect your Gmail and Calendar and sort your mail so only what needs you interrupts you.
           </p>
           <a href="${loginUrl}" style="display: inline-block; background: #0ea5e9; color: #10100d; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 24px 0;">
             Open Klorn → Continue with Google

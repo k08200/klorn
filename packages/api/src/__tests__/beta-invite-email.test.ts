@@ -53,6 +53,12 @@ describe("sendBetaInviteEmail", () => {
     expect(html).not.toMatch(/Access blocked/i);
   });
 
+  it("makes no absolute approval claim (auto-reply rules send without per-message approval)", async () => {
+    const { html } = await sendInvite();
+    expect(html).not.toMatch(/every send/i);
+    expect(html).not.toMatch(/approval step/i);
+  });
+
   it("makes no plan promise", async () => {
     const { subject, html } = await sendInvite();
     for (const text of [subject, html]) {
