@@ -851,7 +851,7 @@ describe("POST /api/auth/login — per-account lockout", () => {
     await app.inject({
       method: "POST",
       url: "/api/auth/register",
-      payload: { email: "victim@example.com", password: "correcthorsebattery" },
+      payload: { email: "victim@example.com", password: REGISTERED_PASSWORD },
     });
 
     for (let i = 0; i < LOGIN_THROTTLE_MAX_FAILURES; i++) {
@@ -862,7 +862,7 @@ describe("POST /api/auth/login — per-account lockout", () => {
     const locked = await app.inject({
       method: "POST",
       url: "/api/auth/login",
-      payload: { email: "victim@example.com", password: "correcthorsebattery" },
+      payload: { email: "victim@example.com", password: REGISTERED_PASSWORD },
     });
     expect(locked.statusCode).toBe(429);
     // Mirrors the per-IP limiter's shape — no account-existence oracle.
@@ -890,7 +890,7 @@ describe("POST /api/auth/login — per-account lockout", () => {
     await app.inject({
       method: "POST",
       url: "/api/auth/register",
-      payload: { email: "bystander@example.com", password: "correcthorsebattery" },
+      payload: { email: "bystander@example.com", password: REGISTERED_PASSWORD },
     });
 
     for (let i = 0; i < LOGIN_THROTTLE_MAX_FAILURES; i++) {
@@ -899,7 +899,7 @@ describe("POST /api/auth/login — per-account lockout", () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/auth/login",
-      payload: { email: "bystander@example.com", password: "correcthorsebattery" },
+      payload: { email: "bystander@example.com", password: REGISTERED_PASSWORD },
     });
     expect(res.statusCode).toBe(200);
     await app.close();
@@ -911,7 +911,7 @@ describe("POST /api/auth/login — per-account lockout", () => {
     await app.inject({
       method: "POST",
       url: "/api/auth/register",
-      payload: { email: "resetme@example.com", password: "correcthorsebattery" },
+      payload: { email: "resetme@example.com", password: REGISTERED_PASSWORD },
     });
 
     for (let i = 0; i < LOGIN_THROTTLE_MAX_FAILURES - 1; i++) {
@@ -920,7 +920,7 @@ describe("POST /api/auth/login — per-account lockout", () => {
     const ok = await app.inject({
       method: "POST",
       url: "/api/auth/login",
-      payload: { email: "resetme@example.com", password: "correcthorsebattery" },
+      payload: { email: "resetme@example.com", password: REGISTERED_PASSWORD },
     });
     expect(ok.statusCode).toBe(200);
 
@@ -930,7 +930,7 @@ describe("POST /api/auth/login — per-account lockout", () => {
     const okAgain = await app.inject({
       method: "POST",
       url: "/api/auth/login",
-      payload: { email: "resetme@example.com", password: "correcthorsebattery" },
+      payload: { email: "resetme@example.com", password: REGISTERED_PASSWORD },
     });
     expect(okAgain.statusCode).toBe(200);
     await app.close();
@@ -954,7 +954,7 @@ describe("POST /api/auth/login — per-account lockout", () => {
     await app.inject({
       method: "POST",
       url: "/api/auth/register",
-      payload: { email: "victim@example.com", password: "correcthorsebattery" },
+      payload: { email: "victim@example.com", password: REGISTERED_PASSWORD },
     });
 
     const WAVE_OVERSHOOT = 20;

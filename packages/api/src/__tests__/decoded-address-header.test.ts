@@ -271,8 +271,8 @@ describe("bounded work on hostile header sizes", () => {
   // unbounded code took well over a second on, so a loaded runner cannot flake it.
   const BACKSTOP_MS = 1_500;
   const TWENTY_MB = 20 * 1024 * 1024;
-  // One run, not the fastest of five: the work counters asserted next to each
-  // bound count every call.
+  // One run, not the fastest of five: the work counters and the results list
+  // asserted next to each bound collect from every call.
   const elapsed = (run: () => unknown) => fastestCpuMs(run, 1);
 
   beforeEach(() => {
