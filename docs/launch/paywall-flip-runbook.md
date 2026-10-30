@@ -14,7 +14,14 @@ old beta auto-PRO grant (`BETA_AUTO_PRO_ENABLED` / `BETA_AUTO_PRO_LIMIT`) and th
 `signup-plan-guard.test.ts` fails if any User create sets `plan` again. Pro now
 comes only from a paid subscription (or its card-backed trial) or an admin
 setting the plan. The accounts that got free beta PRO before that date keep
-`betaProGrantedAt` as a marker — their fate is §3a.
+`betaProGrantedAt` as a marker — §3a records what happened to them.
+
+The plan matters before the flip too. `isEntitled` / `requireEntitled` are
+no-ops while the paywall is off, but `planHasFeature` reads `user.plan`
+directly: a FREE account gets the pre-launch FREE set (`FREE_FEATURES` in
+`billing/stripe.ts`), so auto-reply, agent AUTO mode and the agent's write
+tools (send, calendar write, web search, integrations) stay off for it even
+with `PAYWALL_ENABLED=false`.
 
 The Paddle web pipeline is wired and was verified live 2026-08-22 (at the old
 price). The other active billing mechanism is the per-user daily LLM cost cap.
@@ -207,60 +214,33 @@ What changes at that moment (all code paths already live):
   `FREE_DAILY_COST_CAP_CENTS`; on cap they now get the **upgrade nudge**
   message instead of the BYOK one (BYOK is Pro-only once the paywall is on, so
   the free message does not offer it).
-- Access follows `user.plan` only. `betaProGrantedAt` grants nothing; a beta
-  account is Pro because its `plan` column says `PRO`. Decide §3a first.
+- Access follows `user.plan` only. `betaProGrantedAt` grants nothing; an
+  account is Pro because its `plan` column says `PRO`. See §3a.
 
-## 3a. Accounts that got free beta PRO (founder decision)
+## 3a. Accounts that got free beta PRO — decided 2026-10-28
 
 Before 2026-10-24 some signups got PRO for free; each has `betaProGrantedAt`
-set. The admin account may carry the marker too, but it is entitled by role
-whatever its plan, so every query below targets `role = 'USER'` only. The
-cohort has no payment relationship: no Paddle subscription, no Stripe customer.
-
-While their `plan` stays `PRO` they stay entitled after the flip, forever, at
-no charge. What a downgraded account keeps and loses with the paywall on: mail
-reads, classification and the briefing stay; sending/replying, calendar writes,
-a second inbox's sync, linked-calendar sync, BYOK, MCP and auto-reply stop.
+set. Founder decision 2026-10-28: the external accounts in that cohort were
+moved to FREE (only `plan` changed; `betaProGrantedAt` stays as the marker,
+nothing else was touched), and the founder's own accounts stay PRO by choice.
+What a FREE account keeps and loses once the paywall is on: mail reads,
+classification and the briefing stay; sending/replying, calendar writes, a
+second inbox's sync, linked-calendar sync, BYOK, MCP and auto-reply stop.
 Nothing is deleted.
 
-Preview the exact rows (run first, whatever the option, and note the count):
+Right before the flip, list every non-admin account that is Pro without paying
+and confirm each row is a deliberate comp (an admin comp via
+`PATCH /api/admin/users/:id { "plan": … }` shows up here too):
 
 ```sql
-SELECT id, email, plan, role, "betaProGrantedAt", "createdAt"
+SELECT id, email, plan, "betaProGrantedAt", "createdAt"
 FROM "User"
-WHERE "betaProGrantedAt" IS NOT NULL
-  AND role = 'USER' AND plan = 'PRO'
+WHERE role = 'USER' AND plan <> 'FREE'
   AND "paddleSubscriptionId" IS NULL AND "stripeId" IS NULL;
 ```
 
-**Option A — keep them comped.** No action. They stay Pro after the flip. To
-end it later, run Option C's statement then.
-
-**Option B — downgrade on a date, with notice.** Email the cohort (preview query
-above) from the contact address: the date their free Pro ends, that the account
-and mail stay, and that Pro is $29.99/month with a 7-day trial from
-`/billing`. Checkout works while they are still `PRO` (it does not refuse a
-current Pro plan), and the Paddle webhook then ties a real subscription to the
-account. On the date, run Option C's statement — it skips anyone who
-subscribed in the meantime (`paddleSubscriptionId` is set).
-
-**Option C — downgrade now.**
-
-```sql
-BEGIN;
-UPDATE "User"
-SET plan = 'FREE', "updatedAt" = now()
-WHERE "betaProGrantedAt" IS NOT NULL
-  AND role = 'USER' AND plan = 'PRO'
-  AND "paddleSubscriptionId" IS NULL AND "stripeId" IS NULL;
--- the reported row count must equal the preview's count; then:
-COMMIT;   -- or ROLLBACK;
-```
-
-Per account instead of SQL: `/admin` → user → plan `FREE` (the
-`PATCH /api/admin/users/:id { "plan": "FREE" }` route). Undo either way by
-setting `plan` back to `PRO`; `betaProGrantedAt` is left in place so the cohort
-stays identifiable.
+To end a comp: `/admin` → user → plan `FREE`. Undo by setting `plan` back to
+`PRO`.
 
 ## 4. Post-flip smoke (first hour)
 
