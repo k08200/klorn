@@ -32,6 +32,8 @@ const { sendDigestEmail, sendPasswordResetEmail, sendVerificationEmail } = await
 );
 
 const UNSUBSCRIBE_URL = "https://app.klorn.ai/settings/notifications#notifyDailyBriefing";
+const LABEL_EN = "Unsubscribe — turn off daily briefing emails and alerts";
+const LABEL_KO = "수신거부 — 데일리 브리핑 메일·알림 끄기";
 
 /** The single payload handed to Resend by the call under test. */
 function sentPayload(): Record<string, unknown> {
@@ -59,7 +61,7 @@ describe("sendDigestEmail opt-out", () => {
     await sendDigestEmail("a@example.com", "Subject", "what got filed");
     const text = sentPayload().text as string;
     expect(text).toContain("what got filed");
-    expect(text).toContain("Unsubscribe from the daily digest");
+    expect(text).toContain(LABEL_EN);
     expect(text).toContain(UNSUBSCRIBE_URL);
   });
 
@@ -67,21 +69,21 @@ describe("sendDigestEmail opt-out", () => {
     await sendDigestEmail("a@example.com", "Subject", "body");
     const html = sentPayload().html as string;
     expect(html).toContain(`href="${UNSUBSCRIBE_URL}"`);
-    expect(html).toContain("Unsubscribe from the daily digest");
+    expect(html).toContain(LABEL_EN);
   });
 
   it("speaks Korean when that is the user's notification language", async () => {
-    await sendDigestEmail("a@example.com", "제목", "본문", "ko");
+    await sendDigestEmail("a@example.com", "제목", "본문", { language: "ko" });
     const payload = sentPayload();
-    expect(payload.text as string).toContain("일일 요약 메일 수신거부");
-    expect(payload.html as string).toContain("일일 요약 메일 수신거부");
+    expect(payload.text as string).toContain(LABEL_KO);
+    expect(payload.html as string).toContain(LABEL_KO);
     // The URL is the same either way — only the label is translated.
     expect(payload.headers).toEqual({ "List-Unsubscribe": `<${UNSUBSCRIBE_URL}>` });
   });
 
   it("falls back to English for a language the digest copy was never written in", async () => {
-    await sendDigestEmail("a@example.com", "Subject", "body", "de");
-    expect(sentPayload().text as string).toContain("Unsubscribe from the daily digest");
+    await sendDigestEmail("a@example.com", "Subject", "body", { language: "de" });
+    expect(sentPayload().text as string).toContain(LABEL_EN);
   });
 
   it("points at the preference the settings screen already shows, not a parallel opt-out store", async () => {
@@ -92,6 +94,59 @@ describe("sendDigestEmail opt-out", () => {
     expect(sentPayload().headers).toEqual({
       "List-Unsubscribe": "<https://app.klorn.ai/settings/notifications#notifyDailyBriefing>",
     });
+  });
+
+  it("refuses to send at all when WEB_URL yields no opt-out target", async () => {
+    // Fails CLOSED. A recurring mail with no way out is the thing this feature
+    // exists to prevent, so a misconfigured WEB_URL costs a skipped digest.
+    await expect(
+      sendDigestEmail("a@example.com", "Subject", "body", { webUrl: "app.klorn.ai" }),
+    ).resolves.toBe(false);
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("honours the caller's webUrl over this module's env default", async () => {
+    await sendDigestEmail("a@example.com", "Subject", "body", {
+      webUrl: "https://staging.klorn.ai",
+    });
+    expect(sentPayload().headers).toEqual({
+      "List-Unsubscribe": "<https://staging.klorn.ai/settings/notifications#notifyDailyBriefing>",
+    });
+  });
+
+  it("emits exactly one URI in the header — a hostile base cannot append a second", async () => {
+    await sendDigestEmail("a@example.com", "Subject", "body", {
+      webUrl: "https://app.klorn.ai/?x=>, <https://evil.example",
+    });
+    const header = (sentPayload().headers as Record<string, string>)["List-Unsubscribe"];
+    expect(header).toBe(`<${UNSUBSCRIBE_URL}>`);
+    expect(header.match(/</g)).toHaveLength(1);
+    expect(header).not.toContain("evil.example");
+  });
+
+  it("never lets a CR/LF in WEB_URL forge a header line", async () => {
+    await sendDigestEmail("a@example.com", "Subject", "body", {
+      webUrl: "https://app.klorn.ai\r\nBcc: evil@example.com",
+    });
+    const header = (sentPayload().headers as Record<string, string>)["List-Unsubscribe"];
+    // The host is NOT asserted: URL strips the CR/LF and then parses
+    // "app.klorn.ai Bcc: evil@" as userinfo, so the origin legitimately
+    // becomes example.com. What must never happen is a second header line or
+    // a second URI, and that is what is pinned here.
+    expect(header).not.toMatch(/[\r\n]/);
+    expect(header).not.toContain("Bcc");
+    expect(header.match(/</g)).toHaveLength(1);
+    expect(header).toMatch(/^<https?:\/\/[^/]+\/settings\/notifications#notifyDailyBriefing>$/);
+  });
+
+  it("HTML-escapes the href and the label, not just the body", async () => {
+    await sendDigestEmail("a@example.com", "Subject", "body");
+    const html = sentPayload().html as string;
+    // The href must be inside its quotes: an unescaped '"' would end the
+    // attribute early and let the rest of the URL become markup.
+    expect(html).toContain(`href="${UNSUBSCRIBE_URL}"`);
+    const anchor = html.slice(html.indexOf("<a "), html.indexOf("</a>"));
+    expect(anchor).not.toMatch(/&(?!(?:amp|lt|gt|quot);)/);
   });
 
   it("still escapes the digest body — an address is attacker-influenced text", async () => {

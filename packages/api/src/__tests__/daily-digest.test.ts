@@ -157,7 +157,7 @@ describe("sendDailyDigests", () => {
       "a@example.com",
       expect.any(String),
       expect.stringContaining("noise@example.com"),
-      expect.any(String),
+      expect.objectContaining({ language: expect.any(String), webUrl: expect.any(String) }),
     );
   });
 
@@ -168,7 +168,7 @@ describe("sendDailyDigests", () => {
       "a@example.com",
       expect.any(String),
       expect.any(String),
-      "ko",
+      expect.objectContaining({ language: "ko" }),
     );
   });
 

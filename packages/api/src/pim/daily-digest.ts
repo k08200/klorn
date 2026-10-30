@@ -230,13 +230,15 @@ export async function sendDailyDigests(now: Date = new Date()): Promise<number> 
       }
 
       const language = await getUserNotificationLanguage(user.id);
-      // The language also picks the opt-out wording in the mail's footer and
-      // text part, so it is passed rather than left to the "en" default.
+      // The language picks the opt-out wording in the mail's footer and text
+      // part; WEB_URL is passed from here because this module already owns
+      // where the digest's links point, and letting mail/email.ts read the env
+      // var separately let the body and the opt-out disagree.
       await sendDigestEmail(
         user.email,
         digestSubject(stats, language),
         formatDigest(stats, language),
-        language,
+        { language, webUrl: WEB_URL },
       );
       sent++;
     } catch (err) {

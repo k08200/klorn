@@ -427,16 +427,27 @@ function LegalConsent() {
   const { t } = useT();
   const linkClass =
     "focus-ring rounded-control text-ink underline decoration-line-strong underline-offset-2 transition-colors duration-120 ease-fluid hover:text-accent-deep";
+  // Split on the first occurrence of each token only, keeping ALL the text
+  // around them. A plain `split` would silently drop everything after a
+  // repeated token, and the i18n parity guard counts keys, not the
+  // placeholders inside them, so a hand-edited translation can produce any of
+  // these shapes. Order is read from the string rather than assumed, and a
+  // token that never appeared leaves its slot empty instead of printing
+  // "{privacy}" verbatim.
   const template = t("auth.legalConsent");
-  const termsFirst = template.indexOf("{terms}") <= template.indexOf("{privacy}");
+  const termsAt = template.indexOf("{terms}");
+  const privacyAt = template.indexOf("{privacy}");
+  const termsFirst = termsAt <= privacyAt;
   const first = termsFirst ? "{terms}" : "{privacy}";
   const second = termsFirst ? "{privacy}" : "{terms}";
-  const [lead, afterFirst = ""] = template.split(first);
-  const [middle, tail = ""] = afterFirst.split(second);
-  // A translation that lost a placeholder would otherwise print "{privacy}"
-  // verbatim to the user. The i18n parity guard counts keys, not the tokens
-  // inside them, so strip any token that survived the split: the sentence and
-  // both links still render, and nothing user-facing shows a brace.
+  const firstAt = template.indexOf(first);
+  const rest = firstAt < 0 ? "" : template.slice(firstAt + first.length);
+  const secondAt = rest.indexOf(second);
+  const lead = firstAt < 0 ? template : template.slice(0, firstAt);
+  const middle = secondAt < 0 ? rest : rest.slice(0, secondAt);
+  const tail = secondAt < 0 ? "" : rest.slice(secondAt + second.length);
+  // Any token that survived (a duplicate, or the pair being absent) is stripped
+  // so no brace ever reaches the user.
   const text = (part: string) => part.replace(/\{(?:terms|privacy)\}/g, "");
 
   const termsLink = (

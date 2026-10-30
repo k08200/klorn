@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { captureError } from "../sentry.js";
+import { digestUnsubscribeLabel, digestUnsubscribeUrl } from "./digest-unsubscribe.js";
 import { parseAddress } from "./email-address.js";
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
@@ -333,38 +334,6 @@ export async function sendWelcomeEmail(
 }
 
 /**
- * Where an opt-out lands: the notification preferences, anchored on the
- * "Daily briefing" checkbox that gates digest-class content
- * (notify/notification-prefs.ts, category `daily_briefing`).
- *
- * This is the existing per-user switch, not a parallel suppression list. A
- * second store of "who said no" is a second thing that can disagree with the
- * product's own settings screen, and the one the user can see has to win.
- */
-const DIGEST_UNSUBSCRIBE_PATH = "/settings/notifications#notifyDailyBriefing";
-
-function digestUnsubscribeUrl(): string | null {
-  const base = safeHttpUrl(WEB_URL);
-  if (!base) return null;
-  return stripHeaderControls(`${base.replace(/\/+$/, "")}${DIGEST_UNSUBSCRIBE_PATH}`);
-}
-
-/**
- * Opt-out copy, en/ko only, every other ship language falling back to English —
- * the same rule the digest body itself follows (pim/daily-digest.ts). Inventing
- * five more sets of unreviewed legal-adjacent copy is worse than an honest
- * fallback.
- */
-const DIGEST_UNSUBSCRIBE_LABEL: Record<"en" | "ko", string> = {
-  en: "Unsubscribe from the daily digest",
-  ko: "일일 요약 메일 수신거부",
-};
-
-function unsubscribeLabel(language: string): string {
-  return language === "ko" ? DIGEST_UNSUBSCRIBE_LABEL.ko : DIGEST_UNSUBSCRIBE_LABEL.en;
-}
-
-/**
  * Send one daily-digest mail.
  *
  * Plain text is the payload; the HTML part is the same text in a monospace
@@ -385,6 +354,17 @@ function unsubscribeLabel(language: string): string {
  * goes to the user's own settings instead, so advertising one-click would be a
  * header that lies about what the URL does.
  *
+ * `webUrl` is the caller's, not this module's: pim/daily-digest.ts already owns
+ * "where the digest points" for the links inside the body, and reading the env
+ * var separately here let the two disagree — an unset WEB_URL pointed the body
+ * at the deployed app and the opt-out at localhost.
+ *
+ * If no usable opt-out URL can be built, the mail is NOT sent. A recurring mail
+ * with no way out is the exact thing this function exists to prevent, so a
+ * misconfigured WEB_URL has to cost a skipped digest rather than silently
+ * produce the non-compliant mail the old code would have sent. The digest is a
+ * safety net, and the sweep already tolerates a false return per user.
+ *
  * Returns false rather than throwing: the digest sweep runs over every user,
  * and one bad address must not end it.
  */
@@ -392,14 +372,25 @@ export async function sendDigestEmail(
   to: string,
   subject: string,
   text: string,
-  language: string = "en",
+  opts: { language?: string; webUrl?: string } = {},
 ): Promise<boolean> {
   if (!resend) {
     console.log("[EMAIL] No RESEND_API_KEY — digest not sent to", maskEmail(to));
     return false;
   }
-  const unsubscribeUrl = digestUnsubscribeUrl();
-  const label = unsubscribeLabel(language);
+  const unsubscribeUrl = digestUnsubscribeUrl(opts.webUrl ?? WEB_URL);
+  if (!unsubscribeUrl) {
+    console.error(
+      "[EMAIL] digest NOT sent to",
+      maskEmail(to),
+      "— WEB_URL yields no usable unsubscribe target; refusing to send a recurring mail with no opt-out",
+    );
+    captureError(new Error("digest unsubscribe URL unavailable"), {
+      tags: { scope: "digest-email" },
+    });
+    return false;
+  }
+  const label = digestUnsubscribeLabel(opts.language ?? "en");
   try {
     await resend.emails.send({
       from: FROM_EMAIL,
@@ -407,17 +398,15 @@ export async function sendDigestEmail(
       subject,
       // The opt-out is part of the text payload, not a decoration on the HTML
       // part: a client that shows only text/plain must still see a way out.
-      text: unsubscribeUrl ? `${text}\n\n—\n${label}: ${unsubscribeUrl}` : text,
+      text: `${text}\n\n—\n${label}: ${unsubscribeUrl}`,
       html:
         `<div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:520px;` +
         `margin:0 auto;padding:32px 20px;color:#374151;font-size:15px;line-height:1.6">` +
         `<pre style="font-family:inherit;white-space:pre-wrap;margin:0">${escapeHtml(text)}</pre>` +
-        (unsubscribeUrl
-          ? `<p style="color:#6b7280;font-size:13px;margin-top:28px">` +
-            `<a href="${escapeHtml(unsubscribeUrl)}" style="color:#6b7280">${escapeHtml(label)}</a></p>`
-          : "") +
+        `<p style="color:#6b7280;font-size:13px;margin-top:28px">` +
+        `<a href="${escapeHtml(unsubscribeUrl)}" style="color:#6b7280">${escapeHtml(label)}</a></p>` +
         `</div>`,
-      ...(unsubscribeUrl ? { headers: { "List-Unsubscribe": `<${unsubscribeUrl}>` } } : {}),
+      headers: { "List-Unsubscribe": `<${unsubscribeUrl}>` },
     });
     return true;
   } catch (err) {
