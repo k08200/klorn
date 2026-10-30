@@ -35,6 +35,23 @@ const listCommitmentsQuerySchema = {
   },
 } as const;
 
+// The ledger is open to the free tier, so its inputs are bounded: a list page
+// never exceeds MAX_LIST_LIMIT rows, and a PATCH can't stuff an oversized title
+// or description (both are mirrored into the attention feed).
+const MAX_LIST_LIMIT = 200;
+const MAX_TITLE_LENGTH = 500;
+const MAX_DESCRIPTION_LENGTH = 5000;
+
+const patchCommitmentBodySchema = {
+  type: "object",
+  properties: {
+    title: { type: "string", maxLength: MAX_TITLE_LENGTH },
+    description: { type: ["string", "null"], maxLength: MAX_DESCRIPTION_LENGTH },
+    status: { type: "string", maxLength: 50 },
+    dueAt: { type: ["string", "null"], maxLength: 100 },
+  },
+} as const;
+
 export async function commitmentRoutes(app: FastifyInstance) {
   app.addHook("preHandler", requireAuth);
   // Paywall (no-op pre-launch): reading the ledger and triaging the user's own
@@ -54,7 +71,10 @@ export async function commitmentRoutes(app: FastifyInstance) {
     const parsedLimit = limit ? Number.parseInt(limit, 10) : undefined;
     const commitments = await listCommitments(userId, {
       status: filterStatus,
-      limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined,
+      limit:
+        parsedLimit !== undefined && Number.isFinite(parsedLimit)
+          ? Math.min(Math.max(parsedLimit, 1), MAX_LIST_LIMIT)
+          : undefined,
     });
 
     // Enrich COUNTERPARTY commitments with trust badges
@@ -106,7 +126,7 @@ export async function commitmentRoutes(app: FastifyInstance) {
   });
 
   // PATCH /api/commitments/:id — status / title / due updates
-  app.patch("/:id", async (request, reply) => {
+  app.patch("/:id", { schema: { body: patchCommitmentBodySchema } }, async (request, reply) => {
     const userId = getUserId(request);
     const { id } = request.params as { id: string };
     const existing = await getCommitment(id);

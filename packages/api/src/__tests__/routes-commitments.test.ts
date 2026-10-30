@@ -182,6 +182,37 @@ describe("commitment routes", () => {
     await app.close();
   });
 
+  it("PATCH refuses an oversized title or description", async () => {
+    const c = seed({ userId: "user-1", status: "OPEN" });
+    const app = await buildApp();
+    for (const payload of [{ title: "x".repeat(501) }, { description: "x".repeat(5001) }]) {
+      const res = await app.inject({
+        method: "PATCH",
+        url: `/api/commitments/${c.id}`,
+        headers: auth(),
+        payload,
+      });
+      expect(res.statusCode).toBe(400);
+    }
+    await app.close();
+  });
+
+  it("caps ?limit= so one request can't pull an unbounded list", async () => {
+    const { prisma } = await import("../db.js");
+    const findMany = vi.mocked(prisma.commitment.findMany);
+    findMany.mockClear();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/commitments?limit=1000000",
+      headers: auth(),
+    });
+    expect(res.statusCode).toBe(200);
+    const take = (findMany.mock.calls.at(-1)?.[0] as { take?: number } | undefined)?.take;
+    expect(take).toBeLessThanOrEqual(200);
+    await app.close();
+  });
+
   it("DELETE removes the commitment", async () => {
     const c = seed({ userId: "user-1" });
     const app = await buildApp();

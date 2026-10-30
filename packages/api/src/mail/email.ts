@@ -95,7 +95,7 @@ export async function sendBetaInviteEmail(to: string, name?: string | null): Pro
   const loginUrl = `${WEB_URL}/login`;
   const safeAddr = maskEmail(to);
   const safeName = name?.trim()?.replace(/[<>]/g, "");
-  const greeting = safeName ? `Hi ${safeName},` : "Hi,";
+  const greeting = safeName ? `Hi ${escapeHtml(safeName)},` : "Hi,";
 
   if (!resend) {
     console.log("[EMAIL] No RESEND_API_KEY — invite link generated for", safeAddr);
