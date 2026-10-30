@@ -14,6 +14,7 @@ import {
   type NotificationGroup,
   unreadGroupCount,
 } from "../lib/notification-grouping";
+import { type NotificationLinkTarget, notificationLinkTarget } from "../lib/notification-target";
 import { formatRelative } from "../lib/text";
 import { ProFeatureNotice } from "./pro-feature-notice";
 import { RejectReasonDialog } from "./reject-reason-dialog";
@@ -359,12 +360,17 @@ export default function NotificationBell({ userId }: { userId: string }) {
   // Determine where clicking a notification should navigate.
   // Week 1 removed /calendar, /tasks, /email, /notes — every fallback now
   // points at a surviving surface so taps never 404.
-  const getNotificationTarget = (n: Notification): string | null => {
-    if (n.link) return n.link;
+  const getNotificationTarget = (n: Notification): NotificationLinkTarget => {
+    // A stored link is untrusted (a meeting link can come from anyone's
+    // invite): only a same-origin path or a plain https URL is followed; any
+    // other link falls through to the type's own surface.
+    const linked = notificationLinkTarget(n.link);
+    if (linked) return linked;
+    const internal = (path: string): NotificationLinkTarget => ({ kind: "internal", path });
     // A pending action the user still needs to approve/reject — Inbox is
     // the one place that shows every unresolved item with action buttons.
-    if (n.pendingActionId && n.pendingActionStatus === "PENDING") return "/inbox";
-    if (n.conversationId) return "/inbox";
+    if (n.pendingActionId && n.pendingActionStatus === "PENDING") return internal("/inbox");
+    if (n.conversationId) return internal("/inbox");
     const typeRoutes: Record<string, string> = {
       briefing: "/briefing",
       meeting: "/briefing",
@@ -374,7 +380,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
       reminder: "/inbox",
       insight: "/inbox",
     };
-    return typeRoutes[n.type] || "/inbox";
+    return internal(typeRoutes[n.type] || "/inbox");
   };
 
   const handleNotificationClick = (n: Notification) => {
@@ -386,11 +392,14 @@ export default function NotificationBell({ userId }: { userId: string }) {
 
     // Navigate first, then close dropdown
     const target = getNotificationTarget(n);
-    if (target) {
-      router.push(target);
-      // Close dropdown after navigation starts (defer to avoid portal unmount racing with router)
-      setTimeout(() => setOpen(false), 0);
+    if (target.kind === "external") {
+      // Never the app tab: an https link (e.g. a meeting) opens on its own.
+      window.open(target.url, "_blank", "noopener,noreferrer");
+    } else {
+      router.push(target.path);
     }
+    // Close dropdown after navigation starts (defer to avoid portal unmount racing with router)
+    setTimeout(() => setOpen(false), 0);
   };
 
   const markAllRead = async () => {
