@@ -231,7 +231,41 @@ describe("runChatTurn", () => {
     expect(result.error).toContain("provider down");
     expect(result.eventDraft).toBeNull();
     expect(result.reply.length).toBeGreaterThan(0);
+    expect(result.errorCode).toBeUndefined();
     expect(captureError).toHaveBeenCalled();
+  });
+
+  it("answers the daily cost cap with its own message + code, not a false 'try again'", async () => {
+    // The real class (the openai.js mock above has none) — proves the engine
+    // reads what llm/openai.ts actually throws.
+    const { DailyCostCapExceededError } =
+      await vi.importActual<typeof import("../llm/openai.js")>("../llm/openai.js");
+    const message = "You've used today's free AI quota.";
+    createCompletion.mockRejectedValueOnce(
+      new DailyCostCapExceededError(message, "DAILY_COST_CAP_FREE"),
+    );
+
+    const result = await runChatTurn({ userId: "u1", history: [], userText: "hi" });
+
+    expect(result).toEqual({
+      reply: message,
+      eventDraft: null,
+      error: message,
+      errorCode: "DAILY_COST_CAP_FREE",
+    });
+    // Expected back-pressure, not a bug: no Sentry alert.
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("carries DAILY_COST_CAP for the paid / global cap", async () => {
+    createCompletion.mockRejectedValueOnce(
+      Object.assign(new Error("Quota used."), { name: "DailyCostCapExceededError" }),
+    );
+
+    const result = await runChatTurn({ userId: "u1", history: [], userText: "hi" });
+
+    expect(result.errorCode).toBe("DAILY_COST_CAP");
+    expect(result.reply).toBe("Quota used.");
   });
 
   it("keeps a failing tool from killing the turn", async () => {

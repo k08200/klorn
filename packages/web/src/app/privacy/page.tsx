@@ -247,8 +247,9 @@ export default function PrivacyPage() {
               features you see.
             </p>
             <p>
-              Email sending is treated as a sensitive action. During beta, Klorn does not send
-              replies without your awareness. Email actions require your approval before sending.
+              Email sending is treated as a sensitive action. Mail Klorn sends waits for your
+              approval, unless you turn on automatic replies (Auto mode or an auto-reply rule):
+              those replies are sent without asking each time.
             </p>
             <p>
               <strong className="text-ink">Limited Use disclosure.</strong> Klorn's use and transfer

@@ -32,6 +32,9 @@ struct ProposalsList: View {
                 Text(error).font(.caption).foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 20).padding(.bottom, 8)
+                if PlanUpgrade.offersUpgrade(for: error) {
+                    UpgradeToProLink().padding(.horizontal, 20).padding(.bottom, 8)
+                }
             }
 
             if model.pendingActions.isEmpty {

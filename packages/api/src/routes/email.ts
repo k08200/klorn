@@ -48,6 +48,7 @@ import {
   getTrustScoresBulk,
   type TrustScoreResult,
 } from "../learning/trust-score.js";
+import { COST_CAP_HTTP_STATUS, costCapRefusal } from "../llm/cost-cap-refusal.js";
 import { describeLlmFailure } from "../llm/describe-failure.js";
 import { normalizeCompanyDomains } from "../mail/company-domains.js";
 import { extractEmailAddress } from "../mail/email-address.js";
@@ -1918,9 +1919,8 @@ export async function emailRoutes(app: FastifyInstance) {
         }
         return dossier;
       } catch (err) {
-        if (err instanceof Error && err.name === "DailyCostCapExceededError") {
-          return reply.code(429).send({ error: err.message });
-        }
+        const capped = costCapRefusal(err);
+        if (capped) return reply.code(COST_CAP_HTTP_STATUS).send(capped);
         if (err instanceof Error && err.name === "UserRateLimitedError") {
           const retryAfterMs = (err as { retryAfterMs?: number }).retryAfterMs ?? 1_000;
           reply.header("Retry-After", String(Math.max(1, Math.ceil(retryAfterMs / 1000))));
@@ -1972,9 +1972,8 @@ export async function emailRoutes(app: FastifyInstance) {
         // Same failure taxonomy as /reply-draft: the cap and the per-user
         // throttle are user-visible facts, everything else is a transient 503
         // with the failure class named — never a bare 500.
-        if (err instanceof Error && err.name === "DailyCostCapExceededError") {
-          return reply.code(429).send({ error: err.message });
-        }
+        const capped = costCapRefusal(err);
+        if (capped) return reply.code(COST_CAP_HTTP_STATUS).send(capped);
         if (err instanceof Error && err.name === "UserRateLimitedError") {
           const retryAfterMs = (err as { retryAfterMs?: number }).retryAfterMs ?? 1_000;
           reply.header("Retry-After", String(Math.max(1, Math.ceil(retryAfterMs / 1000))));

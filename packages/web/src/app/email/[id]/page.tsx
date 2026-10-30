@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../../components/auth-guard";
 import { useConfirm } from "../../../components/confirm-dialog";
 import MailHtmlBody from "../../../components/mail-html-body";
+import { ProFeatureNotice } from "../../../components/pro-feature-notice";
 import { useToast } from "../../../components/toast";
 import { TrustBadgeChip } from "../../../components/trust-badge";
 import Button from "../../../components/ui/button";
@@ -14,6 +15,7 @@ import ErrorAlert from "../../../components/ui/error-alert";
 import LoadingState from "../../../components/ui/loading-state";
 import { API_BASE, apiFetch, authHeaders } from "../../../lib/api";
 import { useAuth } from "../../../lib/auth";
+import { isEntitlementRefusal } from "../../../lib/entitlement";
 import { useT } from "../../../lib/i18n";
 import { linkifyText } from "../../../lib/linkify";
 import { queryKeys } from "../../../lib/query-keys";
@@ -223,6 +225,9 @@ function EmailDetailView() {
   const [loading, setLoading] = useState(true);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Which paid action a FREE user just tried (403 ENTITLEMENT_REQUIRED): the
+  // upgrade notice renders next to it instead of the server's English refusal.
+  const [proGate, setProGate] = useState<"reply" | "summary" | null>(null);
   const [reanalyzing, setReanalyzing] = useState(false);
   const [ocring, setOcring] = useState(false);
   const [draft, setDraft] = useState<ReplyDraft | null>(null);
@@ -299,6 +304,7 @@ function EmailDetailView() {
   const summarize = useCallback(async () => {
     if (!id || summarizing) return;
     setSummarizing(true);
+    setProGate(null);
     try {
       await apiFetch(`/api/email/${id}/summarize`, {
         method: "POST",
@@ -306,6 +312,10 @@ function EmailDetailView() {
       });
       await load();
     } catch (err) {
+      if (isEntitlementRefusal(err)) {
+        setProGate("summary");
+        return;
+      }
       captureClientError(err, { scope: "email.summarize", id });
     } finally {
       setSummarizing(false);
@@ -450,6 +460,7 @@ function EmailDetailView() {
     if (!id || drafting) return;
     setDrafting(true);
     setError(null);
+    setProGate(null);
     try {
       const data = await apiFetch<ReplyDraft>(`/api/email/${id}/reply-draft`, {
         method: "POST",
@@ -458,6 +469,10 @@ function EmailDetailView() {
       setDraft(data);
       setGmailDraftUrl(null);
     } catch (err) {
+      if (isEntitlementRefusal(err)) {
+        setProGate("reply");
+        return;
+      }
       captureClientError(err, { scope: "email.reply-draft", id });
       setError(serverErrorMessage(err, t("emailDetail.error.replyDraft")));
     } finally {
@@ -469,6 +484,7 @@ function EmailDetailView() {
     if (!draft || sendingDraft) return;
     setSendingDraft(true);
     setError(null);
+    setProGate(null);
     try {
       await apiFetch("/api/email/send", {
         method: "POST",
@@ -476,6 +492,10 @@ function EmailDetailView() {
       });
       setDraft(null);
     } catch (err) {
+      if (isEntitlementRefusal(err)) {
+        setProGate("reply");
+        return;
+      }
       captureClientError(err, { scope: "email.reply-draft.send", id });
       setError(serverErrorMessage(err, t("emailDetail.error.sendReply")));
     } finally {
@@ -487,6 +507,7 @@ function EmailDetailView() {
     if (!id || !draft || savingGmailDraft) return;
     setSavingGmailDraft(true);
     setError(null);
+    setProGate(null);
     try {
       const data = await apiFetch<{
         success: boolean;
@@ -513,6 +534,10 @@ function EmailDetailView() {
           : prev,
       );
     } catch (err) {
+      if (isEntitlementRefusal(err)) {
+        setProGate("reply");
+        return;
+      }
       captureClientError(err, { scope: "email.reply-draft.gmail-draft", id });
       setError(serverErrorMessage(err, t("emailDetail.error.gmailDraft")));
     } finally {
@@ -823,26 +848,29 @@ function EmailDetailView() {
                     <ThreadContextPanel currentEmailId={email.id} thread={thread} />
                   ) : null,
                 reply: (
-                  <ReplyDraftBox
-                    presets="collapsed"
-                    draft={draft}
-                    intent={draftIntent}
-                    drafting={drafting}
-                    sending={sendingDraft}
-                    savingGmailDraft={savingGmailDraft}
-                    gmailDraftUrl={gmailDraftUrl}
-                    attachments={email.attachments ?? []}
-                    candidateProfile={email.candidateProfile ?? null}
-                    selectedAttachmentIds={selectedDraftAttachmentIds}
-                    includeBriefAttachment={includeBriefAttachment}
-                    onSelectedAttachmentIdsChange={setSelectedDraftAttachmentIds}
-                    onIncludeBriefAttachmentChange={setIncludeBriefAttachment}
-                    onIntentChange={setDraftIntent}
-                    onGenerate={generateReplyDraft}
-                    onDraftChange={setDraft}
-                    onSaveGmailDraft={saveGmailDraft}
-                    onSend={sendReplyDraft}
-                  />
+                  <>
+                    {proGate === "reply" && <ProFeatureNotice className="mb-3" />}
+                    <ReplyDraftBox
+                      presets="collapsed"
+                      draft={draft}
+                      intent={draftIntent}
+                      drafting={drafting}
+                      sending={sendingDraft}
+                      savingGmailDraft={savingGmailDraft}
+                      gmailDraftUrl={gmailDraftUrl}
+                      attachments={email.attachments ?? []}
+                      candidateProfile={email.candidateProfile ?? null}
+                      selectedAttachmentIds={selectedDraftAttachmentIds}
+                      includeBriefAttachment={includeBriefAttachment}
+                      onSelectedAttachmentIdsChange={setSelectedDraftAttachmentIds}
+                      onIncludeBriefAttachmentChange={setIncludeBriefAttachment}
+                      onIntentChange={setDraftIntent}
+                      onGenerate={generateReplyDraft}
+                      onDraftChange={setDraft}
+                      onSaveGmailDraft={saveGmailDraft}
+                      onSend={sendReplyDraft}
+                    />
+                  </>
                 ),
                 candidate: email.candidateProfile ? (
                   <CandidateProfileCard
@@ -866,16 +894,19 @@ function EmailDetailView() {
                     />
                   ) : null,
                 analysis: (
-                  <KlornAnalysis
-                    quiet
-                    email={email}
-                    onReplyStateChange={doneFeedback.onReplyStateChange}
-                    onPriorityChange={(priority) =>
-                      setEmail((prev) => (prev ? { ...prev, priority } : prev))
-                    }
-                    onSummarize={summarize}
-                    summarizing={summarizing}
-                  />
+                  <>
+                    {proGate === "summary" && <ProFeatureNotice className="mb-3" />}
+                    <KlornAnalysis
+                      quiet
+                      email={email}
+                      onReplyStateChange={doneFeedback.onReplyStateChange}
+                      onPriorityChange={(priority) =>
+                        setEmail((prev) => (prev ? { ...prev, priority } : prev))
+                      }
+                      onSummarize={summarize}
+                      summarizing={summarizing}
+                    />
+                  </>
                 ),
                 context: (
                   <>
@@ -1026,6 +1057,7 @@ function EmailDetailView() {
             <ThreadContextPanel currentEmailId={email.id} thread={thread} />
           )}
 
+          {proGate === "reply" && <ProFeatureNotice className="mt-5" />}
           <ReplyDraftBox
             draft={draft}
             intent={draftIntent}
@@ -1097,6 +1129,7 @@ function EmailDetailView() {
               </section>
             ) : null}
 
+            {proGate === "summary" && <ProFeatureNotice />}
             <KlornAnalysis
               email={email}
               onPriorityChange={(priority) =>

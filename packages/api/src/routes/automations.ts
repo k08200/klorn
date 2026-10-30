@@ -9,6 +9,7 @@ import {
   normalizeAutoReplyGuideline,
 } from "../learning/auto-reply-guideline.js";
 import { listReplyTonePolicies, normalizeReplyTone } from "../learning/reply-tone.js";
+import { COST_CAP_HTTP_STATUS, costCapRefusal } from "../llm/cost-cap-refusal.js";
 import { createCompletion, DRAFT_MODEL } from "../llm/openai.js";
 import {
   NOTIFICATION_LANGUAGES,
@@ -284,6 +285,8 @@ export async function automationRoutes(app: FastifyInstance) {
         if (!advice) return reply.code(502).send({ error: "No advice produced" });
         return { advice };
       } catch (err) {
+        const capped = costCapRefusal(err);
+        if (capped) return reply.code(COST_CAP_HTTP_STATUS).send(capped);
         captureError(err, { tags: { scope: "automations.guideline-advice" }, extra: { userId } });
         return reply.code(502).send({ error: "Advice generation failed" });
       }

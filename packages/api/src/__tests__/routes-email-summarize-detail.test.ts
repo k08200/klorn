@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { signToken } from "../auth.js";
 
 const summarizeEmailOnDemand = vi.hoisted(() => vi.fn());
+const summarizeUnsummarizedEmails = vi.hoisted(() => vi.fn());
 const emailFindFirst = vi.hoisted(() => vi.fn());
 
 vi.mock("../mail/email.js", () => ({
@@ -35,7 +36,7 @@ vi.mock("../mail/email-sync.js", () => ({
   syncEmailByGmailId: vi.fn(async () => ({ synced: 1, newCount: 1, emailId: "email-1" })),
   reconcileEmails: vi.fn(async () => ({ removed: 0, updated: 0 })),
   syncLinkedInboxesForUser: vi.fn(async () => ({ newCount: 0 })),
-  summarizeUnsummarizedEmails: vi.fn(async () => 0),
+  summarizeUnsummarizedEmails,
   generateSmartReply: vi.fn(async () => "Reply"),
   classifyPriorityDetailed: vi.fn(() => ({ priority: "NORMAL", reason: "t", signals: [] })),
   checkAutoReplyRules: vi.fn(async () => null),
@@ -103,6 +104,8 @@ async function buildApp() {
 }
 
 beforeEach(() => {
+  summarizeUnsummarizedEmails.mockReset();
+  summarizeUnsummarizedEmails.mockResolvedValue(0);
   summarizeEmailOnDemand.mockReset();
   emailFindFirst.mockReset();
   emailFindFirst.mockResolvedValue(EMAIL);
@@ -180,6 +183,53 @@ describe("POST /api/email/:id/summarize", () => {
     });
     expect(res.statusCode).toBe(429);
     expect(res.json().error).toMatch(/budget/);
+    expect(res.json().code).toBe("DAILY_COST_CAP");
+    await app.close();
+  });
+
+  it("carries DAILY_COST_CAP_FREE when the free cap refused the call", async () => {
+    const err = Object.assign(new Error("Free quota used for today."), {
+      name: "DailyCostCapExceededError",
+      code: "DAILY_COST_CAP_FREE",
+    });
+    summarizeEmailOnDemand.mockRejectedValue(err);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/e1/summarize",
+      headers: auth(),
+    });
+    expect(res.statusCode).toBe(429);
+    expect(res.json()).toEqual({
+      error: "Free quota used for today.",
+      code: "DAILY_COST_CAP_FREE",
+    });
+    await app.close();
+  });
+
+  it("bulk POST /summarize (free-tier reachable, no route catch) answers the same 429 via the global handler", async () => {
+    summarizeUnsummarizedEmails.mockRejectedValue(
+      Object.assign(new Error("Free quota used for today."), {
+        name: "DailyCostCapExceededError",
+        code: "DAILY_COST_CAP_FREE",
+      }),
+    );
+    const { handleError } = await import("../error-handler.js");
+    const { emailRoutes } = await import("../routes/email.js");
+    const app = Fastify();
+    app.setErrorHandler(handleError);
+    await app.register(emailRoutes, { prefix: "/api/email" });
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/summarize",
+      headers: auth(),
+      payload: {},
+    });
+    expect(res.statusCode).toBe(429);
+    expect(res.json()).toEqual({
+      error: "Free quota used for today.",
+      code: "DAILY_COST_CAP_FREE",
+    });
     await app.close();
   });
 

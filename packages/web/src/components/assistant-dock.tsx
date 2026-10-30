@@ -8,8 +8,10 @@
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { ASSISTANT_ASK_EVENT, type AssistantAskDetail } from "../lib/assistant-ask";
+import type { DailyCapCode } from "../lib/daily-cap";
 import { useT } from "../lib/i18n";
 import { type AssistantChatMessage, useAssistantChat } from "../lib/use-assistant-chat";
+import { DailyCapLine } from "./daily-cap-line";
 import EventDraftCard from "./event-draft-card";
 import ErrorAlert from "./ui/error-alert";
 import VoiceButton from "./voice-button";
@@ -153,7 +155,7 @@ export default function AssistantDock({ unified = false }: { unified?: boolean }
             ) : (
               <>
                 {chat.messages.map((m) => (
-                  <DockBubble key={m.id} message={m} />
+                  <DockBubble key={m.id} message={m} capCode={chat.capCodeFor(m)} />
                 ))}
                 {chat.pendingText && (
                   <div className="ease-strong flex justify-end transition duration-150 starting:translate-y-1 starting:opacity-0 motion-reduce:transition-none">
@@ -267,7 +269,13 @@ export default function AssistantDock({ unified = false }: { unified?: boolean }
   );
 }
 
-function DockBubble({ message }: { message: AssistantChatMessage }) {
+function DockBubble({
+  message,
+  capCode,
+}: {
+  message: AssistantChatMessage;
+  capCode: DailyCapCode | null;
+}) {
   if (message.role === "USER") {
     return (
       <div className="ease-strong flex justify-end transition duration-150 starting:translate-y-1 starting:opacity-0 motion-reduce:transition-none">
@@ -288,7 +296,11 @@ function DockBubble({ message }: { message: AssistantChatMessage }) {
         K
       </span>
       <div className="max-w-[85%] rounded-2xl rounded-tl-md border border-line/70 bg-surface-panel px-3.5 py-2 text-label font-normal text-ink-strong shadow-[0_1px_2px_rgba(15,23,42,0.05)]">
-        <p className="whitespace-pre-wrap">{message.content}</p>
+        {capCode ? (
+          <DailyCapLine code={capCode} />
+        ) : (
+          <p className="whitespace-pre-wrap">{message.content}</p>
+        )}
         {draft && <EventDraftCard draft={draft} />}
       </div>
     </div>

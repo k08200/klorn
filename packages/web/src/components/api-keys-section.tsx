@@ -19,11 +19,13 @@ import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../lib/api";
 import { buttonClasses } from "../lib/api-key-controls";
 import { DEFAULT_API_KEY_PERMISSION } from "../lib/api-key-ui";
+import { isEntitlementRefusal } from "../lib/entitlement";
 import { useT } from "../lib/i18n";
 import { captureClientError } from "../lib/sentry";
 import { ApiKeyCreateForm } from "./api-key-create-form";
 import { ApiKeyRow } from "./api-key-row";
 import { useConfirm } from "./confirm-dialog";
+import { ProFeatureNotice } from "./pro-feature-notice";
 import { useToast } from "./toast";
 
 export function ApiKeysSection() {
@@ -37,6 +39,8 @@ export function ApiKeysSection() {
   const [freshKey, setFreshKey] = useState<CreateApiKeyResponse | null>(null);
   const [writeTools, setWriteTools] = useState(false);
   const [permission, setPermission] = useState<ApiKeyPermissionWire>(DEFAULT_API_KEY_PERMISSION);
+  // Creating a key is Pro once the paywall is on: a FREE user's 403 shows the notice.
+  const [proGated, setProGated] = useState(false);
 
   const load = useCallback(() => {
     apiFetch<ApiKeysListResponse>("/api/keys")
@@ -53,6 +57,7 @@ export function ApiKeysSection() {
 
   const create = async () => {
     setCreating(true);
+    setProGated(false);
     try {
       const res = await apiFetch<CreateApiKeyResponse>("/api/keys", {
         method: "POST",
@@ -64,6 +69,10 @@ export function ApiKeysSection() {
       setPermission(DEFAULT_API_KEY_PERMISSION);
       load();
     } catch (err) {
+      if (isEntitlementRefusal(err)) {
+        setProGated(true);
+        return;
+      }
       captureClientError(err, { scope: "settings.api-keys-create" });
       toast(t("settings.apiKeys.createFailed"), "error");
     } finally {
@@ -112,6 +121,7 @@ export function ApiKeysSection() {
         permission={permission}
         onPermissionChange={setPermission}
       />
+      {proGated && <ProFeatureNotice />}
 
       {freshKey && (
         <div className="space-y-2 rounded-xl border border-line bg-surface-raised p-3">

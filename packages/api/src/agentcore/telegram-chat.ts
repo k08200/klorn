@@ -279,6 +279,7 @@ export async function handleTelegramChatMessage(input: {
             source: "telegram",
             ...(turn.eventDraft ? { eventDraft: { ...turn.eventDraft } } : {}),
             ...(turn.error ? { turnError: turn.error } : {}),
+            ...(turn.errorCode ? { turnErrorCode: turn.errorCode } : {}),
           } as Prisma.InputJsonValue,
         },
       });

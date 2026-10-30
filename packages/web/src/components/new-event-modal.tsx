@@ -2,7 +2,10 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { apiFetch } from "../lib/api";
+import { isEntitlementRefusal } from "../lib/entitlement";
 import { useT } from "../lib/i18n";
+import { serverErrorMessage } from "../lib/server-error";
+import { ProFeatureNotice } from "./pro-feature-notice";
 import ErrorAlert from "./ui/error-alert";
 
 /**
@@ -73,6 +76,8 @@ export function NewEventModal({
   const [location, setLocation] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Creating events is Pro: a FREE user's 403 shows the upgrade notice.
+  const [proGated, setProGated] = useState(false);
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -91,6 +96,7 @@ export function NewEventModal({
     setEndTime(initial?.endTime || plusOneHour(start));
     setLocation(initial?.location ?? "");
     setError(null);
+    setProGated(false);
     setSaving(false);
   }, [open, initial]);
 
@@ -144,6 +150,7 @@ export function NewEventModal({
     if (!canSave) return;
     setSaving(true);
     setError(null);
+    setProGated(false);
     try {
       const start = new Date(`${date}T${startTime}`);
       const end = new Date(`${date}T${endTime}`);
@@ -159,7 +166,9 @@ export function NewEventModal({
       onCreated(title.trim());
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("newEvent.error.create"));
+      if (isEntitlementRefusal(err)) setProGated(true);
+      // The server's own sentence when it sent one, never the raw `API 4xx: {json}`.
+      else setError(serverErrorMessage(err, t("newEvent.error.create")));
       setSaving(false);
     }
   };
@@ -277,6 +286,7 @@ export function NewEventModal({
           </div>
 
           {error && <ErrorAlert>{error}</ErrorAlert>}
+          {proGated && <ProFeatureNotice />}
 
           <div className="flex items-center justify-end gap-2 pt-1">
             <button

@@ -177,6 +177,7 @@ export async function chatConversationRoutes(app: FastifyInstance) {
               source: "chat",
               ...(result.eventDraft ? { eventDraft: { ...result.eventDraft } } : {}),
               ...(result.error ? { turnError: result.error } : {}),
+              ...(result.errorCode ? { turnErrorCode: result.errorCode } : {}),
             } as Prisma.InputJsonValue,
           },
         });
@@ -199,6 +200,9 @@ export async function chatConversationRoutes(app: FastifyInstance) {
         reply: result.reply,
         eventDraft: result.eventDraft,
         ...(result.error ? { error: result.error } : {}),
+        // Only the daily cost cap carries a code (DAILY_COST_CAP_FREE /
+        // DAILY_COST_CAP) — clients show the cap, not a false "try again".
+        ...(result.errorCode ? { errorCode: result.errorCode } : {}),
       };
     },
   );

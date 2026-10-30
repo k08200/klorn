@@ -346,7 +346,10 @@ export async function billingRoutes(app: FastifyInstance) {
       const isSettingKey =
         typeof openRouterApiKey === "string" && openRouterApiKey.trim().length > 0;
       if (isSettingKey && !isEntitled(user.plan, user.role)) {
-        return reply.code(403).send({ error: "BYOK requires an active subscription" });
+        return reply.code(403).send({
+          error: "BYOK requires an active subscription",
+          code: "ENTITLEMENT_REQUIRED",
+        });
       }
 
       // Verify a NEW key upstream before storing it. A definitively-rejected

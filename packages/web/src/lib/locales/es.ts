@@ -774,10 +774,9 @@ const es: Record<string, string> = {
   "onboarding.welcome.feature.surfaceDecisions": "Mostrar las decisiones",
   "onboarding.welcome.permissions.pre": "Klorn",
   "onboarding.welcome.permissions.emphasis1": "solo lee",
-  "onboarding.welcome.permissions.mid":
-    "Gmail y Calendar. Enviar correo o crear eventos siempre espera",
+  "onboarding.welcome.permissions.mid": "Gmail y Calendar. El correo que envía Klorn espera",
   "onboarding.welcome.permissions.emphasis2": "tu aprobación",
-  "onboarding.welcome.permissions.suffix": ".",
+  "onboarding.welcome.permissions.suffix": ", salvo que actives las respuestas automáticas.",
   "onboarding.syncing.title": "Preparando tu espacio de trabajo...",
   "onboarding.syncing.titleDone": "Sincronización completa.",
   "onboarding.syncing.desc":
@@ -1006,7 +1005,6 @@ const es: Record<string, string> = {
   "billing.error.checkoutFailed": "No se pudo crear la sesión de pago.",
   "billing.error.portalFailed": "No se pudo abrir el portal de facturación.",
   "billing.cancelSubscription": "Cancelar la suscripción",
-  "billing.unlimitedOnPlan": "Ilimitado en este plan",
   "billing.noWebSubscription":
     "Este plan no se factura en la web, así que aquí no hay nada que cancelar. Si te suscribiste en la app móvil, gestiónalo allí.",
   "billing.enterpriseBilling":
@@ -1031,29 +1029,26 @@ const es: Record<string, string> = {
   "billing.toast.resumed": "Suscripción reanudada: la facturación continúa como antes.",
   "billing.error.resumeFailed": "No se pudo reanudar la suscripción. Inténtalo de nuevo.",
   "billing.plan.free.name": "Free",
-  "billing.plan.free.limit": "50 decisiones/mes · 500K tokens",
+  "billing.plan.free.limit": "Una cuota diaria de IA (se restablece a las 00:00 UTC)",
+  "billing.plan.free.feature.oneAccount": "Primera cuenta de correo, de cualquier proveedor",
+  "billing.plan.free.feature.briefings": "Resúmenes diarios y triaje de correo",
   "billing.plan.free.feature.mailCalendar": "Lectura de correo y calendario",
   "billing.plan.free.feature.tasksMemory": "Tareas y memoria",
-  "billing.plan.free.feature.freeModels": "Modelos gratuitos de OpenRouter",
   "billing.plan.pro.name": "Pro",
   "billing.plan.pro.period": "/mes",
   "billing.plan.pro.trialNote":
     "Prueba gratis de 7 días · cancela antes de que acabe y no pagas nada",
-  "billing.plan.pro.limit": "2K decisiones/mes · 10M tokens",
-  "billing.plan.pro.feature.everythingFree": "Todo lo de Free",
-  "billing.plan.pro.feature.sendMail": "Enviar correo y crear eventos de calendario",
-  "billing.plan.pro.feature.decisionLoop":
-    "Modo bucle de decisión: sugerencia + ejecución por política",
-  "billing.plan.pro.feature.briefings": "Resúmenes diarios y triaje de correo",
-  "billing.plan.pro.feature.replyDrafts": "Borradores de respuesta y aprendizaje de patrones",
+  "billing.plan.pro.limit": "Una cuota diaria de IA más alta (se restablece a las 00:00 UTC)",
+  "billing.plan.pro.feature.everythingFree": "Todo lo de Free, y además:",
+  "billing.plan.pro.feature.sendMail": "Enviar y responder correo, con borradores de respuesta",
+  "billing.plan.pro.feature.calendarWrites": "Crear y editar eventos de calendario",
+  "billing.plan.pro.feature.moreAccounts": "Más cuentas de correo y calendarios",
+  "billing.plan.pro.feature.autoReply": "Respuestas automáticas en modo Automático",
+  "billing.plan.pro.feature.byok": "Tu propia clave de modelo",
   "billing.plan.pro.feature.integrations": "Integraciones con Slack y Notion (próximamente)",
-  "billing.plan.pro.feature.webResearch": "Investigación web y borradores de documentos",
-  "billing.plan.pro.feature.sonnet": "Selección del modelo Claude Sonnet",
   "billing.plan.enterprise.name": "Enterprise",
   "billing.plan.enterprise.price": "A medida",
-  "billing.plan.enterprise.limit": "Ilimitado",
   "billing.plan.enterprise.feature.everythingPro": "Todo lo de Pro",
-  "billing.plan.enterprise.feature.opus": "Selección de Claude Opus",
   "billing.plan.enterprise.feature.onPrem": "Opciones on-premise",
   "billing.plan.enterprise.feature.sla": "Soporte con SLA",
   "billing.plan.enterprise.feature.customIntegrations": "Integraciones a medida",
@@ -1062,10 +1057,10 @@ const es: Record<string, string> = {
     "Empezar Pro cuesta 0 hoy y desbloquea todo Pro al instante. El primer cargo de {price} se produce cuando acaban los 7 días de prueba. Cancela antes desde «Gestionar la suscripción» y no pagas nada.",
   "billing.faq.freeVsPro.q": "¿Cuál es la diferencia entre Free y Pro?",
   "billing.faq.freeVsPro.a":
-    "Free lee y organiza: Klorn vigila el correo y el calendario y los convierte en tarjetas de decisión, dentro de 50 decisiones y 500K tokens al mes con modelos gratuitos. Pro ejecuta: enviar correo, crear eventos, borradores de respuesta, resúmenes diarios y la sugerencia + ejecución por política del bucle de decisión, con 2K decisiones y 10M tokens al mes y selección del modelo Claude Sonnet.",
+    "Free lee y organiza: Klorn clasifica el correo de tu primera cuenta, de cualquier proveedor, escribe el resumen diario, lee tu calendario y responde en el asistente, dentro de una cuota diaria de IA que se restablece a las 00:00 UTC. Pro ejecuta: enviar y responder correo con borradores de respuesta, crear y editar eventos de calendario, más cuentas de correo y calendarios, respuestas automáticas en modo Automático, integraciones con Slack y Notion a medida que lleguen, tu propia clave de modelo y una cuota diaria de IA más alta.",
   "billing.faq.enterprise.q": "¿Qué añade Enterprise?",
   "billing.faq.enterprise.a":
-    "Límites a medida en vez de cuotas fijas, selección del modelo Claude Opus, opciones de despliegue on-premise, soporte con SLA e integraciones a medida. El precio depende del alcance: contacta con ventas.",
+    "Opciones de despliegue on-premise, soporte con SLA e integraciones a medida. El precio depende del alcance: contacta con ventas.",
   "billing.faq.manage.q": "¿Cómo cancelo o gestiono mi suscripción?",
   "billing.faq.manage.a":
     "«Cancelar la suscripción» en esta página la termina al final del periodo que ya pagaste: Pro sigue funcionando hasta esa fecha, no se te vuelve a cobrar y no se elimina nada. Hasta que surta efecto puedes deshacerlo con «Mantener la suscripción». «Gestionar la suscripción» abre el portal de facturación de Paddle, nuestro comercio registrado, para cambiar el método de pago y descargar facturas.",
@@ -1515,6 +1510,10 @@ const es: Record<string, string> = {
   "candidates.qualityIssues.oneFailed": "adjunto falló el análisis: prueba con tu propia clave",
   "candidates.qualityIssues.manyFailed":
     "adjuntos fallaron el análisis: prueba con tu propia clave",
+  "candidates.qualityIssues.oneFailedFree":
+    "adjunto falló el análisis: tu propia clave de modelo está disponible con Pro",
+  "candidates.qualityIssues.manyFailedFree":
+    "adjuntos fallaron el análisis: tu propia clave de modelo está disponible con Pro",
   "candidates.qualityIssues.hide": "Ocultar",
   "candidates.qualityIssues.details": "Detalles",
   "candidates.filterStatusLabel": "Estado",
@@ -1732,6 +1731,13 @@ const es: Record<string, string> = {
   "mailAccount.proGate.body":
     "Free incluye una cuenta de correo (Gmail, iCloud Mail o Naver Mail). Mejora tu plan para que el cortafuegos cubra más de una.",
   "mailAccount.proGate.upgrade": "Mejorar plan",
+  "proFeature.title": "Es una función Pro.",
+  "proFeature.upgrade": "Mejorar plan",
+  "proFeature.byok": "Tu propia clave de modelo está disponible con Pro.",
+  "proFeature.drive": "Conectar Google Drive es una función Pro.",
+  "dailyCap.free": "Has usado la cuota gratuita de IA de hoy. Se restablece a las 00:00 UTC.",
+  "dailyCap.paid":
+    "Has usado la cuota de IA de hoy. Se restablece a las 00:00 UTC, o puedes añadir tu propia clave de modelo en Ajustes.",
   "imapConnect.firstSync.started": "Obteniendo tu correo ahora. Aparecerá en Correo en breve.",
   "imapConnect.firstSync.delayed": "El primer correo de esta cuenta puede tardar hasta ~5 minutos.",
   "mailV2.archive.done": "Archivado",
@@ -2135,6 +2141,8 @@ const es: Record<string, string> = {
   "byok.title": "Usa tu propia clave de LLM",
   "byok.body":
     "De forma predeterminada, tu correo se clasifica con la clave compartida de Klorn. Añade tu propia clave de proveedor y Klorn usará tu clave y tu cuota para tu correo; útil si el presupuesto compartido está saturado. Las claves se guardan cifradas (AES-GCM); nunca registramos el texto plano.",
+  "byok.bodyFree":
+    "Tu correo se clasifica con la clave compartida de Klorn, dentro de tu cuota diaria de IA.",
   "byok.activeModel": "Modelo activo:",
   "byok.usingYourKey": "Usando tu clave",
   "byok.stored": "•••••••• guardada",
@@ -2147,6 +2155,8 @@ const es: Record<string, string> = {
   "byok.assistantModel": "Modelo del asistente",
   "byok.assistantModelHelp":
     "Solo modelos de vanguardia: es el modelo con el que habla tu asistente de Klorn. Trabaja con tu correo, calendario y tareas, y nunca busca en la web. Funciona dentro de tu cuota diaria de IA; añade tu propia clave arriba para usar tu cuota. El clasificador del cortafuegos de correo se ajusta por separado y no se ve afectado.",
+  "byok.assistantModelHelpFree":
+    "Solo modelos de vanguardia: es el modelo con el que habla tu asistente de Klorn. Trabaja con tu correo, calendario y tareas, y nunca busca en la web. Funciona dentro de tu cuota diaria de IA. El clasificador del cortafuegos de correo se ajusta por separado y no se ve afectado.",
   "byok.error.status": "No se pudo cargar el estado de tu clave de LLM.",
   "byok.error.update": "No se pudo actualizar la clave.",
   "byok.error.model": "No se pudo cambiar el modelo.",
@@ -2166,13 +2176,10 @@ const es: Record<string, string> = {
   "subscription.toast.unavailable": "Las suscripciones no están disponibles en este momento.",
   "subscription.toast.purchaseFailed": "No se pudo completar la compra. Inténtalo de nuevo.",
   "subscription.toast.noPurchase": "No se encontró ninguna compra anterior.",
-  "paywall.foundingPrice": "Precio fundador",
   "paywall.title": "Empieza tu prueba gratuita de 7 días",
   "paywall.body":
-    "Klorn Pro es tu cortafuegos de correo con IA: clasifica lo que te llega y nada sale sin tu visto bueno.",
+    "Klorn Pro es tu cortafuegos de correo con IA: clasifica lo que te llega. El correo que envía Klorn espera tu visto bueno, salvo que actives las respuestas automáticas.",
   "paywall.startTrial": "Empezar prueba gratuita",
-  "paywall.trialTerms":
-    "7 días gratis y después {price}/mes, precio fijo para los primeros miembros. Cancela cuando quieras.",
   "paywall.refunds": "Reembolsos",
   "paywall.valueProp.interrupt": "Que solo te interrumpa el correo que de verdad importa",
   "paywall.valueProp.noise":
@@ -2317,6 +2324,7 @@ const es: Record<string, string> = {
     "Google está conectado. Un calendario vacío sigue vacío en el resumen.",
   "calendar.error.load": "No se pudieron cargar los eventos del calendario.",
   "calendar.error.sync": "No se pudo sincronizar Google Calendar.",
+  "calendar.error.delete": "No se pudo eliminar el evento.",
   "calendar.sync.imported": "Se importaron {count} eventos de Google Calendar.",
   "calendar.sync.empty":
     "Google Calendar está sincronizado. No hay eventos en los próximos 14 días.",
