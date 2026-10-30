@@ -509,6 +509,8 @@ export const ja: Messages = {
   "assistant.chat.sendFailed":
     "送信できませんでした。メッセージは入力欄に戻してあります。もう一度お試しください。",
   "assistant.chat.turnError": "この回答を最後まで作れませんでした。",
+  "assistant.chat.cap": "今日のAI利用枠を使い切りました。UTC 0:00にリセットされます。",
+  "assistant.chat.capFree": "今日の無料のAI利用枠を使い切りました。UTC 0:00にリセットされます。",
   "assistant.chat.aboutMail": "読んでいたメールについて",
   "assistant.chip.urgent": "返信していない急ぎのメール",
   "assistant.chip.receipts": "今週の領収書をまとめて",
@@ -754,9 +756,14 @@ export const ja: Messages = {
 
   "plans.title": "プラン",
   "plans.current": "現在のプラン",
+  "plans.name.free": "無料",
+  "plans.name.pro": "Pro",
+  "plans.name.team": "チーム",
+  "plans.name.enterprise": "エンタープライズ",
   "plans.renewsOn": "{date}に更新されます",
   "plans.endsOn": "{date}に終了します",
   "plans.pro.title": "Proに含まれるもの",
+  "plans.pro.send": "Klornからメールの返信と送信",
   "plans.pro.accounts": "より多くのメールアカウントを接続",
   "plans.pro.calendar": "Klornから予定の作成と招待",
   "plans.pro.assistant": "毎日たっぷり使えるアシスタント",

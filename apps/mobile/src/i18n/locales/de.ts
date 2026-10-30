@@ -526,6 +526,10 @@ export const de: Messages = {
   "assistant.chat.sendFailed":
     "Senden fehlgeschlagen. Deine Nachricht steht wieder im Feld – versuch es noch einmal.",
   "assistant.chat.turnError": "Der Assistent konnte diese Antwort nicht fertigstellen.",
+  "assistant.chat.cap":
+    "Du hast das KI-Kontingent für heute aufgebraucht. Es wird um 00:00 UTC zurückgesetzt.",
+  "assistant.chat.capFree":
+    "Du hast das kostenlose KI-Kontingent für heute aufgebraucht. Es wird um 00:00 UTC zurückgesetzt.",
   "assistant.chat.aboutMail": "Zur Mail, die du gerade gelesen hast",
   "assistant.chip.urgent": "Dringende Mails ohne Antwort",
   "assistant.chip.receipts": "Sammle die Belege dieser Woche",
@@ -776,9 +780,14 @@ export const de: Messages = {
 
   "plans.title": "Tarif",
   "plans.current": "Aktueller Tarif",
+  "plans.name.free": "Kostenlos",
+  "plans.name.pro": "Pro",
+  "plans.name.team": "Team",
+  "plans.name.enterprise": "Enterprise",
   "plans.renewsOn": "Verlängert sich am {date}",
   "plans.endsOn": "Endet am {date}",
   "plans.pro.title": "Pro enthält",
+  "plans.pro.send": "E-Mails aus Klorn beantworten und senden",
   "plans.pro.accounts": "Mehr verbundene Mail-Konten",
   "plans.pro.calendar": "Termine und Einladungen aus Klorn erstellen",
   "plans.pro.assistant": "Mehr Assistent jeden Tag",

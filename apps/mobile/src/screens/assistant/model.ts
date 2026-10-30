@@ -334,3 +334,23 @@ export function activityReason(reason: string | null): ActivityText | null {
 export function visibleMessages(messages: readonly ChatMessageWire[]): ChatMessageWire[] {
   return messages.filter((m) => (m.role === "USER" || m.role === "ASSISTANT") && m.content.trim());
 }
+
+// ── The daily AI allowance ──────────────────────────────────────────────────
+
+export interface ChatCapNotice {
+  key: MessageKey;
+  /** A FREE user can lift the cap by subscribing: the line ends with See plans. */
+  plans: boolean;
+}
+
+/**
+ * What the thread says when a turn stopped at the daily AI allowance
+ * (ChatTurnResponse.errorCode). The server's `reply` is English, so the app
+ * writes the line itself; an unknown or absent code (an older server) is no
+ * notice and the thread behaves as before.
+ */
+export function chatCapNotice(errorCode: string | null | undefined): ChatCapNotice | null {
+  if (errorCode === "DAILY_COST_CAP_FREE") return { key: "assistant.chat.capFree", plans: true };
+  if (errorCode === "DAILY_COST_CAP") return { key: "assistant.chat.cap", plans: false };
+  return null;
+}

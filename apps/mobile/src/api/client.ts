@@ -16,13 +16,22 @@ export class ApiError extends Error {
   readonly status: number;
   /** The server's `error` string, when it sent one. */
   readonly serverMessage: string | null;
+  /** The server's machine-readable `code` (e.g. ENTITLEMENT_REQUIRED), when it sent one. */
+  readonly serverCode: string | null;
 
-  constructor(kind: ApiErrorKind, status: number, message: string, serverMessage: string | null) {
+  constructor(
+    kind: ApiErrorKind,
+    status: number,
+    message: string,
+    serverMessage: string | null,
+    serverCode: string | null = null,
+  ) {
     super(message);
     this.name = "ApiError";
     this.kind = kind;
     this.status = status;
     this.serverMessage = serverMessage;
+    this.serverCode = serverCode;
   }
 
   /** No answer from the server at all: offline, DNS, TLS, timeout. */
@@ -33,6 +42,18 @@ export class ApiError extends Error {
 
 export function isApiError(err: unknown): err is ApiError {
   return err instanceof ApiError;
+}
+
+/** The `code` an API refusal carries when a plan gate said no (billing/entitlement-guard.ts). */
+export const ENTITLEMENT_REQUIRED = "ENTITLEMENT_REQUIRED";
+
+/**
+ * True only for the server's plan refusal: 403 with code ENTITLEMENT_REQUIRED.
+ * Any other 403 (a row that is not yours, a demo account) and every other
+ * status is NOT "needs Pro" — the API never answers a client with 402.
+ */
+export function isEntitlementRefusal(err: unknown): boolean {
+  return isApiError(err) && err.status === 403 && err.serverCode === ENTITLEMENT_REQUIRED;
 }
 
 export interface ApiClientOptions {
@@ -81,6 +102,12 @@ function errorMessageOf(data: unknown): string | null {
   if (typeof error === "string") return error;
   // Some routes answer { ok: false, message } (routes/imap-connect.ts).
   return typeof message === "string" ? message : null;
+}
+
+function errorCodeOf(data: unknown): string | null {
+  if (!data || typeof data !== "object") return null;
+  const { code } = data as { code?: unknown };
+  return typeof code === "string" ? code : null;
 }
 
 export function createApiClient(options: ApiClientOptions): ApiClient {
@@ -148,7 +175,13 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       throw new ApiError("unauthorized", 401, `Unauthorized: ${path}`, errorMessageOf(data));
     }
     if (!res.ok) {
-      throw new ApiError("http", res.status, `HTTP ${res.status}: ${path}`, errorMessageOf(data));
+      throw new ApiError(
+        "http",
+        res.status,
+        `HTTP ${res.status}: ${path}`,
+        errorMessageOf(data),
+        errorCodeOf(data),
+      );
     }
     return { status: res.status, data: data as T };
   }

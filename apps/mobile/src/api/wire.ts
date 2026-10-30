@@ -186,6 +186,13 @@ export interface ChatTurnResponse {
   reply: string;
   eventDraft: EventDraftWire | null;
   error?: string;
+  /**
+   * Why the turn ended without an answer, when the server says so:
+   * DAILY_COST_CAP_FREE (free allowance used up) or DAILY_COST_CAP. `reply`
+   * then holds the server's English text; the app shows its own line
+   * (screens/assistant/model.ts chatCapNotice). Absent on older servers.
+   */
+  errorCode?: string;
 }
 
 /** POST /api/chat/pending-actions/:id/approve (routes/chat-pending-actions.ts). */

@@ -512,6 +512,9 @@ export const es: Messages = {
   "assistant.chat.sendFailed":
     "No se pudo enviar. Tu mensaje vuelve a estar en el cuadro: inténtalo de nuevo.",
   "assistant.chat.turnError": "El asistente no pudo terminar esta respuesta.",
+  "assistant.chat.cap": "Has usado el cupo de IA de hoy. Se restablece a las 00:00 UTC.",
+  "assistant.chat.capFree":
+    "Has usado el cupo gratuito de IA de hoy. Se restablece a las 00:00 UTC.",
   "assistant.chat.aboutMail": "Sobre el correo que estabas leyendo",
   "assistant.chip.urgent": "Correo urgente sin responder",
   "assistant.chip.receipts": "Reúne los recibos de esta semana",
@@ -762,9 +765,14 @@ export const es: Messages = {
 
   "plans.title": "Plan",
   "plans.current": "Plan actual",
+  "plans.name.free": "Gratis",
+  "plans.name.pro": "Pro",
+  "plans.name.team": "Equipo",
+  "plans.name.enterprise": "Enterprise",
   "plans.renewsOn": "Se renueva el {date}",
   "plans.endsOn": "Termina el {date}",
   "plans.pro.title": "Pro incluye",
+  "plans.pro.send": "Responder y enviar correo desde Klorn",
   "plans.pro.accounts": "Más cuentas de correo conectadas",
   "plans.pro.calendar": "Crear eventos e invitaciones desde Klorn",
   "plans.pro.assistant": "Más asistente cada día",

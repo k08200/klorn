@@ -7,14 +7,13 @@
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { isApiError } from "../../api/client";
 import type { EventDraftWire } from "../../api/wire";
 import { getServices } from "../../app/services";
 import { useI18n } from "../../i18n/I18nProvider";
 import { hapticSuccess } from "../../platform/haptics";
-import { useLinkProps } from "../../router/Router";
 import { Icon } from "../../ui/Icon";
-import { slotDay, slotLabel } from "./model";
+import { PlansLink } from "../../ui/PlansLink";
+import { saveStateAfterFailure, slotDay, slotLabel } from "./model";
 
 export type SaveState = "idle" | "saving" | "saved" | "paywalled" | "error";
 
@@ -30,9 +29,7 @@ export function useCreateEvent() {
       await queryClient.invalidateQueries({ queryKey: ["calendar"] });
       return true;
     } catch (err) {
-      setState(
-        isApiError(err) && (err.status === 402 || err.status === 403) ? "paywalled" : "error",
-      );
+      setState(saveStateAfterFailure(err));
       return false;
     }
   };
@@ -104,7 +101,6 @@ export function DraftSummary({ draft, zone }: DraftSummaryProps) {
 export function EventDraftCard({ draft, zone }: { draft: EventDraftWire; zone: string }) {
   const { t } = useI18n();
   const { state, save } = useCreateEvent();
-  const plans = useLinkProps({ name: "settings", section: "plans" });
   const invites = (draft.attendees?.length ?? 0) > 0;
   return (
     <section className="event-draft" aria-label={t("calendar.draft.label")}>
@@ -118,7 +114,7 @@ export function EventDraftCard({ draft, zone }: { draft: EventDraftWire; zone: s
         </span>
       ) : state === "paywalled" ? (
         <p className="event-draft__paywall" role="status">
-          {t("calendar.draft.paywall")} <a {...plans}>{t("calendar.draft.seePlans")}</a>
+          {t("calendar.draft.paywall")} <PlansLink />
         </p>
       ) : (
         <>

@@ -504,6 +504,8 @@ export const ko: Messages = {
   "assistant.chat.sendFailed":
     "보내지 못했어요. 메시지를 입력창에 되돌려 놨어요. 다시 시도해 주세요.",
   "assistant.chat.turnError": "이 답변을 끝까지 만들지 못했어요.",
+  "assistant.chat.cap": "오늘 쓸 수 있는 AI 사용량을 다 썼어요. UTC 00:00에 초기화돼요.",
+  "assistant.chat.capFree": "오늘 쓸 수 있는 무료 AI 사용량을 다 썼어요. UTC 00:00에 초기화돼요.",
   "assistant.chat.aboutMail": "보고 있던 메일에 대해",
   "assistant.chip.urgent": "답장 안 한 급한 메일",
   "assistant.chip.receipts": "이번 주 영수증 모아줘",
@@ -740,9 +742,14 @@ export const ko: Messages = {
 
   "plans.title": "요금제",
   "plans.current": "현재 요금제",
+  "plans.name.free": "무료",
+  "plans.name.pro": "Pro",
+  "plans.name.team": "팀",
+  "plans.name.enterprise": "엔터프라이즈",
   "plans.renewsOn": "{date}에 갱신돼요",
   "plans.endsOn": "{date}에 끝나요",
   "plans.pro.title": "Pro에 포함된 것",
+  "plans.pro.send": "Klorn에서 메일 답장과 발송",
   "plans.pro.accounts": "더 많은 메일 계정 연결",
   "plans.pro.calendar": "Klorn에서 일정 만들기와 초대",
   "plans.pro.assistant": "매일 더 넉넉한 도우미",

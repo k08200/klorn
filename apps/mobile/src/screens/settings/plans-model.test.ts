@@ -2,7 +2,14 @@ import { describe, expect, it } from "vitest";
 import { createTranslator } from "../../i18n";
 import { en } from "../../i18n/locales/en";
 import { ko } from "../../i18n/locales/ko";
-import { lengthText, parseIsoPeriod, pricePerText, subscriptionLengthOf } from "./plans-model";
+import {
+  lengthText,
+  parseIsoPeriod,
+  planLabel,
+  planNameKey,
+  pricePerText,
+  subscriptionLengthOf,
+} from "./plans-model";
 
 describe("subscription length (App Store 3.1.2)", () => {
   it("reads RevenueCat's package type, else the ISO period", () => {
@@ -29,5 +36,37 @@ describe("subscription length (App Store 3.1.2)", () => {
     expect(say(e, pricePerText({ unit: "month", count: 3 }, "$29.99"))).toBe(
       "$29.99 every 3 months",
     );
+  });
+});
+
+describe("planNameKey (the plan row never shows a raw code)", () => {
+  it("maps the server's plan codes and display names alike", () => {
+    expect(planNameKey("FREE")).toBe("plans.name.free");
+    expect(planNameKey("Free")).toBe("plans.name.free");
+    expect(planNameKey("PRO")).toBe("plans.name.pro");
+    expect(planNameKey("Team")).toBe("plans.name.team");
+    expect(planNameKey("ENTERPRISE")).toBe("plans.name.enterprise");
+  });
+
+  it("leaves a name it does not know alone", () => {
+    expect(planNameKey("Founders")).toBeNull();
+    expect(planNameKey("constructor")).toBeNull();
+    expect(planNameKey("")).toBeNull();
+    expect(planNameKey(undefined)).toBeNull();
+  });
+
+  it("reads Free in the app's language", () => {
+    const key = planNameKey("FREE");
+    if (!key) throw new Error("expected a key");
+    expect(createTranslator("en", en).t(key)).toBe("Free");
+    expect(createTranslator("ko", ko).t(key)).toBe("무료");
+  });
+
+  it("labels a plan in the app's language, else as the server sent it", () => {
+    const koT = createTranslator("ko", ko);
+    expect(planLabel((k) => koT.t(k), "FREE")).toBe("무료");
+    expect(planLabel((k) => koT.t(k), "Pro")).toBe("Pro");
+    expect(planLabel((k) => koT.t(k), "Founders")).toBe("Founders");
+    expect(planLabel((k) => koT.t(k), undefined)).toBeUndefined();
   });
 });

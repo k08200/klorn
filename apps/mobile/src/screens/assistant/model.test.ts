@@ -2,11 +2,15 @@ import { describe, expect, it } from "vitest";
 import { mockPendingActions } from "../../api/mock/fixtures";
 import { mockReceipt } from "../../api/mock/fixtures-hub";
 import type { PendingActionWire } from "../../api/wire";
+import { createTranslator } from "../../i18n";
+import { en } from "../../i18n/locales/en";
+import { ko } from "../../i18n/locales/ko";
 import {
   activityEntries,
   activityReason,
   activityTitle,
   approvalModel,
+  chatCapNotice,
   dayPartOf,
   groupByDayPart,
   splitReasoning,
@@ -122,5 +126,36 @@ describe("activity", () => {
         { id: "3", role: "ASSISTANT", content: " ", metadata: null, createdAt: at },
       ]).map((m) => m.id),
     ).toEqual(["2"]);
+  });
+});
+
+describe("chatCapNotice (the daily AI allowance reached)", () => {
+  it("offers plans to a FREE user at the cap", () => {
+    expect(chatCapNotice("DAILY_COST_CAP_FREE")).toEqual({
+      key: "assistant.chat.capFree",
+      plans: true,
+    });
+  });
+
+  it("names the cap without a plans link for everyone else", () => {
+    expect(chatCapNotice("DAILY_COST_CAP")).toEqual({ key: "assistant.chat.cap", plans: false });
+  });
+
+  it("is absent for an old server, no error, or an unknown code (current behaviour)", () => {
+    expect(chatCapNotice(undefined)).toBeNull();
+    expect(chatCapNotice(null)).toBeNull();
+    expect(chatCapNotice("")).toBeNull();
+    expect(chatCapNotice("SOMETHING_NEW")).toBeNull();
+  });
+
+  it("reads in the app's language, not the server's English", () => {
+    const free = chatCapNotice("DAILY_COST_CAP_FREE");
+    if (!free) throw new Error("expected a notice");
+    expect(createTranslator("en", en).t(free.key)).toBe(
+      "You've used today's free AI allowance. It resets at 00:00 UTC.",
+    );
+    expect(createTranslator("ko", ko).t(free.key)).toBe(
+      "오늘 쓸 수 있는 무료 AI 사용량을 다 썼어요. UTC 00:00에 초기화돼요.",
+    );
   });
 });

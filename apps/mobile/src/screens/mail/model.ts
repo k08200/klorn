@@ -4,7 +4,9 @@
  * receipt hash, and the Subscriptions read rates. No React, no DOM.
  */
 import type { EmailListItem, FirewallResponse, InboxOption, LiveTier } from "@klorn/contract";
+import { isApiError, isEntitlementRefusal } from "../../api/client";
 import type { EmailSubscriptionWire } from "../../api/wire";
+import type { MessageKey } from "../../i18n";
 import { senderLabel } from "./lane-sheet-model";
 
 export { senderLabel };
@@ -113,6 +115,41 @@ export function sendableAccounts(inboxes: readonly InboxOption[]): InboxOption[]
 /** The send body's `linkedInboxAccountId`: null = the primary inbox. */
 export function sendAccountId(from: InboxOption | null): string | null {
   return from && from.kind === "linked" ? from.id : null;
+}
+
+/**
+ * The message for a refused or failed write. Only the plan gate (403
+ * ENTITLEMENT_REQUIRED) says "needs Pro" — the one message that carries the
+ * See-plans link (`PRO_REFUSAL_KEY`); every other 403 is a plain failure.
+ */
+export const PRO_REFUSAL_KEY = "reader.draft.notEntitled" satisfies MessageKey;
+
+export function draftErrorKey(err: unknown): MessageKey {
+  if (isApiError(err) && err.isOffline) return "reader.draft.offline";
+  if (isApiError(err) && err.status === 429) return "reader.draft.rateLimited";
+  if (isEntitlementRefusal(err)) return PRO_REFUSAL_KEY;
+  return "reader.draft.unavailable";
+}
+
+/** What the confirm sheet says when a send did not complete; `unknown` forbids a blind retry. */
+export function sendFailure(
+  err: unknown,
+  mail: { kind: "reply" | "new"; accountId: string | null },
+): { unknown: boolean; message: MessageKey } {
+  const status = isApiError(err) ? err.status : null;
+  // 502 = the provider could not say whether it went out.
+  if (status === 502) return { unknown: true, message: "reader.send.unknown" };
+  const message: MessageKey =
+    isApiError(err) && err.isOffline
+      ? "reader.send.offline"
+      : isEntitlementRefusal(err)
+        ? PRO_REFUSAL_KEY
+        : status === 501 && mail.kind === "new"
+          ? "reader.send.unsupportedAccount"
+          : status === 404 && mail.kind === "new" && mail.accountId
+            ? "reader.send.accountGone"
+            : "reader.send.failed";
+  return { unknown: false, message };
 }
 
 export interface AccountWords {
