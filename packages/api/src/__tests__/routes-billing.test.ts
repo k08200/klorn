@@ -297,6 +297,30 @@ describe("billing routes", () => {
     await app.close();
   });
 
+  it("refuses a BYOK key for a non-entitled user with the ENTITLEMENT_REQUIRED code", async () => {
+    // Clients detect an entitlement refusal by `code`, not by the error text —
+    // without it the BYOK refusal read as a generic failure (paywall on, FREE).
+    const { isEntitled } = await import("../billing/stripe.js");
+    (isEntitled as ReturnType<typeof vi.fn>).mockReturnValueOnce(false);
+    const { prisma } = await import("../db.js");
+    const updateMock = prisma.user.update as ReturnType<typeof vi.fn>;
+    updateMock.mockClear();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/billing/models",
+      headers: auth(),
+      payload: { openRouterApiKey: "sk-or-v1-test" },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual({
+      error: "BYOK requires an active subscription",
+      code: "ENTITLEMENT_REQUIRED",
+    });
+    expect(updateMock).not.toHaveBeenCalled();
+    await app.close();
+  });
+
   it("a dead OpenRouter key is rejected upstream-verified, never stored silently", async () => {
     const { verifyOpenRouterKey } = await import("../billing/verify-provider-key.js");
     (verifyOpenRouterKey as ReturnType<typeof vi.fn>).mockResolvedValueOnce("invalid");

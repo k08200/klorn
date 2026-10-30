@@ -387,7 +387,9 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
     const LLM_ADJACENT: Array<[string, string[], string]> = [
       [
         "routes/calendar.ts",
-        ["../event-parse.js"], // dynamic import in POST /parse-event
+        // event-parse: dynamic import in POST /parse-event. cost-cap-refusal:
+        // maps a cap-refused call's error to its 429 body — no prompt.
+        ["../event-parse.js", "../llm/cost-cap-refusal.js"],
         "event-parse sends the user's own spoken or typed utterance to the model, never a row",
       ],
       [

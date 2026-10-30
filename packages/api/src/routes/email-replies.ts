@@ -17,6 +17,7 @@ import { prisma } from "../db.js";
 import { recordContactEngagement } from "../learning/contact-engagement.js";
 import { buildReplyToneHint } from "../learning/reply-tone.js";
 import { buildVoicePromptHint } from "../learning/voice-profile-extractor.js";
+import { COST_CAP_HTTP_STATUS, costCapRefusal } from "../llm/cost-cap-refusal.js";
 import { describeLlmFailure } from "../llm/describe-failure.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 import { createCompletion, DRAFT_MODEL } from "../llm/openai.js";
@@ -366,9 +367,8 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
         // A daily-budget trip is a different fact from an outage, and the
         // generic "temporarily unavailable" sent the user in circles retrying
         // something that cannot succeed until tomorrow (founder, 2026-08-10).
-        if (err instanceof Error && err.name === "DailyCostCapExceededError") {
-          return reply.code(429).send({ error: err.message });
-        }
+        const capped = costCapRefusal(err);
+        if (capped) return reply.code(COST_CAP_HTTP_STATUS).send(capped);
         if (err instanceof Error && err.name === "AllProvidersExhaustedError") {
           // Every model in the fallback chain refused. Still 503 (it is
           // transient), but say which layer failed so a key/quota problem is
@@ -469,9 +469,8 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
         // A daily-budget trip is a different fact from an outage, and the
         // generic "temporarily unavailable" sent the user in circles retrying
         // something that cannot succeed until tomorrow (founder, 2026-08-10).
-        if (err instanceof Error && err.name === "DailyCostCapExceededError") {
-          return reply.code(429).send({ error: err.message });
-        }
+        const capped = costCapRefusal(err);
+        if (capped) return reply.code(COST_CAP_HTTP_STATUS).send(capped);
         if (err instanceof Error && err.name === "AllProvidersExhaustedError") {
           // Every model in the fallback chain refused. Still 503 (it is
           // transient), but say which layer failed so a key/quota problem is

@@ -444,8 +444,9 @@ async function dbHeartbeat(): Promise<void> {
 // Title used both to create and to dedup the free-tier limit nudge, so the two
 // stay in lockstep (a title drift would break the once-a-day guard).
 const FREE_LIMIT_NUDGE_TITLE = "Daily free limit reached";
+// Pro has a daily cap too (a larger one) — never promise "unlimited".
 const FREE_LIMIT_NUDGE_MESSAGE =
-  "You've reached today's free limit. Upgrade to Pro for unlimited classification and auto-handling.";
+  "You've reached today's free limit. Upgrade to Pro for a larger daily limit.";
 
 function startOfUtcDay(): Date {
   const d = new Date();

@@ -114,7 +114,7 @@ export async function sendBetaInviteEmail(to: string, name?: string | null): Pro
             ${greeting}
           </p>
           <p style="color: #374151; font-size: 16px; line-height: 1.6;">
-            I've added <strong style="color: #111827;">${to}</strong> to the Klorn test-user list in Google Cloud Console. Google's "Access blocked" screen should be gone for you now.
+            You're approved. Sign in with this address: <strong style="color: #111827;">${escapeHtml(to)}</strong>.
           </p>
           <p style="color: #374151; font-size: 16px; line-height: 1.6;">
             Open the login page below and click <strong>Continue with Google</strong> using this exact address. Klorn will start connecting your Gmail and Calendar into a single decision queue — every send, permanent delete, or external forward stops at an approval step with a verifiable receipt.

@@ -25,6 +25,7 @@ import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireEntitled } from "../billing/entitlement-guard.js";
 import { prisma } from "../db.js";
+import { COST_CAP_HTTP_STATUS, costCapRefusal } from "../llm/cost-cap-refusal.js";
 import { describeLlmFailure } from "../llm/describe-failure.js";
 import { listTierPins, replaceTierPins, validateTierPin } from "../mail/pin-rules.js";
 import { compileRuleText, RULE_TEXT_MAX_CHARS } from "../mail/rule-compile.js";
@@ -106,9 +107,8 @@ export async function registerEmailRulesRoutes(app: FastifyInstance) {
         }
         return compiled;
       } catch (err) {
-        if (err instanceof Error && err.name === "DailyCostCapExceededError") {
-          return reply.code(429).send({ error: err.message });
-        }
+        const capped = costCapRefusal(err);
+        if (capped) return reply.code(COST_CAP_HTTP_STATUS).send(capped);
         if (err instanceof Error && err.name === "UserRateLimitedError") {
           const retryAfterMs = (err as { retryAfterMs?: number }).retryAfterMs ?? 1_000;
           reply.header("Retry-After", String(Math.max(1, Math.ceil(retryAfterMs / 1000))));
