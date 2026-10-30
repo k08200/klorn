@@ -98,7 +98,16 @@ export function DraftSummary({ draft, zone }: DraftSummaryProps) {
   );
 }
 
-export function EventDraftCard({ draft, zone }: { draft: EventDraftWire; zone: string }) {
+export function EventDraftCard({
+  draft,
+  zone,
+  onNavigate,
+}: {
+  draft: EventDraftWire;
+  zone: string;
+  /** Runs when a link in the card (See plans) is followed; a sheet closes itself with it. */
+  onNavigate?: () => void;
+}) {
   const { t } = useI18n();
   const { state, save } = useCreateEvent();
   const invites = (draft.attendees?.length ?? 0) > 0;
@@ -114,7 +123,7 @@ export function EventDraftCard({ draft, zone }: { draft: EventDraftWire; zone: s
         </span>
       ) : state === "paywalled" ? (
         <p className="event-draft__paywall" role="status">
-          {t("calendar.draft.paywall")} <PlansLink />
+          {t("calendar.draft.paywall")} <PlansLink onNavigate={onNavigate} />
         </p>
       ) : (
         <>

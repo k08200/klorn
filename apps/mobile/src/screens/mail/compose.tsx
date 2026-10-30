@@ -67,19 +67,44 @@ export interface OutgoingMail {
   from: InboxOption | null;
 }
 
-/** A draft / send error line; the plan refusal also carries the way to Pro. */
-export function WriteError({ messageKey }: { messageKey: MessageKey }) {
+/**
+ * A draft / send error line; the plan refusal also carries the way to Pro.
+ * `discards` is for a line shown beside mail the user has written: following
+ * the link leaves the mail screen, and the unsent mail does not survive that.
+ */
+export function WriteError({
+  messageKey,
+  discards = false,
+  onNavigate,
+}: {
+  messageKey: MessageKey;
+  discards?: boolean;
+  onNavigate?: () => void;
+}) {
   const { t } = useI18n();
+  if (messageKey !== PRO_REFUSAL_KEY) return <>{t(messageKey)}</>;
   return (
     <>
-      {t(messageKey)}
-      {messageKey === PRO_REFUSAL_KEY ? (
-        <>
-          {" "}
-          <PlansLink />
-        </>
-      ) : null}
+      {t(messageKey)} {discards ? `${t("reader.draft.discardsOnLeave")} ` : null}
+      <PlansLink onNavigate={onNavigate} />
     </>
+  );
+}
+
+/**
+ * Where "write", "reply" and a mailto tap land for an account that may not
+ * send (mailWriteBlocked): the reason and the way to Pro, with no editor —
+ * so no one writes a mail that cannot go out. Nothing is typed yet, so
+ * following the link loses nothing.
+ */
+export function ProGateSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { t } = useI18n();
+  return (
+    <Sheet closeButton open={open} onClose={onClose} title={t("plans.title")}>
+      <p className="form-note" role="status">
+        <WriteError messageKey={PRO_REFUSAL_KEY} onNavigate={onClose} />
+      </p>
+    </Sheet>
   );
 }
 
@@ -178,7 +203,7 @@ export function ReplyForm({
       </div>
       {error ? (
         <p className="reply-form__error" role="alert">
-          <WriteError messageKey={error} />
+          <WriteError messageKey={error} discards />
         </p>
       ) : null}
       {saved ? (
@@ -410,7 +435,7 @@ export function ComposerSheet({
         ) : null}
         {rewriteError ? (
           <p className="reply-form__error" role="alert">
-            <WriteError messageKey={rewriteError} />
+            <WriteError messageKey={rewriteError} discards />
           </p>
         ) : null}
         {touched && recipients === null ? (
@@ -501,7 +526,7 @@ export function ConfirmSendSheet({
           <>
             {state.kind === "failed" ? (
               <p className="reply-form__error" role="alert">
-                <WriteError messageKey={state.message} />
+                <WriteError messageKey={state.message} discards />
               </p>
             ) : null}
             <button

@@ -243,6 +243,7 @@ export const en = {
   "reader.draft.offline": "You're offline — drafting needs a connection.",
   "reader.draft.rateLimited": "Too many drafts in a row. Try again in a minute.",
   "reader.draft.notEntitled": "Writing and sending mail needs a Pro plan.",
+  "reader.draft.discardsOnLeave": "Opening plans discards this unsent mail.",
   "reader.draft.panelTitle": "Reply draft",
   "reader.draft.voice": "Your voice · follows the email's language",
   "reader.draft.bodyLabel": "Reply text",

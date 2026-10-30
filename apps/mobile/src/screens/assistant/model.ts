@@ -354,3 +354,17 @@ export function chatCapNotice(errorCode: string | null | undefined): ChatCapNoti
   if (errorCode === "DAILY_COST_CAP") return { key: "assistant.chat.cap", plans: false };
   return null;
 }
+
+/**
+ * The notice a stored assistant message shows, if any. The code the server
+ * stored on the message (`metadata.turnErrorCode`) wins, so the line survives
+ * a reload or leaving the screen; `live` (replies that stopped at the cap in
+ * this session, by their text) only covers a server that stores no code.
+ */
+export function capNoticeOf(
+  message: ChatMessageWire,
+  live: ReadonlyMap<string, ChatCapNotice>,
+): ChatCapNotice | null {
+  if (message.role !== "ASSISTANT") return null;
+  return chatCapNotice(message.metadata?.turnErrorCode) ?? live.get(message.content) ?? null;
+}

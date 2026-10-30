@@ -242,6 +242,8 @@ export const de: Messages = {
   "reader.draft.rateLimited":
     "Zu viele Entwürfe hintereinander. Versuche es in einer Minute erneut.",
   "reader.draft.notEntitled": "Zum Schreiben und Senden von E-Mails brauchst du den Pro-Tarif.",
+  "reader.draft.discardsOnLeave":
+    "Wenn du die Tarife öffnest, geht diese ungesendete Mail verloren.",
   "reader.draft.panelTitle": "Antwortentwurf",
   "reader.draft.voice": "Dein Ton · in der Sprache der E-Mail",
   "reader.draft.bodyLabel": "Antworttext",

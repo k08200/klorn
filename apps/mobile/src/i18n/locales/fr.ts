@@ -238,6 +238,7 @@ export const fr: Messages = {
   "reader.draft.offline": "Vous êtes hors ligne : la rédaction nécessite une connexion.",
   "reader.draft.rateLimited": "Trop de brouillons d'affilée. Réessayez dans une minute.",
   "reader.draft.notEntitled": "Rédiger et envoyer des e-mails nécessite l'offre Pro.",
+  "reader.draft.discardsOnLeave": "Ouvrir les offres supprime cet e-mail non envoyé.",
   "reader.draft.panelTitle": "Brouillon de réponse",
   "reader.draft.voice": "Votre ton · dans la langue de l'e-mail",
   "reader.draft.bodyLabel": "Texte de la réponse",

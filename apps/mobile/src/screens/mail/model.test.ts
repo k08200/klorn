@@ -12,6 +12,7 @@ import {
   draftErrorKey,
   flattenPages,
   groupByDay,
+  mailWriteBlocked,
   monogram,
   neighbours,
   parseRecipients,
@@ -322,5 +323,18 @@ describe("write refusals: only the entitlement refusal says Pro", () => {
     expect(sendFailure(http(404), { kind: "new", accountId: null }).message).toBe(
       "reader.send.failed",
     );
+  });
+});
+
+describe("mailWriteBlocked (no editor for a mail that could not be sent)", () => {
+  it("is true only when the server says this account is not entitled", () => {
+    expect(mailWriteBlocked({ entitled: false })).toBe(true);
+  });
+
+  it("is false for a paid account, and while the answer is unknown or absent", () => {
+    expect(mailWriteBlocked({ entitled: true })).toBe(false);
+    expect(mailWriteBlocked({})).toBe(false); // an older server, or the paywall off
+    expect(mailWriteBlocked(undefined)).toBe(false); // /me still loading
+    expect(mailWriteBlocked(null)).toBe(false);
   });
 });

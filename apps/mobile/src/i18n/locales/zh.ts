@@ -232,6 +232,7 @@ export const zh: Messages = {
   "reader.draft.offline": "您处于离线状态，生成草稿需要联网。",
   "reader.draft.rateLimited": "草稿生成过于频繁，请稍后重试。",
   "reader.draft.notEntitled": "撰写和发送邮件需要 Pro 方案。",
+  "reader.draft.discardsOnLeave": "打开方案页会丢弃尚未发送的邮件。",
   "reader.draft.panelTitle": "回复草稿",
   "reader.draft.voice": "您的语气 · 与邮件语言一致",
   "reader.draft.bodyLabel": "回复内容",

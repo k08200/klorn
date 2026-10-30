@@ -238,6 +238,7 @@ export const es: Messages = {
   "reader.draft.offline": "Estás sin conexión: redactar necesita conexión.",
   "reader.draft.rateLimited": "Demasiados borradores seguidos. Inténtalo en un minuto.",
   "reader.draft.notEntitled": "Escribir y enviar correo requiere el plan Pro.",
+  "reader.draft.discardsOnLeave": "Abrir los planes descarta este correo sin enviar.",
   "reader.draft.panelTitle": "Borrador de respuesta",
   "reader.draft.voice": "Tu estilo · en el idioma del correo",
   "reader.draft.bodyLabel": "Texto de la respuesta",

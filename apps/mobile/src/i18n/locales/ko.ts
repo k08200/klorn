@@ -235,6 +235,7 @@ export const ko: Messages = {
   "reader.draft.offline": "오프라인이에요 — 초안을 만들려면 연결이 필요해요.",
   "reader.draft.rateLimited": "초안을 너무 많이 만들었어요. 잠시 후 다시 해 주세요.",
   "reader.draft.notEntitled": "메일 쓰기와 보내기는 Pro 요금제에서 쓸 수 있어요.",
+  "reader.draft.discardsOnLeave": "요금제를 열면 작성 중인 메일은 사라져요.",
   "reader.draft.panelTitle": "답장 초안",
   "reader.draft.voice": "내 말투 · 메일 언어 그대로",
   "reader.draft.bodyLabel": "답장 내용",

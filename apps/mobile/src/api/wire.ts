@@ -171,6 +171,8 @@ export interface ChatMessageWire {
   metadata: {
     eventDraft?: EventDraftWire;
     turnError?: string;
+    /** Why the turn stopped, as ChatTurnResponse.errorCode (stored by the API; absent on older servers). */
+    turnErrorCode?: string;
     source?: string;
     actionRejected?: boolean;
   } | null;

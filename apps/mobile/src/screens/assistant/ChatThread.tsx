@@ -21,7 +21,7 @@ import { ProblemState, SkeletonRows } from "../../ui/StateView";
 import { EventDraftCard } from "../calendar/EventDraftCard";
 import { isKnownZone } from "../today/model";
 import { onAssistantRequest, takeAssistantRequest } from "./handoff";
-import { type ChatCapNotice, chatCapNotice, visibleMessages } from "./model";
+import { type ChatCapNotice, capNoticeOf, chatCapNotice, visibleMessages } from "./model";
 
 const CHIPS = ["assistant.chip.urgent", "assistant.chip.receipts", "assistant.chip.week"] as const;
 
@@ -37,11 +37,13 @@ function Message({
   message,
   zone,
   cap,
+  onNavigate,
 }: {
   message: ChatMessageWire;
   zone: string;
   /** This reply is the server's allowance-reached text: say it in the app's language. */
-  cap?: ChatCapNotice;
+  cap: ChatCapNotice | null;
+  onNavigate?: () => void;
 }) {
   const { t } = useI18n();
   if (message.role === "USER") {
@@ -58,14 +60,14 @@ function Message({
             {cap.plans ? (
               <>
                 {" "}
-                <PlansLink />
+                <PlansLink onNavigate={onNavigate} />
               </>
             ) : null}
           </p>
         ) : (
           <p className="chat-reply__text selectable">{message.content}</p>
         )}
-        {draft ? <EventDraftCard draft={draft} zone={zone} /> : null}
+        {draft ? <EventDraftCard draft={draft} zone={zone} onNavigate={onNavigate} /> : null}
         {message.metadata?.turnError && !cap ? (
           <p className="chat-reply__error">{t("assistant.chat.turnError")}</p>
         ) : null}
@@ -77,10 +79,13 @@ function Message({
 export function ChatThread({
   variant = "page",
   newChat = false,
+  onNavigate,
 }: {
   variant?: "page" | "sheet";
   /** Start a new conversation instead of resuming the latest one. */
   newChat?: boolean;
+  /** Runs when a link in the thread (See plans) is followed; the side sheet closes itself with it. */
+  onNavigate?: () => void;
 }) {
   const { t, intlTag } = useI18n();
   const queryClient = useQueryClient();
@@ -96,8 +101,8 @@ export function ChatThread({
   const [contextEmailId, setContextEmailId] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
-  // Replies that stopped at the daily allowance, by the server's reply text
-  // (the stored message carries the same text, so the refetched thread matches).
+  // Replies that stopped at the daily allowance in this session, by the server's
+  // reply text: the fallback for a server that stores no code on the message.
   const [capped, setCapped] = useState<ReadonlyMap<string, ChatCapNotice>>(new Map());
   const scroll = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
@@ -198,7 +203,8 @@ export function ChatThread({
               key={m.id}
               message={m}
               zone={zone}
-              cap={m.role === "ASSISTANT" ? capped.get(m.content) : undefined}
+              cap={capNoticeOf(m, capped)}
+              onNavigate={onNavigate}
             />
           ))
         )}

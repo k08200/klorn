@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { mockPendingActions } from "../../api/mock/fixtures";
 import { mockReceipt } from "../../api/mock/fixtures-hub";
-import type { PendingActionWire } from "../../api/wire";
+import type { ChatMessageWire, PendingActionWire } from "../../api/wire";
 import { createTranslator } from "../../i18n";
 import { en } from "../../i18n/locales/en";
 import { ko } from "../../i18n/locales/ko";
@@ -10,6 +10,8 @@ import {
   activityReason,
   activityTitle,
   approvalModel,
+  type ChatCapNotice,
+  capNoticeOf,
   chatCapNotice,
   dayPartOf,
   groupByDayPart,
@@ -157,5 +159,50 @@ describe("chatCapNotice (the daily AI allowance reached)", () => {
     expect(createTranslator("ko", ko).t(free.key)).toBe(
       "오늘 쓸 수 있는 무료 AI 사용량을 다 썼어요. UTC 00:00에 초기화돼요.",
     );
+  });
+});
+
+describe("capNoticeOf (which line a stored reply shows)", () => {
+  const at = new Date(NOW).toISOString();
+  const reply = (over: Partial<ChatMessageWire> = {}): ChatMessageWire => ({
+    id: "m1",
+    role: "ASSISTANT",
+    content: "You've used today's free AI quota.",
+    metadata: null,
+    createdAt: at,
+    ...over,
+  });
+  const live = new Map<string, ChatCapNotice>([
+    ["You've used today's free AI quota.", { key: "assistant.chat.cap", plans: false }],
+  ]);
+
+  it("reads the code the server stored on the message, so a reload or a return keeps the line", () => {
+    const stored = reply({ metadata: { turnErrorCode: "DAILY_COST_CAP_FREE" } });
+    expect(capNoticeOf(stored, new Map())).toEqual({ key: "assistant.chat.capFree", plans: true });
+  });
+
+  it("prefers the stored code over the in-session text match", () => {
+    const stored = reply({ metadata: { turnErrorCode: "DAILY_COST_CAP_FREE" } });
+    expect(capNoticeOf(stored, live)).toEqual({ key: "assistant.chat.capFree", plans: true });
+  });
+
+  it("falls back to the live response when the message carries no code (older server)", () => {
+    expect(capNoticeOf(reply(), live)).toEqual({ key: "assistant.chat.cap", plans: false });
+    expect(capNoticeOf(reply({ metadata: { turnError: "x" } }), live)).toEqual({
+      key: "assistant.chat.cap",
+      plans: false,
+    });
+  });
+
+  it("has no notice for an unknown code with nothing live, or another reply's text", () => {
+    expect(
+      capNoticeOf(reply({ metadata: { turnErrorCode: "SOMETHING_NEW" } }), new Map()),
+    ).toBeNull();
+    expect(capNoticeOf(reply({ content: "Sure, here is your week." }), live)).toBeNull();
+  });
+
+  it("never marks the user's own message", () => {
+    const mine = reply({ role: "USER", metadata: { turnErrorCode: "DAILY_COST_CAP" } });
+    expect(capNoticeOf(mine, live)).toBeNull();
   });
 });

@@ -233,6 +233,7 @@ export const ja: Messages = {
   "reader.draft.offline": "オフラインです。下書きの作成には接続が必要です。",
   "reader.draft.rateLimited": "下書きの作成が多すぎます。1分後にもう一度お試しください。",
   "reader.draft.notEntitled": "メールの作成と送信には Pro プランが必要です。",
+  "reader.draft.discardsOnLeave": "プランを開くと、作成中のメールは破棄されます。",
   "reader.draft.panelTitle": "返信の下書き",
   "reader.draft.voice": "あなたの口調・メールと同じ言語",
   "reader.draft.bodyLabel": "返信の本文",

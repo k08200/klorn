@@ -131,6 +131,16 @@ export function draftErrorKey(err: unknown): MessageKey {
   return "reader.draft.unavailable";
 }
 
+/**
+ * The server says this account may not send (the paywall is on and the plan is
+ * FREE). Nobody should be handed an editor for a mail that would only be
+ * refused on send. Absent (an older server, the paywall off) or still loading
+ * means "not blocked"; the 403 on send stays the backstop.
+ */
+export function mailWriteBlocked(user: { entitled?: boolean } | null | undefined): boolean {
+  return user?.entitled === false;
+}
+
 /** What the confirm sheet says when a send did not complete; `unknown` forbids a blind retry. */
 export function sendFailure(
   err: unknown,
