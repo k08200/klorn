@@ -353,6 +353,9 @@ const ja: Record<string, string> = {
   "auth.trustLine": "Google OAuth 審査完了(2026年10月) · 第三者評価済み(CASA Tier 2)",
   "auth.privacy": "プライバシー",
   "auth.terms": "利用規約",
+  "auth.legalConsent": "続行すると、{terms}に同意し、{privacy}を確認したものとみなされます。",
+  "auth.legalConsentTerms": "利用規約",
+  "auth.legalConsentPrivacy": "プライバシーポリシー",
   "auth.preview.label": "Klornがメールを5つのレーンに振り分ける例",
   "auth.preview.demo": "デモデータ",
   "auth.preview.caption":

@@ -273,6 +273,11 @@ export function NotificationsSection() {
                 className="flex items-start gap-3 py-2 cursor-pointer hover:bg-surface-hover rounded-lg px-2 transition"
               >
                 <input
+                  // The pref name doubles as the anchor id: the daily digest
+                  // mail's unsubscribe link is
+                  // /settings/notifications#notifyDailyBriefing, so it has to
+                  // land on this control and not the top of a long page.
+                  id={row.key}
                   type="checkbox"
                   checked={notifPrefs[row.key]}
                   onChange={(e) => updateNotifPref(row.key, e.target.checked)}

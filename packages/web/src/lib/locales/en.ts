@@ -350,6 +350,9 @@ const en: Record<string, string> = {
     "Google OAuth verification completed Oct 2026 · Independently assessed (CASA Tier 2)",
   "auth.privacy": "Privacy",
   "auth.terms": "Terms",
+  "auth.legalConsent": "By continuing, you agree to the {terms} and acknowledge the {privacy}.",
+  "auth.legalConsentTerms": "Terms of Service",
+  "auth.legalConsentPrivacy": "Privacy Policy",
   "auth.preview.label": "Example of Klorn sorting mail into five lanes",
   "auth.preview.demo": "Demo data",
   "auth.preview.caption":

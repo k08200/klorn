@@ -374,6 +374,8 @@ function LoginForm() {
         </Button>
       </form>
 
+      <LegalConsent />
+
       <p className="mt-6 flex flex-wrap items-center justify-center gap-x-1 text-label text-ink-mid">
         {signupOpen ? (
           <>
@@ -401,6 +403,58 @@ function LoginForm() {
         )}
       </p>
     </AuthScreen>
+  );
+}
+
+/**
+ * The consent line, directly under the sign-in/sign-up action it refers to.
+ *
+ * AuthScreen's footer already links /privacy and /terms, but a pair of nav
+ * links at the bottom of the chrome is not the same thing as telling someone
+ * what they are agreeing to at the moment they agree to it — which is what
+ * both sign-in paths here (Google and email) actually do.
+ *
+ * One template with two placeholders rather than three concatenated fragments:
+ * the clause order differs across the seven languages Klorn ships, and
+ * splitting on the tokens lets each locale put the links where its own grammar
+ * wants them. The order is resolved from the string instead of assumed, so a
+ * locale that names the privacy policy first still renders correctly.
+ */
+function LegalConsent() {
+  const { t } = useT();
+  const linkClass =
+    "focus-ring rounded-control text-ink underline decoration-line-strong underline-offset-2 transition-colors duration-120 ease-fluid hover:text-accent-deep";
+  const template = t("auth.legalConsent");
+  const termsFirst = template.indexOf("{terms}") <= template.indexOf("{privacy}");
+  const first = termsFirst ? "{terms}" : "{privacy}";
+  const second = termsFirst ? "{privacy}" : "{terms}";
+  const [lead, afterFirst = ""] = template.split(first);
+  const [middle, tail = ""] = afterFirst.split(second);
+  // A translation that lost a placeholder would otherwise print "{privacy}"
+  // verbatim to the user. The i18n parity guard counts keys, not the tokens
+  // inside them, so strip any token that survived the split: the sentence and
+  // both links still render, and nothing user-facing shows a brace.
+  const text = (part: string) => part.replace(/\{(?:terms|privacy)\}/g, "");
+
+  const termsLink = (
+    <Link href="/terms" className={linkClass}>
+      {t("auth.legalConsentTerms")}
+    </Link>
+  );
+  const privacyLink = (
+    <Link href="/privacy" className={linkClass}>
+      {t("auth.legalConsentPrivacy")}
+    </Link>
+  );
+
+  return (
+    <p className="mt-5 text-center text-caption text-ink-mid">
+      {text(lead)}
+      {termsFirst ? termsLink : privacyLink}
+      {text(middle)}
+      {termsFirst ? privacyLink : termsLink}
+      {text(tail)}
+    </p>
   );
 }
 

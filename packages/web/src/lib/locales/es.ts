@@ -357,6 +357,9 @@ const es: Record<string, string> = {
     "Verificación OAuth de Google completada (oct. 2026) · Evaluación independiente (CASA Tier 2)",
   "auth.privacy": "Privacidad",
   "auth.terms": "Términos",
+  "auth.legalConsent": "Al continuar, aceptas los {terms} y confirmas haber leído la {privacy}.",
+  "auth.legalConsentTerms": "Términos del Servicio",
+  "auth.legalConsentPrivacy": "Política de Privacidad",
   "auth.preview.label": "Ejemplo de Klorn clasificando el correo en cinco carriles",
   "auth.preview.demo": "Datos de demostración",
   "auth.preview.caption":

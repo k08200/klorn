@@ -333,6 +333,38 @@ export async function sendWelcomeEmail(
 }
 
 /**
+ * Where an opt-out lands: the notification preferences, anchored on the
+ * "Daily briefing" checkbox that gates digest-class content
+ * (notify/notification-prefs.ts, category `daily_briefing`).
+ *
+ * This is the existing per-user switch, not a parallel suppression list. A
+ * second store of "who said no" is a second thing that can disagree with the
+ * product's own settings screen, and the one the user can see has to win.
+ */
+const DIGEST_UNSUBSCRIBE_PATH = "/settings/notifications#notifyDailyBriefing";
+
+function digestUnsubscribeUrl(): string | null {
+  const base = safeHttpUrl(WEB_URL);
+  if (!base) return null;
+  return stripHeaderControls(`${base.replace(/\/+$/, "")}${DIGEST_UNSUBSCRIBE_PATH}`);
+}
+
+/**
+ * Opt-out copy, en/ko only, every other ship language falling back to English —
+ * the same rule the digest body itself follows (pim/daily-digest.ts). Inventing
+ * five more sets of unreviewed legal-adjacent copy is worse than an honest
+ * fallback.
+ */
+const DIGEST_UNSUBSCRIBE_LABEL: Record<"en" | "ko", string> = {
+  en: "Unsubscribe from the daily digest",
+  ko: "일일 요약 메일 수신거부",
+};
+
+function unsubscribeLabel(language: string): string {
+  return language === "ko" ? DIGEST_UNSUBSCRIBE_LABEL.ko : DIGEST_UNSUBSCRIBE_LABEL.en;
+}
+
+/**
  * Send one daily-digest mail.
  *
  * Plain text is the payload; the HTML part is the same text in a monospace
@@ -340,26 +372,52 @@ export async function sendWelcomeEmail(
  * here that a layout would make clearer, and an address rendered as unescaped
  * HTML is an injection waiting to happen.
  *
+ * This is the one sender in this module that recurs on a schedule, so it is the
+ * one that carries an opt-out: in the plain-text part (which had none at all —
+ * a text-only client saw no way out), in the HTML part, and in the
+ * `List-Unsubscribe` header that Gmail weights when it decides whether Klorn's
+ * mail is wanted. The transactional senders above (reset, verify, invite)
+ * deliberately carry none: an unsubscribe control on a password reset offers to
+ * stop a mail that is only ever sent because the user just asked for it.
+ *
+ * No `List-Unsubscribe-Post`: that header promises RFC 8058 one-click, which
+ * requires an endpoint that unsubscribes on an unauthenticated POST. This link
+ * goes to the user's own settings instead, so advertising one-click would be a
+ * header that lies about what the URL does.
+ *
  * Returns false rather than throwing: the digest sweep runs over every user,
  * and one bad address must not end it.
  */
-export async function sendDigestEmail(to: string, subject: string, text: string): Promise<boolean> {
+export async function sendDigestEmail(
+  to: string,
+  subject: string,
+  text: string,
+  language: string = "en",
+): Promise<boolean> {
   if (!resend) {
     console.log("[EMAIL] No RESEND_API_KEY — digest not sent to", maskEmail(to));
     return false;
   }
+  const unsubscribeUrl = digestUnsubscribeUrl();
+  const label = unsubscribeLabel(language);
   try {
     await resend.emails.send({
       from: FROM_EMAIL,
       to,
       subject,
-      text,
+      // The opt-out is part of the text payload, not a decoration on the HTML
+      // part: a client that shows only text/plain must still see a way out.
+      text: unsubscribeUrl ? `${text}\n\n—\n${label}: ${unsubscribeUrl}` : text,
       html:
         `<div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:520px;` +
         `margin:0 auto;padding:32px 20px;color:#374151;font-size:15px;line-height:1.6">` +
         `<pre style="font-family:inherit;white-space:pre-wrap;margin:0">${escapeHtml(text)}</pre>` +
-        `<p style="color:#6b7280;font-size:13px;margin-top:28px">` +
-        `<a href="${WEB_URL}/settings/notifications" style="color:#6b7280">Turn digests off</a></p></div>`,
+        (unsubscribeUrl
+          ? `<p style="color:#6b7280;font-size:13px;margin-top:28px">` +
+            `<a href="${escapeHtml(unsubscribeUrl)}" style="color:#6b7280">${escapeHtml(label)}</a></p>`
+          : "") +
+        `</div>`,
+      ...(unsubscribeUrl ? { headers: { "List-Unsubscribe": `<${unsubscribeUrl}>` } } : {}),
     });
     return true;
   } catch (err) {
