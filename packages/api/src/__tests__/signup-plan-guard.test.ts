@@ -1,9 +1,12 @@
 /**
  * Founder decision 2026-10-24: a new account starts on FREE and gets Pro only
  * by paying (Paddle/Stripe/IAP webhooks) or from an admin setting the plan.
- * This guard keeps a later signup path from quietly comping Pro again: no
- * code that creates a User may set `plan`, and the retired beta auto-PRO
- * switch must stay unread.
+ * This is a tripwire, not a proof: it catches the direct pattern (a `plan:`
+ * key inside a `user.create(` / `user.upsert(` call) and any read of the
+ * retired beta auto-PRO switch. Shorthand, a data object built elsewhere or a
+ * post-create update would slip past it — the per-door behaviour tests
+ * (routes-auth, routes-auth-google-callback-pinned, routes-social-auth) are
+ * what pin each signup path to FREE.
  */
 
 import { readdirSync, readFileSync, statSync } from "node:fs";

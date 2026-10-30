@@ -219,8 +219,10 @@ What changes at that moment (all code paths already live):
 
 ## 3a. Accounts that got free beta PRO — decided 2026-10-28
 
-Before 2026-10-24 some signups got PRO for free; each has `betaProGrantedAt`
-set. Founder decision 2026-10-28: the external accounts in that cohort were
+Before 2026-10-24 signups got PRO for free in two ways: the beta auto-PRO
+grant (stamped `betaProGrantedAt`) and the waitlist-approval rule (set `PRO`
+without the marker). So the marker does not find every comped account — the
+payment-less query below does. Founder decision 2026-10-28: the external accounts in that cohort were
 moved to FREE (only `plan` changed; `betaProGrantedAt` stays as the marker,
 nothing else was touched), and the founder's own accounts stay PRO by choice.
 What a FREE account keeps and loses once the paywall is on: mail reads,
@@ -230,7 +232,9 @@ Nothing is deleted.
 
 Right before the flip, list every non-admin account that is Pro without paying
 and confirm each row is a deliberate comp (an admin comp via
-`PATCH /api/admin/users/:id { "plan": … }` shows up here too):
+`PATCH /api/admin/users/:id { "plan": … }` shows up here too, and so does a
+mobile in-app subscriber, since the RevenueCat path stores no subscription id
+on `User` — check those in RevenueCat before ending anything):
 
 ```sql
 SELECT id, email, plan, "betaProGrantedAt", "createdAt"
