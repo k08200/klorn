@@ -23,7 +23,7 @@ export interface AssistantChatMessage {
   id: string;
   role: "USER" | "ASSISTANT" | "SYSTEM";
   content: string;
-  metadata: { eventDraft?: EventDraft; turnError?: string; errorCode?: string } | null;
+  metadata: { eventDraft?: EventDraft; turnError?: string; turnErrorCode?: string } | null;
   createdAt: string;
 }
 

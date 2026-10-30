@@ -45,7 +45,8 @@ export function capTurnFrom(
 interface BubbleMessage {
   role: "USER" | "ASSISTANT" | "SYSTEM";
   content: string;
-  metadata: { errorCode?: unknown } | null;
+  /** `turnErrorCode` is the cap code the API stores next to `turnError`. */
+  metadata: { turnErrorCode?: unknown } | null;
 }
 
 /**
@@ -58,7 +59,7 @@ export function capCodeForMessage(
   capTurn: CapTurn | null,
 ): DailyCapCode | null {
   if (message.role !== "ASSISTANT") return null;
-  const stored = message.metadata?.errorCode;
+  const stored = message.metadata?.turnErrorCode;
   if (isDailyCapCode(stored)) return stored;
   if (capTurn && message.content === capTurn.reply) return capTurn.code;
   return null;

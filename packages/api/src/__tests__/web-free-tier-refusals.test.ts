@@ -153,10 +153,10 @@ describe("capCodeForMessage", () => {
   });
 
   it("reads a code persisted on the message, so a reload keeps the localized line", () => {
-    expect(capCodeForMessage(assistant("anything", { errorCode: "DAILY_COST_CAP" }), null)).toBe(
-      "DAILY_COST_CAP",
-    );
-    expect(capCodeForMessage(assistant("anything", { errorCode: "NOPE" }), null)).toBeNull();
+    expect(
+      capCodeForMessage(assistant("anything", { turnErrorCode: "DAILY_COST_CAP" }), null),
+    ).toBe("DAILY_COST_CAP");
+    expect(capCodeForMessage(assistant("anything", { turnErrorCode: "NOPE" }), null)).toBeNull();
   });
 });
 
