@@ -154,6 +154,9 @@ private struct ChatBubble: View {
                     : message.role == .failure ? L("assistant.message.failure.a11y", message.text)
                     : L("assistant.message.reply.a11y", message.text))
 
+            // A plan refusal (Pro-only action, the free daily AI allowance).
+            if message.offersUpgrade { UpgradeToProLink() }
+
             // Agent-drafted event: nothing is written until the user clicks.
             if let draft = message.eventDraft {
                 VStack(alignment: .leading, spacing: 8) {

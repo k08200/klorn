@@ -67,6 +67,7 @@ struct ImapConnectForm: View {
                     .font(Theme.Typo.caption).foregroundStyle(Theme.dangerInk)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityLabel(failure.message(for: provider))
+                if failure == .needsPro { UpgradeToProLink() }
             }
             actions
         }
