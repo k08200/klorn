@@ -64,15 +64,17 @@ export const GATE_FAILING_JUDGE_MODELS: Readonly<Record<string, GateResult>> = {
 };
 
 /**
- * Models measured as PASSING the gate on every run, beyond the recommended pin.
- * Same rule as the failing list: an empirical claim, re-measure before
- * changing it, and update `eval/README.md` in the same change.
+ * Models measured as passing the gate, beyond the recommended pin — with the
+ * run count in `gate`, because at provider-default sampling a model can pass
+ * most runs rather than all of them. Same rule as the failing list: an
+ * empirical claim, re-measure before changing it, and update `eval/README.md`
+ * in the same change.
  */
 export const GATE_PASSING_JUDGE_MODELS: Readonly<Record<string, GateResult>> = {
   "anthropic/claude-haiku-5.5": {
-    accuracy: "96.4–98.2%",
-    urgentRecall: "13, 12 and 13 of 13",
-    gate: "3/3",
+    accuracy: "92.9–98.2%",
+    urgentRecall: "13, 12, 13, 13 and 11 of 13",
+    gate: "4/5",
     mechanism:
       "passes through the native Anthropic provider with the forced JSON tool (2026-10-30)",
   },
