@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description: "How Klorn handles Gmail, Calendar, and account data during beta.",
 };
 
-const updatedAt = "October 25, 2026";
+const updatedAt = "October 30, 2026";
 
 /** Stable, URL-safe anchor id so the TOC links line up with each section. */
 function slug(title: string): string {
@@ -170,8 +170,9 @@ export default function PrivacyPage() {
               features you see.
             </p>
             <p>
-              Email sending is treated as a sensitive action. During beta, Klorn does not send
-              replies without your awareness. Email actions require your approval before sending.
+              Email sending is treated as a sensitive action. Mail Klorn sends waits for your
+              approval, unless you turn on automatic replies (Auto mode or an auto-reply rule):
+              those replies are sent without asking each time.
             </p>
             <p>
               <strong className="text-ink">Limited Use disclosure.</strong> Klorn's use and transfer

@@ -113,10 +113,7 @@ export default function PaywallScreen() {
     <main className="flex min-h-dvh flex-col justify-center bg-surface-panel px-6 pb-safe pt-safe text-ink">
       <div className="mx-auto w-full max-w-sm">
         <img src="/brand/mark.svg?v=matte2" alt="" className="mb-6 h-12 w-12" />
-        <span className="inline-flex items-center rounded-full bg-accent-light/15 px-2.5 py-1 text-caption font-semibold uppercase tracking-[0.14em] text-accent-deep">
-          {t("paywall.foundingPrice")}
-        </span>
-        <h1 className="mt-3 text-[28px] font-bold leading-tight tracking-tight text-ink">
+        <h1 className="text-[28px] font-bold leading-tight tracking-tight text-ink">
           {t("paywall.title")}
         </h1>
         <p className="mt-2 text-sm leading-6 text-ink-mid">{t("paywall.body")}</p>
@@ -176,7 +173,7 @@ export default function PaywallScreen() {
             </button>
           )}
           <p className="mt-3 text-center text-xs text-ink-dim">
-            {t("paywall.trialTerms", { price })}
+            {t("subscription.trialTerms", { price })}
           </p>
         </div>
 

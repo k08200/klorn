@@ -789,10 +789,9 @@ const de: Record<string, string> = {
   "onboarding.welcome.feature.surfaceDecisions": "Entscheidungen zeigen",
   "onboarding.welcome.permissions.pre": "Klorn",
   "onboarding.welcome.permissions.emphasis1": "liest nur",
-  "onboarding.welcome.permissions.mid":
-    "Gmail und Kalender. Mail senden oder Termine anlegen wartet immer auf",
+  "onboarding.welcome.permissions.mid": "Gmail und Kalender. Mail, die Klorn sendet, wartet auf",
   "onboarding.welcome.permissions.emphasis2": "deine Freigabe",
-  "onboarding.welcome.permissions.suffix": ".",
+  "onboarding.welcome.permissions.suffix": " – außer du schaltest automatische Antworten ein.",
   "onboarding.syncing.title": "Dein Arbeitsbereich wird eingerichtet...",
   "onboarding.syncing.titleDone": "Synchronisierung abgeschlossen.",
   "onboarding.syncing.desc":
@@ -1022,7 +1021,6 @@ const de: Record<string, string> = {
   "billing.error.checkoutFailed": "Die Bezahlsitzung konnte nicht erstellt werden.",
   "billing.error.portalFailed": "Das Abrechnungsportal konnte nicht geöffnet werden.",
   "billing.cancelSubscription": "Abo kündigen",
-  "billing.unlimitedOnPlan": "In diesem Tarif unbegrenzt",
   "billing.noWebSubscription":
     "Dieser Tarif wird nicht über das Web abgerechnet, hier gibt es also nichts zu kündigen. Wenn du in der mobilen App abonniert hast, verwalte es dort.",
   "billing.enterpriseBilling":
@@ -1048,28 +1046,25 @@ const de: Record<string, string> = {
   "billing.toast.resumed": "Abo fortgesetzt — die Abrechnung läuft weiter wie zuvor.",
   "billing.error.resumeFailed": "Das Abo konnte nicht fortgesetzt werden. Bitte erneut versuchen.",
   "billing.plan.free.name": "Free",
-  "billing.plan.free.limit": "50 Entscheidungen/Monat · 500K Tokens",
+  "billing.plan.free.limit": "Tägliches KI-Kontingent (Reset um 00:00 UTC)",
+  "billing.plan.free.feature.oneAccount": "Erstes E-Mail-Konto bei jedem Anbieter",
+  "billing.plan.free.feature.briefings": "Tägliche Briefings und Mail-Triage",
   "billing.plan.free.feature.mailCalendar": "Mail und Kalender lesen",
   "billing.plan.free.feature.tasksMemory": "Aufgaben und Gedächtnis",
-  "billing.plan.free.feature.freeModels": "Kostenlose OpenRouter-Modelle",
   "billing.plan.pro.name": "Pro",
   "billing.plan.pro.period": "/Monat",
   "billing.plan.pro.trialNote": "7 Tage kostenlos testen · vor Ende kündigen und nichts zahlen",
-  "billing.plan.pro.limit": "2K Entscheidungen/Monat · 10M Tokens",
-  "billing.plan.pro.feature.everythingFree": "Alles aus Free",
-  "billing.plan.pro.feature.sendMail": "Mail senden und Kalendertermine anlegen",
-  "billing.plan.pro.feature.decisionLoop":
-    "Entscheidungsschleife: Vorschlag + Ausführung im Rahmen",
-  "billing.plan.pro.feature.briefings": "Tägliche Briefings und Mail-Triage",
-  "billing.plan.pro.feature.replyDrafts": "Antwortentwürfe und Musterlernen",
+  "billing.plan.pro.limit": "Höheres tägliches KI-Kontingent (Reset um 00:00 UTC)",
+  "billing.plan.pro.feature.everythingFree": "Alles aus Free, plus:",
+  "billing.plan.pro.feature.sendMail": "Mails senden und beantworten, mit Antwortentwürfen",
+  "billing.plan.pro.feature.calendarWrites": "Kalendertermine anlegen und bearbeiten",
+  "billing.plan.pro.feature.moreAccounts": "Weitere E-Mail-Konten und Kalender",
+  "billing.plan.pro.feature.autoReply": "Automatische Antworten im automatischen Modus",
+  "billing.plan.pro.feature.byok": "Eigener Modellschlüssel",
   "billing.plan.pro.feature.integrations": "Slack- und Notion-Integrationen (demnächst)",
-  "billing.plan.pro.feature.webResearch": "Webrecherche und Dokumententwürfe",
-  "billing.plan.pro.feature.sonnet": "Auswahl des Claude-Sonnet-Modells",
   "billing.plan.enterprise.name": "Enterprise",
   "billing.plan.enterprise.price": "Individuell",
-  "billing.plan.enterprise.limit": "Unbegrenzt",
   "billing.plan.enterprise.feature.everythingPro": "Alles aus Pro",
-  "billing.plan.enterprise.feature.opus": "Auswahl von Claude Opus",
   "billing.plan.enterprise.feature.onPrem": "On-Premise-Optionen",
   "billing.plan.enterprise.feature.sla": "Support mit SLA",
   "billing.plan.enterprise.feature.customIntegrations": "Individuelle Integrationen",
@@ -1078,10 +1073,10 @@ const de: Record<string, string> = {
     'Pro zu starten kostet heute 0 und schaltet sofort alles in Pro frei. Die erste Abbuchung von {price} erfolgt, wenn die 7 Testtage enden. Kündige vorher über „Abo verwalten" und du zahlst nichts.',
   "billing.faq.freeVsPro.q": "Was ist der Unterschied zwischen Free und Pro?",
   "billing.faq.freeVsPro.a":
-    "Free liest und ordnet: Klorn beobachtet Mail und Kalender und macht daraus Entscheidungskarten — mit 50 Entscheidungen und 500K Tokens pro Monat auf kostenlosen Modellen. Pro führt aus: Mail senden, Kalendertermine anlegen, Antwortentwürfe, tägliche Briefings und die Vorschlag-plus-Ausführung der Entscheidungsschleife — mit 2K Entscheidungen und 10M Tokens pro Monat und der Auswahl des Claude-Sonnet-Modells.",
+    "Free liest und ordnet: Klorn sortiert die Mail Ihres ersten E-Mail-Kontos bei jedem Anbieter, schreibt das tägliche Briefing, liest Ihren Kalender und antwortet im Assistenten – innerhalb eines täglichen KI-Kontingents, das um 00:00 UTC zurückgesetzt wird. Pro führt aus: Mails senden und beantworten mit Antwortentwürfen, Kalendertermine anlegen und bearbeiten, weitere E-Mail-Konten und Kalender, automatische Antworten im automatischen Modus, Slack- und Notion-Integrationen, sobald sie verfügbar sind, ein eigener Modellschlüssel und ein höheres tägliches KI-Kontingent.",
   "billing.faq.enterprise.q": "Was bietet Enterprise zusätzlich?",
   "billing.faq.enterprise.a":
-    "Individuelle Grenzen statt fester Kontingente, Auswahl des Claude-Opus-Modells, On-Premise-Optionen, Support mit SLA und individuelle Integrationen. Der Preis hängt vom Umfang ab — sprich mit dem Vertrieb.",
+    "On-Premise-Optionen, Support mit SLA und individuelle Integrationen. Der Preis hängt vom Umfang ab — sprich mit dem Vertrieb.",
   "billing.faq.manage.q": "Wie kündige oder verwalte ich mein Abo?",
   "billing.faq.manage.a":
     '„Abo kündigen" auf dieser Seite beendet das Abo zum Ende des bereits bezahlten Zeitraums — bis dahin läuft Pro weiter, es wird nichts mehr abgebucht und nichts gelöscht. Bis es wirksam wird, kannst du es mit „Abo behalten" rückgängig machen. „Abo verwalten" öffnet das Abrechnungsportal von Paddle, unserem Händler, für Zahlungsmethoden und Rechnungen.',
@@ -1536,6 +1531,10 @@ const de: Record<string, string> = {
     "Anhang konnte nicht analysiert werden — versuch es mit deinem eigenen Schlüssel",
   "candidates.qualityIssues.manyFailed":
     "Anhänge konnten nicht analysiert werden — versuch es mit deinem eigenen Schlüssel",
+  "candidates.qualityIssues.oneFailedFree":
+    "Anhang konnte nicht analysiert werden — ein eigener Modellschlüssel ist mit Pro verfügbar",
+  "candidates.qualityIssues.manyFailedFree":
+    "Anhänge konnten nicht analysiert werden — ein eigener Modellschlüssel ist mit Pro verfügbar",
   "candidates.qualityIssues.hide": "Ausblenden",
   "candidates.qualityIssues.details": "Details",
   "candidates.filterStatusLabel": "Status",
@@ -1759,6 +1758,14 @@ const de: Record<string, string> = {
   "mailAccount.proGate.body":
     "Free umfasst ein E-Mail-Konto (Gmail, iCloud Mail oder Naver Mail). Mit einem Upgrade läuft die Firewall über mehr als eines.",
   "mailAccount.proGate.upgrade": "Upgraden",
+  "proFeature.title": "Das ist eine Pro-Funktion.",
+  "proFeature.upgrade": "Upgraden",
+  "proFeature.byok": "Ein eigener Modellschlüssel ist mit Pro verfügbar.",
+  "proFeature.drive": "Google Drive zu verbinden ist eine Pro-Funktion.",
+  "dailyCap.free":
+    "Das kostenlose KI-Kontingent für heute ist aufgebraucht. Es wird um 00:00 UTC zurückgesetzt.",
+  "dailyCap.paid":
+    "Das KI-Kontingent für heute ist aufgebraucht. Es wird um 00:00 UTC zurückgesetzt – oder hinterlegen Sie in den Einstellungen einen eigenen Modellschlüssel.",
   "imapConnect.firstSync.started":
     "Deine Mails werden jetzt abgerufen und erscheinen gleich in Mail.",
   "imapConnect.firstSync.delayed": "Die erste Mail dieses Kontos kann bis zu ~5 Minuten dauern.",
@@ -2170,6 +2177,8 @@ const de: Record<string, string> = {
   "byok.title": "Eigenen LLM-Schlüssel verwenden",
   "byok.body":
     "Standardmäßig wird Ihre Post mit dem gemeinsamen Schlüssel von Klorn sortiert. Fügen Sie Ihren eigenen Anbieterschlüssel hinzu, und Klorn nutzt für Ihre Post Ihren Schlüssel und Ihr Kontingent – praktisch, wenn das gemeinsame Budget ausgelastet ist. Schlüssel werden verschlüsselt gespeichert (AES-GCM); den Klartext protokollieren wir nie.",
+  "byok.bodyFree":
+    "Ihre Post wird mit dem gemeinsamen Schlüssel von Klorn sortiert, innerhalb Ihres täglichen KI-Kontingents.",
   "byok.activeModel": "Aktives Modell:",
   "byok.usingYourKey": "Ihr Schlüssel wird verwendet",
   "byok.stored": "•••••••• gespeichert",
@@ -2182,6 +2191,8 @@ const de: Record<string, string> = {
   "byok.assistantModel": "Assistentenmodell",
   "byok.assistantModelHelp":
     "Nur Spitzenmodelle – mit diesem Modell spricht Ihr Klorn-Assistent. Er arbeitet mit Ihrer Post, Ihrem Kalender und Ihren Aufgaben und durchsucht nie das Web. Läuft innerhalb Ihres täglichen KI-Kontingents; fügen Sie oben Ihren eigenen Schlüssel hinzu, um Ihr eigenes Kontingent zu nutzen. Der Klassifikator der Mail-Firewall wird separat abgestimmt und ist nicht betroffen.",
+  "byok.assistantModelHelpFree":
+    "Nur Spitzenmodelle – mit diesem Modell spricht Ihr Klorn-Assistent. Er arbeitet mit Ihrer Post, Ihrem Kalender und Ihren Aufgaben und durchsucht nie das Web. Läuft innerhalb Ihres täglichen KI-Kontingents. Der Klassifikator der Mail-Firewall wird separat abgestimmt und ist nicht betroffen.",
   "byok.error.status": "Status Ihres LLM-Schlüssels konnte nicht geladen werden.",
   "byok.error.update": "Schlüssel konnte nicht aktualisiert werden.",
   "byok.error.model": "Modell konnte nicht geändert werden.",
@@ -2203,13 +2214,10 @@ const de: Record<string, string> = {
   "subscription.toast.purchaseFailed":
     "Kauf konnte nicht abgeschlossen werden. Bitte erneut versuchen.",
   "subscription.toast.noPurchase": "Kein früherer Kauf gefunden.",
-  "paywall.foundingPrice": "Gründerpreis",
   "paywall.title": "Starten Sie Ihre 7-tägige kostenlose Testphase",
   "paywall.body":
-    "Klorn Pro ist Ihre KI-E-Mail-Firewall – sie sortiert, was Sie erreicht, und nichts geht ohne Ihre Zustimmung hinaus.",
+    "Klorn Pro ist Ihre KI-E-Mail-Firewall – sie sortiert, was Sie erreicht. Mail, die Klorn sendet, wartet auf Ihre Zustimmung, außer Sie schalten automatische Antworten ein.",
   "paywall.startTrial": "Kostenlos testen",
-  "paywall.trialTerms":
-    "7 Tage kostenlos, danach {price}/Monat – für frühe Mitglieder fest. Jederzeit kündbar.",
   "paywall.refunds": "Erstattungen",
   "paywall.valueProp.interrupt": "Nur von E-Mails unterbrochen werden, die wirklich zählen",
   "paywall.valueProp.noise":
@@ -2355,6 +2363,7 @@ const de: Record<string, string> = {
     "Google ist verbunden. Ein leerer Kalender bleibt auch im Briefing leer.",
   "calendar.error.load": "Kalendertermine konnten nicht geladen werden.",
   "calendar.error.sync": "Google Kalender konnte nicht synchronisiert werden.",
+  "calendar.error.delete": "Termin konnte nicht gelöscht werden.",
   "calendar.sync.imported": "{count} Termine aus Google Kalender importiert.",
   "calendar.sync.empty":
     "Google Kalender ist synchronisiert. Keine Termine in den nächsten 14 Tagen.",

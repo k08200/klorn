@@ -7,6 +7,8 @@ import AuthGuard from "../../../components/auth-guard";
 import { ListSkeleton } from "../../../components/skeleton";
 import ErrorAlert from "../../../components/ui/error-alert";
 import { API_BASE, apiFetch, authHeaders } from "../../../lib/api";
+import { useAuth } from "../../../lib/auth";
+import { byokLocked } from "../../../lib/entitlement";
 import { useT } from "../../../lib/i18n";
 import { queryKeys } from "../../../lib/query-keys";
 import { captureClientError } from "../../../lib/sentry";
@@ -506,8 +508,11 @@ function CandidateIntakeView() {
 // and the noisy per-file list only appears on demand.
 function QualityIssuesStrip({ issues }: { issues: NonNullable<AttachmentQuality["topIssues"]> }) {
   const { t } = useT();
+  const { user } = useAuth();
   const [expanded, setExpanded] = useState(false);
   const count = issues.length;
+  // "Add your own key" is a Pro remedy: a FREE user is told where it lives instead.
+  const locked = byokLocked(user);
   return (
     <div className="mb-3 overflow-hidden rounded-lg border border-state-warn-line bg-state-warn-bg">
       <div className="flex items-center gap-3 px-3 py-2">
@@ -515,8 +520,16 @@ function QualityIssuesStrip({ issues }: { issues: NonNullable<AttachmentQuality[
           {t("candidates.qualityIssues.prefix")}
           <span className="font-semibold tabular-nums">{count}</span>{" "}
           {count === 1
-            ? t("candidates.qualityIssues.oneFailed")
-            : t("candidates.qualityIssues.manyFailed")}
+            ? t(
+                locked
+                  ? "candidates.qualityIssues.oneFailedFree"
+                  : "candidates.qualityIssues.oneFailed",
+              )
+            : t(
+                locked
+                  ? "candidates.qualityIssues.manyFailedFree"
+                  : "candidates.qualityIssues.manyFailed",
+              )}
         </p>
         <button
           type="button"
