@@ -49,16 +49,15 @@ correction (`DecisionLabel.outcome`) → `decision-metrics` counts it.
 ## B. The message to send each invitee (copy/edit this)
 
 > I added you to Klorn — an attention firewall for your inbox. It sorts mail into
-> **PUSH / QUEUE / SILENT** and only interrupts you for what matters. I need one thing from
+> **PUSH / MEETING / QUEUE / INFO / SILENT** and only interrupts you for what matters. I need one thing from
 > you: **when it sorts something wrong, correct it.** That correction is the entire product.
 >
-> 1. Go to **klorn.ai** → **Continue with Google**.
-> 2. Google will warn the app is **unverified** — that's expected while its security review
->    is in the queue. Click **Advanced → Continue**. You only do this once.
-> 3. Grant Gmail access (it reads to classify, and can act only when you approve — nothing
+> 1. Go to **klorn.ai** → **Continue with Google**. You start on the Free plan (sorting,
+>    briefing, one mail account). Pro is $29.99/month with a 7-day trial, from **Billing**.
+> 2. Grant Gmail access (it reads to classify, and can act only when you approve — nothing
 >    auto-sends by default).
-> 4. It classifies your recent mail. **Turn on notifications** so you feel a real PUSH.
-> 5. Open the **firewall view** (`/inbox/firewall`). When something is in the wrong lane,
+> 3. It classifies your recent mail. **Turn on notifications** so you feel a real PUSH.
+> 4. Open the **firewall view** (`/inbox/firewall`). When something is in the wrong lane,
 >    hit **"Move → PUSH / QUEUE / SILENT"**. That's it — every "Move" teaches it how *you*
 >    tier mail. Correct freely for a few days.
 >
