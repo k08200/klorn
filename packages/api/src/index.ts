@@ -33,11 +33,12 @@ import {
   type PublicJudgeHealth,
   warnRetiredJudgeHealthEnv,
 } from "./judge/judge-fallback-check.js";
-import { reportJudgeModelResolution } from "./llm/judge-model-gate.js";
-import { JUDGE_MODEL_RESOLUTION } from "./llm/openai.js";
+import { reportJudgeModelResolution, reportJudgeServing } from "./llm/judge-model-gate.js";
+import { JUDGE_MODEL, JUDGE_MODEL_RESOLUTION } from "./llm/openai.js";
 import { IMAP_PROVIDERS } from "./mail/imap-providers.js";
 import { attachPerfMonitor } from "./perf-monitor.js";
 import { briefingRoutes } from "./pim/briefing.js";
+import { getProviderChain } from "./providers/index.js";
 import { adminRoutes } from "./routes/admin.js";
 import { analyticsRoutes } from "./routes/analytics.js";
 import { apiKeyRoutes } from "./routes/api-keys.js";
@@ -593,6 +594,11 @@ app.addHook("onClose", async () => {
 // opted in explicitly. This line is what makes either outcome visible; the
 // 2026-09 incident ran for three weeks precisely because nothing announced it.
 reportJudgeModelResolution(JUDGE_MODEL_RESOLUTION);
+// ...and the models that really serve it: every non-OpenRouter provider in the
+// chain swaps a pin it cannot route for its own default (ANTHROPIC_MODEL,
+// GEMINI_FALLBACK_MODEL), which the pin check above never sees — including the
+// failover lanes, which serve the judge exactly when the lead is down.
+reportJudgeServing(JUDGE_MODEL, getProviderChain());
 // The count-based JUDGE_HEALTH_WINDOW knob is retired (#1319): say so once.
 warnRetiredJudgeHealthEnv();
 

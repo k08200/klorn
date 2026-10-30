@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Data processing and subprocessors — Klorn</title>
-<meta name="description" content="How to get a DPA, and the full list of subprocessors that can touch data in the hosted service — Google, Render, Vercel, OpenRouter, Paddle and Apple.">
+<meta name="description" content="How to get a DPA, and the full list of subprocessors that can touch data in the hosted service — Google, Render, Vercel, Anthropic, OpenRouter, Paddle and Apple.">
 <meta property="og:title" content="Data processing and subprocessors — Klorn">
-<meta property="og:description" content="How to get a DPA, and the full list of subprocessors that can touch data in the hosted service — Google, Render, Vercel, OpenRouter, Paddle and Apple.">
+<meta property="og:description" content="How to get a DPA, and the full list of subprocessors that can touch data in the hosted service — Google, Render, Vercel, Anthropic, OpenRouter, Paddle and Apple.">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://klorn.ai/dpa/">
 <meta property="og:locale" content="en_US">
@@ -15,7 +15,7 @@
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Data processing and subprocessors — Klorn">
-<meta name="twitter:description" content="How to get a DPA, and the full list of subprocessors that can touch data in the hosted service — Google, Render, Vercel, OpenRouter, Paddle and Apple.">
+<meta name="twitter:description" content="How to get a DPA, and the full list of subprocessors that can touch data in the hosted service — Google, Render, Vercel, Anthropic, OpenRouter, Paddle and Apple.">
 <meta name="twitter:image" content="https://klorn.ai/brand/og-image.png?v=k2">
 <link rel="canonical" href="https://klorn.ai/dpa/">
 <link rel="preload" as="font" type="font/woff2" href="/fonts/geist-var.woff2" crossorigin>
@@ -59,6 +59,7 @@
       <tr><th>GitHub</th><td class="us">Storage of the nightly database backups (Actions artifacts, expiring after 14 days)</td><td>Encrypted files only. The database is copied to a temporary GitHub runner, encrypted there, and only the ciphertext is stored; the key to read it is never stored on GitHub</td></tr>
       <tr><th>Vercel</th><td class="us">Web app hosting</td><td>Requests and responses in transit</td></tr>
       <tr><th>Google (Gemini API)</th><td class="us">Model calls</td><td>The message text sent for classification or drafting, under API terms that exclude training on submitted data</td></tr>
+      <tr><th>Anthropic (Claude API)</th><td class="us">Model calls</td><td>The same message text, under commercial API terms that exclude training on submitted data. Deleted within 30 days by default, longer only for content flagged by usage-policy enforcement</td></tr>
       <tr><th>OpenRouter</th><td class="us">Model routing</td><td>The same, for models reached through it. Bring your own key and this row becomes your chosen provider instead</td></tr>
       <tr><th>Paddle</th><td class="us">Payments and merchant of record</td><td>Billing details. <strong>No mail content</strong></td></tr>
       <tr><th>Apple</th><td class="us">Push notification delivery (APNs)</td><td>Notification payloads on the devices you registered</td></tr>

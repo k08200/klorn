@@ -88,6 +88,13 @@ Reviewed against `packages/web/src/app/privacy/page.tsx` (live at
 > sweep is OFF by default (`log-retention.ts:114-116`), so this flag is load
 > bearing for a statement the policy makes as fact — re-check it after any
 > environment change.
+>
+> **2026-10-25** — AI sub-processor added: Anthropic (Claude API), on the
+> privacy page ("AI Processing") and the DPA subprocessor table. Basis:
+> Anthropic Commercial Terms §B (no training on Customer Content) and its
+> default 30-day deletion of API inputs/outputs. The provider ships OFF
+> (`ANTHROPIC_API_KEY` unset); this disclosure must be live BEFORE the key is
+> set in production.
 > Gap 8 (contact address): resolved by decision — the support address is pinned
 > to `k0820086@gmail.com` everywhere (policy already uses it consistently in 3
 > places; the consent screen must use the same literal). Switching to a domain

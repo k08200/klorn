@@ -24,10 +24,12 @@ import {
   getProviderCooldownInfo,
   isConnectionError,
   isCreditError,
+  isCreditExhaustionError,
   isFreeModel,
   isFreeModelFallbackDisabled,
   isKeyLimitError,
   isModelUnavailableError,
+  isOverloadedError,
   isProviderUnavailable,
   markCreditExhausted,
   markKeyLimited,
@@ -698,6 +700,26 @@ async function createCompletionWithFailover(
         continue;
       }
 
+      // Credit exhaustion on a provider with no same-provider swap (Anthropic's
+      // prepaid balance or spend limit — the adapter turns those 400s into a
+      // 402). Treated like a key limit: cool down, move on, say so. Rethrowing
+      // it as an operator fault instead would drop every judge call to the
+      // keyword fallback until someone tops up — PUSH unreachable, and nothing
+      // that looks broken. Matched on the status, never on a "402" substring.
+      // A user's own key keeps its existing, no-cooldown failover below.
+      if (isCreditExhaustionError(err) && provider.ownedByUser !== true) {
+        markCreditExhausted(provider.quotaKey);
+        signalKeyFailover(provider, err, options.userId);
+        continue;
+      }
+
+      // 529 overloaded: capacity, not a fault, and the SDK already retried with
+      // backoff. Next provider, no cooldown — it is usually back in seconds.
+      // (Logged by recordDispatchFailure in `call`.)
+      if (isOverloadedError(err)) {
+        continue;
+      }
+
       // Local/OpenAI-compat endpoint unreachable (Ollama not running, box
       // asleep): fail over to the next provider WITHOUT a cooldown — a
       // local endpoint can come back any second, and cooling down the only
@@ -932,6 +954,8 @@ async function createVisionCompletionWithFailover(
       // A non-`:free` model reported unavailable → this provider can't serve
       // vision; move on rather than hard-failing the whole request.
       if (isModelUnavailableError(err)) continue;
+      // 529 overloaded: next provider, no cooldown (same as createCompletion).
+      if (isOverloadedError(err)) continue;
       if (isProviderUnavailable(provider.quotaKey)) continue;
       if (provider.name === "openai-compat" && isConnectionError(err)) continue;
       // Non-budget error (5xx, auth, malformed request, cloud network): don't
