@@ -17,18 +17,13 @@ import { isNativePlatform } from "../../lib/native/capacitor";
 import { PRO_PRICE_WEB } from "../../lib/pricing";
 import { toSubscriptionState } from "../../lib/subscription";
 
-/** Server-side Infinity arrives as null through JSON — treat both as "unlimited". */
-function isFiniteLimit(value: number | null): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
-
 interface BillingStatus {
   plan: string;
   planName: string;
-  /** null = unlimited (Infinity does not survive JSON serialization). */
-  messageLimit: number | null;
+  // The API also sends messageLimit / tokenLimit. Nothing enforces them (the
+  // real bound is the daily AI allowance, api billing/cost-guard.ts), so the
+  // page shows what was used and no limit.
   messageCount: number;
-  tokenLimit: number | null;
   tokenUsage: number;
   estimatedCost: number;
   stripeId: string | null;
@@ -54,50 +49,6 @@ function formatTokens(n: number): string {
   return String(n);
 }
 
-/** A plan is metered when at least one of its two limits is a real number. */
-function isMetered(status: BillingStatus): boolean {
-  return isFiniteLimit(status.messageLimit) || isFiniteLimit(status.tokenLimit);
-}
-
-/**
- * One usage row: label, used/limit, and a bar. The two metrics used to be the
- * same thirty lines written twice.
- */
-function UsageMeter({
-  label,
-  used,
-  limit,
-  format,
-}: {
-  label: string;
-  used: number;
-  limit: number | null;
-  format: (n: number) => string;
-}) {
-  const metered = isFiniteLimit(limit) && limit > 0;
-  const ratio = metered ? used / limit : 0;
-  return (
-    <div>
-      <div className="mb-1 flex justify-between text-sm">
-        <span className="text-ink-mid">{label}</span>
-        <span className="text-ink-mid tabular-nums">
-          {format(used)} / {isFiniteLimit(limit) ? format(limit) : "\u221e"}
-        </span>
-      </div>
-      {metered && (
-        <div className="h-2 w-full rounded-full bg-surface-hover">
-          <div
-            className={`h-2 rounded-full transition-[width] duration-500 ${
-              ratio > 0.9 ? "bg-red-500" : ratio > 0.7 ? "bg-amber-400" : "bg-emerald-400"
-            }`}
-            style={{ width: `${Math.min(ratio * 100, 100)}%` }}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
 /** Round to cents; sub-cent spend reads "< $0.01" instead of a noisy $0.0001. */
 function formatUsd(amount: number): string {
   if (amount > 0 && amount < 0.01) return "< $0.01";
@@ -111,7 +62,8 @@ interface PlanDef {
   price: string | null;
   priceKey: string | null;
   periodKey: string | null;
-  limitKey: string;
+  /** null = no limit line (Enterprise: the daily AI allowance applies there too). */
+  limitKey: string | null;
   trialNoteKey: string | null;
   featureKeys: string[];
 }
@@ -165,11 +117,11 @@ const PLANS: PlanDef[] = [
     price: null,
     priceKey: "billing.plan.enterprise.price",
     periodKey: null,
-    limitKey: "billing.plan.enterprise.limit",
+    limitKey: null,
     trialNoteKey: null,
+    // Model choice (Opus included) is open to every plan (api routes/billing.ts).
     featureKeys: [
       "billing.plan.enterprise.feature.everythingPro",
-      "billing.plan.enterprise.feature.opus",
       "billing.plan.enterprise.feature.onPrem",
       "billing.plan.enterprise.feature.sla",
       "billing.plan.enterprise.feature.customIntegrations",
@@ -291,69 +243,35 @@ function BillingContent() {
             <SubscriptionManager state={toSubscriptionState(status)} onChanged={loadStatus} />
           </div>
 
-          {isMetered(status) ? (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <UsageMeter
-                label={t("billing.decisions")}
-                used={status.messageCount}
-                limit={status.messageLimit}
-                format={(n) => n.toLocaleString()}
-              />
-              <UsageMeter
-                label={t("billing.tokens")}
-                used={status.tokenUsage}
-                limit={status.tokenLimit}
-                format={formatTokens}
-              />
-            </div>
-          ) : (
-            // Unlimited plan: no bar to draw, and the metered layout flung
-            // each label to the opposite end of a half-width grid cell, then
-            // stacked cost and the usage link under it — five rows of mostly
-            // air. Everything that is left collapses into one dense line.
-            <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1 text-sm text-ink-mid">
-              <span>
-                {t("billing.decisions")}{" "}
-                <span className="font-medium text-ink tabular-nums">
-                  {status.messageCount.toLocaleString()}
-                </span>
+          {/* Usage so far this month, with no limit: the plan's monthly
+              decision/token figures were never enforced. What does bound AI
+              use is the daily allowance (api billing/cost-guard.ts), which no
+              endpoint reports yet. */}
+          <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1 text-sm text-ink-mid">
+            <span>
+              {t("billing.decisions")}{" "}
+              <span className="font-medium text-ink tabular-nums">
+                {status.messageCount.toLocaleString()}
               </span>
-              <span>
-                {t("billing.tokens")}{" "}
-                <span className="font-medium text-ink tabular-nums">
-                  {formatTokens(status.tokenUsage)}
-                </span>
+            </span>
+            <span>
+              {t("billing.tokens")}{" "}
+              <span className="font-medium text-ink tabular-nums">
+                {formatTokens(status.tokenUsage)}
               </span>
-              <span>{t("billing.unlimitedOnPlan")}</span>
-              {status.estimatedCost > 0 && (
-                <span className="tabular-nums">
-                  {t("billing.aboutCostThisMonth", { amount: formatUsd(status.estimatedCost) })}
-                </span>
-              )}
-              <Link
-                href="/usage"
-                className="focus-ring rounded font-medium text-accent-deeper hover:underline"
-              >
-                {t("billing.viewDetailedUsage")}
-              </Link>
-            </div>
-          )}
-
-          {isMetered(status) && (
-            <>
-              {status.estimatedCost > 0 && (
-                <p className="mt-2 text-xs text-ink-mid tabular-nums">
-                  {t("billing.aboutCostThisMonth", { amount: formatUsd(status.estimatedCost) })}
-                </p>
-              )}
-              <Link
-                href="/usage"
-                className="focus-ring mt-3 inline-flex min-h-11 items-center rounded text-sm font-medium text-accent-deeper hover:underline"
-              >
-                {t("billing.viewDetailedUsage")}
-              </Link>
-            </>
-          )}
+            </span>
+            {status.estimatedCost > 0 && (
+              <span className="tabular-nums">
+                {t("billing.aboutCostThisMonth", { amount: formatUsd(status.estimatedCost) })}
+              </span>
+            )}
+            <Link
+              href="/usage"
+              className="focus-ring inline-flex min-h-11 items-center rounded font-medium text-accent-deeper hover:underline"
+            >
+              {t("billing.viewDetailedUsage")}
+            </Link>
+          </div>
         </div>
       )}
 
@@ -383,7 +301,7 @@ function BillingContent() {
                   {plan.periodKey ? t(plan.periodKey) : ""}
                 </span>
               </p>
-              <p className="mb-1 text-sm text-ink-mid">{t(plan.limitKey)}</p>
+              {plan.limitKey && <p className="mb-1 text-sm text-ink-mid">{t(plan.limitKey)}</p>}
               {plan.trialNoteKey ? (
                 <p className="mb-4 text-xs font-medium text-state-ok-ink">{t(plan.trialNoteKey)}</p>
               ) : (

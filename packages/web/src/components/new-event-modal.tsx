@@ -96,6 +96,7 @@ export function NewEventModal({
     setEndTime(initial?.endTime || plusOneHour(start));
     setLocation(initial?.location ?? "");
     setError(null);
+    setProGated(false);
     setSaving(false);
   }, [open, initial]);
 

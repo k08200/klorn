@@ -755,10 +755,9 @@ const en: Record<string, string> = {
   "onboarding.welcome.feature.surfaceDecisions": "Surface decisions",
   "onboarding.welcome.permissions.pre": "Klorn",
   "onboarding.welcome.permissions.emphasis1": "only reads",
-  "onboarding.welcome.permissions.mid":
-    "Gmail and Calendar. Sending mail or creating events always waits for",
+  "onboarding.welcome.permissions.mid": "Gmail and Calendar. Mail Klorn sends waits for",
   "onboarding.welcome.permissions.emphasis2": "your approval",
-  "onboarding.welcome.permissions.suffix": ".",
+  "onboarding.welcome.permissions.suffix": ", unless you turn on automatic replies.",
   "onboarding.syncing.title": "Setting up your workspace...",
   "onboarding.syncing.titleDone": "Sync complete.",
   "onboarding.syncing.desc":
@@ -996,7 +995,6 @@ const en: Record<string, string> = {
   "billing.error.checkoutFailed": "Could not create checkout session.",
   "billing.error.portalFailed": "Could not open billing portal.",
   "billing.cancelSubscription": "Cancel subscription",
-  "billing.unlimitedOnPlan": "Unlimited on this plan",
   "billing.noWebSubscription":
     "This plan isn't billed on the web, so there is nothing to cancel here. If you subscribed in the mobile app, manage it there.",
   "billing.enterpriseBilling":
@@ -1034,14 +1032,12 @@ const en: Record<string, string> = {
   "billing.plan.pro.feature.sendMail": "Send and reply to mail, with reply drafts",
   "billing.plan.pro.feature.calendarWrites": "Create and edit calendar events",
   "billing.plan.pro.feature.moreAccounts": "More mail accounts and calendars",
-  "billing.plan.pro.feature.autoReply": "Auto mode answers routine mail for you",
+  "billing.plan.pro.feature.autoReply": "Automatic replies in Auto mode",
   "billing.plan.pro.feature.byok": "Bring your own model key",
   "billing.plan.pro.feature.integrations": "Slack and Notion integrations (coming soon)",
   "billing.plan.enterprise.name": "Enterprise",
   "billing.plan.enterprise.price": "Custom",
-  "billing.plan.enterprise.limit": "Unlimited",
   "billing.plan.enterprise.feature.everythingPro": "Everything in Pro",
-  "billing.plan.enterprise.feature.opus": "Claude Opus selection",
   "billing.plan.enterprise.feature.onPrem": "On-prem options",
   "billing.plan.enterprise.feature.sla": "SLA support",
   "billing.plan.enterprise.feature.customIntegrations": "Custom integrations",
@@ -1053,7 +1049,7 @@ const en: Record<string, string> = {
     "Free reads and organizes: Klorn sorts the mail of your first mail account on any provider, writes the daily briefing, reads your calendar, and answers in the assistant, within a daily AI allowance that resets at 00:00 UTC. Pro acts: sending and replying with reply drafts, creating and editing calendar events, more mail accounts and calendars, automatic replies in Auto mode, Slack and Notion integrations as they ship, your own model key, and a higher daily AI allowance.",
   "billing.faq.enterprise.q": "What does Enterprise add?",
   "billing.faq.enterprise.a":
-    "Custom limits instead of fixed quotas, Claude Opus model selection, on-prem deployment options, SLA-backed support, and custom integrations. Pricing depends on scope — contact sales.",
+    "On-prem deployment options, SLA-backed support, and custom integrations. Pricing depends on scope — contact sales.",
   "billing.faq.manage.q": "How do I cancel or manage my subscription?",
   "billing.faq.manage.a":
     '"Cancel subscription" on this page ends the subscription at the end of the period you already paid for — Pro keeps working until that date, you are not charged again, and nothing is deleted. Until it takes effect you can undo it with "Keep subscription". "Manage subscription" opens the billing portal of Paddle, our merchant of record, for payment method changes and invoice downloads.',
@@ -1718,7 +1714,8 @@ const en: Record<string, string> = {
   "proFeature.byok": "Your own model key works on Pro.",
   "proFeature.drive": "Connecting Google Drive is a Pro feature.",
   "dailyCap.free": "You've used today's free AI allowance. It resets at 00:00 UTC.",
-  "dailyCap.paid": "You've used today's AI allowance. It resets at 00:00 UTC.",
+  "dailyCap.paid":
+    "You've used today's AI allowance. It resets at 00:00 UTC, or you can add your own model key in Settings.",
   "imapConnect.firstSync.started": "Fetching your mail now. It shows up in Mail shortly.",
   "imapConnect.firstSync.delayed": "First mail from this account can take up to ~5 minutes.",
   "mailV2.archive.done": "Archived",
@@ -2142,7 +2139,7 @@ const en: Record<string, string> = {
   "subscription.toast.noPurchase": "No previous purchase found.",
   "paywall.title": "Start your 7-day free trial",
   "paywall.body":
-    "Klorn Pro is your AI email firewall — it sorts what reaches you, and nothing goes out without your say-so.",
+    "Klorn Pro is your AI email firewall — it sorts what reaches you. Mail Klorn sends waits for your approval, unless you turn on automatic replies.",
   "paywall.startTrial": "Start free trial",
   "paywall.refunds": "Refunds",
   "paywall.valueProp.interrupt": "Only get interrupted by mail that actually matters",

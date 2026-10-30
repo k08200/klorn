@@ -746,9 +746,9 @@ const ko: Record<string, string> = {
   "onboarding.welcome.feature.surfaceDecisions": "결정 표면화",
   "onboarding.welcome.permissions.pre": "Klorn은 Gmail과 캘린더를",
   "onboarding.welcome.permissions.emphasis1": "읽기만",
-  "onboarding.welcome.permissions.mid": "합니다. 메일 발송이나 일정 생성은 항상",
+  "onboarding.welcome.permissions.mid": "합니다. Klorn이 보내는 메일은",
   "onboarding.welcome.permissions.emphasis2": "사용자 승인",
-  "onboarding.welcome.permissions.suffix": "을 기다립니다.",
+  "onboarding.welcome.permissions.suffix": "을 기다립니다. 자동 답장을 켠 경우는 예외입니다.",
   "onboarding.syncing.title": "워크스페이스를 준비하는 중...",
   "onboarding.syncing.titleDone": "동기화 완료.",
   "onboarding.syncing.desc": "최근 이메일과 캘린더를 읽고 있습니다. 약 30초 걸립니다.",
@@ -984,7 +984,6 @@ const ko: Record<string, string> = {
   "billing.error.checkoutFailed": "결제 세션을 생성하지 못했습니다.",
   "billing.error.portalFailed": "결제 포털을 열지 못했습니다.",
   "billing.cancelSubscription": "구독 취소",
-  "billing.unlimitedOnPlan": "이 플랜은 무제한",
   "billing.noWebSubscription":
     "이 플랜은 웹에서 결제된 것이 아니라 여기서 취소할 것이 없습니다. 모바일 앱에서 구독했다면 앱에서 관리하세요.",
   "billing.enterpriseBilling":
@@ -1022,14 +1021,12 @@ const ko: Record<string, string> = {
   "billing.plan.pro.feature.sendMail": "메일 발송과 답장 (답장 초안 포함)",
   "billing.plan.pro.feature.calendarWrites": "캘린더 일정 생성과 수정",
   "billing.plan.pro.feature.moreAccounts": "메일 계정·캘린더 추가 연결",
-  "billing.plan.pro.feature.autoReply": "Auto 모드에서 일상적인 메일에 대신 답장",
+  "billing.plan.pro.feature.autoReply": "Auto 모드의 자동 답장",
   "billing.plan.pro.feature.byok": "내 모델 키 사용",
   "billing.plan.pro.feature.integrations": "Slack, Notion 연동 (준비 중)",
   "billing.plan.enterprise.name": "엔터프라이즈",
   "billing.plan.enterprise.price": "맞춤 견적",
-  "billing.plan.enterprise.limit": "무제한",
   "billing.plan.enterprise.feature.everythingPro": "Pro 플랜의 모든 기능",
-  "billing.plan.enterprise.feature.opus": "Claude Opus 모델 선택",
   "billing.plan.enterprise.feature.onPrem": "온프레미스 배포 옵션",
   "billing.plan.enterprise.feature.sla": "SLA 지원",
   "billing.plan.enterprise.feature.customIntegrations": "맞춤 연동",
@@ -1041,7 +1038,7 @@ const ko: Record<string, string> = {
     "무료는 읽고 정리합니다: 어느 서비스든 첫 메일 계정의 메일을 분류하고, 데일리 브리핑을 쓰고, 캘린더를 읽고, 어시스턴트에서 답합니다. 일일 AI 할당량 안에서 동작하며 할당량은 00:00 UTC에 초기화됩니다. Pro는 실행합니다: 답장 초안을 포함한 메일 발송과 답장, 캘린더 일정 생성과 수정, 메일 계정·캘린더 추가 연결, Auto 모드의 자동 답장, 출시되는 대로 Slack·Notion 연동, 내 모델 키, 더 넉넉한 일일 AI 할당량.",
   "billing.faq.enterprise.q": "엔터프라이즈는 무엇이 추가되나요?",
   "billing.faq.enterprise.a":
-    "고정 한도 대신 맞춤 한도, Claude Opus 모델 선택, 온프레미스 배포 옵션, SLA 기반 지원, 맞춤 연동이 제공됩니다. 가격은 범위에 따라 달라지니 영업팀에 문의하세요.",
+    "온프레미스 배포 옵션, SLA 기반 지원, 맞춤 연동이 제공됩니다. 가격은 범위에 따라 달라지니 영업팀에 문의하세요.",
   "billing.faq.manage.q": "구독을 취소하거나 관리하려면 어떻게 하나요?",
   "billing.faq.manage.a":
     '이 페이지의 "구독 취소"를 누르면 이미 결제한 기간이 끝나는 시점에 구독이 종료됩니다 — 그때까지 Pro는 그대로 동작하고, 추가 결제는 없으며, 삭제되는 데이터도 없습니다. 적용 전에는 "구독 유지"로 되돌릴 수 있습니다. "구독 관리"는 결제 대행사 Paddle의 결제 포털을 열어 결제 수단 변경과 인보이스 다운로드를 처리합니다.',
@@ -1700,8 +1697,9 @@ const ko: Record<string, string> = {
   "proFeature.upgrade": "업그레이드",
   "proFeature.byok": "내 모델 키는 Pro에서 사용할 수 있습니다.",
   "proFeature.drive": "Google Drive 연결은 Pro 기능입니다.",
-  "dailyCap.free": "오늘 무료 AI 할당량을 다 썼어요. 00:00 UTC에 초기화돼요.",
-  "dailyCap.paid": "오늘 AI 할당량을 다 썼어요. 00:00 UTC에 초기화돼요.",
+  "dailyCap.free": "오늘 무료 AI 할당량을 모두 사용했습니다. 00:00 UTC에 초기화됩니다.",
+  "dailyCap.paid":
+    "오늘 AI 할당량을 모두 사용했습니다. 00:00 UTC에 초기화되며, 설정에서 내 모델 키를 추가할 수도 있습니다.",
   "imapConnect.firstSync.started": "지금 메일을 가져오는 중입니다. 곧 메일함에 표시됩니다.",
   "imapConnect.firstSync.delayed":
     "이 계정의 첫 메일이 표시되기까지 최대 5분 정도 걸릴 수 있습니다.",
@@ -2128,7 +2126,7 @@ const ko: Record<string, string> = {
   "subscription.toast.noPurchase": "이전 구매 내역이 없습니다.",
   "paywall.title": "7일 무료 체험 시작하기",
   "paywall.body":
-    "Klorn Pro는 AI 이메일 방화벽입니다 — 무엇이 나에게 도달할지 분류하며, 내 승인 없이는 아무것도 나가지 않습니다.",
+    "Klorn Pro는 AI 이메일 방화벽입니다 — 무엇이 나에게 도달할지 분류합니다. 자동 답장을 켜지 않았다면 Klorn이 보내는 메일은 먼저 내 승인을 기다립니다.",
   "paywall.startTrial": "무료 체험 시작",
   "paywall.refunds": "환불",
   "paywall.valueProp.interrupt": "정말 중요한 메일에만 방해받기",

@@ -53,6 +53,7 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
     setBody("");
     setFiles([]);
     setError(null);
+    setProGated(false);
     setSending(false);
   }, []);
 

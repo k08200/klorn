@@ -789,10 +789,9 @@ const de: Record<string, string> = {
   "onboarding.welcome.feature.surfaceDecisions": "Entscheidungen zeigen",
   "onboarding.welcome.permissions.pre": "Klorn",
   "onboarding.welcome.permissions.emphasis1": "liest nur",
-  "onboarding.welcome.permissions.mid":
-    "Gmail und Kalender. Mail senden oder Termine anlegen wartet immer auf",
+  "onboarding.welcome.permissions.mid": "Gmail und Kalender. Mail, die Klorn sendet, wartet auf",
   "onboarding.welcome.permissions.emphasis2": "deine Freigabe",
-  "onboarding.welcome.permissions.suffix": ".",
+  "onboarding.welcome.permissions.suffix": " – außer du schaltest automatische Antworten ein.",
   "onboarding.syncing.title": "Dein Arbeitsbereich wird eingerichtet...",
   "onboarding.syncing.titleDone": "Synchronisierung abgeschlossen.",
   "onboarding.syncing.desc":
@@ -1022,7 +1021,6 @@ const de: Record<string, string> = {
   "billing.error.checkoutFailed": "Die Bezahlsitzung konnte nicht erstellt werden.",
   "billing.error.portalFailed": "Das Abrechnungsportal konnte nicht geöffnet werden.",
   "billing.cancelSubscription": "Abo kündigen",
-  "billing.unlimitedOnPlan": "In diesem Tarif unbegrenzt",
   "billing.noWebSubscription":
     "Dieser Tarif wird nicht über das Web abgerechnet, hier gibt es also nichts zu kündigen. Wenn du in der mobilen App abonniert hast, verwalte es dort.",
   "billing.enterpriseBilling":
@@ -1061,14 +1059,12 @@ const de: Record<string, string> = {
   "billing.plan.pro.feature.sendMail": "Mails senden und beantworten, mit Antwortentwürfen",
   "billing.plan.pro.feature.calendarWrites": "Kalendertermine anlegen und bearbeiten",
   "billing.plan.pro.feature.moreAccounts": "Weitere E-Mail-Konten und Kalender",
-  "billing.plan.pro.feature.autoReply": "Der automatische Modus beantwortet Routine-Mails für Sie",
+  "billing.plan.pro.feature.autoReply": "Automatische Antworten im automatischen Modus",
   "billing.plan.pro.feature.byok": "Eigener Modellschlüssel",
   "billing.plan.pro.feature.integrations": "Slack- und Notion-Integrationen (demnächst)",
   "billing.plan.enterprise.name": "Enterprise",
   "billing.plan.enterprise.price": "Individuell",
-  "billing.plan.enterprise.limit": "Unbegrenzt",
   "billing.plan.enterprise.feature.everythingPro": "Alles aus Pro",
-  "billing.plan.enterprise.feature.opus": "Auswahl von Claude Opus",
   "billing.plan.enterprise.feature.onPrem": "On-Premise-Optionen",
   "billing.plan.enterprise.feature.sla": "Support mit SLA",
   "billing.plan.enterprise.feature.customIntegrations": "Individuelle Integrationen",
@@ -1080,7 +1076,7 @@ const de: Record<string, string> = {
     "Free liest und ordnet: Klorn sortiert die Mail Ihres ersten E-Mail-Kontos bei jedem Anbieter, schreibt das tägliche Briefing, liest Ihren Kalender und antwortet im Assistenten – innerhalb eines täglichen KI-Kontingents, das um 00:00 UTC zurückgesetzt wird. Pro führt aus: Mails senden und beantworten mit Antwortentwürfen, Kalendertermine anlegen und bearbeiten, weitere E-Mail-Konten und Kalender, automatische Antworten im automatischen Modus, Slack- und Notion-Integrationen, sobald sie verfügbar sind, ein eigener Modellschlüssel und ein höheres tägliches KI-Kontingent.",
   "billing.faq.enterprise.q": "Was bietet Enterprise zusätzlich?",
   "billing.faq.enterprise.a":
-    "Individuelle Grenzen statt fester Kontingente, Auswahl des Claude-Opus-Modells, On-Premise-Optionen, Support mit SLA und individuelle Integrationen. Der Preis hängt vom Umfang ab — sprich mit dem Vertrieb.",
+    "On-Premise-Optionen, Support mit SLA und individuelle Integrationen. Der Preis hängt vom Umfang ab — sprich mit dem Vertrieb.",
   "billing.faq.manage.q": "Wie kündige oder verwalte ich mein Abo?",
   "billing.faq.manage.a":
     '„Abo kündigen" auf dieser Seite beendet das Abo zum Ende des bereits bezahlten Zeitraums — bis dahin läuft Pro weiter, es wird nichts mehr abgebucht und nichts gelöscht. Bis es wirksam wird, kannst du es mit „Abo behalten" rückgängig machen. „Abo verwalten" öffnet das Abrechnungsportal von Paddle, unserem Händler, für Zahlungsmethoden und Rechnungen.',
@@ -1769,7 +1765,7 @@ const de: Record<string, string> = {
   "dailyCap.free":
     "Das kostenlose KI-Kontingent für heute ist aufgebraucht. Es wird um 00:00 UTC zurückgesetzt.",
   "dailyCap.paid":
-    "Das KI-Kontingent für heute ist aufgebraucht. Es wird um 00:00 UTC zurückgesetzt.",
+    "Das KI-Kontingent für heute ist aufgebraucht. Es wird um 00:00 UTC zurückgesetzt – oder hinterlegen Sie in den Einstellungen einen eigenen Modellschlüssel.",
   "imapConnect.firstSync.started":
     "Deine Mails werden jetzt abgerufen und erscheinen gleich in Mail.",
   "imapConnect.firstSync.delayed": "Die erste Mail dieses Kontos kann bis zu ~5 Minuten dauern.",
@@ -2220,7 +2216,7 @@ const de: Record<string, string> = {
   "subscription.toast.noPurchase": "Kein früherer Kauf gefunden.",
   "paywall.title": "Starten Sie Ihre 7-tägige kostenlose Testphase",
   "paywall.body":
-    "Klorn Pro ist Ihre KI-E-Mail-Firewall – sie sortiert, was Sie erreicht, und nichts geht ohne Ihre Zustimmung hinaus.",
+    "Klorn Pro ist Ihre KI-E-Mail-Firewall – sie sortiert, was Sie erreicht. Mail, die Klorn sendet, wartet auf Ihre Zustimmung, außer Sie schalten automatische Antworten ein.",
   "paywall.startTrial": "Kostenlos testen",
   "paywall.refunds": "Erstattungen",
   "paywall.valueProp.interrupt": "Nur von E-Mails unterbrochen werden, die wirklich zählen",

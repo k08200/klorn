@@ -760,9 +760,9 @@ const ja: Record<string, string> = {
   "onboarding.welcome.feature.surfaceDecisions": "判断を差し出す",
   "onboarding.welcome.permissions.pre": "Klornは",
   "onboarding.welcome.permissions.emphasis1": "読むだけ",
-  "onboarding.welcome.permissions.mid": "です。メールの送信や予定の作成は必ず",
+  "onboarding.welcome.permissions.mid": "です。Klorn が送るメールは",
   "onboarding.welcome.permissions.emphasis2": "あなたの承認",
-  "onboarding.welcome.permissions.suffix": "を待ちます。",
+  "onboarding.welcome.permissions.suffix": "を待ちます（自動返信をオンにした場合を除きます）。",
   "onboarding.syncing.title": "ワークスペースを準備しています...",
   "onboarding.syncing.titleDone": "同期が完了しました。",
   "onboarding.syncing.desc": "最近のメールとカレンダーを読み込んでいます。30秒ほどかかります。",
@@ -987,7 +987,6 @@ const ja: Record<string, string> = {
   "billing.error.checkoutFailed": "購入セッションを作成できませんでした。",
   "billing.error.portalFailed": "請求ポータルを開けませんでした。",
   "billing.cancelSubscription": "サブスクリプションを解約",
-  "billing.unlimitedOnPlan": "このプランでは無制限",
   "billing.noWebSubscription":
     "このプランはウェブで課金されていないため、ここで解約するものはありません。モバイルアプリで登録した場合は、そちらで管理してください。",
   "billing.enterpriseBilling":
@@ -1026,14 +1025,12 @@ const ja: Record<string, string> = {
   "billing.plan.pro.feature.sendMail": "メールの送信と返信（返信の下書きつき）",
   "billing.plan.pro.feature.calendarWrites": "カレンダー予定の作成と編集",
   "billing.plan.pro.feature.moreAccounts": "メールアカウントとカレンダーの追加",
-  "billing.plan.pro.feature.autoReply": "自動モードで定型的なメールに代わりに返信",
+  "billing.plan.pro.feature.autoReply": "自動モードでの自動返信",
   "billing.plan.pro.feature.byok": "自分のモデルキーを使用",
   "billing.plan.pro.feature.integrations": "SlackとNotionの連携（近日）",
   "billing.plan.enterprise.name": "Enterprise",
   "billing.plan.enterprise.price": "個別見積もり",
-  "billing.plan.enterprise.limit": "無制限",
   "billing.plan.enterprise.feature.everythingPro": "Proのすべて",
-  "billing.plan.enterprise.feature.opus": "Claude Opusの選択",
   "billing.plan.enterprise.feature.onPrem": "オンプレミス構成",
   "billing.plan.enterprise.feature.sla": "SLA付きサポート",
   "billing.plan.enterprise.feature.customIntegrations": "個別の連携開発",
@@ -1045,7 +1042,7 @@ const ja: Record<string, string> = {
     "Free は読んで整理します: プロバイダーを問わず最初のメールアカウントのメールを仕分け、デイリーブリーフィングを作り、カレンダーを読み、アシスタントで答えます。1 日の AI クォータの範囲で動作し、クォータは 00:00 UTC にリセットされます。Pro は実行します: 返信の下書きつきのメール送信と返信、カレンダー予定の作成と編集、メールアカウントとカレンダーの追加、自動モードでの返信、提供開始に合わせた Slack と Notion の連携、自分のモデルキー、より多い 1 日の AI クォータ。",
   "billing.faq.enterprise.q": "Enterpriseで何が増えますか?",
   "billing.faq.enterprise.a":
-    "固定枠ではなく個別の上限、Claude Opusモデルの選択、オンプレミス構成、SLA付きサポート、個別の連携開発です。価格は範囲によります — 営業にご相談ください。",
+    "オンプレミス構成、SLA付きサポート、個別の連携開発です。価格は範囲によります — 営業にご相談ください。",
   "billing.faq.manage.q": "解約や管理はどうすればいいですか?",
   "billing.faq.manage.a":
     "このページの「サブスクリプションを解約」は、すでに支払い済みの期間の終わりで契約を終了します — その日までProは動き続け、追加の請求はなく、何も削除されません。有効になるまでは「解約を取り消す」で戻せます。「サブスクリプションを管理」は、決済代行のPaddleの請求ポータルを開き、お支払い方法の変更や請求書のダウンロードができます。",
@@ -1703,7 +1700,8 @@ const ja: Record<string, string> = {
   "proFeature.byok": "自分のモデルキーは Pro で使えます。",
   "proFeature.drive": "Google Drive の接続は Pro の機能です。",
   "dailyCap.free": "今日の無料 AI クォータを使い切りました。00:00 UTC にリセットされます。",
-  "dailyCap.paid": "今日の AI クォータを使い切りました。00:00 UTC にリセットされます。",
+  "dailyCap.paid":
+    "今日の AI クォータを使い切りました。00:00 UTC にリセットされます。設定で自分のモデルキーを追加することもできます。",
   "imapConnect.firstSync.started": "メールを取得しています。まもなくメールに表示されます。",
   "imapConnect.firstSync.delayed":
     "このアカウントの最初のメールが表示されるまで最大 5 分ほどかかる場合があります。",
@@ -2142,7 +2140,7 @@ const ja: Record<string, string> = {
   "subscription.toast.noPurchase": "以前の購入が見つかりません。",
   "paywall.title": "7 日間の無料トライアルを始める",
   "paywall.body":
-    "Klorn Pro は AI メールファイアウォールです。あなたに届くものを分類し、あなたの許可なしには何も送信されません。",
+    "Klorn Pro は AI メールファイアウォールです。あなたに届くものを分類します。自動返信をオンにしない限り、Klorn が送るメールはまずあなたの承認を待ちます。",
   "paywall.startTrial": "無料トライアルを開始",
   "paywall.refunds": "返金",
   "paywall.valueProp.interrupt": "本当に重要なメールにだけ邪魔される",

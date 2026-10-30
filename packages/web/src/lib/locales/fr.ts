@@ -776,10 +776,9 @@ const fr: Record<string, string> = {
   "onboarding.welcome.feature.surfaceDecisions": "Faire remonter les décisions",
   "onboarding.welcome.permissions.pre": "Klorn",
   "onboarding.welcome.permissions.emphasis1": "lit seulement",
-  "onboarding.welcome.permissions.mid":
-    "Gmail et l'Agenda. Envoyer du courrier ou créer des événements attend toujours",
+  "onboarding.welcome.permissions.mid": "Gmail et l'Agenda. Le courrier envoyé par Klorn attend",
   "onboarding.welcome.permissions.emphasis2": "votre approbation",
-  "onboarding.welcome.permissions.suffix": ".",
+  "onboarding.welcome.permissions.suffix": ", sauf si vous activez les réponses automatiques.",
   "onboarding.syncing.title": "Préparation de votre espace...",
   "onboarding.syncing.titleDone": "Synchronisation terminée.",
   "onboarding.syncing.desc":
@@ -1009,7 +1008,6 @@ const fr: Record<string, string> = {
   "billing.error.checkoutFailed": "Impossible de créer la session de paiement.",
   "billing.error.portalFailed": "Impossible d'ouvrir le portail de facturation.",
   "billing.cancelSubscription": "Annuler l'abonnement",
-  "billing.unlimitedOnPlan": "Illimité sur ce forfait",
   "billing.noWebSubscription":
     "Ce forfait n'est pas facturé sur le web, il n'y a donc rien à annuler ici. Si vous vous êtes abonné dans l'app mobile, gérez-le là-bas.",
   "billing.enterpriseBilling":
@@ -1050,14 +1048,12 @@ const fr: Record<string, string> = {
     "Envoyer du courrier et y répondre, avec brouillons de réponse",
   "billing.plan.pro.feature.calendarWrites": "Créer et modifier des événements",
   "billing.plan.pro.feature.moreAccounts": "Plus de comptes de messagerie et d'agendas",
-  "billing.plan.pro.feature.autoReply": "Le mode Automatique répond pour vous au courrier courant",
+  "billing.plan.pro.feature.autoReply": "Réponses automatiques en mode Automatique",
   "billing.plan.pro.feature.byok": "Votre propre clé de modèle",
   "billing.plan.pro.feature.integrations": "Intégrations Slack et Notion (bientôt)",
   "billing.plan.enterprise.name": "Enterprise",
   "billing.plan.enterprise.price": "Sur mesure",
-  "billing.plan.enterprise.limit": "Illimité",
   "billing.plan.enterprise.feature.everythingPro": "Tout ce qu'il y a dans Pro",
-  "billing.plan.enterprise.feature.opus": "Choix de Claude Opus",
   "billing.plan.enterprise.feature.onPrem": "Options on-premise",
   "billing.plan.enterprise.feature.sla": "Support avec SLA",
   "billing.plan.enterprise.feature.customIntegrations": "Intégrations sur mesure",
@@ -1069,7 +1065,7 @@ const fr: Record<string, string> = {
     "Free lit et organise : Klorn trie le courrier de votre premier compte de messagerie, quel que soit le fournisseur, rédige le brief quotidien, lit votre agenda et répond dans l'assistant, dans la limite d'un quota IA quotidien réinitialisé à 00:00 UTC. Pro exécute : envoi de courrier et réponses avec brouillons, création et modification d'événements, plus de comptes de messagerie et d'agendas, réponses automatiques en mode Automatique, intégrations Slack et Notion à mesure qu'elles arrivent, votre propre clé de modèle et un quota IA quotidien plus élevé.",
   "billing.faq.enterprise.q": "Qu'apporte Enterprise ?",
   "billing.faq.enterprise.a":
-    "Des limites sur mesure au lieu de quotas fixes, le choix du modèle Claude Opus, des options de déploiement on-premise, un support avec SLA et des intégrations sur mesure. Le prix dépend du périmètre — contactez le service commercial.",
+    "Des options de déploiement on-premise, un support avec SLA et des intégrations sur mesure. Le prix dépend du périmètre — contactez le service commercial.",
   "billing.faq.manage.q": "Comment annuler ou gérer mon abonnement ?",
   "billing.faq.manage.a":
     "« Annuler l'abonnement » sur cette page met fin à l'abonnement à la fin de la période déjà payée — Pro continue de fonctionner jusqu'à cette date, vous n'êtes plus prélevé et rien n'est supprimé. Tant que ce n'est pas effectif, vous pouvez revenir en arrière avec « Conserver l'abonnement ». « Gérer l'abonnement » ouvre le portail de facturation de Paddle, notre revendeur officiel, pour changer de moyen de paiement et télécharger les factures.",
@@ -1753,7 +1749,8 @@ const fr: Record<string, string> = {
   "proFeature.drive": "Connecter Google Drive est une fonctionnalité Pro.",
   "dailyCap.free":
     "Vous avez utilisé votre quota IA gratuit du jour. Il se réinitialise à 00:00 UTC.",
-  "dailyCap.paid": "Vous avez utilisé votre quota IA du jour. Il se réinitialise à 00:00 UTC.",
+  "dailyCap.paid":
+    "Vous avez utilisé votre quota IA du jour. Il se réinitialise à 00:00 UTC, ou vous pouvez ajouter votre propre clé de modèle dans les Réglages.",
   "imapConnect.firstSync.started":
     "Récupération de vos e-mails en cours. Ils apparaîtront bientôt dans Mail.",
   "imapConnect.firstSync.delayed":
@@ -2196,7 +2193,7 @@ const fr: Record<string, string> = {
   "subscription.toast.noPurchase": "Aucun achat précédent trouvé.",
   "paywall.title": "Commencez votre essai gratuit de 7 jours",
   "paywall.body":
-    "Klorn Pro est votre pare-feu e-mail IA — il trie ce qui vous parvient, et rien ne part sans votre accord.",
+    "Klorn Pro est votre pare-feu e-mail IA — il trie ce qui vous parvient. Le courrier envoyé par Klorn attend votre accord, sauf si vous activez les réponses automatiques.",
   "paywall.startTrial": "Commencer l'essai gratuit",
   "paywall.refunds": "Remboursements",
   "paywall.valueProp.interrupt": "N'être interrompu que par le courrier qui compte vraiment",

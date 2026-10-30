@@ -3,6 +3,7 @@
 // becomes a localized line, and BYOK copy stops promising a key FREE cannot
 // store. Run from the api suite because the web package has no unit-test
 // runner (see web-auth-surfaces.test.ts).
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { capCodeForMessage, capTurnFrom, dailyCapNotice } from "../../../web/src/lib/daily-cap";
 import {
@@ -227,5 +228,59 @@ describe("free-tier copy", () => {
       expect(table["paywall.foundingPrice"]).toBeUndefined();
       expect(table["paywall.trialTerms"]).toBeUndefined();
     }
+  });
+});
+
+describe("approval and plan claims (review follow-up)", () => {
+  // Auto mode and auto-reply rules send without asking per message, so no
+  // surface may say every send waits for approval.
+  const ABSOLUTE_APPROVAL = /nothing goes out|always waits|require your approval|say-so/i;
+
+  it("no absolute approval claim in the paywall or the onboarding promise", () => {
+    expect(en["paywall.body"]).not.toMatch(ABSOLUTE_APPROVAL);
+    const onboarding = [
+      en["onboarding.welcome.permissions.mid"],
+      en["onboarding.welcome.permissions.emphasis2"],
+      en["onboarding.welcome.permissions.suffix"],
+    ].join(" ");
+    expect(onboarding).not.toMatch(ABSOLUTE_APPROVAL);
+    expect(en["paywall.body"]).toMatch(/automatic replies/);
+    expect(onboarding).toMatch(/automatic replies/);
+  });
+
+  it("the privacy policy no longer says every email action waits for approval", () => {
+    const privacy = readFileSync(
+      new URL("../../../web/src/app/privacy/page.tsx", import.meta.url),
+      "utf8",
+    );
+    expect(privacy).not.toMatch(/require your approval before sending/);
+    expect(privacy).not.toMatch(/does not send\s+replies without your awareness/);
+    expect(privacy).toMatch(/automatic replies/);
+  });
+
+  it("no plan claims unlimited use or Opus as a plan perk", () => {
+    for (const table of Object.values(LOCALES)) {
+      expect(table["billing.unlimitedOnPlan"]).toBeUndefined();
+      expect(table["billing.plan.enterprise.limit"]).toBeUndefined();
+      expect(table["billing.plan.enterprise.feature.opus"]).toBeUndefined();
+      expect(table["billing.faq.enterprise.a"]).not.toMatch(/Opus/);
+    }
+  });
+
+  it("the paid daily-cap line keeps the own-key unblock; the free one does not offer it", () => {
+    expect(en["dailyCap.paid"]).toMatch(/own model key/);
+    expect(en["dailyCap.free"]).not.toMatch(/key/i);
+    for (const [code, table] of Object.entries(LOCALES)) {
+      expect(table["dailyCap.paid"], code).not.toBe(table["dailyCap.free"]);
+    }
+  });
+
+  it("Korean daily-cap lines use the same -습니다 tone as the refusal notices", () => {
+    expect(ko["dailyCap.free"]).toMatch(/니다\.$/);
+    expect(ko["dailyCap.paid"]).toMatch(/니다\.$/);
+  });
+
+  it("the Pro auto-reply line does not read as if Auto mode itself were Pro", () => {
+    expect(en["billing.plan.pro.feature.autoReply"]).toBe("Automatic replies in Auto mode");
   });
 });

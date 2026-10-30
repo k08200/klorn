@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { apiFetch } from "../lib/api";
+import { isEntitlementRefusal } from "../lib/entitlement";
 import { useT } from "../lib/i18n";
 import { shellKind } from "../lib/native/shell";
 import { deliverDesktopAlert } from "../lib/native/tauri-notify";
@@ -14,6 +15,7 @@ import {
   unreadGroupCount,
 } from "../lib/notification-grouping";
 import { formatRelative } from "../lib/text";
+import { ProFeatureNotice } from "./pro-feature-notice";
 import { RejectReasonDialog } from "./reject-reason-dialog";
 import { useToast } from "./toast";
 import { useWebSocket } from "./use-websocket";
@@ -292,11 +294,14 @@ export default function NotificationBell({ userId }: { userId: string }) {
   const [pendingActionLoading, setPendingActionLoading] = useState<
     Record<string, "approve" | "reject" | null>
   >({});
+  // Approving executes the action, which is Pro: a FREE user's 403 shows the notice.
+  const [approveProGated, setApproveProGated] = useState(false);
 
   const handleApprovePendingAction = async (notif: Notification, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!notif.pendingActionId || pendingActionLoading[notif.id]) return;
     setPendingActionLoading((prev) => ({ ...prev, [notif.id]: "approve" }));
+    setApproveProGated(false);
     try {
       await apiFetch(`/api/chat/pending-actions/${notif.pendingActionId}/approve`, {
         method: "POST",
@@ -309,6 +314,10 @@ export default function NotificationBell({ userId }: { userId: string }) {
       );
       apiFetch(`/api/notifications/${notif.id}/read`, { method: "PATCH" }).catch(() => {});
     } catch (err) {
+      if (isEntitlementRefusal(err)) {
+        setApproveProGated(true);
+        return;
+      }
       console.error("[notification-bell] approve failed", err);
       // Let the user retry — don't silently swallow
       toast(t("notif.toast.approveFailed"), "error");
@@ -633,6 +642,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
               </div>
             </div>
             <div className="flex-1 overflow-y-auto overscroll-contain">
+              {approveProGated && <ProFeatureNotice className="m-3" />}
               {notifications.length === 0 ? (
                 <p className="text-center text-ink-dim text-sm py-6">{t("notif.empty")}</p>
               ) : (
