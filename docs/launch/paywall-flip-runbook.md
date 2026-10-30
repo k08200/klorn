@@ -234,7 +234,10 @@ Right before the flip, list every non-admin account that is Pro without paying
 and confirm each row is a deliberate comp (an admin comp via
 `PATCH /api/admin/users/:id { "plan": … }` shows up here too, and so does a
 mobile in-app subscriber, since the RevenueCat path stores no subscription id
-on `User` — check those in RevenueCat before ending anything):
+on `User` — check those in RevenueCat before ending anything. A comp who once
+opened Stripe checkout keeps `stripeId` and is hidden by this filter — if
+Stripe checkout was ever live, drop the `"stripeId" IS NULL` condition and
+check each row that has a `stripeId` in Stripe):
 
 ```sql
 SELECT id, email, plan, "betaProGrantedAt", "createdAt"

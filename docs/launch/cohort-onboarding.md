@@ -52,13 +52,13 @@ correction (`DecisionLabel.outcome`) → `decision-metrics` counts it.
 > **PUSH / MEETING / QUEUE / INFO / SILENT** and only interrupts you for what matters. I need one thing from
 > you: **when it sorts something wrong, correct it.** That correction is the entire product.
 >
-> 1. Go to **klorn.ai** → **Continue with Google**. You start on the Free plan (sorting,
->    briefing, one mail account). Pro is $29.99/month with a 7-day trial, from **Billing**.
+> 1. Go to **klorn.ai** → **Continue with Google**. You start on the Free plan; Pro is
+>    $29.99/month with a 7-day trial, from **Billing**.
 > 2. Grant Gmail access (it reads to classify, and can act only when you approve — nothing
 >    auto-sends by default).
 > 3. It classifies your recent mail. **Turn on notifications** so you feel a real PUSH.
 > 4. Open the **firewall view** (`/inbox/firewall`). When something is in the wrong lane,
->    hit **"Move → PUSH / QUEUE / SILENT"**. That's it — every "Move" teaches it how *you*
+>    hit **"Move →"** and pick the right lane. That's it — every "Move" teaches it how *you*
 >    tier mail. Correct freely for a few days.
 >
 > Don't overthink it. The only action that matters is moving the ones it got wrong.
@@ -81,8 +81,9 @@ extracts from nothing.
 
 ## D. Known friction (name it so the cohort doesn't silently drop off)
 
-- **The unverified-app screen** is the #1 drop point. Pre-warn them in the message (done in B)
-  and tell them the exact clicks ("Advanced → Continue").
+- **The unverified-app screen** was the #1 drop point until Google approved the app's
+  verification (2026-10-03); the invite in B no longer warns about it. If a user still reports
+  the screen, check the OAuth consent screen status before anything else.
 - **No corrections = no data.** If the classifier is mostly right for a user, they'll have
   little to move. That's fine signal too (high recall), but solicit the misses explicitly.
 - **Push silently off** if VAPID isn't set/persisted → they never feel PUSH → the product's
