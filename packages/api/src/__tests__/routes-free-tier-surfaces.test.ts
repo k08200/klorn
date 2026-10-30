@@ -212,6 +212,57 @@ describe("free-tier surfaces (PAYWALL_ENABLED=true, FREE user)", () => {
   });
 });
 
+/**
+ * These plugins are open to FREE at the plugin level and gate paid routes one
+ * by one, so a NEW route would be free by default. Every registered route must
+ * be classified here — an unclassified one fails this test until its author
+ * decides (and, if it is paid, adds requireEntitled + a PAID_ONLY case).
+ */
+const ROUTE_CLASSIFICATION: Record<string, "free" | "paid"> = {
+  "GET /api/chat/pending-actions": "free",
+  "GET /api/chat/conversations/:id/pending-actions": "free",
+  "POST /api/chat/pending-actions/:actionId/reject": "free",
+  "POST /api/chat/pending-actions/:actionId/snooze": "free",
+  "POST /api/chat/pending-actions/:actionId/approve": "paid",
+  "GET /api/commitments": "free",
+  "GET /api/commitments/:id": "free",
+  "PATCH /api/commitments/:id": "free",
+  "DELETE /api/commitments/:id": "free",
+  "GET /api/commitments/:id/path": "paid",
+  "POST /api/commitments/:id/path/rebuild": "paid",
+  "POST /api/commitments/:id/path/steps/:index/materialize": "paid",
+  "POST /api/commitments/:id/path/materialize-all": "paid",
+  "GET /api/inbox/receipt/today": "free",
+  "POST /api/inbox/receipt/undo/:pendingActionId": "paid",
+  "GET /api/keys": "free",
+  "GET /api/keys/:id/activity": "free",
+  "DELETE /api/keys/:id": "free",
+  "POST /api/keys": "paid",
+};
+
+describe("free-tier surfaces — every route is classified", () => {
+  it("has no unclassified route in the free-open plugins", async () => {
+    vi.resetModules();
+    const { chatRoutes } = await import("../routes/chat-pending-actions.js");
+    const { commitmentRoutes } = await import("../routes/commitments.js");
+    const { receiptRoutes } = await import("../routes/receipt.js");
+    const { apiKeyRoutes } = await import("../routes/api-keys.js");
+    const app = Fastify();
+    const seen: string[] = [];
+    app.addHook("onRoute", (route) => {
+      const methods = Array.isArray(route.method) ? route.method : [route.method];
+      for (const m of methods) if (m !== "HEAD") seen.push(`${m} ${route.url}`);
+    });
+    await app.register(chatRoutes, { prefix: "/api/chat" });
+    await app.register(commitmentRoutes, { prefix: "/api/commitments" });
+    await app.register(receiptRoutes, { prefix: "/api/inbox/receipt" });
+    await app.register(apiKeyRoutes, { prefix: "/api/keys" });
+    await app.ready();
+    expect([...new Set(seen)].sort()).toEqual(Object.keys(ROUTE_CLASSIFICATION).sort());
+    await app.close();
+  });
+});
+
 describe("free-tier surfaces (paywall off — pre-launch unchanged)", () => {
   it.each(
     PAID_ONLY.map((c) => [label(c), c] as const),

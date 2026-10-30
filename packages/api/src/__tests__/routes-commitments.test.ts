@@ -185,7 +185,13 @@ describe("commitment routes", () => {
   it("PATCH refuses an oversized title or description", async () => {
     const c = seed({ userId: "user-1", status: "OPEN" });
     const app = await buildApp();
-    for (const payload of [{ title: "x".repeat(501) }, { description: "x".repeat(5001) }]) {
+    // `title: null` would be coerced to "" by ajv and blank the row — refused too.
+    for (const payload of [
+      { title: "x".repeat(501) },
+      { description: "x".repeat(5001) },
+      { title: null },
+      { title: "" },
+    ]) {
       const res = await app.inject({
         method: "PATCH",
         url: `/api/commitments/${c.id}`,

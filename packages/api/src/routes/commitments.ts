@@ -45,7 +45,7 @@ const MAX_DESCRIPTION_LENGTH = 5000;
 const patchCommitmentBodySchema = {
   type: "object",
   properties: {
-    title: { type: "string", maxLength: MAX_TITLE_LENGTH },
+    title: { type: "string", minLength: 1, maxLength: MAX_TITLE_LENGTH },
     description: { type: ["string", "null"], maxLength: MAX_DESCRIPTION_LENGTH },
     status: { type: "string", maxLength: 50 },
     dueAt: { type: ["string", "null"], maxLength: 100 },
