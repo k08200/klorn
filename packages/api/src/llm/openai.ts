@@ -147,10 +147,20 @@ export interface CompletionOptions {
   _paced?: boolean;
 }
 
+/**
+ * Stable machine-readable reason clients branch on (never on the message):
+ * DAILY_COST_CAP_FREE is the free-tier cap, where upgrading helps;
+ * DAILY_COST_CAP is the paid per-user cap or the shared global ceiling.
+ */
+export type DailyCostCapCode = "DAILY_COST_CAP" | "DAILY_COST_CAP_FREE";
+
 export class DailyCostCapExceededError extends Error {
-  constructor(message: string) {
+  readonly code: DailyCostCapCode;
+
+  constructor(message: string, code: DailyCostCapCode = "DAILY_COST_CAP") {
     super(message);
     this.name = "DailyCostCapExceededError";
+    this.code = code;
   }
 }
 
@@ -174,6 +184,14 @@ export const DAILY_COST_CAP_UPGRADE_MESSAGE =
 
 export function dailyCostCapMessageFor(freeCapApplied: boolean): string {
   return freeCapApplied ? DAILY_COST_CAP_UPGRADE_MESSAGE : DAILY_COST_CAP_MESSAGE;
+}
+
+/** The per-user cap refusal: message and code both follow freeCapApplied. */
+function perUserCapError(freeCapApplied: boolean): DailyCostCapExceededError {
+  return new DailyCostCapExceededError(
+    dailyCostCapMessageFor(freeCapApplied),
+    freeCapApplied ? "DAILY_COST_CAP_FREE" : "DAILY_COST_CAP",
+  );
 }
 
 /**
@@ -227,7 +245,7 @@ async function enforceCostGates(
       // Klorn's money once the cap is reached. Nothing is pre-billed: the
       // per-user and global pre-bills below are skipped for userKeyAvailable.
       if (userKeyAvailable) return { userKeyOnly: true };
-      throw new DailyCostCapExceededError(dailyCostCapMessageFor(gate.freeCapApplied === true));
+      throw perUserCapError(gate.freeCapApplied === true);
     }
     if (!userKeyAvailable) {
       // Await the pre-bill so the atomic increment lands before we return, and
@@ -236,7 +254,7 @@ async function enforceCostGates(
       // check-then-act TOCTOU under concurrency / multi-dyno).
       const usage = await recordCostUsage(userId, estCents, model, { reserved });
       if (usage?.overCap) {
-        throw new DailyCostCapExceededError(dailyCostCapMessageFor(gate.freeCapApplied === true));
+        throw perUserCapError(gate.freeCapApplied === true);
       }
     }
   }
