@@ -41,6 +41,7 @@ struct ComposePanel: View {
             if let error = model.composeError {
                 Text(error).font(.caption).foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
+                if PlanUpgrade.offersUpgrade(for: error) { UpgradeToProLink() }
             }
 
             HStack {

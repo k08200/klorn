@@ -737,6 +737,9 @@ struct ChatTurnResponse: Codable, Sendable {
     let reply: String
     let error: String?
     let eventDraft: EventDraft?
+    /// "DAILY_COST_CAP_FREE" / "DAILY_COST_CAP" when the daily AI cost cap
+    /// stopped the turn (`ChatCapNotice`). Absent from older servers.
+    let errorCode: String?
 }
 
 /// One bubble in the desktop's in-memory thread. An assistant bubble may carry
@@ -747,12 +750,27 @@ struct ChatMessage: Identifiable, Hashable, Sendable {
     let role: Role
     let text: String
     var eventDraft: EventDraft?
+    /// A plan refusal: the bubble carries the upgrade link-out.
+    let offersUpgrade: Bool
 
-    init(role: Role, text: String, eventDraft: EventDraft? = nil) {
+    init(role: Role, text: String, eventDraft: EventDraft? = nil, offersUpgrade: Bool = false) {
         self.role = role
         self.text = text
         self.eventDraft = eventDraft
+        self.offersUpgrade = offersUpgrade
     }
+}
+
+/// The bubbles one agent turn adds. At the daily cost cap that is a single
+/// localized line (the server's reply and error are English and say the same
+/// thing twice); otherwise the reply, plus the server's error when it sent one.
+func chatTurnBubbles(_ turn: ChatTurnResponse) -> [ChatMessage] {
+    if let cap = ChatCapNotice(errorCode: turn.errorCode) {
+        return [ChatMessage(role: .failure, text: cap.text, offersUpgrade: cap.offersUpgrade)]
+    }
+    let reply = ChatMessage(role: .assistant, text: turn.reply, eventDraft: turn.eventDraft)
+    guard let error = turn.error else { return [reply] }
+    return [reply, ChatMessage(role: .failure, text: error)]
 }
 
 /// "Title · 15:00–16:00 · Location" — one-line confirm-card label. Time falls

@@ -179,8 +179,9 @@ final class AppModel {
     private(set) var emailError: String?
     private(set) var replyError: String?
     /// On-demand deep re-summary ("AI 정리") in flight / failed for the pane.
+    /// A plan refusal is its own failure: retrying never works for FREE.
     private(set) var isSummarizing = false
-    private(set) var summarizeFailed = false
+    private(set) var summarizeFailure: ActionFailure?
 
     /// Refresh cadence so new PUSH mail surfaces a notification even with the
     /// window closed (also keeps the free-tier API warm).
@@ -1220,14 +1221,16 @@ final class AppModel {
         guard let email = openedEmail, !isSummarizing else { return }
         let session = sessionGeneration
         isSummarizing = true
-        summarizeFailed = false
+        summarizeFailure = nil
         defer { if isCurrent(session) { isSummarizing = false } }
         do {
             let lang = L10n.resolvedCode(override: L10n.override)
             try await api.post("/api/email/\(email.id)/summarize", json: ["lang": lang])
         } catch {
             Log.app.error("on-demand summarize failed: \(String(describing: error), privacy: .private)")
-            if isCurrent(session), openedEmail?.id == email.id { summarizeFailed = true }
+            if isCurrent(session), openedEmail?.id == email.id {
+                summarizeFailure = ActionFailure.classify(error)
+            }
             return
         }
         // The POST persisted server-side; a refresh failure here must not
@@ -1474,9 +1477,12 @@ final class AppModel {
             return
         } catch APIError.unauthorized {
             sessionRejected()
+        } catch APIError.forbidden {
+            chatMessages.append(ChatMessage(
+                role: .failure, text: L("error.needsPro"), offersUpgrade: true))
         } catch {
             chatMessages.append(ChatMessage(
-                role: .failure, text: "Couldn't create the event — \(Self.describe(error))"))
+                role: .failure, text: L("chat.event.failed", Self.describe(error))))
         }
     }
 
@@ -1572,18 +1578,14 @@ final class AppModel {
                     context: openedEmail.map { ChatTurnRequest.Context(emailId: $0.id) }),
                 as: ChatTurnResponse.self)
             guard isCurrent(session) else { return }
-            chatMessages.append(
-                ChatMessage(role: .assistant, text: turn.reply, eventDraft: turn.eventDraft))
-            if let error = turn.error {
-                chatMessages.append(ChatMessage(role: .failure, text: error))
-            }
+            chatMessages.append(contentsOf: chatTurnBubbles(turn))
         } catch _ where !isCurrent(session) {
             return
         } catch APIError.unauthorized {
             sessionRejected()
         } catch {
             chatMessages.append(ChatMessage(
-                role: .failure, text: "Couldn't reach Klorn — \(Self.describe(error))"))
+                role: .failure, text: L("chat.send.failed", Self.describe(error))))
         }
     }
 
@@ -2431,7 +2433,7 @@ final class AppModel {
             flag("isLoadingEmail", \.isLoadingEmail),
             flag("isDrafting", \.isDrafting),
             flag("isSummarizing", \.isSummarizing),
-            flag("summarizeFailed", \.summarizeFailed),
+            field("summarizeFailure", \.summarizeFailure, nil, isClean: { $0 == nil }, dirty: .some(.failed)),
             flag("composeSending", \.composeSending),
             flag("isChatting", \.isChatting),
             field("chatMessages", \.chatMessages, [], dirty: [ChatMessage(role: .user, text: "x")]),
@@ -2758,12 +2760,19 @@ final class AppModel {
             } catch {
                 guard isCurrent(session) else { return }
                 pendingActions = previous
-                pendingActionError = Self.automationErrorText(error)
+                pendingActionError = Self.pendingActionErrorText(error)
                 Log.app.debug("pending action resolve failed: \(String(describing: error), privacy: .private)")
             }
             guard isCurrent(session) else { return }
             resolvingActions.remove(action.id)
         }
+    }
+
+    /// A refused approve/reject is the plan, not a setting: approvals get their
+    /// own needs-Pro sentence (and the upgrade link beside it).
+    private static func pendingActionErrorText(_ error: Error) -> String {
+        if case APIError.forbidden = error { return L("proposals.needsPro") }
+        return automationErrorText(error)
     }
 
     func loadQueue() async {

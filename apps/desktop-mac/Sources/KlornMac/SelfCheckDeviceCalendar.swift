@@ -622,6 +622,28 @@ enum DeviceCalendarScenarios {
                         overRows.lastError == L("deviceCalendars.error.rows")
                         && overRows.lastError != L("deviceCalendars.error.limit")))
 
+        // 4e. A plan refusal (403) reads as needs-Pro and stops the background
+        // passes for the session; opening Settings or a switch tries once more.
+        fresh(DeviceCalendarOptIn(uploadEnabled: true, calendarIds: ["a"]))
+        DeviceCalendarStubProtocol.reset([
+            "GET \(sourcesPath)": sources([]),
+            "PUT": .init(status: 403, body: #"{"error":"x","code":"ENTITLEMENT_REQUIRED"}"#),
+        ])
+        let free = bridge(defaults, user: user, items: ["a"], snapshots: ["a"])
+        free.start()
+        await free.idle()
+        let refusedOnce = puts() == 1 && free.planRefused && free.lastError == L("error.needsPro")
+        await free.runPass()  // what the 15-minute tick and a calendar change run
+        await free.runPass()
+        results.append(("a plan refusal shows needs-Pro and the background passes stop sending",
+                        refusedOnce && puts() == 1 && free.planRefused
+                        && PlanUpgrade.offersUpgrade(for: free.lastError)))
+        await free.refreshAvailability()
+        let reopened = !free.planRefused
+        await free.setCalendar("a", enabled: true)
+        results.append(("opening Settings or a switch gives it one more try",
+                        reopened && puts() == 2 && free.planRefused))
+
         // 5. The feature off on the server hides it and uploads nothing.
         fresh(DeviceCalendarOptIn(uploadEnabled: true, calendarIds: ["a"]))
         DeviceCalendarStubProtocol.reset(["GET \(sourcesPath)": .init(status: 404, body: "{}")])
