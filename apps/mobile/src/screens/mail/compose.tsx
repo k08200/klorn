@@ -15,7 +15,6 @@
  */
 import type { InboxOption } from "@klorn/contract";
 import { type CSSProperties, useEffect, useId, useRef, useState } from "react";
-import { isApiError } from "../../api/client";
 import type { ReplyDraftResponse, SendMailResponse } from "../../api/wire";
 import { getServices } from "../../app/services";
 import type { MessageKey } from "../../i18n";
@@ -23,9 +22,19 @@ import { useI18n } from "../../i18n/I18nProvider";
 import { hapticSuccess, hapticWarning } from "../../platform/haptics";
 import { useKeyboardInset } from "../../platform/keyboard";
 import { MailGlyph } from "../../ui/MailGlyph";
+import { PlansLink } from "../../ui/PlansLink";
 import { Sheet } from "../../ui/Sheet";
 import { SourceBadge } from "../../ui/SourceBadge";
-import { addressOf, parseRecipients, replySubject, sendAccountId, sendPayloadHash } from "./model";
+import {
+  addressOf,
+  draftErrorKey,
+  PRO_REFUSAL_KEY,
+  parseRecipients,
+  replySubject,
+  sendAccountId,
+  sendFailure,
+  sendPayloadHash,
+} from "./model";
 import { useAccountLabel } from "./useAccountLabel";
 
 /** Tone chips → the reply-draft route's `intent` (it regenerates with instructions). */
@@ -58,11 +67,45 @@ export interface OutgoingMail {
   from: InboxOption | null;
 }
 
-export function draftErrorKey(err: unknown): MessageKey {
-  if (isApiError(err) && err.isOffline) return "reader.draft.offline";
-  if (isApiError(err) && err.status === 429) return "reader.draft.rateLimited";
-  if (isApiError(err) && err.status === 403) return "reader.draft.notEntitled";
-  return "reader.draft.unavailable";
+/**
+ * A draft / send error line; the plan refusal also carries the way to Pro.
+ * `discards` is for a line shown beside mail the user has written: following
+ * the link leaves the mail screen, and the unsent mail does not survive that.
+ */
+export function WriteError({
+  messageKey,
+  discards = false,
+  onNavigate,
+}: {
+  messageKey: MessageKey;
+  discards?: boolean;
+  onNavigate?: () => void;
+}) {
+  const { t } = useI18n();
+  if (messageKey !== PRO_REFUSAL_KEY) return <>{t(messageKey)}</>;
+  return (
+    <>
+      {t(messageKey)} {discards ? `${t("reader.draft.discardsOnLeave")} ` : null}
+      <PlansLink onNavigate={onNavigate} />
+    </>
+  );
+}
+
+/**
+ * Where "write", "reply" and a mailto tap land for an account that may not
+ * send (mailWriteBlocked): the reason and the way to Pro, with no editor —
+ * so no one writes a mail that cannot go out. Nothing is typed yet, so
+ * following the link loses nothing.
+ */
+export function ProGateSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { t } = useI18n();
+  return (
+    <Sheet closeButton open={open} onClose={onClose} title={t("plans.title")}>
+      <p className="form-note" role="status">
+        <WriteError messageKey={PRO_REFUSAL_KEY} onNavigate={onClose} />
+      </p>
+    </Sheet>
+  );
 }
 
 // ── Reply form (inline in tabletop, inside the composer sheet elsewhere) ─────
@@ -87,7 +130,7 @@ export function ReplyForm({
   const { t } = useI18n();
   const [body, setBody] = useState(initial);
   const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<MessageKey | null>(null);
   const [saved, setSaved] = useState(false);
   const fieldId = useId();
   useEffect(() => setBody(initial), [initial]);
@@ -102,7 +145,7 @@ export function ReplyForm({
       );
       setBody(draft.body);
     } catch (err) {
-      setError(t(draftErrorKey(err)));
+      setError(draftErrorKey(err));
     } finally {
       setBusy(null);
     }
@@ -117,7 +160,7 @@ export function ReplyForm({
       hapticSuccess();
       onSaved?.();
     } catch {
-      setError(t("reader.draft.saveFailed"));
+      setError("reader.draft.saveFailed");
     } finally {
       setBusy(null);
     }
@@ -160,7 +203,7 @@ export function ReplyForm({
       </div>
       {error ? (
         <p className="reply-form__error" role="alert">
-          {error}
+          <WriteError messageKey={error} discards />
         </p>
       ) : null}
       {saved ? (
@@ -250,7 +293,7 @@ export function ComposerSheet({
   const recipients = parseRecipients(to);
   const valid = recipients !== null && subject.trim() !== "" && body.trim() !== "";
   const [rewriting, setRewriting] = useState<string | null>(null);
-  const [rewriteError, setRewriteError] = useState<string | null>(null);
+  const [rewriteError, setRewriteError] = useState<MessageKey | null>(null);
   const rewrite = async (tone: (typeof TONES)[number]) => {
     if (mode?.kind !== "reply") return;
     setRewriting(tone.key);
@@ -259,7 +302,7 @@ export function ComposerSheet({
       const draft = await getServices().ep.compose.replyDraft(mode.emailId, tone.intent);
       setBody(draft.body);
     } catch (err) {
-      setRewriteError(t(draftErrorKey(err)));
+      setRewriteError(draftErrorKey(err));
     } finally {
       setRewriting(null);
     }
@@ -392,7 +435,7 @@ export function ComposerSheet({
         ) : null}
         {rewriteError ? (
           <p className="reply-form__error" role="alert">
-            {rewriteError}
+            <WriteError messageKey={rewriteError} discards />
           </p>
         ) : null}
         {touched && recipients === null ? (
@@ -453,24 +496,8 @@ export function ConfirmSendSheet({
       onSent(mail);
     } catch (err) {
       hapticWarning();
-      // 502 = the provider could not say whether it went out: never invite a blind retry.
-      const status = isApiError(err) ? err.status : null;
-      const unknown = status === 502;
-      setState({
-        kind: "failed",
-        unknown,
-        message: unknown
-          ? "reader.send.unknown"
-          : isApiError(err) && err.isOffline
-            ? "reader.send.offline"
-            : status === 403
-              ? "reader.draft.notEntitled"
-              : status === 501 && mail.kind === "new"
-                ? "reader.send.unsupportedAccount"
-                : status === 404 && mail.kind === "new" && sendAccountId(mail.from)
-                  ? "reader.send.accountGone"
-                  : "reader.send.failed",
-      });
+      const failure = sendFailure(err, { kind: mail.kind, accountId: sendAccountId(mail.from) });
+      setState({ kind: "failed", ...failure });
     } finally {
       sending.current = false;
     }
@@ -499,7 +526,7 @@ export function ConfirmSendSheet({
           <>
             {state.kind === "failed" ? (
               <p className="reply-form__error" role="alert">
-                {t(state.message)}
+                <WriteError messageKey={state.message} discards />
               </p>
             ) : null}
             <button

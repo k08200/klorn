@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ApiError } from "../../api/client";
 import { mockWeekEvents } from "../../api/mock/fixtures-hub";
 import {
   addDays,
@@ -17,6 +18,7 @@ import {
   nowLineIndex,
   overlapOf,
   parseAttendees,
+  saveStateAfterFailure,
   slotLabel,
   weekOf,
   weekRange,
@@ -174,5 +176,22 @@ describe("new event draft", () => {
       end: "11:00",
       attendees: "a@x.io",
     });
+  });
+});
+
+describe("saveStateAfterFailure", () => {
+  const http = (status: number, code: string | null = null) =>
+    new ApiError("http", status, `HTTP ${status}`, null, code);
+
+  it("shows the plans prompt only for the entitlement refusal", () => {
+    expect(saveStateAfterFailure(http(403, "ENTITLEMENT_REQUIRED"))).toBe("paywalled");
+  });
+
+  it("shows the plain error for every other failure", () => {
+    expect(saveStateAfterFailure(http(403))).toBe("error"); // "Forbidden": not your event
+    expect(saveStateAfterFailure(http(402))).toBe("error");
+    expect(saveStateAfterFailure(http(500))).toBe("error");
+    expect(saveStateAfterFailure(new ApiError("network", 0, "offline", null))).toBe("error");
+    expect(saveStateAfterFailure(new Error("boom"))).toBe("error");
   });
 });

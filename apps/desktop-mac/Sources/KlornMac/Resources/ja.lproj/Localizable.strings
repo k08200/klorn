@@ -780,3 +780,13 @@
 "tool.label.execute_skill" = "スキルを実行";
 "tool.label.classify_emails" = "メールをレーンに分類";
 "tool.label.unknown" = "アクション";
+
+/* FREE plan refusals: the upgrade link-out and the assistant's daily allowance (2026-10-30) */
+"plan.upgrade" = "Proにアップグレード";
+"plan.upgrade.a11yHint" = "ブラウザで請求ページを開きます。";
+"proposals.needsPro" = "承認と却下にはKlorn Proが必要です。";
+"chat.cap.free" = "本日の無料AI利用枠を使い切りました。00:00 UTCにリセットされます。";
+"chat.cap.daily" = "本日のAI利用枠を使い切りました。00:00 UTCにリセットされます。";
+"chat.send.failed" = "Klornに接続できませんでした — %@";
+"chat.event.failed" = "予定を作成できませんでした — %@";
+"commitments.needsPro" = "約束の管理にはKlorn Proが必要です。";
