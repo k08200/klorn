@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../../components/auth-guard";
+import { ProFeatureNotice } from "../../../components/pro-feature-notice";
+import ErrorAlert from "../../../components/ui/error-alert";
 import { apiFetch } from "../../../lib/api";
+import { isEntitlementRefusal } from "../../../lib/entitlement";
 import { useT } from "../../../lib/i18n";
 import { safeMeetingHref } from "../../../lib/meeting-link";
 import { captureClientError } from "../../../lib/sentry";
@@ -229,6 +232,8 @@ function CalendarEventDetail({ id }: { id: string }) {
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Deleting is Pro: "pro" shows the upgrade notice, "failed" a plain error.
+  const [deleteError, setDeleteError] = useState<"pro" | "failed" | null>(null);
 
   const load = useCallback(() => {
     Promise.all([
@@ -252,11 +257,17 @@ function CalendarEventDetail({ id }: { id: string }) {
 
   const handleDelete = async () => {
     setDeleting(true);
+    setDeleteError(null);
     try {
       await apiFetch(`/api/calendar/${id}`, { method: "DELETE" });
       router.push("/calendar");
     } catch (err) {
-      captureClientError(err, { scope: "calendar-detail.delete" });
+      if (isEntitlementRefusal(err)) {
+        setDeleteError("pro");
+      } else {
+        captureClientError(err, { scope: "calendar-detail.delete" });
+        setDeleteError("failed");
+      }
       setDeleting(false);
       setConfirmDelete(false);
     }
@@ -376,6 +387,11 @@ function CalendarEventDetail({ id }: { id: string }) {
               )}
             </div>
           </div>
+
+          {deleteError === "pro" && <ProFeatureNotice className="mt-3" />}
+          {deleteError === "failed" && (
+            <ErrorAlert className="mt-3">{t("calendar.error.delete")}</ErrorAlert>
+          )}
 
           {event.description && (
             <p className="mt-4 whitespace-pre-wrap rounded-lg border border-line bg-surface-raised p-3 text-label font-normal leading-6 text-ink-mid">

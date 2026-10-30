@@ -23,12 +23,13 @@ import type {
 } from "@klorn/contract";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useConfirm } from "../../components/confirm-dialog";
-import { isEntitlementRefusal } from "../../components/mail-account-pro-gate";
+import { ProFeatureNotice } from "../../components/pro-feature-notice";
 import { useToast } from "../../components/toast";
 import Button from "../../components/ui/button";
 import { apiFetch, startLinkGoogleDrive } from "../../lib/api";
+import { isEntitlementRefusal } from "../../lib/entitlement";
 import { FILES_HOME } from "../../lib/home";
 import { useT } from "../../lib/i18n";
 import { queryKeys } from "../../lib/query-keys";
@@ -126,9 +127,6 @@ async function pickAndIndex(
 }
 
 function pickErrorKey(err: unknown): string {
-  if (isEntitlementRefusal(err instanceof Error ? err.message : "")) {
-    return "mailAccount.proGate.title";
-  }
   if (isApiStatus(err, 409)) return "files.google.pick.reconnect";
   if (isApiStatus(err, 503)) return "files.google.pick.notConfigured";
   return "files.google.pick.error";
@@ -141,13 +139,15 @@ export function GoogleDriveConnect() {
   const queryClient = useQueryClient();
   const accounts = useGoogleDriveAccounts();
   useLinkOutcome();
+  // Linking Drive and picking files are Pro: a FREE user's 403 shows the notice.
+  const [proGated, setProGated] = useState(false);
 
   // A mutation, so a double click cannot start two consents.
   const connect = useMutation({
     mutationFn: () => startLinkGoogleDrive(),
     onError: (err) => {
-      if (isEntitlementRefusal(err instanceof Error ? err.message : "")) {
-        toast(t("mailAccount.proGate.title"), "error");
+      if (isEntitlementRefusal(err)) {
+        setProGated(true);
         return;
       }
       captureClientError(err, { scope: "files.google.connect" });
@@ -182,6 +182,10 @@ export function GoogleDriveConnect() {
       if (capped > 0) toast(t("files.google.pick.cap", { count: String(capped) }), "info");
     },
     onError: (err) => {
+      if (isEntitlementRefusal(err)) {
+        setProGated(true);
+        return;
+      }
       captureClientError(err, { scope: "files.google.pick" });
       toast(t(pickErrorKey(err)), "error");
     },
@@ -221,6 +225,7 @@ export function GoogleDriveConnect() {
           {t("files.google.connect")}
         </Button>
       </div>
+      {proGated && <ProFeatureNotice messageKey="proFeature.drive" />}
       {list.length > 0 && (
         <ul className="flex flex-col divide-y divide-line-soft">
           {list.map((account) => (

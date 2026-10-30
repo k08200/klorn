@@ -2,11 +2,13 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { apiFetch, startLinkCalendar } from "../lib/api";
+import { isEntitlementRefusal } from "../lib/entitlement";
 import { useT } from "../lib/i18n";
 import { queryKeys } from "../lib/query-keys";
 import { captureClientError } from "../lib/sentry";
+import { ProFeatureNotice } from "./pro-feature-notice";
 import { useToast } from "./toast";
 import Button from "./ui/button";
 
@@ -32,20 +34,25 @@ export function LinkedCalendars() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const { data: accounts = [] } = useQuery({
+  const { data: listing } = useQuery({
     queryKey: queryKeys.calendar.linkedAccounts(),
-    queryFn: async () => {
+    queryFn: async (): Promise<{ accounts: LinkedAccount[]; proGated: boolean }> => {
       try {
         const res = await apiFetch<{ accounts: LinkedAccount[] }>(
           "/api/auth/google/linked-calendars",
         );
-        return res.accounts ?? [];
-      } catch {
-        // 403 (not entitled) or not connected — show the connect prompt, no list.
-        return [] as LinkedAccount[];
+        return { accounts: res.accounts ?? [], proGated: false };
+      } catch (err) {
+        // 403 ENTITLEMENT_REQUIRED: linked calendars are Pro — say so with the
+        // upgrade link. Anything else (not connected, transient): the connect prompt.
+        return { accounts: [], proGated: isEntitlementRefusal(err) };
       }
     },
   });
+  const accounts = listing?.accounts ?? [];
+  // The connect itself refused (e.g. `entitled` changed since the list loaded).
+  const [connectRefused, setConnectRefused] = useState(false);
+  const proGated = (listing?.proGated ?? false) || connectRefused;
 
   // Toast the OAuth redirect result (?linked=success|failed|unverified) once,
   // then strip the param so a refresh doesn't re-toast.
@@ -81,8 +88,12 @@ export function LinkedCalendars() {
   const connect = useMutation({
     mutationFn: () => startLinkCalendar(),
     onError: (err) => {
+      if (isEntitlementRefusal(err)) {
+        setConnectRefused(true);
+        return;
+      }
       captureClientError(err, { scope: "calendar.linked.connect" });
-      toast(t("linkedCalendars.toast.needsPro"), "error");
+      toast(t("linkedCalendars.toast.connectFailed"), "error");
     },
   });
 
@@ -131,15 +142,19 @@ export function LinkedCalendars() {
         </ul>
       )}
 
-      {/* Outlined (W8): "New event" is the page's one filled primary. */}
-      <Button
-        variant="secondary"
-        onClick={() => connect.mutate()}
-        loading={connect.isPending}
-        className="mt-3"
-      >
-        {t("linkedCalendars.connect")}
-      </Button>
+      {proGated ? (
+        <ProFeatureNotice messageKey="linkedCalendars.toast.needsPro" className="mt-3" />
+      ) : (
+        // Outlined (W8): "New event" is the page's one filled primary.
+        <Button
+          variant="secondary"
+          onClick={() => connect.mutate()}
+          loading={connect.isPending}
+          className="mt-3"
+        >
+          {t("linkedCalendars.connect")}
+        </Button>
+      )}
     </section>
   );
 }

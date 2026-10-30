@@ -20,6 +20,7 @@ import { useT } from "../../lib/i18n";
 import { startNativeGoogleLogin } from "../../lib/native/native-auth";
 import { isNativeShell } from "../../lib/native/shell";
 import { providerLane } from "../../lib/provider-lane";
+import { loginNextPath } from "../../lib/safe-path";
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -48,7 +49,9 @@ function LoginForm() {
   const { t } = useT();
   const { toast } = useToast();
   const router = useRouter();
-  const nextPath = safeNextPath(searchParams.get("next"));
+  // Strict same-origin path (lib/safe-path.ts): "/\evil.com" or "/<tab>/evil.com"
+  // would otherwise resolve to another host after sign-in.
+  const nextPath = loginNextPath(searchParams.get("next"));
   // Whether the visitor was sent here from a page they should return to.
   const hasNext = searchParams.get("next") !== null;
 
@@ -432,13 +435,6 @@ function socialErrorMessage(error: string, t: (key: string) => string): string |
     default:
       return t("auth.socialSignInError");
   }
-}
-
-function safeNextPath(value: string | null): string {
-  if (!value) return "/inbox";
-  if (!value.startsWith("/") || value.startsWith("//")) return "/inbox";
-  if (value.startsWith("/login")) return "/inbox";
-  return value;
 }
 
 function returnDestinationLabel(path: string, t: (key: string) => string): string {
