@@ -816,7 +816,7 @@ const en: Record<string, string> = {
   "chat.suggestion1": "Summarize my unread mail",
   "chat.suggestion2": "Find the last email from my boss",
   "chat.suggestion3": "What's on my calendar tomorrow?",
-  "chat.suggestion4": "내일 3시 김대표 미팅 잡아줘",
+  "chat.suggestion4": "Schedule a meeting with Director Kim tomorrow at 3 pm",
   "chat.emptyState":
     "Ask about your mail, calendar, or briefing — or speak with the mic. I work only on your Klorn data.",
   "chat.loadingConversation": "Loading conversation…",

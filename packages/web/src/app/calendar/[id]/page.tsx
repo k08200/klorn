@@ -125,11 +125,17 @@ function avatarGradient(name: string): string {
 
 // `timeZone` is the user's stored IANA zone — never rely on the browser
 // default. 24-hour format keeps AM/PM ambiguity out of the rendered range.
-function formatRange(start: string, end: string, allDay: boolean, timeZone: string): string {
+function formatRange(
+  start: string,
+  end: string,
+  allDay: boolean,
+  timeZone: string,
+  locale: string,
+): string {
   const s = new Date(start);
   const e = new Date(end);
   if (allDay) {
-    return s.toLocaleDateString("en-US", {
+    return s.toLocaleDateString(locale, {
       weekday: "long",
       month: "long",
       day: "numeric",
@@ -139,19 +145,19 @@ function formatRange(start: string, end: string, allDay: boolean, timeZone: stri
   }
   const sameLocalDay =
     s.toLocaleDateString("en-CA", { timeZone }) === e.toLocaleDateString("en-CA", { timeZone });
-  const dateStr = s.toLocaleDateString("en-US", {
+  const dateStr = s.toLocaleDateString(locale, {
     weekday: "long",
     month: "long",
     day: "numeric",
     timeZone,
   });
-  const startTime = s.toLocaleTimeString("en-US", {
+  const startTime = s.toLocaleTimeString(locale, {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
     timeZone,
   });
-  const endTime = e.toLocaleTimeString("en-US", {
+  const endTime = e.toLocaleTimeString(locale, {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
@@ -161,7 +167,7 @@ function formatRange(start: string, end: string, allDay: boolean, timeZone: stri
     return `${dateStr} · ${startTime} – ${endTime}`;
   }
   const longRange = (d: Date) =>
-    d.toLocaleString("en-US", {
+    d.toLocaleString(locale, {
       month: "short",
       day: "numeric",
       hour: "2-digit",
@@ -215,7 +221,7 @@ function MeetingLinkLine({ link }: { link: string }) {
 
 function CalendarEventDetail({ id }: { id: string }) {
   const router = useRouter();
-  const { t } = useT();
+  const { t, locale } = useT();
   const userTimezone = useDisplayTimeZone();
   const [event, setEvent] = useState<CalendarEvent | null>(null);
   const [pack, setPack] = useState<PrepPack | null>(null);
@@ -310,7 +316,7 @@ function CalendarEventDetail({ id }: { id: string }) {
             <div className="min-w-0 flex-1">
               <h1 className="break-words text-xl font-semibold text-ink">{event.title}</h1>
               <p className="mt-1 text-label font-normal text-ink-mid">
-                {formatRange(event.startTime, event.endTime, event.allDay, userTimezone)}
+                {formatRange(event.startTime, event.endTime, event.allDay, userTimezone, locale)}
               </p>
               {event.location && (
                 <p className="mt-1 break-words text-caption text-ink-dim">📍 {event.location}</p>

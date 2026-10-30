@@ -65,7 +65,7 @@ What falls out of that split:
   | `anthropic/claude-opus-4.8` | 2 | 50 · 49 | 87.5–89.3 | 9 · 8 | **0/2** | $5.00 |
   | `anthropic/claude-sonnet-5` | 2 | 48 · 45 | 80.4–85.7 | 7 · 5 | **0/2** | $2.00 |
 
-  \* two grok-4.6 runs were lost to upstream timeouts of over 90 minutes and are reported as lost, not averaged in. Read this as **tiers, not ranks**: the four models at 98.2 are a tie — one email on 56 items is not a gap — while the top (gpt-5.4, 56/56 every run) and the failing tier (both Anthropic models, below the urgent-recall floor every run) are stable across runs. The $5.00 model never passes the gate; the $0.20 model reaches the top tier. The default pin stays `gemini-2.5-flash` because 54/56 three times at $0.30 is the stability a per-email judge needs, not because 96.4 is the best number in the table. Gate floors: overall ≥80%, urgent recall ≥90%, silenced precision ≥90% ([`eval-floors.ts`](packages/api/src/eval-floors.ts)). Run it yourself: `JUDGE_MODEL=<id> pnpm eval:judge`.
+  \* two grok-4.6 runs were lost to upstream timeouts of over 90 minutes and are reported as lost, not averaged in. Read this as **tiers, not ranks**: the four models at 98.2 are a tie — one email on 56 items is not a gap — while the top (gpt-5.4, 56/56 every run) and the failing tier (both Anthropic models, below the urgent-recall floor every run) are stable across runs. The $5.00 model never passes the gate; the $0.20 model reaches the top tier. The default pin stays `gemini-2.5-flash` because 54/56 three times at $0.30 is the stability a per-email judge needs, not because 96.4 is the best number in the table. Gate floors: overall ≥80%, urgent recall ≥90%, silenced precision ≥90% ([`eval-floors.ts`](packages/api/src/eval-floors.ts)). Run it yourself: `JUDGE_MODEL=<id> pnpm --filter @klorn/api eval:judge`.
 - **A failing model tells you *why* it failed.** Of the eight urgent emails `claude-sonnet-5` missed, seven failed the `confidence` threshold rather than the `urgency` one — it scored urgency 0.80–1.00 (correct) against confidence 0.55–0.60, under the 0.70 bar both must clear in [`tier-policy.ts`](packages/api/src/judge/tier-policy.ts). It read the mail correctly and then declined to say it was sure. That diagnosis is only available because the threshold is a number in a file you can open; where the model picks the tier directly, the same result reads as "this one is worse at email" and there is nothing to do about it.
 - **Measured on real mail, not just synthetic — and that set's labels have gone stale.** A second committed set ([`eval/real-eval-set.json`](packages/api/eval/real-eval-set.json)) holds 53 real, hand-labeled, PII-scrubbed emails with per-sender context snapshots from the production learning loop. Re-measured 2026-08-26 on the default pin: **46/53 (86.8%) overall, 95.5% precision on silenced mail** (3 runs, identical every time). This README previously claimed 94.3% here, and the arithmetic of the gap is worth being precise about: **4 of the 7 misses are `QUEUE` → `INFO`**, and `INFO` did not exist as a lane when the set was labelled — the label vocabulary cannot express it, so those items are scored wrong by construction. 46 + 4 = 50 = exactly the old 94.3%. So the drop is an ontology change, not a quality regression; but the honest number today is the one that reproduces, and 94.3% no longer does. Two of those four (a Google application confirmation, a Reddit digest) look like textbook `INFO`; the two GitHub address-verification items are genuinely arguable, since a verification link is an action. The other three misses are real: one `QUEUE` → `SILENT`, one `QUEUE` → `PUSH`, one `PUSH` → `QUEUE`. **The set needs re-labelling against the five-lane ontology before any headline number from it is quotable.** (Standing caveats: one inbox's ground truth so far, and the urgent lane has only 4 labelled samples, so its floor stays report-only until support grows. Full measurement history: [`eval/README.md`](packages/api/eval/README.md).)
 - **The floor held through every one of them.** Across all 23 clean runs of the ten models above — a 15–20-point accuracy spread including two models that fail the gate every time — **zero** urgent emails were classified `SILENT`. Every miss degraded to `QUEUE`, where you still see it. That is what the split buys: not a better classifier, a bounded worst case.
@@ -368,8 +368,8 @@ Docker Compose ports: Web `3000`, API `3001`, PostgreSQL `5432`.
 pnpm --filter @klorn/web build
 pnpm --filter @klorn/api build
 pnpm --filter @klorn/api test
-pnpm eval:judge   # classifier vs the synthetic gate set (judge-eval-set.json)
-pnpm eval:real    # classifier vs the 53 hand-labelled real emails (86.8%; labels predate INFO/MEETING)
+pnpm --filter @klorn/api eval:judge   # classifier vs the synthetic gate set (judge-eval-set.json)
+pnpm --filter @klorn/api eval:real    # classifier vs the 53 hand-labelled real emails (86.8%; labels predate INFO/MEETING)
 packages/api/node_modules/.bin/biome check packages/
 ```
 
@@ -408,7 +408,13 @@ When touching core UX, verify at least:
 
 ## Contributing
 
-Issues and pull requests are welcome. For anything non-trivial, open an issue first to discuss the approach. Run `pnpm -r test` and `biome check packages/` before submitting. This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md).
+Issues and pull requests are welcome. Start with **[CONTRIBUTING.md](CONTRIBUTING.md)**: it covers local setup without a Google account, the checks CI runs, and the PR format.
+
+- Newcomer-sized work: [`good first issue`](https://github.com/k08200/klorn/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22)
+- Bigger pieces: [`help wanted`](https://github.com/k08200/klorn/issues?q=is%3Aopen+is%3Aissue+label%3A%22help+wanted%22)
+- Questions: [Discussions → Q&A](https://github.com/k08200/klorn/discussions/categories/q-a)
+
+For anything non-trivial, open an issue first to discuss the approach. This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Security
 

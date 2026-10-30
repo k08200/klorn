@@ -301,7 +301,7 @@ function CalendarView() {
                   {nextEvent.title || t("common.untitled")}
                 </span>{" "}
                 <span className="mx-0.5 text-slate-300">·</span>{" "}
-                {formatTime(new Date(nextEvent.startTime), userTimezone)}
+                {formatTime(new Date(nextEvent.startTime), userTimezone, locale)}
               </>
             ) : (
               t("calendar.nothingComingUp")
@@ -542,7 +542,7 @@ function AgendaList({
                     <span className="w-14 shrink-0 pt-0.5 text-right text-xs tabular-nums text-ink-mid">
                       {ev.allDay
                         ? t("calendar.allDay")
-                        : formatTime(new Date(ev.startTime), timeZone)}
+                        : formatTime(new Date(ev.startTime), timeZone, locale)}
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium text-ink">
@@ -747,9 +747,9 @@ function EventChip({
   timeZone: string;
   dimmed: boolean;
 }) {
-  const { t } = useT();
+  const { t, locale } = useT();
   const start = new Date(event.startTime);
-  const timeLabel = event.allDay ? "" : formatTime(start, timeZone);
+  const timeLabel = event.allDay ? "" : formatTime(start, timeZone, locale);
   return (
     <Link
       href={`/calendar/${event.id}`}
@@ -780,8 +780,8 @@ function weekdayNames(locale: string): string[] {
 // dogfood pain point — "04:00 AM" in the calendar looked like 4 in the
 // morning when the underlying event was 13:00 KST). The timezone arg is
 // the user's stored IANA zone, NOT the browser default.
-function formatTime(d: Date, timeZone: string): string {
-  return d.toLocaleTimeString("en-US", {
+function formatTime(d: Date, timeZone: string, locale: string): string {
+  return d.toLocaleTimeString(locale, {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
@@ -857,18 +857,19 @@ function monthIndexInZone(d: Date, timeZone: string): number {
 
 /** Sunday-first weekday index 0..6 in the given timezone for a date. */
 function weekdayInZone(d: Date, timeZone: string): number {
-  // Intl gives short names; map Sun..Sat to 0..6.
-  const wd = new Intl.DateTimeFormat("en-US", { timeZone, weekday: "short" }).format(d);
-  const map: Record<string, number> = {
-    Sun: 0,
-    Mon: 1,
-    Tue: 2,
-    Wed: 3,
-    Thu: 4,
-    Fri: 5,
-    Sat: 6,
-  };
-  return map[wd] ?? 0;
+  // Resolve the calendar date in the user's zone, then read its weekday from
+  // the UTC clock — no locale week names to translate (and no hardcoded
+  // English abbreviations).
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(d);
+  const year = Number(parts.find((p) => p.type === "year")?.value);
+  const month = Number(parts.find((p) => p.type === "month")?.value);
+  const day = Number(parts.find((p) => p.type === "day")?.value);
+  return new Date(Date.UTC(year, month - 1, day, 12)).getUTCDay();
 }
 
 /** Build the 42-cell month grid (6 rows × 7 days) including leading/trailing
