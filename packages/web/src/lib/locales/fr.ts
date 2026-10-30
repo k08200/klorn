@@ -1035,23 +1035,24 @@ const fr: Record<string, string> = {
   "billing.toast.resumed": "Abonnement repris — la facturation continue comme avant.",
   "billing.error.resumeFailed": "Impossible de reprendre l'abonnement. Réessayez.",
   "billing.plan.free.name": "Free",
-  "billing.plan.free.limit": "50 décisions/mois · 500K jetons",
+  "billing.plan.free.limit": "Un quota IA quotidien (réinitialisé à 00:00 UTC)",
+  "billing.plan.free.feature.oneAccount":
+    "Premier compte de messagerie, quel que soit le fournisseur",
+  "billing.plan.free.feature.briefings": "Briefs quotidiens et tri du courrier",
   "billing.plan.free.feature.mailCalendar": "Lecture du courrier et de l'agenda",
   "billing.plan.free.feature.tasksMemory": "Tâches et mémoire",
-  "billing.plan.free.feature.freeModels": "Modèles OpenRouter gratuits",
   "billing.plan.pro.name": "Pro",
   "billing.plan.pro.period": "/mois",
   "billing.plan.pro.trialNote": "Essai gratuit de 7 jours · annulez avant la fin et ne payez rien",
-  "billing.plan.pro.limit": "2K décisions/mois · 10M jetons",
-  "billing.plan.pro.feature.everythingFree": "Tout ce qu'il y a dans Free",
-  "billing.plan.pro.feature.sendMail": "Envoyer du courrier et créer des événements",
-  "billing.plan.pro.feature.decisionLoop":
-    "Mode boucle de décision : proposition + exécution encadrée",
-  "billing.plan.pro.feature.briefings": "Briefs quotidiens et tri du courrier",
-  "billing.plan.pro.feature.replyDrafts": "Brouillons de réponse et apprentissage des habitudes",
+  "billing.plan.pro.limit": "Un quota IA quotidien plus élevé (réinitialisé à 00:00 UTC)",
+  "billing.plan.pro.feature.everythingFree": "Tout ce qu'il y a dans Free, plus :",
+  "billing.plan.pro.feature.sendMail":
+    "Envoyer du courrier et y répondre, avec brouillons de réponse",
+  "billing.plan.pro.feature.calendarWrites": "Créer et modifier des événements",
+  "billing.plan.pro.feature.moreAccounts": "Plus de comptes de messagerie et d'agendas",
+  "billing.plan.pro.feature.autoReply": "Le mode Automatique répond pour vous au courrier courant",
+  "billing.plan.pro.feature.byok": "Votre propre clé de modèle",
   "billing.plan.pro.feature.integrations": "Intégrations Slack et Notion (bientôt)",
-  "billing.plan.pro.feature.webResearch": "Recherche web et brouillons de documents",
-  "billing.plan.pro.feature.sonnet": "Choix du modèle Claude Sonnet",
   "billing.plan.enterprise.name": "Enterprise",
   "billing.plan.enterprise.price": "Sur mesure",
   "billing.plan.enterprise.limit": "Illimité",
@@ -1065,7 +1066,7 @@ const fr: Record<string, string> = {
     "Démarrer Pro coûte 0 aujourd'hui et débloque tout Pro immédiatement. Le premier prélèvement de {price} a lieu à la fin des 7 jours d'essai. Annulez avant depuis « Gérer l'abonnement » et vous ne payez rien.",
   "billing.faq.freeVsPro.q": "Quelle est la différence entre Free et Pro ?",
   "billing.faq.freeVsPro.a":
-    "Free lit et organise : Klorn surveille le courrier et l'agenda et les transforme en cartes de décision, dans la limite de 50 décisions et 500K jetons par mois sur des modèles gratuits. Pro exécute : envoi de courrier, création d'événements, brouillons de réponse, briefs quotidiens et la proposition + exécution encadrée de la boucle de décision — avec 2K décisions et 10M jetons par mois et le choix du modèle Claude Sonnet.",
+    "Free lit et organise : Klorn trie le courrier de votre premier compte de messagerie, quel que soit le fournisseur, rédige le brief quotidien, lit votre agenda et répond dans l'assistant, dans la limite d'un quota IA quotidien réinitialisé à 00:00 UTC. Pro exécute : envoi de courrier et réponses avec brouillons, création et modification d'événements, plus de comptes de messagerie et d'agendas, réponses automatiques en mode Automatique, intégrations Slack et Notion à mesure qu'elles arrivent, votre propre clé de modèle et un quota IA quotidien plus élevé.",
   "billing.faq.enterprise.q": "Qu'apporte Enterprise ?",
   "billing.faq.enterprise.a":
     "Des limites sur mesure au lieu de quotas fixes, le choix du modèle Claude Opus, des options de déploiement on-premise, un support avec SLA et des intégrations sur mesure. Le prix dépend du périmètre — contactez le service commercial.",
@@ -1521,6 +1522,10 @@ const fr: Record<string, string> = {
     "pièce jointe n'a pas pu être analysée — essayez avec votre propre clé",
   "candidates.qualityIssues.manyFailed":
     "pièces jointes n'ont pas pu être analysées — essayez avec votre propre clé",
+  "candidates.qualityIssues.oneFailedFree":
+    "pièce jointe n'a pas pu être analysée — votre propre clé de modèle est disponible avec Pro",
+  "candidates.qualityIssues.manyFailedFree":
+    "pièces jointes n'ont pas pu être analysées — votre propre clé de modèle est disponible avec Pro",
   "candidates.qualityIssues.hide": "Masquer",
   "candidates.qualityIssues.details": "Détails",
   "candidates.filterStatusLabel": "État",
@@ -1742,6 +1747,13 @@ const fr: Record<string, string> = {
   "mailAccount.proGate.body":
     "Free inclut un compte de messagerie (Gmail, iCloud Mail ou Naver Mail). Passez à Pro pour étendre le pare-feu à plusieurs comptes.",
   "mailAccount.proGate.upgrade": "Passer à Pro",
+  "proFeature.title": "C'est une fonctionnalité Pro.",
+  "proFeature.upgrade": "Passer à Pro",
+  "proFeature.byok": "Votre propre clé de modèle est disponible avec Pro.",
+  "proFeature.drive": "Connecter Google Drive est une fonctionnalité Pro.",
+  "dailyCap.free":
+    "Vous avez utilisé votre quota IA gratuit du jour. Il se réinitialise à 00:00 UTC.",
+  "dailyCap.paid": "Vous avez utilisé votre quota IA du jour. Il se réinitialise à 00:00 UTC.",
   "imapConnect.firstSync.started":
     "Récupération de vos e-mails en cours. Ils apparaîtront bientôt dans Mail.",
   "imapConnect.firstSync.delayed":
@@ -2147,6 +2159,8 @@ const fr: Record<string, string> = {
   "byok.title": "Utilisez votre propre clé LLM",
   "byok.body":
     "Par défaut, votre courrier est classé avec la clé partagée de Klorn. Ajoutez votre propre clé de fournisseur et Klorn utilisera votre clé et votre quota pour votre courrier — pratique si le budget partagé est saturé. Les clés sont stockées chiffrées (AES-GCM) ; nous ne journalisons jamais le texte en clair.",
+  "byok.bodyFree":
+    "Votre courrier est classé avec la clé partagée de Klorn, dans la limite de votre quota IA quotidien.",
   "byok.activeModel": "Modèle actif :",
   "byok.usingYourKey": "Votre clé est utilisée",
   "byok.stored": "•••••••• enregistrée",
@@ -2159,6 +2173,8 @@ const fr: Record<string, string> = {
   "byok.assistantModel": "Modèle de l'assistant",
   "byok.assistantModelHelp":
     "Modèles de pointe uniquement — c'est le modèle avec lequel votre assistant Klorn s'exprime. Il travaille sur votre courrier, votre agenda et vos tâches, et ne fait jamais de recherche sur le web. Il fonctionne dans votre quota IA quotidien ; ajoutez votre propre clé ci-dessus pour utiliser votre quota. Le classificateur du pare-feu de messagerie est réglé séparément et n'est pas affecté.",
+  "byok.assistantModelHelpFree":
+    "Modèles de pointe uniquement — c'est le modèle avec lequel votre assistant Klorn s'exprime. Il travaille sur votre courrier, votre agenda et vos tâches, et ne fait jamais de recherche sur le web. Il fonctionne dans votre quota IA quotidien. Le classificateur du pare-feu de messagerie est réglé séparément et n'est pas affecté.",
   "byok.error.status": "Impossible de charger l'état de votre clé LLM.",
   "byok.error.update": "Impossible de mettre à jour la clé.",
   "byok.error.model": "Impossible de changer de modèle.",
@@ -2178,13 +2194,10 @@ const fr: Record<string, string> = {
   "subscription.toast.unavailable": "Les abonnements ne sont pas disponibles pour le moment.",
   "subscription.toast.purchaseFailed": "Impossible de finaliser l'achat. Veuillez réessayer.",
   "subscription.toast.noPurchase": "Aucun achat précédent trouvé.",
-  "paywall.foundingPrice": "Prix fondateur",
   "paywall.title": "Commencez votre essai gratuit de 7 jours",
   "paywall.body":
     "Klorn Pro est votre pare-feu e-mail IA — il trie ce qui vous parvient, et rien ne part sans votre accord.",
   "paywall.startTrial": "Commencer l'essai gratuit",
-  "paywall.trialTerms":
-    "7 jours gratuits, puis {price}/mois — tarif garanti pour les premiers membres. Résiliable à tout moment.",
   "paywall.refunds": "Remboursements",
   "paywall.valueProp.interrupt": "N'être interrompu que par le courrier qui compte vraiment",
   "paywall.valueProp.noise":
@@ -2330,6 +2343,7 @@ const fr: Record<string, string> = {
     "Google est connecté. Un agenda vide reste vide dans le point du jour.",
   "calendar.error.load": "Impossible de charger les événements de l'agenda.",
   "calendar.error.sync": "Impossible de synchroniser Google Agenda.",
+  "calendar.error.delete": "Impossible de supprimer l'événement.",
   "calendar.sync.imported": "{count} événements importés depuis Google Agenda.",
   "calendar.sync.empty":
     "Google Agenda est synchronisé. Aucun événement dans les 14 prochains jours.",

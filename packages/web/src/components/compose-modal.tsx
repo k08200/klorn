@@ -2,9 +2,11 @@
 
 import { type ChangeEvent, useCallback, useEffect, useId, useRef, useState } from "react";
 import { API_BASE, getStoredAuthToken } from "../lib/api";
+import { isEntitlementResponse } from "../lib/entitlement";
 import { useT } from "../lib/i18n";
 import { captureClientError } from "../lib/sentry";
 import { useConfirm } from "./confirm-dialog";
+import { ProFeatureNotice } from "./pro-feature-notice";
 import { useToast } from "./toast";
 import ErrorAlert from "./ui/error-alert";
 
@@ -37,6 +39,8 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Sending is Pro: a FREE user's 403 ENTITLEMENT_REQUIRED shows the upgrade notice.
+  const [proGated, setProGated] = useState(false);
   const toInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -160,6 +164,7 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
 
     setSending(true);
     setError(null);
+    setProGated(false);
     try {
       const form = new FormData();
       form.append("to", to.trim());
@@ -178,6 +183,12 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
 
       if (!res.ok) {
         const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+        // Expected for a FREE user, not a fault: no Sentry event.
+        if (isEntitlementResponse(res.status, payload)) {
+          setProGated(true);
+          setSending(false);
+          return;
+        }
         const message =
           (payload && typeof payload.error === "string" && payload.error) ||
           t("compose.error.sendFailed", { status: String(res.status) });
@@ -319,6 +330,7 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
             </p>
           )}
           {error && <ErrorAlert>{error}</ErrorAlert>}
+          {proGated && <ProFeatureNotice />}
         </div>
 
         <div className="flex items-center justify-between gap-3 border-t border-line-soft px-5 py-4">

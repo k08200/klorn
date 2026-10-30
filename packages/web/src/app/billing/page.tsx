@@ -127,10 +127,12 @@ const PLANS: PlanDef[] = [
     periodKey: null,
     limitKey: "billing.plan.free.limit",
     trialNoteKey: null,
+    // What FREE keeps with the paywall on (api billing/stripe.ts FREE_TASTER).
     featureKeys: [
+      "billing.plan.free.feature.oneAccount",
+      "billing.plan.free.feature.briefings",
       "billing.plan.free.feature.mailCalendar",
       "billing.plan.free.feature.tasksMemory",
-      "billing.plan.free.feature.freeModels",
     ],
   },
   {
@@ -144,15 +146,17 @@ const PLANS: PlanDef[] = [
     // 2026-08-13) — keep this line in sync with the Paddle dashboard.
     trialNoteKey: "billing.plan.pro.trialNote",
     limitKey: "billing.plan.pro.limit",
+    // Only what Pro adds over FREE (api billing/stripe.ts PLAN_FEATURES.PRO
+    // minus FREE_TASTER; BYOK is isEntitled-gated). The higher daily AI
+    // allowance is the limit line above.
     featureKeys: [
       "billing.plan.pro.feature.everythingFree",
       "billing.plan.pro.feature.sendMail",
-      "billing.plan.pro.feature.decisionLoop",
-      "billing.plan.pro.feature.briefings",
-      "billing.plan.pro.feature.replyDrafts",
+      "billing.plan.pro.feature.calendarWrites",
+      "billing.plan.pro.feature.moreAccounts",
+      "billing.plan.pro.feature.autoReply",
       "billing.plan.pro.feature.integrations",
-      "billing.plan.pro.feature.webResearch",
-      "billing.plan.pro.feature.sonnet",
+      "billing.plan.pro.feature.byok",
     ],
   },
   {
