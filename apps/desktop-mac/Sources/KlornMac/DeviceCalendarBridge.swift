@@ -85,6 +85,10 @@ final class DeviceCalendarBridge {
     private(set) var calendars: [DeviceCalendarItem] = []
     private(set) var lastError: String?
     private(set) var isBusy = false
+    /// The server refused an upload for the plan (403). Retrying in the
+    /// background cannot succeed, so passes send nothing until the user acts:
+    /// opens Settings, flips a switch, or signs in again.
+    private(set) var planRefused = false
 
     var uploadEnabled: Bool { optIn.uploadEnabled }
     var enabledIds: Set<String> { optIn.calendarIds }
@@ -143,9 +147,17 @@ final class DeviceCalendarBridge {
     }
 
     /// Re-asked each time Preferences opens, so a server flip shows or hides the
-    /// section without a relaunch.
+    /// section without a relaunch. After a plan refusal it also sends one pass
+    /// at once: a plan bought on the web since clears the notice now, not at
+    /// the next 15-minute tick.
     func refreshAvailability() async {
+        let wasRefused = planRefused
+        if wasRefused {
+            planRefused = false
+            lastError = nil
+        }
         await enqueue { [weak self] in await self?.launch() }.value
+        if wasRefused { await runPass() }
     }
 
     /// Wait until every queued job ran (self-check).
@@ -212,6 +224,7 @@ final class DeviceCalendarBridge {
         calendars = []
         lastSent = [:]
         lastError = nil
+        planRefused = false
         store = nil
         guard let user, let token, !optIn.pending(for: user).isEmpty else { return }
         var client = api
@@ -225,6 +238,7 @@ final class DeviceCalendarBridge {
     /// list the calendars, all off. Off: every uploaded calendar is deleted.
     func setUploadEnabled(_ on: Bool) async {
         lastError = nil
+        planRefused = false
         guard on else {
             let enabledKeys = Set(optIn.calendarIds.map(sourceKey(for:)))
             commit(optIn.switchedOff(user: currentUser(), enabledKeys: enabledKeys))
@@ -249,6 +263,7 @@ final class DeviceCalendarBridge {
     /// this deletes a source: a calendar missing from this Mac merely pauses.
     func setCalendar(_ id: String, enabled: Bool) async {
         lastError = nil
+        planRefused = false
         let key = sourceKey(for: id)
         lastSent[id] = nil
         commit(enabled
@@ -349,7 +364,7 @@ final class DeviceCalendarBridge {
     }
 
     private func uploadEnabledCalendars() async {
-        guard availability == .available, uploadEnabled, access == .granted,
+        guard availability == .available, uploadEnabled, access == .granted, !planRefused,
               let reader = store, let user = currentUser() else { return }
         let untitled = L("deviceCalendars.untitled")
         for id in optIn.calendarIds.sorted() {
@@ -397,6 +412,7 @@ final class DeviceCalendarBridge {
             return false
         case APIError.forbidden:
             lastError = L("error.needsPro")
+            planRefused = true
             return false
         case APIError.http(409, let code):
             lastError = L(Self.conflictErrorKey(serverCode: code))
