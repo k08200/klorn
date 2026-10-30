@@ -164,14 +164,7 @@ vi.mock("../db.js", () => {
           return { count };
         },
       ),
-      count: vi.fn(async ({ where }: { where?: { betaProGrantedAt?: { not: null } } } = {}) => {
-        if (where?.betaProGrantedAt?.not === null) {
-          let n = 0;
-          for (const u of userStore.values()) if (u.betaProGrantedAt) n += 1;
-          return n;
-        }
-        return userStore.size;
-      }),
+      count: vi.fn(async () => userStore.size),
     },
     userToken: { findFirst: vi.fn(async () => null) },
     // /me's hasAnyMailSource counts linked/IMAP inboxes alongside the Google
