@@ -789,3 +789,4 @@
 "chat.cap.daily" = "Has usado tu cupo de IA de hoy. Se restablece a las 00:00 UTC.";
 "chat.send.failed" = "No se pudo conectar con Klorn: %@";
 "chat.event.failed" = "No se pudo crear el evento: %@";
+"commitments.needsPro" = "Los compromisos requieren Klorn Pro.";

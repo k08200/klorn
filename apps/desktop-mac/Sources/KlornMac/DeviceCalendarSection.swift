@@ -24,7 +24,7 @@ struct DeviceCalendarSection: View {
             if let error = bridge.lastError {
                 Text(error).font(.caption).foregroundStyle(Theme.textDim)
                     .fixedSize(horizontal: false, vertical: true)
-                if PlanUpgrade.offersUpgrade(for: error) { UpgradeToProLink() }
+                if bridge.planRefused { UpgradeToProLink() }
             }
         }
     }

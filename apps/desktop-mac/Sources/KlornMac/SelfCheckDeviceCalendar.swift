@@ -623,12 +623,12 @@ enum DeviceCalendarScenarios {
                         && overRows.lastError != L("deviceCalendars.error.limit")))
 
         // 4e. A plan refusal (403) reads as needs-Pro and stops the background
-        // passes for the session; opening Settings or a switch tries once more.
+        // passes for the session; opening Settings sends one upload at once (a
+        // plan bought on the web clears the notice), and so does a switch.
+        let refusal = DeviceCalendarStubProtocol.Reply(
+            status: 403, body: #"{"error":"x","code":"ENTITLEMENT_REQUIRED"}"#)
         fresh(DeviceCalendarOptIn(uploadEnabled: true, calendarIds: ["a"]))
-        DeviceCalendarStubProtocol.reset([
-            "GET \(sourcesPath)": sources([]),
-            "PUT": .init(status: 403, body: #"{"error":"x","code":"ENTITLEMENT_REQUIRED"}"#),
-        ])
+        DeviceCalendarStubProtocol.reset(["GET \(sourcesPath)": sources([]), "PUT": refusal])
         let free = bridge(defaults, user: user, items: ["a"], snapshots: ["a"])
         free.start()
         await free.idle()
@@ -636,13 +636,19 @@ enum DeviceCalendarScenarios {
         await free.runPass()  // what the 15-minute tick and a calendar change run
         await free.runPass()
         results.append(("a plan refusal shows needs-Pro and the background passes stop sending",
-                        refusedOnce && puts() == 1 && free.planRefused
-                        && PlanUpgrade.offersUpgrade(for: free.lastError)))
+                        refusedOnce && puts() == 1 && free.planRefused))
+        DeviceCalendarStubProtocol.replace([
+            "GET \(sourcesPath)": sources([]), "PUT": .init(status: 200, body: #"{"created":1}"#),
+        ])
+        await free.refreshAvailability()  // Settings opened after upgrading on the web
+        results.append(("opening Settings after a refusal sends an upload at once and clears the notice",
+                        puts() == 2 && !free.planRefused && free.lastError == nil))
         await free.refreshAvailability()
-        let reopened = !free.planRefused
+        let noRefusalNoSend = puts() == 2
+        DeviceCalendarStubProtocol.replace(["GET \(sourcesPath)": sources([]), "PUT": refusal])
         await free.setCalendar("a", enabled: true)
-        results.append(("opening Settings or a switch gives it one more try",
-                        reopened && puts() == 2 && free.planRefused))
+        results.append(("without a refusal Settings sends nothing extra; a switch always tries",
+                        noRefusalNoSend && puts() == 3 && free.planRefused))
 
         // 5. The feature off on the server hides it and uploads nothing.
         fresh(DeviceCalendarOptIn(uploadEnabled: true, calendarIds: ["a"]))

@@ -147,10 +147,17 @@ final class DeviceCalendarBridge {
     }
 
     /// Re-asked each time Preferences opens, so a server flip shows or hides the
-    /// section without a relaunch.
+    /// section without a relaunch. After a plan refusal it also sends one pass
+    /// at once: a plan bought on the web since clears the notice now, not at
+    /// the next 15-minute tick.
     func refreshAvailability() async {
-        planRefused = false  // a plan bought on the web since gets its next pass
+        let wasRefused = planRefused
+        if wasRefused {
+            planRefused = false
+            lastError = nil
+        }
         await enqueue { [weak self] in await self?.launch() }.value
+        if wasRefused { await runPass() }
     }
 
     /// Wait until every queued job ran (self-check).

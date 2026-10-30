@@ -21,10 +21,16 @@ enum PlanUpgrade {
         "error.needsPro", "reply.needsPro", "compose.needsPro", "proposals.needsPro",
     ]
 
-    /// Whether a shown notice is a needs-Pro sentence (in the current language).
+    /// Those sentences in every shipped language. A notice keeps the text it
+    /// was set with, so after an in-app language switch it no longer equals
+    /// what L() returns; matching every catalogue keeps its link.
+    private static let needsProTexts: Set<String> = Set(
+        needsProKeys.flatMap { key in L10n.shipped.compactMap { L10n.value(key, language: $0) } })
+
+    /// Whether a shown notice is a needs-Pro sentence, in any shipped language.
     static func offersUpgrade(for message: String?) -> Bool {
         guard let message else { return false }
-        return needsProKeys.contains { L($0) == message }
+        return needsProTexts.contains(message) || needsProKeys.contains { L($0) == message }
     }
 }
 

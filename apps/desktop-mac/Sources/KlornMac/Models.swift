@@ -695,10 +695,29 @@ struct ChatConversationList: Decodable, Sendable {
 /// empty contents, are not part of the visible thread.
 struct ChatHistory: Decodable, Sendable {
     struct Item: Decodable, Sendable {
+        /// The stored turn's `metadata`. Only the cap code is read: a turn the
+        /// daily cost cap stopped was stored with the server's English reply.
+        struct Metadata: Decodable, Sendable { let turnErrorCode: String? }
+
         let role: String
         let content: String?
+        let metadata: Metadata?
+
+        private enum CodingKeys: String, CodingKey { case role, content, metadata }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            role = try container.decode(String.self, forKey: .role)
+            content = try container.decodeIfPresent(String.self, forKey: .content)
+            // Free-form JSON server-side: a shape this app does not expect must
+            // not cost the whole thread.
+            metadata = try? container.decodeIfPresent(Metadata.self, forKey: .metadata)
+        }
 
         var bubble: ChatMessage? {
+            if role.uppercased() == "ASSISTANT", let cap = ChatCapNotice(errorCode: metadata?.turnErrorCode) {
+                return ChatMessage(role: .failure, text: cap.text, offersUpgrade: cap.offersUpgrade)
+            }
             guard let text = content?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !text.isEmpty else { return nil }
             // The server's enum is USER / ASSISTANT / SYSTEM.

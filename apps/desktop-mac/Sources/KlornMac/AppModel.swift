@@ -1593,9 +1593,12 @@ final class AppModel {
 
     /// OPEN commitments (nil until first load). Best-effort like today/usage.
     private(set) var commitments: [CommitmentItem]?
-    /// True when the last fetch failed AND nothing has ever loaded — the view
-    /// shows an honest error instead of an infinite spinner.
-    private(set) var commitmentsFailed = false
+    /// Set when the last fetch failed; the view reads it while nothing has
+    /// loaded, so it shows an honest error (or the needs-Pro notice when the
+    /// plan refused it) instead of an infinite spinner.
+    private(set) var commitmentsFailure: ActionFailure?
+    /// The plan refused marking a commitment done or dismissing it.
+    private(set) var commitmentUpdateNeedsPro = false
 
     // MARK: Inbox purpose (2026-09-01)
 
@@ -1940,24 +1943,26 @@ final class AppModel {
         return false
     }
 
-    /// DELETE — Google copy too, server-side. False = refused / failed; the
-    /// caller shows it next to the button.
-    func deleteEvent(_ event: CalendarEventWire) async -> Bool {
-        guard calendarEventIsEditable(event) else { return false }  // linked calendar: read-only
+    /// DELETE — Google copy too, server-side. nil = deleted; otherwise why not,
+    /// which the caller shows next to the button (needs-Pro gets the upgrade).
+    func deleteEvent(_ event: CalendarEventWire) async -> ActionFailure? {
+        guard calendarEventIsEditable(event) else { return .failed }  // linked calendar: read-only
         let session = sessionGeneration
         do {
             try await api.delete("/api/calendar/\(event.id)")
-            guard isCurrent(session) else { return false }
+            guard isCurrent(session) else { return .failed }
             await refreshCalendarRange()
-            return true
+            return nil
         } catch _ where !isCurrent(session) {
-            return false
+            return .failed
         } catch APIError.unauthorized {
             sessionRejected()
+        } catch APIError.forbidden {
+            return .needsPro
         } catch {
             Log.app.warning("calendar delete failed: \(String(describing: error), privacy: .private)")
         }
-        return false
+        return .failed
     }
 
     // MARK: Waiting on (2026-09-18)
@@ -2127,11 +2132,11 @@ final class AppModel {
                 "/api/commitments?status=OPEN&limit=50", as: CommitmentsResponse.self)
             guard isCurrent(session) else { return }
             commitments = resp.commitments
-            commitmentsFailed = false
+            commitmentsFailure = nil
         } catch _ where !isCurrent(session) {
             return
         } catch {
-            commitmentsFailed = true
+            commitmentsFailure = ActionFailure.classify(error)
             Log.app.warning("commitments fetch failed: \(String(describing: error), privacy: .private)")
         }
     }
@@ -2141,6 +2146,7 @@ final class AppModel {
     func resolveCommitment(_ item: CommitmentItem, as status: String) async {
         let before = commitments
         commitments = commitments?.filter { $0.id != item.id }
+        commitmentUpdateNeedsPro = false
         let session = sessionGeneration
         do {
             try await api.patch("/api/commitments/\(item.id)", json: ["status": status])
@@ -2150,6 +2156,7 @@ final class AppModel {
             sessionRejected()
         } catch {
             commitments = before
+            commitmentUpdateNeedsPro = ActionFailure.classify(error) == .needsPro
             Log.app.warning("commitment update failed: \(String(describing: error), privacy: .private)")
         }
     }
@@ -2440,7 +2447,8 @@ final class AppModel {
             text("chatConversationId", \.chatConversationId),
             flag("didRestoreChat", \.didRestoreChat),
             field("commitments", \.commitments, nil, isClean: { $0 == nil }, dirty: .some([])),
-            flag("commitmentsFailed", \.commitmentsFailed),
+            field("commitmentsFailure", \.commitmentsFailure, nil, isClean: { $0 == nil }, dirty: .some(.failed)),
+            flag("commitmentUpdateNeedsPro", \.commitmentUpdateNeedsPro),
             field("pendingActions", \.pendingActions, [], isClean: { $0.isEmpty }),
             text("pendingActionError", \.pendingActionError),
             field("resolvingActions", \.resolvingActions, [], dirty: ["x"]),

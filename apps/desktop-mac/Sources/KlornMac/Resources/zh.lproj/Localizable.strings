@@ -789,3 +789,4 @@
 "chat.cap.daily" = "今天的 AI 额度已用完。将于 00:00 UTC 重置。";
 "chat.send.failed" = "无法连接到 Klorn — %@";
 "chat.event.failed" = "无法创建日程 — %@";
+"commitments.needsPro" = "承诺跟踪需要 Klorn Pro。";

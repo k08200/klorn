@@ -789,3 +789,4 @@
 "chat.cap.daily" = "本日のAI利用枠を使い切りました。00:00 UTCにリセットされます。";
 "chat.send.failed" = "Klornに接続できませんでした — %@";
 "chat.event.failed" = "予定を作成できませんでした — %@";
+"commitments.needsPro" = "約束の管理にはKlorn Proが必要です。";

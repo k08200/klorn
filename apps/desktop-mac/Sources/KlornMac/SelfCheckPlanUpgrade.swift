@@ -14,7 +14,9 @@ import Foundation
 func planUpgradeSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
     var results = planUpgradePureChecks()
     results += chatCapChecks()
+    results += chatHistoryCapChecks()
     results += await planRefusalModelChecks()
+    results += await calendarAndCommitmentRefusalChecks()
     results += planUpgradeStringChecks()
     results += planUpgradeWiringChecks(sourceDir: sourceDir)
     return results
@@ -40,6 +42,17 @@ private func planUpgradePureChecks() -> [(String, Bool)] {
               && !PlanUpgrade.offersUpgrade(for: L("mail.summarizeFailed"))
               && !PlanUpgrade.offersUpgrade(for: L("auto.error.forbidden"))
               && !PlanUpgrade.offersUpgrade(for: L("error.generic")))
+    // A notice keeps the text it was set with: after an in-app language switch
+    // it is in another language than L() returns now, and keeps its link.
+    let everyWording = PlanUpgrade.needsProKeys.flatMap { key in
+        L10n.shipped.map { L10n.value(key, language: $0) }
+    }
+    check("a needs-Pro notice in any shipped language keeps the upgrade",
+          everyWording.count == PlanUpgrade.needsProKeys.count * L10n.shipped.count
+              && everyWording.allSatisfy { $0 != nil && PlanUpgrade.offersUpgrade(for: $0) }
+              && L10n.value("error.needsPro", language: "ko") != L10n.value("error.needsPro", language: "en"))
+    check("a missing key has no wording in any language",
+          L10n.value("no.such.key", language: "en") == nil)
     check("a 403 is a plan refusal; anything else is a failure",
           ActionFailure.classify(APIError.forbidden) == .needsPro
               && ActionFailure.classify(APIError.http(500, nil)) == .failed
@@ -86,6 +99,88 @@ private func chatCapChecks() -> [(String, Bool)] {
     let unknown = turn(#"{"reply":"hi","error":null,"errorCode":"NEW_CODE"}"#)
     check("an unknown errorCode is the normal turn",
           unknown.map(chatTurnBubbles)?.map(\.text) == ["hi"])
+    return results
+}
+
+private func history(_ json: String) -> [ChatMessage]? {
+    (try? JSONDecoder().decode(ChatHistory.self, from: Data(json.utf8)))?.messages.compactMap(\.bubble)
+}
+
+/// A reloaded conversation: the server stored the cap's English reply, and the
+/// cap code beside it in `metadata.turnErrorCode`.
+private func chatHistoryCapChecks() -> [(String, Bool)] {
+    var results: [(String, Bool)] = []
+    func check(_ name: String, _ passed: Bool) { results.append((name, passed)) }
+
+    let capped = history(#"""
+        {"messages":[
+          {"role":"USER","content":"hi","metadata":{"source":"chat"}},
+          {"role":"ASSISTANT","content":"quota","metadata":{"source":"chat","turnError":"capped","turnErrorCode":"DAILY_COST_CAP_FREE"}},
+          {"role":"ASSISTANT","content":"quota","metadata":{"turnErrorCode":"DAILY_COST_CAP"}}
+        ]}
+        """#)
+    check("a reloaded free-cap turn is the localized line with the upgrade",
+          capped?.count == 3 && capped?[1].text == L("chat.cap.free")
+              && capped?[1].role == .failure && capped?[1].offersUpgrade == true)
+    check("a reloaded paid-cap turn is the paid line without it",
+          capped?[2].text == L("chat.cap.daily") && capped?[2].offersUpgrade == false)
+    check("the user's own turn is untouched",
+          capped?.first?.text == "hi" && capped?.first?.role == .user)
+
+    let plain = history(#"""
+        {"messages":[
+          {"role":"ASSISTANT","content":"a"},
+          {"role":"ASSISTANT","content":"b","metadata":null},
+          {"role":"ASSISTANT","content":"c","metadata":"odd"},
+          {"role":"ASSISTANT","content":"d","metadata":{"turnErrorCode":"NEW_CODE"}}
+        ]}
+        """#)
+    check("no, null, odd or unknown metadata keeps the stored reply",
+          plain?.map(\.text) == ["a", "b", "c", "d"]
+              && plain?.allSatisfy { $0.role == .assistant && !$0.offersUpgrade } == true)
+    return results
+}
+
+/// Calendar delete and commitments: both stay Pro-gated on the server.
+@MainActor
+private func calendarAndCommitmentRefusalChecks() async -> [(String, Bool)] {
+    typealias S = SessionScenarios
+    typealias Reply = SessionStubProtocol.Reply
+    var results: [(String, Bool)] = []
+    func check(_ name: String, _ passed: Bool) { results.append((name, passed)) }
+    let refused = Reply(status: 403, body: #"{"error":"x","code":"ENTITLEMENT_REQUIRED"}"#)
+
+    // `title:` starts its own line: after a quoted argument on the same line,
+    // the catalogue scan would read it as an EmptyState call.
+    let event = CalendarEventWire(
+        id: "ev1",
+        title: "t", startTime: "2026-10-30T10:00:00Z", endTime: "2026-10-30T11:00:00Z",
+        location: nil, meetingLink: nil, allDay: false)
+    let deleteKey = "DELETE /api/calendar/ev1"
+    let deleteFree = await S.model([deleteKey: refused]).deleteEvent(event)
+    let deleteDown = await S.model([deleteKey: Reply(status: 500, body: "{}")]).deleteEvent(event)
+    let deleted = await S.model().deleteEvent(event)
+    check("a refused event delete is needs-Pro; a failed one is still 'try again'",
+          deleteFree == .needsPro && deleteDown == .failed && deleted == nil)
+
+    let commitmentsKey = "GET /api/commitments"
+    let lockedOut = S.model([commitmentsKey: refused])
+    await lockedOut.loadQueue()
+    _ = await S.waitUntil { lockedOut.commitmentsFailure != nil }
+    check("a refused commitments load is needs-Pro, not 'couldn't load'",
+          lockedOut.commitmentsFailure == .needsPro && lockedOut.commitments == nil)
+
+    let listed = S.model([
+        commitmentsKey: Reply(body: #"{"commitments":[{"id":"c1","title":"t"}]}"#),
+        "PATCH /api/commitments/c1": refused,
+    ])
+    await listed.loadQueue()
+    _ = await S.waitUntil { listed.commitments != nil }
+    let item = listed.commitments?.first
+    if let item { await listed.resolveCommitment(item, as: "DONE") }
+    check("a refused commitment update rolls back and shows needs-Pro",
+          item != nil && listed.commitments?.map(\.id) == ["c1"] && listed.commitmentUpdateNeedsPro
+              && listed.commitmentsFailure == nil)
     return results
 }
 
@@ -159,7 +254,7 @@ private func planUpgradeStringChecks() -> [(String, Bool)] {
     var results: [(String, Bool)] = []
     func check(_ name: String, _ passed: Bool) { results.append((name, passed)) }
     let keys = [
-        "plan.upgrade", "plan.upgrade.a11yHint", "proposals.needsPro",
+        "plan.upgrade", "plan.upgrade.a11yHint", "proposals.needsPro", "commitments.needsPro",
         "chat.cap.free", "chat.cap.daily", "chat.send.failed", "chat.event.failed",
     ]
     check("every new sentence is in all seven catalogues",
@@ -187,7 +282,7 @@ private func planUpgradeWiringChecks(sourceDir: URL) -> [(String, Bool)] {
     let surfaces = [
         "Compose.swift", "ReadingPane.swift", "CalendarEditor.swift", "PreferencesView.swift",
         "DeviceCalendarSection.swift", "ProposalsList.swift", "AssistantThread.swift",
-        "ImapConnectForm.swift",
+        "ImapConnectForm.swift", "EventRows.swift", "CommitmentsList.swift",
     ]
     let missing = surfaces.filter { !text($0).contains("UpgradeToProLink()") }
     check("every needs-Pro notice renders the upgrade link", missing.isEmpty)

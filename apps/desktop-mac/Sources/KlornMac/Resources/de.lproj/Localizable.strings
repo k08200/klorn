@@ -789,3 +789,4 @@
 "chat.cap.daily" = "Du hast dein KI-Kontingent für heute aufgebraucht. Es wird um 00:00 UTC zurückgesetzt.";
 "chat.send.failed" = "Klorn ist nicht erreichbar — %@";
 "chat.event.failed" = "Termin konnte nicht erstellt werden — %@";
+"commitments.needsPro" = "Zusagen brauchen Klorn Pro.";

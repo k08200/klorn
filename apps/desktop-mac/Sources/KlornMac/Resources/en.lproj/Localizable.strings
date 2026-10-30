@@ -789,3 +789,4 @@
 "chat.cap.daily" = "You've used today's AI allowance. It resets at 00:00 UTC.";
 "chat.send.failed" = "Couldn't reach Klorn — %@";
 "chat.event.failed" = "Couldn't create the event — %@";
+"commitments.needsPro" = "Commitments need Klorn Pro.";
