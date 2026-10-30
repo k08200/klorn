@@ -88,7 +88,11 @@ describe("toAnthropicModelId", () => {
 
 describe("readAnthropicCallOptions", () => {
   it("defaults to 5-minute prompt caching and no effort override", () => {
-    expect(readAnthropicCallOptions({})).toEqual({ cacheTtl: "5m", effort: null });
+    expect(readAnthropicCallOptions({})).toEqual({
+      cacheTtl: "5m",
+      effort: null,
+      forceJsonTool: true,
+    });
   });
 
   it("accepts a 1h TTL, an off switch, and a valid effort", () => {
@@ -859,5 +863,99 @@ describe("silent-degradation guards (review fixes)", () => {
         }
       })(),
     ).rejects.toThrow(/streaming.*tool/i);
+  });
+});
+
+describe("ANTHROPIC_JSON_TOOL_CHOICE=auto (let the model think before answering)", () => {
+  it("reads the switch; anything else keeps the forced default", () => {
+    expect(readAnthropicCallOptions({ ANTHROPIC_JSON_TOOL_CHOICE: "auto" }).forceJsonTool).toBe(
+      false,
+    );
+    expect(readAnthropicCallOptions({}).forceJsonTool).toBe(true);
+    expect(readAnthropicCallOptions({ ANTHROPIC_JSON_TOOL_CHOICE: "bogus" }).forceJsonTool).toBe(
+      true,
+    );
+  });
+
+  it("asks for the JSON tool with tool_choice auto + thinking headroom even on Haiku 5.5", () => {
+    const { body, jsonMode } = buildAnthropicRequest(
+      {
+        model: "x",
+        max_tokens: 1024,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: "Score it." },
+          { role: "user", content: "x" },
+        ],
+      } as Loose,
+      "claude-haiku-5-5",
+      { cacheTtl: "5m", effort: null, forceJsonTool: false },
+    );
+    expect(jsonMode).toBe(true);
+    expect(body.tool_choice).toEqual({ type: "auto" });
+    expect(body.max_tokens).toBe(1024 + THINKING_HEADROOM_TOKENS);
+  });
+
+  it("leaves a caller's own tool_choice alone (the switch is about JSON mode only)", () => {
+    const { body } = buildAnthropicRequest(
+      {
+        model: "x",
+        tools: [{ type: "function", function: { name: "t", parameters: { type: "object" } } }],
+        tool_choice: "required",
+        messages: [{ role: "user", content: "x" }],
+      } as Loose,
+      "claude-haiku-5-5",
+      { cacheTtl: "5m", effort: null, forceJsonTool: false },
+    );
+    expect(body.tool_choice).toEqual({ type: "any" });
+  });
+});
+
+describe("JSON tool answers wrapped in an extra key (measured: 12/55 Haiku calls with thinking)", () => {
+  const answer = (input: unknown) =>
+    toChatCompletion(
+      message({
+        stop_reason: "tool_use",
+        content: [
+          { type: "tool_use", id: "t", name: JSON_RESPONSE_TOOL, input },
+        ] as Message["content"],
+      }),
+      true,
+    ).choices[0].message.content;
+
+  it("unwraps {input: {...}} — left wrapped, every expected key reads as missing and scores 0", () => {
+    expect(JSON.parse(answer({ input: { urgency: 0.9, reason: "x" } }) ?? "")).toEqual({
+      urgency: 0.9,
+      reason: "x",
+    });
+  });
+
+  it("unwraps a JSON string under a wrapper key", () => {
+    expect(JSON.parse(answer({ json: '{"urgency":0.9}' }) ?? "")).toEqual({ urgency: 0.9 });
+  });
+
+  it("leaves a genuine single-key answer alone", () => {
+    expect(JSON.parse(answer({ summary: { text: "hi" } }) ?? "")).toEqual({
+      summary: { text: "hi" },
+    });
+  });
+
+  it("returns no content for a wrapper around nothing usable", () => {
+    expect(answer({ input: {} })).toBe("");
+    expect(answer({ input: "not json" })).toBe("");
+  });
+
+  it("tells the model, in the schema, to put the keys at the top level", () => {
+    const { body } = buildAnthropicRequest(
+      {
+        model: "x",
+        response_format: { type: "json_object" },
+        messages: [{ role: "user", content: "x" }],
+      } as Loose,
+      "claude-haiku-5-5",
+      CACHE_5M,
+    );
+    const schema = (body.tools?.[0] as { input_schema: { description?: string } }).input_schema;
+    expect(schema.description).toMatch(/top level/i);
   });
 });

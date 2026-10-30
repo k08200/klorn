@@ -17,12 +17,17 @@ export interface AnthropicCallOptions {
   readonly cacheTtl: "5m" | "1h" | null;
   /** `output_config.effort`; null = model default (not sent). */
   readonly effort: AnthropicEffort | null;
+  /**
+   * JSON mode as a FORCED tool call (default; no thinking, cheapest) or, when
+   * false, tool_choice auto so the model may think first. Absent = forced.
+   */
+  readonly forceJsonTool?: boolean;
 }
 
 /**
  * Env knobs, validated so a typo degrades to the default instead of 400ing
  * every call: ANTHROPIC_PROMPT_CACHE=false, ANTHROPIC_CACHE_TTL=1h,
- * ANTHROPIC_EFFORT=low|medium|high|xhigh|max.
+ * ANTHROPIC_EFFORT=low|medium|high|xhigh|max, ANTHROPIC_JSON_TOOL_CHOICE=auto.
  */
 export function readAnthropicCallOptions(
   env: Record<string, string | undefined>,
@@ -35,6 +40,7 @@ export function readAnthropicCallOptions(
   return {
     cacheTtl: off ? null : ttl === "1h" ? "1h" : "5m",
     effort: (EFFORTS as readonly string[]).includes(effort) ? (effort as AnthropicEffort) : null,
+    forceJsonTool: (env.ANTHROPIC_JSON_TOOL_CHOICE ?? "").trim().toLowerCase() !== "auto",
   };
 }
 

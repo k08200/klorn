@@ -278,11 +278,17 @@ function toToolChoice(
 }
 
 /** The JSON schema a response_format asks for, or null when it asks for none. */
+const OPEN_ANSWER_SCHEMA = {
+  type: "object",
+  description:
+    "Your answer object itself: the keys the instructions specify, at the top level. Do not wrap it in another key.",
+};
+
 function jsonResponseSchema(format: unknown): Record<string, unknown> | null {
   if (!isRecord(format)) return null;
-  if (format.type === "json_object") return { type: "object" };
+  if (format.type === "json_object") return OPEN_ANSWER_SCHEMA;
   if (format.type === "json_schema" && isRecord(format.json_schema)) {
-    return isRecord(format.json_schema.schema) ? format.json_schema.schema : { type: "object" };
+    return isRecord(format.json_schema.schema) ? format.json_schema.schema : OPEN_ANSWER_SCHEMA;
   }
   return null;
 }
@@ -303,7 +309,7 @@ interface ToolSetup {
   instruction: string | null;
 }
 
-function toolSetup(loose: LooseParams, allowForced: boolean): ToolSetup {
+function toolSetup(loose: LooseParams, allowForced: boolean, forceJson: boolean): ToolSetup {
   const callerTools = toTools(loose.tools);
   const schema = jsonResponseSchema(loose.response_format);
   if (schema === null || callerTools.length > 0) {
@@ -319,7 +325,7 @@ function toolSetup(loose: LooseParams, allowForced: boolean): ToolSetup {
       "Return your complete answer as this tool's input: the JSON object the instructions ask for, with exactly the keys they specify.",
     input_schema: schema as Tool["input_schema"],
   };
-  return allowForced
+  return allowForced && forceJson
     ? {
         tools: [jsonTool],
         toolChoice: { type: "tool", name: JSON_RESPONSE_TOOL },
@@ -347,7 +353,11 @@ export function buildAnthropicRequest(
 ): { body: MessageCreateParamsNonStreaming; jsonMode: boolean } {
   const loose = params as unknown as LooseParams;
   const messages = Array.isArray(loose.messages) ? loose.messages : [];
-  const { tools, toolChoice, jsonMode, instruction } = toolSetup(loose, allowForced);
+  const { tools, toolChoice, jsonMode, instruction } = toolSetup(
+    loose,
+    allowForced,
+    options.forceJsonTool !== false,
+  );
   // A forced call (named tool or "any") has no thinking block.
   const forced = toolChoice?.type === "tool" || toolChoice?.type === "any";
   const cap =
@@ -420,8 +430,30 @@ function jsonContent(toolUses: ToolUseBlock[], text: string, truncated: boolean)
   if (truncated) return "";
   const block = toolUses.find((b) => b.name === JSON_RESPONSE_TOOL);
   if (!block) return text;
-  const input = isRecord(block.input) ? block.input : {};
+  const input = unwrapAnswer(isRecord(block.input) ? block.input : {});
   return Object.keys(input).length > 0 ? JSON.stringify(input) : "";
+}
+
+/**
+ * Key names a model wraps the whole answer in when the tool schema is open
+ * (measured 2026-10-30: Haiku 5.5 with thinking sent `{"input": {…}}` on 12 of
+ * 55 judge calls). Left wrapped, the caller finds none of its keys and scores
+ * every feature 0 while recording the call as an LLM success.
+ */
+const ANSWER_WRAPPER_KEYS = new Set(["input", "json", "answer", "response", "result", "output"]);
+
+function unwrapAnswer(input: Record<string, unknown>): Record<string, unknown> {
+  const keys = Object.keys(input);
+  if (keys.length !== 1 || !ANSWER_WRAPPER_KEYS.has(keys[0])) return input;
+  const inner = input[keys[0]];
+  if (isRecord(inner)) return inner;
+  if (typeof inner !== "string") return {};
+  try {
+    const parsed: unknown = JSON.parse(inner);
+    return isRecord(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
 }
 
 /** Convert a Messages API response into an OpenAI-shape ChatCompletion. Pure. */
