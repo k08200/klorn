@@ -393,3 +393,37 @@ so run-to-run stability is itself a selection criterion for a per-email judge;
 mechanism reproduced across runs (urgent 5–7/13) with the same shape.
 
 > ⚠️ The canary sections above describe the judge as temperature-0. It is not — `createCompletion` passes no `temperature`, so the judge runs at each provider's default. The 09-04 measurement shows most models are still stable run-to-run at that default, but the canary's flip-alarm reasoning assumes determinism it does not have. Tracked in #1297.
+
+## Native Anthropic provider (2026-10-30 — Claude 5.5 family, PR #1543)
+
+Measured through the native adapter (`providers/anthropic-native.ts`), Anthropic
+as the ONLY provider (a failure would show as INSTRUMENT DEGRADED, never as
+another model's score), `--context=fixture`, `JUDGE_INCLUDE_BODY=true`,
+concurrency 2. The 5.5 family takes no `temperature`, so run-to-run variance is
+part of the result. Local runs plus the PR's report-only `llm-eval-claude` job.
+
+| model / mode | runs | correct / 56 | urgent / 13 | gate | PUSH→SILENT |
+|---|---|---|---|---|---|
+| `claude-haiku-5-5`, forced JSON tool, **after the schema fix** | 3 | 55 · 54 · 54 | 13 · 12 · 13 | **3/3** | 0 |
+| `claude-haiku-5-5`, forced JSON tool, before the fix | 4 | 51 · 53 · 51 · 50 | 11 · 11 · 11 · 10 | 0/4 | 0 |
+| `claude-haiku-5-5`, tool_choice auto (thinking), before the fix | 2 | 48 · 48 | 7 · 7 | 0/2 | 0 |
+| `claude-sonnet-5-5` (auto — rejects forced tools), before the fix | 1 | 50 | 9 | 0/1 | 0 |
+
+The fix (commit "stop wrapped JSON-tool answers from scoring every feature 0"):
+with an open `{type: "object"}` tool schema the model sometimes wrapped its
+answer as `{"input": {…}}` (12 of 55 calls in auto mode) or sent `{}`; the
+judge then scored all four features 0 while logging an LLM success. The fix
+unwraps a single wrapper key and describes the schema ("keys at the top level").
+After it, forced mode returned 48/48 well-shaped answers. Not isolated: whether
+the schema description also moved calibration — the pre-fix forced misses were
+the sonnet-5 shape (urgency 0.9, confidence 0.6), not zeroed answers.
+
+Real-mail readout (report-only, 53 items): Haiku 39/53 (73.6%) vs
+`gemini-2.5-flash` 46/53 (86.8%) on the same day; PUSH 3/4 for both; SILENT
+precision Haiku 100% (16/16) vs gemini 95.5%. 13 of Haiku's 14 misses are
+QUEUE/SILENT predicted as INFO, a lane the v1-labelled real set has no truth
+for — Haiku routes noticeably more mail to INFO (13 vs 4).
+
+Measured cost per judge call (Haiku 5.5, forced): ~1,340 input + ~153 output
+tokens ≈ $0.0002. The judge's system prompt is under the 512-token cache
+minimum, so judge calls are not cached.
