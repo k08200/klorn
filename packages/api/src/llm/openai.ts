@@ -24,10 +24,12 @@ import {
   getProviderCooldownInfo,
   isConnectionError,
   isCreditError,
+  isCreditExhaustionError,
   isFreeModel,
   isFreeModelFallbackDisabled,
   isKeyLimitError,
   isModelUnavailableError,
+  isOverloadedError,
   isProviderUnavailable,
   markCreditExhausted,
   markKeyLimited,
@@ -145,10 +147,20 @@ export interface CompletionOptions {
   _paced?: boolean;
 }
 
+/**
+ * Stable machine-readable reason clients branch on (never on the message):
+ * DAILY_COST_CAP_FREE is the free-tier cap, where upgrading helps;
+ * DAILY_COST_CAP is the paid per-user cap or the shared global ceiling.
+ */
+export type DailyCostCapCode = "DAILY_COST_CAP" | "DAILY_COST_CAP_FREE";
+
 export class DailyCostCapExceededError extends Error {
-  constructor(message: string) {
+  readonly code: DailyCostCapCode;
+
+  constructor(message: string, code: DailyCostCapCode = "DAILY_COST_CAP") {
     super(message);
     this.name = "DailyCostCapExceededError";
+    this.code = code;
   }
 }
 
@@ -172,6 +184,14 @@ export const DAILY_COST_CAP_UPGRADE_MESSAGE =
 
 export function dailyCostCapMessageFor(freeCapApplied: boolean): string {
   return freeCapApplied ? DAILY_COST_CAP_UPGRADE_MESSAGE : DAILY_COST_CAP_MESSAGE;
+}
+
+/** The per-user cap refusal: message and code both follow freeCapApplied. */
+function perUserCapError(freeCapApplied: boolean): DailyCostCapExceededError {
+  return new DailyCostCapExceededError(
+    dailyCostCapMessageFor(freeCapApplied),
+    freeCapApplied ? "DAILY_COST_CAP_FREE" : "DAILY_COST_CAP",
+  );
 }
 
 /**
@@ -225,7 +245,7 @@ async function enforceCostGates(
       // Klorn's money once the cap is reached. Nothing is pre-billed: the
       // per-user and global pre-bills below are skipped for userKeyAvailable.
       if (userKeyAvailable) return { userKeyOnly: true };
-      throw new DailyCostCapExceededError(dailyCostCapMessageFor(gate.freeCapApplied === true));
+      throw perUserCapError(gate.freeCapApplied === true);
     }
     if (!userKeyAvailable) {
       // Await the pre-bill so the atomic increment lands before we return, and
@@ -234,7 +254,7 @@ async function enforceCostGates(
       // check-then-act TOCTOU under concurrency / multi-dyno).
       const usage = await recordCostUsage(userId, estCents, model, { reserved });
       if (usage?.overCap) {
-        throw new DailyCostCapExceededError(dailyCostCapMessageFor(gate.freeCapApplied === true));
+        throw perUserCapError(gate.freeCapApplied === true);
       }
     }
   }
@@ -698,6 +718,26 @@ async function createCompletionWithFailover(
         continue;
       }
 
+      // Credit exhaustion on a provider with no same-provider swap (Anthropic's
+      // prepaid balance or spend limit — the adapter turns those 400s into a
+      // 402). Treated like a key limit: cool down, move on, say so. Rethrowing
+      // it as an operator fault instead would drop every judge call to the
+      // keyword fallback until someone tops up — PUSH unreachable, and nothing
+      // that looks broken. Matched on the status, never on a "402" substring.
+      // A user's own key keeps its existing, no-cooldown failover below.
+      if (isCreditExhaustionError(err) && provider.ownedByUser !== true) {
+        markCreditExhausted(provider.quotaKey);
+        signalKeyFailover(provider, err, options.userId);
+        continue;
+      }
+
+      // 529 overloaded: capacity, not a fault, and the SDK already retried with
+      // backoff. Next provider, no cooldown — it is usually back in seconds.
+      // (Logged by recordDispatchFailure in `call`.)
+      if (isOverloadedError(err)) {
+        continue;
+      }
+
       // Local/OpenAI-compat endpoint unreachable (Ollama not running, box
       // asleep): fail over to the next provider WITHOUT a cooldown — a
       // local endpoint can come back any second, and cooling down the only
@@ -932,6 +972,8 @@ async function createVisionCompletionWithFailover(
       // A non-`:free` model reported unavailable → this provider can't serve
       // vision; move on rather than hard-failing the whole request.
       if (isModelUnavailableError(err)) continue;
+      // 529 overloaded: next provider, no cooldown (same as createCompletion).
+      if (isOverloadedError(err)) continue;
       if (isProviderUnavailable(provider.quotaKey)) continue;
       if (provider.name === "openai-compat" && isConnectionError(err)) continue;
       // Non-budget error (5xx, auth, malformed request, cloud network): don't

@@ -16,6 +16,19 @@
  * OpenRouter goes through the OpenAI SDK (Bearer-auth). Gemini is called via
  * a native adapter (URL-param auth) — newer `AQ.`-prefix Google keys are
  * rejected by the OpenAI-compat endpoint's Bearer auth path.
+ *
+ *   3. Anthropic (optional) — ANTHROPIC_API_KEY, the official SDK behind a
+ *      native adapter (anthropic-native.ts). OFF until the key is set, and
+ *      even then only a failover lane at the END of the env chain until
+ *      LLM_PROVIDER_ORDER puts it first: becoming primary is its own decision.
+ *      Commercial API terms — inputs/outputs are not used for training by
+ *      default — which is what lets user mail go there under Limited Use.
+ *
+ * LLM_PROVIDER_ORDER (e.g. "anthropic,gemini") orders the ENV providers.
+ * Configured providers it does not list keep their default relative order
+ * after the listed ones, so a typo can reorder the chain but never empty it.
+ * User (BYOK) keys always lead; the local provider keeps its own
+ * OPENAI_COMPAT_PRIORITY edge.
  */
 
 import crypto from "node:crypto";
@@ -31,11 +44,46 @@ import {
   llmRequestTimeoutMs,
 } from "../llm/llm-timeout.js";
 import {
+  RECOMMENDED_ANTHROPIC_MODEL,
+  readAnthropicCallOptions,
+  toAnthropicModelId,
+} from "./anthropic-config.js";
+import {
   createCompletionNonStreaming as geminiNonStreaming,
   createCompletionStreaming as geminiStreaming,
 } from "./gemini-native.js";
 
-export type ProviderName = "openai-compat" | "openrouter" | "gemini" | "openai";
+export type ProviderName = "openai-compat" | "openrouter" | "gemini" | "openai" | "anthropic";
+
+/** Server-key providers whose order LLM_PROVIDER_ORDER controls. */
+const ENV_PROVIDER_NAMES = ["openrouter", "gemini", "anthropic"] as const;
+export type EnvProviderName = (typeof ENV_PROVIDER_NAMES)[number];
+
+function isEnvProviderName(value: string): value is EnvProviderName {
+  return (ENV_PROVIDER_NAMES as readonly string[]).includes(value);
+}
+
+function orderTokens(raw: string | undefined): string[] {
+  return (raw ?? "")
+    .split(",")
+    .map((token) => token.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+/**
+ * The env-provider order: names listed in LLM_PROVIDER_ORDER first (unknown and
+ * duplicate names dropped), then every remaining env provider in the default
+ * order. Unconfigured providers are filtered out later by the chain itself.
+ */
+export function resolveEnvProviderOrder(raw: string | undefined): EnvProviderName[] {
+  const listed = [...new Set(orderTokens(raw).filter(isEnvProviderName))];
+  return [...listed, ...ENV_PROVIDER_NAMES.filter((name) => !listed.includes(name))];
+}
+
+/** Names in LLM_PROVIDER_ORDER that are not env providers (boot warning). */
+export function unknownEnvProviderNames(raw: string | undefined): string[] {
+  return orderTokens(raw).filter((token) => !isEnvProviderName(token));
+}
 
 type ChatParams = ChatCompletionCreateParamsNonStreaming | ChatCompletionCreateParamsStreaming;
 type ChatResult =
@@ -222,6 +270,50 @@ function buildGemini(apiKey = process.env.GEMINI_API_KEY, scope = "env"): Provid
   };
 }
 
+interface AnthropicSession {
+  adapter: typeof import("./anthropic-native.js");
+  client: ReturnType<typeof import("./anthropic-native.js").createAnthropicClient>;
+}
+
+/**
+ * Native Anthropic provider (env key only — no per-user path). Non-Claude pins
+ * are served by ANTHROPIC_MODEL (default claude-haiku-5-5), the way Gemini
+ * serves a non-Gemini pin with GEMINI_FALLBACK_MODEL; Claude pins, native or
+ * OpenRouter-spelled, are honoured.
+ */
+function buildAnthropic(apiKey = process.env.ANTHROPIC_API_KEY): Provider | null {
+  if (!apiKey) return null;
+  const defaultModel = process.env.ANTHROPIC_MODEL || RECOMMENDED_ANTHROPIC_MODEL;
+  const options = readAnthropicCallOptions(process.env);
+  // The SDK (+~20 MB RSS) loads on the first call, not at boot.
+  let session: Promise<AnthropicSession> | null = null;
+  const connect = (): Promise<AnthropicSession> => {
+    session ??= import("./anthropic-native.js").then((adapter) => ({
+      adapter,
+      client: adapter.createAnthropicClient(
+        apiKey,
+        llmRequestTimeoutMs(CLOUD_LLM_TIMEOUT_MS),
+        process.env.ANTHROPIC_WORKSPACE_ID?.trim() || null,
+      ),
+    }));
+    return session;
+  };
+  return {
+    name: "anthropic",
+    quotaKey: "anthropic:env",
+    client: null, // native adapter, not the OpenAI SDK
+    defaultModel,
+    supportsTools: true,
+    resolveModel: (m) => toAnthropicModelId(m, defaultModel),
+    call: async (params, model) => {
+      const { adapter, client } = await connect();
+      return (params as { stream?: boolean }).stream
+        ? adapter.streamAnthropicCompletion(client, params, model, options)
+        : await adapter.createAnthropicCompletion(client, params, model, options);
+    },
+  };
+}
+
 const providers: Record<ProviderName, Provider | null> = {
   "openai-compat": buildOpenAICompat(),
   openrouter: buildOpenRouter(process.env.OPENROUTER_API_KEY),
@@ -229,13 +321,34 @@ const providers: Record<ProviderName, Provider | null> = {
   // No env-level direct OpenAI provider — the server routes through OpenRouter.
   // Direct OpenAI is a playground BYOK-only path (per-request key).
   openai: null,
+  anthropic: buildAnthropic(),
 };
 
-if (!providers.openrouter && !providers.gemini && !providers["openai-compat"]) {
+const configuredEnvProviders = resolveEnvProviderOrder(process.env.LLM_PROVIDER_ORDER).filter(
+  (name) => providers[name] !== null,
+);
+
+if (configuredEnvProviders.length === 0 && !providers["openai-compat"]) {
   console.error(
-    "[providers] No LLM provider configured — every chat request will fail. Set OPENROUTER_API_KEY, GEMINI_API_KEY, or OPENAI_COMPAT_BASE_URL (local Ollama/LM Studio/vLLM) in your env.",
+    "[providers] No LLM provider configured — every chat request will fail. Set OPENROUTER_API_KEY, GEMINI_API_KEY, ANTHROPIC_API_KEY, or OPENAI_COMPAT_BASE_URL (local Ollama/LM Studio/vLLM) in your env.",
   );
 } else {
+  const ignored = unknownEnvProviderNames(process.env.LLM_PROVIDER_ORDER);
+  if (ignored.length > 0) {
+    console.warn(
+      `[providers] LLM_PROVIDER_ORDER names unknown provider(s) ${ignored.join(", ")} — ignored. Known: ${ENV_PROVIDER_NAMES.join(", ")}.`,
+    );
+  }
+  console.log(`[providers] Env provider order: ${configuredEnvProviders.join(" → ")}`);
+  if (providers.anthropic) {
+    console.log(
+      `[providers] Anthropic provider active (default model ${providers.anthropic.defaultModel})${
+        configuredEnvProviders[0] === "anthropic"
+          ? " — PRIMARY"
+          : " — failover only; set LLM_PROVIDER_ORDER=anthropic,... to make it primary"
+      }`,
+    );
+  }
   if (providers["openai-compat"]) {
     const host = (() => {
       try {
@@ -249,20 +362,21 @@ if (!providers.openrouter && !providers.gemini && !providers["openai-compat"]) {
     );
   }
   if (!providers.openrouter) {
-    console.warn("[providers] OPENROUTER_API_KEY not set — primary provider disabled");
+    console.warn("[providers] OPENROUTER_API_KEY not set — OpenRouter lane disabled");
   }
-  if (!providers.gemini) {
-    // Hosted Klorn deliberately runs ONE OpenRouter key (founder decision,
-    // 2026-08-02) — this is the expected shape, not a misconfiguration, so
-    // don't phrase it as a missing key. State the consequence instead: with a
-    // single provider there is nothing to fail over to, so a 402/403/429 on
-    // that key degrades every judge call to the keyword fallback (which caps
-    // confidence at 0.55 and cannot reach the PUSH floor of 0.7).
+  if (configuredEnvProviders.length === 1 && !providers["openai-compat"]) {
+    // A single key can be a deliberate shape (hosted Klorn ran one OpenRouter
+    // key from 2026-08-02), so don't phrase it as a missing key. State the
+    // consequence instead: with a single provider there is nothing to fail
+    // over to, so a 402/403/429 on that key degrades every judge call to the
+    // keyword fallback (which caps confidence at 0.55 and cannot reach the
+    // PUSH floor of 0.7).
     console.warn(
-      "[providers] Single provider configured (OpenRouter only) — no failover: a 402/403/429 on this key degrades every LLM surface until it clears. Add GEMINI_API_KEY or OPENAI_COMPAT_BASE_URL for a second lane.",
+      `[providers] Single provider configured (${configuredEnvProviders[0]} only) — no failover: a 402/403/429 on this key degrades every LLM surface until it clears. Add a second provider key (GEMINI_API_KEY, ANTHROPIC_API_KEY, OPENROUTER_API_KEY) or OPENAI_COMPAT_BASE_URL for a second lane.`,
     );
-  } else {
-    console.log("[providers] Gemini secondary provider active (daily quota fallback)");
+  }
+  if (providers.gemini) {
+    console.log("[providers] Gemini provider active");
   }
   // Cost guardrail — OpenRouter bills any `<vendor>/<model>` ID without a
   // `:free` suffix. A deploy that drops the suffix silently routes to the
@@ -337,11 +451,13 @@ export function getProviderChain(credentials: ProviderCredentials = {}): Provide
   // Passing undefined through would hit the builders' env-default params and
   // register the env key a second time under a `user` quotaKey — duplicate
   // tries and a cooldown bypass for the same underlying key.
+  const envProviders = resolveEnvProviderOrder(process.env.LLM_PROVIDER_ORDER).map(
+    (name) => providers[name],
+  );
   const chain = [
     ...(compatLast ? [] : [compat]),
     ...visitorProviders,
-    providers.openrouter,
-    providers.gemini,
+    ...envProviders,
     ...(compatLast ? [compat] : []),
   ].filter((p): p is Provider => p !== null);
 

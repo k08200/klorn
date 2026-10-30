@@ -2,9 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../lib/api";
+import { useAuth } from "../lib/auth";
+import { byokLocked, isByokEntitlementRefusal } from "../lib/entitlement";
 import { useT } from "../lib/i18n";
 import { captureClientError } from "../lib/sentry";
+import { serverErrorMessage } from "../lib/server-error";
 import { useConfirm } from "./confirm-dialog";
+import { ProFeatureNotice } from "./pro-feature-notice";
 import Button from "./ui/button";
 import ErrorAlert from "./ui/error-alert";
 import { Input, Select } from "./ui/input";
@@ -64,6 +68,11 @@ function modelNote(
 export function ByokKeysSection() {
   const { confirm } = useConfirm();
   const { t } = useT();
+  const { user } = useAuth();
+  // BYOK is Pro: the server refuses to store a FREE user's key. `refused`
+  // covers a stale `entitled` (and an older API that only refuses on save).
+  const [refused, setRefused] = useState(false);
+  const locked = byokLocked(user) || refused;
   const [status, setStatus] = useState<ModelStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -101,9 +110,12 @@ export function ByokKeysSection() {
         setInputs((s) => ({ ...s, [p]: "" }));
         await loadStatus();
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
+        if (isByokEntitlementRefusal(err)) {
+          setRefused(true);
+          return;
+        }
         captureClientError(err, { scope: "byok.save" });
-        setError(msg || t("byok.error.update"));
+        setError(serverErrorMessage(err, t("byok.error.update")));
       } finally {
         setBusy((s) => ({ ...s, [p]: false }));
       }
@@ -145,9 +157,8 @@ export function ByokKeysSection() {
       });
       await loadStatus();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
       captureClientError(err, { scope: "byok.model" });
-      setError(msg || t("byok.error.model"));
+      setError(serverErrorMessage(err, t("byok.error.model")));
     } finally {
       setSavingModel(false);
     }
@@ -157,7 +168,7 @@ export function ByokKeysSection() {
     <section className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-5">
       <header className="mb-3">
         <h2 className="text-base font-semibold text-ink">{t("byok.title")}</h2>
-        <p className="mt-1 text-xs text-ink-mid">{t("byok.body")}</p>
+        <p className="mt-1 text-xs text-ink-mid">{t(locked ? "byok.bodyFree" : "byok.body")}</p>
         {status?.activeModel && (
           <p className="mt-2 text-caption text-ink-dim">
             {t("byok.activeModel")} <span className="text-ink-mid">{status.activeModel}</span>
@@ -176,6 +187,10 @@ export function ByokKeysSection() {
                 <StatusChip status="connected" label={t("byok.usingYourKey")} />
               )}
             </div>
+            {/* Before the disabled field, so the reason is read first. */}
+            {locked && !status?.hasOpenRouterApiKey && (
+              <ProFeatureNotice messageKey="proFeature.byok" className="mb-2" />
+            )}
             {status?.hasOpenRouterApiKey ? (
               <div className="flex items-center justify-between gap-3">
                 <span className="font-mono text-xs text-ink-mid">{t("byok.stored")}</span>
@@ -201,12 +216,13 @@ export function ByokKeysSection() {
                     placeholder={OPENROUTER.placeholder}
                     autoComplete="off"
                     maxLength={512}
+                    disabled={locked}
                   />
                 </div>
                 <Button
                   variant="primary"
                   onClick={saveKey}
-                  disabled={busy.openRouter || !inputs.openRouter.trim()}
+                  disabled={locked || busy.openRouter || !inputs.openRouter.trim()}
                   loading={busy.openRouter}
                   className="shrink-0"
                 >
@@ -267,7 +283,9 @@ export function ByokKeysSection() {
                     </option>
                   ))}
                 </Select>
-                <p className="mt-1 text-caption text-ink-dim">{t("byok.assistantModelHelp")}</p>
+                <p className="mt-1 text-caption text-ink-dim">
+                  {t(locked ? "byok.assistantModelHelpFree" : "byok.assistantModelHelp")}
+                </p>
               </div>
             );
           })()}

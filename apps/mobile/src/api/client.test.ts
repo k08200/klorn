@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ApiError, createApiClient, type Transport } from "./client";
+import { ApiError, createApiClient, isEntitlementRefusal, type Transport } from "./client";
 import { endpoints } from "./endpoints";
 import { createMockTransport, MOCK_TOKEN } from "./mock/transport";
 
@@ -58,6 +58,26 @@ describe("api client", () => {
     const err = await api.get("/api/x").catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ApiError);
     expect(err).toMatchObject({ kind: "http", status: 429, serverMessage: "Too many" });
+  });
+
+  it("keeps the server's machine-readable code", async () => {
+    const { transport } = recording(() =>
+      json(403, { error: "Pro only", code: "ENTITLEMENT_REQUIRED" }),
+    );
+    const api = createApiClient({ baseUrl: "https://a", getToken: () => null, transport });
+    const err = await api.get("/api/x").catch((e: unknown) => e);
+    expect(err).toMatchObject({ status: 403, serverMessage: "Pro only" });
+    expect((err as ApiError).serverCode).toBe("ENTITLEMENT_REQUIRED");
+    // Absent or not a string: no code.
+    const bare = recording(() => json(500, { error: "x", code: 7 }));
+    const other = createApiClient({
+      baseUrl: "https://a",
+      getToken: () => null,
+      transport: bare.transport,
+    });
+    expect(
+      ((await other.get("/api/x").catch((e: unknown) => e)) as ApiError).serverCode,
+    ).toBeNull();
   });
 
   it("maps a failed fetch to an offline error", async () => {
@@ -179,5 +199,30 @@ describe("mock transport", () => {
       }),
     );
     await expect(ep.auth.me()).rejects.toMatchObject({ status: 401 });
+  });
+});
+
+describe("isEntitlementRefusal: the only refusal that means needs-Pro", () => {
+  const http = (status: number, serverCode: string | null) =>
+    new ApiError("http", status, `HTTP ${status}`, "server text", serverCode);
+
+  it("is a 403 that carries ENTITLEMENT_REQUIRED", () => {
+    expect(isEntitlementRefusal(http(403, "ENTITLEMENT_REQUIRED"))).toBe(true);
+  });
+
+  it("is not any other 403 (forbidden row, demo user, CSRF)", () => {
+    expect(isEntitlementRefusal(http(403, null))).toBe(false);
+    expect(isEntitlementRefusal(http(403, "SOMETHING_ELSE"))).toBe(false);
+  });
+
+  it("is not a 402 (the API never answers 402 to a client) or a server error", () => {
+    expect(isEntitlementRefusal(http(402, null))).toBe(false);
+    expect(isEntitlementRefusal(http(402, "ENTITLEMENT_REQUIRED"))).toBe(false);
+    expect(isEntitlementRefusal(http(500, "ENTITLEMENT_REQUIRED"))).toBe(false);
+  });
+
+  it("is not a non-API error", () => {
+    expect(isEntitlementRefusal(new Error("ENTITLEMENT_REQUIRED"))).toBe(false);
+    expect(isEntitlementRefusal(null)).toBe(false);
   });
 });

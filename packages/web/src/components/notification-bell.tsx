@@ -4,8 +4,9 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { apiFetch } from "../lib/api";
+import { isEntitlementRefusal } from "../lib/entitlement";
 import { useT } from "../lib/i18n";
-import { shellKind } from "../lib/native/shell";
+import { openExternal, shellKind } from "../lib/native/shell";
 import { deliverDesktopAlert } from "../lib/native/tauri-notify";
 import {
   getTypeLabel,
@@ -13,7 +14,9 @@ import {
   type NotificationGroup,
   unreadGroupCount,
 } from "../lib/notification-grouping";
+import { type NotificationLinkTarget, notificationLinkTarget } from "../lib/notification-target";
 import { formatRelative } from "../lib/text";
+import { ProFeatureNotice } from "./pro-feature-notice";
 import { RejectReasonDialog } from "./reject-reason-dialog";
 import { useToast } from "./toast";
 import { useWebSocket } from "./use-websocket";
@@ -292,11 +295,14 @@ export default function NotificationBell({ userId }: { userId: string }) {
   const [pendingActionLoading, setPendingActionLoading] = useState<
     Record<string, "approve" | "reject" | null>
   >({});
+  // Approving executes the action, which is Pro: a FREE user's 403 shows the notice.
+  const [approveProGated, setApproveProGated] = useState(false);
 
   const handleApprovePendingAction = async (notif: Notification, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!notif.pendingActionId || pendingActionLoading[notif.id]) return;
     setPendingActionLoading((prev) => ({ ...prev, [notif.id]: "approve" }));
+    setApproveProGated(false);
     try {
       await apiFetch(`/api/chat/pending-actions/${notif.pendingActionId}/approve`, {
         method: "POST",
@@ -309,6 +315,10 @@ export default function NotificationBell({ userId }: { userId: string }) {
       );
       apiFetch(`/api/notifications/${notif.id}/read`, { method: "PATCH" }).catch(() => {});
     } catch (err) {
+      if (isEntitlementRefusal(err)) {
+        setApproveProGated(true);
+        return;
+      }
       console.error("[notification-bell] approve failed", err);
       // Let the user retry — don't silently swallow
       toast(t("notif.toast.approveFailed"), "error");
@@ -350,12 +360,17 @@ export default function NotificationBell({ userId }: { userId: string }) {
   // Determine where clicking a notification should navigate.
   // Week 1 removed /calendar, /tasks, /email, /notes — every fallback now
   // points at a surviving surface so taps never 404.
-  const getNotificationTarget = (n: Notification): string | null => {
-    if (n.link) return n.link;
+  const getNotificationTarget = (n: Notification): NotificationLinkTarget => {
+    // A stored link is untrusted (a meeting link can come from anyone's
+    // invite): only a same-origin path or a plain https URL is followed; any
+    // other link falls through to the type's own surface.
+    const linked = notificationLinkTarget(n.link);
+    if (linked) return linked;
+    const internal = (path: string): NotificationLinkTarget => ({ kind: "internal", path });
     // A pending action the user still needs to approve/reject — Inbox is
     // the one place that shows every unresolved item with action buttons.
-    if (n.pendingActionId && n.pendingActionStatus === "PENDING") return "/inbox";
-    if (n.conversationId) return "/inbox";
+    if (n.pendingActionId && n.pendingActionStatus === "PENDING") return internal("/inbox");
+    if (n.conversationId) return internal("/inbox");
     const typeRoutes: Record<string, string> = {
       briefing: "/briefing",
       meeting: "/briefing",
@@ -365,7 +380,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
       reminder: "/inbox",
       insight: "/inbox",
     };
-    return typeRoutes[n.type] || "/inbox";
+    return internal(typeRoutes[n.type] || "/inbox");
   };
 
   const handleNotificationClick = (n: Notification) => {
@@ -377,11 +392,22 @@ export default function NotificationBell({ userId }: { userId: string }) {
 
     // Navigate first, then close dropdown
     const target = getNotificationTarget(n);
-    if (target) {
-      router.push(target);
-      // Close dropdown after navigation starts (defer to avoid portal unmount racing with router)
-      setTimeout(() => setOpen(false), 0);
+    if (target.kind === "external") {
+      // Never the app tab: an https link (e.g. a meeting) opens on its own —
+      // in the system browser inside the desktop/mobile wrappers, where a
+      // plain window.open may stay in the WebView or do nothing.
+      if (shellKind() !== null) {
+        openExternal(target.url).catch((err) =>
+          console.error("[notifications] could not open external link:", err),
+        );
+      } else {
+        window.open(target.url, "_blank", "noopener,noreferrer");
+      }
+    } else {
+      router.push(target.path);
     }
+    // Close dropdown after navigation starts (defer to avoid portal unmount racing with router)
+    setTimeout(() => setOpen(false), 0);
   };
 
   const markAllRead = async () => {
@@ -633,6 +659,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
               </div>
             </div>
             <div className="flex-1 overflow-y-auto overscroll-contain">
+              {approveProGated && <ProFeatureNotice className="m-3" />}
               {notifications.length === 0 ? (
                 <p className="text-center text-ink-dim text-sm py-6">{t("notif.empty")}</p>
               ) : (

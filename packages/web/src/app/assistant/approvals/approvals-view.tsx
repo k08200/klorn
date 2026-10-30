@@ -10,6 +10,7 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo } from "react";
+import { ProFeatureNotice } from "../../../components/pro-feature-notice";
 import Button from "../../../components/ui/button";
 import EmptyState from "../../../components/ui/empty-state";
 import { Skeleton, SkeletonGroup } from "../../../components/ui/skeleton";
@@ -73,6 +74,7 @@ export function ApprovalsView() {
           {approvals.failed && (
             <BlockError message={t("today.approvals.error")} onRetry={approvals.retry} />
           )}
+          {approvals.proGated && <ProFeatureNotice className="mb-3" />}
           {settled && (
             <ApprovalList models={models} approving={approvals.approving} decisions={decisions} />
           )}

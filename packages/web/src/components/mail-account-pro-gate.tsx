@@ -9,10 +9,8 @@ import { useT } from "../lib/i18n";
  * provider; a second one is Pro (api billing/mail-account-entitlement.ts).
  */
 
-/** apiFetch throws `API <status>: <body>`; the gate is 403 ENTITLEMENT_REQUIRED. */
-export function isEntitlementRefusal(message: string): boolean {
-  return message.startsWith("API 403") && message.includes("ENTITLEMENT_REQUIRED");
-}
+/** The one refusal check (lib/entitlement.ts), re-exported for the connect sections. */
+export { isEntitlementRefusal } from "../lib/entitlement";
 
 export function MailAccountProGate() {
   const { t } = useT();

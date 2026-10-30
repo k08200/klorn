@@ -295,8 +295,8 @@ export function getProviderCooldownInfo(quotaKey: string): ProviderCooldownInfo 
  * check so the dashboard reports "AI unavailable" instead of the stale
  * "Overall OK" when every provider for this user is in cooldown.
  *
- * The four keys mirror how createCompletion routes calls: env-wide keys for
- * the shared Klorn account plus user-supplied keys that override them.
+ * The keys mirror how createCompletion routes calls: env-wide keys for the
+ * shared Klorn account plus user-supplied keys that override them.
  */
 export function snapshotUserProviderCooldowns(userId: string): {
   providers: ProviderCooldownInfo[];
@@ -305,6 +305,9 @@ export function snapshotUserProviderCooldowns(userId: string): {
   const quotaKeys = [
     "openrouter:env",
     "gemini:env",
+    // Only when configured: an unconfigured lane must not count as "available"
+    // and keep "every provider in cooldown" from ever reading as an outage.
+    ...(process.env.ANTHROPIC_API_KEY ? ["anthropic:env"] : []),
     `openrouter:user:${userId}`,
     `gemini:user:${userId}`,
   ];
@@ -324,12 +327,32 @@ export function isCreditError(error: unknown): boolean {
 
   if (status === 402) return true;
   return (
-    message.includes("402") ||
+    // Anchored: a "402" inside a request id or a token count is not a credit
+    // error (it used to cool shared keys down on unrelated 4xx/5xx text).
+    /^\s*402\b/.test(message) ||
     message.includes("insufficient credits") ||
     message.includes("budget exceeded") ||
     message.includes("payment required") ||
     message.includes("out of credits")
   );
+}
+
+/**
+ * Credit exhaustion established by the HTTP status — 402, which is also what
+ * the Anthropic adapter turns its prepaid-balance / spend-limit 400s into — or
+ * a message that STARTS with 402. Unlike isCreditError it ignores a "402"
+ * anywhere else in the text: a request id (`req_…402…`) or a token count
+ * (`1402153 tokens`) must not put a shared env key into a credit cooldown.
+ */
+export function isCreditExhaustionError(error: unknown): boolean {
+  const status =
+    typeof error === "object" && error !== null && "status" in error
+      ? (error as { status: unknown }).status
+      : undefined;
+  if (status === 402) return true;
+  if (typeof status === "number") return false;
+  const message = error instanceof Error ? error.message : "";
+  return /^\s*402\b/.test(message);
 }
 
 /**
@@ -371,6 +394,22 @@ export function isKeyLimitError(error: unknown): boolean {
     message.includes("too many requests") ||
     message.includes("quota exceeded")
   );
+}
+
+/**
+ * Provider-side capacity shortage (Anthropic's 529 overloaded_error). Not a
+ * key limit and not an operator fault: the SDK has already retried it with
+ * backoff, so the right move is the next provider, with no cooldown — the
+ * provider is usually back within seconds.
+ */
+export function isOverloadedError(error: unknown): boolean {
+  const status =
+    typeof error === "object" && error !== null && "status" in error
+      ? (error as { status: unknown }).status
+      : undefined;
+  if (status === 529) return true;
+  const message = error instanceof Error ? error.message : "";
+  return /^\s*529\b/.test(message) || message.includes("overloaded_error");
 }
 
 /** Any budget/quota error — credit exhaustion OR weekly key limit */
@@ -466,7 +505,26 @@ export function isFreeModel(model: string): boolean {
 interface ModelRateUsdPerMTok {
   input: number;
   output: number;
+  /**
+   * Prompt-cache pricing, as a multiple of `input`. Only rows whose provider
+   * reports cache reads AND writes distinctly carry it (Anthropic); without it
+   * cached tokens are billed as ordinary input — the conservative historical
+   * behaviour for providers whose cache discount we don't model.
+   */
+  cacheRead?: number;
+  /**
+   * Long-context tier: a request whose prompt (ALL input tokens, cache reads
+   * and writes included) exceeds `aboveTokens` pays these rates instead.
+   */
+  longContext?: { aboveTokens: number; input: number; output: number };
 }
+
+/** Anthropic cache-write multipliers of base input (same for every model). */
+const CACHE_WRITE_5M_MULTIPLIER = 1.25;
+const CACHE_WRITE_1H_MULTIPLIER = 2;
+
+/** Read from cache = 10% of base input on most Claude models. */
+const CLAUDE_CACHE_READ = 0.1;
 
 /**
  * Model-family pricing table. Matched case-insensitively: EVERY substring in
@@ -498,9 +556,32 @@ const MODEL_RATES: ReadonlyArray<{ match: readonly string[]; rate: ModelRateUsdP
   { match: ["gemini", "flash"], rate: { input: 0.3, output: 2.5 } },
   { match: ["gemini", "pro"], rate: { input: 1.25, output: 10 } },
   { match: ["gemma"], rate: { input: 0.1, output: 0.4 } },
-  { match: ["claude", "haiku"], rate: { input: 1, output: 5 } },
-  { match: ["claude", "sonnet"], rate: { input: 3, output: 15 } },
-  { match: ["claude", "opus"], rate: { input: 15, output: 75 } },
+  // Claude: Anthropic list prices read 2026-10-24
+  // (platform.claude.com/docs/en/about-claude/pricing). Ids are matched with
+  // dots folded to dashes, so the native `claude-haiku-5-5` and OpenRouter's
+  // `anthropic/claude-haiku-5.5` hit the same row. Specific SKUs above their
+  // family rows; the family rows keep the HIGHEST price in the family.
+  {
+    match: ["claude", "haiku-5-5"],
+    rate: {
+      input: 0.1,
+      output: 0.5,
+      cacheRead: CLAUDE_CACHE_READ,
+      longContext: { aboveTokens: 100_000, input: 0.5, output: 2.5 },
+    },
+  },
+  { match: ["claude", "haiku"], rate: { input: 1, output: 5, cacheRead: CLAUDE_CACHE_READ } },
+  { match: ["claude", "sonnet-5-5"], rate: { input: 2, output: 10, cacheRead: 0.05 } },
+  { match: ["claude", "sonnet"], rate: { input: 3, output: 15, cacheRead: CLAUDE_CACHE_READ } },
+  { match: ["claude", "opus-5-5"], rate: { input: 4, output: 20, cacheRead: 0.05 } },
+  // Deliberately NOT here yet: Sonnet 5 ($2/$10) and Opus 4.5–5 ($5/$25) are
+  // cheaper than their family rows, but both are live chat-catalog models on
+  // OpenRouter today — re-pricing them changes production cost caps without
+  // the Anthropic provider being on, so it ships as its own change. The family
+  // rows over-bill them (the safe direction).
+  { match: ["claude", "opus"], rate: { input: 15, output: 75, cacheRead: CLAUDE_CACHE_READ } },
+  { match: ["claude", "fable"], rate: { input: 10, output: 50, cacheRead: CLAUDE_CACHE_READ } },
+  { match: ["claude", "mythos"], rate: { input: 10, output: 50, cacheRead: CLAUDE_CACHE_READ } },
   { match: ["gpt", "mini"], rate: { input: 0.6, output: 2.4 } },
   { match: ["gpt", "nano"], rate: { input: 0.1, output: 0.4 } },
   { match: ["gpt"], rate: { input: 2.5, output: 10 } },
@@ -517,28 +598,88 @@ const MODEL_RATES: ReadonlyArray<{ match: readonly string[]; rate: ModelRateUsdP
  */
 const DEFAULT_MODEL_RATE: ModelRateUsdPerMTok = { input: 3, output: 15 };
 
-/** Resolve the per-M-token USD rate for a model id (family-prefix match). */
+/**
+ * Resolve the per-M-token USD rate for a model id (family-prefix match).
+ * Dots are folded to dashes first so a version written either way
+ * (`haiku-5.5` / `haiku-5-5`) matches the same row.
+ */
 export function resolveModelRateUsdPerMTok(model: string): ModelRateUsdPerMTok {
-  const id = model.toLowerCase();
+  const id = model.toLowerCase().replace(/\./g, "-");
   const hit = MODEL_RATES.find((entry) => entry.match.every((needle) => id.includes(needle)));
   return hit?.rate ?? DEFAULT_MODEL_RATE;
 }
 
 const TOKENS_PER_M = 1_000_000;
 
+/** Prompt-cache breakdown of a call's prompt tokens (all optional). */
+export interface PromptCacheUsage {
+  /** Prompt tokens served from cache. */
+  readTokens?: number | null;
+  /** Prompt tokens written to cache (all TTLs). */
+  writeTokens?: number | null;
+  /** Of `writeTokens`, those written with the 1-hour TTL. */
+  write1hTokens?: number | null;
+}
+
+/** The cache breakdown of an OpenAI-shape `usage` block ({} when absent). */
+export function promptCacheUsageOf(
+  usage:
+    | {
+        prompt_tokens_details?: {
+          cached_tokens?: number | null;
+          cache_write_tokens?: number | null;
+          cache_write_1h_tokens?: number | null;
+        } | null;
+      }
+    | null
+    | undefined,
+): PromptCacheUsage {
+  const details = usage?.prompt_tokens_details;
+  if (!details) return {};
+  return {
+    readTokens: details.cached_tokens,
+    writeTokens: details.cache_write_tokens,
+    write1hTokens: details.cache_write_1h_tokens,
+  };
+}
+
+function nonNegative(value: number | null | undefined): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0;
+}
+
 /**
  * Model-aware cost estimate feeding the token ledger, admin UI, and the
  * daily cost caps (via estimatePrebillCents / trueUpCostLedgers).
+ *
+ * `promptTokens` is the TOTAL prompt (OpenAI semantics: cache reads and writes
+ * included). For rows that model prompt caching, the cache share is priced at
+ * the read / write multipliers and only the remainder at base input; the cache
+ * figures are clamped to the prompt total so a malformed usage block can never
+ * price more tokens than were sent.
  */
 export function estimateModelCostUsd(
   model: string,
   promptTokens: number,
   completionTokens: number,
+  cache: PromptCacheUsage = {},
 ): number {
   if (isFreeModel(model)) return 0;
-  const rate = resolveModelRateUsdPerMTok(model);
-  const prompt = Number.isFinite(promptTokens) && promptTokens > 0 ? promptTokens : 0;
-  const completion =
-    Number.isFinite(completionTokens) && completionTokens > 0 ? completionTokens : 0;
-  return (prompt * rate.input + completion * rate.output) / TOKENS_PER_M;
+  const family = resolveModelRateUsdPerMTok(model);
+  const prompt = nonNegative(promptTokens);
+  const completion = nonNegative(completionTokens);
+  const long = family.longContext;
+  const rate = long && prompt > long.aboveTokens ? { ...family, ...long } : family;
+  if (family.cacheRead === undefined) {
+    return (prompt * rate.input + completion * rate.output) / TOKENS_PER_M;
+  }
+  const read = Math.min(nonNegative(cache.readTokens), prompt);
+  const write = Math.min(nonNegative(cache.writeTokens), prompt - read);
+  const write1h = Math.min(nonNegative(cache.write1hTokens), write);
+  const uncached = prompt - read - write;
+  const inputUsd =
+    uncached * rate.input +
+    read * rate.input * family.cacheRead +
+    (write - write1h) * rate.input * CACHE_WRITE_5M_MULTIPLIER +
+    write1h * rate.input * CACHE_WRITE_1H_MULTIPLIER;
+  return (inputUsd + completion * rate.output) / TOKENS_PER_M;
 }

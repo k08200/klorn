@@ -11,12 +11,14 @@ import type { CommitmentItem } from "../../components/commitment-card";
 import { FirewallBoard } from "../../components/firewall-board";
 import { HubHandoff } from "../../components/hub-handoff";
 import PmfCard from "../../components/pmf-card";
+import { ProFeatureNotice } from "../../components/pro-feature-notice";
 import { RejectReasonDialog } from "../../components/reject-reason-dialog";
 import ScreenerCard from "../../components/screener-card";
 import { useToast } from "../../components/toast";
 import ErrorAlert from "../../components/ui/error-alert";
 import { apiFetch } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
+import { isEntitlementRefusal } from "../../lib/entitlement";
 import { useT } from "../../lib/i18n";
 import type { InboxSummary, ReplyNeededEmail } from "../../lib/inbox-summary";
 import { queryKeys } from "../../lib/query-keys";
@@ -69,6 +71,8 @@ function CommandCenterView() {
   >({});
   // Action id awaiting the reject-with-reason dialog; null when closed.
   const [rejectTargetId, setRejectTargetId] = useState<string | null>(null);
+  // Approving executes the action, which is Pro: a FREE user's 403 shows the notice.
+  const [proGated, setProGated] = useState(false);
   const { toast } = useToast();
   const { t } = useT();
 
@@ -193,6 +197,7 @@ function CommandCenterView() {
   const handleApprove = async (actionId: string) => {
     if (actionLoading[actionId]) return;
     setActionLoading((prev) => ({ ...prev, [actionId]: "approve" }));
+    setProGated(false);
     try {
       await apiFetch(`/api/chat/pending-actions/${actionId}/approve`, { method: "POST" });
       queryClient.setQueryData<PendingActionItem[]>(
@@ -204,6 +209,10 @@ function CommandCenterView() {
       );
       toast(t("inboxLegacy.toast.approved"), "success");
     } catch (err) {
+      if (isEntitlementRefusal(err)) {
+        setProGated(true);
+        return;
+      }
       captureClientError(err, { scope: "inbox.approve", actionId });
       toast(t("inboxLegacy.toast.approveFailed"), "error");
     } finally {
@@ -294,6 +303,7 @@ function CommandCenterView() {
           setFilter={setFilter}
           loading={loading || syncing}
           error={error}
+          proGated={proGated}
           view={view}
           onSelectView={setView}
           actionLoading={actionLoading}
@@ -365,6 +375,7 @@ function DecisionsBody({
   setFilter,
   loading,
   error,
+  proGated,
   view,
   onSelectView,
   actionLoading,
@@ -380,6 +391,7 @@ function DecisionsBody({
   setFilter: (f: StatusFilter) => void;
   loading: boolean;
   error: string | null;
+  proGated: boolean;
   view: SegmentView;
   onSelectView: (next: SegmentView) => void;
   actionLoading: Record<string, "approve" | "reject" | "snooze" | null>;
@@ -490,6 +502,7 @@ function DecisionsBody({
         />
 
         {error && <ErrorAlert className="mb-4">{error}</ErrorAlert>}
+        {proGated && <ProFeatureNotice className="mb-4" />}
 
         {/* 2-column grid — decisions fill the wide column, reply rail on the right. */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">

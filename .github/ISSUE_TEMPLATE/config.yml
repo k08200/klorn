@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/k08200/klorn/blob/main/SECURITY.md
+    about: Never open a public issue for a vulnerability. Follow SECURITY.md to report it privately.
+  - name: Ask a question
+    url: https://github.com/k08200/klorn/discussions/categories/q-a
+    about: Setup help, "how does X work", self-hosting questions.
+  - name: Share an idea
+    url: https://github.com/k08200/klorn/discussions/categories/ideas
+    about: Early ideas that aren't a concrete feature request yet.

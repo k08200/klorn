@@ -16,6 +16,14 @@ vi.mock("../agentcore/autonomous-agent.js", () => ({
   runAgentForUser: vi.fn(),
 }));
 
+// Only createCompletion is replaced (the guideline-advice LLM call); the rest
+// of llm/openai.js stays real.
+const createCompletion = vi.hoisted(() => vi.fn());
+vi.mock("../llm/openai.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../llm/openai.js")>()),
+  createCompletion,
+}));
+
 // In-memory prisma stub capturing upsert payloads.
 const upsertSpy = vi.fn();
 const findUniqueSpy = vi.fn();
@@ -519,6 +527,36 @@ describe("PATCH /api/automations timezone validation", () => {
     const call = upsertSpy.mock.calls[0][0];
     expect(call.update.timezoneMode).toBeNull();
     expect(res.json().timezoneMode).toBe("AUTO");
+    await app.close();
+  });
+});
+
+describe("POST /api/automations/guideline-advice", () => {
+  it("answers the daily cost cap with 429 + its code, not a 'failed' 502", async () => {
+    createCompletion.mockRejectedValueOnce(
+      Object.assign(new Error("Quota used for today."), { name: "DailyCostCapExceededError" }),
+    );
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/automations/guideline-advice",
+      payload: { guideline: "Reply politely." },
+    });
+    expect(res.statusCode).toBe(429);
+    expect(res.json()).toEqual({ error: "Quota used for today.", code: "DAILY_COST_CAP" });
+    await app.close();
+  });
+
+  it("still answers 502 for an ordinary provider failure", async () => {
+    createCompletion.mockRejectedValueOnce(new Error("provider down"));
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/automations/guideline-advice",
+      payload: { guideline: "Reply politely." },
+    });
+    expect(res.statusCode).toBe(502);
+    expect(res.json()).toEqual({ error: "Advice generation failed" });
     await app.close();
   });
 });

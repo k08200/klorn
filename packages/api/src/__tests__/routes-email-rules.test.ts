@@ -138,6 +138,22 @@ describe("POST /rules/compile", () => {
     expect(res.statusCode).toBe(502);
     await app.close();
   });
+
+  it("answers the daily cost cap with 429 + its code", async () => {
+    compileMock.mockRejectedValue(
+      Object.assign(new Error("Quota used for today."), { name: "DailyCostCapExceededError" }),
+    );
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/rules/compile",
+      headers: auth(),
+      payload: { text: "some rule" },
+    });
+    expect(res.statusCode).toBe(429);
+    expect(res.json()).toEqual({ error: "Quota used for today.", code: "DAILY_COST_CAP" });
+    await app.close();
+  });
 });
 
 describe("POST /rules/pins", () => {

@@ -1,0 +1,77 @@
+name: Bug report
+description: Something in Klorn doesn't work the way it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Two rules before you start:
+
+        - **Security problems don't go here.** If this could let someone read another user's mail, bypass sign-in, send mail without approval, or crash the server with a crafted input, report it privately as described in [SECURITY.md](https://github.com/k08200/klorn/blob/main/SECURITY.md).
+        - **Remove personal data.** No email addresses, message content, tokens or account IDs in text, logs or screenshots. Replace them with `user@example.com` and invented text.
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where did it happen?
+      options:
+        - Web app
+        - macOS app
+        - Windows app
+        - Mobile app
+        - API
+        - Self-host setup (Docker / compose)
+        - Website (klorn.ai)
+        - Docs
+    validations:
+      required: true
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Hosted or self-hosted?
+      options:
+        - Hosted (klorn.ai)
+        - Self-hosted
+        - Local development
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: App version (macOS/Windows/mobile "About"), image tag, or `git rev-parse --short HEAD`.
+      placeholder: e.g. 0.4.80108 or 6667282d
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you saw. Include the exact error text if there is one.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to ...
+        2. Click ...
+        3. See ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Optional. Redact email addresses, message content and tokens first.
+      render: shell
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS and version, browser, and for self-host the LLM provider you configured (no keys).
+      placeholder: macOS 15.4, Safari 18 / Ubuntu 24.04, Docker 27, Ollama qwen3:8b

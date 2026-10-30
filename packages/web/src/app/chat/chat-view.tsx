@@ -6,10 +6,12 @@
 // Pro-gated POST /api/calendar.
 
 import { useEffect, useRef } from "react";
+import { DailyCapLine } from "../../components/daily-cap-line";
 import EventDraftCard from "../../components/event-draft-card";
 import ErrorAlert from "../../components/ui/error-alert";
 import LoadingState from "../../components/ui/loading-state";
 import VoiceButton from "../../components/voice-button";
+import type { DailyCapCode } from "../../lib/daily-cap";
 import { useT } from "../../lib/i18n";
 import {
   type AssistantChatMessage as ChatMessage,
@@ -45,6 +47,7 @@ export function ChatView({ hub = false }: { hub?: boolean }) {
     newChat,
     pendingText,
     sendError,
+    capCodeFor,
     sending,
     messages,
     messagesLoading,
@@ -115,7 +118,7 @@ export function ChatView({ hub = false }: { hub?: boolean }) {
         ) : (
           <>
             {messages.map((m) => (
-              <MessageBubble key={m.id} message={m} hub={hub} />
+              <MessageBubble key={m.id} message={m} hub={hub} capCode={capCodeFor(m)} />
             ))}
             {pendingText && (
               <div className="flex justify-end transition duration-150 ease-strong starting:translate-y-1 starting:opacity-0 motion-reduce:transition-none">
@@ -190,7 +193,15 @@ export function ChatView({ hub = false }: { hub?: boolean }) {
   );
 }
 
-function MessageBubble({ message, hub }: { message: ChatMessage; hub: boolean }) {
+function MessageBubble({
+  message,
+  hub,
+  capCode,
+}: {
+  message: ChatMessage;
+  hub: boolean;
+  capCode: DailyCapCode | null;
+}) {
   if (message.role === "USER") {
     return (
       <div className="flex justify-end transition duration-150 ease-strong starting:translate-y-1 starting:opacity-0 motion-reduce:transition-none">
@@ -211,7 +222,11 @@ function MessageBubble({ message, hub }: { message: ChatMessage; hub: boolean })
         K
       </span>
       <div className="max-w-[85%] rounded-2xl rounded-tl-md border border-line/70 bg-surface-panel px-4 py-2.5 text-sm text-ink-strong shadow-[0_1px_2px_rgba(15,23,42,0.05)]">
-        <p className="whitespace-pre-wrap">{message.content}</p>
+        {capCode ? (
+          <DailyCapLine code={capCode} />
+        ) : (
+          <p className="whitespace-pre-wrap">{message.content}</p>
+        )}
         {draft && <EventDraftCard draft={draft} />}
       </div>
     </div>

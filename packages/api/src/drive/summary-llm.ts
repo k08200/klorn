@@ -19,7 +19,7 @@ import { usdToFractionalCents } from "../billing/cents.js";
 import type { CallPriority } from "../billing/quota-limiter.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 import { parseLlmJson } from "../llm/llm-json.js";
-import { estimateModelCostUsd } from "../llm/model-fallback.js";
+import { estimateModelCostUsd, promptCacheUsageOf } from "../llm/model-fallback.js";
 import {
   createCompletion,
   DailyCostCapExceededError,
@@ -108,10 +108,20 @@ function cleanSummary(value: unknown): string | null {
 
 function costMicroCentsOf(
   model: string,
-  usage: { prompt_tokens?: number | null; completion_tokens?: number | null } | undefined,
+  usage:
+    | (NonNullable<Parameters<typeof promptCacheUsageOf>[0]> & {
+        prompt_tokens?: number | null;
+        completion_tokens?: number | null;
+      })
+    | undefined,
 ): number {
   if (!usage) return 0;
-  const usd = estimateModelCostUsd(model, usage.prompt_tokens ?? 0, usage.completion_tokens ?? 0);
+  const usd = estimateModelCostUsd(
+    model,
+    usage.prompt_tokens ?? 0,
+    usage.completion_tokens ?? 0,
+    promptCacheUsageOf(usage),
+  );
   return Math.round(usdToFractionalCents(usd) * MICRO_PER_CENT);
 }
 

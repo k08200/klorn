@@ -219,6 +219,7 @@ function envProviderSummary(): string {
   const present = [
     process.env.OPENROUTER_API_KEY ? "openrouter" : null,
     process.env.GEMINI_API_KEY ? "gemini" : null,
+    process.env.ANTHROPIC_API_KEY ? "anthropic" : null,
     process.env.OPENAI_COMPAT_BASE_URL ? "openai-compat" : null,
   ].filter((name): name is string => name !== null);
   return present.length > 0 ? present.join(", ") : "NONE CONFIGURED";

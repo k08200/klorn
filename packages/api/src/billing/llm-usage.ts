@@ -18,7 +18,7 @@
  */
 
 import { LLM_USAGE_LOG_DISABLED } from "../config.js";
-import { estimateModelCostUsd } from "../llm/model-fallback.js";
+import { estimateModelCostUsd, promptCacheUsageOf } from "../llm/model-fallback.js";
 import { captureError } from "../sentry.js";
 // NOTE: db.js (Prisma) is imported LAZILY inside the async functions below.
 // openai.ts imports this module statically, and a static db.js import here
@@ -41,7 +41,16 @@ export interface ProviderUsage {
    * providers that report it). Absent = the provider doesn't cache or
    * doesn't say — recorded as 0, never estimated.
    */
-  prompt_tokens_details?: { cached_tokens?: number | null } | null;
+  prompt_tokens_details?: {
+    cached_tokens?: number | null;
+    /**
+     * Prompt tokens written to the cache (Anthropic reports these separately
+     * and bills them above base input; OpenRouter uses the same field name).
+     */
+    cache_write_tokens?: number | null;
+    /** Of cache_write_tokens, those written with the 1-hour TTL (2x input). */
+    cache_write_1h_tokens?: number | null;
+  } | null;
 }
 
 export interface RecordLlmUsageInput {
@@ -125,7 +134,12 @@ export async function trueUpCostLedgers(input: {
     if (promptTokens == null && completionTokens == null) return;
 
     const actualCents = usdToFractionalCents(
-      estimateModelCostUsd(input.model, promptTokens ?? 0, completionTokens ?? 0),
+      estimateModelCostUsd(
+        input.model,
+        promptTokens ?? 0,
+        completionTokens ?? 0,
+        promptCacheUsageOf(input.usage),
+      ),
     );
     // Both sides are fractional cents now — no 1¢ floor on either, so the
     // delta settles at 0.01¢ precision.

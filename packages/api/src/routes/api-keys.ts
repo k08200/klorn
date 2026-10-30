@@ -9,6 +9,7 @@
 import type { ApiKeyPermissionWire, ApiKeyWire } from "@klorn/contract";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
+import { requireEntitled } from "../billing/entitlement-guard.js";
 import { mcpWriteToolsEnabled } from "../config.js";
 import { prisma } from "../db.js";
 import {
@@ -120,10 +121,13 @@ export async function apiKeyRoutes(app: FastifyInstance) {
     },
   );
 
+  // Minting is paid: a key's ONLY use is POST /api/mcp, which refuses
+  // non-entitled owners (routes/mcp.ts), so a free key would be dead on
+  // arrival. Listing and revoking stay open so a downgraded user can clean up.
   app.post(
     "/",
     {
-      preHandler: requireAuth,
+      preHandler: [requireAuth, requireEntitled],
       config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
     },
     async (request, reply) => {

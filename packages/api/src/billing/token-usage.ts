@@ -1,5 +1,5 @@
 import { db } from "../db.js";
-import { estimateModelCostUsd } from "../llm/model-fallback.js";
+import { estimateModelCostUsd, promptCacheUsageOf } from "../llm/model-fallback.js";
 import { captureError } from "../sentry.js";
 
 /** OpenAI-shaped usage block returned alongside a completion. */
@@ -7,6 +7,12 @@ export interface LlmUsage {
   prompt_tokens?: number;
   completion_tokens?: number;
   total_tokens?: number;
+  /** Prompt-cache breakdown, when the provider reports one (priced by promptCacheUsageOf). */
+  prompt_tokens_details?: {
+    cached_tokens?: number | null;
+    cache_write_tokens?: number | null;
+    cache_write_1h_tokens?: number | null;
+  } | null;
 }
 
 /**
@@ -26,7 +32,12 @@ export async function trackTokenUsage(
   const prompt = usage.prompt_tokens || 0;
   const completion = usage.completion_tokens || 0;
   const total = usage.total_tokens || prompt + completion;
-  const estimatedCost = estimateModelCostUsd(modelName, prompt, completion);
+  const estimatedCost = estimateModelCostUsd(
+    modelName,
+    prompt,
+    completion,
+    promptCacheUsageOf(usage),
+  );
   try {
     await db.tokenUsage.create({
       data: {

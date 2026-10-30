@@ -1,0 +1,58 @@
+name: Mail provider request
+description: Ask for (or offer to build) support for another mail or calendar provider.
+labels: ["enhancement", "area/providers"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Klorn reads mail through provider adapters. A new provider is easiest when it speaks a standard protocol (IMAP, JMAP, CalDAV) or has a public API with documented auth. Providers that need an OAuth app registered by the maintainer take longer, because that registration is a separate process.
+  - type: input
+    id: provider
+    attributes:
+      label: Provider
+      placeholder: e.g. Fastmail, Proton Mail Bridge, Zoho Mail, a self-hosted Dovecot
+    validations:
+      required: true
+  - type: dropdown
+    id: protocol
+    attributes:
+      label: How can a client reach it?
+      multiple: true
+      options:
+        - IMAP / SMTP
+        - JMAP
+        - CalDAV / CardDAV
+        - Microsoft Graph
+        - Provider's own REST API
+        - Not sure
+    validations:
+      required: true
+  - type: dropdown
+    id: auth
+    attributes:
+      label: How does a user sign in?
+      multiple: true
+      options:
+        - App-specific password
+        - OAuth 2.0 (needs an app registration)
+        - API token the user creates
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: docs
+    attributes:
+      label: Provider documentation
+      description: Links to the protocol / API / auth docs.
+  - type: textarea
+    id: why
+    attributes:
+      label: Why this provider?
+      description: Who uses it, and what they can't do with Klorn today.
+  - type: checkboxes
+    id: help
+    attributes:
+      label: How can you help?
+      options:
+        - label: I can build the adapter (I've read CONTRIBUTING.md).
+        - label: I have an account and can test a branch against it.

@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../../components/auth-guard";
+import { ProFeatureNotice } from "../../../components/pro-feature-notice";
+import ErrorAlert from "../../../components/ui/error-alert";
 import { apiFetch } from "../../../lib/api";
+import { isEntitlementRefusal } from "../../../lib/entitlement";
 import { useT } from "../../../lib/i18n";
 import { safeMeetingHref } from "../../../lib/meeting-link";
 import { captureClientError } from "../../../lib/sentry";
@@ -125,11 +128,17 @@ function avatarGradient(name: string): string {
 
 // `timeZone` is the user's stored IANA zone — never rely on the browser
 // default. 24-hour format keeps AM/PM ambiguity out of the rendered range.
-function formatRange(start: string, end: string, allDay: boolean, timeZone: string): string {
+function formatRange(
+  start: string,
+  end: string,
+  allDay: boolean,
+  timeZone: string,
+  locale: string,
+): string {
   const s = new Date(start);
   const e = new Date(end);
   if (allDay) {
-    return s.toLocaleDateString("en-US", {
+    return s.toLocaleDateString(locale, {
       weekday: "long",
       month: "long",
       day: "numeric",
@@ -139,19 +148,19 @@ function formatRange(start: string, end: string, allDay: boolean, timeZone: stri
   }
   const sameLocalDay =
     s.toLocaleDateString("en-CA", { timeZone }) === e.toLocaleDateString("en-CA", { timeZone });
-  const dateStr = s.toLocaleDateString("en-US", {
+  const dateStr = s.toLocaleDateString(locale, {
     weekday: "long",
     month: "long",
     day: "numeric",
     timeZone,
   });
-  const startTime = s.toLocaleTimeString("en-US", {
+  const startTime = s.toLocaleTimeString(locale, {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
     timeZone,
   });
-  const endTime = e.toLocaleTimeString("en-US", {
+  const endTime = e.toLocaleTimeString(locale, {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
@@ -161,7 +170,7 @@ function formatRange(start: string, end: string, allDay: boolean, timeZone: stri
     return `${dateStr} · ${startTime} – ${endTime}`;
   }
   const longRange = (d: Date) =>
-    d.toLocaleString("en-US", {
+    d.toLocaleString(locale, {
       month: "short",
       day: "numeric",
       hour: "2-digit",
@@ -215,7 +224,7 @@ function MeetingLinkLine({ link }: { link: string }) {
 
 function CalendarEventDetail({ id }: { id: string }) {
   const router = useRouter();
-  const { t } = useT();
+  const { t, locale } = useT();
   const userTimezone = useDisplayTimeZone();
   const [event, setEvent] = useState<CalendarEvent | null>(null);
   const [pack, setPack] = useState<PrepPack | null>(null);
@@ -223,6 +232,8 @@ function CalendarEventDetail({ id }: { id: string }) {
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Deleting is Pro: "pro" shows the upgrade notice, "failed" a plain error.
+  const [deleteError, setDeleteError] = useState<"pro" | "failed" | null>(null);
 
   const load = useCallback(() => {
     Promise.all([
@@ -246,11 +257,17 @@ function CalendarEventDetail({ id }: { id: string }) {
 
   const handleDelete = async () => {
     setDeleting(true);
+    setDeleteError(null);
     try {
       await apiFetch(`/api/calendar/${id}`, { method: "DELETE" });
       router.push("/calendar");
     } catch (err) {
-      captureClientError(err, { scope: "calendar-detail.delete" });
+      if (isEntitlementRefusal(err)) {
+        setDeleteError("pro");
+      } else {
+        captureClientError(err, { scope: "calendar-detail.delete" });
+        setDeleteError("failed");
+      }
       setDeleting(false);
       setConfirmDelete(false);
     }
@@ -310,7 +327,7 @@ function CalendarEventDetail({ id }: { id: string }) {
             <div className="min-w-0 flex-1">
               <h1 className="break-words text-xl font-semibold text-ink">{event.title}</h1>
               <p className="mt-1 text-label font-normal text-ink-mid">
-                {formatRange(event.startTime, event.endTime, event.allDay, userTimezone)}
+                {formatRange(event.startTime, event.endTime, event.allDay, userTimezone, locale)}
               </p>
               {event.location && (
                 <p className="mt-1 break-words text-caption text-ink-dim">📍 {event.location}</p>
@@ -370,6 +387,11 @@ function CalendarEventDetail({ id }: { id: string }) {
               )}
             </div>
           </div>
+
+          {deleteError === "pro" && <ProFeatureNotice className="mt-3" />}
+          {deleteError === "failed" && (
+            <ErrorAlert className="mt-3">{t("calendar.error.delete")}</ErrorAlert>
+          )}
 
           {event.description && (
             <p className="mt-4 whitespace-pre-wrap rounded-lg border border-line bg-surface-raised p-3 text-label font-normal leading-6 text-ink-mid">

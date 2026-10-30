@@ -305,7 +305,7 @@ export default function PlaygroundPage() {
           href="/early-access"
           className="rounded-md border border-line px-3 py-1.5 text-xs font-medium text-ink-mid transition hover:border-line-strong"
         >
-          Get early access
+          Start free
         </Link>
       </nav>
 

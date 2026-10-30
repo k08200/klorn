@@ -117,3 +117,86 @@ jobs:
           cd packages/api && npx tsx scripts/poc-accuracy.ts \
             --in=eval/real-eval-set.json --concurrency=2 --delay=500 \
             || echo "::warning::Real-mail per-tier floors not met (report-only until PUSH support ≥10) — numbers are in this step's log"
+
+  # Claude (native Anthropic provider) measured against the SAME gate set and
+  # the real-mail readout, report-only: it informs the founder's decision to
+  # make Anthropic the primary provider (LLM_PROVIDER_ORDER=anthropic,...) and
+  # never blocks a PR. Runs only when the ANTHROPIC_API_KEY repo secret exists.
+  # Anthropic is the ONLY provider in this job, so a provider failure drops
+  # items to the keyword fallback and the run reports INSTRUMENT DEGRADED
+  # (exit 3) instead of silently measuring another model.
+  # When Anthropic becomes primary in prod, this job becomes the gate and the
+  # OpenRouter job above is retired (see the PR's env plan).
+  llm-eval-claude:
+    name: LLM judge accuracy — Claude Haiku 5.5 (report-only)
+    runs-on: ubuntu-latest
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      # Optional: only for a key not scoped to a workspace.
+      ANTHROPIC_WORKSPACE_ID: ${{ secrets.ANTHROPIC_WORKSPACE_ID }}
+      LLM_PROVIDER_ORDER: anthropic
+      JUDGE_MODEL: claude-haiku-5-5
+      DATABASE_URL: "postgresql://eval:eval@localhost:5432/eval"
+      GLOBAL_DAILY_COST_CAP_CENTS: "0"
+      LLM_USAGE_LOG_DISABLED: "true"
+      JUDGE_INCLUDE_BODY: "true"
+    steps:
+      - name: Check for Anthropic key
+        id: key
+        run: |
+          if [ -n "$ANTHROPIC_API_KEY" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No ANTHROPIC_API_KEY secret — skipping the Claude eval."
+          fi
+
+      - uses: actions/checkout@v7
+        if: steps.key.outputs.present == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.key.outputs.present == 'true'
+        with:
+          node-version: 22
+
+      - uses: pnpm/action-setup@v6
+        if: steps.key.outputs.present == 'true'
+
+      - name: Install dependencies
+        if: steps.key.outputs.present == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma types
+        if: steps.key.outputs.present == 'true'
+        run: cd packages/api && npx prisma generate
+
+      - name: Live adapter smoke (report-only)
+        if: steps.key.outputs.present == 'true'
+        run: |
+          cd packages/api
+          npx tsx scripts/anthropic-smoke.ts || echo "::warning::Anthropic adapter smoke failed — see this step's log"
+
+      # Two runs: the 5.5 family takes no temperature, so run-to-run variance
+      # is part of the measurement (the gemini pin runs at temperature 0).
+      - name: Gate set, 2 runs (report-only)
+        if: steps.key.outputs.present == 'true'
+        run: |
+          cd packages/api
+          set +e
+          for run in 1 2; do
+            echo "::group::Claude gate run $run"
+            NODE_OPTIONS="--import $PWD/scripts/anthropic-usage-tap.mjs" \
+              npx tsx scripts/poc-accuracy.ts --in=eval/judge-eval-set.json --concurrency=2 --delay=500
+            code=$?
+            echo "::endgroup::"
+            echo "Claude gate run $run exit code: $code (0 pass, 2 floor failure, 3 instrument degraded)"
+            if [ "$code" != "0" ]; then echo "::warning::Claude gate run $run exited $code"; fi
+          done
+
+      - name: Real-mail readout (report-only)
+        if: steps.key.outputs.present == 'true'
+        run: |
+          cd packages/api
+          NODE_OPTIONS="--import $PWD/scripts/anthropic-usage-tap.mjs" \
+            npx tsx scripts/poc-accuracy.ts --in=eval/real-eval-set.json --concurrency=2 --delay=500 \
+            || echo "::warning::Claude real-mail readout exited non-zero — numbers are in this step's log"

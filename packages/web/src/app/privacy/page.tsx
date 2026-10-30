@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description: "How Klorn handles Gmail, Calendar, and account data during beta.",
 };
 
-const updatedAt = "October 19, 2026";
+const updatedAt = "October 30, 2026";
 
 /** Stable, URL-safe anchor id so the TOC links line up with each section. */
 function slug(title: string): string {
@@ -170,8 +170,9 @@ export default function PrivacyPage() {
               features you see.
             </p>
             <p>
-              Email sending is treated as a sensitive action. During beta, Klorn does not send
-              replies without your awareness. Email actions require your approval before sending.
+              Email sending is treated as a sensitive action. Mail Klorn sends waits for your
+              approval, unless you turn on automatic replies (Auto mode or an auto-reply rule):
+              those replies are sent without asking each time.
             </p>
             <p>
               <strong className="text-ink">Limited Use disclosure.</strong> Klorn's use and transfer
@@ -270,10 +271,12 @@ export default function PrivacyPage() {
               their models on the data we send.
             </p>
             <p>
-              Klorn&apos;s server-side AI providers are Google (Gemini API) and OpenRouter, both
-              used under API terms that exclude training on submitted data. If you bring your own
-              API key or point a self-hosted Klorn at your own OpenAI-compatible endpoint, that
-              provider is used only for your own requests.
+              Klorn&apos;s server-side AI providers are Anthropic (Claude API), Google (Gemini API)
+              and OpenRouter, all used under API terms that exclude training on submitted data.
+              Anthropic deletes API inputs and outputs within 30 days by default, longer only for
+              content its usage-policy enforcement flags. If you bring your own API key or point a
+              self-hosted Klorn at your own OpenAI-compatible endpoint, that provider is used only
+              for your own requests.
             </p>
           </Section>
 

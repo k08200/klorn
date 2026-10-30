@@ -11,11 +11,13 @@
 import type { CompileRulesResponse, TierPinInput, TierPinsListResponse } from "@klorn/contract";
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../lib/api";
+import { isEntitlementRefusal } from "../lib/entitlement";
 import { useT } from "../lib/i18n";
 import { captureClientError } from "../lib/sentry";
 import { CORE_TIERS } from "../lib/tiers";
 import { useConfirm } from "./confirm-dialog";
 import { LaneChip } from "./lane-chip";
+import { ProFeatureNotice } from "./pro-feature-notice";
 import { useToast } from "./toast";
 
 const RULE_TEXT_MAX = 500;
@@ -39,6 +41,8 @@ export function RulesSection() {
   const [pins, setPins] = useState<TierPinsListResponse["pins"]>([]);
   const [text, setText] = useState("");
   const [compiling, setCompiling] = useState(false);
+  // Compiling is Pro (one LLM call): a FREE user's 403 shows the upgrade notice.
+  const [proGated, setProGated] = useState(false);
   const [proposals, setProposals] = useState<TierPinInput[] | null>(null);
   const [unsupported, setUnsupported] = useState<string[]>([]);
   const [applying, setApplying] = useState(false);
@@ -55,6 +59,7 @@ export function RulesSection() {
 
   const compile = async () => {
     setCompiling(true);
+    setProGated(false);
     try {
       const res = await apiFetch<CompileRulesResponse>("/api/email/rules/compile", {
         method: "POST",
@@ -63,6 +68,10 @@ export function RulesSection() {
       setProposals(res.pins);
       setUnsupported(res.unsupported);
     } catch (err) {
+      if (isEntitlementRefusal(err)) {
+        setProGated(true);
+        return;
+      }
       captureClientError(err, { scope: "settings.rules-compile" });
       toast(t("settings.rules.compileFailed"), "error");
     } finally {
@@ -129,6 +138,7 @@ export function RulesSection() {
         >
           {compiling ? t("settings.rules.compiling") : t("settings.rules.compile")}
         </button>
+        {proGated && <ProFeatureNotice />}
       </div>
 
       {proposals && (
