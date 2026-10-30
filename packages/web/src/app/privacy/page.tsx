@@ -159,10 +159,11 @@ export default function PrivacyPage() {
             </p>
             <p>
               Klorn does use your browser&apos;s own local storage and session storage. This is data
-              kept on your device by Klorn&apos;s own pages, not sent to anyone else, and you can
-              erase all of it at any time by clearing site data for the Klorn domains in your
-              browser. Anything in session storage is discarded as soon as you close the tab. Klorn
-              uses it for the following, and nothing else.
+              kept on your device, readable only by Klorn&apos;s own pages and never by another
+              site. Most of it never leaves your browser; where a value is sent to Klorn, it says so
+              below. You can erase all of it at any time by clearing site data for the Klorn domains
+              in your browser, and anything in session storage is discarded as soon as you close the
+              tab. Klorn uses it for the following, and nothing else.
             </p>
             <ul className="list-disc space-y-2 pl-5">
               <li>
