@@ -21,7 +21,7 @@ import { openExternal } from "../../platform/external";
 import { MailGlyph, type MailGlyphName } from "../../ui/MailGlyph";
 import { SourceBadge } from "../../ui/SourceBadge";
 import { EmptyState, ProblemState } from "../../ui/StateView";
-import { draftErrorKey, replyTarget } from "./compose";
+import { replyTarget, WriteError } from "./compose";
 import type { MailTarget } from "./controller";
 import {
   cachedRow,
@@ -35,6 +35,7 @@ import {
   accountOf,
   attentionByEmail,
   avatarTone,
+  draftErrorKey,
   monogram,
   neighbours,
   senderLabel,
@@ -566,7 +567,7 @@ export function Reader(props: ReaderProps) {
               </h2>
               {draftError ? (
                 <p className="reply-form__error" role="alert">
-                  {t(draftError)}
+                  <WriteError messageKey={draftError} />
                 </p>
               ) : (
                 <p className="draft-card__hint">{t("reader.draft.offer")}</p>

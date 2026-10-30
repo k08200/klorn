@@ -19,7 +19,7 @@ export function AssistantSheet({ open, onClose }: { open: boolean; onClose: () =
       variant="side"
       className="assistant-sheet"
     >
-      <ChatThread variant="sheet" />
+      <ChatThread variant="sheet" onNavigate={onClose} />
     </Sheet>
   );
 }
