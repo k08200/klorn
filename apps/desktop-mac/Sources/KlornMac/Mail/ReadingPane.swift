@@ -284,6 +284,7 @@ struct ReadingPane: View {
                 .overlay(RoundedRectangle(cornerRadius: m.editorRadius).strokeBorder(Theme.field))
             if let err = model.replyError {
                 Text(err).font(m.caption).foregroundStyle(m.warning)
+                if PlanUpgrade.offersUpgrade(for: err) { UpgradeToProLink() }
             }
             HStack {
                 Spacer()
@@ -354,9 +355,18 @@ struct ReadingPane: View {
                     .disabled(model.isSummarizing)
                 }
                 if expanded {
-                if model.summarizeFailed {
+                switch model.summarizeFailure {
+                case .needsPro?:
+                    HStack(spacing: Theme.s2) {
+                        Text(L("error.needsPro"))
+                            .font(m.caption).foregroundStyle(Theme.textDim)
+                        UpgradeToProLink()
+                    }
+                case .failed?:
                     Text(L("mail.summarizeFailed"))
                         .font(m.caption).foregroundStyle(Theme.textDim)
+                case nil:
+                    EmptyView()
                 }
                 if let summary = email.summary, !summary.isEmpty {
                     // Wraps to three lines (audit M2) instead of cutting
@@ -604,7 +614,10 @@ struct ReadingPane: View {
             case .ready:
                 EmptyView()
             case .needsPro:
-                Text(L("push.proRequired")).font(m.caption).foregroundStyle(Theme.textDim)
+                HStack(spacing: Theme.s2) {
+                    Text(L("push.proRequired")).font(m.caption).foregroundStyle(Theme.textDim)
+                    UpgradeToProLink()
+                }
             case .failed(let message):
                 HStack(spacing: Theme.s2) {
                     Text(message).font(m.caption).foregroundStyle(m.warning)
