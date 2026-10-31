@@ -360,6 +360,10 @@ const fr: Record<string, string> = {
     "Vérification OAuth de Google terminée (oct. 2026) · Évaluation indépendante (CASA Tier 2)",
   "auth.privacy": "Confidentialité",
   "auth.terms": "Conditions",
+  "auth.legalConsent":
+    "En continuant, vous acceptez les {terms} et confirmez avoir lu la {privacy}.",
+  "auth.legalConsentTerms": "Conditions d’utilisation",
+  "auth.legalConsentPrivacy": "Politique de confidentialité",
   "auth.preview.label": "Exemple : Klorn range les e-mails dans cinq voies",
   "auth.preview.demo": "Données de démo",
   "auth.preview.caption":

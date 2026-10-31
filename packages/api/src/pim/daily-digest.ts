@@ -17,7 +17,10 @@
  *     safety net.
  *
  * Both are digest-class content, so both are governed by the single
- * `daily_briefing` preference rather than growing a second switch.
+ * `daily_briefing` preference rather than growing a second switch. That
+ * preference is also what this mail's opt-out points at (mail/email.ts): a
+ * recurring mail needs a working way out, and the switch the user can already
+ * see in settings is that way out — not a second, invisible suppression list.
  *
  * No LLM and no estimates. The weekly report deliberately refuses to claim
  * "time saved" because we do not measure it; the same rule applies here.
@@ -227,10 +230,15 @@ export async function sendDailyDigests(now: Date = new Date()): Promise<number> 
       }
 
       const language = await getUserNotificationLanguage(user.id);
+      // The language picks the opt-out wording in the mail's footer and text
+      // part; WEB_URL is passed from here because this module already owns
+      // where the digest's links point, and letting mail/email.ts read the env
+      // var separately let the body and the opt-out disagree.
       await sendDigestEmail(
         user.email,
         digestSubject(stats, language),
         formatDigest(stats, language),
+        { language, webUrl: WEB_URL },
       );
       sent++;
     } catch (err) {

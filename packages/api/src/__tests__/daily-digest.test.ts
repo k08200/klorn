@@ -157,6 +157,18 @@ describe("sendDailyDigests", () => {
       "a@example.com",
       expect.any(String),
       expect.stringContaining("noise@example.com"),
+      expect.objectContaining({ language: expect.any(String), webUrl: expect.any(String) }),
+    );
+  });
+
+  it("passes the notification language through, so the opt-out footer is not always English", async () => {
+    getUserNotificationLanguage.mockResolvedValue("ko");
+    await sendDailyDigests(NOW);
+    expect(sendDigestEmail).toHaveBeenCalledWith(
+      "a@example.com",
+      expect.any(String),
+      expect.any(String),
+      expect.objectContaining({ language: "ko" }),
     );
   });
 

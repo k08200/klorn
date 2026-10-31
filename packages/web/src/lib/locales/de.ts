@@ -366,6 +366,10 @@ const de: Record<string, string> = {
     "Google-OAuth-Prüfung abgeschlossen (Okt. 2026) · Unabhängig bewertet (CASA Tier 2)",
   "auth.privacy": "Datenschutz",
   "auth.terms": "AGB",
+  "auth.legalConsent":
+    "Wenn du fortfährst, stimmst du den {terms} zu und bestätigst, die {privacy} gelesen zu haben.",
+  "auth.legalConsentTerms": "Nutzungsbedingungen",
+  "auth.legalConsentPrivacy": "Datenschutzerklärung",
   "auth.preview.label": "Beispiel: Klorn sortiert E-Mails in fünf Spuren",
   "auth.preview.demo": "Demodaten",
   "auth.preview.caption":

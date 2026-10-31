@@ -345,6 +345,9 @@ const ko: Record<string, string> = {
   "auth.trustLine": "Google OAuth 검증 완료(2026년 10월) · 독립 보안 평가 완료(CASA Tier 2)",
   "auth.privacy": "개인정보처리방침",
   "auth.terms": "이용약관",
+  "auth.legalConsent": "계속하면 {terms}에 동의하고, {privacy}을 확인한 것으로 봅니다.",
+  "auth.legalConsentTerms": "서비스 이용약관",
+  "auth.legalConsentPrivacy": "개인정보처리방침",
   "auth.preview.label": "Klorn이 메일을 다섯 레인으로 나누는 예시",
   "auth.preview.demo": "데모 데이터",
   "auth.preview.caption":
