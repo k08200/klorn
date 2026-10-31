@@ -1,4 +1,4 @@
-# Weekly model canary (#526) — behavioral drift tripwire for the NON-judge
+# Model canary (#526) — behavioral drift tripwire for the NON-judge
 # models (MODEL/chat, AGENT_MODEL; VISION_MODEL via manual dispatch).
 #
 # The catalog check (openrouter-catalog-check.ts) only sees metadata diffs; the
@@ -18,14 +18,20 @@
 # whose daily quota flakiness would false-alarm a weekly schedule. Include it
 # manually (include-vision=true) until the pin moves off :free.
 #
-# Cost: ~24 tiny calls/week (12 probes × chat+agent) — a fraction of the
-# judge canary's 50.
+# Cost: ~24 tiny calls per run (12 probes × chat+agent).
+#
+# DISPATCH-ONLY since 2026-10-31. This workflow probes through OpenRouter
+# (OPENROUTER_API_KEY), but prod now serves chat and agent through the native
+# Anthropic provider first (claude-haiku-5-5), so a weekly run would watch only
+# the failover lane. Moving it to Claude doesn't work either: the Claude 5.5
+# family takes no temperature, and the fingerprint probes need a temperature-0
+# model, so they would flip by chance. A manual run still probes the OpenRouter
+# lane. Note: GitHub evicts a cache entry unused for 7 days, so a manual run
+# usually records a fresh baseline instead of comparing.
 
 name: Model canary
 
 on:
-  schedule:
-    - cron: "0 2 * * 1" # Mondays 02:00 UTC (judge canary runs at 01:00)
   workflow_dispatch:
     inputs:
       accept-baseline:
@@ -46,7 +52,7 @@ concurrency:
 
 jobs:
   canary:
-    name: Weekly drift canary (chat/agent probe flips)
+    name: Drift canary (chat/agent probe flips)
     runs-on: ubuntu-latest
     env:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
