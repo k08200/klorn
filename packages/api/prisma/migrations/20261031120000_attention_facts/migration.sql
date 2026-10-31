@@ -45,6 +45,9 @@ CREATE TABLE "AttentionFacts" (
     "escalate" BOOLEAN NOT NULL DEFAULT false,
     "escalateReasons" TEXT[],
     "v2Tier" TEXT,
+    "promptTokens" INTEGER,
+    "completionTokens" INTEGER,
+    "costUsd" DOUBLE PRECISION,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 

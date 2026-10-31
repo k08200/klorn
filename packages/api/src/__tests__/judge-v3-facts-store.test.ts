@@ -39,6 +39,7 @@ const extraction = (over: Partial<FactsExtraction> = {}): FactsExtraction => ({
   model: "claude-haiku-5-5",
   provider: "anthropic",
   servedByUserKey: false,
+  usage: { promptTokens: 2100, completionTokens: 180, costUsd: 0.0031 },
   issues: [],
   evidenceCheck: { checked: 1, dropped: [] },
   escalate: false,
@@ -84,6 +85,9 @@ describe("toAttentionFactsData", () => {
       escalate: false,
       escalateReasons: [],
       v2Tier: "QUEUE",
+      promptTokens: 2100,
+      completionTokens: 180,
+      costUsd: 0.0031,
     });
     expect(d.facts).toEqual(extraction().facts);
     expect(d.relationship).toEqual(rel);

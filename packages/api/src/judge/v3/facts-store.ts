@@ -50,6 +50,9 @@ export function toAttentionFactsData(input: StoreFactsInput) {
     escalate: x.escalate,
     escalateReasons: [...x.escalateReasons],
     v2Tier: input.v2Tier,
+    promptTokens: x.usage?.promptTokens ?? null,
+    completionTokens: x.usage?.completionTokens ?? null,
+    costUsd: x.usage?.costUsd ?? null,
   } satisfies Prisma.AttentionFactsUncheckedCreateInput;
 }
 
