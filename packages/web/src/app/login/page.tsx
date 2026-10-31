@@ -278,6 +278,8 @@ function LoginForm() {
         {mode === "login" ? t("auth.formTitleLogin") : t("auth.formTitleRegister")}
       </h2>
 
+      <LegalConsent />
+
       <section aria-label={t("auth.providerLaneLabel")}>
         <ProviderButtons
           extraProviders={extraProviders}
@@ -377,8 +379,6 @@ function LoginForm() {
         </Button>
       </form>
 
-      <LegalConsent />
-
       <p className="mt-6 flex flex-wrap items-center justify-center gap-x-1 text-label text-ink-mid">
         {signupOpen ? (
           <>
@@ -410,12 +410,17 @@ function LoginForm() {
 }
 
 /**
- * The consent line, directly under the sign-in/sign-up action it refers to.
+ * The consent line, above both sign-in actions it refers to.
  *
  * AuthScreen's footer already links /privacy and /terms, but a pair of nav
  * links at the bottom of the chrome is not the same thing as telling someone
  * what they are agreeing to at the moment they agree to it — which is what
  * both sign-in paths here (Google and email) actually do.
+ *
+ * Above the provider lane rather than under the email form, because the
+ * provider buttons are the first action on the page: a line below the form
+ * would sit after the control a Google signer has already clicked, and that
+ * path leaves the page immediately.
  *
  * One template with two placeholders rather than three concatenated fragments:
  * the clause order differs across the seven languages Klorn ships, and
@@ -462,7 +467,7 @@ function LegalConsent() {
   );
 
   return (
-    <p className="mt-5 text-center text-caption text-ink-mid">
+    <p className="mb-4 text-center text-caption text-ink-mid">
       {text(lead)}
       {termsFirst ? termsLink : privacyLink}
       {text(middle)}
