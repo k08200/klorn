@@ -104,7 +104,15 @@ As built in P2 (`judge/v3/relationship.ts`, `relationship-loader.ts`):
 - Every field is null when the data to answer it does not exist, never 0, so policy can tell "unknown" from "never". No sent-mail sync means the sent fields are null.
 - "Wrote to them" matches the exact address on the To header.
 - Reply latency is measured per thread, from the sender's earliest unanswered mail to the user's reply. Gaps over 30 days are ignored.
-- Same organisation means a shared domain that is not a public mailbox provider.
+- Same organisation means a shared domain that is not a public mailbox provider, **and** this mail passed DMARC (the receiving server's Authentication-Results, or the Klorn mailbox's stored verdict). Unauthenticated same-domain mail is null, because a lookalike or spoofed colleague must not be lifted (CEO fraud).
+- Reciprocity and tenure, as raw counts (smoothing and weights belong to the per-user importance model, never to the snapshot):
+  - `inboundCount`;
+  - `inboundThreadCount` and `repliedThreadCount` (threads where the user wrote after the sender's first mail; a 1/1 is not "100%");
+  - `userInitiatedThreadCount` (the user's mail opens the thread);
+  - `firstSeenAt` (first contact either way).
+- A From with no parseable mailbox gives an all-null snapshot.
+- Per-user ego network only: one user's mail never informs another user's snapshot. No hand-tuned scores (the interaction graph's are not reused).
+- Known gap: Klorn's own unattended replies reach `SentMessage` through the Gmail SENT sync with no provenance, so the sent-side counts include them. Until sends carry provenance, policy must not treat "the user wrote to them" as trust.
 - Pinned means any `PIN_TIER` rule on the address or domain. VIP means a sender label of investor or customer, or a pin to PUSH.
 - **Calendar co-attendance is always null for now.** `CalendarEvent` stores no attendees. The interaction graph's "meeting" count is inferred from email volume, which is not co-attendance, so it is not reused.
 
