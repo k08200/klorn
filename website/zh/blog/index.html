@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>博客 — Klorn</title>
+<meta name="description" content="打造 Klorn 过程中的工程笔记：实测的模型对比、确定性的决策底线，以及一路上出过的问题。每个数字都可以从仓库重新运行得出。">
+<meta property="og:title" content="博客 — Klorn">
+<meta property="og:description" content="打造 Klorn 过程中的工程笔记：实测的模型对比、确定性的决策底线，以及一路上出过的问题。每个数字都可以从仓库重新运行得出。">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://klorn.ai/zh/blog/">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://klorn.ai/brand/og-image.png?v=k2">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="博客 — Klorn">
+<meta name="twitter:description" content="打造 Klorn 过程中的工程笔记：实测的模型对比、确定性的决策底线，以及一路上出过的问题。每个数字都可以从仓库重新运行得出。">
+<meta name="twitter:image" content="https://klorn.ai/brand/og-image.png?v=k2">
+<link rel="canonical" href="https://klorn.ai/zh/blog/">
+<link rel="alternate" hreflang="en" href="https://klorn.ai/blog/">
+<link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/blog/">
+<link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/blog/">
+<link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/blog/">
+<link rel="alternate" hreflang="es" href="https://klorn.ai/es/blog/">
+<link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/blog/">
+<link rel="alternate" hreflang="de" href="https://klorn.ai/de/blog/">
+<link rel="alternate" hreflang="x-default" href="https://klorn.ai/blog/">
+<link rel="preload" as="font" type="font/woff2" href="/fonts/geist-var.woff2" crossorigin>
+<link rel="stylesheet" href="/landing.css">
+<link rel="stylesheet" href="/subpage.css">
+<link rel="icon" href="/brand/favicon.svg?v=matte2" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png?v=matte2">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Blog",
+  "name": "Klorn — 工程笔记",
+  "url": "https://klorn.ai/blog/",
+  "publisher": {
+    "@type": "Organization",
+    "name": "Klorn",
+    "url": "https://klorn.ai"
+  },
+  "blogPost": [
+    {
+      "@type": "BlogPosting",
+      "headline": "Google 对 Klorn 的 OAuth 审核已完成。以下是它具体涵盖的内容。",
+      "datePublished": "2026-10-14",
+      "url": "https://klorn.ai/blog/google-verification-casa/"
+    },
+    {
+      "@type": "BlogPosting",
+      "headline": "Notion Mail 已经关停。他们给出的理由才是值得玩味的地方。",
+      "datePublished": "2026-09-24",
+      "url": "https://klorn.ai/blog/notion-mail-shutting-down/"
+    },
+    {
+      "@type": "BlogPosting",
+      "headline": "该用哪个 LLM 给邮件分类？我测了十个，每个跑三次。",
+      "datePublished": "2026-08-26",
+      "url": "https://klorn.ai/blog/which-llm-is-best-for-email-classification/"
+    },
+    {
+      "@type": "BlogPosting",
+      "headline": "邮件通知太多？从源头解决，而不是调低数量",
+      "datePublished": "2026-08-26",
+      "url": "https://klorn.ai/blog/too-many-email-notifications/"
+    },
+    {
+      "@type": "BlogPosting",
+      "headline": "提示注入始于你的收件箱。防御不能靠提示词。",
+      "datePublished": "2026-08-26",
+      "url": "https://klorn.ai/blog/prompt-injection-and-your-inbox/"
+    },
+    {
+      "@type": "BlogPosting",
+      "headline": "重要邮件总是进入“推广”——如何阻止",
+      "datePublished": "2026-08-26",
+      "url": "https://klorn.ai/blog/gmail-important-emails-going-to-promotions/"
+    },
+    {
+      "@type": "BlogPosting",
+      "headline": "如何在 Gmail 中只接收重要邮件的通知",
+      "datePublished": "2026-08-26",
+      "url": "https://klorn.ai/blog/how-to-get-notified-only-for-urgent-emails/"
+    },
+    {
+      "@type": "BlogPosting",
+      "headline": "Gmail 过滤器 vs AI 分拣：规则何时胜出，何时力不从心",
+      "datePublished": "2026-08-26",
+      "url": "https://klorn.ai/blog/gmail-filters-vs-ai-triage/"
+    },
+    {
+      "@type": "BlogPosting",
+      "headline": "Gmail 优先收件箱不起作用？真正训练它的是这些",
+      "datePublished": "2026-08-26",
+      "url": "https://klorn.ai/blog/gmail-priority-inbox-not-working/"
+    },
+    {
+      "@type": "BlogPosting",
+      "headline": "用本地 LLM 分拣邮件：Ollama 设置，以及你要放弃什么",
+      "datePublished": "2026-08-26",
+      "url": "https://klorn.ai/blog/local-llm-email-triage-ollama/"
+    },
+    {
+      "@type": "BlogPosting",
+      "headline": "在 Gmail 中自动归档新闻通讯（不丢任何东西）",
+      "datePublished": "2026-08-26",
+      "url": "https://klorn.ai/blog/auto-archive-newsletters-gmail/"
+    },
+    {
+      "@type": "BlogPosting",
+      "headline": "LLM 费用上限必须默认拒绝（fail closed）。我的确实如此——结果变成了停机。",
+      "datePublished": "2026-08-26",
+      "url": "https://klorn.ai/blog/llm-cost-caps-that-fail-closed/"
+    }
+  ]
+}
+</script>
+<script src="/site-nav.js" defer></script>
+</head>
+<body class="sub">
+<a class="skip" href="#main">跳到正文</a>
+
+<nav class="nav" aria-label="主导航"><div class="nav-pill">
+  <a class="nav-brand" href="/zh/">Klorn</a>
+  <button type="button" class="nav-menu-btn" data-menu-toggle aria-expanded="false" aria-controls="nav-menu" aria-label="菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <span class="nav-links" id="nav-menu" role="group" aria-label="页面板块" data-site-nav><a href="/zh/#accounts">账户</a><a href="/zh/#lanes">分类</a><a href="/zh/pricing/">定价</a><a href="/zh/security/">安全</a><a href="/zh/blog/" aria-current="page">博客</a></span>
+  <span class="nav-lang">
+    <button type="button" class="nav-lang-btn" data-menu-toggle
+            aria-haspopup="true" aria-expanded="false" aria-controls="lang-menu">中文 <i aria-hidden="true">▾</i></button>
+    <span class="nav-lang-menu" id="lang-menu" role="menu">
+      <a href="/blog/" role="menuitem" lang="en">English</a>
+      <a href="/ko/blog/" role="menuitem" lang="ko">한국어</a>
+      <a href="/ja/blog/" role="menuitem" lang="ja">日本語</a>
+      <a href="/zh/blog/" role="menuitem" lang="zh" aria-current="true">中文</a>
+      <a href="/es/blog/" role="menuitem" lang="es">Español</a>
+      <a href="/fr/blog/" role="menuitem" lang="fr">Français</a>
+      <a href="/de/blog/" role="menuitem" lang="de">Deutsch</a>
+    </span>
+  </span>
+  <a class="nav-login" href="https://app.klorn.ai/login">登录</a>
+  <a class="nav-cta dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
+     data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.2.0/Klorn-windows-setup.exe" data-win-label="下载">下载</a>
+</div></nav>
+
+<main id="main">
+<header class="sub-hero">
+  <div class="wrap">
+    <h1>来自<span class="ser">工作间</span>的笔记。</h1>
+    <p class="lead">公开打造一款邮件防火墙的工程笔记。这里的规矩是：只有能从仓库重新运行得出的数字才会出现在这里——一旦某个数字无法复现，就会撤下并说明。文章目前仅有英文版。</p>
+  </div>
+</header>
+<div class="wrap">
+<div class="article article-index">
+
+  <ul class="postlist">
+    <li>
+      <a class="pt" href="/blog/google-verification-casa/">Google 对 Klorn 的 OAuth 审核已完成。以下是它具体涵盖的内容。</a>
+      <span class="meta">2026-10-14 · 安全</span>
+      <p>由 TAC Security 依据 CASA Tier 2 独立评估，结果：In Compliance（符合要求）。五个 Google 权限范围、各自的用途，以及这次审核不意味着什么。</p>
+    </li>
+    <li>
+      <a class="pt" href="/blog/notion-mail-shutting-down/">Notion Mail 已经关停。他们给出的理由才是值得玩味的地方。</a>
+      <span class="meta">2026-09-24 · 迁移笔记</span>
+      <p>它关停是因为大多数用户从不打开收件箱——打开它的是代理。哪些留了下来、哪些没有，以及下一步该去哪里的坦诚分析。</p>
+    </li>
+    <li>
+      <a class="pt" href="/blog/prompt-injection-and-your-inbox/">提示注入始于你的收件箱。防御不能靠提示词。</a>
+      <span class="meta">2026-08-26 · 安全</span>
+      <p>邮件是攻击者可以写入的输入。四层防御，以及安全策略与安全属性之间那条坦诚的界线。</p>
+    </li>
+    <li>
+      <a class="pt" href="/blog/local-llm-email-triage-ollama/">邮件始终不离开本机的分拣</a>
+      <span class="meta">2026-08-26 · 指南</span>
+      <p>没有任何邮件文本离开你的电脑：两个环境变量、以 qwen3:8b 为起点，以及如何实测你的模型而不是盲目信任它。</p>
+    </li>
+    <li>
+      <a class="pt" href="/blog/llm-cost-caps-that-fail-closed/">LLM 费用上限必须默认拒绝（fail closed）。我的确实如此——结果变成了停机。</a>
+      <span class="meta">2026-08-26 · 事后复盘</span>
+      <p>超额计费损失的不是钱，而是可用性。这次事故，以及上限现在遵循的四条规则。</p>
+    </li>
+    <li>
+      <a class="pt" href="/blog/gmail-filters-vs-ai-triage/">Gmail 过滤器 vs AI 分拣：坦诚的答案是分工</a>
+      <span class="meta">2026-08-26 · 随笔</span>
+      <p>规则可审计但会过时；模型能泛化却无法解释自己。坦诚的对比，以及兼顾两者的分工方式。</p>
+    </li>
+    <li>
+      <a class="pt" href="/blog/auto-archive-newsletters-gmail/">按你的节奏、而不是他们的节奏阅读新闻通讯</a>
+      <span class="meta">2026-08-26 · 指南</span>
+      <p>安全地设置跳过收件箱的过滤器：标签技巧、会吞掉收据的关键词陷阱，以及每周复查这道安全网。</p>
+    </li>
+    <li>
+      <a class="pt" href="/blog/gmail-priority-inbox-not-working/">优先收件箱没坏，只是没训练过。</a>
+      <span class="meta">2026-08-26 · 指南</span>
+      <p>重要性标记、会悄悄覆盖它们的过滤器选项，以及大多数人从未用过的再训练循环。</p>
+    </li>
+    <li>
+      <a class="pt" href="/blog/too-many-email-notifications/">邮件通知太多，是流程问题</a>
+      <span class="meta">2026-08-26 · 指南</span>
+      <p>顺序很重要：先取消订阅，再批量处理，最后过滤——以及为什么把应用静音只是把焦虑挪了个地方。</p>
+    </li>
+    <li>
+      <a class="pt" href="/blog/gmail-important-emails-going-to-promotions/">重要邮件总是落进“推广”</a>
+      <span class="meta">2026-08-26 · 指南</span>
+      <p>Gmail 为什么把真正的邮件埋进“推广”、四种真正有效的修复方法，以及模型为什么会忘记你的纠正。</p>
+    </li>
+    <li>
+      <a class="pt" href="/blog/how-to-get-notified-only-for-urgent-emails/">只为重要的邮件接收通知</a>
+      <span class="meta">2026-08-26 · 指南</span>
+      <p>四种可行的方法，让手机不再为每封邮件震动——Gmail 的“仅限高优先级”设置、按标签通知、只针对重要邮件的桌面提醒——以及这四种方法共同的结构性缺口。</p>
+    </li>
+    <li>
+      <a class="pt" href="/blog/which-llm-is-best-for-email-classification/">该用哪个 LLM 给邮件分类？我测了十个，每个跑三次。</a>
+      <span class="meta">2026-08-26 · 2026-09-04 重新测量 · 基准测试</span>
+      <p>十个当前模型，每个跑三次。表格中段是平局，现在也标注为平局；gpt-5.4 每次都是 56/56，$0.20 的模型进入了第一梯队，$5.00 的模型从未通过门槛，安全底线在全部 23 次运行中都守住了。</p>
+    </li>
+  </ul>
+
+  <h2>早期文章（发布在 dev.to 上）</h2>
+  <p>这个页面出现之前写的较长文章：</p>
+  <ul>
+    <li><a href="https://dev.to/k08200/every-ai-email-tool-has-the-same-bug-it-is-not-a-bug-in-the-model-5f14" rel="noreferrer noopener">每个 AI 邮件工具都有同一个 bug。它不是模型的 bug。</a></li>
+    <li><a href="https://dev.to/k08200/i-dont-trust-the-llm-to-classify-my-email-so-i-dont-let-it-55d9" rel="noreferrer noopener">我不信任 LLM 给我的邮件分类，所以我不让它这么做。</a></li>
+    <li><a href="https://dev.to/k08200/confidence-is-enough-to-decide-its-not-enough-to-do-8ck" rel="noreferrer noopener">置信度足以做出判断，却不足以付诸行动。</a></li>
+  </ul>
+
+  <div class="actions actions-left"><a class="btn btn-1" href="https://app.klorn.ai/login?mode=register">免费试用 Klorn</a></div>
+
+  <p class="checked">Klorn 采用 <a href="https://github.com/k08200/klorn" rel="noreferrer noopener">AGPL-3.0</a>——本页的每一项主张
+      都可以对照源代码核查。</p>
+</div>
+</div>
+</main>
+<footer class="foot">
+  <div class="wrap foot-grid">
+    <div>
+      <a class="brand" href="/zh/">Klorn</a>
+      <p class="foot-note">邮件和日历，在一个地方分拣好，附上理由。开源。</p>
+      <div class="socials">
+        <a href="https://github.com/k08200/klorn" rel="noreferrer noopener" aria-label="GitHub"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a>
+        <a href="https://x.com/klornai" rel="noreferrer noopener" aria-label="X"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+        <a href="https://join.slack.com/t/klorn/shared_invite/zt-3zkj8lqxg-L4LK8dNPkzgupHEdmXgbIg" rel="noreferrer noopener" aria-label="Slack"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52zm1.271 0a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52zm0 1.271a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522zm-1.268 0a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522zm0-1.268a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523z"/></svg></a>
+      </div>
+    </div>
+    <nav aria-label="产品"><h4>产品</h4>
+      <a href="/zh/download/">全部下载</a>
+      <a href="/zh/pricing/">定价</a>
+      <a href="https://app.klorn.ai/login">登录</a>
+      <a href="/zh/status/">服务状态</a>
+      <a href="/zh/blog/" aria-current="page">博客</a></nav>
+    <nav aria-label="开源"><h4>开源</h4>
+      <a href="https://github.com/k08200/klorn" rel="noreferrer noopener">GitHub 仓库</a>
+      <a href="https://github.com/k08200/klorn/releases/latest" rel="noreferrer noopener">版本发布</a>
+      <a href="https://github.com/k08200/klorn/tree/main/packages/api/eval" rel="noreferrer noopener">评测集</a>
+      <a href="/zh/methodology/">评测方法</a>
+      <a href="https://github.com/k08200/klorn/blob/main/LICENSE" rel="noreferrer noopener">AGPLv3 许可证</a>
+      <a href="/zh/open-source/">为什么是不加附加条款的 AGPL</a>
+      <a href="/zh/self-host/">自托管</a></nav>
+    <nav aria-label="对比"><h4>对比</h4>
+      <a href="/zh/vs/fyxer/">对比 Fyxer</a>
+      <a href="/zh/vs/superhuman/">对比 Superhuman</a>
+      <a href="/zh/vs/sanebox/">对比 SaneBox</a>
+      <a href="/zh/vs/inbox-zero/">对比 Inbox Zero</a></nav>
+    <nav aria-label="法律"><h4>法律</h4>
+      <a href="https://app.klorn.ai/privacy">隐私</a>
+      <a href="https://app.klorn.ai/terms">条款</a>
+      <a href="https://app.klorn.ai/refund">退款</a>
+      <a href="/zh/security/">安全</a>
+      <a href="/zh/gdpr/">GDPR</a>
+      <a href="/zh/dpa/">DPA</a>
+      <a href="mailto:k0820086@gmail.com">联系我们</a></nav>
+  </div>
+  <div class="wrap foot-base">
+    <span>© 2026 Klorn · AGPLv3</span>
+  </div>
+</footer>
+<script>
+// Windows visitors get the installer: /site-nav.js swaps the href on every
+// .dl-cta, and this swaps the label to match. Same block as the landings.
+(function () {
+  var uaData = navigator.userAgentData;
+  var raw = String((uaData && uaData.platform) || navigator.platform || navigator.userAgent || '');
+  if (!/win/i.test(raw) || /mac|iphone|ipad|ipod/i.test(raw)) return;
+  document.querySelectorAll('[data-mac-dl]').forEach(function (a) {
+    var label = a.getAttribute('data-win-label');
+    if (!label) return;
+    Array.prototype.forEach.call(a.childNodes, function (n) {
+      if (n.nodeType !== 3 || !n.textContent.trim()) return;
+      var pad = n.textContent.match(/^(\s*)[\s\S]*?(\s*)$/);
+      n.textContent = pad[1] + label + pad[2];
+    });
+  });
+})();
+</script>
+<script>
+// Same block as every other page: carry the campaign through to the app so a
+// signup can be credited to the page that earned it.
+(function () {
+  try {
+    var p = new URLSearchParams(location.search);
+    var q = [];
+    ["utm_source", "utm_medium", "utm_campaign", "utm_content"].forEach(function (k) {
+      var v = p.get(k);
+      if (v) q.push(k + "=" + encodeURIComponent(v.slice(0, 60)));
+    });
+    if (document.referrer) {
+      try {
+        var h = new URL(document.referrer).hostname;
+        if (h && h !== location.hostname) q.push("ref=" + encodeURIComponent(h));
+      } catch (e) {}
+    }
+    q.push("lp=" + encodeURIComponent(location.pathname.slice(0, 60)));
+    var qs = q.join("&");
+    document.querySelectorAll('a[href^="https://app.klorn.ai/"]').forEach(function (a) {
+      a.href += (a.href.indexOf("?") === -1 ? "?" : "&") + qs;
+    });
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>

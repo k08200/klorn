@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Klorn 직접 설치 — 기능을 뺀 판이 아니라 같은 코드</title>
+<meta name="description" content="Klorn은 수정하지 않은 AGPL-3.0입니다. 직접 설치해도 같은 분류기와 같은 승인 강제가 돌아가며, 내 모델 키나 로컬 모델을 씁니다.">
+<meta property="og:title" content="Klorn 직접 설치 — 기능을 뺀 판이 아니라 같은 코드">
+<meta property="og:description" content="Klorn은 수정하지 않은 AGPL-3.0입니다. 직접 설치해도 같은 분류기와 같은 승인 강제가 돌아가며, 내 모델 키나 로컬 모델을 씁니다.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://klorn.ai/ko/self-host/">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:image" content="https://klorn.ai/brand/og-image.png?v=k2">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Klorn 직접 설치 — 기능을 뺀 판이 아니라 같은 코드">
+<meta name="twitter:description" content="Klorn은 수정하지 않은 AGPL-3.0입니다. 직접 설치해도 같은 분류기와 같은 승인 강제가 돌아가며, 내 모델 키나 로컬 모델을 씁니다.">
+<meta name="twitter:image" content="https://klorn.ai/brand/og-image.png?v=k2">
+<link rel="canonical" href="https://klorn.ai/ko/self-host/">
+<link rel="alternate" hreflang="en" href="https://klorn.ai/self-host/">
+<link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/self-host/">
+<link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/self-host/">
+<link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/self-host/">
+<link rel="alternate" hreflang="es" href="https://klorn.ai/es/self-host/">
+<link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/self-host/">
+<link rel="alternate" hreflang="de" href="https://klorn.ai/de/self-host/">
+<link rel="alternate" hreflang="x-default" href="https://klorn.ai/self-host/">
+<link rel="preload" as="font" type="font/woff2" href="/fonts/geist-var.woff2" crossorigin>
+<link rel="stylesheet" href="/landing.css">
+<link rel="stylesheet" href="/subpage.css">
+<link rel="stylesheet" href="/fonts/pretendard/pretendard.css">
+<link rel="icon" href="/brand/favicon.svg?v=matte2" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png?v=matte2">
+<script src="/site-nav.js" defer></script>
+</head>
+<body class="sub">
+<a class="skip" href="#main">본문으로 건너뛰기</a>
+
+<nav class="nav" aria-label="메인"><div class="nav-pill">
+  <a class="nav-brand" href="/ko/">Klorn</a>
+  <button type="button" class="nav-menu-btn" data-menu-toggle aria-expanded="false" aria-controls="nav-menu" aria-label="메뉴"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <span class="nav-links" id="nav-menu" role="group" aria-label="섹션" data-site-nav><a href="/ko/#accounts">계정</a><a href="/ko/#lanes">레인</a><a href="/ko/pricing/">요금</a><a href="/ko/security/">보안</a><a href="/ko/blog/">블로그</a></span>
+  <span class="nav-lang">
+    <button type="button" class="nav-lang-btn" data-menu-toggle
+            aria-haspopup="true" aria-expanded="false" aria-controls="lang-menu">한국어 <i aria-hidden="true">▾</i></button>
+    <span class="nav-lang-menu" id="lang-menu" role="menu">
+      <a href="/self-host/" role="menuitem" lang="en">English</a>
+      <a href="/ko/self-host/" role="menuitem" lang="ko" aria-current="true">한국어</a>
+      <a href="/ja/self-host/" role="menuitem" lang="ja">日本語</a>
+      <a href="/zh/self-host/" role="menuitem" lang="zh">中文</a>
+      <a href="/es/self-host/" role="menuitem" lang="es">Español</a>
+      <a href="/fr/self-host/" role="menuitem" lang="fr">Français</a>
+      <a href="/de/self-host/" role="menuitem" lang="de">Deutsch</a>
+    </span>
+  </span>
+  <a class="nav-login" href="https://app.klorn.ai/login">로그인</a>
+  <a class="nav-cta dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
+     data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.2.0/Klorn-windows-setup.exe" data-win-label="다운로드">다운로드</a>
+</div></nav>
+
+<main id="main">
+<div class="wrap">
+<div class="article">
+  <h1>우리가 돌리는 코드를<br>그대로 돌리세요.</h1>
+  <p class="thesis">Klorn은 아무것도 덧붙이지 않은 AGPL-3.0입니다 — 상업적 사용 제한도, 직원 수 조항도, 엔터프라이즈 라이선스 관문도 없습니다. 직접 설치는 기능을 뺀 판이 아닙니다. 같은 분류기, 같은 승인 강제입니다.</p>
+
+  <div class="scroll">
+  <table>
+    <thead><tr><th>질문</th><th>답변</th></tr></thead>
+    <tbody>
+      <tr><th>라이선스</th><td class="us"><strong>수정하지 않은 GNU AGPL v3</strong> — <a href="https://github.com/k08200/klorn/blob/main/LICENSE" rel="noreferrer noopener">읽어 보기</a></td></tr>
+      <tr><th>소스에서 뺀 기능</th><td class="us"><strong>코어에는 없습니다.</strong> <a href="https://github.com/k08200/klorn/blob/main/docs/EDITIONS.md" rel="noreferrer noopener">docs/EDITIONS.md</a>가 그 경계를 명시합니다</td></tr>
+      <tr><th>직접 설치는 한 단계 낮은 버전인가요?</th><td class="us">같은 분류기, 같은 강제, 같은 평가 세트</td></tr>
+      <tr><th>필요한 것</th><td class="us">Postgres, 직접 만든 Google OAuth 클라이언트, 모델 키(또는 로컬 모델)</td></tr>
+      <tr><th>모델 제공사</th><td class="us">내 키, 내 선택 — 로컬 모델 포함. 우리 것을 거치도록 강제하는 것은 없습니다</td></tr>
+      <tr><th>TLS</th><td class="us">compose 스택 앞에 TLS 리버스 프록시를 두세요. 앱은 프록시 뒤에 있다고 가정합니다</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h2>여기서 시작하세요</h2>
+  <p><a href="https://github.com/k08200/klorn/blob/main/docs/self-hosting.md" rel="noreferrer noopener">docs/self-hosting.md</a>가 실제로 쓰는 가이드입니다. 설명하는 코드 바로 옆, 저장소 안에 두어서 낡더라도 조용히가 아니라 눈에 띄게 낡습니다. 라이선스를 고른 이유는 <a href="/ko/open-source/">추가 조항 없는 AGPL인 이유</a>에서 설명합니다.</p>
+
+  <h2>직접 설치해도 사라지지 않는 것</h2>
+  <p>승인 하한은 호스팅 전용 기능이 아니며 설정으로 끌 수 없습니다. 보내기, 영구 삭제, 외부 전달에는 여전히 정확한 페이로드의 해시를 고정한 영수증이 필요하고, 실행 시점에 다시 검증합니다. 이는 내가 돌리는 코드 자체의 성질이며, 그 코드를 읽을 수 있다는 것이 바로 핵심입니다.</p>
+
+  <div class="actions actions-left"><a class="btn btn-1" href="https://app.klorn.ai/login?mode=register">Klorn 무료로 써보기</a></div>
+
+  <p class="checked">이 페이지 내용에 대한 질문은 <a href="mailto:k0820086@gmail.com">k0820086@gmail.com</a>으로 보내 주세요.
+      Klorn은 <a href="https://github.com/k08200/klorn" rel="noreferrer noopener">AGPL-3.0</a>입니다 — 여기 적힌 모든 주장은
+      소스로 확인할 수 있습니다.</p>
+</div>
+</div>
+</main>
+<footer class="foot">
+  <div class="wrap foot-grid">
+    <div>
+      <a class="brand" href="/ko/">Klorn</a>
+      <p class="foot-note">메일과 캘린더를 한 곳에서, 이유와 함께 정리합니다. 오픈소스.</p>
+      <div class="socials">
+        <a href="https://github.com/k08200/klorn" rel="noreferrer noopener" aria-label="GitHub"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a>
+        <a href="https://x.com/klornai" rel="noreferrer noopener" aria-label="X"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+        <a href="https://join.slack.com/t/klorn/shared_invite/zt-3zkj8lqxg-L4LK8dNPkzgupHEdmXgbIg" rel="noreferrer noopener" aria-label="Slack"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52zm1.271 0a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52zm0 1.271a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522zm-1.268 0a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522zm0-1.268a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523z"/></svg></a>
+      </div>
+    </div>
+    <nav aria-label="제품"><h4>제품</h4>
+      <a href="/ko/download/">모든 다운로드</a>
+      <a href="/ko/pricing/">요금</a>
+      <a href="https://app.klorn.ai/login">로그인</a>
+      <a href="/ko/status/">서비스 상태</a>
+      <a href="/ko/blog/">블로그</a></nav>
+    <nav aria-label="오픈소스"><h4>오픈소스</h4>
+      <a href="https://github.com/k08200/klorn" rel="noreferrer noopener">GitHub 저장소</a>
+      <a href="https://github.com/k08200/klorn/releases/latest" rel="noreferrer noopener">릴리스</a>
+      <a href="https://github.com/k08200/klorn/tree/main/packages/api/eval" rel="noreferrer noopener">평가 세트</a>
+      <a href="/ko/methodology/">측정 방법</a>
+      <a href="https://github.com/k08200/klorn/blob/main/LICENSE" rel="noreferrer noopener">AGPLv3 라이선스</a>
+      <a href="/ko/open-source/">추가 조항 없는 AGPL인 이유</a>
+      <a href="/ko/self-host/" aria-current="page">직접 설치</a></nav>
+    <nav aria-label="비교"><h4>비교</h4>
+      <a href="/ko/vs/fyxer/">Fyxer와 비교</a>
+      <a href="/ko/vs/superhuman/">Superhuman과 비교</a>
+      <a href="/ko/vs/sanebox/">SaneBox와 비교</a>
+      <a href="/ko/vs/inbox-zero/">Inbox Zero와 비교</a></nav>
+    <nav aria-label="법적 고지"><h4>법적 고지</h4>
+      <a href="https://app.klorn.ai/privacy">개인정보처리방침</a>
+      <a href="https://app.klorn.ai/terms">이용약관</a>
+      <a href="https://app.klorn.ai/refund">환불 정책</a>
+      <a href="/ko/security/">보안</a>
+      <a href="/ko/gdpr/">GDPR</a>
+      <a href="/ko/dpa/">DPA</a>
+      <a href="mailto:k0820086@gmail.com">문의</a></nav>
+  </div>
+  <div class="wrap foot-base">
+    <span>© 2026 Klorn · AGPLv3</span>
+  </div>
+</footer>
+<script>
+// Windows visitors get the installer: /site-nav.js swaps the href on every
+// .dl-cta, and this swaps the label to match. Same block as the landings.
+(function () {
+  var uaData = navigator.userAgentData;
+  var raw = String((uaData && uaData.platform) || navigator.platform || navigator.userAgent || '');
+  if (!/win/i.test(raw) || /mac|iphone|ipad|ipod/i.test(raw)) return;
+  document.querySelectorAll('[data-mac-dl]').forEach(function (a) {
+    var label = a.getAttribute('data-win-label');
+    if (!label) return;
+    Array.prototype.forEach.call(a.childNodes, function (n) {
+      if (n.nodeType !== 3 || !n.textContent.trim()) return;
+      var pad = n.textContent.match(/^(\s*)[\s\S]*?(\s*)$/);
+      n.textContent = pad[1] + label + pad[2];
+    });
+  });
+})();
+</script>
+<script>
+// Same block as every other page: carry the campaign through to the app so a
+// signup can be credited to the page that earned it.
+(function () {
+  try {
+    var p = new URLSearchParams(location.search);
+    var q = [];
+    ["utm_source", "utm_medium", "utm_campaign", "utm_content"].forEach(function (k) {
+      var v = p.get(k);
+      if (v) q.push(k + "=" + encodeURIComponent(v.slice(0, 60)));
+    });
+    if (document.referrer) {
+      try {
+        var h = new URL(document.referrer).hostname;
+        if (h && h !== location.hostname) q.push("ref=" + encodeURIComponent(h));
+      } catch (e) {}
+    }
+    q.push("lp=" + encodeURIComponent(location.pathname.slice(0, 60)));
+    var qs = q.join("&");
+    document.querySelectorAll('a[href^="https://app.klorn.ai/"]').forEach(function (a) {
+      a.href += (a.href.indexOf("?") === -1 ? "?" : "&") + qs;
+    });
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>

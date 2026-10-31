@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Klorn vs SaneBox — ヘッダーのルールか、メールを読むか</title>
+<meta name="description" content="SaneBoxはヘッダーの手がかりでメールをフォルダーに移します。Klornはメールを読んで5つのレーンに振り分け、日程調整のメールはカレンダーと照合します。オープンソースで、セルフホストできます。">
+<meta property="og:title" content="Klorn vs SaneBox — ヘッダーのルールか、メールを読むか">
+<meta property="og:description" content="SaneBoxはヘッダーの手がかりでメールをフォルダーに移します。Klornはメールを読んで5つのレーンに振り分け、日程調整のメールはカレンダーと照合します。オープンソースで、セルフホストできます。">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://klorn.ai/ja/vs/sanebox/">
+<meta property="og:locale" content="ja_JP">
+<meta property="og:image" content="https://klorn.ai/brand/og-image.png?v=k2">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Klorn vs SaneBox — ヘッダーのルールか、メールを読むか">
+<meta name="twitter:description" content="SaneBoxはヘッダーの手がかりでメールをフォルダーに移します。Klornはメールを読んで5つのレーンに振り分け、日程調整のメールはカレンダーと照合します。オープンソースで、セルフホストできます。">
+<meta name="twitter:image" content="https://klorn.ai/brand/og-image.png?v=k2">
+<link rel="canonical" href="https://klorn.ai/ja/vs/sanebox/">
+<link rel="alternate" hreflang="en" href="https://klorn.ai/vs/sanebox/">
+<link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/sanebox/">
+<link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/vs/sanebox/">
+<link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/vs/sanebox/">
+<link rel="alternate" hreflang="es" href="https://klorn.ai/es/vs/sanebox/">
+<link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/vs/sanebox/">
+<link rel="alternate" hreflang="de" href="https://klorn.ai/de/vs/sanebox/">
+<link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/sanebox/">
+<link rel="preload" as="font" type="font/woff2" href="/fonts/geist-var.woff2" crossorigin>
+<link rel="stylesheet" href="/landing.css">
+<link rel="stylesheet" href="/subpage.css">
+<link rel="icon" href="/brand/favicon.svg?v=matte2" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png?v=matte2">
+<script src="/site-nav.js" defer></script>
+</head>
+<body class="sub">
+<a class="skip" href="#main">本文へスキップ</a>
+
+<nav class="nav" aria-label="メイン"><div class="nav-pill">
+  <a class="nav-brand" href="/ja/">Klorn</a>
+  <button type="button" class="nav-menu-btn" data-menu-toggle aria-expanded="false" aria-controls="nav-menu" aria-label="メニュー"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <span class="nav-links" id="nav-menu" role="group" aria-label="セクション" data-site-nav><a href="/ja/#accounts">アカウント</a><a href="/ja/#lanes">レーン</a><a href="/ja/pricing/">料金</a><a href="/ja/security/">セキュリティ</a><a href="/ja/blog/">ブログ</a></span>
+  <span class="nav-lang">
+    <button type="button" class="nav-lang-btn" data-menu-toggle
+            aria-haspopup="true" aria-expanded="false" aria-controls="lang-menu">日本語 <i aria-hidden="true">▾</i></button>
+    <span class="nav-lang-menu" id="lang-menu" role="menu">
+      <a href="/vs/sanebox/" role="menuitem" lang="en">English</a>
+      <a href="/ko/vs/sanebox/" role="menuitem" lang="ko">한국어</a>
+      <a href="/ja/vs/sanebox/" role="menuitem" lang="ja" aria-current="true">日本語</a>
+      <a href="/zh/vs/sanebox/" role="menuitem" lang="zh">中文</a>
+      <a href="/es/vs/sanebox/" role="menuitem" lang="es">Español</a>
+      <a href="/fr/vs/sanebox/" role="menuitem" lang="fr">Français</a>
+      <a href="/de/vs/sanebox/" role="menuitem" lang="de">Deutsch</a>
+    </span>
+  </span>
+  <a class="nav-login" href="https://app.klorn.ai/login">ログイン</a>
+  <a class="nav-cta dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
+     data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.2.0/Klorn-windows-setup.exe" data-win-label="ダウンロード">ダウンロード</a>
+</div></nav>
+
+<main id="main">
+<div class="wrap">
+<div class="article">
+  <h1>SaneBoxはヘッダーを読む。<br>Klornは<em>メール</em>を読む。</h1>
+  <p class="thesis">SaneBoxは2010年からフォルダーによる振り分けを続けており、独自のアプリなしでそれを行います。その取捨選択は意図的です。見るのは差出人・件名・日付だけで、本文は決して見ません。だからKlornにはできない形でプライバシーを守れる一方、日程調整の依頼と、日付に触れているだけのニュースレターを区別できません。</p>
+
+  <div class="scroll">
+  <table>
+    <thead><tr><th>観点</th><th>Klorn</th><th>SaneBox</th></tr></thead>
+    <tbody>
+      <tr><th>判断の仕方</th><td class="us">メールを読んで4つの特徴を採点し、決定論的なルールがそれをレーンに割り当てる</td><td>ヘッダーとメタデータの手がかり（差出人、件名、日付）による行動学習</td></tr>
+      <tr><th>そう判断した理由</th><td class="us"><strong>すべての行に表示</strong></td><td>表示されない — メールの行き先から推測する</td></tr>
+      <tr><th>本文を読むか</th><td class="us">読む。だからこそ理由を説明できる</td><td><strong>読まない — ヘッダーとメタデータのみ</strong></td></tr>
+      <tr><th>修正の仕方</th><td class="us">行を移動する。同じ修正が2回そろうと、その差出人の扱いが確定する</td><td>フォルダー間でドラッグ。その移動から学習する</td></tr>
+      <tr><th>専用アプリが必要か</th><td class="us">ラベルモードなら不要。ウェブ、macOS、Windowsのクライアントもある</td><td><strong>不要 — すでに使っているクライアントの中で動く</strong></td></tr>
+      <tr><th>ソースとホスティング</th><td class="us"><strong>AGPL-3.0、すべてセルフホスト可能</strong></td><td>クローズド、クラウドのみ</td></tr>
+      <tr><th>公開価格</th><td class="us"><strong><a href="/ja/pricing/">月$29.99</a></strong></td><td>$3.49 Snack · $5.99 Lunch · $16.99 Dinner</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h2>正直に言うと、プライバシーの一文はSaneBoxのほうが強い</h2>
+  <p>「あなたのメールは決して読みません」は一文で済み、但し書きも要りません。そしてKlornには言えない一文です。理由を示してメールをレーンに振り分けるには、メールを読む必要があります。ヘッダーだけのフィルタリングで十分なら、それは本物の利点で、私たちはそれを言いくるめるつもりはありません。</p>
+  <p>代わりにKlornが提供するのは、言葉ではなく構造です。スタック全体がAGPL-3.0でセルフホストでき、自分のモデルキーやローカルモデルを指定すればメール本文はあなたのマシンの外に出ません。そしてすべての分類は、それを生んだバイト列そのもののハッシュに結びついています。短く言えば、<strong>メールを読むサーバーを自分で所有できる</strong>ということです。SaneBoxの一文より長いですが、確かめられる一文です。</p>
+
+  <h2>本文を読むことで得られるもの</h2>
+  <p>ヘッダーの手がかりでは、日程調整の依頼と日付に触れているだけのニュースレターを区別できません。Klornは日程調整のメールを専用のレーンに振り分け、カレンダーと照合します。提案された時間、予定が重なるかどうか、そして双方が空いていると確認できた最初の時間まで。これは品質の差ではなく、システムが見ることを許されている情報の差です。</p>
+
+  <div class="not">
+    <p><strong>主張していないこと。</strong>KlornとSaneBoxの正解率を直接比べるテストは行っていません。SaneBoxの方式は、同社が公に説明しているとおりに記載しています。</p>
+    <p>SaneBoxは敬意を払うべき反例でもあります。2010年から外部資金なしで続き、黒字で、はるかに小さな機能範囲で運営されています。オープンソースだからといって、SaneBoxが得意なことでKlornが勝るわけではありません。</p>
+  </div>
+
+  <div class="actions actions-left"><a class="btn btn-1" href="https://app.klorn.ai/login?mode=register">Klornを無料で試す</a></div>
+
+  <p class="checked">価格と製品情報は各社の公開情報に基づき、2026-08-23に確認しました。間違いがあれば<a href="mailto:k0820086@gmail.com">お知らせください</a>。修正します。</p>
+</div>
+</div>
+</main>
+<footer class="foot">
+  <div class="wrap foot-grid">
+    <div>
+      <a class="brand" href="/ja/">Klorn</a>
+      <p class="foot-note">メールとカレンダーをひとつの場所で、理由とともに整理します。オープンソース。</p>
+      <div class="socials">
+        <a href="https://github.com/k08200/klorn" rel="noreferrer noopener" aria-label="GitHub"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a>
+        <a href="https://x.com/klornai" rel="noreferrer noopener" aria-label="X"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+        <a href="https://join.slack.com/t/klorn/shared_invite/zt-3zkj8lqxg-L4LK8dNPkzgupHEdmXgbIg" rel="noreferrer noopener" aria-label="Slack"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52zm1.271 0a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52zm0 1.271a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522zm-1.268 0a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522zm0-1.268a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523z"/></svg></a>
+      </div>
+    </div>
+    <nav aria-label="製品"><h4>製品</h4>
+      <a href="/ja/download/">すべてのダウンロード</a>
+      <a href="/ja/pricing/">料金</a>
+      <a href="https://app.klorn.ai/login">ログイン</a>
+      <a href="/ja/status/">ステータス</a>
+      <a href="/ja/blog/">ブログ</a></nav>
+    <nav aria-label="オープンソース"><h4>オープンソース</h4>
+      <a href="https://github.com/k08200/klorn" rel="noreferrer noopener">GitHubリポジトリ</a>
+      <a href="https://github.com/k08200/klorn/releases/latest" rel="noreferrer noopener">リリース</a>
+      <a href="https://github.com/k08200/klorn/tree/main/packages/api/eval" rel="noreferrer noopener">評価セット</a>
+      <a href="/ja/methodology/">評価方法</a>
+      <a href="https://github.com/k08200/klorn/blob/main/LICENSE" rel="noreferrer noopener">AGPLv3ライセンス</a>
+      <a href="/ja/open-source/">なぜAGPLなのか、付け足しなしで</a>
+      <a href="/ja/self-host/">セルフホスト</a></nav>
+    <nav aria-label="比較"><h4>比較</h4>
+      <a href="/ja/vs/fyxer/">Fyxerと比較</a>
+      <a href="/ja/vs/superhuman/">Superhumanと比較</a>
+      <a href="/ja/vs/sanebox/" aria-current="page">SaneBoxと比較</a>
+      <a href="/ja/vs/inbox-zero/">Inbox Zeroと比較</a></nav>
+    <nav aria-label="法的事項"><h4>法的事項</h4>
+      <a href="https://app.klorn.ai/privacy">プライバシー</a>
+      <a href="https://app.klorn.ai/terms">利用規約</a>
+      <a href="https://app.klorn.ai/refund">返金</a>
+      <a href="/ja/security/">セキュリティ</a>
+      <a href="/ja/gdpr/">GDPR</a>
+      <a href="/ja/dpa/">DPA</a>
+      <a href="mailto:k0820086@gmail.com">お問い合わせ</a></nav>
+  </div>
+  <div class="wrap foot-base">
+    <span>© 2026 Klorn · AGPLv3</span>
+    <span class="langsw"><a href="/vs/sanebox/" lang="en" aria-current="true">EN</a><i aria-hidden="true">·</i><a href="/ko/vs/sanebox/" lang="ko">KO</a></span>
+  </div>
+</footer>
+<script>
+// Windows visitors get the installer: /site-nav.js swaps the href on every
+// .dl-cta, and this swaps the label to match. Same block as the landings.
+(function () {
+  var uaData = navigator.userAgentData;
+  var raw = String((uaData && uaData.platform) || navigator.platform || navigator.userAgent || '');
+  if (!/win/i.test(raw) || /mac|iphone|ipad|ipod/i.test(raw)) return;
+  document.querySelectorAll('[data-mac-dl]').forEach(function (a) {
+    var label = a.getAttribute('data-win-label');
+    if (!label) return;
+    Array.prototype.forEach.call(a.childNodes, function (n) {
+      if (n.nodeType !== 3 || !n.textContent.trim()) return;
+      var pad = n.textContent.match(/^(\s*)[\s\S]*?(\s*)$/);
+      n.textContent = pad[1] + label + pad[2];
+    });
+  });
+})();
+</script>
+<script>
+// Carry the campaign that produced the click through to the app, so a signup
+// can be attributed to the page that earned it. `lp` is the landing path —
+// without it every comparison page is indistinguishable from the home page in
+// the signup data. Same block as the landing pages; inline because it has to
+// run before anyone clicks.
+(function () {
+  try {
+    var p = new URLSearchParams(location.search);
+    var q = [];
+    ["utm_source", "utm_medium", "utm_campaign", "utm_content"].forEach(function (k) {
+      var v = p.get(k);
+      if (v) q.push(k + "=" + encodeURIComponent(v.slice(0, 60)));
+    });
+    if (document.referrer) {
+      try {
+        var h = new URL(document.referrer).hostname;
+        if (h && h !== location.hostname) q.push("ref=" + encodeURIComponent(h));
+      } catch (e) {}
+    }
+    q.push("lp=" + encodeURIComponent(location.pathname.slice(0, 60)));
+    var qs = q.join("&");
+    document.querySelectorAll('a[href^="https://app.klorn.ai/"]').forEach(function (a) {
+      a.href += (a.href.indexOf("?") === -1 ? "?" : "&") + qs;
+    });
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>
