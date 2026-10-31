@@ -57,12 +57,39 @@ outcomes (open/reply/dismiss/override) ──► feed (3), measure everything
 Rules:
 - Every `evidence` string must be a substring of the normalised mail body or subject. If the check fails, the fact is dropped and the item is escalated.
 - No free-form scores. Dates are absolute and computed against the mail's own Date header.
-- Deterministic pre-facts win when certain: Gmail category, ICS invite, List-Unsubscribe, automated sender, spam label.
+- Deterministic pre-facts win when certain: Gmail category, ICS invite, List-Unsubscribe, automated sender. The spam label is a signal, not a fact (see conventions below).
 - Facts are persisted per item with `factsVersion`, `model`, `provider` and `extractedAt`.
+
+#### Facts v1 conventions (P2, agreed with the P1 benchmark so numbers stay comparable)
+
+Code: `packages/api/src/judge/v3/` (`facts-schema.ts` is the canonical type and validator; `evidence.ts` holds the normalisation and the time tokens; the P1 scorer mirrors them).
+
+- **Haystack.** Evidence is checked against every text field shown to the model, each field separately (a quote cannot span subject and body), using the text *as shown* (after truncation), not the stored body.
+- **Normalisation.** NFKC, strip every Unicode format character (`\p{Cf}`: zero-width, soft hyphen, bidi overrides), controls to spaces, fold curly quotes and dashes, collapse whitespace, trim, lower-case. Case-insensitive on purpose: a re-capitalised sentence start must not drop a real ask.
+- **Minimum quote.** At least 2 tokens, or at least 8 characters as one token (Korean phrases often have no spaces); at most 300. A stray "the" cannot ground a fact. A quote may not cut a Latin word ("approval" does not verify inside "disapproval"); scripts that attach particles to words (Korean) are not boundary-checked.
+- **Due binding.** An ask with a non-null `due` must have evidence that states a time (`TEMPORAL_RE`): a time-shaped number (6pm, 18:00, 3/5, 2026-11-03, 5th, within 3 hours, 6시, 3일), a weekday or month name (ambiguous short forms such as "may", "sun", "wed" only next to a number), today/tomorrow/tonight/EOD/EOW/COB/end of day/close of business/deadline/ASAP/urgent/immediately/morning/noon…, or 오늘/내일/모레/이번 주/다음 주/…요일/오전/오후/까지/마감/기한/긴급/즉시/당장. Otherwise `due` is cleared, the ask is kept, and the item escalates. The prompt tells the model to quote the deadline words. The due value itself is not compared with the quote, so policy still treats a due as model-derived.
+- **Relative dates**, resolved against the mail's sent time in its own offset:
+  - today / EOD / end of day / tonight → 23:59 that day;
+  - tomorrow → 23:59 the next day; tomorrow morning → 09:00; tomorrow noon → 12:00;
+  - within N hours → sent time + N hours;
+  - a weekday → 23:59 on the next such day on or after the sent day;
+  - ASAP / urgent / right now / immediately → the sent time itself;
+  - a meeting start is not a due date unless the mail asks for action by then;
+  - no zone given → the sent time's offset (else the user's timezone).
+- **Date validity.** ISO-8601 with an explicit offset only; a date more than 60 days before or 400 days after the mail is dropped as a misreading.
+- **The Date header is mail-controlled.** Only its parsed value (a local time with offset, and only when it is within 2 days of receipt) reaches the prompt, never its text. RFC 5322 allows comments in it.
+- **Invites.** Only an attached calendar file (text/calendar, `.ics`) sets `event.hasInvite`. Mail text cannot: an "Invitation: … @ …" subject, or the model reading one, is attacker-writable. `event.conflict` is null until the calendar read lands.
+- **Spam label.** It fixes no fact field, because Gmail misfiles real mail and SPAM_INTAKE exists to rescue it. It travels as the header signal `spam`, and policy keeps spam out of PUSH and MEETING.
+- **Header signals.** The detector results (list mail, automated sender, spam, Gmail category, calendar file, recipient counts and position) are stored with the facts. They are booleans and counts, never mail text, and replay can read them.
+- **What the model sees.** Mail fields are wrapped as untrusted. Invisible format characters (zero-width, bidi, Unicode tag characters) are dropped first. Recipients go as counts, never third-party addresses.
+- **Relayed asks.** A system notification that relays a person's request or assignment ("X assigned you issue Y", "X requested your review") is an ask, quoting the relayed words.
+- **No LLM answer.** The extractor stores no facts (`factsSource = "none"`), only the certain pre-facts and the signals. The keyword fallback belongs to the policy layer (P3 `keywordFactsV1`), which owns parity with today's keyword lanes.
+
+Open for facts v1.1 (not changed here): `risk` and `transaction.actionRequired` carry no evidence. A mail can claim `security_alert` without a quote, so policy v3 must not let risk alone interrupt without another signal. A `riskEvidence` field is the proposed fix.
 
 ### (2) Relationship: no LLM
 
-Build on what exists: `SentMessage` (user's sent mail), `ContactEngagementScore` (outbound/dismiss counts), `learning/interaction-graph.ts` (frequency, recency, calendar co-attendance) and sender pins (`SenderLabel`). Features per sender:
+Build on what exists: `SentMessage` (user's sent mail), `ContactEngagementScore` (outbound/dismiss counts), `learning/interaction-graph.ts` (frequency, recency, calendar co-attendance), sender pins (`EmailRule` `PIN_TIER`) and sender labels (`SenderLabel`). Features per sender:
 - times the user wrote to them;
 - last time the user wrote;
 - median reply latency;
@@ -73,6 +100,24 @@ Build on what exists: `SentMessage` (user's sent mail), `ContactEngagementScore`
 
 Output is a `relationship` snapshot stored with the decision. This removes the cold-start "urgent 0/4" problem from day one, because sent mail is already synced for "waiting on".
 
+As built in P2 (`judge/v3/relationship.ts`, `relationship-loader.ts`):
+- Every field is null when the data to answer it does not exist, never 0, so policy can tell "unknown" from "never". No sent-mail sync means the sent fields are null.
+- "Wrote to them" matches the exact address on the To header.
+- Reply latency is measured per thread, from the sender's earliest unanswered mail to the user's reply. Gaps over 30 days are ignored.
+- Same organisation means a shared domain that is not a public mailbox provider, **and** this mail passed DMARC (the receiving server's Authentication-Results, or the Klorn mailbox's stored verdict). Unauthenticated same-domain mail is null, because a lookalike or spoofed colleague must not be lifted (CEO fraud).
+- Reciprocity and tenure, as raw counts (smoothing and weights belong to the per-user importance model, never to the snapshot):
+  - `inboundCount`;
+  - `inboundThreadCount` and `repliedThreadCount` (threads where the user wrote after the sender's first mail; a 1/1 is not "100%");
+  - `userInitiatedThreadCount` (the user's mail opens the thread);
+  - `firstSeenAt` (first contact either way).
+- A From with no parseable mailbox gives an all-null snapshot.
+- Per-user ego network only: one user's mail never informs another user's snapshot. No hand-tuned scores (the interaction graph's are not reused).
+- Known gap: Klorn's own unattended replies reach `SentMessage` through the Gmail SENT sync with no provenance, so the sent-side counts include them. Until sends carry provenance, policy must not treat "the user wrote to them" as trust.
+- Pinned means any `PIN_TIER` rule on the address or domain. VIP means a sender label of investor or customer, or a pin to PUSH.
+- **Calendar co-attendance is always null for now.** `CalendarEvent` stores no attendees. The interaction graph's "meeting" count is inferred from email volume, which is not co-attendance, so it is not reused.
+
+Facts and the snapshot are stored in `AttentionFacts`, one row per (userId, source, sourceId), the natural key of `AttentionItem` and `DecisionLabel`. The row also holds the evidence check, escalation reasons, model, provider, and the v2 lane shown when the shadow ran. That lane is frozen there because `DecisionLabel.shownTier` is rewritten on re-judge.
+
 ### (3) Importance: per user, learned
 
 Signals come from the outcomes being wired in P0: opened (and latency), replied (and latency), starred, archived unread, dismissed, lane override.
@@ -81,7 +126,7 @@ Model: a per-user logistic regression over (facts, relationship, time) features,
 
 ### (4) Policy: deterministic, `policyVersion`
 
-- **PUSH** = (`asks` non-empty with `due` ≤ 24h) OR (`risk` contains payment_failed or security_alert). AND `addressedTo` is me_direct/me_cc. AND importance is within the user's top-k for the day. AND the item falls within the **interrupt budget** (default proposal: 3 per day, user-adjustable). Overflow goes to the top of QUEUE.
+- **PUSH** = (`asks` non-empty with `due` ≤ 24h) OR (`risk` contains payment_failed or security_alert). AND `addressedTo` is me_direct/me_cc. AND importance is within the user's top-k for the day. AND the item falls within the **interrupt budget**: the most PUSH notifications Klorn may send per day. **Default 5 per day, user-adjustable** (founder decision 2026-10-31). Once the day's budget is used, further qualifying items go to the top of the ranked QUEUE with the reason "held: daily interrupt budget" and no notification.
 - **MEETING** = `event` present and not bulk. The calendar conflict is shown.
 - **QUEUE** = `asks` non-empty, or `kind` personal/work_thread, or `threadTurn` = mine_to_reply. **Ranked** by importance × deadline proximity. This is the Today list.
 - **INFO** = `transaction` without `actionRequired`, or `kind` notification without asks.
@@ -97,7 +142,7 @@ Pins and manual overrides keep their precedence, as they do today. Every decisio
   - `ambiguous`;
   - PUSH candidates (high stakes).
 
-  Target ≤ 10% of mail. The existing dial (`judge-dial.ts`) is the hook.
+  There is **no fixed escalation share and no monthly cost ceiling for now**: accuracy first. The founder decided this on 2026-10-31. Cost grows with users either way, and the user count is small today. Escalate wherever it measurably improves accuracy. Cost per day stays a reported metric (§5), so the trade-off is visible when the user count grows. The existing dial (`judge-dial.ts`) is the hook.
 - **Self-consistency** (two samples) for PUSH candidates only.
 - **Cost controls:** prompt caching for the fixed system prompt, and the provider batch API for backfills. Measured today: one Haiku judge call ≈ $0.0002.
 - **Later (P5):**
@@ -108,7 +153,12 @@ Pins and manual overrides keep their precedence, as they do today. Every decisio
 
 - **Fact eval set:**
   - synthetic edge cases, in the repo, PII-free;
-  - the founder's own real mail, labelled at fact level. Frontier-model draft labels, founder spot-check. Kept out of the repo, under `~/klorn-secrets`. Needs founder consent; see §8.
+  - the founder's own real mail, labelled at fact level. **Consent given 2026-10-31**, on condition that the labels are exact. Protocol:
+    - two different frontier models label each mail independently;
+    - every disagreement, and every PUSH/MEETING-relevant item, goes to the founder for review;
+    - only the reconciled label counts.
+    
+    The labels are kept out of the repo, under `~/klorn-secrets`, and processed only by disclosed processors.
   - Metrics: per-field precision/recall, evidence validity rate, date accuracy.
 - **Policy replay:** any `policyVersion` change is replayed over stored facts and diffed per lane before it ships.
 - **Shadow mode:** v3 runs beside v2 on every new mail. Both results are stored, and a disagreement report is produced. Users see only v2.
@@ -132,7 +182,7 @@ Each phase is its own PR(s), flag-OFF, with full gate and reviews.
 | P1 | Re-benchmark **current** models (Haiku/Sonnet/Opus 5.5, Fable 5.1, current Gemini/GPT available to us) × {v2 score prompt, v3 fact prompt} on the gate set + real set | numbers answer whether v2 is calibration-coupled and whether v3 narrows the spread between models | none (eval only, synthetic/consented data) |
 | P2 | Fact extractor (schema v1) + evidence verification + persistence, run in **shadow** | fact eval ≥ the agreed bar; shadow running on prod with a disagreement report | `JUDGE_V3_SHADOW` |
 | P3 | Policy v3 (lanes from facts) + QUEUE ranking + PUSH interrupt budget | replay and shadow show v3 ≥ v2 on outcome metrics | `JUDGE_V3_POLICY` (founder flip) |
-| P4 | Escalation to frontier for hard/high-stakes items + batch backfills | escalation ≤ 10%, cost inside the $100/mo credit | `JUDGE_V3_ESCALATION` |
+| P4 | Escalation to frontier for hard/high-stakes items + batch backfills | escalation measurably raises accuracy on the fact eval; cost per day reported (no cap for now) | `JUDGE_V3_ESCALATION` |
 | P5 | Per-user importance model + embedding first pass | enough outcomes per user; first pass agrees with LLM facts on bulk/transactional | `JUDGE_V3_IMPORTANCE` |
 | Review | Lane set review with 2–4 weeks of P3 data (e.g. MEETING/INFO as chips?) | founder decision (lanes are LOCKED) | — |
 
@@ -143,7 +193,14 @@ Each phase is its own PR(s), flag-OFF, with full gate and reviews.
 - A policy flip is reversible because v2 decisions keep being computed until v3 has been the default for two weeks.
 - Fact persistence is additive (new columns/table). No v2 data is rewritten.
 
-## 8. Open founder decisions
+## 8. Founder decisions
+
+Decided 2026-10-31:
+- PUSH interrupt budget: **user-adjustable, default 5 per day**.
+- Labelling the founder's own mail for the fact eval: **yes, labels must be exact** (protocol in §5).
+- Escalation: **accuracy first; no escalation share or cost ceiling for now**. Cost is tracked, not capped.
+
+Original open list, kept for history:
 
 1. Default PUSH interrupt budget (proposal: 3/day).
 2. Consent to label the founder's own mail for the fact eval set (kept outside the repo, processed only by disclosed processors).
