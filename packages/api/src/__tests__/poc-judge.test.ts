@@ -368,3 +368,26 @@ describe("judgeEmail fast-path", () => {
     expect(result.tier).toBe("QUEUE");
   });
 });
+
+describe("judgeEmail decidedBy (playground 'decided the lane')", () => {
+  it("names the marketing fast-path", async () => {
+    const result = await judgeEmail({
+      from: "newsletter@example.com",
+      subject: "Weekly digest — view this email in your browser",
+      snippet: "...",
+      labels: [],
+    });
+    expect(result.decidedBy).toBe("marketing");
+  });
+
+  it("names the v2 rule that placed a scored email", async () => {
+    const result = await judgeEmail({
+      from: "Vercel <notifications@vercel.com>",
+      subject: "Failed preview deployment on team 'k0820086'",
+      snippet: "Build error in packages/web",
+      labels: [],
+    });
+    expect(result.tier).toBe("INFO");
+    expect(result.decidedBy).toBe("transactional");
+  });
+});

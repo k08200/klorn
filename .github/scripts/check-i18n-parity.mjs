@@ -201,6 +201,8 @@ const COPY_GUARD_PREFIXES = [
   "bottomTabs.",
   "toast.",
   "errorAlert.",
+  // Public playground (redesign 2026-10-30).
+  "playground.",
   "mailRow.",
   "graph.",
   "newEvent.",
@@ -315,6 +317,8 @@ const PROSE_GUARD_DIRS = [
   "packages/web/src/app/files",
   "packages/web/src/app/login",
   "packages/web/src/app/onboarding",
+  // Public playground (redesign 2026-10-30): every string through t().
+  "packages/web/src/app/playground",
   "packages/web/src/app/settings",
   "packages/web/src/app/today",
   "packages/web/src/components",

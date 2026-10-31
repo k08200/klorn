@@ -167,11 +167,32 @@ export function tierFromFeatures(
  * its detector is deterministic content, not an LLM score — a meeting invite
  * with a shaky feature vector is still a meeting invite.
  */
+/**
+ * Which v2 branch placed the email, in evaluation order. Returned so a surface
+ * that explains a verdict (the public playground's "decided the lane" marker)
+ * reads the rule that actually fired instead of re-deriving it client-side,
+ * where it could drift from these thresholds.
+ */
+export type TierRuleV2 =
+  | "scheduling"
+  | "low-confidence"
+  | "urgent"
+  | "promotional"
+  | "transactional"
+  | "default";
+
+export interface TierDecisionV2 {
+  tier: Tier;
+  reason: string;
+  autoEligible: boolean;
+  rule: TierRuleV2;
+}
+
 export function tierFromFeaturesV2(
   features: TierFeatures,
   signals: TierSignals,
   thresholds: ThresholdConfig = TIER_THRESHOLDS,
-): { tier: Tier; reason: string; autoEligible: boolean } {
+): TierDecisionV2 {
   const f: TierFeatures = {
     confidence: CLAMP(features.confidence),
     senderTrust: CLAMP(features.senderTrust),
@@ -191,7 +212,12 @@ export function tierFromFeaturesV2(
   // 1. Scheduling mail → MEETING (own lane: structured accept/decline +
   //    calendar cross-check; notifies like PUSH regardless of scored urgency).
   if (signals.scheduling) {
-    return { tier: "MEETING", reason: "Scheduling — meeting lane", autoEligible: eligible };
+    return {
+      tier: "MEETING",
+      reason: "Scheduling — meeting lane",
+      autoEligible: eligible,
+      rule: "scheduling",
+    };
   }
 
   // 2. Very low confidence → QUEUE (visible; never hide uncertain mail).
@@ -200,12 +226,13 @@ export function tierFromFeaturesV2(
       tier: "QUEUE",
       reason: "Low classification confidence — queued for review",
       autoEligible: false,
+      rule: "low-confidence",
     };
   }
 
   // 3. Urgent + sure → PUSH.
   if (f.urgency >= t.push.urgency && f.confidence >= t.push.confidence) {
-    return { tier: "PUSH", reason: "Urgent and confident", autoEligible: false };
+    return { tier: "PUSH", reason: "Urgent and confident", autoEligible: false, rule: "urgent" };
   }
 
   // 4. Clear promotional → SILENT (same narrow v1 branch).
@@ -218,6 +245,7 @@ export function tierFromFeaturesV2(
       tier: "SILENT",
       reason: "Promotional / marketing — no human attention needed",
       autoEligible: false,
+      rule: "promotional",
     };
   }
 
@@ -229,6 +257,7 @@ export function tierFromFeaturesV2(
       tier: "INFO",
       reason: "Transactional record — filed, no reply expected",
       autoEligible: false,
+      rule: "transactional",
     };
   }
 
@@ -237,5 +266,6 @@ export function tierFromFeaturesV2(
     tier: "QUEUE",
     reason: "Visible in queue for manual review",
     autoEligible: eligible,
+    rule: "default",
   };
 }

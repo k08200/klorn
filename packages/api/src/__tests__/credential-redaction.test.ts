@@ -228,3 +228,18 @@ describe("redactCredentialQueryParams — parameter names", () => {
     }
   });
 });
+
+describe("redactCredentials — Anthropic keys (playground BYOK)", () => {
+  it.each([
+    "sk-ant-api03-AbCdEf_GhIjKl-MnOpQrStUv0123456789",
+    "sk-ant-admin01-AbCdEf_GhIjKl-MnOpQrStUv0123456789",
+  ])("redacts %s and keeps no part of the secret tail", (key) => {
+    const out = redactCredentials(`401 invalid x-api-key: ${key} (check your key)`);
+    expect(out).not.toContain("AbCdEf");
+    expect(out).toContain("sk-***");
+  });
+
+  it("redacts an sk-ant key preceded by a letter-free encoded boundary", () => {
+    expect(redactCredentials("key%3Dsk-ant-api03-secretTAIL1234")).not.toContain("secretTAIL");
+  });
+});

@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { TIER_COUNT } from "@/lib/tiers";
 
-const TITLE = "Klorn Playground — see what would interrupt you";
-const DESCRIPTION = `Try Klorn's ${TIER_COUNT}-lane email firewall without signing in. Paste an email, bring your own LLM key, and see whether Klorn would interrupt you for it.`;
+const TITLE = "Klorn Playground — see how Klorn sorts one email";
+const DESCRIPTION = `Try Klorn's ${TIER_COUNT}-lane email firewall without signing in. Paste an email, bring your own model key, and see which lane Klorn's real judge puts it in — and the four scores that decided it.`;
 
 // Own OpenGraph/Twitter card so a shared /playground link previews as the demo
 // (not the generic homepage it would inherit from the root layout). metadataBase

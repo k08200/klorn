@@ -119,6 +119,8 @@ export interface ProviderCredentials {
   geminiApiKey?: string | null;
   /** Direct OpenAI key (sk-…/sk-proj-…) → api.openai.com. Playground BYOK. */
   openAiApiKey?: string | null;
+  /** Direct Anthropic key (sk-ant-…) → api.anthropic.com. Playground BYOK only. */
+  anthropicApiKey?: string | null;
   quotaScope?: string | null;
   /**
    * When true, the provider chain contains ONLY the explicitly supplied
@@ -275,13 +277,31 @@ interface AnthropicSession {
   client: ReturnType<typeof import("./anthropic-native.js").createAnthropicClient>;
 }
 
+interface AnthropicBuildOptions {
+  /** `env` for the server key; `user:<scope>` for a playground visitor key. */
+  scope: string;
+  /** Only the server's own key may name the operator's workspace. */
+  workspaceId: string | null;
+  /** undefined = SDK default; 0 for a visitor so a 429 fails fast. */
+  maxRetries?: number;
+}
+
 /**
- * Native Anthropic provider (env key only — no per-user path). Non-Claude pins
- * are served by ANTHROPIC_MODEL (default claude-haiku-5-5), the way Gemini
- * serves a non-Gemini pin with GEMINI_FALLBACK_MODEL; Claude pins, native or
- * OpenRouter-spelled, are honoured.
+ * Native Anthropic provider. The env key serves the server; the playground
+ * passes a visitor's own key (BYOK) with its own quota scope, no workspace
+ * header (ANTHROPIC_WORKSPACE_ID names Klorn's workspace, never a visitor's)
+ * and no SDK retries. Non-Claude pins are served by ANTHROPIC_MODEL (default
+ * claude-haiku-5-5), the way Gemini serves a non-Gemini pin with
+ * GEMINI_FALLBACK_MODEL; Claude pins, native or OpenRouter-spelled, are
+ * honoured.
  */
-function buildAnthropic(apiKey = process.env.ANTHROPIC_API_KEY): Provider | null {
+function buildAnthropic(
+  apiKey = process.env.ANTHROPIC_API_KEY,
+  build: AnthropicBuildOptions = {
+    scope: "env",
+    workspaceId: process.env.ANTHROPIC_WORKSPACE_ID?.trim() || null,
+  },
+): Provider | null {
   if (!apiKey) return null;
   const defaultModel = process.env.ANTHROPIC_MODEL || RECOMMENDED_ANTHROPIC_MODEL;
   const options = readAnthropicCallOptions(process.env);
@@ -293,14 +313,15 @@ function buildAnthropic(apiKey = process.env.ANTHROPIC_API_KEY): Provider | null
       client: adapter.createAnthropicClient(
         apiKey,
         llmRequestTimeoutMs(CLOUD_LLM_TIMEOUT_MS),
-        process.env.ANTHROPIC_WORKSPACE_ID?.trim() || null,
+        build.workspaceId,
+        build.maxRetries,
       ),
     }));
     return session;
   };
   return {
     name: "anthropic",
-    quotaKey: "anthropic:env",
+    quotaKey: `anthropic:${build.scope}`,
     client: null, // native adapter, not the OpenAI SDK
     defaultModel,
     supportsTools: true,
@@ -436,6 +457,13 @@ export function getProviderChain(credentials: ProviderCredentials = {}): Provide
     credentials.geminiApiKey ? buildGemini(credentials.geminiApiKey, userScope) : null,
     credentials.openAiApiKey
       ? buildOpenAI(credentials.openAiApiKey, userScope, visitorRetries)
+      : null,
+    credentials.anthropicApiKey
+      ? buildAnthropic(credentials.anthropicApiKey, {
+          scope: userScope,
+          workspaceId: null,
+          maxRetries: visitorRetries,
+        })
       : null,
   ].map((p): Provider | null => (p ? { ...p, ownedByUser: true } : null));
 

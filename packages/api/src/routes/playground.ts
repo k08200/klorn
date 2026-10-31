@@ -6,7 +6,7 @@
  * Why this exists: every real onboarding path (OAuth, Workspace admin policy)
  * gates a visitor out before they ever see the classifier. The playground
  * removes that wall for the *experience* step — paste an email, bring your own
- * OpenRouter/Gemini key, see the tier the real `judgeEmail` would assign. It
+ * OpenRouter/Gemini/OpenAI/Anthropic key, see the tier the real `judgeEmail` would assign. It
  * is a top-of-funnel demo, NOT a measurement of per-user recall (the visitor
  * self-selects the input, so it cannot test what the firewall would miss).
  *
@@ -33,6 +33,32 @@ function sanitizeForLog(value: string): string {
   return value.replace(/[\x00-\x1F\x7F]/g, " ").slice(0, 200);
 }
 
+/**
+ * Model ids are echoed into logs and forwarded to a provider, so they are
+ * shape-checked, not just length-capped: vendor/model[:variant] with dots and
+ * dashes (`google/gemini-2.5-flash`, `claude-haiku-5-5`, `…:free`). No spaces,
+ * no query strings, no `..` anywhere, and a letter or digit first.
+ */
+export const PLAYGROUND_MODEL_ID_PATTERN =
+  "^(?!.*\\.\\.)[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9._-]+)?(:[A-Za-z0-9._-]+)?$";
+
+const PLAYGROUND_PROVIDERS = ["openrouter", "gemini", "openai", "anthropic"] as const;
+
+/**
+ * The native Anthropic and Gemini adapters answer a pin from another vendor
+ * with their own default model (toAnthropicModelId / buildGemini), so the
+ * visitor would be shown a model that never ran. Those two providers only
+ * accept their own family; the web client applies the same rule.
+ */
+function modelFitsProvider(
+  provider: (typeof PLAYGROUND_PROVIDERS)[number],
+  model: string,
+): boolean {
+  if (provider === "anthropic") return /^(anthropic\/)?claude-/i.test(model);
+  if (provider === "gemini") return /^(google\/)?gemini/i.test(model);
+  return true;
+}
+
 const classifyBodySchema = {
   type: "object",
   additionalProperties: false,
@@ -44,12 +70,12 @@ const classifyBodySchema = {
     from: { type: "string", minLength: 1, maxLength: 320 },
     subject: { type: "string", minLength: 1, maxLength: 998 },
     snippet: { type: "string", maxLength: 4000 },
-    provider: { type: "string", enum: ["openrouter", "gemini", "openai"] },
+    provider: { type: "string", enum: [...PLAYGROUND_PROVIDERS] },
     apiKey: { type: "string", minLength: 8, maxLength: 400 },
     // No `:free` enforcement: the visitor uses their own key and pays for
     // whatever model they pick. `playgroundOnly` walls this off from the
     // server's keys, so a paid model never costs Klorn anything.
-    model: { type: "string", minLength: 1, maxLength: 120 },
+    model: { type: "string", minLength: 1, maxLength: 120, pattern: PLAYGROUND_MODEL_ID_PATTERN },
   },
 } as const;
 
@@ -77,7 +103,7 @@ function scrubKeys(text: string): string {
   return redactCredentials(text);
 }
 
-type PlaygroundProvider = "openrouter" | "gemini" | "openai";
+type PlaygroundProvider = (typeof PLAYGROUND_PROVIDERS)[number];
 
 interface ClassifyBody {
   from: string;
@@ -219,6 +245,7 @@ async function handleNoKeyDemo(request: FastifyRequest, reply: FastifyReply, bod
       reason: result.reason,
       features: result.features,
       source: result.source,
+      decidedBy: result.decidedBy,
     });
   } catch (err) {
     const message = sanitizeForLog(scrubKeys(err instanceof Error ? err.message : String(err)));
@@ -243,8 +270,10 @@ export function playgroundRoutes(app: FastifyInstance) {
         // Key-free → server-paid demo path (or 401 key_required while dark).
         return handleNoKeyDemo(request, reply, body);
       }
-      const provider: PlaygroundProvider =
-        body.provider === "gemini" || body.provider === "openai" ? body.provider : "openrouter";
+      const provider: PlaygroundProvider = body.provider ?? "openrouter";
+      if (body.model && !modelFitsProvider(provider, body.model)) {
+        return reply.code(400).send({ error: "model_provider_mismatch" });
+      }
 
       // Build credentials from the request body and pass straight through to
       // the classifier. No userId → the per-user cost ledger is bypassed; the
@@ -256,6 +285,7 @@ export function playgroundRoutes(app: FastifyInstance) {
         openRouterApiKey: provider === "openrouter" ? body.apiKey : null,
         geminiApiKey: provider === "gemini" ? body.apiKey : null,
         openAiApiKey: provider === "openai" ? body.apiKey : null,
+        anthropicApiKey: provider === "anthropic" ? body.apiKey : null,
         quotaScope: "playground",
         // Fail closed: never fall through to the server's env keys.
         playgroundOnly: true,
@@ -304,6 +334,10 @@ export function playgroundRoutes(app: FastifyInstance) {
           reason: result.reason,
           features: result.features,
           source: result.source,
+          // Which rule placed it — the result card marks that score as
+          // "decided the lane" from this, so the explanation can't drift
+          // from tier-policy.ts.
+          decidedBy: result.decidedBy,
         });
       } catch (err) {
         // Log WHY (message only) but NEVER the body or the key. captureError
