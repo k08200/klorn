@@ -1,0 +1,678 @@
+{
+  "metadata": {
+    "factsVersion": 1,
+    "source": "eval/judge-eval-set.json (synthetic, PII-free)",
+    "count": 56,
+    "note": "Fact-level labels for docs/design/attention-engine-v3.md §3(1). An absent field is not scored (ambiguous for that item). due: none | within24h | later, relative to the item's receivedAt. transaction.kind null = any kind. askKinds is scored as a set (precision/recall) where present."
+  },
+  "items": [
+    {
+      "id": "eval-001",
+      "labels": {
+        "addressedTo": "bulk",
+        "asksPresent": false,
+        "due": "none",
+        "event": false,
+        "transaction": null,
+        "risk": [],
+        "kind": "promotion"
+      }
+    },
+    {
+      "id": "eval-002",
+      "labels": {
+        "addressedTo": "bulk",
+        "asksPresent": false,
+        "due": "none",
+        "event": false,
+        "transaction": null,
+        "risk": [],
+        "kind": "promotion"
+      }
+    },
+    {
+      "id": "eval-003",
+      "labels": {
+        "addressedTo": "bulk",
+        "asksPresent": false,
+        "due": "none",
+        "event": false,
+        "transaction": null,
+        "risk": [],
+        "kind": "promotion"
+      }
+    },
+    {
+      "id": "eval-004",
+      "labels": {
+        "addressedTo": "bulk",
+        "asksPresent": false,
+        "due": "none",
+        "event": false,
+        "transaction": null,
+        "risk": [],
+        "kind": "promotion"
+      }
+    },
+    {
+      "id": "eval-005",
+      "labels": {
+        "addressedTo": "bulk",
+        "asksPresent": false,
+        "due": "none",
+        "event": false,
+        "transaction": null,
+        "risk": [],
+        "kind": "promotion"
+      }
+    },
+    {
+      "id": "eval-006",
+      "labels": {
+        "addressedTo": "bulk",
+        "asksPresent": false,
+        "due": "none",
+        "event": false,
+        "transaction": null,
+        "risk": [],
+        "kind": "promotion"
+      }
+    },
+    {
+      "id": "eval-007",
+      "labels": {
+        "addressedTo": "bulk",
+        "asksPresent": false,
+        "due": "none",
+        "event": false,
+        "transaction": null,
+        "risk": [],
+        "kind": "promotion"
+      }
+    },
+    {
+      "id": "eval-008",
+      "labels": {
+        "addressedTo": "bulk",
+        "asksPresent": false,
+        "due": "none",
+        "event": false,
+        "transaction": null,
+        "risk": [],
+        "kind": "promotion"
+      }
+    },
+    {
+      "id": "eval-009",
+      "labels": {
+        "addressedTo": "bulk",
+        "asksPresent": false,
+        "due": "none",
+        "event": false,
+        "transaction": null,
+        "risk": [],
+        "kind": "newsletter"
+      }
+    },
+    {
+      "id": "eval-010",
+      "labels": {
+        "addressedTo": "bulk",
+        "asksPresent": false,
+        "due": "none",
+        "event": false,
+        "transaction": null,
+        "risk": [],
+        "kind": "newsletter"
+      }
+    },
+    {
+      "id": "eval-011",
+      "labels": {
+        "addressedTo": "bulk",
+        "asksPresent": false,
+        "due": "none",
+        "event": false,
+        "transaction": null,
+        "risk": [],
+        "kind": "promotion"
+      }
+    },
+    {
+      "id": "eval-012",
+      "labels": {
+        "addressedTo": "bulk",
+        "asksPresent": false,
+        "due": "none",
+        "event": false,
+        "transaction": null,
+        "risk": [],
+        "kind": "newsletter"
+      }
+    },
+    {
+      "id": "eval-013",
+      "labels": {
+        "kind": "notification",
+        "asksPresent": false,
+        "due": "none",
+        "event": false,
+        "transaction": null,
+        "risk": []
+      }
+    },
+    {
+      "id": "eval-014",
+      "labels": {
+        "kind": "notification",
+        "asksPresent": true,
+        "due": "none",
+        "event": false,
+        "transaction": null,
+        "risk": [],
+        "askKinds": [
+          "review"
+        ]
+      }
+    },
+    {
+      "id": "eval-015",
+      "labels": {
+        "kind": "notification",
+        "asksPresent": false,
+        "due": "none",
+        "event": false,
+        "transaction": null,
+        "risk": [
+          "account_change"
+        ]
+      }
+    },
+    {
+      "id": "eval-016",
+      "labels": {
+        "asksPresent": false,
+        "due": "none",
+        "event": false,
+        "transaction": {
+          "kind": "invoice",
+          "actionRequired": false
+        },
+        "risk": [],
+        "kind": "receipt"
+      }
+    },
+    {
+      "id": "eval-017",
+      "labels": {
+        "kind": "notification",
+        "asksPresent": true,
+        "due": "none",
+        "event": false,
+        "transaction": null,
+        "risk": []
+      }
+    },
+    {
+      "id": "eval-018",
+      "labels": {
+        "asksPresent": false,
+        "due": "none",
+        "event": false,
+        "transaction": {
+          "kind": "receipt",
+          "actionRequired": false
+        },
+        "risk": [],
+        "kind": "receipt"
+      }
+    },
+    {
+      "id": "eval-019",
+      "labels": {
+        "addressedTo": "me_direct",
+        "due": "none",
+        "transaction": null,
+        "risk": [],
+        "kind": "work_thread",
+        "asksPresent": false,
+        "event": false
+      }
+    },
+    {
+      "id": "eval-020",
+      "labels": {
+        "addressedTo": "me_direct",
+        "due": "none",
+        "transaction": null,
+        "risk": [],
+        "kind": "personal",
+        "event": false
+      }
+    },
+    {
+      "id": "eval-021",
+      "labels": {
+        "addressedTo": "me_direct",
+        "due": "none",
+        "transaction": null,
+        "risk": [],
+        "asksPresent": true,
+        "askKinds": [
+          "decide"
+        ],
+        "event": false
+      }
+    },
+    {
+      "id": "eval-022",
+      "labels": {
+        "addressedTo": "me_direct",
+        "due": "none",
+        "transaction": null,
+        "risk": [],
+        "kind": "work_thread",
+        "asksPresent": false,
+        "event": false
+      }
+    },
+    {
+      "id": "eval-023",
+      "labels": {
+        "addressedTo": "me_direct",
+        "due": "none",
+        "transaction": null,
+        "risk": [],
+        "asksPresent": true,
+        "askKinds": [
+          "reply"
+        ],
+        "event": false
+      }
+    },
+    {
+      "id": "eval-024",
+      "labels": {
+        "addressedTo": "me_direct",
+        "due": "none",
+        "transaction": null,
+        "risk": [],
+        "kind": "work_thread",
+        "asksPresent": false,
+        "event": false
+      }
+    },
+    {
+      "id": "eval-025",
+      "labels": {
+        "addressedTo": "me_direct",
+        "due": "none",
+        "transaction": null,
+        "risk": [],
+        "event": false
+      }
+    },
+    {
+      "id": "eval-026",
+      "labels": {
+        "kind": "notification",
+        "asksPresent": false,
+        "due": "none",
+        "event": false,
+        "transaction": null,
+        "risk": []
+      }
+    },
+    {
+      "id": "eval-027",
+      "labels": {
+        "asksPresent": false,
+        "due": "none",
+        "event": false,
+        "transaction": {
+          "kind": null,
+          "actionRequired": false
+        },
+        "risk": [],
+        "kind": "receipt"
+      }
+    },
+    {
+      "id": "eval-028",
+      "labels": {
+        "addressedTo": "me_direct",
+        "due": "none",
+        "transaction": null,
+        "risk": [],
+        "kind": "work_thread",
+        "asksPresent": false,
+        "threadTurn": "theirs",
+        "event": false
+      }
+    },
+    {
+      "id": "eval-029",
+      "labels": {
+        "addressedTo": "me_direct",
+        "due": "none",
+        "transaction": null,
+        "risk": [],
+        "kind": "meeting",
+        "event": true
+      }
+    },
+    {
+      "id": "eval-030",
+      "labels": {
+        "addressedTo": "bulk",
+        "asksPresent": false,
+        "due": "none",
+        "event": false,
+        "transaction": null,
+        "risk": [],
+        "kind": "newsletter"
+      }
+    },
+    {
+      "id": "eval-031",
+      "labels": {
+        "asksPresent": false,
+        "due": "none",
+        "event": false,
+        "transaction": {
+          "kind": "statement",
+          "actionRequired": false
+        },
+        "risk": []
+      }
+    },
+    {
+      "id": "eval-032",
+      "labels": {
+        "kind": "notification",
+        "asksPresent": true,
+        "due": "none",
+        "event": false,
+        "transaction": null,
+        "risk": [],
+        "askKinds": [
+          "review"
+        ]
+      }
+    },
+    {
+      "id": "eval-033",
+      "labels": {
+        "addressedTo": "me_direct",
+        "due": "none",
+        "transaction": null,
+        "risk": [],
+        "kind": "work_thread",
+        "event": false
+      }
+    },
+    {
+      "id": "eval-034",
+      "labels": {
+        "addressedTo": "me_direct",
+        "due": "within24h",
+        "transaction": null,
+        "risk": [],
+        "asksPresent": true,
+        "askKinds": [
+          "provide"
+        ]
+      }
+    },
+    {
+      "id": "eval-035",
+      "labels": {
+        "addressedTo": "me_direct",
+        "due": "within24h",
+        "transaction": null,
+        "risk": [],
+        "asksPresent": true
+      }
+    },
+    {
+      "id": "eval-036",
+      "labels": {
+        "addressedTo": "me_direct",
+        "due": "later",
+        "transaction": null,
+        "risk": [],
+        "asksPresent": true,
+        "askKinds": [
+          "provide"
+        ]
+      }
+    },
+    {
+      "id": "eval-037",
+      "labels": {
+        "addressedTo": "me_direct",
+        "due": "within24h",
+        "transaction": null,
+        "risk": [],
+        "asksPresent": true
+      }
+    },
+    {
+      "id": "eval-038",
+      "labels": {
+        "addressedTo": "me_direct",
+        "due": "within24h",
+        "transaction": null,
+        "risk": [],
+        "asksPresent": true
+      }
+    },
+    {
+      "id": "eval-039",
+      "labels": {
+        "addressedTo": "me_direct",
+        "due": "within24h",
+        "transaction": null,
+        "risk": [],
+        "asksPresent": true,
+        "askKinds": [
+          "reply"
+        ]
+      }
+    },
+    {
+      "id": "eval-040",
+      "labels": {
+        "addressedTo": "me_direct",
+        "due": "within24h",
+        "transaction": null,
+        "risk": [],
+        "asksPresent": true
+      }
+    },
+    {
+      "id": "eval-041",
+      "labels": {
+        "addressedTo": "me_direct",
+        "due": "within24h",
+        "transaction": null,
+        "risk": [],
+        "asksPresent": true,
+        "askKinds": [
+          "attend"
+        ]
+      }
+    },
+    {
+      "id": "eval-042",
+      "labels": {
+        "addressedTo": "me_direct",
+        "due": "within24h",
+        "transaction": null,
+        "risk": [],
+        "asksPresent": true
+      }
+    },
+    {
+      "id": "eval-043",
+      "labels": {
+        "addressedTo": "me_direct",
+        "due": "within24h",
+        "transaction": null,
+        "risk": [],
+        "asksPresent": true,
+        "askKinds": [
+          "review"
+        ]
+      }
+    },
+    {
+      "id": "eval-044",
+      "labels": {
+        "addressedTo": "me_direct",
+        "due": "within24h",
+        "transaction": null,
+        "risk": [],
+        "asksPresent": true,
+        "askKinds": [
+          "provide"
+        ]
+      }
+    },
+    {
+      "id": "eval-045",
+      "labels": {
+        "addressedTo": "me_direct",
+        "due": "within24h",
+        "transaction": null,
+        "risk": [],
+        "asksPresent": true
+      }
+    },
+    {
+      "id": "eval-046",
+      "labels": {
+        "asksPresent": true,
+        "risk": [
+          "security_alert"
+        ],
+        "event": false
+      }
+    },
+    {
+      "id": "eval-047",
+      "labels": {
+        "asksPresent": false,
+        "due": "none",
+        "event": false,
+        "transaction": {
+          "kind": "receipt",
+          "actionRequired": false
+        },
+        "risk": [],
+        "kind": "receipt"
+      }
+    },
+    {
+      "id": "eval-048",
+      "labels": {
+        "asksPresent": false,
+        "risk": []
+      }
+    },
+    {
+      "id": "eval-049",
+      "labels": {
+        "asksPresent": false,
+        "due": "none",
+        "event": false,
+        "transaction": {
+          "kind": "shipping",
+          "actionRequired": false
+        },
+        "risk": []
+      }
+    },
+    {
+      "id": "eval-050",
+      "labels": {
+        "kind": "notification",
+        "asksPresent": false,
+        "due": "none",
+        "event": false,
+        "transaction": null,
+        "risk": []
+      }
+    },
+    {
+      "id": "eval-051",
+      "labels": {
+        "addressedTo": "me_direct",
+        "due": "none",
+        "transaction": null,
+        "risk": [],
+        "kind": "meeting",
+        "event": true
+      }
+    },
+    {
+      "id": "eval-052",
+      "labels": {
+        "addressedTo": "me_direct",
+        "due": "none",
+        "transaction": null,
+        "risk": [],
+        "asksPresent": true,
+        "event": true
+      }
+    },
+    {
+      "id": "eval-053",
+      "labels": {
+        "addressedTo": "me_direct",
+        "due": "none",
+        "transaction": null,
+        "risk": [],
+        "asksPresent": true,
+        "event": true
+      }
+    },
+    {
+      "id": "eval-054",
+      "labels": {
+        "asksPresent": false,
+        "due": "none",
+        "event": false,
+        "transaction": {
+          "kind": "receipt",
+          "actionRequired": false
+        },
+        "risk": []
+      }
+    },
+    {
+      "id": "eval-055",
+      "labels": {
+        "kind": "notification",
+        "asksPresent": false,
+        "due": "none",
+        "event": false,
+        "transaction": null,
+        "risk": []
+      }
+    },
+    {
+      "id": "eval-056",
+      "labels": {
+        "asksPresent": false,
+        "due": "none",
+        "event": false,
+        "transaction": {
+          "kind": "shipping",
+          "actionRequired": false
+        },
+        "risk": []
+      }
+    }
+  ]
+}
