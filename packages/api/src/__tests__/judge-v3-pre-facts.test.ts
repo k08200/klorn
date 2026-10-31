@@ -52,7 +52,6 @@ describe("deterministicPreFacts — addressedTo", () => {
       { precedence: "List" },
       { labels: ["CATEGORY_PROMOTIONS"] },
       { labels: ["CATEGORY_SOCIAL"] },
-      { labels: ["SPAM"] },
     ] satisfies Partial<PreFactsInput>[]) {
       const p = deterministicPreFacts(mail(over));
       expect(p.facts.addressedTo, JSON.stringify(over)).toBe("bulk");
@@ -95,15 +94,28 @@ describe("deterministicPreFacts — kind, event, threadTurn, asks", () => {
     expect(p.certain).toEqual(expect.arrayContaining(["kind", "event"]));
   });
 
-  it("treats a calendar-system invitation subject as an invite", () => {
+  it("treats an invitation subject as a hint only: anyone can write one", () => {
     const p = deterministicPreFacts(
       mail({
         from: "calendar-notification@google.com",
         subject: "Invitation: Board sync @ Tue Nov 3, 2026 10am",
       }),
     );
-    expect(p.facts.event?.hasInvite).toBe(true);
-    expect(p.signals.calendarInvite).toBe(true);
+    expect(p.signals.inviteSubject).toBe(true);
+    expect(p.signals.icsInvite).toBe(false);
+    expect(p.facts.event).toBeUndefined();
+    expect(p.certain).not.toContain("event");
+    expect(p.certain).not.toContain("kind");
+  });
+
+  it("bounds the recipient scan on an attacker-sized To header", () => {
+    const huge = Array.from({ length: 200_000 }, (_, i) => `p${i}@x.com`).join(", ");
+    const started = process.cpuUsage();
+    const p = deterministicPreFacts(mail({ to: `${me}, ${huge}` }));
+    const cpuMs = (process.cpuUsage(started).user + process.cpuUsage(started).system) / 1000;
+    expect(p.signals.toCount).toBeLessThan(1000);
+    expect(p.facts.addressedTo).toBe("group");
+    expect(cpuMs).toBeLessThan(2000);
   });
 
   it("does not let a marketing ICS (webinar blast) become a meeting", () => {
@@ -132,11 +144,12 @@ describe("deterministicPreFacts — kind, event, threadTurn, asks", () => {
     expect(p.facts.threadTurn).toBeUndefined();
   });
 
-  it("forces no asks on Gmail spam", () => {
+  it("fixes no fact from the spam label (Gmail misfiles real mail); it is a signal only", () => {
     const p = deterministicPreFacts(mail({ labels: ["SPAM"] }));
-    expect(p.facts.asks).toEqual([]);
-    expect(p.certain).toContain("asks");
     expect(p.signals.spam).toBe(true);
+    expect(p.facts.asks).toBeUndefined();
+    expect(p.facts.kind).toBeUndefined();
+    expect(p.facts.addressedTo).toBe("me_direct");
   });
 
   it("never marks asks/risk/transaction/ambiguous certain for ordinary mail", () => {

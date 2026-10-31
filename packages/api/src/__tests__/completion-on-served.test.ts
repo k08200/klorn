@@ -75,6 +75,22 @@ describe("createCompletion onServed", () => {
     });
   });
 
+  it("a throwing callback does not fail the call over to a second provider", async () => {
+    const second = vi.fn(async () => ok());
+    mockChain([fakeProvider("anthropic", async () => ok()), fakeProvider("gemini", second)]);
+    const { createCompletion } = await import("../llm/openai.js");
+    const res = await createCompletion(
+      { model: "claude-haiku-5-5", messages: [] },
+      {
+        onServed: () => {
+          throw new Error("callback bug");
+        },
+      },
+    );
+    expect(res.choices[0].message.content).toBe("{}");
+    expect(second).not.toHaveBeenCalled();
+  });
+
   it("is not called when every provider fails", async () => {
     const overloaded = Object.assign(new Error("529 overloaded"), { status: 529 });
     mockChain([

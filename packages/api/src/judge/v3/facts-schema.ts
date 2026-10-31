@@ -98,10 +98,11 @@ export interface ParseFactsResult {
 const ISO_DATETIME_RE =
   /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(?:Z|[+-](\d{2}):(\d{2}))$/;
 
-// C0/C1 controls (incl. ESC, so no terminal escape survives) — free text from
-// the model is shown in reasons and must stay inert.
-// biome-ignore lint/suspicious/noControlCharactersInRegex: stripping control chars is the point.
-const CONTROL_CHARS_RE = /[\u0000-\u001f\u007f-\u009f]/g;
+// Controls (incl. ESC, so no terminal escape survives) and format characters
+// (zero-width, bidi overrides that could spoof a rendered quote). Free text
+// from the model is shown in reasons and must stay inert.
+const CONTROL_CHARS_RE = /\p{Cc}/gu;
+const FORMAT_CHARS_RE = /\p{Cf}/gu;
 
 function isOneOf<T extends string>(values: readonly T[], v: unknown): v is T {
   return typeof v === "string" && (values as readonly string[]).includes(v);
@@ -128,10 +129,18 @@ export function isAbsoluteIsoDateTime(v: unknown): v is string {
   return !Number.isNaN(Date.parse(v));
 }
 
-/** Trim, strip control characters, collapse inner whitespace, cap length. */
+/** Trim, strip control/format characters, collapse whitespace, cap length
+ * by code point (never splitting a surrogate pair). */
 export function cleanText(v: unknown, max: number): string {
   if (typeof v !== "string") return "";
-  return v.replace(CONTROL_CHARS_RE, " ").replace(/\s+/g, " ").trim().slice(0, max).trim();
+  // Format chars vanish (as in evidence normalisation, so a cleaned quote
+  // still verifies); controls become spaces.
+  const flat = v
+    .replace(FORMAT_CHARS_RE, "")
+    .replace(CONTROL_CHARS_RE, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return Array.from(flat).slice(0, max).join("").trim();
 }
 
 function parseAsks(raw: unknown, issues: string[]): FactAsk[] | null {
