@@ -55,6 +55,7 @@ const completion = (content: unknown, model = "claude-haiku-5-5") =>
     choices: [
       { message: { content: typeof content === "string" ? content : JSON.stringify(content) } },
     ],
+    usage: { prompt_tokens: 2000, completion_tokens: 200 },
   }) as never;
 
 describe("buildFactsPrompt", () => {
@@ -162,6 +163,32 @@ describe("extractFacts", () => {
     expect(r.escalate).toBe(false);
     expect(r.escalateReasons).toEqual([]);
     expect(r.evidenceCheck).toEqual({ checked: 1, dropped: [] });
+  });
+
+  it("reports tokens and an estimated cost, zero when the user's own key served", async () => {
+    const env = vi.fn(
+      async (
+        _p: unknown,
+        o: { onServed?: (s: { provider: string; model: string; ownedByUser: boolean }) => void },
+      ) => {
+        o.onServed?.({ provider: "anthropic", model: "claude-haiku-5-5", ownedByUser: false });
+        return completion(llmAnswer());
+      },
+    );
+    const r = await extractFacts(mail(), { complete: env });
+    expect(r.usage?.promptTokens).toBe(2000);
+    expect(r.usage?.completionTokens).toBe(200);
+    expect(r.usage?.costUsd).toBeGreaterThan(0);
+    const byok = vi.fn(
+      async (
+        _p: unknown,
+        o: { onServed?: (s: { provider: string; model: string; ownedByUser: boolean }) => void },
+      ) => {
+        o.onServed?.({ provider: "anthropic", model: "claude-haiku-5-5", ownedByUser: true });
+        return completion(llmAnswer());
+      },
+    );
+    expect((await extractFacts(mail(), { complete: byok })).usage?.costUsd).toBe(0);
   });
 
   it("asks for strict JSON-schema output, background priority, never the judge reserve", async () => {
