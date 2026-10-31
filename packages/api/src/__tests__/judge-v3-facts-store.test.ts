@@ -57,6 +57,11 @@ const rel: RelationshipSnapshot = {
   pinned: false,
   vip: null,
   dismissCount: 0,
+  inboundCount: 4,
+  inboundThreadCount: 2,
+  repliedThreadCount: 1,
+  userInitiatedThreadCount: 0,
+  firstSeenAt: "2026-06-04T00:00:00.000Z",
 };
 
 const at = new Date("2026-10-31T01:00:00Z");
