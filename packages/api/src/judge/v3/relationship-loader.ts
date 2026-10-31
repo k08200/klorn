@@ -7,6 +7,7 @@
  */
 
 import { db } from "../../db.js";
+import { escapeLikePattern } from "../../db-like.js";
 import { parseAddress } from "../../mail/email-address.js";
 import { senderLabelsFor } from "../../mail/sender-labels.js";
 import { fetchPinnedTier } from "../judge-context.js";
@@ -47,7 +48,9 @@ export const prismaRelationshipDeps: RelationshipLoaderDeps = {
   },
   sentRowsMentioning(userId, address) {
     return db.sentMessage.findMany({
-      where: { userId, to: { contains: address, mode: "insensitive" } },
+      // Escaped so "_" and "%" in an address match literally; the exact
+      // mailbox comparison happens in relationship.ts either way.
+      where: { userId, to: { contains: escapeLikePattern(address), mode: "insensitive" } },
       select: { sentAt: true, to: true, threadId: true },
       orderBy: { sentAt: "desc" },
       take: SENT_SCAN_LIMIT,
