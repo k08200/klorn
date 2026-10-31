@@ -4,14 +4,27 @@ How to turn on monetization. Everything below is already built and merged;
 nothing here ships code. The flip is **configuration only**, and every step is
 independently reversible.
 
-Current state (verified live 2026-07-20): `PAYWALL_ENABLED` is **off**, so
-`isEntitled()` returns true for everyone and the entitlement guards are no-ops.
-Additionally `BETA_AUTO_PRO_ENABLED=true`, so the first `BETA_AUTO_PRO_LIMIT`
-(default 50) signups are silently granted PRO (`betaProGrantedAt` set) — this
-is why a brand-new account already shows plan `PRO` with no payment. The Paddle
-web pipeline is fully wired and sandbox-verified (see §2a); the only reason no
-one is paying yet is that everyone is auto-PRO. The other active billing
-mechanism is the per-user daily LLM cost cap.
+Current state: `PAYWALL_ENABLED` is **off**, so `isEntitled()` returns true
+for everyone and the entitlement guards are no-ops.
+
+Since 2026-10-24 (founder decision) **every signup starts on FREE** — email,
+Google (web and desktop), Apple and Naver alike, waitlist-approved or not. The
+old beta auto-PRO grant (`BETA_AUTO_PRO_ENABLED` / `BETA_AUTO_PRO_LIMIT`) and the
+"gate-approved signups get PRO" rule are deleted; the env names are dead and
+`signup-plan-guard.test.ts` fails if any User create sets `plan` again. Pro now
+comes only from a paid subscription (or its card-backed trial) or an admin
+setting the plan. The accounts that got free beta PRO before that date keep
+`betaProGrantedAt` as a marker — §3a records what happened to them.
+
+The plan matters before the flip too. `isEntitled` / `requireEntitled` are
+no-ops while the paywall is off, but `planHasFeature` reads `user.plan`
+directly: a FREE account gets the pre-launch FREE set (`FREE_FEATURES` in
+`billing/stripe.ts`), so auto-reply, agent AUTO mode and the agent's write
+tools (send, calendar write, web search, integrations) stay off for it even
+with `PAYWALL_ENABLED=false`.
+
+The Paddle web pipeline is wired and was verified live 2026-08-22 (at the old
+price). The other active billing mechanism is the per-user daily LLM cost cap.
 
 ---
 
@@ -178,32 +191,63 @@ On Render (API service), set — in one deploy:
 PAYWALL_ENABLED=true
 FREE_DAILY_COST_CAP_CENTS=10   # or D2 value
 TRIAL_DAYS=7                   # or D3 value
-# Decide the beta-auto-PRO fate at the same time:
-#   BETA_AUTO_PRO_ENABLED=false   → new signups must pay from day one, OR
-#   leave it on with BETA_AUTO_PRO_LIMIT=50 → first 50 stay free, #51+ pays.
 ```
 
-Note: the paywall (`isEntitled`) and beta-auto-PRO are independent switches.
-If you flip `PAYWALL_ENABLED=true` but leave `BETA_AUTO_PRO_ENABLED=true` with
-room under the limit, new users are still auto-granted PRO and won't see the
-paywall — so to actually collect money from new signups, set
-`BETA_AUTO_PRO_ENABLED=false` (or confirm the limit is already reached).
+Also delete `BETA_AUTO_PRO_ENABLED` and `BETA_AUTO_PRO_LIMIT` from the Render
+environment. Nothing reads them any more, so leaving them changes nothing, but
+they suggest a grant that no longer exists.
+
+`PAYWALL_ENABLED` is read once at boot: it takes effect only when a new
+instance starts, so save the env change with a deploy (not "save only").
 
 What changes at that moment (all code paths already live):
 - `isEntitled()` starts returning false for FREE users → `requireEntitled`
   routes (receipts, commitments, email replies, calendar writes) return 403
   `ENTITLEMENT_REQUIRED`; the web app surfaces upgrade UI for them.
 - FREE shrinks from the historical feature set to the taster set
-  (`FREE_TASTER` in `packages/api/src/stripe.ts`); `multi_account` and other
+  (`FREE_TASTER` in `packages/api/src/billing/stripe.ts`); `multi_account` and other
   `TOOL_FEATURE_MAP` tools gate per plan.
 - Mail accounts: a FREE user may connect ONE mail account of any provider
   (their first); a second one answers 403 `ENTITLEMENT_REQUIRED`
   (`billing/mail-account-entitlement.ts`, founder decision 2026-10-15).
 - Free users' daily LLM cap drops from `DAILY_COST_CAP_CENTS` (100¢) to
   `FREE_DAILY_COST_CAP_CENTS`; on cap they now get the **upgrade nudge**
-  message instead of the BYOK-only one.
-- Existing beta users keep access only via `betaProGrantedAt` / admin-set
-  plan — decide beforehand who gets comped.
+  message instead of the BYOK one (BYOK is Pro-only once the paywall is on, so
+  the free message does not offer it).
+- Access follows `user.plan` only. `betaProGrantedAt` grants nothing; an
+  account is Pro because its `plan` column says `PRO`. See §3a.
+
+## 3a. Accounts that got free beta PRO — decided 2026-10-28
+
+Before 2026-10-24 signups got PRO for free in two ways: the beta auto-PRO
+grant (stamped `betaProGrantedAt`) and the waitlist-approval rule (set `PRO`
+without the marker). So the marker does not find every comped account — the
+payment-less query below does. Founder decision 2026-10-28: the external accounts in that cohort were
+moved to FREE (only `plan` changed; `betaProGrantedAt` stays as the marker,
+nothing else was touched), and the founder's own accounts stay PRO by choice.
+What a FREE account keeps and loses once the paywall is on: mail reads,
+classification and the briefing stay; sending/replying, calendar writes, a
+second inbox's sync, linked-calendar sync, BYOK, MCP and auto-reply stop.
+Nothing is deleted.
+
+Right before the flip, list every non-admin account that is Pro without paying
+and confirm each row is a deliberate comp (an admin comp via
+`PATCH /api/admin/users/:id { "plan": … }` shows up here too, and so does a
+mobile in-app subscriber, since the RevenueCat path stores no subscription id
+on `User` — check those in RevenueCat before ending anything. A comp who once
+opened Stripe checkout keeps `stripeId` and is hidden by this filter — if
+Stripe checkout was ever live, drop the `"stripeId" IS NULL` condition and
+check each row that has a `stripeId` in Stripe):
+
+```sql
+SELECT id, email, plan, "betaProGrantedAt", "createdAt"
+FROM "User"
+WHERE role = 'USER' AND plan <> 'FREE'
+  AND "paddleSubscriptionId" IS NULL AND "stripeId" IS NULL;
+```
+
+To end a comp: `/admin` → user → plan `FREE`. Undo by setting `plan` back to
+`PRO`.
 
 ## 4. Post-flip smoke (first hour)
 

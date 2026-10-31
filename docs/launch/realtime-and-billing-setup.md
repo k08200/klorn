@@ -91,8 +91,10 @@ Founder steps:
 5. Sandbox end-to-end: checkout → webhook → `User.plan` flips to PRO →
    entitlement-gated features open. Only then switch `PADDLE_ENV`.
 6. Flip `PAYWALL_ENABLED=true` as a **separate, deliberate** decision
-   (`docs/launch/paywall-flip-runbook.md`). Until it flips, every gate is
-   inert and multi-inbox stays free.
+   (`docs/launch/paywall-flip-runbook.md`). Until it flips, the request gates
+   (`requireEntitled`) are inert and multi-inbox stays free; plan-level
+   features already follow `user.plan`, and since 2026-10-24 every signup
+   starts on FREE.
 
 The landing already says $29.99/mo with a 7-day trial (all 7 locales). Keep the
 price string, the Paddle price, and `TRIAL_DAYS` in sync — three places,
