@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description: "How Klorn handles Gmail, Calendar, and account data during beta.",
 };
 
-const updatedAt = "October 30, 2026";
+const updatedAt = "October 31, 2026";
 
 /** Stable, URL-safe anchor id so the TOC links line up with each section. */
 function slug(title: string): string {
@@ -19,7 +19,9 @@ function slug(title: string): string {
 
 const SECTIONS = [
   "What Klorn Does",
+  "Who Can Use Klorn",
   "Data We Collect",
+  "Cookies and Local Storage",
   "How We Use Data",
   "Google User Data",
   "Your Rights (GDPR / CCPA)",
@@ -106,6 +108,27 @@ export default function PrivacyPage() {
             </p>
           </Section>
 
+          <Section title="Who Can Use Klorn">
+            <p>
+              You must be at least 16 years old to use Klorn. One number rather than one per
+              country: 16 is the GDPR&apos;s default where a member state has not lowered it, and it
+              is above the other thresholds Klorn would otherwise have to track — 14 under
+              Korea&apos;s PIPA, 13 under the US children&apos;s privacy rule.
+            </p>
+            <p>
+              Klorn is a work tool and is not directed at children. Klorn does not knowingly create
+              an account for, or keep data about, anyone under 16. If you believe a child has an
+              account, write to{" "}
+              <a
+                className="text-accent-deep hover:text-accent-deeper"
+                href="mailto:k0820086@gmail.com"
+              >
+                k0820086@gmail.com
+              </a>{" "}
+              and the account and its data will be deleted.
+            </p>
+          </Section>
+
           <Section title="Data We Collect">
             <p>When you use Klorn, we may collect or store the following data.</p>
             <ul className="list-disc space-y-2 pl-5">
@@ -146,6 +169,103 @@ export default function PrivacyPage() {
                 Usage, token, error, and delivery logs needed to operate and improve the beta.
               </li>
             </ul>
+          </Section>
+
+          <Section title="Cookies and Local Storage">
+            <p>
+              <strong>Klorn sets no cookies.</strong> The Klorn web app and this website write no
+              cookies, and the Klorn API sets none on any response. Klorn runs no advertising, no
+              tracking pixels and no third-party analytics, so nothing here follows you from Klorn
+              to other sites — which is also why Klorn shows you no cookie consent banner: there is
+              nothing to consent to.
+            </p>
+            <p>
+              Some pages do load code from a third party, each only where it is needed, and none of
+              it is an analytics or advertising service. Paddle, Klorn&apos;s payment provider,
+              loads its checkout overlay on the billing page so you can pay without leaving Klorn;
+              what Paddle stores in your browser is covered by Paddle&apos;s own privacy policy. If
+              you use the Google Drive file picker, Google&apos;s picker loads on the page you open
+              it from. Klorn&apos;s own usage counts — that the app was opened, that a queued item
+              was actioned, that a notification was opened or muted — are sent to Klorn&apos;s own
+              API and recorded against your account; they do not go to an analytics company.
+            </p>
+            <p>
+              Klorn does use your browser&apos;s own local storage and session storage. This is data
+              kept on your device, readable only by Klorn&apos;s own pages and never by another
+              site. Most of it never leaves your browser; where a value is sent to Klorn, it says so
+              below. You can erase all of it at any time by clearing site data for the Klorn domains
+              in your browser, and anything in session storage is discarded as soon as you close the
+              tab. These are what it is used for.
+            </p>
+            <ul className="list-disc space-y-2 pl-5">
+              <li>
+                <strong>Keeping you signed in.</strong> Your session token is held in local storage
+                and sent with each request to the Klorn API. It identifies your account, contains
+                your email address, and expires 7 days after it is issued. Signing out deletes it.
+              </li>
+              <li>
+                <strong>Protecting the sign-in itself.</strong> Short-lived, single-use values that
+                tie a sign-in or an account link back to the browser that started it, so that
+                another site cannot complete it on your behalf. They are deleted as soon as they are
+                used, and expire within 5 to 15 minutes regardless.
+              </li>
+              <li>
+                <strong>Remembering how you set things up</strong> — light or dark theme, app
+                language, time zone, whether a panel is expanded, and the language you chose on the
+                marketing site.
+              </li>
+              <li>
+                <strong>Not losing your place.</strong> Which lane, mailbox and filter your mail
+                list was showing, how far you had scrolled, the last message you opened, and where
+                you had got to in first-run setup. This can include text you typed into mail search;
+                it is held in session storage only, so it is gone when the tab closes. Message
+                bodies, subjects and draft replies are never written to browser storage.
+              </li>
+              <li>
+                <strong>Not showing you a notice you already dismissed</strong> — the app install
+                prompt, the push-notification banner, onboarding hints and the product survey card.
+              </li>
+              <li>
+                <strong>Push notifications.</strong> A random identifier for this browser, so that a
+                reissued push subscription replaces your old one instead of adding a duplicate. It
+                is a random value and is not derived from you or from your device.
+              </li>
+              <li>
+                <strong>Knowing how you found Klorn.</strong> On your first visit, the campaign
+                parameters in the link you arrived through, the hostname of the site that referred
+                you, and the page you landed on, capped at 300 characters. It is sent to Klorn each
+                time you start a sign-in, and is saved against an account only when that account is
+                first created. The stored copy is kept until you clear site data.
+              </li>
+              <li>
+                <strong>The public playground.</strong> The playground at{" "}
+                <Link className="text-accent-deep hover:text-accent-deeper" href="/playground">
+                  /playground
+                </Link>{" "}
+                needs no account and runs on an AI provider key you supply yourself. That key is
+                stored in your browser&apos;s local storage so you do not have to paste it again.
+                When you run a sample, the key and the text you pasted are sent to the Klorn API,
+                which uses the key in memory to call the AI provider you chose — OpenRouter, Google
+                or OpenAI — so both reach that provider and are covered by its terms. Klorn does not
+                write the key to its database, and strips it from its logs and from its crash
+                reports before either leaves the server. Emptying the key field removes it from your
+                browser, as does signing out or clearing site data.
+              </li>
+              <li>
+                <strong>Small internal bookkeeping.</strong> A few values that keep the interface
+                consistent between page loads: which sign-in methods the server offers, which home
+                screen your account uses, a once-per-tab marker so a usage count is not sent twice,
+                and the ids of desktop alerts already shown. Klorn&apos;s offline cache (a service
+                worker) also keeps copies of the app&apos;s own files and of the address used to
+                refresh a push subscription — never of your mail.
+              </li>
+            </ul>
+            <p>
+              Deleting your account clears Klorn&apos;s local storage in the browser you delete it
+              from. Signing out clears the session token, any playground key and the mail view you
+              were in, but deliberately leaves your preferences and dismissed notices in place, so
+              that signing back in looks the way you left it.
+            </p>
           </Section>
 
           <Section title="How We Use Data">
@@ -391,14 +511,17 @@ export default function PrivacyPage() {
               database, hosted in Seoul, ap-northeast-2), and GitHub (storage of the nightly
               database backups: the database is copied to a temporary GitHub runner, encrypted
               there, and only the encrypted file is kept; the key to read it is never stored on
-              GitHub); they store and transmit data solely to operate Klorn. Paddle acts as merchant
-              of record for paid subscriptions and receives only billing details — never mail
-              content. Resend delivers Klorn&apos;s own transactional email (address verification,
-              password reset, invitations) and therefore receives your address and the contents of
-              those messages — never your mailbox. Apple (APNs) and Google (Firebase Cloud
-              Messaging) deliver push notifications to devices you register. RevenueCat manages
-              subscriptions bought in the mobile app and receives only purchase records and your
-              Klorn account id.
+              GitHub) and Sentry (error reporting: when something fails, a report that can include
+              the failing request's context is sent there so it can be diagnosed); they store and
+              transmit data solely to operate Klorn. Paddle acts as merchant of record for paid
+              subscriptions and receives only billing details — never mail content. Resend delivers
+              Klorn&apos;s own outgoing email (address verification, password reset, invitations,
+              and the daily digest where it is enabled) and therefore receives your address and the
+              contents of those messages. Because the digest lists who your filed mail came from,
+              those sender addresses pass through Resend; the messages themselves never do. Apple
+              (APNs) and Google (Firebase Cloud Messaging) deliver push notifications to devices you
+              register. RevenueCat manages subscriptions bought in the mobile app and receives only
+              purchase records and your Klorn account id.
             </p>
             <p>
               Because Klorn is a beta product, avoid connecting accounts that contain information

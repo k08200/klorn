@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description: "Klorn beta terms of service.",
 };
 
-const updatedAt = "October 17, 2026";
+const updatedAt = "October 31, 2026";
 
 /** Stable, URL-safe anchor id so the TOC links line up with each section. */
 function slug(title: string): string {
@@ -18,6 +18,7 @@ function slug(title: string): string {
 }
 
 const SECTIONS = [
+  "Eligibility",
   "Beta Product",
   "Your Responsibilities",
   "Approval and Automation",
@@ -99,6 +100,14 @@ export default function TermsPage() {
         <TableOfContents sections={SECTIONS} />
 
         <div className="mt-12 space-y-10">
+          <Section title="Eligibility">
+            <p>
+              You must be at least 16 years old to use Klorn. The Privacy Policy explains why that
+              single number rather than one per country, and how to report an account that belongs
+              to a child.
+            </p>
+          </Section>
+
           <Section title="Beta Product">
             <p>
               Klorn is currently a beta product. Features may change, fail temporarily, be rate
