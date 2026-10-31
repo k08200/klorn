@@ -12,6 +12,21 @@ calendar time.
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-10-28
+
+Cuts a release line for everything that piled up behind `[Unreleased]` since
+0.3.0: the ontology write side and its approval gate, the deterministic core
+extraction, the model dial, the desktop shell, the public playground, the
+calibration measurement work, and the security hardening that came with them.
+`@klorn/api` and `@klorn/web` move to `0.4.0` together.
+
+Two notes for anyone reading the tag list and wondering whether this project
+stalled in June. The tags published between 0.3.0 and here are desktop builds
+(`desktop-v0.4.8xxxx`) that ship the macOS and Windows apps; they do not carry
+the server version, which is why 136 of them exist against one changelog entry.
+And `@klorn/core`, named in the 0.3.0 lockstep note, no longer exists — its
+surface is now `@klorn/contract`, which versions on its own.
+
 ### Fixed — Outbox drain crashed: missing OutboxStatus enum type
 - **The transactional action outbox never drained.** `ActionOutbox.status` was
   declared as the `OutboxStatus` enum in the schema, but the original
