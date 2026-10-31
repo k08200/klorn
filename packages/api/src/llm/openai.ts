@@ -140,6 +140,13 @@ export interface CompletionOptions {
    */
   useUserModel?: boolean;
   /**
+   * Told which provider and model actually served a successful call, after
+   * failover. createCompletion returns a plain ChatCompletion with no provider
+   * name, so callers that must persist provenance (the v3 facts store) read it
+   * here. Must not throw; errors from it are not caught.
+   */
+  onServed?: (served: { provider: string; model: string; ownedByUser: boolean }) => void;
+  /**
    * Internal recursion guard for the background pacer — set only by
    * createCompletion itself when re-entering through backgroundLlmPacer.
    * Callers must never set this.
@@ -615,6 +622,11 @@ async function createCompletionWithFailover(
       prebilledCents: usageContext.estimatedCostCents,
       usage,
       servedByUserKey: provider.ownedByUser === true,
+    });
+    options.onServed?.({
+      provider: provider.name,
+      model,
+      ownedByUser: provider.ownedByUser === true,
     });
     return result;
   };

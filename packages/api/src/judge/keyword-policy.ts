@@ -166,6 +166,18 @@ export const KEYWORD_SCORES = {
   confidence: { patternMatched: 0.7, default: 0.55 },
 } as const;
 
+/** The keyword scorer's marketing signal on from + subject (newsletter, digest,
+ * promo, 광고, 수신거부). Narrower than {@link isClearMarketing}'s subject markers
+ * plus Gmail category; both stay, they feed different decisions. */
+export function isKeywordMarketing(email: {
+  from?: string | null;
+  subject?: string | null;
+}): boolean {
+  return MARKETING_RE.test(
+    `${(email.from || "").toLowerCase()} ${(email.subject || "").toLowerCase()}`,
+  );
+}
+
 /** Cheap content check: does this email carry any time-pressure signal? */
 export function looksUrgent(email: ClassifiableEmail): boolean {
   const hay = `${email.subject || ""} ${email.snippet || ""}`;
@@ -185,9 +197,8 @@ export function keywordFeatures(email: ClassifiableEmail): TierFeatures {
   const subject = (email.subject || "").toLowerCase();
   const snippet = (email.snippet || "").toLowerCase();
   const hay = `${subject} ${snippet}`;
-  const fromAndSubject = `${from} ${subject}`;
 
-  const isMarketing = MARKETING_RE.test(fromAndSubject);
+  const isMarketing = isKeywordMarketing(email);
   const isSystemNotification = SYSTEM_NOTIFICATION_RE.test(from);
   const isInvestor = INVESTOR_RE.test(from);
   const isUrgentWord = URGENT_WORDS_RE.test(hay);
@@ -259,6 +270,11 @@ const BULK_CATEGORY_LABELS = new Set(["CATEGORY_SOCIAL", "CATEGORY_PROMOTIONS"])
 /// isAutomatedSender, which also drives the PUSH floor and stays as is.
 const INVITE_SYSTEM_SENDER_RE = /(?:^|[<\s])(?:notify|invitations?)@/i;
 
+/** A calendar system's invitation subject ("Invitation: … @ …"), any sender. */
+export function isCalendarInviteSubject(subject: string | null | undefined): boolean {
+  return CALENDAR_INVITE_SUBJECT_RE.test((subject || "").trim());
+}
+
 /** True when invite wording is most likely not a meeting ask:
  *  bulk mail, a social/promotions tab, or a system account. In prod
  *  (2026-10-05..18) 28 of 30 MEETING items were LinkedIn connection
@@ -285,7 +301,7 @@ export function detectSchedulingIntent(email: {
   labels?: string[] | null;
   hasListUnsubscribe?: boolean | null;
 }): boolean {
-  if (CALENDAR_INVITE_SUBJECT_RE.test((email.subject || "").trim())) return true;
+  if (isCalendarInviteSubject(email.subject)) return true;
   const head = `${email.subject || ""} ${email.snippet || ""}`.toLowerCase();
   if (SCHEDULING_RE.test(head)) return true;
   if (INVITE_RE.test(head) && !isNonPersonalInvite(email)) return true;
