@@ -31,18 +31,32 @@ const SINGLE_QUOTES_RE = /[\u2018\u2019\u201a\u201b]/g;
 const DOUBLE_QUOTES_RE = /[\u201c\u201d\u201e\u201f]/g;
 const DASHES_RE = /[\u2010-\u2015]/g;
 
+const MONTH_ABBR = "jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec";
+
 /**
  * Words that state a time. When an ask carries a due date, its evidence must
  * contain one, so a model (or an injected instruction) cannot attach a
  * deadline to an unrelated quote. Applied to normalised (lower-case) text.
+ * Digits count only when time-shaped ("Invoice #4821" does not state a time),
+ * and ambiguous words ("may", "sun", "wed") only next to a number.
  * Shared with the P1 benchmark scorer.
  */
 export const TEMPORAL_RE = new RegExp(
   [
-    "\\d",
-    "\\b(?:today|tonight|tomorrow|tmrw|eod|eow|cob|asap|urgent|urgently|immediately|midnight|noon|morning|afternoon|evening|deadline|week|weekend|month|right now|right away|end of (?:the )?(?:day|week|month)|close of business)\\b",
-    "\\b(?:mon|monday|tue|tues|tuesday|wed|wednesday|thu|thur|thurs|thursday|fri|friday|sat|saturday|sun|sunday)\\b",
-    "\\b(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\\b",
+    // 6pm, 6 p.m., 18:00, 3/5, 2026-11-03, 5th, within 3 hours
+    "\\b\\d{1,2}(?::\\d{2})?\\s?(?:am|pm|a\\.m\\.|p\\.m\\.)",
+    "\\b\\d{1,2}:\\d{2}\\b",
+    "\\b\\d{1,2}[/.-]\\d{1,2}\\b",
+    "\\b\\d{4}-\\d{2}",
+    "\\b\\d{1,2}(?:st|nd|rd|th)\\b",
+    "\\b\\d+\\s?(?:minutes?|mins?|hours?|hrs?|days?|weeks?)\\b",
+    // Korean numerals with a unit: 6시, 3일, 11월, 2주
+    "\\d{1,2}\\s?(?:시|일|월|주)",
+    `\\b(?:${MONTH_ABBR})[a-z]*\\.?\\s?\\d{1,2}\\b`,
+    `\\b\\d{1,2}\\s(?:${MONTH_ABBR})`,
+    "\\b(?:today|tonight|tomorrow|tmrw|eod|eow|cob|asap|urgent|urgently|immediately|midnight|noon|morning|afternoon|evening|deadline|weekend|right now|right away|end of (?:the )?(?:day|week|month)|close of business|this week|next week|this month|next month)\\b",
+    "\\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|tue|tues|thu|thur|thurs|fri)\\b",
+    "\\b(?:january|february|march|april|june|july|august|september|october|november|december)\\b",
     "오늘|내일|모레|글피|이번\\s?주|다음\\s?주|주말|[월화수목금토일]요일|오전|오후|정오|자정|까지|마감|기한|긴급|즉시|당장|급히|지금",
   ].join("|"),
   "u",
@@ -85,10 +99,30 @@ function longEnough(normalised: string): boolean {
   );
 }
 
+const LATIN_WORD_CHAR_RE = /[a-z0-9]/;
+
+/** A Latin word may not be cut: "approval" does not verify inside "disapproval".
+ * Scripts without spaces between word and particle (Korean) are not checked. */
+function onWordBoundary(part: string, at: number, quote: string): boolean {
+  const before = part[at - 1] ?? "";
+  const after = part[at + quote.length] ?? "";
+  const cutsStart = LATIN_WORD_CHAR_RE.test(before) && LATIN_WORD_CHAR_RE.test(quote[0] ?? "");
+  const cutsEnd =
+    LATIN_WORD_CHAR_RE.test(after) && LATIN_WORD_CHAR_RE.test(quote[quote.length - 1] ?? "");
+  return !cutsStart && !cutsEnd;
+}
+
+function occursAsWords(part: string, quote: string): boolean {
+  for (let at = part.indexOf(quote); at >= 0; at = part.indexOf(quote, at + 1)) {
+    if (onWordBoundary(part, at, quote)) return true;
+  }
+  return false;
+}
+
 export function verifyEvidence(evidence: string, haystack: EvidenceHaystack): boolean {
   const n = normaliseForEvidence(evidence);
   if (!longEnough(n)) return false;
-  return haystack.parts.some((p) => p.includes(n));
+  return haystack.parts.some((p) => occursAsWords(p, n));
 }
 
 /** The quote states a time (see TEMPORAL_RE). */

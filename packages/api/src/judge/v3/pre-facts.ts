@@ -151,7 +151,7 @@ export function collectPreFactSignals(input: PreFactsInput): PreFactSignals {
 function addressedToOf(s: PreFactSignals): FactsV1["addressedTo"] | undefined {
   const bulkCategory =
     s.gmailCategory === "CATEGORY_PROMOTIONS" || s.gmailCategory === "CATEGORY_SOCIAL";
-  if (s.spam || s.listMail || bulkCategory) return "bulk";
+  if (s.listMail || bulkCategory) return "bulk";
   if (s.gmailCategory === "CATEGORY_FORUMS") return "group";
   if (s.otherRecipients === null) return undefined;
   if (s.userInTo) return s.otherRecipients <= DIRECT_MAX_OTHER_RECIPIENTS ? "me_direct" : "group";
@@ -161,7 +161,7 @@ function addressedToOf(s: PreFactSignals): FactsV1["addressedTo"] | undefined {
 }
 
 function kindOf(s: PreFactSignals, bulk: boolean): FactsV1["kind"] | undefined {
-  if (s.spam || s.gmailCategory === "CATEGORY_PROMOTIONS" || s.clearMarketing) return "promotion";
+  if (s.gmailCategory === "CATEGORY_PROMOTIONS" || s.clearMarketing) return "promotion";
   if (s.gmailCategory === "CATEGORY_SOCIAL") return "notification";
   if (s.icsInvite && !bulk) return "meeting";
   return undefined;
@@ -195,8 +195,9 @@ export function deterministicPreFacts(input: PreFactsInput): PreFacts {
   if (signals.icsInvite && !bulk) {
     fix("event", { proposedTimes: [], hasInvite: true, conflict: null });
   }
-  // Gmail spam is never a genuine request to the user.
-  if (signals.spam) fix("asks", []);
+  // The spam label fixes no fact: Gmail misfiles real mail, and SPAM_INTAKE
+  // exists to rescue it. It travels as signals.spam; policy keeps spam out of
+  // PUSH/MEETING.
 
   return { facts, certain, signals };
 }

@@ -63,6 +63,15 @@ describe("verifyEvidence", () => {
     expect(verifyEvidence("회신 부탁드립니다", hay)).toBe(true);
   });
 
+  it("does not verify a Latin word fragment, but tolerates Korean particles", () => {
+    const h = buildEvidenceHaystack("", "Pending disapproval of the plan. 회신을 부탁드립니다");
+    expect(verifyEvidence("approval of the plan", h)).toBe(false);
+    expect(verifyEvidence("disapproval of the plan", h)).toBe(true);
+    expect(
+      verifyEvidence("회신 부탁드립니다", buildEvidenceHaystack("", "회신 부탁드립니다요")),
+    ).toBe(true);
+  });
+
   it("does not let a quote span the subject/body boundary", () => {
     expect(verifyEvidence("next steps hi", hay)).toBe(false);
   });
@@ -117,6 +126,11 @@ describe("evidenceStatesTime (due binding)", () => {
       "오늘 6시까지 회신 필요",
       "다음주 월요일 마감",
       "이번 주 안에 부탁드립니다",
+      "by may 5",
+      "on 3 nov",
+      "within 3 hours",
+      "at 18:00",
+      "11월 3일까지",
     ]) {
       expect(evidenceStatesTime(q), q).toBe(true);
     }
@@ -128,6 +142,10 @@ describe("evidenceStatesTime (due binding)", () => {
       "could you send the contract",
       "검토 부탁드립니다",
       "this sunset photo",
+      "you may approve it",
+      "see invoice #4821",
+      "we wed in spring",
+      "suite 4 reception",
     ]) {
       expect(evidenceStatesTime(q), q).toBe(false);
     }

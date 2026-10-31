@@ -3,7 +3,9 @@
  *
  * deterministic pre-facts → one LLM call (strict JSON schema; a forced tool on
  * native Anthropic) → parseFactsV1 → evidence check → date window → merge
- * (certain pre-facts win). An unusable answer degrades to keyword facts. A
+ * (certain pre-facts win). With no usable answer the result has facts=null
+ * and source "none": the keyword fallback belongs to the policy layer
+ * (P3 keywordFactsV1), which merges it with the certain pre-facts. A
  * budget refusal (daily cost cap, daily call cap) propagates so the caller can
  * stop: the call is background priority and never draws on the judge reserve.
  *
@@ -20,17 +22,22 @@ import { FACTS_TOOL_NAME, FACTS_V1_JSON_SCHEMA } from "./facts-json-schema.js";
 import { enforceDateWindow, mergeWithPreFacts } from "./facts-merge.js";
 import { buildFactsPrompt, type FactsPrompt, type FactsPromptInput } from "./facts-prompt.js";
 import { type FactsV1, parseFactsV1 } from "./facts-schema.js";
-import { keywordFallbackFacts } from "./keyword-facts.js";
-import { deterministicPreFacts, type PreFacts } from "./pre-facts.js";
+import { deterministicPreFacts, type PreFactSignals, type PreFacts } from "./pre-facts.js";
 
 export type FactsMailInput = FactsPromptInput;
 
 export type EscalateReason = "llm_failed" | "parse_issues" | "evidence_failed" | "ambiguous";
 
 export interface FactsExtraction {
-  facts: FactsV1;
-  source: "llm" | "keyword-fallback";
-  /** Model that served the answer (null for keyword facts). */
+  /** Merged facts v1, or null when no model gave a usable answer. */
+  facts: FactsV1 | null;
+  /** "none": no LLM facts; policy falls back to keywords + certain pre-facts. */
+  source: "llm" | "none";
+  /** Deterministic pre-facts (the certain fields win in `facts`). */
+  preFacts: Partial<FactsV1>;
+  /** Header-derived detector results; no mail text. */
+  signals: PreFactSignals;
+  /** Model that served the answer (null for "none"). */
   model: string | null;
   /** Provider that served it, from createCompletion's onServed (null if unknown). */
   provider: string | null;
@@ -75,10 +82,12 @@ export function factsModel(): string {
   return process.env.JUDGE_V3_FACTS_MODEL?.trim() || JUDGE_MODEL;
 }
 
+/** Error name and HTTP status only: provider messages can echo request text. */
 function failureNote(attempt: number, err: unknown): string {
   const name = err instanceof Error ? err.name : "Error";
-  const message = err instanceof Error ? err.message : String(err);
-  return `attempt ${attempt}: ${name}: ${message}`.slice(0, MAX_FAILURE_NOTE_CHARS);
+  const status = (err as { status?: unknown } | null)?.status;
+  const suffix = typeof status === "number" ? ` ${status}` : "";
+  return `attempt ${attempt}: ${name}${suffix}`.slice(0, MAX_FAILURE_NOTE_CHARS);
 }
 
 interface ModelAnswer {
@@ -171,10 +180,12 @@ function parseAnswer(raw: string, failures: string[]): ReturnType<typeof parseFa
   return parsed;
 }
 
-function fallback(input: FactsMailInput, pre: PreFacts, issues: string[]): FactsExtraction {
+function noFacts(pre: PreFacts, issues: string[]): FactsExtraction {
   return {
-    facts: keywordFallbackFacts(input, pre),
-    source: "keyword-fallback",
+    facts: null,
+    source: "none",
+    preFacts: pre.facts,
+    signals: pre.signals,
     model: null,
     provider: null,
     servedByUserKey: false,
@@ -200,6 +211,8 @@ function finish(
   return {
     facts,
     source: "llm",
+    preFacts: pre.facts,
+    signals: pre.signals,
     model: answer.model,
     provider: answer.provider,
     servedByUserKey: answer.byUserKey,
@@ -220,7 +233,7 @@ export async function extractFacts(
   const failures: string[] = [];
   const answer = await fetchAnswer(prompt, options, failures);
   const parsed = answer ? parseAnswer(answer.raw, failures) : null;
-  if (!answer || !parsed?.facts) return fallback(input, pre, failures);
+  if (!answer || !parsed?.facts) return noFacts(pre, failures);
 
   const verified = verifyFactsEvidence(parsed.facts, prompt.haystack);
   const dated = enforceDateWindow(verified.facts, input.receivedAt);

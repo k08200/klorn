@@ -20,7 +20,8 @@ function withinWindow(iso: string, mailMs: number): boolean {
   );
 }
 
-/** Drop dates that cannot be a reading of this mail. No-op for an invalid mail date. */
+/** Drop dates that cannot be a reading of this mail. With no valid mail date
+ * nothing anchors them, so every date is dropped (fail closed). */
 export function enforceDateWindow(
   facts: FactsV1,
   mailDate: Date,
@@ -32,7 +33,16 @@ export function enforceDateWindow(
     event: facts.event ? { ...facts.event, proposedTimes: [...facts.event.proposedTimes] } : null,
     risk: [...facts.risk],
   };
-  if (Number.isNaN(mailMs)) return { facts: copy, issues: [] };
+  if (Number.isNaN(mailMs)) {
+    return {
+      facts: {
+        ...copy,
+        asks: copy.asks.map((a) => ({ ...a, due: null })),
+        event: copy.event ? { ...copy.event, proposedTimes: [] } : null,
+      },
+      issues: ["mail date invalid: dates dropped"],
+    };
+  }
   const issues: string[] = [];
   const asks = copy.asks.map((a, i) => {
     if (a.due === null || withinWindow(a.due, mailMs)) return a;
@@ -58,10 +68,9 @@ function mergeEvent(llm: FactsV1["event"], pre: PreFacts): FactsV1["event"] {
   if (!base) return null;
   return {
     proposedTimes: [...(llm?.proposedTimes ?? base.proposedTimes)],
-    // An attached calendar file is the deterministic invite. Without one the
-    // model may only claim an invite when the subject reads like a calendar
-    // system's invitation; otherwise mail text alone cannot make one.
-    hasInvite: ics ? true : (llm?.hasInvite ?? false) && pre.signals.inviteSubject,
+    // Only an attached calendar file is an invite. Mail text (a subject that
+    // reads "Invitation: …", or the model reading one) is attacker-writable.
+    hasInvite: Boolean(ics),
     // Conflict comes from the calendar read, never from the mail text.
     conflict: null,
   };

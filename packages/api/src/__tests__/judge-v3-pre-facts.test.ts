@@ -52,7 +52,6 @@ describe("deterministicPreFacts — addressedTo", () => {
       { precedence: "List" },
       { labels: ["CATEGORY_PROMOTIONS"] },
       { labels: ["CATEGORY_SOCIAL"] },
-      { labels: ["SPAM"] },
     ] satisfies Partial<PreFactsInput>[]) {
       const p = deterministicPreFacts(mail(over));
       expect(p.facts.addressedTo, JSON.stringify(over)).toBe("bulk");
@@ -145,11 +144,12 @@ describe("deterministicPreFacts — kind, event, threadTurn, asks", () => {
     expect(p.facts.threadTurn).toBeUndefined();
   });
 
-  it("forces no asks on Gmail spam", () => {
+  it("fixes no fact from the spam label (Gmail misfiles real mail); it is a signal only", () => {
     const p = deterministicPreFacts(mail({ labels: ["SPAM"] }));
-    expect(p.facts.asks).toEqual([]);
-    expect(p.certain).toContain("asks");
     expect(p.signals.spam).toBe(true);
+    expect(p.facts.asks).toBeUndefined();
+    expect(p.facts.kind).toBeUndefined();
+    expect(p.facts.addressedTo).toBe("me_direct");
   });
 
   it("never marks asks/risk/transaction/ambiguous certain for ordinary mail", () => {

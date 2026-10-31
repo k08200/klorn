@@ -6,7 +6,6 @@ import {
   FACTS_BODY_CAP,
   validTimeZone,
 } from "../judge/v3/facts-prompt.js";
-import { keywordFallbackFacts } from "../judge/v3/keyword-facts.js";
 import { deterministicPreFacts } from "../judge/v3/pre-facts.js";
 
 const me = "me@acme.com";
@@ -157,9 +156,9 @@ describe("extractFacts", () => {
     expect(r.model).toBe("claude-haiku-5-5");
     expect(r.provider).toBe("anthropic");
     // pre-facts: the user is the only To recipient → me_direct overrides the model's "group".
-    expect(r.facts.addressedTo).toBe("me_direct");
-    expect(r.facts.asks).toHaveLength(1);
-    expect(r.facts.asks[0]?.due).toBe("2026-11-03T18:00:00+09:00");
+    expect(r.facts?.addressedTo).toBe("me_direct");
+    expect(r.facts?.asks).toHaveLength(1);
+    expect(r.facts?.asks[0]?.due).toBe("2026-11-03T18:00:00+09:00");
     expect(r.escalate).toBe(false);
     expect(r.escalateReasons).toEqual([]);
     expect(r.evidenceCheck).toEqual({ checked: 1, dropped: [] });
@@ -199,7 +198,7 @@ describe("extractFacts", () => {
       ),
     );
     const r = await extractFacts(mail(), { complete });
-    expect(r.facts.asks).toEqual([]);
+    expect(r.facts?.asks).toEqual([]);
     expect(r.evidenceCheck.dropped).toEqual([
       { path: "asks[0]", evidence: "please wire the funds today" },
     ]);
@@ -218,7 +217,7 @@ describe("extractFacts", () => {
       completion(llmAnswer({ asks: [{ ...llmAnswer().asks[0], due: "2024-01-01T00:00:00Z" }] })),
     );
     const r = await extractFacts(mail(), { complete });
-    expect(r.facts.asks[0]?.due).toBeNull();
+    expect(r.facts?.asks[0]?.due).toBeNull();
     expect(r.issues).toContain("asks[0].due: outside the plausible window of the mail date");
     expect(r.escalateReasons).toContain("parse_issues");
   });
@@ -232,7 +231,7 @@ describe("extractFacts", () => {
       ),
     );
     const r = await extractFacts(mail(), { complete });
-    expect(r.facts.event).toEqual({
+    expect(r.facts?.event).toEqual({
       proposedTimes: ["2026-11-04T10:00:00+09:00"],
       hasInvite: false,
       conflict: null,
@@ -248,12 +247,12 @@ describe("extractFacts", () => {
       ),
     );
     const r = await extractFacts(mail({ hasCalendarInvite: true }), { complete });
-    expect(r.facts.event).toEqual({
+    expect(r.facts?.event).toEqual({
       proposedTimes: ["2026-11-04T10:00:00+09:00"],
       hasInvite: true,
       conflict: null,
     });
-    expect(r.facts.kind).toBe("meeting");
+    expect(r.facts?.kind).toBe("meeting");
   });
 
   it("tolerates a fenced JSON answer from a provider without schema support", async () => {
@@ -264,13 +263,15 @@ describe("extractFacts", () => {
     expect(r.source).toBe("llm");
   });
 
-  it("falls back to keyword facts when the model output is unusable, and escalates", async () => {
+  it("returns no facts (source none) when the model output is unusable, keeping pre-facts", async () => {
     const complete = vi.fn(async () => completion({ nope: true }));
     const r = await extractFacts(mail(), { complete });
-    expect(r.source).toBe("keyword-fallback");
+    expect(r.source).toBe("none");
+    expect(r.facts).toBeNull();
     expect(r.model).toBeNull();
-    expect(r.escalateReasons).toContain("llm_failed");
-    expect(r.facts.addressedTo).toBe("me_direct");
+    expect(r.escalateReasons).toEqual(["llm_failed"]);
+    expect(r.preFacts.addressedTo).toBe("me_direct");
+    expect(r.signals.userInTo).toBe(true);
   });
 
   it("propagates a daily cost cap refusal instead of silently falling back", async () => {
@@ -295,7 +296,7 @@ describe("extractFacts", () => {
     const complete = vi.fn(async () => completion("not json at all"));
     const r = await extractFacts(mail(), { complete });
     expect(complete).toHaveBeenCalledTimes(1);
-    expect(r.source).toBe("keyword-fallback");
+    expect(r.source).toBe("none");
   });
 
   it("does not retry when every provider is exhausted", async () => {
@@ -305,7 +306,7 @@ describe("extractFacts", () => {
     });
     const r = await extractFacts(mail(), { complete });
     expect(complete).toHaveBeenCalledTimes(1);
-    expect(r.source).toBe("keyword-fallback");
+    expect(r.source).toBe("none");
   });
 
   it("propagates the daily call cap like the cost cap", async () => {
@@ -330,7 +331,7 @@ describe("extractFacts", () => {
   it("rejects a degenerate over-long answer without parsing it", async () => {
     const complete = vi.fn(async () => completion(`{${" ".repeat(25_000)}}`));
     const r = await extractFacts(mail(), { complete });
-    expect(r.source).toBe("keyword-fallback");
+    expect(r.source).toBe("none");
     expect(r.issues.join(" ")).toMatch(/too long/);
   });
 
@@ -350,8 +351,8 @@ describe("extractFacts", () => {
       ),
     );
     const r = await extractFacts(mail(), { complete });
-    expect(r.facts.asks).toHaveLength(1);
-    expect(r.facts.asks[0]?.due).toBeNull();
+    expect(r.facts?.asks).toHaveLength(1);
+    expect(r.facts?.asks[0]?.due).toBeNull();
     expect(r.escalateReasons).toContain("evidence_failed");
   });
 
@@ -360,113 +361,41 @@ describe("extractFacts", () => {
       completion(llmAnswer({ event: { proposedTimes: [], hasInvite: true, conflict: null } })),
     );
     const r = await extractFacts(mail(), { complete });
-    expect(r.facts.event?.hasInvite).toBe(false);
+    expect(r.facts?.event?.hasInvite).toBe(false);
   });
 
-  it("survives an invalid receipt date", async () => {
+  it("drops every date when the receipt date is invalid (nothing anchors them)", async () => {
     const complete = vi.fn(async () => completion(llmAnswer()));
     const r = await extractFacts(mail({ receivedAt: new Date("nope") }), { complete });
     expect(r.source).toBe("llm");
+    expect(r.facts?.asks[0]?.due).toBeNull();
+    expect(r.issues).toContain("mail date invalid: dates dropped");
   });
-});
 
-describe("keywordFallbackFacts", () => {
-  it("silences bulk marketing", () => {
-    const m = mail({
-      from: "Deals <deals@shop.com>",
-      labels: ["CATEGORY_PROMOTIONS"],
-      hasListUnsubscribe: true,
+  it("an invitation subject plus a model claim is still not an invite (no calendar file)", async () => {
+    const complete = vi.fn(async () =>
+      completion(llmAnswer({ event: { proposedTimes: [], hasInvite: true, conflict: null } })),
+    );
+    const r = await extractFacts(mail({ subject: "Invitation: Salary review @ Mon 9am" }), {
+      complete,
     });
-    const f = keywordFallbackFacts(m, deterministicPreFacts(m));
-    expect(f).toMatchObject({
-      addressedTo: "bulk",
-      kind: "promotion",
-      asks: [],
-      threadTurn: "none",
+    expect(r.facts?.event?.hasInvite).toBe(false);
+  });
+
+  it("strips invisible format characters (tag chars, zero-width) before the model sees them", () => {
+    const hidden = "Hi\u200b \u{E0049}\u{E0047}\u{E004E} please confirm";
+    const m = mail({ subject: hidden, body: hidden });
+    const p = buildFactsPrompt(m, deterministicPreFacts(m));
+    expect(p.user).not.toMatch(/\p{Cf}/u);
+  });
+
+  it("keeps provider error text out of the failure notes", async () => {
+    const err = Object.assign(new Error("echo: <email body secret>"), { status: 400 });
+    const complete = vi.fn(async () => {
+      throw err;
     });
-  });
-
-  it("treats an automated sender as a notification, never a security alert", () => {
-    const m = mail({
-      from: "no-reply@accounts.example.com",
-      subject: "New sign-in from Chrome",
-      snippet: "If this wasn't you, secure your account",
-    });
-    const f = keywordFallbackFacts(m, deterministicPreFacts(m));
-    expect(f.kind).toBe("notification");
-    expect(f.risk).toEqual(["account_change"]);
-    expect(f.risk).not.toContain("security_alert");
-  });
-
-  it("marks scheduling intent as an event without inventing times", () => {
-    const m = mail({ subject: "Can we reschedule our call?", snippet: "Thursday works" });
-    const f = keywordFallbackFacts(m, deterministicPreFacts(m));
-    expect(f.event).toEqual({ proposedTimes: [], hasInvite: false, conflict: null });
-  });
-
-  it("quotes urgent wording verbatim as evidence, with no invented deadline", () => {
-    const m = mail({ subject: "회신 부탁드립니다", snippet: "오늘 6시까지 회신 필요", body: null });
-    const f = keywordFallbackFacts(m, deterministicPreFacts(m));
-    expect(f.asks).toHaveLength(1);
-    expect(f.asks[0]?.due).toBeNull();
-    expect(`${m.subject} ${m.snippet}`).toContain(f.asks[0]?.evidence ?? "∅");
-  });
-
-  it("keeps an urgent notice from a machine in front of the user (v2 kept it in QUEUE)", () => {
-    const m = mail({
-      from: "noreply@bank.com",
-      subject: "Payment due tomorrow",
-      snippet: "Your card payment is due",
-      body: null,
-    });
-    const f = keywordFallbackFacts(m, deterministicPreFacts(m));
-    expect(f.asks).toHaveLength(1);
-    expect(f.asks[0]?.kind).toBe("review");
-    expect(f.threadTurn).toBe("none");
-    expect(f.kind).toBe("notification");
-  });
-
-  it("never infers a transaction from the sender alone", () => {
-    const m = mail({
-      from: "orders@shop.com",
-      subject: "Action required: confirm address today",
-      body: null,
-    });
-    const f = keywordFallbackFacts(m, deterministicPreFacts(m));
-    expect(f.transaction).toBeNull();
-    expect(f.asks).toHaveLength(1);
-  });
-
-  it("never gives marketing an ask, even with urgent words", () => {
-    const m = mail({
-      from: "Deals <promo@shop.com>",
-      subject: "URGENT: sale ends today",
-      labels: ["CATEGORY_PROMOTIONS"],
-    });
-    const f = keywordFallbackFacts(m, deterministicPreFacts(m));
-    expect(f.asks).toEqual([]);
-  });
-
-  it("cleans the evidence excerpt (no control characters) and never splits an emoji", () => {
-    const m = mail({
-      subject: "x\u001b[31m\u0007 urgent please\nreply 😀😀😀",
-      snippet: "",
-      body: null,
-    });
-    const f = keywordFallbackFacts(m, deterministicPreFacts(m));
-    const ev = f.asks[0]?.evidence ?? "";
-    expect([...ev].some((c) => c.charCodeAt(0) < 0x20)).toBe(false);
-    expect(ev).not.toMatch(/[\ud800-\udbff](?![\udc00-\udfff])/);
-  });
-
-  it("does not alias pre-fact arrays", () => {
-    const m = mail({ labels: ["SPAM"] });
-    const pre = deterministicPreFacts(m);
-    expect(keywordFallbackFacts(m, pre).asks).not.toBe(pre.facts.asks);
-  });
-
-  it("is always ambiguous so it is re-extracted when the model is back", () => {
-    const f = keywordFallbackFacts(mail(), deterministicPreFacts(mail()));
-    expect(f.ambiguous).toBe(true);
+    const r = await extractFacts(mail(), { complete });
+    expect(r.issues.join(" ")).not.toContain("secret");
+    expect(r.issues[0]).toBe("attempt 1: Error 400");
   });
 });
