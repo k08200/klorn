@@ -660,7 +660,7 @@ function priorFeatures(tier: PocTier): PocFeatures {
  *    email to the LLM instead. A PUSH override prior skips the guard —
  *    urgent content and "always interrupt" agree.
  */
-function canShortCircuit(prior: SenderPrior, email: ClassifiableEmail): boolean {
+export function canShortCircuit(prior: SenderPrior, email: ClassifiableEmail): boolean {
   const allowed = PRIOR_SHORTCIRCUIT_TIERS[prior.kind];
   if (!allowed.has(prior.tier)) return false;
   // A HISTORY prior is model-authored (unanimous past classifications, never a
