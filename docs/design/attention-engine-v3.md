@@ -57,12 +57,39 @@ outcomes (open/reply/dismiss/override) ──► feed (3), measure everything
 Rules:
 - Every `evidence` string must be a substring of the normalised mail body or subject. If the check fails, the fact is dropped and the item is escalated.
 - No free-form scores. Dates are absolute and computed against the mail's own Date header.
-- Deterministic pre-facts win when certain: Gmail category, ICS invite, List-Unsubscribe, automated sender, spam label.
+- Deterministic pre-facts win when certain: Gmail category, ICS invite, List-Unsubscribe, automated sender. The spam label is a signal, not a fact (see conventions below).
 - Facts are persisted per item with `factsVersion`, `model`, `provider` and `extractedAt`.
+
+#### Facts v1 conventions (P2, agreed with the P1 benchmark so numbers stay comparable)
+
+Code: `packages/api/src/judge/v3/` (`facts-schema.ts` is the canonical type and validator; `evidence.ts` holds the normalisation and the time tokens; the P1 scorer mirrors them).
+
+- **Haystack.** Evidence is checked against every text field shown to the model, each field separately (a quote cannot span subject and body), using the text *as shown* (after truncation), not the stored body.
+- **Normalisation.** NFKC, strip every Unicode format character (`\p{Cf}`: zero-width, soft hyphen, bidi overrides), controls to spaces, fold curly quotes and dashes, collapse whitespace, trim, lower-case. Case-insensitive on purpose: a re-capitalised sentence start must not drop a real ask.
+- **Minimum quote.** At least 2 tokens, or at least 8 characters as one token (Korean phrases often have no spaces); at most 300. A stray "the" cannot ground a fact. A quote may not cut a Latin word ("approval" does not verify inside "disapproval"); scripts that attach particles to words (Korean) are not boundary-checked.
+- **Due binding.** An ask with a non-null `due` must have evidence that states a time (`TEMPORAL_RE`): a time-shaped number (6pm, 18:00, 3/5, 2026-11-03, 5th, within 3 hours, 6시, 3일), a weekday or month name (ambiguous short forms such as "may", "sun", "wed" only next to a number), today/tomorrow/tonight/EOD/EOW/COB/end of day/close of business/deadline/ASAP/urgent/immediately/morning/noon…, or 오늘/내일/모레/이번 주/다음 주/…요일/오전/오후/까지/마감/기한/긴급/즉시/당장. Otherwise `due` is cleared, the ask is kept, and the item escalates. The prompt tells the model to quote the deadline words. The due value itself is not compared with the quote, so policy still treats a due as model-derived.
+- **Relative dates**, resolved against the mail's sent time in its own offset:
+  - today / EOD / end of day / tonight → 23:59 that day;
+  - tomorrow → 23:59 the next day; tomorrow morning → 09:00; tomorrow noon → 12:00;
+  - within N hours → sent time + N hours;
+  - a weekday → 23:59 on the next such day on or after the sent day;
+  - ASAP / urgent / right now / immediately → the sent time itself;
+  - a meeting start is not a due date unless the mail asks for action by then;
+  - no zone given → the sent time's offset (else the user's timezone).
+- **Date validity.** ISO-8601 with an explicit offset only; a date more than 60 days before or 400 days after the mail is dropped as a misreading.
+- **The Date header is mail-controlled.** Only its parsed value (a local time with offset, and only when it is within 2 days of receipt) reaches the prompt, never its text. RFC 5322 allows comments in it.
+- **Invites.** Only an attached calendar file (text/calendar, `.ics`) sets `event.hasInvite`. Mail text cannot: an "Invitation: … @ …" subject, or the model reading one, is attacker-writable. `event.conflict` is null until the calendar read lands.
+- **Spam label.** It fixes no fact field, because Gmail misfiles real mail and SPAM_INTAKE exists to rescue it. It travels as the header signal `spam`, and policy keeps spam out of PUSH and MEETING.
+- **Header signals.** The detector results (list mail, automated sender, spam, Gmail category, calendar file, recipient counts and position) are stored with the facts. They are booleans and counts, never mail text, and replay can read them.
+- **What the model sees.** Mail fields are wrapped as untrusted. Invisible format characters (zero-width, bidi, Unicode tag characters) are dropped first. Recipients go as counts, never third-party addresses.
+- **Relayed asks.** A system notification that relays a person's request or assignment ("X assigned you issue Y", "X requested your review") is an ask, quoting the relayed words.
+- **No LLM answer.** The extractor stores no facts (`factsSource = "none"`), only the certain pre-facts and the signals. The keyword fallback belongs to the policy layer (P3 `keywordFactsV1`), which owns parity with today's keyword lanes.
+
+Open for facts v1.1 (not changed here): `risk` and `transaction.actionRequired` carry no evidence. A mail can claim `security_alert` without a quote, so policy v3 must not let risk alone interrupt without another signal. A `riskEvidence` field is the proposed fix.
 
 ### (2) Relationship: no LLM
 
-Build on what exists: `SentMessage` (user's sent mail), `ContactEngagementScore` (outbound/dismiss counts), `learning/interaction-graph.ts` (frequency, recency, calendar co-attendance) and sender pins (`SenderLabel`). Features per sender:
+Build on what exists: `SentMessage` (user's sent mail), `ContactEngagementScore` (outbound/dismiss counts), `learning/interaction-graph.ts` (frequency, recency, calendar co-attendance), sender pins (`EmailRule` `PIN_TIER`) and sender labels (`SenderLabel`). Features per sender:
 - times the user wrote to them;
 - last time the user wrote;
 - median reply latency;
@@ -72,6 +99,16 @@ Build on what exists: `SentMessage` (user's sent mail), `ContactEngagementScore`
 - dismiss count.
 
 Output is a `relationship` snapshot stored with the decision. This removes the cold-start "urgent 0/4" problem from day one, because sent mail is already synced for "waiting on".
+
+As built in P2 (`judge/v3/relationship.ts`, `relationship-loader.ts`):
+- Every field is null when the data to answer it does not exist, never 0, so policy can tell "unknown" from "never". No sent-mail sync means the sent fields are null.
+- "Wrote to them" matches the exact address on the To header.
+- Reply latency is measured per thread, from the sender's earliest unanswered mail to the user's reply. Gaps over 30 days are ignored.
+- Same organisation means a shared domain that is not a public mailbox provider.
+- Pinned means any `PIN_TIER` rule on the address or domain. VIP means a sender label of investor or customer, or a pin to PUSH.
+- **Calendar co-attendance is always null for now.** `CalendarEvent` stores no attendees. The interaction graph's "meeting" count is inferred from email volume, which is not co-attendance, so it is not reused.
+
+Facts and the snapshot are stored in `AttentionFacts`, one row per (userId, source, sourceId), the natural key of `AttentionItem` and `DecisionLabel`. The row also holds the evidence check, escalation reasons, model, provider, and the v2 lane shown when the shadow ran. That lane is frozen there because `DecisionLabel.shownTier` is rewritten on re-judge.
 
 ### (3) Importance: per user, learned
 
