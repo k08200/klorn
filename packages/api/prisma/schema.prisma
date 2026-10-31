@@ -145,6 +145,7 @@ model User {
   commitments               Commitment[]
   feedbackEvents            FeedbackEvent[]
   decisionLabels            DecisionLabel[]
+  attentionFacts            AttentionFacts[]
   emailLabelFeedback        EmailLabelFeedback[]
   playbookActivations       ActivatedPlaybook[]
   workContextSnapshots      WorkContextSnapshot[]
@@ -1835,6 +1836,54 @@ model AttentionItem {
 // re-judge refreshes its shownTier/features (the live decision the user would
 // see); once the outcome is stamped the row is frozen so the label always
 // matches what the user actually saw when they acted.
+// Attention Engine v3 facts per item (docs/design/attention-engine-v3.md §3,
+// phase P2). Written only by the JUDGE_V3_SHADOW extractor, after the v2 judge
+// on new mail; never read by the lane users see. Additive: no v2 data is
+// rewritten. Same natural key as AttentionItem / DecisionLabel, so policy
+// replay (P3) joins on (userId, source, sourceId).
+model AttentionFacts {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  source   AttentionSource
+  sourceId String
+
+  // judge/v3/facts-schema.ts FACTS_VERSION; facts is FactsV1 at that version.
+  factsVersion    Int
+  // "llm" | "keyword-fallback"
+  factsSource     String
+  // Model and provider that actually served (createCompletion onServed); null
+  // for keyword facts.
+  model           String?
+  provider        String?
+  extractedAt     DateTime
+  // FactsV1 after evidence check, date window and the deterministic merge.
+  facts           Json
+  // Fact fields fixed by deterministic pre-facts.
+  certainFields   String[]
+  // judge/v3/relationship.ts RelationshipSnapshot at extraction time.
+  relationship    Json?
+  // { checked, dropped: [{ path, evidence }] }
+  evidenceCheck   Json
+  // Validator / date-window issues and LLM failure notes (bounded strings).
+  issues          String[]
+  // Doc §4 escalation candidates: evidence_failed | ambiguous | parse_issues | llm_failed.
+  escalate        Boolean  @default(false)
+  escalateReasons String[]
+  // The v2 lane shown when the shadow ran. DecisionLabel.shownTier is rewritten
+  // on re-judge, so the disagreement report needs its own frozen copy.
+  v2Tier          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, source, sourceId])
+  @@index([userId, extractedAt])
+  // The cross-user disagreement report filters on extractedAt alone.
+  @@index([extractedAt])
+}
+
 model DecisionLabel {
   id     String @id @default(uuid())
   userId String

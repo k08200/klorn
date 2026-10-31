@@ -70,6 +70,7 @@ export const FENCED_MODELS = [
   "SendReceipt",
   "AttentionItem",
   "DecisionLabel",
+  "AttentionFacts",
   "LearnedRule",
   "SenderTrait",
   "SenderLabel",

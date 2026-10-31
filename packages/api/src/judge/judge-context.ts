@@ -607,7 +607,7 @@ async function fetchLearnedRules(userId: string): Promise<LearnedRule[]> {
  * mail it was never authored for (subdomains do not inherit a parent-domain
  * pin for the same reason). Fail-open null.
  */
-async function fetchPinnedTier(userId: string, senderAddress: string): Promise<Tier | null> {
+export async function fetchPinnedTier(userId: string, senderAddress: string): Promise<Tier | null> {
   if (!senderAddress) return null;
   try {
     const rules = await db.emailRule.findMany({
