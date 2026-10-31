@@ -15,6 +15,7 @@
 
 import type { ChatCompletionCreateParamsNonStreaming } from "openai/resources/chat/completions";
 import { parseLlmJson } from "../../llm/llm-json.js";
+import { estimateModelCostUsd } from "../../llm/model-fallback.js";
 import { type CompletionOptions, createCompletion, JUDGE_MODEL } from "../../llm/openai.js";
 import type { ProviderCredentials } from "../../providers/index.js";
 import { type EvidenceCheck, verifyFactsEvidence } from "./evidence.js";
@@ -43,6 +44,9 @@ export interface FactsExtraction {
   provider: string | null;
   /** The user's own (BYOK) key served the call. */
   servedByUserKey: boolean;
+  /** Tokens and estimated USD cost of the served call (0 when the user's key
+   * served); null when no call succeeded. For the shadow's cost-per-day metric. */
+  usage: FactsUsage | null;
   /** Validator issues and failure notes; no mail text. */
   issues: string[];
   evidenceCheck: EvidenceCheck;
@@ -52,10 +56,30 @@ export interface FactsExtraction {
   certain: PreFacts["certain"];
 }
 
+export interface FactsUsage {
+  promptTokens: number;
+  completionTokens: number;
+  costUsd: number;
+}
+
+interface UsageBlock {
+  prompt_tokens?: number | null;
+  completion_tokens?: number | null;
+  prompt_tokens_details?: {
+    cached_tokens?: number | null;
+    cache_write_tokens?: number | null;
+    cache_write_1h_tokens?: number | null;
+  } | null;
+}
+
 type Complete = (
   params: ChatCompletionCreateParamsNonStreaming,
   options: CompletionOptions,
-) => Promise<{ model?: string; choices: Array<{ message?: { content?: string | null } }> }>;
+) => Promise<{
+  model?: string;
+  choices: Array<{ message?: { content?: string | null } }>;
+  usage?: UsageBlock | null;
+}>;
 
 export interface ExtractFactsOptions {
   userId?: string;
@@ -95,6 +119,23 @@ interface ModelAnswer {
   model: string | null;
   provider: string | null;
   byUserKey: boolean;
+  usage: FactsUsage | null;
+}
+
+function usageOf(block: UsageBlock | null | undefined, model: string | null, byUserKey: boolean) {
+  if (!block) return null;
+  const promptTokens = block.prompt_tokens ?? 0;
+  const completionTokens = block.completion_tokens ?? 0;
+  const details = block.prompt_tokens_details ?? {};
+  const costUsd =
+    byUserKey || !model
+      ? 0
+      : estimateModelCostUsd(model, promptTokens, completionTokens, {
+          readTokens: details.cached_tokens ?? 0,
+          writeTokens: details.cache_write_tokens ?? 0,
+          write1hTokens: details.cache_write_1h_tokens ?? 0,
+        });
+  return { promptTokens, completionTokens, costUsd };
 }
 
 function requestParams(prompt: FactsPrompt, model: string): ChatCompletionCreateParamsNonStreaming {
@@ -134,11 +175,14 @@ async function callModel(prompt: FactsPrompt, options: ExtractFactsOptions): Pro
   const raw = response.choices[0]?.message?.content;
   if (!raw) throw new Error("empty completion content");
   const s = served as { provider: string; model: string; ownedByUser: boolean } | undefined;
+  const model = s?.model ?? response.model ?? null;
+  const byUserKey = s?.ownedByUser ?? false;
   return {
     raw,
-    model: s?.model ?? response.model ?? null,
+    model,
     provider: s?.provider ?? null,
-    byUserKey: s?.ownedByUser ?? false,
+    byUserKey,
+    usage: usageOf(response.usage, model, byUserKey),
   };
 }
 
@@ -189,6 +233,7 @@ function noFacts(pre: PreFacts, issues: string[]): FactsExtraction {
     model: null,
     provider: null,
     servedByUserKey: false,
+    usage: null,
     issues,
     evidenceCheck: { checked: 0, dropped: [] },
     escalate: true,
@@ -216,6 +261,7 @@ function finish(
     model: answer.model,
     provider: answer.provider,
     servedByUserKey: answer.byUserKey,
+    usage: answer.usage,
     issues,
     evidenceCheck: check,
     escalate: escalateReasons.length > 0,

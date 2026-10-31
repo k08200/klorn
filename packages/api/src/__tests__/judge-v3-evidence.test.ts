@@ -58,6 +58,9 @@ describe("verifyEvidence", () => {
     // A stray function word cannot ground a fabricated fact.
     expect(verifyEvidence("the", hay)).toBe(false);
     expect(verifyEvidence("please", hay)).toBe(false);
+    expect(verifyEvidence("by tuesday", hay)).toBe(true);
+    expect(verifyEvidence("you please", buildEvidenceHaystack("", "could you please"))).toBe(true);
+    expect(verifyEvidence("of the", buildEvidenceHaystack("", "the end of the plan"))).toBe(false);
     // Two tokens, or one long token (Korean often has no spaces), do.
     expect(verifyEvidence("please confirm", hay)).toBe(true);
     expect(verifyEvidence("회신 부탁드립니다", hay)).toBe(true);
@@ -131,6 +134,17 @@ describe("evidenceStatesTime (due binding)", () => {
       "within 3 hours",
       "at 18:00",
       "11월 3일까지",
+      "bitte bis morgen antworten",
+      "明日までにお願いします",
+      "11月3日までに",
+      "send it by wed",
+      "by mon please",
+      "reply by 5",
+      "close it in q4",
+      "réponse avant demain",
+      "responda hasta mañana",
+      "antwort bis übermorgen",
+      "responda até amanhã",
     ]) {
       expect(evidenceStatesTime(q), q).toBe(true);
     }
@@ -146,6 +160,8 @@ describe("evidenceStatesTime (due binding)", () => {
       "see invoice #4821",
       "we wed in spring",
       "suite 4 reception",
+      "decision 3 is final",
+      "market 5 report",
     ]) {
       expect(evidenceStatesTime(q), q).toBe(false);
     }
