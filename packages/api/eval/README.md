@@ -202,6 +202,11 @@ DATABASE_URL=... OPENROUTER_API_KEY=... npx tsx scripts/poc-accuracy.ts \
 
 ## Weekly canary: verdict flips + margin erosion (#769)
 
+> **Since 2026-10-31** the judge is Claude Haiku 5.5, which takes no
+> temperature: flips are a readout and the gate set's floors carry the alarm
+> (see "2026-10-31: CI measures Claude" below). The flip design that follows
+> applies to a temperature-0 judge.
+
 `judge-canary.yml` re-scores the committed set every Monday and compares the
 run against the previous week's baseline with `scripts/canary-compare.ts`:
 
@@ -328,7 +333,11 @@ may gate at any floor once a stable baseline exists.
 
 ## Model canary (#526 — the non-judge surfaces)
 
-`model-canary.yml` (Mondays 02:00 UTC) extends the same flip-alarm machinery to
+> **Dispatch-only since 2026-10-31** — it probes through OpenRouter, now only
+> the failover lane, and its fingerprint probes need a temperature-0 model (see
+> "2026-10-31: CI measures Claude").
+
+`model-canary.yml` (dispatch-only since 2026-10-31; Mondays 02:00 UTC before that) extends the same flip-alarm machinery to
 the models the judge canary cannot see: **chat (`MODEL`)** and
 **agent (`AGENT_MODEL`)**, with **vision (`VISION_MODEL`) via manual dispatch**
 (its default pin is a `:free` SKU whose quota flakiness would false-alarm a
@@ -427,3 +436,35 @@ for — Haiku routes noticeably more mail to INFO (13 vs 4).
 Measured cost per judge call (Haiku 5.5, forced): ~1,340 input + ~153 output
 tokens ≈ $0.0002. The judge's system prompt is under the 512-token cache
 minimum, so judge calls are not cached.
+
+## 2026-10-31: CI measures Claude
+
+Prod has served the judge with `claude-haiku-5-5` first since 2026-10-30
+(`LLM_PROVIDER_ORDER=anthropic,openrouter`), so CI now measures that model, with
+Anthropic as the only provider (an outage reads as INSTRUMENT DEGRADED, never as
+another model's score):
+
+- **`eval.yml`** — the PR gate runs Claude Haiku 5.5 through
+  `scripts/judge-gate.sh`: a floor failure (exit 2) gets one re-run, because the
+  model takes no temperature and passed 4 of 5 recorded runs; an outage (exit 3)
+  gets one retry. The decision table is pinned by
+  `src/__tests__/judge-gate-script.test.ts`. The OpenRouter job that measured
+  `gemini-2.5-flash` is removed.
+- **`judge-canary.yml`** — weekly, the gate set's floors (same script) carry the
+  alarm. The real-set flip comparison is report-only: without temperature the
+  same code scored 39/53 locally and 38/53 in CI, so a flip no longer means the
+  decision boundary moved. The baseline refreshes on every scored run and
+  `accept-baseline` is gone.
+- **`model-canary.yml`** — dispatch-only: it probes through OpenRouter, which
+  is now only the failover lane, and its fingerprint probes need a temperature-0
+  model, so it can't move to Claude. A manual run still probes the OpenRouter
+  lane.
+
+Secrets: `ANTHROPIC_API_KEY` (plus optional `ANTHROPIC_WORKSPACE_ID`). No PR or
+scheduled workflow reads `OPENROUTER_API_KEY` any more; only a manual
+`model-canary.yml` run does.
+
+What the re-run costs in sensitivity: a change that only lowers the per-run
+pass rate (say from 4/5 to 1/2) still passes the gate about 3 times in 4. Watch
+the `::warning::A floor failed on the first run` annotation — first-run failures
+that keep coming back are a regression even while the gate is green.
