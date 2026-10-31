@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildEvidenceHaystack,
+  evidenceStatesTime,
   normaliseForEvidence,
   verifyEvidence,
   verifyFactsEvidence,
@@ -20,12 +21,14 @@ const base: FactsV1 = {
 
 describe("normaliseForEvidence", () => {
   it("folds case, NFKC width, curly quotes, dashes, zero-width chars and whitespace runs", () => {
-    expect(normaliseForEvidence("  Please  CONFIRM\n\t by “Tuesday” — ok​ ")).toBe(
+    expect(normaliseForEvidence("  Please\u00a0 CONFIRM\n\t by “Tuesday” — ok\u200b ")).toBe(
       'please confirm by "tuesday" - ok',
     );
     expect(normaliseForEvidence("ＡＢＣ１２３")).toBe("abc123");
     expect(normaliseForEvidence("it’s")).toBe("it's");
-    expect(normaliseForEvidence("re­view")).toBe("review");
+    expect(normaliseForEvidence("re\u00adview")).toBe("review");
+    // Bidi overrides and isolates (\p{Cf}) are dropped, not kept invisibly.
+    expect(normaliseForEvidence("pay \u202enow\u202c \u2066x\u2069")).toBe("pay now x");
   });
 });
 
@@ -49,7 +52,15 @@ describe("verifyEvidence", () => {
   it("rejects quotes that are too short to ground anything, and over-long ones", () => {
     expect(verifyEvidence("hi", hay)).toBe(false);
     expect(verifyEvidence("", hay)).toBe(false);
-    expect(verifyEvidence("x".repeat(301), "x".repeat(400))).toBe(false);
+    expect(verifyEvidence("x ".repeat(160), buildEvidenceHaystack("", "x ".repeat(400)))).toBe(
+      false,
+    );
+    // A stray function word cannot ground a fabricated fact.
+    expect(verifyEvidence("the", hay)).toBe(false);
+    expect(verifyEvidence("please", hay)).toBe(false);
+    // Two tokens, or one long token (Korean often has no spaces), do.
+    expect(verifyEvidence("please confirm", hay)).toBe(true);
+    expect(verifyEvidence("회신 부탁드립니다", hay)).toBe(true);
   });
 
   it("does not let a quote span the subject/body boundary", () => {
@@ -90,5 +101,35 @@ describe("verifyFactsEvidence", () => {
     expect(facts).toEqual(snapshot);
     expect(r.facts).not.toBe(facts);
     expect(r.facts.asks).toEqual([]);
+  });
+});
+
+describe("evidenceStatesTime (due binding)", () => {
+  it("accepts quotes that state a time, in English and Korean", () => {
+    for (const q of [
+      "confirm receipt of the wire before end of day",
+      "by close of business",
+      "send it by COB",
+      "reply by Fri",
+      "due 3/5",
+      "needed tomorrow morning",
+      "ASAP please",
+      "오늘 6시까지 회신 필요",
+      "다음주 월요일 마감",
+      "이번 주 안에 부탁드립니다",
+    ]) {
+      expect(evidenceStatesTime(q), q).toBe(true);
+    }
+  });
+
+  it("rejects quotes with no time in them", () => {
+    for (const q of [
+      "please review the deck",
+      "could you send the contract",
+      "검토 부탁드립니다",
+      "this sunset photo",
+    ]) {
+      expect(evidenceStatesTime(q), q).toBe(false);
+    }
   });
 });

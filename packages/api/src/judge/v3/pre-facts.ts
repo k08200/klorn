@@ -53,8 +53,14 @@ export interface PreFactSignals {
   autoSubmitted: boolean;
   spam: boolean;
   gmailCategory: string | null;
-  calendarInvite: boolean;
+  /** A text/calendar part or .ics attachment: deterministic invite. */
+  icsInvite: boolean;
+  /** "Invitation: … @ …" subject. Any sender can write this, so it is a hint only. */
+  inviteSubject: boolean;
   schedulingIntent: boolean;
+  /** Mailboxes on To / Cc (within the scanned header length). */
+  toCount: number;
+  ccCount: number;
   userInTo: boolean | null;
   userInCc: boolean | null;
   /** To + Cc recipients other than the user (null when the user is unknown). */
@@ -73,6 +79,10 @@ export const DIRECT_MAX_OTHER_RECIPIENTS = 5;
 /** Up to this many other people still counts as a personal Cc. */
 export const CC_MAX_OTHER_RECIPIENTS = 10;
 
+/** Header chars scanned for recipients: far beyond any real To/Cc, and it
+ * bounds the work an attacker-sized header can cause. */
+export const MAX_RECIPIENT_HEADER_CHARS = 8000;
+
 const BULK_PRECEDENCE = new Set(["bulk", "list", "junk"]);
 const GMAIL_CATEGORIES = [
   "CATEGORY_PROMOTIONS",
@@ -84,18 +94,22 @@ const GMAIL_CATEGORIES = [
 
 function addressesOf(header: string | null): string[] {
   if (!header) return [];
-  return splitAddressList(header)
+  return splitAddressList(header.slice(0, MAX_RECIPIENT_HEADER_CHARS))
     .map((entry) => parseAddress(entry).toLowerCase())
     .filter((a) => a !== "");
 }
 
 function recipientSignals(input: PreFactsInput) {
-  const mine = new Set(input.userAddresses.map((a) => a.trim().toLowerCase()).filter(Boolean));
-  if (mine.size === 0) return { userInTo: null, userInCc: null, otherRecipients: null };
   const to = addressesOf(input.to);
   const cc = addressesOf(input.cc);
+  const counts = { toCount: to.length, ccCount: cc.length };
+  const mine = new Set(input.userAddresses.map((a) => a.trim().toLowerCase()).filter(Boolean));
+  if (mine.size === 0) {
+    return { ...counts, userInTo: null, userInCc: null, otherRecipients: null };
+  }
   const others = new Set([...to, ...cc].filter((a) => !mine.has(a)));
   return {
+    ...counts,
     userInTo: to.some((a) => mine.has(a)),
     userInCc: cc.some((a) => mine.has(a)),
     otherRecipients: others.size,
@@ -120,7 +134,8 @@ export function collectPreFactSignals(input: PreFactsInput): PreFactSignals {
     autoSubmitted: autoSubmitted !== "" && autoSubmitted !== "no",
     spam: labels.includes("SPAM"),
     gmailCategory: GMAIL_CATEGORIES.find((c) => labels.includes(c)) ?? null,
-    calendarInvite: input.hasCalendarInvite === true || isCalendarInviteSubject(subject),
+    icsInvite: input.hasCalendarInvite === true,
+    inviteSubject: isCalendarInviteSubject(subject),
     schedulingIntent: detectSchedulingIntent({
       from,
       subject: input.subject,
@@ -148,7 +163,7 @@ function addressedToOf(s: PreFactSignals): FactsV1["addressedTo"] | undefined {
 function kindOf(s: PreFactSignals, bulk: boolean): FactsV1["kind"] | undefined {
   if (s.spam || s.gmailCategory === "CATEGORY_PROMOTIONS" || s.clearMarketing) return "promotion";
   if (s.gmailCategory === "CATEGORY_SOCIAL") return "notification";
-  if (s.calendarInvite && !bulk) return "meeting";
+  if (s.icsInvite && !bulk) return "meeting";
   return undefined;
 }
 
@@ -177,7 +192,7 @@ export function deterministicPreFacts(input: PreFactsInput): PreFacts {
   fix("addressedTo", addressedTo);
   fix("kind", kindOf(signals, bulk));
   fix("threadTurn", threadTurnOf(signals, bulk, input.userRepliedAfter));
-  if (signals.calendarInvite && !bulk) {
+  if (signals.icsInvite && !bulk) {
     fix("event", { proposedTimes: [], hasInvite: true, conflict: null });
   }
   // Gmail spam is never a genuine request to the user.
