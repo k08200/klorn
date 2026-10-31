@@ -5,8 +5,9 @@
  * two-way tracking, Inbox Zero's Reply Zero.
  *
  * Two sources fill `SentMessage`:
- *   1. every send that goes out through Klorn (reply route, compose) —
- *      recorded at send time, zero extra Gmail calls;
+ *   1. every send that goes out through Klorn (reply route, compose, the
+ *      agent executor, auto replies, mailto unsubscribes) — recorded at send
+ *      time with its `origin`, zero extra Gmail calls;
  *   2. a throttled scan of the Gmail Sent folder (every account, latest
  *      page, at most every 30 minutes per user) so mail sent from Gmail
  *      directly counts too.
@@ -22,6 +23,19 @@ import { senderEmail } from "../notify/notification-format.js";
 import { captureError } from "../sentry.js";
 import { listGmailMailbox } from "./gmail-mailbox.js";
 
+/**
+ * Who sent a recorded mail:
+ *   - "user": a manual send through Klorn;
+ *   - "approved": the agent drafted it and the user approved these exact
+ *     bytes (chat approve → outbox → executor);
+ *   - "auto_reply": an autonomous reply the user never saw before it left;
+ *   - "unsubscribe": a mailto unsubscribe request.
+ * Null = seen only by the Sent-folder scan (sent outside Klorn), or recorded
+ * before this column existed. Relationship evidence is null, "user" and
+ * "approved"; "auto_reply" and "unsubscribe" never are.
+ */
+export type SentOrigin = "user" | "approved" | "auto_reply" | "unsubscribe";
+
 export interface SentMessageInput {
   gmailId: string;
   threadId: string | null;
@@ -30,29 +44,51 @@ export interface SentMessageInput {
   sentAt: Date;
   /** "primary" or a LinkedInboxAccount id — where a live read must go. */
   inbox: string;
+  /** Set by Klorn's own send paths; the Sent-folder scan leaves it out. */
+  origin?: SentOrigin;
 }
 
 /**
  * Upsert one sent message. Fail-soft: a bookkeeping miss must never fail a
  * send that already went out, and the periodic scan re-records anyway.
+ * A record without an origin (the scan) never writes one, so a later scan
+ * cannot erase what Klorn recorded at send time.
  */
 export async function recordSentMessage(userId: string, input: SentMessageInput): Promise<void> {
-  try {
-    await prisma.sentMessage.upsert({
-      where: { userId_gmailId: { userId, gmailId: input.gmailId } },
-      create: { userId, ...input },
+  const { origin, ...fields } = input;
+  const originField = origin ? { origin } : {};
+  const upsert = () =>
+    prisma.sentMessage.upsert({
+      where: { userId_gmailId: { userId, gmailId: fields.gmailId } },
+      create: { ...fields, ...originField, userId },
       update: {
-        threadId: input.threadId,
-        to: input.to,
-        subject: input.subject,
-        sentAt: input.sentAt,
-        inbox: input.inbox,
+        threadId: fields.threadId,
+        to: fields.to,
+        subject: fields.subject,
+        sentAt: fields.sentAt,
+        inbox: fields.inbox,
+        ...originField,
       },
     });
+  try {
+    try {
+      await upsert();
+    } catch (err) {
+      // The Sent scan can insert the same row between this upsert's read and
+      // its insert. Once more: the row now exists, so the update path runs
+      // and the origin still lands.
+      if (!isUniqueConflict(err)) throw err;
+      await upsert();
+    }
   } catch (err) {
-    console.warn("[SENT] record failed:", err instanceof Error ? err.message : err);
+    const code = (err as { code?: unknown } | null)?.code;
+    console.warn("[SENT] record failed:", err instanceof Error ? err.name : "unknown", code ?? "");
     captureError(err, { tags: { scope: "sent-messages.record" }, extra: { userId } });
   }
+}
+
+function isUniqueConflict(err: unknown): boolean {
+  return typeof err === "object" && err !== null && (err as { code?: unknown }).code === "P2002";
 }
 
 const SENT_SYNC_INTERVAL_MS = 30 * 60_000;
@@ -112,6 +148,7 @@ export interface SentRow {
   subject: string;
   sentAt: Date;
   inbox: string;
+  origin?: string | null;
 }
 
 export interface ReplyRow {
@@ -126,7 +163,8 @@ const DAY_MS = 86_400_000;
  * The pure rule, exported for its tests. Per thread only the LATEST thing I
  * sent counts; a thread is waiting when that message is at least `minDays`
  * old and nothing from someone else arrived after it. Notes to myself and
- * my own copies (a CC to self) never count. Oldest wait first.
+ * my own copies (a CC to self) never count, and neither does a mailto
+ * unsubscribe: no list answers one. Oldest wait first.
  */
 export function computeWaitingOn(
   sent: readonly SentRow[],
@@ -136,7 +174,7 @@ export function computeWaitingOn(
   const me = opts.userEmail?.trim().toLowerCase() || null;
   const latestByThread = new Map<string, SentRow>();
   for (const row of sent) {
-    if (!row.threadId) continue;
+    if (!row.threadId || row.origin === "unsubscribe") continue;
     const current = latestByThread.get(row.threadId);
     if (!current || row.sentAt > current.sentAt) latestByThread.set(row.threadId, row);
   }
@@ -180,7 +218,15 @@ export async function waitingOnThreads(
   const since = new Date(now.getTime() - WAITING_ON_WINDOW_DAYS * DAY_MS);
   const sent = await prisma.sentMessage.findMany({
     where: { userId, sentAt: { gte: since }, threadId: { not: null } },
-    select: { gmailId: true, threadId: true, to: true, subject: true, sentAt: true, inbox: true },
+    select: {
+      gmailId: true,
+      threadId: true,
+      to: true,
+      subject: true,
+      sentAt: true,
+      inbox: true,
+      origin: true,
+    },
   });
   if (!sent.length) return [];
   const threadIds = [...new Set(sent.map((s) => s.threadId).filter((t): t is string => !!t))];

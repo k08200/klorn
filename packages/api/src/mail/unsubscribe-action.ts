@@ -13,6 +13,7 @@
 import type { EmailUnsubscribeResponse } from "@klorn/contract";
 import { executeOneClickUnsubscribe, parseMailtoTarget } from "./list-unsubscribe.js";
 import { mailActionsFor } from "./providers/dispatch.js";
+import { recordSentMessage } from "./sent-messages.js";
 
 /** The stored columns the action reads. */
 export interface UnsubscribableEmail {
@@ -52,6 +53,19 @@ export async function unsubscribeFromEmail(
         linkedInboxAccountId: email.linkedInboxAccountId,
       });
       if (!("unsupported" in result) && !("error" in result)) {
+        // Mark it an unsubscribe: it is not mail the user wrote to that list,
+        // and no list answers it, so "waiting on" must skip it.
+        if (result.success && result.messageId) {
+          await recordSentMessage(userId, {
+            gmailId: result.messageId,
+            threadId: result.threadId ?? null,
+            to: target.to,
+            subject: target.subject,
+            sentAt: new Date(),
+            inbox: email.linkedInboxAccountId ?? "primary",
+            origin: "unsubscribe",
+          });
+        }
         return { ok: true, body: { method: "mailto", done: true } };
       }
     }

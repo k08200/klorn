@@ -726,6 +726,7 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
           subject,
           sentAt: new Date(),
           inbox: dbEmail.linkedInboxAccountId ?? "primary",
+          origin: "user",
         });
       }
 
