@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { describe, expect, it, vi } from "vitest";
 import type { FactsExtraction } from "../judge/v3/facts-extractor.js";
 import { saveAttentionFacts, toAttentionFactsData } from "../judge/v3/facts-store.js";
@@ -129,6 +130,23 @@ describe("toAttentionFactsData", () => {
   });
 });
 
+describe("stored evidence check", () => {
+  it("keeps dropped paths but not the dropped (model-written) quote", () => {
+    const d = toAttentionFactsData({
+      userId: "u1",
+      source: "EMAIL",
+      sourceId: "e1",
+      extraction: extraction({
+        evidenceCheck: { checked: 2, dropped: [{ path: "asks[1]", evidence: "made up" }] },
+      }),
+      relationship: null,
+      v2Tier: null,
+      extractedAt: at,
+    });
+    expect(d.evidenceCheck).toEqual({ checked: 2, dropped: [{ path: "asks[1]" }] });
+  });
+});
+
 describe("saveAttentionFacts", () => {
   it("upserts on the item's natural key so a rerun replaces, never duplicates", async () => {
     const upsert = vi.fn(async () => ({}));
@@ -154,6 +172,24 @@ describe("saveAttentionFacts", () => {
     expect(arg.update).not.toHaveProperty("userId");
     expect(arg.update).not.toHaveProperty("sourceId");
     expect(arg.update.factsSource).toBe("llm");
+  });
+
+  it("a rerun without a relationship clears the stored one (DbNull), never keeps a stale snapshot", async () => {
+    const upsert = vi.fn(async () => ({}));
+    await saveAttentionFacts(
+      {
+        userId: "u1",
+        source: "EMAIL",
+        sourceId: "e1",
+        extraction: extraction(),
+        relationship: null,
+        v2Tier: null,
+        extractedAt: at,
+      },
+      { attentionFacts: { upsert } } as never,
+    );
+    const [arg] = upsert.mock.calls[0] as unknown as [{ update: Record<string, unknown> }];
+    expect(arg.update.relationship).toBe(Prisma.DbNull);
   });
 });
 

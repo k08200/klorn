@@ -10,7 +10,7 @@
 import { db } from "../../db.js";
 import { escapeLikePattern } from "../../db-like.js";
 import { senderLabelsFor } from "../../mail/sender-labels.js";
-import { fetchPinnedTier } from "../judge-context.js";
+import { isSenderAddressIndexEnabled, lookupPinnedTier } from "../judge-context.js";
 import {
   buildRelationshipSnapshot,
   type InboundRow,
@@ -27,8 +27,6 @@ export const SENT_SCAN_LIMIT = 300;
 export const INBOUND_SCAN_LIMIT = 500;
 /** Threads read for latency / reply rate. */
 const THREAD_LIMIT = 100;
-/** Oldest candidates read for first contact (LIKE can over-match; exact filter after). */
-const FIRST_CONTACT_CANDIDATES = 20;
 
 export interface InboundCandidate extends InboundRow {
   from: string;
@@ -38,19 +36,16 @@ export interface InboundCandidate extends InboundRow {
 export interface RelationshipLoaderDeps {
   hasAnySent(userId: string): Promise<boolean>;
   /** Sent rows whose To may contain the address, newest first (exact match after). */
-  sentRowsMentioning(userId: string, address: string, order: "asc" | "desc"): Promise<SentRow[]>;
-  /** Mails whose From may contain the address, newest first (exact match after). */
-  inboundMentioning(
-    userId: string,
-    address: string,
-    order: "asc" | "desc",
-  ): Promise<InboundCandidate[]>;
+  sentRowsMentioning(userId: string, address: string): Promise<SentRow[]>;
+  /** The sender's mail, newest first (exact match after). */
+  inboundFrom(userId: string, address: string): Promise<InboundCandidate[]>;
   /** The user's sends in these threads, to anyone. */
   sentInThreads(
     userId: string,
     threadIds: string[],
   ): Promise<{ sentAt: Date; threadId: string | null }[]>;
   dismissCount(userId: string, address: string): Promise<number>;
+  /** Throws on a lookup failure (unknown), returns null for "no pin". */
   pinnedTier(userId: string, address: string): Promise<string | null>;
   senderCategory(userId: string, address: string): Promise<string | null>;
 }
@@ -60,24 +55,30 @@ export const prismaRelationshipDeps: RelationshipLoaderDeps = {
     const row = await db.sentMessage.findFirst({ where: { userId }, select: { id: true } });
     return row !== null;
   },
-  sentRowsMentioning(userId, address, order) {
+  sentRowsMentioning(userId, address) {
+    // SentMessage has no recipient index: this filters the user's sent rows
+    // (small today; a recipient-address column is the fix once sent history
+    // is backfilled). Escaped so "_" and "%" match literally.
     return db.sentMessage.findMany({
-      // Escaped so "_" and "%" match literally; the exact mailbox comparison
-      // happens in relationship.ts either way.
       where: { userId, to: { contains: escapeLikePattern(address), mode: "insensitive" } },
       select: { sentAt: true, to: true, threadId: true },
-      orderBy: { sentAt: order },
-      take: order === "desc" ? SENT_SCAN_LIMIT : FIRST_CONTACT_CANDIDATES,
+      orderBy: { sentAt: "desc" },
+      take: SENT_SCAN_LIMIT,
     });
   },
-  async inboundMentioning(userId, address, order) {
-    const rows = await db.emailMessage.findMany({
-      where: { userId, from: { contains: escapeLikePattern(address), mode: "insensitive" } },
+  inboundFrom(userId, address) {
+    // The same gate the judge's sender history uses: equality on the indexed,
+    // normalised fromAddress once it is backfilled; the legacy substring scan
+    // until then (an unbackfilled row has fromAddress = null).
+    const where = isSenderAddressIndexEnabled()
+      ? { userId, fromAddress: address }
+      : { userId, from: { contains: escapeLikePattern(address), mode: "insensitive" as const } };
+    return db.emailMessage.findMany({
+      where,
       select: { threadId: true, receivedAt: true, from: true, fromAddress: true },
-      orderBy: { receivedAt: order },
-      take: order === "desc" ? INBOUND_SCAN_LIMIT : FIRST_CONTACT_CANDIDATES,
+      orderBy: { receivedAt: "desc" },
+      take: INBOUND_SCAN_LIMIT,
     });
-    return rows;
   },
   sentInThreads(userId, threadIds) {
     return db.sentMessage.findMany({
@@ -94,8 +95,7 @@ export const prismaRelationshipDeps: RelationshipLoaderDeps = {
     // Dismisses are recorded unconditionally (attention-dismiss.ts): no row = none.
     return row?.dismissCount ?? 0;
   },
-  // fetchPinnedTier is fail-open: a failed lookup reads as "no pin" (false).
-  pinnedTier: (userId, address) => fetchPinnedTier(userId, address),
+  pinnedTier: (userId, address) => lookupPinnedTier(userId, address),
   async senderCategory(userId, address) {
     return (await senderLabelsFor(userId, [address])).get(address) ?? null;
   },
@@ -131,32 +131,31 @@ const threadIdsOf = (rows: readonly { threadId: string | null }[]) =>
     THREAD_LIMIT,
   );
 
+const earliest = (dates: Date[]): Date | null =>
+  dates.length === 0 ? null : new Date(Math.min(...dates.map((d) => d.getTime())));
+
+/** First contact is the oldest row within the scanned window (approximate for
+ * senders past the scan limit, whose tenure is long either way). */
 async function loadSent(userId: string, sender: string, deps: RelationshipLoaderDeps) {
-  if ((await settle(() => deps.hasAnySent(userId), "sent-sync")) !== true) {
+  const rows = await settle(() => deps.sentRowsMentioning(userId, sender), "sent");
+  if (rows === undefined) return { sent: null, firstSentAt: undefined };
+  // No candidate rows: "never wrote to them" only if sent mail is synced at all.
+  if (rows.length === 0 && (await settle(() => deps.hasAnySent(userId), "sent-sync")) !== true) {
     return { sent: null, firstSentAt: undefined };
   }
-  const [recent, oldest] = await Promise.all([
-    settle(() => deps.sentRowsMentioning(userId, sender, "desc"), "sent"),
-    settle(() => deps.sentRowsMentioning(userId, sender, "asc"), "first-sent"),
-  ]);
-  const first = oldest?.find((r) => writtenTo(r, sender));
   return {
-    sent: recent ?? null,
-    firstSentAt: oldest === undefined ? undefined : (first?.sentAt ?? null),
+    sent: rows,
+    firstSentAt: earliest(rows.filter((r) => writtenTo(r, sender)).map((r) => r.sentAt)),
   };
 }
 
 async function loadInbound(userId: string, sender: string, deps: RelationshipLoaderDeps) {
-  const [recent, oldest] = await Promise.all([
-    settle(() => deps.inboundMentioning(userId, sender, "desc"), "inbound"),
-    settle(() => deps.inboundMentioning(userId, sender, "asc"), "first-inbound"),
-  ]);
-  const inbound = recent?.filter(fromSender(sender)) ?? null;
-  const first = oldest?.find(fromSender(sender));
-  return {
-    inbound: inbound?.map((r) => ({ threadId: r.threadId, receivedAt: r.receivedAt })) ?? null,
-    firstInboundAt: oldest === undefined ? undefined : (first?.receivedAt ?? null),
-  };
+  const rows = await settle(() => deps.inboundFrom(userId, sender), "inbound");
+  if (rows === undefined) return { inbound: null, firstInboundAt: undefined };
+  const inbound = rows
+    .filter(fromSender(sender))
+    .map((r) => ({ threadId: r.threadId, receivedAt: r.receivedAt }));
+  return { inbound, firstInboundAt: earliest(inbound.map((r) => r.receivedAt)) };
 }
 
 /** The user's sends in the sender's threads; null when sent mail is not synced. */

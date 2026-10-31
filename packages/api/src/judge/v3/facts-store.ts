@@ -45,7 +45,11 @@ export function toAttentionFactsData(input: StoreFactsInput) {
     certainFields: [...x.certain],
     signals: asJson(x.signals),
     relationship: input.relationship ? asJson(input.relationship) : Prisma.DbNull,
-    evidenceCheck: asJson(x.evidenceCheck),
+    // Paths only: a dropped quote is model text that is not in the mail.
+    evidenceCheck: asJson({
+      checked: x.evidenceCheck.checked,
+      dropped: x.evidenceCheck.dropped.map((d) => ({ path: d.path })),
+    }),
     issues: x.issues.slice(0, MAX_STORED_ISSUES).map((s) => s.slice(0, MAX_ISSUE_CHARS)),
     escalate: x.escalate,
     escalateReasons: [...x.escalateReasons],

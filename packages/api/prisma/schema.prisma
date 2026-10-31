@@ -1822,20 +1822,6 @@ model AttentionItem {
   @@index([status, surfacedAt])
 }
 
-// Decision ledger: the tier the firewall SHOWED the user for each classified
-// item (one row per source item), plus the user's eventual outcome.
-//
-// AttentionItem.tier is overwritten in place on a manual override
-// (attention-override.ts), so the original shown tier is destroyed and
-// {shownTier, features, sender} can't be reconstructed after the fact. This
-// table records that decision immutably at judgement time, so per-user recall
-// and over-suppression can be measured from real traffic later. It is the
-// free complement to a held-out human audit — a drift tripwire, NOT itself
-// the launch gate (the gate is PUSH recall + an over-suppression ceiling,
-// which need the audit's whole-inbox denominator). While a row is still open a
-// re-judge refreshes its shownTier/features (the live decision the user would
-// see); once the outcome is stamped the row is frozen so the label always
-// matches what the user actually saw when they acted.
 // Attention Engine v3 facts per item (docs/design/attention-engine-v3.md §3,
 // phase P2). Written only by the JUDGE_V3_SHADOW extractor, after the v2 judge
 // on new mail; never read by the lane users see. Additive: no v2 data is
@@ -1896,6 +1882,20 @@ model AttentionFacts {
   @@index([extractedAt])
 }
 
+// Decision ledger: the tier the firewall SHOWED the user for each classified
+// item (one row per source item), plus the user's eventual outcome.
+//
+// AttentionItem.tier is overwritten in place on a manual override
+// (attention-override.ts), so the original shown tier is destroyed and
+// {shownTier, features, sender} can't be reconstructed after the fact. This
+// table records that decision immutably at judgement time, so per-user recall
+// and over-suppression can be measured from real traffic later. It is the
+// free complement to a held-out human audit — a drift tripwire, NOT itself
+// the launch gate (the gate is PUSH recall + an over-suppression ceiling,
+// which need the audit's whole-inbox denominator). While a row is still open a
+// re-judge refreshes its shownTier/features (the live decision the user would
+// see); once the outcome is stamped the row is frozen so the label always
+// matches what the user actually saw when they acted.
 model DecisionLabel {
   id     String @id @default(uuid())
   userId String
