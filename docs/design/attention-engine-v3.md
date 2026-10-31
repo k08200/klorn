@@ -81,7 +81,7 @@ Model: a per-user logistic regression over (facts, relationship, time) features,
 
 ### (4) Policy: deterministic, `policyVersion`
 
-- **PUSH** = (`asks` non-empty with `due` ≤ 24h) OR (`risk` contains payment_failed or security_alert). AND `addressedTo` is me_direct/me_cc. AND importance is within the user's top-k for the day. AND the item falls within the **interrupt budget** (default proposal: 3 per day, user-adjustable). Overflow goes to the top of QUEUE.
+- **PUSH** = (`asks` non-empty with `due` ≤ 24h) OR (`risk` contains payment_failed or security_alert). AND `addressedTo` is me_direct/me_cc. AND importance is within the user's top-k for the day. AND the item falls within the **interrupt budget**: the most PUSH notifications Klorn may send per day. **Default 5 per day, user-adjustable** (founder decision 2026-10-31). Once the day's budget is used, further qualifying items go to the top of the ranked QUEUE with the reason "held: daily interrupt budget" and no notification.
 - **MEETING** = `event` present and not bulk. The calendar conflict is shown.
 - **QUEUE** = `asks` non-empty, or `kind` personal/work_thread, or `threadTurn` = mine_to_reply. **Ranked** by importance × deadline proximity. This is the Today list.
 - **INFO** = `transaction` without `actionRequired`, or `kind` notification without asks.
@@ -97,7 +97,7 @@ Pins and manual overrides keep their precedence, as they do today. Every decisio
   - `ambiguous`;
   - PUSH candidates (high stakes).
 
-  Target ≤ 10% of mail. The existing dial (`judge-dial.ts`) is the hook.
+  There is **no fixed escalation share and no monthly cost ceiling for now**: accuracy first. The founder decided this on 2026-10-31. Cost grows with users either way, and the user count is small today. Escalate wherever it measurably improves accuracy. Cost per day stays a reported metric (§5), so the trade-off is visible when the user count grows. The existing dial (`judge-dial.ts`) is the hook.
 - **Self-consistency** (two samples) for PUSH candidates only.
 - **Cost controls:** prompt caching for the fixed system prompt, and the provider batch API for backfills. Measured today: one Haiku judge call ≈ $0.0002.
 - **Later (P5):**
@@ -108,7 +108,12 @@ Pins and manual overrides keep their precedence, as they do today. Every decisio
 
 - **Fact eval set:**
   - synthetic edge cases, in the repo, PII-free;
-  - the founder's own real mail, labelled at fact level. Frontier-model draft labels, founder spot-check. Kept out of the repo, under `~/klorn-secrets`. Needs founder consent; see §8.
+  - the founder's own real mail, labelled at fact level. **Consent given 2026-10-31**, on condition that the labels are exact. Protocol:
+    - two different frontier models label each mail independently;
+    - every disagreement, and every PUSH/MEETING-relevant item, goes to the founder for review;
+    - only the reconciled label counts.
+    
+    The labels are kept out of the repo, under `~/klorn-secrets`, and processed only by disclosed processors.
   - Metrics: per-field precision/recall, evidence validity rate, date accuracy.
 - **Policy replay:** any `policyVersion` change is replayed over stored facts and diffed per lane before it ships.
 - **Shadow mode:** v3 runs beside v2 on every new mail. Both results are stored, and a disagreement report is produced. Users see only v2.
@@ -132,7 +137,7 @@ Each phase is its own PR(s), flag-OFF, with full gate and reviews.
 | P1 | Re-benchmark **current** models (Haiku/Sonnet/Opus 5.5, Fable 5.1, current Gemini/GPT available to us) × {v2 score prompt, v3 fact prompt} on the gate set + real set | numbers answer whether v2 is calibration-coupled and whether v3 narrows the spread between models | none (eval only, synthetic/consented data) |
 | P2 | Fact extractor (schema v1) + evidence verification + persistence, run in **shadow** | fact eval ≥ the agreed bar; shadow running on prod with a disagreement report | `JUDGE_V3_SHADOW` |
 | P3 | Policy v3 (lanes from facts) + QUEUE ranking + PUSH interrupt budget | replay and shadow show v3 ≥ v2 on outcome metrics | `JUDGE_V3_POLICY` (founder flip) |
-| P4 | Escalation to frontier for hard/high-stakes items + batch backfills | escalation ≤ 10%, cost inside the $100/mo credit | `JUDGE_V3_ESCALATION` |
+| P4 | Escalation to frontier for hard/high-stakes items + batch backfills | escalation measurably raises accuracy on the fact eval; cost per day reported (no cap for now) | `JUDGE_V3_ESCALATION` |
 | P5 | Per-user importance model + embedding first pass | enough outcomes per user; first pass agrees with LLM facts on bulk/transactional | `JUDGE_V3_IMPORTANCE` |
 | Review | Lane set review with 2–4 weeks of P3 data (e.g. MEETING/INFO as chips?) | founder decision (lanes are LOCKED) | — |
 
@@ -143,7 +148,14 @@ Each phase is its own PR(s), flag-OFF, with full gate and reviews.
 - A policy flip is reversible because v2 decisions keep being computed until v3 has been the default for two weeks.
 - Fact persistence is additive (new columns/table). No v2 data is rewritten.
 
-## 8. Open founder decisions
+## 8. Founder decisions
+
+Decided 2026-10-31:
+- PUSH interrupt budget: **user-adjustable, default 5 per day**.
+- Labelling the founder's own mail for the fact eval: **yes, labels must be exact** (protocol in §5).
+- Escalation: **accuracy first; no escalation share or cost ceiling for now**. Cost is tracked, not capped.
+
+Original open list, kept for history:
 
 1. Default PUSH interrupt budget (proposal: 3/day).
 2. Consent to label the founder's own mail for the fact eval set (kept outside the repo, processed only by disclosed processors).
