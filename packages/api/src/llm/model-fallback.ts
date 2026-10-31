@@ -12,6 +12,8 @@
  * Gemini free tier also resets daily at UTC 00:00. We treat both the same way.
  */
 
+import { redactCredentials } from "../security/credential-redaction.js";
+
 /** Free model used when paid credits run out (same provider) */
 // The 402 "insufficient credits" swap target. Paid-but-cheap since
 // 2026-08-10 (founder decision) for the same reasons as the chain — and note
@@ -166,6 +168,12 @@ const PROVIDER_MESSAGE_LOG_CAP = 200;
  * WHETHER it was an RPM trip, a per-key spend cap, or an account limit — never
  * reached anyone. Keep the provider's wording verbatim, minus anything shaped
  * like a credential, capped so a giant HTML error page can't flood the log.
+ *
+ * The credential patterns are shared with the playground route and the Sentry
+ * boundary (security/credential-redaction.ts). They used to live here alone,
+ * and the local copy missed both of Google's key shapes and OpenAI's masked
+ * echo form — this text goes to console.warn AND captureError
+ * (judge/poc-judge.ts), so a miss here is a miss in error reporting.
  */
 export function redactProviderMessage(error: unknown): string | null {
   const raw =
@@ -176,10 +184,7 @@ export function redactProviderMessage(error: unknown): string | null {
         : typeof error === "string"
           ? error
           : "";
-  const cleaned = raw
-    .trim()
-    .replace(/sk-[A-Za-z0-9_-]{8,}/g, "sk-***")
-    .replace(/(bearer\s+)[A-Za-z0-9._-]{8,}/gi, "$1***");
+  const cleaned = redactCredentials(raw.trim());
   if (!cleaned) return null;
   return cleaned.length > PROVIDER_MESSAGE_LOG_CAP
     ? `${cleaned.slice(0, PROVIDER_MESSAGE_LOG_CAP)}…`
