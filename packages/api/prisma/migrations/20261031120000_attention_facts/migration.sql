@@ -1,6 +1,7 @@
 -- Attention Engine v3 facts (2026-10-31, docs/design/attention-engine-v3.md §3,
--- phase P2). One row per judged item: the facts v1 the extractor produced, the
--- relationship snapshot it saw, the evidence-check result, the model/provider
+-- phase P2). One row per judged item: the facts v1 the extractor produced (or,
+-- with no usable model answer, factsSource "none" and only the certain
+-- pre-facts), the header signals, the relationship snapshot it saw, the evidence-check result, the model/provider
 -- that served, and the v2 lane shown at the time (frozen here because
 -- DecisionLabel.shownTier is rewritten on re-judge). JUDGE_V3_SHADOW (OFF by
 -- default) is the only writer, and nothing on the lane path reads it: users see
@@ -37,6 +38,7 @@ CREATE TABLE "AttentionFacts" (
     "extractedAt" TIMESTAMP(3) NOT NULL,
     "facts" JSONB NOT NULL,
     "certainFields" TEXT[],
+    "signals" JSONB,
     "relationship" JSONB,
     "evidenceCheck" JSONB NOT NULL,
     "issues" TEXT[],

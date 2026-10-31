@@ -40,8 +40,10 @@ export function toAttentionFactsData(input: StoreFactsInput) {
     model: x.model,
     provider: x.provider,
     extractedAt: input.extractedAt,
-    facts: asJson(x.facts),
+    // "none" rows keep only the certain pre-facts (policy re-derives the rest).
+    facts: asJson(x.facts ?? x.preFacts),
     certainFields: [...x.certain],
+    signals: asJson(x.signals),
     relationship: input.relationship ? asJson(input.relationship) : Prisma.DbNull,
     evidenceCheck: asJson(x.evidenceCheck),
     issues: x.issues.slice(0, MAX_STORED_ISSUES).map((s) => s.slice(0, MAX_ISSUE_CHARS)),

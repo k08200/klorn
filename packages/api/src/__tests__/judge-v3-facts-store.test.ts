@@ -17,6 +17,25 @@ const extraction = (over: Partial<FactsExtraction> = {}): FactsExtraction => ({
     ambiguous: false,
   },
   source: "llm",
+  preFacts: { addressedTo: "me_direct" },
+  signals: {
+    automatedSender: false,
+    noReplySender: false,
+    transactionalSender: false,
+    clearMarketing: false,
+    listMail: false,
+    autoSubmitted: false,
+    spam: false,
+    gmailCategory: "CATEGORY_PERSONAL",
+    icsInvite: false,
+    inviteSubject: false,
+    schedulingIntent: false,
+    toCount: 1,
+    ccCount: 0,
+    userInTo: true,
+    userInCc: false,
+    otherRecipients: 0,
+  },
   model: "claude-haiku-5-5",
   provider: "anthropic",
   servedByUserKey: false,
@@ -68,6 +87,21 @@ describe("toAttentionFactsData", () => {
     });
     expect(d.facts).toEqual(extraction().facts);
     expect(d.relationship).toEqual(rel);
+  });
+
+  it("stores a no-LLM row as factsSource none with only the certain pre-facts", () => {
+    const d = toAttentionFactsData({
+      userId: "u1",
+      source: "EMAIL",
+      sourceId: "e1",
+      extraction: extraction({ facts: null, source: "none", model: null, provider: null }),
+      relationship: null,
+      v2Tier: "QUEUE",
+      extractedAt: at,
+    });
+    expect(d.factsSource).toBe("none");
+    expect(d.facts).toEqual({ addressedTo: "me_direct" });
+    expect(d.signals).toMatchObject({ userInTo: true, spam: false });
   });
 
   it("bounds the issue list so provider error text cannot bloat the row", () => {

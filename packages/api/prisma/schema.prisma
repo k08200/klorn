@@ -1851,17 +1851,23 @@ model AttentionFacts {
 
   // judge/v3/facts-schema.ts FACTS_VERSION; facts is FactsV1 at that version.
   factsVersion    Int
-  // "llm" | "keyword-fallback"
+  // "llm" | "none" (no usable model answer)
   factsSource     String
   // Model and provider that actually served (createCompletion onServed); null
-  // for keyword facts.
+  // for "none".
   model           String?
   provider        String?
   extractedAt     DateTime
-  // FactsV1 after evidence check, date window and the deterministic merge.
+  // "llm": FactsV1 after evidence check, date window and the deterministic
+  // merge. "none": only the certain pre-facts (Partial<FactsV1>), so
+  // parseFactsV1 rejects it by design and policy uses its keyword fallback.
   facts           Json
   // Fact fields fixed by deterministic pre-facts.
   certainFields   String[]
+  // judge/v3/pre-facts.ts PreFactSignals: header-derived booleans and counts
+  // (list mail, automated sender, spam, Gmail category, calendar file,
+  // recipients). No mail text.
+  signals         Json?
   // judge/v3/relationship.ts RelationshipSnapshot at extraction time.
   relationship    Json?
   // { checked, dropped: [{ path, evidence }] }
