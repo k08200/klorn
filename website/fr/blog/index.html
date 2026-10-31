@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Blog — Klorn</title>
+<meta name="description" content="Notes d’ingénierie sur la construction de Klorn : comparaisons de modèles mesurées, le plancher de décision déterministe, et ce qui a cassé en chemin. Chaque chiffre se reproduit depuis le dépôt.">
+<meta property="og:title" content="Blog — Klorn">
+<meta property="og:description" content="Notes d’ingénierie sur la construction de Klorn : comparaisons de modèles mesurées, le plancher de décision déterministe, et ce qui a cassé en chemin. Chaque chiffre se reproduit depuis le dépôt.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://klorn.ai/fr/blog/">
+<meta property="og:locale" content="fr_FR">
+<meta property="og:image" content="https://klorn.ai/brand/og-image.png?v=k2">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Blog — Klorn">
+<meta name="twitter:description" content="Notes d’ingénierie sur la construction de Klorn : comparaisons de modèles mesurées, le plancher de décision déterministe, et ce qui a cassé en chemin. Chaque chiffre se reproduit depuis le dépôt.">
+<meta name="twitter:image" content="https://klorn.ai/brand/og-image.png?v=k2">
+<link rel="canonical" href="https://klorn.ai/fr/blog/">
+<link rel="alternate" hreflang="en" href="https://klorn.ai/blog/">
+<link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/blog/">
+<link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/blog/">
+<link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/blog/">
+<link rel="alternate" hreflang="es" href="https://klorn.ai/es/blog/">
+<link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/blog/">
+<link rel="alternate" hreflang="de" href="https://klorn.ai/de/blog/">
+<link rel="alternate" hreflang="x-default" href="https://klorn.ai/blog/">
+<link rel="preload" as="font" type="font/woff2" href="/fonts/geist-var.woff2" crossorigin>
+<link rel="stylesheet" href="/landing.css">
+<link rel="stylesheet" href="/subpage.css">
+<link rel="icon" href="/brand/favicon.svg?v=matte2" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png?v=matte2">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Blog",
+  "name": "Klorn — notes d’ingénierie",
+  "url": "https://klorn.ai/blog/",
+  "publisher": {
+    "@type": "Organization",
+    "name": "Klorn",
+    "url": "https://klorn.ai"
+  },
+  "blogPost": [
+    {
+      "@type": "BlogPosting",
+      "headline": "L’examen OAuth de Klorn par Google est terminé. Voici exactement ce qu’il a couvert.",
+      "datePublished": "2026-10-14",
+      "url": "https://klorn.ai/blog/google-verification-casa/"
+    },
+    {
+      "@type": "BlogPosting",
+      "headline": "Notion Mail, c’est fini. La raison invoquée est la partie intéressante.",
+      "datePublished": "2026-09-24",
+      "url": "https://klorn.ai/blog/notion-mail-shutting-down/"
+    },
+    {
+      "@type": "BlogPosting",
+      "headline": "Quel LLM pour classer vos e-mails ? J’en ai testé dix, trois fois chacun.",
+      "datePublished": "2026-08-26",
+      "url": "https://klorn.ai/blog/which-llm-is-best-for-email-classification/"
+    },
+    {
+      "@type": "BlogPosting",
+      "headline": "Trop de notifications d’e-mail ? Traitez la source, pas le volume",
+      "datePublished": "2026-08-26",
+      "url": "https://klorn.ai/blog/too-many-email-notifications/"
+    },
+    {
+      "@type": "BlogPosting",
+      "headline": "L’injection de prompt commence dans votre boîte de réception. La défense ne peut pas être un prompt.",
+      "datePublished": "2026-08-26",
+      "url": "https://klorn.ai/blog/prompt-injection-and-your-inbox/"
+    },
+    {
+      "@type": "BlogPosting",
+      "headline": "Des e-mails importants finissent sans cesse dans Promotions — comment l’éviter",
+      "datePublished": "2026-08-26",
+      "url": "https://klorn.ai/blog/gmail-important-emails-going-to-promotions/"
+    },
+    {
+      "@type": "BlogPosting",
+      "headline": "Comment n’être notifié que pour les e-mails importants dans Gmail",
+      "datePublished": "2026-08-26",
+      "url": "https://klorn.ai/blog/how-to-get-notified-only-for-urgent-emails/"
+    },
+    {
+      "@type": "BlogPosting",
+      "headline": "Filtres Gmail ou tri par IA : quand les règles l’emportent, et quand elles ne le peuvent pas",
+      "datePublished": "2026-08-26",
+      "url": "https://klorn.ai/blog/gmail-filters-vs-ai-triage/"
+    },
+    {
+      "@type": "BlogPosting",
+      "headline": "La boîte de réception prioritaire de Gmail ne fonctionne pas ? Voici ce qui l’entraîne vraiment",
+      "datePublished": "2026-08-26",
+      "url": "https://klorn.ai/blog/gmail-priority-inbox-not-working/"
+    },
+    {
+      "@type": "BlogPosting",
+      "headline": "Trier ses e-mails avec un LLM local : la configuration Ollama, et ce à quoi vous renoncez",
+      "datePublished": "2026-08-26",
+      "url": "https://klorn.ai/blog/local-llm-email-triage-ollama/"
+    },
+    {
+      "@type": "BlogPosting",
+      "headline": "Archiver automatiquement les newsletters dans Gmail (sans rien perdre)",
+      "datePublished": "2026-08-26",
+      "url": "https://klorn.ai/blog/auto-archive-newsletters-gmail/"
+    },
+    {
+      "@type": "BlogPosting",
+      "headline": "Un plafond de coût LLM doit échouer en position fermée. Le mien l’a fait — jusqu’à l’indisponibilité.",
+      "datePublished": "2026-08-26",
+      "url": "https://klorn.ai/blog/llm-cost-caps-that-fail-closed/"
+    }
+  ]
+}
+</script>
+<script src="/site-nav.js" defer></script>
+</head>
+<body class="sub">
+<a class="skip" href="#main">Aller au contenu</a>
+
+<nav class="nav" aria-label="Principale"><div class="nav-pill">
+  <a class="nav-brand" href="/fr/">Klorn</a>
+  <button type="button" class="nav-menu-btn" data-menu-toggle aria-expanded="false" aria-controls="nav-menu" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <span class="nav-links" id="nav-menu" role="group" aria-label="Sections" data-site-nav><a href="/fr/#accounts">Comptes</a><a href="/fr/#lanes">Files</a><a href="/fr/pricing/">Tarifs</a><a href="/fr/security/">Sécurité</a><a href="/fr/blog/" aria-current="page">Blog</a></span>
+  <span class="nav-lang">
+    <button type="button" class="nav-lang-btn" data-menu-toggle
+            aria-haspopup="true" aria-expanded="false" aria-controls="lang-menu">Français <i aria-hidden="true">▾</i></button>
+    <span class="nav-lang-menu" id="lang-menu" role="menu">
+      <a href="/blog/" role="menuitem" lang="en">English</a>
+      <a href="/ko/blog/" role="menuitem" lang="ko">한국어</a>
+      <a href="/ja/blog/" role="menuitem" lang="ja">日本語</a>
+      <a href="/zh/blog/" role="menuitem" lang="zh">中文</a>
+      <a href="/es/blog/" role="menuitem" lang="es">Español</a>
+      <a href="/fr/blog/" role="menuitem" lang="fr" aria-current="true">Français</a>
+      <a href="/de/blog/" role="menuitem" lang="de">Deutsch</a>
+    </span>
+  </span>
+  <a class="nav-login" href="https://app.klorn.ai/login">Connexion</a>
+  <a class="nav-cta dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
+     data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.2.0/Klorn-windows-setup.exe" data-win-label="Télécharger">Télécharger</a>
+</div></nav>
+
+<main id="main">
+<header class="sub-hero">
+  <div class="wrap">
+    <h1>Notes de <span class="ser">l’atelier</span>.</h1>
+    <p class="lead">Notes d’ingénierie sur la construction, en public, d’un pare-feu pour e-mails ; les articles sont pour l’instant en anglais. Règle de la maison : un chiffre n’apparaît ici que si vous pouvez le reproduire depuis le dépôt — et quand il cesse de se reproduire, il est retiré et nous le disons.</p>
+  </div>
+</header>
+<div class="wrap">
+<div class="article article-index">
+
+  <ul class="postlist">
+    <li>
+      <a class="pt" href="/blog/google-verification-casa/">L’examen OAuth de Klorn par Google est terminé. Voici exactement ce qu’il a couvert.</a>
+      <span class="meta">2026-10-14 · sécurité</span>
+      <p>Évalué de façon indépendante selon CASA Tier 2 par TAC Security ; résultat : In Compliance (conforme). Les cinq scopes Google, à quoi sert chacun, et ce que l’examen ne signifie pas.</p>
+    </li>
+    <li>
+      <a class="pt" href="/blog/notion-mail-shutting-down/">Notion Mail, c’est fini. La raison invoquée est la partie intéressante.</a>
+      <span class="meta">2026-09-24 · notes de migration</span>
+      <p>Le service a fermé parce que la plupart des utilisateurs n’ouvraient jamais la boîte de réception — c’étaient des agents qui le faisaient. Ce qui a survécu, ce qui n’a pas survécu, et un regard honnête sur où aller ensuite.</p>
+    </li>
+    <li>
+      <a class="pt" href="/blog/prompt-injection-and-your-inbox/">L’injection de prompt commence dans votre boîte de réception. La défense ne peut pas être un prompt.</a>
+      <span class="meta">2026-08-26 · sécurité</span>
+      <p>Un e-mail est une entrée que n’importe quel attaquant peut écrire. Quatre couches de défense, et la frontière honnête entre une politique de sécurité et une propriété de sécurité.</p>
+    </li>
+    <li>
+      <a class="pt" href="/blog/local-llm-email-triage-ollama/">Un tri où vos e-mails ne quittent jamais la machine</a>
+      <span class="meta">2026-08-26 · guide</span>
+      <p>Aucun texte de message ne quitte votre machine : les deux variables d’environnement, le point de départ qwen3:8b, et comment mesurer votre modèle au lieu de lui faire confiance.</p>
+    </li>
+    <li>
+      <a class="pt" href="/blog/llm-cost-caps-that-fail-closed/">Un plafond de coût LLM doit échouer en position fermée. Le mien l’a fait — jusqu’à l’indisponibilité.</a>
+      <span class="meta">2026-08-26 · post-mortem</span>
+      <p>La surfacturation ne fait pas perdre d’argent — elle fait perdre la disponibilité. L’incident, et les quatre règles que le plafond suit désormais.</p>
+    </li>
+    <li>
+      <a class="pt" href="/blog/gmail-filters-vs-ai-triage/">Filtres Gmail ou tri par IA : la réponse honnête, c’est un partage</a>
+      <span class="meta">2026-08-26 · essai</span>
+      <p>Les règles sont auditables mais vieillissent ; les modèles généralisent mais ne savent pas s’expliquer. La comparaison honnête, et le partage qui garde le meilleur des deux.</p>
+    </li>
+    <li>
+      <a class="pt" href="/blog/auto-archive-newsletters-gmail/">Des newsletters lues à votre rythme, pas au leur</a>
+      <span class="meta">2026-08-26 · guide</span>
+      <p>Des filtres qui contournent la boîte de réception, sans risque : l’astuce du libellé, le piège des mots-clés qui avale les reçus, et le filet de sécurité de la revue hebdomadaire.</p>
+    </li>
+    <li>
+      <a class="pt" href="/blog/gmail-priority-inbox-not-working/">La boîte de réception prioritaire n’est pas cassée. Elle n’est pas entraînée.</a>
+      <span class="meta">2026-08-26 · guide</span>
+      <p>Les marqueurs d’importance, l’option de filtre qui les écrase sans prévenir, et la boucle de réentraînement que la plupart des gens n’utilisent jamais.</p>
+    </li>
+    <li>
+      <a class="pt" href="/blog/too-many-email-notifications/">Trop de notifications d’e-mail, c’est un problème de chaîne de traitement</a>
+      <span class="meta">2026-08-26 · guide</span>
+      <p>L’ordre compte : supprimer d’abord les abonnements, puis regrouper, puis filtrer — et pourquoi couper le son de l’app ne fait que déplacer l’anxiété.</p>
+    </li>
+    <li>
+      <a class="pt" href="/blog/gmail-important-emails-going-to-promotions/">Des e-mails importants atterrissent sans cesse dans Promotions</a>
+      <span class="meta">2026-08-26 · guide</span>
+      <p>Pourquoi Gmail enterre de vrais e-mails dans Promotions, les quatre solutions qui marchent vraiment, et pourquoi le modèle oublie vos corrections.</p>
+    </li>
+    <li>
+      <a class="pt" href="/blog/how-to-get-notified-only-for-urgent-emails/">N’être notifié que pour les e-mails qui comptent</a>
+      <span class="meta">2026-08-26 · guide</span>
+      <p>Quatre méthodes qui fonctionnent pour que chaque e-mail ne fasse plus vibrer votre téléphone — le réglage « priorité élevée uniquement » de Gmail, les notifications par libellé, les alertes de bureau réservées aux e-mails importants — et la lacune structurelle que partagent les quatre.</p>
+    </li>
+    <li>
+      <a class="pt" href="/blog/which-llm-is-best-for-email-classification/">Quel LLM pour classer vos e-mails ? J’en ai testé dix, trois fois chacun.</a>
+      <span class="meta">2026-08-26 · remesuré le 2026-09-04 · benchmark</span>
+      <p>Dix modèles actuels, trois exécutions chacun. Le milieu du tableau est une égalité, désormais présentée comme telle ; gpt-5.4 obtient 56/56 à chaque exécution, le modèle à 0,20 $ atteint le groupe de tête, le modèle à 5,00 $ ne franchit jamais le seuil, et le plancher de sécurité a tenu sur les 23 exécutions.</p>
+    </li>
+  </ul>
+
+  <h2>Écrits plus anciens (sur dev.to)</h2>
+  <p>Des essais plus longs, antérieurs à cette page :</p>
+  <ul>
+    <li><a href="https://dev.to/k08200/every-ai-email-tool-has-the-same-bug-it-is-not-a-bug-in-the-model-5f14" rel="noreferrer noopener">Tous les outils d’e-mail à IA ont le même bug. Ce n’est pas un bug du modèle.</a></li>
+    <li><a href="https://dev.to/k08200/i-dont-trust-the-llm-to-classify-my-email-so-i-dont-let-it-55d9" rel="noreferrer noopener">Je ne fais pas confiance au LLM pour classer mes e-mails. Alors je ne le laisse pas faire.</a></li>
+    <li><a href="https://dev.to/k08200/confidence-is-enough-to-decide-its-not-enough-to-do-8ck" rel="noreferrer noopener">La confiance suffit pour décider. Pas pour agir.</a></li>
+  </ul>
+
+  <div class="actions actions-left"><a class="btn btn-1" href="https://app.klorn.ai/login?mode=register">Essayer Klorn gratuitement</a></div>
+
+  <p class="checked">Klorn est sous <a href="https://github.com/k08200/klorn" rel="noreferrer noopener">AGPL-3.0</a> — chaque affirmation de
+      cette page peut être vérifiée dans le code source.</p>
+</div>
+</div>
+</main>
+<footer class="foot">
+  <div class="wrap foot-grid">
+    <div>
+      <a class="brand" href="/fr/">Klorn</a>
+      <p class="foot-note">Vos e-mails et vos agendas, triés au même endroit. Open source.</p>
+      <div class="socials">
+        <a href="https://github.com/k08200/klorn" rel="noreferrer noopener" aria-label="GitHub"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a>
+        <a href="https://x.com/klornai" rel="noreferrer noopener" aria-label="X"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+        <a href="https://join.slack.com/t/klorn/shared_invite/zt-3zkj8lqxg-L4LK8dNPkzgupHEdmXgbIg" rel="noreferrer noopener" aria-label="Slack"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52zm1.271 0a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52zm0 1.271a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522zm-1.268 0a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522zm0-1.268a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523z"/></svg></a>
+      </div>
+    </div>
+    <nav aria-label="Produit"><h4>Produit</h4>
+      <a href="/fr/download/">Tous les téléchargements</a>
+      <a href="/fr/pricing/">Tarifs</a>
+      <a href="https://app.klorn.ai/login">Connexion</a>
+      <a href="/fr/status/">État du service</a>
+      <a href="/fr/blog/" aria-current="page">Blog</a></nav>
+    <nav aria-label="Open source"><h4>Open source</h4>
+      <a href="https://github.com/k08200/klorn" rel="noreferrer noopener">Dépôt GitHub</a>
+      <a href="https://github.com/k08200/klorn/releases/latest" rel="noreferrer noopener">Versions</a>
+      <a href="https://github.com/k08200/klorn/tree/main/packages/api/eval" rel="noreferrer noopener">Jeu d’évaluation</a>
+      <a href="/fr/methodology/">Méthodologie</a>
+      <a href="https://github.com/k08200/klorn/blob/main/LICENSE" rel="noreferrer noopener">Licence AGPLv3</a>
+      <a href="/fr/open-source/">Pourquoi l’AGPL, sans ajout</a>
+      <a href="/fr/self-host/">Auto-hébergement</a></nav>
+    <nav aria-label="Comparer"><h4>Comparer</h4>
+      <a href="/fr/vs/fyxer/">vs Fyxer</a>
+      <a href="/fr/vs/superhuman/">vs Superhuman</a>
+      <a href="/fr/vs/sanebox/">vs SaneBox</a>
+      <a href="/fr/vs/inbox-zero/">vs Inbox Zero</a></nav>
+    <nav aria-label="Mentions légales"><h4>Mentions légales</h4>
+      <a href="https://app.klorn.ai/privacy">Confidentialité</a>
+      <a href="https://app.klorn.ai/terms">Conditions</a>
+      <a href="https://app.klorn.ai/refund">Remboursements</a>
+      <a href="/fr/security/">Sécurité</a>
+      <a href="/fr/gdpr/">GDPR</a>
+      <a href="/fr/dpa/">DPA</a>
+      <a href="mailto:k0820086@gmail.com">Contact</a></nav>
+  </div>
+  <div class="wrap foot-base">
+    <span>© 2026 Klorn · AGPLv3</span>
+  </div>
+</footer>
+<script>
+// Windows visitors get the installer: /site-nav.js swaps the href on every
+// .dl-cta, and this swaps the label to match. Same block as the landings.
+(function () {
+  var uaData = navigator.userAgentData;
+  var raw = String((uaData && uaData.platform) || navigator.platform || navigator.userAgent || '');
+  if (!/win/i.test(raw) || /mac|iphone|ipad|ipod/i.test(raw)) return;
+  document.querySelectorAll('[data-mac-dl]').forEach(function (a) {
+    var label = a.getAttribute('data-win-label');
+    if (!label) return;
+    Array.prototype.forEach.call(a.childNodes, function (n) {
+      if (n.nodeType !== 3 || !n.textContent.trim()) return;
+      var pad = n.textContent.match(/^(\s*)[\s\S]*?(\s*)$/);
+      n.textContent = pad[1] + label + pad[2];
+    });
+  });
+})();
+</script>
+<script>
+// Same block as every other page: carry the campaign through to the app so a
+// signup can be credited to the page that earned it.
+(function () {
+  try {
+    var p = new URLSearchParams(location.search);
+    var q = [];
+    ["utm_source", "utm_medium", "utm_campaign", "utm_content"].forEach(function (k) {
+      var v = p.get(k);
+      if (v) q.push(k + "=" + encodeURIComponent(v.slice(0, 60)));
+    });
+    if (document.referrer) {
+      try {
+        var h = new URL(document.referrer).hostname;
+        if (h && h !== location.hostname) q.push("ref=" + encodeURIComponent(h));
+      } catch (e) {}
+    }
+    q.push("lp=" + encodeURIComponent(location.pathname.slice(0, 60)));
+    var qs = q.join("&");
+    document.querySelectorAll('a[href^="https://app.klorn.ai/"]').forEach(function (a) {
+      a.href += (a.href.indexOf("?") === -1 ? "?" : "&") + qs;
+    });
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>

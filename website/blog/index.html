@@ -18,6 +18,14 @@
 <meta name="twitter:description" content="Engineering notes from building Klorn: measured model comparisons, the deterministic decision floor, and what broke along the way. Every number re-runs from the repo.">
 <meta name="twitter:image" content="https://klorn.ai/brand/og-image.png?v=k2">
 <link rel="canonical" href="https://klorn.ai/blog/">
+<link rel="alternate" hreflang="en" href="https://klorn.ai/blog/">
+<link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/blog/">
+<link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/blog/">
+<link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/blog/">
+<link rel="alternate" hreflang="es" href="https://klorn.ai/es/blog/">
+<link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/blog/">
+<link rel="alternate" hreflang="de" href="https://klorn.ai/de/blog/">
+<link rel="alternate" hreflang="x-default" href="https://klorn.ai/blog/">
 <link rel="preload" as="font" type="font/woff2" href="/fonts/geist-var.woff2" crossorigin>
 <link rel="stylesheet" href="/landing.css">
 <link rel="stylesheet" href="/subpage.css">
@@ -119,6 +127,19 @@
   <a class="nav-brand" href="/">Klorn</a>
   <button type="button" class="nav-menu-btn" data-menu-toggle aria-expanded="false" aria-controls="nav-menu" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
   <span class="nav-links" id="nav-menu" role="group" aria-label="Sections" data-site-nav><a href="/#accounts">Accounts</a><a href="/#lanes">Lanes</a><a href="/pricing/">Pricing</a><a href="/security/">Security</a><a href="/blog/" aria-current="page">Blog</a></span>
+  <span class="nav-lang">
+    <button type="button" class="nav-lang-btn" data-menu-toggle
+            aria-haspopup="true" aria-expanded="false" aria-controls="lang-menu">English <i aria-hidden="true">▾</i></button>
+    <span class="nav-lang-menu" id="lang-menu" role="menu">
+      <a href="/blog/" role="menuitem" lang="en" aria-current="true">English</a>
+      <a href="/ko/blog/" role="menuitem" lang="ko">한국어</a>
+      <a href="/ja/blog/" role="menuitem" lang="ja">日本語</a>
+      <a href="/zh/blog/" role="menuitem" lang="zh">中文</a>
+      <a href="/es/blog/" role="menuitem" lang="es">Español</a>
+      <a href="/fr/blog/" role="menuitem" lang="fr">Français</a>
+      <a href="/de/blog/" role="menuitem" lang="de">Deutsch</a>
+    </span>
+  </span>
   <a class="nav-login" href="https://app.klorn.ai/login">Log in</a>
   <a class="nav-cta dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
      data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.2.0/Klorn-windows-setup.exe" data-win-label="Download">Download</a>

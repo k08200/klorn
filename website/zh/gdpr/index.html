@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GDPR — Klorn</title>
+<meta name="description" content="控制者与处理者的角色、Klorn 处理哪些数据以及原因、数据存储在哪里，以及如何行使访问权、删除权和可携带权。">
+<meta property="og:title" content="GDPR — Klorn">
+<meta property="og:description" content="控制者与处理者的角色、Klorn 处理哪些数据以及原因、数据存储在哪里，以及如何行使访问权、删除权和可携带权。">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://klorn.ai/zh/gdpr/">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://klorn.ai/brand/og-image.png?v=k2">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="GDPR — Klorn">
+<meta name="twitter:description" content="控制者与处理者的角色、Klorn 处理哪些数据以及原因、数据存储在哪里，以及如何行使访问权、删除权和可携带权。">
+<meta name="twitter:image" content="https://klorn.ai/brand/og-image.png?v=k2">
+<link rel="canonical" href="https://klorn.ai/zh/gdpr/">
+<link rel="alternate" hreflang="en" href="https://klorn.ai/gdpr/">
+<link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/gdpr/">
+<link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/gdpr/">
+<link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/gdpr/">
+<link rel="alternate" hreflang="es" href="https://klorn.ai/es/gdpr/">
+<link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/gdpr/">
+<link rel="alternate" hreflang="de" href="https://klorn.ai/de/gdpr/">
+<link rel="alternate" hreflang="x-default" href="https://klorn.ai/gdpr/">
+<link rel="preload" as="font" type="font/woff2" href="/fonts/geist-var.woff2" crossorigin>
+<link rel="stylesheet" href="/landing.css">
+<link rel="stylesheet" href="/subpage.css">
+<link rel="icon" href="/brand/favicon.svg?v=matte2" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png?v=matte2">
+<script src="/site-nav.js" defer></script>
+</head>
+<body class="sub">
+<a class="skip" href="#main">跳到正文</a>
+
+<nav class="nav" aria-label="主导航"><div class="nav-pill">
+  <a class="nav-brand" href="/zh/">Klorn</a>
+  <button type="button" class="nav-menu-btn" data-menu-toggle aria-expanded="false" aria-controls="nav-menu" aria-label="菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <span class="nav-links" id="nav-menu" role="group" aria-label="页面板块" data-site-nav><a href="/zh/#accounts">账户</a><a href="/zh/#lanes">分类</a><a href="/zh/pricing/">定价</a><a href="/zh/security/">安全</a><a href="/zh/blog/">博客</a></span>
+  <span class="nav-lang">
+    <button type="button" class="nav-lang-btn" data-menu-toggle
+            aria-haspopup="true" aria-expanded="false" aria-controls="lang-menu">中文 <i aria-hidden="true">▾</i></button>
+    <span class="nav-lang-menu" id="lang-menu" role="menu">
+      <a href="/gdpr/" role="menuitem" lang="en">English</a>
+      <a href="/ko/gdpr/" role="menuitem" lang="ko">한국어</a>
+      <a href="/ja/gdpr/" role="menuitem" lang="ja">日本語</a>
+      <a href="/zh/gdpr/" role="menuitem" lang="zh" aria-current="true">中文</a>
+      <a href="/es/gdpr/" role="menuitem" lang="es">Español</a>
+      <a href="/fr/gdpr/" role="menuitem" lang="fr">Français</a>
+      <a href="/de/gdpr/" role="menuitem" lang="de">Deutsch</a>
+    </span>
+  </span>
+  <a class="nav-login" href="https://app.klorn.ai/login">登录</a>
+  <a class="nav-cta dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
+     data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.2.0/Klorn-windows-setup.exe" data-win-label="下载">下载</a>
+</div></nav>
+
+<main id="main">
+<div class="wrap">
+<div class="article">
+  <h1>GDPR</h1>
+  <p class="thesis">Klorn 处理邮箱内容，这几乎是最私人的工作数据了。本页是简短实用的版本：我们扮演什么角色、持有哪些数据，以及如何让我们落实你的权利。具有约束力的细节见<a href="https://app.klorn.ai/privacy">隐私政策</a>。</p>
+  <p>本译文仅为方便阅读而提供，以英文版本为准。 <a href="/gdpr/" lang="en" hreflang="en">阅读英文版</a></p>
+
+  <div class="scroll">
+  <table>
+    <thead><tr><th>问题</th><th>回答</th></tr></thead>
+    <tbody>
+      <tr><th>谁是控制者？</th><td class="us">对于个人账户，是 Klorn。如果是你的雇主为你部署了 Klorn，则雇主是控制者，Klorn 是处理者</td></tr>
+      <tr><th>处理哪些数据</th><td class="us">账户信息、Google OAuth 令牌、Gmail 元数据与内容、日历日程，以及由此得出的分类和摘要</td></tr>
+      <tr><th>为什么处理</th><td class="us">为了提供你所要求的服务——分拣邮件、显示理由，以及准备由你批准的操作</td></tr>
+      <tr><th>存储在哪里</th><td class="us">数据库位于<strong>首尔</strong>（Supabase，ap-northeast-2）；API 位于<strong>新加坡</strong>（Render）；网页应用运行在 Vercel 的边缘网络上；每晚的加密备份存放在 GitHub 上，14 天后过期</td></tr>
+      <tr><th>自动化决策</th><td class="us">把邮件分到各个分类是自动完成的。它<strong>不产生法律效力或类似的重大影响</strong>：它只改变一封邮件以多显眼的方式送达你，而且你可以把任何邮件移到另一个分类</td></tr>
+      <tr><th>用你的邮件训练模型</th><td class="us"><strong>不会。</strong>你的邮件不会用于训练模型。你做的纠正只用于调整你自己账户的行为</td></tr>
+      <tr><th>保留期限</th><td class="us">运营日志按固定时间表清理——视数据表不同为 30、90 或 180 天。删除账户会移除账户数据</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h2>行使你的权利</h2>
+  <p>访问、更正、删除、限制处理、可携带和反对：请用账户所用的邮箱地址发邮件至 <a href="mailto:k0820086@gmail.com">k0820086@gmail.com</a>。Klorn 是只有一名维护者的小产品，所以请求由人工处理，而不是通过自助门户——预计几天内回复，而不是几分钟。</p>
+  <p>你可以随时在<a href="https://myaccount.google.com/permissions" rel="noreferrer noopener">你的 Google 账号权限</a>页面撤销 Klorn 对你邮箱的访问，无需征得我们同意。这会立即切断之后的同步。</p>
+
+  <div class="not">
+    <p><strong>本页不是什么。</strong>这是维护者撰写的通俗摘要，不是法律意见，也不能替代<a href="https://app.klorn.ai/privacy">隐私政策</a>。两者有出入时，以隐私政策为准。如果你需要签署数据处理协议，请参阅 <a href="/zh/dpa/">DPA</a>。</p>
+  </div>
+
+  <p class="checked">对本页内容有任何疑问？请联系 <a href="mailto:k0820086@gmail.com">k0820086@gmail.com</a>。
+      Klorn 采用 <a href="https://github.com/k08200/klorn" rel="noreferrer noopener">AGPL-3.0</a>——这里的每一项主张
+      都可以对照源代码核查。</p>
+</div>
+</div>
+</main>
+<footer class="foot">
+  <div class="wrap foot-grid">
+    <div>
+      <a class="brand" href="/zh/">Klorn</a>
+      <p class="foot-note">邮件和日历，在一个地方分拣好，附上理由。开源。</p>
+      <div class="socials">
+        <a href="https://github.com/k08200/klorn" rel="noreferrer noopener" aria-label="GitHub"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a>
+        <a href="https://x.com/klornai" rel="noreferrer noopener" aria-label="X"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+        <a href="https://join.slack.com/t/klorn/shared_invite/zt-3zkj8lqxg-L4LK8dNPkzgupHEdmXgbIg" rel="noreferrer noopener" aria-label="Slack"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52zm1.271 0a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52zm0 1.271a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522zm-1.268 0a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522zm0-1.268a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523z"/></svg></a>
+      </div>
+    </div>
+    <nav aria-label="产品"><h4>产品</h4>
+      <a href="/zh/download/">全部下载</a>
+      <a href="/zh/pricing/">定价</a>
+      <a href="https://app.klorn.ai/login">登录</a>
+      <a href="/zh/status/">服务状态</a>
+      <a href="/zh/blog/">博客</a></nav>
+    <nav aria-label="开源"><h4>开源</h4>
+      <a href="https://github.com/k08200/klorn" rel="noreferrer noopener">GitHub 仓库</a>
+      <a href="https://github.com/k08200/klorn/releases/latest" rel="noreferrer noopener">版本发布</a>
+      <a href="https://github.com/k08200/klorn/tree/main/packages/api/eval" rel="noreferrer noopener">评测集</a>
+      <a href="/zh/methodology/">评测方法</a>
+      <a href="https://github.com/k08200/klorn/blob/main/LICENSE" rel="noreferrer noopener">AGPLv3 许可证</a>
+      <a href="/zh/open-source/">为什么是不加附加条款的 AGPL</a>
+      <a href="/zh/self-host/">自托管</a></nav>
+    <nav aria-label="对比"><h4>对比</h4>
+      <a href="/zh/vs/fyxer/">对比 Fyxer</a>
+      <a href="/zh/vs/superhuman/">对比 Superhuman</a>
+      <a href="/zh/vs/sanebox/">对比 SaneBox</a>
+      <a href="/zh/vs/inbox-zero/">对比 Inbox Zero</a></nav>
+    <nav aria-label="法律"><h4>法律</h4>
+      <a href="https://app.klorn.ai/privacy">隐私</a>
+      <a href="https://app.klorn.ai/terms">条款</a>
+      <a href="https://app.klorn.ai/refund">退款</a>
+      <a href="/zh/security/">安全</a>
+      <a href="/zh/gdpr/" aria-current="page">GDPR</a>
+      <a href="/zh/dpa/">DPA</a>
+      <a href="mailto:k0820086@gmail.com">联系我们</a></nav>
+  </div>
+  <div class="wrap foot-base">
+    <span>© 2026 Klorn · AGPLv3</span>
+  </div>
+</footer>
+<script>
+// Windows visitors get the installer: /site-nav.js swaps the href on every
+// .dl-cta, and this swaps the label to match. Same block as the landings.
+(function () {
+  var uaData = navigator.userAgentData;
+  var raw = String((uaData && uaData.platform) || navigator.platform || navigator.userAgent || '');
+  if (!/win/i.test(raw) || /mac|iphone|ipad|ipod/i.test(raw)) return;
+  document.querySelectorAll('[data-mac-dl]').forEach(function (a) {
+    var label = a.getAttribute('data-win-label');
+    if (!label) return;
+    Array.prototype.forEach.call(a.childNodes, function (n) {
+      if (n.nodeType !== 3 || !n.textContent.trim()) return;
+      var pad = n.textContent.match(/^(\s*)[\s\S]*?(\s*)$/);
+      n.textContent = pad[1] + label + pad[2];
+    });
+  });
+})();
+</script>
+<script>
+// Same block as every other page: carry the campaign through to the app so a
+// signup can be credited to the page that earned it.
+(function () {
+  try {
+    var p = new URLSearchParams(location.search);
+    var q = [];
+    ["utm_source", "utm_medium", "utm_campaign", "utm_content"].forEach(function (k) {
+      var v = p.get(k);
+      if (v) q.push(k + "=" + encodeURIComponent(v.slice(0, 60)));
+    });
+    if (document.referrer) {
+      try {
+        var h = new URL(document.referrer).hostname;
+        if (h && h !== location.hostname) q.push("ref=" + encodeURIComponent(h));
+      } catch (e) {}
+    }
+    q.push("lp=" + encodeURIComponent(location.pathname.slice(0, 60)));
+    var qs = q.join("&");
+    document.querySelectorAll('a[href^="https://app.klorn.ai/"]').forEach(function (a) {
+      a.href += (a.href.indexOf("?") === -1 ? "?" : "&") + qs;
+    });
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>

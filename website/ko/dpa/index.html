@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>데이터 처리와 하위 처리자 — Klorn</title>
+<meta name="description" content="DPA를 받는 방법, 그리고 호스팅 서비스에서 데이터에 닿을 수 있는 하위 처리자 전체 목록 — Google, Render, Vercel, Anthropic, OpenRouter, Paddle, Apple.">
+<meta property="og:title" content="데이터 처리와 하위 처리자 — Klorn">
+<meta property="og:description" content="DPA를 받는 방법, 그리고 호스팅 서비스에서 데이터에 닿을 수 있는 하위 처리자 전체 목록 — Google, Render, Vercel, Anthropic, OpenRouter, Paddle, Apple.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://klorn.ai/ko/dpa/">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:image" content="https://klorn.ai/brand/og-image.png?v=k2">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="데이터 처리와 하위 처리자 — Klorn">
+<meta name="twitter:description" content="DPA를 받는 방법, 그리고 호스팅 서비스에서 데이터에 닿을 수 있는 하위 처리자 전체 목록 — Google, Render, Vercel, Anthropic, OpenRouter, Paddle, Apple.">
+<meta name="twitter:image" content="https://klorn.ai/brand/og-image.png?v=k2">
+<link rel="canonical" href="https://klorn.ai/ko/dpa/">
+<link rel="alternate" hreflang="en" href="https://klorn.ai/dpa/">
+<link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/dpa/">
+<link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/dpa/">
+<link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/dpa/">
+<link rel="alternate" hreflang="es" href="https://klorn.ai/es/dpa/">
+<link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/dpa/">
+<link rel="alternate" hreflang="de" href="https://klorn.ai/de/dpa/">
+<link rel="alternate" hreflang="x-default" href="https://klorn.ai/dpa/">
+<link rel="preload" as="font" type="font/woff2" href="/fonts/geist-var.woff2" crossorigin>
+<link rel="stylesheet" href="/landing.css">
+<link rel="stylesheet" href="/subpage.css">
+<link rel="stylesheet" href="/fonts/pretendard/pretendard.css">
+<link rel="icon" href="/brand/favicon.svg?v=matte2" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png?v=matte2">
+<script src="/site-nav.js" defer></script>
+</head>
+<body class="sub">
+<a class="skip" href="#main">본문으로 건너뛰기</a>
+
+<nav class="nav" aria-label="메인"><div class="nav-pill">
+  <a class="nav-brand" href="/ko/">Klorn</a>
+  <button type="button" class="nav-menu-btn" data-menu-toggle aria-expanded="false" aria-controls="nav-menu" aria-label="메뉴"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <span class="nav-links" id="nav-menu" role="group" aria-label="섹션" data-site-nav><a href="/ko/#accounts">계정</a><a href="/ko/#lanes">레인</a><a href="/ko/pricing/">요금</a><a href="/ko/security/">보안</a><a href="/ko/blog/">블로그</a></span>
+  <span class="nav-lang">
+    <button type="button" class="nav-lang-btn" data-menu-toggle
+            aria-haspopup="true" aria-expanded="false" aria-controls="lang-menu">한국어 <i aria-hidden="true">▾</i></button>
+    <span class="nav-lang-menu" id="lang-menu" role="menu">
+      <a href="/dpa/" role="menuitem" lang="en">English</a>
+      <a href="/ko/dpa/" role="menuitem" lang="ko" aria-current="true">한국어</a>
+      <a href="/ja/dpa/" role="menuitem" lang="ja">日本語</a>
+      <a href="/zh/dpa/" role="menuitem" lang="zh">中文</a>
+      <a href="/es/dpa/" role="menuitem" lang="es">Español</a>
+      <a href="/fr/dpa/" role="menuitem" lang="fr">Français</a>
+      <a href="/de/dpa/" role="menuitem" lang="de">Deutsch</a>
+    </span>
+  </span>
+  <a class="nav-login" href="https://app.klorn.ai/login">로그인</a>
+  <a class="nav-cta dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
+     data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.2.0/Klorn-windows-setup.exe" data-win-label="다운로드">다운로드</a>
+</div></nav>
+
+<main id="main">
+<div class="wrap">
+<div class="article">
+  <h1>데이터 처리</h1>
+  <p class="thesis">다른 사람들을 위해 Klorn을 도입한다면, 당신이 컨트롤러이고 Klorn은 당신의 프로세서입니다. 데이터 처리 계약(DPA)을 제공합니다 — 그리고 데이터가 실제로 닿는 모든 곳의 목록도 제공합니다. 대부분의 하위 처리자 페이지가 묻어 두는 부분입니다.</p>
+  <p>이 번역은 편의를 위해 제공되며, 영문판이 우선합니다. <a href="/dpa/" lang="en" hreflang="en">영문판 보기</a></p>
+
+  <h2>DPA 받기</h2>
+  <p>조직 이름과 서명할 법인을 적어 <a href="mailto:k0820086@gmail.com">k0820086@gmail.com</a>으로 메일을 보내 주세요. Klorn은 혼자 유지보수하는 제품이라, 클릭 한 번으로 끝나는 절차가 아니라 사람과 실제로 주고받는 과정입니다 — 그래서 표준 양식이 있다면 귀사 문서를 기준으로 진행할 수도 있습니다.</p>
+
+  <h2>하위 처리자</h2>
+  <p>아래 모두는 호스팅 서비스를 운영하는 과정에서 Klorn에 넣은 데이터를 처리할 수 있습니다. 직접 설치하면 내가 고른 모델 제공사와 Google을 제외한 모든 행이 사라집니다.</p>
+
+  <div class="scroll">
+  <table>
+    <thead><tr><th>하위 처리자</th><th>하는 일</th><th>보는 것</th></tr></thead>
+    <tbody>
+      <tr><th>Google</th><td class="us">Gmail·캘린더 API, 로그인</td><td>데이터의 출처 — 내가 허용한 권한 범위 안의 메일함과 캘린더</td></tr>
+      <tr><th>Render</th><td class="us">API 호스팅, 싱가포르 리전</td><td>API가 처리하는 모든 것, 전송 중 및 메모리 상에서</td></tr>
+      <tr><th>Supabase</th><td class="us">관리형 Postgres, 서울(ap-northeast-2)</td><td>저장된 모든 계정, 메일, 분류 데이터</td></tr>
+      <tr><th>GitHub</th><td class="us">야간 데이터베이스 백업 저장(Actions 아티팩트, 14일 뒤 만료)</td><td>암호화된 파일만. 데이터베이스는 임시 GitHub 러너로 복사되어 그곳에서 암호화되고, 암호문만 저장됩니다. 이를 읽을 키는 GitHub에 절대 저장되지 않습니다</td></tr>
+      <tr><th>Vercel</th><td class="us">웹 앱 호스팅</td><td>전송 중인 요청과 응답</td></tr>
+      <tr><th>Google (Gemini API)</th><td class="us">모델 호출</td><td>분류나 초안 작성을 위해 보내는 메일 텍스트. 제출된 데이터로 학습하지 않는다는 API 약관이 적용됩니다</td></tr>
+      <tr><th>Anthropic (Claude API)</th><td class="us">모델 호출</td><td>같은 메일 텍스트. 제출된 데이터로 학습하지 않는다는 상업용 API 약관이 적용됩니다. 기본적으로 30일 안에 삭제되며, 사용 정책 집행으로 표시된 콘텐츠만 더 오래 보관됩니다</td></tr>
+      <tr><th>OpenRouter</th><td class="us">모델 라우팅</td><td>OpenRouter를 거쳐 쓰는 모델에 대해 위와 같습니다. 내 키를 쓰면 이 행은 내가 고른 제공사로 바뀝니다</td></tr>
+      <tr><th>Paddle</th><td class="us">결제 및 판매 대행(Merchant of Record)</td><td>결제 정보. <strong>메일 내용은 없음</strong></td></tr>
+      <tr><th>Apple</th><td class="us">푸시 알림 전송(APNs)</td><td>등록한 기기로 가는 알림 페이로드</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h2>절대 나가지 않는 것</h2>
+  <p>Klorn은 데이터를 팔지 않고, 내 메일로 모델을 학습시키지 않으며, 제3자 분석이나 추적기를 쓰지 않습니다 — 유지율 계측은 Klorn 자체 데이터베이스에 저장되는 짧은 허용 목록의 대략적인 이벤트 이름뿐이며, 메일 내용은 절대 포함되지 않습니다. 이는 여기서 주장만 하는 것이 아니라 <a href="https://github.com/k08200/klorn/blob/main/packages/api/src/analytics.ts" rel="noreferrer noopener">analytics.ts</a>에서 강제됩니다.</p>
+
+  <div class="not">
+    <p><strong>솔직하게 말하면.</strong> Klorn에는 SOC 2 보고서도, 제3자 감사도 없습니다. 조달 절차에서 이를 요구한다면 Klorn은 현재 그 기준을 통과하지 못하며, 통화를 세 번 한 뒤가 아니라 이 페이지에서 아시는 편이 낫다고 생각합니다. 대신 제공할 수 있는 것은 AGPL-3.0으로 공개된 전체 소스와, 각 주장을 강제하는 파일을 밝힌 <a href="/ko/security/">보안 페이지</a>입니다.</p>
+  </div>
+
+  <p class="checked">이 페이지 내용에 대한 질문은 <a href="mailto:k0820086@gmail.com">k0820086@gmail.com</a>으로 보내 주세요.
+      Klorn은 <a href="https://github.com/k08200/klorn" rel="noreferrer noopener">AGPL-3.0</a>입니다 — 여기 적힌 모든 주장은
+      소스로 확인할 수 있습니다.</p>
+</div>
+</div>
+</main>
+<footer class="foot">
+  <div class="wrap foot-grid">
+    <div>
+      <a class="brand" href="/ko/">Klorn</a>
+      <p class="foot-note">메일과 캘린더를 한 곳에서, 이유와 함께 정리합니다. 오픈소스.</p>
+      <div class="socials">
+        <a href="https://github.com/k08200/klorn" rel="noreferrer noopener" aria-label="GitHub"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a>
+        <a href="https://x.com/klornai" rel="noreferrer noopener" aria-label="X"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+        <a href="https://join.slack.com/t/klorn/shared_invite/zt-3zkj8lqxg-L4LK8dNPkzgupHEdmXgbIg" rel="noreferrer noopener" aria-label="Slack"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52zm1.271 0a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52zm0 1.271a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522zm-1.268 0a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522zm0-1.268a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523z"/></svg></a>
+      </div>
+    </div>
+    <nav aria-label="제품"><h4>제품</h4>
+      <a href="/ko/download/">모든 다운로드</a>
+      <a href="/ko/pricing/">요금</a>
+      <a href="https://app.klorn.ai/login">로그인</a>
+      <a href="/ko/status/">서비스 상태</a>
+      <a href="/ko/blog/">블로그</a></nav>
+    <nav aria-label="오픈소스"><h4>오픈소스</h4>
+      <a href="https://github.com/k08200/klorn" rel="noreferrer noopener">GitHub 저장소</a>
+      <a href="https://github.com/k08200/klorn/releases/latest" rel="noreferrer noopener">릴리스</a>
+      <a href="https://github.com/k08200/klorn/tree/main/packages/api/eval" rel="noreferrer noopener">평가 세트</a>
+      <a href="/ko/methodology/">측정 방법</a>
+      <a href="https://github.com/k08200/klorn/blob/main/LICENSE" rel="noreferrer noopener">AGPLv3 라이선스</a>
+      <a href="/ko/open-source/">추가 조항 없는 AGPL인 이유</a>
+      <a href="/ko/self-host/">직접 설치</a></nav>
+    <nav aria-label="비교"><h4>비교</h4>
+      <a href="/ko/vs/fyxer/">Fyxer와 비교</a>
+      <a href="/ko/vs/superhuman/">Superhuman과 비교</a>
+      <a href="/ko/vs/sanebox/">SaneBox와 비교</a>
+      <a href="/ko/vs/inbox-zero/">Inbox Zero와 비교</a></nav>
+    <nav aria-label="법적 고지"><h4>법적 고지</h4>
+      <a href="https://app.klorn.ai/privacy">개인정보처리방침</a>
+      <a href="https://app.klorn.ai/terms">이용약관</a>
+      <a href="https://app.klorn.ai/refund">환불 정책</a>
+      <a href="/ko/security/">보안</a>
+      <a href="/ko/gdpr/">GDPR</a>
+      <a href="/ko/dpa/" aria-current="page">DPA</a>
+      <a href="mailto:k0820086@gmail.com">문의</a></nav>
+  </div>
+  <div class="wrap foot-base">
+    <span>© 2026 Klorn · AGPLv3</span>
+  </div>
+</footer>
+<script>
+// Windows visitors get the installer: /site-nav.js swaps the href on every
+// .dl-cta, and this swaps the label to match. Same block as the landings.
+(function () {
+  var uaData = navigator.userAgentData;
+  var raw = String((uaData && uaData.platform) || navigator.platform || navigator.userAgent || '');
+  if (!/win/i.test(raw) || /mac|iphone|ipad|ipod/i.test(raw)) return;
+  document.querySelectorAll('[data-mac-dl]').forEach(function (a) {
+    var label = a.getAttribute('data-win-label');
+    if (!label) return;
+    Array.prototype.forEach.call(a.childNodes, function (n) {
+      if (n.nodeType !== 3 || !n.textContent.trim()) return;
+      var pad = n.textContent.match(/^(\s*)[\s\S]*?(\s*)$/);
+      n.textContent = pad[1] + label + pad[2];
+    });
+  });
+})();
+</script>
+<script>
+// Same block as every other page: carry the campaign through to the app so a
+// signup can be credited to the page that earned it.
+(function () {
+  try {
+    var p = new URLSearchParams(location.search);
+    var q = [];
+    ["utm_source", "utm_medium", "utm_campaign", "utm_content"].forEach(function (k) {
+      var v = p.get(k);
+      if (v) q.push(k + "=" + encodeURIComponent(v.slice(0, 60)));
+    });
+    if (document.referrer) {
+      try {
+        var h = new URL(document.referrer).hostname;
+        if (h && h !== location.hostname) q.push("ref=" + encodeURIComponent(h));
+      } catch (e) {}
+    }
+    q.push("lp=" + encodeURIComponent(location.pathname.slice(0, 60)));
+    var qs = q.join("&");
+    document.querySelectorAll('a[href^="https://app.klorn.ai/"]').forEach(function (a) {
+      a.href += (a.href.indexOf("?") === -1 ? "?" : "&") + qs;
+    });
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>
