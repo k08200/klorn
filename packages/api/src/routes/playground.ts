@@ -24,6 +24,7 @@ import { DEMO_DAILY_BUDGET_CENTS, PLAYGROUND_NO_KEY_DEMO_ENABLED } from "../conf
 import { judgeEmail } from "../judge/poc-judge.js";
 import { TIERS } from "../judge/tiers.js";
 import type { ProviderCredentials } from "../providers/index.js";
+import { redactCredentials } from "../security/credential-redaction.js";
 
 // Strip CR/LF/control chars from any user-supplied value before it reaches a
 // log line, so a crafted model/source field can't forge or split log entries.
@@ -66,14 +67,14 @@ const feedbackBodySchema = {
   },
 } as const;
 
-// Defense-in-depth: redact anything shaped like an OpenRouter (sk-or-…) or
-// Google (AIza…) key before it reaches a log line, in case a provider SDK
-// echoes the credential inside an error message.
+// Defense-in-depth: redact anything shaped like a provider key before it
+// reaches a log line or the visitor's screen, in case a provider SDK echoes the
+// credential inside an error message. The patterns are shared now
+// (security/credential-redaction.ts) — the local copy here could not match
+// OpenAI's `sk-proj-…` keys at all, because its [A-Za-z0-9] class stopped at
+// the hyphen after the prefix.
 function scrubKeys(text: string): string {
-  return text.replace(
-    /(?:sk-or-[A-Za-z0-9_-]{6,}|sk-[A-Za-z0-9]{16,}|AIza[A-Za-z0-9_-]{16,})/g,
-    "[REDACTED]",
-  );
+  return redactCredentials(text);
 }
 
 type PlaygroundProvider = "openrouter" | "gemini" | "openai";
