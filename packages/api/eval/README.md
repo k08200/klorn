@@ -141,6 +141,11 @@ against the five-lane ontology. Until that lands, cite 86.8% with the caveat,
 or cite the synthetic gate set instead. Do not restore 94.3% — it measures a
 judge that no longer exists.
 
+> 2026-10-31: 4 items (the Google new-sign-in alerts) now carry `labelV2: INFO`,
+> agreed by two independent frontier-model labelers. The other 49 keep their
+> 3-lane labels; the disagreements are listed for founder review in the
+> "Attention engine v3, phase P1" section below.
+
 ## JUDGE_INCLUDE_BODY measurement (2026-07-20)
 
 `pnpm eval:judge:body` (the 8-item body-dependent set, where from+subject+snippet
@@ -427,3 +432,236 @@ for — Haiku routes noticeably more mail to INFO (13 vs 4).
 Measured cost per judge call (Haiku 5.5, forced): ~1,340 input + ~153 output
 tokens ≈ $0.0002. The judge's system prompt is under the 512-token cache
 minimum, so judge calls are not cached.
+
+## Attention engine v3, phase P1: v2 score prompt vs v3 fact prompt on current models (2026-10-31)
+
+Contract: [`docs/design/attention-engine-v3.md`](../../../docs/design/attention-engine-v3.md) (#1583; founder decisions #1584). Eval only: no product behaviour changes and no production data. Two questions:
+
+- (a) Is the v2 judge calibration-coupled?
+- (b) Does a v3 fact prompt narrow the spread between models and raise accuracy?
+
+### Verdict
+
+- **(a) Yes, measured.** The `confidence ≥ 0.70` PUSH bar (`TIER_THRESHOLDS`) costs urgent recall on 3 of the 4 Claude models.
+  - `claude-sonnet-5-5` misses 3–4 of 13 urgent gate items per run. Of those misses, 2·2·3 have urgency ≥ 0.70 and fail only the confidence bar.
+  - Re-scoring the **same answers** (no new calls) at `confidence ≥ 0.50` moves Sonnet to 12/13 in every run, with 0 false PUSH on the gate set.
+  - Haiku and Fable each lose one urgent item to the bar in 1–2 of 3 runs. Opus loses none, but its lowest urgent confidence is exactly 0.70: it sits on the bar.
+  - Most of the v2 between-model PUSH spread is this bar: at `confidence ≥ 0.50` it shrinks from 17.9pt to 5.1pt on the same answers.
+- **(b) It narrows the spread to ~zero, but lane accuracy falls.** The fall is caused by the policy, not by the facts.
+  - Gate set under v3: all four models score 12/13 urgent in every run. PUSH spread is **0.0pt** (v2: 17.9pt); overall spread 1.8pt (v2: 6.0pt).
+  - Evidence validity: **358/359 = 99.7%** across all models and runs.
+  - Lane accuracy under the doc's §3(4) policy, applied literally, is lower:
+    - gate: 83.9–85.7% vs v2 90.5–96.4%;
+    - real: 50.9–57.2% vs 60.4–74.8% for a context-matched v2 control (67.3–79.2% when v2 also sees the fixtures' sender facts).
+  - On the gate set, Haiku's and Opus's v3 misses are exactly the same 8 items in every run, and the same 8 are missed by Fable and Sonnet too. On top of those, Fable adds one item in every run (eval-016, a "pay" ask read from "invoice available") and Sonnet adds one in a single run.
+  - So the facts are model-invariant, and the gap comes from the §3(4) mapping and from label consistency. Each shared miss is listed below.
+  - The lane score therefore cannot rank extractors. P2 should judge them on per-field fact labels.
+
+### Setup
+
+| axis | value |
+|---|---|
+| models | `claude-haiku-5-5`, `claude-sonnet-5-5`, `claude-opus-5-5`, `claude-fable-5-1`, native Anthropic adapter, `LLM_PROVIDER_ORDER=anthropic`, no other key set; every call's served model is checked against `--model` |
+| v2 | the production judge, unchanged: `judgeEmail(…, modelOverride)` → 4 scores → `tierFromFeaturesV2` → floors |
+| v3 | facts schema v1 prompt ([`src/eval-v3/facts-prompt.ts`](../src/eval-v3/facts-prompt.ts)) → evidence + due binding ([`evidence.ts`](../src/eval-v3/evidence.ts), same spec as the P2 extractor) → doc §3(4) policy without budget, importance or ranking ([`policy.ts`](../src/eval-v3/policy.ts)); the deadline window is measured from the mail's Date header |
+| shared front | pin → marketing fast-path → sender prior → learned rule, the same order as `judgeEmail` ([`front.ts`](../src/eval-v3/front.ts)). On the gate set (no fixtures) the A/B isolates the LLM stage. On the real set, `--context=fixture` also puts sender facts into v2's prompt (50 of 53 items), which v3 does not use, so a **v2 control with `--context=front`** (prompt context stripped, front kept) was run too |
+| sets | gate `judge-eval-set.json` (56, `labelV2`); real `real-eval-set.json` (53, 3-lane labels plus 4 new `labelV2`, see "Relabel" below); `--context=fixture`, `JUDGE_INCLUDE_BODY=true` |
+| runs | 3 per cell, one process per run (the v2 judge's in-process prompt cache would otherwise replay run 1), concurrency 2. A run with any provider failure or another served model is discarded; **none were** (60/60 clean: 48 matrix + 12 control) |
+
+Gemini and GPT were **not run**. The only configured routes are OpenRouter, whose CI key returned `402 credits_exhausted` in the Judge Eval run on 2026-10-31 07:04 UTC, and `GEMINI_API_KEY`, which is set nowhere. The OpenRouter catalog (read 2026-10-31) lists `google/gemini-4-argon` (2026-10-13), `google/gemini-3.8-flash`, `openai/gpt-6.1-terra(-pro)` (2026-10-26), `openai/gpt-6.1-sol(-pro)` and `openai/gpt-6-astra(-pro)`. The same command works with `LLM_PROVIDER_ORDER=openrouter OPENROUTER_API_KEY=… --model=google/gemini-4-argon`. That route is untested in this harness.
+
+### Results: per cell (one value per run)
+
+| set | model | prompt | overall | LLM-stage overall | PUSH recall | PUSH prec. | SILENT prec. | MEETING rec. | INFO rec. | PUSH→SILENT | evidence valid | would escalate | $/1k mails | p50 ms |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| judge-eval-set | `claude-fable-5-1` | v2 | 54·53·54 /56 | 46·45·46 /48 | 12·12·12 /13 | 12·12·12 /12 | 12·12·12 /12 | 4·4·4 /4 | 10·10·10 /10 | 0·0·0 | — | — | $20.10 | 2038 |
+| judge-eval-set | `claude-fable-5-1` | v3 | 47·47·47 /56 | 39·39·39 /48 | 12·12·12 /13 | 12·12·12 /12 | 12·12·12 /13 | 4·4·4 /4 | 9·9·9 /10 | 0·0·0 | 100.0% (73/73) | 0·0·0 | $22.32 | 3100 |
+| judge-eval-set | `claude-haiku-5-5` | v2 | 53·55·54 /56 | 45·47·46 /48 | 11·13·12 /13 | 11/11·13/13·12/12 | 11·11·11 /11 | 4·4·4 /4 | 10·10·10 /10 | 0·0·0 | — | — | $0.181 | 1069 |
+| judge-eval-set | `claude-haiku-5-5` | v3 | 48·48·48 /56 | 40·40·40 /48 | 12·12·12 /13 | 12·12·12 /12 | 12·12·12 /13 | 4·4·4 /4 | 10·10·10 /10 | 0·0·0 | 100.0% (62/62) | 0·0·0 | $0.159 | 1217 |
+| judge-eval-set | `claude-opus-5-5` | v2 | 54·54·54 /56 | 46·46·46 /48 | 12·12·12 /13 | 12·12·12 /12 | 12·12·12 /12 | 4·4·4 /4 | 10·10·10 /10 | 0·0·0 | — | — | $7.25 | 2075 |
+| judge-eval-set | `claude-opus-5-5` | v3 | 48·48·48 /56 | 40·40·40 /48 | 12·12·12 /13 | 12·12·12 /12 | 12·12·12 /13 | 4·4·4 /4 | 10·10·10 /10 | 0·0·0 | 100.0% (69/69) | 0·0·0 | $7.07 | 2546 |
+| judge-eval-set | `claude-sonnet-5-5` | v2 | 51·51·50 /56 | 43·43·42 /48 | 10·10·9 /13 | 10/10·10/10·9/9 | 12·12·12 /12 | 4·4·4 /4 | 10·10·10 /10 | 0·0·0 | — | — | $3.60 | 1884 |
+| judge-eval-set | `claude-sonnet-5-5` | v3 | 48·47·48 /56 | 40·39·40 /48 | 12·12·12 /13 | 12·12·12 /12 | 12/13·12/14·12/13 | 4·4·4 /4 | 10·10·10 /10 | 0·0·0 | 100.0% (60/60) | 1·1·1 | $3.26 | 2089 |
+| real-eval-set | `claude-fable-5-1` | v2 | 43·42·41 /53 | 30·29·28 /36 | 3·3·3 /4 | 3/3·3/3·3/4 | 21/23·21/22·21/22 | — | 0·0·0 /4 | 0·0·0 | — | — | $20.59 | 2133 |
+| real-eval-set | `claude-fable-5-1` | v2 (front ctx) | 39·40·40 /53 | 26·27·27 /36 | 3·3·3 /4 | 3·3·3 /3 | 21·21·21 /23 | — | 0·0·0 /4 | 0·0·0 | — | — | $18.76 | 2297 |
+| real-eval-set | `claude-fable-5-1` | v3 | 29·28·29 /53 | 16·15·16 /36 | 3·3·3 /4 | 3·3·3 /4 | 16·16·16 /19 | — | 0·0·0 /4 | 0·0·0 | 100.0% (23/23) | 0·1·0 | $18.62 | 2643 |
+| real-eval-set | `claude-haiku-5-5` | v2 | 36·36·35 /53 | 23·23·22 /36 | 3·3·3 /4 | 3·3·3 /3 | 17/17·17/17·16/16 | — | 0·0·0 /4 | 0·0·0 | — | — | $0.191 | 1036 |
+| real-eval-set | `claude-haiku-5-5` | v2 (front ctx) | 32·32·32 /53 | 19·19·19 /36 | 3·3·3 /4 | 3·3·3 /3 | 13·13·13 /13 | — | 0·0·0 /4 | 0·0·0 | — | — | $0.182 | 1175 |
+| real-eval-set | `claude-haiku-5-5` | v3 | 30·30·31 /53 | 17·17·18 /36 | 3·3·3 /4 | 3·3·3 /4 | 15/18·15/18·16/19 | — | 0·0·0 /4 | 0·0·0 | 100.0% (30/30) | 3·3·3 | $0.157 | 1118 |
+| real-eval-set | `claude-opus-5-5` | v2 | 38·39·38 /53 | 25·26·25 /36 | 3·3·3 /4 | 3·3·3 /4 | 21·21·21 /22 | — | 0·0·0 /4 | 0·0·0 | — | — | $7.70 | 2199 |
+| real-eval-set | `claude-opus-5-5` | v2 (front ctx) | 38·38·38 /53 | 25·25·25 /36 | 3·3·3 /4 | 3·3·3 /4 | 21·21·21 /23 | — | 0·0·0 /4 | 0·0·0 | — | — | $7.26 | 2358 |
+| real-eval-set | `claude-opus-5-5` | v3 | 28·26·27 /53 | 15·13·14 /36 | 3·3·3 /4 | 3·3·3 /4 | 15·15·15 /17 | — | 0·0·0 /4 | 0·0·0 | 100.0% (21/21) | 0·0·0 | $6.25 | 2536 |
+| real-eval-set | `claude-sonnet-5-5` | v2 | 38·39·39 /53 | 25·26·26 /36 | 3·3·3 /4 | 3·3·3 /3 | 20/21·21/22·21/22 | — | 0·0·0 /4 | 0·0·0 | — | — | $3.77 | 1910 |
+| real-eval-set | `claude-sonnet-5-5` | v2 (front ctx) | 36·37·36 /53 | 23·24·23 /36 | 3·3·3 /4 | 3·3·3 /3 | 18/20·18/19·18/20 | — | 0·0·0 /4 | 0·0·0 | — | — | $3.59 | 1991 |
+| real-eval-set | `claude-sonnet-5-5` | v3 | 30·28·29 /53 | 17·15·16 /36 | 3·3·3 /4 | 3·3·3 /4 | 18/20·17/19·17/19 | — | 0·0·0 /4 | 0·0·0 | 95.2% (20/21) | 2·1·1 | $2.99 | 2076 |
+
+Column notes:
+- `LLM-stage overall` counts only the items that reached a model: 48/56 on gate and 36/53 on real. The other items go through the deterministic front, which is identical for every cell.
+- `$/1k mails` divides each run's measured token cost by every mail in the set, including fast-path items that cost nothing, so it is the per-mail price at this traffic mix.
+- `p50 ms` is per LLM call.
+- The real-set v2 rows marked `(front ctx)` are the context-matched control.
+
+### Spread across models (mean of 3 runs; overall % / PUSH recall %)
+
+| set | prompt | `claude-fable-5-1` overall / PUSH % | `claude-haiku-5-5` overall / PUSH % | `claude-opus-5-5` overall / PUSH % | `claude-sonnet-5-5` overall / PUSH % | spread overall | spread PUSH |
+|---|---|---|---|---|---|---|---|
+| judge-eval-set | v2 | 95.8 / 92.3 | 96.4 / 92.3 | 96.4 / 92.3 | 90.5 / 74.4 | 6.0pt | 17.9pt |
+| judge-eval-set | v3 | 83.9 / 92.3 | 85.7 / 92.3 | 85.7 / 92.3 | 85.1 / 92.3 | 1.8pt | 0.0pt |
+| real-eval-set | v2 | 79.2 / 75.0 | 67.3 / 75.0 | 72.3 / 75.0 | 73.0 / 75.0 | 11.9pt | 0.0pt |
+| real-eval-set | v2 (front ctx) | 74.8 / 75.0 | 60.4 / 75.0 | 71.7 / 75.0 | 68.6 / 75.0 | 14.5pt | 0.0pt |
+| real-eval-set | v3 | 54.1 / 75.0 | 57.2 / 75.0 | 50.9 / 75.0 | 54.7 / 75.0 | 6.3pt | 0.0pt |
+
+### v2 calibration on urgent items (truth-PUSH)
+
+Columns:
+- *misses*: conf-gated (urgency ≥ 0.70, confidence < 0.70) · urgency-low · other, per run.
+- *PUSH recall at …*: the shipped rule re-run on the same features with the bar at 0.70 (shipped), 0.50, and ignored.
+
+The re-run reproduces `judgeEmail`'s tier on every LLM-scored item (0 mismatches in all 24 v2 runs).
+
+| set | model | prompt | urgent via LLM | confidence on urgent (min / median / max) | below 0.70 | misses: conf-gated · urgency-low · other | PUSH recall at conf ≥0.70 → ≥0.50 → ignored | false PUSH at same | re-run mismatches |
+|---|---|---|---|---|---|---|---|---|---|
+| judge-eval-set | `claude-fable-5-1` | v2 | 13/13·13/13·13/13 | 0.60 / 0.85 / 0.90 | 0·1·1 | 0·1·0 / 1·0·0 / 1·0·0 | 12·12·12 /13 → 12·13·13 /13 → 12·13·13 /13 | 0·0·0 → 0·0·0 → 0·0·0 | 0 |
+| judge-eval-set | `claude-haiku-5-5` | v2 | 13/13·13/13·13/13 | 0.60 / 0.80 / 0.90 | 2·0·0 | 1·1·0 / 0·0·0 / 0·1·0 | 11·13·12 /13 → 12·13·12 /13 → 12·13·12 /13 | 0·0·0 → 0·0·0 → 0·0·0 | 0 |
+| judge-eval-set | `claude-opus-5-5` | v2 | 13/13·13/13·13/13 | 0.70 / 0.85 / 0.85 | 0·0·0 | 0·1·0 / 0·1·0 / 0·1·0 | 12·12·12 /13 → 12·12·12 /13 → 12·12·12 /13 | 0·0·0 → 0·0·0 → 0·0·0 | 0 |
+| judge-eval-set | `claude-sonnet-5-5` | v2 | 13/13·13/13·13/13 | 0.60 / 0.75 / 0.85 | 3·3·4 | 2·1·0 / 2·1·0 / 3·1·0 | 10·10·9 /13 → 12·12·12 /13 → 12·12·12 /13 | 0·0·0 → 0·0·0 → 0·0·0 | 0 |
+| real-eval-set | `claude-fable-5-1` | v2 | 1/4·1/4·1/4 | 0.70 / 0.75 / 0.75 | 0·0·0 | 0·1·0 / 0·1·0 / 0·1·0 | 3·3·3 /4 → 3·3·3 /4 → 3·3·3 /4 | 0·0·1 → 0·0·1 → 0·0·1 | 0 |
+| real-eval-set | `claude-fable-5-1` | v2 (front ctx) | 1/4·1/4·1/4 | 0.60 / 0.60 / 0.70 | 1·0·1 | 0·1·0 / 0·1·0 / 0·1·0 | 3·3·3 /4 → 3·3·3 /4 → 3·3·3 /4 | 0·0·0 → 0·0·0 → 0·0·0 | 0 |
+| real-eval-set | `claude-haiku-5-5` | v2 | 1/4·1/4·1/4 | 0.70 / 0.70 / 0.70 | 0·0·0 | 0·1·0 / 0·1·0 / 0·1·0 | 3·3·3 /4 → 3·3·3 /4 → 3·3·3 /4 | 0·0·0 → 0·0·0 → 0·0·0 | 0 |
+| real-eval-set | `claude-haiku-5-5` | v2 (front ctx) | 1/4·1/4·1/4 | 0.60 / 0.60 / 0.60 | 1·1·1 | 0·1·0 / 0·1·0 / 0·1·0 | 3·3·3 /4 → 3·3·3 /4 → 3·3·3 /4 | 0·0·0 → 0·0·0 → 0·0·0 | 0 |
+| real-eval-set | `claude-opus-5-5` | v2 | 1/4·1/4·1/4 | 0.75 / 0.75 / 0.75 | 0·0·0 | 0·1·0 / 0·1·0 / 0·1·0 | 3·3·3 /4 → 3·3·3 /4 → 3·3·3 /4 | 1·1·1 → 1·1·1 → 1·1·1 | 0 |
+| real-eval-set | `claude-opus-5-5` | v2 (front ctx) | 1/4·1/4·1/4 | 0.65 / 0.70 / 0.70 | 1·0·0 | 0·1·0 / 0·1·0 / 0·1·0 | 3·3·3 /4 → 3·3·3 /4 → 3·3·3 /4 | 1·1·1 → 1·1·1 → 1·1·1 | 0 |
+| real-eval-set | `claude-sonnet-5-5` | v2 | 1/4·1/4·1/4 | 0.60 / 0.60 / 0.60 | 1·1·1 | 0·1·0 / 0·1·0 / 0·1·0 | 3·3·3 /4 → 3·3·3 /4 → 3·3·3 /4 | 0·0·0 → 1·0·0 → 1·0·0 | 0 |
+| real-eval-set | `claude-sonnet-5-5` | v2 (front ctx) | 1/4·1/4·1/4 | 0.50 / 0.55 / 0.60 | 1·1·1 | 0·1·0 / 0·1·0 / 0·1·0 | 3·3·3 /4 → 3·3·3 /4 → 3·3·3 /4 | 0·0·0 → 0·0·0 → 0·0·0 | 0 |
+
+A miss counts as conf-gated only if ignoring confidence would turn it into PUSH. A scheduling-rule MEETING or a floor demotion counts as "other".
+
+On the real set only 1 of 4 urgent items reaches the LLM. The other three are the founder's `OVERRIDE:PUSH` senders, which short-circuit, so the real set cannot show the bar effect. Moving the bar there adds 0–1 false PUSH. The fixtures' sender facts also lift v2's confidence: on that urgent item, Sonnet scores 0.60 with them and 0.50–0.60 without.
+
+### Where v3 loses: every miss shared by all models in all runs
+
+Gate set (8 items; v3 lane ≠ label for all 4 models × 3 runs):
+
+| item | label | v3 lane [rule] | cause |
+|---|---|---|---|
+| eval-018 Render "Payment processed for June" | QUEUE | INFO [info] | **label consistency**: eval-016/027/054 (invoice available, AWS bill, invoice paid) are labelled INFO |
+| eval-031 Hana Bank "Statement ready" | QUEUE | INFO [info] | label consistency, same as above |
+| eval-047 Notion "Receipt: subscription renewed" ("No action needed") | QUEUE | INFO [info] | label is a v1 AUTO→QUEUE fold; the ontology says receipts are INFO |
+| eval-048 "Accepted: Roadmap sync" | QUEUE | INFO / MEETING | v1 AUTO→QUEUE fold |
+| eval-030 OpenAI DevRel "API changelog" | QUEUE | SILENT [silent] | **policy**: §3(4) SILENTs newsletters; the locked ontology keeps SILENT for clear marketing only |
+| eval-017 Linear "Issue assigned to you" | QUEUE | INFO [info] | **prompt definition**: no model treats a system-relayed assignment as an ask |
+| eval-032 Notion "Jamie left 3 comments" | QUEUE | INFO [info] | prompt definition, as above |
+| eval-036 Growth Fund "DD docs due Friday" | PUSH | QUEUE [queue:ask] | **policy**: the due date was extracted correctly (Fri 23:59), but it is 4 days out and PUSH needs due ≤ 24h |
+
+On the real set, v3's shared misses repeat these shapes:
+- automated notices without an ask go to INFO where the 3-lane label says QUEUE: 5 Vercel "Failed deployment" alerts, the Namecheap order receipt, "Thanks for applying", the EVE config test;
+- the doc's INFO-before-SILENT order sends 2 LinkedIn notifications to INFO;
+- the newsletter rule SILENTs the Reddit digest. v3 SILENT precision on real is 83.3–90.0%, **below the 90% floor in 11 of 12 runs**, while v2 holds 91.3–100%;
+- one confirmation-code mail whose body says "Sign-in from unauthorized device detected — please verify" becomes `push:risk`. All 4 models extracted `security_alert` from that sentence; the founder's QUEUE label rests on context the mail does not carry.
+
+Three non-v3 effects on the real set:
+- **The context confound is real but small.** Stripping sender facts from v2's prompt costs v2 0.6–6.9pt (Haiku 67.3→60.4, Sonnet 73.0→68.6, Fable 79.2→74.8, Opus 72.3→71.7). Against that control, v3 still trails by 3–21pt.
+- The 4 relabelled Google sign-in alerts are decided by a **sender-history prior** (10 past QUEUE classifications, i.e. v2's own output) before any model runs, so every cell misses them under the new label (+4/53 to every cell under the stale labels). Under v3 those priors would pin v2's past decisions onto the new policy.
+- 98bf199e ("ㅎㅇ" from the founder's own alias, labelled PUSH) is missed by every model under both prompts; nothing in the mail can recover it.
+
+Escalation triggers (doc §4) seen under v3: 0–1 per gate run and 0–3 per real run, from `ambiguous` (Haiku 3 per real run, Sonnet 1) and one dropped evidence quote (Sonnet, real). Unbound dues: 0 after replay under the final token list. Before "end of day" was added, one real PUSH (eval-039) was lost to the binding.
+
+### Cost and latency (measured tokens, list prices in `model-fallback.ts`)
+
+| model | v2 $/1k mails | v3 $/1k mails | v2 p50 | v3 p50 |
+|---|---|---|---|---|
+| `claude-haiku-5-5` | 0.18–0.19 | 0.16 | 1.0–1.1 s | 1.1–1.2 s |
+| `claude-sonnet-5-5` | 3.6–3.8 | 3.0–3.3 | 1.9 s | 2.1 s |
+| `claude-opus-5-5` | 7.3–7.7 | 6.3–7.1 | 2.1–2.2 s | 2.5 s |
+| `claude-fable-5-1` | 20.1–20.6 | 18.6–22.3 | 2.0–2.1 s | 2.6–3.1 s |
+
+v3 sends a ~2.9k-token prompt against v2's ~1.3k. The v3 system prompt is fixed, so Anthropic caching serves ~2.4k of it as cache reads (Haiku), which keeps v3 at or below v2's cost. The v2 judge prompt is under the cache minimum.
+
+### Relabel of the real set (5 lanes)
+
+Protocol, following the founder's #1584 rule for real-mail labels:
+- Two frontier models labelled independently: this session's `claude-opus-5-5` (A, recorded first) and a blind `claude-fable-5-1` subagent (B).
+- The rule both applied: keep the founder's label unless the 5-lane split clearly re-homes the mail into INFO or MEETING, with a non-conflicting founder precedent from the gate set's `labelV2`.
+- Only agreements were applied, as `labelV2`. `label` is unchanged, and `--verify` passes.
+
+| item | label → labelV2 | precedent |
+|---|---|---|
+| 22273cda, d63feb18, a8ca544a, b31d9b6b — Google "보안 알림" (new sign-in, "본인이 맞다면 조치 불필요") | QUEUE → INFO | eval-015 "Security alert: new sign-in" → INFO |
+
+For founder review, kept at the founder's label:
+- **5 EVE waitlist signups.** A proposed INFO per eval-026. B flagged the conflict with the founder's own `OVERRIDE:PUSH` on Klorn waitlist mail in the same set, and that conflict is right.
+- **EVE config test.** Only B proposed INFO.
+- **Unsure for both labelers:**
+  - 5 Vercel failed deployments;
+  - 2 GitHub verify-email;
+  - the Namecheap confirmation code;
+  - the Namecheap order receipt;
+  - "Thanks for applying to Google".
+
+The gate set was not relabelled. It is the CI gate and the founder's labels. Its receipt inconsistency (eval-018/031/047 vs eval-016/027/054) is the founder's call.
+
+### Conclusion: what P2 and P3 should adopt
+
+**P2 (fact extractor):**
+- Adopt schema v1 as written. No lane decision needed a field it lacks, and evidence validity was 99.7%.
+- Adopt the relative-date table and due binding. Both are in P2's doc PR; the token list must include spelled-out deadlines ("end of day", "close of business"), or real PUSH items are lost.
+- Add one prompt sentence so that work a system assigns or relays to the recipient (issue assigned, review requested, comments on your doc) counts as an ask.
+- Score extractors per field on the P2 fact labels. The lane score above measures the §3(4) mapping, which ranks every model the same.
+
+**P3 (policy):** do not ship §3(4) literally. Replay it (`scripts/v3-bench-report.ts` re-scores stored facts with no LLM calls) until it matches the labels. Five fixes:
+1. Keep SILENT narrow: promotions only, never newsletters or other bulk mail without a marketing kind.
+2. Put SILENT-shaped social notifications ahead of INFO.
+3. Decide whether automated *failure* alerts are INFO.
+4. Decide what a 2–7-day investor deadline is.
+5. Drop or recompute sender-history priors, which are v2 outputs, under v3.
+
+**Models (doc §4), for P2/P4 to confirm on the fact eval:**
+- **Primary: `claude-haiku-5-5`.**
+  - Under v3 it matches every frontier model on every urgent item: 12/13 in all runs, the same items.
+  - Its v3 gate score is 48/56 vs 47–48 for the frontier models; LLM-stage 40/48 vs 39–40.
+  - It costs $0.16 per 1k mails at p50 1.2 s.
+- **Escalation: `claude-opus-5-5`.**
+  - `claude-fable-5-1` showed no stable advantage at ~2.9× Opus's price. Its real-set v2 lead (41–43 vs 38–39 /53) comes from contested QUEUE/INFO items and one Opus false PUSH; only 2 differing items repeat across all 3 runs.
+  - The founder's "accuracy first" decision allows Fable. These sets cannot separate the two, so P4 should decide on the fact eval of the founder's own mail.
+  - Escalation triggers fired on 0–6% of mail here. Under §4, PUSH candidates will be the main escalation volume.
+
+### Reproduce
+
+From `packages/api`:
+- Env: the eval.yml env, Anthropic only.
+- Each cell takes about 1–3 minutes.
+- The bench refuses to run unless `LLM_USAGE_LOG_DISABLED=true`, `GLOBAL_DAILY_COST_CAP_CENTS=0` and a localhost `DATABASE_URL` are set.
+
+```bash
+export LLM_PROVIDER_ORDER=anthropic JUDGE_INCLUDE_BODY=true GLOBAL_DAILY_COST_CAP_CENTS=0 \
+  LLM_USAGE_LOG_DISABLED=true DATABASE_URL=postgresql://eval:eval@localhost:5432/eval   # + ANTHROPIC_API_KEY
+for set in judge-eval-set real-eval-set; do
+  for model in claude-haiku-5-5 claude-sonnet-5-5 claude-opus-5-5 claude-fable-5-1; do
+    for run in 1 2 3; do
+      for prompt in v2 v3; do
+        npx tsx scripts/v3-bench.ts --in=eval/$set.json --model=$model --prompt=$prompt \
+          --run=$run --concurrency=2 --delay=300 --out=/tmp/p1/runs/$set.$model.$prompt.$run.json
+      done
+    done
+  done
+done
+# context-matched v2 control on the real set (v2's prompt loses the sender facts v3 never sees)
+for model in claude-haiku-5-5 claude-sonnet-5-5 claude-opus-5-5 claude-fable-5-1; do
+  for run in 1 2 3; do
+    npx tsx scripts/v3-bench.ts --in=eval/real-eval-set.json --model=$model --prompt=v2 --context=front \
+      --run=$run --concurrency=2 --delay=300 --out=/tmp/p1/runs/real-eval-set.$model.v2-front.$run.json
+  done
+done
+npx tsx scripts/v3-bench-report.ts --dir=/tmp/p1/runs --out=/tmp/p1/report.md
+```
+
+Exit 3 means instrument degraded: a provider failure, or a call served by another model. The file is still written, the report skips it, and you retry the run. The report re-scores every stored run against the labels in the eval file and replays v3 from the stored raw facts. A relabel or a policy change therefore costs no LLM calls.
+
+### Spend
+
+- Measured, at the list prices in `model-fallback.ts` from token counts: **$25.73**.
+  - 60 runs (48 matrix + 12 control): $25.11 (Fable $16.38, Opus $5.79, Sonnet $2.80, Haiku $0.14).
+  - 2 runs on an earlier prompt draft: $0.19.
+  - Smoke runs: $0.43.
+- Unmeasured: up to ~$1.8 from 4 runs stopped mid-flight when the prompt changed. Their output was never written.
+- Total: **≤ $28** of the $100/month credit.
