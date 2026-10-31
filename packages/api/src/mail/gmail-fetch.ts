@@ -57,6 +57,85 @@ export interface GmailRawEmail {
   // (mail/klorn-inbound-map.ts). Only the Klorn mailbox has them; written on
   // create only, into EmailMessage.authentication.
   authentication?: { spf: string; dkim: string; dmarc: string } | null;
+  // Header signals for the attention engine v3 facts shadow
+  // (judge/v3/pre-facts.ts). In memory only, never persisted. Gmail-only, so
+  // optional for the same reason as hasListUnsubscribe.
+  listId?: string | null;
+  precedence?: string | null;
+  autoSubmitted?: string | null;
+  /** Raw Date header, kept for its UTC offset; parsed before any prompt use. */
+  dateHeader?: string | null;
+  /** A text/calendar part or .ics attachment anywhere in the MIME tree. */
+  hasCalendarInvite?: boolean;
+  /** Gmail's DMARC verdict for the From domain (gmailDmarcPass); null = none. */
+  dmarcPass?: boolean | null;
+}
+
+/** Longest header value kept for the shadow signals. */
+const SHADOW_HEADER_MAX_CHARS = 500;
+const SHADOW_MIME_MAX_DEPTH = 10;
+
+type HeaderList = ReadonlyArray<{ name?: string | null; value?: string | null }>;
+type MimePart = {
+  mimeType?: string | null;
+  filename?: string | null;
+  parts?: MimePart[] | null;
+};
+
+function isCalendarPart(part: MimePart): boolean {
+  const mime = (part.mimeType ?? "").toLowerCase();
+  return (
+    mime === "text/calendar" ||
+    mime === "application/ics" ||
+    (part.filename ?? "").toLowerCase().endsWith(".ics")
+  );
+}
+
+function hasCalendarPart(part: MimePart, depth: number): boolean {
+  if (depth > SHADOW_MIME_MAX_DEPTH) return false;
+  if (isCalendarPart(part)) return true;
+  return (part.parts ?? []).some((child) => hasCalendarPart(child, depth + 1));
+}
+
+const GMAIL_AUTHSERV_ID = "mx.google.com";
+
+function fromDomain(from: string): string {
+  const m = /@([a-z0-9.-]+)>?\s*$/i.exec(from.slice(0, SHADOW_HEADER_MAX_CHARS).trim());
+  return m ? m[1].toLowerCase() : "";
+}
+
+/**
+ * Gmail's own DMARC verdict for the From domain: the FIRST Authentication-Results
+ * header (the receiving server prepends its own; anything below it may be
+ * sender-written) with authserv-id mx.google.com, dmarc=pass, and header.from
+ * equal to the From domain. null when Gmail left no verdict.
+ */
+export function gmailDmarcPass(headers: HeaderList): boolean | null {
+  const first = headers.find((h) => h.name?.toLowerCase() === "authentication-results");
+  const value = (first?.value ?? "").slice(0, 2000);
+  const [authserv, ...rest] = value.split(";");
+  if (authserv?.trim().toLowerCase() !== GMAIL_AUTHSERV_ID) return null;
+  const results = rest.join(";").toLowerCase();
+  const dmarc = /\bdmarc=(\w+)[^;]*?header\.from=([a-z0-9.-]+)/.exec(results);
+  if (!dmarc) return null;
+  const from = headers.find((h) => h.name?.toLowerCase() === "from")?.value ?? "";
+  return dmarc[1] === "pass" && dmarc[2] === fromDomain(from);
+}
+
+/** The header signals the v3 facts shadow reads, from a Gmail message. */
+export function readShadowHeaders(headers: HeaderList, payload: MimePart) {
+  const get = (name: string): string | null => {
+    const value = headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value;
+    return value ? value.slice(0, SHADOW_HEADER_MAX_CHARS) : null;
+  };
+  return {
+    listId: get("List-Id"),
+    precedence: get("Precedence"),
+    autoSubmitted: get("Auto-Submitted"),
+    dateHeader: get("Date"),
+    hasCalendarInvite: hasCalendarPart(payload, 0),
+    dmarcPass: gmailDmarcPass(headers),
+  };
 }
 
 function decodeBase64Url(data: string): Buffer {
@@ -260,6 +339,7 @@ async function parseGmailMessageDetail(
     listUnsubscribeMailto: listUnsubscribe.mailto,
     listUnsubscribeUrl: listUnsubscribe.url,
     listUnsubscribeOneClick: listUnsubscribe.oneClick,
+    ...readShadowHeaders(headers, payload ?? {}),
   };
 }
 
