@@ -207,7 +207,7 @@ describe("executeToolCall — floor enforcement for send_email", () => {
         approvedBy: userId,
       });
 
-    it("records a successful agent send as origin agent, keyed by the provider message id", async () => {
+    it("records an approved send as origin approved, keyed by the provider message id", async () => {
       recordSentMock.mockClear();
       sendEmailMock.mockResolvedValueOnce({ success: true, messageId: "msg-9", threadId: "th-9" });
       await executeToolCall(userId, "send_email", args, receiptFor());
@@ -219,7 +219,7 @@ describe("executeToolCall — floor enforcement for send_email", () => {
         subject: args.subject,
         sentAt: expect.any(Date),
         inbox: "primary",
-        origin: "agent",
+        origin: "approved",
       });
     });
 
@@ -235,8 +235,28 @@ describe("executeToolCall — floor enforcement for send_email", () => {
       );
       expect(recordSentMock).toHaveBeenCalledWith(
         userId,
-        expect.objectContaining({ gmailId: "msg-10", inbox: "linked-abc", origin: "agent" }),
+        expect.objectContaining({ gmailId: "msg-10", inbox: "linked-abc", origin: "approved" }),
       );
+    });
+
+    it("records the origin the trusted caller passes, never one from tool args", async () => {
+      recordSentMock.mockClear();
+      sendEmailMock.mockResolvedValueOnce({ success: true, messageId: "msg-11", threadId: null });
+      await executeToolCall(userId, "send_email", { ...args, origin: "user" }, receiptFor(), {
+        sentOrigin: "auto_reply",
+      });
+      expect(recordSentMock).toHaveBeenCalledWith(
+        userId,
+        expect.objectContaining({ gmailId: "msg-11", origin: "auto_reply" }),
+      );
+    });
+
+    it("a failed record never turns a sent mail into a send error (no retry, no double send)", async () => {
+      recordSentMock.mockClear();
+      recordSentMock.mockRejectedValueOnce(new Error("db down"));
+      sendEmailMock.mockResolvedValueOnce({ success: true, messageId: "msg-12", threadId: null });
+      const result = await executeToolCall(userId, "send_email", args, receiptFor());
+      expect(JSON.parse(result)).toMatchObject({ success: true, messageId: "msg-12" });
     });
 
     it("records nothing when the send failed or returned no message id", async () => {

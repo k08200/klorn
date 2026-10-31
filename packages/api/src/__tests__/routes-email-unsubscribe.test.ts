@@ -18,7 +18,6 @@ const sendEmailMock = vi.hoisted(() => vi.fn(async () => ({ success: true })));
 const recordSentMock = vi.hoisted(() => vi.fn(async (..._args: unknown[]) => {}));
 vi.mock("../mail/sent-messages.js", () => ({
   recordSentMessage: recordSentMock,
-  markSentOrigin: vi.fn(async () => {}),
   waitingOnThreads: vi.fn(async () => []),
   WAITING_ON_DEFAULT_MIN_DAYS: 2,
   syncSentMessages: vi.fn(async () => 0),

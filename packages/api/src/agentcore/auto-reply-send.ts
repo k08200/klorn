@@ -1,5 +1,4 @@
 import { mintReceipt, sendEmailPayloadHash } from "../judge/attention-floor.js";
-import { markSentOrigin } from "../mail/sent-messages.js";
 import { executeToolCall } from "./tool-executor.js";
 
 // A single RFC-ish email address: no whitespace, comma, semicolon, or angle
@@ -41,7 +40,7 @@ export class AutoReplyNotSentError extends Error {
  * { error }. Only `success === true` with no `error` and no `unsupported` is a
  * sent reply; everything else throws.
  */
-function assertSendSucceeded(raw: string): { messageId: string | null } {
+function assertSendSucceeded(raw: string): void {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -55,7 +54,6 @@ function assertSendSucceeded(raw: string): { messageId: string | null } {
   if ("unsupported" in result) throw new AutoReplyNotSentError("unsupported");
   if ("error" in result) throw new AutoReplyNotSentError("error");
   if (result.success !== true) throw new AutoReplyNotSentError("unrecognized");
-  return { messageId: typeof result.messageId === "string" ? result.messageId : null };
 }
 
 /**
@@ -120,9 +118,9 @@ export async function sendAutoReplyViaFloor(
       ...(inReplyToEmailId ? { in_reply_to_email_id: inReplyToEmailId } : {}),
     },
     receipt,
+    // The user never saw this reply before it left: the executor records it
+    // as an auto reply, never as mail the user wrote (sent-messages.ts).
+    { sentOrigin: "auto_reply" },
   );
-  const { messageId } = assertSendSucceeded(result);
-  // The executor recorded this send as "agent"; it left without the user
-  // seeing it, so label it an auto reply (sent-messages.ts SentOrigin).
-  if (messageId) await markSentOrigin(userId, messageId, "auto_reply");
+  assertSendSucceeded(result);
 }

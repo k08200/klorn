@@ -2023,10 +2023,11 @@ model SentMessage {
   subject  String
   sentAt   DateTime
   inbox    String // "primary" | LinkedInboxAccount id — where a live read must go
-  /// Who sent it (2026-10-31): "user" (a manual send through Klorn), "agent"
-  /// (the agent executor), "auto_reply" (an autonomous reply), "unsubscribe"
-  /// (a mailto unsubscribe). Null = seen only by the Sent-folder scan, i.e.
-  /// sent outside Klorn, or sent before this column existed.
+  /// Who sent it (2026-10-31): "user" (a manual send through Klorn),
+  /// "approved" (agent-drafted, the user approved the exact bytes),
+  /// "auto_reply" (an autonomous reply), "unsubscribe" (a mailto unsubscribe).
+  /// Null = seen only by the Sent-folder scan, i.e. sent outside Klorn, or
+  /// recorded before this column existed. See SentOrigin in sent-messages.ts.
   origin   String?
 
   createdAt DateTime @default(now())

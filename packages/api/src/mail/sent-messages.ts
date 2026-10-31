@@ -24,11 +24,17 @@ import { captureError } from "../sentry.js";
 import { listGmailMailbox } from "./gmail-mailbox.js";
 
 /**
- * Who sent a recorded mail. Only mail the user wrote ("user", or null = seen
- * only in the Sent folder, i.e. sent outside Klorn) is evidence of a
- * relationship; the other three left without the user writing them.
+ * Who sent a recorded mail:
+ *   - "user": a manual send through Klorn;
+ *   - "approved": the agent drafted it and the user approved these exact
+ *     bytes (chat approve → outbox → executor);
+ *   - "auto_reply": an autonomous reply the user never saw before it left;
+ *   - "unsubscribe": a mailto unsubscribe request.
+ * Null = seen only by the Sent-folder scan (sent outside Klorn), or recorded
+ * before this column existed. Relationship evidence is null, "user" and
+ * "approved"; "auto_reply" and "unsubscribe" never are.
  */
-export type SentOrigin = "user" | "agent" | "auto_reply" | "unsubscribe";
+export type SentOrigin = "user" | "approved" | "auto_reply" | "unsubscribe";
 
 export interface SentMessageInput {
   gmailId: string;
@@ -75,31 +81,14 @@ export async function recordSentMessage(userId: string, input: SentMessageInput)
       await upsert();
     }
   } catch (err) {
-    console.warn("[SENT] record failed:", err instanceof Error ? err.name : "unknown");
+    const code = (err as { code?: unknown } | null)?.code;
+    console.warn("[SENT] record failed:", err instanceof Error ? err.name : "unknown", code ?? "");
     captureError(err, { tags: { scope: "sent-messages.record" }, extra: { userId } });
   }
 }
 
 function isUniqueConflict(err: unknown): boolean {
   return typeof err === "object" && err !== null && (err as { code?: unknown }).code === "P2002";
-}
-
-/**
- * Re-label a row Klorn already recorded. The auto-reply path uses it: the
- * executor records every send as "agent", and only the caller knows the send
- * was autonomous. Fail-soft, like the record.
- */
-export async function markSentOrigin(
-  userId: string,
-  gmailId: string,
-  origin: SentOrigin,
-): Promise<void> {
-  try {
-    await prisma.sentMessage.updateMany({ where: { userId, gmailId }, data: { origin } });
-  } catch (err) {
-    console.warn("[SENT] origin update failed:", err instanceof Error ? err.message : err);
-    captureError(err, { tags: { scope: "sent-messages.origin" }, extra: { userId } });
-  }
 }
 
 const SENT_SYNC_INTERVAL_MS = 30 * 60_000;

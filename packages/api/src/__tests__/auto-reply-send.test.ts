@@ -10,13 +10,6 @@ vi.mock("../agentcore/tool-executor.js", () => ({
   executeToolCall: (...args: unknown[]) => executeToolCall(...args),
 }));
 
-// The executor records the send as "agent"; the auto-reply path then marks
-// that row as an autonomous reply, which the user never saw before it left.
-const markSentOrigin = vi.fn(async (..._args: unknown[]) => {});
-vi.mock("../mail/sent-messages.js", () => ({
-  markSentOrigin: (...args: unknown[]) => markSentOrigin(...args),
-}));
-
 const { AutoReplyNotSentError, sendAutoReplyViaFloor } = await import(
   "../agentcore/auto-reply-send.js"
 );
@@ -53,19 +46,9 @@ describe("sendAutoReplyViaFloor — autonomous AUTO_REPLY routes through the flo
     expect(receipt.approvedBy).toBe("user-1");
   });
 
-  it("marks the sent row as an auto reply once the send provably succeeded", async () => {
-    markSentOrigin.mockClear();
+  it("asks the executor to record the send as an auto reply, never as the user's", async () => {
     await sendAutoReplyViaFloor("user-1", "bob@example.com", "Re: x", "hi");
-    expect(markSentOrigin).toHaveBeenCalledWith("user-1", "m-1", "auto_reply");
-  });
-
-  it("marks nothing when the send failed", async () => {
-    markSentOrigin.mockClear();
-    executeToolCall.mockImplementation(async () => JSON.stringify({ error: "nope" }));
-    await expect(
-      sendAutoReplyViaFloor("user-1", "bob@example.com", "Re: x", "hi"),
-    ).rejects.toBeInstanceOf(AutoReplyNotSentError);
-    expect(markSentOrigin).not.toHaveBeenCalled();
+    expect(executeToolCall.mock.calls[0]?.[4]).toEqual({ sentOrigin: "auto_reply" });
   });
 
   it("threads in_reply_to_email_id through to the executor for per-account routing, without touching the hashed bytes", async () => {

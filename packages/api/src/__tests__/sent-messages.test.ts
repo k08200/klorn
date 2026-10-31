@@ -211,15 +211,17 @@ describe("recordSentMessage / syncSentMessages", () => {
 
   it("retries once when the Sent scan inserted the same row first, so the origin still lands", async () => {
     state.upsertConflictsLeft = 1;
-    await recordSentMessage("u1", { ...sent(), origin: "agent" });
+    await recordSentMessage("u1", { ...sent(), origin: "approved" });
     expect(state.upserts).toHaveLength(1);
-    expect(state.upserts[0]).toMatchObject({ update: { origin: "agent" } });
+    expect(state.upserts[0]).toMatchObject({ update: { origin: "approved" } });
     expect(state.captured).toEqual([]);
   });
 
   it("gives up after one retry and reports, never throwing", async () => {
     state.upsertConflictsLeft = 2;
-    await expect(recordSentMessage("u1", { ...sent(), origin: "agent" })).resolves.toBeUndefined();
+    await expect(
+      recordSentMessage("u1", { ...sent(), origin: "approved" }),
+    ).resolves.toBeUndefined();
     expect(state.upserts).toHaveLength(0);
     expect(state.captured).toHaveLength(1);
   });
