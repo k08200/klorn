@@ -315,3 +315,33 @@ describe("eligibleAfterFloor", () => {
     expect(eligibleAfterFloor(false, "QUEUE")).toBe(false);
   });
 });
+
+describe("tierFromFeaturesV2 names the rule that fired (playground 'decided the lane')", () => {
+  const calm = { confidence: 0.8, senderTrust: 0.6, reversibility: 0.5, urgency: 0.3 };
+  const none = { scheduling: false, transactional: false };
+
+  it("scheduling wins first", () => {
+    expect(tierFromFeaturesV2(calm, { ...none, scheduling: true }).rule).toBe("scheduling");
+  });
+  it("low confidence queues", () => {
+    expect(tierFromFeaturesV2({ ...calm, confidence: 0.1 }, none).rule).toBe("low-confidence");
+  });
+  it("urgent + sure pushes", () => {
+    const r = tierFromFeaturesV2({ ...calm, urgency: 0.95, confidence: 0.95 }, none);
+    expect(r).toMatchObject({ tier: "PUSH", rule: "urgent" });
+  });
+  it("promotional silences", () => {
+    const r = tierFromFeaturesV2(
+      { confidence: 0.9, senderTrust: 0.05, reversibility: 0.95, urgency: 0.05 },
+      none,
+    );
+    expect(r).toMatchObject({ tier: "SILENT", rule: "promotional" });
+  });
+  it("calm transactional goes to INFO", () => {
+    const r = tierFromFeaturesV2({ ...calm, urgency: 0.1 }, { ...none, transactional: true });
+    expect(r).toMatchObject({ tier: "INFO", rule: "transactional" });
+  });
+  it("falls back to the default queue", () => {
+    expect(tierFromFeaturesV2(calm, none)).toMatchObject({ tier: "QUEUE", rule: "default" });
+  });
+});

@@ -561,10 +561,16 @@ export function createAnthropicClient(
   apiKey: string,
   timeoutMs: number,
   workspaceId: string | null = null,
+  maxRetries?: number,
 ): Anthropic {
   return new Anthropic({
     apiKey,
     timeout: timeoutMs,
+    // Never let the SDK pick up ANTHROPIC_AUTH_TOKEN from the environment: a
+    // playground visitor's client would otherwise carry a server bearer token
+    // next to the visitor's own key. Klorn authenticates by apiKey only.
+    authToken: null,
+    ...(maxRetries !== undefined ? { maxRetries } : {}),
     baseURL: "https://api.anthropic.com",
     logLevel: "warn",
     // Personal and service-account keys that aren't scoped to one workspace

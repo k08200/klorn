@@ -3,7 +3,7 @@ import { API_BASE, getStoredAuthToken } from "./api";
 /**
  * localStorage keys that hold SECRETS (beyond the session token, which
  * clearStoredAuthToken owns). Must match the playground's keyStorageFor()
- * scheme in app/playground/page.tsx — the visitor's own LLM provider keys
+ * scheme in app/playground/key-storage.ts — the visitor's own LLM provider keys
  * live only in this browser, so logout on a shared machine must wipe them.
  * (CASA 6.6.1: browser storage securely cleared during logout, 2026-08-13.)
  */
@@ -12,6 +12,13 @@ const SENSITIVE_STORAGE_KEYS = [
   "klorn-playground-key-openrouter",
   "klorn-playground-key-gemini",
   "klorn-playground-key-openai",
+  "klorn-playground-key-anthropic",
+  // Consent markers for "Remember this key on this device" — not secrets, but
+  // they belong to the signed-out user's choice.
+  "klorn-playground-remember-openrouter",
+  "klorn-playground-remember-gemini",
+  "klorn-playground-remember-openai",
+  "klorn-playground-remember-anthropic",
 ] as const;
 
 /**

@@ -46,7 +46,10 @@ const CREDENTIAL_SHAPES: ReadonlyArray<readonly [RegExp, string]> = [
   // in the tail class so the masked forms providers echo back
   // ("sk-proj-****abcd", "sk-...A1b2") match too. Four characters minimum, so
   // "sk-***" is not re-matched and the redactor stays idempotent.
-  [/sk-(?:proj|or-v1|svcacct|admin)-[A-Za-z0-9_*.-]{4,}/g, "sk-***"],
+  // Anthropic's `sk-ant-api03-…` / `sk-ant-admin01-…` (playground BYOK) ride
+  // here too: the bare-`sk-` rule below refuses a letter to the left, so
+  // without the explicit prefix "key%3Dsk-ant-…" would leak through.
+  [/sk-(?:proj|or-v1|svcacct|admin|ant)-[A-Za-z0-9_*.-]{4,}/g, "sk-***"],
   // Bare `sk-` is the one shape that needs a guard: without it
   // "risk-assessment" contains "sk-assessment" and gets mangled into "ri" +
   // the marker. A letter to the left is the only thing excluded, so `_sk-…`,

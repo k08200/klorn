@@ -2711,6 +2711,129 @@ const de: Record<string, string> = {
   "statusChip.pending": "Ausstehend",
   // web app design pass, 2026-10-21: English that reached localized screens.
   "imap.beta": "Beta",
+  // Public playground (redesign 2026-10-30). Model ids and prices stay untranslated.
+  "playground.brand.section": "Testumgebung",
+  "playground.nav.methodology": "So wird bewertet",
+  "playground.nav.pricing": "Preise",
+  "playground.nav.login": "Anmelden",
+  "playground.nav.startFree": "Kostenlos starten",
+  "playground.title": "So sortiert Klorn eine E-Mail.",
+  "playground.lead":
+    "Nachricht einfügen, Modell wählen, eigenen Schlüssel mitbringen. Klorns echter Judge ordnet sie einer von fünf Lanes zu und zeigt die vier Scores dahinter.",
+  "playground.leadShort": "Dein Modell, dein Schlüssel, Klorns echter Judge.",
+  "playground.form.label": "E-Mail und Modell",
+  "playground.samples.heading": "Beispiel ausprobieren",
+  "playground.samples.investor": "Geldgeber",
+  "playground.samples.newsletter": "Rundbrief",
+  "playground.samples.receipt": "Beleg",
+  "playground.samples.teammate": "Kollege",
+  "playground.samples.meeting": "Terminanfrage",
+  "playground.field.from": "Von",
+  "playground.field.fromPlaceholder": "name@firma.de",
+  "playground.field.subject": "Betreff",
+  "playground.field.subjectPlaceholder": "Betreffzeile",
+  "playground.field.body": "Text",
+  "playground.field.bodyPlaceholder": "E-Mail einfügen oder oben ein Beispiel wählen.",
+  "playground.email.edit": "E-Mail bearbeiten",
+  "playground.email.collapse": "Bearbeiten beenden",
+  "playground.email.empty": "Noch keine E-Mail. Wähle ein Beispiel oder füge eine ein.",
+  "playground.provider.label": "Anbieter",
+  "playground.model.label": "Modell",
+  "playground.model.klorn": "Von Klorn genutzt",
+  "playground.model.measured": "{correct}/{total} im Klorn-Test",
+  "playground.model.other": "Andere Modell-ID…",
+  "playground.model.otherLabel": "Modell-ID",
+  "playground.model.otherPlaceholder": "anbieter/modellname",
+  "playground.model.otherInvalid":
+    "Nutze eine Modell-ID wie anbieter/modellname: Buchstaben, Ziffern, Punkte und Bindestriche.",
+  "playground.model.klornNote":
+    "Das Modell, das Klorn selbst nutzt, bewertet im 56-E-Mail-Test von Klorn.",
+  "playground.model.listedNote":
+    "Wird wie gelistet angezeigt. Nur das von Klorn genutzte Modell wird im Klorn-Test bewertet.",
+  "playground.model.priceNote":
+    "Preis pro 1 Mio. Token, Eingabe / Ausgabe, laut OpenRouter am {date}.",
+  "playground.key.label": "{provider}-API-Schlüssel",
+  "playground.key.show": "Anzeigen",
+  "playground.key.hide": "Verbergen",
+  "playground.key.remember": "Schlüssel auf diesem Gerät merken",
+  "playground.key.trust":
+    "Dein Schlüssel geht nur für diese eine Anfrage von diesem Browser über Klorns Server an den Anbieter. Klorn speichert ihn nicht.",
+  "playground.key.none": "Noch kein Schlüssel?",
+  "playground.key.create": "Bei {provider} erstellen",
+  "playground.key.billing": "Jede Sortierung wird deinem eigenen {provider}-Konto berechnet.",
+  "playground.submit": "E-Mail sortieren",
+  "playground.submitting": "Sortiere…",
+  "playground.result.label": "Ergebnis",
+  "playground.legend.title": "Jede E-Mail landet in einer von fünf Lanes.",
+  "playground.legend.sub": "Dein Ergebnis erscheint hier, mit den Scores dahinter.",
+  "playground.legend.PUSH": "Braucht dich jetzt. Steht ganz oben in Heute und kommt als Banner.",
+  "playground.legend.MEETING":
+    "Ein Termin zum Annehmen, Verschieben oder Ablehnen, mit deinem Kalender abgeglichen.",
+  "playground.legend.QUEUE": "Eine Antwort wert, aber nicht jetzt. Die Standard-Lane.",
+  "playground.legend.INFO":
+    "Belege, Warnungen, Bestätigungen. Wird aufbewahrt, braucht keine Antwort.",
+  "playground.legend.SILENT": "Werbung und Rauschen, leise abgelegt.",
+  "playground.legend.scores":
+    "Vier Scores fließen in die Lane ein: Dringlichkeit, Absendervertrauen, Umkehrbarkeit und Sicherheit.",
+  "playground.legend.link": "So wird gemessen",
+  "playground.headline.PUSH": "Das braucht dich jetzt.",
+  "playground.headline.MEETING": "Ein Termin zum Annehmen, Verschieben oder Ablehnen.",
+  "playground.headline.QUEUE": "Eine Antwort wert, aber nicht jetzt.",
+  "playground.headline.INFO": "Ein Beleg zum Aufbewahren. Keine Antwort nötig.",
+  "playground.headline.SILENT": "Rauschen, leise abgelegt.",
+  "playground.why.heading": "Warum {lane}",
+  "playground.why.decided": "· hat die Lane entschieden",
+  "playground.why.scheduling":
+    "Die E-Mail fragt nach einem Zeitfenster. Terminanfragen kommen in eine eigene Lane, bevor Scores gewichtet werden.",
+  "playground.why.lowConfidence":
+    "Das Modell war unsicher, deshalb lässt Klorn sie in Queue sichtbar, statt sie zu verstecken.",
+  "playground.why.transactional":
+    "Sie wirkt wie eine ruhige automatische Benachrichtigung. Solche Belege landen in Info.",
+  "playground.why.default":
+    "Keine stärkere Regel hat gegriffen, also wartet sie in Queue, der Standard-Lane.",
+  "playground.why.marketing":
+    "Das ist eindeutig Werbung, deshalb wurde sie abgelegt, bevor Scores gewichtet wurden.",
+  "playground.why.automated":
+    "Eine Sicherheitsregel für automatische Mails hat sie hier eingeordnet, damit sie außerhalb deiner Unterbrechungen bleibt.",
+  "playground.feature.urgency": "Dringlichkeit",
+  "playground.feature.urgency.low": "Kann warten",
+  "playground.feature.urgency.high": "Heute",
+  "playground.feature.senderTrust": "Absendervertrauen",
+  "playground.feature.senderTrust.low": "Unbekannt",
+  "playground.feature.senderTrust.high": "Bekannte Person",
+  "playground.feature.reversibility": "Umkehrbarkeit",
+  "playground.feature.reversibility.low": "Schwer rückgängig zu machen",
+  "playground.feature.reversibility.high": "Leicht rückgängig zu machen",
+  "playground.feature.confidence": "Sicherheit",
+  "playground.feature.confidence.low": "Unsicher",
+  "playground.feature.confidence.high": "Sicher",
+  "playground.inKlorn.heading": "Was Klorn daraus macht",
+  "playground.inKlorn.PUSH":
+    "Push-Mails stehen ganz oben in Heute und kommen als Banner in der Klorn-App auf Mac und Windows an.",
+  "playground.inKlorn.MEETING": "Erscheint in Heute unter Meeting.",
+  "playground.inKlorn.QUEUE": "Wartet in Mail, bis du Zeit dafür hast.",
+  "playground.inKlorn.INFO": "Wird in Mail als Beleg aufbewahrt. Keine Antwort nötig.",
+  "playground.inKlorn.SILENT": "Leise abgelegt, aus dem Weg.",
+  "playground.wrong.prompt": "Falsche Lane? Sag uns, wohin sie gehört.",
+  "playground.wrong.short": "Falsche Lane?",
+  "playground.wrong.thanks": "Danke, als {lane} vermerkt.",
+  "playground.wrong.error": "Das konnte nicht gesendet werden. Versuch es noch einmal.",
+  "playground.cta.text": "Sortiere deinen ganzen Posteingang genauso.",
+  "playground.meta": "{model} · {seconds} Sek.",
+  "playground.error.title": "Diese E-Mail konnte nicht sortiert werden",
+  "playground.error.noKey": "Gib zuerst deinen {provider}-API-Schlüssel ein.",
+  "playground.error.noEmail": "Gib zuerst Absender und Betreff ein.",
+  "playground.error.rateLimited": "Zu viele Versuche. Warte eine Minute und sortiere dann erneut.",
+  "playground.error.timeout":
+    "Das Modell hat länger als {seconds} Sekunden gebraucht. Versuch es erneut oder wähle ein schnelleres Modell.",
+  "playground.error.network":
+    "Klorn war nicht erreichbar. Prüfe deine Verbindung und versuch es erneut.",
+  "playground.error.failed":
+    "Das Modell wurde nicht ausgeführt. Meist stimmt der Schlüssel nicht, das Modell ist nicht verfügbar oder das Konto hat kein Guthaben.",
+  "playground.error.invalid":
+    "Die Anfrage wurde nicht akzeptiert. Prüfe die Modell-ID und die E-Mail-Felder.",
+  "playground.error.upstream": "Anbieter meldet: {detail}",
+  "playground.footer.privacy": "Datenschutz",
 };
 
 export default de;

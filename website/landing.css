@@ -161,6 +161,9 @@ html[lang=zh] :is(h1,h2){word-break:keep-all}
 .lead b{color:var(--ink);font-weight:600}
 .actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
 .meta{margin:20px 0 0;font-size:var(--fs-14);color:var(--ink-2);letter-spacing:.005em}
+.try{margin:6px 0 0;font-size:var(--fs-14)}
+.try a{display:inline-flex;align-items:center;min-height:44px;color:var(--ink-2);text-underline-offset:3px}
+.try a:hover{color:var(--ink)}
 .meta span{white-space:nowrap}
 .meta i{font-style:normal;display:inline-block;margin:0 8px;color:var(--ink-3)}
 /* When the line has to wrap, a separator would start or end a line; on
@@ -480,6 +483,7 @@ html[lang=ja] :is(.lead,.sec-lead,.tile p,.note-q p,summary,.price li){word-brea
   .hero{text-align:left}
   .hero h1,.hero .lead{margin-left:0;margin-right:0}
   .hero .actions{flex-direction:column;align-items:stretch;justify-content:flex-start}
+  .hero .try{text-align:left}
   .hero .meta{text-align:left;text-wrap:wrap}
   .hero .meta span{margin:0 18px 0 0}
 }

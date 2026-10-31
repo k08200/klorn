@@ -62,3 +62,65 @@ describe("getProviderChain with playgroundOnly", () => {
     }
   });
 });
+
+describe("getProviderChain — visitor Anthropic key (playground)", () => {
+  const createAnthropicClient = vi.fn(() => ({ fake: true }));
+  const createAnthropicCompletion = vi.fn(async () => ({ choices: [] }));
+
+  beforeEach(() => {
+    vi.resetModules();
+    vi.unstubAllEnvs();
+    createAnthropicClient.mockClear();
+    createAnthropicCompletion.mockClear();
+    vi.stubEnv("OPENROUTER_API_KEY", "env-openrouter-key");
+    vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-env-server-key");
+    // The operator's workspace id belongs to Klorn's key, never a visitor's.
+    vi.stubEnv("ANTHROPIC_WORKSPACE_ID", "wrkspc_klorn");
+    vi.doMock("../providers/anthropic-native.js", () => ({
+      createAnthropicClient,
+      createAnthropicCompletion,
+      streamAnthropicCompletion: vi.fn(),
+    }));
+  });
+
+  afterEach(() => {
+    vi.doUnmock("../providers/anthropic-native.js");
+    vi.unstubAllEnvs();
+  });
+
+  it("returns ONLY the visitor's anthropic provider, scoped and user-owned", async () => {
+    const { getProviderChain } = await import("../providers/index.js");
+    const chain = getProviderChain({
+      anthropicApiKey: "sk-ant-visitor",
+      quotaScope: "playground",
+      playgroundOnly: true,
+    });
+    expect(chain.map((p) => p.name)).toEqual(["anthropic"]);
+    expect(chain[0].quotaKey).toBe("anthropic:user:playground");
+    expect(chain[0].ownedByUser).toBe(true);
+  });
+
+  it("maps both id spellings to the native Claude id", async () => {
+    const { getProviderChain } = await import("../providers/index.js");
+    const [provider] = getProviderChain({
+      anthropicApiKey: "sk-ant-visitor",
+      playgroundOnly: true,
+    });
+    expect(provider.resolveModel("anthropic/claude-opus-5.5")).toBe("claude-opus-5-5");
+    expect(provider.resolveModel("claude-fable-5-1")).toBe("claude-fable-5-1");
+  });
+
+  it("builds the visitor client with the visitor key, no workspace header, no SDK retries", async () => {
+    const { getProviderChain } = await import("../providers/index.js");
+    const [provider] = getProviderChain({
+      anthropicApiKey: "sk-ant-visitor",
+      playgroundOnly: true,
+    });
+    await provider.call({ messages: [] } as never, "claude-haiku-5-5");
+    expect(createAnthropicClient).toHaveBeenCalledTimes(1);
+    const [key, , workspaceId, maxRetries] = createAnthropicClient.mock.calls[0] as unknown[];
+    expect(key).toBe("sk-ant-visitor");
+    expect(workspaceId).toBeNull();
+    expect(maxRetries).toBe(0);
+  });
+});

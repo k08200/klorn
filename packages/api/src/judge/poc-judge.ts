@@ -54,7 +54,12 @@ import {
   keywordFeatures,
   looksUrgent,
 } from "./keyword-policy.js";
-import { type TierFeatures, tierFromFeatures, tierFromFeaturesV2 } from "./tier-policy.js";
+import {
+  type TierFeatures,
+  type TierRuleV2,
+  tierFromFeatures,
+  tierFromFeaturesV2,
+} from "./tier-policy.js";
 import { TIERS, type Tier } from "./tiers.js";
 
 export type { CorrectionExample, SenderFacts, SenderPrior } from "../learning/sender-policy.js";
@@ -96,7 +101,16 @@ export interface PocJudgement {
     | "keyword-fallback";
   /** v2 only: may Klorn answer this unattended? Absent/false under v1. */
   autoEligible?: boolean;
+  /**
+   * The rule that placed the email: a v2 tier branch, the marketing
+   * fast-path, or the automated-sender floors that override a scored lane.
+   * Absent on the v1 rule set and on the context short-circuits. Read by the
+   * public playground to mark the score that decided the lane.
+   */
+  decidedBy?: JudgeDecidedBy;
 }
+
+export type JudgeDecidedBy = TierRuleV2 | "marketing" | "automated-sender";
 
 // CorrectionExample, SenderPrior, and SenderFacts are the sender-knowledge
 // schema — defined in sender-policy.ts and re-exported above so the entity
@@ -824,6 +838,7 @@ export async function judgeEmail(
       reason: "Promotional / marketing — no human attention needed",
       features: { confidence: 0.95, senderTrust: 0.05, reversibility: 1.0, urgency: 0.0 },
       source: "fast-path",
+      decidedBy: "marketing",
     };
   }
 
@@ -886,15 +901,14 @@ export async function judgeEmail(
     }
     const features = applyRoutineConfirmationCap(email, llm.features);
     const decided = decideTier(email, features);
-    const floored = applyAutomatedSenderFloors(email, {
-      tier: decided.tier,
-      reason: llm.reason || decided.reason,
-    });
+    const scored = { tier: decided.tier, reason: llm.reason || decided.reason };
+    const floored = applyAutomatedSenderFloors(email, scored);
     return {
       tier: floored.tier,
       reason: floored.reason,
       features,
       source: "llm",
+      decidedBy: decidedByOf(decided.rule, floored === scored),
       autoEligible:
         eligibleAfterFloor(decided.autoEligible, floored.tier) && !hasSpamLabel(email.labels),
     };
@@ -908,9 +922,20 @@ export async function judgeEmail(
     reason: floored.reason,
     features,
     source: "keyword-fallback",
+    decidedBy: decidedByOf(decided.rule, floored === decided),
     autoEligible:
       eligibleAfterFloor(decided.autoEligible, floored.tier) && !hasSpamLabel(email.labels),
   };
+}
+
+/**
+ * The floors return their input untouched when they do not fire, so identity
+ * tells whether the scored rule still owns the final lane. When a floor
+ * rewrote it (automated sender, CI noise, spam), the floor decided.
+ */
+function decidedByOf(rule: TierRuleV2 | undefined, floorKept: boolean): JudgeDecidedBy | undefined {
+  if (!floorKept) return "automated-sender";
+  return rule;
 }
 
 /**
@@ -933,7 +958,7 @@ export function eligibleAfterFloor(eligible: boolean, finalTier: Tier): boolean 
 function decideTier(
   email: ClassifiableEmail,
   features: PocFeatures,
-): { tier: Tier; reason: string; autoEligible: boolean } {
+): { tier: Tier; reason: string; autoEligible: boolean; rule?: TierRuleV2 } {
   if (tierV2Enabled()) {
     return tierFromFeaturesV2(
       features,
