@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description: "How Klorn handles Gmail, Calendar, and account data during beta.",
 };
 
-const updatedAt = "October 30, 2026";
+const updatedAt = "October 31, 2026";
 
 /** Stable, URL-safe anchor id so the TOC links line up with each section. */
 function slug(title: string): string {
@@ -19,6 +19,7 @@ function slug(title: string): string {
 
 const SECTIONS = [
   "What Klorn Does",
+  "Who Can Use Klorn",
   "Data We Collect",
   "Cookies and Local Storage",
   "How We Use Data",
@@ -104,6 +105,27 @@ export default function PrivacyPage() {
               context, classifies incoming messages into attention tiers ({TIER_NAMES}), summarizes
               what matters into daily briefings, and prepares actions — replies, labels, archiving —
               that touch your mailbox only with your approval.
+            </p>
+          </Section>
+
+          <Section title="Who Can Use Klorn">
+            <p>
+              You must be at least 16 years old to use Klorn. One number rather than one per
+              country: 16 is the GDPR&apos;s default where a member state has not lowered it, and it
+              is above the other thresholds Klorn would otherwise have to track — 14 under
+              Korea&apos;s PIPA, 13 under the US children&apos;s privacy rule.
+            </p>
+            <p>
+              Klorn is a work tool and is not directed at children. Klorn does not knowingly create
+              an account for, or keep data about, anyone under 16. If you believe a child has an
+              account, write to{" "}
+              <a
+                className="text-accent-deep hover:text-accent-deeper"
+                href="mailto:k0820086@gmail.com"
+              >
+                k0820086@gmail.com
+              </a>{" "}
+              and the account and its data will be deleted.
             </p>
           </Section>
 
@@ -225,8 +247,9 @@ export default function PrivacyPage() {
                 When you run a sample, the key and the text you pasted are sent to the Klorn API,
                 which uses the key in memory to call the AI provider you chose — OpenRouter, Google
                 or OpenAI — so both reach that provider and are covered by its terms. Klorn does not
-                write the key to its database and redacts it from its request logs. Emptying the key
-                field removes it from your browser, as does signing out or clearing site data.
+                write the key to its database, and strips it from its logs and from its crash
+                reports before either leaves the server. Emptying the key field removes it from your
+                browser, as does signing out or clearing site data.
               </li>
               <li>
                 <strong>Small internal bookkeeping.</strong> A few values that keep the interface
