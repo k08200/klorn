@@ -22,6 +22,7 @@ import { classifyEmails, GMAIL_TOOLS, listEmails, readEmail } from "../mail/gmai
 import { mailActionsFor } from "../mail/providers/dispatch.js";
 import { markEmailReplied } from "../mail/reply-state.js";
 import { getSenderDossier } from "../mail/sender-dossier.js";
+import { recordSentMessage } from "../mail/sent-messages.js";
 import { BRIEFING_TOOLS } from "../pim/briefing.js";
 import {
   CALENDAR_TOOLS,
@@ -327,6 +328,20 @@ async function executeToolCallInternal(
         // an answer.
         if (inReplyToId && !("error" in sent) && !("unsupported" in sent)) {
           await markEmailReplied(userId, inReplyToId);
+        }
+        // Record the send as the agent's, so the relationship layer and the
+        // Sent-folder scan never mistake it for mail the user wrote. The
+        // auto-reply path re-labels its own sends (auto-reply-send.ts).
+        if ("success" in sent && sent.success && sent.messageId) {
+          await recordSentMessage(userId, {
+            gmailId: sent.messageId,
+            threadId: sent.threadId ?? null,
+            to,
+            subject,
+            sentAt: new Date(),
+            inbox: linkedInboxAccountId ?? "primary",
+            origin: "agent",
+          });
         }
         return JSON.stringify(sent);
       }

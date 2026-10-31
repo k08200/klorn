@@ -13,6 +13,17 @@ const emailFindFirst = vi.hoisted(() => vi.fn(async () => null as unknown));
 const oneClickMock = vi.hoisted(() => vi.fn());
 const sendEmailMock = vi.hoisted(() => vi.fn(async () => ({ success: true })));
 
+// The mailto unsubscribe leaves from the user's account; it must be recorded as
+// an unsubscribe, never as mail the user wrote to that list.
+const recordSentMock = vi.hoisted(() => vi.fn(async (..._args: unknown[]) => {}));
+vi.mock("../mail/sent-messages.js", () => ({
+  recordSentMessage: recordSentMock,
+  markSentOrigin: vi.fn(async () => {}),
+  waitingOnThreads: vi.fn(async () => []),
+  WAITING_ON_DEFAULT_MIN_DAYS: 2,
+  syncSentMessages: vi.fn(async () => 0),
+}));
+
 vi.mock("../db.js", () => {
   const prisma = {
     userToken: { findFirst: vi.fn(async () => null) },
@@ -134,6 +145,30 @@ describe("POST /api/email/:id/unsubscribe", () => {
       [],
       expect.objectContaining({ linkedInboxAccountId: null }),
     );
+    await app.close();
+  });
+
+  it("records a sent mailto unsubscribe with origin unsubscribe", async () => {
+    recordSentMock.mockClear();
+    emailFindFirst.mockResolvedValue(
+      unsubEmail({ listUnsubscribeMailto: "mailto:unsub@lists.x.com?subject=stop" }),
+    );
+    sendEmailMock.mockResolvedValueOnce({
+      success: true,
+      messageId: "gm-7",
+      threadId: "th-7",
+    } as never);
+    const app = await buildApp();
+    await app.inject({ method: "POST", url: "/api/email/e1/unsubscribe", headers: auth() });
+    expect(recordSentMock).toHaveBeenCalledWith("user-1", {
+      gmailId: "gm-7",
+      threadId: "th-7",
+      to: "unsub@lists.x.com",
+      subject: "stop",
+      sentAt: expect.any(Date),
+      inbox: "primary",
+      origin: "unsubscribe",
+    });
     await app.close();
   });
 
