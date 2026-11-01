@@ -98,7 +98,14 @@ Build on what exists: `SentMessage` (user's sent mail), `ContactEngagementScore`
 - pinned or VIP;
 - dismiss count.
 
-Output is a `relationship` snapshot stored with the decision. It eases the cold-start "urgent 0/4" problem from day one, because sent mail is already synced for "waiting on". The sync reads only the newest page of the Sent folder (50 mails) every 30 minutes and has no history backfill. So on day one the snapshot sees at most the user's last 50 sent mails, and older correspondents look new. Production on 2026-10-31: 192 `SentMessage` rows across 3 users, the oldest from 2026-06-04. A bounded backfill of sent headers is planned as its own change.
+Output is a `relationship` snapshot stored with the decision. It eases the cold-start "urgent 0/4" problem from day one, because sent mail is already synced for "waiting on". The sync reads only the newest page of the Sent folder (50 mails) every 30 minutes. Without history, the snapshot sees at most the user's last 50 sent mails, and older correspondents look new. Production on 2026-10-31: 192 `SentMessage` rows across 3 users, the oldest from 2026-06-04.
+
+A one-time history import (`mail/sent-history-import.ts`, flag `SENT_HISTORY_BACKFILL_ENABLED`, OFF by default, accepts `cohort`) fills that in:
+- Scope: the newest 2,000 sent mails of the last 12 months, for each inbox the scan reads (primary Gmail and linked Google inboxes). Headers only (`format=metadata`: To, Subject, Date). No new scope.
+- Resume: each run lists the window's ids and fetches the ones `SentMessage` does not have, so the rows are the progress. A crash or redeploy resumes, and gaps the scan left are filled.
+- Pace: at most 100 metadata fetches per user per email-sync tick, 2 in flight, run detached from the serial user loop.
+- Done: when nothing listed is missing, the grant row (`UserToken` / `LinkedInboxAccount`) gets `sentHistoryImportedAt` and the inbox is never listed again.
+- Provenance: rows the import or the scan create are labelled at insert by `mail/sent-origin-classifier.ts`, with the same rules as the legacy backfill. A label recorded at send time is never overwritten.
 
 As built in P2 (`judge/v3/relationship.ts`, `relationship-loader.ts`):
 - Every field is null when the data to answer it does not exist, never 0, so policy can tell "unknown" from "never". No sent-mail sync means the sent fields are null.

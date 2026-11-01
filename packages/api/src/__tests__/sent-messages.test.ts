@@ -15,6 +15,9 @@ const state = vi.hoisted(() => ({
   listCalls: 0,
   listResult: null as null | { items: unknown[]; nextPageToken: null },
   captured: [] as unknown[],
+  labels: new Map<string, string>(),
+  classifyCalls: [] as unknown[][],
+  classifyFails: false,
 }));
 
 vi.mock("../db.js", () => ({
@@ -39,6 +42,14 @@ vi.mock("../db.js", () => ({
 vi.mock("../sentry.js", () => ({
   captureError: vi.fn((err: unknown) => {
     state.captured.push(err);
+  }),
+}));
+
+vi.mock("../mail/sent-origin-classifier.js", () => ({
+  classifySentRows: vi.fn(async (_userId: string, rows: unknown[]) => {
+    state.classifyCalls.push(rows);
+    if (state.classifyFails) throw new Error("db down");
+    return state.labels;
   }),
 }));
 
@@ -160,6 +171,10 @@ describe("recordSentMessage / syncSentMessages", () => {
     state.upsertFails = false;
     state.upsertConflictsLeft = 0;
     state.listCalls = 0;
+    state.sentRows = [];
+    state.labels = new Map();
+    state.classifyCalls = [];
+    state.classifyFails = false;
     state.listResult = {
       items: [
         {
@@ -238,6 +253,83 @@ describe("recordSentMessage / syncSentMessages", () => {
     const args = state.upserts[0] as { create: object; update: object };
     expect(args.create).not.toHaveProperty("origin");
     expect(args.update).not.toHaveProperty("origin");
+  });
+
+  it("an inferred origin is written on create only, so it never overwrites a send-time label", async () => {
+    await recordSentMessage("u1", { ...sent(), inferredOrigin: "unsubscribe" });
+    const args = state.upserts[0] as { create: object; update: object };
+    expect(args.create).toMatchObject({ origin: "unsubscribe" });
+    expect(args.update).not.toHaveProperty("origin");
+  });
+
+  it("a send-time origin wins over an inferred one", async () => {
+    await recordSentMessage("u1", { ...sent(), origin: "user", inferredOrigin: "auto_reply" });
+    expect(state.upserts[0]).toMatchObject({
+      create: { origin: "user" },
+      update: { origin: "user" },
+    });
+  });
+
+  it("the P2002 retry keeps an inferred origin off the update path", async () => {
+    state.upsertConflictsLeft = 1;
+    await recordSentMessage("u1", { ...sent(), inferredOrigin: "auto_reply" });
+    const args = state.upserts[0] as { create: object; update: object };
+    expect(args.update).not.toHaveProperty("origin");
+  });
+
+  it("sync classifies only the rows it is about to create and labels them on create", async () => {
+    state.listResult = {
+      items: [
+        {
+          gmailId: "known",
+          threadId: "t0",
+          to: "a@b.com",
+          subject: "Old",
+          receivedAt: "2026-09-09T00:00:00.000Z",
+          inbox: "primary",
+        },
+        {
+          gmailId: "g1",
+          threadId: "t1",
+          to: "unsub@list.com",
+          subject: "unsubscribe",
+          receivedAt: "2026-09-10T00:00:00.000Z",
+          inbox: "primary",
+        },
+      ],
+      nextPageToken: null,
+    };
+    state.sentRows = [{ gmailId: "known" }];
+    state.labels = new Map([["g1", "unsubscribe"]]);
+    expect(await syncSentMessages("u1", NOW.getTime())).toBe(2);
+    expect(state.classifyCalls).toEqual([
+      [
+        {
+          gmailId: "g1",
+          to: "unsub@list.com",
+          subject: "unsubscribe",
+          sentAt: new Date("2026-09-10T00:00:00.000Z"),
+        },
+      ],
+    ]);
+    const [known, created] = state.upserts as { create: object; update: object }[];
+    expect(known?.create).not.toHaveProperty("origin");
+    expect(created?.create).toMatchObject({ gmailId: "g1", origin: "unsubscribe" });
+    expect(created?.update).not.toHaveProperty("origin");
+  });
+
+  it("sync makes no classifier call when every row already exists", async () => {
+    state.sentRows = [{ gmailId: "g1" }];
+    await syncSentMessages("u1", NOW.getTime());
+    expect(state.classifyCalls).toEqual([]);
+    expect(state.upserts).toHaveLength(1);
+  });
+
+  it("sync records nothing when classification fails, rather than writing unlabeled rows", async () => {
+    state.classifyFails = true;
+    expect(await syncSentMessages("u1", NOW.getTime())).toBe(0);
+    expect(state.upserts).toEqual([]);
+    expect(state.captured).toHaveLength(1);
   });
 
   it("not connected (null page) records nothing and is not an error", async () => {
