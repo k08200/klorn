@@ -81,7 +81,7 @@
       <tr><th>Vercel</th><td class="us">Web app hosting</td><td>Requests and responses in transit</td></tr>
       <tr><th>Google (Gemini API)</th><td class="us">Model calls</td><td>The message text sent for classification or drafting, under API terms that exclude training on submitted data</td></tr>
       <tr><th>Anthropic (Claude API)</th><td class="us">Model calls</td><td>The same message text, under commercial API terms that exclude training on submitted data. Deleted within 30 days by default, longer only for content flagged by usage-policy enforcement</td></tr>
-      <tr><th>OpenRouter</th><td class="us">Model routing</td><td>The same, for models reached through it. Bring your own key and this row becomes your chosen provider instead</td></tr>
+      <tr><th>OpenRouter</th><td class="us">Model routing for your own OpenRouter key, and a backup lane</td><td>The same message text, only for requests made with an OpenRouter key you added yourself, or if the hosted service falls back from Anthropic when it is unavailable. Anthropic handles the hosted service's model calls by default</td></tr>
       <tr><th>Paddle</th><td class="us">Payments and merchant of record</td><td>Billing details. <strong>No mail content</strong></td></tr>
       <tr><th>Apple</th><td class="us">Push notification delivery (APNs)</td><td>Notification payloads on the devices you registered</td></tr>
     </tbody>
