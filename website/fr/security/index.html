@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sécurité — Klorn</title>
+<meta name="description" content="La vérification OAuth de Google, une évaluation indépendante CASA Tier 2, et ce que l’architecture de Klorn garantit réellement : chiffrement des jetons en AES-256-GCM, reçus d’approbation épinglés par hachage, injection de prompt traitée comme faisant partie du périmètre, et le fichier qui met en œuvre chaque affirmation.">
+<meta property="og:title" content="Sécurité — Klorn">
+<meta property="og:description" content="La vérification OAuth de Google, une évaluation indépendante CASA Tier 2, et ce que l’architecture de Klorn garantit réellement : chiffrement des jetons en AES-256-GCM, reçus d’approbation épinglés par hachage, injection de prompt traitée comme faisant partie du périmètre, et le fichier qui met en œuvre chaque affirmation.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://klorn.ai/fr/security/">
+<meta property="og:locale" content="fr_FR">
+<meta property="og:image" content="https://klorn.ai/brand/og-image.png?v=k2">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Sécurité — Klorn">
+<meta name="twitter:description" content="La vérification OAuth de Google, une évaluation indépendante CASA Tier 2, et ce que l’architecture de Klorn garantit réellement : chiffrement des jetons en AES-256-GCM, reçus d’approbation épinglés par hachage, injection de prompt traitée comme faisant partie du périmètre, et le fichier qui met en œuvre chaque affirmation.">
+<meta name="twitter:image" content="https://klorn.ai/brand/og-image.png?v=k2">
+<link rel="canonical" href="https://klorn.ai/fr/security/">
+<link rel="alternate" hreflang="en" href="https://klorn.ai/security/">
+<link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/security/">
+<link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/security/">
+<link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/security/">
+<link rel="alternate" hreflang="es" href="https://klorn.ai/es/security/">
+<link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/security/">
+<link rel="alternate" hreflang="de" href="https://klorn.ai/de/security/">
+<link rel="alternate" hreflang="x-default" href="https://klorn.ai/security/">
+<link rel="preload" as="font" type="font/woff2" href="/fonts/geist-var.woff2" crossorigin>
+<link rel="icon" href="/brand/favicon.svg?v=matte2" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png?v=matte2">
+<link rel="stylesheet" href="/landing.css">
+<link rel="stylesheet" href="/subpage.css">
+<script src="/site-nav.js" defer></script>
+</head>
+<body class="sub">
+<a class="skip" href="#main">Aller au contenu</a>
+
+<nav class="nav" aria-label="Principale"><div class="nav-pill">
+  <a class="nav-brand" href="/fr/">Klorn</a>
+  <button type="button" class="nav-menu-btn" data-menu-toggle aria-expanded="false" aria-controls="nav-menu" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <span class="nav-links" id="nav-menu" role="group" aria-label="Sections" data-site-nav><a href="/fr/#accounts">Comptes</a><a href="/fr/#lanes">Files</a><a href="/fr/pricing/">Tarifs</a><a href="/fr/security/" aria-current="page">Sécurité</a><a href="/fr/blog/">Blog</a></span>
+  <span class="nav-lang">
+    <button type="button" class="nav-lang-btn" data-menu-toggle
+            aria-haspopup="true" aria-expanded="false" aria-controls="lang-menu">Français <i aria-hidden="true">▾</i></button>
+    <span class="nav-lang-menu" id="lang-menu" role="menu">
+      <a href="/security/" role="menuitem" lang="en">English</a>
+      <a href="/ko/security/" role="menuitem" lang="ko">한국어</a>
+      <a href="/ja/security/" role="menuitem" lang="ja">日本語</a>
+      <a href="/zh/security/" role="menuitem" lang="zh">中文</a>
+      <a href="/es/security/" role="menuitem" lang="es">Español</a>
+      <a href="/fr/security/" role="menuitem" lang="fr" aria-current="true">Français</a>
+      <a href="/de/security/" role="menuitem" lang="de">Deutsch</a>
+    </span>
+  </span>
+  <a class="nav-login" href="https://app.klorn.ai/login">Connexion</a>
+  <a class="nav-cta dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
+     data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.2.0/Klorn-windows-setup.exe" data-win-label="Télécharger">Télécharger</a>
+</div></nav>
+
+<main id="main">
+<header class="sub-hero" id="top">
+  <div class="wrap">
+    <span class="eyebrow">Sécurité</span>
+    <h1>&laquo;&nbsp;Faites-nous confiance&nbsp;&raquo; n’est pas <span class="ser">une réponse.</span></h1>
+    <p class="lead">Klorn lit les e-mails écrits par d’autres pour que vous n’ayez pas à le faire. Cette phrase <em>est</em> le modèle de menace : l’entrée principale est du texte écrit par des inconnus, dont certains sont malveillants. Voici ce que l’architecture garantit réellement, avec le fichier qui met en œuvre chaque point.</p>
+    <p>Cette traduction est fournie pour votre commodité ; la version anglaise fait foi. <a href="/security/" lang="en" hreflang="en">Lire la version anglaise</a></p>
+  </div>
+</header>
+
+<section class="sec" id="verification" aria-labelledby="google-verification">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2 id="google-verification">Vérification Google et évaluation indépendante</h2>
+    </div>
+    <div class="prose">
+      <p>Google a terminé son examen de vérification OAuth pour Klorn le <strong>2026-10-03</strong>. Auparavant, Klorn avait été évalué de façon indépendante selon <strong>CASA Tier 2</strong> par TAC Security ; résultat : <strong>In Compliance</strong> (conforme). La lettre de validation (Letter of Validation) issue de cette évaluation a ensuite été transmise à Google.</p>
+    </div>
+    <dl class="kv">
+    <div><dt>Évaluation</dt><dd>CASA Tier 2, tests dynamiques de sécurité applicative (DAST), par TAC Security</dd></div>
+    <div><dt>Résultat</dt><dd>In Compliance (conforme), au niveau d’assurance AL1 (OWASP ASVS niveau 1)</dd></div>
+    <div><dt>Dates</dt><dd>Évalué le 2026-08-12 · rapport émis le 2026-08-30 · examen Google terminé le 2026-10-03</dd></div>
+    <div><dt>Réévaluation</dt><dd>Annuelle. La prochaine évaluation est prévue en août 2027</dd></div>
+  </dl>
+
+    <div class="prose">
+      <h3>Les cinq scopes Google, et la raison de chacun</h3>
+      <p>Ces cinq scopes sont ceux que Google a approuvés lors de cet examen, et les seuls scopes de messagerie et d’agenda que Klorn demande. Klorn ne demande pas le scope d’accès complet à Gmail et, pour Google Agenda, il demande uniquement <code>calendar.events</code> et <code>calendar.readonly</code> — jamais le scope complet de l’agenda.</p>
+    </div>
+    <dl class="kv kv-code">
+    <div><dt><code>gmail.readonly</code></dt><dd>Lire vos messages pour que Klorn puisse les trier, afficher le motif de chaque décision et résumer un fil quand vous le demandez.</dd></div>
+    <div><dt><code>gmail.modify</code></dt><dd>Modifier l’état d’un message quand vous agissez dans Klorn : archiver ou désarchiver, placer dans la corbeille ou l’en sortir, ajouter une étoile, marquer comme lu ou non lu, et enregistrer un brouillon de réponse dans Gmail.</dd></div>
+    <div><dt><code>gmail.send</code></dt><dd>Envoyer un e-mail uniquement quand vous l’approuvez — une réponse que vous confirmez, une désinscription par mailto que vous demandez — ou une réponse automatique selon des règles que vous avez définies vous-même.</dd></div>
+    <div><dt><code>calendar.readonly</code></dt><dd>Lire vos disponibilités sur tous vos agendas, afin que les e-mails de réunion soient vérifiés par rapport à votre emploi du temps réel et que les conflits soient détectés.</dd></div>
+    <div><dt><code>calendar.events</code></dt><dd>Créer, modifier ou supprimer un événement dans votre agenda principal quand vous le demandez à Klorn — pas les paramètres ni le partage de l’agenda.</dd></div>
+  </dl>
+    <div class="prose">
+      <p>Se connecter avec Google ne demande que votre nom et votre adresse e-mail. Les scopes de messagerie et d’agenda viennent plus tard, dans un second écran de consentement, quand vous connectez une boîte de réception — et une connexion limitée à l’agenda demande <code>calendar.readonly</code> sans aucun scope de messagerie. (<code>openid</code> et <code>userinfo.email</code>/<code>userinfo.profile</code> figurent aussi dans ce fichier — ils identifient le compte connecté, ne sont pas sensibles et ne font pas partie de ce que Google a examiné.)</p>
+      <h3>Où vont les données</h3>
+      <p>Les jetons OAuth sont chiffrés en AES-256-GCM avant d’être stockés, chaque surface hébergée fonctionne uniquement en TLS, et les statistiques d’usage n’incluent jamais le contenu des messages — le tableau ci-dessous indique le fichier derrière chaque point. Les journaux expirent selon le calendrier fixe décrit dans <a href="#retention">Combien de temps les données sont conservées</a>. Si vous préférez que vos e-mails ne passent pas du tout par nos serveurs, <a href="/fr/self-host/">auto-hébergez</a> le même code avec votre propre clé de modèle ou un <a href="/blog/local-llm-email-triage-ollama/">modèle local</a>. La politique de confidentialité se trouve sur <a href="/privacy/">/privacy</a>.</p>
+    </div>
+    <p class="not"><strong>Ce que cela signifie, et ce que cela ne signifie pas.</strong> L’examen et l’évaluation vérifient la manière dont Klorn traite les données Google qu’il demande. Ils ne constituent pas une recommandation de Klorn par Google et ne couvrent rien au-delà de ces scopes. Aujourd’hui, vous pouvez connecter Gmail, Google Agenda, Naver Mail (bêta) et iCloud Mail (bêta) ; les autres fournisseurs ne sont pas encore disponibles.</p>
+  </div>
+</section>
+
+<section class="sec sec-alt" id="guarantees" aria-labelledby="guarantees-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2 id="guarantees-h">Ce que l’architecture garantit</h2>
+    </div>
+    <div class="table-scroll" tabindex="0" role="region" aria-labelledby="guarantees-h">
+    <table class="spec">
+      <thead><tr><th>Propriété</th><th>Ce qui est réellement vrai</th><th>Où vérifier</th></tr></thead>
+      <tbody>
+      <tr><th>Les e-mails sont une entrée hostile</th><td class="us">Chaque corps d’e-mail, objet et chaîne provenant d’un tiers est encadré par des balises <code>&lt;untrusted_content&gt;</code> avant d’atteindre un modèle, et les balises d’encadrement déjà présentes sont d’abord retirées pour qu’un message forgé ne puisse pas refermer l’encadrement. <strong>L’injection de prompt fait partie du périmètre ; ce n’est pas une limite acceptée</strong></td><td><a href="https://github.com/k08200/klorn/blob/main/SECURITY.md" rel="noreferrer noopener">SECURITY.md</a></td></tr>
+      <tr><th>Chiffrement des jetons au repos</th><td class="us"><strong>AES-256-GCM</strong> avant que le jeton ne touche la base de données, avec rotation du trousseau de clés (enveloppes v1/v2) pour qu’une fuite suspectée soit traitée par rotation, sans bascule brutale. Une clé manquante hors dev/test <strong>interrompt le démarrage</strong> au lieu de basculer sur une solution de repli</td><td><a href="https://github.com/k08200/klorn/blob/main/packages/api/src/crypto-tokens.ts" rel="noreferrer noopener">crypto-tokens.ts</a></td></tr>
+      <tr id="approvals"><th>Actions sortantes</th><td class="us">L’envoi, la suppression définitive et le transfert vers l’extérieur ne peuvent pas reposer sur la confiance du classifieur. Chacun exige un reçu émis au moment de l’approbation, qui épingle un <strong>sha256 de la charge utile canonique</strong>, revérifié à l’exécution. Si quoi que ce soit a changé entre-temps, l’action est refusée</td><td><a href="https://github.com/k08200/klorn/blob/main/packages/api/src/judge/attention-floor.ts" rel="noreferrer noopener">attention-floor.ts</a></td></tr>
+      <tr><th>Commodités de développement</th><td class="us">Le secret JWT de dev, la clé de chiffrement de dev, le CORS localhost et l’utilisateur de démo sont derrière une liste d’autorisation dev/test qui <strong>échoue en position fermée</strong> pour tout autre <code>NODE_ENV</code></td><td><a href="https://github.com/k08200/klorn/blob/main/packages/api/src/env.ts" rel="noreferrer noopener">env.ts</a></td></tr>
+      <tr><th>Statistiques d’usage</th><td class="us"><strong>Uniquement internes (first-party).</strong> Une courte liste autorisée de noms d’événements génériques, dans la propre base Postgres de Klorn. Aucun traceur externe, et jamais le contenu des messages</td><td><a href="https://github.com/k08200/klorn/blob/main/packages/api/src/analytics.ts" rel="noreferrer noopener">analytics.ts</a></td></tr>
+      <tr><th>Chiffrement en transit</th><td class="us">Uniquement TLS sur chaque surface hébergée — API, web, API Google, fournisseurs de modèles</td><td><a href="https://github.com/k08200/klorn/blob/main/docs/self-hosting.md" rel="noreferrer noopener">self-hosting.md</a></td></tr>
+    </tbody>
+    </table>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="retention-sec" aria-labelledby="retention">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2 id="retention">Combien de temps les données sont conservées</h2>
+    </div>
+    <div class="prose"><p>La conservation des journaux est appliquée par une purge planifiée plutôt que par une promesse : les actions de l’agent, le traitement des e-mails, l’envoi des notifications push et les registres de webhooks sont supprimés après <strong>90 jours</strong>, les lignes de limitation de débit après <strong>30</strong>, et la comptabilité des tokens après <strong>180</strong> pour l’analyse des dérives de coût. Ces durées sont un tableau dans le code source, pas un réglage que nous pourrions élargir discrètement sans que cela apparaisse dans un diff.</p>
+      <h3>Signaler une vulnérabilité</h3>
+      <p>Écrivez à <a href="mailto:k0820086@gmail.com">k0820086@gmail.com</a> avec une description et les étapes de reproduction. Merci de ne pas ouvrir d’issue publique pour une faille exploitable. Vous recevrez un accusé de réception sous quelques jours ; les correctifs du plancher d’approbation et des chemins de chiffrement des jetons passent avant tout le reste. Les coordonnées lisibles par machine se trouvent sur <a href="/.well-known/security.txt">/.well-known/security.txt</a>.</p>
+    </div>
+    <div class="not"><p><strong>Ce que nous n’affirmons pas.</strong> En dehors de l’évaluation CASA Tier 2 ci-dessus, Klorn n’a fait l’objet d’aucun test d’intrusion par un tiers ni d’aucun audit SOC 2, et cette page n’en sous-entend aucun. C’est un produit en bêta maintenu par une seule personne. La mesure compensatoire : le code est sous AGPL-3.0 et les chemins liés à la sécurité sont nommés ci-dessus, fichier par fichier — vous pouvez les lire au lieu de nous croire sur parole.</p><p><a href="https://github.com/k08200/klorn/blob/main/SECURITY.md" rel="noreferrer noopener">SECURITY.md</a> en donne la version longue, y compris les lacunes connues que nous avons choisi d’exposer plutôt que de taire.</p></div>
+    <div class="actions actions-left">
+      <a class="btn btn-1" href="https://app.klorn.ai/login?mode=register">Essayer Klorn gratuitement</a>
+      <a class="btn btn-2" href="mailto:k0820086@gmail.com">Signaler un problème</a>
+    </div>
+  </div>
+</section>
+</main>
+<footer class="foot">
+  <div class="wrap foot-grid">
+    <div>
+      <a class="brand" href="/fr/">Klorn</a>
+      <p class="foot-note">Vos e-mails et vos agendas, triés au même endroit. Open source.</p>
+      <div class="socials">
+        <a href="https://github.com/k08200/klorn" rel="noreferrer noopener" aria-label="GitHub"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a>
+        <a href="https://x.com/klornai" rel="noreferrer noopener" aria-label="X"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+        <a href="https://join.slack.com/t/klorn/shared_invite/zt-3zkj8lqxg-L4LK8dNPkzgupHEdmXgbIg" rel="noreferrer noopener" aria-label="Slack"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52zm1.271 0a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52zm0 1.271a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522zm-1.268 0a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522zm0-1.268a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523z"/></svg></a>
+      </div>
+    </div>
+    <nav aria-label="Produit"><h4>Produit</h4>
+      <a href="/fr/download/">Tous les téléchargements</a>
+      <a href="/fr/pricing/">Tarifs</a>
+      <a href="https://app.klorn.ai/login">Connexion</a>
+      <a href="/fr/status/">État du service</a>
+      <a href="/fr/blog/">Blog</a></nav>
+    <nav aria-label="Open source"><h4>Open source</h4>
+      <a href="https://github.com/k08200/klorn" rel="noreferrer noopener">Dépôt GitHub</a>
+      <a href="https://github.com/k08200/klorn/releases/latest" rel="noreferrer noopener">Versions</a>
+      <a href="https://github.com/k08200/klorn/tree/main/packages/api/eval" rel="noreferrer noopener">Jeu d’évaluation</a>
+      <a href="/fr/methodology/">Méthodologie</a>
+      <a href="https://github.com/k08200/klorn/blob/main/LICENSE" rel="noreferrer noopener">Licence AGPLv3</a>
+      <a href="/fr/open-source/">Pourquoi l’AGPL, sans ajout</a>
+      <a href="/fr/self-host/">Auto-hébergement</a></nav>
+    <nav aria-label="Comparer"><h4>Comparer</h4>
+      <a href="/fr/vs/fyxer/">vs Fyxer</a>
+      <a href="/fr/vs/superhuman/">vs Superhuman</a>
+      <a href="/fr/vs/sanebox/">vs SaneBox</a>
+      <a href="/fr/vs/inbox-zero/">vs Inbox Zero</a></nav>
+    <nav aria-label="Mentions légales"><h4>Mentions légales</h4>
+      <a href="https://app.klorn.ai/privacy">Confidentialité</a>
+      <a href="https://app.klorn.ai/terms">Conditions</a>
+      <a href="https://app.klorn.ai/refund">Remboursements</a>
+      <a href="/fr/security/" aria-current="page">Sécurité</a>
+      <a href="/fr/gdpr/">GDPR</a>
+      <a href="/fr/dpa/">DPA</a>
+      <a href="mailto:k0820086@gmail.com">Contact</a></nav>
+  </div>
+  <div class="wrap foot-base">
+    <span>© 2026 Klorn · AGPLv3</span>
+  </div>
+</footer>
+<script>
+// Windows visitors get the installer: /site-nav.js swaps the href on every
+// .dl-cta, and this swaps the label to match. Same block as the landings.
+(function () {
+  var uaData = navigator.userAgentData;
+  var raw = String((uaData && uaData.platform) || navigator.platform || navigator.userAgent || '');
+  if (!/win/i.test(raw) || /mac|iphone|ipad|ipod/i.test(raw)) return;
+  document.querySelectorAll('[data-mac-dl]').forEach(function (a) {
+    var label = a.getAttribute('data-win-label');
+    if (!label) return;
+    Array.prototype.forEach.call(a.childNodes, function (n) {
+      if (n.nodeType !== 3 || !n.textContent.trim()) return;
+      var pad = n.textContent.match(/^(\s*)[\s\S]*?(\s*)$/);
+      n.textContent = pad[1] + label + pad[2];
+    });
+  });
+})();
+</script>
+<script>
+// Inflow attribution: utm_campaign and friends, the referrer and this page's
+// path ride along on every app.klorn.ai link, so a signup can be credited to
+// the page that earned it.
+(function () {
+  try {
+    var p = new URLSearchParams(location.search);
+    var q = [];
+    ["utm_source", "utm_medium", "utm_campaign", "utm_content"].forEach(function (k) {
+      var v = p.get(k);
+      if (v) q.push(k + "=" + encodeURIComponent(v.slice(0, 60)));
+    });
+    if (document.referrer) {
+      try {
+        var h = new URL(document.referrer).hostname;
+        if (h && h !== location.hostname) q.push("ref=" + encodeURIComponent(h));
+      } catch (e) {}
+    }
+    q.push("lp=" + encodeURIComponent(location.pathname.slice(0, 60)));
+    var qs = q.join("&");
+    document.querySelectorAll('a[href^="https://app.klorn.ai/"]').forEach(function (a) {
+      a.href += (a.href.indexOf("?") === -1 ? "?" : "&") + qs;
+    });
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>
