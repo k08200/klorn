@@ -164,8 +164,10 @@ func tokenSelfChecks(sourceDir: URL) -> [(String, Bool)] {
 
     // The scale itself.
     results.append((
-        "three radii (6 / 10 / 16) and the spacing grid (4 … 48)",
-        [Theme.Radius.sm, Theme.Radius.md, Theme.Radius.lg] == [6, 10, 16]
+        "v2 radii (chip 6 / control 10 / card 16 / sheet 24) and the spacing grid (4 … 48)",
+        [Theme.Radius.sm, Theme.Radius.md, Theme.Radius.lg, Theme.Radius.xl] == [6, 10, 16, 24]
+            && [Theme.Radius.chip, Theme.Radius.control, Theme.Radius.card, Theme.Radius.sheet]
+                == [6, 10, 16, 24]
             && [Theme.s1, Theme.s2, Theme.s3, Theme.s4, Theme.s6, Theme.s8, Theme.s12]
                 == [4, 8, 12, 16, 24, 32, 48]
             && Theme.rowHeight == 52))
@@ -178,11 +180,22 @@ func tokenSelfChecks(sourceDir: URL) -> [(String, Bool)] {
             && Theme.mailRowHeight.truncatingRemainder(dividingBy: Theme.s2) == 0
             && Theme.mailRowHeight >= WindowLaneChip.height + 2 * Theme.s1 + 18 + 15 + 2 * Theme.s2))
     results.append((
-        "elevation and motion carry the plan's numbers",
-        Theme.Elevation.l2.opacity == 0.12 && Theme.Elevation.l2.y == 8
-            && Theme.Elevation.l3.opacity == 0.18 && Theme.Elevation.l3.y == 24
-            && Theme.Motion.state == 0.12 && Theme.Motion.enter == 0.20
-            && Theme.Motion.exit == 0.16))
+        "v2 depth (menu, sheet) and motion (120 / 200 / 320 on 0.32,0.72,0,1)",
+        Theme.Elevation.menu.layers == [.init(opacity: 0.06, radius: 1, y: 1), .init(opacity: 0.10, radius: 6, y: 4)]
+            && Theme.Elevation.sheet.layers == [.init(opacity: 0.18, radius: 16, y: 12)]
+            && Theme.shadowInk == Theme.hex(0x0A0E14) && Theme.hairlineOpacity == 0.08
+            && Theme.Motion.state == 0.12 && Theme.Motion.move == 0.20
+            && Theme.Motion.sheet == 0.32 && Theme.Motion.curve == (0.32, 0.72, 0.0, 1.0)))
+    results.append((
+        "v2 type roles, Mac column: page 28 / title 22 / head 15 / body 13 / label 12 / caption 11 / mono 12",
+        [Theme.TypeSize.page, Theme.TypeSize.title, Theme.TypeSize.head, Theme.TypeSize.body,
+         Theme.TypeSize.label, Theme.TypeSize.caption, Theme.TypeSize.mono]
+            == [28, 22, 15, 13, 12, 11, 12]))
+    results.append((
+        "v2 dark canvas #0A0A0B, ink #0B0D12 and the accent pair is #0369A1 / #38BDF8",
+        Theme.bgDark == Theme.hex(0x0A0A0B) && Theme.textLight == Theme.hex(0x0B0D12)
+            && Theme.accentSolidLight == Theme.hex(0x0369A1)
+            && Theme.accentSolidDark == Theme.hex(0x38BDF8)))
 
     // The guard's own rules, then the files.
     let bad = [
