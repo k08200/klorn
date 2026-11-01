@@ -118,6 +118,9 @@ export async function sendAutoReplyViaFloor(
       ...(inReplyToEmailId ? { in_reply_to_email_id: inReplyToEmailId } : {}),
     },
     receipt,
+    // The user never saw this reply before it left: the executor records it
+    // as an auto reply, never as mail the user wrote (sent-messages.ts).
+    { sentOrigin: "auto_reply" },
   );
   assertSendSucceeded(result);
 }
