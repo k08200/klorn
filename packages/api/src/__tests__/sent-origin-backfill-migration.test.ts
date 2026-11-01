@@ -100,8 +100,12 @@ describe("auto_reply — the claim the unattended reply wrote before sending", (
     );
     expect(s()).toContain(`s."subject" = 'Re: ' || e."subject"`);
     expect(s()).toContain(
-      `s."sentAt" BETWEEN n."createdAt" - interval '1 minute' AND n."createdAt" + interval '10 minutes'`,
+      `s."sentAt" BETWEEN n."createdAt" - interval '1 minute' AND n."createdAt" + interval '2 minutes'`,
     );
+  });
+
+  it("skips claims rewritten as failed: nothing left, so a manual reply right after must stay the user's", () => {
+    expect(s()).toContain(`n."title" NOT IN ('Auto-reply failed', 'Auto-mode reply failed')`);
   });
 });
 
@@ -112,6 +116,7 @@ describe("unsubscribe — a mailto List-Unsubscribe target the user received", (
     expect(s()).toContain(
       `lower(btrim(split_part(regexp_replace("listUnsubscribeMailto", '^mailto:', '', 'i'), '?', 1))) AS addr`,
     );
+    expect(s()).toContain(`WITH targets AS MATERIALIZED (`);
     expect(s()).toContain(
       `COALESCE(NULLIF(btrim(replace(substring("listUnsubscribeMailto" from '[?&]subject=([^&]*)'), '+', ' ')), ''), 'unsubscribe') AS subject`,
     );

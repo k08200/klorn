@@ -21,8 +21,11 @@
 --                pre-dedupeKey "Auto-reply sent" row) for the mail answered,
 --                with the claim's recipient, the exact "Re: <subject>" both
 --                senders use (auto-mode-sweep.ts, deliverRuleAutoReply), and a
---                send within [claim - 1 min, claim + 10 min]. Claims are
---                at-most-once locks that clearing notifications never deletes.
+--                send within [claim - 1 min, claim + 2 min]: both write the
+--                claim after drafting and send right after it. A claim
+--                rewritten as failed means nothing left, so it never counts.
+--                Claims are at-most-once locks that clearing notifications
+--                never deletes.
 --   unsubscribe  the row's single recipient IS a mailto List-Unsubscribe
 --                target the user received, derived like parseMailtoTarget
 --                (list-unsubscribe.ts). When that address also sends the user
@@ -36,6 +39,15 @@
 -- Known unprovable: 1 row sent before the send floor deployed
 -- (2026-06-04 10:22 UTC), when the autonomous agent could send without a
 -- receipt; no log of that era survives, so it stays NULL.
+--
+-- Scope: every NULL row with proof, legacy or scanned since (production had
+-- none of the latter on 2026-11-01). A sent-history import applies the same
+-- rules to the rows it creates, so the two cannot disagree.
+--
+-- Deploy check: scripts/start.sh baselines a migration that keeps failing when
+-- the schema diff is empty, and this one changes no schema. After deploy,
+-- confirm SELECT origin, count(*) FROM "SentMessage" GROUP BY 1 shows the
+-- labels; if all are NULL, run this file by hand (it is idempotent).
 --
 -- Every statement fills NULLs only: a label recorded at send time is never
 -- overwritten and a re-run is a no-op. To undo one label, run the same
@@ -67,12 +79,13 @@ WHERE s."origin" IS NULL AND EXISTS (
    AND e."gmailId" = COALESCE(substring(n."dedupeKey" from '^(?:auto-reply|auto-mode-reply):(.+)$'), substring(n."message" from '\[([^\]]+)\]\s*$'))
   WHERE n."userId" = s."userId"
     AND (n."dedupeKey" LIKE 'auto-reply:%' OR n."dedupeKey" LIKE 'auto-mode-reply:%' OR (n."dedupeKey" IS NULL AND n."title" = 'Auto-reply sent'))
+    AND n."title" NOT IN ('Auto-reply failed', 'Auto-mode reply failed')
     AND lower(btrim(s."to")) = lower(substring(n."message" from '(?:replied|reply) to (\S+)'))
     AND s."subject" = 'Re: ' || e."subject"
-    AND s."sentAt" BETWEEN n."createdAt" - interval '1 minute' AND n."createdAt" + interval '10 minutes'
+    AND s."sentAt" BETWEEN n."createdAt" - interval '1 minute' AND n."createdAt" + interval '2 minutes'
 );
 
-WITH targets AS (
+WITH targets AS MATERIALIZED (
   SELECT DISTINCT "userId",
     lower(btrim(split_part(regexp_replace("listUnsubscribeMailto", '^mailto:', '', 'i'), '?', 1))) AS addr,
     COALESCE(NULLIF(btrim(replace(substring("listUnsubscribeMailto" from '[?&]subject=([^&]*)'), '+', ' ')), ''), 'unsubscribe') AS subject
