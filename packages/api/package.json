@@ -17,6 +17,7 @@
     "backfill:from-address": "tsx scripts/backfill-from-address.ts",
     "calibration": "tsx scripts/calibration.ts",
     "decision-metrics": "tsx scripts/decision-metrics.ts",
+    "replay:policy": "tsx scripts/replay-policy.ts",
     "throughput": "tsx scripts/throughput.ts",
     "prune:push-logs": "tsx scripts/prune-push-logs.ts",
     "cleanup:commitment-noise": "tsx scripts/cleanup-commitment-noise.ts",
