@@ -11,7 +11,8 @@
  * (laneFromFactsV3, phase P3) lands; then this file imports that instead.
  */
 
-import { type LiveTier, toLiveTier } from "../tiers.js";
+import type { LiveTier } from "@klorn/contract";
+import { toLiveTier } from "../tiers.js";
 import { type FactsV1, parseFactsV1 } from "./facts-schema.js";
 import { parseRelationshipSnapshot, type RelationshipSnapshot } from "./relationship.js";
 
