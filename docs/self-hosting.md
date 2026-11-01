@@ -49,12 +49,24 @@ degraded one. Full feature parity with the hosted product.
 
 ### 2. An LLM provider (one of three)
 
-- **OpenRouter key** — [openrouter.ai/keys](https://openrouter.ai/keys); a
-  free key works with the default free-model configuration.
-- **Gemini API key** — used as failover (or standalone).
-- **Fully local** — any OpenAI-compatible endpoint (Ollama, LM Studio,
-  vLLM): set `OPENAI_COMPAT_BASE_URL` + `OPENAI_COMPAT_MODEL` and no email
-  content leaves your machine.
+- **Anthropic (Claude API)** — `ANTHROPIC_API_KEY` from
+  [platform.claude.com](https://platform.claude.com/settings/keys). The
+  default provider, and the one klorn.ai runs. Model pins default to
+  `claude-haiku-5-5`; a pin that is not a Claude id is served by
+  `ANTHROPIC_MODEL` (default `claude-haiku-5-5`).
+- **Google Gemini** — `GEMINI_API_KEY` from
+  [aistudio.google.com/apikey](https://aistudio.google.com/apikey). Works
+  standalone or as a second provider; pins that are not Gemini ids are served
+  by `GEMINI_FALLBACK_MODEL` (default `gemini-2.5-flash`).
+- **OpenAI-compatible / local** — any OpenAI-compatible endpoint (Ollama,
+  LM Studio, vLLM, llama.cpp server): set `OPENAI_COMPAT_BASE_URL` +
+  `OPENAI_COMPAT_MODEL` and no email content leaves your machine.
+
+With more than one cloud key set, `LLM_PROVIDER_ORDER` (e.g.
+`anthropic,gemini`) puts the listed providers first; configured providers it
+does not list follow in the default order, so a typo can reorder the chain
+but never empty it. A local endpoint keeps its own `OPENAI_COMPAT_PRIORITY`
+(first unless set to `last`).
 
 ## Path 1 — Deploy to Render (managed, free tier)
 
@@ -93,7 +105,7 @@ Required — the API won't boot, or won't log in, without these:
 | `GOOGLE_REDIRECT_URI` | Must exactly match the OAuth client's redirect URI | `packages/api/src/mail/gmail.ts` |
 | `WEB_URL` | Where OAuth redirects send the browser back | `packages/api/src/routes/auth.ts` |
 | `CORS_ORIGINS` | Allowed browser origins (comma-separated). Production **fails closed** to klorn.ai origins only when unset — your web origin must be listed | `packages/api/src/index.ts` |
-| one of `OPENROUTER_API_KEY` / `GEMINI_API_KEY` / `OPENAI_COMPAT_BASE_URL` | LLM provider for the classifier | `packages/api/src/providers/index.ts` |
+| one of `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` / `OPENAI_COMPAT_BASE_URL` | LLM provider for the classifier | `packages/api/src/providers/index.ts` |
 | `NEXT_PUBLIC_API_URL` | *(web app, build-time)* URL browsers use to reach the API | `packages/web` build |
 
 Useful optional vars (full tuning catalog with defaults:
@@ -107,7 +119,8 @@ Useful optional vars (full tuning catalog with defaults:
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_EMAIL` | Web Push notifications |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_BOT_USERNAME` / `TELEGRAM_WEBHOOK_SECRET` | PUSH-tier delivery to Telegram |
 | `ADMIN_EMAILS` | Comma-separated operator emails with admin access |
-| `JUDGE_MODEL` / `CHAT_MODEL` / `AGENT_MODEL` | Model pins (defaults stay on free models for keyless/cheap operation) |
+| `LLM_PROVIDER_ORDER` | Order of the cloud providers when more than one key is set, e.g. `anthropic,gemini` |
+| `JUDGE_MODEL` / `CHAT_MODEL` / `AGENT_MODEL` | Model pins (default `claude-haiku-5-5`) |
 | `DAILY_COST_CAP_CENTS` | Per-user daily LLM spend cap (default 100 = $1/day) |
 | `KEEPALIVE_URL` | Free-dyno keepalive ping target (Render free tier sleeps) |
 
@@ -185,9 +198,10 @@ OPENAI_COMPAT_MODEL=qwen3:8b
 OPENAI_COMPAT_API_KEY=
 
 # This is the line that makes it local-ONLY. A configured local endpoint runs
-# FIRST, but hosted providers stay as failover, so leaving a key here means
-# mail can still leave the box when the local model errors or times out.
-OPENROUTER_API_KEY=
+# FIRST, but hosted providers (Anthropic, Gemini) stay as failover, so leaving
+# a key here means mail can still leave the box when the local model errors or
+# times out.
+ANTHROPIC_API_KEY=
 GEMINI_API_KEY=
 ```
 
