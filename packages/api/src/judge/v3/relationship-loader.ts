@@ -10,6 +10,7 @@
 import { db } from "../../db.js";
 import { escapeLikePattern } from "../../db-like.js";
 import { senderLabelsFor } from "../../mail/sender-labels.js";
+import type { SentOrigin } from "../../mail/sent-messages.js";
 import { isSenderAddressIndexEnabled, lookupPinnedTier } from "../judge-context.js";
 import {
   buildRelationshipSnapshot,
@@ -20,6 +21,21 @@ import {
   UNKNOWN_RELATIONSHIP,
   writtenTo,
 } from "./relationship.js";
+
+/**
+ * Sends that count as "the user wrote to them" (doc §3(2), #1591/#1592):
+ * the user's own sends in Klorn ("user"), bytes the user approved ("approved"),
+ * and sends seen only by the Sent-folder scan (null: sent outside Klorn).
+ * Klorn's unattended replies and mailto unsubscribes never count: an attacker
+ * who triggers an auto-reply must not look like someone the user writes to.
+ */
+export const RELATIONSHIP_EVIDENCE_ORIGINS = [
+  "user",
+  "approved",
+] as const satisfies readonly SentOrigin[];
+export const SENT_EVIDENCE_WHERE = {
+  OR: [{ origin: null }, { origin: { in: [...RELATIONSHIP_EVIDENCE_ORIGINS] } }],
+};
 
 /** Most recent sent rows scanned for one sender. */
 export const SENT_SCAN_LIMIT = 300;
@@ -52,7 +68,10 @@ export interface RelationshipLoaderDeps {
 
 export const prismaRelationshipDeps: RelationshipLoaderDeps = {
   async hasAnySent(userId) {
-    const row = await db.sentMessage.findFirst({ where: { userId }, select: { id: true } });
+    const row = await db.sentMessage.findFirst({
+      where: { userId, ...SENT_EVIDENCE_WHERE },
+      select: { id: true },
+    });
     return row !== null;
   },
   sentRowsMentioning(userId, address) {
@@ -60,7 +79,11 @@ export const prismaRelationshipDeps: RelationshipLoaderDeps = {
     // (small today; a recipient-address column is the fix once sent history
     // is backfilled). Escaped so "_" and "%" match literally.
     return db.sentMessage.findMany({
-      where: { userId, to: { contains: escapeLikePattern(address), mode: "insensitive" } },
+      where: {
+        userId,
+        to: { contains: escapeLikePattern(address), mode: "insensitive" },
+        ...SENT_EVIDENCE_WHERE,
+      },
       select: { sentAt: true, to: true, threadId: true },
       orderBy: { sentAt: "desc" },
       take: SENT_SCAN_LIMIT,
@@ -82,7 +105,7 @@ export const prismaRelationshipDeps: RelationshipLoaderDeps = {
   },
   sentInThreads(userId, threadIds) {
     return db.sentMessage.findMany({
-      where: { userId, threadId: { in: threadIds } },
+      where: { userId, threadId: { in: threadIds }, ...SENT_EVIDENCE_WHERE },
       select: { sentAt: true, threadId: true },
       take: SENT_SCAN_LIMIT,
     });
