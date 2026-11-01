@@ -120,6 +120,8 @@ export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> 
   await tx.emailMessage.deleteMany(scope);
   await tx.emailRule.deleteMany(scope);
   await tx.decisionLabel.deleteMany(scope);
+  // AttentionFacts: v3 shadow facts per item — evidence quotes from the mail.
+  await tx.attentionFacts.deleteMany(scope);
   await tx.learnedRule.deleteMany(scope);
   await tx.calibrationSnapshot.deleteMany(scope);
   await tx.devicePushToken.deleteMany(scope);
