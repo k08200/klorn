@@ -170,9 +170,7 @@
         "event": false,
         "transaction": null,
         "risk": [],
-        "askKinds": [
-          "review"
-        ]
+        "askKinds": ["review"]
       }
     },
     {
@@ -183,9 +181,7 @@
         "due": "none",
         "event": false,
         "transaction": null,
-        "risk": [
-          "account_change"
-        ]
+        "risk": ["account_change"]
       }
     },
     {
@@ -258,9 +254,7 @@
         "transaction": null,
         "risk": [],
         "asksPresent": true,
-        "askKinds": [
-          "decide"
-        ],
+        "askKinds": ["decide"],
         "event": false
       }
     },
@@ -284,9 +278,7 @@
         "transaction": null,
         "risk": [],
         "asksPresent": true,
-        "askKinds": [
-          "reply"
-        ],
+        "askKinds": ["reply"],
         "event": false
       }
     },
@@ -395,9 +387,7 @@
         "event": false,
         "transaction": null,
         "risk": [],
-        "askKinds": [
-          "review"
-        ]
+        "askKinds": ["review"]
       }
     },
     {
@@ -419,9 +409,7 @@
         "transaction": null,
         "risk": [],
         "asksPresent": true,
-        "askKinds": [
-          "provide"
-        ]
+        "askKinds": ["provide"]
       }
     },
     {
@@ -442,9 +430,7 @@
         "transaction": null,
         "risk": [],
         "asksPresent": true,
-        "askKinds": [
-          "provide"
-        ]
+        "askKinds": ["provide"]
       }
     },
     {
@@ -475,9 +461,7 @@
         "transaction": null,
         "risk": [],
         "asksPresent": true,
-        "askKinds": [
-          "reply"
-        ]
+        "askKinds": ["reply"]
       }
     },
     {
@@ -498,9 +482,7 @@
         "transaction": null,
         "risk": [],
         "asksPresent": true,
-        "askKinds": [
-          "attend"
-        ]
+        "askKinds": ["attend"]
       }
     },
     {
@@ -521,9 +503,7 @@
         "transaction": null,
         "risk": [],
         "asksPresent": true,
-        "askKinds": [
-          "review"
-        ]
+        "askKinds": ["review"]
       }
     },
     {
@@ -534,9 +514,7 @@
         "transaction": null,
         "risk": [],
         "asksPresent": true,
-        "askKinds": [
-          "provide"
-        ]
+        "askKinds": ["provide"]
       }
     },
     {
@@ -553,9 +531,7 @@
       "id": "eval-046",
       "labels": {
         "asksPresent": true,
-        "risk": [
-          "security_alert"
-        ],
+        "risk": ["security_alert"],
         "event": false
       }
     },
