@@ -145,6 +145,7 @@ model User {
   commitments               Commitment[]
   feedbackEvents            FeedbackEvent[]
   decisionLabels            DecisionLabel[]
+  attentionFacts            AttentionFacts[]
   emailLabelFeedback        EmailLabelFeedback[]
   playbookActivations       ActivatedPlaybook[]
   workContextSnapshots      WorkContextSnapshot[]
@@ -1819,6 +1820,66 @@ model AttentionItem {
   // can't serve it; this status-leading index keeps it from seq-scanning the
   // whole table as rows accumulate across users.
   @@index([status, surfacedAt])
+}
+
+// Attention Engine v3 facts per item (docs/design/attention-engine-v3.md §3,
+// phase P2). Written only by the JUDGE_V3_SHADOW extractor, after the v2 judge
+// on new mail; never read by the lane users see. Additive: no v2 data is
+// rewritten. Same natural key as AttentionItem / DecisionLabel, so policy
+// replay (P3) joins on (userId, source, sourceId).
+model AttentionFacts {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  source   AttentionSource
+  sourceId String
+
+  // judge/v3/facts-schema.ts FACTS_VERSION; facts is FactsV1 at that version.
+  factsVersion     Int
+  // "llm" | "none" (no usable model answer)
+  factsSource      String
+  // Model and provider that actually served (createCompletion onServed); null
+  // for "none".
+  model            String?
+  provider         String?
+  extractedAt      DateTime
+  // "llm": FactsV1 after evidence check, date window and the deterministic
+  // merge. "none": only the certain pre-facts (Partial<FactsV1>), so
+  // parseFactsV1 rejects it by design and policy uses its keyword fallback.
+  facts            Json
+  // Fact fields fixed by deterministic pre-facts.
+  certainFields    String[]
+  // judge/v3/pre-facts.ts PreFactSignals: header-derived booleans and counts
+  // (list mail, automated sender, spam, Gmail category, calendar file,
+  // recipients). No mail text.
+  signals          Json?
+  // judge/v3/relationship.ts RelationshipSnapshot at extraction time.
+  relationship     Json?
+  // { checked, dropped: [{ path, evidence }] }
+  evidenceCheck    Json
+  // Validator / date-window issues and LLM failure notes (bounded strings).
+  issues           String[]
+  // Doc §4 escalation candidates: evidence_failed | ambiguous | parse_issues | llm_failed.
+  escalate         Boolean  @default(false)
+  escalateReasons  String[]
+  // The v2 lane shown when the shadow ran. DecisionLabel.shownTier is rewritten
+  // on re-judge, so the disagreement report needs its own frozen copy.
+  v2Tier           String?
+  // Usage of the served call, for the shadow's cost-per-day metric (LlmUsageLog
+  // has no purpose tag). costUsd is 0 when the user's own key served; all null
+  // when no call succeeded.
+  promptTokens     Int?
+  completionTokens Int?
+  costUsd          Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, source, sourceId])
+  @@index([userId, extractedAt])
+  // The cross-user disagreement report filters on extractedAt alone.
+  @@index([extractedAt])
 }
 
 // Decision ledger: the tier the firewall SHOWED the user for each classified

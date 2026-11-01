@@ -42,6 +42,8 @@ export interface PreFactsInput {
   hasCalendarInvite: boolean | null;
   /** The user sent a message in this thread after this mail (null = unknown). */
   userRepliedAfter: boolean | null;
+  /** The receiving server's DMARC verdict for the From domain (null = unknown). */
+  senderAuthenticated?: boolean | null;
 }
 
 export interface PreFactSignals {
@@ -65,6 +67,8 @@ export interface PreFactSignals {
   userInCc: boolean | null;
   /** To + Cc recipients other than the user (null when the user is unknown). */
   otherRecipients: number | null;
+  /** DMARC pass for the From domain; null when no verdict exists. */
+  senderAuthenticated: boolean | null;
 }
 
 export interface PreFacts {
@@ -145,6 +149,7 @@ export function collectPreFactSignals(input: PreFactsInput): PreFactSignals {
       hasListUnsubscribe: input.hasListUnsubscribe,
     }),
     ...recipientSignals(input),
+    senderAuthenticated: input.senderAuthenticated ?? null,
   };
 }
 
