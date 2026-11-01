@@ -15,26 +15,43 @@ const facts = (over: Partial<FactsV1> = {}): FactsV1 => ({
   ambiguous: false,
   ...over,
 });
-const ask = (kind: "reply" | "provide", due: string | null) => ({ kind, object: "x", due, evidence: "by today" });
+const ask = (kind: "reply" | "provide", due: string | null) => ({
+  kind,
+  object: "x",
+  due,
+  evidence: "by today",
+});
 
 describe("dueBucket", () => {
   it("buckets the earliest due against receipt", () => {
     expect(dueBucket(facts(), at)).toBe("none");
-    expect(dueBucket(facts({ asks: [ask("reply", "2026-06-01T23:59:00+00:00")] }), at)).toBe("within24h");
-    expect(dueBucket(facts({ asks: [ask("reply", "2026-06-05T23:59:00+00:00")] }), at)).toBe("later");
+    expect(dueBucket(facts({ asks: [ask("reply", "2026-06-01T23:59:00+00:00")] }), at)).toBe(
+      "within24h",
+    );
+    expect(dueBucket(facts({ asks: [ask("reply", "2026-06-05T23:59:00+00:00")] }), at)).toBe(
+      "later",
+    );
   });
 });
 
 describe("scoreItem", () => {
   it("scores only labelled fields", () => {
-    const s = scoreItem(facts({ asks: [ask("provide", "2026-06-01T20:00:00Z")] }), { asksPresent: true, due: "within24h" }, at);
+    const s = scoreItem(
+      facts({ asks: [ask("provide", "2026-06-01T20:00:00Z")] }),
+      { asksPresent: true, due: "within24h" },
+      at,
+    );
     expect(s).toEqual({ asksPresent: true, due: true });
   });
 
   it("transaction kind null means any kind; null label means no transaction", () => {
     const f = facts({ transaction: { kind: "statement", actionRequired: false } });
-    expect(scoreItem(f, { transaction: { kind: null, actionRequired: false } }, at).transaction).toBe(true);
-    expect(scoreItem(f, { transaction: { kind: "invoice", actionRequired: false } }, at).transaction).toBe(false);
+    expect(
+      scoreItem(f, { transaction: { kind: null, actionRequired: false } }, at).transaction,
+    ).toBe(true);
+    expect(
+      scoreItem(f, { transaction: { kind: "invoice", actionRequired: false } }, at).transaction,
+    ).toBe(false);
     expect(scoreItem(f, { transaction: null }, at).transaction).toBe(false);
   });
 });
@@ -42,8 +59,22 @@ describe("scoreItem", () => {
 describe("summarizeFactEval", () => {
   it("reports per-field accuracy, ask-kind precision/recall and evidence validity", () => {
     const s = summarizeFactEval([
-      { id: "a", facts: facts({ asks: [ask("reply", null)] }), label: { asksPresent: true, askKinds: ["reply"] }, receivedAt: at, asksChecked: 2, asksDropped: 1 },
-      { id: "b", facts: facts(), label: { asksPresent: true, askKinds: ["provide"] }, receivedAt: at, asksChecked: 0, asksDropped: 0 },
+      {
+        id: "a",
+        facts: facts({ asks: [ask("reply", null)] }),
+        label: { asksPresent: true, askKinds: ["reply"] },
+        receivedAt: at,
+        asksChecked: 2,
+        asksDropped: 1,
+      },
+      {
+        id: "b",
+        facts: facts(),
+        label: { asksPresent: true, askKinds: ["provide"] },
+        receivedAt: at,
+        asksChecked: 0,
+        asksDropped: 0,
+      },
       { id: "c", facts: null, label: {}, receivedAt: at, asksChecked: 0, asksDropped: 0 },
     ]);
     expect(s.fields.asksPresent).toEqual({ correct: 1, total: 2, accuracy: 0.5 });
@@ -55,13 +86,21 @@ describe("summarizeFactEval", () => {
 });
 
 describe("synthetic fact labels file", () => {
-  const doc = JSON.parse(readFileSync(new URL("../../eval/facts/synthetic-facts.json", import.meta.url), "utf8"));
-  const items = JSON.parse(readFileSync(new URL("../../eval/judge-eval-set.json", import.meta.url), "utf8")).items as { id: string }[];
+  const doc = JSON.parse(
+    readFileSync(new URL("../../eval/facts/synthetic-facts.json", import.meta.url), "utf8"),
+  );
+  const items = JSON.parse(
+    readFileSync(new URL("../../eval/judge-eval-set.json", import.meta.url), "utf8"),
+  ).items as { id: string }[];
 
   it("labels only items that exist in the synthetic judge set, once each", () => {
     const ids = doc.items.map((i: { id: string }) => i.id);
     expect(new Set(ids).size).toBe(ids.length);
-    for (const id of ids) expect(items.some((i) => i.id === id), id).toBe(true);
+    for (const id of ids)
+      expect(
+        items.some((i) => i.id === id),
+        id,
+      ).toBe(true);
   });
 
   it("uses only facts v1 vocabulary", () => {

@@ -11,7 +11,11 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { type EvalItemResult, type FactLabel, summarizeFactEval } from "../src/judge/v3/fact-eval.js";
+import {
+  type EvalItemResult,
+  type FactLabel,
+  summarizeFactEval,
+} from "../src/judge/v3/fact-eval.js";
 import { extractFacts } from "../src/judge/v3/facts-extractor.js";
 
 interface Item {
@@ -29,7 +33,11 @@ function arg(name: string): string | undefined {
   return hit?.slice(name.length + 3);
 }
 
-async function run(item: Item, label: FactLabel, model: string | undefined): Promise<EvalItemResult & { costUsd: number }> {
+async function run(
+  item: Item,
+  label: FactLabel,
+  model: string | undefined,
+): Promise<EvalItemResult & { costUsd: number }> {
   const receivedAt = new Date(item.receivedAt);
   const x = await extractFacts(
     {
@@ -65,8 +73,10 @@ async function run(item: Item, label: FactLabel, model: string | undefined): Pro
 }
 
 async function main(): Promise<number> {
-  const items = JSON.parse(readFileSync(resolve("eval/judge-eval-set.json"), "utf8")).items as Item[];
-  const labels = JSON.parse(readFileSync(resolve("eval/facts/synthetic-facts.json"), "utf8")).items as {
+  const items = JSON.parse(readFileSync(resolve("eval/judge-eval-set.json"), "utf8"))
+    .items as Item[];
+  const labels = JSON.parse(readFileSync(resolve("eval/facts/synthetic-facts.json"), "utf8"))
+    .items as {
     id: string;
     labels: FactLabel;
   }[];

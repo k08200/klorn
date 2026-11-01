@@ -62,10 +62,12 @@ export function scoreItem(
   if (label.addressedTo) out.addressedTo = facts.addressedTo === label.addressedTo;
   if (label.kind) out.kind = facts.kind === label.kind;
   if (label.threadTurn) out.threadTurn = facts.threadTurn === label.threadTurn;
-  if (label.asksPresent !== undefined) out.asksPresent = facts.asks.length > 0 === label.asksPresent;
+  if (label.asksPresent !== undefined)
+    out.asksPresent = facts.asks.length > 0 === label.asksPresent;
   if (label.due) out.due = dueBucket(facts, receivedAt) === label.due;
   if (label.event !== undefined) out.event = (facts.event !== null) === label.event;
-  if (label.transaction !== undefined) out.transaction = transactionMatches(label.transaction, facts);
+  if (label.transaction !== undefined)
+    out.transaction = transactionMatches(label.transaction, facts);
   if (label.risk) out.risk = sameSet(facts.risk, label.risk);
   return out;
 }
@@ -107,12 +109,15 @@ export function summarizeFactEval(results: readonly EvalItemResult[]) {
     if (r.label.askKinds) {
       const got = new Set(r.facts.asks.map((a) => a.kind));
       const want = new Set(r.label.askKinds);
-      for (const k of got) (want.has(k) ? kindTp++ : kindFp++);
+      for (const k of got) want.has(k) ? kindTp++ : kindFp++;
       for (const k of want) if (!got.has(k)) kindFn++;
     }
   }
   const accuracy = Object.fromEntries(
-    Object.entries(fields).map(([f, v]) => [f, { ...v, accuracy: v.total ? v.correct / v.total : null }]),
+    Object.entries(fields).map(([f, v]) => [
+      f,
+      { ...v, accuracy: v.total ? v.correct / v.total : null },
+    ]),
   );
   return {
     items: results.length,

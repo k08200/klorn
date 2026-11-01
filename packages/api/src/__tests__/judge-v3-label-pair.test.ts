@@ -14,7 +14,12 @@ const f = (over: Partial<FactsV1> = {}): FactsV1 => ({
   ambiguous: false,
   ...over,
 });
-const ask = (due: string | null) => ({ kind: "reply" as const, object: "x", due, evidence: "reply today please" });
+const ask = (due: string | null) => ({
+  kind: "reply" as const,
+  object: "x",
+  due,
+  evidence: "reply today please",
+});
 
 describe("comparePair", () => {
   it("agreement on a non-urgent item is reconciled without founder review", () => {
@@ -46,12 +51,21 @@ describe("comparePair", () => {
   });
 
   it("a model without usable facts sends the item to review", () => {
-    expect(comparePair(null, f(), at)).toMatchObject({ needsReview: true, reviewReasons: ["no_facts"] });
+    expect(comparePair(null, f(), at)).toMatchObject({
+      needsReview: true,
+      reviewReasons: ["no_facts"],
+    });
   });
 
   it("compares ask kinds as a set and ignores the order of risks", () => {
-    const a = f({ asks: [{ ...ask(null), kind: "review" }, ask(null)], risk: ["account_change", "phishing_suspect"] });
-    const b = f({ asks: [ask(null), { ...ask(null), kind: "review" }, ask(null)], risk: ["phishing_suspect", "account_change"] });
+    const a = f({
+      asks: [{ ...ask(null), kind: "review" }, ask(null)],
+      risk: ["account_change", "phishing_suspect"],
+    });
+    const b = f({
+      asks: [ask(null), { ...ask(null), kind: "review" }, ask(null)],
+      risk: ["phishing_suspect", "account_change"],
+    });
     expect(comparePair(a, b, at).diffs).toEqual([]);
   });
 });

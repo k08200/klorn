@@ -58,19 +58,39 @@ function parseArgs(argv: string[]): Args {
   const input = map.get("in");
   if (!input) throw new Error("--in=<mail export JSON> is required");
   const models = (map.get("models") ?? DEFAULT_MODELS.join(",")).split(",").map((s) => s.trim());
-  if (models.length !== 2 || models[0] === models[1]) throw new Error("--models needs two different models");
+  if (models.length !== 2 || models[0] === models[1])
+    throw new Error("--models needs two different models");
   const outDir = resolve(
-    map.get("out-dir") ?? join(homedir(), "klorn-secrets", "ae3-fact-labels", new Date().toISOString().replace(/[:.]/g, "-")),
+    map.get("out-dir") ??
+      join(
+        homedir(),
+        "klorn-secrets",
+        "ae3-fact-labels",
+        new Date().toISOString().replace(/[:.]/g, "-"),
+      ),
   );
-  if (!relative(REPO_ROOT, outDir).startsWith("..")) throw new Error("refusing: --out-dir must be outside the repo");
+  if (!relative(REPO_ROOT, outDir).startsWith(".."))
+    throw new Error("refusing: --out-dir must be outside the repo");
   const limit = map.has("limit") ? Number(map.get("limit")) : null;
-  return { input, models: [models[0], models[1]], limit, outDir, concurrency: Number(map.get("concurrency") ?? 2) };
+  return {
+    input,
+    models: [models[0], models[1]],
+    limit,
+    outDir,
+    concurrency: Number(map.get("concurrency") ?? 2),
+  };
 }
 
-function loadItems(path: string, limit: number | null): { items: MailItem[]; userEmail: string | null } {
+function loadItems(
+  path: string,
+  limit: number | null,
+): { items: MailItem[]; userEmail: string | null } {
   const doc = JSON.parse(readFileSync(resolve(path), "utf8"));
   const items = (doc.items ?? doc) as MailItem[];
-  return { items: limit ? items.slice(0, limit) : items, userEmail: doc.metadata?.userEmail ?? null };
+  return {
+    items: limit ? items.slice(0, limit) : items,
+    userEmail: doc.metadata?.userEmail ?? null,
+  };
 }
 
 async function labelOne(item: MailItem, model: string, userEmail: string | null) {
@@ -116,7 +136,11 @@ function slim(x: FactsExtraction | null, error: string | null, requested: string
   };
 }
 
-async function mapLimit<T, R>(items: T[], n: number, fn: (t: T, i: number) => Promise<R>): Promise<R[]> {
+async function mapLimit<T, R>(
+  items: T[],
+  n: number,
+  fn: (t: T, i: number) => Promise<R>,
+): Promise<R[]> {
   const out: R[] = new Array(items.length);
   let next = 0;
   await Promise.all(
@@ -130,13 +154,32 @@ async function mapLimit<T, R>(items: T[], n: number, fn: (t: T, i: number) => Pr
   return out;
 }
 
-function reviewMarkdown(rows: { item: MailItem; verdict: PairVerdict; a: ReturnType<typeof slim>; b: ReturnType<typeof slim> }[]) {
-  const lines = ["# Fact labels for founder review", "", "Decide each item; only reconciled labels count.", ""];
+function reviewMarkdown(
+  rows: {
+    item: MailItem;
+    verdict: PairVerdict;
+    a: ReturnType<typeof slim>;
+    b: ReturnType<typeof slim>;
+  }[],
+) {
+  const lines = [
+    "# Fact labels for founder review",
+    "",
+    "Decide each item; only reconciled labels count.",
+    "",
+  ];
   for (const { item, verdict, a, b } of rows.filter((r) => r.verdict.needsReview)) {
     lines.push(`## ${item.id} — ${item.subject.slice(0, 120)}`);
-    lines.push(`from: ${item.from} · ${item.receivedAt} · why: ${verdict.reviewReasons.join(", ")}`);
+    lines.push(
+      `from: ${item.from} · ${item.receivedAt} · why: ${verdict.reviewReasons.join(", ")}`,
+    );
     if (verdict.diffs.length) lines.push(`differs on: ${verdict.diffs.join(", ")}`);
-    lines.push("```json", JSON.stringify({ [a.requested]: a.facts, [b.requested]: b.facts }, null, 2), "```", "");
+    lines.push(
+      "```json",
+      JSON.stringify({ [a.requested]: a.facts, [b.requested]: b.facts }, null, 2),
+      "```",
+      "",
+    );
   }
   return lines.join("\n");
 }
@@ -160,7 +203,17 @@ async function main(): Promise<number> {
   });
   writePrivate(
     join(args.outDir, "labels.jsonl"),
-    rows.map((r) => JSON.stringify({ id: r.item.id, receivedAt: r.item.receivedAt, a: r.a, b: r.b, ...r.verdict })).join("\n"),
+    rows
+      .map((r) =>
+        JSON.stringify({
+          id: r.item.id,
+          receivedAt: r.item.receivedAt,
+          a: r.a,
+          b: r.b,
+          ...r.verdict,
+        }),
+      )
+      .join("\n"),
   );
   writePrivate(join(args.outDir, "review.md"), reviewMarkdown(rows));
   const summary = {
@@ -170,9 +223,14 @@ async function main(): Promise<number> {
     agreed: rows.filter((r) => r.verdict.agree).length,
     reconciledNow: rows.filter((r) => r.verdict.reconciled).length,
     needsReview: rows.filter((r) => r.verdict.needsReview).length,
-    reviewReasons: rows.flatMap((r) => r.verdict.reviewReasons).reduce<Record<string, number>>((m, k) => ({ ...m, [k]: (m[k] ?? 0) + 1 }), {}),
-    diffFields: rows.flatMap((r) => r.verdict.diffs).reduce<Record<string, number>>((m, k) => ({ ...m, [k]: (m[k] ?? 0) + 1 }), {}),
-    degradedCalls: rows.filter((r) => r.a.degraded).length + rows.filter((r) => r.b.degraded).length,
+    reviewReasons: rows
+      .flatMap((r) => r.verdict.reviewReasons)
+      .reduce<Record<string, number>>((m, k) => ({ ...m, [k]: (m[k] ?? 0) + 1 }), {}),
+    diffFields: rows
+      .flatMap((r) => r.verdict.diffs)
+      .reduce<Record<string, number>>((m, k) => ({ ...m, [k]: (m[k] ?? 0) + 1 }), {}),
+    degradedCalls:
+      rows.filter((r) => r.a.degraded).length + rows.filter((r) => r.b.degraded).length,
     costUsd: rows.reduce((s, r) => s + r.a.costUsd + r.b.costUsd, 0),
   };
   writePrivate(join(args.outDir, "summary.json"), JSON.stringify(summary, null, 2));
