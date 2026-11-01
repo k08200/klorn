@@ -14,6 +14,66 @@
     <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/"/>
   </url>
   <url>
+    <loc>https://klorn.ai/blog/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/blog/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/blog/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/blog/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/blog/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/blog/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/blog/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/blog/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/blog/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/blog/auto-archive-newsletters-gmail/</loc>
+    <lastmod>2026-10-02</lastmod>
+  </url>
+  <url>
+    <loc>https://klorn.ai/blog/gmail-filters-vs-ai-triage/</loc>
+    <lastmod>2026-10-02</lastmod>
+  </url>
+  <url>
+    <loc>https://klorn.ai/blog/gmail-important-emails-going-to-promotions/</loc>
+    <lastmod>2026-10-02</lastmod>
+  </url>
+  <url>
+    <loc>https://klorn.ai/blog/gmail-priority-inbox-not-working/</loc>
+    <lastmod>2026-10-02</lastmod>
+  </url>
+  <url>
+    <loc>https://klorn.ai/blog/google-verification-casa/</loc>
+    <lastmod>2026-10-14</lastmod>
+  </url>
+  <url>
+    <loc>https://klorn.ai/blog/how-to-get-notified-only-for-urgent-emails/</loc>
+    <lastmod>2026-10-02</lastmod>
+  </url>
+  <url>
+    <loc>https://klorn.ai/blog/llm-cost-caps-that-fail-closed/</loc>
+    <lastmod>2026-10-02</lastmod>
+  </url>
+  <url>
+    <loc>https://klorn.ai/blog/local-llm-email-triage-ollama/</loc>
+    <lastmod>2026-10-02</lastmod>
+  </url>
+  <url>
+    <loc>https://klorn.ai/blog/notion-mail-shutting-down/</loc>
+    <lastmod>2026-10-02</lastmod>
+  </url>
+  <url>
+    <loc>https://klorn.ai/blog/prompt-injection-and-your-inbox/</loc>
+    <lastmod>2026-10-02</lastmod>
+  </url>
+  <url>
+    <loc>https://klorn.ai/blog/too-many-email-notifications/</loc>
+    <lastmod>2026-10-02</lastmod>
+  </url>
+  <url>
+    <loc>https://klorn.ai/blog/which-llm-is-best-for-email-classification/</loc>
+    <lastmod>2026-10-02</lastmod>
+  </url>
+  <url>
     <loc>https://klorn.ai/de/</loc>
     <lastmod>2026-10-15</lastmod>
     <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/"/>
@@ -26,8 +86,196 @@
     <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/"/>
   </url>
   <url>
+    <loc>https://klorn.ai/de/blog/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/blog/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/blog/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/blog/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/blog/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/blog/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/blog/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/blog/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/blog/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/de/download/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/download/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/download/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/download/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/download/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/download/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/download/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/download/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/download/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/de/dpa/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/dpa/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/de/gdpr/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/gdpr/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/de/methodology/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/methodology/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/de/open-source/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/open-source/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/de/pricing/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/pricing/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/de/security/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/security/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/security/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/security/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/security/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/security/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/security/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/security/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/security/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/de/self-host/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/self-host/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/de/status/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/status/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/status/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/status/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/status/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/status/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/status/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/status/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/status/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/de/vs/fyxer/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/fyxer/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/de/vs/inbox-zero/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/inbox-zero/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/de/vs/sanebox/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/sanebox/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/de/vs/superhuman/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/superhuman/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/download/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/download/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/download/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/download/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/download/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/download/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/download/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/download/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/download/"/>
+  </url>
+  <url>
     <loc>https://klorn.ai/dpa/</loc>
-    <lastmod>2026-10-02</lastmod>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/dpa/"/>
   </url>
   <url>
     <loc>https://klorn.ai/es/</loc>
@@ -42,6 +290,174 @@
     <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/"/>
   </url>
   <url>
+    <loc>https://klorn.ai/es/blog/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/blog/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/blog/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/blog/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/blog/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/blog/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/blog/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/blog/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/blog/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/es/download/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/download/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/download/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/download/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/download/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/download/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/download/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/download/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/download/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/es/dpa/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/dpa/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/es/gdpr/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/gdpr/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/es/methodology/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/methodology/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/es/open-source/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/open-source/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/es/pricing/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/pricing/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/es/security/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/security/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/security/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/security/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/security/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/security/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/security/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/security/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/security/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/es/self-host/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/self-host/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/es/status/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/status/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/status/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/status/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/status/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/status/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/status/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/status/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/status/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/es/vs/fyxer/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/fyxer/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/es/vs/inbox-zero/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/inbox-zero/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/es/vs/sanebox/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/sanebox/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/es/vs/superhuman/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/superhuman/"/>
+  </url>
+  <url>
     <loc>https://klorn.ai/fr/</loc>
     <lastmod>2026-10-15</lastmod>
     <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/"/>
@@ -54,8 +470,184 @@
     <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/"/>
   </url>
   <url>
+    <loc>https://klorn.ai/fr/blog/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/blog/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/blog/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/blog/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/blog/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/blog/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/blog/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/blog/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/blog/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/fr/download/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/download/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/download/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/download/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/download/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/download/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/download/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/download/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/download/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/fr/dpa/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/dpa/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/fr/gdpr/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/gdpr/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/fr/methodology/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/methodology/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/fr/open-source/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/open-source/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/fr/pricing/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/pricing/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/fr/security/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/security/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/security/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/security/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/security/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/security/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/security/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/security/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/security/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/fr/self-host/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/self-host/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/fr/status/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/status/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/status/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/status/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/status/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/status/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/status/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/status/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/status/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/fr/vs/fyxer/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/fyxer/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/fr/vs/inbox-zero/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/inbox-zero/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/fr/vs/sanebox/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/sanebox/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/fr/vs/superhuman/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/superhuman/"/>
+  </url>
+  <url>
     <loc>https://klorn.ai/gdpr/</loc>
-    <lastmod>2026-10-02</lastmod>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/gdpr/"/>
   </url>
   <url>
     <loc>https://klorn.ai/ja/</loc>
@@ -70,6 +662,174 @@
     <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/"/>
   </url>
   <url>
+    <loc>https://klorn.ai/ja/blog/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/blog/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/blog/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/blog/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/blog/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/blog/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/blog/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/blog/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/blog/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/ja/download/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/download/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/download/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/download/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/download/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/download/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/download/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/download/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/download/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/ja/dpa/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/dpa/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/ja/gdpr/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/gdpr/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/ja/methodology/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/methodology/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/ja/open-source/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/open-source/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/ja/pricing/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/pricing/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/ja/security/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/security/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/security/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/security/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/security/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/security/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/security/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/security/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/security/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/ja/self-host/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/self-host/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/ja/status/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/status/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/status/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/status/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/status/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/status/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/status/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/status/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/status/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/ja/vs/fyxer/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/fyxer/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/ja/vs/inbox-zero/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/inbox-zero/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/ja/vs/sanebox/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/sanebox/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/ja/vs/superhuman/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/superhuman/"/>
+  </url>
+  <url>
     <loc>https://klorn.ai/ko/</loc>
     <lastmod>2026-10-15</lastmod>
     <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/"/>
@@ -82,79 +842,292 @@
     <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/"/>
   </url>
   <url>
-    <loc>https://klorn.ai/open-source/</loc>
-    <lastmod>2026-10-02</lastmod>
+    <loc>https://klorn.ai/ko/blog/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/blog/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/blog/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/blog/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/blog/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/blog/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/blog/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/blog/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/blog/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/ko/download/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/download/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/download/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/download/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/download/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/download/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/download/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/download/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/download/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/ko/dpa/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/dpa/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/ko/gdpr/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/gdpr/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/ko/methodology/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/methodology/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/ko/open-source/</loc>
+    <lastmod>2026-10-31</lastmod>
     <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/open-source/"/>
     <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/open-source/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/ko/pricing/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/pricing/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/ko/security/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/security/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/security/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/security/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/security/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/security/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/security/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/security/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/security/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/ko/self-host/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/self-host/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/ko/status/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/status/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/status/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/status/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/status/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/status/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/status/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/status/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/status/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/ko/vs/fyxer/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/fyxer/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/ko/vs/inbox-zero/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/inbox-zero/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/ko/vs/sanebox/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/sanebox/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/ko/vs/superhuman/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/superhuman/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/methodology/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/methodology/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/open-source/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/open-source/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/open-source/"/>
   </url>
   <url>
     <loc>https://klorn.ai/pricing/</loc>
-    <lastmod>2026-10-15</lastmod>
-  </url>
-  <url>
-    <loc>https://klorn.ai/blog/</loc>
-    <lastmod>2026-10-15</lastmod>
-  </url>
-  <url>
-    <loc>https://klorn.ai/blog/google-verification-casa/</loc>
-    <lastmod>2026-10-14</lastmod>
-  </url>
-  <url>
-    <loc>https://klorn.ai/blog/notion-mail-shutting-down/</loc>
-    <lastmod>2026-10-02</lastmod>
-  </url>
-  <url>
-    <loc>https://klorn.ai/blog/which-llm-is-best-for-email-classification/</loc>
-    <lastmod>2026-10-02</lastmod>
-  </url>
-  <url>
-    <loc>https://klorn.ai/blog/how-to-get-notified-only-for-urgent-emails/</loc>
-    <lastmod>2026-10-02</lastmod>
-  </url>
-  <url>
-    <loc>https://klorn.ai/blog/gmail-important-emails-going-to-promotions/</loc>
-    <lastmod>2026-10-02</lastmod>
-  </url>
-  <url>
-    <loc>https://klorn.ai/blog/too-many-email-notifications/</loc>
-    <lastmod>2026-10-02</lastmod>
-  </url>
-  <url>
-    <loc>https://klorn.ai/blog/gmail-priority-inbox-not-working/</loc>
-    <lastmod>2026-10-02</lastmod>
-  </url>
-  <url>
-    <loc>https://klorn.ai/blog/auto-archive-newsletters-gmail/</loc>
-    <lastmod>2026-10-02</lastmod>
-  </url>
-  <url>
-    <loc>https://klorn.ai/blog/gmail-filters-vs-ai-triage/</loc>
-    <lastmod>2026-10-02</lastmod>
-  </url>
-  <url>
-    <loc>https://klorn.ai/blog/prompt-injection-and-your-inbox/</loc>
-    <lastmod>2026-10-02</lastmod>
-  </url>
-  <url>
-    <loc>https://klorn.ai/blog/local-llm-email-triage-ollama/</loc>
-    <lastmod>2026-10-02</lastmod>
-  </url>
-  <url>
-    <loc>https://klorn.ai/blog/llm-cost-caps-that-fail-closed/</loc>
-    <lastmod>2026-10-02</lastmod>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/pricing/"/>
   </url>
   <url>
     <loc>https://klorn.ai/security/</loc>
-    <lastmod>2026-10-14</lastmod>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/security/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/security/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/security/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/security/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/security/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/security/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/security/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/security/"/>
   </url>
   <url>
     <loc>https://klorn.ai/self-host/</loc>
-    <lastmod>2026-10-02</lastmod>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/self-host/"/>
   </url>
   <url>
     <loc>https://klorn.ai/status/</loc>
-    <lastmod>2026-10-02</lastmod>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/status/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/status/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/status/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/status/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/status/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/status/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/status/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/status/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/vs/fyxer/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/fyxer/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/vs/inbox-zero/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/inbox-zero/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/vs/sanebox/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/sanebox/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/vs/superhuman/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/superhuman/"/>
   </url>
   <url>
     <loc>https://klorn.ai/zh/</loc>
@@ -169,90 +1142,171 @@
     <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/"/>
   </url>
   <url>
-    <loc>https://klorn.ai/ko/open-source/</loc>
-    <lastmod>2026-10-02</lastmod>
+    <loc>https://klorn.ai/zh/blog/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/blog/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/blog/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/blog/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/blog/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/blog/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/blog/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/blog/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/blog/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/zh/download/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/download/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/download/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/download/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/download/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/download/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/download/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/download/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/download/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/zh/dpa/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/dpa/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/dpa/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/zh/gdpr/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/gdpr/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/gdpr/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/zh/methodology/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/methodology/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/zh/open-source/</loc>
+    <lastmod>2026-10-31</lastmod>
     <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/open-source/"/>
     <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/open-source/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/open-source/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/open-source/"/>
   </url>
   <url>
-    <loc>https://klorn.ai/vs/fyxer/</loc>
-    <lastmod>2026-10-15</lastmod>
+    <loc>https://klorn.ai/zh/pricing/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/pricing/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/pricing/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/zh/security/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/security/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/security/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/security/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/security/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/security/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/security/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/security/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/security/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/zh/self-host/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/self-host/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/self-host/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/zh/status/</loc>
+    <lastmod>2026-10-31</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/status/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/status/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/status/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/status/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/status/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/status/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/status/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/status/"/>
+  </url>
+  <url>
+    <loc>https://klorn.ai/zh/vs/fyxer/</loc>
+    <lastmod>2026-10-31</lastmod>
     <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/vs/fyxer/"/>
     <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/vs/fyxer/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/vs/fyxer/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/fyxer/"/>
   </url>
   <url>
-    <loc>https://klorn.ai/vs/inbox-zero/</loc>
-    <lastmod>2026-10-02</lastmod>
+    <loc>https://klorn.ai/zh/vs/inbox-zero/</loc>
+    <lastmod>2026-10-31</lastmod>
     <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/vs/inbox-zero/"/>
     <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/vs/inbox-zero/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/vs/inbox-zero/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/inbox-zero/"/>
   </url>
   <url>
-    <loc>https://klorn.ai/vs/sanebox/</loc>
-    <lastmod>2026-10-14</lastmod>
+    <loc>https://klorn.ai/zh/vs/sanebox/</loc>
+    <lastmod>2026-10-31</lastmod>
     <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/vs/sanebox/"/>
     <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/vs/sanebox/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/vs/sanebox/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/sanebox/"/>
   </url>
   <url>
-    <loc>https://klorn.ai/vs/superhuman/</loc>
-    <lastmod>2026-10-02</lastmod>
+    <loc>https://klorn.ai/zh/vs/superhuman/</loc>
+    <lastmod>2026-10-31</lastmod>
     <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/vs/superhuman/"/>
     <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://klorn.ai/es/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/vs/superhuman/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klorn.ai/de/vs/superhuman/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/superhuman/"/>
-  </url>
-  <url>
-    <loc>https://klorn.ai/ko/vs/fyxer/</loc>
-    <lastmod>2026-10-15</lastmod>
-    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/vs/fyxer/"/>
-    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/fyxer/"/>
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/fyxer/"/>
-  </url>
-  <url>
-    <loc>https://klorn.ai/ko/vs/inbox-zero/</loc>
-    <lastmod>2026-10-02</lastmod>
-    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/vs/inbox-zero/"/>
-    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/inbox-zero/"/>
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/inbox-zero/"/>
-  </url>
-  <url>
-    <loc>https://klorn.ai/ko/vs/sanebox/</loc>
-    <lastmod>2026-10-14</lastmod>
-    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/vs/sanebox/"/>
-    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/sanebox/"/>
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/sanebox/"/>
-  </url>
-  <url>
-    <loc>https://klorn.ai/ko/vs/superhuman/</loc>
-    <lastmod>2026-10-02</lastmod>
-    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/vs/superhuman/"/>
-    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/vs/superhuman/"/>
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/vs/superhuman/"/>
-  </url>
-  <url>
-    <loc>https://klorn.ai/download/</loc>
-    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/download/"/>
-    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/download/"/>
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/download/"/>
-  </url>
-  <url>
-    <loc>https://klorn.ai/ko/download/</loc>
-    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/download/"/>
-    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/download/"/>
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/download/"/>
-  </url>
-  <url>
-    <loc>https://klorn.ai/methodology/</loc>
-    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/methodology/"/>
-    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/methodology/"/>
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/methodology/"/>
-  </url>
-  <url>
-    <loc>https://klorn.ai/ko/methodology/</loc>
-    <xhtml:link rel="alternate" hreflang="en" href="https://klorn.ai/methodology/"/>
-    <xhtml:link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/methodology/"/>
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://klorn.ai/methodology/"/>
   </url>
 </urlset>
