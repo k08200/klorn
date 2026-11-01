@@ -67,18 +67,32 @@ async function shadowSpentTodayUsd(userId: string, now: Date): Promise<number> {
   return agg._sum.costUsd ?? 0;
 }
 
-export type BudgetVerdict = "ok" | "calls" | "user_budget" | "shadow_budget" | "global_budget";
+export type BudgetVerdict =
+  | "ok"
+  | "calls"
+  | "user_budget"
+  | "shadow_budget"
+  | "global_budget"
+  | "budget_unknown";
 
 export async function shadowBudgetVerdict(
   userId: string,
   now = new Date(),
 ): Promise<BudgetVerdict> {
   if (!callShareOk(getUserUsage(userId))) return "calls";
-  const [gate, global, spent] = await Promise.all([
-    checkCostGate(userId),
-    checkGlobalCostGate(),
-    shadowSpentTodayUsd(userId, now),
-  ]);
+  let gate: GateView;
+  let global: { allowed: boolean };
+  let spent: number;
+  try {
+    [gate, global, spent] = await Promise.all([
+      checkCostGate(userId),
+      checkGlobalCostGate(),
+      shadowSpentTodayUsd(userId, now),
+    ]);
+  } catch {
+    // Can't tell what the shadow may spend: skip quietly (no Sentry per mail).
+    return "budget_unknown";
+  }
   if (!shadowHeadroomOk(gate, shadowFloorCents())) return "user_budget";
   if (!global.allowed) return "global_budget";
   if (spent >= shadowDailyUsd()) return "shadow_budget";
