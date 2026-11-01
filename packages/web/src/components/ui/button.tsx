@@ -68,9 +68,9 @@ const sizeStyles: Record<Size, string> = {
 // The chip draws 28px and pads its hit area to 32px (44px on touch) with an
 // invisible ::after, so a row of chips stays compact without small targets.
 const CHIP_FRAME =
-  "relative min-h-7 px-2.5 gap-1.5 text-caption font-medium rounded-control after:absolute after:inset-x-0 after:-inset-y-0.5 after:content-[''] pointer-coarse:after:-inset-y-2";
+  "relative min-h-7 px-2.5 gap-1.5 text-role-caption font-medium rounded-chip after:absolute after:inset-x-0 after:-inset-y-0.5 after:content-[''] pointer-coarse:after:-inset-y-2";
 const CHIP_ICON_FRAME =
-  "relative size-7 shrink-0 p-0 rounded-control after:absolute after:-inset-0.5 after:content-[''] pointer-coarse:after:-inset-2";
+  "relative size-7 shrink-0 p-0 rounded-chip after:absolute after:-inset-0.5 after:content-[''] pointer-coarse:after:-inset-2";
 
 // A text link keeps the frame height but only a hairline of side padding, so
 // it sits inline with the sentence it finishes.
@@ -78,8 +78,8 @@ const LINK_SIZE = "min-h-9 px-1 gap-1.5 pointer-coarse:min-h-11";
 
 function frameClass(variant: Variant, size: Size): string {
   if (variant === "chip") return size === "icon" ? CHIP_ICON_FRAME : CHIP_FRAME;
-  if (variant === "link") return `${LINK_SIZE} rounded-lg text-label`;
-  return `${sizeStyles[size]} rounded-lg text-label`;
+  if (variant === "link") return `${LINK_SIZE} rounded-control text-role-label`;
+  return `${sizeStyles[size]} rounded-control text-role-label`;
 }
 
 export default function Button({
