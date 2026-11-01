@@ -107,28 +107,49 @@ describe("auto_reply — the claim the unattended reply wrote before sending", (
   it("skips claims rewritten as failed: nothing left, so a manual reply right after must stay the user's", () => {
     expect(s()).toContain(`n."title" NOT IN ('Auto-reply failed', 'Auto-mode reply failed')`);
   });
+
+  it("matches one row per claim, the earliest, so a manual reply inside the window stays the user's", () => {
+    expect(s()).toContain(
+      `(earlier."sentAt" < s."sentAt" OR (earlier."sentAt" = s."sentAt" AND earlier."id" < s."id"))`,
+    );
+  });
 });
 
 describe("unsubscribe — a mailto List-Unsubscribe target the user received", () => {
   const s = () => updates[2] ?? "";
 
-  it("derives the target address and subject the way parseMailtoTarget does (subject defaults to 'unsubscribe')", () => {
-    expect(s()).toContain(
-      `lower(btrim(split_part(regexp_replace("listUnsubscribeMailto", '^mailto:', '', 'i'), '?', 1))) AS addr`,
-    );
+  it("derives the target the way parseMailtoTarget does: '+' is a space, ASCII escapes decoded, trimmed, default 'unsubscribe'", () => {
     expect(s()).toContain(`WITH targets AS MATERIALIZED (`);
     expect(s()).toContain(
-      `COALESCE(NULLIF(btrim(replace(substring("listUnsubscribeMailto" from '[?&]subject=([^&]*)'), '+', ' ')), ''), 'unsubscribe') AS subject`,
+      `lower(btrim(split_part(regexp_replace(m."listUnsubscribeMailto", '^mailto:', '', 'i'), '?', 1))) AS addr`,
     );
-  });
-
-  it("requires the row's single recipient to BE that address", () => {
-    expect(s()).toContain(`t.addr <> '' AND t.addr = lower(btrim(s."to"))`);
-  });
-
-  it("when the address also sends the user mail (it may be a person), demands the exact mailto subject too", () => {
     expect(s()).toContain(
-      `(t.subject = s."subject" OR NOT EXISTS (SELECT 1 FROM "EmailMessage" e WHERE e."userId" = s."userId" AND (e."fromAddress" = t.addr OR position(t.addr in lower(e."from")) > 0)))`,
+      `replace(substring(m."listUnsubscribeMailto" from '[?&]subject=([^&#]*)'), '+', ' ')`,
     );
+    expect(s()).toContain(`CASE WHEN x.part[1] ~ '^%[0-7][0-9A-Fa-f]$' AND x.part[1] <> '%00'`);
+    expect(s()).toContain(
+      `COALESCE(NULLIF(regexp_replace(d.subject, '^\\s+|\\s+$', '', 'g'), ''), 'unsubscribe') AS subject`,
+    );
+  });
+
+  it("requires the row's single recipient to BE that address, from the same account, after the carrier arrived", () => {
+    expect(s()).toContain(`t.addr <> '' AND t.addr = lower(btrim(s."to"))`);
+    expect(s()).toContain(`t.inbox = s."inbox" AND s."sentAt" >= t."receivedAt"`);
+  });
+
+  it("needs the exact subject, or a same-shape per-mail token sent to an address that never mails the user", () => {
+    expect(s()).toContain(
+      `t.subject = s."subject" OR (length(regexp_replace(t.subject, '[^A-Za-z0-9]', '', 'g')) >= 16`,
+    );
+    expect(s()).toContain(
+      `regexp_replace(s."subject", '[A-Za-z0-9]', 'x', 'g') = regexp_replace(t.subject, '[A-Za-z0-9]', 'x', 'g')`,
+    );
+    expect(s()).toContain(
+      `NOT EXISTS (SELECT 1 FROM "EmailMessage" e WHERE e."userId" = s."userId" AND (e."fromAddress" = t.addr OR position(t.addr in lower(e."from")) > 0))`,
+    );
+  });
+
+  it("has no branch that labels on the address alone", () => {
+    expect(s()).not.toMatch(/t\.subject = s\."subject" OR NOT EXISTS/);
   });
 });
