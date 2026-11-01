@@ -43,8 +43,8 @@ import { recordJudgeSource } from "./judge-health.js";
 import { isClearMarketing } from "./keyword-policy.js";
 import { reconcileLabelCorrection } from "./label-correction.js";
 import { judgeEmail, type PocTier } from "./poc-judge.js";
-import { admitPushNotification, holdEmailForInterruptBudget } from "./v3/push-budget-gate.js";
 import { isJudgeV3ShadowEnabled } from "./v3/flags.js";
+import { admitPushNotification, holdEmailForInterruptBudget } from "./v3/push-budget-gate.js";
 
 /**
  * Normalized sender address for the `fromAddress` column — the SINGLE source of
