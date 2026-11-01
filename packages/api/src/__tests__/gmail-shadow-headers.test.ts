@@ -80,6 +80,23 @@ describe("gmailDmarcPass", () => {
     ).toBe(false);
   });
 
+  it("cannot be fooled by dmarc text inside another method's value", () => {
+    const smuggled =
+      'mx.google.com; spf=pass smtp.mailfrom="a dmarc=pass header.from=evil.com"@evil.com; dmarc=fail (p=NONE) header.from=evil.com';
+    expect(gmailDmarcPass([ar(smuggled), { name: "From", value: "x@evil.com" }])).toBe(false);
+  });
+
+  it("checks header.from against the From header's one parseable mailbox", () => {
+    const ok = "mx.google.com; dmarc=pass (p=REJECT) header.from=evil.com";
+    // The relationship snapshot keys this From on ceo@victim.com (same parser),
+    // so a verdict for evil.com does not authenticate it.
+    expect(
+      gmailDmarcPass([ar(ok), { name: "From", value: "Boss <ceo@victim.com> evil@evil.com" }]),
+    ).toBe(false);
+    expect(gmailDmarcPass([ar(ok), { name: "From", value: "not an address" }])).toBeNull();
+    expect(gmailDmarcPass([ar(ok), { name: "From", value: "Boss <ceo@victim.com>" }])).toBe(false);
+  });
+
   it("ignores a sender-written header below Gmail's, and any other authserv-id", () => {
     const forged = ar("mx.google.com; dmarc=pass header.from=acme.com");
     expect(gmailDmarcPass([ar(google.replace("dmarc=pass", "dmarc=fail")), forged, from])).toBe(

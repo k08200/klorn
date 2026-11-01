@@ -12,6 +12,7 @@
 import { db } from "../../db.js";
 import { getUserLlmCredentials } from "../../llm/llm-credentials.js";
 import type { GmailRawEmail } from "../../mail/gmail-fetch.js";
+import { isAuthenticatedSender } from "../../mail/klorn-inbound-map.js";
 import type { ProviderCredentials } from "../../providers/index.js";
 import { captureError } from "../../sentry.js";
 import {
@@ -23,8 +24,8 @@ import {
 import { type StoreFactsInput, saveAttentionFacts } from "./facts-store.js";
 import { isJudgeV3ShadowEnabled } from "./flags.js";
 import type { RelationshipSnapshot } from "./relationship.js";
-import { loadRelationshipSnapshot } from "./relationship-loader.js";
-import { shadowBudgetAllows } from "./shadow-budget.js";
+import { loadRelationshipSnapshot, SENT_EVIDENCE_WHERE } from "./relationship-loader.js";
+import { type BudgetVerdict, shadowBudgetVerdict, withShadowSlot } from "./shadow-budget.js";
 
 export interface ShadowMail {
   emailId: string;
@@ -66,22 +67,35 @@ export function shadowMailFromRaw(emailId: string, email: GmailRawEmail): Shadow
     autoSubmitted: email.autoSubmitted ?? null,
     dateHeader: email.dateHeader ?? null,
     senderAuthenticated:
-      email.dmarcPass ?? (email.authentication ? email.authentication.dmarc === "pass" : null),
-    // Gmail walks every MIME part; other producers report attachments only.
+      email.dmarcPass ??
+      (email.authentication ? isAuthenticatedSender(email.authentication) : null),
+    // Gmail walks every MIME part; other producers report named attachments
+    // only, so without one the answer is unknown (null), not "no invite".
     hasCalendarInvite:
       email.hasCalendarInvite ??
-      email.attachments.some(
+      (email.attachments.some(
         (a) => a.mimeType === "text/calendar" || a.filename.toLowerCase().endsWith(".ics"),
-      ),
+      )
+        ? true
+        : null),
   };
 }
 
-export type ShadowOutcome = "disabled" | "byok" | "budget" | "stored" | "stopped" | "failed";
+export type ShadowOutcome =
+  | "disabled"
+  | "byok"
+  | "busy"
+  | Exclude<BudgetVerdict, "ok">
+  | "stored"
+  | "stopped"
+  | "failed";
 
 export interface ShadowDeps {
   enabled(userId: string): boolean;
   usesOwnKey(userId: string): Promise<boolean>;
-  budgetAllows(userId: string): Promise<boolean>;
+  budget(userId: string): Promise<BudgetVerdict>;
+  /** Runs fn when a shadow slot is free; null when busy (skip, never queue). */
+  slot<T>(fn: () => Promise<T>): Promise<T | null>;
   userContext(userId: string): Promise<{ userAddresses: string[]; timeZone: string | null }>;
   repliedAfter(userId: string, threadId: string, after: Date): Promise<boolean>;
   extract(input: FactsMailInput, options: ExtractFactsOptions): Promise<FactsExtraction>;
@@ -90,6 +104,7 @@ export interface ShadowDeps {
     senderAddress: string,
     userAddresses: string[],
     senderAuthenticated: boolean | null,
+    excludeEmailId: string,
   ): Promise<RelationshipSnapshot | null>;
   save(input: StoreFactsInput): Promise<void>;
   now(): Date;
@@ -104,7 +119,8 @@ function hasOwnKey(c: ProviderCredentials): boolean {
 export const prismaShadowDeps: ShadowDeps = {
   enabled: isJudgeV3ShadowEnabled,
   usesOwnKey: async (userId) => hasOwnKey(await getUserLlmCredentials(userId)),
-  budgetAllows: shadowBudgetAllows,
+  budget: (userId) => shadowBudgetVerdict(userId),
+  slot: withShadowSlot,
   async userContext(userId) {
     const [user, linked, automation] = await Promise.all([
       db.user.findUnique({ where: { id: userId }, select: { email: true } }),
@@ -118,14 +134,21 @@ export const prismaShadowDeps: ShadowDeps = {
   },
   async repliedAfter(userId, threadId, after) {
     const row = await db.sentMessage.findFirst({
-      where: { userId, threadId, sentAt: { gt: after } },
+      // Klorn's own auto-replies are not the user answering (#1591).
+      where: { userId, threadId, sentAt: { gt: after }, ...SENT_EVIDENCE_WHERE },
       select: { id: true },
     });
     return row !== null;
   },
   extract: extractFacts,
-  relationship: (userId, senderAddress, userAddresses, senderAuthenticated) =>
-    loadRelationshipSnapshot({ userId, senderAddress, userAddresses, senderAuthenticated }),
+  relationship: (userId, senderAddress, userAddresses, senderAuthenticated, excludeEmailId) =>
+    loadRelationshipSnapshot({
+      userId,
+      senderAddress,
+      userAddresses,
+      senderAuthenticated,
+      excludeEmailId,
+    }),
   save: (input) => saveAttentionFacts(input),
   now: () => new Date(),
 };
@@ -158,15 +181,12 @@ async function buildInput(userId: string, mail: ShadowMail, deps: ShadowDeps) {
   return { input, userAddresses: ctx.userAddresses };
 }
 
-async function shadowOnce(
+async function extractAndStore(
   userId: string,
   mail: ShadowMail,
   v2Tier: string | null,
   deps: ShadowDeps,
-): Promise<ShadowOutcome> {
-  if (!deps.enabled(userId)) return "disabled";
-  if (await deps.usesOwnKey(userId)) return "byok";
-  if (!(await deps.budgetAllows(userId))) return "budget";
+): Promise<"stored"> {
   const { input, userAddresses } = await buildInput(userId, mail, deps);
   const extraction = await deps.extract(input, { userId });
   const relationship = await deps.relationship(
@@ -174,6 +194,7 @@ async function shadowOnce(
     mail.from,
     userAddresses,
     mail.senderAuthenticated,
+    mail.emailId,
   );
   await deps.save({
     userId,
@@ -187,6 +208,41 @@ async function shadowOnce(
   return "stored";
 }
 
+async function shadowOnce(
+  userId: string,
+  mail: ShadowMail,
+  v2Tier: string | null,
+  deps: ShadowDeps,
+): Promise<ShadowOutcome> {
+  if (!deps.enabled(userId)) return "disabled";
+  if (await deps.usesOwnKey(userId)) return "byok";
+  const budget = await deps.budget(userId);
+  if (budget !== "ok") return budget;
+  return (await deps.slot(() => extractAndStore(userId, mail, v2Tier, deps))) ?? "busy";
+}
+
+const outcomeCounts = new Map<ShadowOutcome, number>();
+const OUTCOME_LOG_EVERY = 100;
+let outcomesSinceLog = 0;
+
+/** Outcomes since boot, so skipped mail is visible (the report only sees stored rows). */
+export function shadowOutcomeCounts(): Record<string, number> {
+  return Object.fromEntries(outcomeCounts);
+}
+
+function countOutcome(outcome: ShadowOutcome): ShadowOutcome {
+  if (outcome === "disabled") return outcome;
+  outcomeCounts.set(outcome, (outcomeCounts.get(outcome) ?? 0) + 1);
+  if (++outcomesSinceLog >= OUTCOME_LOG_EVERY) {
+    outcomesSinceLog = 0;
+    console.log(
+      "[judge-v3] facts shadow outcomes since boot:",
+      JSON.stringify(shadowOutcomeCounts()),
+    );
+  }
+  return outcome;
+}
+
 export async function runFactsShadow(
   userId: string,
   mail: ShadowMail,
@@ -194,15 +250,16 @@ export async function runFactsShadow(
   deps: ShadowDeps = prismaShadowDeps,
 ): Promise<ShadowOutcome> {
   try {
-    return await shadowOnce(userId, mail, v2Tier, deps);
+    return countOutcome(await shadowOnce(userId, mail, v2Tier, deps));
   } catch (err) {
-    if (err instanceof Error && BUDGET_STOP_ERRORS.has(err.name)) return "stopped";
-    // Ids only: never the mail, the prompt or the model answer.
-    console.warn("[judge-v3] facts shadow failed:", err instanceof Error ? err.name : "unknown");
-    captureError(err, {
+    if (err instanceof Error && BUDGET_STOP_ERRORS.has(err.name)) return countOutcome("stopped");
+    // Name and ids only: a DB or provider message can echo values.
+    const name = err instanceof Error ? err.name : "unknown";
+    console.warn("[judge-v3] facts shadow failed:", name);
+    captureError(new Error(`judge-v3 facts shadow failed: ${name}`), {
       tags: { scope: "judge-v3-shadow" },
       extra: { userId, emailId: mail.emailId },
     });
-    return "failed";
+    return countOutcome("failed");
   }
 }

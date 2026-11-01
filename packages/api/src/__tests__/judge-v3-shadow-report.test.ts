@@ -48,6 +48,21 @@ describe("laneFromFactsForReport (doc §3(4), pre-budget)", () => {
     expect(laneFromFactsForReport(f, {}, null, at)).toBe("QUEUE");
   });
 
+  it("PUSH needs the mail addressed to the user on both branches; long-overdue is not due soon", () => {
+    const vip = { vip: true } as never;
+    expect(
+      laneFromFactsForReport(
+        facts({ risk: ["payment_failed"], addressedTo: "group" }),
+        {},
+        vip,
+        at,
+      ),
+    ).toBe("QUEUE");
+    expect(
+      laneFromFactsForReport(facts({ asks: [ask("2026-10-20T00:00:00Z")] }), {}, null, at),
+    ).toBe("QUEUE");
+  });
+
   it("MEETING for a non-bulk event; INFO for records; SILENT for bulk", () => {
     expect(
       laneFromFactsForReport(

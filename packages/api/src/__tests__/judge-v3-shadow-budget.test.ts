@@ -1,46 +1,54 @@
-import { describe, expect, it } from "vitest";
-import { shadowHeadroomOk } from "../judge/v3/shadow-budget.js";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  callShareOk,
+  shadowDailyUsd,
+  shadowFloorCents,
+  shadowHeadroomOk,
+  withShadowSlot,
+} from "../judge/v3/shadow-budget.js";
 
-describe("shadowHeadroomOk", () => {
-  it("is false once the ordinary (cap minus reserve) line is reached", () => {
-    expect(
-      shadowHeadroomOk(
-        { allowed: false, remainingCents: 0, capCents: 75 },
-        { floorCents: 25, reserveCents: 25 },
-      ),
-    ).toBe(false);
-  });
+afterEach(() => {
+  delete process.env.JUDGE_V3_SHADOW_FLOOR_CENTS;
+  delete process.env.JUDGE_V3_SHADOW_DAILY_USD;
+});
 
-  it("with the judge reserve covering the floor, any headroom below the line is enough", () => {
-    expect(
-      shadowHeadroomOk(
-        { allowed: true, remainingCents: 1, capCents: 75 },
-        { floorCents: 25, reserveCents: 25 },
-      ),
-    ).toBe(true);
-  });
+const usage = (rpmUsed: number, backgroundDailyUsed: number) =>
+  ({ rpmUsed, rpmCap: 10, backgroundDailyUsed, backgroundDailyCap: 200 }) as never;
 
-  it("without a reserve, keeps its own floor for the v2 judge", () => {
-    expect(
-      shadowHeadroomOk(
-        { allowed: true, remainingCents: 20, capCents: 100 },
-        { floorCents: 25, reserveCents: 0 },
-      ),
-    ).toBe(false);
-    expect(
-      shadowHeadroomOk(
-        { allowed: true, remainingCents: 30, capCents: 100 },
-        { floorCents: 25, reserveCents: 0 },
-      ),
-    ).toBe(true);
-  });
-
-  it("an uncapped user (cap 0) is always allowed", () => {
+describe("shadow admission", () => {
+  it("money: keeps the floor of ordinary budget, uncapped users always pass", () => {
+    expect(shadowHeadroomOk({ allowed: false, remainingCents: 0, capCents: 75 }, 25)).toBe(false);
+    expect(shadowHeadroomOk({ allowed: true, remainingCents: 20, capCents: 75 }, 25)).toBe(false);
+    expect(shadowHeadroomOk({ allowed: true, remainingCents: 30, capCents: 75 }, 25)).toBe(true);
     expect(
       shadowHeadroomOk(
         { allowed: true, remainingCents: Number.POSITIVE_INFINITY, capCents: 0 },
-        { floorCents: 25, reserveCents: 0 },
+        25,
       ),
     ).toBe(true);
+  });
+
+  it("calls: never more than half of the user's RPM or daily background count", () => {
+    expect(callShareOk(usage(4, 99))).toBe(true);
+    expect(callShareOk(usage(5, 10))).toBe(false);
+    expect(callShareOk(usage(1, 100))).toBe(false);
+  });
+
+  it("env: an empty value means the default, not zero", () => {
+    process.env.JUDGE_V3_SHADOW_FLOOR_CENTS = "";
+    process.env.JUDGE_V3_SHADOW_DAILY_USD = " ";
+    expect(shadowFloorCents()).toBe(25);
+    expect(shadowDailyUsd()).toBe(0.15);
+    process.env.JUDGE_V3_SHADOW_DAILY_USD = "0.5";
+    expect(shadowDailyUsd()).toBe(0.5);
+  });
+
+  it("one extraction in flight: a second concurrent run is skipped, not queued", async () => {
+    let release: () => void = () => {};
+    const first = withShadowSlot(() => new Promise<string>((r) => (release = () => r("first"))));
+    expect(await withShadowSlot(async () => "second")).toBeNull();
+    release();
+    expect(await first).toBe("first");
+    expect(await withShadowSlot(async () => "third")).toBe("third");
   });
 });

@@ -41,7 +41,8 @@ function deps(over: Partial<ShadowDeps> = {}): ShadowDeps {
   return {
     enabled: vi.fn(() => true),
     usesOwnKey: vi.fn(async () => false),
-    budgetAllows: vi.fn(async () => true),
+    budget: vi.fn(async () => "ok" as const),
+    slot: vi.fn(async <T>(fn: () => Promise<T>) => fn()),
     userContext: vi.fn(async () => ({ userAddresses: ["me@acme.com"], timeZone: "Asia/Seoul" })),
     repliedAfter: vi.fn(async () => false),
     extract: vi.fn(async () => extraction),
@@ -66,9 +67,17 @@ describe("runFactsShadow", () => {
     expect(d.extract).not.toHaveBeenCalled();
   });
 
-  it("stops at the budget floor so new-mail v2 judging keeps its reserve", async () => {
-    const d = deps({ budgetAllows: vi.fn(async () => false) });
-    expect(await runFactsShadow("u1", mail, "QUEUE", d)).toBe("budget");
+  it("skips (never waits) when the budget or call share is tight", async () => {
+    for (const verdict of ["calls", "user_budget", "shadow_budget", "global_budget"] as const) {
+      const d = deps({ budget: vi.fn(async () => verdict) });
+      expect(await runFactsShadow("u1", mail, "QUEUE", d)).toBe(verdict);
+      expect(d.extract).not.toHaveBeenCalled();
+    }
+  });
+
+  it("skips when another shadow extraction is in flight", async () => {
+    const d = deps({ slot: vi.fn(async () => null) });
+    expect(await runFactsShadow("u1", mail, "QUEUE", d)).toBe("busy");
     expect(d.extract).not.toHaveBeenCalled();
   });
 
@@ -87,7 +96,8 @@ describe("runFactsShadow", () => {
       senderAuthenticated: true,
       dateHeader: mail.dateHeader,
     });
-    expect(d.relationship).toHaveBeenCalledWith("u1", mail.from, ["me@acme.com"], true);
+    // The mail being judged is excluded from its own sender history.
+    expect(d.relationship).toHaveBeenCalledWith("u1", mail.from, ["me@acme.com"], true, "e1");
     expect(opts).toEqual({ userId: "u1" });
     expect(d.save).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -158,6 +168,13 @@ describe("shadowMailFromRaw", () => {
       }).senderAuthenticated,
     ).toBe(false);
     expect(shadowMailFromRaw("e", raw).senderAuthenticated).toBeNull();
+    // The Klorn mailbox needs DKIM and DMARC, as isAuthenticatedSender says.
+    expect(
+      shadowMailFromRaw("e", {
+        ...raw,
+        authentication: { spf: "pass", dkim: "fail", dmarc: "pass" },
+      }).senderAuthenticated,
+    ).toBe(false);
   });
 
   it("detects an .ics attachment for producers without a MIME walk", async () => {
@@ -179,5 +196,7 @@ describe("shadowMailFromRaw", () => {
       attachments: [{ filename: "invite.ics", mimeType: "application/octet-stream" }] as never,
     };
     expect(shadowMailFromRaw("e", raw).hasCalendarInvite).toBe(true);
+    // No MIME walk and no .ics: unknown, not "no invite".
+    expect(shadowMailFromRaw("e", { ...raw, attachments: [] }).hasCalendarInvite).toBeNull();
   });
 });

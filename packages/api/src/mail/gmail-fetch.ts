@@ -9,6 +9,7 @@ import { type gmail_v1, google } from "googleapis";
 import { Semaphore } from "../semaphore.js";
 import { captureError } from "../sentry.js";
 import { extractAttachmentContentIsolated } from "./attachment-extract-isolated.js";
+import { isPlainAddress, parseAddress } from "./email-address.js";
 import { isReadableEmailAttachment } from "./email-attachment-text.js";
 import type { RawEmailAttachment } from "./email-attachments.js";
 import { htmlToPlainText } from "./email-text.js";
@@ -99,27 +100,38 @@ function hasCalendarPart(part: MimePart, depth: number): boolean {
 
 const GMAIL_AUTHSERV_ID = "mx.google.com";
 
-function fromDomain(from: string): string {
-  const m = /@([a-z0-9.-]+)>?\s*$/i.exec(from.slice(0, SHADOW_HEADER_MAX_CHARS).trim());
-  return m ? m[1].toLowerCase() : "";
+/** The domain of the From header's one parseable mailbox, or "" (same strict
+ * parser the relationship snapshot keys on, so both judge the same address). */
+function fromMailboxDomain(from: string): string {
+  const address = parseAddress(from.slice(0, SHADOW_HEADER_MAX_CHARS)).trim().toLowerCase();
+  if (!isPlainAddress(address)) return "";
+  return address.slice(address.lastIndexOf("@") + 1);
 }
+
+// The whole dmarc segment, anchored: a "dmarc=pass" inside another method's
+// value or comment (spf/dkim carry sender-chosen text) never matches.
+const DMARC_SEGMENT_RE = /^dmarc=(\w+)(?:\s*\([^()]*\))?\s+header\.from=([a-z0-9.-]+)$/;
 
 /**
  * Gmail's own DMARC verdict for the From domain: the FIRST Authentication-Results
  * header (the receiving server prepends its own; anything below it may be
- * sender-written) with authserv-id mx.google.com, dmarc=pass, and header.from
- * equal to the From domain. null when Gmail left no verdict.
+ * sender-written) with authserv-id mx.google.com, exactly one result segment
+ * that is a whole `dmarc=… header.from=…`, and header.from equal to the From
+ * mailbox's domain. null when Gmail left no usable verdict.
  */
 export function gmailDmarcPass(headers: HeaderList): boolean | null {
   const first = headers.find((h) => h.name?.toLowerCase() === "authentication-results");
-  const value = (first?.value ?? "").slice(0, 2000);
-  const [authserv, ...rest] = value.split(";");
-  if (authserv?.trim().toLowerCase() !== GMAIL_AUTHSERV_ID) return null;
-  const results = rest.join(";").toLowerCase();
-  const dmarc = /\bdmarc=(\w+)[^;]*?header\.from=([a-z0-9.-]+)/.exec(results);
-  if (!dmarc) return null;
+  const value = (first?.value ?? "").slice(0, 2000).toLowerCase();
+  const [authserv, ...segments] = value.split(";").map((seg) => seg.replace(/\s+/g, " ").trim());
+  if (authserv !== GMAIL_AUTHSERV_ID) return null;
+  const dmarc = segments.filter((seg) => seg.startsWith("dmarc="));
+  if (dmarc.length !== 1) return null;
+  const m = DMARC_SEGMENT_RE.exec(dmarc[0] ?? "");
+  if (!m) return null;
   const from = headers.find((h) => h.name?.toLowerCase() === "from")?.value ?? "";
-  return dmarc[1] === "pass" && dmarc[2] === fromDomain(from);
+  const domain = fromMailboxDomain(from);
+  if (!domain) return null;
+  return m[1] === "pass" && m[2] === domain;
 }
 
 /** The header signals the v3 facts shadow reads, from a Gmail message. */

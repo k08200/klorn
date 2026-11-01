@@ -61,7 +61,8 @@ async function main(): Promise<number> {
       provider: true,
       extractedAt: true,
     },
-    orderBy: { extractedAt: "asc" },
+    // Newest first, so a truncated window keeps the most recent rows.
+    orderBy: { extractedAt: "desc" },
     take: MAX_ROWS,
   });
   const report = {

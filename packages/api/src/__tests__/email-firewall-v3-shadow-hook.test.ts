@@ -37,7 +37,12 @@ vi.mock("../judge/keyword-policy.js", () => ({ isClearMarketing: vi.fn(() => fal
 vi.mock("../llm/llm-credentials.js", () => ({
   getUserLlmCredentials: vi.fn(() => Promise.resolve(null)),
 }));
-vi.mock("../judge/poc-judge.js", () => ({ judgeEmail: vi.fn(() => Promise.resolve("QUEUE")) }));
+const judgedTier = "QUEUE";
+vi.mock("../judge/poc-judge.js", () => ({
+  judgeEmail: vi.fn(() =>
+    Promise.resolve({ tier: "QUEUE", reason: "", features: {}, source: "llm" }),
+  ),
+}));
 vi.mock("../resolve-user-email.js", () => ({
   resolveUserEmail: vi.fn(() => Promise.resolve("me@example.com")),
 }));
@@ -92,9 +97,15 @@ describe("persistGmailEmail — v3 facts shadow hook", () => {
     shadowEnabled.mockReturnValue(true);
     await persistGmailEmail("u1", rawEmail());
     await vi.waitFor(() => expect(runFactsShadow).toHaveBeenCalledTimes(1));
-    const [userId, mail] = runFactsShadow.mock.calls[0] as unknown as [string, { emailId: string }];
+    const [userId, mail, tier] = runFactsShadow.mock.calls[0] as unknown as [
+      string,
+      { emailId: string },
+      unknown,
+    ];
     expect(userId).toBe("u1");
     expect(mail.emailId).toBe("e-new");
+    // The v2 lane is handed over to be frozen with the facts.
+    expect(tier).toBe(judgedTier);
   });
 
   it("never runs on a re-sync of an existing row", async () => {
@@ -103,5 +114,14 @@ describe("persistGmailEmail — v3 facts shadow hook", () => {
     await persistGmailEmail("u1", rawEmail());
     await new Promise((r) => setTimeout(r, 20));
     expect(runFactsShadow).not.toHaveBeenCalled();
+  });
+});
+
+describe("persistGmailEmail — v3 shadow failures never touch sync", () => {
+  it("a rejecting shadow is contained", async () => {
+    shadowEnabled.mockReturnValue(true);
+    runFactsShadow.mockImplementationOnce(() => Promise.reject(new Error("boom")));
+    await expect(persistGmailEmail("u1", rawEmail())).resolves.toBeDefined();
+    await vi.waitFor(() => expect(runFactsShadow).toHaveBeenCalled());
   });
 });

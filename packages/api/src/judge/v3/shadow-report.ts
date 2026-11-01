@@ -11,13 +11,15 @@
  * (laneFromFactsV3, phase P3) lands; then this file imports that instead.
  */
 
-import { normalizeTier, type Tier } from "../tiers.js";
+import { type LiveTier, toLiveTier } from "../tiers.js";
 import { type FactsV1, parseFactsV1 } from "./facts-schema.js";
 import { parseRelationshipSnapshot, type RelationshipSnapshot } from "./relationship.js";
 
 export const REPORT_LANE_POLICY = "doc-3.4-pre-budget (stand-in until P3 policy.ts)";
 const DAY_MS = 86_400_000;
 const PUSH_DUE_WINDOW_MS = DAY_MS;
+/** An overdue deadline older than this is not "due soon". */
+const PUSH_OVERDUE_MS = DAY_MS;
 const MAX_SAMPLES = 20;
 
 export interface ShadowRow {
@@ -50,17 +52,20 @@ export function laneFromFactsForReport(
   signals: Signals,
   rel: RelationshipSnapshot | null,
   at: Date,
-): Tier | null {
+): LiveTier | null {
   if (rel?.pinned) return null;
   const phishing = facts.risk.includes("phishing_suspect");
   const machine = Boolean(signals.automatedSender || signals.autoSubmitted);
   const blocked = Boolean(signals.spam) || phishing;
   const direct = facts.addressedTo === "me_direct" || facts.addressedTo === "me_cc";
-  const dueSoon = facts.asks.some(
-    (a) => a.due !== null && Date.parse(a.due) - at.getTime() <= PUSH_DUE_WINDOW_MS,
-  );
+  const dueSoon = facts.asks.some((a) => {
+    if (a.due === null) return false;
+    const delta = Date.parse(a.due) - at.getTime();
+    return delta <= PUSH_DUE_WINDOW_MS && delta >= -PUSH_OVERDUE_MS;
+  });
   const urgentRisk = facts.risk.some((r) => (URGENT_RISKS as readonly string[]).includes(r));
-  if (!blocked && ((dueSoon && direct && !machine) || (urgentRisk && rel?.vip === true))) {
+  // Doc §3(4): both PUSH branches need the mail addressed to the user.
+  if (!blocked && direct && ((dueSoon && !machine) || (urgentRisk && rel?.vip === true))) {
     return "PUSH";
   }
   if (facts.event && facts.addressedTo !== "bulk" && !blocked) return "MEETING";
@@ -97,7 +102,7 @@ export function summarizeShadow(rows: readonly ShadowRow[]) {
   const models: Record<string, number> = {};
   const costPerDay: Record<string, number> = {};
   const matrix: Record<string, Record<string, number>> = {};
-  const samples: { sourceId: string; v2: Tier; v3: Tier }[] = [];
+  const samples: { sourceId: string; v2: LiveTier; v3: LiveTier }[] = [];
   let invalid = 0;
   let escalated = 0;
   let asksDropped = 0;
@@ -133,7 +138,7 @@ export function summarizeShadow(rows: readonly ShadowRow[]) {
       pinned++;
       continue;
     }
-    const v2 = normalizeTier(row.v2Tier);
+    const v2 = toLiveTier(row.v2Tier);
     matrix[v2] = matrix[v2] ?? {};
     bump(matrix[v2], v3);
     compared++;

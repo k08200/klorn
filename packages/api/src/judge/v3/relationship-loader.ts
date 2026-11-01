@@ -53,8 +53,12 @@ export interface RelationshipLoaderDeps {
   hasAnySent(userId: string): Promise<boolean>;
   /** Sent rows whose To may contain the address, newest first (exact match after). */
   sentRowsMentioning(userId: string, address: string): Promise<SentRow[]>;
-  /** The sender's mail, newest first (exact match after). */
-  inboundFrom(userId: string, address: string): Promise<InboundCandidate[]>;
+  /** The sender's mail, newest first (exact match after), minus the mail being judged. */
+  inboundFrom(
+    userId: string,
+    address: string,
+    excludeEmailId?: string,
+  ): Promise<InboundCandidate[]>;
   /** The user's sends in these threads, to anyone. */
   sentInThreads(
     userId: string,
@@ -89,7 +93,7 @@ export const prismaRelationshipDeps: RelationshipLoaderDeps = {
       take: SENT_SCAN_LIMIT,
     });
   },
-  inboundFrom(userId, address) {
+  inboundFrom(userId, address, excludeEmailId) {
     // The same gate the judge's sender history uses: equality on the indexed,
     // normalised fromAddress once it is backfilled; the legacy substring scan
     // until then (an unbackfilled row has fromAddress = null).
@@ -97,7 +101,7 @@ export const prismaRelationshipDeps: RelationshipLoaderDeps = {
       ? { userId, fromAddress: address }
       : { userId, from: { contains: escapeLikePattern(address), mode: "insensitive" as const } };
     return db.emailMessage.findMany({
-      where,
+      where: { ...where, ...(excludeEmailId ? { id: { not: excludeEmailId } } : {}) },
       select: { threadId: true, receivedAt: true, from: true, fromAddress: true },
       orderBy: { receivedAt: "desc" },
       take: INBOUND_SCAN_LIMIT,
@@ -130,6 +134,8 @@ export interface RelationshipLoadInput {
   userAddresses: readonly string[];
   /** This mail passed DMARC (or aligned SPF+DKIM); null = unknown. */
   senderAuthenticated?: boolean | null;
+  /** The mail being judged: excluded so a first-time sender reads as never seen. */
+  excludeEmailId?: string;
 }
 
 /** undefined when the lookup failed: the snapshot then reports the field as null. */
@@ -172,8 +178,13 @@ async function loadSent(userId: string, sender: string, deps: RelationshipLoader
   };
 }
 
-async function loadInbound(userId: string, sender: string, deps: RelationshipLoaderDeps) {
-  const rows = await settle(() => deps.inboundFrom(userId, sender), "inbound");
+async function loadInbound(
+  userId: string,
+  sender: string,
+  deps: RelationshipLoaderDeps,
+  excludeEmailId?: string,
+) {
+  const rows = await settle(() => deps.inboundFrom(userId, sender, excludeEmailId), "inbound");
   if (rows === undefined) return { inbound: null, firstInboundAt: undefined };
   const inbound = rows
     .filter(fromSender(sender))
@@ -202,7 +213,7 @@ export async function loadRelationshipSnapshot(
   const { userId } = input;
   const [sentData, inboundData, dismissCount, pinnedTier, senderCategory] = await Promise.all([
     loadSent(userId, sender, deps),
-    loadInbound(userId, sender, deps),
+    loadInbound(userId, sender, deps, input.excludeEmailId),
     settle(() => deps.dismissCount(userId, sender), "dismiss"),
     settle(() => deps.pinnedTier(userId, sender), "pin"),
     settle(() => deps.senderCategory(userId, sender), "label"),
