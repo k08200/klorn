@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import { toLiveTier } from "../judge/tiers.js";
 import { laneFromFactsV3, POLICY_VERSION } from "../judge/v3/policy.js";
 import type { FactsV1 } from "../judge/v3/policy-types.js";
+import { UNKNOWN_RELATIONSHIP } from "../judge/v3/relationship.js";
 import { genFacts, genRelationship, genTierOrNull, mulberry32 } from "./helpers/v3-facts-gen.js";
 
 const NOW = new Date("2026-10-31T09:00:00.000Z");
@@ -26,16 +27,7 @@ const base: FactsV1 = {
   ambiguous: false,
 };
 const facts = (over: Partial<FactsV1>): FactsV1 => ({ ...base, ...over });
-const noRelationship = {
-  sentCount: null,
-  lastSentAt: null,
-  medianReplyLatencyMs: null,
-  sameOrgDomain: null,
-  coAttendanceNext14d: null,
-  pinned: null,
-  vip: null,
-  dismissCount: null,
-};
+const noRelationship = UNKNOWN_RELATIONSHIP;
 const decide = (f: FactsV1, extra: Partial<Parameters<typeof laneFromFactsV3>[0]> = {}) =>
   laneFromFactsV3({ facts: f, relationship: null, decidedAt: NOW, ...extra });
 
@@ -68,8 +60,10 @@ describe("laneFromFactsV3 — rules", () => {
     });
   });
 
-  it("PUSH: an overdue ask counts as due soon", () => {
-    expect(decide(facts({ asks: [replyAsk(inHours(-30))] })).lane).toBe("PUSH");
+  it("PUSH: an ask overdue by up to 24h counts as due soon; an older one is stale and queues", () => {
+    expect(decide(facts({ asks: [replyAsk(inHours(-5))] })).lane).toBe("PUSH");
+    expect(decide(facts({ asks: [replyAsk(inHours(-24))] })).lane).toBe("PUSH");
+    expect(decide(facts({ asks: [replyAsk(inHours(-30))] })).lane).toBe("QUEUE");
   });
 
   it("PUSH picks the earliest qualifying ask as the deciding evidence", () => {
@@ -308,14 +302,14 @@ describe("laneFromFactsV3 — rules", () => {
     const d = laneFromFactsV3({
       facts: facts({ kind: "personal" }),
       relationship: {
+        ...noRelationship,
         sentCount: 12,
         lastSentAt: inHours(-48),
-        medianReplyLatencyMs: null,
         sameOrgDomain: true,
-        coAttendanceNext14d: null,
-        pinned: null,
-        vip: null,
         dismissCount: 0,
+        // P2-only fields never reach clients (the reason uses an allowlist).
+        inboundCount: 30,
+        firstSeenAt: inHours(-24 * 400),
       },
       decidedAt: NOW,
     });
@@ -354,7 +348,7 @@ function* cases(seed: number) {
 const dueWithin24h = (f: FactsV1) =>
   f.asks.some((a) => {
     const t = a.due ? Date.parse(a.due) : Number.NaN;
-    return Number.isFinite(t) && t <= NOW.getTime() + 24 * HOUR;
+    return Number.isFinite(t) && t >= NOW.getTime() - 24 * HOUR && t <= NOW.getTime() + 24 * HOUR;
   });
 
 describe("laneFromFactsV3 — properties", () => {

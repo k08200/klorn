@@ -7,6 +7,7 @@
 
 import { describe, expect, it } from "vitest";
 import type { FactsV1 } from "../judge/v3/policy-types.js";
+import { UNKNOWN_RELATIONSHIP } from "../judge/v3/relationship.js";
 import { type ReplayRow, replayPolicy } from "../judge/v3/replay.js";
 
 const T0 = new Date("2026-10-30T01:00:00.000Z"); // 10:00 in Seoul
@@ -69,16 +70,7 @@ describe("replayPolicy", () => {
   });
 
   it("holds PUSH past the budget per user per local day, most important first", () => {
-    const rel = (sentCount: number) => ({
-      sentCount,
-      lastSentAt: null,
-      medianReplyLatencyMs: null,
-      sameOrgDomain: null,
-      coAttendanceNext14d: null,
-      pinned: null,
-      vip: null,
-      dismissCount: null,
-    });
+    const rel = (sentCount: number) => ({ ...UNKNOWN_RELATIONSHIP, sentCount });
     const push = (id: string, h: number, sentCount: number, userId = "u1") =>
       row(id, {
         userId,

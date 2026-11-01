@@ -13,7 +13,7 @@
  *   1. MEETING  event, not bulk (before PUSH, as in v2: it notifies through
  *               its own lane and spends no interrupt budget)
  *   2. PUSH     addressed to me, no phishing suspicion, AND (a payment/security
- *               risk from a VIP sender OR an ask due within 24h from a
+ *               risk from a VIP sender OR an ask due within ±24h from a
  *               non-machine kind and a non-automated sender). Risk carries no
  *               evidence quote in facts v1, so on its own it needs a VIP
  *               sender: same domain or past replies are not enough, since
@@ -36,6 +36,12 @@ export const POLICY_VERSION = "v3.0";
 
 /** An ask due within this window of the decision time is "due soon" (doc: ≤ 24h). */
 export const DUE_SOON_MS = 24 * 60 * 60 * 1000;
+/**
+ * An overdue ask still counts as due soon for this long. Older deadlines are
+ * stale, not an interrupt (they still rank at the top of QUEUE), and a
+ * re-judge of old mail must not turn it into a PUSH.
+ */
+export const OVERDUE_GRACE_MS = 24 * 60 * 60 * 1000;
 
 /** Machine-authored kinds interrupt only through `risk`, never through an ask. */
 const MACHINE_KINDS: ReadonlySet<MailKind> = new Set([
@@ -172,7 +178,11 @@ function pushMatch(
     };
   }
   if (automatedSender || MACHINE_KINDS.has(f.kind)) return null;
-  const soonest = earliestAskDueBy(f, decidedAt.getTime() + DUE_SOON_MS);
+  const soonest = earliestAskDueWithin(
+    f,
+    decidedAt.getTime() - OVERDUE_GRACE_MS,
+    decidedAt.getTime() + DUE_SOON_MS,
+  );
   if (soonest === null) return null;
   const ask = f.asks[soonest];
   const deciding = reason("ask_due_soon", {
@@ -183,13 +193,13 @@ function pushMatch(
   return { lane: "PUSH", reasons: [deciding, addressed], pushCandidate: true };
 }
 
-/** Index of the ask with the earliest valid due date at or before `limitMs`. */
-function earliestAskDueBy(f: FactsV1, limitMs: number): number | null {
+/** Index of the ask with the earliest valid due date in [fromMs, toMs]. */
+function earliestAskDueWithin(f: FactsV1, fromMs: number, toMs: number): number | null {
   let bestIndex: number | null = null;
   let bestAt = Number.POSITIVE_INFINITY;
   for (const [index, ask] of f.asks.entries()) {
     const at = ask.due ? Date.parse(ask.due) : Number.NaN;
-    if (!Number.isFinite(at) || at > limitMs || at >= bestAt) continue;
+    if (!Number.isFinite(at) || at < fromMs || at > toMs || at >= bestAt) continue;
     bestIndex = index;
     bestAt = at;
   }

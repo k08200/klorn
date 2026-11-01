@@ -91,6 +91,11 @@ export function genRelationship(rng: Rng, now: Date): RelationshipSnapshot | nul
     pinned: maybe(rng, chance(rng, 0.05)),
     vip: maybe(rng, chance(rng, 0.05)),
     dismissCount: maybe(rng, Math.floor(rng() * 10)),
+    inboundCount: maybe(rng, Math.floor(rng() * 80)),
+    inboundThreadCount: maybe(rng, Math.floor(rng() * 30)),
+    repliedThreadCount: maybe(rng, Math.floor(rng() * 20)),
+    userInitiatedThreadCount: maybe(rng, Math.floor(rng() * 10)),
+    firstSeenAt: maybe(rng, new Date(now.getTime() - 500 * 24 * HOUR).toISOString()),
   };
 }
 

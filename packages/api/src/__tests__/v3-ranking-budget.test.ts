@@ -23,6 +23,7 @@ import {
   rankQueue,
   rankScore,
 } from "../judge/v3/ranking.js";
+import { UNKNOWN_RELATIONSHIP } from "../judge/v3/relationship.js";
 import { genRelationship, mulberry32, pick } from "./helpers/v3-facts-gen.js";
 
 const NOW = new Date("2026-10-31T09:00:00.000Z");
@@ -30,16 +31,7 @@ const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 const inHours = (h: number) => new Date(NOW.getTime() + h * HOUR).toISOString();
 
-const unknown: RelationshipSnapshot = {
-  sentCount: null,
-  lastSentAt: null,
-  medianReplyLatencyMs: null,
-  sameOrgDomain: null,
-  coAttendanceNext14d: null,
-  pinned: null,
-  vip: null,
-  dismissCount: null,
-};
+const unknown = UNKNOWN_RELATIONSHIP;
 
 describe("importancePrior", () => {
   it("is the unknown-sender base with no relationship data", () => {
