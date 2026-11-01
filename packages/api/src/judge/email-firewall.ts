@@ -44,6 +44,7 @@ import { isClearMarketing } from "./keyword-policy.js";
 import { reconcileLabelCorrection } from "./label-correction.js";
 import { judgeEmail, type PocTier } from "./poc-judge.js";
 import { admitPushNotification, holdEmailForInterruptBudget } from "./v3/push-budget-gate.js";
+import { isJudgeV3ShadowEnabled } from "./v3/flags.js";
 
 /**
  * Normalized sender address for the `fromAddress` column — the SINGLE source of
@@ -257,6 +258,11 @@ export async function persistGmailEmail(
       // user sees a draft proposal without waiting for the cron. Debounced
       // inside the trigger to bound LLM cost.
       scheduleAgentForActionableEmail(userId, tier);
+      // Attention engine v3 facts shadow (JUDGE_V3_SHADOW, OFF by default):
+      // after the v2 lane is decided, never changing it. Fire-and-forget.
+      if (isJudgeV3ShadowEnabled(userId)) {
+        void startFactsShadow(userId, createdEmail.id, email, tier);
+      }
       // Promotional / marketing mail (the judge's fast-path SILENT bucket) is
       // noise the user never needs to open — mark it read in Gmail so it
       // doesn't sit unread. Promotional-ONLY by product decision: QUEUE/PUSH/
@@ -398,6 +404,25 @@ interface JudgeableEmailRow {
    * in — CLAUDE.md: never assume the primary account for a Gmail action.
    */
   linkedInboxAccountId?: string | null;
+}
+
+/**
+ * Run the v3 facts shadow for a new mail. The module graph loads only when
+ * the flag is on, so a flag-off install pays nothing. runFactsShadow never
+ * throws; the catch covers a failed module load.
+ */
+async function startFactsShadow(
+  userId: string,
+  emailId: string,
+  email: GmailRawEmail,
+  tier: PocTier,
+): Promise<void> {
+  try {
+    const { runFactsShadow, shadowMailFromRaw } = await import("./v3/shadow.js");
+    await runFactsShadow(userId, shadowMailFromRaw(emailId, email), tier);
+  } catch (err) {
+    captureError(err, { tags: { scope: "judge-v3-shadow-load" }, extra: { userId, emailId } });
+  }
 }
 
 /**

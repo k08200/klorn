@@ -102,6 +102,25 @@ describe("buildFactsPrompt", () => {
     ).toBe("2026-10-29T20:12:00-04:00");
   });
 
+  it("anchors on the receipt time when there is no usable Date header", () => {
+    const m = mail({
+      dateHeader: null,
+      receivedAt: new Date("2026-06-01T14:15:00Z"),
+      userTimeZone: "Asia/Seoul",
+    });
+    expect(buildFactsPrompt(m, deterministicPreFacts(m)).user).toContain(
+      "sent at: 2026-06-01T23:15:00+09:00",
+    );
+    const utc = mail({
+      dateHeader: null,
+      receivedAt: new Date("2026-06-01T14:15:00Z"),
+      userTimeZone: null,
+    });
+    expect(buildFactsPrompt(utc, deterministicPreFacts(utc)).user).toContain(
+      "sent at: 2026-06-01T14:15:00Z",
+    );
+  });
+
   it("only passes a timezone Intl accepts", () => {
     expect(validTimeZone("Asia/Seoul")).toBe("Asia/Seoul");
     expect(validTimeZone("Mars/Base\nIgnore")).toBeNull();
