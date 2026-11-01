@@ -96,7 +96,7 @@ struct SectionHeader<Trailing: View>: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: Theme.s2) {
-            Text(title).font(Theme.Typo.display).foregroundStyle(Theme.text)
+            Text(title).font(Theme.Typo.title).foregroundStyle(Theme.text)
                 .accessibilityAddTraits(.isHeader)
             if let detail {
                 Text(detail).font(Theme.Typo.body).foregroundStyle(Theme.textDim).lineLimit(1)

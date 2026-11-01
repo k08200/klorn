@@ -9,7 +9,7 @@ struct CommitmentsList: View {
             HStack(spacing: 8) {
                 Image(systemName: "checklist").font(.body).foregroundStyle(Theme.accent)
                     .accessibilityHidden(true)
-                Text(L("section.commitments")).font(Theme.Typo.display).foregroundStyle(Theme.text)
+                Text(L("section.commitments")).font(Theme.Typo.title).foregroundStyle(Theme.text)
                 Text("\(model.commitments?.count ?? 0)")
                     .font(.title3.monospacedDigit()).foregroundStyle(Theme.textDim)
             }
