@@ -46,6 +46,11 @@ describe("sendAutoReplyViaFloor — autonomous AUTO_REPLY routes through the flo
     expect(receipt.approvedBy).toBe("user-1");
   });
 
+  it("asks the executor to record the send as an auto reply, never as the user's", async () => {
+    await sendAutoReplyViaFloor("user-1", "bob@example.com", "Re: x", "hi");
+    expect(executeToolCall.mock.calls[0]?.[4]).toEqual({ sentOrigin: "auto_reply" });
+  });
+
   it("threads in_reply_to_email_id through to the executor for per-account routing, without touching the hashed bytes", async () => {
     await sendAutoReplyViaFloor("user-1", "bob@example.com", "Re: x", "hi", "email-42");
 
