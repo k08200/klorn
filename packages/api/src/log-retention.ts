@@ -104,6 +104,19 @@ export const LOG_RETENTION_POLICIES: LogRetentionPolicy[] = [
     deleteByIds: (ids) => prisma.webhookEvent.deleteMany({ where: { id: { in: ids } } }),
   },
   {
+    // Attention engine v3 shadow facts: verbatim mail quotes per item. Replay
+    // and the disagreement report work on recent mail; 180 days bounds the
+    // table and the quotes. Outcomes stay on DecisionLabel (not swept).
+    name: "attentionFacts",
+    column: "extractedAt",
+    days: 180,
+    findExpiredIds: (cutoff, take) =>
+      prisma.attentionFacts
+        .findMany({ where: { extractedAt: { lt: cutoff } }, select: { id: true }, take })
+        .then((rows) => rows.map((r) => r.id)),
+    deleteByIds: (ids) => prisma.attentionFacts.deleteMany({ where: { id: { in: ids } } }),
+  },
+  {
     // Ground-truth token accounting; kept longer for cost-drift analysis.
     name: "llmUsageLog",
     column: "createdAt",

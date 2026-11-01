@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({
   upserts: [] as unknown[],
   upsertFails: false,
+  upsertConflictsLeft: 0,
   sentRows: [] as unknown[],
   replyRows: [] as unknown[],
   listCalls: 0,
@@ -21,6 +22,10 @@ vi.mock("../db.js", () => ({
     sentMessage: {
       upsert: vi.fn(async (args: unknown) => {
         if (state.upsertFails) throw new Error("db down");
+        if (state.upsertConflictsLeft > 0) {
+          state.upsertConflictsLeft -= 1;
+          throw Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
+        }
         state.upserts.push(args);
         return {};
       }),
@@ -127,6 +132,18 @@ describe("computeWaitingOn", () => {
     expect(computeWaitingOn([sent({ threadId: null })], [], opts)).toEqual([]);
   });
 
+  it("an unsubscribe request is never waiting on a reply", () => {
+    const out = computeWaitingOn(
+      [
+        sent({ gmailId: "u1", threadId: "tu", to: "unsub@lists.x.com", origin: "unsubscribe" }),
+        sent(),
+      ],
+      [],
+      opts,
+    );
+    expect(out.map((i) => i.threadId)).toEqual(["t1"]);
+  });
+
   it("minDays is a floor: a 1-day-old message is not waiting at minDays=2, is at 0", () => {
     const row = sent({ sentAt: daysAgo(1) });
     expect(computeWaitingOn([row], [], opts)).toEqual([]);
@@ -141,6 +158,7 @@ describe("recordSentMessage / syncSentMessages", () => {
     state.upserts.length = 0;
     state.captured.length = 0;
     state.upsertFails = false;
+    state.upsertConflictsLeft = 0;
     state.listCalls = 0;
     state.listResult = {
       items: [
@@ -183,6 +201,45 @@ describe("recordSentMessage / syncSentMessages", () => {
     expect(state.listCalls).toBe(3);
   });
 
+  it("a Klorn send records its origin on create and on update", async () => {
+    await recordSentMessage("u1", { ...sent(), origin: "auto_reply" });
+    expect(state.upserts[0]).toMatchObject({
+      create: { origin: "auto_reply" },
+      update: { origin: "auto_reply" },
+    });
+  });
+
+  it("retries once when the Sent scan inserted the same row first, so the origin still lands", async () => {
+    state.upsertConflictsLeft = 1;
+    await recordSentMessage("u1", { ...sent(), origin: "approved" });
+    expect(state.upserts).toHaveLength(1);
+    expect(state.upserts[0]).toMatchObject({ update: { origin: "approved" } });
+    expect(state.captured).toEqual([]);
+  });
+
+  it("gives up after one retry and reports, never throwing", async () => {
+    state.upsertConflictsLeft = 2;
+    await expect(
+      recordSentMessage("u1", { ...sent(), origin: "approved" }),
+    ).resolves.toBeUndefined();
+    expect(state.upserts).toHaveLength(0);
+    expect(state.captured).toHaveLength(1);
+  });
+
+  it("a record without an origin never writes one, so the Sent scan cannot erase a Klorn origin", async () => {
+    await recordSentMessage("u1", sent());
+    const args = state.upserts[0] as { create: object; update: object };
+    expect(args.create).not.toHaveProperty("origin");
+    expect(args.update).not.toHaveProperty("origin");
+  });
+
+  it("rows from the Sent-folder scan carry no origin", async () => {
+    await syncSentMessages("u1", NOW.getTime());
+    const args = state.upserts[0] as { create: object; update: object };
+    expect(args.create).not.toHaveProperty("origin");
+    expect(args.update).not.toHaveProperty("origin");
+  });
+
   it("not connected (null page) records nothing and is not an error", async () => {
     state.listResult = null;
     expect(await syncSentMessages("u1", NOW.getTime())).toBe(0);
@@ -200,6 +257,16 @@ describe("waitingOnThreads", () => {
   it("joins sent rows with the mirror's replies and applies the rule", async () => {
     const out = await waitingOnThreads("u1", { now: NOW, minDays: 2 });
     expect(out.map((i) => i.threadId)).toEqual(["t1"]);
+  });
+
+  it("reads each row's origin so the rule can drop unsubscribe requests", async () => {
+    const { prisma } = await import("../db.js");
+    state.sentRows = [sent({ origin: "unsubscribe" })];
+    expect(await waitingOnThreads("u1", { now: NOW, minDays: 2 })).toEqual([]);
+    const call = vi.mocked(prisma.sentMessage.findMany).mock.calls.at(-1)?.[0] as {
+      select: Record<string, boolean>;
+    };
+    expect(call.select.origin).toBe(true);
   });
 
   it("no sent rows → no reply query, empty result", async () => {
