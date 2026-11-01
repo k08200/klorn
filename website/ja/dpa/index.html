@@ -82,7 +82,7 @@
       <tr><th>Vercel</th><td class="us">ウェブアプリのホスティング</td><td>通信中のリクエストとレスポンス</td></tr>
       <tr><th>Google（Gemini API）</th><td class="us">モデル呼び出し</td><td>分類や下書きのために送られるメッセージのテキスト。送信データを学習に使わないAPI規約のもとで扱われます</td></tr>
       <tr><th>Anthropic（Claude API）</th><td class="us">モデル呼び出し</td><td>同じメッセージのテキスト。送信データを学習に使わない商用API規約のもとで扱われます。既定では30日以内に削除され、利用ポリシーの執行で問題とされたコンテンツに限り、より長く保持されます</td></tr>
-      <tr><th>OpenRouter</th><td class="us">モデルのルーティング</td><td>同上（OpenRouter経由で使うモデルの場合）。自分のキーを使うと、この行はあなたが選んだ提供元に置き換わります</td></tr>
+      <tr><th>OpenRouter</th><td class="us">自分のOpenRouterキーによるモデルのルーティング、および予備経路</td><td>同じメッセージ本文。自分で追加したOpenRouterキーでのリクエスト、またはAnthropicが使えないときにホスト版サービスが予備経路へ切り替えた場合に限ります。ホスト版サービスのモデル呼び出しは、通常Anthropicが処理します</td></tr>
       <tr><th>Paddle</th><td class="us">決済と販売代理（Merchant of Record）</td><td>請求情報。<strong>メールの内容は含みません</strong></td></tr>
       <tr><th>Apple</th><td class="us">プッシュ通知の配信（APNs）</td><td>登録したデバイスへの通知ペイロード</td></tr>
     </tbody>

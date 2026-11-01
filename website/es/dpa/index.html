@@ -82,7 +82,7 @@
       <tr><th>Vercel</th><td class="us">Alojamiento de la app web</td><td>Solicitudes y respuestas en tránsito</td></tr>
       <tr><th>Google (API de Gemini)</th><td class="us">Llamadas al modelo</td><td>El texto del mensaje enviado para clasificar o redactar, con condiciones de la API que excluyen el entrenamiento con los datos enviados</td></tr>
       <tr><th>Anthropic (API de Claude)</th><td class="us">Llamadas al modelo</td><td>El mismo texto del mensaje, con condiciones comerciales de la API que excluyen el entrenamiento con los datos enviados. Se elimina en un plazo de 30 días por defecto; se conserva más tiempo solo el contenido señalado por la aplicación de la política de uso</td></tr>
-      <tr><th>OpenRouter</th><td class="us">Enrutamiento de modelos</td><td>Lo mismo, para los modelos a los que se accede a través de él. Si usas tu propia clave, esta fila pasa a ser el proveedor que elijas</td></tr>
+      <tr><th>OpenRouter</th><td class="us">Enrutamiento de modelos con tu propia clave de OpenRouter, y vía de respaldo</td><td>El mismo texto del mensaje, solo en las solicitudes hechas con una clave de OpenRouter que añadiste tú, o si el servicio alojado recurre a esta vía cuando Anthropic no está disponible. Por defecto, las llamadas al modelo del servicio alojado las gestiona Anthropic</td></tr>
       <tr><th>Paddle</th><td class="us">Pagos y comerciante registrado (merchant of record)</td><td>Datos de facturación. <strong>Ningún contenido de correo</strong></td></tr>
       <tr><th>Apple</th><td class="us">Entrega de notificaciones push (APNs)</td><td>El contenido de las notificaciones en los dispositivos que registraste</td></tr>
     </tbody>
