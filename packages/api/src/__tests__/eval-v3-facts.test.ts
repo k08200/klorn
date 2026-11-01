@@ -152,12 +152,22 @@ describe("evidence verification (P2 normalisation spec)", () => {
     expect(normaliseEvidence("pay‮now⁦")).toBe("paynow");
   });
 
-  it("requires ≥2 tokens or ≥8 chars, so a stray word cannot verify", () => {
-    const haystack = "the attachment is the contract";
+  it("requires a quote weight ≥8 (Hangul/CJK count 2, spaces 0), so a stray phrase cannot verify", () => {
+    const haystack = "of the attachment, the contract — 회신 부탁드립니다";
     expect(verifyEvidence("the", haystack)).toBe(false);
-    expect(verifyEvidence("att", haystack)).toBe(false);
+    expect(verifyEvidence("of the", haystack)).toBe(false);
     expect(verifyEvidence("the contract", haystack)).toBe(true);
     expect(verifyEvidence("contract", haystack)).toBe(true);
+    expect(verifyEvidence("회신 부탁", haystack)).toBe(true);
+  });
+
+  it("never cuts a Latin word: 'approval' does not verify inside 'disapproval'", () => {
+    expect(verifyEvidence("approval needed", "your disapproval needed now")).toBe(false);
+    expect(verifyEvidence("approval needed", "final approval needed now")).toBe(true);
+  });
+
+  it("turns control characters into spaces", () => {
+    expect(normaliseEvidence("send\u0007the deck")).toBe("send the deck");
   });
 });
 
@@ -183,6 +193,28 @@ describe("due binding (P2 security review)", () => {
     // bare 시 is not a token (시스템, 다시, 주시기 …); "6시" still matches via the digit
     expect(hasTemporalToken("자료 보내주시기 바랍니다")).toBe(false);
     expect(hasTemporalToken("오늘 6시까지")).toBe(true);
+  });
+
+  it("counts only time-shaped numbers and context-bound ambiguous words (P2 #1587)", () => {
+    expect(hasTemporalToken("Invoice #4821 attached")).toBe(false);
+    expect(hasTemporalToken("you may approve it")).toBe(false);
+    expect(hasTemporalToken("by may 5")).toBe(true);
+    expect(hasTemporalToken("by 5pm")).toBe(true);
+    expect(hasTemporalToken("send it by sun")).toBe(true);
+    expect(hasTemporalToken("before Q4")).toBe(true);
+  });
+
+  it("covers the product's other mail languages", () => {
+    for (const quote of [
+      "bitte bis morgen",
+      "avant demain",
+      "para mañana",
+      "até amanhã",
+      "明日までに",
+      "今天截止",
+    ]) {
+      expect(hasTemporalToken(quote), quote).toBe(true);
+    }
   });
 
   it("keeps the ask but nulls a due whose evidence states no deadline", () => {
