@@ -98,7 +98,7 @@ Build on what exists: `SentMessage` (user's sent mail), `ContactEngagementScore`
 - pinned or VIP;
 - dismiss count.
 
-Output is a `relationship` snapshot stored with the decision. This removes the cold-start "urgent 0/4" problem from day one, because sent mail is already synced for "waiting on".
+Output is a `relationship` snapshot stored with the decision. It eases the cold-start "urgent 0/4" problem from day one, because sent mail is already synced for "waiting on". The sync reads only the newest page of the Sent folder (50 mails) every 30 minutes and has no history backfill. So on day one the snapshot sees at most the user's last 50 sent mails, and older correspondents look new. Production on 2026-10-31: 192 `SentMessage` rows across 3 users, the oldest from 2026-06-04. A bounded backfill of sent headers is planned as its own change.
 
 As built in P2 (`judge/v3/relationship.ts`, `relationship-loader.ts`):
 - Every field is null when the data to answer it does not exist, never 0, so policy can tell "unknown" from "never". No sent-mail sync means the sent fields are null.
@@ -112,7 +112,21 @@ As built in P2 (`judge/v3/relationship.ts`, `relationship-loader.ts`):
   - `firstSeenAt` (first contact either way).
 - A From with no parseable mailbox gives an all-null snapshot.
 - Per-user ego network only: one user's mail never informs another user's snapshot. No hand-tuned scores (the interaction graph's are not reused).
-- Known gap: Klorn's own unattended replies reach `SentMessage` through the Gmail SENT sync with no provenance, so the sent-side counts include them. Until sends carry provenance, policy must not treat "the user wrote to them" as trust.
+- Sent provenance (#1591): `SentMessage.origin` records who sent each mail.
+
+  | Value | Meaning | Relationship evidence |
+  |---|---|---|
+  | `user` | manual send through Klorn | yes |
+  | `approved` | the agent drafted it; the user approved these exact bytes | yes |
+  | `auto_reply` | an autonomous reply the user never saw | never |
+  | `unsubscribe` | a mailto unsubscribe request | never |
+  | null | seen only by the Sent-folder scan (sent outside Klorn), or recorded before the column existed | yes |
+
+  This applies to every sent-side field: sent count, last sent, reply latency, replied and user-initiated thread counts, and the sent side of `firstSeenAt`.
+
+  Rows recorded before #1591 stay null, so legacy auto-replies and unsubscribes still read as the user's. A null row whose `to` matches a `listUnsubscribeMailto` address stored for that user is not evidence.
+
+  Until the loader applies this rule, policy must not treat "the user wrote to them" as trust.
 - Pinned means any `PIN_TIER` rule on the address or domain. VIP means a sender label of investor or customer, or a pin to PUSH.
 - **Calendar co-attendance is always null for now.** `CalendarEvent` stores no attendees. The interaction graph's "meeting" count is inferred from email volume, which is not co-attendance, so it is not reused.
 
