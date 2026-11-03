@@ -30,9 +30,10 @@ import { listGmailMailbox } from "./gmail-mailbox.js";
  *     bytes (chat approve → outbox → executor);
  *   - "auto_reply": an autonomous reply the user never saw before it left;
  *   - "unsubscribe": a mailto unsubscribe request.
- * Null = seen only by the Sent-folder scan (sent outside Klorn), or recorded
- * before this column existed. Relationship evidence is null, "user" and
- * "approved"; "auto_reply" and "unsubscribe" never are.
+ * Null = seen only by the Sent-folder scan, with no proof that Klorn sent it
+ * (counted as the user's own mail; legacy rows were labelled by migration
+ * 20261101000000_sent_message_origin_backfill). Relationship evidence is null,
+ * "user" and "approved"; "auto_reply" and "unsubscribe" never are.
  */
 export type SentOrigin = "user" | "approved" | "auto_reply" | "unsubscribe";
 

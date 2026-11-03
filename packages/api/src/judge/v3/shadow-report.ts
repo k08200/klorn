@@ -1,26 +1,20 @@
 /**
  * Disagreement report for the v3 facts shadow (doc §5 "Shadow mode"): v2 lane
- * shown vs the lane the stored facts imply, plus fallback rate, escalation,
- * evidence drops and cost per day. Pure over stored AttentionFacts rows;
- * reports counts and ids only, never mail text.
+ * shown vs the lane policy v3 (laneFromFactsV3, pre-budget) gives the stored
+ * facts, plus fallback rate, escalation, evidence drops and cost per day. Pure
+ * over stored AttentionFacts rows; reports counts and ids only, never mail text.
  *
- * The facts→lane mapping here is doc §3(4) WITHOUT budget, ranking or
- * importance, with the P3 safety rules already agreed (machine mail never
- * PUSHes through an ask, risk-only PUSH needs vip, phishing_suspect and spam
- * veto PUSH/MEETING). It is a stand-in until judge/v3/policy.ts
- * (laneFromFactsV3, phase P3) lands; then this file imports that instead.
+ * Rows without LLM facts (factsSource "none") are counted as fallback and not
+ * compared: their partial facts do not parse as FactsV1 by design. Pinned
+ * senders are excluded: the pin decides both lanes.
  */
 
 import type { LiveTier } from "@klorn/contract";
 import { toLiveTier } from "../tiers.js";
 import { type FactsV1, parseFactsV1 } from "./facts-schema.js";
+import { laneFromFactsV3, POLICY_VERSION } from "./policy.js";
 import { parseRelationshipSnapshot, type RelationshipSnapshot } from "./relationship.js";
 
-export const REPORT_LANE_POLICY = "doc-3.4-pre-budget (stand-in until P3 policy.ts)";
-const DAY_MS = 86_400_000;
-const PUSH_DUE_WINDOW_MS = DAY_MS;
-/** An overdue deadline older than this is not "due soon". */
-const PUSH_OVERDUE_MS = DAY_MS;
 const MAX_SAMPLES = 20;
 
 export interface ShadowRow {
@@ -45,41 +39,21 @@ interface Signals {
   autoSubmitted?: boolean;
 }
 
-const URGENT_RISKS = ["payment_failed", "security_alert"] as const;
-
-/** Pre-budget lane implied by facts, or null when a pin decides the lane. */
-export function laneFromFactsForReport(
+/** Pre-budget v3 lane for a stored row, or null when a pin decides the lane. */
+export function laneForRow(
   facts: FactsV1,
   signals: Signals,
   rel: RelationshipSnapshot | null,
   at: Date,
 ): LiveTier | null {
   if (rel?.pinned) return null;
-  const phishing = facts.risk.includes("phishing_suspect");
-  const machine = Boolean(signals.automatedSender || signals.autoSubmitted);
-  const blocked = Boolean(signals.spam) || phishing;
-  const direct = facts.addressedTo === "me_direct" || facts.addressedTo === "me_cc";
-  const dueSoon = facts.asks.some((a) => {
-    if (a.due === null) return false;
-    const delta = Date.parse(a.due) - at.getTime();
-    return delta <= PUSH_DUE_WINDOW_MS && delta >= -PUSH_OVERDUE_MS;
-  });
-  const urgentRisk = facts.risk.some((r) => (URGENT_RISKS as readonly string[]).includes(r));
-  // Doc §3(4): both PUSH branches need the mail addressed to the user.
-  if (!blocked && direct && ((dueSoon && !machine) || (urgentRisk && rel?.vip === true))) {
-    return "PUSH";
-  }
-  if (facts.event && facts.addressedTo !== "bulk" && !blocked) return "MEETING";
-  const personal = facts.kind === "personal" || facts.kind === "work_thread";
-  if (facts.asks.length > 0 || personal || facts.threadTurn === "mine_to_reply" || urgentRisk) {
-    return "QUEUE";
-  }
-  const record = facts.kind === "notification" || facts.kind === "receipt";
-  if ((facts.transaction && !facts.transaction.actionRequired) || record) return "INFO";
-  if (facts.addressedTo === "bulk" || facts.kind === "newsletter" || facts.kind === "promotion") {
-    return "SILENT";
-  }
-  return "QUEUE";
+  return laneFromFactsV3({
+    facts,
+    relationship: rel,
+    spam: Boolean(signals.spam),
+    automatedSender: Boolean(signals.automatedSender || signals.autoSubmitted),
+    decidedAt: at,
+  }).lane;
 }
 
 function asSignals(raw: unknown): Signals {
@@ -129,7 +103,7 @@ export function summarizeShadow(rows: readonly ShadowRow[]) {
       invalid++;
       continue;
     }
-    const v3 = laneFromFactsForReport(
+    const v3 = laneForRow(
       parsed,
       asSignals(row.signals),
       parseRelationshipSnapshot(row.relationship),
@@ -158,7 +132,7 @@ export function summarizeShadow(rows: readonly ShadowRow[]) {
     cost: { totalUsd, perDayUsd: costPerDay },
     models,
     lanes: {
-      policy: REPORT_LANE_POLICY,
+      policy: POLICY_VERSION,
       compared,
       excludedPinned: pinned,
       agreement: compared ? agreed / compared : null,
