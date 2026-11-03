@@ -114,7 +114,7 @@ const BUDGET_STOP_ERRORS = new Set(["DailyCostCapExceededError", "UserRateLimite
 const PACER_BUSY_ERROR = "PacerBusyError";
 
 function hasOwnKey(c: ProviderCredentials): boolean {
-  return Boolean(c.openRouterApiKey || c.geminiApiKey || c.openAiApiKey || c.anthropicApiKey);
+  return Boolean(c.anthropicApiKey || c.geminiApiKey || c.openAiApiKey);
 }
 
 export const prismaShadowDeps: ShadowDeps = {
