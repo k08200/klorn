@@ -31,14 +31,13 @@ import type {
   MeetingListing,
 } from "../calendar-providers/types.js";
 import type { CalendarProviderName } from "../calendar-rows.js";
-import { type CountedMeeting, countMeeting } from "./coattendance-rules.js";
+import { type CountedMeeting, countMeeting, utcDayOf } from "./coattendance-rules.js";
 import { isPassDue, readSourceState, recordPassSucceeded } from "./coattendance-sources.js";
 import {
   loadOwnAddresses,
   pruneCountedMeetings,
   type RecordResult,
   recordCountedMeetings,
-  utcDayOf,
 } from "./coattendance-store.js";
 
 export const COATTENDANCE_LOOKBACK_DAYS = 30;

@@ -19,7 +19,11 @@ vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
 import { prisma } from "../db.js";
 import type { CountedMeeting } from "../pim/coattendance/coattendance-rules.js";
-import { claimAndCount, eventKeyOf } from "../pim/coattendance/coattendance-store.js";
+import {
+  claimAndCount,
+  eventKeyOf,
+  recordCountedMeetings,
+} from "../pim/coattendance/coattendance-store.js";
 import { isDataWipeFenceError } from "../privacy/data-wipe-fence.js";
 import { purgeUserData } from "../purge-user-data.js";
 
@@ -197,6 +201,38 @@ describePg("nothing finer than a day", () => {
            AND "endedAt" <> date_trunc('day', "endedAt")) AS n`;
     expect(Number(finer?.n)).toBe(0);
     expect(await prisma.coAttendanceMeeting.count({ where: { userId } })).toBe(2);
+  });
+});
+
+describePg("one transaction per UTC end-day", () => {
+  /** The transaction that last wrote each contact's row, by address. */
+  async function writers(userId: string): Promise<Record<string, string>> {
+    const rows = await prisma.$queryRaw<Array<{ contactEmail: string; tx: string }>>`
+      SELECT "contactEmail", xmin::text AS tx FROM "ContactCoAttendance" WHERE "userId" = ${userId}`;
+    return Object.fromEntries(rows.map((r) => [r.contactEmail, r.tx]));
+  }
+
+  it("writes the meetings of one end-day in one transaction, and another day in another", async () => {
+    const userId = await newUser();
+    await recordCountedMeetings("GOOGLE", userId, [
+      meeting("day1-a", "2026-10-20T01:00:00Z", ["ana@x.example"]),
+      meeting("day2-a", "2026-10-21T01:00:00Z", ["cy@x.example"]),
+      meeting("day1-b", "2026-10-20T15:00:00Z", ["bo@x.example"]),
+    ]);
+    const tx = await writers(userId);
+    // Rows that share a transaction id reveal one day, which lastMetAt already says.
+    expect(tx["ana@x.example"]).toBe(tx["bo@x.example"]);
+    expect(tx["cy@x.example"]).not.toBe(tx["ana@x.example"]);
+  });
+
+  it("splits a day only past a cap: 26 meetings of one day take two transactions", async () => {
+    const userId = await newUser();
+    const day = Array.from({ length: 26 }, (_, i) =>
+      meeting(`cap${i}`, "2026-10-22T01:00:00Z", [`p${i}@x.example`]),
+    );
+    expect(await recordCountedMeetings("GOOGLE", userId, day)).toMatchObject({ meetings: 26 });
+    const tx = Object.values(await writers(userId));
+    expect(new Set(tx).size).toBe(2);
   });
 });
 

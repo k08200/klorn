@@ -375,6 +375,51 @@ describe("per-source markers: observed since, last pass", () => {
   });
 });
 
+describe("one UTC day at a time", () => {
+  it("counts a meeting that ended today only after the day is over", async () => {
+    const today = meeting("ical:today@google.com|", "2026-11-01T08:00:00.000Z", [
+      me,
+      person("ana@client.example"),
+    ]);
+    const { session } = googleSession([today]);
+    expect(await countCoAttendance(session, "u1", null, NOW)).toMatchObject({ meetings: 0 });
+    expect(tables().coAttendanceMeeting ?? []).toEqual([]);
+    const tomorrow = at("2026-11-02T00:30:00.000Z");
+    expect(await countCoAttendance(session, "u1", null, tomorrow)).toMatchObject({ meetings: 1 });
+    expect(counters()["ana@client.example"]?.lastMetAt).toEqual(at("2026-11-01T00:00:00.000Z"));
+  });
+
+  it("keeps a meeting's marker for as long as any pass can still list it", async () => {
+    // A meeting ending just after midnight, passes every 6 hours until it leaves
+    // the 30-day window: counted once, at its first pass after its day ended, and
+    // its marker never pruned while the listing still returns it.
+    const end = at("2026-10-01T00:00:01.000Z");
+    const late = {
+      ...meeting("ical:edge@google.com|", "2026-09-30T23:00:01.000Z", [
+        me,
+        person("ana@x.example"),
+      ]),
+      endTime: end,
+    };
+    for (
+      let t = end.getTime();
+      t < end.getTime() + 32 * DAY_MS;
+      t += COATTENDANCE_PASS_INTERVAL_MS
+    ) {
+      const now = new Date(t);
+      const listed = end.getTime() > t - COATTENDANCE_LOOKBACK_DAYS * DAY_MS;
+      await countCoAttendance(googleSession(listed ? [late] : []).session, "u1", null, now);
+      const counted = (counters()["ana@x.example"]?.meetingCount as number | undefined) ?? 0;
+      expect(counted, now.toISOString()).toBe(
+        t >= at("2026-10-02T00:00:00.000Z").getTime() ? 1 : 0,
+      );
+      if (listed && counted === 1) {
+        expect(tables().coAttendanceMeeting ?? [], now.toISOString()).toHaveLength(1);
+      }
+    }
+  });
+});
+
 describe("idempotency", () => {
   it("never counts a meeting twice across repeated passes", async () => {
     const { session } = googleSession([standup, allHands]);
@@ -473,6 +518,36 @@ describe("batches", () => {
       contacts: Array.from({ length: contactsEach }, (_, c) => `${prefix}${i}-${c}@x.example`),
       small: contactsEach <= 4,
     }));
+
+  const onDay = (meetings: CountedMeeting[], day: string): CountedMeeting[] =>
+    meetings.map((m) => ({
+      ...m,
+      startTime: at(`${day}T01:00:00.000Z`),
+      endTime: at(`${day}T02:00:00.000Z`),
+    }));
+
+  it("writes each UTC end-day in its own transaction, the whole day together", () => {
+    const day1 = onDay(many(3, 2, "a"), "2026-10-20");
+    const day2 = onDay(many(2, 2, "b"), "2026-10-21");
+    const batches = planBatches([...day2, day1[0], ...day1.slice(1)].reverse());
+    expect(batches.map((b) => b.length)).toEqual([3, 2]);
+    expect(batches[0]?.every((m) => m.endTime.getTime() === day1[0]?.endTime.getTime())).toBe(true);
+    expect(batches[1]?.every((m) => m.endTime.getTime() === day2[0]?.endTime.getTime())).toBe(true);
+  });
+
+  it("splits only a day over a cap, in marker-key order, and never mixes days", () => {
+    const big = onDay(many(27, 2, "c"), "2026-10-20");
+    const small = onDay(many(1, 2, "d"), "2026-10-20");
+    const next = onDay(many(1, 2, "e"), "2026-10-21");
+    const batches = planBatches([...next, ...big, ...small]);
+    expect(batches.map((b) => b.length)).toEqual([25, 3, 1]);
+    const day20 = batches
+      .slice(0, 2)
+      .flat()
+      .map((m) => eventKeyOf(m.identity));
+    expect(day20).toEqual([...day20].sort());
+    expect(batches[2]?.[0]?.identity).toBe(next[0]?.identity);
+  });
 
   it("orders each batch by marker key, at most 25 meetings", () => {
     const batches = planBatches(many(60, 2, "m"));

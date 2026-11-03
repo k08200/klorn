@@ -28,8 +28,8 @@ function meeting(overrides: Partial<ProviderMeeting> = {}): ProviderMeeting {
     identity: "ical:abc@google.com|",
     cancelled: false,
     allDay: false,
-    startTime: new Date("2026-11-01T09:00:00.000Z"),
-    endTime: new Date("2026-11-01T10:00:00.000Z"),
+    startTime: new Date("2026-10-31T09:00:00.000Z"),
+    endTime: new Date("2026-10-31T10:00:00.000Z"),
     attendeesOmitted: false,
     organizedBySelf: false,
     attendees: [me(), person("ana@client.example")],
@@ -41,17 +41,24 @@ describe("countMeeting: what counts", () => {
   it("counts an ended meeting for the other attendees, as a small meeting", () => {
     expect(countMeeting(meeting(), OWN, NOW)).toEqual({
       identity: "ical:abc@google.com|",
-      startTime: new Date("2026-11-01T09:00:00.000Z"),
-      endTime: new Date("2026-11-01T10:00:00.000Z"),
+      startTime: new Date("2026-10-31T09:00:00.000Z"),
+      endTime: new Date("2026-10-31T10:00:00.000Z"),
       contacts: ["ana@client.example"],
       small: true,
     });
   });
 
-  it("counts a meeting that ended exactly now, and not one still running", () => {
-    expect(countMeeting(meeting({ endTime: NOW }), OWN, NOW)).not.toBeNull();
-    const running = meeting({ endTime: new Date(NOW.getTime() + 1) });
-    expect(countMeeting(running, OWN, NOW)).toBeNull();
+  it("counts a meeting only once its whole UTC end-day has finished", () => {
+    // NOW is 2026-11-01T12:00Z: today's meetings wait for tomorrow, even ended ones,
+    // so a day's meetings are always written together (one transaction per day).
+    const endedAt = (iso: string) =>
+      meeting({ startTime: new Date(new Date(iso).getTime() - 3_600_000), endTime: new Date(iso) });
+    expect(countMeeting(endedAt("2026-10-31T23:59:59.999Z"), OWN, NOW)).not.toBeNull();
+    expect(countMeeting(endedAt("2026-11-01T00:00:00.000Z"), OWN, NOW)).toBeNull();
+    expect(countMeeting(endedAt("2026-11-01T11:00:00.000Z"), OWN, NOW)).toBeNull();
+    expect(countMeeting(endedAt("2026-11-01T13:00:00.000Z"), OWN, NOW)).toBeNull();
+    const tomorrow = new Date("2026-11-02T00:00:00.000Z");
+    expect(countMeeting(endedAt("2026-11-01T11:00:00.000Z"), OWN, tomorrow)).not.toBeNull();
   });
 
   it("does not count a cancelled meeting", () => {

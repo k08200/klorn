@@ -3,8 +3,11 @@
  * already counted (CoAttendanceMeeting). The only place either table is written.
  *
  * Exactly once per meeting, without keeping who attended it. Meetings are written
- * in batches (planBatches: at most MEETINGS_PER_TRANSACTION meetings and
- * CONTACTS_PER_TRANSACTION distinct contacts), one transaction each. The transaction
+ * one UTC end-day per transaction (planBatches): every meeting that ended on day D
+ * goes in one transaction, so rows that share a transaction id (Postgres xmin)
+ * reveal no more than lastMetAt, a day, already does. Only a day past a cap
+ * (MEETINGS_PER_TRANSACTION meetings or CONTACTS_PER_TRANSACTION distinct
+ * contacts) is split, across transactions in marker-key order. The transaction
  * first claims the batch's markers (INSERT ... ON CONFLICT DO NOTHING RETURNING,
  * through createManyAndReturn with skipDuplicates), then adds the meetings it
  * claimed, and only those, to each contact's counters. A meeting listed again by a
@@ -30,13 +33,12 @@
 import { createHash } from "node:crypto";
 import { INTERACTIVE_TX_OPTIONS, prisma } from "../../db.js";
 import type { CalendarProviderName } from "../calendar-rows.js";
-import { type CountedMeeting, normalizeAttendeeEmail } from "./coattendance-rules.js";
+import { type CountedMeeting, normalizeAttendeeEmail, utcDayOf } from "./coattendance-rules.js";
 
 /** Meetings per transaction: bounds how long one holds a pooled connection. */
 export const MEETINGS_PER_TRANSACTION = 25;
 /** Distinct contacts (one upsert each) per transaction, for the same reason. */
 export const CONTACTS_PER_TRANSACTION = 200;
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface RecordResult {
   /** Meetings counted by this call (not already counted before). */
@@ -55,11 +57,6 @@ interface ContactTally {
 /** The marker key: SHA-256 (hex) of the meeting's identity, never the identity itself. */
 export function eventKeyOf(identity: string): string {
   return createHash("sha256").update(identity).digest("hex");
-}
-
-/** The start of the instant's UTC day. */
-export function utcDayOf(instant: Date): Date {
-  return new Date(Math.floor(instant.getTime() / DAY_MS) * DAY_MS);
 }
 
 /**
@@ -97,19 +94,29 @@ interface Keyed {
 const byKey = (a: Keyed, b: Keyed) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
 
 /**
- * Batches in marker-key order, each closed before it would pass
- * MEETINGS_PER_TRANSACTION meetings or CONTACTS_PER_TRANSACTION distinct contacts.
- * One meeting has at most MAX_COUNTED_ATTENDEES contacts, so it always fits alone.
+ * One batch per UTC end-day, days in order, each in marker-key order. A day is
+ * split only when it would pass MEETINGS_PER_TRANSACTION meetings or
+ * CONTACTS_PER_TRANSACTION distinct contacts; a batch never mixes days. One
+ * meeting has at most MAX_COUNTED_ATTENDEES contacts, so it always fits alone.
  */
 export function planBatches(meetings: readonly CountedMeeting[]): CountedMeeting[][] {
-  const keyed = meetings.map((meeting) => ({ key: eventKeyOf(meeting.identity), meeting }));
+  const keyed = meetings.map((meeting) => ({
+    key: eventKeyOf(meeting.identity),
+    day: utcDayOf(meeting.endTime).getTime(),
+    meeting,
+  }));
+  keyed.sort((a, b) => a.day - b.day || byKey(a, b));
   const batches: CountedMeeting[][] = [];
   let batch: CountedMeeting[] = [];
+  let batchDay = Number.NaN;
   let contacts = new Set<string>();
-  for (const { meeting } of keyed.sort(byKey)) {
+  for (const { day, meeting } of keyed) {
     const widened = new Set([...contacts, ...meeting.contacts]);
     const full =
-      batch.length >= MEETINGS_PER_TRANSACTION || widened.size > CONTACTS_PER_TRANSACTION;
+      day !== batchDay ||
+      batch.length >= MEETINGS_PER_TRANSACTION ||
+      widened.size > CONTACTS_PER_TRANSACTION;
+    batchDay = day;
     if (full && batch.length > 0) {
       batches.push(batch);
       batch = [];

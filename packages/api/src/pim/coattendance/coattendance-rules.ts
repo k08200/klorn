@@ -3,8 +3,12 @@
  * Pure: the listing is pim/calendar-providers/google-meetings.ts, the writes
  * coattendance-store.ts. Founder decision 2026-11-01: counts only, never an
  * attendee list. The rules:
- *   - the meeting has ended (its end is at or before now), is not cancelled, has an
- *     identity and timed start and end;
+ *   - the meeting's whole UTC end-day has finished (its end is before today's UTC
+ *     midnight), so a day's meetings are always counted together, in one
+ *     transaction (coattendance-store.ts): rows written together then reveal no
+ *     more than the day each row's lastMetAt already gives. A meeting ending today
+ *     is counted at the first pass tomorrow. It is not cancelled, and has an
+ *     identity and a timed start and end;
  *   - not all day: an all-day event with guests is mostly a notice (out of office, a
  *     deadline, a holiday, travel), not time spent together, and counting it would
  *     inflate "met";
@@ -39,6 +43,12 @@ export const SMALL_MEETING_MAX_PEOPLE = 5;
 export const MAX_COUNTED_ATTENDEES = 50;
 /** RFC 5321's limit on a forward path, the longest address worth keeping. */
 const MAX_ADDRESS_LENGTH = 254;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** The start of the instant's UTC day. */
+export function utcDayOf(instant: Date): Date {
+  return new Date(Math.floor(instant.getTime() / DAY_MS) * DAY_MS);
+}
 
 export interface CountedMeeting {
   readonly identity: string;
@@ -62,7 +72,7 @@ export function normalizeAttendeeEmail(raw: string): string | null {
 function isCountableEvent(meeting: ProviderMeeting, now: Date): boolean {
   if (!meeting.identity || meeting.cancelled || meeting.allDay) return false;
   if (!meeting.startTime || !meeting.endTime) return false;
-  if (meeting.endTime.getTime() > now.getTime()) return false;
+  if (meeting.endTime.getTime() >= utcDayOf(now).getTime()) return false;
   return !meeting.attendeesOmitted;
 }
 
