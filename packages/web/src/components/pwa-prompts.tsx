@@ -18,7 +18,7 @@ const LEGACY_INSTALL_DISMISSED_KEY = `${LEGACY_KEY_PREFIX}-install-dismissed`;
 // Floating cards sit above the phone tab bar (62px + home indicator) and at
 // the corner on desktop, so they never sit on top of the bar's targets.
 const FLOATING =
-  "fixed left-1/2 z-[100] flex w-[min(92vw,28rem)] -translate-x-1/2 items-center gap-3 rounded-card border border-line bg-surface-panel px-4 py-3 shadow-l3 animate-slide-up motion-reduce:animate-none bottom-[calc(62px+env(safe-area-inset-bottom)+12px)] md:bottom-6";
+  "fixed left-1/2 z-[100] flex w-[min(92vw,28rem)] -translate-x-1/2 items-center gap-3 rounded-card border border-line bg-surface-panel px-4 py-3 shadow-sheet animate-slide-up motion-reduce:animate-none bottom-[calc(62px+env(safe-area-inset-bottom)+12px)] md:bottom-6";
 
 /**
  * App-wide PWA chrome: offline notice, "new version" refresh, and the

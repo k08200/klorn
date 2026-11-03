@@ -32,7 +32,7 @@ export default function LanePreview() {
   const { t } = useT();
   return (
     <figure aria-label={t("auth.preview.label")} className="w-full max-w-lg">
-      <div className="overflow-hidden rounded-card border border-line bg-surface-panel shadow-l2">
+      <div className="overflow-hidden rounded-card border border-line bg-surface-panel shadow-menu">
         <div className="flex h-11 items-center justify-between border-b border-line px-4">
           <span className="text-label text-ink">{t("nav.mail")}</span>
           <span className="rounded-full border border-line px-2 py-0.5 text-caption text-ink-mid">

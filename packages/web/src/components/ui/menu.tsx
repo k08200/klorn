@@ -76,7 +76,7 @@ interface MenuProps {
 
 const ITEM_SELECTOR = '[role^="menuitem"]:not([aria-disabled="true"])';
 const ITEM_CLASS =
-  "focus-ring flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-control px-2 text-left text-body text-ink hover:bg-surface-hover focus-visible:bg-surface-hover aria-disabled:cursor-not-allowed aria-disabled:opacity-50";
+  "focus-ring flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-chip px-2 text-left text-role-body text-ink hover:bg-surface-hover focus-visible:bg-surface-hover aria-disabled:cursor-not-allowed aria-disabled:opacity-50";
 
 const ALIGN_CLASS = {
   start: "left-0",
@@ -125,7 +125,7 @@ function MenuRow({ item, onDone }: { item: MenuItem; onDone: () => void }) {
       {checkable && <CheckMark shown={item.checked === true} />}
       {item.leading}
       <span className="min-w-0 flex-1 truncate">{item.label}</span>
-      {item.hint && <span className="shrink-0 text-caption text-ink-muted">{item.hint}</span>}
+      {item.hint && <span className="shrink-0 text-role-caption text-ink-muted">{item.hint}</span>}
     </>
   );
   if (item.href && !item.disabled) {
@@ -172,11 +172,11 @@ function MenuRow({ item, onDone }: { item: MenuItem; onDone: () => void }) {
 type MenuVariant = "chip" | "secondary" | "icon" | "secondaryIcon";
 
 const TRIGGER_CLASS: Record<MenuVariant, string> = {
-  chip: "h-8 rounded-control pointer-coarse:h-11",
-  secondary: "h-9 rounded-lg pointer-coarse:h-11",
-  icon: "size-9 justify-center rounded-lg text-ink-mid hover:bg-surface-hover hover:text-ink pointer-coarse:size-11",
+  chip: "h-8 rounded-chip pointer-coarse:h-11",
+  secondary: "h-9 rounded-control pointer-coarse:h-11",
+  icon: "size-9 justify-center rounded-control text-ink-mid hover:bg-surface-hover hover:text-ink pointer-coarse:size-11",
   secondaryIcon:
-    "size-9 justify-center rounded-lg border border-line-strong bg-surface-panel text-ink-mid hover:bg-surface-hover hover:text-ink pointer-coarse:size-11",
+    "size-9 justify-center rounded-control border border-line-strong bg-surface-panel text-ink-mid hover:bg-surface-hover hover:text-ink pointer-coarse:size-11",
 };
 
 export function Menu({
@@ -287,12 +287,12 @@ export function Menu({
           <span
             className={`flex max-w-56 items-center gap-1.5 transition-colors duration-120 ease-fluid ${
               variant === "secondary"
-                ? `h-9 rounded-lg border px-3 text-label group-hover/trigger:bg-surface-hover ${
+                ? `h-9 rounded-control border px-3 text-role-label group-hover/trigger:bg-surface-hover ${
                     faceOpen
                       ? "border-ink-dim bg-surface-hover text-ink"
                       : "border-line-strong bg-surface-panel text-ink"
                   }`
-                : `h-7 rounded-control px-2.5 text-caption font-medium group-hover/trigger:bg-surface-inset ${
+                : `h-7 rounded-chip px-2.5 text-role-caption font-medium group-hover/trigger:bg-surface-inset ${
                     faceOpen ? "bg-surface-inset text-ink" : "bg-surface-hover text-ink-strong"
                   }`
             }`}
@@ -309,7 +309,7 @@ export function Menu({
           role="menu"
           aria-label={label}
           onKeyDown={onMenuKeyDown}
-          className={`absolute z-30 w-max min-w-56 max-w-[min(20rem,calc(100vw-2rem))] rounded-card border border-line bg-surface-elevated p-1 shadow-l2 ${
+          className={`absolute z-30 w-max min-w-56 max-w-[min(20rem,calc(100vw-2rem))] rounded-control border border-line bg-surface-elevated p-1 shadow-menu ${
             side === "top" ? "bottom-full mb-1" : "top-full mt-1"
           } ${scroll ? "max-h-[min(32rem,70dvh)] overflow-y-auto overscroll-contain" : ""} ${ALIGN_CLASS[align]}`}
         >
@@ -322,7 +322,7 @@ export function Menu({
               className={index > 0 ? "mt-1 border-t border-line-soft pt-1" : undefined}
             >
               {section.heading && (
-                <p aria-hidden="true" className="px-2 pb-1 pt-2 text-caption text-ink-muted">
+                <p aria-hidden="true" className="px-2 pb-1 pt-2 text-role-caption text-ink-muted">
                   {section.heading}
                 </p>
               )}
