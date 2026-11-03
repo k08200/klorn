@@ -84,3 +84,21 @@ describe("background-pacer", () => {
     expect(await result).toBe(42);
   });
 });
+
+describe("backgroundPacer load()", () => {
+  it("reports calls in flight and calls waiting for a slot", async () => {
+    const { createBackgroundPacer } = await import("../llm/background-pacer.js");
+    const pacer = createBackgroundPacer({ maxConcurrent: 1, minIntervalMs: 0 });
+    expect(pacer.load()).toEqual({ active: 0, waiting: 0, maxConcurrent: 1 });
+    let release: () => void = () => {};
+    const first = pacer.run(() => new Promise<void>((r) => (release = r)));
+    await Promise.resolve();
+    const second = pacer.run(async () => undefined);
+    await Promise.resolve();
+    expect(pacer.load()).toEqual({ active: 1, waiting: 1, maxConcurrent: 1 });
+    release();
+    await first;
+    await second;
+    expect(pacer.load()).toEqual({ active: 0, waiting: 0, maxConcurrent: 1 });
+  });
+});

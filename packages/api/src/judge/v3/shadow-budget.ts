@@ -6,18 +6,28 @@
  *    of mails is sampled, not queued behind the judge in the shared pacer);
  *  - at most half of the user's per-minute and daily background call budget
  *    (the judge's RPM slots and count headroom stay free);
+ *  - a free background pacer slot with nobody queued (it never waits behind
+ *    the judge's calls in the shared pacer);
  *  - the money it may spend: at least JUDGE_V3_SHADOW_FLOOR_CENTS (25¢) of the
  *    user's ordinary budget must remain (the judge reserve sits above that),
  *    the shadow's own spend today stays under JUDGE_V3_SHADOW_DAILY_USD
- *    ($0.15), and the global ceiling must be open.
+ *    ($0.15) per user and JUDGE_V3_SHADOW_GLOBAL_DAILY_USD for everyone
+ *    (default 10% of the global ceiling, which has no judge reserve), and the
+ *    global ceiling must be open.
  */
 
 import { checkCostGate, checkGlobalCostGate } from "../../billing/cost-guard.js";
 import { getUserUsage, type UserUsageSnapshot } from "../../billing/quota-limiter.js";
+import { GLOBAL_DAILY_COST_CAP_CENTS } from "../../config.js";
 import { db } from "../../db.js";
+import { backgroundLlmPacer, type PacerLoad } from "../../llm/background-pacer.js";
 
 const DEFAULT_SHADOW_FLOOR_CENTS = 25;
 const DEFAULT_SHADOW_DAILY_USD = 0.15;
+/** Share of the global daily ceiling the shadow may take, all users together. */
+const GLOBAL_SHADOW_SHARE = 0.1;
+/** Global shadow cap when the global ceiling is off (0 = uncapped). */
+const DEFAULT_GLOBAL_SHADOW_DAILY_USD = 5;
 /** The shadow never takes more than this share of the per-user call budget. */
 export const SHADOW_MAX_CALL_SHARE = 0.5;
 export const MAX_SHADOW_IN_FLIGHT = 1;
@@ -33,6 +43,20 @@ export const shadowFloorCents = () =>
   envNumber("JUDGE_V3_SHADOW_FLOOR_CENTS", DEFAULT_SHADOW_FLOOR_CENTS);
 export const shadowDailyUsd = () =>
   envNumber("JUDGE_V3_SHADOW_DAILY_USD", DEFAULT_SHADOW_DAILY_USD);
+
+/** The shadow's spend cap across all users per UTC day. */
+export function globalShadowDailyUsd(globalCapCents = GLOBAL_DAILY_COST_CAP_CENTS): number {
+  const fallback =
+    globalCapCents > 0
+      ? (globalCapCents / 100) * GLOBAL_SHADOW_SHARE
+      : DEFAULT_GLOBAL_SHADOW_DAILY_USD;
+  return envNumber("JUDGE_V3_SHADOW_GLOBAL_DAILY_USD", fallback);
+}
+
+/** Pure: a free pacer slot and an empty queue. */
+export function pacerHasRoom(load: PacerLoad): boolean {
+  return load.waiting === 0 && load.active < load.maxConcurrent;
+}
 
 export interface GateView {
   allowed: boolean;
@@ -59,9 +83,10 @@ function utcDayStart(now: Date): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 }
 
-async function shadowSpentTodayUsd(userId: string, now: Date): Promise<number> {
+/** Shadow spend today: one user's, or everyone's when userId is null. */
+async function shadowSpentTodayUsd(userId: string | null, now: Date): Promise<number> {
   const agg = await db.attentionFacts.aggregate({
-    where: { userId, extractedAt: { gte: utcDayStart(now) } },
+    where: { ...(userId ? { userId } : {}), extractedAt: { gte: utcDayStart(now) } },
     _sum: { costUsd: true },
   });
   return agg._sum.costUsd ?? 0;
@@ -73,6 +98,8 @@ export type BudgetVerdict =
   | "user_budget"
   | "shadow_budget"
   | "global_budget"
+  | "global_shadow_budget"
+  | "pacer_busy"
   | "budget_unknown";
 
 export async function shadowBudgetVerdict(
@@ -80,14 +107,17 @@ export async function shadowBudgetVerdict(
   now = new Date(),
 ): Promise<BudgetVerdict> {
   if (!callShareOk(getUserUsage(userId))) return "calls";
+  if (!pacerHasRoom(backgroundLlmPacer.load())) return "pacer_busy";
   let gate: GateView;
   let global: { allowed: boolean };
   let spent: number;
+  let spentAll: number;
   try {
-    [gate, global, spent] = await Promise.all([
+    [gate, global, spent, spentAll] = await Promise.all([
       checkCostGate(userId),
       checkGlobalCostGate(),
       shadowSpentTodayUsd(userId, now),
+      shadowSpentTodayUsd(null, now),
     ]);
   } catch {
     // Can't tell what the shadow may spend: skip quietly (no Sentry per mail).
@@ -96,6 +126,7 @@ export async function shadowBudgetVerdict(
   if (!shadowHeadroomOk(gate, shadowFloorCents())) return "user_budget";
   if (!global.allowed) return "global_budget";
   if (spent >= shadowDailyUsd()) return "shadow_budget";
+  if (spentAll >= globalShadowDailyUsd()) return "global_shadow_budget";
   return "ok";
 }
 

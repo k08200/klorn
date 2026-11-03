@@ -17,8 +17,16 @@
 
 import { LLM_BACKGROUND_MAX_CONCURRENT, LLM_BACKGROUND_MIN_INTERVAL_MS } from "../config.js";
 
+export interface PacerLoad {
+  active: number;
+  waiting: number;
+  maxConcurrent: number;
+}
+
 export interface BackgroundPacer {
   run<T>(fn: () => Promise<T>): Promise<T>;
+  /** Calls in flight and calls queued for a slot, for callers that would rather skip than wait. */
+  load(): PacerLoad;
 }
 
 export function createBackgroundPacer(options: {
@@ -51,6 +59,7 @@ export function createBackgroundPacer(options: {
   }
 
   return {
+    load: () => ({ active, waiting: waiters.length, maxConcurrent }),
     async run<T>(fn: () => Promise<T>): Promise<T> {
       await acquire();
       try {
