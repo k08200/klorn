@@ -88,22 +88,48 @@ extension Theme {
         return contrast(chipInkComponents(tier, dark: dark), composite(wash, over: surface))
     }
 
-    // MARK: Elevation (L0 canvas, L1 hairline, L2 popovers, L3 sheets)
+    // MARK: Depth (Design Language v2 — hairline first)
+    // flat = a 1pt hairline, no shadow. menu = popovers, menus, toasts.
+    // sheet = sheets and dialogs. No other shadows. CSS → SwiftUI: radius is
+    // half the CSS blur; SwiftUI has no spread, so the negative spread is
+    // dropped. Ink is rgb(10,14,20), the v2 shadow colour.
     enum Elevation {
-        case l2
-        case l3
+        case menu
+        case sheet
 
-        var opacity: Double { self == .l2 ? 0.12 : 0.18 }
-        /// SwiftUI's shadow radius is half the CSS blur (24 / 48).
-        var radius: CGFloat { self == .l2 ? 12 : 24 }
-        var y: CGFloat { self == .l2 ? 8 : 24 }
+        struct Layer: Equatable {
+            let opacity: Double
+            let radius: CGFloat
+            let y: CGFloat
+        }
+
+        /// menu: 0 1px 2px .06, 0 4px 12px -4px .10 · sheet: 0 12px 32px -8px .18
+        var layers: [Layer] {
+            switch self {
+            case .menu: [Layer(opacity: 0.06, radius: 1, y: 1), Layer(opacity: 0.10, radius: 6, y: 4)]
+            case .sheet: [Layer(opacity: 0.18, radius: 16, y: 12)]
+            }
+        }
     }
 
-    // MARK: Motion (120ms state, 200ms enter, 160ms exit)
+    /// The v2 shadow ink, rgb(10, 14, 20).
+    static let shadowInk: RGBA = hex(0x0A0E14)
+    /// The v2 flat hairline: 8% of the shadow ink.
+    static let hairlineOpacity = 0.08
+
+    // MARK: Motion (v2: 120 state · 200 move · 320 sheet, one curve)
     enum Motion {
         static let state = 0.12
-        static let enter = 0.20
+        static let move = 0.20
+        static let sheet = 0.32
+        /// Legacy names (pre-v2) for existing call sites.
+        static let enter = move
         static let exit = 0.16
+        /// cubic-bezier(0.32, 0.72, 0, 1) — the web's ease-fluid.
+        static let curve = (0.32, 0.72, 0.0, 1.0)
+        static func fluid(_ duration: Double) -> Animation {
+            .timingCurve(curve.0, curve.1, curve.2, curve.3, duration: duration)
+        }
         static let stateChange = Animation.easeOut(duration: state)
     }
 
@@ -131,8 +157,12 @@ extension Theme.Typo {
 }
 
 extension View {
-    /// The plan's shadow for a floating layer.
+    /// The v2 shadow for a floating layer (menu or sheet).
     func elevation(_ level: Theme.Elevation) -> some View {
-        shadow(color: Color.black.opacity(level.opacity), radius: level.radius, y: level.y)
+        level.layers.reduce(AnyView(self)) { view, layer in
+            AnyView(view.shadow(
+                color: Theme.dyn(light: Theme.shadowInk, dark: Theme.shadowInk).opacity(layer.opacity),
+                radius: layer.radius, y: layer.y))
+        }
     }
 }

@@ -20,7 +20,7 @@ function Mark() {
   return (
     <span
       aria-hidden="true"
-      className="grid size-7 place-items-center rounded-control bg-ink text-head font-bold text-surface-panel"
+      className="grid size-7 place-items-center rounded-chip bg-ink text-head font-bold text-surface-panel"
     >
       K
     </span>

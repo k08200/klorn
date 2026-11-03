@@ -146,6 +146,18 @@ export const STATIC_TIER_REASONS = {
     fr: "Engagement suivi — ajouté à la file de revue",
     de: "Verfolgte Zusage – zur Prüfliste hinzugefügt",
   },
+  // Policy v3 interrupt budget (attention-engine-v3.md §3(4)): a PUSH
+  // candidate after the day's notifications are spent. Read back as the
+  // "held" marker, so the key must not change.
+  "email.heldByInterruptBudget": {
+    en: "Held: daily interrupt budget reached — no notification sent",
+    ko: "보류: 오늘 알림 한도에 도달해 알림을 보내지 않았어요",
+    ja: "保留: 今日の通知上限に達したため通知していません",
+    zh: "已暂缓：今日提醒次数已用完，未发送通知",
+    es: "En espera: se alcanzó el límite diario de avisos, no se envió notificación",
+    fr: "En attente : limite quotidienne d'alertes atteinte, aucune notification envoyée",
+    de: "Zurückgestellt: Tageslimit für Benachrichtigungen erreicht – keine Benachrichtigung",
+  },
 } as const satisfies Record<string, Record<NotificationLanguage, string>>;
 // `satisfies`, not an annotation: it checks language completeness at the TABLE
 // (a new NOTIFICATION_LANGUAGES entry errors on the exact reason missing a

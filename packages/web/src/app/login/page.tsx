@@ -242,7 +242,7 @@ function LoginForm() {
   return (
     <AuthScreen title={<BrandHeadline />} description={t("auth.subline")} preview={<LanePreview />}>
       {nextPath !== "/inbox" && (
-        <p className="mb-6 rounded-card border border-notice-border bg-notice-bg px-3.5 py-2.5 text-label text-notice-ink">
+        <p className="mb-6 rounded-control border border-notice-border bg-notice-bg px-3.5 py-2.5 text-label text-notice-ink">
           {t("auth.signInToContinue", { destination: returnDestinationLabel(nextPath, t) })}
         </p>
       )}
@@ -255,7 +255,7 @@ function LoginForm() {
         <div className="mb-6 space-y-3">
           <div
             data-testid="access-notice"
-            className="rounded-card border border-notice-border bg-notice-bg px-3.5 py-3 text-label text-notice-ink"
+            className="rounded-control border border-notice-border bg-notice-bg px-3.5 py-3 text-label text-notice-ink"
           >
             <span className="font-semibold text-notice-ink-strong">
               {t("auth.inviteOnlyTitle")}
@@ -431,7 +431,7 @@ function LoginForm() {
 function LegalConsent() {
   const { t } = useT();
   const linkClass =
-    "focus-ring rounded-control text-ink underline decoration-line-strong underline-offset-2 transition-colors duration-120 ease-fluid hover:text-accent-deep";
+    "focus-ring rounded-chip text-ink underline decoration-line-strong underline-offset-2 transition-colors duration-120 ease-fluid hover:text-accent-deep";
   // Split on the first occurrence of each token only, keeping ALL the text
   // around them. A plain `split` would silently drop everything after a
   // repeated token, and the i18n parity guard counts keys, not the
