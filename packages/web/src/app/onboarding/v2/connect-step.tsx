@@ -145,7 +145,7 @@ export function ConnectStep(props: ConnectStepProps) {
         {googleNeedsReconnect && (
           <p
             role="status"
-            className="rounded-card border border-notice-border bg-notice-bg px-4 py-3 text-body text-notice-ink"
+            className="rounded-control border border-notice-border bg-notice-bg px-4 py-3 text-body text-notice-ink"
           >
             <span className="font-semibold text-notice-ink-strong">
               {t("reconnect.googleExpiredTitle")}
@@ -158,7 +158,7 @@ export function ConnectStep(props: ConnectStepProps) {
         {startError && (
           <p
             role="alert"
-            className="rounded-card border border-state-danger-line bg-state-danger-bg px-4 py-3 text-body text-state-danger-ink"
+            className="rounded-control border border-state-danger-line bg-state-danger-bg px-4 py-3 text-body text-state-danger-ink"
           >
             {startError}
           </p>
@@ -251,7 +251,7 @@ function ProviderGrid({ loading, failed, onRetry, children }: ProviderGridProps)
     return (
       <div
         role="alert"
-        className="mt-4 flex flex-wrap items-center gap-3 rounded-card border border-line bg-surface-panel px-4 py-3"
+        className="mt-4 flex flex-wrap items-center gap-3 rounded-control border border-line bg-surface-panel px-4 py-3"
       >
         <p className="min-w-0 flex-1 text-body text-ink">{t("onboardingV2.connect.loadError")}</p>
         <Button variant="secondary" size="sm" onClick={onRetry}>

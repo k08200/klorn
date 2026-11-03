@@ -64,7 +64,7 @@ function ForgotPasswordForm() {
         title={t("resetPassword.checkEmail.title")}
         description={t("resetPassword.checkEmail.description")}
       >
-        <p className="rounded-card border border-line bg-surface-raised px-4 py-3 text-body text-ink-mid">
+        <p className="rounded-control border border-line bg-surface-raised px-4 py-3 text-body text-ink-mid">
           {t("resetPassword.checkEmail.body")}
         </p>
         <Link
