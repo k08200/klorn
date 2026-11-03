@@ -20,13 +20,12 @@ import {
 /** Sentinel option id for the free-text model field. */
 export const OTHER_MODEL = "__other__";
 
-const GROUP_ORDER: readonly ModelGroup[] = ["klorn", "anthropic", "google", "openai", "xai"];
+const GROUP_ORDER: readonly ModelGroup[] = ["klorn", "anthropic", "google", "openai"];
 // Vendor names are proper nouns, the same in every locale.
 const VENDOR_HEADING: Record<Exclude<ModelGroup, "klorn">, string> = {
   anthropic: "Anthropic",
   google: "Google",
   openai: "OpenAI",
-  xai: "xAI",
 };
 
 interface ModelFieldProps {
@@ -56,8 +55,10 @@ function useSections(provider: PlaygroundProvider): ListboxSection[] {
           mono: true,
           badge: m.measured
             ? t("playground.model.measured", {
-                correct: String(m.measured.correct),
+                low: String(m.measured.low),
+                high: String(m.measured.high),
                 total: String(m.measured.total),
+                runs: String(m.measured.runs),
               })
             : undefined,
           hint: formatPrice(m),
@@ -86,7 +87,7 @@ function TriggerFace({ model, choice }: { model: PlaygroundModel | undefined; ch
       )}
       {model.measured && (
         <span className="hidden shrink-0 text-caption text-ink-mid sm:inline">
-          {model.measured.correct}/{model.measured.total}
+          {model.measured.low}–{model.measured.high}/{model.measured.total}
         </span>
       )}
     </>

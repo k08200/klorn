@@ -2110,17 +2110,17 @@ const en: Record<string, string> = {
   "byok.activeModel": "Active model:",
   "byok.usingYourKey": "Using your key",
   "byok.stored": "•••••••• stored",
-  "byok.openRouterLabel": "OpenRouter API key",
-  "byok.openRouterHelp":
-    "One key covers every model Klorn uses — OpenRouter routes them all. The key is verified with the provider before it's stored. Get one at",
+  "byok.anthropicLabel": "Anthropic API key",
+  "byok.anthropicHelp":
+    "Klorn runs on Claude, so one Anthropic key covers every model it uses. The key is verified with Anthropic before it's stored. Get one at",
   "byok.legacy": "legacy",
   "byok.geminiRetired":
-    "Direct Gemini keys are retired — a free-tier key here silently starves classification when its daily quota runs out. Remove it and use one OpenRouter key instead.",
+    "Direct Gemini keys are retired — a free-tier key here silently starves classification when its daily quota runs out. Remove it and use an Anthropic key instead.",
   "byok.assistantModel": "Assistant model",
   "byok.assistantModelHelp":
-    "Frontier models only — this is the model your Klorn assistant talks in. It works on your mail, calendar, and tasks and never searches the web. Runs under your daily AI quota; add your own key above to use your own quota instead. The mail firewall's classifier is tuned separately and is not affected.",
+    "Claude models only — this is the model your Klorn assistant talks in. It works on your mail, calendar, and tasks and never searches the web. Runs under your daily AI quota; add your own key above to use your own quota instead. The mail firewall's classifier is tuned separately and is not affected.",
   "byok.assistantModelHelpFree":
-    "Frontier models only — this is the model your Klorn assistant talks in. It works on your mail, calendar, and tasks and never searches the web. Runs under your daily AI allowance. The mail firewall's classifier is tuned separately and is not affected.",
+    "Claude models only — this is the model your Klorn assistant talks in. It works on your mail, calendar, and tasks and never searches the web. Runs under your daily AI allowance. The mail firewall's classifier is tuned separately and is not affected.",
   "byok.error.status": "Could not load your LLM key status.",
   "byok.error.update": "Could not update the key.",
   "byok.error.model": "Could not change the model.",
@@ -2602,7 +2602,7 @@ const en: Record<string, string> = {
     "Push was skipped because quiet hours were active when the briefing was sent.",
   "briefingPage.guidance.quietHoursAction": "Adjust quiet hours",
   // web app design pass, 2026-10-21: English that reached localized screens.
-  "byok.modelNote.recommended": "{provider} — recommended",
+  "byok.modelNote.balanced": "{provider} — balanced",
   "byok.modelNote.fastest": "{provider} — fastest",
   "byok.modelNote.mostCapable": "{provider} — most capable, pricier",
   "statusChip.connected": "Connected",
@@ -2639,7 +2639,7 @@ const en: Record<string, string> = {
   "playground.provider.label": "Provider",
   "playground.model.label": "Model",
   "playground.model.klorn": "Klorn uses this",
-  "playground.model.measured": "{correct}/{total} on Klorn's test",
+  "playground.model.measured": "{low}–{high}/{total} on Klorn's test ({runs} runs)",
   "playground.model.other": "Another model id…",
   "playground.model.otherLabel": "Model id",
   "playground.model.otherPlaceholder": "vendor/model-name",
@@ -2648,8 +2648,7 @@ const en: Record<string, string> = {
   "playground.model.klornNote": "The model Klorn itself uses, scored on Klorn's 56-email test.",
   "playground.model.listedNote":
     "Listed as is. Only the model Klorn uses is scored on Klorn's test.",
-  "playground.model.priceNote":
-    "Price per 1M tokens, input / output, as listed on OpenRouter on {date}.",
+  "playground.model.priceNote": "List price per 1M tokens, input / output, as recorded on {date}.",
   "playground.key.label": "{provider} API key",
   "playground.key.show": "Show",
   "playground.key.hide": "Hide",

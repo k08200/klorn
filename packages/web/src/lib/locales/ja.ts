@@ -2111,17 +2111,17 @@ const ja: Record<string, string> = {
   "byok.activeModel": "使用中のモデル:",
   "byok.usingYourKey": "自分のキーを使用中",
   "byok.stored": "•••••••• 保存済み",
-  "byok.openRouterLabel": "OpenRouter API キー",
-  "byok.openRouterHelp":
-    "1 つのキーで Klorn が使うすべてのモデルをカバーします。OpenRouter がすべてを中継します。キーは保存前にプロバイダーで検証されます。キーの取得先:",
+  "byok.anthropicLabel": "Anthropic API キー",
+  "byok.anthropicHelp":
+    "Klorn は Claude で動作するため、Anthropic のキー 1 つで Klorn が使うすべてのモデルをカバーします。キーは保存前に Anthropic で検証されます。キーの取得先:",
   "byok.legacy": "レガシー",
   "byok.geminiRetired":
-    "Gemini の直接キーは廃止されました。無料枠のキーは 1 日のクォータを使い切ると分類が気づかないうちに止まります。削除して OpenRouter のキーを 1 つ使ってください。",
+    "Gemini の直接キーは廃止されました。無料枠のキーは 1 日のクォータを使い切ると分類が気づかないうちに止まります。削除して Anthropic のキーを使ってください。",
   "byok.assistantModel": "アシスタントのモデル",
   "byok.assistantModelHelp":
-    "最先端モデルのみ。Klorn アシスタントが会話に使うモデルです。メール、カレンダー、タスクを扱い、Web 検索は行いません。1 日の AI クォータの範囲で動作します。上で自分のキーを追加すると自分のクォータを使います。メールファイアウォールの分類器は別途調整されており、影響を受けません。",
+    "Claude モデルのみ。Klorn アシスタントが会話に使うモデルです。メール、カレンダー、タスクを扱い、Web 検索は行いません。1 日の AI クォータの範囲で動作します。上で自分のキーを追加すると自分のクォータを使います。メールファイアウォールの分類器は別途調整されており、影響を受けません。",
   "byok.assistantModelHelpFree":
-    "最先端モデルのみ。Klorn アシスタントが会話に使うモデルです。メール、カレンダー、タスクを扱い、Web 検索は行いません。1 日の AI クォータの範囲で動作します。メールファイアウォールの分類器は別途調整されており、影響を受けません。",
+    "Claude モデルのみ。Klorn アシスタントが会話に使うモデルです。メール、カレンダー、タスクを扱い、Web 検索は行いません。1 日の AI クォータの範囲で動作します。メールファイアウォールの分類器は別途調整されており、影響を受けません。",
   "byok.error.status": "LLM キーの状態を読み込めませんでした。",
   "byok.error.update": "キーを更新できませんでした。",
   "byok.error.model": "モデルを変更できませんでした。",
@@ -2616,7 +2616,7 @@ const ja: Record<string, string> = {
     "ブリーフィング送信時に通知停止時間中だったため、プッシュをスキップしました。",
   "briefingPage.guidance.quietHoursAction": "通知停止時間を調整",
   // web app design pass, 2026-10-21: English that reached localized screens.
-  "byok.modelNote.recommended": "{provider} — おすすめ",
+  "byok.modelNote.balanced": "{provider} — バランス型",
   "byok.modelNote.fastest": "{provider} — 最速",
   "byok.modelNote.mostCapable": "{provider} — 最も高性能・高価格",
   "statusChip.connected": "接続済み",
@@ -2653,7 +2653,7 @@ const ja: Record<string, string> = {
   "playground.provider.label": "プロバイダー",
   "playground.model.label": "モデル",
   "playground.model.klorn": "Klorn が使用",
-  "playground.model.measured": "Klorn のテスト {correct}/{total}",
+  "playground.model.measured": "Klorn のテスト {low}–{high}/{total}({runs} 回)",
   "playground.model.other": "別のモデル ID…",
   "playground.model.otherLabel": "モデル ID",
   "playground.model.otherPlaceholder": "provider/model-name",
@@ -2662,8 +2662,7 @@ const ja: Record<string, string> = {
   "playground.model.klornNote": "Klorn 自身が使うモデルで、Klorn の56通のテストで採点しています。",
   "playground.model.listedNote":
     "掲載どおりに表示しています。Klorn のテストで採点するのは Klorn が使うモデルだけです。",
-  "playground.model.priceNote":
-    "100万トークンあたりの価格(入力 / 出力)。{date} 時点の OpenRouter の掲載価格です。",
+  "playground.model.priceNote": "100万トークンあたりの定価(入力 / 出力)。{date} 時点の記録です。",
   "playground.key.label": "{provider} API キー",
   "playground.key.show": "表示",
   "playground.key.hide": "隠す",

@@ -2146,17 +2146,17 @@ const es: Record<string, string> = {
   "byok.activeModel": "Modelo activo:",
   "byok.usingYourKey": "Usando tu clave",
   "byok.stored": "•••••••• guardada",
-  "byok.openRouterLabel": "Clave de API de OpenRouter",
-  "byok.openRouterHelp":
-    "Una sola clave cubre todos los modelos que usa Klorn: OpenRouter los enruta todos. La clave se verifica con el proveedor antes de guardarla. Consíguela en",
+  "byok.anthropicLabel": "Clave de API de Anthropic",
+  "byok.anthropicHelp":
+    "Klorn funciona con Claude, así que una sola clave de Anthropic cubre todos los modelos que usa. La clave se verifica con Anthropic antes de guardarla. Consíguela en",
   "byok.legacy": "heredada",
   "byok.geminiRetired":
-    "Las claves directas de Gemini están retiradas: una clave gratuita aquí deja sin recursos la clasificación sin avisar cuando se agota su cuota diaria. Quítala y usa una clave de OpenRouter.",
+    "Las claves directas de Gemini están retiradas: una clave gratuita aquí deja sin recursos la clasificación sin avisar cuando se agota su cuota diaria. Quítala y usa una clave de Anthropic.",
   "byok.assistantModel": "Modelo del asistente",
   "byok.assistantModelHelp":
-    "Solo modelos de vanguardia: es el modelo con el que habla tu asistente de Klorn. Trabaja con tu correo, calendario y tareas, y nunca busca en la web. Funciona dentro de tu cuota diaria de IA; añade tu propia clave arriba para usar tu cuota. El clasificador del cortafuegos de correo se ajusta por separado y no se ve afectado.",
+    "Solo modelos Claude: es el modelo con el que habla tu asistente de Klorn. Trabaja con tu correo, calendario y tareas, y nunca busca en la web. Funciona dentro de tu cuota diaria de IA; añade tu propia clave arriba para usar tu cuota. El clasificador del cortafuegos de correo se ajusta por separado y no se ve afectado.",
   "byok.assistantModelHelpFree":
-    "Solo modelos de vanguardia: es el modelo con el que habla tu asistente de Klorn. Trabaja con tu correo, calendario y tareas, y nunca busca en la web. Funciona dentro de tu cuota diaria de IA. El clasificador del cortafuegos de correo se ajusta por separado y no se ve afectado.",
+    "Solo modelos Claude: es el modelo con el que habla tu asistente de Klorn. Trabaja con tu correo, calendario y tareas, y nunca busca en la web. Funciona dentro de tu cuota diaria de IA. El clasificador del cortafuegos de correo se ajusta por separado y no se ve afectado.",
   "byok.error.status": "No se pudo cargar el estado de tu clave de LLM.",
   "byok.error.update": "No se pudo actualizar la clave.",
   "byok.error.model": "No se pudo cambiar el modelo.",
@@ -2650,7 +2650,7 @@ const es: Record<string, string> = {
     "Se omitió la notificación porque el horario de silencio estaba activo cuando se envió el resumen.",
   "briefingPage.guidance.quietHoursAction": "Ajustar horario de silencio",
   // web app design pass, 2026-10-21: English that reached localized screens.
-  "byok.modelNote.recommended": "{provider} — recomendado",
+  "byok.modelNote.balanced": "{provider} — equilibrado",
   "byok.modelNote.fastest": "{provider} — el más rápido",
   "byok.modelNote.mostCapable": "{provider} — el más capaz, más caro",
   "statusChip.connected": "Conectado",
@@ -2687,7 +2687,7 @@ const es: Record<string, string> = {
   "playground.provider.label": "Proveedor",
   "playground.model.label": "Modelo",
   "playground.model.klorn": "Lo usa Klorn",
-  "playground.model.measured": "{correct}/{total} en la prueba de Klorn",
+  "playground.model.measured": "{low}–{high}/{total} en la prueba de Klorn ({runs} ejecuciones)",
   "playground.model.other": "Otro ID de modelo…",
   "playground.model.otherLabel": "ID del modelo",
   "playground.model.otherPlaceholder": "proveedor/nombre-modelo",
@@ -2698,7 +2698,7 @@ const es: Record<string, string> = {
   "playground.model.listedNote":
     "Se muestra tal cual. Solo el modelo que usa Klorn se puntúa en su prueba.",
   "playground.model.priceNote":
-    "Precio por 1M de tokens, entrada / salida, según OpenRouter el {date}.",
+    "Precio de lista por 1M de tokens, entrada / salida, registrado el {date}.",
   "playground.key.label": "Clave de API de {provider}",
   "playground.key.show": "Mostrar",
   "playground.key.hide": "Ocultar",
