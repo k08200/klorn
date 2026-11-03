@@ -69,6 +69,7 @@ import {
 import { getLinkedInboxClients, renewExpiringGmailWatches } from "./mail/gmail.js";
 import { findReingestedHistoryFailClosed } from "./mail/imap-history.js";
 import { runProactiveDrafts } from "./mail/proactive-drafts.js";
+import { importSentHistory } from "./mail/sent-history-import.js";
 import { syncSentMessages } from "./mail/sent-messages.js";
 import { notifyConversationsUpdated } from "./notify/conversations-updated.js";
 import { desktopAlertTag } from "./notify/desktop-alert.js";
@@ -1474,6 +1475,14 @@ async function runUserCycle(
         // Sent-folder scan for "waiting on" — throttled to every 30 min per
         // user inside, fail-soft, so it can ride every sync tick.
         await syncSentMessages(config.userId);
+        // One-time import of the last 12 months of Sent headers for the same
+        // inboxes (SENT_HISTORY_BACKFILL_ENABLED, default OFF: no DB read, no
+        // Gmail call). Detached on purpose: a batch is up to 100 metadata
+        // fetches, which must not eat this serial loop's per-user time budget.
+        // It never rejects, runs one batch per user at a time (2 minutes at
+        // most), and stops once each inbox is marked imported (a reconnect
+        // resets the mark).
+        void importSentHistory(config.userId);
 
         // AI summarize new emails — floor 10 so a zero-new tick still drains
         // the backlog (same #725 floor the interactive routes already have;

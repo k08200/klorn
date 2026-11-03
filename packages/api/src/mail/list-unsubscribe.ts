@@ -58,7 +58,20 @@ export function parseListUnsubscribe(
   return { mailto, url, oneClick };
 }
 
-const MAILTO_ADDRESS_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const WHITESPACE_RE = /\s/;
+
+/**
+ * One plausible address: no whitespace, exactly one "@" with something before
+ * it, and a dot inside the domain (not its first or last character). Same rule
+ * as the former /^[^\s@]+@[^\s@]+\.[^\s@]+$/, without its backtracking: the
+ * target is sender-controlled, and that regex was quadratic on a domain of dots.
+ */
+export function isPlausibleMailtoAddress(text: string): boolean {
+  if (WHITESPACE_RE.test(text)) return false;
+  const at = text.indexOf("@");
+  if (at <= 0 || text.indexOf("@", at + 1) !== -1) return false;
+  return text.slice(at + 2, -1).includes(".");
+}
 
 // The subject and body of a stored mailto: come from the sender of the mail. A
 // real unsubscribe request is a few words or a short token; anything past these
@@ -93,7 +106,7 @@ export function parseMailtoTarget(mailto: string): MailtoTarget | null {
   } catch {
     return null;
   }
-  if (!MAILTO_ADDRESS_RE.test(to)) return null;
+  if (!isPlausibleMailtoAddress(to)) return null;
   const subject = url.searchParams.get("subject")?.trim() || "unsubscribe";
   const body = url.searchParams.get("body")?.trim() || "unsubscribe";
   if (subject.length > MAX_MAILTO_SUBJECT_LENGTH || body.length > MAX_MAILTO_BODY_LENGTH) {

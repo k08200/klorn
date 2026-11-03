@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, describe, expect, it, vi } from "vitest";
 
 // Real-Postgres proof of the co-attendance store (pim/coattendance/ and migration
-// 20261101010000_calendar_coattendance). A mock cannot show what matters here:
+// 20261103010000_calendar_coattendance). A mock cannot show what matters here:
 // that the CHECKs refuse what they should, that a marker claim inserts once under
 // concurrency, that Prisma's upsert on the compound key holds when two batches
 // write the same contact at once, that the data-wipe fence trigger covers both

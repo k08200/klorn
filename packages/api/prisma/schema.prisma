@@ -374,6 +374,10 @@ model UserToken {
   // until a pass succeeds; cleared when the grant is reconnected.
   coAttendanceObservedSince DateTime?
   coAttendanceLastPassAt    DateTime?
+  // When the one-time Sent-history import (mail/sent-history-import.ts,
+  // SENT_HISTORY_BACKFILL_ENABLED) finished for this account. Null = not yet.
+  // It lives on the grant, so a new grant is imported again.
+  sentHistoryImportedAt     DateTime?
   createdAt                 DateTime  @default(now())
   updatedAt                 DateTime  @updatedAt
 
@@ -556,6 +560,8 @@ model LinkedInboxAccount {
   // same co-opt precedent as gmailId holding provider message ids).
   historyId                 String?
   lastSyncedAt              DateTime?
+  // Same as UserToken.sentHistoryImportedAt, for this linked GOOGLE inbox.
+  sentHistoryImportedAt     DateTime?
   // Set true when this linked inbox's token is found revoked/undecryptable so the
   // UI can prompt a re-link instead of the inbox silently rotting; cleared on a
   // successful token refresh or re-link. Durable so a revoked inbox stays flagged

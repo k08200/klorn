@@ -196,6 +196,9 @@ export async function finishGoogleInboxLink(
       expiresAt,
       // Re-linking a previously-revoked inbox clears the reconnect prompt.
       needsReconnect: false,
+      // Sent-history import (mail/sent-history-import.ts) runs again: mail
+      // sent while the link was broken was never scanned.
+      sentHistoryImportedAt: null,
     },
     create: {
       userId: userId,
@@ -281,6 +284,9 @@ export async function finishGooglePrimaryConnect(
           // Nor is the old account's calendar observed: co-attendance starts over.
           coAttendanceObservedSince: null,
           coAttendanceLastPassAt: null,
+          // Same reason: import that account's sent history again
+          // (mail/sent-history-import.ts).
+          sentHistoryImportedAt: null,
         },
       }),
     { label: "oauth.integration.upsert_user_token" },
