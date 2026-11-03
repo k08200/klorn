@@ -413,6 +413,32 @@ describe("Naver login flow", () => {
     expect(res.headers.location).toBe("http://localhost:8001/login?error=invite_only");
     expect(userCreate).not.toHaveBeenCalled();
   });
+
+  it("a new Naver account starts on FREE whatever the BETA_* flags say", async () => {
+    // Founder decision 2026-10-24: Pro is paid. Gate approval and the retired
+    // auto-pro flags must not set a plan on the new row.
+    process.env.BETA_GATE_ENABLED = "true";
+    process.env.BETA_AUTO_PRO_ENABLED = "true";
+    process.env.BETA_AUTO_PRO_LIMIT = "50";
+    waitlistFindUnique.mockResolvedValue({ status: "APPROVED" });
+    userCount.mockClear();
+    try {
+      const app = await buildApp();
+      const res = await app.inject({
+        method: "GET",
+        url: `/api/auth/naver/callback?code=abc&state=${encodeURIComponent(naverState())}`,
+      });
+      expect(res.headers.location).toMatch(/\/auth\/callback\?code=/);
+      expect(userCreate).toHaveBeenCalledTimes(1);
+      const { data } = userCreate.mock.calls[0][0] as { data: Record<string, unknown> };
+      expect(data).not.toHaveProperty("plan");
+      expect(data).not.toHaveProperty("betaProGrantedAt");
+      expect(userCount).not.toHaveBeenCalled();
+    } finally {
+      delete process.env.BETA_AUTO_PRO_ENABLED;
+      delete process.env.BETA_AUTO_PRO_LIMIT;
+    }
+  });
 });
 
 describe("Apple login flow (form_post callback)", () => {
@@ -444,6 +470,33 @@ describe("Apple login flow (form_post callback)", () => {
     };
     expect(createArgs.data.email).toBe("relay@privaterelay.appleid.com");
     expect(createArgs.data.identities.create.provider).toBe("apple");
+  });
+
+  it("a new Apple account starts on FREE with the retired auto-pro flag still set", async () => {
+    process.env.BETA_AUTO_PRO_ENABLED = "true";
+    try {
+      const app = await buildApp();
+      const state = signToken(
+        {
+          userId: "__login__",
+          email: "__apple_login__",
+          lb: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        },
+        "10m",
+      );
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/auth/apple/callback",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        payload: `code=abc&state=${encodeURIComponent(state)}`,
+      });
+      expect(res.headers.location).toContain("/auth/callback?code=");
+      const { data } = userCreate.mock.calls[0][0] as { data: Record<string, unknown> };
+      expect(data).not.toHaveProperty("plan");
+      expect(data).not.toHaveProperty("betaProGrantedAt");
+    } finally {
+      delete process.env.BETA_AUTO_PRO_ENABLED;
+    }
   });
 
   // `apple_failed` covered four unrelated causes, so a broken deployment and a

@@ -97,6 +97,9 @@ model User {
   // the user to zero devices and the "no devices = legacy, allow" branch
   // resurrected every still-unexpired stolen token.
   sessionsInvalidatedAt     DateTime?
+  // Historical marker only: stamped on the signups that got free beta PRO
+  // before 2026-10-24. Nothing writes it now (every signup starts on FREE);
+  // kept so those accounts stay identifiable.
   betaProGrantedAt          DateTime?
   // Stamped the first time the founder welcome email is sent to this user, so
   // they receive it exactly once across the email-verify and Google sign-in

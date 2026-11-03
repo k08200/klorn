@@ -74,8 +74,11 @@ trader / individual** can sign up — no company registration needed.
 6. Sandbox end-to-end: checkout → webhook → `User.plan` flips to PRO →
    entitlement-gated features open. Only then set `PADDLE_ENV=production`.
 7. `PAYWALL_ENABLED=true` is a **separate, deliberate** flip
-   (`docs/launch/paywall-flip-runbook.md`). Until it flips every gate is inert
-   and multi-inbox is free.
+   (`docs/launch/paywall-flip-runbook.md`). Until it flips the request gates
+   (`requireEntitled`) are inert and multi-inbox is free, but plan-level
+   features already follow `user.plan` — and since 2026-10-24 every signup
+   starts on FREE (no auto-PRO), so auto-reply and the agent's write tools are
+   Pro-only even before the flip.
 8. Local payment methods (KakaoPay, Pix, iDEAL, …) need **local currency**, not
    just a dashboard checkbox: the PRO price is USD-only, so a Korean buyer is
    quoted USD and KakaoPay is never eligible for them. Turn on automatic
@@ -83,7 +86,7 @@ trader / individual** can sign up — no company registration needed.
    the per-method country/currency table are in
    `docs/launch/paywall-flip-runbook.md` → "Payment methods at checkout".
 
-Keep three numbers in sync: the landing copy ($30, all 7 locales), the Paddle
+Keep three numbers in sync: the landing copy ($29.99, all 7 locales), the Paddle
 price, and `TRIAL_DAYS` (7).
 
 ## D. Standing config decisions already made

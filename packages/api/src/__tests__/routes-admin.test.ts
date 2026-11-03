@@ -122,7 +122,21 @@ vi.mock("../db.js", () => {
         if (where.id === "admin-1")
           return { id: "admin-1", email: "admin@e.com", role: "ADMIN", plan: "FREE" };
         if (where.id === "user-1")
-          return { id: "user-1", email: "u@e.com", role: "USER", plan: "FREE" };
+          return {
+            id: "user-1",
+            email: "u@e.com",
+            role: "USER",
+            plan: "FREE",
+            emailVerified: true,
+          };
+        if (where.id === "unverified-1")
+          return {
+            id: "unverified-1",
+            email: "u2@e.com",
+            role: "USER",
+            plan: "FREE",
+            emailVerified: false,
+          };
         return null;
       }),
       findMany: vi.fn(async () => []),
@@ -365,6 +379,22 @@ describe("admin routes", () => {
       headers: { authorization: `Bearer ${USER_TOKEN}` },
     });
     expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("refuses an env-listed address whose account is not verified yet", async () => {
+    // Register hands out a session before verification; an unclaimed
+    // ADMIN_EMAILS address must not become an admin by pre-registering it.
+    process.env.ADMIN_EMAILS = "founder@example.com, u2@e.com";
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/admin/users",
+      headers: {
+        authorization: `Bearer ${signToken({ userId: "unverified-1", email: "u2@e.com" })}`,
+      },
+    });
+    expect(res.statusCode).toBe(403);
     await app.close();
   });
 
