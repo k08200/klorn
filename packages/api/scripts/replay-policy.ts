@@ -6,14 +6,19 @@
  * is what the founder reads before flipping JUDGE_V3_POLICY.
  *
  * Read-only. No LLM call, no write, no notification. Safe against prod.
- * Facts: rows with stored facts (AttentionFacts, written by the P2 extractor
- * under JUDGE_V3_SHADOW) use them; every other row uses keyword facts
- * (v3/keyword-facts.ts), the model-down path. The report says how many of each.
+ * Facts (--facts):
+ *  - stored (default): each row is decided as the live path would decide it
+ *    (v3/live-decision.ts). Stored LLM facts (AttentionFacts) go to the
+ *    policy; otherwise the v2 lane stands, or keyword facts when v2 itself fell
+ *    back to keywords;
+ *  - keyword: every row gets keyword facts (v3/keyword-facts.ts), the
+ *    model-down estimate.
+ * The report says what decided each row.
  *
  * Usage:
  *   DATABASE_URL=... pnpm --filter @klorn/api replay:policy -- \
  *     [--user=admin@example.com] [--days=30] [--budget=5|unlimited] \
- *     [--out=./replay.json] [--max-changes=40] [--show-subjects]
+ *     [--facts=stored|keyword] [--out=./replay.json] [--max-changes=40] [--show-subjects]
  *
  * Prints ids only by default. --show-subjects adds each changed mail's subject
  * (truncated) to the terminal output; it is never written to --out.
@@ -23,9 +28,11 @@ import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { prisma } from "../src/db.js";
 import { toLiveTier } from "../src/judge/tiers.js";
+import { parseStoredFacts } from "../src/judge/v3/facts-store.js";
 import { resolveInterruptBudget } from "../src/judge/v3/interrupt-budget.js";
 import {
   LIVE_LANES,
+  type ReplayFactsMode,
   type ReplayReport,
   type ReplayRow,
   replayPolicy,
@@ -42,6 +49,7 @@ interface CliArgs {
   user?: string;
   days: number;
   budget: number | null;
+  facts: ReplayFactsMode;
   out?: string;
   maxChanges: number;
   showSubjects: boolean;
@@ -67,10 +75,15 @@ function parseArgs(argv: string[]): CliArgs {
   if (budgetRaw && budgetRaw !== "unlimited" && budget !== Number(budgetRaw)) {
     throw new Error("--budget must be a positive integer or 'unlimited'");
   }
+  const facts = map.get("facts") ?? "stored";
+  if (facts !== "stored" && facts !== "keyword") {
+    throw new Error("--facts must be 'stored' or 'keyword'");
+  }
   return {
     user: map.get("user"),
     days,
     budget,
+    facts,
     out: map.get("out"),
     maxChanges,
     showSubjects: flags.has("show-subjects"),
@@ -111,32 +124,53 @@ async function loadRows(
     });
     if (emails.length === 0) break;
     const ids = emails.map((e) => e.id);
-    const [items, labels] = await Promise.all([
+    const [items, labels, facts] = await Promise.all([
       prisma.attentionItem.findMany({
         where: { source: "EMAIL", sourceId: { in: ids } },
-        select: { userId: true, sourceId: true, tier: true, isManualOverride: true },
+        select: {
+          userId: true,
+          sourceId: true,
+          tier: true,
+          isManualOverride: true,
+          v3PolicyVersion: true,
+        },
       }),
       prisma.decisionLabel.findMany({
         where: { source: "EMAIL", sourceId: { in: ids } },
         select: { userId: true, sourceId: true, decidedBy: true },
       }),
+      prisma.attentionFacts.findMany({
+        where: { source: "EMAIL", sourceId: { in: ids } },
+        select: {
+          userId: true,
+          sourceId: true,
+          factsVersion: true,
+          factsSource: true,
+          facts: true,
+          certainFields: true,
+          signals: true,
+          relationship: true,
+          v2Tier: true,
+        },
+      }),
     ]);
     const itemBy = new Map(items.map((i) => [`${i.userId}|${i.sourceId}`, i]));
     const labelBy = new Map(labels.map((l) => [`${l.userId}|${l.sourceId}`, l]));
+    const factsBy = new Map(facts.map((f) => [`${f.userId}|${f.sourceId}`, f]));
     await loadZones(
       emails.map((e) => e.userId),
       zones,
     );
     for (const e of emails) {
       const item = itemBy.get(`${e.userId}|${e.id}`);
+      const stored = factsBy.get(`${e.userId}|${e.id}`);
       subjects.set(e.id, printableSubject(e.subject));
       rows.push({
         id: e.id,
         userId: e.userId,
         receivedAt: e.receivedAt,
         timeZone: zones.get(e.userId) ?? DEFAULT_TIME_ZONE,
-        // No item yet reads as QUEUE, exactly as the lane queries treat it.
-        v2Tier: toLiveTier(item?.tier ?? "QUEUE"),
+        v2Tier: toLiveTier(v2LaneOf(item, stored?.v2Tier ?? null)),
         v2Source: labelBy.get(`${e.userId}|${e.id}`)?.decidedBy ?? null,
         manualOverride: item?.isManualOverride ?? false,
         email: {
@@ -147,11 +181,27 @@ async function loadRows(
           labels: e.labels,
           hasListUnsubscribe: e.listUnsubscribeMailto != null || e.listUnsubscribeUrl != null,
         },
-        stored: null,
+        stored: stored ? parseStoredFacts(stored) : null,
       });
     }
   }
   return { rows, subjects };
+}
+
+/**
+ * The lane v2 decided. For an item v3 already decided live, AttentionItem.tier
+ * is v3's lane, so the v2 lane frozen on the facts row is used. A manual
+ * override is the user's lane either way. No item yet reads as QUEUE, exactly
+ * as the lane queries treat it.
+ */
+function v2LaneOf(
+  item:
+    | { tier: string | null; isManualOverride: boolean; v3PolicyVersion: string | null }
+    | undefined,
+  frozenV2: string | null,
+): string {
+  if (item?.v3PolicyVersion && !item.isManualOverride && frozenV2) return frozenV2;
+  return item?.tier ?? "QUEUE";
 }
 
 /**
@@ -179,7 +229,10 @@ function printReport(report: ReplayReport, args: CliArgs, subjects: Map<string, 
   const total = report.items;
   console.log(`\nPolicy ${report.policyVersion} replay — last ${args.days} days`);
   console.log(
-    `  items ${total}, users ${report.users}, facts stored ${report.factsSource.stored} / keyword ${report.factsSource.keyword}, precedence kept ${report.precedenceKept}`,
+    `  items ${total}, users ${report.users}, facts mode ${report.factsMode}, stored rows ${report.storedFacts.rows} (LLM ${report.storedFacts.llm}), precedence kept ${report.precedenceKept}`,
+  );
+  console.log(
+    `  decided by: LLM facts ${report.basis.llm}, keyword facts ${report.basis.keyword}, v2 lane ${report.basis.v2}`,
   );
   console.log(`\nLane            v2 shown         v3 pre-budget    v3 final`);
   for (const lane of LIVE_LANES) {
@@ -212,7 +265,7 @@ function printReport(report: ReplayReport, args: CliArgs, subjects: Map<string, 
   for (const c of report.changes.slice(0, args.maxChanges)) {
     const subject = args.showSubjects ? `  "${subjects.get(c.id) ?? ""}"` : "";
     console.log(
-      `  ${c.receivedAt.slice(0, 16)} ${c.id} ${c.v2}→${c.v3}${c.held ? " (held)" : ""} [${c.reasonCodes.join(",")}] ${c.factsSource}${subject}`,
+      `  ${c.receivedAt.slice(0, 16)} ${c.id} ${c.v2}→${c.v3}${c.held ? " (held)" : ""} [${c.reasonCodes.join(",")}] ${c.basis}${subject}`,
     );
   }
 }
@@ -227,7 +280,7 @@ async function main() {
     process.exitCode = 1;
     return;
   }
-  const report = replayPolicy(rows, { budget: args.budget });
+  const report = replayPolicy(rows, { budget: args.budget, facts: args.facts });
   printReport(report, args, subjects);
   if (args.out) {
     const path = resolve(args.out);

@@ -195,14 +195,16 @@ Floors:
 4. A PUSH then passes the push gates: the 6h rule, the re-ingest skip and the dedupe. If it is not pinned and would ring, it claims a budget slot **before** the item is written. A held PUSH is written as QUEUE with `heldAt`, so it never shows as PUSH, not even for one sync.
 5. The item stores what ranking and clients read:
    - `v3PolicyVersion`: "v3.0", or "v2" when the v2 lane stood;
-   - `v3Reasons`;
+   - `v3Decision`: `{ basis: "llm" | "keyword" | "v2", reasons, threadTurn }`;
    - `v3Due`;
    - `v3Importance`;
    - `heldAt`.
+
+   When the policy picks a different lane from v2, `tierReason` becomes the static key `email.v3LaneFromFacts`, because v2's text would not explain the new lane. Otherwise v2's reason stays.
 6. A hold is final for the item. A later re-judge that says PUSH again keeps it in QUEUE, held; it is past the 6h push window by then. A re-judge to any other lane clears the hold.
 7. If a human or an agent moved the item while the judge ran, their lane stands. A slot already claimed for it stays spent, and its bell row is hidden.
 
-**Interrupt budget.** The founder's default is 5 per day (§8). `JUDGE_V3_PUSH_BUDGET` sets the system default and accepts a positive integer or `unlimited`. `AutomationConfig.interruptBudget` (1–50, via `PATCH /api/automations`) overrides it per user. Null means the system default.
+**Interrupt budget.** The founder's default is 5 per day (§8). `JUDGE_V3_PUSH_BUDGET` sets the system default and accepts a positive integer or `unlimited`. `AutomationConfig.interruptBudget` (1–50, via `PATCH /api/automations`) overrides it per user. Null means the system default. Any other value is a 400. For a user under the policy, the automations response adds `interruptBudget`, `interruptBudgetDefault` (null for no limit) and `interruptBudgetMax`.
 - The budget is counted per user per local day (`AutomationConfig.timezone`). Only PUSH notifications spend it. MEETING does not.
 - These spend nothing:
   - the existing gates, which run first: the 6h recency rule, the IMAP re-ingest skip and the 7-day dedupe (`email-firewall.ts`);
@@ -219,6 +221,7 @@ Floors:
 - **Slots reserved for trusted senders.** 40% of the day's slots, rounded down (2 of 5), are reserved for trusted senders. A trusted sender is a VIP, or someone the user has written to (relationship `sentCount` > 0).
   - Slots are numbered 1..limit. Strangers claim only from the slots above the reserve, so five urgent-looking mails from strangers can spend 3 slots at most.
   - Trusted senders claim the lowest free slot.
+  - A budgeted PUSH decided without a relationship gets one loaded from the database, with no model call. That covers a v2 lane standing for missing facts, a sender prior and a learned rule. A failed load leaves the sender a stranger.
   - `sentCount` still counts legacy null-origin sends (§3(2)), so an attacker who once got a Klorn auto-reply competes for the reserved slots. That is bounded: it cannot exceed the limit, and it does not change the lane. With no limit there is no reserve.
 - For a user under the policy, the legacy keyword urgent sweep (`automation-scheduler.ts`) stops sending its own pushes. The policy's PUSH lane, under the budget, is the only email interrupt.
   - Prod, last 30 days to 2026-10-31: 43 of the 48 "Urgent email" notifications were for mail whose firewall lane is now QUEUE or SILENT, or which has no item. That is the sweep.

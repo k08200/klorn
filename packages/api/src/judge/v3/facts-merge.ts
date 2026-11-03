@@ -62,7 +62,7 @@ export function enforceDateWindow(
   return { facts: { ...copy, asks, event }, issues };
 }
 
-function mergeEvent(llm: FactsV1["event"], pre: PreFacts): FactsV1["event"] {
+function mergeEvent(llm: FactsV1["event"], pre: CertainPreFacts): FactsV1["event"] {
   const ics = pre.certain.includes("event") ? pre.facts.event : undefined;
   const base = ics ?? llm;
   if (!base) return null;
@@ -76,8 +76,11 @@ function mergeEvent(llm: FactsV1["event"], pre: PreFacts): FactsV1["event"] {
   };
 }
 
+/** The part of the pre-facts a merge reads. */
+export type CertainPreFacts = Pick<PreFacts, "facts" | "certain">;
+
 /** Certain pre-facts replace the model's value; the event merges field by field. */
-export function mergeWithPreFacts(llm: FactsV1, pre: PreFacts): FactsV1 {
+export function mergeWithPreFacts(llm: FactsV1, pre: CertainPreFacts): FactsV1 {
   const fixed: Partial<FactsV1> = {};
   for (const field of pre.certain) {
     if (field === "event") continue;

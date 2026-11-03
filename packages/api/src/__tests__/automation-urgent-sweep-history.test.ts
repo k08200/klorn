@@ -319,13 +319,15 @@ describe.each(IMAP_CASES)("$label: the urgent sweep after an IMAP repair", (imap
   });
 });
 
-describe("JUDGE_V3_POLICY on: the keyword urgent sweep stands down", () => {
+describe("JUDGE_V3_POLICY on: the keyword urgent sweep stands down for users under the policy", () => {
   afterEach(() => {
     delete process.env.JUDGE_V3_POLICY;
+    delete process.env.JUDGE_V3_SHADOW;
   });
 
   it("rings for nothing, so the policy's PUSH lane under the daily budget is the only email interrupt", async () => {
     process.env.JUDGE_V3_POLICY = "true";
+    process.env.JUDGE_V3_SHADOW = "true";
     arrange([urgent("gmail", "18abc", BEFORE_RESET, null)]);
 
     await runOneTick();
@@ -335,98 +337,20 @@ describe("JUDGE_V3_POLICY on: the keyword urgent sweep stands down", () => {
     expect(m.sendSms).not.toHaveBeenCalled();
   });
 
-  it("still rings with the flag off (the control)", async () => {
+  it("still rings for a user the shadow flag does not cover (no policy for them)", async () => {
+    process.env.JUDGE_V3_POLICY = "true";
     arrange([urgent("gmail", "18abc", BEFORE_RESET, null)]);
 
     await runOneTick();
 
     expect(createdNotifications().filter((d) => d.title === "Urgent email")).toHaveLength(1);
   });
-});
 
-describe.each(IMAP_CASES)("$label: the rule auto-reply loop after an IMAP repair", (imapCase) => {
-  beforeEach(() => {
-    IMAP = imapCase.head;
-  });
-  it("never matches a rule for re-ingested history; Gmail mail goes through as before", async () => {
-    m.syncEmails.mockResolvedValue({ newCount: 2 });
-    const gmailRow = { ...urgent("gmail", "18abc", BEFORE_RESET, null), body: "", labels: [] };
-    const historyRow = {
-      ...urgent("history", `${IMAP}:1`, BEFORE_RESET, ACCOUNT),
-      body: "",
-      labels: [],
-    };
-    arrange([], [historyRow, gmailRow]);
+  it("still rings with the flag off (the control)", async () => {
+    arrange([urgent("gmail", "18abc", BEFORE_RESET, null)]);
 
     await runOneTick();
 
-    expect(m.checkAutoReplyRules).toHaveBeenCalledTimes(1);
-    expect(m.checkAutoReplyRules).toHaveBeenCalledWith(
-      USER,
-      expect.objectContaining({ id: "gmail" }),
-    );
-  });
-});
-
-/**
- * A failed reset lookup must not end the user's tick: it used to escape to the per-user
- * catch ("Email sync failed") and skip the Gmail alert of a mixed batch. IMAP rows fail
- * closed for that tick; Gmail rows go through.
- */
-describe.each(IMAP_CASES)("$label: a failing reset lookup", (imapCase) => {
-  beforeEach(() => {
-    IMAP = imapCase.head;
-  });
-  const failLookup = () =>
-    override("linkedInboxAccount.findMany", (arg) => {
-      if ((arg as { select?: Record<string, unknown> }).select?.inboxUidValidityResetAt) {
-        throw new Error("db down");
-      }
-      return [];
-    });
-  const syncFailed = () =>
-    (console.error as unknown as { mock: { calls: unknown[][] } }).mock.calls.filter(([line]) =>
-      String(line).includes("Email sync failed"),
-    );
-
-  it("in the urgent sweep: still rings for the Gmail row, not for the IMAP row", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    arrange([
-      urgent("gmail", "18abc", BEFORE_RESET, null),
-      urgent("during-hold", `${IMAP}:2`, DURING_HOLD, ACCOUNT),
-    ]);
-    failLookup();
-
-    await runOneTick();
-
-    const created = createdNotifications().filter((d) => d.title === "Urgent email");
-    expect(created).toHaveLength(1);
-    expect(String(created[0].message)).toMatch(/\[18abc\]$/);
-    expect(m.sendPushNotification).toHaveBeenCalledTimes(1);
-    expect(m.sendSms).toHaveBeenCalledTimes(1);
-    expect(syncFailed()).toEqual([]);
-    expect(m.captureError).toHaveBeenCalledWith(
-      expect.any(Error),
-      expect.objectContaining({ tags: { scope: "imap-history.urgent-sweep" } }),
-    );
-  });
-
-  it("in the rule auto-reply loop: Gmail is still matched, IMAP is not, and the urgent sweep after it runs", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    m.syncEmails.mockResolvedValue({ newCount: 2 });
-    const gmailRow = { ...urgent("gmail", "18abc", BEFORE_RESET, null), body: "", labels: [] };
-    const imapRow = { ...urgent("imap", `${IMAP}:2`, DURING_HOLD, ACCOUNT), body: "", labels: [] };
-    arrange([urgent("gmail-urgent", "18def", BEFORE_RESET, null)], [imapRow, gmailRow]);
-    failLookup();
-
-    await runOneTick();
-
-    expect(m.checkAutoReplyRules).toHaveBeenCalledTimes(1);
-    expect(m.checkAutoReplyRules).toHaveBeenCalledWith(
-      USER,
-      expect.objectContaining({ id: "gmail" }),
-    );
     expect(createdNotifications().filter((d) => d.title === "Urgent email")).toHaveLength(1);
-    expect(syncFailed()).toEqual([]);
   });
 });

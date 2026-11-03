@@ -30,8 +30,12 @@ import { prisma } from "../db.js";
 import { captureError } from "../sentry.js";
 import { NOT_AGENT_SET } from "./agent-tier.js";
 import { recordEmailDecision } from "./decision-label.js";
+import type { JudgeableEmailRow } from "./email-firewall.js";
 import { buildJudgeContext } from "./judge-context.js";
+import type { PocTier } from "./poc-judge.js";
 import { judgeEmail } from "./poc-judge.js";
+import { isJudgeV3PolicyEnabled } from "./v3/flags.js";
+import { v3Columns } from "./v3/live-item.js";
 
 /**
  * How far back a fallback row is still worth repairing. Env-tunable
@@ -117,7 +121,16 @@ export async function rejudgeFallbackItems(
     try {
       const email = await prisma.emailMessage.findUnique({
         where: { id: row.sourceId },
-        select: { id: true, from: true, subject: true, snippet: true, body: true, labels: true },
+        select: {
+          id: true,
+          gmailId: true,
+          from: true,
+          subject: true,
+          snippet: true,
+          body: true,
+          labels: true,
+          receivedAt: true,
+        },
       });
       if (!email) continue;
 
@@ -159,11 +172,17 @@ export async function rejudgeFallbackItems(
         return summary;
       }
 
-      const delta = item.tier === judgement.tier ? "=" : `${item.tier}→${judgement.tier}`;
+      // A user under policy v3 gets the live rule from stored facts (no
+      // model call, no notification): the repaired v2 lane only stands
+      // where no LLM facts decided.
+      const repair = isJudgeV3PolicyEnabled(userId)
+        ? await v3Repair(userId, email, judgement)
+        : { tier: judgement.tier, tierReason: judgement.reason, v3: {} };
+      const delta = item.tier === repair.tier ? "=" : `${item.tier}→${repair.tier}`;
       onRow(
         `[${delta}] (${judgement.source}) ${email.subject.slice(0, 55)} :: ${judgement.reason.slice(0, 50)}`,
       );
-      if (item.tier === judgement.tier) summary.unchanged++;
+      if (item.tier === repair.tier) summary.unchanged++;
       else summary.changed++;
 
       if (apply) {
@@ -171,13 +190,13 @@ export async function rejudgeFallbackItems(
         // if it landed between the read above and this write.
         await prisma.attentionItem.updateMany({
           where: { id: item.id, status: "OPEN", isManualOverride: false, ...NOT_AGENT_SET },
-          data: { tier: judgement.tier, tierReason: judgement.reason },
+          data: { tier: repair.tier, tierReason: repair.tierReason, ...repair.v3 },
         });
         if (judgement.features) {
           await recordEmailDecision({
             userId,
             sourceId: email.id,
-            shownTier: judgement.tier,
+            shownTier: repair.tier,
             features: judgement.features,
             sender: email.from,
             decidedBy: judgement.source ?? null,
@@ -194,6 +213,17 @@ export async function rejudgeFallbackItems(
     if (delayMs > 0) await sleep(delayMs);
   }
   return summary;
+}
+
+/** The v3 live rule for a repaired item: stored facts only, no push, a hold stays. */
+async function v3Repair(
+  userId: string,
+  email: JudgeableEmailRow,
+  judgement: { tier: string; source: string; reason: string },
+): Promise<{ tier: PocTier; tierReason: string; v3: ReturnType<typeof v3Columns> }> {
+  const { planV3Write } = await import("./v3/live-judge.js");
+  const plan = await planV3Write({ userId, email, judgement, rejudge: true, allowPush: false });
+  return { tier: plan.tier, tierReason: plan.reason, v3: v3Columns(plan.v3) };
 }
 
 /**

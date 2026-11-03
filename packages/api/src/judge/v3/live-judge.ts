@@ -1,0 +1,206 @@
+/**
+ * The v3 live decision inside the firewall judge (docs/design/attention-
+ * engine-v3.md §3(5) "Live decision"), for users isJudgeV3PolicyEnabled
+ * covers. email-firewall.ts calls planV3Write after the v2 judgement and
+ * before it writes the item, so the lane and any budget hold are decided
+ * before anyone can see the item. The fallback repair sweep calls it with
+ * pushes off.
+ *
+ * Loaded lazily by email-firewall.ts, so a flag-off install never loads the
+ * extractor's module graph.
+ */
+
+import type { LiveTier } from "@klorn/contract";
+import { prisma } from "../../db.js";
+import type { GmailRawEmail } from "../../mail/gmail-fetch.js";
+import type { ProviderCredentials } from "../../providers/index.js";
+import { captureError } from "../../sentry.js";
+import type { JudgeableEmailRow } from "../email-firewall.js";
+import { firewallBellRow, firewallPushGatesPass } from "../firewall-push.js";
+import type { StaticTierReasonKey } from "../tier-reason-strings.js";
+import { toLiveTier } from "../tiers.js";
+import { findAttentionFacts } from "./facts-store.js";
+import { importancePrior } from "./importance.js";
+import {
+  basisFromLive,
+  basisFromStored,
+  decideLiveLane,
+  type FactsBasis,
+  isTrustedSender,
+  type LiveDecision,
+  PRECEDENCE_SOURCES,
+} from "./live-decision.js";
+import { extractFactsForDecision } from "./live-facts.js";
+import { type Hold, heldBudgetOf, type V3ItemFields, v3ItemFields } from "./live-item.js";
+import { admitPushNotification, HELD_REASON_KEY } from "./push-budget-gate.js";
+import { loadRelationshipSnapshot } from "./relationship-loader.js";
+import { prismaShadowDeps, shadowMailFromRaw } from "./shadow.js";
+
+/** How long the judge waits for live facts before the v2 lane stands. */
+export const LIVE_FACTS_DEADLINE_MS = 20_000;
+
+/** tierReason when the policy picked another lane than v2: v2's text would not explain it. */
+export const V3_LANE_REASON_KEY: StaticTierReasonKey = "email.v3LaneFromFacts";
+
+export type V3PushPlan =
+  /** A PUSH whose bell row is written (slot claimed, or unbudgeted): ring after the write. */
+  | { kind: "deliver"; notification: { id: string; createdAt: Date } }
+  /** A MEETING: the usual unbudgeted firewall push after the write. */
+  | { kind: "meeting" }
+  | { kind: "none" };
+
+export interface V3WritePlan {
+  tier: LiveTier;
+  reason: string;
+  v3: V3ItemFields;
+  push: V3PushPlan;
+}
+
+export interface V3PlanInput {
+  userId: string;
+  email: JudgeableEmailRow;
+  judgement: { tier: string; source: string | null; reason: string };
+  /** The item exists: a held item stays held. */
+  rejudge: boolean;
+  /** The freshly ingested message. Present: the live facts call. Absent: stored facts only. */
+  liveRaw?: GmailRawEmail;
+  credentials?: ProviderCredentials;
+  /** False for backlog repair: no notification and no budget. */
+  allowPush: boolean;
+  now?: Date;
+}
+
+export async function planV3Write(input: V3PlanInput): Promise<V3WritePlan> {
+  const now = input.now ?? new Date();
+  const v2Tier = toLiveTier(input.judgement.tier);
+  const basis = await resolveBasis(input, v2Tier);
+  const decided = decideLiveLane({
+    v2Tier,
+    v2Source: input.judgement.source,
+    email: input.email,
+    receivedAt: input.email.receivedAt,
+    basis,
+    decidedAt: now,
+  });
+  const decision = await withSenderTrust(input, decided, basis, now);
+  const reason = laneReason(decision, v2Tier, input.judgement.reason);
+  const prior = input.rejudge ? await priorHold(input.userId, input.email.id) : null;
+  if (decision.lane === "PUSH" && prior) return heldPlan(decision, prior);
+  if (decision.lane === "PUSH") return planPush(input, decision, reason, now);
+  const push: V3PushPlan =
+    decision.lane === "MEETING" && input.allowPush ? { kind: "meeting" } : { kind: "none" };
+  return { tier: decision.lane, reason, v3: v3ItemFields(decision, null), push };
+}
+
+function laneReason(decision: LiveDecision, v2Tier: LiveTier, v2Reason: string): string {
+  const policyChangedLane =
+    decision.basis !== "v2" && !decision.precedence && decision.lane !== v2Tier;
+  return policyChangedLane ? V3_LANE_REASON_KEY : v2Reason;
+}
+
+function heldPlan(decision: LiveDecision, hold: Hold): V3WritePlan {
+  return {
+    tier: "QUEUE",
+    reason: HELD_REASON_KEY,
+    v3: v3ItemFields(decision, hold),
+    push: { kind: "none" },
+  };
+}
+
+/**
+ * A PUSH: the existing gates first (they spend nothing), then a budget slot
+ * claimed with the bell row. No slot left: the item is written as QUEUE,
+ * held, and nothing rings.
+ */
+async function planPush(
+  input: V3PlanInput,
+  decision: LiveDecision,
+  reason: string,
+  now: Date,
+): Promise<V3WritePlan> {
+  const quiet: V3WritePlan = {
+    tier: "PUSH",
+    reason,
+    v3: v3ItemFields(decision, null),
+    push: { kind: "none" },
+  };
+  if (!input.allowPush) return quiet;
+  if (!(await firewallPushGatesPass(input.userId, input.email, true))) return quiet;
+  const admission = await admitPushNotification(input.userId, firewallBellRow(input.email), {
+    pinned: !decision.budgeted,
+    trusted: decision.trusted,
+    now,
+  });
+  if (admission.status !== "held") {
+    return { ...quiet, push: { kind: "deliver", notification: admission.notification } };
+  }
+  console.log(
+    `[PUSH-BUDGET] Firewall PUSH held in QUEUE: daily interrupt budget ${admission.limit} ` +
+      `spent (${decision.trusted ? "trusted" : "stranger"} sender), ` +
+      `for email ${input.email.gmailId} user ${input.userId}`,
+  );
+  return heldPlan(decision, { heldAt: now, budget: admission.limit });
+}
+
+/**
+ * A budgeted PUSH needs to know whether the sender is trusted (the slot
+ * reserve). When the decision had no relationship (no facts, or a precedence
+ * source decided), load it: database only, no model call. A failed load
+ * leaves the sender a stranger, the safe side.
+ */
+async function withSenderTrust(
+  input: V3PlanInput,
+  decision: LiveDecision,
+  basis: FactsBasis,
+  now: Date,
+): Promise<LiveDecision> {
+  const needsTrust = decision.lane === "PUSH" && decision.budgeted && input.allowPush;
+  if (!needsTrust || basis.relationship !== null) return decision;
+  try {
+    const { userAddresses } = await prismaShadowDeps.userContext(input.userId);
+    const relationship = await loadRelationshipSnapshot({
+      userId: input.userId,
+      senderAddress: input.email.from,
+      userAddresses,
+      senderAuthenticated: null,
+      excludeEmailId: input.email.id,
+    });
+    return {
+      ...decision,
+      trusted: isTrustedSender(relationship),
+      importance: importancePrior(relationship, now),
+    };
+  } catch (err) {
+    captureError(err, {
+      tags: { scope: "judge-v3-sender-trust" },
+      extra: { userId: input.userId, emailId: input.email.id },
+    });
+    return decision;
+  }
+}
+
+/** A hold already on the item: final, so a re-judge keeps it (doc step 6). */
+async function priorHold(userId: string, emailId: string): Promise<Hold | null> {
+  const item = await prisma.attentionItem.findUnique({
+    where: { userId_source_sourceId: { userId, source: "EMAIL", sourceId: emailId } },
+    select: { heldAt: true, v3Decision: true },
+  });
+  if (!item?.heldAt) return null;
+  return { heldAt: item.heldAt, budget: heldBudgetOf(item.v3Decision) };
+}
+
+async function resolveBasis(input: V3PlanInput, v2Tier: LiveTier): Promise<FactsBasis> {
+  // A precedence source decides without facts: no model call for it.
+  if (input.judgement.source && PRECEDENCE_SOURCES[input.judgement.source]) {
+    return { kind: "none", pre: null, relationship: null };
+  }
+  if (input.liveRaw) {
+    const result = await extractFactsForDecision(
+      input.userId,
+      shadowMailFromRaw(input.email.id, input.liveRaw),
+      { v2Tier, credentials: input.credentials, deadlineMs: LIVE_FACTS_DEADLINE_MS },
+    );
+    return basisFromLive(result);
+  }
+  return basisFromStored(await findAttentionFacts(input.userId, "EMAIL", input.email.id));
+}

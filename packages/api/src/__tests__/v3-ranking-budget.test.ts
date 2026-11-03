@@ -12,6 +12,7 @@ import {
   DEFAULT_INTERRUPT_BUDGET,
   interruptSlotKey,
   localDayKey,
+  reservedTrustedSlots,
   resolveInterruptBudget,
 } from "../judge/v3/interrupt-budget.js";
 import type { FactsV1, RelationshipSnapshot } from "../judge/v3/policy-types.js";
@@ -235,45 +236,55 @@ describe("interrupt budget configuration", () => {
 });
 
 describe("allocateInterruptBudget (batch / replay)", () => {
-  const cand = (id: string, importance: number, minutes = 0) => ({
+  const cand = (id: string, importance: number, minutes = 0, trusted = true) => ({
     id,
     importance,
     receivedAt: new Date(NOW.getTime() + minutes * 60_000),
+    trusted,
   });
 
   it("admits by importance, then arrival, until the day's budget is spent", () => {
     const r = allocateInterruptBudget(
       [cand("low", 0.1), cand("high", 0.9), cand("mid", 0.5, 1), cand("mid0", 0.5)],
-      {
-        used: 3,
-        limit: 5,
-      },
+      { limit: 2 },
     );
     expect(r.admitted).toEqual(["high", "mid0"]);
     expect(r.held).toEqual(["mid", "low"]);
   });
 
   it("admits everything with no limit", () => {
-    const r = allocateInterruptBudget([cand("a", 0.1), cand("b", 0.2)], { used: 99, limit: null });
+    const r = allocateInterruptBudget([cand("a", 0.1, 0, false), cand("b", 0.2)], { limit: null });
     expect(r.held).toEqual([]);
   });
 
-  it("never exceeds the budget and admits the most important (property)", () => {
+  it("keeps the trusted reserve from strangers", () => {
+    const strangers = [1, 2, 3, 4, 5].map((i) => cand(`s${i}`, 0.9, i, false));
+    const r = allocateInterruptBudget([...strangers, cand("t", 0.3, 9)], { limit: 5 });
+    // 2 of 5 reserved: strangers get 3, the trusted sender still gets in.
+    expect(r.admitted).toEqual(["s1", "s2", "s3", "t"]);
+    expect(r.held).toEqual(["s4", "s5"]);
+  });
+
+  it("never exceeds the budget or the strangers' share, and admits by importance (property)", () => {
     const rng = mulberry32(31);
     for (let run = 0; run < 2000; run++) {
       const limit = Math.floor(rng() * 8) + 1;
-      const used = Math.floor(rng() * 10);
       const cands = Array.from({ length: Math.floor(rng() * 10) }, (_, i) =>
-        cand(`c${i}`, rng(), i),
+        cand(`c${i}`, rng(), i, rng() < 0.5),
       );
-      const r = allocateInterruptBudget(cands, { used, limit });
-      expect(used + r.admitted.length <= Math.max(limit, used), `run ${run}`).toBe(true);
+      const r = allocateInterruptBudget(cands, { limit });
+      expect(r.admitted.length <= limit, `run ${run}`).toBe(true);
+      const trusted = new Map(cands.map((c) => [c.id, c.trusted]));
+      const strangersIn = r.admitted.filter((id) => !trusted.get(id)).length;
+      expect(strangersIn <= limit - reservedTrustedSlots(limit), `run ${run}`).toBe(true);
       expect([...r.admitted, ...r.held].sort(), `run ${run}`).toEqual(
         cands.map((c) => c.id).sort(),
       );
+      // Among trusted senders, importance decides.
       const imp = new Map(cands.map((c) => [c.id, c.importance]));
-      const minAdmitted = Math.min(...r.admitted.map((id) => imp.get(id) ?? 0));
-      for (const id of r.held)
+      const admittedTrusted = r.admitted.filter((id) => trusted.get(id));
+      const minAdmitted = Math.min(...admittedTrusted.map((id) => imp.get(id) ?? 0));
+      for (const id of r.held.filter((h) => trusted.get(h)))
         expect(imp.get(id) ?? 0, `run ${run}`).toBeLessThanOrEqual(minAdmitted);
     }
   });
@@ -285,7 +296,8 @@ describe("claimInterruptSlot (live, atomic)", () => {
     const keys = new Set<string>();
     return {
       keys,
-      countUsed: async (prefix: string) => [...keys].filter((k) => k.startsWith(prefix)).length,
+      usedSlots: async (prefix: string) =>
+        [...keys].filter((k) => k.startsWith(prefix)).map((k) => Number(k.slice(prefix.length))),
       tryCreate: async (key: string) => {
         await Promise.resolve();
         if (keys.has(key)) return "taken" as const;
@@ -299,7 +311,9 @@ describe("claimInterruptSlot (live, atomic)", () => {
     const s = store();
     const claims = [];
     for (let i = 0; i < 7; i++)
-      claims.push(await claimInterruptSlot({ dayKey: "2026-10-31", limit: 5, ...s }));
+      claims.push(
+        await claimInterruptSlot({ dayKey: "2026-10-31", limit: 5, trusted: true, ...s }),
+      );
     expect(claims.map((c) => c.status)).toEqual([
       "admitted",
       "admitted",
@@ -324,7 +338,9 @@ describe("claimInterruptSlot (live, atomic)", () => {
       const limit = Math.floor(rng() * 6) + 1;
       const n = Math.floor(rng() * 15) + 1;
       const results = await Promise.all(
-        Array.from({ length: n }, () => claimInterruptSlot({ dayKey: "2026-10-31", limit, ...s })),
+        Array.from({ length: n }, () =>
+          claimInterruptSlot({ dayKey: "2026-10-31", limit, trusted: true, ...s }),
+        ),
       );
       const admitted = results.filter((r) => r.status === "admitted").length;
       expect(admitted, `run ${run}`).toBe(Math.min(n, limit));
@@ -335,7 +351,53 @@ describe("claimInterruptSlot (live, atomic)", () => {
   it("with no limit, still records a slot so the day's count stays exact", async () => {
     const s = store();
     for (let i = 0; i < 9; i++)
-      await claimInterruptSlot({ dayKey: "2026-10-31", limit: null, ...s });
+      await claimInterruptSlot({ dayKey: "2026-10-31", limit: null, trusted: false, ...s });
     expect(s.keys.size).toBe(9);
+  });
+
+  it("strangers claim only above the trusted reserve; trusted senders take the lowest free slot", async () => {
+    const s = store();
+    const day = "2026-10-31";
+    const stranger = () => claimInterruptSlot({ dayKey: day, limit: 5, trusted: false, ...s });
+    const trusted = () => claimInterruptSlot({ dayKey: day, limit: 5, trusted: true, ...s });
+    expect(await stranger()).toEqual({
+      status: "admitted",
+      dedupeKey: interruptSlotKey(day, 3),
+      used: 1,
+    });
+    expect((await stranger()).status).toBe("admitted");
+    expect((await stranger()).status).toBe("admitted");
+    expect(await stranger()).toEqual({ status: "held", used: 3 });
+    expect(await trusted()).toEqual({
+      status: "admitted",
+      dedupeKey: interruptSlotKey(day, 1),
+      used: 4,
+    });
+    expect((await trusted()).status).toBe("admitted");
+    expect((await trusted()).status).toBe("held");
+  });
+
+  it("concurrent mixed claims never exceed the budget or the strangers' share (property)", async () => {
+    const rng = mulberry32(43);
+    for (let run = 0; run < 150; run++) {
+      const s = store();
+      const limit = Math.floor(rng() * 7) + 1;
+      const n = Math.floor(rng() * 16) + 1;
+      const who = Array.from({ length: n }, () => rng() < 0.5);
+      const results = await Promise.all(
+        who.map((trusted) => claimInterruptSlot({ dayKey: "2026-10-31", limit, trusted, ...s })),
+      );
+      const strangerCap = limit - reservedTrustedSlots(limit);
+      const strangersIn = results.filter((r, i) => r.status === "admitted" && !who[i]).length;
+      const admitted = results.filter((r) => r.status === "admitted").length;
+      expect(admitted, `run ${run}`).toBeLessThanOrEqual(limit);
+      expect(strangersIn, `run ${run}`).toBeLessThanOrEqual(strangerCap);
+      expect(s.keys.size, `run ${run}`).toBe(admitted);
+      // Nobody is held while a slot they may use is still free.
+      const trustedN = who.filter(Boolean).length;
+      expect(admitted, `run ${run}`).toBe(
+        Math.min(limit, trustedN + Math.min(n - trustedN, strangerCap)),
+      );
+    }
   });
 });

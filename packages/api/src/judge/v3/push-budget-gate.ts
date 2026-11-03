@@ -1,31 +1,33 @@
 /**
- * Live PUSH interrupt budget (docs/design/attention-engine-v3.md §3(5)), used by
- * the firewall push path while JUDGE_V3_POLICY is on.
+ * Live PUSH interrupt budget (docs/design/attention-engine-v3.md §3(5)), used
+ * by the v3 live decision (live-judge.ts) for users JUDGE_V3_POLICY covers,
+ * before the item is written.
  *
  * The existing gates run first and spend no budget: the 6h recency rule, the
- * IMAP re-ingest skip and the 7-day dedupe (email-firewall.ts). A push that
+ * IMAP re-ingest skip and the 7-day dedupe (firewall-push.ts). A push that
  * would not ring anyway (the user's notification preferences, quiet hours or
  * focus block say no) spends nothing either, and neither does a sender the
  * user pinned to PUSH: a pin is the user's own rule and keeps precedence.
  *
  * Every other PUSH claims a slot by writing its bell row with dedupeKey
  * `interrupt:<local day>:<n>`; (userId, dedupeKey) is unique, so two concurrent
- * judgements can never both take the last slot. With no slot left, the item is
- * held: QUEUE, the held reason key, no notification.
+ * judgements can never both take the last slot. Strangers claim only above
+ * the trusted reserve. With no slot left, the item is held: written as QUEUE
+ * with heldAt and the held reason, and nothing is sent.
  *
  * MEETING notifications are not budgeted.
  */
 
+import { HIDDEN_CLAIM_TYPE } from "../../agentcore/auto-reply-ledger-keys.js";
 import { prisma } from "../../db.js";
 import { escapeLikePattern } from "../../db-like.js";
 import { evaluateNotificationGate } from "../../notify/notification-prefs.js";
-import { NOT_AGENT_SET } from "../agent-tier.js";
-import { claimInterruptSlot, localDayKey, resolveInterruptBudget } from "./interrupt-budget.js";
+import { claimInterruptSlot, localDayKey, resolveUserInterruptBudget } from "./interrupt-budget.js";
 
 /**
  * Stored in AttentionItem.tierReason for display (tier-reason-strings.ts). The
- * judge drops a model reason equal to a static key, so only this path writes
- * it; P3 PR2 adds a dedicated held column as the marker the ranking trusts.
+ * judge drops a model reason equal to a static key, so only the hold writes
+ * it. Ranking trusts AttentionItem.heldAt, not this text.
  */
 export const HELD_REASON_KEY = "email.heldByInterruptBudget";
 
@@ -54,7 +56,8 @@ const isUniqueViolation = (err: unknown): boolean =>
 export async function admitPushNotification(
   userId: string,
   row: BellRow,
-  opts: { pinned: boolean; now?: Date },
+  /** trusted: a VIP or someone the user wrote to, who may use the reserved slots. */
+  opts: { pinned: boolean; trusted: boolean; now?: Date },
 ): Promise<PushAdmission> {
   const now = opts.now ?? new Date();
   if (opts.pinned)
@@ -67,7 +70,7 @@ export async function admitPushNotification(
       why: "will_not_ring",
     };
   }
-  return claimSlotWithRow(userId, row, now);
+  return claimSlotWithRow(userId, row, now, opts.trusted);
 }
 
 async function writeRow(userId: string, row: BellRow): Promise<WrittenRow> {
@@ -77,30 +80,26 @@ async function writeRow(userId: string, row: BellRow): Promise<WrittenRow> {
   });
 }
 
-async function claimSlotWithRow(userId: string, row: BellRow, now: Date): Promise<PushAdmission> {
-  const config = await prisma.automationConfig.findUnique({
-    where: { userId },
-    select: { timezone: true },
-  });
-  const wanted = config?.timezone ?? DEFAULT_TIME_ZONE;
-  const { dayKey, zone } = localDayKey(now, wanted);
-  if (zone !== wanted) {
-    console.warn(
-      `[PUSH-BUDGET] invalid timezone "${wanted}" for user ${userId}; counting the day in ${zone}`,
-    );
-  }
-  const limit = resolveInterruptBudget(process.env, (raw) =>
-    console.warn(`[PUSH-BUDGET] ignoring invalid JUDGE_V3_PUSH_BUDGET="${raw}"; using the default`),
-  );
+async function claimSlotWithRow(
+  userId: string,
+  row: BellRow,
+  now: Date,
+  trusted: boolean,
+): Promise<PushAdmission> {
+  const { dayKey, limit } = await budgetDayFor(userId, now);
   // Filled by the winning tryCreate (a holder, since TS does not track closure writes).
   const written: { row: WrittenRow | null } = { row: null };
   const claim = await claimInterruptSlot({
     dayKey,
     limit,
-    countUsed: (prefix) =>
-      prisma.notification.count({
+    trusted,
+    usedSlots: async (prefix) => {
+      const rows = await prisma.notification.findMany({
         where: { userId, dedupeKey: { startsWith: escapeLikePattern(prefix) } },
-      }),
+        select: { dedupeKey: true },
+      });
+      return rows.map((r) => Number((r.dedupeKey ?? "").slice(prefix.length)));
+    },
     tryCreate: async (dedupeKey) => {
       try {
         written.row = await prisma.notification.create({
@@ -118,33 +117,36 @@ async function claimSlotWithRow(userId: string, row: BellRow, now: Date): Promis
   return { status: "admitted", notification: written.row };
 }
 
-/**
- * Hold a PUSH email in QUEUE for the rest of the day. Guarded on the stored
- * tier and provenance, so a human or agent decision that landed meanwhile is
- * never overwritten. Returns whether the item was held.
- */
-export async function holdEmailForInterruptBudget(
+/** The user's budget day (their local date) and daily limit. */
+export async function budgetDayFor(
   userId: string,
-  emailId: string,
-): Promise<boolean> {
-  const held = await prisma.attentionItem.updateMany({
-    where: {
-      userId,
-      source: "EMAIL",
-      sourceId: emailId,
-      tier: "PUSH",
-      isManualOverride: false,
-      ...NOT_AGENT_SET,
-    },
-    data: { tier: "QUEUE", tierReason: HELD_REASON_KEY },
+  now: Date,
+): Promise<{ dayKey: string; limit: number | null }> {
+  const config = await prisma.automationConfig.findUnique({
+    where: { userId },
+    select: { timezone: true, interruptBudget: true },
   });
-  if (held.count === 0) return false;
-  // Keep the outcome ledger truthful: the user was shown QUEUE, not PUSH.
-  // decidedBy stays: it records which judge path scored the mail, and the
-  // fallback repair sweep selects on it (fallback-rejudge.ts).
-  await prisma.decisionLabel.updateMany({
-    where: { userId, source: "EMAIL", sourceId: emailId },
-    data: { shownTier: "QUEUE" },
+  const wanted = config?.timezone ?? DEFAULT_TIME_ZONE;
+  const { dayKey, zone } = localDayKey(now, wanted);
+  if (zone !== wanted) {
+    console.warn(
+      `[PUSH-BUDGET] invalid timezone "${wanted}" for user ${userId}; counting the day in ${zone}`,
+    );
+  }
+  const limit = resolveUserInterruptBudget(config?.interruptBudget ?? null, process.env, (raw) =>
+    console.warn(`[PUSH-BUDGET] ignoring invalid JUDGE_V3_PUSH_BUDGET="${raw}"; using the default`),
+  );
+  return { dayKey, limit };
+}
+
+/**
+ * A slot was claimed, but a human or an agent changed the item before it was
+ * written (doc §3(5), live decision step 7). Nothing is sent; the slot stays
+ * spent, and the bell row is hidden like a cleared slot row.
+ */
+export async function hideClaimedBellRow(userId: string, notificationId: string): Promise<void> {
+  await prisma.notification.updateMany({
+    where: { id: notificationId, userId },
+    data: { type: HIDDEN_CLAIM_TYPE, isRead: true },
   });
-  return true;
 }
