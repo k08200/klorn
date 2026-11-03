@@ -41,6 +41,25 @@ func detailPassSelfChecks(sourceDir: URL) -> [(String, Bool)] {
             && !reader.contains("SolidButtonStyle(compact: true)")
             && !reader.contains("caption2Semibold).foregroundStyle(Theme.textDim)\n                            }\n                            .menuStyle")))
 
+    // Window floor (880): the reader's actions step down to icon-only
+    // instead of truncating ("AI로… / 미…"), and the meta line drops the
+    // account's words before squeezing them.
+    let bar = text("Mail/ReaderActionBar.swift")
+    let meta = text("Mail/WindowLaneChip.swift")
+    results.append((
+        "narrow reader: actions step full → primary-only label → icons, never truncated",
+        ReaderActionRules.densities == [.full, .primaryLabel, .icons]
+            && ReaderActionRules.densities.last.map { $0.iconOnlySecondary } == true
+            && !ReaderActionDensity.full.iconOnlySecondary
+            && reader.contains("ReaderActionBar(")
+            && bar.contains("ViewThatFits(in: .horizontal)")
+            && bar.components(separatedBy: ".help(").count - 1 == 4
+            && bar.components(separatedBy: ".accessibilityLabel(").count - 1 == 4
+            && !bar.contains(".lineLimit(")
+            && meta.contains("showsSourceLabel: false")
+            && meta.contains(".help(source.label)")
+            && !meta.contains(".truncationMode(.middle)")))
+
     // M2: subject 2 lines, summary 3, both allowed to wrap.
     results.append((
         "reader subject wraps to 2 lines and the summary to 3",
