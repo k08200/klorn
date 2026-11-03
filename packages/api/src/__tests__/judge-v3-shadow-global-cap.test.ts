@@ -15,6 +15,11 @@ vi.mock("../billing/quota-limiter.js", () => ({
   getUserUsage: () => ({ rpmUsed: 0, rpmCap: 10, backgroundDailyUsed: 0, backgroundDailyCap: 200 }),
 }));
 vi.mock("../llm/background-pacer.js", () => ({ backgroundLlmPacer: { load: pacerLoad } }));
+// Pin the global ceiling: the reserve is a share of it, and CI may run with 0 (uncapped).
+vi.mock("../config.js", async (orig) => ({
+  ...(await orig<typeof import("../config.js")>()),
+  GLOBAL_DAILY_COST_CAP_CENTS: 5000,
+}));
 
 import {
   _resetGlobalShadowSpendCache,

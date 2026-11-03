@@ -73,6 +73,19 @@ describe("createCompletion noWait", () => {
     expect(awaitSlot).toHaveBeenCalledWith("u1", expect.objectContaining({ maxWaitMs: 0 }));
   });
 
+  it("an RPM miss throws instead of parking, and nothing is retried", async () => {
+    const { UserRateLimitedError } = await import("../billing/quota-limiter.js");
+    tryRun.mockImplementationOnce(<T>(fn: () => Promise<T>) => fn());
+    awaitSlot.mockRejectedValueOnce(new UserRateLimitedError("rpm", 30_000, "background"));
+    await expect(
+      createCompletion(
+        { model: "m", messages: [] },
+        { priority: "background", noWait: true, userId: "u1" },
+      ),
+    ).rejects.toMatchObject({ name: "UserRateLimitedError" });
+    expect(awaitSlot).toHaveBeenCalledTimes(1);
+  });
+
   it("ordinary background calls still queue (unchanged)", async () => {
     await createCompletion({ model: "m", messages: [] }, { priority: "background" });
     expect(run).toHaveBeenCalledTimes(1);
