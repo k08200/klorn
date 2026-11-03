@@ -2,7 +2,7 @@
  * "Is any LLM configured?" must be answered by the real provider chain, not by
  * whether one particular provider's key happens to be set.
  *
- * The old guard was the legacy `openai` export — the OpenRouter client — so a
+ * The old guard was the legacy `openai` export — one proxy provider's client — so a
  * deploy that ran on ANTHROPIC_API_KEY alone silently returned the raw rule
  * template for every smart auto-reply, returned null for every guideline
  * reply, and switched the autonomous agent off at boot. Nothing errored; the

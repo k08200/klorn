@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 /**
  * The judge must not be starved by the rest of the product.
  *
- * 2026-10-15: an OpenRouter top-up brought the LLM back at 22:07. By 22:28 the
+ * 2026-10-15: a provider credit top-up brought the LLM back at 22:07. By 22:28 the
  * founder's account had spent 101¢ against a 100¢ daily cap — almost all of it
  * chat/agent traffic on claude-sonnet-5 ($2.00/M against gemini-2.5-flash's
  * $0.30/M). The cost guard then blocked every paid call for the rest of the
