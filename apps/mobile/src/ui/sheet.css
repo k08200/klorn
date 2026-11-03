@@ -3,7 +3,7 @@
   --sheet-scrim: rgba(15, 23, 42, 0.32);
   --shadow-sheet: 0 -8px 32px rgba(15, 23, 42, 0.16);
   --sheet-grabber: #cbd5e1;
-  --ink-button: #0f172a;
+  --ink-button: #0b0d12;
   --ink-button-text: #ffffff;
 }
 
@@ -13,7 +13,7 @@
     --shadow-sheet: 0 -8px 32px rgba(0, 0, 0, 0.45);
     --sheet-grabber: #3b4a63;
     --ink-button: #e2e8f0;
-    --ink-button-text: #0b1120;
+    --ink-button-text: #0a0a0b;
   }
 }
 
@@ -22,7 +22,7 @@
   --shadow-sheet: 0 -8px 32px rgba(0, 0, 0, 0.45);
   --sheet-grabber: #3b4a63;
   --ink-button: #e2e8f0;
-  --ink-button-text: #0b1120;
+  --ink-button-text: #0a0a0b;
 }
 
 /*
@@ -45,13 +45,13 @@
   inset: 0;
   background: var(--sheet-scrim);
   opacity: 0;
-  transition: opacity var(--motion-exit) var(--ease);
+  transition: opacity var(--motion-sheet) var(--ease);
   pointer-events: auto;
 }
 
 .sheet[data-open="true"] .sheet__scrim {
   opacity: 1;
-  transition-duration: var(--motion-enter);
+  transition-duration: var(--motion-sheet);
 }
 
 .sheet__panel {
@@ -81,12 +81,12 @@
     calc(16px + var(--safe-left));
   box-shadow: var(--shadow-sheet);
   transform: translateY(calc(100% + 24px));
-  transition: transform var(--motion-exit) var(--ease);
+  transition: transform var(--motion-sheet) var(--ease);
 }
 
 .sheet--bottom[data-open="true"] .sheet__panel {
   transform: translateY(var(--sheet-drag, 0px));
-  transition-duration: var(--motion-enter);
+  transition-duration: var(--motion-sheet);
 }
 
 .sheet--bottom[data-dragging="true"] .sheet__panel {
@@ -134,14 +134,14 @@
   opacity: 0;
   transform: translateY(8px) scale(0.98);
   transition:
-    opacity var(--motion-exit) var(--ease),
-    transform var(--motion-exit) var(--ease);
+    opacity var(--motion-sheet) var(--ease),
+    transform var(--motion-sheet) var(--ease);
 }
 
 .sheet--dialog[data-open="true"] .sheet__panel {
   opacity: 1;
   transform: none;
-  transition-duration: var(--motion-enter);
+  transition-duration: var(--motion-sheet);
 }
 
 .sheet--dialog.sheet--full .sheet__panel {
@@ -166,14 +166,14 @@
   opacity: 0;
   transform: translateX(24px);
   transition:
-    opacity var(--motion-exit) var(--ease),
-    transform var(--motion-exit) var(--ease);
+    opacity var(--motion-sheet) var(--ease),
+    transform var(--motion-sheet) var(--ease);
 }
 
 .sheet--side[data-open="true"] .sheet__panel {
   opacity: 1;
   transform: none;
-  transition-duration: var(--motion-enter);
+  transition-duration: var(--motion-sheet);
 }
 
 .sheet--side .sheet__head {
@@ -189,7 +189,7 @@
   .sheet--bottom[data-open="true"] .sheet__panel {
     transform: translateY(var(--sheet-drag, 0px));
     opacity: 0;
-    transition: opacity var(--motion-exit) linear;
+    transition: opacity var(--motion-sheet) linear;
   }
   .sheet--bottom[data-open="true"] .sheet__panel,
   .sheet--dialog[data-open="true"] .sheet__panel {
@@ -421,11 +421,11 @@
 }
 
 :root[data-theme="dark"] .button--danger {
-  color: #0b1120;
+  color: #0a0a0b;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .button--danger {
-    color: #0b1120;
+    color: #0a0a0b;
   }
 }
