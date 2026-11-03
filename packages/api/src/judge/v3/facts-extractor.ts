@@ -177,7 +177,9 @@ async function callModel(prompt: FactsPrompt, options: ExtractFactsOptions): Pro
     // so it always goes through the pacer.
     priority: "background",
     ...(options.userId ? { userId: options.userId } : {}),
-    ...(options.userId && options.reserved ? { reserved: true } : {}),
+    // Passed through, never claimed here: only the live path (live-facts.ts)
+    // may ask for the judge's reserve.
+    ...(options.userId && options.reserved ? { reserved: options.reserved } : {}),
     ...(options.credentials ? { credentials: options.credentials } : {}),
     ...(options.noWait ? { noWait: true } : {}),
     onServed: (s) => {
