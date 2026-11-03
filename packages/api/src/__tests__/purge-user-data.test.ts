@@ -59,6 +59,9 @@ describe("purgeUserData", () => {
       "learnedRule",
       "contactEngagementScore",
       "contactTrustScore",
+      // Per-contact co-attendance counts, and the markers of the meetings counted.
+      "contactCoAttendance",
+      "coAttendanceMeeting",
       "conversationSummary",
       "message",
       "conversation",

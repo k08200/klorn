@@ -24,6 +24,7 @@ import {
   upsertLinkedEventRow,
 } from "./calendar-rows.js";
 import { removeRowsMissingFromWindow } from "./calendar-window-reconcile.js";
+import { countCoAttendance } from "./coattendance/coattendance-sync.js";
 import { handleLinkedCalendarFailure } from "./linked-calendar-failure.js";
 
 export const CALENDAR_SYNC_WINDOW_DAYS = 30;
@@ -160,9 +161,11 @@ async function removeDeclinedRows(
 /**
  * Sync the PRIMARY calendar's window into rows (matched by googleId), then, behind
  * CALENDAR_CANCELLATION_SYNC_ENABLED, remove the rows of events cancelled upstream
- * (a separate call that can never fail the sync, see calendar-cancellation.ts). A
- * list failure throws to the caller, which owns the failure policy. Returns the
- * number of rows written.
+ * (a separate call that can never fail the sync, see calendar-cancellation.ts), and,
+ * behind CALENDAR_COATTENDANCE_ENABLED, count the ended meetings per contact (also
+ * never failing the sync, see coattendance/coattendance-sync.ts). A list failure
+ * throws to the caller, which owns the failure policy. Returns the number of rows
+ * written.
  */
 export async function syncPrimaryCalendarWindow(
   session: CalendarSession,
@@ -180,6 +183,7 @@ export async function syncPrimaryCalendarWindow(
   }
   await removeDeclinedRows(userId, null, declined, now);
   await reconcileCancelledEvents(session, userId, null, now);
+  await countCoAttendance(session, userId, null, now);
   return rows.length;
 }
 
@@ -220,6 +224,7 @@ export async function syncLinkedCalendarWindow(
     await removeRowsMissingFromWindow(session.provider, userId, linkedAccountId, listing, now);
   }
   await reconcileCancelledEvents(session, userId, linkedAccountId, now);
+  await countCoAttendance(session, userId, linkedAccountId, now);
   return rows.length;
 }
 

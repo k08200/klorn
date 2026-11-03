@@ -83,6 +83,8 @@ export const FENCED_MODELS = [
   "WorkContextSnapshot",
   // Calendar and files.
   "CalendarEvent",
+  "ContactCoAttendance",
+  "CoAttendanceMeeting",
   "DriveFile",
   "DriveFileSummary",
   "DriveSummaryUsage",

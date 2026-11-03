@@ -491,6 +491,8 @@ export interface FakeModel {
   groupBy(args: Args): Promise<Array<Row & { _count?: { _all: number }; _min?: Row }>>;
   aggregate(args: Args): Promise<{ _sum: Row }>;
   create(args: { data: Row; select?: Select }): Promise<Row>;
+  /** `skipDuplicates` skips a row that clashes on a unique key, like ON CONFLICT DO NOTHING. */
+  createMany(args: { data: Row | Row[]; skipDuplicates?: boolean }): Promise<{ count: number }>;
   update(args: { where: Where; data: Row; select?: Select }): Promise<Row>;
   updateMany(args: { where?: Where; data: Row }): Promise<{ count: number }>;
   deleteMany(args?: { where?: Where }): Promise<{ count: number }>;
@@ -552,13 +554,15 @@ export function createFakeDb(seed: Record<string, Row[]>, hooks: FakeDbHooks = {
       const from = args.skip ?? 0;
       return args.take === undefined ? sorted.slice(from) : sorted.slice(from, from + args.take);
     };
-    const assertUnique = (candidate: Row, ignore?: Row) => {
-      for (const set of info.uniqueSets) {
-        const clash = rowsOf().some(
+    const clashingSet = (candidate: Row, ignore?: Row): string[] | undefined =>
+      info.uniqueSets.find((set) =>
+        rowsOf().some(
           (r) => r !== ignore && set.every((c) => candidate[c] != null && same(r[c], candidate[c])),
-        );
-        if (clash) throw new Error(`fake-db: unique constraint on ${name}(${set.join(", ")})`);
-      }
+        ),
+      );
+    const assertUnique = (candidate: Row, ignore?: Row) => {
+      const set = clashingSet(candidate, ignore);
+      if (set) throw new Error(`fake-db: unique constraint on ${name}(${set.join(", ")})`);
     };
     const insert = (data: Row, select?: Select): Row => {
       const row = completeRow(info, checkedData(info, data, "create"), true);
@@ -646,6 +650,19 @@ export function createFakeDb(seed: Record<string, Row[]>, hooks: FakeDbHooks = {
         assertArgs(name, "create", args, ["data", "select"]);
         log(name, { op: "create", data: args.data });
         return insert(args.data, args.select);
+      },
+      async createMany(args) {
+        assertArgs(name, "createMany", args, ["data", "skipDuplicates"]);
+        let count = 0;
+        for (const data of Array.isArray(args.data) ? args.data : [args.data]) {
+          log(name, { op: "createMany", data });
+          const row = completeRow(info, checkedData(info, data, "create"), true);
+          if (args.skipDuplicates === true && clashingSet(row)) continue;
+          assertUnique(row);
+          tables[name] = [...rowsOf(), row];
+          count += 1;
+        }
+        return { count };
       },
       async update(args) {
         assertArgs(name, "update", args, ["where", "data", "select"]);

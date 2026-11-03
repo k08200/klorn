@@ -113,6 +113,7 @@ model User {
   reminders                 Reminder[]
   contacts                  Contact[]
   calendarEvents            CalendarEvent[]
+  coAttendanceMeetings      CoAttendanceMeeting[]
   driveFiles                DriveFile[]
   driveFileSummaries        DriveFileSummary[]
   driveSummaryUsage         DriveSummaryUsage[]
@@ -157,6 +158,7 @@ model User {
   emailProcessingLogs       EmailProcessingLog[]
   contactTrustScores        ContactTrustScore[]
   contactEngagementScores   ContactEngagementScore[]
+  contactCoAttendances      ContactCoAttendance[]
   llmCostLedger             LlmCostLedger[]
   llmUsageLogs              LlmUsageLog[]
   analyticsEvents           AnalyticsEvent[]
@@ -2403,6 +2405,47 @@ model ContactEngagementScore {
 
   @@unique([userId, contactEmail])
   @@index([userId])
+}
+
+/// Per-contact co-attendance from ended calendar meetings: a relationship signal
+/// for attention engine v3 (docs/design/attention-engine-v3.md §3(2)). Founder
+/// decision 2026-11-01: counts and dates only, never an attendee list; attendee
+/// addresses are read in memory during the sync and only the counted contact's own
+/// address is kept, as its row key. Written by pim/coattendance/ behind
+/// CALENDAR_COATTENDANCE_ENABLED. No row means never counted (flag off, no calendar
+/// connected, or no shared meeting): unknown to readers, never 0.
+model ContactCoAttendance {
+  id                String   @id @default(uuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contactEmail      String // trimmed and lowercased (a CHECK enforces it)
+  meetingCount      Int      @default(0) // ended meetings both attended
+  smallMeetingCount Int      @default(0) // of those, with at most 5 people (rooms excluded)
+  firstMetAt        DateTime // start of the earliest counted meeting
+  lastMetAt         DateTime // start of the latest counted meeting
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([userId, contactEmail])
+}
+
+/// A meeting already counted into ContactCoAttendance, so a meeting the sync lists
+/// again is never counted twice. eventKey is the SHA-256 (hex) of the meeting's
+/// identity across calendars (Google: iCalUID plus the instance's original start),
+/// so one meeting in two of the user's calendars is one key; a CHECK keeps it a
+/// hash. endedAt only prunes the marker once the meeting is older than the counting
+/// window. No title, attendee or start is stored.
+model CoAttendanceMeeting {
+  id        String           @id @default(uuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider  CalendarProvider
+  eventKey  String
+  endedAt   DateTime
+  countedAt DateTime         @default(now())
+
+  @@unique([userId, provider, eventKey])
+  @@index([userId, endedAt])
 }
 
 /// A named group of people (team mode P1: "AX팀", "PM팀") whose combined

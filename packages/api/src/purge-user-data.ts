@@ -140,6 +140,9 @@ export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> 
   await tx.notification.deleteMany(scope);
   await tx.agentLog.deleteMany(scope);
   await tx.calendarEvent.deleteMany(scope);
+  // Per-contact co-attendance counts, and the markers of the meetings counted.
+  await tx.contactCoAttendance.deleteMany(scope);
+  await tx.coAttendanceMeeting.deleteMany(scope);
   // DriveFileSummary: model summaries of the user's files (D4); DriveSummaryUsage:
   // their daily count. Both cascade with DriveFile and User; deleted by name so
   // this list stays the complete record.
