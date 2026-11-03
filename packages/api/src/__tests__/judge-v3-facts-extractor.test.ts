@@ -372,6 +372,18 @@ describe("extractFacts", () => {
     expect(complete).toHaveBeenCalledTimes(1);
   });
 
+  it("draws on the judge reserve only when asked and only with a userId", async () => {
+    const complete = vi.fn(async () => completion(llmAnswer()));
+    await extractFacts(mail(), { complete, userId: "u1", reserved: true });
+    await extractFacts(mail(), { complete, reserved: true });
+    await extractFacts(mail(), { complete, userId: "u1" });
+    const r = (i: number) =>
+      (complete.mock.calls[i] as unknown as [unknown, { reserved?: boolean }])[1].reserved;
+    expect(r(0)).toBe(true);
+    expect(r(1)).toBeUndefined();
+    expect(r(2)).toBeUndefined();
+  });
+
   it("passes noWait through to the completion only when asked", async () => {
     const complete = vi.fn(async () => completion(llmAnswer()));
     await extractFacts(mail(), { complete, noWait: true });
