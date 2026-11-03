@@ -1,7 +1,9 @@
 /**
- * The co-attendance pass a calendar sync runs after its rows are written
- * (pim/calendar-sync.ts), behind CALENDAR_COATTENDANCE_ENABLED. Off: it returns
- * before any listing, read or write.
+ * The co-attendance pass, behind CALENDAR_COATTENDANCE_ENABLED. Off: it returns
+ * before any listing, read or write. Only the scheduler runs it, after an
+ * account's rows are written (automation-scheduler.ts for the primary calendar,
+ * syncLinkedCalendars in pim/calendar-sync.ts for linked ones), never a request:
+ * the first pass after the flag is turned on writes 30 days of meetings.
  *
  * On: for a session that can list attendees (Google, primary and linked), at most
  * once per COATTENDANCE_PASS_INTERVAL_MS per account, it lists the last
@@ -20,6 +22,7 @@
  */
 
 import { calendarCoattendanceEnabled } from "../../config.js";
+import { isDataWipeFenceError } from "../../privacy/data-wipe-fence.js";
 import { captureError } from "../../sentry.js";
 import type {
   CalendarSession,
@@ -130,6 +133,8 @@ export async function countCoAttendance(
     }
     return result;
   } catch (err) {
+    // The account's data is being wiped: the refusal is the fence working.
+    if (isDataWipeFenceError(err)) return null;
     const label = failureLabel(err);
     console.warn(`[CALENDAR] co-attendance pass failed for ${account}: ${label}`);
     captureError(new Error(`calendar co-attendance pass failed: ${label}`), {

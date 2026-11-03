@@ -161,11 +161,10 @@ async function removeDeclinedRows(
 /**
  * Sync the PRIMARY calendar's window into rows (matched by googleId), then, behind
  * CALENDAR_CANCELLATION_SYNC_ENABLED, remove the rows of events cancelled upstream
- * (a separate call that can never fail the sync, see calendar-cancellation.ts), and,
- * behind CALENDAR_COATTENDANCE_ENABLED, count the ended meetings per contact (also
- * never failing the sync, see coattendance/coattendance-sync.ts). A list failure
- * throws to the caller, which owns the failure policy. Returns the number of rows
- * written.
+ * (a separate call that can never fail the sync, see calendar-cancellation.ts). A
+ * list failure throws to the caller, which owns the failure policy. Returns the
+ * number of rows written. Co-attendance is not counted here: this also serves
+ * requests, and the scheduler counts after calling it.
  */
 export async function syncPrimaryCalendarWindow(
   session: CalendarSession,
@@ -183,7 +182,6 @@ export async function syncPrimaryCalendarWindow(
   }
   await removeDeclinedRows(userId, null, declined, now);
   await reconcileCancelledEvents(session, userId, null, now);
-  await countCoAttendance(session, userId, null, now);
   return rows.length;
 }
 
@@ -224,7 +222,6 @@ export async function syncLinkedCalendarWindow(
     await removeRowsMissingFromWindow(session.provider, userId, linkedAccountId, listing, now);
   }
   await reconcileCancelledEvents(session, userId, linkedAccountId, now);
-  await countCoAttendance(session, userId, linkedAccountId, now);
   return rows.length;
 }
 
@@ -244,7 +241,8 @@ function isForeignKeyViolation(err: unknown): boolean {
  * an account flagged needsReconnect: a revoked token is not retried every cycle
  * until the user re-links it. Best-effort per account: one failing never skips
  * the others (see linked-calendar-failure.ts for the policy). Called only behind
- * LINKED_CALENDAR_SYNC_ENABLED and the user's entitlement; with nothing to sync it
+ * LINKED_CALENDAR_SYNC_ENABLED and the user's entitlement, by the scheduler only,
+ * which is why each account's co-attendance pass runs here; with nothing to sync it
  * reads no user row.
  */
 export async function syncLinkedCalendars(
@@ -260,6 +258,8 @@ export async function syncLinkedCalendars(
   for (const { session, id, email } of linked) {
     try {
       events += await syncLinkedCalendarWindow(session, userId, id, userTimezone, now);
+      // Behind CALENDAR_COATTENDANCE_ENABLED; never throws.
+      await countCoAttendance(session, userId, id, now);
     } catch (err) {
       // The account was unlinked while its sync was in flight: its rows now fail
       // the foreign key, which is exactly the orphan the constraint prevents.

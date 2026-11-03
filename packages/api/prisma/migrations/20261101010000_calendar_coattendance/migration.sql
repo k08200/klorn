@@ -5,8 +5,9 @@
 -- either table until CALENDAR_COATTENDANCE_ENABLED is on (pim/coattendance/).
 --
 -- ContactCoAttendance. One row per (userId, contactEmail): the number of ended
--- meetings the user and that address both attended, how many of them had at most
--- five people, and the start of the first and the last. contactEmail is stored
+-- meetings the user took part in and that address was invited to without
+-- declining, how many of them had at most five such people, and the UTC day (never
+-- the instant) of the first and the last. contactEmail is stored
 -- normalised: a CHECK that it equals lower(btrim("contactEmail")), so a padded or
 -- upper-case address fails loud (23514) instead of making a second row for the
 -- same person. A second CHECK keeps the small count within the total. No row

@@ -12,13 +12,18 @@
  *     at most MAX_COUNTED_ATTENDEES people invited. A larger meeting (an all-hands, a
  *     webinar) says little about any one guest, and Google returns only the user's
  *     own entry past the listing's cap anyway, so it counts nothing;
- *   - the user did not decline: every entry of theirs (the calendar owner's `self`
- *     entry, or any of their known addresses) is `declined` means they did not go;
+ *   - the user took part: one of their entries (the calendar owner's `self` entry,
+ *     or any of their known addresses) organised it, accepted or is tentative. An
+ *     invitation the user never answered does not count: anyone can put one on a
+ *     calendar (Google adds invitations from anyone by default), so it is no
+ *     evidence of a meeting and would let a stranger raise a count. An event with
+ *     no entry of theirs at all is one they made themselves, and counts;
  *   - a contact is a person (rooms and other resources never count), not the user,
- *     with a plain address, who did not decline. Tentative and unanswered count: a
- *     calendar records invitations, not who walked in.
- * A meeting is small when at most SMALL_MEETING_MAX_PEOPLE people attended (the
- * user plus the counted contacts): audience size dominates how much a shared
+ *     with a plain ASCII address, who did not decline. A contact's tentative or
+ *     unanswered invitation counts: few guests answer, and the user's own answer
+ *     already says the meeting happened.
+ * A meeting is small when at most SMALL_MEETING_MAX_PEOPLE people took part (the
+ * user plus the counted contacts; declined guests and rooms are not people present): audience size dominates how much a shared
  * meeting says about a relationship (Karagiannis & Vojnović 2009), so it is kept as
  * a raw count of its own, never as a weight.
  */
@@ -42,11 +47,14 @@ export interface CountedMeeting {
   readonly small: boolean;
 }
 
-/** The trimmed, lower-cased address, or null when it is not one plain address. */
+/** Printable ASCII only: the table's CHECK compares this lower-casing with Postgres's. */
+const PRINTABLE_ASCII = /^[\x21-\x7e]+$/;
+
+/** The trimmed, lower-cased address, or null when it is not one plain ASCII address. */
 export function normalizeAttendeeEmail(raw: string): string | null {
   const address = raw.trim().toLowerCase();
   if (address.length === 0 || address.length > MAX_ADDRESS_LENGTH) return null;
-  return isPlainAddress(address) ? address : null;
+  return PRINTABLE_ASCII.test(address) && isPlainAddress(address) ? address : null;
 }
 
 function isCountableEvent(meeting: ProviderMeeting, now: Date): boolean {
@@ -63,6 +71,10 @@ function isOwn(attendee: MeetingAttendee, ownAddresses: ReadonlySet<string>): bo
 }
 
 const declined = (attendee: MeetingAttendee) => attendee.responseStatus === "declined";
+const tookPart = (attendee: MeetingAttendee) =>
+  attendee.organizer ||
+  attendee.responseStatus === "accepted" ||
+  attendee.responseStatus === "tentative";
 
 /** The contacts an ended meeting counts for, or null when it counts for no one. */
 export function countMeeting(
@@ -75,7 +87,7 @@ export function countMeeting(
   if (people.length > MAX_COUNTED_ATTENDEES) return null;
 
   const mine = people.filter((attendee) => isOwn(attendee, ownAddresses));
-  if (mine.length > 0 && mine.every(declined)) return null;
+  if (mine.length > 0 && !mine.some(tookPart)) return null;
 
   const contacts = new Set<string>();
   for (const attendee of people) {

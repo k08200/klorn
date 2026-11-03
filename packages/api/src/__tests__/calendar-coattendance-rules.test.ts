@@ -17,7 +17,7 @@ const NOW = new Date("2026-11-01T12:00:00.000Z");
 const OWN = new Set(["me@example.com", "me@work.example"]);
 
 function person(email: string, responseStatus = "accepted", extra = {}): MeetingAttendee {
-  return { email, self: false, resource: false, responseStatus, ...extra };
+  return { email, self: false, organizer: false, resource: false, responseStatus, ...extra };
 }
 
 const me = (responseStatus = "accepted"): MeetingAttendee =>
@@ -83,9 +83,9 @@ describe("countMeeting: what counts", () => {
     ]);
   });
 
-  it("counts tentative and unanswered invitations, the user's and the contact's", () => {
+  it("counts a contact's tentative or unanswered invitation: few guests answer", () => {
     const attendees = [
-      me("needsAction"),
+      me(),
       person("ana@client.example", "tentative"),
       person("bo@client.example", "needsAction"),
     ];
@@ -93,6 +93,21 @@ describe("countMeeting: what counts", () => {
       "ana@client.example",
       "bo@client.example",
     ]);
+  });
+
+  it("counts only a meeting the user accepted, held tentatively, or organised", () => {
+    const withMe = (entry: MeetingAttendee) =>
+      meeting({ attendees: [entry, person("ana@x.example")] });
+    expect(countMeeting(withMe(me("tentative")), OWN, NOW)).not.toBeNull();
+    expect(
+      countMeeting(withMe({ ...me("needsAction"), organizer: true }), OWN, NOW),
+    ).not.toBeNull();
+    // An invitation the user never answered: anyone can put one on a calendar
+    // (Google adds invitations from anyone by default), so it is no evidence of a
+    // meeting and must not let a stranger raise a count.
+    expect(countMeeting(withMe(me("needsAction")), OWN, NOW)).toBeNull();
+    expect(countMeeting(withMe(me("")), OWN, NOW)).toBeNull();
+    expect(countMeeting(withMe({ ...me(), responseStatus: null }), OWN, NOW)).toBeNull();
   });
 
   it("leaves out a contact who declined", () => {
@@ -204,6 +219,9 @@ describe("normalizeAttendeeEmail", () => {
       "a@b@c",
       "a b@x.example",
       "device:3f9a1c",
+      // Non-ASCII: JavaScript's and Postgres's lower() may disagree on it, and the
+      // table's CHECK compares the two.
+      "İnci@örnek.example",
     ]) {
       expect(normalizeAttendeeEmail(raw), raw).toBeNull();
     }

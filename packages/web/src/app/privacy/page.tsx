@@ -151,10 +151,11 @@ export default function PrivacyPage() {
                 description.
               </li>
               <li>
-                Counts from your past calendar meetings: for each person you shared a meeting with,
-                how many meetings, how many of them had five or fewer people, and when the first and
-                the last took place. Only these counts and times are kept; the attendee lists they
-                are counted from are not stored.
+                Counts from your past calendar meetings: for each person invited to a meeting you
+                organised or accepted (even tentatively), unless they declined, how many such
+                meetings, how many of them had five or fewer people, and the day of the first and
+                the last. To count each meeting once, Klorn keeps a one-way fingerprint of it for
+                about a month. The attendee lists themselves are not stored.
               </li>
               <li>
                 Product data you create in Klorn, including tasks, reminders, notes, commitments,

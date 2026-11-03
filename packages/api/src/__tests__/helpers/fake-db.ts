@@ -493,6 +493,12 @@ export interface FakeModel {
   create(args: { data: Row; select?: Select }): Promise<Row>;
   /** `skipDuplicates` skips a row that clashes on a unique key, like ON CONFLICT DO NOTHING. */
   createMany(args: { data: Row | Row[]; skipDuplicates?: boolean }): Promise<{ count: number }>;
+  /** createMany answering the rows it inserted (only those, under skipDuplicates). */
+  createManyAndReturn(args: {
+    data: Row | Row[];
+    skipDuplicates?: boolean;
+    select?: Select;
+  }): Promise<Row[]>;
   update(args: { where: Where; data: Row; select?: Select }): Promise<Row>;
   updateMany(args: { where?: Where; data: Row }): Promise<{ count: number }>;
   deleteMany(args?: { where?: Where }): Promise<{ count: number }>;
@@ -569,6 +575,19 @@ export function createFakeDb(seed: Record<string, Row[]>, hooks: FakeDbHooks = {
       assertUnique(row);
       tables[name] = [...rowsOf(), row];
       return project(info, row, select);
+    };
+    /** Inserts each row in order; under skipDuplicates a clashing row is skipped. */
+    const insertMany = (op: string, data: Row | Row[], skipDuplicates?: boolean): Row[] => {
+      const inserted: Row[] = [];
+      for (const one of Array.isArray(data) ? data : [data]) {
+        log(name, { op, data: one });
+        const row = completeRow(info, checkedData(info, one, "create"), true);
+        if (skipDuplicates === true && clashingSet(row)) continue;
+        assertUnique(row);
+        tables[name] = [...rowsOf(), row];
+        inserted.push(row);
+      }
+      return inserted;
     };
     const apply = (target: Row, data: Row): void => {
       const clean = checkedData(info, resolveIncrements(info, target, data), "update");
@@ -653,16 +672,12 @@ export function createFakeDb(seed: Record<string, Row[]>, hooks: FakeDbHooks = {
       },
       async createMany(args) {
         assertArgs(name, "createMany", args, ["data", "skipDuplicates"]);
-        let count = 0;
-        for (const data of Array.isArray(args.data) ? args.data : [args.data]) {
-          log(name, { op: "createMany", data });
-          const row = completeRow(info, checkedData(info, data, "create"), true);
-          if (args.skipDuplicates === true && clashingSet(row)) continue;
-          assertUnique(row);
-          tables[name] = [...rowsOf(), row];
-          count += 1;
-        }
-        return { count };
+        return { count: insertMany("createMany", args.data, args.skipDuplicates).length };
+      },
+      async createManyAndReturn(args) {
+        assertArgs(name, "createManyAndReturn", args, ["data", "skipDuplicates", "select"]);
+        const inserted = insertMany("createManyAndReturn", args.data, args.skipDuplicates);
+        return inserted.map((row) => project(info, row, args.select));
       },
       async update(args) {
         assertArgs(name, "update", args, ["where", "data", "select"]);

@@ -11,12 +11,16 @@
  * the real schema and every write is recorded.
  */
 
+import { readdirSync, readFileSync } from "node:fs";
+import { dirname, join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createFakeDb, type FakeDb } from "./helpers/fake-db.js";
 
 const h = vi.hoisted(() => ({
   db: null as unknown,
   captureError: vi.fn(),
+  connectLinkedCalendars: vi.fn(),
 }));
 
 vi.mock("../db.js", async () => {
@@ -29,6 +33,9 @@ vi.mock("../db.js", async () => {
   };
 });
 vi.mock("../sentry.js", () => ({ captureError: h.captureError }));
+vi.mock("../pim/calendar-providers/dispatch.js", () => ({
+  connectLinkedCalendars: h.connectLinkedCalendars,
+}));
 
 import type {
   CalendarSession,
@@ -36,7 +43,11 @@ import type {
   ProviderCalendarEvent,
   ProviderMeeting,
 } from "../pim/calendar-providers/types.js";
-import { syncLinkedCalendarWindow, syncPrimaryCalendarWindow } from "../pim/calendar-sync.js";
+import {
+  syncLinkedCalendars,
+  syncLinkedCalendarWindow,
+  syncPrimaryCalendarWindow,
+} from "../pim/calendar-sync.js";
 import { claimAndCount, eventKeyOf } from "../pim/coattendance/coattendance-store.js";
 import {
   _resetCoAttendancePassesForTests,
@@ -44,8 +55,10 @@ import {
   COATTENDANCE_PASS_INTERVAL_MS,
   countCoAttendance,
 } from "../pim/coattendance/coattendance-sync.js";
+import { DataWipeFenceError } from "../privacy/data-wipe-fence.js";
 
 const FLAG = "CALENDAR_COATTENDANCE_ENABLED";
+const srcDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 const NOW = new Date("2026-11-01T12:00:00.000Z");
 const DAY_MS = 24 * 60 * 60 * 1000;
 const ZONE = "Asia/Seoul";
@@ -57,7 +70,7 @@ const tables = () => db.tables as Rows;
 const saved = process.env[FLAG];
 
 function person(email: string, responseStatus = "accepted", extra = {}): MeetingAttendee {
-  return { email, self: false, resource: false, responseStatus, ...extra };
+  return { email, self: false, organizer: false, resource: false, responseStatus, ...extra };
 }
 
 const me: MeetingAttendee = person("me@example.com", "accepted", { self: true });
@@ -196,8 +209,9 @@ describe("counting", () => {
       timeMax: NOW.toISOString(),
     });
     expect(result).toEqual({ meetings: 2, contacts: 7, truncated: false });
-    const standupAt = new Date("2026-10-30T01:00:00.000Z");
-    const allHandsAt = new Date("2026-10-28T01:00:00.000Z");
+    // Days, not instants: the start of the meeting's UTC day.
+    const standupAt = new Date("2026-10-30T00:00:00.000Z");
+    const allHandsAt = new Date("2026-10-28T00:00:00.000Z");
     expect(counters()).toMatchObject({
       "ana@client.example": {
         meetingCount: 2,
@@ -282,8 +296,8 @@ describe("idempotency", () => {
     expect(counters()["ana@client.example"]).toEqual({
       meetingCount: 2,
       smallMeetingCount: 2,
-      firstMetAt: new Date("2026-10-10T01:00:00.000Z"),
-      lastMetAt: new Date("2026-10-30T01:00:00.000Z"),
+      firstMetAt: new Date("2026-10-10T00:00:00.000Z"),
+      lastMetAt: new Date("2026-10-30T00:00:00.000Z"),
     });
   });
 
@@ -295,8 +309,8 @@ describe("idempotency", () => {
       contacts: ["ana@client.example"],
       small: true,
     };
-    expect(await claimAndCount("GOOGLE", "u1", counted)).toBe(true);
-    expect(await claimAndCount("GOOGLE", "u1", counted)).toBe(false);
+    expect(await claimAndCount("GOOGLE", "u1", [counted])).toBe(1);
+    expect(await claimAndCount("GOOGLE", "u1", [counted])).toBe(0);
     expect(counters()["ana@client.example"]?.meetingCount).toBe(1);
   });
 
@@ -374,13 +388,15 @@ describe("no attendee data outside the counters", () => {
       const stored = JSON.stringify([write.data, write.update]);
       const mentioned = ATTENDEE_EMAILS.filter((e) => stored.includes(e));
       expect(mentioned.length).toBeLessThanOrEqual(1);
-      if (write.op === "updateMany") expect(stored).not.toContain("@");
+      if (write.op === "update") expect(stored).not.toContain("@");
     }
   });
 
   it("puts no attendee data in the synced rows or in any log line", async () => {
     const { session } = googleSession([standup, allHands]);
     await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
+    await countCoAttendance(session, "u1", null, NOW);
+    expect(counters()["ana@client.example"]?.meetingCount).toBe(2);
 
     const rowText = JSON.stringify(db.writes.calendarEvent);
     for (const email of [...ATTENDEE_EMAILS, "Ana@Client.Example"]) {
@@ -392,21 +408,27 @@ describe("no attendee data outside the counters", () => {
     }
   });
 
-  it("a failure never fails the sync and never logs what the error carried", async () => {
+  it("a failure never throws and never logs what the error carried", async () => {
     const { session, listMeetingAttendees } = googleSession([standup]);
     listMeetingAttendees.mockRejectedValue(
       Object.assign(new Error("Invalid upsert: contactEmail ana@client.example"), {
         code: "P2009",
       }),
     );
-    expect(await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW)).toBe(1);
-    expect(tables().calendarEvent).toHaveLength(1);
+    expect(await countCoAttendance(session, "u1", null, NOW)).toBeNull();
     expect(h.captureError).toHaveBeenCalledTimes(1);
     expect(h.captureError.mock.calls[0]?.[1]).toMatchObject({
       tags: { scope: "calendar.coattendance" },
     });
     expect(allLoggedText()).not.toContain("ana@client.example");
     expect(allLoggedText()).toContain("P2009");
+  });
+
+  it("does not report a write the data-wipe fence refused: the wipe is expected", async () => {
+    const { session, listMeetingAttendees } = googleSession([standup]);
+    listMeetingAttendees.mockRejectedValue(new DataWipeFenceError());
+    expect(await countCoAttendance(session, "u1", null, NOW)).toBeNull();
+    expect(h.captureError).not.toHaveBeenCalled();
   });
 
   it("a counter write that fails rolls its meeting's marker back, so the next pass retries", async () => {
@@ -426,18 +448,48 @@ describe("no attendee data outside the counters", () => {
 });
 
 describe("sync wiring", () => {
-  it("counts after the primary row sync", async () => {
+  it("the request-path syncs (POST /sync, login) never list attendees", async () => {
     const { session, listMeetingAttendees } = googleSession([standup]);
     expect(await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW)).toBe(1);
-    expect(listMeetingAttendees).toHaveBeenCalledTimes(1);
+    await syncLinkedCalendarWindow(session, "u1", "lc1", ZONE, NOW);
+    expect(listMeetingAttendees).not.toHaveBeenCalled();
+    expect(tables().contactCoAttendance ?? []).toEqual([]);
+  });
+
+  it("the scheduler's linked sync counts each account after its rows, once across both", async () => {
+    const primary = googleSession([standup]);
+    const linked = googleSession([standup]);
+    h.connectLinkedCalendars.mockResolvedValue([
+      { session: linked.session, id: "lc1", email: "me@work.example" },
+    ]);
+    await countCoAttendance(primary.session, "u1", null, NOW);
+    expect(await syncLinkedCalendars("u1", NOW)).toMatchObject({ accounts: 1, events: 1 });
+    expect(linked.listMeetingAttendees).toHaveBeenCalledTimes(1);
     expect(counters()["ana@client.example"]?.meetingCount).toBe(1);
   });
 
-  it("counts after a linked Google calendar's row sync, once across both", async () => {
-    const { session, listMeetingAttendees } = googleSession([standup]);
-    await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
-    await syncLinkedCalendarWindow(session, "u1", "lc1", ZONE, NOW);
-    expect(listMeetingAttendees).toHaveBeenCalledTimes(2);
-    expect(counters()["ana@client.example"]?.meetingCount).toBe(1);
+  it("the scheduler counts the primary calendar right after its row sync, and nothing else calls it", () => {
+    const src = (rel: string) => readFileSync(join(srcDir, rel), "utf8");
+    const scheduler = src("automation-scheduler.ts");
+    expect(scheduler).toMatch(
+      /await syncPrimaryCalendarWindow\(session, config\.userId, userTimezone\);\s*(?:\/\/[^\n]*\n\s*)*await countCoAttendance\(session, config\.userId, null\);/,
+    );
+    const callers = sourceFiles(srcDir)
+      .filter((file) => /\bcountCoAttendance\(/.test(readFileSync(file, "utf8")))
+      .map((file) => relative(srcDir, file))
+      .sort();
+    expect(callers).toEqual([
+      "automation-scheduler.ts",
+      "pim/calendar-sync.ts",
+      "pim/coattendance/coattendance-sync.ts",
+    ]);
   });
 });
+
+function sourceFiles(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) return entry.name === "__tests__" ? [] : sourceFiles(path);
+    return entry.name.endsWith(".ts") ? [path] : [];
+  });
+}

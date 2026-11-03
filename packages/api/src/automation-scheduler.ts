@@ -90,6 +90,7 @@ import {
   syncLinkedCalendars,
   syncPrimaryCalendarWindow,
 } from "./pim/calendar-sync.js";
+import { countCoAttendance } from "./pim/coattendance/coattendance-sync.js";
 import { expireStaleDeviceSources } from "./pim/device-calendar/device-sources.js";
 import { sendFocusWindowDigests } from "./pim/focus-digest.js";
 import { draftReplyForEmailId } from "./routes/email-replies.js";
@@ -1401,6 +1402,8 @@ async function runUserCycle(
         // routes/calendar.ts /sync.
         const userTimezone = await readSyncTimezone(config.userId);
         await syncPrimaryCalendarWindow(session, config.userId, userTimezone);
+        // Behind CALENDAR_COATTENDANCE_ENABLED; never throws (pim/coattendance/).
+        await countCoAttendance(session, config.userId, null);
       }
     } catch (err) {
       const gaxiosErr = err as {

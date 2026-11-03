@@ -18,7 +18,7 @@ const prismaDir = join(here, "..", "..", "prisma");
 const migrationsDir = join(prismaDir, "migrations");
 const MIGRATION = "20261101010000_calendar_coattendance";
 /** The latest migration on main when this one was written. */
-const AFTER = "20261031000000_sent_message_origin";
+const AFTER = "20261031120000_attention_facts";
 
 const sql = readFileSync(join(migrationsDir, MIGRATION, "migration.sql"), "utf8");
 const statements = sql

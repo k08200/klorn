@@ -130,6 +130,8 @@ export interface MeetingAttendee {
   readonly email: string;
   /** The calendar owner's own entry. */
   readonly self: boolean;
+  /** This attendee organised the event. */
+  readonly organizer: boolean;
   /** A room or equipment, not a person. */
   readonly resource: boolean;
   /** accepted | tentative | needsAction | declined; null when absent. */

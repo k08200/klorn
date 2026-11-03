@@ -48,7 +48,7 @@ describe("Google listMeetingAttendees", () => {
       maxAttendees: MAX_COUNTED_ATTENDEES,
       maxResults: MEETINGS_PAGE_SIZE,
       fields:
-        "nextPageToken,items(id,iCalUID,status,start,end,originalStartTime,attendeesOmitted,attendees(email,self,resource,responseStatus))",
+        "nextPageToken,items(id,iCalUID,status,start,end,originalStartTime,attendeesOmitted,attendees(email,self,organizer,resource,responseStatus))",
     });
     // No summary, description, location or conference data is asked for.
     expect(String(params.fields)).not.toMatch(/summary|description|location|conference/);
@@ -66,7 +66,7 @@ describe("Google listMeetingAttendees", () => {
             start: { dateTime: "2026-10-20T10:00:00+09:00" },
             end: { dateTime: "2026-10-20T11:00:00+09:00" },
             attendees: [
-              { email: "me@example.com", self: true, responseStatus: "accepted" },
+              { email: "me@example.com", self: true, organizer: true, responseStatus: "accepted" },
               { email: "Ana@Client.Example", responseStatus: "tentative" },
               { email: "room@resource.calendar.google.com", resource: true },
             ],
@@ -86,16 +86,24 @@ describe("Google listMeetingAttendees", () => {
           endTime: new Date("2026-10-20T02:00:00.000Z"),
           attendeesOmitted: false,
           attendees: [
-            { email: "me@example.com", self: true, resource: false, responseStatus: "accepted" },
+            {
+              email: "me@example.com",
+              self: true,
+              organizer: true,
+              resource: false,
+              responseStatus: "accepted",
+            },
             {
               email: "Ana@Client.Example",
               self: false,
+              organizer: false,
               resource: false,
               responseStatus: "tentative",
             },
             {
               email: "room@resource.calendar.google.com",
               self: false,
+              organizer: false,
               resource: true,
               responseStatus: null,
             },

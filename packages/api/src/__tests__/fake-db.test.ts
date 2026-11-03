@@ -199,6 +199,16 @@ describe("createMany", () => {
     expect(d.tables.attentionItem.map((r) => r.sourceId).sort()).toEqual(["s1", "s2"]);
   });
 
+  it("createManyAndReturn answers only the rows it inserted, projected by select", async () => {
+    const d = db();
+    const made = await items(d).createManyAndReturn({
+      data: [create, { ...create, sourceId: "s2" }],
+      skipDuplicates: true,
+      select: { sourceId: true },
+    });
+    expect(made).toEqual([{ sourceId: "s2" }]);
+  });
+
   it("without skipDuplicates, throws on a clash, and checks columns like create", async () => {
     await expect(items().createMany({ data: [create] })).rejects.toThrow(/unique constraint/);
     await expect(items(db([])).createMany({ data: [{ ...create, nope: 1 }] })).rejects.toThrow();
