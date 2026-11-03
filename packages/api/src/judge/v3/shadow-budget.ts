@@ -53,6 +53,11 @@ export function globalShadowDailyUsd(globalCapCents = GLOBAL_DAILY_COST_CAP_CENT
   return envNumber("JUDGE_V3_SHADOW_GLOBAL_DAILY_USD", fallback);
 }
 
+/** Global ceiling (cents) kept free of shadow spend: the share the shadow may take. */
+export function globalShadowReserveCents(globalCapCents = GLOBAL_DAILY_COST_CAP_CENTS): number {
+  return globalCapCents > 0 ? globalCapCents * GLOBAL_SHADOW_SHARE : 0;
+}
+
 /** Pure: a free pacer slot and an empty queue. */
 export function pacerHasRoom(load: PacerLoad): boolean {
   return load.waiting === 0 && load.active < load.maxConcurrent;
@@ -92,6 +97,29 @@ async function shadowSpentTodayUsd(userId: string | null, now: Date): Promise<nu
   return agg._sum.costUsd ?? 0;
 }
 
+/** The all-users sum is read at most once a minute per process: it scans the day. */
+const GLOBAL_SPEND_CACHE_MS = 60_000;
+let globalSpend: { at: number; day: number; usd: number } | null = null;
+
+async function globalShadowSpentTodayUsd(now: Date): Promise<number> {
+  const day = utcDayStart(now).getTime();
+  if (
+    globalSpend &&
+    globalSpend.day === day &&
+    now.getTime() - globalSpend.at < GLOBAL_SPEND_CACHE_MS
+  ) {
+    return globalSpend.usd;
+  }
+  const usd = await shadowSpentTodayUsd(null, now);
+  globalSpend = { at: now.getTime(), day, usd };
+  return usd;
+}
+
+/** Test hook: forget the cached all-users sum. */
+export function _resetGlobalShadowSpendCache(): void {
+  globalSpend = null;
+}
+
 export type BudgetVerdict =
   | "ok"
   | "calls"
@@ -109,7 +137,7 @@ export async function shadowBudgetVerdict(
   if (!callShareOk(getUserUsage(userId))) return "calls";
   if (!pacerHasRoom(backgroundLlmPacer.load())) return "pacer_busy";
   let gate: GateView;
-  let global: { allowed: boolean };
+  let global: { allowed: boolean; remainingCents: number };
   let spent: number;
   let spentAll: number;
   try {
@@ -117,14 +145,15 @@ export async function shadowBudgetVerdict(
       checkCostGate(userId),
       checkGlobalCostGate(),
       shadowSpentTodayUsd(userId, now),
-      shadowSpentTodayUsd(null, now),
+      globalShadowSpentTodayUsd(now),
     ]);
   } catch {
     // Can't tell what the shadow may spend: skip quietly (no Sentry per mail).
     return "budget_unknown";
   }
   if (!shadowHeadroomOk(gate, shadowFloorCents())) return "user_budget";
-  if (!global.allowed) return "global_budget";
+  // The global ceiling has no judge reserve of its own: keep its last share free.
+  if (!global.allowed || global.remainingCents < globalShadowReserveCents()) return "global_budget";
   if (spent >= shadowDailyUsd()) return "shadow_budget";
   if (spentAll >= globalShadowDailyUsd()) return "global_shadow_budget";
   return "ok";

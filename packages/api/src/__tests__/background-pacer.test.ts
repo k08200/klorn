@@ -85,20 +85,81 @@ describe("background-pacer", () => {
   });
 });
 
-describe("backgroundPacer load()", () => {
+describe("backgroundPacer load() and tryRun()", () => {
+  const gate = () => {
+    let open: () => void = () => {};
+    const p = new Promise<void>((r) => {
+      open = r;
+    });
+    return { p, open };
+  };
+
   it("reports calls in flight and calls waiting for a slot", async () => {
     const { createBackgroundPacer } = await import("../llm/background-pacer.js");
     const pacer = createBackgroundPacer({ maxConcurrent: 1, minIntervalMs: 0 });
     expect(pacer.load()).toEqual({ active: 0, waiting: 0, maxConcurrent: 1 });
-    let release: () => void = () => {};
-    const first = pacer.run(() => new Promise<void>((r) => (release = r)));
-    await Promise.resolve();
+    const g = gate();
+    const first = pacer.run(() => g.p);
     const second = pacer.run(async () => undefined);
-    await Promise.resolve();
-    expect(pacer.load()).toEqual({ active: 1, waiting: 1, maxConcurrent: 1 });
-    release();
+    await vi.waitFor(() =>
+      expect(pacer.load()).toEqual({ active: 1, waiting: 1, maxConcurrent: 1 }),
+    );
+    g.open();
     await first;
     await second;
     expect(pacer.load()).toEqual({ active: 0, waiting: 0, maxConcurrent: 1 });
+  });
+
+  it("tryRun claims a free slot at once, or returns null without queueing", async () => {
+    const { createBackgroundPacer } = await import("../llm/background-pacer.js");
+    const pacer = createBackgroundPacer({ maxConcurrent: 1, minIntervalMs: 0 });
+    const g = gate();
+    const held = pacer.tryRun(() => g.p);
+    expect(held).not.toBeNull();
+    expect(pacer.tryRun(async () => "never")).toBeNull();
+    expect(pacer.load().waiting).toBe(0);
+    g.open();
+    await held;
+    expect(await pacer.tryRun(async () => "next")).toBe("next");
+  });
+
+  it("tryRun never jumps a queue, and never launches inside the spacing window", async () => {
+    const { createBackgroundPacer } = await import("../llm/background-pacer.js");
+    const spaced = createBackgroundPacer({ maxConcurrent: 2, minIntervalMs: 60_000 });
+    await spaced.run(async () => undefined);
+    expect(spaced.tryRun(async () => "too soon")).toBeNull();
+
+    const pacer = createBackgroundPacer({ maxConcurrent: 1, minIntervalMs: 0 });
+    const g = gate();
+    const first = pacer.run(() => g.p);
+    const queued = pacer.run(async () => "queued");
+    await vi.waitFor(() => expect(pacer.load().waiting).toBe(1));
+    expect(pacer.tryRun(async () => "jump")).toBeNull();
+    g.open();
+    await first;
+    expect(await queued).toBe("queued");
+  });
+
+  it("hands a released slot straight to the next waiter: never over the limit", async () => {
+    const { createBackgroundPacer } = await import("../llm/background-pacer.js");
+    const pacer = createBackgroundPacer({ maxConcurrent: 1, minIntervalMs: 0 });
+    let peak = 0;
+    const track = async () => {
+      peak = Math.max(peak, pacer.load().active);
+      await Promise.resolve();
+    };
+    const g = gate();
+    const first = pacer.run(async () => {
+      await g.p;
+      await track();
+    });
+    const second = pacer.run(track);
+    await vi.waitFor(() => expect(pacer.load().waiting).toBe(1));
+    g.open();
+    await first;
+    // In the hand-off window a tryRun must not squeeze in.
+    expect(pacer.tryRun(async () => "squeeze")).toBeNull();
+    await second;
+    expect(peak).toBe(1);
   });
 });

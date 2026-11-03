@@ -27,6 +27,12 @@ export interface BackgroundPacer {
   run<T>(fn: () => Promise<T>): Promise<T>;
   /** Calls in flight and calls queued for a slot, for callers that would rather skip than wait. */
   load(): PacerLoad;
+  /**
+   * Run fn only if a slot is free right now, nobody is queued and the launch
+   * spacing allows it; otherwise null, without queueing. For work that must
+   * never wait behind (or delay) the calls that do queue.
+   */
+  tryRun<T>(fn: () => Promise<T>): Promise<T> | null;
 }
 
 export function createBackgroundPacer(options: {
@@ -42,11 +48,14 @@ export function createBackgroundPacer(options: {
 
   async function acquire(): Promise<void> {
     // No await between the check and the increment, so the slot claim is
-    // atomic within the event loop.
-    if (active >= maxConcurrent) {
+    // atomic within the event loop. A waiter is handed the releasing call's
+    // slot directly (release() does not decrement), so `active` never dips
+    // below the real count and no other caller can take the slot in between.
+    if (active >= maxConcurrent || waiters.length > 0) {
       await new Promise<void>((resolve) => waiters.push(resolve));
+    } else {
+      active++;
     }
-    active++;
     const now = Date.now();
     const launchAt = Math.max(now, nextLaunchAt);
     nextLaunchAt = launchAt + minIntervalMs;
@@ -54,19 +63,31 @@ export function createBackgroundPacer(options: {
   }
 
   function release(): void {
-    active--;
-    waiters.shift()?.();
+    const next = waiters.shift();
+    if (next) next();
+    else active--;
+  }
+
+  async function runHeld<T>(fn: () => Promise<T>): Promise<T> {
+    try {
+      return await fn();
+    } finally {
+      release();
+    }
   }
 
   return {
     load: () => ({ active, waiting: waiters.length, maxConcurrent }),
     async run<T>(fn: () => Promise<T>): Promise<T> {
       await acquire();
-      try {
-        return await fn();
-      } finally {
-        release();
-      }
+      return runHeld(fn);
+    },
+    tryRun<T>(fn: () => Promise<T>): Promise<T> | null {
+      const now = Date.now();
+      if (active >= maxConcurrent || waiters.length > 0 || now < nextLaunchAt) return null;
+      active++;
+      nextLaunchAt = now + minIntervalMs;
+      return runHeld(fn);
     },
   };
 }
