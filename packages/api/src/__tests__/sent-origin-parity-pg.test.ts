@@ -21,6 +21,7 @@ const url = vi.hoisted(() => {
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
 import { prisma } from "../db.js";
+import { clampSentField } from "../mail/sent-fields.js";
 import { classifySentRows } from "../mail/sent-origin-classifier.js";
 
 const describePg = url ? describe : describe.skip;
@@ -131,8 +132,9 @@ class Copy {
         data: {
           userId: r.userId,
           gmailId: r.gmailId,
-          to: r.to,
-          subject: r.subject,
+          // As every writer stores them (recordSentMessage).
+          to: clampSentField(r.to),
+          subject: clampSentField(r.subject),
           sentAt: r.sentAt,
           inbox: r.inbox,
           origin: r.origin,
@@ -252,6 +254,23 @@ async function seed(copy: Copy): Promise<void> {
     subject: "unsub-ZzYyXx9876543210AbC",
     sentAt: T,
   });
+  // Subjects over 1,024 characters: stored truncated, compared as stored by
+  // the classifier; the SQL compares them with the untruncated source.
+  const i = await copy.user();
+  const longSource = "S".repeat(1_100);
+  await copy.inbound(i, { gmailId: "g-i", from: "Ivy <ivy@x.example>", subject: longSource });
+  await copy.claim(i, { gmailId: "g-i", to: "ivy@x.example" });
+  copy.sent("longAutoReply", i, {
+    to: "ivy@x.example",
+    subject: `Re: ${longSource}`,
+    sentAt: at(1),
+  });
+  const longMailto = "b".repeat(1_100);
+  await copy.inbound(i, {
+    mailto: `mailto:longer@list.example?subject=${longMailto}`,
+    receivedAt: at(-3600),
+  });
+  copy.sent("longMailtoSubject", i, { to: "longer@list.example", subject: longMailto, sentAt: T });
 }
 
 /** The migration's statements, run the way migrate deploy runs them: one transaction. */
@@ -307,8 +326,23 @@ describePg("sent provenance: the classifier agrees with the backfill SQL on real
     await prisma.user.deleteMany({ where: { id: { in: created } } });
   });
 
+  // The one documented difference besides the same-instant tie-break: a
+  // subject over 1,024 characters is stored truncated, and the classifier
+  // compares it with the source or mailto subject truncated the same way.
+  // The SQL compares it with the untruncated text, so it never matches.
+  const OVER_LONG = ["longAutoReply", "longMailtoSubject"];
+  const without = (labels: Map<string, string | null>) =>
+    Object.fromEntries([...labels].filter(([key]) => !OVER_LONG.includes(key)));
+
   it("labels every fixture the same way", () => {
-    expect(Object.fromEntries(tsLabels)).toEqual(Object.fromEntries(sqlLabels));
+    expect(without(tsLabels)).toEqual(without(sqlLabels));
+  });
+
+  it("over-1,024-character subjects: the classifier still matches, the SQL cannot", () => {
+    expect(OVER_LONG.map((key) => [key, sqlLabels.get(key), tsLabels.get(key)])).toEqual([
+      ["longAutoReply", null, "auto_reply"],
+      ["longMailtoSubject", null, "unsubscribe"],
+    ]);
   });
 
   it("is not vacuous: the fixtures exercise every label and null", () => {
@@ -334,6 +368,34 @@ describePg("sent provenance: the classifier agrees with the backfill SQL on real
       trimmedSubject: "unsubscribe",
       nulEscapeKept: "unsubscribe",
       tokenToSender: null,
+      longAutoReply: null,
+      longMailtoSubject: null,
     });
+  });
+});
+
+describePg("a header Postgres or Prisma would reject is stored, not lost (LOW-3)", () => {
+  afterAll(async () => {
+    await prisma.user.deleteMany({ where: { id: { in: created } } });
+  });
+
+  it("drops NUL and lone surrogates before the write", async () => {
+    const { recordSentMessage } = await import("../mail/sent-messages.js");
+    const user = await prisma.user.create({ data: { email: `poison-${randomUUID()}@test.local` } });
+    created.push(user.id);
+    const ok = await recordSentMessage(user.id, {
+      gmailId: "poison",
+      threadId: null,
+      to: "a\u0000b@x.example",
+      subject: "x\uD800y\uDC00z",
+      sentAt: T,
+      inbox: "primary",
+    });
+    expect(ok).toBe(true);
+    const row = await prisma.sentMessage.findUniqueOrThrow({
+      where: { userId_gmailId: { userId: user.id, gmailId: "poison" } },
+      select: { to: true, subject: true },
+    });
+    expect(row).toEqual({ to: "ab@x.example", subject: "xyz" });
   });
 });

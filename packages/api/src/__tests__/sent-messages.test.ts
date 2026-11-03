@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({
   upserts: [] as unknown[],
   upsertFails: false,
+  upsertError: null as unknown,
   upsertConflictsLeft: 0,
   sentRows: [] as unknown[],
   replyRows: [] as unknown[],
@@ -24,6 +25,7 @@ vi.mock("../db.js", () => ({
   prisma: {
     sentMessage: {
       upsert: vi.fn(async (args: unknown) => {
+        if (state.upsertError) throw state.upsertError;
         if (state.upsertFails) throw new Error("db down");
         if (state.upsertConflictsLeft > 0) {
           state.upsertConflictsLeft -= 1;
@@ -175,6 +177,7 @@ describe("recordSentMessage / syncSentMessages", () => {
     state.upserts.length = 0;
     state.captured.length = 0;
     state.upsertFails = false;
+    state.upsertError = null;
     state.upsertConflictsLeft = 0;
     state.listCalls = 0;
     state.sentRows = [];
@@ -378,6 +381,16 @@ describe("recordSentMessage / syncSentMessages", () => {
     expect(args.create.subject).toHaveLength(1_024);
     expect(args.update.subject).toHaveLength(1_024);
     expect(args.create.to).toBe("a".repeat(1_023));
+  });
+
+  it("a write the data-wipe fence rejected is logged, never sent to Sentry (LOW-1)", async () => {
+    const { DataWipeFenceError } = await import("../privacy/data-wipe-fence.js");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    state.upsertError = new DataWipeFenceError();
+    expect(await recordSentMessage("u1", sent())).toBe(false);
+    expect(state.captured).toEqual([]);
+    expect(warn.mock.calls.flat().join(" ")).toContain("DataWipeFenceError");
+    warn.mockRestore();
   });
 
   it("record reports whether the row was written", async () => {

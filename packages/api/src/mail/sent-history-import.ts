@@ -17,10 +17,12 @@
  *     time (Gmail allows 250 quota units per user per second; a fetch costs 5),
  *     a page cap and a RUN_DEADLINE_MS deadline per run, one run per user at a
  *     time and MAX_CONCURRENT_IMPORTS users at once;
- *   - failures: a failed fetch pauses that inbox (not the user) for
- *     FAILURE_PAUSE_MS. A message whose fetch failed MAX_FETCH_ATTEMPTS times
- *     (or that has no usable date) is skipped from then on and the inbox can
- *     still finish without it; the count is logged, never the id;
+ *   - failures: a transient one (429, 5xx, timeout, auth, a failing listing)
+ *     pauses that inbox, not the user, for FAILURE_PAUSE_MS and counts
+ *     nothing. A message that fails for good (another 4xx, no usable date, a
+ *     write Prisma rejects) MAX_FETCH_ATTEMPTS times is skipped from then on,
+ *     and the inbox can still finish without it; the count is logged, never
+ *     the id. When no inbox can run, the user waits FAILURE_PAUSE_MS;
  *   - finished once: when everything listed is recorded, the inbox's grant row
  *     gets `sentHistoryImportedAt`. A reconnect or re-link resets it (it may
  *     be another Google account), so that account is imported again;
@@ -121,6 +123,14 @@ function pruneExpired(now: number): void {
 
 const inboxKey = (userId: string, inbox: string) => `${userId}:${inbox}`;
 
+function attemptsOf(key: string, gmailId: string): number {
+  return failedAttempts.get(`${key}:${gmailId}`) ?? 0;
+}
+
+function countFailedAttempt(key: string, gmailId: string): void {
+  failedAttempts.set(`${key}:${gmailId}`, attemptsOf(key, gmailId) + 1);
+}
+
 /** Unfinished inboxes, primary first; "primary" or a LinkedInboxAccount id. */
 async function pendingInboxes(userId: string): Promise<string[]> {
   const token = await prisma.userToken.findFirst({
@@ -136,6 +146,10 @@ async function pendingInboxes(userId: string): Promise<string[]> {
   return [...primary, ...linked.map((l) => l.id)];
 }
 
+function clientFor(userId: string, inbox: string): Promise<OAuth2 | null> {
+  return inbox === PRIMARY ? getAuthedClient(userId) : getAuthedInboxClient(userId, inbox);
+}
+
 async function importNextBatch(userId: string, now: number, deadline: number): Promise<number> {
   const inboxes = await pendingInboxes(userId);
   if (inboxes.length === 0) {
@@ -143,14 +157,22 @@ async function importNextBatch(userId: string, now: number, deadline: number): P
     return 0;
   }
   for (const inbox of inboxes) {
-    // A paused or unusable inbox must not stall the ones after it.
-    if (pausedUntil.has(inboxKey(userId, inbox))) continue;
-    const auth = await (inbox === PRIMARY
-      ? getAuthedClient(userId)
-      : getAuthedInboxClient(userId, inbox));
-    if (!auth) continue;
-    return importInboxBatch(userId, inbox, auth, now, deadline);
+    // A paused, failing or unusable inbox must not stall the ones after it.
+    const key = inboxKey(userId, inbox);
+    if (pausedUntil.has(key)) continue;
+    try {
+      const auth = await clientFor(userId, inbox);
+      if (!auth) continue;
+      return await importInboxBatch(userId, inbox, auth, now, deadline);
+    } catch (err) {
+      // A listing or token failure (a dead grant's invalid_grant) is this inbox's.
+      pausedUntil.set(key, now + FAILURE_PAUSE_MS);
+      reportSentError("sent-history.inbox", err, userId);
+    }
   }
+  // Nothing could run: every inbox is paused, failing or without a usable
+  // token. Wait before looking them up (and logging about them) again.
+  pausedUntil.set(userId, now + FAILURE_PAUSE_MS);
   return 0;
 }
 
@@ -162,24 +184,25 @@ async function importInboxBatch(
   deadline: number,
 ): Promise<number> {
   const key = inboxKey(userId, inbox);
-  const attemptsOf = (gmailId: string) => failedAttempts.get(`${key}:${gmailId}`) ?? 0;
   const gmail = google.gmail({ version: "v1", auth });
   const listing = await listMissing(gmail, userId, {
     now,
     deadline,
-    isExhausted: (gmailId) => attemptsOf(gmailId) >= MAX_FETCH_ATTEMPTS,
+    isExhausted: (gmailId) => attemptsOf(key, gmailId) >= MAX_FETCH_ATTEMPTS,
   });
   if (listing.exhausted > 0) {
     console.warn(
-      `[SENT-HISTORY] skipping ${listing.exhausted} message(s) after ${MAX_FETCH_ATTEMPTS} failed fetches`,
+      `[SENT-HISTORY] skipping ${listing.exhausted} message(s) after ${MAX_FETCH_ATTEMPTS} failed attempts`,
     );
   }
   const fetched = await fetchHeaders(gmail, inbox, listing.missing, deadline);
-  for (const id of fetched.failedIds) failedAttempts.set(`${key}:${id}`, attemptsOf(id) + 1);
-  if (fetched.error) {
+  for (const id of fetched.countedIds) countFailedAttempt(key, id);
+  if (fetched.transientError) {
+    // Gmail or the grant, not the message: wait, and count nothing.
     pausedUntil.set(key, now + FAILURE_PAUSE_MS);
-    reportSentError("sent-history.fetch", fetched.error, userId);
+    reportSentError("sent-history.fetch", fetched.transientError, userId);
   }
+  if (fetched.lastingError) reportSentError("sent-history.fetch", fetched.lastingError, userId);
   const written = await recordLabelled(userId, key, fetched.rows, now);
   if (written === null) return 0;
   if (listing.complete && !fetched.cut && written === fetched.rows.length) {
@@ -222,6 +245,9 @@ async function recordLabelled(
     if (await recordSentMessage(userId, inferredOrigin ? { ...row, inferredOrigin } : row)) {
       written += 1;
       failedAttempts.delete(`${key}:${row.gmailId}`);
+    } else {
+      // A write that keeps failing (a row Prisma rejects) ends like a fetch that does.
+      countFailedAttempt(key, row.gmailId);
     }
   }
   return written;

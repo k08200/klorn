@@ -99,17 +99,38 @@ export async function listMissing(
 type FetchResult =
   | { kind: "row"; row: HistoryRow }
   | { kind: "gone" }
-  | { kind: "failed"; id: string; error: unknown }
+  | { kind: "failed"; id: string; error: unknown; lasting: boolean }
   | { kind: "undated"; id: string }
   | { kind: "skipped" };
+
+/** 4xx that say "try later" or "this grant", not "this message": never counted. */
+const TRANSIENT_4XX = new Set([401, 403, 408, 429]);
+
+function httpStatus(err: unknown): number | undefined {
+  const e = err as { response?: { status?: unknown }; code?: unknown } | null;
+  const status = e?.response?.status ?? e?.code;
+  return typeof status === "number" ? status : undefined;
+}
+
+/**
+ * A failure that will repeat for this message: a 4xx other than auth, timeout
+ * and rate limit (404/410 never get here). 5xx, 429, network errors and
+ * timeouts are about Gmail or the grant, not the message.
+ */
+export function isLastingFetchFailure(err: unknown): boolean {
+  const status = httpStatus(err);
+  return status !== undefined && status >= 400 && status < 500 && !TRANSIENT_4XX.has(status);
+}
 
 export interface FetchOutcome {
   /** Rows before the first failure, undated message or unfetched id, in batch order. */
   rows: HistoryRow[];
-  /** Ids whose fetch failed or that had no usable date: one more failed attempt each. */
-  failedIds: string[];
-  /** The first fetch error (not a 404), if any: the inbox pauses. */
-  error: unknown;
+  /** Ids that failed for good or had no usable date: one more failed attempt each. */
+  countedIds: string[];
+  /** The first transient fetch error, if any: the inbox pauses. */
+  transientError: unknown;
+  /** The first lasting fetch error, if any: reported, counted, no pause. */
+  lastingError: unknown;
   /** Something in the batch was not imported: the inbox is not finished. */
   cut: boolean;
 }
@@ -152,16 +173,20 @@ export async function fetchHeaders(
       } catch (error) {
         if (isGoogleNotFoundError(error)) return { kind: "gone" };
         stop = true;
-        return { kind: "failed", id, error };
+        return { kind: "failed", id, error, lasting: isLastingFetchFailure(error) };
       }
     }),
   );
   const cutAt = results.findIndex((r) => r.kind !== "row" && r.kind !== "gone");
   const kept = cutAt === -1 ? results : results.slice(0, cutAt);
+  const failures = results.flatMap((r) => (r.kind === "failed" ? [r] : []));
   return {
     rows: kept.flatMap((r) => (r.kind === "row" ? [r.row] : [])),
-    failedIds: results.flatMap((r) => (r.kind === "failed" || r.kind === "undated" ? [r.id] : [])),
-    error: results.find((r) => r.kind === "failed")?.error ?? null,
+    countedIds: results.flatMap((r) =>
+      r.kind === "undated" || (r.kind === "failed" && r.lasting) ? [r.id] : [],
+    ),
+    transientError: failures.find((f) => !f.lasting)?.error ?? null,
+    lastingError: failures.find((f) => f.lasting)?.error ?? null,
     cut: cutAt !== -1,
   };
 }

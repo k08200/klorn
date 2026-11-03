@@ -24,6 +24,7 @@ const state = vi.hoisted(() => ({
   getCalls: [] as { account: string; params: Record<string, unknown>; options: unknown }[],
   getFailures: new Map<string, unknown>(),
   getDelayMs: 0,
+  listFailures: new Map<string, unknown>(),
   pageSize: 0,
   recordFails: new Set<string>(),
   inFlight: 0,
@@ -47,6 +48,8 @@ vi.mock("googleapis", () => ({
         messages: {
           list: vi.fn(async (params: Record<string, unknown>, options: unknown) => {
             state.listCalls.push({ account: auth.key, params, options });
+            const listFailure = state.listFailures.get(auth.key);
+            if (listFailure) throw listFailure;
             const after = Number(/after:(\d+)/.exec(String(params.q))?.[1] ?? 0);
             const all = (state.mailboxes[auth.key] ?? []).filter(
               (m) => m.internalDate / 1000 > after,
@@ -189,6 +192,7 @@ beforeEach(() => {
   state.getCalls = [];
   state.getFailures = new Map();
   state.getDelayMs = 0;
+  state.listFailures = new Map();
   state.pageSize = 0;
   state.recordFails = new Set();
   state.inFlight = 0;
@@ -493,10 +497,10 @@ describe("review fixes (#1600)", () => {
     expect(state.captured).toHaveLength(1);
   });
 
-  it("M4: a message that fails 3 times is skipped (count logged, not the id) and the inbox can finish", async () => {
+  it("M4: a message whose fetch fails 3 times for good (a 4xx) is skipped (count logged, not the id) and the inbox can finish", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     state.mailboxes = { primary: mailbox(1) };
-    state.getFailures.set("m0", Object.assign(new Error("boom"), { response: { status: 500 } }));
+    state.getFailures.set("m0", Object.assign(new Error("bad"), { response: { status: 400 } }));
     let t = NOW;
     for (let attempt = 0; attempt < 3; attempt++) {
       await importSentHistory("u1", t);
@@ -629,5 +633,64 @@ describe("review fixes (#1600)", () => {
       const update = upsert.slice(from, upsert.indexOf(after, from));
       expect(update).toContain("sentHistoryImportedAt: null,");
     }
+  });
+});
+
+describe("re-verification fixes (#1600)", () => {
+  it("M3: a list that throws (dead token) pauses only that inbox; the next inbox imports in the same run", async () => {
+    state.linked = [{ id: "L1", sentHistoryImportedAt: null }];
+    state.mailboxes = { primary: mailbox(2), L1: mailbox(2, "l") };
+    state.listFailures.set("primary", Object.assign(new Error("invalid_grant"), { code: 400 }));
+    expect(await importSentHistory("u1", NOW)).toBe(2);
+    expect(state.listCalls.map((c) => c.account)).toEqual(["primary", "L1"]);
+    expect(state.markerWrites.map((w) => w.table)).toEqual(["linkedInboxAccount"]);
+    expect(state.captured).toHaveLength(1);
+    // The primary inbox waits its pause out; it never blocks the user.
+    state.listCalls = [];
+    state.listFailures.clear();
+    await importSentHistory("u1", NOW + 31 * 60_000);
+    expect(state.listCalls.map((c) => c.account)).toEqual(["primary"]);
+  });
+
+  it("LOW-4: transient failures (429, 5xx, timeouts, auth) pause the inbox and never count toward the skip", async () => {
+    state.mailboxes = { primary: mailbox(1) };
+    let t = NOW;
+    for (const failure of [
+      { response: { status: 500 } },
+      { response: { status: 429 } },
+      { response: { status: 401 } },
+      { code: "ETIMEDOUT" },
+    ]) {
+      state.getFailures.set("m0", Object.assign(new Error("transient"), failure));
+      await importSentHistory("u1", t);
+      t += 31 * 60_000;
+    }
+    expect(state.getCalls).toHaveLength(4);
+    expect(state.markerWrites).toEqual([]);
+    state.getFailures.clear();
+    expect(await importSentHistory("u1", t)).toBe(1);
+    expect(state.markerWrites).toHaveLength(1);
+  });
+
+  it("LOW-3: a write that keeps failing counts as a failed attempt, so it cannot block the inbox forever", async () => {
+    state.mailboxes = { primary: mailbox(1) };
+    state.recordFails = new Set(["m0"]);
+    for (let run = 0; run < 3; run++) await importSentHistory("u1", NOW + run * 60_000);
+    expect(state.getCalls).toHaveLength(3);
+    expect(state.markerWrites).toEqual([]);
+    await importSentHistory("u1", NOW + 3 * 60_000);
+    expect(state.getCalls).toHaveLength(3);
+    expect(state.markerWrites).toHaveLength(1);
+  });
+
+  it("LOW-4: when no inbox has a usable token, the next tick neither queries nor logs again", async () => {
+    const { prisma } = await import("../db.js");
+    state.primaryClient = false;
+    expect(await importSentHistory("u1", NOW)).toBe(0);
+    expect(getAuthedClient).toHaveBeenCalledTimes(1);
+    vi.mocked(prisma.userToken.findFirst).mockClear();
+    await importSentHistory("u1", NOW + 60_000);
+    expect(prisma.userToken.findFirst).not.toHaveBeenCalled();
+    expect(getAuthedClient).toHaveBeenCalledTimes(1);
   });
 });

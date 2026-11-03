@@ -25,13 +25,18 @@
  *
  * Mailto targets are derived by provenanceMailtoTarget, the SQL's own
  * derivation, not by parseMailtoTarget (whose send-side caps and decoding
- * would leave provable rows null). The one difference from the SQL: among
- * rows with the same sentAt, the SQL breaks the tie by random row id; here a
- * row already recorded counts as earlier, then gmailId order.
+ * would leave provable rows null). Two differences from the SQL:
+ *   - among rows with the same sentAt, the SQL breaks the tie by random row
+ *     id; here a row already recorded counts as earlier, then gmailId order;
+ *   - both sides of every subject comparison are read as stored
+ *     (clampSentField), so a subject over 1,024 characters still matches its
+ *     source or mailto subject; the SQL compares the stored, truncated row
+ *     with the untruncated text, so it never matches.
  *
  * Inputs are attacker-influenced (an auto-reply echoes a stranger's subject),
  * so `to` and `subject` are read as stored (SENT_FIELD_MAX) and every parse is
- * linear. Callers label rows on create only (SentMessageInput.inferredOrigin),
+ * linear; mailto targets are indexed once per batch, so a row costs O(1)
+ * lookups however many targets a sender crafted. Callers label rows on create only (SentMessageInput.inferredOrigin),
  * so a label recorded at send time is never overwritten.
  */
 
@@ -75,6 +80,21 @@ export interface UnsubscribeTarget {
   firstReceivedAt: Date;
 }
 
+/**
+ * Mailto targets indexed once per batch, so each row costs a couple of Map
+ * lookups however many targets a sender crafted. Keys are (addr, inbox,
+ * subject) and (addr, inbox, shape); each keeps the earliest arrival, which
+ * is all "received before the send" needs. Subjects are read as stored
+ * (clampSentField), the same as the row they are compared with.
+ */
+export interface UnsubscribeIndex {
+  bySubject: ReadonlyMap<string, Date>;
+  /** Token targets only (TOKEN_MIN_ALNUM+ letters/digits), by subject shape. */
+  byTokenShape: ReadonlyMap<string, Date>;
+  /** Addresses of token targets: the sender check runs only for these. */
+  tokenAddrs: ReadonlySet<string>;
+}
+
 /** What the rules read, loaded per batch by loadSentOriginEvidence. */
 export interface SentOriginEvidence {
   /** `result` of the user's executed send_email approvals. */
@@ -85,8 +105,8 @@ export interface SentOriginEvidence {
   sourceSubjects: ReadonlyMap<string, string>;
   /** Recorded rows inside the claims' windows, plus the batch itself. */
   sentNeighbours: readonly SentNeighbour[];
-  /** List-Unsubscribe mailto targets of the user's received mail, parsed once. */
-  unsubscribeTargets: readonly UnsubscribeTarget[];
+  /** List-Unsubscribe mailto targets of the user's received mail, indexed once. */
+  unsubscribe: UnsubscribeIndex;
   /** Target addresses that also appear as a sender of the user's mail. */
   senderAddresses: ReadonlySet<string>;
 }
@@ -212,7 +232,9 @@ function claimMatches(
   if (!isClaim(claim) || !inClaimWindow(row.sentAt, claim)) return false;
   const sourceId = claimSourceGmailId(claim.dedupeKey, claim.message);
   const sourceSubject = sourceId === null ? undefined : ev.sourceSubjects.get(sourceId);
-  if (sourceSubject === undefined || row.subject !== `Re: ${sourceSubject}`) return false;
+  if (sourceSubject === undefined) return false;
+  // Read as stored on both sides: the row's subject is clamped at write.
+  if (row.subject !== clampSentField(`Re: ${sourceSubject}`)) return false;
   return claimRecipient(claim.message) === recipientKey(row.to);
 }
 
@@ -222,10 +244,9 @@ function isEarlierInWindow(
   row: ClassifiableSentRow,
   claim: ClaimNotification,
 ): boolean {
-  if (other.gmailId === row.gmailId || other.subject !== row.subject) return false;
-  if (recipientKey(other.to) !== recipientKey(row.to) || !inClaimWindow(other.sentAt, claim)) {
-    return false;
-  }
+  if (other.gmailId === row.gmailId || clampSentField(other.subject) !== row.subject) return false;
+  if (!inClaimWindow(other.sentAt, claim)) return false;
+  if (recipientKey(clampSentField(other.to)) !== recipientKey(row.to)) return false;
   const a = other.sentAt.getTime();
   const b = row.sentAt.getTime();
   return a < b || (a === b && (other.recorded || other.gmailId < row.gmailId));
@@ -247,19 +268,40 @@ function subjectShape(text: string): string {
   return text.replace(ALNUM_RE, "x");
 }
 
+const targetKey = (addr: string, inbox: string, text: string) =>
+  JSON.stringify([addr, inbox, text]);
+
+function keepEarliest(map: Map<string, Date>, key: string, at: Date): void {
+  const known = map.get(key);
+  if (!known || at < known) map.set(key, at);
+}
+
+/** Index the targets once: O(targets × SENT_FIELD_MAX), then O(1) per row. */
+export function indexUnsubscribeTargets(targets: readonly UnsubscribeTarget[]): UnsubscribeIndex {
+  const bySubject = new Map<string, Date>();
+  const byTokenShape = new Map<string, Date>();
+  const tokenAddrs = new Set<string>();
+  for (const target of targets) {
+    if (target.addr === "") continue;
+    const subject = clampSentField(target.subject);
+    keepEarliest(bySubject, targetKey(target.addr, target.inbox, subject), target.firstReceivedAt);
+    if (alnumCount(subject) < TOKEN_MIN_ALNUM) continue;
+    tokenAddrs.add(target.addr);
+    const shapeKey = targetKey(target.addr, target.inbox, subjectShape(subject));
+    keepEarliest(byTokenShape, shapeKey, target.firstReceivedAt);
+  }
+  return { bySubject, byTokenShape, tokenAddrs };
+}
+
 function isUnsubscribe(row: ClassifiableSentRow, ev: SentOriginEvidence): boolean {
   const recipient = recipientKey(row.to);
   if (recipient === "") return false;
-  return ev.unsubscribeTargets.some((target) => {
-    if (target.addr !== recipient || target.inbox !== row.inbox) return false;
-    if (row.sentAt < target.firstReceivedAt) return false;
-    if (row.subject === target.subject) return true;
-    return (
-      alnumCount(target.subject) >= TOKEN_MIN_ALNUM &&
-      subjectShape(row.subject) === subjectShape(target.subject) &&
-      !ev.senderAddresses.has(target.addr)
-    );
-  });
+  const { bySubject, byTokenShape } = ev.unsubscribe;
+  const exact = bySubject.get(targetKey(recipient, row.inbox, row.subject));
+  if (exact && row.sentAt >= exact) return true;
+  if (ev.senderAddresses.has(recipient)) return false;
+  const token = byTokenShape.get(targetKey(recipient, row.inbox, subjectShape(row.subject)));
+  return token !== undefined && row.sentAt >= token;
 }
 
 /** `to` and `subject` as they are stored: what the SQL would read from the table. */
@@ -378,21 +420,23 @@ async function loadClaimEvidence(
   };
 }
 
-type UnsubscribeEvidence = Pick<SentOriginEvidence, "unsubscribeTargets" | "senderAddresses">;
+type UnsubscribeEvidence = Pick<SentOriginEvidence, "unsubscribe" | "senderAddresses">;
 
 /**
  * Mailto targets that can match the batch, parsed once each: the database
  * keeps only stored targets whose raw text contains one of the batch's
  * recipients (the SQL's addr is never decoded, so it is always a substring),
  * one row per (target, inbox) with its first arrival, since "received before
- * the send" only needs the earliest.
+ * the send" only needs the earliest. Then indexed once (indexUnsubscribeTargets).
  */
 async function loadUnsubscribeEvidence(
   userId: string,
   rows: readonly ClassifiableSentRow[],
 ): Promise<UnsubscribeEvidence> {
   const recipients = [...new Set(rows.map((r) => recipientKey(r.to)))].filter(Boolean);
-  if (recipients.length === 0) return { unsubscribeTargets: [], senderAddresses: new Set() };
+  if (recipients.length === 0) {
+    return { unsubscribe: indexUnsubscribeTargets([]), senderAddresses: new Set() };
+  }
   const groups = await prisma.emailMessage.groupBy({
     by: ["listUnsubscribeMailto", "linkedInboxAccountId"],
     where: {
@@ -405,19 +449,16 @@ async function loadUnsubscribeEvidence(
     _min: { receivedAt: true },
   });
   const wanted = new Set(recipients);
-  const unsubscribeTargets = groups.flatMap((g) => {
+  const targets = groups.flatMap((g) => {
     if (!g.listUnsubscribeMailto || !g._min.receivedAt) return [];
     const target = provenanceMailtoTarget(g.listUnsubscribeMailto);
     if (!wanted.has(target.addr)) return [];
     const inbox = g.linkedInboxAccountId ?? "primary";
     return [{ ...target, inbox, firstReceivedAt: g._min.receivedAt }];
   });
-  const tokenAddrs = [
-    ...new Set(
-      unsubscribeTargets.filter((t) => alnumCount(t.subject) >= TOKEN_MIN_ALNUM).map((t) => t.addr),
-    ),
-  ];
-  return { unsubscribeTargets, senderAddresses: await knownSenders(userId, tokenAddrs) };
+  const unsubscribe = indexUnsubscribeTargets(targets);
+  const senderAddresses = await knownSenders(userId, [...unsubscribe.tokenAddrs]);
+  return { unsubscribe, senderAddresses };
 }
 
 /**

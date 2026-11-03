@@ -65,24 +65,31 @@ import {
   classifySentOrigin,
   classifySentRows,
   extractApprovedMessageId,
+  indexUnsubscribeTargets,
   provenanceMailtoTarget,
   type SentOriginEvidence,
   sqlBtrim,
+  type UnsubscribeTarget,
 } from "../mail/sent-origin-classifier.js";
 import { expectLinear, repeatTo } from "./helpers/linear-timing.js";
 
 const CLAIM_AT = new Date("2026-05-10T09:00:00.000Z");
 const minutes = (n: number) => new Date(CLAIM_AT.getTime() + n * 60_000);
 
-function evidence(over: Partial<SentOriginEvidence> = {}): SentOriginEvidence {
+/** Evidence as the loader builds it; targets go through the same index. */
+function evidence(
+  over: Partial<SentOriginEvidence> & { unsubscribeTargets?: UnsubscribeTarget[] } = {},
+): SentOriginEvidence {
+  const { unsubscribeTargets, ...rest } = over;
   return {
     approvalResults: [],
     claims: [],
     sourceSubjects: new Map(),
     sentNeighbours: [],
-    unsubscribeTargets: [],
+    unsubscribe: indexUnsubscribeTargets([]),
     senderAddresses: new Set(),
-    ...over,
+    ...rest,
+    ...(unsubscribeTargets ? { unsubscribe: indexUnsubscribeTargets(unsubscribeTargets) } : {}),
   };
 }
 
@@ -471,6 +478,75 @@ describe("classifySentOrigin: unsubscribe", () => {
       (n) => repeatTo(n, " ", "a", "b@list.example"),
       (to) => classifySentOrigin(row({ to, subject: "unsubscribe" }), ev1),
     );
+  });
+});
+
+describe("unsubscribe targets are indexed once (MEDIUM-1)", () => {
+  const target = (subject: string, over: Partial<UnsubscribeTarget> = {}): UnsubscribeTarget => ({
+    addr: "u@lists.example",
+    subject,
+    inbox: "primary",
+    firstReceivedAt: minutes(-60),
+    ...over,
+  });
+
+  it("keeps the earliest arrival of duplicate targets", () => {
+    const r = row({ to: "u@lists.example", subject: "remove", sentAt: minutes(0) });
+    const ev = evidence({
+      unsubscribeTargets: [
+        target("remove", { firstReceivedAt: minutes(30) }),
+        target("remove", { firstReceivedAt: minutes(-30) }),
+      ],
+    });
+    expect(classifySentOrigin(r, ev)).toBe("unsubscribe");
+  });
+
+  it("costs each row O(1) lookups: linear in the number of crafted targets", () => {
+    // Every target shares the rows' address and carries a 2,000-character
+    // token subject of a different shape: the worst case for a per-pair rule.
+    const rows = Array.from({ length: 100 }, (_, i) =>
+      row({ gmailId: `r${i}`, to: "u@lists.example", subject: `x-${"b".repeat(1_990)}${i}` }),
+    );
+    expectLinear(
+      (bytes) => "t".repeat(Math.floor(bytes / 1_000)),
+      (marker) => {
+        const targets = Array.from({ length: marker.length }, (_, i) =>
+          target(`${"a".repeat(1_990)}${i}`),
+        );
+        const ev = evidence({ unsubscribeTargets: targets });
+        for (const r of rows) classifySentOrigin(r, ev);
+      },
+    );
+  });
+});
+
+describe("both sides of every subject comparison are read as stored (LOW-2)", () => {
+  const long = "S".repeat(1_100);
+
+  it("an auto-reply to a source subject over 1,021 characters still matches", () => {
+    const ev = evidence({
+      claims: [settledClaim],
+      sourceSubjects: new Map([["src1", long]]),
+    });
+    expect(classifySentOrigin(row({ subject: `Re: ${long}` }), ev)).toBe("auto_reply");
+  });
+
+  it("an earlier stored row with an over-long subject still counts as earlier", () => {
+    const ev = {
+      ...evidence({ claims: [settledClaim], sourceSubjects: new Map([["src1", long]]) }),
+      sentNeighbours: [neighbour({ subject: `Re: ${long}` })],
+    };
+    expect(classifySentOrigin(row({ subject: `Re: ${long}` }), ev)).toBeNull();
+  });
+
+  it("a mailto subject over 1,024 characters still matches the stored subject", () => {
+    const subject = "b".repeat(1_100);
+    const ev = evidence({
+      unsubscribeTargets: [
+        { addr: "long@list.example", subject, inbox: "primary", firstReceivedAt: minutes(-60) },
+      ],
+    });
+    expect(classifySentOrigin(row({ to: "long@list.example", subject }), ev)).toBe("unsubscribe");
   });
 });
 
