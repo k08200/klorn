@@ -230,7 +230,8 @@ describe("one batch", () => {
       q: `in:sent after:${WINDOW_START_SECONDS}`,
       maxResults: 500,
     });
-    expect(getIds()).toEqual(["m1", "m2"]);
+    // Oldest first.
+    expect(getIds()).toEqual(["m2", "m1"]);
     for (const call of state.getCalls) {
       expect(call.params).toMatchObject({
         userId: "me",
@@ -267,22 +268,25 @@ describe("one batch", () => {
     expect(state.classifyCalls).toHaveLength(1);
     expect(state.classifyCalls[0]).toEqual([
       {
-        gmailId: "m0",
-        to: "person0@x.com",
-        subject: "Subject 0",
-        sentAt: new Date(NOW - 3_600_000),
+        gmailId: "m2",
+        to: "person2@x.com",
+        subject: "Subject 2",
+        sentAt: new Date(NOW - 10_800_000),
+        inbox: "primary",
       },
       {
         gmailId: "m1",
         to: "person1@x.com",
         subject: "Subject 1",
         sentAt: new Date(NOW - 7_200_000),
+        inbox: "primary",
       },
       {
-        gmailId: "m2",
-        to: "person2@x.com",
-        subject: "Subject 2",
-        sentAt: new Date(NOW - 10_800_000),
+        gmailId: "m0",
+        to: "person0@x.com",
+        subject: "Subject 0",
+        sentAt: new Date(NOW - 3_600_000),
+        inbox: "primary",
       },
     ]);
     expect(recordSentMessage).toHaveBeenCalledTimes(3);
@@ -293,27 +297,22 @@ describe("one batch", () => {
 });
 
 describe("paging and resume", () => {
-  it("does at most one batch per run and resumes from the database, with no cursor", async () => {
+  it("does at most one batch per run, oldest first, and resumes from the database, with no cursor", async () => {
     state.mailboxes = { primary: mailbox(250) };
+    const oldestFirst = mailbox(250)
+      .map((m) => m.id)
+      .reverse();
     expect(await importSentHistory("u1", NOW)).toBe(SENT_HISTORY_BATCH);
-    expect(getIds()).toEqual(mailbox(100).map((m) => m.id));
+    expect(getIds()).toEqual(oldestFirst.slice(0, 100));
     expect(state.markerWrites).toEqual([]);
 
     state.getCalls = [];
     expect(await importSentHistory("u1", NOW)).toBe(SENT_HISTORY_BATCH);
-    expect(getIds()).toEqual(
-      mailbox(200)
-        .slice(100)
-        .map((m) => m.id),
-    );
+    expect(getIds()).toEqual(oldestFirst.slice(100, 200));
 
     state.getCalls = [];
     expect(await importSentHistory("u1", NOW)).toBe(50);
-    expect(getIds()).toEqual(
-      mailbox(250)
-        .slice(200)
-        .map((m) => m.id),
-    );
+    expect(getIds()).toEqual(oldestFirst.slice(200));
     // Everything listed is recorded: done in the same run.
     expect(state.markerWrites).toHaveLength(1);
   });
@@ -323,7 +322,7 @@ describe("paging and resume", () => {
     // A run that died after recording 4 rows, plus rows the 30-min scan wrote.
     for (const id of ["m0", "m1", "m2", "m3", "m6"]) state.recorded.set(id, { gmailId: id });
     await importSentHistory("u1", NOW);
-    expect(getIds()).toEqual(["m4", "m5", "m7", "m8", "m9"]);
+    expect(getIds()).toEqual(["m9", "m8", "m7", "m5", "m4"]);
   });
 
   it("caps the import at the newest 2,000 sent mails of the inbox", async () => {
@@ -351,7 +350,7 @@ describe("paging and resume", () => {
       ],
     };
     await importSentHistory("u1", NOW);
-    expect(getIds()).toEqual(["m0", "m1"]);
+    expect(getIds()).toEqual(["m1", "m0"]);
   });
 });
 

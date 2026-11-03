@@ -102,7 +102,7 @@ Output is a `relationship` snapshot stored with the decision. It eases the cold-
 
 A one-time history import (`mail/sent-history-import.ts`, flag `SENT_HISTORY_BACKFILL_ENABLED`, OFF by default, accepts `cohort`) fills that in:
 - Scope: the newest 2,000 sent mails of the last 12 months, for each inbox the scan reads (primary Gmail and linked Google inboxes). Headers only (`format=metadata`: To, Subject, Date). No new scope.
-- Resume: each run lists the window's ids and fetches the ones `SentMessage` does not have, so the rows are the progress. A crash or redeploy resumes, and gaps the scan left are filled.
+- Resume: each run lists the window's ids and fetches the oldest ones `SentMessage` does not have, so the rows are the progress. A crash or redeploy resumes, and gaps the scan left are filled.
 - Pace: at most 100 metadata fetches per user per email-sync tick, 2 in flight, run detached from the serial user loop.
 - Done: when nothing listed is missing, the grant row (`UserToken` / `LinkedInboxAccount`) gets `sentHistoryImportedAt` and the inbox is never listed again.
 - Provenance: rows the import or the scan create are labelled at insert by `mail/sent-origin-classifier.ts`, with the same rules as the legacy backfill. A label recorded at send time is never overwritten.

@@ -8,11 +8,11 @@
  * sent mails of the last SENT_HISTORY_WINDOW_DAYS:
  *   - headers only (`format: "metadata"`, To / Subject / Date), never a body;
  *     `gmail.readonly` already covers it, so no new scope;
- *   - stateless: each run lists the window's ids newest first (stopping at the
- *     cap) and fetches the ones SentMessage does not have yet. The rows ARE the
- *     progress, so a crash or a redeploy resumes where it stopped, a gap the
- *     scan left (more than a page of sends while a token was dead) is filled,
- *     and nothing depends on Gmail's list order or second-granular dates;
+ *   - stateless: each run lists the window's ids (newest first, stopping at
+ *     the cap) and fetches the oldest ones SentMessage does not have yet. The
+ *     rows ARE the progress, so a crash or a redeploy resumes where it stopped,
+ *     a gap the scan left (more than a page of sends while a token was dead) is
+ *     filled, and no cursor or second-granular `before:` date is kept;
  *   - bounded: at most SENT_HISTORY_BATCH metadata fetches per run, two at a
  *     time (Gmail allows 250 quota units per user per second; a fetch costs 5),
  *     one run per user at a time and MAX_CONCURRENT_IMPORTS users at once;
@@ -137,7 +137,7 @@ async function importInboxBatch(
   const { rows, failure } = await fetchHeaders(gmail, inbox, listing.missing);
   const labels = await classifySentRows(
     userId,
-    rows.map(({ gmailId, to, subject, sentAt }) => ({ gmailId, to, subject, sentAt })),
+    rows.map(({ gmailId, to, subject, sentAt }) => ({ gmailId, to, subject, sentAt, inbox })),
   );
   for (const row of rows) {
     const inferredOrigin = labels.get(row.gmailId);
@@ -153,9 +153,9 @@ async function importInboxBatch(
 }
 
 interface Listing {
-  /** Ids not in SentMessage yet, newest first, at most SENT_HISTORY_BATCH. */
+  /** The oldest ids of the capped window not in SentMessage yet, at most SENT_HISTORY_BATCH. */
   missing: string[];
-  /** The whole capped window was listed and `missing` is all of what is left. */
+  /** `missing` is all of what is left. */
   complete: boolean;
 }
 
@@ -164,7 +164,6 @@ async function listMissing(gmail: Gmail, userId: string, now: number): Promise<L
   const missing: string[] = [];
   let listed = 0;
   let pageToken: string | undefined;
-  let more: boolean;
   do {
     const res = await gmail.users.messages.list(
       {
@@ -179,11 +178,13 @@ async function listMissing(gmail: Gmail, userId: string, now: number): Promise<L
     listed += ids.length;
     missing.push(...(await notRecorded(userId, ids)));
     pageToken = res.data.nextPageToken ?? undefined;
-    more = Boolean(pageToken) && listed < SENT_HISTORY_CAP;
-  } while (more && missing.length < SENT_HISTORY_BATCH);
+  } while (pageToken && listed < SENT_HISTORY_CAP);
+  // Gmail lists newest first; import oldest first. Where an unattended reply
+  // and a manual one share a claim's window, the earlier is then recorded
+  // before the later is classified (the classifier's one-row-per-claim rule).
   return {
-    missing: missing.slice(0, SENT_HISTORY_BATCH),
-    complete: !more && missing.length <= SENT_HISTORY_BATCH,
+    missing: [...missing].reverse().slice(0, SENT_HISTORY_BATCH),
+    complete: missing.length <= SENT_HISTORY_BATCH,
   };
 }
 

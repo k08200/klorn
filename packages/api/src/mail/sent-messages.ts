@@ -151,7 +151,13 @@ export async function syncSentMessages(userId: string, now = Date.now()): Promis
     }));
     const labels = await labelNewSentRows(
       userId,
-      rows.map(({ gmailId, to, subject, sentAt }) => ({ gmailId, to, subject, sentAt })),
+      rows.map(({ gmailId, to, subject, sentAt, inbox }) => ({
+        gmailId,
+        to,
+        subject,
+        sentAt,
+        inbox,
+      })),
     );
     for (const row of rows) {
       const inferredOrigin = labels.get(row.gmailId);

@@ -309,6 +309,7 @@ describe("recordSentMessage / syncSentMessages", () => {
           to: "unsub@list.com",
           subject: "unsubscribe",
           sentAt: new Date("2026-09-10T00:00:00.000Z"),
+          inbox: "primary",
         },
       ],
     ]);
