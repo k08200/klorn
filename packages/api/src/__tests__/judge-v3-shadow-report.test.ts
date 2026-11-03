@@ -1,10 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { FactsV1 } from "../judge/v3/facts-schema.js";
-import {
-  laneFromFactsForReport,
-  type ShadowRow,
-  summarizeShadow,
-} from "../judge/v3/shadow-report.js";
+import { laneFromFactsV3, POLICY_VERSION } from "../judge/v3/policy.js";
+import { laneForRow, type ShadowRow, summarizeShadow } from "../judge/v3/shadow-report.js";
 
 const at = new Date("2026-10-30T00:00:00Z");
 const facts = (over: Partial<FactsV1> = {}): FactsV1 => ({
@@ -25,63 +22,29 @@ const ask = (due: string | null) => ({
   evidence: "reply by today",
 });
 
-describe("laneFromFactsForReport (doc §3(4), pre-budget)", () => {
-  it("PUSH: a verified ask due within 24h, written to the user by a person", () => {
-    expect(
-      laneFromFactsForReport(facts({ asks: [ask("2026-10-30T10:00:00Z")] }), {}, null, at),
-    ).toBe("PUSH");
+describe("report lanes come from policy v3 (laneFromFactsV3)", () => {
+  it("reports the policy version it scored with", () => {
+    expect(summarizeShadow([]).lanes.policy).toBe(POLICY_VERSION);
   });
 
-  it("machine mail never PUSHes through an ask; spam and phishing never PUSH", () => {
-    const f = facts({ asks: [ask("2026-10-30T10:00:00Z")] });
-    expect(laneFromFactsForReport(f, { automatedSender: true }, null, at)).toBe("QUEUE");
-    expect(laneFromFactsForReport(f, { spam: true }, null, at)).toBe("QUEUE");
-    expect(laneFromFactsForReport({ ...f, risk: ["phishing_suspect"] }, {}, null, at)).toBe(
-      "QUEUE",
+  it("passes the stored signals: machine mail never PUSHes through an ask, spam never PUSHes", () => {
+    const urgent = facts({ asks: [ask("2026-10-30T10:00:00Z")] });
+    expect(laneForRow(urgent, {}, null, at)).toBe("PUSH");
+    expect(laneForRow(urgent, { automatedSender: true }, null, at)).not.toBe("PUSH");
+    expect(laneForRow(urgent, { autoSubmitted: true }, null, at)).not.toBe("PUSH");
+    expect(laneForRow(urgent, { spam: true }, null, at)).not.toBe("PUSH");
+  });
+
+  it("matches laneFromFactsV3 exactly for the same inputs (no private mapping left)", () => {
+    const f = facts({ risk: ["payment_failed"], kind: "notification" });
+    const rel = { vip: true } as never;
+    expect(laneForRow(f, {}, rel, at)).toBe(
+      laneFromFactsV3({ facts: f, relationship: rel, decidedAt: at }).lane,
     );
   });
 
-  it("risk-only PUSH needs vip; untrusted risk lands QUEUE, never INFO/SILENT", () => {
-    const f = facts({ risk: ["payment_failed"], kind: "notification" });
-    const vip = { vip: true } as never;
-    expect(laneFromFactsForReport(f, {}, vip, at)).toBe("PUSH");
-    expect(laneFromFactsForReport(f, {}, null, at)).toBe("QUEUE");
-  });
-
-  it("PUSH needs the mail addressed to the user on both branches; long-overdue is not due soon", () => {
-    const vip = { vip: true } as never;
-    expect(
-      laneFromFactsForReport(
-        facts({ risk: ["payment_failed"], addressedTo: "group" }),
-        {},
-        vip,
-        at,
-      ),
-    ).toBe("QUEUE");
-    expect(
-      laneFromFactsForReport(facts({ asks: [ask("2026-10-20T00:00:00Z")] }), {}, null, at),
-    ).toBe("QUEUE");
-  });
-
-  it("MEETING for a non-bulk event; INFO for records; SILENT for bulk", () => {
-    expect(
-      laneFromFactsForReport(
-        facts({ event: { proposedTimes: [], hasInvite: true, conflict: null }, kind: "meeting" }),
-        {},
-        null,
-        at,
-      ),
-    ).toBe("MEETING");
-    expect(
-      laneFromFactsForReport(facts({ kind: "receipt", addressedTo: "me_direct" }), {}, null, at),
-    ).toBe("INFO");
-    expect(
-      laneFromFactsForReport(facts({ kind: "newsletter", addressedTo: "bulk" }), {}, null, at),
-    ).toBe("SILENT");
-  });
-
   it("excludes pinned senders (the pin decides both lanes)", () => {
-    expect(laneFromFactsForReport(facts(), {}, { pinned: true } as never, at)).toBeNull();
+    expect(laneForRow(facts(), {}, { pinned: true } as never, at)).toBeNull();
   });
 });
 

@@ -193,7 +193,7 @@ export function KeyField({
         autoComplete="off"
         spellCheck={false}
         maxLength={400}
-        className="focus-ring min-h-9 w-full rounded-card border border-line-strong bg-surface-panel px-3 font-mono text-field text-ink placeholder:text-ink-dim md:text-body max-md:min-h-11"
+        className="focus-ring min-h-9 w-full rounded-control border border-line-strong bg-surface-panel px-3 font-mono text-field text-ink placeholder:text-ink-dim md:text-body max-md:min-h-11"
       />
       <label className="flex min-h-8 cursor-pointer items-center gap-2 text-label text-ink-soft max-md:min-h-11">
         <input

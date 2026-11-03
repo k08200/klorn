@@ -68,7 +68,7 @@ export default function SidebarAccounts() {
               >
                 <span
                   aria-hidden="true"
-                  className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-control border border-line bg-surface-raised px-1 text-caption font-semibold tracking-tight text-ink-soft"
+                  className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-chip border border-line bg-surface-raised px-1 text-caption font-semibold tracking-tight text-ink-soft"
                 >
                   {sourceGlyph(account.provider).glyph}
                 </span>

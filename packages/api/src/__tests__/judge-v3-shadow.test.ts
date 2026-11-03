@@ -75,10 +75,22 @@ describe("runFactsShadow", () => {
     }
   });
 
-  it("skips when another shadow extraction is in flight", async () => {
+  it("skips when another shadow extraction is in flight, before any budget query", async () => {
     const d = deps({ slot: vi.fn(async () => null) });
     expect(await runFactsShadow("u1", mail, "QUEUE", d)).toBe("busy");
+    expect(d.budget).not.toHaveBeenCalled();
     expect(d.extract).not.toHaveBeenCalled();
+  });
+
+  it("a busy pacer at call time is a skip (pacer_busy), nothing stored", async () => {
+    const err = Object.assign(new Error("busy"), { name: "PacerBusyError" });
+    const d = deps({
+      extract: vi.fn(async () => {
+        throw err;
+      }),
+    });
+    expect(await runFactsShadow("u1", mail, "QUEUE", d)).toBe("pacer_busy");
+    expect(d.save).not.toHaveBeenCalled();
   });
 
   it("extracts, snapshots the relationship and stores one row with the v2 lane frozen", async () => {
@@ -98,7 +110,8 @@ describe("runFactsShadow", () => {
     });
     // The mail being judged is excluded from its own sender history.
     expect(d.relationship).toHaveBeenCalledWith("u1", mail.from, ["me@acme.com"], true, "e1");
-    expect(opts).toEqual({ userId: "u1" });
+    // The model call never waits for a pacer or RPM slot.
+    expect(opts).toEqual({ userId: "u1", noWait: true });
     expect(d.save).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: "u1",
