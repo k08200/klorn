@@ -382,6 +382,36 @@ describe("billing routes", () => {
     await app.close();
   });
 
+  it("rejects a string that cannot be an Anthropic key with 400 and stores nothing", async () => {
+    const { verifyAnthropicKey } = await import("../billing/verify-provider-key.js");
+    (verifyAnthropicKey as ReturnType<typeof vi.fn>).mockResolvedValueOnce("malformed");
+    const { prisma } = await import("../db.js");
+    const findMock = prisma.user.findUnique as ReturnType<typeof vi.fn>;
+    findMock.mockResolvedValueOnce({ sessionsInvalidatedAt: null }); // auth call
+    findMock.mockResolvedValueOnce({
+      id: "user-1",
+      email: "t@e.com",
+      plan: "PRO",
+      role: "USER",
+      stripeId: null,
+      chatModel: "",
+      anthropicApiKey: null,
+      geminiApiKey: null,
+    });
+    const updateMock = prisma.user.update as ReturnType<typeof vi.fn>;
+    updateMock.mockClear();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/billing/models",
+      headers: auth(),
+      payload: { anthropicApiKey: "not-a-key" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/sk-ant-/);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
   it("stores a verified Anthropic key encrypted, never as plaintext", async () => {
     const { verifyAnthropicKey } = await import("../billing/verify-provider-key.js");
     const verifyMock = verifyAnthropicKey as ReturnType<typeof vi.fn>;

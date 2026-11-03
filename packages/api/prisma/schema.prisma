@@ -32,12 +32,19 @@ model User {
   name                      String?
   role                      UserRole                   @default(USER)
   plan                      Plan                       @default(FREE)
-  /// The user's chat/assistant model pick (a CURATED_MODELS id). null — or any
+  /// The user's chat/assistant model pick (a CURATED_MODELS id). "" — or any
   /// id no longer in the catalog — means unset: the surface default applies.
-  chatModel                 String?
+  /// Stays NOT NULL: an instance still running the previous client mid-deploy
+  /// reads it as a required string.
+  chatModel                 String                     @default("")
   agentModel                String?
   /// BYOK Anthropic key, encrypted (crypto-tokens). Paid plans only.
   anthropicApiKey           String?
+  /// Retired 2026-11-01 with the OpenRouter provider; never read or written.
+  /// @ignore keeps it out of the client while the column still exists, so the
+  /// follow-up migration can drop it without breaking a mid-deploy instance's
+  /// full-row User reads.
+  openRouterApiKey          String?                    @ignore
   /// Legacy BYOK slot, encrypted: clear-only, no new writes.
   geminiApiKey              String?
   // Naver IMAP connection (Korean ICP support).

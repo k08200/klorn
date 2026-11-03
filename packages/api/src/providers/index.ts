@@ -363,7 +363,7 @@ if (configuredEnvProviders.length === 0 && !providers["openai-compat"]) {
     // fallback (which caps confidence at 0.55 and cannot reach the PUSH floor
     // of 0.7).
     console.warn(
-      `[providers] Single provider configured (${configuredEnvProviders[0]} only) — no failover: a 402/403/429 on this key degrades every LLM surface until it clears. Add a second provider key (ANTHROPIC_API_KEY, GEMINI_API_KEY) or OPENAI_COMPAT_BASE_URL for a second lane.`,
+      `[providers] Single provider configured (${configuredEnvProviders[0]} only) — no failover: a 402/403/429 on this key degrades every LLM surface until it clears. A second lane needs another provider (${configuredEnvProviders[0] === "anthropic" ? "GEMINI_API_KEY" : "ANTHROPIC_API_KEY"} or OPENAI_COMPAT_BASE_URL).`,
     );
   }
   if (providers.gemini) {

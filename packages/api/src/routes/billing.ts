@@ -22,7 +22,6 @@ import { TRIAL_DAYS } from "../config.js";
 import { encryptOptional } from "../crypto-tokens.js";
 import { db, prisma } from "../db.js";
 import { CURATED_MODELS, isCuratedModel } from "../llm/model-catalog.js";
-import { clearFallbackState } from "../llm/model-fallback.js";
 import { MODEL } from "../llm/openai.js";
 import { captureError } from "../sentry.js";
 
@@ -304,6 +303,9 @@ export async function billingRoutes(app: FastifyInstance) {
   app.patch(
     "/models",
     {
+      // Each key save makes one outbound verification call; cap the route so
+      // it can't be driven as a key-testing loop from Klorn's egress IP.
+      config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
       // Bound + shape the body: a BYOK key is short, so cap it (an unbounded
       // string would bloat the row and get re-read+decrypted on every hot-path
       // call). additionalProperties:false rejects anything unexpected.
@@ -356,6 +358,11 @@ export async function billingRoutes(app: FastifyInstance) {
       // every later chain walk failed on it with zero signal to the user.
       if (isSettingKey && anthropicApiKey) {
         const verdict = await verifyAnthropicKey(anthropicApiKey.trim());
+        if (verdict === "malformed") {
+          return reply.code(400).send({
+            error: "That doesn't look like an Anthropic API key — it starts with sk-ant-.",
+          });
+        }
         if (verdict === "invalid") {
           return reply.code(400).send({
             error:

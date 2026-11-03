@@ -12,17 +12,25 @@
  * The key travels only in the request header and is never logged.
  */
 
-export type KeyVerification = "valid" | "invalid" | "unreachable";
+export type KeyVerification = "valid" | "invalid" | "malformed" | "unreachable";
 
 const VERIFY_TIMEOUT_MS = 4_000;
 const ANTHROPIC_MODELS_URL = "https://api.anthropic.com/v1/models";
 const ANTHROPIC_VERSION = "2023-06-01";
+/**
+ * Every Anthropic key (API `sk-ant-api…`, personal `sk-ant-usr-…`) is the
+ * prefix plus URL-safe characters. Anything else is rejected before egress:
+ * it cannot be a key, and a header-invalid string would otherwise make fetch
+ * throw locally and read as "unreachable" — stored unverified.
+ */
+const ANTHROPIC_KEY_SHAPE = /^sk-ant-[A-Za-z0-9_-]{16,500}$/;
 
 /**
  * Verify an Anthropic key with `GET /v1/models`: authenticated, but it runs no
  * model, so a save spends no tokens on the user's account.
  */
 export async function verifyAnthropicKey(key: string): Promise<KeyVerification> {
+  if (!ANTHROPIC_KEY_SHAPE.test(key)) return "malformed";
   try {
     const res = await fetch(ANTHROPIC_MODELS_URL, {
       headers: { "x-api-key": key, "anthropic-version": ANTHROPIC_VERSION },

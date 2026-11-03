@@ -116,7 +116,14 @@ const app = Fastify({
     // bodies, redact key-bearing fields so a future serializer change or a
     // rawBody dump can never leak a credential into the log drain.
     redact: {
-      paths: ["req.body.apiKey", "req.body.password", "req.body.token", "req.rawBody"],
+      paths: [
+        "req.body.apiKey",
+        "req.body.anthropicApiKey",
+        "req.body.geminiApiKey",
+        "req.body.password",
+        "req.body.token",
+        "req.rawBody",
+      ],
       censor: "[REDACTED]",
     },
   },

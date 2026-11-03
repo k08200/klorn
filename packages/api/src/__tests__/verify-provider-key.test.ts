@@ -34,6 +34,28 @@ function everythingLogged(): string {
     .join("\n");
 }
 
+describe("verifyAnthropicKey — shape check before any network call", () => {
+  // A string that cannot be an Anthropic key never leaves the server: fetch
+  // throws locally on header-invalid characters, which used to read as
+  // "unreachable" and store the junk unverified.
+  it.each([
+    ["no sk-ant- prefix", "sk-or-v1-0123456789abcdef0123456789"],
+    ["too short", "sk-ant-abc"],
+    ["non-Latin-1 character", "sk-ant-api03-0123456789✓abcdef"],
+    ["embedded newline", "sk-ant-api03-0123456789\nabcdef"],
+    ["inner whitespace", "sk-ant-api03 0123456789abcdef"],
+  ])("%s → malformed, no fetch", async (_label, key) => {
+    await expect(verifyAnthropicKey(key)).resolves.toBe("malformed");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("accepts the documented key shapes (api and personal keys)", async () => {
+    fetchMock.mockResolvedValue(new Response("{}", { status: 200 }));
+    await expect(verifyAnthropicKey(KEY)).resolves.toBe("valid");
+    await expect(verifyAnthropicKey("sk-ant-usr-0123456789_abcdef-XYZ")).resolves.toBe("valid");
+  });
+});
+
 describe("verifyAnthropicKey", () => {
   it("calls GET /v1/models with x-api-key and anthropic-version, and no Authorization header", async () => {
     fetchMock.mockResolvedValue(new Response("{}", { status: 200 }));
