@@ -81,7 +81,7 @@ function VerifyEmailContent() {
             : t("verifyEmail.description.error")
       }
     >
-      <p className="rounded-card border border-line bg-surface-raised px-4 py-3 text-body text-ink-mid">
+      <p className="rounded-control border border-line bg-surface-raised px-4 py-3 text-body text-ink-mid">
         {status === "sent"
           ? t("verifyEmail.nextStepBody.sent")
           : status === "pending"

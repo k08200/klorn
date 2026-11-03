@@ -60,6 +60,7 @@ import {
   tierFromFeatures,
   tierFromFeaturesV2,
 } from "./tier-policy.js";
+import { isStaticTierReasonKey } from "./tier-reason-strings.js";
 import { TIERS, type Tier } from "./tiers.js";
 
 export type { CorrectionExample, SenderFacts, SenderPrior } from "../learning/sender-policy.js";
@@ -902,7 +903,7 @@ export async function judgeEmail(
     }
     const features = applyRoutineConfirmationCap(email, llm.features);
     const decided = decideTier(email, features);
-    const scored = { tier: decided.tier, reason: llm.reason || decided.reason };
+    const scored = { tier: decided.tier, reason: modelReason(llm.reason) || decided.reason };
     const floored = applyAutomatedSenderFloors(email, scored);
     return {
       tier: floored.tier,
@@ -915,6 +916,26 @@ export async function judgeEmail(
     };
   }
 
+  return keywordFallbackJudgement(email);
+}
+
+/**
+ * The model's reason, unless it is exactly a static reason key. Keys are
+ * resolved to Klorn's own copy for display (tier-reason-strings.ts), so mail
+ * that coaxes the model into emitting one (e.g. the interrupt-budget "held"
+ * key) must not borrow that copy.
+ */
+function modelReason(reason: string | undefined): string {
+  return reason && !isStaticTierReasonKey(reason) ? reason : "";
+}
+
+/**
+ * The v2 keyword fallback (LLM down): judgeEmail's last step, pure. Exported
+ * so policy v3's fallback-parity test and the replay CLI compare against the
+ * real v2 path rather than a re-implementation. The marketing fast-path runs
+ * before it in judgeEmail and is not part of it.
+ */
+export function keywordFallbackJudgement(email: ClassifiableEmail): PocJudgement {
   const features = applyRoutineConfirmationCap(email, keywordFeatures(email));
   const decided = decideTier(email, features);
   const floored = applyAutomatedSenderFloors(email, decided);

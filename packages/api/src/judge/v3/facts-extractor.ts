@@ -87,6 +87,8 @@ export interface ExtractFactsOptions {
   model?: string;
   /** Injected for tests; defaults to createCompletion. */
   complete?: Complete;
+  /** Skip instead of waiting for a pacer/RPM slot (the shadow); throws PacerBusyError. */
+  noWait?: boolean;
 }
 
 /** Transport attempts. A malformed answer is not retried: at temperature 0 it repeats. */
@@ -97,8 +99,12 @@ const FACTS_MAX_TOKENS = 1500;
 export const MAX_ANSWER_CHARS = 20_000;
 const MAX_FAILURE_NOTE_CHARS = 160;
 
-/** Errors that mean "stop spending for this user now", not "try again". */
-const BUDGET_STOP_ERRORS = new Set(["DailyCostCapExceededError", "UserRateLimitedError"]);
+/** Errors that mean "stop now", not "try again": budget refusals and a busy pacer under noWait. */
+const BUDGET_STOP_ERRORS = new Set([
+  "DailyCostCapExceededError",
+  "UserRateLimitedError",
+  "PacerBusyError",
+]);
 /** Errors a second attempt cannot fix: the provider chain already failed over. */
 const NO_RETRY_ERRORS = new Set(["AllProvidersExhaustedError"]);
 
@@ -168,6 +174,7 @@ async function callModel(prompt: FactsPrompt, options: ExtractFactsOptions): Pro
     priority: "background",
     ...(options.userId ? { userId: options.userId } : {}),
     ...(options.credentials ? { credentials: options.credentials } : {}),
+    ...(options.noWait ? { noWait: true } : {}),
     onServed: (s) => {
       served = s;
     },

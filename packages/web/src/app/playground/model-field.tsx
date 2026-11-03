@@ -81,7 +81,7 @@ function TriggerFace({ model, choice }: { model: PlaygroundModel | undefined; ch
     <>
       <span className="min-w-0 flex-1 truncate font-mono text-label text-ink">{model.id}</span>
       {model.measured && (
-        <span className="shrink-0 rounded-control bg-state-info-bg px-2 py-0.5 text-caption font-semibold text-accent-deeper">
+        <span className="shrink-0 rounded-chip bg-state-info-bg px-2 py-0.5 text-caption font-semibold text-accent-deeper">
           {t("playground.model.klorn")}
         </span>
       )}

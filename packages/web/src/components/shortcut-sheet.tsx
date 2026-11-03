@@ -86,7 +86,7 @@ export function ShortcutSheet({ open, onClose, unifiedHome = false }: ShortcutSh
                             <kbd
                               // biome-ignore lint/suspicious/noArrayIndexKey: caps of one chord are positional and never reorder
                               key={`${keys}-${capIndex}`}
-                              className="min-w-6 rounded-control border border-line bg-surface-raised px-1.5 py-0.5 text-center font-mono text-caption text-ink-soft"
+                              className="min-w-6 rounded-chip border border-line bg-surface-raised px-1.5 py-0.5 text-center font-mono text-caption text-ink-soft"
                             >
                               {cap}
                             </kbd>

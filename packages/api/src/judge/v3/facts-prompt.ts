@@ -130,14 +130,38 @@ export function validTimeZone(tz: string | null): string | null {
   }
 }
 
+function offsetOf(date: Date, timeZone: string | null): string {
+  if (!timeZone) return "Z";
+  const name = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "longOffset" })
+    .formatToParts(date)
+    .find((p) => p.type === "timeZoneName")?.value;
+  const m = /GMT([+-]\d{2}):?(\d{2})?/.exec(name ?? "");
+  return m ? `${m[1]}:${m[2] ?? "00"}` : "Z";
+}
+
+/** The receipt time as a local time with offset (recipient zone, else UTC). */
+export function receiptAsLocal(receivedAt: Date, timeZone: string | null): string | null {
+  if (Number.isNaN(receivedAt.getTime())) return null;
+  const offset = offsetOf(receivedAt, timeZone);
+  if (offset === "Z") return `${receivedAt.toISOString().slice(0, 19)}Z`;
+  const sign = offset.startsWith("-") ? -1 : 1;
+  const minutes = sign * (Number(offset.slice(1, 3)) * 60 + Number(offset.slice(4, 6)));
+  return `${new Date(receivedAt.getTime() + minutes * 60_000).toISOString().slice(0, 19)}${offset}`;
+}
+
 function mailDateLines(input: FactsPromptInput): string {
   const received = Number.isNaN(input.receivedAt.getTime())
     ? "unknown"
     : input.receivedAt.toISOString();
+  const tz = validTimeZone(input.userTimeZone);
+  // Without a usable Date header, anchor on the receipt time: a missing anchor
+  // made models drop "today"/"EOD" deadlines entirely (fact eval, 2026-11-01).
+  const sentAt =
+    canonicalMailDate(input.dateHeader, input.receivedAt) ?? receiptAsLocal(input.receivedAt, tz);
   return [
-    `- sent at: ${canonicalMailDate(input.dateHeader, input.receivedAt) ?? "(not available)"}`,
+    `- sent at: ${sentAt ?? "(not available)"}`,
     `- received (UTC): ${received}`,
-    `- recipient timezone: ${validTimeZone(input.userTimeZone) ?? "unknown"}`,
+    `- recipient timezone: ${tz ?? "unknown"}`,
   ].join("\n");
 }
 

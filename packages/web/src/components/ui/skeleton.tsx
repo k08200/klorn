@@ -26,7 +26,7 @@ const VARIANT: Record<SkeletonVariant, string> = {
   // One line of body text: 14px glyph box inside a 21px line.
   line: "h-3.5 rounded-control",
   block: "rounded-card",
-  row: "h-13 rounded-card max-md:h-16 pointer-coarse:h-16",
+  row: "h-13 rounded-control max-md:h-16 pointer-coarse:h-16",
 };
 
 export function Skeleton({ variant = "line", width, height, className = "" }: SkeletonProps) {

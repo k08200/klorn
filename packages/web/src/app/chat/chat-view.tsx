@@ -30,7 +30,7 @@ const SUGGESTION_KEYS = [
 const LEGACY_USER_BUBBLE =
   "max-w-[85%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-2.5 text-sm text-slate-50 shadow-[0_1px_2px_rgba(15,23,42,0.16)]";
 const HUB_USER_BUBBLE =
-  "max-w-[85%] rounded-sheet rounded-br-control bg-accent-solid px-4 py-2.5 text-body text-accent-solid-ink";
+  "max-w-[85%] rounded-card rounded-br-chip bg-accent-solid px-4 py-2.5 text-body text-accent-solid-ink";
 
 /**
  * `hub` is the Assistant hub's Chat page (productization plan P7): the same

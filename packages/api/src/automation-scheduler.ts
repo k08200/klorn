@@ -82,7 +82,7 @@ import {
   unnotifiedEmails,
   urgentDedupeKey,
 } from "./notify/urgent-dedup.js";
-import { autoModeSendEnabled, tierV2Enabled } from "./ops/feature-flags.js";
+import { autoModeSendEnabled, judgeV3PolicyEnabled, tierV2Enabled } from "./ops/feature-flags.js";
 import { createDailyBriefingDelivery } from "./pim/briefing.js";
 import { connectPrimaryCalendar } from "./pim/calendar-providers/dispatch.js";
 import {
@@ -1762,25 +1762,31 @@ async function runUserCycle(
 
         // Check for urgent unread emails — notify only for NEW urgent emails
         // Only check truly new emails (synced in last hour) to avoid re-notifying old unread emails
-        const urgentEmails = await prisma.emailMessage.findMany({
-          where: {
-            userId: config.userId,
-            priority: "URGENT",
-            isRead: false,
-            syncedAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
-          },
-          orderBy: { receivedAt: "desc" },
-          select: {
-            id: true,
-            gmailId: true,
-            subject: true,
-            from: true,
-            summary: true,
-            createdAt: true,
-            receivedAt: true,
-            linkedInboxAccountId: true,
-          },
-        });
+        // With JUDGE_V3_POLICY on, the judge's PUSH lane under the daily
+        // interrupt budget is the only email interrupt (attention-engine-v3.md
+        // §3(4)); this keyword sweep would ring outside the budget, so it
+        // stands down.
+        const urgentEmails = judgeV3PolicyEnabled()
+          ? []
+          : await prisma.emailMessage.findMany({
+              where: {
+                userId: config.userId,
+                priority: "URGENT",
+                isRead: false,
+                syncedAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
+              },
+              orderBy: { receivedAt: "desc" },
+              select: {
+                id: true,
+                gmailId: true,
+                subject: true,
+                from: true,
+                summary: true,
+                createdAt: true,
+                receivedAt: true,
+                linkedInboxAccountId: true,
+              },
+            });
         // Step B2b: tombstones and mail an IMAP UIDVALIDITY repair re-ingested are
         // history: rung once already, never again. Gmail rows read nothing more.
         // Fail-closed on a lookup failure (IMAP rows skipped), never thrown: the Gmail

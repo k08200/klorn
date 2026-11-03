@@ -78,6 +78,14 @@ export class AllProvidersExhaustedError extends Error {
   }
 }
 
+/** A noWait background call found no pacer slot free: skipped, nothing spent. */
+export class PacerBusyError extends Error {
+  constructor() {
+    super("background pacer busy");
+    this.name = "PacerBusyError";
+  }
+}
+
 export interface CompletionOptions {
   credentials?: ProviderCredentials;
   /**
@@ -122,6 +130,13 @@ export interface CompletionOptions {
    * failure (that would fail over into a second, billed call).
    */
   onServed?: (served: { provider: string; model: string; ownedByUser: boolean }) => void;
+  /**
+   * Skip rather than wait (background only): if the background pacer has no
+   * slot free right now the call throws PacerBusyError instead of queueing,
+   * and an RPM-window miss throws instead of parking. For optional work (the
+   * v3 facts shadow) that must never sit in front of, or behind, the judge.
+   */
+  noWait?: boolean;
   /**
    * Internal recursion guard for the background pacer — set only by
    * createCompletion itself when re-entering through backgroundLlmPacer.
@@ -472,13 +487,12 @@ async function createCompletionWithFailover(
   // foreground calls down with it (PushCard drafts 503'd for 5+ min in prod).
   if ((options.priority ?? "foreground") === "background" && !options._paced) {
     const paced = { ...options, _paced: true };
-    return backgroundLlmPacer.run(
-      () =>
-        createCompletion(
-          params as ChatCompletionCreateParamsNonStreaming,
-          paced,
-        ) as Promise<Result>,
-    );
+    const run = () =>
+      createCompletion(params as ChatCompletionCreateParamsNonStreaming, paced) as Promise<Result>;
+    if (!options.noWait) return backgroundLlmPacer.run(run);
+    const claimed = backgroundLlmPacer.tryRun(run);
+    if (!claimed) throw new PacerBusyError();
+    return claimed;
   }
 
   const fullChain = getProviderChain(options.credentials);
@@ -513,6 +527,7 @@ async function createCompletionWithFailover(
     await awaitUserCallSlot(options.userId, {
       priority: options.priority ?? "foreground",
       reserved: options.reserved,
+      ...(options.noWait ? { maxWaitMs: 0 } : {}),
     });
   }
 

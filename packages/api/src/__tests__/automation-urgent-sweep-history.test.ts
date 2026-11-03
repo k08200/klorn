@@ -313,6 +313,31 @@ describe.each(IMAP_CASES)("$label: the urgent sweep after an IMAP repair", (imap
   });
 });
 
+describe("JUDGE_V3_POLICY on: the keyword urgent sweep stands down", () => {
+  afterEach(() => {
+    delete process.env.JUDGE_V3_POLICY;
+  });
+
+  it("rings for nothing, so the policy's PUSH lane under the daily budget is the only email interrupt", async () => {
+    process.env.JUDGE_V3_POLICY = "true";
+    arrange([urgent("gmail", "18abc", BEFORE_RESET, null)]);
+
+    await runOneTick();
+
+    expect(createdNotifications().filter((d) => d.title === "Urgent email")).toEqual([]);
+    expect(m.sendPushNotification).not.toHaveBeenCalled();
+    expect(m.sendSms).not.toHaveBeenCalled();
+  });
+
+  it("still rings with the flag off (the control)", async () => {
+    arrange([urgent("gmail", "18abc", BEFORE_RESET, null)]);
+
+    await runOneTick();
+
+    expect(createdNotifications().filter((d) => d.title === "Urgent email")).toHaveLength(1);
+  });
+});
+
 describe.each(IMAP_CASES)("$label: the rule auto-reply loop after an IMAP repair", (imapCase) => {
   beforeEach(() => {
     IMAP = imapCase.head;
