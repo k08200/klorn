@@ -188,11 +188,15 @@ describe("Google-only LinkedCalendarAccount readers filter on provider", () => {
   // secrets, whatever the provider. So does the dispatcher: it reads a row's
   // provider to choose the implementation.
   // The source label reads an account's email by id, for a row that already
-  // names it: provider-agnostic on purpose, it only labels.
+  // names it: provider-agnostic on purpose, it only labels. The co-attendance
+  // store reads every linked account's address so none of the user's own
+  // addresses is ever counted as a contact (a DEVICE row's `device:` key is not
+  // an address and is dropped).
   const ALL_PROVIDER_READERS = [
     "scripts/reencrypt-tokens.ts",
     "pim/calendar-providers/dispatch.ts",
     "pim/calendar-source-label.ts",
+    "pim/coattendance/coattendance-store.ts",
   ];
 
   it("finds the known readers (so this guard cannot pass by scanning nothing)", () => {
@@ -204,6 +208,8 @@ describe("Google-only LinkedCalendarAccount readers filter on provider", () => {
       "pim/calendar-providers/dispatch.ts",
       "pim/calendar-providers/outlook-token.ts", // re-reads one OUTLOOK row after a refresh race
       "pim/calendar-source-label.ts",
+      "pim/coattendance/coattendance-sources.ts", // GOOGLE rows' co-attendance markers
+      "pim/coattendance/coattendance-store.ts",
       "pim/device-calendar/device-ingest.ts",
       "pim/device-calendar/device-sources.ts",
       "pim/linked-calendar-unlink.ts",

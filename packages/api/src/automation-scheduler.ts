@@ -91,6 +91,7 @@ import {
   syncLinkedCalendars,
   syncPrimaryCalendarWindow,
 } from "./pim/calendar-sync.js";
+import { enqueueCoAttendance } from "./pim/coattendance/coattendance-job.js";
 import { expireStaleDeviceSources } from "./pim/device-calendar/device-sources.js";
 import { sendFocusWindowDigests } from "./pim/focus-digest.js";
 import { draftReplyForEmailId } from "./routes/email-replies.js";
@@ -1439,6 +1440,13 @@ async function runUserCycle(
         });
       }
     }
+
+    // Calendar co-attendance (pim/coattendance/), behind CALENDAR_COATTENDANCE_ENABLED:
+    // queued, never awaited, so it runs outside this user's per-tick budget and
+    // never delays the email step below. The job checks each source's interval.
+    enqueueCoAttendance(config.userId, {
+      includeLinked: linkedCalendarSyncEnabled() && isEntitled(configUserPlan, configUserRole),
+    });
   }
 
   // --- Email Sync + AI Classify (requires PRO+ for classify, TEAM+ for auto-reply) ---
