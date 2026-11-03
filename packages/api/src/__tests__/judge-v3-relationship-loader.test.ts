@@ -39,6 +39,7 @@ function deps(over: Partial<RelationshipLoaderDeps> = {}): RelationshipLoaderDep
     dismissCount: vi.fn(async () => 2),
     pinnedTier: vi.fn(async () => null),
     senderCategory: vi.fn(async () => "investor"),
+    coAttendance: vi.fn(async () => undefined),
     ...over,
   };
 }

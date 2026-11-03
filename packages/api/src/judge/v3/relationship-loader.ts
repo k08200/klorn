@@ -7,6 +7,7 @@
  * it never throws, because the snapshot is context for the shadow, not a gate.
  */
 
+import { calendarCoattendanceEnabled } from "../../config.js";
 import { db } from "../../db.js";
 import { escapeLikePattern } from "../../db-like.js";
 import { senderLabelsFor } from "../../mail/sender-labels.js";
@@ -14,6 +15,7 @@ import type { SentOrigin } from "../../mail/sent-messages.js";
 import { isSenderAddressIndexEnabled, lookupPinnedTier } from "../judge-context.js";
 import {
   buildRelationshipSnapshot,
+  type CoAttendanceView,
   type InboundRow,
   type RelationshipSnapshot,
   type SentRow,
@@ -68,6 +70,46 @@ export interface RelationshipLoaderDeps {
   /** Throws on a lookup failure (unknown), returns null for "no pin". */
   pinnedTier(userId: string, address: string): Promise<string | null>;
   senderCategory(userId: string, address: string): Promise<string | null>;
+  /** Stored past co-attendance; undefined = unknown (see latestObservedSince). */
+  coAttendance(userId: string, address: string): Promise<CoAttendanceView | undefined>;
+}
+
+/**
+ * The window co-attendance counts cover: the latest observed-since marker,
+ * only when EVERY Google calendar source has one (otherwise a contact seen
+ * only in an unobserved calendar would read as 0). null = unknown.
+ */
+export function latestObservedSince(sources: readonly (Date | null)[]): Date | null {
+  if (sources.length === 0 || sources.some((s) => s === null)) return null;
+  return new Date(Math.max(...(sources as Date[]).map((s) => s.getTime())));
+}
+
+async function loadCoAttendance(
+  userId: string,
+  address: string,
+): Promise<CoAttendanceView | undefined> {
+  if (!calendarCoattendanceEnabled()) return undefined;
+  const [token, linked] = await Promise.all([
+    db.userToken.findUnique({
+      where: { userId_provider: { userId, provider: "google" } },
+      select: { coAttendanceObservedSince: true },
+    }),
+    db.linkedCalendarAccount.findMany({
+      where: { userId, provider: "GOOGLE" },
+      select: { coAttendanceObservedSince: true, needsReconnect: true },
+    }),
+  ]);
+  // A calendar awaiting reconnect has stopped being counted: not observed now.
+  const observedSince = latestObservedSince([
+    ...(token ? [token.coAttendanceObservedSince] : []),
+    ...linked.map((l) => (l.needsReconnect ? null : l.coAttendanceObservedSince)),
+  ]);
+  if (!observedSince) return undefined;
+  const row = await db.contactCoAttendance.findUnique({
+    where: { userId_contactEmail: { userId, contactEmail: address } },
+    select: { meetingCount: true, smallMeetingCount: true, lastMetAt: true },
+  });
+  return { observedSince, row };
 }
 
 export const prismaRelationshipDeps: RelationshipLoaderDeps = {
@@ -126,6 +168,7 @@ export const prismaRelationshipDeps: RelationshipLoaderDeps = {
   async senderCategory(userId, address) {
     return (await senderLabelsFor(userId, [address])).get(address) ?? null;
   },
+  coAttendance: loadCoAttendance,
 };
 
 export interface RelationshipLoadInput {
@@ -211,13 +254,15 @@ export async function loadRelationshipSnapshot(
   const sender = senderMailbox(input.senderAddress);
   if (!sender) return { ...UNKNOWN_RELATIONSHIP };
   const { userId } = input;
-  const [sentData, inboundData, dismissCount, pinnedTier, senderCategory] = await Promise.all([
-    loadSent(userId, sender, deps),
-    loadInbound(userId, sender, deps, input.excludeEmailId),
-    settle(() => deps.dismissCount(userId, sender), "dismiss"),
-    settle(() => deps.pinnedTier(userId, sender), "pin"),
-    settle(() => deps.senderCategory(userId, sender), "label"),
-  ]);
+  const [sentData, inboundData, dismissCount, pinnedTier, senderCategory, coAttendance] =
+    await Promise.all([
+      loadSent(userId, sender, deps),
+      loadInbound(userId, sender, deps, input.excludeEmailId),
+      settle(() => deps.dismissCount(userId, sender), "dismiss"),
+      settle(() => deps.pinnedTier(userId, sender), "pin"),
+      settle(() => deps.senderCategory(userId, sender), "label"),
+      settle(() => deps.coAttendance(userId, sender), "co-attendance"),
+    ]);
   const userSent = await loadThreadSends(
     userId,
     sentData.sent !== null,
@@ -236,5 +281,6 @@ export async function loadRelationshipSnapshot(
     dismissCount: dismissCount ?? null,
     pinnedTier,
     senderCategory,
+    coAttendance,
   });
 }
