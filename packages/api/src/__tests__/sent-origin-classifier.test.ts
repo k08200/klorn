@@ -21,24 +21,41 @@ const state = vi.hoisted(() => ({
     _min: { receivedAt: Date | null };
   }[],
   senders: new Set<string>(),
+  inFlight: 0,
+  maxInFlight: 0,
 }));
 
-vi.mock("../db.js", () => ({
-  prisma: {
-    actionOutbox: { findMany: vi.fn(async () => state.outboxResults) },
-    pendingAction: { findMany: vi.fn(async () => state.pendingResults) },
-    notification: { findMany: vi.fn(async () => state.claims) },
-    sentMessage: { findMany: vi.fn(async () => state.recordedSent) },
-    emailMessage: {
-      findMany: vi.fn(async () => state.sources),
-      groupBy: vi.fn(async () => state.carriers),
-      findFirst: vi.fn(async (args: { where: { OR: { fromAddress?: string }[] } }) => {
-        const addr = args.where.OR.find((c) => c.fromAddress)?.fromAddress ?? "";
-        return state.senders.has(addr) ? { id: "e1" } : null;
-      }),
+vi.mock("../db.js", () => {
+  // Every query goes through `tracked`, so a test can see the loaders never
+  // hold more than one pool connection at a time.
+  const tracked =
+    <A extends unknown[], T>(read: (...args: A) => T) =>
+    async (...args: A) => {
+      state.inFlight += 1;
+      state.maxInFlight = Math.max(state.maxInFlight, state.inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      state.inFlight -= 1;
+      return read(...args);
+    };
+  return {
+    prisma: {
+      actionOutbox: { findMany: vi.fn(tracked(() => state.outboxResults)) },
+      pendingAction: { findMany: vi.fn(tracked(() => state.pendingResults)) },
+      notification: { findMany: vi.fn(tracked(() => state.claims)) },
+      sentMessage: { findMany: vi.fn(tracked(() => state.recordedSent)) },
+      emailMessage: {
+        findMany: vi.fn(tracked(() => state.sources)),
+        groupBy: vi.fn(tracked(() => state.carriers)),
+      },
+      // The sender check: one query for every token target address.
+      $queryRaw: vi.fn(
+        tracked((_sql: TemplateStringsArray, addrs: string[]) =>
+          addrs.filter((a) => state.senders.has(a)).map((addr) => ({ addr })),
+        ),
+      ),
     },
-  },
-}));
+  };
+});
 
 import { prisma } from "../db.js";
 import {
@@ -48,8 +65,11 @@ import {
   classifySentOrigin,
   classifySentRows,
   extractApprovedMessageId,
+  provenanceMailtoTarget,
   type SentOriginEvidence,
+  sqlBtrim,
 } from "../mail/sent-origin-classifier.js";
+import { expectLinear, repeatTo } from "./helpers/linear-timing.js";
 
 const CLAIM_AT = new Date("2026-05-10T09:00:00.000Z");
 const minutes = (n: number) => new Date(CLAIM_AT.getTime() + n * 60_000);
@@ -60,7 +80,7 @@ function evidence(over: Partial<SentOriginEvidence> = {}): SentOriginEvidence {
     claims: [],
     sourceSubjects: new Map(),
     sentNeighbours: [],
-    unsubscribeCarriers: [],
+    unsubscribeTargets: [],
     senderAddresses: new Set(),
     ...over,
   };
@@ -133,6 +153,58 @@ describe("claimRecipient", () => {
       "bob@x.com",
     );
     expect(claimRecipient("Sent something [a]")).toBeNull();
+  });
+});
+
+describe("provenanceMailtoTarget (the SQL's addr and subject, exactly)", () => {
+  const t = provenanceMailtoTarget;
+
+  it("addr: strips mailto: (any case), cuts at ?, trims spaces, lowercases, never decodes", () => {
+    expect(t("MAILTO: Unsub@List.Example ?subject=x").addr).toBe("unsub@list.example");
+    expect(t("mailto:a%40b.example").addr).toBe("a%40b.example");
+    expect(t("x@y.example").addr).toBe("x@y.example");
+    expect(t("mailto:x@y.example#frag").addr).toBe("x@y.example#frag");
+    expect(t("mailto:not-an-address").addr).toBe("not-an-address");
+  });
+
+  it("subject: the first subject= value up to & or #, + as space, ASCII %XX decoded", () => {
+    expect(t("mailto:a@b.c?subject=remove+%3Cme%3E").subject).toBe("remove <me>");
+    expect(t("mailto:a@b.c?body=x&subject=hi&subject=no").subject).toBe("hi");
+    expect(t("mailto:a@b.c?subject=bye#frag").subject).toBe("bye");
+    expect(t("mailto:a@b.c?subject=caf%C3%A9").subject).toBe("caf%C3%A9");
+    expect(t("mailto:a@b.c?subject=a%00b").subject).toBe("a%00b");
+    expect(t("mailto:a@b.c?subject=%%41%4").subject).toBe("%A%4");
+    expect(t("mailto:a@b.c?subject=%7e%7E").subject).toBe("~~");
+  });
+
+  it("subject: trimmed, and 'unsubscribe' when missing or empty", () => {
+    expect(t("mailto:a@b.c?subject=%20%09hi%0A").subject).toBe("hi");
+    expect(t("mailto:a@b.c").subject).toBe("unsubscribe");
+    expect(t("mailto:a@b.c?subject=").subject).toBe("unsubscribe");
+    expect(t("mailto:a@b.c?subject=%20+%20").subject).toBe("unsubscribe");
+    // The parameter name is case-sensitive, as in the SQL pattern.
+    expect(t("mailto:a@b.c?Subject=hi").subject).toBe("unsubscribe");
+  });
+
+  it("keeps a subject over parseMailtoTarget's 250-character cap", () => {
+    expect(t(`mailto:a@b.c?subject=${"x".repeat(300)}`).subject).toHaveLength(300);
+  });
+
+  it("stays linear on a crafted target", () => {
+    expectLinear((n) => repeatTo(n, "%", "mailto:", "?subject=%"), t);
+    expectLinear((n) => repeatTo(n, "%2", "mailto:a@b.c?subject="), t);
+  });
+});
+
+describe("sqlBtrim (Postgres btrim: spaces only)", () => {
+  it("trims spaces at both ends and nothing else", () => {
+    expect(sqlBtrim("  a b  ")).toBe("a b");
+    expect(sqlBtrim("\ta\t")).toBe("\ta\t");
+    expect(sqlBtrim("    ")).toBe("");
+  });
+
+  it("is linear on a long run of interior spaces (H1)", () => {
+    expectLinear((n) => repeatTo(n, " ", "a", "b"), sqlBtrim);
   });
 });
 
@@ -256,14 +328,15 @@ describe("classifySentOrigin: auto_reply", () => {
 });
 
 describe("classifySentOrigin: unsubscribe", () => {
+  // Targets reach the rule parsed once at load, the way the SQL derives them.
   const carrier = (mailto: string, over: object = {}) => ({
-    mailto,
+    ...provenanceMailtoTarget(mailto),
     inbox: "primary",
     firstReceivedAt: minutes(-60),
     ...over,
   });
   const ev = (mailto: string, over: Partial<SentOriginEvidence> = {}) =>
-    evidence({ unsubscribeCarriers: [carrier(mailto)], ...over });
+    evidence({ unsubscribeTargets: [carrier(mailto)], ...over });
 
   it("labels a send to the target with the decoded mailto subject", () => {
     const out = classifySentOrigin(
@@ -273,7 +346,7 @@ describe("classifySentOrigin: unsubscribe", () => {
     expect(out).toBe("unsubscribe");
   });
 
-  it("defaults the subject to 'unsubscribe' like parseMailtoTarget", () => {
+  it("defaults the subject to 'unsubscribe' like the SQL", () => {
     expect(
       classifySentOrigin(
         row({ to: "leave@x.com", subject: "unsubscribe" }),
@@ -286,25 +359,25 @@ describe("classifySentOrigin: unsubscribe", () => {
     const mailto = "mailto:unsub@list.example?subject=remove";
     const r = row({ to: "unsub@list.example", subject: "remove" });
     expect(
-      classifySentOrigin(r, evidence({ unsubscribeCarriers: [carrier(mailto, { inbox: "L1" })] })),
+      classifySentOrigin(r, evidence({ unsubscribeTargets: [carrier(mailto, { inbox: "L1" })] })),
     ).toBeNull();
     expect(
       classifySentOrigin(
         r,
-        evidence({ unsubscribeCarriers: [carrier(mailto, { firstReceivedAt: minutes(5) })] }),
+        evidence({ unsubscribeTargets: [carrier(mailto, { firstReceivedAt: minutes(5) })] }),
       ),
     ).toBeNull();
     expect(
       classifySentOrigin(
         { ...r, inbox: "L1" },
-        evidence({ unsubscribeCarriers: [carrier(mailto, { inbox: "L1" })] }),
+        evidence({ unsubscribeTargets: [carrier(mailto, { inbox: "L1" })] }),
       ),
     ).toBe("unsubscribe");
     // Received at the very instant of the send still counts (sentAt >= receivedAt).
     expect(
       classifySentOrigin(
         r,
-        evidence({ unsubscribeCarriers: [carrier(mailto, { firstReceivedAt: r.sentAt })] }),
+        evidence({ unsubscribeTargets: [carrier(mailto, { firstReceivedAt: r.sentAt })] }),
       ),
     ).toBe("unsubscribe");
   });
@@ -368,13 +441,36 @@ describe("classifySentOrigin: unsubscribe", () => {
     expect(classifySentOrigin(row({ to: "", subject }), ev(mailto))).toBeNull();
   });
 
-  it("ignores a mailto that parseMailtoTarget rejects", () => {
+  it("labels a target parseMailtoTarget would reject (send-side caps), like the SQL", () => {
     expect(
       classifySentOrigin(
         row({ to: "not-an-address", subject: "unsubscribe" }),
         ev("mailto:not-an-address"),
       ),
-    ).toBeNull();
+    ).toBe("unsubscribe");
+    const long = "a".repeat(300);
+    expect(
+      classifySentOrigin(
+        row({ to: "u@lists.example", subject: long }),
+        ev(`mailto:u@lists.example?subject=${long}`),
+      ),
+    ).toBe("unsubscribe");
+  });
+
+  it("reads only the first 1,024 characters of a recipient, the length stored", () => {
+    const ev1 = ev("mailto:unsub@list.example");
+    const padded = `unsub@list.example${" ".repeat(2_000)}x`;
+    expect(classifySentOrigin(row({ to: padded, subject: "unsubscribe" }), ev1)).toBe(
+      "unsubscribe",
+    );
+  });
+
+  it("stays linear on a To with a huge run of interior spaces (H1)", () => {
+    const ev1 = ev("mailto:unsub@list.example");
+    expectLinear(
+      (n) => repeatTo(n, " ", "a", "b@list.example"),
+      (to) => classifySentOrigin(row({ to, subject: "unsubscribe" }), ev1),
+    );
   });
 });
 
@@ -383,9 +479,9 @@ describe("classifySentOrigin: order and default", () => {
     const all = evidence({
       ...claimEvidence(),
       approvalResults: ['{"messageId":"g1"}'],
-      unsubscribeCarriers: [
+      unsubscribeTargets: [
         {
-          mailto: "mailto:sarah@acme.com?subject=Re%3A%20Contract",
+          ...provenanceMailtoTarget("mailto:sarah@acme.com?subject=Re%3A%20Contract"),
           inbox: "primary",
           firstReceivedAt: minutes(-60),
         },
@@ -413,6 +509,7 @@ describe("classifySentRows: bounded evidence loading", () => {
     state.recordedSent = [];
     state.carriers = [];
     state.senders = new Set();
+    state.maxInFlight = 0;
   });
 
   const rows = [
@@ -468,8 +565,49 @@ describe("classifySentRows: bounded evidence loading", () => {
     expect(prisma.emailMessage.findMany).toHaveBeenCalledTimes(1);
     expect(prisma.sentMessage.findMany).toHaveBeenCalledTimes(1);
     expect(prisma.emailMessage.groupBy).toHaveBeenCalledTimes(1);
-    // Sender check only for the one target whose subject is a token.
-    expect(prisma.emailMessage.findFirst).toHaveBeenCalledTimes(1);
+    // One sender check, for the one target whose subject is a token.
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(prisma.$queryRaw).mock.calls[0]?.slice(1)).toEqual([["friend@x.com"], "u1"]);
+  });
+
+  it("runs its queries one at a time (the pool is small)", async () => {
+    state.claims = [settledClaim];
+    state.sources = [{ gmailId: "src1", subject: "Contract" }];
+    state.carriers = [listCarrier("mailto:friend@x.com?subject=unsub-AbCdEf0123456789XyZ")];
+    await classifySentRows("u1", rows);
+    expect(state.maxInFlight).toBe(1);
+  });
+
+  it("checks every token target in one query, however many there are", async () => {
+    const many = Array.from({ length: 40 }, (_, i) =>
+      row({ gmailId: `t${i}`, to: `t${i}@lists.example`, subject: "x", sentAt: minutes(i) }),
+    );
+    state.carriers = many.map((r) =>
+      listCarrier(`mailto:${r.to}?subject=unsub-AbCdEf0123456789XyZ`),
+    );
+    state.senders = new Set(["t3@lists.example"]);
+    await classifySentRows("u1", many);
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(prisma.$queryRaw).mock.calls[0]?.[1]).toHaveLength(40);
+  });
+
+  it("derives targets like the SQL: an encoded subject, a long subject, a loose address", async () => {
+    const long = "a".repeat(300);
+    state.carriers = [
+      listCarrier("mailto:Unsub@List.example?subject=remove+%3Cme%3E"),
+      listCarrier(`mailto:long@list.example?subject=${long}`),
+      listCarrier("mailto:not-an-address"),
+    ];
+    const out = await classifySentRows("u1", [
+      row({ gmailId: "a", to: "unsub@list.example", subject: "remove <me>" }),
+      row({ gmailId: "b", to: "long@list.example", subject: long }),
+      row({ gmailId: "c", to: "not-an-address", subject: "unsubscribe" }),
+    ]);
+    expect([...out.entries()]).toEqual([
+      ["a", "unsubscribe"],
+      ["b", "unsubscribe"],
+      ["c", "unsubscribe"],
+    ]);
   });
 
   it("scopes every query to the user and the batch", async () => {
@@ -529,7 +667,7 @@ describe("classifySentRows: bounded evidence loading", () => {
     await classifySentRows("u1", rows);
     expect(prisma.emailMessage.findMany).not.toHaveBeenCalled();
     expect(prisma.sentMessage.findMany).not.toHaveBeenCalled();
-    expect(prisma.emailMessage.findFirst).not.toHaveBeenCalled();
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
   });
 
   it("makes no query for an empty batch", async () => {

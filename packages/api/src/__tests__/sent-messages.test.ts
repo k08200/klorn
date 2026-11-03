@@ -48,7 +48,12 @@ vi.mock("../sentry.js", () => ({
 vi.mock("../mail/sent-origin-classifier.js", () => ({
   classifySentRows: vi.fn(async (_userId: string, rows: unknown[]) => {
     state.classifyCalls.push(rows);
-    if (state.classifyFails) throw new Error("db down");
+    if (state.classifyFails) {
+      throw Object.assign(new Error("db down near unsub@list.com"), {
+        name: "PrismaClientKnownRequestError",
+        code: "P1001",
+      });
+    }
     return state.labels;
   }),
 }));
@@ -67,6 +72,7 @@ import {
   syncSentMessages,
   waitingOnThreads,
 } from "../mail/sent-messages.js";
+import { captureError } from "../sentry.js";
 
 const NOW = new Date("2026-09-18T09:00:00Z");
 const daysAgo = (n: number) => new Date(NOW.getTime() - n * 86_400_000);
@@ -198,7 +204,7 @@ describe("recordSentMessage / syncSentMessages", () => {
       where: { userId_gmailId: { userId: "u1", gmailId: "s1" } },
     });
     state.upsertFails = true;
-    await expect(recordSentMessage("u1", sent())).resolves.toBeUndefined();
+    await expect(recordSentMessage("u1", sent())).resolves.toBe(false);
     expect(state.captured).toHaveLength(1);
   });
 
@@ -234,9 +240,7 @@ describe("recordSentMessage / syncSentMessages", () => {
 
   it("gives up after one retry and reports, never throwing", async () => {
     state.upsertConflictsLeft = 2;
-    await expect(
-      recordSentMessage("u1", { ...sent(), origin: "approved" }),
-    ).resolves.toBeUndefined();
+    await expect(recordSentMessage("u1", { ...sent(), origin: "approved" })).resolves.toBe(false);
     expect(state.upserts).toHaveLength(0);
     expect(state.captured).toHaveLength(1);
   });
@@ -270,7 +274,7 @@ describe("recordSentMessage / syncSentMessages", () => {
     });
   });
 
-  it("the P2002 retry keeps an inferred origin off the update path", async () => {
+  it("on a P2002 retry the update carries no inferred origin, so a send-time label that won the race stays", async () => {
     state.upsertConflictsLeft = 1;
     await recordSentMessage("u1", { ...sent(), inferredOrigin: "auto_reply" });
     const args = state.upserts[0] as { create: object; update: object };
@@ -326,11 +330,78 @@ describe("recordSentMessage / syncSentMessages", () => {
     expect(state.upserts).toHaveLength(1);
   });
 
-  it("sync records nothing when classification fails, rather than writing unlabeled rows", async () => {
+  it("when classification fails it still records the rows it had, and skips only the new ones", async () => {
+    state.listResult = {
+      items: [
+        {
+          gmailId: "known",
+          threadId: "t0",
+          to: "a@b.com",
+          subject: "Old",
+          receivedAt: "2026-09-09T00:00:00.000Z",
+          inbox: "primary",
+        },
+        {
+          gmailId: "new",
+          threadId: "t1",
+          to: "unsub@list.com",
+          subject: "unsubscribe",
+          receivedAt: "2026-09-10T00:00:00.000Z",
+          inbox: "primary",
+        },
+      ],
+      nextPageToken: null,
+    };
+    state.sentRows = [{ gmailId: "known" }];
     state.classifyFails = true;
+    expect(await syncSentMessages("u1", NOW.getTime())).toBe(1);
+    expect(state.upserts).toHaveLength(1);
+    expect(state.upserts[0]).toMatchObject({ create: { gmailId: "known" } });
+    // One Sentry event, carrying the error's name and code only: a Prisma
+    // message can quote the query's values (addresses).
+    expect(state.captured).toHaveLength(1);
+    const reported = state.captured[0] as Error;
+    expect(reported.name).toBe("PrismaClientKnownRequestError");
+    expect(reported.message).not.toContain("unsub@list.com");
+    expect(vi.mocked(captureError).mock.calls.at(-1)?.[1]).toMatchObject({
+      extra: { code: "P1001" },
+    });
+  });
+
+  it("record stores at most 1,024 characters of to and subject, never half a surrogate pair", async () => {
+    const to = `${"a".repeat(1_023)}\u{1F600}tail`;
+    await recordSentMessage("u1", { ...sent(), to, subject: "s".repeat(5_000) });
+    const args = state.upserts[0] as {
+      create: { to: string; subject: string };
+      update: { to: string; subject: string };
+    };
+    expect(args.create.subject).toHaveLength(1_024);
+    expect(args.update.subject).toHaveLength(1_024);
+    expect(args.create.to).toBe("a".repeat(1_023));
+  });
+
+  it("record reports whether the row was written", async () => {
+    expect(await recordSentMessage("u1", sent())).toBe(true);
+    state.upsertFails = true;
+    expect(await recordSentMessage("u1", sent())).toBe(false);
+  });
+
+  it("sync skips a row whose date is not a date", async () => {
+    state.listResult = {
+      items: [
+        {
+          gmailId: "bad",
+          threadId: "t1",
+          to: "a@b.com",
+          subject: "x",
+          receivedAt: "not a date",
+          inbox: "primary",
+        },
+      ],
+      nextPageToken: null,
+    };
     expect(await syncSentMessages("u1", NOW.getTime())).toBe(0);
     expect(state.upserts).toEqual([]);
-    expect(state.captured).toHaveLength(1);
   });
 
   it("not connected (null page) records nothing and is not an error", async () => {

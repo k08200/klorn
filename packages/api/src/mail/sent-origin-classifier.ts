@@ -5,8 +5,9 @@
  * on its own before #1591 (unattended replies), and mailto unsubscribe
  * requests (Klorn's or Gmail's own), must not land as null.
  *
- * The rules mirror the legacy SQL backfill (migration
- * 20261101000000_sent_message_origin_backfill), checked in its order:
+ * The rules are the legacy SQL backfill's (migration
+ * 20261101000000_sent_message_origin_backfill), checked in its order, so the
+ * backfill and the rows created since cannot disagree:
  *   approved     the gmailId is the messageId an executed send_email approval
  *                returned (ActionOutbox COMPLETED, PendingAction EXECUTED);
  *   auto_reply   an unattended-reply claim that did not fail, for a source mail
@@ -22,22 +23,22 @@
  *                has the same shape, and the address never sent the user mail.
  * Otherwise null. Never "user": nothing here proves a manual send.
  *
- * Two deliberate differences from the SQL, both from running in the app:
- *   - mailto targets go through parseMailtoTarget, the function Klorn's own
- *     unsubscribe send uses and the SQL emulates: it also decodes non-ASCII
- *     %XX escapes and rejects a target with no plausible address or an
- *     oversized subject or body;
- *   - "earlier" among rows with the same sentAt: the SQL compares random row
- *     ids; here a row already recorded counts as earlier, then gmailId order.
+ * Mailto targets are derived by provenanceMailtoTarget, the SQL's own
+ * derivation, not by parseMailtoTarget (whose send-side caps and decoding
+ * would leave provable rows null). The one difference from the SQL: among
+ * rows with the same sentAt, the SQL breaks the tie by random row id; here a
+ * row already recorded counts as earlier, then gmailId order.
  *
- * Callers label rows on create only (SentMessageInput.inferredOrigin), so a
- * label recorded at send time is never overwritten.
+ * Inputs are attacker-influenced (an auto-reply echoes a stranger's subject),
+ * so `to` and `subject` are read as stored (SENT_FIELD_MAX) and every parse is
+ * linear. Callers label rows on create only (SentMessageInput.inferredOrigin),
+ * so a label recorded at send time is never overwritten.
  */
 
 import { REPLY_CLAIM_ROWS } from "../agentcore/auto-reply-ledger-keys.js";
 import { prisma } from "../db.js";
 import { escapeLikePattern } from "../db-like.js";
-import { parseMailtoTarget } from "./list-unsubscribe.js";
+import { clampSentField } from "./sent-fields.js";
 import type { SentOrigin } from "./sent-messages.js";
 
 export interface ClassifiableSentRow {
@@ -66,9 +67,10 @@ export interface SentNeighbour {
   recorded: boolean;
 }
 
-/** A stored mailto target, with the first time it reached that inbox. */
-export interface UnsubscribeCarrier {
-  mailto: string;
+/** A stored mailto target as the SQL derives it, with its first arrival in that inbox. */
+export interface UnsubscribeTarget {
+  addr: string;
+  subject: string;
   inbox: string;
   firstReceivedAt: Date;
 }
@@ -83,17 +85,20 @@ export interface SentOriginEvidence {
   sourceSubjects: ReadonlyMap<string, string>;
   /** Recorded rows inside the claims' windows, plus the batch itself. */
   sentNeighbours: readonly SentNeighbour[];
-  /** List-Unsubscribe mailto targets of the user's received mail. */
-  unsubscribeCarriers: readonly UnsubscribeCarrier[];
+  /** List-Unsubscribe mailto targets of the user's received mail, parsed once. */
+  unsubscribeTargets: readonly UnsubscribeTarget[];
   /** Target addresses that also appear as a sender of the user's mail. */
   senderAddresses: ReadonlySet<string>;
 }
 
 const MESSAGE_ID_RE = /"messageId":"([^"]+)"/;
 const CLAIM_KEY_RE = /^(?:auto-reply|auto-mode-reply):(.+)$/s;
-const CLAIM_MESSAGE_ID_RE = /\[([^\]]+)\]\s*$/;
 const CLAIM_RECIPIENT_RE = /(?:replied|reply) to (\S+)/;
 const ALNUM_RE = /[A-Za-z0-9]/g;
+const MAILTO_PREFIX_RE = /^mailto:/i;
+const MAILTO_SUBJECT_RE = /[?&]subject=([^&#]*)/;
+const PERCENT_ESCAPE_RE = /%([0-9A-Fa-f]{2})/g;
+const DEFAULT_MAILTO_SUBJECT = "unsubscribe";
 const LEGACY_CLAIM_TITLE = "Auto-reply sent";
 /** A failed claim sent nothing; every other claim state may have gone out. */
 export const FAILED_CLAIM_TITLES = ["Auto-reply failed", "Auto-mode reply failed"];
@@ -102,13 +107,53 @@ const CLAIM_AFTER_SEND_MS = 2 * 60_000;
 /** Letters and digits that make a mailto subject a per-mail token. */
 const TOKEN_MIN_ALNUM = 16;
 
+/** Trim the characters `isTrimmed` accepts from both ends, by index (linear). */
+function trimBy(text: string, isTrimmed: (code: number) => boolean): string {
+  let start = 0;
+  let end = text.length;
+  while (start < end && isTrimmed(text.charCodeAt(start))) start += 1;
+  while (end > start && isTrimmed(text.charCodeAt(end - 1))) end -= 1;
+  return text.slice(start, end);
+}
+
+const SPACE = 0x20;
 /** Postgres btrim(text): strips spaces only, not other whitespace. */
-function btrim(text: string): string {
-  return text.replace(/^ +| +$/g, "");
+export function sqlBtrim(text: string): string {
+  return trimBy(text, (code) => code === SPACE);
+}
+
+/** The ASCII whitespace Postgres's \s matches: space, \t, \n, \v, \f, \r. */
+function sqlTrimWhitespace(text: string): string {
+  return trimBy(text, (code) => code === SPACE || (code >= 0x09 && code <= 0x0d));
 }
 
 function recipientKey(to: string): string {
-  return btrim(to).toLowerCase();
+  return sqlBtrim(to).toLowerCase();
+}
+
+/** Only %00-%7F (not %00) are decoded, like the SQL; anything else stays as written. */
+function decodeAsciiEscapes(text: string): string {
+  return text.replace(PERCENT_ESCAPE_RE, (whole, hex: string) => {
+    const code = Number.parseInt(hex, 16);
+    return code > 0 && code < 0x80 ? String.fromCharCode(code) : whole;
+  });
+}
+
+/**
+ * A mailto target exactly as the backfill SQL derives it:
+ *   addr     lower(btrim(split_part(regexp_replace(m, '^mailto:', '', 'i'), '?', 1))),
+ *            never decoded;
+ *   subject  the first [?&]subject= value up to & or #, "+" as a space, ASCII
+ *            %XX decoded (not %00), trimmed, "unsubscribe" when empty.
+ * Every step is linear in the stored header.
+ */
+export function provenanceMailtoTarget(mailto: string): { addr: string; subject: string } {
+  const rest = mailto.replace(MAILTO_PREFIX_RE, "");
+  const query = rest.indexOf("?");
+  const addr = sqlBtrim(query === -1 ? rest : rest.slice(0, query)).toLowerCase();
+  const raw = MAILTO_SUBJECT_RE.exec(mailto)?.[1] ?? "";
+  const subject = sqlTrimWhitespace(decodeAsciiEscapes(raw.replaceAll("+", " ")));
+  return { addr, subject: subject || DEFAULT_MAILTO_SUBJECT };
 }
 
 /** The SQL's substring(result from '"messageId":"([^"]+)"'): the first match. */
@@ -116,10 +161,25 @@ export function extractApprovedMessageId(result: string | null): string | null {
   return result ? (MESSAGE_ID_RE.exec(result)?.[1] ?? null) : null;
 }
 
+/**
+ * The SQL's substring(message from '\[([^\]]+)\]\s*$'), by index: the text
+ * between the final "]" (only whitespace after it) and the first "[" after the
+ * "]" before that. A backtracking regex here would be quadratic on many "[".
+ */
+function trailingBracketId(message: string): string | null {
+  const body = message.trimEnd();
+  if (!body.endsWith("]")) return null;
+  const close = body.length - 1;
+  const previousClose = body.lastIndexOf("]", close - 1);
+  const open = body.indexOf("[", previousClose + 1);
+  if (open === -1 || open >= close - 1) return null;
+  return body.slice(open + 1, close);
+}
+
 /** COALESCE(id from the claim key, trailing "[id]" of the message). */
 export function claimSourceGmailId(dedupeKey: string | null, message: string): string | null {
   const fromKey = dedupeKey ? CLAIM_KEY_RE.exec(dedupeKey)?.[1] : undefined;
-  return fromKey ?? CLAIM_MESSAGE_ID_RE.exec(message)?.[1] ?? null;
+  return fromKey ?? trailingBracketId(message);
 }
 
 /** The address after "replied to " / "reply to " in a claim message, lowercased. */
@@ -190,24 +250,29 @@ function subjectShape(text: string): string {
 function isUnsubscribe(row: ClassifiableSentRow, ev: SentOriginEvidence): boolean {
   const recipient = recipientKey(row.to);
   if (recipient === "") return false;
-  return ev.unsubscribeCarriers.some((carrier) => {
-    if (carrier.inbox !== row.inbox || row.sentAt < carrier.firstReceivedAt) return false;
-    const target = parseMailtoTarget(carrier.mailto);
-    if (!target || target.to !== recipient) return false;
+  return ev.unsubscribeTargets.some((target) => {
+    if (target.addr !== recipient || target.inbox !== row.inbox) return false;
+    if (row.sentAt < target.firstReceivedAt) return false;
     if (row.subject === target.subject) return true;
     return (
       alnumCount(target.subject) >= TOKEN_MIN_ALNUM &&
       subjectShape(row.subject) === subjectShape(target.subject) &&
-      !ev.senderAddresses.has(recipient)
+      !ev.senderAddresses.has(target.addr)
     );
   });
 }
 
+/** `to` and `subject` as they are stored: what the SQL would read from the table. */
+function asStored<T extends { to: string; subject: string }>(row: T): T {
+  return { ...row, to: clampSentField(row.to), subject: clampSentField(row.subject) };
+}
+
 /** The pure rule: who sent a row the scan or import is about to create. */
 export function classifySentOrigin(
-  row: ClassifiableSentRow,
+  input: ClassifiableSentRow,
   evidence: SentOriginEvidence,
 ): SentOrigin | null {
+  const row = asStored(input);
   if (isApproved(row, evidence)) return "approved";
   if (isAutoReply(row, evidence)) return "auto_reply";
   if (isUnsubscribe(row, evidence)) return "unsubscribe";
@@ -242,16 +307,14 @@ async function loadApprovalResults(
   const idFilters = rows.map((r) => ({
     result: { contains: escapeLikePattern(`"messageId":"${r.gmailId}"`) },
   }));
-  const [outbox, pending] = await Promise.all([
-    prisma.actionOutbox.findMany({
-      where: { userId, toolName: "send_email", status: "COMPLETED", OR: idFilters },
-      select: { result: true },
-    }),
-    prisma.pendingAction.findMany({
-      where: { userId, toolName: "send_email", status: "EXECUTED", OR: idFilters },
-      select: { result: true },
-    }),
-  ]);
+  const outbox = await prisma.actionOutbox.findMany({
+    where: { userId, toolName: "send_email", status: "COMPLETED", OR: idFilters },
+    select: { result: true },
+  });
+  const pending = await prisma.pendingAction.findMany({
+    where: { userId, toolName: "send_email", status: "EXECUTED", OR: idFilters },
+    select: { result: true },
+  });
   return [...outbox, ...pending].map((r) => r.result);
 }
 
@@ -300,16 +363,14 @@ async function loadClaimEvidence(
       lte: c.createdAt.getTime() + CLAIM_AFTER_SEND_MS,
     })),
   );
-  const [sources, recorded] = await Promise.all([
-    prisma.emailMessage.findMany({
-      where: { userId, gmailId: { in: sourceIds } },
-      select: { gmailId: true, subject: true },
-    }),
-    prisma.sentMessage.findMany({
-      where: { userId, OR: sendWindows.map((sentAt) => ({ sentAt })) },
-      select: { gmailId: true, to: true, subject: true, sentAt: true },
-    }),
-  ]);
+  const sources = await prisma.emailMessage.findMany({
+    where: { userId, gmailId: { in: sourceIds } },
+    select: { gmailId: true, subject: true },
+  });
+  const recorded = await prisma.sentMessage.findMany({
+    where: { userId, OR: sendWindows.map((sentAt) => ({ sentAt })) },
+    select: { gmailId: true, to: true, subject: true, sentAt: true },
+  });
   return {
     claims,
     sourceSubjects: new Map(sources.map((s) => [s.gmailId, s.subject])),
@@ -317,16 +378,21 @@ async function loadClaimEvidence(
   };
 }
 
-type UnsubscribeEvidence = Pick<SentOriginEvidence, "unsubscribeCarriers" | "senderAddresses">;
+type UnsubscribeEvidence = Pick<SentOriginEvidence, "unsubscribeTargets" | "senderAddresses">;
 
+/**
+ * Mailto targets that can match the batch, parsed once each: the database
+ * keeps only stored targets whose raw text contains one of the batch's
+ * recipients (the SQL's addr is never decoded, so it is always a substring),
+ * one row per (target, inbox) with its first arrival, since "received before
+ * the send" only needs the earliest.
+ */
 async function loadUnsubscribeEvidence(
   userId: string,
   rows: readonly ClassifiableSentRow[],
 ): Promise<UnsubscribeEvidence> {
   const recipients = [...new Set(rows.map((r) => recipientKey(r.to)))].filter(Boolean);
-  if (recipients.length === 0) return { unsubscribeCarriers: [], senderAddresses: new Set() };
-  // One row per (target, inbox) with its first arrival: "received before the
-  // send" only needs the earliest.
+  if (recipients.length === 0) return { unsubscribeTargets: [], senderAddresses: new Set() };
   const groups = await prisma.emailMessage.groupBy({
     by: ["listUnsubscribeMailto", "linkedInboxAccountId"],
     where: {
@@ -338,58 +404,49 @@ async function loadUnsubscribeEvidence(
     },
     _min: { receivedAt: true },
   });
-  const unsubscribeCarriers = groups.flatMap((g) =>
-    g.listUnsubscribeMailto && g._min.receivedAt
-      ? [
-          {
-            mailto: g.listUnsubscribeMailto,
-            inbox: g.linkedInboxAccountId ?? "primary",
-            firstReceivedAt: g._min.receivedAt,
-          },
-        ]
-      : [],
-  );
-  // The sender check only matters for a token subject; one query per such
-  // target address (usually none), never one per row.
   const wanted = new Set(recipients);
-  const tokenTargets = [
+  const unsubscribeTargets = groups.flatMap((g) => {
+    if (!g.listUnsubscribeMailto || !g._min.receivedAt) return [];
+    const target = provenanceMailtoTarget(g.listUnsubscribeMailto);
+    if (!wanted.has(target.addr)) return [];
+    const inbox = g.linkedInboxAccountId ?? "primary";
+    return [{ ...target, inbox, firstReceivedAt: g._min.receivedAt }];
+  });
+  const tokenAddrs = [
     ...new Set(
-      unsubscribeCarriers.flatMap((c) => {
-        const target = parseMailtoTarget(c.mailto);
-        return target && wanted.has(target.to) && alnumCount(target.subject) >= TOKEN_MIN_ALNUM
-          ? [target.to]
-          : [];
-      }),
+      unsubscribeTargets.filter((t) => alnumCount(t.subject) >= TOKEN_MIN_ALNUM).map((t) => t.addr),
     ),
   ];
-  const seen = await Promise.all(
-    tokenTargets.map(async (addr) => {
-      const sender = await prisma.emailMessage.findFirst({
-        where: {
-          userId,
-          OR: [
-            { fromAddress: addr },
-            { from: { contains: escapeLikePattern(addr), mode: "insensitive" } },
-          ],
-        },
-        select: { id: true },
-      });
-      return sender ? [addr] : [];
-    }),
-  );
-  return { unsubscribeCarriers, senderAddresses: new Set(seen.flat()) };
+  return { unsubscribeTargets, senderAddresses: await knownSenders(userId, tokenAddrs) };
 }
 
-/** Everything the rules need for one batch, in a bounded number of queries. */
+/**
+ * Which of these addresses ever sent the user mail, in one query: the SQL's
+ * own test (fromAddress equality, or a substring of the lowercased From).
+ */
+async function knownSenders(userId: string, addrs: string[]): Promise<Set<string>> {
+  if (addrs.length === 0) return new Set();
+  const rows = await prisma.$queryRaw<{ addr: string }[]>`
+    SELECT t.addr FROM unnest(${addrs}::text[]) AS t(addr)
+    WHERE EXISTS (
+      SELECT 1 FROM "EmailMessage" e
+      WHERE e."userId" = ${userId}
+        AND (e."fromAddress" = t.addr OR position(t.addr in lower(e."from")) > 0)
+    )`;
+  return new Set(rows.map((r) => r.addr));
+}
+
+/**
+ * Everything the rules need for one batch, in a bounded number of queries run
+ * one after another (the connection pool is small; this is background work).
+ */
 export async function loadSentOriginEvidence(
   userId: string,
   rows: readonly ClassifiableSentRow[],
 ): Promise<SentOriginEvidence> {
-  const [approvalResults, claimEvidence, unsubscribe] = await Promise.all([
-    loadApprovalResults(userId, rows),
-    loadClaimEvidence(userId, rows),
-    loadUnsubscribeEvidence(userId, rows),
-  ]);
+  const approvalResults = await loadApprovalResults(userId, rows);
+  const claimEvidence = await loadClaimEvidence(userId, rows);
+  const unsubscribe = await loadUnsubscribeEvidence(userId, rows);
   return { approvalResults, ...claimEvidence, ...unsubscribe };
 }
 
@@ -403,9 +460,10 @@ export async function classifySentRows(
   rows: readonly ClassifiableSentRow[],
 ): Promise<Map<string, SentOrigin>> {
   if (rows.length === 0) return new Map();
-  const evidence = await loadSentOriginEvidence(userId, rows);
+  const stored = rows.map(asStored);
+  const evidence = await loadSentOriginEvidence(userId, stored);
   return new Map(
-    rows.flatMap((row) => {
+    stored.flatMap((row) => {
       const origin = classifySentOrigin(row, evidence);
       return origin ? [[row.gmailId, origin] as const] : [];
     }),

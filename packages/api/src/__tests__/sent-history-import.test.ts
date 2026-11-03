@@ -12,6 +12,9 @@ interface FakeMessage {
   internalDate: number;
   to: string;
   subject: string;
+  /** What Gmail returns as internalDate, when not String(internalDate). */
+  rawInternalDate?: string | null;
+  dateHeader?: string;
 }
 
 const state = vi.hoisted(() => ({
@@ -21,6 +24,8 @@ const state = vi.hoisted(() => ({
   getCalls: [] as { account: string; params: Record<string, unknown>; options: unknown }[],
   getFailures: new Map<string, unknown>(),
   getDelayMs: 0,
+  pageSize: 0,
+  recordFails: new Set<string>(),
   inFlight: 0,
   maxInFlight: 0,
   primaryToken: { sentHistoryImportedAt: null as Date | null } as null | {
@@ -47,7 +52,7 @@ vi.mock("googleapis", () => ({
               (m) => m.internalDate / 1000 > after,
             );
             const start = Number(params.pageToken ?? 0);
-            const end = start + Number(params.maxResults);
+            const end = start + (state.pageSize || Number(params.maxResults));
             return {
               data: {
                 messages: all.slice(start, end).map((m) => ({ id: m.id, threadId: `t-${m.id}` })),
@@ -68,11 +73,13 @@ vi.mock("googleapis", () => ({
                 data: {
                   id: m?.id,
                   threadId: `t-${m?.id}`,
-                  internalDate: String(m?.internalDate),
+                  internalDate:
+                    m && "rawInternalDate" in m ? m.rawInternalDate : String(m?.internalDate),
                   payload: {
                     headers: [
                       { name: "To", value: m?.to },
                       { name: "Subject", value: m?.subject },
+                      ...(m?.dateHeader ? [{ name: "Date", value: m.dateHeader }] : []),
                     ],
                   },
                 },
@@ -128,7 +135,9 @@ vi.mock("../db.js", () => ({
 
 vi.mock("../mail/sent-messages.js", () => ({
   recordSentMessage: vi.fn(async (_userId: string, input: { gmailId: string }) => {
+    if (state.recordFails.has(input.gmailId)) return false;
     state.recorded.set(input.gmailId, input);
+    return true;
   }),
 }));
 
@@ -180,6 +189,8 @@ beforeEach(() => {
   state.getCalls = [];
   state.getFailures = new Map();
   state.getDelayMs = 0;
+  state.pageSize = 0;
+  state.recordFails = new Set();
   state.inFlight = 0;
   state.maxInFlight = 0;
   state.primaryToken = { sentHistoryImportedAt: null };
@@ -237,6 +248,8 @@ describe("one batch", () => {
         userId: "me",
         format: "metadata",
         metadataHeaders: ["To", "Subject", "Date"],
+        // Field mask: the snippet and labels never leave Google.
+        fields: "id,threadId,internalDate,payload/headers",
       });
     }
     // Detached work: every Gmail call carries a timeout so a hung request
@@ -443,5 +456,178 @@ describe("failures", () => {
     const [a, b] = await Promise.all([importSentHistory("u1", NOW), importSentHistory("u1", NOW)]);
     expect([a, b].sort()).toEqual([0, 3]);
     expect(state.listCalls).toHaveLength(1);
+  });
+});
+
+describe("review fixes (#1600)", () => {
+  it("M1: sets the marker only when every row was written, and counts rows written", async () => {
+    state.recordFails = new Set(["m1"]);
+    expect(await importSentHistory("u1", NOW)).toBe(2);
+    expect(state.markerWrites).toEqual([]);
+    state.recordFails = new Set();
+    expect(await importSentHistory("u1", NOW + 60_000)).toBe(1);
+    expect(state.markerWrites).toHaveLength(1);
+  });
+
+  it("M3: a linked inbox that needs reconnecting is never listed", async () => {
+    const { prisma } = await import("../db.js");
+    state.primaryToken = { sentHistoryImportedAt: new Date(NOW - DAY) };
+    await importSentHistory("u1", NOW);
+    const query = vi.mocked(prisma.linkedInboxAccount.findMany).mock.calls[0]?.[0] as {
+      where: Record<string, unknown>;
+    };
+    expect(query.where).toMatchObject({ needsReconnect: false, sentHistoryImportedAt: null });
+  });
+
+  it("M3: a failing inbox pauses only itself; the next inbox still imports", async () => {
+    state.linked = [{ id: "L1", sentHistoryImportedAt: null }];
+    state.mailboxes = { primary: mailbox(2), L1: mailbox(2, "l") };
+    state.getFailures.set("m1", Object.assign(new Error("quota"), { response: { status: 429 } }));
+    await importSentHistory("u1", NOW);
+    expect(state.markerWrites).toEqual([]);
+    state.listCalls = [];
+    expect(await importSentHistory("u1", NOW + 60_000)).toBe(2);
+    expect(state.listCalls.map((c) => c.account)).toEqual(["L1"]);
+    expect(state.markerWrites.map((w) => w.table)).toEqual(["linkedInboxAccount"]);
+    // One Sentry event for the primary's failure, none for the healthy inbox.
+    expect(state.captured).toHaveLength(1);
+  });
+
+  it("M4: a message that fails 3 times is skipped (count logged, not the id) and the inbox can finish", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    state.mailboxes = { primary: mailbox(1) };
+    state.getFailures.set("m0", Object.assign(new Error("boom"), { response: { status: 500 } }));
+    let t = NOW;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await importSentHistory("u1", t);
+      t += 31 * 60_000;
+    }
+    expect(state.getCalls).toHaveLength(3);
+    expect(state.markerWrites).toEqual([]);
+    await importSentHistory("u1", t);
+    expect(state.getCalls).toHaveLength(3);
+    expect(state.markerWrites).toHaveLength(1);
+    const lines = warn.mock.calls.map((c) => c.join(" "));
+    expect(lines.some((l) => l.includes("1 message"))).toBe(true);
+    expect(lines.some((l) => l.includes("m0"))).toBe(false);
+    warn.mockRestore();
+  });
+
+  it("M5: after a failed fetch, nothing newer than it is classified or recorded", async () => {
+    state.mailboxes = { primary: mailbox(5) };
+    // Oldest first: m4, m3, m2, m1, m0. m2 fails, so m1 and m0 must wait.
+    state.getFailures.set("m2", Object.assign(new Error("x"), { response: { status: 503 } }));
+    expect(await importSentHistory("u1", NOW)).toBe(2);
+    expect([...state.recorded.keys()].sort()).toEqual(["m3", "m4"]);
+    expect((state.classifyCalls[0] as { gmailId: string }[]).map((r) => r.gmailId).sort()).toEqual([
+      "m3",
+      "m4",
+    ]);
+  });
+
+  it("dates: null or empty internalDate falls back to the Date header; neither means the row is skipped, never the batch", async () => {
+    state.mailboxes = {
+      primary: [
+        {
+          ...mailbox(1)[0],
+          id: "hdr",
+          rawInternalDate: null,
+          dateHeader: "Tue, 1 Sep 2026 10:00:00 +0000",
+        },
+        { ...mailbox(2)[1], id: "bad", rawInternalDate: "" },
+        { ...mailbox(3)[2], id: "ok" },
+      ],
+    };
+    // Oldest first: ok, bad, hdr. "bad" has no usable date: skipped, and the
+    // newer "hdr" waits behind it like after a failed fetch.
+    expect(await importSentHistory("u1", NOW)).toBe(1);
+    expect([...state.recorded.keys()]).toEqual(["ok"]);
+    state.mailboxes = {
+      primary: [
+        {
+          ...mailbox(1)[0],
+          id: "hdr",
+          rawInternalDate: null,
+          dateHeader: "Tue, 1 Sep 2026 10:00:00 +0000",
+        },
+      ],
+    };
+    await importSentHistory("u1", NOW + 60_000);
+    expect(state.recorded.get("hdr")).toMatchObject({
+      sentAt: new Date("2026-09-01T10:00:00.000Z"),
+    });
+  });
+
+  it("stores and classifies to/subject truncated to 1,024 characters", async () => {
+    state.mailboxes = { primary: [{ ...mailbox(1)[0], subject: "s".repeat(3_000) }] };
+    await importSentHistory("u1", NOW);
+    const row = state.classifyCalls[0]?.[0] as { subject: string };
+    expect(row.subject).toHaveLength(1_024);
+    expect(state.recorded.get("m0")).toMatchObject({ subject: "s".repeat(1_024) });
+  });
+
+  it("L1: stops at the run deadline without finishing or pausing", async () => {
+    state.mailboxes = { primary: mailbox(12) };
+    state.getDelayMs = 15;
+    await importSentHistory("u1", NOW, { deadlineMs: 20 });
+    expect(state.getCalls.length).toBeLessThan(12);
+    expect(state.markerWrites).toEqual([]);
+    state.listCalls = [];
+    state.getDelayMs = 0;
+    await importSentHistory("u1", NOW + 60_000);
+    expect(state.listCalls).toHaveLength(1);
+  });
+
+  it("L1: lists at most 10 pages per run, even when Gmail returns short pages", async () => {
+    state.mailboxes = { primary: mailbox(30) };
+    state.pageSize = 1;
+    await importSentHistory("u1", NOW);
+    expect(state.listCalls).toHaveLength(10);
+    expect(state.markerWrites).toEqual([]);
+  });
+
+  it("L2: logs and reports the error name and code, never its message", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    state.getFailures.set(
+      "m1",
+      Object.assign(new Error("quota exceeded for person1@x.com"), { code: 429 }),
+    );
+    await importSentHistory("u1", NOW);
+    const reported = state.captured[0] as Error;
+    expect(reported.message).not.toContain("person1@x.com");
+    expect(warn.mock.calls.flat().join(" ")).not.toContain("person1@x.com");
+    warn.mockRestore();
+  });
+
+  it("L6: a finished user costs no query until the recheck, then is checked again", async () => {
+    const { prisma } = await import("../db.js");
+    for (const m of state.mailboxes.primary ?? []) state.recorded.set(m.id, { gmailId: m.id });
+    await importSentHistory("u1", NOW);
+    expect(state.markerWrites).toHaveLength(1);
+    await importSentHistory("u1", NOW + 60_000);
+    vi.mocked(prisma.userToken.findFirst).mockClear();
+    await importSentHistory("u1", NOW + 2 * 60_000);
+    expect(prisma.userToken.findFirst).not.toHaveBeenCalled();
+    await importSentHistory("u1", NOW + 7 * 3_600_000);
+    expect(prisma.userToken.findFirst).toHaveBeenCalledTimes(1);
+  });
+
+  it("M2: a reconnect or re-link resets the marker (it may be another Google account)", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { fileURLToPath } = await import("node:url");
+    const finish = readFileSync(
+      fileURLToPath(new URL("../routes/google-link-finish.ts", import.meta.url)),
+      "utf8",
+    );
+    // [where the upsert starts, what follows its update block]
+    for (const [marker, after] of [
+      ["prisma.linkedInboxAccount.upsert({", "create: {"],
+      ["prisma.userToken.upsert({", "\n      }),"],
+    ] as const) {
+      const upsert = finish.slice(finish.indexOf(marker));
+      const from = upsert.indexOf("update: {");
+      const update = upsert.slice(from, upsert.indexOf(after, from));
+      expect(update).toContain("sentHistoryImportedAt: null,");
+    }
   });
 });

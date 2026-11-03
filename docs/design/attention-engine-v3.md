@@ -101,11 +101,12 @@ Build on what exists: `SentMessage` (user's sent mail), `ContactEngagementScore`
 Output is a `relationship` snapshot stored with the decision. It eases the cold-start "urgent 0/4" problem from day one, because sent mail is already synced for "waiting on". The sync reads only the newest page of the Sent folder (50 mails) every 30 minutes. Without history, the snapshot sees at most the user's last 50 sent mails, and older correspondents look new. Production on 2026-10-31: 192 `SentMessage` rows across 3 users, the oldest from 2026-06-04.
 
 A one-time history import (`mail/sent-history-import.ts`, flag `SENT_HISTORY_BACKFILL_ENABLED`, OFF by default, accepts `cohort`) fills that in:
-- Scope: the newest 2,000 sent mails of the last 12 months, for each inbox the scan reads (primary Gmail and linked Google inboxes). Headers only (`format=metadata`: To, Subject, Date). No new scope.
+- Scope: the newest 2,000 sent mails of the last 12 months, for each inbox the scan reads (primary Gmail and linked Google inboxes not waiting for a reconnect). Headers only (`format=metadata`: To, Subject, Date, with a field mask, so no snippet). `To` and `Subject` are stored up to 1,024 characters. No new scope.
 - Resume: each run lists the window's ids and fetches the oldest ones `SentMessage` does not have, so the rows are the progress. A crash or redeploy resumes, and gaps the scan left are filled.
-- Pace: at most 100 metadata fetches per user per email-sync tick, 2 in flight, run detached from the serial user loop.
-- Done: when nothing listed is missing, the grant row (`UserToken` / `LinkedInboxAccount`) gets `sentHistoryImportedAt` and the inbox is never listed again.
-- Provenance: rows the import or the scan create are labelled at insert by `mail/sent-origin-classifier.ts`, with the same rules as the legacy backfill. A label recorded at send time is never overwritten.
+- Pace: at most 100 metadata fetches per user per email-sync tick, 2 in flight, at most 10 list pages and 2 minutes per run, run detached from the serial user loop.
+- Failures: a failed fetch pauses that inbox for 30 minutes and keeps everything newer than it for later. A message that fails 3 times, or has no usable date, is skipped; the inbox can finish without it.
+- Done: when every listed mail is recorded, the grant row (`UserToken` / `LinkedInboxAccount`) gets `sentHistoryImportedAt` and the inbox is not listed again. A reconnect or re-link resets it, since it may be another Google account.
+- Provenance: rows the import or the scan create are labelled at insert by `mail/sent-origin-classifier.ts`, with the legacy backfill's rules and its own mailto derivation; a Postgres test (`sent-origin-parity-pg.test.ts`) checks both give the same labels. The one difference: among rows with the same `sentAt`, a recorded row counts as earlier, then gmailId order (the SQL compares random ids). A label recorded at send time is never overwritten. If the labels cannot be read, the scan writes only rows it already had.
 
 As built in P2 (`judge/v3/relationship.ts`, `relationship-loader.ts`):
 - Every field is null when the data to answer it does not exist, never 0, so policy can tell "unknown" from "never". No sent-mail sync means the sent fields are null.

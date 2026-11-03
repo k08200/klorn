@@ -1471,8 +1471,9 @@ async function runUserCycle(
         // inboxes (SENT_HISTORY_BACKFILL_ENABLED, default OFF: no DB read, no
         // Gmail call). Detached on purpose: a batch is up to 100 metadata
         // fetches, which must not eat this serial loop's per-user time budget.
-        // It never rejects, runs one batch per user at a time, and stops for
-        // good once each inbox is marked imported.
+        // It never rejects, runs one batch per user at a time (2 minutes at
+        // most), and stops once each inbox is marked imported (a reconnect
+        // resets the mark).
         void importSentHistory(config.userId);
 
         // AI summarize new emails — floor 10 so a zero-new tick still drains

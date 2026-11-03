@@ -330,6 +330,7 @@ describe("__link_inbox__ pins", () => {
         refreshToken: "enc:rt",
         expiresAt: new Date(EXPIRY),
         needsReconnect: false,
+        sentHistoryImportedAt: null,
       },
       create: {
         userId: "u1",
@@ -440,7 +441,12 @@ describe("__oauth_state__ (primary connect) pins", () => {
         expiresAt: new Date(EXPIRY),
       },
       // The address is forgotten until read again: a reconnect may be another account.
-      update: { accessToken: "enc:at2", expiresAt: new Date(EXPIRY), googleEmail: null },
+      update: {
+        accessToken: "enc:at2",
+        expiresAt: new Date(EXPIRY),
+        googleEmail: null,
+        sentHistoryImportedAt: null,
+      },
     });
     await app.close();
   });
@@ -462,6 +468,7 @@ describe("__oauth_state__ (primary connect) pins", () => {
         refreshToken: "enc:rt",
         expiresAt: new Date(EXPIRY),
         googleEmail: null,
+        sentHistoryImportedAt: null,
       },
     });
     expect(m.registerGmailWatch).toHaveBeenCalledWith("u1");
