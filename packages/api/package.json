@@ -17,6 +17,7 @@
     "backfill:from-address": "tsx scripts/backfill-from-address.ts",
     "calibration": "tsx scripts/calibration.ts",
     "decision-metrics": "tsx scripts/decision-metrics.ts",
+    "replay:policy": "tsx scripts/replay-policy.ts",
     "v3-shadow-report": "tsx scripts/v3-shadow-report.ts",
     "eval:facts": "tsx scripts/v3-fact-eval.ts",
     "label:own-mail": "tsx scripts/v3-label-own-mail.ts",

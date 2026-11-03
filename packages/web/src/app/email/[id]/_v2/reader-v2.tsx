@@ -229,7 +229,7 @@ export function ReaderV2(props: ReaderV2Props) {
       {props.error && current && (
         <div
           role="alert"
-          className="mt-2 flex items-center gap-2 rounded-card border border-state-danger-line bg-state-danger-bg py-1 pl-3 pr-1 text-body text-state-danger-ink"
+          className="mt-2 flex items-center gap-2 rounded-control border border-state-danger-line bg-state-danger-bg py-1 pl-3 pr-1 text-body text-state-danger-ink"
         >
           <p className="min-w-0 flex-1">{props.error}</p>
           <Button variant="ghost" size="sm" onClick={props.onDismissError}>

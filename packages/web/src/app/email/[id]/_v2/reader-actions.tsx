@@ -223,7 +223,7 @@ export function ReaderBottomBar(props: ReaderActionsProps) {
     <div
       role="toolbar"
       aria-label={t("mailV2.reader.actions")}
-      className="fixed bottom-[calc(74px+env(safe-area-inset-bottom))] left-4 right-20 z-30 flex items-center gap-1 rounded-card border border-line bg-surface-elevated p-1 shadow-menu md:hidden"
+      className="fixed bottom-[calc(74px+env(safe-area-inset-bottom))] left-4 right-20 z-30 flex items-center gap-1 rounded-control border border-line bg-surface-elevated p-1 shadow-menu md:hidden"
     >
       <Button
         variant="primary"

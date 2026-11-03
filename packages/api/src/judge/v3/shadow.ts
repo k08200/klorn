@@ -111,6 +111,7 @@ export interface ShadowDeps {
 }
 
 const BUDGET_STOP_ERRORS = new Set(["DailyCostCapExceededError", "UserRateLimitedError"]);
+const PACER_BUSY_ERROR = "PacerBusyError";
 
 function hasOwnKey(c: ProviderCredentials): boolean {
   return Boolean(c.openRouterApiKey || c.geminiApiKey || c.openAiApiKey || c.anthropicApiKey);
@@ -188,7 +189,9 @@ async function extractAndStore(
   deps: ShadowDeps,
 ): Promise<"stored"> {
   const { input, userAddresses } = await buildInput(userId, mail, deps);
-  const extraction = await deps.extract(input, { userId });
+  // noWait: the model call claims a pacer slot at once or throws PacerBusyError;
+  // it never queues behind (or in front of) the judge.
+  const extraction = await deps.extract(input, { userId, noWait: true });
   const relationship = await deps.relationship(
     userId,
     mail.from,
@@ -216,9 +219,13 @@ async function shadowOnce(
 ): Promise<ShadowOutcome> {
   if (!deps.enabled(userId)) return "disabled";
   if (await deps.usesOwnKey(userId)) return "byok";
-  const budget = await deps.budget(userId);
-  if (budget !== "ok") return budget;
-  return (await deps.slot(() => extractAndStore(userId, mail, v2Tier, deps))) ?? "busy";
+  // Slot first: a mail that would be "busy" costs no budget queries.
+  const outcome = await deps.slot(async (): Promise<ShadowOutcome> => {
+    const budget = await deps.budget(userId);
+    if (budget !== "ok") return budget;
+    return extractAndStore(userId, mail, v2Tier, deps);
+  });
+  return outcome ?? "busy";
 }
 
 const outcomeCounts = new Map<ShadowOutcome, number>();
@@ -252,6 +259,7 @@ export async function runFactsShadow(
   try {
     return countOutcome(await shadowOnce(userId, mail, v2Tier, deps));
   } catch (err) {
+    if (err instanceof Error && err.name === PACER_BUSY_ERROR) return countOutcome("pacer_busy");
     if (err instanceof Error && BUDGET_STOP_ERRORS.has(err.name)) return countOutcome("stopped");
     // Name and ids only: a DB or provider message can echo values.
     const name = err instanceof Error ? err.name : "unknown";

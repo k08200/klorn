@@ -2093,8 +2093,10 @@ model SentMessage {
   /// Who sent it (2026-10-31): "user" (a manual send through Klorn),
   /// "approved" (agent-drafted, the user approved the exact bytes),
   /// "auto_reply" (an autonomous reply), "unsubscribe" (a mailto unsubscribe).
-  /// Null = seen only by the Sent-folder scan, i.e. sent outside Klorn, or
-  /// recorded before this column existed. See SentOrigin in sent-messages.ts.
+  /// Null = seen only by the Sent-folder scan, with no proof that Klorn sent it
+  /// (counted as the user's own mail). Legacy rows were labelled from send-time records by
+  /// migration 20261101000000_sent_message_origin_backfill. See SentOrigin in
+  /// sent-messages.ts.
   origin   String?
 
   createdAt DateTime @default(now())

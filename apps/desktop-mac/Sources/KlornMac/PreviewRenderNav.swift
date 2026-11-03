@@ -193,8 +193,16 @@ extension PreviewRender {
         return model
     }
 
+    /// The main-window shot size. `KLORN_RENDER_W=880` renders the same set
+    /// at another width (never under the window's floor): narrow layouts are
+    /// judged on a render, not assumed.
+    static var mainWindowSize: CGSize {
+        let width = ProcessInfo.processInfo.environment["KLORN_RENDER_W"].flatMap(Double.init) ?? 1280
+        return CGSize(width: max(MainWindowRules.minSize.width, CGFloat(width)), height: 800)
+    }
+
     static func renderMainWindow(dir: URL, dark: Bool, actions: ShellActions) -> Bool {
-        let size = CGSize(width: 1280, height: 800)
+        let size = mainWindowSize
         let date = ISO8601DateFormatter().date(from: "2026-07-29T08:30:00Z") ?? Date()
         var ok = true
         // Built once here, in the function's own (main-actor) scope: a closure
@@ -216,6 +224,10 @@ extension PreviewRender {
         }
         // Mixed lanes (M7): the one place a row carries its lane chip.
         shot("mail-all", navModel(firewallJSON: navFirewallJSON)) { $0.listMode = .inbox }
+        // A label facet: the reader's meta line carries the account chip.
+        shot("mail-label-company", navModel(firewallJSON: navFirewallJSON)) {
+            $0.listMode = .label(.company)
+        }
         shot("calendar-full", model) { $0.listMode = .calendar }
         // Settings ▸ Accounts: the connected inboxes, beta sources tagged.
         ok = writeShot(

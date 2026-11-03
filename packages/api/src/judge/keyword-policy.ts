@@ -185,6 +185,58 @@ export function looksUrgent(email: ClassifiableEmail): boolean {
 }
 
 /**
+ * The keyword fallback's content signals. Single source for the v2 feature
+ * scorer below and for policy v3's keyword facts (v3/keyword-facts.ts), so the
+ * two fallbacks read exactly the same vocabulary.
+ */
+export interface KeywordSignals {
+  marketing: boolean;
+  systemNotification: boolean;
+  investor: boolean;
+  urgentWord: boolean;
+  meetingWord: boolean;
+  question: boolean;
+  /** The urgent word as written in the subject or snippet (verbatim), if any. */
+  urgentEvidence: string | null;
+  /** The meeting word as written in the subject or snippet (verbatim), if any. */
+  meetingEvidence: string | null;
+}
+
+const MEETING_RE_ANY_CASE = new RegExp(MEETING_RE.source, "i");
+
+/**
+ * First match in the subject, else in the snippet, so the quote is verbatim
+ * from one field. Last resort: the joined text the detectors scan, for a
+ * phrase that only matches across the subject/snippet seam.
+ */
+function firstMatch(re: RegExp, email: ClassifiableEmail): string | null {
+  const subject = email.subject || "";
+  const snippet = email.snippet || "";
+  return (
+    re.exec(subject)?.[0] ?? re.exec(snippet)?.[0] ?? re.exec(`${subject} ${snippet}`)?.[0] ?? null
+  );
+}
+
+export function keywordSignals(email: ClassifiableEmail): KeywordSignals {
+  const from = (email.from || "").toLowerCase();
+  const subject = (email.subject || "").toLowerCase();
+  const snippet = (email.snippet || "").toLowerCase();
+  const hay = `${subject} ${snippet}`;
+  const urgentWord = URGENT_WORDS_RE.test(hay);
+  const meetingWord = MEETING_RE.test(hay);
+  return {
+    marketing: isKeywordMarketing(email),
+    systemNotification: SYSTEM_NOTIFICATION_RE.test(from),
+    investor: INVESTOR_RE.test(from),
+    urgentWord,
+    meetingWord,
+    question: QUESTION_RE.test(hay),
+    urgentEvidence: urgentWord ? firstMatch(URGENT_WORDS_RE, email) : null,
+    meetingEvidence: meetingWord ? firstMatch(MEETING_RE_ANY_CASE, email) : null,
+  };
+}
+
+/**
  * Coarse keyword-only feature scorer for when the LLM is unavailable.
  *
  * Separates two automated-sender signals the founder treats differently:
@@ -193,17 +245,13 @@ export function looksUrgent(email: ClassifiableEmail): boolean {
  * The old `isAutomated` mashed both together and forced everything to SILENT.
  */
 export function keywordFeatures(email: ClassifiableEmail): TierFeatures {
-  const from = (email.from || "").toLowerCase();
-  const subject = (email.subject || "").toLowerCase();
-  const snippet = (email.snippet || "").toLowerCase();
-  const hay = `${subject} ${snippet}`;
-
-  const isMarketing = isKeywordMarketing(email);
-  const isSystemNotification = SYSTEM_NOTIFICATION_RE.test(from);
-  const isInvestor = INVESTOR_RE.test(from);
-  const isUrgentWord = URGENT_WORDS_RE.test(hay);
-  const isMeeting = MEETING_RE.test(hay);
-  const isQuestion = QUESTION_RE.test(hay);
+  const signals = keywordSignals(email);
+  const isMarketing = signals.marketing;
+  const isSystemNotification = signals.systemNotification;
+  const isInvestor = signals.investor;
+  const isUrgentWord = signals.urgentWord;
+  const isMeeting = signals.meetingWord;
+  const isQuestion = signals.question;
 
   const s = KEYWORD_SCORES;
 
