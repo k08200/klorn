@@ -106,7 +106,7 @@ describe("replayPolicy", () => {
         ...[0, 1, 2, 3, 4].map((h) => stranger(`s${h}`, h)),
         row("known", {
           receivedAt: at(5),
-          stored: llmRow(urgentFacts(at(6)), { ...UNKNOWN_RELATIONSHIP, sentCount: 1 }),
+          stored: llmRow(urgentFacts(at(6)), { ...UNKNOWN_RELATIONSHIP, sentCount: 2 }),
         }),
       ],
       { budget: 5 },

@@ -55,7 +55,7 @@ vi.mock("../mail/gmail-labels.js", () => ({
   laneForLabelIds: vi.fn(async () => null),
 }));
 
-import { judgeAndMirrorEmail } from "../judge/email-firewall.js";
+import { backfillEmailAttentionItems, judgeAndMirrorEmail } from "../judge/email-firewall.js";
 import { FACTS_VERSION } from "../judge/v3/facts-schema.js";
 import { V3_LANE_REASON_KEY } from "../judge/v3/live-judge.js";
 import type { FactsV1 } from "../judge/v3/policy-types.js";
@@ -604,5 +604,111 @@ describe("lanes from facts, for a user under the policy", () => {
     expect(extractFactsForDecision).not.toHaveBeenCalled();
     expect(sendPushNotification).not.toHaveBeenCalled();
     expect(item("e1")).toMatchObject({ tier: "INFO", v3PolicyVersion: "v3.0" });
+  });
+});
+
+describe("ordering and failure paths, for a user under the policy", () => {
+  beforeEach(() => {
+    process.env.JUDGE_V3_POLICY = "true";
+    process.env.JUDGE_V3_SHADOW = "true";
+  });
+
+  const heldItem = (id: string): Row => ({
+    id: `item-${id}`,
+    userId: USER,
+    source: "EMAIL",
+    sourceId: id,
+    type: "REPLY_NEEDED",
+    title: `Subject ${id}`,
+    tier: "QUEUE",
+    tierReason: HELD_REASON_KEY,
+    heldAt: new Date(NOW.getTime() - HOUR),
+  });
+
+  it("a plan that fails still writes the mail, in v2's lane, and rings nothing", async () => {
+    seed();
+    extractFactsForDecision.mockRejectedValueOnce(new Error("database unavailable"));
+    judgedAs("PUSH");
+    expect(await judge("e1", {}, { liveRaw: raw("e1") })).toBe("PUSH");
+    expect(item("e1")).toMatchObject({ tier: "PUSH", v3PolicyVersion: null });
+    expect(sendPushNotification).not.toHaveBeenCalled();
+    expect(slotKeys()).toEqual([]);
+  });
+
+  it("a write that throws after a claim releases the slot, so the retry can ring", async () => {
+    seed(
+      { attentionItem: [{ ...heldItem("e1"), tier: "QUEUE", tierReason: "x", heldAt: null }] },
+      {
+        beforeUpdateMany: (model) => {
+          if (model === "attentionItem") throw new Error("write failed");
+        },
+      },
+    );
+    judgedAs("PUSH");
+    await expect(judge("e1", {}, { rejudge: true })).rejects.toThrow("write failed");
+    expect(db.tables.notification ?? []).toEqual([]);
+    expect(sendPushNotification).not.toHaveBeenCalled();
+  });
+
+  it("a pin added after a hold keeps its precedence: the re-judge rings and clears the hold", async () => {
+    seed({ attentionItem: [heldItem("e1")] });
+    judgedAs("PUSH", "pinned-rule");
+    expect(await judge("e1", {}, { rejudge: true })).toBe("PUSH");
+    expect(item("e1")).toMatchObject({ tier: "PUSH", heldAt: null });
+    expect(sendPushNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it("a re-judge to another lane clears the hold", async () => {
+    seed({ attentionItem: [heldItem("e1")] });
+    judgedAs("MEETING");
+    expect(await judge("e1", {}, { rejudge: true })).toBe("MEETING");
+    expect(item("e1")).toMatchObject({ tier: "MEETING", heldAt: null });
+  });
+
+  it("v2's autoEligible survives only where v3 kept the lane and saw no risk", async () => {
+    seed();
+    const eligibleQueue = () =>
+      judgeEmail.mockResolvedValueOnce({
+        tier: "QUEUE",
+        reason: "Reply when you can",
+        features: { confidence: 0.9, senderTrust: 0.8, reversibility: 0.5, urgency: 0.3 },
+        source: "llm",
+        autoEligible: true,
+      });
+    eligibleQueue();
+    extractFactsForDecision.mockResolvedValueOnce(
+      liveFacts(facts({ threadTurn: "mine_to_reply" })),
+    );
+    await judge("e1", {}, { liveRaw: raw("e1") });
+    expect(item("e1")).toMatchObject({ tier: "QUEUE", autoEligible: true });
+
+    // A payment risk keeps QUEUE, but unattended auto mode must not answer it.
+    eligibleQueue();
+    extractFactsForDecision.mockResolvedValueOnce(
+      liveFacts(facts({ risk: ["payment_failed"], kind: "notification" })),
+    );
+    await judge("e2", {}, { liveRaw: raw("e2") });
+    expect(item("e2")).toMatchObject({ tier: "QUEUE", autoEligible: false });
+  });
+
+  it("the backfill sweep leaves mail younger than five minutes to the inline judge", async () => {
+    seed();
+    for (const row of db.tables.emailMessage ?? []) {
+      Object.assign(row, {
+        receivedAt: new Date(NOW.getTime() - HOUR),
+        createdAt: row.id === "e1" ? new Date(NOW.getTime() - 10 * 60_000) : NOW,
+        labels: ["INBOX"],
+        snippet: "",
+      });
+    }
+    judgeEmail.mockResolvedValue({
+      tier: "QUEUE",
+      reason: "r",
+      features: { confidence: 0.9, senderTrust: 0.8, reversibility: 0.5, urgency: 0.3 },
+      source: "llm",
+      autoEligible: false,
+    });
+    await backfillEmailAttentionItems(USER);
+    expect((db.tables.attentionItem ?? []).map((r) => r.sourceId)).toEqual(["e1"]);
   });
 });

@@ -355,6 +355,35 @@ describe("claimInterruptSlot (live, atomic)", () => {
     expect(s.keys.size).toBe(9);
   });
 
+  it.each([
+    [null, 0],
+    [1, 0],
+    [2, 1],
+    [3, 1],
+    [5, 2],
+    [10, 4],
+  ])("limit %s reserves %s slots for trusted senders", (limit, reserved) => {
+    expect(reservedTrustedSlots(limit)).toBe(reserved);
+  });
+
+  it("a limit lowered mid-day still holds: used slots above it count", async () => {
+    const s = store();
+    const day = "2026-10-31";
+    for (const n of [3, 4, 5]) s.keys.add(interruptSlotKey(day, n));
+    // Now 3 per day: the three used slots spend it, though slots 1 and 2 are free.
+    expect(await claimInterruptSlot({ dayKey: day, limit: 3, trusted: true, ...s })).toEqual({
+      status: "held",
+      used: 3,
+    });
+    // Now 4 per day (1 reserved): strangers already hold three slots above it.
+    expect((await claimInterruptSlot({ dayKey: day, limit: 4, trusted: false, ...s })).status).toBe(
+      "held",
+    );
+    expect((await claimInterruptSlot({ dayKey: day, limit: 4, trusted: true, ...s })).status).toBe(
+      "admitted",
+    );
+  });
+
   it("strangers claim only above the trusted reserve; trusted senders take the lowest free slot", async () => {
     const s = store();
     const day = "2026-10-31";

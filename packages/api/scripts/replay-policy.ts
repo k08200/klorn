@@ -30,6 +30,7 @@ import { prisma } from "../src/db.js";
 import { toLiveTier } from "../src/judge/tiers.js";
 import { parseStoredFacts } from "../src/judge/v3/facts-store.js";
 import { resolveInterruptBudget } from "../src/judge/v3/interrupt-budget.js";
+import { loadRelationshipSnapshot } from "../src/judge/v3/relationship-loader.js";
 import {
   LIVE_LANES,
   type ReplayFactsMode,
@@ -37,6 +38,7 @@ import {
   type ReplayRow,
   replayPolicy,
 } from "../src/judge/v3/replay.js";
+import { prismaShadowDeps } from "../src/judge/v3/shadow.js";
 
 const PAGE = 500;
 const BODY_SCAN_CHARS = 4000; // detectSchedulingIntent reads at most this much body
@@ -132,7 +134,9 @@ async function loadRows(
           sourceId: true,
           tier: true,
           isManualOverride: true,
+          agentTierSetAt: true,
           v3PolicyVersion: true,
+          heldAt: true,
         },
       }),
       prisma.decisionLabel.findMany({
@@ -172,7 +176,8 @@ async function loadRows(
         timeZone: zones.get(e.userId) ?? DEFAULT_TIME_ZONE,
         v2Tier: toLiveTier(v2LaneOf(item, stored?.v2Tier ?? null)),
         v2Source: labelBy.get(`${e.userId}|${e.id}`)?.decidedBy ?? null,
-        manualOverride: item?.isManualOverride ?? false,
+        // An agent's lane is preserved on a re-judge like a human's.
+        manualOverride: (item?.isManualOverride ?? false) || item?.agentTierSetAt != null,
         email: {
           from: e.from,
           subject: e.subject,
@@ -188,20 +193,55 @@ async function loadRows(
   return { rows, subjects };
 }
 
+interface ItemLane {
+  tier: string | null;
+  isManualOverride: boolean;
+  agentTierSetAt: Date | null;
+  v3PolicyVersion: string | null;
+  heldAt: Date | null;
+}
+
 /**
- * The lane v2 decided. For an item v3 already decided live, AttentionItem.tier
- * is v3's lane, so the v2 lane frozen on the facts row is used. A manual
- * override is the user's lane either way. No item yet reads as QUEUE, exactly
- * as the lane queries treat it.
+ * The lane v2 decided. No item yet reads as QUEUE, exactly as the lane queries
+ * treat it. A human's or an agent's lane is kept as is. For an item v3 decided
+ * live, AttentionItem.tier is v3's lane:
+ *  - with a facts row, the v2 lane frozen on it is used;
+ *  - without one (a precedence source, or no facts), v3 kept v2's lane and
+ *    only a budget hold changed it, so a held item was v2 PUSH.
  */
-function v2LaneOf(
-  item:
-    | { tier: string | null; isManualOverride: boolean; v3PolicyVersion: string | null }
-    | undefined,
-  frozenV2: string | null,
-): string {
-  if (item?.v3PolicyVersion && !item.isManualOverride && frozenV2) return frozenV2;
-  return item?.tier ?? "QUEUE";
+function v2LaneOf(item: ItemLane | undefined, frozenV2: string | null): string {
+  if (!item) return "QUEUE";
+  const kept = item.isManualOverride || item.agentTierSetAt !== null;
+  if (kept || !item.v3PolicyVersion) return item.tier ?? "QUEUE";
+  if (frozenV2) return frozenV2;
+  return item.heldAt ? "PUSH" : (item.tier ?? "QUEUE");
+}
+
+/**
+ * Trust for the slot reserve, as live loads it for a budgeted PUSH with no
+ * relationship: only v2 PUSH rows can become one without facts. Read-only.
+ */
+async function attachRelationships(rows: ReplayRow[]): Promise<ReplayRow[]> {
+  const contexts = new Map<string, string[]>();
+  const out: ReplayRow[] = [];
+  for (const row of rows) {
+    if (row.v2Tier !== "PUSH" || row.stored?.relationship) {
+      out.push(row);
+      continue;
+    }
+    if (!contexts.has(row.userId)) {
+      contexts.set(row.userId, (await prismaShadowDeps.userContext(row.userId)).userAddresses);
+    }
+    const relationship = await loadRelationshipSnapshot({
+      userId: row.userId,
+      senderAddress: row.email.from,
+      userAddresses: contexts.get(row.userId) ?? [],
+      senderAuthenticated: null,
+      excludeEmailId: row.id,
+    });
+    out.push({ ...row, relationship });
+  }
+  return out;
 }
 
 /**
@@ -209,8 +249,14 @@ function v2LaneOf(
  * sequences included) before it reaches the operator's terminal, then cap it.
  */
 function printableSubject(subject: string): string {
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping them is the point
-  return subject.replace(/[\u0000-\u001f\u007f-\u009f]/g, " ").slice(0, SUBJECT_PREVIEW);
+  // Unicode format characters too (bidi overrides, zero-width): they can
+  // reorder what the terminal shows.
+  return (
+    subject
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping them is the point
+      .replace(/[\u0000-\u001f\u007f-\u009f]|\p{Cf}/gu, " ")
+      .slice(0, SUBJECT_PREVIEW)
+  );
 }
 
 async function loadZones(userIds: string[], zones: Map<string, string>): Promise<void> {
@@ -274,7 +320,9 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const userId = args.user ? await resolveUserId(args.user) : undefined;
   const since = new Date(Date.now() - args.days * 24 * 60 * 60 * 1000);
-  const { rows, subjects } = await loadRows(userId, since);
+  const loaded = await loadRows(userId, since);
+  const rows = await attachRelationships(loaded.rows);
+  const { subjects } = loaded;
   if (rows.length === 0) {
     console.error(`No mail in the last ${args.days} days${args.user ? ` for ${args.user}` : ""}.`);
     process.exitCode = 1;
@@ -284,7 +332,8 @@ async function main() {
   printReport(report, args, subjects);
   if (args.out) {
     const path = resolve(args.out);
-    writeFileSync(path, `${JSON.stringify(report, null, 2)}\n`);
+    // Ids and lane changes for every user: owner-only.
+    writeFileSync(path, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 });
     console.log(`\nWrote ${path}`);
   }
 }

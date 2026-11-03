@@ -210,7 +210,9 @@ describe("decideLiveLane: trust for the slot reserve", () => {
     [null, false],
     [rel(), false],
     [rel({ sentCount: 0 }), false],
-    [rel({ sentCount: 1 }), true],
+    // One reply ("who is this?") is not a relationship.
+    [rel({ sentCount: 1 }), false],
+    [rel({ sentCount: 2 }), true],
     [rel({ vip: true }), true],
     [rel({ vip: false, sentCount: 3 }), true],
   ])("relationship %j → trusted %s", (relationship, trusted) => {
@@ -218,6 +220,63 @@ describe("decideLiveLane: trust for the slot reserve", () => {
     expect(
       decideLiveLane(input({ basis: { kind: "none", pre: null, relationship } })).trusted,
     ).toBe(trusted);
+  });
+});
+
+describe("decideLiveLane: sender authentication and stored signals", () => {
+  it("a sender whose From failed DMARC is never trusted, VIP or not", () => {
+    for (const relationship of [rel({ vip: true }), rel({ sentCount: 9 })]) {
+      const passed = decideLiveLane(input({ basis: llm(facts(), relationship) }));
+      const forged = decideLiveLane(
+        input({ basis: llm(facts(), relationship), senderAuthenticated: false }),
+      );
+      expect(passed.trusted).toBe(true);
+      expect(forged.trusted).toBe(false);
+    }
+  });
+
+  it("reads the DMARC verdict from the LLM basis signals when the caller has none", () => {
+    const d = decideLiveLane(
+      input({
+        basis: {
+          kind: "llm",
+          facts: facts(),
+          relationship: rel({ vip: true }),
+          signals: { senderAuthenticated: false } as never,
+        },
+      }),
+    );
+    expect(d.trusted).toBe(false);
+  });
+
+  it("ignores a stored signal that is not a boolean and falls back to the mailbox", () => {
+    const event = facts({ event: { proposedTimes: [], hasInvite: true, conflict: null } });
+    // "false" is truthy; it must not read as spam, and the labels decide.
+    const d = decideLiveLane(
+      input({
+        basis: {
+          kind: "llm",
+          facts: event,
+          relationship: null,
+          signals: { spam: "false" } as never,
+        },
+      }),
+    );
+    expect(d.lane).toBe("MEETING");
+    const spam = decideLiveLane(
+      input({
+        email: { ...MAIL, labels: ["SPAM"] },
+        basis: { kind: "llm", facts: event, relationship: null, signals: { spam: 1 } as never },
+      }),
+    );
+    expect(spam.lane).toBe("QUEUE");
+  });
+
+  it("a precedence decision reports basis v2, not the facts it did not use", () => {
+    const d = decideLiveLane(
+      input({ v2Tier: "INFO", v2Source: "learned-rule", basis: llm(facts({ kind: "promotion" })) }),
+    );
+    expect(d.basis).toBe("v2");
   });
 });
 

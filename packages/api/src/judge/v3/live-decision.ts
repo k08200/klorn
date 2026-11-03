@@ -52,6 +52,11 @@ export interface LiveDecisionInput {
   receivedAt: Date;
   basis: FactsBasis;
   decidedAt: Date;
+  /**
+   * DMARC verdict for the From domain, when the caller has the message (live
+   * ingest). Otherwise the stored signal is used. false = failed.
+   */
+  senderAuthenticated?: boolean | null;
 }
 
 export const V2_POLICY_VERSION = "v2";
@@ -87,15 +92,38 @@ export const PRECEDENCE_SOURCES: Readonly<Record<string, ReasonCode>> = {
 
 const KEYWORD_FALLBACK_SOURCE = "keyword-fallback";
 
-export function isTrustedSender(rel: RelationshipSnapshot | null): boolean {
-  return rel?.vip === true || (rel?.sentCount ?? 0) > 0;
+/**
+ * Sends to a sender before they count as someone the user writes to. One reply
+ * (a "who is this?") is not a relationship.
+ */
+export const TRUSTED_MIN_SENT = 2;
+
+/**
+ * Trusted for the slot reserve: a VIP, or someone the user has written to at
+ * least twice. Never a sender whose From failed DMARC: VIP labels and sent
+ * history match by address, which a forger can copy.
+ */
+export function isTrustedSender(
+  rel: RelationshipSnapshot | null,
+  senderAuthenticated: boolean | null,
+): boolean {
+  if (senderAuthenticated === false) return false;
+  return rel?.vip === true || (rel?.sentCount ?? 0) >= TRUSTED_MIN_SENT;
 }
+
+/** A stored boolean signal, or null when absent or malformed. */
+const flag = (value: unknown): boolean | null => (typeof value === "boolean" ? value : null);
 
 export function decideLiveLane(input: LiveDecisionInput): LiveDecision {
   const relationship = input.basis.relationship;
+  const signals = input.basis.kind === "llm" ? input.basis.signals : null;
+  const senderAuthenticated =
+    input.senderAuthenticated !== undefined
+      ? input.senderAuthenticated
+      : flag(signals?.senderAuthenticated);
   const common = {
     importance: importancePrior(relationship, input.decidedAt),
-    trusted: isTrustedSender(relationship),
+    trusted: isTrustedSender(relationship, senderAuthenticated),
   };
   const precedence = precedenceDecision(input);
   if (precedence) return { ...precedence, ...common };
@@ -115,12 +143,12 @@ export function decideLiveLane(input: LiveDecisionInput): LiveDecision {
       ...common,
     };
   }
-  const signals = input.basis.kind === "llm" ? input.basis.signals : null;
   const decision = laneFromFactsV3({
     facts,
     relationship,
-    spam: signals?.spam ?? hasSpamLabel(input.email.labels),
-    automatedSender: signals?.automatedSender ?? isAutomatedSender(input.email.from || ""),
+    spam: flag(signals?.spam) ?? hasSpamLabel(input.email.labels),
+    automatedSender: flag(signals?.automatedSender) ?? isAutomatedSender(input.email.from || ""),
+    senderAuthenticated,
     decidedAt: input.decidedAt,
   });
   return {
@@ -154,7 +182,8 @@ function precedenceDecision(input: LiveDecisionInput): PrecedenceDecision | null
     pushCandidate: false,
     budgeted: !unbudgeted,
     precedence: true,
-    basis: input.basis.kind === "llm" ? "llm" : "v2",
+    // The v2 judge's own precedence decided, not facts.
+    basis: "v2",
     due: null,
     threadTurn: null,
   };

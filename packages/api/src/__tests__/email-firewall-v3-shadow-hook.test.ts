@@ -57,7 +57,14 @@ vi.mock("../judge/v3/flags.js", () => ({
   isJudgeV3ShadowEnabled: shadowEnabled,
   isJudgeV3PolicyEnabled: policyEnabled,
 }));
-vi.mock("../judge/v3/live-judge.js", () => ({ planV3Write }));
+vi.mock("../judge/v3/live-judge.js", () => ({
+  planV3Write,
+  judgementUnderPlan: (judgement: object, plan: { tier: string; reason: string }) => ({
+    ...judgement,
+    tier: plan.tier,
+    reason: plan.reason,
+  }),
+}));
 vi.mock("../judge/v3/shadow.js", () => ({
   runFactsShadow,
   shadowMailFromRaw: (emailId: string) => ({ emailId }),

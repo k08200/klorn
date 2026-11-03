@@ -52,6 +52,12 @@ export type V3PushPlan =
 export interface V3WritePlan {
   tier: LiveTier;
   reason: string;
+  /**
+   * v2's autoEligible survives only where v3 kept v2's lane and saw no
+   * payment, security or phishing risk: unattended auto mode must never
+   * answer mail the policy flagged.
+   */
+  autoEligible: boolean;
   v3: V3ItemFields;
   push: V3PushPlan;
 }
@@ -59,7 +65,7 @@ export interface V3WritePlan {
 export interface V3PlanInput {
   userId: string;
   email: JudgeableEmailRow;
-  judgement: { tier: string; source: string | null; reason: string };
+  judgement: { tier: string; source: string | null; reason: string; autoEligible?: boolean };
   /** The item exists: a held item stays held. */
   rejudge: boolean;
   /** The freshly ingested message. Present: the live facts call. Absent: stored facts only. */
@@ -71,9 +77,11 @@ export interface V3PlanInput {
 }
 
 export async function planV3Write(input: V3PlanInput): Promise<V3WritePlan> {
-  const now = input.now ?? new Date();
   const v2Tier = toLiveTier(input.judgement.tier);
-  const basis = await resolveBasis(input, v2Tier);
+  const { basis, senderAuthenticated } = await resolveBasis(input, v2Tier);
+  // After the facts wait (up to the deadline): the budget day, quiet hours and
+  // heldAt follow the moment of the decision.
+  const now = input.now ?? new Date();
   const decided = decideLiveLane({
     v2Tier,
     v2Source: input.judgement.source,
@@ -81,15 +89,51 @@ export async function planV3Write(input: V3PlanInput): Promise<V3WritePlan> {
     receivedAt: input.email.receivedAt,
     basis,
     decidedAt: now,
+    senderAuthenticated,
   });
-  const decision = await withSenderTrust(input, decided, basis, now);
-  const reason = laneReason(decision, v2Tier, input.judgement.reason);
-  const prior = input.rejudge ? await priorHold(input.userId, input.email.id) : null;
-  if (decision.lane === "PUSH" && prior) return heldPlan(decision, prior);
+  const decision = await withSenderTrust(input, decided, basis, senderAuthenticated, now);
+  const plan = await planLane(
+    input,
+    decision,
+    laneReason(decision, v2Tier, input.judgement.reason),
+    now,
+  );
+  return { ...plan, autoEligible: keepsAutoEligible(input, decision, plan.tier, v2Tier) };
+}
+
+type LanePlan = Omit<V3WritePlan, "autoEligible">;
+
+async function planLane(
+  input: V3PlanInput,
+  decision: LiveDecision,
+  reason: string,
+  now: Date,
+): Promise<LanePlan> {
+  if (decision.lane === "PUSH" && decision.budgeted) {
+    const prior = input.rejudge ? await priorHold(input.userId, input.email.id) : null;
+    if (prior) return heldPlan(decision, prior);
+  }
   if (decision.lane === "PUSH") return planPush(input, decision, reason, now);
   const push: V3PushPlan =
     decision.lane === "MEETING" && input.allowPush ? { kind: "meeting" } : { kind: "none" };
   return { tier: decision.lane, reason, v3: v3ItemFields(decision, null), push };
+}
+
+function keepsAutoEligible(
+  input: V3PlanInput,
+  decision: LiveDecision,
+  tier: LiveTier,
+  v2Tier: LiveTier,
+): boolean {
+  if (input.judgement.autoEligible !== true || tier !== v2Tier) return false;
+  return !decision.reasons.some((r) => r.code === "risk");
+}
+
+/** The judgement to write under a v3 plan: v2's, with the plan's lane, reason and autoEligible. */
+export function judgementUnderPlan<
+  J extends { tier: string; reason: string; autoEligible?: boolean },
+>(judgement: J, plan: V3WritePlan): J {
+  return { ...judgement, tier: plan.tier, reason: plan.reason, autoEligible: plan.autoEligible };
 }
 
 function laneReason(decision: LiveDecision, v2Tier: LiveTier, v2Reason: string): string {
@@ -98,7 +142,7 @@ function laneReason(decision: LiveDecision, v2Tier: LiveTier, v2Reason: string):
   return policyChangedLane ? V3_LANE_REASON_KEY : v2Reason;
 }
 
-function heldPlan(decision: LiveDecision, hold: Hold): V3WritePlan {
+function heldPlan(decision: LiveDecision, hold: Hold): LanePlan {
   return {
     tier: "QUEUE",
     reason: HELD_REASON_KEY,
@@ -117,8 +161,8 @@ async function planPush(
   decision: LiveDecision,
   reason: string,
   now: Date,
-): Promise<V3WritePlan> {
-  const quiet: V3WritePlan = {
+): Promise<LanePlan> {
+  const quiet: LanePlan = {
     tier: "PUSH",
     reason,
     v3: v3ItemFields(decision, null),
@@ -134,10 +178,10 @@ async function planPush(
   if (admission.status !== "held") {
     return { ...quiet, push: { kind: "deliver", notification: admission.notification } };
   }
+  // Ids only: an IMAP gmailId embeds the mailbox address.
   console.log(
     `[PUSH-BUDGET] Firewall PUSH held in QUEUE: daily interrupt budget ${admission.limit} ` +
-      `spent (${decision.trusted ? "trusted" : "stranger"} sender), ` +
-      `for email ${input.email.gmailId} user ${input.userId}`,
+      `spent, for email ${input.email.id} user ${input.userId}`,
   );
   return heldPlan(decision, { heldAt: now, budget: admission.limit });
 }
@@ -152,6 +196,7 @@ async function withSenderTrust(
   input: V3PlanInput,
   decision: LiveDecision,
   basis: FactsBasis,
+  senderAuthenticated: boolean | null | undefined,
   now: Date,
 ): Promise<LiveDecision> {
   const needsTrust = decision.lane === "PUSH" && decision.budgeted && input.allowPush;
@@ -162,12 +207,12 @@ async function withSenderTrust(
       userId: input.userId,
       senderAddress: input.email.from,
       userAddresses,
-      senderAuthenticated: null,
+      senderAuthenticated: senderAuthenticated ?? null,
       excludeEmailId: input.email.id,
     });
     return {
       ...decision,
-      trusted: isTrustedSender(relationship),
+      trusted: isTrustedSender(relationship, senderAuthenticated ?? null),
       importance: importancePrior(relationship, now),
     };
   } catch (err) {
@@ -189,18 +234,34 @@ async function priorHold(userId: string, emailId: string): Promise<Hold | null> 
   return { heldAt: item.heldAt, budget: heldBudgetOf(item.v3Decision) };
 }
 
-async function resolveBasis(input: V3PlanInput, v2Tier: LiveTier): Promise<FactsBasis> {
-  // A precedence source decides without facts: no model call for it.
-  if (input.judgement.source && PRECEDENCE_SOURCES[input.judgement.source]) {
-    return { kind: "none", pre: null, relationship: null };
-  }
-  if (input.liveRaw) {
-    const result = await extractFactsForDecision(
-      input.userId,
-      shadowMailFromRaw(input.email.id, input.liveRaw),
-      { v2Tier, credentials: input.credentials, deadlineMs: LIVE_FACTS_DEADLINE_MS },
-    );
-    return basisFromLive(result);
-  }
-  return basisFromStored(await findAttentionFacts(input.userId, "EMAIL", input.email.id));
+interface ResolvedBasis {
+  basis: FactsBasis;
+  /** DMARC verdict when known; undefined lets the decision read the LLM basis signals. */
+  senderAuthenticated: boolean | null | undefined;
 }
+
+async function resolveBasis(input: V3PlanInput, v2Tier: LiveTier): Promise<ResolvedBasis> {
+  const noFacts: FactsBasis = { kind: "none", pre: null, relationship: null };
+  if (input.liveRaw) {
+    const mail = shadowMailFromRaw(input.email.id, input.liveRaw);
+    // A precedence source decides without facts: no model call for it.
+    if (isPrecedence(input))
+      return { basis: noFacts, senderAuthenticated: mail.senderAuthenticated };
+    const result = await extractFactsForDecision(input.userId, mail, {
+      v2Tier,
+      credentials: input.credentials,
+      deadlineMs: LIVE_FACTS_DEADLINE_MS,
+    });
+    return { basis: basisFromLive(result), senderAuthenticated: mail.senderAuthenticated };
+  }
+  if (isPrecedence(input)) return { basis: noFacts, senderAuthenticated: undefined };
+  const stored = await findAttentionFacts(input.userId, "EMAIL", input.email.id);
+  const auth = stored?.signals?.senderAuthenticated;
+  return {
+    basis: basisFromStored(stored),
+    senderAuthenticated: typeof auth === "boolean" ? auth : undefined,
+  };
+}
+
+const isPrecedence = (input: V3PlanInput): boolean =>
+  Boolean(input.judgement.source && PRECEDENCE_SOURCES[input.judgement.source]);

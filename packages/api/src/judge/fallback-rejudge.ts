@@ -34,6 +34,7 @@ import type { JudgeableEmailRow } from "./email-firewall.js";
 import { buildJudgeContext } from "./judge-context.js";
 import type { PocTier } from "./poc-judge.js";
 import { judgeEmail } from "./poc-judge.js";
+import { findAttentionFacts } from "./v3/facts-store.js";
 import { isJudgeV3PolicyEnabled } from "./v3/flags.js";
 import { v3Columns } from "./v3/live-item.js";
 
@@ -133,6 +134,12 @@ export async function rejudgeFallbackItems(
         },
       });
       if (!email) continue;
+      // Under policy v3, LLM facts decided this lane, not the v2 fallback the
+      // ledger records: re-judging with v2 would spend a call and change nothing.
+      if (isJudgeV3PolicyEnabled(userId) && (await hasLlmFacts(userId, email.id))) {
+        summary.unchanged++;
+        continue;
+      }
 
       const context = await buildJudgeContext(userId, {
         from: email.from,
@@ -213,6 +220,11 @@ export async function rejudgeFallbackItems(
     if (delayMs > 0) await sleep(delayMs);
   }
   return summary;
+}
+
+async function hasLlmFacts(userId: string, emailId: string): Promise<boolean> {
+  const stored = await findAttentionFacts(userId, "EMAIL", emailId);
+  return stored?.factsSource === "llm" && stored.facts !== null;
 }
 
 /** The v3 live rule for a repaired item: stored facts only, no push, a hold stays. */

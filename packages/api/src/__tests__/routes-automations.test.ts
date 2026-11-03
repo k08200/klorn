@@ -542,6 +542,8 @@ describe("PATCH /api/automations interruptBudget (attention engine v3)", () => {
       alwaysAllowedTools: [],
       interruptBudget: (args.update.interruptBudget as number | null | undefined) ?? null,
     }));
+    process.env.JUDGE_V3_POLICY = "true";
+    process.env.JUDGE_V3_SHADOW = "true";
   });
   afterEach(() => {
     delete process.env.JUDGE_V3_POLICY;
@@ -568,18 +570,21 @@ describe("PATCH /api/automations interruptBudget (attention engine v3)", () => {
     expect(upsertSpy).not.toHaveBeenCalled();
   });
 
-  it("returns the setting only for a user under the policy; the shape is unchanged otherwise", async () => {
-    const off = await patch({ interruptBudget: 4 });
-    expect(off.json()).not.toHaveProperty("interruptBudget");
-
-    process.env.JUDGE_V3_POLICY = "true";
-    process.env.JUDGE_V3_SHADOW = "true";
-    const on = await patch({ interruptBudget: 4 });
-    expect(on.json()).toMatchObject({
+  it("returns the setting with its default and maximum", async () => {
+    const res = await patch({ interruptBudget: 4 });
+    expect(res.json()).toMatchObject({
       interruptBudget: 4,
       interruptBudgetDefault: 5,
       interruptBudgetMax: 50,
     });
+  });
+
+  it("for a user outside the policy, ignores the key like any unknown one (today's behaviour)", async () => {
+    delete process.env.JUDGE_V3_SHADOW;
+    const res = await patch({ interruptBudget: 999 });
+    expect(res.statusCode).toBe(200);
+    expect(upsertSpy.mock.calls[0][0].update).not.toHaveProperty("interruptBudget");
+    expect(res.json()).not.toHaveProperty("interruptBudget");
   });
 });
 

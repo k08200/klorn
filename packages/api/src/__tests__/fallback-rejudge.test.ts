@@ -24,6 +24,7 @@ const dbMock = vi.hoisted(() => ({
   decisionLabel: { findMany: vi.fn() },
   attentionItem: { findMany: vi.fn(), updateMany: vi.fn() },
   emailMessage: { findUnique: vi.fn() },
+  attentionFacts: { findUnique: vi.fn() },
 }));
 const judgeEmailMock = vi.hoisted(() => vi.fn());
 const buildContextMock = vi.hoisted(() => vi.fn());
@@ -85,6 +86,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   flagState.sweep = false;
   policyEnabled.mockReturnValue(false);
+  dbMock.attentionFacts.findUnique.mockResolvedValue(null);
 });
 
 describe("rejudgeFallbackItems", () => {
@@ -149,6 +151,33 @@ describe("rejudgeFallbackItems", () => {
     expect(recordDecisionMock).toHaveBeenCalledWith(
       expect.objectContaining({ shownTier: "INFO", decidedBy: "llm" }),
     );
+  });
+
+  it("for a user under policy v3, skips a row whose lane LLM facts decided (no v2 call)", async () => {
+    wire();
+    policyEnabled.mockReturnValue(true);
+    dbMock.attentionFacts.findUnique.mockResolvedValue({
+      factsVersion: 1,
+      factsSource: "llm",
+      facts: {
+        asks: [],
+        addressedTo: "me_direct",
+        threadTurn: "none",
+        event: null,
+        transaction: null,
+        risk: [],
+        kind: "personal",
+        ambiguous: false,
+      },
+      certainFields: [],
+      signals: null,
+      relationship: null,
+    });
+    const summary = await rejudgeFallbackItems("u1", { apply: true, delayMs: 0 });
+    expect(summary).toEqual({ changed: 0, unchanged: 1, skippedFallback: 0 });
+    expect(judgeEmailMock).not.toHaveBeenCalled();
+    expect(planV3Write).not.toHaveBeenCalled();
+    expect(dbMock.attentionItem.updateMany).not.toHaveBeenCalled();
   });
 
   it("never targets an item whose lane an MCP agent set (step A2b) — in the read or in the guarded write", async () => {

@@ -38,8 +38,9 @@ import { buildJudgeContext } from "./judge-context.js";
 import { recordJudgeSource } from "./judge-health.js";
 import { isClearMarketing } from "./keyword-policy.js";
 import { reconcileLabelCorrection } from "./label-correction.js";
-import { judgeEmail, type PocTier } from "./poc-judge.js";
+import { judgeEmail, type PocJudgement, type PocTier } from "./poc-judge.js";
 import { isJudgeV3PolicyEnabled, isJudgeV3ShadowEnabled } from "./v3/flags.js";
+import type { V3ItemFields } from "./v3/live-item.js";
 import type { V3PushPlan } from "./v3/live-judge.js";
 
 /**
@@ -432,9 +433,10 @@ async function startFactsShadow(
 /**
  * Classify one stored email into a tier and mirror it to an AttentionItem.
  * Shared by the inline sync path and the backfill sweep. buildJudgeContext
- * never throws and judgeEmail falls back to keyword features when the LLM is
- * down, so the only way this produces no AttentionItem is the upsert itself
- * throwing — in which case the next backfill pass retries it.
+ * never throws, judgeEmail falls back to keyword features when the LLM is
+ * down, and a failed v3 plan falls back to the v2 lane, so the only way this
+ * produces no AttentionItem is the upsert itself throwing — in which case the
+ * next backfill pass retries it.
  */
 export async function judgeAndMirrorEmail(
   userId: string,
@@ -492,33 +494,17 @@ export async function judgeAndMirrorEmail(
   }
   // Attention engine v3 (JUDGE_V3_POLICY, for the users it covers): the lane
   // and any interrupt-budget hold are decided here, before the item is written.
-  const policyUser = isJudgeV3PolicyEnabled(userId);
-  const plan = policyUser
-    ? await (await import("./v3/live-judge.js")).planV3Write({
-        userId,
-        email,
-        judgement,
-        rejudge: options.rejudge === true,
-        liveRaw: options.liveRaw,
-        credentials: llmCredentials,
-        allowPush: true,
-      })
-    : null;
-  const written = plan ? { ...judgement, tier: plan.tier, reason: plan.reason } : judgement;
-  const outcome = await upsertAttentionForEmailJudgement(
-    { userId, ...email },
-    written,
-    engagementKindOf(judgeContext.senderFacts),
-    { rejudge: options.rejudge, v3: plan?.v3 },
-  );
+  const v3 = await v3PlanFor(userId, email, judgement, llmCredentials, options);
+  const written = v3?.written ?? judgement;
+  const outcome = await writeJudgedItem(userId, email, written, judgeContext, options, v3);
   // A human override or an agent lane landed while the judge ran, so the write
   // was refused and their decision stands. Nothing below may run: no wake-up, no
   // push and no Gmail label for a tier that is not the one the item carries. A
   // budget slot already claimed stays spent; its bell row is hidden.
   if (outcome === "preserved") {
-    if (plan?.push.kind === "deliver") {
+    if (v3?.push.kind === "deliver") {
       const { hideClaimedBellRow } = await import("./v3/push-budget-gate.js");
-      await hideClaimedBellRow(userId, plan.push.notification.id);
+      await hideClaimedBellRow(userId, v3.push.notification.id);
     }
     return written.tier;
   }
@@ -536,7 +522,7 @@ export async function judgeAndMirrorEmail(
   // founder's 기본 모드 contract is "important mail + calendar/scheduling
   // interrupt, everything else is silent" (docs/design/tier-ontology-v2.md).
   // Best-effort: never block or fail classification on the notification.
-  await ringForFirewallEmail(userId, email, written.tier, plan?.push ?? null);
+  await ringForFirewallEmail(userId, email, written.tier, v3?.push ?? null);
 
   // Label mode: mirror the decided lane back into Gmail so the classification
   // is visible in whatever client the user already reads mail in. Best-effort
@@ -555,6 +541,80 @@ export async function judgeAndMirrorEmail(
   );
 
   return written.tier;
+}
+
+interface V3Write {
+  written: PocJudgement;
+  v3?: V3ItemFields;
+  push: V3PushPlan;
+}
+
+/**
+ * The v3 plan for a user under the policy; null for everyone else. A plan that
+ * fails (a database error) falls back to the v2 lane with no v3 columns and no
+ * PUSH notification, so the mail is still written and the budget is never
+ * bypassed. MEETING still rings: it is not budgeted.
+ */
+async function v3PlanFor(
+  userId: string,
+  email: JudgeableEmailRow,
+  judgement: PocJudgement,
+  credentials: ProviderCredentials,
+  options: { rejudge?: boolean; liveRaw?: GmailRawEmail },
+): Promise<V3Write | null> {
+  if (!isJudgeV3PolicyEnabled(userId)) return null;
+  try {
+    const { judgementUnderPlan, planV3Write } = await import("./v3/live-judge.js");
+    const plan = await planV3Write({
+      userId,
+      email,
+      judgement,
+      rejudge: options.rejudge === true,
+      liveRaw: options.liveRaw,
+      credentials,
+      allowPush: true,
+    });
+    return { written: judgementUnderPlan(judgement, plan), v3: plan.v3, push: plan.push };
+  } catch (err) {
+    console.warn("[FIREWALL] v3 plan failed; writing the v2 lane (ids in Sentry extra)", err);
+    captureError(err, { tags: { scope: "judge-v3-plan" }, extra: { userId, emailId: email.id } });
+    const push: V3PushPlan = judgement.tier === "MEETING" ? { kind: "meeting" } : { kind: "none" };
+    return { written: judgement, push };
+  }
+}
+
+/**
+ * Write the item. If the write throws after a budget slot was claimed, the
+ * claim is released: nothing rang, and the retry (the backfill sweep) must be
+ * able to claim and ring again rather than find its own bell row as a dedupe.
+ */
+async function writeJudgedItem(
+  userId: string,
+  email: JudgeableEmailRow,
+  written: PocJudgement,
+  judgeContext: Awaited<ReturnType<typeof buildJudgeContext>>,
+  options: { rejudge?: boolean },
+  v3: V3Write | null,
+) {
+  try {
+    return await upsertAttentionForEmailJudgement(
+      { userId, ...email },
+      written,
+      engagementKindOf(judgeContext.senderFacts),
+      { rejudge: options.rejudge, v3: v3?.v3 },
+    );
+  } catch (err) {
+    if (v3?.push.kind === "deliver") {
+      const { releaseClaimedBellRow } = await import("./v3/push-budget-gate.js");
+      await releaseClaimedBellRow(userId, v3.push.notification.id).catch((releaseErr) =>
+        captureError(releaseErr, {
+          tags: { scope: "judge-v3-release-claim" },
+          extra: { userId, emailId: email.id },
+        }),
+      );
+    }
+    throw err;
+  }
 }
 
 /**
@@ -582,6 +642,11 @@ async function ringForFirewallEmail(
 
 const BACKFILL_LOOKBACK_DAYS = 14;
 const BACKFILL_LOOKBACK_MS = BACKFILL_LOOKBACK_DAYS * 24 * 60 * 60 * 1000;
+// For a user under policy v3 the inline judge can run for the live facts
+// deadline plus a wait for a model slot. The sweep leaves mail that young to
+// the inline judge, so the two never judge (and claim a budget slot for) the
+// same mail at once.
+const V3_BACKFILL_MIN_AGE_MS = 5 * 60 * 1000;
 const BACKFILL_SCAN_LIMIT = 200;
 const BACKFILL_BATCH = 10;
 
@@ -599,9 +664,12 @@ const BACKFILL_BATCH = 10;
  */
 export async function backfillEmailAttentionItems(userId: string): Promise<number> {
   const cutoff = new Date(Date.now() - BACKFILL_LOOKBACK_MS);
+  const youngest = isJudgeV3PolicyEnabled(userId)
+    ? { createdAt: { lte: new Date(Date.now() - V3_BACKFILL_MIN_AGE_MS) } }
+    : {};
   const recent = (
     (await prisma.emailMessage.findMany({
-      where: { userId, receivedAt: { gte: cutoff } },
+      where: { userId, receivedAt: { gte: cutoff }, ...youngest },
       select: {
         id: true,
         gmailId: true,

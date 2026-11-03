@@ -161,7 +161,8 @@ export async function automationRoutes(app: FastifyInstance) {
       "phoneEscalationEnabled",
       "attentionMode",
       "autoReplyGuideline",
-      "interruptBudget",
+      // Only for users under policy v3; ignored like any unknown key otherwise.
+      ...(isJudgeV3PolicyEnabled(userId) ? ["interruptBudget"] : []),
     ];
     const data: Record<string, unknown> = {};
     for (const key of allowed) {

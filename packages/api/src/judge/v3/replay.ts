@@ -35,6 +35,7 @@ import {
 } from "./live-decision.js";
 import { classifyParityDivergence, parityViolation } from "./parity.js";
 import { laneFromFactsV3, POLICY_VERSION } from "./policy.js";
+import type { RelationshipSnapshot } from "./policy-types.js";
 import type { ReasonCode } from "./reasons.js";
 
 export const LIVE_LANES: readonly LiveTier[] = ["PUSH", "MEETING", "QUEUE", "INFO", "SILENT"];
@@ -53,6 +54,11 @@ export interface ReplayRow {
   email: ClassifiableEmail;
   /** The stored AttentionFacts row, read back (facts-store.ts parseStoredFacts). */
   stored: StoredFacts | null;
+  /**
+   * The sender's relationship when no stored row carries one, loaded by the CLI
+   * as the live path loads it for a budgeted PUSH (trust for the slot reserve).
+   */
+  relationship?: RelationshipSnapshot | null;
 }
 
 /** "stored": the live rule per row. "keyword": keyword facts for every row. */
@@ -144,15 +150,12 @@ export function replayPolicy(
 }
 
 function decideRow(row: ReplayRow, mode: ReplayFactsMode): Decided {
-  const stored = basisFromStored(row.stored);
+  const relationship = row.stored?.relationship ?? row.relationship ?? null;
   const basis: FactsBasis =
     mode === "keyword"
-      ? {
-          kind: "keyword",
-          pre: row.stored?.pre ?? null,
-          relationship: row.stored?.relationship ?? null,
-        }
-      : stored;
+      ? { kind: "keyword", pre: row.stored?.pre ?? null, relationship }
+      : { ...basisFromStored(row.stored), relationship };
+  const auth = row.stored?.signals?.senderAuthenticated;
   const decision = decideLiveLane({
     v2Tier: row.v2Tier,
     v2Source: row.v2Source,
@@ -160,7 +163,9 @@ function decideRow(row: ReplayRow, mode: ReplayFactsMode): Decided {
     email: row.email,
     receivedAt: row.receivedAt,
     basis,
+    // Replay decides each mail as ingest would have, at its arrival.
     decidedAt: row.receivedAt,
+    senderAuthenticated: typeof auth === "boolean" ? auth : undefined,
   });
   return { row, decision };
 }

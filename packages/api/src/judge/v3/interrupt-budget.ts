@@ -97,9 +97,14 @@ export const interruptSlotKey = (dayKey: string, slot: number): string =>
  */
 export const TRUSTED_SLOT_SHARE = 0.4;
 
-/** Slots 1..n reserved for trusted senders (none without a limit). */
+/**
+ * Slots 1..n reserved for trusted senders: 40% rounded down, and at least one
+ * from a limit of 2 up, so a user who picks a small budget still keeps one
+ * slot strangers cannot take. A limit of 1, or no limit, has no reserve.
+ */
 export function reservedTrustedSlots(limit: number | null): number {
-  return limit === null ? 0 : Math.floor(limit * TRUSTED_SLOT_SHARE);
+  if (limit === null || limit < 2) return 0;
+  return Math.max(1, Math.floor(limit * TRUSTED_SLOT_SHARE));
 }
 
 export interface BudgetCandidate {
@@ -157,7 +162,8 @@ export interface SlotStore {
 /**
  * Claim a free interrupt slot for the day. With a limit, slots are 1..limit:
  * a trusted sender takes the lowest free one, a stranger only one above the
- * trusted reserve. A unique-index conflict means a racing claimer took that
+ * trusted reserve. The day's used count is checked first, so a limit lowered
+ * mid-day still holds. A unique-index conflict means a racing claimer took that
  * slot, so the claim moves on to the next; at most `limit` attempts. Without
  * a limit it takes the next number after the highest used one.
  */
@@ -167,7 +173,14 @@ export async function claimInterruptSlot(
   const prefix = interruptSlotPrefix(input.dayKey);
   const used = new Set((await input.usedSlots(prefix)).filter((n) => Number.isInteger(n) && n > 0));
   if (input.limit === null) return claimUnlimited(input, used);
-  const lowest = input.trusted ? 1 : reservedTrustedSlots(input.limit) + 1;
+  const reserve = reservedTrustedSlots(input.limit);
+  // Counted, not only bounded by slot number: a limit lowered mid-day leaves
+  // used slots above the new limit, and they still count.
+  if (used.size >= input.limit) return { status: "held", used: used.size };
+  if (!input.trusted && [...used].filter((n) => n > reserve).length >= input.limit - reserve) {
+    return { status: "held", used: used.size };
+  }
+  const lowest = input.trusted ? 1 : reserve + 1;
   for (let slot = lowest; slot <= input.limit; slot++) {
     if (used.has(slot)) continue;
     const key = interruptSlotKey(input.dayKey, slot);

@@ -150,3 +150,13 @@ export async function hideClaimedBellRow(userId: string, notificationId: string)
     data: { type: HIDDEN_CLAIM_TYPE, isRead: true },
   });
 }
+
+/**
+ * A slot was claimed, but writing the item failed, so nothing rang. The claim
+ * is released (unlike a cleared bell, where the row is only hidden): the retry
+ * must be able to claim the slot and ring, and must not find this row as
+ * "already pushed".
+ */
+export async function releaseClaimedBellRow(userId: string, notificationId: string): Promise<void> {
+  await prisma.notification.deleteMany({ where: { id: notificationId, userId } });
+}

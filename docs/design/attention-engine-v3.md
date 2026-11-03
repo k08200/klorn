@@ -169,6 +169,7 @@ The code is in `packages/api/src/judge/v3/`: `policy.ts`, `interrupt-budget.ts`,
 2. **MEETING**: `event` is present and `addressedTo` is not bulk. This is checked before PUSH, as in v2. A meeting notifies through its own lane and spends no interrupt budget.
 3. **PUSH candidate**: `addressedTo` is me_direct or me_cc, there is no `phishing_suspect`, and one of these holds:
    - `risk` contains payment_failed or security_alert, and the sender is a **VIP** (an investor/customer label, or a sender pinned to PUSH). Risk has no evidence quote in facts v1, so on its own it needs relationship trust.
+     - A VIP whose From failed DMARC (`senderAuthenticated` false) is not trusted. VIP labels match by address or domain, which a forger can copy. No verdict (null) is not a failure: some providers report none.
      - The same organisation is not enough: that is how CEO-fraud spoofing looks.
      - "The user wrote to them" is not enough either. `SentMessage.origin` (#1591) now marks Klorn's own sends, but rows recorded before it stay null and still read as the user's (§3(2)). A past unattended auto-reply to an attacker could therefore still lend trust.
      - v2 never pushed machine mail, so this is never worse than today. A user who wants a bank's alerts to interrupt pins the sender to PUSH.
@@ -201,8 +202,13 @@ Floors:
    - `heldAt`.
 
    When the policy picks a different lane from v2, `tierReason` becomes the static key `email.v3LaneFromFacts`, because v2's text would not explain the new lane. Otherwise v2's reason stays.
-6. A hold is final for the item. A later re-judge that says PUSH again keeps it in QUEUE, held; it is past the 6h push window by then. A re-judge to any other lane clears the hold.
+6. A hold is final for the item. A later re-judge that says PUSH again keeps it in QUEUE, held; it is past the 6h push window by then. A pin keeps precedence over a hold, and a re-judge to any other lane clears it.
 7. If a human or an agent moved the item while the judge ran, their lane stands. A slot already claimed for it stays spent, and its bell row is hidden.
+8. Failure paths:
+   - If planning fails (a database error), the mail is still written, in the v2 lane, with no v3 columns and no PUSH notification. The budget is never bypassed. MEETING still rings, since it is not budgeted.
+   - If writing the item fails after a slot was claimed, the claim is released. Nothing rang, so the backfill sweep's retry can claim and ring again.
+   - The backfill sweep leaves a policy user's mail younger than five minutes to the inline judge, so the two never claim slots for the same mail at once.
+9. v2's `autoEligible` (unattended auto mode) survives only where v3 kept v2's lane and saw no payment, security or phishing risk.
 
 **Interrupt budget.** The founder's default is 5 per day (§8). `JUDGE_V3_PUSH_BUDGET` sets the system default and accepts a positive integer or `unlimited`. `AutomationConfig.interruptBudget` (1–50, via `PATCH /api/automations`) overrides it per user. Null means the system default. Any other value is a 400. For a user under the policy, the automations response adds `interruptBudget`, `interruptBudgetDefault` (null for no limit) and `interruptBudgetMax`.
 - The budget is counted per user per local day (`AutomationConfig.timezone`). Only PUSH notifications spend it. MEETING does not.
@@ -218,12 +224,15 @@ Floors:
   - `DecisionLabel.shownTier` = QUEUE. `decidedBy` keeps the judge path, because the fallback repair sweep selects on it.
   - The judge drops a model reason that equals a static reason key, so only the hold path writes the held key. Ranking trusts `AttentionItem.heldAt`, not the reason text.
   - If a human or an agent moved the item between the judgement and the hold, nothing is sent and their lane stands.
-- **Slots reserved for trusted senders.** 40% of the day's slots, rounded down (2 of 5), are reserved for trusted senders. A trusted sender is a VIP, or someone the user has written to (relationship `sentCount` > 0).
-  - Slots are numbered 1..limit. Strangers claim only from the slots above the reserve, so five urgent-looking mails from strangers can spend 3 slots at most.
-  - Trusted senders claim the lowest free slot.
+- **Slots reserved for trusted senders.** 40% of the day's slots, rounded down, are reserved for trusted senders, with at least 1 from a limit of 2 up (5 → 2, 3 → 1, 2 → 1, 1 → 0).
+  - A trusted sender is a VIP, or someone the user has written to at least twice (`sentCount` ≥ 2). One reply, such as "who is this?", is not a relationship.
+  - A sender whose From failed DMARC is never trusted.
+  - Slots are numbered 1..limit. Strangers claim only slots above the reserve, so five urgent-looking mails from strangers can spend 3 slots at most.
+  - Trusted senders claim the lowest free slot, and may also use the slots above the reserve. The reserve only limits strangers; it is not a cap on trusted senders.
+  - The day's used slots are counted first, so a limit lowered mid-day still holds.
   - A budgeted PUSH decided without a relationship gets one loaded from the database, with no model call. That covers a v2 lane standing for missing facts, a sender prior and a learned rule. A failed load leaves the sender a stranger.
-  - `sentCount` still counts legacy null-origin sends (§3(2)), so an attacker who once got a Klorn auto-reply competes for the reserved slots. That is bounded: it cannot exceed the limit, and it does not change the lane. With no limit there is no reserve.
-- For a user under the policy, the legacy keyword urgent sweep (`automation-scheduler.ts`) stops sending its own pushes. The policy's PUSH lane, under the budget, is the only email interrupt.
+  - `sentCount` still counts legacy null-origin sends (§3(2)). An attacker who got two Klorn auto-replies therefore counts as trusted, and can take any free slot, not only the reserved ones. That is bounded by the limit, and it does not change the lane. With no limit there is no reserve.
+- For a user under the policy, the legacy keyword urgent sweep (`automation-scheduler.ts`) stops sending its own pushes. The policy's PUSH lane, under the budget, is then the only budgeted email interrupt. MEETING still notifies outside the budget, as in v2.
   - Prod, last 30 days to 2026-10-31: 43 of the 48 "Urgent email" notifications were for mail whose firewall lane is now QUEUE or SILENT, or which has no item. That is the sweep.
   - **This is part of the founder's flip decision.**
 - Live admission is first come, first served within the day, apart from the trusted reserve. "Importance within the day's top-k" applies inside a batch (replay), and gets stricter once P5 importance exists.
@@ -282,6 +291,7 @@ These are cross-product counts, not prevalence. The replay reports prevalence on
 **Replay.** Run `pnpm --filter @klorn/api replay:policy -- [--user=] [--days=30] [--budget=5|unlimited] [--facts=stored|keyword] [--out=] [--show-subjects]`. It is read-only and makes no LLM calls.
 - `--facts=stored`, the default, decides each item the way the live path would: stored LLM facts go to the policy, otherwise the v2 lane or the keyword parity rule applies.
 - `--facts=keyword` gives every item keyword facts. That is the model-down estimate.
+- For a v2 PUSH row with no stored relationship, the CLI loads the relationship from the database, as the live path does for the trusted reserve. A human's or an agent's lane is kept, as live keeps it.
 
 It reports:
 - the lane distribution: v2 shown, v3 before the budget, v3 final;
@@ -310,6 +320,9 @@ It reports:
     - `relationship`: the known features only. These are counts and dates, never content.
 - Today responses add `interruptBudget: { limit, used, day }` (`limit` is null for no limit; `day` is `YYYY-MM-DD`), plus `queueTotal` and `rankedAt` (ISO). Clients re-apply ranks only on focus or refresh.
 - Open, and not in v3.0:
+  - MEETING outside the budget (security review, P3 PR2). MEETING needs no sender trust: an `.ics` part from anyone makes a certain event. It shares the per-user push rate limit (3 per 10 minutes) with PUSH. A flood of invites can therefore use up the rate limit, so that a budgeted PUSH claims its slot but its phone ring is rate-limited. v2 pushed MEETING the same way. Options are a small daily MEETING cap for untrusted senders, or requiring trust for an `.ics`-only MEETING push. This is a founder decision.
+  - Floods that never claim a slot (security review). A PUSH that will not ring (quiet hours, preferences) stays in the PUSH lane and spends nothing. Many urgent-looking stranger mails in quiet hours, or held overflow outside them, all list ahead of ordinary QUEUE. Ranking orders held items by importance, so a trusted sender's held alert stays above a stranger's. P3 PR2b decides how to collapse or cap stranger held items in the Today list.
+  - In ranking, "held" means `heldAt` is set, the lane is still QUEUE, and no human or agent lane is on the item. A manual override or an agent `set_tier` leaves `heldAt` in place, so readers must check all three.
   - Widening risk-only PUSH trust beyond VIP. Now that `SentMessage.origin` exists (#1591), "the user wrote to them" can become a signal: user-origin sends only, once legacy null rows have aged out or been classified. This would be a new `policyVersion`, decided on replay data.
   - Calendar conflict title and time. `event.conflict` stays null until P2 reads the calendar.
   - "Always interrupt for payment/security past the budget". This is a design proposal and a founder decision, OFF until decided. The params `{risk, overBudget: true}` are reserved for it.
