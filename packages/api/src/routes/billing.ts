@@ -343,8 +343,7 @@ export async function billingRoutes(app: FastifyInstance) {
       // misleading + unnecessary PII). Clearing keys stays allowed so a
       // downgraded user can remove theirs. The chat-model CHOICE is for
       // everyone — the per-user daily cost cap is the spend guard.
-      const isSettingKey =
-        typeof anthropicApiKey === "string" && anthropicApiKey.trim().length > 0;
+      const isSettingKey = typeof anthropicApiKey === "string" && anthropicApiKey.trim().length > 0;
       if (isSettingKey && !isEntitled(user.plan, user.role)) {
         return reply.code(403).send({
           error: "BYOK requires an active subscription",

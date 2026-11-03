@@ -75,7 +75,8 @@ export const GATE_PASSING_JUDGE_MODELS: Readonly<Record<string, GateResult>> = {
     accuracy: "96.4%",
     urgentRecall: "13, 13 and 13 of 13",
     gate: "3/3",
-    mechanism: "the hosted judge pin before the Claude switch; 54/56 on all three runs (2026-09-04)",
+    mechanism:
+      "the hosted judge pin before the Claude switch; 54/56 on all three runs (2026-09-04)",
   },
   "anthropic/claude-haiku-5.5": {
     accuracy: "92.9–98.2%",
