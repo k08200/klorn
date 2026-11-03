@@ -69,6 +69,8 @@ export async function saveAttentionFacts(
   await client.attentionFacts.upsert({
     where: { userId_source_sourceId: { userId, source, sourceId } },
     create: data,
-    update,
+    // A row without LLM facts never replaces one: if the shadow and the live
+    // path both wrote the same mail, the facts the policy used must survive.
+    update: data.factsSource === "none" ? {} : update,
   });
 }

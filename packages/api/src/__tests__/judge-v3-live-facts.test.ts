@@ -7,6 +7,10 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const captureError = vi.hoisted(() => vi.fn());
+vi.mock("../sentry.js", () => ({ captureError }));
+
 import { extractFactsForDecision, type LiveFactsDeps } from "../judge/v3/live-facts.js";
 import type { ShadowMail } from "../judge/v3/shadow.js";
 
@@ -60,7 +64,7 @@ describe("extractFactsForDecision", () => {
       unknown,
       Record<string, unknown>,
     ];
-    expect(o).toEqual({ userId: "u1", reserved: true, credentials });
+    expect(o).toMatchObject({ userId: "u1", reserved: true, credentials });
     expect(o.noWait).toBeUndefined();
   });
 
@@ -148,5 +152,58 @@ describe("extractFactsForDecision", () => {
       deps({ extract: vi.fn(async () => none) }),
     );
     expect(r).toMatchObject({ status: "ok", extraction: none });
+  });
+});
+
+describe("extractFactsForDecision: deadline hygiene", () => {
+  it("clears its timer once answered", async () => {
+    vi.useFakeTimers();
+    await extractFactsForDecision("u1", mail, opts, deps());
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("marks the work abandoned at the deadline, so the extractor won't retry", async () => {
+    vi.useFakeTimers();
+    let seen: (() => boolean) | undefined;
+    let release: () => void = () => {};
+    const d = deps({
+      extract: vi.fn((_i: unknown, o: { abandoned?: () => boolean }) => {
+        seen = o.abandoned;
+        return new Promise((r) => {
+          release = () => r(extraction);
+        });
+      }) as never,
+    });
+    const pending = extractFactsForDecision("u1", mail, { ...opts, deadlineMs: 500 }, d);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(await pending).toEqual({ status: "timeout" });
+    expect(seen?.()).toBe(true);
+    release();
+  });
+
+  it("a failure after the deadline is contained (no unhandled rejection) and logs the name only", async () => {
+    vi.useFakeTimers();
+    captureError.mockClear();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    let fail: () => void = () => {};
+    const d = deps({
+      extract: vi.fn(
+        () =>
+          new Promise((_r, rej) => {
+            fail = () =>
+              rej(Object.assign(new Error("echo: secret mail text"), { name: "ProviderError" }));
+          }),
+      ) as never,
+    });
+    const pending = extractFactsForDecision("u1", mail, { ...opts, deadlineMs: 100 }, d);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(await pending).toEqual({ status: "timeout" });
+    fail();
+    await vi.waitFor(() => expect(captureError).toHaveBeenCalled());
+    const sent = (captureError.mock.calls[0] as unknown as [Error])[0];
+    expect(sent.message).toContain("ProviderError");
+    expect(sent.message).not.toContain("secret mail text");
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("secret mail text");
+    warn.mockRestore();
   });
 });

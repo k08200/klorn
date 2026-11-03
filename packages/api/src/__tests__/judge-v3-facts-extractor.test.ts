@@ -384,6 +384,13 @@ describe("extractFacts", () => {
     expect(r(2)).toBeUndefined();
   });
 
+  it("does not retry once the caller has abandoned the answer", async () => {
+    const complete = vi.fn().mockRejectedValueOnce(new Error("503"));
+    const r = await extractFacts(mail(), { complete, abandoned: () => true });
+    expect(complete).toHaveBeenCalledTimes(1);
+    expect(r.source).toBe("none");
+  });
+
   it("passes noWait through to the completion only when asked", async () => {
     const complete = vi.fn(async () => completion(llmAnswer()));
     await extractFacts(mail(), { complete, noWait: true });

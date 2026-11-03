@@ -8,10 +8,16 @@
  *  - it stores the AttentionFacts row (v2 lane frozen) before answering "ok";
  *  - at the deadline it answers "timeout" and lets the call finish and store
  *    in the background, so replay still gets the row.
- * It never throws. The caller (policy, P3) decides the lane: "ok" with LLM
- * facts → v3; anything else → the v2 lane, exactly as without the policy.
+ * It never throws. The caller (policy, P3) decides the lane: "ok" AND
+ * extraction.source === "llm" → v3; anything else ("ok" with source "none",
+ * timeout, budget, error) → the v2 lane, exactly as without the policy.
+ *
+ * New mail only: a re-judge or backfill reads the stored row and never calls
+ * the model again (it would spend the judge reserve twice). Past the deadline
+ * the call is not retried, so an answer nobody waits for costs one call at most.
  */
 
+import { isDataWipeFenceError } from "../../privacy/data-wipe-fence.js";
 import type { ProviderCredentials } from "../../providers/index.js";
 import { captureError } from "../../sentry.js";
 import type { PocTier } from "../poc-judge.js";
@@ -55,11 +61,13 @@ async function extractAndStore(
   mail: ShadowMail,
   opts: LiveFactsOptions,
   deps: LiveFactsDeps,
+  abandoned: () => boolean,
 ): Promise<LiveFactsResult> {
   const { input, userAddresses } = await buildFactsMailInput(userId, mail, deps);
   const extraction = await deps.extract(input, {
     userId,
     reserved: true,
+    abandoned,
     ...(opts.credentials ? { credentials: opts.credentials } : {}),
   });
   const relationship = await deps.relationship(
@@ -88,6 +96,8 @@ async function settle(work: () => Promise<LiveFactsResult>, userId: string, emai
   } catch (err) {
     const name = err instanceof Error ? err.name : "unknown";
     if (BUDGET_ERRORS.has(name)) return { status: "budget" } as const;
+    // A data wipe in progress rejected the write: expected, not an incident.
+    if (isDataWipeFenceError(err)) return { status: "error" } as const;
     console.warn("[judge-v3] live facts failed:", name);
     captureError(new Error(`judge-v3 live facts failed: ${name}`), {
       tags: { scope: "judge-v3-live-facts" },
@@ -104,10 +114,18 @@ export async function extractFactsForDecision(
   deps: LiveFactsDeps = prismaLiveFactsDeps,
 ): Promise<LiveFactsResult> {
   // The work keeps running past the deadline; settle() means it can't reject.
-  const work = settle(() => extractAndStore(userId, mail, opts, deps), userId, mail.emailId);
+  let pastDeadline = false;
+  const work = settle(
+    () => extractAndStore(userId, mail, opts, deps, () => pastDeadline),
+    userId,
+    mail.emailId,
+  );
   let timer: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<LiveFactsResult>((resolve) => {
-    timer = setTimeout(() => resolve({ status: "timeout" }), opts.deadlineMs);
+    timer = setTimeout(() => {
+      pastDeadline = true;
+      resolve({ status: "timeout" });
+    }, opts.deadlineMs);
   });
   try {
     return await Promise.race([work, deadline]);
