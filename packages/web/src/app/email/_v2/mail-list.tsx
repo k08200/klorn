@@ -110,7 +110,7 @@ function RowPick({ label, picked, onPick }: RowPickProps) {
         aria-label={label}
         checked={picked}
         onChange={(event) => onPick((event.nativeEvent as MouseEvent).shiftKey === true)}
-        className="focus-ring size-4 cursor-pointer rounded-control accent-accent-solid"
+        className="focus-ring size-4 cursor-pointer rounded-chip accent-accent-solid"
       />
     </label>
   );

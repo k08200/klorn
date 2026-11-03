@@ -557,7 +557,14 @@ export function createFakeDb(seed: Record<string, Row[]>, hooks: FakeDbHooks = {
         const clash = rowsOf().some(
           (r) => r !== ignore && set.every((c) => candidate[c] != null && same(r[c], candidate[c])),
         );
-        if (clash) throw new Error(`fake-db: unique constraint on ${name}(${set.join(", ")})`);
+        // Thrown the way Prisma reports it (P2002), so create-catch-P2002 code
+        // paths behave here as they do against Postgres.
+        if (clash) {
+          throw new Prisma.PrismaClientKnownRequestError(
+            `fake-db: unique constraint on ${name}(${set.join(", ")})`,
+            { code: "P2002", clientVersion: "fake-db", meta: { target: set } },
+          );
+        }
       }
     };
     const insert = (data: Row, select?: Select): Row => {

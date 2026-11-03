@@ -47,7 +47,7 @@ export function ReturnNotice({
     <div
       role={ok ? "status" : "alert"}
       data-outcome={result.outcome}
-      className={`flex items-start gap-2 rounded-card border py-1 pr-1 pl-4 ${
+      className={`flex items-start gap-2 rounded-control border py-1 pr-1 pl-4 ${
         ok
           ? "border-state-ok-line bg-state-ok-bg text-state-ok-ink"
           : "border-state-danger-line bg-state-danger-bg text-state-danger-ink"

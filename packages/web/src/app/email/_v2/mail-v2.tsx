@@ -290,11 +290,11 @@ export function MailV2({ pane }: { pane?: MailPane } = {}) {
         />
 
         {isDemo && (
-          <p className="flex flex-wrap items-center gap-x-2 rounded-card border border-state-info-line bg-state-info-bg px-3 py-2 text-body text-state-info-ink">
+          <p className="flex flex-wrap items-center gap-x-2 rounded-control border border-state-info-line bg-state-info-bg px-3 py-2 text-body text-state-info-ink">
             {needsConnection ? t("mailV2.noSource") : t("mailV2.demo")}
             <Link
               href="/settings/accounts"
-              className="focus-ring rounded-control font-medium underline"
+              className="focus-ring rounded-chip font-medium underline"
             >
               {t("mailV2.demo.connect")}
             </Link>
@@ -304,7 +304,7 @@ export function MailV2({ pane }: { pane?: MailPane } = {}) {
         {actions.error && (
           <div
             role="alert"
-            className="flex items-center gap-2 rounded-card border border-state-danger-line bg-state-danger-bg py-1 pl-3 pr-1 text-body text-state-danger-ink"
+            className="flex items-center gap-2 rounded-control border border-state-danger-line bg-state-danger-bg py-1 pl-3 pr-1 text-body text-state-danger-ink"
           >
             <p className="min-w-0 flex-1">{actions.error}</p>
             <Button variant="ghost" size="sm" onClick={() => actions.setError(null)}>
