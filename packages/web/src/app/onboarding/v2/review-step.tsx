@@ -79,7 +79,7 @@ export function ReviewStepV2({ onContinue }: { onContinue: () => void }) {
       {error && (
         <p
           role="alert"
-          className="mt-4 rounded-card border border-state-danger-line bg-state-danger-bg px-4 py-3 text-body text-state-danger-ink"
+          className="mt-4 rounded-control border border-state-danger-line bg-state-danger-bg px-4 py-3 text-body text-state-danger-ink"
         >
           {error}
         </p>
@@ -94,7 +94,7 @@ export function ReviewStepV2({ onContinue }: { onContinue: () => void }) {
           <Skeleton variant="block" height="h-28" />
         </SkeletonGroup>
       ) : sample.length === 0 ? (
-        <p className="mt-6 rounded-card border border-line bg-surface-panel px-4 py-3 text-body text-ink-mid">
+        <p className="mt-6 rounded-control border border-line bg-surface-panel px-4 py-3 text-body text-ink-mid">
           {t(loadError ? "onboardingV2.review.loadError" : "onboardingV2.review.empty")}
         </p>
       ) : (

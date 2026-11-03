@@ -155,7 +155,7 @@ export function ActivityView() {
             {t("assistantHub.activity.undo.hint")}{" "}
             <Link
               href={ASSISTANT_APPROVALS}
-              className="focus-ring rounded-control text-accent-deep underline"
+              className="focus-ring rounded-chip text-accent-deep underline"
             >
               {t("nav.v2.openApprovals")}
             </Link>
