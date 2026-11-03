@@ -82,7 +82,6 @@ const DEFAULT_SUMMARY_DAYS = 7;
  * runs ~2k prompt / ~0.5k completion tokens; pre-billing that floor makes
  * a runaway loop of paid-model calls trip the cap, and the post-call
  * true-up (trueUpCostLedgers) settles the difference against actuals.
- * Free models still estimate to 0¢ regardless of token counts.
  */
 const PREBILL_NOMINAL_PROMPT_TOKENS = 2000;
 const PREBILL_NOMINAL_COMPLETION_TOKENS = 500;
