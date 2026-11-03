@@ -32,9 +32,13 @@ model User {
   name                      String?
   role                      UserRole                   @default(USER)
   plan                      Plan                       @default(FREE)
-  chatModel                 String                     @default("google/gemma-4-31b-it:free")
+  /// The user's chat/assistant model pick (a CURATED_MODELS id). null — or any
+  /// id no longer in the catalog — means unset: the surface default applies.
+  chatModel                 String?
   agentModel                String?
-  openRouterApiKey          String?
+  /// BYOK Anthropic key, encrypted (crypto-tokens). Paid plans only.
+  anthropicApiKey           String?
+  /// Legacy BYOK slot, encrypted: clear-only, no new writes.
   geminiApiKey              String?
   // Naver IMAP connection (Korean ICP support).
   // OAuth is intentionally skipped — Naver issues a separate "외부 메일
@@ -2634,7 +2638,7 @@ model LlmUsageLog {
   id                 String   @id @default(uuid())
   userId             String? // null = system-initiated call (no user accounting)
   user               User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  provider           String // "openrouter" | "gemini"
+  provider           String // ProviderName that served the call: "anthropic" | "gemini" | "openai-compat" | "openai" (rows before 2026-11-01 may also say "openrouter")
   model              String // model that actually served the call (post-failover)
   promptTokens       Int      @default(0)
   // Prompt tokens served from the provider's prompt cache (OpenAI

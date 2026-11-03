@@ -84,7 +84,7 @@ export async function revokeUserAccess(tx: PurgeTx, userId: string): Promise<voi
       githubTokenCipher: null,
       githubConnectedAt: null,
       githubLastPolledAt: null,
-      openRouterApiKey: null,
+      anthropicApiKey: null,
       geminiApiKey: null,
       telegramChatId: null,
       telegramLinkCode: null,
