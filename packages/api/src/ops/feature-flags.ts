@@ -85,6 +85,9 @@ export function collectFeatureFlags(env: NodeJS.ProcessEnv = process.env): Flags
       JUDGE_V3_SHADOW: ["true", "1", "yes", "on", "cohort"].includes(
         (env.JUDGE_V3_SHADOW ?? "").trim().toLowerCase(),
       ),
+      // Attention engine v3 policy (P3): interrupt budget on PUSH notifications.
+      // Founder flip only, after replay + shadow data. Requires JUDGE_V3_SHADOW.
+      JUDGE_V3_POLICY: dynamicFlag(env, "JUDGE_V3_POLICY"),
     },
     configured: {
       GMAIL_PUBSUB_TOPIC: Boolean(env.GMAIL_PUBSUB_TOPIC),
@@ -93,6 +96,7 @@ export function collectFeatureFlags(env: NodeJS.ProcessEnv = process.env): Flags
       SENTRY_DSN: Boolean(env.SENTRY_DSN),
       MS_CLIENT_ID: Boolean(env.MS_CLIENT_ID),
       OBJECT_STORAGE_BUCKET: Boolean(env.OBJECT_STORAGE_BUCKET),
+      JUDGE_V3_PUSH_BUDGET: Boolean(env.JUDGE_V3_PUSH_BUDGET),
     },
   };
 }
@@ -111,6 +115,16 @@ function defaultOnFlag(env: NodeJS.ProcessEnv, key: string): boolean {
  */
 export function tierV2Enabled(): boolean {
   return defaultOnFlag(process.env, "TIER_V2_ENABLED");
+}
+
+/**
+ * Attention engine v3 policy (docs/design/attention-engine-v3.md, P3).
+ * Default OFF; the founder flips it after replay and shadow data. While on,
+ * PUSH notifications are capped by the daily interrupt budget. Requires
+ * JUDGE_V3_SHADOW for lanes from facts; items without facts keep the v2 lane.
+ */
+export function judgeV3PolicyEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return dynamicFlag(env, "JUDGE_V3_POLICY");
 }
 
 /**
