@@ -432,6 +432,18 @@ export function getProvider(name: ProviderName): Provider | null {
 }
 
 /**
+ * Is ANY server-side LLM configured (an env provider or the local compat
+ * endpoint)? The answer to "should this LLM feature run at all?" for surfaces
+ * that otherwise degrade to a non-LLM path (auto-reply templates, the
+ * autonomous agent). It must follow the real chain: the old guard checked one
+ * provider's key, and a deploy on a different provider silently lost those
+ * features with no error.
+ */
+export function hasLlmProvider(): boolean {
+  return getProviderChain().length > 0;
+}
+
+/**
  * Ordered list of providers to try, skipping any that aren't configured.
  *
  * The local/OpenAI-compat provider leads the chain by default — a
