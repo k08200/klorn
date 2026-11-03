@@ -594,8 +594,8 @@ app.addHook("onClose", async () => {
 // opted in explicitly. This line is what makes either outcome visible; the
 // 2026-09 incident ran for three weeks precisely because nothing announced it.
 reportJudgeModelResolution(JUDGE_MODEL_RESOLUTION);
-// ...and the models that really serve it: every non-OpenRouter provider in the
-// chain swaps a pin it cannot route for its own default (ANTHROPIC_MODEL,
+// ...and the models that really serve it: every provider in the chain swaps a
+// pin it cannot route for its own default (ANTHROPIC_MODEL,
 // GEMINI_FALLBACK_MODEL), which the pin check above never sees — including the
 // failover lanes, which serve the judge exactly when the lead is down.
 reportJudgeServing(JUDGE_MODEL, getProviderChain());

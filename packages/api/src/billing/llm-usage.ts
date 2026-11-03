@@ -37,15 +37,15 @@ export interface ProviderUsage {
   total_tokens?: number | null;
   /**
    * Cache-hit detail (OpenAI automatic prompt caching, Gemini implicit
-   * caching via the gemini-native mapping, OpenRouter passthrough for
-   * providers that report it). Absent = the provider doesn't cache or
+   * caching via the gemini-native mapping, Anthropic cache reads via the
+   * anthropic-native mapping). Absent = the provider doesn't cache or
    * doesn't say — recorded as 0, never estimated.
    */
   prompt_tokens_details?: {
     cached_tokens?: number | null;
     /**
      * Prompt tokens written to the cache (Anthropic reports these separately
-     * and bills them above base input; OpenRouter uses the same field name).
+     * and bills them above base input; the anthropic-native mapping fills it).
      */
     cache_write_tokens?: number | null;
     /** Of cache_write_tokens, those written with the 1-hour TTL (2x input). */
