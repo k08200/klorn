@@ -363,6 +363,25 @@ describe("extractFacts", () => {
     await expect(extractFacts(mail(), { complete })).rejects.toBe(err);
   });
 
+  it("a busy pacer under noWait propagates (no retry, no fallback)", async () => {
+    const err = Object.assign(new Error("busy"), { name: "PacerBusyError" });
+    const complete = vi.fn(async () => {
+      throw err;
+    });
+    await expect(extractFacts(mail(), { complete, noWait: true })).rejects.toBe(err);
+    expect(complete).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes noWait through to the completion only when asked", async () => {
+    const complete = vi.fn(async () => completion(llmAnswer()));
+    await extractFacts(mail(), { complete, noWait: true });
+    await extractFacts(mail(), { complete });
+    const [, a] = complete.mock.calls[0] as unknown as [unknown, { noWait?: boolean }];
+    const [, b] = complete.mock.calls[1] as unknown as [unknown, { noWait?: boolean }];
+    expect(a.noWait).toBe(true);
+    expect(b.noWait).toBeUndefined();
+  });
+
   it("is background priority even without a userId", async () => {
     const complete = vi.fn(async () => completion(llmAnswer()));
     await extractFacts(mail(), { complete });
