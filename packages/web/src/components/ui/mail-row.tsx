@@ -112,7 +112,7 @@ function PaperclipGlyph() {
 function ThreadCount({ count }: { count: number }) {
   const { t } = useT();
   return (
-    <span className="shrink-0 rounded-control bg-surface-hover px-1.5 text-caption font-semibold tabular-nums text-ink-soft">
+    <span className="shrink-0 rounded-chip bg-surface-hover px-1.5 text-caption font-semibold tabular-nums text-ink-soft">
       <span aria-hidden="true">{count}</span>
       <span className="sr-only">{t("mailRow.threadCount", { count: String(count) })}</span>
     </span>
@@ -192,7 +192,7 @@ function RowContent(props: MailRowProps) {
 }
 
 const OVERLAY_CLASS =
-  "pointer-events-none absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-[10px] bg-surface-panel p-1 opacity-0 shadow-l2 ring-1 ring-line-strong transition-opacity duration-120 ease-fluid group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 [@media(hover:none)]:hidden";
+  "pointer-events-none absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-control bg-surface-panel p-1 opacity-0 shadow-menu ring-1 ring-line-strong transition-opacity duration-120 ease-fluid group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 [@media(hover:none)]:hidden";
 
 export function MailRow(props: MailRowProps) {
   const { href, onOpen, selected = false, actions, leading, className = "" } = props;

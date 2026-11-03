@@ -111,8 +111,8 @@
 .brand__mark {
   width: 40px;
   height: 40px;
-  border-radius: 12px;
-  background: #0f172a;
+  border-radius: var(--radius-control);
+  background: #0b0d12;
   color: #7dd3fc;
   font-weight: 700;
   display: flex;
@@ -207,7 +207,7 @@
 .sidebar__item {
   min-height: var(--touch);
   padding: 0 12px;
-  border-radius: 12px;
+  border-radius: var(--radius-control);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -291,7 +291,7 @@
   height: 52px;
   padding: 0 20px 0 16px;
   border-radius: 26px;
-  background: #0f172a;
+  background: #0b0d12;
   color: #ffffff;
   font-size: calc(14.5 * var(--u));
   font-weight: 600;
@@ -306,13 +306,13 @@
 }
 
 :root[data-theme="dark"] .assistant-fab {
-  background: #16213a;
+  background: #1c1c1f;
   border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .assistant-fab {
-    background: #16213a;
+    background: #1c1c1f;
     border: 1px solid rgba(255, 255, 255, 0.12);
   }
 }

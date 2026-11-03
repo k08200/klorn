@@ -50,7 +50,7 @@ export default function EmptyState({
       {icon && (
         <div
           aria-hidden="true"
-          className="mb-4 flex size-12 items-center justify-center rounded-card border border-line bg-surface-raised text-ink-muted"
+          className="mb-4 flex size-12 items-center justify-center rounded-control border border-line bg-surface-raised text-ink-muted"
         >
           {icon}
         </div>
