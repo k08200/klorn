@@ -19,9 +19,12 @@
  *   3. The meetings that ended on those days, from all sources, are merged (one
  *      meeting in two calendars is one), counted by the rules
  *      (coattendance-rules.ts) and written one UTC end-day per transaction
- *      (coattendance-store.ts). A day that already has a counted meeting (a pass
- *      that died before advancing) is not evaluated again.
- *   4. The watermark advances; covered sources get their observed-since day (if
+ *      (coattendance-store.ts), or, for a day over a cap, its balanced slices. Each
+ *      day transaction re-reads the day's markers under a per-user lock: a
+ *      one-slice day that already has one is complete and skipped; a split day is
+ *      resumed, writing only its unmarked meetings.
+ *   4. The watermark advances (compare-and-swap; a pass that loses it stops);
+ *      covered sources get their observed-since day (if
  *      new: the first day of this advance); sources left out lose observed-since.
  *      A source's pass time (coAttendanceLastPassAt) is written on every pass in
  *      which its own listing succeeded in full, advanced or not, and never for a
@@ -59,7 +62,6 @@ import {
 import {
   eventKeyOf,
   loadOwnAddresses,
-  markedDays,
   pruneCountedMeetings,
   type RecordResult,
   recordCountedMeetings,
@@ -215,12 +217,10 @@ async function countable(
   });
   if (inRange.length === 0) return [];
   const own = await loadOwnAddresses(userId);
-  const marked = await markedDays(userId, from, through);
   const unique = new Map<string, CountedMeeting>();
   for (const meeting of inRange) {
     const counted = countMeeting(meeting, own, now);
-    if (!counted || marked.has(utcDayOf(counted.endTime).getTime())) continue;
-    unique.set(eventKeyOf(counted.identity), counted);
+    if (counted) unique.set(eventKeyOf(counted.identity), counted);
   }
   return [...unique.values()];
 }
@@ -269,7 +269,7 @@ async function pass(
   const meetings = await countable(userId, listed.meetings, from, listed.through, now);
   recorded = await recordCountedMeetings("GOOGLE", userId, meetings);
   const coveredIds = new Set(coveredSources.map((s) => s.id));
-  await recordAdvance(userId, {
+  const advanced = await recordAdvance(userId, {
     previous,
     through: listed.through,
     from,
@@ -278,6 +278,11 @@ async function pass(
     dropped: sources.filter((s) => !coveredIds.has(s.id)),
     now,
   });
+  if (!advanced) {
+    // Another process moved the watermark first: it owns these days; stop here.
+    console.warn(`[CALENDAR] co-attendance pass for ${userId} lost the watermark race`);
+    return null;
+  }
   await pruneCountedMeetings(userId, addDays(windowStart, -1));
   return { ...recorded, evaluatedFrom: from, evaluatedThrough: listed.through };
 }

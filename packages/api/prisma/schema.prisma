@@ -85,9 +85,10 @@ model User {
   // scheduled_change must not resurrect a cancellation the user already undid.
   subscriptionEventAt        DateTime?
   emailVerified              Boolean                    @default(false)
-  // Calendar co-attendance (pim/coattendance/): the last UTC day every finished
-  // day through which has been evaluated, all Google calendar sources together.
-  // A day at or before it is never evaluated again. Null until the first pass.
+  // Calendar co-attendance watermark (pim/coattendance/): a UTC day such that
+  // every finished UTC day up to and including it has been evaluated for every
+  // included Google calendar source. A day at or before it is never evaluated
+  // again. Null until the first pass; a data wipe resets it.
   coAttendanceCountedThrough DateTime?
   // SHA-256 hash of the emailed one-time token (one-time-token.ts) — the raw
   // token is never stored, same standard as Device.tokenHash.
@@ -369,9 +370,10 @@ model UserToken {
   // first). An empty googleEmail is a grant Google already refuses.
   googleEmailCheckedAt      DateTime?
   // Calendar co-attendance (pim/coattendance/) for this primary Google calendar:
-  // the UTC day its counting window first started (set once, by the first
-  // successful pass) and its last successful pass (the 6-hour interval). Null
-  // until a pass succeeds; cleared when the grant is reconnected.
+  // the first full UTC day it was covered by an advance of the user's watermark
+  // (cleared when it is left out of an advance, or after a coverage gap), and the
+  // last pass in which its own listing succeeded in full (never a failed or cut
+  // listing). Cleared when the grant is reconnected.
   coAttendanceObservedSince DateTime?
   coAttendanceLastPassAt    DateTime?
   // When the one-time Sent-history import (mail/sent-history-import.ts,
@@ -2504,8 +2506,8 @@ model ContactCoAttendance {
   contactEmail      String // trimmed and lowercased (a CHECK enforces it)
   meetingCount      Int      @default(0) // ended meetings the user took part in, the contact invited and not declining
   smallMeetingCount Int      @default(0) // of those, with at most 5 such people (rooms, decliners excluded)
-  firstMetAt        DateTime // UTC day (midnight) of the earliest counted meeting's start
-  lastMetAt         DateTime // UTC day (midnight) of the latest counted meeting's start
+  firstMetAt        DateTime // UTC end-day (midnight) of the earliest counted meeting
+  lastMetAt         DateTime // UTC end-day (midnight) of the latest counted meeting
   // No createdAt/updatedAt: rows written in one transaction would share a time
   // and line up into one meeting's guest list.
 

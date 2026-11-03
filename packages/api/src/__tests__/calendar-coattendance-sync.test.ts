@@ -382,7 +382,7 @@ describe("watermark: each finished UTC day evaluated once", () => {
     expect(counters()).toEqual({});
   });
 
-  it("does not evaluate again a day that already has a marker (a pass that died midway)", async () => {
+  it("does not evaluate again a one-slice day that already has a marker (a pass that died)", async () => {
     seed({
       coAttendanceMeeting: [
         {
@@ -399,6 +399,74 @@ describe("watermark: each finished UTC day evaluated once", () => {
     // standup (10-30) is skipped with its day; allHands (10-28) is counted.
     expect(counters()["bo@client.example"]).toBeUndefined();
     expect(counters()["cy@vendor.example"]?.meetingCount).toBe(1);
+  });
+
+  const splitDay = () =>
+    Array.from({ length: 26 }, (_, i) =>
+      meeting(`ical:split${i}@google.com|`, "2026-10-25T01:00:00.000Z", [
+        me,
+        person(`p${i}@x.example`),
+      ]),
+    ).sort((a, b) => (eventKeyOf(a.identity) < eventKeyOf(b.identity) ? -1 : 1));
+  const marker = (m: ProviderMeeting, i: number) => ({
+    id: `mk${i}`,
+    userId: "u1",
+    provider: "GOOGLE",
+    eventKey: eventKeyOf(m.identity),
+    endedAt: day("2026-10-25"),
+  });
+
+  it("resumes a split day after its first slice: the other slice is counted, once", async () => {
+    const meetings = splitDay();
+    seed({ coAttendanceMeeting: meetings.slice(0, 13).map(marker) });
+    sources(meetings);
+    expect(await pass()).toMatchObject({ meetings: 13 });
+    const counted = Object.keys(counters()).sort();
+    expect(counted).toEqual(
+      meetings
+        .slice(13)
+        .map((m) => m.attendees[1]?.email)
+        .sort(),
+    );
+    expect(user()?.coAttendanceCountedThrough).toEqual(day("2026-10-31"));
+  });
+
+  it("a split day with any marker still counts every unmarked meeting (probe B: 26, one marked)", async () => {
+    const meetings = splitDay();
+    seed({ coAttendanceMeeting: [marker(meetings[7] as ProviderMeeting, 7)] });
+    sources(meetings);
+    expect(await pass()).toMatchObject({ meetings: 25 });
+    expect(Object.keys(counters())).toHaveLength(25);
+  });
+
+  it("stops when another pass moved the watermark first: no advance, no prune", async () => {
+    db = createFakeDb(
+      {
+        user: [{ id: "u1", email: "me@example.com" }],
+        userToken: [{ id: "t1", userId: "u1", provider: "google", accessToken: "x" }],
+        coAttendanceMeeting: [
+          {
+            id: "old",
+            userId: "u1",
+            provider: "GOOGLE",
+            eventKey: "a".repeat(64),
+            endedAt: day("2026-09-01"),
+          },
+        ],
+      },
+      {
+        beforeUpdateMany: (model) => {
+          const row = model === "user" ? (db.tables.user?.[0] as Record<string, unknown>) : null;
+          if (row && row.coAttendanceCountedThrough == null) {
+            row.coAttendanceCountedThrough = day("2026-10-31");
+          }
+        },
+      },
+    );
+    h.db = db;
+    sources([standup]);
+    expect(await pass()).toBeNull();
+    expect(tables().coAttendanceMeeting?.map((r) => r.id)).toContain("old");
   });
 
   it("a cut listing advances neither the watermark nor observed-since past its last full day", async () => {
@@ -665,7 +733,8 @@ describe("batches", () => {
     const small = onDay(many(1, 2, "d"), "2026-10-20");
     const next = onDay(many(1, 2, "e"), "2026-10-21");
     const batches = planBatches([...next, ...big, ...small]);
-    expect(batches.map((b) => b.length)).toEqual([25, 3, 1]);
+    // 28 meetings on 10-20: two balanced slices of 14, never 25 + 3.
+    expect(batches.map((b) => b.length)).toEqual([14, 14, 1]);
     const day20 = batches
       .slice(0, 2)
       .flat()
@@ -675,10 +744,19 @@ describe("batches", () => {
     expect(MEETINGS_PER_TRANSACTION).toBe(25);
   });
 
-  it("closes a batch before it would pass 200 distinct contacts", () => {
+  it("balances slices, so a lone meeting is never a transaction of its own on a split day", () => {
+    expect(planBatches(many(26, 2, "f")).map((b) => b.length)).toEqual([13, 13]);
+    expect(planBatches(many(51, 2, "g")).map((b) => b.length)).toEqual([17, 17, 17]);
+  });
+
+  it("balances by contacts too: no slice past 200 distinct contacts", () => {
     expect(CONTACTS_PER_TRANSACTION).toBe(200);
-    const batches = planBatches(many(10, 50, "w"));
-    expect(batches.map((b) => b.length)).toEqual([4, 4, 2]);
+    // 9 meetings of 50 people each, 450 contacts: three slices of 3, not 4 + 4 + 1.
+    const batches = planBatches(many(9, 50, "w"));
+    expect(batches.map((b) => b.length)).toEqual([3, 3, 3]);
+    for (const batch of batches) {
+      expect(new Set(batch.flatMap((m) => m.contacts)).size).toBeLessThanOrEqual(200);
+    }
   });
 });
 

@@ -97,7 +97,6 @@ describe("calendar co-attendance migration", () => {
       `CREATE TRIGGER "CoAttendanceMeeting_data_wipe_fence" BEFORE INSERT ON "CoAttendanceMeeting" FOR EACH ROW EXECUTE FUNCTION public.klorn_data_wipe_fence()`,
       `ALTER TABLE "UserToken" ADD COLUMN "coAttendanceObservedSince" TIMESTAMP(3), ADD COLUMN "coAttendanceLastPassAt" TIMESTAMP(3)`,
       `ALTER TABLE "LinkedCalendarAccount" ADD COLUMN "coAttendanceObservedSince" TIMESTAMP(3), ADD COLUMN "coAttendanceLastPassAt" TIMESTAMP(3)`,
-      `ALTER TABLE "User" ADD COLUMN "coAttendanceCountedThrough" TIMESTAMP(3)`,
     ]);
   });
 
@@ -130,8 +129,8 @@ describe("calendar co-attendance migration", () => {
         expect.arrayContaining(["coAttendanceObservedSince", "coAttendanceLastPassAt"]),
       );
     }
-    expect(columnsOf("User")).toContain("coAttendanceCountedThrough");
-    expect(schema).toMatch(/coAttendanceCountedThrough\s+DateTime\?/);
+    // The User watermark has its own migration: 20261103020000_user_coattendance_watermark.
+    expect(sql).not.toContain('"User" ADD COLUMN');
     expect(schema).toMatch(/coAttendanceObservedSince\s+DateTime\?/);
     expect(schema).toMatch(/coAttendanceLastPassAt\s+DateTime\?/);
   });
