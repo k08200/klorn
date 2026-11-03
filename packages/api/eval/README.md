@@ -1,5 +1,12 @@
 # Judge eval set
 
+> **2026-11-01 — OpenRouter removed.** Klorn runs on the Claude API only, and
+> the default model pin is `claude-haiku-5-5` (see "Native Anthropic provider"
+> and "2026-10-31: CI measures Claude" below). Older sections describe history:
+> many of their runs went through OpenRouter (`provider/model` ids such as
+> `google/gemini-2.5-flash`), and their "default pin" labels mean the pin at
+> the time. Their numbers are kept as measured.
+
 `judge-eval-set.json` is a **synthetic, PII-free** 56-email set used to
 regression-test the judge. It is NOT the founder's private ground truth (that
 file is gitignored and never leaves the machine) — it encodes the same locked
@@ -189,14 +196,14 @@ Add cases when you find a real misclassification worth locking in:
 2. Set `label` to the tier the founder would choose, add a `note` saying why
    it's interesting (e.g. "hard for keyword fallback").
 3. Run `npx vitest run src/__tests__/judge-eval-set.test.ts` and
-   `pnpm eval:judge` (needs `OPENROUTER_API_KEY` or `GEMINI_API_KEY`).
+   `pnpm eval:judge` (needs `ANTHROPIC_API_KEY` or `GEMINI_API_KEY`).
 
 ## Running against the private ground truth
 
 The original POC measurement still works unchanged:
 
 ```bash
-DATABASE_URL=... OPENROUTER_API_KEY=... npx tsx scripts/poc-accuracy.ts \
+DATABASE_URL=... ANTHROPIC_API_KEY=... npx tsx scripts/poc-accuracy.ts \
   --in=../../poc-ground-truth.json
 ```
 
@@ -333,9 +340,11 @@ may gate at any floor once a stable baseline exists.
 
 ## Model canary (#526 — the non-judge surfaces)
 
-> **Dispatch-only since 2026-10-31** — it probes through OpenRouter, now only
-> the failover lane, and its fingerprint probes need a temperature-0 model (see
-> "2026-10-31: CI measures Claude").
+> **Deleted 2026-11-01** — it probed through OpenRouter, which was removed from
+> Klorn that day, and its fingerprint probes need a temperature-0 model, which
+> the Claude 5.5 family does not take (see "2026-10-31: CI measures Claude").
+> It was dispatch-only from 2026-10-31. The rest of this section describes how
+> it worked.
 
 `model-canary.yml` (dispatch-only since 2026-10-31; Mondays 02:00 UTC before that) extends the same flip-alarm machinery to
 the models the judge canary cannot see: **chat (`MODEL`)** and
@@ -457,12 +466,12 @@ another model's score):
   `accept-baseline` is gone.
 - **`model-canary.yml`** — dispatch-only: it probes through OpenRouter, which
   is now only the failover lane, and its fingerprint probes need a temperature-0
-  model, so it can't move to Claude. A manual run still probes the OpenRouter
-  lane.
+  model, so it can't move to Claude. *(2026-11-01: deleted along with
+  OpenRouter.)*
 
-Secrets: `ANTHROPIC_API_KEY` (plus optional `ANTHROPIC_WORKSPACE_ID`). No PR or
-scheduled workflow reads `OPENROUTER_API_KEY` any more; only a manual
-`model-canary.yml` run does.
+Secrets: `ANTHROPIC_API_KEY` (plus optional `ANTHROPIC_WORKSPACE_ID`). No
+workflow reads `OPENROUTER_API_KEY` any more (the manual `model-canary.yml`
+was the last, deleted 2026-11-01).
 
 What the re-run costs in sensitivity: a change that only lowers the per-run
 pass rate (say from 4/5 to 1/2) still passes the gate about 3 times in 4. Watch
