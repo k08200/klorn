@@ -12,6 +12,8 @@ import { db } from "../../db.js";
 import { escapeLikePattern } from "../../db-like.js";
 import { senderLabelsFor } from "../../mail/sender-labels.js";
 import type { SentOrigin } from "../../mail/sent-messages.js";
+import { normalizeAttendeeEmail } from "../../pim/coattendance/coattendance-rules.js";
+import { COATTENDANCE_LOOKBACK_DAYS } from "../../pim/coattendance/coattendance-sync.js";
 import { isSenderAddressIndexEnabled, lookupPinnedTier } from "../judge-context.js";
 import {
   buildRelationshipSnapshot,
@@ -71,7 +73,11 @@ export interface RelationshipLoaderDeps {
   pinnedTier(userId: string, address: string): Promise<string | null>;
   senderCategory(userId: string, address: string): Promise<string | null>;
   /** Stored past co-attendance; undefined = unknown (see latestObservedSince). */
-  coAttendance(userId: string, address: string): Promise<CoAttendanceView | undefined>;
+  coAttendance(
+    userId: string,
+    address: string,
+    userAddresses: readonly string[],
+  ): Promise<CoAttendanceView | undefined>;
 }
 
 /**
@@ -84,25 +90,48 @@ export function latestObservedSince(sources: readonly (Date | null)[]): Date | n
   return new Date(Math.max(...(sources as Date[]).map((s) => s.getTime())));
 }
 
+/** A source whose last pass is older than the lookback has a counting gap its marker can't show. */
+const STALE_PASS_MS = COATTENDANCE_LOOKBACK_DAYS * 86_400_000;
+
+type SourceMarkers = {
+  coAttendanceObservedSince: Date | null;
+  coAttendanceLastPassAt: Date | null;
+};
+
+/** The source's observed-since day, or null when it is not being counted now. */
+function liveObservedSince(m: SourceMarkers, needsReconnect: boolean, now: number): Date | null {
+  if (needsReconnect || !m.coAttendanceObservedSince || !m.coAttendanceLastPassAt) return null;
+  return now - m.coAttendanceLastPassAt.getTime() > STALE_PASS_MS
+    ? null
+    : m.coAttendanceObservedSince;
+}
+
+const MARKERS = { coAttendanceObservedSince: true, coAttendanceLastPassAt: true } as const;
+
 async function loadCoAttendance(
   userId: string,
   address: string,
+  userAddresses: readonly string[],
 ): Promise<CoAttendanceView | undefined> {
   if (!calendarCoattendanceEnabled()) return undefined;
+  // The store never counts the user's own addresses or ones it can't normalise:
+  // for those a missing row means nothing, so they stay unknown.
+  const own = userAddresses.some((a) => a.trim().toLowerCase() === address);
+  if (own || normalizeAttendeeEmail(address) !== address) return undefined;
   const [token, linked] = await Promise.all([
     db.userToken.findUnique({
       where: { userId_provider: { userId, provider: "google" } },
-      select: { coAttendanceObservedSince: true },
+      select: MARKERS,
     }),
     db.linkedCalendarAccount.findMany({
       where: { userId, provider: "GOOGLE" },
-      select: { coAttendanceObservedSince: true, needsReconnect: true },
+      select: { ...MARKERS, needsReconnect: true },
     }),
   ]);
-  // A calendar awaiting reconnect has stopped being counted: not observed now.
+  const now = Date.now();
   const observedSince = latestObservedSince([
-    ...(token ? [token.coAttendanceObservedSince] : []),
-    ...linked.map((l) => (l.needsReconnect ? null : l.coAttendanceObservedSince)),
+    ...(token ? [liveObservedSince(token, false, now)] : []),
+    ...linked.map((l) => liveObservedSince(l, l.needsReconnect, now)),
   ]);
   if (!observedSince) return undefined;
   const row = await db.contactCoAttendance.findUnique({
@@ -261,7 +290,7 @@ export async function loadRelationshipSnapshot(
       settle(() => deps.dismissCount(userId, sender), "dismiss"),
       settle(() => deps.pinnedTier(userId, sender), "pin"),
       settle(() => deps.senderCategory(userId, sender), "label"),
-      settle(() => deps.coAttendance(userId, sender), "co-attendance"),
+      settle(() => deps.coAttendance(userId, sender, input.userAddresses), "co-attendance"),
     ]);
   const userSent = await loadThreadSends(
     userId,

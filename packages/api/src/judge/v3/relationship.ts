@@ -55,7 +55,8 @@ export interface RelationshipSnapshot {
   userInitiatedThreadCount: number | null;
   /** First contact either way, ISO-8601 UTC (tenure; new-sender flag). */
   firstSeenAt: string | null;
-  /** Past meetings shared with the sender (ContactCoAttendance), within the observed window. */
+  /** Past meetings shared with the sender (ContactCoAttendance), covering at least the
+   * window since coAttendanceObservedSince (earlier sources may add older meetings). */
   meetingCount: number | null;
   /** Of those, meetings of at most 5 people. */
   smallMeetingCount: number | null;

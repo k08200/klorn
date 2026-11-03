@@ -133,7 +133,9 @@ As built in P2 (`judge/v3/relationship.ts`, `relationship-loader.ts`):
 - Pinned means any `PIN_TIER` rule on the address or domain. VIP means a sender label of investor or customer, or a pin to PUSH.
 - **Calendar co-attendance comes from the co-attendance store below, past meetings only.**
   - The snapshot carries `meetingCount`, `smallMeetingCount`, `lastMetAt` (UTC day) and `coAttendanceObservedSince`. The last one is the latest marker across the user's Google calendar sources, so the importance model knows the window the counts cover.
-  - All four are null unless the flag is on and every Google source has been observed. A source awaiting reconnect counts as not observed.
+  - All four are null unless the flag is on and every Google source has been observed and is still being counted. A source awaiting reconnect, or whose last pass is older than the 30-day lookback, counts as not observed.
+  - They are also null for the user's own addresses and for addresses the store can't normalise, because the store never counts those.
+  - Only Google calendars are counted, so a contact met only in Outlook or CalDAV reads 0 (known limit).
   - `coAttendanceNext14d` is **deprecated and always null**, because no upcoming attendee data is stored. It stays in the shape so stored rows replay unchanged.
   - The interaction graph's "meeting" count is inferred from email volume, which is not co-attendance, so it is not reused.
 
