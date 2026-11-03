@@ -24,7 +24,6 @@ import {
   upsertLinkedEventRow,
 } from "./calendar-rows.js";
 import { removeRowsMissingFromWindow } from "./calendar-window-reconcile.js";
-import { countCoAttendance } from "./coattendance/coattendance-sync.js";
 import { handleLinkedCalendarFailure } from "./linked-calendar-failure.js";
 
 export const CALENDAR_SYNC_WINDOW_DAYS = 30;
@@ -164,7 +163,7 @@ async function removeDeclinedRows(
  * (a separate call that can never fail the sync, see calendar-cancellation.ts). A
  * list failure throws to the caller, which owns the failure policy. Returns the
  * number of rows written. Co-attendance is not counted here: this also serves
- * requests, and the scheduler counts after calling it.
+ * requests, and the scheduler queues its own job (pim/coattendance/).
  */
 export async function syncPrimaryCalendarWindow(
   session: CalendarSession,
@@ -241,9 +240,8 @@ function isForeignKeyViolation(err: unknown): boolean {
  * an account flagged needsReconnect: a revoked token is not retried every cycle
  * until the user re-links it. Best-effort per account: one failing never skips
  * the others (see linked-calendar-failure.ts for the policy). Called only behind
- * LINKED_CALENDAR_SYNC_ENABLED and the user's entitlement, by the scheduler only,
- * which is why each account's co-attendance pass runs here; with nothing to sync it
- * reads no user row.
+ * LINKED_CALENDAR_SYNC_ENABLED and the user's entitlement, by the scheduler only;
+ * with nothing to sync it reads no user row.
  */
 export async function syncLinkedCalendars(
   userId: string,
@@ -258,8 +256,6 @@ export async function syncLinkedCalendars(
   for (const { session, id, email } of linked) {
     try {
       events += await syncLinkedCalendarWindow(session, userId, id, userTimezone, now);
-      // Behind CALENDAR_COATTENDANCE_ENABLED; never throws.
-      await countCoAttendance(session, userId, id, now);
     } catch (err) {
       // The account was unlinked while its sync was in flight: its rows now fail
       // the foreign key, which is exactly the orphan the constraint prevents.

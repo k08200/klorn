@@ -208,6 +208,7 @@ describe("Google-only LinkedCalendarAccount readers filter on provider", () => {
       "pim/calendar-providers/dispatch.ts",
       "pim/calendar-providers/outlook-token.ts", // re-reads one OUTLOOK row after a refresh race
       "pim/calendar-source-label.ts",
+      "pim/coattendance/coattendance-sources.ts", // GOOGLE rows' co-attendance markers
       "pim/coattendance/coattendance-store.ts",
       "pim/device-calendar/device-ingest.ts",
       "pim/device-calendar/device-sources.ts",

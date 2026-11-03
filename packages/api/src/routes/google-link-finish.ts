@@ -110,6 +110,10 @@ export async function finishGoogleCalendarLink(
       expiresAt,
       // Re-linking a previously-revoked calendar clears the reconnect prompt.
       needsReconnect: false,
+      // Co-attendance starts over for the re-linked grant: until its first pass,
+      // readers must not treat a missing count as "never met".
+      coAttendanceObservedSince: null,
+      coAttendanceLastPassAt: null,
     },
     create: {
       userId: userId,
@@ -274,6 +278,9 @@ export async function finishGooglePrimaryConnect(
           // address until it is read again, so a revoke's shared-grant check
           // never trusts a stale one (unknown is re-read, never assumed).
           googleEmail: null,
+          // Nor is the old account's calendar observed: co-attendance starts over.
+          coAttendanceObservedSince: null,
+          coAttendanceLastPassAt: null,
         },
       }),
     { label: "oauth.integration.upsert_user_token" },

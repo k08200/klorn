@@ -17,7 +17,9 @@
  *     invitation the user never answered does not count: anyone can put one on a
  *     calendar (Google adds invitations from anyone by default), so it is no
  *     evidence of a meeting and would let a stranger raise a count. An event with
- *     no entry of theirs at all is one they made themselves, and counts;
+ *     no entry of theirs counts only if the calendar says they organised it
+ *     (Google's organizer.self); an imported or stranger-made event without their
+ *     entry counts nothing;
  *   - a contact is a person (rooms and other resources never count), not the user,
  *     with a plain ASCII address, who did not decline. A contact's tentative or
  *     unanswered invitation counts: few guests answer, and the user's own answer
@@ -87,7 +89,8 @@ export function countMeeting(
   if (people.length > MAX_COUNTED_ATTENDEES) return null;
 
   const mine = people.filter((attendee) => isOwn(attendee, ownAddresses));
-  if (mine.length > 0 && !mine.some(tookPart)) return null;
+  const userTookPart = mine.length > 0 ? mine.some(tookPart) : meeting.organizedBySelf;
+  if (!userTookPart) return null;
 
   const contacts = new Set<string>();
   for (const attendee of people) {

@@ -152,6 +152,8 @@ export interface ProviderMeeting {
   readonly endTime: Date | null;
   /** The provider left attendees out (over the listing's attendee cap, or a hidden guest list). */
   readonly attendeesOmitted: boolean;
+  /** The calendar owner organised the event (Google: `organizer.self`). */
+  readonly organizedBySelf: boolean;
   readonly attendees: readonly MeetingAttendee[];
 }
 

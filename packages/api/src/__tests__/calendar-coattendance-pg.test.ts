@@ -68,8 +68,8 @@ describePg("the tables refuse what the code never writes", () => {
     const userId = await newUser();
     const insert = (email: string) => prisma.$executeRaw`
       INSERT INTO "ContactCoAttendance"
-        ("id", "userId", "contactEmail", "meetingCount", "smallMeetingCount", "firstMetAt", "lastMetAt", "updatedAt")
-      VALUES (${randomUUID()}, ${userId}, ${email}, 1, 0, now(), now(), now())`;
+        ("id", "userId", "contactEmail", "meetingCount", "smallMeetingCount", "firstMetAt", "lastMetAt")
+      VALUES (${randomUUID()}, ${userId}, ${email}, 1, 0, current_date, current_date)`;
     expect(await sqlState(insert("Ana@Client.Example"))).toBe("23514");
     expect(await sqlState(insert(" ana@client.example"))).toBe("23514");
     await insert("ana@client.example");
@@ -81,8 +81,8 @@ describePg("the tables refuse what the code never writes", () => {
     expect(
       await sqlState(prisma.$executeRaw`
         INSERT INTO "ContactCoAttendance"
-          ("id", "userId", "contactEmail", "meetingCount", "smallMeetingCount", "firstMetAt", "lastMetAt", "updatedAt")
-        VALUES (${randomUUID()}, ${userId}, 'bo@x.example', 1, 2, now(), now(), now())`),
+          ("id", "userId", "contactEmail", "meetingCount", "smallMeetingCount", "firstMetAt", "lastMetAt")
+        VALUES (${randomUUID()}, ${userId}, 'bo@x.example', 1, 2, current_date, current_date)`),
     ).toBe("23514");
     expect(
       await sqlState(prisma.$executeRaw`
@@ -169,6 +169,52 @@ describePg("counting on a real database", () => {
       firstMetAt: new Date("2026-10-01T00:00:00Z"),
       lastMetAt: new Date("2026-10-29T00:00:00Z"),
     });
+  });
+});
+
+describePg("nothing finer than a day", () => {
+  it("has no timestamp column but the three days, and stores only midnights in them", async () => {
+    const userId = await newUser();
+    await claimAndCount("GOOGLE", userId, [
+      meeting("d1", "2026-10-20T13:47:21.123Z", ["ana@x.example", "bo@x.example"]),
+      meeting("d2", "2026-10-21T23:59:59.999Z", ["ana@x.example"]),
+    ]);
+    const columns = await prisma.$queryRaw<Array<{ table_name: string; column_name: string }>>`
+      SELECT table_name, column_name FROM information_schema.columns
+      WHERE table_name IN ('ContactCoAttendance', 'CoAttendanceMeeting')
+        AND data_type LIKE 'timestamp%'
+      ORDER BY table_name, column_name`;
+    expect(columns.map((c) => `${c.table_name}.${c.column_name}`)).toEqual([
+      "CoAttendanceMeeting.endedAt",
+      "ContactCoAttendance.firstMetAt",
+      "ContactCoAttendance.lastMetAt",
+    ]);
+    const [finer] = await prisma.$queryRaw<Array<{ n: bigint }>>`
+      SELECT
+        (SELECT count(*) FROM "ContactCoAttendance" WHERE "userId" = ${userId}
+           AND ("firstMetAt" <> date_trunc('day', "firstMetAt") OR "lastMetAt" <> date_trunc('day', "lastMetAt")))
+        + (SELECT count(*) FROM "CoAttendanceMeeting" WHERE "userId" = ${userId}
+           AND "endedAt" <> date_trunc('day', "endedAt")) AS n`;
+    expect(Number(finer?.n)).toBe(0);
+    expect(await prisma.coAttendanceMeeting.count({ where: { userId } })).toBe(2);
+  });
+});
+
+describePg("lock order", () => {
+  it("claims the same meetings from opposite orders at once without a deadlock", async () => {
+    const userId = await newUser();
+    const batch = Array.from({ length: 10 }, (_, i) =>
+      meeting(`o${i}`, `2026-10-${10 + i}T01:00:00Z`, ["ana@x.example", `p${i}@x.example`]),
+    );
+    const reversed = [...batch].reverse();
+    const results = await Promise.all([
+      claimAndCount("GOOGLE", userId, batch),
+      claimAndCount("GOOGLE", userId, reversed),
+      claimAndCount("GOOGLE", userId, batch),
+      claimAndCount("GOOGLE", userId, reversed),
+    ]);
+    expect(results.reduce((sum, n) => sum + n, 0)).toBe(10);
+    expect(await counter(userId, "ana@x.example")).toMatchObject({ meetingCount: 10 });
   });
 });
 

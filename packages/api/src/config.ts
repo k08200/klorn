@@ -518,9 +518,10 @@ export function calendarHideDeclinedEnabled(): boolean {
 // Per-contact calendar co-attendance (pim/coattendance/, attention engine v3
 // §3(2)). OFF by default (repo doctrine). While unset/false the sync lists no past
 // events and writes nothing to ContactCoAttendance or CoAttendanceMeeting. When on,
-// each Google calendar sync (primary and linked) lists the last 30 days at most
-// once per 6 hours per account and counts each ended meeting once per contact:
-// counts and dates only, never an attendee list (founder decision 2026-11-01).
+// the scheduler queues a background job that, for each Google calendar source
+// (primary and linked) at most once per 6 hours, lists the last 30 days and counts
+// each ended meeting once per contact: counts and UTC days only, never an attendee
+// list (founder decision 2026-11-01).
 // Read at sync time with the same lenient truthy parse.
 export function calendarCoattendanceEnabled(): boolean {
   return ["true", "1", "yes", "on"].includes(

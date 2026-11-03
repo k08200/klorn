@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description: "How Klorn handles Gmail, Calendar, and account data during beta.",
 };
 
-const updatedAt = "November 1, 2026";
+const updatedAt = "October 31, 2026";
 
 /** Stable, URL-safe anchor id so the TOC links line up with each section. */
 function slug(title: string): string {
@@ -149,13 +149,6 @@ export default function PrivacyPage() {
               <li>
                 Calendar event information such as title, time, attendees, location, and
                 description.
-              </li>
-              <li>
-                Counts from your past calendar meetings: for each person invited to a meeting you
-                organised or accepted (even tentatively), unless they declined, how many such
-                meetings, how many of them had five or fewer people, and the day of the first and
-                the last. To count each meeting once, Klorn keeps a one-way fingerprint of it for
-                about a month. The attendee lists themselves are not stored.
               </li>
               <li>
                 Product data you create in Klorn, including tasks, reminders, notes, commitments,

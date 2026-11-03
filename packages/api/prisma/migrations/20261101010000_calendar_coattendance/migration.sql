@@ -16,9 +16,22 @@
 -- CoAttendanceMeeting. One row per meeting already counted, so a meeting the sync
 -- lists again is never counted twice. eventKey is the SHA-256 (64 hex) of the
 -- meeting's identity across calendars, never the identity itself; a CHECK keeps it
--- a hash. endedAt prunes the row once the meeting is older than the counting
--- window. Neither table has a column for a title, a start of a single meeting, or
--- another attendee.
+-- a hash. endedAt, the UTC day the meeting ended, prunes the row once the
+-- meeting is older than the counting window.
+--
+-- Nothing finer than a day. Neither table has a column for a title, an attendee,
+-- or a time: no createdAt, updatedAt or countedAt, and the three dates
+-- (firstMetAt, lastMetAt, endedAt) are UTC midnights. Rows written in one
+-- transaction would otherwise share a write time, and grouping by it recovers
+-- who was in the meeting that ended at a given time (review of #1604).
+--
+-- UserToken and LinkedCalendarAccount gain two nullable columns for each Google
+-- calendar source: coAttendanceObservedSince (the UTC day its counting window
+-- first started, set once by the first successful pass) and
+-- coAttendanceLastPassAt (its last successful pass, the persisted 6-hour
+-- interval). Readers treat a missing ContactCoAttendance row as 0 only when every
+-- Google calendar source of the user has coAttendanceObservedSince. Reconnecting
+-- or re-linking a grant clears both (routes/google-link-finish.ts).
 --
 -- Row-level security on both, in the form every per-user table has: ENABLE, not
 -- FORCE, a tenant policy on app.current_user_id and a system policy on
@@ -30,7 +43,12 @@
 -- a data wipe (purge-user-data.ts).
 --
 -- Locks and cost: two new, empty tables. The foreign keys take SHARE ROW EXCLUSIVE
--- on "User" for the length of the transaction; nothing scans an existing table.
+-- on "User" for the length of the transaction. The two ADD COLUMNs (nullable, no
+-- default) are metadata-only but take ACCESS EXCLUSIVE on "UserToken" and
+-- "LinkedCalendarAccount", which every sync reads; they run last so those locks
+-- are held for the shortest time, and lock_timeout makes a deploy blocked by a
+-- long transaction fail fast instead of queueing reads behind it. Nothing scans an
+-- existing table.
 SET LOCAL lock_timeout = '5s';
 
 CREATE TABLE "ContactCoAttendance" (
@@ -41,8 +59,6 @@ CREATE TABLE "ContactCoAttendance" (
     "smallMeetingCount" INTEGER NOT NULL DEFAULT 0,
     "firstMetAt" TIMESTAMP(3) NOT NULL,
     "lastMetAt" TIMESTAMP(3) NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "ContactCoAttendance_pkey" PRIMARY KEY ("id"),
     CONSTRAINT "ContactCoAttendance_contactEmail_normalized_check" CHECK ("contactEmail" = lower(btrim("contactEmail"))),
@@ -55,7 +71,6 @@ CREATE TABLE "CoAttendanceMeeting" (
     "provider" "CalendarProvider" NOT NULL,
     "eventKey" TEXT NOT NULL,
     "endedAt" TIMESTAMP(3) NOT NULL,
-    "countedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "CoAttendanceMeeting_pkey" PRIMARY KEY ("id"),
     CONSTRAINT "CoAttendanceMeeting_eventKey_sha256_check" CHECK ("eventKey" ~ '^[0-9a-f]{64}$')
@@ -81,3 +96,6 @@ CREATE POLICY "CoAttendanceMeeting_system_bypass" ON "CoAttendanceMeeting" USING
 
 CREATE TRIGGER "ContactCoAttendance_data_wipe_fence" BEFORE INSERT ON "ContactCoAttendance" FOR EACH ROW EXECUTE FUNCTION public.klorn_data_wipe_fence();
 CREATE TRIGGER "CoAttendanceMeeting_data_wipe_fence" BEFORE INSERT ON "CoAttendanceMeeting" FOR EACH ROW EXECUTE FUNCTION public.klorn_data_wipe_fence();
+
+ALTER TABLE "UserToken" ADD COLUMN "coAttendanceObservedSince" TIMESTAMP(3), ADD COLUMN "coAttendanceLastPassAt" TIMESTAMP(3);
+ALTER TABLE "LinkedCalendarAccount" ADD COLUMN "coAttendanceObservedSince" TIMESTAMP(3), ADD COLUMN "coAttendanceLastPassAt" TIMESTAMP(3);

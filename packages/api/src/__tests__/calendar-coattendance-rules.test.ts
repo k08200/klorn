@@ -31,6 +31,7 @@ function meeting(overrides: Partial<ProviderMeeting> = {}): ProviderMeeting {
     startTime: new Date("2026-11-01T09:00:00.000Z"),
     endTime: new Date("2026-11-01T10:00:00.000Z"),
     attendeesOmitted: false,
+    organizedBySelf: false,
     attendees: [me(), person("ana@client.example")],
     ...overrides,
   };
@@ -146,9 +147,27 @@ describe("countMeeting: what counts", () => {
 
   it("counts a meeting the user organised without adding themselves", () => {
     const attendees = [person("ana@client.example"), person("bo@client.example")];
+    expect(countMeeting(meeting({ attendees, organizedBySelf: true }), OWN, NOW)?.contacts).toEqual(
+      ["ana@client.example", "bo@client.example"],
+    );
+  });
+
+  it("counts nothing from an event without the user's entry that they did not organise", () => {
+    // An imported .ics or an event a stranger put on the calendar: no evidence the
+    // user took part, whoever it lists.
+    const attendees = [person("ana@client.example"), person("bo@client.example")];
+    expect(countMeeting(meeting({ attendees, organizedBySelf: false }), OWN, NOW)).toBeNull();
+  });
+
+  it("never lists one of the user's aliases as a contact, whatever it answered", () => {
+    const attendees = [
+      person("ME@work.example", "accepted"),
+      person("me@example.com", "needsAction"),
+      person("ana@client.example"),
+    ];
+    // No `self` entry: the alias that accepted is the user's entry, not a contact.
     expect(countMeeting(meeting({ attendees }), OWN, NOW)?.contacts).toEqual([
       "ana@client.example",
-      "bo@client.example",
     ]);
   });
 
