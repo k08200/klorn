@@ -120,13 +120,16 @@ As built in P2 (`judge/v3/relationship.ts`, `relationship-loader.ts`):
   | `approved` | the agent drafted it; the user approved these exact bytes | yes |
   | `auto_reply` | an autonomous reply the user never saw | never |
   | `unsubscribe` | a mailto unsubscribe request | never |
-  | null | seen only by the Sent-folder scan (sent outside Klorn), or recorded before the column existed | yes |
+  | null | seen only by the Sent-folder scan, with no proof that Klorn sent it (counted as the user's own mail) | yes |
 
-  This applies to every sent-side field: sent count, last sent, reply latency, replied and user-initiated thread counts, and the sent side of `firstSeenAt`.
+  This applies to every sent-side field: sent count, last sent, reply latency, replied and user-initiated thread counts, and the sent side of `firstSeenAt`. The loader applies it as one where-clause (`SENT_EVIDENCE_WHERE`, #1589).
 
-  Rows recorded before #1591 stay null, so legacy auto-replies and unsubscribes still read as the user's. A null row whose `to` matches a `listUnsubscribeMailto` address stored for that user is not evidence.
+  Legacy rows (before #1591) were labelled on 2026-11-01 by migration `20261101000000_sent_message_origin_backfill`. It labels only from records written at send time:
+  - `approved`: the executed approval's returned messageId.
+  - `auto_reply`: the unattended-reply claim's recipient, an exact `Re: <subject>`, and a send within 2 minutes of the claim. Only the first such row per claim counts, and a claim rewritten as failed never counts.
+  - `unsubscribe`: the recipient is a mailto List-Unsubscribe target of a mail received in the same account before the send. The subject must equal the decoded mailto subject, or be a same-shape per-mail token sent to an address that never mails the user.
 
-  Until the loader applies this rule, policy must not treat "the user wrote to them" as trust.
+  Production dry run: 4 `auto_reply` and 37 `unsubscribe` of 192 rows; no row qualified as `approved`. Of the 37, 28 match the subject exactly and 9 are token subjects. One row from before the send floor (2026-06-04 10:22 UTC) is unprovable and stays null. A sent-history import must classify the rows it creates with the same rules.
 - Pinned means any `PIN_TIER` rule on the address or domain. VIP means a sender label of investor or customer, or a pin to PUSH.
 - **Calendar co-attendance is always null for now.** `CalendarEvent` stores no attendees. The interaction graph's "meeting" count is inferred from email volume, which is not co-attendance, so it is not reused.
 
