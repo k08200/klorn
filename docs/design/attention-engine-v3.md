@@ -266,7 +266,10 @@ These are cross-product counts, not prevalence. The replay reports prevalence on
 
 **Flags.**
 - `JUDGE_V3_POLICY` (default OFF) applies to the users `JUDGE_V3_SHADOW` covers: `true` means everyone, `cohort` means the cohort. Other users keep v2 exactly, with no budget. This allows a cohort rollout: POLICY=true with SHADOW=cohort.
-- **Cost.** For a user under the policy, the facts call is part of the judge (live decision, step 2). That is one more model call per new mail, on the judge's budget, and it replaces the sampled shadow for that user. Prod volume for scale: 2,378 email decisions in the 30 days to 2026-10-31, about 80 a day across all users.
+- **Cost.** For a user under the policy, the facts call is part of the judge (live decision, step 2). That is one more model call per new mail, and it replaces the sampled shadow for that user. Prod volume for scale: 2,378 email decisions in the 30 days to 2026-10-31, about 80 a day across all users.
+  - The facts call draws on the judge's reserved slice of the daily cost cap (`JUDGE_BUDGET_RESERVE_CENTS`). It therefore competes with the v2 judge call for the same reserve.
+  - v2 keeps being computed per mail until v3 has been the default for two weeks (§7). Until then, one new mail spends two reserved calls.
+  - Before a POLICY flip, check the reserve against that double draw and raise it if needed.
 - Per item, missing LLM facts mean the v2 lane (live decision, step 3).
 - These apply per user, only to users under the policy:
   - the budget;
