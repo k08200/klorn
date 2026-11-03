@@ -64,6 +64,11 @@ describe("loadRelationshipSnapshot", () => {
       repliedThreadCount: 1,
       userInitiatedThreadCount: 1,
       firstSeenAt: "2026-07-01T00:00:00.000Z",
+      // Co-attendance stays unknown until the loader reads the store (#1604 marker).
+      meetingCount: null,
+      smallMeetingCount: null,
+      lastMetAt: null,
+      coAttendanceObservedSince: null,
     });
     expect(d.sentRowsMentioning).toHaveBeenCalledWith("u1", "sarah@partner.io");
     expect(d.sentInThreads).toHaveBeenCalledWith("u1", ["th1", "th0"]);
