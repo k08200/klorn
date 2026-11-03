@@ -52,8 +52,6 @@ const COUNTS_TABLE = [
   `"smallMeetingCount" INTEGER NOT NULL DEFAULT 0,`,
   `"firstMetAt" TIMESTAMP(3) NOT NULL,`,
   `"lastMetAt" TIMESTAMP(3) NOT NULL,`,
-  `"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,`,
-  `"updatedAt" TIMESTAMP(3) NOT NULL,`,
   `CONSTRAINT "ContactCoAttendance_pkey" PRIMARY KEY ("id"),`,
   `CONSTRAINT "ContactCoAttendance_contactEmail_normalized_check" CHECK ("contactEmail" = lower(btrim("contactEmail"))),`,
   `CONSTRAINT "ContactCoAttendance_counts_check" CHECK ("smallMeetingCount" >= 0 AND "smallMeetingCount" <= "meetingCount") )`,
@@ -66,7 +64,6 @@ const MARKER_TABLE = [
   `"provider" "CalendarProvider" NOT NULL,`,
   `"eventKey" TEXT NOT NULL,`,
   `"endedAt" TIMESTAMP(3) NOT NULL,`,
-  `"countedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,`,
   `CONSTRAINT "CoAttendanceMeeting_pkey" PRIMARY KEY ("id"),`,
   `CONSTRAINT "CoAttendanceMeeting_eventKey_sha256_check" CHECK ("eventKey" ~ '^[0-9a-f]{64}$') )`,
 ].join(" ");
@@ -98,6 +95,8 @@ describe("calendar co-attendance migration", () => {
       `CREATE POLICY "CoAttendanceMeeting_system_bypass" ON "CoAttendanceMeeting" USING (current_setting('app.bypass_rls', true) = 'on')`,
       `CREATE TRIGGER "ContactCoAttendance_data_wipe_fence" BEFORE INSERT ON "ContactCoAttendance" FOR EACH ROW EXECUTE FUNCTION public.klorn_data_wipe_fence()`,
       `CREATE TRIGGER "CoAttendanceMeeting_data_wipe_fence" BEFORE INSERT ON "CoAttendanceMeeting" FOR EACH ROW EXECUTE FUNCTION public.klorn_data_wipe_fence()`,
+      `ALTER TABLE "UserToken" ADD COLUMN "coAttendanceObservedSince" TIMESTAMP(3), ADD COLUMN "coAttendanceLastPassAt" TIMESTAMP(3)`,
+      `ALTER TABLE "LinkedCalendarAccount" ADD COLUMN "coAttendanceObservedSince" TIMESTAMP(3), ADD COLUMN "coAttendanceLastPassAt" TIMESTAMP(3)`,
     ]);
   });
 
@@ -110,8 +109,6 @@ describe("calendar co-attendance migration", () => {
       "smallMeetingCount",
       "firstMetAt",
       "lastMetAt",
-      "createdAt",
-      "updatedAt",
     ]);
     expect(columnsOf("CoAttendanceMeeting")).toEqual([
       "id",
@@ -119,9 +116,21 @@ describe("calendar co-attendance migration", () => {
       "provider",
       "eventKey",
       "endedAt",
-      "countedAt",
     ]);
     expect(sql).not.toMatch(/"attendees?"|"title"|"summary"|"startTime"|JSONB|TEXT\[\]/);
+    // No column of either table records when a row was written: rows written in
+    // one transaction must not line up into one meeting's guest list by time.
+    expect(sql).not.toMatch(/"createdAt"|"updatedAt"|"countedAt"|CURRENT_TIMESTAMP/);
+  });
+
+  it("adds the per-source markers, nullable, to the primary token and linked calendars", () => {
+    for (const model of ["UserToken", "LinkedCalendarAccount"]) {
+      expect(columnsOf(model)).toEqual(
+        expect.arrayContaining(["coAttendanceObservedSince", "coAttendanceLastPassAt"]),
+      );
+    }
+    expect(schema).toMatch(/coAttendanceObservedSince\s+DateTime\?/);
+    expect(schema).toMatch(/coAttendanceLastPassAt\s+DateTime\?/);
   });
 
   it("leaves both tables with RLS and their policies only, and fenced", () => {

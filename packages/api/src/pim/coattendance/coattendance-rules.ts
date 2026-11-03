@@ -3,8 +3,12 @@
  * Pure: the listing is pim/calendar-providers/google-meetings.ts, the writes
  * coattendance-store.ts. Founder decision 2026-11-01: counts only, never an
  * attendee list. The rules:
- *   - the meeting has ended (its end is at or before now), is not cancelled, has an
- *     identity and timed start and end;
+ *   - the meeting's whole UTC end-day has finished (its end is before today's UTC
+ *     midnight), so a day's meetings are always counted together, in one
+ *     transaction (coattendance-store.ts): rows written together then reveal no
+ *     more than the day each row's lastMetAt already gives. A meeting ending today
+ *     is counted at the first pass tomorrow. It is not cancelled, and has an
+ *     identity and a timed start and end;
  *   - not all day: an all-day event with guests is mostly a notice (out of office, a
  *     deadline, a holiday, travel), not time spent together, and counting it would
  *     inflate "met";
@@ -17,7 +21,9 @@
  *     invitation the user never answered does not count: anyone can put one on a
  *     calendar (Google adds invitations from anyone by default), so it is no
  *     evidence of a meeting and would let a stranger raise a count. An event with
- *     no entry of theirs at all is one they made themselves, and counts;
+ *     no entry of theirs counts only if the calendar says they organised it
+ *     (Google's organizer.self); an imported or stranger-made event without their
+ *     entry counts nothing;
  *   - a contact is a person (rooms and other resources never count), not the user,
  *     with a plain ASCII address, who did not decline. A contact's tentative or
  *     unanswered invitation counts: few guests answer, and the user's own answer
@@ -37,6 +43,12 @@ export const SMALL_MEETING_MAX_PEOPLE = 5;
 export const MAX_COUNTED_ATTENDEES = 50;
 /** RFC 5321's limit on a forward path, the longest address worth keeping. */
 const MAX_ADDRESS_LENGTH = 254;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** The start of the instant's UTC day. */
+export function utcDayOf(instant: Date): Date {
+  return new Date(Math.floor(instant.getTime() / DAY_MS) * DAY_MS);
+}
 
 export interface CountedMeeting {
   readonly identity: string;
@@ -60,7 +72,7 @@ export function normalizeAttendeeEmail(raw: string): string | null {
 function isCountableEvent(meeting: ProviderMeeting, now: Date): boolean {
   if (!meeting.identity || meeting.cancelled || meeting.allDay) return false;
   if (!meeting.startTime || !meeting.endTime) return false;
-  if (meeting.endTime.getTime() > now.getTime()) return false;
+  if (meeting.endTime.getTime() >= utcDayOf(now).getTime()) return false;
   return !meeting.attendeesOmitted;
 }
 
@@ -87,7 +99,8 @@ export function countMeeting(
   if (people.length > MAX_COUNTED_ATTENDEES) return null;
 
   const mine = people.filter((attendee) => isOwn(attendee, ownAddresses));
-  if (mine.length > 0 && !mine.some(tookPart)) return null;
+  const userTookPart = mine.length > 0 ? mine.some(tookPart) : meeting.organizedBySelf;
+  if (!userTookPart) return null;
 
   const contacts = new Set<string>();
   for (const attendee of people) {

@@ -7,8 +7,9 @@
  *
  * Asked of Google, and nothing more:
  *   - `fields`: identity (id, iCalUID, originalStartTime), status, start, end,
- *     attendeesOmitted, and per attendee only email, self, organizer, resource and
- *     responseStatus. No title, description, location or conference data;
+ *     attendeesOmitted, whether the calendar owner organised it (organizer.self,
+ *     not the organizer's address), and per attendee only email, self, organizer,
+ *     resource and responseStatus. No title, description, location or conference data;
  *   - `eventTypes: ["default"]`: meetings, not working-location, focus-time,
  *     out-of-office or birthday entries, which would only fill the pages;
  *   - `maxAttendees`: past MAX_COUNTED_ATTENDEES Google returns only the user's own
@@ -28,7 +29,7 @@ export const MEETINGS_TIMEOUT_MS = 10_000;
 
 const PRIMARY_CALENDAR_ID = "primary";
 const MEETING_FIELDS =
-  "nextPageToken,items(id,iCalUID,status,start,end,originalStartTime,attendeesOmitted,attendees(email,self,organizer,resource,responseStatus))";
+  "nextPageToken,items(id,iCalUID,status,start,end,originalStartTime,attendeesOmitted,organizer(self),attendees(email,self,organizer,resource,responseStatus))";
 
 function instantOf(value: string | null | undefined): Date | null {
   if (!value) return null;
@@ -66,6 +67,7 @@ function toMeeting(item: calendar_v3.Schema$Event): ProviderMeeting {
     startTime: instantOf(item.start?.dateTime),
     endTime: instantOf(item.end?.dateTime),
     attendeesOmitted: item.attendeesOmitted === true,
+    organizedBySelf: item.organizer?.self === true,
     attendees: (item.attendees ?? []).map(toAttendee),
   };
 }

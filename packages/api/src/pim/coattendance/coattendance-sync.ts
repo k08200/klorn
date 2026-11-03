@@ -1,24 +1,25 @@
 /**
- * The co-attendance pass, behind CALENDAR_COATTENDANCE_ENABLED. Off: it returns
- * before any listing, read or write. Only the scheduler runs it, after an
- * account's rows are written (automation-scheduler.ts for the primary calendar,
- * syncLinkedCalendars in pim/calendar-sync.ts for linked ones), never a request:
- * the first pass after the flag is turned on writes 30 days of meetings.
+ * The co-attendance pass for one Google calendar source, behind
+ * CALENDAR_COATTENDANCE_ENABLED. Off: it returns before any listing, read or
+ * write. Only the scheduler's background job runs it (coattendance-job.ts), never
+ * a request and never inside a user's per-tick budget: the first pass after the
+ * flag is turned on writes 30 days of meetings.
  *
- * On: for a session that can list attendees (Google, primary and linked), at most
- * once per COATTENDANCE_PASS_INTERVAL_MS per account, it lists the last
- * COATTENDANCE_LOOKBACK_DAYS (the row sync lists only upcoming events, so ended
- * meetings need a listing of their own), counts each ended meeting once per
- * contact (coattendance-rules.ts, coattendance-store.ts), then forgets markers older
- * than any pass can list again. The window is fixed and the markers make every pass
- * idempotent, so the first pass after the flag is turned on also counts the 30
- * days before it, and a missed pass is caught up by the next.
+ * On: for a session that can list attendees (Google, primary and linked), when the
+ * source's persisted interval has passed (coattendance-sources.ts), it lists the
+ * last COATTENDANCE_LOOKBACK_DAYS (the row sync lists only upcoming events, so
+ * ended meetings need a listing of their own), counts each ended meeting once per
+ * contact (coattendance-rules.ts, coattendance-store.ts), forgets markers no pass
+ * can list again, and records the pass on the source. The window is fixed and the
+ * markers make every pass idempotent, so the first pass also counts the 30 days
+ * before it, and a missed pass is caught up by the next.
+ *
+ * A failed pass records nothing on the source, so it does not use the interval: it
+ * backs off in memory for COATTENDANCE_FAILURE_BACKOFF_MS and is retried then.
  *
  * Attendee addresses exist only in memory here. Nothing is logged but counts, and
  * a failure is reported by its error class, code and HTTP status only: a database
- * error's message can quote the values of the query that failed.
- *
- * Best effort: it never throws, so it can never fail the row sync.
+ * error's message can quote the values of the query that failed. Never throws.
  */
 
 import { calendarCoattendanceEnabled } from "../../config.js";
@@ -30,7 +31,8 @@ import type {
   MeetingListing,
 } from "../calendar-providers/types.js";
 import type { CalendarProviderName } from "../calendar-rows.js";
-import { type CountedMeeting, countMeeting } from "./coattendance-rules.js";
+import { type CountedMeeting, countMeeting, utcDayOf } from "./coattendance-rules.js";
+import { isPassDue, readSourceState, recordPassSucceeded } from "./coattendance-sources.js";
 import {
   loadOwnAddresses,
   pruneCountedMeetings,
@@ -40,33 +42,37 @@ import {
 
 export const COATTENDANCE_LOOKBACK_DAYS = 30;
 export const COATTENDANCE_PASS_INTERVAL_MS = 6 * 60 * 60 * 1000;
+export const COATTENDANCE_FAILURE_BACKOFF_MS = 30 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
-/** Markers are kept one day past the window, so one at its edge is never forgotten early. */
+/** Markers keep only a day, so they are kept one day past the window. */
 const MARKER_GRACE_MS = DAY_MS;
-/** Accounts whose last pass time is remembered; the oldest is forgotten past the cap. */
-const MAX_REMEMBERED_ACCOUNTS = 10_000;
+/** Sources whose failure backoff is remembered; the oldest is forgotten past the cap. */
+const MAX_REMEMBERED_SOURCES = 10_000;
 
 export interface CoAttendancePassResult extends RecordResult {
   readonly truncated: boolean;
 }
 
-const lastPassAt = new Map<string, number>();
+const retryAfter = new Map<string, number>();
+const inFlight = new Set<string>();
 
 export function _resetCoAttendancePassesForTests(): void {
-  lastPassAt.clear();
+  retryAfter.clear();
+  inFlight.clear();
 }
 
-/** True (and the pass recorded) when this account's last pass is at least an interval old. */
-function claimPass(account: string, now: Date): boolean {
-  const last = lastPassAt.get(account);
-  if (last !== undefined && now.getTime() - last < COATTENDANCE_PASS_INTERVAL_MS) return false;
-  lastPassAt.delete(account);
-  if (lastPassAt.size >= MAX_REMEMBERED_ACCOUNTS) {
-    const oldest = lastPassAt.keys().next().value;
-    if (oldest !== undefined) lastPassAt.delete(oldest);
+function backOff(source: string, now: Date): void {
+  retryAfter.delete(source);
+  if (retryAfter.size >= MAX_REMEMBERED_SOURCES) {
+    const oldest = retryAfter.keys().next().value;
+    if (oldest !== undefined) retryAfter.delete(oldest);
   }
-  lastPassAt.set(account, now.getTime());
-  return true;
+  retryAfter.set(source, now.getTime() + COATTENDANCE_FAILURE_BACKOFF_MS);
+}
+
+function backingOff(source: string, now: Date): boolean {
+  const until = retryAfter.get(source);
+  return until !== undefined && now.getTime() < until;
 }
 
 export function coAttendanceWindow(now: Date): CalendarWindow {
@@ -92,7 +98,8 @@ async function runPass(
   userId: string,
   now: Date,
 ): Promise<CoAttendancePassResult> {
-  const listing = await list(coAttendanceWindow(now));
+  const window = coAttendanceWindow(now);
+  const listing = await list(window);
   let recorded: RecordResult = { meetings: 0, contacts: 0 };
   if (listing.meetings.length > 0) {
     const own = await loadOwnAddresses(userId);
@@ -101,17 +108,16 @@ async function runPass(
       .filter((meeting): meeting is CountedMeeting => meeting !== null);
     recorded = await recordCountedMeetings(provider, userId, counted);
   }
-  const forgetBefore = new Date(
-    now.getTime() - COATTENDANCE_LOOKBACK_DAYS * DAY_MS - MARKER_GRACE_MS,
-  );
-  await pruneCountedMeetings(userId, forgetBefore);
+  const windowStart = new Date(window.timeMin);
+  await pruneCountedMeetings(userId, new Date(windowStart.getTime() - MARKER_GRACE_MS));
   return { ...recorded, truncated: listing.truncated };
 }
 
 /**
- * Count the ended meetings of one calendar account. Null when nothing ran: the flag
- * is off, the provider cannot list attendees, the account's interval has not
- * passed, or the pass failed (reported, never thrown).
+ * Count the ended meetings of one Google calendar source. Null when nothing ran:
+ * the flag is off, the provider cannot list attendees, the user has no such Google
+ * source, its interval has not passed, it is backing off after a failure, a pass
+ * for it is already running, or the pass failed (reported, never thrown).
  */
 export async function countCoAttendance(
   session: CalendarSession,
@@ -122,25 +128,34 @@ export async function countCoAttendance(
   if (!calendarCoattendanceEnabled()) return null;
   if (!session.listMeetingAttendees) return null;
   const list = session.listMeetingAttendees.bind(session);
-  const account = `${userId}:${linkedAccountId ?? "primary"}`;
-  if (!claimPass(account, now)) return null;
+  const source = `${userId}:${linkedAccountId ?? "primary"}`;
+  if (backingOff(source, now) || inFlight.has(source)) return null;
+  inFlight.add(source);
   try {
+    const state = await readSourceState(userId, linkedAccountId);
+    if (!state || !isPassDue(state, now, COATTENDANCE_PASS_INTERVAL_MS)) return null;
     const result = await runPass(list, session.provider, userId, now);
+    const windowStartDay = utcDayOf(new Date(coAttendanceWindow(now).timeMin));
+    await recordPassSucceeded(userId, linkedAccountId, state, windowStartDay, now);
+    retryAfter.delete(source);
     if (result.meetings > 0 || result.truncated) {
       console.log(
-        `[CALENDAR] co-attendance ${account} meetings=${result.meetings} contacts=${result.contacts} truncated=${result.truncated}`,
+        `[CALENDAR] co-attendance ${source} meetings=${result.meetings} contacts=${result.contacts} truncated=${result.truncated}`,
       );
     }
     return result;
   } catch (err) {
+    backOff(source, now);
     // The account's data is being wiped: the refusal is the fence working.
     if (isDataWipeFenceError(err)) return null;
     const label = failureLabel(err);
-    console.warn(`[CALENDAR] co-attendance pass failed for ${account}: ${label}`);
+    console.warn(`[CALENDAR] co-attendance pass failed for ${source}: ${label}`);
     captureError(new Error(`calendar co-attendance pass failed: ${label}`), {
       tags: { scope: "calendar.coattendance" },
       extra: { userId, linkedAccountId },
     });
     return null;
+  } finally {
+    inFlight.delete(source);
   }
 }

@@ -278,7 +278,7 @@ func tokenSelfChecks(sourceDir: URL) -> [(String, Bool)] {
     results.append((
         "the sender-label correction menu has a main-window call site: the reader header",
         correctionHosts == ["WindowLaneChip.swift"]
-            && readerMeta.contains("SenderLabelCorrectionMenu(\n                from: item.email?.from")
+            && readerMeta.contains("SenderLabelCorrectionMenu(\n            from: item.email?.from")
             && readerMeta.contains("Menu {\n                    SenderLabelMenuItems(address: address, byUser: byUser)")
             && readerMeta.contains(".accessibilityLabel(\n                    signalWord.map { L(\"label.correct.a11y\", $0) } ?? L(\"label.correct\"))")
             && readerMeta.components(separatedBy: ".accessibilityElement(children: .combine)").count == 2

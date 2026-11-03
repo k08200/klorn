@@ -48,7 +48,7 @@ describe("Google listMeetingAttendees", () => {
       maxAttendees: MAX_COUNTED_ATTENDEES,
       maxResults: MEETINGS_PAGE_SIZE,
       fields:
-        "nextPageToken,items(id,iCalUID,status,start,end,originalStartTime,attendeesOmitted,attendees(email,self,organizer,resource,responseStatus))",
+        "nextPageToken,items(id,iCalUID,status,start,end,originalStartTime,attendeesOmitted,organizer(self),attendees(email,self,organizer,resource,responseStatus))",
     });
     // No summary, description, location or conference data is asked for.
     expect(String(params.fields)).not.toMatch(/summary|description|location|conference/);
@@ -63,6 +63,7 @@ describe("Google listMeetingAttendees", () => {
             id: "evt1",
             iCalUID: "uid-1@google.com",
             status: "confirmed",
+            organizer: { self: true },
             start: { dateTime: "2026-10-20T10:00:00+09:00" },
             end: { dateTime: "2026-10-20T11:00:00+09:00" },
             attendees: [
@@ -85,6 +86,7 @@ describe("Google listMeetingAttendees", () => {
           startTime: new Date("2026-10-20T01:00:00.000Z"),
           endTime: new Date("2026-10-20T02:00:00.000Z"),
           attendeesOmitted: false,
+          organizedBySelf: true,
           attendees: [
             {
               email: "me@example.com",
@@ -164,6 +166,8 @@ describe("Google listMeetingAttendees", () => {
     expect(listing?.meetings[2]?.startTime).toBeNull();
     expect(listing?.meetings[2]?.endTime).toBeNull();
     expect(listing?.meetings[2]?.attendees).toEqual([]);
+    // No organizer, or one that is not the calendar owner: not organised by the user.
+    expect(listing?.meetings.map((m) => m.organizedBySelf)).toEqual([false, false, false]);
   });
 
   it("follows page tokens and reports a listing cut at the page cap as truncated", async () => {

@@ -256,7 +256,7 @@ function FolderChoice({
       variant="ghost"
       aria-label={t("files.openFolder", { name: folder.name })}
       onClick={() => onEnter(folder)}
-      className="-mx-3 min-h-11 w-[calc(100%+1.5rem)] justify-start gap-3 rounded-card text-ink"
+      className="-mx-3 min-h-11 w-[calc(100%+1.5rem)] justify-start gap-3 rounded-control text-ink"
     >
       {body}
       <ChevronGlyph />

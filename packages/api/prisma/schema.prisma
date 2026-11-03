@@ -342,30 +342,36 @@ enum Role {
 }
 
 model UserToken {
-  id                   String    @id @default(uuid())
-  userId               String
-  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  provider             String // "google"
-  accessToken          String
-  refreshToken         String?
-  expiresAt            DateTime?
+  id                        String    @id @default(uuid())
+  userId                    String
+  user                      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider                  String // "google"
+  accessToken               String
+  refreshToken              String?
+  expiresAt                 DateTime?
   // Gmail push watch (users.watch) expires ~7 days after registration.
   // Null means the user has not enabled real-time push.
-  gmailWatchExpiresAt  DateTime?
+  gmailWatchExpiresAt       DateTime?
   // Last-synced Gmail historyId watermark for incremental (History API) sync.
   // Null = never baselined; the next sync snapshots then records the current id.
-  historyId            String?
+  historyId                 String?
   // The Google account this grant belongs to, lowercased (Gmail's profile
   // address). Google revokes a grant for the whole account, so a revoke must
   // first know whether another Klorn account holds a grant for the same one
   // (auth/google-grant-revoke.ts). Null until read: set at connect, or the
   // first time a revoke needs it.
-  googleEmail          String?
+  googleEmail               String?
   // When the address was last looked up (the lookup order, least recent
   // first). An empty googleEmail is a grant Google already refuses.
-  googleEmailCheckedAt DateTime?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  googleEmailCheckedAt      DateTime?
+  // Calendar co-attendance (pim/coattendance/) for this primary Google calendar:
+  // the UTC day its counting window first started (set once, by the first
+  // successful pass) and its last successful pass (the 6-hour interval). Null
+  // until a pass succeeds; cleared when the grant is reconnected.
+  coAttendanceObservedSince DateTime?
+  coAttendanceLastPassAt    DateTime?
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
 
   @@unique([userId, provider])
   // The revoke's shared-grant check looks other users' grants up by address.
@@ -420,42 +426,46 @@ enum CalendarProvider {
 // LinkedInboxAccount: OAuth providers use accessToken/refreshToken, CalDAV
 // providers the caldav* columns.
 model LinkedCalendarAccount {
-  id                   String           @id @default(uuid())
-  userId               String
-  user                 User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  provider             CalendarProvider @default(GOOGLE)
-  email                String // the linked account address — label + dedup key
+  id                        String           @id @default(uuid())
+  userId                    String
+  user                      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider                  CalendarProvider @default(GOOGLE)
+  email                     String // the linked account address — label + dedup key
   // OAuth providers (GOOGLE, OUTLOOK): encrypted token pair. Nullable because
   // CalDAV rows never have one; readers already guard `row.accessToken ?`.
-  accessToken          String?
-  refreshToken         String?
-  expiresAt            DateTime?
+  accessToken               String?
+  refreshToken              String?
+  expiresAt                 DateTime?
   // CalDAV providers (ICLOUD, NAVER): server URL + AES-256-GCM password cipher
   // (an app-specific password), same crypto-tokens helper as the OAuth ciphers.
   // Unused until C3; covered by the key-rotation sweep from day one. caldavUrl is
   // user-supplied and fetched server-side, so C3 must validate it against SSRF
   // (resolve-then-pin, reject private ranges) before the first request.
-  caldavUrl            String?
-  caldavPasswordCipher String?
+  caldavUrl                 String?
+  caldavPasswordCipher      String?
   // Set true when this linked calendar's token is found revoked/undecryptable so
   // the UI can prompt a re-link instead of the account silently dropping out of
   // free/busy; cleared on a successful token refresh or re-link. Mirrors
   // LinkedInboxAccount.needsReconnect.
-  needsReconnect       Boolean          @default(false)
+  needsReconnect            Boolean          @default(false)
+  // Calendar co-attendance (pim/coattendance/), GOOGLE rows only: as on UserToken.
+  // Cleared on a re-link; an unlink deletes the row.
+  coAttendanceObservedSince DateTime?
+  coAttendanceLastPassAt    DateTime?
   // C6: a DEVICE source is one calendar a desktop app uploads (opt-in per
   // calendar, decision P4). Its `email` is `device:<key>`, the device's hash of
   // the calendar identifier plus the device id (never the raw identifier), and
   // this is the calendar's title on the device, shown as the row's source label.
   // NULL for every other provider, which label their rows with `email`.
-  displayName          String?
+  displayName               String?
   // C6: the device's own time of the last snapshot applied to a DEVICE source; an
   // older one arriving later is ignored (a retry or a slow request must not
   // overwrite a newer view). NULL for every other provider.
-  deviceSnapshotAt     DateTime?
-  createdAt            DateTime         @default(now())
-  updatedAt            DateTime         @updatedAt
+  deviceSnapshotAt          DateTime?
+  createdAt                 DateTime         @default(now())
+  updatedAt                 DateTime         @updatedAt
   // Events synced from this account (C2); deleted with it.
-  events               CalendarEvent[]
+  events                    CalendarEvent[]
 
   // provider participates so the same address can exist on two services (an
   // iCloud address linked into Google) without colliding. Mirrors
@@ -2486,8 +2496,8 @@ model ContactCoAttendance {
   smallMeetingCount Int      @default(0) // of those, with at most 5 such people (rooms, decliners excluded)
   firstMetAt        DateTime // UTC day (midnight) of the earliest counted meeting's start
   lastMetAt         DateTime // UTC day (midnight) of the latest counted meeting's start
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  // No createdAt/updatedAt: rows written in one transaction would share a time
+  // and line up into one meeting's guest list.
 
   @@unique([userId, contactEmail])
 }
@@ -2499,13 +2509,12 @@ model ContactCoAttendance {
 /// hash. endedAt only prunes the marker once the meeting is older than the counting
 /// window. No title, attendee or start is stored.
 model CoAttendanceMeeting {
-  id        String           @id @default(uuid())
-  userId    String
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  provider  CalendarProvider
-  eventKey  String
-  endedAt   DateTime
-  countedAt DateTime         @default(now())
+  id       String           @id @default(uuid())
+  userId   String
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider CalendarProvider
+  eventKey String
+  endedAt  DateTime // UTC day (midnight) the meeting ended; no write time is kept
 
   @@unique([userId, provider, eventKey])
   @@index([userId, endedAt])
