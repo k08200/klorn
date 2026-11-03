@@ -26,7 +26,7 @@ html:has(.shell[data-nav="tabs"]) .snackbar-region--fixed {
   width: min(560px, 100%);
   min-height: 52px;
   padding: 6px 6px 6px 16px;
-  border-radius: 16px;
+  border-radius: var(--radius-control);
   background: var(--snackbar-bg);
   color: var(--snackbar-ink);
   box-shadow: var(--shadow-float);
@@ -67,7 +67,7 @@ html:has(.shell[data-nav="tabs"]) .snackbar-region--fixed {
   flex: none;
   min-height: var(--touch);
   padding: 0 12px;
-  border-radius: 12px;
+  border-radius: var(--radius-control);
   color: var(--snackbar-action);
   font-weight: 700;
 }
@@ -80,7 +80,7 @@ html:has(.shell[data-nav="tabs"]) .snackbar-region--fixed {
   flex: none;
   width: var(--touch);
   height: var(--touch);
-  border-radius: 12px;
+  border-radius: var(--radius-control);
   display: flex;
   align-items: center;
   justify-content: center;

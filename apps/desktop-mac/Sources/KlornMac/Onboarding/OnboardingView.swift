@@ -24,7 +24,7 @@ struct OnboardingView: View {
         VStack(spacing: 0) {
             VStack(spacing: Theme.s3) {
                 LogoRing(size: 40)
-                Text("Klorn").font(Theme.Typo.display).foregroundStyle(Theme.text)
+                Text("Klorn").font(Theme.Typo.title).foregroundStyle(Theme.text)
                     .accessibilityAddTraits(.isHeader)
                 Text(L("onboarding.value", OnboardingRules.lanes.count))
                     .font(Theme.Typo.body).foregroundStyle(Theme.textDim)

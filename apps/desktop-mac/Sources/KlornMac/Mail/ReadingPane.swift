@@ -104,7 +104,7 @@ struct ReadingPane: View {
             VStack(alignment: .leading, spacing: Theme.s2) {
                 Text(decodeHTMLEntities(detail.subject.isEmpty
                     ? L("mailbox.noSubject") : detail.subject))
-                    .font(Theme.Typo.display)
+                    .font(Theme.Typo.title)
                     .foregroundStyle(Theme.text).lineLimit(2)
                 HStack {
                     let from = senderDisplayName(decodeHTMLEntities(detail.from))
@@ -149,7 +149,7 @@ struct ReadingPane: View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: Theme.s2) {
                 Text(decodeHTMLEntities(email.subject ?? L("mail.noSubjectParen")))
-                    .font(Theme.Typo.display)
+                    .font(Theme.Typo.title)
                     .foregroundStyle(Theme.text)
                     .lineLimit(ReaderActionRules.subjectLines)
                     .fixedSize(horizontal: false, vertical: true)
