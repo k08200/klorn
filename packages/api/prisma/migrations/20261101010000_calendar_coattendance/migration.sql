@@ -29,9 +29,12 @@
 -- calendar source: coAttendanceObservedSince (the UTC day its counting window
 -- first started, set once by the first successful pass) and
 -- coAttendanceLastPassAt (its last successful pass, the persisted 6-hour
--- interval). Readers treat a missing ContactCoAttendance row as 0 only when every
--- Google calendar source of the user has coAttendanceObservedSince. Reconnecting
--- or re-linking a grant clears both (routes/google-link-finish.ts).
+-- interval). "User"."coAttendanceCountedThrough" is the per-user watermark: the
+-- last UTC day through which every finished day has been evaluated, all sources
+-- together; a day at or before it is never evaluated again. Readers treat a
+-- missing ContactCoAttendance row as 0 only when every Google calendar source of
+-- the user has coAttendanceObservedSince. Reconnecting or re-linking a grant
+-- clears both source columns (routes/google-link-finish.ts).
 --
 -- Row-level security on both, in the form every per-user table has: ENABLE, not
 -- FORCE, a tenant policy on app.current_user_id and a system policy on
@@ -43,12 +46,12 @@
 -- a data wipe (purge-user-data.ts).
 --
 -- Locks and cost: two new, empty tables. The foreign keys take SHARE ROW EXCLUSIVE
--- on "User" for the length of the transaction. The two ADD COLUMNs (nullable, no
--- default) are metadata-only but take ACCESS EXCLUSIVE on "UserToken" and
--- "LinkedCalendarAccount", which every sync reads; they run last so those locks
--- are held for the shortest time, and lock_timeout makes a deploy blocked by a
--- long transaction fail fast instead of queueing reads behind it. Nothing scans an
--- existing table.
+-- on "User" for the length of the transaction. The three ADD COLUMN statements
+-- (nullable, no default) are metadata-only but take ACCESS EXCLUSIVE on
+-- "UserToken", "LinkedCalendarAccount" and "User", which every request reads; they
+-- run last so those locks are held for the shortest time, and lock_timeout makes a
+-- deploy blocked by a long transaction fail fast instead of queueing reads behind
+-- it. Nothing scans an existing table.
 SET LOCAL lock_timeout = '5s';
 
 CREATE TABLE "ContactCoAttendance" (
@@ -99,3 +102,4 @@ CREATE TRIGGER "CoAttendanceMeeting_data_wipe_fence" BEFORE INSERT ON "CoAttenda
 
 ALTER TABLE "UserToken" ADD COLUMN "coAttendanceObservedSince" TIMESTAMP(3), ADD COLUMN "coAttendanceLastPassAt" TIMESTAMP(3);
 ALTER TABLE "LinkedCalendarAccount" ADD COLUMN "coAttendanceObservedSince" TIMESTAMP(3), ADD COLUMN "coAttendanceLastPassAt" TIMESTAMP(3);
+ALTER TABLE "User" ADD COLUMN "coAttendanceCountedThrough" TIMESTAMP(3);

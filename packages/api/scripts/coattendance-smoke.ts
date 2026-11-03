@@ -3,18 +3,23 @@
  * google-meetings.ts) against one real account, for the founder to run before
  * CALENDAR_COATTENDANCE_ENABLED is turned on. Never run in CI.
  *
- * It sends the exact events.list the pass sends (same window, fields mask,
- * eventTypes, maxAttendees, paging) and applies the counting rules, then prints
- * COUNTS ONLY: events listed, eligible meetings, distinct contacts, and why the
- * rest were skipped. It never prints an address, a title or an event id, and it
- * writes nothing (no counters, no markers, no source markers).
+ * It sends the exact events.list a user's first pass sends (the window's finished
+ * days: today − 30 days through yesterday, UTC; same fields mask, eventTypes,
+ * maxAttendees, paging) and applies the counting rules, then prints COUNTS ONLY:
+ * events listed, eligible meetings, distinct contacts, and why the rest were
+ * skipped. It never prints an address, a title or an event id, and it writes no
+ * co-attendance data (no counters, markers, watermark or source markers).
  *
  * Usage, from packages/api, either:
  *   GOOGLE_ACCESS_TOKEN=… npx tsx scripts/coattendance-smoke.ts
  *     A bare OAuth access token with calendar.readonly or calendar.events. Only
  *     the calendar owner's `self` entry is known as the user.
  *   DATABASE_URL=… TOKEN_ENCRYPTION_KEYS=… npx tsx scripts/coattendance-smoke.ts --user <userId> [--linked <linkedCalendarAccountId>]
- *     The stored grant of a Klorn user (read-only), with all their known addresses.
+ *     The stored grant of a Klorn user, with all their known addresses. This goes
+ *     through the app's own Google client, which, exactly as a calendar sync does,
+ *     may REFRESH the stored OAuth token and save the new one (and marks a grant it
+ *     cannot decrypt for reconnect). Use the GOOGLE_ACCESS_TOKEN form for a run that
+ *     writes nothing at all.
  */
 
 import { google } from "googleapis";
@@ -24,9 +29,25 @@ import {
 } from "../src/pim/calendar-providers/dispatch.js";
 import { googleSessionFromClient } from "../src/pim/calendar-providers/google.js";
 import type { CalendarSession, ProviderMeeting } from "../src/pim/calendar-providers/types.js";
-import { countMeeting, MAX_COUNTED_ATTENDEES } from "../src/pim/coattendance/coattendance-rules.js";
+import {
+  countMeeting,
+  MAX_COUNTED_ATTENDEES,
+  utcDayOf,
+} from "../src/pim/coattendance/coattendance-rules.js";
 import { loadOwnAddresses } from "../src/pim/coattendance/coattendance-store.js";
-import { coAttendanceWindow } from "../src/pim/coattendance/coattendance-sync.js";
+import { COATTENDANCE_LOOKBACK_DAYS } from "../src/pim/coattendance/coattendance-sync.js";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** A first pass's listing: the window's first day through today's midnight (UTC). */
+function firstPassWindow(now: Date) {
+  const today = utcDayOf(now).getTime();
+  const from = today - COATTENDANCE_LOOKBACK_DAYS * DAY_MS;
+  return {
+    timeMin: new Date(from - 1000).toISOString(),
+    timeMax: new Date(today).toISOString(),
+  };
+}
 
 /** A usage mistake: its message is ours and carries no data, so it is printed. */
 class UsageError extends Error {}
@@ -55,7 +76,8 @@ function skipReason(meeting: ProviderMeeting, now: Date): string {
   if (meeting.cancelled) return "cancelled";
   if (meeting.allDay) return "all-day";
   if (!meeting.startTime || !meeting.endTime) return "no timed start/end";
-  if (meeting.endTime.getTime() > now.getTime()) return "not ended";
+  // The rules' cut: a meeting counts once its whole UTC end-day has finished.
+  if (meeting.endTime.getTime() >= utcDayOf(now).getTime()) return "end-day not finished";
   if (meeting.attendeesOmitted) return "guest list omitted";
   if (meeting.attendees.filter((a) => !a.resource).length > MAX_COUNTED_ATTENDEES) {
     return "over attendee cap";
@@ -69,7 +91,7 @@ async function main(): Promise<void> {
   if (!session?.listMeetingAttendees)
     throw new UsageError("no Google calendar session for that account");
   const now = new Date();
-  const listing = await session.listMeetingAttendees(coAttendanceWindow(now));
+  const listing = await session.listMeetingAttendees(firstPassWindow(now));
   const own = userId ? await loadOwnAddresses(userId) : new Set<string>();
   const contacts = new Set<string>();
   const skipped = new Map<string, number>();

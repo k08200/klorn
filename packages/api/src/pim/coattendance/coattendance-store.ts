@@ -2,32 +2,32 @@
  * Writes of per-contact co-attendance (ContactCoAttendance) and of the meetings
  * already counted (CoAttendanceMeeting). The only place either table is written.
  *
- * Exactly once per meeting, without keeping who attended it. Meetings are written
- * one UTC end-day per transaction (planBatches): every meeting that ended on day D
- * goes in one transaction, so rows that share a transaction id (Postgres xmin)
- * reveal no more than lastMetAt, a day, already does. Only a day past a cap
- * (MEETINGS_PER_TRANSACTION meetings or CONTACTS_PER_TRANSACTION distinct
- * contacts) is split, across transactions in marker-key order. The transaction
- * first claims the batch's markers (INSERT ... ON CONFLICT DO NOTHING RETURNING,
- * through createManyAndReturn with skipDuplicates), then adds the meetings it
- * claimed, and only those, to each contact's counters. A meeting listed again by a
- * later pass, by another of the user's calendars, or by a concurrent pass (whose
- * insert waits on the unique index, then returns nothing) finds its marker and
- * counts nothing. A failed counter write rolls the batch's markers back with it,
- * so the next pass counts those meetings again rather than never.
+ * One UTC end-day per transaction (planBatches). The pass (coattendance-sync.ts)
+ * hands over every meeting of a day from all of the user's Google calendars at
+ * once, and a day is evaluated only once (the user's watermark). So the rows that
+ * share a Postgres transaction id (xmin) are one whole day's contacts, which each
+ * row's lastMetAt (the same end-day) already says. What xmin can still reveal:
+ * only a day over a cap (MEETINGS_PER_TRANSACTION meetings or
+ * CONTACTS_PER_TRANSACTION distinct contacts) is split, across transactions in
+ * marker-key order, so each part is a key-ordered slice of that day.
+ *
+ * Exactly once per meeting. The transaction first claims the batch's markers
+ * (INSERT ... ON CONFLICT DO NOTHING RETURNING, through createManyAndReturn with
+ * skipDuplicates), then adds the meetings it claimed, and only those, to each
+ * contact's counters. A meeting in two of the user's calendars, or claimed by a
+ * concurrent pass, finds its marker and counts nothing. A failed counter write
+ * rolls the batch back with it.
  *
  * What is stored about a meeting: the hash of its identity and the UTC day it
- * ended, on the marker; on each contact's row, the UTC day of the first and the
- * last meeting. Nothing finer than a day, and no write time, so rows written
- * together do not line up into one meeting's guest list by time. Markers are
+ * ended, on the marker; on each contact's row, the UTC end-day of the first and
+ * the last meeting. Nothing finer than a day, and no write time. Markers are
  * claimed in key order and contacts written in address order, so two concurrent
  * batches lock shared rows in the same order and cannot deadlock.
  *
- * Known limits: a meeting is counted as it was when first seen ended, so guests
- * added or removed afterwards are not recounted; it is counted again if its
- * identity changes (a new iCalUID: re-imported, recreated, or a recurring series
- * split at "this and following") or if its end moves to a day after its marker was
- * pruned.
+ * Known limits: a meeting is counted as it was when its day was evaluated, so a
+ * late accept or guest change after that is never counted; it is counted again if
+ * its identity changes (a new iCalUID: re-imported, recreated, or a recurring
+ * series split at "this and following") within days not yet evaluated.
  */
 
 import { createHash } from "node:crypto";
@@ -134,7 +134,9 @@ export function planBatches(meetings: readonly CountedMeeting[]): CountedMeeting
 function tallyByContact(meetings: readonly CountedMeeting[]): Array<[string, ContactTally]> {
   const tallies = new Map<string, ContactTally>();
   for (const meeting of meetings) {
-    const day = utcDayOf(meeting.startTime);
+    // The END day, the day the meeting is batched by: a row's first and last met
+    // then never name a different day from the transaction that wrote it.
+    const day = utcDayOf(meeting.endTime);
     for (const contact of meeting.contacts) {
       const tally = tallies.get(contact);
       if (!tally) {
@@ -259,6 +261,20 @@ export async function recordCountedMeetings(
     for (const meeting of added) for (const contact of meeting.contacts) touched.add(contact);
   }
   return { meetings, contacts: touched.size };
+}
+
+/**
+ * The UTC end-days in [from, through] that already have a counted meeting: days a
+ * pass wrote before it could advance the watermark (it died in between). A pass
+ * never evaluates such a day again, so a meeting that became countable since is
+ * not written on its own.
+ */
+export async function markedDays(userId: string, from: Date, through: Date): Promise<Set<number>> {
+  const rows = await prisma.coAttendanceMeeting.findMany({
+    where: { userId, endedAt: { gte: from, lte: through } },
+    select: { endedAt: true },
+  });
+  return new Set(rows.map((row) => row.endedAt.getTime()));
 }
 
 /**

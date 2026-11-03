@@ -78,6 +78,7 @@ describe("Google listMeetingAttendees", () => {
     const listing = await session().listMeetingAttendees?.(WINDOW);
     expect(listing).toEqual({
       truncated: false,
+      lastStart: new Date("2026-10-20T01:00:00.000Z"),
       meetings: [
         {
           identity: "ical:uid-1@google.com|",
@@ -183,6 +184,24 @@ describe("Google listMeetingAttendees", () => {
     const cut = await session().listMeetingAttendees?.(WINDOW);
     expect(h.eventsList).toHaveBeenCalledTimes(MEETINGS_MAX_PAGES);
     expect(cut?.truncated).toBe(true);
+  });
+
+  it("reports where a cut listing stopped: the last item's start, conservatively for a date", async () => {
+    h.eventsList.mockResolvedValueOnce({
+      data: {
+        items: [
+          { id: "a", start: { dateTime: "2026-10-20T10:00:00+09:00" } },
+          { id: "b", start: { date: "2026-10-21" } },
+        ],
+      },
+    });
+    // A date has no zone here: read it 14 hours early (the furthest UTC offset), so
+    // the caller never treats a day as fully listed when it was not.
+    expect((await session().listMeetingAttendees?.(WINDOW))?.lastStart).toEqual(
+      new Date("2026-10-20T10:00:00.000Z"),
+    );
+    h.eventsList.mockResolvedValueOnce({ data: { items: [] } });
+    expect((await session().listMeetingAttendees?.(WINDOW))?.lastStart).toBeNull();
   });
 
   it("throws a listing failure to the caller", async () => {

@@ -28,6 +28,8 @@ export const MEETINGS_MAX_PAGES = 4;
 export const MEETINGS_TIMEOUT_MS = 10_000;
 
 const PRIMARY_CALENDAR_ID = "primary";
+/** The furthest a calendar's zone is ahead of UTC: a bare date starts no earlier than this before UTC midnight. */
+const MAX_ZONE_AHEAD_MS = 14 * 60 * 60 * 1000;
 const MEETING_FIELDS =
   "nextPageToken,items(id,iCalUID,status,start,end,originalStartTime,attendeesOmitted,organizer(self),attendees(email,self,organizer,resource,responseStatus))";
 
@@ -42,6 +44,14 @@ function originalStartKey(item: calendar_v3.Schema$Event): string {
   const original = item.originalStartTime;
   if (!original) return "";
   return instantOf(original.dateTime)?.toISOString() ?? original.date ?? "";
+}
+
+/** The item's start, never later than it really was (a bare date read at UTC+14). */
+function earliestStartOf(item: calendar_v3.Schema$Event): Date | null {
+  const timed = instantOf(item.start?.dateTime);
+  if (timed) return timed;
+  const date = instantOf(item.start?.date ? `${item.start.date}T00:00:00Z` : null);
+  return date ? new Date(date.getTime() - MAX_ZONE_AHEAD_MS) : null;
 }
 
 function identityOf(item: calendar_v3.Schema$Event): string {
@@ -77,6 +87,7 @@ export async function listMeetingAttendeesVia(
   window: CalendarWindow,
 ): Promise<MeetingListing> {
   const meetings: ProviderMeeting[] = [];
+  let lastStart: Date | null = null;
   let pageToken: string | undefined;
   for (let page = 0; page < MEETINGS_MAX_PAGES; page += 1) {
     const res = await api.events.list(
@@ -94,9 +105,12 @@ export async function listMeetingAttendeesVia(
       },
       { timeout: MEETINGS_TIMEOUT_MS, retry: false },
     );
-    for (const item of res.data.items ?? []) meetings.push(toMeeting(item));
+    for (const item of res.data.items ?? []) {
+      meetings.push(toMeeting(item));
+      lastStart = earliestStartOf(item) ?? lastStart;
+    }
     pageToken = res.data.nextPageToken ?? undefined;
-    if (!pageToken) return { meetings, truncated: false };
+    if (!pageToken) return { meetings, truncated: false, lastStart };
   }
-  return { meetings, truncated: true };
+  return { meetings, truncated: true, lastStart };
 }

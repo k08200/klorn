@@ -15,15 +15,22 @@ const url = vi.hoisted(() => {
   return value;
 });
 
+const h = vi.hoisted(() => ({ connectPrimaryCalendar: vi.fn(), connectLinkedCalendars: vi.fn() }));
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
+vi.mock("../pim/calendar-providers/dispatch.js", () => ({
+  connectPrimaryCalendar: h.connectPrimaryCalendar,
+  connectLinkedCalendars: h.connectLinkedCalendars,
+}));
 
 import { prisma } from "../db.js";
+import type { MeetingAttendee, ProviderMeeting } from "../pim/calendar-providers/types.js";
 import type { CountedMeeting } from "../pim/coattendance/coattendance-rules.js";
 import {
   claimAndCount,
   eventKeyOf,
   recordCountedMeetings,
 } from "../pim/coattendance/coattendance-store.js";
+import { runCoAttendancePass } from "../pim/coattendance/coattendance-sync.js";
 import { isDataWipeFenceError } from "../privacy/data-wipe-fence.js";
 import { purgeUserData } from "../purge-user-data.js";
 
@@ -223,6 +230,78 @@ describePg("one transaction per UTC end-day", () => {
     // Rows that share a transaction id reveal one day, which lastMetAt already says.
     expect(tx["ana@x.example"]).toBe(tx["bo@x.example"]);
     expect(tx["cy@x.example"]).not.toBe(tx["ana@x.example"]);
+  });
+
+  it("dates a midnight-spanning meeting by its end day, and writes it with that day only", async () => {
+    const userId = await newUser();
+    const spanning = {
+      ...meeting("span", "2026-10-20T23:30:00Z", ["ana@x.example"]),
+      endTime: new Date("2026-10-21T00:30:00Z"),
+    };
+    await recordCountedMeetings("GOOGLE", userId, [
+      spanning,
+      meeting("same-end-day", "2026-10-21T10:00:00Z", ["bo@x.example"]),
+      meeting("start-day", "2026-10-20T10:00:00Z", ["cy@x.example"]),
+    ]);
+    const tx = await writers(userId);
+    expect(tx["ana@x.example"]).toBe(tx["bo@x.example"]);
+    expect(tx["ana@x.example"]).not.toBe(tx["cy@x.example"]);
+    expect(await counter(userId, "ana@x.example")).toMatchObject({
+      firstMetAt: new Date("2026-10-21T00:00:00Z"),
+      lastMetAt: new Date("2026-10-21T00:00:00Z"),
+    });
+  });
+
+  it("writes the primary's and a linked calendar's meetings of one day in one transaction", async () => {
+    const userId = await newUser();
+    await prisma.userToken.create({
+      data: { userId, provider: "google", accessToken: "x" },
+    });
+    const linked = await prisma.linkedCalendarAccount.create({
+      data: { userId, provider: "GOOGLE", email: `w-${randomUUID()}@x.example` },
+    });
+    const attendee = (email: string, extra = {}): MeetingAttendee => ({
+      email,
+      self: false,
+      organizer: false,
+      resource: false,
+      responseStatus: "accepted",
+      ...extra,
+    });
+    const listed = (id: string, contact: string): ProviderMeeting => ({
+      identity: `ical:${id}|`,
+      cancelled: false,
+      allDay: false,
+      startTime: new Date("2026-10-25T01:00:00Z"),
+      endTime: new Date("2026-10-25T02:00:00Z"),
+      attendeesOmitted: false,
+      organizedBySelf: false,
+      attendees: [attendee("me@self.example", { self: true }), attendee(contact)],
+    });
+    const session = (meetings: ProviderMeeting[]) => ({
+      provider: "GOOGLE",
+      listMeetingAttendees: async () => ({ meetings, truncated: false, lastStart: null }),
+    });
+    h.connectPrimaryCalendar.mockResolvedValue(session([listed("p", "pat@x.example")]));
+    h.connectLinkedCalendars.mockResolvedValue([
+      { id: linked.id, email: linked.email, session: session([listed("l", "lin@x.example")]) },
+    ]);
+    const saved = process.env.CALENDAR_COATTENDANCE_ENABLED;
+    process.env.CALENDAR_COATTENDANCE_ENABLED = "true";
+    try {
+      const result = await runCoAttendancePass(
+        userId,
+        { includeLinked: true },
+        new Date("2026-11-01T12:00:00Z"),
+      );
+      expect(result).toMatchObject({ meetings: 2 });
+    } finally {
+      if (saved === undefined) delete process.env.CALENDAR_COATTENDANCE_ENABLED;
+      else process.env.CALENDAR_COATTENDANCE_ENABLED = saved;
+    }
+    const tx = await writers(userId);
+    expect(tx["pat@x.example"]).toBeDefined();
+    expect(tx["pat@x.example"]).toBe(tx["lin@x.example"]);
   });
 
   it("splits a day only past a cap: 26 meetings of one day take two transactions", async () => {

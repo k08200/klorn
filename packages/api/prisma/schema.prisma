@@ -10,167 +10,171 @@ datasource db {
 }
 
 model User {
-  id                        String                     @id @default(uuid())
-  email                     String                     @unique
+  id                         String                     @id @default(uuid())
+  email                      String                     @unique
   // Purpose of the PRIMARY inbox (the account the user signed in with) —
   // same vocabulary as LinkedInboxAccount.purpose. Null = never asked.
-  primaryInboxPurpose       String?
-  companyDomains            String[]                   @default([])
-  triagePriorities          String?
+  primaryInboxPurpose        String?
+  companyDomains             String[]                   @default([])
+  triagePriorities           String?
   /// Proactive reply drafts: today's slot counter (mail/proactive-drafts.ts).
   /// proactiveDraftDay is the UTC day ("YYYY-MM-DD") the count belongs to;
   /// both are only ever changed by conditional updates, which is what makes
   /// PROACTIVE_DRAFT_DAILY_CAP a hard bound.
-  proactiveDraftDay         String?
-  proactiveDraftCount       Int                        @default(0)
+  proactiveDraftDay          String?
+  proactiveDraftCount        Int                        @default(0)
   /// Automatic one-click unsubscribes: today's per-user slot counter
   /// (mail/unsubscribe-quota.ts). Same conditional-update pattern as
   /// proactiveDraftDay/Count — AUTO_UNSUBSCRIBE_USER_DAILY_CAP is a hard bound.
-  autoUnsubscribeDay        String?
-  autoUnsubscribeCount      Int                        @default(0)
-  passwordHash              String?
-  name                      String?
-  role                      UserRole                   @default(USER)
-  plan                      Plan                       @default(FREE)
-  chatModel                 String                     @default("google/gemma-4-31b-it:free")
-  agentModel                String?
-  openRouterApiKey          String?
-  geminiApiKey              String?
+  autoUnsubscribeDay         String?
+  autoUnsubscribeCount       Int                        @default(0)
+  passwordHash               String?
+  name                       String?
+  role                       UserRole                   @default(USER)
+  plan                       Plan                       @default(FREE)
+  chatModel                  String                     @default("google/gemma-4-31b-it:free")
+  agentModel                 String?
+  openRouterApiKey           String?
+  geminiApiKey               String?
   // Naver IMAP connection (Korean ICP support).
   // OAuth is intentionally skipped — Naver issues a separate "외부 메일
   // 가져오기 비밀번호" the user generates in their Naver settings; we
   // store the encrypted form so a DB leak doesn't expose the live IMAP
   // password. Host defaults to imap.naver.com:993 (SSL) but is
   // overridable for other IMAP providers in the future.
-  naverImapEmail            String?
-  naverImapPasswordCipher   String?
-  naverImapHost             String?
-  naverImapConnectedAt      DateTime?
+  naverImapEmail             String?
+  naverImapPasswordCipher    String?
+  naverImapHost              String?
+  naverImapConnectedAt       DateTime?
   // GitHub as a second attention source (BYO personal access token, like
   // the Naver app-password above — OAuth/App registration intentionally
   // skipped so self-hosters need no approval). The cipher is the encrypted
   // PAT; lastPolledAt is the Notifications API `since` cursor.
-  githubTokenCipher         String?
-  githubConnectedAt         DateTime?
-  githubLastPolledAt        DateTime?
+  githubTokenCipher          String?
+  githubConnectedAt          DateTime?
+  githubLastPolledAt         DateTime?
   // Telegram delivery (self-hoster BYO bot via BotFather).
   // telegramChatId is the bound chat for outbound PUSH-tier interrupts —
   // unique so a chat can only ever belong to one account. telegramLinkCode
   // is a one-time crypto-random code minted by POST /api/telegram/link and
   // consumed by the bot webhook's `/start <code>` handler within 10 minutes.
-  telegramChatId            String?                    @unique
-  telegramLinkCode          String?                    @unique
-  telegramLinkCodeExpiresAt DateTime?
-  stripeId                  String?                    @unique
+  telegramChatId             String?                    @unique
+  telegramLinkCode           String?                    @unique
+  telegramLinkCodeExpiresAt  DateTime?
+  stripeId                   String?                    @unique
   // Paddle Billing customer (ctm_…). Set by the paddle webhook on the first
   // subscription event; used for the customer portal and as the fallback
   // mapping for events that arrive without custom_data.userId.
-  paddleCustomerId          String?                    @unique
+  paddleCustomerId           String?                    @unique
   // Paddle subscription (sub_…) currently attached to this account, so the
   // in-app cancel route can call the Paddle API without a lookup. Cleared when
   // the subscription reaches its terminal `canceled` status.
-  paddleSubscriptionId      String?                    @unique
+  paddleSubscriptionId       String?                    @unique
   // Live provider subscription status (active/trialing/past_due/paused/
   // canceled) as last reported by webhook. Entitlement still lives in `plan` —
   // this is display/guard state, never an entitlement source.
-  subscriptionStatus        String?
+  subscriptionStatus         String?
   // Next automatic charge (Paddle next_billed_at). Null when a cancel is
   // scheduled or there is no live subscription.
-  subscriptionRenewsAt      DateTime?
+  subscriptionRenewsAt       DateTime?
   // When a cancellation is scheduled (in-app or portal), the date access ends
   // (scheduled_change.effective_at). Null = no pending cancel.
-  subscriptionCancelAt      DateTime?
+  subscriptionCancelAt       DateTime?
   // occurred_at of the newest provider event whose detail we applied. Paddle
   // does not guarantee delivery order, so a late retry carrying an older
   // scheduled_change must not resurrect a cancellation the user already undid.
-  subscriptionEventAt       DateTime?
-  emailVerified             Boolean                    @default(false)
+  subscriptionEventAt        DateTime?
+  emailVerified              Boolean                    @default(false)
+  // Calendar co-attendance (pim/coattendance/): the last UTC day every finished
+  // day through which has been evaluated, all Google calendar sources together.
+  // A day at or before it is never evaluated again. Null until the first pass.
+  coAttendanceCountedThrough DateTime?
   // SHA-256 hash of the emailed one-time token (one-time-token.ts) — the raw
   // token is never stored, same standard as Device.tokenHash.
-  verifyToken               String?
-  verifyTokenExp            DateTime?
-  resetToken                String?
-  resetTokenExp             DateTime?
+  verifyToken                String?
+  verifyTokenExp             DateTime?
+  resetToken                 String?
+  resetTokenExp              DateTime?
   // Global session-revocation epoch. Stamped on password reset; any JWT whose
   // `iat` predates this instant is rejected at the auth gate, independently of
   // the Device table. Closes the reset bypass where wiping all devices dropped
   // the user to zero devices and the "no devices = legacy, allow" branch
   // resurrected every still-unexpired stolen token.
-  sessionsInvalidatedAt     DateTime?
-  betaProGrantedAt          DateTime?
+  sessionsInvalidatedAt      DateTime?
+  betaProGrantedAt           DateTime?
   // Stamped the first time the founder welcome email is sent to this user, so
   // they receive it exactly once across the email-verify and Google sign-in
   // paths. Null = not sent yet (the atomic claim in welcome-email.ts flips it).
-  welcomeEmailSentAt        DateTime?
-  conversations             Conversation[]
-  tokens                    UserToken[]
-  identities                UserIdentity[]
-  linkedCalendarAccounts    LinkedCalendarAccount[]
-  linkedInboxAccounts       LinkedInboxAccount[]
-  linkedDriveAccounts       LinkedDriveAccount[]
-  tasks                     Task[]
-  notes                     Note[]
-  reminders                 Reminder[]
-  contacts                  Contact[]
-  calendarEvents            CalendarEvent[]
-  coAttendanceMeetings      CoAttendanceMeeting[]
-  driveFiles                DriveFile[]
-  driveFileSummaries        DriveFileSummary[]
-  driveSummaryUsage         DriveSummaryUsage[]
-  automationConfig          AutomationConfig?
-  dataWipe                  DataWipe?
-  klornAddress              KlornAddress?
-  agentLogs                 AgentLog[]
-  notifications             Notification[]
-  pushSubscriptions         PushSubscription[]
-  devicePushTokens          DevicePushToken[]
-  pushDeliveryLogs          PushDeliveryLog[]
-  pushRingEvents            PushRingEvent[]
-  phoneEscalations          PhoneEscalation[]
-  actionOutbox              ActionOutbox[]
-  calibrationSnapshots      CalibrationSnapshot[]
-  memories                  Memory[]
-  skills                    Skill[]
-  tokenUsages               TokenUsage[]
-  devices                   Device[]
-  emailMessages             EmailMessage[]
-  emailAttachments          EmailAttachment[]
-  candidateIntakes          CandidateIntake[]
-  emailRules                EmailRule[]
-  screenerDecisions         ScreenerDecision[]
-  pmfResponse               PmfResponse?
-  attentionItems            AttentionItem[]
-  contactDossiers           ContactDossier[]
-  threadBriefs              ThreadBrief[]
-  teams                     Team[]
-  commitments               Commitment[]
-  feedbackEvents            FeedbackEvent[]
-  decisionLabels            DecisionLabel[]
-  attentionFacts            AttentionFacts[]
-  emailLabelFeedback        EmailLabelFeedback[]
-  playbookActivations       ActivatedPlaybook[]
-  workContextSnapshots      WorkContextSnapshot[]
-  feedbackPolicyPreferences FeedbackPolicyPreference[]
+  welcomeEmailSentAt         DateTime?
+  conversations              Conversation[]
+  tokens                     UserToken[]
+  identities                 UserIdentity[]
+  linkedCalendarAccounts     LinkedCalendarAccount[]
+  linkedInboxAccounts        LinkedInboxAccount[]
+  linkedDriveAccounts        LinkedDriveAccount[]
+  tasks                      Task[]
+  notes                      Note[]
+  reminders                  Reminder[]
+  contacts                   Contact[]
+  calendarEvents             CalendarEvent[]
+  coAttendanceMeetings       CoAttendanceMeeting[]
+  driveFiles                 DriveFile[]
+  driveFileSummaries         DriveFileSummary[]
+  driveSummaryUsage          DriveSummaryUsage[]
+  automationConfig           AutomationConfig?
+  dataWipe                   DataWipe?
+  klornAddress               KlornAddress?
+  agentLogs                  AgentLog[]
+  notifications              Notification[]
+  pushSubscriptions          PushSubscription[]
+  devicePushTokens           DevicePushToken[]
+  pushDeliveryLogs           PushDeliveryLog[]
+  pushRingEvents             PushRingEvent[]
+  phoneEscalations           PhoneEscalation[]
+  actionOutbox               ActionOutbox[]
+  calibrationSnapshots       CalibrationSnapshot[]
+  memories                   Memory[]
+  skills                     Skill[]
+  tokenUsages                TokenUsage[]
+  devices                    Device[]
+  emailMessages              EmailMessage[]
+  emailAttachments           EmailAttachment[]
+  candidateIntakes           CandidateIntake[]
+  emailRules                 EmailRule[]
+  screenerDecisions          ScreenerDecision[]
+  pmfResponse                PmfResponse?
+  attentionItems             AttentionItem[]
+  contactDossiers            ContactDossier[]
+  threadBriefs               ThreadBrief[]
+  teams                      Team[]
+  commitments                Commitment[]
+  feedbackEvents             FeedbackEvent[]
+  decisionLabels             DecisionLabel[]
+  attentionFacts             AttentionFacts[]
+  emailLabelFeedback         EmailLabelFeedback[]
+  playbookActivations        ActivatedPlaybook[]
+  workContextSnapshots       WorkContextSnapshot[]
+  feedbackPolicyPreferences  FeedbackPolicyPreference[]
   /// First-touch inflow attribution (utm_* / ref / lp), captured on the login
   /// surface and carried through signup. No PII — params and hostnames only.
-  attribution               String?
-  createdAt                 DateTime                   @default(now())
-  updatedAt                 DateTime                   @updatedAt
-  emailProcessingLogs       EmailProcessingLog[]
-  contactTrustScores        ContactTrustScore[]
-  contactEngagementScores   ContactEngagementScore[]
-  contactCoAttendances      ContactCoAttendance[]
-  llmCostLedger             LlmCostLedger[]
-  llmUsageLogs              LlmUsageLog[]
-  analyticsEvents           AnalyticsEvent[]
-  senderTraits              SenderTrait[]
-  senderLabels              SenderLabel[]
-  sentMessages              SentMessage[]
-  sendReceipts              SendReceipt[]
-  learnedRules              LearnedRule[]
-  apiKeys                   ApiKey[]
-  mcpWriteAudits            McpWriteAudit[]
-  imapMovedMessages         ImapMovedMessage[]
+  attribution                String?
+  createdAt                  DateTime                   @default(now())
+  updatedAt                  DateTime                   @updatedAt
+  emailProcessingLogs        EmailProcessingLog[]
+  contactTrustScores         ContactTrustScore[]
+  contactEngagementScores    ContactEngagementScore[]
+  contactCoAttendances       ContactCoAttendance[]
+  llmCostLedger              LlmCostLedger[]
+  llmUsageLogs               LlmUsageLog[]
+  analyticsEvents            AnalyticsEvent[]
+  senderTraits               SenderTrait[]
+  senderLabels               SenderLabel[]
+  sentMessages               SentMessage[]
+  sendReceipts               SendReceipt[]
+  learnedRules               LearnedRule[]
+  apiKeys                    ApiKey[]
+  mcpWriteAudits             McpWriteAudit[]
+  imapMovedMessages          ImapMovedMessage[]
 }
 
 enum UserRole {
