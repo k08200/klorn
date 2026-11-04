@@ -16,6 +16,7 @@
 import { google } from "googleapis";
 import { Semaphore } from "../semaphore.js";
 import { getAuthedClient, getAuthedInboxClient, getLinkedInboxClients } from "./gmail.js";
+import { UNKNOWN_DATE } from "./mailbox-dates.js";
 import { sentAtOf } from "./sent-history-fetch.js";
 
 type OAuth2 = InstanceType<typeof google.auth.OAuth2>;
@@ -217,10 +218,11 @@ async function listAccountPage(
           metadataHeaders: ["From", "To", "Subject", "Date"],
         });
         const headers = detail.data.payload?.headers ?? [];
-        // No internalDate and no usable Date header: not listed, rather than
-        // dated 1970 — the Sent scan would record that as its sentAt.
-        const date = sentAtOf(detail.data);
-        if (!date) return null;
+        // internalDate, else the Date header (sentAtOf, same rule as the
+        // Sent-history import). With neither, the row stays listed at the epoch,
+        // which means "date unknown": a folder view never hides mail, and the
+        // Sent scan skips epoch rows (sent-messages.ts toScannedRow).
+        const date = sentAtOf(detail.data) ?? UNKNOWN_DATE;
         return {
           gmailId: detail.data.id ?? id,
           threadId: detail.data.threadId ?? null,

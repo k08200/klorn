@@ -196,7 +196,8 @@ describe("listGmailMailbox", () => {
 // Number(null) and Number("") are both 0, so a missing internalDate used to
 // become 1970-01-01 here — and syncSentMessages recorded that as the sentAt.
 // Same rule as the Sent-history import (#1600): internalDate, else the Date
-// header, else the row is not listed at all.
+// header. A message with neither stays listed (a folder view must never hide
+// mail) at the epoch, which only means "date unknown"; the Sent scan skips it.
 describe("listGmailMailbox — a message with no internalDate", () => {
   const HEADER = "Tue, 26 Aug 2026 09:00:00 +0900";
   const EPOCH = new Date(0).toISOString();
@@ -235,19 +236,21 @@ describe("listGmailMailbox — a message with no internalDate", () => {
   it.each([
     ["null", null],
     ['""', ""],
-  ])("internalDate %s with no Date header skips the row", async (_label, missing) => {
+  ])("internalDate %s with no Date header stays listed, dated unknown (epoch)", async (_label, missing) => {
     state.internalDates = { m1: missing };
     state.dateHeaders = { m1: null };
-    expect(await listSent()).toEqual([]);
+    const items = await listSent();
+    expect(items.map((r) => [r.gmailId, r.receivedAt])).toEqual([["m1", EPOCH]]);
   });
 
   it.each([
     ["null", null],
     ['""', ""],
-  ])("internalDate %s with an unparseable Date header skips the row", async (_label, missing) => {
+  ])("internalDate %s with an unparseable Date header stays listed, dated unknown (epoch)", async (_label, missing) => {
     state.internalDates = { m1: missing };
     state.dateHeaders = { m1: "not a date" };
-    expect(await listSent()).toEqual([]);
+    const items = await listSent();
+    expect(items.map((r) => [r.gmailId, r.receivedAt])).toEqual([["m1", EPOCH]]);
   });
 
   it("a valid internalDate still wins over the Date header", async () => {
@@ -258,12 +261,12 @@ describe("listGmailMailbox — a message with no internalDate", () => {
     expect(items[0].receivedAt).toBe(new Date(1756100000000).toISOString());
   });
 
-  it("only the undated row drops — its neighbours on the page still list", async () => {
+  it("an undated row never hides its neighbours, and is not hidden itself", async () => {
     state.listIds = ["m1", "m2"];
     state.internalDates = { m1: null };
     state.dateHeaders = { m1: null };
     const items = await listSent();
-    expect(items.map((r) => r.gmailId)).toEqual(["m2"]);
+    expect(items.map((r) => r.gmailId).sort()).toEqual(["m1", "m2"]);
   });
 });
 
