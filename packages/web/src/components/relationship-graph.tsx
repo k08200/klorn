@@ -207,7 +207,7 @@ export function RelationshipGraph({ nodes, edges }: { nodes: GraphNode[]; edges:
 
   if (nodes.length <= 1) {
     return (
-      <p className="rounded-card border border-line bg-surface-raised p-6 text-sm text-ink-mid">
+      <p className="rounded-card border border-line bg-surface-raised p-6 text-role-body text-ink-mid">
         {t("graph.empty")}
       </p>
     );

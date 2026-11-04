@@ -195,13 +195,15 @@ function AccountSheet({ onClose, initials }: { onClose: () => void; initials: st
           <div className="flex items-center gap-3 px-5 py-4">
             <span
               aria-hidden="true"
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-accent-solid to-accent-solid-hover text-xs font-bold text-accent-solid-ink"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-accent-solid to-accent-solid-hover text-role-caption font-bold text-accent-solid-ink"
             >
               {initials || "?"}
             </span>
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-ink">{user.name || user.email}</p>
-              {user.name && <p className="truncate text-xs text-ink-dim">{user.email}</p>}
+              <p className="truncate text-role-body font-semibold text-ink">
+                {user.name || user.email}
+              </p>
+              {user.name && <p className="truncate text-role-caption text-ink-dim">{user.email}</p>}
             </div>
           </div>
         )}
@@ -222,7 +224,7 @@ function AccountSheet({ onClose, initials }: { onClose: () => void; initials: st
               onClose();
               logout();
             }}
-            className="focus-ring flex min-h-11 w-full items-center gap-3 rounded-control px-3 py-2.5 text-left text-sm text-state-danger-ink transition hover:bg-red-500/10"
+            className="focus-ring flex min-h-11 w-full items-center gap-3 rounded-control px-3 py-2.5 text-left text-role-body text-state-danger-ink transition hover:bg-red-500/10"
           >
             <span className="flex h-5 w-5 items-center justify-center" aria-hidden="true">
               <svg
@@ -263,7 +265,7 @@ function SheetLink({
     <Link
       href={href}
       onClick={onNavigate}
-      className="focus-ring flex min-h-11 items-center gap-3 rounded-control px-3 py-2.5 text-sm text-ink transition hover:bg-surface-hover"
+      className="focus-ring flex min-h-11 items-center gap-3 rounded-control px-3 py-2.5 text-role-body text-ink transition hover:bg-surface-hover"
     >
       <span className="flex h-5 w-5 items-center justify-center text-ink-mid" aria-hidden="true">
         <NavIcon type={icon} size={16} />

@@ -125,7 +125,7 @@ function SmsContent() {
   if (authLoading || (user && user.role !== "ADMIN")) {
     return (
       <div className="min-h-dvh bg-surface-panel">
-        <div className="mx-auto max-w-xl px-6 py-8 text-sm text-ink-dim">Loading…</div>
+        <div className="mx-auto max-w-xl px-6 py-8 text-role-body text-ink-dim">Loading…</div>
       </div>
     );
   }
@@ -137,9 +137,7 @@ function SmsContent() {
     <div className="min-h-dvh bg-surface-panel">
       <div className="mx-auto max-w-xl px-6 py-8">
         <div className="mb-8">
-          <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-ink">
-            SMS alerts (admin)
-          </h1>
+          <h1 className="text-role-page text-ink">SMS alerts (admin)</h1>
           <p className="mt-2 text-label font-normal text-ink-mid">
             Klorn will text you for URGENT email + meeting alerts on top of the existing web push.
             Admin-only while we dogfood. Hard cap of {usage?.cap ?? 10} messages per day.
@@ -161,7 +159,7 @@ function SmsContent() {
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder="+821012345678"
-            className="w-full rounded-control border border-line bg-surface-raised px-3 py-2 text-sm text-ink placeholder:text-ink-dim focus:border-accent-light/50 focus:outline-none"
+            className="w-full rounded-control border border-line bg-surface-raised px-3 py-2 text-role-body text-ink placeholder:text-ink-dim focus:border-accent-light/50 focus:outline-none"
           />
           <p className="text-caption text-ink-dim">{E164_HINT}</p>
 

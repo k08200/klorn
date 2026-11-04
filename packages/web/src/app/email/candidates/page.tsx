@@ -308,17 +308,15 @@ function CandidateIntakeView() {
     <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-6 md:py-10">
       <header className="mb-4 flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-ink">
-            {t("mail.filterCandidates")}
-          </h1>
-          <p className="mt-2 text-sm text-ink-mid">{t("candidates.subtitle")}</p>
+          <h1 className="text-role-page text-ink">{t("mail.filterCandidates")}</h1>
+          <p className="mt-2 text-role-body text-ink-mid">{t("candidates.subtitle")}</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"
             onClick={() => load(status, attention, true)}
             disabled={refreshing}
-            className="glow-primary ease-strong inline-flex h-9 items-center rounded-control bg-accent-solid px-3.5 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 focus-ring"
+            className="glow-primary ease-strong inline-flex h-9 items-center rounded-control bg-accent-solid px-3.5 text-role-label text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 focus-ring"
           >
             {refreshing ? t("candidates.refreshing") : t("candidates.rescan")}
           </button>
@@ -326,13 +324,13 @@ function CandidateIntakeView() {
             type="button"
             onClick={exportCsv}
             disabled={exporting}
-            className="ease-strong inline-flex h-9 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50 focus-ring"
+            className="ease-strong inline-flex h-9 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-role-caption font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50 focus-ring"
           >
             {exporting ? t("candidates.exporting") : t("candidates.exportCsv")}
           </button>
           <Link
             href="/email"
-            className="ease-strong inline-flex h-9 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring"
+            className="ease-strong inline-flex h-9 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-role-caption font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring"
           >
             {t("candidates.emailListLink")}
           </Link>
@@ -389,7 +387,7 @@ function CandidateIntakeView() {
               key={filter.status}
               type="button"
               onClick={() => setStatus(filter.status)}
-              className={`ease-strong inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition duration-150 active:scale-[0.97] focus-ring ${
+              className={`ease-strong inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-role-caption font-medium transition duration-150 active:scale-[0.97] focus-ring ${
                 active
                   ? "bg-accent/10 text-accent-deeper ring-1 ring-inset ring-accent/30"
                   : "text-ink-mid hover:bg-surface-panel/80 hover:text-ink hover:shadow-sm"
@@ -413,7 +411,7 @@ function CandidateIntakeView() {
               key={filter.value}
               type="button"
               onClick={() => setAttention(filter.value)}
-              className={`ease-strong inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition duration-150 active:scale-[0.97] focus-ring ${
+              className={`ease-strong inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-role-caption font-medium transition duration-150 active:scale-[0.97] focus-ring ${
                 active
                   ? "bg-accent/10 text-accent-deeper ring-1 ring-inset ring-accent/30"
                   : "text-ink-mid hover:bg-surface-panel/80 hover:text-ink hover:shadow-sm"
@@ -432,7 +430,7 @@ function CandidateIntakeView() {
             <button
               type="button"
               onClick={toggleAllVisible}
-              className="ease-strong rounded-control border border-line bg-surface-panel/70 px-3 py-1.5 text-xs font-medium text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring"
+              className="ease-strong rounded-control border border-line bg-surface-panel/70 px-3 py-1.5 text-role-caption font-medium text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring"
             >
               {selectedCount > 0
                 ? t("candidates.bulk.selectedCount", { count: String(selectedCount) })
@@ -442,7 +440,7 @@ function CandidateIntakeView() {
               <button
                 type="button"
                 onClick={() => setSelectedIds(new Set())}
-                className="ease-strong rounded-control px-3 py-1.5 text-xs text-ink-dim transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97] focus-ring"
+                className="ease-strong rounded-control px-3 py-1.5 text-role-caption text-ink-dim transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97] focus-ring"
               >
                 {t("candidates.bulk.clear")}
               </button>
@@ -483,8 +481,8 @@ function CandidateIntakeView() {
 
       {!loading && !error && candidates.length === 0 && (
         <div className="panel-elevated mt-4 rounded-card border border-line/70 bg-surface-panel p-6 text-center">
-          <p className="text-sm text-ink-mid">{t("candidates.empty.title")}</p>
-          <p className="mt-1 text-xs text-ink-dim">{t("candidates.empty.description")}</p>
+          <p className="text-role-body text-ink-mid">{t("candidates.empty.title")}</p>
+          <p className="mt-1 text-role-caption text-ink-dim">{t("candidates.empty.description")}</p>
         </div>
       )}
 
@@ -516,7 +514,7 @@ function QualityIssuesStrip({ issues }: { issues: NonNullable<AttachmentQuality[
   return (
     <div className="mb-3 overflow-hidden rounded-control border border-state-warn-line bg-state-warn-bg">
       <div className="flex items-center gap-3 px-3 py-2">
-        <p className="min-w-0 flex-1 truncate text-xs text-amber-800">
+        <p className="min-w-0 flex-1 truncate text-role-caption text-amber-800">
           {t("candidates.qualityIssues.prefix")}
           <span className="font-semibold tabular-nums">{count}</span>{" "}
           {count === 1
@@ -591,7 +589,7 @@ function BulkStatusButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="ease-strong rounded-control border border-line bg-surface-panel/70 px-3 py-1.5 text-xs font-medium text-ink-mid transition duration-150 hover:bg-state-info-bg hover:text-accent-deeper active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 focus-ring"
+      className="ease-strong rounded-control border border-line bg-surface-panel/70 px-3 py-1.5 text-role-caption font-medium text-ink-mid transition duration-150 hover:bg-state-info-bg hover:text-accent-deeper active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 focus-ring"
     >
       {label}
     </button>
@@ -651,8 +649,10 @@ function CandidateCard({
               </span>
             )}
           </div>
-          <h2 className="mt-1.5 truncate text-sm font-semibold text-ink">{title}</h2>
-          <p className="mt-1 line-clamp-2 text-xs leading-5 text-ink-mid">{candidate.summary}</p>
+          <h2 className="mt-1.5 truncate text-role-head text-ink">{title}</h2>
+          <p className="mt-1 line-clamp-2 text-role-caption leading-5 text-ink-mid">
+            {candidate.summary}
+          </p>
         </div>
         <time className="shrink-0 text-caption tabular-nums text-ink-dim">
           {formatRelative(candidate.email.receivedAt)}
@@ -692,7 +692,7 @@ function CandidateCard({
         )}
       </div>
       <div className="mt-3 rounded-control border border-line-soft bg-surface-raised/70 px-3 py-2">
-        <p className="truncate text-xs text-ink-muted">
+        <p className="truncate text-role-caption text-ink-muted">
           {candidate.email.subject || t("common.untitled")}
         </p>
         <p className="mt-1 truncate text-caption text-ink-dim">
@@ -706,13 +706,13 @@ function CandidateCard({
       )}
       <Link
         href={`/email/candidates/${candidate.emailId}`}
-        className="ease-strong mt-3 inline-flex h-8 items-center rounded-chip border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring"
+        className="ease-strong mt-3 inline-flex h-8 items-center rounded-chip border border-line bg-surface-panel/70 px-3 text-role-caption font-medium text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring"
       >
         {t("candidates.card.detailsLink")}
       </Link>
       <Link
         href={`/email/${candidate.emailId}`}
-        className="ease-strong ml-2 mt-3 inline-flex h-8 items-center rounded-chip border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink-dim transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring"
+        className="ease-strong ml-2 mt-3 inline-flex h-8 items-center rounded-chip border border-line bg-surface-panel/70 px-3 text-role-caption font-medium text-ink-dim transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring"
       >
         {t("nav.email")}
       </Link>

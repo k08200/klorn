@@ -219,7 +219,7 @@ export function AttachmentAnalysis({
             className="border-t border-line pt-3 first:border-t-0 first:pt-0"
           >
             <div className="flex flex-wrap items-center gap-2">
-              <span className="max-w-full truncate text-sm font-medium text-ink">
+              <span className="max-w-full truncate text-role-body font-medium text-ink">
                 {attachment.filename}
               </span>
               {attachment.category && (
@@ -282,7 +282,9 @@ export function AttachmentAnalysis({
               </div>
             </div>
             {attachment.summary && (
-              <p className="mt-2 text-xs leading-relaxed text-ink-mid">{attachment.summary}</p>
+              <p className="mt-2 text-role-caption leading-relaxed text-ink-mid">
+                {attachment.summary}
+              </p>
             )}
             {attachmentNeedsManualReview(t, attachment) && (
               <p className="mt-2 text-caption leading-relaxed text-rose-200/80">
@@ -294,7 +296,7 @@ export function AttachmentAnalysis({
                 {attachment.keyPoints.map((point, index) => (
                   <li
                     key={`${attachment.id}-${index}`}
-                    className="flex gap-1.5 text-xs text-ink-mid"
+                    className="flex gap-1.5 text-role-caption text-ink-mid"
                   >
                     <span className="text-slate-300">•</span>
                     <span>{point}</span>
@@ -457,7 +459,7 @@ function AttachmentCorrectionForm({
           <input
             value={summary}
             onChange={(e) => setSummary(e.target.value)}
-            className="w-full rounded border border-line bg-surface-raised px-2 py-1.5 text-xs text-ink-mid outline-none focus:border-accent/40"
+            className="w-full rounded border border-line bg-surface-raised px-2 py-1.5 text-role-caption text-ink-mid outline-none focus:border-accent/40"
           />
         </label>
         <label className="block">
@@ -467,7 +469,7 @@ function AttachmentCorrectionForm({
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            className="w-full rounded border border-line bg-surface-raised px-2 py-1.5 text-xs text-ink-mid outline-none focus:border-accent/40"
+            className="w-full rounded border border-line bg-surface-raised px-2 py-1.5 text-role-caption text-ink-mid outline-none focus:border-accent/40"
           >
             {[
               "resume",
@@ -523,7 +525,7 @@ function AttachmentCorrectionForm({
                   )
                 }
                 placeholder={t("emailDetail.attachment.form.fieldPlaceholder")}
-                className="rounded border border-line bg-surface-raised px-2 py-1.5 text-xs text-ink-mid outline-none focus:border-accent/40"
+                className="rounded border border-line bg-surface-raised px-2 py-1.5 text-role-caption text-ink-mid outline-none focus:border-accent/40"
               />
               <input
                 value={field.value}
@@ -535,7 +537,7 @@ function AttachmentCorrectionForm({
                   )
                 }
                 placeholder={t("emailDetail.attachment.form.valuePlaceholder")}
-                className="rounded border border-line bg-surface-raised px-2 py-1.5 text-xs text-ink-mid outline-none focus:border-accent/40"
+                className="rounded border border-line bg-surface-raised px-2 py-1.5 text-role-caption text-ink-mid outline-none focus:border-accent/40"
               />
               <button
                 type="button"
@@ -556,7 +558,7 @@ function AttachmentCorrectionForm({
           type="button"
           onClick={save}
           disabled={saving}
-          className="rounded bg-accent-solid px-3 py-1.5 text-xs font-medium text-accent-solid-ink transition hover:bg-accent-solid-hover disabled:opacity-50 focus-ring"
+          className="rounded bg-accent-solid px-3 py-1.5 text-role-caption font-medium text-accent-solid-ink transition hover:bg-accent-solid-hover disabled:opacity-50 focus-ring"
         >
           {saving
             ? t("emailDetail.attachment.form.saving")

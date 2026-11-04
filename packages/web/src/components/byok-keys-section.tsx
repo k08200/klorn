@@ -168,8 +168,10 @@ export function ByokKeysSection() {
   return (
     <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-5">
       <header className="mb-3">
-        <h2 className="text-base font-semibold text-ink">{t("byok.title")}</h2>
-        <p className="mt-1 text-xs text-ink-mid">{t(locked ? "byok.bodyFree" : "byok.body")}</p>
+        <h2 className="text-role-head text-ink">{t("byok.title")}</h2>
+        <p className="mt-1 text-role-caption text-ink-mid">
+          {t(locked ? "byok.bodyFree" : "byok.body")}
+        </p>
         {status?.activeModel && (
           <p className="mt-2 text-caption text-ink-dim">
             {t("byok.activeModel")} <span className="text-ink-mid">{status.activeModel}</span>
@@ -178,12 +180,12 @@ export function ByokKeysSection() {
       </header>
 
       {loading ? (
-        <div className="text-xs text-ink-dim">{t("common.loading")}</div>
+        <div className="text-role-caption text-ink-dim">{t("common.loading")}</div>
       ) : (
         <div className="space-y-4">
           <div className="rounded-control border border-line-soft bg-surface-raised/70 p-3">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <span className="text-sm font-medium text-ink">{t(ANTHROPIC.labelKey)}</span>
+              <span className="text-role-body font-medium text-ink">{t(ANTHROPIC.labelKey)}</span>
               {status?.hasAnthropicApiKey && (
                 <StatusChip status="connected" label={t("byok.usingYourKey")} />
               )}
@@ -194,7 +196,7 @@ export function ByokKeysSection() {
             )}
             {status?.hasAnthropicApiKey ? (
               <div className="flex items-center justify-between gap-3">
-                <span className="font-mono text-xs text-ink-mid">{t("byok.stored")}</span>
+                <span className="font-mono text-role-mono text-ink-mid">{t("byok.stored")}</span>
                 <Button
                   variant="danger"
                   size="sm"
@@ -248,7 +250,7 @@ export function ByokKeysSection() {
           {status?.hasGeminiApiKey && (
             <div className="rounded-control border border-state-warn-line bg-state-warn-bg p-3">
               <div className="mb-2 flex items-center justify-between gap-2">
-                <span className="text-sm font-medium text-ink">
+                <span className="text-role-body font-medium text-ink">
                   Google Gemini{" "}
                   <span className="text-caption text-state-warn-ink">{t("byok.legacy")}</span>
                 </span>

@@ -19,7 +19,7 @@ export default function RefundPage() {
           </div>
           <span className="text-lg font-bold tracking-tight">Klorn</span>
         </Link>
-        <div className="flex items-center gap-5 text-sm text-ink-mid">
+        <div className="flex items-center gap-5 text-role-body text-ink-mid">
           <Link href="/terms" className="transition hover:text-ink">
             Terms
           </Link>
@@ -33,13 +33,11 @@ export default function RefundPage() {
       </nav>
 
       <article className="mx-auto max-w-4xl px-6 py-14">
-        <p className="text-sm font-medium uppercase tracking-[0.18em] text-accent-deep">
+        <p className="text-role-body font-medium uppercase tracking-[0.18em] text-accent-deep">
           REFUND POLICY
         </p>
-        <h1 className="mt-4 max-w-3xl text-4xl font-semibold tracking-tight text-ink md:text-5xl">
-          Cancellation and Refunds
-        </h1>
-        <p className="mt-5 max-w-2xl text-sm leading-6 text-ink-mid">
+        <h1 className="mt-4 max-w-3xl text-role-page text-ink">Cancellation and Refunds</h1>
+        <p className="mt-5 max-w-2xl text-role-body leading-6 text-ink-mid">
           Last updated: {updatedAt}. This policy is also part of the{" "}
           <Link href="/terms#billing-cancellation-and-refunds" className="underline">
             Klorn Terms of Service
@@ -47,7 +45,7 @@ export default function RefundPage() {
           .
         </p>
 
-        <div className="mt-12 space-y-3 text-base leading-7 text-ink-mid">
+        <div className="mt-12 space-y-3 text-role-body leading-7 text-ink-mid">
           <RefundPolicy />
         </div>
       </article>

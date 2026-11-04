@@ -132,10 +132,8 @@ function OntologyPageInner() {
     <div className="min-h-dvh px-4 pb-28 pt-6 text-ink sm:px-6 md:py-10">
       <div className="mx-auto max-w-5xl">
         <header className="mb-6">
-          <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-ink">
-            The brain the firewall runs on
-          </h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-ink-mid">
+          <h1 className="text-role-page text-ink">The brain the firewall runs on</h1>
+          <p className="mt-2 max-w-3xl text-role-body leading-6 text-ink-mid">
             The deterministic core — tier rule, sender priors, keyword patterns, model dial — read
             live, plus threshold proposals derived from your override signal. Proposals are advisory
             until you act:{" "}
@@ -147,9 +145,9 @@ function OntologyPageInner() {
         </header>
 
         {loading ? (
-          <p className="text-sm text-ink-dim">Loading...</p>
+          <p className="text-role-body text-ink-dim">Loading...</p>
         ) : !data ? (
-          <p className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-6 text-sm text-ink-mid">
+          <p className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-6 text-role-body text-ink-mid">
             No ontology data.
           </p>
         ) : (
@@ -171,7 +169,7 @@ function OntologyPageInner() {
                 {data.tiers.map((t) => (
                   <span
                     key={t}
-                    className="rounded-chip border border-line bg-surface-hover px-2.5 py-1 text-sm font-semibold"
+                    className="rounded-chip border border-line bg-surface-hover px-2.5 py-1 text-role-body font-semibold"
                   >
                     {t}
                   </span>
@@ -182,14 +180,14 @@ function OntologyPageInner() {
             <Section title="Relation — tier thresholds">
               {data.relation.overriddenKnobs.length > 0 ? (
                 <>
-                  <h3 className="mb-1 text-xs uppercase tracking-wide text-ink-dim">
+                  <h3 className="mb-1 text-role-caption uppercase tracking-wide text-ink-dim">
                     Effective (live){" "}
                     <span className="text-accent-deep">
                       · overridden: {data.relation.overriddenKnobs.join(", ")}
                     </span>
                   </h3>
                   <KeyVals record={data.relation.effective} />
-                  <h3 className="mb-1 mt-3 text-xs uppercase tracking-wide text-ink-dim">
+                  <h3 className="mb-1 mt-3 text-role-caption uppercase tracking-wide text-ink-dim">
                     Git base
                   </h3>
                   <KeyVals record={data.relation.thresholds} />
@@ -200,11 +198,11 @@ function OntologyPageInner() {
             </Section>
 
             <Section title="Entity — sender knowledge">
-              <h3 className="mb-1 text-xs uppercase tracking-wide text-ink-dim">
+              <h3 className="mb-1 text-role-caption uppercase tracking-wide text-ink-dim">
                 Prior thresholds
               </h3>
               <KeyVals record={data.entity.priorThresholds} />
-              <h3 className="mb-1 mt-3 text-xs uppercase tracking-wide text-ink-dim">
+              <h3 className="mb-1 mt-3 text-role-caption uppercase tracking-wide text-ink-dim">
                 Short-circuit tiers
               </h3>
               <KeyVals record={data.entity.shortCircuitTiers} />
@@ -246,20 +244,20 @@ function Proposals({
   return (
     <section className="panel-elevated mb-4 rounded-card border border-state-info-line bg-surface-panel p-4 md:p-5">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-accent-deep">
+        <h2 className="text-role-label font-semibold uppercase tracking-wide text-accent-deep">
           Proposals (advisory)
         </h2>
         <button
           type="button"
           onClick={onRecompute}
           disabled={busy}
-          className="ease-strong inline-flex h-9 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-sm text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-60"
+          className="ease-strong inline-flex h-9 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-role-label text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-60"
         >
           Recompute
         </button>
       </div>
       {proposals.length === 0 ? (
-        <p className="text-sm text-ink-mid">
+        <p className="text-role-body text-ink-mid">
           No open proposals — the override signal is within target.
         </p>
       ) : (
@@ -270,7 +268,7 @@ function Proposals({
               className="row-wash flex flex-col gap-2 py-3 md:flex-row md:items-center md:justify-between"
             >
               <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2 text-sm">
+                <div className="flex flex-wrap items-center gap-2 text-role-body">
                   <span className="font-mono text-ink">{p.knob}</span>
                   <span className="rounded-chip bg-accent/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-accent-deep ring-1 ring-inset ring-accent/20">
                     {p.direction}
@@ -279,7 +277,7 @@ function Proposals({
                     {p.currentValue} → {p.proposedValue}
                   </span>
                 </div>
-                <div className="mt-1 text-xs tabular-nums text-ink-dim">
+                <div className="mt-1 text-role-caption tabular-nums text-ink-dim">
                   {p.evidence.metric} = {p.evidence.value} (target {p.evidence.target}, n=
                   {p.evidence.sampleSize}, {p.evidence.windowDays}d)
                 </div>
@@ -289,7 +287,7 @@ function Proposals({
                   type="button"
                   onClick={() => onApprove(p.id)}
                   disabled={busy}
-                  className="glow-primary ease-strong inline-flex h-9 items-center rounded-control bg-accent-solid px-3.5 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:opacity-60"
+                  className="glow-primary ease-strong inline-flex h-9 items-center rounded-control bg-accent-solid px-3.5 text-role-label text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:opacity-60"
                 >
                   Approve
                 </button>
@@ -297,7 +295,7 @@ function Proposals({
                   type="button"
                   onClick={() => onDismiss(p.id)}
                   disabled={busy}
-                  className="ease-strong inline-flex h-9 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-sm text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-60"
+                  className="ease-strong inline-flex h-9 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-role-label text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-60"
                 >
                   Dismiss
                 </button>
@@ -321,10 +319,10 @@ function Applied({
 }) {
   return (
     <section className="panel-elevated mb-4 rounded-card border border-state-ok-line bg-surface-panel p-4 md:p-5">
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-state-ok-ink">
+      <h2 className="mb-3 text-role-label font-semibold uppercase tracking-wide text-state-ok-ink">
         Live overrides
       </h2>
-      <p className="mb-3 text-xs text-ink-mid">
+      <p className="mb-3 text-role-caption text-ink-mid">
         Approved threshold changes the classifier is reading right now. Revert restores the git
         default.
       </p>
@@ -334,7 +332,7 @@ function Applied({
             key={p.id}
             className="row-wash flex flex-col gap-2 py-3 md:flex-row md:items-center md:justify-between"
           >
-            <div className="flex flex-wrap items-center gap-2 text-sm">
+            <div className="flex flex-wrap items-center gap-2 text-role-body">
               <span className="font-mono text-ink">{p.knob}</span>
               <span className="tabular-nums text-ink">
                 {p.currentValue} → {p.proposedValue}
@@ -344,7 +342,7 @@ function Applied({
               type="button"
               onClick={() => onRevert(p.id)}
               disabled={busy}
-              className="ease-strong inline-flex h-9 shrink-0 items-center self-start rounded-control border border-line bg-surface-panel/70 px-3 text-sm text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-60 md:self-auto"
+              className="ease-strong inline-flex h-9 shrink-0 items-center self-start rounded-control border border-line bg-surface-panel/70 px-3 text-role-label text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-60 md:self-auto"
             >
               Revert
             </button>
@@ -358,7 +356,7 @@ function Applied({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="panel-elevated mb-4 rounded-card border border-line/70 bg-surface-panel p-4 md:p-5">
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-accent-deep">
+      <h2 className="mb-3 text-role-label font-semibold uppercase tracking-wide text-accent-deep">
         {title}
       </h2>
       {children}
@@ -371,7 +369,10 @@ function KeyVals({ record }: { record: Record<string, unknown> }) {
   return (
     <div className="divide-y divide-line-soft">
       {Object.entries(record).map(([key, val]) => (
-        <div key={key} className="row-wash flex items-start justify-between gap-4 py-1.5 text-sm">
+        <div
+          key={key}
+          className="row-wash flex items-start justify-between gap-4 py-1.5 text-role-body"
+        >
           <span className="text-ink-mid">{key}</span>
           {isRecord(val) ? (
             <div className="min-w-0 flex-1 pl-4">

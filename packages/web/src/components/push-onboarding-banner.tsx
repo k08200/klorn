@@ -110,15 +110,15 @@ export default function PushOnboardingBanner() {
         <span aria-hidden="true">🔔</span>
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-ink">{t("pushBanner.title")}</p>
-        <p className="text-xs text-ink-mid mt-0.5">{t("pushBanner.body")}</p>
-        {error && <p className="text-xs text-state-danger-ink mt-1.5">{error}</p>}
+        <p className="text-role-body font-medium text-ink">{t("pushBanner.title")}</p>
+        <p className="text-role-caption text-ink-mid mt-0.5">{t("pushBanner.body")}</p>
+        {error && <p className="text-role-caption text-state-danger-ink mt-1.5">{error}</p>}
         <div className="flex gap-2 mt-2.5">
           <button
             type="button"
             onClick={enable}
             disabled={submitting}
-            className="px-3 py-1.5 text-xs font-medium bg-accent-solid hover:bg-accent-solid-hover disabled:bg-surface-hover disabled:text-ink-dim text-accent-solid-ink rounded-control transition"
+            className="px-3 py-1.5 text-role-caption font-medium bg-accent-solid hover:bg-accent-solid-hover disabled:bg-surface-hover disabled:text-ink-dim text-accent-solid-ink rounded-control transition"
           >
             {submitting ? t("pushBanner.enabling") : t("pushBanner.enable")}
           </button>
@@ -126,7 +126,7 @@ export default function PushOnboardingBanner() {
             type="button"
             onClick={dismiss}
             disabled={submitting}
-            className="px-3 py-1.5 text-xs font-medium text-ink-mid hover:text-ink transition"
+            className="px-3 py-1.5 text-role-caption font-medium text-ink-mid hover:text-ink transition"
           >
             {t("pwa.update.later")}
           </button>

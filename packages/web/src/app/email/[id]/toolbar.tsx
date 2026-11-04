@@ -41,11 +41,11 @@ export function UndoActionBanner({
   return (
     <div
       role="status"
-      className="mb-4 flex flex-col gap-3 rounded-control border border-accent-light/30 bg-state-info-bg px-4 py-3 text-sm text-ink shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between"
+      className="mb-4 flex flex-col gap-3 rounded-control border border-accent-light/30 bg-state-info-bg px-4 py-3 text-role-body text-ink shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between"
     >
       <div className="min-w-0">
         <p className="font-medium">{title}</p>
-        {subject && <p className="mt-0.5 truncate text-xs text-ink-mid">{subject}</p>}
+        {subject && <p className="mt-0.5 truncate text-role-caption text-ink-mid">{subject}</p>}
       </div>
       <div className="flex shrink-0 gap-2">
         <Button variant="primary" size="sm" onClick={onUndo} disabled={busy}>
@@ -88,7 +88,7 @@ export function EmailActionToolbar({
   const actionDisabled = disabled || isDemo;
   return (
     <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-control border border-line bg-surface-raised px-3 py-2">
-      <div className="flex min-w-0 items-center gap-2 text-xs text-ink-dim">
+      <div className="flex min-w-0 items-center gap-2 text-role-caption text-ink-dim">
         <span
           className={`h-1.5 w-1.5 shrink-0 rounded-full ${
             email.isRead ? "bg-slate-300" : "bg-accent"
@@ -180,7 +180,7 @@ export function EmailReminderQuickActions({
 }) {
   const { t } = useT();
   return (
-    <div className="mb-4 flex flex-col gap-2 rounded-control border border-line bg-surface-raised px-3 py-2 text-xs text-ink-mid sm:flex-row sm:items-center sm:justify-between">
+    <div className="mb-4 flex flex-col gap-2 rounded-control border border-line bg-surface-raised px-3 py-2 text-role-caption text-ink-mid sm:flex-row sm:items-center sm:justify-between">
       <span className="font-medium text-ink-mid">{t("emailDetail.toolbar.remindMe")}</span>
       <div className="flex flex-wrap gap-1.5">
         {EMAIL_REMINDER_OPTIONS.map((option) => (

@@ -189,12 +189,12 @@ function LegacyShortcutsDialog({ onClose }: { onClose: () => void }) {
         <div className="space-y-3">
           {SHORTCUTS.map((s) => (
             <div key={s.labelKey} className="flex items-center justify-between">
-              <span className="text-sm text-ink-mid">{t(s.labelKey)}</span>
+              <span className="text-role-body text-ink-mid">{t(s.labelKey)}</span>
               <div className="flex gap-1">
                 {s.keys.map((k) => (
                   <kbd
                     key={k}
-                    className="bg-surface-raised border border-line rounded px-2 py-0.5 text-xs text-ink-soft font-mono"
+                    className="bg-surface-raised border border-line rounded px-2 py-0.5 text-role-mono text-ink-soft font-mono"
                   >
                     {k === "mod" ? modKeyLabel(isApplePlatform()) : k}
                   </kbd>
@@ -203,11 +203,13 @@ function LegacyShortcutsDialog({ onClose }: { onClose: () => void }) {
             </div>
           ))}
         </div>
-        <p className="text-xs text-ink-mid mt-4 text-center">{t("shortcuts.closeHint")}</p>
+        <p className="text-role-caption text-ink-mid mt-4 text-center">
+          {t("shortcuts.closeHint")}
+        </p>
         <button
           type="button"
           onClick={onClose}
-          className="mt-4 w-full min-h-11 rounded-control border border-line text-sm text-ink-mid transition hover:border-accent/40 hover:text-accent-deep"
+          className="mt-4 w-full min-h-11 rounded-control border border-line text-role-label text-ink-mid transition hover:border-accent/40 hover:text-accent-deep"
         >
           {t("common.close")}
         </button>

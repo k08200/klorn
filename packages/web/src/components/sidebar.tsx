@@ -185,7 +185,7 @@ export default function Sidebar() {
           <Link
             href={unified ? TODAY_HOME : "/inbox"}
             aria-label={unified ? t("nav.v2.openToday") : t("nav.v2.openApprovals")}
-            className="flex items-center gap-2.5 rounded-chip px-1 py-1 text-sm font-semibold text-ink transition hover:text-ink"
+            className="flex items-center gap-2.5 rounded-chip px-1 py-1 text-role-label font-semibold text-ink transition hover:text-ink"
           >
             <img src="/brand/mark.svg?v=matte2" alt="" className="h-8 w-8" />
             <span>
@@ -355,21 +355,21 @@ export default function Sidebar() {
                   <Link
                     href="/billing"
                     onClick={() => setShowUserMenu(false)}
-                    className="block px-3 py-2 text-sm text-ink-mid hover:bg-surface-hover rounded-chip mx-1 transition"
+                    className="block px-3 py-2 text-role-body text-ink-mid hover:bg-surface-hover rounded-chip mx-1 transition"
                   >
                     {t("nav.billing")}
                   </Link>
                   <Link
                     href="/usage"
                     onClick={() => setShowUserMenu(false)}
-                    className="block px-3 py-2 text-sm text-ink-mid hover:bg-surface-hover rounded-chip mx-1 transition"
+                    className="block px-3 py-2 text-role-body text-ink-mid hover:bg-surface-hover rounded-chip mx-1 transition"
                   >
                     {t("nav.usage")}
                   </Link>
                   <Link
                     href="/settings"
                     onClick={() => setShowUserMenu(false)}
-                    className="block px-3 py-2 text-sm text-ink-mid hover:bg-surface-hover rounded-chip mx-1 transition"
+                    className="block px-3 py-2 text-role-body text-ink-mid hover:bg-surface-hover rounded-chip mx-1 transition"
                   >
                     {t("settings.title")}
                   </Link>
@@ -378,7 +378,7 @@ export default function Sidebar() {
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={() => setShowUserMenu(false)}
-                    className="block px-3 py-2 text-sm text-ink-mid hover:bg-surface-hover rounded-chip mx-1 transition"
+                    className="block px-3 py-2 text-role-body text-ink-mid hover:bg-surface-hover rounded-chip mx-1 transition"
                   >
                     {t("nav.blog")}
                   </a>
@@ -389,7 +389,7 @@ export default function Sidebar() {
                       setShowUserMenu(false);
                       logout();
                     }}
-                    className="w-[calc(100%-0.5rem)] text-left px-3 py-2 text-sm text-state-danger-ink hover:bg-red-500/10 rounded-chip mx-1 transition"
+                    className="w-[calc(100%-0.5rem)] text-left px-3 py-2 text-role-body text-state-danger-ink hover:bg-red-500/10 rounded-chip mx-1 transition"
                   >
                     {t("nav.logout")}
                   </button>
@@ -399,7 +399,7 @@ export default function Sidebar() {
           ) : (
             <Link
               href="/login"
-              className="flex items-center justify-center gap-2 rounded-control px-3 py-2 text-sm text-ink-mid hover:bg-surface-hover hover:text-ink transition"
+              className="flex items-center justify-center gap-2 rounded-control px-3 py-2 text-role-label text-ink-mid hover:bg-surface-hover hover:text-ink transition"
             >
               {t("nav.logIn")}
             </Link>

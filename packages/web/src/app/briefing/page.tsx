@@ -55,10 +55,8 @@ function DayShapeCard({ structure }: { structure: BriefingStructure }) {
 
   return (
     <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-5 md:p-6">
-      <p className="text-xs text-ink-dim">{structure.dateLabel}</p>
-      <h1 className="mt-1 text-xl font-semibold leading-snug text-ink md:text-2xl">
-        {structure.headline}
-      </h1>
+      <p className="text-role-caption text-ink-dim">{structure.dateLabel}</p>
+      <h1 className="mt-1 text-role-title leading-snug text-ink">{structure.headline}</h1>
       {structure.curve.some((c) => c > 0) && (
         <svg
           viewBox={`0 0 ${width} ${height}`}
@@ -87,19 +85,21 @@ function DayShapeCard({ structure }: { structure: BriefingStructure }) {
             className="border-l border-line-soft pl-3 first:border-l-0 first:pl-0"
           >
             <p
-              className={`text-xs font-semibold ${seg.kind === "busy" ? "text-accent-deep" : "text-ink-dim"}`}
+              className={`text-role-caption font-semibold ${seg.kind === "busy" ? "text-accent-deep" : "text-ink-dim"}`}
             >
               {seg.label}
             </p>
-            <p className="mt-1 text-sm text-ink">{seg.summary}</p>
+            <p className="mt-1 text-role-body text-ink">{seg.summary}</p>
           </div>
         ))}
       </div>
       {structure.attention.length > 0 && (
         <ol className="mt-4 space-y-1.5 border-t border-line-soft pt-3">
           {structure.attention.map((item) => (
-            <li key={item.rank} className="flex gap-2 text-sm text-ink">
-              <span className="text-xs font-semibold leading-5 text-ink-dim">{item.rank}</span>
+            <li key={item.rank} className="flex gap-2 text-role-body text-ink">
+              <span className="text-role-caption font-semibold leading-5 text-ink-dim">
+                {item.rank}
+              </span>
               <span>
                 {item.action}
                 {item.reason ? <span className="text-ink-mid"> — {item.reason}</span> : null}
@@ -146,10 +146,8 @@ function BriefingView() {
       {/* MOBILE — native large-title header (desktop hero below, untouched) */}
       <header className="mb-5 flex items-end justify-between gap-3 md:hidden">
         <div className="min-w-0">
-          <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-ink">
-            {t("nav.briefing")}
-          </h1>
-          <p className="mt-1.5 text-sm text-ink-mid">
+          <h1 className="text-role-page text-ink">{t("nav.briefing")}</h1>
+          <p className="mt-1.5 text-role-body text-ink-mid">
             {content ? todayLabel : t("briefing.notGenerated")}
           </p>
         </div>
@@ -182,10 +180,8 @@ function BriefingView() {
           the single filled primary action; the subtitle carries honest counts. */}
       <header className="mb-6 hidden items-start justify-between gap-4 md:flex">
         <div className="min-w-0">
-          <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-ink">
-            {t("nav.briefing")}
-          </h1>
-          <p className="mt-2 text-sm text-ink-mid">
+          <h1 className="text-role-page text-ink">{t("nav.briefing")}</h1>
+          <p className="mt-2 text-role-body text-ink-mid">
             {content ? (
               <>
                 {todayLabel}
@@ -208,7 +204,7 @@ function BriefingView() {
           type="button"
           onClick={regenerate}
           disabled={generating}
-          className="glow-primary ease-strong inline-flex h-9 shrink-0 items-center gap-1.5 rounded-control bg-accent-solid px-3.5 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 focus-ring min-h-11"
+          className="glow-primary ease-strong inline-flex h-9 shrink-0 items-center gap-1.5 rounded-control bg-accent-solid px-3.5 text-role-label text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 focus-ring min-h-11"
         >
           <svg
             aria-hidden="true"
@@ -237,7 +233,7 @@ function BriefingView() {
 
       {status && <BriefingDeliveryStatus status={status} />}
       {statusError && (
-        <div className="mb-4 rounded-control border border-state-warn-line bg-state-warn-bg px-4 py-3 text-sm text-state-warn-ink">
+        <div className="mb-4 rounded-control border border-state-warn-line bg-state-warn-bg px-4 py-3 text-role-body text-state-warn-ink">
           {statusError}
         </div>
       )}
@@ -248,8 +244,8 @@ function BriefingView() {
 
       {!loading && !error && !briefingLoadError && !content && (
         <div className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-6 text-center">
-          <p className="mb-3 text-sm text-ink-mid">{t("briefingPage.empty.title")}</p>
-          <p className="mx-auto mb-4 max-w-md text-xs leading-5 text-ink-mid">
+          <p className="mb-3 text-role-body text-ink-mid">{t("briefingPage.empty.title")}</p>
+          <p className="mx-auto mb-4 max-w-md text-role-caption leading-5 text-ink-mid">
             {t("briefing.learningMode")}
           </p>
           <TimeHint t={t} />
@@ -257,7 +253,7 @@ function BriefingView() {
             type="button"
             onClick={regenerate}
             disabled={generating}
-            className="glow-primary ease-strong inline-flex h-9 items-center rounded-control bg-accent-solid px-3.5 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 focus-ring min-h-11"
+            className="glow-primary ease-strong inline-flex h-9 items-center rounded-control bg-accent-solid px-3.5 text-role-label text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 focus-ring min-h-11"
           >
             {generating ? t("briefing.generating") : t("briefing.generateNow")}
           </button>
@@ -278,15 +274,15 @@ function BriefingView() {
           {noteId && topActions.length > 0 && (
             <section className="panel-elevated overflow-hidden rounded-card border border-line/70 bg-surface-panel">
               <div className="border-b border-line-soft px-4 py-3">
-                <h2 className="text-sm font-semibold text-ink">
-                  {t("briefingPage.feedback.title")}
-                </h2>
-                <p className="mt-1 text-xs text-ink-dim">{t("briefingPage.feedback.body")}</p>
+                <h2 className="text-role-head text-ink">{t("briefingPage.feedback.title")}</h2>
+                <p className="mt-1 text-role-caption text-ink-dim">
+                  {t("briefingPage.feedback.body")}
+                </p>
               </div>
               <ul className="divide-y divide-line-soft">
                 {topActions.map((action) => (
                   <li key={action.rank} className="row-wash px-4 py-3">
-                    <p className="text-sm text-ink-muted">
+                    <p className="text-role-body text-ink-muted">
                       <span className="text-ink-dim">{action.rank}.</span> {action.label}
                     </p>
                     <div className="mt-2.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -299,7 +295,7 @@ function BriefingView() {
                             onClick={() => submitFeedback(action, option.choice)}
                             aria-pressed={selected}
                             disabled={savingRank === action.rank}
-                            className={`ease-strong h-8 rounded-control border px-2 text-xs transition duration-150 active:scale-[0.97] disabled:opacity-50 focus-ring min-h-9 min-w-9 ${
+                            className={`ease-strong h-8 rounded-control border px-2 text-role-caption transition duration-150 active:scale-[0.97] disabled:opacity-50 focus-ring min-h-9 min-w-9 ${
                               selected
                                 ? "border-accent-muted bg-accent/10 font-medium text-accent-deeper"
                                 : "border-line bg-surface-panel/70 text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] hover:bg-surface-panel hover:text-ink"
@@ -347,12 +343,15 @@ function BriefingDeliveryStatus({ status }: { status: BriefingStatus }) {
   return (
     <section className="panel-elevated mb-4 rounded-card border border-line/70 bg-surface-panel p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-ink">{t("briefingPage.delivery.title")}</h2>
-        <Link href="/settings/notifications" className="text-xs text-accent-deep hover:underline">
+        <h2 className="text-role-head text-ink">{t("briefingPage.delivery.title")}</h2>
+        <Link
+          href="/settings/notifications"
+          className="text-role-caption text-accent-deep hover:underline"
+        >
           {t("briefingPage.delivery.settings")}
         </Link>
       </div>
-      <div className="grid gap-2 text-xs sm:grid-cols-4">
+      <div className="grid gap-2 text-role-caption sm:grid-cols-4">
         <DeliveryFact
           label={t("briefingPage.delivery.automation")}
           value={auto}
@@ -411,7 +410,7 @@ function nextBriefingLabel(automation: BriefingStatus["automation"], t: Translat
 function TimeHint({ t }: { t: Translate }) {
   const [before, after = ""] = t("briefingPage.empty.timeHint").split("{link}");
   return (
-    <p className="mb-4 text-xs text-ink-dim">
+    <p className="mb-4 text-role-caption text-ink-dim">
       {before}
       <Link href="/settings/notifications" className="text-accent-deep hover:underline">
         {t("briefingPage.delivery.settings")}
@@ -490,7 +489,7 @@ function DeliveryFact({
   return (
     <div className={`rounded-control border px-3 py-2 ${toneClass}`}>
       <p className="text-caption font-semibold uppercase tracking-[0.12em] opacity-60">{label}</p>
-      <p className="mt-1 truncate text-xs font-medium">{value}</p>
+      <p className="mt-1 truncate text-role-caption font-medium">{value}</p>
     </div>
   );
 }
