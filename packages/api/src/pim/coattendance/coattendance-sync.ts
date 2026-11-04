@@ -28,7 +28,8 @@
  *      new: the first day of this advance); sources left out lose observed-since.
  *      A source's pass time (coAttendanceLastPassAt) is written on every pass in
  *      which its own listing succeeded in full, advanced or not, and never for a
- *      failed or cut listing: readers use it as a freshness guard.
+ *      failed or cut listing. It is the pass's interval, not a reader's freshness
+ *      signal: readers check the watermark (judge/v3/relationship-coattendance.ts).
  * A day at or before the watermark is never evaluated again: a late accept or
  * guest change is ignored (recall loss, by design: a meeting written on its own
  * would show its guest list in the rows that share its transaction).
@@ -50,7 +51,12 @@ import type {
   MeetingListing,
   ProviderMeeting,
 } from "../calendar-providers/types.js";
-import { type CountedMeeting, countMeeting, utcDayOf } from "./coattendance-rules.js";
+import {
+  COATTENDANCE_LOOKBACK_DAYS,
+  type CountedMeeting,
+  countMeeting,
+  utcDayOf,
+} from "./coattendance-rules.js";
 import {
   type CoverageSource,
   isPassDue,
@@ -67,7 +73,6 @@ import {
   recordCountedMeetings,
 } from "./coattendance-store.js";
 
-export const COATTENDANCE_LOOKBACK_DAYS = 30;
 export const COATTENDANCE_PASS_INTERVAL_MS = 6 * 60 * 60 * 1000;
 export const COATTENDANCE_FAILURE_BACKOFF_MS = 30 * 60 * 1000;
 /** One source's listing: up to 4 pages of 10 s each. */
