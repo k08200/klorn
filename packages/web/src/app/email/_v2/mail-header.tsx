@@ -266,7 +266,7 @@ export function MailHeader(props: MailHeaderProps) {
           value={threads ? null : view.lane}
           onChange={(lane) => onChange({ lane })}
           disabled={threads}
-          className="flex-1 max-md:-mx-4 max-md:px-4"
+          className="flex-1 max-md:-mx-4 max-md:scroll-px-4 max-md:px-4"
         />
         <div className={`flex items-center gap-2 ${compact ? "justify-end" : ""}`}>
           {accounts.length > 1 && (

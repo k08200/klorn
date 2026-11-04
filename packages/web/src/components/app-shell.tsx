@@ -48,13 +48,16 @@ const DOCKLESS_ROUTES = ["/chat", "/assistant"];
  * must scroll clear of it: 72px (48px button + its offset + a gap) plus the
  * home-indicator inset — below 600px on top of the 62px tab bar. The phone
  * floor of 152px covers the flag-off button, which sits at a fixed 96px
- * (96 + 48 + 8). Pages that scroll an inner pane (graph, admin, the mail
- * split) sit inside this padding, so they clear the button too.
+ * (96 + 48 + 8). The clearance is published as `--main-clear` so a page that
+ * scrolls its own panes (the mail split) can run them to the bottom edge and
+ * put the clearance inside each pane instead — otherwise the padding shows
+ * as a strip of <main>'s background under the panes (globals.css,
+ * .mail-split).
  */
 const DOCK_CLEARANCE =
-  "pb-[max(calc(62px+72px+env(safe-area-inset-bottom)),152px)] rail:pb-[calc(72px+env(safe-area-inset-bottom))]";
+  "[--main-clear:max(calc(62px+72px+env(safe-area-inset-bottom)),152px)] rail:[--main-clear:calc(72px+env(safe-area-inset-bottom))] pb-(--main-clear)";
 const DOCKLESS_CLEARANCE =
-  "pb-[calc(62px+env(safe-area-inset-bottom))] rail:pb-[env(safe-area-inset-bottom)]";
+  "[--main-clear:calc(62px+env(safe-area-inset-bottom))] rail:[--main-clear:env(safe-area-inset-bottom)] pb-(--main-clear)";
 
 /**
  * The same clearances as scroll padding, so a control scrolled into view on

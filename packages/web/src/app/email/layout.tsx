@@ -43,7 +43,7 @@ export default function EmailLayout({ children }: { children: ReactNode }) {
   // on (the wrappers turn into display: contents), so the media query
   // resolving after the first paint does not remount the reader.
   return (
-    <div className={split ? "flex h-full min-h-0" : "contents"}>
+    <div className={split ? "mail-split flex min-h-0" : "contents"}>
       {split && (
         <section
           data-mail-scroll
