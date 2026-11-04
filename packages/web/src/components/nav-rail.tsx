@@ -54,7 +54,7 @@ export default function NavRail() {
                   <Link
                     href={tab.href}
                     aria-current={active ? "page" : undefined}
-                    className={`focus-ring flex min-h-14 flex-col items-center justify-center gap-1 rounded-control py-1.5 text-center text-caption leading-tight transition ${
+                    className={`focus-ring flex min-h-14 flex-col items-center justify-center gap-1 rounded-control py-1.5 text-center text-role-caption leading-tight transition ${
                       active ? "text-accent-deep" : "text-ink-mid hover:text-ink"
                     }`}
                   >
@@ -84,13 +84,13 @@ export default function NavRail() {
             onClick={() => setAccountOpen(true)}
             aria-haspopup="dialog"
             aria-expanded={accountOpen}
-            className={`focus-ring flex min-h-14 w-full flex-col items-center justify-center gap-1 rounded-control py-1.5 text-caption leading-tight transition ${
+            className={`focus-ring flex min-h-14 w-full flex-col items-center justify-center gap-1 rounded-control py-1.5 text-role-caption leading-tight transition ${
               accountActive ? "text-accent-deep" : "text-ink-mid hover:text-ink"
             }`}
           >
             <span
               aria-hidden="true"
-              className={`flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-accent-solid to-accent-solid-hover text-caption font-bold text-accent-solid-ink ring-1 transition ${
+              className={`flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-accent-solid to-accent-solid-hover text-role-caption font-bold text-accent-solid-ink ring-1 transition ${
                 accountActive ? "ring-accent" : "ring-transparent"
               }`}
             >
