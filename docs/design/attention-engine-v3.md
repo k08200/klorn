@@ -158,7 +158,7 @@ Co-attendance store (`pim/coattendance/`, behind `CALENDAR_COATTENDANCE_ENABLED`
   3. the user has at least one Google calendar source, and EVERY one (the primary `UserToken`, provider google, and each `LinkedCalendarAccount` with provider GOOGLE, as the store's own `readCoverage` lists them) has `coAttendanceObservedSince` ≤ utcDay(now) − 30 days, that is full-window coverage; a source that joins later reads null for up to 30 days;
   4. no Google source has `needsReconnect`;
   5. the user has NO non-Google calendar source (a `LinkedCalendarAccount` of Outlook, CalDAV or any other provider);
-  6. the sender is not one of the user's own addresses, and its address can be normalised.
+  6. the sender's address can be normalised, and it is not one of the user's own addresses as the store knows them (`loadOwnAddresses`, shared by writer and reader: the account email, each Google login's address, every linked calendar and inbox), since the store never counts those.
 
   The window the counts cover, for P5, is [max over sources of `coAttendanceObservedSince`, `coAttendanceCountedThrough`]; the snapshot carries both ends. Freshness is the watermark's (condition 2); a source's `coAttendanceLastPassAt` is not read, because a failing source freezes the watermark while the other sources' pass times stay fresh (probe C).
 
