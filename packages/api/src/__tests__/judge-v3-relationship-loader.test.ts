@@ -39,6 +39,13 @@ function deps(over: Partial<RelationshipLoaderDeps> = {}): RelationshipLoaderDep
     dismissCount: vi.fn(async () => 2),
     pinnedTier: vi.fn(async () => null),
     senderCategory: vi.fn(async () => "investor"),
+    coAttendanceCoverage: vi.fn(async () => ({
+      countedThrough: null,
+      sources: [],
+      hasNonGoogleSource: false,
+    })),
+    coAttendanceRow: vi.fn(async () => null),
+    coAttendanceOwnAddresses: vi.fn(async () => new Set<string>()),
     ...over,
   };
 }
@@ -64,6 +71,12 @@ describe("loadRelationshipSnapshot", () => {
       repliedThreadCount: 1,
       userInitiatedThreadCount: 1,
       firstSeenAt: "2026-07-01T00:00:00.000Z",
+      // Co-attendance is unknown while CALENDAR_COATTENDANCE_ENABLED is off (the default).
+      meetingCount: null,
+      smallMeetingCount: null,
+      lastMetAt: null,
+      coAttendanceObservedSince: null,
+      coAttendanceCountedThrough: null,
     });
     expect(d.sentRowsMentioning).toHaveBeenCalledWith("u1", "sarah@partner.io");
     expect(d.sentInThreads).toHaveBeenCalledWith("u1", ["th1", "th0"]);

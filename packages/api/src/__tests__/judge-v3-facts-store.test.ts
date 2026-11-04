@@ -63,6 +63,11 @@ const rel: RelationshipSnapshot = {
   repliedThreadCount: 1,
   userInitiatedThreadCount: 0,
   firstSeenAt: "2026-06-04T00:00:00.000Z",
+  meetingCount: 2,
+  smallMeetingCount: 1,
+  lastMetAt: "2026-10-20T00:00:00.000Z",
+  coAttendanceObservedSince: "2026-10-02T00:00:00.000Z",
+  coAttendanceCountedThrough: "2026-11-03T00:00:00.000Z",
 };
 
 const at = new Date("2026-10-31T01:00:00Z");

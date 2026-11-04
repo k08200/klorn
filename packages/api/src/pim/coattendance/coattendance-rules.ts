@@ -37,6 +37,9 @@
 import { isPlainAddress } from "../../mail/email-address.js";
 import type { MeetingAttendee, ProviderMeeting } from "../calendar-providers/types.js";
 
+/** The counting window in days: a first pass (or one after a coverage gap) evaluates
+ * the finished days this far back, and a counted meeting's marker is kept as long. */
+export const COATTENDANCE_LOOKBACK_DAYS = 30;
 /** At most this many people (the user included) make a small meeting. */
 export const SMALL_MEETING_MAX_PEOPLE = 5;
 /** Invitees (rooms excluded) past which a meeting counts nothing; also Google's maxAttendees. */
