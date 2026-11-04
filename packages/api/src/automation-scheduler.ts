@@ -69,6 +69,7 @@ import {
 import { getLinkedInboxClients, renewExpiringGmailWatches } from "./mail/gmail.js";
 import { findReingestedHistoryFailClosed } from "./mail/imap-history.js";
 import { runProactiveDrafts } from "./mail/proactive-drafts.js";
+import { importSentHistory } from "./mail/sent-history-import.js";
 import { syncSentMessages } from "./mail/sent-messages.js";
 import { notifyConversationsUpdated } from "./notify/conversations-updated.js";
 import { desktopAlertTag } from "./notify/desktop-alert.js";
@@ -90,6 +91,7 @@ import {
   syncLinkedCalendars,
   syncPrimaryCalendarWindow,
 } from "./pim/calendar-sync.js";
+import { enqueueCoAttendance } from "./pim/coattendance/coattendance-job.js";
 import { expireStaleDeviceSources } from "./pim/device-calendar/device-sources.js";
 import { sendFocusWindowDigests } from "./pim/focus-digest.js";
 import { draftReplyForEmailId } from "./routes/email-replies.js";
@@ -1402,6 +1404,13 @@ async function runUserCycle(
         });
       }
     }
+
+    // Calendar co-attendance (pim/coattendance/), behind CALENDAR_COATTENDANCE_ENABLED:
+    // queued, never awaited, so it runs outside this user's per-tick budget and
+    // never delays the email step below. The job checks each source's interval.
+    enqueueCoAttendance(config.userId, {
+      includeLinked: linkedCalendarSyncEnabled() && isEntitled(configUserPlan, configUserRole),
+    });
   }
 
   // --- Email Sync + AI Classify (requires PRO+ for classify, TEAM+ for auto-reply) ---
@@ -1430,6 +1439,14 @@ async function runUserCycle(
         // Sent-folder scan for "waiting on" — throttled to every 30 min per
         // user inside, fail-soft, so it can ride every sync tick.
         await syncSentMessages(config.userId);
+        // One-time import of the last 12 months of Sent headers for the same
+        // inboxes (SENT_HISTORY_BACKFILL_ENABLED, default OFF: no DB read, no
+        // Gmail call). Detached on purpose: a batch is up to 100 metadata
+        // fetches, which must not eat this serial loop's per-user time budget.
+        // It never rejects, runs one batch per user at a time (2 minutes at
+        // most), and stops once each inbox is marked imported (a reconnect
+        // resets the mark).
+        void importSentHistory(config.userId);
 
         // AI summarize new emails — floor 10 so a zero-new tick still drains
         // the backlog (same #725 floor the interactive routes already have;
