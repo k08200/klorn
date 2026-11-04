@@ -36,7 +36,7 @@ struct UpcomingEventRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .background(hovering ? Theme.surfaceHover : .clear, in: RoundedRectangle(cornerRadius: 8))
+        .background(hovering ? Theme.surfaceHover : .clear, in: RoundedRectangle(cornerRadius: Theme.Radius.control))
         .onHover { hovering = $0 }
         .animation(.easeOut(duration: 0.12), value: hovering)
         .accessibilityLabel(
@@ -79,7 +79,7 @@ struct WeekEventChip: View {
             .padding(.horizontal, 5).padding(.vertical, 3)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.accent.opacity(event.allDay ? 0.24 : 0.14),
-                        in: RoundedRectangle(cornerRadius: 4))
+                        in: RoundedRectangle(cornerRadius: Theme.Radius.chip))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

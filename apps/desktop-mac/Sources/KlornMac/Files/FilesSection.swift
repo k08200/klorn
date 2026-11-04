@@ -75,8 +75,8 @@ struct FilesSection: View {
         }
         .padding(.horizontal, Theme.s3)
         .frame(maxWidth: 420, minHeight: 32)
-        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.sm))
-        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm).strokeBorder(Theme.line))
+        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.control))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.control).strokeBorder(Theme.line))
     }
 
     @ViewBuilder
@@ -193,11 +193,11 @@ private struct FilesSkeleton: View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(0..<5, id: \.self) { row in
                 HStack(spacing: Theme.s3) {
-                    RoundedRectangle(cornerRadius: 3).fill(Theme.surfaceHover).frame(width: 16, height: 16)
+                    RoundedRectangle(cornerRadius: Theme.Radius.chip).fill(Theme.surfaceHover).frame(width: 16, height: 16)
                     VStack(alignment: .leading, spacing: Theme.s1) {
-                        RoundedRectangle(cornerRadius: 3).fill(Theme.surfaceHover)
+                        RoundedRectangle(cornerRadius: Theme.Radius.chip).fill(Theme.surfaceHover)
                             .frame(width: row.isMultiple(of: 2) ? 260 : 200, height: 11)
-                        RoundedRectangle(cornerRadius: 3).fill(Theme.surfaceHover).frame(width: 90, height: 8)
+                        RoundedRectangle(cornerRadius: Theme.Radius.chip).fill(Theme.surfaceHover).frame(width: 90, height: 8)
                     }
                     Spacer()
                 }
