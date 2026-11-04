@@ -209,11 +209,13 @@ function validDate(ms: number): Date | null {
 }
 
 /**
- * Gmail's internalDate, the scan's authority too, so both write the same
- * sentAt; the Date header only when internalDate is missing (null or "").
- * Neither usable: null, and the row is not recorded at the epoch.
+ * Gmail's internalDate; the Date header only when internalDate is missing
+ * (null or "" — Number() of either is 0, the epoch). Neither usable: null,
+ * and the row is not recorded at the epoch. The folder listing the Sent scan
+ * reads (gmail-mailbox.ts) uses this too, so import and scan write the same
+ * sentAt.
  */
-function sentAtOf(message: MetadataMessage): Date | null {
+export function sentAtOf(message: MetadataMessage): Date | null {
   const internal = message.internalDate;
   if (internal !== null && internal !== undefined && internal.trim() !== "") {
     const date = validDate(Number(internal));
