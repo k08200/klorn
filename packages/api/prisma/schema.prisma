@@ -40,11 +40,6 @@ model User {
   agentModel                 String?
   /// BYOK Anthropic key, encrypted (crypto-tokens). Paid plans only.
   anthropicApiKey            String?
-  /// Retired 2026-11-01 with the OpenRouter provider; never read or written.
-  /// @ignore keeps it out of the client while the column still exists, so the
-  /// follow-up migration can drop it without breaking a mid-deploy instance's
-  /// full-row User reads.
-  openRouterApiKey           String?                    @ignore
   /// Legacy BYOK slot, encrypted: clear-only, no new writes.
   geminiApiKey               String?
   // Naver IMAP connection (Korean ICP support).
