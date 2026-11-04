@@ -106,21 +106,21 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
             <h3 id="confirm-dialog-title" className="font-semibold mb-2">
               {options.title}
             </h3>
-            <p id="confirm-dialog-message" className="text-sm text-ink-mid mb-6">
+            <p id="confirm-dialog-message" className="text-role-body text-ink-mid mb-6">
               {options.message}
             </p>
             <div className="flex gap-2 justify-end">
               <button
                 type="button"
                 onClick={() => handleClose(false)}
-                className="min-h-11 px-4 py-2 rounded-control text-sm text-ink-mid hover:text-ink transition"
+                className="min-h-11 px-4 py-2 rounded-control text-role-label text-ink-mid hover:text-ink transition"
               >
                 {options.dismissLabel || t("common.cancel")}
               </button>
               <button
                 type="button"
                 onClick={() => handleClose(true)}
-                className={`min-h-11 px-4 py-2 rounded-control text-sm font-medium transition ${
+                className={`min-h-11 px-4 py-2 rounded-control text-role-label font-medium transition ${
                   options.danger
                     ? "bg-danger-solid hover:bg-danger-solid-hover text-danger-solid-ink"
                     : "bg-accent-solid hover:bg-accent-solid-hover text-accent-solid-ink"

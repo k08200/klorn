@@ -106,7 +106,7 @@ export default function PmfCard() {
       aria-labelledby="pmf-heading"
       className="panel-elevated mb-4 rounded-card border border-line/70 bg-surface-panel p-5"
     >
-      <h2 id="pmf-heading" className="text-base font-semibold text-ink">
+      <h2 id="pmf-heading" className="text-role-head text-ink">
         {t("pmf.title")}
       </h2>
       <p className="mt-1.5 text-label font-normal leading-5 text-ink-mid">{t("pmf.subtitle")}</p>
@@ -118,7 +118,7 @@ export default function PmfCard() {
             type="button"
             disabled={answering !== null}
             onClick={() => answer.mutate(opt.value)}
-            className="focus-ring inline-flex min-h-11 items-center rounded-control border border-line px-3.5 text-xs font-semibold text-ink transition hover:border-line-strong hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
+            className="focus-ring inline-flex min-h-11 items-center rounded-control border border-line px-3.5 text-role-caption font-semibold text-ink transition hover:border-line-strong hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
           >
             {answering === opt.value ? t("pmf.working") : opt.label}
           </button>

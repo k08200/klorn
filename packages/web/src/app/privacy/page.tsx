@@ -35,8 +35,8 @@ const SECTIONS = [
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section id={slug(title)} className="scroll-mt-24 space-y-3">
-      <h2 className="text-xl font-semibold text-ink">{title}</h2>
-      <div className="space-y-3 text-base leading-7 text-ink-mid">{children}</div>
+      <h2 className="text-role-title text-ink">{title}</h2>
+      <div className="space-y-3 text-role-body leading-7 text-ink-mid">{children}</div>
     </section>
   );
 }
@@ -47,13 +47,15 @@ function TableOfContents({ sections }: { sections: string[] }) {
       aria-label="On this page"
       className="mt-10 rounded-card border border-line bg-surface-raised p-5"
     >
-      <p className="text-xs font-medium uppercase tracking-[0.18em] text-ink-mid">On this page</p>
+      <p className="text-role-caption font-medium uppercase tracking-[0.18em] text-ink-mid">
+        On this page
+      </p>
       <ul className="mt-3 grid gap-2 sm:grid-cols-2">
         {sections.map((title) => (
           <li key={title}>
             <a
               href={`#${slug(title)}`}
-              className="inline-flex min-h-11 items-center text-sm text-ink-mid transition hover:text-accent-deep focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 focus-visible:ring-offset-1 focus-visible:ring-offset-white rounded"
+              className="inline-flex min-h-11 items-center text-role-body text-ink-mid transition hover:text-accent-deep focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 focus-visible:ring-offset-1 focus-visible:ring-offset-white rounded"
             >
               {title}
             </a>
@@ -74,7 +76,7 @@ export default function PrivacyPage() {
           </div>
           <span className="text-lg font-bold tracking-tight">Klorn</span>
         </Link>
-        <div className="flex items-center gap-5 text-sm text-ink-mid">
+        <div className="flex items-center gap-5 text-role-body text-ink-mid">
           <Link href="/terms" className="transition hover:text-ink">
             Terms
           </Link>
@@ -85,13 +87,11 @@ export default function PrivacyPage() {
       </nav>
 
       <article className="mx-auto max-w-4xl px-6 py-14">
-        <p className="text-sm font-medium uppercase tracking-[0.18em] text-accent-deep">
+        <p className="text-role-body font-medium uppercase tracking-[0.18em] text-accent-deep">
           PRIVACY POLICY
         </p>
-        <h1 className="mt-4 max-w-3xl text-4xl font-semibold tracking-tight text-ink md:text-5xl">
-          How Klorn handles work data
-        </h1>
-        <p className="mt-5 max-w-2xl text-sm leading-6 text-ink-mid">
+        <h1 className="mt-4 max-w-3xl text-role-page text-ink">How Klorn handles work data</h1>
+        <p className="mt-5 max-w-2xl text-role-body leading-6 text-ink-mid">
           Last updated: {updatedAt}. Klorn is currently a beta product. This policy explains what
           data Klorn can access, why it needs that access, and how you can request deletion.
         </p>

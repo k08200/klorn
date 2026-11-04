@@ -165,11 +165,11 @@ export function NaverImapSection({ embedded = false, onChanged }: NaverImapSecti
     >
       <header className={embedded ? "hidden" : "mb-3 flex items-start justify-between gap-3"}>
         <div>
-          <h2 className="flex items-center gap-2 text-base font-semibold text-ink">
+          <h2 className="flex items-center gap-2 text-role-head text-ink">
             {t("imap.naver.title")}
             <BetaChip />
           </h2>
-          <p className="mt-1 text-xs text-ink-mid">
+          <p className="mt-1 text-role-caption text-ink-mid">
             {t("imap.naver.body", { count: String(TIER_COUNT) })}
           </p>
         </div>
@@ -177,10 +177,10 @@ export function NaverImapSection({ embedded = false, onChanged }: NaverImapSecti
       </header>
 
       {loading ? (
-        <div className="text-xs text-ink-dim">{t("common.loading")}</div>
+        <div className="text-role-caption text-ink-dim">{t("common.loading")}</div>
       ) : status?.connected ? (
         <div className="space-y-3">
-          <div className="rounded-control border border-line-soft bg-surface-raised/70 p-3 text-sm text-ink">
+          <div className="rounded-control border border-line-soft bg-surface-raised/70 p-3 text-role-body text-ink">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="font-medium">{status.email}</p>
@@ -202,7 +202,7 @@ export function NaverImapSection({ embedded = false, onChanged }: NaverImapSecti
           </div>
           {firstSync !== null && <FirstSyncNote started={firstSync} />}
           {error && (
-            <p role="alert" className="text-xs text-state-danger-ink">
+            <p role="alert" className="text-role-caption text-state-danger-ink">
               {error}
             </p>
           )}
@@ -245,7 +245,7 @@ export function NaverImapSection({ embedded = false, onChanged }: NaverImapSecti
               {t("imap.naver.help.after")}
             </p>
           </div>
-          <details className="text-xs text-ink-mid">
+          <details className="text-role-caption text-ink-mid">
             <summary className="cursor-pointer">{t("imap.naver.advancedHost")}</summary>
             <div className="mt-2">
               <Input

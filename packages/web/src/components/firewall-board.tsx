@@ -238,10 +238,8 @@ export function FirewallBoard() {
           {announcement}
         </p>
         <header className="mb-8">
-          <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-ink">
-            Today's attention firewall
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm text-ink-mid">
+          <h1 className="text-role-page text-ink">Today's attention firewall</h1>
+          <p className="mt-2 max-w-2xl text-role-body text-ink-mid">
             Klorn evaluated every signal that hit your inbox today and sorted it into a tier. Move
             anything we got wrong — that override teaches the classifier.
           </p>
@@ -435,7 +433,7 @@ function DailyReceiptStrip({
                 </span>
                 <CountChip
                   value={data.summary[tier]}
-                  className={`text-2xl font-semibold leading-none ${v.accent}`}
+                  className={`text-role-title font-semibold leading-none ${v.accent}`}
                 />
               </div>
             </div>
@@ -443,7 +441,7 @@ function DailyReceiptStrip({
         })}
       </div>
       {receipt?.summary?.narrative && (
-        <p className="mt-4 border-t border-line pt-4 text-xs leading-5 text-ink-dim">
+        <p className="mt-4 border-t border-line pt-4 text-role-caption leading-5 text-ink-dim">
           {receipt.summary.narrative}
         </p>
       )}
@@ -472,12 +470,15 @@ function TierColumn({
         <h2 className="font-mono text-caption font-semibold uppercase tracking-[0.2em] text-ink">
           {v.label}
         </h2>
-        <CountChip value={items.length} className={`ml-auto text-sm font-semibold ${v.accent}`} />
+        <CountChip
+          value={items.length}
+          className={`ml-auto text-role-body font-semibold ${v.accent}`}
+        />
       </header>
       <p className="mb-4 text-caption leading-5 text-ink-dim">{v.description}</p>
 
       {items.length === 0 ? (
-        <p className="rounded-control border border-dashed border-line px-3 py-8 text-center text-xs text-ink-mid">
+        <p className="rounded-control border border-dashed border-line px-3 py-8 text-center text-role-caption text-ink-mid">
           Nothing here yet.
         </p>
       ) : (
@@ -529,7 +530,7 @@ function FirewallCard({
 
   return (
     <li
-      className={`lift animate-card-in rounded-card border p-3.5 text-sm ${v.card} ${
+      className={`lift animate-card-in rounded-card border p-3.5 text-role-body ${v.card} ${
         busy ? "opacity-50" : ""
       }`}
       // Stagger only the first screenful so a fresh load cascades in; later
@@ -665,10 +666,10 @@ function InfoStrip({ count, items }: { count: number; items: FirewallItem[] }) {
         <h2 className="font-mono text-caption font-semibold uppercase tracking-[0.2em] text-ink-dim">
           INFO
         </h2>
-        <CountChip value={count} className={`ml-auto text-sm font-semibold ${v.accent}`} />
+        <CountChip value={count} className={`ml-auto text-role-body font-semibold ${v.accent}`} />
       </header>
       <p className="mt-1.5 text-caption leading-5 text-ink-dim">{v.description}</p>
-      <ul className="mt-3 space-y-1.5 text-xs text-ink-mid">
+      <ul className="mt-3 space-y-1.5 text-role-caption text-ink-mid">
         {items.slice(0, 5).map((item) => (
           <li key={item.id} className="flex items-center gap-2 line-clamp-1">
             <span className="text-ink-dim/60">·</span>

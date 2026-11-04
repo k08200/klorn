@@ -193,7 +193,7 @@ export function AccountsSection() {
               <div key={int.name} className="flex items-center justify-between gap-4 p-4">
                 <div>
                   <h3 className="font-medium">{int.name}</h3>
-                  <p className="text-sm text-ink-mid">{int.description}</p>
+                  <p className="text-role-body text-ink-mid">{int.description}</p>
                 </div>
                 {int.connected ? (
                   <div className="flex items-center gap-3">
@@ -205,14 +205,14 @@ export function AccountsSection() {
                       <button
                         type="button"
                         onClick={disconnectGoogle}
-                        className="ease-strong inline-flex min-h-11 items-center rounded-control border border-state-danger-line bg-state-danger-bg px-3 text-xs font-medium text-state-danger-ink transition duration-150 hover:bg-state-danger-bg active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+                        className="ease-strong inline-flex min-h-11 items-center rounded-control border border-state-danger-line bg-state-danger-bg px-3 text-role-caption font-medium text-state-danger-ink transition duration-150 hover:bg-state-danger-bg active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
                       >
                         {t("settings.disconnect")}
                       </button>
                     )}
                   </div>
                 ) : int.connectUrl?.endsWith("-coming-soon") ? (
-                  <span className="text-sm text-ink-dim bg-surface-raised px-3 py-1.5 rounded-control border border-line">
+                  <span className="text-role-body text-ink-dim bg-surface-raised px-3 py-1.5 rounded-control border border-line">
                     {t("settings.chip.comingSoon")}
                   </span>
                 ) : int.connectUrl === "google-oauth-start" ? (
@@ -238,7 +238,7 @@ export function AccountsSection() {
                     {t("settings.connect")}
                   </a>
                 ) : (
-                  <span className="text-sm text-ink-dim bg-surface-raised px-3 py-1.5 rounded-control border border-line">
+                  <span className="text-role-body text-ink-dim bg-surface-raised px-3 py-1.5 rounded-control border border-line">
                     {t("settings.chip.comingSoon")}
                   </span>
                 )}
@@ -256,7 +256,7 @@ export function AccountsSection() {
           <div className={`mt-3 ${PANEL} p-4 flex items-center justify-between gap-4`}>
             <div>
               <h3 className="font-medium">{t("settings.realtimeSync.title")}</h3>
-              <p className="text-sm text-ink-mid">
+              <p className="text-role-body text-ink-mid">
                 {gmailPushConfigured
                   ? gmailPushEnabled
                     ? gmailPushExpiresAt
@@ -279,7 +279,7 @@ export function AccountsSection() {
                 </Button>
               )
             ) : (
-              <span className="text-sm text-ink-dim bg-surface-raised px-3 py-1.5 rounded-control border border-line">
+              <span className="text-role-body text-ink-dim bg-surface-raised px-3 py-1.5 rounded-control border border-line">
                 {t("settings.realtimeSync.unavailable")}
               </span>
             )}

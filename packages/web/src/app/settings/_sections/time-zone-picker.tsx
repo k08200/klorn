@@ -14,7 +14,7 @@ import {
 import { useDeviceTimeZone } from "../../../lib/time-zone-sync";
 
 const FIELD =
-  "w-full min-h-11 bg-surface-raised border border-line rounded-control px-4 py-2.5 text-sm focus:outline-none focus:border-accent-muted transition";
+  "w-full min-h-11 bg-surface-raised border border-line rounded-control px-4 py-2.5 text-role-body focus:outline-none focus:border-accent-muted transition";
 
 interface TimeZonePickerProps {
   /** AUTO_TIME_ZONE or an IANA zone. */
@@ -65,7 +65,7 @@ export function TimeZonePicker({ value, onChange }: TimeZonePickerProps) {
 
   return (
     <div className="space-y-2">
-      <label htmlFor="profile-tz" className="block text-sm text-ink-mid">
+      <label htmlFor="profile-tz" className="block text-role-label text-ink-mid">
         {t("settings.timezone")}
       </label>
       <input
@@ -107,7 +107,7 @@ export function TimeZonePicker({ value, onChange }: TimeZonePickerProps) {
           </optgroup>
         )}
       </select>
-      <p className="text-xs text-ink-dim" aria-live="polite">
+      <p className="text-role-caption text-ink-dim" aria-live="polite">
         {shownCommon.length + shownRest.length === 0
           ? t("settings.tz.noMatches", { query: query.trim() })
           : isAuto

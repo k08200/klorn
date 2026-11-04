@@ -23,8 +23,10 @@ export default function AppearanceSection() {
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <p className="text-sm text-ink">{t("settings.appearance.theme")}</p>
-        <p className="mt-0.5 text-xs text-ink-mid">{t("settings.appearance.themeDesc")}</p>
+        <p className="text-role-body text-ink">{t("settings.appearance.theme")}</p>
+        <p className="mt-0.5 text-role-caption text-ink-mid">
+          {t("settings.appearance.themeDesc")}
+        </p>
       </div>
       <Tabs
         tabs={themeTabs}

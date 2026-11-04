@@ -197,19 +197,17 @@ function BillingContent() {
   return (
     <div className={PAGE_SHELL}>
       <header className="mb-8">
-        <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-ink">
-          {t("billing.title")}
-        </h1>
-        <p className="mt-2 max-w-3xl text-sm text-ink-mid">{t("billing.subtitle")}</p>
+        <h1 className="text-role-page text-ink">{t("billing.title")}</h1>
+        <p className="mt-2 max-w-3xl text-role-body text-ink-mid">{t("billing.subtitle")}</p>
       </header>
 
       {success && (
-        <div className="mb-6 rounded-control border border-state-ok-line bg-state-ok-bg p-4 text-sm text-state-ok-ink">
+        <div className="mb-6 rounded-control border border-state-ok-line bg-state-ok-bg p-4 text-role-body text-state-ok-ink">
           {t("billing.subscriptionActive")}
         </div>
       )}
       {canceled && (
-        <div className="mb-6 rounded-control border border-state-warn-line bg-state-warn-bg p-4 text-sm text-state-warn-ink">
+        <div className="mb-6 rounded-control border border-state-warn-line bg-state-warn-bg p-4 text-role-body text-state-warn-ink">
           {t("billing.checkoutCanceled")}
         </div>
       )}
@@ -231,10 +229,10 @@ function BillingContent() {
               grid, where the other spend numbers live. */}
           <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
-              <p className="text-xs font-medium uppercase tracking-[0.18em] text-ink-mid">
+              <p className="text-role-caption font-medium uppercase tracking-[0.18em] text-ink-mid">
                 {t("billing.currentPlan")}
               </p>
-              <p className="mt-1 text-xl font-semibold text-ink">{status.planName}</p>
+              <p className="mt-1 text-role-title text-ink">{status.planName}</p>
               <SubscriptionStatusLine state={toSubscriptionState(status)} />
             </div>
             {/* Portal + in-app cancel. Renders nothing inside the native app
@@ -247,7 +245,7 @@ function BillingContent() {
               decision/token figures were never enforced. What does bound AI
               use is the daily allowance (api billing/cost-guard.ts), which no
               endpoint reports yet. */}
-          <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1 text-sm text-ink-mid">
+          <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1 text-role-body text-ink-mid">
             <span>
               {t("billing.decisions")}{" "}
               <span className="font-medium text-ink tabular-nums">
@@ -294,23 +292,27 @@ function BillingContent() {
                   {t("billing.recommended")}
                 </span>
               )}
-              <p className="mb-1 text-lg font-semibold text-ink">{t(plan.nameKey)}</p>
-              <p className="mb-1 text-2xl font-semibold text-ink tabular-nums">
+              <p className="mb-1 text-role-head text-ink">{t(plan.nameKey)}</p>
+              <p className="mb-1 text-role-title text-ink tabular-nums">
                 {plan.priceKey ? t(plan.priceKey) : plan.price}
-                <span className="text-sm font-normal text-ink-mid">
+                <span className="text-role-body text-ink-mid">
                   {plan.periodKey ? t(plan.periodKey) : ""}
                 </span>
               </p>
-              {plan.limitKey && <p className="mb-1 text-sm text-ink-mid">{t(plan.limitKey)}</p>}
+              {plan.limitKey && (
+                <p className="mb-1 text-role-body text-ink-mid">{t(plan.limitKey)}</p>
+              )}
               {plan.trialNoteKey ? (
-                <p className="mb-4 text-xs font-medium text-state-ok-ink">{t(plan.trialNoteKey)}</p>
+                <p className="mb-4 text-role-caption font-medium text-state-ok-ink">
+                  {t(plan.trialNoteKey)}
+                </p>
               ) : (
                 <div className="mb-4" />
               )}
 
               <ul className="mb-6 flex-1 space-y-2">
                 {plan.featureKeys.map((fKey) => (
-                  <li key={fKey} className="flex items-start gap-2 text-sm text-ink-mid">
+                  <li key={fKey} className="flex items-start gap-2 text-role-body text-ink-mid">
                     <span aria-hidden="true" className="mt-0.5 text-state-ok-ink">
                       ✓
                     </span>
@@ -320,19 +322,19 @@ function BillingContent() {
               </ul>
 
               {isCurrent ? (
-                <div className="rounded-control border border-accent-muted/45 bg-accent/8 py-2 text-center text-sm font-medium text-accent-deeper">
+                <div className="rounded-control border border-accent-muted/45 bg-accent/8 py-2 text-center text-role-body font-medium text-accent-deeper">
                   {t("billing.currentPlan")}
                 </div>
               ) : plan.key === "FREE" ? (
                 // Non-current FREE card: render a neutral pill (not an empty div)
                 // so every plan card keeps the same footer height and alignment.
-                <div className="rounded-control border border-line bg-surface-raised py-2 text-center text-sm font-medium text-ink-mid">
+                <div className="rounded-control border border-line bg-surface-raised py-2 text-center text-role-body font-medium text-ink-mid">
                   {t("billing.includedWithEveryPlan")}
                 </div>
               ) : plan.key === "ENTERPRISE" ? (
                 <a
                   href="mailto:k0820086@gmail.com"
-                  className="ease-strong block rounded-control border border-line bg-surface-panel/70 py-2.5 text-center text-sm font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring min-h-11"
+                  className="ease-strong block rounded-control border border-line bg-surface-panel/70 py-2.5 text-center text-role-label text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring min-h-11"
                 >
                   {t("billing.contactSales")}
                 </a>
@@ -346,7 +348,7 @@ function BillingContent() {
                 <button
                   type="button"
                   disabled
-                  className="rounded-control border border-line bg-surface-hover py-2.5 text-sm font-semibold text-ink-dim min-h-11"
+                  className="rounded-control border border-line bg-surface-hover py-2.5 text-role-label font-semibold text-ink-dim min-h-11"
                 >
                   {t("billing.subscriptionComingSoon")}
                 </button>
@@ -354,7 +356,7 @@ function BillingContent() {
                 <button
                   type="button"
                   onClick={() => handleUpgrade(plan.key as "PRO")}
-                  className="glow-primary ease-strong focus-ring min-h-11 rounded-control bg-accent-solid py-2.5 text-sm font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97]"
+                  className="glow-primary ease-strong focus-ring min-h-11 rounded-control bg-accent-solid py-2.5 text-role-label font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97]"
                 >
                   {t("billing.startTrial")}
                 </button>
@@ -387,7 +389,7 @@ function PlanDetails() {
   const { t } = useT();
   return (
     <section className="mt-10" aria-labelledby="plan-details-heading">
-      <h2 id="plan-details-heading" className="mb-4 text-lg font-semibold text-ink">
+      <h2 id="plan-details-heading" className="mb-4 text-role-head text-ink">
         {t("billing.planDetailsHeading")}
       </h2>
       <dl className="space-y-4">
@@ -396,8 +398,8 @@ function PlanDetails() {
             key={item.qKey}
             className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-5"
           >
-            <dt className="text-sm font-semibold text-ink">{t(item.qKey)}</dt>
-            <dd className="mt-1.5 text-sm leading-relaxed text-ink-mid">
+            <dt className="text-role-body font-semibold text-ink">{t(item.qKey)}</dt>
+            <dd className="mt-1.5 text-role-body leading-relaxed text-ink-mid">
               {t(item.aKey, { price: PRO_PRICE_WEB })}
             </dd>
           </div>

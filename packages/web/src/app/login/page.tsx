@@ -333,7 +333,7 @@ function LoginForm() {
 
         <div>
           <div className="mb-1.5 flex items-center justify-between gap-3">
-            <label htmlFor="password" className="block text-xs font-medium text-ink-mid">
+            <label htmlFor="password" className="block text-role-caption font-medium text-ink-mid">
               {t("auth.password")}
             </label>
             {mode === "login" && (

@@ -134,7 +134,7 @@ function WelcomeStep({
         <div
           data-testid="google-reconnect-notice"
           role="status"
-          className="mb-6 rounded-control border border-notice-border bg-notice-bg px-3.5 py-3 text-xs leading-5 text-notice-ink"
+          className="mb-6 rounded-control border border-notice-border bg-notice-bg px-3.5 py-3 text-role-caption leading-5 text-notice-ink"
         >
           <span className="font-semibold text-notice-ink-strong">
             {t("reconnect.googleExpiredTitle")}
@@ -142,19 +142,19 @@ function WelcomeStep({
           {t("reconnect.googleExpiredBody")}
         </div>
       )}
-      <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.02em] text-ink">
+      <h1 className="text-role-page leading-tight text-ink">
         {t("onboarding.welcome.titleLine1")}
         <br />
         {t("onboarding.welcome.titleLine2")}
       </h1>
-      <p className="mt-4 text-sm leading-6 text-ink-mid">{t("onboarding.welcome.desc")}</p>
+      <p className="mt-4 text-role-body leading-6 text-ink-mid">{t("onboarding.welcome.desc")}</p>
 
       <div className="mt-8 space-y-3">
         <button
           type="button"
           onClick={onConnectClick}
           disabled={connecting}
-          className="glow-primary ease-strong flex w-full items-center justify-center gap-2 rounded-control bg-accent-solid px-5 py-3.5 text-sm font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 focus-ring"
+          className="glow-primary ease-strong flex w-full items-center justify-center gap-2 rounded-control bg-accent-solid px-5 py-3.5 text-role-label font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 focus-ring"
         >
           {connecting ? t("onboarding.welcome.connecting") : t("onboarding.welcome.connectButton")}
           {!connecting && <span aria-hidden>→</span>}
@@ -162,7 +162,7 @@ function WelcomeStep({
         {/* Non-Google escape hatch: a user who signed in with Apple/Naver and
             lives in Naver Mail attaches it via IMAP in Settings instead —
             without this line the Google button reads as the only way in. */}
-        <p className="text-center text-xs leading-5 text-ink-dim">
+        <p className="text-center text-role-caption leading-5 text-ink-dim">
           {t("onboarding.welcome.preferNaver")}{" "}
           <Link
             href="/settings/accounts"
@@ -225,10 +225,10 @@ function SyncingStep({ initSync, onContinue }: { initSync: SyncState; onContinue
 
   return (
     <div>
-      <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.02em] text-ink">
+      <h1 className="text-role-page leading-tight text-ink">
         {isDone ? t("onboarding.syncing.titleDone") : t("onboarding.syncing.title")}
       </h1>
-      <p className="mt-4 text-sm leading-6 text-ink-mid">
+      <p className="mt-4 text-role-body leading-6 text-ink-mid">
         {isDone ? t("onboarding.syncing.descDone") : t("onboarding.syncing.desc")}
       </p>
 
@@ -269,7 +269,7 @@ function SyncingStep({ initSync, onContinue }: { initSync: SyncState; onContinue
         <button
           type="button"
           onClick={onContinue}
-          className="ease-strong mt-8 flex w-full items-center justify-center gap-2 rounded-control bg-accent-solid px-5 py-3.5 text-sm font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] focus-ring"
+          className="ease-strong mt-8 flex w-full items-center justify-center gap-2 rounded-control bg-accent-solid px-5 py-3.5 text-role-label font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] focus-ring"
         >
           {isDone
             ? t("onboarding.syncing.continueSeeFound")
@@ -295,7 +295,7 @@ function SyncRow({
   return (
     <div className="flex items-center gap-3 px-4 py-3">
       <span className="shrink-0 text-base text-ink-mid">{icon}</span>
-      <p className="flex-1 text-sm text-ink-mid">{label}</p>
+      <p className="flex-1 text-role-body text-ink-mid">{label}</p>
       {done && <span className="shrink-0 text-caption font-semibold text-state-ok-ink">✓</span>}
       {loading && (
         <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-line border-t-accent" />
@@ -310,10 +310,8 @@ function ReadyStep({ initSync, onDone }: { initSync: SyncState; onDone: () => vo
   const { t } = useT();
   return (
     <div>
-      <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.02em] text-ink">
-        {t("onboarding.ready.title")}
-      </h1>
-      <p className="mt-4 text-sm leading-6 text-ink-mid">{t("onboarding.ready.desc")}</p>
+      <h1 className="text-role-page leading-tight text-ink">{t("onboarding.ready.title")}</h1>
+      <p className="mt-4 text-role-body leading-6 text-ink-mid">{t("onboarding.ready.desc")}</p>
 
       <div className="mt-6 grid grid-cols-3 gap-3">
         <StatCard value={initSync.emails} label={t("onboarding.ready.stat.emailsRead")} />
@@ -322,10 +320,10 @@ function ReadyStep({ initSync, onDone }: { initSync: SyncState; onDone: () => vo
       </div>
 
       <div className="panel-elevated mt-4 rounded-card border border-state-info-line bg-surface-panel p-4">
-        <p className="text-xs font-semibold text-accent-deeper">
+        <p className="text-role-caption font-semibold text-accent-deeper">
           {t("onboarding.ready.whatNext.title")}
         </p>
-        <ul className="mt-2 space-y-1.5 text-xs text-ink-mid">
+        <ul className="mt-2 space-y-1.5 text-role-caption text-ink-mid">
           <li>{t("onboarding.ready.whatNext.item1")}</li>
           <li>{t("onboarding.ready.whatNext.item2")}</li>
           <li>{t("onboarding.ready.whatNext.item3")}</li>
@@ -335,7 +333,7 @@ function ReadyStep({ initSync, onDone }: { initSync: SyncState; onDone: () => vo
       <button
         type="button"
         onClick={onDone}
-        className="ease-strong mt-8 flex w-full items-center justify-center gap-2 rounded-control bg-accent-solid px-5 py-3.5 text-sm font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] focus-ring"
+        className="ease-strong mt-8 flex w-full items-center justify-center gap-2 rounded-control bg-accent-solid px-5 py-3.5 text-role-label font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] focus-ring"
       >
         {t("onboarding.ready.openQueue")}
         <span aria-hidden>→</span>
@@ -347,7 +345,7 @@ function ReadyStep({ initSync, onDone }: { initSync: SyncState; onDone: () => vo
 function StatCard({ value, label }: { value: number; label: string }) {
   return (
     <div className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-3 text-center">
-      <p className="text-2xl font-semibold tabular-nums text-ink">{value > 0 ? value : "—"}</p>
+      <p className="text-role-title tabular-nums text-ink">{value > 0 ? value : "—"}</p>
       <p className="mt-1 text-caption text-ink-dim">{label}</p>
     </div>
   );
