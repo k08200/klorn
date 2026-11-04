@@ -205,6 +205,9 @@ describe("Google-only LinkedCalendarAccount readers filter on provider", () => {
       // Reads GOOGLE rows' tokens to revoke them at Google, and counts GOOGLE
       // rows of an address for the shared-grant check.
       "auth/google-grant-revoke.ts",
+      // The co-attendance reader's gate: does the user have any non-GOOGLE
+      // calendar the store does not count (doc §3(2), condition 5).
+      "judge/v3/relationship-coattendance.ts",
       "pim/calendar-providers/dispatch.ts",
       "pim/calendar-providers/outlook-token.ts", // re-reads one OUTLOOK row after a refresh race
       "pim/calendar-source-label.ts",

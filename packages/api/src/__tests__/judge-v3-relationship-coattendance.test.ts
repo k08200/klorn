@@ -22,6 +22,7 @@ const base = (over: Partial<RelationshipInput> = {}): RelationshipInput => ({
 });
 
 const since = new Date("2026-10-02T00:00:00Z");
+const through = new Date("2026-11-03T00:00:00Z");
 
 describe("relationship snapshot: past calendar co-attendance", () => {
   it("is unknown (null) unless every calendar source has been observed", () => {
@@ -31,18 +32,20 @@ describe("relationship snapshot: past calendar co-attendance", () => {
       smallMeetingCount: null,
       lastMetAt: null,
       coAttendanceObservedSince: null,
+      coAttendanceCountedThrough: null,
     });
   });
 
   it("observed with no row means never met in the window: 0, not null", () => {
     const s = buildRelationshipSnapshot(
-      base({ coAttendance: { observedSince: since, row: null } }),
+      base({ coAttendance: { observedSince: since, countedThrough: through, row: null } }),
     );
     expect(s).toMatchObject({
       meetingCount: 0,
       smallMeetingCount: 0,
       lastMetAt: null,
       coAttendanceObservedSince: "2026-10-02T00:00:00.000Z",
+      coAttendanceCountedThrough: "2026-11-03T00:00:00.000Z",
     });
   });
 
@@ -51,6 +54,7 @@ describe("relationship snapshot: past calendar co-attendance", () => {
       base({
         coAttendance: {
           observedSince: since,
+          countedThrough: through,
           row: {
             meetingCount: 4,
             smallMeetingCount: 1,
@@ -64,19 +68,20 @@ describe("relationship snapshot: past calendar co-attendance", () => {
       smallMeetingCount: 1,
       lastMetAt: "2026-10-28T00:00:00.000Z",
       coAttendanceObservedSince: "2026-10-02T00:00:00.000Z",
+      coAttendanceCountedThrough: "2026-11-03T00:00:00.000Z",
     });
   });
 
   it("keeps the deprecated upcoming field null", () => {
     const s = buildRelationshipSnapshot(
-      base({ coAttendance: { observedSince: since, row: null } }),
+      base({ coAttendance: { observedSince: since, countedThrough: through, row: null } }),
     );
     expect(s.coAttendanceNext14d).toBeNull();
   });
 
   it("round-trips through storage, and older rows read the new fields as null", () => {
     const s = buildRelationshipSnapshot(
-      base({ coAttendance: { observedSince: since, row: null } }),
+      base({ coAttendance: { observedSince: since, countedThrough: through, row: null } }),
     );
     expect(parseRelationshipSnapshot(JSON.parse(JSON.stringify(s)))).toEqual(s);
     const old = {
@@ -91,8 +96,14 @@ describe("relationship snapshot: past calendar co-attendance", () => {
     };
     expect(parseRelationshipSnapshot(old)).toMatchObject({
       meetingCount: null,
+      smallMeetingCount: null,
+      lastMetAt: null,
       coAttendanceObservedSince: null,
+      coAttendanceCountedThrough: null,
     });
     expect(parseRelationshipSnapshot({ ...old, meetingCount: "3" })).toBeNull();
+    expect(
+      parseRelationshipSnapshot({ ...old, coAttendanceCountedThrough: "2026-11-03" }),
+    ).toBeNull();
   });
 });

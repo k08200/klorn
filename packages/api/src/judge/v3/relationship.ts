@@ -10,10 +10,11 @@
  * Per-user ego network only: every row read belongs to the one user, and one
  * user's mail never informs another's. Raw values only, no hand weights.
  *
- * coAttendanceNext14d is always null for now: CalendarEvent stores no
- * attendees (schema.prisma CalendarEvent), so co-attendance cannot be read from
- * data. interaction-graph.ts approximates it from email volume, which is not
- * what this field claims, so it is not reused here.
+ * Past calendar co-attendance comes from the co-attendance store, behind the
+ * reader's gate in relationship-coattendance.ts. coAttendanceNext14d is
+ * deprecated and always null: no upcoming attendee data is stored. It stays in
+ * the shape so stored rows replay unchanged. interaction-graph.ts approximates
+ * meetings from email volume, which is not co-attendance, so it is not reused.
  */
 
 import { isPlainAddress, parseAddress, splitAddressList } from "../../mail/email-address.js";
@@ -55,21 +56,26 @@ export interface RelationshipSnapshot {
   userInitiatedThreadCount: number | null;
   /** First contact either way, ISO-8601 UTC (tenure; new-sender flag). */
   firstSeenAt: string | null;
-  /** Past meetings shared with the sender (ContactCoAttendance), covering at least the
-   * window since coAttendanceObservedSince (earlier sources may add older meetings). */
+  /** Past meetings shared with the sender (ContactCoAttendance). The count covers
+   * at least [coAttendanceObservedSince, coAttendanceCountedThrough], and may hold
+   * older meetings: a row is never pruned when coverage restarts. */
   meetingCount: number | null;
   /** Of those, meetings of at most 5 people. */
   smallMeetingCount: number | null;
   /** UTC day of the latest shared meeting, ISO-8601. */
   lastMetAt: string | null;
-  /** Start of the window the co-attendance counts cover (latest across calendar sources). */
+  /** First UTC day of the window the counts cover: the latest
+   * coAttendanceObservedSince across the user's Google calendar sources. */
   coAttendanceObservedSince: string | null;
+  /** Last UTC day of that window: the watermark User.coAttendanceCountedThrough. */
+  coAttendanceCountedThrough: string | null;
 }
 
-/** Stored co-attendance for one sender. undefined = unknown (flag off, or not
- * every calendar source observed yet); row null = observed, never met. */
+/** Stored co-attendance for one sender. undefined = unknown (the reader's gate
+ * failed, relationship-coattendance.ts); row null = counted, never met. */
 export interface CoAttendanceView {
   observedSince: Date;
+  countedThrough: Date;
   row: { meetingCount: number; smallMeetingCount: number; lastMetAt: Date } | null;
 }
 
@@ -195,6 +201,7 @@ function coAttendanceFields(view: CoAttendanceView | undefined) {
       smallMeetingCount: null,
       lastMetAt: null,
       coAttendanceObservedSince: null,
+      coAttendanceCountedThrough: null,
     };
   }
   return {
@@ -202,6 +209,7 @@ function coAttendanceFields(view: CoAttendanceView | undefined) {
     smallMeetingCount: view.row?.smallMeetingCount ?? 0,
     lastMetAt: view.row ? view.row.lastMetAt.toISOString() : null,
     coAttendanceObservedSince: view.observedSince.toISOString(),
+    coAttendanceCountedThrough: view.countedThrough.toISOString(),
   };
 }
 
@@ -244,6 +252,7 @@ export const UNKNOWN_RELATIONSHIP: RelationshipSnapshot = {
   smallMeetingCount: null,
   lastMetAt: null,
   coAttendanceObservedSince: null,
+  coAttendanceCountedThrough: null,
 };
 
 const ISO_UTC_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
@@ -274,6 +283,7 @@ const DATE_FIELDS = [
   "firstSeenAt",
   "lastMetAt",
   "coAttendanceObservedSince",
+  "coAttendanceCountedThrough",
 ] as const;
 
 /** Read a stored snapshot back; null when the JSON is not a valid snapshot.

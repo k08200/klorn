@@ -1,23 +1,20 @@
 /**
  * Loads the rows behind a relationship snapshot (relationship.ts) for one
  * sender: the user's sent mail, the sender's mail, the user's sends in the
- * sender's threads, first contact, dismiss count, PIN_TIER and sender label.
+ * sender's threads, first contact, dismiss count, PIN_TIER, sender label and
+ * past calendar co-attendance (behind its gate, relationship-coattendance.ts).
  * Every query is scoped by userId (one user's ego network, never a cross-user
  * graph) and bounded. A failed lookup degrades that field to null (unknown);
  * it never throws, because the snapshot is context for the shadow, not a gate.
  */
 
-import { calendarCoattendanceEnabled } from "../../config.js";
 import { db } from "../../db.js";
 import { escapeLikePattern } from "../../db-like.js";
 import { senderLabelsFor } from "../../mail/sender-labels.js";
 import type { SentOrigin } from "../../mail/sent-messages.js";
-import { normalizeAttendeeEmail } from "../../pim/coattendance/coattendance-rules.js";
-import { COATTENDANCE_LOOKBACK_DAYS } from "../../pim/coattendance/coattendance-sync.js";
 import { isSenderAddressIndexEnabled, lookupPinnedTier } from "../judge-context.js";
 import {
   buildRelationshipSnapshot,
-  type CoAttendanceView,
   type InboundRow,
   type RelationshipSnapshot,
   type SentRow,
@@ -25,6 +22,12 @@ import {
   UNKNOWN_RELATIONSHIP,
   writtenTo,
 } from "./relationship.js";
+import {
+  type CoAttendanceDeps,
+  loadCoAttendance,
+  readCoAttendanceCoverage,
+  readCoAttendanceRow,
+} from "./relationship-coattendance.js";
 
 /**
  * Sends that count as "the user wrote to them" (doc §3(2), #1591/#1592):
@@ -53,7 +56,7 @@ export interface InboundCandidate extends InboundRow {
   fromAddress: string | null;
 }
 
-export interface RelationshipLoaderDeps {
+export interface RelationshipLoaderDeps extends CoAttendanceDeps {
   hasAnySent(userId: string): Promise<boolean>;
   /** Sent rows whose To may contain the address, newest first (exact match after). */
   sentRowsMentioning(userId: string, address: string): Promise<SentRow[]>;
@@ -72,73 +75,6 @@ export interface RelationshipLoaderDeps {
   /** Throws on a lookup failure (unknown), returns null for "no pin". */
   pinnedTier(userId: string, address: string): Promise<string | null>;
   senderCategory(userId: string, address: string): Promise<string | null>;
-  /** Stored past co-attendance; undefined = unknown (see latestObservedSince). */
-  coAttendance(
-    userId: string,
-    address: string,
-    userAddresses: readonly string[],
-  ): Promise<CoAttendanceView | undefined>;
-}
-
-/**
- * The window co-attendance counts cover: the latest observed-since marker,
- * only when EVERY Google calendar source has one (otherwise a contact seen
- * only in an unobserved calendar would read as 0). null = unknown.
- */
-export function latestObservedSince(sources: readonly (Date | null)[]): Date | null {
-  if (sources.length === 0 || sources.some((s) => s === null)) return null;
-  return new Date(Math.max(...(sources as Date[]).map((s) => s.getTime())));
-}
-
-/** A source whose last pass is older than the lookback has a counting gap its marker can't show. */
-const STALE_PASS_MS = COATTENDANCE_LOOKBACK_DAYS * 86_400_000;
-
-type SourceMarkers = {
-  coAttendanceObservedSince: Date | null;
-  coAttendanceLastPassAt: Date | null;
-};
-
-/** The source's observed-since day, or null when it is not being counted now. */
-function liveObservedSince(m: SourceMarkers, needsReconnect: boolean, now: number): Date | null {
-  if (needsReconnect || !m.coAttendanceObservedSince || !m.coAttendanceLastPassAt) return null;
-  return now - m.coAttendanceLastPassAt.getTime() > STALE_PASS_MS
-    ? null
-    : m.coAttendanceObservedSince;
-}
-
-const MARKERS = { coAttendanceObservedSince: true, coAttendanceLastPassAt: true } as const;
-
-async function loadCoAttendance(
-  userId: string,
-  address: string,
-  userAddresses: readonly string[],
-): Promise<CoAttendanceView | undefined> {
-  if (!calendarCoattendanceEnabled()) return undefined;
-  // The store never counts the user's own addresses or ones it can't normalise:
-  // for those a missing row means nothing, so they stay unknown.
-  const own = userAddresses.some((a) => a.trim().toLowerCase() === address);
-  if (own || normalizeAttendeeEmail(address) !== address) return undefined;
-  const [token, linked] = await Promise.all([
-    db.userToken.findUnique({
-      where: { userId_provider: { userId, provider: "google" } },
-      select: MARKERS,
-    }),
-    db.linkedCalendarAccount.findMany({
-      where: { userId, provider: "GOOGLE" },
-      select: { ...MARKERS, needsReconnect: true },
-    }),
-  ]);
-  const now = Date.now();
-  const observedSince = latestObservedSince([
-    ...(token ? [liveObservedSince(token, false, now)] : []),
-    ...linked.map((l) => liveObservedSince(l, l.needsReconnect, now)),
-  ]);
-  if (!observedSince) return undefined;
-  const row = await db.contactCoAttendance.findUnique({
-    where: { userId_contactEmail: { userId, contactEmail: address } },
-    select: { meetingCount: true, smallMeetingCount: true, lastMetAt: true },
-  });
-  return { observedSince, row };
 }
 
 export const prismaRelationshipDeps: RelationshipLoaderDeps = {
@@ -197,7 +133,8 @@ export const prismaRelationshipDeps: RelationshipLoaderDeps = {
   async senderCategory(userId, address) {
     return (await senderLabelsFor(userId, [address])).get(address) ?? null;
   },
-  coAttendance: loadCoAttendance,
+  coAttendanceCoverage: readCoAttendanceCoverage,
+  coAttendanceRow: readCoAttendanceRow,
 };
 
 export interface RelationshipLoadInput {
@@ -290,7 +227,10 @@ export async function loadRelationshipSnapshot(
       settle(() => deps.dismissCount(userId, sender), "dismiss"),
       settle(() => deps.pinnedTier(userId, sender), "pin"),
       settle(() => deps.senderCategory(userId, sender), "label"),
-      settle(() => deps.coAttendance(userId, sender, input.userAddresses), "co-attendance"),
+      settle(
+        () => loadCoAttendance(deps, userId, sender, input.userAddresses, new Date()),
+        "co-attendance",
+      ),
     ]);
   const userSent = await loadThreadSends(
     userId,

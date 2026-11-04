@@ -1,137 +1,244 @@
 /**
- * Co-attendance in the relationship loader (#1604 store): a missing contact row
- * is 0 meetings only when the flag is on and every Google calendar source is
- * observed and still being counted; otherwise the fields are unknown (null).
+ * Co-attendance in the relationship loader: the reader's gate (doc §3(2), "The
+ * reader's gate"). A missing ContactCoAttendance row is 0 meetings only when the
+ * flag is on, the watermark is fresh, every Google calendar source covers the full
+ * 30-day window, none awaits a reconnect, the user has no calendar the store does
+ * not count, and the sender is an address the store counts. Otherwise every
+ * co-attendance field is null (unknown), even when a row exists.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  type CoAttendanceCoverage,
+  type CoAttendanceRow,
+  coAttendanceWindow,
+} from "../judge/v3/relationship-coattendance.js";
+import {
+  loadRelationshipSnapshot,
+  type RelationshipLoaderDeps,
+} from "../judge/v3/relationship-loader.js";
+import type { CoverageSource } from "../pim/coattendance/coattendance-sources.js";
 
-const tokenFind = vi.hoisted(() => vi.fn());
-const linkedFind = vi.hoisted(() => vi.fn());
-const coFind = vi.hoisted(() => vi.fn());
-const enabled = vi.hoisted(() => vi.fn(() => true));
+const day = (iso: string) => new Date(`${iso}T00:00:00Z`);
+// Today is 2026-11-04 (UTC): the watermark may be as old as 11-02, and a source
+// covers the full window when it was observed on or before 10-05.
+const NOW = new Date("2026-11-04T10:00:00Z");
+const FRESH_PASS = new Date("2026-11-04T04:00:00Z");
 
-vi.mock("../db.js", () => ({
-  db: {
-    sentMessage: { findFirst: vi.fn(async () => null), findMany: vi.fn(async () => []) },
-    emailMessage: { findMany: vi.fn(async () => []) },
-    contactEngagementScore: { findUnique: vi.fn(async () => null) },
-    userToken: { findUnique: tokenFind },
-    linkedCalendarAccount: { findMany: linkedFind },
-    contactCoAttendance: { findUnique: coFind },
-  },
-  prisma: {},
-}));
-vi.mock("../config.js", async (orig) => ({
-  ...(await orig<typeof import("../config.js")>()),
-  calendarCoattendanceEnabled: enabled,
-}));
-vi.mock("../judge/judge-context.js", () => ({
-  lookupPinnedTier: vi.fn(async () => null),
-  isSenderAddressIndexEnabled: () => false,
-}));
-vi.mock("../mail/sender-labels.js", () => ({ senderLabelsFor: vi.fn(async () => new Map()) }));
-
-import { latestObservedSince, loadRelationshipSnapshot } from "../judge/v3/relationship-loader.js";
-
-const d = (iso: string) => new Date(iso);
-const recent = d("2026-11-02T06:00:00Z");
-const load = (senderAddress = "Kim <Kim@Partner.io>", userAddresses = ["me@acme.com"]) =>
-  loadRelationshipSnapshot({ userId: "u1", senderAddress, userAddresses });
-const source = (since: string | null, lastPass: Date | null = recent, needsReconnect = false) => ({
-  coAttendanceObservedSince: since ? d(since) : null,
-  coAttendanceLastPassAt: lastPass,
-  needsReconnect,
+const source = (over: Partial<CoverageSource> = {}): CoverageSource => ({
+  kind: "linked",
+  id: "lc1",
+  needsReconnect: false,
+  observedSince: day("2026-10-01"),
+  lastPassAt: FRESH_PASS,
+  ...over,
 });
 
+const coverage = (over: Partial<CoAttendanceCoverage> = {}): CoAttendanceCoverage => ({
+  countedThrough: day("2026-11-03"),
+  sources: [source({ kind: "primary", id: "tok1", observedSince: day("2026-09-20") }), source()],
+  hasNonGoogleSource: false,
+  ...over,
+});
+
+const ROW: CoAttendanceRow = {
+  meetingCount: 3,
+  smallMeetingCount: 2,
+  lastMetAt: day("2026-10-30"),
+};
+
+function deps(over: Partial<RelationshipLoaderDeps> = {}): RelationshipLoaderDeps {
+  return {
+    hasAnySent: vi.fn(async () => true),
+    sentRowsMentioning: vi.fn(async () => []),
+    inboundFrom: vi.fn(async () => []),
+    sentInThreads: vi.fn(async () => []),
+    dismissCount: vi.fn(async () => 0),
+    pinnedTier: vi.fn(async () => null),
+    senderCategory: vi.fn(async () => null),
+    coAttendanceCoverage: vi.fn(async () => coverage()),
+    coAttendanceRow: vi.fn(async () => null),
+    ...over,
+  };
+}
+
+const load = (
+  d: RelationshipLoaderDeps,
+  senderAddress = "Kim <Kim@Partner.io>",
+  userAddresses = ["me@acme.com"],
+) => loadRelationshipSnapshot({ userId: "u1", senderAddress, userAddresses }, d);
+
+const UNKNOWN = {
+  meetingCount: null,
+  smallMeetingCount: null,
+  lastMetAt: null,
+  coAttendanceObservedSince: null,
+  coAttendanceCountedThrough: null,
+  coAttendanceNext14d: null,
+};
+
 beforeEach(() => {
-  vi.clearAllMocks();
-  vi.useFakeTimers({ now: d("2026-11-03T00:00:00Z"), toFake: ["Date"] });
-  enabled.mockReturnValue(true);
-  tokenFind.mockResolvedValue(source("2026-10-02T00:00:00Z"));
-  linkedFind.mockResolvedValue([source("2026-10-05T00:00:00Z")]);
-  coFind.mockResolvedValue(null);
+  vi.stubEnv("CALENDAR_COATTENDANCE_ENABLED", "true");
+  vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
 });
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllEnvs();
 });
 
-describe("latestObservedSince", () => {
-  it("is the latest marker when every source has one, in any order; else null", () => {
-    const later = d("2026-10-05T00:00:00Z");
-    expect(latestObservedSince([d("2026-10-02T00:00:00Z"), later])).toEqual(later);
-    expect(latestObservedSince([later, d("2026-10-02T00:00:00Z")])).toEqual(later);
-    expect(latestObservedSince([d("2026-10-02T00:00:00Z"), null])).toBeNull();
-    expect(latestObservedSince([])).toBeNull();
-  });
-});
-
-describe("co-attendance in the relationship snapshot", () => {
-  it("every source observed and no row: 0 meetings, window from the latest marker", async () => {
-    expect(await load()).toMatchObject({
+describe("co-attendance gate passes", () => {
+  it("no row: 0 meetings, 0 small, no last day; window [latest marker, watermark]", async () => {
+    const d = deps();
+    expect(await load(d)).toMatchObject({
       meetingCount: 0,
       smallMeetingCount: 0,
       lastMetAt: null,
-      coAttendanceObservedSince: "2026-10-05T00:00:00.000Z",
+      coAttendanceObservedSince: "2026-10-01T00:00:00.000Z",
+      coAttendanceCountedThrough: "2026-11-03T00:00:00.000Z",
+      coAttendanceNext14d: null,
     });
-    const where = (m: typeof coFind) =>
-      (m.mock.calls[0] as unknown as [{ where: unknown }])[0].where;
-    expect(where(coFind)).toEqual({
-      userId_contactEmail: { userId: "u1", contactEmail: "kim@partner.io" },
-    });
-    expect(where(tokenFind)).toEqual({ userId_provider: { userId: "u1", provider: "google" } });
-    expect(where(linkedFind)).toMatchObject({ userId: "u1", provider: "GOOGLE" });
+    expect(d.coAttendanceCoverage).toHaveBeenCalledWith("u1");
+    expect(d.coAttendanceRow).toHaveBeenCalledWith("u1", "kim@partner.io");
   });
 
-  it("passes stored counts through", async () => {
-    coFind.mockResolvedValue({
-      meetingCount: 3,
-      smallMeetingCount: 2,
-      lastMetAt: d("2026-10-30T00:00:00Z"),
-    });
-    expect(await load()).toMatchObject({
+  it("a row: its raw values", async () => {
+    const d = deps({ coAttendanceRow: vi.fn(async () => ROW) });
+    expect(await load(d)).toMatchObject({
       meetingCount: 3,
       smallMeetingCount: 2,
       lastMetAt: "2026-10-30T00:00:00.000Z",
+      coAttendanceObservedSince: "2026-10-01T00:00:00.000Z",
+      coAttendanceCountedThrough: "2026-11-03T00:00:00.000Z",
+      coAttendanceNext14d: null,
     });
   });
 
-  it("unknown when the flag is off, without reading anything", async () => {
-    enabled.mockReturnValue(false);
-    expect((await load()).meetingCount).toBeNull();
-    expect(tokenFind).not.toHaveBeenCalled();
-    expect(linkedFind).not.toHaveBeenCalled();
-    expect(coFind).not.toHaveBeenCalled();
+  it("at the edges: watermark exactly today − 2, a source observed exactly today − 30", async () => {
+    const edge = coverage({
+      countedThrough: day("2026-11-02"),
+      sources: [source({ kind: "primary", id: "tok1", observedSince: day("2026-10-05") })],
+    });
+    const s = await load(deps({ coAttendanceCoverage: vi.fn(async () => edge) }));
+    expect(s).toMatchObject({
+      meetingCount: 0,
+      coAttendanceObservedSince: "2026-10-05T00:00:00.000Z",
+    });
+  });
+});
+
+describe("co-attendance gate fails: every field null, even with a row", () => {
+  const failing = async (cov: CoAttendanceCoverage) => {
+    const d = deps({
+      coAttendanceCoverage: vi.fn(async () => cov),
+      coAttendanceRow: vi.fn(async () => ROW),
+    });
+    const s = await load(d);
+    expect(s).toMatchObject(UNKNOWN);
+    // The counts may be incomplete, so the row is never read.
+    expect(d.coAttendanceRow).not.toHaveBeenCalled();
+  };
+
+  it("1. the flag is off: nothing is read", async () => {
+    vi.stubEnv("CALENDAR_COATTENDANCE_ENABLED", "");
+    const d = deps({ coAttendanceRow: vi.fn(async () => ROW) });
+    expect(await load(d)).toMatchObject(UNKNOWN);
+    expect(d.coAttendanceCoverage).not.toHaveBeenCalled();
+    expect(d.coAttendanceRow).not.toHaveBeenCalled();
   });
 
-  it("unknown when any source is unobserved, awaiting reconnect, or stopped being counted", async () => {
-    linkedFind.mockResolvedValueOnce([source(null)]);
-    expect((await load()).meetingCount).toBeNull();
-    linkedFind.mockResolvedValueOnce([source("2026-10-05T00:00:00Z", recent, true)]);
-    expect((await load()).meetingCount).toBeNull();
-    tokenFind.mockResolvedValueOnce(source(null, null));
-    expect((await load()).meetingCount).toBeNull();
-    // Last pass older than the 30-day lookback: there is a hole the marker can't show.
-    tokenFind.mockResolvedValueOnce(source("2026-09-01T00:00:00Z", d("2026-09-20T00:00:00Z")));
-    expect((await load()).meetingCount).toBeNull();
+  it("2. no watermark yet", async () => {
+    await failing(coverage({ countedThrough: null }));
   });
 
-  it("unknown when the user has no Google calendar at all", async () => {
-    tokenFind.mockResolvedValue(null);
-    linkedFind.mockResolvedValue([]);
-    expect((await load()).meetingCount).toBeNull();
+  it("2. probe C: a watermark 3 days old, though every source's last pass is fresh", async () => {
+    await failing(coverage({ countedThrough: day("2026-11-01") }));
   });
 
-  it("unknown for addresses the store never counts: the user's own, or non-ASCII", async () => {
-    expect((await load("Me <ME@acme.com>")).meetingCount).toBeNull();
-    expect((await load("josé@exemplo.com.br")).meetingCount).toBeNull();
-    expect(coFind).not.toHaveBeenCalled();
+  it("3. a Google source never observed", async () => {
+    await failing(
+      coverage({
+        sources: [source({ kind: "primary", id: "tok1" }), source({ observedSince: null })],
+      }),
+    );
   });
 
-  it("unknown, not a throw, when the lookup fails", async () => {
-    coFind.mockRejectedValue(new Error("db down"));
-    const s = await load();
-    expect(s.meetingCount).toBeNull();
-    expect(s.coAttendanceObservedSince).toBeNull();
+  it("3. a Google source observed for less than the full window (today − 29)", async () => {
+    await failing(coverage({ sources: [source({ observedSince: day("2026-10-06") })] }));
+  });
+
+  it("3. probe A: a source that joined later (observed since yesterday)", async () => {
+    await failing(
+      coverage({
+        sources: [
+          source({ kind: "primary", id: "tok1", observedSince: day("2026-09-20") }),
+          source({ id: "lc2", observedSince: day("2026-11-03") }),
+        ],
+      }),
+    );
+  });
+
+  it("3. the user has no Google calendar source at all", async () => {
+    await failing(coverage({ sources: [] }));
+  });
+
+  it("4. a Google source awaiting reconnect, though its marker covers the window", async () => {
+    await failing(coverage({ sources: [source({ needsReconnect: true })] }));
+  });
+
+  it("5. the user has a calendar the store does not count (Outlook, CalDAV, device)", async () => {
+    await failing(coverage({ hasNonGoogleSource: true }));
+  });
+
+  it("6. the sender is one of the user's own addresses: nothing is read", async () => {
+    const d = deps({ coAttendanceRow: vi.fn(async () => ROW) });
+    expect(await load(d, "Me <ME@acme.com>", [" Me@Acme.com "])).toMatchObject(UNKNOWN);
+    expect(d.coAttendanceCoverage).not.toHaveBeenCalled();
+    expect(d.coAttendanceRow).not.toHaveBeenCalled();
+  });
+
+  it("6. the sender's address cannot be normalised by the store: nothing is read", async () => {
+    const d = deps({ coAttendanceRow: vi.fn(async () => ROW) });
+    expect(await load(d, "josé@exemplo.com.br")).toMatchObject(UNKNOWN);
+    expect(d.coAttendanceCoverage).not.toHaveBeenCalled();
+  });
+
+  it("a failed lookup is unknown, not a throw", async () => {
+    const coverageDown = deps({
+      coAttendanceCoverage: vi.fn(async () => Promise.reject(new Error("db"))),
+    });
+    expect(await load(coverageDown)).toMatchObject(UNKNOWN);
+    const rowDown = deps({ coAttendanceRow: vi.fn(async () => Promise.reject(new Error("db"))) });
+    expect(await load(rowDown)).toMatchObject(UNKNOWN);
+  });
+});
+
+describe("coAttendanceWindow (the pure gate, conditions 2-5)", () => {
+  it("is [latest marker, watermark], whatever the source order", () => {
+    const a = source({ kind: "primary", id: "tok1", observedSince: day("2026-09-01") });
+    const b = source({ observedSince: day("2026-10-02") });
+    const expected = { observedSince: day("2026-10-02"), countedThrough: day("2026-11-03") };
+    expect(coAttendanceWindow(coverage({ sources: [a, b] }), NOW)).toEqual(expected);
+    expect(coAttendanceWindow(coverage({ sources: [b, a] }), NOW)).toEqual(expected);
+  });
+
+  it("is null when any condition fails", () => {
+    expect(coAttendanceWindow(coverage({ countedThrough: day("2026-11-01") }), NOW)).toBeNull();
+    expect(
+      coAttendanceWindow(
+        coverage({ sources: [source({ observedSince: day("2026-11-03") })] }),
+        NOW,
+      ),
+    ).toBeNull();
+    expect(
+      coAttendanceWindow(coverage({ sources: [source({ needsReconnect: true })] }), NOW),
+    ).toBeNull();
+    expect(coAttendanceWindow(coverage({ hasNonGoogleSource: true }), NOW)).toBeNull();
+    expect(coAttendanceWindow(coverage({ sources: [] }), NOW)).toBeNull();
+  });
+
+  it("does not use a source's last pass time: a stale one does not fail the gate", () => {
+    // Freshness is the watermark's job (probe C); lastPassAt is the job's interval.
+    const stale = source({ lastPassAt: new Date("2026-09-01T00:00:00Z") });
+    expect(coAttendanceWindow(coverage({ sources: [stale] }), NOW)).not.toBeNull();
   });
 });
