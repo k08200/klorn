@@ -279,6 +279,7 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
           subject,
           sentAt: new Date(),
           inbox: linkedId ?? "primary",
+          origin: "user",
         });
       }
       return receipt ? { ...result, receipt: sendReceiptWire(receipt) } : result;
@@ -394,6 +395,7 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
           subject,
           sentAt: new Date(),
           inbox: "primary",
+          origin: "user",
         });
       }
       return { ...result, attachedCount: attachments.length };

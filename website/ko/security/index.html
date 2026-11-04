@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>보안 — Klorn</title>
+<meta name="description" content="Google OAuth 검증, CASA Tier 2 독립 평가, 그리고 Klorn의 아키텍처가 실제로 보장하는 것: AES-256-GCM 토큰 암호화, 해시로 고정한 승인 영수증, 대응 범위 안의 위협으로 다루는 프롬프트 인젝션, 각 주장을 구현한 파일.">
+<meta property="og:title" content="보안 — Klorn">
+<meta property="og:description" content="Google OAuth 검증, CASA Tier 2 독립 평가, 그리고 Klorn의 아키텍처가 실제로 보장하는 것: AES-256-GCM 토큰 암호화, 해시로 고정한 승인 영수증, 대응 범위 안의 위협으로 다루는 프롬프트 인젝션, 각 주장을 구현한 파일.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://klorn.ai/ko/security/">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:image" content="https://klorn.ai/brand/og-image.png?v=k2">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="보안 — Klorn">
+<meta name="twitter:description" content="Google OAuth 검증, CASA Tier 2 독립 평가, 그리고 Klorn의 아키텍처가 실제로 보장하는 것: AES-256-GCM 토큰 암호화, 해시로 고정한 승인 영수증, 대응 범위 안의 위협으로 다루는 프롬프트 인젝션, 각 주장을 구현한 파일.">
+<meta name="twitter:image" content="https://klorn.ai/brand/og-image.png?v=k2">
+<link rel="canonical" href="https://klorn.ai/ko/security/">
+<link rel="alternate" hreflang="en" href="https://klorn.ai/security/">
+<link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/security/">
+<link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/security/">
+<link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/security/">
+<link rel="alternate" hreflang="es" href="https://klorn.ai/es/security/">
+<link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/security/">
+<link rel="alternate" hreflang="de" href="https://klorn.ai/de/security/">
+<link rel="alternate" hreflang="x-default" href="https://klorn.ai/security/">
+<link rel="preload" as="font" type="font/woff2" href="/fonts/geist-var.woff2" crossorigin>
+<link rel="stylesheet" href="/fonts/pretendard/pretendard.css">
+<link rel="icon" href="/brand/favicon.svg?v=matte2" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png?v=matte2">
+<link rel="stylesheet" href="/landing.css">
+<link rel="stylesheet" href="/subpage.css">
+<script src="/site-nav.js" defer></script>
+</head>
+<body class="sub">
+<a class="skip" href="#main">본문으로 건너뛰기</a>
+
+<nav class="nav" aria-label="메인"><div class="nav-pill">
+  <a class="nav-brand" href="/ko/">Klorn</a>
+  <button type="button" class="nav-menu-btn" data-menu-toggle aria-expanded="false" aria-controls="nav-menu" aria-label="메뉴"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <span class="nav-links" id="nav-menu" role="group" aria-label="섹션" data-site-nav><a href="/ko/#accounts">계정</a><a href="/ko/#lanes">레인</a><a href="/ko/pricing/">요금</a><a href="/ko/security/" aria-current="page">보안</a><a href="/ko/blog/">블로그</a></span>
+  <span class="nav-lang">
+    <button type="button" class="nav-lang-btn" data-menu-toggle
+            aria-haspopup="true" aria-expanded="false" aria-controls="lang-menu">한국어 <i aria-hidden="true">▾</i></button>
+    <span class="nav-lang-menu" id="lang-menu" role="menu">
+      <a href="/security/" role="menuitem" lang="en">English</a>
+      <a href="/ko/security/" role="menuitem" lang="ko" aria-current="true">한국어</a>
+      <a href="/ja/security/" role="menuitem" lang="ja">日本語</a>
+      <a href="/zh/security/" role="menuitem" lang="zh">中文</a>
+      <a href="/es/security/" role="menuitem" lang="es">Español</a>
+      <a href="/fr/security/" role="menuitem" lang="fr">Français</a>
+      <a href="/de/security/" role="menuitem" lang="de">Deutsch</a>
+    </span>
+  </span>
+  <a class="nav-login" href="https://app.klorn.ai/login">로그인</a>
+  <a class="nav-cta dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
+     data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.2.0/Klorn-windows-setup.exe" data-win-label="다운로드">다운로드</a>
+</div></nav>
+
+<main id="main">
+<header class="sub-hero" id="top">
+  <div class="wrap">
+    <span class="eyebrow">보안</span>
+    <h1>&ldquo;믿어 주세요&rdquo;는 <span class="ser">답이 아닙니다.</span></h1>
+    <p class="lead">Klorn은 내가 읽지 않아도 되도록 다른 사람들이 보낸 메일을 대신 읽습니다. 그 문장이 <em>곧</em> 위협 모델입니다. 주된 입력은 낯선 사람이 쓴 텍스트이고, 그중 일부는 악의적입니다. 아키텍처가 실제로 보장하는 것을, 각각을 구현한 파일과 함께 정리했습니다.</p>
+    <p>이 번역은 편의를 위해 제공되며, 영문판이 우선합니다. <a href="/security/" lang="en" hreflang="en">영문판 보기</a></p>
+  </div>
+</header>
+
+<section class="sec" id="verification" aria-labelledby="google-verification">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2 id="google-verification">Google 검증과 독립 평가</h2>
+    </div>
+    <div class="prose">
+      <p>Google은 <strong>2026-10-03</strong>에 Klorn에 대한 OAuth 검증 심사를 마쳤습니다. 그에 앞서 Klorn은 TAC Security로부터 <strong>CASA Tier 2</strong> 기준 독립 평가를 받았고, 결과는 <strong>In Compliance</strong>(적합)였습니다. 이 평가의 검증 서한(Letter of Validation)은 이후 Google에 제출되었습니다.</p>
+    </div>
+    <dl class="kv">
+    <div><dt>평가</dt><dd>CASA Tier 2, 동적 애플리케이션 보안 테스트(DAST), TAC Security 수행</dd></div>
+    <div><dt>결과</dt><dd>In Compliance(적합), 보증 수준 AL1(OWASP ASVS Level 1)</dd></div>
+    <div><dt>날짜</dt><dd>2026-08-12 평가 · 2026-08-30 보고서 발행 · 2026-10-03 Google 심사 완료</dd></div>
+    <div><dt>재평가</dt><dd>매년. 다음 평가는 2027년 8월 예정</dd></div>
+  </dl>
+
+    <div class="prose">
+      <h3>Google 권한 범위(scope) 다섯 개와 각각의 이유</h3>
+      <p>이 다섯 개가 해당 심사에서 승인된 Google 권한 범위이며, Klorn이 요청하는 메일·캘린더 권한 범위의 전부입니다. Gmail 전체 접근 권한은 요청하지 않으며, 캘린더는 <code>calendar.events</code>와 <code>calendar.readonly</code>만 요청합니다 — 캘린더 전체 권한은 요청하지 않습니다.</p>
+    </div>
+    <dl class="kv kv-code">
+    <div><dt><code>gmail.readonly</code></dt><dd>Klorn이 메일을 분류하고, 각 판단의 이유를 보여 주고, 요청할 때 스레드를 요약할 수 있도록 메일을 읽습니다.</dd></div>
+    <div><dt><code>gmail.modify</code></dt><dd>Klorn에서 내가 조작할 때 메일 상태를 바꿉니다: 보관 또는 보관 해제, 휴지통으로 이동 또는 복원, 별표, 읽음 또는 안 읽음 표시, Gmail에 답장 초안 저장.</dd></div>
+    <div><dt><code>gmail.send</code></dt><dd>내가 승인할 때만 메일을 보냅니다 — 내가 확인한 답장, 내가 요청한 mailto 구독 해지 — 또는 내가 직접 정한 규칙에 따른 자동 답장.</dd></div>
+    <div><dt><code>calendar.readonly</code></dt><dd>모든 캘린더의 바쁨/한가함 정보를 읽어, 회의 메일을 실제 일정과 대조하고 겹치는 일정을 잡아냅니다.</dd></div>
+    <div><dt><code>calendar.events</code></dt><dd>Klorn에 요청할 때 기본 캘린더에서 일정을 만들거나 바꾸거나 지웁니다 — 캘린더 설정이나 공유는 건드리지 않습니다.</dd></div>
+  </dl>
+    <div class="prose">
+      <p>Google로 로그인할 때는 이름과 이메일만 요청합니다. 메일과 캘린더 권한 범위는 나중에, 메일함을 연결할 때 두 번째 동의 화면에서 요청합니다. 캘린더만 연결할 때는 메일 권한 없이 <code>calendar.readonly</code>만 요청합니다. (<code>openid</code>와 <code>userinfo.email</code>/<code>userinfo.profile</code>도 그 파일에 나옵니다. 어떤 계정으로 로그인했는지 식별하는 용도로, 민감 정보가 아니며 Google 심사 대상에 포함되지 않습니다.)</p>
+      <h3>데이터가 가는 곳</h3>
+      <p>OAuth 토큰은 저장 전에 AES-256-GCM으로 암호화되고, 모든 호스팅 환경은 TLS로만 통신하며, 분석 데이터에는 메일 내용이 절대 포함되지 않습니다 — 각 항목을 구현한 파일은 아래 표에 있습니다. 로그는 <a href="#retention">보관 기간</a>에 적힌 고정 일정에 따라 만료됩니다. 메일이 우리 서버를 아예 거치지 않기를 원한다면, 같은 코드를 <a href="/ko/self-host/">직접 설치</a>해서 내 모델 키나 <a href="/blog/local-llm-email-triage-ollama/">로컬 모델</a>로 돌리세요. 개인정보처리방침은 <a href="/privacy/">/privacy</a>에 있습니다.</p>
+    </div>
+    <p class="not"><strong>이것이 의미하는 것과 의미하지 않는 것.</strong> 심사와 평가는 Klorn이 요청하는 Google 데이터를 어떻게 다루는지를 확인합니다. Google이 Klorn을 보증한다는 뜻이 아니며, 해당 권한 범위 밖의 것은 다루지 않습니다. 현재 연결할 수 있는 것은 Gmail, Google 캘린더, 네이버 메일(베타), iCloud 메일(베타)이며, 다른 메일 서비스는 아직 지원하지 않습니다.</p>
+  </div>
+</section>
+
+<section class="sec sec-alt" id="guarantees" aria-labelledby="guarantees-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2 id="guarantees-h">아키텍처가 보장하는 것</h2>
+    </div>
+    <div class="table-scroll" tabindex="0" role="region" aria-labelledby="guarantees-h">
+    <table class="spec">
+      <thead><tr><th>항목</th><th>실제로 사실인 것</th><th>확인할 곳</th></tr></thead>
+      <tbody>
+      <tr><th>메일은 적대적 입력</th><td class="us">모든 메일 본문, 제목, 제3자 문자열은 모델에 닿기 전에 <code>&lt;untrusted_content&gt;</code> 표지로 감싸지며, 조작된 메시지가 감싸기를 닫지 못하도록 기존 감싸기 태그를 먼저 제거합니다. <strong>프롬프트 인젝션은 받아들인 한계가 아니라 대응 범위 안에 있습니다</strong></td><td><a href="https://github.com/k08200/klorn/blob/main/SECURITY.md" rel="noreferrer noopener">SECURITY.md</a></td></tr>
+      <tr><th>저장 시 토큰 암호화</th><td class="us">토큰이 데이터베이스에 닿기 전에 <strong>AES-256-GCM</strong>으로 암호화하며, 키링 교체(v1/v2 봉투)를 지원해 유출이 의심되면 일괄 전환일 없이 키를 교체합니다. dev/test 밖에서 키가 없으면 대체 동작으로 넘어가지 않고 <strong>부팅을 중단</strong>합니다</td><td><a href="https://github.com/k08200/klorn/blob/main/packages/api/src/crypto-tokens.ts" rel="noreferrer noopener">crypto-tokens.ts</a></td></tr>
+      <tr id="approvals"><th>외부로 나가는 작업</th><td class="us">보내기, 영구 삭제, 외부 전달은 분류기의 확신도만으로 실행될 수 없습니다. 각 작업에는 승인 시점에 발급되어 <strong>정규화한 페이로드의 sha256</strong>을 고정하는 영수증이 필요하고, 실행 시점에 다시 검증합니다. 그 사이에 무엇이든 바뀌었으면 작업은 거부됩니다</td><td><a href="https://github.com/k08200/klorn/blob/main/packages/api/src/judge/attention-floor.ts" rel="noreferrer noopener">attention-floor.ts</a></td></tr>
+      <tr><th>개발용 편의 기능</th><td class="us">개발용 JWT 시크릿, 개발용 암호화 키, localhost CORS, 데모 사용자는 dev/test 허용 목록 뒤에 있으며, 그 밖의 모든 <code>NODE_ENV</code>에서는 <strong>닫힌 쪽으로 실패</strong>합니다</td><td><a href="https://github.com/k08200/klorn/blob/main/packages/api/src/env.ts" rel="noreferrer noopener">env.ts</a></td></tr>
+      <tr><th>분석</th><td class="us"><strong>자체 수집만.</strong> Klorn 자체 Postgres에 저장되는, 짧은 허용 목록의 대략적인 이벤트 이름뿐입니다. 외부 추적기는 없고, 메일 내용은 절대 포함되지 않습니다</td><td><a href="https://github.com/k08200/klorn/blob/main/packages/api/src/analytics.ts" rel="noreferrer noopener">analytics.ts</a></td></tr>
+      <tr><th>전송 중 암호화</th><td class="us">모든 호스팅 환경에서 TLS만 사용 — API, 웹, Google API, 모델 제공사</td><td><a href="https://github.com/k08200/klorn/blob/main/docs/self-hosting.md" rel="noreferrer noopener">self-hosting.md</a></td></tr>
+    </tbody>
+    </table>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="retention-sec" aria-labelledby="retention">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2 id="retention">보관 기간</h2>
+    </div>
+    <div class="prose"><p>로그 보관 기간은 약속이 아니라 예약된 정리 작업으로 강제됩니다. 에이전트 작업, 메일 처리, 푸시 전송, 웹훅 원장은 <strong>90일</strong> 뒤, 요청 한도 기록은 <strong>30일</strong> 뒤, 토큰 사용량 기록은 비용 변동 분석을 위해 <strong>180일</strong> 뒤 삭제됩니다. 이 기간은 소스 코드 안의 표이지, diff에 드러나지 않게 몰래 늘릴 수 있는 설정이 아닙니다.</p>
+      <h3>취약점 신고</h3>
+      <p>설명과 재현 절차를 적어 <a href="mailto:k0820086@gmail.com">k0820086@gmail.com</a>으로 메일을 보내 주세요. 악용 가능한 문제는 공개 이슈로 올리지 말아 주세요. 며칠 안에 접수 확인을 드리며, 승인 하한과 토큰 암호화 경로에 대한 수정이 무엇보다 우선합니다. 기계가 읽을 수 있는 연락처 정보는 <a href="/.well-known/security.txt">/.well-known/security.txt</a>에 있습니다.</p>
+    </div>
+    <div class="not"><p><strong>주장하지 않는 것.</strong> 위의 CASA Tier 2 평가 외에, Klorn은 제3자 침투 테스트나 SOC 2 감사를 받은 적이 없으며, 이 페이지는 그런 것을 암시하지 않습니다. 혼자 유지보수하는 베타 제품입니다. 이를 보완하는 장치는 코드가 AGPL-3.0이고 보안 관련 경로를 위에 파일 단위로 밝혀 두었다는 점입니다 — 우리 말을 믿는 대신 직접 읽어 보실 수 있습니다.</p><p><a href="https://github.com/k08200/klorn/blob/main/SECURITY.md" rel="noreferrer noopener">SECURITY.md</a>에 더 긴 버전이 있으며, 생략하지 않고 밝히기로 한 알려진 공백도 함께 적혀 있습니다.</p></div>
+    <div class="actions actions-left">
+      <a class="btn btn-1" href="https://app.klorn.ai/login?mode=register">Klorn 무료로 써보기</a>
+      <a class="btn btn-2" href="mailto:k0820086@gmail.com">문제 신고</a>
+    </div>
+  </div>
+</section>
+</main>
+<footer class="foot">
+  <div class="wrap foot-grid">
+    <div>
+      <a class="brand" href="/ko/">Klorn</a>
+      <p class="foot-note">메일과 캘린더를 한 곳에서, 이유와 함께 정리합니다. 오픈소스.</p>
+      <div class="socials">
+        <a href="https://github.com/k08200/klorn" rel="noreferrer noopener" aria-label="GitHub"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a>
+        <a href="https://x.com/klornai" rel="noreferrer noopener" aria-label="X"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+        <a href="https://join.slack.com/t/klorn/shared_invite/zt-3zkj8lqxg-L4LK8dNPkzgupHEdmXgbIg" rel="noreferrer noopener" aria-label="Slack"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52zm1.271 0a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52zm0 1.271a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522zm-1.268 0a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522zm0-1.268a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523z"/></svg></a>
+      </div>
+    </div>
+    <nav aria-label="제품"><h4>제품</h4>
+      <a href="/ko/download/">모든 다운로드</a>
+      <a href="/ko/pricing/">요금</a>
+      <a href="https://app.klorn.ai/login">로그인</a>
+      <a href="/ko/status/">서비스 상태</a>
+      <a href="/ko/blog/">블로그</a></nav>
+    <nav aria-label="오픈소스"><h4>오픈소스</h4>
+      <a href="https://github.com/k08200/klorn" rel="noreferrer noopener">GitHub 저장소</a>
+      <a href="https://github.com/k08200/klorn/releases/latest" rel="noreferrer noopener">릴리스</a>
+      <a href="https://github.com/k08200/klorn/tree/main/packages/api/eval" rel="noreferrer noopener">평가 세트</a>
+      <a href="/ko/methodology/">측정 방법</a>
+      <a href="https://github.com/k08200/klorn/blob/main/LICENSE" rel="noreferrer noopener">AGPLv3 라이선스</a>
+      <a href="/ko/open-source/">추가 조항 없는 AGPL인 이유</a>
+      <a href="/ko/self-host/">직접 설치</a></nav>
+    <nav aria-label="비교"><h4>비교</h4>
+      <a href="/ko/vs/fyxer/">Fyxer와 비교</a>
+      <a href="/ko/vs/superhuman/">Superhuman과 비교</a>
+      <a href="/ko/vs/sanebox/">SaneBox와 비교</a>
+      <a href="/ko/vs/inbox-zero/">Inbox Zero와 비교</a></nav>
+    <nav aria-label="법적 고지"><h4>법적 고지</h4>
+      <a href="https://app.klorn.ai/privacy">개인정보처리방침</a>
+      <a href="https://app.klorn.ai/terms">이용약관</a>
+      <a href="https://app.klorn.ai/refund">환불 정책</a>
+      <a href="/ko/security/" aria-current="page">보안</a>
+      <a href="/ko/gdpr/">GDPR</a>
+      <a href="/ko/dpa/">DPA</a>
+      <a href="mailto:k0820086@gmail.com">문의</a></nav>
+  </div>
+  <div class="wrap foot-base">
+    <span>© 2026 Klorn · AGPLv3</span>
+  </div>
+</footer>
+<script>
+// Windows visitors get the installer: /site-nav.js swaps the href on every
+// .dl-cta, and this swaps the label to match. Same block as the landings.
+(function () {
+  var uaData = navigator.userAgentData;
+  var raw = String((uaData && uaData.platform) || navigator.platform || navigator.userAgent || '');
+  if (!/win/i.test(raw) || /mac|iphone|ipad|ipod/i.test(raw)) return;
+  document.querySelectorAll('[data-mac-dl]').forEach(function (a) {
+    var label = a.getAttribute('data-win-label');
+    if (!label) return;
+    Array.prototype.forEach.call(a.childNodes, function (n) {
+      if (n.nodeType !== 3 || !n.textContent.trim()) return;
+      var pad = n.textContent.match(/^(\s*)[\s\S]*?(\s*)$/);
+      n.textContent = pad[1] + label + pad[2];
+    });
+  });
+})();
+</script>
+<script>
+// Inflow attribution: utm_campaign and friends, the referrer and this page's
+// path ride along on every app.klorn.ai link, so a signup can be credited to
+// the page that earned it.
+(function () {
+  try {
+    var p = new URLSearchParams(location.search);
+    var q = [];
+    ["utm_source", "utm_medium", "utm_campaign", "utm_content"].forEach(function (k) {
+      var v = p.get(k);
+      if (v) q.push(k + "=" + encodeURIComponent(v.slice(0, 60)));
+    });
+    if (document.referrer) {
+      try {
+        var h = new URL(document.referrer).hostname;
+        if (h && h !== location.hostname) q.push("ref=" + encodeURIComponent(h));
+      } catch (e) {}
+    }
+    q.push("lp=" + encodeURIComponent(location.pathname.slice(0, 60)));
+    var qs = q.join("&");
+    document.querySelectorAll('a[href^="https://app.klorn.ai/"]').forEach(function (a) {
+      a.href += (a.href.indexOf("?") === -1 ? "?" : "&") + qs;
+    });
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>

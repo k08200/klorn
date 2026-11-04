@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>安全 — Klorn</title>
+<meta name="description" content="Google OAuth 验证、独立的 CASA Tier 2 评估，以及 Klorn 架构实际能保证的内容：AES-256-GCM 令牌加密、以哈希锁定的批准回执、把提示注入纳入防御范围，以及实现每一项主张的文件。">
+<meta property="og:title" content="安全 — Klorn">
+<meta property="og:description" content="Google OAuth 验证、独立的 CASA Tier 2 评估，以及 Klorn 架构实际能保证的内容：AES-256-GCM 令牌加密、以哈希锁定的批准回执、把提示注入纳入防御范围，以及实现每一项主张的文件。">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://klorn.ai/zh/security/">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://klorn.ai/brand/og-image.png?v=k2">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="安全 — Klorn">
+<meta name="twitter:description" content="Google OAuth 验证、独立的 CASA Tier 2 评估，以及 Klorn 架构实际能保证的内容：AES-256-GCM 令牌加密、以哈希锁定的批准回执、把提示注入纳入防御范围，以及实现每一项主张的文件。">
+<meta name="twitter:image" content="https://klorn.ai/brand/og-image.png?v=k2">
+<link rel="canonical" href="https://klorn.ai/zh/security/">
+<link rel="alternate" hreflang="en" href="https://klorn.ai/security/">
+<link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/security/">
+<link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/security/">
+<link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/security/">
+<link rel="alternate" hreflang="es" href="https://klorn.ai/es/security/">
+<link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/security/">
+<link rel="alternate" hreflang="de" href="https://klorn.ai/de/security/">
+<link rel="alternate" hreflang="x-default" href="https://klorn.ai/security/">
+<link rel="preload" as="font" type="font/woff2" href="/fonts/geist-var.woff2" crossorigin>
+<link rel="icon" href="/brand/favicon.svg?v=matte2" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png?v=matte2">
+<link rel="stylesheet" href="/landing.css">
+<link rel="stylesheet" href="/subpage.css">
+<script src="/site-nav.js" defer></script>
+</head>
+<body class="sub">
+<a class="skip" href="#main">跳到正文</a>
+
+<nav class="nav" aria-label="主导航"><div class="nav-pill">
+  <a class="nav-brand" href="/zh/">Klorn</a>
+  <button type="button" class="nav-menu-btn" data-menu-toggle aria-expanded="false" aria-controls="nav-menu" aria-label="菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <span class="nav-links" id="nav-menu" role="group" aria-label="页面板块" data-site-nav><a href="/zh/#accounts">账户</a><a href="/zh/#lanes">分类</a><a href="/zh/pricing/">定价</a><a href="/zh/security/" aria-current="page">安全</a><a href="/zh/blog/">博客</a></span>
+  <span class="nav-lang">
+    <button type="button" class="nav-lang-btn" data-menu-toggle
+            aria-haspopup="true" aria-expanded="false" aria-controls="lang-menu">中文 <i aria-hidden="true">▾</i></button>
+    <span class="nav-lang-menu" id="lang-menu" role="menu">
+      <a href="/security/" role="menuitem" lang="en">English</a>
+      <a href="/ko/security/" role="menuitem" lang="ko">한국어</a>
+      <a href="/ja/security/" role="menuitem" lang="ja">日本語</a>
+      <a href="/zh/security/" role="menuitem" lang="zh" aria-current="true">中文</a>
+      <a href="/es/security/" role="menuitem" lang="es">Español</a>
+      <a href="/fr/security/" role="menuitem" lang="fr">Français</a>
+      <a href="/de/security/" role="menuitem" lang="de">Deutsch</a>
+    </span>
+  </span>
+  <a class="nav-login" href="https://app.klorn.ai/login">登录</a>
+  <a class="nav-cta dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
+     data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.2.0/Klorn-windows-setup.exe" data-win-label="下载">下载</a>
+</div></nav>
+
+<main id="main">
+<header class="sub-hero" id="top">
+  <div class="wrap">
+    <span class="eyebrow">安全</span>
+    <h1>&ldquo;相信我们&rdquo;<span class="ser">不是答案。</span></h1>
+    <p class="lead">Klorn 替你读别人写来的邮件，这样你就不必亲自去读。这句话本身<em>就是</em>威胁模型：主要输入是陌生人写的文字，其中有些人怀有恶意。下面列出这套架构实际能保证的内容，以及实现每一项的文件。</p>
+    <p>本译文仅为方便阅读而提供，以英文版本为准。 <a href="/security/" lang="en" hreflang="en">阅读英文版</a></p>
+  </div>
+</header>
+
+<section class="sec" id="verification" aria-labelledby="google-verification">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2 id="google-verification">Google 验证与独立评估</h2>
+    </div>
+    <div class="prose">
+      <p>Google 已于 <strong>2026-10-03</strong> 完成对 Klorn 的 OAuth 验证审核。在此之前，Klorn 由 TAC Security 依据 <strong>CASA Tier 2</strong> 进行了独立评估，结果为 <strong>In Compliance（符合要求）</strong>。该评估出具的验证函（Letter of Validation）随后提交给了 Google。</p>
+    </div>
+    <dl class="kv">
+    <div><dt>评估</dt><dd>CASA Tier 2，动态应用安全测试（DAST），由 TAC Security 执行</dd></div>
+    <div><dt>结果</dt><dd>In Compliance（符合要求），保证级别 AL1（OWASP ASVS Level 1）</dd></div>
+    <div><dt>日期</dt><dd>2026-08-12 评估 · 2026-08-30 出具报告 · 2026-10-03 Google 审核完成</dd></div>
+    <div><dt>重新评估</dt><dd>每年一次。下一次评估应于 2027 年 8 月进行</dd></div>
+  </dl>
+
+    <div class="prose">
+      <h3>五个 Google 权限范围，以及各自的用途</h3>
+      <p>这五个是该次审核中获批的 Google 权限范围，也是 Klorn 申请的全部邮件和日历权限范围。它不申请 Gmail 的完全访问权限范围；在日历方面，只申请 <code>calendar.events</code> 和 <code>calendar.readonly</code>——从不申请完整的日历权限范围。</p>
+    </div>
+    <dl class="kv kv-code">
+    <div><dt><code>gmail.readonly</code></dt><dd>读取你的邮件，以便 Klorn 对其分拣、展示每个判断的理由，并在你需要时总结整个会话。</dd></div>
+    <div><dt><code>gmail.modify</code></dt><dd>在你于 Klorn 中操作时更改邮件状态：归档或取消归档、移到垃圾箱或移回、加星标、标为已读或未读，以及把回复草稿保存到 Gmail。</dd></div>
+    <div><dt><code>gmail.send</code></dt><dd>仅在你批准时发送邮件——你确认的回复、你要求的 mailto 退订——或者按你自己设定的规则发送的自动回复。</dd></div>
+    <div><dt><code>calendar.readonly</code></dt><dd>读取你所有日历的忙闲状态，以便用你的真实日程核对会议邮件，并发现冲突。</dd></div>
+    <div><dt><code>calendar.events</code></dt><dd>在你要求 Klorn 这样做时，在你的主日历上创建、修改或删除日程——不涉及日历设置或共享。</dd></div>
+  </dl>
+    <div class="prose">
+      <p>使用 Google 登录只会请求你的姓名和邮箱地址。邮件和日历权限范围要等到你连接邮箱时，才会在第二个授权页面中请求——而只连接日历时，只请求 <code>calendar.readonly</code>，完全不含邮件权限范围。（<code>openid</code> 和 <code>userinfo.email</code>/<code>userinfo.profile</code> 也出现在那个文件中——它们用于识别登录的是哪个账户，不属于敏感权限，也不在 Google 审核的范围内。）</p>
+      <h3>数据去向</h3>
+      <p>OAuth 令牌在存储前用 AES-256-GCM 加密，所有托管服务都只走 TLS，分析数据从不包含邮件内容——每一项对应的文件见下表。日志按<a href="#retention">数据保留多久</a>中的固定时间表过期。如果你希望邮件完全不经过我们的服务器，可以<a href="/zh/self-host/">自托管</a>同一套代码，搭配你自己的模型密钥或<a href="/blog/local-llm-email-triage-ollama/">本地模型</a>。隐私政策见 <a href="/privacy/">/privacy</a>。</p>
+    </div>
+    <p class="not"><strong>这意味着什么，又不意味着什么。</strong>该审核和评估检查的是 Klorn 如何处理它所申请的 Google 数据。它们并不代表 Google 为 Klorn 背书，也不涵盖这些权限范围以外的任何内容。目前你可以连接 Gmail、Google 日历、Naver 邮箱（测试版）和 iCloud 邮箱（测试版）；其他服务商暂不可用。</p>
+  </div>
+</section>
+
+<section class="sec sec-alt" id="guarantees" aria-labelledby="guarantees-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2 id="guarantees-h">架构能保证什么</h2>
+    </div>
+    <div class="table-scroll" tabindex="0" role="region" aria-labelledby="guarantees-h">
+    <table class="spec">
+      <thead><tr><th>属性</th><th>实际情况</th><th>在哪里核查</th></tr></thead>
+      <tbody>
+      <tr><th>邮件是敌意输入</th><td class="us">每封邮件的正文、主题以及第三方字符串在送达模型之前，都会被包进 <code>&lt;untrusted_content&gt;</code> 标记中；已有的包装标签会先被剥离，使精心构造的邮件无法闭合这层包装。<strong>提示注入属于防御范围，而不是被默认接受的局限</strong></td><td><a href="https://github.com/k08200/klorn/blob/main/SECURITY.md" rel="noreferrer noopener">SECURITY.md</a></td></tr>
+      <tr><th>令牌静态加密</th><td class="us">令牌写入数据库之前即以 <strong>AES-256-GCM</strong> 加密，并支持密钥环轮换（v1/v2 信封），怀疑泄露时无需全体同时切换即可轮换。在 dev/test 之外缺少密钥会<strong>直接中止启动</strong>，而不是降级运行</td><td><a href="https://github.com/k08200/klorn/blob/main/packages/api/src/crypto-tokens.ts" rel="noreferrer noopener">crypto-tokens.ts</a></td></tr>
+      <tr id="approvals"><th>外发操作</th><td class="us">发送、永久删除和向外部转发不能凭分类器的置信度执行。每一项都需要一份在批准时生成的回执，其中锁定<strong>规范化载荷的 sha256</strong>，并在执行时再次校验。如果期间有任何变化，操作会被拒绝</td><td><a href="https://github.com/k08200/klorn/blob/main/packages/api/src/judge/attention-floor.ts" rel="noreferrer noopener">attention-floor.ts</a></td></tr>
+      <tr><th>开发便利设置</th><td class="us">开发用 JWT 密钥、开发用加密密钥、localhost CORS 和演示用户都位于 dev/test 白名单之后，对其他任何 <code>NODE_ENV</code> 都<strong>默认拒绝（fail closed）</strong></td><td><a href="https://github.com/k08200/klorn/blob/main/packages/api/src/env.ts" rel="noreferrer noopener">env.ts</a></td></tr>
+      <tr><th>分析</th><td class="us"><strong>仅限第一方。</strong>Klorn 自己的 Postgres 中一份简短的粗粒度事件名白名单。没有外部追踪器，也从不包含邮件内容</td><td><a href="https://github.com/k08200/klorn/blob/main/packages/api/src/analytics.ts" rel="noreferrer noopener">analytics.ts</a></td></tr>
+      <tr><th>传输加密</th><td class="us">所有托管服务一律仅用 TLS——API、网页、Google API、模型服务商</td><td><a href="https://github.com/k08200/klorn/blob/main/docs/self-hosting.md" rel="noreferrer noopener">self-hosting.md</a></td></tr>
+    </tbody>
+    </table>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="retention-sec" aria-labelledby="retention">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2 id="retention">数据保留多久</h2>
+    </div>
+    <div class="prose"><p>日志保留期由定时清理任务强制执行，而不只是一句承诺：代理操作、邮件处理、推送投递和 webhook 记录在 <strong>90 天</strong>后删除，速率限制记录在 <strong>30</strong> 天后删除，令牌用量记录为分析成本偏差保留 <strong>180</strong> 天后删除。这些期限是源代码中的一张表，而不是我们可以悄悄放宽、却不在 diff 中显现的设置。</p>
+      <h3>报告漏洞</h3>
+      <p>请发邮件至 <a href="mailto:k0820086@gmail.com">k0820086@gmail.com</a>，附上问题描述和复现步骤。对于可被利用的问题，请不要公开提交 issue。你会在几天内收到确认；针对批准底线和令牌加密路径的修复优先于其他一切工作。机器可读的联系方式见 <a href="/.well-known/security.txt">/.well-known/security.txt</a>。</p>
+    </div>
+    <div class="not"><p><strong>我们没有声称的事。</strong>除上述 CASA Tier 2 评估外，Klorn 没有做过第三方渗透测试或 SOC 2 审计，本页也不暗示做过。这是一个由一人维护、处于测试阶段的产品。补偿性控制在于：代码以 AGPL-3.0 开源，上文已按文件列出与安全相关的路径——你可以直接阅读，而不必只听我们的一面之词。</p><p><a href="https://github.com/k08200/klorn/blob/main/SECURITY.md" rel="noreferrer noopener">SECURITY.md</a> 提供了更完整的版本，包括我们选择如实说明而非略去的已知不足。</p></div>
+    <div class="actions actions-left">
+      <a class="btn btn-1" href="https://app.klorn.ai/login?mode=register">免费试用 Klorn</a>
+      <a class="btn btn-2" href="mailto:k0820086@gmail.com">报告问题</a>
+    </div>
+  </div>
+</section>
+</main>
+<footer class="foot">
+  <div class="wrap foot-grid">
+    <div>
+      <a class="brand" href="/zh/">Klorn</a>
+      <p class="foot-note">邮件和日历，在一个地方分拣好，附上理由。开源。</p>
+      <div class="socials">
+        <a href="https://github.com/k08200/klorn" rel="noreferrer noopener" aria-label="GitHub"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a>
+        <a href="https://x.com/klornai" rel="noreferrer noopener" aria-label="X"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+        <a href="https://join.slack.com/t/klorn/shared_invite/zt-3zkj8lqxg-L4LK8dNPkzgupHEdmXgbIg" rel="noreferrer noopener" aria-label="Slack"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52zm1.271 0a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52zm0 1.271a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522zm-1.268 0a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522zm0-1.268a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523z"/></svg></a>
+      </div>
+    </div>
+    <nav aria-label="产品"><h4>产品</h4>
+      <a href="/zh/download/">全部下载</a>
+      <a href="/zh/pricing/">定价</a>
+      <a href="https://app.klorn.ai/login">登录</a>
+      <a href="/zh/status/">服务状态</a>
+      <a href="/zh/blog/">博客</a></nav>
+    <nav aria-label="开源"><h4>开源</h4>
+      <a href="https://github.com/k08200/klorn" rel="noreferrer noopener">GitHub 仓库</a>
+      <a href="https://github.com/k08200/klorn/releases/latest" rel="noreferrer noopener">版本发布</a>
+      <a href="https://github.com/k08200/klorn/tree/main/packages/api/eval" rel="noreferrer noopener">评测集</a>
+      <a href="/zh/methodology/">评测方法</a>
+      <a href="https://github.com/k08200/klorn/blob/main/LICENSE" rel="noreferrer noopener">AGPLv3 许可证</a>
+      <a href="/zh/open-source/">为什么是不加附加条款的 AGPL</a>
+      <a href="/zh/self-host/">自托管</a></nav>
+    <nav aria-label="对比"><h4>对比</h4>
+      <a href="/zh/vs/fyxer/">对比 Fyxer</a>
+      <a href="/zh/vs/superhuman/">对比 Superhuman</a>
+      <a href="/zh/vs/sanebox/">对比 SaneBox</a>
+      <a href="/zh/vs/inbox-zero/">对比 Inbox Zero</a></nav>
+    <nav aria-label="法律"><h4>法律</h4>
+      <a href="https://app.klorn.ai/privacy">隐私</a>
+      <a href="https://app.klorn.ai/terms">条款</a>
+      <a href="https://app.klorn.ai/refund">退款</a>
+      <a href="/zh/security/" aria-current="page">安全</a>
+      <a href="/zh/gdpr/">GDPR</a>
+      <a href="/zh/dpa/">DPA</a>
+      <a href="mailto:k0820086@gmail.com">联系我们</a></nav>
+  </div>
+  <div class="wrap foot-base">
+    <span>© 2026 Klorn · AGPLv3</span>
+  </div>
+</footer>
+<script>
+// Windows visitors get the installer: /site-nav.js swaps the href on every
+// .dl-cta, and this swaps the label to match. Same block as the landings.
+(function () {
+  var uaData = navigator.userAgentData;
+  var raw = String((uaData && uaData.platform) || navigator.platform || navigator.userAgent || '');
+  if (!/win/i.test(raw) || /mac|iphone|ipad|ipod/i.test(raw)) return;
+  document.querySelectorAll('[data-mac-dl]').forEach(function (a) {
+    var label = a.getAttribute('data-win-label');
+    if (!label) return;
+    Array.prototype.forEach.call(a.childNodes, function (n) {
+      if (n.nodeType !== 3 || !n.textContent.trim()) return;
+      var pad = n.textContent.match(/^(\s*)[\s\S]*?(\s*)$/);
+      n.textContent = pad[1] + label + pad[2];
+    });
+  });
+})();
+</script>
+<script>
+// Inflow attribution: utm_campaign and friends, the referrer and this page's
+// path ride along on every app.klorn.ai link, so a signup can be credited to
+// the page that earned it.
+(function () {
+  try {
+    var p = new URLSearchParams(location.search);
+    var q = [];
+    ["utm_source", "utm_medium", "utm_campaign", "utm_content"].forEach(function (k) {
+      var v = p.get(k);
+      if (v) q.push(k + "=" + encodeURIComponent(v.slice(0, 60)));
+    });
+    if (document.referrer) {
+      try {
+        var h = new URL(document.referrer).hostname;
+        if (h && h !== location.hostname) q.push("ref=" + encodeURIComponent(h));
+      } catch (e) {}
+    }
+    q.push("lp=" + encodeURIComponent(location.pathname.slice(0, 60)));
+    var qs = q.join("&");
+    document.querySelectorAll('a[href^="https://app.klorn.ai/"]').forEach(function (a) {
+      a.href += (a.href.indexOf("?") === -1 ? "?" : "&") + qs;
+    });
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>

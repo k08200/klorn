@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>データ処理とサブプロセッサー — Klorn</title>
+<meta name="description" content="DPAの入手方法と、ホスト版サービスでデータに触れうるサブプロセッサーの完全な一覧 — Google、Render、Vercel、Anthropic、OpenRouter、Paddle、Apple。">
+<meta property="og:title" content="データ処理とサブプロセッサー — Klorn">
+<meta property="og:description" content="DPAの入手方法と、ホスト版サービスでデータに触れうるサブプロセッサーの完全な一覧 — Google、Render、Vercel、Anthropic、OpenRouter、Paddle、Apple。">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://klorn.ai/ja/dpa/">
+<meta property="og:locale" content="ja_JP">
+<meta property="og:image" content="https://klorn.ai/brand/og-image.png?v=k2">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="データ処理とサブプロセッサー — Klorn">
+<meta name="twitter:description" content="DPAの入手方法と、ホスト版サービスでデータに触れうるサブプロセッサーの完全な一覧 — Google、Render、Vercel、Anthropic、OpenRouter、Paddle、Apple。">
+<meta name="twitter:image" content="https://klorn.ai/brand/og-image.png?v=k2">
+<link rel="canonical" href="https://klorn.ai/ja/dpa/">
+<link rel="alternate" hreflang="en" href="https://klorn.ai/dpa/">
+<link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/dpa/">
+<link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/dpa/">
+<link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/dpa/">
+<link rel="alternate" hreflang="es" href="https://klorn.ai/es/dpa/">
+<link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/dpa/">
+<link rel="alternate" hreflang="de" href="https://klorn.ai/de/dpa/">
+<link rel="alternate" hreflang="x-default" href="https://klorn.ai/dpa/">
+<link rel="preload" as="font" type="font/woff2" href="/fonts/geist-var.woff2" crossorigin>
+<link rel="stylesheet" href="/landing.css">
+<link rel="stylesheet" href="/subpage.css">
+<link rel="icon" href="/brand/favicon.svg?v=matte2" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png?v=matte2">
+<script src="/site-nav.js" defer></script>
+</head>
+<body class="sub">
+<a class="skip" href="#main">本文へスキップ</a>
+
+<nav class="nav" aria-label="メイン"><div class="nav-pill">
+  <a class="nav-brand" href="/ja/">Klorn</a>
+  <button type="button" class="nav-menu-btn" data-menu-toggle aria-expanded="false" aria-controls="nav-menu" aria-label="メニュー"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <span class="nav-links" id="nav-menu" role="group" aria-label="セクション" data-site-nav><a href="/ja/#accounts">アカウント</a><a href="/ja/#lanes">レーン</a><a href="/ja/pricing/">料金</a><a href="/ja/security/">セキュリティ</a><a href="/ja/blog/">ブログ</a></span>
+  <span class="nav-lang">
+    <button type="button" class="nav-lang-btn" data-menu-toggle
+            aria-haspopup="true" aria-expanded="false" aria-controls="lang-menu">日本語 <i aria-hidden="true">▾</i></button>
+    <span class="nav-lang-menu" id="lang-menu" role="menu">
+      <a href="/dpa/" role="menuitem" lang="en">English</a>
+      <a href="/ko/dpa/" role="menuitem" lang="ko">한국어</a>
+      <a href="/ja/dpa/" role="menuitem" lang="ja" aria-current="true">日本語</a>
+      <a href="/zh/dpa/" role="menuitem" lang="zh">中文</a>
+      <a href="/es/dpa/" role="menuitem" lang="es">Español</a>
+      <a href="/fr/dpa/" role="menuitem" lang="fr">Français</a>
+      <a href="/de/dpa/" role="menuitem" lang="de">Deutsch</a>
+    </span>
+  </span>
+  <a class="nav-login" href="https://app.klorn.ai/login">ログイン</a>
+  <a class="nav-cta dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
+     data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.2.0/Klorn-windows-setup.exe" data-win-label="ダウンロード">ダウンロード</a>
+</div></nav>
+
+<main id="main">
+<div class="wrap">
+<div class="article">
+  <h1>データ処理</h1>
+  <p class="thesis">ほかの人のためにKlornを導入する場合、あなたが管理者で、Klornはあなたの処理者です。データ処理契約（DPA）をご用意しています。そして、データが実際に触れるすべての相手の一覧も公開しています。多くのサブプロセッサーのページが目立たない場所に追いやっている部分です。</p>
+  <p>この翻訳は便宜上提供しているものです。英語版が優先します。<a href="/dpa/" lang="en" hreflang="en">英語版を読む</a></p>
+
+  <h2>DPAの入手</h2>
+  <p>組織名と署名する法人名を添えて<a href="mailto:k0820086@gmail.com">k0820086@gmail.com</a>にメールしてください。Klornはひとりで保守している製品なので、クリックだけで済む手続きではなく、人との実際のやり取りになります。そのぶん、標準の書式をお持ちであれば、そちらの書面をもとに進めることもできます。</p>
+
+  <h2>サブプロセッサー</h2>
+  <p>以下のすべての事業者は、ホスト版サービスの運用の過程で、あなたがKlornに入れたデータを処理する可能性があります。セルフホストすると、あなたが選んだモデル提供元とGoogle以外のすべての行がなくなります。</p>
+
+  <div class="scroll">
+  <table>
+    <thead><tr><th>サブプロセッサー</th><th>役割</th><th>見えるもの</th></tr></thead>
+    <tbody>
+      <tr><th>Google</th><td class="us">GmailとカレンダーのAPI、およびログイン</td><td>データの出どころ — あなたが許可したスコープの範囲での、あなたのメールボックスとカレンダー</td></tr>
+      <tr><th>Render</th><td class="us">APIのホスティング、シンガポールリージョン</td><td>APIが処理するすべて（通信中およびメモリ上）</td></tr>
+      <tr><th>Supabase</th><td class="us">マネージドPostgres、ソウル（ap-northeast-2）</td><td>保存されているすべてのアカウント、メール、分類のデータ</td></tr>
+      <tr><th>GitHub</th><td class="us">夜間のデータベースバックアップの保存（Actionsのアーティファクト、14日後に期限切れ）</td><td>暗号化されたファイルのみ。データベースは一時的なGitHubランナーにコピーされてそこで暗号化され、保存されるのは暗号文だけです。復号するためのキーがGitHubに保存されることはありません</td></tr>
+      <tr><th>Vercel</th><td class="us">ウェブアプリのホスティング</td><td>通信中のリクエストとレスポンス</td></tr>
+      <tr><th>Google（Gemini API）</th><td class="us">モデル呼び出し</td><td>分類や下書きのために送られるメッセージのテキスト。送信データを学習に使わないAPI規約のもとで扱われます</td></tr>
+      <tr><th>Anthropic（Claude API）</th><td class="us">モデル呼び出し</td><td>同じメッセージのテキスト。送信データを学習に使わない商用API規約のもとで扱われます。既定では30日以内に削除され、利用ポリシーの執行で問題とされたコンテンツに限り、より長く保持されます</td></tr>
+      <tr><th>OpenRouter</th><td class="us">モデルのルーティング</td><td>同上（OpenRouter経由で使うモデルの場合）。自分のキーを使うと、この行はあなたが選んだ提供元に置き換わります</td></tr>
+      <tr><th>Paddle</th><td class="us">決済と販売代理（Merchant of Record）</td><td>請求情報。<strong>メールの内容は含みません</strong></td></tr>
+      <tr><th>Apple</th><td class="us">プッシュ通知の配信（APNs）</td><td>登録したデバイスへの通知ペイロード</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h2>外に出ないもの</h2>
+  <p>Klornはデータを販売せず、あなたのメールをモデルの学習に使わず、第三者の分析ツールやトラッカーも使いません。利用継続の計測は、Klorn自身のデータベースにある大まかなイベント名の短い許可リストだけで、メッセージの内容は決して含みません。これはここで主張しているだけでなく、<a href="https://github.com/k08200/klorn/blob/main/packages/api/src/analytics.ts" rel="noreferrer noopener">analytics.ts</a>で強制されています。</p>
+
+  <div class="not">
+    <p><strong>はっきり言うと。</strong>KlornにはSOC 2レポートも第三者監査もありません。調達プロセスでそれが必須であれば、Klornは現時点では要件を満たしません。3回目の打ち合わせで知るより、このページで知っていただくほうがよいと考えています。その代わりにご用意しているのは、AGPL-3.0で公開しているソースコード全体と、各主張を強制しているファイルを示した<a href="/ja/security/">セキュリティのページ</a>です。</p>
+  </div>
+
+  <p class="checked">このページの内容についての質問は<a href="mailto:k0820086@gmail.com">k0820086@gmail.com</a>へ。
+      Klornは<a href="https://github.com/k08200/klorn" rel="noreferrer noopener">AGPL-3.0</a>です。ここにあるすべての主張は
+      ソースコードで確認できます。</p>
+</div>
+</div>
+</main>
+<footer class="foot">
+  <div class="wrap foot-grid">
+    <div>
+      <a class="brand" href="/ja/">Klorn</a>
+      <p class="foot-note">メールとカレンダーをひとつの場所で、理由とともに整理します。オープンソース。</p>
+      <div class="socials">
+        <a href="https://github.com/k08200/klorn" rel="noreferrer noopener" aria-label="GitHub"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a>
+        <a href="https://x.com/klornai" rel="noreferrer noopener" aria-label="X"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+        <a href="https://join.slack.com/t/klorn/shared_invite/zt-3zkj8lqxg-L4LK8dNPkzgupHEdmXgbIg" rel="noreferrer noopener" aria-label="Slack"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52zm1.271 0a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52zm0 1.271a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522zm-1.268 0a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522zm0-1.268a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523z"/></svg></a>
+      </div>
+    </div>
+    <nav aria-label="製品"><h4>製品</h4>
+      <a href="/ja/download/">すべてのダウンロード</a>
+      <a href="/ja/pricing/">料金</a>
+      <a href="https://app.klorn.ai/login">ログイン</a>
+      <a href="/ja/status/">ステータス</a>
+      <a href="/ja/blog/">ブログ</a></nav>
+    <nav aria-label="オープンソース"><h4>オープンソース</h4>
+      <a href="https://github.com/k08200/klorn" rel="noreferrer noopener">GitHubリポジトリ</a>
+      <a href="https://github.com/k08200/klorn/releases/latest" rel="noreferrer noopener">リリース</a>
+      <a href="https://github.com/k08200/klorn/tree/main/packages/api/eval" rel="noreferrer noopener">評価セット</a>
+      <a href="/ja/methodology/">評価方法</a>
+      <a href="https://github.com/k08200/klorn/blob/main/LICENSE" rel="noreferrer noopener">AGPLv3ライセンス</a>
+      <a href="/ja/open-source/">なぜAGPLなのか、付け足しなしで</a>
+      <a href="/ja/self-host/">セルフホスト</a></nav>
+    <nav aria-label="比較"><h4>比較</h4>
+      <a href="/ja/vs/fyxer/">Fyxerと比較</a>
+      <a href="/ja/vs/superhuman/">Superhumanと比較</a>
+      <a href="/ja/vs/sanebox/">SaneBoxと比較</a>
+      <a href="/ja/vs/inbox-zero/">Inbox Zeroと比較</a></nav>
+    <nav aria-label="法的事項"><h4>法的事項</h4>
+      <a href="https://app.klorn.ai/privacy">プライバシー</a>
+      <a href="https://app.klorn.ai/terms">利用規約</a>
+      <a href="https://app.klorn.ai/refund">返金</a>
+      <a href="/ja/security/">セキュリティ</a>
+      <a href="/ja/gdpr/">GDPR</a>
+      <a href="/ja/dpa/" aria-current="page">DPA</a>
+      <a href="mailto:k0820086@gmail.com">お問い合わせ</a></nav>
+  </div>
+  <div class="wrap foot-base">
+    <span>© 2026 Klorn · AGPLv3</span>
+  </div>
+</footer>
+<script>
+// Windows visitors get the installer: /site-nav.js swaps the href on every
+// .dl-cta, and this swaps the label to match. Same block as the landings.
+(function () {
+  var uaData = navigator.userAgentData;
+  var raw = String((uaData && uaData.platform) || navigator.platform || navigator.userAgent || '');
+  if (!/win/i.test(raw) || /mac|iphone|ipad|ipod/i.test(raw)) return;
+  document.querySelectorAll('[data-mac-dl]').forEach(function (a) {
+    var label = a.getAttribute('data-win-label');
+    if (!label) return;
+    Array.prototype.forEach.call(a.childNodes, function (n) {
+      if (n.nodeType !== 3 || !n.textContent.trim()) return;
+      var pad = n.textContent.match(/^(\s*)[\s\S]*?(\s*)$/);
+      n.textContent = pad[1] + label + pad[2];
+    });
+  });
+})();
+</script>
+<script>
+// Same block as every other page: carry the campaign through to the app so a
+// signup can be credited to the page that earned it.
+(function () {
+  try {
+    var p = new URLSearchParams(location.search);
+    var q = [];
+    ["utm_source", "utm_medium", "utm_campaign", "utm_content"].forEach(function (k) {
+      var v = p.get(k);
+      if (v) q.push(k + "=" + encodeURIComponent(v.slice(0, 60)));
+    });
+    if (document.referrer) {
+      try {
+        var h = new URL(document.referrer).hostname;
+        if (h && h !== location.hostname) q.push("ref=" + encodeURIComponent(h));
+      } catch (e) {}
+    }
+    q.push("lp=" + encodeURIComponent(location.pathname.slice(0, 60)));
+    var qs = q.join("&");
+    document.querySelectorAll('a[href^="https://app.klorn.ai/"]').forEach(function (a) {
+      a.href += (a.href.indexOf("?") === -1 ? "?" : "&") + qs;
+    });
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>

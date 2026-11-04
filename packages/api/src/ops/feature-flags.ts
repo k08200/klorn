@@ -80,6 +80,11 @@ export function collectFeatureFlags(env: NodeJS.ProcessEnv = process.env): Flags
       OBJECT_STORAGE_ENABLED: dynamicFlag(env, "OBJECT_STORAGE_ENABLED"),
       // Read per send by config.ts androidDataPushEnabled() (notify/push-device.ts).
       ANDROID_DATA_PUSH_ENABLED: dynamicFlag(env, "ANDROID_DATA_PUSH_ENABLED"),
+      // Read per new mail by judge/v3/flags.ts (attention engine v3 facts shadow).
+      // True for "true" or "cohort"; the cohort is ROLLOUT_COHORT_USER_IDS.
+      JUDGE_V3_SHADOW: ["true", "1", "yes", "on", "cohort"].includes(
+        (env.JUDGE_V3_SHADOW ?? "").trim().toLowerCase(),
+      ),
     },
     configured: {
       GMAIL_PUBSUB_TOPIC: Boolean(env.GMAIL_PUBSUB_TOPIC),

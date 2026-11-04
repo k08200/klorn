@@ -23,13 +23,14 @@
     var home = lang === 'en' || !NAV_LABELS[lang] ? '/' : '/' + lang + '/';
     var path = location.pathname.replace(/index\.html$/, '');
     var onHome = path === home;
-    var pricing = onHome ? '#pricing' : home === '/' ? '/pricing/' : home + '#pricing';
+    // Every subpage exists in every language (scripts/site-i18n), so the
+    // Pricing, Security and Blog links stay inside the reader's language.
     var hrefs = [
       (onHome ? '' : home) + '#accounts',
       (onHome ? '' : home) + '#lanes',
-      pricing,
-      '/security/',
-      '/blog/'
+      onHome ? '#pricing' : home + 'pricing/',
+      home + 'security/',
+      home + 'blog/'
     ];
     navMenu.textContent = '';
     hrefs.forEach(function (href, i) {

@@ -18,6 +18,14 @@
 <meta name="twitter:description" content="Google OAuth verification, an independent CASA Tier 2 assessment, and what Klorn's architecture actually guarantees: AES-256-GCM token encryption, hash-pinned approval receipts, prompt injection treated as in-scope, and the file that implements each claim.">
 <meta name="twitter:image" content="https://klorn.ai/brand/og-image.png?v=k2">
 <link rel="canonical" href="https://klorn.ai/security/">
+<link rel="alternate" hreflang="en" href="https://klorn.ai/security/">
+<link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/security/">
+<link rel="alternate" hreflang="ja" href="https://klorn.ai/ja/security/">
+<link rel="alternate" hreflang="zh" href="https://klorn.ai/zh/security/">
+<link rel="alternate" hreflang="es" href="https://klorn.ai/es/security/">
+<link rel="alternate" hreflang="fr" href="https://klorn.ai/fr/security/">
+<link rel="alternate" hreflang="de" href="https://klorn.ai/de/security/">
+<link rel="alternate" hreflang="x-default" href="https://klorn.ai/security/">
 <link rel="preload" as="font" type="font/woff2" href="/fonts/geist-var.woff2" crossorigin>
 <link rel="icon" href="/brand/favicon.svg?v=matte2" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png?v=matte2">
@@ -32,6 +40,19 @@
   <a class="nav-brand" href="/">Klorn</a>
   <button type="button" class="nav-menu-btn" data-menu-toggle aria-expanded="false" aria-controls="nav-menu" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
   <span class="nav-links" id="nav-menu" role="group" aria-label="Sections" data-site-nav><a href="/#accounts">Accounts</a><a href="/#lanes">Lanes</a><a href="/pricing/">Pricing</a><a href="/security/" aria-current="page">Security</a><a href="/blog/">Blog</a></span>
+  <span class="nav-lang">
+    <button type="button" class="nav-lang-btn" data-menu-toggle
+            aria-haspopup="true" aria-expanded="false" aria-controls="lang-menu">English <i aria-hidden="true">▾</i></button>
+    <span class="nav-lang-menu" id="lang-menu" role="menu">
+      <a href="/security/" role="menuitem" lang="en" aria-current="true">English</a>
+      <a href="/ko/security/" role="menuitem" lang="ko">한국어</a>
+      <a href="/ja/security/" role="menuitem" lang="ja">日本語</a>
+      <a href="/zh/security/" role="menuitem" lang="zh">中文</a>
+      <a href="/es/security/" role="menuitem" lang="es">Español</a>
+      <a href="/fr/security/" role="menuitem" lang="fr">Français</a>
+      <a href="/de/security/" role="menuitem" lang="de">Deutsch</a>
+    </span>
+  </span>
   <a class="nav-login" href="https://app.klorn.ai/login">Log in</a>
   <a class="nav-cta dl-cta" href="https://github.com/k08200/klorn/releases/latest/download/Klorn.dmg" rel="noreferrer noopener"
      data-mac-dl data-win-href="https://github.com/k08200/klorn/releases/download/desktop-win-v0.2.0/Klorn-windows-setup.exe" data-win-label="Download">Download</a>
