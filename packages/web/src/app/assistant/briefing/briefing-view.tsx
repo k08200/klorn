@@ -26,7 +26,7 @@ import { DayShape } from "./day-shape";
 
 const SETTINGS_HREF = "/settings/notifications";
 const LINK_CLASS =
-  "focus-ring inline-flex min-h-11 items-center rounded-control text-label text-accent-deep hover:underline";
+  "focus-ring inline-flex min-h-11 items-center rounded-control text-role-label text-accent-deep hover:underline";
 
 type Translate = (key: string, vars?: Record<string, string>) => string;
 
@@ -83,16 +83,18 @@ export function BriefingView() {
         }
       />
 
-      <p className="flex flex-wrap items-center gap-x-3 text-body text-ink-muted [word-break:keep-all]">
+      <p className="flex flex-wrap items-center gap-x-3 text-role-body text-ink-muted [word-break:keep-all]">
         {content && schedule}
         <Link href={SETTINGS_HREF} className={LINK_CLASS}>
           {t("assistantHub.briefing.settings")}
         </Link>
       </p>
-      {note && <p className="pb-2 text-body text-state-warn-ink [word-break:keep-all]">{note}</p>}
+      {note && (
+        <p className="pb-2 text-role-body text-state-warn-ink [word-break:keep-all]">{note}</p>
+      )}
 
       {briefing.actionError && (
-        <p role="alert" className="py-2 text-body text-state-danger-ink [word-break:keep-all]">
+        <p role="alert" className="py-2 text-role-body text-state-danger-ink [word-break:keep-all]">
           {t(
             briefing.actionError === "generate"
               ? "assistantHub.briefing.generateFailed"
@@ -187,17 +189,17 @@ function TopFeedback({ actions, chosen, savingRank, onChoose }: TopFeedbackProps
   return (
     <section aria-labelledby="hub-briefing-feedback">
       <div className="border-b border-line pb-2">
-        <h2 id="hub-briefing-feedback" className="text-head text-ink">
+        <h2 id="hub-briefing-feedback" className="text-role-head text-ink">
           {t("assistantHub.briefing.feedback.title")}
         </h2>
-        <p className="text-caption text-ink-muted [word-break:keep-all]">
+        <p className="text-role-caption text-ink-muted [word-break:keep-all]">
           {t("assistantHub.briefing.feedback.hint")}
         </p>
       </div>
       <ul>
         {actions.map((action) => (
           <li key={action.rank} className="border-b border-line-soft py-3 last:border-b-0">
-            <p className="text-body text-ink [word-break:keep-all]">
+            <p className="text-role-body text-ink [word-break:keep-all]">
               <span className="tabular-nums text-ink-muted">{action.rank}. </span>
               {action.label}
             </p>

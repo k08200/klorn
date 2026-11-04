@@ -71,13 +71,13 @@ function HubTabs({ pathname }: { pathname: string }) {
               <Link
                 href={page.href}
                 aria-current={current ? "page" : undefined}
-                className={`focus-ring relative flex min-h-11 items-center gap-1.5 rounded-control px-3 text-label transition-colors duration-120 ease-fluid ${
+                className={`focus-ring relative flex min-h-11 items-center gap-1.5 rounded-control px-3 text-role-label transition-colors duration-120 ease-fluid ${
                   current ? "text-ink" : "font-normal text-ink-mid hover:text-ink"
                 }`}
               >
                 {t(page.labelKey)}
                 {badge && (
-                  <span className="min-w-5 rounded-full bg-accent-solid px-1.5 text-center text-caption font-semibold tabular-nums text-accent-solid-ink">
+                  <span className="min-w-5 rounded-full bg-accent-solid px-1.5 text-center text-role-caption font-semibold tabular-nums text-accent-solid-ink">
                     <span aria-hidden="true">
                       {waiting > MAX_BADGE ? `${MAX_BADGE}+` : waiting}
                     </span>
@@ -113,9 +113,9 @@ export function HubHeader({ title, subtitle, actions }: HubHeaderProps) {
   return (
     <header className="flex flex-wrap items-start gap-x-4 gap-y-2 pb-4 pt-6 md:pt-8">
       <div className="min-w-0 flex-1">
-        <h1 className="text-display text-ink [word-break:keep-all]">{title}</h1>
+        <h1 className="text-role-page text-ink [word-break:keep-all]">{title}</h1>
         {subtitle && (
-          <p className="mt-1 text-body text-ink-muted [word-break:keep-all]">{subtitle}</p>
+          <p className="mt-1 text-role-body text-ink-muted [word-break:keep-all]">{subtitle}</p>
         )}
       </div>
       {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}

@@ -16,11 +16,11 @@ import type { PendingSender, ScreenerVerdict } from "../../../lib/use-screener";
 function SectionHeading({ id, title, count }: { id: string; title: string; count: number }) {
   return (
     <div className="flex min-h-11 items-center gap-2 border-b border-line">
-      <h2 id={id} className="text-head text-ink">
+      <h2 id={id} className="text-role-head text-ink">
         {title}
       </h2>
       <span className="flex-1" />
-      <p className="text-label tabular-nums text-ink-soft">{count}</p>
+      <p className="text-role-label tabular-nums text-ink-soft">{count}</p>
     </div>
   );
 }
@@ -44,7 +44,7 @@ export function CommitmentsSection({ commitments }: { commitments: CommitmentIte
         title={t("assistantHub.commitments.title")}
         count={commitments.length}
       />
-      <p className="pt-2 text-caption text-ink-muted [word-break:keep-all]">
+      <p className="pt-2 text-role-caption text-ink-muted [word-break:keep-all]">
         {t("assistantHub.commitments.hint")}
       </p>
       <ul>
@@ -61,19 +61,19 @@ export function CommitmentsSection({ commitments }: { commitments: CommitmentIte
           return (
             <li key={commitment.id} className="border-b border-line-soft py-3 last:border-b-0">
               <p
-                className={`text-caption font-medium ${mine ? "text-state-warn-ink" : "text-state-info-ink"}`}
+                className={`text-role-caption font-medium ${mine ? "text-state-warn-ink" : "text-state-info-ink"}`}
               >
                 {t(mine ? "assistantHub.commitments.mine" : "assistantHub.commitments.theirs")}
               </p>
-              <p className="mt-0.5 break-words text-body font-medium text-ink-strong">
+              <p className="mt-0.5 break-words text-role-body font-medium text-ink-strong">
                 {commitment.title}
               </p>
               {commitment.description && (
-                <p className="mt-0.5 line-clamp-2 break-words text-body text-ink-soft">
+                <p className="mt-0.5 line-clamp-2 break-words text-role-body text-ink-soft">
                   {commitment.description}
                 </p>
               )}
-              <p className="mt-0.5 text-caption text-ink-muted">{meta.join(" · ")}</p>
+              <p className="mt-0.5 text-role-caption text-ink-muted">{meta.join(" · ")}</p>
             </li>
           );
         })}
@@ -104,7 +104,7 @@ export function ScreenerSection({ senders, deciding, onDecide }: ScreenerSection
   return (
     <section aria-labelledby="hub-screener">
       <SectionHeading id="hub-screener" title={t("screener.title")} count={senders.length} />
-      <p className="pt-2 text-caption text-ink-muted [word-break:keep-all]">
+      <p className="pt-2 text-role-caption text-ink-muted [word-break:keep-all]">
         {t("screener.subtitle")}
       </p>
       <ul>
@@ -116,10 +116,10 @@ export function ScreenerSection({ senders, deciding, onDecide }: ScreenerSection
               className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line-soft py-2 last:border-b-0"
             >
               <div className="min-w-0 flex-1 basis-40">
-                <p className="truncate text-body font-medium text-ink" title={row.sender}>
+                <p className="truncate text-role-body font-medium text-ink" title={row.sender}>
                   {row.sender}
                 </p>
-                <p className="text-caption text-ink-muted">
+                <p className="text-role-caption text-ink-muted">
                   {row.lastReceivedAt
                     ? t("screener.meta", {
                         count: String(row.messageCount),
@@ -160,7 +160,7 @@ export function ScreenerSection({ senders, deciding, onDecide }: ScreenerSection
           {t("screener.showAll", { count: String(hidden) })}
         </Button>
       )}
-      <p className="pt-1 text-caption text-ink-muted [word-break:keep-all]">
+      <p className="pt-1 text-role-caption text-ink-muted [word-break:keep-all]">
         {t("screener.noHold")}
       </p>
     </section>

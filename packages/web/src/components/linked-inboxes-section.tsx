@@ -132,7 +132,7 @@ export function LinkedInboxesSection() {
   return (
     <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-5">
       <h2 className="text-role-head text-ink">{t("linkedInboxes.title")}</h2>
-      <p className="mt-1 text-role-caption text-ink-mid">
+      <p className="mt-1 text-role-body text-ink-mid">
         {t("linkedInboxes.body", { count: String(TIER_COUNT) })}
       </p>
 
@@ -146,11 +146,11 @@ export function LinkedInboxesSection() {
               <div className="min-w-0">
                 <span className="block truncate text-ink">{account.email}</span>
                 {account.needsReconnect ? (
-                  <span className="block truncate text-caption text-state-warn-ink">
+                  <span className="block truncate text-role-caption text-state-warn-ink">
                     {t("linkedAccounts.reconnectNeeded")}
                   </span>
                 ) : (
-                  <span className="block truncate text-caption text-ink-dim">
+                  <span className="block truncate text-role-caption text-ink-dim">
                     {formatLastSynced(account.lastSyncedAt)}
                   </span>
                 )}

@@ -20,7 +20,7 @@ export default function AuthStatus({ label }: { label?: string }) {
           aria-hidden="true"
           className="h-4 w-4 animate-spin rounded-full border-2 border-accent-solid border-t-transparent motion-reduce:animate-none"
         />
-        <span className="text-label text-ink-mid">{label ?? t("common.loading")}</span>
+        <span className="text-role-label text-ink-mid">{label ?? t("common.loading")}</span>
       </div>
     </main>
   );

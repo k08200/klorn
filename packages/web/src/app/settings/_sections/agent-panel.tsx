@@ -217,19 +217,19 @@ export function AgentPanel({ config }: { config: AutomationConfig | null }) {
                     aria-pressed={agentMode === option.mode}
                   >
                     <div className="font-medium truncate">{agentModeLabel(option)}</div>
-                    <div className="text-caption mt-0.5 opacity-70 truncate">
+                    <div className="text-role-caption mt-0.5 opacity-70 truncate">
                       {agentModeDescription(option)}
                     </div>
                   </button>
                 ))}
               </div>
               {agentMode === "SHADOW" && (
-                <p className="text-caption text-ink-mid mt-2">
+                <p className="text-role-caption text-ink-mid mt-2">
                   {t("settings.agentMode.shadowNote")}
                 </p>
               )}
               {agentMode === "AUTO" && (
-                <p className="text-caption text-state-ok-ink mt-2">
+                <p className="text-role-caption text-state-ok-ink mt-2">
                   {t("settings.agentMode.autoNote")}
                 </p>
               )}
@@ -257,7 +257,7 @@ export function AgentPanel({ config }: { config: AutomationConfig | null }) {
                         aria-pressed={enabled}
                       >
                         <span className="text-role-caption">{t(toolLabelKey(tool))}</span>
-                        <span className="text-caption opacity-80">
+                        <span className="text-role-caption opacity-80">
                           {enabled
                             ? t("settings.tool.runWithinPolicy")
                             : t("settings.tool.reviewFirst")}
@@ -266,7 +266,7 @@ export function AgentPanel({ config }: { config: AutomationConfig | null }) {
                     );
                   })}
                 </div>
-                <p className="text-caption text-ink-dim mt-2">
+                <p className="text-role-caption text-ink-dim mt-2">
                   {t("settings.alwaysAllowedTools.note")}
                 </p>
               </div>
@@ -304,11 +304,13 @@ export function AgentPanel({ config }: { config: AutomationConfig | null }) {
                 aria-pressed={autoMarkReadEnabled}
               >
                 <span>{t("settings.autoMarkRead.label")}</span>
-                <span className="text-caption opacity-80">
+                <span className="text-role-caption opacity-80">
                   {autoMarkReadEnabled ? t("settings.state.on") : t("settings.state.off")}
                 </span>
               </button>
-              <p className="text-caption text-ink-dim mt-1">{t("settings.autoMarkRead.desc")}</p>
+              <p className="text-role-caption text-ink-dim mt-1">
+                {t("settings.autoMarkRead.desc")}
+              </p>
             </div>
 
             {/* Proactive actions toggle */}
@@ -340,11 +342,13 @@ export function AgentPanel({ config }: { config: AutomationConfig | null }) {
                 aria-pressed={proactiveActionsEnabled}
               >
                 <span>{t("settings.proactiveAlerts.label")}</span>
-                <span className="text-caption opacity-80">
+                <span className="text-role-caption opacity-80">
                   {proactiveActionsEnabled ? t("settings.state.on") : t("settings.state.off")}
                 </span>
               </button>
-              <p className="text-caption text-ink-dim mt-1">{t("settings.proactiveAlerts.desc")}</p>
+              <p className="text-role-caption text-ink-dim mt-1">
+                {t("settings.proactiveAlerts.desc")}
+              </p>
             </div>
 
             <FeedbackPolicyPanel />
@@ -354,7 +358,9 @@ export function AgentPanel({ config }: { config: AutomationConfig | null }) {
               <Button onClick={runAgentNow} disabled={runningAgent}>
                 {runningAgent ? t("settings.state.running") : t("settings.runAgentNow")}
               </Button>
-              <p className="text-caption text-ink-dim mt-1">{t("settings.runAgentNow.desc")}</p>
+              <p className="text-role-caption text-ink-dim mt-1">
+                {t("settings.runAgentNow.desc")}
+              </p>
             </div>
           </div>
         )}

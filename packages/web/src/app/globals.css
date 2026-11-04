@@ -348,37 +348,22 @@
   --color-tier-auto: #34d399; /* emerald-400 */
 
   /* ── Design system (productization plan §2, P1) ──────────────────────
-     Type scale: six roles, each a size + line-height + weight bundle, so one
-     class sets all three: text-display / text-title / text-head / text-body /
-     text-label / text-caption. New code uses these instead of text-xs/sm/…
-     and never an arbitrary text-[Npx] (guarded). 10px text is retired. */
-  --text-display: 28px;
-  --text-display--line-height: 34px;
-  --text-display--font-weight: 600;
-  --text-title: 20px;
-  --text-title--line-height: 28px;
-  --text-title--font-weight: 600;
-  --text-head: 15px;
-  --text-head--line-height: 22px;
-  --text-head--font-weight: 600;
-  --text-body: 14px;
-  --text-body--line-height: 21px;
-  --text-body--font-weight: 400;
-  --text-label: 13px;
-  --text-label--line-height: 18px;
-  --text-label--font-weight: 500;
-  --text-caption: 12px;
-  --text-caption--line-height: 16px;
-  --text-caption--font-weight: 400;
+     Type: the Design Language v2 roles below (text-role-page … mono). The
+     P1 legacy steps (text-display / title / head / body / label / caption,
+     28/20/15/14/13/12) are retired and removed; `legacy-type` in
+     .github/scripts/check-design-tokens.mjs fails CI if one comes back, since
+     an unknown text-* class would silently render unstyled. Never an
+     arbitrary text-[Npx] (guarded). 10px text is retired. */
+
   /* Text you type on a touch screen: iOS zooms the page into any field under
      16px, so inputs switch to this with `pointer-coarse:text-field` (P10). */
   --text-field: 16px;
   --text-field--line-height: 24px;
   --text-field--font-weight: 400;
 
-  /* Design Language v2 type roles (web column). New names so the legacy
-     scale above keeps every page as-is until its wave; ui primitives use
-     these. mono pairs with `font-mono`. */
+  /* Design Language v2 type roles (web column,
+     docs/design/design-language-v2.md § Type roles). Pick by meaning, not
+     nearest pixel. mono pairs with `font-mono`. */
   --text-role-page: 34px;
   --text-role-page--line-height: 40px;
   --text-role-page--font-weight: 650;

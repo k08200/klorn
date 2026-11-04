@@ -59,7 +59,7 @@ function BriefingSummary() {
   const scheduled = briefing.status?.automation.enabled === true;
   return (
     <div className="flex flex-col">
-      <h3 className="text-caption font-medium text-ink-muted">{t("today.briefing.title")}</h3>
+      <h3 className="text-role-caption font-medium text-ink-muted">{t("today.briefing.title")}</h3>
       {briefing.loading && <LinesSkeleton lines={3} label={t("today.briefing.loading")} />}
       {briefing.failed && (
         <BlockError message={t("today.briefing.error")} onRetry={briefing.retry} />
@@ -67,7 +67,7 @@ function BriefingSummary() {
       {!briefing.loading && !briefing.failed && (
         <>
           <p
-            className={`mt-1 line-clamp-6 whitespace-pre-line text-body [word-break:keep-all] ${preview ? "text-ink-strong" : "text-ink-muted"}`}
+            className={`mt-1 line-clamp-6 whitespace-pre-line text-role-body [word-break:keep-all] ${preview ? "text-ink-strong" : "text-ink-muted"}`}
           >
             {preview || dayOneCopy(briefing.status, t)}
           </p>
@@ -96,7 +96,7 @@ function ApprovalsRow() {
   return (
     <Link
       href={assistantHref()}
-      className="focus-ring flex min-h-10 items-center gap-2 rounded-control bg-surface-hover px-3 text-label text-ink transition-colors duration-120 ease-fluid hover:bg-surface-inset pointer-coarse:min-h-11"
+      className="focus-ring flex min-h-10 items-center gap-2 rounded-control bg-surface-hover px-3 text-role-label text-ink transition-colors duration-120 ease-fluid hover:bg-surface-inset pointer-coarse:min-h-11"
     >
       {approvals.loading ? (
         <SkeletonGroup label={t("today.approvals.loading")} className="flex-1">
@@ -105,7 +105,7 @@ function ApprovalsRow() {
       ) : (
         <>
           {count > 0 && (
-            <span className="min-w-6 rounded-full bg-accent-solid px-1.5 py-px text-center text-caption font-semibold tabular-nums text-accent-solid-ink">
+            <span className="min-w-6 rounded-full bg-accent-solid px-1.5 py-px text-center text-role-caption font-semibold tabular-nums text-accent-solid-ink">
               {count > 99 ? "99+" : count}
             </span>
           )}
@@ -148,7 +148,7 @@ function AskBox() {
         maxLength={ASK_MAX_LENGTH}
         placeholder={t("today.ask.placeholder")}
         autoComplete="off"
-        className="focus-ring h-10 min-w-0 flex-1 rounded-control border border-line-strong bg-surface-app px-3 text-label font-normal text-ink placeholder:text-ink-muted pointer-coarse:h-11 pointer-coarse:text-field"
+        className="focus-ring h-10 min-w-0 flex-1 rounded-control border border-line-strong bg-surface-app px-3 text-role-label font-normal text-ink placeholder:text-ink-muted pointer-coarse:h-11 pointer-coarse:text-field"
       />
       <Button type="submit" variant="secondary" disabled={!text.trim()}>
         {t("today.ask.submit")}

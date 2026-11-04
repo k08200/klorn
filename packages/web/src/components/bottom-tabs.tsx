@@ -80,7 +80,7 @@ export default function BottomTabs() {
   const tabs = shellTabs(user);
   // UNIFIED_HOME (P10): tab labels move off the retired 10px size to the
   // caption role (12px); the legacy bar is left as it was.
-  const labelSize = unified ? "text-caption" : "text-caption";
+  const labelSize = unified ? "text-role-caption" : "text-role-caption";
 
   const accountActive = ACCOUNT_ROUTES.some((r) => pathname === r || pathname.startsWith(`${r}/`));
 
@@ -124,7 +124,7 @@ export default function BottomTabs() {
             >
               <span
                 aria-hidden="true"
-                className={`flex h-[22px] w-[22px] items-center justify-center rounded-full bg-gradient-to-br from-accent-solid to-accent-solid-hover text-caption font-bold text-accent-solid-ink ring-1 transition ${
+                className={`flex h-[22px] w-[22px] items-center justify-center rounded-full bg-gradient-to-br from-accent-solid to-accent-solid-hover text-role-caption font-bold text-accent-solid-ink ring-1 transition ${
                   accountActive || accountOpen ? "ring-accent" : "ring-transparent"
                 }`}
               >

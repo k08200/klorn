@@ -24,8 +24,8 @@ export function DayShape({ structure }: { structure: BriefingStructure }) {
 
   return (
     <section className="rounded-card border border-line p-4 md:p-5">
-      <p className="text-caption text-ink-muted">{structure.dateLabel}</p>
-      <h2 className="mt-1 text-title text-ink [word-break:keep-all]">{structure.headline}</h2>
+      <p className="text-role-caption text-ink-muted">{structure.dateLabel}</p>
+      <h2 className="mt-1 text-role-title text-ink [word-break:keep-all]">{structure.headline}</h2>
       {points.some((p) => p.busy) && (
         <svg
           viewBox={`0 0 ${CURVE_WIDTH} ${CURVE_HEIGHT}`}
@@ -64,18 +64,20 @@ export function DayShape({ structure }: { structure: BriefingStructure }) {
             className="md:border-l md:border-line-soft md:pl-4 md:first:border-l-0 md:first:pl-0"
           >
             <p
-              className={`text-caption font-medium ${segment.kind === "busy" ? "text-accent-deep" : "text-ink-muted"}`}
+              className={`text-role-caption font-medium ${segment.kind === "busy" ? "text-accent-deep" : "text-ink-muted"}`}
             >
               {segment.label}
             </p>
-            <p className="mt-0.5 text-body text-ink [word-break:keep-all]">{segment.summary}</p>
+            <p className="mt-0.5 text-role-body text-ink [word-break:keep-all]">
+              {segment.summary}
+            </p>
           </div>
         ))}
       </div>
       {structure.attention.length > 0 && (
         <ol className="mt-4 flex flex-col gap-1 border-t border-line-soft pt-3">
           {structure.attention.map((item) => (
-            <li key={item.rank} className="flex gap-2 text-body text-ink">
+            <li key={item.rank} className="flex gap-2 text-role-body text-ink">
               <span className="w-4 shrink-0 tabular-nums text-ink-muted">{item.rank}</span>
               <span className="min-w-0 [word-break:keep-all]">
                 {item.action}

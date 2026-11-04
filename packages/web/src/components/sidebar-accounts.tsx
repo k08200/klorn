@@ -40,11 +40,14 @@ export default function SidebarAccounts() {
   if (failed) {
     return (
       <section aria-labelledby="sidebar-accounts" className="px-2 pt-6">
-        <h2 id="sidebar-accounts" className="px-3 pb-1 text-caption font-medium text-ink-muted">
+        <h2
+          id="sidebar-accounts"
+          className="px-3 pb-1 text-role-caption font-medium text-ink-muted"
+        >
           {t("nav.v2.accounts")}
         </h2>
         <div role="alert" className="flex flex-col items-start gap-1 px-3">
-          <p className="text-caption text-state-danger-ink">{t("today.accounts.error")}</p>
+          <p className="text-role-caption text-state-danger-ink">{t("today.accounts.error")}</p>
           <Button variant="chip" onClick={retry}>
             {t("today.retry")}
           </Button>
@@ -54,7 +57,7 @@ export default function SidebarAccounts() {
   }
   return (
     <section aria-labelledby="sidebar-accounts" className="px-2 pt-6">
-      <h2 id="sidebar-accounts" className="px-3 pb-1 text-caption font-medium text-ink-muted">
+      <h2 id="sidebar-accounts" className="px-3 pb-1 text-role-caption font-medium text-ink-muted">
         {t("nav.v2.accounts")}
       </h2>
       <ul className="space-y-0.5">
@@ -64,11 +67,11 @@ export default function SidebarAccounts() {
             <li key={account.scope}>
               <Link
                 href={ACCOUNTS_HREF}
-                className="focus-ring flex min-h-10 pointer-coarse:min-h-11 items-center gap-2 rounded-control px-3 py-1.5 text-label font-normal text-ink-mid transition-colors duration-120 ease-fluid hover:bg-surface-hover/70 hover:text-ink"
+                className="focus-ring flex min-h-10 pointer-coarse:min-h-11 items-center gap-2 rounded-control px-3 py-1.5 text-role-label font-normal text-ink-mid transition-colors duration-120 ease-fluid hover:bg-surface-hover/70 hover:text-ink"
               >
                 <span
                   aria-hidden="true"
-                  className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-chip border border-line bg-surface-raised px-1 text-caption font-semibold tracking-tight text-ink-soft"
+                  className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-chip border border-line bg-surface-raised px-1 text-role-caption font-semibold tracking-tight text-ink-soft"
                 >
                   {sourceGlyph(account.provider).glyph}
                 </span>
@@ -80,7 +83,7 @@ export default function SidebarAccounts() {
                   {attention && (
                     <span
                       aria-hidden="true"
-                      className={`block truncate text-caption ${account.health === "reconnect" ? "text-state-danger-ink" : "text-ink-muted"}`}
+                      className={`block truncate text-role-caption ${account.health === "reconnect" ? "text-state-danger-ink" : "text-ink-muted"}`}
                     >
                       {t(HEALTH_LABEL_KEY[account.health])}
                     </span>
@@ -98,7 +101,7 @@ export default function SidebarAccounts() {
         <li>
           <Link
             href={ACCOUNTS_HREF}
-            className="focus-ring flex min-h-10 pointer-coarse:min-h-11 items-center rounded-control px-3 py-1.5 text-label font-normal text-ink-muted transition-colors duration-120 ease-fluid hover:bg-surface-hover/70 hover:text-ink"
+            className="focus-ring flex min-h-10 pointer-coarse:min-h-11 items-center rounded-control px-3 py-1.5 text-role-label font-normal text-ink-muted transition-colors duration-120 ease-fluid hover:bg-surface-hover/70 hover:text-ink"
           >
             {t("today.accounts.add")}
           </Link>

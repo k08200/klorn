@@ -1012,7 +1012,7 @@ function EmailDetailView() {
                 </div>
                 <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                   <span
-                    className={`shrink-0 rounded-chip px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ring-1 ring-inset ${
+                    className={`shrink-0 rounded-chip px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide ring-1 ring-inset ${
                       email.priority === "URGENT"
                         ? "bg-rose-500/10 text-rose-600 ring-rose-500/20"
                         : "bg-surface-hover text-ink-mid ring-transparent"
@@ -1021,12 +1021,12 @@ function EmailDetailView() {
                     {priorityLabel(t, email.priority)}
                   </span>
                   {email.needsReply && (
-                    <span className="shrink-0 rounded-chip bg-accent/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-accent-deeper ring-1 ring-inset ring-accent/20">
+                    <span className="shrink-0 rounded-chip bg-accent/10 px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-accent-deeper ring-1 ring-inset ring-accent/20">
                       {t("mail.filterReplyNeeded")}
                     </span>
                   )}
                   {email.category && (
-                    <span className="shrink-0 rounded-chip bg-surface-hover px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-ink-mid">
+                    <span className="shrink-0 rounded-chip bg-surface-hover px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-ink-mid">
                       {categoryLabel(t, email.category)}
                     </span>
                   )}
@@ -1106,7 +1106,7 @@ function EmailDetailView() {
           <div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr] lg:items-start">
             {email.renderHtml || email.body ? (
               <section className="panel-elevated overflow-hidden rounded-card border border-line/70 bg-surface-panel p-5 md:p-6">
-                <h2 className="mb-4 text-caption font-semibold uppercase tracking-wider text-ink-dim">
+                <h2 className="mb-4 text-role-caption font-semibold uppercase tracking-wider text-ink-dim">
                   {t("emailDetail.messageTitle")}
                 </h2>
                 {email.renderHtml ? (
@@ -1122,7 +1122,7 @@ function EmailDetailView() {
               </section>
             ) : email.snippet ? (
               <section className="panel-elevated overflow-hidden rounded-card border border-line/70 bg-surface-panel p-5 md:p-6">
-                <h2 className="mb-4 text-caption font-semibold uppercase tracking-wider text-ink-dim">
+                <h2 className="mb-4 text-role-caption font-semibold uppercase tracking-wider text-ink-dim">
                   {t("emailDetail.previewTitle")}
                 </h2>
                 <p className="text-role-body leading-7 text-ink-muted">
@@ -1170,21 +1170,21 @@ function CandidateProfileCard({
         className="absolute left-0 top-0 h-full w-[3px] bg-gradient-to-b from-accent-muted to-accent"
       />
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-caption font-semibold uppercase tracking-wider text-accent-deep">
+        <h2 className="text-role-caption font-semibold uppercase tracking-wider text-accent-deep">
           {t("emailDetail.candidateCard.title")}
         </h2>
-        <span className="text-caption tabular-nums text-ink-dim">
+        <span className="text-role-caption tabular-nums text-ink-dim">
           {t("candidates.confidence", { percent: String(Math.round(profile.confidence * 100)) })}
         </span>
       </div>
       <div className="mb-3 rounded-control border border-line-soft bg-surface-raised/70 px-3 py-2">
-        <p className="text-caption font-medium uppercase tracking-wider text-ink-dim">
+        <p className="text-role-caption font-medium uppercase tracking-wider text-ink-dim">
           {t("emailDetail.candidateCard.pipeline")}
         </p>
         <p className="mt-1 text-role-caption font-semibold text-accent-deeper">
           {candidatePipelineLabel(t, profile.pipelineStatus)}
         </p>
-        <p className="mt-1 text-caption leading-5 text-ink-mid">{profile.nextAction}</p>
+        <p className="mt-1 text-role-caption leading-5 text-ink-mid">{profile.nextAction}</p>
       </div>
       <div className="mb-3 flex flex-wrap gap-1.5">
         {candidateStatusOptions.map((option) => (
@@ -1193,7 +1193,7 @@ function CandidateProfileCard({
             type="button"
             onClick={() => onUpdate({ status: option.status })}
             disabled={updating || status === option.status}
-            className={`ease-strong rounded-chip border px-2 py-1 text-caption font-medium transition duration-150 active:scale-[0.97] disabled:cursor-default focus-ring ${
+            className={`ease-strong rounded-chip border px-2 py-1 text-role-caption font-medium transition duration-150 active:scale-[0.97] disabled:cursor-default focus-ring ${
               status === option.status
                 ? "border-accent-muted bg-accent/10 text-accent-deeper"
                 : "border-line bg-surface-panel/70 text-ink-mid hover:bg-surface-panel hover:text-ink"
@@ -1220,7 +1220,7 @@ function CandidateProfileCard({
           {profile.skills.map((skill) => (
             <span
               key={skill}
-              className="rounded-full border border-line bg-surface-panel/70 px-2 py-1 text-caption text-ink-muted"
+              className="rounded-full border border-line bg-surface-panel/70 px-2 py-1 text-role-caption text-ink-muted"
             >
               {skill}
             </span>
@@ -1230,14 +1230,14 @@ function CandidateProfileCard({
       {profile.links.length > 0 && (
         <div className="mt-3 space-y-1">
           {profile.links.map((link) => (
-            <p key={link} className="break-all text-caption text-accent-deep">
+            <p key={link} className="break-all text-role-caption text-accent-deep">
               {link}
             </p>
           ))}
         </div>
       )}
       {profile.missingFields.length > 0 && (
-        <p className="mt-3 text-caption text-accent-deeper">
+        <p className="mt-3 text-role-caption text-accent-deeper">
           {t("emailDetail.candidateCard.needsFollowUp", {
             fields: profile.missingFields
               .map((field) => candidateMissingLabel(t, field))
@@ -1247,12 +1247,15 @@ function CandidateProfileCard({
       )}
       {profile.manualReviewFiles.length > 0 && (
         <div className="mt-3 rounded-control border border-rose-200 bg-rose-50 px-3 py-2">
-          <p className="text-caption font-semibold text-rose-700">
+          <p className="text-role-caption font-semibold text-rose-700">
             {t("emailDetail.candidateCard.sourceReviewNeeded")}
           </p>
           <ul className="mt-1 space-y-1">
             {profile.manualReviewFiles.map((file) => (
-              <li key={`${file.filename}-${file.reason}`} className="text-caption text-rose-600/90">
+              <li
+                key={`${file.filename}-${file.reason}`}
+                className="text-role-caption text-rose-600/90"
+              >
                 {file.filename}: {file.reason}
               </li>
             ))}
@@ -1260,7 +1263,7 @@ function CandidateProfileCard({
         </div>
       )}
       <label className="mt-3 block">
-        <span className="mb-1 block text-caption font-medium uppercase tracking-wider text-ink-mid">
+        <span className="mb-1 block text-role-caption font-medium uppercase tracking-wider text-ink-mid">
           {t("emailDetail.candidateCard.reviewNoteLabel")}
         </span>
         <textarea
@@ -1334,18 +1337,18 @@ function ThreadContextPanel({
                 <p className="min-w-0 truncate text-role-caption font-medium text-ink">
                   {senderName(message.from)}
                 </p>
-                <time className="shrink-0 text-caption tabular-nums text-ink-dim">
+                <time className="shrink-0 text-role-caption tabular-nums text-ink-dim">
                   {formatFull(message.date, locale)}
                 </time>
               </div>
-              <p className="mt-1 truncate text-caption text-ink-mid">
+              <p className="mt-1 truncate text-role-caption text-ink-mid">
                 {message.summary ||
                   message.snippet ||
                   message.subject ||
                   t("emailDetail.thread.noSummary")}
               </p>
               {message.actionItems.length > 0 && (
-                <p className="mt-1 text-caption font-medium text-accent-deep">
+                <p className="mt-1 text-role-caption font-medium text-accent-deep">
                   {t("emailDetail.thread.taskCount", { count: String(message.actionItems.length) })}
                 </p>
               )}
@@ -1603,7 +1606,7 @@ function ReplyDraftBox({
             key={option.value}
             type="button"
             onClick={() => setMode(option.value)}
-            className={`ease-strong inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-caption font-medium transition duration-150 active:scale-[0.97] focus-ring ${
+            className={`ease-strong inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-role-caption font-medium transition duration-150 active:scale-[0.97] focus-ring ${
               mode === option.value
                 ? "bg-accent/10 text-accent-deeper ring-1 ring-inset ring-accent/30"
                 : "text-ink-mid hover:bg-surface-raised hover:text-ink"
@@ -1623,7 +1626,7 @@ function ReplyDraftBox({
               key={item.label}
               type="button"
               onClick={() => onIntentChange(item.intent)}
-              className="ease-strong rounded-full border border-line bg-surface-panel/70 px-3 py-1.5 text-caption text-ink-mid transition duration-150 hover:bg-state-info-bg hover:text-accent-deeper active:scale-[0.97] focus-ring"
+              className="ease-strong rounded-full border border-line bg-surface-panel/70 px-3 py-1.5 text-role-caption text-ink-mid transition duration-150 hover:bg-state-info-bg hover:text-accent-deeper active:scale-[0.97] focus-ring"
             >
               {item.label}
             </button>
@@ -1637,7 +1640,7 @@ function ReplyDraftBox({
     <section className="panel-elevated mt-5 overflow-hidden rounded-card border border-line/70 bg-surface-panel p-4 md:p-5">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-caption font-semibold uppercase tracking-wider text-ink-mid">
+          <h2 className="text-role-caption font-semibold uppercase tracking-wider text-ink-mid">
             {t("emailDetail.replyDraft.title")}
           </h2>
           <p className="mt-1 text-role-caption text-ink-dim">
@@ -1665,7 +1668,7 @@ function ReplyDraftBox({
           onToggle={(event) => setPresetsOpen(event.currentTarget.open)}
           className="group mb-3"
         >
-          <summary className="focus-ring inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 rounded-control text-label text-ink-mid hover:text-ink [&::-webkit-details-marker]:hidden">
+          <summary className="focus-ring inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 rounded-control text-role-label text-ink-mid hover:text-ink [&::-webkit-details-marker]:hidden">
             {t("mailV2.reader.tone")}
             <svg
               aria-hidden="true"
@@ -1689,7 +1692,7 @@ function ReplyDraftBox({
         <div className="space-y-2">
           <div className="grid gap-2 text-role-caption sm:grid-cols-2">
             <label className="block">
-              <span className="mb-1 block text-caption uppercase tracking-wider text-ink-mid">
+              <span className="mb-1 block text-role-caption uppercase tracking-wider text-ink-mid">
                 {t("emailDetail.replyDraft.toLabel")}
               </span>
               <input
@@ -1699,7 +1702,7 @@ function ReplyDraftBox({
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-caption uppercase tracking-wider text-ink-mid">
+              <span className="mb-1 block text-role-caption uppercase tracking-wider text-ink-mid">
                 {t("emailDetail.replyDraft.subjectLabel")}
               </span>
               <input
@@ -1725,16 +1728,16 @@ function ReplyDraftBox({
                   className="mt-0.5 h-3.5 w-3.5 rounded border-line-strong bg-surface-panel text-accent-deep focus:ring-accent focus:ring-offset-white"
                 />
                 <span>
-                  <span className="block text-caption font-medium text-accent-deeper">
+                  <span className="block text-role-caption font-medium text-accent-deeper">
                     {t("emailDetail.replyDraft.attachBriefLabel")}
                   </span>
-                  <span className="mt-0.5 block text-caption leading-4 text-ink-dim">
+                  <span className="mt-0.5 block text-role-caption leading-4 text-ink-dim">
                     {t("emailDetail.replyDraft.attachBriefDescription")}
                   </span>
                 </span>
               </label>
               <div className="mb-2 flex items-center justify-between gap-3">
-                <span className="text-caption font-medium uppercase tracking-wider text-ink-mid">
+                <span className="text-role-caption font-medium uppercase tracking-wider text-ink-mid">
                   {t("emailDetail.replyDraft.saveOriginalAttachments")}
                 </span>
                 <button
@@ -1746,7 +1749,7 @@ function ReplyDraftBox({
                         : attachments.map((attachment) => attachment.id),
                     )
                   }
-                  className="text-caption font-medium text-ink-dim transition duration-150 hover:text-accent-deeper focus-ring"
+                  className="text-role-caption font-medium text-ink-dim transition duration-150 hover:text-accent-deeper focus-ring"
                 >
                   {selectedCount === attachments.length
                     ? t("emailDetail.replyDraft.clearAll")
@@ -1765,10 +1768,10 @@ function ReplyDraftBox({
                       onChange={() => toggleAttachment(attachment.id)}
                       className="h-3.5 w-3.5 rounded border-line-strong bg-surface-panel text-accent-deep focus:ring-accent focus:ring-offset-white"
                     />
-                    <span className="min-w-0 flex-1 truncate text-caption text-ink-muted">
+                    <span className="min-w-0 flex-1 truncate text-role-caption text-ink-muted">
                       {attachment.filename}
                     </span>
-                    <span className="shrink-0 text-caption text-ink-dim">
+                    <span className="shrink-0 text-role-caption text-ink-dim">
                       {formatBytes(attachment.size)}
                     </span>
                   </label>
@@ -1870,7 +1873,7 @@ function ThreadBriefCard({ emailId }: { emailId: string }) {
   if (!brief) return null;
   return (
     <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-4">
-      <p className="mb-2 text-caption font-semibold uppercase tracking-wider text-ink-dim">
+      <p className="mb-2 text-role-caption font-semibold uppercase tracking-wider text-ink-dim">
         {t("emailDetail.threadBrief.title")}
       </p>
       <p className="text-role-body leading-relaxed text-ink">{brief.whyNow}</p>
@@ -1921,7 +1924,7 @@ function SenderContextCard({ emailId }: { emailId: string }) {
   if (!dossier) return null;
   return (
     <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-4">
-      <p className="mb-2 text-caption font-semibold uppercase tracking-wider text-ink-dim">
+      <p className="mb-2 text-role-caption font-semibold uppercase tracking-wider text-ink-dim">
         {t("emailDetail.senderContext.title")}
       </p>
       <p className="text-role-body leading-relaxed text-ink">{dossier.summary}</p>
@@ -1968,20 +1971,20 @@ function KlornAnalysis({
     return (
       <section className="rounded-card border border-line bg-surface-panel p-4">
         <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-          <h2 className="text-label text-ink-mid">{t("emailDetail.analysis.title")}</h2>
+          <h2 className="text-role-label text-ink-mid">{t("emailDetail.analysis.title")}</h2>
           {/* No "Wrong label" here: the header's label menu and "Move to lane"
               correct the mail in v2. */}
           <SummarizeButton onSummarize={onSummarize} summarizing={summarizing} />
         </div>
-        {email.summary && <p className="text-body text-ink">{email.summary}</p>}
+        {email.summary && <p className="text-role-body text-ink">{email.summary}</p>}
         {email.keyPoints.length > 0 && (
           <div className="mt-3">
-            <p className="mb-1 text-caption text-ink-muted">
+            <p className="mb-1 text-role-caption text-ink-muted">
               {t("emailDetail.analysis.keyPoints")}
             </p>
             <ul className="flex flex-col gap-1">
               {email.keyPoints.map((point) => (
-                <li key={point} className="flex gap-2 text-body text-ink-mid">
+                <li key={point} className="flex gap-2 text-role-body text-ink-mid">
                   <span aria-hidden="true" className="text-ink-muted">
                     •
                   </span>
@@ -2021,7 +2024,7 @@ function KlornAnalysis({
       <div className="absolute bottom-0 left-0 top-0 w-[3px] bg-gradient-to-b from-accent-muted to-accent" />
       <div className="pl-2">
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <span className="text-caption font-semibold uppercase tracking-wider text-accent-deep">
+          <span className="text-role-caption font-semibold uppercase tracking-wider text-accent-deep">
             {t("emailDetail.analysis.title")}
           </span>
           <div className="flex items-center gap-1.5">
@@ -2043,7 +2046,7 @@ function KlornAnalysis({
 
         {email.keyPoints.length > 0 && (
           <div className="mt-3">
-            <p className="mb-1.5 text-caption font-medium uppercase tracking-wider text-ink-dim">
+            <p className="mb-1.5 text-role-caption font-medium uppercase tracking-wider text-ink-dim">
               {t("emailDetail.analysis.keyPoints")}
             </p>
             <ul className="space-y-1">
@@ -2070,7 +2073,7 @@ function KlornAnalysis({
 function ReplyNeededPill() {
   const { t } = useT();
   return (
-    <span className="shrink-0 rounded-chip bg-accent/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-accent-deeper ring-1 ring-inset ring-accent/20">
+    <span className="shrink-0 rounded-chip bg-accent/10 px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-accent-deeper ring-1 ring-inset ring-accent/20">
       {t("mail.filterReplyNeeded")}
     </span>
   );
@@ -2085,7 +2088,7 @@ function PriorityPill({ priority }: { priority: EmailDetail["priority"] }) {
   };
   return (
     <span
-      className={`shrink-0 rounded-chip px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ring-1 ring-inset ${styles[priority as "URGENT" | "LOW"]}`}
+      className={`shrink-0 rounded-chip px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide ring-1 ring-inset ${styles[priority as "URGENT" | "LOW"]}`}
     >
       {priorityLabel(t, priority as "URGENT" | "LOW")}
     </span>
@@ -2096,7 +2099,7 @@ function CategoryPill({ category }: { category: string }) {
   const { t } = useT();
   const label = categoryLabel(t, category);
   return (
-    <span className="shrink-0 rounded-chip bg-surface-hover px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-ink-mid">
+    <span className="shrink-0 rounded-chip bg-surface-hover px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-ink-mid">
       {label}
     </span>
   );

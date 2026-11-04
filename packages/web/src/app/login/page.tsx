@@ -242,7 +242,7 @@ function LoginForm() {
   return (
     <AuthScreen title={<BrandHeadline />} description={t("auth.subline")} preview={<LanePreview />}>
       {nextPath !== "/inbox" && (
-        <p className="mb-6 rounded-control border border-notice-border bg-notice-bg px-3.5 py-2.5 text-label text-notice-ink">
+        <p className="mb-6 rounded-control border border-notice-border bg-notice-bg px-3.5 py-2.5 text-role-label text-notice-ink">
           {t("auth.signInToContinue", { destination: returnDestinationLabel(nextPath, t) })}
         </p>
       )}
@@ -255,7 +255,7 @@ function LoginForm() {
         <div className="mb-6 space-y-3">
           <div
             data-testid="access-notice"
-            className="rounded-control border border-notice-border bg-notice-bg px-3.5 py-3 text-label text-notice-ink"
+            className="rounded-control border border-notice-border bg-notice-bg px-3.5 py-3 text-role-label text-notice-ink"
           >
             <span className="font-semibold text-notice-ink-strong">
               {t("auth.inviteOnlyTitle")}
@@ -265,16 +265,16 @@ function LoginForm() {
 
           <Link
             href="/early-access"
-            className="focus-ring flex h-11 w-full items-center justify-center rounded-control bg-accent-solid text-label text-accent-solid-ink transition-colors duration-120 ease-fluid hover:bg-accent-solid-hover"
+            className="focus-ring flex h-11 w-full items-center justify-center rounded-control bg-accent-solid text-role-label text-accent-solid-ink transition-colors duration-120 ease-fluid hover:bg-accent-solid-hover"
           >
             {t("auth.requestEarlyAccess")}
           </Link>
 
-          <p className="text-center text-caption text-ink-mid">{t("auth.alreadyApproved")}</p>
+          <p className="text-center text-role-caption text-ink-mid">{t("auth.alreadyApproved")}</p>
         </div>
       )}
 
-      <h2 className="mb-4 text-head text-ink">
+      <h2 className="mb-4 text-role-head text-ink">
         {mode === "login" ? t("auth.formTitleLogin") : t("auth.formTitleRegister")}
       </h2>
 
@@ -287,7 +287,7 @@ function LoginForm() {
           onGoogleClick={handleGoogleClick}
         />
         {pairingCode && (
-          <p role="status" className="mt-3 text-label text-ink-mid">
+          <p role="status" className="mt-3 text-role-label text-ink-mid">
             {t("auth.desktopPairingCode", { code: pairingCode })}
           </p>
         )}
@@ -295,7 +295,7 @@ function LoginForm() {
 
       <div className="my-5 flex items-center gap-3" aria-hidden="true">
         <div className="h-px flex-1 bg-line" />
-        <span className="text-caption text-ink-mid">
+        <span className="text-role-caption text-ink-mid">
           {signupOpen ? t("auth.orContinueEmail") : t("auth.orSignInEmail")}
         </span>
         <div className="h-px flex-1 bg-line" />
@@ -339,7 +339,7 @@ function LoginForm() {
             {mode === "login" && (
               <Link
                 href="/reset-password"
-                className="focus-ring -my-3 inline-flex min-h-11 items-center rounded-control text-caption text-ink-mid transition-colors duration-120 ease-fluid hover:text-accent-deep"
+                className="focus-ring -my-3 inline-flex min-h-11 items-center rounded-control text-role-caption text-ink-mid transition-colors duration-120 ease-fluid hover:text-accent-deep"
               >
                 {t("auth.resetPassword")}
               </Link>
@@ -379,7 +379,7 @@ function LoginForm() {
         </Button>
       </form>
 
-      <p className="mt-6 flex flex-wrap items-center justify-center gap-x-1 text-label text-ink-mid">
+      <p className="mt-6 flex flex-wrap items-center justify-center gap-x-1 text-role-label text-ink-mid">
         {signupOpen ? (
           <>
             <span>{mode === "login" ? t("auth.needAccount") : t("auth.haveAccount")}</span>
@@ -467,7 +467,7 @@ function LegalConsent() {
   );
 
   return (
-    <p className="mb-4 text-center text-caption text-ink-mid">
+    <p className="mb-4 text-center text-role-caption text-ink-mid">
       {text(lead)}
       {termsFirst ? termsLink : privacyLink}
       {text(middle)}

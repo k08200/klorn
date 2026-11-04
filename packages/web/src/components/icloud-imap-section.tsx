@@ -180,7 +180,7 @@ export function ICloudImapSection({ embedded = false, onChanged }: ICloudImapSec
             {t("imap.icloud.title")}
             <BetaChip />
           </h2>
-          <p className="mt-1 text-role-caption text-ink-mid">
+          <p className="mt-1 text-role-body text-ink-mid">
             {t("imap.icloud.body", { count: String(TIER_COUNT) })}
           </p>
         </div>
@@ -195,7 +195,7 @@ export function ICloudImapSection({ embedded = false, onChanged }: ICloudImapSec
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="font-medium">{status.email}</p>
-                <p className="text-caption text-ink-dim">
+                <p className="text-role-caption text-ink-dim">
                   {t("imap.hostSince", { host: status.host ?? "—" })}{" "}
                   {status.connectedAt ? new Date(status.connectedAt).toLocaleString(locale) : "—"}
                 </p>
@@ -243,7 +243,7 @@ export function ICloudImapSection({ embedded = false, onChanged }: ICloudImapSec
               required
               autoComplete="off"
             />
-            <p className="mt-1 text-caption text-ink-mid">
+            <p className="mt-1 text-role-caption text-ink-mid">
               {t("imap.icloud.help.before")}{" "}
               <a
                 href={APP_PASSWORD_HELP_URL}

@@ -428,7 +428,7 @@ function DailyReceiptStrip({
             <div key={tier} className="flex items-center gap-3">
               <TierGlyph tier={tier} className={v.dot} />
               <div className="flex flex-col">
-                <span className="font-mono text-caption uppercase tracking-[0.18em] text-ink-dim">
+                <span className="font-mono text-role-caption uppercase tracking-[0.18em] text-ink-dim">
                   {v.label}
                 </span>
                 <CountChip
@@ -467,7 +467,7 @@ function TierColumn({
     <section className={`glass rounded-card border p-4 transition-opacity ${v.plane}`}>
       <header className="mb-1 flex items-center gap-2">
         <TierGlyph tier={tier} className={v.dot} />
-        <h2 className="font-mono text-caption font-semibold uppercase tracking-[0.2em] text-ink">
+        <h2 className="font-mono text-role-caption font-semibold uppercase tracking-[0.2em] text-ink">
           {v.label}
         </h2>
         <CountChip
@@ -475,7 +475,7 @@ function TierColumn({
           className={`ml-auto text-role-body font-semibold ${v.accent}`}
         />
       </header>
-      <p className="mb-4 text-caption leading-5 text-ink-dim">{v.description}</p>
+      <p className="mb-4 text-role-caption leading-5 text-ink-dim">{v.description}</p>
 
       {items.length === 0 ? (
         <p className="rounded-control border border-dashed border-line px-3 py-8 text-center text-role-caption text-ink-mid">
@@ -539,14 +539,14 @@ function FirewallCard({
     >
       <p className="line-clamp-2 break-words font-medium text-ink">{subject}</p>
       {sender && (
-        <p className="mt-1 flex items-center gap-1.5 truncate text-caption text-ink-dim">
+        <p className="mt-1 flex items-center gap-1.5 truncate text-role-caption text-ink-dim">
           {item.email?.trust && <TrustDot trust={item.email.trust} />}
           <span className="truncate">
             {item.email?.from ? "From" : "To"}: {sender}
           </span>
         </p>
       )}
-      <div className="mt-2 flex items-center gap-1.5 text-caption uppercase tracking-wider text-ink-mid">
+      <div className="mt-2 flex items-center gap-1.5 text-role-caption uppercase tracking-wider text-ink-mid">
         <SourceBadge source={item.source} />
         {item.toolName && (
           <>
@@ -562,21 +562,21 @@ function FirewallCard({
 
       {snippet && (
         <details className="group mt-2.5 rounded-control border border-line bg-surface-raised">
-          <summary className="flex cursor-pointer list-none items-center gap-1 rounded-control px-2.5 py-1.5 text-caption text-ink-mid transition hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+          <summary className="flex cursor-pointer list-none items-center gap-1 rounded-control px-2.5 py-1.5 text-role-caption text-ink-mid transition hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
             <span aria-hidden="true" className="inline-block transition group-open:rotate-90">
               ›
             </span>
             <span className="group-open:hidden">Show preview</span>
             <span className="hidden group-open:inline">Hide preview</span>
           </summary>
-          <p className="line-clamp-6 whitespace-pre-wrap border-t border-line px-2.5 py-2 text-caption leading-4 text-ink-mid">
+          <p className="line-clamp-6 whitespace-pre-wrap border-t border-line px-2.5 py-2 text-role-caption leading-4 text-ink-mid">
             {snippet}
           </p>
         </details>
       )}
 
       {item.tierReason && (
-        <p className="mt-2.5 line-clamp-2 border-l-2 border-line pl-2 text-caption leading-4 text-ink-dim">
+        <p className="mt-2.5 line-clamp-2 border-l-2 border-line pl-2 text-role-caption leading-4 text-ink-dim">
           {item.tierReason}
         </p>
       )}
@@ -590,7 +590,7 @@ function FirewallCard({
               type="button"
               disabled={anyOverriding}
               onClick={() => onOverride(item, target)}
-              className={`ease-strong inline-flex min-h-7 items-center rounded-full border border-line bg-surface-panel/70 px-2.5 text-caption font-medium uppercase tracking-wider text-ink-mid transition duration-150 hover:bg-surface-panel active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40 ${TARGET_BUTTON[target]}`}
+              className={`ease-strong inline-flex min-h-7 items-center rounded-full border border-line bg-surface-panel/70 px-2.5 text-role-caption font-medium uppercase tracking-wider text-ink-mid transition duration-150 hover:bg-surface-panel active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40 ${TARGET_BUTTON[target]}`}
             >
               Move → {target}
             </button>
@@ -598,7 +598,7 @@ function FirewallCard({
         {item.href && (
           <Link
             href={item.href}
-            className={`ml-auto text-caption transition ${v.accent} hover:text-ink`}
+            className={`ml-auto text-role-caption transition ${v.accent} hover:text-ink`}
           >
             Open email →
           </Link>
@@ -663,12 +663,12 @@ function InfoStrip({ count, items }: { count: number; items: FirewallItem[] }) {
     <section className={`glass mt-4 rounded-card border p-4 ${v.plane}`}>
       <header className="flex items-center gap-2">
         <TierGlyph tier="INFO" className={v.dot} />
-        <h2 className="font-mono text-caption font-semibold uppercase tracking-[0.2em] text-ink-dim">
+        <h2 className="font-mono text-role-caption font-semibold uppercase tracking-[0.2em] text-ink-dim">
           INFO
         </h2>
         <CountChip value={count} className={`ml-auto text-role-body font-semibold ${v.accent}`} />
       </header>
-      <p className="mt-1.5 text-caption leading-5 text-ink-dim">{v.description}</p>
+      <p className="mt-1.5 text-role-caption leading-5 text-ink-dim">{v.description}</p>
       <ul className="mt-3 space-y-1.5 text-role-caption text-ink-mid">
         {items.slice(0, 5).map((item) => (
           <li key={item.id} className="flex items-center gap-2 line-clamp-1">
@@ -682,7 +682,7 @@ function InfoStrip({ count, items }: { count: number; items: FirewallItem[] }) {
 }
 
 function SourceBadge({ source }: { source: string }) {
-  return <span className="font-mono text-caption text-ink-dim">{source}</span>;
+  return <span className="font-mono text-role-caption text-ink-dim">{source}</span>;
 }
 
 function relativeTime(iso: string): string {
