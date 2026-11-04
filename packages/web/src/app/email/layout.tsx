@@ -2,10 +2,15 @@
 
 /**
  * Mail split view (design detail pass X3, Reader.dc; MAIL_V2 only): from
- * 1280px the list stays on the left (440px) and the reader opens beside it.
- * A layout, so the list — its scroll, view and selection — survives moving
- * between mails. Below 1280px, without MAIL_V2, and on /email/candidates this
- * renders the route alone: the list → page flow is unchanged.
+ * 700px — a Fold opened, an iPad in portrait, anything wider — the list
+ * stays on the left and the reader opens beside it. The list takes 45% of
+ * the space beside the shell's navigation, 280–440px (globals.css,
+ * .mail-split-list); on a two-segment screen (a book-style foldable or a
+ * dual-screen phone) the seam sits on the hinge instead, and the split is on
+ * whatever the width. A layout, so the list — its scroll, view and
+ * selection — survives moving between mails. Below 700px, without MAIL_V2,
+ * and on /email/candidates this renders the route alone: the list → page
+ * flow is unchanged.
  *
  * In the split the list's own hotkeys stand down while a mail is open, so the
  * reader's J / K / E are the only ones listening.
@@ -19,7 +24,7 @@ import { useT } from "../../lib/i18n";
 import { useMediaQuery } from "../../lib/use-media-query";
 import { MailV2 } from "./_v2/mail-v2";
 
-const SPLIT_QUERY = "(min-width: 1280px)";
+const SPLIT_QUERY = "(min-width: 700px), (horizontal-viewport-segments: 2)";
 const READER_PATH = /^\/email\/([^/]+)$/;
 
 function openEmailId(pathname: string): string | null {
@@ -42,14 +47,18 @@ export default function EmailLayout({ children }: { children: ReactNode }) {
       {split && (
         <section
           data-mail-scroll
-          className="h-full w-[440px] shrink-0 overflow-y-auto border-r border-line bg-surface-panel"
+          className="mail-split-list h-full shrink-0 overflow-y-auto border-r border-line bg-surface-panel"
         >
           <MailV2 pane={{ selectedId }} />
         </section>
       )}
       <div
         data-reader-scroll={split || undefined}
-        className={split ? "h-full min-w-0 flex-1 overflow-y-auto bg-surface-app" : "contents"}
+        className={
+          split
+            ? "mail-split-reader h-full min-w-0 flex-1 overflow-y-auto bg-surface-app"
+            : "contents"
+        }
       >
         {split && !selectedId ? <SplitEmpty /> : children}
       </div>

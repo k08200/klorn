@@ -62,7 +62,7 @@ interface MailHeaderProps {
   onCompose: () => void;
   onSync: () => void;
   onReanalyze: () => void;
-  /** The 440px list column of the split view: smaller title, stacked controls. */
+  /** The list column of the split view (280–440px): smaller title, stacked controls. */
   compact?: boolean;
 }
 

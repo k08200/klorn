@@ -113,7 +113,9 @@ export default function NotificationBell({ userId }: { userId: string }) {
   });
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
-    const update = () => setIsMobile(window.innerWidth < 768);
+    // The bell lives in the rail (600px+) and the sidebar; below 600px is
+    // the full-width fallback (globals.css, --breakpoint-rail).
+    const update = () => setIsMobile(window.innerWidth < 600);
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
@@ -575,7 +577,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
         ref={bellRef}
         type="button"
         onClick={() => setOpen(!open)}
-        className={`focus-ring relative rounded-chip text-ink-mid hover:text-ink transition p-1 ${flash ? "animate-bounce" : ""}`}
+        className={`focus-ring relative inline-flex items-center justify-center rounded-chip text-ink-mid hover:text-ink transition p-1 pointer-coarse:size-11 ${flash ? "animate-bounce" : ""}`}
         aria-label={t("notif.title")}
       >
         <svg
@@ -619,7 +621,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
                     zIndex: 9999,
                   }
             }
-            className="md:w-[min(20rem,calc(100vw-2rem))] bg-surface-panel border border-line rounded-control shadow-xl overflow-hidden flex flex-col max-h-[min(70vh,calc(100vh-6rem))] md:max-h-[28rem]"
+            className="rail:w-[min(20rem,calc(100vw-2rem))] bg-surface-panel border border-line rounded-control shadow-xl overflow-hidden flex flex-col max-h-[min(70vh,calc(100vh-6rem))] rail:max-h-[28rem]"
           >
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-line">
               <div className="flex items-center gap-2">
