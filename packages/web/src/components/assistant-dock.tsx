@@ -87,7 +87,7 @@ export default function AssistantDock({ unified = false }: { unified?: boolean }
           ref={panelRef}
           role="dialog"
           aria-label={t("nav.assistant")}
-          className={`panel-elevated ease-strong fixed ${unified ? LIFTED_BOTTOM : "bottom-24"} right-4 z-[80] flex h-[min(600px,calc(100dvh-8rem))] w-[min(400px,calc(100vw-2rem))] origin-bottom-right flex-col overflow-hidden rounded-2xl border border-line/70 bg-surface-panel transition duration-200 starting:translate-y-2 starting:scale-[0.97] starting:opacity-0 motion-reduce:transition-none md:bottom-[5.25rem] md:right-5`}
+          className={`panel-elevated ease-strong fixed ${unified ? LIFTED_BOTTOM : "bottom-24"} right-4 z-[80] flex h-[min(600px,calc(100dvh-8rem))] w-[min(400px,calc(100vw-2rem))] origin-bottom-right flex-col overflow-hidden rounded-sheet border border-line/70 bg-surface-panel transition duration-200 starting:translate-y-2 starting:scale-[0.97] starting:opacity-0 motion-reduce:transition-none md:bottom-[5.25rem] md:right-5`}
         >
           {/* Head */}
           <div className="flex items-center gap-2.5 border-b border-line-soft px-4 py-3">
@@ -105,7 +105,7 @@ export default function AssistantDock({ unified = false }: { unified?: boolean }
               type="button"
               onClick={chat.newChat}
               disabled={!chat.activeId || chat.sending}
-              className="focus-ring ease-strong h-7 rounded-md px-2 text-caption pointer-coarse:h-11 pointer-coarse:px-3 font-medium text-ink-dim transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97] disabled:opacity-40"
+              className="focus-ring ease-strong h-7 rounded-chip px-2 text-caption pointer-coarse:h-11 pointer-coarse:px-3 font-medium text-ink-dim transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97] disabled:opacity-40"
             >
               {t("chat.newChat")}
             </button>
@@ -113,7 +113,7 @@ export default function AssistantDock({ unified = false }: { unified?: boolean }
               type="button"
               onClick={() => setOpen(false)}
               aria-label={t("assistantDock.close")}
-              className="focus-ring ease-strong flex h-7 w-7 pointer-coarse:h-11 pointer-coarse:w-11 items-center justify-center rounded-md text-ink-dim transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97]"
+              className="focus-ring ease-strong flex h-7 w-7 pointer-coarse:h-11 pointer-coarse:w-11 items-center justify-center rounded-chip text-ink-dim transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97]"
             >
               <svg
                 aria-hidden="true"
@@ -144,7 +144,7 @@ export default function AssistantDock({ unified = false }: { unified?: boolean }
                       <button
                         type="button"
                         onClick={() => chat.send(t(key))}
-                        className="focus-ring ease-strong row-wash w-full rounded-lg border border-line bg-surface-panel/70 px-3 py-2 text-left text-label font-normal text-ink-muted transition duration-150 hover:text-ink active:scale-[0.99]"
+                        className="focus-ring ease-strong row-wash w-full rounded-control border border-line bg-surface-panel/70 px-3 py-2 text-left text-label font-normal text-ink-muted transition duration-150 hover:text-ink active:scale-[0.99]"
                       >
                         {t(key)}
                       </button>
@@ -159,7 +159,7 @@ export default function AssistantDock({ unified = false }: { unified?: boolean }
                 ))}
                 {chat.pendingText && (
                   <div className="ease-strong flex justify-end transition duration-150 starting:translate-y-1 starting:opacity-0 motion-reduce:transition-none">
-                    <div className="max-w-[85%] rounded-2xl rounded-br-md bg-slate-900 px-3.5 py-2 text-label font-normal text-slate-50 shadow-[0_1px_2px_rgba(15,23,42,0.16)]">
+                    <div className="max-w-[85%] rounded-card rounded-br-chip bg-slate-900 px-3.5 py-2 text-label font-normal text-slate-50 shadow-[0_1px_2px_rgba(15,23,42,0.16)]">
                       <p className="whitespace-pre-wrap">{chat.pendingText}</p>
                     </div>
                   </div>
@@ -189,7 +189,7 @@ export default function AssistantDock({ unified = false }: { unified?: boolean }
               chat.send(chat.input);
             }}
           >
-            <div className="flex items-end gap-1.5 rounded-xl border border-line bg-surface-panel px-3 py-2 transition duration-150 ease-out focus-within:border-accent-muted/70 focus-within:ring-2 focus-within:ring-accent/15">
+            <div className="flex items-end gap-1.5 rounded-control border border-line bg-surface-panel px-3 py-2 transition duration-150 ease-out focus-within:border-accent-muted/70 focus-within:ring-2 focus-within:ring-accent/15">
               <textarea
                 ref={inputRef}
                 value={chat.input}
@@ -217,7 +217,7 @@ export default function AssistantDock({ unified = false }: { unified?: boolean }
                 type="submit"
                 disabled={!chat.input.trim() || chat.sending}
                 aria-label={t("chat.send")}
-                className="glow-primary ease-strong flex h-8 w-8 pointer-coarse:h-11 pointer-coarse:w-11 shrink-0 items-center justify-center rounded-lg bg-accent-solid text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
+                className="glow-primary ease-strong flex h-8 w-8 pointer-coarse:h-11 pointer-coarse:w-11 shrink-0 items-center justify-center rounded-chip bg-accent-solid text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <svg
                   aria-hidden="true"
@@ -279,7 +279,7 @@ function DockBubble({
   if (message.role === "USER") {
     return (
       <div className="ease-strong flex justify-end transition duration-150 starting:translate-y-1 starting:opacity-0 motion-reduce:transition-none">
-        <div className="max-w-[85%] rounded-2xl rounded-br-md bg-slate-900 px-3.5 py-2 text-label font-normal text-slate-50 shadow-[0_1px_2px_rgba(15,23,42,0.16)]">
+        <div className="max-w-[85%] rounded-card rounded-br-chip bg-slate-900 px-3.5 py-2 text-label font-normal text-slate-50 shadow-[0_1px_2px_rgba(15,23,42,0.16)]">
           <p className="whitespace-pre-wrap">{message.content}</p>
         </div>
       </div>
@@ -295,7 +295,7 @@ function DockBubble({
       >
         K
       </span>
-      <div className="max-w-[85%] rounded-2xl rounded-tl-md border border-line/70 bg-surface-panel px-3.5 py-2 text-label font-normal text-ink-strong shadow-[0_1px_2px_rgba(15,23,42,0.05)]">
+      <div className="max-w-[85%] rounded-card rounded-tl-chip border border-line/70 bg-surface-panel px-3.5 py-2 text-label font-normal text-ink-strong shadow-[0_1px_2px_rgba(15,23,42,0.05)]">
         {capCode ? (
           <DailyCapLine code={capCode} />
         ) : (

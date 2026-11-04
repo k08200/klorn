@@ -171,7 +171,7 @@ export function AttachmentAnalysis({
   };
 
   return (
-    <section className="mt-5 rounded-xl border border-line bg-surface-raised p-4">
+    <section className="mt-5 rounded-card border border-line bg-surface-raised p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-caption font-semibold uppercase tracking-wider text-ink-dim">
           {t("emailDetail.attachment.title")}
@@ -317,7 +317,7 @@ export function AttachmentAnalysis({
               </div>
             )}
             {attachment.textPreview && (
-              <details className="mt-2 rounded-lg border border-line bg-surface-raised px-3 py-2">
+              <details className="mt-2 rounded-control border border-line bg-surface-raised px-3 py-2">
                 <summary className="cursor-pointer text-caption font-medium text-ink-dim">
                   {t("emailDetail.attachment.textPreview")}
                 </summary>
@@ -448,7 +448,7 @@ function AttachmentCorrectionForm({
   };
 
   return (
-    <div className="mt-3 rounded-lg border border-accent/15 bg-accent/5 p-3">
+    <div className="mt-3 rounded-control border border-accent/15 bg-accent/5 p-3">
       <div className="grid gap-2 sm:grid-cols-[1fr_160px]">
         <label className="block">
           <span className="mb-1 block text-caption uppercase tracking-wider text-ink-mid">

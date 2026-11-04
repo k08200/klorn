@@ -118,7 +118,7 @@ function EventRow({ event, time, conflict }: EventRowProps) {
   return (
     <Link
       href={`${CALENDAR_HREF}/${event.id}`}
-      className="focus-ring -mx-2 flex min-h-12 items-stretch gap-3 rounded-lg px-2 py-1.5 transition-colors duration-120 ease-fluid hover:bg-surface-raised pointer-coarse:min-h-14"
+      className="focus-ring -mx-2 flex min-h-12 items-stretch gap-3 rounded-control px-2 py-1.5 transition-colors duration-120 ease-fluid hover:bg-surface-raised pointer-coarse:min-h-14"
     >
       <span
         className={`flex w-16 shrink-0 flex-col whitespace-nowrap pt-0.5 text-caption tabular-nums ${past ? "text-ink-muted" : "text-ink-soft"}`}

@@ -14,7 +14,7 @@ export default function RefundPage() {
     <main id="main" className="min-h-screen sky-bg text-ink">
       <nav className="mx-auto flex max-w-4xl items-center justify-between px-6 py-5">
         <Link href="/" className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg bg-[#f5f0e8]">
+          <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-control bg-[#f5f0e8]">
             <img src="/brand/mark.svg?v=matte2" alt="" className="h-9 w-9" />
           </div>
           <span className="text-lg font-bold tracking-tight">Klorn</span>

@@ -323,7 +323,7 @@ function CalendarView() {
               setVoiceInitial(null);
               setNewEventOpen(true);
             }}
-            className="glow-primary ease-strong inline-flex h-9 items-center gap-1.5 rounded-lg bg-accent-solid px-3.5 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97]"
+            className="glow-primary ease-strong inline-flex h-9 items-center gap-1.5 rounded-control bg-accent-solid px-3.5 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97]"
           >
             <svg
               aria-hidden="true"
@@ -342,7 +342,7 @@ function CalendarView() {
           </button>
           <VoiceButton
             onTranscript={(text) => void handleVoiceTranscript(text)}
-            className="ease-strong inline-flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-surface-panel/70 text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
+            className="ease-strong inline-flex h-9 w-9 items-center justify-center rounded-control border border-line bg-surface-panel/70 text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
           />
           <button
             type="button"
@@ -350,7 +350,7 @@ function CalendarView() {
             disabled={syncing}
             aria-label={syncing ? t("common.syncing") : t("common.syncNow")}
             title={t("common.syncNow")}
-            className="ease-strong inline-flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-surface-panel/70 text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
+            className="ease-strong inline-flex h-9 w-9 items-center justify-center rounded-control border border-line bg-surface-panel/70 text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
           >
             <svg
               aria-hidden="true"
@@ -378,7 +378,7 @@ function CalendarView() {
       </div>
 
       {loading && (
-        <div className="rounded-lg border border-line bg-surface-panel px-4 py-5 text-center text-sm text-ink-dim">
+        <div className="rounded-card border border-line bg-surface-panel px-4 py-5 text-center text-sm text-ink-dim">
           {t("calendar.gathering")}
         </div>
       )}
@@ -386,13 +386,13 @@ function CalendarView() {
       {error && <ErrorAlert className="mb-4">{error}</ErrorAlert>}
 
       {syncMessage && !error && (
-        <div className="mb-4 rounded-lg border border-state-ok-line bg-state-ok-bg px-4 py-3 text-sm text-state-ok-ink">
+        <div className="mb-4 rounded-control border border-state-ok-line bg-state-ok-bg px-4 py-3 text-sm text-state-ok-ink">
           {syncMessage}
         </div>
       )}
 
       {!loading && !error && events.length === 0 && (
-        <div className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-6 text-center">
+        <div className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-6 text-center">
           <p className="mb-1 text-sm text-ink-mid">
             {googleConnected === false
               ? t("calendar.empty.notConnected")
@@ -409,7 +409,7 @@ function CalendarView() {
               onClick={() => {
                 void startGoogleConnect();
               }}
-              className="ease-strong inline-flex min-h-11 items-center rounded-lg border border-line bg-surface-panel/70 px-4 py-2 text-sm font-medium text-ink-muted shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
+              className="ease-strong inline-flex min-h-11 items-center rounded-control border border-line bg-surface-panel/70 px-4 py-2 text-sm font-medium text-ink-muted shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
             >
               {t("mail.connectGoogle")}
             </button>
@@ -418,7 +418,7 @@ function CalendarView() {
               type="button"
               onClick={syncNow}
               disabled={syncing}
-              className="ease-strong min-h-11 rounded-lg border border-line bg-surface-panel/70 px-4 py-2 text-sm font-medium text-ink-muted shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
+              className="ease-strong min-h-11 rounded-control border border-line bg-surface-panel/70 px-4 py-2 text-sm font-medium text-ink-muted shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
             >
               {syncing ? t("common.syncing") : t("calendar.syncAgain")}
             </button>
@@ -500,7 +500,7 @@ function AgendaList({
 
   if (days.length === 0) {
     return (
-      <div className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel px-4 py-6 text-center text-sm text-ink-dim">
+      <div className="panel-elevated rounded-card border border-line/70 bg-surface-panel px-4 py-6 text-center text-sm text-ink-dim">
         {t("calendar.nothingThisMonth")}
       </div>
     );
@@ -520,12 +520,12 @@ function AgendaList({
               })}
             </h3>
             {key === todayKey && (
-              <span className="rounded-md bg-accent/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-accent-deep ring-1 ring-inset ring-accent/20">
+              <span className="rounded-chip bg-accent/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-accent-deep ring-1 ring-inset ring-accent/20">
                 {t("nav.v2.today")}
               </span>
             )}
           </div>
-          <div className="panel-elevated overflow-hidden rounded-2xl border border-line/70 bg-surface-panel">
+          <div className="panel-elevated overflow-hidden rounded-card border border-line/70 bg-surface-panel">
             <ul className="divide-y divide-line-soft">
               {list.map((ev) => (
                 <li key={ev.id} className="row-wash relative">
@@ -601,14 +601,14 @@ function MonthGrid({
   const viewMonthIdx = monthIndexInZone(viewMonth, timeZone);
 
   return (
-    <div className="panel-elevated overflow-hidden rounded-2xl border border-line/70 bg-surface-panel">
+    <div className="panel-elevated overflow-hidden rounded-card border border-line/70 bg-surface-panel">
       <div className="flex items-center justify-between gap-3 border-b border-line-soft px-4 py-2.5">
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={onPrev}
             aria-label={t("calendar.prevMonth")}
-            className="ease-strong flex h-11 w-11 items-center justify-center rounded-lg text-ink-mid transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97]"
+            className="ease-strong flex h-11 w-11 items-center justify-center rounded-control text-ink-mid transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97]"
           >
             ‹
           </button>
@@ -616,7 +616,7 @@ function MonthGrid({
             type="button"
             onClick={onNext}
             aria-label={t("calendar.nextMonth")}
-            className="ease-strong flex h-11 w-11 items-center justify-center rounded-lg text-ink-mid transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97]"
+            className="ease-strong flex h-11 w-11 items-center justify-center rounded-control text-ink-mid transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97]"
           >
             ›
           </button>
@@ -625,7 +625,7 @@ function MonthGrid({
         <button
           type="button"
           onClick={onToday}
-          className="ease-strong rounded-lg border border-line bg-surface-panel/70 px-3 py-1 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
+          className="ease-strong rounded-control border border-line bg-surface-panel/70 px-3 py-1 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
         >
           {t("nav.v2.today")}
         </button>
@@ -754,7 +754,7 @@ function EventChip({
     <Link
       href={`/calendar/${event.id}`}
       title={`${timeLabel ? `${timeLabel} · ` : ""}${event.title || "Untitled"}`}
-      className={`flex items-center gap-1 truncate rounded-md px-1 py-0.5 text-caption transition duration-150 ${
+      className={`flex items-center gap-1 truncate rounded-chip px-1 py-0.5 text-caption transition duration-150 ${
         dimmed
           ? "text-ink-dim hover:bg-surface-hover hover:text-ink-mid"
           : "text-ink hover:bg-accent/10 hover:text-accent-deeper"

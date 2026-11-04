@@ -71,7 +71,7 @@ function formatDay(iso: string): string {
 
 function StatTile({ label, value, detail }: { label: string; value: string; detail?: string }) {
   return (
-    <div className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-5">
+    <div className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-5">
       <p className="text-xs font-medium uppercase tracking-[0.18em] text-ink-dim">{label}</p>
       <p className="mt-2 text-[26px] font-semibold leading-none tracking-[-0.02em] text-ink tabular-nums">
         {value}
@@ -85,14 +85,14 @@ function DailyActivity({ daily }: { daily: DailyUsage[] }) {
   const { t } = useT();
   const maxTokens = Math.max(...daily.map((d) => d.tokens), 1);
   return (
-    <div className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-5">
+    <div className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-5">
       <h2 className="text-sm font-semibold text-ink">{t("usage.dailyActivity.title")}</h2>
       <p className="mt-1 text-xs text-ink-mid">{t("usage.dailyActivity.subtitle")}</p>
       <ul className="mt-4 space-y-1">
         {daily.map((d) => (
           <li
             key={d.date}
-            className="grid grid-cols-[64px_1fr_72px_64px] items-center gap-3 rounded-md px-2 py-1.5 text-xs transition hover:bg-surface-raised"
+            className="grid grid-cols-[64px_1fr_72px_64px] items-center gap-3 rounded-control px-2 py-1.5 text-xs transition hover:bg-surface-raised"
           >
             <span className="text-ink-mid">{formatDay(d.date)}</span>
             <span className="h-2 overflow-hidden rounded-full bg-surface-hover">
@@ -113,7 +113,7 @@ function DailyActivity({ daily }: { daily: DailyUsage[] }) {
 function ConversationsTable({ conversations }: { conversations: ConversationUsage[] }) {
   const { t } = useT();
   return (
-    <div className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-5">
+    <div className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-5">
       <h2 className="text-sm font-semibold text-ink">{t("usage.conversations.title")}</h2>
       <p className="mt-1 text-xs text-ink-mid">{t("usage.conversations.subtitle")}</p>
       <ResponsiveTable className="mt-4">
@@ -226,7 +226,7 @@ function UsageView() {
       {loading && <LoadingState rows={3} />}
 
       {!loading && !error && summary && !hasActivity && (
-        <div className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel">
+        <div className="panel-elevated rounded-card border border-line/70 bg-surface-panel">
           <EmptyState title={t("usage.empty.title")} description={t("usage.empty.description")} />
         </div>
       )}

@@ -128,7 +128,7 @@ function GraphPageInner() {
         <div
           role="group"
           aria-label={t("graph.view.aria")}
-          className="mb-4 inline-flex rounded-xl border border-line bg-surface-raised p-1"
+          className="mb-4 inline-flex rounded-control border border-line bg-surface-raised p-1"
         >
           {(["relationships", "decisions"] as Mode[]).map((mKey) => (
             <button
@@ -136,7 +136,7 @@ function GraphPageInner() {
               type="button"
               aria-pressed={mode === mKey}
               onClick={() => setMode(mKey)}
-              className={`rounded-lg px-3 py-1.5 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+              className={`rounded-chip px-3 py-1.5 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
                 mode === mKey
                   ? "bg-accent-solid font-semibold text-accent-solid-ink"
                   : "text-ink-mid hover:text-ink"
@@ -147,7 +147,7 @@ function GraphPageInner() {
           ))}
         </div>
 
-        <header className="mb-6 rounded-2xl border border-line bg-surface-panel p-5 shadow-sm shadow-black/20">
+        <header className="mb-6 rounded-card border border-line bg-surface-panel p-5 shadow-sm shadow-black/20">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-accent-deep">
             {t(copy.eyebrow)}
           </p>
@@ -202,7 +202,7 @@ function GraphPageInner() {
         {loading ? (
           <LoadingState rows={1} rowHeight="h-96" label={t("statePage.graphLoading")} />
         ) : !data ? (
-          <p className="rounded-xl border border-line bg-surface-raised p-6 text-sm text-ink-mid">
+          <p className="rounded-card border border-line bg-surface-raised p-6 text-sm text-ink-mid">
             {t("graph.noData")}
           </p>
         ) : (
@@ -222,7 +222,7 @@ function TopNodesFallback({ nodes, mode }: { nodes: GraphNode[]; mode: Mode }) {
   const { t } = useT();
   if (nodes.length === 0) return null;
   return (
-    <section className="mt-6 rounded-2xl border border-line bg-surface-panel p-5">
+    <section className="mt-6 rounded-card border border-line bg-surface-panel p-5">
       <h2 className="text-sm font-semibold text-ink">
         {t(mode === "decisions" ? "graph.top.decisions" : "graph.top.contacts")}
       </h2>

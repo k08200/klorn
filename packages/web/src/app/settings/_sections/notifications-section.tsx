@@ -198,7 +198,7 @@ export function NotificationsSection() {
             </p>
           </div>
           {pushStatus === "unsupported" || pushStatus === "denied" ? (
-            <span className="text-sm text-ink-dim bg-surface-raised px-3 py-1.5 rounded-lg border border-line">
+            <span className="text-sm text-ink-dim bg-surface-raised px-3 py-1.5 rounded-control border border-line">
               {pushStatus === "denied"
                 ? t("settings.pushNotifications.blockedChip")
                 : t("settings.pushNotifications.unsupportedChip")}
@@ -233,7 +233,7 @@ export function NotificationsSection() {
                   !notifPrefs.notifyDailyBriefing &&
                   !notifPrefs.notifyEmailCandidate
                 }
-                className="ease-strong min-h-11 rounded-lg border border-line-strong px-3 py-2 text-sm text-ink-soft transition duration-150 hover:bg-surface-hover active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 aria-pressed:border-accent aria-pressed:text-accent-deep"
+                className="ease-strong min-h-11 rounded-control border border-line-strong px-3 py-2 text-sm text-ink-soft transition duration-150 hover:bg-surface-hover active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 aria-pressed:border-accent aria-pressed:text-accent-deep"
               >
                 {t("settings.notifPrefs.essentialsOnly")}
               </button>
@@ -270,7 +270,7 @@ export function NotificationsSection() {
             ].map((row) => (
               <label
                 key={row.key}
-                className="flex items-start gap-3 py-2 cursor-pointer hover:bg-surface-hover rounded-lg px-2 transition"
+                className="flex items-start gap-3 py-2 cursor-pointer hover:bg-surface-hover rounded-control px-2 transition"
               >
                 <input
                   // The pref name doubles as the anchor id: the daily digest

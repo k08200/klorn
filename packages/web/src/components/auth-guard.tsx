@@ -77,7 +77,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
         </div>
         <div
           aria-hidden="true"
-          className="mt-10 overflow-hidden rounded-xl bg-surface-panel ring-1 ring-line"
+          className="mt-10 overflow-hidden rounded-card bg-surface-panel ring-1 ring-line"
         >
           <MailRowSkeleton />
         </div>
@@ -209,7 +209,7 @@ function ApiOfflineScreen() {
         <button
           type="button"
           onClick={retryNow}
-          className="mt-6 inline-flex min-h-11 items-center rounded-md bg-accent-solid px-5 text-sm font-semibold text-accent-solid-ink transition hover:bg-accent-solid-hover focus-ring"
+          className="mt-6 inline-flex min-h-11 items-center rounded-control bg-accent-solid px-5 text-sm font-semibold text-accent-solid-ink transition hover:bg-accent-solid-hover focus-ring"
         >
           {t("authGuard.offline.retry")}
         </button>

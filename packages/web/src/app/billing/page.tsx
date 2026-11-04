@@ -204,12 +204,12 @@ function BillingContent() {
       </header>
 
       {success && (
-        <div className="mb-6 rounded-xl border border-state-ok-line bg-state-ok-bg p-4 text-sm text-state-ok-ink">
+        <div className="mb-6 rounded-control border border-state-ok-line bg-state-ok-bg p-4 text-sm text-state-ok-ink">
           {t("billing.subscriptionActive")}
         </div>
       )}
       {canceled && (
-        <div className="mb-6 rounded-xl border border-state-warn-line bg-state-warn-bg p-4 text-sm text-state-warn-ink">
+        <div className="mb-6 rounded-control border border-state-warn-line bg-state-warn-bg p-4 text-sm text-state-warn-ink">
           {t("billing.checkoutCanceled")}
         </div>
       )}
@@ -223,7 +223,7 @@ function BillingContent() {
       )}
 
       {!loading && status && (
-        <div className="panel-elevated mb-8 rounded-2xl border border-line/70 bg-surface-panel p-5">
+        <div className="panel-elevated mb-8 rounded-card border border-line/70 bg-surface-panel p-5">
           {/* Identity on the left, actions on the right. The renewal line
               sits under the plan name because it is a fact ABOUT the plan,
               not a caption for the buttons — floated up next to them it read
@@ -281,7 +281,7 @@ function BillingContent() {
           return (
             <div
               key={plan.key}
-              className={`panel-elevated flex flex-col rounded-2xl border bg-surface-panel p-6 ${
+              className={`panel-elevated flex flex-col rounded-card border bg-surface-panel p-6 ${
                 isCurrent
                   ? "border-accent-muted/70"
                   : plan.key === "PRO"
@@ -320,19 +320,19 @@ function BillingContent() {
               </ul>
 
               {isCurrent ? (
-                <div className="rounded-lg border border-accent-muted/45 bg-accent/8 py-2 text-center text-sm font-medium text-accent-deeper">
+                <div className="rounded-control border border-accent-muted/45 bg-accent/8 py-2 text-center text-sm font-medium text-accent-deeper">
                   {t("billing.currentPlan")}
                 </div>
               ) : plan.key === "FREE" ? (
                 // Non-current FREE card: render a neutral pill (not an empty div)
                 // so every plan card keeps the same footer height and alignment.
-                <div className="rounded-lg border border-line bg-surface-raised py-2 text-center text-sm font-medium text-ink-mid">
+                <div className="rounded-control border border-line bg-surface-raised py-2 text-center text-sm font-medium text-ink-mid">
                   {t("billing.includedWithEveryPlan")}
                 </div>
               ) : plan.key === "ENTERPRISE" ? (
                 <a
                   href="mailto:k0820086@gmail.com"
-                  className="ease-strong block rounded-lg border border-line bg-surface-panel/70 py-2.5 text-center text-sm font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring min-h-11"
+                  className="ease-strong block rounded-control border border-line bg-surface-panel/70 py-2.5 text-center text-sm font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring min-h-11"
                 >
                   {t("billing.contactSales")}
                 </a>
@@ -346,7 +346,7 @@ function BillingContent() {
                 <button
                   type="button"
                   disabled
-                  className="rounded-lg border border-line bg-surface-hover py-2.5 text-sm font-semibold text-ink-dim min-h-11"
+                  className="rounded-control border border-line bg-surface-hover py-2.5 text-sm font-semibold text-ink-dim min-h-11"
                 >
                   {t("billing.subscriptionComingSoon")}
                 </button>
@@ -354,7 +354,7 @@ function BillingContent() {
                 <button
                   type="button"
                   onClick={() => handleUpgrade(plan.key as "PRO")}
-                  className="glow-primary ease-strong focus-ring min-h-11 rounded-lg bg-accent-solid py-2.5 text-sm font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97]"
+                  className="glow-primary ease-strong focus-ring min-h-11 rounded-control bg-accent-solid py-2.5 text-sm font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97]"
                 >
                   {t("billing.startTrial")}
                 </button>
@@ -394,7 +394,7 @@ function PlanDetails() {
         {PLAN_FAQ.map((item) => (
           <div
             key={item.qKey}
-            className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-5"
+            className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-5"
           >
             <dt className="text-sm font-semibold text-ink">{t(item.qKey)}</dt>
             <dd className="mt-1.5 text-sm leading-relaxed text-ink-mid">

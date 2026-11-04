@@ -155,7 +155,7 @@ export default function LinkCompletePage() {
       {view.action ? (
         <Link
           href={view.action.href}
-          className="inline-flex min-h-11 items-center justify-center rounded-lg bg-accent-solid px-5 text-label font-medium text-accent-solid-ink transition hover:bg-accent-solid-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+          className="inline-flex min-h-11 items-center justify-center rounded-control bg-accent-solid px-5 text-label font-medium text-accent-solid-ink transition hover:bg-accent-solid-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
         >
           {t(view.action.label)}
         </Link>

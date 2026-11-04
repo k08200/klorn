@@ -28,7 +28,7 @@ const SUGGESTION_KEYS = [
 
 /** The reader's own message. The legacy page keeps its classes byte for byte. */
 const LEGACY_USER_BUBBLE =
-  "max-w-[85%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-2.5 text-sm text-slate-50 shadow-[0_1px_2px_rgba(15,23,42,0.16)]";
+  "max-w-[85%] rounded-card rounded-br-chip bg-slate-900 px-4 py-2.5 text-sm text-slate-50 shadow-[0_1px_2px_rgba(15,23,42,0.16)]";
 const HUB_USER_BUBBLE =
   "max-w-[85%] rounded-card rounded-br-chip bg-accent-solid px-4 py-2.5 text-body text-accent-solid-ink";
 
@@ -89,7 +89,7 @@ export function ChatView({ hub = false }: { hub?: boolean }) {
           type="button"
           onClick={newChat}
           disabled={!activeId || sending}
-          className="focus-ring ease-strong inline-flex min-h-[44px] shrink-0 items-center rounded-lg border border-line bg-surface-panel/70 px-3 text-sm font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-40 md:min-h-9"
+          className="focus-ring ease-strong inline-flex min-h-[44px] shrink-0 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-sm font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-40 md:min-h-9"
         >
           {t("chat.newChat")}
         </button>
@@ -107,7 +107,7 @@ export function ChatView({ hub = false }: { hub?: boolean }) {
                   <button
                     type="button"
                     onClick={() => send(t(key))}
-                    className="focus-ring ease-strong row-wash min-h-[44px] w-full rounded-xl border border-line bg-surface-panel/70 px-4 py-2.5 text-left text-sm text-ink-muted shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:text-ink active:scale-[0.99]"
+                    className="focus-ring ease-strong row-wash min-h-[44px] w-full rounded-control border border-line bg-surface-panel/70 px-4 py-2.5 text-left text-sm text-ink-muted shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:text-ink active:scale-[0.99]"
                   >
                     {t(key)}
                   </button>
@@ -155,7 +155,7 @@ export function ChatView({ hub = false }: { hub?: boolean }) {
           send(input);
         }}
       >
-        <div className="panel-elevated flex min-h-[44px] flex-1 items-center gap-2 rounded-2xl border border-line/70 bg-surface-panel px-3.5 py-2 transition duration-150 ease-out focus-within:border-accent-muted/70 focus-within:ring-2 focus-within:ring-accent/15">
+        <div className="panel-elevated flex min-h-[44px] flex-1 items-center gap-2 rounded-control border border-line/70 bg-surface-panel px-3.5 py-2 transition duration-150 ease-out focus-within:border-accent-muted/70 focus-within:ring-2 focus-within:ring-accent/15">
           <textarea
             ref={inputRef}
             value={input}
@@ -184,7 +184,7 @@ export function ChatView({ hub = false }: { hub?: boolean }) {
         <button
           type="submit"
           disabled={!input.trim() || sending}
-          className="focus-ring glow-primary ease-strong inline-flex min-h-[44px] items-center rounded-xl bg-accent-solid px-4 text-sm font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
+          className="focus-ring glow-primary ease-strong inline-flex min-h-[44px] items-center rounded-control bg-accent-solid px-4 text-sm font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
         >
           {t("chat.send")}
         </button>
@@ -221,7 +221,7 @@ function MessageBubble({
       >
         K
       </span>
-      <div className="max-w-[85%] rounded-2xl rounded-tl-md border border-line/70 bg-surface-panel px-4 py-2.5 text-sm text-ink-strong shadow-[0_1px_2px_rgba(15,23,42,0.05)]">
+      <div className="max-w-[85%] rounded-card rounded-tl-chip border border-line/70 bg-surface-panel px-4 py-2.5 text-sm text-ink-strong shadow-[0_1px_2px_rgba(15,23,42,0.05)]">
         {capCode ? (
           <DailyCapLine code={capCode} />
         ) : (

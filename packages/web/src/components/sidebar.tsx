@@ -74,7 +74,7 @@ function NavCountBadge({ count, active }: { count: number; active: boolean }) {
   if (count <= 0) return null;
   return (
     <span
-      className={`rounded-md px-1.5 py-0.5 text-caption font-semibold tabular-nums ${
+      className={`rounded-chip px-1.5 py-0.5 text-caption font-semibold tabular-nums ${
         active ? "bg-accent-solid text-accent-solid-ink shadow-sm" : "bg-surface-hover text-ink-mid"
       }`}
     >
@@ -185,7 +185,7 @@ export default function Sidebar() {
           <Link
             href={unified ? TODAY_HOME : "/inbox"}
             aria-label={unified ? t("nav.v2.openToday") : t("nav.v2.openApprovals")}
-            className="flex items-center gap-2.5 rounded-lg px-1 py-1 text-sm font-semibold text-ink transition hover:text-ink"
+            className="flex items-center gap-2.5 rounded-chip px-1 py-1 text-sm font-semibold text-ink transition hover:text-ink"
           >
             <img src="/brand/mark.svg?v=matte2" alt="" className="h-8 w-8" />
             <span>
@@ -217,7 +217,7 @@ export default function Sidebar() {
                   // A section with links under it is highlighted, but the
                   // current page is the link below it, not the section.
                   aria-current={active && !item.children ? "page" : undefined}
-                  className={`focus-ring relative flex min-h-10 items-center gap-3 rounded-lg px-3 py-2 text-label transition ${
+                  className={`focus-ring relative flex min-h-10 items-center gap-3 rounded-control px-3 py-2 text-label transition ${
                     active
                       ? "bg-state-info-bg font-medium text-accent-deeper shadow-[0_1px_2px_rgba(2,60,110,0.06)] ring-1 ring-inset ring-accent-dim dark:ring-state-info-line"
                       : "text-ink-mid hover:bg-surface-hover/70 hover:text-ink"
@@ -245,7 +245,7 @@ export default function Sidebar() {
                         <Link
                           href={child.href}
                           aria-current={current ? "page" : undefined}
-                          className={`focus-ring flex min-h-10 items-center rounded-lg px-3 py-1.5 text-label transition-colors duration-120 ease-fluid ${
+                          className={`focus-ring flex min-h-10 items-center rounded-control px-3 py-1.5 text-label transition-colors duration-120 ease-fluid ${
                             current
                               ? "text-ink"
                               : "font-normal text-ink-mid hover:bg-surface-hover/70 hover:text-ink"
@@ -263,7 +263,7 @@ export default function Sidebar() {
               <Link
                 href="/admin"
                 aria-current={pathname.startsWith("/admin") ? "page" : undefined}
-                className={`focus-ring relative flex min-h-10 items-center gap-3 rounded-lg px-3 py-2 text-label transition ${
+                className={`focus-ring relative flex min-h-10 items-center gap-3 rounded-control px-3 py-2 text-label transition ${
                   pathname.startsWith("/admin")
                     ? "bg-state-info-bg font-medium text-accent-deeper shadow-[0_1px_2px_rgba(2,60,110,0.06)] ring-1 ring-inset ring-accent-dim dark:ring-state-info-line"
                     : "text-ink-mid hover:bg-surface-hover/70 hover:text-ink"
@@ -294,7 +294,7 @@ export default function Sidebar() {
             statement, not decoration. Under UNIFIED_HOME the Accounts group
             above states each account's health instead. */}
         {user && googleConnected === true && !unified && (
-          <div className="mx-2 mb-2 rounded-xl border border-state-info-line bg-state-info-bg p-3 shadow-[0_1px_2px_rgba(2,60,110,0.05)]">
+          <div className="mx-2 mb-2 rounded-control border border-state-info-line bg-state-info-bg p-3 shadow-[0_1px_2px_rgba(2,60,110,0.05)]">
             <div className="flex items-center gap-1.5 text-caption font-semibold text-state-info-ink">
               <span aria-hidden="true" className="relative flex h-1.5 w-1.5">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60 motion-reduce:animate-none" />
@@ -309,7 +309,7 @@ export default function Sidebar() {
         {/* User */}
         <div className="border-t border-line/70 p-2" ref={userMenuRef}>
           {authLoading ? (
-            <div className="flex items-center gap-2.5 rounded-lg px-2 py-2">
+            <div className="flex items-center gap-2.5 rounded-control px-2 py-2">
               <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-surface-hover" />
               <div className="h-3 w-24 animate-pulse rounded bg-surface-hover" />
             </div>
@@ -322,7 +322,7 @@ export default function Sidebar() {
                 aria-expanded={showUserMenu}
                 aria-controls={showUserMenu ? userMenuId : undefined}
                 onClick={() => setShowUserMenu((p) => !p)}
-                className="w-full flex items-center gap-2.5 rounded-lg px-2 py-2 hover:bg-surface-hover/70 transition text-left"
+                className="w-full flex items-center gap-2.5 rounded-control px-2 py-2 hover:bg-surface-hover/70 transition text-left"
               >
                 <div className="avatar-ring flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent-solid to-accent-solid-hover text-caption font-bold text-accent-solid-ink">
                   {initials}
@@ -350,26 +350,26 @@ export default function Sidebar() {
               {showUserMenu && (
                 <div
                   id={userMenuId}
-                  className="absolute bottom-full left-0 right-0 mb-1 bg-surface-panel border border-line rounded-xl shadow-xl shadow-slate-900/10 z-50 py-1 animate-slide-up"
+                  className="absolute bottom-full left-0 right-0 mb-1 bg-surface-panel border border-line rounded-control shadow-xl shadow-slate-900/10 z-50 py-1 animate-slide-up"
                 >
                   <Link
                     href="/billing"
                     onClick={() => setShowUserMenu(false)}
-                    className="block px-3 py-2 text-sm text-ink-mid hover:bg-surface-hover rounded-md mx-1 transition"
+                    className="block px-3 py-2 text-sm text-ink-mid hover:bg-surface-hover rounded-chip mx-1 transition"
                   >
                     {t("nav.billing")}
                   </Link>
                   <Link
                     href="/usage"
                     onClick={() => setShowUserMenu(false)}
-                    className="block px-3 py-2 text-sm text-ink-mid hover:bg-surface-hover rounded-md mx-1 transition"
+                    className="block px-3 py-2 text-sm text-ink-mid hover:bg-surface-hover rounded-chip mx-1 transition"
                   >
                     {t("nav.usage")}
                   </Link>
                   <Link
                     href="/settings"
                     onClick={() => setShowUserMenu(false)}
-                    className="block px-3 py-2 text-sm text-ink-mid hover:bg-surface-hover rounded-md mx-1 transition"
+                    className="block px-3 py-2 text-sm text-ink-mid hover:bg-surface-hover rounded-chip mx-1 transition"
                   >
                     {t("settings.title")}
                   </Link>
@@ -378,7 +378,7 @@ export default function Sidebar() {
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={() => setShowUserMenu(false)}
-                    className="block px-3 py-2 text-sm text-ink-mid hover:bg-surface-hover rounded-md mx-1 transition"
+                    className="block px-3 py-2 text-sm text-ink-mid hover:bg-surface-hover rounded-chip mx-1 transition"
                   >
                     {t("nav.blog")}
                   </a>
@@ -389,7 +389,7 @@ export default function Sidebar() {
                       setShowUserMenu(false);
                       logout();
                     }}
-                    className="w-[calc(100%-0.5rem)] text-left px-3 py-2 text-sm text-state-danger-ink hover:bg-red-500/10 rounded-md mx-1 transition"
+                    className="w-[calc(100%-0.5rem)] text-left px-3 py-2 text-sm text-state-danger-ink hover:bg-red-500/10 rounded-chip mx-1 transition"
                   >
                     {t("nav.logout")}
                   </button>
@@ -399,7 +399,7 @@ export default function Sidebar() {
           ) : (
             <Link
               href="/login"
-              className="flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-mid hover:bg-surface-hover hover:text-ink transition"
+              className="flex items-center justify-center gap-2 rounded-control px-3 py-2 text-sm text-ink-mid hover:bg-surface-hover hover:text-ink transition"
             >
               {t("nav.logIn")}
             </Link>

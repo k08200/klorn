@@ -37,7 +37,7 @@ export function TodayActionsCard() {
 
   if (query.isLoading) {
     return (
-      <section className="panel-elevated mb-4 rounded-2xl border border-line/70 bg-surface-panel p-4">
+      <section className="panel-elevated mb-4 rounded-card border border-line/70 bg-surface-panel p-4">
         <p className="text-xs text-ink-dim">{t("todayActions.loading")}</p>
       </section>
     );
@@ -54,7 +54,7 @@ export function TodayActionsCard() {
 
   if (idle) {
     return (
-      <section className="panel-elevated mb-4 rounded-2xl border border-line/70 bg-surface-panel p-4">
+      <section className="panel-elevated mb-4 rounded-card border border-line/70 bg-surface-panel p-4">
         <header className="mb-2 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-ink">{t("todayActions.title")}</h2>
           <span className="text-caption text-ink-dim">{t("todayActions.since")}</span>
@@ -65,7 +65,7 @@ export function TodayActionsCard() {
   }
 
   return (
-    <section className="panel-elevated mb-4 rounded-2xl border border-line/70 bg-surface-panel p-4">
+    <section className="panel-elevated mb-4 rounded-card border border-line/70 bg-surface-panel p-4">
       <header className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-ink">{t("todayActions.title")}</h2>
         <span className="text-caption text-ink-dim">{t("todayActions.since")}</span>
@@ -155,7 +155,7 @@ function TodayStat({
     idle: "border-line bg-surface-panel text-ink-mid",
   }[tone];
   return (
-    <div className={`rounded-lg border px-2.5 py-2 ${toneClasses}`}>
+    <div className={`rounded-control border px-2.5 py-2 ${toneClasses}`}>
       <p className="text-caption uppercase tracking-wider opacity-70">{label}</p>
       <p className="text-base font-semibold leading-none">{value}</p>
     </div>
@@ -181,7 +181,7 @@ function TodayRow({
     urgent: "bg-rose-400",
   }[tone];
   const inner = (
-    <div className="flex items-start gap-2 rounded-lg border border-line bg-surface-raised px-3 py-2">
+    <div className="flex items-start gap-2 rounded-control border border-line bg-surface-raised px-3 py-2">
       <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${dot}`} aria-hidden />
       <div className="min-w-0 flex-1">
         <p className="text-caption font-medium text-ink-mid">

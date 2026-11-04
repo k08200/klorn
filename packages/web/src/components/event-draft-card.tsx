@@ -84,8 +84,8 @@ export default function EventDraftCard({ draft }: { draft: EventDraft }) {
   };
 
   return (
-    <div className="mt-2 rounded-xl border border-line/70 bg-surface-panel p-3 text-sm shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-      <span className="inline-flex rounded-md bg-accent/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-accent-deep ring-1 ring-inset ring-accent/20">
+    <div className="mt-2 rounded-card border border-line/70 bg-surface-panel p-3 text-sm shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+      <span className="inline-flex rounded-chip bg-accent/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-accent-deep ring-1 ring-inset ring-accent/20">
         {t("draft.title")}
       </span>
       <p className="mt-1.5 font-medium text-ink">{draft.title}</p>
@@ -110,7 +110,7 @@ export default function EventDraftCard({ draft }: { draft: EventDraft }) {
             type="button"
             onClick={() => void save()}
             disabled={state === "saving"}
-            className="focus-ring glow-primary ease-strong min-h-[44px] rounded-lg bg-accent-solid px-4 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
+            className="focus-ring glow-primary ease-strong min-h-[44px] rounded-control bg-accent-solid px-4 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {state === "saving" ? t("draft.saving") : t("draft.save")}
           </button>

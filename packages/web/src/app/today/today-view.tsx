@@ -67,7 +67,7 @@ export function TodayView() {
             label: t("today.connect.action"),
             onClick: () => router.push(ACCOUNTS_HREF),
           }}
-          className="rounded-xl bg-surface-panel ring-1 ring-line"
+          className="rounded-card bg-surface-panel ring-1 ring-line"
         />
       ) : (
         <div className="@container">

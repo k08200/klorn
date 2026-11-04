@@ -96,7 +96,7 @@ function ApprovalsRow() {
   return (
     <Link
       href={assistantHref()}
-      className="focus-ring flex min-h-10 items-center gap-2 rounded-lg bg-surface-hover px-3 text-label text-ink transition-colors duration-120 ease-fluid hover:bg-surface-inset pointer-coarse:min-h-11"
+      className="focus-ring flex min-h-10 items-center gap-2 rounded-control bg-surface-hover px-3 text-label text-ink transition-colors duration-120 ease-fluid hover:bg-surface-inset pointer-coarse:min-h-11"
     >
       {approvals.loading ? (
         <SkeletonGroup label={t("today.approvals.loading")} className="flex-1">
@@ -148,7 +148,7 @@ function AskBox() {
         maxLength={ASK_MAX_LENGTH}
         placeholder={t("today.ask.placeholder")}
         autoComplete="off"
-        className="focus-ring h-10 min-w-0 flex-1 rounded-lg border border-line-strong bg-surface-app px-3 text-label font-normal text-ink placeholder:text-ink-muted pointer-coarse:h-11 pointer-coarse:text-field"
+        className="focus-ring h-10 min-w-0 flex-1 rounded-control border border-line-strong bg-surface-app px-3 text-label font-normal text-ink placeholder:text-ink-muted pointer-coarse:h-11 pointer-coarse:text-field"
       />
       <Button type="submit" variant="secondary" disabled={!text.trim()}>
         {t("today.ask.submit")}

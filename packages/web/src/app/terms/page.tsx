@@ -46,7 +46,7 @@ function TableOfContents({ sections }: { sections: string[] }) {
   return (
     <nav
       aria-label="On this page"
-      className="mt-10 rounded-xl border border-line bg-surface-raised p-5"
+      className="mt-10 rounded-card border border-line bg-surface-raised p-5"
     >
       <p className="text-xs font-medium uppercase tracking-[0.18em] text-ink-mid">On this page</p>
       <ul className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -70,7 +70,7 @@ export default function TermsPage() {
     <main id="main" className="min-h-screen sky-bg text-ink">
       <nav className="mx-auto flex max-w-4xl items-center justify-between px-6 py-5">
         <Link href="/" className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg bg-[#f5f0e8]">
+          <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-control bg-[#f5f0e8]">
             <img src="/brand/mark.svg?v=matte2" alt="" className="h-9 w-9" />
           </div>
           <span className="text-lg font-bold tracking-tight">Klorn</span>

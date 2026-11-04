@@ -106,21 +106,21 @@ export function TeamsSection({ wrapper }: { wrapper?: (children: ReactNode) => R
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder={t("settings.teams.namePlaceholder")}
-          className="w-full rounded-lg border border-line bg-surface-raised px-4 py-2.5 text-sm placeholder-ink-dim transition focus:border-accent-muted focus:outline-none"
+          className="w-full rounded-control border border-line bg-surface-raised px-4 py-2.5 text-sm placeholder-ink-dim transition focus:border-accent-muted focus:outline-none"
         />
         <input
           type="text"
           value={membersText}
           onChange={(e) => setMembersText(e.target.value)}
           placeholder={t("settings.teams.membersPlaceholder")}
-          className="w-full rounded-lg border border-line bg-surface-raised px-4 py-2.5 text-sm placeholder-ink-dim transition focus:border-accent-muted focus:outline-none"
+          className="w-full rounded-control border border-line bg-surface-raised px-4 py-2.5 text-sm placeholder-ink-dim transition focus:border-accent-muted focus:outline-none"
         />
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={add}
             disabled={saving || !name.trim() || !membersText.trim()}
-            className="rounded-lg bg-accent-solid px-4 py-2 text-sm font-medium text-accent-solid-ink transition hover:bg-accent-solid-hover disabled:opacity-50"
+            className="rounded-control bg-accent-solid px-4 py-2 text-sm font-medium text-accent-solid-ink transition hover:bg-accent-solid-hover disabled:opacity-50"
           >
             {saving ? t("settings.teams.adding") : t("settings.teams.add")}
           </button>
