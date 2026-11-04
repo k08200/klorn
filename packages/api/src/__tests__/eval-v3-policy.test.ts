@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { FactsV1 } from "../eval-v3/facts-schema.js";
 import { laneFromFacts } from "../eval-v3/policy.js";
+import type { FactsV1 } from "../judge/v3/facts-schema.js";
 
 const RECEIVED = new Date("2026-06-01T14:00:00Z");
 

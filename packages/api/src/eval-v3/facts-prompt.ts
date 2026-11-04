@@ -11,15 +11,15 @@
  * proposed to the P2 extractor so both measure the same thing.
  */
 import type { ClassifiableEmail } from "../judge/email-classifier.js";
-import { wrapUntrusted } from "../untrusted.js";
 import {
   ADDRESSED_TO,
   ASK_KINDS,
-  FACT_KINDS,
+  MAIL_KINDS,
   RISKS,
   THREAD_TURNS,
   TRANSACTION_KINDS,
-} from "./facts-schema.js";
+} from "../judge/v3/facts-schema.js";
+import { wrapUntrusted } from "../untrusted.js";
 
 /** Same caps as the v2 judge prompt (poc-judge.ts buildJudgePrompt). */
 const FROM_CAP = 200;
@@ -116,7 +116,7 @@ export const FACTS_JSON_SCHEMA: Record<string, unknown> = {
       },
     }),
     risk: { type: "array", items: { type: "string", enum: [...RISKS] } },
-    kind: { type: "string", enum: [...FACT_KINDS] },
+    kind: { type: "string", enum: [...MAIL_KINDS] },
     ambiguous: { type: "boolean" },
   },
 };
