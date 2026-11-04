@@ -39,7 +39,7 @@ struct FeatureIcon: View {
     let systemName: String
     var tint: Color? = nil
     var body: some View {
-        RoundedRectangle(cornerRadius: 5, style: .continuous)
+        RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
             .fill(tint.map { AnyShapeStyle($0.opacity(0.13)) }
                 ?? AnyShapeStyle(Theme.surfaceRaised))
             .frame(width: 20, height: 20)
@@ -117,7 +117,7 @@ struct OffscreenMenuLabel: View {
         (lead + Text(verbatim: " ") + Text(Image(systemName: "chevron.down")))
             .font(Theme.Typo.body).foregroundStyle(Theme.text)
             .padding(.horizontal, 8).frame(height: 22)
-            .background(Theme.surfaceHover, in: RoundedRectangle(cornerRadius: Theme.Radius.sm))
+            .background(Theme.surfaceHover, in: RoundedRectangle(cornerRadius: Theme.Radius.control))
     }
 }
 
