@@ -11,14 +11,16 @@
  *     source was covered by an advance of the watermark, and
  *     coAttendanceLastPassAt, the last pass in which that source's listing
  *     succeeded in full (not failed, not cut) through the days being evaluated,
- *     whether or not the watermark advanced. Readers use it as a freshness guard
- *     (null or older than 30 days: unobserved); the pass also uses it as its
- *     6-hour interval. A source left out of an advance (re-link pending, not
+ *     whether or not the watermark advanced. The pass uses it as its 6-hour
+ *     interval. It is NOT a reader's freshness signal: a healthy source keeps it
+ *     fresh while a failing one freezes the watermark. A source left out of an advance (re-link pending, not
  *     connectable, linked sync off) loses observedSince: its days were not
  *     covered. It starts again at the day after the watermark.
  *
- * A reader may treat a missing ContactCoAttendance row as 0 only when the flag is
- * on and every Google calendar source of the user has observedSince. Re-linking or
+ * The reader's gate (when a missing ContactCoAttendance row may read as 0) is in
+ * judge/v3/relationship-coattendance.ts and docs/design/attention-engine-v3.md
+ * §3(2): flag on, watermark current, every Google source covering the full
+ * 30-day window, none needing reconnect, no non-Google calendar. Re-linking or
  * reconnecting a grant clears the source's two columns (routes/google-link-finish.ts);
  * unlinking deletes the row.
  */
