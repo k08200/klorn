@@ -87,7 +87,7 @@ export function RailOpenLink({ href, label }: { href: string; label?: string }) 
   return (
     <Link
       href={href}
-      className="focus-ring -my-1.5 inline-flex min-h-8 items-center rounded-chip px-1 text-role-caption font-medium text-accent-deep hover:underline pointer-coarse:min-h-11"
+      className="focus-ring -my-1.5 inline-flex min-h-8 items-center justify-center rounded-chip px-1 text-role-caption font-medium text-accent-deep hover:underline pointer-coarse:min-h-11 pointer-coarse:min-w-11"
     >
       {label ?? t("today.rail.open")}
     </Link>

@@ -231,7 +231,7 @@ function CalendarView() {
         <div className="flex shrink-0 items-center gap-2">
           <VoiceButton
             onTranscript={(text) => void handleVoiceTranscript(text)}
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-line"
+            className="flex h-11 w-11 items-center justify-center rounded-full border border-line"
           />
           <button
             type="button"
@@ -241,7 +241,7 @@ function CalendarView() {
               setNewEventOpen(true);
             }}
             aria-label={t("calendar.newEvent")}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-accent-solid text-accent-solid-ink transition active:bg-accent-solid-hover"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-accent-solid text-accent-solid-ink transition active:bg-accent-solid-hover"
           >
             <svg
               aria-hidden="true"
@@ -262,7 +262,7 @@ function CalendarView() {
             onClick={syncNow}
             disabled={syncing}
             aria-label={t("calendar.sync")}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-raised text-ink-mid transition active:bg-surface-hover disabled:opacity-50"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-surface-raised text-ink-mid transition active:bg-surface-hover disabled:opacity-50"
           >
             <svg
               aria-hidden="true"
@@ -319,7 +319,7 @@ function CalendarView() {
               setVoiceInitial(null);
               setNewEventOpen(true);
             }}
-            className="glow-primary ease-strong inline-flex h-9 items-center gap-1.5 rounded-control bg-accent-solid px-3.5 text-role-label text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97]"
+            className="glow-primary ease-strong inline-flex h-9 pointer-coarse:h-11 items-center gap-1.5 rounded-control bg-accent-solid px-3.5 text-role-label text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97]"
           >
             <svg
               aria-hidden="true"
@@ -338,7 +338,7 @@ function CalendarView() {
           </button>
           <VoiceButton
             onTranscript={(text) => void handleVoiceTranscript(text)}
-            className="ease-strong inline-flex h-9 w-9 items-center justify-center rounded-control border border-line bg-surface-panel/70 text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
+            className="ease-strong inline-flex h-9 w-9 pointer-coarse:h-11 pointer-coarse:w-11 items-center justify-center rounded-control border border-line bg-surface-panel/70 text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
           />
           <button
             type="button"
@@ -346,7 +346,7 @@ function CalendarView() {
             disabled={syncing}
             aria-label={syncing ? t("common.syncing") : t("common.syncNow")}
             title={t("common.syncNow")}
-            className="ease-strong inline-flex h-9 w-9 items-center justify-center rounded-control border border-line bg-surface-panel/70 text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
+            className="ease-strong inline-flex h-9 w-9 pointer-coarse:h-11 pointer-coarse:w-11 items-center justify-center rounded-control border border-line bg-surface-panel/70 text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
           >
             <svg
               aria-hidden="true"
@@ -621,7 +621,7 @@ function MonthGrid({
         <button
           type="button"
           onClick={onToday}
-          className="ease-strong rounded-control border border-line bg-surface-panel/70 px-3 py-1 text-role-caption font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
+          className="ease-strong rounded-control border border-line bg-surface-panel/70 px-3 py-1 pointer-coarse:min-h-11 text-role-caption font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
         >
           {t("nav.v2.today")}
         </button>
@@ -709,7 +709,8 @@ function DayCell({
             type="button"
             onClick={openDay}
             aria-label={`${dayLabel} — ${events.length} event${events.length === 1 ? "" : "s"}`}
-            className={`${dayNumberClass} hover:ring-1 hover:ring-accent-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent`}
+            // On touch the 24px number keeps its look but takes a 44px hit area.
+            className={`${dayNumberClass} relative hover:ring-1 hover:ring-accent-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent pointer-coarse:after:absolute pointer-coarse:after:-inset-2.5 pointer-coarse:after:content-['']`}
           >
             {cell.dayNumber}
           </button>
