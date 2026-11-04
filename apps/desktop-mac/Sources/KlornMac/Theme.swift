@@ -243,20 +243,20 @@ enum Theme {
 
     // MARK: Radius (productization plan §2)
     // Design Language v2: 6 chip · 10 control · 16 card · 24 sheet. The
-    // rungs keep their numbers (sm/md/lg = 6/10/16); `xl` 24 is the v2 sheet.
-    // Existing call sites still use sm for buttons/fields (v2 says control
-    // 10) — that moves with the Mac screen wave, not this token wave.
+    // rungs keep their numbers (sm/md/lg/xl = 6/10/16/24) and live only in
+    // this file: call sites pick a role by meaning (the self-check holds
+    // every other file to the role names).
     enum Radius {
-        /// Chips; today also buttons, fields, small toggles.
+        /// Chips, badges, tags, skeleton bars, a segment inside a track.
         static let sm: CGFloat = 6
-        /// v2 control; today rows, cards, popovers.
+        /// Buttons, fields, segmented tracks, row highlights, inline notices.
         static let md: CGFloat = 10
-        /// v2 card; today sheets and windows.
+        /// Bordered or raised cards and panels.
         static let lg: CGFloat = 16
-        /// v2 sheet (top corners of a sheet).
+        /// Sheets (top corners of a sheet).
         static let xl: CGFloat = 24
 
-        // v2 role names — new code picks these.
+        // v2 role names — every call site picks one of these.
         static let chip = sm
         static let control = md
         static let card = lg
@@ -328,9 +328,9 @@ struct FirstSyncState: View {
                 HStack(spacing: Theme.s3) {
                     Circle().fill(Theme.surfaceHover).frame(width: 8, height: 8)
                     VStack(alignment: .leading, spacing: Theme.s1) {
-                        RoundedRectangle(cornerRadius: 3).fill(Theme.surfaceHover)
+                        RoundedRectangle(cornerRadius: Theme.Radius.chip).fill(Theme.surfaceHover)
                             .frame(width: 90, height: 8)
-                        RoundedRectangle(cornerRadius: 3).fill(Theme.surfaceHover)
+                        RoundedRectangle(cornerRadius: Theme.Radius.chip).fill(Theme.surfaceHover)
                             .frame(width: row.isMultiple(of: 2) ? 260 : 200, height: 11)
                     }
                     Spacer()

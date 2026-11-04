@@ -109,7 +109,7 @@ describe("loadEvalItems", () => {
       limit: undefined,
       useLabelV2: true,
     });
-    expect(items.filter((i) => i.truth === "INFO")).toHaveLength(4);
+    expect(items.filter((i) => i.truth === "INFO")).toHaveLength(11); // 4 (2026-10-31) + 7 (2026-11-04 reconciliation)
     const slice = loadEvalItems(resolve("eval/judge-eval-set.json"), {
       context: "empty",
       offset: 28,

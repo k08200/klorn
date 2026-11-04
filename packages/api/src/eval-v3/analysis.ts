@@ -7,11 +7,11 @@ import type { ClassifiableEmail } from "../judge/email-classifier.js";
 import { hasSpamLabel } from "../judge/poc-judge.js";
 import type { TierFeatures } from "../judge/tier-policy.js";
 import type { Tier } from "../judge/tiers.js";
+import { type FactsV1, parseFactsV1 } from "../judge/v3/facts-schema.js";
 import { CONFIDENCE_VARIANTS, counterfactual, urgentCalibration } from "./calibration.js";
 import type { CallRecord } from "./call-tap.js";
 import { applyEvidenceCheck } from "./evidence.js";
 import { buildFactsUserPrompt } from "./facts-prompt.js";
-import type { FactsV1 } from "./facts-schema.js";
 import { type BenchRow, summarizeRun } from "./metrics.js";
 import { laneFromFacts } from "./policy.js";
 import { type BenchFile, cellLabel } from "./report.js";
@@ -30,11 +30,28 @@ export interface StoredRun extends BenchFile {
 
 export type EvalEmail = ClassifiableEmail & { receivedAt?: string };
 
-/** Re-derive a v3 lane from stored raw facts under the CURRENT evidence rules and policy. */
+/**
+ * Re-derive a v3 lane from stored raw facts under the CURRENT production
+ * contract: P2's `parseFactsV1` (text cleaning, empty-object drops, strict ISO
+ * dates), P2's evidence rules, then the policy. A stored answer the production
+ * parser rejects becomes "v3-unparsed" → QUEUE, as it would in production.
+ */
 function replayV3(row: StoredRow, email: EvalEmail | undefined, includeBody: boolean): StoredRow {
   if (row.source !== "v3" || !row.rawFacts || !email?.receivedAt) return row;
+  const parsed = parseFactsV1(row.rawFacts);
+  if (!parsed.facts) {
+    return {
+      ...row,
+      predicted: "QUEUE",
+      source: "v3-unparsed",
+      rule: undefined,
+      evidenceTotal: 0,
+      evidenceValid: 0,
+      dueUnbound: 0,
+    };
+  }
   const { fields } = buildFactsUserPrompt({ ...email, receivedAt: email.receivedAt }, includeBody);
-  const checked = applyEvidenceCheck(row.rawFacts, fields);
+  const checked = applyEvidenceCheck(parsed.facts, fields);
   const decision = laneFromFacts(checked.facts, {
     receivedAt: new Date(email.receivedAt),
     spam: hasSpamLabel(email.labels),

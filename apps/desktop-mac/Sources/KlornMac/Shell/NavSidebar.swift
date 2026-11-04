@@ -115,7 +115,7 @@ struct NavRowLabel: View {
         }
         .background(
             selected ? Theme.surfaceSelected : hovering ? Theme.surfaceHover : .clear,
-            in: RoundedRectangle(cornerRadius: Theme.Radius.sm))
+            in: RoundedRectangle(cornerRadius: Theme.Radius.control))
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
     }

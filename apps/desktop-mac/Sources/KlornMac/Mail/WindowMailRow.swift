@@ -215,7 +215,7 @@ private struct ThreadCountChip: View {
             .font(Theme.Typo.caption.weight(.semibold).monospacedDigit())
             .foregroundStyle(Theme.textDim)
             .padding(.horizontal, Theme.s1)
-            .background(Theme.surfaceHover, in: RoundedRectangle(cornerRadius: Theme.Radius.sm))
+            .background(Theme.surfaceHover, in: RoundedRectangle(cornerRadius: Theme.Radius.chip))
             .fixedSize()
             .accessibilityHidden(true)
     }
@@ -239,10 +239,10 @@ private struct WindowRowChrome: ViewModifier {
             }
             .background(
                 selected ? Theme.surfaceSelected : hovering ? Theme.surfaceHover : .clear,
-                in: RoundedRectangle(cornerRadius: Theme.Radius.md))
+                in: RoundedRectangle(cornerRadius: Theme.Radius.control))
             .overlay {
                 if focused {
-                    RoundedRectangle(cornerRadius: Theme.Radius.md)
+                    RoundedRectangle(cornerRadius: Theme.Radius.control)
                         .strokeBorder(Theme.accent, lineWidth: 2)
                 }
             }
@@ -323,7 +323,7 @@ struct WindowMailRow: View {
                 Theme.bg
                 selected ? Theme.surfaceSelected : Theme.surfaceHover
             }
-            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.chip))
         }
         .padding(.trailing, Theme.s3)
     }

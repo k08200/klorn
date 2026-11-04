@@ -9,6 +9,7 @@
  * model failure (counted, routed to QUEUE).
  */
 import type { ClassifiableEmail } from "../judge/email-classifier.js";
+import { type FactsV1, parseFactsV1 } from "../judge/v3/facts-schema.js";
 import { parseLlmJson } from "../llm/llm-json.js";
 import { describeErrorChain } from "../llm/model-fallback.js";
 import { createCompletion } from "../llm/openai.js";
@@ -20,7 +21,6 @@ import {
   FACTS_TOOL_NAME,
   type FactsPrompt,
 } from "./facts-prompt.js";
-import { type FactsV1, parseFactsV1 } from "./facts-schema.js";
 
 const ATTEMPTS = 2;
 /** Schema v1 answers are ~100–400 tokens; thinking headroom is added by the adapter. */

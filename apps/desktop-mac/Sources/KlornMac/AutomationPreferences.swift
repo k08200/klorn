@@ -61,16 +61,16 @@ struct AutomationPreferences: View {
                         .font(.callout).foregroundStyle(Theme.textDim)
                         .frame(maxWidth: .infinity, minHeight: 64, alignment: .topLeading)
                         .padding(6)
-                        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 6))
-                        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.field))
+                        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.control))
+                        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.control).strokeBorder(Theme.field))
                 } else {
                     TextEditor(text: $guidelineDraft)
                         .font(.callout)
                         .frame(minHeight: 88, maxHeight: 140)
                         .scrollContentBackground(.hidden)
                         .padding(4)
-                        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 6))
-                        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.field))
+                        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.control))
+                        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.control).strokeBorder(Theme.field))
                         .accessibilityLabel(L("mode.guideline"))
                 }
                 HStack(spacing: Theme.s2) {
@@ -293,8 +293,8 @@ private struct OffscreenPickerLabel: View {
             Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(Theme.textDim)
         }
         .padding(.horizontal, 11).padding(.vertical, 5)
-        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 7))
-        .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.line))
+        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.control))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.control).strokeBorder(Theme.line))
     }
 }
 
@@ -328,10 +328,10 @@ private struct ChoiceRow: View {
             .frame(minHeight: 44, alignment: .top)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: Theme.Radius.control)
                     .fill(selected ? Theme.surfaceSelected : Theme.surfaceRaised))
             .overlay(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: Theme.Radius.control)
                     .strokeBorder(selected ? Theme.accent.opacity(0.5) : Theme.line))
             // Ideal-height pin on the WHOLE card (background included), not on
             // the inner Text: inside a Button label a text-level fixedSize can
@@ -426,8 +426,8 @@ private struct QuietHoursField: View {
             Text(text.wrappedValue.isEmpty ? "--:--" : text.wrappedValue)
                 .font(.callout).foregroundStyle(Theme.textDim)
                 .frame(width: 76, height: 22)
-                .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 6))
-                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.field))
+                .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.control))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.control).strokeBorder(Theme.field))
         } else {
             TextField("--:--", text: text)
                 .textFieldStyle(.roundedBorder)

@@ -241,9 +241,9 @@ struct UpdateRow: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
-            .background(Theme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 9))
+            .background(Theme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: Theme.Radius.control))
             .overlay(
-                RoundedRectangle(cornerRadius: 9)
+                RoundedRectangle(cornerRadius: Theme.Radius.control)
                     .strokeBorder(Theme.accent.opacity(0.25), lineWidth: 1))
         }
         .buttonStyle(.plain)

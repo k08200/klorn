@@ -24,14 +24,14 @@ struct WindowLaneChip: View {
         .frame(height: Self.height)
         .background(
             Theme.chipInk(tier).opacity(Theme.chipWashOpacity),
-            in: RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous))
+            in: RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(tier.label)
     }
 
     nonisolated static let height: CGFloat = 22
     nonisolated static let horizontalPadding: CGFloat = 8
-    nonisolated static let radius: CGFloat = Theme.Radius.sm
+    nonisolated static let radius: CGFloat = Theme.Radius.chip
     nonisolated static let dot: CGFloat = 6
     nonisolated static let gap: CGFloat = 6
     nonisolated static let fontSize: CGFloat = 12

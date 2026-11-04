@@ -21,5 +21,5 @@ struct MailListMetrics {
         titleIcon: Theme.Typo.body, field: Theme.Typo.body, fieldIcon: Theme.Typo.caption,
         compose: Theme.Typo.body, inset: Theme.s4, titleVertical: Theme.s3,
         fieldInset: Theme.s2, fieldVertical: Theme.s2 - Theme.hairline,
-        fieldRadius: Theme.Radius.sm, fieldGap: Theme.s2)
+        fieldRadius: Theme.Radius.control, fieldGap: Theme.s2)
 }
