@@ -59,7 +59,7 @@ export function callCostUsd(call: CallRecord): number {
 }
 
 const LLM_URL_RE =
-  /^https:\/\/(api\.anthropic\.com\/v1\/messages|openrouter\.ai\/api\/v1\/chat\/completions|generativelanguage\.googleapis\.com\/)/;
+  /^https:\/\/(api\.anthropic\.com\/v1\/messages|generativelanguage\.googleapis\.com\/)/;
 
 export interface CallTap {
   calls: CallRecord[];
