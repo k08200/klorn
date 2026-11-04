@@ -2186,17 +2186,17 @@ const de: Record<string, string> = {
   "byok.activeModel": "Aktives Modell:",
   "byok.usingYourKey": "Ihr Schlüssel wird verwendet",
   "byok.stored": "•••••••• gespeichert",
-  "byok.openRouterLabel": "OpenRouter-API-Schlüssel",
-  "byok.openRouterHelp":
-    "Ein Schlüssel deckt alle Modelle ab, die Klorn nutzt – OpenRouter leitet sie alle weiter. Der Schlüssel wird vor dem Speichern beim Anbieter geprüft. Erhältlich unter",
+  "byok.anthropicLabel": "Anthropic-API-Schlüssel",
+  "byok.anthropicHelp":
+    "Klorn läuft auf Claude, daher deckt ein Anthropic-Schlüssel alle Modelle ab, die Klorn nutzt. Der Schlüssel wird vor dem Speichern bei Anthropic geprüft. Erhältlich unter",
   "byok.legacy": "veraltet",
   "byok.geminiRetired":
-    "Direkte Gemini-Schlüssel werden nicht mehr unterstützt – ein kostenloser Schlüssel hier legt die Sortierung stillschweigend lahm, sobald sein Tageskontingent aufgebraucht ist. Entfernen Sie ihn und verwenden Sie stattdessen einen OpenRouter-Schlüssel.",
+    "Direkte Gemini-Schlüssel werden nicht mehr unterstützt – ein kostenloser Schlüssel hier legt die Sortierung stillschweigend lahm, sobald sein Tageskontingent aufgebraucht ist. Entfernen Sie ihn und verwenden Sie stattdessen einen Anthropic-Schlüssel.",
   "byok.assistantModel": "Assistentenmodell",
   "byok.assistantModelHelp":
-    "Nur Spitzenmodelle – mit diesem Modell spricht Ihr Klorn-Assistent. Er arbeitet mit Ihrer Post, Ihrem Kalender und Ihren Aufgaben und durchsucht nie das Web. Läuft innerhalb Ihres täglichen KI-Kontingents; fügen Sie oben Ihren eigenen Schlüssel hinzu, um Ihr eigenes Kontingent zu nutzen. Der Klassifikator der Mail-Firewall wird separat abgestimmt und ist nicht betroffen.",
+    "Nur Claude-Modelle – mit diesem Modell spricht Ihr Klorn-Assistent. Er arbeitet mit Ihrer Post, Ihrem Kalender und Ihren Aufgaben und durchsucht nie das Web. Läuft innerhalb Ihres täglichen KI-Kontingents; fügen Sie oben Ihren eigenen Schlüssel hinzu, um Ihr eigenes Kontingent zu nutzen. Der Klassifikator der Mail-Firewall wird separat abgestimmt und ist nicht betroffen.",
   "byok.assistantModelHelpFree":
-    "Nur Spitzenmodelle – mit diesem Modell spricht Ihr Klorn-Assistent. Er arbeitet mit Ihrer Post, Ihrem Kalender und Ihren Aufgaben und durchsucht nie das Web. Läuft innerhalb Ihres täglichen KI-Kontingents. Der Klassifikator der Mail-Firewall wird separat abgestimmt und ist nicht betroffen.",
+    "Nur Claude-Modelle – mit diesem Modell spricht Ihr Klorn-Assistent. Er arbeitet mit Ihrer Post, Ihrem Kalender und Ihren Aufgaben und durchsucht nie das Web. Läuft innerhalb Ihres täglichen KI-Kontingents. Der Klassifikator der Mail-Firewall wird separat abgestimmt und ist nicht betroffen.",
   "byok.error.status": "Status Ihres LLM-Schlüssels konnte nicht geladen werden.",
   "byok.error.update": "Schlüssel konnte nicht aktualisiert werden.",
   "byok.error.model": "Modell konnte nicht geändert werden.",
@@ -2703,7 +2703,7 @@ const de: Record<string, string> = {
     "Die Benachrichtigung wurde übersprungen, weil beim Versand des Briefings Ruhezeiten aktiv waren.",
   "briefingPage.guidance.quietHoursAction": "Ruhezeiten anpassen",
   // web app design pass, 2026-10-21: English that reached localized screens.
-  "byok.modelNote.recommended": "{provider} — empfohlen",
+  "byok.modelNote.balanced": "{provider} — ausgewogen",
   "byok.modelNote.fastest": "{provider} — am schnellsten",
   "byok.modelNote.mostCapable": "{provider} — am leistungsfähigsten, teurer",
   "statusChip.connected": "Verbunden",
@@ -2740,7 +2740,7 @@ const de: Record<string, string> = {
   "playground.provider.label": "Anbieter",
   "playground.model.label": "Modell",
   "playground.model.klorn": "Von Klorn genutzt",
-  "playground.model.measured": "{correct}/{total} im Klorn-Test",
+  "playground.model.measured": "{low}–{high}/{total} im Klorn-Test ({runs} Läufe)",
   "playground.model.other": "Andere Modell-ID…",
   "playground.model.otherLabel": "Modell-ID",
   "playground.model.otherPlaceholder": "anbieter/modellname",
@@ -2750,8 +2750,7 @@ const de: Record<string, string> = {
     "Das Modell, das Klorn selbst nutzt, bewertet im 56-E-Mail-Test von Klorn.",
   "playground.model.listedNote":
     "Wird wie gelistet angezeigt. Nur das von Klorn genutzte Modell wird im Klorn-Test bewertet.",
-  "playground.model.priceNote":
-    "Preis pro 1 Mio. Token, Eingabe / Ausgabe, laut OpenRouter am {date}.",
+  "playground.model.priceNote": "Listenpreis pro 1 Mio. Token, Eingabe / Ausgabe, Stand {date}.",
   "playground.key.label": "{provider}-API-Schlüssel",
   "playground.key.show": "Anzeigen",
   "playground.key.hide": "Verbergen",

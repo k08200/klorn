@@ -109,7 +109,7 @@ export function TelegramSection() {
   };
 
   return (
-    <div className="panel-elevated mt-3 rounded-2xl border border-line/70 bg-surface-panel p-4">
+    <div className="panel-elevated mt-3 rounded-card border border-line/70 bg-surface-panel p-4">
       <div className="flex items-center justify-between gap-4">
         <div>
           <h3 className="font-medium text-ink">Telegram</h3>
@@ -147,7 +147,7 @@ export function TelegramSection() {
       </div>
 
       {!linked && !loading && linkCode && (
-        <div className="mt-3 space-y-2 rounded-xl border border-line-soft bg-surface-raised/70 p-3">
+        <div className="mt-3 space-y-2 rounded-control border border-line-soft bg-surface-raised/70 p-3">
           {linkCode.deepLink ? (
             <p className="text-sm text-ink-mid">
               {t("telegram.deepLink.before")}{" "}

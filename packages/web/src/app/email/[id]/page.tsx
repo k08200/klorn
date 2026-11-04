@@ -925,7 +925,7 @@ function EmailDetailView() {
     <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-5 md:py-10">
       <Link
         href="/email"
-        className="ease-strong mb-5 inline-flex h-9 items-center gap-1.5 rounded-lg border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring"
+        className="ease-strong mb-5 inline-flex h-9 items-center gap-1.5 rounded-control border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring"
       >
         <svg
           aria-hidden="true"
@@ -1012,7 +1012,7 @@ function EmailDetailView() {
                 </div>
                 <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                   <span
-                    className={`shrink-0 rounded-md px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ring-1 ring-inset ${
+                    className={`shrink-0 rounded-chip px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ring-1 ring-inset ${
                       email.priority === "URGENT"
                         ? "bg-rose-500/10 text-rose-600 ring-rose-500/20"
                         : "bg-surface-hover text-ink-mid ring-transparent"
@@ -1021,12 +1021,12 @@ function EmailDetailView() {
                     {priorityLabel(t, email.priority)}
                   </span>
                   {email.needsReply && (
-                    <span className="shrink-0 rounded-md bg-accent/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-accent-deeper ring-1 ring-inset ring-accent/20">
+                    <span className="shrink-0 rounded-chip bg-accent/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-accent-deeper ring-1 ring-inset ring-accent/20">
                       {t("mail.filterReplyNeeded")}
                     </span>
                   )}
                   {email.category && (
-                    <span className="shrink-0 rounded-md bg-surface-hover px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-ink-mid">
+                    <span className="shrink-0 rounded-chip bg-surface-hover px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-ink-mid">
                       {categoryLabel(t, email.category)}
                     </span>
                   )}
@@ -1105,7 +1105,7 @@ function EmailDetailView() {
               beside it as supporting context. */}
           <div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr] lg:items-start">
             {email.renderHtml || email.body ? (
-              <section className="panel-elevated overflow-hidden rounded-2xl border border-line/70 bg-surface-panel p-5 md:p-6">
+              <section className="panel-elevated overflow-hidden rounded-card border border-line/70 bg-surface-panel p-5 md:p-6">
                 <h2 className="mb-4 text-caption font-semibold uppercase tracking-wider text-ink-dim">
                   {t("emailDetail.messageTitle")}
                 </h2>
@@ -1121,7 +1121,7 @@ function EmailDetailView() {
                 )}
               </section>
             ) : email.snippet ? (
-              <section className="panel-elevated overflow-hidden rounded-2xl border border-line/70 bg-surface-panel p-5 md:p-6">
+              <section className="panel-elevated overflow-hidden rounded-card border border-line/70 bg-surface-panel p-5 md:p-6">
                 <h2 className="mb-4 text-caption font-semibold uppercase tracking-wider text-ink-dim">
                   {t("emailDetail.previewTitle")}
                 </h2>
@@ -1162,7 +1162,7 @@ function CandidateProfileCard({
   const status = intake?.status ?? candidatePipelineToIntakeStatus(profile.pipelineStatus);
   const candidateStatusOptions = buildCandidateStatusOptions(t);
   return (
-    <section className="panel-elevated relative mt-5 overflow-hidden rounded-2xl border border-line/70 bg-surface-panel p-4 md:p-5">
+    <section className="panel-elevated relative mt-5 overflow-hidden rounded-card border border-line/70 bg-surface-panel p-4 md:p-5">
       <span
         aria-hidden="true"
         className="absolute left-0 top-0 h-full w-[3px] bg-gradient-to-b from-accent-muted to-accent"
@@ -1175,7 +1175,7 @@ function CandidateProfileCard({
           {t("candidates.confidence", { percent: String(Math.round(profile.confidence * 100)) })}
         </span>
       </div>
-      <div className="mb-3 rounded-lg border border-line-soft bg-surface-raised/70 px-3 py-2">
+      <div className="mb-3 rounded-control border border-line-soft bg-surface-raised/70 px-3 py-2">
         <p className="text-caption font-medium uppercase tracking-wider text-ink-dim">
           {t("emailDetail.candidateCard.pipeline")}
         </p>
@@ -1191,7 +1191,7 @@ function CandidateProfileCard({
             type="button"
             onClick={() => onUpdate({ status: option.status })}
             disabled={updating || status === option.status}
-            className={`ease-strong rounded-lg border px-2 py-1 text-caption font-medium transition duration-150 active:scale-[0.97] disabled:cursor-default focus-ring ${
+            className={`ease-strong rounded-chip border px-2 py-1 text-caption font-medium transition duration-150 active:scale-[0.97] disabled:cursor-default focus-ring ${
               status === option.status
                 ? "border-accent-muted bg-accent/10 text-accent-deeper"
                 : "border-line bg-surface-panel/70 text-ink-mid hover:bg-surface-panel hover:text-ink"
@@ -1244,7 +1244,7 @@ function CandidateProfileCard({
         </p>
       )}
       {profile.manualReviewFiles.length > 0 && (
-        <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2">
+        <div className="mt-3 rounded-control border border-rose-200 bg-rose-50 px-3 py-2">
           <p className="text-caption font-semibold text-rose-700">
             {t("emailDetail.candidateCard.sourceReviewNeeded")}
           </p>
@@ -1265,7 +1265,7 @@ function CandidateProfileCard({
           defaultValue={intake?.notes ?? ""}
           rows={2}
           onBlur={(e) => onUpdate({ notes: e.target.value || null })}
-          className="w-full rounded-lg border border-line bg-surface-panel/80 px-3 py-2 text-xs leading-5 text-ink-soft outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15"
+          className="w-full rounded-control border border-line bg-surface-panel/80 px-3 py-2 text-xs leading-5 text-ink-soft outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15"
           placeholder={t("emailDetail.candidateCard.reviewNoteLabel")}
         />
       </label>
@@ -1307,7 +1307,7 @@ function ThreadContextPanel({
 }) {
   const { t, locale } = useT();
   return (
-    <section className="panel-elevated mb-5 overflow-hidden rounded-2xl border border-line/70 bg-surface-panel">
+    <section className="panel-elevated mb-5 overflow-hidden rounded-card border border-line/70 bg-surface-panel">
       <div className="border-b border-line-soft px-4 py-3">
         <h2 className="text-sm font-semibold text-ink">{t("emailDetail.thread.title")}</h2>
         <p className="mt-0.5 text-xs text-ink-dim">
@@ -1632,7 +1632,7 @@ function ReplyDraftBox({
   );
 
   return (
-    <section className="panel-elevated mt-5 overflow-hidden rounded-2xl border border-line/70 bg-surface-panel p-4 md:p-5">
+    <section className="panel-elevated mt-5 overflow-hidden rounded-card border border-line/70 bg-surface-panel p-4 md:p-5">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <h2 className="text-caption font-semibold uppercase tracking-wider text-ink-mid">
@@ -1653,7 +1653,7 @@ function ReplyDraftBox({
         value={intent}
         onChange={(e) => onIntentChange(e.target.value)}
         placeholder={t("emailDetail.replyDraft.intentPlaceholder")}
-        className={`mb-3 w-full rounded-lg border border-line bg-surface-panel/80 px-3 py-2 text-xs text-ink-soft placeholder-ink-dim outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15${touchField}`}
+        className={`mb-3 w-full rounded-control border border-line bg-surface-panel/80 px-3 py-2 text-xs text-ink-soft placeholder-ink-dim outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15${touchField}`}
       />
       {presets === "collapsed" ? (
         <details
@@ -1691,7 +1691,7 @@ function ReplyDraftBox({
               <input
                 value={draft.to}
                 onChange={(e) => onDraftChange({ ...draft, to: e.target.value })}
-                className="w-full rounded-lg border border-line bg-surface-panel/80 px-2 py-1.5 text-ink-soft outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15"
+                className="w-full rounded-control border border-line bg-surface-panel/80 px-2 py-1.5 text-ink-soft outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15"
               />
             </label>
             <label className="block">
@@ -1701,7 +1701,7 @@ function ReplyDraftBox({
               <input
                 value={draft.subject}
                 onChange={(e) => onDraftChange({ ...draft, subject: e.target.value })}
-                className={`w-full rounded-lg border border-line bg-surface-panel/80 px-2 py-1.5 text-ink-soft outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15${touchField}`}
+                className={`w-full rounded-control border border-line bg-surface-panel/80 px-2 py-1.5 text-ink-soft outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15${touchField}`}
               />
             </label>
           </div>
@@ -1709,11 +1709,11 @@ function ReplyDraftBox({
             value={draft.body}
             onChange={(e) => onDraftChange({ ...draft, body: e.target.value })}
             rows={7}
-            className={`w-full rounded-lg border border-line bg-surface-panel/80 px-3 py-2 text-sm leading-6 text-ink outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15${touchField}`}
+            className={`w-full rounded-control border border-line bg-surface-panel/80 px-3 py-2 text-sm leading-6 text-ink outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15${touchField}`}
           />
           {attachments.length > 0 && (
-            <div className="space-y-2 rounded-lg border border-line-soft bg-surface-raised/70 px-3 py-2">
-              <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-state-info-line bg-state-info-bg px-2 py-1.5">
+            <div className="space-y-2 rounded-control border border-line-soft bg-surface-raised/70 px-3 py-2">
+              <label className="flex cursor-pointer items-start gap-2 rounded-control border border-state-info-line bg-state-info-bg px-2 py-1.5">
                 <input
                   type="checkbox"
                   checked={includeBriefAttachment}
@@ -1753,7 +1753,7 @@ function ReplyDraftBox({
                 {attachments.map((attachment) => (
                   <label
                     key={attachment.id}
-                    className="flex min-w-0 cursor-pointer items-center gap-2 rounded-lg border border-line bg-surface-panel px-2 py-1.5 transition duration-150 ease-out hover:border-state-info-line"
+                    className="flex min-w-0 cursor-pointer items-center gap-2 rounded-control border border-line bg-surface-panel px-2 py-1.5 transition duration-150 ease-out hover:border-state-info-line"
                   >
                     <input
                       type="checkbox"
@@ -1779,7 +1779,7 @@ function ReplyDraftBox({
                   href={gmailDraftUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="ease-strong inline-flex h-9 items-center rounded-lg border border-state-info-line bg-state-info-bg px-3 text-xs font-medium text-accent-deeper transition duration-150 hover:bg-state-info-bg hover:text-state-info-ink active:scale-[0.97] focus-ring"
+                  className="ease-strong inline-flex h-9 items-center rounded-control border border-state-info-line bg-state-info-bg px-3 text-xs font-medium text-accent-deeper transition duration-150 hover:bg-state-info-bg hover:text-state-info-ink active:scale-[0.97] focus-ring"
                 >
                   {t("emailDetail.replyDraft.openGmailDraft")}
                 </a>
@@ -1788,7 +1788,7 @@ function ReplyDraftBox({
                 type="button"
                 onClick={onSaveGmailDraft}
                 disabled={savingGmailDraft || !draft.to || !draft.subject || !draft.body}
-                className="ease-strong inline-flex h-9 items-center rounded-lg border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50 focus-ring"
+                className="ease-strong inline-flex h-9 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50 focus-ring"
               >
                 {savingGmailDraft
                   ? t("emailDetail.replyDraft.saving")
@@ -1802,7 +1802,7 @@ function ReplyDraftBox({
                 type="button"
                 onClick={onSend}
                 disabled={sending || !draft.to || !draft.subject || !draft.body}
-                className="glow-primary ease-strong inline-flex h-9 items-center rounded-lg bg-accent-solid px-3.5 text-xs font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 focus-ring"
+                className="glow-primary ease-strong inline-flex h-9 items-center rounded-control bg-accent-solid px-3.5 text-xs font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 focus-ring"
               >
                 {sending
                   ? t("emailDetail.replyDraft.sending")
@@ -1865,7 +1865,7 @@ function ThreadBriefCard({ emailId }: { emailId: string }) {
 
   if (!brief) return null;
   return (
-    <section className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-4">
+    <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-4">
       <p className="mb-2 text-caption font-semibold uppercase tracking-wider text-ink-dim">
         {t("emailDetail.threadBrief.title")}
       </p>
@@ -1916,7 +1916,7 @@ function SenderContextCard({ emailId }: { emailId: string }) {
 
   if (!dossier) return null;
   return (
-    <section className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-4">
+    <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-4">
       <p className="mb-2 text-caption font-semibold uppercase tracking-wider text-ink-dim">
         {t("emailDetail.senderContext.title")}
       </p>
@@ -2003,7 +2003,7 @@ function KlornAnalysis({
 
   if (!hasAnything) {
     return (
-      <section className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-4">
+      <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-4">
         <div className="flex items-center">
           <p className="text-xs text-ink-dim">{t("emailDetail.analysis.notAnalyzed")}</p>
           <SummarizeButton onSummarize={onSummarize} summarizing={summarizing} />
@@ -2013,7 +2013,7 @@ function KlornAnalysis({
   }
 
   return (
-    <section className="panel-elevated relative overflow-hidden rounded-2xl border border-line/70 bg-surface-panel p-4 md:p-5">
+    <section className="panel-elevated relative overflow-hidden rounded-card border border-line/70 bg-surface-panel p-4 md:p-5">
       <div className="absolute bottom-0 left-0 top-0 w-[3px] bg-gradient-to-b from-accent-muted to-accent" />
       <div className="pl-2">
         <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -2064,7 +2064,7 @@ function KlornAnalysis({
 function ReplyNeededPill() {
   const { t } = useT();
   return (
-    <span className="shrink-0 rounded-md bg-accent/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-accent-deeper ring-1 ring-inset ring-accent/20">
+    <span className="shrink-0 rounded-chip bg-accent/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-accent-deeper ring-1 ring-inset ring-accent/20">
       {t("mail.filterReplyNeeded")}
     </span>
   );
@@ -2079,7 +2079,7 @@ function PriorityPill({ priority }: { priority: EmailDetail["priority"] }) {
   };
   return (
     <span
-      className={`shrink-0 rounded-md px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ring-1 ring-inset ${styles[priority as "URGENT" | "LOW"]}`}
+      className={`shrink-0 rounded-chip px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ring-1 ring-inset ${styles[priority as "URGENT" | "LOW"]}`}
     >
       {priorityLabel(t, priority as "URGENT" | "LOW")}
     </span>
@@ -2090,7 +2090,7 @@ function CategoryPill({ category }: { category: string }) {
   const { t } = useT();
   const label = categoryLabel(t, category);
   return (
-    <span className="shrink-0 rounded-md bg-surface-hover px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-ink-mid">
+    <span className="shrink-0 rounded-chip bg-surface-hover px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-ink-mid">
       {label}
     </span>
   );

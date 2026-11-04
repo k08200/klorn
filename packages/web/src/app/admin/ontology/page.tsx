@@ -149,7 +149,7 @@ function OntologyPageInner() {
         {loading ? (
           <p className="text-sm text-ink-dim">Loading...</p>
         ) : !data ? (
-          <p className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-6 text-sm text-ink-mid">
+          <p className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-6 text-sm text-ink-mid">
             No ontology data.
           </p>
         ) : (
@@ -171,7 +171,7 @@ function OntologyPageInner() {
                 {data.tiers.map((t) => (
                   <span
                     key={t}
-                    className="rounded-md border border-line bg-surface-hover px-2.5 py-1 text-sm font-semibold"
+                    className="rounded-chip border border-line bg-surface-hover px-2.5 py-1 text-sm font-semibold"
                   >
                     {t}
                   </span>
@@ -244,7 +244,7 @@ function Proposals({
   onDismiss: (id: string) => void;
 }) {
   return (
-    <section className="panel-elevated mb-4 rounded-2xl border border-state-info-line bg-surface-panel p-4 md:p-5">
+    <section className="panel-elevated mb-4 rounded-card border border-state-info-line bg-surface-panel p-4 md:p-5">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-accent-deep">
           Proposals (advisory)
@@ -253,7 +253,7 @@ function Proposals({
           type="button"
           onClick={onRecompute}
           disabled={busy}
-          className="ease-strong inline-flex h-9 items-center rounded-lg border border-line bg-surface-panel/70 px-3 text-sm text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-60"
+          className="ease-strong inline-flex h-9 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-sm text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-60"
         >
           Recompute
         </button>
@@ -272,7 +272,7 @@ function Proposals({
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2 text-sm">
                   <span className="font-mono text-ink">{p.knob}</span>
-                  <span className="rounded-md bg-accent/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-accent-deep ring-1 ring-inset ring-accent/20">
+                  <span className="rounded-chip bg-accent/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-accent-deep ring-1 ring-inset ring-accent/20">
                     {p.direction}
                   </span>
                   <span className="tabular-nums text-ink">
@@ -289,7 +289,7 @@ function Proposals({
                   type="button"
                   onClick={() => onApprove(p.id)}
                   disabled={busy}
-                  className="glow-primary ease-strong inline-flex h-9 items-center rounded-lg bg-accent-solid px-3.5 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:opacity-60"
+                  className="glow-primary ease-strong inline-flex h-9 items-center rounded-control bg-accent-solid px-3.5 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:opacity-60"
                 >
                   Approve
                 </button>
@@ -297,7 +297,7 @@ function Proposals({
                   type="button"
                   onClick={() => onDismiss(p.id)}
                   disabled={busy}
-                  className="ease-strong inline-flex h-9 items-center rounded-lg border border-line bg-surface-panel/70 px-3 text-sm text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-60"
+                  className="ease-strong inline-flex h-9 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-sm text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-60"
                 >
                   Dismiss
                 </button>
@@ -320,7 +320,7 @@ function Applied({
   onRevert: (id: string) => void;
 }) {
   return (
-    <section className="panel-elevated mb-4 rounded-2xl border border-state-ok-line bg-surface-panel p-4 md:p-5">
+    <section className="panel-elevated mb-4 rounded-card border border-state-ok-line bg-surface-panel p-4 md:p-5">
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-state-ok-ink">
         Live overrides
       </h2>
@@ -344,7 +344,7 @@ function Applied({
               type="button"
               onClick={() => onRevert(p.id)}
               disabled={busy}
-              className="ease-strong inline-flex h-9 shrink-0 items-center self-start rounded-lg border border-line bg-surface-panel/70 px-3 text-sm text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-60 md:self-auto"
+              className="ease-strong inline-flex h-9 shrink-0 items-center self-start rounded-control border border-line bg-surface-panel/70 px-3 text-sm text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-60 md:self-auto"
             >
               Revert
             </button>
@@ -357,7 +357,7 @@ function Applied({
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="panel-elevated mb-4 rounded-2xl border border-line/70 bg-surface-panel p-4 md:p-5">
+    <section className="panel-elevated mb-4 rounded-card border border-line/70 bg-surface-panel p-4 md:p-5">
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-accent-deep">
         {title}
       </h2>

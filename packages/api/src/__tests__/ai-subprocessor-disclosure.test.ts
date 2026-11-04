@@ -17,9 +17,8 @@ import { describe, expect, it } from "vitest";
 import type { EnvProviderName } from "../providers/index.js";
 
 const DISCLOSED_AS = {
-  openrouter: "OpenRouter",
-  gemini: "Gemini",
   anthropic: "Anthropic",
+  gemini: "Gemini",
 } as const satisfies Record<EnvProviderName, string>;
 
 const repoFile = (rel: string): string =>

@@ -69,7 +69,7 @@ function ReceiptView() {
             <button
               type="button"
               onClick={() => receiptQuery.refetch()}
-              className="ease-strong inline-flex h-9 items-center rounded-lg border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring min-h-11"
+              className="ease-strong inline-flex h-9 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] focus-ring min-h-11"
             >
               {t("receipt.refresh")}
             </button>
@@ -77,7 +77,7 @@ function ReceiptView() {
         </div>
 
         {/* Summary row — one elevated panel */}
-        <div className="panel-elevated mt-5 grid grid-cols-4 overflow-hidden rounded-2xl border border-line/70 bg-surface-panel">
+        <div className="panel-elevated mt-5 grid grid-cols-4 overflow-hidden rounded-card border border-line/70 bg-surface-panel">
           <SummaryMetric
             label={t("receipt.metric.signalsSeen")}
             value={receipt.summary.totalSeen}
@@ -162,7 +162,7 @@ function ReceiptView() {
         )}
 
         {receipt.summary.totalSeen === 0 && (
-          <div className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-8 text-center">
+          <div className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-8 text-center">
             <p className="text-sm text-ink-mid">{t("receipt.empty.title")}</p>
             <p className="mt-1 text-xs text-ink-mid">{t("receipt.empty.description")}</p>
           </div>
@@ -209,7 +209,7 @@ function ReceiptSection({
         </div>
         <span className="text-caption tabular-nums text-ink-dim">{items.length}</span>
       </div>
-      <div className="panel-elevated overflow-hidden rounded-2xl border border-line/70 bg-surface-panel">
+      <div className="panel-elevated overflow-hidden rounded-card border border-line/70 bg-surface-panel">
         <ul className="divide-y divide-line-soft">
           {items.map((item) => (
             <li key={item.id} className="row-wash relative">
@@ -260,7 +260,7 @@ function SourceBadge({ source, type }: { source: string; type: string }) {
   const { t } = useT();
   const label = sourceLabel(t, source, type);
   return (
-    <span className="rounded-md bg-surface-hover px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-ink-mid">
+    <span className="rounded-chip bg-surface-hover px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-ink-mid">
       {label}
     </span>
   );
@@ -270,14 +270,14 @@ function PushStatusBadge({ status, clickedAt }: { status: string; clickedAt: str
   const { t } = useT();
   if (clickedAt) {
     return (
-      <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-state-ok-ink ring-1 ring-inset ring-emerald-500/20">
+      <span className="rounded-chip bg-emerald-500/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-state-ok-ink ring-1 ring-inset ring-emerald-500/20">
         {t("receipt.status.opened")}
       </span>
     );
   }
   if (status === "SENT") {
     return (
-      <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-state-warn-ink ring-1 ring-inset ring-amber-500/20">
+      <span className="rounded-chip bg-amber-500/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-state-warn-ink ring-1 ring-inset ring-amber-500/20">
         {t("receipt.status.sent")}
       </span>
     );

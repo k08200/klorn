@@ -21,7 +21,7 @@ import { useT } from "../../lib/i18n";
 
 /** The card surface: 12px radius, a hairline ring and a contact shadow. */
 export const CARD_CLASS =
-  "overflow-hidden rounded-xl bg-surface-panel shadow-[0_1px_2px_rgb(10_14_20/0.04)] ring-1 ring-line";
+  "overflow-hidden rounded-card bg-surface-panel shadow-[0_1px_2px_rgb(10_14_20/0.04)] ring-1 ring-line";
 
 interface TodayBlockProps {
   /** Id of the heading; the region is named by it. */

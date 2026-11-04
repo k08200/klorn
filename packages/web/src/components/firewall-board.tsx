@@ -420,7 +420,7 @@ function DailyReceiptStrip({
 }) {
   const counts = CORE_TIERS;
   return (
-    <section className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-5">
+    <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-5">
       {/* Five columns, not four: the strip used to count PUSH/QUEUE/SILENT/AUTO
           — a lane that no longer occurs — while omitting MEETING and INFO. */}
       <div className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3 lg:grid-cols-5">
@@ -466,7 +466,7 @@ function TierColumn({
 }) {
   const v = TIER_VISUAL[tier];
   return (
-    <section className={`glass rounded-2xl border p-4 transition-opacity ${v.plane}`}>
+    <section className={`glass rounded-card border p-4 transition-opacity ${v.plane}`}>
       <header className="mb-1 flex items-center gap-2">
         <TierGlyph tier={tier} className={v.dot} />
         <h2 className="font-mono text-caption font-semibold uppercase tracking-[0.2em] text-ink">
@@ -477,7 +477,7 @@ function TierColumn({
       <p className="mb-4 text-caption leading-5 text-ink-dim">{v.description}</p>
 
       {items.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-line px-3 py-8 text-center text-xs text-ink-mid">
+        <p className="rounded-control border border-dashed border-line px-3 py-8 text-center text-xs text-ink-mid">
           Nothing here yet.
         </p>
       ) : (
@@ -529,7 +529,7 @@ function FirewallCard({
 
   return (
     <li
-      className={`lift animate-card-in rounded-xl border p-3.5 text-sm ${v.card} ${
+      className={`lift animate-card-in rounded-card border p-3.5 text-sm ${v.card} ${
         busy ? "opacity-50" : ""
       }`}
       // Stagger only the first screenful so a fresh load cascades in; later
@@ -560,8 +560,8 @@ function FirewallCard({
       </div>
 
       {snippet && (
-        <details className="group mt-2.5 rounded-lg border border-line bg-surface-raised">
-          <summary className="flex cursor-pointer list-none items-center gap-1 rounded-lg px-2.5 py-1.5 text-caption text-ink-mid transition hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+        <details className="group mt-2.5 rounded-control border border-line bg-surface-raised">
+          <summary className="flex cursor-pointer list-none items-center gap-1 rounded-control px-2.5 py-1.5 text-caption text-ink-mid transition hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
             <span aria-hidden="true" className="inline-block transition group-open:rotate-90">
               ›
             </span>
@@ -659,7 +659,7 @@ function toolBodyPreview(item: FirewallItem): string | undefined {
 function InfoStrip({ count, items }: { count: number; items: FirewallItem[] }) {
   const v = TIER_VISUAL.INFO;
   return (
-    <section className={`glass mt-4 rounded-2xl border p-4 ${v.plane}`}>
+    <section className={`glass mt-4 rounded-card border p-4 ${v.plane}`}>
       <header className="flex items-center gap-2">
         <TierGlyph tier="INFO" className={v.dot} />
         <h2 className="font-mono text-caption font-semibold uppercase tracking-[0.2em] text-ink-dim">

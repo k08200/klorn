@@ -34,7 +34,7 @@ import { judgeEmail } from "../judge/poc-judge.js";
 import type { ProviderCredentials } from "../providers/index.js";
 
 const USER_KEY: ProviderCredentials = {
-  openRouterApiKey: "sk-or-v1-user-owned-key",
+  anthropicApiKey: "sk-ant-api03-user-owned-key",
   quotaScope: "user-123",
 };
 

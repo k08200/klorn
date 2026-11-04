@@ -2097,17 +2097,17 @@ const ko: Record<string, string> = {
   "byok.activeModel": "사용 중인 모델:",
   "byok.usingYourKey": "내 키 사용 중",
   "byok.stored": "•••••••• 저장됨",
-  "byok.openRouterLabel": "OpenRouter API 키",
-  "byok.openRouterHelp":
-    "키 하나로 Klorn이 쓰는 모든 모델을 사용할 수 있습니다 — OpenRouter가 모두 연결해 줍니다. 키는 저장 전에 프로바이더에서 검증됩니다. 키 발급:",
+  "byok.anthropicLabel": "Anthropic API 키",
+  "byok.anthropicHelp":
+    "Klorn은 Claude로 동작하므로 Anthropic 키 하나로 Klorn이 쓰는 모든 모델을 사용할 수 있습니다. 키는 저장 전에 Anthropic에서 검증됩니다. 키 발급:",
   "byok.legacy": "레거시",
   "byok.geminiRetired":
-    "Gemini 직접 키는 더 이상 지원하지 않습니다 — 무료 등급 키는 일일 할당량이 바닥나면 분류가 조용히 멈춥니다. 삭제하고 OpenRouter 키 하나를 사용하세요.",
+    "Gemini 직접 키는 더 이상 지원하지 않습니다 — 무료 등급 키는 일일 할당량이 바닥나면 분류가 조용히 멈춥니다. 삭제하고 Anthropic 키를 사용하세요.",
   "byok.assistantModel": "어시스턴트 모델",
   "byok.assistantModelHelp":
-    "최상위 모델만 제공합니다 — Klorn 어시스턴트가 대화할 때 쓰는 모델입니다. 메일, 캘린더, 할 일을 다루며 웹을 검색하지 않습니다. 일일 AI 할당량 안에서 동작하며, 위에 내 키를 추가하면 내 할당량을 사용합니다. 메일 방화벽의 분류기는 별도로 조정되므로 영향을 받지 않습니다.",
+    "Claude 모델만 제공합니다 — Klorn 어시스턴트가 대화할 때 쓰는 모델입니다. 메일, 캘린더, 할 일을 다루며 웹을 검색하지 않습니다. 일일 AI 할당량 안에서 동작하며, 위에 내 키를 추가하면 내 할당량을 사용합니다. 메일 방화벽의 분류기는 별도로 조정되므로 영향을 받지 않습니다.",
   "byok.assistantModelHelpFree":
-    "최상위 모델만 제공합니다 — Klorn 어시스턴트가 대화할 때 쓰는 모델입니다. 메일, 캘린더, 할 일을 다루며 웹을 검색하지 않습니다. 일일 AI 할당량 안에서 동작합니다. 메일 방화벽의 분류기는 별도로 조정되므로 영향을 받지 않습니다.",
+    "Claude 모델만 제공합니다 — Klorn 어시스턴트가 대화할 때 쓰는 모델입니다. 메일, 캘린더, 할 일을 다루며 웹을 검색하지 않습니다. 일일 AI 할당량 안에서 동작합니다. 메일 방화벽의 분류기는 별도로 조정되므로 영향을 받지 않습니다.",
   "byok.error.status": "LLM 키 상태를 불러오지 못했습니다.",
   "byok.error.update": "키를 업데이트하지 못했습니다.",
   "byok.error.model": "모델을 변경하지 못했습니다.",
@@ -2594,7 +2594,7 @@ const ko: Record<string, string> = {
   "briefingPage.guidance.quietHours": "브리핑 발송 시 방해 금지 시간이어서 푸시를 건너뛰었습니다.",
   "briefingPage.guidance.quietHoursAction": "방해 금지 시간 조정",
   // web app design pass, 2026-10-21: English that reached localized screens.
-  "byok.modelNote.recommended": "{provider} — 추천",
+  "byok.modelNote.balanced": "{provider} — 균형형",
   "byok.modelNote.fastest": "{provider} — 가장 빠름",
   "byok.modelNote.mostCapable": "{provider} — 가장 강력, 비용 높음",
   "statusChip.connected": "연결됨",
@@ -2631,7 +2631,7 @@ const ko: Record<string, string> = {
   "playground.provider.label": "프로바이더",
   "playground.model.label": "모델",
   "playground.model.klorn": "Klorn 사용 모델",
-  "playground.model.measured": "Klorn 테스트 {correct}/{total}",
+  "playground.model.measured": "Klorn 테스트 {low}–{high}/{total} ({runs}회)",
   "playground.model.other": "다른 모델 ID…",
   "playground.model.otherLabel": "모델 ID",
   "playground.model.otherPlaceholder": "provider/model-name",
@@ -2641,7 +2641,7 @@ const ko: Record<string, string> = {
     "Klorn이 실제로 쓰는 모델이며, Klorn의 메일 56통 테스트로 채점했습니다.",
   "playground.model.listedNote":
     "목록에 있는 그대로 표시합니다. Klorn이 쓰는 모델만 Klorn 테스트로 채점합니다.",
-  "playground.model.priceNote": "100만 토큰당 가격(입력 / 출력), {date} OpenRouter 표기 기준.",
+  "playground.model.priceNote": "100만 토큰당 정가(입력 / 출력), {date} 기록 기준.",
   "playground.key.label": "{provider} API 키",
   "playground.key.show": "표시",
   "playground.key.hide": "숨기기",

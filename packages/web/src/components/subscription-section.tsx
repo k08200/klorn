@@ -104,7 +104,7 @@ export function SubscriptionSection() {
       <h2 className="mb-3 text-caption font-semibold uppercase tracking-wider text-ink-dim">
         {t("subscription.title")}
       </h2>
-      <div className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-5">
+      <div className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-5">
         {isPro ? (
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -116,7 +116,7 @@ export function SubscriptionSection() {
                 type="button"
                 onClick={restore}
                 disabled={loading}
-                className="ease-strong min-h-10 rounded-lg border border-line bg-surface-panel/70 px-4 text-sm text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
+                className="ease-strong min-h-10 rounded-control border border-line bg-surface-panel/70 px-4 text-sm text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
               >
                 {t("subscription.restore")}
               </button>
@@ -163,7 +163,7 @@ export function SubscriptionSection() {
               <button
                 type="button"
                 disabled
-                className="mt-5 flex min-h-11 w-full items-center justify-center rounded-lg border border-line bg-surface-hover text-sm font-semibold text-ink-dim"
+                className="mt-5 flex min-h-11 w-full items-center justify-center rounded-control border border-line bg-surface-hover text-sm font-semibold text-ink-dim"
               >
                 {t("billing.subscriptionComingSoon")}
               </button>
@@ -172,7 +172,7 @@ export function SubscriptionSection() {
                 type="button"
                 onClick={native ? startAppPurchase : startWebTrial}
                 disabled={loading}
-                className="glow-primary ease-strong mt-5 flex min-h-11 w-full items-center justify-center rounded-lg bg-accent-solid text-sm font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:opacity-50"
+                className="glow-primary ease-strong mt-5 flex min-h-11 w-full items-center justify-center rounded-control bg-accent-solid text-sm font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:opacity-50"
               >
                 {loading ? t("subscription.starting") : t("billing.startTrial")}
               </button>

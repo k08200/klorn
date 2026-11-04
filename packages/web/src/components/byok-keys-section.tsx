@@ -22,32 +22,33 @@ interface CuratedModelOption {
 
 interface ModelStatus {
   activeModel: string;
-  hasOpenRouterApiKey: boolean;
+  hasAnthropicApiKey: boolean;
   hasGeminiApiKey: boolean;
   availableModels: CuratedModelOption[];
   selectedModel: string | null;
 }
 
-// Single-key policy (2026-07-16 outage post-mortem): OpenRouter is THE BYOK
-// slot — it routes every model Klorn pins, including the Gemini family. A
-// second per-provider slot is exactly how a dead/free key ends up silently
-// poisoning the provider chain. The legacy Gemini slot renders as remove-only
-// while a stored key remains.
-type Provider = "openRouter" | "gemini";
+// Single-key policy (2026-07-16 outage post-mortem): one BYOK slot. Since the
+// Claude-only switch (2026-11-01) it is an Anthropic key — every surface Klorn
+// pins runs on Claude. A second per-provider slot is exactly how a dead/free
+// key ends up silently poisoning the provider chain. The legacy Gemini slot
+// renders as remove-only while a stored key remains.
+type Provider = "anthropic" | "gemini";
 
-const OPENROUTER = {
-  id: "openRouter" as const,
-  labelKey: "byok.openRouterLabel",
-  placeholder: "sk-or-v1-…",
-  helpUrl: "https://openrouter.ai/keys",
-  helpLabel: "openrouter.ai/keys",
+const ANTHROPIC = {
+  id: "anthropic" as const,
+  labelKey: "byok.anthropicLabel",
+  placeholder: "sk-ant-…",
+  // Same page the playground links to (app/playground/models.ts KEY_URL).
+  helpUrl: "https://platform.claude.com/settings/keys",
+  helpLabel: "platform.claude.com/settings/keys",
 };
 
 /** Qualifier keys for the curated catalog (packages/api/src/llm/model-catalog.ts). */
 const MODEL_NOTE_KEY: Record<string, string> = {
-  "anthropic/claude-sonnet-5": "byok.modelNote.recommended",
-  "google/gemini-3.5-flash": "byok.modelNote.fastest",
-  "anthropic/claude-opus-4.8": "byok.modelNote.mostCapable",
+  "claude-haiku-5-5": "byok.modelNote.fastest",
+  "claude-sonnet-5": "byok.modelNote.balanced",
+  "claude-opus-4-8": "byok.modelNote.mostCapable",
 };
 
 /**
@@ -76,10 +77,10 @@ export function ByokKeysSection() {
   const [status, setStatus] = useState<ModelStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [inputs, setInputs] = useState<Record<Provider, string>>({ openRouter: "", gemini: "" });
+  const [inputs, setInputs] = useState<Record<Provider, string>>({ anthropic: "", gemini: "" });
   // Per-provider busy so saving one key never locks the other's controls.
   const [busy, setBusy] = useState<Record<Provider, boolean>>({
-    openRouter: false,
+    anthropic: false,
     gemini: false,
   });
 
@@ -126,9 +127,9 @@ export function ByokKeysSection() {
   // Errors are handled inside patchModels; void the promise so the click
   // handlers stay synchronous (no floating promise).
   const saveKey = () => {
-    const key = inputs.openRouter.trim();
+    const key = inputs.anthropic.trim();
     if (!key) return;
-    void patchModels({ openRouterApiKey: key }, "openRouter");
+    void patchModels({ anthropicApiKey: key }, "anthropic");
   };
 
   const removeKey = async (p: Provider, label: string) => {
@@ -140,7 +141,7 @@ export function ByokKeysSection() {
     });
     if (!ok) return;
     void patchModels(
-      p === "openRouter" ? { clearOpenRouterApiKey: true } : { clearGeminiApiKey: true },
+      p === "anthropic" ? { clearAnthropicApiKey: true } : { clearGeminiApiKey: true },
       p,
     );
   };
@@ -165,7 +166,7 @@ export function ByokKeysSection() {
   };
 
   return (
-    <section className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-5">
+    <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-5">
       <header className="mb-3">
         <h2 className="text-base font-semibold text-ink">{t("byok.title")}</h2>
         <p className="mt-1 text-xs text-ink-mid">{t(locked ? "byok.bodyFree" : "byok.body")}</p>
@@ -180,26 +181,26 @@ export function ByokKeysSection() {
         <div className="text-xs text-ink-dim">{t("common.loading")}</div>
       ) : (
         <div className="space-y-4">
-          <div className="rounded-xl border border-line-soft bg-surface-raised/70 p-3">
+          <div className="rounded-control border border-line-soft bg-surface-raised/70 p-3">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <span className="text-sm font-medium text-ink">{t(OPENROUTER.labelKey)}</span>
-              {status?.hasOpenRouterApiKey && (
+              <span className="text-sm font-medium text-ink">{t(ANTHROPIC.labelKey)}</span>
+              {status?.hasAnthropicApiKey && (
                 <StatusChip status="connected" label={t("byok.usingYourKey")} />
               )}
             </div>
             {/* Before the disabled field, so the reason is read first. */}
-            {locked && !status?.hasOpenRouterApiKey && (
+            {locked && !status?.hasAnthropicApiKey && (
               <ProFeatureNotice messageKey="proFeature.byok" className="mb-2" />
             )}
-            {status?.hasOpenRouterApiKey ? (
+            {status?.hasAnthropicApiKey ? (
               <div className="flex items-center justify-between gap-3">
                 <span className="font-mono text-xs text-ink-mid">{t("byok.stored")}</span>
                 <Button
                   variant="danger"
                   size="sm"
-                  onClick={() => void removeKey("openRouter", "OpenRouter")}
-                  disabled={busy.openRouter}
-                  loading={busy.openRouter}
+                  onClick={() => void removeKey("anthropic", "Anthropic")}
+                  disabled={busy.anthropic}
+                  loading={busy.anthropic}
                 >
                   {t("common.remove")}
                 </Button>
@@ -208,12 +209,12 @@ export function ByokKeysSection() {
               <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
                 <div className="flex-1">
                   <Input
-                    id="byok-key-openRouter"
-                    label={t("byok.openRouterLabel")}
+                    id="byok-key-anthropic"
+                    label={t(ANTHROPIC.labelKey)}
                     type="password"
-                    value={inputs.openRouter}
-                    onChange={(e) => setInputs((s) => ({ ...s, openRouter: e.target.value }))}
-                    placeholder={OPENROUTER.placeholder}
+                    value={inputs.anthropic}
+                    onChange={(e) => setInputs((s) => ({ ...s, anthropic: e.target.value }))}
+                    placeholder={ANTHROPIC.placeholder}
                     autoComplete="off"
                     maxLength={512}
                     disabled={locked}
@@ -222,8 +223,8 @@ export function ByokKeysSection() {
                 <Button
                   variant="primary"
                   onClick={saveKey}
-                  disabled={locked || busy.openRouter || !inputs.openRouter.trim()}
-                  loading={busy.openRouter}
+                  disabled={locked || busy.anthropic || !inputs.anthropic.trim()}
+                  loading={busy.anthropic}
                   className="shrink-0"
                 >
                   {t("common.save")}
@@ -231,21 +232,21 @@ export function ByokKeysSection() {
               </div>
             )}
             <p className="mt-1.5 text-caption text-ink-dim">
-              {t("byok.openRouterHelp")}{" "}
+              {t("byok.anthropicHelp")}{" "}
               <a
-                href={OPENROUTER.helpUrl}
+                href={ANTHROPIC.helpUrl}
                 target="_blank"
                 rel="noreferrer"
                 className="underline hover:text-ink-soft"
               >
-                {OPENROUTER.helpLabel}
+                {ANTHROPIC.helpLabel}
               </a>
               .
             </p>
           </div>
 
           {status?.hasGeminiApiKey && (
-            <div className="rounded-xl border border-state-warn-line bg-state-warn-bg p-3">
+            <div className="rounded-control border border-state-warn-line bg-state-warn-bg p-3">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <span className="text-sm font-medium text-ink">
                   Google Gemini{" "}
@@ -268,13 +269,18 @@ export function ByokKeysSection() {
           )}
           {(() => {
             const options = status?.availableModels ?? [];
+            // Unpicked: show the model the chat surface actually runs
+            // (CHAT_MODEL) when it is in the catalog, not merely index 0.
+            const effective = options.some((m) => m.id === status?.activeModel)
+              ? status?.activeModel
+              : options[0]?.id;
             return (
-              <div className="rounded-xl border border-line-soft bg-surface-raised/70 p-3">
+              <div className="rounded-control border border-line-soft bg-surface-raised/70 p-3">
                 <Select
                   id="byok-model"
                   label={t("byok.assistantModel")}
                   disabled={savingModel}
-                  value={status?.selectedModel ?? options[0]?.id ?? ""}
+                  value={status?.selectedModel ?? effective ?? ""}
                   onChange={(e) => void saveModel(e.target.value)}
                 >
                   {options.map((m) => (

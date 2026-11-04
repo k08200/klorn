@@ -477,12 +477,13 @@ async function extractFeaturesWithLlm(
           // temperature 0 by default — deterministic feature scores (see const).
           temperature: JUDGE_TEMPERATURE,
           // The output is a fixed ~50-token JSON object. Capping max_tokens
-          // keeps it well above what the scorer needs while shrinking
-          // OpenRouter's up-front credit RESERVATION (price × max_tokens) from
-          // the model's full output window to a few hundred tokens — otherwise
-          // a key with a small balance or a per-key credit limit gets a
-          // spurious "402 Insufficient credits" even though the real call costs
-          // a fraction of a cent. 1024 leaves headroom for reasoning models.
+          // keeps it well above what the scorer needs while bounding any
+          // provider-side up-front credit reservation (price × max_tokens) to
+          // a few hundred tokens instead of the model's full output window —
+          // otherwise a key with a small balance or a per-key credit limit can
+          // get a spurious "402 Insufficient credits" even though the real
+          // call costs a fraction of a cent. 1024 leaves headroom for
+          // reasoning models.
           max_tokens: 1024,
         },
         {
@@ -661,7 +662,7 @@ function priorFeatures(tier: PocTier): PocFeatures {
  *    email to the LLM instead. A PUSH override prior skips the guard —
  *    urgent content and "always interrupt" agree.
  */
-function canShortCircuit(prior: SenderPrior, email: ClassifiableEmail): boolean {
+export function canShortCircuit(prior: SenderPrior, email: ClassifiableEmail): boolean {
   const allowed = PRIOR_SHORTCIRCUIT_TIERS[prior.kind];
   if (!allowed.has(prior.tier)) return false;
   // A HISTORY prior is model-authored (unanimous past classifications, never a

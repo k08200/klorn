@@ -207,7 +207,7 @@ export function RelationshipGraph({ nodes, edges }: { nodes: GraphNode[]; edges:
 
   if (nodes.length <= 1) {
     return (
-      <p className="rounded-xl border border-line bg-surface-raised p-6 text-sm text-ink-mid">
+      <p className="rounded-card border border-line bg-surface-raised p-6 text-sm text-ink-mid">
         {t("graph.empty")}
       </p>
     );
@@ -216,7 +216,7 @@ export function RelationshipGraph({ nodes, edges }: { nodes: GraphNode[]; edges:
   return (
     <svg
       viewBox={viewBox}
-      className="h-[70vh] w-full rounded-2xl border border-line bg-surface-raised"
+      className="h-[70vh] w-full rounded-card border border-line bg-surface-raised"
       role="img"
       aria-label={t("graph.ariaLabel")}
     >

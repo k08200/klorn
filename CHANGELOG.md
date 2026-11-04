@@ -12,6 +12,24 @@ calendar time.
 
 ## [Unreleased]
 
+### Removed — OpenRouter; Klorn runs on the Claude API only (2026-11-01)
+- **OpenRouter is no longer a provider.** Founder decision 2026-11-01. The
+  hosted service has served every model call through Anthropic
+  (`claude-haiku-5-5`) since 2026-10-30. The OpenRouter provider, the
+  `llm/openrouter-*` modules and the dispatch-only `model-canary.yml` workflow
+  are removed, and model pins default to `claude-haiku-5-5`.
+- **BYOK takes an Anthropic key** instead of an OpenRouter key.
+- **The public playground drops its OpenRouter tab.** Visitors can still run
+  it with their own Anthropic, OpenAI or Google Gemini key.
+- **Self-host providers are Anthropic, Gemini and any OpenAI-compatible
+  endpoint** (Ollama, LM Studio, vLLM, llama.cpp). `.env.example`,
+  `.env.selfhost.example`, both compose files and `docs/self-hosting.md` now
+  use `ANTHROPIC_API_KEY`; the env examples and the guide document
+  `LLM_PROVIDER_ORDER`.
+- **Legal pages updated.** The privacy policy and the DPA subprocessor table
+  (all 7 locales) no longer name OpenRouter; the server-side AI providers are
+  Anthropic (Claude API) and Google (Gemini API).
+
 ### Fixed — Outbox drain crashed: missing OutboxStatus enum type
 - **The transactional action outbox never drained.** `ActionOutbox.status` was
   declared as the `OutboxStatus` enum in the schema, but the original

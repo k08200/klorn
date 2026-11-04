@@ -887,7 +887,7 @@ function EmailView() {
             onChange={(event) => setSearch(event.target.value)}
             placeholder={t("mail.searchMail")}
             aria-label={t("mail.searchMail")}
-            className="h-11 min-w-0 flex-1 rounded-xl border border-line bg-surface-panel px-4 text-sm text-ink outline-none transition placeholder:text-ink-dim focus:border-accent/45"
+            className="h-11 min-w-0 flex-1 rounded-control border border-line bg-surface-panel px-4 text-sm text-ink outline-none transition placeholder:text-ink-dim focus:border-accent/45"
           />
           {appliedSearch && (
             <button
@@ -896,7 +896,7 @@ function EmailView() {
                 setSearch("");
                 setAppliedSearch("");
               }}
-              className="shrink-0 rounded-xl border border-line px-3 text-xs text-ink-mid transition active:bg-surface-hover"
+              className="shrink-0 rounded-control border border-line px-3 text-xs text-ink-mid transition active:bg-surface-hover"
             >
               {t("common.clear")}
             </button>
@@ -908,16 +908,16 @@ function EmailView() {
 
         {loading && (
           <div className="mt-3 space-y-2">
-            <div className="h-16 animate-pulse rounded-2xl bg-surface-inset" />
-            <div className="h-16 animate-pulse rounded-2xl bg-surface-hover" />
-            <div className="h-16 animate-pulse rounded-2xl bg-surface-raised" />
+            <div className="h-16 animate-pulse rounded-control bg-surface-inset" />
+            <div className="h-16 animate-pulse rounded-control bg-surface-hover" />
+            <div className="h-16 animate-pulse rounded-control bg-surface-raised" />
           </div>
         )}
 
         {error && <ErrorAlert className="mt-3">{error}</ErrorAlert>}
 
         {!loading && !error && filter !== "threads" && emails.length === 0 && (
-          <div className="mt-6 rounded-2xl bg-surface-raised px-6 py-12 text-center">
+          <div className="mt-6 rounded-card bg-surface-raised px-6 py-12 text-center">
             <p className="text-base font-medium text-ink">
               {filter === "reply-needed" ? t("mail.emptyReplyTitle") : t("mail.emptyTitle")}
             </p>
@@ -928,7 +928,7 @@ function EmailView() {
               type="button"
               onClick={syncNow}
               disabled={syncing}
-              className="mt-5 inline-flex min-h-11 items-center rounded-xl border border-line px-5 text-sm text-ink-mid transition active:bg-surface-hover disabled:opacity-50"
+              className="mt-5 inline-flex min-h-11 items-center rounded-control border border-line px-5 text-sm text-ink-mid transition active:bg-surface-hover disabled:opacity-50"
             >
               {syncing ? t("common.syncing") : t("common.syncNow")}
             </button>
@@ -953,7 +953,7 @@ function EmailView() {
             type="button"
             onClick={() => listQuery.fetchNextPage()}
             disabled={listQuery.isFetchingNextPage}
-            className="mt-4 flex min-h-11 w-full items-center justify-center rounded-xl border border-line text-sm text-ink-mid transition active:bg-surface-hover disabled:opacity-50"
+            className="mt-4 flex min-h-11 w-full items-center justify-center rounded-control border border-line text-sm text-ink-mid transition active:bg-surface-hover disabled:opacity-50"
           >
             {listQuery.isFetchingNextPage ? t("common.loading") : t("mailV2.loadMore")}
           </button>
@@ -1017,7 +1017,7 @@ function EmailView() {
               onClick={() => setComposeOpen(true)}
               disabled={source === "demo"}
               title={source === "demo" ? t("mail.compose.demoTitle") : t("mail.compose.title")}
-              className="glow-primary ease-strong inline-flex h-9 items-center gap-1.5 rounded-lg bg-accent-solid px-3.5 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
+              className="glow-primary ease-strong inline-flex h-9 items-center gap-1.5 rounded-control bg-accent-solid px-3.5 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
             >
               <svg
                 aria-hidden="true"
@@ -1041,7 +1041,7 @@ function EmailView() {
               disabled={syncing}
               aria-label={syncing ? t("common.syncing") : t("common.syncNow")}
               title={t("common.syncNow")}
-              className="ease-strong inline-flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-surface-panel/70 text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
+              className="ease-strong inline-flex h-9 w-9 items-center justify-center rounded-control border border-line bg-surface-panel/70 text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
             >
               <svg
                 aria-hidden="true"
@@ -1064,7 +1064,7 @@ function EmailView() {
               onClick={reanalyzeAttachments}
               disabled={reanalyzing}
               title={t("mailV2.more.reanalyze")}
-              className="ease-strong hidden h-9 items-center rounded-lg border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50 lg:inline-flex"
+              className="ease-strong hidden h-9 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50 lg:inline-flex"
             >
               {reanalyzing ? t("mail.reanalyzing") : t("mail.reanalyze")}
             </button>
@@ -1141,12 +1141,12 @@ function EmailView() {
               onChange={(event) => setSearch(event.target.value)}
               placeholder={t("mail.searchPlaceholder")}
               aria-label={t("mail.searchPlaceholder")}
-              className="h-9 w-full rounded-lg border border-line bg-surface-panel/80 pl-9 pr-12 text-sm text-ink shadow-[0_1px_1px_rgba(15,23,42,0.03)] outline-none transition duration-150 ease-out placeholder:text-ink-dim focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15"
+              className="h-9 w-full rounded-control border border-line bg-surface-panel/80 pl-9 pr-12 text-sm text-ink shadow-[0_1px_1px_rgba(15,23,42,0.03)] outline-none transition duration-150 ease-out placeholder:text-ink-dim focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15"
             />
             {!appliedSearch && (
               <span
                 aria-hidden="true"
-                className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-md border border-line bg-surface-raised px-1.5 py-0.5 font-mono text-caption font-medium text-ink-dim"
+                className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-chip border border-line bg-surface-raised px-1.5 py-0.5 font-mono text-caption font-medium text-ink-dim"
               >
                 {modKeyLabel(isApple)}K
               </span>
@@ -1159,7 +1159,7 @@ function EmailView() {
                   setAppliedSearch("");
                 }}
                 aria-label={t("mail.clearSearch")}
-                className="absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-ink-dim transition hover:bg-surface-hover hover:text-ink-muted"
+                className="absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-chip text-ink-dim transition hover:bg-surface-hover hover:text-ink-muted"
               >
                 <svg
                   aria-hidden="true"
@@ -1213,12 +1213,12 @@ function EmailView() {
         {candidateCount > 0 && (
           <Link
             href="/email/candidates"
-            className="group mb-4 flex items-center justify-between gap-3 overflow-hidden rounded-xl border border-state-info-line bg-state-info-bg px-4 py-2.5 text-sm text-state-info-ink shadow-[0_1px_2px_rgba(2,60,110,0.05)] transition duration-150 ease-out hover:from-accent-dim/70"
+            className="group mb-4 flex items-center justify-between gap-3 overflow-hidden rounded-control border border-state-info-line bg-state-info-bg px-4 py-2.5 text-sm text-state-info-ink shadow-[0_1px_2px_rgba(2,60,110,0.05)] transition duration-150 ease-out hover:from-accent-dim/70"
           >
             <span className="inline-flex items-center gap-2.5">
               <span
                 aria-hidden="true"
-                className="flex h-6 w-6 items-center justify-center rounded-lg bg-accent/15 text-accent-deep"
+                className="flex h-6 w-6 items-center justify-center rounded-chip bg-accent/15 text-accent-deep"
               >
                 <svg
                   width="13"
@@ -1272,7 +1272,7 @@ function EmailView() {
         {error && <ErrorAlert className="mt-3">{error}</ErrorAlert>}
 
         {!loading && !error && filter !== "threads" && emails.length === 0 && (
-          <div className="mt-4 rounded-lg border border-line bg-surface-raised p-6 text-center">
+          <div className="mt-4 rounded-card border border-line bg-surface-raised p-6 text-center">
             <p className="text-sm text-ink-mid">
               {filter === "all"
                 ? t("mail.emptyAll")
@@ -1288,7 +1288,7 @@ function EmailView() {
                 <button
                   type="button"
                   onClick={() => setFilter("all")}
-                  className="inline-flex min-h-11 items-center rounded-md border border-line px-4 text-xs font-medium text-ink-mid transition hover:border-line-strong hover:text-ink"
+                  className="inline-flex min-h-11 items-center rounded-control border border-line px-4 text-xs font-medium text-ink-mid transition hover:border-line-strong hover:text-ink"
                 >
                   {t("mail.showAllSignals")}
                 </button>
@@ -1296,7 +1296,7 @@ function EmailView() {
                   type="button"
                   onClick={syncNow}
                   disabled={syncing}
-                  className="inline-flex min-h-11 items-center rounded-md border border-line px-4 text-xs font-medium text-ink-mid transition hover:border-line-strong hover:text-ink disabled:opacity-50"
+                  className="inline-flex min-h-11 items-center rounded-control border border-line px-4 text-xs font-medium text-ink-mid transition hover:border-line-strong hover:text-ink disabled:opacity-50"
                 >
                   {syncing ? t("common.syncing") : t("common.syncNow")}
                 </button>
@@ -1306,7 +1306,7 @@ function EmailView() {
               <div className="mt-4 flex flex-wrap justify-center gap-2">
                 <Link
                   href="/settings/accounts"
-                  className="inline-flex min-h-11 items-center rounded-md bg-accent-solid px-4 text-xs font-medium text-accent-solid-ink transition hover:bg-accent-solid-hover"
+                  className="inline-flex min-h-11 items-center rounded-control bg-accent-solid px-4 text-xs font-medium text-accent-solid-ink transition hover:bg-accent-solid-hover"
                 >
                   {t("mail.connectGoogle")}
                 </Link>
@@ -1314,7 +1314,7 @@ function EmailView() {
                   type="button"
                   onClick={syncNow}
                   disabled={syncing}
-                  className="inline-flex min-h-11 items-center rounded-md border border-line px-4 text-xs font-medium text-ink-mid transition hover:border-line-strong hover:text-ink disabled:opacity-50"
+                  className="inline-flex min-h-11 items-center rounded-control border border-line px-4 text-xs font-medium text-ink-mid transition hover:border-line-strong hover:text-ink disabled:opacity-50"
                 >
                   {syncing ? t("common.syncing") : t("common.syncNow")}
                 </button>
@@ -1324,7 +1324,7 @@ function EmailView() {
         )}
 
         {!loading && filter !== "threads" && emails.length > 0 && (
-          <section className="panel-elevated overflow-hidden rounded-2xl border border-line/70 bg-surface-panel">
+          <section className="panel-elevated overflow-hidden rounded-card border border-line/70 bg-surface-panel">
             <BulkActionBar
               allVisibleSelected={allVisibleSelected}
               busy={bulkBusy}
@@ -1364,13 +1364,13 @@ function EmailView() {
         )}
 
         {!loading && filter === "threads" && threads.length === 0 && !error && (
-          <div className="mt-4 rounded-lg border border-line bg-surface-raised p-6 text-center">
+          <div className="mt-4 rounded-card border border-line bg-surface-raised p-6 text-center">
             <p className="text-sm text-ink-mid">{t("mail.noThreads")}</p>
           </div>
         )}
 
         {!loading && filter === "threads" && threads.length > 0 && (
-          <section className="panel-elevated overflow-hidden rounded-2xl border border-line/70 bg-surface-panel">
+          <section className="panel-elevated overflow-hidden rounded-card border border-line/70 bg-surface-panel">
             <ul className="divide-y divide-line-soft">
               {threads.map((thread) => (
                 <ThreadRowItem key={thread.threadId} thread={thread} />
@@ -1459,7 +1459,7 @@ function UndoActionBanner({
   const { t } = useT();
   const title = notice.action === "archive" ? t("mail.undo.archived") : t("mail.undo.trashed");
   return (
-    <div className="mb-4 flex flex-col gap-3 rounded-lg border border-accent-light/30 bg-state-info-bg px-4 py-3 text-sm text-ink shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
+    <div className="mb-4 flex flex-col gap-3 rounded-control border border-accent-light/30 bg-state-info-bg px-4 py-3 text-sm text-ink shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <p className="font-medium">{title}</p>
         {notice.subject && <p className="mt-0.5 truncate text-xs text-ink-mid">{notice.subject}</p>}
@@ -1469,7 +1469,7 @@ function UndoActionBanner({
           type="button"
           onClick={onUndo}
           disabled={busy}
-          className="min-h-10 rounded-md bg-accent-solid px-3 text-xs font-semibold text-accent-solid-ink transition hover:bg-accent-solid-hover disabled:opacity-50"
+          className="min-h-10 rounded-control bg-accent-solid px-3 text-xs font-semibold text-accent-solid-ink transition hover:bg-accent-solid-hover disabled:opacity-50"
         >
           {busy ? t("mail.undo.restoring") : t("mailV2.undo")}
         </button>
@@ -1477,7 +1477,7 @@ function UndoActionBanner({
           type="button"
           onClick={onDismiss}
           disabled={busy}
-          className="min-h-10 rounded-md border border-line px-3 text-xs text-ink-mid transition hover:bg-surface-hover disabled:opacity-50"
+          className="min-h-10 rounded-control border border-line px-3 text-xs text-ink-mid transition hover:bg-surface-hover disabled:opacity-50"
         >
           {t("common.dismiss")} {countdown > 0 && `(${countdown}s)`}
         </button>
@@ -1509,7 +1509,7 @@ function BulkUndoActionBanner({
   return (
     <div
       role="status"
-      className="mb-4 flex flex-col gap-3 rounded-lg border border-accent-light/30 bg-state-info-bg px-4 py-3 text-sm text-ink shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between"
+      className="mb-4 flex flex-col gap-3 rounded-control border border-accent-light/30 bg-state-info-bg px-4 py-3 text-sm text-ink shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between"
     >
       <div className="min-w-0">
         <p className="font-medium">{title}</p>
@@ -1520,7 +1520,7 @@ function BulkUndoActionBanner({
           type="button"
           onClick={onUndo}
           disabled={busy}
-          className="min-h-10 rounded-md bg-accent-solid px-3 text-xs font-semibold text-accent-solid-ink transition hover:bg-accent-solid-hover disabled:opacity-50"
+          className="min-h-10 rounded-control bg-accent-solid px-3 text-xs font-semibold text-accent-solid-ink transition hover:bg-accent-solid-hover disabled:opacity-50"
         >
           {busy ? t("mail.undo.restoring") : undoLabel}
         </button>
@@ -1528,7 +1528,7 @@ function BulkUndoActionBanner({
           type="button"
           onClick={onDismiss}
           disabled={busy}
-          className="min-h-10 rounded-md border border-line px-3 text-xs text-ink-mid transition hover:bg-surface-hover disabled:opacity-50"
+          className="min-h-10 rounded-control border border-line px-3 text-xs text-ink-mid transition hover:bg-surface-hover disabled:opacity-50"
         >
           {t("common.dismiss")} {countdown > 0 && `(${countdown}s)`}
         </button>
@@ -1616,7 +1616,7 @@ function BulkActionBar({
             type="button"
             onClick={onClear}
             disabled={busy}
-            className="h-7 rounded-md px-2 text-xs text-ink-dim transition hover:bg-surface-hover disabled:opacity-50"
+            className="h-7 rounded-chip px-2 text-xs text-ink-dim transition hover:bg-surface-hover disabled:opacity-50"
           >
             {t("common.cancel")}
           </button>
@@ -1648,7 +1648,7 @@ function BulkButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`h-8 rounded-md border px-2.5 text-xs font-medium transition disabled:opacity-50 ${
+      className={`h-8 rounded-chip border px-2.5 text-xs font-medium transition disabled:opacity-50 ${
         danger
           ? "border-red-500/25 bg-red-500/10 text-state-danger-ink hover:bg-red-500/15"
           : "border-line bg-surface-raised text-ink-mid hover:bg-surface-hover"
@@ -1762,7 +1762,7 @@ function FilterTabs({
     <div
       role="group"
       aria-label={t("mail.filter.label")}
-      className="flex gap-0.5 overflow-x-auto rounded-xl border border-line/70 bg-surface-panel/60 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)] backdrop-blur [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="flex gap-0.5 overflow-x-auto rounded-control border border-line/70 bg-surface-panel/60 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)] backdrop-blur [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {FILTERS.filter((f) => !DOMAIN_FILTER_KEYS.includes(f.key)).map((f) => {
         const active = f.key === current;
@@ -1772,7 +1772,7 @@ function FilterTabs({
             type="button"
             aria-pressed={active}
             onClick={() => onChange(f.key)}
-            className={`${MOBILE_FILTERS.has(f.key) ? "inline-flex" : "hidden md:inline-flex"} ease-strong h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-xs transition duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+            className={`${MOBILE_FILTERS.has(f.key) ? "inline-flex" : "hidden md:inline-flex"} ease-strong h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-chip px-3 text-xs transition duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
               active
                 ? "seg-active bg-surface-panel font-semibold text-ink"
                 : "font-medium text-ink-mid hover:bg-surface-panel/70 hover:text-ink"
@@ -1833,7 +1833,7 @@ function LoadMoreBar({
   return (
     <div
       ref={sentinelRef}
-      className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-line/70 bg-surface-panel/60 px-4 py-2.5 text-caption text-ink-dim backdrop-blur"
+      className="mt-3 flex items-center justify-between gap-3 rounded-control border border-line/70 bg-surface-panel/60 px-4 py-2.5 text-caption text-ink-dim backdrop-blur"
     >
       <span>
         {totalAvailable > loadedCount
@@ -1845,7 +1845,7 @@ function LoadMoreBar({
           type="button"
           onClick={onLoadMore}
           disabled={isFetching}
-          className="ease-strong rounded-md border border-line bg-surface-panel px-2.5 py-1 text-caption font-medium text-ink-mid shadow-sm transition duration-150 hover:text-accent-deep active:scale-[0.97] disabled:opacity-50"
+          className="ease-strong rounded-chip border border-line bg-surface-panel px-2.5 py-1 text-caption font-medium text-ink-mid shadow-sm transition duration-150 hover:text-accent-deep active:scale-[0.97] disabled:opacity-50"
         >
           {isFetching ? t("mailV2.loadingMore") : t("mailV2.loadMore")}
         </button>
@@ -2015,7 +2015,7 @@ function EmailRowItem({
           }
           onClick={() => onQuickToggleRead(email)}
           disabled={quickBusyId !== null}
-          className="ease-strong flex h-7 w-7 items-center justify-center rounded-md border border-line bg-surface-panel text-ink-dim shadow-sm transition duration-150 hover:text-accent-deep active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45"
+          className="ease-strong flex h-7 w-7 items-center justify-center rounded-chip border border-line bg-surface-panel text-ink-dim shadow-sm transition duration-150 hover:text-accent-deep active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45"
         >
           {email.isRead ? (
             <svg
@@ -2056,7 +2056,7 @@ function EmailRowItem({
           })}
           onClick={() => onQuickArchive(email)}
           disabled={quickBusyId !== null}
-          className="ease-strong flex h-7 w-7 items-center justify-center rounded-md border border-line bg-surface-panel text-ink-dim shadow-sm transition duration-150 hover:text-accent-deep active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45"
+          className="ease-strong flex h-7 w-7 items-center justify-center rounded-chip border border-line bg-surface-panel text-ink-dim shadow-sm transition duration-150 hover:text-accent-deep active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45"
         >
           <svg
             aria-hidden="true"
@@ -2109,7 +2109,7 @@ function EmailRowReminderActions({
             type="button"
             onClick={() => onCreateReminder(email, option)}
             disabled={busyKey !== null}
-            className="ease-strong rounded-md px-2 py-1 text-caption font-medium text-ink-dim transition duration-150 hover:bg-state-info-bg hover:text-accent-deeper active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45"
+            className="ease-strong rounded-chip px-2 py-1 text-caption font-medium text-ink-dim transition duration-150 hover:bg-state-info-bg hover:text-accent-deeper active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45"
           >
             {busyKey === key ? t("mail.remind.setting") : t(option.labelKey)}
           </button>
@@ -2135,7 +2135,7 @@ function EmailBadges({ email, unread }: { email: EmailRow; unread: boolean }) {
     badges.push(
       <span
         key="files"
-        className="inline-flex shrink-0 items-center gap-1 rounded-md bg-surface-hover px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-ink-mid"
+        className="inline-flex shrink-0 items-center gap-1 rounded-chip bg-surface-hover px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-ink-mid"
       >
         <svg
           aria-hidden="true"
@@ -2201,7 +2201,7 @@ function ThreadRowItem({ thread }: { thread: ThreadRow }) {
               {thread.participants.map(senderName).join(", ")}
             </span>
             <PriorityBadge priority={thread.latestPriority} />
-            <span className="shrink-0 rounded-md bg-surface-hover px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-ink-mid">
+            <span className="shrink-0 rounded-chip bg-surface-hover px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-ink-mid">
               {t("mail.thread.messages", { count: String(thread.messageCount) })}
             </span>
             <time className="ml-auto shrink-0 text-caption tabular-nums text-ink-dim">
@@ -2240,7 +2240,7 @@ function CandidatePreview({ profile }: { profile: CandidateProfilePreview }) {
         })
       : null;
   return (
-    <div className="mt-2 rounded-lg border border-accent/15 bg-accent/5 px-2.5 py-2">
+    <div className="mt-2 rounded-control border border-accent/15 bg-accent/5 px-2.5 py-2">
       <div className="flex items-center justify-between gap-2">
         <p className="truncate text-caption font-medium text-accent-deep">{title}</p>
         <span className="shrink-0 text-caption tabular-nums text-accent-deep">
@@ -2290,7 +2290,7 @@ function candidateMissingLabel(field: string): string {
 function ReplyNeededBadge() {
   const { t } = useT();
   return (
-    <span className="shrink-0 rounded-md bg-accent/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-accent-deeper ring-1 ring-inset ring-accent/20">
+    <span className="shrink-0 rounded-chip bg-accent/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-accent-deeper ring-1 ring-inset ring-accent/20">
       {t("mail.filterReplyNeeded")}
     </span>
   );
@@ -2299,7 +2299,7 @@ function ReplyNeededBadge() {
 function CandidateBadge() {
   const { t } = useT();
   return (
-    <span className="shrink-0 rounded-md bg-accent/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-accent-deep ring-1 ring-inset ring-accent/20">
+    <span className="shrink-0 rounded-chip bg-accent/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-accent-deep ring-1 ring-inset ring-accent/20">
       {t("mail.badge.candidate")}
     </span>
   );
@@ -2320,7 +2320,7 @@ function PriorityBadge({ priority }: { priority: EmailRow["priority"] }) {
   if (priority === "NORMAL") return null;
   return (
     <span
-      className={`shrink-0 rounded-md px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ring-1 ring-inset ${styles[priority]}`}
+      className={`shrink-0 rounded-chip px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ring-1 ring-inset ${styles[priority]}`}
     >
       {labels[priority]}
     </span>
@@ -2341,7 +2341,7 @@ function CategoryBadge({ category }: { category: string }) {
   ]);
   const label = known.has(category) ? t(`emailDetail.category.${category}`) : category;
   return (
-    <span className="shrink-0 rounded-md bg-surface-hover px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-ink-mid">
+    <span className="shrink-0 rounded-chip bg-surface-hover px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-ink-mid">
       {label}
     </span>
   );
@@ -2411,7 +2411,7 @@ function MobileEmailRow({
     <li>
       <Link
         href={`/email/${email.id}?${params.toString()}`}
-        className="flex gap-3 rounded-2xl bg-surface-panel px-4 py-3 transition active:bg-surface-hover"
+        className="flex gap-3 rounded-control bg-surface-panel px-4 py-3 transition active:bg-surface-hover"
       >
         <span
           aria-hidden="true"

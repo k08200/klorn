@@ -160,7 +160,7 @@ export function NaverImapSection({ embedded = false, onChanged }: NaverImapSecti
       className={
         embedded
           ? undefined
-          : "panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-5"
+          : "panel-elevated rounded-card border border-line/70 bg-surface-panel p-5"
       }
     >
       <header className={embedded ? "hidden" : "mb-3 flex items-start justify-between gap-3"}>
@@ -180,7 +180,7 @@ export function NaverImapSection({ embedded = false, onChanged }: NaverImapSecti
         <div className="text-xs text-ink-dim">{t("common.loading")}</div>
       ) : status?.connected ? (
         <div className="space-y-3">
-          <div className="rounded-xl border border-line-soft bg-surface-raised/70 p-3 text-sm text-ink">
+          <div className="rounded-control border border-line-soft bg-surface-raised/70 p-3 text-sm text-ink">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="font-medium">{status.email}</p>

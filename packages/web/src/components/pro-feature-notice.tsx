@@ -20,7 +20,7 @@ export function ProFeatureNotice({
   return (
     <div
       role="status"
-      className={`rounded-xl border border-state-info-line bg-state-info-bg px-3 py-2 ${className}`}
+      className={`rounded-control border border-state-info-line bg-state-info-bg px-3 py-2 ${className}`}
     >
       <p className="text-sm text-ink">{t(messageKey)}</p>
       <Link

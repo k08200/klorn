@@ -125,7 +125,7 @@ export function DataSection() {
         <h2 className="mb-3 text-caption font-semibold uppercase tracking-wider text-state-danger-ink">
           {t("settings.dangerZone")}
         </h2>
-        <div className="panel-elevated rounded-2xl border border-state-danger-line bg-surface-panel divide-y divide-state-danger-line">
+        <div className="panel-elevated rounded-card border border-state-danger-line bg-surface-panel divide-y divide-state-danger-line">
           <div className="flex items-center justify-between gap-4 p-4">
             <div>
               <h3 className="font-medium">{t("settings.confirm.deleteWorkspace.title")}</h3>
