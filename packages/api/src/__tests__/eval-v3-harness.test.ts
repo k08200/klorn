@@ -465,3 +465,27 @@ describe("front parity extras", () => {
     expect(deterministicFront(bot, { ...EMPTY_JUDGE_CONTEXT, senderPrior: override })).toBeNull();
   });
 });
+
+describe("replay re-parses stored facts with the production parser", () => {
+  it("drops what P2's parseFactsV1 drops (an ask with an empty object), as production would", async () => {
+    const { rescore } = await import("../eval-v3/analysis.js");
+    const rawFacts = {
+      asks: [{ kind: "provide" as const, object: "", due: null, evidence: "can you send the latest deck today?" }],
+      addressedTo: "me_direct" as const,
+      threadTurn: "none" as const,
+      event: null,
+      transaction: null,
+      risk: [],
+      kind: "notification" as const,
+      ambiguous: false,
+    };
+    const run = {
+      meta: { set: "gate", model: "m", prompt: "v3" as const, run: 1, ranAt: "", includeBody: true },
+      summary: summarizeRun([], []),
+      calls: [],
+      rows: [{ id: "a", truth: "INFO" as const, predicted: "QUEUE" as const, source: "v3", rawFacts }],
+    };
+    const out = rescore(run, new Map([["a", "INFO" as const]]), new Map([["a", EMAIL]]));
+    expect(out.rows[0]).toMatchObject({ predicted: "INFO", rule: "info", evidenceTotal: 0 });
+  });
+});

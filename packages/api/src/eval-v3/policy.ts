@@ -12,7 +12,7 @@
  * schedules (the v2 spam floor, a deterministic pre-fact).
  */
 import type { Tier } from "../judge/tiers.js";
-import type { FactsV1, Risk } from "./facts-schema.js";
+import type { FactsV1, Risk } from "../judge/v3/facts-schema.js";
 
 const PUSH_DEADLINE_MS = 24 * 60 * 60 * 1000;
 const PUSH_RISKS: ReadonlySet<Risk> = new Set(["payment_failed", "security_alert"]);
