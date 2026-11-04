@@ -621,7 +621,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
                     zIndex: 9999,
                   }
             }
-            className="md:w-[min(20rem,calc(100vw-2rem))] bg-surface-panel border border-line rounded-control shadow-xl overflow-hidden flex flex-col max-h-[min(70vh,calc(100vh-6rem))] md:max-h-[28rem]"
+            className="rail:w-[min(20rem,calc(100vw-2rem))] bg-surface-panel border border-line rounded-control shadow-xl overflow-hidden flex flex-col max-h-[min(70vh,calc(100vh-6rem))] rail:max-h-[28rem]"
           >
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-line">
               <div className="flex items-center gap-2">
