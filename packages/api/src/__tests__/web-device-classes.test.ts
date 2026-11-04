@@ -87,3 +87,19 @@ describe("mail split", () => {
     );
   });
 });
+
+describe("touch targets on the tablet widths", () => {
+  // A tablet is a coarse pointer at desktop widths, so the desktop-sized
+  // controls need their own 44px floor (WCAG 2.5.8), not just the phone ones.
+  it("calendar, composer and reader controls reach 44px on a coarse pointer", () => {
+    const calendar = read("app/calendar/page.tsx");
+    expect(calendar).not.toContain("flex h-10 w-10 items-center justify-center rounded-full");
+    expect(calendar).toMatch(/h-9 w-9 pointer-coarse:h-11 pointer-coarse:w-11/);
+    expect(calendar).toContain("pointer-coarse:after:-inset-2.5");
+    const compose = read("components/compose-modal.tsx");
+    expect(compose).toMatch(/const fieldClass =\s*"[^"]*pointer-coarse:min-h-11/);
+    expect(compose).toContain("h-9 w-9 pointer-coarse:h-11 pointer-coarse:w-11");
+    expect(read("components/ui/segmented-control.tsx")).toContain("pointer-coarse:min-w-11");
+    expect(read("components/notification-bell.tsx")).toContain("pointer-coarse:size-11");
+  });
+});

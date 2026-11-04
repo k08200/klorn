@@ -103,7 +103,7 @@ export function SegmentedControl<Id extends string>({
             tabIndex={index === tabStop ? 0 : -1}
             disabled={disabled}
             onClick={() => onChange(segment.id)}
-            className={`group/segment focus-ring flex h-[30px] min-w-fit flex-1 shrink-0 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-role-caption transition-colors duration-120 ease-fluid disabled:cursor-not-allowed disabled:opacity-50 pointer-coarse:h-11 ${
+            className={`group/segment focus-ring flex h-[30px] min-w-fit pointer-coarse:min-w-11 flex-1 shrink-0 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-role-caption transition-colors duration-120 ease-fluid disabled:cursor-not-allowed disabled:opacity-50 pointer-coarse:h-11 ${
               checked
                 ? `bg-surface-panel font-semibold ring-1 ring-line ${segment.checkedClass ?? "text-ink"}`
                 : "font-medium text-ink-soft hover:text-ink"

@@ -117,7 +117,7 @@ function DayStrip() {
           <Link
             href={MAIL_HREF}
             onClick={() => preselectMailLane("QUEUE")}
-            className="focus-ring rounded-chip text-ink-muted underline-offset-2 transition-colors duration-120 ease-fluid hover:text-ink-soft hover:underline"
+            className="focus-ring relative rounded-chip text-ink-muted underline-offset-2 transition-colors duration-120 ease-fluid hover:text-ink-soft hover:underline pointer-coarse:after:absolute pointer-coarse:after:-inset-y-3.5 pointer-coarse:after:inset-x-0 pointer-coarse:after:content-['']"
           >
             {t(todayWaitingKey(waiting), { count: String(waiting) })}
           </Link>
