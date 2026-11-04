@@ -2,8 +2,8 @@
 
 /**
  * Sheet (productization plan §2, P2) — a modal panel: right-side on ≥768px,
- * bottom sheet on phones. Elevation L3 (`shadow-l3`) over a 40% scrim,
- * `rounded-sheet`, enter 200ms / exit 160ms on `ease-fluid`. Reduced motion
+ * bottom sheet on phones. Sheet depth (`shadow-sheet`) over a 40% scrim,
+ * `rounded-sheet` (24), 320ms in and out on `ease-fluid` (Design Language v2). Reduced motion
  * drops the slide and keeps only the opacity change (and the global
  * reduced-motion rule in globals.css shortens that to an instant swap).
  *
@@ -27,8 +27,8 @@ import { getFocusableElements, trapTab } from "../../lib/focusable";
 import { bodyScrollLock, isPlainEscape, modalStack } from "../../lib/modal-stack";
 import Button from "./button";
 
-/** Matches --motion-exit; the panel unmounts after the exit transition. */
-const EXIT_MS = 160;
+/** Matches --motion-sheet; the panel unmounts after the exit transition. */
+const EXIT_MS = 320;
 
 type Phase = "closed" | "enter" | "open" | "exit";
 
@@ -183,14 +183,13 @@ export function Sheet({
   if (phase === "closed") return null;
 
   const shown = phase === "open";
-  const duration = phase === "exit" ? "duration-160" : "duration-200";
 
   return createPortal(
     <div className="fixed inset-0 z-[120]">
       <div
         aria-hidden="true"
         onClick={onClose}
-        className={`absolute inset-0 bg-black/40 transition-opacity ease-fluid ${duration} ${shown ? "opacity-100" : "opacity-0"}`}
+        className={`absolute inset-0 bg-black/40 transition-opacity ease-fluid duration-320 ${shown ? "opacity-100" : "opacity-0"}`}
       />
       <div
         ref={panelRef}
@@ -199,7 +198,7 @@ export function Sheet({
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
-        className={`absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col rounded-t-sheet border border-line bg-surface-elevated text-ink shadow-l3 outline-none transition-[transform,opacity] ease-fluid md:inset-x-auto md:top-2 md:right-2 md:bottom-2 md:max-h-none md:w-[28rem] md:max-w-[calc(100vw-1rem)] md:rounded-sheet ${duration} ${
+        className={`absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col rounded-t-sheet border border-line bg-surface-elevated text-ink shadow-sheet outline-none transition-[transform,opacity] ease-fluid md:inset-x-auto md:top-2 md:right-2 md:bottom-2 md:max-h-none md:w-[28rem] md:max-w-[calc(100vw-1rem)] md:rounded-sheet duration-320 ${
           shown
             ? "translate-x-0 translate-y-0 opacity-100"
             : "opacity-0 motion-safe:translate-y-full motion-safe:md:translate-x-full motion-safe:md:translate-y-0"
@@ -209,14 +208,14 @@ export function Sheet({
           <div className="min-w-0 flex-1 pt-2.5">
             <h2
               id={titleId}
-              className="text-title text-ink [overflow-wrap:anywhere] [word-break:keep-all]"
+              className="text-role-title text-ink [overflow-wrap:anywhere] [word-break:keep-all]"
             >
               {title}
             </h2>
             {description && (
               <p
                 id={descriptionId}
-                className="mt-1 text-body text-ink-muted [overflow-wrap:anywhere] [word-break:keep-all]"
+                className="mt-1 text-role-body text-ink-muted [overflow-wrap:anywhere] [word-break:keep-all]"
               >
                 {description}
               </p>
@@ -233,7 +232,7 @@ export function Sheet({
             <CloseGlyph />
           </Button>
         </div>
-        <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-4 text-body">
+        <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-4 text-role-body">
           {children}
         </div>
         {footer && (

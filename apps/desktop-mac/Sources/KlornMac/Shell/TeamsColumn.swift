@@ -34,7 +34,7 @@ struct TeamsColumn: View {
     var body: some View {
         OffscreenFriendlyScroll {
             VStack(alignment: .leading, spacing: 14) {
-                Text(L("teams.title")).font(Theme.Typo.display).foregroundStyle(Theme.text)
+                Text(L("teams.title")).font(Theme.Typo.title).foregroundStyle(Theme.text)
                 Text(L("teams.subtitle")).font(.caption).foregroundStyle(Theme.textDim)
                     .fixedSize(horizontal: false, vertical: true)
 

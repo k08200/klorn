@@ -20,6 +20,9 @@
  *   raw-button           a raw `<button` in app/** pages — use ui/button.
  *   retired-auto-lane    `tier-auto` — the retired v1 AUTO lane's tokens stay
  *                        only for legacy Record<Tier, …> visuals.
+ *   retired-elevation    `shadow-l2` / `shadow-l3` — Design Language v2 keeps
+ *                        exactly two shadows, `shadow-menu` and `shadow-sheet`
+ *                        (docs/design/design-language-v2.md). Zero allowance.
  *   retired-text-size    `text-[9px]` … `text-[13px]` — the sizes the type roles
  *                        replaced (caption 12, label 13). Zero allowance: this
  *                        rule takes no baseline, so a retired size can never
@@ -81,6 +84,13 @@ const RULES = [
     applies: () => true,
     zeroAllowance: true,
     hint: "retired size — text-caption (12) or text-label (13)",
+  },
+  {
+    id: "retired-elevation",
+    re: /(?<![\w-])shadow-l[23](?![\w-])/g,
+    applies: () => true,
+    zeroAllowance: true,
+    hint: "use shadow-menu (popovers, menus, toasts) or shadow-sheet (sheets, dialogs)",
   },
   {
     id: "retired-auto-lane",

@@ -9,6 +9,15 @@
 /** Hard ceiling: above this an attachment is too large to send to vision OCR. */
 export const MAX_VISION_ATTACHMENT_BYTES = 8_000_000;
 
+/**
+ * Output budget for one OCR call. The answer carries the attachment's FULL
+ * text as JSON; the native Anthropic adapter's 4,096-token default cuts a
+ * text-dense multi-page PDF off mid-JSON, which reads as "no readable text".
+ * Output is billed only as generated, so the ceiling costs nothing on short
+ * files.
+ */
+export const VISION_OCR_MAX_TOKENS = 16_000;
+
 // Floor: below this an image carries no readable content — it's a tracking
 // pixel, spacer, or a tiny email logo/icon. The BetaList digest that surfaced
 // this shipped a 558-byte logo.png on every row; sending those to the vision

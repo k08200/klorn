@@ -98,7 +98,15 @@ Build on what exists: `SentMessage` (user's sent mail), `ContactEngagementScore`
 - pinned or VIP;
 - dismiss count.
 
-Output is a `relationship` snapshot stored with the decision. It eases the cold-start "urgent 0/4" problem from day one, because sent mail is already synced for "waiting on". The sync reads only the newest page of the Sent folder (50 mails) every 30 minutes and has no history backfill. So on day one the snapshot sees at most the user's last 50 sent mails, and older correspondents look new. Production on 2026-10-31: 192 `SentMessage` rows across 3 users, the oldest from 2026-06-04. A bounded backfill of sent headers is planned as its own change.
+Output is a `relationship` snapshot stored with the decision. It eases the cold-start "urgent 0/4" problem from day one, because sent mail is already synced for "waiting on". The sync reads only the newest page of the Sent folder (50 mails) every 30 minutes. Without history, the snapshot sees at most the user's last 50 sent mails, and older correspondents look new. Production on 2026-10-31: 192 `SentMessage` rows across 3 users, the oldest from 2026-06-04.
+
+A one-time history import (`mail/sent-history-import.ts`, flag `SENT_HISTORY_BACKFILL_ENABLED`, OFF by default, accepts `cohort`) fills that in:
+- Scope: the newest 2,000 sent mails of the last 12 months, for each inbox the scan reads (primary Gmail and linked Google inboxes not waiting for a reconnect). Headers only (`format=metadata`: To, Subject, Date, with a field mask, so no snippet). `To` and `Subject` are stored up to 1,024 characters. No new scope.
+- Resume: each run lists the window's ids and fetches the oldest ones `SentMessage` does not have, so the rows are the progress. A crash or redeploy resumes, and gaps the scan left are filled.
+- Pace: at most 100 metadata fetches per user per email-sync tick, 2 in flight, at most 10 list pages and 2 minutes per run, run detached from the serial user loop.
+- Failures: a transient failure (429, 5xx, timeout, auth, a failing listing) pauses only that inbox for 30 minutes, counts nothing, and keeps everything newer than it for later. A message that fails for good 3 times (another 4xx, no usable date, a write Postgres rejects) is skipped; the inbox can finish without it. When no inbox can run, the user waits 30 minutes.
+- Done: when every listed mail is recorded, the grant row (`UserToken` / `LinkedInboxAccount`) gets `sentHistoryImportedAt` and the inbox is not listed again. A reconnect or re-link resets it, since it may be another Google account.
+- Provenance: rows the import or the scan create are labelled at insert by `mail/sent-origin-classifier.ts`, with the legacy backfill's rules and its own mailto derivation; a Postgres test (`sent-origin-parity-pg.test.ts`) checks both give the same labels. Two differences: among rows with the same `sentAt`, a recorded row counts as earlier, then gmailId order (the SQL compares random ids); and a subject over 1,024 characters, stored truncated, is compared with the source or mailto subject truncated the same way, so it still matches (the SQL compares it with the untruncated text, so it never does). A label recorded at send time is never overwritten. If the labels cannot be read, the scan writes only rows it already had.
 
 As built in P2 (`judge/v3/relationship.ts`, `relationship-loader.ts`):
 - Every field is null when the data to answer it does not exist, never 0, so policy can tell "unknown" from "never". No sent-mail sync means the sent fields are null.
@@ -120,15 +128,40 @@ As built in P2 (`judge/v3/relationship.ts`, `relationship-loader.ts`):
   | `approved` | the agent drafted it; the user approved these exact bytes | yes |
   | `auto_reply` | an autonomous reply the user never saw | never |
   | `unsubscribe` | a mailto unsubscribe request | never |
-  | null | seen only by the Sent-folder scan (sent outside Klorn), or recorded before the column existed | yes |
+  | null | seen only by the Sent-folder scan, with no proof that Klorn sent it (counted as the user's own mail) | yes |
 
-  This applies to every sent-side field: sent count, last sent, reply latency, replied and user-initiated thread counts, and the sent side of `firstSeenAt`.
+  This applies to every sent-side field: sent count, last sent, reply latency, replied and user-initiated thread counts, and the sent side of `firstSeenAt`. The loader applies it as one where-clause (`SENT_EVIDENCE_WHERE`, #1589).
 
-  Rows recorded before #1591 stay null, so legacy auto-replies and unsubscribes still read as the user's. A null row whose `to` matches a `listUnsubscribeMailto` address stored for that user is not evidence.
+  Legacy rows (before #1591) were labelled on 2026-11-01 by migration `20261101000000_sent_message_origin_backfill`. It labels only from records written at send time:
+  - `approved`: the executed approval's returned messageId.
+  - `auto_reply`: the unattended-reply claim's recipient, an exact `Re: <subject>`, and a send within 2 minutes of the claim. Only the first such row per claim counts, and a claim rewritten as failed never counts.
+  - `unsubscribe`: the recipient is a mailto List-Unsubscribe target of a mail received in the same account before the send. The subject must equal the decoded mailto subject, or be a same-shape per-mail token sent to an address that never mails the user.
 
-  Until the loader applies this rule, policy must not treat "the user wrote to them" as trust.
+  Production dry run: 4 `auto_reply` and 37 `unsubscribe` of 192 rows; no row qualified as `approved`. Of the 37, 28 match the subject exactly and 9 are token subjects. One row from before the send floor (2026-06-04 10:22 UTC) is unprovable and stays null. A sent-history import must classify the rows it creates with the same rules.
 - Pinned means any `PIN_TIER` rule on the address or domain. VIP means a sender label of investor or customer, or a pin to PUSH.
 - **Calendar co-attendance is always null for now.** `CalendarEvent` stores no attendees. The interaction graph's "meeting" count is inferred from email volume, which is not co-attendance, so it is not reused.
+
+Co-attendance store (`pim/coattendance/`, behind `CALENDAR_COATTENDANCE_ENABLED`, off by default). Founder decision 2026-11-01: keep per-contact counts, never attendee lists.
+
+- **Counts.** `ContactCoAttendance` has one row per (userId, contactEmail) with raw counts, no weights: `meetingCount` (ended meetings the user took part in, with the contact invited and not declining), `smallMeetingCount` (of those, at most 5 such people; rooms and decliners excluded), `firstMetAt` and `lastMetAt` (the UTC day the earliest and latest counted meeting ended). It counts past meetings; the "next 14 days" feature above is not served by it. No column of it or of `CoAttendanceMeeting` (a SHA-256 of each counted meeting's identity and its end day, kept about a month so a meeting in two of the user's calendars counts once) is finer than a UTC day or records when a row was written.
+- **One pass per user, each finished UTC day once.** A background job the scheduler queues (never a request, never inside a user's per-tick budget) lists every Google calendar source of the user together (the primary, and each GOOGLE linked calendar not awaiting a re-link while linked sync is on): the days after the user's watermark `User.coAttendanceCountedThrough` through yesterday (the first pass, and the first after a data wipe, which resets the watermark: the last 30 days). The watermark's contract: every finished UTC day up to and including it has been evaluated for every included source. All sources' meetings that ended on one UTC day are written in one transaction, so rows that share a Postgres transaction id (`xmin`) reveal no more than `lastMetAt` already does. Only a day over a cap (25 meetings or 200 distinct contacts) is split, into the fewest balanced slices in marker-key order (26 meetings: 13 + 13), so each part is a key-ordered slice of that day and never one meeting alone. Each day transaction takes a per-user advisory lock and re-reads the day's markers: a one-slice day that has any is complete and skipped; a split day is resumed, writing only its unmarked meetings. The watermark advances (compare-and-swap; a pass that loses it stops) only through the last day every source listed in full (a cut listing counts through the day before its last listed start; a failed one covers nothing). A day at or before the watermark is never evaluated again.
+- **Counting rules.** A meeting counts once its whole UTC end-day has finished, if it is not cancelled or all-day, has at most 50 invitees with a complete guest list, and the user organised, accepted or is tentative; an event without the user's entry counts only if the calendar says they organised it. Rooms Google flags as resources, the user's own addresses and anyone who declined are never counted.
+- **Coverage, per source** (on `UserToken` for the primary, on `LinkedCalendarAccount` for a linked calendar): `coAttendanceObservedSince` is the first full day the source was covered by an advance of the watermark (a newly linked source: the day after the watermark); a source left out of an advance loses it, and after a gap (the watermark older than the day before the window) coverage restarts at the window's first day for every source. `coAttendanceLastPassAt` is written on every pass in which that source's own listing succeeded in full through the days being evaluated, whether the watermark advanced or there was nothing new to count in them, and never for a failed or cut listing. A pass that finds no new day to evaluate lists nothing and writes nothing; a new day appears every day, so a running job refreshes it daily. Reconnecting or re-linking clears both.
+- **The reader's gate (P2's contract).** A missing `ContactCoAttendance` row means 0 only when ALL of these hold; otherwise every co-attendance field is null:
+  1. the flag is ON;
+  2. `User.coAttendanceCountedThrough` ≥ utcDay(now) − 2 days;
+  3. EVERY Google calendar source (the primary `UserToken`, provider google, and each `LinkedCalendarAccount` with provider GOOGLE) has `coAttendanceObservedSince` ≤ utcDay(now) − 30 days, that is full-window coverage; a source that joins later reads null for up to 30 days;
+  4. no Google source has `needsReconnect`;
+  5. the user has NO non-Google calendar source (a `LinkedCalendarAccount` of Outlook, CalDAV or any other provider);
+  6. the sender is not one of the user's own addresses, and its address can be normalised.
+
+  The window the counts cover, for P5, is [max over sources of `coAttendanceObservedSince`, `coAttendanceCountedThrough`].
+
+  False zeros this gate prevents:
+  - a source that joined later (probe A): its earlier meetings were never counted, so its contacts would read 0 although the user met them (condition 3);
+  - a stale watermark (probe C): the job stopped (flag flipped off and on, scheduler down, a source failing) and the days since were never evaluated, so recent meetings would read 0 (condition 2);
+  - non-Google calendars: Outlook and CalDAV meetings are not counted at all, so their contacts would read 0 (condition 5); a re-link-pending Google source is not being listed (condition 4).
+- **Known limits.** A late accept or guest change after a meeting's day was evaluated is ignored (recall loss: written on its own, it would show its guest list through `xmin`); a meeting is counted again if its iCalUID changes (re-imported or recreated, or a recurring series split at "this and following") on a day not yet evaluated; one failing source holds the watermark for all of the user's sources; Outlook and CalDAV are not counted yet; rows are not removed when a calendar is unlinked or the flag is turned off (a data wipe or account deletion removes them).
 
 Facts and the snapshot are stored in `AttentionFacts`, one row per (userId, source, sourceId), the natural key of `AttentionItem` and `DecisionLabel`. The row also holds the evidence check, escalation reasons, model, provider, and the v2 lane shown when the shadow ran. That lane is frozen there because `DecisionLabel.shownTier` is rewritten on re-judge.
 
@@ -147,6 +180,128 @@ Model: a per-user logistic regression over (facts, relationship, time) features,
 - **SILENT** = `addressedTo` bulk with no asks, or `kind` newsletter/promotion with no asks.
 
 Pins and manual overrides keep their precedence, as they do today. Every decision stores `policyVersion` and the facts it read.
+
+### (5) Policy v3.0: exact rules, budget, ranking (P3)
+
+The code is in `packages/api/src/judge/v3/`: `policy.ts`, `interrupt-budget.ts`, `push-budget-gate.ts`, `ranking.ts`, `importance.ts`, `keyword-facts.ts`, `parity.ts` and `replay.ts`. Every decision carries `policyVersion: "v3.0"`.
+
+**Evaluation.** The result is the lane before the budget. The first match wins:
+
+1. A manual override, then a sender pin, sets the lane. That is the order in effect today: an overridden item is preserved against any later judgement, a pin included. In the live judge, the marketing fast-path, sender priors and learned rules still short-circuit before facts, as in v2. Replay keeps the v2 lane for those items.
+2. **MEETING**: `event` is present and `addressedTo` is not bulk. This is checked before PUSH, as in v2. A meeting notifies through its own lane and spends no interrupt budget.
+3. **PUSH candidate**: `addressedTo` is me_direct or me_cc, there is no `phishing_suspect`, and one of these holds:
+   - `risk` contains payment_failed or security_alert, and the sender is a **VIP** (an investor/customer label, or a sender pinned to PUSH). Risk has no evidence quote in facts v1, so on its own it needs relationship trust.
+     - The same organisation is not enough: that is how CEO-fraud spoofing looks.
+     - "The user wrote to them" is not enough either. `SentMessage.origin` (#1591) now marks Klorn's own sends, but rows recorded before it stay null and still read as the user's (§3(2)). A past unattended auto-reply to an attacker could therefore still lend trust.
+     - v2 never pushed machine mail, so this is never worse than today. A user who wants a bank's alerts to interrupt pins the sender to PUSH.
+   - An ask has `due` within 24h of the decision time, either side. An ask overdue by more than 24h is stale: it ranks at the top of QUEUE but does not interrupt, and a re-judge of old mail cannot turn it into a PUSH. Also, `kind` must not be notification, newsletter, promotion or receipt, and the deterministic automated-sender signal must be off. Machine mail interrupts only through `risk`. This keeps the v2 automated-sender PUSH floor (#794), and it does not depend on the model's `kind`.
+4. **QUEUE**: a payment/security risk that did not PUSH (also under a phishing suspicion, so a false positive is never filed or hidden), non-empty `asks`, `threadTurn` mine_to_reply, `transaction.actionRequired`, or `kind` personal or work_thread.
+5. **INFO**: `transaction` is present, or `kind` is notification or receipt.
+6. **SILENT**: `addressedTo` is bulk, or `kind` is newsletter or promotion.
+7. Otherwise **QUEUE**, the default lane.
+
+Floors:
+- `ambiguous` never lands in SILENT or INFO. It goes to QUEUE, like v2's low-confidence rule.
+- Mail that Gmail marked as spam never lands in PUSH or MEETING. It goes to QUEUE, like v2's spam floor. `spam` and `automatedSender` are mailbox signals passed next to the facts; they are not facts.
+- `phishing_suspect` never lands in PUSH or MEETING (a suspected fake invite goes to QUEUE) and shows up as a reason on any lane.
+
+**Interrupt budget.** The founder's default is 5 per day (§8). `JUDGE_V3_PUSH_BUDGET` sets the system default and accepts a positive integer or `unlimited`. The per-user setting arrives with the settings UI.
+- The budget is counted per user per local day (`AutomationConfig.timezone`). Only PUSH notifications spend it. MEETING does not.
+- These spend nothing:
+  - the existing gates, which run first: the 6h recency rule, the IMAP re-ingest skip and the 7-day dedupe (`email-firewall.ts`);
+  - a push that would not ring anyway, because the user's notification preferences, quiet hours or focus block say no;
+  - a sender the user pinned to PUSH. A pin is the user's own rule and keeps precedence over the budget.
+- Admission is atomic. A sent PUSH writes its bell row with `Notification.dedupeKey = interrupt:<YYYY-MM-DD>:<n>`, which is unique per user, so concurrent judgements cannot exceed the budget. Clearing the bell hides these rows instead of deleting them.
+- A PUSH with no free slot is held:
+  - lane QUEUE;
+  - `tierReason` = `email.heldByInterruptBudget` ("Held: daily interrupt budget reached", 7 languages);
+  - no notification;
+  - `DecisionLabel.shownTier` = QUEUE. `decidedBy` keeps the judge path, because the fallback repair sweep selects on it.
+  - The judge drops a model reason that equals a static reason key, so only the hold path writes the held key. P3 PR2 adds a dedicated held column as the marker the ranking trusts.
+  - If a human or an agent moved the item between the judgement and the hold, nothing is sent and their lane stands.
+- While `JUDGE_V3_POLICY` is on, the legacy keyword urgent sweep (`automation-scheduler.ts`) stops sending its own pushes. The policy's PUSH lane, under the budget, is the only email interrupt.
+  - Prod, last 30 days to 2026-10-31: 43 of the 48 "Urgent email" notifications were for mail whose firewall lane is now QUEUE or SILENT, or which has no item. That is the sweep.
+  - **This is part of the founder's flip decision.**
+- Live admission is first come, first served within the day. "Importance within the day's top-k" applies inside a batch (replay), and gets stricter once P5 importance exists.
+- Known gaps until the lane decision moves before persistence, with a held column (P3 PR2):
+  - The item is written as PUSH and then held, so the Mac's local banner can see it for one sync.
+  - A re-judge after the 6h window can write a held item back to PUSH. It sends no notification and spends no budget, but it shows in the PUSH lane.
+- A set but invalid `JUDGE_V3_PUSH_BUDGET` falls back to 5 with a warning in the log.
+
+**Importance before P5** (`importance.ts`). A relationship prior in [0, 1]:
+- a VIP scores 1;
+- otherwise the score starts at 0.2 and adds:
+  - sent count, on a log scale that saturates at 20;
+  - recency of the last mail the user sent, with a half-life of 30 days;
+  - reply latency;
+  - same organisation;
+  - calendar co-attendance;
+- dismissals subtract from it.
+
+Unknown (null) features add nothing. A pin adds nothing either: it sets the lane, not the importance.
+
+**QUEUE ranking (the Today list).**
+- Held items come first: by importance, then in the order they were held. That way mail from strangers that spent the budget cannot push a known sender's held alert down.
+- Then items are ordered by importance × deadline proximity. Proximity rises linearly from 1 (no deadline, or one 7 or more days away) to 2 (due now or overdue). A payment/security risk that did not PUSH ranks as due now, unless phishing is suspected.
+- Ties go to the newer mail.
+- No numeric score is sent to clients.
+
+**Fallback parity (principle 9).** With no LLM facts, `keywordFactsV1` derives facts from the same detectors as the v2 keyword fallback. The P2 extractor writes `factsSource: "none"` rows when the LLM fails. The policy treats those rows as having no LLM facts and uses keyword facts merged with the certain pre-facts.
+
+A test runs both paths over the cross product of keyword signals (4,368 mails), against the real v2 code path. It asserts:
+- (a) nothing v2 shows becomes SILENT, except bulk scheduling mail;
+- (b) every v2 PUSH stays a PUSH candidate, except list mail;
+- (c) machine, marketing and spam mail never become PUSH candidates;
+- (d) nothing becomes a PUSH candidate that v2 did not push. In keyword facts, an urgent word gives the ask a due time only where v2's keyword rule would have pushed (an investor-looking sender). Elsewhere the ask has no due time, so the model-down path never interrupts more, or for more senders, than v2 did.
+
+The documented divergences (`parity.ts`), counted on that corpus:
+
+| Class | Change | Why |
+|---|---|---|
+| bulkScheduling | MEETING → QUEUE / INFO / SILENT (449) | MEETING requires "not bulk". v2 let bulk invites into a lane that notifies (#1497). |
+| machineListFiled | QUEUE → INFO (117) | Machine list mail with nothing asked is filed, and stays visible. |
+| listNeverInterrupts | PUSH → QUEUE (52) | PUSH requires mail addressed to the user. |
+
+These are cross-product counts, not prevalence. The replay reports prevalence on real mail. In prod, 331 of the 2,378 email decisions in the 30 days to 2026-10-31 came from the keyword fallback.
+
+**Flags.**
+- `JUDGE_V3_POLICY` (default OFF) **requires `JUDGE_V3_SHADOW`**. Facts exist only while the extractor runs, and a POLICY flip must never add LLM cost on its own.
+- Per item, missing facts mean the v2 lane.
+- While POLICY is on, the budget applies to every PUSH notification.
+- P3 PR1 ships the budget. P3 PR2 wires lanes from stored facts, after the P2 store lands.
+
+**Replay.** Run `pnpm --filter @klorn/api replay:policy -- [--user=] [--days=30] [--budget=5|unlimited] [--out=] [--show-subjects]`. It is read-only and makes no LLM calls. It reports:
+- the lane distribution: v2 shown, v3 before the budget, v3 final;
+- v2 → v3 transitions;
+- budget stats per user-day. Like the live path, pins and manual overrides spend no budget. Quiet hours, preferences and the 6h rule are not modelled, so `held` is an upper bound;
+- keyword parity on real mail;
+- per-item changes (ids by default).
+
+**Reasons and API contract (for the surface redesign).** These fields are additive and only appear while `JUDGE_V3_POLICY` is on. With the flag off, every response keeps today's shape and order: the new fields are absent, not null.
+- Each item gets `v3: { policyVersion, rank, held, due, threadTurn, reasons }`:
+  - `rank` is the 1-based position in the ranked QUEUE, and null outside QUEUE;
+  - `held` is true when the budget held this PUSH (read from the held column that P3 PR2 adds). Held items take ranks 1..n, by importance and then in the order they were held;
+  - `due` is an ISO 8601 UTC timestamp. Clients format it in the display zone, and null hides the chip.
+- Each reason is `{ code, fact, evidence, evidenceIn: "subject" | "body" | null, params }`.
+  - `reasons[0]` decides the lane; the rest support it. Reasons contain no prose and no model names; clients localise from `code` and `params`.
+  - Codes: pinned, manual_override, sender_pattern, learned_rule, event, risk, ask_due_soon, addressed_to_me, ask, thread_turn_mine, transaction_action, kind, transaction_record, bulk, default_queue, ambiguous, spam_floor, held_budget, relationship.
+  - Params by code:
+    - `addressed_to_me` {addressedTo}
+    - `risk` {risk, trusted}
+    - `event` {conflict}
+    - `ask` and `ask_due_soon` {askKind, due}
+    - `kind` {kind}
+    - `transaction_*` {transactionKind}
+    - `held_budget` {budget}
+    - `relationship`: the known features only. These are counts and dates, never content.
+- Today responses add `interruptBudget: { limit, used, day }` (`limit` is null for no limit; `day` is `YYYY-MM-DD`), plus `queueTotal` and `rankedAt` (ISO). Clients re-apply ranks only on focus or refresh.
+- Open, and not in v3.0:
+  - Budget exhaustion by strangers (security review). Five PUSH candidates from people the user never wrote to can spend the day's budget. The held alert still tops the Today list, and v2 had no budget at all. The fix is a share of slots reserved for trusted senders, in P3 PR2, which has relationship data on the push path.
+  - Widening risk-only PUSH trust beyond VIP. Now that `SentMessage.origin` exists (#1591), "the user wrote to them" can become a signal: user-origin sends only, once legacy null rows have aged out or been classified. This would be a new `policyVersion`, decided on replay data.
+  - Calendar conflict title and time. `event.conflict` stays null until P2 reads the calendar.
+  - "Always interrupt for payment/security past the budget". This is a design proposal and a founder decision, OFF until decided. The params `{risk, overBudget: true}` are reserved for it.
+  - The Important / Not important feedback endpoint. It belongs to P0 outcome stamping.
+- Clients that re-sort lists themselves must adopt the server order behind the same flag: mobile Today and Cover sort by priority, Mac Inbox mode sorts by time, and mobile groups by day.
 
 ## 4. Models
 

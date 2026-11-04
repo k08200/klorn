@@ -10,7 +10,10 @@
  *      time with its `origin`, zero extra Gmail calls;
  *   2. a throttled scan of the Gmail Sent folder (every account, latest
  *      page, at most every 30 minutes per user) so mail sent from Gmail
- *      directly counts too.
+ *      directly counts too;
+ *   3. a one-time import of the last 12 months of the Sent folder
+ *      (sent-history-import.ts, SENT_HISTORY_BACKFILL_ENABLED, default OFF).
+ * Rows the scan or the import create are labelled by sent-origin-classifier.ts.
  *
  * "Waiting" = the latest thing I sent in a thread is at least `minDays`
  * old and no message from someone else arrived in that thread after it.
@@ -20,8 +23,10 @@
 
 import { prisma } from "../db.js";
 import { senderEmail } from "../notify/notification-format.js";
-import { captureError } from "../sentry.js";
-import { listGmailMailbox } from "./gmail-mailbox.js";
+import { listGmailMailbox, type MailboxItemWire } from "./gmail-mailbox.js";
+import { reportSentError } from "./sent-errors.js";
+import { clampSentField } from "./sent-fields.js";
+import { classifySentRows } from "./sent-origin-classifier.js";
 
 /**
  * Who sent a recorded mail:
@@ -30,9 +35,10 @@ import { listGmailMailbox } from "./gmail-mailbox.js";
  *     bytes (chat approve → outbox → executor);
  *   - "auto_reply": an autonomous reply the user never saw before it left;
  *   - "unsubscribe": a mailto unsubscribe request.
- * Null = seen only by the Sent-folder scan (sent outside Klorn), or recorded
- * before this column existed. Relationship evidence is null, "user" and
- * "approved"; "auto_reply" and "unsubscribe" never are.
+ * Null = seen only by the Sent-folder scan, with no proof that Klorn sent it
+ * (counted as the user's own mail; legacy rows were labelled by migration
+ * 20261101000000_sent_message_origin_backfill). Relationship evidence is null,
+ * "user" and "approved"; "auto_reply" and "unsubscribe" never are.
  */
 export type SentOrigin = "user" | "approved" | "auto_reply" | "unsubscribe";
 
@@ -46,21 +52,32 @@ export interface SentMessageInput {
   inbox: string;
   /** Set by Klorn's own send paths; the Sent-folder scan leaves it out. */
   origin?: SentOrigin;
+  /**
+   * Set by the Sent-folder scan and the history import from
+   * sent-origin-classifier.ts: written when the row is created, never on
+   * update, so it cannot overwrite a label recorded at send time.
+   */
+  inferredOrigin?: SentOrigin;
 }
 
 /**
  * Upsert one sent message. Fail-soft: a bookkeeping miss must never fail a
  * send that already went out, and the periodic scan re-records anyway.
- * A record without an origin (the scan) never writes one, so a later scan
- * cannot erase what Klorn recorded at send time.
+ * A record without an origin (the scan) never writes one on update, so a
+ * later scan cannot erase what Klorn recorded at send time. `to` and
+ * `subject` are stored truncated to SENT_FIELD_MAX. Returns whether the row
+ * was written.
  */
-export async function recordSentMessage(userId: string, input: SentMessageInput): Promise<void> {
-  const { origin, ...fields } = input;
+export async function recordSentMessage(userId: string, input: SentMessageInput): Promise<boolean> {
+  const { origin, inferredOrigin, ...rest } = input;
+  const fields = { ...rest, to: clampSentField(rest.to), subject: clampSentField(rest.subject) };
   const originField = origin ? { origin } : {};
+  const createOrigin = origin ?? inferredOrigin;
+  const createOriginField = createOrigin ? { origin: createOrigin } : {};
   const upsert = () =>
     prisma.sentMessage.upsert({
       where: { userId_gmailId: { userId, gmailId: fields.gmailId } },
-      create: { ...fields, ...originField, userId },
+      create: { ...fields, ...createOriginField, userId },
       update: {
         threadId: fields.threadId,
         to: fields.to,
@@ -80,10 +97,10 @@ export async function recordSentMessage(userId: string, input: SentMessageInput)
       if (!isUniqueConflict(err)) throw err;
       await upsert();
     }
+    return true;
   } catch (err) {
-    const code = (err as { code?: unknown } | null)?.code;
-    console.warn("[SENT] record failed:", err instanceof Error ? err.name : "unknown", code ?? "");
-    captureError(err, { tags: { scope: "sent-messages.record" }, extra: { userId } });
+    reportSentError("sent-messages.record", err, userId);
+    return false;
   }
 }
 
@@ -94,11 +111,67 @@ function isUniqueConflict(err: unknown): boolean {
 const SENT_SYNC_INTERVAL_MS = 30 * 60_000;
 const lastSentSyncAt = new Map<string, number>();
 
+/** Which of these gmailIds the user already has a row for. */
+export async function recordedGmailIds(userId: string, gmailIds: string[]): Promise<Set<string>> {
+  if (gmailIds.length === 0) return new Set();
+  const existing = await prisma.sentMessage.findMany({
+    where: { userId, gmailId: { in: gmailIds } },
+    select: { gmailId: true },
+  });
+  return new Set(existing.map((r) => r.gmailId));
+}
+
+type ScannedRow = Omit<SentMessageInput, "origin" | "inferredOrigin">;
+
+function toScannedRow(item: MailboxItemWire): ScannedRow | null {
+  const sentAt = new Date(item.receivedAt);
+  if (Number.isNaN(sentAt.getTime())) return null;
+  return {
+    gmailId: item.gmailId,
+    threadId: item.threadId,
+    to: clampSentField(item.to),
+    subject: clampSentField(item.subject),
+    sentAt,
+    inbox: item.inbox,
+  };
+}
+
+/**
+ * Labels for the rows the scan is about to create, or null when they cannot be
+ * read. The classifier is deliberately not behind the import's flag: a
+ * Gmail-native mailto unsubscribe found by the scan is an unsubscribe too.
+ */
+async function labelFreshRows(
+  userId: string,
+  fresh: readonly ScannedRow[],
+): Promise<Map<string, SentOrigin> | null> {
+  if (fresh.length === 0) return new Map();
+  try {
+    return await classifySentRows(
+      userId,
+      fresh.map(({ gmailId, to, subject, sentAt, inbox }) => ({
+        gmailId,
+        to,
+        subject,
+        sentAt,
+        inbox,
+      })),
+    );
+  } catch (err) {
+    reportSentError("sent-messages.classify", err, userId);
+    return null;
+  }
+}
+
 /**
  * Scan the Sent folder of every connected account (one page each) and
- * record what is there. Throttled per user so the scheduler can call it
- * every tick. Returns the number of rows recorded (0 when throttled, not
- * connected, or failed — failures are captured, never thrown).
+ * record what is there, labelling the rows it creates (sent-origin-classifier).
+ * If the labels cannot be read, the rows already recorded are still updated
+ * and the new ones wait for the next scan (they stay in the newest page): a
+ * new row is never written unlabelled because of a classifier error.
+ * Throttled per user so the scheduler can call it every tick. Returns the
+ * number of rows written (0 when throttled, not connected, or failed —
+ * failures are captured, never thrown).
  */
 export async function syncSentMessages(userId: string, now = Date.now()): Promise<number> {
   const last = lastSentSyncAt.get(userId) ?? 0;
@@ -107,20 +180,26 @@ export async function syncSentMessages(userId: string, now = Date.now()): Promis
   try {
     const page = await listGmailMailbox(userId, "sent", undefined, "all");
     if (!page) return 0;
-    for (const row of page.items) {
-      await recordSentMessage(userId, {
-        gmailId: row.gmailId,
-        threadId: row.threadId,
-        to: row.to,
-        subject: row.subject,
-        sentAt: new Date(row.receivedAt),
-        inbox: row.inbox,
-      });
+    const rows = page.items.flatMap((item) => toScannedRow(item) ?? []);
+    const known = await recordedGmailIds(
+      userId,
+      rows.map((r) => r.gmailId),
+    );
+    const labels = await labelFreshRows(
+      userId,
+      rows.filter((r) => !known.has(r.gmailId)),
+    );
+    let written = 0;
+    for (const row of rows) {
+      const isNew = !known.has(row.gmailId);
+      if (isNew && labels === null) continue;
+      const inferredOrigin = isNew ? labels?.get(row.gmailId) : undefined;
+      const ok = await recordSentMessage(userId, inferredOrigin ? { ...row, inferredOrigin } : row);
+      if (ok) written += 1;
     }
-    return page.items.length;
+    return written;
   } catch (err) {
-    console.warn("[SENT] sync failed:", err instanceof Error ? err.message : err);
-    captureError(err, { tags: { scope: "sent-messages.sync" }, extra: { userId } });
+    reportSentError("sent-messages.sync", err, userId);
     return 0;
   }
 }

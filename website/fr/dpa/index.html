@@ -82,7 +82,7 @@
       <tr><th>Vercel</th><td class="us">Hébergement de l’app web</td><td>Requêtes et réponses en transit</td></tr>
       <tr><th>Google (API Gemini)</th><td class="us">Appels aux modèles</td><td>Le texte des messages envoyé pour classement ou rédaction, selon des conditions d’API qui excluent l’entraînement sur les données soumises</td></tr>
       <tr><th>Anthropic (API Claude)</th><td class="us">Appels aux modèles</td><td>Le même texte des messages, selon des conditions d’API commerciales qui excluent l’entraînement sur les données soumises. Supprimé sous 30 jours par défaut, plus longtemps uniquement pour le contenu signalé dans le cadre de l’application de la politique d’utilisation</td></tr>
-      <tr><th>OpenRouter</th><td class="us">Routage des modèles</td><td>Idem, pour les modèles atteints par son intermédiaire. Avec votre propre clé, cette ligne devient à la place le fournisseur que vous avez choisi</td></tr>
+      <tr><th>OpenRouter</th><td class="us">Routage des modèles avec votre propre clé OpenRouter, et voie de secours</td><td>Le même texte de message, uniquement pour les requêtes faites avec une clé OpenRouter que vous avez ajoutée vous-même, ou si le service hébergé bascule sur cette voie quand Anthropic est indisponible. Par défaut, les appels aux modèles du service hébergé passent par Anthropic</td></tr>
       <tr><th>Paddle</th><td class="us">Paiements et revendeur officiel (merchant of record)</td><td>Informations de facturation. <strong>Aucun contenu d’e-mail</strong></td></tr>
       <tr><th>Apple</th><td class="us">Distribution des notifications push (APNs)</td><td>Contenu des notifications sur les appareils que vous avez enregistrés</td></tr>
     </tbody>

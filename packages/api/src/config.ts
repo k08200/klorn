@@ -515,6 +515,19 @@ export function calendarHideDeclinedEnabled(): boolean {
     (process.env.CALENDAR_HIDE_DECLINED_ENABLED ?? "").trim().toLowerCase(),
   );
 }
+// Per-contact calendar co-attendance (pim/coattendance/, attention engine v3
+// §3(2)). OFF by default (repo doctrine). While unset/false the sync lists no past
+// events and writes nothing to ContactCoAttendance or CoAttendanceMeeting. When on,
+// the scheduler queues a background job that, for each Google calendar source
+// (primary and linked) at most once per 6 hours, lists the last 30 days and counts
+// each ended meeting once per contact: counts and UTC days only, never an attendee
+// list (founder decision 2026-11-01).
+// Read at sync time with the same lenient truthy parse.
+export function calendarCoattendanceEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.CALENDAR_COATTENDANCE_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
 // Archive, trash and their inverses for Naver and iCloud over IMAP MOVE — step B2
 // of docs/providers/unified-platform-plan.md. OFF by default (repo doctrine) and
 // independent of IMAP_ACTIONS_ENABLED and IMAP_SEND_ENABLED. While OFF,

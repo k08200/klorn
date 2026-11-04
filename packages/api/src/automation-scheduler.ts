@@ -69,6 +69,7 @@ import {
 import { getLinkedInboxClients, renewExpiringGmailWatches } from "./mail/gmail.js";
 import { findReingestedHistoryFailClosed } from "./mail/imap-history.js";
 import { runProactiveDrafts } from "./mail/proactive-drafts.js";
+import { importSentHistory } from "./mail/sent-history-import.js";
 import { syncSentMessages } from "./mail/sent-messages.js";
 import { notifyConversationsUpdated } from "./notify/conversations-updated.js";
 import { desktopAlertTag } from "./notify/desktop-alert.js";
@@ -82,7 +83,7 @@ import {
   unnotifiedEmails,
   urgentDedupeKey,
 } from "./notify/urgent-dedup.js";
-import { autoModeSendEnabled, tierV2Enabled } from "./ops/feature-flags.js";
+import { autoModeSendEnabled, judgeV3PolicyEnabled, tierV2Enabled } from "./ops/feature-flags.js";
 import { createDailyBriefingDelivery } from "./pim/briefing.js";
 import { connectPrimaryCalendar } from "./pim/calendar-providers/dispatch.js";
 import {
@@ -90,6 +91,7 @@ import {
   syncLinkedCalendars,
   syncPrimaryCalendarWindow,
 } from "./pim/calendar-sync.js";
+import { enqueueCoAttendance } from "./pim/coattendance/coattendance-job.js";
 import { expireStaleDeviceSources } from "./pim/device-calendar/device-sources.js";
 import { sendFocusWindowDigests } from "./pim/focus-digest.js";
 import { draftReplyForEmailId } from "./routes/email-replies.js";
@@ -1438,6 +1440,13 @@ async function runUserCycle(
         });
       }
     }
+
+    // Calendar co-attendance (pim/coattendance/), behind CALENDAR_COATTENDANCE_ENABLED:
+    // queued, never awaited, so it runs outside this user's per-tick budget and
+    // never delays the email step below. The job checks each source's interval.
+    enqueueCoAttendance(config.userId, {
+      includeLinked: linkedCalendarSyncEnabled() && isEntitled(configUserPlan, configUserRole),
+    });
   }
 
   // --- Email Sync + AI Classify (requires PRO+ for classify, TEAM+ for auto-reply) ---
@@ -1466,6 +1475,14 @@ async function runUserCycle(
         // Sent-folder scan for "waiting on" — throttled to every 30 min per
         // user inside, fail-soft, so it can ride every sync tick.
         await syncSentMessages(config.userId);
+        // One-time import of the last 12 months of Sent headers for the same
+        // inboxes (SENT_HISTORY_BACKFILL_ENABLED, default OFF: no DB read, no
+        // Gmail call). Detached on purpose: a batch is up to 100 metadata
+        // fetches, which must not eat this serial loop's per-user time budget.
+        // It never rejects, runs one batch per user at a time (2 minutes at
+        // most), and stops once each inbox is marked imported (a reconnect
+        // resets the mark).
+        void importSentHistory(config.userId);
 
         // AI summarize new emails — floor 10 so a zero-new tick still drains
         // the backlog (same #725 floor the interactive routes already have;
@@ -1798,25 +1815,31 @@ async function runUserCycle(
 
         // Check for urgent unread emails — notify only for NEW urgent emails
         // Only check truly new emails (synced in last hour) to avoid re-notifying old unread emails
-        const urgentEmails = await prisma.emailMessage.findMany({
-          where: {
-            userId: config.userId,
-            priority: "URGENT",
-            isRead: false,
-            syncedAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
-          },
-          orderBy: { receivedAt: "desc" },
-          select: {
-            id: true,
-            gmailId: true,
-            subject: true,
-            from: true,
-            summary: true,
-            createdAt: true,
-            receivedAt: true,
-            linkedInboxAccountId: true,
-          },
-        });
+        // With JUDGE_V3_POLICY on, the judge's PUSH lane under the daily
+        // interrupt budget is the only email interrupt (attention-engine-v3.md
+        // §3(4)); this keyword sweep would ring outside the budget, so it
+        // stands down.
+        const urgentEmails = judgeV3PolicyEnabled()
+          ? []
+          : await prisma.emailMessage.findMany({
+              where: {
+                userId: config.userId,
+                priority: "URGENT",
+                isRead: false,
+                syncedAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
+              },
+              orderBy: { receivedAt: "desc" },
+              select: {
+                id: true,
+                gmailId: true,
+                subject: true,
+                from: true,
+                summary: true,
+                createdAt: true,
+                receivedAt: true,
+                linkedInboxAccountId: true,
+              },
+            });
         // Step B2b: tombstones and mail an IMAP UIDVALIDITY repair re-ingested are
         // history: rung once already, never again. Gmail rows read nothing more.
         // Fail-closed on a lookup failure (IMAP rows skipped), never thrown: the Gmail

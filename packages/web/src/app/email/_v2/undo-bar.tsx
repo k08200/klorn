@@ -34,7 +34,7 @@ export function UndoBar(props: UndoBarProps) {
     >
       <div
         role="status"
-        className="pointer-events-auto flex w-full max-w-md items-center gap-2 rounded-card border border-line bg-surface-elevated py-1 pl-4 pr-1 shadow-l2"
+        className="pointer-events-auto flex w-full max-w-md items-center gap-2 rounded-control border border-line bg-surface-elevated py-1 pl-4 pr-1 shadow-menu"
       >
         <p className="min-w-0 flex-1 truncate text-body text-ink">
           <span className="font-medium">{title}</span>

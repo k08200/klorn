@@ -65,6 +65,7 @@ vi.mock("../mail/vision-attachment-policy.js", () => ({
   isDecorativeImage: vi.fn(() => false),
   isVisionAttachment: vi.fn(() => false),
   MAX_VISION_ATTACHMENT_BYTES: 10_000_000,
+  VISION_OCR_MAX_TOKENS: 16_000,
 }));
 
 import { registerEmailAttachmentsRoutes } from "../routes/email-attachments.js";

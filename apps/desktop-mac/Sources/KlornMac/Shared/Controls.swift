@@ -108,10 +108,13 @@ struct SubtleTextButton: View {
 /// ships. Same size and chrome, no AppKit.
 struct OffscreenMenuLabel: View {
     let title: String
+    /// Set for an icon-only menu: the glyph replaces the words.
+    var systemImage: String? = nil
     var body: some View {
         // Matches a regular-size `.bordered` button (13pt text, ~22pt tall,
         // the control radius) so the shots show the one button system.
-        (Text(title) + Text(verbatim: " ") + Text(Image(systemName: "chevron.down")))
+        let lead = systemImage.map { Text(Image(systemName: $0)) } ?? Text(title)
+        (lead + Text(verbatim: " ") + Text(Image(systemName: "chevron.down")))
             .font(Theme.Typo.body).foregroundStyle(Theme.text)
             .padding(.horizontal, 8).frame(height: 22)
             .background(Theme.surfaceHover, in: RoundedRectangle(cornerRadius: Theme.Radius.sm))

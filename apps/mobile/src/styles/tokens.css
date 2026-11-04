@@ -39,18 +39,36 @@
   /* One design pixel in rem, so every text size scales with the OS text size
      (Dynamic Type on iOS via -apple-system-body, font scale on Android). */
   --u: calc(1rem / 16);
-  --type-large-title: calc(30 * var(--u));
-  --type-large-title-lh: calc(36 * var(--u));
-  --type-title: calc(20 * var(--u));
-  --type-title-lh: calc(26 * var(--u));
-  --type-headline: calc(16 * var(--u));
-  --type-headline-lh: calc(22 * var(--u));
-  --type-body: calc(15 * var(--u));
-  --type-body-lh: calc(22 * var(--u));
-  --type-callout: calc(14 * var(--u));
-  --type-callout-lh: calc(20 * var(--u));
-  --type-subhead: calc(13 * var(--u));
-  --type-subhead-lh: calc(18 * var(--u));
+  /* Design Language v2 type roles, phone column (docs/design/
+     design-language-v2.md). Pinned by tokens.test.ts. */
+  --role-page: calc(30 * var(--u));
+  --role-page-lh: calc(36 * var(--u));
+  --role-title: calc(21 * var(--u));
+  --role-title-lh: calc(28 * var(--u));
+  --role-head: calc(17 * var(--u));
+  --role-head-lh: calc(24 * var(--u));
+  --role-body: calc(16 * var(--u));
+  --role-body-lh: calc(24 * var(--u));
+  --role-label: calc(14 * var(--u));
+  --role-label-lh: calc(20 * var(--u));
+  --role-caption: calc(13 * var(--u));
+  --role-caption-lh: calc(18 * var(--u));
+  --role-mono: calc(13 * var(--u));
+  --role-mono-lh: calc(20 * var(--u));
+  /* Legacy step names. The ones that ARE a v2 role follow it; footnote /
+     caption / tab / stat sit outside the role set and burn down per screen. */
+  --type-large-title: var(--role-page);
+  --type-large-title-lh: var(--role-page-lh);
+  --type-title: var(--role-title);
+  --type-title-lh: var(--role-title-lh);
+  --type-headline: var(--role-head);
+  --type-headline-lh: var(--role-head-lh);
+  --type-body: var(--role-body);
+  --type-body-lh: var(--role-body-lh);
+  --type-callout: var(--role-label);
+  --type-callout-lh: var(--role-label-lh);
+  --type-subhead: var(--role-caption);
+  --type-subhead-lh: var(--role-caption-lh);
   --type-footnote: calc(12 * var(--u));
   --type-footnote-lh: calc(16 * var(--u));
   --type-caption: calc(11 * var(--u));
@@ -66,10 +84,12 @@
   --gutter: 20px;
   --section-gap: 24px;
   --card-pad: 16px;
-  --radius-control: 12px;
-  --radius-row: 16px;
-  --radius-card: 20px;
-  --radius-sheet: 28px;
+  /* v2 radius by role: 6 chip · 10 control/row · 16 card · 24 sheet. */
+  --radius-chip: 6px;
+  --radius-control: 10px;
+  --radius-row: 10px;
+  --radius-card: 16px;
+  --radius-sheet: 24px;
   --touch: 44px;
   --tabbar-height: 49px;
   --rail-width: 76px;
@@ -82,15 +102,19 @@
   --safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
   --safe-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
 
-  /* ── Motion (canvas: 120 state · 200 enter · 160 exit) ─────────────── */
+  /* ── Motion (v2: 120 state · 200 move · 320 sheet) ─────────────────── */
   --motion-state: 120ms;
+  --motion-move: 200ms;
+  --motion-sheet: 320ms;
+  /* Legacy names, kept for call sites that have not moved yet. */
   --motion-enter: 200ms;
   --motion-exit: 160ms;
-  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
 
   /* ── Colour: light ──────────────────────────────────────────────────── */
   --surface-app: #fafafa;
   --surface-card: #ffffff;
+  --surface-raised: #ffffff;
   --surface-sunken: rgba(15, 23, 42, 0.05);
   --surface-control: rgba(15, 23, 42, 0.06);
   --surface-bar: rgba(250, 250, 250, 0.86);
@@ -100,7 +124,9 @@
   --line-bar: rgba(15, 23, 42, 0.14);
   --line-nav: #e2e8f0;
   --line-selected: #7dd3fc;
-  --ink: #0f172a;
+  --ink: #0b0d12;
+  --ink-2: #3b4250;
+  --ink-3: #5b6270;
   --ink-strong: #1e293b;
   --ink-soft: #334155;
   --ink-mid: #556275;
@@ -112,14 +138,19 @@
   --accent-soft: #e0f2fe;
   --accent-soft-ink: #075985;
   --accent-tab-fill: rgba(3, 105, 161, 0.12);
-  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04);
-  --shadow-float: 0 8px 24px rgba(15, 23, 42, 0.12);
-  --shadow-fab: 0 10px 28px rgba(15, 23, 42, 0.25);
+  /* v2 depth: flat hairline, menu, sheet — no other shadows. Legacy names
+     map onto them. */
+  --hairline: rgba(10, 14, 20, 0.08);
+  --shadow-menu: 0 1px 2px rgba(10, 14, 20, 0.06), 0 4px 12px -4px rgba(10, 14, 20, 0.1);
+  --shadow-sheet: 0 12px 32px -8px rgba(10, 14, 20, 0.18);
+  --shadow-card: 0 0 0 1px var(--hairline);
+  --shadow-float: var(--shadow-menu);
+  --shadow-fab: var(--shadow-sheet);
   --skeleton-strong: #eef1f5;
   --skeleton-soft: #f3f5f8;
 
   /* The "Needs you now" brief is a dark card in both themes. */
-  --brief-bg: #0f172a;
+  --brief-bg: #0b0d12;
   --brief-line: transparent;
   --brief-shadow: var(--shadow-float);
   --brief-title: #bae6fd;
@@ -164,7 +195,7 @@
   --state-ok-bg: #ecfdf5;
   --state-ok-ink: #047857;
   /* Snackbar (ui/Snackbar.tsx): an inverted surface — dark on light, light on dark. */
-  --snackbar-bg: #0f172a;
+  --snackbar-bg: #0b0d12;
   --snackbar-ink: #f1f5f9;
   --snackbar-action: #7dd3fc;
   --snackbar-ok: #6ee7b7;
@@ -212,35 +243,37 @@
 /* ── Colour: dark (MainDark artboard) ──────────────────────────────────── */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --surface-app: #0b1120;
-    --surface-card: #111a2e;
+    --surface-app: #0a0a0b;
+    --surface-card: #141416;
+    --surface-raised: #1c1c1f;
     --surface-sunken: rgba(255, 255, 255, 0.06);
     --surface-control: rgba(255, 255, 255, 0.08);
-    --surface-bar: rgba(11, 17, 32, 0.86);
-    --surface-nav: #0f172a;
+    --surface-bar: rgba(10, 10, 11, 0.86);
+    --surface-nav: #141416;
     --surface-selected: #0d2233;
     --line: rgba(255, 255, 255, 0.08);
     --line-bar: rgba(255, 255, 255, 0.12);
-    --line-nav: #1c2a40;
+    --line-nav: #2e2e33;
     --line-selected: #2b5578;
-    --ink: #f1f5f9;
-    --ink-strong: #e2e8f0;
-    --ink-soft: #cbd5e1;
-    --ink-mid: #94a3b8;
-    --ink-dim: #7d8ba1;
-    --ink-faint: #64748b;
+    --ink: #f4f4f6;
+    --ink-2: #a2a2ad;
+    --ink-3: #8e8e9a;
+    --ink-strong: #e4e4e8;
+    --ink-soft: #c9c9d1;
+    --ink-mid: #a2a2ad;
+    --ink-dim: #8e8e9a;
+    --ink-faint: #6e6e78;
     --accent: #38bdf8;
     --accent-hover: #7dd3fc;
-    --accent-ink: #0b1120;
+    --accent-ink: #0a0a0b;
     --accent-soft: #0d2233;
     --accent-soft-ink: #7dd3fc;
     --accent-tab-fill: rgba(56, 189, 248, 0.16);
     --shadow-card: none;
-    --shadow-float: 0 8px 24px rgba(0, 0, 0, 0.35);
-    --shadow-fab: 0 10px 28px rgba(0, 0, 0, 0.45);
+    --hairline: rgba(255, 255, 255, 0.08);
     --skeleton-strong: rgba(255, 255, 255, 0.08);
     --skeleton-soft: rgba(255, 255, 255, 0.05);
-    --brief-bg: #16213a;
+    --brief-bg: #1c1c1f;
     --brief-line: rgba(255, 255, 255, 0.08);
     --brief-shadow: none;
     --brief-title: #7dd3fc;
@@ -263,8 +296,8 @@
     --meeting-tile-ink: #a5b4fc;
     --state-ok-bg: #0c2a20;
     --state-ok-ink: #6ee7b7;
-    --snackbar-bg: #e2e8f0;
-    --snackbar-ink: #0b1120;
+    --snackbar-bg: #f4f4f6;
+    --snackbar-ink: #0a0a0b;
     --snackbar-action: #0369a1;
     --snackbar-ok: #047857;
     --state-warn-bg: #2c220c;
@@ -274,41 +307,43 @@
     --state-danger-bg: #2b1116;
     --state-danger-line: #6b2430;
     --state-danger-ink: #fca5a5;
-    --source-icloud: #64748b;
-    --source-imap: #475569;
+    --source-icloud: #6e6e78;
+    --source-imap: #52525b;
   }
 }
 
 :root[data-theme="dark"] {
-  --surface-app: #0b1120;
-  --surface-card: #111a2e;
+  --surface-app: #0a0a0b;
+  --surface-card: #141416;
+  --surface-raised: #1c1c1f;
   --surface-sunken: rgba(255, 255, 255, 0.06);
   --surface-control: rgba(255, 255, 255, 0.08);
-  --surface-bar: rgba(11, 17, 32, 0.86);
-  --surface-nav: #0f172a;
+  --surface-bar: rgba(10, 10, 11, 0.86);
+  --surface-nav: #141416;
   --surface-selected: #0d2233;
   --line: rgba(255, 255, 255, 0.08);
   --line-bar: rgba(255, 255, 255, 0.12);
-  --line-nav: #1c2a40;
+  --line-nav: #2e2e33;
   --line-selected: #2b5578;
-  --ink: #f1f5f9;
-  --ink-strong: #e2e8f0;
-  --ink-soft: #cbd5e1;
-  --ink-mid: #94a3b8;
-  --ink-dim: #7d8ba1;
-  --ink-faint: #64748b;
+  --ink: #f4f4f6;
+  --ink-2: #a2a2ad;
+  --ink-3: #8e8e9a;
+  --ink-strong: #e4e4e8;
+  --ink-soft: #c9c9d1;
+  --ink-mid: #a2a2ad;
+  --ink-dim: #8e8e9a;
+  --ink-faint: #6e6e78;
   --accent: #38bdf8;
   --accent-hover: #7dd3fc;
-  --accent-ink: #0b1120;
+  --accent-ink: #0a0a0b;
   --accent-soft: #0d2233;
   --accent-soft-ink: #7dd3fc;
   --accent-tab-fill: rgba(56, 189, 248, 0.16);
   --shadow-card: none;
-  --shadow-float: 0 8px 24px rgba(0, 0, 0, 0.35);
-  --shadow-fab: 0 10px 28px rgba(0, 0, 0, 0.45);
+  --hairline: rgba(255, 255, 255, 0.08);
   --skeleton-strong: rgba(255, 255, 255, 0.08);
   --skeleton-soft: rgba(255, 255, 255, 0.05);
-  --brief-bg: #16213a;
+  --brief-bg: #1c1c1f;
   --brief-line: rgba(255, 255, 255, 0.08);
   --brief-shadow: none;
   --brief-title: #7dd3fc;
@@ -331,8 +366,8 @@
   --meeting-tile-ink: #a5b4fc;
   --state-ok-bg: #0c2a20;
   --state-ok-ink: #6ee7b7;
-  --snackbar-bg: #e2e8f0;
-  --snackbar-ink: #0b1120;
+  --snackbar-bg: #f4f4f6;
+  --snackbar-ink: #0a0a0b;
   --snackbar-action: #0369a1;
   --snackbar-ok: #047857;
   --state-warn-bg: #2c220c;
@@ -342,14 +377,17 @@
   --state-danger-bg: #2b1116;
   --state-danger-line: #6b2430;
   --state-danger-ink: #fca5a5;
-  --source-icloud: #64748b;
-  --source-imap: #475569;
+  --source-icloud: #6e6e78;
+  --source-imap: #52525b;
 }
 
 @media (prefers-reduced-motion: reduce) {
   :root {
+    /* v2: reduced motion is instant. */
     --motion-state: 0ms;
-    --motion-enter: 120ms;
-    --motion-exit: 120ms;
+    --motion-move: 0ms;
+    --motion-sheet: 0ms;
+    --motion-enter: 0ms;
+    --motion-exit: 0ms;
   }
 }

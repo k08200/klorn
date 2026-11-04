@@ -1,7 +1,7 @@
 /* FlipCover artboard (360×400): always dark, big targets. */
 .cover {
   height: 100%;
-  background: #0b1120;
+  background: #0a0a0b;
   color: #f1f5f9;
   padding: calc(28px + var(--safe-top)) calc(22px + var(--safe-right))
     calc(22px + var(--safe-bottom)) calc(22px + var(--safe-left));
@@ -82,7 +82,7 @@
   height: 56px;
   border-radius: 18px;
   border: 1px solid #3b4d6b;
-  background: #16213a;
+  background: #1c1c1f;
   color: #e2e8f0;
   font-size: var(--type-body);
   font-weight: 600;
@@ -91,7 +91,7 @@
 .cover__button--primary {
   border: 0;
   background: #38bdf8;
-  color: #0b1120;
+  color: #0a0a0b;
   font-weight: 700;
 }
 

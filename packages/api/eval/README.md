@@ -474,6 +474,11 @@ pass rate (say from 4/5 to 1/2) still passes the gate about 3 times in 4. Watch
 the `::warning::A floor failed on the first run` annotation — first-run failures
 that keep coming back are a regression even while the gate is green.
 
+## Facts v1 (attention engine v3)
+
+- `facts/synthetic-facts.json`: fact-level labels for the synthetic set (docs/design/attention-engine-v3.md §3(1)). An absent field is ambiguous for that item and is not scored. Run with `pnpm eval:facts --model=<id>` (needs a provider key; see the script header). It reports per-field accuracy, ask-kind precision/recall and evidence validity.
+- The founder's own mail is labelled with `pnpm label:own-mail` under the §5 protocol: two different frontier models label each mail; disagreements and PUSH/MEETING-relevant items go to the founder; only reconciled labels count. Output goes to `~/klorn-secrets/ae3-fact-labels/`, never the repo. The script refuses to run without `--i-have-founder-consent` and an Anthropic-only provider order.
+
 ## Attention engine v3, phase P1: v2 score prompt vs v3 fact prompt on current models (2026-10-31)
 
 Contract: [`docs/design/attention-engine-v3.md`](../../../docs/design/attention-engine-v3.md) (#1583; founder decisions #1584). Eval only: no product behaviour changes and no production data. Two questions:

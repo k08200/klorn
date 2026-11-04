@@ -21,6 +21,7 @@ import {
 import { buildLinkedCalendarClient, getAuthedClient } from "../../mail/gmail.js";
 import { captureError } from "../../sentry.js";
 import { safeMeetingLink } from "../meeting-link.js";
+import { listMeetingAttendeesVia } from "./google-meetings.js";
 import type {
   CalendarAccountRef,
   CalendarCreateInput,
@@ -366,6 +367,7 @@ export function googleSessionFromClient(auth: GoogleAuth): CalendarSession {
     provider: "GOOGLE",
     listEvents: (query) => listEventsVia(api(), query),
     listCancelledEvents: (query) => listCancelledVia(api(), query),
+    listMeetingAttendees: (window) => listMeetingAttendeesVia(api(), window),
     createEvent: (input) => createEventVia(api(), input),
     updateEvent: (eventId, patch) => updateEventVia(api(), eventId, patch),
     deleteEvent: async (eventId) => {

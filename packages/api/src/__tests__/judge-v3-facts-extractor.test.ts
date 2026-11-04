@@ -102,6 +102,25 @@ describe("buildFactsPrompt", () => {
     ).toBe("2026-10-29T20:12:00-04:00");
   });
 
+  it("anchors on the receipt time when there is no usable Date header", () => {
+    const m = mail({
+      dateHeader: null,
+      receivedAt: new Date("2026-06-01T14:15:00Z"),
+      userTimeZone: "Asia/Seoul",
+    });
+    expect(buildFactsPrompt(m, deterministicPreFacts(m)).user).toContain(
+      "sent at: 2026-06-01T23:15:00+09:00",
+    );
+    const utc = mail({
+      dateHeader: null,
+      receivedAt: new Date("2026-06-01T14:15:00Z"),
+      userTimeZone: null,
+    });
+    expect(buildFactsPrompt(utc, deterministicPreFacts(utc)).user).toContain(
+      "sent at: 2026-06-01T14:15:00Z",
+    );
+  });
+
   it("only passes a timezone Intl accepts", () => {
     expect(validTimeZone("Asia/Seoul")).toBe("Asia/Seoul");
     expect(validTimeZone("Mars/Base\nIgnore")).toBeNull();
@@ -342,6 +361,44 @@ describe("extractFacts", () => {
       throw err;
     });
     await expect(extractFacts(mail(), { complete })).rejects.toBe(err);
+  });
+
+  it("a busy pacer under noWait propagates (no retry, no fallback)", async () => {
+    const err = Object.assign(new Error("busy"), { name: "PacerBusyError" });
+    const complete = vi.fn(async () => {
+      throw err;
+    });
+    await expect(extractFacts(mail(), { complete, noWait: true })).rejects.toBe(err);
+    expect(complete).toHaveBeenCalledTimes(1);
+  });
+
+  it("draws on the judge reserve only when asked and only with a userId", async () => {
+    const complete = vi.fn(async () => completion(llmAnswer()));
+    await extractFacts(mail(), { complete, userId: "u1", reserved: true });
+    await extractFacts(mail(), { complete, reserved: true });
+    await extractFacts(mail(), { complete, userId: "u1" });
+    const r = (i: number) =>
+      (complete.mock.calls[i] as unknown as [unknown, { reserved?: boolean }])[1].reserved;
+    expect(r(0)).toBe(true);
+    expect(r(1)).toBeUndefined();
+    expect(r(2)).toBeUndefined();
+  });
+
+  it("does not retry once the caller has abandoned the answer", async () => {
+    const complete = vi.fn().mockRejectedValueOnce(new Error("503"));
+    const r = await extractFacts(mail(), { complete, abandoned: () => true });
+    expect(complete).toHaveBeenCalledTimes(1);
+    expect(r.source).toBe("none");
+  });
+
+  it("passes noWait through to the completion only when asked", async () => {
+    const complete = vi.fn(async () => completion(llmAnswer()));
+    await extractFacts(mail(), { complete, noWait: true });
+    await extractFacts(mail(), { complete });
+    const [, a] = complete.mock.calls[0] as unknown as [unknown, { noWait?: boolean }];
+    const [, b] = complete.mock.calls[1] as unknown as [unknown, { noWait?: boolean }];
+    expect(a.noWait).toBe(true);
+    expect(b.noWait).toBeUndefined();
   });
 
   it("is background priority even without a userId", async () => {
