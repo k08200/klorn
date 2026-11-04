@@ -21,13 +21,13 @@ export default function NotFound() {
       <div className="mt-8 flex flex-col gap-3 sm:flex-row">
         <Link
           href="/"
-          className="inline-flex min-h-11 items-center justify-center rounded-md bg-accent-solid px-5 text-sm font-semibold text-accent-solid-ink transition hover:bg-accent-solid-hover"
+          className="inline-flex min-h-11 items-center justify-center rounded-control bg-accent-solid px-5 text-sm font-semibold text-accent-solid-ink transition hover:bg-accent-solid-hover"
         >
           {t("statePage.notFound.open")}
         </Link>
         <a
           href="https://klorn.ai"
-          className="inline-flex min-h-11 items-center justify-center rounded-md border border-line px-5 text-sm font-medium text-ink-mid transition hover:bg-surface-hover hover:text-ink"
+          className="inline-flex min-h-11 items-center justify-center rounded-control border border-line px-5 text-sm font-medium text-ink-mid transition hover:bg-surface-hover hover:text-ink"
         >
           {t("statePage.notFound.about")}
         </a>

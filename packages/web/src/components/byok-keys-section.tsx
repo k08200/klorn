@@ -166,7 +166,7 @@ export function ByokKeysSection() {
   };
 
   return (
-    <section className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-5">
+    <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-5">
       <header className="mb-3">
         <h2 className="text-base font-semibold text-ink">{t("byok.title")}</h2>
         <p className="mt-1 text-xs text-ink-mid">{t(locked ? "byok.bodyFree" : "byok.body")}</p>
@@ -181,7 +181,7 @@ export function ByokKeysSection() {
         <div className="text-xs text-ink-dim">{t("common.loading")}</div>
       ) : (
         <div className="space-y-4">
-          <div className="rounded-xl border border-line-soft bg-surface-raised/70 p-3">
+          <div className="rounded-control border border-line-soft bg-surface-raised/70 p-3">
             <div className="mb-2 flex items-center justify-between gap-2">
               <span className="text-sm font-medium text-ink">{t(ANTHROPIC.labelKey)}</span>
               {status?.hasAnthropicApiKey && (
@@ -246,7 +246,7 @@ export function ByokKeysSection() {
           </div>
 
           {status?.hasGeminiApiKey && (
-            <div className="rounded-xl border border-state-warn-line bg-state-warn-bg p-3">
+            <div className="rounded-control border border-state-warn-line bg-state-warn-bg p-3">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <span className="text-sm font-medium text-ink">
                   Google Gemini{" "}
@@ -275,7 +275,7 @@ export function ByokKeysSection() {
               ? status?.activeModel
               : options[0]?.id;
             return (
-              <div className="rounded-xl border border-line-soft bg-surface-raised/70 p-3">
+              <div className="rounded-control border border-line-soft bg-surface-raised/70 p-3">
                 <Select
                   id="byok-model"
                   label={t("byok.assistantModel")}

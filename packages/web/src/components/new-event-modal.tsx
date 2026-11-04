@@ -17,7 +17,7 @@ import ErrorAlert from "./ui/error-alert";
  */
 
 const inputClass =
-  "w-full rounded-lg border border-line bg-surface-panel/80 px-3 py-2 text-sm text-ink shadow-[0_1px_1px_rgba(15,23,42,0.03)] outline-none transition duration-150 ease-out placeholder:text-ink-dim focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15 disabled:opacity-60";
+  "w-full rounded-control border border-line bg-surface-panel/80 px-3 py-2 text-sm text-ink shadow-[0_1px_1px_rgba(15,23,42,0.03)] outline-none transition duration-150 ease-out placeholder:text-ink-dim focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15 disabled:opacity-60";
 
 function getFocusableElements(root: HTMLElement | null): HTMLElement[] {
   if (!root) return [];
@@ -188,7 +188,7 @@ export function NewEventModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={headingId}
-        className="panel-elevated relative w-full max-w-md animate-slide-up rounded-t-2xl border border-line/70 bg-surface-panel p-5 shadow-2xl shadow-slate-900/10 md:rounded-2xl"
+        className="panel-elevated relative w-full max-w-md animate-slide-up rounded-t-sheet border border-line/70 bg-surface-panel p-5 shadow-2xl shadow-slate-900/10 md:rounded-sheet"
       >
         <h2 id={headingId} className="text-base font-semibold text-ink">
           {t("calendar.newEvent")}
@@ -293,14 +293,14 @@ export function NewEventModal({
               type="button"
               onClick={onClose}
               disabled={saving}
-              className="ease-strong min-h-10 rounded-lg border border-line bg-surface-panel/70 px-4 text-sm text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
+              className="ease-strong min-h-10 rounded-control border border-line bg-surface-panel/70 px-4 text-sm text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
             >
               {t("common.cancel")}
             </button>
             <button
               type="submit"
               disabled={!canSave}
-              className="glow-primary ease-strong min-h-10 rounded-lg bg-accent-solid px-4 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
+              className="glow-primary ease-strong min-h-10 rounded-control bg-accent-solid px-4 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
             >
               {saving ? t("newEvent.creating") : t("newEvent.create")}
             </button>

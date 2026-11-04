@@ -14,7 +14,7 @@ import {
 import { useDeviceTimeZone } from "../../../lib/time-zone-sync";
 
 const FIELD =
-  "w-full min-h-11 bg-surface-raised border border-line rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-accent-muted transition";
+  "w-full min-h-11 bg-surface-raised border border-line rounded-control px-4 py-2.5 text-sm focus:outline-none focus:border-accent-muted transition";
 
 interface TimeZonePickerProps {
   /** AUTO_TIME_ZONE or an IANA zone. */

@@ -144,7 +144,7 @@ export function CommitmentCard({
   };
 
   return (
-    <article className="rounded-2xl border border-line/70 bg-surface-panel p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+    <article className="rounded-card border border-line/70 bg-surface-panel p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -171,7 +171,7 @@ export function CommitmentCard({
           type="button"
           onClick={onDone}
           disabled={!!loading}
-          className="glow-primary ease-strong inline-flex min-w-[72px] items-center justify-center gap-1.5 rounded-lg bg-accent-solid px-3 py-1.5 text-xs font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+          className="glow-primary ease-strong inline-flex min-w-[72px] items-center justify-center gap-1.5 rounded-control bg-accent-solid px-3 py-1.5 text-xs font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading === "done" ? (
             <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
@@ -183,7 +183,7 @@ export function CommitmentCard({
           type="button"
           onClick={onDismiss}
           disabled={!!loading}
-          className="ease-strong inline-flex min-w-[72px] items-center justify-center gap-1.5 rounded-lg border border-line bg-surface-panel/70 px-3 py-1.5 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+          className="ease-strong inline-flex min-w-[72px] items-center justify-center gap-1.5 rounded-control border border-line bg-surface-panel/70 px-3 py-1.5 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading === "dismiss" ? (
             <span className="h-3 w-3 animate-spin rounded-full border-2 border-line-strong/40 border-t-slate-600" />
@@ -194,7 +194,7 @@ export function CommitmentCard({
         <button
           type="button"
           onClick={togglePath}
-          className="ease-strong inline-flex items-center justify-center gap-1 rounded-lg border border-line bg-surface-panel/70 px-3 py-1.5 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
+          className="ease-strong inline-flex items-center justify-center gap-1 rounded-control border border-line bg-surface-panel/70 px-3 py-1.5 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
         >
           {pathExpanded ? "Hide plan" : "View plan"}
         </button>
@@ -203,7 +203,7 @@ export function CommitmentCard({
           onClick={onSnooze}
           disabled={!!loading}
           title="Hide for 24h — will resurface automatically"
-          className="ease-strong inline-flex items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-xs text-ink-dim transition duration-150 hover:bg-state-info-bg hover:text-accent-deeper active:scale-[0.97] disabled:opacity-50"
+          className="ease-strong inline-flex items-center justify-center gap-1 rounded-control px-2 py-1.5 text-xs text-ink-dim transition duration-150 hover:bg-state-info-bg hover:text-accent-deeper active:scale-[0.97] disabled:opacity-50"
         >
           {loading === "snooze" ? (
             <span className="h-3 w-3 animate-spin rounded-full border-2 border-slate-400/30 border-t-slate-500" />
@@ -232,7 +232,7 @@ function CommitmentOwnerBadge({ owner }: { owner: CommitmentItem["owner"] }) {
   const entry = commitmentOwnerEntry(owner);
   return (
     <span
-      className={`shrink-0 rounded-md px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ${entry.className}`}
+      className={`shrink-0 rounded-chip px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ${entry.className}`}
     >
       {entry.label}
     </span>
@@ -264,7 +264,7 @@ function TrustBadge({
   if (!entry) return null;
   return (
     <span
-      className={`shrink-0 rounded-md px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ${entry.className}`}
+      className={`shrink-0 rounded-chip px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ${entry.className}`}
       title={label ?? undefined}
     >
       {entry.shortLabel}
@@ -398,7 +398,7 @@ function CommitmentPathPanel({
           return (
             <li
               key={`${step.dueIso}-${i}`}
-              className={`flex items-start gap-3 rounded-lg border p-3 text-xs ${
+              className={`flex items-start gap-3 rounded-control border p-3 text-xs ${
                 isMaterialized ? "border-accent/20 bg-accent/5" : "border-line bg-surface-raised"
               }`}
             >
@@ -424,7 +424,7 @@ function CommitmentPathPanel({
                   type="button"
                   onClick={() => onMaterializeStep(i)}
                   disabled={materializingStep !== null}
-                  className="ease-strong shrink-0 rounded-md border border-line bg-surface-panel/70 px-2 py-0.5 text-caption font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
+                  className="ease-strong shrink-0 rounded-chip border border-line bg-surface-panel/70 px-2 py-0.5 text-caption font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
                 >
                   {materializingStep === i ? "..." : "+ task"}
                 </button>
