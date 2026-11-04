@@ -92,7 +92,7 @@ export function CalendarColumn({
 function NowMarker({ time }: { time: TimeContext }) {
   const { t } = useT();
   return (
-    <p className="flex items-center gap-2 py-1 text-caption font-semibold tracking-[0.06em] text-tier-push-ink">
+    <p className="flex items-center gap-2 py-1 text-role-caption font-semibold tracking-[0.06em] text-tier-push-ink">
       <span className="shrink-0 uppercase">
         {t("today.calendar.now")}
         <span className="sr-only"> {clock(time.now.toISOString(), time)}</span>
@@ -121,7 +121,7 @@ function EventRow({ event, time, conflict }: EventRowProps) {
       className="focus-ring -mx-2 flex min-h-12 items-stretch gap-3 rounded-control px-2 py-1.5 transition-colors duration-120 ease-fluid hover:bg-surface-raised pointer-coarse:min-h-14"
     >
       <span
-        className={`flex w-16 shrink-0 flex-col whitespace-nowrap pt-0.5 text-caption tabular-nums ${past ? "text-ink-muted" : "text-ink-soft"}`}
+        className={`flex w-16 shrink-0 flex-col whitespace-nowrap pt-0.5 text-role-caption tabular-nums ${past ? "text-ink-muted" : "text-ink-soft"}`}
       >
         {event.allDay ? (
           <span>{t("today.calendar.allDay")}</span>
@@ -144,19 +144,19 @@ function EventRow({ event, time, conflict }: EventRowProps) {
       <span className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
         <span className="flex min-w-0 items-center gap-2">
           <span
-            className={`min-w-0 truncate text-label font-semibold ${past ? "text-ink-muted" : "text-ink"}`}
+            className={`min-w-0 truncate text-role-label font-semibold ${past ? "text-ink-muted" : "text-ink"}`}
           >
             {event.title || t("today.calendar.untitled")}
           </span>
         </span>
-        <span className="flex min-w-0 items-center gap-1.5 text-caption text-ink-muted">
+        <span className="flex min-w-0 items-center gap-1.5 text-role-caption text-ink-muted">
           {provider && <SourceBadge provider={provider} />}
           <span className="min-w-0 truncate">
             {event.location ? `${source} · ${event.location}` : source}
           </span>
         </span>
         {conflict && (
-          <span className="flex items-center gap-1 text-caption font-medium text-state-warn-ink">
+          <span className="flex items-center gap-1 text-role-caption font-medium text-state-warn-ink">
             <OverlapGlyph />
             {t("today.calendar.conflict")}
           </span>

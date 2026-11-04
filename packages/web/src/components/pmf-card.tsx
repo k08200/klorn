@@ -109,7 +109,9 @@ export default function PmfCard() {
       <h2 id="pmf-heading" className="text-role-head text-ink">
         {t("pmf.title")}
       </h2>
-      <p className="mt-1.5 text-label font-normal leading-5 text-ink-mid">{t("pmf.subtitle")}</p>
+      <p className="mt-1.5 text-role-label font-normal leading-5 text-ink-mid">
+        {t("pmf.subtitle")}
+      </p>
 
       <div className="mt-4 flex flex-wrap gap-2">
         {options.map((opt) => (
@@ -131,7 +133,7 @@ export default function PmfCard() {
           window.localStorage.setItem(DISMISS_KEY, "1");
           setDismissed(true);
         }}
-        className="focus-ring mt-3 inline-flex min-h-11 items-center text-caption font-medium text-ink-dim hover:underline"
+        className="focus-ring mt-3 inline-flex min-h-11 items-center text-role-caption font-medium text-ink-dim hover:underline"
       >
         {t("pmf.later")}
       </button>

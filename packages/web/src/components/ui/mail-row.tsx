@@ -5,7 +5,7 @@
  *
  *   line 1  unread dot · sender 13/500 dim · thread count chip · SourceBadge ·
  *           LaneChip (only where the list is not already one lane) · time
- *   line 2  subject 15/600 (14/600 in the compact split-view list)
+ *   line 2  subject 17/600 (15/600 in the compact split-view list)
  *   line 3  why it is in its lane, 12/500 in the lane's chip ink — or, when no
  *           reason was recorded, the snippet in muted text on its own line
  *
@@ -112,7 +112,7 @@ function PaperclipGlyph() {
 function ThreadCount({ count }: { count: number }) {
   const { t } = useT();
   return (
-    <span className="shrink-0 rounded-chip bg-surface-hover px-1.5 text-caption font-semibold tabular-nums text-ink-soft">
+    <span className="shrink-0 rounded-chip bg-surface-hover px-1.5 text-role-caption font-semibold tabular-nums text-ink-soft">
       <span aria-hidden="true">{count}</span>
       <span className="sr-only">{t("mailRow.threadCount", { count: String(count) })}</span>
     </span>
@@ -141,12 +141,12 @@ function MetaLine(props: MailRowProps) {
         className={`-ml-2.5 size-1.5 shrink-0 rounded-full ${unread ? "bg-accent-solid" : "bg-transparent"} ${dotYields}`}
       />
       {unread && <span className="sr-only">{t("mailRow.unread")}</span>}
-      <span className="min-w-0 truncate text-label text-ink-mid">{sender}</span>
+      <span className="min-w-0 truncate text-role-label text-ink-mid">{sender}</span>
       {(props.threadCount ?? 0) > 1 && <ThreadCount count={props.threadCount ?? 0} />}
       {source && <SourceBadge provider={source.provider} nickname={source.nickname} />}
       {tier && <LaneChip tier={tier} />}
       {!tier && tierPending && (
-        <span className="shrink-0 rounded-full border border-dashed border-line-strong px-2 py-px text-caption text-ink-muted">
+        <span className="shrink-0 rounded-full border border-dashed border-line-strong px-2 py-px text-role-caption text-ink-muted">
           {tierPending}
         </span>
       )}
@@ -159,7 +159,7 @@ function MetaLine(props: MailRowProps) {
       <span className="flex-1" />
       <time
         dateTime={timeIso}
-        className={`shrink-0 text-caption tabular-nums text-ink-muted ${timeYields}`}
+        className={`shrink-0 text-role-caption tabular-nums text-ink-muted ${timeYields}`}
       >
         {time}
       </time>
@@ -174,18 +174,18 @@ function RowContent(props: MailRowProps) {
     <>
       <MetaLine {...props} />
       <span
-        className={`min-w-0 truncate text-ink ${compact ? "text-body font-semibold" : "text-head tracking-[-0.005em]"}`}
+        className={`min-w-0 truncate text-ink ${compact ? "text-role-body font-semibold" : "text-role-head tracking-[-0.005em]"}`}
       >
         {subject}
       </span>
       {reason ? (
         <span
-          className={`min-w-0 truncate text-caption font-medium ${lane ? LANE_INK_CLASS[lane] : "text-ink-mid"}`}
+          className={`min-w-0 truncate text-role-caption font-medium ${lane ? LANE_INK_CLASS[lane] : "text-ink-mid"}`}
         >
           {reason}
         </span>
       ) : snippet ? (
-        <span className="min-w-0 truncate text-caption text-ink-muted">{snippet}</span>
+        <span className="min-w-0 truncate text-role-caption text-ink-muted">{snippet}</span>
       ) : null}
     </>
   );

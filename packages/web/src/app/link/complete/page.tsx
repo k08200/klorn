@@ -149,13 +149,13 @@ export default function LinkCompletePage() {
       className="flex min-h-dvh flex-col items-center justify-center gap-5 bg-surface-panel px-4 text-ink"
     >
       <img src="/brand/mark.svg?v=matte2" alt="" className="h-9 w-9" />
-      <p role="status" className="max-w-md text-center text-label text-ink-mid">
+      <p role="status" className="max-w-md text-center text-role-label text-ink-mid">
         {t(view.key)}
       </p>
       {view.action ? (
         <Link
           href={view.action.href}
-          className="inline-flex min-h-11 items-center justify-center rounded-control bg-accent-solid px-5 text-label font-medium text-accent-solid-ink transition hover:bg-accent-solid-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+          className="inline-flex min-h-11 items-center justify-center rounded-control bg-accent-solid px-5 text-role-label font-medium text-accent-solid-ink transition hover:bg-accent-solid-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
         >
           {t(view.action.label)}
         </Link>

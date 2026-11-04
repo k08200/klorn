@@ -93,7 +93,7 @@ export default function AssistantDock({ unified = false }: { unified?: boolean }
           <div className="flex items-center gap-2.5 border-b border-line-soft px-4 py-3">
             <span
               aria-hidden="true"
-              className="avatar-ring flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent-solid to-accent-solid-hover text-caption font-semibold text-accent-solid-ink"
+              className="avatar-ring flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent-solid to-accent-solid-hover text-role-caption font-semibold text-accent-solid-ink"
             >
               K
             </span>
@@ -101,13 +101,15 @@ export default function AssistantDock({ unified = false }: { unified?: boolean }
               <p className="text-role-body font-semibold leading-none text-ink">
                 {t("nav.assistant")}
               </p>
-              <p className="mt-1 truncate text-caption text-ink-dim">{t("assistantDock.scope")}</p>
+              <p className="mt-1 truncate text-role-caption text-ink-dim">
+                {t("assistantDock.scope")}
+              </p>
             </div>
             <button
               type="button"
               onClick={chat.newChat}
               disabled={!chat.activeId || chat.sending}
-              className="focus-ring ease-strong h-7 rounded-chip px-2 text-caption pointer-coarse:h-11 pointer-coarse:px-3 font-medium text-ink-dim transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97] disabled:opacity-40"
+              className="focus-ring ease-strong h-7 rounded-chip px-2 text-role-caption pointer-coarse:h-11 pointer-coarse:px-3 font-medium text-ink-dim transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97] disabled:opacity-40"
             >
               {t("chat.newChat")}
             </button>
@@ -146,7 +148,7 @@ export default function AssistantDock({ unified = false }: { unified?: boolean }
                       <button
                         type="button"
                         onClick={() => chat.send(t(key))}
-                        className="focus-ring ease-strong row-wash w-full rounded-control border border-line bg-surface-panel/70 px-3 py-2 text-left text-label font-normal text-ink-muted transition duration-150 hover:text-ink active:scale-[0.99]"
+                        className="focus-ring ease-strong row-wash w-full rounded-control border border-line bg-surface-panel/70 px-3 py-2 text-left text-role-label font-normal text-ink-muted transition duration-150 hover:text-ink active:scale-[0.99]"
                       >
                         {t(key)}
                       </button>
@@ -161,7 +163,7 @@ export default function AssistantDock({ unified = false }: { unified?: boolean }
                 ))}
                 {chat.pendingText && (
                   <div className="ease-strong flex justify-end transition duration-150 starting:translate-y-1 starting:opacity-0 motion-reduce:transition-none">
-                    <div className="max-w-[85%] rounded-card rounded-br-chip bg-slate-900 px-3.5 py-2 text-label font-normal text-slate-50 shadow-[0_1px_2px_rgba(15,23,42,0.16)]">
+                    <div className="max-w-[85%] rounded-card rounded-br-chip bg-slate-900 px-3.5 py-2 text-role-label font-normal text-slate-50 shadow-[0_1px_2px_rgba(15,23,42,0.16)]">
                       <p className="whitespace-pre-wrap">{chat.pendingText}</p>
                     </div>
                   </div>
@@ -170,11 +172,11 @@ export default function AssistantDock({ unified = false }: { unified?: boolean }
                   <div role="status" className="flex items-center gap-2">
                     <span
                       aria-hidden="true"
-                      className="avatar-ring flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent-solid to-accent-solid-hover text-caption font-semibold text-accent-solid-ink"
+                      className="avatar-ring flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent-solid to-accent-solid-hover text-role-caption font-semibold text-accent-solid-ink"
                     >
                       K
                     </span>
-                    <p className="text-label font-normal text-ink-mid">{t("chat.thinking")}</p>
+                    <p className="text-role-label font-normal text-ink-mid">{t("chat.thinking")}</p>
                   </div>
                 )}
               </>
@@ -206,7 +208,7 @@ export default function AssistantDock({ unified = false }: { unified?: boolean }
                 maxLength={4000}
                 placeholder={t("chat.inputPlaceholder")}
                 aria-label={t("assistantDock.input")}
-                className={`max-h-24 flex-1 resize-none bg-transparent text-label font-normal text-ink outline-none placeholder:text-ink-dim${
+                className={`max-h-24 flex-1 resize-none bg-transparent text-role-label font-normal text-ink outline-none placeholder:text-ink-dim${
                   unified ? " pointer-coarse:text-field" : ""
                 }`}
               />
@@ -281,7 +283,7 @@ function DockBubble({
   if (message.role === "USER") {
     return (
       <div className="ease-strong flex justify-end transition duration-150 starting:translate-y-1 starting:opacity-0 motion-reduce:transition-none">
-        <div className="max-w-[85%] rounded-card rounded-br-chip bg-slate-900 px-3.5 py-2 text-label font-normal text-slate-50 shadow-[0_1px_2px_rgba(15,23,42,0.16)]">
+        <div className="max-w-[85%] rounded-card rounded-br-chip bg-slate-900 px-3.5 py-2 text-role-label font-normal text-slate-50 shadow-[0_1px_2px_rgba(15,23,42,0.16)]">
           <p className="whitespace-pre-wrap">{message.content}</p>
         </div>
       </div>
@@ -293,11 +295,11 @@ function DockBubble({
     <div className="ease-strong flex justify-start gap-2 transition duration-150 starting:translate-y-1 starting:opacity-0 motion-reduce:transition-none">
       <span
         aria-hidden="true"
-        className="avatar-ring mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent-solid to-accent-solid-hover text-caption font-semibold text-accent-solid-ink"
+        className="avatar-ring mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent-solid to-accent-solid-hover text-role-caption font-semibold text-accent-solid-ink"
       >
         K
       </span>
-      <div className="max-w-[85%] rounded-card rounded-tl-chip border border-line/70 bg-surface-panel px-3.5 py-2 text-label font-normal text-ink-strong shadow-[0_1px_2px_rgba(15,23,42,0.05)]">
+      <div className="max-w-[85%] rounded-card rounded-tl-chip border border-line/70 bg-surface-panel px-3.5 py-2 text-role-label font-normal text-ink-strong shadow-[0_1px_2px_rgba(15,23,42,0.05)]">
         {capCode ? (
           <DailyCapLine code={capCode} />
         ) : (

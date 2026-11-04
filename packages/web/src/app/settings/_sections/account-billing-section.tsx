@@ -15,7 +15,7 @@ export function AccountBillingSection() {
       <SubscriptionSection />
       <Link
         href="/usage"
-        className="focus-ring inline-flex min-h-11 items-center rounded-control text-label text-accent-deep hover:underline"
+        className="focus-ring inline-flex min-h-11 items-center rounded-control text-role-label text-accent-deep hover:underline"
       >
         {t("billing.viewDetailedUsage")}
       </Link>

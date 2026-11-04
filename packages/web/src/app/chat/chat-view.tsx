@@ -30,7 +30,7 @@ const SUGGESTION_KEYS = [
 const LEGACY_USER_BUBBLE =
   "max-w-[85%] rounded-card rounded-br-chip bg-slate-900 px-4 py-2.5 text-role-body text-slate-50 shadow-[0_1px_2px_rgba(15,23,42,0.16)]";
 const HUB_USER_BUBBLE =
-  "max-w-[85%] rounded-card rounded-br-chip bg-accent-solid px-4 py-2.5 text-body text-accent-solid-ink";
+  "max-w-[85%] rounded-card rounded-br-chip bg-accent-solid px-4 py-2.5 text-role-body text-accent-solid-ink";
 
 /**
  * `hub` is the Assistant hub's Chat page (productization plan P7): the same
@@ -71,7 +71,7 @@ export function ChatView({ hub = false }: { hub?: boolean }) {
     >
       <div className="mb-4 flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <h1 className={hub ? "text-display text-ink" : "text-role-page text-ink"}>
+          <h1 className={hub ? "text-role-page text-ink" : "text-role-page text-ink"}>
             {hub ? t("nav.v2.chat") : t("nav.assistant")}
           </h1>
           {/* The hub page's empty thread already says what to ask. */}
@@ -127,7 +127,7 @@ export function ChatView({ hub = false }: { hub?: boolean }) {
               <div role="status" className="flex items-center gap-2.5">
                 <span
                   aria-hidden="true"
-                  className="avatar-ring flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent-solid to-accent-solid-hover text-caption font-semibold text-accent-solid-ink"
+                  className="avatar-ring flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent-solid to-accent-solid-hover text-role-caption font-semibold text-accent-solid-ink"
                 >
                   K
                 </span>
@@ -213,7 +213,7 @@ function MessageBubble({
     <div className="flex justify-start gap-2.5 transition duration-150 ease-strong starting:translate-y-1 starting:opacity-0 motion-reduce:transition-none">
       <span
         aria-hidden="true"
-        className="avatar-ring mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent-solid to-accent-solid-hover text-caption font-semibold text-accent-solid-ink"
+        className="avatar-ring mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent-solid to-accent-solid-hover text-role-caption font-semibold text-accent-solid-ink"
       >
         K
       </span>

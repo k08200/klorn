@@ -100,7 +100,7 @@ export function LinkedCalendars() {
   return (
     <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-4 text-ink-muted">
       <h3 className="text-role-head font-medium text-ink">{t("linkedCalendars.title")}</h3>
-      <p className="mt-1 text-role-caption text-ink-mid">{t("linkedCalendars.body")}</p>
+      <p className="mt-1 text-role-body text-ink-mid">{t("linkedCalendars.body")}</p>
 
       {accounts.length > 0 && (
         <ul className="mt-3 divide-y divide-line-soft rounded-control border border-line-soft bg-surface-raised/70">
@@ -112,7 +112,7 @@ export function LinkedCalendars() {
               <div className="min-w-0">
                 <span className="block truncate text-ink">{account.email}</span>
                 {account.needsReconnect && (
-                  <span className="block truncate text-caption text-state-warn-ink">
+                  <span className="block truncate text-role-caption text-state-warn-ink">
                     {t("linkedAccounts.reconnectNeeded")}
                   </span>
                 )}

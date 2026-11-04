@@ -31,7 +31,7 @@ const EXTRA_ORDER: readonly AuthProviderId[] = ["apple", "naver"];
 // press squash, colour change only, so reduced motion needs no special case.
 const ROW_CLASS =
   "flex h-11 w-full items-center justify-center gap-3 rounded-control border border-line " +
-  "bg-surface-panel text-label text-ink transition-colors duration-120 ease-fluid " +
+  "bg-surface-panel text-role-label text-ink transition-colors duration-120 ease-fluid " +
   "hover:border-line-strong hover:bg-surface-hover focus-ring";
 
 interface ProviderButtonsProps {

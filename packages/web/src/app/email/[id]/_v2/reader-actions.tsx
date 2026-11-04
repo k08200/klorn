@@ -145,7 +145,7 @@ function KeyHint({ k, onAccent = false }: { k: string; onAccent?: boolean }) {
   return (
     <span
       aria-hidden="true"
-      className={`rounded-chip border px-1 font-sans text-caption leading-4 ${
+      className={`rounded-chip border px-1 font-sans text-role-caption leading-4 ${
         onAccent ? "border-accent-solid-ink/40" : "border-line-strong text-ink-muted"
       }`}
     >

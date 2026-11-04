@@ -23,7 +23,7 @@ function SampleRow({ active, onPick, disabled }: SampleRowProps) {
   const { t } = useT();
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-caption font-semibold uppercase tracking-wide text-ink-mid">
+      <span className="text-role-caption font-semibold uppercase tracking-wide text-ink-mid">
         {t("playground.samples.heading")}
       </span>
       <div className="flex flex-wrap gap-2">
@@ -52,12 +52,12 @@ function EmailSummary({ draft, onEdit }: { draft: EmailDraft; onEdit: () => void
     <div className="flex flex-col gap-3 md:hidden">
       <div className="flex flex-col gap-1 rounded-card bg-surface-raised p-3">
         {empty ? (
-          <span className="text-body text-ink-mid">{t("playground.email.empty")}</span>
+          <span className="text-role-body text-ink-mid">{t("playground.email.empty")}</span>
         ) : (
           <>
-            <span className="truncate text-caption text-ink-mid">{draft.from}</span>
-            <span className="truncate text-label font-semibold text-ink">{draft.subject}</span>
-            <span className="line-clamp-2 text-body text-ink-soft">{draft.body}</span>
+            <span className="truncate text-role-caption text-ink-mid">{draft.from}</span>
+            <span className="truncate text-role-label font-semibold text-ink">{draft.subject}</span>
+            <span className="line-clamp-2 text-role-body text-ink-soft">{draft.body}</span>
           </>
         )}
       </div>
@@ -170,7 +170,7 @@ export function KeyField({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
-        <label htmlFor={inputId} className="text-label text-ink-soft">
+        <label htmlFor={inputId} className="text-role-label text-ink-soft">
           {t("playground.key.label", { provider: providerName })}
         </label>
         <Button
@@ -193,9 +193,9 @@ export function KeyField({
         autoComplete="off"
         spellCheck={false}
         maxLength={400}
-        className="focus-ring min-h-9 w-full rounded-control border border-line-strong bg-surface-panel px-3 font-mono text-field text-ink placeholder:text-ink-dim md:text-body max-md:min-h-11"
+        className="focus-ring min-h-9 w-full rounded-control border border-line-strong bg-surface-panel px-3 font-mono text-field text-ink placeholder:text-ink-dim md:text-role-body max-md:min-h-11"
       />
-      <label className="flex min-h-8 cursor-pointer items-center gap-2 text-label text-ink-soft max-md:min-h-11">
+      <label className="flex min-h-8 cursor-pointer items-center gap-2 text-role-label text-ink-soft max-md:min-h-11">
         <input
           type="checkbox"
           checked={remember}
@@ -204,9 +204,9 @@ export function KeyField({
         />
         {t("playground.key.remember")}
       </label>
-      <p className="text-caption text-ink-mid">{t("playground.key.trust")}</p>
+      <p className="text-role-caption text-ink-mid">{t("playground.key.trust")}</p>
       {!apiKey && (
-        <p className="text-caption text-ink-mid">
+        <p className="text-role-caption text-ink-mid">
           {t("playground.key.none")}{" "}
           <a
             href={KEY_URL[provider]}

@@ -61,19 +61,21 @@ export function ApprovalCard(props: ApprovalCardProps) {
       }`}
     >
       <div className="flex items-baseline gap-3">
-        <h3 id={headingId} className="min-w-0 flex-1 text-head text-ink [word-break:keep-all]">
+        <h3 id={headingId} className="min-w-0 flex-1 text-role-head text-ink [word-break:keep-all]">
           {title}
         </h3>
         <time
           dateTime={model.createdAt}
-          className="shrink-0 text-caption tabular-nums text-ink-muted"
+          className="shrink-0 text-role-caption tabular-nums text-ink-muted"
         >
           {formatRelativeIntl(model.createdAt, locale, t("assistantHub.justNow"))}
         </time>
       </div>
 
       {model.subject && (
-        <p className="mt-2 break-words text-body font-medium text-ink-strong">{model.subject}</p>
+        <p className="mt-2 break-words text-role-body font-medium text-ink-strong">
+          {model.subject}
+        </p>
       )}
       {model.facts.length > 0 && (
         <dl className="mt-1 flex flex-col gap-0.5">
@@ -84,7 +86,7 @@ export function ApprovalCard(props: ApprovalCardProps) {
       )}
 
       {model.why && (
-        <p className="mt-3 text-body text-ink-soft [word-break:keep-all]">
+        <p className="mt-3 text-role-body text-ink-soft [word-break:keep-all]">
           <span className="text-ink-muted">{t("assistantHub.approvals.why")} </span>
           {model.why}
         </p>
@@ -92,7 +94,7 @@ export function ApprovalCard(props: ApprovalCardProps) {
 
       {model.preview && (
         <div className="mt-3 rounded-control border border-line-soft bg-surface-raised px-3 py-2">
-          <p className="text-caption font-medium text-ink-muted">
+          <p className="text-role-caption font-medium text-ink-muted">
             {t(
               model.sendsMail
                 ? "assistantHub.approvals.preview.mail"
@@ -101,7 +103,7 @@ export function ApprovalCard(props: ApprovalCardProps) {
           </p>
           <p
             id={previewId}
-            className={`mt-1 whitespace-pre-wrap break-words text-body text-ink ${
+            className={`mt-1 whitespace-pre-wrap break-words text-role-body text-ink ${
               long && !expanded ? "line-clamp-6" : ""
             }`}
           >
@@ -146,7 +148,7 @@ export function ApprovalCard(props: ApprovalCardProps) {
             {t("assistantHub.approvals.reject")}
           </Button>
         </div>
-        <p className="min-w-0 text-caption text-ink-muted [word-break:keep-all]">
+        <p className="min-w-0 text-role-caption text-ink-muted [word-break:keep-all]">
           {t(
             model.sendsMail ? "assistantHub.approvals.sendsNow" : "assistantHub.approvals.runsNow",
           )}
@@ -159,7 +161,7 @@ export function ApprovalCard(props: ApprovalCardProps) {
 function Fact({ fact, timeZone }: { fact: ApprovalFact; timeZone: string }) {
   const { t, locale } = useT();
   return (
-    <div className="flex gap-2 text-body">
+    <div className="flex gap-2 text-role-body">
       <dt className="shrink-0 text-ink-muted">{fact.labelKey ? t(fact.labelKey) : fact.label}</dt>
       <dd className="min-w-0 break-words text-ink-soft">
         {fact.iso ? formatWhen(fact.iso, locale, timeZone) : fact.text}

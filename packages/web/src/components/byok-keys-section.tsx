@@ -169,11 +169,11 @@ export function ByokKeysSection() {
     <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-5">
       <header className="mb-3">
         <h2 className="text-role-head text-ink">{t("byok.title")}</h2>
-        <p className="mt-1 text-role-caption text-ink-mid">
+        <p className="mt-1 text-role-body text-ink-mid">
           {t(locked ? "byok.bodyFree" : "byok.body")}
         </p>
         {status?.activeModel && (
-          <p className="mt-2 text-caption text-ink-dim">
+          <p className="mt-2 text-role-caption text-ink-dim">
             {t("byok.activeModel")} <span className="text-ink-mid">{status.activeModel}</span>
           </p>
         )}
@@ -233,7 +233,7 @@ export function ByokKeysSection() {
                 </Button>
               </div>
             )}
-            <p className="mt-1.5 text-caption text-ink-dim">
+            <p className="mt-1.5 text-role-caption text-ink-dim">
               {t("byok.anthropicHelp")}{" "}
               <a
                 href={ANTHROPIC.helpUrl}
@@ -252,11 +252,11 @@ export function ByokKeysSection() {
               <div className="mb-2 flex items-center justify-between gap-2">
                 <span className="text-role-body font-medium text-ink">
                   Google Gemini{" "}
-                  <span className="text-caption text-state-warn-ink">{t("byok.legacy")}</span>
+                  <span className="text-role-caption text-state-warn-ink">{t("byok.legacy")}</span>
                 </span>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span className="text-caption text-ink-mid">{t("byok.geminiRetired")}</span>
+                <span className="text-role-caption text-ink-mid">{t("byok.geminiRetired")}</span>
                 <Button
                   variant="danger"
                   size="sm"
@@ -291,7 +291,7 @@ export function ByokKeysSection() {
                     </option>
                   ))}
                 </Select>
-                <p className="mt-1 text-caption text-ink-dim">
+                <p className="mt-1 text-role-caption text-ink-dim">
                   {t(locked ? "byok.assistantModelHelpFree" : "byok.assistantModelHelp")}
                 </p>
               </div>

@@ -359,7 +359,7 @@ function CandidateIntakeView() {
       </div>
 
       {quality?.correctionSummary && quality.correctionSummary.total > 0 && (
-        <div className="mb-3 rounded-control border border-state-info-line bg-state-info-bg px-3 py-2 text-caption text-state-info-ink">
+        <div className="mb-3 rounded-control border border-state-info-line bg-state-info-bg px-3 py-2 text-role-caption text-state-info-ink">
           {t("candidates.correctionSummary", {
             total: String(quality.correctionSummary.total),
             categories: String(quality.correctionSummary.categoryCorrectionCount),
@@ -377,7 +377,7 @@ function CandidateIntakeView() {
       )}
 
       <div className="-mx-4 flex items-center gap-1.5 overflow-x-auto px-4 pb-1 scrollbar-hide">
-        <span className="mr-0.5 shrink-0 text-caption font-medium uppercase tracking-wider text-ink-dim">
+        <span className="mr-0.5 shrink-0 text-role-caption font-medium uppercase tracking-wider text-ink-dim">
           {t("candidates.filterStatusLabel")}
         </span>
         {STATUS_FILTERS.map((filter) => {
@@ -401,7 +401,7 @@ function CandidateIntakeView() {
       </div>
 
       <div className="-mx-4 mt-1 flex items-center gap-1.5 overflow-x-auto px-4 pb-1 scrollbar-hide">
-        <span className="mr-0.5 shrink-0 text-caption font-medium uppercase tracking-wider text-ink-dim">
+        <span className="mr-0.5 shrink-0 text-role-caption font-medium uppercase tracking-wider text-ink-dim">
           {t("candidates.filterFocusLabel")}
         </span>
         {ATTENTION_FILTERS.map((filter) => {
@@ -533,7 +533,7 @@ function QualityIssuesStrip({ issues }: { issues: NonNullable<AttachmentQuality[
           type="button"
           onClick={() => setExpanded((v) => !v)}
           aria-expanded={expanded}
-          className="ease-strong shrink-0 rounded-chip px-2 py-1 text-caption font-medium text-state-warn-ink transition duration-150 hover:bg-amber-100 hover:text-amber-900 active:scale-[0.97] focus-ring"
+          className="ease-strong shrink-0 rounded-chip px-2 py-1 text-role-caption font-medium text-state-warn-ink transition duration-150 hover:bg-amber-100 hover:text-amber-900 active:scale-[0.97] focus-ring"
         >
           {expanded ? t("candidates.qualityIssues.hide") : t("candidates.qualityIssues.details")}
         </button>
@@ -544,7 +544,7 @@ function QualityIssuesStrip({ issues }: { issues: NonNullable<AttachmentQuality[
             <li key={issue.attachmentId}>
               <Link
                 href={`/email/${issue.emailId}`}
-                className="ease-strong flex items-baseline gap-2 px-3 py-2 text-caption transition duration-150 hover:bg-state-warn-bg focus-ring"
+                className="ease-strong flex items-baseline gap-2 px-3 py-2 text-role-caption transition duration-150 hover:bg-state-warn-bg focus-ring"
               >
                 <span className="truncate font-medium text-ink-soft">{issue.filename}</span>
                 <span className="min-w-0 truncate text-ink-dim">{issue.reason}</span>
@@ -563,7 +563,7 @@ function QueueStat({ label, value }: { label: string; value: number | string }) 
   const isZero = value === 0 || value === "0";
   return (
     <span
-      className={`inline-flex h-7 items-center gap-1.5 rounded-full border border-line bg-surface-panel/70 px-3 text-caption font-medium tabular-nums ${
+      className={`inline-flex h-7 items-center gap-1.5 rounded-full border border-line bg-surface-panel/70 px-3 text-role-caption font-medium tabular-nums ${
         isZero ? "text-ink-dim opacity-60" : "text-ink-mid"
       }`}
     >
@@ -631,20 +631,20 @@ function CandidateCard({
         />
         <span
           aria-hidden="true"
-          className={`avatar-ring mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-label font-semibold text-white ${avatarGradient(displayName)}`}
+          className={`avatar-ring mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-role-label font-semibold text-white ${avatarGradient(displayName)}`}
         >
           {senderInitials(displayName)}
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="shrink-0 rounded-chip bg-accent/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-accent-deeper ring-1 ring-inset ring-accent/20">
+            <span className="shrink-0 rounded-chip bg-accent/10 px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-accent-deeper ring-1 ring-inset ring-accent/20">
               {candidateStatusLabel(t, candidate.status)}
             </span>
-            <span className="text-caption tabular-nums text-ink-dim">
+            <span className="text-role-caption tabular-nums text-ink-dim">
               {Math.round(candidate.confidence * 100)}%
             </span>
             {candidate.duplicateCount > 1 && (
-              <span className="shrink-0 rounded-chip bg-amber-500/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-state-warn-ink ring-1 ring-inset ring-amber-500/20">
+              <span className="shrink-0 rounded-chip bg-amber-500/10 px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-state-warn-ink ring-1 ring-inset ring-amber-500/20">
                 {t("candidates.card.duplicateBadge", { count: String(candidate.duplicateCount) })}
               </span>
             )}
@@ -654,11 +654,11 @@ function CandidateCard({
             {candidate.summary}
           </p>
         </div>
-        <time className="shrink-0 text-caption tabular-nums text-ink-dim">
+        <time className="shrink-0 text-role-caption tabular-nums text-ink-dim">
           {formatRelative(candidate.email.receivedAt)}
         </time>
       </div>
-      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-caption text-ink-dim">
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-role-caption text-ink-dim">
         {candidate.contact && (
           <span className="truncate">
             {t("candidates.card.contactPrefix", { contact: candidate.contact })}
@@ -668,7 +668,7 @@ function CandidateCard({
           {t("emailDetail.attachment.fileCount", { count: String(candidate.evidenceFiles.length) })}
         </span>
         {candidate.evidenceFiles.some((file) => file.needsManualReview) && (
-          <span className="rounded-chip bg-amber-500/10 px-1.5 py-0.5 text-caption font-medium tabular-nums text-state-warn-ink ring-1 ring-inset ring-amber-500/20">
+          <span className="rounded-chip bg-amber-500/10 px-1.5 py-0.5 text-role-caption font-medium tabular-nums text-state-warn-ink ring-1 ring-inset ring-amber-500/20">
             {t("candidates.card.sourceCheckCount", {
               count: String(
                 candidate.evidenceFiles.filter((file) => file.needsManualReview).length,
@@ -677,7 +677,7 @@ function CandidateCard({
           </span>
         )}
         {candidate.duplicateCount > 1 && (
-          <span className="rounded-chip bg-surface-hover px-1.5 py-0.5 text-caption font-medium text-ink-mid ring-1 ring-inset ring-line">
+          <span className="rounded-chip bg-surface-hover px-1.5 py-0.5 text-role-caption font-medium text-ink-mid ring-1 ring-inset ring-line">
             {t("candidates.card.duplicateMatch", {
               reasons: candidate.duplicateReasons
                 .map((reason) => candidateDuplicateLabel(t, reason))
@@ -686,7 +686,7 @@ function CandidateCard({
           </span>
         )}
         {candidate.missingFields.length > 0 && (
-          <span className="rounded-chip bg-surface-hover px-1.5 py-0.5 text-caption font-medium tabular-nums text-ink-mid ring-1 ring-inset ring-line">
+          <span className="rounded-chip bg-surface-hover px-1.5 py-0.5 text-role-caption font-medium tabular-nums text-ink-mid ring-1 ring-inset ring-line">
             {formatMissingBadge(t, candidate.missingFields)}
           </span>
         )}
@@ -695,12 +695,12 @@ function CandidateCard({
         <p className="truncate text-role-caption text-ink-muted">
           {candidate.email.subject || t("common.untitled")}
         </p>
-        <p className="mt-1 truncate text-caption text-ink-dim">
+        <p className="mt-1 truncate text-role-caption text-ink-dim">
           {senderName(candidate.email.from)}
         </p>
       </div>
       {candidate.notes && (
-        <p className="mt-2 line-clamp-2 text-caption leading-5 text-ink-dim">
+        <p className="mt-2 line-clamp-2 text-role-caption leading-5 text-ink-dim">
           {t("candidates.card.notesPrefix", { notes: candidate.notes })}
         </p>
       )}

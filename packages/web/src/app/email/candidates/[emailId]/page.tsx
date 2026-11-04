@@ -231,7 +231,7 @@ function CandidateDetailView() {
                     {profile.nextAction}
                   </p>
                   {profile.manualReviewFiles.map((file) => (
-                    <p key={file.filename} className="mt-1 text-caption text-accent-deeper/80">
+                    <p key={file.filename} className="mt-1 text-role-caption text-accent-deeper/80">
                       {file.filename}: {file.reason}
                     </p>
                   ))}
@@ -239,7 +239,7 @@ function CandidateDetailView() {
               )}
 
               <div className="mt-5 space-y-2">
-                <h2 className="text-caption font-semibold uppercase tracking-wider text-ink-dim">
+                <h2 className="text-role-caption font-semibold uppercase tracking-wider text-ink-dim">
                   {t("candidates.detail.evidenceFilesTitle")}
                 </h2>
                 {profile.evidenceFiles.map((file) => (
@@ -251,18 +251,20 @@ function CandidateDetailView() {
                       <span className="text-role-caption font-medium text-ink">
                         {file.filename}
                       </span>
-                      <span className="text-caption text-ink-mid">
+                      <span className="text-role-caption text-ink-mid">
                         {file.category || t("emailDetail.attachment.category.document")} ·{" "}
                         {file.analysisStatus}
                       </span>
                       {file.needsManualReview && (
-                        <span className="shrink-0 rounded-chip bg-rose-500/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-rose-600 ring-1 ring-inset ring-rose-500/20">
+                        <span className="shrink-0 rounded-chip bg-rose-500/10 px-1.5 py-0.5 text-role-caption font-bold uppercase tracking-wide text-rose-600 ring-1 ring-inset ring-rose-500/20">
                           {t("candidates.attention.sourceCheck")}
                         </span>
                       )}
                     </div>
                     {file.summary && (
-                      <p className="mt-1 text-caption leading-5 text-ink-dim">{file.summary}</p>
+                      <p className="mt-1 text-role-caption leading-5 text-ink-dim">
+                        {file.summary}
+                      </p>
                     )}
                   </div>
                 ))}
@@ -270,7 +272,7 @@ function CandidateDetailView() {
             </section>
 
             <aside className="panel-elevated h-fit rounded-card border border-line/70 bg-surface-panel p-4">
-              <h2 className="text-caption font-semibold uppercase tracking-wider text-ink-mid">
+              <h2 className="text-role-caption font-semibold uppercase tracking-wider text-ink-mid">
                 {t("candidates.detail.reviewStatusTitle")}
               </h2>
               <div className="mt-3 grid gap-2">
@@ -300,7 +302,7 @@ function CandidateDetailView() {
                 })}
               </div>
               <label className="mt-4 block">
-                <span className="mb-1 block text-caption font-medium uppercase tracking-wider text-ink-mid">
+                <span className="mb-1 block text-role-caption font-medium uppercase tracking-wider text-ink-mid">
                   {t("candidates.detail.notesLabel")}
                 </span>
                 <textarea
@@ -322,7 +324,7 @@ function CandidateDetailView() {
                 <p className="text-role-caption text-ink-muted">
                   {email.subject || t("common.untitled")}
                 </p>
-                <p className="mt-1 text-caption text-ink-dim">{email.from}</p>
+                <p className="mt-1 text-role-caption text-ink-dim">{email.from}</p>
               </div>
             </aside>
           </section>
@@ -354,7 +356,7 @@ function CandidateDetailView() {
             <p className="text-role-caption text-ink-muted">
               {email.subject || t("common.untitled")}
             </p>
-            <p className="mt-1 text-caption text-ink-dim">{email.from}</p>
+            <p className="mt-1 text-role-caption text-ink-dim">{email.from}</p>
           </div>
         </section>
       )}
@@ -365,7 +367,7 @@ function CandidateDetailView() {
 function Fact({ label, value }: { label: string; value: string | null }) {
   return (
     <div className="rounded-control border border-line-soft bg-surface-raised/70 px-3 py-2">
-      <p className="text-caption font-medium uppercase tracking-wider text-ink-dim">{label}</p>
+      <p className="text-role-caption font-medium uppercase tracking-wider text-ink-dim">{label}</p>
       <p className="mt-1 truncate text-role-body font-medium text-ink">{value || "-"}</p>
     </div>
   );
@@ -374,7 +376,9 @@ function Fact({ label, value }: { label: string; value: string | null }) {
 function ChipBlock({ title, values }: { title: string; values: string[] }) {
   return (
     <div className="mt-5">
-      <h2 className="text-caption font-semibold uppercase tracking-wider text-ink-dim">{title}</h2>
+      <h2 className="text-role-caption font-semibold uppercase tracking-wider text-ink-dim">
+        {title}
+      </h2>
       <div className="mt-2 flex flex-wrap gap-2">
         {values.map((value) => (
           <span

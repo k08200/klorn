@@ -16,7 +16,7 @@ export function Markdown({ content }: { content: string }) {
           return (
             <div key={i} className="relative group">
               {block.lang && (
-                <span className="text-caption text-ink-dim absolute top-2 right-2">
+                <span className="text-role-caption text-ink-dim absolute top-2 right-2">
                   {block.lang}
                 </span>
               )}

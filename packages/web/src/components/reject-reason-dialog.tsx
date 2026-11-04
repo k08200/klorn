@@ -94,7 +94,7 @@ export function RejectReasonDialog({ open, onCancel, onReject }: RejectReasonDia
           placeholder={t("rejectDialog.placeholder")}
           className="w-full resize-none rounded-control border border-line bg-surface-panel/80 px-3 py-2 text-role-body text-ink placeholder-ink-dim outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15"
         />
-        <p className="mt-1 text-right text-caption tabular-nums text-ink-dim">
+        <p className="mt-1 text-right text-role-caption tabular-nums text-ink-dim">
           {reason.length}/{MAX_REJECT_REASON_LENGTH}
         </p>
         <div className="mt-4 flex flex-wrap justify-end gap-2">

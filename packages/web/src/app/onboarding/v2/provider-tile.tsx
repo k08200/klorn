@@ -56,18 +56,18 @@ export function ProviderTileCard({ tile, busy, disabled, onAction }: ProviderTil
       <div className="flex items-start gap-3">
         <span
           aria-hidden="true"
-          className="flex size-10 shrink-0 items-center justify-center rounded-control border border-line bg-surface-raised text-label font-semibold tracking-tight text-ink-soft"
+          className="flex size-10 shrink-0 items-center justify-center rounded-control border border-line bg-surface-raised text-role-label font-semibold tracking-tight text-ink-soft"
         >
           {glyph}
         </span>
         <div className="min-w-0 flex-1">
-          <h2 id={headingId} className="flex items-center gap-2 text-head text-ink">
+          <h2 id={headingId} className="flex items-center gap-2 text-role-head text-ink">
             {name}
             {BETA_PROVIDERS.has(tile.provider) && <BetaChip />}
           </h2>
-          <p className="text-body text-ink-mid">{t(tile.scopeKey)}</p>
+          <p className="text-role-body text-ink-mid">{t(tile.scopeKey)}</p>
           {tile.noteKeys.map((key) => (
-            <p key={key} className="mt-1 text-caption text-ink-muted">
+            <p key={key} className="mt-1 text-role-caption text-ink-muted">
               {t(key)}
             </p>
           ))}
@@ -81,11 +81,11 @@ export function ProviderTileCard({ tile, busy, disabled, onAction }: ProviderTil
         >
           {tile.accounts.map((account) => (
             <li key={account.scope} className="flex items-center gap-3 px-3 py-2">
-              <span className="min-w-0 flex-1 truncate text-label font-normal text-ink">
+              <span className="min-w-0 flex-1 truncate text-role-label font-normal text-ink">
                 {account.email ?? name}
               </span>
               <span
-                className={`flex shrink-0 items-center gap-1.5 text-caption ${HEALTH_INK.get(account.health) ?? ""}`}
+                className={`flex shrink-0 items-center gap-1.5 text-role-caption ${HEALTH_INK.get(account.health) ?? ""}`}
               >
                 <HealthMark health={account.health} />
                 {t(HEALTH_KEY.get(account.health) ?? "")}
@@ -96,7 +96,7 @@ export function ProviderTileCard({ tile, busy, disabled, onAction }: ProviderTil
       )}
 
       {tile.action === "pro" && (
-        <p className="mt-auto text-caption text-ink-mid">
+        <p className="mt-auto text-role-caption text-ink-mid">
           {t("mailAccount.proGate.title")}{" "}
           <Link
             href="/billing"

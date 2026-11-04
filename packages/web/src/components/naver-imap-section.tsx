@@ -169,7 +169,7 @@ export function NaverImapSection({ embedded = false, onChanged }: NaverImapSecti
             {t("imap.naver.title")}
             <BetaChip />
           </h2>
-          <p className="mt-1 text-role-caption text-ink-mid">
+          <p className="mt-1 text-role-body text-ink-mid">
             {t("imap.naver.body", { count: String(TIER_COUNT) })}
           </p>
         </div>
@@ -184,7 +184,7 @@ export function NaverImapSection({ embedded = false, onChanged }: NaverImapSecti
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="font-medium">{status.email}</p>
-                <p className="text-caption text-ink-dim">
+                <p className="text-role-caption text-ink-dim">
                   {t("imap.hostSince", { host: status.host ?? "—" })}{" "}
                   {status.connectedAt ? new Date(status.connectedAt).toLocaleString(locale) : "—"}
                 </p>
@@ -232,7 +232,7 @@ export function NaverImapSection({ embedded = false, onChanged }: NaverImapSecti
               required
               autoComplete="off"
             />
-            <p className="mt-1 text-caption text-ink-mid">
+            <p className="mt-1 text-role-caption text-ink-mid">
               {t("imap.naver.help.before")}{" "}
               <a
                 href={PASSWORD_HELP_URL}

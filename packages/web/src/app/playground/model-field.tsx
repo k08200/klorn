@@ -75,18 +75,18 @@ function useSections(provider: PlaygroundProvider): ListboxSection[] {
 function TriggerFace({ model, choice }: { model: PlaygroundModel | undefined; choice: string }) {
   const { t } = useT();
   if (!model || choice === OTHER_MODEL) {
-    return <span className="truncate text-label text-ink">{t("playground.model.other")}</span>;
+    return <span className="truncate text-role-label text-ink">{t("playground.model.other")}</span>;
   }
   return (
     <>
-      <span className="min-w-0 flex-1 truncate font-mono text-label text-ink">{model.id}</span>
+      <span className="min-w-0 flex-1 truncate font-mono text-role-label text-ink">{model.id}</span>
       {model.measured && (
-        <span className="shrink-0 rounded-chip bg-state-info-bg px-2 py-0.5 text-caption font-semibold text-accent-deeper">
+        <span className="shrink-0 rounded-chip bg-state-info-bg px-2 py-0.5 text-role-caption font-semibold text-accent-deeper">
           {t("playground.model.klorn")}
         </span>
       )}
       {model.measured && (
-        <span className="hidden shrink-0 text-caption text-ink-mid sm:inline">
+        <span className="hidden shrink-0 text-role-caption text-ink-mid sm:inline">
           {model.measured.low}–{model.measured.high}/{model.measured.total}
         </span>
       )}
@@ -113,7 +113,7 @@ export function ModelField({
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-2">
-        <span className="text-label text-ink-soft">{t("playground.provider.label")}</span>
+        <span className="text-role-label text-ink-soft">{t("playground.provider.label")}</span>
         <SegmentedControl
           ariaLabel={t("playground.provider.label")}
           value={provider}
@@ -124,7 +124,7 @@ export function ModelField({
         />
       </div>
       <div className="flex flex-col gap-2">
-        <span id={labelId} className="text-label text-ink-soft">
+        <span id={labelId} className="text-role-label text-ink-soft">
           {t("playground.model.label")}
         </span>
         <Listbox
@@ -151,7 +151,7 @@ export function ModelField({
             error={customInvalid ? t("playground.model.otherInvalid") : undefined}
           />
         ) : (
-          <p className="text-caption text-ink-mid">
+          <p className="text-role-caption text-ink-mid">
             {selected?.measured
               ? t("playground.model.klornNote")
               : t("playground.model.listedNote")}
