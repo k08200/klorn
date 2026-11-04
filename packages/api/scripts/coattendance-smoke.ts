@@ -30,12 +30,12 @@ import {
 import { googleSessionFromClient } from "../src/pim/calendar-providers/google.js";
 import type { CalendarSession, ProviderMeeting } from "../src/pim/calendar-providers/types.js";
 import {
+  COATTENDANCE_LOOKBACK_DAYS,
   countMeeting,
   MAX_COUNTED_ATTENDEES,
   utcDayOf,
 } from "../src/pim/coattendance/coattendance-rules.js";
 import { loadOwnAddresses } from "../src/pim/coattendance/coattendance-store.js";
-import { COATTENDANCE_LOOKBACK_DAYS } from "../src/pim/coattendance/coattendance-sync.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

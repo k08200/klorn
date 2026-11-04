@@ -37,12 +37,13 @@ async function newUser(watermark: Date | null = daysAgo(1)): Promise<string> {
   return user.id;
 }
 
-const primary = (userId: string, observedSince: Date | null) =>
+const primary = (userId: string, observedSince: Date | null, googleEmail?: string) =>
   prisma.userToken.create({
     data: {
       userId,
       provider: "google",
       accessToken: "enc",
+      googleEmail,
       coAttendanceObservedSince: observedSince,
       coAttendanceLastPassAt: new Date(),
     },
@@ -163,6 +164,31 @@ describePg("co-attendance reader against Postgres", () => {
 
     expect(await load(userId)).toMatchObject({ meetingCount: 0, lastMetAt: null });
     expect((await load(other)).meetingCount).toBeNull();
+  });
+
+  // Condition 6 uses the store's own-address set (loadOwnAddresses), not the
+  // caller's list (User.email and linked inboxes): the store never counts these.
+  it("the sender is the user's Google login (UserToken.googleEmail): unknown", async () => {
+    const userId = await newUser();
+    await primary(userId, daysAgo(45), "kim@partner.io");
+    expect(await load(userId, "lee@partner.io")).toMatchObject({ meetingCount: 0 });
+    expect(await load(userId)).toMatchObject({ meetingCount: null, lastMetAt: null });
+  });
+
+  it("the sender is a calendar-only linked account of the user: unknown", async () => {
+    const userId = await newUser();
+    await primary(userId, daysAgo(45));
+    await prisma.linkedCalendarAccount.create({
+      data: {
+        userId,
+        provider: "GOOGLE",
+        email: "kim@partner.io",
+        coAttendanceObservedSince: daysAgo(40),
+        coAttendanceLastPassAt: new Date(),
+      },
+    });
+    expect(await load(userId, "lee@partner.io")).toMatchObject({ meetingCount: 0 });
+    expect(await load(userId)).toMatchObject({ meetingCount: null, lastMetAt: null });
   });
 
   it("a user with no Google calendar is unknown, even with a fresh watermark", async () => {

@@ -12,10 +12,11 @@
  *     coAttendanceLastPassAt, the last pass in which that source's listing
  *     succeeded in full (not failed, not cut) through the days being evaluated,
  *     whether or not the watermark advanced. The pass uses it as its 6-hour
- *     interval. It is NOT a reader's freshness signal: a healthy source keeps it
- *     fresh while a failing one freezes the watermark. A source left out of an advance (re-link pending, not
- *     connectable, linked sync off) loses observedSince: its days were not
- *     covered. It starts again at the day after the watermark.
+ *     interval. It is NOT a reader's freshness signal: a healthy source keeps
+ *     it fresh while a failing one freezes the watermark. A source left out of
+ *     an advance (re-link pending, not connectable, linked sync off) loses
+ *     observedSince: its days were not covered. It starts again at the day
+ *     after the watermark.
  *
  * The reader's gate (when a missing ContactCoAttendance row may read as 0) is in
  * judge/v3/relationship-coattendance.ts and docs/design/attention-engine-v3.md
@@ -177,8 +178,9 @@ export async function recordAdvance(userId: string, advance: Advance): Promise<b
 /**
  * A pass that advanced nothing (a source failed, or a cut listing covered no full
  * day): record the pass time of the sources whose listing was complete, and only
- * theirs. The pass time is what a reader checks for freshness, so it is never
- * written for a failed or cut listing.
+ * theirs. The pass time sets the 6-hour interval, so it is never written for a
+ * failed or cut listing (that source is retried on the next tick). Readers do not
+ * use it: freshness is the watermark's, which this leaves where it was.
  */
 export async function recordListedOnly(
   sources: readonly CoverageSource[],

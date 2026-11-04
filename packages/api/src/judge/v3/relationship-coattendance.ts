@@ -14,8 +14,10 @@
  *   4. no Google source awaits a reconnect;
  *   5. the user has no calendar source the store does not count (a
  *      LinkedCalendarAccount of any other provider);
- *   6. the sender is not one of the user's own addresses and the store can
- *      normalise its address.
+ *   6. the store can normalise the sender's address, and it is not one of the
+ *      user's own addresses as the store knows them (loadOwnAddresses: the
+ *      account email, each Google login, every linked calendar and inbox). The
+ *      store never counts those, so a missing row says nothing about them.
  *
  * Freshness is the watermark's (2), never a source's coAttendanceLastPassAt: a
  * failing source freezes the watermark while the others' pass times stay fresh.
@@ -23,9 +25,13 @@
 
 import { calendarCoattendanceEnabled } from "../../config.js";
 import { prisma } from "../../db.js";
-import { normalizeAttendeeEmail, utcDayOf } from "../../pim/coattendance/coattendance-rules.js";
+import {
+  COATTENDANCE_LOOKBACK_DAYS,
+  normalizeAttendeeEmail,
+  utcDayOf,
+} from "../../pim/coattendance/coattendance-rules.js";
 import { type Coverage, readCoverage } from "../../pim/coattendance/coattendance-sources.js";
-import { COATTENDANCE_LOOKBACK_DAYS } from "../../pim/coattendance/coattendance-sync.js";
+import { loadOwnAddresses } from "../../pim/coattendance/coattendance-store.js";
 import type { CoAttendanceView } from "./relationship.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -46,6 +52,8 @@ export interface CoAttendanceDeps {
   coAttendanceCoverage(userId: string): Promise<CoAttendanceCoverage>;
   /** The stored counts for one normalised address; null = no row. */
   coAttendanceRow(userId: string, contactEmail: string): Promise<CoAttendanceRow | null>;
+  /** The user's own addresses, normalised: the set the store excludes when counting. */
+  coAttendanceOwnAddresses(userId: string): Promise<ReadonlySet<string>>;
 }
 
 const daysBefore = (day: Date, n: number) => new Date(day.getTime() - n * DAY_MS);
@@ -74,10 +82,9 @@ export function coAttendanceWindow(
   return { observedSince: new Date(latest), countedThrough };
 }
 
-/** Condition 6: the store counts this address (never the user's own, always normalised). */
-export function isCountableContact(address: string, userAddresses: readonly string[]): boolean {
-  if (normalizeAttendeeEmail(address) !== address) return false;
-  return !userAddresses.some((own) => own.trim().toLowerCase() === address);
+/** Condition 6, first half: the store can normalise the address (checked before any read). */
+export function isNormalisedContact(address: string): boolean {
+  return normalizeAttendeeEmail(address) === address;
 }
 
 /** The sender's co-attendance; undefined = unknown (the gate failed). */
@@ -85,12 +92,16 @@ export async function loadCoAttendance(
   deps: CoAttendanceDeps,
   userId: string,
   sender: string,
-  userAddresses: readonly string[],
   now: Date,
 ): Promise<CoAttendanceView | undefined> {
   if (!calendarCoattendanceEnabled()) return undefined;
-  if (!isCountableContact(sender, userAddresses)) return undefined;
-  const window = coAttendanceWindow(await deps.coAttendanceCoverage(userId), now);
+  if (!isNormalisedContact(sender)) return undefined;
+  const [coverage, own] = await Promise.all([
+    deps.coAttendanceCoverage(userId),
+    deps.coAttendanceOwnAddresses(userId),
+  ]);
+  if (own.has(sender)) return undefined;
+  const window = coAttendanceWindow(coverage, now);
   if (!window) return undefined;
   return { ...window, row: await deps.coAttendanceRow(userId, sender) };
 }
@@ -105,6 +116,9 @@ export async function readCoAttendanceCoverage(userId: string): Promise<CoAttend
   ]);
   return { ...coverage, hasNonGoogleSource: other !== null };
 }
+
+/** The store's own set, so reader and writer cannot disagree on "own". */
+export const readCoAttendanceOwnAddresses = loadOwnAddresses;
 
 export function readCoAttendanceRow(
   userId: string,

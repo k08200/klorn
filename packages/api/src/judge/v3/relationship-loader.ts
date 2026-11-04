@@ -26,6 +26,7 @@ import {
   type CoAttendanceDeps,
   loadCoAttendance,
   readCoAttendanceCoverage,
+  readCoAttendanceOwnAddresses,
   readCoAttendanceRow,
 } from "./relationship-coattendance.js";
 
@@ -135,6 +136,7 @@ export const prismaRelationshipDeps: RelationshipLoaderDeps = {
   },
   coAttendanceCoverage: readCoAttendanceCoverage,
   coAttendanceRow: readCoAttendanceRow,
+  coAttendanceOwnAddresses: readCoAttendanceOwnAddresses,
 };
 
 export interface RelationshipLoadInput {
@@ -145,6 +147,8 @@ export interface RelationshipLoadInput {
   senderAuthenticated?: boolean | null;
   /** The mail being judged: excluded so a first-time sender reads as never seen. */
   excludeEmailId?: string;
+  /** When the snapshot is taken (the co-attendance gate's "today"); default: now. */
+  now?: Date;
 }
 
 /** undefined when the lookup failed: the snapshot then reports the field as null. */
@@ -228,7 +232,7 @@ export async function loadRelationshipSnapshot(
       settle(() => deps.pinnedTier(userId, sender), "pin"),
       settle(() => deps.senderCategory(userId, sender), "label"),
       settle(
-        () => loadCoAttendance(deps, userId, sender, input.userAddresses, new Date()),
+        () => loadCoAttendance(deps, userId, sender, input.now ?? new Date()),
         "co-attendance",
       ),
     ]);

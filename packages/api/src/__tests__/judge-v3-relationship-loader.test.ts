@@ -45,6 +45,7 @@ function deps(over: Partial<RelationshipLoaderDeps> = {}): RelationshipLoaderDep
       hasNonGoogleSource: false,
     })),
     coAttendanceRow: vi.fn(async () => null),
+    coAttendanceOwnAddresses: vi.fn(async () => new Set<string>()),
     ...over,
   };
 }

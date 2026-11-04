@@ -58,6 +58,7 @@ function deps(over: Partial<RelationshipLoaderDeps> = {}): RelationshipLoaderDep
     senderCategory: vi.fn(async () => null),
     coAttendanceCoverage: vi.fn(async () => coverage()),
     coAttendanceRow: vi.fn(async () => null),
+    coAttendanceOwnAddresses: vi.fn(async () => new Set(["me@acme.com"])),
     ...over,
   };
 }
@@ -189,11 +190,24 @@ describe("co-attendance gate fails: every field null, even with a row", () => {
     await failing(coverage({ hasNonGoogleSource: true }));
   });
 
-  it("6. the sender is one of the user's own addresses: nothing is read", async () => {
+  it("6. the sender is one of the user's own addresses: the row is never read", async () => {
     const d = deps({ coAttendanceRow: vi.fn(async () => ROW) });
-    expect(await load(d, "Me <ME@acme.com>", [" Me@Acme.com "])).toMatchObject(UNKNOWN);
-    expect(d.coAttendanceCoverage).not.toHaveBeenCalled();
+    expect(await load(d, "Me <ME@acme.com>")).toMatchObject(UNKNOWN);
+    expect(d.coAttendanceOwnAddresses).toHaveBeenCalledWith("u1");
     expect(d.coAttendanceRow).not.toHaveBeenCalled();
+  });
+
+  it("6. own means the store's own set (its Google login, a calendar-only account), not the caller's list", async () => {
+    // The writer never counts these addresses, so a missing row says nothing.
+    const own = new Set(["me@acme.com", "me.google@gmail.com", "cal-only@corp.example"]);
+    for (const sender of ["Me <Me.Google@gmail.com>", "cal-only@corp.example"]) {
+      const d = deps({
+        coAttendanceOwnAddresses: vi.fn(async () => own),
+        coAttendanceRow: vi.fn(async () => ROW),
+      });
+      expect(await load(d, sender, ["me@acme.com"])).toMatchObject(UNKNOWN);
+      expect(d.coAttendanceRow).not.toHaveBeenCalled();
+    }
   });
 
   it("6. the sender's address cannot be normalised by the store: nothing is read", async () => {
@@ -209,6 +223,10 @@ describe("co-attendance gate fails: every field null, even with a row", () => {
     expect(await load(coverageDown)).toMatchObject(UNKNOWN);
     const rowDown = deps({ coAttendanceRow: vi.fn(async () => Promise.reject(new Error("db"))) });
     expect(await load(rowDown)).toMatchObject(UNKNOWN);
+    const ownDown = deps({
+      coAttendanceOwnAddresses: vi.fn(async () => Promise.reject(new Error("db"))),
+    });
+    expect(await load(ownDown)).toMatchObject(UNKNOWN);
   });
 });
 
@@ -234,6 +252,9 @@ describe("coAttendanceWindow (the pure gate, conditions 2-5)", () => {
     ).toBeNull();
     expect(coAttendanceWindow(coverage({ hasNonGoogleSource: true }), NOW)).toBeNull();
     expect(coAttendanceWindow(coverage({ sources: [] }), NOW)).toBeNull();
+    expect(
+      coAttendanceWindow(coverage({ sources: [source({ observedSince: null })] }), NOW),
+    ).toBeNull();
   });
 
   it("does not use a source's last pass time: a stale one does not fail the gate", () => {
