@@ -87,7 +87,9 @@ export function genRelationship(rng: Rng, now: Date): RelationshipSnapshot | nul
     ),
     medianReplyLatencyMs: maybe(rng, Math.floor(rng() * 7 * 24) * HOUR),
     sameOrgDomain: maybe(rng, chance(rng, 0.5)),
-    coAttendanceNext14d: maybe(rng, Math.floor(rng() * 4)),
+    // Deprecated in the snapshot: always null since the count store (#1604).
+    coAttendanceNext14d: null,
+    ...genCoAttendance(rng, now),
     pinned: maybe(rng, chance(rng, 0.05)),
     vip: maybe(rng, chance(rng, 0.05)),
     dismissCount: maybe(rng, Math.floor(rng() * 10)),
@@ -101,4 +103,30 @@ export function genRelationship(rng: Rng, now: Date): RelationshipSnapshot | nul
 
 export function genTierOrNull(rng: Rng, p: number): Tier | null {
   return chance(rng, p) ? pick(rng, TIERS) : null;
+}
+
+/** The reader's all-or-nothing shape: every co-attendance field is null unless
+ * its gate passed (relationship-coattendance.ts). */
+function genCoAttendance(rng: () => number, now: Date) {
+  const day = (daysAgo: number) =>
+    new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - daysAgo),
+    ).toISOString();
+  if (!chance(rng, 0.5)) {
+    return {
+      meetingCount: null,
+      smallMeetingCount: null,
+      lastMetAt: null,
+      coAttendanceObservedSince: null,
+      coAttendanceCountedThrough: null,
+    };
+  }
+  const meetingCount = Math.floor(rng() * 12);
+  return {
+    meetingCount,
+    smallMeetingCount: Math.floor(rng() * (meetingCount + 1)),
+    lastMetAt: meetingCount > 0 ? day(1 + Math.floor(rng() * 29)) : null,
+    coAttendanceObservedSince: day(30 + Math.floor(rng() * 60)),
+    coAttendanceCountedThrough: day(1),
+  };
 }

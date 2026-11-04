@@ -10,10 +10,11 @@
  * Per-user ego network only: every row read belongs to the one user, and one
  * user's mail never informs another's. Raw values only, no hand weights.
  *
- * coAttendanceNext14d is always null for now: CalendarEvent stores no
- * attendees (schema.prisma CalendarEvent), so co-attendance cannot be read from
- * data. interaction-graph.ts approximates it from email volume, which is not
- * what this field claims, so it is not reused here.
+ * Past calendar co-attendance comes from the co-attendance store, behind the
+ * reader's gate in relationship-coattendance.ts. coAttendanceNext14d is
+ * deprecated and always null: no upcoming attendee data is stored. It stays in
+ * the shape so stored rows replay unchanged. interaction-graph.ts approximates
+ * meetings from email volume, which is not co-attendance, so it is not reused.
  */
 
 import { isPlainAddress, parseAddress, splitAddressList } from "../../mail/email-address.js";
@@ -36,7 +37,7 @@ export interface RelationshipSnapshot {
   /** Sender shares a non-public mail domain with the user AND this mail passed
    * DMARC; null when the domain matches but authentication is unknown. */
   sameOrgDomain: boolean | null;
-  /** Calendar events with the sender in the next 14 days. */
+  /** Deprecated, always null: no upcoming attendee data is stored. See meetingCount. */
   coAttendanceNext14d: number | null;
   /** A PIN_TIER rule applies to the sender (address or domain). */
   pinned: boolean | null;
@@ -55,6 +56,27 @@ export interface RelationshipSnapshot {
   userInitiatedThreadCount: number | null;
   /** First contact either way, ISO-8601 UTC (tenure; new-sender flag). */
   firstSeenAt: string | null;
+  /** Past meetings shared with the sender (ContactCoAttendance). The count covers
+   * at least [coAttendanceObservedSince, coAttendanceCountedThrough], and may hold
+   * older meetings: a row is never pruned when coverage restarts. */
+  meetingCount: number | null;
+  /** Of those, meetings of at most 5 people. */
+  smallMeetingCount: number | null;
+  /** UTC day of the latest shared meeting, ISO-8601. */
+  lastMetAt: string | null;
+  /** First UTC day of the window the counts cover: the latest
+   * coAttendanceObservedSince across the user's Google calendar sources. */
+  coAttendanceObservedSince: string | null;
+  /** Last UTC day of that window: the watermark User.coAttendanceCountedThrough. */
+  coAttendanceCountedThrough: string | null;
+}
+
+/** Stored co-attendance for one sender. undefined = unknown (the reader's gate
+ * failed, relationship-coattendance.ts); row null = counted, never met. */
+export interface CoAttendanceView {
+  observedSince: Date;
+  countedThrough: Date;
+  row: { meetingCount: number; smallMeetingCount: number; lastMetAt: Date } | null;
 }
 
 export interface SentRow {
@@ -88,6 +110,8 @@ export interface RelationshipInput {
   pinnedTier: string | null | undefined;
   /** SenderLabel category: a category, null = none, undefined = unknown. */
   senderCategory: string | null | undefined;
+  /** Past calendar co-attendance; undefined = unknown. */
+  coAttendance?: CoAttendanceView;
 }
 
 const VIP_CATEGORIES = new Set(["investor", "customer"]);
@@ -170,6 +194,25 @@ function inboundFields(input: RelationshipInput) {
   return { inboundCount: input.inbound.length, ...counts };
 }
 
+function coAttendanceFields(view: CoAttendanceView | undefined) {
+  if (!view) {
+    return {
+      meetingCount: null,
+      smallMeetingCount: null,
+      lastMetAt: null,
+      coAttendanceObservedSince: null,
+      coAttendanceCountedThrough: null,
+    };
+  }
+  return {
+    meetingCount: view.row?.meetingCount ?? 0,
+    smallMeetingCount: view.row?.smallMeetingCount ?? 0,
+    lastMetAt: view.row ? view.row.lastMetAt.toISOString() : null,
+    coAttendanceObservedSince: view.observedSince.toISOString(),
+    coAttendanceCountedThrough: view.countedThrough.toISOString(),
+  };
+}
+
 export function buildRelationshipSnapshot(input: RelationshipInput): RelationshipSnapshot {
   const sender = senderMailbox(input.senderAddress);
   if (!sender) return { ...UNKNOWN_RELATIONSHIP };
@@ -187,6 +230,7 @@ export function buildRelationshipSnapshot(input: RelationshipInput): Relationshi
     dismissCount: input.dismissCount,
     ...inboundFields(input),
     firstSeenAt: earliestIso(input.firstInboundAt, input.firstSentAt),
+    ...coAttendanceFields(input.coAttendance),
   };
 }
 
@@ -204,6 +248,11 @@ export const UNKNOWN_RELATIONSHIP: RelationshipSnapshot = {
   repliedThreadCount: null,
   userInitiatedThreadCount: null,
   firstSeenAt: null,
+  meetingCount: null,
+  smallMeetingCount: null,
+  lastMetAt: null,
+  coAttendanceObservedSince: null,
+  coAttendanceCountedThrough: null,
 };
 
 const ISO_UTC_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
@@ -225,9 +274,17 @@ const NUMBER_FIELDS = [
   "inboundThreadCount",
   "repliedThreadCount",
   "userInitiatedThreadCount",
+  "meetingCount",
+  "smallMeetingCount",
 ] as const;
 const BOOLEAN_FIELDS = ["sameOrgDomain", "pinned", "vip"] as const;
-const DATE_FIELDS = ["lastSentAt", "firstSeenAt"] as const;
+const DATE_FIELDS = [
+  "lastSentAt",
+  "firstSeenAt",
+  "lastMetAt",
+  "coAttendanceObservedSince",
+  "coAttendanceCountedThrough",
+] as const;
 
 /** Read a stored snapshot back; null when the JSON is not a valid snapshot.
  * Fields added after a row was written read as null (unknown). */

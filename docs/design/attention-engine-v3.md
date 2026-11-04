@@ -139,7 +139,12 @@ As built in P2 (`judge/v3/relationship.ts`, `relationship-loader.ts`):
 
   Production dry run: 4 `auto_reply` and 37 `unsubscribe` of 192 rows; no row qualified as `approved`. Of the 37, 28 match the subject exactly and 9 are token subjects. One row from before the send floor (2026-06-04 10:22 UTC) is unprovable and stays null. A sent-history import must classify the rows it creates with the same rules.
 - Pinned means any `PIN_TIER` rule on the address or domain. VIP means a sender label of investor or customer, or a pin to PUSH.
-- **Calendar co-attendance is always null for now.** `CalendarEvent` stores no attendees. The interaction graph's "meeting" count is inferred from email volume, which is not co-attendance, so it is not reused.
+- **Calendar co-attendance comes from the co-attendance store below, past meetings only** (`judge/v3/relationship-coattendance.ts`).
+  - The snapshot carries `meetingCount`, `smallMeetingCount`, `lastMetAt` (a UTC day), and the window the counts cover: `coAttendanceObservedSince` (the latest `coAttendanceObservedSince` across the user's Google calendar sources) and `coAttendanceCountedThrough` (the watermark). Raw values, no weights.
+  - All five are null unless the reader's gate below passes. Then a missing row is 0, 0 and a null `lastMetAt`. When the gate fails they are null even if a row exists, because its counts may be incomplete.
+  - The count covers at least that window. It may also hold older meetings, because a row is never pruned when coverage restarts (a re-link, a reconnect, a gap).
+  - `coAttendanceNext14d` is **deprecated and always null**, because no upcoming attendee data is stored. It stays in the shape so stored rows replay unchanged. A stored snapshot written before these fields existed reads them as null (`parseRelationshipSnapshot`).
+  - The interaction graph's "meeting" count is inferred from email volume, which is not co-attendance, so it is not reused.
 
 Co-attendance store (`pim/coattendance/`, behind `CALENDAR_COATTENDANCE_ENABLED`, off by default). Founder decision 2026-11-01: keep per-contact counts, never attendee lists.
 
@@ -150,12 +155,12 @@ Co-attendance store (`pim/coattendance/`, behind `CALENDAR_COATTENDANCE_ENABLED`
 - **The reader's gate (P2's contract).** A missing `ContactCoAttendance` row means 0 only when ALL of these hold; otherwise every co-attendance field is null:
   1. the flag is ON;
   2. `User.coAttendanceCountedThrough` ≥ utcDay(now) − 2 days;
-  3. EVERY Google calendar source (the primary `UserToken`, provider google, and each `LinkedCalendarAccount` with provider GOOGLE) has `coAttendanceObservedSince` ≤ utcDay(now) − 30 days, that is full-window coverage; a source that joins later reads null for up to 30 days;
+  3. the user has at least one Google calendar source, and EVERY one (the primary `UserToken`, provider google, and each `LinkedCalendarAccount` with provider GOOGLE, as the store's own `readCoverage` lists them) has `coAttendanceObservedSince` ≤ utcDay(now) − 30 days, that is full-window coverage; a source that joins later reads null for up to 30 days;
   4. no Google source has `needsReconnect`;
   5. the user has NO non-Google calendar source (a `LinkedCalendarAccount` of Outlook, CalDAV or any other provider);
-  6. the sender is not one of the user's own addresses, and its address can be normalised.
+  6. the sender's address can be normalised, and it is not one of the user's own addresses as the store knows them (`loadOwnAddresses`, shared by writer and reader: the account email, each Google login's address, every linked calendar and inbox), since the store never counts those.
 
-  The window the counts cover, for P5, is [max over sources of `coAttendanceObservedSince`, `coAttendanceCountedThrough`].
+  The window the counts cover, for P5, is [max over sources of `coAttendanceObservedSince`, `coAttendanceCountedThrough`]; the snapshot carries both ends. Freshness is the watermark's (condition 2); a source's `coAttendanceLastPassAt` is not read, because a failing source freezes the watermark while the other sources' pass times stay fresh (probe C).
 
   False zeros this gate prevents:
   - a source that joined later (probe A): its earlier meetings were never counted, so its contacts would read 0 although the user met them (condition 3);
