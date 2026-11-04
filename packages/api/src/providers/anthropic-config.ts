@@ -46,7 +46,7 @@ export function readAnthropicCallOptions(
 
 /**
  * Translate a caller's model pin into a native Claude id. Native ids pass
- * through; OpenRouter ids (`anthropic/claude-haiku-4.5`) become native
+ * through; vendor-prefixed ids (`anthropic/claude-haiku-4.5`) become native
  * (`claude-haiku-4-5`); anything else is served by `fallback`, exactly as the
  * Gemini provider serves a non-Gemini pin with its own default.
  */

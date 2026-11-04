@@ -5,6 +5,11 @@ loads the web app, so the web bundle's SDKs (`@sentry/browser`, the web
 `track.ts` analytics sender) are **not** in it. Every answer is tied to code
 below; answer the two conditional rows from the build you actually upload.
 
+Revised 2026-11-01: the AI provider lists below now name Anthropic (Claude
+API), which has handled the hosted service's model calls since 2026-10-30 and
+was missing from the earlier revision. OpenRouter is removed; Klorn no longer
+uses it.
+
 What "collected" means: Apple — data sent off the device and kept longer than
 needed to answer the request; Google — data sent off the device. Klorn's API
 (`packages/api`, Postgres on Supabase) keeps account, mail, calendar, chat and
@@ -20,7 +25,7 @@ store, but it is described here because reviewers and the privacy policy ask.
 |---|---|---|---|
 | Account email address, name (from Google / Apple sign-in, or the email login) | Yes | API database while the account exists | `src/auth/`, `routes/auth.ts` |
 | Account id (server user id) | Yes | API database; also RevenueCat's `appUserID` when IAP is on | `src/platform/iap.ts` (`Purchases.configure({ appUserID })`) |
-| Mail from connected accounts (headers, bodies, attachments), AI summaries and drafts | Mail is fetched server-side from Gmail / IMAP, not from the phone; the app sends replies and new mail the user confirms | API database while the account exists; AI providers per request (Gemini API, OpenRouter — privacy policy "AI Processing") | `routes/email*.ts`; send only from the confirm sheet (`src/screens/mail/compose.tsx`) |
+| Mail from connected accounts (headers, bodies, attachments), AI summaries and drafts | Mail is fetched server-side from Gmail / IMAP, not from the phone; the app sends replies and new mail the user confirms | API database while the account exists; AI providers per request (Anthropic Claude API, Gemini API — privacy policy "AI Processing") | `routes/email*.ts`; send only from the confirm sheet (`src/screens/mail/compose.tsx`) |
 | Calendar events (Google Calendar, CalDAV) and events the user creates | Created events: yes (after the confirm card) | API database | `POST /api/calendar` |
 | Assistant chat, lane moves, Done / Later, approvals and rejections (with an optional reason) | Yes | API database | `routes/chat-*.ts`, `routes/firewall.ts` |
 | Server-side usage events keyed by user id: `push_sent`, `queue_action` | Generated on the server | API `analyticsEvent` table (first-party, no third-party analytics) | `packages/api/src/analytics.ts`, `notify/push.ts:302` |
@@ -85,8 +90,9 @@ Audio Data, Gameplay Content, Customer Support, Other Data.
 
 Third parties inside the binary: **RevenueCat** (purchase history + the
 account id, only with a key), **Apple APNs** (the token). Service providers on
-the server side — Render, Supabase, Vercel, Google Gemini API, OpenRouter,
-Resend — process data for Klorn and are listed in the privacy policy.
+the server side — Render, Supabase, Vercel, Anthropic (Claude API), Google
+Gemini API, Resend — process data for Klorn and are listed in the privacy
+policy.
 
 ### `PrivacyInfo.xcprivacy` — matches the table (done 2026-10-16)
 

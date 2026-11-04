@@ -6,7 +6,7 @@
  * Why this exists: every real onboarding path (OAuth, Workspace admin policy)
  * gates a visitor out before they ever see the classifier. The playground
  * removes that wall for the *experience* step — paste an email, bring your own
- * OpenRouter/Gemini/OpenAI/Anthropic key, see the tier the real `judgeEmail` would assign. It
+ * Anthropic/OpenAI/Gemini key, see the tier the real `judgeEmail` would assign. It
  * is a top-of-funnel demo, NOT a measurement of per-user recall (the visitor
  * self-selects the input, so it cannot test what the firewall would miss).
  *
@@ -36,13 +36,13 @@ function sanitizeForLog(value: string): string {
 /**
  * Model ids are echoed into logs and forwarded to a provider, so they are
  * shape-checked, not just length-capped: vendor/model[:variant] with dots and
- * dashes (`google/gemini-2.5-flash`, `claude-haiku-5-5`, `…:free`). No spaces,
+ * dashes (`claude-haiku-5-5`, `gpt-5-mini`, `gemini-2.5-flash`). No spaces,
  * no query strings, no `..` anywhere, and a letter or digit first.
  */
 export const PLAYGROUND_MODEL_ID_PATTERN =
   "^(?!.*\\.\\.)[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9._-]+)?(:[A-Za-z0-9._-]+)?$";
 
-const PLAYGROUND_PROVIDERS = ["openrouter", "gemini", "openai", "anthropic"] as const;
+const PLAYGROUND_PROVIDERS = ["anthropic", "openai", "gemini"] as const;
 
 /**
  * The native Anthropic and Gemini adapters answer a pin from another vendor
@@ -72,9 +72,9 @@ const classifyBodySchema = {
     snippet: { type: "string", maxLength: 4000 },
     provider: { type: "string", enum: [...PLAYGROUND_PROVIDERS] },
     apiKey: { type: "string", minLength: 8, maxLength: 400 },
-    // No `:free` enforcement: the visitor uses their own key and pays for
-    // whatever model they pick. `playgroundOnly` walls this off from the
-    // server's keys, so a paid model never costs Klorn anything.
+    // The visitor uses their own key and pays for whatever model they pick.
+    // `playgroundOnly` walls this off from the server's keys, so a visitor's
+    // model choice never costs Klorn anything.
     model: { type: "string", minLength: 1, maxLength: 120, pattern: PLAYGROUND_MODEL_ID_PATTERN },
   },
 } as const;
@@ -137,9 +137,13 @@ interface FeedbackBody {
 
 const DEMO_IP_PER_MINUTE = 3;
 const DEMO_IP_PER_DAY = 10;
-// Measured real cost of one gemini-flash classification (~0.19¢). Pre-charged
-// against the daily budget BEFORE the provider call so the budget fails closed.
-const DEMO_CLASSIFY_EST_USD = 0.0019;
+// One Claude Haiku 5.5 classification (the judge pin): eval/README.md measured
+// ~1,340 input + ~153 output tokens ≈ $0.0002 at the $0.10/$0.50 per-MTok list
+// rate; the playground's 4,000-char snippet cap (~1,000 more input tokens)
+// adds ≤ $0.0001. Rounded up to $0.0004 — over-estimating only makes the
+// budget stricter. Pre-charged against the daily budget BEFORE the provider
+// call so the budget fails closed.
+const DEMO_CLASSIFY_EST_USD = 0.0004;
 const DEMO_CLASSIFY_COST_FRACTIONAL_CENTS = usdToFractionalCents(DEMO_CLASSIFY_EST_USD);
 // Bound the per-IP map so a botnet of unique IPs can't grow it forever; stale
 // (previous-day) entries are evicted once the map crosses this size.
@@ -270,7 +274,7 @@ export function playgroundRoutes(app: FastifyInstance) {
         // Key-free → server-paid demo path (or 401 key_required while dark).
         return handleNoKeyDemo(request, reply, body);
       }
-      const provider: PlaygroundProvider = body.provider ?? "openrouter";
+      const provider: PlaygroundProvider = body.provider ?? "anthropic";
       if (body.model && !modelFitsProvider(provider, body.model)) {
         return reply.code(400).send({ error: "model_provider_mismatch" });
       }
@@ -282,17 +286,16 @@ export function playgroundRoutes(app: FastifyInstance) {
       // never participates in cooldown bucketing, so there is nothing to key on
       // the credential (and nothing to hash).
       const credentials: ProviderCredentials = {
-        openRouterApiKey: provider === "openrouter" ? body.apiKey : null,
-        geminiApiKey: provider === "gemini" ? body.apiKey : null,
-        openAiApiKey: provider === "openai" ? body.apiKey : null,
         anthropicApiKey: provider === "anthropic" ? body.apiKey : null,
+        openAiApiKey: provider === "openai" ? body.apiKey : null,
+        geminiApiKey: provider === "gemini" ? body.apiKey : null,
         quotaScope: "playground",
         // Fail closed: never fall through to the server's env keys.
         playgroundOnly: true,
       };
 
-      // Capture the real upstream failure reason (e.g. OpenRouter "401 User
-      // not found", "model not found") so the visitor sees what to fix instead
+      // Capture the real upstream failure reason (e.g. "401 invalid x-api-key",
+      // "model not found") so the visitor sees what to fix instead
       // of a generic message. Keys are scrubbed before it leaves the server.
       let llmError: string | undefined;
 

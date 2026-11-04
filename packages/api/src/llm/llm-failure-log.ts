@@ -3,7 +3,7 @@
  *
  * LlmUsageLog is written only after a provider call SUCCEEDS (the `call`
  * closure in openai.ts), while the cost pre-bill lands in GlobalCostLedger
- * BEFORE dispatch. During the 2026-09-05 OpenRouter credit outage every judge
+ * BEFORE dispatch. During the 2026-09-05 provider credit outage every judge
  * call failed, nothing was written for the failures, and the pre-bills kept
  * the ledgers moving — the system looked alive for four weeks. This module is
  * the failure-side record:

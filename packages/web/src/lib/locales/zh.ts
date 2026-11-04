@@ -1982,17 +1982,17 @@ const zh: Record<string, string> = {
   "byok.activeModel": "当前模型：",
   "byok.usingYourKey": "正在使用你的密钥",
   "byok.stored": "•••••••• 已保存",
-  "byok.openRouterLabel": "OpenRouter API 密钥",
-  "byok.openRouterHelp":
-    "一个密钥即可覆盖 Klorn 使用的所有模型——OpenRouter 会统一路由。密钥在保存前会经服务商验证。获取地址：",
+  "byok.anthropicLabel": "Anthropic API 密钥",
+  "byok.anthropicHelp":
+    "Klorn 运行在 Claude 上，因此一个 Anthropic 密钥即可覆盖它使用的所有模型。密钥在保存前会经 Anthropic 验证。获取地址：",
   "byok.legacy": "旧版",
   "byok.geminiRetired":
-    "Gemini 直连密钥已停用——免费层密钥在每日配额用尽后会悄无声息地中断分类。请移除它，改用一个 OpenRouter 密钥。",
+    "Gemini 直连密钥已停用——免费层密钥在每日配额用尽后会悄无声息地中断分类。请移除它，改用 Anthropic 密钥。",
   "byok.assistantModel": "助手模型",
   "byok.assistantModelHelp":
-    "仅限前沿模型——这是 Klorn 助手对话所用的模型。它处理你的邮件、日历和任务，从不搜索网络。在你的每日 AI 配额内运行；在上方添加你自己的密钥即可改用自己的配额。邮件防火墙的分类器单独调校，不受影响。",
+    "仅限 Claude 模型——这是 Klorn 助手对话所用的模型。它处理你的邮件、日历和任务，从不搜索网络。在你的每日 AI 配额内运行；在上方添加你自己的密钥即可改用自己的配额。邮件防火墙的分类器单独调校，不受影响。",
   "byok.assistantModelHelpFree":
-    "仅限前沿模型——这是 Klorn 助手对话所用的模型。它处理你的邮件、日历和任务，从不搜索网络。在你的每日 AI 配额内运行。邮件防火墙的分类器单独调校，不受影响。",
+    "仅限 Claude 模型——这是 Klorn 助手对话所用的模型。它处理你的邮件、日历和任务，从不搜索网络。在你的每日 AI 配额内运行。邮件防火墙的分类器单独调校，不受影响。",
   "byok.error.status": "无法加载你的 LLM 密钥状态。",
   "byok.error.update": "无法更新密钥。",
   "byok.error.model": "无法更改模型。",
@@ -2456,7 +2456,7 @@ const zh: Record<string, string> = {
   "briefingPage.guidance.quietHours": "简报发送时处于免打扰时段，因此跳过了推送。",
   "briefingPage.guidance.quietHoursAction": "调整免打扰时段",
   // web app design pass, 2026-10-21: English that reached localized screens.
-  "byok.modelNote.recommended": "{provider} — 推荐",
+  "byok.modelNote.balanced": "{provider} — 均衡",
   "byok.modelNote.fastest": "{provider} — 最快",
   "byok.modelNote.mostCapable": "{provider} — 能力最强，价格较高",
   "statusChip.connected": "已连接",
@@ -2493,7 +2493,7 @@ const zh: Record<string, string> = {
   "playground.provider.label": "服务商",
   "playground.model.label": "模型",
   "playground.model.klorn": "Klorn 使用",
-  "playground.model.measured": "Klorn 测试 {correct}/{total}",
+  "playground.model.measured": "Klorn 测试 {low}–{high}/{total}（{runs} 次运行）",
   "playground.model.other": "其他模型 ID…",
   "playground.model.otherLabel": "模型 ID",
   "playground.model.otherPlaceholder": "provider/model-name",
@@ -2501,8 +2501,7 @@ const zh: Record<string, string> = {
     "请使用 provider/model-name 格式的模型 ID，只能包含字母、数字、点和连字符。",
   "playground.model.klornNote": "Klorn 自己使用的模型，已用 Klorn 的 56 封邮件测试集评分。",
   "playground.model.listedNote": "按原样列出。只有 Klorn 使用的模型会用 Klorn 测试集评分。",
-  "playground.model.priceNote":
-    "每百万 token 的价格（输入 / 输出），以 {date} OpenRouter 上的标价为准。",
+  "playground.model.priceNote": "每百万 token 的标价（输入 / 输出），记录于 {date}。",
   "playground.key.label": "{provider} API 密钥",
   "playground.key.show": "显示",
   "playground.key.hide": "隐藏",

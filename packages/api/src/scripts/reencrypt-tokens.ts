@@ -17,7 +17,7 @@
  * Covers every encrypted column: UserToken (Google OAuth), the three linked
  * account tables (OAuth tokens plus the CalDAV/IMAP password ciphers; the drive
  * accounts hold the token pair only), and the User BYOK/app-secret columns
- * (Naver IMAP password, GitHub PAT, OpenRouter/Gemini keys).
+ * (Naver IMAP password, GitHub PAT, Anthropic/Gemini keys).
  *
  * Usage:
  *   cd packages/api && pnpm tsx src/scripts/reencrypt-tokens.ts            # dry run
@@ -174,11 +174,11 @@ function buildSweeps(): FieldSweep[] {
             id: true,
             naverImapPasswordCipher: true,
             githubTokenCipher: true,
-            openRouterApiKey: true,
+            anthropicApiKey: true,
             geminiApiKey: true,
           },
         }),
-      ["naverImapPasswordCipher", "githubTokenCipher", "openRouterApiKey", "geminiApiKey"],
+      ["naverImapPasswordCipher", "githubTokenCipher", "anthropicApiKey", "geminiApiKey"],
       (id, data, guard) => prisma.user.updateMany({ where: { id, ...guard }, data }),
     ),
   ];

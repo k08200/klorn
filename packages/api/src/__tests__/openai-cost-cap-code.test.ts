@@ -31,8 +31,8 @@ vi.mock("../providers/index.js", () => ({
   getProvider: vi.fn(() => null),
   getProviderChain: vi.fn(() => [
     {
-      name: "openrouter",
-      quotaKey: "openrouter:test",
+      name: "anthropic",
+      quotaKey: "anthropic:env",
       defaultModel: "fake-default",
       supportsTools: true,
       client: null,
