@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, describe, expect, it, vi } from "vitest";
 
 // Real-Postgres proof of the co-attendance store (pim/coattendance/ and migration
-// 20261101010000_calendar_coattendance). A mock cannot show what matters here:
+// 20261103010000_calendar_coattendance). A mock cannot show what matters here:
 // that the CHECKs refuse what they should, that a marker claim inserts once under
 // concurrency, that Prisma's upsert on the compound key holds when two batches
 // write the same contact at once, that the data-wipe fence trigger covers both
@@ -15,15 +15,22 @@ const url = vi.hoisted(() => {
   return value;
 });
 
+const h = vi.hoisted(() => ({ connectPrimaryCalendar: vi.fn(), connectLinkedCalendars: vi.fn() }));
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
+vi.mock("../pim/calendar-providers/dispatch.js", () => ({
+  connectPrimaryCalendar: h.connectPrimaryCalendar,
+  connectLinkedCalendars: h.connectLinkedCalendars,
+}));
 
 import { prisma } from "../db.js";
+import type { MeetingAttendee, ProviderMeeting } from "../pim/calendar-providers/types.js";
 import type { CountedMeeting } from "../pim/coattendance/coattendance-rules.js";
 import {
   claimAndCount,
   eventKeyOf,
   recordCountedMeetings,
 } from "../pim/coattendance/coattendance-store.js";
+import { runCoAttendancePass } from "../pim/coattendance/coattendance-sync.js";
 import { isDataWipeFenceError } from "../privacy/data-wipe-fence.js";
 import { purgeUserData } from "../purge-user-data.js";
 
@@ -225,6 +232,78 @@ describePg("one transaction per UTC end-day", () => {
     expect(tx["cy@x.example"]).not.toBe(tx["ana@x.example"]);
   });
 
+  it("dates a midnight-spanning meeting by its end day, and writes it with that day only", async () => {
+    const userId = await newUser();
+    const spanning = {
+      ...meeting("span", "2026-10-20T23:30:00Z", ["ana@x.example"]),
+      endTime: new Date("2026-10-21T00:30:00Z"),
+    };
+    await recordCountedMeetings("GOOGLE", userId, [
+      spanning,
+      meeting("same-end-day", "2026-10-21T10:00:00Z", ["bo@x.example"]),
+      meeting("start-day", "2026-10-20T10:00:00Z", ["cy@x.example"]),
+    ]);
+    const tx = await writers(userId);
+    expect(tx["ana@x.example"]).toBe(tx["bo@x.example"]);
+    expect(tx["ana@x.example"]).not.toBe(tx["cy@x.example"]);
+    expect(await counter(userId, "ana@x.example")).toMatchObject({
+      firstMetAt: new Date("2026-10-21T00:00:00Z"),
+      lastMetAt: new Date("2026-10-21T00:00:00Z"),
+    });
+  });
+
+  it("writes the primary's and a linked calendar's meetings of one day in one transaction", async () => {
+    const userId = await newUser();
+    await prisma.userToken.create({
+      data: { userId, provider: "google", accessToken: "x" },
+    });
+    const linked = await prisma.linkedCalendarAccount.create({
+      data: { userId, provider: "GOOGLE", email: `w-${randomUUID()}@x.example` },
+    });
+    const attendee = (email: string, extra = {}): MeetingAttendee => ({
+      email,
+      self: false,
+      organizer: false,
+      resource: false,
+      responseStatus: "accepted",
+      ...extra,
+    });
+    const listed = (id: string, contact: string): ProviderMeeting => ({
+      identity: `ical:${id}|`,
+      cancelled: false,
+      allDay: false,
+      startTime: new Date("2026-10-25T01:00:00Z"),
+      endTime: new Date("2026-10-25T02:00:00Z"),
+      attendeesOmitted: false,
+      organizedBySelf: false,
+      attendees: [attendee("me@self.example", { self: true }), attendee(contact)],
+    });
+    const session = (meetings: ProviderMeeting[]) => ({
+      provider: "GOOGLE",
+      listMeetingAttendees: async () => ({ meetings, truncated: false, lastStart: null }),
+    });
+    h.connectPrimaryCalendar.mockResolvedValue(session([listed("p", "pat@x.example")]));
+    h.connectLinkedCalendars.mockResolvedValue([
+      { id: linked.id, email: linked.email, session: session([listed("l", "lin@x.example")]) },
+    ]);
+    const saved = process.env.CALENDAR_COATTENDANCE_ENABLED;
+    process.env.CALENDAR_COATTENDANCE_ENABLED = "true";
+    try {
+      const result = await runCoAttendancePass(
+        userId,
+        { includeLinked: true },
+        new Date("2026-11-01T12:00:00Z"),
+      );
+      expect(result).toMatchObject({ meetings: 2 });
+    } finally {
+      if (saved === undefined) delete process.env.CALENDAR_COATTENDANCE_ENABLED;
+      else process.env.CALENDAR_COATTENDANCE_ENABLED = saved;
+    }
+    const tx = await writers(userId);
+    expect(tx["pat@x.example"]).toBeDefined();
+    expect(tx["pat@x.example"]).toBe(tx["lin@x.example"]);
+  });
+
   it("splits a day only past a cap: 26 meetings of one day take two transactions", async () => {
     const userId = await newUser();
     const day = Array.from({ length: 26 }, (_, i) =>
@@ -254,7 +333,161 @@ describePg("lock order", () => {
   });
 });
 
+/** Run a pass for `userId` whose primary calendar lists `meetings`, with the flag on. */
+async function passWith(userId: string, meetings: ProviderMeeting[], now: Date) {
+  h.connectPrimaryCalendar.mockResolvedValue({
+    provider: "GOOGLE",
+    listMeetingAttendees: async () => ({ meetings, truncated: false, lastStart: null }),
+  });
+  h.connectLinkedCalendars.mockResolvedValue([]);
+  const saved = process.env.CALENDAR_COATTENDANCE_ENABLED;
+  process.env.CALENDAR_COATTENDANCE_ENABLED = "true";
+  try {
+    return await runCoAttendancePass(userId, { includeLinked: true }, now);
+  } finally {
+    if (saved === undefined) delete process.env.CALENDAR_COATTENDANCE_ENABLED;
+    else process.env.CALENDAR_COATTENDANCE_ENABLED = saved;
+  }
+}
+
+function listedMeeting(id: string, start: string, contact: string): ProviderMeeting {
+  const startTime = new Date(start);
+  const person = (email: string, self = false): MeetingAttendee => ({
+    email,
+    self,
+    organizer: false,
+    resource: false,
+    responseStatus: "accepted",
+  });
+  return {
+    identity: `ical:${id}|`,
+    cancelled: false,
+    allDay: false,
+    startTime,
+    endTime: new Date(startTime.getTime() + 60 * 60 * 1000),
+    attendeesOmitted: false,
+    organizedBySelf: false,
+    attendees: [person("me@self.example", true), person(contact)],
+  };
+}
+
+const watermarkOf = async (userId: string) =>
+  (await prisma.user.findUnique({ where: { id: userId } }))?.coAttendanceCountedThrough ?? null;
+
+describePg("a split day resumes after a crash", () => {
+  const NOW = new Date("2026-11-01T12:00:00Z");
+  const splitDay = () =>
+    Array.from({ length: 26 }, (_, i) =>
+      listedMeeting(`split${i}`, "2026-10-25T01:00:00Z", `p${i}@x.example`),
+    ).sort((a, b) => (eventKeyOf(a.identity) < eventKeyOf(b.identity) ? -1 : 1));
+
+  it("counts the other slice of a 26-meeting day once, and only then advances the watermark", async () => {
+    const userId = await newUser();
+    await prisma.userToken.create({ data: { userId, provider: "google", accessToken: "x" } });
+    const meetings = splitDay();
+    // Slice 1 (13 meetings, in key order) committed; the pass died before slice 2.
+    const firstSlice = meetings.slice(0, 13).map((m) => ({
+      identity: m.identity,
+      startTime: m.startTime as Date,
+      endTime: m.endTime as Date,
+      contacts: [m.attendees[1]?.email as string],
+      small: true,
+    }));
+    expect(await claimAndCount("GOOGLE", userId, firstSlice)).toBe(13);
+    expect(await watermarkOf(userId)).toBeNull();
+
+    expect(await passWith(userId, meetings, NOW)).toMatchObject({ meetings: 13 });
+    const rows = await prisma.contactCoAttendance.findMany({ where: { userId } });
+    expect(rows).toHaveLength(26);
+    expect(rows.every((r) => r.meetingCount === 1)).toBe(true);
+    expect(await prisma.coAttendanceMeeting.count({ where: { userId } })).toBe(26);
+    expect(await watermarkOf(userId)).toEqual(new Date("2026-10-31T00:00:00Z"));
+  });
+
+  it("a day transaction waits for another holding the user's lock", async () => {
+    const userId = await newUser();
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let locked: () => void = () => {};
+    const lockedSignal = new Promise<void>((resolve) => {
+      locked = resolve;
+    });
+    const holder = prisma.$transaction(
+      async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(${0x0c0a7}::int, hashtext(${userId}))`;
+        locked();
+        await held;
+      },
+      { maxWait: 10_000, timeout: 20_000 },
+    );
+    await lockedSignal;
+    let done = false;
+    const writer = claimAndCount("GOOGLE", userId, [
+      {
+        identity: "ical:waits|",
+        startTime: new Date("2026-10-20T01:00:00Z"),
+        endTime: new Date("2026-10-20T02:00:00Z"),
+        contacts: ["ana@x.example"],
+        small: true,
+      },
+    ]).then((n) => {
+      done = true;
+      return n;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(done).toBe(false);
+    release();
+    await holder;
+    expect(await writer).toBe(1);
+  });
+
+  it("two writers of one split day at once count each meeting once (the per-user lock)", async () => {
+    const userId = await newUser();
+    const counted = splitDay().map((m) => ({
+      identity: m.identity,
+      startTime: m.startTime as Date,
+      endTime: m.endTime as Date,
+      contacts: [m.attendees[1]?.email as string],
+      small: true,
+    }));
+    const results = await Promise.all([
+      recordCountedMeetings("GOOGLE", userId, counted),
+      recordCountedMeetings("GOOGLE", userId, [...counted].reverse()),
+    ]);
+    expect(results.reduce((sum, r) => sum + r.meetings, 0)).toBe(26);
+    const rows = await prisma.contactCoAttendance.findMany({ where: { userId } });
+    expect(rows).toHaveLength(26);
+    expect(rows.every((r) => r.meetingCount === 1)).toBe(true);
+  });
+});
+
 describePg("the data wipe", () => {
+  it("resets the watermark: after a reconnect the whole window is counted again", async () => {
+    const userId = await newUser();
+    const NOW = new Date("2026-11-01T12:00:00Z");
+    const meetings = [
+      listedMeeting("w-early", "2026-10-03T01:00:00Z", "ana@x.example"),
+      listedMeeting("w-late", "2026-10-30T01:00:00Z", "bo@x.example"),
+    ];
+    await prisma.userToken.create({ data: { userId, provider: "google", accessToken: "x" } });
+    expect(await passWith(userId, meetings, NOW)).toMatchObject({ meetings: 2 });
+    expect(await watermarkOf(userId)).toEqual(new Date("2026-10-31T00:00:00Z"));
+
+    await prisma.$transaction((tx) => purgeUserData(tx as never, userId), {
+      maxWait: 10_000,
+      timeout: 30_000,
+    });
+    expect(await watermarkOf(userId)).toBeNull();
+    // Reconnect, then the next pass: the wiped window is counted again, in full.
+    await prisma.userToken.create({ data: { userId, provider: "google", accessToken: "y" } });
+    expect(await passWith(userId, meetings, NOW)).toMatchObject({ meetings: 2 });
+    expect(await counter(userId, "ana@x.example")).toMatchObject({ meetingCount: 1 });
+    expect(await counter(userId, "bo@x.example")).toMatchObject({ meetingCount: 1 });
+    expect(await watermarkOf(userId)).toEqual(new Date("2026-10-31T00:00:00Z"));
+  });
+
   it("the fence trigger refuses a pass while the account's wipe is pending", async () => {
     const userId = await newUser();
     await prisma.$executeRaw`

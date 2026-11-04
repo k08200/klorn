@@ -2,35 +2,43 @@
  * Writes of per-contact co-attendance (ContactCoAttendance) and of the meetings
  * already counted (CoAttendanceMeeting). The only place either table is written.
  *
- * Exactly once per meeting, without keeping who attended it. Meetings are written
- * one UTC end-day per transaction (planBatches): every meeting that ended on day D
- * goes in one transaction, so rows that share a transaction id (Postgres xmin)
- * reveal no more than lastMetAt, a day, already does. Only a day past a cap
- * (MEETINGS_PER_TRANSACTION meetings or CONTACTS_PER_TRANSACTION distinct
- * contacts) is split, across transactions in marker-key order. The transaction
- * first claims the batch's markers (INSERT ... ON CONFLICT DO NOTHING RETURNING,
- * through createManyAndReturn with skipDuplicates), then adds the meetings it
- * claimed, and only those, to each contact's counters. A meeting listed again by a
- * later pass, by another of the user's calendars, or by a concurrent pass (whose
- * insert waits on the unique index, then returns nothing) finds its marker and
- * counts nothing. A failed counter write rolls the batch's markers back with it,
- * so the next pass counts those meetings again rather than never.
+ * One UTC end-day per transaction (planBatches). The pass (coattendance-sync.ts)
+ * hands over every meeting of a day from all of the user's Google calendars at
+ * once, and a day is evaluated only once (the user's watermark). So the rows that
+ * share a Postgres transaction id (xmin) are one whole day's contacts, which each
+ * row's lastMetAt (the same end-day) already says. What xmin can still reveal:
+ * only a day over a cap (MEETINGS_PER_TRANSACTION meetings or
+ * CONTACTS_PER_TRANSACTION distinct contacts) is split, into the fewest balanced
+ * slices in marker-key order (a 26-meeting day is 13 + 13), so each part is a
+ * key-ordered slice of that day, never one meeting alone.
+ *
+ * Every day transaction takes a per-user advisory lock and re-reads the day's
+ * markers under it: a one-slice day that has any marker is complete (it committed
+ * whole) and is skipped; a split day writes only the meetings not yet marked, so a
+ * pass that died between slices, or a second process, resumes it without counting
+ * anything twice and without losing the rest of the day.
+ *
+ * Exactly once per meeting. The transaction first claims the batch's markers
+ * (INSERT ... ON CONFLICT DO NOTHING RETURNING, through createManyAndReturn with
+ * skipDuplicates), then adds the meetings it claimed, and only those, to each
+ * contact's counters. A meeting in two of the user's calendars, or claimed by a
+ * concurrent pass, finds its marker and counts nothing. A failed counter write
+ * rolls the batch back with it.
  *
  * What is stored about a meeting: the hash of its identity and the UTC day it
- * ended, on the marker; on each contact's row, the UTC day of the first and the
- * last meeting. Nothing finer than a day, and no write time, so rows written
- * together do not line up into one meeting's guest list by time. Markers are
+ * ended, on the marker; on each contact's row, the UTC end-day of the first and
+ * the last meeting. Nothing finer than a day, and no write time. Markers are
  * claimed in key order and contacts written in address order, so two concurrent
  * batches lock shared rows in the same order and cannot deadlock.
  *
- * Known limits: a meeting is counted as it was when first seen ended, so guests
- * added or removed afterwards are not recounted; it is counted again if its
- * identity changes (a new iCalUID: re-imported, recreated, or a recurring series
- * split at "this and following") or if its end moves to a day after its marker was
- * pruned.
+ * Known limits: a meeting is counted as it was when its day was evaluated, so a
+ * late accept or guest change after that is never counted; it is counted again if
+ * its identity changes (a new iCalUID: re-imported, recreated, or a recurring
+ * series split at "this and following") within days not yet evaluated.
  */
 
 import { createHash } from "node:crypto";
+import { Prisma } from "@prisma/client";
 import { INTERACTIVE_TX_OPTIONS, prisma } from "../../db.js";
 import type { CalendarProviderName } from "../calendar-rows.js";
 import { type CountedMeeting, normalizeAttendeeEmail, utcDayOf } from "./coattendance-rules.js";
@@ -93,48 +101,68 @@ interface Keyed {
 
 const byKey = (a: Keyed, b: Keyed) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
 
-/**
- * One batch per UTC end-day, days in order, each in marker-key order. A day is
- * split only when it would pass MEETINGS_PER_TRANSACTION meetings or
- * CONTACTS_PER_TRANSACTION distinct contacts; a batch never mixes days. One
- * meeting has at most MAX_COUNTED_ATTENDEES contacts, so it always fits alone.
- */
-export function planBatches(meetings: readonly CountedMeeting[]): CountedMeeting[][] {
-  const keyed = meetings.map((meeting) => ({
-    key: eventKeyOf(meeting.identity),
-    day: utcDayOf(meeting.endTime).getTime(),
-    meeting,
-  }));
-  keyed.sort((a, b) => a.day - b.day || byKey(a, b));
-  const batches: CountedMeeting[][] = [];
-  let batch: CountedMeeting[] = [];
-  let batchDay = Number.NaN;
-  let contacts = new Set<string>();
-  for (const { day, meeting } of keyed) {
-    const widened = new Set([...contacts, ...meeting.contacts]);
-    const full =
-      day !== batchDay ||
-      batch.length >= MEETINGS_PER_TRANSACTION ||
-      widened.size > CONTACTS_PER_TRANSACTION;
-    batchDay = day;
-    if (full && batch.length > 0) {
-      batches.push(batch);
-      batch = [];
-      contacts = new Set(meeting.contacts);
-    } else {
-      contacts = widened;
-    }
-    batch.push(meeting);
+/** Rows of one day split into balanced slices, each within both caps. */
+function sliceDay(day: readonly Keyed[]): Keyed[][] {
+  const contactsOf = (slice: readonly Keyed[]) =>
+    new Set(slice.flatMap(({ meeting }) => meeting.contacts)).size;
+  const fits = (slice: readonly Keyed[]) =>
+    slice.length <= MEETINGS_PER_TRANSACTION && contactsOf(slice) <= CONTACTS_PER_TRANSACTION;
+  const n = day.length;
+  const fewest = Math.max(
+    1,
+    Math.ceil(n / MEETINGS_PER_TRANSACTION),
+    Math.ceil(contactsOf(day) / CONTACTS_PER_TRANSACTION),
+  );
+  for (let parts = fewest; parts <= n; parts += 1) {
+    const size = Math.ceil(n / parts);
+    const slices: Keyed[][] = [];
+    for (let at = 0; at < n; at += size) slices.push(day.slice(at, at + size));
+    if (slices.every(fits)) return slices;
   }
-  if (batch.length > 0) batches.push(batch);
-  return batches;
+  return day.map((one) => [one]);
+}
+
+interface DayPlan {
+  /** The UTC end-day, as epoch milliseconds. */
+  readonly day: number;
+  readonly slices: Keyed[][];
+}
+
+/**
+ * One plan per UTC end-day, days in order, each day's meetings in marker-key order
+ * (one meeting once). A day within both caps is one slice. A day over a cap is
+ * split into the fewest balanced slices that fit (ceil(n / parts) meetings each,
+ * more parts only when a slice would pass the contact cap), so a 26-meeting day is
+ * 13 + 13, never 25 + 1 with a lone meeting in a transaction of its own.
+ */
+function planDays(meetings: readonly CountedMeeting[]): DayPlan[] {
+  const byDay = new Map<number, Map<string, Keyed>>();
+  for (const meeting of meetings) {
+    const day = utcDayOf(meeting.endTime).getTime();
+    const key = eventKeyOf(meeting.identity);
+    const keyed = byDay.get(day) ?? new Map<string, Keyed>();
+    keyed.set(key, { key, meeting });
+    byDay.set(day, keyed);
+  }
+  return [...byDay]
+    .sort(([a], [b]) => a - b)
+    .map(([day, keyed]) => ({ day, slices: sliceDay([...keyed.values()].sort(byKey)) }));
+}
+
+/** The transactions recordCountedMeetings writes, in order: each a slice of one day. */
+export function planBatches(meetings: readonly CountedMeeting[]): CountedMeeting[][] {
+  return planDays(meetings).flatMap(({ slices }) =>
+    slices.map((slice) => slice.map(({ meeting }) => meeting)),
+  );
 }
 
 /** Per contact: meetings, small meetings, first and last day, in address order. */
 function tallyByContact(meetings: readonly CountedMeeting[]): Array<[string, ContactTally]> {
   const tallies = new Map<string, ContactTally>();
   for (const meeting of meetings) {
-    const day = utcDayOf(meeting.startTime);
+    // The END day, the day the meeting is batched by: a row's first and last met
+    // then never name a different day from the transaction that wrote it.
+    const day = utcDayOf(meeting.endTime);
     for (const contact of meeting.contacts) {
       const tally = tallies.get(contact);
       if (!tally) {
@@ -155,108 +183,137 @@ function tallyByContact(meetings: readonly CountedMeeting[]): Array<[string, Con
   return [...tallies].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
 }
 
+type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+
 /**
- * Claim a batch of meetings' markers and count the ones this call claimed.
- * Answers how many it counted (0 when every marker already existed).
+ * pg_advisory_xact_lock(class, key): one user's day transactions run one at a
+ * time across processes, and a transaction re-reads its day's markers under the
+ * lock. The two-int form has its own key space, apart from the scheduler's
+ * single-key lock.
  */
-export async function claimAndCount(
+const COATTENDANCE_LOCK_CLASS = 0x0c0a7;
+
+function lockUser(tx: Tx, userId: string) {
+  return tx.$executeRaw(
+    Prisma.sql`SELECT pg_advisory_xact_lock(${COATTENDANCE_LOCK_CLASS}::int, hashtext(${userId}))`,
+  );
+}
+
+/** Claim the slice's markers and count the meetings this call claimed (inside `tx`). */
+async function writeSlice(
+  tx: Tx,
+  provider: CalendarProviderName,
+  userId: string,
+  slice: readonly Keyed[],
+): Promise<CountedMeeting[]> {
+  // Key order: concurrent claims wait on each other's index entries in one order.
+  const keyed = [...slice].sort(byKey);
+  const claimed = await tx.coAttendanceMeeting.createManyAndReturn({
+    data: keyed.map(({ key, meeting }) => ({
+      userId,
+      provider,
+      eventKey: key,
+      endedAt: utcDayOf(meeting.endTime),
+    })),
+    skipDuplicates: true,
+    select: { eventKey: true },
+  });
+  const won = new Set(claimed.map((row) => row.eventKey));
+  const counted = keyed.filter(({ key }) => won.has(key)).map(({ meeting }) => meeting);
+  for (const [contactEmail, tally] of tallyByContact(counted)) {
+    const row = await tx.contactCoAttendance.upsert({
+      where: { userId_contactEmail: { userId, contactEmail } },
+      create: {
+        userId,
+        contactEmail,
+        meetingCount: tally.meetings,
+        smallMeetingCount: tally.small,
+        firstMetAt: tally.firstDay,
+        lastMetAt: tally.lastDay,
+      },
+      update: {
+        meetingCount: { increment: tally.meetings },
+        smallMeetingCount: { increment: tally.small },
+      },
+      select: { firstMetAt: true, lastMetAt: true },
+    });
+    // The upsert holds the row's lock until commit, so widening from what it
+    // returned cannot lose a concurrent writer's earlier or later day.
+    if (row.firstMetAt <= tally.firstDay && row.lastMetAt >= tally.lastDay) continue;
+    await tx.contactCoAttendance.update({
+      where: { userId_contactEmail: { userId, contactEmail } },
+      data: {
+        firstMetAt: row.firstMetAt < tally.firstDay ? row.firstMetAt : tally.firstDay,
+        lastMetAt: row.lastMetAt > tally.lastDay ? row.lastMetAt : tally.lastDay,
+      },
+    });
+  }
+  return counted;
+}
+
+/**
+ * Claim and count a set of meetings in one transaction, with no day rules: what one
+ * committed slice does. Answers how many it counted (0 when every marker existed).
+ */
+export function claimAndCount(
   provider: CalendarProviderName,
   userId: string,
   meetings: readonly CountedMeeting[],
 ): Promise<number> {
-  return (await claimBatch(provider, userId, meetings)).length;
-}
-
-/** claimAndCount's work: answers the meetings this call counted. */
-function claimBatch(
-  provider: CalendarProviderName,
-  userId: string,
-  meetings: readonly CountedMeeting[],
-): Promise<CountedMeeting[]> {
-  // Key order: concurrent claims of overlapping batches wait on each other's
-  // unique-index entries in one order, never in a cycle.
-  const keyed = meetings
-    .map((meeting) => ({ key: eventKeyOf(meeting.identity), meeting }))
-    .sort(byKey);
+  const keyed = meetings.map((meeting) => ({ key: eventKeyOf(meeting.identity), meeting }));
   return prisma.$transaction(async (tx) => {
-    const claimed = await tx.coAttendanceMeeting.createManyAndReturn({
-      data: keyed.map(({ key, meeting }) => ({
-        userId,
-        provider,
-        eventKey: key,
-        endedAt: utcDayOf(meeting.endTime),
-      })),
-      skipDuplicates: true,
-      select: { eventKey: true },
-    });
-    const won = new Set(claimed.map((row) => row.eventKey));
-    const counted = keyed.filter(({ key }) => won.has(key)).map(({ meeting }) => meeting);
-    for (const [contactEmail, tally] of tallyByContact(counted)) {
-      const row = await tx.contactCoAttendance.upsert({
-        where: { userId_contactEmail: { userId, contactEmail } },
-        create: {
-          userId,
-          contactEmail,
-          meetingCount: tally.meetings,
-          smallMeetingCount: tally.small,
-          firstMetAt: tally.firstDay,
-          lastMetAt: tally.lastDay,
-        },
-        update: {
-          meetingCount: { increment: tally.meetings },
-          smallMeetingCount: { increment: tally.small },
-        },
-        select: { firstMetAt: true, lastMetAt: true },
-      });
-      // The upsert holds the row's lock until commit, so widening from what it
-      // returned cannot lose a concurrent writer's earlier or later day.
-      if (row.firstMetAt <= tally.firstDay && row.lastMetAt >= tally.lastDay) continue;
-      await tx.contactCoAttendance.update({
-        where: { userId_contactEmail: { userId, contactEmail } },
-        data: {
-          firstMetAt: row.firstMetAt < tally.firstDay ? row.firstMetAt : tally.firstDay,
-          lastMetAt: row.lastMetAt > tally.lastDay ? row.lastMetAt : tally.lastDay,
-        },
-      });
-    }
-    return counted;
+    await lockUser(tx, userId);
+    return (await writeSlice(tx, provider, userId, keyed)).length;
   }, INTERACTIVE_TX_OPTIONS);
 }
 
-/** The keys among `keys` whose marker already exists (one read for the whole pass). */
-async function alreadyCounted(
+/**
+ * Write one slice of a day, under the user's lock, after re-reading the day's
+ * markers (rule b):
+ *   - a one-slice day that has any marker is complete (its one transaction
+ *     committed whole), so nothing is written;
+ *   - a split day writes only the slice's meetings not yet marked, so a pass that
+ *     died after some slices, or another process that wrote some meanwhile, is
+ *     resumed, never repeated.
+ */
+function writeDaySlice(
   provider: CalendarProviderName,
   userId: string,
-  keys: readonly string[],
-): Promise<Set<string>> {
-  if (keys.length === 0) return new Set();
-  const rows = await prisma.coAttendanceMeeting.findMany({
-    where: { userId, provider, eventKey: { in: [...keys] } },
-    select: { eventKey: true },
-  });
-  return new Set(rows.map((row) => row.eventKey));
+  plan: DayPlan,
+  slice: readonly Keyed[],
+): Promise<CountedMeeting[]> {
+  return prisma.$transaction(async (tx) => {
+    await lockUser(tx, userId);
+    const markers = await tx.coAttendanceMeeting.findMany({
+      where: { userId, provider, endedAt: new Date(plan.day) },
+      select: { eventKey: true },
+    });
+    const marked = new Set(markers.map((row) => row.eventKey));
+    if (marked.size > 0 && plan.slices.length === 1) return [];
+    const todo = slice.filter(({ key }) => !marked.has(key));
+    return todo.length === 0 ? [] : writeSlice(tx, provider, userId, todo);
+  }, INTERACTIVE_TX_OPTIONS);
 }
 
 /**
- * Count the meetings not counted before. Meetings already marked are skipped with
- * one read; the rest are claimed and counted batch by batch, so a concurrent pass
- * that got there first is still safe. Throws on a write failure (that batch is
- * rolled back; earlier batches stay counted).
+ * Count the meetings of the days handed in: each UTC end-day in one transaction,
+ * or, for a day over a cap, its balanced slices in key order (planBatches). Days
+ * at or before the watermark are never handed in (the pass). Throws on a write
+ * failure (that slice is rolled back; earlier ones stay, and are resumed past).
  */
 export async function recordCountedMeetings(
   provider: CalendarProviderName,
   userId: string,
   counted: readonly CountedMeeting[],
 ): Promise<RecordResult> {
-  const unique = new Map(counted.map((meeting) => [eventKeyOf(meeting.identity), meeting]));
-  const known = await alreadyCounted(provider, userId, [...unique.keys()]);
-  const fresh = [...unique].filter(([key]) => !known.has(key)).map(([, meeting]) => meeting);
   let meetings = 0;
   const touched = new Set<string>();
-  for (const batch of planBatches(fresh)) {
-    const added = await claimBatch(provider, userId, batch);
-    meetings += added.length;
-    for (const meeting of added) for (const contact of meeting.contacts) touched.add(contact);
+  for (const plan of planDays(counted)) {
+    for (const slice of plan.slices) {
+      const added = await writeDaySlice(provider, userId, plan, slice);
+      meetings += added.length;
+      for (const meeting of added) for (const contact of meeting.contacts) touched.add(contact);
+    }
   }
   return { meetings, contacts: touched.size };
 }

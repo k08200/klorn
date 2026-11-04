@@ -16,9 +16,9 @@ import { findGaps, parseModels } from "./helpers/rls-coverage.js";
 const here = dirname(fileURLToPath(import.meta.url));
 const prismaDir = join(here, "..", "..", "prisma");
 const migrationsDir = join(prismaDir, "migrations");
-const MIGRATION = "20261101010000_calendar_coattendance";
+const MIGRATION = "20261103010000_calendar_coattendance";
 /** The latest migration on main when this one was written. */
-const AFTER = "20261101000000_sent_message_origin_backfill";
+const AFTER = "20261101120000_sent_history_import_marker";
 
 const sql = readFileSync(join(migrationsDir, MIGRATION, "migration.sql"), "utf8");
 const statements = sql
@@ -129,6 +129,8 @@ describe("calendar co-attendance migration", () => {
         expect.arrayContaining(["coAttendanceObservedSince", "coAttendanceLastPassAt"]),
       );
     }
+    // The User watermark has its own migration: 20261103020000_user_coattendance_watermark.
+    expect(sql).not.toContain('"User" ADD COLUMN');
     expect(schema).toMatch(/coAttendanceObservedSince\s+DateTime\?/);
     expect(schema).toMatch(/coAttendanceLastPassAt\s+DateTime\?/);
   });

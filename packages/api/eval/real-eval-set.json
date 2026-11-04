@@ -114,6 +114,7 @@
       "labels": ["IMPORTANT", "CATEGORY_UPDATES", "INBOX"],
       "receivedAt": "2026-05-27T14:48:40.000Z",
       "label": "QUEUE",
+      "labelV2": "INFO",
       "context": {
         "senderPrior": {
           "tier": "QUEUE",
@@ -471,6 +472,7 @@
       "labels": ["IMPORTANT", "CATEGORY_UPDATES", "INBOX"],
       "receivedAt": "2026-05-25T16:18:05.000Z",
       "label": "QUEUE",
+      "labelV2": "INFO",
       "context": {
         "senderPrior": {
           "tier": "QUEUE",
@@ -835,6 +837,7 @@
       "labels": ["IMPORTANT", "CATEGORY_UPDATES", "INBOX"],
       "receivedAt": "2026-05-23T13:18:48.000Z",
       "label": "QUEUE",
+      "labelV2": "INFO",
       "context": {
         "senderPrior": {
           "tier": "QUEUE",
@@ -962,6 +965,7 @@
       "labels": ["IMPORTANT", "CATEGORY_UPDATES", "INBOX"],
       "receivedAt": "2026-05-23T03:39:09.000Z",
       "label": "QUEUE",
+      "labelV2": "INFO",
       "context": {
         "senderPrior": {
           "tier": "QUEUE",

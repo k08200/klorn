@@ -1,17 +1,20 @@
 /**
  * Per-contact co-attendance counts (founder decision 2026-11-01): from ended
  * meetings, keep only how many meetings the user shared with each address, how
- * many were small, and the first and last; never an attendee list. Behind
+ * many were small, and the first and last UTC day; never an attendee list. Behind
  * CALENDAR_COATTENDANCE_ENABLED (off by default): off, nothing is listed, read or
- * written. Each meeting is counted once across repeated syncs and across the
- * user's calendars, through a marker that holds a hash of the meeting's identity
- * and the day it ended, nothing more. No column of either table is finer than a
- * day, so rows written together cannot be grouped back into one meeting by time.
- * Each Google calendar source records when it was first observed and its last
- * successful pass (the persisted 6-hour interval).
+ * written.
+ *
+ * One pass per user, over every Google calendar source together: each finished
+ * UTC day after the user's watermark (User.coAttendanceCountedThrough) is
+ * evaluated exactly once, all sources' meetings of a day written in one
+ * transaction. The watermark only advances through days every source listed in
+ * full; each source's coAttendanceObservedSince is the first full day it was
+ * covered, so readers can tell a true 0 from unknown.
  *
  * The rows live in the strict fake database, so every query is checked against
- * the real schema and every write is recorded.
+ * the real schema and every write is recorded. Transaction ids (xmin) are proven
+ * on Postgres in calendar-coattendance-pg.test.ts.
  */
 
 import { readdirSync, readFileSync } from "node:fs";
@@ -56,7 +59,6 @@ import {
 import {
   _drainCoAttendanceQueueForTests,
   enqueueCoAttendance,
-  runCoAttendanceForUser,
 } from "../pim/coattendance/coattendance-job.js";
 import type { CountedMeeting } from "../pim/coattendance/coattendance-rules.js";
 import {
@@ -69,14 +71,14 @@ import {
 import {
   _resetCoAttendancePassesForTests,
   COATTENDANCE_FAILURE_BACKOFF_MS,
-  COATTENDANCE_LOOKBACK_DAYS,
   COATTENDANCE_PASS_INTERVAL_MS,
-  countCoAttendance,
+  runCoAttendancePass,
 } from "../pim/coattendance/coattendance-sync.js";
 import { DataWipeFenceError } from "../privacy/data-wipe-fence.js";
 
 const FLAG = "CALENDAR_COATTENDANCE_ENABLED";
 const srcDir = join(dirname(fileURLToPath(import.meta.url)), "..");
+/** Today is 2026-11-01 (UTC): yesterday 10-31, and the 30-day window starts 10-02. */
 const NOW = new Date("2026-11-01T12:00:00.000Z");
 const DAY_MS = 24 * 60 * 60 * 1000;
 const ZONE = "Asia/Seoul";
@@ -86,6 +88,9 @@ type Rows = Record<string, Array<Record<string, unknown>>>;
 let db: FakeDb;
 const tables = () => db.tables as Rows;
 const saved = process.env[FLAG];
+const at = (iso: string) => new Date(iso);
+const day = (iso: string) => at(`${iso}T00:00:00.000Z`);
+const isMidnight = (value: unknown) => value instanceof Date && value.getTime() % DAY_MS === 0;
 
 function person(email: string, responseStatus = "accepted", extra = {}): MeetingAttendee {
   return { email, self: false, organizer: false, resource: false, responseStatus, ...extra };
@@ -137,8 +142,12 @@ function upcoming(id: string): ProviderCalendarEvent {
   };
 }
 
-function googleSession(meetings: ProviderMeeting[], truncated = false) {
-  const listMeetingAttendees = vi.fn(async () => ({ meetings, truncated }));
+function googleSession(meetings: ProviderMeeting[], cut: Date | null = null) {
+  const listMeetingAttendees = vi.fn(async () => ({
+    meetings,
+    truncated: cut !== null,
+    lastStart: cut ?? meetings.at(-1)?.startTime ?? null,
+  }));
   const session = {
     provider: "GOOGLE",
     listEvents: vi.fn(async () => [upcoming("up-1")]),
@@ -146,6 +155,19 @@ function googleSession(meetings: ProviderMeeting[], truncated = false) {
   } as unknown as CalendarSession;
   return { session, listMeetingAttendees };
 }
+
+/** The primary calendar lists `primary`; lc1 (if given) lists `linked`. */
+function sources(primary: ProviderMeeting[], linked?: ProviderMeeting[]) {
+  const p = googleSession(primary);
+  const l = googleSession(linked ?? []);
+  h.connectPrimaryCalendar.mockResolvedValue(p.session);
+  h.connectLinkedCalendars.mockResolvedValue(
+    linked ? [{ session: l.session, id: "lc1", email: "me@work.example" }] : [],
+  );
+  return { primary: p, linked: l };
+}
+
+const pass = (now = NOW, includeLinked = true) => runCoAttendancePass("u1", { includeLinked }, now);
 
 function seed(extra: Rows = {}) {
   db = createFakeDb({
@@ -163,11 +185,9 @@ function seed(extra: Rows = {}) {
   h.db = db;
 }
 
-const at = (iso: string) => new Date(iso);
-const isMidnight = (value: unknown) => value instanceof Date && value.getTime() % DAY_MS === 0;
-const source = (model: "userToken" | "linkedCalendarAccount", id: string) =>
-  tables()[model]?.find((r) => r.id === id);
-
+const user = () => tables().user?.find((r) => r.id === "u1");
+const token = () => tables().userToken?.find((r) => r.id === "t1");
+const linkedRow = (id: string) => tables().linkedCalendarAccount?.find((r) => r.id === id);
 const counters = () =>
   Object.fromEntries(
     (tables().contactCoAttendance ?? []).map((r) => [
@@ -210,14 +230,12 @@ afterEach(() => {
 describe("flag off", () => {
   it("lists nothing, reads nothing and writes nothing", async () => {
     delete process.env[FLAG];
-    const { session, listMeetingAttendees } = googleSession([standup]);
-    expect(await countCoAttendance(session, "u1", null, NOW)).toBeNull();
-    await runCoAttendanceForUser("u1", { includeLinked: true }, NOW);
+    const { primary } = sources([standup]);
+    expect(await pass()).toBeNull();
     enqueueCoAttendance("u1", { includeLinked: true });
     await _drainCoAttendanceQueueForTests();
-    expect(listMeetingAttendees).not.toHaveBeenCalled();
+    expect(primary.listMeetingAttendees).not.toHaveBeenCalled();
     expect(h.connectPrimaryCalendar).not.toHaveBeenCalled();
-    expect(h.connectLinkedCalendars).not.toHaveBeenCalled();
     expect(db.reads).toEqual([]);
     expect(db.writes).toEqual({});
   });
@@ -232,27 +250,24 @@ describe("flag off", () => {
 });
 
 describe("counting", () => {
-  it("lists the past window and counts each contact of each ended meeting", async () => {
-    const { session, listMeetingAttendees } = googleSession([standup, allHands]);
-    const result = await countCoAttendance(session, "u1", null, NOW);
-
-    expect(listMeetingAttendees).toHaveBeenCalledWith({
-      timeMin: new Date(NOW.getTime() - COATTENDANCE_LOOKBACK_DAYS * DAY_MS).toISOString(),
-      timeMax: NOW.toISOString(),
+  it("lists the window's finished days and counts each contact of each ended meeting", async () => {
+    const { primary } = sources([standup, allHands]);
+    expect(await pass()).toMatchObject({ meetings: 2, contacts: 7 });
+    // From the first second of the window's first day to today's midnight.
+    expect(primary.listMeetingAttendees).toHaveBeenCalledWith({
+      timeMin: "2026-10-01T23:59:59.000Z",
+      timeMax: "2026-11-01T00:00:00.000Z",
     });
-    expect(result).toEqual({ meetings: 2, contacts: 7, truncated: false });
-    // Days, not instants: the start of the meeting's UTC day.
     expect(counters()).toMatchObject({
       "ana@client.example": {
         meetingCount: 2,
         smallMeetingCount: 1,
-        firstMetAt: at("2026-10-28T00:00:00.000Z"),
-        lastMetAt: at("2026-10-30T00:00:00.000Z"),
+        firstMetAt: day("2026-10-28"),
+        lastMetAt: day("2026-10-30"),
       },
       "bo@client.example": { meetingCount: 1, smallMeetingCount: 1 },
       "cy@vendor.example": { meetingCount: 1, smallMeetingCount: 0 },
     });
-    // The user's own addresses, from every account Klorn knows, are never counted.
     const counted = Object.keys(counters());
     for (const own of ["me@example.com", "me@work.example", "me@gmail.com", "me@side.example"]) {
       expect(counted).not.toContain(own);
@@ -260,108 +275,344 @@ describe("counting", () => {
     expect(counted).toHaveLength(7);
   });
 
+  it("dates a meeting by the day it ended, also across midnight", async () => {
+    const late = {
+      ...meeting("ical:late@google.com|", "2026-10-29T23:30:00.000Z", [
+        me,
+        person("ana@x.example"),
+      ]),
+      endTime: at("2026-10-30T00:30:00.000Z"),
+    };
+    sources([late]);
+    await pass();
+    expect(counters()["ana@x.example"]).toMatchObject({
+      firstMetAt: day("2026-10-30"),
+      lastMetAt: day("2026-10-30"),
+    });
+  });
+
   it("counts nothing from a meeting the user declined, and writes no marker for it", async () => {
     const declined = meeting("ical:declined@google.com|", "2026-10-29T01:00:00.000Z", [
       { ...me, responseStatus: "declined" },
       person("ana@client.example"),
     ]);
-    const { session } = googleSession([declined]);
-    expect(await countCoAttendance(session, "u1", null, NOW)).toEqual({
-      meetings: 0,
-      contacts: 0,
-      truncated: false,
-    });
+    sources([declined]);
+    expect(await pass()).toMatchObject({ meetings: 0, contacts: 0 });
     expect(tables().contactCoAttendance ?? []).toEqual([]);
     expect(tables().coAttendanceMeeting ?? []).toEqual([]);
   });
 
-  it("reports a listing cut at its page cap", async () => {
-    const { session } = googleSession([standup], true);
-    expect(await countCoAttendance(session, "u1", null, NOW)).toMatchObject({ truncated: true });
-  });
-
   it("reads no own addresses when the window has no meetings", async () => {
-    const { session } = googleSession([]);
-    await countCoAttendance(session, "u1", null, NOW);
-    expect(db.reads).not.toContain("user");
+    sources([]);
+    await pass();
     expect(db.reads).not.toContain("linkedInboxAccount");
   });
 
-  it("does nothing for a session that cannot list attendees (Outlook, CalDAV)", async () => {
-    const session = { provider: "OUTLOOK", listEvents: vi.fn(async () => []) };
-    expect(await countCoAttendance(session as never, "u1", "lc2", NOW)).toBeNull();
-    expect(db.reads).toEqual([]);
-    expect(db.writes).toEqual({});
-  });
-
-  it("does nothing for a source Klorn has no Google row for", async () => {
-    const { session, listMeetingAttendees } = googleSession([standup]);
-    expect(await countCoAttendance(session, "u1", "lc2", NOW)).toBeNull();
-    expect(await countCoAttendance(session, "u1", "gone", NOW)).toBeNull();
-    expect(listMeetingAttendees).not.toHaveBeenCalled();
+  it("never lists an Outlook, CalDAV or re-link-pending calendar", async () => {
+    seed({
+      linkedCalendarAccount: [
+        { id: "lc1", userId: "u1", email: "me@work.example", needsReconnect: true },
+        { id: "lc2", userId: "u1", provider: "OUTLOOK", email: "me@outlook.example" },
+      ],
+    });
+    const outlook = googleSession([standup]);
+    const { primary } = sources([standup]);
+    h.connectLinkedCalendars.mockResolvedValue([
+      { session: { ...outlook.session, provider: "OUTLOOK" }, id: "lc2", email: "o@x.example" },
+    ]);
+    await pass();
+    expect(primary.listMeetingAttendees).toHaveBeenCalledTimes(1);
+    expect(outlook.listMeetingAttendees).not.toHaveBeenCalled();
+    expect(h.connectLinkedCalendars).not.toHaveBeenCalled();
   });
 });
 
-describe("per-source markers: observed since, last pass", () => {
-  const firstDay = at("2026-10-02T00:00:00.000Z");
-
-  it("the first successful pass records the window's first UTC day and the pass time", async () => {
-    const { session } = googleSession([standup]);
-    await countCoAttendance(session, "u1", null, NOW);
-    await countCoAttendance(session, "u1", "lc1", NOW);
-    for (const row of [source("userToken", "t1"), source("linkedCalendarAccount", "lc1")]) {
+describe("watermark: each finished UTC day evaluated once", () => {
+  it("the first pass covers the window through yesterday and records it", async () => {
+    sources([standup], [allHands]);
+    await pass();
+    expect(user()?.coAttendanceCountedThrough).toEqual(day("2026-10-31"));
+    for (const row of [token(), linkedRow("lc1")]) {
       expect(row).toMatchObject({
-        coAttendanceObservedSince: firstDay,
+        coAttendanceObservedSince: day("2026-10-02"),
         coAttendanceLastPassAt: NOW,
       });
     }
-    expect(source("linkedCalendarAccount", "lc2")).toMatchObject({
-      coAttendanceObservedSince: null,
-      coAttendanceLastPassAt: null,
-    });
+    expect(linkedRow("lc2")).toMatchObject({ coAttendanceObservedSince: null });
   });
 
-  it("a later pass moves the pass time and never the observed-since day", async () => {
-    const { session } = googleSession([standup]);
-    await countCoAttendance(session, "u1", null, NOW);
-    const later = new Date(NOW.getTime() + COATTENDANCE_PASS_INTERVAL_MS);
-    await countCoAttendance(session, "u1", null, later);
-    expect(source("userToken", "t1")).toMatchObject({
-      coAttendanceObservedSince: firstDay,
-      coAttendanceLastPassAt: later,
+  it("lists only the days after the watermark, and nothing once yesterday is covered", async () => {
+    const { primary } = sources([standup]);
+    await pass();
+    expect(await pass(new Date(NOW.getTime() + COATTENDANCE_PASS_INTERVAL_MS))).toBeNull();
+    expect(primary.listMeetingAttendees).toHaveBeenCalledTimes(1);
+    const tomorrow = at("2026-11-02T07:00:00.000Z");
+    await pass(tomorrow);
+    expect(primary.listMeetingAttendees).toHaveBeenLastCalledWith({
+      timeMin: "2026-10-31T23:59:59.000Z",
+      timeMax: "2026-11-02T00:00:00.000Z",
     });
+    expect(user()?.coAttendanceCountedThrough).toEqual(day("2026-11-01"));
+    expect(token()?.coAttendanceObservedSince).toEqual(day("2026-10-02"));
   });
 
-  it("the interval is persisted: a restarted process still waits for it", async () => {
-    const { session, listMeetingAttendees } = googleSession([standup]);
-    await countCoAttendance(session, "u1", null, NOW);
-    _resetCoAttendancePassesForTests();
-    const soon = new Date(NOW.getTime() + COATTENDANCE_PASS_INTERVAL_MS - 1);
-    expect(await countCoAttendance(session, "u1", null, soon)).toBeNull();
-    expect(listMeetingAttendees).toHaveBeenCalledTimes(1);
-    // Another source of the same user has its own interval.
-    await countCoAttendance(session, "u1", "lc1", soon);
-    expect(listMeetingAttendees).toHaveBeenCalledTimes(2);
+  it("counts a meeting that ended today only after the day is over", async () => {
+    const today = meeting("ical:today@google.com|", "2026-11-01T08:00:00.000Z", [
+      me,
+      person("ana@client.example"),
+    ]);
+    sources([today]);
+    expect(await pass()).toMatchObject({ meetings: 0 });
+    expect(await pass(at("2026-11-02T07:00:00.000Z"))).toMatchObject({ meetings: 1 });
+    expect(counters()["ana@client.example"]?.lastMetAt).toEqual(day("2026-11-01"));
   });
 
-  it("a failed pass does not use the interval: it backs off in memory, then retries", async () => {
-    const { session, listMeetingAttendees } = googleSession([standup]);
-    listMeetingAttendees.mockRejectedValueOnce(new Error("socket hang up"));
-    expect(await countCoAttendance(session, "u1", null, NOW)).toBeNull();
-    expect(source("userToken", "t1")).toMatchObject({
-      coAttendanceObservedSince: null,
-      coAttendanceLastPassAt: null,
+  it("never counts a meeting accepted after its day was evaluated", async () => {
+    const before = meeting("ical:late-yes@google.com|", "2026-10-30T01:00:00.000Z", [
+      { ...me, responseStatus: "needsAction" },
+      person("ana@client.example"),
+    ]);
+    sources([before]);
+    await pass();
+    expect(counters()).toEqual({});
+    // Accepted later: a listing that still returns it does not reopen 10-30.
+    const accepted = { ...before, attendees: [me, person("ana@client.example")] };
+    sources([accepted]);
+    await pass(at("2026-11-02T07:00:00.000Z"));
+    expect(counters()).toEqual({});
+  });
+
+  it("does not evaluate again a one-slice day that already has a marker (a pass that died)", async () => {
+    seed({
+      coAttendanceMeeting: [
+        {
+          id: "m1",
+          userId: "u1",
+          provider: "GOOGLE",
+          eventKey: eventKeyOf("ical:done@google.com|"),
+          endedAt: day("2026-10-30"),
+        },
+      ],
     });
+    sources([standup, allHands]);
+    await pass();
+    // standup (10-30) is skipped with its day; allHands (10-28) is counted.
+    expect(counters()["bo@client.example"]).toBeUndefined();
+    expect(counters()["cy@vendor.example"]?.meetingCount).toBe(1);
+  });
+
+  const splitDay = () =>
+    Array.from({ length: 26 }, (_, i) =>
+      meeting(`ical:split${i}@google.com|`, "2026-10-25T01:00:00.000Z", [
+        me,
+        person(`p${i}@x.example`),
+      ]),
+    ).sort((a, b) => (eventKeyOf(a.identity) < eventKeyOf(b.identity) ? -1 : 1));
+  const marker = (m: ProviderMeeting, i: number) => ({
+    id: `mk${i}`,
+    userId: "u1",
+    provider: "GOOGLE",
+    eventKey: eventKeyOf(m.identity),
+    endedAt: day("2026-10-25"),
+  });
+
+  it("resumes a split day after its first slice: the other slice is counted, once", async () => {
+    const meetings = splitDay();
+    seed({ coAttendanceMeeting: meetings.slice(0, 13).map(marker) });
+    sources(meetings);
+    expect(await pass()).toMatchObject({ meetings: 13 });
+    const counted = Object.keys(counters()).sort();
+    expect(counted).toEqual(
+      meetings
+        .slice(13)
+        .map((m) => m.attendees[1]?.email)
+        .sort(),
+    );
+    expect(user()?.coAttendanceCountedThrough).toEqual(day("2026-10-31"));
+  });
+
+  it("a split day with any marker still counts every unmarked meeting (probe B: 26, one marked)", async () => {
+    const meetings = splitDay();
+    seed({ coAttendanceMeeting: [marker(meetings[7] as ProviderMeeting, 7)] });
+    sources(meetings);
+    expect(await pass()).toMatchObject({ meetings: 25 });
+    expect(Object.keys(counters())).toHaveLength(25);
+  });
+
+  it("stops when another pass moved the watermark first: no advance, no prune", async () => {
+    db = createFakeDb(
+      {
+        user: [{ id: "u1", email: "me@example.com" }],
+        userToken: [{ id: "t1", userId: "u1", provider: "google", accessToken: "x" }],
+        coAttendanceMeeting: [
+          {
+            id: "old",
+            userId: "u1",
+            provider: "GOOGLE",
+            eventKey: "a".repeat(64),
+            endedAt: day("2026-09-01"),
+          },
+        ],
+      },
+      {
+        beforeUpdateMany: (model) => {
+          const row = model === "user" ? (db.tables.user?.[0] as Record<string, unknown>) : null;
+          if (row && row.coAttendanceCountedThrough == null) {
+            row.coAttendanceCountedThrough = day("2026-10-31");
+          }
+        },
+      },
+    );
+    h.db = db;
+    sources([standup]);
+    expect(await pass()).toBeNull();
+    expect(tables().coAttendanceMeeting?.map((r) => r.id)).toContain("old");
+  });
+
+  it("a cut listing advances neither the watermark nor observed-since past its last full day", async () => {
+    const p = googleSession([allHands], at("2026-10-20T05:00:00.000Z"));
+    const l = googleSession([standup]);
+    h.connectPrimaryCalendar.mockResolvedValue(p.session);
+    h.connectLinkedCalendars.mockResolvedValue([{ session: l.session, id: "lc1", email: "w" }]);
+    await pass();
+    // The primary stopped inside 10-20, so 10-19 is the last day both listed in full.
+    expect(user()?.coAttendanceCountedThrough).toEqual(day("2026-10-19"));
+    expect(counters()).toEqual({});
+    expect(token()?.coAttendanceObservedSince).toEqual(day("2026-10-02"));
+    // The pass time is the reader's freshness guard: never written for a cut listing.
+    expect(token()?.coAttendanceLastPassAt).toBeNull();
+    expect(linkedRow("lc1")?.coAttendanceLastPassAt).toEqual(NOW);
+
+    // A cut inside the first day covers nothing: no watermark, no observed-since.
+    seed();
+    const cutEarly = googleSession([allHands], at("2026-10-02T03:00:00.000Z"));
+    h.connectPrimaryCalendar.mockResolvedValue(cutEarly.session);
+    h.connectLinkedCalendars.mockResolvedValue([]);
+    await pass();
+    expect(user()?.coAttendanceCountedThrough).toBeNull();
+    expect(token()?.coAttendanceObservedSince).toBeNull();
+    expect(token()?.coAttendanceLastPassAt).toBeNull();
+  });
+
+  it("with one source failing, only the other's pass time is written, and nothing advances", async () => {
+    const { primary, linked } = sources([standup], [allHands]);
+    primary.listMeetingAttendees.mockRejectedValueOnce(new Error("socket hang up"));
+    expect(await pass()).toBeNull();
+    expect(token()?.coAttendanceLastPassAt).toBeNull();
+    expect(linkedRow("lc1")?.coAttendanceLastPassAt).toEqual(NOW);
+    expect(user()?.coAttendanceCountedThrough).toBeNull();
+    expect(token()?.coAttendanceObservedSince).toBeNull();
+    expect(linkedRow("lc1")?.coAttendanceObservedSince).toBeNull();
+    expect(counters()).toEqual({});
+    expect(linked.listMeetingAttendees).toHaveBeenCalledTimes(1);
+  });
+
+  it("a failed source holds the watermark for every source, and backs off", async () => {
+    const { primary, linked } = sources([standup], [allHands]);
+    linked.listMeetingAttendees.mockRejectedValueOnce(new Error("socket hang up"));
+    expect(await pass()).toBeNull();
+    expect(user()?.coAttendanceCountedThrough).toBeNull();
+    expect(counters()).toEqual({});
+    expect(token()?.coAttendanceObservedSince).toBeNull();
+    expect(linkedRow("lc1")?.coAttendanceLastPassAt).toBeNull();
     const soon = new Date(NOW.getTime() + COATTENDANCE_FAILURE_BACKOFF_MS - 1);
-    expect(await countCoAttendance(session, "u1", null, soon)).toBeNull();
-    expect(listMeetingAttendees).toHaveBeenCalledTimes(1);
+    expect(await pass(soon)).toBeNull();
+    expect(primary.listMeetingAttendees).toHaveBeenCalledTimes(1);
     const after = new Date(NOW.getTime() + COATTENDANCE_FAILURE_BACKOFF_MS);
-    expect(await countCoAttendance(session, "u1", null, after)).toMatchObject({ meetings: 1 });
-    expect(source("userToken", "t1")).toMatchObject({ coAttendanceLastPassAt: after });
-    expect(COATTENDANCE_FAILURE_BACKOFF_MS).toBeLessThan(COATTENDANCE_PASS_INTERVAL_MS);
+    expect(await pass(after)).toMatchObject({ meetings: 2 });
+    expect(user()?.coAttendanceCountedThrough).toEqual(day("2026-10-31"));
   });
 
-  it("re-linking or reconnecting a Google calendar clears both markers", () => {
+  it("restarts coverage after a gap: watermark to the window, every observed-since to its start", async () => {
+    seed({
+      user: [{ id: "u1", email: "me@example.com", coAttendanceCountedThrough: day("2026-09-20") }],
+      userToken: [
+        {
+          id: "t1",
+          userId: "u1",
+          provider: "google",
+          accessToken: "x",
+          coAttendanceObservedSince: day("2026-08-01"),
+          coAttendanceLastPassAt: day("2026-09-21"),
+        },
+      ],
+      linkedCalendarAccount: [
+        {
+          id: "lc1",
+          userId: "u1",
+          email: "w@x.example",
+          coAttendanceObservedSince: day("2026-08-01"),
+        },
+      ],
+    });
+    sources([standup], [allHands]);
+    await pass();
+    expect(user()?.coAttendanceCountedThrough).toEqual(day("2026-10-31"));
+    expect(token()?.coAttendanceObservedSince).toEqual(day("2026-10-02"));
+    expect(linkedRow("lc1")?.coAttendanceObservedSince).toEqual(day("2026-10-02"));
+  });
+
+  it("a gap is recorded even when the pass then fails, so no stale observed-since remains", async () => {
+    seed({
+      user: [{ id: "u1", email: "me@example.com", coAttendanceCountedThrough: day("2026-09-20") }],
+      userToken: [
+        {
+          id: "t1",
+          userId: "u1",
+          provider: "google",
+          accessToken: "x",
+          coAttendanceObservedSince: day("2026-08-01"),
+        },
+      ],
+    });
+    const { primary } = sources([standup]);
+    primary.listMeetingAttendees.mockRejectedValueOnce(new Error("socket hang up"));
+    await pass();
+    expect(user()?.coAttendanceCountedThrough).toEqual(day("2026-10-01"));
+    expect(token()?.coAttendanceObservedSince).toBeNull();
+  });
+
+  it("a newly linked calendar is observed from the day after the watermark", async () => {
+    seed({
+      user: [{ id: "u1", email: "me@example.com", coAttendanceCountedThrough: day("2026-10-30") }],
+      userToken: [
+        {
+          id: "t1",
+          userId: "u1",
+          provider: "google",
+          accessToken: "x",
+          coAttendanceObservedSince: day("2026-10-02"),
+          coAttendanceLastPassAt: at("2026-10-31T01:00:00.000Z"),
+        },
+      ],
+      linkedCalendarAccount: [{ id: "lc1", userId: "u1", email: "w@x.example" }],
+    });
+    sources([], []);
+    await pass();
+    expect(user()?.coAttendanceCountedThrough).toEqual(day("2026-10-31"));
+    expect(linkedRow("lc1")?.coAttendanceObservedSince).toEqual(day("2026-10-31"));
+    expect(token()?.coAttendanceObservedSince).toEqual(day("2026-10-02"));
+  });
+
+  it("a source left out of an advance (re-link pending, linked sync off) loses observed-since", async () => {
+    seed({
+      linkedCalendarAccount: [
+        {
+          id: "lc1",
+          userId: "u1",
+          email: "w@x.example",
+          needsReconnect: true,
+          coAttendanceObservedSince: day("2026-10-02"),
+        },
+      ],
+    });
+    sources([standup]);
+    await pass();
+    expect(linkedRow("lc1")?.coAttendanceObservedSince).toBeNull();
+    expect(token()?.coAttendanceObservedSince).toEqual(day("2026-10-02"));
+  });
+
+  it("re-linking or reconnecting a Google calendar clears both source markers", () => {
     const text = readFileSync(join(srcDir, "routes/google-link-finish.ts"), "utf8");
     for (const call of ["prisma.linkedCalendarAccount.upsert(", "prisma.userToken.upsert("]) {
       const from = text.indexOf(call);
@@ -375,85 +626,12 @@ describe("per-source markers: observed since, last pass", () => {
   });
 });
 
-describe("one UTC day at a time", () => {
-  it("counts a meeting that ended today only after the day is over", async () => {
-    const today = meeting("ical:today@google.com|", "2026-11-01T08:00:00.000Z", [
-      me,
-      person("ana@client.example"),
-    ]);
-    const { session } = googleSession([today]);
-    expect(await countCoAttendance(session, "u1", null, NOW)).toMatchObject({ meetings: 0 });
-    expect(tables().coAttendanceMeeting ?? []).toEqual([]);
-    const tomorrow = at("2026-11-02T00:30:00.000Z");
-    expect(await countCoAttendance(session, "u1", null, tomorrow)).toMatchObject({ meetings: 1 });
-    expect(counters()["ana@client.example"]?.lastMetAt).toEqual(at("2026-11-01T00:00:00.000Z"));
-  });
-
-  it("keeps a meeting's marker for as long as any pass can still list it", async () => {
-    // A meeting ending just after midnight, passes every 6 hours until it leaves
-    // the 30-day window: counted once, at its first pass after its day ended, and
-    // its marker never pruned while the listing still returns it.
-    const end = at("2026-10-01T00:00:01.000Z");
-    const late = {
-      ...meeting("ical:edge@google.com|", "2026-09-30T23:00:01.000Z", [
-        me,
-        person("ana@x.example"),
-      ]),
-      endTime: end,
-    };
-    for (
-      let t = end.getTime();
-      t < end.getTime() + 32 * DAY_MS;
-      t += COATTENDANCE_PASS_INTERVAL_MS
-    ) {
-      const now = new Date(t);
-      const listed = end.getTime() > t - COATTENDANCE_LOOKBACK_DAYS * DAY_MS;
-      await countCoAttendance(googleSession(listed ? [late] : []).session, "u1", null, now);
-      const counted = (counters()["ana@x.example"]?.meetingCount as number | undefined) ?? 0;
-      expect(counted, now.toISOString()).toBe(
-        t >= at("2026-10-02T00:00:00.000Z").getTime() ? 1 : 0,
-      );
-      if (listed && counted === 1) {
-        expect(tables().coAttendanceMeeting ?? [], now.toISOString()).toHaveLength(1);
-      }
-    }
-  });
-});
-
 describe("idempotency", () => {
-  it("never counts a meeting twice across repeated passes", async () => {
-    const { session } = googleSession([standup, allHands]);
-    await countCoAttendance(session, "u1", null, NOW);
-    const first = counters();
-    for (const hours of [6, 12, 18]) {
-      const later = new Date(NOW.getTime() + hours * 60 * 60 * 1000);
-      expect(await countCoAttendance(session, "u1", null, later)).toMatchObject({ meetings: 0 });
-    }
-    expect(counters()).toEqual(first);
-    expect(tables().coAttendanceMeeting).toHaveLength(2);
-  });
-
   it("counts a meeting once when it sits in the primary and a linked calendar", async () => {
-    const { session } = googleSession([standup]);
-    await countCoAttendance(session, "u1", null, NOW);
-    await countCoAttendance(session, "u1", "lc1", NOW);
+    sources([standup], [standup]);
+    await pass();
     expect(counters()["ana@client.example"]?.meetingCount).toBe(1);
-  });
-
-  it("counts a meeting newly ended since the last pass, and moves first/last met", async () => {
-    await countCoAttendance(googleSession([standup]).session, "u1", null, NOW);
-    const later = new Date(NOW.getTime() + COATTENDANCE_PASS_INTERVAL_MS);
-    const earlier = meeting("ical:kickoff@google.com|", "2026-10-10T01:00:00.000Z", [
-      me,
-      person("ana@client.example"),
-    ]);
-    await countCoAttendance(googleSession([earlier, standup]).session, "u1", null, later);
-    expect(counters()["ana@client.example"]).toEqual({
-      meetingCount: 2,
-      smallMeetingCount: 2,
-      firstMetAt: at("2026-10-10T00:00:00.000Z"),
-      lastMetAt: at("2026-10-30T00:00:00.000Z"),
-    });
+    expect(tables().coAttendanceMeeting).toHaveLength(1);
   });
 
   it("a second claim of the same meeting (a concurrent pass) changes nothing", async () => {
@@ -469,12 +647,7 @@ describe("idempotency", () => {
     expect(counters()["ana@client.example"]?.meetingCount).toBe(1);
   });
 
-  it("forgets markers of meetings that ended before the window, never one a pass can list", async () => {
-    // A pass lists meetings that end after now − 30 days; a marker keeps only the
-    // day the meeting ended, so it is kept one day longer than that.
-    const windowStart = NOW.getTime() - COATTENDANCE_LOOKBACK_DAYS * DAY_MS;
-    const stillListed = new Date(windowStart + 1);
-    const dayOf = (t: number) => new Date(Math.floor(t / DAY_MS) * DAY_MS);
+  it("forgets markers older than the window, never one of a day it can still evaluate", async () => {
     seed({
       coAttendanceMeeting: [
         {
@@ -482,30 +655,38 @@ describe("idempotency", () => {
           userId: "u1",
           provider: "GOOGLE",
           eventKey: "a".repeat(64),
-          endedAt: dayOf(windowStart - DAY_MS),
+          endedAt: day("2026-09-30"),
         },
         {
           id: "m-edge",
           userId: "u1",
           provider: "GOOGLE",
           eventKey: "b".repeat(64),
-          endedAt: dayOf(stillListed.getTime()),
+          endedAt: day("2026-10-01"),
+        },
+        {
+          id: "m-in",
+          userId: "u1",
+          provider: "GOOGLE",
+          eventKey: "c".repeat(64),
+          endedAt: day("2026-10-02"),
         },
         {
           id: "m-other",
           userId: "u2",
           provider: "GOOGLE",
-          eventKey: "c".repeat(64),
-          endedAt: dayOf(windowStart - DAY_MS),
+          eventKey: "d".repeat(64),
+          endedAt: day("2026-09-30"),
         },
       ],
     });
-    await countCoAttendance(googleSession([]).session, "u1", null, NOW);
+    sources([]);
+    await pass();
     expect(
       tables()
         .coAttendanceMeeting?.map((r) => r.id)
         .sort(),
-    ).toEqual(["m-edge", "m-other"]);
+    ).toEqual(["m-edge", "m-in", "m-other"]);
   });
 });
 
@@ -518,21 +699,33 @@ describe("batches", () => {
       contacts: Array.from({ length: contactsEach }, (_, c) => `${prefix}${i}-${c}@x.example`),
       small: contactsEach <= 4,
     }));
-
-  const onDay = (meetings: CountedMeeting[], day: string): CountedMeeting[] =>
+  const onDay = (meetings: CountedMeeting[], d: string): CountedMeeting[] =>
     meetings.map((m) => ({
       ...m,
-      startTime: at(`${day}T01:00:00.000Z`),
-      endTime: at(`${day}T02:00:00.000Z`),
+      startTime: at(`${d}T01:00:00.000Z`),
+      endTime: at(`${d}T02:00:00.000Z`),
     }));
 
   it("writes each UTC end-day in its own transaction, the whole day together", () => {
     const day1 = onDay(many(3, 2, "a"), "2026-10-20");
     const day2 = onDay(many(2, 2, "b"), "2026-10-21");
-    const batches = planBatches([...day2, day1[0], ...day1.slice(1)].reverse());
+    const batches = planBatches([...day2, ...day1].reverse());
     expect(batches.map((b) => b.length)).toEqual([3, 2]);
-    expect(batches[0]?.every((m) => m.endTime.getTime() === day1[0]?.endTime.getTime())).toBe(true);
-    expect(batches[1]?.every((m) => m.endTime.getTime() === day2[0]?.endTime.getTime())).toBe(true);
+  });
+
+  it("groups a meeting by the day it ended, not the day it started", () => {
+    const spanning = {
+      ...many(1, 1, "s")[0],
+      startTime: at("2026-10-20T23:30:00.000Z"),
+      endTime: at("2026-10-21T00:30:00.000Z"),
+    } as CountedMeeting;
+    const next = onDay(many(1, 1, "n"), "2026-10-21");
+    const before = onDay(many(1, 1, "b"), "2026-10-20");
+    const batches = planBatches([spanning, ...next, ...before]);
+    expect(batches.map((b) => b.map((m) => m.identity).sort())).toEqual([
+      [before[0]?.identity],
+      [next[0]?.identity, spanning.identity].sort(),
+    ]);
   });
 
   it("splits only a day over a cap, in marker-key order, and never mixes days", () => {
@@ -540,27 +733,27 @@ describe("batches", () => {
     const small = onDay(many(1, 2, "d"), "2026-10-20");
     const next = onDay(many(1, 2, "e"), "2026-10-21");
     const batches = planBatches([...next, ...big, ...small]);
-    expect(batches.map((b) => b.length)).toEqual([25, 3, 1]);
+    // 28 meetings on 10-20: two balanced slices of 14, never 25 + 3.
+    expect(batches.map((b) => b.length)).toEqual([14, 14, 1]);
     const day20 = batches
       .slice(0, 2)
       .flat()
       .map((m) => eventKeyOf(m.identity));
     expect(day20).toEqual([...day20].sort());
     expect(batches[2]?.[0]?.identity).toBe(next[0]?.identity);
-  });
-
-  it("orders each batch by marker key, at most 25 meetings", () => {
-    const batches = planBatches(many(60, 2, "m"));
-    expect(batches.map((b) => b.length)).toEqual([25, 25, 10]);
-    const keys = batches.flat().map((m) => eventKeyOf(m.identity));
-    expect(keys).toEqual([...keys].sort());
     expect(MEETINGS_PER_TRANSACTION).toBe(25);
   });
 
-  it("closes a batch before it would pass 200 distinct contacts", () => {
+  it("balances slices, so a lone meeting is never a transaction of its own on a split day", () => {
+    expect(planBatches(many(26, 2, "f")).map((b) => b.length)).toEqual([13, 13]);
+    expect(planBatches(many(51, 2, "g")).map((b) => b.length)).toEqual([17, 17, 17]);
+  });
+
+  it("balances by contacts too: no slice past 200 distinct contacts", () => {
     expect(CONTACTS_PER_TRANSACTION).toBe(200);
-    const batches = planBatches(many(10, 50, "w"));
-    expect(batches.map((b) => b.length)).toEqual([4, 4, 2]);
+    // 9 meetings of 50 people each, 450 contacts: three slices of 3, not 4 + 4 + 1.
+    const batches = planBatches(many(9, 50, "w"));
+    expect(batches.map((b) => b.length)).toEqual([3, 3, 3]);
     for (const batch of batches) {
       expect(new Set(batch.flatMap((m) => m.contacts)).size).toBeLessThanOrEqual(200);
     }
@@ -568,13 +761,15 @@ describe("batches", () => {
 });
 
 describe("no attendee data outside the counters", () => {
-  it("writes only counters, markers and the source's pass markers; nothing finer than a day", async () => {
-    const { session } = googleSession([standup, allHands]);
-    await countCoAttendance(session, "u1", null, NOW);
+  it("writes counters, markers and coverage only; nothing finer than a day but the pass time", async () => {
+    sources([standup, allHands], []);
+    await pass();
 
     expect(Object.keys(db.writes).sort()).toEqual([
       "coAttendanceMeeting",
       "contactCoAttendance",
+      "linkedCalendarAccount",
+      "user",
       "userToken",
     ]);
     const markers = tables().coAttendanceMeeting ?? [];
@@ -585,14 +780,7 @@ describe("no attendee data outside the counters", () => {
       expect(marker.eventKey).toMatch(/^[0-9a-f]{64}$/);
       expect(isMidnight(marker.endedAt)).toBe(true);
     }
-    expect(markers.map((r) => r.eventKey).sort()).toEqual(
-      [eventKeyOf(standup.identity), eventKeyOf(allHands.identity)].sort(),
-    );
-    const markerText = JSON.stringify(db.writes.coAttendanceMeeting);
-    expect(markerText).not.toContain("@");
-    expect(markerText).not.toContain("standup");
-
-    // A counter row is one address, numbers and two days: no other attendee, no time.
+    expect(JSON.stringify(db.writes.coAttendanceMeeting)).not.toContain("@");
     for (const row of tables().contactCoAttendance ?? []) {
       expect(Object.keys(row).sort()).toEqual([
         "contactEmail",
@@ -605,28 +793,22 @@ describe("no attendee data outside the counters", () => {
       ]);
       expect(isMidnight(row.firstMetAt) && isMidnight(row.lastMetAt)).toBe(true);
     }
-    // What a write would store (create, update, data) names at most one address;
-    // only a filter (`where`) may name several, and a filter stores nothing.
     for (const write of db.writes.contactCoAttendance ?? []) {
       const stored = JSON.stringify([write.data, write.update]);
-      const mentioned = ATTENDEE_EMAILS.filter((e) => stored.includes(e));
-      expect(mentioned.length).toBeLessThanOrEqual(1);
+      expect(ATTENDEE_EMAILS.filter((e) => stored.includes(e)).length).toBeLessThanOrEqual(1);
       if (write.op === "update") expect(stored).not.toContain("@");
     }
-    for (const write of db.writes.userToken ?? []) {
-      expect(Object.keys(write.data ?? {}).sort()).toEqual([
-        "coAttendanceLastPassAt",
-        "coAttendanceObservedSince",
-      ]);
+    for (const write of db.writes.user ?? []) {
+      expect(Object.keys(write.data ?? {})).toEqual(["coAttendanceCountedThrough"]);
     }
+    expect(isMidnight(user()?.coAttendanceCountedThrough)).toBe(true);
   });
 
   it("puts no attendee data in the synced rows or in any log line", async () => {
-    const { session } = googleSession([standup, allHands]);
-    await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
-    await countCoAttendance(session, "u1", null, NOW);
+    const { primary } = sources([standup, allHands]);
+    await syncPrimaryCalendarWindow(primary.session, "u1", ZONE, NOW);
+    await pass();
     expect(counters()["ana@client.example"]?.meetingCount).toBe(2);
-
     const rowText = JSON.stringify(db.writes.calendarEvent);
     for (const email of [...ATTENDEE_EMAILS, "Ana@Client.Example"]) {
       expect(rowText).not.toContain(email);
@@ -637,95 +819,72 @@ describe("no attendee data outside the counters", () => {
     }
   });
 
-  it("a failure never throws and never logs what the error carried", async () => {
-    const { session, listMeetingAttendees } = googleSession([standup]);
-    listMeetingAttendees.mockRejectedValue(
+  it("a failure never throws, never logs what it carried, and is reported once until a pass succeeds", async () => {
+    const { primary } = sources([standup]);
+    primary.listMeetingAttendees.mockRejectedValue(
       Object.assign(new Error("Invalid upsert: contactEmail ana@client.example"), {
         code: "P2009",
       }),
     );
-    expect(await countCoAttendance(session, "u1", null, NOW)).toBeNull();
+    expect(await pass()).toBeNull();
+    expect(await pass(new Date(NOW.getTime() + COATTENDANCE_FAILURE_BACKOFF_MS))).toBeNull();
     expect(h.captureError).toHaveBeenCalledTimes(1);
     expect(h.captureError.mock.calls[0]?.[1]).toMatchObject({
       tags: { scope: "calendar.coattendance" },
     });
     expect(allLoggedText()).not.toContain("ana@client.example");
     expect(allLoggedText()).toContain("P2009");
+
+    primary.listMeetingAttendees.mockResolvedValue({
+      meetings: [],
+      truncated: false,
+      lastStart: null,
+    });
+    expect(
+      await pass(new Date(NOW.getTime() + 2 * COATTENDANCE_FAILURE_BACKOFF_MS)),
+    ).not.toBeNull();
+    primary.listMeetingAttendees.mockRejectedValue(new Error("again"));
+    await pass(at("2026-11-02T07:00:00.000Z"));
+    expect(h.captureError).toHaveBeenCalledTimes(2);
+  });
+
+  it("logs a listing that timed out, without data, and lets the next pass run", async () => {
+    const { primary } = sources([standup]);
+    primary.listMeetingAttendees.mockImplementationOnce(() => new Promise(() => {}));
+    expect(
+      await runCoAttendancePass("u1", { includeLinked: true }, NOW, { listTimeoutMs: 20 }),
+    ).toBeNull();
+    expect(allLoggedText()).toContain("TimeoutError");
+    const after = new Date(NOW.getTime() + COATTENDANCE_FAILURE_BACKOFF_MS);
+    expect(await pass(after)).toMatchObject({ meetings: 1 });
   });
 
   it("does not report a write the data-wipe fence refused: the wipe is expected", async () => {
-    const { session, listMeetingAttendees } = googleSession([standup]);
-    listMeetingAttendees.mockRejectedValue(new DataWipeFenceError());
-    expect(await countCoAttendance(session, "u1", null, NOW)).toBeNull();
+    const { primary } = sources([standup]);
+    primary.listMeetingAttendees.mockRejectedValue(new DataWipeFenceError());
+    expect(await pass()).toBeNull();
     expect(h.captureError).not.toHaveBeenCalled();
   });
 
-  it("a counter write that fails rolls its meeting's marker back, so the next pass retries", async () => {
-    const { session } = googleSession([standup]);
+  it("a counter write that fails rolls its day back and holds the watermark", async () => {
+    sources([standup]);
     const original = db.model("contactCoAttendance").upsert;
     db.model("contactCoAttendance").upsert = () =>
       Promise.reject(new Error("write failed for bo@client.example"));
-    await countCoAttendance(session, "u1", null, NOW);
+    await pass();
     expect(tables().coAttendanceMeeting ?? []).toEqual([]);
+    expect(user()?.coAttendanceCountedThrough).toBeNull();
     expect(allLoggedText()).not.toContain("bo@client.example");
 
     db.model("contactCoAttendance").upsert = original;
     _resetCoAttendancePassesForTests();
-    await countCoAttendance(session, "u1", null, NOW);
+    await pass();
     expect(counters()["bo@client.example"]?.meetingCount).toBe(1);
   });
 });
 
-describe("the scheduler's job", () => {
-  it("counts the primary and each due Google linked calendar, never another provider", async () => {
-    const primary = googleSession([standup]);
-    const linked = googleSession([standup]);
-    const outlook = googleSession([standup]);
-    h.connectPrimaryCalendar.mockResolvedValue(primary.session);
-    h.connectLinkedCalendars.mockResolvedValue([
-      { session: linked.session, id: "lc1", email: "me@work.example" },
-      { session: { ...outlook.session, provider: "OUTLOOK" }, id: "lc2", email: "o@x.example" },
-    ]);
-    await runCoAttendanceForUser("u1", { includeLinked: true }, NOW);
-    expect(primary.listMeetingAttendees).toHaveBeenCalledTimes(1);
-    expect(linked.listMeetingAttendees).toHaveBeenCalledTimes(1);
-    expect(outlook.listMeetingAttendees).not.toHaveBeenCalled();
-    expect(counters()["ana@client.example"]?.meetingCount).toBe(1);
-  });
-
-  it("connects nothing for a source whose interval has not passed", async () => {
-    h.connectPrimaryCalendar.mockResolvedValue(googleSession([standup]).session);
-    h.connectLinkedCalendars.mockResolvedValue([]);
-    await runCoAttendanceForUser("u1", { includeLinked: false }, NOW);
-    expect(h.connectPrimaryCalendar).toHaveBeenCalledTimes(1);
-    vi.clearAllMocks();
-    await runCoAttendanceForUser("u1", { includeLinked: false }, new Date(NOW.getTime() + 60_000));
-    expect(h.connectPrimaryCalendar).not.toHaveBeenCalled();
-    expect(h.connectLinkedCalendars).not.toHaveBeenCalled();
-  });
-
-  it("does not let a hung pass hold up the next source", async () => {
-    const hung = googleSession([standup]);
-    hung.listMeetingAttendees.mockImplementation(() => new Promise(() => {}));
-    const linked = googleSession([standup]);
-    h.connectPrimaryCalendar.mockResolvedValue(hung.session);
-    h.connectLinkedCalendars.mockResolvedValue([
-      { session: linked.session, id: "lc1", email: "me@work.example" },
-    ]);
-    await runCoAttendanceForUser("u1", { includeLinked: true }, NOW, { passTimeoutMs: 20 });
-    expect(linked.listMeetingAttendees).toHaveBeenCalledTimes(1);
-  });
-
+describe("the scheduler's queue", () => {
   it("runs queued users one at a time, each once while queued, and never throws", async () => {
-    let running = 0;
-    let peak = 0;
-    h.connectPrimaryCalendar.mockImplementation(async () => {
-      running += 1;
-      peak = Math.max(peak, running);
-      await new Promise((resolve) => setTimeout(resolve, 5));
-      running -= 1;
-      throw new Error("token refresh failed");
-    });
     seed({
       user: [
         { id: "u1", email: "me@example.com" },
@@ -736,6 +895,16 @@ describe("the scheduler's job", () => {
         { id: "t2", userId: "u2", provider: "google", accessToken: "y" },
       ],
     });
+    let running = 0;
+    let peak = 0;
+    h.connectPrimaryCalendar.mockImplementation(async () => {
+      running += 1;
+      peak = Math.max(peak, running);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      running -= 1;
+      throw new Error("token refresh failed");
+    });
+    h.connectLinkedCalendars.mockResolvedValue([]);
     enqueueCoAttendance("u1", { includeLinked: false });
     enqueueCoAttendance("u1", { includeLinked: false });
     enqueueCoAttendance("u2", { includeLinked: false });
@@ -746,7 +915,7 @@ describe("the scheduler's job", () => {
 });
 
 describe("wiring", () => {
-  it("the request-path syncs (POST /sync, login) and the linked row sync never list attendees", async () => {
+  it("the request-path syncs and the linked row sync never list attendees", async () => {
     const { session, listMeetingAttendees } = googleSession([standup]);
     expect(await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW)).toBe(1);
     await syncLinkedCalendarWindow(session, "u1", "lc1", ZONE, NOW);
@@ -756,7 +925,7 @@ describe("wiring", () => {
     expect(tables().contactCoAttendance ?? []).toEqual([]);
   });
 
-  it("only the scheduler queues the job, after the calendar step, without awaiting it", () => {
+  it("only the scheduler queues the pass, after the calendar step, without awaiting it", () => {
     const scheduler = readFileSync(join(srcDir, "automation-scheduler.ts"), "utf8");
     const enqueue = scheduler.indexOf("enqueueCoAttendance(config.userId");
     expect(enqueue).toBeGreaterThan(scheduler.indexOf("await syncLinkedCalendars(config.userId)"));
@@ -770,11 +939,11 @@ describe("wiring", () => {
       "automation-scheduler.ts",
       "pim/coattendance/coattendance-job.ts",
     ]);
-    expect(callersOf("runCoAttendanceForUser")).toEqual(["pim/coattendance/coattendance-job.ts"]);
-    expect(callersOf("countCoAttendance")).toEqual([
+    expect(callersOf("runCoAttendancePass")).toEqual([
       "pim/coattendance/coattendance-job.ts",
       "pim/coattendance/coattendance-sync.ts",
     ]);
+    expect(callersOf("countCoAttendance")).toEqual([]);
     expect(callersOf("syncLinkedCalendars")).toEqual([
       "automation-scheduler.ts",
       "pim/calendar-sync.ts",

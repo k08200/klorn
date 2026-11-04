@@ -89,6 +89,10 @@ export async function revokeUserAccess(tx: PurgeTx, userId: string): Promise<voi
       telegramChatId: null,
       telegramLinkCode: null,
       telegramLinkCodeExpiresAt: null,
+      // The co-attendance watermark goes with the counts and markers it describes
+      // (purgeUserData): left behind, a reconnect would start counting at the day
+      // after it and never recount the wiped days.
+      coAttendanceCountedThrough: null,
     },
   });
 }

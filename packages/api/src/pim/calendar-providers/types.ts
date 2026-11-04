@@ -161,6 +161,12 @@ export interface MeetingListing {
   readonly meetings: readonly ProviderMeeting[];
   /** More events than the listing's page cap: the latest ones were not read. */
   readonly truncated: boolean;
+  /**
+   * The start of the last event listed (events come in start order), never later
+   * than it really was; null when nothing was listed. When `truncated`, every
+   * event that ends before this instant's UTC day was listed.
+   */
+  readonly lastStart: Date | null;
 }
 
 export interface CalendarCreateInput {

@@ -203,6 +203,15 @@ describe("purgeUserData — what the account row and the cost ledger keep", () =
     });
   });
 
+  it("resets the co-attendance watermark, so a reconnect counts the whole window again", async () => {
+    // The counts and markers are deleted below; a watermark left behind would let
+    // the next pass start at the day after it and never recount the wiped days.
+    const { tx, updates } = makeTxSpy();
+    await revokeUserAccess(tx as never, "u1");
+    const userUpdate = updates.find((u) => u.model === "user");
+    expect(userUpdate?.arg.data).toMatchObject({ coAttendanceCountedThrough: null });
+  });
+
   it("keeps today's cost-ledger row, so a wipe cannot reset the daily spend cap", async () => {
     const { tx, scopes } = makeTxSpy();
     vi.useFakeTimers();

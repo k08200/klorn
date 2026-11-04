@@ -26,12 +26,14 @@
 -- who was in the meeting that ended at a given time (review of #1604).
 --
 -- UserToken and LinkedCalendarAccount gain two nullable columns for each Google
--- calendar source: coAttendanceObservedSince (the UTC day its counting window
--- first started, set once by the first successful pass) and
--- coAttendanceLastPassAt (its last successful pass, the persisted 6-hour
--- interval). Readers treat a missing ContactCoAttendance row as 0 only when every
--- Google calendar source of the user has coAttendanceObservedSince. Reconnecting
--- or re-linking a grant clears both (routes/google-link-finish.ts).
+-- calendar source: coAttendanceObservedSince (the first full UTC day the source
+-- was covered by an advance of the user's watermark) and coAttendanceLastPassAt
+-- (the last pass in which the source's own listing succeeded in full). The
+-- watermark itself, "User"."coAttendanceCountedThrough", has its own migration
+-- (20261103020000_user_coattendance_watermark), so the statement that locks
+-- "User" runs alone. Reconnecting or re-linking a grant clears both source
+-- columns (routes/google-link-finish.ts). docs/design/attention-engine-v3.md
+-- §3(2) is the reader's contract.
 --
 -- Row-level security on both, in the form every per-user table has: ENABLE, not
 -- FORCE, a tenant policy on app.current_user_id and a system policy on
@@ -43,12 +45,12 @@
 -- a data wipe (purge-user-data.ts).
 --
 -- Locks and cost: two new, empty tables. The foreign keys take SHARE ROW EXCLUSIVE
--- on "User" for the length of the transaction. The two ADD COLUMNs (nullable, no
--- default) are metadata-only but take ACCESS EXCLUSIVE on "UserToken" and
--- "LinkedCalendarAccount", which every sync reads; they run last so those locks
--- are held for the shortest time, and lock_timeout makes a deploy blocked by a
--- long transaction fail fast instead of queueing reads behind it. Nothing scans an
--- existing table.
+-- on "User" for the length of the transaction. The two ADD COLUMN statements
+-- (nullable, no default) are metadata-only but take ACCESS EXCLUSIVE on
+-- "UserToken" and "LinkedCalendarAccount", which every sync reads; they run last
+-- so those locks are held for the shortest time, and lock_timeout makes a deploy
+-- blocked by a long transaction fail fast instead of queueing reads behind it.
+-- Nothing scans an existing table.
 SET LOCAL lock_timeout = '5s';
 
 CREATE TABLE "ContactCoAttendance" (

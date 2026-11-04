@@ -197,6 +197,29 @@ describe("saveAttentionFacts", () => {
   });
 });
 
+describe("saveAttentionFacts: a no-LLM row never replaces LLM facts", () => {
+  it("writes a none row only when the row is new (update is empty)", async () => {
+    const upsert = vi.fn(async () => ({}));
+    await saveAttentionFacts(
+      {
+        userId: "u1",
+        source: "EMAIL",
+        sourceId: "e1",
+        extraction: extraction({ facts: null, source: "none", model: null, provider: null }),
+        relationship: null,
+        v2Tier: "QUEUE",
+        extractedAt: at,
+      },
+      { attentionFacts: { upsert } } as never,
+    );
+    const [arg] = upsert.mock.calls[0] as unknown as [
+      { create: Record<string, unknown>; update: Record<string, unknown> },
+    ];
+    expect(arg.create.factsSource).toBe("none");
+    expect(arg.update).toEqual({});
+  });
+});
+
 describe("parseRelationshipSnapshot", () => {
   it("round-trips a stored snapshot and rejects malformed JSON", () => {
     expect(parseRelationshipSnapshot(JSON.parse(JSON.stringify(rel)))).toEqual(rel);

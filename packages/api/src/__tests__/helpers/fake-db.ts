@@ -762,10 +762,20 @@ const REKEY_SQL =
 
 const normalisedSql = (text: string): string => text.replace(/\s+/g, " ").trim();
 
+/**
+ * The co-attendance store's per-user lock (pim/coattendance/coattendance-store.ts).
+ * The fake runs one operation at a time, so taking it is a no-op; its text is
+ * pinned the same way, so a changed statement fails here instead of passing.
+ */
+const COATTENDANCE_LOCK_SQL = "SELECT pg_advisory_xact_lock($1::int, hashtext($2))";
+
 /** Applies the re-key with the semantics the SQL has, one unique key checked first. */
 async function executeRaw(db: FakeDb, hooks: FakeDbHooks, statement: unknown): Promise<number> {
   hooks.beforeExecuteRaw?.();
   const given = statement as { text?: string; values?: unknown[] };
+  if (typeof given.text === "string" && normalisedSql(given.text) === COATTENDANCE_LOCK_SQL) {
+    return 1;
+  }
   if (
     typeof given.text !== "string" ||
     normalisedSql(given.text) !== REKEY_SQL ||
