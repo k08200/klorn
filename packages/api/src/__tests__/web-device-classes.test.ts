@@ -88,6 +88,51 @@ describe("mail split", () => {
   });
 });
 
+describe("the mail split fills the height", () => {
+  // <main> pads its end for the tab bar and the assistant button. The split's
+  // panes scroll themselves, so inside that padding they stopped short and
+  // left a strip of <main>'s background under the reader (Fold 717, iPad).
+  it("the shell publishes its bottom clearance as --main-clear and pads <main> with it", () => {
+    expect(SHELL).toMatch(/const DOCK_CLEARANCE =\s*"[^"]*\[--main-clear:[^"]*pb-\(--main-clear\)/);
+    expect(SHELL).toMatch(
+      /const DOCKLESS_CLEARANCE =\s*"[^"]*\[--main-clear:[^"]*pb-\(--main-clear\)/,
+    );
+  });
+
+  it("runs the split through that clearance and pads each pane's scroll end instead", () => {
+    expect(MAIL_LAYOUT).toContain('"mail-split flex min-h-0"');
+    expect(MAIL_LAYOUT).not.toMatch(/split \? "flex h-full/);
+    const split = block(CSS, ".mail-split {");
+    expect(split).toContain("height: calc(100% + var(--main-clear, 0px))");
+    expect(split).toContain("margin-bottom: calc(-1 * var(--main-clear, 0px))");
+    const panes = block(CSS, ".mail-split-list,\n.mail-split-reader {");
+    expect(panes).toContain("padding-bottom: var(--main-clear, 0px)");
+    expect(panes).toContain("scroll-padding-bottom: var(--main-clear, 0px)");
+  });
+});
+
+describe("lane segments never overlap", () => {
+  const SEGMENTED = read("components/ui/segmented-control.tsx");
+
+  it("a segment keeps its content width: auto basis, no shrink, even under the coarse 44px floor", () => {
+    // flex-1 (a 0% basis) plus pointer-coarse:min-w-11 replacing min-w-fit let
+    // a segment shrink below its label, so "Push 2" ran into "Meeting".
+    expect(SEGMENTED).toMatch(/pointer-coarse:min-w-11 grow shrink-0 basis-auto/);
+    expect(SEGMENTED).not.toMatch(/\bflex-1 shrink-0\b/);
+  });
+
+  it("a row wider than its column scrolls with snap and fades the edge that hides segments", () => {
+    expect(SEGMENTED).toMatch(
+      /segmented-track flex min-w-0 snap-x snap-proximity[^`]*overflow-x-auto/,
+    );
+    expect(SEGMENTED).toContain("snap-start");
+    expect(SEGMENTED).toContain("data-more-start=");
+    expect(SEGMENTED).toContain("data-more-end=");
+    expect(CSS).toMatch(/\.segmented-track\[data-more-end\]\s*{\s*mask-image:/);
+    expect(CSS).toMatch(/\.segmented-track\[data-more-start\]\s*{\s*mask-image:/);
+  });
+});
+
 describe("touch targets on the tablet widths", () => {
   // A tablet is a coarse pointer at desktop widths, so the desktop-sized
   // controls need their own 44px floor (WCAG 2.5.8), not just the phone ones.

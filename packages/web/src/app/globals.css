@@ -567,6 +567,25 @@ body {
   }
 }
 
+/* A segmented row wider than its column scrolls inside itself
+   (components/ui/segmented-control.tsx); the edge with segments past it
+   fades out, so a lane scrolled out of view still reads as there. */
+.segmented-track[data-more-start] {
+  mask-image: linear-gradient(to right, transparent, black 2rem);
+}
+.segmented-track[data-more-end] {
+  mask-image: linear-gradient(to left, transparent, black 2rem);
+}
+.segmented-track[data-more-start][data-more-end] {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 2rem,
+    black calc(100% - 2rem),
+    transparent
+  );
+}
+
 /* Mail split (app/email/layout.tsx). The list takes 45% of what the shell
    leaves, held between 280px and 440px; the reader takes the rest.
    On a device whose screen is two segments side by side (a book-style
@@ -577,6 +596,20 @@ body {
    only matter if a browser matches it without knowing the variables. */
 .mail-split-list {
   width: clamp(280px, 45%, 440px);
+}
+/* The split runs to the bottom edge of <main>, through the clearance <main>
+   pads its end with (app-shell.tsx, --main-clear: the tab bar and the
+   assistant button), and each pane pads its own scroll end by the same
+   amount instead. Inside the padding, the panes would stop short and leave
+   a strip of <main>'s background under the reader. */
+.mail-split {
+  height: calc(100% + var(--main-clear, 0px));
+  margin-bottom: calc(-1 * var(--main-clear, 0px));
+}
+.mail-split-list,
+.mail-split-reader {
+  padding-bottom: var(--main-clear, 0px);
+  scroll-padding-bottom: var(--main-clear, 0px);
 }
 @media (horizontal-viewport-segments: 2) {
   .mail-split-list {
