@@ -71,7 +71,7 @@ interface TimeContext {
 
 interface MailRowsProps {
   emails: readonly EmailListItem[];
-  /** The split view's 440px column: 14px subjects. */
+  /** The split view's list column (280–440px): 14px subjects. */
   compact?: boolean;
   view: ListView;
   accounts: readonly AccountOption[];

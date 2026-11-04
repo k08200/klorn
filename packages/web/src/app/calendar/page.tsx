@@ -461,7 +461,7 @@ function CalendarView() {
         }}
       />
       {voiceParsing && (
-        <output className="fixed bottom-24 left-1/2 z-40 -translate-x-1/2 rounded-full border border-line bg-surface-raised px-4 py-2 text-role-caption text-ink shadow-lg md:bottom-8">
+        <output className="fixed bottom-24 left-1/2 z-40 -translate-x-1/2 rounded-full border border-line bg-surface-raised px-4 py-2 text-role-caption text-ink shadow-lg rail:bottom-8">
           {t("calendar.voiceParsing")}
         </output>
       )}

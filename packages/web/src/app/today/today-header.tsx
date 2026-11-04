@@ -128,7 +128,8 @@ function DayStrip() {
 }
 
 /**
- * Phone only (the sidebar is hidden below md): the accounts that need
+ * Below 1024px (the sidebar, and its Accounts list, is hidden there — the
+ * rail and the tab bar carry no accounts): the accounts that need
  * attention, or the retry when the list failed. Nothing while loading or when
  * every account is synced — the sidebar states health on wider screens.
  */
@@ -136,7 +137,7 @@ function AccountAttention({ accounts }: { accounts: ConnectedAccountsState }) {
   const { t } = useT();
   if (accounts.failed) {
     return (
-      <div role="alert" className="flex items-center gap-2 md:hidden">
+      <div role="alert" className="flex items-center gap-2 lg:hidden">
         <p className="text-label font-normal text-state-danger-ink">{t("today.accounts.error")}</p>
         <Button variant="secondary" size="sm" onClick={accounts.retry}>
           {t("today.retry")}
@@ -149,7 +150,7 @@ function AccountAttention({ accounts }: { accounts: ConnectedAccountsState }) {
   return (
     <nav
       aria-label={t("today.accounts.label")}
-      className="relative -mx-4 flex items-center overflow-x-auto px-2 md:hidden"
+      className="relative -mx-4 flex items-center overflow-x-auto px-2 lg:hidden"
     >
       <ul className="flex items-center gap-1">
         {attention.map((account) => (

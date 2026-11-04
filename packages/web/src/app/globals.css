@@ -288,6 +288,14 @@
 }
 
 @theme {
+  /* Device classes (docs/design/design-language-v2.md, "Device classes").
+     Tailwind's defaults stay (md 768 / lg 1024 carry the page layouts); the
+     shell adds one step: from 600px (a Fold opened, a phone on its side, an
+     iPad in split view) the bottom tab bar gives way to the navigation rail.
+     `rail:` / `max-rail:` name that step. The full sidebar replaces the rail
+     at lg (1024). Same unit (rem) as the defaults so the variants sort. */
+  --breakpoint-rail: 37.5rem;
+
   /* Typography (2026-08-13): Geist, self-hosted via next/font (the CSS vars
      are stamped on <html> by layout.tsx). Hangul falls through to Pretendard,
      self-hosted from the `pretendard` package (layout.tsx) so Windows, which
@@ -556,6 +564,47 @@ body {
 .pr-safe {
   padding-right: env(safe-area-inset-right);
 }
+/* Width of the shell's navigation column: nothing on a phone (bottom tabs),
+   the rail from 600px, the sidebar from 1024px. The mail split reads it to
+   put its list/reader seam on a fold's hinge. Keep in step with
+   components/nav-rail.tsx (w-[72px]) and components/sidebar.tsx (w-[260px]). */
+:root {
+  --shell-nav-w: 0px;
+}
+@media (min-width: 37.5rem) {
+  :root {
+    --shell-nav-w: calc(72px + env(safe-area-inset-left));
+  }
+}
+@media (min-width: 64rem) {
+  :root {
+    --shell-nav-w: calc(260px + env(safe-area-inset-left));
+  }
+}
+
+/* Mail split (app/email/layout.tsx). The list takes 45% of what the shell
+   leaves, held between 280px and 440px; the reader takes the rest.
+   On a device whose screen is two segments side by side (a book-style
+   foldable, a dual-screen phone; the Viewport Segments API), the seam goes
+   on the hinge instead: the list ends where the left segment ends and the
+   reader starts where the right one begins, so no line of text crosses the
+   fold. Browsers without the API never match the query; the env() fallbacks
+   only matter if a browser matches it without knowing the variables. */
+.mail-split-list {
+  width: clamp(280px, 45%, 440px);
+}
+@media (horizontal-viewport-segments: 2) {
+  .mail-split-list {
+    width: max(240px, calc(env(viewport-segment-right 0 0, 50vw) - var(--shell-nav-w)));
+  }
+  .mail-split-reader {
+    padding-left: max(
+      0px,
+      calc(env(viewport-segment-left 1 0, 50vw) - env(viewport-segment-right 0 0, 50vw))
+    );
+  }
+}
+
 /* dvh = dynamic viewport height (iOS 15.4+, all evergreen browsers).
    We already gate the PWA on iOS 16.4+ for Web Push, so no fallback needed. */
 .h-dvh {

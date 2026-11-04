@@ -113,7 +113,9 @@ export default function NotificationBell({ userId }: { userId: string }) {
   });
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
-    const update = () => setIsMobile(window.innerWidth < 768);
+    // The bell lives in the rail (600px+) and the sidebar; below 600px is
+    // the full-width fallback (globals.css, --breakpoint-rail).
+    const update = () => setIsMobile(window.innerWidth < 600);
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
@@ -575,7 +577,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
         ref={bellRef}
         type="button"
         onClick={() => setOpen(!open)}
-        className={`focus-ring relative rounded-chip text-ink-mid hover:text-ink transition p-1 ${flash ? "animate-bounce" : ""}`}
+        className={`focus-ring relative inline-flex items-center justify-center rounded-chip text-ink-mid hover:text-ink transition p-1 pointer-coarse:size-11 ${flash ? "animate-bounce" : ""}`}
         aria-label={t("notif.title")}
       >
         <svg

@@ -83,9 +83,9 @@ function NavCountBadge({ count, active }: { count: number; active: boolean }) {
   );
 }
 
-// Desktop-only workspace nav. On mobile the bottom tab bar (+ account sheet)
-// is the whole navigation, so this sidebar renders `hidden md:block` and there
-// is no mobile drawer anymore. Labels resolve via t() inside the component.
+// The full workspace nav, from 1024px (`hidden lg:block`). From 600px the
+// navigation rail (nav-rail.tsx) stands in for it, and below 600px the bottom
+// tab bar (+ account sheet) is the whole navigation; there is no drawer. Labels resolve via t() inside the component.
 interface NavItem {
   href: string;
   labelKey: string;
@@ -178,14 +178,14 @@ export default function Sidebar() {
     : "";
 
   return (
-    <aside className="hidden md:block w-[260px] h-dvh shrink-0 sticky top-0">
-      <div className="relative flex h-full flex-col overflow-hidden border-r border-line/70 bg-surface-panel/55 backdrop-blur-xl pt-safe pb-safe">
+    <aside className="hidden lg:block w-[calc(260px+env(safe-area-inset-left))] h-dvh shrink-0 sticky top-0">
+      <div className="relative flex h-full flex-col overflow-hidden border-r border-line/70 bg-surface-panel/55 backdrop-blur-xl pt-safe pb-safe pl-safe">
         {/* Header */}
         <div className="relative flex items-center justify-between px-3 py-4">
           <Link
             href={unified ? TODAY_HOME : "/inbox"}
             aria-label={unified ? t("nav.v2.openToday") : t("nav.v2.openApprovals")}
-            className="flex items-center gap-2.5 rounded-chip px-1 py-1 text-role-label font-semibold text-ink transition hover:text-ink"
+            className="flex items-center gap-2.5 rounded-chip px-1 py-1 pointer-coarse:min-h-11 text-role-label font-semibold text-ink transition hover:text-ink"
           >
             <img src="/brand/mark.svg?v=matte2" alt="" className="h-8 w-8" />
             <span>
@@ -217,7 +217,7 @@ export default function Sidebar() {
                   // A section with links under it is highlighted, but the
                   // current page is the link below it, not the section.
                   aria-current={active && !item.children ? "page" : undefined}
-                  className={`focus-ring relative flex min-h-10 items-center gap-3 rounded-control px-3 py-2 text-label transition ${
+                  className={`focus-ring relative flex min-h-10 pointer-coarse:min-h-11 items-center gap-3 rounded-control px-3 py-2 text-label transition ${
                     active
                       ? "bg-state-info-bg font-medium text-accent-deeper shadow-[0_1px_2px_rgba(2,60,110,0.06)] ring-1 ring-inset ring-accent-dim dark:ring-state-info-line"
                       : "text-ink-mid hover:bg-surface-hover/70 hover:text-ink"
@@ -245,7 +245,7 @@ export default function Sidebar() {
                         <Link
                           href={child.href}
                           aria-current={current ? "page" : undefined}
-                          className={`focus-ring flex min-h-10 items-center rounded-control px-3 py-1.5 text-label transition-colors duration-120 ease-fluid ${
+                          className={`focus-ring flex min-h-10 pointer-coarse:min-h-11 items-center rounded-control px-3 py-1.5 text-label transition-colors duration-120 ease-fluid ${
                             current
                               ? "text-ink"
                               : "font-normal text-ink-mid hover:bg-surface-hover/70 hover:text-ink"
@@ -263,7 +263,7 @@ export default function Sidebar() {
               <Link
                 href="/admin"
                 aria-current={pathname.startsWith("/admin") ? "page" : undefined}
-                className={`focus-ring relative flex min-h-10 items-center gap-3 rounded-control px-3 py-2 text-label transition ${
+                className={`focus-ring relative flex min-h-10 pointer-coarse:min-h-11 items-center gap-3 rounded-control px-3 py-2 text-label transition ${
                   pathname.startsWith("/admin")
                     ? "bg-state-info-bg font-medium text-accent-deeper shadow-[0_1px_2px_rgba(2,60,110,0.06)] ring-1 ring-inset ring-accent-dim dark:ring-state-info-line"
                     : "text-ink-mid hover:bg-surface-hover/70 hover:text-ink"
