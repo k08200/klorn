@@ -208,7 +208,7 @@ export function AgentPanel({ config }: { config: AutomationConfig | null }) {
                     key={option.mode}
                     type="button"
                     onClick={() => toggleAgentMode(option.mode)}
-                    className={`ease-strong min-h-16 min-w-0 rounded-lg border px-3 py-2.5 text-sm transition duration-150 active:scale-[0.97] ${agentModeLightClasses(
+                    className={`ease-strong min-h-16 min-w-0 rounded-control border px-3 py-2.5 text-sm transition duration-150 active:scale-[0.97] ${agentModeLightClasses(
                       option.mode,
                       agentMode === option.mode,
                     )}`}
@@ -247,7 +247,7 @@ export function AgentPanel({ config }: { config: AutomationConfig | null }) {
                         key={tool}
                         type="button"
                         onClick={() => toggleAlwaysAllowedTool(tool)}
-                        className={`ease-strong flex min-h-11 w-full items-center justify-between rounded-lg border px-3 py-2 text-sm transition duration-150 active:scale-[0.97] ${
+                        className={`ease-strong flex min-h-11 w-full items-center justify-between rounded-control border px-3 py-2 text-sm transition duration-150 active:scale-[0.97] ${
                           enabled
                             ? "bg-state-info-bg border-state-info-line text-accent-deeper"
                             : "bg-surface-panel/70 border-line text-ink-mid hover:border-line-strong"
@@ -279,7 +279,7 @@ export function AgentPanel({ config }: { config: AutomationConfig | null }) {
                 id="agent-interval"
                 value={agentInterval}
                 onChange={(e) => updateAgentInterval(Number(e.target.value))}
-                className="min-h-11 rounded-lg border border-line bg-surface-raised px-4 py-2 text-sm transition focus:border-accent-muted focus:outline-none"
+                className="min-h-11 rounded-control border border-line bg-surface-raised px-4 py-2 text-sm transition focus:border-accent-muted focus:outline-none"
               >
                 <option value={3}>{t("settings.checkInterval.3min")}</option>
                 <option value={5}>{t("settings.checkInterval.5min")}</option>
@@ -294,7 +294,7 @@ export function AgentPanel({ config }: { config: AutomationConfig | null }) {
               <button
                 type="button"
                 onClick={() => updateAutoMarkRead(!autoMarkReadEnabled)}
-                className={`ease-strong flex min-h-11 w-full items-center justify-between rounded-lg border px-3 py-2 text-sm transition duration-150 active:scale-[0.97] ${
+                className={`ease-strong flex min-h-11 w-full items-center justify-between rounded-control border px-3 py-2 text-sm transition duration-150 active:scale-[0.97] ${
                   autoMarkReadEnabled
                     ? "bg-state-ok-bg border-state-ok-line text-state-ok-ink"
                     : "bg-surface-panel/70 border-line text-ink-mid hover:border-line-strong"
@@ -330,7 +330,7 @@ export function AgentPanel({ config }: { config: AutomationConfig | null }) {
                     toast(t("settings.toast.settingSaveFailed"), "error");
                   }
                 }}
-                className={`ease-strong flex min-h-11 w-full items-center justify-between rounded-lg border px-3 py-2 text-sm transition duration-150 active:scale-[0.97] ${
+                className={`ease-strong flex min-h-11 w-full items-center justify-between rounded-control border px-3 py-2 text-sm transition duration-150 active:scale-[0.97] ${
                   proactiveActionsEnabled
                     ? "bg-state-info-bg border-state-info-line text-accent-deeper"
                     : "bg-surface-panel/70 border-line text-ink-mid hover:border-line-strong"

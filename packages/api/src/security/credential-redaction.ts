@@ -42,7 +42,8 @@
  * not a form these providers hand out, so the trade is not worth making.
  */
 const CREDENTIAL_SHAPES: ReadonlyArray<readonly [RegExp, string]> = [
-  // OpenAI and OpenRouter, by their distinctive sub-prefixes. `*` and `.` are
+  // OpenAI-style keys, by their distinctive sub-prefixes (`sk-or-v1-` stays:
+  // an old proxy key pasted into a BYOK field must still redact). `*` and `.` are
   // in the tail class so the masked forms providers echo back
   // ("sk-proj-****abcd", "sk-...A1b2") match too. Four characters minimum, so
   // "sk-***" is not re-matched and the redactor stays idempotent.

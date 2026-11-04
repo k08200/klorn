@@ -14,7 +14,7 @@ export default function SkipLink() {
   return (
     <a
       href="#main"
-      className="sr-only rounded-md bg-accent-solid px-4 py-2 text-sm font-semibold text-accent-solid-ink focus-visible:not-sr-only focus-visible:fixed focus-visible:left-4 focus-visible:top-4 focus-visible:z-[200] focus-ring"
+      className="sr-only rounded-control bg-accent-solid px-4 py-2 text-sm font-semibold text-accent-solid-ink focus-visible:not-sr-only focus-visible:fixed focus-visible:left-4 focus-visible:top-4 focus-visible:z-[200] focus-ring"
     >
       {t("appShell.skipToContent")}
     </a>

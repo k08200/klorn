@@ -81,8 +81,8 @@ export default function BriefingCard() {
 
   if (loading) {
     return (
-      <section className="panel-elevated mb-6 rounded-2xl border border-line/70 bg-surface-panel p-4">
-        <div className="h-16 animate-pulse rounded-lg bg-surface-hover" />
+      <section className="panel-elevated mb-6 rounded-card border border-line/70 bg-surface-panel p-4">
+        <div className="h-16 animate-pulse rounded-control bg-surface-hover" />
       </section>
     );
   }
@@ -94,7 +94,7 @@ export default function BriefingCard() {
       : status.automation.briefingTime;
 
   return (
-    <section className="panel-elevated mb-6 rounded-2xl border border-line/70 bg-surface-panel p-4">
+    <section className="panel-elevated mb-6 rounded-card border border-line/70 bg-surface-panel p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -114,7 +114,7 @@ export default function BriefingCard() {
         {status.generated ? (
           <Link
             href="/briefing"
-            className="ease-strong shrink-0 rounded-lg border border-line bg-surface-panel/70 px-3 py-1.5 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
+            className="ease-strong shrink-0 rounded-control border border-line bg-surface-panel/70 px-3 py-1.5 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
           >
             Open
           </Link>
@@ -123,7 +123,7 @@ export default function BriefingCard() {
             type="button"
             onClick={generate}
             disabled={generating}
-            className="glow-primary ease-strong shrink-0 rounded-lg bg-accent-solid px-3 py-1.5 text-xs font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
+            className="glow-primary ease-strong shrink-0 rounded-control bg-accent-solid px-3 py-1.5 text-xs font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {generating ? "Creating..." : "Create now"}
           </button>

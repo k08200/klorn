@@ -220,6 +220,36 @@ func tokenSelfChecks(sourceDir: URL) -> [(String, Bool)] {
     results.append(("the guard reads the main window's files", scan.files >= 14))
     results.append(("the main window's files hold zero raw style literals", scan.offenses.isEmpty))
 
+    // v2 radius roles (2026-11-04): every corner names a role, app-wide.
+    let radius = RadiusGuard.offenders(sourceDir: sourceDir)
+    print("    radius guard: \(radius.files) files, \(radius.offenses.count) offenses")
+    for offense in radius.offenses { print("      \(offense)") }
+    results.append((
+        "the radius guard flags literals and rungs and passes the roles",
+        RadiusGuard.badSamples.allSatisfy { !RadiusGuard.offenses(in: $0).isEmpty }
+            && RadiusGuard.goodSamples.allSatisfy { RadiusGuard.offenses(in: $0).isEmpty }))
+    results.append(("the radius guard reads the whole app", radius.files >= 100))
+    results.append((
+        "no corner outside Theme.swift uses a raw number or a sm/md/lg/xl rung",
+        radius.offenses.isEmpty))
+    let solid = text("Shared/SurfaceState.swift")
+    let provider = text("Shared/ProviderButtons.swift")
+    let segmented = text("Shared/SegmentedBar.swift")
+    results.append((
+        "buttons, fields and segmented tracks wear the control role (10)",
+        Theme.Radius.control == 10
+            && solid.contains("in: RoundedRectangle(cornerRadius: Theme.Radius.control))")
+            && !provider.contains("Radius.chip")
+            && provider.components(separatedBy: "Theme.Radius.control").count - 1 == 5
+            && segmented.contains(
+                "selected ? Theme.surfaceHover : hovering ? Theme.surfaceRaised : .clear,\n"
+                    + "                in: RoundedRectangle(cornerRadius: Theme.Radius.control))")
+            && text("Mail/MailListMetrics.swift").contains("fieldRadius: Theme.Radius.control")
+            && text("Mail/ReadingPaneMetrics.swift").contains("editorRadius: Theme.Radius.control")
+            && text("Calendar/CalendarMetrics.swift").contains("scopeRadius: Theme.Radius.control")
+            && text("Shared/Controls.swift").contains(
+                ".background(Theme.surfaceHover, in: RoundedRectangle(cornerRadius: Theme.Radius.control))")))
+
     // One-badge rule.
     let row = text("Mail/WindowMailRow.swift")
     let today = text("Today/TodayScreen.swift")
@@ -491,4 +521,60 @@ private func threeLineRowChecks(inboxes: [InboxOption]) -> [(String, Bool)] {
                  WindowRowRules.a11yLabel($0, lead: "x").contains(L("mail.threadCount", 3))
              } ?? false),
     ]
+}
+
+/// App-wide radius rule (Design Language v2): a corner names a role —
+/// `Theme.Radius.chip / control / card / sheet` — or derives from one
+/// (`m.fieldRadius`). Raw numbers and the sm/md/lg/xl rungs stay in
+/// Theme.swift, the token file. Capsules are a shape, not a radius.
+enum RadiusGuard {
+    /// Files allowed raw radii: the token file itself, and the self-checks
+    /// that quote bad samples.
+    static func exempt(_ relativePath: String) -> Bool {
+        relativePath == "Theme.swift" || relativePath.hasPrefix("SelfCheck")
+    }
+
+    static let badSamples = [
+        "RoundedRectangle(cornerRadius: 8)", "RoundedRectangle(cornerRadius: 1.5)",
+        ".background(x, in: RoundedRectangle(cornerRadius: Theme.Radius.sm))",
+        "static let radius: CGFloat = Theme.Radius.md", "RoundedRectangle(cornerRadius:12)",
+    ]
+    static let goodSamples = [
+        "RoundedRectangle(cornerRadius: Theme.Radius.control)",
+        "RoundedRectangle(cornerRadius: m.fieldRadius).strokeBorder(Theme.line)",
+        "static let radius: CGFloat = Theme.Radius.chip", "Capsule().fill(Theme.accent)",
+        "// RoundedRectangle(cornerRadius: 8) in a comment",
+    ]
+
+    static func offenses(in rawLine: String) -> [String] {
+        let trimmed = rawLine.trimmingCharacters(in: .whitespaces)
+        if trimmed.hasPrefix("//") { return [] }
+        let line = rawLine.components(separatedBy: " //").first ?? rawLine
+        var found: [String] = []
+        if line.range(of: "cornerRadius:\\s*[0-9]", options: .regularExpression) != nil {
+            found.append("raw cornerRadius number")
+        }
+        if line.range(of: "Radius\\.(sm|md|lg|xl)\\b", options: .regularExpression) != nil {
+            found.append("radius rung instead of a role")
+        }
+        return found
+    }
+
+    static func offenders(sourceDir: URL) -> (files: Int, offenses: [String]) {
+        var files = 0
+        var offenses: [String] = []
+        for url in swiftSources(under: sourceDir) {
+            let path = String(url.path.dropFirst(sourceDir.path.count + 1))
+            guard !exempt(path), let text = try? String(contentsOf: url, encoding: .utf8) else {
+                continue
+            }
+            files += 1
+            for (index, line) in text.components(separatedBy: "\n").enumerated() {
+                for offense in Self.offenses(in: line) {
+                    offenses.append("\(path):\(index + 1): \(offense)")
+                }
+            }
+        }
+        return (files, offenses.sorted())
+    }
 }

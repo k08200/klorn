@@ -137,8 +137,9 @@ already use the role utilities.
 | motion | `Theme.Motion.state` / `.move` / `.sheet`, `Theme.Motion.fluid(_:)` |
 | type | `Theme.TypeSize.*` (pure) → `Theme.Typo.page` / `title` / `head` / `body` / `label` / `caption` / `mono` |
 
-Known gap: Mac buttons and fields still use `Radius.sm` (6). v2 says control
-= 10. They move with the Mac screen wave.
+Every Mac call site names a role (buttons and fields are `.control`); the
+rungs and raw numbers stay in Theme.swift, held there by the self-check's
+radius guard.
 
 ## Device classes
 

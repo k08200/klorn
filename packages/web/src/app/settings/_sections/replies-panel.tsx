@@ -137,7 +137,7 @@ export function RepliesPanel({ config }: { config: AutomationConfig | null }) {
             id="reply-tone"
             value={replyTone}
             onChange={(e) => updateReplyTone(e.target.value)}
-            className="min-h-11 w-full rounded-lg border border-line-strong bg-surface-panel px-3 py-2 text-sm text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+            className="min-h-11 w-full rounded-control border border-line-strong bg-surface-panel px-3 py-2 text-sm text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
           >
             {(replyTones.length > 0
               ? replyTones
@@ -180,7 +180,7 @@ export function RepliesPanel({ config }: { config: AutomationConfig | null }) {
                 type="button"
                 aria-pressed={attentionMode === mode}
                 onClick={() => updateAttentionMode(mode)}
-                className={`min-h-11 rounded-lg border px-3 py-2 text-left text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 ${
+                className={`min-h-11 rounded-control border px-3 py-2 text-left text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 ${
                   attentionMode === mode
                     ? "border-accent/60 bg-accent/5 text-ink"
                     : "border-line-strong bg-surface-panel text-ink-mid hover:border-line-strong hover:text-ink"
@@ -213,14 +213,14 @@ export function RepliesPanel({ config }: { config: AutomationConfig | null }) {
                 onChange={(e) => setGuidelineDraft(e.target.value)}
                 rows={5}
                 maxLength={2000}
-                className="w-full rounded-lg border border-line-strong bg-surface-panel px-3 py-2 text-sm text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+                className="w-full rounded-control border border-line-strong bg-surface-panel px-3 py-2 text-sm text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
               />
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={saveGuideline}
                   disabled={guidelineSaving}
-                  className="min-h-11 rounded-lg border border-accent/60 bg-accent/10 px-3 py-2 text-sm font-medium text-accent-deep hover:bg-accent/15 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+                  className="min-h-11 rounded-control border border-accent/60 bg-accent/10 px-3 py-2 text-sm font-medium text-accent-deep hover:bg-accent/15 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
                 >
                   {t("settings.action.saveGuideline")}
                 </button>
@@ -228,7 +228,7 @@ export function RepliesPanel({ config }: { config: AutomationConfig | null }) {
                   type="button"
                   onClick={requestGuidelineAdvice}
                   disabled={adviceLoading || !guidelineDraft.trim()}
-                  className="min-h-11 rounded-lg border border-line-strong bg-surface-panel px-3 py-2 text-sm text-ink-mid hover:text-ink disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+                  className="min-h-11 rounded-control border border-line-strong bg-surface-panel px-3 py-2 text-sm text-ink-mid hover:text-ink disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
                 >
                   {adviceLoading
                     ? t("settings.action.guidelineAdviceLoading")
@@ -236,7 +236,7 @@ export function RepliesPanel({ config }: { config: AutomationConfig | null }) {
                 </button>
               </div>
               {guidelineAdvice && (
-                <div className="rounded-lg border border-line bg-surface-raised p-3 text-sm text-ink-mid whitespace-pre-wrap">
+                <div className="rounded-control border border-line bg-surface-raised p-3 text-sm text-ink-mid whitespace-pre-wrap">
                   {guidelineAdvice}
                 </div>
               )}

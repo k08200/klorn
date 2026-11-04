@@ -54,7 +54,7 @@ function DayShapeCard({ structure }: { structure: BriefingStructure }) {
   const path = points.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
 
   return (
-    <section className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-5 md:p-6">
+    <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-5 md:p-6">
       <p className="text-xs text-ink-dim">{structure.dateLabel}</p>
       <h1 className="mt-1 text-xl font-semibold leading-snug text-ink md:text-2xl">
         {structure.headline}
@@ -208,7 +208,7 @@ function BriefingView() {
           type="button"
           onClick={regenerate}
           disabled={generating}
-          className="glow-primary ease-strong inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-accent-solid px-3.5 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 focus-ring min-h-11"
+          className="glow-primary ease-strong inline-flex h-9 shrink-0 items-center gap-1.5 rounded-control bg-accent-solid px-3.5 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 focus-ring min-h-11"
         >
           <svg
             aria-hidden="true"
@@ -237,7 +237,7 @@ function BriefingView() {
 
       {status && <BriefingDeliveryStatus status={status} />}
       {statusError && (
-        <div className="mb-4 rounded-lg border border-state-warn-line bg-state-warn-bg px-4 py-3 text-sm text-state-warn-ink">
+        <div className="mb-4 rounded-control border border-state-warn-line bg-state-warn-bg px-4 py-3 text-sm text-state-warn-ink">
           {statusError}
         </div>
       )}
@@ -247,7 +247,7 @@ function BriefingView() {
       {(error || briefingLoadError) && <ErrorAlert>{error ?? briefingLoadError}</ErrorAlert>}
 
       {!loading && !error && !briefingLoadError && !content && (
-        <div className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-6 text-center">
+        <div className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-6 text-center">
           <p className="mb-3 text-sm text-ink-mid">{t("briefingPage.empty.title")}</p>
           <p className="mx-auto mb-4 max-w-md text-xs leading-5 text-ink-mid">
             {t("briefing.learningMode")}
@@ -257,7 +257,7 @@ function BriefingView() {
             type="button"
             onClick={regenerate}
             disabled={generating}
-            className="glow-primary ease-strong inline-flex h-9 items-center rounded-lg bg-accent-solid px-3.5 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 focus-ring min-h-11"
+            className="glow-primary ease-strong inline-flex h-9 items-center rounded-control bg-accent-solid px-3.5 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 focus-ring min-h-11"
           >
             {generating ? t("briefing.generating") : t("briefing.generateNow")}
           </button>
@@ -269,14 +269,14 @@ function BriefingView() {
       {content && (
         <div className="space-y-4">
           {/* Core: the brief itself, on the single elevated panel. */}
-          <article className="panel-elevated relative overflow-hidden rounded-2xl border border-line/70 bg-surface-panel p-5 pl-6 md:p-6 md:pl-7">
+          <article className="panel-elevated relative overflow-hidden rounded-card border border-line/70 bg-surface-panel p-5 pl-6 md:p-6 md:pl-7">
             <div className="absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b from-accent-muted via-sky-200/40 to-transparent" />
             <Markdown content={content} />
           </article>
 
           {/* List: feedback rows inside one panel, not stacked cards. */}
           {noteId && topActions.length > 0 && (
-            <section className="panel-elevated overflow-hidden rounded-2xl border border-line/70 bg-surface-panel">
+            <section className="panel-elevated overflow-hidden rounded-card border border-line/70 bg-surface-panel">
               <div className="border-b border-line-soft px-4 py-3">
                 <h2 className="text-sm font-semibold text-ink">
                   {t("briefingPage.feedback.title")}
@@ -299,7 +299,7 @@ function BriefingView() {
                             onClick={() => submitFeedback(action, option.choice)}
                             aria-pressed={selected}
                             disabled={savingRank === action.rank}
-                            className={`ease-strong h-8 rounded-lg border px-2 text-xs transition duration-150 active:scale-[0.97] disabled:opacity-50 focus-ring min-h-9 min-w-9 ${
+                            className={`ease-strong h-8 rounded-control border px-2 text-xs transition duration-150 active:scale-[0.97] disabled:opacity-50 focus-ring min-h-9 min-w-9 ${
                               selected
                                 ? "border-accent-muted bg-accent/10 font-medium text-accent-deeper"
                                 : "border-line bg-surface-panel/70 text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] hover:bg-surface-panel hover:text-ink"
@@ -345,7 +345,7 @@ function BriefingDeliveryStatus({ status }: { status: BriefingStatus }) {
   const guidance = deliveryGuidance(status);
 
   return (
-    <section className="panel-elevated mb-4 rounded-2xl border border-line/70 bg-surface-panel p-4">
+    <section className="panel-elevated mb-4 rounded-card border border-line/70 bg-surface-panel p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold text-ink">{t("briefingPage.delivery.title")}</h2>
         <Link href="/settings/notifications" className="text-xs text-accent-deep hover:underline">
@@ -375,12 +375,12 @@ function BriefingDeliveryStatus({ status }: { status: BriefingStatus }) {
         />
       </div>
       {guidance && (
-        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-state-warn-line bg-state-warn-bg px-3 py-2 text-caption leading-5 text-state-warn-ink">
+        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-control border border-state-warn-line bg-state-warn-bg px-3 py-2 text-caption leading-5 text-state-warn-ink">
           <span>{t(guidance.message)}</span>
           {guidance.action && (
             <Link
               href={guidance.action.href}
-              className="rounded-md border border-state-warn-line px-2 py-0.5 font-medium text-state-warn-ink transition hover:bg-surface-hover focus-ring"
+              className="rounded-chip border border-state-warn-line px-2 py-0.5 font-medium text-state-warn-ink transition hover:bg-surface-hover focus-ring"
             >
               {t(guidance.action.label)}
             </Link>
@@ -488,7 +488,7 @@ function DeliveryFact({
     muted: "border-line bg-surface-raised text-ink-mid",
   }[tone];
   return (
-    <div className={`rounded-lg border px-3 py-2 ${toneClass}`}>
+    <div className={`rounded-control border px-3 py-2 ${toneClass}`}>
       <p className="text-caption font-semibold uppercase tracking-[0.12em] opacity-60">{label}</p>
       <p className="mt-1 truncate text-xs font-medium">{value}</p>
     </div>

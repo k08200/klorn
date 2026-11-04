@@ -14,22 +14,30 @@ import { estimateModelCostUsd } from "../llm/model-fallback.js";
 const M = 1_000_000;
 
 describe("estimateModelCostUsd — model-aware pricing", () => {
-  it("returns 0 for free models regardless of tokens", () => {
-    expect(estimateModelCostUsd("google/gemma-4-31b-it:free", M, M)).toBe(0);
-    expect(estimateModelCostUsd("openrouter/free", M, M)).toBe(0);
+  it("prices a :free-suffixed id like its family (no $0 shortcut without the proxy lane)", () => {
+    const free = estimateModelCostUsd("google/gemma-4-31b-it:free", M, M);
+    expect(free).toBeGreaterThan(0);
+    expect(free).toBeCloseTo(estimateModelCostUsd("google/gemma-4-31b-it", M, M), 9);
   });
 
   it("returns 0 for zero tokens on a paid model", () => {
-    expect(estimateModelCostUsd("anthropic/claude-sonnet-5", 0, 0)).toBe(0);
+    expect(estimateModelCostUsd("claude-sonnet-5", 0, 0)).toBe(0);
   });
 
-  it("prices claude-sonnet at ~$3/M input and ~$15/M output", () => {
-    expect(estimateModelCostUsd("anthropic/claude-sonnet-5", M, 0)).toBeCloseTo(3, 5);
-    expect(estimateModelCostUsd("anthropic/claude-sonnet-5", 0, M)).toBeCloseTo(15, 5);
+  it("prices claude-sonnet-4-6 at ~$3/M input and ~$15/M output", () => {
+    expect(estimateModelCostUsd("claude-sonnet-4-6", M, 0)).toBeCloseTo(3, 5);
+    expect(estimateModelCostUsd("claude-sonnet-4-6", 0, M)).toBeCloseTo(15, 5);
+  });
+
+  it("prices Claude Sonnet 5 at its $2/$10 list price, native or vendor-prefixed", () => {
+    for (const id of ["claude-sonnet-5", "anthropic/claude-sonnet-5"]) {
+      expect(estimateModelCostUsd(id, M, 0), id).toBeCloseTo(2, 5);
+      expect(estimateModelCostUsd(id, 0, M), id).toBeCloseTo(10, 5);
+    }
   });
 
   it("no longer flat-rates sonnet at flash prices (the ~20x undercount)", () => {
-    const sonnet = estimateModelCostUsd("anthropic/claude-sonnet-5", 10_000, 2_000);
+    const sonnet = estimateModelCostUsd("claude-sonnet-4-6", 10_000, 2_000);
     const flash = estimateModelCostUsd("google/gemini-2.5-flash", 10_000, 2_000);
     expect(sonnet).toBeGreaterThan(flash * 5);
   });
@@ -50,12 +58,10 @@ describe("estimateModelCostUsd — model-aware pricing", () => {
 
   it("gives every code/render.yaml model a positive model-specific price", () => {
     const seen = [
-      "anthropic/claude-sonnet-5", // CHAT_MODEL (render.yaml) + catalog
-      "google/gemini-2.5-flash", // AGENT/JUDGE/VISION_MODEL (render.yaml)
-      "openai/gpt-5.4", // catalog
-      "google/gemini-3.5-flash", // catalog
-      "x-ai/grok-4.3", // catalog
-      "anthropic/claude-opus-4.8", // catalog
+      "claude-sonnet-5", // CHAT_MODEL (render.yaml) + catalog
+      "claude-haiku-5-5", // in-code default + AGENT/JUDGE/VISION_MODEL (render.yaml) + catalog
+      "claude-opus-4-8", // catalog
+      "gemini-2.5-flash", // GEMINI_FALLBACK_MODEL default (self-host)
       "google/gemini-2.5-pro",
       "meta-llama/llama-3.3-70b-instruct",
       "deepseek/deepseek-r1",
@@ -67,13 +73,14 @@ describe("estimateModelCostUsd — model-aware pricing", () => {
 
   it("prices unknown models at a conservative default (>= sonnet tier, not flash)", () => {
     const unknown = estimateModelCostUsd("mystery-vendor/next-gen-9000", M, M);
-    const sonnet = estimateModelCostUsd("anthropic/claude-sonnet-5", M, M);
+    const sonnet = estimateModelCostUsd("claude-sonnet-4-6", M, M);
     const flash = estimateModelCostUsd("google/gemini-2.5-flash", M, M);
     expect(unknown).toBeGreaterThanOrEqual(sonnet);
     expect(unknown).toBeGreaterThan(flash);
   });
 
   it("is case-insensitive on the model id", () => {
-    expect(estimateModelCostUsd("Anthropic/Claude-Sonnet-5", M, 0)).toBeCloseTo(3, 5);
+    expect(estimateModelCostUsd("Anthropic/Claude-Sonnet-5", M, 0)).toBeCloseTo(2, 5);
+    expect(estimateModelCostUsd("CLAUDE-SONNET-4-6", M, 0)).toBeCloseTo(3, 5);
   });
 });

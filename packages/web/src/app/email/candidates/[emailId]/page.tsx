@@ -154,14 +154,14 @@ function CandidateDetailView() {
       <div className="mb-4 flex flex-wrap gap-2">
         <Link
           href="/email/candidates"
-          className="ease-strong inline-flex h-9 items-center rounded-lg border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
+          className="ease-strong inline-flex h-9 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
         >
           {t("candidates.detail.queueLink")}
         </Link>
         {email && (
           <Link
             href={`/email/${email.id}`}
-            className="ease-strong inline-flex h-9 items-center rounded-lg border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
+            className="ease-strong inline-flex h-9 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
           >
             {t("candidates.detail.sourceEmailLink")}
           </Link>
@@ -175,7 +175,7 @@ function CandidateDetailView() {
       {commitmentToast && (
         <div
           role="status"
-          className="mb-3 rounded-lg border border-state-ok-line bg-state-ok-bg px-4 py-3 text-sm text-state-ok-ink"
+          className="mb-3 rounded-control border border-state-ok-line bg-state-ok-bg px-4 py-3 text-sm text-state-ok-ink"
         >
           {commitmentToast}
         </div>
@@ -205,7 +205,7 @@ function CandidateDetailView() {
           </header>
 
           <section className="grid gap-4 lg:grid-cols-[1fr_320px]">
-            <section className="panel-elevated overflow-hidden rounded-2xl border border-line/70 bg-surface-panel p-5">
+            <section className="panel-elevated overflow-hidden rounded-card border border-line/70 bg-surface-panel p-5">
               <p className="text-sm leading-6 text-ink-muted">{profile.summary}</p>
 
               <div className="mt-5 grid gap-2 sm:grid-cols-2">
@@ -226,7 +226,7 @@ function CandidateDetailView() {
               )}
 
               {(profile.missingFields.length > 0 || profile.manualReviewFiles.length > 0) && (
-                <div className="mt-5 rounded-xl border border-state-info-line bg-state-info-bg p-3">
+                <div className="mt-5 rounded-control border border-state-info-line bg-state-info-bg p-3">
                   <p className="text-xs font-medium text-state-info-ink">{profile.nextAction}</p>
                   {profile.manualReviewFiles.map((file) => (
                     <p key={file.filename} className="mt-1 text-caption text-accent-deeper/80">
@@ -243,7 +243,7 @@ function CandidateDetailView() {
                 {profile.evidenceFiles.map((file) => (
                   <div
                     key={file.filename}
-                    className="rounded-lg border border-line-soft bg-surface-raised/70 px-3 py-2"
+                    className="rounded-control border border-line-soft bg-surface-raised/70 px-3 py-2"
                   >
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-xs font-medium text-ink">{file.filename}</span>
@@ -252,7 +252,7 @@ function CandidateDetailView() {
                         {file.analysisStatus}
                       </span>
                       {file.needsManualReview && (
-                        <span className="shrink-0 rounded-md bg-rose-500/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-rose-600 ring-1 ring-inset ring-rose-500/20">
+                        <span className="shrink-0 rounded-chip bg-rose-500/10 px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide text-rose-600 ring-1 ring-inset ring-rose-500/20">
                           {t("candidates.attention.sourceCheck")}
                         </span>
                       )}
@@ -265,7 +265,7 @@ function CandidateDetailView() {
               </div>
             </section>
 
-            <aside className="panel-elevated h-fit rounded-2xl border border-line/70 bg-surface-panel p-4">
+            <aside className="panel-elevated h-fit rounded-card border border-line/70 bg-surface-panel p-4">
               <h2 className="text-caption font-semibold uppercase tracking-wider text-ink-mid">
                 {t("candidates.detail.reviewStatusTitle")}
               </h2>
@@ -278,7 +278,7 @@ function CandidateDetailView() {
                       type="button"
                       onClick={() => update({ status: status.value, notes })}
                       disabled={saving}
-                      className={`ease-strong relative overflow-hidden rounded-lg border px-3 py-2 text-left text-xs font-medium transition duration-150 active:scale-[0.98] disabled:opacity-50 ${
+                      className={`ease-strong relative overflow-hidden rounded-control border px-3 py-2 text-left text-xs font-medium transition duration-150 active:scale-[0.98] disabled:opacity-50 ${
                         active
                           ? "border-accent-muted bg-accent/10 text-accent-deeper"
                           : "border-line bg-surface-panel/70 text-ink-mid hover:bg-surface-panel hover:text-ink"
@@ -303,18 +303,18 @@ function CandidateDetailView() {
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   rows={6}
-                  className="w-full rounded-lg border border-line bg-surface-panel/80 px-3 py-2 text-xs leading-5 text-ink-soft outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15"
+                  className="w-full rounded-control border border-line bg-surface-panel/80 px-3 py-2 text-xs leading-5 text-ink-soft outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15"
                 />
               </label>
               <button
                 type="button"
                 onClick={() => update({ notes })}
                 disabled={saving}
-                className="glow-primary ease-strong mt-2 w-full rounded-lg bg-accent-solid px-3 py-2 text-xs font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+                className="glow-primary ease-strong mt-2 w-full rounded-control bg-accent-solid px-3 py-2 text-xs font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {saving ? t("candidates.detail.saving") : t("candidates.detail.saveNotes")}
               </button>
-              <div className="mt-4 rounded-lg border border-line-soft bg-surface-raised/70 px-3 py-2">
+              <div className="mt-4 rounded-control border border-line-soft bg-surface-raised/70 px-3 py-2">
                 <p className="text-xs text-ink-muted">{email.subject || t("common.untitled")}</p>
                 <p className="mt-1 text-caption text-ink-dim">{email.from}</p>
               </div>
@@ -323,7 +323,7 @@ function CandidateDetailView() {
         </>
       )}
       {email && !profile && !loading && (
-        <section className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-6">
+        <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-6">
           <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-ink">
             {t("candidates.detail.noProfile.title")}
           </h1>
@@ -333,18 +333,18 @@ function CandidateDetailView() {
           <div className="mt-5 flex flex-wrap gap-2">
             <Link
               href={`/email/${email.id}`}
-              className="glow-primary ease-strong inline-flex min-h-11 items-center rounded-lg bg-accent-solid px-4 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97]"
+              className="glow-primary ease-strong inline-flex min-h-11 items-center rounded-control bg-accent-solid px-4 text-sm font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97]"
             >
               {t("candidates.detail.noProfile.openSourceEmail")}
             </Link>
             <Link
               href="/email/candidates"
-              className="ease-strong inline-flex min-h-11 items-center rounded-lg border border-line bg-surface-panel/70 px-4 text-sm text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
+              className="ease-strong inline-flex min-h-11 items-center rounded-control border border-line bg-surface-panel/70 px-4 text-sm text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97]"
             >
               {t("candidates.detail.noProfile.backToQueue")}
             </Link>
           </div>
-          <div className="mt-5 rounded-lg border border-line-soft bg-surface-raised/70 px-3 py-2">
+          <div className="mt-5 rounded-control border border-line-soft bg-surface-raised/70 px-3 py-2">
             <p className="text-xs text-ink-muted">{email.subject || t("common.untitled")}</p>
             <p className="mt-1 text-caption text-ink-dim">{email.from}</p>
           </div>
@@ -356,7 +356,7 @@ function CandidateDetailView() {
 
 function Fact({ label, value }: { label: string; value: string | null }) {
   return (
-    <div className="rounded-lg border border-line-soft bg-surface-raised/70 px-3 py-2">
+    <div className="rounded-control border border-line-soft bg-surface-raised/70 px-3 py-2">
       <p className="text-caption font-medium uppercase tracking-wider text-ink-dim">{label}</p>
       <p className="mt-1 truncate text-sm font-medium text-ink">{value || "-"}</p>
     </div>

@@ -104,9 +104,9 @@ export default function PushOnboardingBanner() {
     <div
       role="dialog"
       aria-label={t("pushBanner.label")}
-      className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[90] w-[min(94vw,420px)] bg-surface-panel border border-line rounded-2xl shadow-2xl shadow-slate-900/15 px-4 py-3.5 flex items-start gap-3 animate-slide-up pb-safe"
+      className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[90] w-[min(94vw,420px)] bg-surface-panel border border-line rounded-control shadow-2xl shadow-slate-900/15 px-4 py-3.5 flex items-start gap-3 animate-slide-up pb-safe"
     >
-      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent-light to-sky-600 flex items-center justify-center text-base shrink-0">
+      <div className="w-10 h-10 rounded-control bg-gradient-to-br from-accent-light to-sky-600 flex items-center justify-center text-base shrink-0">
         <span aria-hidden="true">🔔</span>
       </div>
       <div className="min-w-0 flex-1">
@@ -118,7 +118,7 @@ export default function PushOnboardingBanner() {
             type="button"
             onClick={enable}
             disabled={submitting}
-            className="px-3 py-1.5 text-xs font-medium bg-accent-solid hover:bg-accent-solid-hover disabled:bg-surface-hover disabled:text-ink-dim text-accent-solid-ink rounded-lg transition"
+            className="px-3 py-1.5 text-xs font-medium bg-accent-solid hover:bg-accent-solid-hover disabled:bg-surface-hover disabled:text-ink-dim text-accent-solid-ink rounded-control transition"
           >
             {submitting ? t("pushBanner.enabling") : t("pushBanner.enable")}
           </button>

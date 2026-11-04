@@ -134,7 +134,7 @@ function WelcomeStep({
         <div
           data-testid="google-reconnect-notice"
           role="status"
-          className="mb-6 rounded-lg border border-notice-border bg-notice-bg px-3.5 py-3 text-xs leading-5 text-notice-ink"
+          className="mb-6 rounded-control border border-notice-border bg-notice-bg px-3.5 py-3 text-xs leading-5 text-notice-ink"
         >
           <span className="font-semibold text-notice-ink-strong">
             {t("reconnect.googleExpiredTitle")}
@@ -154,7 +154,7 @@ function WelcomeStep({
           type="button"
           onClick={onConnectClick}
           disabled={connecting}
-          className="glow-primary ease-strong flex w-full items-center justify-center gap-2 rounded-xl bg-accent-solid px-5 py-3.5 text-sm font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 focus-ring"
+          className="glow-primary ease-strong flex w-full items-center justify-center gap-2 rounded-control bg-accent-solid px-5 py-3.5 text-sm font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 focus-ring"
         >
           {connecting ? t("onboarding.welcome.connecting") : t("onboarding.welcome.connectButton")}
           {!connecting && <span aria-hidden>→</span>}
@@ -181,7 +181,7 @@ function WelcomeStep({
         ].map((item) => (
           <div
             key={item.label}
-            className="panel-elevated rounded-xl border border-line/70 bg-surface-panel p-3 text-center"
+            className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-3 text-center"
           >
             <p className="text-lg text-ink-mid">{item.icon}</p>
             <p className="mt-1 text-caption leading-4 text-ink-dim">{item.label}</p>
@@ -232,7 +232,7 @@ function SyncingStep({ initSync, onContinue }: { initSync: SyncState; onContinue
         {isDone ? t("onboarding.syncing.descDone") : t("onboarding.syncing.desc")}
       </p>
 
-      <div className="panel-elevated mt-8 divide-y divide-line-soft overflow-hidden rounded-2xl border border-line/70 bg-surface-panel">
+      <div className="panel-elevated mt-8 divide-y divide-line-soft overflow-hidden rounded-card border border-line/70 bg-surface-panel">
         <SyncRow
           icon="✉"
           label={
@@ -269,7 +269,7 @@ function SyncingStep({ initSync, onContinue }: { initSync: SyncState; onContinue
         <button
           type="button"
           onClick={onContinue}
-          className="ease-strong mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-accent-solid px-5 py-3.5 text-sm font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] focus-ring"
+          className="ease-strong mt-8 flex w-full items-center justify-center gap-2 rounded-control bg-accent-solid px-5 py-3.5 text-sm font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] focus-ring"
         >
           {isDone
             ? t("onboarding.syncing.continueSeeFound")
@@ -321,7 +321,7 @@ function ReadyStep({ initSync, onDone }: { initSync: SyncState; onDone: () => vo
         <StatCard value={initSync.contacts} label={t("onboarding.ready.stat.contacts")} />
       </div>
 
-      <div className="panel-elevated mt-4 rounded-2xl border border-state-info-line bg-surface-panel p-4">
+      <div className="panel-elevated mt-4 rounded-card border border-state-info-line bg-surface-panel p-4">
         <p className="text-xs font-semibold text-accent-deeper">
           {t("onboarding.ready.whatNext.title")}
         </p>
@@ -335,7 +335,7 @@ function ReadyStep({ initSync, onDone }: { initSync: SyncState; onDone: () => vo
       <button
         type="button"
         onClick={onDone}
-        className="ease-strong mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-accent-solid px-5 py-3.5 text-sm font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] focus-ring"
+        className="ease-strong mt-8 flex w-full items-center justify-center gap-2 rounded-control bg-accent-solid px-5 py-3.5 text-sm font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] focus-ring"
       >
         {t("onboarding.ready.openQueue")}
         <span aria-hidden>→</span>
@@ -346,7 +346,7 @@ function ReadyStep({ initSync, onDone }: { initSync: SyncState; onDone: () => vo
 
 function StatCard({ value, label }: { value: number; label: string }) {
   return (
-    <div className="panel-elevated rounded-xl border border-line/70 bg-surface-panel p-3 text-center">
+    <div className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-3 text-center">
       <p className="text-2xl font-semibold tabular-nums text-ink">{value > 0 ? value : "—"}</p>
       <p className="mt-1 text-caption text-ink-dim">{label}</p>
     </div>

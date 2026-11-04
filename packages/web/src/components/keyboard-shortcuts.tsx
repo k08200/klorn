@@ -177,7 +177,7 @@ function LegacyShortcutsDialog({ onClose }: { onClose: () => void }) {
     >
       <div
         ref={dialogRef}
-        className="bg-surface-panel border border-line rounded-xl p-6 w-full max-w-sm"
+        className="bg-surface-panel border border-line rounded-sheet p-6 w-full max-w-sm"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -207,7 +207,7 @@ function LegacyShortcutsDialog({ onClose }: { onClose: () => void }) {
         <button
           type="button"
           onClick={onClose}
-          className="mt-4 w-full min-h-11 rounded-lg border border-line text-sm text-ink-mid transition hover:border-accent/40 hover:text-accent-deep"
+          className="mt-4 w-full min-h-11 rounded-control border border-line text-sm text-ink-mid transition hover:border-accent/40 hover:text-accent-deep"
         >
           {t("common.close")}
         </button>

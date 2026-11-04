@@ -276,8 +276,8 @@ function CalendarEventDetail({ id }: { id: string }) {
   if (loading) {
     return (
       <div className="mx-auto max-w-3xl px-6 py-8">
-        <div className="h-32 animate-pulse rounded-xl border border-line bg-surface-raised" />
-        <div className="mt-4 h-40 animate-pulse rounded-xl border border-line bg-surface-raised" />
+        <div className="h-32 animate-pulse rounded-card border border-line bg-surface-raised" />
+        <div className="mt-4 h-40 animate-pulse rounded-card border border-line bg-surface-raised" />
       </div>
     );
   }
@@ -322,7 +322,7 @@ function CalendarEventDetail({ id }: { id: string }) {
         </Link>
 
         {/* Header */}
-        <section className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-5">
+        <section className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <h1 className="break-words text-xl font-semibold text-ink">{event.title}</h1>
@@ -349,7 +349,7 @@ function CalendarEventDetail({ id }: { id: string }) {
                   <button
                     type="button"
                     onClick={() => setConfirmDelete(false)}
-                    className="ease-strong rounded-md px-2 py-1 text-caption text-ink-dim transition duration-150 hover:text-ink-muted focus-ring min-h-9 min-w-9"
+                    className="ease-strong rounded-control px-2 py-1 text-caption text-ink-dim transition duration-150 hover:text-ink-muted focus-ring min-h-9 min-w-9"
                   >
                     {t("common.cancel")}
                   </button>
@@ -357,7 +357,7 @@ function CalendarEventDetail({ id }: { id: string }) {
                     type="button"
                     onClick={handleDelete}
                     disabled={deleting}
-                    className="ease-strong rounded-md border border-state-danger-line bg-state-danger-bg px-2 py-1 text-caption font-medium text-state-danger-ink transition duration-150 hover:bg-state-danger-bg active:scale-[0.97] disabled:opacity-50 focus-ring min-h-9 min-w-9"
+                    className="ease-strong rounded-control border border-state-danger-line bg-state-danger-bg px-2 py-1 text-caption font-medium text-state-danger-ink transition duration-150 hover:bg-state-danger-bg active:scale-[0.97] disabled:opacity-50 focus-ring min-h-9 min-w-9"
                   >
                     {deleting ? t("calendar.deleting") : t("common.delete")}
                   </button>
@@ -366,7 +366,7 @@ function CalendarEventDetail({ id }: { id: string }) {
                 <button
                   type="button"
                   onClick={() => setConfirmDelete(true)}
-                  className="ease-strong rounded-md p-1.5 text-slate-300 transition duration-150 hover:text-state-danger-ink focus-ring min-h-9 min-w-9"
+                  className="ease-strong rounded-control p-1.5 text-slate-300 transition duration-150 hover:text-state-danger-ink focus-ring min-h-9 min-w-9"
                   aria-label={t("calendar.deleteEvent")}
                 >
                   <svg
@@ -394,7 +394,7 @@ function CalendarEventDetail({ id }: { id: string }) {
           )}
 
           {event.description && (
-            <p className="mt-4 whitespace-pre-wrap rounded-lg border border-line bg-surface-raised p-3 text-label font-normal leading-6 text-ink-mid">
+            <p className="mt-4 whitespace-pre-wrap rounded-control border border-line bg-surface-raised p-3 text-label font-normal leading-6 text-ink-mid">
               {event.description}
             </p>
           )}
@@ -402,7 +402,7 @@ function CalendarEventDetail({ id }: { id: string }) {
 
         {/* Prep pack */}
         {pack && (
-          <section className="panel-elevated mt-6 rounded-2xl border border-line/70 bg-surface-panel p-5">
+          <section className="panel-elevated mt-6 rounded-card border border-line/70 bg-surface-panel p-5">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="text-caption font-semibold uppercase tracking-widest text-accent-deep">
@@ -418,7 +418,7 @@ function CalendarEventDetail({ id }: { id: string }) {
               </div>
               {readiness && (
                 <span
-                  className={`rounded-md px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ${readiness.className}`}
+                  className={`rounded-chip px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ${readiness.className}`}
                 >
                   {t(readiness.labelKey)}
                 </span>
@@ -426,7 +426,7 @@ function CalendarEventDetail({ id }: { id: string }) {
             </div>
 
             {pack.checklist.length > 0 && (
-              <ul className="divide-y divide-line-soft overflow-hidden rounded-xl border border-line-soft">
+              <ul className="divide-y divide-line-soft overflow-hidden rounded-control border border-line-soft">
                 {pack.checklist.map((item) => (
                   <li key={item} className="row-wash px-3 py-2 text-caption text-ink-mid">
                     {item}
@@ -440,7 +440,7 @@ function CalendarEventDetail({ id }: { id: string }) {
                 <p className="mb-2 text-caption font-semibold uppercase tracking-widest text-ink-dim">
                   {t("calendar.prep.relatedMail")}
                 </p>
-                <ul className="divide-y divide-line-soft overflow-hidden rounded-xl border border-line-soft">
+                <ul className="divide-y divide-line-soft overflow-hidden rounded-control border border-line-soft">
                   {pack.relatedEmails.map((m) => {
                     const name = senderName(m.from);
                     return (
@@ -487,7 +487,7 @@ function CalendarEventDetail({ id }: { id: string }) {
                 <p className="mb-2 text-caption font-semibold uppercase tracking-widest text-ink-dim">
                   {t("calendar.prep.openTasks")}
                 </p>
-                <ul className="divide-y divide-line-soft overflow-hidden rounded-xl border border-line-soft">
+                <ul className="divide-y divide-line-soft overflow-hidden rounded-control border border-line-soft">
                   {pack.openTasks.map((t) => (
                     <li key={t.id} className="row-wash px-3 py-2 text-caption text-ink-mid">
                       {t.title}
@@ -502,11 +502,11 @@ function CalendarEventDetail({ id }: { id: string }) {
                 <p className="mb-2 text-caption font-semibold uppercase tracking-widest text-ink-dim">
                   {t("calendar.prep.openCommitments")}
                 </p>
-                <ul className="divide-y divide-line-soft overflow-hidden rounded-xl border border-line-soft">
+                <ul className="divide-y divide-line-soft overflow-hidden rounded-control border border-line-soft">
                   {pack.openCommitments.map((c) => (
                     <li key={c.id} className="row-wash px-3 py-2 text-caption text-ink-mid">
                       <span
-                        className={`mr-2 rounded-md px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ${
+                        className={`mr-2 rounded-chip px-1.5 py-0.5 text-caption font-bold uppercase tracking-wide ${
                           c.owner === "USER"
                             ? "bg-accent/10 text-accent-deep ring-1 ring-inset ring-accent/20"
                             : "bg-surface-hover text-ink-mid"

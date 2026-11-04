@@ -20,7 +20,7 @@ export function Markdown({ content }: { content: string }) {
                   {block.lang}
                 </span>
               )}
-              <pre className="bg-surface-raised border border-line rounded-lg px-4 py-3 overflow-x-auto text-xs font-mono">
+              <pre className="bg-surface-raised border border-line rounded-control px-4 py-3 overflow-x-auto text-xs font-mono">
                 <code>{block.text}</code>
               </pre>
             </div>
