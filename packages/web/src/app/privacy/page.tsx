@@ -151,11 +151,12 @@ export default function PrivacyPage() {
                 description.
               </li>
               <li>
-                Counts from your past calendar meetings (timed meetings with up to 50 invitees): for
-                each person invited to a meeting you organised or accepted (even tentatively),
-                unless they declined, Klorn keeps their email address with how many such meetings
-                there were, how many had five or fewer people, and the UTC day of the first and the
-                last. To count each meeting only once, Klorn also keeps a one-way fingerprint of it
+                Counts from your past calendar meetings (timed meetings with no more than 50 people
+                on the guest list): for each person invited to a meeting you organised or had
+                accepted (even tentatively) by the time that meeting&apos;s day is counted, shortly
+                after the day ends (UTC), and who did not decline, Klorn keeps their email address
+                with how many such meetings there were, how many had five or fewer people, and the
+                UTC day on which the first and the last ended. To count each meeting only once, Klorn also keeps a one-way fingerprint of it
                 for about a month while counting runs; it is deleted with your data. These counts
                 store no attendee lists and no meeting times.
               </li>
