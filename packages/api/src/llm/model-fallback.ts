@@ -1,46 +1,17 @@
 /**
- * Model / Provider Fallback — automatic switch to a secondary provider when
- * OpenRouter or Gemini reports budget exhaustion or daily key-limit errors.
+ * Model / Provider Fallback — per-provider-key cooldown state and the error
+ * classifiers createCompletion uses to decide when to move to the next
+ * provider in the chain.
  *
- * Two distinct failure modes:
- *   - 402 insufficient_credits: swap to a :free OpenRouter model
- *   - 403/429 provider quota or rate limit: swap providers entirely
- *     (the limit is per-KEY, so another :free model on the same key fails too)
- *
- * OpenRouter free-tier limits (2026): 20 RPM, 50 req/day (1000 with 10+ credits),
- * shared across ALL :free models. Limits reset daily at UTC 00:00 — NOT weekly.
- * Gemini free tier also resets daily at UTC 00:00. We treat both the same way.
+ * Failure modes that fail over (each provider has its own key and quota):
+ *   - 402 credit exhaustion (Anthropic prepaid balance / spend limit): short
+ *     cooldown, next provider
+ *   - 403/429 key limit or rate limit: cooldown sized to the quota window
+ *     (per-minute, per-day, ambiguous), next provider
+ *   - 529 overloaded: next provider, no cooldown
  */
 
 import { redactCredentials } from "../security/credential-redaction.js";
-
-/** Free model used when paid credits run out (same provider) */
-// The 402 "insufficient credits" swap target. Paid-but-cheap since
-// 2026-08-10 (founder decision) for the same reasons as the chain — and note
-// the irony of the old value: swapping to a :free SKU on a credit error is
-// pointless when DISABLE_FREE_MODEL_FALLBACK is on in hosted prod, which is
-// precisely where credits run out. $0.05/$0.40 per 1M, 400k context.
-export const FALLBACK_MODEL = process.env.FALLBACK_MODEL || "openai/gpt-5-nano";
-
-/**
- * Kill switch for every :free-model fallback (the 402 credit swap and the
- * :free entries of the retirement chain). Hosted prod sets
- * DISABLE_FREE_MODEL_FALLBACK=true: OpenRouter's :free endpoints route to
- * hosts that may train on request data (verified 2026-07-03 —
- * gemma-4-31b-it:free serves via Google AI Studio free tier + OpenInference),
- * which would break the privacy policy's Limited Use no-train commitment.
- * With the account-level "free endpoints that may train" toggle off those
- * calls are refused by OpenRouter anyway; this switch skips the doomed round
- * trips so a 402 fails over straight to the next provider (Gemini direct,
- * paid tier). Self-host default (unset) keeps the $0 degradation net — the
- * operator owns their data policy. Read at call time so tests can flip it
- * without module resets.
- */
-export function isFreeModelFallbackDisabled(): boolean {
-  return ["true", "1", "yes", "on"].includes(
-    (process.env.DISABLE_FREE_MODEL_FALLBACK ?? "").trim().toLowerCase(),
-  );
-}
 
 /** How long to stay on a credit-exhausted state before retrying the paid model */
 const CREDIT_RETRY_AFTER_MS = 5 * 60 * 1000; // 5 minutes
@@ -55,7 +26,7 @@ interface ProviderState {
 
 // Map (not a plain object) so a malicious quotaKey like "__proto__" or
 // "constructor" can never poison Object.prototype. quotaKeys flow in from
-// JWT userIds ("openrouter:user:<uuid>") and from the admin clear endpoint,
+// JWT userIds ("anthropic:user:<uuid>") and from the admin clear endpoint,
 // both of which CodeQL classifies as user-controlled.
 const state = new Map<string, ProviderState>();
 
@@ -74,9 +45,8 @@ function safeLogToken(value: string): string {
 }
 
 /**
- * Compute the next provider daily-reset boundary.
- * Both OpenRouter free tier and Gemini free tier reset at UTC 00:00.
- * Always targets the NEXT UTC midnight (never today's).
+ * Compute the next provider daily-reset boundary (Gemini's daily quotas reset
+ * at UTC 00:00). Always targets the NEXT UTC midnight (never today's).
  */
 export function nextDailyResetMs(now: Date = new Date()): number {
   const target = new Date(
@@ -131,8 +101,8 @@ export function markCreditExhausted(provider: string): void {
 }
 
 /**
- * Granularity of the key-limit signal. Matters because Gemini and OpenRouter
- * return 429s for both per-minute RPM trips AND per-day quota exhaustion —
+ * Granularity of the key-limit signal. Matters because providers return 429s
+ * for both per-minute RPM trips AND per-day quota exhaustion —
  * locking a provider out for ~21h after a one-minute RPM burst is far too
  * punitive, so we shorten that case dramatically.
  */
@@ -143,7 +113,7 @@ const AMBIGUOUS_COOLDOWN_MS = 60 * 60_000;
 
 /**
  * Inspect an error message to decide how long to lock the provider out.
- * Both OpenRouter and Gemini surface their quota window in the message body
+ * Providers surface their quota window in the message body
  * ("per minute" / "per day" / "daily limit"). When that signal is absent
  * we default to "ambiguous" (1h) rather than "daily" so a transient 429
  * doesn't burn most of the day.
@@ -212,7 +182,7 @@ export function describeErrorChain(error: unknown, depth = 2): string {
 export interface KeyLimitOptions {
   /**
    * Whether the chain still holds another provider that could serve this
-   * request. Defaults to true (the historical assumption: OpenRouter → Gemini).
+   * request. Defaults to true (the historical multi-provider assumption).
    */
   hasFailover?: boolean;
 }
@@ -223,7 +193,7 @@ export interface KeyLimitOptions {
  * RPM trips get 5 minutes; per-day quotas get held until next UTC midnight;
  * anything ambiguous gets 1 hour.
  *
- * Single-provider deployments (one OpenRouter key, no Gemini failover) get the
+ * Single-provider deployments (one Anthropic key, no second lane) get the
  * ambiguous case shortened to the RPM window. With a failover provider the 1h
  * lockout is just routing — traffic keeps flowing on the other key. With none,
  * it converts one unexplained 429 into an hour with NO LLM at all: the judge
@@ -295,33 +265,43 @@ export function getProviderCooldownInfo(quotaKey: string): ProviderCooldownInfo 
   };
 }
 
+/** Which BYOK keys the user has stored (only those lanes are listed). */
+export interface UserKeyLanes {
+  anthropic?: boolean;
+  gemini?: boolean;
+}
+
 /**
  * Snapshot the per-user AI provider cooldown state. Used by the readiness
  * check so the dashboard reports "AI unavailable" instead of the stale
  * "Overall OK" when every provider for this user is in cooldown.
  *
  * The keys mirror how createCompletion routes calls: env-wide keys for the
- * shared Klorn account plus user-supplied keys that override them.
+ * shared Klorn account plus user-supplied keys that lead them. Only configured
+ * lanes are listed: an unconfigured lane is never in cooldown, so counting it
+ * as "available" would keep "every provider in cooldown" from ever reading as
+ * an outage.
  */
-export function snapshotUserProviderCooldowns(userId: string): {
+export function snapshotUserProviderCooldowns(
+  userId: string,
+  userKeys: UserKeyLanes = {},
+): {
   providers: ProviderCooldownInfo[];
   unavailable: ProviderCooldownInfo[];
 } {
   const quotaKeys = [
-    "openrouter:env",
-    "gemini:env",
-    // Only when configured: an unconfigured lane must not count as "available"
-    // and keep "every provider in cooldown" from ever reading as an outage.
     ...(process.env.ANTHROPIC_API_KEY ? ["anthropic:env"] : []),
-    `openrouter:user:${userId}`,
-    `gemini:user:${userId}`,
+    ...(process.env.GEMINI_API_KEY ? ["gemini:env"] : []),
+    ...(process.env.OPENAI_COMPAT_BASE_URL ? ["openai-compat:env"] : []),
+    ...(userKeys.anthropic ? [`anthropic:user:${userId}`] : []),
+    ...(userKeys.gemini ? [`gemini:user:${userId}`] : []),
   ];
   const providers = quotaKeys.map(getProviderCooldownInfo);
   const unavailable = providers.filter((info) => isProviderUnavailable(info.quotaKey));
   return { providers, unavailable };
 }
 
-/** 402 insufficient_credits — same-provider, swap to :free model */
+/** 402 insufficient credits / budget exceeded (message or status). */
 export function isCreditError(error: unknown): boolean {
   const status =
     typeof error === "object" && error !== null && "status" in error
@@ -455,8 +435,8 @@ export function isConnectionError(error: unknown): boolean {
 
 /**
  * Provider has no endpoint for the requested model — typically because the
- * model SKU was retired (OpenRouter's "No endpoints found for ..." 404), the
- * caller misspelled an id, or no provider on that platform serves it. The
+ * model SKU was retired, the caller misspelled an id, or no provider on that
+ * platform serves it. The
  * call CAN succeed against a different provider that has the same family
  * (e.g. native Gemini direct API), so we treat this the same as a quota
  * limit for failover purposes: skip this provider, try the next.
@@ -491,19 +471,13 @@ export function isModelUnavailableError(error: unknown): boolean {
   if (isModelyText) return true;
 
   // Bare 404 status alone is too broad (route 404s, auth 404s). Require the
-  // message to mention a model/endpoint, OR the literal phrase that OpenRouter
-  // uses for retired SKUs.
+  // message to mention a model/endpoint.
   const isStatus404 = status === 404 || /^\s*404\b/.test(message);
   if (isStatus404 && (message.includes("endpoint") || message.includes("model"))) {
     return true;
   }
 
   return false;
-}
-
-/** Returns true if the model is already a free tier model */
-export function isFreeModel(model: string): boolean {
-  return model.endsWith(":free") || model === "openrouter/free";
 }
 
 /** USD per MILLION tokens (input = prompt, output = completion). */
@@ -542,19 +516,12 @@ const CLAUDE_CACHE_READ = 0.1;
  * code priced every paid model at flash rates, undercounting sonnet ~20x).
  */
 const MODEL_RATES: ReadonlyArray<{ match: readonly string[]; rate: ModelRateUsdPerMTok }> = [
-  // Cheap fallback SKUs, priced from the live OpenRouter catalog 2026-08-10
-  // and rounded up. These rows exist because the generic family rows below
-  // mis-price them by 60-100x: gpt-oss-120b fell into the ["gpt"] row
-  // ($2.50/$10 vs a real $0.037/$0.17), qwen matched nothing and took the
-  // sonnet-tier default ($3/$15 vs $0.03/$0.13), and mistral-nemo took the
-  // generic mistral row ($2/$6 vs $0.019/$0.03). Over-billing is "safe" for
-  // a protective cap in isolation, but at 100 users it burns the daily caps
-  // ~100x too fast and the fleet stops classifying mid-day — the caps stop
-  // protecting and start breaking. Specific rows MUST stay above generic.
-  { match: ["gpt-oss"], rate: { input: 0.05, output: 0.2 } },
+  // Qwen (the local openai-compat default family, qwen3:8b): list price read
+  // 2026-08-10, rounded up. Without this row qwen matched nothing and took the
+  // sonnet-tier default ($3/$15 vs $0.03/$0.13) — over-billing is "safe" for a
+  // protective cap in isolation, but ~100x too fast burns the daily caps and
+  // the fleet stops classifying mid-day. Specific rows MUST stay above generic.
   { match: ["qwen"], rate: { input: 0.1, output: 0.3 } },
-  { match: ["mistral", "nemo"], rate: { input: 0.05, output: 0.1 } },
-  { match: ["nemotron"], rate: { input: 0.1, output: 0.4 } },
   // Gemini flash-lite spans 2.5 ($0.10/$0.40) and 3.1 ($0.25/$1.50); the
   // family row must carry the HIGHER of the two or the newer SKU under-bills.
   { match: ["gemini", "flash-lite"], rate: { input: 0.25, output: 1.5 } },
@@ -563,9 +530,10 @@ const MODEL_RATES: ReadonlyArray<{ match: readonly string[]; rate: ModelRateUsdP
   { match: ["gemma"], rate: { input: 0.1, output: 0.4 } },
   // Claude: Anthropic list prices read 2026-10-24
   // (platform.claude.com/docs/en/about-claude/pricing). Ids are matched with
-  // dots folded to dashes, so the native `claude-haiku-5-5` and OpenRouter's
-  // `anthropic/claude-haiku-5.5` hit the same row. Specific SKUs above their
-  // family rows; the family rows keep the HIGHEST price in the family.
+  // dots folded to dashes, so the native `claude-haiku-5-5` and the
+  // vendor-prefixed `anthropic/claude-haiku-5.5` hit the same row. Specific
+  // SKUs above their family rows; the family rows keep the HIGHEST price in
+  // the family.
   {
     match: ["claude", "haiku-5-5"],
     rate: {
@@ -577,13 +545,18 @@ const MODEL_RATES: ReadonlyArray<{ match: readonly string[]; rate: ModelRateUsdP
   },
   { match: ["claude", "haiku"], rate: { input: 1, output: 5, cacheRead: CLAUDE_CACHE_READ } },
   { match: ["claude", "sonnet-5-5"], rate: { input: 2, output: 10, cacheRead: 0.05 } },
+  // Sonnet 5 ($2/$10) and Opus 4.5–5 ($5/$25), same 2026-10-24 list-price
+  // read. They used to ride their (higher) family rows while they were served
+  // through the retired proxy lane; on the native Claude API they bill at list
+  // price. Cache reads keep the family's 10% (no distinct rate recorded).
+  { match: ["claude", "sonnet-5"], rate: { input: 2, output: 10, cacheRead: CLAUDE_CACHE_READ } },
   { match: ["claude", "sonnet"], rate: { input: 3, output: 15, cacheRead: CLAUDE_CACHE_READ } },
   { match: ["claude", "opus-5-5"], rate: { input: 4, output: 20, cacheRead: 0.05 } },
-  // Deliberately NOT here yet: Sonnet 5 ($2/$10) and Opus 4.5–5 ($5/$25) are
-  // cheaper than their family rows, but both are live chat-catalog models on
-  // OpenRouter today — re-pricing them changes production cost caps without
-  // the Anthropic provider being on, so it ships as its own change. The family
-  // rows over-bill them (the safe direction).
+  { match: ["claude", "opus-5"], rate: { input: 5, output: 25, cacheRead: CLAUDE_CACHE_READ } },
+  { match: ["claude", "opus-4-8"], rate: { input: 5, output: 25, cacheRead: CLAUDE_CACHE_READ } },
+  { match: ["claude", "opus-4-7"], rate: { input: 5, output: 25, cacheRead: CLAUDE_CACHE_READ } },
+  { match: ["claude", "opus-4-6"], rate: { input: 5, output: 25, cacheRead: CLAUDE_CACHE_READ } },
+  { match: ["claude", "opus-4-5"], rate: { input: 5, output: 25, cacheRead: CLAUDE_CACHE_READ } },
   { match: ["claude", "opus"], rate: { input: 15, output: 75, cacheRead: CLAUDE_CACHE_READ } },
   { match: ["claude", "fable"], rate: { input: 10, output: 50, cacheRead: CLAUDE_CACHE_READ } },
   { match: ["claude", "mythos"], rate: { input: 10, output: 50, cacheRead: CLAUDE_CACHE_READ } },
@@ -668,7 +641,6 @@ export function estimateModelCostUsd(
   completionTokens: number,
   cache: PromptCacheUsage = {},
 ): number {
-  if (isFreeModel(model)) return 0;
   const family = resolveModelRateUsdPerMTok(model);
   const prompt = nonNegative(promptTokens);
   const completion = nonNegative(completionTokens);

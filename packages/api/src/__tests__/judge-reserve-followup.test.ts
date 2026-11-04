@@ -49,14 +49,14 @@ const COMPLETION = {
   usage: { prompt_tokens: 10, completion_tokens: 2, total_tokens: 12 },
 };
 const PARAMS = {
-  model: "google/gemini-2.5-flash",
+  model: "claude-haiku-5-5",
   messages: [{ role: "user" as const, content: "x" }],
 };
 
 function provider(name: string, ownedByUser: boolean, call: () => Promise<unknown>) {
   return {
     name,
-    quotaKey: `${ownedByUser ? "user" : "env"}-${name}`,
+    quotaKey: ownedByUser ? `${name}:user:u1` : `${name}:env`,
     defaultModel: "m",
     supportsTools: true,
     client: null,
@@ -96,8 +96,8 @@ afterEach(() => {
 describe("BYOK past the per-user cost cap", () => {
   it("runs on the user's own key alone; the env provider is never called", async () => {
     ledger.cents = 100;
-    const own = provider("openrouter", true, async () => COMPLETION);
-    const env = provider("openrouter", false, async () => COMPLETION);
+    const own = provider("anthropic", true, async () => COMPLETION);
+    const env = provider("anthropic", false, async () => COMPLETION);
     chain.push(own, env);
     const { createCompletion } = await import("../llm/openai.js");
 
@@ -108,10 +108,10 @@ describe("BYOK past the per-user cost cap", () => {
 
   it("a broken own key past the cap fails — it does not fall through to Klorn's money", async () => {
     ledger.cents = 100;
-    const own = provider("openrouter", true, async () => {
+    const own = provider("anthropic", true, async () => {
       throw Object.assign(new Error("401 invalid key"), { status: 401 });
     });
-    const env = provider("openrouter", false, async () => COMPLETION);
+    const env = provider("anthropic", false, async () => COMPLETION);
     chain.push(own, env);
     const { createCompletion } = await import("../llm/openai.js");
 
@@ -121,10 +121,10 @@ describe("BYOK past the per-user cost cap", () => {
 
   it("below the cap a BYOK user keeps the env fallback, exactly as before", async () => {
     ledger.cents = 10;
-    const own = provider("openrouter", true, async () => {
+    const own = provider("anthropic", true, async () => {
       throw Object.assign(new Error("401 invalid key"), { status: 401 });
     });
-    const env = provider("openrouter", false, async () => COMPLETION);
+    const env = provider("anthropic", false, async () => COMPLETION);
     chain.push(own, env);
     const { createCompletion } = await import("../llm/openai.js");
 
@@ -134,7 +134,7 @@ describe("BYOK past the per-user cost cap", () => {
 
   it("a user without a key is still refused at the cap", async () => {
     ledger.cents = 100;
-    const env = provider("openrouter", false, async () => COMPLETION);
+    const env = provider("anthropic", false, async () => COMPLETION);
     chain.push(env);
     const { createCompletion } = await import("../llm/openai.js");
 
@@ -194,7 +194,7 @@ describe("background call-count cap and the judge reserve", () => {
   it("createCompletion hands its reserved flag to the count", async () => {
     process.env.JUDGE_BUDGET_RESERVE_CENTS = "25";
     await exhaustBackground(5);
-    const env = provider("openrouter", false, async () => COMPLETION);
+    const env = provider("anthropic", false, async () => COMPLETION);
     chain.push(env);
     const { createCompletion } = await import("../llm/openai.js");
 

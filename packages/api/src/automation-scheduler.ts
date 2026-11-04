@@ -215,19 +215,14 @@ let lastDbSizeCheckAt = Date.now() - DB_SIZE_CHECK_INTERVAL_MS + JUDGE_FALLBACK_
 // primary token ran silently for weeks (2026-08-10 diagnosis). One alert a
 // day is signal; 1440 a day is noise.
 const syncSkipAlertedDay = new Map<string, string>();
-// UTC date ("YYYY-MM-DD") of the last OpenRouter catalog check. In-memory is
-// fine — a restart re-running the check the same day is harmless (read-only).
-let lastCatalogCheckDate = "";
-// UTC date of the last OpenRouter key-headroom probe. Read-only like the
-// catalog check, so a restart re-running it the same day costs one request.
-let lastKeyHealthCheckDate = "";
-// UTC date of the last calibration snapshot run. Same trade-off: the daily
-// job upserts on (userId, dayKey), so a restart re-running it is idempotent.
+// UTC date ("YYYY-MM-DD") of the last calibration snapshot run. In-memory is
+// fine: the daily job upserts on (userId, dayKey), so a restart re-running it
+// is idempotent.
 let lastCalibrationSnapshotDate = "";
 // UTC date of the last run of the weekly (Sunday) jobs. runAutomations() ticks
 // every 60s, so a bare `getDay() === 0` guard fires these ~1440 times every
-// Sunday; these in-memory date gates make them fire once (mirrors the catalog /
-// calibration gates above).
+// Sunday; these in-memory date gates make them fire once (mirrors the
+// calibration gate above).
 let lastVoiceProfileDate = "";
 let lastWeeklyReportDate = "";
 // UTC date of the last daily-digest sweep, same tick-guard pattern.
@@ -1212,37 +1207,6 @@ async function runAutomations() {
         .catch((err) => {
           console.error("[AUTOMATION] Learned-rule recompute failed:", err);
           captureError(err, { tags: { scope: "automation.learned-rules" } });
-        });
-    }
-
-    // --- Daily: OpenRouter catalog check ---
-    // Proactively verify every model the fallback chain depends on still
-    // exists upstream, so a retired/renamed :free SKU surfaces as a named
-    // alert instead of mystery 404s in the agent logs.
-    if (lastCatalogCheckDate !== todayUtc) {
-      lastCatalogCheckDate = todayUtc;
-      import("./llm/openrouter-catalog-check.js")
-        .then(({ runOpenRouterCatalogCheck }) => runOpenRouterCatalogCheck())
-        .catch((err) => {
-          console.warn("[AUTOMATION] Catalog check failed:", err);
-          captureError(err, { tags: { scope: "automation.catalog-check" } });
-        });
-    }
-
-    // --- Daily: OpenRouter key headroom ---
-    // The catalog check above watches the models; this watches the key paying
-    // for them. A spend cap set on the key drains with the account still
-    // funded, so nothing bills-side warns — and at zero every call 403s and the
-    // whole fleet drops to the keyword fallback (2026-07-26 outage, found only
-    // a week later). Shares the catalog check's daily marker: same cadence,
-    // same "one cheap request per day" budget.
-    if (lastKeyHealthCheckDate !== todayUtc) {
-      lastKeyHealthCheckDate = todayUtc;
-      import("./llm/openrouter-key-health.js")
-        .then(({ runOpenRouterKeyCheck }) => runOpenRouterKeyCheck())
-        .catch((err) => {
-          console.warn("[AUTOMATION] Key health check failed:", err);
-          captureError(err, { tags: { scope: "automation.key-health" } });
         });
     }
 

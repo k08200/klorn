@@ -2165,17 +2165,17 @@ const fr: Record<string, string> = {
   "byok.activeModel": "Modèle actif :",
   "byok.usingYourKey": "Votre clé est utilisée",
   "byok.stored": "•••••••• enregistrée",
-  "byok.openRouterLabel": "Clé API OpenRouter",
-  "byok.openRouterHelp":
-    "Une seule clé couvre tous les modèles utilisés par Klorn — OpenRouter les achemine tous. La clé est vérifiée auprès du fournisseur avant d'être enregistrée. Obtenez-en une sur",
+  "byok.anthropicLabel": "Clé API Anthropic",
+  "byok.anthropicHelp":
+    "Klorn fonctionne avec Claude : une seule clé Anthropic couvre tous les modèles qu'il utilise. La clé est vérifiée auprès d'Anthropic avant d'être enregistrée. Obtenez-en une sur",
   "byok.legacy": "ancienne",
   "byok.geminiRetired":
-    "Les clés Gemini directes ne sont plus prises en charge — une clé gratuite ici bloque discrètement le classement quand son quota quotidien est épuisé. Retirez-la et utilisez plutôt une clé OpenRouter.",
+    "Les clés Gemini directes ne sont plus prises en charge — une clé gratuite ici bloque discrètement le classement quand son quota quotidien est épuisé. Retirez-la et utilisez plutôt une clé Anthropic.",
   "byok.assistantModel": "Modèle de l'assistant",
   "byok.assistantModelHelp":
-    "Modèles de pointe uniquement — c'est le modèle avec lequel votre assistant Klorn s'exprime. Il travaille sur votre courrier, votre agenda et vos tâches, et ne fait jamais de recherche sur le web. Il fonctionne dans votre quota IA quotidien ; ajoutez votre propre clé ci-dessus pour utiliser votre quota. Le classificateur du pare-feu de messagerie est réglé séparément et n'est pas affecté.",
+    "Modèles Claude uniquement — c'est le modèle avec lequel votre assistant Klorn s'exprime. Il travaille sur votre courrier, votre agenda et vos tâches, et ne fait jamais de recherche sur le web. Il fonctionne dans votre quota IA quotidien ; ajoutez votre propre clé ci-dessus pour utiliser votre quota. Le classificateur du pare-feu de messagerie est réglé séparément et n'est pas affecté.",
   "byok.assistantModelHelpFree":
-    "Modèles de pointe uniquement — c'est le modèle avec lequel votre assistant Klorn s'exprime. Il travaille sur votre courrier, votre agenda et vos tâches, et ne fait jamais de recherche sur le web. Il fonctionne dans votre quota IA quotidien. Le classificateur du pare-feu de messagerie est réglé séparément et n'est pas affecté.",
+    "Modèles Claude uniquement — c'est le modèle avec lequel votre assistant Klorn s'exprime. Il travaille sur votre courrier, votre agenda et vos tâches, et ne fait jamais de recherche sur le web. Il fonctionne dans votre quota IA quotidien. Le classificateur du pare-feu de messagerie est réglé séparément et n'est pas affecté.",
   "byok.error.status": "Impossible de charger l'état de votre clé LLM.",
   "byok.error.update": "Impossible de mettre à jour la clé.",
   "byok.error.model": "Impossible de changer de modèle.",
@@ -2671,7 +2671,7 @@ const fr: Record<string, string> = {
     "La notification a été ignorée car les heures calmes étaient actives à l'envoi du briefing.",
   "briefingPage.guidance.quietHoursAction": "Ajuster les heures calmes",
   // web app design pass, 2026-10-21: English that reached localized screens.
-  "byok.modelNote.recommended": "{provider} — recommandé",
+  "byok.modelNote.balanced": "{provider} — équilibré",
   "byok.modelNote.fastest": "{provider} — le plus rapide",
   "byok.modelNote.mostCapable": "{provider} — le plus performant, plus cher",
   "statusChip.connected": "Connecté",
@@ -2708,7 +2708,7 @@ const fr: Record<string, string> = {
   "playground.provider.label": "Fournisseur",
   "playground.model.label": "Modèle",
   "playground.model.klorn": "Utilisé par Klorn",
-  "playground.model.measured": "{correct}/{total} au test de Klorn",
+  "playground.model.measured": "{low}–{high}/{total} au test de Klorn ({runs} exécutions)",
   "playground.model.other": "Autre identifiant de modèle…",
   "playground.model.otherLabel": "Identifiant du modèle",
   "playground.model.otherPlaceholder": "fournisseur/nom-du-modèle",
@@ -2719,7 +2719,7 @@ const fr: Record<string, string> = {
   "playground.model.listedNote":
     "Affiché tel quel. Seul le modèle utilisé par Klorn est noté sur son test.",
   "playground.model.priceNote":
-    "Prix par million de tokens, entrée / sortie, tel qu'affiché sur OpenRouter le {date}.",
+    "Prix catalogue par million de tokens, entrée / sortie, relevé le {date}.",
   "playground.key.label": "Clé API {provider}",
   "playground.key.show": "Afficher",
   "playground.key.hide": "Masquer",
