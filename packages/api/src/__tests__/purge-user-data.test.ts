@@ -132,7 +132,7 @@ describe("revokeUserAccess (what lets a sync, a job or an agent act for the user
     expect(updates[1]?.arg.data).toMatchObject({
       naverImapPasswordCipher: null,
       githubTokenCipher: null,
-      openRouterApiKey: null,
+      anthropicApiKey: null,
       geminiApiKey: null,
       telegramChatId: null,
     });
@@ -196,7 +196,7 @@ describe("purgeUserData — what the account row and the cost ledger keep", () =
       naverImapEmail: null,
       naverImapPasswordCipher: null,
       githubTokenCipher: null,
-      openRouterApiKey: null,
+      anthropicApiKey: null,
       geminiApiKey: null,
       telegramChatId: null,
       telegramLinkCode: null,

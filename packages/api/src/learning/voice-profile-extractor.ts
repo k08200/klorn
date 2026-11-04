@@ -25,6 +25,7 @@ import {
   asStringArray,
   asUnitInterval,
 } from "../llm/llm-coerce.js";
+import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 import { parseLlmJson } from "../llm/llm-json.js";
 import { createCompletion, MODEL } from "../llm/openai.js";
 import { remember } from "./memory.js";
@@ -270,7 +271,10 @@ Return exactly this JSON shape:
           { role: "user", content: prompt },
         ],
       },
-      { credentials: await getUserCredentials(userId), userId, priority: "background" },
+      // Same credential path as every other surface: the paid-plan BYOK check
+      // and decrypt-failure fallback live there (getUserLlmCredentials is
+      // total — it never throws).
+      { credentials: await getUserLlmCredentials(userId), userId, priority: "background" },
     );
 
     const raw = res.choices[0]?.message?.content || "";
@@ -300,23 +304,6 @@ async function isProfileFresh(userId: string): Promise<boolean> {
     return Date.now() - mem.updatedAt.getTime() < REFRESH_INTERVAL_MS;
   } catch {
     return false;
-  }
-}
-
-async function getUserCredentials(userId: string) {
-  try {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { openRouterApiKey: true, geminiApiKey: true },
-    });
-    if (!user) return undefined;
-    const { decryptOptional } = await import("../crypto-tokens.js");
-    return {
-      openRouterApiKey: user.openRouterApiKey ? decryptOptional(user.openRouterApiKey) : undefined,
-      geminiApiKey: user.geminiApiKey ? decryptOptional(user.geminiApiKey) : undefined,
-    };
-  } catch {
-    return undefined;
   }
 }
 

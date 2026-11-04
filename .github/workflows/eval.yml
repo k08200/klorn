@@ -1,8 +1,8 @@
 name: Judge Eval
 
-# LLM accuracy gate for the judge, measured on the model prod serves first:
+# LLM accuracy gate for the judge, measured on the model prod serves:
 # Claude Haiku 5.5 through the native Anthropic provider (prod runs
-# LLM_PROVIDER_ORDER=anthropic,openrouter since 2026-10-30). Runs the committed
+# LLM_PROVIDER_ORDER=anthropic, Anthropic only). Runs the committed
 # synthetic set (packages/api/eval/judge-eval-set.json) through the LLM
 # pipeline and fails when a floor is missed (overall ≥80%, PUSH recall ≥90%,
 # SILENT precision ≥90% — see packages/api/src/eval-floors.ts). The judge
@@ -11,9 +11,7 @@ name: Judge Eval
 #
 # Anthropic is the ONLY provider in this job: a provider failure drops items to
 # the keyword fallback and the run reports INSTRUMENT DEGRADED (exit 3) instead
-# of silently measuring another model. The OpenRouter job that measured
-# google/gemini-2.5-flash was removed on 2026-10-31 — prod no longer serves
-# that model first (eval/README.md, "CI measures Claude").
+# of silently measuring another model (eval/README.md, "CI measures Claude").
 #
 # This complements the deterministic gate that always runs in CI tests
 # (src/__tests__/judge-eval-set.test.ts — fast-path + keyword fallback,
